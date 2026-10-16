@@ -1,12 +1,12 @@
 {
-  "name": "@link-foundation/example-package-name",
+  "name": "voice-simulator",
   "version": "0.11.31",
-  "description": "A JavaScript/TypeScript package template for AI-driven development",
+  "description": "Physical 3D voice simulator: text to IPA to articulation to sound waves travelling through a parametric low-poly human head",
   "type": "module",
   "main": "src/index.js",
   "types": "src/index.d.ts",
   "bin": {
-    "example-package-name": "./bin/example-package-name.js"
+    "voice-simulator": "./bin/voice-simulator.js"
   },
   "files": [
     "bin/",
@@ -44,10 +44,16 @@
     "changeset:status": "changeset status --since=origin/main"
   },
   "keywords": [
-    "template",
-    "javascript",
-    "typescript",
-    "ai-driven"
+    "voice",
+    "speech-synthesis",
+    "articulatory-synthesis",
+    "vocal-tract",
+    "ipa",
+    "g2p",
+    "waveguide",
+    "fdtd",
+    "web-audio",
+    "3d"
   ],
   "author": "",
   "license": "Unlicense",
@@ -61,7 +67,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/link-foundation/js-ai-driven-development-pipeline-template.git"
+    "url": "git+https://github.com/konard/voice-simulator.git"
   },
   "engines": {
     "node": ">=20.0.0"
@@ -87,5 +93,9 @@
       "prettier --write",
       "prettier --check"
     ]
+  },
+  "homepage": "https://konard.github.io/voice-simulator/",
+  "bugs": {
+    "url": "https://github.com/konard/voice-simulator/issues"
   }
 }

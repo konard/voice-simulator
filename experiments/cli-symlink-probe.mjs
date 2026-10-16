@@ -7,8 +7,8 @@ import { spawnSync } from 'node:child_process';
 
 const fixture = mkdtempSync(join(tmpdir(), 'cli-symlink-probe-'));
 try {
-  const link = join(fixture, 'example-package-name');
-  symlinkSync(resolve('bin/example-package-name.js'), link);
+  const link = join(fixture, 'voice-simulator');
+  symlinkSync(resolve('bin/voice-simulator.js'), link);
   const result = spawnSync(
     process.execPath,
     [
