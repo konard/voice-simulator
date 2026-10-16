@@ -1,0 +1,124 @@
+{
+  "benchmark": [
+    {
+      "tier": "minimal",
+      "load": 0.250635285
+    },
+    {
+      "tier": "low",
+      "load": 0.11015203499999998
+    },
+    {
+      "tier": "medium",
+      "load": 0.10540602500000006
+    },
+    {
+      "tier": "high",
+      "load": 1.4444865249999996
+    },
+    {
+      "tier": "ultra",
+      "load": 7.950570165
+    }
+  ],
+  "languages": [
+    {
+      "language": "en",
+      "tier": "minimal",
+      "ipa": "həˈloʊ . ˈðɪs ˈvɔɪs ˈɪz ˈsɪmjəˌleɪtɪd ˈbaɪ ˈsaʊnd ˈweɪvz ɪn ə ˈθɹi ˈdi ˈhɛd .",
+      "duration": 5.726394557823129,
+      "rms": 0.16750824406121664,
+      "peak": 0.9754137396812439,
+      "realtimeFactor": 12.358037962151144,
+      "file": "en-minimal.wav"
+    },
+    {
+      "language": "ru",
+      "tier": "minimal",
+      "ipa": "prʲɪˈvʲet . ˈɛtət ˈɡoɫəs rɐʐˈdajɪt͡sə is ˈzvukəvɨx voɫn f ˈmodʲɪlʲɪ ɡɐˈɫovɨ .",
+      "duration": 5.902993197278912,
+      "rms": 0.13741626367287116,
+      "peak": 0.9797582626342773,
+      "realtimeFactor": 14.819882404458905,
+      "file": "ru-minimal.wav"
+    },
+    {
+      "language": "hi",
+      "tier": "minimal",
+      "ipa": "nəməst̪eː . jəɦ aːʋaːz sɪɾ keː mɔɖəl mẽː d̪ʱʋənɪ t̪əɾəŋɡõː seː bənt̪iː ɦɛː .",
+      "duration": 5.715056689342403,
+      "rms": 0.1873061081596933,
+      "peak": 0.9891905784606934,
+      "realtimeFactor": 23.901844072935596,
+      "file": "hi-minimal.wav"
+    },
+    {
+      "language": "zh",
+      "tier": "minimal",
+      "ipa": "ni˧˥ xɑʊ˨˩˦ . ʈ͡ʂɤ˥˩ kɤ˥˩ ʂəŋ˥ in˥ ʂɻ̩˥˩ joʊ˧˥ tʰoʊ˧˥ pu˥˩ mwo˧˥ ɕiŋ˧˥ li˨˩ tɤ ʂəŋ˥ pwo˥ mwo˧˥ ni˨˩ ʈ͡ʂʰu˥ laɪ˧˥ tɤ .",
+      "duration": 6.5488888888888885,
+      "rms": 0.17369731991440585,
+      "peak": 0.8129338026046753,
+      "realtimeFactor": 21.033616818204205,
+      "file": "zh-minimal.wav"
+    }
+  ],
+  "resonances": {
+    "dx": 0.6,
+    "cells": 2575,
+    "vowels": [
+      {
+        "vowel": "i",
+        "tube": [276, 2260],
+        "fdtd": [250, 2010],
+        "errors": [0.09481847471386368, 0.1105990364852026],
+        "tolerance": 0.15
+      },
+      {
+        "vowel": "e",
+        "tube": [472, 1997],
+        "fdtd": [440, 2160],
+        "errors": [0.06854071408882871, 0.08161795848022244],
+        "tolerance": 0.15
+      },
+      {
+        "vowel": "a",
+        "tube": [948, 1430],
+        "fdtd": [1120, 1120],
+        "errors": [0.18148098075762115, 0.21664290501927252],
+        "tolerance": 0.25
+      },
+      {
+        "vowel": "ɑ",
+        "tube": [703, 991],
+        "fdtd": [675, 975],
+        "errors": [0.0398805824487572, 0.01599160062017527],
+        "tolerance": 0.15
+      },
+      {
+        "vowel": "o",
+        "tube": [485, 801],
+        "fdtd": [480, 780],
+        "errors": [0.009655130551723304, 0.025619716106057237],
+        "tolerance": 0.15
+      },
+      {
+        "vowel": "u",
+        "tube": [260, 735],
+        "fdtd": [235, 725],
+        "errors": [0.0960645241156841, 0.013882423841402881],
+        "tolerance": 0.15
+      },
+      {
+        "vowel": "ə",
+        "tube": [635, 1413],
+        "fdtd": [605, 1305],
+        "errors": [0.047346920101189, 0.07651485247899618],
+        "tolerance": 0.15
+      }
+    ]
+  },
+  "heads": [],
+  "failures": [],
+  "seconds": 10.427347985
+}
