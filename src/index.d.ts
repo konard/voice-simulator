@@ -185,7 +185,7 @@ export declare function encodeHeadConfig(config: HeadConfig): string;
 export declare function decodeHeadConfig(text: string): HeadConfig;
 export declare function getHeadParameter(key: string): HeadParameter;
 export declare function createRandom(seed?: string | number): () => number;
-export declare function createSeed(): number;
+export declare function createSeed(): string;
 export declare function hashSeed(value: string | number): number;
 
 // Acoustics
