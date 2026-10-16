@@ -140,6 +140,8 @@ export class VoiceRenderer {
     this.output = new OutputStage(this.sampleRate);
     this.state = {};
     this.time = 0;
+    this.position = 0;
+    this.totalSamples = Math.ceil(plan.duration * this.sampleRate);
     this.solverTime = 0;
     this.previous = 0;
     this.current = 0;
@@ -151,7 +153,7 @@ export class VoiceRenderer {
   }
 
   get done() {
-    return this.time >= this.plan.duration;
+    return this.position >= this.totalSamples;
   }
 
   #updateShape() {
@@ -203,7 +205,8 @@ export class VoiceRenderer {
   }
 
   /**
-   * Render the next samples into `target`.
+   * Render the next samples into `target`. Blocks are aligned to the
+   * absolute sample position, so any chunking gives identical audio.
    * @param {Float32Array} target
    * @returns {number} Number of samples written (less than target.length at the end).
    */
@@ -211,9 +214,16 @@ export class VoiceRenderer {
     const outputStep = 1 / this.sampleRate;
     let written = 0;
     while (written < target.length && !this.done) {
-      this.#updateShape();
-      const blockEnd = Math.min(target.length, written + this.blockSize);
-      for (; written < blockEnd; written++) {
+      const offset = this.position % this.blockSize;
+      if (offset === 0 || !this.shape) {
+        this.#updateShape();
+      }
+      const blockEnd = Math.min(
+        target.length,
+        written + this.blockSize - offset,
+        written + this.totalSamples - this.position
+      );
+      for (; written < blockEnd; written++, this.position++) {
         while (this.solverTime <= this.time) {
           this.previous = this.current;
           this.current = this.#step();
@@ -237,9 +247,7 @@ export class VoiceRenderer {
  */
 export function renderPlan(plan, options = {}) {
   const renderer = new VoiceRenderer(plan, options);
-  const samples = new Float32Array(
-    Math.ceil(plan.duration * renderer.sampleRate)
-  );
-  const written = renderer.render(samples);
-  return samples.subarray(0, written);
+  const samples = new Float32Array(renderer.totalSamples);
+  renderer.render(samples);
+  return samples;
 }

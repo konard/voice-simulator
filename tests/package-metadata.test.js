@@ -10,7 +10,7 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 
-import { runCli } from '../bin/example-package-name.js';
+import { runCli } from '../bin/voice-simulator.js';
 import { itUnless, sandboxed } from './helpers/skip.js';
 
 const packageJson = JSON.parse(readFileSync('package.json', 'utf8'));
@@ -22,7 +22,7 @@ function windowsSymlinkSkipReason() {
   }
   const fixture = mkdtempSync(join(tmpdir(), 'symlink-permission-'));
   try {
-    symlinkSync(resolve('bin/example-package-name.js'), join(fixture, 'bin'));
+    symlinkSync(resolve('bin/voice-simulator.js'), join(fixture, 'bin'));
     return null;
   } catch (error) {
     if (error.code === 'EPERM') {
@@ -37,35 +37,44 @@ function windowsSymlinkSkipReason() {
 const symlinkSkipReason = windowsSymlinkSkipReason();
 
 describe('publishable package metadata', () => {
-  it('uses the real link-foundation example package name', () => {
-    expect(packageJson.name).toBe('@link-foundation/example-package-name');
+  it('uses the voice-simulator package name', () => {
+    expect(packageJson.name).toBe('voice-simulator');
     expect(packageJson.publishConfig).toEqual({ access: 'public' });
-    expect(lockJson.name).toBe('@link-foundation/example-package-name');
-    expect(lockJson.packages[''].name).toBe(
-      '@link-foundation/example-package-name'
-    );
+    expect(lockJson.name).toBe('voice-simulator');
+    expect(lockJson.packages[''].name).toBe('voice-simulator');
   });
 
   it('defines a globally installable CLI command', () => {
     expect(packageJson.bin).toEqual({
-      'example-package-name': './bin/example-package-name.js',
+      'voice-simulator': './bin/voice-simulator.js',
     });
-    expect(existsSync('bin/example-package-name.js')).toBe(true);
+    expect(existsSync('bin/voice-simulator.js')).toBe(true);
   });
 
-  it('runs package functions through the CLI command', () => {
+  it('runs package functions through the CLI command', async () => {
     const stdout = [];
     const stderr = [];
 
     expect(
-      runCli(['add', '2', '3'], {
+      await runCli(['ipa', '--lang', 'ru', 'мама'], {
         stderr: (line) => stderr.push(line),
         stdout: (line) => stdout.push(line),
       })
     ).toBe(0);
 
-    expect(stdout).toEqual(['5']);
+    expect(stdout).toEqual(['ˈmamə']);
     expect(stderr).toEqual([]);
+  });
+
+  it('reports unknown commands with a non-zero exit code', async () => {
+    const stderr = [];
+    expect(
+      await runCli(['nope'], {
+        stderr: (line) => stderr.push(line),
+        stdout: () => {},
+      })
+    ).toBe(1);
+    expect(stderr[0]).toBe('Unknown command: nope');
   });
 
   itUnless(
@@ -74,25 +83,26 @@ describe('publishable package metadata', () => {
     globalThis.Deno &&
       'Deno resolves relative imports from the bin symlink directory'
   )('runs when invoked through an npm-style bin symlink', () => {
-    const tempRoot = mkdtempSync(join(tmpdir(), 'example-package-name-'));
-    const linkPath = join(tempRoot, 'example-package-name');
+    const tempRoot = mkdtempSync(join(tmpdir(), 'voice-simulator-'));
+    const linkPath = join(tempRoot, 'voice-simulator');
 
     try {
-      symlinkSync(resolve('bin/example-package-name.js'), linkPath);
+      symlinkSync(resolve('bin/voice-simulator.js'), linkPath);
       const result = spawnSync(
         process.execPath,
         [
           ...(globalThis.Deno ? ['run', '-A'] : []),
           linkPath,
-          'multiply',
-          '6',
-          '7',
+          'ipa',
+          '--lang',
+          'en',
+          'cat',
         ],
         { encoding: 'utf8' }
       );
 
       expect(result.status).toBe(0);
-      expect(result.stdout.trim()).toBe('42');
+      expect(result.stdout.trim()).toBe('ˈkæt');
       expect(result.stderr).toBe('');
     } finally {
       rmSync(tempRoot, { force: true, recursive: true });

@@ -1,0 +1,58 @@
+/**
+ * Complete low-poly head model: skin, vocal tract, nasal tract and lips
+ * for a head configuration and an articulator state.
+ */
+
+import { noseShape, tractShape } from '../articulation/tract-shape.js';
+import { normalizeHeadConfig } from '../head-config.js';
+import { nasalCenterline, tractCenterline } from './centerline.js';
+import {
+  MESH_LODS,
+  headMesh,
+  lipsMesh,
+  meshesToObj,
+  tubeMesh,
+} from './mesh.js';
+
+/**
+ * Build all meshes of the head.
+ * @param {Record<string, number>} head
+ * @param {{lod?: number, state?: object}} [options] `state` is an articulator state (see sampleState).
+ * @returns {{name: string, positions: Float32Array, indices: Uint32Array}[]}
+ */
+export function headModel(head, options = {}) {
+  const config = normalizeHeadConfig(head);
+  const lod = Math.min(MESH_LODS.length - 1, Math.max(0, options.lod ?? 1));
+  const shape = tractShape(options.state ?? {}, config);
+  const tube = { lod, head: config };
+  const tractPath = tractCenterline(config, {
+    sections: shape.areas.length,
+    length: shape.length,
+  });
+  const nose = noseShape(config);
+  const velumDistance =
+    ((shape.velumIndex + 0.5) / shape.areas.length) * shape.length;
+  const nosePath = nasalCenterline(config, {
+    sections: nose.areas.length,
+    velumDistance,
+    length: nose.length,
+  });
+  return [
+    { name: 'head', ...headMesh(config, { lod }) },
+    { name: 'tract', ...tubeMesh(tractPath, shape.areas, tube) },
+    { name: 'nose', ...tubeMesh(nosePath, nose.areas, tube) },
+    {
+      name: 'lips',
+      ...lipsMesh(config, { area: shape.areas.at(-1), lod }),
+    },
+  ];
+}
+
+/**
+ * Wavefront OBJ of the whole head model.
+ * @param {Record<string, number>} head
+ * @param {{lod?: number, state?: object}} [options]
+ */
+export function headModelObj(head, options = {}) {
+  return meshesToObj(headModel(head, options));
+}
