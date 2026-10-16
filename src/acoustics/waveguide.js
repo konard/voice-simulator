@@ -19,7 +19,7 @@ const NOSTRIL_REFLECTION = -0.85;
  * perimeter / area, and the flow resistance of narrow constrictions
  * (Bernoulli/kinetic losses) dominates below a few tenths of a cm².
  */
-function lossFactor(area) {
+export function lossFactor(area) {
   const boundary = 0.0004 / Math.sqrt(Math.max(area, 0.05));
   const constriction = Math.min(0.3, 0.0004 / Math.max(area, 1e-3) ** 2);
   return 1 - 0.0007 - boundary - constriction;
