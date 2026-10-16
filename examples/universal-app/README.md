@@ -1,10 +1,23 @@
-# Universal Example App
+# Voice Simulator Web App
 
-This example turns the package functions in `src/index.js` into a React UI and
-uses the same build output for GitHub Pages, Electron desktop packages, and
-Capacitor mobile projects.
+The demo web app for `voice-simulator`. It imports the library from
+`src/index.js` and uses the same build output for GitHub Pages, Electron
+desktop packages, and Capacitor mobile projects.
 
-![Universal example app preview](../../docs/screenshots/example-app/example-app.png)
+- Type text in English, Russian, Hindi or Chinese (or raw IPA) and press
+  **Speak**: the transcription is planned on the main thread, the acoustic
+  simulation runs in a Web Worker (`src/engine/synth-worker.js`) and audio is
+  streamed to Web Audio in chunks.
+- The three.js view (`src/viewer/head-viewer.js`) shows the low-poly head,
+  animates the jaw and lips, and colours the tract by the simulated pressure.
+- Modes: sound and 3D, sound only, or 3D only.
+- The head and voice editor starts from a random head on every load;
+  `?seed=<value>` reproduces a head.
+- Audio and visual quality tiers are chosen automatically from a benchmark
+  and a runtime governor that keeps the load under 80%; the HUD shows both
+  loads. A fixed tier can be selected too.
+
+![Voice simulator web app preview](../../docs/screenshots/example-app/example-app.png)
 
 > The preview image above is regenerated automatically on every push to `main`
 > by the `preview-regen` job in `.github/workflows/example-app.yml`. Run it
