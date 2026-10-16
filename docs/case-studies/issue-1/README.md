@@ -21,6 +21,8 @@ the prototype.
 | [`data/fdtd-open-vowel-a-dx0.6.txt`](data/fdtd-open-vowel-a-dx0.6.txt)                 | 3D FDTD impulse spectrum peaks of /a/ on a 0.6 cm grid                                                               |
 | [`data/fdtd-open-vowel-a-dx0.4.txt`](data/fdtd-open-vowel-a-dx0.4.txt)                 | The same on a 0.4 cm grid (rules out discretisation error)                                                           |
 | [`data/machine.txt`](data/machine.txt)                                                 | Hardware and runtime of the measurements                                                                             |
+| [`data/random-head-resonances.txt`](data/random-head-resonances.txt)                   | Worst resonance error of both solvers over 100 random heads                                                          |
+| [`data/random-head-ci-8.txt`](data/random-head-ci-8.txt)                               | Why LPC reported F1 = 390 Hz for random head `ci-8` (first CI run)                                                   |
 | [`research/articulatory-synthesis.md`](research/articulatory-synthesis.md)             | Articulatory synthesis: Pink Trombone, VocalTractLab, TubeTalker, glottal models, 2D/3D wave simulation, cost        |
 | [`research/ipa-and-g2p.md`](research/ipa-and-g2p.md)                                   | Grapheme-to-phoneme tools and data for English, Russian, Hindi and Chinese                                           |
 | [`research/web-performance-and-delivery.md`](research/web-performance-and-delivery.md) | AudioWorklet, workers, COOP/COEP, WebGPU, LOD control, delivery targets, anatomical data (Story 2008 area functions) |
@@ -47,7 +49,7 @@ status column refers to this pull request.
 | R13 | Local server API including streaming                                                                         | Dependency-free `node:http` server: `/api/ipa`, `/api/head/random`, `/api/mesh.obj`, `/api/synthesize`, `/api/stream` (chunked WAV produced while simulating), `/api/tiers`, `/api/languages`, `/api/health`.                                                                             | `src/server/server.js` (`voice-simulator/server` export)                                 | Done                                        |
 | R14 | Docker image with the server                                                                                 | `Dockerfile` that runs `voice-simulator serve`; CI builds it on pull requests and publishes it when Docker Hub variables are set.                                                                                                                                                         | `Dockerfile`, `.github/workflows/release.yml`                                            | Done                                        |
 | R15 | A complete demo web app                                                                                      | Same app as R10: text box, language picker, IPA view, head editor, mode switch, theme and locale (en/ru), LOD HUD.                                                                                                                                                                        | `examples/universal-app/`                                                                | Done                                        |
-| R16 | Everything with intense computations runs in release or CI/CD testing                                        | Unit tests use coarse grids and short clips. A CI `simulation` job runs the fine-grid 3D FDTD resonance check, every language on every tier up to `high`, 24 random heads and a tier benchmark, and uploads WAV files and a report.                                                       | `scripts/check-simulation.mjs`, `release.yml` job `simulation`                           | Done                                        |
+| R16 | Everything with intense computations runs in release or CI/CD testing                                        | Unit tests use coarse grids and short clips. A CI `simulation` job runs the fine-grid 3D FDTD resonance check, every language on every tier up to `high`, resonance and stability checks of 24 random heads with both solvers, and a tier benchmark, and uploads WAV files and a report.  | `scripts/check-simulation.mjs`, `release.yml` job `simulation`                           | Done                                        |
 | R17 | Case study in `docs/case-studies/issue-1` with data, online research, requirements, solutions and components | This document and the `data/` and `research/` folders.                                                                                                                                                                                                                                    | `docs/case-studies/issue-1/`                                                             | Done                                        |
 | R18 | Everything in a single pull request                                                                          | All work is on branch `issue-1-2e16b430da4f`, pull request #2.                                                                                                                                                                                                                            | —                                                                                        | Done                                        |
 
@@ -167,6 +169,37 @@ deviation comes from the 3D shape and not from the grid. The CI check allows
 F1 matches everywhere; the LPC estimator misses F2 of back vowels, where F1
 and F2 are close. The unit test checks /i/, /ɑ/ and /ə/ within 15%.
 
+### Random heads
+
+The first CI run of the `simulation` job failed on random head `ci-8`: LPC
+on the rendered /aː/ of the 3D solver reported F1 = 390 Hz, while the
+waveguide gave 1175 Hz for the same head. The impulse response of the 3D
+solver for that head has its F1 at 1075 Hz (tube model: 930 Hz) and no peak
+near 390 Hz. The rendered flow signal falls by about 12 dB per octave from
+the glottal source, and in the 3D spectrum the F1 region (640–1130 Hz) is a
+flat plateau without a local maximum, so a 12th-order LPC spends a pole on
+the source tilt ([`data/random-head-ci-8.txt`](data/random-head-ci-8.txt)).
+The fault lay in the measurement, not in the solver.
+
+A sweep over 100 heads
+([`data/random-head-resonances.txt`](data/random-head-resonances.txt))
+compared impulse-response resonances with the tube model of each head:
+
+| Vowel | Waveguide worst F1 / F2 error | 3D FDTD (dx 1 cm) worst F1 / F2 error |
+| ----- | ----------------------------- | ------------------------------------- |
+| /ə/   | 11.2% / 3.8%                  | 18.2% / 15.8%                         |
+| /i/   | 3.6% / 1.7%                   | 21.2% / 16.2%                         |
+| /a/   | 61.9% / 33.2%                 | 26.6% / 32.0%                         |
+| /ɑ/   | 51.5% / 16.1%                 | 38.1% / 18.0%                         |
+
+For open back vowels the strongly damped pharyngeal F1 can drop below the
+−12 dB peak floor, and the 3D shape merges F1 and F2, so those numbers
+mostly measure peak picking. The CI check therefore renders /aː/ for every
+head (finite, audible) and compares the /ə/ and /i/ impulse resonances with
+the tube model of the same head, with 15% tolerance for the waveguide and 25%
+for the 1 cm 3D grid. Open vowels are checked on the default head with the
+fine grid.
+
 ## Known limitations
 
 - The voxel tract keeps the rest vocal-tract length; lip protrusion and larynx
@@ -178,6 +211,9 @@ and F2 are close. The unit test checks /i/, /ɑ/ and /ə/ within 15%.
   level of about 0.13–0.4× the signal; the default `flow` output is clean.
 - /a/ shows merged F1/F2 in 3D, and open vowels show a weak peak near 380 Hz
   (−16 to −18 dB).
+- `estimateFormants` (LPC with one pre-emphasis stage) can report a pole of
+  the glottal source tilt as F1 when a formant has no clear peak; resonance
+  checks therefore use impulse responses (`spectralPeaks`).
 - The `high` tier (FDTD, dx 1 cm) needs about 1.4× real time on the
   development machine, so the governor stays on waveguide tiers there.
 - Headless Chromium renders with SwiftShader at about 12 fps on a busy CPU, so

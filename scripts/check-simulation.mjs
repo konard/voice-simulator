@@ -7,7 +7,8 @@
  *      up to `--max-tier` and saved as WAV for listening.
  *   2. The 3D FDTD solver on the fine `--dx` grid reproduces the resonances
  *      of the tube model for the cardinal vowels.
- *   3. Random heads stay stable and keep plausible formants.
+ *   3. Random heads stay stable, and both solvers keep the tube-model
+ *      resonances of /ə/ and /i/ for each head.
  *   4. All audio tiers are benchmarked on the runner.
  *
  * Usage:
@@ -29,7 +30,6 @@ import {
   LANGUAGES,
   buildVoxelModel,
   encodeWav,
-  estimateFormants,
   getPhoneme,
   measureAudioTier,
   noseShape,
@@ -41,7 +41,9 @@ import {
   synthesize,
   tractShape,
   tubeFormants,
+  Waveguide,
 } from '../src/index.js';
+import { SPEED_OF_SOUND } from '../src/acoustics/transfer.js';
 import { vowelTarget } from '../src/articulation/phones.js';
 
 const VOWELS = ['i', 'e', 'a', 'ɑ', 'o', 'u', 'ə'];
@@ -57,6 +59,16 @@ const RESONANCE_TOLERANCE = 0.15;
 const KNOWN_TOLERANCE = { a: 0.25 };
 /** Spectral peaks weaker than this (dB below the strongest) are ignored. */
 const PEAK_FLOOR = 12;
+/**
+ * Vowels and tolerances of the random-head check. Over 100 random heads the
+ * /ə/ and /i/ resonances stay within 11% of the tube model in the waveguide
+ * and within 22% in the 1 cm FDTD grid. Open back vowels are left to the
+ * fine-grid check of the default head: their weak, damped F1 and the 3D
+ * F1/F2 merge make a per-head pass/fail unreliable (see
+ * experiments/random-head-resonances.mjs).
+ */
+const HEAD_VOWELS = ['ə', 'i'];
+const HEAD_TOLERANCE = { waveguide: 0.15, fdtd3d: 0.25 };
 
 function parseArgs(argv) {
   const args = {
@@ -110,11 +122,60 @@ function peak(samples) {
   return max;
 }
 
-function vowelShape(symbol, head) {
+function vowelShape(symbol, head, sections) {
   return tractShape(
     { ...vowelTarget({ phoneme: getPhoneme(symbol) }), rhotic: 0 },
-    head
+    head,
+    sections ? { sections } : undefined
   );
+}
+
+/** Solver with the vowel shape of a head and its step rate (Hz). */
+function vowelSolver(solverName, shape, head, model) {
+  if (solverName === 'fdtd3d') {
+    const solver = new Fdtd3d({ model });
+    solver.setNose(noseShape(head).areas);
+    solver.setShape(shape.areas, 0);
+    return { solver, rate: 1 / solver.stepDuration() };
+  }
+  const solver = new Waveguide({ sections: shape.areas.length });
+  solver.setNose(noseShape(head).areas);
+  solver.setShape(shape.areas, 0);
+  return {
+    solver,
+    rate: (shape.areas.length * SPEED_OF_SOUND) / shape.length,
+  };
+}
+
+/**
+ * Resonances of a solver for a vowel: the impulse-response peaks nearest to
+ * the first two formants of the tube model with the same areas. The impulse
+ * response is independent of the glottal source, so it measures the solver
+ * alone (LPC on rendered speech also depends on the source spectrum).
+ */
+function resonances(symbol, head, { solver: solverName, model, sections }) {
+  const shape = vowelShape(symbol, head, sections);
+  const { solver, rate } = vowelSolver(solverName, shape, head, model);
+  const response = new Float64Array(Math.round(rate * 0.08));
+  for (let n = 0; n < response.length; n++) {
+    response[n] = solver.step(n === 0 ? 1 : 0, 0, 0);
+  }
+  const peaks = spectralPeaks(response, rate, {
+    step: 5,
+    floor: PEAK_FLOOR,
+  });
+  const tube = tubeFormants(shape.areas, shape.length, { count: 2 });
+  const nearest = tube.map((target) =>
+    peaks.reduce(
+      (best, value) =>
+        Math.abs(value - target) < Math.abs(best - target) ? value : best,
+      Infinity
+    )
+  );
+  const errors = nearest.map(
+    (value, index) => Math.abs(value - tube[index]) / tube[index]
+  );
+  return { tube, nearest, errors };
 }
 
 async function checkLanguages(args) {
@@ -162,30 +223,10 @@ function checkResonances(args) {
   );
   const results = [];
   for (const symbol of VOWELS) {
-    const shape = vowelShape(symbol, DEFAULT_HEAD);
-    const solver = new Fdtd3d({ model });
-    solver.setNose(noseShape(DEFAULT_HEAD).areas);
-    solver.setShape(shape.areas, 0);
-    const rate = 1 / solver.stepDuration();
-    const response = new Float64Array(Math.round(rate * 0.08));
-    for (let n = 0; n < response.length; n++) {
-      response[n] = solver.step(n === 0 ? 1 : 0, 0, 0);
-    }
-    const peaks = spectralPeaks(response, rate, {
-      step: 5,
-      floor: PEAK_FLOOR,
+    const { tube, nearest, errors } = resonances(symbol, DEFAULT_HEAD, {
+      solver: 'fdtd3d',
+      model,
     });
-    const tube = tubeFormants(shape.areas, shape.length, { count: 2 });
-    const nearest = tube.map((target) =>
-      peaks.reduce(
-        (best, value) =>
-          Math.abs(value - target) < Math.abs(best - target) ? value : best,
-        Infinity
-      )
-    );
-    const errors = nearest.map(
-      (value, index) => Math.abs(value - tube[index]) / tube[index]
-    );
     const tolerance = KNOWN_TOLERANCE[symbol] ?? RESONANCE_TOLERANCE;
     for (const index of [0, 1]) {
       check(
@@ -212,30 +253,34 @@ function checkRandomHeads(args) {
   for (let index = 0; index < args.heads; index++) {
     const seed = `ci-${index}`;
     const head = randomHeadConfig(seed);
-    const plan = planUtterance('ˈaː', { head });
-    const vowel = plan.segments.find((segment) => segment.kind === 'vowel');
-    const middle = (vowel.start + vowel.end) / 2;
-    const rate = 24000;
     // Every fourth head also runs through the 3D solver (coarse grid).
     const solver = index % 4 === 0 ? 'fdtd3d' : 'waveguide';
-    const options = { sampleRate: rate, sections: 44, solver };
+    const options = { sampleRate: 24000, sections: 44, solver };
     if (solver === 'fdtd3d') {
       options.model = buildVoxelModel(head, { dx: 1 });
     }
-    const samples = renderPlan(plan, options);
+    const samples = renderPlan(planUtterance('ˈaː', { head }), options);
     const level = rms(samples);
-    const [f1] = estimateFormants(samples, rate, {
-      start: middle - 0.03,
-      duration: 0.06,
-      count: 1,
-    });
     const label = `head ${seed} (${solver})`;
     check(samples.every(Number.isFinite), `${label}: finite samples`);
     check(level > 0.01, `${label}: audible (rms ${level.toFixed(4)})`);
-    check(f1 > 400 && f1 < 1400, `${label}: /a/ F1 ${Math.round(f1)} Hz`);
-    results.push({ seed, solver, rms: level, f1 });
+    const tolerance = HEAD_TOLERANCE[solver];
+    const vowels = {};
+    for (const symbol of HEAD_VOWELS) {
+      const { tube, nearest, errors } = resonances(symbol, head, options);
+      errors.forEach((error, formant) =>
+        check(
+          error < tolerance,
+          `${label}: /${symbol}/ F${formant + 1} ${nearest[formant]} Hz vs tube ${Math.round(tube[formant])} Hz (tolerance ${tolerance * 100}%)`
+        )
+      );
+      vowels[symbol] = { tube: tube.map(Math.round), solver: nearest };
+    }
+    results.push({ seed, solver, rms: level, vowels });
     if (args.verbose) {
-      console.log(`${label}: rms ${level.toFixed(3)} F1 ${Math.round(f1)}`);
+      console.log(
+        `${label}: rms ${level.toFixed(3)} ${JSON.stringify(vowels)}`
+      );
     }
   }
   return results;

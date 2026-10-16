@@ -1,22 +1,26 @@
 // Print the impulse-response spectrum of the 3D FDTD solver around its
 // peaks for one vowel, to tell real resonances from DFT ripple.
 // Usage: node experiments/fdtd-open-vowel-peaks.mjs [vowel] [dx] [seconds]
+//   [head seed]
 import { Fdtd3d } from '../src/acoustics/fdtd3d.js';
 import { buildVoxelModel } from '../src/acoustics/voxel-model.js';
 import { vowelTarget } from '../src/articulation/phones.js';
 import { noseShape, tractShape } from '../src/articulation/tract-shape.js';
 import { tubeFormants } from '../src/acoustics/transfer.js';
-import { DEFAULT_HEAD } from '../src/head-config.js';
+import { DEFAULT_HEAD, randomHeadConfig } from '../src/head-config.js';
 import { getPhoneme } from '../src/ipa/inventory.js';
 
 const symbol = process.argv[2] ?? 'a';
 const dx = Number(process.argv[3] ?? 0.6);
 const seconds = Number(process.argv[4] ?? 0.08);
-const model = buildVoxelModel(DEFAULT_HEAD, { dx });
+const config = process.argv[5]
+  ? randomHeadConfig(process.argv[5])
+  : DEFAULT_HEAD;
+const model = buildVoxelModel(config, { dx });
 const target = vowelTarget({ phoneme: getPhoneme(symbol) });
-const shape = tractShape({ ...target, rhotic: 0 }, DEFAULT_HEAD);
+const shape = tractShape({ ...target, rhotic: 0 }, config);
 const solver = new Fdtd3d({ model });
-solver.setNose(noseShape(DEFAULT_HEAD).areas);
+solver.setNose(noseShape(config).areas);
 solver.setShape(shape.areas, target.velum ?? 0);
 const rate = 1 / solver.stepDuration();
 const response = new Float64Array(Math.round(rate * seconds));
