@@ -89,6 +89,37 @@ describe('security workflow', () => {
     );
   });
 
+  it('skips dependency review with a warning while Dependency graph is off', () => {
+    const dependencyReview = getJobBlock('dependency-review');
+
+    expect(dependencyReview).toContain('        id: graph');
+    expect(dependencyReview).toContain(
+      '          DEPENDENCY_GRAPH_MODE: warn\n        run: bash scripts/check-dependency-graph.sh'
+    );
+    expect(dependencyReview).toContain(
+      "        if: steps.graph.outputs.enabled == 'true'\n        uses: actions/dependency-review-action@v5"
+    );
+  });
+
+  it('fails the default branch until Dependency graph is enabled', () => {
+    const dependencyGraph = getJobBlock('dependency-graph');
+
+    expect(dependencyGraph).toContain(
+      "    if: github.event_name != 'pull_request'"
+    );
+    expect(dependencyGraph).toContain('    timeout-minutes: 5');
+    expect(dependencyGraph).toContain(
+      '      group: check-${{ github.workflow }}-${{ github.ref }}-dependency-graph\n      cancel-in-progress: true'
+    );
+    expect(dependencyGraph).toContain('    permissions:\n      contents: read');
+    expect(dependencyGraph).toContain(
+      '          DEPENDENCY_GRAPH_MODE: require\n        run: bash scripts/check-dependency-graph.sh'
+    );
+    expect(getJobBlock('pipeline-status')).toContain(
+      '      - dependency-graph'
+    );
+  });
+
   it('fails closed on high-severity advisories in every npm lock', () => {
     const audit = getJobBlock('npm-audit');
     const directoryList = audit.match(/directory: \[([^\]]+)\]/)?.[1] ?? '';

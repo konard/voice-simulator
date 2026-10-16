@@ -231,6 +231,11 @@ fine grid.
 3. **Docker Hub** (optional): set the Docker Hub variables and secret listed
    in the README to publish the server image; without them CI only builds the
    image.
+4. **Dependency graph**: enable it under _Settings → Advanced Security →
+   Dependency graph_. Dependency review needs it to compare two commits. While
+   it is off, `scripts/check-dependency-graph.sh` makes pull requests skip the
+   review with a warning, and the `dependency-graph` job of the Security
+   workflow fails on `main` with the same instruction.
 
 ## Future work
 

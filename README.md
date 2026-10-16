@@ -327,6 +327,15 @@ _Deploy from a branch_. Without it, the `pages-deploy` job fails on
 `Failed to create deployment`. After flipping the source, the workflow
 provisions the Pages site on its first run.
 
+### Enabling dependency review
+
+`actions/dependency-review-action` needs the repository's **Dependency graph**,
+which only a maintainer can enable: **Settings → Advanced Security →
+Dependency graph → Enable**. Until it is enabled, the Security workflow skips
+dependency review on pull requests with a warning, and its
+`Dependency graph enabled` job fails on `main` with the same instruction
+(`scripts/check-dependency-graph.sh`).
+
 ### Auto-regenerated preview screenshots
 
 The same `example-app.yml` workflow contains a `preview-regen` job that boots
