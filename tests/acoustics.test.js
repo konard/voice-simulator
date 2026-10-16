@@ -13,6 +13,7 @@ import {
   estimateFormants,
   estimatePitch,
   rms,
+  spectralPeaks,
 } from '../src/acoustics/analysis.js';
 import { tubeFormants } from '../src/acoustics/transfer.js';
 import { encodeWav, decodeWav, wavHeader } from '../src/audio/wav.js';
@@ -133,6 +134,25 @@ describe('waveguide synthesis', () => {
     const level = segmentLevel(fricative, fricativePlan, index);
     expect(level).toBeGreaterThan(vowel * 0.2);
     expect(level).toBeLessThan(vowel * 1.2);
+  });
+});
+
+describe('spectral peaks', () => {
+  it('finds resonances and drops weak ones below the floor', () => {
+    const rate = 16000;
+    const response = new Float64Array(rate / 10);
+    for (let n = 0; n < response.length; n++) {
+      const decay = Math.exp(-n / 400);
+      response[n] =
+        decay *
+        (Math.sin((2 * Math.PI * 500 * n) / rate) +
+          0.8 * Math.sin((2 * Math.PI * 1500 * n) / rate) +
+          0.02 * Math.sin((2 * Math.PI * 3000 * n) / rate));
+    }
+    const all = spectralPeaks(response, rate);
+    const strong = spectralPeaks(response, rate, { floor: 12 });
+    expect(all).toContain(3000);
+    expect(strong).toEqual([500, 1500]);
   });
 });
 

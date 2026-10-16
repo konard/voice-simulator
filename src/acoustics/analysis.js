@@ -156,3 +156,38 @@ export function rms(samples, start = 0, end = samples.length) {
   }
   return Math.sqrt(sum / Math.max(1, end - start));
 }
+
+/**
+ * Local maxima (Hz) of the magnitude spectrum of an impulse response,
+ * evaluated with a direct DFT on a regular frequency grid. Peaks more than
+ * `floor` dB below the strongest one are dropped.
+ * @param {ArrayLike<number>} response
+ * @param {number} sampleRate
+ * @param {{from?: number, to?: number, step?: number, floor?: number}} [options]
+ */
+export function spectralPeaks(response, sampleRate, options = {}) {
+  const { from = 100, to = 4000, step = 10, floor = Infinity } = options;
+  const spectrum = [];
+  for (let frequency = from; frequency <= to; frequency += step) {
+    let re = 0;
+    let im = 0;
+    const omega = (2 * Math.PI * frequency) / sampleRate;
+    for (let n = 0; n < response.length; n++) {
+      re += response[n] * Math.cos(omega * n);
+      im -= response[n] * Math.sin(omega * n);
+    }
+    spectrum.push([frequency, Math.hypot(re, im)]);
+  }
+  const strongest = Math.max(...spectrum.map(([, magnitude]) => magnitude));
+  const threshold = strongest * 10 ** (-floor / 20);
+  return spectrum
+    .filter(
+      ([, magnitude], index) =>
+        magnitude >= threshold &&
+        index > 0 &&
+        index < spectrum.length - 1 &&
+        magnitude > spectrum[index - 1][1] &&
+        magnitude > spectrum[index + 1][1]
+    )
+    .map(([frequency]) => frequency);
+}

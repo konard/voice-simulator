@@ -15,7 +15,7 @@ import {
 } from '../src/acoustics/voxel-model.js';
 import { Fdtd3d } from '../src/acoustics/fdtd3d.js';
 import { renderPlan } from '../src/acoustics/voice.js';
-import { rms } from '../src/acoustics/analysis.js';
+import { rms, spectralPeaks } from '../src/acoustics/analysis.js';
 import { tubeFormants } from '../src/acoustics/transfer.js';
 import { planUtterance } from '../src/articulation/plan.js';
 import { vowelTarget } from '../src/articulation/phones.js';
@@ -44,26 +44,7 @@ function impulsePeaks(shape) {
   for (let n = 0; n < response.length; n++) {
     response[n] = solver.step(n === 0 ? 1 : 0, 0, 0);
   }
-  const spectrum = [];
-  for (let frequency = 100; frequency <= 4000; frequency += 10) {
-    let re = 0;
-    let im = 0;
-    const omega = (2 * Math.PI * frequency) / rate;
-    for (let n = 0; n < response.length; n++) {
-      re += response[n] * Math.cos(omega * n);
-      im -= response[n] * Math.sin(omega * n);
-    }
-    spectrum.push([frequency, Math.hypot(re, im)]);
-  }
-  return spectrum
-    .filter(
-      ([, magnitude], index) =>
-        index > 0 &&
-        index < spectrum.length - 1 &&
-        magnitude > spectrum[index - 1][1] &&
-        magnitude > spectrum[index + 1][1]
-    )
-    .map(([frequency]) => frequency);
+  return spectralPeaks(response, rate);
 }
 
 function relativeError(value, target) {

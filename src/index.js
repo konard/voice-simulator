@@ -52,7 +52,12 @@ export { Fdtd3d } from './acoustics/fdtd3d.js';
 export { buildVoxelModel } from './acoustics/voxel-model.js';
 export { Glottis } from './acoustics/glottis.js';
 export { tubeFormants, tubeSpectrum } from './acoustics/transfer.js';
-export { estimateFormants, estimatePitch, rms } from './acoustics/analysis.js';
+export {
+  estimateFormants,
+  estimatePitch,
+  rms,
+  spectralPeaks,
+} from './acoustics/analysis.js';
 export { encodeWav, decodeWav, wavHeader } from './audio/wav.js';
 export {
   headLandmarks,

@@ -431,6 +431,48 @@ jobs:
           cache-from: type=gha,scope=docker-image
           cache-to: type=gha,mode=max,scope=docker-image
 
+  # === HEAVY SIMULATION CHECKS ===
+  # Fine-grid 3D FDTD resonances, every language on every audio tier up to
+  # the 3D solver, random heads and a tier benchmark. Too heavy for the unit
+  # tests on development machines, so it runs here; the WAV files and the
+  # report are uploaded as an artifact for listening.
+  simulation:
+    name: Simulation Checks
+    runs-on: ubuntu-24.04
+    # Typical run: 1-3min. The check step owns a 15min budget; this cap is
+    # the backstop behind it.
+    timeout-minutes: 25
+    concurrency:
+      group: check-${{ github.workflow }}-${{ github.ref }}-simulation
+      cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+    needs: [detect-changes]
+    if: |
+      !cancelled() &&
+      needs.detect-changes.outputs.any-code-changed == 'true'
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: '24.x'
+
+      - name: Run simulation checks
+        shell: bash
+        run: bash scripts/run-with-budget-warning.sh 900 "Simulation checks" node scripts/check-simulation.mjs --out ci-artifacts/simulation
+
+      - name: Upload simulation report and audio
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: simulation-report
+          path: ci-artifacts/simulation
+          retention-days: 14
+
   # === DOCUMENTATION VALIDATION ===
   # Validate documentation files when docs change (hive-mind principle #12)
   validate-docs:
@@ -514,6 +556,7 @@ jobs:
         changeset-check,
         lint,
         test,
+        simulation,
         docker-build,
         validate-docs,
         release-preflight,
@@ -1041,6 +1084,7 @@ jobs:
       - changeset-check
       - lint
       - test
+      - simulation
       - docker-build
       - docker-publish-config
       - docker-publish-build

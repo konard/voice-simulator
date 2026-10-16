@@ -278,6 +278,7 @@ describe('CI timeout policy', () => {
       'changeset-check': 10,
       lint: 10,
       test: 15,
+      simulation: 25,
       'validate-docs': 5,
       release: 65,
       'instant-release': 65,
@@ -388,6 +389,7 @@ describe('CI execution budgets', () => {
       'docker-publish-config',
       'instant-release',
       'release',
+      'simulation',
       'test',
     ]);
 

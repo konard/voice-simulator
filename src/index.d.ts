@@ -284,6 +284,12 @@ export declare function rms(
   start?: number,
   end?: number
 ): number;
+/** Peak frequencies (Hz) of the magnitude spectrum of an impulse response. */
+export declare function spectralPeaks(
+  response: ArrayLike<number>,
+  sampleRate: number,
+  options?: { from?: number; to?: number; step?: number; floor?: number }
+): number[];
 
 // Audio files
 export declare function encodeWav(
