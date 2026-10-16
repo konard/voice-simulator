@@ -19,10 +19,11 @@ import { Biquad, createNoise } from './filters.js';
 import { Glottis } from './glottis.js';
 import { SPEED_OF_SOUND } from './transfer.js';
 import { Waveguide } from './waveguide.js';
+import { Fdtd3d } from './fdtd3d.js';
 
 const OUTPUT_GAIN = 0.3;
 
-/** Solver factories by name; the 3D solver registers itself lazily. */
+/** Solver factories by name: 1D waveguide and 3D FDTD. */
 const SOLVERS = new Map([
   [
     'waveguide',
@@ -33,6 +34,7 @@ const SOLVERS = new Map([
       return solver;
     },
   ],
+  ['fdtd3d', (options) => new Fdtd3d(options)],
 ]);
 
 /**
@@ -106,7 +108,7 @@ class OutputStage {
 export class VoiceRenderer {
   /**
    * @param {object} plan Result of planUtterance.
-   * @param {{sampleRate?: number, sections?: number, solver?: string, seed?: string|number, blockSize?: number, head?: object}} [options]
+   * @param {{sampleRate?: number, sections?: number, solver?: string, seed?: string|number, blockSize?: number, head?: object, dx?: number, model?: object, output?: string}} [options]
    */
   constructor(plan, options = {}) {
     this.plan = plan;
@@ -124,6 +126,9 @@ export class VoiceRenderer {
       noseSections: noseSections(this.head, this.sections),
       head: this.head,
       seed,
+      dx: options.dx,
+      model: options.model,
+      output: options.output,
     });
     this.solver.setNose?.(noseShape(this.head).areas);
     this.glottis = new Glottis({
