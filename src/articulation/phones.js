@@ -39,7 +39,7 @@ export const PLACES = Object.freeze({
 const MANNERS = {
   plosive: { area: 0, frication: 0.7, duration: 75 },
   nasal: { area: 0, frication: 0, duration: 70, velum: 1 },
-  trill: { area: 0.12, frication: 0.15, duration: 85, trill: true },
+  trill: { area: 0.12, frication: 0.04, duration: 85, trill: true },
   tap: { area: 0, frication: 0.2, duration: 28 },
   fricative: { area: 0.09, frication: 1, duration: 105 },
   'lateral-fricative': { area: 0.1, frication: 0.9, duration: 105 },

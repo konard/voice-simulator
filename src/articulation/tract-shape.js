@@ -115,10 +115,24 @@ export function referenceShape(state) {
     state.tongueLocation,
     state.tongueWidth,
     tongueArea(state),
-    state.tongueAmount
+    engagement(state.tongueAmount)
   );
-  constrict(areas, 1, 0.035, state.lipArea, state.lipAmount);
+  constrict(areas, 1, 0.035, state.lipArea, engagement(state.lipAmount));
   return base;
+}
+
+/** Smoothed articulator engagement saturates, so closures really close. */
+function engagement(amount) {
+  return Math.min(1, Math.max(0, amount) / 0.85);
+}
+
+/** Inverse of warpPosition: reference position -> head position. */
+function headPosition(reference, pharynxRatio) {
+  return reference < REFERENCE_PHARYNX
+    ? (reference / REFERENCE_PHARYNX) * pharynxRatio
+    : pharynxRatio +
+        ((reference - REFERENCE_PHARYNX) / (1 - REFERENCE_PHARYNX)) *
+          (1 - pharynxRatio);
 }
 
 function warpPosition(x, pharynxRatio) {
@@ -185,10 +199,18 @@ export function noseShape(head, sections = NOSE_SECTIONS) {
   return { areas, length };
 }
 
-/** Index of the narrowest oral section (ignores the glottal region). */
-function narrowest(areas) {
-  let best = Math.floor(areas.length * 0.2);
-  for (let index = best + 1; index < areas.length; index++) {
+/** Narrowest section near the active articulator. */
+function constrictionIndex(areas, state, head) {
+  const lips = (state.lipAmount ?? 0) > (state.tongueAmount ?? 0);
+  const location = lips ? 1 : state.tongueLocation;
+  const last = areas.length - 1;
+  const center = Math.round(headPosition(location, head.pharynxRatio) * last);
+  let best = Math.min(last, center);
+  for (
+    let index = Math.max(1, center - 3);
+    index <= Math.min(last, center + 3);
+    index++
+  ) {
     if (areas[index] < areas[best]) {
       best = index;
     }
@@ -210,8 +232,8 @@ export function turbulence(area) {
   return Math.max(0, 1 - (area - 0.06) / 0.4) ** 2;
 }
 
-function fricationSource(areas, state) {
-  const index = narrowest(areas);
+function fricationSource(areas, state, head) {
+  const index = constrictionIndex(areas, state, head);
   const sibilant = state.sibilance ?? 0;
   // Sibilant jets hit the teeth just behind the lips.
   const teeth = Math.round(areas.length * 0.95);
@@ -247,7 +269,7 @@ export function tractShape(state, head, options = {}) {
       ((areas.length - 1) * head.pharynxRatio * VELUM_POSITION) /
         REFERENCE_PHARYNX
     ),
-    frication: fricationSource(areas, full),
+    frication: fricationSource(areas, full, head),
     glottis: {
       f0: full.f0,
       voicing: full.voicing,

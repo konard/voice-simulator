@@ -218,6 +218,8 @@ export function parseIpa(text) {
 
 /**
  * Render tokens back to an IPA string (useful for round-trip tests and UIs).
+ * Stress is stored on the syllable nucleus, so the mark is written right
+ * before the vowel.
  * @param {object[]} tokens
  */
 export function formatIpa(tokens) {
