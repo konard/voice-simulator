@@ -180,6 +180,23 @@ export class Waveguide {
     return this.lipOutput + this.noseOutput;
   }
 
+  /**
+   * Acoustic pressure per section (sum of both travelling waves), for
+   * visualisation. Arrays are reused between calls.
+   * @returns {{pressure: Float64Array, nose: Float64Array}}
+   */
+  field() {
+    this.pressure ??= new Float64Array(this.n);
+    this.nosePressure ??= new Float64Array(this.noseN);
+    for (let index = 0; index < this.n; index++) {
+      this.pressure[index] = this.right[index] + this.left[index];
+    }
+    for (let index = 0; index < this.noseN; index++) {
+      this.nosePressure[index] = this.noseRight[index] + this.noseLeft[index];
+    }
+    return { pressure: this.pressure, nose: this.nosePressure };
+  }
+
   reset() {
     for (const array of [
       this.right,

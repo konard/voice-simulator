@@ -19,6 +19,10 @@
     ".": {
       "types": "./src/index.d.ts",
       "import": "./src/index.js"
+    },
+    "./server": {
+      "types": "./src/server/server.d.ts",
+      "import": "./src/server/server.js"
     }
   },
   "scripts": {

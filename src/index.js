@@ -76,4 +76,3 @@ export {
   chooseTier,
 } from './perf/lod.js';
 export { measureAudioTier, benchmarkAudioTiers } from './perf/benchmark.js';
-export { createVoiceServer, synthesisOptions } from './server/server.js';

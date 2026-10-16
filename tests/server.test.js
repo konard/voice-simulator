@@ -3,7 +3,8 @@
  */
 
 import { describe, expect } from 'test-anywhere';
-import { createVoiceServer, decodeWav } from '../src/index.js';
+import { decodeWav } from '../src/index.js';
+import { createVoiceServer } from '../src/server/server.js';
 import { itUnless, sandboxed } from './helpers/skip.js';
 
 async function withServer(run) {

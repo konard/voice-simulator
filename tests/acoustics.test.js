@@ -105,6 +105,18 @@ describe('waveguide synthesis', () => {
     expect(Math.abs(total - plan.duration * RATE)).toBeLessThan(130);
   });
 
+  it('exposes the pressure field of the tract for visualisation', () => {
+    const plan = planUtterance('ˈma');
+    const renderer = new VoiceRenderer(plan, { sampleRate: RATE });
+    renderer.render(new Float32Array(2400));
+    const field = renderer.solver.field();
+    expect(field.pressure.length).toBeGreaterThan(10);
+    expect(field.nose.length).toBeGreaterThan(0);
+    const peak = Math.max(...field.pressure.map(Math.abs));
+    expect(peak).toBeGreaterThan(0);
+    expect(Number.isFinite(peak)).toBe(true);
+  });
+
   it('keeps consonants quieter than vowels and closures nearly silent', () => {
     const plan = planUtterance('ˈata');
     const samples = renderPlan(plan, { sampleRate: RATE });

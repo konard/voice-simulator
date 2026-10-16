@@ -28,6 +28,8 @@ import {
 import { AUDIO_TIERS, VISUAL_TIERS } from '../perf/lod.js';
 import { synthesize, synthesizeStream } from '../synthesize.js';
 
+export { INDEX_PAGE } from './index-page.js';
+
 const MAX_TEXT = 2000;
 const MAX_BODY = 64 * 1024;
 const SAMPLE_RATES = new Set([16000, 22050, 24000, 32000, 44100, 48000]);

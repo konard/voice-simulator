@@ -2,8 +2,6 @@
  * Type definitions for voice-simulator: physical 3D voice simulation.
  */
 
-import type { Server } from 'node:http';
-
 export type LanguageCode = 'en' | 'ru' | 'hi' | 'zh';
 export type HeadConfig = Record<string, number>;
 export type SolverName = 'waveguide' | 'fdtd3d';
@@ -199,10 +197,13 @@ export interface Solver {
   ): void;
   setNose(areas: ArrayLike<number>): void;
   step(glottalFlow: number, noisePosition: number, noise: number): number;
+  /** Optional pressure snapshot for visualisation. */
+  field?(): object;
   reset(): void;
 }
 export declare class VoiceRenderer {
   constructor(plan: Plan, options?: RenderOptions);
+  readonly solver: Solver;
   readonly sampleRate: number;
   readonly duration: number;
   readonly done: boolean;
@@ -227,6 +228,8 @@ export declare class Waveguide implements Solver {
   ): void;
   setNose(areas: ArrayLike<number>): void;
   step(glottalFlow: number, noisePosition: number, noise: number): number;
+  /** Pressure per tract and nose section, for visualisation. */
+  field(): { pressure: Float64Array; nose: Float64Array };
   reset(): void;
 }
 export declare class Fdtd3d implements Solver {
@@ -382,13 +385,3 @@ export declare function benchmarkAudioTiers(options?: {
   head?: HeadConfig;
   seconds?: number;
 }): { level: number; tier: AudioTier; loads: number[] };
-
-// Server
-export declare function createVoiceServer(options?: {
-  version?: string;
-  index?: string;
-}): Server;
-export declare function synthesisOptions(params: Record<string, unknown>): {
-  text: string;
-  options: SynthesizeOptions;
-};

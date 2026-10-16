@@ -16,8 +16,7 @@ import {
   synthesize,
   textToIpa,
 } from '../src/index.js';
-import { INDEX_PAGE } from '../src/server/index-page.js';
-import { createVoiceServer } from '../src/server/server.js';
+import { INDEX_PAGE, createVoiceServer } from '../src/server/server.js';
 
 const OPTIONS = {
   lang: { type: 'string', short: 'l' },
