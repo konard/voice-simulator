@@ -1,18 +1,23 @@
 #!/usr/bin/env node
 
 import { readFileSync, realpathSync, writeFileSync } from 'node:fs';
+import { extname } from 'node:path';
 import { fileURLToPath, URL } from 'node:url';
 import { parseArgs } from 'node:util';
 
 import {
+  AUDIO_FORMAT_NAMES,
   AUDIO_TIERS,
+  audioEncoding,
   benchmarkAudioTiers,
+  decodeAudio,
   decodeHeadConfig,
   encodeHeadConfig,
-  encodeWav,
+  formatFromFileName,
   headModelObj,
   measureAudioTier,
   randomHeadConfig,
+  resample,
   synthesize,
   textToIpa,
 } from '../src/index.js';
@@ -28,6 +33,9 @@ const OPTIONS = {
   head: { type: 'string' },
   output: { type: 'string' },
   'sample-rate': { type: 'string' },
+  format: { type: 'string', short: 'f' },
+  'bit-depth': { type: 'string', short: 'b' },
+  float: { type: 'boolean' },
   ipa: { type: 'boolean' },
   lod: { type: 'string' },
   seconds: { type: 'string' },
@@ -44,7 +52,8 @@ function usage() {
     '',
     'Commands:',
     '  ipa <text>          Print the IPA transcription (en, ru, hi, zh)',
-    '  say <text> -o f.wav Simulate speech and write a WAV file',
+    '  say <text> -o f.wav Simulate speech and write an audio file',
+    '  convert <in> -o out Convert an audio file (WAV, FLAC, AIFF, AU) to mono',
     '  head                Print a random head configuration',
     '  mesh -o head.obj    Export the low-poly head model as OBJ',
     '  benchmark           Measure the audio LOD tiers on this machine',
@@ -60,6 +69,9 @@ function usage() {
     '      --head <value>    "random" or an encoded head (key=value&...)',
     '      --output <mode>   flow | microphone (FDTD only)',
     '      --sample-rate <n> Output sample rate',
+    `  -f, --format <name>   ${AUDIO_FORMAT_NAMES.join(' | ')} (default: from -o, else wav)`,
+    '  -b, --bit-depth <n>   8 | 16 | 24 | 32 (default 16; 32 | 64 with --float)',
+    '      --float           IEEE float samples (wav, aiff, au, raw)',
     '      --ipa             Treat <text> as IPA',
     '      --lod <0-3>       Mesh level of detail',
     '  -p, --port <port>     Server port (default 8080, env PORT)',
@@ -113,6 +125,34 @@ function writeOutput(out, data, io) {
   writeFileSync(out, data);
 }
 
+/**
+ * Output file and encoding: --format wins, then the --out extension, then
+ * WAV; the default file name follows the format.
+ */
+function audioOutput(values, baseName) {
+  const out = values.out;
+  const named = out && out !== '-' && extname(out) ? out : null;
+  const inferred = named ? formatFromFileName(named) : null;
+  if (named && !inferred && !values.format) {
+    throw new Error(
+      `Unknown audio extension "${extname(named)}" (use --format ${AUDIO_FORMAT_NAMES.join('|')})`
+    );
+  }
+  const encoding = audioEncoding({
+    format: values.format ?? inferred ?? 'wav',
+    bitDepth: values['bit-depth'],
+    float: values.float,
+  });
+  return {
+    out: out ?? `${baseName}.${encoding.format.extension}`,
+    encode: (samples, sampleRate) =>
+      encoding.format.encode(samples, sampleRate, {
+        bitDepth: encoding.bitDepth,
+        float: encoding.float,
+      }),
+  };
+}
+
 const COMMANDS = {
   ipa(values, positionals, io) {
     const result = textToIpa(requireText(positionals), { lang: values.lang });
@@ -120,6 +160,7 @@ const COMMANDS = {
   },
 
   say(values, positionals, io) {
+    const output = audioOutput(values, 'voice');
     const result = synthesize(requireText(positionals), {
       lang: values.lang,
       ipa: values.ipa,
@@ -131,11 +172,33 @@ const COMMANDS = {
       output: values.output,
       sampleRate: optionalNumber(values['sample-rate'], 'sample-rate'),
     });
-    const out = values.out ?? 'voice.wav';
-    writeOutput(out, encodeWav(result.samples, result.sampleRate), io);
+    const { out } = output;
+    writeOutput(out, output.encode(result.samples, result.sampleRate), io);
     if (out !== '-') {
       io.stdout(
         `[${result.lang}] /${result.ipa}/ ${result.duration.toFixed(2)} s -> ${out}`
+      );
+    }
+  },
+
+  convert(values, positionals, io) {
+    const [input] = positionals;
+    if (!input) {
+      throw new Error('Missing <in>');
+    }
+    if (!values.out) {
+      throw new Error('Missing -o <out>');
+    }
+    const output = audioOutput(values, 'converted');
+    const decoded = decodeAudio(readFileSync(input));
+    const rate =
+      optionalNumber(values['sample-rate'], 'sample-rate') ??
+      decoded.sampleRate;
+    const samples = resample(decoded.samples, decoded.sampleRate, rate);
+    writeOutput(output.out, output.encode(samples, rate), io);
+    if (output.out !== '-') {
+      io.stdout(
+        `${decoded.format} ${decoded.channels} ch ${decoded.sampleRate} Hz -> ${output.out} (${rate} Hz mono)`
       );
     }
   },
