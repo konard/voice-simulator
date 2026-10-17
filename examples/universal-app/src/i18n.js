@@ -44,6 +44,9 @@ const STRINGS = {
       mouth: 'Mouth and jaw',
       face: 'Face',
       voice: 'Voice',
+      source: 'Voice source',
+      prosody: 'Prosody and timing',
+      acoustics: 'Acoustics',
     },
   },
   ru: {
@@ -88,6 +91,9 @@ const STRINGS = {
       mouth: 'Рот и челюсть',
       face: 'Лицо',
       voice: 'Голос',
+      source: 'Голосовой источник',
+      prosody: 'Просодия и темп',
+      acoustics: 'Акустика',
     },
   },
 };
@@ -109,8 +115,22 @@ const PARAMETER_LABELS_RU = {
   pitchRange: 'Диапазон тона',
   tenseness: 'Напряжённость',
   breathiness: 'Придыхание',
-  vibrato: 'Вибрато',
+  vibrato: 'Глубина вибрато',
   speechRate: 'Темп речи',
+  jitter: 'Джиттер',
+  shimmer: 'Шиммер',
+  vibratoRate: 'Частота вибрато',
+  aspirationLevel: 'Шум придыхания',
+  declination: 'Деклинация',
+  accentStrength: 'Сила ударения',
+  stressLengthening: 'Удлинение ударных',
+  finalLengthening: 'Удлинение в конце фразы',
+  pauseLength: 'Длина пауз',
+  articulationSpeed: 'Скорость артикуляции',
+  wallLoss: 'Потери в стенках',
+  nasalCoupling: 'Носовая связь',
+  fricationLevel: 'Уровень шума фрикативных',
+  outputGain: 'Громкость выхода',
 };
 
 /** Pick the UI locale from the browser languages. */

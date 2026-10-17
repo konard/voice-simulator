@@ -61,7 +61,7 @@ const PAUSE_DURATIONS = [0.012, 0.09, 0.2, 0.36];
 function vowelDuration(token, context) {
   let duration = 0.105;
   if (token.stress === 1) {
-    duration *= 1.35;
+    duration *= context.stressLengthening;
   } else if (token.stress === 2) {
     duration *= 1.15;
   } else if (REDUCED_VOWELS.has(token.base) && !context.tonal) {
@@ -76,7 +76,7 @@ function vowelDuration(token, context) {
   if (context.tonal) {
     duration *= 1.15;
   }
-  return context.phraseFinal ? duration * 1.4 : duration;
+  return context.phraseFinal ? duration * context.finalLengthening : duration;
 }
 
 function isPhraseEnd(tokens, index) {
@@ -185,6 +185,8 @@ function pushVowel(segments, token, index, context) {
     offglide,
     tonal: context.tonal,
     phraseFinal: isPhraseEnd(context.tokens, index),
+    stressLengthening: context.stressLengthening,
+    finalLengthening: context.finalLengthening,
   });
   segments.push({
     token,
@@ -195,9 +197,9 @@ function pushVowel(segments, token, index, context) {
   });
 }
 
-function pushPause(segments, token) {
+function pushPause(segments, token, context) {
   const strength = Math.min(3, token.strength);
-  const duration = PAUSE_DURATIONS[strength];
+  const duration = PAUSE_DURATIONS[strength] * context.pauseLength;
   if (segments.length === 0 || segments.at(-1).kind === 'pause') {
     if (segments.length) {
       segments.at(-1).duration = Math.max(segments.at(-1).duration, duration);
@@ -218,7 +220,7 @@ function pushPause(segments, token) {
 /**
  * Split tokens into timed segments.
  * @param {object[]} tokens
- * @param {{rate: number, language?: string}} options
+ * @param {{rate: number, language?: string, stressLengthening?: number, finalLengthening?: number, pauseLength?: number}} options
  */
 export function buildSegments(tokens, options) {
   const context = {
@@ -226,6 +228,9 @@ export function buildSegments(tokens, options) {
     rate: 1 / options.rate,
     language: options.language,
     tonal: tokens.some((token) => token.tone),
+    stressLengthening: options.stressLengthening ?? 1.35,
+    finalLengthening: options.finalLengthening ?? 1.4,
+    pauseLength: options.pauseLength ?? 1,
   };
   const segments = [
     {
@@ -237,7 +242,7 @@ export function buildSegments(tokens, options) {
   ];
   tokens.forEach((token, index) => {
     if (token.kind === 'pause') {
-      pushPause(segments, token);
+      pushPause(segments, token, context);
     } else if (token.kind === 'vowel') {
       pushVowel(segments, token, index, context);
     } else if (token.phoneme) {
@@ -432,7 +437,7 @@ function syllablePitch(segment, context) {
   const { head, phraseStart, phraseEnd, question } = context;
   const progress =
     (segment.start - phraseStart) / Math.max(0.2, phraseEnd - phraseStart);
-  const base = semitones(head.pitch, -2 * progress);
+  const base = semitones(head.pitch, -head.declination * progress);
   const tone = segment.token.tone;
   if (tone) {
     const scale = 1.2 + 0.35 * head.pitchRange;
@@ -441,7 +446,8 @@ function syllablePitch(segment, context) {
       semitones(base, (tone.at(-1) - 3) * scale),
     ];
   }
-  const accent = segment.token.stress === 1 ? head.pitchRange : 0;
+  const accent =
+    segment.token.stress === 1 ? head.pitchRange * head.accentStrength : 0;
   const accented = semitones(base, accent);
   if (!context.last) {
     return [accented, semitones(base, accent * 0.6)];
@@ -499,7 +505,8 @@ function addVibrato(values, head, frameRate) {
   const depth = head.vibrato * 0.004;
   for (let frame = 0; frame < values.length; frame++) {
     const time = frame / frameRate;
-    values[frame] *= 1 + depth * Math.sin(2 * Math.PI * 5.2 * time);
+    values[frame] *=
+      1 + depth * Math.sin(2 * Math.PI * head.vibratoRate * time);
   }
 }
 
@@ -517,6 +524,9 @@ export function planUtterance(ipa, options = {}) {
   const segments = buildSegments(tokens, {
     rate: head.speechRate,
     language: options.language,
+    stressLengthening: head.stressLengthening,
+    finalLengthening: head.finalLengthening,
+    pauseLength: head.pauseLength,
   });
   const duration = segments.at(-1).end;
   const frameCount = Math.ceil(duration * frameRate) + 1;
@@ -527,7 +537,11 @@ export function planUtterance(ipa, options = {}) {
   fillArticulation(channels, segments, frameRate);
   fillPitch(channels.f0, segments, head, frameRate);
   for (const name of CHANNEL_NAMES) {
-    smoothChannel(channels[name], CHANNELS[name], frameRate);
+    smoothChannel(
+      channels[name],
+      CHANNELS[name] / head.articulationSpeed,
+      frameRate
+    );
   }
   addVibrato(channels.f0, head, frameRate);
   return { tokens, segments, head, frameRate, frameCount, duration, channels };

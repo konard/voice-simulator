@@ -264,7 +264,10 @@ export function tractShape(state, head, options = {}) {
   return {
     areas,
     length,
-    velumArea: MAX_VELUM_AREA * Math.max(0, Math.min(1, full.velum)),
+    velumArea:
+      MAX_VELUM_AREA *
+      Math.max(0, Math.min(1, full.velum)) *
+      (head.nasalCoupling ?? 1),
     velumIndex: Math.round(
       ((areas.length - 1) * head.pharynxRatio * VELUM_POSITION) /
         REFERENCE_PHARYNX

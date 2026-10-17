@@ -130,6 +130,7 @@ export class Fdtd3d {
     this.dx = model.dx;
     this.dt = (COURANT * model.dx) / SPEED_OF_SOUND;
     this.output = options.output ?? 'flow';
+    this.wallLoss = options.head?.wallLoss ?? 1;
     this.#allocate(model, options.kernel ?? 'wasm');
     this.#prepareBoundaries(model);
     const { lips } = model.landmarks;
@@ -335,7 +336,8 @@ export class Fdtd3d {
         area = Math.min(area, narrowest);
       }
       this.conductance[link] = Math.max(0, g);
-      this.damping[link] = Math.max(0, lossFactor(area)) ** exponent;
+      this.damping[link] =
+        Math.max(0, lossFactor(area, this.wallLoss)) ** exponent;
     }
     const portArea = this.velumLinks.length * this.dx * this.dx;
     const open = Math.min(1, this.velumArea / Math.max(portArea, 1e-9));
