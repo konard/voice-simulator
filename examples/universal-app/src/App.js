@@ -122,9 +122,9 @@ function Meter({ label, tier, load, detail, t }) {
 function Hud({ status, visual, mode, t }) {
   const audioTier = AUDIO_TIERS[status.audioLevel ?? 0];
   const solver = status.solver ?? audioTier.solver;
-  const underruns = status.underruns
-    ? ` · ${t.underruns} ${status.underruns}`
-    : '';
+  const underruns =
+    (status.underruns ? ` · ${t.underruns} ${status.underruns}` : '') +
+    (status.overloads ? ` · ${t.overloads} ${status.overloads}` : '');
   return h(
     'div',
     { className: 'hud', 'aria-live': 'polite' },

@@ -170,7 +170,8 @@ const COMMANDS = {
       return;
     }
     result.loads.forEach((load, index) => {
-      io.stdout(`${AUDIO_TIERS[index].name}: load ${load.toFixed(3)}`);
+      const note = result.measured[index] ? '' : ' (predicted, not run)';
+      io.stdout(`${AUDIO_TIERS[index].name}: load ${load.toFixed(3)}${note}`);
     });
     io.stdout(`selected: ${result.tier.name}`);
   },

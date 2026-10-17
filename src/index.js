@@ -78,6 +78,8 @@ export {
   AUDIO_TIERS,
   VISUAL_TIERS,
   LodGovernor,
+  OverloadDetector,
   chooseTier,
+  fallbackLevel,
 } from './perf/lod.js';
 export { measureAudioTier, benchmarkAudioTiers } from './perf/benchmark.js';

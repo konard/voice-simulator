@@ -5,10 +5,12 @@
  *
  * Messages in:
  *   {type: 'benchmark', head}                 -> {type: 'benchmark', level, loads}
- *   {type: 'speak', id, ipa, lang, head, seed, tier, chunkSize}
+ *   {type: 'speak', id, ipa, lang, head, seed, tier, auto, chunkSize}
  *   {type: 'cancel', id}
  * Messages out (per utterance):
  *   {type: 'start', id, sampleRate, solver, totalSamples, model?}
+ *   {type: 'overload', id, from, level, load}  (auto mode: the tier could
+ *     not keep up, the utterance restarts on the cheaper `level`)
  *   {type: 'chunk', id, start, samples, field, load}
  *   {type: 'end', id, load}
  *   {type: 'error', id, message}
@@ -16,10 +18,12 @@
 
 import {
   AUDIO_TIERS,
+  OverloadDetector,
   VoiceRenderer,
   buildVoxelModel,
   chooseTier,
   encodeHeadConfig,
+  fallbackLevel,
   measureAudioTier,
   prepareUtterance,
 } from '../../../../src/index.js';
@@ -138,6 +142,7 @@ async function speak(message) {
   });
   const chunkSize = message.chunkSize ?? 1024;
   const meter = new FieldMeter();
+  const detector = new OverloadDetector();
   let busyTotal = 0;
   while (!renderer.done) {
     if (current !== id) {
@@ -149,6 +154,21 @@ async function speak(message) {
     const written = renderChunk(renderer, samples, meter);
     const busy = (globalThis.performance.now() - began) / 1000;
     busyTotal += busy;
+    const overloaded = detector.record(busy, written / renderer.sampleRate);
+    if (overloaded && message.auto && message.tier > 0) {
+      // Detected within the first chunks, while the audio is still in the
+      // player's lead: restart on a tier that is predicted to keep up.
+      const level = fallbackLevel(AUDIO_TIERS, message.tier, detector.load);
+      globalThis.postMessage({
+        type: 'overload',
+        id,
+        from: message.tier,
+        level,
+        load: detector.load,
+      });
+      await speak({ ...message, tier: level });
+      return;
+    }
     const field = meter.take();
     const transfer = [samples.buffer];
     if (field) {
@@ -179,10 +199,11 @@ async function speak(message) {
 
 function benchmark(message) {
   const result = chooseTier(
-    (tier) =>
+    (tier, { limit }) =>
       measureAudioTier(tier, {
         head: message.head,
         seconds: BENCHMARK_SECONDS,
+        limit,
       }),
     { tiers: AUDIO_TIERS, target: 0.8 }
   );

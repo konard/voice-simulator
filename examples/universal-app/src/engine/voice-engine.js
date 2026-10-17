@@ -141,6 +141,7 @@ export class VoiceEngine {
       head: request.head,
       seed: request.seed,
       tier: this.audioLevel,
+      auto: this.auto,
     });
     return job;
   }
@@ -163,6 +164,7 @@ export class VoiceEngine {
     const handlers = {
       start: () => this.#start(job, message),
       chunk: () => this.#chunk(job, message),
+      overload: () => this.#overload(job, message),
       end: () => {
         job.finished = true;
       },
@@ -181,6 +183,21 @@ export class VoiceEngine {
     this.cells = message.model;
     this.player.begin(message.sampleRate);
     this.#emit({ solver: message.solver, cells: Boolean(message.model) });
+  }
+
+  /** The worker restarts the utterance on a cheaper tier. */
+  #overload(job, message) {
+    this.governor.level = message.level;
+    this.governor.load = 0;
+    this.governor.samples = 0;
+    job.chunks = [];
+    job.fields = [];
+    job.fieldIndex = 0;
+    this.#emit({
+      audioLevel: this.audioLevel,
+      audioLoad: message.load,
+      overloads: (this.status.overloads ?? 0) + 1,
+    });
   }
 
   #chunk(job, message) {

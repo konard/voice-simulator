@@ -10,7 +10,10 @@
  * not oscillate.
  */
 
-/** Audio tiers, cheapest first. `cost` is relative work per second. */
+/**
+ * Audio tiers, cheapest first. `cost` is relative work per second, as
+ * measured by experiments/issue-5-tier-costs.mjs (with the wasm kernel).
+ */
 export const AUDIO_TIERS = Object.freeze([
   Object.freeze({
     name: 'minimal',
@@ -38,14 +41,14 @@ export const AUDIO_TIERS = Object.freeze([
     solver: 'fdtd3d',
     dx: 1,
     sampleRate: 48000,
-    cost: 60,
+    cost: 10,
   }),
   Object.freeze({
     name: 'ultra',
     solver: 'fdtd3d',
     dx: 0.6,
     sampleRate: 48000,
-    cost: 300,
+    cost: 65,
   }),
 ]);
 
@@ -103,11 +106,9 @@ export class LodGovernor {
         : this.load + (load - this.load) * this.smoothing;
     this.samples++;
     if (this.load > this.target && this.level > 0) {
-      let level = this.level - 1;
-      while (level > 0 && this.predict(level) > this.target) {
-        level--;
-      }
-      return this.#switch(level);
+      return this.#switch(
+        fallbackLevel(this.tiers, this.level, this.load, this.target)
+      );
     }
     const next = this.level + 1;
     if (
@@ -122,23 +123,98 @@ export class LodGovernor {
 }
 
 /**
+ * Most detailed tier below `level` that is predicted (by cost ratio) to fit
+ * the target, given the load measured at `level`; 0 if none does.
+ * @param {readonly {cost: number}[]} tiers
+ * @param {number} level
+ * @param {number} load
+ * @param {number} [target]
+ */
+export function fallbackLevel(tiers, level, load, target = 0.8) {
+  let next = Math.max(0, level - 1);
+  while (next > 0 && (load * tiers[next].cost) / tiers[level].cost > target) {
+    next--;
+  }
+  return next;
+}
+
+/**
  * Pick the most detailed tier whose measured load fits the target.
- * @param {(tier: object) => number} measure Returns the load of a tier (work time / real time).
- * @param {{tiers?: readonly object[], target?: number}} [options]
- * @returns {{level: number, loads: number[]}}
+ *
+ * To find the limit of slow hardware quickly, a tier whose load predicted
+ * from the cheaper tier (load times cost ratio) exceeds `skip` times the
+ * target is not measured at all, and `measure` receives a `limit`: it may
+ * stop as soon as the load is clearly above it.
+ * @param {(tier: object, options: {limit: number}) => number} measure Returns the load of a tier (work time / real time).
+ * @param {{tiers?: readonly object[], target?: number, skip?: number}} [options]
+ * @returns {{level: number, loads: number[], measured: boolean[]}}
  */
 export function chooseTier(measure, options = {}) {
   const tiers = options.tiers ?? AUDIO_TIERS;
   const target = options.target ?? 0.8;
+  const limit = target * (options.skip ?? 2);
   const loads = [];
+  const measured = [];
   let level = 0;
   for (let index = 0; index < tiers.length; index++) {
-    const load = measure(tiers[index]);
+    if (index > 0) {
+      const ratio = tiers[index].cost / tiers[index - 1].cost;
+      const predicted = loads[index - 1] * ratio;
+      if (predicted > limit) {
+        loads.push(predicted);
+        measured.push(false);
+        break;
+      }
+    }
+    const load = measure(tiers[index], { limit });
     loads.push(load);
+    measured.push(true);
     if (load > target) {
       break;
     }
     level = index;
   }
-  return { level, loads };
+  return { level, loads, measured };
+}
+
+/**
+ * Watches the first moments of an utterance and reports when the current
+ * tier cannot keep up with real time, long before the listener would hear
+ * gaps: the caller can restart the utterance on a cheaper tier while the
+ * audio is still in the playback lead.
+ */
+export class OverloadDetector {
+  /**
+   * @param {{threshold?: number, minAudio?: number, maxAudio?: number}} [options]
+   * threshold: load that counts as overload (1 = exactly real time);
+   * minAudio/maxAudio: seconds of rendered audio during which to decide.
+   */
+  constructor(options = {}) {
+    this.threshold = options.threshold ?? 1.2;
+    this.minAudio = options.minAudio ?? 0.04;
+    this.maxAudio = options.maxAudio ?? 0.3;
+    this.busy = 0;
+    this.audio = 0;
+  }
+
+  /** Overall load so far. */
+  get load() {
+    return this.busy / Math.max(this.audio, 1e-9);
+  }
+
+  /**
+   * Report a rendered chunk.
+   * @param {number} busy Seconds spent rendering.
+   * @param {number} audio Seconds of audio produced.
+   * @returns {boolean} Whether the tier is overloaded.
+   */
+  record(busy, audio) {
+    this.busy += busy;
+    this.audio += audio;
+    return (
+      this.audio >= this.minAudio &&
+      this.audio <= this.maxAudio &&
+      this.load > this.threshold
+    );
+  }
 }

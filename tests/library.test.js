@@ -8,6 +8,8 @@ import {
   LodGovernor,
   VISUAL_TIERS,
   chooseTier,
+  fallbackLevel,
+  OverloadDetector,
   decodeWav,
   encodeWav,
   getAudioTier,
@@ -156,6 +158,40 @@ describe('chooseTier', () => {
     );
     expect(result.level).toBe(1);
     expect(measured).toEqual([1, 2, 4]);
+  });
+
+  it('skips tiers predicted to be far too slow', () => {
+    const measured = [];
+    const result = chooseTier(
+      (tier) => {
+        measured.push(tier.cost);
+        return tier.cost * 0.1;
+      },
+      { tiers: [{ cost: 1 }, { cost: 2 }, { cost: 60 }, { cost: 300 }] }
+    );
+    expect(measured).toEqual([1, 2]);
+    expect(result.level).toBe(1);
+    expect(result.measured).toEqual([true, true, false]);
+    expect(Math.abs(result.loads[2] - 6) < 1e-9).toBe(true);
+  });
+
+  it('stops measuring a tier once it exceeds the limit', () => {
+    const slow = { ...AUDIO_TIERS[2], name: 'slow' };
+    const began = globalThis.performance.now();
+    const load = measureAudioTier(slow, { seconds: 1, limit: 0.001 });
+    expect(load > 0.001).toBe(true);
+    expect(globalThis.performance.now() - began < 500).toBe(true);
+  });
+
+  it('detects overload early and picks a cheaper tier', () => {
+    const detector = new OverloadDetector();
+    expect(detector.record(0.01, 0.021)).toBe(false);
+    expect(detector.record(0.05, 0.021)).toBe(true);
+    expect(fallbackLevel(AUDIO_TIERS, 4, detector.load)).toBe(3);
+    expect(fallbackLevel(AUDIO_TIERS, 3, 1.3)).toBe(2);
+    expect(fallbackLevel(AUDIO_TIERS, 2, 3)).toBe(0);
+    const late = new OverloadDetector();
+    expect(late.record(2, 1)).toBe(false);
   });
 
   it('measures real tiers with a positive load', () => {

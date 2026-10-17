@@ -378,16 +378,48 @@ export declare class LodGovernor<T extends { cost: number } = AudioTier> {
   predict(level: number): number;
   record(busy: number, budget: number): boolean;
 }
+/**
+ * Pick the most detailed tier that fits the target. Tiers predicted to
+ * need more than `skip` (default 2) times the target are not measured.
+ */
 export declare function chooseTier<T>(
-  measure: (tier: T) => number,
-  options?: { tiers?: readonly T[]; target?: number }
-): { level: number; loads: number[] };
+  measure: (tier: T, options: { limit: number }) => number,
+  options?: { tiers?: readonly T[]; target?: number; skip?: number }
+): { level: number; loads: number[]; measured: boolean[] };
+/** Most detailed tier below `level` predicted to fit `target`. */
+export declare function fallbackLevel(
+  tiers: readonly { cost: number }[],
+  level: number,
+  load: number,
+  target?: number
+): number;
+/** Detects in the first moments of an utterance that a tier is too slow. */
+export declare class OverloadDetector {
+  constructor(options?: {
+    threshold?: number;
+    minAudio?: number;
+    maxAudio?: number;
+  });
+  readonly load: number;
+  record(busy: number, audio: number): boolean;
+}
+/** Load of a tier; stops early once the load exceeds `limit`. */
 export declare function measureAudioTier(
   tier: AudioTier,
-  options?: { head?: HeadConfig; ipa?: string; seconds?: number }
+  options?: {
+    head?: HeadConfig;
+    ipa?: string;
+    seconds?: number;
+    limit?: number;
+  }
 ): number;
 export declare function benchmarkAudioTiers(options?: {
   target?: number;
   head?: HeadConfig;
   seconds?: number;
-}): { level: number; tier: AudioTier; loads: number[] };
+}): {
+  level: number;
+  tier: AudioTier;
+  loads: number[];
+  measured: boolean[];
+};
