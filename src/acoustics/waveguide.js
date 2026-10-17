@@ -7,12 +7,22 @@
  * velum is a three-port junction. The glottis injects volume velocity,
  * and the output is the volume velocity leaving lips and nostrils, which
  * (with a flow-derivative source) is proportional to the radiated sound.
+ *
+ * The piriform fossae, two blind pouches either side of the larynx tube,
+ * hang off the lower pharynx as one closed side branch about 2 cm long.
+ * Their quarter-wave resonance puts an antiresonance near 4-5 kHz into
+ * every vowel (Dang & Honda 1997; Takemoto et al. 2010).
  */
 
 const MIN_AREA = 1e-4;
 const GLOTTAL_REFLECTION = 0.75;
 const LIP_REFLECTION = -0.85;
 const NOSTRIL_REFLECTION = -0.85;
+/** Piriform fossae: depth (cm), combined opening (cm²), height (cm). */
+const PIRIFORM_LENGTH = 2;
+const PIRIFORM_AREA = 0.5;
+const PIRIFORM_HEIGHT = 2.4;
+const REST_LENGTH = 16.5;
 
 /**
  * Per-step attenuation of a section: boundary-layer losses grow with
@@ -27,7 +37,8 @@ export function lossFactor(area) {
 
 export class Waveguide {
   /**
-   * @param {{sections?: number, noseSections?: number}} [options]
+   * `piriform: false` leaves out the piriform fossae side branch.
+   * @param {{sections?: number, noseSections?: number, head?: object, piriform?: boolean}} [options]
    */
   constructor(options = {}) {
     const n = options.sections ?? 44;
@@ -52,6 +63,23 @@ export class Waveguide {
     this.velumIndex = Math.round(n * 0.45);
     this.lipOutput = 0;
     this.noseOutput = 0;
+    this.#allocatePiriform(options);
+  }
+
+  #allocatePiriform(options) {
+    const length = options.head?.vocalTractLength ?? REST_LENGTH;
+    const enabled = options.piriform !== false;
+    const count = enabled
+      ? Math.max(2, Math.round((this.n * PIRIFORM_LENGTH) / length))
+      : 0;
+    this.piriform = {
+      index: Math.max(1, Math.round((this.n * PIRIFORM_HEIGHT) / length)),
+      area: PIRIFORM_AREA * (options.head?.pharynxWidth ?? 1),
+      right: new Float64Array(count),
+      left: new Float64Array(count),
+      damping: lossFactor(PIRIFORM_AREA / 2),
+      entering: 0,
+    };
   }
 
   /**
@@ -127,6 +155,42 @@ export class Waveguide {
     this.noseJunctionRight[0] = pressure - fromNose;
   }
 
+  /** Three-port junction into the closed piriform branch. */
+  #scatterPiriform() {
+    const { index, area, right, left } = this.piriform;
+    if (!right.length || index === this.velumIndex) {
+      return;
+    }
+    const a = this.areas[index - 1];
+    const b = this.areas[index];
+    const fromLeft = this.right[index - 1];
+    const fromRight = this.left[index];
+    const fromSide = left[0];
+    const pressure =
+      (2 * (a * fromLeft + b * fromRight + area * fromSide)) / (a + b + area);
+    this.junctionRight[index] = pressure - fromRight;
+    this.junctionLeft[index] = pressure - fromLeft;
+    this.piriform.entering = pressure - fromSide;
+  }
+
+  /** Uniform blind tube: plain delay with a rigid (+1) far end. */
+  #propagatePiriform() {
+    const { right, left, damping } = this.piriform;
+    const last = right.length - 1;
+    if (last < 0) {
+      return;
+    }
+    const end = right[last];
+    for (let index = 0; index < last; index++) {
+      left[index] = left[index + 1] * damping;
+    }
+    left[last] = end * damping;
+    for (let index = last; index > 0; index--) {
+      right[index] = right[index - 1] * damping;
+    }
+    right[0] = this.piriform.entering * damping;
+  }
+
   #scatterNose() {
     const { noseRight, noseLeft, noseReflection } = this;
     for (let index = 1; index < this.noseN; index++) {
@@ -170,12 +234,14 @@ export class Waveguide {
     this.lipOutput = this.right[last] * (1 - LIP_REFLECTION) * this.areas[last];
     this.#scatterOral();
     this.#scatterVelum();
+    this.#scatterPiriform();
     this.#scatterNose();
     if (noise !== 0) {
       const position = Math.min(this.n - 1, Math.max(1, noisePosition));
       this.junctionRight[position] += noise * 0.5;
       this.junctionLeft[position] -= noise * 0.5;
     }
+    this.#propagatePiriform();
     this.#propagate();
     return this.lipOutput + this.noseOutput;
   }
@@ -207,8 +273,11 @@ export class Waveguide {
       this.noseLeft,
       this.noseJunctionRight,
       this.noseJunctionLeft,
+      this.piriform.right,
+      this.piriform.left,
     ]) {
       array.fill(0);
     }
+    this.piriform.entering = 0;
   }
 }

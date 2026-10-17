@@ -1,8 +1,10 @@
 /**
  * three.js view of the simulated head: a translucent low-poly skin, the
- * vocal and nasal tract tubes coloured by acoustic pressure, the lips and
- * (with the 3D solver) the pressure in every air voxel. The tract follows
- * the articulation plan frame by frame; the jaw and lips are optional.
+ * vocal and nasal tract tubes coloured by acoustic pressure, the lips,
+ * teeth, tongue, hard and soft palate and (with the 3D solver) the
+ * pressure in every air voxel. The tract, tongue and velum follow the
+ * articulation plan frame by frame; the jaw, lower teeth and lips are
+ * optional.
  */
 
 import {
@@ -25,21 +27,35 @@ import {
 } from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import {
+  REST_GAP,
+  anatomyMeshes,
   deformJaw,
   headMesh,
+  jawOpenness,
   lipsMesh,
+  lowerTeethMesh,
   nasalCenterline,
   noseShape,
   tractCenterline,
+  tongueMesh,
   tractShape,
   tubeMesh,
   updateTubeMesh,
+  velumMesh,
 } from '../../../../src/index.js';
 
 const LOW = new Color(0.16, 0.32, 0.62);
 const MID = new Color(0.98, 0.78, 0.25);
 const HIGH = new Color(0.92, 0.2, 0.12);
 const TARGET = [0, -5, 2];
+/** Materials of the articulators inside the mouth. */
+const ANATOMY_COLORS = {
+  upperTeeth: { color: 0xf2ead8, roughness: 0.35 },
+  lowerTeeth: { color: 0xf2ead8, roughness: 0.35 },
+  tongue: { color: 0xc4646e, roughness: 0.7 },
+  palate: { color: 0xd88a8a, roughness: 0.6 },
+  velum: { color: 0xd47d84, roughness: 0.6 },
+};
 
 /** Map 0..1 to a blue -> amber -> red ramp. */
 export function pressureColor(value, out) {
@@ -224,6 +240,18 @@ export class HeadViewer {
       geometryFrom(lipsMesh(head, { area: neutral.areas.at(-1), lod })),
       new MeshStandardMaterial({ color: 0xc0505a, roughness: 0.6 })
     );
+    this.anatomy = {};
+    for (const mesh of anatomyMeshes(head, { lod, shape: neutral })) {
+      this.anatomy[mesh.name] = new Mesh(
+        geometryFrom(mesh),
+        new MeshStandardMaterial({
+          ...ANATOMY_COLORS[mesh.name],
+          side: DoubleSide,
+        })
+      );
+      this.group.add(this.anatomy[mesh.name]);
+    }
+    this.anatomyState = { gap: REST_GAP, velum: 0 };
     this.group.add(this.tract, this.nose, this.lips, this.skin, wire);
     colorTube(this.tract.geometry, this.tractMesh.ring, null, 1);
     colorTube(this.nose.geometry, this.noseMesh.ring, null, 1);
@@ -286,9 +314,43 @@ export class HeadViewer {
     return shape;
   }
 
+  #setPositions(name, mesh) {
+    const target = this.anatomy[name].geometry;
+    const attribute = target.getAttribute('position');
+    attribute.array.set(mesh.positions);
+    attribute.needsUpdate = true;
+    target.computeVertexNormals();
+  }
+
+  /** Tongue, soft palate and (with the jaw) the lower teeth. */
+  #updateAnatomy(shape, state, gap) {
+    this.#setPositions(
+      'tongue',
+      tongueMesh(this.head, { lod: this.lod, shape })
+    );
+    const velum = state.velum ?? 0;
+    if (velum !== this.anatomyState.velum) {
+      this.anatomyState.velum = velum;
+      this.#setPositions(
+        'velum',
+        velumMesh(this.head, { lod: this.lod, velum })
+      );
+    }
+    if (gap !== this.anatomyState.gap) {
+      this.anatomyState.gap = gap;
+      this.#setPositions(
+        'lowerTeeth',
+        lowerTeethMesh(this.head, { lod: this.lod, gap })
+      );
+    }
+  }
+
   #updateMouth(shape, state, animate) {
     const area = animate ? shape.areas.at(-1) : 1.2;
-    const openness = animate ? Math.min(1, Math.sqrt(area / 4)) : 0.15;
+    // The jaw carries the chin and the lower teeth to the acoustic gap.
+    const gap = animate ? (shape.teeth?.gap ?? REST_GAP) : REST_GAP;
+    const openness = animate ? jawOpenness(gap, this.head) : 0.15;
+    this.#updateAnatomy(shape, state, gap);
     const skin = this.skin.geometry.getAttribute('position');
     deformJaw(this.skinBase, skin.array, this.head, openness);
     skin.needsUpdate = true;

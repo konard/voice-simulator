@@ -201,13 +201,18 @@ describe('chooseTier', () => {
 });
 
 describe('headModel', () => {
-  it('builds head, tract, nose and lips meshes', () => {
+  it('builds head, tract, nose, lips and articulator meshes', () => {
     const meshes = headModel(randomHeadConfig(4), { lod: 0 });
     expect(meshes.map((mesh) => mesh.name)).toEqual([
       'head',
       'tract',
       'nose',
       'lips',
+      'upperTeeth',
+      'lowerTeeth',
+      'tongue',
+      'palate',
+      'velum',
     ]);
     for (const mesh of meshes) {
       expect(mesh.positions.length > 0).toBe(true);
@@ -225,5 +230,6 @@ describe('headModel', () => {
     const obj = headModelObj({}, { lod: 0 });
     expect(obj).toContain('o head');
     expect(obj).toContain('o lips');
+    expect(obj).toContain('o tongue');
   });
 });

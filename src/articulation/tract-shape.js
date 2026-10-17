@@ -11,6 +11,7 @@
  */
 
 import { CHANNEL_DEFAULTS } from './plan.js';
+import { carveTeeth, dentition } from './teeth.js';
 import { VOWEL_SECTIONS, vowelShape } from './vowel-space.js';
 
 export const TRACT_SECTIONS = VOWEL_SECTIONS;
@@ -232,18 +233,37 @@ export function turbulence(area) {
   return Math.max(0, 1 - (area - 0.06) / 0.4) ** 2;
 }
 
-function fricationSource(areas, state, head) {
+/** How much a sibilant jet is aimed at the incisors (0..1). */
+function obstacleStrength(state, teeth) {
+  if (!teeth) {
+    return 0;
+  }
+  const narrow = Math.min(1, Math.max(0, (0.8 - teeth.gap) / 0.5));
+  return (state.sibilance ?? 0) * narrow;
+}
+
+function fricationSource(areas, state, head, teeth) {
   const index = constrictionIndex(areas, state, head);
-  const sibilant = state.sibilance ?? 0;
-  // Sibilant jets hit the teeth just behind the lips.
-  const teeth = Math.round(areas.length * 0.95);
-  const target = sibilant > 0.5 ? Math.max(index + 1, teeth) : index + 1;
+  const obstacle = obstacleStrength(state, teeth);
+  // Sibilant jets hit the incisors: the noise starts just past them.
+  const target = obstacle > 0.5 ? Math.max(index + 1, teeth.outlet) : index + 1;
   return {
     index,
     position: Math.min(areas.length - 1, target),
     area: areas[index],
     gain: (state.frication ?? 0) * turbulence(areas[index]),
-    sibilance: sibilant,
+    sibilance: state.sibilance ?? 0,
+    obstacle,
+  };
+}
+
+function applyTeeth(areas, state, head, length) {
+  const teeth = dentition(state, head, length);
+  const last = areas.length - 1;
+  return {
+    ...teeth,
+    index: carveTeeth(areas, teeth, length),
+    outlet: Math.min(last, Math.round((teeth.end / length) * last) + 1),
   };
 }
 
@@ -251,7 +271,8 @@ function fricationSource(areas, state, head) {
  * Full tract description for one moment.
  * @param {Record<string, number>} state Articulator channels (see plan.js).
  * @param {Record<string, number>} head Normalised head config.
- * @param {{sections?: number}} [options]
+ * @param {{sections?: number, teeth?: boolean}} [options] `teeth: false`
+ *   leaves out the incisors (constriction and obstacle noise source).
  */
 export function tractShape(state, head, options = {}) {
   const full = { ...CHANNEL_DEFAULTS, time: 0, ...state };
@@ -261,6 +282,8 @@ export function tractShape(state, head, options = {}) {
     sections: options.sections,
     openness,
   });
+  const teeth =
+    options.teeth === false ? null : applyTeeth(areas, full, head, length);
   return {
     areas,
     length,
@@ -269,7 +292,7 @@ export function tractShape(state, head, options = {}) {
       ((areas.length - 1) * head.pharynxRatio * VELUM_POSITION) /
         REFERENCE_PHARYNX
     ),
-    frication: fricationSource(areas, full, head),
+    frication: fricationSource(areas, full, head, teeth),
     glottis: {
       f0: full.f0,
       voicing: full.voicing,
@@ -279,5 +302,6 @@ export function tractShape(state, head, options = {}) {
     },
     lipOpening: areas.at(-1),
     jaw: openness,
+    teeth,
   };
 }

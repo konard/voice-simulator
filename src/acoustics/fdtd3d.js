@@ -17,6 +17,11 @@
  * number lambda = c dt / dx stays below 1/sqrt(3), which keeps the scheme
  * stable for any fill fractions. Quantities are normalised (u = rho c v).
  *
+ * The incisors are solid voxels in the slices just behind the lips: tract
+ * cells outside the slot between the incisal edges are walls (no links),
+ * and the slot cells carry the whole teeth cross-section, so the slot
+ * width follows the jaw.
+ *
  * Simplifications: the voxel tract has the head's rest vocal tract length
  * (dynamic lengthening by the larynx or lips only rescales the area
  * function), and wall losses use the same empirical loss model as the 1D
@@ -164,6 +169,10 @@ export class Fdtd3d {
     this.cellKind = Uint8Array.from(model.cells, (cell) => cell.kind);
     this.cellArc = Float64Array.from(model.cells, (cell) => cell.arc);
     this.envelope = envelopeAreas(model);
+    // Envelope seen by the area function: smaller in the teeth slot cells.
+    this.effective = Float64Array.from(this.envelope);
+    this.solid = new Uint8Array(cellCount);
+    this.teethGap = null;
     this.velocity = array('velocity', Float64Array, linkCount);
     this.conductance = array('conductance', Float64Array, linkCount).fill(1);
     this.damping = array('damping', Float64Array, linkCount).fill(1);
@@ -259,9 +268,9 @@ export class Fdtd3d {
   }
 
   /** Returns false when the areas did not change since the last call. */
-  #setTube(kind, areas) {
+  #setTube(kind, areas, force = false) {
     const previous = this.tubeAreas[kind];
-    if (previous && previous.length === areas.length) {
+    if (!force && previous && previous.length === areas.length) {
       let same = true;
       for (let index = 0; index < areas.length && same; index++) {
         same = previous[index] === areas[index];
@@ -276,10 +285,71 @@ export class Fdtd3d {
       const area = resample(areas, this.cellArc[index] / length);
       this.fill[index] = Math.min(
         1,
-        Math.max(MIN_FILL, area / this.envelope[index])
+        Math.max(MIN_FILL, area / this.effective[index])
       );
+      if (this.solid[index]) {
+        this.fill[index] = 1;
+      }
     }
     return true;
+  }
+
+  /**
+   * Open the teeth cells that overlap the slot between the incisal edges
+   * and make the rest solid. Returns false when the gap did not change.
+   * @param {{gap: number}|null|undefined} teeth
+   */
+  #applyTeeth(teeth) {
+    const gap = teeth && this.model.teeth ? teeth.gap : null;
+    if (gap === this.teethGap) {
+      return false;
+    }
+    this.teethGap = gap;
+    const { cells, groups, edge, width } = this.model.teeth ?? {};
+    if (!cells) {
+      return true;
+    }
+    const open = this.#teethSlot(gap, edge, width);
+    const totals = new Map();
+    const opened = new Map();
+    groups.forEach((group, position) => {
+      totals.set(group, (totals.get(group) ?? 0) + 1);
+      opened.set(group, (opened.get(group) ?? 0) + open[position]);
+    });
+    cells.forEach((cell, position) => {
+      const group = groups[position];
+      const share = opened.get(group) / totals.get(group);
+      const solid = gap !== null && !open[position];
+      if (solid && !this.solid[cell]) {
+        this.pressure[cell] = 0;
+      }
+      this.solid[cell] = solid ? 1 : 0;
+      this.effective[cell] = this.envelope[cell] * (gap === null ? 1 : share);
+    });
+    return true;
+  }
+
+  /** 1 for teeth cells inside the slot (at least one per slice). */
+  #teethSlot(gap, edge, width) {
+    const { cells, groups } = this.model.teeth;
+    const half = this.dx / 2;
+    const open = new Uint8Array(cells.length);
+    const nearest = new Map();
+    cells.forEach((cell, position) => {
+      const [x, y] = this.model.cells[cell].point;
+      const vertical = Math.max(y - half - edge, edge - gap - (y + half));
+      const lateral = Math.abs(x) - half - width / 2;
+      open[position] = vertical < 0 && lateral < 0 ? 1 : 0;
+      const distance = Math.max(vertical, 0) + Math.max(lateral, 0);
+      const best = nearest.get(groups[position]);
+      if (!best || distance < best.distance) {
+        nearest.set(groups[position], { distance, position });
+      }
+    });
+    for (const { position } of nearest.values()) {
+      open[position] = 1;
+    }
+    return open;
   }
 
   /**
@@ -318,11 +388,17 @@ export class Fdtd3d {
     const exponent =
       (SPEED_OF_SOUND * this.dt * LOSS_REFERENCE_SECTIONS) /
       this.model.lengths[CELL_TRACT];
-    const { fill, envelope, linkA, linkB, cellKind } = this;
+    const { fill, effective: envelope, linkA, linkB, cellKind, solid } = this;
     const { from, to } = this.#linkSpans();
     for (const link of this.tubeLinks) {
       const a = linkA[link];
       const b = linkB[link];
+      if (solid[a] || solid[b]) {
+        this.conductance[link] = 0;
+        this.damping[link] = 0;
+        this.velocity[link] = 0;
+        continue;
+      }
       let g = Math.min(fill[a], fill[b]);
       let area = Math.min(fill[a] * envelope[a], fill[b] * envelope[b]);
       if (from[link] >= 0) {
@@ -360,13 +436,17 @@ export class Fdtd3d {
   }
 
   /**
-   * Oral tract area function and velopharyngeal port.
+   * Oral tract area function, velopharyngeal port and incisors.
    * @param {ArrayLike<number>} areas
    * @param {number} velumArea cm².
+   * @param {number} [velumIndex] Unused: the voxel model has its own port.
+   * @param {{gap: number}|null} [teeth] Incisor gap (cm), see tractShape;
+   *   without it the teeth slices are plain tube.
    */
-  setShape(areas, velumArea) {
+  setShape(areas, velumArea, velumIndex, teeth) {
     const velum = Math.max(0, velumArea);
-    const changed = this.#setTube(CELL_TRACT, areas);
+    const moved = this.#applyTeeth(teeth);
+    const changed = this.#setTube(CELL_TRACT, areas, moved) || moved;
     if (!changed && velum === this.velumArea) {
       return;
     }

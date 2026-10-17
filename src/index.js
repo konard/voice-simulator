@@ -102,3 +102,28 @@ export {
   formatFromFileName,
 } from './audio/formats.js';
 export { resample } from './audio/resample.js';
+
+// Anatomy (issue 5): teeth, tongue, hard and soft palate, piriform fossae.
+export {
+  INCISOR_THICKNESS,
+  REST_GAP,
+  SIBILANT_GAP,
+  incisorDepth,
+  teethWidth,
+  teethGap,
+  dentition,
+  carveTeeth,
+} from './articulation/teeth.js';
+export { arcPoint } from './geometry/centerline.js';
+export {
+  ANATOMY_LODS,
+  jawAngle,
+  jawOpenness,
+  incisorEdges,
+  upperTeethMesh,
+  lowerTeethMesh,
+  tongueMesh,
+  palateMesh,
+  velumMesh,
+  anatomyMeshes,
+} from './geometry/anatomy.js';

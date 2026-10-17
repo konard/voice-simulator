@@ -108,7 +108,9 @@ class OutputStage {
 export class VoiceRenderer {
   /**
    * @param {object} plan Result of planUtterance.
-   * @param {{sampleRate?: number, sections?: number, solver?: string, seed?: string|number, blockSize?: number, head?: object, dx?: number, model?: object, output?: string}} [options]
+   * @param {{sampleRate?: number, sections?: number, solver?: string, seed?: string|number, blockSize?: number, head?: object, dx?: number, model?: object, output?: string, teeth?: boolean, piriform?: boolean}} [options]
+   *   `teeth: false` leaves out the incisors, `piriform: false` the
+   *   piriform fossae side branches of the waveguide.
    */
   constructor(plan, options = {}) {
     this.plan = plan;
@@ -116,6 +118,7 @@ export class VoiceRenderer {
     this.sampleRate = options.sampleRate ?? 48000;
     this.sections = options.sections ?? 44;
     this.blockSize = options.blockSize ?? 32;
+    this.teeth = options.teeth !== false;
     const seed = options.seed ?? 1;
     const factory = SOLVERS.get(options.solver ?? 'waveguide');
     if (!factory) {
@@ -130,6 +133,7 @@ export class VoiceRenderer {
       model: options.model,
       output: options.output,
       kernel: options.kernel,
+      piriform: options.piriform,
     });
     this.solver.setNose?.(noseShape(this.head).areas);
     this.glottis = new Glottis({
@@ -159,11 +163,15 @@ export class VoiceRenderer {
 
   #updateShape() {
     sampleState(this.plan, this.time, this.state);
-    this.shape = tractShape(this.state, this.head, { sections: this.sections });
+    this.shape = tractShape(this.state, this.head, {
+      sections: this.sections,
+      teeth: this.teeth,
+    });
     this.solver.setShape(
       this.shape.areas,
       this.shape.velumArea,
-      this.shape.velumIndex
+      this.shape.velumIndex,
+      this.shape.teeth
     );
     this.stepDuration = this.solver.stepDuration(this.shape);
     const rate = 1 / this.stepDuration;
@@ -179,8 +187,10 @@ export class VoiceRenderer {
     const { noise } = this;
     const broad = noise.fricative.process(white);
     const hiss = noise.sibilant.process(white);
+    // A jet hitting the incisors adds a strong high-frequency dipole
+    // source; without that obstacle only the broad wall source remains.
     const colour =
-      broad * (1 - frication.sibilance) + hiss * 0.06 * frication.sibilance;
+      broad * (1 - frication.obstacle) + hiss * 0.06 * frication.obstacle;
     const voicing = Math.min(1, this.shape.glottis.voicing);
     const flow =
       (1 - this.shape.glottis.closure) *

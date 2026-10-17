@@ -18,6 +18,12 @@
 import { vowelTarget } from '../articulation/phones.js';
 import { noseShape, tractShape } from '../articulation/tract-shape.js';
 import {
+  INCISOR_THICKNESS,
+  REST_GAP,
+  incisorDepth,
+  teethWidth,
+} from '../articulation/teeth.js';
+import {
   headLandmarks,
   nasalCenterline,
   tractCenterline,
@@ -289,6 +295,30 @@ function openFaces(grid, collected, field, dx) {
 }
 
 /**
+ * Tract cells in the incisor slices. They become solid tooth or stay air
+ * depending on the incisor gap (see Fdtd3d#applyTeeth). The upper incisal
+ * edge is fixed to the skull; the lower edge drops with the jaw.
+ */
+function teethCells(cells, config, length, lips, dx) {
+  const centre = length - incisorDepth(config) - INCISOR_THICKNESS / 2;
+  const reach = Math.max(dx, INCISOR_THICKNESS) / 2;
+  const members = [];
+  const groups = [];
+  cells.forEach((cell, index) => {
+    if (cell.kind === CELL_TRACT && Math.abs(cell.arc - centre) <= reach) {
+      members.push(index);
+      groups.push(Math.round(cell.arc / dx));
+    }
+  });
+  return {
+    cells: Int32Array.from(members),
+    groups: Int32Array.from(groups),
+    edge: lips[1] + REST_GAP / 2,
+    width: teethWidth(config),
+  };
+}
+
+/**
  * Build the voxel model of a head.
  * @param {Record<string, number>} head
  * @param {{dx?: number}} [options] Cube size in cm (smaller = more detail).
@@ -337,5 +367,6 @@ export function buildVoxelModel(head, options = {}) {
     lengths: context.lengths,
     velumDistance,
     landmarks: { lips, nostrils },
+    teeth: teethCells(collected.cells, config, length, lips, dx),
   };
 }
