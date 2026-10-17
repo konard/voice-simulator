@@ -158,3 +158,24 @@ describe('universal React example app', () => {
     expect(rootReadme).toContain('npm run example:web:preview-images');
   });
 });
+
+describe('previous app versions', () => {
+  it('keeps v1 published from the commit before issue 5', async () => {
+    const { readVersions } =
+      await import('../scripts/build-previous-versions.mjs');
+    const versions = readVersions();
+    expect(versions.map((version) => version.path)).toContain('v1');
+    expect(versions.find((version) => version.path === 'v1').commit).toBe(
+      'a1129cb4efd2be8d7d2ec67403a4ee9290e1f467'
+    );
+    const workflow = readText(workflowPath);
+    const build = workflow.indexOf('run: npm run example:web:build');
+    const previous = workflow.indexOf(
+      'run: node scripts/build-previous-versions.mjs'
+    );
+    expect(build > 0 && previous > build).toBe(true);
+    expect(readText(appSourcePath)).toContain(
+      'https://konard.github.io/voice-simulator/v1/'
+    );
+  });
+});

@@ -17,6 +17,8 @@ const repositoryUrl =
   import.meta.env.VITE_REPOSITORY_URL ??
   'https://github.com/konard/voice-simulator';
 
+// The previous release stays published next to the current one.
+const PREVIOUS_VERSION_URL = 'https://konard.github.io/voice-simulator/v1/';
 const THEMES = ['system', 'light', 'dark'];
 
 function initialSeed() {
@@ -427,6 +429,11 @@ export function App() {
           'button',
           { type: 'button', className: 'ghost', onClick: nextTheme },
           `${t.theme}: ${t.themes[theme]}`
+        ),
+        h(
+          'a',
+          { href: PREVIOUS_VERSION_URL, target: '_blank', rel: 'noreferrer' },
+          t.previousVersion
         ),
         h(
           'a',

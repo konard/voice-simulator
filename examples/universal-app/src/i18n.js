@@ -32,6 +32,7 @@ const STRINGS = {
     solver: 'solver',
     underruns: 'underruns',
     overloads: 'early step-downs',
+    previousVersion: 'Version 1',
     benchmarking: 'Measuring this device…',
     noWebgl:
       'WebGL is not available, so the 3D view is off. Sound still works.',
@@ -77,6 +78,7 @@ const STRINGS = {
     solver: 'решатель',
     underruns: 'опустошения буфера',
     overloads: 'ранние понижения',
+    previousVersion: 'Версия 1',
     benchmarking: 'Измеряем производительность…',
     noWebgl: 'WebGL недоступен, 3D-вид отключён. Звук работает.',
     viewerHint:

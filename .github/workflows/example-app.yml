@@ -10,6 +10,7 @@ on:
       - 'package-lock.json'
       - 'scripts/update-preview-images.mjs'
       - 'scripts/check-pages.sh'
+      - 'scripts/build-previous-versions.mjs'
       - '.github/workflows/example-app.yml'
   push:
     branches:
@@ -21,6 +22,7 @@ on:
       - 'package-lock.json'
       - 'scripts/update-preview-images.mjs'
       - 'scripts/check-pages.sh'
+      - 'scripts/build-previous-versions.mjs'
       - '.github/workflows/example-app.yml'
   workflow_dispatch:
 
@@ -81,6 +83,11 @@ jobs:
         env:
           GITHUB_PAGES: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
           VITE_REPOSITORY_URL: https://github.com/${{ github.repository }}
+
+      # Earlier releases stay online under /v1/ and so on; the list of
+      # versions is examples/universal-app/previous-versions.json.
+      - name: Build previous versions
+        run: node scripts/build-previous-versions.mjs
 
       - name: Upload web build artifact
         uses: actions/upload-artifact@v7
