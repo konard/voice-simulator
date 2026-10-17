@@ -9,6 +9,7 @@ import {
   randomHeadConfig,
   textToIpa,
 } from '../../../src/index.js';
+import { ExportControls } from './components/ExportControls.js';
 import { HeadEditor } from './components/HeadEditor.js';
 import { useSimulator } from './engine/use-simulator.js';
 import { detectLocale, strings } from './i18n.js';
@@ -304,19 +305,15 @@ function SpeakPanel({ speech, setSpeech, simulator, onSpeak, onStop, t }) {
             },
             t.speak
           ),
-      h(
-        'button',
-        {
-          type: 'button',
-          onClick: () => {
-            const blob = simulator.engineRef.current?.wav();
-            if (blob) {
-              download(blob, 'voice-simulator.wav');
-            }
-          },
+      h(ExportControls, {
+        t,
+        onDownload: (preset) => {
+          const file = simulator.engineRef.current?.exportAudio(preset);
+          if (file) {
+            download(file.blob, file.fileName);
+          }
         },
-        t.downloadWav
-      )
+      })
     ),
     simulator.status.error
       ? h('p', { className: 'error', role: 'alert' }, simulator.status.error)

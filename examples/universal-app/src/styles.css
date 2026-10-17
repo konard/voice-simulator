@@ -370,6 +370,17 @@ h2 {
   grid-template-columns: 1fr 1fr;
 }
 
+.export {
+  display: flex;
+  gap: 6px;
+  min-width: 0;
+}
+
+.export select {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
 .toggle {
   display: flex;
   gap: 8px;
