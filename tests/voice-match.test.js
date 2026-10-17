@@ -4,7 +4,12 @@
  * tract length.
  */
 
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { describe, it, expect } from 'test-anywhere';
+import { runCli } from '../bin/voice-simulator.js';
+import { decodeHeadConfig, encodeWav } from '../src/index.js';
 import { synthesize } from '../src/synthesize.js';
 import {
   analyzeVoice,
@@ -103,5 +108,52 @@ describe('matchVoice', () => {
       female.head.vocalTractLength + 1
     );
     expect(male.preset).toBe('male');
+  });
+});
+
+describe('voice-simulator match', () => {
+  it('prints the features and the matched head of a WAV file', async () => {
+    const directory = mkdtempSync(join(tmpdir(), 'voice-match-'));
+    try {
+      const file = join(directory, 'voice.wav');
+      const target = presetHeadConfig('female');
+      const { samples, sampleRate } = synthesize(TEXT, {
+        head: target,
+        sampleRate: 16000,
+      });
+      writeFileSync(file, encodeWav(samples, sampleRate));
+      const lines = [];
+      const code = await runCli(
+        ['match', file, '--transcript', TEXT, '--iterations', '2', '--json'],
+        {
+          stdout: (line) => lines.push(line),
+          stderr: (line) => lines.push(line),
+        }
+      );
+      expect(code).toBe(0);
+      const result = JSON.parse(lines[0]);
+      expect(result.preset).toBe('female');
+      expect(relativeError(result.features.f0, target.pitch)).toBeLessThan(
+        0.15
+      );
+
+      const text = [];
+      await runCli(['match', file, '--iterations', '1'], {
+        stdout: (line) => text.push(line),
+      });
+      expect(text[0]).toContain('Hz');
+      expect(decodeHeadConfig(text[2]).pitch).toBeGreaterThan(150);
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
+  });
+
+  it('fails without a file', async () => {
+    const errors = [];
+    const code = await runCli(['match'], {
+      stderr: (line) => errors.push(line),
+    });
+    expect(code).toBe(1);
+    expect(errors[0]).toContain('Missing');
   });
 });

@@ -9,8 +9,10 @@ import {
   benchmarkAudioTiers,
   decodeHeadConfig,
   encodeHeadConfig,
+  decodeWav,
   encodeWav,
   headModelObj,
+  matchVoice,
   measureAudioTier,
   randomHeadConfig,
   synthesize,
@@ -34,6 +36,8 @@ const OPTIONS = {
   seconds: { type: 'string' },
   port: { type: 'string', short: 'p' },
   host: { type: 'string' },
+  transcript: { type: 'string' },
+  iterations: { type: 'string' },
   json: { type: 'boolean' },
   help: { type: 'boolean', short: 'h' },
   version: { type: 'boolean', short: 'v' },
@@ -48,6 +52,7 @@ function usage() {
     '  say <text> -o f.wav Simulate speech and write a WAV file',
     '  head                Print a random head configuration',
     '  mesh -o head.obj    Export the low-poly head model as OBJ',
+    '  match <file.wav>    Find the head that sounds like a recording',
     '  benchmark           Measure the audio LOD tiers on this machine',
     '  serve               Start the HTTP API (with streaming)',
     '',
@@ -63,7 +68,9 @@ function usage() {
     '      --output <mode>   flow | microphone (FDTD only)',
     '      --sample-rate <n> Output sample rate',
     '      --ipa             Treat <text> as IPA',
-    '      --lod <0-3>       Mesh level of detail',
+    '      --transcript <t>  What the recording says (closer match)',
+    '      --iterations <n>  Renders while matching (default 4, max 12)',
+    '      --lod <0-3>      Mesh level of detail',
     '  -p, --port <port>     Server port (default 8080, env PORT)',
     '      --host <host>     Server host (default 127.0.0.1, env HOST)',
     '      --json            Machine-readable output',
@@ -161,6 +168,44 @@ const COMMANDS = {
     const head = resolveHead(values) ?? randomHeadConfig(1);
     const obj = headModelObj(head, { lod: optionalNumber(values.lod, 'lod') });
     writeOutput(values.out ?? 'head.obj', obj, io);
+  },
+
+  match(values, positionals, io) {
+    const [file] = positionals;
+    if (!file) {
+      throw new Error('Missing <file.wav>');
+    }
+    const { samples, sampleRate } = decodeWav(readFileSync(file));
+    const result = matchVoice(samples, sampleRate, {
+      preset: values.preset,
+      transcript: values.transcript,
+      lang: values.lang,
+      iterations: optionalNumber(values.iterations, 'iterations'),
+    });
+    if (values.json) {
+      io.stdout(
+        JSON.stringify({
+          preset: result.preset,
+          distance: result.distance,
+          features: result.features,
+          head: result.head,
+        })
+      );
+      return;
+    }
+    const { features } = result;
+    io.stdout(
+      [
+        `f0 ${features.f0.toFixed(0)} Hz`,
+        `range ${features.f0Range.toFixed(1)} st`,
+        `formants ${features.formants.map((value) => value.toFixed(0)).join('/')} Hz`,
+        `H1-H2 ${features.h1h2.toFixed(1)} dB`,
+        `HNR ${features.hnr.toFixed(1)} dB`,
+        `${features.syllableRate.toFixed(1)} syllables/s`,
+      ].join(', ')
+    );
+    io.stdout(`${result.preset}, distance ${result.distance.toFixed(2)}`);
+    io.stdout(encodeHeadConfig(result.head));
   },
 
   benchmark(values, positionals, io) {

@@ -249,7 +249,7 @@ function updateHead(head, target, history, controls) {
 function renderFeatures(head, options) {
   const { samples, sampleRate } = synthesize(options.transcript || MATCH_TEXT, {
     head,
-    lang: options.lang ?? 'en',
+    lang: options.transcript ? options.lang : 'en',
     sampleRate: 16000,
     solver: 'waveguide',
     seed: 1,
@@ -264,8 +264,9 @@ function renderFeatures(head, options) {
  * @param {ArrayLike<number>} samples Mono recording.
  * @param {number} sampleRate
  * @param {{preset?: string, iterations?: number, transcript?: string, lang?: string, maxDuration?: number}} [options]
- *   transcript is what the recording says (in `lang`, default en); the
- *   renders then say the same words, which makes pitch and rate exact.
+ *   transcript is what the recording says (in `lang`, detected when
+ *   omitted); the renders then say the same words, which makes pitch and
+ *   rate exact.
  */
 export function* matchVoiceSteps(samples, sampleRate, options = {}) {
   const features = analyzeVoice(samples, sampleRate, options);

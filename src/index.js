@@ -90,3 +90,10 @@ export {
   HEAD_PRESET_NAMES,
   presetHeadConfig,
 } from './head-config.js';
+export { analyzeVoice } from './analysis/voice-features.js';
+export {
+  MATCH_TEXT,
+  featureDistance,
+  matchVoice,
+  matchVoiceSteps,
+} from './analysis/voice-match.js';
