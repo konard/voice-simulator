@@ -167,7 +167,11 @@ export declare function getAudioTier(
 export declare const LANGUAGES: Readonly<Record<LanguageCode, Language>>;
 export declare function textToIpa(
   text: string,
-  options?: { lang?: 'auto' | LanguageCode; accent?: AccentCode | string }
+  options?: {
+    /** A language, or a regional tag such as 'en-GB' that picks the accent. */
+    lang?: 'auto' | LanguageCode | AccentCode | string;
+    accent?: AccentCode | string;
+  }
 ): Transcription;
 export declare function detectLanguage(text: string): LanguageCode;
 export declare function scriptLanguage(text: string): LanguageCode | null;

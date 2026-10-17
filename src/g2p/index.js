@@ -258,22 +258,39 @@ function linkRs(items, accent) {
 }
 
 /**
+ * Split a language tag such as `en-GB` into the language (`en`) and the
+ * full tag, which then selects the accent unless one is given.
+ */
+function splitLanguageTag(tag) {
+  const requested = tag ?? 'auto';
+  const match = /^([a-z]{2})[-_][a-z]{2}$/i.exec(requested);
+  if (!match || !WORD_PRONOUNCERS[match[1].toLowerCase()]) {
+    return { requested, region: undefined };
+  }
+  return {
+    requested: match[1].toLowerCase(),
+    region: requested.replace('_', '-'),
+  };
+}
+
+/**
  * Convert text to IPA.
  * @param {string} text
- * @param {{lang?: 'auto'|'en'|'ru'|'hi'|'zh', accent?: string}} [options]
- *   `accent` picks an English accent (`en-US`, `en-GB`, `en-AU`,
- *   `en-IN`; see `accents.js`).
+ * @param {{lang?: string, accent?: string}} [options]
+ *   `lang` is 'auto', 'en', 'ru', 'hi' or 'zh', or a regional tag such as
+ *   'en-GB'. `accent` picks an English accent (`en-US`, `en-GB`, `en-AU`,
+ *   `en-IN`; see `accents.js`) and wins over the region of `lang`.
  * @returns {{lang: string, accent: string|null, ipa: string, words: object[]}}
  */
 export function textToIpa(text, options = {}) {
   const source = normalizeDevanagariDigits(String(text ?? ''));
-  const requested = options.lang ?? 'auto';
+  const { requested, region } = splitLanguageTag(options.lang);
   const lang =
     requested === 'auto' || !WORD_PRONOUNCERS[requested]
       ? detectLanguage(source)
       : requested;
   const items = [];
-  const accent = resolveAccent('en', options.accent);
+  const accent = resolveAccent('en', options.accent ?? region);
   const normalized = normalizeText(source, {
     lang,
     wordLanguage: (word) => wordLanguage(word, lang),
@@ -293,7 +310,7 @@ export function textToIpa(text, options = {}) {
     .join(' ');
   return {
     lang,
-    accent: resolveAccent(lang, options.accent),
+    accent: resolveAccent(lang, options.accent ?? region),
     ipa,
     words: items.filter((item) => !item.break),
   };

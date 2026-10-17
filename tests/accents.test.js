@@ -151,4 +151,17 @@ describe('accent option', () => {
     expect(code).toBe(0);
     expect(stdout).toEqual(['ˈwɔːtə']);
   });
+
+  it('is implied by a regional language code', () => {
+    const british = textToIpa('water', { lang: 'en-GB' });
+    expect(british.lang).toBe('en');
+    expect(british.accent).toBe('en-GB');
+    expect(british.ipa).toBe('ˈwɔːtə');
+    expect(textToIpa('car', { lang: 'en-au' }).accent).toBe('en-AU');
+    // An explicit accent wins over the region of the language code.
+    expect(textToIpa('car', { lang: 'en-GB', accent: 'en-US' }).ipa).toBe(
+      'ˈkɑɹ'
+    );
+    expect(prepareUtterance('car', { lang: 'en-GB' }).ipa).toBe('ˈkɑː');
+  });
 });
