@@ -18,6 +18,7 @@ import {
   headModelObj,
   matchVoice,
   measureAudioTier,
+  prepareUtterance,
   randomHeadConfig,
   resample,
   synthesize,
@@ -27,6 +28,7 @@ import { INDEX_PAGE, createVoiceServer } from '../src/server/server.js';
 
 const OPTIONS = {
   lang: { type: 'string', short: 'l' },
+  accent: { type: 'string' },
   out: { type: 'string', short: 'o' },
   tier: { type: 'string', short: 't' },
   solver: { type: 'string' },
@@ -67,6 +69,7 @@ function usage() {
     '  ipa <text>          Print the IPA transcription (en, ru, hi, zh)',
     '  say <text> -o f.wav Simulate speech and write an audio file',
     '  convert <in> -o out Convert an audio file (WAV, FLAC, AIFF, AU) to mono',
+    '  timeline <text>     Print when each word and syllable is spoken',
     '  head                Print a random head configuration',
     '  mesh -o head.obj    Export the low-poly head model as OBJ',
     '  match <file>        Find the head that sounds like a recording',
@@ -75,6 +78,7 @@ function usage() {
     '',
     'Options:',
     '  -l, --lang <code>     auto | en | ru | hi | zh (default auto)',
+    '      --accent <code>   English accent: en-US | en-GB | en-AU | en-IN',
     '  -o, --out <file>      Output file ("-" for stdout)',
     `  -t, --tier <name>     ${AUDIO_TIERS.map((tier) => tier.name).join(' | ')}`,
     '      --solver <name>   waveguide | fdtd3d (overrides the tier)',
@@ -242,7 +246,10 @@ function audioOutput(values, baseName) {
 
 const COMMANDS = {
   ipa(values, positionals, io) {
-    const result = textToIpa(requireText(positionals), { lang: values.lang });
+    const result = textToIpa(requireText(positionals), {
+      lang: values.lang,
+      accent: values.accent,
+    });
     io.stdout(values.json ? JSON.stringify(result) : result.ipa);
   },
 
@@ -250,6 +257,7 @@ const COMMANDS = {
     const output = audioOutput(values, 'voice');
     const result = synthesize(requireText(positionals), {
       lang: values.lang,
+      accent: values.accent,
       ipa: values.ipa,
       seed: values.seed,
       head: resolveHead(values),
@@ -262,7 +270,18 @@ const COMMANDS = {
     });
     const { out } = output;
     writeOutput(out, output.encode(result.samples, result.sampleRate), io);
-    if (out !== '-') {
+    if (out !== '-' && values.json) {
+      io.stdout(
+        JSON.stringify({
+          lang: result.lang,
+          accent: result.accent,
+          ipa: result.ipa,
+          duration: result.duration,
+          out,
+          timeline: result.timeline,
+        })
+      );
+    } else if (out !== '-') {
       io.stdout(
         `[${result.lang}] /${result.ipa}/ ${result.duration.toFixed(2)} s -> ${out}`
       );
@@ -287,6 +306,29 @@ const COMMANDS = {
     if (output.out !== '-') {
       io.stdout(
         `${decoded.format} ${decoded.channels} ch ${decoded.sampleRate} Hz -> ${output.out} (${rate} Hz mono)`
+      );
+    }
+  },
+
+  timeline(values, positionals, io) {
+    const prepared = prepareUtterance(requireText(positionals), {
+      lang: values.lang,
+      accent: values.accent,
+      ipa: values.ipa,
+    });
+    const { lang, accent, ipa, timeline } = prepared;
+    if (values.json) {
+      io.stdout(
+        JSON.stringify({ lang, accent: accent ?? null, ipa, timeline })
+      );
+      return;
+    }
+    for (const word of timeline.words) {
+      const syllables = word.syllables
+        .map((syllable) => syllable.text ?? syllable.ipa)
+        .join('·');
+      io.stdout(
+        `${word.start.toFixed(3)} ${word.end.toFixed(3)} ${word.text} /${word.syllables.map((syllable) => syllable.ipa).join('.')}/ ${syllables}`
       );
     }
   },

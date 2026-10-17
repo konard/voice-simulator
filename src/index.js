@@ -162,3 +162,26 @@ export {
   matchVoice,
   matchVoiceSteps,
 } from './analysis/voice-match.js';
+// Linguistics: text normalisation, accents, prosody, syllables, timeline
+export { normalizeText, VERBALIZERS } from './g2p/normalize.js';
+export {
+  ACCENTS,
+  resolveAccent,
+  adaptEnglishWord,
+  isNonRhotic,
+} from './g2p/accents.js';
+export {
+  BOUNDARIES,
+  CONTOURS,
+  boundaryOf,
+  pauseDuration,
+  intonationPhrases,
+} from './articulation/prosody.js';
+export {
+  sonority,
+  syllabifyIpa,
+  syllabifyTokens,
+  syllableIpa,
+} from './ipa/syllables.js';
+export { syllableSpans, hindiAksharas } from './g2p/orthography.js';
+export { utteranceTimeline, timelineAt } from './articulation/timeline.js';

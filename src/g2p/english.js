@@ -11,10 +11,17 @@ import { englishNumberWords, spellToIpa } from './english-rules.js';
 
 let dictionary = null;
 
+/**
+ * Hand-written entries missing from the generated subset: number words
+ * and the words the text normaliser generates (units, currencies).
+ */
+const SUPPLEMENT =
+  "thirteen=θɝˈtin fourteen=fɔɹˈtin sixteen=sɪkˈstin seventeen=ˌsɛvənˈtin eighteen=eɪˈtin nineteen=naɪnˈtin seventy=ˈsɛvənti eighty=ˈeɪti ninety=ˈnaɪnti o'clock=əˈklɑk cetera=ˈsɛtəɹə missus=ˈmɪsɪz miz=ˈmɪz euro=ˈjʊɹoʊ euros=ˈjʊɹoʊz rupee=ɹuˈpi rupees=ɹuˈpiz ruble=ˈɹubəl rubles=ˈɹubəlz kopeck=ˈkoʊpɛk kopecks=ˈkoʊpɛks paisa=ˈpaɪsɑ paise=ˈpaɪseɪ yuan=juˈɑn fen=ˈfɛn celsius=ˈsɛlsiəs fahrenheit=ˈfɛɹənˌhaɪt kilogram=ˈkɪləˌɡɹæm kilograms=ˈkɪləˌɡɹæmz kilometer=kɪˈlɑmətɚ kilometers=kɪˈlɑmətɚz centimeter=ˈsɛntəˌmitɚ centimeters=ˈsɛntəˌmitɚz millimeter=ˈmɪləˌmitɚ millimeters=ˈmɪləˌmitɚz milligram=ˈmɪləˌɡɹæm milligrams=ˈmɪləˌɡɹæmz liter=ˈlitɚ liters=ˈlitɚz milliliter=ˈmɪləˌlitɚ milliliters=ˈmɪləˌlitɚz millisecond=ˈmɪləˌsɛkənd milliseconds=ˈmɪləˌsɛkəndz hertz=ˈhɝts kilohertz=ˈkɪləˌhɝts megabyte=ˈmɛɡəˌbaɪt megabytes=ˈmɛɡəˌbaɪts gigabyte=ˈɡɪɡəˌbaɪt gigabytes=ˈɡɪɡəˌbaɪts";
+
 function getDictionary() {
   if (!dictionary) {
     dictionary = new Map(
-      ENGLISH_DICTIONARY.split(' ').map((entry) => {
+      `${ENGLISH_DICTIONARY} ${SUPPLEMENT}`.split(' ').map((entry) => {
         const split = entry.indexOf('=');
         return [entry.slice(0, split), entry.slice(split + 1)];
       })

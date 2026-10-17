@@ -62,7 +62,8 @@ describe('textToIpa', () => {
   });
 
   it('converts Russian with stress and palatalisation', () => {
-    expect(textToIpa('Привет, мир').ipa).toBe('prʲɪˈvʲet | mʲir');
+    // A comma is its own break (continuation rise), distinct from a dash.
+    expect(textToIpa('Привет, мир').ipa).toBe('prʲɪˈvʲet , mʲir');
   });
 
   it('converts Hindi with schwa deletion', () => {

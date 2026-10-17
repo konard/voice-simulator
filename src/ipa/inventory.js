@@ -214,7 +214,51 @@ export const PAUSES = Object.freeze({
   '!': 3,
   '?': 3,
   '…': 3,
+  '(': 2,
+  ')': 2,
+  '"': 1,
 });
+
+/**
+ * Prosodic boundary class of each pause symbol, ranked from weakest to
+ * strongest: when pauses merge (`, "` or `?!`) the stronger class wins.
+ */
+export const BOUNDARY_CLASSES = Object.freeze({
+  ' ': 'word',
+  '"': 'quote',
+  '(': 'paren',
+  ')': 'paren',
+  ',': 'comma',
+  '|': 'dash',
+  ';': 'semicolon',
+  ':': 'semicolon',
+  '…': 'ellipsis',
+  '.': 'period',
+  '‖': 'period',
+  '!': 'exclamation',
+  '?': 'question',
+});
+
+/** Rank of each boundary class (higher wins a merge). */
+export const BOUNDARY_RANKS = Object.freeze(
+  Object.fromEntries(
+    [
+      'word',
+      'quote',
+      'paren',
+      'comma',
+      'dash',
+      'semicolon',
+      'ellipsis',
+      'period',
+      'exclamation',
+      'question',
+    ].map((name, rank) => [name, rank])
+  )
+);
+
+/** Intonation arrows: global rise and fall for the next phrase end. */
+export const CONTOUR_MARKS = Object.freeze({ '↗': 'rise', '↘': 'fall' });
 
 /**
  * Look up a base IPA symbol.

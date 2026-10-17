@@ -34,6 +34,9 @@ describe('example app i18n', () => {
     expect(Object.keys(russian.units).sort()).toEqual(
       Object.keys(english.units).sort()
     );
+    expect(Object.keys(russian.accents).sort()).toEqual(
+      Object.keys(english.accents).sort()
+    );
     expect(strings('xx')).toBe(english);
   });
 

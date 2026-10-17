@@ -307,7 +307,8 @@ export const HEAD_PARAMETERS = Object.freeze([
     max: 2,
     step: 0.01,
     default: 1.4,
-    description: 'Duration factor of vowels at the end of a phrase.',
+    description:
+      'Duration factor of vowels before a full stop; weaker punctuation lengthens less.',
   },
   {
     key: 'pauseLength',

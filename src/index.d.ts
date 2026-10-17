@@ -20,12 +20,52 @@ export interface Word {
   ipa: string;
   source?: string;
   pinyin?: string;
+  /** The written text the word was read from (before verbalisation). */
+  original?: string;
+  sourceStart?: number;
+  sourceEnd?: number;
+  token?: number;
+  linkingR?: boolean;
 }
+
+export type AccentCode = 'en-US' | 'en-GB' | 'en-AU' | 'en-IN';
 
 export interface Transcription {
   lang: string;
+  /** English accent; null for other languages. */
+  accent?: AccentCode | null;
   ipa: string;
   words: Word[];
+}
+
+export interface TimelineSyllable {
+  ipa: string;
+  /** 0 unstressed, 1 primary, 2 secondary. */
+  stress: number;
+  /** Seconds from the start of the audio. */
+  start: number;
+  end: number;
+  /** Letters that spell the syllable, when the word is read as written. */
+  text?: string;
+  sourceStart?: number;
+  sourceEnd?: number;
+}
+
+export interface TimelineWord {
+  text: string;
+  lang: string;
+  ipa: string;
+  start: number;
+  end: number;
+  /** Range of the source text (null when it cannot be mapped). */
+  sourceStart: number | null;
+  sourceEnd: number | null;
+  syllables: TimelineSyllable[];
+}
+
+export interface Timeline {
+  duration: number;
+  words: TimelineWord[];
 }
 
 export interface Plan {
@@ -75,6 +115,8 @@ export interface RenderOptions {
 
 export interface SynthesizeOptions {
   lang?: 'auto' | LanguageCode;
+  /** English accent (code or region such as "GB"). */
+  accent?: AccentCode | string;
   /** Treat the text as IPA. */
   ipa?: boolean;
   head?: HeadConfig | 'random';
@@ -93,6 +135,7 @@ export interface SynthesizeOptions {
 export interface SynthesisResult extends Transcription {
   head: HeadConfig;
   plan: Plan;
+  timeline: Timeline;
   sampleRate: number;
   samples: Float32Array;
   duration: number;
@@ -113,6 +156,7 @@ export declare function prepareUtterance(
 ): Transcription & {
   head: HeadConfig;
   plan: Plan;
+  timeline: Timeline;
   renderOptions: RenderOptions;
 };
 export declare function getAudioTier(
@@ -123,7 +167,7 @@ export declare function getAudioTier(
 export declare const LANGUAGES: Readonly<Record<LanguageCode, Language>>;
 export declare function textToIpa(
   text: string,
-  options?: { lang?: 'auto' | LanguageCode }
+  options?: { lang?: 'auto' | LanguageCode; accent?: AccentCode | string }
 ): Transcription;
 export declare function detectLanguage(text: string): LanguageCode;
 export declare function scriptLanguage(text: string): LanguageCode | null;
@@ -899,3 +943,55 @@ export declare function matchVoiceSteps(
   sampleRate: number,
   options?: VoiceMatchOptions
 ): Generator<VoiceMatchStep, VoiceMatch, void>;
+// Linguistics: text normalisation, accents, prosody, syllables, timeline
+export declare const VERBALIZERS: Readonly<Record<LanguageCode, object>>;
+export declare function normalizeText(
+  text: string,
+  options: { lang: string; wordLanguage: (word: string) => string }
+): object[];
+export declare const ACCENTS: Readonly<{
+  en: readonly { code: AccentCode; name: string; native: string }[];
+}>;
+/** The accent code for a language, or null when it has no accents. */
+export declare function resolveAccent(
+  lang: string,
+  accent?: string | null
+): AccentCode | null;
+/** Adapt a General American transcription to another accent. */
+export declare function adaptEnglishWord(
+  ipa: string,
+  spelling: string,
+  accent: AccentCode | string
+): string;
+export declare function isNonRhotic(accent: AccentCode | string): boolean;
+export declare const BOUNDARIES: Readonly<Record<string, object>>;
+export declare const CONTOURS: Readonly<Record<string, object>>;
+export declare function boundaryOf(pause: object | null | undefined): string;
+export declare function pauseDuration(pause: object): number;
+export declare function intonationPhrases(segments: object[]): object[];
+export declare function sonority(token: object): number;
+export declare function syllabifyTokens(
+  tokens: object[],
+  options?: { language?: string }
+): object[][];
+export declare function syllableIpa(tokens: object[]): string;
+/** Syllables (as IPA) of each word of an IPA string. */
+export declare function syllabifyIpa(
+  ipa: string,
+  options?: { language?: string }
+): string[][];
+export declare function syllableSpans(
+  word: string,
+  syllables: { onset: number; coda: number; size: number }[],
+  options?: { exactOnly?: boolean }
+): { start: number; end: number }[] | null;
+export declare function hindiAksharas(word: string): object[];
+export declare function utteranceTimeline(
+  plan: Plan,
+  options?: { words?: Word[]; ipa?: string; language?: string }
+): Timeline;
+/** Indices of the word and syllable spoken at `time`, null in a pause. */
+export declare function timelineAt(
+  timeline: Timeline | null | undefined,
+  time: number
+): { word: number; syllable: number } | null;

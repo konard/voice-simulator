@@ -5,6 +5,7 @@
 
 import { renderPlan, VoiceRenderer } from './acoustics/voice.js';
 import { planUtterance } from './articulation/plan.js';
+import { utteranceTimeline } from './articulation/timeline.js';
 import { textToIpa } from './g2p/index.js';
 import { normalizeHeadConfig, randomHeadConfig } from './head-config.js';
 import { AUDIO_TIERS } from './perf/lod.js';
@@ -43,9 +44,14 @@ export function prepareUtterance(text, options = {}) {
   const head = resolveHead(options.head, options.seed, options.preset);
   const transcription = options.ipa
     ? { lang: options.lang ?? 'ipa', ipa: String(text), words: [] }
-    : textToIpa(text, { lang: options.lang });
+    : textToIpa(text, { lang: options.lang, accent: options.accent });
   const plan = planUtterance(transcription.ipa, {
     head,
+    language: transcription.lang,
+  });
+  const timeline = utteranceTimeline(plan, {
+    words: transcription.words,
+    ipa: transcription.ipa,
     language: transcription.lang,
   });
   const tier = getAudioTier(options.tier) ?? {};
@@ -64,15 +70,15 @@ export function prepareUtterance(text, options = {}) {
     teeth: options.teeth,
     piriform: options.piriform,
   };
-  return { ...transcription, head, plan, renderOptions };
+  return { ...transcription, head, plan, timeline, renderOptions };
 }
 
 /**
  * Synthesize speech from text. `microphone`, `room` and `enclosure` choose
  * where and in what space the voice is heard (see VoiceRenderer).
  * @param {string} text
- * @param {{lang?: string, ipa?: boolean, head?: object|'random', seed?: string|number, preset?: string, tier?: string|number, solver?: string, sections?: number, dx?: number, sampleRate?: number, output?: 'flow'|'microphone', microphone?: {distance?: number, azimuth?: number, elevation?: number, compensate?: boolean}, room?: string|object, enclosure?: {width: number, height: number, depth: number, absorption?: number, center?: number[]}, teeth?: boolean, piriform?: boolean}} [options]
- * @returns {{lang: string, ipa: string, words: object[], head: object, plan: object, sampleRate: number, samples: Float32Array, duration: number}}
+ * @param {{lang?: string, accent?: string, ipa?: boolean, head?: object|'random', seed?: string|number, preset?: string, tier?: string|number, solver?: string, sections?: number, dx?: number, sampleRate?: number, output?: 'flow'|'microphone', microphone?: {distance?: number, azimuth?: number, elevation?: number, compensate?: boolean}, room?: string|object, enclosure?: {width: number, height: number, depth: number, absorption?: number, center?: number[]}, teeth?: boolean, piriform?: boolean}} [options]
+ * @returns {{lang: string, accent: string|null, ipa: string, words: object[], head: object, plan: object, timeline: object, sampleRate: number, samples: Float32Array, duration: number}}
  */
 export function synthesize(text, options = {}) {
   const prepared = prepareUtterance(text, options);
@@ -80,10 +86,12 @@ export function synthesize(text, options = {}) {
   const { sampleRate } = prepared.renderOptions;
   return {
     lang: prepared.lang,
+    accent: prepared.accent ?? null,
     ipa: prepared.ipa,
     words: prepared.words,
     head: prepared.head,
     plan: prepared.plan,
+    timeline: prepared.timeline,
     sampleRate,
     samples,
     duration: samples.length / sampleRate,

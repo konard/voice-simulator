@@ -118,7 +118,9 @@ export function isHanzi(char) {
 /**
  * Convert a run of Hanzi to toned pinyin syllables.
  * @param {string} text
- * @returns {{char: string, pinyin: string|null}[]}
+ * @returns {{char: string, pinyin: string|null, group: number}[]}
+ *   `group` is the index of the first character of the dictionary phrase
+ *   the character belongs to (the character itself when not in a phrase).
  */
 export function hanziToPinyin(text) {
   const chars = [...text];
@@ -133,10 +135,11 @@ export function hanziToPinyin(text) {
     ) {
       const phrase = chars.slice(index, index + length).join('');
       if (PHRASES[phrase]) {
+        const group = index;
         PHRASES[phrase]
           .split(' ')
           .forEach((pinyin, offset) =>
-            result.push({ char: chars[index + offset], pinyin })
+            result.push({ char: chars[index + offset], pinyin, group })
           );
         index += length;
         matched = true;
@@ -147,6 +150,7 @@ export function hanziToPinyin(text) {
       result.push({
         char: chars[index],
         pinyin: getReadings().get(chars[index]) ?? null,
+        group: index,
       });
       index++;
     }
@@ -154,17 +158,17 @@ export function hanziToPinyin(text) {
   return result;
 }
 
+function parseSyllable({ char, pinyin }) {
+  const parsed = pinyin ? pinyinSyllableToIpa(pinyin) : null;
+  return parsed ? { ...parsed, char, pinyin } : null;
+}
+
 /**
  * Convert syllables (with optional source characters) to an IPA phrase.
  * @param {{char?: string, pinyin: string|null}[]} items
  */
 function syllablesToIpa(items) {
-  const syllables = items
-    .map(({ char, pinyin }) => {
-      const parsed = pinyin ? pinyinSyllableToIpa(pinyin) : null;
-      return parsed ? { ...parsed, char, pinyin } : null;
-    })
-    .filter(Boolean);
+  const syllables = items.map(parseSyllable).filter(Boolean);
   applyToneSandhi(syllables);
   return syllables.map((syllable, index) =>
     syllableWithTone(syllable, index === syllables.length - 1)
@@ -187,6 +191,20 @@ export function chineseWordToIpa(word) {
     pinyin: known.map((item) => item.pinyin).join(' '),
     source: hanzi ? 'dictionary' : known.length ? 'pinyin' : 'unknown',
   };
+}
+
+/**
+ * Pronounce a run of Hanzi character by character, with tone sandhi
+ * applied across the whole run as in `chineseWordToIpa`.
+ * @param {string} text
+ * @returns {{char: string, pinyin: string|null, group: number, ipa: string|null}[]}
+ */
+export function chineseSyllables(text) {
+  const items = hanziToPinyin(text);
+  const known = items.filter((item) => parseSyllable(item));
+  const ipa = syllablesToIpa(known);
+  const byItem = new Map(known.map((item, index) => [item, ipa[index]]));
+  return items.map((item) => ({ ...item, ipa: byItem.get(item) ?? null }));
 }
 
 /** True when the Latin text is valid pinyin (tone marks or numbers). */
