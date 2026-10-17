@@ -8,11 +8,11 @@
 import {
   AUDIO_TIERS,
   LodGovernor,
-  encodeWav,
   planUtterance,
   sampleState,
   textToIpa,
 } from '../../../../src/index.js';
+import { exportAudio } from './audio-export.js';
 import { AudioPlayer } from './audio-player.js';
 
 const TAIL = 0.15;
@@ -327,8 +327,8 @@ export class VoiceEngine {
     }
   }
 
-  /** WAV file of the last (or current) utterance, or null. */
-  wav() {
+  /** Samples of the last (or current) utterance, or null. */
+  recording() {
     const job = this.job ?? this.lastJob;
     if (!job || job.chunks.length === 0) {
       return null;
@@ -340,9 +340,24 @@ export class VoiceEngine {
     for (const chunk of job.chunks) {
       samples.set(chunk.samples, chunk.start);
     }
-    return new Blob([encodeWav(samples, job.sampleRate)], {
-      type: 'audio/wav',
-    });
+    return { samples, sampleRate: job.sampleRate };
+  }
+
+  /**
+   * The last utterance as a file in an export preset (see audio-export.js).
+   * @param {string} [preset] Default 16-bit WAV.
+   * @returns {{blob: Blob, fileName: string} | null}
+   */
+  exportAudio(preset) {
+    const recording = this.recording();
+    return recording
+      ? exportAudio(recording.samples, recording.sampleRate, preset)
+      : null;
+  }
+
+  /** WAV file of the last (or current) utterance, or null. */
+  wav() {
+    return this.exportAudio()?.blob ?? null;
   }
 
   dispose() {

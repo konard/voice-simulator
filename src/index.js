@@ -83,3 +83,22 @@ export {
   fallbackLevel,
 } from './perf/lod.js';
 export { measureAudioTier, benchmarkAudioTiers } from './perf/benchmark.js';
+
+// Audio formats (issue 5)
+export { encodeAiff, decodeAiff } from './audio/aiff.js';
+export { encodeAu, decodeAu, auHeader } from './audio/au.js';
+export { encodeFlac, decodeFlac } from './audio/flac.js';
+export {
+  AUDIO_FORMATS,
+  AUDIO_FORMAT_NAMES,
+  audioFormat,
+  audioEncoding,
+  audioStreamEncoder,
+  detectAudioFormat,
+  decodeAudio,
+  encodeAudio,
+  encodeRaw,
+  decodeRaw,
+  formatFromFileName,
+} from './audio/formats.js';
+export { resample } from './audio/resample.js';

@@ -293,17 +293,16 @@ export declare function spectralPeaks(
 
 // Audio files
 export declare function encodeWav(
-  samples: Float32Array,
-  sampleRate: number
+  samples: AudioSamples,
+  sampleRate: number,
+  options?: SampleEncoding
 ): Uint8Array;
-export declare function decodeWav(bytes: Uint8Array): {
-  sampleRate: number;
-  samples: Float32Array;
-};
+export declare function decodeWav(bytes: Uint8Array): DecodedAudio;
 export declare function wavHeader(
   sampleRate: number,
   dataLength?: number,
-  channels?: number
+  channels?: number,
+  options?: SampleEncoding
 ): Uint8Array;
 
 // Geometry
@@ -423,3 +422,120 @@ export declare function benchmarkAudioTiers(options?: {
   loads: number[];
   measured: boolean[];
 };
+
+// Audio formats (issue 5)
+/** One channel, or a list of equally long channels (interleaved on write). */
+export type AudioSamples = ArrayLike<number> | ArrayLike<number>[];
+/** Integer PCM (8/16/24/32 bits, default 16) or float (32/64 bits). */
+export interface SampleEncoding {
+  bitDepth?: number | string;
+  float?: boolean;
+}
+/** Decoded file, mixed down to mono. */
+export interface DecodedAudio {
+  sampleRate: number;
+  samples: Float32Array;
+  /** Channels in the file before mixdown. */
+  channels: number;
+  bitDepth: number;
+  float: boolean;
+}
+export type AudioFormatName = 'wav' | 'flac' | 'aiff' | 'au' | 'raw';
+export interface AudioFormat {
+  name: AudioFormatName;
+  label: string;
+  extension: string;
+  extensions: readonly string[];
+  mimeType: string;
+  bitDepths: readonly number[];
+  floatBitDepths: readonly number[];
+  lossless: boolean;
+  /** Can be sent before the length is known (audioStreamEncoder). */
+  streamable: boolean;
+  encode(
+    samples: AudioSamples,
+    sampleRate: number,
+    options?: SampleEncoding
+  ): Uint8Array;
+  decode(bytes: Uint8Array): DecodedAudio;
+}
+export interface AudioEncodingOptions extends SampleEncoding {
+  format?: AudioFormatName | string;
+}
+export declare const AUDIO_FORMATS: Readonly<
+  Record<AudioFormatName, AudioFormat>
+>;
+export declare const AUDIO_FORMAT_NAMES: readonly AudioFormatName[];
+export declare function audioFormat(name?: string): AudioFormat;
+export declare function audioEncoding(options?: AudioEncodingOptions): {
+  format: AudioFormat;
+  bitDepth: number;
+  float: boolean;
+};
+export declare function encodeAudio(
+  samples: AudioSamples,
+  sampleRate: number,
+  options?: AudioEncodingOptions
+): Uint8Array;
+export declare function decodeAudio(
+  bytes: Uint8Array | ArrayBuffer,
+  options?: AudioEncodingOptions & { sampleRate?: number; channels?: number }
+): DecodedAudio & { format: AudioFormatName };
+export declare function detectAudioFormat(
+  bytes: Uint8Array
+): 'wav' | 'aiff' | 'au' | 'flac' | null;
+export declare function formatFromFileName(
+  fileName: string
+): AudioFormatName | null;
+export declare function audioStreamEncoder(
+  format: 'wav' | 'au' | 'raw' | string,
+  sampleRate: number,
+  options?: SampleEncoding
+): {
+  format: AudioFormatName;
+  mimeType: string;
+  header: Uint8Array;
+  encode(samples: ArrayLike<number>): Uint8Array;
+};
+export declare function encodeAiff(
+  samples: AudioSamples,
+  sampleRate: number,
+  options?: SampleEncoding
+): Uint8Array;
+export declare function decodeAiff(bytes: Uint8Array): DecodedAudio;
+export declare function encodeAu(
+  samples: AudioSamples,
+  sampleRate: number,
+  options?: SampleEncoding
+): Uint8Array;
+export declare function decodeAu(bytes: Uint8Array): DecodedAudio;
+export declare function auHeader(
+  sampleRate: number,
+  dataLength?: number,
+  channels?: number,
+  options?: SampleEncoding
+): Uint8Array;
+/** Lossless FLAC, 8/16/24-bit integer samples only. */
+export declare function encodeFlac(
+  samples: AudioSamples,
+  sampleRate: number,
+  options?: { bitDepth?: number | string }
+): Uint8Array;
+export declare function decodeFlac(bytes: Uint8Array): DecodedAudio;
+/** Headerless little-endian samples (s8, s16le, s24le, s32le, f32le, f64le). */
+export declare function encodeRaw(
+  samples: AudioSamples,
+  sampleRate?: number,
+  options?: SampleEncoding
+): Uint8Array;
+export declare function decodeRaw(
+  bytes: Uint8Array,
+  options?: SampleEncoding & { sampleRate?: number; channels?: number }
+): DecodedAudio;
+/** Band-limited (windowed-sinc) sample-rate conversion. */
+export declare function resample(
+  samples: ArrayLike<number>,
+  fromRate: number,
+  toRate: number,
+  options?: { zeroCrossings?: number }
+): Float32Array;
