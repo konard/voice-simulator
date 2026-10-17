@@ -7,17 +7,22 @@
  *   GET  /api/ipa?text=&lang=     -> {lang, ipa, words}
  *   GET  /api/head/random?seed=   -> random head configuration
  *   GET  /api/mesh.obj?seed=&lod= -> low-poly head model (Wavefront OBJ)
- *   GET|POST /api/synthesize      -> complete WAV file
- *   GET|POST /api/stream          -> WAV streamed while it is simulated
+ *   GET|POST /api/synthesize      -> complete audio file (WAV by default)
+ *   GET|POST /api/stream          -> WAV, AU or raw streamed while simulated
  *
  * Synthesis parameters come from the query string or a JSON body:
  * text, lang, ipa (boolean), seed, head (object or "random"), tier,
- * solver, sampleRate.
+ * solver, sampleRate, and the encoding: format (wav | flac | aiff | au |
+ * raw), bitDepth, float (boolean).
  */
 
 import { createServer } from 'node:http';
 import { URL } from 'node:url';
-import { encodeWav, floatToPcm16, wavHeader } from '../audio/wav.js';
+import {
+  AUDIO_FORMATS,
+  audioEncoding,
+  audioStreamEncoder,
+} from '../audio/formats.js';
 import { LANGUAGES, textToIpa } from '../g2p/index.js';
 import { headModelObj } from '../geometry/model.js';
 import {
@@ -109,22 +114,49 @@ export function synthesisOptions(params) {
   };
 }
 
+/**
+ * Validate the output encoding ({format, bitDepth, float}); 16-bit WAV by
+ * default.
+ * @param {Record<string, unknown>} params
+ */
+export function encodingOptions(params) {
+  try {
+    const { format, bitDepth, float } = audioEncoding({
+      format: params.format ?? 'wav',
+      bitDepth: params.bitDepth,
+      float: params.float === true || params.float === 'true',
+    });
+    return { format: format.name, bitDepth, float };
+  } catch (error) {
+    throw new HttpError(400, error.message);
+  }
+}
+
 function sendJson(response, status, value) {
   response.writeHead(status, { 'content-type': 'application/json' });
   response.end(JSON.stringify(value));
 }
 
-async function streamWav(response, text, options) {
+function streamEncoder(params, sampleRate) {
+  const { format, ...encoding } = encodingOptions(params);
+  try {
+    return audioStreamEncoder(format, sampleRate, encoding);
+  } catch (error) {
+    throw new HttpError(400, error.message);
+  }
+}
+
+async function streamAudio(response, text, options, encoder) {
   response.writeHead(200, {
-    'content-type': 'audio/wav',
+    'content-type': encoder.mimeType,
     'cache-control': 'no-store',
   });
-  response.write(wavHeader(options.sampleRate));
+  response.write(encoder.header);
   for await (const chunk of synthesizeStream(text, options)) {
     if (response.destroyed) {
       return;
     }
-    response.write(floatToPcm16(chunk));
+    response.write(encoder.encode(chunk));
   }
   response.end();
 }
@@ -147,17 +179,21 @@ function createRoutes(version) {
     },
     'GET /api/synthesize': (params, response) => {
       const { text, options } = synthesisOptions(params);
+      const { format, ...encoding } = encodingOptions(params);
       const result = synthesize(text, options);
+      const audio = AUDIO_FORMATS[format];
       response.writeHead(200, {
-        'content-type': 'audio/wav',
+        'content-type': audio.mimeType,
+        'content-disposition': `inline; filename="voice.${audio.extension}"`,
         'x-ipa': encodeURIComponent(result.ipa),
         'x-language': result.lang,
       });
-      response.end(encodeWav(result.samples, result.sampleRate));
+      response.end(audio.encode(result.samples, result.sampleRate, encoding));
     },
     'GET /api/stream': (params, response) => {
       const { text, options } = synthesisOptions(params);
-      return streamWav(response, text, options);
+      const encoder = streamEncoder(params, options.sampleRate);
+      return streamAudio(response, text, options, encoder);
     },
   };
 }

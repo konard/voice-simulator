@@ -35,7 +35,7 @@ code { background: #eee; padding: 0 .3em; }
 <li><code>GET /api/ipa?text=…&amp;lang=auto</code></li>
 <li><code>GET /api/head/random?seed=…</code></li>
 <li><code>GET /api/mesh.obj?seed=…&amp;lod=0..3</code></li>
-<li><code>GET|POST /api/synthesize</code> (WAV), <code>GET|POST /api/stream</code> (streamed WAV)</li>
+<li><code>GET|POST /api/synthesize</code> (WAV; <code>format=flac|aiff|au|raw</code>, <code>bitDepth</code>, <code>float</code>), <code>GET|POST /api/stream</code> (streamed WAV, AU or raw)</li>
 </ul>
 <script>
 const $ = (id) => document.getElementById(id);

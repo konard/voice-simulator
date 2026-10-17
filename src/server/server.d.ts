@@ -23,5 +23,15 @@ export declare function synthesisOptions(params: Record<string, unknown>): {
   options: SynthesizeOptions;
 };
 
+/**
+ * Validate the output encoding from a query string or JSON body
+ * (`format`, `bitDepth`, `float`); 16-bit WAV by default.
+ */
+export declare function encodingOptions(params: Record<string, unknown>): {
+  format: 'wav' | 'flac' | 'aiff' | 'au' | 'raw';
+  bitDepth: number;
+  float: boolean;
+};
+
 /** Minimal HTML page with a form that plays /api/stream. */
 export declare const INDEX_PAGE: string;
