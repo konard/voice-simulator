@@ -134,11 +134,17 @@ The image runs `voice-simulator serve` on port 8080 with a health check on
 | `minimal`  | waveguide | 22 sections   | 22.05 kHz   | 1             |
 | `low`      | waveguide | 32 sections   | 32 kHz      | 1.6           |
 | `medium`   | waveguide | 44 sections   | 48 kHz      | 2.6           |
-| `high`     | fdtd3d    | 1 cm voxels   | 48 kHz      | 60            |
-| `ultra`    | fdtd3d    | 0.6 cm voxels | 48 kHz      | 300           |
+| `high`     | fdtd3d    | 1 cm voxels   | 48 kHz      | 10            |
+| `ultra`    | fdtd3d    | 0.6 cm voxels | 48 kHz      | 65            |
 
 The web app and `voice-simulator benchmark` pick the most detailed tier
-whose measured load stays under 80%; while speaking, `LodGovernor` steps down
+whose measured load stays under 80%. The benchmark does not run tiers whose
+load, predicted from the cheaper tier, is far above the target, and it stops
+measuring a tier as soon as it is clearly too slow; the app remembers the
+result per device. In the first 40-300 ms of each utterance an
+`OverloadDetector` checks that the tier keeps up with real time and, if not,
+the utterance restarts at once on a cheaper tier before any gap is audible.
+While speaking, `LodGovernor` steps down
 immediately when the load exceeds the target and steps up only after a dwell
 period when the next tier is predicted to fit with margin. Visual tiers
 (mesh LOD 0-3, pressure-field points) are governed the same way from the
