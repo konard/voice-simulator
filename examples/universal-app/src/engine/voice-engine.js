@@ -16,6 +16,39 @@ import {
 import { AudioPlayer } from './audio-player.js';
 
 const TAIL = 0.15;
+const BENCHMARK_KEY = 'voice-simulator:benchmark';
+
+/** Identifies the device and build a cached benchmark belongs to. */
+function deviceKey() {
+  const navigator = globalThis.navigator ?? {};
+  return [
+    navigator.userAgent ?? '',
+    navigator.hardwareConcurrency ?? 0,
+    AUDIO_TIERS.map((tier) => `${tier.name}:${tier.cost}`).join(','),
+  ].join('|');
+}
+
+function readCachedBenchmark() {
+  try {
+    const cached = JSON.parse(
+      globalThis.localStorage?.getItem(BENCHMARK_KEY) ?? 'null'
+    );
+    return cached?.device === deviceKey() ? cached : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeCachedBenchmark({ level, loads }) {
+  try {
+    globalThis.localStorage?.setItem(
+      BENCHMARK_KEY,
+      JSON.stringify({ device: deviceKey(), level, loads })
+    );
+  } catch {
+    // Storage may be unavailable (private mode); the cache is optional.
+  }
+}
 
 export class VoiceEngine {
   /**
@@ -71,9 +104,23 @@ export class VoiceEngine {
     return this.worker;
   }
 
-  /** Measure the audio tiers on this device (runs in the worker). */
+  /**
+   * Measure the audio tiers on this device (runs in the worker). A result
+   * cached by an earlier visit on the same device applies at once, and the
+   * fresh measurement replaces it when it arrives.
+   */
   benchmark(head) {
-    this.#emit({ phase: 'benchmark' });
+    const cached = readCachedBenchmark();
+    if (cached) {
+      this.governor.level = Math.min(cached.level, AUDIO_TIERS.length - 1);
+      this.#emit({
+        loads: cached.loads,
+        audioLevel: this.audioLevel,
+        cachedBenchmark: true,
+      });
+    } else {
+      this.#emit({ phase: 'benchmark' });
+    }
     this.#ensureWorker().postMessage({ type: 'benchmark', head });
   }
 
@@ -148,6 +195,7 @@ export class VoiceEngine {
 
   #handle(message) {
     if (message.type === 'benchmark') {
+      writeCachedBenchmark(message);
       this.governor.level = message.level;
       this.#emit({
         phase: this.job ? 'speaking' : 'idle',
