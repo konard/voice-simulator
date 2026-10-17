@@ -18,6 +18,13 @@ import {
   vowelChannels,
   vowelTarget,
 } from './phones.js';
+import {
+  boundaryOf,
+  finalLengthening,
+  pauseDuration,
+  pitchTargets,
+  registerGains,
+} from './prosody.js';
 
 export const CONTROL_RATE = 200;
 
@@ -56,7 +63,6 @@ const CONSONANT_SHAPE = [
 ];
 const REDUCED_VOWELS = new Set(['ə', 'ɐ', 'ɪ', 'ʊ', 'ɨ', 'ɚ']);
 const OFFGLIDES = new Set(['ɪ', 'ʊ', 'i', 'u', 'ə', 'ɚ', 'y', 'ɯ']);
-const PAUSE_DURATIONS = [0.012, 0.09, 0.2, 0.36];
 
 function vowelDuration(token, context) {
   let duration = 0.105;
@@ -76,20 +82,23 @@ function vowelDuration(token, context) {
   if (context.tonal) {
     duration *= 1.15;
   }
-  return context.phraseFinal ? duration * 1.4 : duration;
+  return context.phraseFinal
+    ? duration * finalLengthening(context.phraseFinal)
+    : duration;
 }
 
-function isPhraseEnd(tokens, index) {
+/** The boundary class ending the phrase if no nucleus follows, else null. */
+function phraseEnd(tokens, index) {
   for (let next = index + 1; next < tokens.length; next++) {
     const token = tokens[next];
     if (token.kind === 'pause' && token.strength >= 2) {
-      return true;
+      return boundaryOf(token);
     }
     if (token.kind === 'vowel' || token.syllabic) {
-      return false;
+      return null;
     }
   }
-  return true;
+  return 'period';
 }
 
 function nextVowel(tokens, index) {
@@ -121,7 +130,7 @@ function isAspirated(tokens, index, language) {
 }
 
 function pushConsonant(segments, token, index, context) {
-  const phraseFinal = isPhraseEnd(context.tokens, index);
+  const phraseFinal = phraseEnd(context.tokens, index);
   const scale = context.rate * (phraseFinal ? 1.2 : 1) * (token.long ? 1.8 : 1);
   if (token.affricate) {
     const stop = consonantTarget({
@@ -184,7 +193,7 @@ function pushVowel(segments, token, index, context) {
   const duration = vowelDuration(token, {
     offglide,
     tonal: context.tonal,
-    phraseFinal: isPhraseEnd(context.tokens, index),
+    phraseFinal: phraseEnd(context.tokens, index),
   });
   segments.push({
     token,
@@ -197,11 +206,12 @@ function pushVowel(segments, token, index, context) {
 
 function pushPause(segments, token) {
   const strength = Math.min(3, token.strength);
-  const duration = PAUSE_DURATIONS[strength];
-  if (segments.length === 0 || segments.at(-1).kind === 'pause') {
-    if (segments.length) {
-      segments.at(-1).duration = Math.max(segments.at(-1).duration, duration);
-      segments.at(-1).question ||= token.question;
+  const duration = pauseDuration(token);
+  const previous = segments.at(-1);
+  if (!previous || previous.kind === 'pause') {
+    if (previous) {
+      previous.duration = Math.max(previous.duration, duration);
+      previous.question ||= token.question;
     }
     return;
   }
@@ -209,7 +219,9 @@ function pushPause(segments, token) {
     token,
     kind: 'pause',
     strength,
+    boundary: boundaryOf(token),
     question: token.question,
+    contour: token.contour,
     target: strength > 0 ? { voicing: 0, loudness: 0 } : {},
     duration,
   });
@@ -425,73 +437,27 @@ export function smoothChannel(values, timeConstant, frameRate) {
   return values;
 }
 
-const semitones = (base, steps) => base * 2 ** (steps / 12);
-
-/** Pitch target (Hz) at the start and end of a voiced syllable nucleus. */
-function syllablePitch(segment, context) {
-  const { head, phraseStart, phraseEnd, question } = context;
-  const progress =
-    (segment.start - phraseStart) / Math.max(0.2, phraseEnd - phraseStart);
-  const base = semitones(head.pitch, -2 * progress);
-  const tone = segment.token.tone;
-  if (tone) {
-    const scale = 1.2 + 0.35 * head.pitchRange;
-    return [
-      semitones(base, (tone[0] - 3) * scale),
-      semitones(base, (tone.at(-1) - 3) * scale),
-    ];
-  }
-  const accent = segment.token.stress === 1 ? head.pitchRange : 0;
-  const accented = semitones(base, accent);
-  if (!context.last) {
-    return [accented, semitones(base, accent * 0.6)];
-  }
-  if (question) {
-    return [accented, semitones(base, 1.5 * head.pitchRange + 1)];
-  }
-  return [accented, semitones(base, -0.8 * head.pitchRange - 1)];
-}
-
-function phraseBounds(segments) {
-  const phrases = [];
-  let current = [];
-  for (const segment of segments) {
-    if (segment.kind === 'pause' && segment.strength >= 2) {
-      if (current.length) {
-        phrases.push({ nuclei: current, question: segment.question });
-      }
-      current = [];
-    } else if (segment.kind === 'vowel' || segment.token?.syllabic) {
-      current.push(segment);
-    }
-  }
-  if (current.length) {
-    phrases.push({ nuclei: current, question: false });
-  }
-  return phrases;
-}
-
 /** Declining phrase pitch with stress accents, tones and final contours. */
 function fillPitch(values, segments, head, frameRate) {
   values.fill(Number.NaN);
-  for (const phrase of phraseBounds(segments)) {
-    const { nuclei } = phrase;
-    nuclei.forEach((segment, index) => {
-      const [first, last] = frameRange(segment, frameRate, values.length);
-      const [from, to] = syllablePitch(segment, {
-        head,
-        phraseStart: nuclei[0].start,
-        phraseEnd: nuclei.at(-1).end,
-        question: phrase.question,
-        last: index === nuclei.length - 1,
-      });
-      for (let frame = first; frame < last; frame++) {
-        const t = last - first > 1 ? (frame - first) / (last - first - 1) : 0;
-        values[frame] = from + (to - from) * t;
-      }
-    });
+  for (const { segment, from, to } of pitchTargets(segments, head)) {
+    const [first, last] = frameRange(segment, frameRate, values.length);
+    for (let frame = first; frame < last; frame++) {
+      const t = last - first > 1 ? (frame - first) / (last - first - 1) : 0;
+      values[frame] = from + (to - from) * t;
+    }
   }
   return interpolateGaps(values, head.pitch);
+}
+
+/** Louder exclamations, quieter parentheticals. */
+function applyRegisterGain(values, segments, frameRate) {
+  for (const { segment, gain } of registerGains(segments)) {
+    const [first, last] = frameRange(segment, frameRate, values.length);
+    for (let frame = first; frame < last; frame++) {
+      values[frame] *= gain;
+    }
+  }
 }
 
 /** Slow periodic pitch modulation (vibrato / natural jitter). */
@@ -525,6 +491,7 @@ export function planUtterance(ipa, options = {}) {
   );
   fillDefaults(channels, segments, frameRate);
   fillArticulation(channels, segments, frameRate);
+  applyRegisterGain(channels.loudness, segments, frameRate);
   fillPitch(channels.f0, segments, head, frameRate);
   for (const name of CHANNEL_NAMES) {
     smoothChannel(channels[name], CHANNELS[name], frameRate);
