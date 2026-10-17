@@ -8,11 +8,23 @@ desktop packages, and Capacitor mobile projects.
   **Speak**: the transcription is planned on the main thread, the acoustic
   simulation runs in a Web Worker (`src/engine/synth-worker.js`) and audio is
   streamed to Web Audio in chunks.
-- The three.js view (`src/viewer/head-viewer.js`) shows the low-poly head,
-  animates the jaw and lips, and colours the tract by the simulated pressure.
+- The three.js view (`src/viewer/head-viewer.js`) shows the low-poly head
+  with its teeth, tongue and palate, animates the jaw, lips and tongue,
+  colours the tract by the simulated pressure and marks the microphone.
 - Modes: sound and 3D, sound only, or 3D only.
 - The head and voice editor starts from a random head on every load;
-  `?seed=<value>` reproduces a head.
+  `?seed=<value>` reproduces a head. A preset (any, male, female, child)
+  limits the random heads to one speaker group.
+- **Copy a voice** (`src/components/VoiceMatch.js`): upload a recording or
+  record yourself and the head is fitted to it in a Web Worker
+  (`src/engine/match-worker.js`).
+- **Acoustics** (`src/components/AcousticsSettings.js`): microphone
+  distance and angle, room preset, or a simulated box of air around the
+  head on the 3D tiers.
+- **Download** (`src/components/ExportControls.js`): the last utterance as
+  WAV, FLAC, AIFF or AU, with a choice of bit depth and float samples.
+- The previous version of the app stays online at `/v1/`
+  (`scripts/build-previous-versions.mjs`).
 - Audio and visual quality tiers are chosen automatically from a benchmark
   and a runtime governor that keeps the load under 80%; the HUD shows both
   loads. A fixed tier can be selected too.
