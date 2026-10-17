@@ -9,8 +9,8 @@
 #                         exit 0 so the pull request is not blocked.
 #   PAGES_MODE=require -- default branch: fail with the setting to change
 #                         until Pages is enabled with the GitHub Actions source.
-# The API answers 404 both for a disabled site and for a token without
-# `pages: read`, so the job running this check must grant that permission.
+# The API answers 404 both for a disabled site and for a request it does not
+# authorise, so the job running this check grants `pages: read` explicitly.
 # Any other failure fails closed in both modes.
 set -euo pipefail
 

@@ -105,7 +105,7 @@ describe('check-pages.sh', () => {
     }
   });
 
-  it('runs before configure-pages with the permission the API needs', () => {
+  it('runs before configure-pages with an explicit Pages read grant', () => {
     // Windows checkouts can have CRLF line endings.
     const workflow = readFileSync(
       '.github/workflows/example-app.yml',

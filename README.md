@@ -329,8 +329,9 @@ provisions the Pages site on its first run.
 
 `scripts/check-pages.sh` checks the setting before the build: pull requests
 get a warning, and `main` fails with the settings link until the source is
-GitHub Actions. The `web-build` job grants `pages: read` because the Pages API
-answers 404 to a token without it, the same answer as for a disabled site.
+GitHub Actions. The `web-build` job grants `pages: read` explicitly because the
+Pages API answers a request it does not authorise with the same 404 as a
+disabled site.
 
 ### Enabling dependency review
 

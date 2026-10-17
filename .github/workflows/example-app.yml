@@ -42,8 +42,9 @@ jobs:
     concurrency:
       group: check-${{ github.workflow }}-${{ github.ref }}-web-build
       cancel-in-progress: true
-    # The Pages API answers 404 to a token without pages: read, the same
-    # answer it gives for a disabled site.
+    # check-pages.sh and configure-pages read the Pages API, which answers
+    # a request it does not authorise with the same 404 as a disabled site,
+    # so the read is granted explicitly.
     permissions:
       contents: read
       pages: read
