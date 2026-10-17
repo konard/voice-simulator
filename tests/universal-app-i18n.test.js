@@ -28,6 +28,12 @@ describe('example app i18n', () => {
     expect(Object.keys(russian.presets).sort()).toEqual(
       Object.keys(english.presets).sort()
     );
+    expect(Object.keys(russian.features).sort()).toEqual(
+      Object.keys(english.features).sort()
+    );
+    expect(Object.keys(russian.units).sort()).toEqual(
+      Object.keys(english.units).sort()
+    );
     expect(strings('xx')).toBe(english);
   });
 

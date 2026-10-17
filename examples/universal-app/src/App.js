@@ -12,6 +12,7 @@ import {
 } from '../../../src/index.js';
 import { HeadEditor } from './components/HeadEditor.js';
 import { PresetSelect, initialPreset } from './components/PresetSelect.js';
+import { VoiceMatch } from './components/VoiceMatch.js';
 import { useSimulator } from './engine/use-simulator.js';
 import { detectLocale, strings } from './i18n.js';
 
@@ -425,6 +426,10 @@ export function App() {
     setSeed(value);
     setHead(randomHeadConfig(value || 1, { preset: nextPreset }));
   };
+  const editHead = (next) => {
+    setHead(next);
+    setSeed('');
+  };
 
   return h(
     'main',
@@ -480,15 +485,13 @@ export function App() {
       preset,
       locale,
       t,
-      onHead: (next) => {
-        setHead(next);
-        setSeed('');
-      },
+      onHead: editHead,
       onSeed: changeSeed,
       onPreset: (next) => {
         setPreset(next);
         changeSeed(seed || createSeed(), next);
       },
-    })
+    }),
+    h(VoiceMatch, { text: speech.text, lang: speech.lang, t, onHead: editHead })
   );
 }
