@@ -87,7 +87,11 @@ function createChangeFixture(filePath, eventName, options = {}) {
   }
 
   mkdirSync(path.dirname(path.join(root, filePath)), { recursive: true });
-  writeFileSync(path.join(root, filePath), 'export const ignored = true;\n');
+  // Bun reads bunfig.toml from its working directory, so it must parse.
+  const content = filePath.endsWith('.toml')
+    ? '# Fixture change\n'
+    : 'export const ignored = true;\n';
+  writeFileSync(path.join(root, filePath), content);
   commit(root, 'Add excluded file');
 
   if (eventName === 'pull_request') {
