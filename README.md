@@ -327,6 +327,11 @@ _Deploy from a branch_. Without it, the `pages-deploy` job fails on
 `Failed to create deployment`. After flipping the source, the workflow
 provisions the Pages site on its first run.
 
+`scripts/check-pages.sh` checks the setting before the build: pull requests
+get a warning, and `main` fails with the settings link until the source is
+GitHub Actions. The `web-build` job grants `pages: read` because the Pages API
+answers 404 to a token without it, the same answer as for a disabled site.
+
 ### Enabling dependency review
 
 `actions/dependency-review-action` needs the repository's **Dependency graph**,

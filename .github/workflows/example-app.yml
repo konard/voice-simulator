@@ -9,6 +9,7 @@ on:
       - 'package.json'
       - 'package-lock.json'
       - 'scripts/update-preview-images.mjs'
+      - 'scripts/check-pages.sh'
       - '.github/workflows/example-app.yml'
   push:
     branches:
@@ -19,6 +20,7 @@ on:
       - 'package.json'
       - 'package-lock.json'
       - 'scripts/update-preview-images.mjs'
+      - 'scripts/check-pages.sh'
       - '.github/workflows/example-app.yml'
   workflow_dispatch:
 
@@ -40,6 +42,11 @@ jobs:
     concurrency:
       group: check-${{ github.workflow }}-${{ github.ref }}-web-build
       cancel-in-progress: true
+    # The Pages API answers 404 to a token without pages: read, the same
+    # answer it gives for a disabled site.
+    permissions:
+      contents: read
+      pages: read
     steps:
       - uses: actions/checkout@v6
         with:
@@ -51,6 +58,15 @@ jobs:
           node-version: '24.x'
           cache: npm
           cache-dependency-path: examples/universal-app/package-lock.json
+
+      # Pull requests never deploy, so they only warn; main fails with the
+      # setting a maintainer has to change.
+      - name: Check GitHub Pages source
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          PAGES_MODE: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && 'require' || 'warn' }}
+        run: bash scripts/check-pages.sh
 
       - name: Configure GitHub Pages
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
