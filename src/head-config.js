@@ -10,6 +10,9 @@
  */
 
 import { createRandom, randomNormal } from './random.js';
+import { HEAD_PRESETS, HEAD_PRESET_NAMES } from './head-presets.js';
+
+export { HEAD_PRESETS, HEAD_PRESET_NAMES };
 
 /**
  * Parameter schema. `group` drives the editor layout, `unit` is shown in UIs.
@@ -423,19 +426,73 @@ function roundToStep(value, step) {
   return Number((Math.round(value / step) * step).toFixed(decimals));
 }
 
+function roundHead(config) {
+  const normalized = normalizeHeadConfig(config);
+  for (const parameter of HEAD_PARAMETERS) {
+    normalized[parameter.key] = roundToStep(
+      normalized[parameter.key],
+      parameter.step
+    );
+  }
+  return normalized;
+}
+
+function getPreset(name) {
+  const preset = HEAD_PRESETS[name];
+  if (!preset) {
+    throw new Error(
+      `Unknown head preset: ${name} (use ${HEAD_PRESET_NAMES.join(', ')})`
+    );
+  }
+  return preset;
+}
+
+function presetHead(preset, size, jitter) {
+  const config = {};
+  for (const [key, [small, large, spread]] of Object.entries(preset.ranges)) {
+    config[key] =
+      key === 'pitch'
+        ? small *
+          Math.pow(large / small, size) *
+          Math.pow(2, jitter(spread) / 12)
+        : small + (large - small) * size + jitter(spread);
+  }
+  return roundHead(config);
+}
+
+/**
+ * The typical head of a preset (middle size, no random variation).
+ * @param {string} name One of HEAD_PRESETS (male, female, child).
+ * @returns {Record<string, number>}
+ */
+export function presetHeadConfig(name) {
+  return presetHead(getPreset(name), 0.5, () => 0);
+}
+
 /**
  * Generate a plausible random head. Proportions are correlated through a
  * shared body-size factor (bigger heads get longer tracts and lower voices),
  * so random voices stay human-like.
+ *
+ * Without a preset (or with 'any') the head spans children to large men
+ * and a seed always gives the same head. A preset (male, female, child) draws
+ * from that group's ranges in HEAD_PRESETS; a seed gives the same relative
+ * size and deviations in every preset.
  * @param {string|number} seed
+ * @param {{preset?: string}} [options]
  * @returns {Record<string, number>}
  */
-export function randomHeadConfig(seed) {
+export function randomHeadConfig(seed, options = {}) {
   const random = createRandom(seed);
+  const jitter = (spread) => spread * randomNormal(random);
+  if (options.preset && options.preset !== 'any') {
+    const preset = getPreset(options.preset);
+    const size = clamp(0.5 + 0.25 * randomNormal(random), 0, 1);
+    return presetHead(preset, size, jitter);
+  }
   // 0 = small (child-like), 1 = large adult.
   const size = clamp(0.55 + 0.25 * randomNormal(random), 0, 1);
-  const jitter = (spread) => spread * randomNormal(random);
-  const config = {
+  return roundHead({
     vocalTractLength: 13 + 5 * size + jitter(0.5),
     pharynxRatio: 0.4 + 0.1 * size + jitter(0.02),
     pharynxWidth: 0.9 + 0.2 * size + jitter(0.06),
@@ -455,15 +512,7 @@ export function randomHeadConfig(seed) {
     breathiness: 0.2 + jitter(0.08),
     vibrato: 0.25 + jitter(0.1),
     speechRate: 1 + jitter(0.06),
-  };
-  const normalized = normalizeHeadConfig(config);
-  for (const parameter of HEAD_PARAMETERS) {
-    normalized[parameter.key] = roundToStep(
-      normalized[parameter.key],
-      parameter.step
-    );
-  }
-  return normalized;
+  });
 }
 
 /**

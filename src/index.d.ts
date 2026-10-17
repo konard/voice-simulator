@@ -79,6 +79,8 @@ export interface SynthesizeOptions {
   ipa?: boolean;
   head?: HeadConfig | 'random';
   seed?: string | number;
+  /** Speaker group for `head: 'random'`. */
+  preset?: HeadPresetName;
   tier?: string | number;
   solver?: SolverName;
   sections?: number;
@@ -180,7 +182,10 @@ export interface HeadParameter {
 export declare const HEAD_PARAMETERS: readonly HeadParameter[];
 export declare const DEFAULT_HEAD: Readonly<HeadConfig>;
 export declare function normalizeHeadConfig(config?: HeadConfig): HeadConfig;
-export declare function randomHeadConfig(seed: string | number): HeadConfig;
+export declare function randomHeadConfig(
+  seed: string | number,
+  options?: { preset?: HeadPresetName }
+): HeadConfig;
 export declare function encodeHeadConfig(config: HeadConfig): string;
 export declare function decodeHeadConfig(text: string): HeadConfig;
 export declare function getHeadParameter(key: string): HeadParameter;
@@ -423,3 +428,18 @@ export declare function benchmarkAudioTiers(options?: {
   loads: number[];
   measured: boolean[];
 };
+
+// Voice presets and matching (issue 5)
+export type HeadPresetName = 'any' | 'male' | 'female' | 'child';
+export interface HeadPreset {
+  label: string;
+  /** `[small, large, spread]` per parameter (pitch spread in semitones). */
+  ranges: Readonly<Record<string, readonly [number, number, number]>>;
+}
+export declare const HEAD_PRESETS: Readonly<
+  Record<Exclude<HeadPresetName, 'any'>, HeadPreset>
+>;
+export declare const HEAD_PRESET_NAMES: readonly HeadPresetName[];
+export declare function presetHeadConfig(
+  name: Exclude<HeadPresetName, 'any'>
+): HeadConfig;

@@ -24,6 +24,7 @@ import {
   DEFAULT_HEAD,
   decodeHeadConfig,
   randomHeadConfig,
+  HEAD_PRESET_NAMES,
 } from '../head-config.js';
 import { AUDIO_TIERS, VISUAL_TIERS } from '../perf/lod.js';
 import { synthesize, synthesizeStream } from '../synthesize.js';
@@ -65,9 +66,19 @@ async function readBody(request) {
   }
 }
 
-function parseHead(value, seed) {
+function parsePreset(value) {
+  if (value === undefined) {
+    return undefined;
+  }
+  if (!HEAD_PRESET_NAMES.includes(value)) {
+    throw new HttpError(400, `Unknown preset ${value}`);
+  }
+  return value;
+}
+
+function parseHead(value, seed, preset) {
   if (value === 'random') {
-    return randomHeadConfig(seed ?? Date.now());
+    return randomHeadConfig(seed ?? Date.now(), { preset });
   }
   if (typeof value === 'string') {
     return decodeHeadConfig(value);
@@ -102,7 +113,7 @@ export function synthesisOptions(params) {
       lang: params.lang ?? 'auto',
       ipa: params.ipa === true || params.ipa === 'true',
       seed,
-      head: parseHead(params.head, seed),
+      head: parseHead(params.head, seed, parsePreset(params.preset)),
       tier,
       sampleRate,
     },
@@ -139,9 +150,15 @@ function createRoutes(version) {
       return textToIpa(text, { lang: options.lang });
     },
     'GET /api/head/random': (params) =>
-      randomHeadConfig(params.seed ?? Date.now()),
+      randomHeadConfig(params.seed ?? Date.now(), {
+        preset: parsePreset(params.preset),
+      }),
     'GET /api/mesh.obj': (params, response) => {
-      const head = parseHead(params.head ?? 'random', params.seed ?? 1);
+      const head = parseHead(
+        params.head ?? 'random',
+        params.seed ?? 1,
+        parsePreset(params.preset)
+      );
       response.writeHead(200, { 'content-type': 'model/obj' });
       response.end(headModelObj(head, { lod: Number(params.lod ?? 1) }));
     },

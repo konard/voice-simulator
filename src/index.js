@@ -83,3 +83,10 @@ export {
   fallbackLevel,
 } from './perf/lod.js';
 export { measureAudioTier, benchmarkAudioTiers } from './perf/benchmark.js';
+
+// Voice presets and matching (issue 5)
+export {
+  HEAD_PRESETS,
+  HEAD_PRESET_NAMES,
+  presetHeadConfig,
+} from './head-config.js';
