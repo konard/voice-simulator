@@ -34,6 +34,7 @@ import {
   LINK_VELUM,
   buildVoxelModel,
 } from './voxel-model.js';
+import { createKernel } from './fdtd-kernel.js';
 
 const COURANT = 0.5;
 const MIN_FILL = 1e-4;
@@ -119,7 +120,9 @@ function nearestAirCell(cells, point) {
 
 export class Fdtd3d {
   /**
-   * @param {{head?: object, dx?: number, model?: object, output?: 'flow'|'microphone'}} [options]
+   * `kernel` selects the step loop: 'wasm' (default when WebAssembly is
+   * available) or 'js'; both produce bit-identical output.
+   * @param {{head?: object, dx?: number, model?: object, output?: 'flow'|'microphone', kernel?: 'wasm'|'js'}} [options]
    */
   constructor(options = {}) {
     const model = options.model ?? buildVoxelModel(options.head, options);
@@ -127,7 +130,7 @@ export class Fdtd3d {
     this.dx = model.dx;
     this.dt = (COURANT * model.dx) / SPEED_OF_SOUND;
     this.output = options.output ?? 'flow';
-    this.#allocate(model);
+    this.#allocate(model, options.kernel ?? 'wasm');
     this.#prepareBoundaries(model);
     const { lips } = model.landmarks;
     this.microphone = nearestAirCell(model.cells, [
@@ -145,25 +148,34 @@ export class Fdtd3d {
     this.tubeAreas = [null, null];
   }
 
-  #allocate(model) {
+  #allocate(model, kernel) {
     const cellCount = model.cells.length;
     const linkCount = model.links.a.length;
     this.cellCount = cellCount;
     this.linkCount = linkCount;
-    this.pressure = new Float64Array(cellCount);
-    this.divergence = new Float64Array(cellCount);
+    this.kernel = kernel === 'wasm' ? createKernel(linkCount, cellCount) : null;
+    const arrays = this.kernel?.arrays;
+    const array = (name, Type, count) => arrays?.[name] ?? new Type(count);
+    this.pressure = array('pressure', Float64Array, cellCount);
+    this.divergence = array('divergence', Float64Array, cellCount);
     this.fill = new Float64Array(cellCount).fill(1);
-    this.keep = new Float64Array(cellCount).fill(1);
-    this.gain = new Float64Array(cellCount).fill(COURANT);
+    this.keep = array('keep', Float64Array, cellCount).fill(1);
+    this.gain = array('gain', Float64Array, cellCount).fill(COURANT);
     this.cellKind = Uint8Array.from(model.cells, (cell) => cell.kind);
     this.cellArc = Float64Array.from(model.cells, (cell) => cell.arc);
     this.envelope = envelopeAreas(model);
-    this.velocity = new Float64Array(linkCount);
-    this.conductance = new Float64Array(linkCount).fill(1);
-    this.damping = new Float64Array(linkCount).fill(1);
+    this.velocity = array('velocity', Float64Array, linkCount);
+    this.conductance = array('conductance', Float64Array, linkCount).fill(1);
+    this.damping = array('damping', Float64Array, linkCount).fill(1);
     this.linkA = Int32Array.from(model.links.a);
     this.linkB = Int32Array.from(model.links.b);
+    if (arrays) {
+      // The wasm kernel addresses cells by byte offset.
+      arrays.linkA.set(this.linkA.map((cell) => cell * 8));
+      arrays.linkB.set(this.linkB.map((cell) => cell * 8));
+    }
     this.linkKind = Uint8Array.from(model.links.kind);
+    this.#indexLinks();
     const outputLinks = [];
     this.velumLinks = [];
     for (let link = 0; link < linkCount; link++) {
@@ -188,6 +200,31 @@ export class Fdtd3d {
     });
   }
 
+  /** Tube links and cells: only these change with the articulation. */
+  #indexLinks() {
+    const { linkA, linkB, linkCount, cellCount } = this;
+    // Only links that touch a tube change with the articulation.
+    const tubeLinks = [];
+    for (let index = 0; index < linkCount; index++) {
+      const a = this.cellKind[linkA[index]];
+      const b = this.cellKind[linkB[index]];
+      if (a !== CELL_AIR || b !== CELL_AIR) {
+        tubeLinks.push(index);
+      }
+    }
+    this.tubeLinks = Int32Array.from(tubeLinks);
+    this.tubeCells = [CELL_TRACT, 1].map((kind) => {
+      const cells = [];
+      for (let index = 0; index < cellCount; index++) {
+        if (this.cellKind[index] === kind) {
+          cells.push(index);
+        }
+      }
+      return Int32Array.from(cells);
+    });
+    this.spans = null;
+  }
+
   /** Per-cell boundary admittance (open faces of the air shell, glottis). */
   #prepareBoundaries(model) {
     this.admittance = new Float64Array(this.cellCount);
@@ -206,8 +243,10 @@ export class Fdtd3d {
     this.#updateCellCoefficients();
   }
 
-  #updateCellCoefficients() {
-    for (let index = 0; index < this.cellCount; index++) {
+  #updateCellCoefficients(cells = null) {
+    const count = cells ? cells.length : this.cellCount;
+    for (let position = 0; position < count; position++) {
+      const index = cells ? cells[position] : position;
       const half = (COURANT * this.admittance[index]) / 2;
       this.keep[index] = (1 - half) / (1 + half);
       this.gain[index] = COURANT / (this.fill[index] * (1 + half));
@@ -219,39 +258,58 @@ export class Fdtd3d {
     return this.dt;
   }
 
+  /** Returns false when the areas did not change since the last call. */
   #setTube(kind, areas) {
+    const previous = this.tubeAreas[kind];
+    if (previous && previous.length === areas.length) {
+      let same = true;
+      for (let index = 0; index < areas.length && same; index++) {
+        same = previous[index] === areas[index];
+      }
+      if (same) {
+        return false;
+      }
+    }
     this.tubeAreas[kind] = Float64Array.from(areas);
     const length = this.model.lengths[kind];
-    for (let index = 0; index < this.cellCount; index++) {
-      if (this.cellKind[index] !== kind) {
-        continue;
-      }
+    for (const index of this.tubeCells[kind]) {
       const area = resample(areas, this.cellArc[index] / length);
       this.fill[index] = Math.min(
         1,
         Math.max(MIN_FILL, area / this.envelope[index])
       );
     }
+    return true;
   }
 
-  /** Smallest tube area between the arc positions of two cells. */
-  #narrowest(a, b) {
-    const kind = this.cellKind[a];
-    const areas = this.tubeAreas[kind];
-    if (!areas) {
-      return Infinity;
+  /**
+   * Section range [from, to] that each link spans along its tube. A link
+   * may span several sections (e.g. round the pharynx bend) and must not
+   * bypass a constriction between its two cells.
+   */
+  #linkSpans() {
+    const counts = this.tubeAreas.map((areas) => areas?.length ?? 0);
+    if (this.spans && this.spans.counts.every((n, i) => n === counts[i])) {
+      return this.spans;
     }
-    const scale = areas.length / this.model.lengths[kind];
-    const last = areas.length - 1;
-    const arcA = this.cellArc[a];
-    const arcB = this.cellArc[b];
-    const from = Math.min(last, Math.floor(Math.min(arcA, arcB) * scale));
-    const to = Math.min(last, Math.floor(Math.max(arcA, arcB) * scale));
-    let narrowest = Infinity;
-    for (let index = from; index <= to; index++) {
-      narrowest = Math.min(narrowest, areas[index]);
+    const from = new Int32Array(this.linkCount).fill(-1);
+    const to = new Int32Array(this.linkCount).fill(-1);
+    for (const link of this.tubeLinks) {
+      const a = this.linkA[link];
+      const b = this.linkB[link];
+      const kind = this.cellKind[a];
+      if (this.linkKind[link] !== LINK_INNER || !counts[kind]) {
+        continue;
+      }
+      const scale = counts[kind] / this.model.lengths[kind];
+      const last = counts[kind] - 1;
+      const arcA = this.cellArc[a];
+      const arcB = this.cellArc[b];
+      from[link] = Math.min(last, Math.floor(Math.min(arcA, arcB) * scale));
+      to[link] = Math.min(last, Math.floor(Math.max(arcA, arcB) * scale));
     }
-    return narrowest;
+    this.spans = { counts, from, to };
+    return this.spans;
   }
 
   #updateLinks() {
@@ -260,20 +318,19 @@ export class Fdtd3d {
     const exponent =
       (SPEED_OF_SOUND * this.dt * LOSS_REFERENCE_SECTIONS) /
       this.model.lengths[CELL_TRACT];
-    const { fill, envelope, linkA, linkB } = this;
-    for (let link = 0; link < this.linkCount; link++) {
+    const { fill, envelope, linkA, linkB, cellKind } = this;
+    const { from, to } = this.#linkSpans();
+    for (const link of this.tubeLinks) {
       const a = linkA[link];
       const b = linkB[link];
       let g = Math.min(fill[a], fill[b]);
-      if (this.cellKind[a] === CELL_AIR && this.cellKind[b] === CELL_AIR) {
-        this.conductance[link] = g;
-        continue;
-      }
       let area = Math.min(fill[a] * envelope[a], fill[b] * envelope[b]);
-      if (this.linkKind[link] === LINK_INNER) {
-        // A link may span several sections (e.g. round the pharynx bend):
-        // it must not bypass a constriction between its two cells.
-        const narrowest = this.#narrowest(a, b);
+      if (from[link] >= 0) {
+        const areas = this.tubeAreas[cellKind[a]];
+        let narrowest = Infinity;
+        for (let index = from[link]; index <= to[link]; index++) {
+          narrowest = Math.min(narrowest, areas[index]);
+        }
         g = Math.min(g, narrowest / Math.max(envelope[a], envelope[b]));
         area = Math.min(area, narrowest);
       }
@@ -296,9 +353,10 @@ export class Fdtd3d {
    * @param {ArrayLike<number>} areas
    */
   setNose(areas) {
-    this.#setTube(1, areas);
-    this.#updateLinks();
-    this.#updateCellCoefficients();
+    if (this.#setTube(1, areas)) {
+      this.#updateLinks();
+      this.#updateCellCoefficients(this.tubeCells[1]);
+    }
   }
 
   /**
@@ -307,10 +365,14 @@ export class Fdtd3d {
    * @param {number} velumArea cm².
    */
   setShape(areas, velumArea) {
-    this.#setTube(CELL_TRACT, areas);
-    this.velumArea = Math.max(0, velumArea);
+    const velum = Math.max(0, velumArea);
+    const changed = this.#setTube(CELL_TRACT, areas);
+    if (!changed && velum === this.velumArea) {
+      return;
+    }
+    this.velumArea = velum;
     this.#updateLinks();
-    this.#updateCellCoefficients();
+    this.#updateCellCoefficients(this.tubeCells[CELL_TRACT]);
     this.areaCount = areas.length;
   }
 
@@ -401,6 +463,17 @@ export class Fdtd3d {
     if (force !== 0) {
       this.#addNoise(noisePosition, force);
     }
+    if (this.kernel) {
+      this.kernel.step();
+    } else {
+      this.#stepJs();
+    }
+    this.#injectSource(glottalFlow);
+    return this.#measure();
+  }
+
+  /** Reference step loop; the wasm kernel mirrors it operation by operation. */
+  #stepJs() {
     const { pressure, velocity, damping, conductance, linkA, linkB } = this;
     const { divergence, keep, gain, linkCount, cellCount } = this;
     for (let link = 0; link < linkCount; link++) {
@@ -419,8 +492,6 @@ export class Fdtd3d {
         keep[index] * pressure[index] - gain[index] * divergence[index];
       divergence[index] = 0;
     }
-    this.#injectSource(glottalFlow);
-    return this.#measure();
   }
 
   /**

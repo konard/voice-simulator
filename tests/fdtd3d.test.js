@@ -109,6 +109,29 @@ describe('3D FDTD rendering', () => {
     expect(again.every((value, index) => value === samples[index])).toBe(true);
   });
 
+  it('renders bit-identically with the wasm and JavaScript kernels', () => {
+    const solver = new Fdtd3d({ model });
+    const reference = new Fdtd3d({ model, kernel: 'js' });
+    expect(reference.kernel).toBe(null);
+    if (solver.kernel) {
+      const js = renderPlan(plan, { ...options, kernel: 'js' });
+      expect(js.every((value, index) => value === samples[index])).toBe(true);
+    }
+  });
+
+  it('skips coefficient updates when the shape does not change', () => {
+    const solver = new Fdtd3d({ model });
+    const shape = vowelShape('a');
+    solver.setShape(shape.areas, 0.2);
+    const damping = Float64Array.from(solver.damping);
+    solver.damping.fill(0);
+    solver.setShape(Float64Array.from(shape.areas), 0.2);
+    expect(solver.damping.every((value) => value === 0)).toBe(true);
+    solver.setShape(shape.areas, 0.3);
+    expect(solver.damping.some((value) => value !== 0)).toBe(true);
+    solver.damping.set(damping);
+  });
+
   it('works with a microphone in front of the lips', () => {
     const heard = renderPlan(planUtterance('ˈa'), {
       ...options,

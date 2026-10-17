@@ -129,6 +129,7 @@ export class VoiceRenderer {
       dx: options.dx,
       model: options.model,
       output: options.output,
+      kernel: options.kernel,
     });
     this.solver.setNose?.(noseShape(this.head).areas);
     this.glottis = new Glottis({
