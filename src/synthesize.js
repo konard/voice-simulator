@@ -5,6 +5,7 @@
 
 import { renderPlan, VoiceRenderer } from './acoustics/voice.js';
 import { planUtterance } from './articulation/plan.js';
+import { utteranceTimeline } from './articulation/timeline.js';
 import { textToIpa } from './g2p/index.js';
 import { normalizeHeadConfig, randomHeadConfig } from './head-config.js';
 import { AUDIO_TIERS } from './perf/lod.js';
@@ -48,6 +49,11 @@ export function prepareUtterance(text, options = {}) {
     head,
     language: transcription.lang,
   });
+  const timeline = utteranceTimeline(plan, {
+    words: transcription.words,
+    ipa: transcription.ipa,
+    language: transcription.lang,
+  });
   const tier = getAudioTier(options.tier) ?? {};
   const renderOptions = {
     solver: options.solver ?? tier.solver,
@@ -59,14 +65,14 @@ export function prepareUtterance(text, options = {}) {
     seed: options.seed ?? 1,
     head,
   };
-  return { ...transcription, head, plan, renderOptions };
+  return { ...transcription, head, plan, timeline, renderOptions };
 }
 
 /**
  * Synthesize speech from text.
  * @param {string} text
  * @param {{lang?: string, accent?: string, ipa?: boolean, head?: object|'random', seed?: string|number, tier?: string|number, solver?: string, sections?: number, dx?: number, sampleRate?: number, output?: 'flow'|'microphone'}} [options]
- * @returns {{lang: string, accent: string|null, ipa: string, words: object[], head: object, plan: object, sampleRate: number, samples: Float32Array, duration: number}}
+ * @returns {{lang: string, accent: string|null, ipa: string, words: object[], head: object, plan: object, timeline: object, sampleRate: number, samples: Float32Array, duration: number}}
  */
 export function synthesize(text, options = {}) {
   const prepared = prepareUtterance(text, options);
@@ -79,6 +85,7 @@ export function synthesize(text, options = {}) {
     words: prepared.words,
     head: prepared.head,
     plan: prepared.plan,
+    timeline: prepared.timeline,
     sampleRate,
     samples,
     duration: samples.length / sampleRate,
