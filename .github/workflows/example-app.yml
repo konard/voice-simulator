@@ -267,6 +267,10 @@ jobs:
       contents: write
     env:
       PLAYWRIGHT_BROWSERS_PATH: /ms-playwright
+    # Container jobs run `run:` blocks with sh, which has no [[ ]].
+    defaults:
+      run:
+        shell: bash
     steps:
       - uses: actions/checkout@v6
         with:
@@ -276,6 +280,11 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
           fetch-depth: 0
           persist-credentials: false
+
+      # The container user (root) does not own the runner's workspace, so git
+      # refuses the checkout as dubious ownership until it is trusted.
+      - name: Trust the checkout
+        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
 
       - name: Install example app dependencies
         run: npm ci --prefix examples/universal-app --no-audit --no-fund
@@ -293,10 +302,13 @@ jobs:
       - name: Detect drift
         id: drift
         run: |
-          if [[ -n "$(git status --porcelain)" ]]; then
+          # The assignment fails the step when git fails; a test on $(...)
+          # would read the failure as no drift.
+          changes="$(git status --porcelain)"
+          if [[ -n "$changes" ]]; then
             echo "drift=true" >> "$GITHUB_OUTPUT"
             echo "Preview images drifted:"
-            git status --porcelain
+            printf '%s\n' "$changes"
           else
             echo "drift=false" >> "$GITHUB_OUTPUT"
             echo "Preview images already current."
