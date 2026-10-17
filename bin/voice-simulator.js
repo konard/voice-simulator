@@ -12,6 +12,7 @@ import {
   encodeWav,
   headModelObj,
   measureAudioTier,
+  prepareUtterance,
   randomHeadConfig,
   synthesize,
   textToIpa,
@@ -46,6 +47,7 @@ function usage() {
     'Commands:',
     '  ipa <text>          Print the IPA transcription (en, ru, hi, zh)',
     '  say <text> -o f.wav Simulate speech and write a WAV file',
+    '  timeline <text>     Print when each word and syllable is spoken',
     '  head                Print a random head configuration',
     '  mesh -o head.obj    Export the low-poly head model as OBJ',
     '  benchmark           Measure the audio LOD tiers on this machine',
@@ -139,9 +141,43 @@ const COMMANDS = {
     });
     const out = values.out ?? 'voice.wav';
     writeOutput(out, encodeWav(result.samples, result.sampleRate), io);
-    if (out !== '-') {
+    if (out !== '-' && values.json) {
+      io.stdout(
+        JSON.stringify({
+          lang: result.lang,
+          accent: result.accent,
+          ipa: result.ipa,
+          duration: result.duration,
+          out,
+          timeline: result.timeline,
+        })
+      );
+    } else if (out !== '-') {
       io.stdout(
         `[${result.lang}] /${result.ipa}/ ${result.duration.toFixed(2)} s -> ${out}`
+      );
+    }
+  },
+
+  timeline(values, positionals, io) {
+    const prepared = prepareUtterance(requireText(positionals), {
+      lang: values.lang,
+      accent: values.accent,
+      ipa: values.ipa,
+    });
+    const { lang, accent, ipa, timeline } = prepared;
+    if (values.json) {
+      io.stdout(
+        JSON.stringify({ lang, accent: accent ?? null, ipa, timeline })
+      );
+      return;
+    }
+    for (const word of timeline.words) {
+      const syllables = word.syllables
+        .map((syllable) => syllable.text ?? syllable.ipa)
+        .join('·');
+      io.stdout(
+        `${word.start.toFixed(3)} ${word.end.toFixed(3)} ${word.text} /${word.syllables.map((syllable) => syllable.ipa).join('.')}/ ${syllables}`
       );
     }
   },

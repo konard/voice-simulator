@@ -5,6 +5,8 @@
  *   GET  /api/languages           -> supported languages with samples
  *   GET  /api/tiers               -> audio and visual LOD tiers
  *   GET  /api/ipa?text=&lang=&accent= -> {lang, accent, ipa, words}
+ *   GET|POST /api/timeline        -> {lang, accent, ipa, timeline}: when
+ *                                    each word and syllable is spoken
  *   GET  /api/head/random?seed=   -> random head configuration
  *   GET  /api/mesh.obj?seed=&lod= -> low-poly head model (Wavefront OBJ)
  *   GET|POST /api/synthesize      -> complete WAV file
@@ -26,7 +28,11 @@ import {
   randomHeadConfig,
 } from '../head-config.js';
 import { AUDIO_TIERS, VISUAL_TIERS } from '../perf/lod.js';
-import { synthesize, synthesizeStream } from '../synthesize.js';
+import {
+  prepareUtterance,
+  synthesize,
+  synthesizeStream,
+} from '../synthesize.js';
 
 export { INDEX_PAGE } from './index-page.js';
 
@@ -138,6 +144,11 @@ function createRoutes(version) {
     'GET /api/ipa': (params) => {
       const { text, options } = synthesisOptions(params);
       return textToIpa(text, { lang: options.lang, accent: options.accent });
+    },
+    'GET /api/timeline': (params) => {
+      const { text, options } = synthesisOptions(params);
+      const { lang, accent, ipa, timeline } = prepareUtterance(text, options);
+      return { lang, accent: accent ?? null, ipa, timeline };
     },
     'GET /api/head/random': (params) =>
       randomHeadConfig(params.seed ?? Date.now()),
