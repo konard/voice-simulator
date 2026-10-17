@@ -367,7 +367,7 @@ h2 {
 }
 
 .actions {
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: 1fr;
 }
 
 .export {
@@ -454,6 +454,10 @@ h2 {
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
 }
 
+.match-panel .row {
+  align-items: end;
+}
+
 .match-features {
   display: grid;
   grid-template-columns: max-content 1fr;
@@ -480,6 +484,7 @@ h2 {
 
 .editor-group {
   display: grid;
+  align-content: start;
   gap: 10px;
   margin: 0;
   padding: 12px 14px;
