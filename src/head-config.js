@@ -426,7 +426,11 @@ function roundToStep(value, step) {
   return Number((Math.round(value / step) * step).toFixed(decimals));
 }
 
-function roundHead(config) {
+/**
+ * Clamp a head to the parameter ranges and round it to the parameter steps.
+ * @param {Record<string, number>} config
+ */
+export function roundHead(config) {
   const normalized = normalizeHeadConfig(config);
   for (const parameter of HEAD_PARAMETERS) {
     normalized[parameter.key] = roundToStep(
@@ -461,12 +465,13 @@ function presetHead(preset, size, jitter) {
 }
 
 /**
- * The typical head of a preset (middle size, no random variation).
+ * The head of a preset at a relative size, without random variation.
  * @param {string} name One of HEAD_PRESETS (male, female, child).
+ * @param {number} [size] 0 = smallest of the group, 1 = largest (default 0.5, typical).
  * @returns {Record<string, number>}
  */
-export function presetHeadConfig(name) {
-  return presetHead(getPreset(name), 0.5, () => 0);
+export function presetHeadConfig(name, size = 0.5) {
+  return presetHead(getPreset(name), clamp(size, 0, 1), () => 0);
 }
 
 /**
