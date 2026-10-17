@@ -571,6 +571,7 @@ jobs:
     concurrency:
       group: main-writer-${{ github.repository }}-main
       cancel-in-progress: false
+      queue: max
     # Use !cancelled() instead of always() so cancellation propagates correctly (hive-mind issue #1278)
     # This is needed because lint/test jobs have a transitive dependency on changeset-check
     if: |
@@ -730,6 +731,7 @@ jobs:
     concurrency:
       group: main-writer-${{ github.repository }}-main
       cancel-in-progress: false
+      queue: max
     # Permissions required for npm OIDC trusted publishing
     permissions:
       contents: write
@@ -819,6 +821,7 @@ jobs:
     concurrency:
       group: main-writer-${{ github.repository }}-main
       cancel-in-progress: false
+      queue: max
     if: |
       !cancelled() &&
       needs.release-preflight.result == 'success' &&
@@ -924,6 +927,7 @@ jobs:
     concurrency:
       group: main-writer-${{ github.repository }}-main
       cancel-in-progress: false
+      queue: max
     runs-on: ubuntu-24.04
     permissions:
       contents: read
@@ -1002,6 +1006,7 @@ jobs:
     concurrency:
       group: main-writer-${{ github.repository }}-main
       cancel-in-progress: false
+      queue: max
     permissions:
       contents: read
     steps:

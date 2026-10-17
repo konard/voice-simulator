@@ -2,7 +2,13 @@ import { describe, it, expect } from 'test-anywhere';
 import { readFileSync, readdirSync } from 'node:fs';
 
 const WORKFLOW_DIRECTORY = '.github/workflows';
-const SUPPORTED_CONCURRENCY_KEYS = new Set(['group', 'cancel-in-progress']);
+// GitHub documents `queue` although actionlint 1.7.12 does not know it yet:
+// https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/control-workflow-concurrency
+const SUPPORTED_CONCURRENCY_KEYS = new Set([
+  'group',
+  'cancel-in-progress',
+  'queue',
+]);
 
 function readWorkflow(filePath) {
   return readFileSync(filePath, 'utf8').replaceAll('\r\n', '\n');
@@ -130,7 +136,7 @@ function expectOrdered(text, markers) {
 
 function expectMainWriterConcurrency(jobBlock) {
   expect(jobBlock).toContain(
-    '    concurrency:\n      group: main-writer-${{ github.repository }}-main\n      cancel-in-progress: false'
+    '    concurrency:\n      group: main-writer-${{ github.repository }}-main\n      cancel-in-progress: false\n      queue: max'
   );
 }
 
@@ -188,10 +194,39 @@ describe('workflow concurrency policy', () => {
       '      group: main-writer',
       '      cancel-in-progress: false',
       '      queue: max',
+      '      cancel-in-flight: true',
       '    steps: []',
     ].join('\n');
 
-    expect(getUnsupportedConcurrencyKeys(invalidWorkflow)).toEqual(['queue']);
+    expect(getUnsupportedConcurrencyKeys(invalidWorkflow)).toEqual([
+      'cancel-in-flight',
+    ]);
+  });
+
+  it('keeps every waiting main writer in the queue', () => {
+    // With the default `queue: single`, a third writer that starts waiting
+    // cancels the one already waiting, so a due release ends up cancelled.
+    const writers = [];
+
+    for (const workflowPath of listWorkflowPaths()) {
+      const blocks = readWorkflow(workflowPath).split(/\n {4}concurrency:\n/);
+
+      for (const block of blocks.slice(1)) {
+        const settings = block.split(/\n(?! {6})/)[0];
+
+        if (settings.includes('group: main-writer-')) {
+          writers.push(settings);
+          expect(settings).toContain('cancel-in-progress: false');
+          expect(settings).toContain('queue: max');
+        }
+        // GitHub rejects the workflow when a queue may also cancel.
+        if (settings.includes('queue: max')) {
+          expect(settings).not.toContain('cancel-in-progress: true');
+        }
+      }
+    }
+
+    expect(writers.length).toBe(7);
   });
 
   it('uses only keys supported by GitHub Actions', () => {
