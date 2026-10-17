@@ -1,31 +1,148 @@
-# js-ai-driven-development-pipeline-template
+# voice-simulator
 
-A comprehensive template for AI-driven JavaScript/TypeScript development with full CI/CD pipeline support.
+A physical 3D voice simulator. There are no recordings and no samples: text is
+transcribed to IPA, turned into a smooth articulation plan, and every sound is
+a pressure wave travelling through the 3D shape of a parametric low-poly head
+(vocal tract, nasal cavity, lips and the air in front of the mouth).
 
-This repository publishes the real test package
-`@link-foundation/example-package-name` so the template release pipeline is
-validated end to end with npm trusted publishing.
+![Voice simulator web UI while speaking](docs/screenshots/web-app-speaking.png)
 
 ## Features
 
-- **Multi-runtime support**: Works with Bun, Node.js, and Deno
-- **Universal testing**: Uses [test-anywhere](https://github.com/link-foundation/test-anywhere) for cross-runtime tests
-- **Automated releases**: Changesets-based versioning with GitHub Actions
-- **Optional Docker Hub publishing**: Docker images can be published after the matching npm version is visible
-- **Universal app example**: React UI for the package API with GitHub Pages, Electron, and Capacitor build paths
-- **Code quality**: ESLint + Prettier with pre-commit hooks via Husky
-- **Package manager agnostic**: Works with bun, npm, yarn, pnpm, and deno
-- **Broken link checks**: Automated link validation with [lychee](https://github.com/lycheeverse/lychee-action) and Web Archive fallback suggestions
+- **Text to IPA** for English, Russian, Hindi and Chinese, with automatic
+  language detection per word (`textToIpa`).
+- **Smooth articulation**: IPA becomes a time plan of tract shapes with
+  coarticulated transitions, glottal source and pitch contour.
+- **Physical acoustics** with two interchangeable solvers:
+  - `waveguide`: a branched Kelly-Lochbaum tube (tract + nose) that follows
+    the 3D centreline of the head; real time on any device.
+  - `fdtd3d`: a sparse-voxel 3D finite-difference time-domain solver of the
+    acoustic wave equation inside the voxelised head and the air around it.
+- **Low-poly head model** with only acoustically relevant detail (tract tube,
+  nasal tube, lips, jaw, skin hull), four mesh LODs and OBJ export.
+- **Head and voice editor**: 18 parameters (tract length, pharynx ratio,
+  mouth width, jaw range, nose, pitch, breathiness, ...). Every page refresh
+  starts from a new random seed; `?seed=` makes it reproducible.
+- **Automatic LODs** for audio and visuals: a startup benchmark plus a
+  runtime governor keep about 20% headroom (target load 80%).
+- **Modes**: sound only, 3D only, or both, with optional jaw/lip animation and
+  a live pressure-field view.
+- **Delivery**: GitHub Pages web app, JavaScript library, CLI, HTTP API with
+  WAV streaming, and a Docker image with the server.
+
+The full research, the list of requirements and the plan behind each of them
+are in [docs/case-studies/issue-1](docs/case-studies/issue-1/README.md).
 
 ## Quick Start
 
-### Using This Template
+### Web app
 
-1. Click "Use this template" on GitHub to create a new repository
-2. Clone your new repository
-3. Update `package.json` with your package name and description
-4. Install dependencies: `bun install`
-5. Start developing!
+The web app in [`examples/universal-app`](examples/universal-app) is deployed
+to GitHub Pages. Run it locally:
+
+```bash
+npm install --prefix examples/universal-app
+npm run example:web:dev
+```
+
+Synthesis runs in a Web Worker and is streamed to Web Audio in chunks; the 3D
+view uses three.js and colours the tract (or every air voxel with the 3D
+solver) by the simulated acoustic pressure.
+
+### Library
+
+```bash
+npm install voice-simulator
+```
+
+```js
+import {
+  encodeWav,
+  randomHeadConfig,
+  synthesize,
+  synthesizeStream,
+  textToIpa,
+} from 'voice-simulator';
+
+textToIpa('Привет, мир'); // { lang: 'ru', ipa: 'prʲɪˈvʲet | mʲir', ... }
+
+const head = randomHeadConfig(42); // a different person for every seed
+const result = synthesize('Hello world', { head, tier: 'medium' });
+const wav = encodeWav(result.samples, result.sampleRate);
+
+// Streaming: chunks of Float32Array as soon as they are simulated.
+for await (const chunk of synthesizeStream('नमस्ते', { tier: 'low' })) {
+  play(chunk);
+}
+```
+
+Lower-level building blocks are exported too: `planUtterance`,
+`sampleState`, `tractShape`, `Waveguide`, `Fdtd3d`, `buildVoxelModel`,
+`VoiceRenderer`, `headMesh`, `tubeMesh`, `headModelObj`, `LodGovernor`,
+`chooseTier`, `measureAudioTier` and more; see
+[`src/index.d.ts`](src/index.d.ts). A runnable example is in
+[`examples/basic-usage.js`](examples/basic-usage.js).
+
+### CLI
+
+```bash
+npx voice-simulator ipa "你好世界"
+npx voice-simulator say "Hello world" -o hello.wav --seed 7
+npx voice-simulator say "Привет" --tier high -o fdtd.wav   # 3D FDTD solver
+npx voice-simulator mesh --lod 3 -o head.obj
+npx voice-simulator benchmark
+npx voice-simulator serve --port 8080
+npx voice-simulator --help
+```
+
+### HTTP API and streaming
+
+`voice-simulator serve` (or `createVoiceServer` from the separate
+`voice-simulator/server` export, which keeps `node:http` out of browser
+bundles) serves a small test page at `/` and these endpoints. Parameters can
+be passed as a query string or as a JSON `POST` body.
+
+| Endpoint               | Result                                                       |
+| ---------------------- | ------------------------------------------------------------ |
+| `GET /api/health`      | `{ status, version }`                                        |
+| `GET /api/languages`   | Supported languages with sample sentences                    |
+| `GET /api/tiers`       | Audio and visual LOD tiers                                   |
+| `GET /api/ipa`         | `text`, `lang` → IPA transcription                           |
+| `GET /api/head/random` | `seed` → random head configuration                           |
+| `GET /api/mesh.obj`    | `head`, `seed`, `lod` → OBJ model                            |
+| `GET /api/synthesize`  | `text`, `lang`, `tier`, `seed`, `head`, `sampleRate` → WAV   |
+| `GET /api/stream`      | Same parameters → chunked WAV that starts playing right away |
+
+```bash
+curl -o hello.wav "http://127.0.0.1:8080/api/stream?text=Hello&tier=medium"
+```
+
+### Docker
+
+```bash
+docker build -t voice-simulator .
+docker run --rm -p 8080:8080 voice-simulator
+```
+
+The image runs `voice-simulator serve` on port 8080 with a health check on
+`/api/health`.
+
+### Quality tiers
+
+| Audio tier | Solver    | Detail        | Sample rate | Relative cost |
+| ---------- | --------- | ------------- | ----------- | ------------- |
+| `minimal`  | waveguide | 22 sections   | 22.05 kHz   | 1             |
+| `low`      | waveguide | 32 sections   | 32 kHz      | 1.6           |
+| `medium`   | waveguide | 44 sections   | 48 kHz      | 2.6           |
+| `high`     | fdtd3d    | 1 cm voxels   | 48 kHz      | 60            |
+| `ultra`    | fdtd3d    | 0.6 cm voxels | 48 kHz      | 300           |
+
+The web app and `voice-simulator benchmark` pick the most detailed tier
+whose measured load stays under 80%; while speaking, `LodGovernor` steps down
+immediately when the load exceeds the target and steps up only after a dwell
+period when the next tier is predicted to fit with margin. Visual tiers
+(mesh LOD 0-3, pressure-field points) are governed the same way from the
+measured frame time.
 
 ### Development
 
@@ -49,73 +166,60 @@ bun run format
 # Check all (lint + format + file size)
 bun run check
 
-# Build the universal React example app
+# Build the web app
 npm install --prefix examples/universal-app
 npm run example:web:build
 npm run example:desktop:package
-
-# Try the CLI locally
-node bin/example-package-name.js add 2 3
 ```
 
 ## Project Structure
 
 ```
 .
-├── .changeset/           # Changeset configuration
-├── .github/workflows/    # GitHub Actions CI/CD
-├── .husky/               # Git hooks (pre-commit)
-├── examples/             # Usage examples
-│   └── universal-app/    # React + GitHub Pages + Electron + Capacitor app
-├── scripts/              # Build and release scripts
-├── src/                  # Source code
-│   ├── index.js          # Main entry point
-│   └── index.d.ts        # TypeScript definitions
-├── tests/                # Test files
-├── .eslintrc.js          # ESLint configuration
-├── .prettierrc           # Prettier configuration
-├── bunfig.toml           # Bun configuration
-├── deno.json             # Deno configuration
-└── package.json          # Node.js package manifest
+├── bin/voice-simulator.js # CLI
+├── Dockerfile             # Server image
+├── docs/case-studies/     # Research, requirements and plans
+├── examples/
+│   ├── basic-usage.js     # Library example
+│   └── universal-app/     # Web app (GitHub Pages, Electron, Capacitor)
+├── experiments/           # Measurement and debugging scripts
+├── src/
+│   ├── g2p/               # Text to IPA (en, ru, hi, zh)
+│   ├── ipa/               # IPA parsing and phone inventory
+│   ├── articulation/      # Articulation plan and tract shapes
+│   ├── geometry/          # Head model, centrelines and meshes
+│   ├── acoustics/         # Glottis, waveguide, voxel model, 3D FDTD
+│   ├── perf/              # Benchmarks and LOD governor
+│   ├── audio/             # WAV encoding
+│   ├── server/            # HTTP API (voice-simulator/server)
+│   ├── index.js           # Library entry point
+│   └── index.d.ts         # TypeScript definitions
+└── tests/                 # test-anywhere tests (Node, Bun, Deno)
 ```
 
 ## Design Choices
 
 ### Multi-Runtime Support
 
-This template is designed to work seamlessly with all major JavaScript runtimes:
+The library and its tests run on Node.js, Bun and Deno:
 
-- **Bun**: Primary runtime with highest performance, uses native test support (`bun test`)
-- **Node.js**: Alternative runtime, uses built-in test runner (`node --test`)
-- **Deno**: Secure runtime with built-in TypeScript support (`deno test`)
+- **Bun**: native test support (`bun test`)
+- **Node.js**: built-in test runner (`node --test`)
+- **Deno**: `deno test`
 
 The [test-anywhere](https://github.com/link-foundation/test-anywhere) framework provides a unified testing API that works identically across all runtimes.
 
-### Package Manager Agnostic
+### Web App Example
 
-While `package.json` is the source of truth for dependencies, the template supports:
-
-- **bun**: Primary choice, uses `bun.lockb`
-- **npm**: Uses `package-lock.json`
-- **yarn**: Uses `yarn.lock`
-- **pnpm**: Uses `pnpm-lock.yaml`
-- **deno**: Uses `deno.json` for configuration
-
-Note: `package-lock.json` is not committed by default to allow any package manager.
-
-### Universal App Example
-
-The template includes `examples/universal-app`, a Vite React app that imports
-`add` and `multiply` from `src/index.js` and renders a visual calculator UI.
-The same static build is used by:
+`examples/universal-app` is a Vite React app that imports the library from
+`src/index.js`. The same static build is used by:
 
 - GitHub Pages (`npm run example:web:build`)
 - Electron desktop packaging (`npm run example:desktop:package`)
 - Capacitor Android/iOS sync (`npm run example:mobile:sync`)
 
-The example app has its own `package.json` and lockfile so template users can
-opt into the frontend stack without adding React, Electron, or Capacitor to the
-library package itself.
+The app has its own `package.json` and lockfile so React, three.js, Electron
+and Capacitor stay out of the library package.
 
 See [examples/universal-app/README.md](examples/universal-app/README.md) for
 local web, desktop, Android, and iOS testing instructions.
@@ -214,15 +318,23 @@ This design decouples PR validation from the need to pull changes from the defau
 
 ### Deploying the example app
 
-The `example-app.yml` workflow deploys the universal example app to GitHub
-Pages on every push to `main`. Before the first run on `main` in a new
-repository created from this template, open **Settings → Pages** and set
+The `example-app.yml` workflow deploys the voice simulator web app to GitHub
+Pages on every push to `main`. Before the first run on `main`, open **Settings → Pages** and set
 **Source = GitHub Actions**. This is a one-time manual step and cannot be
 configured from a workflow because the Pages source defaults to
 _Deploy from a branch_. Without it, the `pages-deploy` job fails on
 `actions/deploy-pages` with `Get Pages site failed` /
 `Failed to create deployment`. After flipping the source, the workflow
 provisions the Pages site on its first run.
+
+### Enabling dependency review
+
+`actions/dependency-review-action` needs the repository's **Dependency graph**,
+which only a maintainer can enable: **Settings → Advanced Security →
+Dependency graph → Enable**. Until it is enabled, the Security workflow skips
+dependency review on pull requests with a warning, and its
+`Dependency graph enabled` job fails on `main` with the same instruction
+(`scripts/check-dependency-graph.sh`).
 
 ### Auto-regenerated preview screenshots
 
@@ -247,10 +359,11 @@ npm run example:web:preview-images
 PREVIEW_VERBOSE=1 npm run example:web:preview-images
 ```
 
-The matrix defaults to `{en, ru} × {light, dark}`. The shipped example app
-has no localization or theme toggle yet, so every cell currently renders
-the same UI — when a fork adds either, the matrix produces real per-cell
-variants without script edits.
+The matrix covers `{en, ru} × {light, dark}`; the app follows the browser
+language and the stored theme. Each tile opens the app with `?seed=preview`
+so the random head is the same in every run. Set `PREVIEW_CHROMIUM` to a
+Chromium binary when the locally installed browser build differs from the
+pinned Playwright release.
 
 ### Broken Link Checker
 
@@ -268,15 +381,11 @@ Add regex patterns to `.lycheeignore` to exclude URLs from checks (e.g., local d
 
 ## Configuration
 
-### Updating Package Name
+### Package Name
 
-After creating a repository from this template, update the package name in:
-
-1. `package.json`: replace `"@link-foundation/example-package-name"` with your package name
-2. `.changeset/config.json`: Package references
-
-Release scripts derive the package name from `package.json` at runtime, so no
-script-level package-name constants need to be edited during template adoption.
+The package is published as `voice-simulator` (see `package.json`). Release
+scripts derive the package name from `package.json` at runtime, so renaming
+the package only needs `package.json` and `.changeset/config.json`.
 
 ### Protected-Branch Release Pull Requests
 
@@ -299,8 +408,9 @@ token can be wired to the same inputs instead of a PAT.
 
 ### Optional Docker Hub Publishing
 
-Docker publishing is disabled by default. To enable it for a project that ships
-a Docker image, add a `Dockerfile` and configure these GitHub Actions settings:
+Pull requests build the server image from the `Dockerfile` as a check.
+Publishing to Docker Hub is disabled by default. To enable it, configure these
+GitHub Actions settings:
 
 | Setting              | Type               | Description                                                                           |
 | -------------------- | ------------------ | ------------------------------------------------------------------------------------- |
@@ -370,7 +480,7 @@ Quick steps:
 
 ## Best Practices
 
-This template implements CI/CD best practices for AI-driven development. See [BEST-PRACTICES.md](docs/BEST-PRACTICES.md) for details on:
+This repository implements CI/CD best practices for AI-driven development. See [BEST-PRACTICES.md](docs/BEST-PRACTICES.md) for details on:
 
 - File size limits for AI readability
 - Automated formatting and linting

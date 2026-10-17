@@ -1,0 +1,17 @@
+# node experiments/random-head-resonances.mjs 100 1  (worst relative error over heads ci-0..ci-99, seed of the worst head)
+waveguide /a/ F1 0.619 ci-4
+waveguide /a/ F2 0.332 ci-38
+fdtd3d /a/ F1 0.266 ci-4
+fdtd3d /a/ F2 0.32 ci-69
+waveguide /ɑ/ F1 0.515 ci-39
+waveguide /ɑ/ F2 0.161 ci-4
+fdtd3d /ɑ/ F1 0.381 ci-29
+fdtd3d /ɑ/ F2 0.18 ci-98
+waveguide /ə/ F1 0.112 ci-36
+waveguide /ə/ F2 0.038 ci-42
+fdtd3d /ə/ F1 0.182 ci-85
+fdtd3d /ə/ F2 0.158 ci-3
+waveguide /i/ F1 0.036 ci-12
+waveguide /i/ F2 0.017 ci-51
+fdtd3d /i/ F1 0.212 ci-85
+fdtd3d /i/ F2 0.162 ci-1

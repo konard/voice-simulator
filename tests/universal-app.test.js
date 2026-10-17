@@ -45,14 +45,35 @@ describe('universal React example app', () => {
     expect(packageJson.scripts['mobile:ios:run']).toContain('cap run ios');
   });
 
-  it('renders a visual UI using the package add and multiply functions', () => {
+  it('renders the voice simulator UI on top of the package API', () => {
     const appSource = readText(appSourcePath);
+    const engineSource = readText(`${exampleRoot}/src/engine/voice-engine.js`);
+    const workerSource = readText(`${exampleRoot}/src/engine/synth-worker.js`);
+    const viewerSource = readText(`${exampleRoot}/src/viewer/head-viewer.js`);
 
     expect(appSource).toContain("from '../../../src/index.js'");
-    expect(appSource).toContain('add(parsedLeft, parsedRight)');
-    expect(appSource).toContain('multiply(parsedLeft, parsedRight)');
-    expect(appSource).toContain('Addition');
-    expect(appSource).toContain('Multiplication');
+    expect(appSource).toContain("id: 'app-title'");
+    expect(appSource).toContain('useSimulator(');
+    expect(appSource).toContain('textToIpa(text, { lang })');
+    expect(appSource).toContain('randomHeadConfig(');
+    expect(engineSource).toContain('LodGovernor');
+    expect(workerSource).toContain('VoiceRenderer');
+    expect(workerSource).toContain('prepareUtterance');
+    expect(viewerSource).toContain("from 'three'");
+    expect(viewerSource).toContain('tractShape(state, this.head)');
+  });
+
+  it('keeps the browser bundle free of the Node HTTP server', () => {
+    const sources = [
+      appSourcePath,
+      `${exampleRoot}/src/engine/voice-engine.js`,
+      `${exampleRoot}/src/engine/synth-worker.js`,
+    ].map(readText);
+
+    for (const source of sources) {
+      expect(source.includes('server/server.js')).toBe(false);
+      expect(source.includes('node:')).toBe(false);
+    }
   });
 
   it('shares the Vite build output with Capacitor and GitHub Pages', () => {

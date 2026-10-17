@@ -1,5 +1,7 @@
 import { describe, it, expect } from 'test-anywhere';
-import { readFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 
 import { evaluateDockerBuildConfig } from '../scripts/check-docker-build.mjs';
 
@@ -84,12 +86,29 @@ describe('pull-request Docker build check', () => {
 
 describe('Docker build configuration', () => {
   it('stays disabled when the repository ships no Dockerfile', () => {
-    const config = evaluateDockerBuildConfig({ cwd: '.', env: {} });
+    const empty = mkdtempSync(join(tmpdir(), 'no-dockerfile-'));
+    try {
+      const config = evaluateDockerBuildConfig({ cwd: empty, env: {} });
 
-    expect(config.enabled).toBe(false);
-    expect(config.errors).toEqual([]);
-    expect(config.dockerfile).toBe('./Dockerfile');
-    expect(config.context).toBe('.');
+      expect(config.enabled).toBe(false);
+      expect(config.errors).toEqual([]);
+      expect(config.dockerfile).toBe('./Dockerfile');
+      expect(config.context).toBe('.');
+    } finally {
+      rmSync(empty, { recursive: true, force: true });
+    }
+  });
+
+  it('builds the server image from the repository Dockerfile', () => {
+    const config = evaluateDockerBuildConfig({ cwd: '.', env: {} });
+    expect(config.enabled).toBe(true);
+
+    const dockerfile = readFileSync('Dockerfile', 'utf8');
+    expect(dockerfile).toMatch(/^FROM node:24-alpine@sha256:[0-9a-f]{64}$/m);
+    expect(dockerfile).toContain(
+      'ENTRYPOINT ["node", "bin/voice-simulator.js"]'
+    );
+    expect(dockerfile).toContain('CMD ["serve"]');
   });
 
   it('enables the build when a Dockerfile exists', () => {

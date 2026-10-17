@@ -13,6 +13,9 @@ function resolveBasePath() {
 export default defineConfig({
   base: resolveBasePath(),
   plugins: [react()],
+  worker: {
+    format: 'es',
+  },
   build: {
     outDir: 'dist',
     emptyOutDir: true,

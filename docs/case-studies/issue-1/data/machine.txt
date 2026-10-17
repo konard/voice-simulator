@@ -1,0 +1,4 @@
+ 21:55:11 up 4 days, 11:48,  0 user,  load average: 4.68, 4.59, 5.00
+6
+v26.11.1
+Model name:                              AMD EPYC Processor (with IBPB)

@@ -69,11 +69,50 @@ jobs:
         with:
           persist-credentials: false
 
+      # Dependency graph is a repository setting; when it is off the review
+      # cannot run, so the pull request gets a warning and the
+      # dependency-graph job fails on the default branch instead.
+      - name: Check that Dependency graph is enabled
+        id: graph
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          DEPENDENCY_GRAPH_MODE: warn
+        run: bash scripts/check-dependency-graph.sh
+
       - name: Review dependency changes
+        if: steps.graph.outputs.enabled == 'true'
         uses: actions/dependency-review-action@v5
         with:
           fail-on-severity: high
           comment-summary-in-pr: on-failure
+
+  # Fails on the default branch until a maintainer enables Dependency graph,
+  # the setting dependency-review needs to review pull requests.
+  dependency-graph:
+    name: Dependency graph enabled
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    concurrency:
+      group: check-${{ github.workflow }}-${{ github.ref }}-dependency-graph
+      cancel-in-progress: true
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Require Dependency graph
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          HEAD_SHA: ${{ github.sha }}
+          DEPENDENCY_GRAPH_MODE: require
+        run: bash scripts/check-dependency-graph.sh
 
   npm-audit:
     name: Audit npm lock (${{ matrix.directory }})
@@ -118,6 +157,7 @@ jobs:
     needs:
       - codeql
       - dependency-review
+      - dependency-graph
       - npm-audit
     steps:
       - uses: actions/checkout@v6

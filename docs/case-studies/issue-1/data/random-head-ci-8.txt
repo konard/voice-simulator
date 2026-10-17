@@ -1,0 +1,25 @@
+# node experiments/random-head-a-formants.mjs ci-0 ci-4 ci-8 ci-12 ci-16 ci-20  (LPC F1-F3 of rendered /aː/, 24 kHz)
+ci-0 waveguide 1230 3105 5315
+ci-0 fdtd3d 1125 2280 3560
+ci-4 waveguide 1010 1475 2950
+ci-4 fdtd3d 675 1145 2295
+ci-8 waveguide 1175 2855 4915
+ci-8 fdtd3d 390 1045 2115
+ci-12 waveguide 1100 2935 5175
+ci-12 fdtd3d 460 1045 2230
+ci-16 waveguide 1240 3145 5270
+ci-16 fdtd3d 1140 2355 3500
+ci-20 waveguide 1140 1570 2965
+ci-20 fdtd3d 875 1210 2315
+
+# node experiments/fdtd-open-vowel-peaks.mjs a 1 0.08 ci-8  (impulse peaks, dB)
+rate 70000 tail/peak 9.53e-6
+tube [ 930, 1417, 2601 ]
+1075 -1.6 dB
+2120 0.0 dB
+2790 -16.9 dB
+3455 -5.9 dB
+
+# node experiments/rendered-vowel-harmonics.mjs ci-8  (harmonic levels, dB)
+waveguide f0 161.1 161:0 322:-12 483:-17 644:-19 805:-20 966:-20 1128:-21 1289:-23 1450:-24 1611:-30 1772:-38 1933:-42 2094:-46 2255:-49 2416:-54 2577:-49 2738:-43 2899:-41 3060:-58 3221:-60 3383:-56
+fdtd3d f0 161.1 161:0 322:-11 483:-15 644:-16 805:-19 966:-20 1128:-20 1289:-31 1450:-38 1611:-44 1772:-45 1933:-42 2094:-31 2255:-43 2416:-53 2577:-52 2738:-52 2899:-55 3060:-67 3221:-61 3383:-50

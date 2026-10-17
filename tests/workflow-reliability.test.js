@@ -234,6 +234,7 @@ describe('workflow concurrency policy', () => {
       'version-check',
       'changeset-check',
       'lint',
+      'simulation',
       'docker-build',
       'validate-docs',
     ]) {
@@ -470,6 +471,7 @@ describe('release workflow change gates', () => {
     'check-file-line-limits',
     'lint',
     'test',
+    'simulation',
     'validate-docs',
   ]) {
     it(`skips ${jobName} for excluded-only pushes`, () => {

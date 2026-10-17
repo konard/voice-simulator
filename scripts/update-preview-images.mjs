@@ -1,9 +1,10 @@
 #!/usr/bin/env node
 /**
- * Regenerate the example-app preview screenshots that ship with this
- * template (issue #62). Drives the built static bundle through a Chromium
- * controlled by `browser-commander` so the README/site images always reflect
- * the current UI rather than a hand-captured snapshot.
+ * Regenerate the example-app preview screenshots. Drives the built static
+ * bundle through a Chromium controlled by `browser-commander` so the
+ * README/site images always reflect the current UI. Every tile opens the app
+ * with `?seed=preview`, so the randomly generated head is identical between
+ * runs.
  *
  * Outputs:
  *   - docs/screenshots/example-app/example-app-{en,ru}-{light,dark}.png
@@ -12,15 +13,13 @@
  * Usage:
  *   node scripts/update-preview-images.mjs
  *   PREVIEW_VERBOSE=1 node scripts/update-preview-images.mjs
+ *   PREVIEW_CHROMIUM=/path/to/chrome node scripts/update-preview-images.mjs
  *   node scripts/update-preview-images.mjs --skip-build   # reuse existing dist
  *
- * Pattern reused from konard/vk-bot-desktop#52 (closes konard/vk-bot-desktop#51).
- * The matrix is sized to demonstrate locale × theme variation even when the
- * shipped example app does not yet have i18n or a theme toggle: downstream
- * forks that add either get fresh per-cell screenshots without touching this
- * script. Verbose mode (`PREVIEW_VERBOSE=1`) enables browser-commander
- * tracing, dumps PNG signatures, and prints the resolved <html data-theme>
- * and <html lang> so any future regression is diagnosable from CI logs alone.
+ * The matrix covers both UI locales (en, ru) and both themes (light, dark).
+ * Verbose mode (`PREVIEW_VERBOSE=1`) enables browser-commander tracing, dumps
+ * PNG signatures, and prints the resolved <html data-theme> and <html lang>
+ * so a regression is diagnosable from CI logs alone.
  */
 /* global document, window, URL */
 
@@ -240,7 +239,7 @@ async function captureTile({ browser, locale, theme, contextLocale, url }) {
     await commander.emulateMedia({ colorScheme: theme });
 
     const navigation = await commander.goto({
-      url,
+      url: `${url}?seed=preview`,
       waitForStableUrlBefore: false,
       waitForStableUrlAfter: false,
       waitForNetworkIdle: false,
@@ -255,7 +254,7 @@ async function captureTile({ browser, locale, theme, contextLocale, url }) {
 
     await commander.waitForSelector({ selector: '.app-shell', timeout: 10000 });
     await commander.waitForSelector({
-      selector: '#calculator-title',
+      selector: '#app-title',
       timeout: 10000,
     });
     await page.waitForLoadState('networkidle');
@@ -304,12 +303,16 @@ async function main() {
   const server = await createStaticServer(exampleAppDistDir);
   log(`example-app server: ${server.url}`);
 
-  const browser = await chromium.launch({
-    headless: true,
-    args: ['--no-sandbox', '--disable-setuid-sandbox'],
-  });
-
+  let browser = null;
   try {
+    browser = await chromium.launch({
+      headless: true,
+      // Optional override for machines whose Chromium build differs from the
+      // one bundled with the pinned Playwright release.
+      executablePath: process.env.PREVIEW_CHROMIUM || undefined,
+      args: ['--no-sandbox', '--disable-setuid-sandbox'],
+    });
+
     for (const { locale, contextLocale } of LOCALES) {
       for (const theme of THEMES) {
         await captureTile({
@@ -330,7 +333,7 @@ async function main() {
     await copyFile(fallbackSource, fallback);
     await reportPng('fallback (en/light copy)', fallback);
   } finally {
-    await browser.close();
+    await browser?.close();
     await server.close();
   }
 
