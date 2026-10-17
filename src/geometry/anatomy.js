@@ -62,6 +62,8 @@ const OVERJET = 0.25;
 const GUM_HEIGHT = 0.9;
 /** Tongue from just above the larynx (fraction of the tract). */
 const TONGUE_ROOT = 0.22;
+/** Tongue surface just under the tract wall, so the two do not overlap (cm). */
+const TONGUE_CLEARANCE = 0.05;
 
 function clamp(value, low = 0, high = 1) {
   return Math.min(high, Math.max(low, value));
@@ -103,6 +105,28 @@ function mouthFrame(config) {
  * left side).
  */
 function archCurve(teeth, halfWidth, front) {
+  return cached(`arch ${teeth === LOWER_TEETH} ${halfWidth} ${front}`, () =>
+    solveArch(teeth, halfWidth, front)
+  );
+}
+
+/** Parts that only depend on the head and LOD; the viewer rebuilds the
+ * tongue, velum and lower teeth every frame. */
+const cache = new Map();
+
+function cached(key, build) {
+  let value = cache.get(key);
+  if (value === undefined) {
+    if (cache.size >= 64) {
+      cache.clear();
+    }
+    value = build();
+    cache.set(key, value);
+  }
+  return value;
+}
+
+function solveArch(teeth, halfWidth, front) {
   const total = teeth.reduce((sum, tooth) => sum + tooth[0], 0);
   const steps = 64;
   const curve = (depth) => {
@@ -229,7 +253,10 @@ function loftMesh(sections, ring, vertex) {
       positions[cap * 3 + axis] = sum / ring;
     }
   }
-  return { positions, indices: loftIndices(sections, ring) };
+  const indices = cached(`loft ${sections} ${ring}`, () =>
+    loftIndices(sections, ring)
+  );
+  return { positions, indices: indices.slice() };
 }
 
 function anatomyLod(lod) {
@@ -281,16 +308,23 @@ export function incisorEdges(gap, head) {
   };
 }
 
-function archMesh(config, options, lower) {
-  const lod = ANATOMY_LODS[anatomyLod(options.lod)];
-  const { jawPivot, edge, front } = mouthFrame(config);
+/** Copy of a dental arch at rest (jaw closed to REST_GAP). */
+function restArch(config, lod, lower) {
+  const level = anatomyLod(lod);
+  const key = `teeth ${lower} ${level} ${JSON.stringify(config)}`;
+  const mesh = cached(key, () => archMesh(config, level, lower));
+  return { positions: mesh.positions.slice(), indices: mesh.indices.slice() };
+}
+
+function archMesh(config, level, lower) {
+  const lod = ANATOMY_LODS[level];
+  const { edge, front } = mouthFrame(config);
   const teeth = lower ? LOWER_TEETH : UPPER_TEETH;
   const halfWidth =
     (ARCH_HALF_WIDTH - (lower ? OVERJET : 0)) * config.mouthWidth;
   const arch = archCurve(teeth, halfWidth, lower ? front - OVERJET : front);
   const base = lower ? edge - REST_GAP : edge;
   const direction = lower ? -1 : 1;
-  const angle = lower ? jawAngle(options.gap ?? REST_GAP, config) : 0;
   const sections = 2 * lod.arch + 1;
   const notches = lod.arch >= ANATOMY_LODS[2].arch;
   const samples = Array.from({ length: sections }, (_, section) => {
@@ -305,12 +339,11 @@ function archMesh(config, options, lower) {
     const [, height, thickness, flat] = crown;
     const [across, up] = profilePoint(step, lod.profile);
     const depth = across * thickness * lerp(flat, 1, up);
-    const point = [
+    return [
       x + inward[0] * depth,
       base + direction * up * height,
       z + inward[1] * depth,
     ];
-    return angle ? rotateJaw(point, jawPivot, angle) : point;
   });
 }
 
@@ -320,7 +353,7 @@ function archMesh(config, options, lower) {
  * @param {{lod?: number}} [options]
  */
 export function upperTeethMesh(head, options = {}) {
-  return archMesh(normalizeHeadConfig(head), options, false);
+  return restArch(normalizeHeadConfig(head), options.lod, false);
 }
 
 /**
@@ -330,7 +363,20 @@ export function upperTeethMesh(head, options = {}) {
  * @param {{lod?: number, gap?: number}} [options]
  */
 export function lowerTeethMesh(head, options = {}) {
-  return archMesh(normalizeHeadConfig(head), options, true);
+  const config = normalizeHeadConfig(head);
+  const mesh = restArch(config, options.lod, true);
+  const angle = jawAngle(options.gap ?? REST_GAP, config);
+  const { jawPivot } = mouthFrame(config);
+  const { positions } = mesh;
+  for (let index = 0; index < positions.length; index += 3) {
+    const point = [
+      positions[index],
+      positions[index + 1],
+      positions[index + 2],
+    ];
+    positions.set(rotateJaw(point, jawPivot, angle), index);
+  }
+  return mesh;
 }
 
 function interpolate(areas, fraction) {
@@ -382,7 +428,7 @@ export function tongueMesh(head, options = {}) {
     const across = (2 * index) / lod.across - 1;
     const dome = 0.35 * across * across;
     const below = top ? 0 : 0.2 + depth * Math.sqrt(1 - across * across);
-    const drop = minor + dome + below;
+    const drop = minor + TONGUE_CLEARANCE + dome + below;
     return [
       across * width,
       point[1] - normal[1] * drop,
