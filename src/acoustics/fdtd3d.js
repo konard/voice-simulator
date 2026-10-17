@@ -21,6 +21,12 @@
  * (dynamic lengthening by the larynx or lips only rescales the area
  * function), and wall losses use the same empirical loss model as the 1D
  * waveguide, converted to a loss per unit of time.
+ *
+ * A `microphone` option ({distance, azimuth, elevation} relative to the
+ * lips) moves the receiver cell; the free-air shell grows to reach it (up
+ * to MAX_RADIATION_RADIUS, the listener extrapolates beyond). An
+ * `enclosure` option surrounds the head with a box of air whose walls
+ * reflect according to their absorption.
  */
 
 import { lossFactor } from './waveguide.js';
@@ -32,8 +38,11 @@ import {
   LINK_LIPS,
   LINK_NOSTRILS,
   LINK_VELUM,
+  OPEN_FACE_NORMALS,
   buildVoxelModel,
+  voxelModelOptions,
 } from './voxel-model.js';
+import { microphonePosition, resolveMicrophone } from './microphone.js';
 import { createKernel } from './fdtd-kernel.js';
 
 const COURANT = 0.5;
@@ -50,6 +59,15 @@ const MICROPHONE_GAIN = 3.9;
 /** Time constant of the leaky source integrator in microphone mode (s). */
 const MICROPHONE_LEAK_TIME = 0.008;
 const NOISE_GAIN = 1.5;
+/**
+ * Extra microphone level with the spherical boundary: the plane-wave shell
+ * that MICROPHONE_GAIN was calibrated with reflects the low frequencies
+ * and raises the pressure near the lips about this much
+ * (experiments/issue-5-mic-calibration.mjs).
+ */
+const SPHERICAL_MICROPHONE_GAIN = 4.2;
+/** Kind of the links that carry the spherical-wave boundary flow. */
+const LINK_RADIATION = 4;
 
 function resample(values, position) {
   const source = Math.max(
@@ -99,6 +117,70 @@ function envelopeAreas(model) {
   return areas;
 }
 
+/**
+ * Open faces of the free-air shell absorb a plane wave (admittance 1). A
+ * spherical wave leaving a small shell also carries the reactive flow
+ * (c / r) * integral(p dt) (first-order Bayliss-Turkel condition); without
+ * it the shell reflects the low frequencies and the pressure falls off
+ * slower than 1/r. Each boundary cell gets a link to a ghost cell held at
+ * zero pressure: the link velocity integrates the cell pressure, so with
+ * conductance faces * dx / r it carries that flow.
+ */
+function withSphericalBoundary(model) {
+  const { cells, links, openFaces, dx } = model;
+  const { lips, nostrils } = model.landmarks;
+  const boundary = [];
+  const conductance = [];
+  const admittance = Float64Array.from(openFaces);
+  cells.forEach((cell, index) => {
+    if (cell.kind !== CELL_AIR || openFaces[index] === 0) {
+      return;
+    }
+    const offsets = [lips, nostrils].map((centre) =>
+      cell.point.map((value, axis) => value - centre[axis])
+    );
+    const distances = offsets.map((offset) => Math.hypot(...offset));
+    const nearest = distances[0] <= distances[1] ? 0 : 1;
+    const radius = Math.max(dx, distances[nearest]);
+    // A face passes the share of an outgoing wave that crosses it.
+    let weight = 0;
+    OPEN_FACE_NORMALS.forEach((normal, bit) => {
+      if (model.openMasks[index] & (1 << bit)) {
+        const cosine =
+          (normal[0] * offsets[nearest][0] +
+            normal[1] * offsets[nearest][1] +
+            normal[2] * offsets[nearest][2]) /
+          radius;
+        weight += Math.max(0, cosine);
+      }
+    });
+    admittance[index] = weight;
+    boundary.push(index);
+    conductance.push((weight * dx) / (radius + dx / 2));
+  });
+  const first = links.a.length;
+  const ghost = cells.length;
+  const count = first + boundary.length;
+  const a = new Int32Array(count);
+  a.set(links.a);
+  a.set(boundary, first);
+  const b = new Int32Array(count).fill(ghost);
+  b.set(links.b);
+  const kind = new Uint8Array(count).fill(LINK_RADIATION);
+  kind.set(links.kind);
+  return {
+    model: {
+      ...model,
+      cells: [...cells, { kind: CELL_AIR, arc: 0, point: [0, 0, 0] }],
+      links: { ...links, a, b, kind },
+      openFaces: [...admittance, 0],
+    },
+    first,
+    ghost,
+    conductance,
+  };
+}
+
 /** Index of the free-air cell closest to a point. */
 function nearestAirCell(cells, point) {
   let best = -1;
@@ -122,22 +204,40 @@ export class Fdtd3d {
   /**
    * `kernel` selects the step loop: 'wasm' (default when WebAssembly is
    * available) or 'js'; both produce bit-identical output.
-   * @param {{head?: object, dx?: number, model?: object, output?: 'flow'|'microphone', kernel?: 'wasm'|'js'}} [options]
+   * A `microphone` or `enclosure` switches the default output to
+   * 'microphone'; a prebuilt `model` must then come from
+   * buildVoxelModel(head, voxelModelOptions(options)).
+   * @param {{head?: object, dx?: number, model?: object, output?: 'flow'|'microphone', kernel?: 'wasm'|'js', microphone?: object, enclosure?: object}} [options]
    */
   constructor(options = {}) {
-    const model = options.model ?? buildVoxelModel(options.head, options);
+    const model =
+      options.model ??
+      buildVoxelModel(options.head, {
+        ...options,
+        ...voxelModelOptions(options),
+      });
     this.model = model;
     this.dx = model.dx;
     this.dt = (COURANT * model.dx) / SPEED_OF_SOUND;
-    this.output = options.output ?? 'flow';
-    this.#allocate(model, options.kernel ?? 'wasm');
-    this.#prepareBoundaries(model);
-    const { lips } = model.landmarks;
-    this.microphone = nearestAirCell(model.cells, [
-      lips[0],
-      lips[1],
-      lips[2] + 3,
-    ]);
+    const listening = Boolean(options.microphone || model.enclosure);
+    this.output = options.output ?? (listening ? 'microphone' : 'flow');
+    // A microphone away from the lips needs the 1/r fall-off of the
+    // radiated wave; the default keeps the plane-wave shell.
+    const spherical =
+      options.microphone && !model.enclosure
+        ? withSphericalBoundary(model)
+        : null;
+    const grid = spherical?.model ?? model;
+    this.#allocate(grid, options.kernel ?? 'wasm');
+    this.#prepareBoundaries(grid);
+    this.microphoneGain =
+      spherical || model.enclosure ? SPHERICAL_MICROPHONE_GAIN : 1;
+    if (spherical) {
+      this.conductance.set(spherical.conductance, spherical.first);
+      this.keep[spherical.ghost] = 0;
+      this.gain[spherical.ghost] = 0;
+    }
+    this.#placeMicrophone(model, resolveMicrophone(options.microphone));
     this.noiseArc = -1;
     this.noiseLinks = new Int32Array(0);
     this.noiseSigns = new Float64Array(0);
@@ -225,11 +325,40 @@ export class Fdtd3d {
     this.spans = null;
   }
 
+  /**
+   * Receiver cell. With a microphone option, `microphoneDistance` tells the
+   * listener how far from the lips the solver already carried the sound
+   * (less than the microphone distance when it lies outside the domain)
+   * and `simulatesEnclosure` that the walls are part of the simulation.
+   */
+  #placeMicrophone(model, microphone) {
+    const { lips } = model.landmarks;
+    const target = microphone
+      ? microphonePosition(microphone, lips)
+      : [lips[0], lips[1], lips[2] + 3];
+    this.microphone = nearestAirCell(model.cells, target);
+    if (this.output !== 'microphone') {
+      return;
+    }
+    this.simulatesEnclosure = Boolean(model.enclosure);
+    if (microphone) {
+      const { point } = model.cells[this.microphone];
+      const offset = Math.hypot(
+        ...point.map((value, axis) => value - target[axis])
+      );
+      this.microphoneDistance =
+        offset > this.dx
+          ? Math.hypot(...point.map((value, axis) => value - lips[axis]))
+          : microphone.distance;
+    }
+  }
+
   /** Per-cell boundary admittance (open faces of the air shell, glottis). */
   #prepareBoundaries(model) {
     this.admittance = new Float64Array(this.cellCount);
+    const wall = model.boundaryAdmittance ?? 1;
     model.openFaces.forEach((faces, index) => {
-      this.admittance[index] = faces;
+      this.admittance[index] = faces * wall;
     });
     // The source cells span about one slice per dx of arc; share the
     // glottis admittance between the slices so the total matches.
@@ -435,7 +564,7 @@ export class Fdtd3d {
 
   #measure() {
     if (this.output === 'microphone') {
-      return this.pressure[this.microphone];
+      return this.pressure[this.microphone] * this.microphoneGain;
     }
     const { outputLinks, outputSigns, conductance, velocity } = this;
     let flow = 0;
@@ -502,10 +631,11 @@ export class Fdtd3d {
     this.positions ??= Float32Array.from(
       this.model.cells.flatMap((cell) => cell.point)
     );
+    const count = this.model.cells.length;
     return {
       positions: this.positions,
-      pressure: this.pressure,
-      kinds: this.cellKind,
+      pressure: this.pressure.subarray(0, count),
+      kinds: this.cellKind.subarray(0, count),
     };
   }
 

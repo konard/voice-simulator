@@ -58,14 +58,18 @@ export function prepareUtterance(text, options = {}) {
     model: options.model,
     seed: options.seed ?? 1,
     head,
+    microphone: options.microphone,
+    room: options.room,
+    enclosure: options.enclosure,
   };
   return { ...transcription, head, plan, renderOptions };
 }
 
 /**
- * Synthesize speech from text.
+ * Synthesize speech from text. `microphone`, `room` and `enclosure` choose
+ * where and in what space the voice is heard (see VoiceRenderer).
  * @param {string} text
- * @param {{lang?: string, ipa?: boolean, head?: object|'random', seed?: string|number, tier?: string|number, solver?: string, sections?: number, dx?: number, sampleRate?: number, output?: 'flow'|'microphone'}} [options]
+ * @param {{lang?: string, ipa?: boolean, head?: object|'random', seed?: string|number, tier?: string|number, solver?: string, sections?: number, dx?: number, sampleRate?: number, output?: 'flow'|'microphone', microphone?: {distance?: number, azimuth?: number, elevation?: number, compensate?: boolean}, room?: string|object, enclosure?: {width: number, height: number, depth: number, absorption?: number, center?: number[]}}} [options]
  * @returns {{lang: string, ipa: string, words: object[], head: object, plan: object, sampleRate: number, samples: Float32Array, duration: number}}
  */
 export function synthesize(text, options = {}) {
