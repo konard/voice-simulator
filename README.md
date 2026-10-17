@@ -10,7 +10,17 @@ a pressure wave travelling through the 3D shape of a parametric low-poly head
 ## Features
 
 - **Text to IPA** for English, Russian, Hindi and Chinese, with automatic
-  language detection per word (`textToIpa`).
+  language detection per word (`textToIpa`). Numbers, dates, times, money,
+  units and abbreviations are read out per language (`normalizeText`).
+- **English accents**: General American, Southern British, Australian and
+  Indian English (`accent: 'en-GB'`, or `lang: 'en-GB'`).
+- **Punctuation prosody**: commas, semicolons, dashes, parentheses, quotes,
+  periods, exclamations, questions and ellipses each have their own pause,
+  final pitch movement and lengthening; questions with a question word
+  fall, yes/no questions rise, exclamations are higher and louder.
+- **Word and syllable timeline**: `utteranceTimeline` (also in
+  `synthesize`) tells when every word and syllable is spoken; the app
+  highlights the current word and syllable in the text and the IPA.
 - **Smooth articulation**: IPA becomes a time plan of tract shapes with
   coarticulated transitions, glottal source and pitch contour.
 - **Physical acoustics** with two interchangeable solvers:
@@ -93,6 +103,7 @@ import {
 } from 'voice-simulator';
 
 textToIpa('Привет, мир'); // { lang: 'ru', ipa: 'prʲɪˈvʲet | mʲir', ... }
+textToIpa('water', { lang: 'en', accent: 'en-GB' }).ipa; // 'ˈwɔːtə'
 
 const head = randomHeadConfig(42); // a different person for every seed
 const result = synthesize('Hello world', { head, tier: 'medium' });
@@ -116,6 +127,11 @@ const { head: copied } = matchVoice(samples, sampleRate, {
   transcript: 'What the recording says',
 });
 
+// When each word and syllable is spoken, in seconds of the audio.
+for (const word of result.timeline.words) {
+  console.log(word.start, word.end, word.text, word.syllables.length);
+}
+
 // Streaming: chunks of Float32Array as soon as they are simulated.
 for await (const chunk of synthesizeStream('नमस्ते', { tier: 'low' })) {
   play(chunk);
@@ -133,6 +149,8 @@ Lower-level building blocks are exported too: `planUtterance`,
 
 ```bash
 npx voice-simulator ipa "你好世界"
+npx voice-simulator ipa "Water, please." --accent en-GB
+npx voice-simulator timeline "Hello world, how are you?"   # word and syllable times
 npx voice-simulator say "Hello world" -o hello.wav --seed 7
 npx voice-simulator say "Привет" --tier high -o fdtd.wav   # 3D FDTD solver
 npx voice-simulator say "Hello" --preset female --head random -o hi.flac -b 24
@@ -158,18 +176,19 @@ be passed as a query string or as a JSON `POST` body.
 | `GET /api/health`      | `{ status, version }`                                        |
 | `GET /api/languages`   | Supported languages with sample sentences                    |
 | `GET /api/tiers`       | Audio and visual LOD tiers                                   |
-| `GET /api/ipa`         | `text`, `lang` → IPA transcription                           |
+| `GET /api/ipa`         | `text`, `lang`, `accent` → IPA transcription                 |
+| `GET /api/timeline`    | `text`, `lang`, `accent` → word and syllable times           |
 | `GET /api/head/random` | `seed` → random head configuration                           |
 | `GET /api/mesh.obj`    | `head`, `seed`, `lod` → OBJ model                            |
 | `GET /api/synthesize`  | `text`, `lang`, `tier`, `seed`, `head`, `sampleRate` → WAV   |
 | `GET /api/stream`      | Same parameters → chunked WAV that starts playing right away |
 
-Synthesis also accepts `preset` (`male`, `female`, `child`, used with
-`head=random`), `micDistance` (cm), `micAzimuth` and `micElevation`
-(degrees), `micCompensate`, `room` (a preset name, or a
-`{width, height, depth, rt60}` object in a JSON body), and the encoding:
-`format` (`wav`, `flac`, `aiff`, `au`, `raw`; `/api/stream` streams `wav`,
-`au` and `raw`), `bitDepth` and `float`.
+Synthesis also accepts `accent` (`en-US`, `en-GB`, `en-AU`, `en-IN`),
+`preset` (`male`, `female`, `child`, used with `head=random`), `micDistance`
+(cm), `micAzimuth` and `micElevation` (degrees), `micCompensate`, `room` (a
+preset name, or a `{width, height, depth, rt60}` object in a JSON body), and
+the encoding: `format` (`wav`, `flac`, `aiff`, `au`, `raw`; `/api/stream`
+streams `wav`, `au` and `raw`), `bitDepth` and `float`.
 
 ```bash
 curl -o hello.wav "http://127.0.0.1:8080/api/stream?text=Hello&tier=medium"
@@ -248,9 +267,9 @@ npm run example:desktop:package
 │   └── universal-app/     # Web app (GitHub Pages, Electron, Capacitor)
 ├── experiments/           # Measurement and debugging scripts
 ├── src/
-│   ├── g2p/               # Text to IPA (en, ru, hi, zh)
-│   ├── ipa/               # IPA parsing and phone inventory
-│   ├── articulation/      # Articulation plan and tract shapes
+│   ├── g2p/               # Text normalisation, accents, text to IPA
+│   ├── ipa/               # IPA parsing, phone inventory, syllables
+│   ├── articulation/      # Plan, prosody, timeline and tract shapes
 │   ├── geometry/          # Head model, centrelines and meshes
 │   ├── acoustics/         # Glottis, waveguide, voxel model, 3D FDTD,
 │   │                      # microphone and room

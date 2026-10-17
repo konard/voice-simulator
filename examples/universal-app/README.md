@@ -8,6 +8,12 @@ desktop packages, and Capacitor mobile projects.
   **Speak**: the transcription is planned on the main thread, the acoustic
   simulation runs in a Web Worker (`src/engine/synth-worker.js`) and audio is
   streamed to Web Audio in chunks.
+- English text can be spoken with a General American, British,
+  Australian or Indian accent (the accent selector appears for English).
+- While it speaks, the text and its IPA (split into syllables) light up the
+  current word and syllable (`src/components/SpokenText.js`,
+  `src/components/highlight.js`), on the same clock as the audio and the
+  3D view.
 - The three.js view (`src/viewer/head-viewer.js`) shows the low-poly head
   with its teeth, tongue and palate, animates the jaw, lips and tongue,
   colours the tract by the simulated pressure and marks the microphone.
