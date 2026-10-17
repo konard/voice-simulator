@@ -1,0 +1,5 @@
+Machine used for the measurements in this folder
+
+CPU: AMD EPYC Processor (with IBPB) (6 cores, shared, heavily loaded by parallel jobs)
+Node.js: v26.12.0
+OS: Linux 6.8.0-147-generic
