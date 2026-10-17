@@ -151,14 +151,22 @@ export declare function sampleState(
 export declare function tractShape(
   state: Record<string, number>,
   head: HeadConfig,
-  options?: { sections?: number }
+  options?: { sections?: number; teeth?: boolean }
 ): {
   areas: Float64Array;
   length: number;
   velumArea: number;
   velumIndex: number;
-  frication: { position: number; gain: number; sibilance: number };
+  frication: {
+    position: number;
+    gain: number;
+    sibilance: number;
+    /** How much the jet is aimed at the incisors (0..1). */
+    obstacle: number;
+  };
   glottis: Record<string, number>;
+  /** Incisors; null with `teeth: false`. */
+  teeth: Teeth | null;
 };
 export declare function noseShape(
   head: HeadConfig,
@@ -220,7 +228,13 @@ export declare function registerSolver(
   factory: (options: object) => Solver
 ): void;
 export declare class Waveguide implements Solver {
-  constructor(options?: { sections?: number; noseSections?: number });
+  constructor(options?: {
+    sections?: number;
+    noseSections?: number;
+    head?: HeadConfig;
+    /** `false` leaves out the piriform fossae side branch. */
+    piriform?: boolean;
+  });
   setShape(
     areas: ArrayLike<number>,
     velumArea: number,
@@ -240,7 +254,12 @@ export declare class Fdtd3d implements Solver {
     output?: OutputMode;
   });
   stepDuration(): number;
-  setShape(areas: ArrayLike<number>, velumArea: number): void;
+  setShape(
+    areas: ArrayLike<number>,
+    velumArea: number,
+    velumIndex?: number,
+    teeth?: { gap: number } | null
+  ): void;
   setNose(areas: ArrayLike<number>): void;
   step(glottalFlow: number, noisePosition: number, noise: number): number;
   /** Pressure field for visualisation. */
@@ -423,3 +442,91 @@ export declare function benchmarkAudioTiers(options?: {
   loads: number[];
   measured: boolean[];
 };
+
+// Anatomy (issue 5): teeth, tongue, hard and soft palate, piriform fossae.
+export interface RenderOptions {
+  /** `false` leaves out the incisors. */
+  teeth?: boolean;
+  /** `false` leaves out the piriform fossae (waveguide). */
+  piriform?: boolean;
+}
+export interface Teeth {
+  /** Inter-incisor gap (cm). */
+  gap: number;
+  /** Open area between the incisal edges (cm²). */
+  area: number;
+  /** Span along the tract from the glottis (cm). */
+  start: number;
+  end: number;
+  /** Section most covered by the teeth. */
+  index?: number;
+  /** First section in front of the teeth. */
+  outlet?: number;
+}
+export declare const INCISOR_THICKNESS: number;
+export declare const REST_GAP: number;
+export declare const SIBILANT_GAP: number;
+export declare function incisorDepth(head: HeadConfig): number;
+export declare function teethWidth(head: HeadConfig): number;
+export declare function teethGap(
+  state: Record<string, number>,
+  head: HeadConfig
+): number;
+export declare function dentition(
+  state: Record<string, number>,
+  head: HeadConfig,
+  length: number
+): Teeth;
+export declare function carveTeeth(
+  areas: Float64Array,
+  teeth: Teeth,
+  length: number
+): number;
+export declare function arcPoint(
+  distance: number,
+  layout: { pharynx: number; bend: number; origin: number[] }
+): { point: number[]; tangent: number[] };
+export interface AnatomyLod {
+  arch: number;
+  profile: number;
+  tongue: number;
+  across: number;
+  velum: number;
+}
+export interface AnatomyOptions {
+  lod?: number;
+  state?: Record<string, number>;
+  /** Precomputed tractShape(state, head). */
+  shape?: object;
+}
+export declare const ANATOMY_LODS: readonly AnatomyLod[];
+export declare function jawAngle(gap: number, head: HeadConfig): number;
+export declare function jawOpenness(gap: number, head: HeadConfig): number;
+export declare function incisorEdges(
+  gap: number,
+  head: HeadConfig
+): { upper: number[]; lower: number[] };
+export declare function upperTeethMesh(
+  head: HeadConfig,
+  options?: { lod?: number }
+): Mesh;
+export declare function lowerTeethMesh(
+  head: HeadConfig,
+  options?: { lod?: number; gap?: number }
+): Mesh;
+export declare function tongueMesh(
+  head: HeadConfig,
+  options?: AnatomyOptions
+): Mesh;
+export declare function palateMesh(
+  head: HeadConfig,
+  options?: { lod?: number }
+): Mesh;
+export declare function velumMesh(
+  head: HeadConfig,
+  options?: { lod?: number; velum?: number }
+): Mesh;
+export declare function anatomyMeshes(
+  head: HeadConfig,
+  options?: AnatomyOptions
+): (Mesh & { name: string })[];
