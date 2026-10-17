@@ -42,7 +42,13 @@ export function headLandmarks(head = DEFAULT_HEAD) {
   };
 }
 
-function arcPoint(distance, layout) {
+/**
+ * Point and unit tangent `distance` cm along a tract layout (see
+ * tractCenterline().layout).
+ * @param {number} distance
+ * @param {{pharynx: number, bend: number, origin: number[]}} layout
+ */
+export function arcPoint(distance, layout) {
   const { pharynx, bend, origin } = layout;
   if (distance <= pharynx) {
     return {

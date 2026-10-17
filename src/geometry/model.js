@@ -1,10 +1,12 @@
 /**
- * Complete low-poly head model: skin, vocal tract, nasal tract and lips
- * for a head configuration and an articulator state.
+ * Complete low-poly head model: skin, vocal tract, nasal tract, lips,
+ * teeth, tongue, hard and soft palate for a head configuration and an
+ * articulator state.
  */
 
 import { noseShape, tractShape } from '../articulation/tract-shape.js';
 import { normalizeHeadConfig } from '../head-config.js';
+import { anatomyMeshes } from './anatomy.js';
 import { nasalCenterline, tractCenterline } from './centerline.js';
 import {
   MESH_LODS,
@@ -45,6 +47,7 @@ export function headModel(head, options = {}) {
       name: 'lips',
       ...lipsMesh(config, { area: shape.areas.at(-1), lod }),
     },
+    ...anatomyMeshes(config, { lod, state: options.state, shape }),
   ];
 }
 
