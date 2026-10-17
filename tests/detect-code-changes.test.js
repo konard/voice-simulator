@@ -279,6 +279,46 @@ describe('detect-code-changes CLI', () => {
   );
 });
 
+describe('detect-code-changes file types', () => {
+  // The pipeline runs shell scripts, publishes type declarations and builds
+  // the Dockerfile, so a change to any of them must run the checks.
+  for (const eventName of ['pull_request', 'push']) {
+    for (const filePath of [
+      'scripts/check-pages.sh',
+      'src/index.d.ts',
+      'Dockerfile',
+      'bunfig.toml',
+      'tests/fixtures/pages-stub/gh',
+    ]) {
+      itUnless(sandboxed)(`counts ${filePath} as code on ${eventName}`, () => {
+        const root = createChangeFixture(filePath, eventName);
+
+        try {
+          const { outputs, result } = runDetectCodeChanges(root, eventName);
+
+          expect(result.status).toBe(0);
+          expect(outputs).toContain('any-code-changed=true\n');
+        } finally {
+          rmSync(root, { force: true, recursive: true });
+        }
+      });
+    }
+  }
+
+  itUnless(sandboxed)('does not count a .gitkeep placeholder as code', () => {
+    const root = createChangeFixture('assets/.gitkeep', 'push');
+
+    try {
+      const { outputs, result } = runDetectCodeChanges(root, 'push');
+
+      expect(result.status).toBe(0);
+      expect(outputs).toContain('any-code-changed=false\n');
+    } finally {
+      rmSync(root, { force: true, recursive: true });
+    }
+  });
+});
+
 // A pull request can carry several commits, and a superseded run may never
 // have tested the previous head. These fixtures exercise the push-range
 // logic against a stub of the Actions API bound to GITHUB_API_URL, driving
