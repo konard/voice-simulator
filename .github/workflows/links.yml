@@ -64,6 +64,8 @@ jobs:
           # Exclude case-studies directory - these are research documents from
           # external repos with references to files and issues that don't exist
           # in this repository (similar exclusion pattern as eslint.config.js)
+          # Exclude dev/log for the same reason: it keeps issue and CI data
+          # as fetched.
           # Exclude the Vite source HTML because its root-relative app asset
           # URLs are only valid when served by Vite.
           # Exclude tests/fixtures - the captured lychee reports there contain
@@ -78,6 +80,7 @@ jobs:
             --hidden
             --extensions md,html
             --exclude-path docs/case-studies
+            --exclude-path dev/log
             --exclude-path examples/universal-app/index.html
             --exclude-path tests/fixtures
             .

@@ -12,6 +12,7 @@
     "**/.changeset/**",
     "**/docs/case-studies/**",
     "**/docs/case-studies/**/data/**",
+    "**/dev/log/**/data/**",
     "**/package-lock.json",
     "**/pnpm-lock.yaml",
     "**/yarn.lock"

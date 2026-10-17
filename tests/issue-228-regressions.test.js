@@ -52,6 +52,7 @@ describe('link checker input selection', () => {
     expect(args.trim().endsWith('\n            .')).toBe(true);
     for (const file of [
       'docs/case-studies',
+      'dev/log',
       'examples/universal-app/index.html',
       'tests/fixtures',
     ]) {
