@@ -20,6 +20,7 @@ import { INDEX_PAGE, createVoiceServer } from '../src/server/server.js';
 
 const OPTIONS = {
   lang: { type: 'string', short: 'l' },
+  accent: { type: 'string' },
   out: { type: 'string', short: 'o' },
   tier: { type: 'string', short: 't' },
   solver: { type: 'string' },
@@ -52,6 +53,7 @@ function usage() {
     '',
     'Options:',
     '  -l, --lang <code>     auto | en | ru | hi | zh (default auto)',
+    '      --accent <code>   English accent: en-US | en-GB | en-AU | en-IN',
     '  -o, --out <file>      Output file ("-" for stdout)',
     `  -t, --tier <name>     ${AUDIO_TIERS.map((tier) => tier.name).join(' | ')}`,
     '      --solver <name>   waveguide | fdtd3d (overrides the tier)',
@@ -115,13 +117,17 @@ function writeOutput(out, data, io) {
 
 const COMMANDS = {
   ipa(values, positionals, io) {
-    const result = textToIpa(requireText(positionals), { lang: values.lang });
+    const result = textToIpa(requireText(positionals), {
+      lang: values.lang,
+      accent: values.accent,
+    });
     io.stdout(values.json ? JSON.stringify(result) : result.ipa);
   },
 
   say(values, positionals, io) {
     const result = synthesize(requireText(positionals), {
       lang: values.lang,
+      accent: values.accent,
       ipa: values.ipa,
       seed: values.seed,
       head: resolveHead(values),

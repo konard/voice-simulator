@@ -43,7 +43,7 @@ export function prepareUtterance(text, options = {}) {
   const head = resolveHead(options.head, options.seed);
   const transcription = options.ipa
     ? { lang: options.lang ?? 'ipa', ipa: String(text), words: [] }
-    : textToIpa(text, { lang: options.lang });
+    : textToIpa(text, { lang: options.lang, accent: options.accent });
   const plan = planUtterance(transcription.ipa, {
     head,
     language: transcription.lang,
@@ -65,8 +65,8 @@ export function prepareUtterance(text, options = {}) {
 /**
  * Synthesize speech from text.
  * @param {string} text
- * @param {{lang?: string, ipa?: boolean, head?: object|'random', seed?: string|number, tier?: string|number, solver?: string, sections?: number, dx?: number, sampleRate?: number, output?: 'flow'|'microphone'}} [options]
- * @returns {{lang: string, ipa: string, words: object[], head: object, plan: object, sampleRate: number, samples: Float32Array, duration: number}}
+ * @param {{lang?: string, accent?: string, ipa?: boolean, head?: object|'random', seed?: string|number, tier?: string|number, solver?: string, sections?: number, dx?: number, sampleRate?: number, output?: 'flow'|'microphone'}} [options]
+ * @returns {{lang: string, accent: string|null, ipa: string, words: object[], head: object, plan: object, sampleRate: number, samples: Float32Array, duration: number}}
  */
 export function synthesize(text, options = {}) {
   const prepared = prepareUtterance(text, options);
@@ -74,6 +74,7 @@ export function synthesize(text, options = {}) {
   const { sampleRate } = prepared.renderOptions;
   return {
     lang: prepared.lang,
+    accent: prepared.accent ?? null,
     ipa: prepared.ipa,
     words: prepared.words,
     head: prepared.head,

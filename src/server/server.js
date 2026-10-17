@@ -4,14 +4,14 @@
  *   GET  /api/health              -> {status, version}
  *   GET  /api/languages           -> supported languages with samples
  *   GET  /api/tiers               -> audio and visual LOD tiers
- *   GET  /api/ipa?text=&lang=     -> {lang, ipa, words}
+ *   GET  /api/ipa?text=&lang=&accent= -> {lang, accent, ipa, words}
  *   GET  /api/head/random?seed=   -> random head configuration
  *   GET  /api/mesh.obj?seed=&lod= -> low-poly head model (Wavefront OBJ)
  *   GET|POST /api/synthesize      -> complete WAV file
  *   GET|POST /api/stream          -> WAV streamed while it is simulated
  *
  * Synthesis parameters come from the query string or a JSON body:
- * text, lang, ipa (boolean), seed, head (object or "random"), tier,
+ * text, lang, accent (en-US, en-GB, en-AU, en-IN), ipa (boolean), seed, head (object or "random"), tier,
  * solver, sampleRate.
  */
 
@@ -100,6 +100,7 @@ export function synthesisOptions(params) {
     text,
     options: {
       lang: params.lang ?? 'auto',
+      accent: params.accent,
       ipa: params.ipa === true || params.ipa === 'true',
       seed,
       head: parseHead(params.head, seed),
@@ -136,7 +137,7 @@ function createRoutes(version) {
     'GET /api/tiers': () => ({ audio: AUDIO_TIERS, visual: VISUAL_TIERS }),
     'GET /api/ipa': (params) => {
       const { text, options } = synthesisOptions(params);
-      return textToIpa(text, { lang: options.lang });
+      return textToIpa(text, { lang: options.lang, accent: options.accent });
     },
     'GET /api/head/random': (params) =>
       randomHeadConfig(params.seed ?? Date.now()),

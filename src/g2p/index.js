@@ -16,6 +16,12 @@ import { hindiWordToIpa, normalizeDevanagariDigits } from './hindi.js';
 import { chineseSyllables, chineseWordToIpa, isPinyin } from './chinese.js';
 import { russianWordToIpa } from './russian.js';
 import { VERBALIZERS, normalizeText } from './normalize.js';
+import {
+  adaptEnglishWord,
+  hasLinkingR,
+  isNonRhotic,
+  resolveAccent,
+} from './accents.js';
 
 /** Supported languages with display names and sample sentences. */
 export const LANGUAGES = Object.freeze({
@@ -108,8 +114,19 @@ function pronounceWord(word, language) {
   return { text: word, lang: language, ...result };
 }
 
+/** Pronounce a normalised word item in its accent. */
+function pronounceItem(item, source, accent) {
+  return pronounceSource(item, source).map((word) => {
+    if (word.lang !== 'en' || !word.ipa) {
+      return word;
+    }
+    const ipa = adaptEnglishWord(word.ipa, word.text, accent);
+    return { ...word, ipa, linkingR: hasLinkingR(word.ipa) };
+  });
+}
+
 /** Pronounce a normalised word item, keeping its source range. */
-function pronounceItem(item, source) {
+function pronounceSource(item, source) {
   const { sourceStart, sourceEnd, token } = item;
   const original = source.slice(sourceStart, sourceEnd);
   const range = { sourceStart, sourceEnd, original, token };
@@ -221,10 +238,32 @@ function markQuestions(items) {
 }
 
 /**
+ * Non-rhotic accents pronounce a final r before a vowel: `far away`
+ * fɑːɹ əˈweɪ.
+ */
+function linkRs(items, accent) {
+  if (!isNonRhotic(accent)) {
+    return;
+  }
+  items.forEach((item, index) => {
+    const next = items[index + 1];
+    if (
+      item.linkingR &&
+      next?.lang === 'en' &&
+      /^ˈ?ˌ?[aeiouæɑɒɔəɛɪʊʌɜ]/u.test(next.ipa)
+    ) {
+      item.ipa += 'ɹ';
+    }
+  });
+}
+
+/**
  * Convert text to IPA.
  * @param {string} text
- * @param {{lang?: 'auto'|'en'|'ru'|'hi'|'zh'}} [options]
- * @returns {{lang: string, ipa: string, words: object[]}}
+ * @param {{lang?: 'auto'|'en'|'ru'|'hi'|'zh', accent?: string}} [options]
+ *   `accent` picks an English accent (`en-US`, `en-GB`, `en-AU`,
+ *   `en-IN`; see `accents.js`).
+ * @returns {{lang: string, accent: string|null, ipa: string, words: object[]}}
  */
 export function textToIpa(text, options = {}) {
   const source = normalizeDevanagariDigits(String(text ?? ''));
@@ -234,6 +273,7 @@ export function textToIpa(text, options = {}) {
       ? detectLanguage(source)
       : requested;
   const items = [];
+  const accent = resolveAccent('en', options.accent);
   const normalized = normalizeText(source, {
     lang,
     wordLanguage: (word) => wordLanguage(word, lang),
@@ -242,13 +282,19 @@ export function textToIpa(text, options = {}) {
     if (item.kind === 'break') {
       addBreak(items, item);
     } else {
-      items.push(...pronounceItem(item, source));
+      items.push(...pronounceItem(item, source, accent));
     }
   }
   markQuestions(items);
+  linkRs(items, accent);
   const ipa = items
     .map((item) => item.ipa)
     .filter(Boolean)
     .join(' ');
-  return { lang, ipa, words: items.filter((item) => !item.break) };
+  return {
+    lang,
+    accent: resolveAccent(lang, options.accent),
+    ipa,
+    words: items.filter((item) => !item.break),
+  };
 }
