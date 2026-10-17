@@ -71,7 +71,8 @@ view uses three.js and colours the tract (or every air voxel with the 3D
 solver) by the simulated acoustic pressure.
 
 Every published release stays online: the previous version of the app is at
-[`/v1/`](https://konard.github.io/voice-simulator/v1/).
+`/v1/` (`https://konard.github.io/voice-simulator/v1/` once this version is
+deployed to GitHub Pages).
 
 ### Library
 
