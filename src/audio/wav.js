@@ -1,5 +1,6 @@
 /**
- * Minimal 16-bit PCM WAV encoding/decoding (mono or interleaved).
+ * Minimal WAV encoding (16-bit PCM, mono or interleaved) and decoding (PCM
+ * or float recordings).
  */
 
 /**
@@ -65,30 +66,74 @@ export function encodeWav(samples, sampleRate) {
   return file;
 }
 
+const PCM = 1;
+const FLOAT = 3;
+const EXTENSIBLE = 0xfffe;
+
+function sampleReader(view, format, bits) {
+  if (format === FLOAT && bits === 32) {
+    return (offset) => view.getFloat32(offset, true);
+  }
+  if (format === FLOAT && bits === 64) {
+    return (offset) => view.getFloat64(offset, true);
+  }
+  if (format !== PCM) {
+    throw new Error(`Unsupported WAV format ${format}`);
+  }
+  switch (bits) {
+    case 8:
+      return (offset) => (view.getUint8(offset) - 128) / 128;
+    case 16:
+      return (offset) => view.getInt16(offset, true) / 32768;
+    case 24:
+      return (offset) =>
+        ((view.getInt8(offset + 2) << 16) | view.getUint16(offset, true)) /
+        8388608;
+    case 32:
+      return (offset) => view.getInt32(offset, true) / 2147483648;
+    default:
+      throw new Error(`Unsupported WAV sample size ${bits}`);
+  }
+}
+
 /**
- * Decode a 16-bit PCM WAV file (first channel only).
+ * Decode a WAV file (first channel only): 8, 16, 24 or 32-bit PCM and
+ * 32 or 64-bit float, with any chunks around `fmt ` and `data`.
  * @param {Uint8Array} bytes
  * @returns {{sampleRate: number, samples: Float32Array}}
  */
 export function decodeWav(bytes) {
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
-  const channels = view.getUint16(22, true);
-  const sampleRate = view.getUint32(24, true);
+  let fmt = null;
   let offset = 12;
   while (offset + 8 <= bytes.length) {
     const id = String.fromCharCode(...bytes.subarray(offset, offset + 4));
     const size = view.getUint32(offset + 4, true);
-    if (id === 'data') {
-      const length = Math.min(size, bytes.length - offset - 8);
-      const count = Math.floor(length / (2 * channels));
-      const samples = new Float32Array(count);
-      for (let index = 0; index < count; index++) {
-        samples[index] =
-          view.getInt16(offset + 8 + index * 2 * channels, true) / 32768;
+    if (id === 'fmt ') {
+      let format = view.getUint16(offset + 8, true);
+      if (format === EXTENSIBLE && size >= 26) {
+        format = view.getUint16(offset + 32, true);
       }
-      return { sampleRate, samples };
+      fmt = {
+        format,
+        channels: view.getUint16(offset + 10, true),
+        sampleRate: view.getUint32(offset + 12, true),
+        bits: view.getUint16(offset + 22, true),
+      };
+    } else if (id === 'data') {
+      if (!fmt) {
+        throw new Error('WAV file has no fmt chunk before the data');
+      }
+      const read = sampleReader(view, fmt.format, fmt.bits);
+      const frame = (fmt.channels * fmt.bits) / 8;
+      const length = Math.min(size, bytes.length - offset - 8);
+      const samples = new Float32Array(Math.floor(length / frame));
+      for (let index = 0; index < samples.length; index++) {
+        samples[index] = read(offset + 8 + index * frame);
+      }
+      return { sampleRate: fmt.sampleRate, samples };
     }
-    offset += 8 + size;
+    offset += 8 + size + (size % 2);
   }
   throw new Error('WAV file has no data chunk');
 }
