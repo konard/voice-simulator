@@ -256,7 +256,11 @@ jobs:
           npm run changeset:version
           git status --short
 
+      # Pull requests are held to warnings on the lines they change; main
+      # must stay free of warnings everywhere.
       - name: Run ESLint
+        env:
+          LINT_ALL_WARNINGS: ${{ github.event_name != 'pull_request' && '1' || '0' }}
         run: npm run lint
 
       - name: Check formatting
