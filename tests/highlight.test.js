@@ -14,8 +14,8 @@ import {
   utteranceTimeline,
 } from '../src/index.js';
 import { runCli } from '../bin/voice-simulator.js';
-import { createVoiceServer } from '../src/server/server.js';
 import { itUnless, sandboxed } from './helpers/skip.js';
+import { withVoiceServer } from './helpers/voice-server.js';
 
 async function cli(args) {
   const stdout = [];
@@ -101,10 +101,7 @@ describe('timeline in the CLI', () => {
 
 describe('timeline in the HTTP API', () => {
   itUnless(sandboxed)('serves /api/timeline', async () => {
-    const server = createVoiceServer({ version: '1.0.0' });
-    await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
-    try {
-      const base = `http://127.0.0.1:${server.address().port}`;
+    await withVoiceServer({ version: '1.0.0' }, async (base) => {
       const query = new globalThis.URLSearchParams({
         text: '你好',
         lang: 'zh',
@@ -119,8 +116,7 @@ describe('timeline in the HTTP API', () => {
       ]);
       const missing = await fetch(`${base}/api/timeline`);
       expect(missing.status).toBe(400);
-    } finally {
-      await new Promise((resolve) => server.close(resolve));
-    }
+      expect((await missing.json()).error).toContain('text');
+    });
   });
 });

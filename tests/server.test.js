@@ -4,19 +4,12 @@
 
 import { describe, expect, it } from 'test-anywhere';
 import { decodeAudio, decodeWav } from '../src/index.js';
-import { createVoiceServer, encodingOptions } from '../src/server/server.js';
+import { encodingOptions } from '../src/server/server.js';
 import { itUnless, sandboxed } from './helpers/skip.js';
+import { withVoiceServer } from './helpers/voice-server.js';
 
-async function withServer(run) {
-  const server = createVoiceServer({ version: '1.2.3', index: '<h1>hi</h1>' });
-  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
-  const base = `http://127.0.0.1:${server.address().port}`;
-  try {
-    await run(base);
-  } finally {
-    await new Promise((resolve) => server.close(resolve));
-  }
-}
+const withServer = (run) =>
+  withVoiceServer({ version: '1.2.3', index: '<h1>hi</h1>' }, run);
 
 const itNet = itUnless(sandboxed);
 
