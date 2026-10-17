@@ -92,7 +92,9 @@ export class VoiceEngine {
 
   /**
    * Speak text.
-   * @param {{text: string, lang: string, head: object, seed: string, mode: 'both'|'sound'|'visual', ipa?: boolean}} request
+   * @param {{text: string, lang: string, head: object, seed: string, mode: 'both'|'sound'|'visual', ipa?: boolean, microphone?: object, room?: string, enclosure?: object}} request
+   *   `microphone`, `room` and `enclosure` are the listening settings
+   *   (see synthesize).
    */
   async speak(request) {
     this.stop();
@@ -142,6 +144,9 @@ export class VoiceEngine {
       seed: request.seed,
       tier: this.audioLevel,
       auto: this.auto,
+      microphone: request.microphone,
+      room: request.room,
+      enclosure: request.enclosure,
     });
     return job;
   }
@@ -253,7 +258,10 @@ export class VoiceEngine {
     const clamped = Math.max(0, Math.min(job.plan.duration, time));
     sampleState(job.plan, clamped, this.state);
     const field = this.#field(job, clamped);
-    if (time > job.plan.duration + TAIL && (!job.sound || job.finished)) {
+    // The audio can outlast the speech (microphone delay, reverberation).
+    const audioEnd = job.sampleRate ? job.totalSamples / job.sampleRate : 0;
+    const end = Math.max(job.plan.duration + TAIL, audioEnd);
+    if (time > end && (!job.sound || job.finished)) {
       this.job = null;
       this.lastJob = job;
       this.#emit({ phase: 'idle', audioLevel: this.audioLevel });

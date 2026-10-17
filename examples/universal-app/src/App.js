@@ -9,7 +9,9 @@ import {
   randomHeadConfig,
   textToIpa,
 } from '../../../src/index.js';
+import { AcousticsSettings } from './components/AcousticsSettings.js';
 import { HeadEditor } from './components/HeadEditor.js';
+import { DEFAULT_ACOUSTICS, listeningSettings } from './engine/listening.js';
 import { useSimulator } from './engine/use-simulator.js';
 import { detectLocale, strings } from './i18n.js';
 
@@ -389,7 +391,10 @@ export function App() {
     animateMouth: true,
     showField: true,
   });
+  const [acoustics, setAcoustics] = useState(() => ({ ...DEFAULT_ACOUSTICS }));
+  const listening = useMemo(() => listeningSettings(acoustics), [acoustics]);
   const simulator = useSimulator({
+    listening,
     head,
     mode: speech.mode,
     animateMouth: speech.animateMouth,
@@ -451,6 +456,7 @@ export function App() {
             head,
             seed,
             mode: speech.mode,
+            ...listening,
           }),
         onStop: () => simulator.engineRef.current?.stop(),
       })
@@ -465,6 +471,7 @@ export function App() {
         setSeed('');
       },
       onSeed: changeSeed,
-    })
+    }),
+    h(AcousticsSettings, { acoustics, head, t, onChange: setAcoustics })
   );
 }

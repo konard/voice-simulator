@@ -86,6 +86,10 @@ export function useSimulator(settings) {
   }, [settings.head, meshLod, webglError]);
 
   useEffect(() => {
+    viewerRef.current?.setListening(settings.listening);
+  }, [settings.listening, webglError]);
+
+  useEffect(() => {
     viewerRef.current?.setCells(status.cells ? engineRef.current?.cells : null);
   }, [status.cells, status.solver]);
 
