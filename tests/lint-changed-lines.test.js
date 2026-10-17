@@ -152,3 +152,25 @@ describe('lintExitCode', () => {
     expect(step).toContain('run: npm run lint');
   });
 });
+
+describe('eslint.config.js', () => {
+  it('imports only packages that package.json declares', () => {
+    // ESLint 9 hoisted @eslint/js, so an undeclared import still resolved;
+    // ESLint 10 no longer depends on it.
+    const config = readFileSync('eslint.config.js', 'utf8');
+    const pkg = JSON.parse(readFileSync('package.json', 'utf8'));
+    const declared = { ...pkg.dependencies, ...pkg.devDependencies };
+    const imported = [...config.matchAll(/from '([^.][^']*)'/g)].map(
+      ([, spec]) =>
+        spec
+          .split('/')
+          .slice(0, spec.startsWith('@') ? 2 : 1)
+          .join('/')
+    );
+
+    expect(imported).toContain('@eslint/js');
+    for (const name of imported) {
+      expect(`${name} ${typeof declared[name]}`).toBe(`${name} string`);
+    }
+  });
+});
