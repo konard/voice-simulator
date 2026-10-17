@@ -9,6 +9,15 @@ import { spawn, spawnSync } from 'node:child_process';
 import { rmSync } from 'node:fs';
 
 /**
+ * Limit for one fixture command, kept under the 30 s per-test limit of
+ * `npm test` and `bun test --timeout 30000` so a hung command fails with
+ * its own output. It guards against hangs and does not measure speed: under
+ * `deno test --parallel`, a Windows runner took over 10 s to start a single
+ * `node -e` and 19 s to run the Changesets fixture's five processes.
+ */
+export const HANG_GUARD_MS = 25000;
+
+/**
  * Kill a process and every process it started.
  *
  * @param {number} pid a process started by runBounded

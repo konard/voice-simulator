@@ -10,6 +10,12 @@ if (process.env.DEBUG_CHANGESET_FIXTURE) {
     console.error(
       `[changeset fixture +${Date.now() - started}ms] ${operation}: ${JSON.stringify(value)}`
     );
+  // Time between process start and this preload: slow runner startup.
+  report('preload', {
+    sinceProcessStartMs: Math.round(
+      require('node:perf_hooks').performance.now()
+    ),
+  });
   for (const method of ['spawn', 'execFile']) {
     const original = childProcess[method];
     childProcess[method] = function (command, args, ...rest) {

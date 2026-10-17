@@ -1,7 +1,12 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { describe, it, expect } from 'test-anywhere';
-import { killTree, removeFixture, runBounded } from './helpers/bounded-run.js';
+import {
+  HANG_GUARD_MS,
+  killTree,
+  removeFixture,
+  runBounded,
+} from './helpers/bounded-run.js';
 import { itUnless, sandboxed } from './helpers/skip.js';
 
 function isAlive(pid) {
@@ -69,7 +74,7 @@ describe('runBounded', () => {
       const result = await runBounded(
         'node',
         ['-e', 'console.log("out"); console.error("err")'],
-        { timeout: 10000 }
+        { timeout: HANG_GUARD_MS }
       );
       expect(result.stdout).toBe('out\n');
       expect(result.stderr).toBe('err\n');
@@ -81,7 +86,7 @@ describe('runBounded', () => {
     async () => {
       await assert.rejects(
         runBounded('node', ['-e', 'console.error("bad"); process.exit(3)'], {
-          timeout: 10000,
+          timeout: HANG_GUARD_MS,
         }),
         (error) =>
           error.code === 3 &&

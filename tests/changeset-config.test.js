@@ -13,7 +13,11 @@ import {
 import { tmpdir } from 'node:os';
 import { delimiter, join, resolve } from 'node:path';
 import { describe, it, expect } from 'test-anywhere';
-import { removeFixture, runBounded } from './helpers/bounded-run.js';
+import {
+  HANG_GUARD_MS,
+  removeFixture,
+  runBounded,
+} from './helpers/bounded-run.js';
 import { itUnless, sandboxed } from './helpers/skip.js';
 
 const config = JSON.parse(readFileSync('.changeset/config.json', 'utf8'));
@@ -118,7 +122,7 @@ describe('Changesets release formatter', () => {
           spawnSync('deno', ['--version'], { env }).error?.code,
           'ENOENT'
         );
-        const budgetMs = 20000;
+        const budgetMs = HANG_GUARD_MS;
         const run = async (file, args) => {
           try {
             const { stderr, elapsedMs } = await runBounded(
