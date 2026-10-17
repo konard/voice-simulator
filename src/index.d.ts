@@ -252,7 +252,13 @@ export declare class Fdtd3d implements Solver {
     dx?: number;
     model?: object;
     output?: OutputMode;
+    microphone?: MicrophoneOptions;
+    enclosure?: EnclosureOptions;
   });
+  /** Distance of the receiver from the lips (cm), with a microphone. */
+  readonly microphoneDistance?: number;
+  /** True when the grid contains the enclosure walls. */
+  readonly simulatesEnclosure: boolean;
   stepDuration(): number;
   setShape(
     areas: ArrayLike<number>,
@@ -272,7 +278,11 @@ export declare class Fdtd3d implements Solver {
 }
 export declare function buildVoxelModel(
   head: HeadConfig,
-  options?: { dx?: number }
+  options?: {
+    dx?: number;
+    radiationRadius?: number;
+    enclosure?: EnclosureOptions;
+  }
 ): object;
 export declare class Glottis {
   constructor(options?: { seed?: string | number; head?: HeadConfig });
@@ -646,3 +656,152 @@ export declare function anatomyMeshes(
   head: HeadConfig,
   options?: AnatomyOptions
 ): (Mesh & { name: string })[];
+
+// Listening: microphone position, room reverb and the box around the head
+/**
+ * Microphone relative to the lips: distance in cm (3 by default), azimuth
+ * in degrees (0 = ahead, 90 = the speaker's left), elevation in degrees
+ * (positive = up). `compensate` keeps the loudness of the 3 cm reference.
+ */
+export interface MicrophoneOptions {
+  distance?: number;
+  azimuth?: number;
+  elevation?: number;
+  compensate?: boolean;
+}
+export type RoomPreset =
+  | 'anechoic'
+  | 'studio'
+  | 'small-room'
+  | 'office'
+  | 'bathroom'
+  | 'classroom'
+  | 'hall'
+  | 'cathedral';
+/**
+ * Shoebox room in metres with `rt60` (s) or uniform wall `absorption`
+ * (0..1) and the mouth position from a floor corner (m).
+ */
+export interface RoomSpec {
+  width: number;
+  height: number;
+  depth: number;
+  rt60?: number;
+  absorption?: number;
+  headPosition?: [number, number, number];
+}
+export interface ResolvedRoom {
+  width: number;
+  height: number;
+  depth: number;
+  absorption: number;
+  rt60: number;
+  headPosition: [number, number, number];
+}
+/**
+ * Box of air around the head in cm (width x, height y, depth z), wall
+ * absorption 0..1 (0.2 by default) and an optional centre in head
+ * coordinates (the centre of the head by default). The 3D FDTD solver
+ * simulates it; the waveguide approximates it with a room.
+ */
+export interface EnclosureOptions {
+  width: number;
+  height: number;
+  depth: number;
+  absorption?: number;
+  center?: [number, number, number];
+}
+export interface ResolvedEnclosure {
+  width: number;
+  height: number;
+  depth: number;
+  absorption: number;
+  center: [number, number, number] | null;
+}
+export interface EnclosureBounds {
+  low: number[];
+  high: number[];
+  lips: number[];
+  absorption: number;
+}
+export interface RenderOptions {
+  microphone?: MicrophoneOptions;
+  room?: RoomPreset | RoomSpec | null;
+  enclosure?: EnclosureOptions | null;
+}
+export interface SynthesizeOptions {
+  microphone?: MicrophoneOptions;
+  room?: RoomPreset | RoomSpec | null;
+  enclosure?: EnclosureOptions | null;
+}
+export declare const MICROPHONE_REFERENCE: number;
+export declare const MAX_RADIATION_RADIUS: number;
+export declare const MAX_ENCLOSURE_CELLS: number;
+/** Preset rooms; 'anechoic' is null (no room). */
+export declare const ROOM_PRESETS: Readonly<
+  Record<RoomPreset, Readonly<RoomSpec> | null>
+>;
+export declare function resolveMicrophone(
+  microphone: MicrophoneOptions | null | undefined
+): Required<MicrophoneOptions> | null;
+export declare function microphoneDirection(microphone: {
+  azimuth: number;
+  elevation: number;
+}): [number, number, number];
+export declare function microphonePosition(
+  microphone: MicrophoneOptions | null | undefined,
+  lips: ArrayLike<number>
+): [number, number, number];
+export declare function resolveRoom(
+  room: RoomPreset | RoomSpec | null | undefined
+): ResolvedRoom | null;
+/** Eyring reverberation time (s) of a room with uniform absorption. */
+export declare function reverberationTime(room: {
+  width: number;
+  height: number;
+  depth: number;
+  absorption: number;
+}): number;
+/** Image sources and a feedback delay network for one microphone. */
+export declare class Room {
+  constructor(
+    room: Exclude<RoomPreset, 'anechoic'> | RoomSpec,
+    options?: { sampleRate?: number; direction?: number[]; distance?: number }
+  );
+  readonly room: ResolvedRoom;
+  readonly sampleRate: number;
+  /** Seconds of reverberation worth rendering after the voice stops. */
+  readonly tail: number;
+  process(input: number): number;
+  reset(): void;
+}
+export declare function roomImpulseResponse(
+  room: Exclude<RoomPreset, 'anechoic'> | RoomSpec,
+  options?: {
+    sampleRate?: number;
+    direction?: number[];
+    distance?: number;
+    seconds?: number;
+  }
+): Float32Array;
+export declare function resolveEnclosure(
+  enclosure: EnclosureOptions | null | undefined | false
+): ResolvedEnclosure | null;
+export declare function enclosureBounds(
+  head: HeadConfig,
+  enclosure: EnclosureOptions | null | undefined
+): EnclosureBounds | null;
+/** buildVoxelModel options for render options (to build or cache a model). */
+export declare function voxelModelOptions(options?: {
+  dx?: number;
+  microphone?: MicrophoneOptions;
+  enclosure?: EnclosureOptions | null;
+}): { dx: number; radiationRadius?: number; enclosure?: ResolvedEnclosure };
+/** Listening chain after a solver, or null for the default output. */
+export declare function createListener(options: {
+  microphone?: MicrophoneOptions;
+  room?: RoomPreset | RoomSpec | null;
+  enclosure?: EnclosureBounds | null;
+  solver: Solver;
+  sampleRate: number;
+}): { process(value: number): number; tail: number } | null;

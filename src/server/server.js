@@ -12,8 +12,10 @@
  *
  * Synthesis parameters come from the query string or a JSON body:
  * text, lang, ipa (boolean), seed, head (object or "random"), tier,
- * solver, sampleRate, and the encoding: format (wav | flac | aiff | au |
- * raw), bitDepth, float (boolean).
+ * solver, sampleRate, micDistance (cm), micAzimuth and micElevation
+ * (degrees), micCompensate (boolean) and room (a preset name, or a
+ * {width, height, depth, rt60} object in a JSON body), and the encoding:
+ * format (wav | flac | aiff | au | raw), bitDepth, float (boolean).
  */
 
 import { createServer } from 'node:http';
@@ -30,6 +32,8 @@ import {
   decodeHeadConfig,
   randomHeadConfig,
 } from '../head-config.js';
+import { resolveMicrophone } from '../acoustics/microphone.js';
+import { resolveRoom } from '../acoustics/room.js';
 import { AUDIO_TIERS, VISUAL_TIERS } from '../perf/lod.js';
 import { synthesize, synthesizeStream } from '../synthesize.js';
 
@@ -110,6 +114,7 @@ export function synthesisOptions(params) {
       head: parseHead(params.head, seed),
       tier,
       sampleRate,
+      ...listeningParams(params),
     },
   };
 }
@@ -130,6 +135,40 @@ export function encodingOptions(params) {
   } catch (error) {
     throw new HttpError(400, error.message);
   }
+}
+
+const MICROPHONE_PARAMS = {
+  distance: 'micDistance',
+  azimuth: 'micAzimuth',
+  elevation: 'micElevation',
+};
+
+/** Microphone and room options; invalid values are a 400 error. */
+function listeningParams(params) {
+  const result = {};
+  const microphone = {};
+  for (const [name, param] of Object.entries(MICROPHONE_PARAMS)) {
+    if (params[param] !== undefined && params[param] !== '') {
+      microphone[name] = Number(params[param]);
+    }
+  }
+  if (params.micCompensate !== undefined) {
+    microphone.compensate =
+      params.micCompensate === true || params.micCompensate === 'true';
+  }
+  if (Object.keys(microphone).length > 0) {
+    result.microphone = microphone;
+  }
+  if (params.room !== undefined && params.room !== '') {
+    result.room = params.room;
+  }
+  try {
+    resolveMicrophone(result.microphone);
+    resolveRoom(result.room);
+  } catch (error) {
+    throw new HttpError(400, error.message);
+  }
+  return result;
 }
 
 function sendJson(response, status, value) {

@@ -49,7 +49,28 @@ export {
 } from './acoustics/voice.js';
 export { Waveguide } from './acoustics/waveguide.js';
 export { Fdtd3d } from './acoustics/fdtd3d.js';
-export { buildVoxelModel } from './acoustics/voxel-model.js';
+export {
+  MAX_ENCLOSURE_CELLS,
+  MAX_RADIATION_RADIUS,
+  buildVoxelModel,
+  enclosureBounds,
+  resolveEnclosure,
+  voxelModelOptions,
+} from './acoustics/voxel-model.js';
+export {
+  MICROPHONE_REFERENCE,
+  createListener,
+  microphoneDirection,
+  microphonePosition,
+  resolveMicrophone,
+} from './acoustics/microphone.js';
+export {
+  ROOM_PRESETS,
+  Room,
+  resolveRoom,
+  reverberationTime,
+  roomImpulseResponse,
+} from './acoustics/room.js';
 export { Glottis } from './acoustics/glottis.js';
 export { tubeFormants, tubeSpectrum } from './acoustics/transfer.js';
 export {

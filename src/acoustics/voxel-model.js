@@ -13,6 +13,11 @@
  * ends (lips, nostrils) and the free air, through the velopharyngeal port,
  * and inside the free air. Cubes on the outer surface of the free-air shell
  * get an absorbing boundary so the radiated wave leaves the domain.
+ *
+ * The free-air shell grows to reach a distant microphone (up to
+ * MAX_RADIATION_RADIUS). An enclosure replaces the shell by a box of air
+ * around the head whose walls reflect part of the sound, so the solver
+ * simulates the reverberation of a small space (a booth, a helmet, a box).
  */
 
 import { vowelTarget } from '../articulation/phones.js';
@@ -28,7 +33,8 @@ import {
   nasalCenterline,
   tractCenterline,
 } from '../geometry/centerline.js';
-import { headField, sectionAxes } from '../geometry/mesh.js';
+import { headField, headMesh, sectionAxes } from '../geometry/mesh.js';
+import { checkedNumber } from './room.js';
 import { normalizeHeadConfig } from '../head-config.js';
 import { getPhoneme } from '../ipa/inventory.js';
 
@@ -43,6 +49,14 @@ export const LINK_VELUM = 3;
 
 /** Radius of the free-air shell around lips and nostrils (cm). */
 const RADIATION_RADIUS = 4;
+/** Largest free-air shell used to reach a distant microphone (cm). */
+export const MAX_RADIATION_RADIUS = 12;
+/** Most cells an enclosure may hold (memory and time grow with it). */
+export const MAX_ENCLOSURE_CELLS = 300000;
+const MIN_ENCLOSURE_SIZE = 10;
+const MAX_ENCLOSURE_SIZE = 200;
+/** Air an enclosure must leave around the lips and nostrils (cm). */
+const ENCLOSURE_CLEARANCE = 1;
 /** Fine centreline spacing used to find the nearest tube point (cm). */
 const PATH_STEP = 0.1;
 const ENVELOPE_VOWELS = ['i', 'e', 'ɛ', 'a', 'æ', 'ɑ', 'ɔ', 'o', 'u', 'ə', 'ʌ'];
@@ -51,6 +65,10 @@ const DIRECTIONS = [
   [0, 1, 0],
   [0, 0, 1],
 ];
+/** Outward normal of each bit of `openMasks` (+x, -x, +y, -y, +z, -z). */
+export const OPEN_FACE_NORMALS = DIRECTIONS.flatMap((direction) =>
+  [1, -1].map((sign) => direction.map((value) => value * sign))
+);
 
 /** Largest vowel area along the tract (relative position -> cm²). */
 function tractEnvelope(head) {
@@ -136,7 +154,30 @@ function classifyPoint(point, tubes, dx) {
   return found;
 }
 
-function boundingBox(tubes, centres, dx) {
+/** Bounds of the tube centrelines, widened by `reach` (cm). */
+function tubeBounds(tube, reach) {
+  const low = [Infinity, Infinity, Infinity];
+  const high = [-Infinity, -Infinity, -Infinity];
+  for (let index = 0; index < tube.count; index++) {
+    for (let axis = 0; axis < 3; axis++) {
+      const value = tube.points[index * 3 + axis];
+      low[axis] = Math.min(low[axis], value - reach);
+      high[axis] = Math.max(high[axis], value + reach);
+    }
+  }
+  return { low, high };
+}
+
+function insideBounds(point, bounds) {
+  for (let axis = 0; axis < 3; axis++) {
+    if (point[axis] < bounds.low[axis] || point[axis] > bounds.high[axis]) {
+      return false;
+    }
+  }
+  return true;
+}
+
+function boundingBox(tubes, centres, dx, shape) {
   const low = [Infinity, Infinity, Infinity];
   const high = [-Infinity, -Infinity, -Infinity];
   const include = (point, reach) => {
@@ -152,7 +193,11 @@ function boundingBox(tubes, centres, dx) {
     }
   }
   for (const centre of centres) {
-    include(centre, RADIATION_RADIUS + dx);
+    include(centre, shape.radius + dx);
+  }
+  if (shape.box) {
+    include(shape.box.low, 0);
+    include(shape.box.high, 0);
   }
   const size = [0, 1, 2].map((axis) =>
     Math.ceil((high[axis] - low[axis]) / dx)
@@ -160,20 +205,29 @@ function boundingBox(tubes, centres, dx) {
   return { low, size };
 }
 
-function isRadiating(point, field, centres) {
+function isRadiating(point, field, centres, shape) {
+  if (shape.box) {
+    return insideBounds(point, shape.box) && field(point) > 0;
+  }
   if (field(point) <= 0) {
     return false;
   }
   return centres.some(
     (centre) =>
       Math.hypot(...point.map((value, axis) => value - centre[axis])) <=
-      RADIATION_RADIUS
+      shape.radius
   );
 }
 
 /** Fill the grid: -1 = solid/outside, otherwise a cell index. */
-function collectCells(grid, tubes, field, centres, dx) {
+function collectCells(grid, tubes, field, centres, shape) {
   const { low, size } = grid;
+  const { dx } = shape;
+  // Points far from a tube cannot belong to it: skip the costly search
+  // (the reach is generous, so the cells are the same as without it).
+  const bounds = tubes.map((tube) =>
+    tubeBounds(tube, 2 * (Math.max(...tube.axes) + dx) + tube.sectionLength)
+  );
   const index = new Int32Array(size[0] * size[1] * size[2]).fill(-1);
   const cells = [];
   for (let i = 0; i < size[0]; i++) {
@@ -184,11 +238,14 @@ function collectCells(grid, tubes, field, centres, dx) {
           low[1] + (j + 0.5) * dx,
           low[2] + (k + 0.5) * dx,
         ];
-        const tube = classifyPoint(point, tubes, dx);
+        const near = tubes.filter((tube, index) =>
+          insideBounds(point, bounds[index])
+        );
+        const tube = near.length > 0 ? classifyPoint(point, near, dx) : null;
         let cell = null;
         if (tube) {
           cell = { kind: tube.kind, arc: tube.arc, point };
-        } else if (isRadiating(point, field, centres)) {
+        } else if (isRadiating(point, field, centres, shape)) {
           cell = { kind: CELL_AIR, arc: 0, point };
         }
         if (cell) {
@@ -262,10 +319,14 @@ function connect(grid, collected, context) {
   return links;
 }
 
-/** Count faces of free-air cells that open to the air outside the domain. */
+/**
+ * Count faces of free-air cells that open to the air outside the domain,
+ * with a bit mask of which faces they are (see OPEN_FACE_NORMALS).
+ */
 function openFaces(grid, collected, field, dx) {
   const { index, cells } = collected;
   const faces = new Uint8Array(cells.length);
+  const masks = new Uint8Array(cells.length);
   const { low } = grid;
   cells.forEach((cell, cellIndex) => {
     if (cell.kind !== CELL_AIR) {
@@ -274,7 +335,7 @@ function openFaces(grid, collected, field, dx) {
     const [i, j, k] = [0, 1, 2].map((axis) =>
       Math.floor((cell.point[axis] - low[axis]) / dx)
     );
-    for (const [di, dj, dk] of DIRECTIONS) {
+    DIRECTIONS.forEach(([di, dj, dk], direction) => {
       for (const sign of [1, -1]) {
         const ni = i + di * sign;
         const nj = j + dj * sign;
@@ -287,11 +348,131 @@ function openFaces(grid, collected, field, dx) {
         );
         if (field(point) > 0) {
           faces[cellIndex]++;
+          masks[cellIndex] |= 1 << (direction * 2 + (sign > 0 ? 0 : 1));
         }
       }
-    }
+    });
   });
-  return faces;
+  return { faces, masks };
+}
+
+/**
+ * Validate an enclosure: a box of air around the head, `width` (x),
+ * `height` (y) and `depth` (z) in cm, wall `absorption` (0 = rigid, 1 =
+ * anechoic; 0.2 by default) and an optional `center` [x, y, z] in head
+ * coordinates (cm; the centre of the head by default).
+ * @param {object|null|undefined} enclosure
+ * @returns {{width: number, height: number, depth: number, absorption: number, center: number[]|null}|null}
+ */
+export function resolveEnclosure(enclosure) {
+  if (enclosure === undefined || enclosure === null || enclosure === false) {
+    return null;
+  }
+  const [width, height, depth] = ['width', 'height', 'depth'].map((name) =>
+    checkedNumber(
+      enclosure[name],
+      `enclosure ${name}`,
+      MIN_ENCLOSURE_SIZE,
+      MAX_ENCLOSURE_SIZE
+    )
+  );
+  const absorption = checkedNumber(
+    enclosure.absorption ?? 0.2,
+    'enclosure absorption',
+    0,
+    1
+  );
+  const center = enclosure.center
+    ? enclosure.center.map((value) =>
+        checkedNumber(value, 'enclosure center', -100, 100)
+      )
+    : null;
+  return { width, height, depth, absorption, center };
+}
+
+/** Centre of the head surface (cm). */
+function headCenter(head) {
+  const { positions } = headMesh(head, { lod: 0 });
+  return [0, 1, 2].map((axis) => {
+    let low = Infinity;
+    let high = -Infinity;
+    for (let index = axis; index < positions.length; index += 3) {
+      low = Math.min(low, positions[index]);
+      high = Math.max(high, positions[index]);
+    }
+    return (low + high) / 2;
+  });
+}
+
+/**
+ * Corners of an enclosure around a head (cm), with the lips position.
+ * @param {Record<string, number>} head
+ * @param {object} enclosure Enclosure option (see resolveEnclosure).
+ * @returns {{low: number[], high: number[], lips: number[], absorption: number}|null}
+ */
+export function enclosureBounds(head, enclosure) {
+  const resolved = resolveEnclosure(enclosure);
+  if (!resolved) {
+    return null;
+  }
+  const config = normalizeHeadConfig(head);
+  const center = resolved.center ?? headCenter(config);
+  const size = [resolved.width, resolved.height, resolved.depth];
+  const low = center.map((value, axis) => value - size[axis] / 2);
+  const high = center.map((value, axis) => value + size[axis] / 2);
+  const { lips, nostrils } = headLandmarks(config);
+  for (const point of [lips, nostrils]) {
+    const inside = point.every(
+      (value, axis) =>
+        value - ENCLOSURE_CLEARANCE >= low[axis] &&
+        value + ENCLOSURE_CLEARANCE <= high[axis]
+    );
+    if (!inside) {
+      throw new Error('The enclosure must contain the lips and the nostrils');
+    }
+  }
+  return { low, high, lips, absorption: resolved.absorption };
+}
+
+/**
+ * Radius of the free-air shell that reaches a microphone (cm).
+ * @param {{distance?: number}|null|undefined} microphone
+ * @param {number} dx
+ */
+export function radiationRadius(microphone, dx) {
+  if (!microphone) {
+    return RADIATION_RADIUS;
+  }
+  const distance = microphone.distance ?? 3;
+  // Keep two cells of air beyond the microphone: the boundary right next
+  // to it would lower the level.
+  return Math.min(
+    MAX_RADIATION_RADIUS,
+    Math.max(RADIATION_RADIUS, distance + 2 * dx)
+  );
+}
+
+/**
+ * Options of buildVoxelModel for render options (dx, microphone,
+ * enclosure), e.g. to build or cache a model once for many utterances.
+ * @param {{dx?: number, microphone?: object, enclosure?: object}} options
+ */
+export function voxelModelOptions(options = {}) {
+  const dx = options.dx ?? 0.8;
+  const result = { dx };
+  if (options.microphone) {
+    result.radiationRadius = radiationRadius(options.microphone, dx);
+  }
+  if (options.enclosure) {
+    result.enclosure = resolveEnclosure(options.enclosure);
+  }
+  return result;
+}
+
+/** Normal-incidence wall admittance for an absorption coefficient. */
+function wallAdmittance(absorption) {
+  const reflection = Math.sqrt(1 - absorption);
+  return (1 - reflection) / (1 + reflection);
 }
 
 /**
@@ -321,11 +502,34 @@ function teethCells(cells, config, length, lips, dx) {
 /**
  * Build the voxel model of a head.
  * @param {Record<string, number>} head
- * @param {{dx?: number}} [options] Cube size in cm (smaller = more detail).
+ * @param {{dx?: number, radiationRadius?: number, enclosure?: object}} [options]
+ *   Cube size in cm (smaller = more detail), radius of the free-air shell
+ *   around lips and nostrils (cm, 4 by default) or an enclosure (see
+ *   resolveEnclosure) that replaces the shell.
  */
 export function buildVoxelModel(head, options = {}) {
   const config = normalizeHeadConfig(head);
   const dx = options.dx ?? 0.8;
+  const radius = checkedNumber(
+    options.radiationRadius ?? RADIATION_RADIUS,
+    'radiationRadius',
+    dx,
+    MAX_RADIATION_RADIUS
+  );
+  const box = enclosureBounds(config, options.enclosure);
+  if (box) {
+    const cells = [0, 1, 2].reduce(
+      (product, axis) =>
+        product * Math.ceil((box.high[axis] - box.low[axis]) / dx),
+      1
+    );
+    if (cells > MAX_ENCLOSURE_CELLS) {
+      throw new Error(
+        `The enclosure needs ${cells} cells at dx ${dx} (at most ${MAX_ENCLOSURE_CELLS}): use a smaller box or a larger dx`
+      );
+    }
+  }
+  const shape = { dx, radius, box };
   const length = config.vocalTractLength;
   const neutral = tractShape({}, config);
   const velumDistance =
@@ -350,20 +554,27 @@ export function buildVoxelModel(head, options = {}) {
   const tubes = [tract, nasal];
   const { lips, nostrils } = headLandmarks(config);
   const field = headField(config);
-  const grid = boundingBox(tubes, [lips, nostrils], dx);
-  const collected = collectCells(grid, tubes, field, [lips, nostrils], dx);
+  const grid = boundingBox(tubes, [lips, nostrils], dx, shape);
+  const collected = collectCells(grid, tubes, field, [lips, nostrils], shape);
   const context = {
     dx,
     velumDistance,
     lengths: [tract.length, nasal.length],
   };
   const links = connect(grid, collected, context);
+  const open = openFaces(grid, collected, field, dx);
   return {
     dx,
     head: config,
     cells: collected.cells,
     links,
-    openFaces: openFaces(grid, collected, field, dx),
+    openFaces: open.faces,
+    openMasks: open.masks,
+    // Admittance of each open face: 1 lets the wave leave the domain,
+    // enclosure walls reflect part of it.
+    boundaryAdmittance: box ? wallAdmittance(box.absorption) : 1,
+    radiationRadius: box ? null : radius,
+    enclosure: box,
     lengths: context.lengths,
     velumDistance,
     landmarks: { lips, nostrils },

@@ -5,7 +5,8 @@
  *
  * Messages in:
  *   {type: 'benchmark', head}                 -> {type: 'benchmark', level, loads}
- *   {type: 'speak', id, ipa, lang, head, seed, tier, auto, chunkSize}
+ *   {type: 'speak', id, ipa, lang, head, seed, tier, auto, chunkSize,
+ *    microphone?, room?, enclosure?}
  *   {type: 'cancel', id}
  * Messages out (per utterance):
  *   {type: 'start', id, sampleRate, solver, totalSamples, model?}
@@ -26,6 +27,7 @@ import {
   fallbackLevel,
   measureAudioTier,
   prepareUtterance,
+  voxelModelOptions,
 } from '../../../../src/index.js';
 
 const BENCHMARK_SECONDS = 0.08;
@@ -34,13 +36,15 @@ const FIELD_BLOCK = 128;
 const models = new Map();
 let current = 0;
 
-function voxelModel(head, dx) {
-  const key = `${dx}|${encodeHeadConfig(head)}`;
+/** Voxel model for a head, cell size and listening settings (cached). */
+function voxelModel(head, settings) {
+  const options = voxelModelOptions(settings);
+  const key = `${JSON.stringify(options)}|${encodeHeadConfig(head)}`;
   if (!models.has(key)) {
     if (models.size > 4) {
       models.clear();
     }
-    models.set(key, buildVoxelModel(head, { dx }));
+    models.set(key, buildVoxelModel(head, options));
   }
   return models.get(key);
 }
@@ -128,8 +132,17 @@ async function speak(message) {
     head: message.head,
     seed: message.seed,
     tier: message.tier,
+    microphone: message.microphone,
+    room: message.room,
+    enclosure: message.enclosure,
     model:
-      tier.solver === 'fdtd3d' ? voxelModel(message.head, tier.dx) : undefined,
+      tier.solver === 'fdtd3d'
+        ? voxelModel(message.head, {
+            dx: tier.dx,
+            microphone: message.microphone,
+            enclosure: message.enclosure,
+          })
+        : undefined,
   });
   const renderer = new VoiceRenderer(prepared.plan, prepared.renderOptions);
   globalThis.postMessage({

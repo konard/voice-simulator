@@ -4,18 +4,23 @@
  * teeth, tongue, hard and soft palate and (with the 3D solver) the
  * pressure in every air voxel. The tract, tongue and velum follow the
  * articulation plan frame by frame; the jaw, lower teeth and lips are
- * optional.
+ * optional. The microphone is a small sphere and the box around the head a
+ * wireframe.
  */
 
 import {
   AmbientLight,
+  BoxGeometry,
   BufferAttribute,
   BufferGeometry,
   Color,
   DirectionalLight,
   DoubleSide,
+  EdgesGeometry,
   Group,
   HemisphereLight,
+  LineBasicMaterial,
+  LineSegments,
   Mesh,
   MeshBasicMaterial,
   MeshStandardMaterial,
@@ -23,6 +28,7 @@ import {
   Points,
   PointsMaterial,
   Scene,
+  SphereGeometry,
   WebGLRenderer,
 } from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
@@ -30,10 +36,13 @@ import {
   REST_GAP,
   anatomyMeshes,
   deformJaw,
+  enclosureBounds,
+  headLandmarks,
   headMesh,
   jawOpenness,
   lipsMesh,
   lowerTeethMesh,
+  microphonePosition,
   nasalCenterline,
   noseShape,
   tractCenterline,
@@ -143,6 +152,9 @@ export class HeadViewer {
     this.scene.add(sun);
     this.group = new Group();
     this.scene.add(this.group);
+    this.listeningGroup = new Group();
+    this.scene.add(this.listeningGroup);
+    this.listening = {};
     this.normalizer = new Normalizer();
     this.cellNormalizer = new Normalizer();
     this.cells = null;
@@ -257,6 +269,51 @@ export class HeadViewer {
     colorTube(this.nose.geometry, this.noseMesh.ring, null, 1);
     if (this.cells) {
       this.setCells(this.cells);
+    }
+    this.setListening(this.listening);
+    this.dirty = true;
+  }
+
+  /**
+   * Show the microphone and the box around the head.
+   * @param {{microphone?: object, enclosure?: object}} listening
+   *   The listening options of synthesize.
+   */
+  setListening(listening) {
+    this.listening = listening ?? {};
+    for (const child of [...this.listeningGroup.children]) {
+      child.geometry.dispose();
+      child.material.dispose();
+      this.listeningGroup.remove(child);
+    }
+    if (!this.head) {
+      return;
+    }
+    const { microphone, enclosure } = this.listening;
+    const marker = new Mesh(
+      new SphereGeometry(0.8, 12, 8),
+      new MeshStandardMaterial({ color: 0x40464f, metalness: 0.6 })
+    );
+    marker.position.set(
+      ...microphonePosition(microphone, headLandmarks(this.head).lips)
+    );
+    this.listeningGroup.add(marker);
+    let box = null;
+    try {
+      box = enclosure ? enclosureBounds(this.head, enclosure) : null;
+    } catch {
+      // The settings panel explains why the box does not fit.
+    }
+    if (box) {
+      const size = box.high.map((value, axis) => value - box.low[axis]);
+      const edges = new LineSegments(
+        new EdgesGeometry(new BoxGeometry(...size)),
+        new LineBasicMaterial({ color: 0x5a7fa8 })
+      );
+      edges.position.set(
+        ...box.low.map((value, axis) => value + size[axis] / 2)
+      );
+      this.listeningGroup.add(edges);
     }
     this.dirty = true;
   }
@@ -422,6 +479,8 @@ export class HeadViewer {
   dispose() {
     this.resizeObserver.disconnect();
     this.#clear();
+    this.head = null;
+    this.setListening({});
     this.controls.dispose();
     this.renderer.dispose();
     this.renderer.domElement.remove();

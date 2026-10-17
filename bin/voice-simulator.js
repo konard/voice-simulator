@@ -9,6 +9,7 @@ import {
   AUDIO_FORMAT_NAMES,
   AUDIO_TIERS,
   audioEncoding,
+  ROOM_PRESETS,
   benchmarkAudioTiers,
   decodeAudio,
   decodeHeadConfig,
@@ -36,6 +37,14 @@ const OPTIONS = {
   format: { type: 'string', short: 'f' },
   'bit-depth': { type: 'string', short: 'b' },
   float: { type: 'boolean' },
+  'mic-distance': { type: 'string' },
+  'mic-azimuth': { type: 'string' },
+  'mic-elevation': { type: 'string' },
+  'mic-compensate': { type: 'boolean' },
+  room: { type: 'string' },
+  rt60: { type: 'string' },
+  box: { type: 'string' },
+  'box-absorption': { type: 'string' },
   ipa: { type: 'boolean' },
   lod: { type: 'string' },
   seconds: { type: 'string' },
@@ -72,6 +81,15 @@ function usage() {
     `  -f, --format <name>   ${AUDIO_FORMAT_NAMES.join(' | ')} (default: from -o, else wav)`,
     '  -b, --bit-depth <n>   8 | 16 | 24 | 32 (default 16; 32 | 64 with --float)',
     '      --float           IEEE float samples (wav, aiff, au, raw)',
+    '      --mic-distance <cm>     Microphone distance from the lips (default 3)',
+    '      --mic-azimuth <deg>     0 = ahead, 90 = left, 180 = behind the head',
+    '      --mic-elevation <deg>   Positive = above the mouth',
+    '      --mic-compensate        Keep the loudness of a 3 cm microphone',
+    '      --room <name|WxHxD>     Room preset or size in metres (e.g. 5x3x4):',
+    `                              ${Object.keys(ROOM_PRESETS).join(', ')}`,
+    '      --rt60 <s>              Reverberation time of the room',
+    '      --box <WxHxD>           Box of air around the head in cm (fdtd3d)',
+    '      --box-absorption <0-1>  Wall absorption of the box (default 0.2)',
     '      --ipa             Treat <text> as IPA',
     '      --lod <0-3>       Mesh level of detail',
     '  -p, --port <port>     Server port (default 8080, env PORT)',
@@ -107,6 +125,61 @@ function resolveHead(values) {
     return randomHeadConfig(values.seed ?? Date.now());
   }
   return undefined;
+}
+
+function boxSize(value, label) {
+  const parts = value.split(/[x×*]/i).map(Number);
+  if (parts.length !== 3 || !parts.every(Number.isFinite)) {
+    throw new Error(`${label} must look like WxHxD, e.g. 5x3x4`);
+  }
+  return { width: parts[0], height: parts[1], depth: parts[2] };
+}
+
+function resolveRoomFlag(values) {
+  const rt60 = optionalNumber(values.rt60, 'rt60');
+  if (values.room === undefined && rt60 === undefined) {
+    return undefined;
+  }
+  const name = values.room ?? 'small-room';
+  if (/^[\d.]/.test(name)) {
+    return { ...boxSize(name, 'room'), rt60 };
+  }
+  if (rt60 === undefined || name === 'anechoic') {
+    return name;
+  }
+  if (!Object.hasOwn(ROOM_PRESETS, name)) {
+    throw new Error(`Unknown room: ${name}`);
+  }
+  return { ...ROOM_PRESETS[name], rt60 };
+}
+
+/**
+ * Microphone, room and enclosure options from the command-line flags.
+ * @param {Record<string, string|boolean|undefined>} values Parsed flags.
+ * @returns {{microphone?: object, room?: string|object, enclosure?: object}}
+ */
+export function listeningOptions(values) {
+  const result = {};
+  const microphone = {
+    distance: optionalNumber(values['mic-distance'], 'mic-distance'),
+    azimuth: optionalNumber(values['mic-azimuth'], 'mic-azimuth'),
+    elevation: optionalNumber(values['mic-elevation'], 'mic-elevation'),
+    compensate: values['mic-compensate'],
+  };
+  if (Object.values(microphone).some((value) => value !== undefined)) {
+    result.microphone = microphone;
+  }
+  const room = resolveRoomFlag(values);
+  if (room !== undefined) {
+    result.room = room;
+  }
+  const absorption = optionalNumber(values['box-absorption'], 'box-absorption');
+  if (values.box !== undefined) {
+    result.enclosure = { ...boxSize(values.box, 'box'), absorption };
+  } else if (absorption !== undefined) {
+    throw new Error('box-absorption needs --box');
+  }
+  return result;
 }
 
 function requireText(positionals) {
@@ -171,6 +244,7 @@ const COMMANDS = {
       dx: optionalNumber(values.dx, 'dx'),
       output: values.output,
       sampleRate: optionalNumber(values['sample-rate'], 'sample-rate'),
+      ...listeningOptions(values),
     });
     const { out } = output;
     writeOutput(out, output.encode(result.samples, result.sampleRate), io);
