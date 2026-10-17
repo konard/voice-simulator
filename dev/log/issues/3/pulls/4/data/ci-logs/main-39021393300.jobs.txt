@@ -1,0 +1,9 @@
+Build web app: failure
+Package desktop app (windows-2025): success
+Regenerate Preview Images: success
+Package desktop app (ubuntu-24.04): success
+Package desktop app (macos-15): success
+Build Android app: skipped
+Build iOS app: skipped
+Deploy GitHub Pages: skipped
+Pipeline Status: failure
