@@ -2,7 +2,15 @@ import { createElement as h } from 'react';
 import { HEAD_PARAMETERS } from '../../../../src/index.js';
 import { parameterLabel } from '../i18n.js';
 
-const GROUPS = ['anatomy', 'mouth', 'face', 'voice'];
+const GROUPS = [
+  'anatomy',
+  'mouth',
+  'face',
+  'voice',
+  'source',
+  'prosody',
+  'acoustics',
+];
 
 function formatValue(parameter, value) {
   const decimals = Math.max(0, -Math.floor(Math.log10(parameter.step)));

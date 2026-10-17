@@ -6,6 +6,7 @@ import {
   VISUAL_TIERS,
   createSeed,
   headModelObj,
+  presetHeadConfig,
   randomHeadConfig,
   textToIpa,
 } from '../../../src/index.js';
@@ -13,6 +14,8 @@ import { ExportControls } from './components/ExportControls.js';
 import { AcousticsSettings } from './components/AcousticsSettings.js';
 import { HeadEditor } from './components/HeadEditor.js';
 import { DEFAULT_ACOUSTICS, listeningSettings } from './engine/listening.js';
+import { PresetSelect, initialPreset } from './components/PresetSelect.js';
+import { VoiceMatch } from './components/VoiceMatch.js';
 import { useSimulator } from './engine/use-simulator.js';
 import { detectLocale, strings } from './i18n.js';
 
@@ -325,7 +328,16 @@ function SpeakPanel({ speech, setSpeech, simulator, onSpeak, onStop, t }) {
   );
 }
 
-function EditorPanel({ head, seed, locale, t, onHead, onSeed }) {
+function EditorPanel({
+  head,
+  seed,
+  preset,
+  locale,
+  t,
+  onHead,
+  onSeed,
+  onPreset,
+}) {
   return h(
     'section',
     { className: 'panel editor-panel', 'aria-labelledby': 'editor-title' },
@@ -349,9 +361,16 @@ function EditorPanel({ head, seed, locale, t, onHead, onSeed }) {
         { type: 'button', onClick: () => onSeed(createSeed()) },
         t.randomize
       ),
+      h(PresetSelect, { preset, t, onChange: onPreset }),
       h(
         'button',
-        { type: 'button', onClick: () => onHead({ ...DEFAULT_HEAD }) },
+        {
+          type: 'button',
+          onClick: () =>
+            onHead(
+              preset === 'any' ? { ...DEFAULT_HEAD } : presetHeadConfig(preset)
+            ),
+        },
         t.reset
       ),
       h(
@@ -381,7 +400,8 @@ export function App() {
   const t = strings(locale);
   const [theme, nextTheme] = useTheme();
   const [seed, setSeed] = useState(initialSeed);
-  const [head, setHead] = useState(() => randomHeadConfig(seed));
+  const [preset, setPreset] = useState(initialPreset);
+  const [head, setHead] = useState(() => randomHeadConfig(seed, { preset }));
   const [speech, setSpeech] = useState({
     text: LANGUAGES[locale].sample,
     lang: 'auto',
@@ -406,9 +426,13 @@ export function App() {
     document.title = t.title;
   }, [locale, t.title]);
 
-  const changeSeed = (value) => {
+  const changeSeed = (value, nextPreset = preset) => {
     setSeed(value);
-    setHead(randomHeadConfig(value || 1));
+    setHead(randomHeadConfig(value || 1, { preset: nextPreset }));
+  };
+  const editHead = (next) => {
+    setHead(next);
+    setSeed('');
   };
 
   return h(
@@ -468,14 +492,17 @@ export function App() {
     h(EditorPanel, {
       head,
       seed,
+      preset,
       locale,
       t,
-      onHead: (next) => {
-        setHead(next);
-        setSeed('');
-      },
+      onHead: editHead,
       onSeed: changeSeed,
+      onPreset: (next) => {
+        setPreset(next);
+        changeSeed(seed || createSeed(), next);
+      },
     }),
-    h(AcousticsSettings, { acoustics, head, t, onChange: setAcoustics })
+    h(AcousticsSettings, { acoustics, head, t, onChange: setAcoustics }),
+    h(VoiceMatch, { text: speech.text, lang: speech.lang, t, onHead: editHead })
   );
 }

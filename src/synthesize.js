@@ -27,9 +27,9 @@ export function getAudioTier(tier) {
   return found;
 }
 
-function resolveHead(head, seed) {
+function resolveHead(head, seed, preset) {
   if (head === 'random') {
-    return randomHeadConfig(seed ?? Date.now());
+    return randomHeadConfig(seed ?? Date.now(), { preset });
   }
   return normalizeHeadConfig(head);
 }
@@ -40,7 +40,7 @@ function resolveHead(head, seed) {
  * @param {object} [options]
  */
 export function prepareUtterance(text, options = {}) {
-  const head = resolveHead(options.head, options.seed);
+  const head = resolveHead(options.head, options.seed, options.preset);
   const transcription = options.ipa
     ? { lang: options.lang ?? 'ipa', ipa: String(text), words: [] }
     : textToIpa(text, { lang: options.lang });
@@ -61,6 +61,8 @@ export function prepareUtterance(text, options = {}) {
     microphone: options.microphone,
     room: options.room,
     enclosure: options.enclosure,
+    teeth: options.teeth,
+    piriform: options.piriform,
   };
   return { ...transcription, head, plan, renderOptions };
 }
@@ -69,7 +71,7 @@ export function prepareUtterance(text, options = {}) {
  * Synthesize speech from text. `microphone`, `room` and `enclosure` choose
  * where and in what space the voice is heard (see VoiceRenderer).
  * @param {string} text
- * @param {{lang?: string, ipa?: boolean, head?: object|'random', seed?: string|number, tier?: string|number, solver?: string, sections?: number, dx?: number, sampleRate?: number, output?: 'flow'|'microphone', microphone?: {distance?: number, azimuth?: number, elevation?: number, compensate?: boolean}, room?: string|object, enclosure?: {width: number, height: number, depth: number, absorption?: number, center?: number[]}}} [options]
+ * @param {{lang?: string, ipa?: boolean, head?: object|'random', seed?: string|number, preset?: string, tier?: string|number, solver?: string, sections?: number, dx?: number, sampleRate?: number, output?: 'flow'|'microphone', microphone?: {distance?: number, azimuth?: number, elevation?: number, compensate?: boolean}, room?: string|object, enclosure?: {width: number, height: number, depth: number, absorption?: number, center?: number[]}, teeth?: boolean, piriform?: boolean}} [options]
  * @returns {{lang: string, ipa: string, words: object[], head: object, plan: object, sampleRate: number, samples: Float32Array, duration: number}}
  */
 export function synthesize(text, options = {}) {

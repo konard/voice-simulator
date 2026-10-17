@@ -226,6 +226,20 @@ export class Fdtd3d {
     this.dt = (COURANT * model.dx) / SPEED_OF_SOUND;
     const listening = Boolean(options.microphone || model.enclosure);
     this.output = options.output ?? (listening ? 'microphone' : 'flow');
+    this.wallLoss = options.head?.wallLoss ?? 1;
+    this.#prepareGrid(model, options);
+    this.#placeMicrophone(model, resolveMicrophone(options.microphone));
+    this.noiseArc = -1;
+    this.noiseLinks = new Int32Array(0);
+    this.noiseSigns = new Float64Array(0);
+    this.velumArea = 0;
+    this.sourceState = 0;
+    this.noiseState = 0;
+    this.leak = 1 - this.dt / MICROPHONE_LEAK_TIME;
+    this.tubeAreas = [null, null];
+  }
+
+  #prepareGrid(model, options) {
     // A microphone away from the lips needs the 1/r fall-off of the
     // radiated wave; the default keeps the plane-wave shell.
     const spherical =
@@ -242,15 +256,6 @@ export class Fdtd3d {
       this.keep[spherical.ghost] = 0;
       this.gain[spherical.ghost] = 0;
     }
-    this.#placeMicrophone(model, resolveMicrophone(options.microphone));
-    this.noiseArc = -1;
-    this.noiseLinks = new Int32Array(0);
-    this.noiseSigns = new Float64Array(0);
-    this.velumArea = 0;
-    this.sourceState = 0;
-    this.noiseState = 0;
-    this.leak = 1 - this.dt / MICROPHONE_LEAK_TIME;
-    this.tubeAreas = [null, null];
   }
 
   #allocate(model, kernel) {
@@ -540,7 +545,8 @@ export class Fdtd3d {
         area = Math.min(area, narrowest);
       }
       this.conductance[link] = Math.max(0, g);
-      this.damping[link] = Math.max(0, lossFactor(area)) ** exponent;
+      this.damping[link] =
+        Math.max(0, lossFactor(area, this.wallLoss)) ** exponent;
     }
     const portArea = this.velumLinks.length * this.dx * this.dx;
     const open = Math.min(1, this.velumArea / Math.max(portArea, 1e-9));

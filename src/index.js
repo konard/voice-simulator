@@ -148,3 +148,17 @@ export {
   velumMesh,
   anatomyMeshes,
 } from './geometry/anatomy.js';
+
+// Voice presets and matching (issue 5)
+export {
+  HEAD_PRESETS,
+  HEAD_PRESET_NAMES,
+  presetHeadConfig,
+} from './head-config.js';
+export { analyzeVoice } from './analysis/voice-features.js';
+export {
+  MATCH_TEXT,
+  featureDistance,
+  matchVoice,
+  matchVoiceSteps,
+} from './analysis/voice-match.js';

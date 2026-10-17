@@ -81,7 +81,8 @@ class NoiseSources {
 }
 
 class OutputStage {
-  constructor(sampleRate) {
+  constructor(sampleRate, gain = 1) {
+    this.gain = OUTPUT_GAIN * gain;
     this.lowpass = [new Biquad(), new Biquad()];
     this.dcInput = 0;
     this.dcOutput = 0;
@@ -107,7 +108,7 @@ class OutputStage {
     const output = value - this.dcInput + this.dcCoefficient * this.dcOutput;
     this.dcInput = value;
     this.dcOutput = output;
-    return Math.tanh(output * OUTPUT_GAIN);
+    return Math.tanh(output * this.gain);
   }
 }
 
@@ -154,9 +155,12 @@ export class VoiceRenderer {
       seed,
       tenseness: this.head.tenseness,
       breathiness: this.head.breathiness,
+      jitter: this.head.jitter,
+      shimmer: this.head.shimmer,
+      aspirationLevel: this.head.aspirationLevel,
     });
     this.noise = new NoiseSources(seed);
-    this.output = new OutputStage(this.sampleRate);
+    this.output = new OutputStage(this.sampleRate, this.head.outputGain);
     this.state = {};
     this.time = 0;
     this.position = 0;
@@ -218,7 +222,14 @@ export class VoiceRenderer {
     const flow =
       (1 - this.shape.glottis.closure) *
       (1 - voicing * (0.5 - 0.4 * this.glottis.noiseModulation));
-    return colour * frication.gain * flow * this.shape.glottis.loudness * 2.2;
+    return (
+      colour *
+      frication.gain *
+      flow *
+      this.shape.glottis.loudness *
+      2.2 *
+      this.head.fricationLevel
+    );
   }
 
   #step() {

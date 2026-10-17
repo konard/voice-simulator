@@ -16,6 +16,7 @@ import {
   encodeHeadConfig,
   formatFromFileName,
   headModelObj,
+  matchVoice,
   measureAudioTier,
   randomHeadConfig,
   resample,
@@ -32,6 +33,7 @@ const OPTIONS = {
   dx: { type: 'string' },
   seed: { type: 'string', short: 's' },
   head: { type: 'string' },
+  preset: { type: 'string' },
   output: { type: 'string' },
   'sample-rate': { type: 'string' },
   format: { type: 'string', short: 'f' },
@@ -50,6 +52,8 @@ const OPTIONS = {
   seconds: { type: 'string' },
   port: { type: 'string', short: 'p' },
   host: { type: 'string' },
+  transcript: { type: 'string' },
+  iterations: { type: 'string' },
   json: { type: 'boolean' },
   help: { type: 'boolean', short: 'h' },
   version: { type: 'boolean', short: 'v' },
@@ -65,6 +69,7 @@ function usage() {
     '  convert <in> -o out Convert an audio file (WAV, FLAC, AIFF, AU) to mono',
     '  head                Print a random head configuration',
     '  mesh -o head.obj    Export the low-poly head model as OBJ',
+    '  match <file>        Find the head that sounds like a recording',
     '  benchmark           Measure the audio LOD tiers on this machine',
     '  serve               Start the HTTP API (with streaming)',
     '',
@@ -76,6 +81,7 @@ function usage() {
     '      --dx <cm>         FDTD voxel size',
     '  -s, --seed <seed>     Random seed for the head and the voice',
     '      --head <value>    "random" or an encoded head (key=value&...)',
+    '      --preset <name>   any | male | female | child (random head range)',
     '      --output <mode>   flow | microphone (FDTD only)',
     '      --sample-rate <n> Output sample rate',
     `  -f, --format <name>   ${AUDIO_FORMAT_NAMES.join(' | ')} (default: from -o, else wav)`,
@@ -91,7 +97,9 @@ function usage() {
     '      --box <WxHxD>           Box of air around the head in cm (fdtd3d)',
     '      --box-absorption <0-1>  Wall absorption of the box (default 0.2)',
     '      --ipa             Treat <text> as IPA',
-    '      --lod <0-3>       Mesh level of detail',
+    '      --transcript <t>  What the recording says (closer match)',
+    '      --iterations <n>  Renders while matching (default 4, max 12)',
+    '      --lod <0-3>      Mesh level of detail',
     '  -p, --port <port>     Server port (default 8080, env PORT)',
     '      --host <host>     Server host (default 127.0.0.1, env HOST)',
     '      --json            Machine-readable output',
@@ -121,8 +129,14 @@ function resolveHead(values) {
   if (values.head && values.head !== 'random') {
     return decodeHeadConfig(values.head);
   }
-  if (values.head === 'random' || values.seed !== undefined) {
-    return randomHeadConfig(values.seed ?? Date.now());
+  if (
+    values.head === 'random' ||
+    values.seed !== undefined ||
+    values.preset !== undefined
+  ) {
+    return randomHeadConfig(values.seed ?? Date.now(), {
+      preset: values.preset,
+    });
   }
   return undefined;
 }
@@ -278,7 +292,9 @@ const COMMANDS = {
   },
 
   head(values, positionals, io) {
-    const head = randomHeadConfig(values.seed ?? Date.now());
+    const head = randomHeadConfig(values.seed ?? Date.now(), {
+      preset: values.preset,
+    });
     io.stdout(
       values.json ? JSON.stringify(head, null, 2) : encodeHeadConfig(head)
     );
@@ -288,6 +304,44 @@ const COMMANDS = {
     const head = resolveHead(values) ?? randomHeadConfig(1);
     const obj = headModelObj(head, { lod: optionalNumber(values.lod, 'lod') });
     writeOutput(values.out ?? 'head.obj', obj, io);
+  },
+
+  match(values, positionals, io) {
+    const [file] = positionals;
+    if (!file) {
+      throw new Error('Missing <file>');
+    }
+    const { samples, sampleRate } = decodeAudio(readFileSync(file));
+    const result = matchVoice(samples, sampleRate, {
+      preset: values.preset,
+      transcript: values.transcript,
+      lang: values.lang,
+      iterations: optionalNumber(values.iterations, 'iterations'),
+    });
+    if (values.json) {
+      io.stdout(
+        JSON.stringify({
+          preset: result.preset,
+          distance: result.distance,
+          features: result.features,
+          head: result.head,
+        })
+      );
+      return;
+    }
+    const { features } = result;
+    io.stdout(
+      [
+        `f0 ${features.f0.toFixed(0)} Hz`,
+        `range ${features.f0Range.toFixed(1)} st`,
+        `formants ${features.formants.map((value) => value.toFixed(0)).join('/')} Hz`,
+        `H1-H2 ${features.h1h2.toFixed(1)} dB`,
+        `HNR ${features.hnr.toFixed(1)} dB`,
+        `${features.syllableRate.toFixed(1)} syllables/s`,
+      ].join(', ')
+    );
+    io.stdout(`${result.preset}, distance ${result.distance.toFixed(2)}`);
+    io.stdout(encodeHeadConfig(result.head));
   },
 
   benchmark(values, positionals, io) {

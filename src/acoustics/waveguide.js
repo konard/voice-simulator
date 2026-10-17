@@ -29,20 +29,22 @@ const REST_LENGTH = 16.5;
  * perimeter / area, and the flow resistance of narrow constrictions
  * (Bernoulli/kinetic losses) dominates below a few tenths of a cm².
  */
-export function lossFactor(area) {
+export function lossFactor(area, wall = 1) {
   const boundary = 0.0004 / Math.sqrt(Math.max(area, 0.05));
   const constriction = Math.min(0.3, 0.0004 / Math.max(area, 1e-3) ** 2);
-  return 1 - 0.0007 - boundary - constriction;
+  return 1 - 0.0007 * wall - boundary * wall - constriction;
 }
 
 export class Waveguide {
   /**
    * `piriform: false` leaves out the piriform fossae side branch.
-   * @param {{sections?: number, noseSections?: number, head?: object, piriform?: boolean}} [options]
+   * @param {{sections?: number, noseSections?: number, head?: {wallLoss?: number}, piriform?: boolean}} [options]
    */
   constructor(options = {}) {
     const n = options.sections ?? 44;
     const nose = options.noseSections ?? 28;
+    /** Scale of the boundary (wall and viscous) losses. */
+    this.wallLoss = options.head?.wallLoss ?? 1;
     this.n = n;
     this.noseN = nose;
     this.right = new Float64Array(n);
@@ -51,14 +53,16 @@ export class Waveguide {
     this.junctionLeft = new Float64Array(n + 1);
     this.areas = new Float64Array(n).fill(1);
     this.reflection = new Float64Array(n + 1);
-    this.damping = new Float64Array(n).fill(lossFactor(1));
+    this.damping = new Float64Array(n).fill(lossFactor(1, this.wallLoss));
     this.noseRight = new Float64Array(nose);
     this.noseLeft = new Float64Array(nose);
     this.noseJunctionRight = new Float64Array(nose + 1);
     this.noseJunctionLeft = new Float64Array(nose + 1);
     this.noseAreas = new Float64Array(nose).fill(1);
     this.noseReflection = new Float64Array(nose + 1);
-    this.noseDamping = new Float64Array(nose).fill(lossFactor(1));
+    this.noseDamping = new Float64Array(nose).fill(
+      lossFactor(1, this.wallLoss)
+    );
     this.velumArea = 0;
     this.velumIndex = Math.round(n * 0.45);
     this.lipOutput = 0;
@@ -77,7 +81,7 @@ export class Waveguide {
       area: PIRIFORM_AREA * (options.head?.pharynxWidth ?? 1),
       right: new Float64Array(count),
       left: new Float64Array(count),
-      damping: lossFactor(PIRIFORM_AREA / 2),
+      damping: lossFactor(PIRIFORM_AREA / 2, this.wallLoss),
       entering: 0,
     };
   }
@@ -94,7 +98,7 @@ export class Waveguide {
       const fraction = position - lower;
       const area = areas[lower] * (1 - fraction) + areas[upper] * fraction;
       this.noseAreas[index] = Math.max(MIN_AREA, area);
-      this.noseDamping[index] = lossFactor(area);
+      this.noseDamping[index] = lossFactor(area, this.wallLoss);
     }
     for (let index = 1; index < this.noseN; index++) {
       const a = this.noseAreas[index - 1];
@@ -113,7 +117,7 @@ export class Waveguide {
     for (let index = 0; index < this.n; index++) {
       const area = Math.max(MIN_AREA, areas[index]);
       this.areas[index] = area;
-      this.damping[index] = lossFactor(area);
+      this.damping[index] = lossFactor(area, this.wallLoss);
     }
     for (let index = 1; index < this.n; index++) {
       const a = this.areas[index - 1];

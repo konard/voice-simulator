@@ -1,0 +1,8 @@
+{} i female 275 2390 3400 male 230 2100 3285 F2 ratio 1.14
+{} ə female 570 1380 2785 male 540 2390 4290 F2 ratio 0.58
+{"piriform":false} i female 280 2600 3555 male 230 2170 3300 F2 ratio 1.20
+{"piriform":false} ə female 590 1485 2940 male 555 1265 2525 F2 ratio 1.17
+{"teeth":false} i female 275 2390 3400 male 230 2100 3285 F2 ratio 1.14
+{"teeth":false} ə female 570 1380 2785 male 540 2390 4290 F2 ratio 0.58
+{"piriform":false,"teeth":false} i female 280 2600 3555 male 230 2170 3300 F2 ratio 1.20
+{"piriform":false,"teeth":false} ə female 590 1485 2940 male 555 1265 2525 F2 ratio 1.17

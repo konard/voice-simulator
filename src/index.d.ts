@@ -79,6 +79,8 @@ export interface SynthesizeOptions {
   ipa?: boolean;
   head?: HeadConfig | 'random';
   seed?: string | number;
+  /** Speaker group for `head: 'random'`. */
+  preset?: HeadPresetName;
   tier?: string | number;
   solver?: SolverName;
   sections?: number;
@@ -188,7 +190,10 @@ export interface HeadParameter {
 export declare const HEAD_PARAMETERS: readonly HeadParameter[];
 export declare const DEFAULT_HEAD: Readonly<HeadConfig>;
 export declare function normalizeHeadConfig(config?: HeadConfig): HeadConfig;
-export declare function randomHeadConfig(seed: string | number): HeadConfig;
+export declare function randomHeadConfig(
+  seed: string | number,
+  options?: { preset?: HeadPresetName }
+): HeadConfig;
 export declare function encodeHeadConfig(config: HeadConfig): string;
 export declare function decodeHeadConfig(text: string): HeadConfig;
 export declare function getHeadParameter(key: string): HeadParameter;
@@ -730,6 +735,10 @@ export interface RenderOptions {
   enclosure?: EnclosureOptions | null;
 }
 export interface SynthesizeOptions {
+  /** `false` leaves out the incisors. */
+  teeth?: boolean;
+  /** `false` leaves out the piriform fossae (waveguide). */
+  piriform?: boolean;
   microphone?: MicrophoneOptions;
   room?: RoomPreset | RoomSpec | null;
   enclosure?: EnclosureOptions | null;
@@ -805,3 +814,88 @@ export declare function createListener(options: {
   solver: Solver;
   sampleRate: number;
 }): { process(value: number): number; tail: number } | null;
+
+// Voice presets and matching (issue 5)
+export type HeadPresetName = 'any' | 'male' | 'female' | 'child';
+export interface HeadPreset {
+  label: string;
+  /** `[small, large, spread]` per parameter (pitch spread in semitones). */
+  ranges: Readonly<Record<string, readonly [number, number, number]>>;
+}
+export declare const HEAD_PRESETS: Readonly<
+  Record<Exclude<HeadPresetName, 'any'>, HeadPreset>
+>;
+export declare const HEAD_PRESET_NAMES: readonly HeadPresetName[];
+/** The head of a preset at a relative size (0 smallest, 1 largest). */
+export declare function presetHeadConfig(
+  name: Exclude<HeadPresetName, 'any'>,
+  size?: number
+): HeadConfig;
+export interface VoiceFeatures {
+  duration: number;
+  /** Seconds above the silence threshold. */
+  activeDuration: number;
+  voicedDuration: number;
+  /** Median f0 (Hz). */
+  f0: number;
+  f0Low: number;
+  f0High: number;
+  /** 5-95 % f0 range in semitones. */
+  f0Range: number;
+  /** Median F1-F4 (Hz). */
+  formants: number[];
+  formantSpacing: number;
+  /** Vocal tract length (cm) from the formant spacing. */
+  vocalTractLength: number;
+  /** First minus second harmonic level (dB). */
+  h1h2: number;
+  /** Harmonics-to-noise ratio (dB). */
+  hnr: number;
+  syllableRate: number;
+}
+export declare function analyzeVoice(
+  samples: ArrayLike<number>,
+  sampleRate: number,
+  options?: { maxDuration?: number; analysisRate?: number; order?: number }
+): VoiceFeatures;
+export interface VoiceMatchOptions {
+  /** Restrict the starting person to one preset. */
+  preset?: HeadPresetName;
+  /** Renders (default 4, at most 12). */
+  iterations?: number;
+  /** What the recording says; the renders then say the same words. */
+  transcript?: string;
+  lang?: string;
+  /** Seconds of the recording analysed (default 30). */
+  maxDuration?: number;
+}
+export interface VoiceMatch {
+  head: HeadConfig;
+  preset: Exclude<HeadPresetName, 'any'>;
+  features: VoiceFeatures;
+  rendered: VoiceFeatures;
+  distance: number;
+}
+export interface VoiceMatchStep {
+  step: number;
+  total: number;
+  head: HeadConfig;
+  distance: number;
+}
+/** Sentence rendered when the recording has no transcript. */
+export declare const MATCH_TEXT: string;
+export declare function featureDistance(
+  target: VoiceFeatures,
+  candidate: VoiceFeatures,
+  options?: { transcript?: string }
+): number;
+export declare function matchVoice(
+  samples: ArrayLike<number>,
+  sampleRate: number,
+  options?: VoiceMatchOptions
+): VoiceMatch;
+export declare function matchVoiceSteps(
+  samples: ArrayLike<number>,
+  sampleRate: number,
+  options?: VoiceMatchOptions
+): Generator<VoiceMatchStep, VoiceMatch, void>;
