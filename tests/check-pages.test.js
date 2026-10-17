@@ -106,7 +106,11 @@ describe('check-pages.sh', () => {
   });
 
   it('runs before configure-pages with the permission the API needs', () => {
-    const workflow = readFileSync('.github/workflows/example-app.yml', 'utf8');
+    // Windows checkouts can have CRLF line endings.
+    const workflow = readFileSync(
+      '.github/workflows/example-app.yml',
+      'utf8'
+    ).replaceAll('\r\n', '\n');
     const job = workflow
       .split('\n  web-build:')[1]
       .split('\n  pages-deploy:')[0];
