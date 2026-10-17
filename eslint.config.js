@@ -145,6 +145,8 @@ export default [
       'reports/**',
       // Case study raw data files (downloaded from external sources)
       'docs/case-studies/*/data/**',
+      // Development log data (API dumps and saved CI logs, kept verbatim)
+      'dev/log/**/data/**',
     ],
   },
 ];

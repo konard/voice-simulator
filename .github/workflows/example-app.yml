@@ -9,6 +9,7 @@ on:
       - 'package.json'
       - 'package-lock.json'
       - 'scripts/update-preview-images.mjs'
+      - 'scripts/check-pages.sh'
       - '.github/workflows/example-app.yml'
   push:
     branches:
@@ -19,6 +20,7 @@ on:
       - 'package.json'
       - 'package-lock.json'
       - 'scripts/update-preview-images.mjs'
+      - 'scripts/check-pages.sh'
       - '.github/workflows/example-app.yml'
   workflow_dispatch:
 
@@ -40,17 +42,32 @@ jobs:
     concurrency:
       group: check-${{ github.workflow }}-${{ github.ref }}-web-build
       cancel-in-progress: true
+    # check-pages.sh and configure-pages read the Pages API, which answers
+    # a request it does not authorise with the same 404 as a disabled site,
+    # so the read is granted explicitly.
+    permissions:
+      contents: read
+      pages: read
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           persist-credentials: false
 
       - name: Setup Node.js
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v7
         with:
           node-version: '24.x'
           cache: npm
           cache-dependency-path: examples/universal-app/package-lock.json
+
+      # Pull requests never deploy, so they only warn; main fails with the
+      # setting a maintainer has to change.
+      - name: Check GitHub Pages source
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          PAGES_MODE: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' && 'require' || 'warn' }}
+        run: bash scripts/check-pages.sh
 
       - name: Configure GitHub Pages
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
@@ -90,6 +107,7 @@ jobs:
     concurrency:
       group: main-writer-${{ github.repository }}-main
       cancel-in-progress: false
+      queue: max
     permissions:
       pages: write
       id-token: write
@@ -113,12 +131,12 @@ jobs:
       matrix:
         os: [ubuntu-24.04, macos-15, windows-2025]
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           persist-credentials: false
 
       - name: Setup Node.js
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v7
         with:
           node-version: '24.x'
           cache: npm
@@ -161,19 +179,19 @@ jobs:
       group: check-${{ github.workflow }}-${{ github.ref }}-android-build
       cancel-in-progress: true
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           persist-credentials: false
 
       - name: Setup Node.js
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v7
         with:
           node-version: '24.x'
           cache: npm
           cache-dependency-path: examples/universal-app/package-lock.json
 
       - name: Setup Java
-        uses: actions/setup-java@v5
+        uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: '21'
@@ -208,12 +226,12 @@ jobs:
       group: check-${{ github.workflow }}-${{ github.ref }}-ios-build
       cancel-in-progress: true
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           persist-credentials: false
 
       - name: Setup Node.js
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v7
         with:
           node-version: '24.x'
           cache: npm
@@ -244,6 +262,7 @@ jobs:
     concurrency:
       group: main-writer-${{ github.repository }}-main
       cancel-in-progress: false
+      queue: max
     if: |
       (github.event_name == 'push' && github.ref == 'refs/heads/main') ||
       github.event_name == 'workflow_dispatch'
@@ -251,8 +270,12 @@ jobs:
       contents: write
     env:
       PLAYWRIGHT_BROWSERS_PATH: /ms-playwright
+    # Container jobs run `run:` blocks with sh, which has no [[ ]].
+    defaults:
+      run:
+        shell: bash
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           # Regenerate against main HEAD so the bot commit lands on a
           # fast-forward parent regardless of which trigger started the job.
@@ -260,6 +283,11 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
           fetch-depth: 0
           persist-credentials: false
+
+      # The container user (root) does not own the runner's workspace, so git
+      # refuses the checkout as dubious ownership until it is trusted.
+      - name: Trust the checkout
+        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
 
       - name: Install example app dependencies
         run: npm ci --prefix examples/universal-app --no-audit --no-fund
@@ -277,10 +305,13 @@ jobs:
       - name: Detect drift
         id: drift
         run: |
-          if [[ -n "$(git status --porcelain)" ]]; then
+          # The assignment fails the step when git fails; a test on $(...)
+          # would read the failure as no drift.
+          changes="$(git status --porcelain)"
+          if [[ -n "$changes" ]]; then
             echo "drift=true" >> "$GITHUB_OUTPUT"
             echo "Preview images drifted:"
-            git status --porcelain
+            printf '%s\n' "$changes"
           else
             echo "drift=false" >> "$GITHUB_OUTPUT"
             echo "Preview images already current."
@@ -362,12 +393,12 @@ jobs:
       - ios-build
       - preview-regen
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           persist-credentials: false
 
       - name: Setup Node.js
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v7
         with:
           node-version: '24.x'
 

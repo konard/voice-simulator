@@ -38,7 +38,7 @@ jobs:
       group: check-${{ github.workflow }}-${{ github.ref }}-actionlint
       cancel-in-progress: true
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           persist-credentials: false
 
@@ -46,7 +46,8 @@ jobs:
       # every `run:` block. A native actionlint binary without shellcheck on
       # PATH silently skips the shell checks and exits 0 - worth knowing when
       # reproducing a failure locally:
-      #   docker run --rm -v "$PWD:/repo" -w /repo rhysd/actionlint:1.7.12 -color
+      #   docker run --rm -v "$PWD:/repo" -w /repo rhysd/actionlint:1.7.12 -color \
+      #     -ignore "unexpected key .queue. for .concurrency. section"
       # Pinned by digest because a mutable tag of a repository we do not
       # control is arbitrary code execution in any job that holds
       # credentials (the same reasoning as the `'*': hash-pin` policy in
@@ -55,7 +56,11 @@ jobs:
       #   docker inspect --format='{{index .RepoDigests 0}}' rhysd/actionlint:<tag>
       - uses: docker://rhysd/actionlint@sha256:b1934ee5f1c509618f2508e6eb47ee0d3520686341fec936f3b79331f9315667 # v1.7.12
         with:
-          args: -color
+          # `queue:` is documented concurrency syntax that actionlint's bundled
+          # schema predates. Drop the -ignore once rhysd/actionlint#654 ships.
+          # The `.` wildcards avoid quotes inside quotes, which the
+          # docker:// args splitter would mangle.
+          args: -color -ignore "unexpected key .queue. for .concurrency. section"
 
   # The terminal status job of release.yml keys branch protection; its
   # needs list is hand-maintained, so a job left out of it could fail while
@@ -69,7 +74,7 @@ jobs:
       group: check-${{ github.workflow }}-${{ github.ref }}-status-gate-coverage
       cancel-in-progress: true
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           persist-credentials: false
 
@@ -95,7 +100,7 @@ jobs:
       group: check-${{ github.workflow }}-${{ github.ref }}-zizmor
       cancel-in-progress: true
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           persist-credentials: false
 
@@ -161,12 +166,12 @@ jobs:
       - status-gate-coverage
       - zizmor
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           persist-credentials: false
 
       - name: Setup Node.js
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@v7
         with:
           node-version: '24.x'
 

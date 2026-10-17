@@ -1,0 +1,22 @@
+Build web app	failure	.github:11	HttpError: Not Found - https://docs.github.com/rest/pages/pages#get-a-apiname-pages-site
+Build web app	failure	/home/runner/work/_actions/actions/configure-pages/v6/node_modules/@octokit/request/dist-node/index.js:124	Get Pages site failed. Please verify that the repository has Pages enabled and configured to build using GitHub Actions, or consider exploring the `enablement` parameter for this action. Error: Not Found - https://docs.github.com/rest/pages/pages#get-a-apiname-pages-site
+Regenerate Preview Images	notice	.github:15	Preview images are already up to date.
+Package desktop app (macos-15)	notice	.github:1	Due to capacity constraints, jobs targeting macOS arm64 runners may experience longer queue times.
+Pipeline Status	failure	.github:40	Process completed with exit code 1.
+Pipeline Status	failure	.github:39	Failing jobs: web-build
+Release Preflight	failure	.github:23	Process completed with exit code 1.
+Release Preflight	failure	.github:22	release-preflight: refusing to release with 1 refused credential(s)
+Release Preflight	failure	.github:21	release-preflight: npm OIDC package exchange rejected (404); configure a trusted publisher or bootstrap token
+Test (node on macos-15)	notice	.github:1	Due to capacity constraints, jobs targeting macOS arm64 runners may experience longer queue times.
+Test (bun on macos-15)	notice	.github:1	Due to capacity constraints, jobs targeting macOS arm64 runners may experience longer queue times.
+Test (deno on macos-15)	notice	.github:1	Due to capacity constraints, jobs targeting macOS arm64 runners may experience longer queue times.
+Test (deno on windows-2025)	failure	.github:1390	Process completed with exit code 1.
+Pipeline Status	failure	.github:88	Process completed with exit code 1.
+Pipeline Status	failure	.github:87	Failing jobs: test, release-preflight
+Dependency graph enabled	failure	.github:14	Process completed with exit code 1.
+Dependency graph enabled	failure	.github:13	Dependency graph is disabled for konard/voice-simulator, so pull requests skip dependency review. A maintainer must act: Enable it at https://github.com/konard/voice-simulator/settings/security_analysis (Settings -> Advanced Security -> Dependency graph -> Enable), then re-run this workflow.
+Pipeline Status	failure	.github:32	Process completed with exit code 1.
+Pipeline Status	failure	.github:31	Failing jobs: dependency-graph
+Check Links	notice	.github:162	Summary report available at: https://github.com/konard/voice-simulator/actions/runs/39021393363#summary-117363748962
+Release Preflight	warning	.github:21	release-preflight: npm OIDC package exchange rejected (404); configure a trusted publisher or bootstrap token
+Dependency Review	warning	.github:14	Dependency graph is disabled for konard/voice-simulator, so dependency review is skipped on this pull request. Enable it at https://github.com/konard/voice-simulator/settings/security_analysis (Settings -> Advanced Security -> Dependency graph -> Enable), then re-run this workflow.

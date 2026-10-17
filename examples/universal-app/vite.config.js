@@ -1,5 +1,10 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
+import {
+  CHUNK_SIZE_LIMIT_KB,
+  chunkSizeGuard,
+  vendorChunk,
+} from './build-chunks.js';
 
 function resolveBasePath() {
   if (process.env.GITHUB_PAGES !== 'true') {
@@ -12,13 +17,19 @@ function resolveBasePath() {
 
 export default defineConfig({
   base: resolveBasePath(),
-  plugins: [react()],
+  plugins: [react(), chunkSizeGuard()],
   worker: {
     format: 'es',
   },
   build: {
     outDir: 'dist',
     emptyOutDir: true,
+    chunkSizeWarningLimit: CHUNK_SIZE_LIMIT_KB,
+    rollupOptions: {
+      output: {
+        manualChunks: vendorChunk,
+      },
+    },
   },
   server: {
     fs: {

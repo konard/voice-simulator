@@ -1,0 +1,29 @@
+Detected single-language repository (package.json in root)
+{"body":"### Patch Changes\n\n- 68f606a: First change.\n\n  Second paragraph.\n\n  - nested\n\n  ---\n\n  After a rule, with `\\n` and a \"quote\"\n- def5678: Second entry\n"}
+ℹ️ Looking up PR for commit 68f606a (from changelog)
+[{"number":41,"title":"Fix things"}]
+✅ Found PR #41 containing commit
+ℹ️ Looking up PR for commit def5678 (from changelog)
+[{"number":42,"title":"More"}]
+✅ Found PR #42 containing commit
+✅ Formatted release notes for v1.2.3
+   - Added link to PR #41
+   - Added link to PR #42
+   - Added shields.io npm badge
+--- body sent to the release ---
+- 68f606a: First change.
+
+  Second paragraph.
+
+  - nested
+
+  ---
+
+  After a rule, with `\n` and a "quote"
+- def5678: Second entry
+
+**Related Pull Requests:** #41, #42
+
+---
+
+[![npm version](https://img.shields.io/badge/npm-1.2.3-blue.svg)](https://www.npmjs.com/package/voice-simulator/v/1.2.3)

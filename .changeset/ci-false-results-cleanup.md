@@ -1,0 +1,5 @@
+---
+'voice-simulator': patch
+---
+
+Split the example app's three.js and React bundles so its build has no chunk size warning, and fail the build if a chunk grows past the limit. Fail lint on reported warnings and on any warning on main. Kill the whole process tree when a release fixture times out, so the timeout is reported instead of a cleanup error, and size fixture command limits from the per-test limit. Name the maintainer action when npm rejects the trusted publishing exchange for an unpublished package. Check the GitHub Pages source before the example app build, warning on pull requests and failing on main with the setting to change. Let the preview drift check run with bash and a trusted checkout in its container job. Upgrade ESLint to 10 and declare @eslint/js. Track the example app's deprecated packages against their upstream fixes. Count every changed file outside the exclusions as code. Move checkout and setup-node to v7 and setup-java to v6. Queue every job that writes to main so a waiting run is never replaced. Publish release notes with the structure Changesets wrote, linking the pull request of every entry.

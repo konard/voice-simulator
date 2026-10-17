@@ -1,0 +1,7 @@
+Dependency graph enabled: failure
+Audit npm lock (examples/universal-app): success
+CodeQL (actions): success
+CodeQL (javascript-typescript): success
+Audit npm lock (.): success
+Dependency Review: skipped
+Pipeline Status: failure

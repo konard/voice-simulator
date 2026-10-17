@@ -1,0 +1,26 @@
+Release Preflight: failure
+Detect Changes: success
+Check for Manual Version Changes: skipped
+Check File Line Limits: success
+Lint and Format Check: success
+Test Compilation: success
+Validate Documentation: success
+Simulation Checks: success
+Check for Changesets: skipped
+Docker Image Build Check: skipped
+Test (node on macos-15): success
+Test (bun on macos-15): success
+Test (bun on ubuntu-24.04): success
+Test (deno on ubuntu-24.04): success
+Test (node on windows-2025): success
+Test (deno on macos-15): success
+Test (bun on windows-2025): success
+Test (node on ubuntu-24.04): success
+Test (deno on windows-2025): failure
+Create Changeset PR: skipped
+Instant Release: skipped
+Release: skipped
+Pipeline Status: failure
+Configure Docker Hub Publish: skipped
+Optional Docker Hub Publish: skipped
+Build Docker Image (${{ matrix.platform }}): skipped

@@ -1,24 +1,26 @@
 import assert from 'node:assert/strict';
-import { execFile, spawnSync } from 'node:child_process';
+import { spawnSync } from 'node:child_process';
 import {
   copyFileSync,
   existsSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
-  rmSync,
   symlinkSync,
   unlinkSync,
   writeFileSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { delimiter, join, resolve } from 'node:path';
-import { promisify } from 'node:util';
 import { describe, it, expect } from 'test-anywhere';
+import {
+  HANG_GUARD_MS,
+  removeFixture,
+  runBounded,
+} from './helpers/bounded-run.js';
 import { itUnless, sandboxed } from './helpers/skip.js';
 
 const config = JSON.parse(readFileSync('.changeset/config.json', 'utf8'));
-const execFileAsync = promisify(execFile);
 
 function createPrettierBins(dependencies) {
   const bin = join(dependencies, '.bin');
@@ -67,6 +69,7 @@ describe('Changesets release formatter', () => {
         join(dependencies, '@changesets/cli'),
         join(dependencies, 'prettier'),
       ];
+      let failure;
       try {
         for (const file of [
           'package.json',
@@ -119,37 +122,37 @@ describe('Changesets release formatter', () => {
           spawnSync('deno', ['--version'], { env }).error?.code,
           'ENOENT'
         );
+        const budgetMs = HANG_GUARD_MS;
         const run = async (file, args) => {
-          // Use the async child API so cleanup follows process completion.
-          // Close stdin: these CLI commands need no input.
-          const execution = execFileAsync(
-            'node',
-            [
-              '--require',
-              resolve('experiments/trace-changeset-fixture.cjs'),
-              resolve(file),
-              ...args,
-            ],
-            {
-              cwd,
-              env: {
-                ...env,
-                DEBUG_CHANGESET_FIXTURE: '1',
-                // Release formatting must use installed dependencies, never fetch.
-                npm_config_offline: 'true',
-                npm_config_yes: 'false',
-                npm_config_loglevel: 'verbose',
-              },
-              encoding: 'utf8',
-              timeout: 20000,
-            }
-          );
-          execution.child.stdin.end();
           try {
-            await execution;
+            const { stderr, elapsedMs } = await runBounded(
+              'node',
+              [
+                '--require',
+                resolve('experiments/trace-changeset-fixture.cjs'),
+                resolve(file),
+                ...args,
+              ],
+              {
+                cwd,
+                env: {
+                  ...env,
+                  DEBUG_CHANGESET_FIXTURE: '1',
+                  // Release formatting must use installed dependencies, never fetch.
+                  npm_config_offline: 'true',
+                  npm_config_yes: 'false',
+                  npm_config_loglevel: 'verbose',
+                },
+                timeout: budgetMs,
+              }
+            );
+            // Show where the time went while an overrun can still be acted on.
+            if (elapsedMs > budgetMs / 2) {
+              console.error(
+                `${file} took ${elapsedMs} of ${budgetMs} ms\n${stderr}`
+              );
+            }
           } catch (error) {
-            // Print the primary child failure before cleanup can throw on Windows.
-            console.error(`${error}\n${error.stdout}\n${error.stderr}`);
             assert.fail(`${error}\n${error.stdout}\n${error.stderr}`);
           }
         };
@@ -170,6 +173,9 @@ describe('Changesets release formatter', () => {
           'package.json',
           'CHANGELOG.md',
         ]);
+      } catch (error) {
+        failure = error;
+        throw error;
       } finally {
         // Remove shared dependency links without traversing their targets.
         for (const link of links) {
@@ -177,12 +183,7 @@ describe('Changesets release formatter', () => {
             unlinkSync(link);
           }
         }
-        rmSync(cwd, {
-          recursive: true,
-          force: true,
-          maxRetries: 3,
-          retryDelay: 100,
-        });
+        removeFixture(cwd, failure);
       }
     }
   );
