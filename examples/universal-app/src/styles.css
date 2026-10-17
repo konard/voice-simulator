@@ -412,6 +412,43 @@ h2 {
   font-weight: 700;
 }
 
+.spoken {
+  display: grid;
+  gap: 6px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  overflow-wrap: anywhere;
+}
+
+.spoken p {
+  margin: 0;
+  line-height: 1.7;
+}
+
+.spoken-text {
+  font-size: 1.1rem;
+}
+
+.spoken-ipa {
+  color: var(--muted);
+}
+
+.spoken span {
+  border-radius: 4px;
+  transition: background-color 80ms linear;
+}
+
+.spoken .word-current {
+  background: var(--accent-soft);
+  color: var(--ink);
+}
+
+.spoken .syllable-current {
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+
 .error {
   margin: 0;
   color: var(--warn);
@@ -509,5 +546,9 @@ h2 {
 @media (prefers-reduced-motion: reduce) {
   * {
     scroll-behavior: auto !important;
+  }
+
+  .spoken span {
+    transition: none;
   }
 }

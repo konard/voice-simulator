@@ -1,5 +1,6 @@
 import { createElement as h, useEffect, useMemo, useState } from 'react';
 import {
+  ACCENTS,
   AUDIO_TIERS,
   DEFAULT_HEAD,
   LANGUAGES,
@@ -10,6 +11,7 @@ import {
   textToIpa,
 } from '../../../src/index.js';
 import { HeadEditor } from './components/HeadEditor.js';
+import { SpokenText } from './components/SpokenText.js';
 import { useSimulator } from './engine/use-simulator.js';
 import { detectLocale, strings } from './i18n.js';
 
@@ -62,9 +64,9 @@ function download(blob, name) {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
-function transcribe(text, lang) {
+function transcribe(text, lang, accent) {
   try {
-    return textToIpa(text, { lang });
+    return textToIpa(text, { lang, accent });
   } catch (error) {
     return { lang, ipa: '', error: error.message };
   }
@@ -189,10 +191,28 @@ function SamplePicker({ onPick }) {
   );
 }
 
+/** Accent choice, shown for languages that have accents (English). */
+function AccentSelect({ transcription, onChange, t }) {
+  const accents = ACCENTS[transcription.lang];
+  if (!accents) {
+    return null;
+  }
+  return h(Select, {
+    id: 'speech-accent',
+    label: t.accent,
+    value: transcription.accent ?? accents[0].code,
+    options: accents.map((accent) => ({
+      value: accent.code,
+      label: t.accents[accent.code] ?? accent.name,
+    })),
+    onChange: (accent) => onChange({ accent }),
+  });
+}
+
 function SpeakPanel({ speech, setSpeech, simulator, onSpeak, onStop, t }) {
   const transcription = useMemo(
-    () => transcribe(speech.text, speech.lang),
-    [speech.text, speech.lang]
+    () => transcribe(speech.text, speech.lang, speech.accent),
+    [speech.text, speech.lang, speech.accent]
   );
   const speaking = simulator.status.phase === 'speaking';
   const update = (patch) => setSpeech({ ...speech, ...patch });
@@ -226,6 +246,14 @@ function SpeakPanel({ speech, setSpeech, simulator, onSpeak, onStop, t }) {
       h('span', null, `${t.ipa} [${transcription.lang}]`),
       h('bdi', null, transcription.error ?? `/${transcription.ipa}/`)
     ),
+    h(SpokenText, {
+      key: simulator.status.utterance,
+      rootRef: simulator.spokenRef,
+      text: simulator.status.text ?? '',
+      lang: simulator.status.lang,
+      timeline: simulator.status.timeline,
+      t,
+    }),
     h(
       'div',
       { className: 'row' },
@@ -268,7 +296,8 @@ function SpeakPanel({ speech, setSpeech, simulator, onSpeak, onStop, t }) {
           })),
         ],
         onChange: (tier) => update({ tier }),
-      })
+      }),
+      h(AccentSelect, { transcription, onChange: update, t })
     ),
     h(
       'div',
@@ -384,6 +413,7 @@ export function App() {
   const [speech, setSpeech] = useState({
     text: LANGUAGES[locale].sample,
     lang: 'auto',
+    accent: 'en-US',
     mode: 'both',
     tier: 'auto',
     animateMouth: true,
@@ -448,6 +478,7 @@ export function App() {
           simulator.engineRef.current?.speak({
             text: speech.text,
             lang: speech.lang,
+            accent: speech.accent,
             head,
             seed,
             mode: speech.mode,

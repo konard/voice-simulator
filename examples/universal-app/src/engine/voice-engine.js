@@ -12,6 +12,7 @@ import {
   planUtterance,
   sampleState,
   textToIpa,
+  utteranceTimeline,
 } from '../../../../src/index.js';
 import { AudioPlayer } from './audio-player.js';
 
@@ -92,21 +93,27 @@ export class VoiceEngine {
 
   /**
    * Speak text.
-   * @param {{text: string, lang: string, head: object, seed: string, mode: 'both'|'sound'|'visual', ipa?: boolean}} request
+   * @param {{text: string, lang: string, accent?: string, head: object, seed: string, mode: 'both'|'sound'|'visual', ipa?: boolean}} request
    */
   async speak(request) {
     this.stop();
     const transcription = request.ipa
       ? { lang: request.lang, ipa: request.text, words: [] }
-      : textToIpa(request.text, { lang: request.lang });
+      : textToIpa(request.text, { lang: request.lang, accent: request.accent });
     const plan = planUtterance(transcription.ipa, {
       head: request.head,
+      language: transcription.lang,
+    });
+    const timeline = utteranceTimeline(plan, {
+      words: transcription.words,
+      ipa: transcription.ipa,
       language: transcription.lang,
     });
     const id = this.nextId++;
     const job = {
       id,
       plan,
+      timeline,
       sound: request.mode !== 'visual',
       startedAt: null,
       fields: [],
@@ -123,6 +130,9 @@ export class VoiceEngine {
       error: null,
       ipa: transcription.ipa,
       lang: transcription.lang,
+      text: request.text,
+      timeline,
+      utterance: id,
       underruns: 0,
     });
     if (!job.sound) {
@@ -241,13 +251,21 @@ export class VoiceEngine {
   }
 
   /**
-   * Animation frame: articulator state, time and pressure field.
-   * @returns {{speaking: boolean, time: number, state: object, field: object|null, plan: object|null}}
+   * Animation frame: articulator state, time, pressure field and the word
+   * and syllable timeline of the utterance.
+   * @returns {{speaking: boolean, time: number, state: object, field: object|null, plan: object|null, timeline: object|null}}
    */
   frame() {
     const job = this.job;
     if (!job) {
-      return { speaking: false, time: 0, state: {}, field: null, plan: null };
+      return {
+        speaking: false,
+        time: 0,
+        state: {},
+        field: null,
+        plan: null,
+        timeline: null,
+      };
     }
     const time = this.#time(job) ?? 0;
     const clamped = Math.max(0, Math.min(job.plan.duration, time));
@@ -264,6 +282,7 @@ export class VoiceEngine {
       state: this.state,
       field,
       plan: job.plan,
+      timeline: job.timeline,
     };
   }
 

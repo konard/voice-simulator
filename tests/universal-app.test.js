@@ -54,7 +54,7 @@ describe('universal React example app', () => {
     expect(appSource).toContain("from '../../../src/index.js'");
     expect(appSource).toContain("id: 'app-title'");
     expect(appSource).toContain('useSimulator(');
-    expect(appSource).toContain('textToIpa(text, { lang })');
+    expect(appSource).toContain('textToIpa(text, { lang, accent })');
     expect(appSource).toContain('randomHeadConfig(');
     expect(engineSource).toContain('LodGovernor');
     expect(workerSource).toContain('VoiceRenderer');
