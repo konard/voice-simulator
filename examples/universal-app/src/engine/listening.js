@@ -23,12 +23,14 @@ export const DEFAULT_ACOUSTICS = Object.freeze({
   boxHeight: 44,
   boxDepth: 30,
   boxAbsorption: 0.2,
+  // The 3D tiers run on WebGPU where the browser has it.
+  gpu: true,
 });
 
 /**
  * synthesize / speak options for the listening settings.
  * @param {typeof DEFAULT_ACOUSTICS} acoustics
- * @returns {{microphone?: object, room?: string, enclosure?: object}}
+ * @returns {{microphone?: object, room?: string, enclosure?: object, gpu?: false}}
  */
 export function listeningSettings(acoustics) {
   const result = {};
@@ -55,6 +57,9 @@ export function listeningSettings(acoustics) {
       depth: acoustics.boxDepth,
       absorption: acoustics.boxAbsorption,
     };
+  }
+  if (!acoustics.gpu) {
+    result.gpu = false;
   }
   return result;
 }

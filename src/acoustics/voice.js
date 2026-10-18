@@ -128,10 +128,11 @@ export class VoiceRenderer {
    * and `enclosure` ({width, height, depth, absorption, center} in cm, a
    * box around the head) choose where and in what space the voice is
    * heard. The output grows by the reverberation tail.
-   * @param {{sampleRate?: number, sections?: number, solver?: string, seed?: string|number, blockSize?: number, head?: object, dx?: number, model?: object, output?: string, microphone?: object, room?: string|object, enclosure?: object, teeth?: boolean, piriform?: boolean, vallecula?: boolean}} [options]
+   * @param {{sampleRate?: number, sections?: number, solver?: string, seed?: string|number, blockSize?: number, head?: object, dx?: number, model?: object, output?: string, kernel?: string, device?: object, microphone?: object, room?: string|object, enclosure?: object, teeth?: boolean, piriform?: boolean, vallecula?: boolean}} [options]
    *   `teeth: false` leaves out the incisors, `piriform: false` the
    *   piriform fossae (both solvers) and `vallecula: false` the vallecula
-   *   (3D only).
+   *   (3D only). A WebGPU `device` runs the 3D solver on the GPU; such a
+   *   renderer renders with renderAsync.
    */
   constructor(plan, options = {}) {
     this.plan = plan;
@@ -154,6 +155,7 @@ export class VoiceRenderer {
       model: options.model,
       output: options.output,
       kernel: options.kernel,
+      device: options.device,
       piriform: options.piriform,
       vallecula: options.vallecula,
       microphone: options.microphone,
@@ -189,6 +191,8 @@ export class VoiceRenderer {
     this.previous = 0;
     this.current = 0;
     this.shape = null;
+    this.rates = [];
+    this.steps = 0;
   }
 
   get duration() {
@@ -216,7 +220,8 @@ export class VoiceRenderer {
     this.stepDuration = this.solver.stepDuration(this.shape);
     const rate = 1 / this.stepDuration;
     this.noise.configure(rate);
-    this.output.configure(rate);
+    // The output filter runs when the solver outputs arrive (see #finish).
+    this.rates.push(this.steps, rate);
   }
 
   #fricationNoise(white) {
@@ -247,7 +252,8 @@ export class VoiceRenderer {
     );
   }
 
-  #step() {
+  /** Queue one solver step with the sources of this instant. */
+  #step(queue) {
     const white = this.noise.white();
     const aspiration = this.noise.aspiration.process(white);
     const source = this.glottis.step(
@@ -256,21 +262,27 @@ export class VoiceRenderer {
       aspiration
     );
     const noise = this.#fricationNoise(this.noise.white());
-    const value = this.solver.step(
-      source,
-      this.shape.frication.position,
-      noise
-    );
-    return this.output.filter(value);
+    queue(source, this.shape.frication.position, noise);
+    this.steps++;
   }
 
   /**
-   * Render the next samples into `target`. Blocks are aligned to the
-   * absolute sample position, so any chunking gives identical audio.
-   * @param {Float32Array} target
-   * @returns {number} Number of samples written (less than target.length at the end).
+   * Run the sources and the shapes for the next samples and queue the
+   * solver steps they need. Each sample interpolates between two step
+   * outputs: index 0 and 1 are the last two of the previous call, the
+   * steps of this call follow.
    */
-  render(target) {
+  #record(target, queue) {
+    this.steps = 0;
+    this.rates = [];
+    const samples = {
+      previous: new Int32Array(target.length),
+      current: new Int32Array(target.length),
+      fraction: new Float64Array(target.length),
+      count: 0,
+    };
+    let previous = 0;
+    let current = 1;
     const outputStep = 1 / this.sampleRate;
     let written = 0;
     while (written < target.length && !this.done) {
@@ -285,19 +297,87 @@ export class VoiceRenderer {
       );
       for (; written < blockEnd; written++, this.position++) {
         while (this.solverTime <= this.time) {
-          this.previous = this.current;
-          this.current = this.#step();
+          previous = current;
+          current = 2 + this.steps;
+          this.#step(queue);
           this.solverTime += this.stepDuration;
         }
-        const fraction = 1 - (this.solverTime - this.time) / this.stepDuration;
-        const value = this.previous + (this.current - this.previous) * fraction;
-        target[written] = this.output.finish(
-          this.listener ? this.listener.process(value) : value
-        );
+        samples.previous[written] = previous;
+        samples.current[written] = current;
+        samples.fraction[written] =
+          1 - (this.solverTime - this.time) / this.stepDuration;
         this.time += outputStep;
       }
     }
-    return written;
+    samples.count = written;
+    return samples;
+  }
+
+  /**
+   * Filter the solver outputs at the rate of the block that queued them,
+   * then resample them to the audio rate and finish the samples.
+   */
+  #finish(target, samples, outputs) {
+    const values = new Float64Array(outputs.length + 2);
+    values[0] = this.previous;
+    values[1] = this.current;
+    const { rates } = this;
+    let next = 0;
+    for (let step = 0; step <= outputs.length; step++) {
+      for (; next < rates.length && rates[next] <= step; next += 2) {
+        this.output.configure(rates[next + 1]);
+      }
+      if (step < outputs.length) {
+        values[step + 2] = this.output.filter(outputs[step]);
+      }
+    }
+    for (let index = 0; index < samples.count; index++) {
+      const previous = values[samples.previous[index]];
+      const current = values[samples.current[index]];
+      const value = previous + (current - previous) * samples.fraction[index];
+      target[index] = this.output.finish(
+        this.listener ? this.listener.process(value) : value
+      );
+    }
+    if (samples.count > 0) {
+      this.previous = values[samples.previous[samples.count - 1]];
+      this.current = values[samples.current[samples.count - 1]];
+    }
+    return samples.count;
+  }
+
+  /**
+   * Render the next samples into `target`. Blocks are aligned to the
+   * absolute sample position, so any chunking gives identical audio.
+   * @param {Float32Array} target
+   * @returns {number} Number of samples written (less than target.length at the end).
+   */
+  render(target) {
+    const outputs = [];
+    const samples = this.#record(target, (...step) =>
+      outputs.push(this.solver.step(...step))
+    );
+    return this.#finish(target, samples, outputs);
+  }
+
+  /**
+   * render() for solvers that queue their steps (the 3D solver on the
+   * GPU): the steps of the whole call run together. Gives the same audio
+   * as render() for the other solvers.
+   * @param {Float32Array} target
+   * @param {{field?: boolean}} [options] Passed to the solver's flushSteps.
+   * @returns {Promise<number>}
+   */
+  async renderAsync(target, options = {}) {
+    const { solver } = this;
+    if (!solver.queueStep) {
+      return this.render(target);
+    }
+    const samples = this.#record(target, (...step) =>
+      solver.queueStep(...step)
+    );
+    const outputs = await solver.flushSteps(options);
+    return this.#finish(target, samples, outputs);
   }
 }
 
@@ -311,5 +391,22 @@ export function renderPlan(plan, options = {}) {
   const renderer = new VoiceRenderer(plan, options);
   const samples = new Float32Array(renderer.totalSamples);
   renderer.render(samples);
+  return samples;
+}
+
+/**
+ * Render a whole plan offline with renderAsync, `chunkSize` samples at a
+ * time (needed for the GPU solver).
+ * @param {object} plan
+ * @param {ConstructorParameters<typeof VoiceRenderer>[1] & {chunkSize?: number}} [options]
+ * @returns {Promise<Float32Array>}
+ */
+export async function renderPlanAsync(plan, options = {}) {
+  const renderer = new VoiceRenderer(plan, options);
+  const samples = new Float32Array(renderer.totalSamples);
+  const chunkSize = options.chunkSize ?? 4096;
+  for (let start = 0; start < samples.length; start += chunkSize) {
+    await renderer.renderAsync(samples.subarray(start, start + chunkSize));
+  }
   return samples;
 }

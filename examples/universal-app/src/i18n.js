@@ -122,6 +122,10 @@ const STRINGS = {
       boxNote:
         'The high and ultra tiers simulate the walls in 3D; the others approximate them.',
       boxTooLarge: 'The box has too many voxels for these tiers',
+      simulation: 'Simulation',
+      gpu: 'Run the 3D tiers on the GPU (WebGPU)',
+      gpuNote:
+        'Without WebGPU, or when it fails, the processor simulates them. The audio meter shows “GPU” while the GPU is in use.',
     },
   },
   ru: {
@@ -248,6 +252,10 @@ const STRINGS = {
       boxAbsorption: 'Поглощение стенок',
       boxNote:
         'Уровни high и ultra моделируют стенки в 3D, остальные — приближённо.',
+      simulation: 'Моделирование',
+      gpu: 'Считать 3D-уровни на видеокарте (WebGPU)',
+      gpuNote:
+        'Без WebGPU или при его сбое их считает процессор. Пока работает видеокарта, индикатор звука показывает «GPU».',
       boxTooLarge: 'В коробке слишком много вокселей для этих уровней',
     },
   },

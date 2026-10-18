@@ -111,7 +111,13 @@ export interface RenderOptions {
   dx?: number;
   model?: object;
   output?: OutputMode;
+  kernel?: 'wasm' | 'js';
+  /** WebGPU device for the 3D solver (render with renderAsync). */
+  device?: GPUDeviceLike;
 }
+
+/** A WebGPU GPUDevice (typed loosely so the package needs no WebGPU types). */
+export type GPUDeviceLike = object;
 
 export interface SynthesizeOptions {
   lang?: 'auto' | LanguageCode;
@@ -130,6 +136,8 @@ export interface SynthesizeOptions {
   sampleRate?: number;
   output?: OutputMode;
   model?: object;
+  /** WebGPU device for the 3D solver (synthesizeAsync, synthesizeStream). */
+  device?: GPUDeviceLike;
 }
 
 export interface SynthesisResult extends Transcription {
@@ -146,6 +154,10 @@ export declare function synthesize(
   text: string,
   options?: SynthesizeOptions
 ): SynthesisResult;
+export declare function synthesizeAsync(
+  text: string,
+  options?: SynthesizeOptions & { chunkSize?: number }
+): Promise<SynthesisResult>;
 export declare function synthesizeStream(
   text: string,
   options?: SynthesizeOptions & { chunkSize?: number }
@@ -258,6 +270,9 @@ export interface Solver {
   ): void;
   setNose(areas: ArrayLike<number>): void;
   step(glottalFlow: number, noisePosition: number, noise: number): number;
+  /** Queue a step; its output comes with the next flushSteps. */
+  queueStep?(glottalFlow: number, noisePosition: number, noise: number): void;
+  flushSteps?(options?: { field?: boolean }): Promise<Float64Array>;
   /** Optional pressure snapshot for visualisation. */
   field?(): object;
   reset(): void;
@@ -271,11 +286,32 @@ export declare class VoiceRenderer {
   readonly totalSamples: number;
   position: number;
   render(target: Float32Array): number;
+  /** render() for solvers that queue their steps (the GPU solver). */
+  renderAsync(
+    target: Float32Array,
+    options?: { field?: boolean }
+  ): Promise<number>;
 }
 export declare function renderPlan(
   plan: Plan,
   options?: RenderOptions
 ): Float32Array;
+export declare function renderPlanAsync(
+  plan: Plan,
+  options?: RenderOptions & { chunkSize?: number }
+): Promise<Float32Array>;
+/** A WebGPU device for the 3D solver, or null without WebGPU. */
+export declare function requestGpuDevice(options?: {
+  gpu?: object;
+}): Promise<GPUDeviceLike | null>;
+export declare class FdtdGpu {
+  constructor(solver: Fdtd3d, device: GPUDeviceLike);
+  readonly workgroup: number;
+  queue(force: number, inject: number): void;
+  flush(options?: { field?: boolean }): Promise<Float64Array>;
+  reset(): void;
+  destroy(): void;
+}
 export declare function registerSolver(
   name: string,
   factory: (options: object) => Solver
@@ -308,11 +344,15 @@ export declare class Fdtd3d implements Solver {
     microphone?: MicrophoneOptions;
     enclosure?: EnclosureOptions;
     kernel?: 'wasm' | 'js';
+    /** Run the step loop on this WebGPU device (queueStep/flushSteps). */
+    device?: GPUDeviceLike;
     /** `false` leaves out the piriform fossae. */
     piriform?: boolean;
     /** `false` leaves out the vallecula. */
     vallecula?: boolean;
   });
+  /** The GPU step loop, with a `device`. */
+  readonly gpu: FdtdGpu | null;
   /** Distance of the receiver from the lips (cm), with a microphone. */
   readonly microphoneDistance?: number;
   /** True when the grid contains the enclosure walls. */
@@ -330,6 +370,9 @@ export declare class Fdtd3d implements Solver {
   ): void;
   setNose(areas: ArrayLike<number>): void;
   step(glottalFlow: number, noisePosition: number, noise: number): number;
+  queueStep(glottalFlow: number, noisePosition: number, noise: number): void;
+  /** With `field` on the GPU, field() holds the RMS over these steps. */
+  flushSteps(options?: { field?: boolean }): Promise<Float64Array>;
   /** Pressure field for visualisation. */
   field(): {
     positions: Float32Array;

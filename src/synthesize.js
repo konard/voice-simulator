@@ -3,7 +3,11 @@
  * audio, offline or as a stream of chunks.
  */
 
-import { renderPlan, VoiceRenderer } from './acoustics/voice.js';
+import {
+  renderPlan,
+  renderPlanAsync,
+  VoiceRenderer,
+} from './acoustics/voice.js';
 import { planUtterance } from './articulation/plan.js';
 import { utteranceTimeline } from './articulation/timeline.js';
 import { textToIpa } from './g2p/index.js';
@@ -75,6 +79,7 @@ export function prepareUtterance(text, options = {}) {
     teeth: options.teeth,
     piriform: options.piriform,
     vallecula: options.vallecula,
+    device: options.device,
   };
   return { ...transcription, head, plan, timeline, renderOptions };
 }
@@ -88,7 +93,26 @@ export function prepareUtterance(text, options = {}) {
  */
 export function synthesize(text, options = {}) {
   const prepared = prepareUtterance(text, options);
-  const samples = renderPlan(prepared.plan, prepared.renderOptions);
+  return result(prepared, renderPlan(prepared.plan, prepared.renderOptions));
+}
+
+/**
+ * synthesize() that can run the 3D solver on a WebGPU `device` (see
+ * requestGpuDevice); without one it gives the same result as synthesize.
+ * @param {string} text
+ * @param {Parameters<typeof synthesize>[1] & {device?: object, chunkSize?: number}} [options]
+ * @returns {Promise<ReturnType<typeof synthesize>>}
+ */
+export async function synthesizeAsync(text, options = {}) {
+  const prepared = prepareUtterance(text, options);
+  const samples = await renderPlanAsync(prepared.plan, {
+    ...prepared.renderOptions,
+    chunkSize: options.chunkSize,
+  });
+  return result(prepared, samples);
+}
+
+function result(prepared, samples) {
   const { sampleRate } = prepared.renderOptions;
   return {
     lang: prepared.lang,
@@ -117,7 +141,7 @@ export async function* synthesizeStream(text, options = {}) {
   const chunkSize = options.chunkSize ?? 4096;
   while (!renderer.done) {
     const chunk = new Float32Array(chunkSize);
-    const written = renderer.render(chunk);
+    const written = await renderer.renderAsync(chunk);
     if (written === 0) {
       break;
     }

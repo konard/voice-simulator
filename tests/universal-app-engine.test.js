@@ -83,47 +83,88 @@ describe('voice engine benchmark', () => {
   });
 });
 
+/** The worker's message handler, from a single import of the module. */
+let workerHandler = null;
+
+/**
+ * Run the worker on a speak message until it ends, with `navigator.gpu`
+ * and `performance.now` replaced while it runs; returns what it posted.
+ */
+async function speakInWorker(message, { gpu, now } = {}) {
+  const posted = [];
+  const saved = {
+    postMessage: globalThis.postMessage,
+    addEventListener: globalThis.addEventListener,
+    now: globalThis.performance.now,
+    navigator: Object.getOwnPropertyDescriptor(globalThis, 'navigator'),
+  };
+  globalThis.postMessage = (data) => posted.push(data);
+  if (now) {
+    globalThis.performance.now = now;
+  }
+  if (gpu !== undefined) {
+    Object.defineProperty(globalThis, 'navigator', {
+      value: { gpu },
+      configurable: true,
+      writable: true,
+    });
+  }
+  try {
+    if (!workerHandler) {
+      globalThis.addEventListener = (type, listener) => {
+        workerHandler = listener;
+      };
+      await import('../examples/universal-app/src/engine/synth-worker.js');
+    }
+    workerHandler({
+      data: { type: 'speak', lang: 'en', head: {}, ...message },
+    });
+    for (let wait = 0; wait < 400; wait++) {
+      if (posted.some((data) => data.type === 'end' || data.type === 'error')) {
+        break;
+      }
+      await new Promise((resolve) => globalThis.setTimeout(resolve, 20));
+    }
+  } finally {
+    globalThis.postMessage = saved.postMessage;
+    globalThis.addEventListener = saved.addEventListener;
+    globalThis.performance.now = saved.now;
+    if (saved.navigator) {
+      Object.defineProperty(globalThis, 'navigator', saved.navigator);
+    } else {
+      delete globalThis.navigator;
+    }
+  }
+  return posted;
+}
+
+/** A WebGPU whose device fails as soon as the solver uses it. */
+const brokenGpu = {
+  async requestAdapter() {
+    const limits = {
+      maxComputeInvocationsPerWorkgroup: 256,
+      maxComputeWorkgroupSizeX: 256,
+    };
+    return {
+      limits,
+      requestDevice: async () => ({
+        limits,
+        createBuffer() {
+          throw new Error('device lost');
+        },
+      }),
+    };
+  },
+};
+
 describe('synthesis worker', () => {
   it('restarts an utterance on a cheaper tier as soon as it falls behind', async () => {
-    const posted = [];
-    let handler = null;
     let clock = 0;
-    const saved = {
-      postMessage: globalThis.postMessage,
-      addEventListener: globalThis.addEventListener,
-      now: globalThis.performance.now,
-    };
-    globalThis.postMessage = (message) => posted.push(message);
-    globalThis.addEventListener = (type, listener) => {
-      handler = listener;
-    };
     // Every chunk "takes" 60 ms: far slower than real time on every tier.
-    globalThis.performance.now = () => (clock += 30);
-    try {
-      await import('../examples/universal-app/src/engine/synth-worker.js');
-      handler({
-        data: {
-          type: 'speak',
-          id: 1,
-          ipa: 'ˈa',
-          lang: 'en',
-          head: {},
-          seed: 1,
-          tier: 3,
-          auto: true,
-        },
-      });
-      for (let wait = 0; wait < 200; wait++) {
-        if (posted.some((message) => message.type === 'end')) {
-          break;
-        }
-        await new Promise((resolve) => globalThis.setTimeout(resolve, 20));
-      }
-    } finally {
-      globalThis.postMessage = saved.postMessage;
-      globalThis.addEventListener = saved.addEventListener;
-      globalThis.performance.now = saved.now;
-    }
+    const posted = await speakInWorker(
+      { id: 1, ipa: 'ˈa', seed: 1, tier: 3, auto: true, gpu: false },
+      { now: () => (clock += 30) }
+    );
     const steps = posted
       .filter((message) => message.type === 'overload')
       .map((message) => [message.from, message.level]);
@@ -132,6 +173,34 @@ describe('synthesis worker', () => {
     expect(steps.at(-1)[1]).toBe(0);
     const starts = posted.filter((message) => message.type === 'start');
     expect(starts.at(-1).solver).toBe('waveguide');
+    expect(posted.at(-1).type).toBe('end');
+  });
+
+  it('keeps the 3D tiers on the CPU when the GPU is turned off', async () => {
+    const posted = await speakInWorker(
+      { id: 2, ipa: 'ˈa', seed: 1, tier: 3, auto: false, gpu: false },
+      { gpu: brokenGpu }
+    );
+    const starts = posted.filter((message) => message.type === 'start');
+    expect(starts.length).toBe(1);
+    expect(starts[0].solver).toBe('fdtd3d');
+    expect(starts[0].gpu).toBe(false);
+    expect(posted.at(-1).type).toBe('end');
+  });
+
+  it('falls back to the CPU when the GPU fails', async () => {
+    const posted = await speakInWorker(
+      { id: 3, ipa: 'ˈa', seed: 1, tier: 3, auto: false },
+      { gpu: brokenGpu }
+    );
+    expect(posted.some((message) => message.type === 'error')).toBe(false);
+    const starts = posted.filter((message) => message.type === 'start');
+    expect(starts.at(-1).solver).toBe('fdtd3d');
+    expect(starts.at(-1).gpu).toBe(false);
+    const samples = posted
+      .filter((message) => message.type === 'chunk')
+      .reduce((sum, message) => sum + message.samples.length, 0);
+    expect(samples).toBe(starts.at(-1).totalSamples);
     expect(posted.at(-1).type).toBe('end');
   });
 });

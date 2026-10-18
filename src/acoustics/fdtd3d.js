@@ -38,6 +38,11 @@
  * to MAX_RADIATION_RADIUS, the listener extrapolates beyond). An
  * `enclosure` option surrounds the head with a box of air whose walls
  * reflect according to their absorption.
+ *
+ * With a WebGPU `device` the step loop runs on the GPU (see fdtd-gpu.js):
+ * steps are then queued with queueStep and their outputs collected with
+ * flushSteps. Without one, queueStep runs the step right away, so the same
+ * calls work on any solver.
  */
 
 import { LOSS_REFERENCE_SECTIONS, lossFactor } from './waveguide.js';
@@ -58,6 +63,7 @@ import {
 } from './voxel-model.js';
 import { microphonePosition, resolveMicrophone } from './microphone.js';
 import { createKernel } from './fdtd-kernel.js';
+import { FdtdGpu } from './fdtd-gpu.js';
 
 const COURANT = 0.5;
 const MIN_FILL = 1e-4;
@@ -231,11 +237,12 @@ function nearestAirCell(cells, point) {
 export class Fdtd3d {
   /**
    * `kernel` selects the step loop: 'wasm' (default when WebAssembly is
-   * available) or 'js'; both produce bit-identical output.
+   * available) or 'js'; both produce bit-identical output. A `device`
+   * (GPUDevice, see requestGpuDevice) runs it on the GPU instead.
    * A `microphone` or `enclosure` switches the default output to
    * 'microphone'; a prebuilt `model` must then come from
    * buildVoxelModel(head, voxelModelOptions(options)).
-   * @param {{head?: object, dx?: number, model?: object, output?: 'flow'|'microphone', kernel?: 'wasm'|'js', microphone?: object, enclosure?: object}} [options]
+   * @param {{head?: object, dx?: number, model?: object, output?: 'flow'|'microphone', kernel?: 'wasm'|'js', device?: object, microphone?: object, enclosure?: object}} [options]
    */
   constructor(options = {}) {
     const model =
@@ -247,6 +254,10 @@ export class Fdtd3d {
     this.model = model;
     this.dx = model.dx;
     this.dt = (COURANT * model.dx) / SPEED_OF_SOUND;
+    this.courant = COURANT;
+    /** Bumped whenever the link or cell coefficients change. */
+    this.version = 0;
+    this.noiseVersion = 0;
     const listening = Boolean(options.microphone || model.enclosure);
     this.output = options.output ?? (listening ? 'microphone' : 'flow');
     this.wallLoss = options.head?.wallLoss ?? 1;
@@ -263,6 +274,8 @@ export class Fdtd3d {
     this.noiseState = 0;
     this.leak = 1 - this.dt / MICROPHONE_LEAK_TIME;
     this.tubeAreas = [null, null];
+    this.pending = [];
+    this.gpu = options.device ? new FdtdGpu(this, options.device) : null;
   }
 
   #prepareGrid(model, options) {
@@ -273,7 +286,8 @@ export class Fdtd3d {
         ? withSphericalBoundary(model)
         : null;
     const grid = spherical?.model ?? model;
-    this.#allocate(grid, options.kernel ?? 'wasm');
+    // On the GPU the CPU arrays only hold the coefficients.
+    this.#allocate(grid, options.device ? 'js' : (options.kernel ?? 'wasm'));
     this.#prepareBoundaries(grid);
     this.microphoneGain =
       spherical || model.enclosure ? SPHERICAL_MICROPHONE_GAIN : 1;
@@ -565,6 +579,7 @@ export class Fdtd3d {
   }
 
   #updateCellCoefficients(cells = null) {
+    this.version++;
     const count = cells ? cells.length : this.cellCount;
     for (let position = 0; position < count; position++) {
       const index = cells ? cells[position] : position;
@@ -810,6 +825,7 @@ export class Fdtd3d {
       return;
     }
     this.noiseArc = arc;
+    this.noiseVersion++;
     const links = [];
     const signs = [];
     for (let link = 0; link < this.linkCount; link++) {
@@ -832,18 +848,30 @@ export class Fdtd3d {
     this.noiseSigns = Float64Array.from(signs);
   }
 
-  #addNoise(noisePosition, noise) {
+  /**
+   * Velocity added to the noise links for a turbulence pressure `noise`
+   * (integrated like the glottal source in microphone mode), after
+   * selecting the links that cross the noise plane.
+   */
+  #noiseForce(noisePosition, noise) {
+    let force = noise;
+    if (this.output === 'microphone') {
+      // Integrated like the glottal source (see #sourcePressure).
+      this.noiseState = this.noiseState * this.leak + noise;
+      force = this.noiseState * this.dx * MICROPHONE_GAIN;
+    }
+    if (force === 0) {
+      return 0;
+    }
     const sections = this.areaCount ?? 44;
     const arc = (noisePosition / sections) * this.model.lengths[CELL_TRACT];
     this.#selectNoiseLinks(arc);
     // A pressure jump across the noise plane enters the momentum equation.
-    const force = COURANT * NOISE_GAIN * noise;
-    for (let index = 0; index < this.noiseLinks.length; index++) {
-      this.velocity[this.noiseLinks[index]] += force * this.noiseSigns[index];
-    }
+    return COURANT * NOISE_GAIN * force;
   }
 
-  #injectSource(glottalFlow) {
+  /** Pressure the glottal flow adds to the source cells (per keep). */
+  #sourcePressure(glottalFlow) {
     let flow = glottalFlow;
     if (this.output === 'microphone') {
       // The microphone hears dp/dt of the radiated flow: integrate once.
@@ -856,10 +884,7 @@ export class Fdtd3d {
     for (const index of this.sourceCells) {
       area += this.fill[index] * this.dx * this.dx;
     }
-    const pressure = (COURANT * flow) / Math.max(area, 1e-3);
-    for (const index of this.sourceCells) {
-      this.pressure[index] += pressure * this.keep[index];
-    }
+    return (COURANT * flow) / Math.max(area, 1e-3);
   }
 
   #measure() {
@@ -883,22 +908,54 @@ export class Fdtd3d {
    * @returns {number} Radiated output.
    */
   step(glottalFlow, noisePosition, noise) {
-    let force = noise;
-    if (this.output === 'microphone') {
-      // Integrated like the glottal source (see #injectSource).
-      this.noiseState = this.noiseState * this.leak + noise;
-      force = this.noiseState * this.dx * MICROPHONE_GAIN;
+    if (this.gpu) {
+      throw new Error('A GPU solver runs queued steps (queueStep)');
     }
+    const force = this.#noiseForce(noisePosition, noise);
     if (force !== 0) {
-      this.#addNoise(noisePosition, force);
+      for (let index = 0; index < this.noiseLinks.length; index++) {
+        this.velocity[this.noiseLinks[index]] += force * this.noiseSigns[index];
+      }
     }
     if (this.kernel) {
       this.kernel.step();
     } else {
       this.#stepJs();
     }
-    this.#injectSource(glottalFlow);
+    const pressure = this.#sourcePressure(glottalFlow);
+    for (const index of this.sourceCells) {
+      this.pressure[index] += pressure * this.keep[index];
+    }
     return this.#measure();
+  }
+
+  /**
+   * Queue a step (arguments as for step); flushSteps returns the outputs.
+   * On the CPU the step runs right away, on the GPU with the next flush.
+   */
+  queueStep(glottalFlow, noisePosition, noise) {
+    if (!this.gpu) {
+      this.pending.push(this.step(glottalFlow, noisePosition, noise));
+      return;
+    }
+    const force = this.#noiseForce(noisePosition, noise);
+    this.gpu.queue(force, this.#sourcePressure(glottalFlow));
+  }
+
+  /**
+   * Outputs of the steps queued since the last flush. With `field` on the
+   * GPU, field() then holds the RMS pressure over these steps (on the CPU
+   * it is always the current pressure).
+   * @param {{field?: boolean}} [options]
+   * @returns {Promise<Float64Array>}
+   */
+  flushSteps(options = {}) {
+    if (this.gpu) {
+      return this.gpu.flush(options);
+    }
+    const outputs = Float64Array.from(this.pending);
+    this.pending = [];
+    return Promise.resolve(outputs);
   }
 
   /** Reference step loop; the wasm kernel mirrors it operation by operation. */
@@ -944,5 +1001,6 @@ export class Fdtd3d {
     this.velocity.fill(0);
     this.sourceState = 0;
     this.noiseState = 0;
+    this.gpu?.reset();
   }
 }

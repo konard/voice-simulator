@@ -141,7 +141,7 @@ export class VoiceEngine {
 
   /**
    * Speak text.
-   * @param {{text: string, lang: string, accent?: string, head: object, seed: string, mode: 'both'|'sound'|'visual', ipa?: boolean, microphone?: object, room?: string, enclosure?: object}} request
+   * @param {{text: string, lang: string, accent?: string, head: object, seed: string, mode: 'both'|'sound'|'visual', ipa?: boolean, microphone?: object, room?: string, enclosure?: object, gpu?: boolean}} request
    *   `microphone`, `room` and `enclosure` are the listening settings
    *   (see synthesize).
    */
@@ -209,6 +209,7 @@ export class VoiceEngine {
       microphone: request.microphone,
       room: request.room,
       enclosure: request.enclosure,
+      gpu: request.gpu,
     });
     return job;
   }
@@ -251,7 +252,10 @@ export class VoiceEngine {
     job.solver = message.solver;
     this.cells = message.model;
     this.player.begin(message.sampleRate);
-    this.#emit({ solver: message.solver, cells: Boolean(message.model) });
+    this.#emit({
+      solver: message.gpu ? `${message.solver} · GPU` : message.solver,
+      cells: Boolean(message.model),
+    });
   }
 
   /** The worker restarts the utterance on a cheaper tier. */

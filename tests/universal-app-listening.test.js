@@ -40,6 +40,13 @@ describe('example app listening settings', () => {
     ).toBe(true);
   });
 
+  it('runs the 3D tiers on the GPU unless it is turned off', () => {
+    expect(DEFAULT_ACOUSTICS.gpu).toBe(true);
+    expect(listeningSettings({ ...DEFAULT_ACOUSTICS, gpu: false })).toEqual({
+      gpu: false,
+    });
+  });
+
   it('accepts the default box on every tier and flags boxes that cannot work', () => {
     const box = { ...DEFAULT_ACOUSTICS, box: true };
 
