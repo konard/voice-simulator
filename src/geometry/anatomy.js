@@ -44,16 +44,18 @@ export const ANATOMY_LODS = Object.freeze([
  * Permanent teeth from the midline back (central incisor to second
  * molar, the third molar is left out): crown width along the arch, crown
  * height, labio-lingual thickness (cm), how thin the edge is (0 = knife
- * edge, 1 = flat occlusal surface) and how far the long axis leans out of
- * the mouth towards the edge (degrees from vertical). The incisors lean
- * about 20 degrees: the upper ones stand at about 110 degrees to the
- * palatal plane on cephalograms and the lower ones at about 90 degrees to
- * a mandibular plane tilted 25 degrees; the Human Reference Atlas mouths
- * lean 23 (upper) and 30-34 (lower) degrees.
+ * edge, 1 = flat occlusal surface) and how far the crown leans out of the
+ * mouth towards the edge (degrees from vertical). The lean tilts the
+ * labial face; the crown tapering to its edge tilts its middle further.
+ * The leans of the central incisors give the labial faces of the Human
+ * Reference Atlas mouths, 16 (upper) and 22 (lower) degrees on average
+ * (labialLean in reference-anatomy.js), whose long axes, roots included,
+ * lean 23 and 31-33 degrees: about the 110 degrees to the palatal plane
+ * of upper incisors on cephalograms.
  */
 const UPPER_TEETH = [
-  [0.89, 1.05, 0.74, 0.25, 21],
-  [0.69, 0.9, 0.67, 0.3, 19],
+  [0.89, 1.05, 0.74, 0.25, 14],
+  [0.69, 0.9, 0.67, 0.3, 13],
   [0.76, 1.0, 0.82, 0.45, 10],
   [0.68, 0.8, 0.95, 0.85, 3],
   [0.68, 0.75, 0.95, 0.85, 0],
@@ -61,9 +63,9 @@ const UPPER_TEETH = [
   [0.95, 0.65, 1.14, 0.95, 0],
 ];
 const LOWER_TEETH = [
-  [0.54, 0.9, 0.58, 0.25, 22],
-  [0.59, 0.95, 0.61, 0.3, 22],
-  [0.68, 1.05, 0.74, 0.45, 20],
+  [0.54, 0.9, 0.58, 0.25, 12],
+  [0.59, 0.95, 0.61, 0.3, 12],
+  [0.68, 1.05, 0.74, 0.45, 14],
   [0.69, 0.8, 0.8, 0.85, 12],
   [0.7, 0.75, 0.86, 0.85, 6],
   [1.08, 0.7, 1.06, 0.95, 0],

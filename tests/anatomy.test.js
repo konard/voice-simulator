@@ -152,8 +152,9 @@ describe('anatomy meshes', () => {
   it('lays the crowns across the arch, thick and leaning out', () => {
     // A parasagittal cut through a central incisor, as on MRI: the crown is
     // its labio-lingual thickness deep (7.4 mm upper, 5.8 mm lower), not a
-    // sliver along the arch, and its edge stands ahead of its neck as the
-    // incisors lean about 20 degrees out of the mouth.
+    // sliver along the arch, and its edge stands ahead of its neck: the
+    // labial faces of the Human Reference Atlas incisors lean 12-21
+    // degrees (upper) and 20-24 (lower) out of the mouth.
     const cut = (mesh) =>
       sliceMesh(mesh, { normal: [1, 0, 0], offset: 0.3 }).flat();
     const lean = (points, toEdge) => {
@@ -178,7 +179,7 @@ describe('anatomy meshes', () => {
         const depth = Math.max(...z) - Math.min(...z);
         expect(depth).toBeGreaterThan(0.8 * thickness);
         expect(depth).toBeLessThan(thickness + 0.5);
-        expect(lean(points, sign)).toBeGreaterThan(14);
+        expect(lean(points, sign)).toBeGreaterThan(10);
         expect(lean(points, sign)).toBeLessThan(28);
       }
     }

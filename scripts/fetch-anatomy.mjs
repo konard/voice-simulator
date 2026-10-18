@@ -11,34 +11,37 @@
 //                  STL per tooth, millimetres.
 //   z-anatomy      Z-Anatomy atlas (CC BY-SA 4.0): Startup.blend, from
 //                  which scripts/blender/z_anatomy_export.py writes STLs.
-//   hra-male       Human Reference Atlas 3D reference organs of the mouth
-//   hra-female     (Visible Human male and female, CC BY 4.0): one glTF
-//                  binary per sex, of which only the teeth, palate and
-//                  tongue are read into a small mouth.glb, metres.
+//   hra            HuBMAP Human Reference Atlas mouth and larynx of the
+//                  Visible Human male and female (CC BY 4.0): one STL per
+//                  part, millimetres, mirrored into the head frame. Only
+//                  the bytes of the teeth, palate, velum, tongue and
+//                  cartilages are read from the remote GLBs.
 //
 // Usage: node scripts/fetch-anatomy.mjs <source> <output directory>
 //          [--patients 1,2,...] [--blender path/to/blender]
+//          [--sex male|female]
 //   Each source goes into its own new directory. Downloaded files are data:
 //   nothing in them is executed (the .blend file is opened by Blender with
 //   --factory-startup --disable-autoexec).
 import { spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import {
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  readdirSync,
+  writeFileSync,
+} from 'node:fs';
 import { basename, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { meshesToGlb } from '../src/geometry/gltf.js';
+import { meshesToStl, parseStl } from '../src/geometry/stl.js';
+import { fetchGlbMeshes } from '../src/geometry/gltf-read.js';
 import {
-  GLB_HEADER_BYTES,
-  accessorSpan,
-  glbBinaryOffset,
-  glbJsonLength,
-  gltfMeshes,
-  meshAccessors,
-  readGlb,
-} from '../src/geometry/gltf-read.js';
-import { mergeMeshes } from '../src/geometry/mouth-landmarks.js';
-import { parseStl } from '../src/geometry/stl.js';
-import { connectedPieces, numberTeeth } from '../src/geometry/tooth-row.js';
-import { fetchMember, fetchRange, listMembers } from './fetch-dvtd.mjs';
+  HRA_PARTS,
+  mirrorX,
+  referenceParts,
+  referenceTeeth,
+} from '../src/geometry/reference-anatomy.js';
+import { fetchMember, listMembers } from './fetch-dvtd.mjs';
 
 export const BODYPARTS3D = Object.freeze({
   name: 'BodyParts3D 4.0, is-a tree (Database Center for Life Science)',
@@ -73,46 +76,43 @@ export const Z_ANATOMY = Object.freeze({
   units: 'millimetres; +x left, -y anterior, +z superior',
 });
 
-const HRA_CITATION = (sex, doi) =>
-  `Schlehlein H (2023) 3D Reference Organ for Mouth, ${sex}, v1.0. Human Reference Atlas, HuBMAP. doi:${doi}. Built on the Visible Human Project: Ackerman MJ (1998) The Visible Human Project. Proceedings of the IEEE 86(3), 504-511. doi:10.1109/5.662875`;
+const HRA_ORGANS = 'https://cdn.humanatlas.io/digital-objects/ref-organ';
 
-/** Human Reference Atlas reference organs of the mouth, by source name. */
-export const HRA_MOUTH = Object.freeze({
-  'hra-male': Object.freeze({
-    name: 'Human Reference Atlas, 3D reference organ: mouth, male, v1.0',
-    citation: HRA_CITATION('Male', '10.48539/HBM568.RFGM.978'),
-    license: 'CC BY 4.0, HuBMAP Human Reference Atlas',
-    url: 'https://cdn.humanatlas.io/digital-objects/ref-organ/mouth-male/v1.0/assets/3d-vh-m-mouth.glb',
-    size: 53487620,
-    prefix: 'VH_M_',
-    units:
-      'metres; +x left, +y superior, +z anterior (Visible Human male body frame)',
+export const HRA = Object.freeze({
+  name: 'HuBMAP Human Reference Atlas 3D reference organs (Visible Human)',
+  citation:
+    'Schlehlein H, Herr BW II, Quardokus EM, Bueckle A, Börner K (2024) HuBMAP CCF 3D Reference Object Library; mouth and larynx: Schlehlein H (2024), Human Reference Atlas, doi:10.48539/HBM568.RFGM.978',
+  license: 'CC BY 4.0, HuBMAP',
+  urls: Object.freeze({
+    male: Object.freeze([
+      `${HRA_ORGANS}/mouth-male/v1.0/assets/3d-vh-m-mouth.glb`,
+      `${HRA_ORGANS}/larynx-male/v1.1/assets/3d-vh-m-larynx.glb`,
+    ]),
+    female: Object.freeze([
+      `${HRA_ORGANS}/mouth-female/v1.0/assets/3d-vh-f-mouth.glb`,
+      `${HRA_ORGANS}/larynx-female/v1.1/assets/3d-vh-f-larynx.glb`,
+    ]),
   }),
-  'hra-female': Object.freeze({
-    name: 'Human Reference Atlas, 3D reference organ: mouth, female, v1.0',
-    citation: HRA_CITATION('Female', '10.48539/HBM856.VZWZ.422'),
-    license: 'CC BY 4.0, HuBMAP Human Reference Atlas',
-    url: 'https://cdn.humanatlas.io/digital-objects/ref-organ/mouth-female/v1.0/assets/3d-vh-f-mouth.glb',
-    size: 103690760,
-    prefix: 'VH_F_',
-    units:
-      'metres; +x left, +y superior, +z anterior (Visible Human female body frame)',
-  }),
+  units: 'metres; +x body left, +y superior, +z anterior',
 });
 
-/** Parts of the HRA mouth that are read, by their node names after the prefix. */
-export const HRA_PARTS = Object.freeze({
-  upperTeeth: 'set_of_upper_jaw_teeth',
-  lowerTeeth: 'set_of_lower_jaw_teeth',
-  palate: 'hard_palate',
-  velum: 'mucosa_of_soft_palate',
-  tongueDorsum: 'dorsal_tongue',
-  tongueVentral: 'ventral_tongue',
-  tongueRoot: 'posterior_part_of_tongue',
-});
-
-/** File fetchAnatomy() writes for an HRA source. */
-export const HRA_FILE = 'mouth.glb';
+/**
+ * The HRA parts that reference-anatomy.js uses, in millimetres in the
+ * head frame (body left at -x).
+ * @param {'male'|'female'} sex
+ * @param {{fetchFn?: typeof fetch}} [options]
+ * @returns {Promise<{name: string, positions: Float64Array, indices: Uint32Array}[]>}
+ */
+export async function fetchHra(sex, options = {}) {
+  const names = (name) => Object.values(HRA_PARTS).some((test) => test(name));
+  const meshes = [];
+  for (const url of HRA.urls[sex]) {
+    meshes.push(
+      ...(await fetchGlbMeshes(url, { ...options, names, scale: 1000 }))
+    );
+  }
+  return mirrorX(meshes);
+}
 
 /**
  * BodyParts3D files of the permanent teeth (left and right of the body),
@@ -171,51 +171,22 @@ export function objPositions(text) {
 }
 
 /**
- * Parts of a fetched HRA mouth (HRA_PARTS keys), in millimetres in the
- * atlas frame.
- * @param {string} directory What fetchAnatomy() wrote.
- * @returns {Record<string, {positions: Float32Array, indices: Uint32Array}>}
- */
-export function loadHraMouth(directory) {
-  const { meshes } = readGlb(
-    new Uint8Array(readFileSync(join(directory, HRA_FILE)))
-  );
-  return Object.fromEntries(
-    meshes.map(({ name, positions, indices }) => [
-      name,
-      { positions: positions.map((value) => value * 1000), indices },
-    ])
-  );
-}
-
-/**
- * A fetched HRA mouth as mouthLandmarks() parts: the tongue's dorsum,
- * underside and root joined into one tongue.
- * @param {string} directory
- */
-export function hraMouthParts(directory) {
-  const { tongueDorsum, tongueVentral, tongueRoot, ...parts } =
-    loadHraMouth(directory);
-  return {
-    ...parts,
-    tongue: mergeMeshes([tongueDorsum, tongueVentral, tongueRoot]),
-  };
-}
-
-/**
  * Teeth of a fetched source, ready for toothLandmarks().
- * @param {'bodyparts3d'|'open-full-jaw'|'z-anatomy'|'hra-male'|'hra-female'} source
+ * @param {'bodyparts3d'|'open-full-jaw'|'z-anatomy'|'hra'} source 'hra'
+ *   splits the arches of either sex into teeth (see referenceTeeth).
  * @param {string} directory What fetchAnatomy() wrote.
  */
 export function loadDentition(source, directory) {
   const stl = (file) => parseStl(new Uint8Array(readFileSync(file))).positions;
   const teeth = [];
-  if (HRA_MOUTH[source]) {
-    const parts = loadHraMouth(directory);
-    return [
-      ...numberTeeth(connectedPieces(parts.upperTeeth), 'upper'),
-      ...numberTeeth(connectedPieces(parts.lowerTeeth), 'lower'),
-    ];
+  if (source === 'hra') {
+    const meshes = readdirSync(directory)
+      .filter((file) => file.endsWith('.stl'))
+      .map((file) => ({
+        name: basename(file, '.stl'),
+        ...parseStl(new Uint8Array(readFileSync(join(directory, file)))),
+      }));
+    return referenceTeeth(referenceParts(meshes));
   }
   if (source === 'open-full-jaw') {
     for (let number = 1; number <= 32; number++) {
@@ -271,51 +242,10 @@ async function fetchMembers(url, size, wanted, output) {
 }
 
 /**
- * Read the HRA_PARTS of a remote HRA mouth with range requests (the JSON
- * and only the accessors those parts use, about a third of the file) and
- * write them, named by their HRA_PARTS keys, as one glTF binary.
- * @param {{url: string, prefix: string}} atlas An HRA_MOUTH entry.
- * @param {string} output
- * @param {(url: string, start: number, end: number) => Promise<Buffer>}
- *   [fetcher] bytes [start, end) of a URL, as fetchRange() reads them.
- */
-export async function fetchHraMouth(atlas, output, fetcher = fetchRange) {
-  const header = await fetcher(atlas.url, 0, GLB_HEADER_BYTES);
-  const jsonLength = glbJsonLength(new Uint8Array(header));
-  const json = JSON.parse(
-    (await fetcher(atlas.url, GLB_HEADER_BYTES, GLB_HEADER_BYTES + jsonLength))
-      .toString('utf8')
-      .trimEnd()
-  );
-  const names = Object.values(HRA_PARTS).map((part) => atlas.prefix + part);
-  const binary = glbBinaryOffset(jsonLength);
-  const spans = new Map();
-  for (const accessor of meshAccessors(json, { names })) {
-    const { start, end } = accessorSpan(json, accessor);
-    spans.set(
-      accessor,
-      new Uint8Array(await fetcher(atlas.url, binary + start, binary + end))
-    );
-  }
-  const keys = Object.fromEntries(
-    Object.entries(HRA_PARTS).map(([key, part]) => [atlas.prefix + part, key])
-  );
-  const meshes = gltfMeshes(json, (accessor) => spans.get(accessor), {
-    names,
-  }).map((mesh) => ({ ...mesh, name: keys[mesh.name] }));
-  mkdirSync(output, { recursive: true });
-  writeFileSync(
-    join(output, HRA_FILE),
-    meshesToGlb(meshes, { scale: 1, generator: atlas.name })
-  );
-  return [HRA_FILE];
-}
-
-/**
  * Download the teeth (and, for Z-Anatomy, the atlas file) of a source.
- * @param {'bodyparts3d'|'open-full-jaw'|'z-anatomy'|'hra-male'|'hra-female'} source
+ * @param {'bodyparts3d'|'open-full-jaw'|'z-anatomy'|'hra'} source
  * @param {string} output
- * @param {{patients?: number[]}} [options]
+ * @param {{patients?: number[], sex?: 'male'|'female'}} [options]
  * @returns {Promise<string[]>} Files written.
  */
 export async function fetchAnatomy(source, output, options = {}) {
@@ -350,8 +280,16 @@ export async function fetchAnatomy(source, output, options = {}) {
     }
     return written;
   }
-  if (HRA_MOUTH[source]) {
-    return fetchHraMouth(HRA_MOUTH[source], output);
+  if (source === 'hra') {
+    mkdirSync(output, { recursive: true });
+    const meshes = await fetchHra(options.sex ?? 'male');
+    for (const mesh of meshes) {
+      writeFileSync(
+        join(output, `${mesh.name}.stl`),
+        meshesToStl([mesh], { header: `${HRA.name}, ${HRA.license}` })
+      );
+    }
+    return meshes.map((mesh) => `${mesh.name}.stl`);
   }
   if (source === 'z-anatomy') {
     return fetchMembers(
@@ -409,7 +347,8 @@ function option(name) {
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const [source, output] = process.argv.slice(2);
   const patients = option('patients')?.split(',').map(Number);
-  const files = await fetchAnatomy(source, output, { patients });
+  const sex = option('sex');
+  const files = await fetchAnatomy(source, output, { patients, sex });
   files.forEach((file) => console.log(join(output, file)));
   const blender = option('blender') ?? process.env.BLENDER;
   if (source === 'z-anatomy' && blender) {

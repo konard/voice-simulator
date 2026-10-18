@@ -457,11 +457,11 @@
       }
     },
     "hra-male": {
-      "name": "Human Reference Atlas, 3D reference organ: mouth, male, v1.0",
-      "citation": "Schlehlein H (2023) 3D Reference Organ for Mouth, Male, v1.0. Human Reference Atlas, HuBMAP. doi:10.48539/HBM568.RFGM.978. Built on the Visible Human Project: Ackerman MJ (1998) The Visible Human Project. Proceedings of the IEEE 86(3), 504-511. doi:10.1109/5.662875",
-      "license": "CC BY 4.0, HuBMAP Human Reference Atlas",
+      "name": "HuBMAP Human Reference Atlas 3D reference organs (Visible Human), male",
+      "citation": "Schlehlein H, Herr BW II, Quardokus EM, Bueckle A, Börner K (2024) HuBMAP CCF 3D Reference Object Library; mouth and larynx: Schlehlein H (2024), Human Reference Atlas, doi:10.48539/HBM568.RFGM.978",
+      "license": "CC BY 4.0, HuBMAP",
+      "units": "millimetres; head frame: +x right, +y up, +z forward",
       "source": "https://cdn.humanatlas.io/digital-objects/ref-organ/mouth-male/v1.0/assets/3d-vh-m-mouth.glb",
-      "units": "metres; +x left, +y superior, +z anterior (Visible Human male body frame)",
       "notes": "One mesh per arch, split into its connected teeth (crown and root). The Visible Human cadaver lies with the incisal edges about 2 mm apart vertically, so overjet and overbite are not occlusal values. The female dentition is the male one scaled up by about 1.1, not an independent sample.",
       "measures": {
         "upper": {
@@ -485,31 +485,31 @@
       }
     },
     "hra-female": {
-      "name": "Human Reference Atlas, 3D reference organ: mouth, female, v1.0",
-      "citation": "Schlehlein H (2023) 3D Reference Organ for Mouth, Female, v1.0. Human Reference Atlas, HuBMAP. doi:10.48539/HBM856.VZWZ.422. Built on the Visible Human Project: Ackerman MJ (1998) The Visible Human Project. Proceedings of the IEEE 86(3), 504-511. doi:10.1109/5.662875",
-      "license": "CC BY 4.0, HuBMAP Human Reference Atlas",
+      "name": "HuBMAP Human Reference Atlas 3D reference organs (Visible Human), female",
+      "citation": "Schlehlein H, Herr BW II, Quardokus EM, Bueckle A, Börner K (2024) HuBMAP CCF 3D Reference Object Library; mouth and larynx: Schlehlein H (2024), Human Reference Atlas, doi:10.48539/HBM568.RFGM.978",
+      "license": "CC BY 4.0, HuBMAP",
+      "units": "millimetres; head frame: +x right, +y up, +z forward",
       "source": "https://cdn.humanatlas.io/digital-objects/ref-organ/mouth-female/v1.0/assets/3d-vh-f-mouth.glb",
-      "units": "metres; +x left, +y superior, +z anterior (Visible Human female body frame)",
       "notes": "One mesh per arch, split into its connected teeth (crown and root). The Visible Human cadaver lies with the incisal edges about 2 mm apart vertically, so overjet and overbite are not occlusal values. The female dentition is the male one scaled up by about 1.1, not an independent sample.",
       "measures": {
         "upper": {
-          "widths": [7.26, 6.61, 7.01, 6.77, 6.62, 10.38, 9.76],
-          "thicknesses": [5.85, 5.53, 6.66, 9.25, 10.26, 12.11, 11.3],
-          "intercanine": 33.75,
-          "intermolar": 46.9,
+          "widths": [7.26, 6.61, 7.01, 6.77, 6.62, 10.38, 9.75],
+          "thicknesses": [5.85, 5.53, 6.66, 9.25, 10.26, 12.11, 11.31],
+          "intercanine": 33.74,
+          "intermolar": 46.87,
           "depth": 38.73,
-          "length": 108.81
+          "length": 108.79
         },
         "lower": {
           "widths": [4.43, 5.34, 6.72, 7.22, 7.56, 11.67, 12.49],
           "thicknesses": [4.68, 4.67, 6.58, 7.8, 8.43, 11.18, 11.14],
           "intercanine": 26.08,
-          "intermolar": 47.08,
-          "depth": 23.62,
+          "intermolar": 47.09,
+          "depth": 23.61,
           "length": 110.85
         },
-        "overjet": -0.67,
-        "overbite": -3.99
+        "overjet": -0.66,
+        "overbite": -3.98
       }
     }
   }

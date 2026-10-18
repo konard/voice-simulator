@@ -40,8 +40,11 @@ a pressure wave travelling through the 3D shape of a parametric low-poly head
 - **Anatomy checks**: `scripts/compare-anatomy.mjs` renders the model next
   to MRI vocal tracts and measures their agreement on midsagittal, coronal,
   axial and oblique cuts; `scripts/fetch-dvtd.mjs` and
-  `scripts/fetch-anatomy.mjs` fetch MRI tracts and segmented teeth just in
-  time (see [the issue 9 case study](docs/case-studies/issue-9/README.md)).
+  `scripts/fetch-anatomy.mjs` fetch MRI tracts, segmented teeth and the
+  HuBMAP Visible Human mouth and larynx just in time, and
+  `scripts/compare-hra.mjs` cuts the model and the HuBMAP organs like MRI
+  slices and compares ten key points after a rigid fit (see
+  [the issue 9 case study](docs/case-studies/issue-9/README.md)).
 - **Teeth and piriform fossae in the acoustics**: the incisors narrow the
   tract and turn the frication jet into a sibilant source; the piriform
   fossae add their side-branch antiresonance in both solvers, the

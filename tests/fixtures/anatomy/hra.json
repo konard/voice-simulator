@@ -1,0 +1,48 @@
+{
+  "description": "Midsagittal key points (mm) of the HuBMAP HRA reference mouth and larynx, measured by scripts/build-hra-reference.mjs with src/geometry/reference-anatomy.js (numbers only). Head frame: +y up, +z forward, x on the reference midline; each body keeps its own origin, so compare after a rigid fit. incisorLean: sagittal lean (degrees, positive with the top forward) of the long axis of each jaw's central incisors; labialLean: lean of their crowns' labial faces.",
+  "source": "HuBMAP Human Reference Atlas 3D reference organs (Visible Human)",
+  "citation": "Schlehlein H, Herr BW II, Quardokus EM, Bueckle A, Börner K (2024) HuBMAP CCF 3D Reference Object Library; mouth and larynx: Schlehlein H (2024), Human Reference Atlas, doi:10.48539/HBM568.RFGM.978",
+  "license": "CC BY 4.0, HuBMAP",
+  "urls": {
+    "male": [
+      "https://cdn.humanatlas.io/digital-objects/ref-organ/mouth-male/v1.0/assets/3d-vh-m-mouth.glb",
+      "https://cdn.humanatlas.io/digital-objects/ref-organ/larynx-male/v1.1/assets/3d-vh-m-larynx.glb"
+    ],
+    "female": [
+      "https://cdn.humanatlas.io/digital-objects/ref-organ/mouth-female/v1.0/assets/3d-vh-f-mouth.glb",
+      "https://cdn.humanatlas.io/digital-objects/ref-organ/larynx-female/v1.1/assets/3d-vh-f-larynx.glb"
+    ]
+  },
+  "male": {
+    "upperIncisor": [0.39, 725.92, 103.11],
+    "lowerIncisor": [0.39, 721.71, 103.02],
+    "upperFirstMolar": [0.39, 731.5, 68.8],
+    "upperSecondMolar": [0.39, 735.65, 61.14],
+    "staphylion": [0.39, 753.07, 62.7],
+    "palateVault": [0.39, 745.23, 69.36],
+    "uvula": [0.39, 723.16, 33.56],
+    "tongueTip": [0.39, 723.54, 103.68],
+    "tongueDorsum": [0.39, 744.01, 70.43],
+    "glottis": [0.39, 651.15, 47.65]
+  },
+  "female": {
+    "upperIncisor": [2.43, 699.4, 34.07],
+    "lowerIncisor": [2.43, 695.24, 34.04],
+    "upperFirstMolar": [2.43, 704.68, -4.38],
+    "upperSecondMolar": [2.43, 709.12, -13.13],
+    "staphylion": [2.43, 729.06, -12.42],
+    "palateVault": [2.43, 720.52, -3.87],
+    "uvula": [2.43, 705.44, -42.31],
+    "tongueTip": [2.43, 697.09, 34.75],
+    "tongueDorsum": [2.43, 718.57, -6.54],
+    "glottis": [2.43, 626.81, -16.95]
+  },
+  "incisorLean": {
+    "male": { "upper": -22.74, "lower": 32.76 },
+    "female": { "upper": -24.41, "lower": 30.85 }
+  },
+  "labialLean": {
+    "male": { "upper": -11.52, "lower": 24.34 },
+    "female": { "upper": -21.22, "lower": 19.95 }
+  }
+}
