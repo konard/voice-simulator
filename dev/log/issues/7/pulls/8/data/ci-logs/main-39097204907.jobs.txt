@@ -1,0 +1,7 @@
+Dependency graph enabled	failure	2026-10-18T04:28:24Z	2026-10-18T04:28:30Z
+CodeQL (actions)	success	2026-10-18T04:28:24Z	2026-10-18T04:29:06Z
+Audit npm lock (examples/universal-app)	success	2026-10-18T04:28:24Z	2026-10-18T04:28:37Z
+CodeQL (javascript-typescript)	success	2026-10-18T04:28:24Z	2026-10-18T04:30:07Z
+Audit npm lock (.)	success	2026-10-18T04:28:24Z	2026-10-18T04:28:32Z
+Dependency Review	skipped	2026-10-18T04:28:22Z	2026-10-18T04:28:22Z
+Pipeline Status	failure	2026-10-18T04:30:10Z	2026-10-18T04:30:18Z
