@@ -6,25 +6,25 @@ male: key point distance after a rigid fit (mm)
   key point          dental fit  all-point fit
   upperIncisor              2.4            5.0
   lowerIncisor              4.1            5.5
-  upperFirstMolar           2.9            7.4
+  upperFirstMolar           2.9            7.5
   upperSecondMolar          2.4            4.8
-  staphylion               16.2           13.2
-  palateVault               2.7            6.2
-  uvula                     4.4            7.4
+  staphylion               16.2           13.0
+  palateVault               2.7            6.4
+  uvula                     5.8            8.0
   tongueTip                 9.2            6.2
-  tongueDorsum              7.4            5.5
-  glottis                  21.0           11.2
-  rms (fitted)             2.96           7.71
+  tongueDorsum              7.4            5.4
+  glottis                  21.0           11.4
+  rms (fitted)             2.96           7.78
 male: outline distance per cut and part after the dental fit (mm)
   MIDSAGITTAL         upperTeeth     1.55
   MIDSAGITTAL         lowerTeeth     3.29
   MIDSAGITTAL         palate         3.43
-  MIDSAGITTAL         velum          2.77
+  MIDSAGITTAL         velum          2.76
   MIDSAGITTAL         tongue         4.41
   PARASAGITTAL 15 MM  upperTeeth     2.50
   PARASAGITTAL 15 MM  lowerTeeth     1.95
   PARASAGITTAL 15 MM  palate         4.22
-  PARASAGITTAL 15 MM  velum          3.83
+  PARASAGITTAL 15 MM  velum          3.68
   PARASAGITTAL 15 MM  tongue         5.87
   CORONAL AT M1       upperTeeth     2.95
   CORONAL AT M1       lowerTeeth     3.31
@@ -32,35 +32,35 @@ male: outline distance per cut and part after the dental fit (mm)
   CORONAL AT M1       tongue         3.62
   AXIAL CROWNS        upperTeeth     2.25
   AXIAL CROWNS        palate         9.90
-  AXIAL CROWNS        velum          2.05
+  AXIAL CROWNS        velum          1.99
   AXIAL CROWNS        tongue         5.70
   AXIAL PALATE        upperTeeth     7.17
   AXIAL PALATE        palate         9.18
-  AXIAL PALATE        velum          1.49
+  AXIAL PALATE        velum          1.53
 
 female: key point distance after a rigid fit (mm)
   key point          dental fit  all-point fit
-  upperIncisor              5.0            6.5
-  lowerIncisor              6.7            7.8
-  upperFirstMolar           4.3            6.4
-  upperSecondMolar          3.2            4.2
-  staphylion               14.6           13.8
-  palateVault               5.5            5.0
-  uvula                    17.9           19.6
-  tongueTip                11.3           10.9
+  upperIncisor              5.0            6.4
+  lowerIncisor              6.7            7.7
+  upperFirstMolar           4.3            6.6
+  upperSecondMolar          3.2            4.3
+  staphylion               14.6           13.5
+  palateVault               5.5            5.1
+  uvula                    18.8           20.2
+  tongueTip                11.3           10.8
   tongueDorsum             12.0           11.4
-  glottis                  22.7           17.6
-  rms (fitted)             5.07          11.48
+  glottis                  22.7           18.1
+  rms (fitted)             5.07          11.64
 female: outline distance per cut and part after the dental fit (mm)
   MIDSAGITTAL         upperTeeth     1.81
   MIDSAGITTAL         lowerTeeth     4.30
   MIDSAGITTAL         palate         4.01
-  MIDSAGITTAL         velum          7.38
+  MIDSAGITTAL         velum          7.64
   MIDSAGITTAL         tongue         7.19
   PARASAGITTAL 15 MM  upperTeeth     1.88
   PARASAGITTAL 15 MM  lowerTeeth     3.00
   PARASAGITTAL 15 MM  palate         6.40
-  PARASAGITTAL 15 MM  velum          6.20
+  PARASAGITTAL 15 MM  velum          6.41
   PARASAGITTAL 15 MM  tongue         9.53
   CORONAL AT M1       upperTeeth     3.26
   CORONAL AT M1       lowerTeeth     2.92
@@ -68,8 +68,8 @@ female: outline distance per cut and part after the dental fit (mm)
   CORONAL AT M1       tongue         4.29
   AXIAL CROWNS        upperTeeth     1.59
   AXIAL CROWNS        palate         7.52
-  AXIAL CROWNS        velum          4.72
+  AXIAL CROWNS        velum          4.76
   AXIAL CROWNS        tongue         6.12
   AXIAL PALATE        upperTeeth     6.67
   AXIAL PALATE        palate         8.06
-  AXIAL PALATE        velum          5.73
+  AXIAL PALATE        velum          5.92
