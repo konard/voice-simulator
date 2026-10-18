@@ -163,6 +163,26 @@ export {
   anatomyMeshes,
 } from './geometry/anatomy.js';
 
+// Mouths read as MRI is read, from any glTF (character heads, the Human
+// Reference Atlas), and compared key point for key point.
+export { readGlb, gltfMeshes, meshAccessors } from './geometry/gltf-read.js';
+export {
+  connectedPieces,
+  numberTeeth,
+  sagittalLean,
+} from './geometry/tooth-row.js';
+export {
+  MOUTH_LANDMARKS,
+  SLICE_THICKNESS,
+  compareLandmarks,
+  mergeMeshes,
+  midlineOf,
+  modelMouthParts,
+  mouthLandmarks,
+  mouthMeasures,
+  slabPoints,
+} from './geometry/mouth-landmarks.js';
+
 // Voice presets and matching (issue 5)
 export {
   HEAD_PRESETS,

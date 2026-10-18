@@ -5,7 +5,8 @@
 // downloaded data; the meshes themselves are never committed.
 //
 // Usage: node scripts/build-dental-reference.mjs [--bodyparts3d DIR]
-//          [--z-anatomy DIR] [--open-full-jaw DIR] [--out FILE]
+//          [--z-anatomy DIR] [--open-full-jaw DIR] [--hra-male DIR]
+//          [--hra-female DIR] [--out FILE]
 //   DIR is what fetch-anatomy.mjs wrote for that source (for Z-Anatomy, the
 //   stl directory of the Blender export; for Open-Full-Jaw, the directory
 //   holding Patient_N).
@@ -16,6 +17,7 @@ import prettier from 'prettier';
 import { archMeasures, toothLandmarks } from '../src/geometry/dental.js';
 import {
   BODYPARTS3D,
+  HRA_MOUTH,
   OPEN_FULL_JAW,
   Z_ANATOMY,
   loadDentition,
@@ -50,7 +52,7 @@ function rounded(measures) {
 
 /**
  * Arch measures of one fetched source, rounded to 0.01 mm.
- * @param {'bodyparts3d'|'open-full-jaw'|'z-anatomy'} source
+ * @param {'bodyparts3d'|'open-full-jaw'|'z-anatomy'|'hra-male'|'hra-female'} source
  * @param {string} directory
  */
 export function measureSource(source, directory) {
@@ -146,6 +148,17 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
       statistics: populationStatistics(Object.values(patients)),
       patients,
     };
+  }
+  for (const source of Object.keys(HRA_MOUTH)) {
+    const directory = option(source);
+    if (directory) {
+      fixture.sources[source] = {
+        ...describe(HRA_MOUTH[source]),
+        notes:
+          'One mesh per arch, split into its connected teeth (crown and root). The Visible Human cadaver lies with the incisal edges about 2 mm apart vertically, so overjet and overbite are not occlusal values. The female dentition is the male one scaled up by about 1.1, not an independent sample.',
+        measures: measureSource(source, directory),
+      };
+    }
   }
   // Formatted as the committed fixture is.
   const text = await prettier.format(JSON.stringify(fixture), {
