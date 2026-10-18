@@ -1,0 +1,1 @@
+[{"body":"## CodeQL / Regular expression injection\n\nThis regular expression is constructed from a [command-line argument](1).\n\n[Show more details](https://github.com/konard/voice-simulator/security/code-scanning/2)","created_at":"2026-10-18T10:18:37Z","path":"scripts/fetch-dvtd.mjs","user":"github-advanced-security[bot]"}]

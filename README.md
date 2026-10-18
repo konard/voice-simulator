@@ -31,7 +31,16 @@ a pressure wave travelling through the 3D shape of a parametric low-poly head
     the default (`studio` tier).
 - **Low-poly head model** with only acoustically relevant detail (tract tube,
   nasal tube, lips, jaw, skin hull, teeth, tongue, hard and soft palate),
-  four mesh LODs and OBJ export.
+  four mesh LODs and OBJ, STL and glTF export (`npm run export:model`, opens
+  in Blender). The tract bends like the MRI tracts of the Dresden Vocal
+  Tract Dataset, the upper and lower lips outline the acoustic opening, the
+  teeth lie on a dental arch fitted to 17 segmented CBCT scans and the jaw
+  opens per phoneme as measured by MRI.
+- **Anatomy checks**: `scripts/compare-anatomy.mjs` renders the model next
+  to MRI vocal tracts and measures their agreement on midsagittal, coronal,
+  axial and oblique cuts; `scripts/fetch-dvtd.mjs` and
+  `scripts/fetch-anatomy.mjs` fetch MRI tracts and segmented teeth just in
+  time (see [the issue 9 case study](docs/case-studies/issue-9/README.md)).
 - **Teeth and piriform fossae in the acoustics**: the incisors narrow the
   tract and turn the frication jet into a sibilant source; the piriform
   fossae add their side-branch antiresonance in both solvers, the
@@ -42,7 +51,9 @@ a pressure wave travelling through the 3D shape of a parametric low-poly head
   pauses, wall loss, nasal coupling, frication level, ...). Every page
   refresh starts from a new random seed; `?seed=` makes it reproducible.
 - **Male, female and child presets** for random heads (`preset`), with f0
-  and formants in the ranges measured by Hillenbrand et al. (1995).
+  and formants fitted to the men's, women's and children's means of
+  Hillenbrand et al. (1995), and a posterior glottal chink (`glottalChink`)
+  that gives women and children their measured spectral tilt.
 - **Copy a voice**: `matchVoice` analyses a recording (f0, formants,
   vocal-tract length, H1-H2, HNR, speaking rate) and searches for the head
   that sounds most like it; in the app, upload a file or record yourself.
@@ -55,6 +66,8 @@ a pressure wave travelling through the 3D shape of a parametric low-poly head
   resampling (`encodeAudio`, `decodeAudio`, `resample`).
 - **Automatic LODs** for audio and visuals: a startup benchmark plus a
   runtime governor keep about 20% headroom (target load 80%).
+- **WebGPU**: the 3D solver can run on the GPU (`device` option), and the
+  app uses it when the browser has WebGPU, with the CPU as fallback.
 - **Modes**: sound only, 3D only, or both, with optional jaw/lip animation and
   a live pressure-field view.
 - **Delivery**: GitHub Pages web app, JavaScript library, CLI, HTTP API with
@@ -64,7 +77,10 @@ The full research, the list of requirements and the plan behind each of them
 are in [docs/case-studies/issue-1](docs/case-studies/issue-1/README.md); the
 second round (precision, anatomy, listening, presets, voice matching,
 formats, linguistics) is in
-[docs/case-studies/issue-5](docs/case-studies/issue-5/README.md).
+[docs/case-studies/issue-5](docs/case-studies/issue-5/README.md), and the
+third (full 3D by default, anatomy against MRI and segmented scans, female
+and child voices, WebGPU) in
+[docs/case-studies/issue-9](docs/case-studies/issue-9/README.md).
 
 ## Quick Start
 
@@ -140,6 +156,16 @@ for (const word of result.timeline.words) {
 for await (const chunk of synthesizeStream('नमस्ते', { tier: 'low' })) {
   play(chunk);
 }
+```
+
+On the GPU, pass a WebGPU device and render asynchronously; the GPU
+follows the CPU kernel within 1e-5 relative RMS error:
+
+```js
+import { requestGpuDevice, synthesizeAsync } from 'voice-simulator';
+
+const device = await requestGpuDevice(); // null without WebGPU
+const gpuResult = await synthesizeAsync('Hello world', { device });
 ```
 
 Lower-level building blocks are exported too: `planUtterance`,
@@ -229,6 +255,14 @@ as soon as the rest of the utterance is predicted to be ready before the
 player reaches it, so the voice never breaks up. Choose `--tier medium`
 (or `tier: 'medium'`, or the tier menu in the app) for the real-time 1D
 waveguide, or "auto" in the app to let the benchmark pick.
+
+The 3D tiers also run on the GPU: give `synthesizeAsync`,
+`renderPlanAsync` or `new Fdtd3d` a WebGPU `device` (`requestGpuDevice()`
+finds one). One workgroup runs a whole chunk of steps per dispatch, so the
+field stays on the GPU and only the output samples come back. The web app
+uses WebGPU whenever the browser offers it (Acoustics → Simulation turns it
+off) and says the utterance again on the CPU if the GPU fails; the audio
+meter shows `studio · fdtd3d · GPU` or `studio · fdtd3d`.
 
 The web app and `voice-simulator benchmark` pick the most detailed tier
 whose measured load stays under 80%. The benchmark does not run tiers whose
