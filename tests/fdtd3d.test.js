@@ -23,7 +23,11 @@ import { SPEED_OF_SOUND, tubeFormants } from '../src/acoustics/transfer.js';
 import { planUtterance } from '../src/articulation/plan.js';
 import { vowelTarget } from '../src/articulation/phones.js';
 import { noseShape, tractShape } from '../src/articulation/tract-shape.js';
-import { DEFAULT_HEAD, presetHeadConfig } from '../src/head-config.js';
+import {
+  DEFAULT_HEAD,
+  presetHeadConfig,
+  randomHeadConfig,
+} from '../src/head-config.js';
 import { VOWEL_CORRECTIONS_3D } from '../src/articulation/vowel-calibration.js';
 import { HILLENBRAND } from '../src/articulation/vowel-norms.js';
 import { STORY_FEATURES } from '../src/articulation/vowel-space.js';
@@ -153,6 +157,27 @@ describe('voxel model', () => {
       // A narrow neck would turn the pouch into a Helmholtz resonator.
       expect(opening).toBeGreaterThan(0.4 * sinus.area);
     }
+  });
+
+  it('keeps the nostrils from covering the mouth on a coarse grid', () => {
+    // On this head the widened end of the nose tube reached below the upper
+    // lip, sealed the incisor slot and left /i/ without its F1.
+    const head = randomHeadConfig('ci-84');
+    const voxels = buildVoxelModel(head, { dx: DX });
+    const shape = tractShape(
+      { ...vowelTarget({ phoneme: getPhoneme('i') }), rhotic: 0 },
+      head,
+      { vowelCorrections: VOWEL_CORRECTIONS_3D }
+    );
+    const solver = new Fdtd3d({ model: voxels });
+    solver.setNose(noseShape(head).areas);
+    solver.setShape(shape.areas, 0, shape.velumIndex, shape.teeth);
+    const [f1] = responsePeaks(
+      solver,
+      1 / solver.stepDuration(shape),
+      0.1
+    ).filter((value) => value > 150);
+    expect(f1).toBeLessThan(600);
   });
 
   it('gets finer with smaller cells', () => {
