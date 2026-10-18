@@ -1,0 +1,3 @@
+male    oraleStaphylion 47.4  nasalSpineBehindMolars 11.9  vaultHeightFirstMolars 13.8  vaultHeightSecondMolars 11.3  velarLength 35.1  velarThickness 10.5
+female  oraleStaphylion 44.5  nasalSpineBehindMolars 8.6  vaultHeightFirstMolars 10.7  vaultHeightSecondMolars 7.9  velarLength 30.2  velarThickness 9.0
+child   oraleStaphylion 36.9  nasalSpineBehindMolars 0.7  vaultHeightFirstMolars 8.4  vaultHeightSecondMolars 4.8  velarLength 28.2  velarThickness 8.4

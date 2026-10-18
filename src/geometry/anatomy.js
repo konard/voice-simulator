@@ -6,10 +6,13 @@
  * dorsum is the lower wall of the tract tube and the velum opens with the
  * velopharyngeal port.
  *
- * Sizes follow dental and anatomical references: crown widths and heights
- * of the permanent teeth (Wheeler's Dental Anatomy), a parabolic dental
- * arch about 5 cm wide between the molars, a palatal vault 1-1.5 cm above
- * the occlusal plane and a soft palate about 3.5 cm long.
+ * Sizes follow dental and anatomical references: crown widths and
+ * thicknesses of the permanent teeth measured on the Open-Full-Jaw scans,
+ * crown heights from Wheeler's Dental Anatomy, a
+ * beta-function dental arch fitted to the same scans, a palatal vault
+ * 1-1.5 cm above the occlusal plane and a soft palate about 3.5 cm long.
+ * The palate and velum follow the upper wall of the rest tract, whose bend
+ * comes from the MRI tracts of the Dresden Vocal Tract Dataset.
  */
 
 import { REST_GAP, incisorDepth } from '../articulation/teeth.js';
@@ -82,10 +85,21 @@ const OVERJET = 0.25;
  */
 const OCCLUSAL_TILT = 0.17;
 /**
- * Hard palate, incisors to posterior nasal spine, as a share of the oral
- * tract (bend to lips): about 4.5 of 8 cm in MRI midsagittal sections.
+ * Posterior nasal spine behind the middle of the upper second molars (cm):
+ * 0.9 cm on the Z-Anatomy skull, which puts the orale-staphylion length
+ * of the presets near Tomaszewska et al. (2014).
  */
-const HARD_PALATE = 0.55;
+const PNS_BEHIND_MOLARS = 1;
+/** Soft palate from the nasal spine to the velopharyngeal port, at least (cm). */
+const VELAR_KNEE = 1;
+/**
+ * Velar length (hard palate to the tip of the uvula, along its middle) and
+ * greatest thickness of adults on MRI (Perry et al. 2014: 35.7 and
+ * 10.7 mm), scaled by the tract length from this reference (cm).
+ */
+const VELUM_LENGTH = 3.57;
+const VELUM_THICKNESS = 1.07;
+const REFERENCE_TRACT = 17.5;
 /** How far the sides of the palatal vault reach below the airway (cm). */
 const VAULT_DROP = 0.25;
 /** Palate edge inside the middle of the upper crowns (cm). */
@@ -500,10 +514,33 @@ export function tongueMesh(head, options = {}) {
   });
 }
 
-/** Distance along the rest tract of the posterior nasal spine (cm). */
+/** Distance along the rest tract of the velopharyngeal port (cm). */
+function portDistance(frame) {
+  const { velumIndex, areas, length } = frame.shape;
+  return ((velumIndex + 0.5) / areas.length) * length;
+}
+
+/**
+ * Distance along the rest tract of the posterior nasal spine (cm):
+ * PNS_BEHIND_MOLARS behind the upper second molars, but not closer to
+ * the velopharyngeal port than VELAR_KNEE.
+ */
 function palateBack(frame, config) {
-  const oral = (1 - config.pharynxRatio) * frame.layout.length;
-  return frame.start - HARD_PALATE * oral;
+  const arch = jawArch(config, 'upper');
+  const molar = arch.at(arch.total - arch.teeth.at(-1)[0] / 2).z;
+  const target = molar - PNS_BEHIND_MOLARS;
+  let low = Math.min(frame.start, portDistance(frame) + VELAR_KNEE);
+  let high = frame.start;
+  // The upper wall runs forward (+z) from the port to the incisors.
+  for (let iteration = 0; iteration < 30; iteration++) {
+    const middle = (low + high) / 2;
+    if (restSection(frame, middle).point[2] < target) {
+      low = middle;
+    } else {
+      high = middle;
+    }
+  }
+  return low;
 }
 
 /**
@@ -514,6 +551,8 @@ function palateBack(frame, config) {
  */
 function wallSlab(frame, from, to, sections, across, shape) {
   const columns = 2 * across + 1;
+  const free = shape.free ?? (() => 0);
+  const sagging = shape.sag ?? free;
   const rows = Array.from({ length: sections }, (_, row) => {
     const s = row / (sections - 1);
     return { s, ...restSection(frame, lerp(from, to, s)) };
@@ -523,8 +562,13 @@ function wallSlab(frame, from, to, sections, across, shape) {
     const oral = step < columns;
     const column = oral ? step : 2 * columns - 1 - step;
     const u = (2 * column) / (columns - 1) - 1;
-    const width = Math.max(major + 0.2, shape.width(s, point));
-    const sag = shape.sag?.(s) ?? 0;
+    // A part hanging free of the wall (the uvula) is only as wide as
+    // itself and sags off the wall by its thickness.
+    const width = Math.max(
+      (major + 0.2) * (1 - free(s)),
+      shape.width(s, point)
+    );
+    const sag = sagging(s) * shape.thickness(s);
     // The vault, or the airway's own wall where that is higher.
     const wall =
       minor * Math.sqrt(Math.max(0, 1 - (u * width) ** 2 / major ** 2));
@@ -568,10 +612,12 @@ export function palateMesh(head, options = {}) {
 }
 
 /**
- * Soft palate and uvula hanging from the back of the hard palate along
- * the upper wall of the tract to the velopharyngeal port. Raised (velum
- * 0) it closes the port; lowered (velum 1) it swings down about the
- * posterior nasal spine towards the tongue and opens it.
+ * Soft palate and uvula hanging from the back of the hard palate: along
+ * the upper wall of the tract to the velopharyngeal port, where it is
+ * thickest (the velar knee), then free of the wall down to the tip of
+ * the uvula, as long and thick as on MRI for the size of the head.
+ * Raised (velum 0) it closes the port; lowered (velum 1) it swings
+ * about the posterior nasal spine towards the tongue and opens it.
  * @param {Record<string, number>} head
  * @param {{lod?: number, velum?: number}} [options]
  */
@@ -579,23 +625,76 @@ export function velumMesh(head, options = {}) {
   const config = normalizeHeadConfig(head);
   const lod = ANATOMY_LODS[anatomyLod(options.lod)];
   const frame = mouthFrame(config);
-  const back = palateBack(frame, config);
-  const port =
-    ((frame.shape.velumIndex + 0.5) / frame.shape.areas.length) *
-    frame.shape.length;
+  const { back, end, shape } = cached(`velum ${JSON.stringify(config)}`, () =>
+    velumSpan(frame, config)
+  );
   const pivot = restSection(frame, back).point;
-  const tip = restSection(frame, port);
-  // Swing the tip away from the upper wall, towards the tongue.
+  const tip = restSection(frame, portDistance(frame));
+  // Swing the knee away from the upper wall, towards the tongue.
   const arm = [tip.point[1] - pivot[1], tip.point[2] - pivot[2]];
   const sign = -Math.sign(-arm[1] * tip.normal[1] + arm[0] * tip.normal[2]);
   const angle = sign * VELUM_DROP * clamp(options.velum ?? 0);
-  const scale = config.mouthWidth;
-  return wallSlab(frame, back, port, lod.velum, lod.across, {
-    width: (s) => lerp(1.5, 0.45, s ** 1.5) * scale,
-    thickness: (s) => lerp(0.9, 0.55, s),
-    sag: (s) => 0.35 * s ** 4,
+  return wallSlab(frame, back, end, lod.velum, lod.across, {
+    ...shape,
     place: (vertex) => rotateJaw(vertex, pivot, angle),
   });
+}
+
+/** Width, thickness and free part of a soft palate ending at `end`. */
+function velumShape(frame, config, back, end) {
+  const size = config.vocalTractLength / REFERENCE_TRACT;
+  const knee = (back - portDistance(frame)) / (back - end);
+  const free = (s) => smoothstep(knee, (1 + knee) / 2, s);
+  return {
+    // It leaves the wall gradually, from before the knee to the uvula.
+    sag: (s) => smoothstep(knee / 2, 1, s),
+    width: (s) => lerp(1.5, 0.45, free(s)) * config.mouthWidth,
+    thickness: (s) =>
+      VELUM_THICKNESS *
+      size *
+      (0.6 +
+        0.4 * Math.sin((Math.PI / 2) * Math.min(1, s / knee)) ** 2 -
+        0.4 * free(s)),
+    free,
+  };
+}
+
+/**
+ * Where along the rest tract the soft palate ends so that its middle,
+ * which runs outside the bend of the tract and sags off the wall, is
+ * VELUM_LENGTH long for the size of the head.
+ */
+function velumSpan(frame, config) {
+  const back = palateBack(frame, config);
+  const target = (VELUM_LENGTH * config.vocalTractLength) / REFERENCE_TRACT;
+  const middleLength = (end) => {
+    const shape = velumShape(frame, config, back, end);
+    let length = 0;
+    let last = null;
+    for (let row = 0; row <= 16; row++) {
+      const s = row / 16;
+      const { point, normal, minor, shift } = restSection(
+        frame,
+        lerp(back, end, s)
+      );
+      const height = shift + minor + shape.thickness(s) * (0.5 - shape.sag(s));
+      const middle = [1, 2].map((axis) => point[axis] + normal[axis] * height);
+      length += last ? Math.hypot(middle[0] - last[0], middle[1] - last[1]) : 0;
+      last = middle;
+    }
+    return length;
+  };
+  let low = Math.max(0, back - target);
+  let high = Math.max(low, portDistance(frame) - 0.1);
+  for (let iteration = 0; iteration < 24; iteration++) {
+    const middle = (low + high) / 2;
+    if (middleLength(middle) > target) {
+      low = middle;
+    } else {
+      high = middle;
+    }
+  }
+  return { back, end: low, shape: velumShape(frame, config, back, low) };
 }
 
 /**
