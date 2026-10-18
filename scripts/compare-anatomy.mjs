@@ -34,6 +34,7 @@ import {
   pasteRaster,
   drawLine,
 } from '../src/geometry/render.js';
+import { tractAreaFunction } from '../src/geometry/dvtd.js';
 import { parseStl } from '../src/geometry/stl.js';
 import { planeBasis } from '../src/geometry/tract-analysis.js';
 import { presetHeadConfig } from '../src/head-config.js';
@@ -253,11 +254,13 @@ function main() {
     const tract = parseStl(
       gunzipSync(readFileSync(join(FIXTURES, entry.file)))
     );
+    const measured = tractAreaFunction(tract);
     const model = modelTract(
       presetHeadConfig(SUBJECTS[subject]),
-      DVTD_VOWELS[sound]
+      DVTD_VOWELS[sound],
+      { length: measured.length / 10 }
     );
-    const comparison = compareWithDvtd(model, tract);
+    const comparison = compareWithDvtd(model, tract, { measured });
     const name = `${subject}-${sound}`;
     const label = `${name.toUpperCase()} ${SUBJECTS[subject].toUpperCase()} ${tag.toUpperCase()}`;
     writeFileSync(

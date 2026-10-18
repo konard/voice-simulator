@@ -30,15 +30,20 @@ import { noseShape, tractShape } from '../articulation/tract-shape.js';
 import {
   INCISOR_THICKNESS,
   REST_GAP,
-  incisorDepth,
   teethWidth,
 } from '../articulation/teeth.js';
 import {
   headLandmarks,
+  incisorFrame,
   nasalCenterline,
   tractCenterline,
 } from '../geometry/centerline.js';
-import { headField, headMesh, sectionAxes } from '../geometry/mesh.js';
+import {
+  noseAxes,
+  headField,
+  headMesh,
+  sectionAxes,
+} from '../geometry/mesh.js';
 import { checkedNumber } from './room.js';
 import { sinusTubes } from './sinuses.js';
 import { normalizeHeadConfig } from '../head-config.js';
@@ -118,11 +123,11 @@ const TEETH_PULL = 1;
  * slices around the incisors: the flow converges on the slot, so the air
  * there gathers in line with it (the slot as at rest, see teethCells).
  */
-function teethPull(point, arc, teeth) {
+function teethPull(point, teeth) {
   if (!teeth) {
     return 0;
   }
-  const along = Math.abs(arc - teeth.centre) - teeth.reach;
+  const along = Math.abs(point[2] - teeth.plane) - teeth.reach;
   if (along >= TEETH_APPROACH) {
     return 0;
   }
@@ -209,9 +214,7 @@ function openingTable(cells, tract, dx, teeth) {
           // do not add to its cross-section.
           const inside = place.arc >= 0 && place.arc <= tract.length;
           place.arc = Math.min(tract.length, Math.max(0, place.arc));
-          const weight = Math.exp(
-            teethPull(point, place.arc, teeth) / TEETH_SOFTNESS
-          );
+          const weight = Math.exp(teethPull(point, teeth) / TEETH_SOFTNESS);
           values[at++] = weight;
           if (!inside) {
             continue;
@@ -302,7 +305,13 @@ function classifyPoint(point, tubes, dx) {
   for (const tube of tubes) {
     const place = locateInTube(point, tube, dx / 2);
     const { arc, radius } = place;
-    const inside = radius <= 1 && arc >= -dx / 2 && arc <= tube.length + dx / 2;
+    // A tube with a `front` (the lips) ends at that face plane even
+    // where its last section is tilted.
+    const inside =
+      radius <= 1 &&
+      arc >= -dx / 2 &&
+      arc <= tube.length + dx / 2 &&
+      !(point[2] > (tube.front ?? Infinity) + dx / 2);
     if (inside && (!found || radius < found.radius)) {
       found = {
         ...place,
@@ -662,27 +671,35 @@ function wallAdmittance(absorption) {
 }
 
 /**
- * Tract cells in the incisor slices. They become solid tooth or stay air
- * depending on the incisor gap (see Fdtd3d#applyTeeth). The upper incisal
- * edge is fixed to the skull; the lower edge drops with the jaw.
+ * Tract cells in the incisor slices: the grid slices across z through the
+ * incisor row, as the incisors are upright plates whatever the slope of
+ * the airway between them. They become solid tooth or stay air depending
+ * on the incisor gap (see Fdtd3d#applyTeeth). The upper incisal edge is
+ * fixed to the skull where the 3D model draws it (incisorFrame); the
+ * lower edge drops with the jaw.
  */
-function teethCells(cells, config, length, lips, dx) {
-  const centre = length - incisorDepth(config) - INCISOR_THICKNESS / 2;
+function teethCells(cells, config, layout, dx) {
+  const { centre, edge, plane } = incisorFrame(config, layout);
   const reach = Math.max(dx, INCISOR_THICKNESS) / 2;
   const members = [];
   const groups = [];
   cells.forEach((cell, index) => {
-    if (cell.kind === CELL_TRACT && Math.abs(cell.arc - centre) <= reach) {
+    if (
+      cell.kind === CELL_TRACT &&
+      cell.arc > centre - TEETH_APPROACH &&
+      Math.abs(cell.point[2] - plane) <= reach
+    ) {
       members.push(index);
-      groups.push(Math.round(cell.arc / dx));
+      groups.push(Math.round(cell.point[2] / dx));
     }
   });
   return {
     cells: Int32Array.from(members),
     groups: Int32Array.from(groups),
     centre,
+    plane,
     reach,
-    edge: lips[1] + REST_GAP / 2,
+    edge,
     width: teethWidth(config),
   };
 }
@@ -737,9 +754,10 @@ export function buildVoxelModel(head, options = {}) {
       velumDistance,
       length: nose.length,
     }),
-    () => sectionAxes(noseMax, 0.5, { ...config, pharynxRatio: 1 }),
+    () => noseAxes(noseMax),
     CELL_NOSE
   );
+  tract.front = headLandmarks(config).lips[2];
   const sinuses = sinusTubes(tract, config, dx, options);
   const tubes = [
     tract,
@@ -760,7 +778,7 @@ export function buildVoxelModel(head, options = {}) {
     entries: tubes.map((tube) => tube.entry ?? 0),
   };
   const links = connect(grid, collected, context);
-  const teeth = teethCells(collected.cells, config, length, lips, dx);
+  const teeth = teethCells(collected.cells, config, tract.layout, dx);
   const open = openFaces(grid, collected, field, dx);
   return {
     dx,

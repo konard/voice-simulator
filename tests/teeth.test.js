@@ -133,13 +133,21 @@ describe('teeth voxels', () => {
     return Array.from(model.teeth.cells).filter((cell) => solver.solid[cell]);
   }
 
-  it('marks tract cells behind the lips as teeth', () => {
+  it('marks tract cells in the incisor plane behind the lips as teeth', () => {
     expect(model.teeth.cells.length).toBeGreaterThan(4);
     const length = model.lengths[0];
+    const { lips } = model.landmarks;
     for (const cell of model.teeth.cells) {
-      expect(model.cells[cell].kind).toBe(0);
-      expect(model.cells[cell].arc).toBeGreaterThan(length - 2.5);
-      expect(model.cells[cell].arc).toBeLessThan(length);
+      const { kind, arc, point } = model.cells[cell];
+      expect(kind).toBe(0);
+      // The upright incisor plane cuts the airway where it slopes down
+      // to the lips, so its lower cells lie further back along the tract.
+      expect(arc).toBeGreaterThan(length - 3);
+      expect(arc).toBeLessThan(length);
+      expect(Math.abs(point[2] - model.teeth.plane)).toBeLessThan(
+        model.teeth.reach + 1e-9
+      );
+      expect(point[2]).toBeLessThan(lips[2]);
     }
   });
 

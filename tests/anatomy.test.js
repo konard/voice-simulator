@@ -17,6 +17,9 @@ import {
   upperTeethMesh,
   velumMesh,
 } from '../src/geometry/anatomy.js';
+import { tractShape } from '../src/articulation/tract-shape.js';
+import { tractCenterline, upperNormal } from '../src/geometry/centerline.js';
+import { tractAxes } from '../src/geometry/mesh.js';
 import { getPhoneme } from '../src/ipa/inventory.js';
 
 const NAMES = ['upperTeeth', 'lowerTeeth', 'tongue', 'palate', 'velum'];
@@ -24,20 +27,6 @@ const SIBILANT = { height: 0.9, sibilance: 1, tongueAmount: 0.9 };
 
 function vowel(symbol) {
   return vowelTarget({ phoneme: getPhoneme(symbol) });
-}
-
-/** Mean of one coordinate over the vertices that pass `filter`. */
-function mean(positions, axis, filter = () => true) {
-  let sum = 0;
-  let count = 0;
-  for (let index = 0; index < positions.length; index += 3) {
-    const point = [0, 1, 2].map((key) => positions[index + key]);
-    if (filter(point)) {
-      sum += point[axis];
-      count++;
-    }
-  }
-  return sum / count;
 }
 
 /** Extreme of one coordinate over vertices near the midline front. */
@@ -49,6 +38,41 @@ function midlineEdge(positions, front, pick) {
     }
   }
   return value;
+}
+
+/**
+ * Smallest normalised elliptical radius of mesh vertices in the rest
+ * tract tube (below 1 = inside the airway).
+ */
+function closestToAirway(head, positions) {
+  const rest = tractShape({}, head);
+  const path = tractCenterline(head, { sections: 400, length: rest.length });
+  const axes = tractAxes(head, rest.areas);
+  let closest = Infinity;
+  for (let index = 0; index < positions.length; index += 3) {
+    const point = positions.subarray(index, index + 3);
+    let best = 0;
+    let bestDistance = Infinity;
+    for (let section = 0; section < path.count; section++) {
+      const centre = path.points.subarray(section * 3, section * 3 + 3);
+      const distance = Math.hypot(...centre.map((v, axis) => point[axis] - v));
+      if (distance < bestDistance) {
+        bestDistance = distance;
+        best = section;
+      }
+    }
+    const position = (best + 0.5) / path.count;
+    const [major, minor, shift] = axes(
+      rest.areas[Math.round(position * (rest.areas.length - 1))],
+      position
+    );
+    const centre = path.points.subarray(best * 3, best * 3 + 3);
+    const normal = upperNormal(path.tangents.subarray(best * 3, best * 3 + 3));
+    const delta = centre.map((v, axis) => point[axis] - v);
+    const v = delta[1] * normal[1] + delta[2] * normal[2] - shift;
+    closest = Math.min(closest, Math.hypot(delta[0] / major, v / minor));
+  }
+  return closest;
 }
 
 describe('anatomy meshes', () => {
@@ -84,12 +108,19 @@ describe('anatomy meshes', () => {
       tongueMesh(DEFAULT_HEAD, { lod: 2, state: vowel(symbol) })
     );
     const oral = (point) => point[2] > 5 && point[2] < 7.5;
+    const dorsum = (mesh) => {
+      let top = -Infinity;
+      for (let index = 0; index < mesh.positions.length; index += 3) {
+        const point = mesh.positions.subarray(index, index + 3);
+        top = oral(point) ? Math.max(top, point[1]) : top;
+      }
+      return top;
+    };
     const root = (mesh) =>
       Math.min(...mesh.positions.filter((_, i) => i % 3 === 2));
-    // /i/ raises the tongue blade, /ɑ/ pulls the root back into the pharynx.
-    expect(mean(front.positions, 1, oral)).toBeGreaterThan(
-      mean(back.positions, 1, oral) + 0.15
-    );
+    // /i/ raises the tongue under the palate, /ɑ/ lowers it and pulls the
+    // root back into the pharynx.
+    expect(dorsum(front)).toBeGreaterThan(dorsum(back) + 0.3);
     expect(root(back)).toBeLessThan(root(front) - 0.3);
   });
 
@@ -117,14 +148,21 @@ describe('anatomy meshes', () => {
     }
   });
 
+  it('vaults the hard palate over the rest airway without entering it', () => {
+    for (const head of [DEFAULT_HEAD, randomHeadConfig(4)]) {
+      const palate = anatomyMeshes(head, { lod: 2 }).find(
+        (mesh) => mesh.name === 'palate'
+      );
+      expect(closestToAirway(head, palate.positions)).toBeGreaterThan(0.95);
+    }
+  });
+
   it('lowers the soft palate to open the nasal port', () => {
     const [raised, lowered] = [0, 1].map((velum) =>
       velumMesh(DEFAULT_HEAD, { lod: 2, velum })
     );
-    const tip = (mesh) => {
-      const ring = mesh.positions.length / 3 / ANATOMY_LODS[2].velum;
-      return mean(mesh.positions.subarray(-ring * 3), 1, () => true);
-    };
+    // The centre of the cap closing the free end of the velum.
+    const tip = (mesh) => mesh.positions.at(-2);
     expect(tip(lowered)).toBeLessThan(tip(raised) - 0.4);
     const nasal = anatomyMeshes(DEFAULT_HEAD, {
       lod: 1,

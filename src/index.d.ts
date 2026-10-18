@@ -416,22 +416,44 @@ export declare function tractCenterline(
 ): Path;
 export declare function nasalCenterline(
   head: HeadConfig,
-  options: { sections: number; velumDistance: number; length: number }
+  options: {
+    sections?: number;
+    velumDistance: number;
+    length: number;
+    tractLength?: number;
+  }
 ): Path;
 export declare function headMesh(
   head?: HeadConfig,
   options?: { lod?: number }
 ): Mesh;
+export interface TubeOptions {
+  lod?: number;
+  head?: HeadConfig;
+  /** Lateral and midsagittal semi-axes (cm) of a section. */
+  axes?: (area: number, position: number) => number[];
+}
+export declare const NOSE_ASPECT: number;
+export declare function noseAxes(area: number): number[];
+export declare function sectionAxes(
+  area: number,
+  position: number,
+  head?: HeadConfig
+): number[];
+export declare function tractAxes(
+  head: HeadConfig,
+  restAreas: ArrayLike<number>
+): (area: number, position: number) => number[];
 export declare function tubeMesh(
   path: Path,
   areas: ArrayLike<number>,
-  options?: { lod?: number; head?: HeadConfig }
+  options?: TubeOptions
 ): Mesh;
 export declare function updateTubeMesh(
   mesh: Mesh,
   path: Path,
   areas: ArrayLike<number>,
-  options?: { lod?: number; head?: HeadConfig }
+  options?: TubeOptions
 ): Mesh;
 export declare function lipsMesh(
   head?: HeadConfig,

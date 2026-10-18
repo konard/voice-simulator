@@ -125,12 +125,14 @@ describe('microphone settings', () => {
   });
 
   it('follows 1/r in the 3D FDTD free field', () => {
+    // The solver's default grid: at 1 cm the lip slit is a cell or two
+    // high and the near level depends on where the grid falls.
     const level = (distance) =>
       rms(
         renderPlan(plan, {
           sampleRate: RATE,
           solver: 'fdtd3d',
-          dx: 1,
+          dx: 0.8,
           microphone: { distance },
         }).subarray(0, vowelSamples)
       );

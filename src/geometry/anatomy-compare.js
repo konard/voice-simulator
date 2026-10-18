@@ -48,9 +48,18 @@ function pathPoints(path) {
  * and area function.
  * @param {Record<string, number>} head
  * @param {object} state
+ * @param {{length?: number}} [options] Tract length (cm) to scale the
+ *   head's vocal tract to, so a tract is compared by shape and not size.
  */
-export function modelTract(head, state) {
-  const config = normalizeHeadConfig(head);
+export function modelTract(head, state, options = {}) {
+  let config = normalizeHeadConfig(head);
+  if (options.length) {
+    const natural = tractShape(state, config).length;
+    config = normalizeHeadConfig({
+      ...config,
+      vocalTractLength: (config.vocalTractLength * options.length) / natural,
+    });
+  }
   const shape = tractShape(state, config);
   const path = tractCenterline(config, {
     sections: shape.areas.length,
@@ -136,9 +145,11 @@ function areaAt(areas, fraction) {
  *   From modelTract().
  * @param {{positions: ArrayLike<number>, indices: ArrayLike<number>}} tract
  *   Segmented inner surface in dataset millimetres.
+ * @param {{measured?: object}} [options] The tract's tractAreaFunction(),
+ *   when already computed.
  */
-export function compareWithDvtd(model, tract) {
-  const measured = tractAreaFunction(tract);
+export function compareWithDvtd(model, tract, options = {}) {
+  const measured = options.measured ?? tractAreaFunction(tract);
   const dvtdCentreline = [
     measured.glottis,
     ...measured.points,

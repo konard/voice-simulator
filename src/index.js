@@ -88,6 +88,10 @@ export {
 export {
   MESH_LODS,
   headMesh,
+  NOSE_ASPECT,
+  noseAxes,
+  sectionAxes,
+  tractAxes,
   tubeMesh,
   updateTubeMesh,
   lipsMesh,

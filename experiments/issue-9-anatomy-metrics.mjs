@@ -7,6 +7,7 @@ import {
   compareWithDvtd,
   modelTract,
 } from '../src/geometry/anatomy-compare.js';
+import { tractAreaFunction } from '../src/geometry/dvtd.js';
 import { parseStl } from '../src/geometry/stl.js';
 import { presetHeadConfig } from '../src/head-config.js';
 
@@ -21,8 +22,11 @@ for (const entry of manifest.files) {
   const tract = parseStl(
     gunzipSync(readFileSync(new globalThis.URL(entry.file, fixtures)))
   );
-  const model = modelTract(head, DVTD_VOWELS[sound]);
-  const { metrics } = compareWithDvtd(model, tract);
+  const measured = tractAreaFunction(tract);
+  const model = modelTract(head, DVTD_VOWELS[sound], {
+    length: measured.length / 10,
+  });
+  const { metrics } = compareWithDvtd(model, tract, { measured });
   const outlines = Object.entries(metrics.outlineDistance)
     .map(([name, d]) => `${name} ${d === null ? '-' : d.toFixed(2)}`)
     .join(', ');
