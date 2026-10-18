@@ -552,6 +552,7 @@ function palateBack(frame, config) {
 function wallSlab(frame, from, to, sections, across, shape) {
   const columns = 2 * across + 1;
   const free = shape.free ?? (() => 0);
+  const sagging = shape.sag ?? free;
   const rows = Array.from({ length: sections }, (_, row) => {
     const s = row / (sections - 1);
     return { s, ...restSection(frame, lerp(from, to, s)) };
@@ -567,7 +568,7 @@ function wallSlab(frame, from, to, sections, across, shape) {
       (major + 0.2) * (1 - free(s)),
       shape.width(s, point)
     );
-    const sag = free(s) * shape.thickness(s);
+    const sag = sagging(s) * shape.thickness(s);
     // The vault, or the airway's own wall where that is higher.
     const wall =
       minor * Math.sqrt(Math.max(0, 1 - (u * width) ** 2 / major ** 2));
@@ -645,13 +646,15 @@ function velumShape(frame, config, back, end) {
   const knee = (back - portDistance(frame)) / (back - end);
   const free = (s) => smoothstep(knee, (1 + knee) / 2, s);
   return {
+    // It leaves the wall gradually, from before the knee to the uvula.
+    sag: (s) => smoothstep(knee / 2, 1, s),
     width: (s) => lerp(1.5, 0.45, free(s)) * config.mouthWidth,
     thickness: (s) =>
       VELUM_THICKNESS *
       size *
       (0.6 +
         0.4 * Math.sin((Math.PI / 2) * Math.min(1, s / knee)) ** 2 -
-        0.4 * free(s) ** 0.5),
+        0.4 * free(s)),
     free,
   };
 }
@@ -674,7 +677,7 @@ function velumSpan(frame, config) {
         frame,
         lerp(back, end, s)
       );
-      const height = shift + minor + shape.thickness(s) * (0.5 - shape.free(s));
+      const height = shift + minor + shape.thickness(s) * (0.5 - shape.sag(s));
       const middle = [1, 2].map((axis) => point[axis] + normal[axis] * height);
       length += last ? Math.hypot(middle[0] - last[0], middle[1] - last[1]) : 0;
       last = middle;

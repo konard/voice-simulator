@@ -3,7 +3,7 @@
 //
 //   node experiments/issue-9-palate-measures.mjs
 import { presetHeadConfig } from '../src/head-config.js';
-import { palateMeasures } from '../tests/helpers/palate-measures.js';
+import { palateMeasures } from '../src/geometry/palate-measures.js';
 
 for (const name of ['male', 'female', 'child']) {
   const measures = palateMeasures(presetHeadConfig(name));

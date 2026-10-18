@@ -6,8 +6,9 @@
 
 import { readFileSync } from 'node:fs';
 import { describe, it, expect } from 'test-anywhere';
+import { ANATOMY_LODS } from '../src/geometry/anatomy.js';
+import { palateMeasures } from '../src/geometry/palate-measures.js';
 import { presetHeadConfig } from '../src/head-config.js';
-import { palateMeasures } from './helpers/palate-measures.js';
 
 const reference = JSON.parse(
   readFileSync(
@@ -84,5 +85,16 @@ describe('palate and velum against anatomy', () => {
     expect(lengthError).toBeLessThan(RELATIVE);
     expect(thicknessError).toBeLessThan(RELATIVE);
     expect(velumLength).toBeLessThan(measures.male.velumLength);
+  });
+
+  it('keeps the palate and velum lengths at every level of detail', () => {
+    const head = presetHeadConfig('male');
+    for (let lod = 1; lod < ANATOMY_LODS.length; lod++) {
+      const { oraleStaphylion, velumLength } = palateMeasures(head, { lod });
+      expect(
+        Math.abs(oraleStaphylion - measures.male.oraleStaphylion)
+      ).toBeLessThan(2);
+      expect(Math.abs(velumLength - measures.male.velumLength)).toBeLessThan(2);
+    }
   });
 });

@@ -37,6 +37,7 @@ import { DEFAULT_HEAD, normalizeHeadConfig } from '../src/head-config.js';
 import {
   DVTD_ARCHIVE,
   fetchMember,
+  fetchRange,
   listMembers,
   matchesPattern,
 } from '../scripts/fetch-dvtd.mjs';
@@ -207,6 +208,32 @@ describe('Dresden Vocal Tract Dataset download', () => {
     // Expression syntax is plain text.
     expect(matchesPattern('.*', name)).toBe(false);
     expect(matchesPattern('*s2-0[1]-*', name)).toBe(false);
+  });
+
+  it('asks again when the server refuses a range for a while', async () => {
+    const answers = [416, 503, 206];
+    const requests = [];
+    const fetcher = async (url, { headers }) => {
+      requests.push(headers.Range);
+      const status = answers.shift();
+      return { status, arrayBuffer: async () => new Uint8Array([1, 2]).buffer };
+    };
+    const bytes = await fetchRange(DVTD_ARCHIVE, 10, 12, {
+      delay: 0,
+      fetcher,
+    });
+    expect([...bytes]).toEqual([1, 2]);
+    expect(requests).toEqual(['bytes=10-11', 'bytes=10-11', 'bytes=10-11']);
+    const refusing = async () => ({ status: 416 });
+    let message = '';
+    await fetchRange(DVTD_ARCHIVE, 0, 1, {
+      attempts: 2,
+      delay: 0,
+      fetcher: refusing,
+    }).catch((error) => {
+      message = error.message;
+    });
+    expect(message).toContain('range request answered 416');
   });
 
   itUnless(offline)(

@@ -300,6 +300,15 @@ function locateInTube(point, tube, margin) {
   return { arc, radius: Math.hypot(u, w) };
 }
 
+/**
+ * The upper lip parts the nostrils from the mouth: a tube with a
+ * `philtrum` (the nose) does not reach below its middle in front of the
+ * lips, where its widened end would cover the mouth on coarse grids.
+ */
+function belowPhiltrum(point, philtrum) {
+  return Boolean(philtrum) && point[2] > philtrum.z && point[1] < philtrum.y;
+}
+
 function classifyPoint(point, tubes, dx) {
   let found = null;
   for (const tube of tubes) {
@@ -311,7 +320,8 @@ function classifyPoint(point, tubes, dx) {
       radius <= 1 &&
       arc >= -dx / 2 &&
       arc <= tube.length + dx / 2 &&
-      !(point[2] > (tube.front ?? Infinity) + dx / 2);
+      !(point[2] > (tube.front ?? Infinity) + dx / 2) &&
+      !belowPhiltrum(point, tube.philtrum);
     if (inside && (!found || radius < found.radius)) {
       found = {
         ...place,
@@ -757,7 +767,9 @@ export function buildVoxelModel(head, options = {}) {
     () => noseAxes(noseMax),
     CELL_NOSE
   );
-  tract.front = headLandmarks(config).lips[2];
+  const { lips, nostrils } = headLandmarks(config);
+  tract.front = lips[2];
+  nasal.philtrum = { y: (lips[1] + nostrils[1]) / 2, z: lips[2] - dx / 2 };
   const sinuses = sinusTubes(tract, config, dx, options);
   const tubes = [
     tract,
@@ -767,7 +779,6 @@ export function buildVoxelModel(head, options = {}) {
   tubes.forEach((tube, index) => {
     tube.index = index;
   });
-  const { lips, nostrils } = headLandmarks(config);
   const field = headField(config);
   const grid = boundingBox(tubes, [lips, nostrils], dx, shape);
   const collected = collectCells(grid, tubes, field, [lips, nostrils], shape);

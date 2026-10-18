@@ -17,8 +17,15 @@ import { crc32, inflateRawSync } from 'node:zlib';
 export const DVTD_ARCHIVE = 'https://www.vocaltractlab.de/dvtd.zip';
 export const DVTD_ARCHIVE_SIZE = 1129467424;
 
-async function range(url, start, end) {
-  const response = await fetch(url, {
+/** Tries per range request: the server sometimes refuses a valid range. */
+const RANGE_ATTEMPTS = 4;
+/** Wait before the next try (ms), multiplied by the number of tries so far. */
+const RANGE_RETRY_DELAY = 2000;
+
+const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+async function rangeOnce(url, start, end, fetcher) {
+  const response = await fetcher(url, {
     headers: { Range: `bytes=${start}-${end - 1}` },
   });
   if (response.status !== 206) {
@@ -26,6 +33,39 @@ async function range(url, start, end) {
   }
   return Buffer.from(await response.arrayBuffer());
 }
+
+/**
+ * Bytes [start, end) of a remote file, tried again on a refused range or a
+ * network error.
+ * @param {string} url
+ * @param {number} start
+ * @param {number} end
+ * @param {{attempts?: number, delay?: number, fetcher?: typeof fetch}} [options]
+ * @returns {Promise<Buffer>}
+ */
+export async function fetchRange(
+  url,
+  start,
+  end,
+  {
+    attempts = RANGE_ATTEMPTS,
+    delay = RANGE_RETRY_DELAY,
+    fetcher = globalThis.fetch,
+  } = {}
+) {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      return await rangeOnce(url, start, end, fetcher);
+    } catch (error) {
+      if (attempt >= attempts) {
+        throw error;
+      }
+      await wait(delay * attempt);
+    }
+  }
+}
+
+const range = (url, start, end) => fetchRange(url, start, end);
 
 /** End of central directory: offset and size of the directory. */
 function directoryLocation(tail, tailStart) {
