@@ -23,7 +23,10 @@ import { SPEED_OF_SOUND, tubeFormants } from '../src/acoustics/transfer.js';
 import { planUtterance } from '../src/articulation/plan.js';
 import { vowelTarget } from '../src/articulation/phones.js';
 import { noseShape, tractShape } from '../src/articulation/tract-shape.js';
-import { DEFAULT_HEAD } from '../src/head-config.js';
+import { DEFAULT_HEAD, presetHeadConfig } from '../src/head-config.js';
+import { VOWEL_CORRECTIONS_3D } from '../src/articulation/vowel-calibration.js';
+import { HILLENBRAND } from '../src/articulation/vowel-norms.js';
+import { STORY_FEATURES } from '../src/articulation/vowel-space.js';
 import { getPhoneme } from '../src/ipa/inventory.js';
 
 const DX = 1;
@@ -171,6 +174,49 @@ describe('3D FDTD resonances', () => {
       expect(relativeError(nearest, f2)).toBeLessThan(0.2);
     });
   }
+});
+
+describe('3D FDTD vowel table', () => {
+  const head = presetHeadConfig('male');
+  const voxels = buildVoxelModel(head, { dx: DX });
+
+  /** F1-F3 (Hz) of a measured vowel on the male head, incisors included. */
+  function maleFormants(name, vowelCorrections) {
+    const [height, backness, rounding] = STORY_FEATURES[name];
+    const shape = tractShape({ height, backness, rounding }, head, {
+      vowelCorrections,
+    });
+    const solver = new Fdtd3d({ model: voxels });
+    solver.setNose(noseShape(head).areas);
+    solver.setShape(
+      shape.areas,
+      shape.velumArea,
+      shape.velumIndex,
+      shape.teeth
+    );
+    return responsePeaks(solver, 1 / solver.stepDuration(shape), 0.08)
+      .filter((value) => value > 150)
+      .slice(0, 3);
+  }
+
+  it('matches the mean vowel formants of men better than the tube table', () => {
+    const error = (formants, targets) =>
+      Math.sqrt(
+        targets.reduce(
+          (sum, target, index) => sum + Math.log(formants[index] / target) ** 2,
+          0
+        ) / targets.length
+      );
+    for (const name of ['i', 'ɑ', 'u']) {
+      const targets = HILLENBRAND.male[name];
+      const calibrated = error(
+        maleFormants(name, VOWEL_CORRECTIONS_3D),
+        targets
+      );
+      expect(calibrated).toBeLessThan(0.08);
+      expect(calibrated).toBeLessThan(error(maleFormants(name), targets));
+    }
+  });
 });
 
 describe('3D FDTD geometry against the waveguide', () => {

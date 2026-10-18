@@ -19,6 +19,7 @@ import {
   noseShape,
 } from '../articulation/tract-shape.js';
 import { normalizeHeadConfig } from '../head-config.js';
+import { VOWEL_CORRECTIONS_3D } from '../articulation/vowel-calibration.js';
 import { Biquad, createNoise } from './filters.js';
 import { Glottis } from './glottis.js';
 import { SPEED_OF_SOUND } from './transfer.js';
@@ -30,6 +31,12 @@ import { enclosureBounds } from './voxel-model.js';
 const OUTPUT_GAIN = 0.3;
 
 /** Solver factories by name: 1D waveguide and 3D FDTD. */
+/**
+ * Vowel calibration of each solver (scripts/calibrate-vowels.mjs); the
+ * others use the tube-model table.
+ */
+const VOWEL_TABLES = new Map([['fdtd3d', VOWEL_CORRECTIONS_3D]]);
+
 const SOLVERS = new Map([
   [
     'waveguide',
@@ -153,6 +160,7 @@ export class VoiceRenderer {
       enclosure: options.enclosure,
     });
     this.solver.setNose?.(noseShape(this.head).areas);
+    this.vowelCorrections = VOWEL_TABLES.get(options.solver ?? 'waveguide');
     this.glottis = new Glottis({
       seed,
       tenseness: this.head.tenseness,
@@ -195,6 +203,7 @@ export class VoiceRenderer {
     this.shape = tractShape(this.state, this.head, {
       sections: this.sections,
       teeth: this.teeth,
+      vowelCorrections: this.vowelCorrections,
     });
     this.solver.setShape(
       this.shape.areas,

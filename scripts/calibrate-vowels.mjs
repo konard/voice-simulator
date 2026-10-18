@@ -11,15 +11,24 @@
 // section within about a factor of two of the measured area and leaves a few
 // per cent of formant error where matching it would need a deformed tract.
 //
-// Usage: node scripts/calibrate-vowels.mjs [--check]
-//   --check  only report the remaining formant errors of the stored table.
+// The 3D solver resonates a few per cent lower than the tube model for the
+// same area function (the bent, voxelized tract and the open face), so it
+// gets its own table, fitted through the tube model with targets moved by
+// the measured 3D/tube formant ratios.
+//
+// Usage: node scripts/calibrate-vowels.mjs [--check] [--solver fdtd3d] [--dx 0.5]
+//   --check   only report the remaining formant errors of the stored table.
+//   --solver  tube (default; 1D waveguide) or fdtd3d (3D solver table).
 //   PENALTY  environment variable, the regularization weight (0.01).
 import { writeFileSync } from 'node:fs';
 import { URL, fileURLToPath } from 'node:url';
 import { tubeFormants } from '../src/acoustics/transfer.js';
 import { piriformBranch } from '../src/acoustics/waveguide.js';
-import { tractShape } from '../src/articulation/tract-shape.js';
-import { VOWEL_CORRECTIONS } from '../src/articulation/vowel-calibration.js';
+import { noseShape, tractShape } from '../src/articulation/tract-shape.js';
+import { spectralPeaks } from '../src/acoustics/analysis.js';
+import { Fdtd3d } from '../src/acoustics/fdtd3d.js';
+import { buildVoxelModel } from '../src/acoustics/voxel-model.js';
+import * as TABLES from '../src/articulation/vowel-calibration.js';
 import { HILLENBRAND } from '../src/articulation/vowel-norms.js';
 import {
   STORY_AREAS,
@@ -29,6 +38,13 @@ import { presetHeadConfig } from '../src/head-config.js';
 
 export const REFERENCE_HEAD = presetHeadConfig('male');
 const NAMES = Object.keys(STORY_AREAS);
+const option = (flag, fallback) => {
+  const index = process.argv.indexOf(flag);
+  return index >= 0 ? process.argv[index + 1] : fallback;
+};
+const SOLVER = option('--solver', 'tube');
+const DX = Number(option('--dx', 0.5));
+const ROUNDS = 4;
 const TERMS = 8;
 const STEP = 0.02;
 const TOLERANCE = 0.001;
@@ -43,14 +59,18 @@ const WEIGHTS = Array.from({ length: TERMS }, (_, k) =>
   k === 0 ? 2 : (1 + k) / 2
 );
 
-/** F1-F3 (Hz) of a measured vowel with a set of corrections. */
-export function vowelFormants(name, corrections) {
+function vowelTract(name, corrections) {
   const [height, backness, rounding] = STORY_FEATURES[name];
-  const shape = tractShape(
+  return tractShape(
     { height, backness, rounding },
     REFERENCE_HEAD,
     corrections && { vowelCorrections: corrections }
   );
+}
+
+/** F1-F3 (Hz) of a measured vowel in the tube model with corrections. */
+export function vowelFormants(name, corrections) {
+  const shape = vowelTract(name, corrections);
   return tubeFormants(shape.areas, shape.length, {
     count: 3,
     maxFrequency: 3600,
@@ -60,9 +80,31 @@ export function vowelFormants(name, corrections) {
   });
 }
 
-function logErrors(name, coefficients) {
+let voxelModel = null;
+
+/**
+ * F1-F3 (Hz) of a measured vowel in the 3D solver at DX: the first three
+ * peaks of its impulse response above 150 Hz, at 2 Hz steps.
+ */
+export function solverFormants(name, corrections) {
+  voxelModel ??= buildVoxelModel(REFERENCE_HEAD, { dx: DX });
+  const shape = vowelTract(name, corrections);
+  const solver = new Fdtd3d({ model: voxelModel });
+  solver.setNose(noseShape(REFERENCE_HEAD).areas);
+  solver.setShape(shape.areas, shape.velumArea, shape.velumIndex, shape.teeth);
+  const rate = 1 / solver.stepDuration(shape);
+  const response = new Float64Array(Math.round(rate * 0.1));
+  for (let n = 0; n < response.length; n++) {
+    response[n] = solver.step(n === 0 ? 1 : 0, 0, 0);
+  }
+  return spectralPeaks(response, rate, { step: 2, prominence: 0.5 })
+    .filter((value) => value > 150)
+    .slice(0, 3);
+}
+
+function logErrors(name, coefficients, targets) {
   const formants = vowelFormants(name, { [name]: coefficients });
-  return HILLENBRAND.male[name].map((target, index) =>
+  return targets.map((target, index) =>
     Math.log(target / (formants[index] ?? Infinity))
   );
 }
@@ -94,10 +136,12 @@ function solve(matrix, vector) {
  * Gauss-Newton step on the formant errors plus the penalty
  * PENALTY * |WEIGHTS * coefficients|^2.
  */
-function step(name, coefficients, errors) {
+function step(name, coefficients, errors, targets) {
   const jacobian = coefficients.map((_, k) => {
     const moved = coefficients.map((value, j) => value + (j === k ? STEP : 0));
-    return logErrors(name, moved).map((value, i) => (errors[i] - value) / STEP);
+    return logErrors(name, moved, targets).map(
+      (value, i) => (errors[i] - value) / STEP
+    );
   });
   const normal = coefficients.map((_, a) =>
     coefficients.map(
@@ -117,12 +161,22 @@ function step(name, coefficients, errors) {
   );
 }
 
-export function calibrate(name) {
-  let coefficients = new Array(TERMS).fill(0);
-  let errors = logErrors(name, coefficients);
+/**
+ * Tube-model corrections of a vowel for F1-F3 targets (Hz), from `start`.
+ * @param {string} name
+ * @param {number[]} [targets]
+ * @param {number[]} [start]
+ */
+export function calibrate(
+  name,
+  targets = HILLENBRAND.male[name],
+  start = new Array(TERMS).fill(0)
+) {
+  let coefficients = [...start];
+  let errors = logErrors(name, coefficients, targets);
   for (let iteration = 0; iteration < 40; iteration++) {
-    const next = step(name, coefficients, errors);
-    const nextErrors = logErrors(name, next);
+    const next = step(name, coefficients, errors, targets);
+    const nextErrors = logErrors(name, next, targets);
     if (!nextErrors.every(Number.isFinite)) {
       break;
     }
@@ -138,39 +192,78 @@ export function calibrate(name) {
   return coefficients.map((value) => Number(value.toFixed(4)));
 }
 
+/**
+ * Corrections for the 3D solver: the tube model is fitted to targets moved
+ * by the ratio of its formants to the solver's for the current corrections,
+ * which converges in a few rounds because that ratio changes slowly.
+ * @param {string} name
+ */
+export function calibrateSolver(name) {
+  let coefficients = [...(TABLES.VOWEL_CORRECTIONS[name] ?? [])];
+  if (coefficients.length !== TERMS) {
+    coefficients = calibrate(name);
+  }
+  for (let round = 0; round < ROUNDS; round++) {
+    const corrections = { [name]: coefficients };
+    const solver = solverFormants(name, corrections);
+    const tube = vowelFormants(name, corrections);
+    const targets = HILLENBRAND.male[name].map(
+      (target, index) => (target * tube[index]) / solver[index]
+    );
+    coefficients = calibrate(name, targets, coefficients);
+  }
+  return coefficients;
+}
+
 function report(corrections) {
+  const measure = SOLVER === 'fdtd3d' ? solverFormants : vowelFormants;
   for (const name of NAMES) {
-    const raw = vowelFormants(name, {}).map(Math.round);
-    const fitted = vowelFormants(name, corrections).map(Math.round);
+    const raw = measure(name, {}).map(Math.round);
+    const fitted = measure(name, corrections).map(Math.round);
     console.log(
       `/${name}/ target ${HILLENBRAND.male[name].join(' ')} | raw ${raw.join(' ')} | calibrated ${fitted.join(' ')}`
     );
   }
 }
 
+function table(name, corrections) {
+  const body = Object.entries(corrections)
+    .map(([vowel, values]) => `  ${vowel}: [${values.join(', ')}],`)
+    .join('\n');
+  return `export const ${name} = Object.freeze({\n${body}\n});\n`;
+}
+
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
+  const stored =
+    SOLVER === 'fdtd3d'
+      ? TABLES.VOWEL_CORRECTIONS_3D
+      : TABLES.VOWEL_CORRECTIONS;
   if (process.argv.includes('--check')) {
-    report(VOWEL_CORRECTIONS);
+    report(stored);
   } else {
+    const fit =
+      SOLVER === 'fdtd3d' ? calibrateSolver : (name) => calibrate(name);
     const corrections = Object.fromEntries(
-      NAMES.map((name) => [name, calibrate(name)])
+      NAMES.map((name) => [name, fit(name)])
     );
     report(corrections);
-    const body = Object.entries(corrections)
-      .map(([name, values]) => `  ${name}: [${values.join(', ')}],`)
-      .join('\n');
+    const tube = SOLVER === 'fdtd3d' ? TABLES.VOWEL_CORRECTIONS : corrections;
+    const solver =
+      SOLVER === 'fdtd3d'
+        ? corrections
+        : (TABLES.VOWEL_CORRECTIONS_3D ?? TABLES.VOWEL_CORRECTIONS);
     writeFileSync(
       new URL('../src/articulation/vowel-calibration.js', import.meta.url),
       `// Generated by scripts/calibrate-vowels.mjs: log length change and log-area
 // corrections (cosine series along the tract, glottis to lips, from the
-// first order on) of the measured vowels in
-// vowel-space.js, fitted so that their resonances on the typical male head,
-// incisors and piriform fossae included, match the mean formants of men
-// (vowel-norms.js).
-export const VOWEL_CORRECTIONS = Object.freeze({
-${body}
-});
-`
+// first order on) of the measured vowels in vowel-space.js, fitted so that
+// their resonances on the typical male head, incisors and piriform fossae
+// included, match the mean formants of men (vowel-norms.js).
+
+/** For the tube model and the 1D waveguide. */
+${table('VOWEL_CORRECTIONS', tube)}
+/** For the 3D solver (fitted at ${SOLVER === 'fdtd3d' ? DX : 'dx'} cm cells). */
+${table('VOWEL_CORRECTIONS_3D', solver)}`
     );
   }
 }
