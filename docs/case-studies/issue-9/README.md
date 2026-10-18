@@ -63,8 +63,8 @@ used in tests (see [research/1-anatomical-datasets.md](research/1-anatomical-dat
 | -------------------------------------------- | --------------- | ----------------------------------------------------------- | ------------------- |
 | Dresden Vocal Tract Dataset (Birkholz 2020)  | CC0             | MRI tract surfaces: centrelines, area functions, slices     | Derived template    |
 | Open-Full-Jaw (17 CBCT patients)             | CC BY-NC-SA 4.0 | Arch shape, crown widths and thicknesses                    | Numbers only        |
-| BodyParts3D 4.0                              | CC BY 4.0       | Teeth (one OBJ per tooth)                                   | Numbers only        |
-| Z-Anatomy atlas                              | CC BY-SA 4.0    | Teeth, exported from its `.blend` with Blender              | Numbers only        |
+| BodyParts3D 4.0                              | CC BY 4.0       | Teeth, palate bones, tongue, larynx (one OBJ per element)   | Numbers and renders |
+| Z-Anatomy atlas                              | CC BY-SA 4.0    | Teeth, palate, velum, tongue, larynx, from its `.blend`     | Numbers and renders |
 | HuBMAP Human Reference Atlas (Visible Human) | CC BY 4.0       | Teeth, palate, velum, tongue, larynx of a male and a female | Numbers and renders |
 | G-OBIM (Calka et al. 2025)                   | CC BY 4.0       | Jaw opening per phoneme matched to MRI                      | Numbers             |
 
@@ -118,7 +118,7 @@ coronal at the first molars, axial through the crowns and the palate) and
 finds ten key points on both automatically: the incisal edges, the first
 and second molars, the posterior nasal spine (staphylion), the palatal
 vault, the uvula, the tongue tip and dorsum, and the glottis. After a
-rigid fit on the dental points the male RMS is 2.96 mm
+rigid fit on the dental points the male RMS is 2.81 mm
 ([hra-comparison.txt](measurements/hra-comparison.txt)):
 
 ![The model cut against the HuBMAP male](anatomy/hra-male-slices.png)
@@ -130,6 +130,40 @@ living speaker this is said rather than fitted: the cadaver's velum is
 slack, its palate is mucosa only (no anterior nasal spine), its tongue
 includes the root, its incisal edges are about 4 mm apart vertically, and
 the female body is the male one scaled up by about 1.1.
+
+**Key points against Z-Anatomy and BodyParts3D.** Both atlases are read
+as anatomy sources too (`zAnatomySource`, `bodyParts3dSource` in
+`src/geometry/atlas-sources.js`): their z-up meshes are turned into the
+head frame, and since neither segments the mucosa of the hard palate, the
+staphylion and the vault are read on the maxillae and palatine bones
+1.5 mm beside the median suture, which are then cut 8 mm above the vault.
+`node scripts/compare-hra.mjs --atlas bodyparts3d|z-anatomy --dir DIR`
+cuts the male preset against them as against the HRA
+([bodyparts3d-comparison.txt](measurements/bodyparts3d-comparison.txt),
+[z-anatomy-comparison.txt](measurements/z-anatomy-comparison.txt)):
+
+| Key point after the dental fit (mm) | HRA male | BodyParts3D | Z-Anatomy |
+| ----------------------------------- | -------- | ----------- | --------- |
+| Upper / lower incisor               | 2.3/3.9  | 4.2/0.9     | 3.8/1.2   |
+| First / second upper molar          | 3.1/2.3  | 2.1/0.5     | 2.3/1.0   |
+| Staphylion                          | 16.2     | 5.3         | 7.0       |
+| Palatal vault                       | 2.0      | 2.4         | 2.4       |
+| Uvula                               | 5.5      | none        | 21.2      |
+| Tongue tip / dorsum                 | 9.0/7.3  | 2.9/7.8     | 2.9/6.6   |
+| Glottis                             | 21.4     | 25.2        | 20.5      |
+| RMS of the fitted points            | 2.81     | 2.40        | 2.37      |
+
+![The model cut against BodyParts3D (CC BY 4.0, DBCLS)](anatomy/bodyparts3d-male-slices.png)
+
+![The model cut against Z-Anatomy (this image CC BY-SA 4.0)](anatomy/z-anatomy-male-slices.png)
+
+On the bony palate the staphylion is 5 to 7 mm from the model's, against
+16 mm on the cadaver's mucosa. Both atlases are the same Visible Human
+Japanese male, so they are one more sample, not two.
+`tests/atlas-sources.test.js` turns the model into a synthetic Z-Anatomy
+and BodyParts3D and reads its key points back within 0.5 mm (2 mm for
+the staphylion), and checks the frame on two BodyParts3D OBJs fetched
+live.
 
 **Model and Blender.** The model is built in code (`src/geometry`), in four
 levels of detail, and exports to glTF, OBJ and STL; Blender opens,
@@ -248,8 +282,11 @@ header links every version (`tests/universal-app.test.js`).
   `scripts/blender/z_anatomy_export.py` appends only the mouth, pharynx and
   larynx objects from its `.blend` (opened with `--factory-startup
 --disable-autoexec`; its bundled scripts never run) and writes them as
-  STL. Its teeth are measured into `tests/fixtures/anatomy/dentition.json`.
-  Z-Anatomy builds on BodyParts3D, so it is not an independent sample.
+  STL. Its teeth are measured into `tests/fixtures/anatomy/dentition.json`,
+  and `zAnatomySource` makes its teeth, bony palate, soft palate, tongue
+  and larynx a source any part can be taken from, sliced and compared
+  above. Z-Anatomy builds on BodyParts3D (also a source,
+  `bodyParts3dSource`), so it is not an independent sample.
 - **G-OBIM** ([comment](https://github.com/konard/voice-simulator/pull/10#issuecomment-6248312336)):
   the jaw opens per phoneme as G-OBIM measured on MRI
   (`src/articulation/teeth.js`, `tests/teeth.test.js`), and the face rigs
@@ -318,7 +355,14 @@ More, with licences checked, in
   this by rendering ahead, and WebGPU makes it faster where it exists.
 - The WebGPU solver is not exercised in CI, which has no GPU adapter.
 - The HuBMAP organs are a cadaver: the staphylion, uvula, tongue and glottis key
-  points disagree by 6 to 21 mm for reasons of posture, not of the model.
+  points disagree by 5 to 21 mm for reasons of posture, not of the model.
+- BodyParts3D has no soft palate (only its muscles), so its velum stays
+  procedural; the Z-Anatomy soft palate lies horizontal, 21 mm from the
+  model's uvula. Both atlases place the glottis 20 to 25 mm
+  from the model's, about as far as the HRA (21 mm).
+- The BodyParts3D OBJ headers still carry the CC BY-SA 2.1 JP notice of
+  older releases; the database's licence page gives CC BY 4.0, which is
+  what is followed here.
 - Accents are English only, and voice matching does not match
   breathiness (from the issue 5 case study).
 - No listening test compares the voices with neural TTS.
@@ -327,8 +371,8 @@ More, with licences checked, in
 
 - Dresden Vocal Tract Dataset: Birkholz P et al. (2020), CC0.
 - Open-Full-Jaw: Gholamalizadeh T et al. (2022), CC BY-NC-SA 4.0; numbers only.
-- BodyParts3D: The Database Center for Life Science, CC BY 4.0.
-- Z-Anatomy: CC BY-SA 4.0.
+- BodyParts3D: Mitsuhashi N et al. (2009), Nucleic Acids Research 37, D782-D785; The Database Center for Life Science, CC BY 4.0.
+- Z-Anatomy: Gauthier M et al., CC BY-SA 4.0; `z-anatomy-male-slices.png` is CC BY-SA 4.0.
 - HuBMAP Human Reference Atlas: Schlehlein H (2024), doi:10.48539/HBM568.RFGM.978, CC BY 4.0, HuBMAP.
 - G-OBIM: Calka et al. (2025), PLOS.
 - Hillenbrand J, Getty LA, Clark MJ, Wheeler K (1995), J. Acoust. Soc. Am. 97, 3099-3111.
