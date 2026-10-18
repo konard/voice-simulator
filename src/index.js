@@ -246,8 +246,15 @@ export {
   arkitBlendshapes,
   faceRig,
   ovrVisemes,
+  rigFrames,
   rigWeights,
   visemeTrack,
   vowelShapes,
   vrmExpressions,
 } from './animation/visemes.js';
+export {
+  bindRig,
+  characterTrack,
+  rigFrame,
+  vrmVowelBinds,
+} from './animation/rig-bridge.js';
