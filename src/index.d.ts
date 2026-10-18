@@ -307,12 +307,21 @@ export declare class Fdtd3d implements Solver {
     output?: OutputMode;
     microphone?: MicrophoneOptions;
     enclosure?: EnclosureOptions;
+    kernel?: 'wasm' | 'js';
+    /** `false` leaves out the piriform fossae. */
+    piriform?: boolean;
+    /** `false` leaves out the vallecula. */
+    vallecula?: boolean;
   });
   /** Distance of the receiver from the lips (cm), with a microphone. */
   readonly microphoneDistance?: number;
   /** True when the grid contains the enclosure walls. */
   readonly simulatesEnclosure: boolean;
-  stepDuration(): number;
+  /**
+   * Seconds per step; with a shape the grid runs slower by its length over
+   * the rest length so the formants follow the tract length.
+   */
+  stepDuration(shape?: { length?: number }): number;
   setShape(
     areas: ArrayLike<number>,
     velumArea: number,
@@ -335,6 +344,10 @@ export declare function buildVoxelModel(
     dx?: number;
     radiationRadius?: number;
     enclosure?: EnclosureOptions;
+    /** `false` leaves out the piriform fossae. */
+    piriform?: boolean;
+    /** `false` leaves out the vallecula. */
+    vallecula?: boolean;
   }
 ): object;
 export declare class Glottis {
@@ -626,8 +639,10 @@ export declare function resample(
 export interface RenderOptions {
   /** `false` leaves out the incisors. */
   teeth?: boolean;
-  /** `false` leaves out the piriform fossae (waveguide). */
+  /** `false` leaves out the piriform fossae (both solvers). */
   piriform?: boolean;
+  /** `false` leaves out the vallecula (3D FDTD). */
+  vallecula?: boolean;
 }
 export interface Teeth {
   /** Inter-incisor gap (cm). */
@@ -785,8 +800,10 @@ export interface RenderOptions {
 export interface SynthesizeOptions {
   /** `false` leaves out the incisors. */
   teeth?: boolean;
-  /** `false` leaves out the piriform fossae (waveguide). */
+  /** `false` leaves out the piriform fossae (both solvers). */
   piriform?: boolean;
+  /** `false` leaves out the vallecula (3D FDTD). */
+  vallecula?: boolean;
   microphone?: MicrophoneOptions;
   room?: RoomPreset | RoomSpec | null;
   enclosure?: EnclosureOptions | null;
@@ -853,7 +870,15 @@ export declare function voxelModelOptions(options?: {
   dx?: number;
   microphone?: MicrophoneOptions;
   enclosure?: EnclosureOptions | null;
-}): { dx: number; radiationRadius?: number; enclosure?: ResolvedEnclosure };
+  piriform?: boolean;
+  vallecula?: boolean;
+}): {
+  dx: number;
+  radiationRadius?: number;
+  enclosure?: ResolvedEnclosure;
+  piriform?: false;
+  vallecula?: false;
+};
 /** Listening chain after a solver, or null for the default output. */
 export declare function createListener(options: {
   microphone?: MicrophoneOptions;

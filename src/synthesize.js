@@ -69,6 +69,7 @@ export function prepareUtterance(text, options = {}) {
     enclosure: options.enclosure,
     teeth: options.teeth,
     piriform: options.piriform,
+    vallecula: options.vallecula,
   };
   return { ...transcription, head, plan, timeline, renderOptions };
 }
@@ -77,7 +78,7 @@ export function prepareUtterance(text, options = {}) {
  * Synthesize speech from text. `microphone`, `room` and `enclosure` choose
  * where and in what space the voice is heard (see VoiceRenderer).
  * @param {string} text
- * @param {{lang?: string, accent?: string, ipa?: boolean, head?: object|'random', seed?: string|number, preset?: string, tier?: string|number, solver?: string, sections?: number, dx?: number, sampleRate?: number, output?: 'flow'|'microphone', microphone?: {distance?: number, azimuth?: number, elevation?: number, compensate?: boolean}, room?: string|object, enclosure?: {width: number, height: number, depth: number, absorption?: number, center?: number[]}, teeth?: boolean, piriform?: boolean}} [options]
+ * @param {{lang?: string, accent?: string, ipa?: boolean, head?: object|'random', seed?: string|number, preset?: string, tier?: string|number, solver?: string, sections?: number, dx?: number, sampleRate?: number, output?: 'flow'|'microphone', microphone?: {distance?: number, azimuth?: number, elevation?: number, compensate?: boolean}, room?: string|object, enclosure?: {width: number, height: number, depth: number, absorption?: number, center?: number[]}, teeth?: boolean, piriform?: boolean, vallecula?: boolean}} [options]
  * @returns {{lang: string, accent: string|null, ipa: string, words: object[], head: object, plan: object, timeline: object, sampleRate: number, samples: Float32Array, duration: number}}
  */
 export function synthesize(text, options = {}) {

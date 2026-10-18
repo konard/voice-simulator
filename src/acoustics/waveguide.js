@@ -19,10 +19,10 @@ const GLOTTAL_REFLECTION = 0.75;
 const LIP_REFLECTION = -0.85;
 const NOSTRIL_REFLECTION = -0.85;
 /** Piriform fossae: depth (cm), combined opening (cm²), height (cm). */
-const PIRIFORM_LENGTH = 2;
-const PIRIFORM_AREA = 0.5;
-const PIRIFORM_HEIGHT = 2.4;
-const REST_LENGTH = 16.5;
+export const PIRIFORM_LENGTH = 2;
+export const PIRIFORM_AREA = 0.5;
+export const PIRIFORM_HEIGHT = 2.4;
+export const REST_LENGTH = 16.5;
 
 /**
  * Per-step attenuation of a section: boundary-layer losses grow with

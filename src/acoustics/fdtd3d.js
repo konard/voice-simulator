@@ -20,12 +20,18 @@
  * The incisors are solid voxels in the slices just behind the lips: tract
  * cells outside the slot between the incisal edges are walls (no links),
  * and the slot cells carry the whole teeth cross-section, so the slot
- * width follows the jaw.
+ * width follows the jaw. In the slices around the incisors the air of a
+ * section gathers in line with the slot (see openingTable in
+ * voxel-model.js); elsewhere every cube of a section has the same fill.
+ * The piriform fossae and the vallecula are blind pouches with a fixed
+ * fill (see sinuses.js).
  *
- * Simplifications: the voxel tract has the head's rest vocal tract length
- * (dynamic lengthening by the larynx or lips only rescales the area
- * function), and wall losses use the same empirical loss model as the 1D
- * waveguide, converted to a loss per unit of time.
+ * The voxel tract has the head's rest vocal tract length; the dynamic
+ * length of the larynx and lips stretches the time step instead (see
+ * stepDuration). Simplifications: that stretch scales the nose and the
+ * air around the head with the tract, and wall losses use the same
+ * empirical loss model as the 1D waveguide, converted to a loss per unit
+ * of time.
  *
  * A `microphone` option ({distance, azimuth, elevation} relative to the
  * lips) moves the receiver cell; the free-air shell grows to reach it (up
@@ -38,10 +44,12 @@ import { lossFactor } from './waveguide.js';
 import { SPEED_OF_SOUND } from './transfer.js';
 import {
   CELL_AIR,
+  CELL_SINUS,
   CELL_TRACT,
   LINK_INNER,
   LINK_LIPS,
   LINK_NOSTRILS,
+  LINK_SINUS,
   LINK_VELUM,
   OPEN_FACE_NORMALS,
   buildVoxelModel,
@@ -84,6 +92,42 @@ function resample(values, position) {
   return values[lower] + (values[upper] - values[lower]) * (source - lower);
 }
 
+/** Cell indices of every tube (tract, nose, pouches) sorted by arc. */
+function tubeMembers(cells) {
+  const tubes = [];
+  cells.forEach((cell, index) => {
+    if (cell.kind !== CELL_AIR) {
+      const tube = cell.tube ?? cell.kind;
+      (tubes[tube] ??= []).push(index);
+    }
+  });
+  return tubes
+    .filter(Boolean)
+    .map((members) => members.sort((a, b) => cells[a].arc - cells[b].arc));
+}
+
+/**
+ * Calls visit(index, other, weight) for every pair of cells of a tube
+ * within 2 dx of arc, weighted by a triangular kernel of half-width 2 dx.
+ */
+function forNeighbours(cells, sorted, dx, visit) {
+  const reach = 2 * dx;
+  let low = 0;
+  for (const index of sorted) {
+    const arc = cells[index].arc;
+    while (cells[sorted[low]].arc < arc - reach) {
+      low++;
+    }
+    for (let position = low; position < sorted.length; position++) {
+      const other = sorted[position];
+      if (cells[other].arc > arc + reach) {
+        break;
+      }
+      visit(index, other, 1 - Math.abs(cells[other].arc - arc) / reach);
+    }
+  }
+}
+
 /**
  * Cross-section of the envelope at each tube cell. Cells of a tube form
  * slices about `dx` apart in arc length; a triangular kernel of half-width
@@ -92,32 +136,14 @@ function resample(values, position) {
  */
 function envelopeAreas(model) {
   const { cells, dx } = model;
-  const reach = 2 * dx;
   const areas = new Float64Array(cells.length).fill(dx * dx);
-  const byKind = [[], []];
-  cells.forEach((cell, index) => {
-    if (cell.kind !== CELL_AIR) {
-      byKind[cell.kind].push(index);
-    }
-  });
-  for (const members of byKind) {
-    const sorted = members.sort((a, b) => cells[a].arc - cells[b].arc);
-    let low = 0;
+  for (const sorted of tubeMembers(cells)) {
     for (const index of sorted) {
-      const arc = cells[index].arc;
-      while (cells[sorted[low]].arc < arc - reach) {
-        low++;
-      }
-      let weight = 0;
-      for (let other = low; other < sorted.length; other++) {
-        const distance = Math.abs(cells[sorted[other]].arc - arc);
-        if (cells[sorted[other]].arc > arc + reach) {
-          break;
-        }
-        weight += 1 - distance / reach;
-      }
-      areas[index] = (weight * dx ** 3) / reach;
+      areas[index] = 0;
     }
+    forNeighbours(cells, sorted, dx, (index, other, weight) => {
+      areas[index] += (weight * dx * dx) / 2;
+    });
   }
   return areas;
 }
@@ -269,6 +295,7 @@ export class Fdtd3d {
     this.pressure = array('pressure', Float64Array, cellCount);
     this.divergence = array('divergence', Float64Array, cellCount);
     this.fill = new Float64Array(cellCount).fill(1);
+    this.cellArea = new Float64Array(cellCount);
     this.keep = array('keep', Float64Array, cellCount).fill(1);
     this.gain = array('gain', Float64Array, cellCount).fill(COURANT);
     this.cellKind = Uint8Array.from(model.cells, (cell) => cell.kind);
@@ -276,6 +303,11 @@ export class Fdtd3d {
     this.envelope = envelopeAreas(model);
     // Envelope seen by the area function: smaller in the teeth slot cells.
     this.effective = Float64Array.from(this.envelope);
+    this.opening = model.opening ?? null;
+    this.teethCell = new Uint8Array(cellCount);
+    for (const cell of model.teeth?.cells ?? []) {
+      this.teethCell[cell] = 1;
+    }
     this.solid = new Uint8Array(cellCount);
     this.teethGap = null;
     this.velocity = array('velocity', Float64Array, linkCount);
@@ -312,6 +344,147 @@ export class Fdtd3d {
         this.sourceCells.push(index);
       }
     });
+    this.#fillSinuses(model);
+  }
+
+  /**
+   * Pouches hold their anatomical volume (area x depth) spread evenly over
+   * their cells. The tract cells at a pouch opening hold at least the
+   * pouch fill, so the opening is about as wide as the pouch: a narrow
+   * neck would turn the pouch into a Helmholtz resonator.
+   */
+  #fillSinuses(model) {
+    const cubic = model.dx ** 3;
+    for (const sinus of model.sinuses ?? []) {
+      const cells = [];
+      model.cells.forEach((cell, index) => {
+        if (cell.kind === CELL_SINUS && cell.tube === sinus.tube) {
+          cells.push(index);
+        }
+      });
+      const fill = Math.min(
+        1,
+        Math.max(MIN_FILL, (sinus.area * sinus.length) / (cells.length * cubic))
+      );
+      for (const index of cells) {
+        this.fill[index] = fill;
+      }
+    }
+    const floors = new Map();
+    for (let link = 0; link < this.linkCount; link++) {
+      if (this.linkKind[link] === LINK_SINUS) {
+        const [tract, sinus] =
+          this.cellKind[this.linkA[link]] === CELL_SINUS
+            ? [this.linkB[link], this.linkA[link]]
+            : [this.linkA[link], this.linkB[link]];
+        floors.set(tract, Math.max(floors.get(tract) ?? 0, this.fill[sinus]));
+      }
+    }
+    this.openingFloors = [...floors];
+  }
+
+  /**
+   * True for the tract cells whose fill comes from the opening weights
+   * (see openingTable): all but the teeth cells, which share the slot area
+   * evenly, while the teeth are in place. Without teeth every cell of a
+   * section has the same fill.
+   */
+  #ranked(index) {
+    return (
+      this.opening !== null &&
+      this.teethGap !== null &&
+      this.cellKind[index] === CELL_TRACT &&
+      !this.teethCell[index]
+    );
+  }
+
+  /**
+   * Fill of a cell on a link that crosses a section narrower than the
+   * cell's own. Ranked cells keep their open pattern and close in
+   * proportion, so a link between two open cells never shuts because the
+   * other cell's window ranks it lower.
+   */
+  #narrowedFill(index, narrowest) {
+    if (this.#ranked(index)) {
+      return (
+        this.fill[index] *
+        Math.min(1, narrowest / Math.max(this.cellArea[index], 1e-12))
+      );
+    }
+    return this.#fillAt(index, narrowest);
+  }
+
+  /**
+   * Opening scale c that fills a stretch of points to `area` cm² (see
+   * openingTable in voxel-model.js): the points with the highest weights
+   * saturate at 1 and the rest hold c times their weight.
+   */
+  #binScale(bin, area) {
+    const { weights, shares, heads, tails } = this.opening.bins[bin];
+    const target = area / this.opening.sample;
+    const count = weights.length;
+    if (count === 0) {
+      return 0;
+    }
+    if (target >= heads[count]) {
+      return Infinity;
+    }
+    // Largest k whose point saturates first at c = 1 / w[k].
+    let low = -1;
+    let high = count - 1;
+    while (low < high) {
+      const middle = (low + high + 1) >> 1;
+      const filled =
+        heads[middle] + shares[middle] + tails[middle + 1] / weights[middle];
+      if (filled <= target) {
+        low = middle;
+      } else {
+        high = middle - 1;
+      }
+    }
+    return (target - heads[low + 1]) / tails[low + 1];
+  }
+
+  /** Opening scale at `arc`, interpolated between stretches. */
+  #scale(arc, area) {
+    const { binLength, bins } = this.opening;
+    const last = bins.length - 1;
+    const at = Math.min(last, Math.max(0, arc / binLength - 0.5));
+    const lower = Math.floor(at);
+    const upper = Math.min(last, lower + 1);
+    const low = this.#binScale(lower, area);
+    const high = this.#binScale(upper, area);
+    if (!Number.isFinite(low) || !Number.isFinite(high) || low <= 0) {
+      return Math.max(low, high);
+    }
+    return low * (high / low) ** (at - lower);
+  }
+
+  /** Mean fill min(1, c w) of the points of a tract cube. */
+  #openShare(index, scale) {
+    const { cellWeights, cellTails, per } = this.opening;
+    if (scale === Infinity) {
+      return 1;
+    }
+    const start = index * per;
+    let low = 0;
+    let high = per;
+    while (low < high) {
+      const middle = (low + high) >> 1;
+      if (scale * cellWeights[start + middle] >= 1) {
+        low = middle + 1;
+      } else {
+        high = middle;
+      }
+    }
+    return (low + scale * cellTails[index * (per + 1) + low]) / per;
+  }
+
+  #fillAt(index, area) {
+    if (this.#ranked(index)) {
+      return this.#openShare(index, this.#scale(this.cellArc[index], area));
+    }
+    return Math.min(1, Math.max(0, area / this.effective[index]));
   }
 
   /** Tube links and cells: only these change with the articulation. */
@@ -396,9 +569,20 @@ export class Fdtd3d {
     }
   }
 
-  /** Time step in seconds (the solver runs at 1 / dt). */
-  stepDuration() {
-    return this.dt;
+  /**
+   * Time step in seconds (the solver runs at 1 / dt). With a tract shape
+   * the step stretches with its length, as in the waveguide: the voxel
+   * tract has the rest length, and running it slower by length / rest
+   * length scales every distance of the grid by that ratio, so a
+   * protruded or lowered tract keeps its formants.
+   * @param {{length?: number}} [shape]
+   */
+  stepDuration(shape) {
+    const length = shape?.length;
+    if (!(length > 0)) {
+      return this.dt;
+    }
+    return (this.dt * length) / this.model.lengths[CELL_TRACT];
   }
 
   /** Returns false when the areas did not change since the last call. */
@@ -417,12 +601,15 @@ export class Fdtd3d {
     const length = this.model.lengths[kind];
     for (const index of this.tubeCells[kind]) {
       const area = resample(areas, this.cellArc[index] / length);
-      this.fill[index] = Math.min(
-        1,
-        Math.max(MIN_FILL, area / this.effective[index])
-      );
+      this.cellArea[index] = area;
+      this.fill[index] = Math.max(MIN_FILL, this.#fillAt(index, area));
       if (this.solid[index]) {
         this.fill[index] = 1;
+      }
+    }
+    if (kind === CELL_TRACT) {
+      for (const [index, floor] of this.openingFloors) {
+        this.fill[index] = Math.max(this.fill[index], floor);
       }
     }
     return true;
@@ -541,7 +728,11 @@ export class Fdtd3d {
         for (let index = from[link]; index <= to[link]; index++) {
           narrowest = Math.min(narrowest, areas[index]);
         }
-        g = Math.min(g, narrowest / Math.max(envelope[a], envelope[b]));
+        g = Math.min(
+          g,
+          this.#narrowedFill(a, narrowest),
+          this.#narrowedFill(b, narrowest)
+        );
         area = Math.min(area, narrowest);
       }
       this.conductance[link] = Math.max(0, g);

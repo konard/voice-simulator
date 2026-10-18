@@ -121,9 +121,10 @@ export class VoiceRenderer {
    * and `enclosure` ({width, height, depth, absorption, center} in cm, a
    * box around the head) choose where and in what space the voice is
    * heard. The output grows by the reverberation tail.
-   * @param {{sampleRate?: number, sections?: number, solver?: string, seed?: string|number, blockSize?: number, head?: object, dx?: number, model?: object, output?: string, microphone?: object, room?: string|object, enclosure?: object, teeth?: boolean, piriform?: boolean}} [options]
+   * @param {{sampleRate?: number, sections?: number, solver?: string, seed?: string|number, blockSize?: number, head?: object, dx?: number, model?: object, output?: string, microphone?: object, room?: string|object, enclosure?: object, teeth?: boolean, piriform?: boolean, vallecula?: boolean}} [options]
    *   `teeth: false` leaves out the incisors, `piriform: false` the
-   *   piriform fossae side branches of the waveguide.
+   *   piriform fossae (both solvers) and `vallecula: false` the vallecula
+   *   (3D only).
    */
   constructor(plan, options = {}) {
     this.plan = plan;
@@ -147,6 +148,7 @@ export class VoiceRenderer {
       output: options.output,
       kernel: options.kernel,
       piriform: options.piriform,
+      vallecula: options.vallecula,
       microphone: options.microphone,
       enclosure: options.enclosure,
     });
