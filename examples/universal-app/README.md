@@ -29,8 +29,9 @@ desktop packages, and Capacitor mobile projects.
   head on the 3D tiers.
 - **Download** (`src/components/ExportControls.js`): the last utterance as
   WAV, FLAC, AIFF or AU, with a choice of bit depth and float samples.
-- The previous version of the app stays online at `/v1/`
-  (`scripts/build-previous-versions.mjs`).
+- Every version of the app stays online at `/v1/`, `/v2/`, … and the
+  current one also at the next path, linked from the header
+  (`previous-versions.json`, `scripts/build-previous-versions.mjs`).
 - Audio and visual quality tiers are chosen automatically from a benchmark
   and a runtime governor that keeps the load under 80%; the HUD shows both
   loads. A fixed tier can be selected too.

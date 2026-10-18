@@ -80,9 +80,11 @@ Synthesis runs in a Web Worker and is streamed to Web Audio in chunks; the 3D
 view uses three.js and colours the tract (or every air voxel with the 3D
 solver) by the simulated acoustic pressure.
 
-Every published release stays online: the previous version of the app is at
-`/v1/` (`https://konard.github.io/voice-simulator/v1/` once this version is
-deployed to GitHub Pages).
+Every published release stays online at its own path so all versions can be
+compared: `/v1/`, `/v2/` (the release before issue 9) and so on, with the
+current version at both `/` and the next path (`/v3/` for this one). The
+header of the app links every version
+(`https://konard.github.io/voice-simulator/v2/`).
 
 ### Library
 

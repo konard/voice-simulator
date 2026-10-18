@@ -20,13 +20,15 @@ import { VoiceMatch } from './components/VoiceMatch.js';
 import { SpokenText } from './components/SpokenText.js';
 import { useSimulator } from './engine/use-simulator.js';
 import { detectLocale, strings } from './i18n.js';
+import { versionLinks } from './versions.js';
+import previousVersions from '../previous-versions.json';
 
 const repositoryUrl =
   import.meta.env.VITE_REPOSITORY_URL ??
   'https://github.com/konard/voice-simulator';
 
-// The previous release stays published next to the current one.
-const PREVIOUS_VERSION_URL = 'https://konard.github.io/voice-simulator/v1/';
+// Every release stays published next to the current one (see versions.js).
+const VERSIONS = versionLinks(previousVersions);
 const THEMES = ['system', 'light', 'dark'];
 
 function initialSeed() {
@@ -487,9 +489,25 @@ export function App() {
           `${t.theme}: ${t.themes[theme]}`
         ),
         h(
-          'a',
-          { href: PREVIOUS_VERSION_URL, target: '_blank', rel: 'noreferrer' },
-          t.previousVersion
+          'span',
+          { className: 'versions' },
+          `${t.versions}:`,
+          VERSIONS.map((version) =>
+            h(
+              'a',
+              {
+                key: version.path,
+                href: version.href,
+                target: '_blank',
+                rel: 'noreferrer',
+                title: version.current
+                  ? t.currentVersion
+                  : `${t.version} ${version.number}`,
+                'aria-current': version.current ? 'page' : undefined,
+              },
+              version.path
+            )
+          )
         ),
         h(
           'a',
