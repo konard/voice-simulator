@@ -1,0 +1,10 @@
+male: f0 118 Hz, tenseness 0.650, Rd 1.05, H1-H2 4.6 dB (Fant 4.1), H1-H(3 kHz) 44.6 dB, breathiness 0.14, aspiration 1.00
+female: f0 216 Hz, tenseness 0.520, Rd 1.44, H1-H2 8.7 dB (Fant 8.4), H1-H(3 kHz) 39.8 dB, breathiness 0.29, aspiration 1.30
+child: f0 239 Hz, tenseness 0.500, Rd 1.50, H1-H2 9.2 dB (Fant 9.0), H1-H(3 kHz) 39.8 dB, breathiness 0.28, aspiration 1.20
+tenseness 0.7 Rd 0.90: H1-H2 2.9 dB
+tenseness 0.65 Rd 1.05: H1-H2 4.6 dB
+tenseness 0.6 Rd 1.20: H1-H2 6.3 dB
+tenseness 0.55 Rd 1.35: H1-H2 7.9 dB
+tenseness 0.5 Rd 1.50: H1-H2 9.2 dB
+tenseness 0.45 Rd 1.65: H1-H2 10.4 dB
+tenseness 0.4 Rd 1.80: H1-H2 11.4 dB

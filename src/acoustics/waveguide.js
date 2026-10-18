@@ -18,11 +18,11 @@
  * every vowel (Dang & Honda 1997; Takemoto et al. 2010).
  */
 
+import { glottalReflection } from './glottis.js';
 import { Radiation } from './radiation.js';
 import { SPEED_OF_SOUND } from './transfer.js';
 
 const MIN_AREA = 1e-4;
-const GLOTTAL_REFLECTION = 0.75;
 /** Sections over which lossFactor gives the attenuation of one section. */
 export const LOSS_REFERENCE_SECTIONS = 44;
 /** Piriform fossae: depth (cm), combined opening (cm²), height (cm). */
@@ -75,6 +75,7 @@ export class Waveguide {
     const nose = options.noseSections ?? 28;
     /** Scale of the boundary (wall and viscous) losses. */
     this.wallLoss = options.head?.wallLoss ?? 1;
+    this.glottalReflection = glottalReflection(options.head);
     this.n = n;
     this.noseN = nose;
     /** Exponent that turns lossFactor into the attenuation of a section. */
@@ -281,7 +282,7 @@ export class Waveguide {
    */
   step(glottalFlow, noisePosition, noise) {
     this.junctionRight[0] =
-      this.left[0] * GLOTTAL_REFLECTION + glottalFlow / this.areas[0];
+      this.left[0] * this.glottalReflection + glottalFlow / this.areas[0];
     const last = this.n - 1;
     const reflected = this.lips.process(this.right[last]);
     this.junctionLeft[this.n] = reflected;

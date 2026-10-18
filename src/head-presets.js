@@ -23,7 +23,12 @@
  *   (experiments/issue-9-preset-fit.mjs, rms error about 5%);
  * - female voices are on average breathier, with a laxer (higher Rd) pulse
  *   and more aspiration noise (Klatt and Klatt 1990, JASA 87; Hanson 1997,
- *   JASA 101). Raising f0 alone gives a "high-pitched man".
+ *   JASA 101). Raising f0 alone gives a "high-pitched man";
+ * - corrected for the vowel, H1*-A3* of women is 9.6 dB above that of men
+ *   and H1*-H2* 3.1 dB (Hanson and Chuang 1999, JASA 106, table X), mostly
+ *   through posterior glottal chinks. A 1 mm² chink on the female and child
+ *   presets gives 10 dB, the laxer pulse 4-5 dB
+ *   (experiments/issue-9-preset-source.mjs); men keep a closed glottis.
  */
 
 export const HEAD_PRESETS = Object.freeze({
@@ -72,6 +77,7 @@ export const HEAD_PRESETS = Object.freeze({
       vibrato: [0.25, 0.25, 0.1],
       speechRate: [1.02, 1.02, 0.06],
       aspirationLevel: [1.3, 1.3, 0.15],
+      glottalChink: [1, 1, 0.4],
     }),
   }),
   child: Object.freeze({
@@ -96,6 +102,7 @@ export const HEAD_PRESETS = Object.freeze({
       vibrato: [0.2, 0.2, 0.08],
       speechRate: [0.92, 0.92, 0.06],
       aspirationLevel: [1.2, 1.2, 0.15],
+      glottalChink: [1, 1, 0.4],
     }),
   }),
 });

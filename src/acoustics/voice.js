@@ -168,6 +168,7 @@ export class VoiceRenderer {
       jitter: this.head.jitter,
       shimmer: this.head.shimmer,
       aspirationLevel: this.head.aspirationLevel,
+      chink: this.head.glottalChink,
     });
     this.noise = new NoiseSources(seed);
     this.output = new OutputStage(this.sampleRate, this.head.outputGain);

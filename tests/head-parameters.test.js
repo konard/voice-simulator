@@ -12,6 +12,7 @@ import { HEAD_PARAMETERS, normalizeHeadConfig } from '../src/head-config.js';
 const RATE = 16000;
 const IPA = 'ˈmasa ˈna';
 const NEW_KEYS = [
+  'glottalChink',
   'jitter',
   'shimmer',
   'vibratoRate',

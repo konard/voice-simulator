@@ -215,3 +215,83 @@ export function spectralPeaks(response, sampleRate, options = {}) {
     )
     .map(([frequency]) => frequency);
 }
+
+/**
+ * Level (dB) of a sinusoid at a frequency (Hz) in a Hann-windowed range;
+ * `search` (a fraction, 0.02 by default) tolerates pitch drift by keeping
+ * the strongest of nine frequencies within ±search.
+ * @param {ArrayLike<number>} samples
+ * @param {number} sampleRate
+ * @param {number} frequency
+ * @param {{start?: number, duration?: number, search?: number}} [options]
+ */
+export function harmonicLevel(samples, sampleRate, frequency, options = {}) {
+  const start = Math.floor((options.start ?? 0) * sampleRate);
+  const length = Math.floor((options.duration ?? 0.06) * sampleRate);
+  const search = options.search ?? 0.02;
+  let best = 0;
+  for (let step = -4; step <= 4; step++) {
+    const omega =
+      (2 * Math.PI * frequency * (1 + (search * step) / 4)) / sampleRate;
+    let re = 0;
+    let im = 0;
+    for (let index = 0; index < length; index++) {
+      const value =
+        (samples[start + index] ?? 0) *
+        (0.5 - 0.5 * Math.cos((2 * Math.PI * index) / length));
+      re += value * Math.cos(omega * index);
+      im -= value * Math.sin(omega * index);
+    }
+    best = Math.max(best, Math.hypot(re, im));
+  }
+  return 20 * Math.log10(best + 1e-12);
+}
+
+/**
+ * Level (dB) that formants F1 and F2 (Hz) add at a frequency, for narrow
+ * bandwidths and unit gain at 0 Hz: the vowel correction of Hanson (1997).
+ * @param {number} frequency
+ * @param {number[]} formants
+ */
+export function formantBoost(frequency, [f1, f2]) {
+  return [f1, f2].reduce(
+    (sum, formant) =>
+      sum +
+      20 * Math.log10(formant ** 2 / Math.abs(formant ** 2 - frequency ** 2)),
+    0
+  );
+}
+
+/**
+ * Spectral tilt measures of a voiced range (dB) after Hanson (1997) and
+ * Hanson and Chuang (1999): H1-H2 and H1-A3, A3 the strongest harmonic
+ * within ±10% of F3, raw and corrected for F1 and F2 (H1*-H2*, H1*-A3*).
+ * Corrected values are meaningful as differences between speakers, since
+ * the neutral reference of the published correction is left out.
+ * @param {ArrayLike<number>} samples
+ * @param {number} sampleRate
+ * @param {{f0: number, formants: number[], start?: number, duration?: number}} options
+ *   `formants` F1-F3 (Hz).
+ */
+export function spectralTilt(samples, sampleRate, options) {
+  const { f0, formants } = options;
+  const level = (frequency) =>
+    harmonicLevel(samples, sampleRate, frequency, options);
+  const h1 = level(f0);
+  const h2 = level(2 * f0);
+  let a3 = -Infinity;
+  for (
+    let k = Math.ceil((0.9 * formants[2]) / f0);
+    k * f0 <= 1.1 * formants[2];
+    k++
+  ) {
+    a3 = Math.max(a3, level(k * f0));
+  }
+  const boost = (frequency) => formantBoost(frequency, formants);
+  return {
+    h1h2: h1 - h2,
+    h1a3: h1 - a3,
+    h1h2Corrected: h1 - h2 - boost(f0) + boost(2 * f0),
+    h1a3Corrected: h1 - a3 - boost(f0) + boost(formants[2]),
+  };
+}

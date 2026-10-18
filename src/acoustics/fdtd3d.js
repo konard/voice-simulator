@@ -42,6 +42,7 @@
 
 import { LOSS_REFERENCE_SECTIONS, lossFactor } from './waveguide.js';
 import { SPEED_OF_SOUND } from './transfer.js';
+import { glottalReflection } from './glottis.js';
 import {
   CELL_AIR,
   CELL_SINUS,
@@ -60,8 +61,6 @@ import { createKernel } from './fdtd-kernel.js';
 
 const COURANT = 0.5;
 const MIN_FILL = 1e-4;
-/** Glottis termination admittance (reflection 0.75, like the waveguide). */
-const GLOTTIS_ADMITTANCE = 1 / 7;
 /**
  * Microphone level per cm of cell size: matches the waveguide output level
  * for the same source (the radiated pressure is sampled at one point).
@@ -251,6 +250,9 @@ export class Fdtd3d {
     const listening = Boolean(options.microphone || model.enclosure);
     this.output = options.output ?? (listening ? 'microphone' : 'flow');
     this.wallLoss = options.head?.wallLoss ?? 1;
+    /** Glottis termination admittance (the waveguide's reflection). */
+    const reflection = glottalReflection(options.head);
+    this.glottisAdmittance = (1 - reflection) / (1 + reflection);
     this.#prepareGrid(model, options);
     this.#placeMicrophone(model, resolveMicrophone(options.microphone));
     this.noiseArc = -1;
@@ -557,7 +559,7 @@ export class Fdtd3d {
       slices += (this.dx * this.dx) / this.envelope[index];
     }
     for (const index of this.sourceCells) {
-      this.admittance[index] = GLOTTIS_ADMITTANCE / Math.max(1, slices);
+      this.admittance[index] = this.glottisAdmittance / Math.max(1, slices);
     }
     this.#updateCellCoefficients();
   }

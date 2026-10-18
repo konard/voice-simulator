@@ -276,6 +276,7 @@ const PARAMETER_LABELS_RU = {
   shimmer: 'Шиммер',
   vibratoRate: 'Частота вибрато',
   aspirationLevel: 'Шум придыхания',
+  glottalChink: 'Глоттальная щель',
   declination: 'Деклинация',
   accentStrength: 'Сила ударения',
   stressLengthening: 'Удлинение ударных',
