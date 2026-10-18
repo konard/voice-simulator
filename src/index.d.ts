@@ -1388,3 +1388,91 @@ export declare function timelineAt(
   timeline: Timeline | null | undefined,
   time: number
 ): { word: number; syllable: number } | null;
+// Face animation: ARKit blendshapes, VRM expressions and Oculus visemes
+export type VisemeFormat = 'arkit' | 'vrm' | 'oculus';
+export declare const ARKIT_BLENDSHAPES: readonly string[];
+export declare const VRM_VISEMES: readonly ['aa', 'ih', 'ou', 'ee', 'oh'];
+export declare const OVR_VISEMES: readonly string[];
+export declare const VISEME_FORMATS: Readonly<
+  Record<VisemeFormat, readonly string[]>
+>;
+/** Largest inter-incisor opening (cm), jawOpen 1. */
+export declare const MAX_OPENING: number;
+export interface VowelShapes {
+  aa: number;
+  ee: number;
+  ih: number;
+  oh: number;
+  ou: number;
+}
+/** Physical face measures of an articulator state. */
+export interface FaceRig {
+  /** Inter-incisor gap (cm). */
+  gap: number;
+  /** Jaw rotation (radians) about the jaw pivot. */
+  jawAngle: number;
+  /** Jaw angle over the angle at the largest opening, 0..1. */
+  jawOpen: number;
+  /** Lip opening width and height (cm). */
+  lipWidth: number;
+  lipHeight: number;
+  lipsSealed: number;
+  /** Lip opening beyond the incisor gap (cm). */
+  lipParting: number;
+  /** Forward push of the lips (cm). */
+  protrusion: number;
+  rounding: number;
+  spread: number;
+  bilabial: number;
+  labiodental: number;
+  roundedLabial: number;
+  tongueAmount: number;
+  tongueLocation: number;
+  tongue: {
+    dental: number;
+    alveolar: number;
+    postalveolar: number;
+    palatal: number;
+    velar: number;
+  };
+  sibilance: number;
+  rhotic: number;
+  lateral: number;
+  nasal: number;
+  vowel: VowelShapes;
+  silence: number;
+}
+export interface VisemeTrack {
+  format: VisemeFormat;
+  fps: number;
+  duration: number;
+  names: readonly string[];
+  frames: { time: number; weights: Record<string, number> }[];
+}
+export declare function vowelShapes(state: {
+  height?: number;
+  backness?: number;
+  rounding?: number;
+}): VowelShapes;
+export declare function faceRig(
+  state: Record<string, number>,
+  head?: Partial<HeadConfig>,
+  options?: { shape?: object; maxOpening?: number }
+): FaceRig;
+export declare function arkitBlendshapes(rig: FaceRig): Record<string, number>;
+export declare function vrmExpressions(rig: FaceRig): Record<string, number>;
+export declare function ovrVisemes(rig: FaceRig): Record<string, number>;
+export declare function rigWeights(
+  rig: FaceRig,
+  format: VisemeFormat
+): Record<string, number>;
+export declare function visemeTrack(
+  plan: Plan,
+  head?: Partial<HeadConfig>,
+  options?: {
+    fps?: number;
+    format?: VisemeFormat;
+    maxOpening?: number;
+    digits?: number;
+  }
+): VisemeTrack;

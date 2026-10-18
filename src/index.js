@@ -252,3 +252,18 @@ export {
 } from './ipa/syllables.js';
 export { syllableSpans, hindiAksharas } from './g2p/orthography.js';
 export { utteranceTimeline, timelineAt } from './articulation/timeline.js';
+// Face animation: ARKit blendshapes, VRM expressions and Oculus visemes
+export {
+  ARKIT_BLENDSHAPES,
+  MAX_OPENING,
+  OVR_VISEMES,
+  VISEME_FORMATS,
+  VRM_VISEMES,
+  arkitBlendshapes,
+  faceRig,
+  ovrVisemes,
+  rigWeights,
+  visemeTrack,
+  vowelShapes,
+  vrmExpressions,
+} from './animation/visemes.js';

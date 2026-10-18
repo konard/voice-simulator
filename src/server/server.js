@@ -30,6 +30,7 @@ import {
 } from '../audio/formats.js';
 import { LANGUAGES, textToIpa } from '../g2p/index.js';
 import { headModelObj } from '../geometry/model.js';
+import { visemeTrack } from '../animation/visemes.js';
 import {
   DEFAULT_HEAD,
   decodeHeadConfig,
@@ -236,6 +237,22 @@ function createRoutes(version) {
       const { text, options } = synthesisOptions(params);
       const { lang, accent, ipa, timeline } = prepareUtterance(text, options);
       return { lang, accent: accent ?? null, ipa, timeline };
+    },
+    'GET /api/visemes': (params) => {
+      const { text, options } = synthesisOptions(params);
+      const { plan, head } = prepareUtterance(text, options);
+      const fps = Number(params.fps ?? 60);
+      if (!(fps > 0 && fps <= 240)) {
+        throw new HttpError(400, `fps must be in (0, 240], got ${params.fps}`);
+      }
+      try {
+        return visemeTrack(plan, head, {
+          format: params.format ?? 'arkit',
+          fps,
+        });
+      } catch (error) {
+        throw new HttpError(400, error.message);
+      }
     },
     'GET /api/head/random': (params) =>
       randomHeadConfig(params.seed ?? Date.now(), {
