@@ -14,6 +14,7 @@ import {
 } from '../../../src/index.js';
 import { ExportControls } from './components/ExportControls.js';
 import { AcousticsSettings } from './components/AcousticsSettings.js';
+import { CharacterPanel } from './components/CharacterPanel.js';
 import { HeadEditor } from './components/HeadEditor.js';
 import { DEFAULT_ACOUSTICS, listeningSettings } from './engine/listening.js';
 import { PresetSelect, initialPreset } from './components/PresetSelect.js';
@@ -557,6 +558,7 @@ export function App() {
         onStop: () => simulator.engineRef.current?.stop(),
       })
     ),
+    h(CharacterPanel, { simulator, head, t }),
     h(EditorPanel, {
       head,
       seed,
