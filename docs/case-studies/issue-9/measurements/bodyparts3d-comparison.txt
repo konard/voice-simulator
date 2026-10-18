@@ -1,0 +1,32 @@
+Head model against BODYPARTS3D
+Mitsuhashi N, Fujieda K, Tamura T, Kawamoto S, Takagi T, Okubo K (2009) BodyParts3D: 3D structure database for anatomical concepts. Nucleic Acids Research 37, D782-D785. doi:10.1093/nar/gkn613. CC BY 4.0, BodyParts3D, (c) The Database Center for Life Science.
+Produced by scripts/compare-hra.mjs.
+
+male: key point distance after a rigid fit (mm)
+  key point          dental fit  all-point fit
+  upperIncisor              4.2            4.9
+  lowerIncisor              0.9            0.9
+  upperFirstMolar           2.1            4.7
+  upperSecondMolar          0.5            3.9
+  staphylion                5.3            2.8
+  palateVault               2.4            4.3
+  uvula                       -              -
+  tongueTip                 2.9            1.5
+  tongueDorsum              7.8            9.0
+  glottis                  25.2           20.4
+  rms (fitted)             2.40           8.09
+male: outline distance per cut and part after the dental fit (mm)
+  MIDSAGITTAL         palate         2.03
+  MIDSAGITTAL         tongue         4.44
+  PARASAGITTAL 15 MM  upperTeeth     3.16
+  PARASAGITTAL 15 MM  lowerTeeth     2.16
+  PARASAGITTAL 15 MM  palate         2.97
+  PARASAGITTAL 15 MM  tongue         3.12
+  CORONAL AT M1       upperTeeth     2.86
+  CORONAL AT M1       lowerTeeth     1.94
+  CORONAL AT M1       palate         3.88
+  CORONAL AT M1       tongue         2.74
+  AXIAL CROWNS        upperTeeth     1.81
+  AXIAL CROWNS        tongue         2.46
+  AXIAL PALATE        upperTeeth     9.54
+  AXIAL PALATE        palate         4.90

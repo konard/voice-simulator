@@ -9,8 +9,14 @@
  * (symmetric mean nearest distance). Key point distances come from
  * src/geometry/reference-anatomy.js.
  *
+ * With --atlas the male preset is compared with the BodyParts3D or
+ * Z-Anatomy atlas instead (src/geometry/atlas-sources.js), read from the
+ * directory that scripts/fetch-anatomy.mjs wrote: their palate is bone, cut
+ * just above the vault, and BodyParts3D has no soft palate.
+ *
  * Usage:
  *   node scripts/compare-hra.mjs [--out DIR] [--metrics FILE]
+ *     [--atlas bodyparts3d|z-anatomy --dir DIR]
  */
 
 import { mkdirSync, writeFileSync } from 'node:fs';
@@ -39,7 +45,11 @@ import {
 } from '../src/geometry/reference-anatomy.js';
 import { axisPlane, chainSegments, sliceMesh } from '../src/geometry/slice.js';
 import { presetHeadConfig } from '../src/head-config.js';
-import { HRA, fetchHra } from './fetch-anatomy.mjs';
+import {
+  BODYPARTS3D_ATLAS,
+  Z_ANATOMY_ATLAS,
+} from '../src/geometry/atlas-sources.js';
+import { HRA, fetchHra, loadAtlasSource } from './fetch-anatomy.mjs';
 
 const ROOT = new globalThis.URL('..', import.meta.url).pathname;
 const PANEL = 360;
@@ -132,32 +142,56 @@ function cuts(points) {
   ].map((cut) => ({ ...cut, view: { ...cut.view, scale: SCALE } }));
 }
 
+/** A fetched atlas (the Visible Human Japanese male) for compareSex(). */
+function atlasReference(name, directory) {
+  const source = loadAtlasSource(name, directory);
+  return {
+    keyPoints: source.keyPoints,
+    meshes: source.parts,
+    title: ATLASES[name].title,
+    credit: ATLASES[name].credit,
+  };
+}
+
 function outlines(mesh, plane) {
   return chainSegments(sliceMesh(mesh, plane), 1e-6);
 }
 
-/** Render one body and measure its cuts. */
-function compareSex(sex, meshes) {
+/** An HRA body as the parts and key points compareSex() takes. */
+function hraReference(meshes) {
   const parts = referenceParts(meshes);
-  const reference = referenceKeyPoints(parts);
+  return {
+    keyPoints: referenceKeyPoints(parts),
+    meshes: Object.fromEntries(
+      Object.keys(PARTS).map((name) => [name, mergeMeshes(parts[name] ?? [])])
+    ),
+    title: 'HUBMAP HRA VISIBLE HUMAN',
+    credit: 'HRA CC BY 4.0, HUBMAP',
+  };
+}
+
+/**
+ * Render one body and measure its cuts.
+ * @param {string} sex Preset compared.
+ * @param {{keyPoints: object, meshes: Record<string, object|undefined>,
+ *   title: string, credit: string}} body
+ */
+function compareSex(sex, body) {
+  const reference = body.keyPoints;
   const head = presetHeadConfig(sex);
   const model = modelKeyPoints(head);
   const dental = compareKeyPoints(model, reference, { fit: DENTAL });
   const all = compareKeyPoints(model, reference);
   const fitted = modelParts(head, dental.transform);
-  const referenceMeshes = {
-    upperTeeth: mergeMeshes(parts.upperTeeth),
-    lowerTeeth: mergeMeshes(parts.lowerTeeth),
-    palate: mergeMeshes(parts.palate),
-    velum: mergeMeshes(parts.velum),
-    tongue: mergeMeshes(parts.tongue),
-  };
+  const referenceMeshes = body.meshes;
   const sheet = createRaster(PANEL * 5, PANEL + 60);
   const distances = [];
   cuts(reference).forEach(({ title, plane, view }, column) => {
     const raster = createRaster(PANEL, PANEL);
     for (const [name, rgb] of Object.entries(PARTS)) {
-      const theirs = outlines(referenceMeshes[name], plane);
+      const theirs = referenceMeshes[name]
+        ? outlines(referenceMeshes[name], plane)
+        : [];
       const ours = outlines(fitted[name], plane);
       drawPolylines(raster, theirs, view, REFERENCE_GREY, 1);
       drawPolylines(raster, ours, view, rgb, 2);
@@ -174,7 +208,7 @@ function compareSex(sex, meshes) {
   });
   drawText(
     sheet,
-    `${sex.toUpperCase()} PRESET (COLOUR) VS HUBMAP HRA VISIBLE HUMAN (GREY), FITTED ON TEETH AND VAULT`,
+    `${sex.toUpperCase()} PRESET (COLOUR) VS ${body.title} (GREY), FITTED ON TEETH AND VAULT`,
     8,
     8,
     TEXT,
@@ -182,7 +216,7 @@ function compareSex(sex, meshes) {
   );
   drawText(
     sheet,
-    'TEETH UPPER/LOWER, PALATE GREEN, VELUM ORANGE, TONGUE RED. HRA CC BY 4.0, HUBMAP',
+    `TEETH UPPER/LOWER, PALATE GREEN, VELUM ORANGE, TONGUE RED. ${body.credit}`,
     8,
     PANEL + 38,
     TEXT,
@@ -191,13 +225,18 @@ function compareSex(sex, meshes) {
   return { reference, model, dental, all, distances, sheet };
 }
 
+/** A distance (mm) or a dash for a key point the reference lacks. */
+function millimetres(value, digits, width) {
+  return (value === undefined ? '-' : value.toFixed(digits)).padStart(width);
+}
+
 function report(sex, { dental, all, distances }) {
   const lines = [
     `${sex}: key point distance after a rigid fit (mm)`,
     `  ${'key point'.padEnd(18)}${'dental fit'.padStart(11)}${'all-point fit'.padStart(15)}`,
     ...KEY_POINTS.map(
       (name) =>
-        `  ${name.padEnd(18)}${dental.distances[name].toFixed(1).padStart(11)}${all.distances[name].toFixed(1).padStart(15)}`
+        `  ${name.padEnd(18)}${millimetres(dental.distances[name], 1, 11)}${millimetres(all.distances[name], 1, 15)}`
     ),
     `  ${'rms (fitted)'.padEnd(18)}${dental.rms.toFixed(2).padStart(11)}${all.rms.toFixed(2).padStart(15)}`,
     `${sex}: outline distance per cut and part after the dental fit (mm)`,
@@ -209,21 +248,48 @@ function report(sex, { dental, all, distances }) {
   return lines.join('\n');
 }
 
+const ATLASES = Object.freeze({
+  bodyparts3d: {
+    ...BODYPARTS3D_ATLAS,
+    title: 'BODYPARTS3D',
+    credit: 'BODYPARTS3D CC BY 4.0, DBCLS',
+  },
+  'z-anatomy': {
+    ...Z_ANATOMY_ATLAS,
+    title: 'Z-ANATOMY',
+    credit: 'Z-ANATOMY, THIS IMAGE CC BY-SA 4.0',
+  },
+});
+
+const atlas = option('atlas');
+if (atlas && (!ATLASES[atlas] || !option('dir'))) {
+  throw new Error(
+    `--atlas takes ${Object.keys(ATLASES).join(' or ')}, with --dir`
+  );
+}
+const prefix = atlas ?? 'hra';
 const out = option('out', join(ROOT, 'docs/case-studies/issue-9/anatomy'));
 const metrics = option(
   'metrics',
-  join(ROOT, 'docs/case-studies/issue-9/measurements/hra-comparison.txt')
+  join(ROOT, `docs/case-studies/issue-9/measurements/${prefix}-comparison.txt`)
 );
 mkdirSync(out, { recursive: true });
+const credited = atlas ? ATLASES[atlas] : { ...HRA, title: HRA.name };
 const sections = [
-  `Head model against ${HRA.name}`,
-  `${HRA.citation}. ${HRA.license}.`,
+  `Head model against ${atlas ? credited.title : HRA.name}`,
+  `${credited.citation}. ${credited.license}.`,
   'Produced by scripts/compare-hra.mjs.',
   '',
 ];
-for (const sex of ['male', 'female']) {
-  const result = compareSex(sex, await fetchHra(sex));
-  const file = join(out, `hra-${sex}-slices.png`);
+const bodies = atlas
+  ? [['male', () => atlasReference(atlas, option('dir'))]]
+  : ['male', 'female'].map((sex) => [
+      sex,
+      async () => hraReference(await fetchHra(sex)),
+    ]);
+for (const [sex, load] of bodies) {
+  const result = compareSex(sex, await load());
+  const file = join(out, `${prefix}-${sex}-slices.png`);
   writeFileSync(file, encodePng(result.sheet, deflateSync));
   console.log(file);
   sections.push(report(sex, result), '');
