@@ -44,25 +44,36 @@ export const ANATOMY_LODS = Object.freeze([
  * edge, 1 = flat occlusal surface).
  */
 const UPPER_TEETH = [
-  [0.85, 1.05, 0.7, 0.25],
-  [0.65, 0.9, 0.6, 0.3],
-  [0.75, 1.0, 0.8, 0.45],
-  [0.7, 0.8, 0.9, 0.85],
-  [0.65, 0.75, 0.9, 0.85],
-  [1.0, 0.7, 1.1, 0.95],
-  [0.9, 0.65, 1.1, 0.95],
+  [0.89, 1.05, 0.74, 0.25],
+  [0.69, 0.9, 0.67, 0.3],
+  [0.76, 1.0, 0.82, 0.45],
+  [0.68, 0.8, 0.95, 0.85],
+  [0.68, 0.75, 0.95, 0.85],
+  [1.05, 0.7, 1.14, 0.95],
+  [0.95, 0.65, 1.14, 0.95],
 ];
 const LOWER_TEETH = [
-  [0.5, 0.9, 0.6, 0.25],
-  [0.55, 0.95, 0.6, 0.3],
-  [0.7, 1.05, 0.75, 0.45],
-  [0.7, 0.8, 0.8, 0.85],
-  [0.7, 0.75, 0.85, 0.85],
-  [1.1, 0.7, 1.05, 0.95],
-  [1.05, 0.65, 1.05, 0.95],
+  [0.54, 0.9, 0.58, 0.25],
+  [0.59, 0.95, 0.61, 0.3],
+  [0.68, 1.05, 0.74, 0.45],
+  [0.69, 0.8, 0.8, 0.85],
+  [0.7, 0.75, 0.86, 0.85],
+  [1.08, 0.7, 1.06, 0.95],
+  [1.07, 0.65, 1.05, 0.95],
 ];
-/** Half width (cm) of the upper dental arch at the second molars. */
-const ARCH_HALF_WIDTH = 2.65;
+/**
+ * Beta-function arch forms (Braun et al. 1998, Am J Orthod Dentofacial
+ * Orthop 114, 1: 'Form of the human dental arch') through the middle of
+ * the crowns: half width (cm, x mouthWidth) at the back of the second
+ * molars and the power that sets how square the front is. Fitted to the
+ * intercanine and intermolar widths and arch depths of the 17 Open-Full-Jaw
+ * CBCT scans (tests/fixtures/anatomy/dentition.json), with the crown sizes
+ * above set to their means there.
+ */
+const ARCH_FORMS = {
+  upper: { halfWidth: 2.3, power: 0.3 },
+  lower: { halfWidth: 2.375, power: 0.46 },
+};
 /** Lower incisors sit this far behind the upper ones (overjet, cm). */
 const OVERJET = 0.25;
 /**
@@ -77,8 +88,8 @@ const OCCLUSAL_TILT = 0.17;
 const HARD_PALATE = 0.55;
 /** How far the sides of the palatal vault reach below the airway (cm). */
 const VAULT_DROP = 0.25;
-/** Palate edge inside the labial face of the dental arch (cm). */
-const PALATE_INSET = 0.9;
+/** Palate edge inside the middle of the upper crowns (cm). */
+const PALATE_INSET = 0.45;
 /** Swing of the soft palate about the nasal spine when lowered (radians). */
 const VELUM_DROP = 0.45;
 /** Tongue from just above the larynx (fraction of the tract). */
@@ -150,14 +161,24 @@ function restSection(frame, distance) {
 }
 
 /**
- * Parabolic arch whose half length equals the summed crown widths. Returns
- * the labial point and inward normal at a signed arc length (negative =
- * left side).
+ * Dental arch of a jaw through the middle of its crowns, as closed at
+ * rest: the beta curve of ARCH_FORMS, as deep as the crowns laid along it
+ * need. Returns the point and inward normal at a signed arc length
+ * (negative = left side).
  */
-function archCurve(teeth, halfWidth, front) {
-  return cached(`arch ${teeth === LOWER_TEETH} ${halfWidth} ${front}`, () =>
-    solveArch(teeth, halfWidth, front)
-  );
+function jawArch(config, jaw) {
+  const { front } = mouthFrame(config);
+  const lower = jaw === 'lower';
+  const teeth = lower ? LOWER_TEETH : UPPER_TEETH;
+  const { halfWidth, power } = ARCH_FORMS[jaw];
+  // The labial faces of the incisors: the upper ones at the incisor frame,
+  // the lower ones OVERJET behind them.
+  const labial = front - (lower ? OVERJET : 0);
+  const width = halfWidth * config.mouthWidth;
+  return cached(`arch ${jaw} ${width} ${labial}`, () => ({
+    teeth,
+    ...solveArch(teeth, width, power, labial - teeth[0][2] / 2),
+  }));
 }
 
 /** Parts that only depend on the head and LOD; the viewer rebuilds the
@@ -176,15 +197,16 @@ function cached(key, build) {
   return value;
 }
 
-function solveArch(teeth, halfWidth, front) {
+function solveArch(teeth, halfWidth, power, front) {
   const total = teeth.reduce((sum, tooth) => sum + tooth[0], 0);
-  const steps = 64;
+  const steps = 128;
   const curve = (depth) => {
     const points = [];
     let length = 0;
     for (let step = 0; step <= steps; step++) {
       const x = (step / steps) * halfWidth;
-      const z = front - depth * (x / halfWidth) ** 2;
+      const u = x / (2 * halfWidth);
+      const z = front - depth * (1 - (4 * (0.25 - u * u)) ** power);
       if (step) {
         const [px, pz] = points.at(-1);
         length += Math.hypot(x - px, z - pz);
@@ -195,7 +217,7 @@ function solveArch(teeth, halfWidth, front) {
   };
   let low = 0;
   let high = 3 * total;
-  for (let iteration = 0; iteration < 32; iteration++) {
+  for (let iteration = 0; iteration < 40; iteration++) {
     const depth = (low + high) / 2;
     if (curve(depth).at(-1)[2] < total) {
       low = depth;
@@ -204,12 +226,17 @@ function solveArch(teeth, halfWidth, front) {
     }
   }
   const points = curve(low);
-  const depth = low;
   return {
     total,
-    /** Half width of the arch's labial face `z` (cm, head frame). */
+    /** Half width of the arch at `z` (cm, head frame); 0 in front of it. */
     halfWidthAt(z) {
-      return halfWidth * Math.sqrt(clamp((front - z) / Math.max(1e-6, depth)));
+      const index = points.findIndex((point) => point[1] <= z);
+      if (index <= 0) {
+        return index ? halfWidth : 0;
+      }
+      const [x0, z0] = points[index - 1];
+      const [x1, z1] = points[index];
+      return lerp(x0, x1, (z0 - z) / Math.max(1e-9, z0 - z1));
     },
     at(signed) {
       const along = Math.min(total, Math.abs(signed));
@@ -325,10 +352,8 @@ function restArch(config, lod, lower) {
 function archMesh(config, level, lower) {
   const lod = ANATOMY_LODS[level];
   const { edge, front } = mouthFrame(config);
-  const teeth = lower ? LOWER_TEETH : UPPER_TEETH;
-  const halfWidth =
-    (ARCH_HALF_WIDTH - (lower ? OVERJET : 0)) * config.mouthWidth;
-  const arch = archCurve(teeth, halfWidth, lower ? front - OVERJET : front);
+  const arch = jawArch(config, lower ? 'lower' : 'upper');
+  const { teeth } = arch;
   const base = lower ? edge - REST_GAP : edge;
   const direction = lower ? -1 : 1;
   const sections = 2 * lod.arch + 1;
@@ -344,7 +369,8 @@ function archMesh(config, level, lower) {
     const { x, z, inward, crown } = samples[section];
     const [, height, thickness, flat] = crown;
     const [across, up] = profilePoint(step, lod.profile);
-    const depth = across * thickness * lerp(flat, 1, up);
+    // From the labial face, half a crown outside the arch, inwards.
+    const depth = (across * lerp(flat, 1, up) - 0.5) * thickness;
     return [
       x + inward[0] * depth,
       base + OCCLUSAL_TILT * (front - z) + direction * up * height,
@@ -383,6 +409,40 @@ export function lowerTeethMesh(head, options = {}) {
     positions.set(rotateJaw(point, jawPivot, angle), index);
   }
   return mesh;
+}
+
+/**
+ * Landmarks of the procedural teeth in the form toothLandmarks() gives for
+ * segmented ones (millimetres, head frame, jaw closed to REST_GAP): the
+ * occlusal point in the middle of each crown's edge, its width along the
+ * arch and its labio-lingual thickness, so archMeasures() treats the model
+ * and the anatomy alike.
+ * @param {Record<string, number>} head
+ */
+export function dentalLandmarks(head) {
+  const config = normalizeHeadConfig(head);
+  const { edge, front } = mouthFrame(config);
+  return ['upper', 'lower'].flatMap((jaw) => {
+    const arch = jawArch(config, jaw);
+    const base = jaw === 'lower' ? edge - REST_GAP : edge;
+    let start = 0;
+    return arch.teeth.flatMap(([width, , thickness], type) => {
+      const middle = start + width / 2;
+      start += width;
+      return [-1, 1].map((sign) => {
+        const { x, z } = arch.at(sign * middle);
+        const point = [x, base + OCCLUSAL_TILT * (front - z), z];
+        return {
+          jaw,
+          side: sign < 0 ? 'l' : 'r',
+          type,
+          occlusal: point.map((value) => value * 10),
+          width: width * 10,
+          thickness: thickness * 10,
+        };
+      });
+    });
+  });
 }
 
 function sampleAreas(areas, fraction) {
@@ -493,11 +553,7 @@ export function palateMesh(head, options = {}) {
   const config = normalizeHeadConfig(head);
   const lod = ANATOMY_LODS[anatomyLod(options.lod)];
   const frame = mouthFrame(config);
-  const arch = archCurve(
-    UPPER_TEETH,
-    ARCH_HALF_WIDTH * config.mouthWidth,
-    frame.front
-  );
+  const arch = jawArch(config, 'upper');
   return wallSlab(
     frame,
     frame.start,
