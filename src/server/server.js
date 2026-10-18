@@ -3,7 +3,7 @@
  *
  *   GET  /api/health              -> {status, version}
  *   GET  /api/languages           -> supported languages with samples
- *   GET  /api/tiers               -> audio and visual LOD tiers
+ *   GET  /api/tiers               -> audio and visual LOD tiers, default tier
  *   GET  /api/ipa?text=&lang=&accent= -> {lang, accent, ipa, words}
  *   GET|POST /api/timeline        -> {lang, accent, ipa, timeline}: when
  *                                    each word and syllable is spoken
@@ -38,7 +38,7 @@ import {
 } from '../head-config.js';
 import { resolveMicrophone } from '../acoustics/microphone.js';
 import { resolveRoom } from '../acoustics/room.js';
-import { AUDIO_TIERS, VISUAL_TIERS } from '../perf/lod.js';
+import { AUDIO_TIERS, DEFAULT_AUDIO_TIER, VISUAL_TIERS } from '../perf/lod.js';
 import {
   prepareUtterance,
   synthesize,
@@ -118,7 +118,7 @@ export function synthesisOptions(params) {
   if (!SAMPLE_RATES.has(sampleRate)) {
     throw new HttpError(400, `Unsupported sampleRate ${params.sampleRate}`);
   }
-  const tier = params.tier ?? 'medium';
+  const tier = params.tier ?? DEFAULT_AUDIO_TIER;
   if (!AUDIO_TIERS.some((entry) => entry.name === tier)) {
     throw new HttpError(400, `Unknown tier ${tier}`);
   }
@@ -223,7 +223,11 @@ function createRoutes(version) {
   return {
     'GET /api/health': () => ({ status: 'ok', version }),
     'GET /api/languages': () => Object.values(LANGUAGES),
-    'GET /api/tiers': () => ({ audio: AUDIO_TIERS, visual: VISUAL_TIERS }),
+    'GET /api/tiers': () => ({
+      audio: AUDIO_TIERS,
+      visual: VISUAL_TIERS,
+      default: DEFAULT_AUDIO_TIER,
+    }),
     'GET /api/ipa': (params) => {
       const { text, options } = synthesisOptions(params);
       return textToIpa(text, { lang: options.lang, accent: options.accent });

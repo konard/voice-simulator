@@ -50,7 +50,30 @@ export const AUDIO_TIERS = Object.freeze([
     sampleRate: 48000,
     cost: 65,
   }),
+  Object.freeze({
+    name: 'studio',
+    solver: 'fdtd3d',
+    dx: 0.5,
+    sampleRate: 48000,
+    cost: 105,
+  }),
+  Object.freeze({
+    name: 'reference',
+    solver: 'fdtd3d',
+    dx: 0.4,
+    sampleRate: 48000,
+    cost: 220,
+  }),
 ]);
+
+/**
+ * Tier used when none is asked for: full 3D acoustics at 0.5 cm cells,
+ * which resolve the incisors, the pouches and transverse modes to well
+ * above 5 kHz. It renders slower than real time on today's CPUs, so the
+ * app renders ahead; 'medium' is the real-time waveguide of earlier
+ * versions.
+ */
+export const DEFAULT_AUDIO_TIER = 'studio';
 
 /** Visual tiers: head mesh LOD, tube rings and pressure field points. */
 export const VISUAL_TIERS = Object.freeze([

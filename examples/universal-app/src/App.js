@@ -2,6 +2,7 @@ import { createElement as h, useEffect, useMemo, useState } from 'react';
 import {
   ACCENTS,
   AUDIO_TIERS,
+  DEFAULT_AUDIO_TIER,
   DEFAULT_HEAD,
   LANGUAGES,
   VISUAL_TIERS,
@@ -131,6 +132,15 @@ function Meter({ label, tier, load, detail, t }) {
   );
 }
 
+/** "Rendering 3D acoustics 42% · plays in 3 s" while rendering ahead. */
+function renderingNote({ progress, wait }, t) {
+  const percent = Math.floor(progress * 100);
+  const seconds = Number.isFinite(wait)
+    ? ` · ${t.playsIn} ${Math.ceil(wait)} s`
+    : '';
+  return `${t.rendering} ${percent}%${seconds}`;
+}
+
 function Hud({ status, visual, mode, t }) {
   const audioTier = AUDIO_TIERS[status.audioLevel ?? 0];
   const solver = status.solver ?? audioTier.solver;
@@ -159,6 +169,13 @@ function Hud({ status, visual, mode, t }) {
       : null,
     status.phase === 'benchmark'
       ? h('small', { className: 'hud-note' }, t.benchmarking)
+      : null,
+    status.rendering && mode !== 'visual'
+      ? h(
+          'small',
+          { className: 'hud-note', role: 'status' },
+          renderingNote(status.rendering, t)
+        )
       : null
   );
 }
@@ -438,7 +455,9 @@ export function App() {
     lang: 'auto',
     accent: 'en-US',
     mode: 'both',
-    tier: 'auto',
+    tier: String(
+      AUDIO_TIERS.findIndex((tier) => tier.name === DEFAULT_AUDIO_TIER)
+    ),
     animateMouth: true,
     showField: true,
   });

@@ -5,6 +5,7 @@
 import { describe, it, expect } from 'test-anywhere';
 import {
   AUDIO_TIERS,
+  DEFAULT_AUDIO_TIER,
   LodGovernor,
   VISUAL_TIERS,
   chooseTier,
@@ -21,6 +22,7 @@ import {
   synthesize,
   synthesizeStream,
 } from '../src/index.js';
+import { runCli } from '../bin/voice-simulator.js';
 
 describe('synthesize', () => {
   it('turns text of each language into audible audio', () => {
@@ -67,6 +69,35 @@ describe('synthesize', () => {
     expect(prepared.renderOptions.solver).toBe('waveguide');
     expect(prepared.renderOptions.dx).toBe(1);
     expect(prepared.renderOptions.sampleRate).toBe(16000);
+  });
+
+  it('defaults to full 3D acoustics at 0.5 cm and keeps the waveguide a choice away', () => {
+    expect(DEFAULT_AUDIO_TIER).toBe('studio');
+    const names = AUDIO_TIERS.map((tier) => tier.name);
+    expect(names.slice(-2)).toEqual(['studio', 'reference']);
+    for (let level = 1; level < AUDIO_TIERS.length; level++) {
+      expect(AUDIO_TIERS[level].cost > AUDIO_TIERS[level - 1].cost).toBe(true);
+    }
+    const byDefault = prepareUtterance('a', { ipa: true }).renderOptions;
+    expect(byDefault.solver).toBe('fdtd3d');
+    expect(byDefault.dx).toBe(0.5);
+    expect(byDefault.sampleRate).toBe(48000);
+    const earlier = prepareUtterance('a', { ipa: true, tier: 'medium' });
+    expect(earlier.renderOptions.solver).toBe('waveguide');
+    // A solver alone keeps its own defaults, not the default tier's.
+    const waveguide = prepareUtterance('a', { ipa: true, solver: 'waveguide' });
+    expect(waveguide.renderOptions.solver).toBe('waveguide');
+    expect(waveguide.renderOptions.dx).toBe(undefined);
+  });
+
+  it('names the default tier and the waveguide fallback in the CLI help', async () => {
+    const lines = [];
+    expect(
+      await runCli(['--help'], { stdout: (line) => lines.push(line) })
+    ).toBe(0);
+    expect(lines.join('\n')).toContain(
+      'default studio: 3D; medium: real-time waveguide'
+    );
   });
 
   it('round-trips through WAV encoding', () => {

@@ -97,6 +97,7 @@ export {
 export { headModel, headModelObj } from './geometry/model.js';
 export {
   AUDIO_TIERS,
+  DEFAULT_AUDIO_TIER,
   VISUAL_TIERS,
   LodGovernor,
   OverloadDetector,

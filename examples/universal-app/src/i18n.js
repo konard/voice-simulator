@@ -49,6 +49,8 @@ const STRINGS = {
     version: 'Version',
     currentVersion: 'This version (permanent link)',
     benchmarking: 'Measuring this device…',
+    rendering: 'Rendering 3D acoustics',
+    playsIn: 'plays in',
     noWebgl:
       'WebGL is not available, so the 3D view is off. Sound still works.',
     viewerHint:
@@ -175,6 +177,8 @@ const STRINGS = {
     version: 'Версия',
     currentVersion: 'Эта версия (постоянная ссылка)',
     benchmarking: 'Измеряем производительность…',
+    rendering: 'Расчёт 3D-акустики',
+    playsIn: 'звук через',
     noWebgl: 'WebGL недоступен, 3D-вид отключён. Звук работает.',
     viewerHint:
       'Тяните для вращения, колесо — масштаб. Цвет трубки — акустическое давление.',

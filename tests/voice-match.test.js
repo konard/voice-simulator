@@ -81,6 +81,7 @@ describe('matchVoice', () => {
       const target = presetHeadConfig(preset);
       const { samples, sampleRate } = synthesize(TEXT, {
         head: target,
+        solver: 'waveguide',
         sampleRate: 22050,
       });
       const result = matchVoice(samples, sampleRate, { transcript: TEXT });
@@ -99,6 +100,7 @@ describe('matchVoice', () => {
     const [male, female] = ['male', 'female'].map((preset) => {
       const { samples, sampleRate } = synthesize(TEXT, {
         head: presetHeadConfig(preset),
+        solver: 'waveguide',
         sampleRate: 16000,
       });
       return matchVoice(samples, sampleRate, { iterations: 2 });
@@ -119,6 +121,7 @@ describe('voice-simulator match', () => {
       const target = presetHeadConfig('female');
       const { samples, sampleRate } = synthesize(TEXT, {
         head: target,
+        solver: 'waveguide',
         sampleRate: 16000,
       });
       writeFileSync(file, encodeWav(samples, sampleRate));

@@ -61,8 +61,11 @@ export const LINK_SINUS = 5;
 const RADIATION_RADIUS = 4;
 /** Largest free-air shell used to reach a distant microphone (cm). */
 export const MAX_RADIATION_RADIUS = 12;
-/** Most cells an enclosure may hold (memory and time grow with it). */
-export const MAX_ENCLOSURE_CELLS = 300000;
+/**
+ * Most cells an enclosure may hold (memory and time grow with it): enough
+ * for a 30 x 44 x 30 cm box at the 0.4 cm reference tier.
+ */
+export const MAX_ENCLOSURE_CELLS = 700000;
 const MIN_ENCLOSURE_SIZE = 10;
 const MAX_ENCLOSURE_SIZE = 200;
 /** Air an enclosure must leave around the lips and nostrils (cm). */

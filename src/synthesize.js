@@ -8,7 +8,7 @@ import { planUtterance } from './articulation/plan.js';
 import { utteranceTimeline } from './articulation/timeline.js';
 import { textToIpa } from './g2p/index.js';
 import { normalizeHeadConfig, randomHeadConfig } from './head-config.js';
-import { AUDIO_TIERS } from './perf/lod.js';
+import { AUDIO_TIERS, DEFAULT_AUDIO_TIER } from './perf/lod.js';
 
 /**
  * Find an audio tier by name or index.
@@ -54,7 +54,12 @@ export function prepareUtterance(text, options = {}) {
     ipa: transcription.ipa,
     language: transcription.lang,
   });
-  const tier = getAudioTier(options.tier) ?? {};
+  // Without a tier or a solver the default (3D) tier applies; a solver
+  // alone keeps its own defaults.
+  const tier =
+    getAudioTier(
+      options.tier ?? (options.solver ? undefined : DEFAULT_AUDIO_TIER)
+    ) ?? {};
   const renderOptions = {
     solver: options.solver ?? tier.solver,
     sections: options.sections ?? tier.sections,

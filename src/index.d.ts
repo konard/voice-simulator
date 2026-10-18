@@ -455,6 +455,8 @@ export declare function headModelObj(
 
 // Levels of detail
 export declare const AUDIO_TIERS: readonly AudioTier[];
+/** Name of the tier used when no tier or solver is given ('studio', 3D). */
+export declare const DEFAULT_AUDIO_TIER: string;
 export declare const VISUAL_TIERS: readonly VisualTier[];
 export declare class LodGovernor<T extends { cost: number } = AudioTier> {
   constructor(options?: {

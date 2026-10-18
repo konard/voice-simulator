@@ -48,7 +48,9 @@ describe('example app listening settings', () => {
     expect(enclosureCells(box, 1)).toBe(30 * 44 * 30);
 
     const large = { ...box, boxWidth: 60, boxHeight: 60, boxDepth: 60 };
-    expect(boxProblem(large, DEFAULT_HEAD)).toEqual({ tiers: ['ultra'] });
+    expect(boxProblem(large, DEFAULT_HEAD)).toEqual({
+      tiers: ['ultra', 'studio', 'reference'],
+    });
 
     const shallow = boxProblem({ ...box, boxDepth: 12 }, DEFAULT_HEAD);
     expect(shallow.message).toContain('lips');

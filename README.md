@@ -27,13 +27,15 @@ a pressure wave travelling through the 3D shape of a parametric low-poly head
   - `waveguide`: a branched Kelly-Lochbaum tube (tract + nose) that follows
     the 3D centreline of the head; real time on any device.
   - `fdtd3d`: a sparse-voxel 3D finite-difference time-domain solver of the
-    acoustic wave equation inside the voxelised head and the air around it.
+    acoustic wave equation inside the voxelised head and the air around it;
+    the default (`studio` tier).
 - **Low-poly head model** with only acoustically relevant detail (tract tube,
   nasal tube, lips, jaw, skin hull, teeth, tongue, hard and soft palate),
   four mesh LODs and OBJ export.
 - **Teeth and piriform fossae in the acoustics**: the incisors narrow the
   tract and turn the frication jet into a sibilant source; the piriform
-  fossae add their side-branch antiresonance (waveguide).
+  fossae add their side-branch antiresonance in both solvers, the
+  vallecula in the 3D solver.
 - **Head and voice editor**: 32 parameters, everything that changes the
   sound (tract length, pharynx, mouth, jaw, nose, pitch, breathiness,
   jitter, shimmer, vibrato, declination, accent strength, lengthening,
@@ -208,13 +210,25 @@ The image runs `voice-simulator serve` on port 8080 with a health check on
 
 ### Quality tiers
 
-| Audio tier | Solver    | Detail        | Sample rate | Relative cost |
-| ---------- | --------- | ------------- | ----------- | ------------- |
-| `minimal`  | waveguide | 22 sections   | 22.05 kHz   | 1             |
-| `low`      | waveguide | 32 sections   | 32 kHz      | 1.6           |
-| `medium`   | waveguide | 44 sections   | 48 kHz      | 2.6           |
-| `high`     | fdtd3d    | 1 cm voxels   | 48 kHz      | 10            |
-| `ultra`    | fdtd3d    | 0.6 cm voxels | 48 kHz      | 65            |
+| Audio tier  | Solver    | Detail        | Sample rate | Relative cost |
+| ----------- | --------- | ------------- | ----------- | ------------- |
+| `minimal`   | waveguide | 22 sections   | 22.05 kHz   | 1             |
+| `low`       | waveguide | 32 sections   | 32 kHz      | 1.6           |
+| `medium`    | waveguide | 44 sections   | 48 kHz      | 2.6           |
+| `high`      | fdtd3d    | 1 cm voxels   | 48 kHz      | 10            |
+| `ultra`     | fdtd3d    | 0.6 cm voxels | 48 kHz      | 65            |
+| `studio`    | fdtd3d    | 0.5 cm voxels | 48 kHz      | 105           |
+| `reference` | fdtd3d    | 0.4 cm voxels | 48 kHz      | 220           |
+
+`studio` is the default of the library, the CLI, the server and the web
+app (`DEFAULT_AUDIO_TIER`): full 3D acoustics whose 0.5 cm cells resolve
+the incisors, the piriform fossae, the vallecula and transverse modes well
+above 5 kHz. It renders about 12 times slower than real time on a desktop
+CPU, so the app renders ahead: it shows the progress and starts playback
+as soon as the rest of the utterance is predicted to be ready before the
+player reaches it, so the voice never breaks up. Choose `--tier medium`
+(or `tier: 'medium'`, or the tier menu in the app) for the real-time 1D
+waveguide, or "auto" in the app to let the benchmark pick.
 
 The web app and `voice-simulator benchmark` pick the most detailed tier
 whose measured load stays under 80%. The benchmark does not run tiers whose

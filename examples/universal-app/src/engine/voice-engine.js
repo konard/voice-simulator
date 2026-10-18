@@ -15,6 +15,7 @@ import {
 } from '../../../../src/index.js';
 import { exportAudio } from './audio-export.js';
 import { AudioPlayer } from './audio-player.js';
+import { readyToPlay, secondsToPlay } from './render-ahead.js';
 
 const TAIL = 0.15;
 const BENCHMARK_KEY = 'voice-simulator:benchmark';
@@ -170,6 +171,9 @@ export class VoiceEngine {
       chunks: [],
       sampleRate: 0,
       totalSamples: 0,
+      rendered: 0,
+      busy: 0,
+      playing: false,
       finished: false,
     };
     this.job = job;
@@ -183,6 +187,7 @@ export class VoiceEngine {
       timeline,
       utterance: id,
       underruns: 0,
+      rendering: null,
     });
     if (!job.sound) {
       job.startedAt = globalThis.performance.now();
@@ -230,6 +235,7 @@ export class VoiceEngine {
       overload: () => this.#overload(job, message),
       end: () => {
         job.finished = true;
+        this.#play(job);
       },
       error: () => {
         this.#emit({ error: message.message });
@@ -256,6 +262,8 @@ export class VoiceEngine {
     job.chunks = [];
     job.fields = [];
     job.fieldIndex = 0;
+    job.rendered = 0;
+    job.busy = 0;
     this.#emit({
       audioLevel: this.audioLevel,
       audioLoad: message.load,
@@ -266,7 +274,32 @@ export class VoiceEngine {
   #chunk(job, message) {
     const { start, samples, field, load } = message;
     job.chunks.push({ start, samples });
-    this.player.push(start, samples);
+    job.rendered = Math.max(job.rendered, start + samples.length);
+    job.busy += (load * samples.length) / job.sampleRate;
+    if (job.playing) {
+      this.player.push(start, samples);
+    } else if (
+      readyToPlay({
+        rendered: job.rendered,
+        total: job.totalSamples,
+        busy: job.busy,
+        sampleRate: job.sampleRate,
+      })
+    ) {
+      this.#play(job);
+    } else {
+      this.#emit({
+        rendering: {
+          progress: job.rendered / Math.max(1, job.totalSamples),
+          wait: secondsToPlay({
+            rendered: job.rendered,
+            total: job.totalSamples,
+            busy: job.busy,
+            sampleRate: job.sampleRate,
+          }),
+        },
+      });
+    }
     if (field) {
       job.fields.push({
         end: (start + samples.length) / job.sampleRate,
@@ -281,6 +314,21 @@ export class VoiceEngine {
       audioLoad: this.auto ? this.governor.load : load,
       underruns: this.player.underruns,
     });
+  }
+
+  /**
+   * Start playback with everything rendered so far; later chunks play as
+   * they arrive (see render-ahead.js).
+   */
+  #play(job) {
+    if (job.playing || !job.sound) {
+      return;
+    }
+    job.playing = true;
+    for (const { start, samples } of job.chunks) {
+      this.player.push(start, samples);
+    }
+    this.#emit({ rendering: null });
   }
 
   /** Current time in the utterance (seconds), or null before audio starts. */
@@ -356,7 +404,11 @@ export class VoiceEngine {
     }
     this.player.stop();
     if (this.status.phase === 'speaking') {
-      this.#emit({ phase: 'idle', audioLevel: this.audioLevel });
+      this.#emit({
+        phase: 'idle',
+        audioLevel: this.audioLevel,
+        rendering: null,
+      });
     }
   }
 
