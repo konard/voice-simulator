@@ -1,0 +1,24 @@
+male {
+  oraleStaphylion: '37.8',
+  nasalSpineBehindMolars: '1.9',
+  vaultHeightFirstMolars: '13.8',
+  vaultHeightSecondMolars: '11.3',
+  velumLength: '25.2',
+  velumThickness: '9.0'
+}
+female {
+  oraleStaphylion: '34.4',
+  nasalSpineBehindMolars: '-1.7',
+  vaultHeightFirstMolars: '10.7',
+  vaultHeightSecondMolars: 'NaN',
+  velumLength: '24.5',
+  velumThickness: '9.0'
+}
+child {
+  oraleStaphylion: '31.3',
+  nasalSpineBehindMolars: '-5.1',
+  vaultHeightFirstMolars: '8.4',
+  vaultHeightSecondMolars: 'NaN',
+  velumLength: '19.6',
+  velumThickness: '9.0'
+}
