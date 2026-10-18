@@ -448,6 +448,35 @@ describe('workflow reliability policy', () => {
   });
 });
 
+function listJobIds(workflow) {
+  const jobsSection = workflow.split(/^jobs:\s*$/m)[1] ?? '';
+  return [...jobsSection.matchAll(/^ {2}([a-zA-Z0-9_-]+):\s*$/gm)].map(
+    (match) => match[1]
+  );
+}
+
+describe('matrix job names', () => {
+  it('keeps matrix expressions out of the names of jobs that can be skipped', () => {
+    const offenders = [];
+
+    for (const path of listWorkflowPaths()) {
+      const workflow = readWorkflow(path);
+
+      for (const jobId of listJobIds(workflow)) {
+        const job = getJobBlock(workflow, jobId);
+        const canBeSkipped = /^ {4}(?:if|needs):/m.test(job);
+        const name = job.match(/^ {4}name: (.*)$/m)?.[1] ?? '';
+
+        if (canBeSkipped && name.includes('${{ matrix.')) {
+          offenders.push(`${path} ${jobId}: ${name}`);
+        }
+      }
+    }
+
+    expect(offenders).toEqual([]);
+  });
+});
+
 describe('workflow artifact and writer reliability', () => {
   it('serializes main writers and retries generated pushes after rebasing', () => {
     const exampleAppWorkflow = readWorkflow(
