@@ -413,28 +413,40 @@ export function visemeTrack(plan, head, options = {}) {
   if (!names) {
     rigWeights(null, format);
   }
+  const factor = 10 ** (options.digits ?? 4);
+  const { fps, frames } = rigFrames(plan, head, options, (rig) => {
+    const weights = rigWeights(rig, format);
+    for (const name of names) {
+      weights[name] = Math.round(weights[name] * factor) / factor;
+    }
+    return weights;
+  });
+  return { format, fps, duration: plan.duration, names, frames };
+}
+
+/**
+ * Sample the face rig of a plan at a frame rate.
+ *
+ * @template T
+ * @param {{duration: number}} plan Articulation plan (planUtterance).
+ * @param {object} head Head configuration.
+ * @param {{fps?: number, maxOpening?: number}} options
+ * @param {(rig: ReturnType<typeof faceRig>) => T} weigh Frame weights.
+ * @returns {{fps: number, frames: {time: number, weights: T}[]}}
+ */
+export function rigFrames(plan, head, options, weigh) {
   const fps = options.fps ?? 60;
   if (!(fps > 0)) {
     throw new Error(`fps must be positive, got ${fps}`);
   }
   const config = normalizeHeadConfig(head);
-  const factor = 10 ** (options.digits ?? 4);
   const count = Math.floor(plan.duration * fps) + 1;
   const frames = [];
   for (let index = 0; index < count; index++) {
     const time = index / fps;
-    const rig = faceRig(
-      sampleState(plan, Math.min(time, plan.duration)),
-      config,
-      {
-        maxOpening: options.maxOpening,
-      }
-    );
-    const weights = rigWeights(rig, format);
-    for (const name of names) {
-      weights[name] = Math.round(weights[name] * factor) / factor;
-    }
-    frames.push({ time: Math.round(time * 1e6) / 1e6, weights });
+    const state = sampleState(plan, Math.min(time, plan.duration));
+    const rig = faceRig(state, config, { maxOpening: options.maxOpening });
+    frames.push({ time: Math.round(time * 1e6) / 1e6, weights: weigh(rig) });
   }
-  return { format, fps, duration: plan.duration, names, frames };
+  return { fps, frames };
 }

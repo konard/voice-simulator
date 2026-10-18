@@ -1481,6 +1481,45 @@ export declare function visemeTrack(
     digits?: number;
   }
 ): VisemeTrack;
+export declare function rigFrames<T>(
+  plan: Plan,
+  head: Partial<HeadConfig> | undefined,
+  options: { fps?: number; maxOpening?: number },
+  weigh: (rig: FaceRig) => T
+): { fps: number; frames: { time: number; weights: T }[] };
+export interface RigBinding {
+  format: VisemeFormat | null;
+  targets: { name: string; index: number; channel: string }[];
+}
+export declare function bindRig(
+  names: readonly string[],
+  options?: { format?: VisemeFormat }
+): RigBinding;
+export declare function rigFrame(
+  binding: RigBinding,
+  rig: FaceRig
+): Record<string, number>;
+export declare function characterTrack(
+  plan: Plan,
+  head: Partial<HeadConfig> | undefined,
+  names: readonly string[],
+  options?: { fps?: number; maxOpening?: number; format?: VisemeFormat }
+): {
+  format: VisemeFormat | null;
+  fps: number;
+  duration: number;
+  names: string[];
+  frames: { time: number; weights: number[] }[];
+};
+export interface VrmBind {
+  node?: number;
+  mesh?: number;
+  index: number;
+  weight: number;
+}
+export declare function vrmVowelBinds(
+  json: object
+): Record<'aa' | 'ih' | 'ou' | 'ee' | 'oh', VrmBind[]> | null;
 
 // The z-up atlases on the Visible Human Japanese male: Z-Anatomy
 // (CC BY-SA 4.0) and BodyParts3D (CC BY 4.0), fetched just in time.

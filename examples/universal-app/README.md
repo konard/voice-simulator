@@ -17,6 +17,12 @@ desktop packages, and Capacitor mobile projects.
 - The three.js view (`src/viewer/head-viewer.js`) shows the low-poly head
   with its teeth, tongue and palate, animates the jaw, lips and tongue,
   colours the tract by the simulated pressure and marks the microphone.
+- **Talking character** (`src/components/CharacterPanel.js`,
+  `src/viewer/character-viewer.js`): the same articulation animates a
+  head-only character. The procedural demo face (`src/viewer/demo-face.js`)
+  has ARKit-named morph targets; a loaded `.vrm`, `.glb` or `.gltf` model
+  is bound through `bindRig` (ARKit, Oculus, VRM, VRoid, MMD names) or the
+  vowel expressions of its VRM data. The file never leaves the device.
 - Modes: sound and 3D, sound only, or 3D only.
 - The head and voice editor starts from a random head on every load;
   `?seed=<value>` reproduces a head. A preset (any, male, female, child)

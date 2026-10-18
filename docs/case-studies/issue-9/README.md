@@ -272,6 +272,27 @@ header links every version (`tests/universal-app.test.js`).
     curves of MetaHuman and Ready Player Me), VRM 1.0 expressions and the
     Oculus visemes, from the library, the CLI and the server
     (`src/animation/visemes.js`, `tests/visemes.test.js`);
+  - `bindRig` reads the morph target names of any character model and binds
+    whichever convention it has: ARKit (also MetaHuman
+    `CTRL_expressions_*`, `blendShape1.*` and Ready Player Me), Oculus
+    visemes (`viseme_PP`, VRChat `vrc.v_pp`), VRM 1.0 and 0.x vowels, VRoid
+    `Fcl_MTH_*` and MMD `あいうえお`. `vrmVowelBinds` follows the morph
+    targets a VRM file declares for its vowels, and `characterTrack` gives
+    a whole utterance as weights per morph target
+    (`src/animation/rig-bridge.js`, `tests/rig-bridge.test.js`);
+  - the app's **Talking character** panel is the head-only adapter demo
+    the comment asks for, after
+    [anime-avatar](https://github.com/konard/anime-avatar): the same
+    articulation the solvers hear drives a procedural face with ARKit-named
+    morph targets, or any `.vrm`, `.glb` or `.gltf` model the user loads.
+    The jaw opens as far as the tract needs, /m b p/ seal the lips, /f v/
+    tuck the lower lip and /u/ rounds them
+    (`tests/universal-app-character.test.js`):
+
+    ![The demo face for rest, /ɑ/, /i/, /u/, /m/, /f/, /θ/ and /s/](character/poses.png)
+
+    ![The Talking character panel](character/app-panel.png)
+
   - from the most detailed level down: four mesh LODs, seven audio tiers
     from a 22-section waveguide to 0.4 cm voxels, and the 3D solver on
     WebGPU when there is one.

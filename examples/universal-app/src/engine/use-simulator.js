@@ -40,6 +40,8 @@ export function useSimulator(settings) {
   const progressRef = useRef(null);
   const spokenRef = useRef(null);
   const engineRef = useRef(null);
+  // Latest animation frame, for views with their own loop (CharacterPanel).
+  const frameRef = useRef(null);
   const viewerRef = useRef(null);
   const settingsRef = useRef(settings);
   const warmupRef = useRef(WARMUP_FRAMES);
@@ -125,6 +127,7 @@ export function useSimulator(settings) {
         return;
       }
       const frame = engine.frame();
+      frameRef.current = frame;
       writeProgress(refs, frame);
       const current = settingsRef.current;
       if (!viewer || current.mode === 'sound') {
@@ -166,6 +169,7 @@ export function useSimulator(settings) {
     progressRef,
     spokenRef,
     engineRef,
+    frameRef,
     status,
     visual,
     webglError,

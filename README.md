@@ -75,6 +75,20 @@ a pressure wave travelling through the 3D shape of a parametric low-poly head
   lips, /f v/ tuck the lower lip under the upper incisors, /θ ð/ show the
   tongue tip, and coarticulation carries over (`faceRig` gives the
   physical measures in cm and radians).
+- **Bridges to any character model**: `bindRig(morphTargetNames)` reads
+  the mouth shapes a model has and binds them to the face rig, whichever
+  convention they follow: ARKit names (also MetaHuman
+  `CTRL_expressions_*`, `blendShape1.*` and Ready Player Me), Oculus
+  visemes (`viseme_PP`, VRChat `vrc.v_pp`), VRM 1.0 and 0.x vowels, VRoid
+  `Fcl_MTH_*` and MMD `あいうえお`. `rigFrame(binding, faceRig(state, head))`
+  gives the morph target weights of one frame, `characterTrack(plan, head,
+names)` a whole utterance, and `vrmVowelBinds(gltfJson)` reads the morph
+  targets a VRM file declares for its vowels. The example app's **Talking
+  character** panel animates a procedural head or any `.vrm`, `.glb` or
+  `.gltf` model the user loads.
+
+  ![Talking character poses](docs/case-studies/issue-9/character/poses.png)
+
 - **Teeth and piriform fossae in the acoustics**: the incisors narrow the
   tract and turn the frication jet into a sibilant source; the piriform
   fossae add their side-branch antiresonance in both solvers, the
