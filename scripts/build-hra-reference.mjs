@@ -15,7 +15,7 @@ import {
   labialLean,
   referenceKeyPoints,
   referenceParts,
-  referenceTeeth,
+  sortedReferenceTeeth,
 } from '../src/geometry/reference-anatomy.js';
 import { HRA, fetchHra } from './fetch-anatomy.mjs';
 
@@ -35,7 +35,7 @@ const round = (value) => Math.round(value * 100) / 100;
 export async function measureHraBody(sex, options = {}) {
   const parts = referenceParts(await fetchHra(sex, options));
   const points = referenceKeyPoints(parts);
-  const teeth = referenceTeeth(parts);
+  const teeth = sortedReferenceTeeth(parts);
   const lean = incisorLean(teeth);
   const labial = incisorLean(teeth, (tooth) =>
     labialLean(tooth.positions, tooth.jaw)

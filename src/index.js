@@ -161,7 +161,29 @@ export {
   palateMesh,
   velumMesh,
   anatomyMeshes,
+  jawPose,
 } from './geometry/anatomy.js';
+// Anatomy from other 3D sources, switched part by part, and reference
+// atlases cut like MRI slices
+export {
+  ANATOMY_PARTS,
+  DENTAL_KEY_POINTS,
+  PROCEDURAL,
+  SOURCE_LOD_CELLS,
+  anatomySelection,
+  anatomySource,
+  anatomySourceFromGlb,
+  anatomySourceNames,
+  anatomySourceParts,
+  composeAnatomy,
+  fitAnatomySource,
+  registerAnatomySource,
+  similarityFit,
+  sourceHead,
+  unregisterAnatomySource,
+} from './geometry/anatomy-sources.js';
+export { clusterVertices } from './geometry/decimate.js';
+export { HRA, fetchHra, hraSource } from './geometry/hra.js';
 
 // Mouths read as MRI is read, from any glTF (character heads, the Human
 // Reference Atlas), and compared key point for key point.
@@ -184,6 +206,7 @@ export {
   compareKeyPoints,
   referenceParts,
   referenceTeeth,
+  sortedReferenceTeeth,
   referenceKeyPoints,
   sagittalLean,
   labialLean,

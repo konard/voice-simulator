@@ -34,14 +34,14 @@ import {
 import { basename, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { meshesToStl, parseStl } from '../src/geometry/stl.js';
-import { fetchGlbMeshes } from '../src/geometry/gltf-read.js';
+import { HRA, fetchHra, hraSource } from '../src/geometry/hra.js';
 import {
-  HRA_PARTS,
-  mirrorX,
   referenceParts,
-  referenceTeeth,
+  sortedReferenceTeeth,
 } from '../src/geometry/reference-anatomy.js';
 import { fetchMember, listMembers } from './fetch-dvtd.mjs';
+
+export { HRA, fetchHra, hraSource };
 
 export const BODYPARTS3D = Object.freeze({
   name: 'BodyParts3D 4.0, is-a tree (Database Center for Life Science)',
@@ -75,44 +75,6 @@ export const Z_ANATOMY = Object.freeze({
   member: 'Z-Anatomy/Startup.blend',
   units: 'millimetres; +x left, -y anterior, +z superior',
 });
-
-const HRA_ORGANS = 'https://cdn.humanatlas.io/digital-objects/ref-organ';
-
-export const HRA = Object.freeze({
-  name: 'HuBMAP Human Reference Atlas 3D reference organs (Visible Human)',
-  citation:
-    'Schlehlein H, Herr BW II, Quardokus EM, Bueckle A, Börner K (2024) HuBMAP CCF 3D Reference Object Library; mouth and larynx: Schlehlein H (2024), Human Reference Atlas, doi:10.48539/HBM568.RFGM.978',
-  license: 'CC BY 4.0, HuBMAP',
-  urls: Object.freeze({
-    male: Object.freeze([
-      `${HRA_ORGANS}/mouth-male/v1.0/assets/3d-vh-m-mouth.glb`,
-      `${HRA_ORGANS}/larynx-male/v1.1/assets/3d-vh-m-larynx.glb`,
-    ]),
-    female: Object.freeze([
-      `${HRA_ORGANS}/mouth-female/v1.0/assets/3d-vh-f-mouth.glb`,
-      `${HRA_ORGANS}/larynx-female/v1.1/assets/3d-vh-f-larynx.glb`,
-    ]),
-  }),
-  units: 'metres; +x body left, +y superior, +z anterior',
-});
-
-/**
- * The HRA parts that reference-anatomy.js uses, in millimetres in the
- * head frame (body left at -x).
- * @param {'male'|'female'} sex
- * @param {{fetchFn?: typeof fetch}} [options]
- * @returns {Promise<{name: string, positions: Float64Array, indices: Uint32Array}[]>}
- */
-export async function fetchHra(sex, options = {}) {
-  const names = (name) => Object.values(HRA_PARTS).some((test) => test(name));
-  const meshes = [];
-  for (const url of HRA.urls[sex]) {
-    meshes.push(
-      ...(await fetchGlbMeshes(url, { ...options, names, scale: 1000 }))
-    );
-  }
-  return mirrorX(meshes);
-}
 
 /**
  * BodyParts3D files of the permanent teeth (left and right of the body),
@@ -173,7 +135,7 @@ export function objPositions(text) {
 /**
  * Teeth of a fetched source, ready for toothLandmarks().
  * @param {'bodyparts3d'|'open-full-jaw'|'z-anatomy'|'hra'} source 'hra'
- *   splits the arches of either sex into teeth (see referenceTeeth).
+ *   splits the arches of either sex into teeth (see sortedReferenceTeeth).
  * @param {string} directory What fetchAnatomy() wrote.
  */
 export function loadDentition(source, directory) {
@@ -186,7 +148,7 @@ export function loadDentition(source, directory) {
         name: basename(file, '.stl'),
         ...parseStl(new Uint8Array(readFileSync(join(directory, file)))),
       }));
-    return referenceTeeth(referenceParts(meshes));
+    return sortedReferenceTeeth(referenceParts(meshes));
   }
   if (source === 'open-full-jaw') {
     for (let number = 1; number <= 32; number++) {
