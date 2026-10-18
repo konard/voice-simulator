@@ -1,0 +1,4 @@
+default jawRange 1.00: a 11.5 Δi 8.0 (G-OBIM 8), u 7.5 Δi 4.0 (G-OBIM 4), i 3.5 Δi 0.0 (G-OBIM 0), t 1.5 Δi -2.0 (G-OBIM -2), k 5.5 Δi 2.0 (G-OBIM 2), k (i) 3.5 Δi 0.0 (G-OBIM 2), k (u) 5.5 Δi 2.0 (G-OBIM 2), t (i) 1.5 Δi -2.0 (G-OBIM -2)
+male jawRange 1.03: a 11.7 Δi 8.2 (G-OBIM 8), u 7.6 Δi 4.1 (G-OBIM 4), i 3.5 Δi 0.0 (G-OBIM 0), t 1.5 Δi -2.0 (G-OBIM -2), k 5.5 Δi 2.0 (G-OBIM 2), k (i) 3.5 Δi 0.0 (G-OBIM 2), k (u) 5.5 Δi 2.0 (G-OBIM 2), t (i) 1.5 Δi -2.0 (G-OBIM -2)
+female jawRange 0.92: a 10.9 Δi 7.4 (G-OBIM 8), u 7.2 Δi 3.7 (G-OBIM 4), i 3.5 Δi 0.0 (G-OBIM 0), t 1.5 Δi -2.0 (G-OBIM -2), k 5.5 Δi 2.0 (G-OBIM 2), k (i) 3.5 Δi 0.0 (G-OBIM 2), k (u) 5.5 Δi 2.0 (G-OBIM 2), t (i) 1.5 Δi -2.0 (G-OBIM -2)
+child jawRange 0.90: a 10.7 Δi 7.2 (G-OBIM 8), u 7.1 Δi 3.6 (G-OBIM 4), i 3.5 Δi 0.0 (G-OBIM 0), t 1.5 Δi -2.0 (G-OBIM -2), k 5.5 Δi 2.0 (G-OBIM 2), k (i) 3.5 Δi 0.0 (G-OBIM 2), k (u) 5.5 Δi 2.0 (G-OBIM 2), t (i) 1.5 Δi -2.0 (G-OBIM -2)

@@ -55,11 +55,29 @@ describe('incisor constriction', () => {
     const close = teethGap(vowelState('i'), DEFAULT_HEAD);
     const open = teethGap(vowelState('ɑ'), DEFAULT_HEAD);
     const sibilant = teethGap(consonantState('ˈasa'), DEFAULT_HEAD);
-    expect(open).toBeGreaterThan(close + 0.8);
+    expect(open).toBeGreaterThan(close + 0.7);
     expect(sibilant).toBeLessThan(close);
     expect(sibilant).toBeGreaterThan(0.1);
     const wide = normalizeHeadConfig({ jawRange: 1.3 });
     expect(teethGap(vowelState('ɑ'), wide)).toBeGreaterThan(open);
+  });
+
+  it('opens the jaw for each phoneme as G-OBIM matched to MRI', () => {
+    // Mandibular openings of Calka et al. 2025 (PLOS Comput Biol 21(9):
+    // e1013378, Table 3): /t/ 1, /i/ 3, /k/ 5, /u/ 7, /a/ 11 mm. The paper
+    // gives no reference for them, so the differences from /i/ are held.
+    const gobim = { t: 1, k: 5, u: 7, a: 11 };
+    const states = {
+      t: consonantState('ˈata'),
+      k: consonantState('ˈaka'),
+      u: vowelState('u'),
+      a: vowelState('a'),
+    };
+    const close = teethGap(vowelState('i'), DEFAULT_HEAD);
+    for (const [symbol, opening] of Object.entries(gobim)) {
+      const difference = (teethGap(states[symbol], DEFAULT_HEAD) - close) * 10;
+      expect(Math.abs(difference - (opening - 3))).toBeLessThan(0.5);
+    }
   });
 
   it('narrows the area function just behind the lips', () => {

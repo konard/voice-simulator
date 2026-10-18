@@ -6,7 +6,7 @@
  * constriction is carved in separately. Sizes follow dental anatomy: the
  * upper central incisor crown is about 10 mm long and 7 mm thick at the
  * edge level, the incisal edges sit 3-4 mm apart at rest and 1-2 mm in
- * sibilants, and the inter-incisor opening grows to about 1.5 cm for /a/.
+ * sibilants, and the inter-incisor opening grows to about 1.2 cm for /a/.
  * The obstacle they form is the main noise source of /s z ʃ ʒ/ (Shadle
  * 1985; Howe & McGowan 2005).
  */
@@ -15,13 +15,28 @@
 export const INCISOR_THICKNESS = 0.7;
 /** Incisor gap at rest with the jaw raised (cm). */
 export const REST_GAP = 0.35;
-/** Incisor gap of sibilants, jaw fully raised (cm). */
+/** Incisor gap of sibilants and alveolar stops, jaw fully raised (cm). */
 export const SIBILANT_GAP = 0.15;
-/** Extra incisor gap at full jaw opening (cm, scaled by head.jawRange). */
-const OPEN_GAP = 1.1;
+/** Incisor gap of velar stops, which leave the jaw lower (cm). */
+export const VELAR_GAP = 0.55;
+/**
+ * Extra incisor gap of an open vowel and of a high back one (cm, scaled
+ * by head.jawRange). With the gaps above they reproduce the jaw openings
+ * G-OBIM matched to MRI of sustained phonemes (Calka et al. 2025, PLOS
+ * Comput Biol 21(9): e1013378, Table 3): /t/ 1, /i/ 3, /k/ 5, /u/ 7 and
+ * /a/ 11 mm, each 0.5 mm below the gap here, as if measured from edges
+ * 0.5 mm apart.
+ */
+const OPEN_GAP = 0.8;
+const BACK_GAP = 0.4;
 
 function clamp(value, low = 0, high = 1) {
   return Math.min(high, Math.max(low, value));
+}
+
+function smoothstep(low, high, value) {
+  const t = clamp((value - low) / (high - low));
+  return t * t * (3 - 2 * t);
 }
 
 /** Distance (cm) from the lip opening back to the incisal edges' front. */
@@ -36,19 +51,31 @@ export function teethWidth(head) {
 
 /**
  * Inter-incisor gap (cm) for an articulator state: the jaw follows vowel
- * openness and rises for consonants, most of all for sibilants.
+ * openness, stays a little lower for back vowels, and rises for
+ * consonants: fully for sibilants and stops made with the tongue tip, less
+ * for velars, partly for the lips (which can close with the jaw lowered).
  * @param {Record<string, number>} state
  * @param {Record<string, number>} head
  */
 export function teethGap(state, head) {
-  const openness = clamp(1 - (state.height ?? 0.5));
-  const vowelGap = REST_GAP + OPEN_GAP * openness * head.jawRange;
-  const closure = Math.max(state.tongueAmount ?? 0, state.lipAmount ?? 0);
-  const raise = Math.max(
-    clamp(state.sibilance ?? 0),
-    0.4 * clamp(closure / 0.85)
+  const height = clamp(state.height ?? 0.5);
+  const back = clamp(state.backness ?? 0.5);
+  const vowelGap =
+    REST_GAP +
+    (OPEN_GAP * (1 - height) + BACK_GAP * back * height) * head.jawRange;
+  // A consonant only ever raises the jaw towards its own gap.
+  const raise = (gap, weight) =>
+    gap < vowelGap ? (gap - vowelGap) * clamp(weight) : 0;
+  const front = smoothstep(0.66, 0.9, state.tongueLocation ?? 0.9);
+  const tongueGap = VELAR_GAP + (SIBILANT_GAP - VELAR_GAP) * front;
+  return (
+    vowelGap +
+    Math.min(
+      raise(SIBILANT_GAP, state.sibilance ?? 0),
+      raise(tongueGap, (state.tongueAmount ?? 0) / 0.85),
+      raise(SIBILANT_GAP, (0.4 * (state.lipAmount ?? 0)) / 0.85)
+    )
   );
-  return vowelGap + (SIBILANT_GAP - vowelGap) * raise;
 }
 
 /**
