@@ -10,6 +10,9 @@
  */
 
 import { createRandom, randomNormal } from './random.js';
+import { HEAD_PRESETS, HEAD_PRESET_NAMES } from './head-presets.js';
+
+export { HEAD_PRESETS, HEAD_PRESET_NAMES };
 
 /**
  * Parameter schema. `group` drives the editor layout, `unit` is shown in UIs.
@@ -196,14 +199,15 @@ export const HEAD_PARAMETERS = Object.freeze([
   },
   {
     key: 'vibrato',
-    label: 'Vibrato / jitter',
+    label: 'Vibrato depth',
     group: 'voice',
     unit: '',
     min: 0,
     max: 1,
     step: 0.01,
     default: 0.25,
-    description: 'Natural pitch wobble that makes the voice less robotic.',
+    description:
+      'Slow periodic pitch wobble that makes the voice less robotic.',
   },
   {
     key: 'speechRate',
@@ -215,6 +219,166 @@ export const HEAD_PARAMETERS = Object.freeze([
     step: 0.01,
     default: 1,
     description: 'Multiplies phoneme durations (higher is faster).',
+  },
+  {
+    key: 'jitter',
+    label: 'Jitter',
+    group: 'source',
+    unit: '%',
+    min: 0,
+    max: 3,
+    step: 0.05,
+    default: 0.4,
+    description: 'Random cycle-to-cycle variation of the glottal period.',
+  },
+  {
+    key: 'shimmer',
+    label: 'Shimmer',
+    group: 'source',
+    unit: '%',
+    min: 0,
+    max: 15,
+    step: 0.1,
+    default: 3,
+    description:
+      'Random cycle-to-cycle variation of the glottal pulse amplitude.',
+  },
+  {
+    key: 'vibratoRate',
+    label: 'Vibrato rate',
+    group: 'source',
+    unit: 'Hz',
+    min: 3,
+    max: 8,
+    step: 0.1,
+    default: 5.2,
+    description: 'Frequency of the slow periodic pitch modulation.',
+  },
+  {
+    key: 'aspirationLevel',
+    label: 'Aspiration noise',
+    group: 'source',
+    unit: 'x',
+    min: 0,
+    max: 3,
+    step: 0.01,
+    default: 1,
+    description: 'Scales the turbulent noise generated at the glottis.',
+  },
+  {
+    key: 'declination',
+    label: 'Declination',
+    group: 'prosody',
+    unit: 'st',
+    min: 0,
+    max: 6,
+    step: 0.1,
+    default: 2,
+    description: 'Pitch drop from the start to the end of a phrase.',
+  },
+  {
+    key: 'accentStrength',
+    label: 'Accent strength',
+    group: 'prosody',
+    unit: 'x',
+    min: 0,
+    max: 2,
+    step: 0.01,
+    default: 1,
+    description: 'Scales the pitch rise on stressed syllables.',
+  },
+  {
+    key: 'stressLengthening',
+    label: 'Stress lengthening',
+    group: 'prosody',
+    unit: 'x',
+    min: 1,
+    max: 2,
+    step: 0.01,
+    default: 1.35,
+    description: 'Duration factor of primary stressed vowels.',
+  },
+  {
+    key: 'finalLengthening',
+    label: 'Final lengthening',
+    group: 'prosody',
+    unit: 'x',
+    min: 1,
+    max: 2,
+    step: 0.01,
+    default: 1.4,
+    description:
+      'Duration factor of vowels before a full stop; weaker punctuation lengthens less.',
+  },
+  {
+    key: 'pauseLength',
+    label: 'Pause length',
+    group: 'prosody',
+    unit: 'x',
+    min: 0.3,
+    max: 3,
+    step: 0.01,
+    default: 1,
+    description: 'Scales pauses at spaces and punctuation.',
+  },
+  {
+    key: 'articulationSpeed',
+    label: 'Articulation speed',
+    group: 'prosody',
+    unit: 'x',
+    min: 0.5,
+    max: 2,
+    step: 0.01,
+    default: 1,
+    description: 'How fast articulators move between targets (coarticulation).',
+  },
+  {
+    key: 'wallLoss',
+    label: 'Wall losses',
+    group: 'acoustics',
+    unit: 'x',
+    min: 0,
+    max: 3,
+    step: 0.01,
+    default: 1,
+    description:
+      'Viscous and wall vibration losses of the tract and nose (formant bandwidths).',
+  },
+  {
+    key: 'nasalCoupling',
+    label: 'Nasal coupling',
+    group: 'acoustics',
+    unit: 'x',
+    min: 0,
+    max: 2,
+    step: 0.01,
+    default: 1,
+    description:
+      'Scales the velar port opening, so the nasality of nasals and nasal vowels.',
+  },
+  {
+    key: 'fricationLevel',
+    label: 'Frication level',
+    group: 'acoustics',
+    unit: 'x',
+    min: 0,
+    max: 3,
+    step: 0.01,
+    default: 1,
+    description:
+      'Scales the turbulence noise at constrictions (fricatives and bursts).',
+  },
+  {
+    key: 'outputGain',
+    label: 'Output level',
+    group: 'acoustics',
+    unit: 'x',
+    min: 0.25,
+    max: 4,
+    step: 0.01,
+    default: 1,
+    description:
+      'Gain before the soft limiter; high values saturate like a loud voice.',
   },
 ]);
 
@@ -264,18 +428,77 @@ function roundToStep(value, step) {
 }
 
 /**
+ * Clamp a head to the parameter ranges and round it to the parameter steps.
+ * @param {Record<string, number>} config
+ */
+export function roundHead(config) {
+  const normalized = normalizeHeadConfig(config);
+  for (const parameter of HEAD_PARAMETERS) {
+    normalized[parameter.key] = roundToStep(
+      normalized[parameter.key],
+      parameter.step
+    );
+  }
+  return normalized;
+}
+
+function getPreset(name) {
+  const preset = HEAD_PRESETS[name];
+  if (!preset) {
+    throw new Error(
+      `Unknown head preset: ${name} (use ${HEAD_PRESET_NAMES.join(', ')})`
+    );
+  }
+  return preset;
+}
+
+function presetHead(preset, size, jitter) {
+  const config = {};
+  for (const [key, [small, large, spread]] of Object.entries(preset.ranges)) {
+    config[key] =
+      key === 'pitch'
+        ? small *
+          Math.pow(large / small, size) *
+          Math.pow(2, jitter(spread) / 12)
+        : small + (large - small) * size + jitter(spread);
+  }
+  return roundHead(config);
+}
+
+/**
+ * The head of a preset at a relative size, without random variation.
+ * @param {string} name One of HEAD_PRESETS (male, female, child).
+ * @param {number} [size] 0 = smallest of the group, 1 = largest (default 0.5, typical).
+ * @returns {Record<string, number>}
+ */
+export function presetHeadConfig(name, size = 0.5) {
+  return presetHead(getPreset(name), clamp(size, 0, 1), () => 0);
+}
+
+/**
  * Generate a plausible random head. Proportions are correlated through a
  * shared body-size factor (bigger heads get longer tracts and lower voices),
  * so random voices stay human-like.
+ *
+ * Without a preset (or with 'any') the head spans children to large men
+ * and a seed always gives the same head. A preset (male, female, child) draws
+ * from that group's ranges in HEAD_PRESETS; a seed gives the same relative
+ * size and deviations in every preset.
  * @param {string|number} seed
+ * @param {{preset?: string}} [options]
  * @returns {Record<string, number>}
  */
-export function randomHeadConfig(seed) {
+export function randomHeadConfig(seed, options = {}) {
   const random = createRandom(seed);
+  const jitter = (spread) => spread * randomNormal(random);
+  if (options.preset && options.preset !== 'any') {
+    const preset = getPreset(options.preset);
+    const size = clamp(0.5 + 0.25 * randomNormal(random), 0, 1);
+    return presetHead(preset, size, jitter);
+  }
   // 0 = small (child-like), 1 = large adult.
   const size = clamp(0.55 + 0.25 * randomNormal(random), 0, 1);
-  const jitter = (spread) => spread * randomNormal(random);
-  const config = {
+  return roundHead({
     vocalTractLength: 13 + 5 * size + jitter(0.5),
     pharynxRatio: 0.4 + 0.1 * size + jitter(0.02),
     pharynxWidth: 0.9 + 0.2 * size + jitter(0.06),
@@ -295,15 +518,7 @@ export function randomHeadConfig(seed) {
     breathiness: 0.2 + jitter(0.08),
     vibrato: 0.25 + jitter(0.1),
     speechRate: 1 + jitter(0.06),
-  };
-  const normalized = normalizeHeadConfig(config);
-  for (const parameter of HEAD_PARAMETERS) {
-    normalized[parameter.key] = roundToStep(
-      normalized[parameter.key],
-      parameter.step
-    );
-  }
-  return normalized;
+  });
 }
 
 /**

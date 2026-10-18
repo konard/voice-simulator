@@ -10,7 +10,17 @@ a pressure wave travelling through the 3D shape of a parametric low-poly head
 ## Features
 
 - **Text to IPA** for English, Russian, Hindi and Chinese, with automatic
-  language detection per word (`textToIpa`).
+  language detection per word (`textToIpa`). Numbers, dates, times, money,
+  units and abbreviations are read out per language (`normalizeText`).
+- **English accents**: General American, Southern British, Australian and
+  Indian English (`accent: 'en-GB'`, or `lang: 'en-GB'`).
+- **Punctuation prosody**: commas, semicolons, dashes, parentheses, quotes,
+  periods, exclamations, questions and ellipses each have their own pause,
+  final pitch movement and lengthening; questions with a question word
+  fall, yes/no questions rise, exclamations are higher and louder.
+- **Word and syllable timeline**: `utteranceTimeline` (also in
+  `synthesize`) tells when every word and syllable is spoken; the app
+  highlights the current word and syllable in the text and the IPA.
 - **Smooth articulation**: IPA becomes a time plan of tract shapes with
   coarticulated transitions, glottal source and pitch contour.
 - **Physical acoustics** with two interchangeable solvers:
@@ -19,10 +29,28 @@ a pressure wave travelling through the 3D shape of a parametric low-poly head
   - `fdtd3d`: a sparse-voxel 3D finite-difference time-domain solver of the
     acoustic wave equation inside the voxelised head and the air around it.
 - **Low-poly head model** with only acoustically relevant detail (tract tube,
-  nasal tube, lips, jaw, skin hull), four mesh LODs and OBJ export.
-- **Head and voice editor**: 18 parameters (tract length, pharynx ratio,
-  mouth width, jaw range, nose, pitch, breathiness, ...). Every page refresh
-  starts from a new random seed; `?seed=` makes it reproducible.
+  nasal tube, lips, jaw, skin hull, teeth, tongue, hard and soft palate),
+  four mesh LODs and OBJ export.
+- **Teeth and piriform fossae in the acoustics**: the incisors narrow the
+  tract and turn the frication jet into a sibilant source; the piriform
+  fossae add their side-branch antiresonance (waveguide).
+- **Head and voice editor**: 32 parameters, everything that changes the
+  sound (tract length, pharynx, mouth, jaw, nose, pitch, breathiness,
+  jitter, shimmer, vibrato, declination, accent strength, lengthening,
+  pauses, wall loss, nasal coupling, frication level, ...). Every page
+  refresh starts from a new random seed; `?seed=` makes it reproducible.
+- **Male, female and child presets** for random heads (`preset`), with f0
+  and formants in the ranges measured by Hillenbrand et al. (1995).
+- **Copy a voice**: `matchVoice` analyses a recording (f0, formants,
+  vocal-tract length, H1-H2, HNR, speaking rate) and searches for the head
+  that sounds most like it; in the app, upload a file or record yourself.
+- **Microphone and room**: place the microphone anywhere around the head
+  (distance, azimuth, elevation, 1/r fall-off and delay), add a room
+  reverb (eight presets or any shoebox with an RT60), or let the 3D solver
+  simulate a box of air around the head.
+- **Audio formats**: WAV (8-32-bit integer and 32/64-bit float), FLAC,
+  AIFF, AU and raw PCM, for both writing and reading, with band-limited
+  resampling (`encodeAudio`, `decodeAudio`, `resample`).
 - **Automatic LODs** for audio and visuals: a startup benchmark plus a
   runtime governor keep about 20% headroom (target load 80%).
 - **Modes**: sound only, 3D only, or both, with optional jaw/lip animation and
@@ -31,7 +59,10 @@ a pressure wave travelling through the 3D shape of a parametric low-poly head
   WAV streaming, and a Docker image with the server.
 
 The full research, the list of requirements and the plan behind each of them
-are in [docs/case-studies/issue-1](docs/case-studies/issue-1/README.md).
+are in [docs/case-studies/issue-1](docs/case-studies/issue-1/README.md); the
+second round (precision, anatomy, listening, presets, voice matching,
+formats, linguistics) is in
+[docs/case-studies/issue-5](docs/case-studies/issue-5/README.md).
 
 ## Quick Start
 
@@ -49,6 +80,10 @@ Synthesis runs in a Web Worker and is streamed to Web Audio in chunks; the 3D
 view uses three.js and colours the tract (or every air voxel with the 3D
 solver) by the simulated acoustic pressure.
 
+Every published release stays online: the previous version of the app is at
+`/v1/` (`https://konard.github.io/voice-simulator/v1/` once this version is
+deployed to GitHub Pages).
+
 ### Library
 
 ```bash
@@ -57,7 +92,10 @@ npm install voice-simulator
 
 ```js
 import {
+  decodeAudio,
+  encodeAudio,
   encodeWav,
+  matchVoice,
   randomHeadConfig,
   synthesize,
   synthesizeStream,
@@ -65,10 +103,34 @@ import {
 } from 'voice-simulator';
 
 textToIpa('Привет, мир'); // { lang: 'ru', ipa: 'prʲɪˈvʲet | mʲir', ... }
+textToIpa('water', { lang: 'en', accent: 'en-GB' }).ipa; // 'ˈwɔːtə'
 
 const head = randomHeadConfig(42); // a different person for every seed
 const result = synthesize('Hello world', { head, tier: 'medium' });
 const wav = encodeWav(result.samples, result.sampleRate);
+
+// A random woman, heard from 1 m in front in a small room, saved as FLAC.
+const far = synthesize('Hello world', {
+  head: 'random',
+  preset: 'female',
+  microphone: { distance: 100, compensate: true },
+  room: 'small-room',
+});
+const flac = encodeAudio(far.samples, far.sampleRate, {
+  format: 'flac',
+  bitDepth: 24,
+});
+
+// Copy a voice: the head that sounds most like a recording.
+const { samples, sampleRate } = decodeAudio(recordingBytes);
+const { head: copied } = matchVoice(samples, sampleRate, {
+  transcript: 'What the recording says',
+});
+
+// When each word and syllable is spoken, in seconds of the audio.
+for (const word of result.timeline.words) {
+  console.log(word.start, word.end, word.text, word.syllables.length);
+}
 
 // Streaming: chunks of Float32Array as soon as they are simulated.
 for await (const chunk of synthesizeStream('नमस्ते', { tier: 'low' })) {
@@ -87,8 +149,15 @@ Lower-level building blocks are exported too: `planUtterance`,
 
 ```bash
 npx voice-simulator ipa "你好世界"
+npx voice-simulator ipa "Water, please." --accent en-GB
+npx voice-simulator timeline "Hello world, how are you?"   # word and syllable times
 npx voice-simulator say "Hello world" -o hello.wav --seed 7
 npx voice-simulator say "Привет" --tier high -o fdtd.wav   # 3D FDTD solver
+npx voice-simulator say "Hello" --preset female --head random -o hi.flac -b 24
+npx voice-simulator say "Hello" --mic-distance 100 --mic-azimuth 45 --room hall -o hall.wav
+npx voice-simulator say "Hello" --tier high --box 30x44x30 -o box.wav  # simulated box
+npx voice-simulator convert hello.flac -o hello.aiff --sample-rate 16000
+npx voice-simulator match recording.wav --transcript "What it says" --json
 npx voice-simulator mesh --lod 3 -o head.obj
 npx voice-simulator benchmark
 npx voice-simulator serve --port 8080
@@ -107,11 +176,19 @@ be passed as a query string or as a JSON `POST` body.
 | `GET /api/health`      | `{ status, version }`                                        |
 | `GET /api/languages`   | Supported languages with sample sentences                    |
 | `GET /api/tiers`       | Audio and visual LOD tiers                                   |
-| `GET /api/ipa`         | `text`, `lang` → IPA transcription                           |
+| `GET /api/ipa`         | `text`, `lang`, `accent` → IPA transcription                 |
+| `GET /api/timeline`    | `text`, `lang`, `accent` → word and syllable times           |
 | `GET /api/head/random` | `seed` → random head configuration                           |
 | `GET /api/mesh.obj`    | `head`, `seed`, `lod` → OBJ model                            |
 | `GET /api/synthesize`  | `text`, `lang`, `tier`, `seed`, `head`, `sampleRate` → WAV   |
 | `GET /api/stream`      | Same parameters → chunked WAV that starts playing right away |
+
+Synthesis also accepts `accent` (`en-US`, `en-GB`, `en-AU`, `en-IN`),
+`preset` (`male`, `female`, `child`, used with `head=random`), `micDistance`
+(cm), `micAzimuth` and `micElevation` (degrees), `micCompensate`, `room` (a
+preset name, or a `{width, height, depth, rt60}` object in a JSON body), and
+the encoding: `format` (`wav`, `flac`, `aiff`, `au`, `raw`; `/api/stream`
+streams `wav`, `au` and `raw`), `bitDepth` and `float`.
 
 ```bash
 curl -o hello.wav "http://127.0.0.1:8080/api/stream?text=Hello&tier=medium"
@@ -134,11 +211,17 @@ The image runs `voice-simulator serve` on port 8080 with a health check on
 | `minimal`  | waveguide | 22 sections   | 22.05 kHz   | 1             |
 | `low`      | waveguide | 32 sections   | 32 kHz      | 1.6           |
 | `medium`   | waveguide | 44 sections   | 48 kHz      | 2.6           |
-| `high`     | fdtd3d    | 1 cm voxels   | 48 kHz      | 60            |
-| `ultra`    | fdtd3d    | 0.6 cm voxels | 48 kHz      | 300           |
+| `high`     | fdtd3d    | 1 cm voxels   | 48 kHz      | 10            |
+| `ultra`    | fdtd3d    | 0.6 cm voxels | 48 kHz      | 65            |
 
 The web app and `voice-simulator benchmark` pick the most detailed tier
-whose measured load stays under 80%; while speaking, `LodGovernor` steps down
+whose measured load stays under 80%. The benchmark does not run tiers whose
+load, predicted from the cheaper tier, is far above the target, and it stops
+measuring a tier as soon as it is clearly too slow; the app remembers the
+result per device. In the first 40-300 ms of each utterance an
+`OverloadDetector` checks that the tier keeps up with real time and, if not,
+the utterance restarts at once on a cheaper tier before any gap is audible.
+While speaking, `LodGovernor` steps down
 immediately when the load exceeds the target and steps up only after a dwell
 period when the next tier is predicted to fit with margin. Visual tiers
 (mesh LOD 0-3, pressure-field points) are governed the same way from the
@@ -184,13 +267,15 @@ npm run example:desktop:package
 │   └── universal-app/     # Web app (GitHub Pages, Electron, Capacitor)
 ├── experiments/           # Measurement and debugging scripts
 ├── src/
-│   ├── g2p/               # Text to IPA (en, ru, hi, zh)
-│   ├── ipa/               # IPA parsing and phone inventory
-│   ├── articulation/      # Articulation plan and tract shapes
+│   ├── g2p/               # Text normalisation, accents, text to IPA
+│   ├── ipa/               # IPA parsing, phone inventory, syllables
+│   ├── articulation/      # Plan, prosody, timeline and tract shapes
 │   ├── geometry/          # Head model, centrelines and meshes
-│   ├── acoustics/         # Glottis, waveguide, voxel model, 3D FDTD
+│   ├── acoustics/         # Glottis, waveguide, voxel model, 3D FDTD,
+│   │                      # microphone and room
+│   ├── analysis/          # Voice features and voice matching
 │   ├── perf/              # Benchmarks and LOD governor
-│   ├── audio/             # WAV encoding
+│   ├── audio/             # WAV, FLAC, AIFF, AU, raw and resampling
 │   ├── server/            # HTTP API (voice-simulator/server)
 │   ├── index.js           # Library entry point
 │   └── index.d.ts         # TypeScript definitions

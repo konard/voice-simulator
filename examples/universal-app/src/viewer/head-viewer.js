@@ -1,19 +1,26 @@
 /**
  * three.js view of the simulated head: a translucent low-poly skin, the
- * vocal and nasal tract tubes coloured by acoustic pressure, the lips and
- * (with the 3D solver) the pressure in every air voxel. The tract follows
- * the articulation plan frame by frame; the jaw and lips are optional.
+ * vocal and nasal tract tubes coloured by acoustic pressure, the lips,
+ * teeth, tongue, hard and soft palate and (with the 3D solver) the
+ * pressure in every air voxel. The tract, tongue and velum follow the
+ * articulation plan frame by frame; the jaw, lower teeth and lips are
+ * optional. The microphone is a small sphere and the box around the head a
+ * wireframe.
  */
 
 import {
   AmbientLight,
+  BoxGeometry,
   BufferAttribute,
   BufferGeometry,
   Color,
   DirectionalLight,
   DoubleSide,
+  EdgesGeometry,
   Group,
   HemisphereLight,
+  LineBasicMaterial,
+  LineSegments,
   Mesh,
   MeshBasicMaterial,
   MeshStandardMaterial,
@@ -21,25 +28,43 @@ import {
   Points,
   PointsMaterial,
   Scene,
+  SphereGeometry,
   WebGLRenderer,
 } from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import {
+  REST_GAP,
+  anatomyMeshes,
   deformJaw,
+  enclosureBounds,
+  headLandmarks,
   headMesh,
+  jawOpenness,
   lipsMesh,
+  lowerTeethMesh,
+  microphonePosition,
   nasalCenterline,
   noseShape,
   tractCenterline,
+  tongueMesh,
   tractShape,
   tubeMesh,
   updateTubeMesh,
+  velumMesh,
 } from '../../../../src/index.js';
 
 const LOW = new Color(0.16, 0.32, 0.62);
 const MID = new Color(0.98, 0.78, 0.25);
 const HIGH = new Color(0.92, 0.2, 0.12);
 const TARGET = [0, -5, 2];
+/** Materials of the articulators inside the mouth. */
+const ANATOMY_COLORS = {
+  upperTeeth: { color: 0xf2ead8, roughness: 0.35 },
+  lowerTeeth: { color: 0xf2ead8, roughness: 0.35 },
+  tongue: { color: 0xc4646e, roughness: 0.7 },
+  palate: { color: 0xd88a8a, roughness: 0.6 },
+  velum: { color: 0xd47d84, roughness: 0.6 },
+};
 
 /** Map 0..1 to a blue -> amber -> red ramp. */
 export function pressureColor(value, out) {
@@ -127,6 +152,9 @@ export class HeadViewer {
     this.scene.add(sun);
     this.group = new Group();
     this.scene.add(this.group);
+    this.listeningGroup = new Group();
+    this.scene.add(this.listeningGroup);
+    this.listening = {};
     this.normalizer = new Normalizer();
     this.cellNormalizer = new Normalizer();
     this.cells = null;
@@ -224,11 +252,68 @@ export class HeadViewer {
       geometryFrom(lipsMesh(head, { area: neutral.areas.at(-1), lod })),
       new MeshStandardMaterial({ color: 0xc0505a, roughness: 0.6 })
     );
+    this.anatomy = {};
+    for (const mesh of anatomyMeshes(head, { lod, shape: neutral })) {
+      this.anatomy[mesh.name] = new Mesh(
+        geometryFrom(mesh),
+        new MeshStandardMaterial({
+          ...ANATOMY_COLORS[mesh.name],
+          side: DoubleSide,
+        })
+      );
+      this.group.add(this.anatomy[mesh.name]);
+    }
+    this.anatomyState = { gap: REST_GAP, velum: 0 };
     this.group.add(this.tract, this.nose, this.lips, this.skin, wire);
     colorTube(this.tract.geometry, this.tractMesh.ring, null, 1);
     colorTube(this.nose.geometry, this.noseMesh.ring, null, 1);
     if (this.cells) {
       this.setCells(this.cells);
+    }
+    this.setListening(this.listening);
+    this.dirty = true;
+  }
+
+  /**
+   * Show the microphone and the box around the head.
+   * @param {{microphone?: object, enclosure?: object}} listening
+   *   The listening options of synthesize.
+   */
+  setListening(listening) {
+    this.listening = listening ?? {};
+    for (const child of [...this.listeningGroup.children]) {
+      child.geometry.dispose();
+      child.material.dispose();
+      this.listeningGroup.remove(child);
+    }
+    if (!this.head) {
+      return;
+    }
+    const { microphone, enclosure } = this.listening;
+    const marker = new Mesh(
+      new SphereGeometry(0.8, 12, 8),
+      new MeshStandardMaterial({ color: 0x40464f, metalness: 0.6 })
+    );
+    marker.position.set(
+      ...microphonePosition(microphone, headLandmarks(this.head).lips)
+    );
+    this.listeningGroup.add(marker);
+    let box = null;
+    try {
+      box = enclosure ? enclosureBounds(this.head, enclosure) : null;
+    } catch {
+      // The settings panel explains why the box does not fit.
+    }
+    if (box) {
+      const size = box.high.map((value, axis) => value - box.low[axis]);
+      const edges = new LineSegments(
+        new EdgesGeometry(new BoxGeometry(...size)),
+        new LineBasicMaterial({ color: 0x5a7fa8 })
+      );
+      edges.position.set(
+        ...box.low.map((value, axis) => value + size[axis] / 2)
+      );
+      this.listeningGroup.add(edges);
     }
     this.dirty = true;
   }
@@ -286,9 +371,43 @@ export class HeadViewer {
     return shape;
   }
 
+  #setPositions(name, mesh) {
+    const target = this.anatomy[name].geometry;
+    const attribute = target.getAttribute('position');
+    attribute.array.set(mesh.positions);
+    attribute.needsUpdate = true;
+    target.computeVertexNormals();
+  }
+
+  /** Tongue, soft palate and (with the jaw) the lower teeth. */
+  #updateAnatomy(shape, state, gap) {
+    this.#setPositions(
+      'tongue',
+      tongueMesh(this.head, { lod: this.lod, shape })
+    );
+    const velum = state.velum ?? 0;
+    if (velum !== this.anatomyState.velum) {
+      this.anatomyState.velum = velum;
+      this.#setPositions(
+        'velum',
+        velumMesh(this.head, { lod: this.lod, velum })
+      );
+    }
+    if (gap !== this.anatomyState.gap) {
+      this.anatomyState.gap = gap;
+      this.#setPositions(
+        'lowerTeeth',
+        lowerTeethMesh(this.head, { lod: this.lod, gap })
+      );
+    }
+  }
+
   #updateMouth(shape, state, animate) {
     const area = animate ? shape.areas.at(-1) : 1.2;
-    const openness = animate ? Math.min(1, Math.sqrt(area / 4)) : 0.15;
+    // The jaw carries the chin and the lower teeth to the acoustic gap.
+    const gap = animate ? (shape.teeth?.gap ?? REST_GAP) : REST_GAP;
+    const openness = animate ? jawOpenness(gap, this.head) : 0.15;
+    this.#updateAnatomy(shape, state, gap);
     const skin = this.skin.geometry.getAttribute('position');
     deformJaw(this.skinBase, skin.array, this.head, openness);
     skin.needsUpdate = true;
@@ -360,6 +479,8 @@ export class HeadViewer {
   dispose() {
     this.resizeObserver.disconnect();
     this.#clear();
+    this.head = null;
+    this.setListening({});
     this.controls.dispose();
     this.renderer.dispose();
     this.renderer.domElement.remove();

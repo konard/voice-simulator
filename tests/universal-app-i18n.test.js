@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'test-anywhere';
-import { HEAD_PARAMETERS } from '../src/index.js';
+import { HEAD_PARAMETERS, HEAD_PRESET_NAMES } from '../src/index.js';
 import {
   detectLocale,
   parameterLabel,
@@ -25,6 +25,18 @@ describe('example app i18n', () => {
     expect(Object.keys(russian.themes).sort()).toEqual(
       Object.keys(english.themes).sort()
     );
+    expect(Object.keys(russian.presets).sort()).toEqual(
+      Object.keys(english.presets).sort()
+    );
+    expect(Object.keys(russian.features).sort()).toEqual(
+      Object.keys(english.features).sort()
+    );
+    expect(Object.keys(russian.units).sort()).toEqual(
+      Object.keys(english.units).sort()
+    );
+    expect(Object.keys(russian.accents).sort()).toEqual(
+      Object.keys(english.accents).sort()
+    );
     expect(strings('xx')).toBe(english);
   });
 
@@ -37,6 +49,10 @@ describe('example app i18n', () => {
       expect(russian.length > 0).toBe(true);
       expect(russian === parameter.label).toBe(false);
       expect(typeof english.groups[parameter.group]).toBe('string');
+    }
+    for (const name of HEAD_PRESET_NAMES) {
+      expect(typeof english.presets[name]).toBe('string');
+      expect(typeof strings('ru').presets[name]).toBe('string');
     }
   });
 });

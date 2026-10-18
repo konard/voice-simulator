@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { LodGovernor, VISUAL_TIERS } from '../../../../src/index.js';
+import { paintHighlight } from '../components/highlight.js';
 import { HeadViewer } from '../viewer/head-viewer.js';
 import { VoiceEngine } from './voice-engine.js';
 
@@ -26,6 +27,7 @@ function writeProgress(refs, frame) {
     const share = frame.plan ? frame.time / frame.plan.duration : 0;
     refs.progress.current.style.transform = `scaleX(${share})`;
   }
+  paintHighlight(refs.spoken.current, frame);
 }
 
 /**
@@ -36,6 +38,7 @@ export function useSimulator(settings) {
   const containerRef = useRef(null);
   const phonemeRef = useRef(null);
   const progressRef = useRef(null);
+  const spokenRef = useRef(null);
   const engineRef = useRef(null);
   const viewerRef = useRef(null);
   const settingsRef = useRef(settings);
@@ -86,6 +89,10 @@ export function useSimulator(settings) {
   }, [settings.head, meshLod, webglError]);
 
   useEffect(() => {
+    viewerRef.current?.setListening(settings.listening);
+  }, [settings.listening, webglError]);
+
+  useEffect(() => {
     viewerRef.current?.setCells(status.cells ? engineRef.current?.cells : null);
   }, [status.cells, status.solver]);
 
@@ -96,7 +103,11 @@ export function useSimulator(settings) {
       target: 0.8,
       dwell: 90,
     });
-    const refs = { phoneme: phonemeRef, progress: progressRef };
+    const refs = {
+      phoneme: phonemeRef,
+      progress: progressRef,
+      spoken: spokenRef,
+    };
     let handle = 0;
     let last = performance.now();
     let hudAt = 0;
@@ -150,6 +161,7 @@ export function useSimulator(settings) {
     containerRef,
     phonemeRef,
     progressRef,
+    spokenRef,
     engineRef,
     status,
     visual,

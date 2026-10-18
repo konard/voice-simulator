@@ -5,9 +5,16 @@
  * list of segment tokens with resolved articulatory features. Diacritics
  * modify the preceding segment, stress marks apply to the next vowel, tone
  * letters attach to the previous vowel, and tie bars join affricates.
+ *
+ * Pauses carry a prosodic boundary class (comma, question, paren, ...);
+ * `(` ... `)` mark the segments between them as parenthetical, and the
+ * arrows `↗`/`↘` set a rising or falling contour on the next phrase end.
  */
 
 import {
+  BOUNDARY_CLASSES,
+  BOUNDARY_RANKS,
+  CONTOUR_MARKS,
   DIACRITICS,
   PAUSES,
   STRESS_MARKS,
@@ -30,6 +37,7 @@ function normalizeText(text) {
       // NFD splits ç into c + cedilla, which is a different IPA symbol.
       .replaceAll('ç', 'ç')
       .replaceAll('\r', ' ')
+      .replaceAll('\t', ' ')
       .replaceAll('\n', ' | ')
       .replaceAll('/', ' ')
       .replaceAll('[', ' ')
@@ -117,28 +125,60 @@ function addTone(state, level) {
   }
 }
 
+function updateParens(state, char) {
+  if (char === '(') {
+    state.parenDepth++;
+  } else if (char === ')') {
+    state.parenDepth = Math.max(0, state.parenDepth - 1);
+  }
+}
+
+function mergePause(pause, char, strength) {
+  if (strength > pause.strength) {
+    pause.strength = strength;
+    pause.symbol = char;
+  }
+  const boundary = BOUNDARY_CLASSES[char];
+  if (BOUNDARY_RANKS[boundary] > BOUNDARY_RANKS[pause.boundary]) {
+    pause.boundary = boundary;
+  }
+  pause.question = pause.question || char === '?';
+}
+
 function addPause(state, char) {
   const strength = PAUSES[char];
   const previous = state.tokens.at(-1);
+  const closing = char === ')';
+  if (!closing) {
+    updateParens(state, char);
+  }
   if (!previous) {
     return;
   }
+  let pause = previous;
   if (previous.kind === 'pause') {
-    if (strength > previous.strength) {
-      previous.strength = strength;
-      previous.symbol = char;
-    }
-    previous.question = previous.question || char === '?';
-    return;
+    mergePause(previous, char, strength);
+  } else {
+    state.word++;
+    pause = {
+      kind: 'pause',
+      symbol: char,
+      strength,
+      boundary: BOUNDARY_CLASSES[char],
+      question: char === '?',
+      word: -1,
+    };
+    state.tokens.push(pause);
   }
-  state.word++;
-  state.tokens.push({
-    kind: 'pause',
-    symbol: char,
-    strength,
-    question: char === '?',
-    word: -1,
-  });
+  if (closing) {
+    // The pause after `)` still ends the parenthetical phrase.
+    pause.parenthetical = state.parenDepth > 0;
+    updateParens(state, char);
+  }
+  if (state.pendingContour && pause.strength >= 2) {
+    pause.contour = state.pendingContour;
+    state.pendingContour = null;
+  }
 }
 
 function addSegment(state, char, phoneme) {
@@ -157,6 +197,14 @@ function addSegment(state, char, phoneme) {
     return;
   }
   const segment = createSegment(char, phoneme, state.word);
+  if (state.parenDepth > 0) {
+    segment.parenthetical = true;
+  }
+  if (state.pendingSyllable) {
+    // A stress mark is written at the start of its syllable.
+    segment.syllableStart = true;
+    state.pendingSyllable = false;
+  }
   if (phoneme.kind === 'vowel' && state.pendingStress) {
     segment.stress = state.pendingStress;
     state.pendingStress = 0;
@@ -178,6 +226,9 @@ function consumeChar(state, char) {
   const phoneme = getPhoneme(char);
   if (STRESS_MARKS[char]) {
     state.pendingStress = STRESS_MARKS[char];
+    state.pendingSyllable = true;
+  } else if (CONTOUR_MARKS[char]) {
+    state.pendingContour = CONTOUR_MARKS[char];
   } else if (toneLevel) {
     addTone(state, toneLevel);
   } else if (char in PAUSES) {
@@ -202,6 +253,9 @@ export function parseIpa(text) {
     unknown: [],
     word: 0,
     pendingStress: 0,
+    pendingSyllable: false,
+    pendingContour: null,
+    parenDepth: 0,
     pendingTie: false,
   };
   for (const char of expandLigatures(text)) {

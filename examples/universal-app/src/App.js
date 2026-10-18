@@ -1,15 +1,23 @@
 import { createElement as h, useEffect, useMemo, useState } from 'react';
 import {
+  ACCENTS,
   AUDIO_TIERS,
   DEFAULT_HEAD,
   LANGUAGES,
   VISUAL_TIERS,
   createSeed,
   headModelObj,
+  presetHeadConfig,
   randomHeadConfig,
   textToIpa,
 } from '../../../src/index.js';
+import { ExportControls } from './components/ExportControls.js';
+import { AcousticsSettings } from './components/AcousticsSettings.js';
 import { HeadEditor } from './components/HeadEditor.js';
+import { DEFAULT_ACOUSTICS, listeningSettings } from './engine/listening.js';
+import { PresetSelect, initialPreset } from './components/PresetSelect.js';
+import { VoiceMatch } from './components/VoiceMatch.js';
+import { SpokenText } from './components/SpokenText.js';
 import { useSimulator } from './engine/use-simulator.js';
 import { detectLocale, strings } from './i18n.js';
 
@@ -17,6 +25,8 @@ const repositoryUrl =
   import.meta.env.VITE_REPOSITORY_URL ??
   'https://github.com/konard/voice-simulator';
 
+// The previous release stays published next to the current one.
+const PREVIOUS_VERSION_URL = 'https://konard.github.io/voice-simulator/v1/';
 const THEMES = ['system', 'light', 'dark'];
 
 function initialSeed() {
@@ -62,9 +72,9 @@ function download(blob, name) {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
-function transcribe(text, lang) {
+function transcribe(text, lang, accent) {
   try {
-    return textToIpa(text, { lang });
+    return textToIpa(text, { lang, accent });
   } catch (error) {
     return { lang, ipa: '', error: error.message };
   }
@@ -122,9 +132,9 @@ function Meter({ label, tier, load, detail, t }) {
 function Hud({ status, visual, mode, t }) {
   const audioTier = AUDIO_TIERS[status.audioLevel ?? 0];
   const solver = status.solver ?? audioTier.solver;
-  const underruns = status.underruns
-    ? ` · ${t.underruns} ${status.underruns}`
-    : '';
+  const underruns =
+    (status.underruns ? ` · ${t.underruns} ${status.underruns}` : '') +
+    (status.overloads ? ` · ${t.overloads} ${status.overloads}` : '');
   return h(
     'div',
     { className: 'hud', 'aria-live': 'polite' },
@@ -189,10 +199,28 @@ function SamplePicker({ onPick }) {
   );
 }
 
+/** Accent choice, shown for languages that have accents (English). */
+function AccentSelect({ transcription, onChange, t }) {
+  const accents = ACCENTS[transcription.lang];
+  if (!accents) {
+    return null;
+  }
+  return h(Select, {
+    id: 'speech-accent',
+    label: t.accent,
+    value: transcription.accent ?? accents[0].code,
+    options: accents.map((accent) => ({
+      value: accent.code,
+      label: t.accents[accent.code] ?? accent.name,
+    })),
+    onChange: (accent) => onChange({ accent }),
+  });
+}
+
 function SpeakPanel({ speech, setSpeech, simulator, onSpeak, onStop, t }) {
   const transcription = useMemo(
-    () => transcribe(speech.text, speech.lang),
-    [speech.text, speech.lang]
+    () => transcribe(speech.text, speech.lang, speech.accent),
+    [speech.text, speech.lang, speech.accent]
   );
   const speaking = simulator.status.phase === 'speaking';
   const update = (patch) => setSpeech({ ...speech, ...patch });
@@ -226,6 +254,14 @@ function SpeakPanel({ speech, setSpeech, simulator, onSpeak, onStop, t }) {
       h('span', null, `${t.ipa} [${transcription.lang}]`),
       h('bdi', null, transcription.error ?? `/${transcription.ipa}/`)
     ),
+    h(SpokenText, {
+      key: simulator.status.utterance,
+      rootRef: simulator.spokenRef,
+      text: simulator.status.text ?? '',
+      lang: simulator.status.lang,
+      timeline: simulator.status.timeline,
+      t,
+    }),
     h(
       'div',
       { className: 'row' },
@@ -268,7 +304,8 @@ function SpeakPanel({ speech, setSpeech, simulator, onSpeak, onStop, t }) {
           })),
         ],
         onChange: (tier) => update({ tier }),
-      })
+      }),
+      h(AccentSelect, { transcription, onChange: update, t })
     ),
     h(
       'div',
@@ -304,19 +341,15 @@ function SpeakPanel({ speech, setSpeech, simulator, onSpeak, onStop, t }) {
             },
             t.speak
           ),
-      h(
-        'button',
-        {
-          type: 'button',
-          onClick: () => {
-            const blob = simulator.engineRef.current?.wav();
-            if (blob) {
-              download(blob, 'voice-simulator.wav');
-            }
-          },
+      h(ExportControls, {
+        t,
+        onDownload: (preset) => {
+          const file = simulator.engineRef.current?.exportAudio(preset);
+          if (file) {
+            download(file.blob, file.fileName);
+          }
         },
-        t.downloadWav
-      )
+      })
     ),
     simulator.status.error
       ? h('p', { className: 'error', role: 'alert' }, simulator.status.error)
@@ -324,7 +357,16 @@ function SpeakPanel({ speech, setSpeech, simulator, onSpeak, onStop, t }) {
   );
 }
 
-function EditorPanel({ head, seed, locale, t, onHead, onSeed }) {
+function EditorPanel({
+  head,
+  seed,
+  preset,
+  locale,
+  t,
+  onHead,
+  onSeed,
+  onPreset,
+}) {
   return h(
     'section',
     { className: 'panel editor-panel', 'aria-labelledby': 'editor-title' },
@@ -348,9 +390,16 @@ function EditorPanel({ head, seed, locale, t, onHead, onSeed }) {
         { type: 'button', onClick: () => onSeed(createSeed()) },
         t.randomize
       ),
+      h(PresetSelect, { preset, t, onChange: onPreset }),
       h(
         'button',
-        { type: 'button', onClick: () => onHead({ ...DEFAULT_HEAD }) },
+        {
+          type: 'button',
+          onClick: () =>
+            onHead(
+              preset === 'any' ? { ...DEFAULT_HEAD } : presetHeadConfig(preset)
+            ),
+        },
         t.reset
       ),
       h(
@@ -380,16 +429,21 @@ export function App() {
   const t = strings(locale);
   const [theme, nextTheme] = useTheme();
   const [seed, setSeed] = useState(initialSeed);
-  const [head, setHead] = useState(() => randomHeadConfig(seed));
+  const [preset, setPreset] = useState(initialPreset);
+  const [head, setHead] = useState(() => randomHeadConfig(seed, { preset }));
   const [speech, setSpeech] = useState({
     text: LANGUAGES[locale].sample,
     lang: 'auto',
+    accent: 'en-US',
     mode: 'both',
     tier: 'auto',
     animateMouth: true,
     showField: true,
   });
+  const [acoustics, setAcoustics] = useState(() => ({ ...DEFAULT_ACOUSTICS }));
+  const listening = useMemo(() => listeningSettings(acoustics), [acoustics]);
   const simulator = useSimulator({
+    listening,
     head,
     mode: speech.mode,
     animateMouth: speech.animateMouth,
@@ -402,9 +456,13 @@ export function App() {
     document.title = t.title;
   }, [locale, t.title]);
 
-  const changeSeed = (value) => {
+  const changeSeed = (value, nextPreset = preset) => {
     setSeed(value);
-    setHead(randomHeadConfig(value || 1));
+    setHead(randomHeadConfig(value || 1, { preset: nextPreset }));
+  };
+  const editHead = (next) => {
+    setHead(next);
+    setSeed('');
   };
 
   return h(
@@ -430,6 +488,11 @@ export function App() {
         ),
         h(
           'a',
+          { href: PREVIOUS_VERSION_URL, target: '_blank', rel: 'noreferrer' },
+          t.previousVersion
+        ),
+        h(
+          'a',
           { href: repositoryUrl, target: '_blank', rel: 'noreferrer' },
           'GitHub'
         )
@@ -448,9 +511,11 @@ export function App() {
           simulator.engineRef.current?.speak({
             text: speech.text,
             lang: speech.lang,
+            accent: speech.accent,
             head,
             seed,
             mode: speech.mode,
+            ...listening,
           }),
         onStop: () => simulator.engineRef.current?.stop(),
       })
@@ -458,13 +523,17 @@ export function App() {
     h(EditorPanel, {
       head,
       seed,
+      preset,
       locale,
       t,
-      onHead: (next) => {
-        setHead(next);
-        setSeed('');
-      },
+      onHead: editHead,
       onSeed: changeSeed,
-    })
+      onPreset: (next) => {
+        setPreset(next);
+        changeSeed(seed || createSeed(), next);
+      },
+    }),
+    h(AcousticsSettings, { acoustics, head, t, onChange: setAcoustics }),
+    h(VoiceMatch, { text: speech.text, lang: speech.lang, t, onHead: editHead })
   );
 }

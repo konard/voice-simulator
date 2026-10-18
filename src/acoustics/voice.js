@@ -7,6 +7,10 @@
  * tract length) and its output is band-limited and resampled to the audio
  * rate. Rendering is incremental, so the same class serves offline
  * synthesis, AudioWorklets and the streaming server.
+ *
+ * Optional `microphone`, `room` and `enclosure` settings add a listening
+ * chain after the solver (see microphone.js and room.js); without them the
+ * output is unchanged.
  */
 
 import {
@@ -20,6 +24,8 @@ import { Glottis } from './glottis.js';
 import { SPEED_OF_SOUND } from './transfer.js';
 import { Waveguide } from './waveguide.js';
 import { Fdtd3d } from './fdtd3d.js';
+import { createListener } from './microphone.js';
+import { enclosureBounds } from './voxel-model.js';
 
 const OUTPUT_GAIN = 0.3;
 
@@ -75,7 +81,8 @@ class NoiseSources {
 }
 
 class OutputStage {
-  constructor(sampleRate) {
+  constructor(sampleRate, gain = 1) {
+    this.gain = OUTPUT_GAIN * gain;
     this.lowpass = [new Biquad(), new Biquad()];
     this.dcInput = 0;
     this.dcOutput = 0;
@@ -101,14 +108,22 @@ class OutputStage {
     const output = value - this.dcInput + this.dcCoefficient * this.dcOutput;
     this.dcInput = value;
     this.dcOutput = output;
-    return Math.tanh(output * OUTPUT_GAIN);
+    return Math.tanh(output * this.gain);
   }
 }
 
 export class VoiceRenderer {
   /**
    * @param {object} plan Result of planUtterance.
-   * @param {{sampleRate?: number, sections?: number, solver?: string, seed?: string|number, blockSize?: number, head?: object, dx?: number, model?: object, output?: string}} [options]
+   * `microphone` ({distance, azimuth, elevation, compensate}, cm and
+   * degrees relative to the lips), `room` (a ROOM_PRESETS name or
+   * {width, height, depth, rt60 | absorption, headPosition} in m and s)
+   * and `enclosure` ({width, height, depth, absorption, center} in cm, a
+   * box around the head) choose where and in what space the voice is
+   * heard. The output grows by the reverberation tail.
+   * @param {{sampleRate?: number, sections?: number, solver?: string, seed?: string|number, blockSize?: number, head?: object, dx?: number, model?: object, output?: string, microphone?: object, room?: string|object, enclosure?: object, teeth?: boolean, piriform?: boolean}} [options]
+   *   `teeth: false` leaves out the incisors, `piriform: false` the
+   *   piriform fossae side branches of the waveguide.
    */
   constructor(plan, options = {}) {
     this.plan = plan;
@@ -116,6 +131,7 @@ export class VoiceRenderer {
     this.sampleRate = options.sampleRate ?? 48000;
     this.sections = options.sections ?? 44;
     this.blockSize = options.blockSize ?? 32;
+    this.teeth = options.teeth !== false;
     const seed = options.seed ?? 1;
     const factory = SOLVERS.get(options.solver ?? 'waveguide');
     if (!factory) {
@@ -129,19 +145,35 @@ export class VoiceRenderer {
       dx: options.dx,
       model: options.model,
       output: options.output,
+      kernel: options.kernel,
+      piriform: options.piriform,
+      microphone: options.microphone,
+      enclosure: options.enclosure,
     });
     this.solver.setNose?.(noseShape(this.head).areas);
     this.glottis = new Glottis({
       seed,
       tenseness: this.head.tenseness,
       breathiness: this.head.breathiness,
+      jitter: this.head.jitter,
+      shimmer: this.head.shimmer,
+      aspirationLevel: this.head.aspirationLevel,
     });
     this.noise = new NoiseSources(seed);
-    this.output = new OutputStage(this.sampleRate);
+    this.output = new OutputStage(this.sampleRate, this.head.outputGain);
     this.state = {};
     this.time = 0;
     this.position = 0;
-    this.totalSamples = Math.ceil(plan.duration * this.sampleRate);
+    this.listener = createListener({
+      microphone: options.microphone,
+      room: options.room,
+      enclosure: enclosureBounds(this.head, options.enclosure),
+      solver: this.solver,
+      sampleRate: this.sampleRate,
+    });
+    this.totalSamples = Math.ceil(
+      (plan.duration + (this.listener?.tail ?? 0)) * this.sampleRate
+    );
     this.solverTime = 0;
     this.previous = 0;
     this.current = 0;
@@ -158,11 +190,15 @@ export class VoiceRenderer {
 
   #updateShape() {
     sampleState(this.plan, this.time, this.state);
-    this.shape = tractShape(this.state, this.head, { sections: this.sections });
+    this.shape = tractShape(this.state, this.head, {
+      sections: this.sections,
+      teeth: this.teeth,
+    });
     this.solver.setShape(
       this.shape.areas,
       this.shape.velumArea,
-      this.shape.velumIndex
+      this.shape.velumIndex,
+      this.shape.teeth
     );
     this.stepDuration = this.solver.stepDuration(this.shape);
     const rate = 1 / this.stepDuration;
@@ -178,13 +214,22 @@ export class VoiceRenderer {
     const { noise } = this;
     const broad = noise.fricative.process(white);
     const hiss = noise.sibilant.process(white);
+    // A jet hitting the incisors adds a strong high-frequency dipole
+    // source; without that obstacle only the broad wall source remains.
     const colour =
-      broad * (1 - frication.sibilance) + hiss * 0.06 * frication.sibilance;
+      broad * (1 - frication.obstacle) + hiss * 0.06 * frication.obstacle;
     const voicing = Math.min(1, this.shape.glottis.voicing);
     const flow =
       (1 - this.shape.glottis.closure) *
       (1 - voicing * (0.5 - 0.4 * this.glottis.noiseModulation));
-    return colour * frication.gain * flow * this.shape.glottis.loudness * 2.2;
+    return (
+      colour *
+      frication.gain *
+      flow *
+      this.shape.glottis.loudness *
+      2.2 *
+      this.head.fricationLevel
+    );
   }
 
   #step() {
@@ -231,7 +276,9 @@ export class VoiceRenderer {
         }
         const fraction = 1 - (this.solverTime - this.time) / this.stepDuration;
         const value = this.previous + (this.current - this.previous) * fraction;
-        target[written] = this.output.finish(value);
+        target[written] = this.output.finish(
+          this.listener ? this.listener.process(value) : value
+        );
         this.time += outputStep;
       }
     }

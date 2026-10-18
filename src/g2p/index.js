@@ -1,21 +1,27 @@
 /**
  * Text to IPA for English, Russian, Hindi and Mandarin Chinese.
  *
- * The text is split into words, numbers and punctuation. Each word is
- * routed by its script (Latin, Cyrillic, Devanagari, Han) so mixed-language
- * input works; Latin text is read as pinyin when the language is Chinese
- * and the word is valid pinyin. Punctuation becomes IPA prosodic breaks.
+ * The text is normalised first (numbers, dates, money, abbreviations,
+ * see `normalize.js`), then each word is routed by its script (Latin,
+ * Cyrillic, Devanagari, Han) so mixed-language input works; Latin text is
+ * read as pinyin when the language is Chinese and the word is valid
+ * pinyin. Punctuation becomes prosodic breaks: `.` `?` `!` `…` `,` `;`
+ * `|` (dash), `(` `)` and `"`, and questions opening with a question word
+ * get a falling `↘` contour. Every word keeps `sourceStart`/`sourceEnd`
+ * (UTF-16 offsets into the input) and the `original` text it came from.
  */
 
-import { englishNumberWords } from './english-rules.js';
 import { englishWordToIpa } from './english.js';
+import { hindiWordToIpa, normalizeDevanagariDigits } from './hindi.js';
+import { chineseSyllables, chineseWordToIpa, isPinyin } from './chinese.js';
+import { russianWordToIpa } from './russian.js';
+import { VERBALIZERS, normalizeText } from './normalize.js';
 import {
-  hindiNumberWords,
-  hindiWordToIpa,
-  normalizeDevanagariDigits,
-} from './hindi.js';
-import { chineseNumber, chineseWordToIpa, isPinyin } from './chinese.js';
-import { russianNumberWords, russianWordToIpa } from './russian.js';
+  adaptEnglishWord,
+  hasLinkingR,
+  isNonRhotic,
+  resolveAccent,
+} from './accents.js';
 
 /** Supported languages with display names and sample sentences. */
 export const LANGUAGES = Object.freeze({
@@ -52,13 +58,6 @@ const WORD_PRONOUNCERS = {
   zh: chineseWordToIpa,
 };
 
-const NUMBER_SPELLERS = {
-  en: englishNumberWords,
-  ru: russianNumberWords,
-  hi: hindiNumberWords,
-  zh: (value) => [chineseNumber(value)],
-};
-
 const SCRIPT_TESTS = [
   ['ru', /\p{Script=Cyrillic}/u],
   ['hi', /\p{Script=Devanagari}/u],
@@ -66,29 +65,12 @@ const SCRIPT_TESTS = [
   ['en', /\p{Script=Latin}/u],
 ];
 
-const PUNCTUATION_BREAKS = {
-  '.': '.',
-  '!': '.',
-  '…': '.',
-  '。': '.',
-  '！': '.',
-  '।': '.',
-  '॥': '.',
-  '?': '?',
-  '？': '?',
-  ',': '|',
-  ';': '|',
-  ':': '|',
-  '—': '|',
-  '–': '|',
-  '，': '|',
-  '、': '|',
-  '；': '|',
-  '：': '|',
-};
-
-const TOKEN_PATTERN =
-  /\p{Script=Han}+|(?:[\p{L}\p{M}'’+]+\d?)+|\d+(?:[.,]\d+)?|[.!?…。！？।॥,;:—–，、；：]/gu;
+/**
+ * Break symbols in the IPA output, ranked: when breaks meet (`?!`, `.,`)
+ * the stronger one is kept. Brackets and quotes are always kept.
+ */
+const BREAK_RANKS = { ',': 1, '|': 2, ';': 3, '…': 4, '.': 5, '!': 6, '?': 7 };
+const ENCLOSING_BREAKS = new Set(['(', ')', '"']);
 
 /**
  * Detect the script-based language of a word or text.
@@ -127,76 +109,209 @@ function wordLanguage(word, preferred) {
   return script ?? preferred;
 }
 
-function pronounceNumber(token, language) {
-  const value = Number(token.replace(',', '.'));
-  const integer = Number.isInteger(value) ? value : Math.trunc(value);
-  const words = NUMBER_SPELLERS[language](integer);
-  return words.map((word) => pronounceWord(word, language));
-}
-
 function pronounceWord(word, language) {
   const result = WORD_PRONOUNCERS[language](word);
   return { text: word, lang: language, ...result };
 }
 
-/** Pronounce a word; letters mixed with digits (mp3) are split unless pinyin. */
-function pronounceMixed(token, language) {
-  if (language === 'zh' || !/\d/.test(token)) {
-    return [pronounceWord(token, language)];
-  }
-  return token
-    .split(/(\d)/)
-    .filter(Boolean)
-    .flatMap((part) =>
-      /\d/.test(part)
-        ? pronounceNumber(part, language)
-        : [pronounceWord(part, language)]
-    );
+/** Pronounce a normalised word item in its accent. */
+function pronounceItem(item, source, accent) {
+  return pronounceSource(item, source).map((word) => {
+    if (word.lang !== 'en' || !word.ipa) {
+      return word;
+    }
+    const ipa = adaptEnglishWord(word.ipa, word.text, accent);
+    return { ...word, ipa, linkingR: hasLinkingR(word.ipa) };
+  });
 }
 
-function addBreak(items, symbol) {
+/** Pronounce a normalised word item, keeping its source range. */
+function pronounceSource(item, source) {
+  const { sourceStart, sourceEnd, token } = item;
+  const original = source.slice(sourceStart, sourceEnd);
+  const range = { sourceStart, sourceEnd, original, token };
+  if (item.ipa) {
+    const extra = item.letter ? { letter: true } : {};
+    return [
+      { text: item.text, lang: item.lang, ipa: item.ipa, ...extra, ...range },
+    ];
+  }
+  if (
+    item.lang === 'zh' &&
+    item.text === original &&
+    /\p{Script=Han}/u.test(original)
+  ) {
+    return splitHanRun(item, range);
+  }
+  return [
+    {
+      ...pronounceWord(item.say ?? item.text, item.lang),
+      text: item.text,
+      ...range,
+    },
+  ];
+}
+
+/**
+ * Split a run of Hanzi into dictionary words, so each can be highlighted
+ * on its own; tone sandhi is still applied across the whole run.
+ */
+function splitHanRun(item, range) {
+  const groups = new Map();
+  let offset = item.sourceStart;
+  for (const syllable of chineseSyllables(item.text)) {
+    const group = groups.get(syllable.group) ?? {
+      text: '',
+      syllables: [],
+      sourceStart: offset,
+    };
+    group.text += syllable.char;
+    group.syllables.push(syllable);
+    offset += syllable.char.length;
+    group.sourceEnd = offset;
+    groups.set(syllable.group, group);
+  }
+  return [...groups.values()]
+    .map((group) => {
+      const known = group.syllables.filter((syllable) => syllable.ipa);
+      return {
+        text: group.text,
+        lang: 'zh',
+        ipa: known.map((syllable) => syllable.ipa).join(' '),
+        pinyin: known.map((syllable) => syllable.pinyin).join(' '),
+        source: 'dictionary',
+        ...range,
+        sourceStart: group.sourceStart,
+        sourceEnd: group.sourceEnd,
+        original: group.text,
+      };
+    })
+    .filter((word) => word.ipa);
+}
+
+function addBreak(items, item) {
+  const { symbol } = item;
   const last = items.at(-1);
-  if (!last) {
+  const enclosing = ENCLOSING_BREAKS.has(symbol);
+  if (!last && !enclosing) {
     return;
   }
-  if (last.break) {
-    if (symbol !== '|') {
+  if (last?.break && !enclosing && BREAK_RANKS[last.ipa]) {
+    if (BREAK_RANKS[symbol] > BREAK_RANKS[last.ipa]) {
       last.ipa = symbol;
+      last.text = symbol;
     }
     return;
   }
-  items.push({ text: symbol, ipa: symbol, break: true });
+  items.push({
+    text: symbol,
+    ipa: symbol,
+    break: true,
+    sourceStart: item.sourceStart,
+  });
+}
+
+/**
+ * Questions that start with a question word (who, what, ...) fall at the
+ * at the end: mark them with `↘` before the `?`.
+ */
+function markQuestions(items) {
+  let sentence = [];
+  for (const item of items) {
+    if (!item.break) {
+      sentence.push(item);
+      continue;
+    }
+    if (item.ipa === '?') {
+      const opening = sentence.slice(0, 2);
+      const wh = opening.some((word) =>
+        VERBALIZERS[word.lang]?.isWhWord(word.text.toLowerCase())
+      );
+      if (wh) {
+        item.ipa = '↘ ?';
+      }
+    }
+    if ('.!?…'.includes(item.ipa.at(-1))) {
+      sentence = [];
+    }
+  }
+}
+
+/**
+ * Non-rhotic accents pronounce a final r before a vowel: `far away`
+ * fɑːɹ əˈweɪ.
+ */
+function linkRs(items, accent) {
+  if (!isNonRhotic(accent)) {
+    return;
+  }
+  items.forEach((item, index) => {
+    const next = items[index + 1];
+    if (
+      item.linkingR &&
+      next?.lang === 'en' &&
+      /^ˈ?ˌ?[aeiouæɑɒɔəɛɪʊʌɜ]/u.test(next.ipa)
+    ) {
+      item.ipa += 'ɹ';
+    }
+  });
+}
+
+/**
+ * Split a language tag such as `en-GB` into the language (`en`) and the
+ * full tag, which then selects the accent unless one is given.
+ */
+function splitLanguageTag(tag) {
+  const requested = tag ?? 'auto';
+  const match = /^([a-z]{2})[-_][a-z]{2}$/i.exec(requested);
+  if (!match || !WORD_PRONOUNCERS[match[1].toLowerCase()]) {
+    return { requested, region: undefined };
+  }
+  return {
+    requested: match[1].toLowerCase(),
+    region: requested.replace('_', '-'),
+  };
 }
 
 /**
  * Convert text to IPA.
  * @param {string} text
- * @param {{lang?: 'auto'|'en'|'ru'|'hi'|'zh'}} [options]
- * @returns {{lang: string, ipa: string, words: object[]}}
+ * @param {{lang?: string, accent?: string}} [options]
+ *   `lang` is 'auto', 'en', 'ru', 'hi' or 'zh', or a regional tag such as
+ *   'en-GB'. `accent` picks an English accent (`en-US`, `en-GB`, `en-AU`,
+ *   `en-IN`; see `accents.js`) and wins over the region of `lang`.
+ * @returns {{lang: string, accent: string|null, ipa: string, words: object[]}}
  */
 export function textToIpa(text, options = {}) {
   const source = normalizeDevanagariDigits(String(text ?? ''));
-  const requested = options.lang ?? 'auto';
+  const { requested, region } = splitLanguageTag(options.lang);
   const lang =
     requested === 'auto' || !WORD_PRONOUNCERS[requested]
       ? detectLanguage(source)
       : requested;
   const items = [];
-  let current = lang;
-  for (const [token] of source.matchAll(TOKEN_PATTERN)) {
-    if (PUNCTUATION_BREAKS[token]) {
-      addBreak(items, PUNCTUATION_BREAKS[token]);
-    } else if (/^\d/.test(token)) {
-      items.push(...pronounceNumber(token, current));
+  const accent = resolveAccent('en', options.accent ?? region);
+  const normalized = normalizeText(source, {
+    lang,
+    wordLanguage: (word) => wordLanguage(word, lang),
+  });
+  for (const item of normalized) {
+    if (item.kind === 'break') {
+      addBreak(items, item);
     } else {
-      current = wordLanguage(token, lang);
-      items.push(...pronounceMixed(token, current));
+      items.push(...pronounceItem(item, source, accent));
     }
   }
+  markQuestions(items);
+  linkRs(items, accent);
   const ipa = items
     .map((item) => item.ipa)
     .filter(Boolean)
-    .join(' ')
-    .replace(/ ([.?|])/g, ' $1');
-  return { lang, ipa, words: items.filter((item) => !item.break) };
+    .join(' ');
+  return {
+    lang,
+    accent: resolveAccent(lang, options.accent ?? region),
+    ipa,
+    words: items.filter((item) => !item.break),
+  };
 }

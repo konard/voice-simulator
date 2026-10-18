@@ -20,12 +20,52 @@ export interface Word {
   ipa: string;
   source?: string;
   pinyin?: string;
+  /** The written text the word was read from (before verbalisation). */
+  original?: string;
+  sourceStart?: number;
+  sourceEnd?: number;
+  token?: number;
+  linkingR?: boolean;
 }
+
+export type AccentCode = 'en-US' | 'en-GB' | 'en-AU' | 'en-IN';
 
 export interface Transcription {
   lang: string;
+  /** English accent; null for other languages. */
+  accent?: AccentCode | null;
   ipa: string;
   words: Word[];
+}
+
+export interface TimelineSyllable {
+  ipa: string;
+  /** 0 unstressed, 1 primary, 2 secondary. */
+  stress: number;
+  /** Seconds from the start of the audio. */
+  start: number;
+  end: number;
+  /** Letters that spell the syllable, when the word is read as written. */
+  text?: string;
+  sourceStart?: number;
+  sourceEnd?: number;
+}
+
+export interface TimelineWord {
+  text: string;
+  lang: string;
+  ipa: string;
+  start: number;
+  end: number;
+  /** Range of the source text (null when it cannot be mapped). */
+  sourceStart: number | null;
+  sourceEnd: number | null;
+  syllables: TimelineSyllable[];
+}
+
+export interface Timeline {
+  duration: number;
+  words: TimelineWord[];
 }
 
 export interface Plan {
@@ -75,10 +115,14 @@ export interface RenderOptions {
 
 export interface SynthesizeOptions {
   lang?: 'auto' | LanguageCode;
+  /** English accent (code or region such as "GB"). */
+  accent?: AccentCode | string;
   /** Treat the text as IPA. */
   ipa?: boolean;
   head?: HeadConfig | 'random';
   seed?: string | number;
+  /** Speaker group for `head: 'random'`. */
+  preset?: HeadPresetName;
   tier?: string | number;
   solver?: SolverName;
   sections?: number;
@@ -91,6 +135,7 @@ export interface SynthesizeOptions {
 export interface SynthesisResult extends Transcription {
   head: HeadConfig;
   plan: Plan;
+  timeline: Timeline;
   sampleRate: number;
   samples: Float32Array;
   duration: number;
@@ -111,6 +156,7 @@ export declare function prepareUtterance(
 ): Transcription & {
   head: HeadConfig;
   plan: Plan;
+  timeline: Timeline;
   renderOptions: RenderOptions;
 };
 export declare function getAudioTier(
@@ -121,7 +167,11 @@ export declare function getAudioTier(
 export declare const LANGUAGES: Readonly<Record<LanguageCode, Language>>;
 export declare function textToIpa(
   text: string,
-  options?: { lang?: 'auto' | LanguageCode }
+  options?: {
+    /** A language, or a regional tag such as 'en-GB' that picks the accent. */
+    lang?: 'auto' | LanguageCode | AccentCode | string;
+    accent?: AccentCode | string;
+  }
 ): Transcription;
 export declare function detectLanguage(text: string): LanguageCode;
 export declare function scriptLanguage(text: string): LanguageCode | null;
@@ -151,14 +201,22 @@ export declare function sampleState(
 export declare function tractShape(
   state: Record<string, number>,
   head: HeadConfig,
-  options?: { sections?: number }
+  options?: { sections?: number; teeth?: boolean }
 ): {
   areas: Float64Array;
   length: number;
   velumArea: number;
   velumIndex: number;
-  frication: { position: number; gain: number; sibilance: number };
+  frication: {
+    position: number;
+    gain: number;
+    sibilance: number;
+    /** How much the jet is aimed at the incisors (0..1). */
+    obstacle: number;
+  };
   glottis: Record<string, number>;
+  /** Incisors; null with `teeth: false`. */
+  teeth: Teeth | null;
 };
 export declare function noseShape(
   head: HeadConfig,
@@ -180,7 +238,10 @@ export interface HeadParameter {
 export declare const HEAD_PARAMETERS: readonly HeadParameter[];
 export declare const DEFAULT_HEAD: Readonly<HeadConfig>;
 export declare function normalizeHeadConfig(config?: HeadConfig): HeadConfig;
-export declare function randomHeadConfig(seed: string | number): HeadConfig;
+export declare function randomHeadConfig(
+  seed: string | number,
+  options?: { preset?: HeadPresetName }
+): HeadConfig;
 export declare function encodeHeadConfig(config: HeadConfig): string;
 export declare function decodeHeadConfig(text: string): HeadConfig;
 export declare function getHeadParameter(key: string): HeadParameter;
@@ -220,7 +281,13 @@ export declare function registerSolver(
   factory: (options: object) => Solver
 ): void;
 export declare class Waveguide implements Solver {
-  constructor(options?: { sections?: number; noseSections?: number });
+  constructor(options?: {
+    sections?: number;
+    noseSections?: number;
+    head?: HeadConfig;
+    /** `false` leaves out the piriform fossae side branch. */
+    piriform?: boolean;
+  });
   setShape(
     areas: ArrayLike<number>,
     velumArea: number,
@@ -238,9 +305,20 @@ export declare class Fdtd3d implements Solver {
     dx?: number;
     model?: object;
     output?: OutputMode;
+    microphone?: MicrophoneOptions;
+    enclosure?: EnclosureOptions;
   });
+  /** Distance of the receiver from the lips (cm), with a microphone. */
+  readonly microphoneDistance?: number;
+  /** True when the grid contains the enclosure walls. */
+  readonly simulatesEnclosure: boolean;
   stepDuration(): number;
-  setShape(areas: ArrayLike<number>, velumArea: number): void;
+  setShape(
+    areas: ArrayLike<number>,
+    velumArea: number,
+    velumIndex?: number,
+    teeth?: { gap: number } | null
+  ): void;
   setNose(areas: ArrayLike<number>): void;
   step(glottalFlow: number, noisePosition: number, noise: number): number;
   /** Pressure field for visualisation. */
@@ -253,7 +331,11 @@ export declare class Fdtd3d implements Solver {
 }
 export declare function buildVoxelModel(
   head: HeadConfig,
-  options?: { dx?: number }
+  options?: {
+    dx?: number;
+    radiationRadius?: number;
+    enclosure?: EnclosureOptions;
+  }
 ): object;
 export declare class Glottis {
   constructor(options?: { seed?: string | number; head?: HeadConfig });
@@ -293,17 +375,16 @@ export declare function spectralPeaks(
 
 // Audio files
 export declare function encodeWav(
-  samples: Float32Array,
-  sampleRate: number
+  samples: AudioSamples,
+  sampleRate: number,
+  options?: SampleEncoding
 ): Uint8Array;
-export declare function decodeWav(bytes: Uint8Array): {
-  sampleRate: number;
-  samples: Float32Array;
-};
+export declare function decodeWav(bytes: Uint8Array): DecodedAudio;
 export declare function wavHeader(
   sampleRate: number,
   dataLength?: number,
-  channels?: number
+  channels?: number,
+  options?: SampleEncoding
 ): Uint8Array;
 
 // Geometry
@@ -378,16 +459,543 @@ export declare class LodGovernor<T extends { cost: number } = AudioTier> {
   predict(level: number): number;
   record(busy: number, budget: number): boolean;
 }
+/**
+ * Pick the most detailed tier that fits the target. Tiers predicted to
+ * need more than `skip` (default 2) times the target are not measured.
+ */
 export declare function chooseTier<T>(
-  measure: (tier: T) => number,
-  options?: { tiers?: readonly T[]; target?: number }
-): { level: number; loads: number[] };
+  measure: (tier: T, options: { limit: number }) => number,
+  options?: { tiers?: readonly T[]; target?: number; skip?: number }
+): { level: number; loads: number[]; measured: boolean[] };
+/** Most detailed tier below `level` predicted to fit `target`. */
+export declare function fallbackLevel(
+  tiers: readonly { cost: number }[],
+  level: number,
+  load: number,
+  target?: number
+): number;
+/** Detects in the first moments of an utterance that a tier is too slow. */
+export declare class OverloadDetector {
+  constructor(options?: {
+    threshold?: number;
+    minAudio?: number;
+    maxAudio?: number;
+  });
+  readonly load: number;
+  record(busy: number, audio: number): boolean;
+}
+/** Load of a tier; stops early once the load exceeds `limit`. */
 export declare function measureAudioTier(
   tier: AudioTier,
-  options?: { head?: HeadConfig; ipa?: string; seconds?: number }
+  options?: {
+    head?: HeadConfig;
+    ipa?: string;
+    seconds?: number;
+    limit?: number;
+  }
 ): number;
 export declare function benchmarkAudioTiers(options?: {
   target?: number;
   head?: HeadConfig;
   seconds?: number;
-}): { level: number; tier: AudioTier; loads: number[] };
+}): {
+  level: number;
+  tier: AudioTier;
+  loads: number[];
+  measured: boolean[];
+};
+
+// Audio formats (issue 5)
+/** One channel, or a list of equally long channels (interleaved on write). */
+export type AudioSamples = ArrayLike<number> | ArrayLike<number>[];
+/** Integer PCM (8/16/24/32 bits, default 16) or float (32/64 bits). */
+export interface SampleEncoding {
+  bitDepth?: number | string;
+  float?: boolean;
+}
+/** Decoded file, mixed down to mono. */
+export interface DecodedAudio {
+  sampleRate: number;
+  samples: Float32Array;
+  /** Channels in the file before mixdown. */
+  channels: number;
+  bitDepth: number;
+  float: boolean;
+}
+export type AudioFormatName = 'wav' | 'flac' | 'aiff' | 'au' | 'raw';
+export interface AudioFormat {
+  name: AudioFormatName;
+  label: string;
+  extension: string;
+  extensions: readonly string[];
+  mimeType: string;
+  bitDepths: readonly number[];
+  floatBitDepths: readonly number[];
+  lossless: boolean;
+  /** Can be sent before the length is known (audioStreamEncoder). */
+  streamable: boolean;
+  encode(
+    samples: AudioSamples,
+    sampleRate: number,
+    options?: SampleEncoding
+  ): Uint8Array;
+  decode(bytes: Uint8Array): DecodedAudio;
+}
+export interface AudioEncodingOptions extends SampleEncoding {
+  format?: AudioFormatName | string;
+}
+export declare const AUDIO_FORMATS: Readonly<
+  Record<AudioFormatName, AudioFormat>
+>;
+export declare const AUDIO_FORMAT_NAMES: readonly AudioFormatName[];
+export declare function audioFormat(name?: string): AudioFormat;
+export declare function audioEncoding(options?: AudioEncodingOptions): {
+  format: AudioFormat;
+  bitDepth: number;
+  float: boolean;
+};
+export declare function encodeAudio(
+  samples: AudioSamples,
+  sampleRate: number,
+  options?: AudioEncodingOptions
+): Uint8Array;
+export declare function decodeAudio(
+  bytes: Uint8Array | ArrayBuffer,
+  options?: AudioEncodingOptions & { sampleRate?: number; channels?: number }
+): DecodedAudio & { format: AudioFormatName };
+export declare function detectAudioFormat(
+  bytes: Uint8Array
+): 'wav' | 'aiff' | 'au' | 'flac' | null;
+export declare function formatFromFileName(
+  fileName: string
+): AudioFormatName | null;
+export declare function audioStreamEncoder(
+  format: 'wav' | 'au' | 'raw' | string,
+  sampleRate: number,
+  options?: SampleEncoding
+): {
+  format: AudioFormatName;
+  mimeType: string;
+  header: Uint8Array;
+  encode(samples: ArrayLike<number>): Uint8Array;
+};
+export declare function encodeAiff(
+  samples: AudioSamples,
+  sampleRate: number,
+  options?: SampleEncoding
+): Uint8Array;
+export declare function decodeAiff(bytes: Uint8Array): DecodedAudio;
+export declare function encodeAu(
+  samples: AudioSamples,
+  sampleRate: number,
+  options?: SampleEncoding
+): Uint8Array;
+export declare function decodeAu(bytes: Uint8Array): DecodedAudio;
+export declare function auHeader(
+  sampleRate: number,
+  dataLength?: number,
+  channels?: number,
+  options?: SampleEncoding
+): Uint8Array;
+/** Lossless FLAC, 8/16/24-bit integer samples only. */
+export declare function encodeFlac(
+  samples: AudioSamples,
+  sampleRate: number,
+  options?: { bitDepth?: number | string }
+): Uint8Array;
+export declare function decodeFlac(bytes: Uint8Array): DecodedAudio;
+/** Headerless little-endian samples (s8, s16le, s24le, s32le, f32le, f64le). */
+export declare function encodeRaw(
+  samples: AudioSamples,
+  sampleRate?: number,
+  options?: SampleEncoding
+): Uint8Array;
+export declare function decodeRaw(
+  bytes: Uint8Array,
+  options?: SampleEncoding & { sampleRate?: number; channels?: number }
+): DecodedAudio;
+/** Band-limited (windowed-sinc) sample-rate conversion. */
+export declare function resample(
+  samples: ArrayLike<number>,
+  fromRate: number,
+  toRate: number,
+  options?: { zeroCrossings?: number }
+): Float32Array;
+
+// Anatomy (issue 5): teeth, tongue, hard and soft palate, piriform fossae.
+export interface RenderOptions {
+  /** `false` leaves out the incisors. */
+  teeth?: boolean;
+  /** `false` leaves out the piriform fossae (waveguide). */
+  piriform?: boolean;
+}
+export interface Teeth {
+  /** Inter-incisor gap (cm). */
+  gap: number;
+  /** Open area between the incisal edges (cm²). */
+  area: number;
+  /** Span along the tract from the glottis (cm). */
+  start: number;
+  end: number;
+  /** Section most covered by the teeth. */
+  index?: number;
+  /** First section in front of the teeth. */
+  outlet?: number;
+}
+export declare const INCISOR_THICKNESS: number;
+export declare const REST_GAP: number;
+export declare const SIBILANT_GAP: number;
+export declare function incisorDepth(head: HeadConfig): number;
+export declare function teethWidth(head: HeadConfig): number;
+export declare function teethGap(
+  state: Record<string, number>,
+  head: HeadConfig
+): number;
+export declare function dentition(
+  state: Record<string, number>,
+  head: HeadConfig,
+  length: number
+): Teeth;
+export declare function carveTeeth(
+  areas: Float64Array,
+  teeth: Teeth,
+  length: number
+): number;
+export declare function arcPoint(
+  distance: number,
+  layout: { pharynx: number; bend: number; origin: number[] }
+): { point: number[]; tangent: number[] };
+export interface AnatomyLod {
+  arch: number;
+  profile: number;
+  tongue: number;
+  across: number;
+  velum: number;
+}
+export interface AnatomyOptions {
+  lod?: number;
+  state?: Record<string, number>;
+  /** Precomputed tractShape(state, head). */
+  shape?: object;
+}
+export declare const ANATOMY_LODS: readonly AnatomyLod[];
+export declare function jawAngle(gap: number, head: HeadConfig): number;
+export declare function jawOpenness(gap: number, head: HeadConfig): number;
+export declare function incisorEdges(
+  gap: number,
+  head: HeadConfig
+): { upper: number[]; lower: number[] };
+export declare function upperTeethMesh(
+  head: HeadConfig,
+  options?: { lod?: number }
+): Mesh;
+export declare function lowerTeethMesh(
+  head: HeadConfig,
+  options?: { lod?: number; gap?: number }
+): Mesh;
+export declare function tongueMesh(
+  head: HeadConfig,
+  options?: AnatomyOptions
+): Mesh;
+export declare function palateMesh(
+  head: HeadConfig,
+  options?: { lod?: number }
+): Mesh;
+export declare function velumMesh(
+  head: HeadConfig,
+  options?: { lod?: number; velum?: number }
+): Mesh;
+export declare function anatomyMeshes(
+  head: HeadConfig,
+  options?: AnatomyOptions
+): (Mesh & { name: string })[];
+
+// Listening: microphone position, room reverb and the box around the head
+/**
+ * Microphone relative to the lips: distance in cm (3 by default), azimuth
+ * in degrees (0 = ahead, 90 = the speaker's left), elevation in degrees
+ * (positive = up). `compensate` keeps the loudness of the 3 cm reference.
+ */
+export interface MicrophoneOptions {
+  distance?: number;
+  azimuth?: number;
+  elevation?: number;
+  compensate?: boolean;
+}
+export type RoomPreset =
+  | 'anechoic'
+  | 'studio'
+  | 'small-room'
+  | 'office'
+  | 'bathroom'
+  | 'classroom'
+  | 'hall'
+  | 'cathedral';
+/**
+ * Shoebox room in metres with `rt60` (s) or uniform wall `absorption`
+ * (0..1) and the mouth position from a floor corner (m).
+ */
+export interface RoomSpec {
+  width: number;
+  height: number;
+  depth: number;
+  rt60?: number;
+  absorption?: number;
+  headPosition?: [number, number, number];
+}
+export interface ResolvedRoom {
+  width: number;
+  height: number;
+  depth: number;
+  absorption: number;
+  rt60: number;
+  headPosition: [number, number, number];
+}
+/**
+ * Box of air around the head in cm (width x, height y, depth z), wall
+ * absorption 0..1 (0.2 by default) and an optional centre in head
+ * coordinates (the centre of the head by default). The 3D FDTD solver
+ * simulates it; the waveguide approximates it with a room.
+ */
+export interface EnclosureOptions {
+  width: number;
+  height: number;
+  depth: number;
+  absorption?: number;
+  center?: [number, number, number];
+}
+export interface ResolvedEnclosure {
+  width: number;
+  height: number;
+  depth: number;
+  absorption: number;
+  center: [number, number, number] | null;
+}
+export interface EnclosureBounds {
+  low: number[];
+  high: number[];
+  lips: number[];
+  absorption: number;
+}
+export interface RenderOptions {
+  microphone?: MicrophoneOptions;
+  room?: RoomPreset | RoomSpec | null;
+  enclosure?: EnclosureOptions | null;
+}
+export interface SynthesizeOptions {
+  /** `false` leaves out the incisors. */
+  teeth?: boolean;
+  /** `false` leaves out the piriform fossae (waveguide). */
+  piriform?: boolean;
+  microphone?: MicrophoneOptions;
+  room?: RoomPreset | RoomSpec | null;
+  enclosure?: EnclosureOptions | null;
+}
+export declare const MICROPHONE_REFERENCE: number;
+export declare const MAX_RADIATION_RADIUS: number;
+export declare const MAX_ENCLOSURE_CELLS: number;
+/** Preset rooms; 'anechoic' is null (no room). */
+export declare const ROOM_PRESETS: Readonly<
+  Record<RoomPreset, Readonly<RoomSpec> | null>
+>;
+export declare function resolveMicrophone(
+  microphone: MicrophoneOptions | null | undefined
+): Required<MicrophoneOptions> | null;
+export declare function microphoneDirection(microphone: {
+  azimuth: number;
+  elevation: number;
+}): [number, number, number];
+export declare function microphonePosition(
+  microphone: MicrophoneOptions | null | undefined,
+  lips: ArrayLike<number>
+): [number, number, number];
+export declare function resolveRoom(
+  room: RoomPreset | RoomSpec | null | undefined
+): ResolvedRoom | null;
+/** Eyring reverberation time (s) of a room with uniform absorption. */
+export declare function reverberationTime(room: {
+  width: number;
+  height: number;
+  depth: number;
+  absorption: number;
+}): number;
+/** Image sources and a feedback delay network for one microphone. */
+export declare class Room {
+  constructor(
+    room: Exclude<RoomPreset, 'anechoic'> | RoomSpec,
+    options?: { sampleRate?: number; direction?: number[]; distance?: number }
+  );
+  readonly room: ResolvedRoom;
+  readonly sampleRate: number;
+  /** Seconds of reverberation worth rendering after the voice stops. */
+  readonly tail: number;
+  process(input: number): number;
+  reset(): void;
+}
+export declare function roomImpulseResponse(
+  room: Exclude<RoomPreset, 'anechoic'> | RoomSpec,
+  options?: {
+    sampleRate?: number;
+    direction?: number[];
+    distance?: number;
+    seconds?: number;
+  }
+): Float32Array;
+export declare function resolveEnclosure(
+  enclosure: EnclosureOptions | null | undefined | false
+): ResolvedEnclosure | null;
+export declare function enclosureBounds(
+  head: HeadConfig,
+  enclosure: EnclosureOptions | null | undefined
+): EnclosureBounds | null;
+/** buildVoxelModel options for render options (to build or cache a model). */
+export declare function voxelModelOptions(options?: {
+  dx?: number;
+  microphone?: MicrophoneOptions;
+  enclosure?: EnclosureOptions | null;
+}): { dx: number; radiationRadius?: number; enclosure?: ResolvedEnclosure };
+/** Listening chain after a solver, or null for the default output. */
+export declare function createListener(options: {
+  microphone?: MicrophoneOptions;
+  room?: RoomPreset | RoomSpec | null;
+  enclosure?: EnclosureBounds | null;
+  solver: Solver;
+  sampleRate: number;
+}): { process(value: number): number; tail: number } | null;
+
+// Voice presets and matching (issue 5)
+export type HeadPresetName = 'any' | 'male' | 'female' | 'child';
+export interface HeadPreset {
+  label: string;
+  /** `[small, large, spread]` per parameter (pitch spread in semitones). */
+  ranges: Readonly<Record<string, readonly [number, number, number]>>;
+}
+export declare const HEAD_PRESETS: Readonly<
+  Record<Exclude<HeadPresetName, 'any'>, HeadPreset>
+>;
+export declare const HEAD_PRESET_NAMES: readonly HeadPresetName[];
+/** The head of a preset at a relative size (0 smallest, 1 largest). */
+export declare function presetHeadConfig(
+  name: Exclude<HeadPresetName, 'any'>,
+  size?: number
+): HeadConfig;
+export interface VoiceFeatures {
+  duration: number;
+  /** Seconds above the silence threshold. */
+  activeDuration: number;
+  voicedDuration: number;
+  /** Median f0 (Hz). */
+  f0: number;
+  f0Low: number;
+  f0High: number;
+  /** 5-95 % f0 range in semitones. */
+  f0Range: number;
+  /** Median F1-F4 (Hz). */
+  formants: number[];
+  formantSpacing: number;
+  /** Vocal tract length (cm) from the formant spacing. */
+  vocalTractLength: number;
+  /** First minus second harmonic level (dB). */
+  h1h2: number;
+  /** Harmonics-to-noise ratio (dB). */
+  hnr: number;
+  syllableRate: number;
+}
+export declare function analyzeVoice(
+  samples: ArrayLike<number>,
+  sampleRate: number,
+  options?: { maxDuration?: number; analysisRate?: number; order?: number }
+): VoiceFeatures;
+export interface VoiceMatchOptions {
+  /** Restrict the starting person to one preset. */
+  preset?: HeadPresetName;
+  /** Renders (default 4, at most 12). */
+  iterations?: number;
+  /** What the recording says; the renders then say the same words. */
+  transcript?: string;
+  lang?: string;
+  /** Seconds of the recording analysed (default 30). */
+  maxDuration?: number;
+}
+export interface VoiceMatch {
+  head: HeadConfig;
+  preset: Exclude<HeadPresetName, 'any'>;
+  features: VoiceFeatures;
+  rendered: VoiceFeatures;
+  distance: number;
+}
+export interface VoiceMatchStep {
+  step: number;
+  total: number;
+  head: HeadConfig;
+  distance: number;
+}
+/** Sentence rendered when the recording has no transcript. */
+export declare const MATCH_TEXT: string;
+export declare function featureDistance(
+  target: VoiceFeatures,
+  candidate: VoiceFeatures,
+  options?: { transcript?: string }
+): number;
+export declare function matchVoice(
+  samples: ArrayLike<number>,
+  sampleRate: number,
+  options?: VoiceMatchOptions
+): VoiceMatch;
+export declare function matchVoiceSteps(
+  samples: ArrayLike<number>,
+  sampleRate: number,
+  options?: VoiceMatchOptions
+): Generator<VoiceMatchStep, VoiceMatch, void>;
+// Linguistics: text normalisation, accents, prosody, syllables, timeline
+export declare const VERBALIZERS: Readonly<Record<LanguageCode, object>>;
+export declare function normalizeText(
+  text: string,
+  options: { lang: string; wordLanguage: (word: string) => string }
+): object[];
+export declare const ACCENTS: Readonly<{
+  en: readonly { code: AccentCode; name: string; native: string }[];
+}>;
+/** The accent code for a language, or null when it has no accents. */
+export declare function resolveAccent(
+  lang: string,
+  accent?: string | null
+): AccentCode | null;
+/** Adapt a General American transcription to another accent. */
+export declare function adaptEnglishWord(
+  ipa: string,
+  spelling: string,
+  accent: AccentCode | string
+): string;
+export declare function isNonRhotic(accent: AccentCode | string): boolean;
+export declare const BOUNDARIES: Readonly<Record<string, object>>;
+export declare const CONTOURS: Readonly<Record<string, object>>;
+export declare function boundaryOf(pause: object | null | undefined): string;
+export declare function pauseDuration(pause: object): number;
+export declare function intonationPhrases(segments: object[]): object[];
+export declare function sonority(token: object): number;
+export declare function syllabifyTokens(
+  tokens: object[],
+  options?: { language?: string }
+): object[][];
+export declare function syllableIpa(tokens: object[]): string;
+/** Syllables (as IPA) of each word of an IPA string. */
+export declare function syllabifyIpa(
+  ipa: string,
+  options?: { language?: string }
+): string[][];
+export declare function syllableSpans(
+  word: string,
+  syllables: { onset: number; coda: number; size: number }[],
+  options?: { exactOnly?: boolean }
+): { start: number; end: number }[] | null;
+export declare function hindiAksharas(word: string): object[];
+export declare function utteranceTimeline(
+  plan: Plan,
+  options?: { words?: Word[]; ipa?: string; language?: string }
+): Timeline;
+/** Indices of the word and syllable spoken at `time`, null in a pause. */
+export declare function timelineAt(
+  timeline: Timeline | null | undefined,
+  time: number
+): { word: number; syllable: number } | null;

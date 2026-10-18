@@ -376,7 +376,7 @@ const RU_HUNDREDS = [
   'девятьсот',
 ];
 
-function russianBelowThousand(value, feminine) {
+export function russianBelowThousand(value, feminine) {
   const words = [];
   if (value >= 100) {
     words.push(RU_HUNDREDS[Math.floor(value / 100)]);

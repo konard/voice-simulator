@@ -1,22 +1,15 @@
 /**
- * HTTP API: JSON endpoints, WAV synthesis and streaming.
+ * HTTP API: JSON endpoints, audio synthesis in every format and streaming.
  */
 
-import { describe, expect } from 'test-anywhere';
-import { decodeWav } from '../src/index.js';
-import { createVoiceServer } from '../src/server/server.js';
+import { describe, expect, it } from 'test-anywhere';
+import { decodeAudio, decodeWav } from '../src/index.js';
+import { encodingOptions } from '../src/server/server.js';
 import { itUnless, sandboxed } from './helpers/skip.js';
+import { withVoiceServer } from './helpers/voice-server.js';
 
-async function withServer(run) {
-  const server = createVoiceServer({ version: '1.2.3', index: '<h1>hi</h1>' });
-  await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
-  const base = `http://127.0.0.1:${server.address().port}`;
-  try {
-    await run(base);
-  } finally {
-    await new Promise((resolve) => server.close(resolve));
-  }
-}
+const withServer = (run) =>
+  withVoiceServer({ version: '1.2.3', index: '<h1>hi</h1>' }, run);
 
 const itNet = itUnless(sandboxed);
 
@@ -104,6 +97,91 @@ describe('voice server', () => {
         r.json()
       );
       expect(typeof head.vocalTractLength).toBe('number');
+    });
+  });
+});
+
+describe('voice server audio formats', () => {
+  it('validates the output encoding', () => {
+    expect(encodingOptions({})).toEqual({
+      format: 'wav',
+      bitDepth: 16,
+      float: false,
+    });
+    expect(encodingOptions({ format: 'FLAC', bitDepth: '24' })).toEqual({
+      format: 'flac',
+      bitDepth: 24,
+      float: false,
+    });
+    expect(encodingOptions({ format: 'au', float: 'true' })).toEqual({
+      format: 'au',
+      bitDepth: 32,
+      float: true,
+    });
+    expect(() => encodingOptions({ format: 'mp3' })).toThrow('mp3');
+  });
+
+  itNet('synthesizes every format with its content type', async () => {
+    await withServer(async (base) => {
+      const query = 'text=%CB%88mama&ipa=true&tier=minimal&sampleRate=16000';
+      const expected = {
+        flac: 'audio/flac',
+        aiff: 'audio/aiff',
+        au: 'audio/basic',
+        raw: 'application/octet-stream',
+      };
+      for (const [format, mimeType] of Object.entries(expected)) {
+        const response = await fetch(
+          `${base}/api/synthesize?${query}&format=${format}&bitDepth=24`
+        );
+        expect(response.status).toBe(200);
+        expect(response.headers.get('content-type')).toBe(mimeType);
+        expect(response.headers.get('content-disposition')).toContain(
+          `voice.${format}`
+        );
+        const bytes = new Uint8Array(await response.arrayBuffer());
+        const decoded = decodeAudio(bytes, {
+          format: 'raw',
+          sampleRate: 16000,
+          bitDepth: 24,
+        });
+        expect(decoded.format).toBe(format);
+        expect(decoded.bitDepth).toBe(24);
+        expect(decoded.samples.length > 4000).toBe(true);
+      }
+      const bad = await fetch(
+        `${base}/api/synthesize?${query}&format=flac&float=true`
+      );
+      expect(bad.status).toBe(400);
+      expect((await bad.json()).error).toContain('float');
+    });
+  });
+
+  itNet('streams AU and raw, and refuses unstreamable formats', async () => {
+    await withServer(async (base) => {
+      const query = 'text=Hello&tier=minimal&sampleRate=16000';
+      const au = await fetch(`${base}/api/stream?${query}&format=au`);
+      expect(au.status).toBe(200);
+      expect(au.headers.get('content-type')).toBe('audio/basic');
+      const decoded = decodeAudio(new Uint8Array(await au.arrayBuffer()));
+      expect(decoded.format).toBe('au');
+      expect(decoded.samples.length > 4000).toBe(true);
+
+      const raw = await fetch(
+        `${base}/api/stream?${query}&format=raw&float=true`
+      );
+      expect(raw.headers.get('content-type')).toBe('application/octet-stream');
+      const floats = (await raw.arrayBuffer()).byteLength;
+      expect(floats % 4).toBe(0);
+      expect(floats / 4).toBe(decoded.samples.length);
+
+      for (const format of ['flac', 'aiff']) {
+        const refused = await fetch(
+          `${base}/api/stream?${query}&format=${format}`
+        );
+        expect(refused.status).toBe(400);
+        expect((await refused.json()).error).toContain('cannot be streamed');
+      }
     });
   });
 });

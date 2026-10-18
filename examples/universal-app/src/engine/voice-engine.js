@@ -8,14 +8,48 @@
 import {
   AUDIO_TIERS,
   LodGovernor,
-  encodeWav,
   planUtterance,
   sampleState,
   textToIpa,
+  utteranceTimeline,
 } from '../../../../src/index.js';
+import { exportAudio } from './audio-export.js';
 import { AudioPlayer } from './audio-player.js';
 
 const TAIL = 0.15;
+const BENCHMARK_KEY = 'voice-simulator:benchmark';
+
+/** Identifies the device and build a cached benchmark belongs to. */
+function deviceKey() {
+  const navigator = globalThis.navigator ?? {};
+  return [
+    navigator.userAgent ?? '',
+    navigator.hardwareConcurrency ?? 0,
+    AUDIO_TIERS.map((tier) => `${tier.name}:${tier.cost}`).join(','),
+  ].join('|');
+}
+
+function readCachedBenchmark() {
+  try {
+    const cached = JSON.parse(
+      globalThis.localStorage?.getItem(BENCHMARK_KEY) ?? 'null'
+    );
+    return cached?.device === deviceKey() ? cached : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeCachedBenchmark({ level, loads }) {
+  try {
+    globalThis.localStorage?.setItem(
+      BENCHMARK_KEY,
+      JSON.stringify({ device: deviceKey(), level, loads })
+    );
+  } catch {
+    // Storage may be unavailable (private mode); the cache is optional.
+  }
+}
 
 export class VoiceEngine {
   /**
@@ -71,9 +105,23 @@ export class VoiceEngine {
     return this.worker;
   }
 
-  /** Measure the audio tiers on this device (runs in the worker). */
+  /**
+   * Measure the audio tiers on this device (runs in the worker). A result
+   * cached by an earlier visit on the same device applies at once, and the
+   * fresh measurement replaces it when it arrives.
+   */
   benchmark(head) {
-    this.#emit({ phase: 'benchmark' });
+    const cached = readCachedBenchmark();
+    if (cached) {
+      this.governor.level = Math.min(cached.level, AUDIO_TIERS.length - 1);
+      this.#emit({
+        loads: cached.loads,
+        audioLevel: this.audioLevel,
+        cachedBenchmark: true,
+      });
+    } else {
+      this.#emit({ phase: 'benchmark' });
+    }
     this.#ensureWorker().postMessage({ type: 'benchmark', head });
   }
 
@@ -92,21 +140,29 @@ export class VoiceEngine {
 
   /**
    * Speak text.
-   * @param {{text: string, lang: string, head: object, seed: string, mode: 'both'|'sound'|'visual', ipa?: boolean}} request
+   * @param {{text: string, lang: string, accent?: string, head: object, seed: string, mode: 'both'|'sound'|'visual', ipa?: boolean, microphone?: object, room?: string, enclosure?: object}} request
+   *   `microphone`, `room` and `enclosure` are the listening settings
+   *   (see synthesize).
    */
   async speak(request) {
     this.stop();
     const transcription = request.ipa
       ? { lang: request.lang, ipa: request.text, words: [] }
-      : textToIpa(request.text, { lang: request.lang });
+      : textToIpa(request.text, { lang: request.lang, accent: request.accent });
     const plan = planUtterance(transcription.ipa, {
       head: request.head,
+      language: transcription.lang,
+    });
+    const timeline = utteranceTimeline(plan, {
+      words: transcription.words,
+      ipa: transcription.ipa,
       language: transcription.lang,
     });
     const id = this.nextId++;
     const job = {
       id,
       plan,
+      timeline,
       sound: request.mode !== 'visual',
       startedAt: null,
       fields: [],
@@ -123,6 +179,9 @@ export class VoiceEngine {
       error: null,
       ipa: transcription.ipa,
       lang: transcription.lang,
+      text: request.text,
+      timeline,
+      utterance: id,
       underruns: 0,
     });
     if (!job.sound) {
@@ -141,12 +200,17 @@ export class VoiceEngine {
       head: request.head,
       seed: request.seed,
       tier: this.audioLevel,
+      auto: this.auto,
+      microphone: request.microphone,
+      room: request.room,
+      enclosure: request.enclosure,
     });
     return job;
   }
 
   #handle(message) {
     if (message.type === 'benchmark') {
+      writeCachedBenchmark(message);
       this.governor.level = message.level;
       this.#emit({
         phase: this.job ? 'speaking' : 'idle',
@@ -163,6 +227,7 @@ export class VoiceEngine {
     const handlers = {
       start: () => this.#start(job, message),
       chunk: () => this.#chunk(job, message),
+      overload: () => this.#overload(job, message),
       end: () => {
         job.finished = true;
       },
@@ -181,6 +246,21 @@ export class VoiceEngine {
     this.cells = message.model;
     this.player.begin(message.sampleRate);
     this.#emit({ solver: message.solver, cells: Boolean(message.model) });
+  }
+
+  /** The worker restarts the utterance on a cheaper tier. */
+  #overload(job, message) {
+    this.governor.level = message.level;
+    this.governor.load = 0;
+    this.governor.samples = 0;
+    job.chunks = [];
+    job.fields = [];
+    job.fieldIndex = 0;
+    this.#emit({
+      audioLevel: this.audioLevel,
+      audioLoad: message.load,
+      overloads: (this.status.overloads ?? 0) + 1,
+    });
   }
 
   #chunk(job, message) {
@@ -224,19 +304,30 @@ export class VoiceEngine {
   }
 
   /**
-   * Animation frame: articulator state, time and pressure field.
-   * @returns {{speaking: boolean, time: number, state: object, field: object|null, plan: object|null}}
+   * Animation frame: articulator state, time, pressure field and the word
+   * and syllable timeline of the utterance.
+   * @returns {{speaking: boolean, time: number, state: object, field: object|null, plan: object|null, timeline: object|null}}
    */
   frame() {
     const job = this.job;
     if (!job) {
-      return { speaking: false, time: 0, state: {}, field: null, plan: null };
+      return {
+        speaking: false,
+        time: 0,
+        state: {},
+        field: null,
+        plan: null,
+        timeline: null,
+      };
     }
     const time = this.#time(job) ?? 0;
     const clamped = Math.max(0, Math.min(job.plan.duration, time));
     sampleState(job.plan, clamped, this.state);
     const field = this.#field(job, clamped);
-    if (time > job.plan.duration + TAIL && (!job.sound || job.finished)) {
+    // The audio can outlast the speech (microphone delay, reverberation).
+    const audioEnd = job.sampleRate ? job.totalSamples / job.sampleRate : 0;
+    const end = Math.max(job.plan.duration + TAIL, audioEnd);
+    if (time > end && (!job.sound || job.finished)) {
       this.job = null;
       this.lastJob = job;
       this.#emit({ phase: 'idle', audioLevel: this.audioLevel });
@@ -247,6 +338,7 @@ export class VoiceEngine {
       state: this.state,
       field,
       plan: job.plan,
+      timeline: job.timeline,
     };
   }
 
@@ -262,8 +354,8 @@ export class VoiceEngine {
     }
   }
 
-  /** WAV file of the last (or current) utterance, or null. */
-  wav() {
+  /** Samples of the last (or current) utterance, or null. */
+  recording() {
     const job = this.job ?? this.lastJob;
     if (!job || job.chunks.length === 0) {
       return null;
@@ -275,9 +367,24 @@ export class VoiceEngine {
     for (const chunk of job.chunks) {
       samples.set(chunk.samples, chunk.start);
     }
-    return new Blob([encodeWav(samples, job.sampleRate)], {
-      type: 'audio/wav',
-    });
+    return { samples, sampleRate: job.sampleRate };
+  }
+
+  /**
+   * The last utterance as a file in an export preset (see audio-export.js).
+   * @param {string} [preset] Default 16-bit WAV.
+   * @returns {{blob: Blob, fileName: string} | null}
+   */
+  exportAudio(preset) {
+    const recording = this.recording();
+    return recording
+      ? exportAudio(recording.samples, recording.sampleRate, preset)
+      : null;
+  }
+
+  /** WAV file of the last (or current) utterance, or null. */
+  wav() {
+    return this.exportAudio()?.blob ?? null;
   }
 
   dispose() {

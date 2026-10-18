@@ -4,29 +4,46 @@
  *   GET  /api/health              -> {status, version}
  *   GET  /api/languages           -> supported languages with samples
  *   GET  /api/tiers               -> audio and visual LOD tiers
- *   GET  /api/ipa?text=&lang=     -> {lang, ipa, words}
+ *   GET  /api/ipa?text=&lang=&accent= -> {lang, accent, ipa, words}
+ *   GET|POST /api/timeline        -> {lang, accent, ipa, timeline}: when
+ *                                    each word and syllable is spoken
  *   GET  /api/head/random?seed=   -> random head configuration
  *   GET  /api/mesh.obj?seed=&lod= -> low-poly head model (Wavefront OBJ)
- *   GET|POST /api/synthesize      -> complete WAV file
- *   GET|POST /api/stream          -> WAV streamed while it is simulated
+ *   GET|POST /api/synthesize      -> complete audio file (WAV by default)
+ *   GET|POST /api/stream          -> WAV, AU or raw streamed while simulated
  *
  * Synthesis parameters come from the query string or a JSON body:
- * text, lang, ipa (boolean), seed, head (object or "random"), tier,
- * solver, sampleRate.
+ * text, lang, accent (en-US, en-GB, en-AU, en-IN), ipa (boolean), seed,
+ * head (object or "random"), preset, tier, solver, sampleRate, micDistance
+ * (cm), micAzimuth and micElevation (degrees), micCompensate (boolean) and
+ * room (a preset name, or a {width, height, depth, rt60} object in a JSON
+ * body), and the encoding: format (wav | flac | aiff | au | raw), bitDepth,
+ * float (boolean).
  */
 
 import { createServer } from 'node:http';
 import { URL } from 'node:url';
-import { encodeWav, floatToPcm16, wavHeader } from '../audio/wav.js';
+import {
+  AUDIO_FORMATS,
+  audioEncoding,
+  audioStreamEncoder,
+} from '../audio/formats.js';
 import { LANGUAGES, textToIpa } from '../g2p/index.js';
 import { headModelObj } from '../geometry/model.js';
 import {
   DEFAULT_HEAD,
   decodeHeadConfig,
   randomHeadConfig,
+  HEAD_PRESET_NAMES,
 } from '../head-config.js';
+import { resolveMicrophone } from '../acoustics/microphone.js';
+import { resolveRoom } from '../acoustics/room.js';
 import { AUDIO_TIERS, VISUAL_TIERS } from '../perf/lod.js';
-import { synthesize, synthesizeStream } from '../synthesize.js';
+import {
+  prepareUtterance,
+  synthesize,
+  synthesizeStream,
+} from '../synthesize.js';
 
 export { INDEX_PAGE } from './index-page.js';
 
@@ -65,9 +82,19 @@ async function readBody(request) {
   }
 }
 
-function parseHead(value, seed) {
+function parsePreset(value) {
+  if (value === undefined) {
+    return undefined;
+  }
+  if (!HEAD_PRESET_NAMES.includes(value)) {
+    throw new HttpError(400, `Unknown preset ${value}`);
+  }
+  return value;
+}
+
+function parseHead(value, seed, preset) {
   if (value === 'random') {
-    return randomHeadConfig(seed ?? Date.now());
+    return randomHeadConfig(seed ?? Date.now(), { preset });
   }
   if (typeof value === 'string') {
     return decodeHeadConfig(value);
@@ -100,13 +127,67 @@ export function synthesisOptions(params) {
     text,
     options: {
       lang: params.lang ?? 'auto',
+      accent: params.accent,
       ipa: params.ipa === true || params.ipa === 'true',
       seed,
-      head: parseHead(params.head, seed),
+      head: parseHead(params.head, seed, parsePreset(params.preset)),
       tier,
       sampleRate,
+      ...listeningParams(params),
     },
   };
+}
+
+/**
+ * Validate the output encoding ({format, bitDepth, float}); 16-bit WAV by
+ * default.
+ * @param {Record<string, unknown>} params
+ */
+export function encodingOptions(params) {
+  try {
+    const { format, bitDepth, float } = audioEncoding({
+      format: params.format ?? 'wav',
+      bitDepth: params.bitDepth,
+      float: params.float === true || params.float === 'true',
+    });
+    return { format: format.name, bitDepth, float };
+  } catch (error) {
+    throw new HttpError(400, error.message);
+  }
+}
+
+const MICROPHONE_PARAMS = {
+  distance: 'micDistance',
+  azimuth: 'micAzimuth',
+  elevation: 'micElevation',
+};
+
+/** Microphone and room options; invalid values are a 400 error. */
+function listeningParams(params) {
+  const result = {};
+  const microphone = {};
+  for (const [name, param] of Object.entries(MICROPHONE_PARAMS)) {
+    if (params[param] !== undefined && params[param] !== '') {
+      microphone[name] = Number(params[param]);
+    }
+  }
+  if (params.micCompensate !== undefined) {
+    microphone.compensate =
+      params.micCompensate === true || params.micCompensate === 'true';
+  }
+  if (Object.keys(microphone).length > 0) {
+    result.microphone = microphone;
+  }
+  if (params.room !== undefined && params.room !== '') {
+    result.room = params.room;
+  }
+  try {
+    resolveMicrophone(result.microphone);
+    resolveRoom(result.room);
+  } catch (error) {
+    throw new HttpError(400, error.message);
+  }
+  return result;
 }
 
 function sendJson(response, status, value) {
@@ -114,17 +195,26 @@ function sendJson(response, status, value) {
   response.end(JSON.stringify(value));
 }
 
-async function streamWav(response, text, options) {
+function streamEncoder(params, sampleRate) {
+  const { format, ...encoding } = encodingOptions(params);
+  try {
+    return audioStreamEncoder(format, sampleRate, encoding);
+  } catch (error) {
+    throw new HttpError(400, error.message);
+  }
+}
+
+async function streamAudio(response, text, options, encoder) {
   response.writeHead(200, {
-    'content-type': 'audio/wav',
+    'content-type': encoder.mimeType,
     'cache-control': 'no-store',
   });
-  response.write(wavHeader(options.sampleRate));
+  response.write(encoder.header);
   for await (const chunk of synthesizeStream(text, options)) {
     if (response.destroyed) {
       return;
     }
-    response.write(floatToPcm16(chunk));
+    response.write(encoder.encode(chunk));
   }
   response.end();
 }
@@ -136,28 +226,43 @@ function createRoutes(version) {
     'GET /api/tiers': () => ({ audio: AUDIO_TIERS, visual: VISUAL_TIERS }),
     'GET /api/ipa': (params) => {
       const { text, options } = synthesisOptions(params);
-      return textToIpa(text, { lang: options.lang });
+      return textToIpa(text, { lang: options.lang, accent: options.accent });
+    },
+    'GET /api/timeline': (params) => {
+      const { text, options } = synthesisOptions(params);
+      const { lang, accent, ipa, timeline } = prepareUtterance(text, options);
+      return { lang, accent: accent ?? null, ipa, timeline };
     },
     'GET /api/head/random': (params) =>
-      randomHeadConfig(params.seed ?? Date.now()),
+      randomHeadConfig(params.seed ?? Date.now(), {
+        preset: parsePreset(params.preset),
+      }),
     'GET /api/mesh.obj': (params, response) => {
-      const head = parseHead(params.head ?? 'random', params.seed ?? 1);
+      const head = parseHead(
+        params.head ?? 'random',
+        params.seed ?? 1,
+        parsePreset(params.preset)
+      );
       response.writeHead(200, { 'content-type': 'model/obj' });
       response.end(headModelObj(head, { lod: Number(params.lod ?? 1) }));
     },
     'GET /api/synthesize': (params, response) => {
       const { text, options } = synthesisOptions(params);
+      const { format, ...encoding } = encodingOptions(params);
       const result = synthesize(text, options);
+      const audio = AUDIO_FORMATS[format];
       response.writeHead(200, {
-        'content-type': 'audio/wav',
+        'content-type': audio.mimeType,
+        'content-disposition': `inline; filename="voice.${audio.extension}"`,
         'x-ipa': encodeURIComponent(result.ipa),
         'x-language': result.lang,
       });
-      response.end(encodeWav(result.samples, result.sampleRate));
+      response.end(audio.encode(result.samples, result.sampleRate, encoding));
     },
     'GET /api/stream': (params, response) => {
       const { text, options } = synthesisOptions(params);
-      return streamWav(response, text, options);
+      const encoder = streamEncoder(params, options.sampleRate);
+      return streamAudio(response, text, options, encoder);
     },
   };
 }

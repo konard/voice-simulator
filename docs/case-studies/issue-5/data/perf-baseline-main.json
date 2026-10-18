@@ -1,0 +1,37 @@
+[
+ {
+  "tier": "minimal",
+  "modelSeconds": 0,
+  "renderSeconds": 0.103,
+  "load": 0.257,
+  "hash": "cbb1ec33d2c8887d"
+ },
+ {
+  "tier": "low",
+  "modelSeconds": 0,
+  "renderSeconds": 0.059,
+  "load": 0.148,
+  "hash": "1502d7577fac47f4"
+ },
+ {
+  "tier": "medium",
+  "modelSeconds": 0,
+  "renderSeconds": 0.049,
+  "load": 0.121,
+  "hash": "910eec77f2de8e4d"
+ },
+ {
+  "tier": "high",
+  "modelSeconds": 0.061,
+  "renderSeconds": 0.539,
+  "load": 1.348,
+  "hash": "c34cabf3c20e3f32"
+ },
+ {
+  "tier": "ultra",
+  "modelSeconds": 0.072,
+  "renderSeconds": 3.232,
+  "load": 8.079,
+  "hash": "701a5296a816d2fd"
+ }
+]

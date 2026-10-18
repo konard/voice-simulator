@@ -367,7 +367,18 @@ h2 {
 }
 
 .actions {
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: 1fr;
+}
+
+.export {
+  display: flex;
+  gap: 6px;
+  min-width: 0;
+}
+
+.export select {
+  flex: 1 1 auto;
+  min-width: 0;
 }
 
 .toggle {
@@ -412,6 +423,43 @@ h2 {
   font-weight: 700;
 }
 
+.spoken {
+  display: grid;
+  gap: 6px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  overflow-wrap: anywhere;
+}
+
+.spoken p {
+  margin: 0;
+  line-height: 1.7;
+}
+
+.spoken-text {
+  font-size: 1.1rem;
+}
+
+.spoken-ipa {
+  color: var(--muted);
+}
+
+.spoken span {
+  border-radius: 4px;
+  transition: background-color 80ms linear;
+}
+
+.spoken .word-current {
+  background: var(--accent-soft);
+  color: var(--ink);
+}
+
+.spoken .syllable-current {
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+
 .error {
   margin: 0;
   color: var(--warn);
@@ -443,6 +491,28 @@ h2 {
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
 }
 
+.match-panel .row {
+  align-items: end;
+}
+
+.match-features {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 4px 16px;
+  margin: 8px 0 0;
+  font-size: 0.9rem;
+}
+
+.match-features dt {
+  color: var(--muted);
+  font-weight: 700;
+}
+
+.match-features dd {
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+}
+
 .editor-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
@@ -451,6 +521,7 @@ h2 {
 
 .editor-group {
   display: grid;
+  align-content: start;
   gap: 10px;
   margin: 0;
   padding: 12px 14px;
@@ -509,5 +580,9 @@ h2 {
 @media (prefers-reduced-motion: reduce) {
   * {
     scroll-behavior: auto !important;
+  }
+
+  .spoken span {
+    transition: none;
   }
 }

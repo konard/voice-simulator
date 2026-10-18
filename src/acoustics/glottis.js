@@ -49,12 +49,16 @@ export function lfWaveform(p, t) {
 
 export class Glottis {
   /**
-   * @param {{seed?: string|number, tenseness?: number, breathiness?: number}} [options]
+   * @param {{seed?: string|number, tenseness?: number, breathiness?: number, jitter?: number, shimmer?: number, aspirationLevel?: number}} [options]
+   *   `jitter` and `shimmer` are standard deviations in percent.
    */
   constructor(options = {}) {
     this.random = createRandom(`${options.seed ?? 1}:glottis`);
     this.tenseness = options.tenseness ?? 0.6;
     this.breathiness = options.breathiness ?? 0.2;
+    this.jitterDepth = 0.01 * (options.jitter ?? 0.4);
+    this.shimmerDepth = 0.01 * (options.shimmer ?? 3);
+    this.aspirationLevel = options.aspirationLevel ?? 1;
     this.phase = 0;
     this.period = 1 / 120;
     this.jitter = 1;
@@ -66,8 +70,8 @@ export class Glottis {
 
   #startPeriod(frequency, tenseness) {
     // Small cycle-to-cycle irregularities make the voice sound natural.
-    this.jitter = 1 + 0.004 * randomNormal(this.random);
-    this.shimmer = 1 + 0.03 * randomNormal(this.random);
+    this.jitter = 1 + this.jitterDepth * randomNormal(this.random);
+    this.shimmer = 1 + this.shimmerDepth * randomNormal(this.random);
     this.period = 1 / Math.max(30, frequency * this.jitter);
     this.pulse = lfParameters(tenseness);
   }
@@ -102,6 +106,9 @@ export class Glottis {
     const breath =
       (control.aspiration + this.breathiness * voicing * 0.35) *
       (1 - control.closure);
-    return voiced + noise * breath * modulation * loudness * 0.45;
+    return (
+      voiced +
+      noise * breath * modulation * loudness * 0.45 * this.aspirationLevel
+    );
   }
 }
