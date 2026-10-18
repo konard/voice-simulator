@@ -209,9 +209,14 @@ describe('procedural teeth against segmented anatomy', () => {
     expect(model.overjet).toBeGreaterThan(0);
   });
 
-  it('agrees with BodyParts3D and Z-Anatomy on the arch widths', () => {
+  it('agrees with BodyParts3D, Z-Anatomy and the HRA on the arch widths', () => {
     const model = archMeasures(dentalLandmarks(DEFAULT_HEAD));
-    for (const source of ['bodyparts3d', 'z-anatomy']) {
+    for (const source of [
+      'bodyparts3d',
+      'z-anatomy',
+      'hra-male',
+      'hra-female',
+    ]) {
       const { measures } = FIXTURE.sources[source];
       for (const jaw of ['upper', 'lower']) {
         for (const name of ['intercanine', 'intermolar']) {

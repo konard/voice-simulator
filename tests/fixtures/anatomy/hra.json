@@ -1,5 +1,5 @@
 {
-  "description": "Midsagittal key points (mm) of the HuBMAP HRA reference mouth and larynx, measured by scripts/build-hra-reference.mjs with src/geometry/reference-anatomy.js (numbers only). Head frame: +y up, +z forward, x on the reference midline; each body keeps its own origin, so compare after a rigid fit.",
+  "description": "Midsagittal key points (mm) of the HuBMAP HRA reference mouth and larynx, measured by scripts/build-hra-reference.mjs with src/geometry/reference-anatomy.js (numbers only). Head frame: +y up, +z forward, x on the reference midline; each body keeps its own origin, so compare after a rigid fit. incisorLean: sagittal lean (degrees, positive with the top forward) of the long axis of each jaw's central incisors; labialLean: lean of their crowns' labial faces.",
   "source": "HuBMAP Human Reference Atlas 3D reference organs (Visible Human)",
   "citation": "Schlehlein H, Herr BW II, Quardokus EM, Bueckle A, Börner K (2024) HuBMAP CCF 3D Reference Object Library; mouth and larynx: Schlehlein H (2024), Human Reference Atlas, doi:10.48539/HBM568.RFGM.978",
   "license": "CC BY 4.0, HuBMAP",
@@ -36,5 +36,13 @@
     "tongueTip": [2.43, 697.09, 34.75],
     "tongueDorsum": [2.43, 718.57, -6.54],
     "glottis": [2.43, 626.81, -16.95]
+  },
+  "incisorLean": {
+    "male": { "upper": -22.74, "lower": 32.76 },
+    "female": { "upper": -24.41, "lower": 30.85 }
+  },
+  "labialLean": {
+    "male": { "upper": -11.52, "lower": 24.34 },
+    "female": { "upper": -21.22, "lower": 19.95 }
   }
 }

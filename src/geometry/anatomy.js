@@ -43,26 +43,33 @@ export const ANATOMY_LODS = Object.freeze([
 /**
  * Permanent teeth from the midline back (central incisor to second
  * molar, the third molar is left out): crown width along the arch, crown
- * height, labio-lingual thickness (cm) and how thin the edge is (0 = knife
- * edge, 1 = flat occlusal surface).
+ * height, labio-lingual thickness (cm), how thin the edge is (0 = knife
+ * edge, 1 = flat occlusal surface) and how far the crown leans out of the
+ * mouth towards the edge (degrees from vertical). The lean tilts the
+ * labial face; the crown tapering to its edge tilts its middle further.
+ * The leans of the central incisors give the labial faces of the Human
+ * Reference Atlas mouths, 16 (upper) and 22 (lower) degrees on average
+ * (labialLean in reference-anatomy.js), whose long axes, roots included,
+ * lean 23 and 31-33 degrees: about the 110 degrees to the palatal plane
+ * of upper incisors on cephalograms.
  */
 const UPPER_TEETH = [
-  [0.89, 1.05, 0.74, 0.25],
-  [0.69, 0.9, 0.67, 0.3],
-  [0.76, 1.0, 0.82, 0.45],
-  [0.68, 0.8, 0.95, 0.85],
-  [0.68, 0.75, 0.95, 0.85],
-  [1.05, 0.7, 1.14, 0.95],
-  [0.95, 0.65, 1.14, 0.95],
+  [0.89, 1.05, 0.74, 0.25, 14],
+  [0.69, 0.9, 0.67, 0.3, 13],
+  [0.76, 1.0, 0.82, 0.45, 10],
+  [0.68, 0.8, 0.95, 0.85, 3],
+  [0.68, 0.75, 0.95, 0.85, 0],
+  [1.05, 0.7, 1.14, 0.95, 0],
+  [0.95, 0.65, 1.14, 0.95, 0],
 ];
 const LOWER_TEETH = [
-  [0.54, 0.9, 0.58, 0.25],
-  [0.59, 0.95, 0.61, 0.3],
-  [0.68, 1.05, 0.74, 0.45],
-  [0.69, 0.8, 0.8, 0.85],
-  [0.7, 0.75, 0.86, 0.85],
-  [1.08, 0.7, 1.06, 0.95],
-  [1.07, 0.65, 1.05, 0.95],
+  [0.54, 0.9, 0.58, 0.25, 12],
+  [0.59, 0.95, 0.61, 0.3, 12],
+  [0.68, 1.05, 0.74, 0.45, 14],
+  [0.69, 0.8, 0.8, 0.85, 12],
+  [0.7, 0.75, 0.86, 0.85, 6],
+  [1.08, 0.7, 1.06, 0.95, 0],
+  [1.07, 0.65, 1.05, 0.95, 0],
 ];
 /**
  * Beta-function arch forms (Braun et al. 1998, Am J Orthod Dentofacial
@@ -266,7 +273,9 @@ function solveArch(teeth, halfWidth, power, front) {
       return {
         x: side * lerp(x0, x1, t),
         z: lerp(z0, z1, t),
-        inward: [(-side * (x1 - x0)) / norm, (z1 - z0) / norm],
+        // Normal to the arch, towards the tongue: backwards at the
+        // incisors, towards the midline at the molars.
+        inward: [(side * (z1 - z0)) / norm, -(x1 - x0) / norm],
       };
     },
   };
@@ -403,10 +412,13 @@ function archMesh(config, level, lower) {
   });
   return loftMesh(sections, lod.profile, (section, step) => {
     const { x, z, inward, crown } = samples[section];
-    const [, height, thickness, flat] = crown;
+    const [, height, thickness, flat, lean] = crown;
     const [across, up] = profilePoint(step, lod.profile);
-    // From the labial face, half a crown outside the arch, inwards.
-    const depth = (across * lerp(flat, 1, up) - 0.5) * thickness;
+    // From the labial face, half a crown outside the arch, inwards; the
+    // edge stays on the arch and the neck leans in towards the tongue.
+    const depth =
+      (across * lerp(flat, 1, up) - 0.5) * thickness +
+      up * height * Math.tan((lean * Math.PI) / 180);
     return [
       x + inward[0] * depth,
       base + OCCLUSAL_TILT * (front - z) + direction * up * height,

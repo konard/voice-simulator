@@ -24,11 +24,21 @@
 //   nothing in them is executed (the .blend file is opened by Blender with
 //   --factory-startup --disable-autoexec).
 import { spawnSync } from 'node:child_process';
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import {
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  readdirSync,
+  writeFileSync,
+} from 'node:fs';
 import { basename, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { meshesToStl, parseStl } from '../src/geometry/stl.js';
 import { HRA, fetchHra, hraSource } from '../src/geometry/hra.js';
+import {
+  referenceParts,
+  sortedReferenceTeeth,
+} from '../src/geometry/reference-anatomy.js';
 import { fetchMember, listMembers } from './fetch-dvtd.mjs';
 
 export { HRA, fetchHra, hraSource };
@@ -124,12 +134,22 @@ export function objPositions(text) {
 
 /**
  * Teeth of a fetched source, ready for toothLandmarks().
- * @param {'bodyparts3d'|'open-full-jaw'|'z-anatomy'} source
+ * @param {'bodyparts3d'|'open-full-jaw'|'z-anatomy'|'hra'} source 'hra'
+ *   splits the arches of either sex into teeth (see sortedReferenceTeeth).
  * @param {string} directory What fetchAnatomy() wrote.
  */
 export function loadDentition(source, directory) {
   const stl = (file) => parseStl(new Uint8Array(readFileSync(file))).positions;
   const teeth = [];
+  if (source === 'hra') {
+    const meshes = readdirSync(directory)
+      .filter((file) => file.endsWith('.stl'))
+      .map((file) => ({
+        name: basename(file, '.stl'),
+        ...parseStl(new Uint8Array(readFileSync(join(directory, file)))),
+      }));
+    return sortedReferenceTeeth(referenceParts(meshes));
+  }
   if (source === 'open-full-jaw') {
     for (let number = 1; number <= 32; number++) {
       const file = join(directory, `tooth_${number}.stl`);

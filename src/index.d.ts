@@ -846,14 +846,13 @@ export type AnatomyPart =
   | 'tongue'
   | 'palate'
   | 'velum';
-export type KeyPoints = Record<string, number[]>;
 /** A segmented 3D dataset: one mesh per part (mm) and its key points. */
 export interface AnatomySource {
   readonly name: string;
   readonly citation: string;
   readonly license: string;
   readonly parts: Partial<Record<AnatomyPart, Mesh>>;
-  readonly keyPoints: KeyPoints;
+  readonly keyPoints: Record<string, number[]>;
   /** Distance (mm) between the upper first molars' occlusal points. */
   readonly archWidth: number;
 }
@@ -877,7 +876,7 @@ export declare function anatomySource(
   meshes: Mesh[],
   options?: {
     roles?: Record<string, (name: string) => boolean>;
-    keyPoints?: KeyPoints;
+    keyPoints?: Record<string, number[]>;
     citation?: string;
     license?: string;
   }
@@ -946,53 +945,149 @@ export declare function hraSource(
   options?: { fetchFn?: typeof fetch }
 ): Promise<AnatomySource>;
 
-// Reference atlases cut like MRI slices
-export declare const KEY_POINTS: readonly string[];
-export declare const HRA_PARTS: Readonly<
-  Record<string, (name: string) => boolean>
->;
-export declare function midsagittalPoints(
-  mesh: Mesh,
-  midline?: number
-): number[][];
-export declare function modelKeyPoints(head: HeadConfig): KeyPoints;
-export declare function referenceParts(
-  meshes: Mesh[],
-  roles?: Record<string, (name: string) => boolean>
-): Record<string, Mesh[]>;
-export declare function referenceKeyPoints(
-  parts: Record<string, Mesh[]>
-): KeyPoints & { midline: number };
-export declare function compareKeyPoints(
-  model: KeyPoints,
-  reference: KeyPoints,
-  options?: { fit?: string[] }
-): {
-  transform: RigidTransform & { rms: number };
-  distances: Record<string, number>;
-  rms: number;
-  fitted: string[];
-};
-export declare function mirrorX<T extends Mesh>(meshes: T[]): T[];
-
-// Reading glTF binaries from other tools
-/** The JSON of a GLB and the file offset of its binary chunk's data. */
+// Mouths read as MRI is read, from any glTF, and compared key point for
+// key point (millimetres, y up, z forward, the model's left at -x).
+export interface NamedMesh extends Mesh {
+  name: string;
+}
+export type MeshNames = string[] | ((name: string) => boolean);
+/** The JSON chunk of a .glb and where its binary chunk starts. */
 export declare function glbJson(bytes: Uint8Array): {
   json: Record<string, unknown>;
   binOffset: number;
 };
+/** Accessors (positions, indices) the selected nodes' meshes read. */
+export declare function meshAccessors(
+  json: Record<string, unknown>,
+  options?: { names?: MeshNames }
+): number[];
+/** Triangle meshes of the selected nodes, in world coordinates. */
+export declare function gltfMeshes(
+  json: Record<string, unknown>,
+  read: (accessor: number) => ArrayLike<number>,
+  options?: { names?: MeshNames; scale?: number }
+): NamedMesh[];
 export declare function readGlbMeshes(
   bytes: Uint8Array,
-  options?: { names?: string[] | ((name: string) => boolean); scale?: number }
-): (Mesh & { name: string })[];
+  options?: { names?: MeshNames; scale?: number }
+): NamedMesh[];
+/** Meshes of a remote .glb, fetching only the bytes they need. */
 export declare function fetchGlbMeshes(
   url: string,
-  options?: {
-    names?: string[] | ((name: string) => boolean);
-    scale?: number;
-    fetchFn?: typeof fetch;
-  }
-): Promise<(Mesh & { name: string })[]>;
+  options?: { names?: MeshNames; scale?: number; fetchFn?: typeof fetch }
+): Promise<NamedMesh[]>;
+export type KeyPoint =
+  | 'upperIncisor'
+  | 'lowerIncisor'
+  | 'upperFirstMolar'
+  | 'upperSecondMolar'
+  | 'staphylion'
+  | 'palateVault'
+  | 'uvula'
+  | 'tongueTip'
+  | 'tongueDorsum'
+  | 'glottis';
+export type KeyPoints = Record<KeyPoint, number[]>;
+export interface SortedTooth {
+  jaw: 'upper' | 'lower';
+  side: 'l' | 'r';
+  type: number;
+  positions: ArrayLike<number>;
+}
+export declare const KEY_POINTS: readonly KeyPoint[];
+export declare const HRA_PARTS: Readonly<
+  Record<string, (name: string) => boolean>
+>;
+/** Connected shells of a mesh, split vertices welded, largest first. */
+export declare function meshShells(
+  mesh: { positions: ArrayLike<number>; indices: ArrayLike<number> },
+  tolerance?: number
+): Mesh[];
+/** Teeth of an arch sorted into sides and types (0 central incisor). */
+export declare function classifyTeeth(
+  shells: { positions: ArrayLike<number>; indices: ArrayLike<number> }[],
+  jaw: 'upper' | 'lower',
+  options?: { leftSign?: number }
+): SortedTooth[];
+export declare function midsagittalPoints(
+  mesh: { positions: ArrayLike<number>; indices: ArrayLike<number> },
+  midline?: number
+): number[][];
+export declare function mouthKeyPoints(
+  parts: Record<string, unknown>,
+  midline?: number
+): KeyPoints;
+export declare function glottisPoint(larynx: {
+  arytenoids: Mesh[];
+  thyroid: Mesh;
+}): number[];
+/** The model's key points for a head at rest. */
+export declare function modelKeyPoints(head: HeadConfig): KeyPoints;
+/** Rigid fit of the model onto a reference and the distances after it. */
+export declare function compareKeyPoints(
+  model: Partial<KeyPoints>,
+  reference: Partial<KeyPoints>,
+  options?: { fit?: KeyPoint[] }
+): {
+  transform: {
+    rotation: number[][];
+    translation: number[];
+    scale: number;
+    rms: number;
+  };
+  distances: Partial<Record<KeyPoint, number>>;
+  rms: number;
+  fitted: KeyPoint[];
+};
+export declare function referenceParts(
+  meshes: NamedMesh[],
+  roles?: Record<string, (name: string) => boolean>
+): Record<string, NamedMesh[]>;
+export declare function sortedReferenceTeeth(
+  parts: Record<string, NamedMesh[]>
+): SortedTooth[];
+/** Tooth landmarks of a reference's arches (see toothLandmarks). */
+export declare function referenceTeeth(parts: Record<string, NamedMesh[]>): {
+  jaw: 'upper' | 'lower';
+  side: 'l' | 'r';
+  type: number;
+  occlusal: number[];
+  width: number | null;
+  thickness: number | null;
+}[];
+export declare function referenceKeyPoints(
+  parts: Record<string, NamedMesh[]>
+): KeyPoints & { midline: number };
+/** Degrees of a long axis from vertical, positive with its top forward. */
+export declare function sagittalLean(positions: ArrayLike<number>): number;
+/** Degrees of an incisor crown's labial face from vertical. */
+export declare function labialLean(
+  positions: ArrayLike<number>,
+  jaw: 'upper' | 'lower',
+  options?: { crown?: number }
+): number;
+/** Mean lean of each jaw's central incisors (degrees). */
+export declare function incisorLean(
+  teeth: SortedTooth[],
+  measure?: (tooth: SortedTooth) => number
+): { upper: number; lower: number };
+/** Labial-face lean of the model's central incisors at rest (degrees). */
+export declare function modelIncisorLean(head: HeadConfig): {
+  upper: number;
+  lower: number;
+};
+/** Clinical distances (mm) between key points. */
+export declare function keyPointMeasures(points: KeyPoints): {
+  incisorToStaphylion: number;
+  velumChord: number;
+  overjet: number;
+  overbite: number;
+  dorsumHeight: number;
+  palateHeight: number;
+  glottisDepth: number;
+};
+/** Mirror meshes in x, keeping their faces outward. */
+export declare function mirrorX<T extends Mesh>(meshes: T[]): T[];
 
 // Listening: microphone position, room reverb and the box around the head
 /**

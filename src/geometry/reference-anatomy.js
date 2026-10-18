@@ -54,6 +54,13 @@ const MIDLINE_OFFSET = -0.05;
 /** Share of an arytenoid's height, from its base, that holds the vocal
  * process. */
 const VOCAL_PROCESS_BAND = 0.4;
+/** Crown height (mm) over which labialLean() reads the labial face, and
+ * the band at the incisal edge it leaves out (the edge is rounded). */
+const LABIAL_CROWN = 9;
+const LABIAL_START = 0.5;
+/** Half-width (mm) of the band about the midline that holds the middle of
+ * the model's central incisors. */
+const MIDLINE_BAND = 3;
 
 const mean = (points) =>
   [0, 1, 2].map(
@@ -383,20 +390,164 @@ export function referenceParts(meshes, roles = HRA_PARTS) {
 }
 
 /**
+ * Teeth of a segmented reference, one shell per tooth (crown and root),
+ * sorted into jaws, sides and types by classifyTeeth(); a jaw with fewer
+ * than two shells gives none.
+ * @param {Record<string, object[]>} parts From referenceParts().
+ */
+export function sortedReferenceTeeth(parts) {
+  return ['upper', 'lower'].flatMap((jaw) => {
+    const shells = (parts[`${jaw}Teeth`] ?? []).flatMap((mesh) =>
+      meshShells(mesh)
+    );
+    return shells.length >= 2 ? classifyTeeth(shells, jaw) : [];
+  });
+}
+
+/**
  * Tooth landmarks (toothLandmarks()) of a segmented reference's arches,
  * split into crowns and sorted by jaw, side and type.
  * @param {Record<string, object[]>} parts From referenceParts().
  */
 export function referenceTeeth(parts) {
-  const teeth = (role, jaw) => {
-    const shells = (parts[role] ?? []).flatMap((mesh) => meshShells(mesh));
-    return shells.length >= 2 ? classifyTeeth(shells, jaw) : [];
-  };
-  const sorted = [
-    ...teeth('upperTeeth', 'upper'),
-    ...teeth('lowerTeeth', 'lower'),
-  ];
+  const sorted = sortedReferenceTeeth(parts);
   return sorted.length >= 3 ? toothLandmarks(sorted) : [];
+}
+
+/**
+ * Lean of a tooth's long axis in the sagittal plane: the principal axis of
+ * its vertices from vertical, positive when its upper end leans forward
+ * (degrees). An upper incisor with its edge forward of its root leans
+ * negative, a lower incisor with its edge forward positive.
+ * @param {ArrayLike<number>} positions mm, +y up, +z forward.
+ */
+export function sagittalLean(positions) {
+  const count = positions.length / 3;
+  let [up, forward] = [0, 0];
+  for (let index = 0; index < positions.length; index += 3) {
+    up += positions[index + 1] / count;
+    forward += positions[index + 2] / count;
+  }
+  let [upUp, forwardForward, upForward] = [0, 0, 0];
+  for (let index = 0; index < positions.length; index += 3) {
+    const u = positions[index + 1] - up;
+    const f = positions[index + 2] - forward;
+    upUp += u * u;
+    forwardForward += f * f;
+    upForward += u * f;
+  }
+  return (
+    (0.5 * Math.atan2(2 * upForward, upUp - forwardForward) * 180) / Math.PI
+  );
+}
+
+/**
+ * Lean of the labial face of an incisor crown from vertical (degrees,
+ * positive when its upper end leans forward): the most forward point of
+ * every 1 mm band from the incisal edge up (or down) the crown, fitted
+ * with a line. Unlike sagittalLean() it needs no root, so it measures the
+ * model's crowns and segmented teeth alike.
+ * @param {ArrayLike<number>} positions mm, +y up, +z forward.
+ * @param {'upper'|'lower'} jaw
+ * @param {{crown?: number}} [options] Crown height read (mm).
+ */
+export function labialLean(positions, jaw, options = {}) {
+  const crown = options.crown ?? LABIAL_CROWN;
+  const sign = jaw === 'upper' ? 1 : -1;
+  let edge = Infinity;
+  for (let index = 1; index < positions.length; index += 3) {
+    edge = Math.min(edge, sign * positions[index]);
+  }
+  const front = new Map();
+  for (let index = 0; index < positions.length; index += 3) {
+    const rise = sign * positions[index + 1] - edge;
+    if (rise >= LABIAL_START && rise <= crown) {
+      const band = Math.round(rise);
+      front.set(
+        band,
+        Math.max(front.get(band) ?? -Infinity, positions[index + 2])
+      );
+    }
+  }
+  const points = [...front].map(([rise, z]) => [sign * rise, z]);
+  const [up, forward] = [0, 1].map(
+    (axis) =>
+      points.reduce((sum, point) => sum + point[axis], 0) / points.length
+  );
+  const slope =
+    points.reduce((sum, [y, z]) => sum + (y - up) * (z - forward), 0) /
+    points.reduce((sum, [y]) => sum + (y - up) ** 2, 0);
+  return (Math.atan(slope) * 180) / Math.PI;
+}
+
+/**
+ * Mean lean (degrees) of the central incisors of each jaw.
+ * @param {{jaw: string, type: number, positions: ArrayLike<number>}[]} teeth
+ * @param {(tooth: object) => number} [measure] sagittalLean of the whole
+ *   tooth by default.
+ */
+export function incisorLean(
+  teeth,
+  measure = (tooth) => sagittalLean(tooth.positions)
+) {
+  return Object.fromEntries(
+    ['upper', 'lower'].map((jaw) => {
+      const leans = teeth
+        .filter((tooth) => tooth.jaw === jaw && tooth.type === 0)
+        .map(measure);
+      return [jaw, leans.reduce((sum, lean) => sum + lean, 0) / leans.length];
+    })
+  );
+}
+
+/**
+ * Labial-face lean (degrees, see labialLean) of the model's central
+ * incisors at rest: the vertices of each arch within MIDLINE_BAND of the
+ * midline, in mm.
+ * @param {Record<string, number>} head
+ */
+export function modelIncisorLean(head) {
+  const parts = anatomyMeshes(normalizeHeadConfig(head), { lod: 3 });
+  return Object.fromEntries(
+    ['upper', 'lower'].map((jaw) => {
+      const { positions } = parts.find((part) => part.name === `${jaw}Teeth`);
+      const near = [];
+      for (let index = 0; index < positions.length; index += 3) {
+        if (Math.abs(positions[index]) * 10 < MIDLINE_BAND) {
+          near.push(
+            positions[index] * 10,
+            positions[index + 1] * 10,
+            positions[index + 2] * 10
+          );
+        }
+      }
+      return [jaw, labialLean(near, jaw)];
+    })
+  );
+}
+
+/**
+ * Clinical distances (mm) between key points: upper incisor to the
+ * posterior nasal spine, the velum's chord from there to the uvula,
+ * overjet and overbite (positive when the upper incisors overlap the
+ * lower ones), the tongue's dorsum above the upper incisal edge, the
+ * palatal vault above the first molars' occlusal plane and the glottis
+ * below the posterior nasal spine.
+ * @param {Record<string, number[]>} points From a *KeyPoints() function.
+ */
+export function keyPointMeasures(points) {
+  const distance = (a, b) =>
+    Math.hypot(...[1, 2].map((axis) => points[a][axis] - points[b][axis]));
+  const { upperIncisor, lowerIncisor } = points;
+  return {
+    incisorToStaphylion: distance('upperIncisor', 'staphylion'),
+    velumChord: distance('staphylion', 'uvula'),
+    overjet: upperIncisor[2] - lowerIncisor[2],
+    overbite: lowerIncisor[1] - upperIncisor[1],
+    dorsumHeight: points.tongueDorsum[1] - upperIncisor[1],
+    palateHeight: points.palateVault[1] - points.upperFirstMolar[1],
+    glottisDepth: points.staphylion[1] - points.glottis[1],
+  };
 }
 
 /**

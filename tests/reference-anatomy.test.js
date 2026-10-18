@@ -12,10 +12,15 @@ import {
   KEY_POINTS,
   classifyTeeth,
   compareKeyPoints,
+  incisorLean,
+  keyPointMeasures,
+  labialLean,
   meshShells,
   midsagittalPoints,
   mirrorX,
+  modelIncisorLean,
   modelKeyPoints,
+  sagittalLean,
 } from '../src/geometry/reference-anatomy.js';
 import { mergeMeshes } from '../src/geometry/loft.js';
 import { presetHeadConfig } from '../src/head-config.js';
@@ -65,6 +70,14 @@ function box(centre, size) {
   };
 }
 
+/** Vertices of `mesh` with z sheared forward by tan(degrees) per unit y. */
+function sheared(mesh, degrees) {
+  const tan = Math.tan((degrees * Math.PI) / 180);
+  return Float64Array.from(mesh.positions, (value, index) =>
+    index % 3 === 2 ? value + tan * mesh.positions[index - 1] : value
+  );
+}
+
 const models = Object.fromEntries(
   ['male', 'female'].map((sex) => [sex, modelKeyPoints(presetHeadConfig(sex))])
 );
@@ -102,6 +115,75 @@ describe('reference anatomy tools', () => {
     expect(points.every((point) => Math.abs(point[1] - 10) <= 1 + 1e-9)).toBe(
       true
     );
+  });
+
+  it('reads the lean of a long axis from its vertices', () => {
+    const tan = Math.tan((20 * Math.PI) / 180);
+    // Corners of a 6 x 20 x 6 box: var(y) 100, var(z) 9 + 100 tan^2.
+    const exact =
+      (0.5 * Math.atan2(200 * tan, 100 - 9 - 100 * tan * tan) * 180) / Math.PI;
+    const tooth = sheared(box([0, 0, 0], [6, 20, 6]), 20);
+    expect(Math.abs(sagittalLean(tooth) - exact)).toBeLessThan(1e-9);
+    const mirrored = tooth.map((value, index) =>
+      index % 3 === 1 ? -value : value
+    );
+    expect(Math.abs(sagittalLean(mirrored) + exact)).toBeLessThan(1e-9);
+    expect(sagittalLean(box([0, 0, 0], [6, 20, 6]).positions)).toBe(0);
+  });
+
+  it('reads the lean of a crown from its labial face', () => {
+    // A crown 10 mm high above its edge at y = 0, every vertex in a band.
+    const crown = box([0, 5, 0], [6, 10, 4]);
+    crown.positions = Float64Array.from(
+      Array.from({ length: 11 }, (_, rise) =>
+        [-2, 2].flatMap((z) => [0, rise, z])
+      ).flat()
+    );
+    for (const degrees of [-15, 0, 25]) {
+      const upper = labialLean(sheared(crown, degrees), 'upper');
+      expect(Math.abs(upper - degrees)).toBeLessThan(1e-9);
+      const down = sheared(crown, degrees).map((value, index) =>
+        index % 3 === 1 ? -value : value
+      );
+      expect(Math.abs(labialLean(down, 'lower') + degrees)).toBeLessThan(1e-9);
+    }
+  });
+
+  it('averages the lean of the central incisors of each jaw', () => {
+    const tooth = (jaw, type, degrees) => ({
+      jaw,
+      type,
+      positions: sheared(box([0, 0, 0], [6, 20, 6]), degrees),
+    });
+    const lean = incisorLean([
+      tooth('upper', 0, -20),
+      tooth('upper', 0, -20),
+      tooth('upper', 1, 30),
+      tooth('lower', 0, 20),
+    ]);
+    expect(Math.abs(lean.upper + lean.lower)).toBeLessThan(1e-9);
+    expect(lean.upper).toBeLessThan(-15);
+  });
+
+  it('measures the mouth between key points', () => {
+    const points = {
+      upperIncisor: [0, 0, 50],
+      lowerIncisor: [0, -2, 47],
+      upperFirstMolar: [0, 2, 20],
+      palateVault: [0, 16, 20],
+      staphylion: [0, 10, 2],
+      uvula: [0, -20, -38],
+      tongueDorsum: [0, 12, 15],
+      glottis: [0, -90, -10],
+    };
+    const measures = keyPointMeasures(points);
+    expect(measures.incisorToStaphylion).toBe(Math.hypot(10, 48));
+    expect(measures.velumChord).toBe(50);
+    expect(measures.overjet).toBe(3);
+    expect(measures.overbite).toBe(-2);
+    expect(measures.dorsumHeight).toBe(12);
+    expect(measures.palateHeight).toBe(14);
+    expect(measures.glottisDepth).toBe(100);
   });
 
   it('finds no distance between a set of key points and a moved copy', () => {
@@ -156,6 +238,37 @@ describe('model against the HuBMAP Visible Human', () => {
       const { rms, distances } = compareKeyPoints(models[sex], FIXTURE[sex]);
       expect(rms).toBeLessThan(limits[sex]);
       expect(Math.max(...Object.values(distances))).toBeLessThan(21);
+    }
+  });
+
+  it('leans the incisor crowns as the reference crowns lean', () => {
+    // The two bodies differ by 10 degrees on the upper incisors; the model
+    // is within 6 of each.
+    for (const preset of ['male', 'female', 'child']) {
+      const lean = modelIncisorLean(presetHeadConfig(preset));
+      for (const sex of ['male', 'female']) {
+        for (const jaw of ['upper', 'lower']) {
+          expect(
+            Math.abs(lean[jaw] - FIXTURE.labialLean[sex][jaw])
+          ).toBeLessThan(6);
+        }
+      }
+    }
+  });
+
+  it('spans the palate as the reference does', () => {
+    // The female cadaver is the larger body (about 1.1 times the male),
+    // the model's female the smaller.
+    const limits = {
+      male: { incisorToStaphylion: 10, palateHeight: 3 },
+      female: { incisorToStaphylion: 10, palateHeight: 6 },
+    };
+    for (const sex of ['male', 'female']) {
+      const model = keyPointMeasures(models[sex]);
+      const reference = keyPointMeasures(FIXTURE[sex]);
+      for (const [name, limit] of Object.entries(limits[sex])) {
+        expect(Math.abs(model[name] - reference[name])).toBeLessThan(limit);
+      }
     }
   });
 
