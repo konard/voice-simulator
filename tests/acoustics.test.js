@@ -50,9 +50,12 @@ describe('LF glottal pulse', () => {
 
 describe('waveguide synthesis', () => {
   it('reproduces the formants of the tract shape', () => {
+    // LPC locks onto a harmonic next to a sharp formant; at 100 Hz the
+    // harmonics are dense enough for F1 of /ɑ/ (about 650 Hz).
+    const head = normalizeHeadConfig({ pitch: 100, vibrato: 0 });
     for (const symbol of ['i', 'ɑ', 'ə']) {
-      const plan = planUtterance(`ˈ${symbol}ː`);
-      const samples = renderPlan(plan, { sampleRate: RATE });
+      const plan = planUtterance(`ˈ${symbol}ː`, { head });
+      const samples = renderPlan(plan, { sampleRate: RATE, head });
       const measured = estimateFormants(samples, RATE, {
         start: vowelMiddle(plan) - 0.03,
         duration: 0.06,
@@ -153,6 +156,24 @@ describe('spectral peaks', () => {
     const strong = spectralPeaks(response, rate, { floor: 12 });
     expect(all).toContain(3000);
     expect(strong).toEqual([500, 1500]);
+  });
+
+  it('drops ripples on the flank of a resonance by prominence', () => {
+    const rate = 16000;
+    const response = new Float64Array(rate / 10);
+    for (let n = 0; n < response.length; n++) {
+      // A broad resonance and a faint narrow one on its flank.
+      response[n] =
+        Math.exp(-n / 40) * Math.sin((2 * Math.PI * 700 * n) / rate) +
+        0.005 * Math.exp(-n / 400) * Math.sin((2 * Math.PI * 450 * n) / rate);
+    }
+    const all = spectralPeaks(response, rate, { to: 1000 });
+    const prominent = spectralPeaks(response, rate, {
+      to: 1000,
+      prominence: 1,
+    });
+    expect(all).toEqual([440, 700]);
+    expect(prominent).toEqual([700]);
   });
 });
 

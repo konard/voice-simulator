@@ -160,13 +160,22 @@ export function rms(samples, start = 0, end = samples.length) {
 /**
  * Local maxima (Hz) of the magnitude spectrum of an impulse response,
  * evaluated with a direct DFT on a regular frequency grid. Peaks more than
- * `floor` dB below the strongest one are dropped.
+ * `floor` dB below the strongest one are dropped, and so are peaks that
+ * rise less than `prominence` dB above the lowest point between them and
+ * the nearest higher magnitude on either side (ripples on the flank of a
+ * formant).
  * @param {ArrayLike<number>} response
  * @param {number} sampleRate
- * @param {{from?: number, to?: number, step?: number, floor?: number}} [options]
+ * @param {{from?: number, to?: number, step?: number, floor?: number, prominence?: number}} [options]
  */
 export function spectralPeaks(response, sampleRate, options = {}) {
-  const { from = 100, to = 4000, step = 10, floor = Infinity } = options;
+  const {
+    from = 100,
+    to = 4000,
+    step = 10,
+    floor = Infinity,
+    prominence = 0,
+  } = options;
   const spectrum = [];
   for (let frequency = from; frequency <= to; frequency += step) {
     let re = 0;
@@ -178,8 +187,22 @@ export function spectralPeaks(response, sampleRate, options = {}) {
     }
     spectrum.push([frequency, Math.hypot(re, im)]);
   }
-  const strongest = Math.max(...spectrum.map(([, magnitude]) => magnitude));
+  const magnitudes = spectrum.map(([, magnitude]) => magnitude);
+  const strongest = Math.max(...magnitudes);
   const threshold = strongest * 10 ** (-floor / 20);
+  const rise = 10 ** (prominence / 20);
+  /** Lowest magnitude walking from a peak until a higher one (or the end). */
+  const valley = (index, direction) => {
+    let lowest = magnitudes[index];
+    for (
+      let at = index + direction;
+      at >= 0 && at < magnitudes.length && magnitudes[at] <= magnitudes[index];
+      at += direction
+    ) {
+      lowest = Math.min(lowest, magnitudes[at]);
+    }
+    return lowest;
+  };
   return spectrum
     .filter(
       ([, magnitude], index) =>
@@ -187,7 +210,8 @@ export function spectralPeaks(response, sampleRate, options = {}) {
         index > 0 &&
         index < spectrum.length - 1 &&
         magnitude > spectrum[index - 1][1] &&
-        magnitude > spectrum[index + 1][1]
+        magnitude > spectrum[index + 1][1] &&
+        magnitude >= rise * Math.max(valley(index, -1), valley(index, 1))
     )
     .map(([frequency]) => frequency);
 }
