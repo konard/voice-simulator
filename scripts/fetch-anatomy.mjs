@@ -11,9 +11,15 @@
 //                  STL per tooth, millimetres.
 //   z-anatomy      Z-Anatomy atlas (CC BY-SA 4.0): Startup.blend, from
 //                  which scripts/blender/z_anatomy_export.py writes STLs.
+//   hra            HuBMAP Human Reference Atlas mouth and larynx of the
+//                  Visible Human male and female (CC BY 4.0): one STL per
+//                  part, millimetres, mirrored into the head frame. Only
+//                  the bytes of the teeth, palate, velum, tongue and
+//                  cartilages are read from the remote GLBs.
 //
 // Usage: node scripts/fetch-anatomy.mjs <source> <output directory>
 //          [--patients 1,2,...] [--blender path/to/blender]
+//          [--sex male|female]
 //   Each source goes into its own new directory. Downloaded files are data:
 //   nothing in them is executed (the .blend file is opened by Blender with
 //   --factory-startup --disable-autoexec).
@@ -21,7 +27,9 @@ import { spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { basename, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { parseStl } from '../src/geometry/stl.js';
+import { meshesToStl, parseStl } from '../src/geometry/stl.js';
+import { fetchGlbMeshes } from '../src/geometry/gltf-read.js';
+import { HRA_PARTS, mirrorX } from '../src/geometry/reference-anatomy.js';
 import { fetchMember, listMembers } from './fetch-dvtd.mjs';
 
 export const BODYPARTS3D = Object.freeze({
@@ -56,6 +64,44 @@ export const Z_ANATOMY = Object.freeze({
   member: 'Z-Anatomy/Startup.blend',
   units: 'millimetres; +x left, -y anterior, +z superior',
 });
+
+const HRA_ORGANS = 'https://cdn.humanatlas.io/digital-objects/ref-organ';
+
+export const HRA = Object.freeze({
+  name: 'HuBMAP Human Reference Atlas 3D reference organs (Visible Human)',
+  citation:
+    'Schlehlein H, Herr BW II, Quardokus EM, Bueckle A, Börner K (2024) HuBMAP CCF 3D Reference Object Library; mouth and larynx: Schlehlein H (2024), Human Reference Atlas, doi:10.48539/HBM568.RFGM.978',
+  license: 'CC BY 4.0, HuBMAP',
+  urls: Object.freeze({
+    male: Object.freeze([
+      `${HRA_ORGANS}/mouth-male/v1.0/assets/3d-vh-m-mouth.glb`,
+      `${HRA_ORGANS}/larynx-male/v1.1/assets/3d-vh-m-larynx.glb`,
+    ]),
+    female: Object.freeze([
+      `${HRA_ORGANS}/mouth-female/v1.0/assets/3d-vh-f-mouth.glb`,
+      `${HRA_ORGANS}/larynx-female/v1.1/assets/3d-vh-f-larynx.glb`,
+    ]),
+  }),
+  units: 'metres; +x body left, +y superior, +z anterior',
+});
+
+/**
+ * The HRA parts that reference-anatomy.js uses, in millimetres in the
+ * head frame (body left at -x).
+ * @param {'male'|'female'} sex
+ * @param {{fetchFn?: typeof fetch}} [options]
+ * @returns {Promise<{name: string, positions: Float64Array, indices: Uint32Array}[]>}
+ */
+export async function fetchHra(sex, options = {}) {
+  const names = (name) => Object.values(HRA_PARTS).some((test) => test(name));
+  const meshes = [];
+  for (const url of HRA.urls[sex]) {
+    meshes.push(
+      ...(await fetchGlbMeshes(url, { ...options, names, scale: 1000 }))
+    );
+  }
+  return mirrorX(meshes);
+}
 
 /**
  * BodyParts3D files of the permanent teeth (left and right of the body),
@@ -176,9 +222,9 @@ async function fetchMembers(url, size, wanted, output) {
 
 /**
  * Download the teeth (and, for Z-Anatomy, the atlas file) of a source.
- * @param {'bodyparts3d'|'open-full-jaw'|'z-anatomy'} source
+ * @param {'bodyparts3d'|'open-full-jaw'|'z-anatomy'|'hra'} source
  * @param {string} output
- * @param {{patients?: number[]}} [options]
+ * @param {{patients?: number[], sex?: 'male'|'female'}} [options]
  * @returns {Promise<string[]>} Files written.
  */
 export async function fetchAnatomy(source, output, options = {}) {
@@ -212,6 +258,17 @@ export async function fetchAnatomy(source, output, options = {}) {
       written.push(...files.map((file) => join(`Patient_${patient}`, file)));
     }
     return written;
+  }
+  if (source === 'hra') {
+    mkdirSync(output, { recursive: true });
+    const meshes = await fetchHra(options.sex ?? 'male');
+    for (const mesh of meshes) {
+      writeFileSync(
+        join(output, `${mesh.name}.stl`),
+        meshesToStl([mesh], { header: `${HRA.name}, ${HRA.license}` })
+      );
+    }
+    return meshes.map((mesh) => `${mesh.name}.stl`);
   }
   if (source === 'z-anatomy') {
     return fetchMembers(
@@ -269,7 +326,8 @@ function option(name) {
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const [source, output] = process.argv.slice(2);
   const patients = option('patients')?.split(',').map(Number);
-  const files = await fetchAnatomy(source, output, { patients });
+  const sex = option('sex');
+  const files = await fetchAnatomy(source, output, { patients, sex });
   files.forEach((file) => console.log(join(output, file)));
   const blender = option('blender') ?? process.env.BLENDER;
   if (source === 'z-anatomy' && blender) {
