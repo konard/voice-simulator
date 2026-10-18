@@ -20,32 +20,36 @@ import { readyToPlay, secondsToPlay } from './render-ahead.js';
 const TAIL = 0.15;
 const BENCHMARK_KEY = 'voice-simulator:benchmark';
 
-/** Identifies the device and build a cached benchmark belongs to. */
-function deviceKey() {
+/**
+ * Identifies the device, build and backends (whether WebGPU may be used)
+ * a cached benchmark belongs to.
+ */
+function deviceKey(allowGpu) {
   const navigator = globalThis.navigator ?? {};
   return [
     navigator.userAgent ?? '',
     navigator.hardwareConcurrency ?? 0,
     AUDIO_TIERS.map((tier) => `${tier.name}:${tier.cost}`).join(','),
+    allowGpu ? 'gpu' : 'cpu',
   ].join('|');
 }
 
-function readCachedBenchmark() {
+function readCachedBenchmark(allowGpu) {
   try {
     const cached = JSON.parse(
       globalThis.localStorage?.getItem(BENCHMARK_KEY) ?? 'null'
     );
-    return cached?.device === deviceKey() ? cached : null;
+    return cached?.device === deviceKey(allowGpu) ? cached : null;
   } catch {
     return null;
   }
 }
 
-function writeCachedBenchmark({ level, loads }) {
+function writeCachedBenchmark({ level, loads, gpu }, allowGpu) {
   try {
     globalThis.localStorage?.setItem(
       BENCHMARK_KEY,
-      JSON.stringify({ device: deviceKey(), level, loads })
+      JSON.stringify({ device: deviceKey(allowGpu), level, loads, gpu })
     );
   } catch {
     // Storage may be unavailable (private mode); the cache is optional.
@@ -74,6 +78,9 @@ export class VoiceEngine {
     });
     this.auto = true;
     this.fixedLevel = 0;
+    // Whether the benchmark may use WebGPU, and whether its choice runs there.
+    this.allowGpu = true;
+    this.benchmarkGpu = null;
     this.nextId = 1;
     this.job = null;
     this.state = {};
@@ -107,12 +114,17 @@ export class VoiceEngine {
   }
 
   /**
-   * Measure the audio tiers on this device (runs in the worker). A result
-   * cached by an earlier visit on the same device applies at once, and the
-   * fresh measurement replaces it when it arrives.
+   * Measure the audio tiers on this device (runs in the worker), the 3D
+   * ones on WebGPU too unless `gpu` is false. A result cached by an earlier
+   * visit on the same device applies at once, and the fresh measurement
+   * replaces it when it arrives.
+   * @param {object} head
+   * @param {{gpu?: boolean}} [options]
    */
-  benchmark(head) {
-    const cached = readCachedBenchmark();
+  benchmark(head, options = {}) {
+    this.allowGpu = options.gpu !== false;
+    const cached = readCachedBenchmark(this.allowGpu);
+    this.benchmarkGpu = cached ? Boolean(cached.gpu) : null;
     if (cached) {
       this.governor.level = Math.min(cached.level, AUDIO_TIERS.length - 1);
       this.#emit({
@@ -123,7 +135,11 @@ export class VoiceEngine {
     } else {
       this.#emit({ phase: 'benchmark' });
     }
-    this.#ensureWorker().postMessage({ type: 'benchmark', head });
+    this.#ensureWorker().postMessage({
+      type: 'benchmark',
+      head,
+      gpu: this.allowGpu,
+    });
   }
 
   /** Use a fixed audio tier (index) or `null` for automatic selection. */
@@ -209,14 +225,27 @@ export class VoiceEngine {
       microphone: request.microphone,
       room: request.room,
       enclosure: request.enclosure,
-      gpu: request.gpu,
+      gpu: this.#gpu(request),
     });
     return job;
   }
 
+  /**
+   * Whether the 3D tiers of a request may run on WebGPU: not when the
+   * request says so, nor in automatic mode when the benchmark found the
+   * CPU faster.
+   */
+  #gpu(request) {
+    if (request.gpu === false || (this.auto && this.benchmarkGpu === false)) {
+      return false;
+    }
+    return request.gpu;
+  }
+
   #handle(message) {
     if (message.type === 'benchmark') {
-      writeCachedBenchmark(message);
+      writeCachedBenchmark(message, this.allowGpu);
+      this.benchmarkGpu = Boolean(message.gpu);
       this.governor.level = message.level;
       this.#emit({
         phase: this.job ? 'speaking' : 'idle',

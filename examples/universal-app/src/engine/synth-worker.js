@@ -4,7 +4,10 @@
  * 3D view can show the waves that produced the sound.
  *
  * Messages in:
- *   {type: 'benchmark', head}                 -> {type: 'benchmark', level, loads}
+ *   {type: 'benchmark', head, gpu?}  -> {type: 'benchmark', level, loads,
+ *     measured, gpu, gpuLoads}  (the 3D tiers above the CPU's choice are
+ *     measured on WebGPU too unless `gpu: false`; `gpu` in the reply tells
+ *     whether the chosen tier runs there)
  *   {type: 'speak', id, ipa, lang, head, seed, tier, auto, chunkSize,
  *    microphone?, room?, enclosure?, gpu?}
  *   (`gpu: false` keeps the 3D tiers on the CPU; otherwise they run on
@@ -23,11 +26,10 @@ import {
   AUDIO_TIERS,
   OverloadDetector,
   VoiceRenderer,
+  benchmarkAudioTiersAsync,
   buildVoxelModel,
-  chooseTier,
   encodeHeadConfig,
   fallbackLevel,
-  measureAudioTier,
   prepareUtterance,
   requestGpuDevice,
   voxelModelOptions,
@@ -277,17 +279,35 @@ async function stream(message, renderer, progress) {
   return 'done';
 }
 
-function benchmark(message) {
-  const result = chooseTier(
-    (tier, { limit }) =>
-      measureAudioTier(tier, {
-        head: message.head,
-        seconds: BENCHMARK_SECONDS,
-        limit,
-      }),
-    { tiers: AUDIO_TIERS, target: 0.8 }
-  );
-  globalThis.postMessage({ type: 'benchmark', ...result });
+async function benchmark(message) {
+  const device = message.gpu === false ? null : await gpu();
+  const measure = (target) =>
+    benchmarkAudioTiersAsync({
+      head: message.head,
+      seconds: BENCHMARK_SECONDS,
+      target: 0.8,
+      device: target ?? undefined,
+    });
+  let result;
+  try {
+    result = await measure(device);
+  } catch (error) {
+    if (!device) {
+      throw error;
+    }
+    console.warn('WebGPU benchmark failed, measuring the CPU', error);
+    gpuDevice = Promise.resolve(null);
+    result = await measure(null);
+  }
+  const { level, loads, measured, gpuLoads } = result;
+  globalThis.postMessage({
+    type: 'benchmark',
+    level,
+    loads,
+    measured,
+    gpuLoads,
+    gpu: result.gpu,
+  });
 }
 
 globalThis.addEventListener('message', (event) => {
@@ -297,7 +317,11 @@ globalThis.addEventListener('message', (event) => {
     return;
   }
   if (message.type === 'benchmark') {
-    benchmark(message);
+    benchmark(message).catch((error) => {
+      // Stay on the cheapest tier.
+      console.warn('Benchmark failed', error);
+      globalThis.postMessage({ type: 'benchmark', level: 0, loads: [] });
+    });
     return;
   }
   if (message.type === 'speak') {

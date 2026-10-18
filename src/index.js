@@ -115,9 +115,16 @@ export {
   LodGovernor,
   OverloadDetector,
   chooseTier,
+  chooseTierAsync,
+  chooseTierWithGpu,
   fallbackLevel,
 } from './perf/lod.js';
-export { measureAudioTier, benchmarkAudioTiers } from './perf/benchmark.js';
+export {
+  measureAudioTier,
+  measureAudioTierAsync,
+  benchmarkAudioTiers,
+  benchmarkAudioTiersAsync,
+} from './perf/benchmark.js';
 
 // Audio formats (issue 5)
 export { encodeAiff, decodeAiff } from './audio/aiff.js';

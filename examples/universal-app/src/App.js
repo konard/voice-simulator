@@ -2,7 +2,6 @@ import { createElement as h, useEffect, useMemo, useState } from 'react';
 import {
   ACCENTS,
   AUDIO_TIERS,
-  DEFAULT_AUDIO_TIER,
   DEFAULT_HEAD,
   LANGUAGES,
   VISUAL_TIERS,
@@ -456,9 +455,9 @@ export function App() {
     lang: 'auto',
     accent: 'en-US',
     mode: 'both',
-    tier: String(
-      AUDIO_TIERS.findIndex((tier) => tier.name === DEFAULT_AUDIO_TIER)
-    ),
+    // The most detailed tier this device renders in real time with 20%
+    // headroom, measured on the CPU and on WebGPU.
+    tier: 'auto',
     animateMouth: true,
     showField: true,
   });

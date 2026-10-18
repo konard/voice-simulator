@@ -583,8 +583,43 @@ export declare class LodGovernor<T extends { cost: number } = AudioTier> {
  */
 export declare function chooseTier<T>(
   measure: (tier: T, options: { limit: number }) => number,
-  options?: { tiers?: readonly T[]; target?: number; skip?: number }
-): { level: number; loads: number[]; measured: boolean[] };
+  options?: ChooseTierOptions<T>
+): TierChoice;
+/** chooseTier with an asynchronous `measure` (tiers measured on the GPU). */
+export declare function chooseTierAsync<T>(
+  measure: (tier: T, options: { limit: number }) => Promise<number> | number,
+  options?: ChooseTierOptions<T>
+): Promise<TierChoice>;
+/**
+ * chooseTierAsync on the CPU, then on the GPU (when `gpu`) for the
+ * accelerated tiers (3D by default) above the CPU's choice.
+ */
+export declare function chooseTierWithGpu<T>(
+  measure: (
+    tier: T,
+    options: { limit: number; gpu: boolean }
+  ) => Promise<number> | number,
+  options?: ChooseTierOptions<T> & {
+    gpu?: boolean;
+    accelerated?: (tier: T) => boolean;
+  }
+): Promise<GpuTierChoice>;
+export interface GpuTierChoice extends TierChoice {
+  /** Whether the chosen tier runs on the GPU. */
+  gpu: boolean;
+  /** Load of each tier on the GPU, null where not measured there. */
+  gpuLoads: (number | null)[];
+}
+export interface ChooseTierOptions<T> {
+  tiers?: readonly T[];
+  target?: number;
+  skip?: number;
+}
+export interface TierChoice {
+  level: number;
+  loads: number[];
+  measured: boolean[];
+}
 /** Most detailed tier below `level` predicted to fit `target`. */
 export declare function fallbackLevel(
   tiers: readonly { cost: number }[],
@@ -622,6 +657,28 @@ export declare function benchmarkAudioTiers(options?: {
   loads: number[];
   measured: boolean[];
 };
+/**
+ * measureAudioTier on the backend the app would use: with a WebGPU
+ * `device` the 3D tiers run on the GPU, `chunk` samples per dispatch.
+ */
+export declare function measureAudioTierAsync(
+  tier: AudioTier,
+  options?: {
+    head?: HeadConfig;
+    ipa?: string;
+    seconds?: number;
+    limit?: number;
+    device?: GPUDeviceLike | null;
+    chunk?: number;
+  }
+): Promise<number>;
+/** benchmarkAudioTiers with the 3D tiers on a WebGPU `device` when given. */
+export declare function benchmarkAudioTiersAsync(options?: {
+  target?: number;
+  head?: HeadConfig;
+  seconds?: number;
+  device?: GPUDeviceLike | null;
+}): Promise<GpuTierChoice & { tier: AudioTier }>;
 
 // Audio formats (issue 5)
 /** One channel, or a list of equally long channels (interleaved on write). */

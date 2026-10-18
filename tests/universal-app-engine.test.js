@@ -70,6 +70,39 @@ describe('voice engine benchmark', () => {
     });
   });
 
+  it('keeps the 3D tiers on the CPU when the benchmark found it faster', async () => {
+    withStorage(() => {
+      const worker = fakeWorker();
+      const engine = new VoiceEngine({ createWorker: () => worker });
+      engine.benchmark({}, { gpu: false });
+      expect(worker.posted[0].gpu).toBe(false);
+      worker.reply({ type: 'benchmark', level: 3, loads: [], gpu: false });
+      engine.benchmark({});
+      expect(engine.status.phase).toBe('benchmark');
+      expect(worker.posted[1].gpu).toBe(true);
+    });
+    const worker = fakeWorker();
+    const engine = new VoiceEngine({ createWorker: () => worker });
+    engine.player = {
+      unlock: async () => {},
+      stalled: () => false,
+      begin() {},
+      stop() {},
+    };
+    const request = { text: 'ˈa', ipa: true, lang: 'en', head: {}, seed: '1' };
+    engine.benchmark({});
+    worker.reply({ type: 'benchmark', level: 3, loads: [], gpu: false });
+    await engine.speak({ ...request, mode: 'sound' });
+    expect(worker.posted.at(-1).gpu).toBe(false);
+    worker.reply({ type: 'benchmark', level: 5, loads: [], gpu: true });
+    await engine.speak({ ...request, mode: 'sound' });
+    expect(worker.posted.at(-1).gpu).toBe(undefined);
+    engine.setTier(5);
+    worker.reply({ type: 'benchmark', level: 3, loads: [], gpu: false });
+    await engine.speak({ ...request, mode: 'sound' });
+    expect(worker.posted.at(-1).gpu).toBe(undefined);
+  });
+
   it('follows the worker when it steps down early', () => {
     const worker = fakeWorker();
     const engine = new VoiceEngine({ createWorker: () => worker });
@@ -142,14 +175,38 @@ describe('voice engine modes', () => {
   });
 });
 
+/** Replies after which the worker is done with a message. */
+const FINAL = new Set(['end', 'error', 'benchmark']);
+
 /** The worker's message handler, from a single import of the module. */
 let workerHandler = null;
 
 /**
- * Run the worker on a speak message until it ends, with `navigator.gpu`
- * and `performance.now` replaced while it runs; returns what it posted.
+ * Message handler of a worker; `fresh` loads a separate instance of the
+ * module, whose WebGPU device has not been requested yet.
  */
-async function speakInWorker(message, { gpu, now } = {}) {
+async function workerInstance(fresh) {
+  if (workerHandler && !fresh) {
+    return workerHandler;
+  }
+  let handler = null;
+  globalThis.addEventListener = (type, listener) => {
+    handler = listener;
+  };
+  const url = '../examples/universal-app/src/engine/synth-worker.js';
+  await import(fresh ? `${url}?fresh=${fresh}` : url);
+  if (!fresh) {
+    workerHandler = handler;
+  }
+  return handler;
+}
+
+/**
+ * Run the worker on a speak (or other) message until it ends, with
+ * `navigator.gpu` and `performance.now` replaced while it runs; returns
+ * what it posted.
+ */
+async function speakInWorker(message, { gpu, now, fresh } = {}) {
   const posted = [];
   const saved = {
     postMessage: globalThis.postMessage,
@@ -169,17 +226,12 @@ async function speakInWorker(message, { gpu, now } = {}) {
     });
   }
   try {
-    if (!workerHandler) {
-      globalThis.addEventListener = (type, listener) => {
-        workerHandler = listener;
-      };
-      await import('../examples/universal-app/src/engine/synth-worker.js');
-    }
-    workerHandler({
+    const handler = await workerInstance(fresh);
+    handler({
       data: { type: 'speak', lang: 'en', head: {}, ...message },
     });
     for (let wait = 0; wait < 400; wait++) {
-      if (posted.some((data) => data.type === 'end' || data.type === 'error')) {
+      if (posted.some((data) => FINAL.has(data.type))) {
         break;
       }
       await new Promise((resolve) => globalThis.setTimeout(resolve, 20));
@@ -261,5 +313,38 @@ describe('synthesis worker', () => {
       .reduce((sum, message) => sum + message.samples.length, 0);
     expect(samples).toBe(starts.at(-1).totalSamples);
     expect(posted.at(-1).type).toBe('end');
+  });
+
+  it('benchmarks the tiers on the CPU when the GPU is turned off', async () => {
+    const posted = await speakInWorker(
+      { type: 'benchmark', gpu: false },
+      { gpu: brokenGpu }
+    );
+    const [reply] = posted;
+    expect(reply.type).toBe('benchmark');
+    expect(reply.gpu).toBe(false);
+    expect(reply.gpuLoads.every((load) => load === null)).toBe(true);
+    expect(reply.loads[0] > 0).toBe(true);
+    expect(reply.level >= 0).toBe(true);
+  });
+
+  it('benchmarks the CPU alone when the GPU fails', async () => {
+    const warnings = [];
+    const warn = console.warn;
+    console.warn = (text) => warnings.push(text);
+    let posted;
+    try {
+      posted = await speakInWorker(
+        { type: 'benchmark' },
+        { gpu: brokenGpu, fresh: 'benchmark' }
+      );
+    } finally {
+      console.warn = warn;
+    }
+    expect(warnings).toEqual(['WebGPU benchmark failed, measuring the CPU']);
+    const reply = posted.find((message) => message.type === 'benchmark');
+    expect(reply.gpu).toBe(false);
+    expect(reply.loads[0] > 0).toBe(true);
+    expect(posted.some((message) => message.type === 'error')).toBe(false);
   });
 });

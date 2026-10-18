@@ -18,6 +18,8 @@ import { planUtterance } from '../src/articulation/plan.js';
 import { vowelTarget } from '../src/articulation/phones.js';
 import { noseShape, tractShape } from '../src/articulation/tract-shape.js';
 import { DEFAULT_HEAD } from '../src/head-config.js';
+import { AUDIO_TIERS } from '../src/perf/lod.js';
+import { measureAudioTierAsync } from '../src/perf/benchmark.js';
 import { getPhoneme } from '../src/ipa/inventory.js';
 import { synthesize, synthesizeAsync } from '../src/synthesize.js';
 import { itUnless } from './helpers/skip.js';
@@ -165,5 +167,16 @@ describe('WebGPU 3D FDTD step loop', () => {
     } finally {
       renderer.solver.gpu.destroy();
     }
+  });
+
+  itUnless(noGpu)('measures the load of a 3D tier on the GPU', async () => {
+    const high = AUDIO_TIERS.find((tier) => tier.name === 'high');
+    const load = await measureAudioTierAsync(high, {
+      device,
+      seconds: 0.05,
+      chunk: 256,
+    });
+    expect(load > 0).toBe(true);
+    expect(Number.isFinite(load)).toBe(true);
   });
 });

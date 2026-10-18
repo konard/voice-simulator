@@ -165,9 +165,14 @@ describe('voice engine render ahead', () => {
 });
 
 describe('app defaults', () => {
-  it('speaks with the default 3D tier and shows the render-ahead wait', () => {
+  it('picks the tier for the device and shows the render-ahead wait', () => {
     const app = readFileSync('examples/universal-app/src/App.js', 'utf8');
-    expect(app).toContain('(tier) => tier.name === DEFAULT_AUDIO_TIER');
+    expect(app).toContain("tier: 'auto',");
+    const simulator = readFileSync(
+      'examples/universal-app/src/engine/use-simulator.js',
+      'utf8'
+    );
+    expect(simulator).toContain('{ gpu: allowGpu }');
     expect(app).toContain('renderingNote(status.rendering, t)');
   });
 });
