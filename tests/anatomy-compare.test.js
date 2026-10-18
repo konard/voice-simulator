@@ -28,6 +28,7 @@ import {
   drawText,
   encodePng,
 } from '../src/geometry/render.js';
+import { tractAreaFunction } from '../src/geometry/dvtd.js';
 import { parseStl } from '../src/geometry/stl.js';
 import { presetHeadConfig } from '../src/head-config.js';
 
@@ -177,11 +178,19 @@ describe('model against MRI', () => {
       ['s1-22-ehe-schwa', 'male', 'ehe-schwa'],
       ['s2-01-bahn-tense-a', 'female', 'bahn-tense-a'],
     ]) {
-      const model = modelTract(presetHeadConfig(preset), DVTD_VOWELS[sound]);
-      const { metrics } = compareWithDvtd(model, fixture(name));
-      expect(metrics.centrelineRms).toBeLessThan(1);
+      const tract = fixture(name);
+      const measured = tractAreaFunction(tract);
+      // Scaled to the measured length, as scripts/compare-anatomy.mjs
+      // does, so the tracts are compared by shape and not size.
+      const model = modelTract(presetHeadConfig(preset), DVTD_VOWELS[sound], {
+        length: measured.length / 10,
+      });
+      const { metrics } = compareWithDvtd(model, tract, { measured });
+      // The bent MRI template brings the centrelines within 0.3 cm.
+      expect(metrics.centrelineRms).toBeLessThan(0.35);
       expect(metrics.areaLogRms).toBeLessThan(1.3);
-      expect(metrics.outlineDistance.midsagittal).toBeLessThan(0.7);
+      expect(metrics.outlineDistance.midsagittal).toBeLessThan(0.5);
+      expect(metrics.outlineDistance['oblique 50%']).toBeLessThan(0.45);
     }
   });
 });
