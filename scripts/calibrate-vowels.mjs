@@ -192,27 +192,61 @@ export function calibrate(
   return coefficients.map((value) => Number(value.toFixed(4)));
 }
 
+/** RMS log error (natural log) of formants against F1-F3 targets. */
+function rmsError(formants, targets) {
+  return Math.sqrt(
+    targets.reduce(
+      (sum, target, index) =>
+        sum + Math.log(target / (formants[index] ?? Infinity)) ** 2,
+      0
+    ) / targets.length
+  );
+}
+
 /**
- * Corrections for the 3D solver: the tube model is fitted to targets moved
- * by the ratio of its formants to the solver's for the current corrections,
- * which converges in a few rounds because that ratio changes slowly.
+ * 3D solver fit from `start`: the tube model is fitted to targets moved by
+ * the ratio of its formants to the solver's for the current corrections,
+ * which converges in a few rounds because that ratio changes slowly. The
+ * round the solver itself matches best is kept, so a round that locks onto
+ * a different peak cannot make the fit worse.
  * @param {string} name
+ * @param {number[]} start
  */
-export function calibrateSolver(name) {
-  let coefficients = [...(TABLES.VOWEL_CORRECTIONS[name] ?? [])];
-  if (coefficients.length !== TERMS) {
-    coefficients = calibrate(name);
-  }
-  for (let round = 0; round < ROUNDS; round++) {
+function fitSolver(name, start) {
+  const goal = HILLENBRAND.male[name];
+  let coefficients = start;
+  let best = { coefficients, error: Infinity };
+  for (let round = 0; round <= ROUNDS; round++) {
     const corrections = { [name]: coefficients };
     const solver = solverFormants(name, corrections);
+    const error = rmsError(solver, goal);
+    if (error < best.error) {
+      best = { coefficients, error };
+    }
+    if (round === ROUNDS || solver.length < goal.length) {
+      break;
+    }
     const tube = vowelFormants(name, corrections);
-    const targets = HILLENBRAND.male[name].map(
+    const targets = goal.map(
       (target, index) => (target * tube[index]) / solver[index]
     );
     coefficients = calibrate(name, targets, coefficients);
   }
-  return coefficients;
+  return best;
+}
+
+/**
+ * Corrections for the 3D solver: the better of the fits started from the
+ * stored 3D table and from the tube table.
+ * @param {string} name
+ */
+export function calibrateSolver(name) {
+  const starts = [TABLES.VOWEL_CORRECTIONS_3D?.[name], calibrate(name)].filter(
+    (start) => start?.length === TERMS
+  );
+  return starts
+    .map((start) => fitSolver(name, [...start]))
+    .reduce((best, fit) => (fit.error < best.error ? fit : best)).coefficients;
 }
 
 function report(corrections) {
