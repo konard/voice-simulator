@@ -14,12 +14,12 @@ import {
   deformJaw,
   headField,
   headMesh,
-  lipsMesh,
   meshesToObj,
   sectionAxes,
   tractAxes,
   tubeMesh,
 } from '../src/geometry/mesh.js';
+import { lipsMesh } from '../src/geometry/lips.js';
 import { noseShape } from '../src/articulation/tract-shape.js';
 import { DEFAULT_HEAD, normalizeHeadConfig } from '../src/head-config.js';
 

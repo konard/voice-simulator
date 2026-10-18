@@ -8,10 +8,10 @@ import { noseShape, tractShape } from '../articulation/tract-shape.js';
 import { normalizeHeadConfig } from '../head-config.js';
 import { anatomyMeshes } from './anatomy.js';
 import { nasalCenterline, tractCenterline } from './centerline.js';
+import { lipsMesh } from './lips.js';
 import {
   MESH_LODS,
   headMesh,
-  lipsMesh,
   meshesToObj,
   noseAxes,
   tractAxes,
@@ -54,7 +54,11 @@ export function headModel(head, options = {}) {
     },
     {
       name: 'lips',
-      ...lipsMesh(config, { area: shape.areas.at(-1), lod }),
+      ...lipsMesh(config, {
+        area: shape.areas.at(-1),
+        rounding: options.state?.rounding ?? 0,
+        lod,
+      }),
     },
     ...anatomyMeshes(config, { lod, state: options.state, shape }),
   ];

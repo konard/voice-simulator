@@ -455,9 +455,18 @@ export declare function updateTubeMesh(
   areas: ArrayLike<number>,
   options?: TubeOptions
 ): Mesh;
+/** Columns across the mouth and points around each lip section per LOD. */
+export declare const LIP_LODS: readonly { columns: number; ring: number }[];
+/** Semi-axes (cm) of the lip opening for an area (cm²) and rounding 0..1. */
+export declare function lipOpening(
+  area: number,
+  rounding: number,
+  head: HeadConfig
+): [number, number];
+/** Upper and lower lip; the vertex count depends only on `lod`. */
 export declare function lipsMesh(
   head?: HeadConfig,
-  options?: { area?: number; lod?: number }
+  options?: { area?: number; rounding?: number; lod?: number }
 ): Mesh;
 export declare function deformJaw(
   base: Float32Array,

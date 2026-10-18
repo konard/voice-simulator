@@ -94,10 +94,10 @@ export {
   tractAxes,
   tubeMesh,
   updateTubeMesh,
-  lipsMesh,
   deformJaw,
   meshesToObj,
 } from './geometry/mesh.js';
+export { LIP_LODS, lipOpening, lipsMesh } from './geometry/lips.js';
 export { headModel, headModelObj } from './geometry/model.js';
 export {
   AUDIO_TIERS,

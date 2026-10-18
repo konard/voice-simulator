@@ -337,47 +337,6 @@ export function deformJaw(base, target, head, openness) {
 }
 
 /**
- * Lips as a flattened torus around the mouth opening.
- * @param {Record<string, number>} head
- * @param {{area?: number, rounding?: number, lod?: number}} [options]
- */
-export function lipsMesh(head = DEFAULT_HEAD, options = {}) {
-  const config = normalizeHeadConfig(head);
-  const { lips } = headLandmarks(config);
-  const ring = MESH_LODS[options.lod ?? 1].tube * 2;
-  const tube = 6;
-  const [major, minor] = sectionAxes(options.area ?? 1, 1, config);
-  const rounding = options.rounding ?? 0;
-  const thickness = 0.45 * config.lipThickness;
-  const width = major * (1 - 0.35 * rounding) + thickness;
-  const height = minor + thickness;
-  const positions = new Float32Array(ring * tube * 3);
-  let offset = 0;
-  for (let step = 0; step < ring; step++) {
-    const angle = (2 * Math.PI * step) / ring;
-    for (let around = 0; around < tube; around++) {
-      const phi = (2 * Math.PI * around) / tube;
-      const radial = thickness * Math.cos(phi);
-      positions[offset++] = lips[0] + Math.cos(angle) * (width + radial);
-      positions[offset++] = lips[1] + Math.sin(angle) * (height + radial);
-      positions[offset++] =
-        lips[2] + 0.2 + 0.8 * rounding + thickness * 0.8 * Math.sin(phi);
-    }
-  }
-  const indices = [];
-  for (let step = 0; step < ring; step++) {
-    for (let around = 0; around < tube; around++) {
-      const a = step * tube + around;
-      const b = step * tube + ((around + 1) % tube);
-      const c = ((step + 1) % ring) * tube + around;
-      const d = ((step + 1) % ring) * tube + ((around + 1) % tube);
-      indices.push(a, c, b, b, c, d);
-    }
-  }
-  return { positions, indices: Uint32Array.from(indices) };
-}
-
-/**
  * Wavefront OBJ text for named meshes.
  * @param {{name: string, positions: ArrayLike<number>, indices: ArrayLike<number>}[]} meshes
  */
