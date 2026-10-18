@@ -7,6 +7,7 @@
 import { noseShape, tractShape } from '../articulation/tract-shape.js';
 import { normalizeHeadConfig } from '../head-config.js';
 import { anatomyMeshes } from './anatomy.js';
+import { composeAnatomy } from './anatomy-sources.js';
 import { meshesToGlb } from './gltf.js';
 import { nasalCenterline, tractCenterline } from './centerline.js';
 import { lipsMesh } from './lips.js';
@@ -22,7 +23,10 @@ import {
 /**
  * Build all meshes of the head.
  * @param {Record<string, number>} head
- * @param {{lod?: number, state?: object}} [options] `state` is an articulator state (see sampleState).
+ * @param {{lod?: number, state?: object, anatomy?: string|object, scale?: boolean}} [options]
+ *   `state` is an articulator state (see sampleState); `anatomy` takes
+ *   articulators from registered sources (see composeAnatomy), `scale`
+ *   scales them to the head.
  * @returns {{name: string, positions: Float32Array, indices: Uint32Array}[]}
  */
 export function headModel(head, options = {}) {
@@ -61,7 +65,15 @@ export function headModel(head, options = {}) {
         lod,
       }),
     },
-    ...anatomyMeshes(config, { lod, state: options.state, shape }),
+    ...(options.anatomy
+      ? composeAnatomy(config, {
+          lod,
+          state: options.state,
+          shape,
+          anatomy: options.anatomy,
+          scale: options.scale,
+        })
+      : anatomyMeshes(config, { lod, state: options.state, shape })),
   ];
 }
 

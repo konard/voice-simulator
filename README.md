@@ -45,6 +45,26 @@ a pressure wave travelling through the 3D shape of a parametric low-poly head
   `scripts/compare-hra.mjs` cuts the model and the HuBMAP organs like MRI
   slices and compares ten key points after a rigid fit (see
   [the issue 9 case study](docs/case-studies/issue-9/README.md)).
+- **Anatomy from any 3D source, part by part**: each articulator (upper
+  and lower teeth, tongue, hard palate, velum) comes from the procedural
+  model or from a segmented dataset (the HuBMAP Visible Human male and
+  female, or any glTF binary), fitted onto the model's dental key points,
+  carried by the jaw and reduced from full resolution to each LOD by vertex
+  clustering:
+
+  ```js
+  import { headModel, hraSource, registerAnatomySource } from 'voice-simulator';
+
+  registerAnatomySource(await hraSource('male')); // fetched just in time
+  const meshes = headModel(head, {
+    lod: 3,
+    anatomy: { tongue: 'hra-male', palate: 'hra-male' }, // or 'hra-male'
+  });
+  ```
+
+  `npm run export:model -- --anatomy hra-female --scale` exports the same,
+  and `anatomySourceFromGlb` reads a character's own mouth.
+
 - **Teeth and piriform fossae in the acoustics**: the incisors narrow the
   tract and turn the frication jet into a sibilant source; the piriform
   fossae add their side-branch antiresonance in both solvers, the

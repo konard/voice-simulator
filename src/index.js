@@ -161,7 +161,44 @@ export {
   palateMesh,
   velumMesh,
   anatomyMeshes,
+  jawPose,
 } from './geometry/anatomy.js';
+// Anatomy from other 3D sources, switched part by part, and reference
+// atlases cut like MRI slices
+export {
+  ANATOMY_PARTS,
+  DENTAL_KEY_POINTS,
+  PROCEDURAL,
+  SOURCE_LOD_CELLS,
+  anatomySelection,
+  anatomySource,
+  anatomySourceFromGlb,
+  anatomySourceNames,
+  anatomySourceParts,
+  composeAnatomy,
+  fitAnatomySource,
+  registerAnatomySource,
+  similarityFit,
+  sourceHead,
+  unregisterAnatomySource,
+} from './geometry/anatomy-sources.js';
+export {
+  HRA_PARTS,
+  KEY_POINTS,
+  compareKeyPoints,
+  midsagittalPoints,
+  mirrorX,
+  modelKeyPoints,
+  referenceKeyPoints,
+  referenceParts,
+} from './geometry/reference-anatomy.js';
+export { clusterVertices } from './geometry/decimate.js';
+export { HRA, fetchHra, hraSource } from './geometry/hra.js';
+export {
+  fetchGlbMeshes,
+  glbJson,
+  readGlbMeshes,
+} from './geometry/gltf-read.js';
 
 // Voice presets and matching (issue 5)
 export {

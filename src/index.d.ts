@@ -520,7 +520,14 @@ export declare function deformJaw(
 export declare function meshesToObj(meshes: Mesh[]): string;
 export declare function headModel(
   head: HeadConfig,
-  options?: { lod?: number; state?: Record<string, number> }
+  options?: {
+    lod?: number;
+    state?: Record<string, number>;
+    /** Articulators from registered sources (see composeAnatomy). */
+    anatomy?: AnatomySelection;
+    /** Scale the sources to the head. */
+    scale?: boolean;
+  }
 ): (Mesh & { name: string })[];
 export declare function headModelObj(
   head: HeadConfig,
@@ -822,6 +829,170 @@ export declare function anatomyMeshes(
   head: HeadConfig,
   options?: AnatomyOptions
 ): (Mesh & { name: string })[];
+/** Pivot (cm), angle (radians) and point motion of the jaw for a gap. */
+export declare function jawPose(
+  gap: number,
+  head: HeadConfig
+): {
+  pivot: number[];
+  angle: number;
+  move: (point: number[]) => number[];
+};
+
+// Anatomy from other 3D sources, switched part by part
+export type AnatomyPart =
+  | 'upperTeeth'
+  | 'lowerTeeth'
+  | 'tongue'
+  | 'palate'
+  | 'velum';
+export type KeyPoints = Record<string, number[]>;
+/** A segmented 3D dataset: one mesh per part (mm) and its key points. */
+export interface AnatomySource {
+  readonly name: string;
+  readonly citation: string;
+  readonly license: string;
+  readonly parts: Partial<Record<AnatomyPart, Mesh>>;
+  readonly keyPoints: KeyPoints;
+  /** Distance (mm) between the upper first molars' occlusal points. */
+  readonly archWidth: number;
+}
+/** One source for every part it has, or a source per part. */
+export type AnatomySelection =
+  | string
+  | AnatomySource
+  | Partial<Record<AnatomyPart, string | AnatomySource>>;
+export interface RigidTransform {
+  rotation: number[][];
+  translation: number[];
+  scale?: number;
+}
+export declare const ANATOMY_PARTS: readonly AnatomyPart[];
+export declare const DENTAL_KEY_POINTS: readonly string[];
+export declare const PROCEDURAL: 'procedural';
+/** Vertex clustering cube (mm) per anatomy LOD; 0 keeps every vertex. */
+export declare const SOURCE_LOD_CELLS: readonly number[];
+export declare function anatomySource(
+  name: string,
+  meshes: Mesh[],
+  options?: {
+    roles?: Record<string, (name: string) => boolean>;
+    keyPoints?: KeyPoints;
+    citation?: string;
+    license?: string;
+  }
+): AnatomySource;
+export declare function anatomySourceFromGlb(
+  name: string,
+  bytes: ArrayBuffer | Uint8Array,
+  options?: {
+    scale?: number;
+    mirror?: boolean;
+    roles?: Record<string, (name: string) => boolean>;
+    citation?: string;
+    license?: string;
+  }
+): AnatomySource;
+export declare function registerAnatomySource(
+  source: AnatomySource
+): AnatomySource;
+export declare function unregisterAnatomySource(name: string): boolean;
+export declare function anatomySourceNames(): string[];
+export declare function anatomySourceParts(): Record<string, AnatomyPart[]>;
+export declare function anatomySelection(
+  selection?: AnatomySelection
+): Partial<Record<AnatomyPart, AnatomySource>>;
+export declare function similarityFit(
+  source: number[][],
+  target: number[][]
+): RigidTransform & { scale: number };
+export declare function fitAnatomySource(
+  source: AnatomySource,
+  head: HeadConfig,
+  options?: { fit?: string[]; scale?: boolean }
+): RigidTransform;
+export declare function composeAnatomy(
+  head: HeadConfig,
+  options?: AnatomyOptions & {
+    anatomy?: AnatomySelection;
+    scale?: boolean;
+    fit?: string[];
+  }
+): (Mesh & { name: string; source: string })[];
+/** Head whose mouthWidth gives the source's intermolar arch width. */
+export declare function sourceHead(
+  head: HeadConfig,
+  source: string | AnatomySource
+): HeadConfig;
+/** Mesh with its vertices clustered into cubes of `cell`. */
+export declare function clusterVertices(mesh: Mesh, cell: number): Mesh;
+
+/** The HuBMAP HRA Visible Human mouth and larynx (CC BY 4.0). */
+export declare const HRA: {
+  readonly name: string;
+  readonly citation: string;
+  readonly license: string;
+  readonly urls: { readonly male: string[]; readonly female: string[] };
+  readonly units: string;
+};
+/** HRA meshes in millimetres, head frame, fetched just in time. */
+export declare function fetchHra(
+  sex: 'male' | 'female',
+  options?: { fetchFn?: typeof fetch }
+): Promise<(Mesh & { name: string })[]>;
+/** The HRA male or female as source `hra-male` or `hra-female`. */
+export declare function hraSource(
+  sex: 'male' | 'female',
+  options?: { fetchFn?: typeof fetch }
+): Promise<AnatomySource>;
+
+// Reference atlases cut like MRI slices
+export declare const KEY_POINTS: readonly string[];
+export declare const HRA_PARTS: Readonly<
+  Record<string, (name: string) => boolean>
+>;
+export declare function midsagittalPoints(
+  mesh: Mesh,
+  midline?: number
+): number[][];
+export declare function modelKeyPoints(head: HeadConfig): KeyPoints;
+export declare function referenceParts(
+  meshes: Mesh[],
+  roles?: Record<string, (name: string) => boolean>
+): Record<string, Mesh[]>;
+export declare function referenceKeyPoints(
+  parts: Record<string, Mesh[]>
+): KeyPoints & { midline: number };
+export declare function compareKeyPoints(
+  model: KeyPoints,
+  reference: KeyPoints,
+  options?: { fit?: string[] }
+): {
+  transform: RigidTransform & { rms: number };
+  distances: Record<string, number>;
+  rms: number;
+  fitted: string[];
+};
+export declare function mirrorX<T extends Mesh>(meshes: T[]): T[];
+
+// Reading glTF binaries from other tools
+/** The JSON of a GLB and the file offset of its binary chunk's data. */
+export declare function glbJson(bytes: Uint8Array): {
+  json: Record<string, unknown>;
+  binOffset: number;
+};
+export declare function readGlbMeshes(
+  bytes: Uint8Array,
+  options?: { names?: string[] | ((name: string) => boolean); scale?: number }
+): (Mesh & { name: string })[];
+export declare function fetchGlbMeshes(
+  url: string,
+  options?: {
+    names?: string[] | ((name: string) => boolean);
+    scale?: number;
+    fetchFn?: typeof fetch;
+  }
+): Promise<(Mesh & { name: string })[]>;
 
 // Listening: microphone position, room reverb and the box around the head
 /**

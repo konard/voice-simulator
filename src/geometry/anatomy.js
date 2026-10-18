@@ -306,7 +306,11 @@ function profilePoint(step, count) {
   return [(u / scale + 1) / 2, (v / scale + 1) / 2];
 }
 
-function anatomyLod(lod) {
+/**
+ * Anatomy LOD index (0..3) for a requested level.
+ * @param {number} [lod]
+ */
+export function anatomyLod(lod) {
   return clamp(Math.round(lod ?? 1), 0, ANATOMY_LODS.length - 1);
 }
 
@@ -324,6 +328,24 @@ export function jawAngle(gap, head) {
   const radius = Math.hypot(dy, dz);
   const target = clamp((edge - gap - jawPivot[1]) / radius, -1, 1);
   return Math.acos(target) - Math.atan2(dz, dy);
+}
+
+/**
+ * Pivot (cm, head frame) and angle (radians) of the jaw for an
+ * inter-incisor gap, and the motion of a point carried by the jaw, so
+ * meshes from other sources ride on it like the lower teeth.
+ * @param {number} gap
+ * @param {Record<string, number>} head
+ */
+export function jawPose(gap, head) {
+  const config = normalizeHeadConfig(head);
+  const { jawPivot } = mouthFrame(config);
+  const angle = jawAngle(gap, config);
+  return {
+    pivot: jawPivot,
+    angle,
+    move: (point) => rotateJaw(point, jawPivot, angle),
+  };
 }
 
 /**
