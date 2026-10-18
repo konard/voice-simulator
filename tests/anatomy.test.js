@@ -21,6 +21,7 @@ import { tractShape } from '../src/articulation/tract-shape.js';
 import { tractCenterline, upperNormal } from '../src/geometry/centerline.js';
 import { tractAxes } from '../src/geometry/mesh.js';
 import { getPhoneme } from '../src/ipa/inventory.js';
+import { sliceMesh } from '../src/geometry/slice.js';
 
 const NAMES = ['upperTeeth', 'lowerTeeth', 'tongue', 'palate', 'velum'];
 const SIBILANT = { height: 0.9, sibilance: 1, tongueAmount: 0.9 };
@@ -145,6 +146,41 @@ describe('anatomy meshes', () => {
         midlineEdge(upper.positions, front, Math.min) -
         midlineEdge(lower.positions, front, Math.max);
       expect(Math.abs(measured - gap)).toBeLessThan(0.1);
+    }
+  });
+
+  it('lays the crowns across the arch, thick and leaning out', () => {
+    // A parasagittal cut through a central incisor, as on MRI: the crown is
+    // its labio-lingual thickness deep (7.4 mm upper, 5.8 mm lower), not a
+    // sliver along the arch, and its edge stands ahead of its neck as the
+    // incisors lean about 20 degrees out of the mouth.
+    const cut = (mesh) =>
+      sliceMesh(mesh, { normal: [1, 0, 0], offset: 0.3 }).flat();
+    const lean = (points, toEdge) => {
+      const ys = points.map((point) => point[1]);
+      const at = (y) =>
+        Math.max(
+          ...points
+            .filter((point) => Math.abs(point[1] - y) < 0.05)
+            .map((point) => point[2])
+        );
+      const [low, high] = [Math.min(...ys), Math.max(...ys)];
+      const [edge, neck] = toEdge < 0 ? [low, high] : [high, low];
+      return Math.atan2(at(edge) - at(neck), high - low) * (180 / Math.PI);
+    };
+    for (const lod of [1, 3]) {
+      for (const [mesh, thickness, sign] of [
+        [upperTeethMesh(DEFAULT_HEAD, { lod }), 0.74, -1],
+        [lowerTeethMesh(DEFAULT_HEAD, { lod }), 0.58, 1],
+      ]) {
+        const points = cut(mesh);
+        const z = points.map((point) => point[2]);
+        const depth = Math.max(...z) - Math.min(...z);
+        expect(depth).toBeGreaterThan(0.8 * thickness);
+        expect(depth).toBeLessThan(thickness + 0.5);
+        expect(lean(points, sign)).toBeGreaterThan(14);
+        expect(lean(points, sign)).toBeLessThan(28);
+      }
     }
   });
 
