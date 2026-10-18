@@ -364,11 +364,69 @@ describe('workflow reliability policy', () => {
     expect(previewRegenJob).toContain(
       'name: preview-regen-failure-${{ github.run_id }}'
     );
-    expect(previewRegenJob).toContain('docs/screenshots/');
-    expect(previewRegenJob).toContain('web/test-results/');
-    expect(previewRegenJob).toContain('web/playwright-report/');
+    // Only paths this repository has: a web/ app does not exist here.
+    expect(previewRegenJob).toContain('path: docs/screenshots/example-app/');
+    expect(previewRegenJob).not.toContain('web/');
     expect(previewRegenJob).toContain('retention-days: 7');
     expect(previewRegenJob).toContain('if-no-files-found: ignore');
+  });
+
+  it('pushes preview drift with the built-in token and names the fix when a ruleset refuses it', () => {
+    const exampleAppWorkflow = readWorkflow(
+      '.github/workflows/example-app.yml'
+    );
+    const previewRegenJob = getJobBlock(exampleAppWorkflow, 'preview-regen');
+
+    // A missing optional secret is not a failure on a main without rulesets.
+    expect(previewRegenJob).toContain(
+      'BUILT_IN_TOKEN: ${{ secrets.GITHUB_TOKEN }}'
+    );
+    expect(previewRegenJob).toContain(
+      'export GH_TOKEN="${RELEASE_PR_TOKEN:-$BUILT_IN_TOKEN}"'
+    );
+    expect(previewRegenJob).not.toContain(
+      'RELEASE_PR_TOKEN is required to push generated preview images'
+    );
+    // When main does refuse, the error says what to add and where.
+    expect(previewRegenJob).toContain(
+      '::error title=Preview images need RELEASE_PR_TOKEN::'
+    );
+    expect(previewRegenJob).toContain(
+      'SECRETS_URL: ${{ github.server_url }}/${{ github.repository }}/settings/secrets/actions'
+    );
+    expect(previewRegenJob).toContain('secret at $SECRETS_URL');
+    expect(previewRegenJob).toContain('npm run example:web:preview-images');
+  });
+
+  it('summarizes the preview regeneration outcome that actually happened', () => {
+    const exampleAppWorkflow = readWorkflow(
+      '.github/workflows/example-app.yml'
+    );
+    const previewRegenJob = getJobBlock(exampleAppWorkflow, 'preview-regen');
+
+    expect(previewRegenJob).toContain('id: regenerate');
+    expect(previewRegenJob).toContain('id: commit');
+    expect(previewRegenJob).toContain(
+      'REGENERATE: ${{ steps.regenerate.outcome }}'
+    );
+    expect(previewRegenJob).toContain('COMMIT: ${{ steps.commit.outcome }}');
+    expect(previewRegenJob).toContain(
+      '::notice::Regenerated preview images were committed to main.'
+    );
+    expect(previewRegenJob).not.toContain('(if applicable) committed');
+  });
+
+  it('captures preview images deterministically and ignores rendering noise', () => {
+    const previewScript = readWorkflow('scripts/update-preview-images.mjs');
+
+    // The HUD shows a live device benchmark; a fixed answer keeps it stable.
+    expect(previewScript).toContain('const PREVIEW_BENCHMARK = Object.freeze(');
+    expect(previewScript).toContain("message?.type !== 'benchmark'");
+    expect(previewScript).toContain('.hud .hud-note');
+    // Anti-aliasing noise must not count as drift.
+    expect(previewScript).toContain('const PIXEL_TOLERANCE = 2;');
+    expect(previewScript).toContain('writeIfChanged(');
+    expect(previewScript).not.toContain('copyFile');
   });
 
   it('uses the official Playwright image for preview regeneration with browser downloads disabled', () => {
