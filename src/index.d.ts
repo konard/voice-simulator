@@ -1070,6 +1070,11 @@ export declare function midsagittalPoints(
   mesh: { positions: ArrayLike<number>; indices: ArrayLike<number> },
   midline?: number
 ): number[][];
+/** Points of the parasagittal cut at x, densified to 0.25 mm. */
+export declare function sagittalPoints(
+  mesh: { positions: ArrayLike<number>; indices: ArrayLike<number> },
+  x: number
+): number[][];
 export declare function mouthKeyPoints(
   parts: Record<string, unknown>,
   midline?: number
@@ -1572,3 +1577,56 @@ export interface VrmBind {
 export declare function vrmVowelBinds(
   json: object
 ): Record<'aa' | 'ih' | 'ou' | 'ee' | 'oh', VrmBind[]> | null;
+
+// The z-up atlases on the Visible Human Japanese male: Z-Anatomy
+// (CC BY-SA 4.0) and BodyParts3D (CC BY 4.0), fetched just in time.
+export interface Atlas {
+  readonly name: string;
+  readonly citation: string;
+  readonly license: string;
+}
+type TriangleMesh = {
+  positions: ArrayLike<number>;
+  indices: ArrayLike<number>;
+};
+type AtlasMesh = TriangleMesh & { name: string };
+type AtlasRoles = Readonly<Record<string, (name: string) => boolean>>;
+/** Height (mm) above the palatal vault where the palate bones are cut. */
+export declare const PALATE_BONE_CUT: number;
+/** Distance (mm) beside the midline where the bony palate is read. */
+export declare const PALATE_SUTURE: number;
+export declare const Z_ANATOMY_ATLAS: Atlas;
+export declare const BODYPARTS3D_ATLAS: Atlas;
+export declare const Z_ANATOMY_PARTS: AtlasRoles;
+/** BodyParts3D 4.0 element file ids per role. */
+export declare const BODYPARTS3D_FILES: Readonly<
+  Record<string, readonly string[]>
+>;
+export declare const BODYPARTS3D_PARTS: AtlasRoles;
+/** Meshes of a z-up atlas in the head frame, their faces kept outward. */
+export declare function atlasToHeadFrame<T extends TriangleMesh>(
+  meshes: T[]
+): (T & { positions: Float64Array; indices: Uint32Array })[];
+/** Triangles wholly at or below a height (y, mm). */
+export declare function cutAbove<T extends TriangleMesh>(
+  mesh: T,
+  height: number
+): T & { positions: Float64Array; indices: Uint32Array };
+/** Staphylion and palatal vault of a bony palate (mm, head frame). */
+export declare function bonyPalateKeyPoints(
+  palate: TriangleMesh,
+  midline: number,
+  molarDepth: number
+): { staphylion: number[]; palateVault: number[] };
+export declare function atlasSource(
+  atlas: Atlas,
+  meshes: AtlasMesh[],
+  roles: AtlasRoles
+): AnatomySource;
+export declare function zAnatomySource(meshes: AtlasMesh[]): AnatomySource;
+export declare function bodyParts3dSource(meshes: AtlasMesh[]): AnatomySource;
+/** A Wavefront OBJ as one triangle mesh. */
+export declare function parseObj(text: string): {
+  positions: Float64Array;
+  indices: Uint32Array;
+};

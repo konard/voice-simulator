@@ -207,6 +207,7 @@ export {
   meshShells,
   classifyTeeth,
   midsagittalPoints,
+  sagittalPoints,
   mouthKeyPoints,
   glottisPoint,
   modelKeyPoints,
@@ -222,6 +223,22 @@ export {
   keyPointMeasures,
   mirrorX,
 } from './geometry/reference-anatomy.js';
+export {
+  PALATE_BONE_CUT,
+  PALATE_SUTURE,
+  Z_ANATOMY_ATLAS,
+  BODYPARTS3D_ATLAS,
+  Z_ANATOMY_PARTS,
+  BODYPARTS3D_FILES,
+  BODYPARTS3D_PARTS,
+  atlasToHeadFrame,
+  cutAbove,
+  bonyPalateKeyPoints,
+  atlasSource,
+  zAnatomySource,
+  bodyParts3dSource,
+  parseObj,
+} from './geometry/atlas-sources.js';
 
 // Voice presets and matching (issue 5)
 export {

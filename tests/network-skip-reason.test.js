@@ -56,6 +56,21 @@ describe('network integration skip diagnostics', () => {
     ).toBe(`${url} answered HTTP 503`);
   });
 
+  it('asks for one byte when the test needs ranges', async () => {
+    const answers = [];
+    const fetchFn = async (input, options) => {
+      answers.push([options.method, options.headers]);
+      return { ok: true, status: answers.length === 1 ? 416 : 206 };
+    };
+    expect(
+      await networkSkipReason({ url, runtime: null, range: true, fetchFn })
+    ).toBe(`${url} refused a range request (HTTP 416)`);
+    expect(
+      await networkSkipReason({ url, runtime: null, range: true, fetchFn })
+    ).toBe(null);
+    expect(answers[0]).toEqual(['GET', { Range: 'bytes=0-0' }]);
+  });
+
   it('preserves the underlying transport error', async () => {
     expect(
       await networkSkipReason({

@@ -24,7 +24,7 @@ import { arcPoint, tractCenterline } from './centerline.js';
 import { TOOTH_TYPES, toothLandmarks } from './dental.js';
 import { axisPlane, sliceMesh } from './slice.js';
 import { anatomyMeshes, dentalLandmarks } from './anatomy.js';
-import { rigidFit, transformPoint } from './align.js';
+import { densify, rigidFit, transformPoint } from './align.js';
 import { mergeMeshes } from './loft.js';
 import { normalizeHeadConfig } from '../head-config.js';
 
@@ -51,6 +51,9 @@ const BACK_BAND = 1.5;
 /** The midsagittal cut runs this far (mm) beside the midline so it does
  * not pass through the vertices of meshes mirrored about it. */
 const MIDLINE_OFFSET = -0.05;
+/** Spacing (mm) of the points read along a cut, well under BAND, so the
+ * bands find the surface between the vertices of a coarse mesh. */
+const CUT_STEP = 0.25;
 /** Share of an arytenoid's height, from its base, that holds the vocal
  * process. */
 const VOCAL_PROCESS_BAND = 0.4;
@@ -201,9 +204,20 @@ export function classifyTeeth(shells, jaw, options = {}) {
   });
 }
 
+/**
+ * Points of the cut of a mesh with the plane x = `x`: the ends of its
+ * segments and points CUT_STEP apart between them.
+ * @param {{positions: ArrayLike<number>, indices: ArrayLike<number>}} mesh
+ * @param {number} x
+ */
+export function sagittalPoints(mesh, x) {
+  const segments = sliceMesh(mesh, axisPlane(0, x));
+  return [...densify(segments, CUT_STEP), ...segments.map(([, end]) => end)];
+}
+
 /** Points of the cut of a mesh with the plane x = `midline`. */
 export function midsagittalPoints(mesh, midline = 0) {
-  return sliceMesh(mesh, axisPlane(0, midline + MIDLINE_OFFSET)).flat();
+  return sagittalPoints(mesh, midline + MIDLINE_OFFSET);
 }
 
 function occlusalMiddle(landmarks, jaw, type) {

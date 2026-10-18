@@ -1,0 +1,35 @@
+Head model against Z-ANATOMY
+Gauthier M et al., Z-Anatomy, an open-source 3D atlas of human anatomy built on BodyParts3D, https://www.z-anatomy.com. CC BY-SA 4.0.
+Produced by scripts/compare-hra.mjs.
+
+male: key point distance after a rigid fit (mm)
+  key point          dental fit  all-point fit
+  upperIncisor              3.8            4.2
+  lowerIncisor              1.2            1.6
+  upperFirstMolar           2.3            5.1
+  upperSecondMolar          1.0            4.2
+  staphylion                7.0            5.5
+  palateVault               2.4            5.4
+  uvula                    21.2           12.7
+  tongueTip                 2.9            2.2
+  tongueDorsum              6.6            9.3
+  glottis                  20.5           16.2
+  rms (fitted)             2.37           7.99
+male: outline distance per cut and part after the dental fit (mm)
+  MIDSAGITTAL         palate         4.60
+  MIDSAGITTAL         velum          6.85
+  MIDSAGITTAL         tongue         4.17
+  PARASAGITTAL 15 MM  upperTeeth     2.89
+  PARASAGITTAL 15 MM  lowerTeeth     2.16
+  PARASAGITTAL 15 MM  palate         2.96
+  PARASAGITTAL 15 MM  velum          4.83
+  PARASAGITTAL 15 MM  tongue         5.43
+  CORONAL AT M1       upperTeeth     1.24
+  CORONAL AT M1       lowerTeeth     1.49
+  CORONAL AT M1       palate         3.64
+  CORONAL AT M1       tongue         3.86
+  AXIAL CROWNS        upperTeeth     1.86
+  AXIAL CROWNS        tongue         2.35
+  AXIAL PALATE        upperTeeth     9.03
+  AXIAL PALATE        palate         5.28
+  AXIAL PALATE        velum          8.63

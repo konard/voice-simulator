@@ -36,6 +36,12 @@ import { fileURLToPath } from 'node:url';
 import { meshesToStl, parseStl } from '../src/geometry/stl.js';
 import { HRA, fetchHra, hraSource } from '../src/geometry/hra.js';
 import {
+  BODYPARTS3D_FILES,
+  bodyParts3dSource,
+  parseObj,
+  zAnatomySource,
+} from '../src/geometry/atlas-sources.js';
+import {
   referenceParts,
   sortedReferenceTeeth,
 } from '../src/geometry/reference-anatomy.js';
@@ -181,6 +187,35 @@ export function loadDentition(source, directory) {
   return teeth;
 }
 
+/**
+ * The anatomy source (src/geometry/atlas-sources.js) of a fetched atlas:
+ * BodyParts3D's OBJs, or the STLs exported from Z-Anatomy.
+ * @param {'bodyparts3d'|'z-anatomy'} source
+ * @param {string} directory What fetchAnatomy() wrote (for Z-Anatomy, the
+ *   directory exportZAnatomy() wrote).
+ */
+export function loadAtlasSource(source, directory) {
+  const extension = source === 'bodyparts3d' ? '.obj' : '.stl';
+  const meshes = readdirSync(directory)
+    .filter((file) => file.endsWith(extension))
+    .map((file) => {
+      const path = join(directory, file);
+      return {
+        name: basename(file, extension),
+        ...(source === 'bodyparts3d'
+          ? parseObj(readFileSync(path, 'utf8'))
+          : parseStl(new Uint8Array(readFileSync(path)))),
+      };
+    });
+  if (source === 'bodyparts3d') {
+    return bodyParts3dSource(meshes);
+  }
+  if (source === 'z-anatomy') {
+    return zAnatomySource(meshes);
+  }
+  throw new Error(`no atlas source ${source}`);
+}
+
 async function remoteSize(url) {
   const response = await fetch(url, { method: 'HEAD' });
   if (!response.ok) {
@@ -204,18 +239,18 @@ async function fetchMembers(url, size, wanted, output) {
 }
 
 /**
- * Download the teeth (and, for Z-Anatomy, the atlas file) of a source.
+ * Download the teeth and organs (for Z-Anatomy, the atlas file) of a source.
  * @param {'bodyparts3d'|'open-full-jaw'|'z-anatomy'|'hra'} source
  * @param {string} output
- * @param {{patients?: number[], sex?: 'male'|'female'}} [options]
+ * @param {{patients?: number[], sex?: 'male'|'female', files?: string[]}}
+ *   [options] `files`: the BodyParts3D files to read (default: all of
+ *   BODYPARTS3D_FILES).
  * @returns {Promise<string[]>} Files written.
  */
 export async function fetchAnatomy(source, output, options = {}) {
   if (source === 'bodyparts3d') {
     const files = new Set(
-      Object.values(BODYPARTS3D_TEETH).flatMap((sides) =>
-        Object.values(sides).flat()
-      )
+      options.files ?? Object.values(BODYPARTS3D_FILES).flat()
     );
     return fetchMembers(
       BODYPARTS3D.url,

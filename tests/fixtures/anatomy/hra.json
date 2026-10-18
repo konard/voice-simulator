@@ -23,19 +23,19 @@
     "uvula": [0.39, 723.16, 33.56],
     "tongueTip": [0.39, 723.54, 103.68],
     "tongueDorsum": [0.39, 744.01, 70.43],
-    "glottis": [0.39, 651.15, 47.65]
+    "glottis": [0.39, 651.15, 47.62]
   },
   "female": {
     "upperIncisor": [2.43, 699.4, 34.07],
     "lowerIncisor": [2.43, 695.24, 34.04],
     "upperFirstMolar": [2.43, 704.68, -4.38],
     "upperSecondMolar": [2.43, 709.12, -13.13],
-    "staphylion": [2.43, 729.06, -12.42],
-    "palateVault": [2.43, 720.52, -3.87],
+    "staphylion": [2.43, 728.99, -12.3],
+    "palateVault": [2.43, 720.51, -3.7],
     "uvula": [2.43, 705.44, -42.31],
     "tongueTip": [2.43, 697.09, 34.75],
     "tongueDorsum": [2.43, 718.57, -6.54],
-    "glottis": [2.43, 626.81, -16.95]
+    "glottis": [2.43, 626.81, -17.07]
   },
   "incisorLean": {
     "male": { "upper": -22.74, "lower": 32.76 },

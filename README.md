@@ -43,7 +43,9 @@ a pressure wave travelling through the 3D shape of a parametric low-poly head
   `scripts/fetch-anatomy.mjs` fetch MRI tracts, segmented teeth and the
   HuBMAP Visible Human mouth and larynx just in time, and
   `scripts/compare-hra.mjs` cuts the model and the HuBMAP organs like MRI
-  slices and compares ten key points after a rigid fit (see
+  slices and compares ten key points after a rigid fit; with
+  `--atlas z-anatomy|bodyparts3d --dir DIR` it does the same against the
+  Z-Anatomy and BodyParts3D atlases (see
   [the issue 9 case study](docs/case-studies/issue-9/README.md)).
 - **Anatomy from any 3D source, part by part**: each articulator (upper
   and lower teeth, tongue, hard palate, velum) comes from the procedural
@@ -63,7 +65,10 @@ a pressure wave travelling through the 3D shape of a parametric low-poly head
   ```
 
   `npm run export:model -- --anatomy hra-female --scale` exports the same,
-  and `anatomySourceFromGlb` reads a character's own mouth.
+  `anatomySourceFromGlb` reads a character's own mouth, and
+  `zAnatomySource` and `bodyParts3dSource` read the Z-Anatomy STLs and
+  BodyParts3D OBJs that `scripts/fetch-anatomy.mjs` downloads
+  (`npm run export:model -- --atlas z-anatomy=DIR --anatomy z-anatomy`).
 
 - **Talking animation for character models**: `visemeTrack(plan, head,
 { format, fps })` turns the articulation the solvers hear into ARKit

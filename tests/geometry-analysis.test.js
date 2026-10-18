@@ -46,7 +46,7 @@ import { itUnless } from './helpers/skip.js';
 
 // Before any test is registered: the CPU-bound tests start right away and
 // would stall the probe past its timeout.
-const offline = await networkSkipReason({ url: DVTD_ARCHIVE });
+const offline = await networkSkipReason({ url: DVTD_ARCHIVE, range: true });
 
 const FIXTURES = new globalThis.URL('./fixtures/dvtd/', import.meta.url);
 const MANIFEST = JSON.parse(
