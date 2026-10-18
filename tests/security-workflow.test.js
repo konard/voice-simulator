@@ -152,3 +152,23 @@ it('excludes experiments and examples through an explicit CodeQL configuration',
   expect(config).toMatch(/- experiments\b/);
   expect(config).toMatch(/- examples\b/);
 });
+
+// The gate fails only on high advisories, so a moderate one with no patched
+// release (GHSA-hp3w-g68c-fv3c in sprintf-js) is kept out by this override.
+it('keeps the unpatched sprintf-js advisory out of the example app lock', () => {
+  const directory = 'examples/universal-app';
+  const manifest = JSON.parse(
+    readFileSync(`${directory}/package.json`, 'utf8')
+  );
+  const { packages } = JSON.parse(
+    readFileSync(`${directory}/package-lock.json`, 'utf8')
+  );
+  const installed = Object.keys(packages).map((path) =>
+    path.replace(/^.*node_modules\//, '')
+  );
+
+  expect(manifest.overrides?.['global-agent']).toBe('^4.1.3');
+  expect(packages['node_modules/global-agent'].version).toMatch(/^4\./);
+  expect(installed).not.toContain('roarr');
+  expect(installed).not.toContain('sprintf-js');
+});
