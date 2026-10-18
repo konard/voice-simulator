@@ -9,7 +9,7 @@
  * the network allows.
  */
 
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, it, expect } from 'test-anywhere';
@@ -25,8 +25,16 @@ import {
   zAnatomySource,
 } from '../src/geometry/atlas-sources.js';
 import { anatomyMeshes, dentalLandmarks } from '../src/geometry/anatomy.js';
-import { BODYPARTS3D, fetchAnatomy } from '../scripts/fetch-anatomy.mjs';
-import { modelKeyPoints } from '../src/geometry/reference-anatomy.js';
+import {
+  BODYPARTS3D,
+  fetchAnatomy,
+  loadAtlasSource,
+} from '../scripts/fetch-anatomy.mjs';
+import { meshesToStl } from '../src/geometry/stl.js';
+import {
+  KEY_POINTS,
+  modelKeyPoints,
+} from '../src/geometry/reference-anatomy.js';
 import { REST_GAP } from '../src/articulation/teeth.js';
 import { tractShape } from '../src/articulation/tract-shape.js';
 import { presetHeadConfig } from '../src/head-config.js';
@@ -283,6 +291,74 @@ describe('atlas sources from the procedural model', () => {
       );
     });
   }
+});
+
+/** A mesh as Wavefront OBJ text. */
+function toObj({ positions, indices }) {
+  const lines = [];
+  for (let index = 0; index < positions.length; index += 3) {
+    lines.push(
+      `v ${positions[index]} ${positions[index + 1]} ${positions[index + 2]}`
+    );
+  }
+  for (let index = 0; index < indices.length; index += 3) {
+    lines.push(
+      `f ${indices[index] + 1} ${indices[index + 1] + 1} ${indices[index + 2] + 1}`
+    );
+  }
+  return lines.join('\n');
+}
+
+describe('atlas directories', () => {
+  for (const [source, names, build, extension, write] of [
+    [
+      'z-anatomy',
+      Z_ANATOMY_NAMES,
+      zAnatomySource,
+      '.stl',
+      (mesh) => meshesToStl([mesh]),
+    ],
+    ['bodyparts3d', BODYPARTS3D_NAMES, bodyParts3dSource, '.obj', toObj],
+  ]) {
+    it(`loads ${source} as fetch-anatomy.mjs downloads it`, () => {
+      const atlas = syntheticAtlas(names);
+      const directory = mkdtempSync(join(tmpdir(), `${source}-`));
+      try {
+        for (const mesh of atlas) {
+          writeFileSync(
+            join(directory, `${mesh.name}${extension}`),
+            write(mesh)
+          );
+        }
+        writeFileSync(join(directory, 'README.txt'), 'not a mesh');
+        const loaded = loadAtlasSource(source, directory);
+        const built = build(atlas);
+        expect(loaded.name).toBe(source);
+        const measured = KEY_POINTS.filter((key) =>
+          built.keyPoints[key]?.every(Number.isFinite)
+        );
+        // Every key point but the glottis (no larynx here).
+        expect(measured.length).toBeGreaterThan(7);
+        for (const name of measured) {
+          // STL stores single-precision floats.
+          expect(
+            distance(loaded.keyPoints[name], built.keyPoints[name])
+          ).toBeLessThan(0.01);
+        }
+        expect(Object.keys(loaded.parts).sort()).toEqual(
+          Object.keys(built.parts).sort()
+        );
+      } finally {
+        rmSync(directory, { recursive: true, force: true });
+      }
+    });
+  }
+
+  it('names the atlases it can load', () => {
+    expect(() => loadAtlasSource('atlas', tmpdir())).toThrow(
+      'no atlas source atlas'
+    );
+  });
 });
 
 describe('BodyParts3D just in time', () => {

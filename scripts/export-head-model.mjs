@@ -11,13 +11,15 @@
  * male (fetched just in time, CC BY 4.0), `--anatomy tongue=hra-female,palate=hra-male`
  * one source per part, `--source NAME=FILE.glb` adds a glTF binary of your
  * own (metres, the body's left at -x; `--mirror` when it is at +x),
+ * `--atlas z-anatomy=DIR` or `--atlas bodyparts3d=DIR` adds an atlas
+ * scripts/fetch-anatomy.mjs downloaded (`--anatomy tongue=z-anatomy`),
  * `--scale` scales the sources to the head and `--fit-head` sets the
  * head's mouthWidth from the first source's dental arch.
  *
  * Usage:
  *   node scripts/export-head-model.mjs [--out DIR] [--preset male|female|child]
  *     [--vowel IPA] [--lods 0,1,2,3] [--anatomy SPEC] [--source NAME=FILE]
- *     [--mirror] [--scale] [--fit-head]
+ *     [--atlas NAME=DIR] [--mirror] [--scale] [--fit-head]
  */
 
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
@@ -35,7 +37,7 @@ import { headModel } from '../src/geometry/model.js';
 import { meshesToStl } from '../src/geometry/stl.js';
 import { presetHeadConfig } from '../src/head-config.js';
 import { getPhoneme } from '../src/ipa/inventory.js';
-import { hraSource } from './fetch-anatomy.mjs';
+import { hraSource, loadAtlasSource } from './fetch-anatomy.mjs';
 
 function option(name, fallback) {
   const index = process.argv.indexOf(`--${name}`);
@@ -52,7 +54,7 @@ function parseAnatomy(spec) {
   return Object.fromEntries(spec.split(',').map((pair) => pair.split('=')));
 }
 
-/** Register the sources a selection names: HRA just in time, or files. */
+/** Register the sources a selection names: HRA just in time, atlases or files. */
 async function loadSources(selection) {
   const file = option('source');
   if (file) {
@@ -60,6 +62,11 @@ async function loadSources(selection) {
     registerAnatomySource(
       anatomySourceFromGlb(name, readFileSync(path), { mirror: flag('mirror') })
     );
+  }
+  const atlas = option('atlas');
+  if (atlas) {
+    const [name, directory] = atlas.split('=');
+    registerAnatomySource(loadAtlasSource(name, directory));
   }
   const names = new Set(
     typeof selection === 'string' ? [selection] : Object.values(selection)

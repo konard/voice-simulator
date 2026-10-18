@@ -67,7 +67,8 @@ a pressure wave travelling through the 3D shape of a parametric low-poly head
   `npm run export:model -- --anatomy hra-female --scale` exports the same,
   `anatomySourceFromGlb` reads a character's own mouth, and
   `zAnatomySource` and `bodyParts3dSource` read the Z-Anatomy STLs and
-  BodyParts3D OBJs that `scripts/fetch-anatomy.mjs` downloads.
+  BodyParts3D OBJs that `scripts/fetch-anatomy.mjs` downloads
+  (`npm run export:model -- --atlas z-anatomy=DIR --anatomy z-anatomy`).
 
 - **Talking animation for character models**: `visemeTrack(plan, head,
 { format, fps })` turns the articulation the solvers hear into ARKit
