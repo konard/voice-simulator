@@ -40,7 +40,7 @@
  * reflect according to their absorption.
  */
 
-import { lossFactor } from './waveguide.js';
+import { LOSS_REFERENCE_SECTIONS, lossFactor } from './waveguide.js';
 import { SPEED_OF_SOUND } from './transfer.js';
 import {
   CELL_AIR,
@@ -62,8 +62,6 @@ const COURANT = 0.5;
 const MIN_FILL = 1e-4;
 /** Glottis termination admittance (reflection 0.75, like the waveguide). */
 const GLOTTIS_ADMITTANCE = 1 / 7;
-/** Waveguide sections that the empirical loss model is calibrated for. */
-const LOSS_REFERENCE_SECTIONS = 44;
 /**
  * Microphone level per cm of cell size: matches the waveguide output level
  * for the same source (the radiated pressure is sampled at one point).
@@ -305,6 +303,8 @@ export class Fdtd3d {
     this.effective = Float64Array.from(this.envelope);
     this.opening = model.opening ?? null;
     this.teethCell = new Uint8Array(cellCount);
+    // Share of each teeth cell that lies in the slot between the incisors.
+    this.openness = new Float64Array(cellCount).fill(1);
     for (const cell of model.teeth?.cells ?? []) {
       this.teethCell[cell] = 1;
     }
@@ -484,7 +484,10 @@ export class Fdtd3d {
     if (this.#ranked(index)) {
       return this.#openShare(index, this.#scale(this.cellArc[index], area));
     }
-    return Math.min(1, Math.max(0, area / this.effective[index]));
+    return (
+      this.openness[index] *
+      Math.min(1, Math.max(0, area / this.effective[index]))
+    );
   }
 
   /** Tube links and cells: only these change with the articulation. */
@@ -645,22 +648,31 @@ export class Fdtd3d {
         this.pressure[cell] = 0;
       }
       this.solid[cell] = solid ? 1 : 0;
+      this.openness[cell] = gap === null ? 1 : open[position];
       this.effective[cell] = this.envelope[cell] * (gap === null ? 1 : share);
     });
     return true;
   }
 
-  /** 1 for teeth cells inside the slot (at least one per slice). */
+  /**
+   * Share of each teeth cell's cross-section inside the slot between the
+   * incisal edges (at least one open cell per slice), so the open cells
+   * add up to the slot area at any grid size.
+   */
   #teethSlot(gap, edge, width) {
     const { cells, groups } = this.model.teeth;
-    const half = this.dx / 2;
-    const open = new Uint8Array(cells.length);
+    const { dx } = this;
+    const half = dx / 2;
+    const open = new Float64Array(cells.length);
     const nearest = new Map();
+    const overlap = (low, high) => Math.min(1, Math.max(0, high - low) / dx);
     cells.forEach((cell, position) => {
       const [x, y] = this.model.cells[cell].point;
+      open[position] =
+        overlap(Math.max(y - half, edge - gap), Math.min(y + half, edge)) *
+        overlap(Math.max(x - half, -width / 2), Math.min(x + half, width / 2));
       const vertical = Math.max(y - half - edge, edge - gap - (y + half));
       const lateral = Math.abs(x) - half - width / 2;
-      open[position] = vertical < 0 && lateral < 0 ? 1 : 0;
       const distance = Math.max(vertical, 0) + Math.max(lateral, 0);
       const best = nearest.get(groups[position]);
       if (!best || distance < best.distance) {
@@ -668,7 +680,9 @@ export class Fdtd3d {
       }
     });
     for (const { position } of nearest.values()) {
-      open[position] = 1;
+      if (open[position] === 0) {
+        open[position] = 1;
+      }
     }
     return open;
   }
@@ -720,22 +734,29 @@ export class Fdtd3d {
         this.velocity[link] = 0;
         continue;
       }
-      let g = Math.min(fill[a], fill[b]);
-      let area = Math.min(fill[a] * envelope[a], fill[b] * envelope[b]);
+      let fillA = fill[a];
+      let fillB = fill[b];
+      let area = Math.min(fillA * envelope[a], fillB * envelope[b]);
       if (from[link] >= 0) {
         const areas = this.tubeAreas[cellKind[a]];
-        let narrowest = Infinity;
+        // The sections the link spans are in series: their inertances
+        // add, so a closed section shuts the link but a short narrow one
+        // does not narrow the whole cell.
+        let inverse = 0;
         for (let index = from[link]; index <= to[link]; index++) {
-          narrowest = Math.min(narrowest, areas[index]);
+          inverse += 1 / Math.max(areas[index], 1e-12);
         }
-        g = Math.min(
-          g,
-          this.#narrowedFill(a, narrowest),
-          this.#narrowedFill(b, narrowest)
-        );
+        const narrowest = (to[link] - from[link] + 1) / inverse;
+        fillA = Math.min(fillA, this.#narrowedFill(a, narrowest));
+        fillB = Math.min(fillB, this.#narrowedFill(b, narrowest));
         area = Math.min(area, narrowest);
       }
-      this.conductance[link] = Math.max(0, g);
+      // Each cell holds half of the link: two inertances in series, so
+      // the link opens by the harmonic mean of the two fills.
+      this.conductance[link] = Math.max(
+        0,
+        (2 * fillA * fillB) / Math.max(fillA + fillB, 1e-12)
+      );
       this.damping[link] =
         Math.max(0, lossFactor(area, this.wallLoss)) ** exponent;
     }

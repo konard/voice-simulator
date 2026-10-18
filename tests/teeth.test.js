@@ -163,6 +163,29 @@ describe('teeth voxels', () => {
     expect(solver.solid.every((value) => value === 0)).toBe(true);
   });
 
+  it('opens each incisor slice by the slot area at any grid size', () => {
+    for (const dx of [1, 0.5]) {
+      const grid = dx === 1 ? model : buildVoxelModel(DEFAULT_HEAD, { dx });
+      const solver = new Fdtd3d({ model: grid, kernel: 'js' });
+      for (const symbol of ['i', 'ə', 'ɑ']) {
+        const shape = tractShape(vowelState(symbol), DEFAULT_HEAD);
+        solver.setShape(shape.areas, 0, shape.velumIndex, shape.teeth);
+        const slot = shape.teeth.gap * grid.teeth.width;
+        const open = new Map();
+        grid.teeth.cells.forEach((cell, position) => {
+          const group = grid.teeth.groups[position];
+          open.set(
+            group,
+            (open.get(group) ?? 0) + solver.openness[cell] * dx * dx
+          );
+        });
+        for (const area of open.values()) {
+          expect(Math.abs(area - slot) / slot).toBeLessThan(0.02);
+        }
+      }
+    }
+  });
+
   it('stays stable and deterministic with moving teeth', () => {
     const plan = planUtterance('ˈasi');
     const options = { sampleRate: RATE, solver: 'fdtd3d', model };
