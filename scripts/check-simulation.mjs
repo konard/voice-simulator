@@ -5,8 +5,9 @@
  *
  *   1. Every language sample sentence is synthesized with every audio tier
  *      up to `--max-tier` and saved as WAV for listening.
- *   2. The 3D FDTD solver on the fine `--dx` grid reproduces the resonances
- *      of the tube model for the cardinal vowels.
+ *   2. The 3D FDTD solver on the fine `--dx` grid, with its own vowel
+ *      table, reproduces the mean formants of men (Hillenbrand et al. 1995)
+ *      on the male preset head.
  *   3. Random heads stay stable, and both solvers keep the tube-model
  *      resonances of /ə/ and /i/ for each head.
  *   4. All audio tiers are benchmarked on the runner.
@@ -25,7 +26,6 @@ import { performance } from 'node:perf_hooks';
 
 import {
   AUDIO_TIERS,
-  DEFAULT_HEAD,
   Fdtd3d,
   LANGUAGES,
   buildVoxelModel,
@@ -45,18 +45,21 @@ import {
 } from '../src/index.js';
 import { SPEED_OF_SOUND } from '../src/acoustics/transfer.js';
 import { vowelTarget } from '../src/articulation/phones.js';
+import { VOWEL_CORRECTIONS_3D } from '../src/articulation/vowel-calibration.js';
+import { HILLENBRAND } from '../src/articulation/vowel-norms.js';
+import { STORY_FEATURES } from '../src/articulation/vowel-space.js';
+import { presetHeadConfig } from '../src/head-config.js';
 
-const VOWELS = ['i', 'e', 'a', 'ɑ', 'o', 'u', 'ə'];
-/** Allowed relative error of FDTD resonances against the tube model. */
-const RESONANCE_TOLERANCE = 0.15;
 /**
- * Known deviations of the 3D shape from the straight 1D tube. For /a/ the
- * 3D solver merges F1 (948 Hz in the tube) and F2 (1430 Hz) into one strong
- * peak near 1120-1155 Hz on 0.4, 0.6 and 1 cm grids alike, so it is a
- * geometry effect and not discretisation error (see
- * experiments/fdtd-open-vowel-peaks.mjs and the issue-1 case study).
+ * Allowed relative error of the 3D F1 and F2 against the mean formants of
+ * men. The 3D solver has its own vowel table, fitted on the male preset
+ * head at 0.5 cm cells (scripts/calibrate-vowels.mjs); on the 0.6 cm grid
+ * its F1 and F2 stay within 10% of the measured means (see
+ * experiments/issue-9-ci-measured.mjs). The straight tube model is no
+ * reference for it: the bent tract, the piriform fossae, the teeth and the
+ * radiation into the open face all move the 3D resonances.
  */
-const KNOWN_TOLERANCE = { a: 0.25 };
+const MEASURED_TOLERANCE = 0.15;
 /** Spectral peaks weaker than this (dB below the strongest) are ignored. */
 const PEAK_FLOOR = 12;
 /**
@@ -136,7 +139,7 @@ function vowelSolver(solverName, shape, head, model) {
     const solver = new Fdtd3d({ model });
     solver.setNose(noseShape(head).areas);
     solver.setShape(shape.areas, 0);
-    return { solver, rate: 1 / solver.stepDuration() };
+    return { solver, rate: 1 / solver.stepDuration(shape) };
   }
   const solver = new Waveguide({ sections: shape.areas.length });
   solver.setNose(noseShape(head).areas);
@@ -214,38 +217,65 @@ async function checkLanguages(args) {
   return results;
 }
 
+/**
+ * F1-F3 (Hz) of a measured vowel in the 3D solver with the 3D vowel table:
+ * the first three peaks above 150 Hz of its impulse response, read with
+ * the step time of the vowel's tract length (as scripts/calibrate-vowels.mjs
+ * measures them).
+ */
+function measuredVowelFormants(name, head, model) {
+  const [height, backness, rounding] = STORY_FEATURES[name];
+  const shape = tractShape({ height, backness, rounding }, head, {
+    vowelCorrections: VOWEL_CORRECTIONS_3D,
+  });
+  const solver = new Fdtd3d({ model });
+  solver.setNose(noseShape(head).areas);
+  solver.setShape(shape.areas, shape.velumArea, shape.velumIndex, shape.teeth);
+  const rate = 1 / solver.stepDuration(shape);
+  const response = new Float64Array(Math.round(rate * 0.1));
+  for (let n = 0; n < response.length; n++) {
+    response[n] = solver.step(n === 0 ? 1 : 0, 0, 0);
+  }
+  return spectralPeaks(response, rate, { step: 2, prominence: 0.5 })
+    .filter((value) => value > 150)
+    .slice(0, 3);
+}
+
 function checkResonances(args) {
+  const head = presetHeadConfig('male');
   const { value: model, seconds: buildSeconds } = timed(() =>
-    buildVoxelModel(DEFAULT_HEAD, { dx: args.dx })
+    buildVoxelModel(head, { dx: args.dx })
   );
   console.log(
     `voxel model dx=${args.dx}: ${model.cells.length} cells in ${buildSeconds.toFixed(2)} s`
   );
   const results = [];
-  for (const symbol of VOWELS) {
-    const { tube, nearest, errors } = resonances(symbol, DEFAULT_HEAD, {
-      solver: 'fdtd3d',
-      model,
-    });
-    const tolerance = KNOWN_TOLERANCE[symbol] ?? RESONANCE_TOLERANCE;
-    for (const index of [0, 1]) {
-      check(
-        errors[index] < tolerance,
-        `/${symbol}/ dx=${args.dx}: F${index + 1} ${nearest[index]} Hz vs tube ${Math.round(tube[index])} Hz (tolerance ${tolerance * 100}%)`
-      );
+  for (const name of Object.keys(STORY_FEATURES)) {
+    const measured = HILLENBRAND.male[name]?.slice(0, 2);
+    if (!measured) {
+      continue;
     }
-    results.push({
-      vowel: symbol,
-      tube: tube.map(Math.round),
-      fdtd: nearest,
-      errors,
-      tolerance,
-    });
+    const fdtd = measuredVowelFormants(name, head, model).slice(0, 2);
+    const errors = measured.map((target, index) =>
+      Math.abs((fdtd[index] ?? Infinity) / target - 1)
+    );
+    errors.forEach((error, index) =>
+      check(
+        error < MEASURED_TOLERANCE,
+        `/${name}/ dx=${args.dx}: F${index + 1} ${fdtd[index]} Hz vs ${measured[index]} Hz measured (tolerance ${MEASURED_TOLERANCE * 100}%)`
+      )
+    );
+    results.push({ vowel: name, measured, fdtd, errors });
     console.log(
-      `/${symbol}/ tube ${tube.map(Math.round).join(' ')} fdtd ${nearest.join(' ')}`
+      `/${name}/ measured ${measured.join(' ')} fdtd ${fdtd.join(' ')}`
     );
   }
-  return { dx: args.dx, cells: model.cells.length, vowels: results };
+  return {
+    dx: args.dx,
+    cells: model.cells.length,
+    tolerance: MEASURED_TOLERANCE,
+    vowels: results,
+  };
 }
 
 function checkRandomHeads(args) {
@@ -302,12 +332,12 @@ function summary(report) {
   lines.push('', `### 3D FDTD resonances (dx = ${report.resonances.dx} cm)`);
   lines.push(
     '',
-    '| Vowel | Tube F1, F2 | FDTD F1, F2 |',
+    '| Vowel | Men, measured F1, F2 | FDTD F1, F2 |',
     '| --- | --- | --- |'
   );
   for (const vowel of report.resonances.vowels) {
     lines.push(
-      `| /${vowel.vowel}/ | ${vowel.tube.join(', ')} | ${vowel.fdtd.join(', ')} |`
+      `| /${vowel.vowel}/ | ${vowel.measured.join(', ')} | ${vowel.fdtd.join(', ')} |`
     );
   }
   lines.push('', '### Sample sentences', '');
