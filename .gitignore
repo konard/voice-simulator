@@ -145,3 +145,5 @@ experiments/out/
 
 # Head model exports (scripts/export-head-model.mjs)
 /models/
+__pycache__/
+*.pyc
