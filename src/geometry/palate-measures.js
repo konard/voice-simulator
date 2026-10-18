@@ -9,9 +9,9 @@
  * - nasal spine behind the second molars, along the face;
  * - vault height: the oral palate surface above the occlusal point of the
  *   first and second molars;
- * - velar length: curvilinear, along the middle of the velum from the hard
- *   palate to the tip of the uvula, and velar thickness, the greatest
- *   across it (Perry et al. 2014, on MRI).
+ * - velum length: curvilinear, along the middle of the velum from the hard
+ *   palate to the tip of the uvula, and velum thickness, the greatest
+ *   across it (Perry et al. 2016, on MRI).
  */
 
 import {
@@ -99,8 +99,8 @@ export function palateMeasures(head, { lod = ANATOMY_LODS.length - 1 } = {}) {
       upperPair(landmarks, SECOND_MOLAR)[2] - staphylion[2],
     vaultHeightFirstMolars: vaultHeight(FIRST_MOLAR),
     vaultHeightSecondMolars: vaultHeight(SECOND_MOLAR),
-    velarLength: curveLength(velum.map((row) => midpoint(row.oral, row.nasal))),
-    velarThickness: Math.max(
+    velumLength: curveLength(velum.map((row) => midpoint(row.oral, row.nasal))),
+    velumThickness: Math.max(
       ...velum.map((row) => distance(row.oral, row.nasal))
     ),
   };

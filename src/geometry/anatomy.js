@@ -94,7 +94,7 @@ const PNS_BEHIND_MOLARS = 1;
 const VELAR_KNEE = 1;
 /**
  * Velar length (hard palate to the tip of the uvula, along its middle) and
- * greatest thickness of adults on MRI (Perry et al. 2014: 35.7 and
+ * greatest thickness of adults on MRI (Perry et al. 2016: 35.7 and
  * 10.7 mm), scaled by the tract length from this reference (cm).
  */
 const VELUM_LENGTH = 3.57;

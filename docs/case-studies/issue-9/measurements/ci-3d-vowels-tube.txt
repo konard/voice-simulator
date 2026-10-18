@@ -1,0 +1,36 @@
+/i/
+   tube-table bare : tube 365/2488 fdtd 305/2560
+   tube-table shape: tube 365/2488 fdtd 300/2750
+   3d-table bare : tube 444/2857 fdtd 320/3135
+   3d-table shape: tube 444/2857 fdtd 365/3075
+/e/
+   tube-table bare : tube 520/2343 fdtd 420/2280
+   tube-table shape: tube 520/2343 fdtd 440/2385
+   3d-table bare : tube 601/2701 fdtd 415/2585
+   3d-table shape: tube 601/2701 fdtd 510/2785
+/a/
+   tube-table bare : tube 769/1918 fdtd 565/2255
+   tube-table shape: tube 769/1918 fdtd 610/1515
+   3d-table bare : tube 899/2214 fdtd 575/2240
+   3d-table shape: tube 899/2214 fdtd 715/1755
+/ɑ/
+   tube-table bare : tube 904/1301 fdtd 640/1235
+   tube-table shape: tube 904/1301 fdtd 995/995
+   3d-table bare : tube 1066/1524 fdtd 1120/1120
+   3d-table shape: tube 1066/1524 fdtd 1205/1205
+/o/
+   tube-table bare : tube 550/920 fdtd 500/1150
+   tube-table shape: tube 550/920 fdtd 440/770
+   3d-table bare : tube 640/1047 fdtd 505/1090
+   3d-table shape: tube 640/1047 fdtd 510/870
+/u/
+   tube-table bare : tube 406/949 fdtd 385/1275
+   tube-table shape: tube 406/949 fdtd 335/820
+   3d-table bare : tube 485/1090 fdtd 395/1205
+   3d-table shape: tube 485/1090 fdtd 405/945
+/ə/
+   tube-table bare : tube 722/1619 fdtd 605/1405
+   tube-table shape: tube 722/1619 fdtd 570/1290
+   3d-table bare : tube 855/1959 fdtd 595/2145
+   3d-table shape: tube 855/1959 fdtd 685/1590
+model length 11.50 cells 2595

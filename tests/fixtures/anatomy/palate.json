@@ -1,71 +1,44 @@
 {
-  "description": "Hard palate and velum norms (mm) from published measurements, held against the procedural palate and velum by tests/palate.test.js through src/geometry/palate-measures.js.",
-  "sources": {
-    "tomaszewska2014": {
-      "citation": "Tomaszewska IM, Tomaszewski KA, Kmiotek EK, Pena IZ, Urbanik A, Nowakowski M, Walocha JA (2014) Anatomical landmarks for the localization of the greater palatine foramen - a study of 1200 head CTs, 150 dry skulls, systematic review of literature and meta-analysis. Journal of Anatomy 225(4), 419-435. doi:10.1111/joa.12221",
-      "source": "https://pmc.ncbi.nlm.nih.gov/articles/PMC4174025/",
-      "material": "150 dry adult skulls and 1200 adult head CT scans, pooled (Table 1, palatal vault length)",
-      "definition": "orale-staphylion: midline length of the hard palate, from the point behind the upper central incisors to the posterior nasal spine",
-      "measures": {
-        "oraleStaphylion": {
-          "male": {
-            "mean": 49.1,
-            "sd": 4.2
-          },
-          "female": {
-            "mean": 45.0,
-            "sd": 3.9
-          }
-        }
+  "description": "Hard palate and velum norms (mm) from the anatomical literature, and the same measures taken on the Z-Anatomy skull by experiments/issue-9-palate-za.mjs (numbers only; the meshes are CC BY-SA 4.0 and stay out of the repository).",
+  "norms": {
+    "oraleStaphylion": {
+      "definition": "Palatal (vault) length: orale, the lingual alveolar margin behind the central incisors, to staphylion, the posterior nasal spine, straight.",
+      "citation": "Tomaszewska IM, Tomaszewski KA, Kmiotek EK, et al. (2014) Anatomical landmarks for the localization of the greater palatine foramen - a study of 1200 head CTs, 150 dry skulls, systematic review of literature and meta-analysis. Journal of Anatomy 225(4), 419-435. doi:10.1111/joa.12221 (PMC4174025), Table 1: 655 men and 695 women over 21 years, CT and dry skulls.",
+      "male": { "mean": 49.1, "sd": 4.2 },
+      "female": { "mean": 45, "sd": 3.9 }
+    },
+    "velumLength": {
+      "definition": "Velar length on midsagittal MRI: curvilinear, from the posterior border of the hard palate through the middle of the velum to the tip of the uvula.",
+      "citation": "Perry JL, Kotlarek KJ, Sutton BP, Kuehn DP, Jaskolka MS, Fang X, Point SW, Rauccio F (2016) Variations in velopharyngeal structure in adults with repaired cleft palate. Cleft Palate-Craniofacial Journal 53(1), e1-e13. doi:10.1597/14-015 (PMC7528210), Table 2: the 30 adults without cleft (15 men, 15 women, Caucasian), sexes pooled.",
+      "adult": { "mean": 35.7, "sd": 4.5 },
+      "child": {
+        "mean": 26.7,
+        "range": [26, 27.4],
+        "citation": "Kollara L, Perry JL, Hudson S (2016) Racial variations in velopharyngeal and craniometric morphology in children: an imaging study. Journal of Speech, Language, and Hearing Research 59(1), 27-38. doi:10.1044/2015_JSLHR-S-14-0236 (PMC4867931); Table 5: 32 children aged 4-8 years (16 White, 16 Black), estimated marginal means adjusted for head circumference and pooled across race, velar length boys 26.0 and girls 27.4 mm, thickness 7.4 and 7.7 mm (White children 22-23 mm long, Black children 30-32 mm)."
       }
     },
-    "perry2014": {
-      "citation": "Perry JL, Kotlarek KJ, Sutton BP, Kuehn DP, Jaskolka MS, Fang X, Point SW, Rauccio F. Variations in velopharyngeal structure in adults with repaired cleft palate. Cleft Palate-Craniofacial Journal 53(1), e1-e13 (online 2014). doi:10.1597/14-015",
-      "source": "https://pmc.ncbi.nlm.nih.gov/articles/PMC7528210/",
-      "material": "30 adults without cleft palate, 15 men and 15 women, aged 19-66 (Table 2, noncleft group)",
-      "definition": "velar length: curvilinear, from the posterior border of the hard palate through the middle of the velum to the tip of the uvula; velar thickness: from the oral surface to the velar knee, the greatest across it; midsagittal MRI at rest",
-      "measures": {
-        "velarLength": {
-          "adult": {
-            "mean": 35.7,
-            "sd": 4.5
-          }
-        },
-        "velarThickness": {
-          "adult": {
-            "mean": 10.7,
-            "sd": 1.5
-          }
-        }
-      }
-    },
-    "kollara2016": {
-      "citation": "Kollara L, Perry JL, Hudson S (2016) Racial variations in velopharyngeal and craniometric morphology in children: an imaging study. Journal of Speech, Language, and Hearing Research 59(1), 27-38. doi:10.1044/2015_JSLHR-S-14-0236",
-      "source": "https://pmc.ncbi.nlm.nih.gov/articles/PMC4867931/",
-      "material": "32 children aged 4-8, 16 White and 16 Black; means adjusted for head circumference (Table 5). low and high are the means of boys and of girls pooled over both groups; the groups themselves span 22.4-31.0 mm in length and 6.3-8.8 mm in thickness",
-      "definition": "velar length: curvilinear, from the posterior nasal spine through the middle of the velum to the tip of the uvula; velar thickness: from the velar knee to the velar dimple",
-      "measures": {
-        "velarLength": {
-          "child": {
-            "low": 26.0,
-            "high": 27.4
-          }
-        },
-        "velarThickness": {
-          "child": {
-            "low": 7.4,
-            "high": 7.7
-          }
-        }
-      }
-    },
-    "z-anatomy": {
-      "name": "Z-Anatomy (CC BY-SA 4.0), maxilla and upper teeth meshes, measured by experiments/issue-9-palate-za.mjs; only these numbers are kept",
-      "definition": "vault height: the oral palate surface on the midline above the midpoint of the occlusal cusps of the first and second upper molars",
-      "measures": {
-        "vaultHeightFirstMolars": 17.0,
-        "vaultHeightSecondMolars": 13.7
+    "velumThickness": {
+      "definition": "Velar thickness on midsagittal MRI, at the velar knee, where the velum is thickest.",
+      "citation": "Perry et al. (2016), as velumLength.",
+      "adult": { "mean": 10.7, "sd": 1.5 },
+      "child": {
+        "mean": 7.55,
+        "range": [7.4, 7.7],
+        "citation": "Kollara et al. (2016), as velumLength."
       }
     }
+  },
+  "zAnatomy": {
+    "source": "Z-Anatomy, Models-of-human-anatomy (https://github.com/Z-Anatomy/Models-of-human-anatomy), CC BY-SA 4.0: maxillae, palatine bones, upper teeth, soft palate and uvula of one specimen, cut at x = +-1.2 mm (the palatine bones stop 0.8 mm short of the midline).",
+    "bone": true,
+    "oraleStaphylion": 39.8,
+    "nasalSpineBehindSecondMolars": 9,
+    "vaultHeightAboveFirstMolars": 17,
+    "vaultHeightAboveSecondMolars": 13.7,
+    "palateThicknessAtFirstMolars": 3.8,
+    "velumChord": 27.6,
+    "velumThickness": 8.3,
+    "uvulaLength": 9.3,
+    "note": "Bone surfaces: the oral mucosa adds about 3 mm under the vault, so the soft-tissue vault is about that much lower. The orale is estimated at the lingual maximum of the incisors."
   }
 }

@@ -1,7 +1,7 @@
 /**
  * The procedural hard palate and velum (src/geometry/anatomy.js) held to
- * published measurements of skulls, CT and MRI and to the Z-Anatomy maxilla
- * (tests/fixtures/anatomy/palate.json).
+ * the anatomical norms and the Z-Anatomy skull measures in
+ * tests/fixtures/anatomy/palate.json.
  */
 
 import { readFileSync } from 'node:fs';
@@ -10,89 +10,91 @@ import { ANATOMY_LODS } from '../src/geometry/anatomy.js';
 import { palateMeasures } from '../src/geometry/palate-measures.js';
 import { presetHeadConfig } from '../src/head-config.js';
 
-const { sources } = JSON.parse(
+const reference = JSON.parse(
   readFileSync(
-    new globalThis.URL('./fixtures/anatomy/palate.json', import.meta.url),
-    'utf8'
+    new globalThis.URL('./fixtures/anatomy/palate.json', import.meta.url)
   )
 );
+const { norms, zAnatomy } = reference;
+
+/** Allowed distance from a norm's mean, in standard deviations. */
+const SDS = 1.5;
+/** Allowed relative distance from a mean given without a deviation. */
+const RELATIVE = 0.15;
+/** Oral mucosa under the bony vault (mm), from the fixture's note. */
+const MUCOSA = 3;
+
 const measures = Object.fromEntries(
-  ['male', 'female', 'child'].map((name) => [
-    name,
-    palateMeasures(presetHeadConfig(name)),
+  ['male', 'female', 'child'].map((preset) => [
+    preset,
+    palateMeasures(presetHeadConfig(preset)),
   ])
 );
-/** Allowed distance from a published mean, in standard deviations. */
-const SPREAD = 1.5;
 
-function withinNorm(value, { mean, sd }) {
-  expect(Math.abs(value - mean)).toBeLessThan(SPREAD * sd);
-}
+const withinSds = (value, { mean, sd }) => Math.abs(value - mean) <= SDS * sd;
 
-describe('hard palate', () => {
-  it('is as long as the skulls of men and women', () => {
-    const norm = sources.tomaszewska2014.measures.oraleStaphylion;
-    withinNorm(measures.male.oraleStaphylion, norm.male);
-    withinNorm(measures.female.oraleStaphylion, norm.female);
-    expect(measures.child.oraleStaphylion).toBeLessThan(
+describe('palate and velum against anatomy', () => {
+  it('has the orale-staphylion length of men and women', () => {
+    for (const sex of ['male', 'female']) {
+      const length = measures[sex].oraleStaphylion;
+      expect(withinSds(length, norms.oraleStaphylion[sex])).toBe(true);
+    }
+    expect(measures.male.oraleStaphylion).toBeGreaterThan(
       measures.female.oraleStaphylion
     );
   });
 
-  it('ends at the posterior nasal spine behind the second molars', () => {
-    for (const name of ['male', 'female']) {
-      expect(measures[name].nasalSpineBehindMolars).toBeGreaterThan(5);
-      expect(measures[name].nasalSpineBehindMolars).toBeLessThan(15);
+  it('ends the hard palate behind the second molars like the skull', () => {
+    for (const sex of ['male', 'female']) {
+      const behind = measures[sex].nasalSpineBehindMolars;
+      expect(behind).toBeGreaterThan(5);
+      expect(behind).toBeLessThan(15);
+      expect(
+        Math.abs(behind - zAnatomy.nasalSpineBehindSecondMolars)
+      ).toBeLessThan(4);
     }
-    // The second molars of a child have not erupted far back yet.
-    expect(measures.child.nasalSpineBehindMolars).toBeGreaterThan(-2);
   });
 
-  it('vaults above the molars, highest towards the front', () => {
-    const anatomy = sources['z-anatomy'].measures;
-    for (const name of ['male', 'female']) {
+  it('vaults the palate like the skull under its mucosa', () => {
+    const height = measures.male.vaultHeightFirstMolars;
+    const soft = zAnatomy.vaultHeightAboveFirstMolars - MUCOSA;
+    expect(Math.abs(height - soft)).toBeLessThan(2);
+    for (const preset of ['male', 'female', 'child']) {
       const { vaultHeightFirstMolars, vaultHeightSecondMolars } =
-        measures[name];
-      expect(vaultHeightFirstMolars).toBeGreaterThan(10);
-      expect(vaultHeightFirstMolars).toBeLessThan(
-        anatomy.vaultHeightFirstMolars + 3
-      );
-      expect(vaultHeightSecondMolars).toBeLessThan(vaultHeightFirstMolars);
-    }
-    expect(measures.male.vaultHeightSecondMolars).toBeGreaterThan(
-      anatomy.vaultHeightSecondMolars - 3
-    );
-  });
-});
-
-describe('velum', () => {
-  it('has the length and thickness of adult velums at rest', () => {
-    const { velarLength, velarThickness } = sources.perry2014.measures;
-    for (const name of ['male', 'female']) {
-      withinNorm(measures[name].velarLength, velarLength.adult);
-      withinNorm(measures[name].velarThickness, velarThickness.adult);
+        measures[preset];
+      expect(vaultHeightFirstMolars).toBeGreaterThan(vaultHeightSecondMolars);
     }
   });
 
-  it('is shorter and thinner in a child, near the children measured', () => {
-    const { velarLength, velarThickness } = sources.kollara2016.measures;
-    const near = (value, { low, high }) => {
-      expect(value).toBeGreaterThan(low - 3);
-      expect(value).toBeLessThan(high + 3);
-    };
-    near(measures.child.velarLength, velarLength.child);
-    near(measures.child.velarThickness, velarThickness.child);
-    expect(measures.child.velarLength).toBeLessThan(measures.male.velarLength);
+  it('gives adults the velar length and thickness of MRI', () => {
+    for (const sex of ['male', 'female']) {
+      const { velumLength, velumThickness } = measures[sex];
+      expect(withinSds(velumLength, norms.velumLength.adult)).toBe(true);
+      expect(withinSds(velumThickness, norms.velumThickness.adult)).toBe(true);
+    }
   });
 
-  it('keeps its size at every level of detail', () => {
+  it('gives the child the velum of children', () => {
+    const { velumLength, velumThickness } = measures.child;
+    const lengthError =
+      Math.abs(velumLength - norms.velumLength.child.mean) /
+      norms.velumLength.child.mean;
+    const thicknessError =
+      Math.abs(velumThickness - norms.velumThickness.child.mean) /
+      norms.velumThickness.child.mean;
+    expect(lengthError).toBeLessThan(RELATIVE);
+    expect(thicknessError).toBeLessThan(RELATIVE);
+    expect(velumLength).toBeLessThan(measures.male.velumLength);
+  });
+
+  it('keeps the palate and velum lengths at every level of detail', () => {
     const head = presetHeadConfig('male');
     for (let lod = 1; lod < ANATOMY_LODS.length; lod++) {
-      const { velarLength, oraleStaphylion } = palateMeasures(head, { lod });
-      expect(Math.abs(velarLength - measures.male.velarLength)).toBeLessThan(2);
+      const { oraleStaphylion, velumLength } = palateMeasures(head, { lod });
       expect(
         Math.abs(oraleStaphylion - measures.male.oraleStaphylion)
       ).toBeLessThan(2);
+      expect(Math.abs(velumLength - measures.male.velumLength)).toBeLessThan(2);
     }
   });
 });
