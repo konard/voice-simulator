@@ -7,6 +7,7 @@
 import { noseShape, tractShape } from '../articulation/tract-shape.js';
 import { normalizeHeadConfig } from '../head-config.js';
 import { anatomyMeshes } from './anatomy.js';
+import { meshesToGlb } from './gltf.js';
 import { nasalCenterline, tractCenterline } from './centerline.js';
 import { lipsMesh } from './lips.js';
 import {
@@ -71,4 +72,14 @@ export function headModel(head, options = {}) {
  */
 export function headModelObj(head, options = {}) {
   return meshesToObj(headModel(head, options));
+}
+
+/**
+ * Binary glTF 2.0 of the whole head model in metres, with a material per
+ * part (opens in Blender with File > Import > glTF 2.0).
+ * @param {Record<string, number>} head
+ * @param {{lod?: number, state?: object}} [options]
+ */
+export function headModelGlb(head, options = {}) {
+  return meshesToGlb(headModel(head, options));
 }

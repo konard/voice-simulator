@@ -98,7 +98,13 @@ export {
   meshesToObj,
 } from './geometry/mesh.js';
 export { LIP_LODS, lipOpening, lipsMesh } from './geometry/lips.js';
-export { headModel, headModelObj } from './geometry/model.js';
+export { headModel, headModelGlb, headModelObj } from './geometry/model.js';
+export {
+  PART_MATERIALS,
+  meshesToGlb,
+  parseGlb,
+  vertexNormals,
+} from './geometry/gltf.js';
 export {
   AUDIO_TIERS,
   DEFAULT_AUDIO_TIER,

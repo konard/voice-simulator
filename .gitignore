@@ -142,3 +142,6 @@ vite.config.ts.timestamp-*
 # jscpd reports
 reports/
 experiments/out/
+
+# Head model exports (scripts/export-head-model.mjs)
+/models/

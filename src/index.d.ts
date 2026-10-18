@@ -483,6 +483,28 @@ export declare function headModelObj(
   head: HeadConfig,
   options?: { lod?: number; state?: Record<string, number> }
 ): string;
+/** Binary glTF 2.0 of the whole head model, in metres. */
+export declare function headModelGlb(
+  head: HeadConfig,
+  options?: { lod?: number; state?: Record<string, number> }
+): Uint8Array;
+/** Part colours (sRGB integers), roughness and opacity of the glTF export. */
+export declare const PART_MATERIALS: Readonly<
+  Record<string, { color: number; roughness: number; opacity?: number }>
+>;
+export declare function vertexNormals(
+  positions: ArrayLike<number>,
+  indices: ArrayLike<number>
+): Float32Array;
+/** Binary glTF 2.0; `scale` defaults to 0.01 (centimetres to metres). */
+export declare function meshesToGlb(
+  meshes: (Mesh & { name: string })[],
+  options?: { scale?: number; generator?: string }
+): Uint8Array;
+export declare function parseGlb(bytes: Uint8Array): {
+  json: Record<string, unknown>;
+  meshes: (Mesh & { name: string; normals: Float32Array })[];
+};
 
 // Levels of detail
 export declare const AUDIO_TIERS: readonly AudioTier[];

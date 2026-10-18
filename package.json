@@ -34,6 +34,7 @@
     "format:check": "prettier --check .",
     "check:duplication": "jscpd .",
     "check": "npm run lint && npm run format:check && npm run check:duplication",
+    "export:model": "node scripts/export-head-model.mjs",
     "example:web:dev": "npm --prefix examples/universal-app run dev",
     "example:web:build": "npm --prefix examples/universal-app run build",
     "example:web:preview": "npm --prefix examples/universal-app run preview",
