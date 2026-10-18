@@ -57,6 +57,7 @@ for (const symbol of VOWELS) {
     0,
     Math.round((s.velumIndex * sections) / s.areas.length)
   );
+  wg.setLength(s.length);
   const wgRate = (sections * SPEED_OF_SOUND) / s.length;
   const wgSpec = spectrum(respond(wg, wgRate), wgRate);
   console.log(

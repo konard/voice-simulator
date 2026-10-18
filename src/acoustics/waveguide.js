@@ -7,6 +7,10 @@
  * velum is a three-port junction. The glottis injects volume velocity,
  * and the output is the volume velocity leaving lips and nostrils, which
  * (with a flow-derivative source) is proportional to the radiated sound.
+ * Lips and nostrils reflect according to their opening area (see
+ * radiation.js), and the losses are given per reference section of
+ * length / LOSS_REFERENCE_SECTIONS, so they do not depend on the number
+ * of sections.
  *
  * The piriform fossae, two blind pouches either side of the larynx tube,
  * hang off the lower pharynx as one closed side branch about 2 cm long.
@@ -14,10 +18,13 @@
  * every vowel (Dang & Honda 1997; Takemoto et al. 2010).
  */
 
+import { Radiation } from './radiation.js';
+import { SPEED_OF_SOUND } from './transfer.js';
+
 const MIN_AREA = 1e-4;
 const GLOTTAL_REFLECTION = 0.75;
-const LIP_REFLECTION = -0.85;
-const NOSTRIL_REFLECTION = -0.85;
+/** Sections over which lossFactor gives the attenuation of one section. */
+export const LOSS_REFERENCE_SECTIONS = 44;
 /** Piriform fossae: depth (cm), combined opening (cm²), height (cm). */
 export const PIRIFORM_LENGTH = 2;
 export const PIRIFORM_AREA = 0.5;
@@ -25,13 +32,17 @@ export const PIRIFORM_HEIGHT = 2.4;
 export const REST_LENGTH = 16.5;
 
 /**
- * Per-step attenuation of a section: boundary-layer losses grow with
- * perimeter / area, and the flow resistance of narrow constrictions
- * (Bernoulli/kinetic losses) dominates below a few tenths of a cm².
+ * Attenuation of a reference section (length / LOSS_REFERENCE_SECTIONS):
+ * boundary-layer losses grow with perimeter / area, and the flow
+ * resistance of narrow constrictions (Bernoulli/kinetic losses) dominates
+ * below a few tenths of a cm². The kinetic term matches the resistance
+ * rho U / A² of a steady flow U of about 150 cm³/s: a 1.5 cm long 0.15 cm²
+ * constriction (/u/) loses U / (2 A c), about 1.5 % of the wave amplitude,
+ * so the low formants of rounded and close vowels stay sharp.
  */
 export function lossFactor(area, wall = 1) {
   const boundary = 0.0004 / Math.sqrt(Math.max(area, 0.05));
-  const constriction = Math.min(0.3, 0.0004 / Math.max(area, 1e-3) ** 2);
+  const constriction = Math.min(0.3, 0.0001 / Math.max(area, 1e-3) ** 2);
   return 1 - 0.0007 * wall - boundary * wall - constriction;
 }
 
@@ -47,27 +58,46 @@ export class Waveguide {
     this.wallLoss = options.head?.wallLoss ?? 1;
     this.n = n;
     this.noseN = nose;
+    /** Exponent that turns lossFactor into the attenuation of a section. */
+    this.lossExponent = LOSS_REFERENCE_SECTIONS / n;
+    this.lips = new Radiation();
+    this.nostrils = new Radiation();
     this.right = new Float64Array(n);
     this.left = new Float64Array(n);
     this.junctionRight = new Float64Array(n + 1);
     this.junctionLeft = new Float64Array(n + 1);
     this.areas = new Float64Array(n).fill(1);
     this.reflection = new Float64Array(n + 1);
-    this.damping = new Float64Array(n).fill(lossFactor(1, this.wallLoss));
+    this.damping = new Float64Array(n).fill(this.#loss(1));
     this.noseRight = new Float64Array(nose);
     this.noseLeft = new Float64Array(nose);
     this.noseJunctionRight = new Float64Array(nose + 1);
     this.noseJunctionLeft = new Float64Array(nose + 1);
     this.noseAreas = new Float64Array(nose).fill(1);
     this.noseReflection = new Float64Array(nose + 1);
-    this.noseDamping = new Float64Array(nose).fill(
-      lossFactor(1, this.wallLoss)
-    );
+    this.noseDamping = new Float64Array(nose).fill(this.#loss(1));
     this.velumArea = 0;
     this.velumIndex = Math.round(n * 0.45);
     this.lipOutput = 0;
     this.noseOutput = 0;
     this.#allocatePiriform(options);
+    this.setLength(options.head?.vocalTractLength ?? REST_LENGTH);
+  }
+
+  #loss(area) {
+    return Math.max(0, lossFactor(area, this.wallLoss)) ** this.lossExponent;
+  }
+
+  /**
+   * Tract length (cm), which sets the step rate n c / length and with it
+   * the radiation filters of lips and nostrils.
+   * @param {number} length
+   */
+  setLength(length) {
+    this.length = length;
+    this.rate = (this.n * SPEED_OF_SOUND) / length;
+    this.lips.configure(this.areas[this.n - 1], this.rate);
+    this.nostrils.configure(this.noseAreas[this.noseN - 1], this.rate);
   }
 
   #allocatePiriform(options) {
@@ -81,7 +111,7 @@ export class Waveguide {
       area: PIRIFORM_AREA * (options.head?.pharynxWidth ?? 1),
       right: new Float64Array(count),
       left: new Float64Array(count),
-      damping: lossFactor(PIRIFORM_AREA / 2, this.wallLoss),
+      damping: this.#loss(PIRIFORM_AREA / 2),
       entering: 0,
     };
   }
@@ -98,13 +128,14 @@ export class Waveguide {
       const fraction = position - lower;
       const area = areas[lower] * (1 - fraction) + areas[upper] * fraction;
       this.noseAreas[index] = Math.max(MIN_AREA, area);
-      this.noseDamping[index] = lossFactor(area, this.wallLoss);
+      this.noseDamping[index] = this.#loss(area);
     }
     for (let index = 1; index < this.noseN; index++) {
       const a = this.noseAreas[index - 1];
       const b = this.noseAreas[index];
       this.noseReflection[index] = (a - b) / (a + b);
     }
+    this.nostrils.configure(this.noseAreas[this.noseN - 1], this.rate);
   }
 
   /**
@@ -117,7 +148,7 @@ export class Waveguide {
     for (let index = 0; index < this.n; index++) {
       const area = Math.max(MIN_AREA, areas[index]);
       this.areas[index] = area;
-      this.damping[index] = lossFactor(area, this.wallLoss);
+      this.damping[index] = this.#loss(area);
     }
     for (let index = 1; index < this.n; index++) {
       const a = this.areas[index - 1];
@@ -126,6 +157,7 @@ export class Waveguide {
     }
     this.velumArea = Math.max(0, velumArea);
     this.velumIndex = Math.min(this.n - 2, Math.max(1, velumIndex));
+    this.lips.configure(this.areas[this.n - 1], this.rate);
   }
 
   #scatterOral() {
@@ -205,9 +237,9 @@ export class Waveguide {
       this.noseJunctionLeft[index] = incomingLeft + w;
     }
     const last = this.noseN - 1;
-    this.noseJunctionLeft[this.noseN] = noseRight[last] * NOSTRIL_REFLECTION;
-    this.noseOutput =
-      noseRight[last] * (1 - NOSTRIL_REFLECTION) * this.noseAreas[last];
+    const reflected = this.nostrils.process(noseRight[last]);
+    this.noseJunctionLeft[this.noseN] = reflected;
+    this.noseOutput = (noseRight[last] - reflected) * this.noseAreas[last];
   }
 
   #propagate() {
@@ -234,8 +266,9 @@ export class Waveguide {
     this.junctionRight[0] =
       this.left[0] * GLOTTAL_REFLECTION + glottalFlow / this.areas[0];
     const last = this.n - 1;
-    this.junctionLeft[this.n] = this.right[last] * LIP_REFLECTION;
-    this.lipOutput = this.right[last] * (1 - LIP_REFLECTION) * this.areas[last];
+    const reflected = this.lips.process(this.right[last]);
+    this.junctionLeft[this.n] = reflected;
+    this.lipOutput = (this.right[last] - reflected) * this.areas[last];
     this.#scatterOral();
     this.#scatterVelum();
     this.#scatterPiriform();
@@ -283,5 +316,7 @@ export class Waveguide {
       array.fill(0);
     }
     this.piriform.entering = 0;
+    this.lips.reset();
+    this.nostrils.reset();
   }
 }

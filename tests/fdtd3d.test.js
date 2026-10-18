@@ -49,7 +49,7 @@ function responsePeaks(solver, rate, seconds = 0.06) {
   for (let n = 0; n < response.length; n++) {
     response[n] = solver.step(n === 0 ? 1 : 0, 0, 0);
   }
-  return spectralPeaks(response, rate);
+  return spectralPeaks(response, rate, { prominence: 0.5 });
 }
 
 /** Spectral peaks (Hz) of the 3D impulse response for a static vowel. */

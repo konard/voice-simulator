@@ -202,6 +202,7 @@ export class VoiceRenderer {
       this.shape.velumIndex,
       this.shape.teeth
     );
+    this.solver.setLength?.(this.shape.length);
     this.stepDuration = this.solver.stepDuration(this.shape);
     const rate = 1 / this.stepDuration;
     this.noise.configure(rate);
@@ -217,9 +218,11 @@ export class VoiceRenderer {
     const broad = noise.fricative.process(white);
     const hiss = noise.sibilant.process(white);
     // A jet hitting the incisors adds a strong high-frequency dipole
-    // source; without that obstacle only the broad wall source remains.
+    // source; without that obstacle only the broad wall source remains,
+    // so sibilants come out as the most intense fricatives (Jongman,
+    // Wayland and Wong 2000), here about 8–10 dB below the vowel.
     const colour =
-      broad * (1 - frication.obstacle) + hiss * 0.06 * frication.obstacle;
+      broad * 0.5 * (1 - frication.obstacle) + hiss * 0.17 * frication.obstacle;
     const voicing = Math.min(1, this.shape.glottis.voicing);
     const flow =
       (1 - this.shape.glottis.closure) *
