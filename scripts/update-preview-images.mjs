@@ -4,7 +4,12 @@
  * bundle through a Chromium controlled by `browser-commander` so the
  * README/site images always reflect the current UI. Every tile opens the app
  * with `?seed=preview`, so the randomly generated head is identical between
- * runs.
+ * runs, and answers the app's device benchmark with a fixed result, so the
+ * HUD load meter is identical too (issue 7: the measured load changed on
+ * every run, so every push to main reported preview drift). A committed
+ * image is kept when no pixel moved by more than PIXEL_TOLERANCE colour
+ * levels: anti-aliased corners round one level differently on different
+ * runner CPUs.
  *
  * Outputs:
  *   - docs/screenshots/example-app/example-app-{en,ru}-{light,dark}.png
@@ -21,11 +26,11 @@
  * PNG signatures, and prints the resolved <html data-theme> and <html lang>
  * so a regression is diagnosable from CI logs alone.
  */
-/* global document, window, URL */
+/* global document, window, URL, Worker, MessageEvent, Image */
 
 import { spawn } from 'node:child_process';
 import { createServer } from 'node:http';
-import { copyFile, mkdir, readFile, stat } from 'node:fs/promises';
+import { mkdir, readFile, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -53,6 +58,18 @@ const LOCALES = [
   { locale: 'ru', contextLocale: 'ru-RU' },
 ];
 const THEMES = ['light', 'dark'];
+
+// What the synthesis worker would answer to `{type: 'benchmark'}` (see
+// chooseTier in src/perf/lod.js): the chosen audio tier and the measured
+// load of each tier tried. A fixed answer keeps the HUD out of the drift.
+// Largest per-channel difference that is still rounding noise, not drift.
+const PIXEL_TOLERANCE = 2;
+
+const PREVIEW_BENCHMARK = Object.freeze({
+  level: 2,
+  loads: [0.14, 0.21, 0.35, 0.9],
+  measured: [true, true, true, true],
+});
 
 const contentTypes = new Map([
   ['.css', 'text/css; charset=utf-8'],
@@ -203,6 +220,75 @@ async function reportPng(label, filePath) {
   }
 }
 
+/**
+ * Decode two PNGs in the browser and count the pixels whose colour differs
+ * by more than PIXEL_TOLERANCE in any channel.
+ * @returns {Promise<{changed: number, maxDelta: number}>}
+ */
+async function comparePngs(browser, before, after) {
+  const page = await browser.newPage();
+  try {
+    return await page.evaluate(
+      async ({ urls, tolerance }) => {
+        const decode = async (url) => {
+          const image = new Image();
+          image.src = url;
+          await image.decode();
+          const canvas = document.createElement('canvas');
+          canvas.width = image.width;
+          canvas.height = image.height;
+          const context = canvas.getContext('2d');
+          context.drawImage(image, 0, 0);
+          return context.getImageData(0, 0, image.width, image.height);
+        };
+        const [a, b] = await Promise.all(urls.map(decode));
+        if (a.width !== b.width || a.height !== b.height) {
+          return { changed: a.width * a.height, maxDelta: 255 };
+        }
+        let changed = 0;
+        let maxDelta = 0;
+        for (let index = 0; index < a.data.length; index += 4) {
+          let delta = 0;
+          for (let channel = 0; channel < 4; channel++) {
+            const value = Math.abs(
+              a.data[index + channel] - b.data[index + channel]
+            );
+            delta = Math.max(delta, value);
+          }
+          maxDelta = Math.max(maxDelta, delta);
+          if (delta > tolerance) {
+            changed++;
+          }
+        }
+        return { changed, maxDelta };
+      },
+      {
+        urls: [before, after].map(
+          (buffer) => `data:image/png;base64,${buffer.toString('base64')}`
+        ),
+        tolerance: PIXEL_TOLERANCE,
+      }
+    );
+  } finally {
+    await page.close();
+  }
+}
+
+/** Write a capture unless the committed image only differs by noise. */
+async function writeIfChanged(browser, label, outFile, buffer) {
+  const existing = await readFile(outFile).catch(() => null);
+  if (existing) {
+    const { changed, maxDelta } = await comparePngs(browser, existing, buffer);
+    if (changed === 0) {
+      log(`kept ${label}: unchanged (largest difference ${maxDelta})`);
+      return;
+    }
+    log(`${label}: ${changed} pixels changed`);
+  }
+  await writeFile(outFile, buffer);
+  await reportPng(label, outFile);
+}
+
 async function captureTile({ browser, locale, theme, contextLocale, url }) {
   log(`capturing preview tile: locale=${locale} theme=${theme}`);
 
@@ -225,6 +311,22 @@ async function captureTile({ browser, locale, theme, contextLocale, url }) {
       // localStorage can be locked down; emulateMedia covers the CSS path.
     }
   }, theme);
+
+  // The app measures this device on load and shows the result in the HUD.
+  // Answer it with PREVIEW_BENCHMARK so the HUD is the same on every run.
+  await context.addInitScript((result) => {
+    const postMessage = Worker.prototype.postMessage;
+    Worker.prototype.postMessage = function (message, ...rest) {
+      if (message?.type !== 'benchmark') {
+        return postMessage.call(this, message, ...rest);
+      }
+      setTimeout(() => {
+        const data = { type: 'benchmark', ...result };
+        this.dispatchEvent(new MessageEvent('message', { data }));
+      });
+      return undefined;
+    };
+  }, PREVIEW_BENCHMARK);
 
   const page = await context.newPage();
 
@@ -258,6 +360,14 @@ async function captureTile({ browser, locale, theme, contextLocale, url }) {
       timeout: 10000,
     });
     await page.waitForLoadState('networkidle');
+    // The HUD shows a note until the benchmark answer arrives.
+    await page.waitForFunction(
+      () =>
+        Boolean(document.querySelector('.hud')) &&
+        !document.querySelector('.hud .hud-note'),
+      null,
+      { timeout: 10000 }
+    );
 
     if (VERBOSE) {
       const probe = await commander.evaluate({
@@ -265,6 +375,7 @@ async function captureTile({ browser, locale, theme, contextLocale, url }) {
           dataTheme: document.documentElement.getAttribute('data-theme'),
           lang: document.documentElement.getAttribute('lang'),
           heading: document.querySelector('h1')?.textContent ?? '',
+          hud: document.querySelector('.hud')?.textContent ?? '',
         }),
       });
       verbose(`probe(${locale}/${theme}): ${JSON.stringify(probe)}`);
@@ -275,13 +386,12 @@ async function captureTile({ browser, locale, theme, contextLocale, url }) {
       `example-app-${locale}-${theme}.png`
     );
     await mkdir(screenshotsDir, { recursive: true });
-    await page.screenshot({
-      path: outFile,
+    const buffer = await page.screenshot({
       fullPage: false,
       animations: 'disabled',
       caret: 'hide',
     });
-    await reportPng(`tile ${locale}/${theme}`, outFile);
+    await writeIfChanged(browser, `tile ${locale}/${theme}`, outFile, buffer);
     return outFile;
   } finally {
     await commander.destroy();
@@ -330,8 +440,12 @@ async function main() {
       screenshotsDir,
       'example-app-en-light.png'
     );
-    await copyFile(fallbackSource, fallback);
-    await reportPng('fallback (en/light copy)', fallback);
+    await writeIfChanged(
+      browser,
+      'fallback (en/light copy)',
+      fallback,
+      await readFile(fallbackSource)
+    );
   } finally {
     await browser?.close();
     await server.close();
