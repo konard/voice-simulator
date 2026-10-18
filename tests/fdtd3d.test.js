@@ -7,25 +7,41 @@ import { describe, it, expect } from 'test-anywhere';
 import {
   CELL_AIR,
   CELL_NOSE,
+  CELL_SINUS,
   CELL_TRACT,
   LINK_LIPS,
   LINK_NOSTRILS,
+  LINK_SINUS,
   LINK_VELUM,
   buildVoxelModel,
 } from '../src/acoustics/voxel-model.js';
 import { Fdtd3d } from '../src/acoustics/fdtd3d.js';
+import { Waveguide } from '../src/acoustics/waveguide.js';
 import { renderPlan } from '../src/acoustics/voice.js';
 import { rms, spectralPeaks } from '../src/acoustics/analysis.js';
-import { tubeFormants } from '../src/acoustics/transfer.js';
+import { SPEED_OF_SOUND, tubeFormants } from '../src/acoustics/transfer.js';
 import { planUtterance } from '../src/articulation/plan.js';
 import { vowelTarget } from '../src/articulation/phones.js';
 import { noseShape, tractShape } from '../src/articulation/tract-shape.js';
-import { DEFAULT_HEAD } from '../src/head-config.js';
+import {
+  DEFAULT_HEAD,
+  presetHeadConfig,
+  randomHeadConfig,
+} from '../src/head-config.js';
+import { VOWEL_CORRECTIONS_3D } from '../src/articulation/vowel-calibration.js';
+import { HILLENBRAND } from '../src/articulation/vowel-norms.js';
+import { STORY_FEATURES } from '../src/articulation/vowel-space.js';
 import { getPhoneme } from '../src/ipa/inventory.js';
 
 const DX = 1;
 const RATE = 16000;
 const model = buildVoxelModel(DEFAULT_HEAD, { dx: DX });
+/** The same grid without the piriform fossae and the vallecula. */
+const bare = buildVoxelModel(DEFAULT_HEAD, {
+  dx: DX,
+  piriform: false,
+  vallecula: false,
+});
 
 function vowelShape(symbol) {
   return tractShape(
@@ -34,17 +50,51 @@ function vowelShape(symbol) {
   );
 }
 
-/** Spectral peaks (Hz) of the impulse response for a static vowel. */
-function impulsePeaks(shape) {
-  const solver = new Fdtd3d({ model });
-  solver.setNose(noseShape(DEFAULT_HEAD).areas);
-  solver.setShape(shape.areas, 0);
-  const rate = 1 / solver.stepDuration();
-  const response = new Float64Array(Math.round(rate * 0.06));
+/** Spectral peaks (Hz) of a solver's impulse response. */
+function responsePeaks(solver, rate, seconds = 0.06) {
+  const response = new Float64Array(Math.round(rate * seconds));
   for (let n = 0; n < response.length; n++) {
     response[n] = solver.step(n === 0 ? 1 : 0, 0, 0);
   }
-  return spectralPeaks(response, rate);
+  return spectralPeaks(response, rate, { prominence: 0.5 });
+}
+
+/** Spectral peaks (Hz) of the 3D impulse response for a static vowel. */
+function impulsePeaks(shape, voxels = bare) {
+  const solver = new Fdtd3d({ model: voxels });
+  solver.setNose(noseShape(DEFAULT_HEAD).areas);
+  solver.setShape(shape.areas, 0);
+  return responsePeaks(solver, 1 / solver.stepDuration(shape));
+}
+
+/** Spectral peaks (Hz) of the waveguide impulse response. */
+function waveguidePeaks(areas, length, options = {}) {
+  const solver = new Waveguide({ sections: areas.length, ...options });
+  solver.setNose(noseShape(DEFAULT_HEAD).areas);
+  solver.setShape(areas, 0);
+  return responsePeaks(solver, (areas.length * SPEED_OF_SOUND) / length);
+}
+
+/** Air volume (cm³) and open area into the tract (cm²) of each pouch. */
+function pouchAir(solver) {
+  const { cells, links, sinuses } = solver.model;
+  const air = new Map(
+    sinuses.map((sinus) => [sinus.tube, { volume: 0, opening: 0 }])
+  );
+  cells.forEach((cell, index) => {
+    if (cell.kind === CELL_SINUS) {
+      air.get(cell.tube).volume += solver.fill[index] * DX ** 3;
+    }
+  });
+  links.kind.forEach((kind, link) => {
+    if (kind === LINK_SINUS) {
+      const [a, b] = [links.a[link], links.b[link]];
+      const pouch = cells[a].kind === CELL_SINUS ? cells[a] : cells[b];
+      air.get(pouch.tube).opening +=
+        Math.min(solver.fill[a], solver.fill[b]) * DX * DX;
+    }
+  });
+  return air;
 }
 
 function relativeError(value, target) {
@@ -53,20 +103,81 @@ function relativeError(value, target) {
 
 describe('voxel model', () => {
   it('holds tract, nose and free air connected at lips, nostrils and velum', () => {
-    const counts = [0, 0, 0];
+    const counts = [0, 0, 0, 0];
     for (const cell of model.cells) {
       counts[cell.kind]++;
     }
     expect(counts[CELL_TRACT]).toBeGreaterThan(100);
     expect(counts[CELL_NOSE]).toBeGreaterThan(20);
     expect(counts[CELL_AIR]).toBeGreaterThan(50);
-    for (const kind of [LINK_LIPS, LINK_NOSTRILS, LINK_VELUM]) {
+    expect(counts[CELL_SINUS]).toBeGreaterThan(10);
+    for (const kind of [LINK_LIPS, LINK_NOSTRILS, LINK_VELUM, LINK_SINUS]) {
       expect(
         model.links.kind.filter((value) => value === kind).length
       ).toBeGreaterThan(0);
     }
     const open = Array.from(model.openFaces).reduce((a, b) => a + b, 0);
     expect(open).toBeGreaterThan(0);
+  });
+
+  it('opens the pouches into the tract only at their upper end', () => {
+    const names = model.sinuses.map((sinus) => sinus.name);
+    expect(names.join()).toBe('piriform-left,piriform-right,vallecula');
+    const opened = new Set();
+    model.links.kind.forEach((kind, link) => {
+      const a = model.cells[model.links.a[link]];
+      const b = model.cells[model.links.b[link]];
+      if (a.kind !== CELL_SINUS && b.kind !== CELL_SINUS) {
+        return;
+      }
+      if (kind === LINK_SINUS) {
+        const [pouch, tract] = a.kind === CELL_SINUS ? [a, b] : [b, a];
+        expect(tract.kind).toBe(CELL_TRACT);
+        expect(pouch.arc).toBeLessThan(1.5 * DX + 1e-9);
+        opened.add(pouch.tube);
+      } else {
+        expect(a.tube).toBe(b.tube);
+      }
+    });
+    expect(opened.size).toBe(3);
+    expect(bare.cells.some((cell) => cell.kind === CELL_SINUS)).toBe(false);
+    expect(bare.sinuses.length).toBe(0);
+  });
+
+  it('gives each pouch its anatomical volume and an open neck', () => {
+    const solver = new Fdtd3d({ model });
+    const shape = vowelShape('ə');
+    solver.setShape(shape.areas, 0, shape.velumIndex, shape.teeth);
+    const air = pouchAir(solver);
+    for (const sinus of model.sinuses) {
+      const { volume, opening } = air.get(sinus.tube);
+      expect(relativeError(volume, sinus.area * sinus.length)).toBeLessThan(
+        0.05
+      );
+      // A narrow neck would turn the pouch into a Helmholtz resonator.
+      expect(opening).toBeGreaterThan(0.4 * sinus.area);
+    }
+  });
+
+  it('keeps the nostrils from covering the mouth on a coarse grid', () => {
+    // On this head the widened end of the nose tube reached below the upper
+    // lip, sealed the incisor slot and left /i/ without its F1.
+    const head = randomHeadConfig('ci-84');
+    const voxels = buildVoxelModel(head, { dx: DX });
+    const shape = tractShape(
+      { ...vowelTarget({ phoneme: getPhoneme('i') }), rhotic: 0 },
+      head,
+      { vowelCorrections: VOWEL_CORRECTIONS_3D }
+    );
+    const solver = new Fdtd3d({ model: voxels });
+    solver.setNose(noseShape(head).areas);
+    solver.setShape(shape.areas, 0, shape.velumIndex, shape.teeth);
+    const [f1] = responsePeaks(
+      solver,
+      1 / solver.stepDuration(shape),
+      0.1
+    ).filter((value) => value > 150);
+    expect(f1).toBeLessThan(600);
   });
 
   it('gets finer with smaller cells', () => {
@@ -88,6 +199,107 @@ describe('3D FDTD resonances', () => {
       expect(relativeError(nearest, f2)).toBeLessThan(0.2);
     });
   }
+});
+
+describe('3D FDTD vowel table', () => {
+  const head = presetHeadConfig('male');
+  // The grid the table is fitted on (scripts/calibrate-vowels.mjs): a 1 cm
+  // grid cannot resolve the lip constriction of /u/.
+  const voxels = buildVoxelModel(head, { dx: 0.5 });
+
+  /** F1-F3 (Hz) of a measured vowel on the male head, incisors included. */
+  function maleFormants(name, vowelCorrections) {
+    const [height, backness, rounding] = STORY_FEATURES[name];
+    const shape = tractShape({ height, backness, rounding }, head, {
+      vowelCorrections,
+    });
+    const solver = new Fdtd3d({ model: voxels });
+    solver.setNose(noseShape(head).areas);
+    solver.setShape(
+      shape.areas,
+      shape.velumArea,
+      shape.velumIndex,
+      shape.teeth
+    );
+    return responsePeaks(solver, 1 / solver.stepDuration(shape), 0.08)
+      .filter((value) => value > 150)
+      .slice(0, 3);
+  }
+
+  it('matches the mean vowel formants of men better than the tube table', () => {
+    const error = (formants, targets) =>
+      Math.sqrt(
+        targets.reduce(
+          (sum, target, index) => sum + Math.log(formants[index] / target) ** 2,
+          0
+        ) / targets.length
+      );
+    for (const name of ['i', 'ɑ', 'u']) {
+      const targets = HILLENBRAND.male[name];
+      const calibrated = error(
+        maleFormants(name, VOWEL_CORRECTIONS_3D),
+        targets
+      );
+      expect(calibrated).toBeLessThan(0.08);
+      expect(calibrated).toBeLessThan(error(maleFormants(name), targets));
+    }
+  });
+});
+
+describe('3D FDTD geometry against the waveguide', () => {
+  it('resonates like the waveguide in a uniform tube', () => {
+    const areas = new Array(44).fill(3);
+    const solver = new Fdtd3d({ model: bare });
+    solver.setShape(areas, 0, undefined, null);
+    const peaks = responsePeaks(solver, 1 / solver.stepDuration(), 0.08);
+    const length = bare.lengths[CELL_TRACT];
+    const reference = waveguidePeaks(areas, length, { piriform: false });
+    for (const target of reference.slice(0, 3)) {
+      const nearest = peaks.reduce((best, peak) =>
+        Math.abs(peak - target) < Math.abs(best - target) ? peak : best
+      );
+      expect(relativeError(nearest, target)).toBeLessThan(0.12);
+    }
+  });
+
+  it('lowers /ɑ/ F1 with the piriform fossae as much as the waveguide', () => {
+    const shape = vowelShape('ɑ');
+    const piriform = buildVoxelModel(DEFAULT_HEAD, {
+      dx: DX,
+      vallecula: false,
+    });
+    const [withFossae, without] = [true, false].map(
+      (enabled) =>
+        waveguidePeaks(shape.areas, shape.length, { piriform: enabled })[0]
+    );
+    // F1 is the 3D peak nearest the waveguide's: the nostrils pick up a
+    // little of the radiated sound, which leaves sub-dB ripples below F1.
+    const nearest = (peaks, target) =>
+      peaks.reduce((best, peak) =>
+        Math.abs(peak - target) < Math.abs(best - target) ? peak : best
+      );
+    const shift3d =
+      nearest(impulsePeaks(shape, piriform), withFossae) /
+      nearest(impulsePeaks(shape), without);
+    const shift1d = withFossae / without;
+    expect(shift1d).toBeLessThan(0.93);
+    expect(shift3d).toBeLessThan(0.93);
+    // The 3D fossae open along the bent MRI pharynx a little nearer the
+    // glottis than the waveguide's branch and lower F1 a few per cent more.
+    expect(Math.abs(shift3d - shift1d)).toBeLessThan(0.06);
+  });
+
+  it('runs slower for a longer tract so the formants follow its length', () => {
+    const solver = new Fdtd3d({ model: bare });
+    const rest = bare.lengths[CELL_TRACT];
+    expect(solver.stepDuration({})).toBe(solver.stepDuration());
+    expect(
+      relativeError(
+        solver.stepDuration({ length: rest * 1.1 }),
+        solver.stepDuration() * 1.1
+      )
+    ).toBeLessThan(1e-12);
+  });
 });
 
 describe('3D FDTD rendering', () => {

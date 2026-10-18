@@ -1,0 +1,5 @@
+models/head-male-lod0.glb errors 0 warnings 0 infos 0
+models/head-male-lod1.glb errors 0 warnings 0 infos 0
+models/head-male-lod2.glb errors 0 warnings 0 infos 0
+models/head-male-lod3.glb errors 0 warnings 0 infos 0
+head-male-lod3-decimated-0.25.glb (re-exported by Blender) errors 0 warnings 0 infos 0

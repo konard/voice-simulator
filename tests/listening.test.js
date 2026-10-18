@@ -125,12 +125,14 @@ describe('microphone settings', () => {
   });
 
   it('follows 1/r in the 3D FDTD free field', () => {
+    // The solver's default grid: at 1 cm the lip slit is a cell or two
+    // high and the near level depends on where the grid falls.
     const level = (distance) =>
       rms(
         renderPlan(plan, {
           sampleRate: RATE,
           solver: 'fdtd3d',
-          dx: 1,
+          dx: 0.8,
           microphone: { distance },
         }).subarray(0, vowelSamples)
       );
@@ -143,6 +145,10 @@ describe('microphone settings', () => {
     expect(radiationRadius({ distance: 6 }, 1)).toBe(8);
     expect(radiationRadius({ distance: 300 }, 1)).toBe(MAX_RADIATION_RADIUS);
     expect(voxelModelOptions({})).toEqual({ dx: 0.8 });
+    expect(voxelModelOptions({ piriform: true, vallecula: false })).toEqual({
+      dx: 0.8,
+      vallecula: false,
+    });
   });
 });
 
@@ -222,8 +228,13 @@ describe('enclosure', () => {
     expect(soft.every(Number.isFinite)).toBe(true);
     expect(hard.every(Number.isFinite)).toBe(true);
     expect(hard.length > vowelSamples).toBe(true);
+    // The tail just after the vowel against the vowel itself: by the end of
+    // the closing pause both renders have decayed to rounding noise.
+    const vowel = plan.segments.find((segment) => segment.kind === 'vowel');
+    const end = Math.round(vowel.end * RATE);
     const late = (samples) =>
-      rms(samples.subarray(vowelSamples, vowelSamples + 400));
+      rms(samples.subarray(end + 400, end + 1200)) /
+      rms(samples.subarray(Math.round(vowel.start * RATE), end));
     expect(late(hard) > late(soft)).toBe(true);
   });
 

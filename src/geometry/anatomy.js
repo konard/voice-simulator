@@ -6,17 +6,27 @@
  * dorsum is the lower wall of the tract tube and the velum opens with the
  * velopharyngeal port.
  *
- * Sizes follow dental and anatomical references: crown widths and heights
- * of the permanent teeth (Wheeler's Dental Anatomy), a parabolic dental
- * arch about 5 cm wide between the molars, a palatal vault 1-1.5 cm above
- * the occlusal plane and a soft palate about 3.5 cm long.
+ * Sizes follow dental and anatomical references: crown widths and
+ * thicknesses of the permanent teeth measured on the Open-Full-Jaw scans,
+ * crown heights from Wheeler's Dental Anatomy, a
+ * beta-function dental arch fitted to the same scans, a palatal vault
+ * 1-1.5 cm above the occlusal plane and a soft palate about 3.5 cm long.
+ * The palate and velum follow the upper wall of the rest tract, whose bend
+ * comes from the MRI tracts of the Dresden Vocal Tract Dataset.
  */
 
 import { REST_GAP, incisorDepth } from '../articulation/teeth.js';
 import { tractShape } from '../articulation/tract-shape.js';
 import { normalizeHeadConfig } from '../head-config.js';
-import { arcPoint, headLandmarks, tractCenterline } from './centerline.js';
-import { MESH_LODS, sectionAxes, tubeMesh } from './mesh.js';
+import {
+  arcPoint,
+  headLandmarks,
+  incisorFrame,
+  tractCenterline,
+  upperNormal,
+} from './centerline.js';
+import { loftMesh } from './loft.js';
+import { tractAxes } from './mesh.js';
 
 /**
  * Level-of-detail resolutions of the articulator meshes, matched to
@@ -33,33 +43,76 @@ export const ANATOMY_LODS = Object.freeze([
 /**
  * Permanent teeth from the midline back (central incisor to second
  * molar, the third molar is left out): crown width along the arch, crown
- * height, labio-lingual thickness (cm) and how thin the edge is (0 = knife
- * edge, 1 = flat occlusal surface).
+ * height, labio-lingual thickness (cm), how thin the edge is (0 = knife
+ * edge, 1 = flat occlusal surface) and how far the crown leans out of the
+ * mouth towards the edge (degrees from vertical). The lean tilts the
+ * labial face; the crown tapering to its edge tilts its middle further.
+ * The leans of the central incisors give the labial faces of the Human
+ * Reference Atlas mouths, 16 (upper) and 22 (lower) degrees on average
+ * (labialLean in reference-anatomy.js), whose long axes, roots included,
+ * lean 23 and 31-33 degrees: about the 110 degrees to the palatal plane
+ * of upper incisors on cephalograms.
  */
 const UPPER_TEETH = [
-  [0.85, 1.05, 0.7, 0.25],
-  [0.65, 0.9, 0.6, 0.3],
-  [0.75, 1.0, 0.8, 0.45],
-  [0.7, 0.8, 0.9, 0.85],
-  [0.65, 0.75, 0.9, 0.85],
-  [1.0, 0.7, 1.1, 0.95],
-  [0.9, 0.65, 1.1, 0.95],
+  [0.89, 1.05, 0.74, 0.25, 14],
+  [0.69, 0.9, 0.67, 0.3, 13],
+  [0.76, 1.0, 0.82, 0.45, 10],
+  [0.68, 0.8, 0.95, 0.85, 3],
+  [0.68, 0.75, 0.95, 0.85, 0],
+  [1.05, 0.7, 1.14, 0.95, 0],
+  [0.95, 0.65, 1.14, 0.95, 0],
 ];
 const LOWER_TEETH = [
-  [0.5, 0.9, 0.6, 0.25],
-  [0.55, 0.95, 0.6, 0.3],
-  [0.7, 1.05, 0.75, 0.45],
-  [0.7, 0.8, 0.8, 0.85],
-  [0.7, 0.75, 0.85, 0.85],
-  [1.1, 0.7, 1.05, 0.95],
-  [1.05, 0.65, 1.05, 0.95],
+  [0.54, 0.9, 0.58, 0.25, 12],
+  [0.59, 0.95, 0.61, 0.3, 12],
+  [0.68, 1.05, 0.74, 0.45, 14],
+  [0.69, 0.8, 0.8, 0.85, 12],
+  [0.7, 0.75, 0.86, 0.85, 6],
+  [1.08, 0.7, 1.06, 0.95, 0],
+  [1.07, 0.65, 1.05, 0.95, 0],
 ];
-/** Half width (cm) of the upper dental arch at the second molars. */
-const ARCH_HALF_WIDTH = 2.65;
+/**
+ * Beta-function arch forms (Braun et al. 1998, Am J Orthod Dentofacial
+ * Orthop 114, 1: 'Form of the human dental arch') through the middle of
+ * the crowns: half width (cm, x mouthWidth) at the back of the second
+ * molars and the power that sets how square the front is. Fitted to the
+ * intercanine and intermolar widths and arch depths of the 17 Open-Full-Jaw
+ * CBCT scans (tests/fixtures/anatomy/dentition.json), with the crown sizes
+ * above set to their means there.
+ */
+const ARCH_FORMS = {
+  upper: { halfWidth: 2.3, power: 0.3 },
+  lower: { halfWidth: 2.375, power: 0.46 },
+};
 /** Lower incisors sit this far behind the upper ones (overjet, cm). */
 const OVERJET = 0.25;
-/** Gum line above the upper incisal edges (cm). */
-const GUM_HEIGHT = 0.9;
+/**
+ * Rise of the occlusal plane towards the back (cm per cm): it is tilted
+ * about 10 degrees up from the incisors to the molars.
+ */
+const OCCLUSAL_TILT = 0.17;
+/**
+ * Posterior nasal spine behind the middle of the upper second molars (cm):
+ * 0.9 cm on the Z-Anatomy skull, which puts the orale-staphylion length
+ * of the presets near Tomaszewska et al. (2014).
+ */
+const PNS_BEHIND_MOLARS = 1;
+/** Soft palate from the nasal spine to the velopharyngeal port, at least (cm). */
+const VELAR_KNEE = 1;
+/**
+ * Velar length (hard palate to the tip of the uvula, along its middle) and
+ * greatest thickness of adults on MRI (Perry et al. 2016: 35.7 and
+ * 10.7 mm), scaled by the tract length from this reference (cm).
+ */
+const VELUM_LENGTH = 3.57;
+const VELUM_THICKNESS = 1.07;
+const REFERENCE_TRACT = 17.5;
+/** How far the sides of the palatal vault reach below the airway (cm). */
+const VAULT_DROP = 0.25;
+/** Palate edge inside the middle of the upper crowns (cm). */
+const PALATE_INSET = 0.45;
+/** Swing of the soft palate about the nasal spine when lowered (radians). */
+const VELUM_DROP = 0.45;
 /** Tongue from just above the larynx (fraction of the tract). */
 const TONGUE_ROOT = 0.22;
 /** Tongue surface just under the tract wall, so the two do not overlap (cm). */
@@ -91,23 +144,62 @@ function rotateJaw(point, pivot, angle) {
   ];
 }
 
-/** Common landmarks of the mouth for a normalised head. */
-function mouthFrame(config) {
-  const { lips, jawPivot } = headLandmarks(config);
-  const edge = lips[1] + REST_GAP / 2;
-  const front = lips[2] - incisorDepth(config);
-  return { lips, jawPivot, edge, front };
+/** Rest tract of a head: shape, centreline layout and wall-held axes. */
+function restTract(config) {
+  return cached(`rest ${JSON.stringify(config)}`, () => {
+    const shape = tractShape({}, config);
+    const { layout } = tractCenterline(config, {
+      sections: 1,
+      length: shape.length,
+    });
+    return { shape, layout, axes: tractAxes(config, shape.areas) };
+  });
 }
 
 /**
- * Parabolic arch whose half length equals the summed crown widths. Returns
- * the labial point and inward normal at a signed arc length (negative =
- * left side).
+ * Common landmarks of the mouth for a normalised head: the incisal edge
+ * and labial face of the upper incisors sit where the acoustic models put
+ * them on the rest tract (incisorFrame), so the teeth, palate and velum
+ * line the same airway the solvers use.
  */
-function archCurve(teeth, halfWidth, front) {
-  return cached(`arch ${teeth === LOWER_TEETH} ${halfWidth} ${front}`, () =>
-    solveArch(teeth, halfWidth, front)
-  );
+function mouthFrame(config) {
+  const { lips, jawPivot } = headLandmarks(config);
+  const rest = restTract(config);
+  const { edge, front, start } = incisorFrame(config, rest.layout);
+  return { lips, jawPivot, edge, front, start, ...rest };
+}
+
+/**
+ * Point on the rest tract `distance` cm from the glottis, with its upper
+ * normal, the rest semi-axes and the shift of the section centre.
+ */
+function restSection(frame, distance) {
+  const { point, tangent } = arcPoint(distance, frame.layout);
+  const position = distance / frame.layout.length;
+  const area = sampleAreas(frame.shape.areas, position);
+  const [major, minor, shift] = frame.axes(area, position);
+  return { point, normal: upperNormal(tangent), major, minor, shift };
+}
+
+/**
+ * Dental arch of a jaw through the middle of its crowns, as closed at
+ * rest: the beta curve of ARCH_FORMS, as deep as the crowns laid along it
+ * need. Returns the point and inward normal at a signed arc length
+ * (negative = left side).
+ */
+function jawArch(config, jaw) {
+  const { front } = mouthFrame(config);
+  const lower = jaw === 'lower';
+  const teeth = lower ? LOWER_TEETH : UPPER_TEETH;
+  const { halfWidth, power } = ARCH_FORMS[jaw];
+  // The labial faces of the incisors: the upper ones at the incisor frame,
+  // the lower ones OVERJET behind them.
+  const labial = front - (lower ? OVERJET : 0);
+  const width = halfWidth * config.mouthWidth;
+  return cached(`arch ${jaw} ${width} ${labial}`, () => ({
+    teeth,
+    ...solveArch(teeth, width, power, labial - teeth[0][2] / 2),
+  }));
 }
 
 /** Parts that only depend on the head and LOD; the viewer rebuilds the
@@ -126,15 +218,16 @@ function cached(key, build) {
   return value;
 }
 
-function solveArch(teeth, halfWidth, front) {
+function solveArch(teeth, halfWidth, power, front) {
   const total = teeth.reduce((sum, tooth) => sum + tooth[0], 0);
-  const steps = 64;
+  const steps = 128;
   const curve = (depth) => {
     const points = [];
     let length = 0;
     for (let step = 0; step <= steps; step++) {
       const x = (step / steps) * halfWidth;
-      const z = front - depth * (x / halfWidth) ** 2;
+      const u = x / (2 * halfWidth);
+      const z = front - depth * (1 - (4 * (0.25 - u * u)) ** power);
       if (step) {
         const [px, pz] = points.at(-1);
         length += Math.hypot(x - px, z - pz);
@@ -145,7 +238,7 @@ function solveArch(teeth, halfWidth, front) {
   };
   let low = 0;
   let high = 3 * total;
-  for (let iteration = 0; iteration < 32; iteration++) {
+  for (let iteration = 0; iteration < 40; iteration++) {
     const depth = (low + high) / 2;
     if (curve(depth).at(-1)[2] < total) {
       low = depth;
@@ -156,6 +249,16 @@ function solveArch(teeth, halfWidth, front) {
   const points = curve(low);
   return {
     total,
+    /** Half width of the arch at `z` (cm, head frame); 0 in front of it. */
+    halfWidthAt(z) {
+      const index = points.findIndex((point) => point[1] <= z);
+      if (index <= 0) {
+        return index ? halfWidth : 0;
+      }
+      const [x0, z0] = points[index - 1];
+      const [x1, z1] = points[index];
+      return lerp(x0, x1, (z0 - z) / Math.max(1e-9, z0 - z1));
+    },
     at(signed) {
       const along = Math.min(total, Math.abs(signed));
       let index = 1;
@@ -170,7 +273,9 @@ function solveArch(teeth, halfWidth, front) {
       return {
         x: side * lerp(x0, x1, t),
         z: lerp(z0, z1, t),
-        inward: [(-side * (x1 - x0)) / norm, (z1 - z0) / norm],
+        // Normal to the arch, towards the tongue: backwards at the
+        // incisors, towards the midline at the molars.
+        inward: [(side * (z1 - z0)) / norm, -(x1 - x0) / norm],
       };
     },
   };
@@ -210,56 +315,11 @@ function profilePoint(step, count) {
   return [(u / scale + 1) / 2, (v / scale + 1) / 2];
 }
 
-function loftIndices(sections, ring) {
-  const indices = [];
-  for (let section = 0; section < sections - 1; section++) {
-    for (let step = 0; step < ring; step++) {
-      const a = section * ring + step;
-      const b = section * ring + ((step + 1) % ring);
-      indices.push(a, a + ring, b, b, a + ring, b + ring);
-    }
-  }
-  const first = sections * ring;
-  const last = first + 1;
-  const end = (sections - 1) * ring;
-  for (let step = 0; step < ring; step++) {
-    const next = (step + 1) % ring;
-    indices.push(first, next, step, last, end + step, end + next);
-  }
-  return Uint32Array.from(indices);
-}
-
 /**
- * Closed mesh swept through `sections` rings of `ring` points, with a
- * centre vertex capping each end.
- * @param {(section: number, step: number) => number[]} vertex
+ * Anatomy LOD index (0..3) for a requested level.
+ * @param {number} [lod]
  */
-function loftMesh(sections, ring, vertex) {
-  const positions = new Float32Array((sections * ring + 2) * 3);
-  for (let section = 0; section < sections; section++) {
-    for (let step = 0; step < ring; step++) {
-      positions.set(vertex(section, step), (section * ring + step) * 3);
-    }
-  }
-  for (const [cap, section] of [
-    [sections * ring, 0],
-    [sections * ring + 1, sections - 1],
-  ]) {
-    for (let axis = 0; axis < 3; axis++) {
-      let sum = 0;
-      for (let step = 0; step < ring; step++) {
-        sum += positions[(section * ring + step) * 3 + axis];
-      }
-      positions[cap * 3 + axis] = sum / ring;
-    }
-  }
-  const indices = cached(`loft ${sections} ${ring}`, () =>
-    loftIndices(sections, ring)
-  );
-  return { positions, indices: indices.slice() };
-}
-
-function anatomyLod(lod) {
+export function anatomyLod(lod) {
   return clamp(Math.round(lod ?? 1), 0, ANATOMY_LODS.length - 1);
 }
 
@@ -277,6 +337,24 @@ export function jawAngle(gap, head) {
   const radius = Math.hypot(dy, dz);
   const target = clamp((edge - gap - jawPivot[1]) / radius, -1, 1);
   return Math.acos(target) - Math.atan2(dz, dy);
+}
+
+/**
+ * Pivot (cm, head frame) and angle (radians) of the jaw for an
+ * inter-incisor gap, and the motion of a point carried by the jaw, so
+ * meshes from other sources ride on it like the lower teeth.
+ * @param {number} gap
+ * @param {Record<string, number>} head
+ */
+export function jawPose(gap, head) {
+  const config = normalizeHeadConfig(head);
+  const { jawPivot } = mouthFrame(config);
+  const angle = jawAngle(gap, config);
+  return {
+    pivot: jawPivot,
+    angle,
+    move: (point) => rotateJaw(point, jawPivot, angle),
+  };
 }
 
 /**
@@ -319,10 +397,8 @@ function restArch(config, lod, lower) {
 function archMesh(config, level, lower) {
   const lod = ANATOMY_LODS[level];
   const { edge, front } = mouthFrame(config);
-  const teeth = lower ? LOWER_TEETH : UPPER_TEETH;
-  const halfWidth =
-    (ARCH_HALF_WIDTH - (lower ? OVERJET : 0)) * config.mouthWidth;
-  const arch = archCurve(teeth, halfWidth, lower ? front - OVERJET : front);
+  const arch = jawArch(config, lower ? 'lower' : 'upper');
+  const { teeth } = arch;
   const base = lower ? edge - REST_GAP : edge;
   const direction = lower ? -1 : 1;
   const sections = 2 * lod.arch + 1;
@@ -336,12 +412,16 @@ function archMesh(config, level, lower) {
   });
   return loftMesh(sections, lod.profile, (section, step) => {
     const { x, z, inward, crown } = samples[section];
-    const [, height, thickness, flat] = crown;
+    const [, height, thickness, flat, lean] = crown;
     const [across, up] = profilePoint(step, lod.profile);
-    const depth = across * thickness * lerp(flat, 1, up);
+    // From the labial face, half a crown outside the arch, inwards; the
+    // edge stays on the arch and the neck leans in towards the tongue.
+    const depth =
+      (across * lerp(flat, 1, up) - 0.5) * thickness +
+      up * height * Math.tan((lean * Math.PI) / 180);
     return [
       x + inward[0] * depth,
-      base + direction * up * height,
+      base + OCCLUSAL_TILT * (front - z) + direction * up * height,
       z + inward[1] * depth,
     ];
   });
@@ -379,7 +459,41 @@ export function lowerTeethMesh(head, options = {}) {
   return mesh;
 }
 
-function interpolate(areas, fraction) {
+/**
+ * Landmarks of the procedural teeth in the form toothLandmarks() gives for
+ * segmented ones (millimetres, head frame, jaw closed to REST_GAP): the
+ * occlusal point in the middle of each crown's edge, its width along the
+ * arch and its labio-lingual thickness, so archMeasures() treats the model
+ * and the anatomy alike.
+ * @param {Record<string, number>} head
+ */
+export function dentalLandmarks(head) {
+  const config = normalizeHeadConfig(head);
+  const { edge, front } = mouthFrame(config);
+  return ['upper', 'lower'].flatMap((jaw) => {
+    const arch = jawArch(config, jaw);
+    const base = jaw === 'lower' ? edge - REST_GAP : edge;
+    let start = 0;
+    return arch.teeth.flatMap(([width, , thickness], type) => {
+      const middle = start + width / 2;
+      start += width;
+      return [-1, 1].map((sign) => {
+        const { x, z } = arch.at(sign * middle);
+        const point = [x, base + OCCLUSAL_TILT * (front - z), z];
+        return {
+          jaw,
+          side: sign < 0 ? 'l' : 'r',
+          type,
+          occlusal: point.map((value) => value * 10),
+          width: width * 10,
+          thickness: thickness * 10,
+        };
+      });
+    });
+  });
+}
+
+function sampleAreas(areas, fraction) {
   const source = clamp(fraction) * (areas.length - 1);
   const lower = Math.floor(source);
   const upper = Math.min(areas.length - 1, lower + 1);
@@ -389,7 +503,8 @@ function interpolate(areas, fraction) {
 /**
  * Tongue body from just above the larynx to the tip behind the lower
  * incisors. Its upper surface is the lower (front, in the pharynx) wall
- * of the tract tube, so it rises and falls with the area function.
+ * of the tract tube, which moves with the area function while the palate
+ * and the back of the pharynx stay put (tractAxes).
  * @param {Record<string, number>} head
  * @param {{lod?: number, state?: object, shape?: object}} [options]
  *   `shape` is a precomputed tractShape(state, head).
@@ -400,6 +515,7 @@ export function tongueMesh(head, options = {}) {
   const shape = options.shape ?? tractShape(options.state ?? {}, config);
   const { areas, length } = shape;
   const { layout } = tractCenterline(config, { sections: 1, length });
+  const { axes } = restTract(config);
   const teethStart = shape.teeth?.start ?? length - incisorDepth(config) - 0.7;
   const tip = clamp((teethStart - 0.15) / length, TONGUE_ROOT + 0.1, 0.98);
   const size = Math.cbrt(config.tongueSize);
@@ -408,27 +524,22 @@ export function tongueMesh(head, options = {}) {
     const s = section / (lod.tongue - 1);
     const fraction = lerp(TONGUE_ROOT, tip, s);
     const { point, tangent } = arcPoint(fraction * length, layout);
-    // Same frame as the tube mesh: side = +x, normal = tangent × side.
-    const normal = [0, tangent[2], -tangent[1]];
-    const [, minor] = sectionAxes(
-      interpolate(areas, fraction),
-      fraction,
-      config
-    );
+    const [, minor, shift] = axes(sampleAreas(areas, fraction), fraction);
     const taper =
       s > 0.8 ? Math.sqrt(Math.max(0.05, 1 - ((s - 0.8) / 0.2) ** 2)) : 1;
     const width = (1.2 + 0.35 * smoothstep(0, 0.35, s)) * taper * size;
     const depth = (0.25 + 2.3 * Math.sin(Math.PI * (0.15 + 0.85 * s))) * size;
-    return { point, normal, minor, width, depth };
+    const wall = minor - shift + TONGUE_CLEARANCE;
+    return { point, normal: upperNormal(tangent), wall, width, depth };
   });
   return loftMesh(lod.tongue, ring, (section, step) => {
-    const { point, normal, minor, width, depth } = rings[section];
+    const { point, normal, wall, width, depth } = rings[section];
     const top = step <= lod.across;
     const index = top ? step : ring - 1 - step;
     const across = (2 * index) / lod.across - 1;
     const dome = 0.35 * across * across;
     const below = top ? 0 : 0.2 + depth * Math.sqrt(1 - across * across);
-    const drop = minor + TONGUE_CLEARANCE + dome + below;
+    const drop = wall + dome + below;
     return [
       across * width,
       point[1] - normal[1] * drop,
@@ -437,116 +548,187 @@ export function tongueMesh(head, options = {}) {
   });
 }
 
-/** Height of the palatal vault above the gum line, `d` cm behind the incisors. */
-function vaultHeight(d) {
-  return (
-    0.15 +
-    0.75 * smoothstep(0.3, 2.2, d) +
-    0.18 * Math.exp(-(((d - 0.45) / 0.3) ** 2))
-  );
-}
-
-/** Hard palate geometry shared by the palate and velum meshes. */
-function hardPalate(config) {
-  const { edge, front } = mouthFrame(config);
-  const halfWidth = ARCH_HALF_WIDTH * config.mouthWidth;
-  const arch = archCurve(UPPER_TEETH, halfWidth, front);
-  const back = arch.at(arch.total).z;
-  const start = front - UPPER_TEETH[0][2];
-  const gum = edge + GUM_HEIGHT;
-  const depthAt = (z) =>
-    ((front - z) / Math.max(1e-6, front - back)) ** 0.5 * halfWidth;
-  return { start, back, gum, depthAt, end: start - back };
+/** Distance along the rest tract of the velopharyngeal port (cm). */
+function portDistance(frame) {
+  const { velumIndex, areas, length } = frame.shape;
+  return ((velumIndex + 0.5) / areas.length) * length;
 }
 
 /**
- * Hard palate with the alveolar ridge: a vaulted sheet between the upper
- * teeth from behind the incisors to the posterior nasal spine.
+ * Distance along the rest tract of the posterior nasal spine (cm):
+ * PNS_BEHIND_MOLARS behind the upper second molars, but not closer to
+ * the velopharyngeal port than VELAR_KNEE.
+ */
+function palateBack(frame, config) {
+  const arch = jawArch(config, 'upper');
+  const molar = arch.at(arch.total - arch.teeth.at(-1)[0] / 2).z;
+  const target = molar - PNS_BEHIND_MOLARS;
+  let low = Math.min(frame.start, portDistance(frame) + VELAR_KNEE);
+  let high = frame.start;
+  // The upper wall runs forward (+z) from the port to the incisors.
+  for (let iteration = 0; iteration < 30; iteration++) {
+    const middle = (low + high) / 2;
+    if (restSection(frame, middle).point[2] < target) {
+      low = middle;
+    } else {
+      high = middle;
+    }
+  }
+  return low;
+}
+
+/**
+ * Closed slab lining the upper wall of the rest tract between two
+ * distances: its oral face is a vault over the airway, `width(s)` cm to
+ * each side, and it is `thickness(s)` cm thick (s = 0..1 along it).
+ * `place` may move each point (the lowered velum).
+ */
+function wallSlab(frame, from, to, sections, across, shape) {
+  const columns = 2 * across + 1;
+  const free = shape.free ?? (() => 0);
+  const sagging = shape.sag ?? free;
+  const rows = Array.from({ length: sections }, (_, row) => {
+    const s = row / (sections - 1);
+    return { s, ...restSection(frame, lerp(from, to, s)) };
+  });
+  return loftMesh(sections, 2 * columns, (row, step) => {
+    const { s, point, normal, major, minor, shift } = rows[row];
+    const oral = step < columns;
+    const column = oral ? step : 2 * columns - 1 - step;
+    const u = (2 * column) / (columns - 1) - 1;
+    // A part hanging free of the wall (the uvula) is only as wide as
+    // itself and sags off the wall by its thickness.
+    const width = Math.max(
+      (major + 0.2) * (1 - free(s)),
+      shape.width(s, point)
+    );
+    const sag = sagging(s) * shape.thickness(s);
+    // The vault, or the airway's own wall where that is higher.
+    const wall =
+      minor * Math.sqrt(Math.max(0, 1 - (u * width) ** 2 / major ** 2));
+    const vault = Math.max(
+      wall,
+      (minor + VAULT_DROP) * Math.sqrt(1 - u * u) - VAULT_DROP
+    );
+    const height = shift + vault - sag + (oral ? 0 : shape.thickness(s));
+    const vertex = [
+      u * width,
+      point[1] + normal[1] * height,
+      point[2] + normal[2] * height,
+    ];
+    return shape.place ? shape.place(vertex) : vertex;
+  });
+}
+
+/**
+ * Hard palate with the alveolar ridge: a vaulted bony slab on the upper
+ * wall of the rest tract from the upper incisors back to the posterior
+ * nasal spine, as wide as the space between the upper teeth.
  * @param {Record<string, number>} head
  * @param {{lod?: number}} [options]
  */
 export function palateMesh(head, options = {}) {
   const config = normalizeHeadConfig(head);
   const lod = ANATOMY_LODS[anatomyLod(options.lod)];
-  const palate = hardPalate(config);
-  const rows = lod.tongue;
-  const columns = 2 * lod.across + 1;
-  const positions = new Float32Array(rows * columns * 3);
-  for (let row = 0; row < rows; row++) {
-    const d = (palate.end * row) / (rows - 1);
-    const z = palate.start - d;
-    const halfWidth = Math.max(0.3, palate.depthAt(z) - 0.75);
-    for (let column = 0; column < columns; column++) {
-      const across = (2 * column) / (columns - 1) - 1;
-      const rise = vaultHeight(d) * (1 - Math.abs(across) ** 2.5) ** 0.8;
-      positions.set(
-        [across * halfWidth, palate.gum + rise, z],
-        (row * columns + column) * 3
-      );
+  const frame = mouthFrame(config);
+  const arch = jawArch(config, 'upper');
+  return wallSlab(
+    frame,
+    frame.start,
+    palateBack(frame, config),
+    lod.tongue,
+    lod.across,
+    {
+      width: (_, point) => arch.halfWidthAt(point[2]) - PALATE_INSET,
+      thickness: (s) => lerp(0.9, 0.5, smoothstep(0, 0.3, s)),
     }
-  }
-  const indices = [];
-  for (let row = 0; row < rows - 1; row++) {
-    for (let column = 0; column < columns - 1; column++) {
-      const a = row * columns + column;
-      indices.push(a, a + columns, a + 1, a + 1, a + columns, a + columns + 1);
-    }
-  }
-  return { positions, indices: Uint32Array.from(indices) };
+  );
 }
 
 /**
- * Soft palate and uvula hanging from the back of the hard palate. Raised
- * (velum 0) it closes against the back wall of the pharynx; lowered
- * (velum 1) it drops towards the tongue and opens the nasal port.
+ * Soft palate and uvula hanging from the back of the hard palate: along
+ * the upper wall of the tract to the velopharyngeal port, where it is
+ * thickest (the velar knee), then free of the wall down to the tip of
+ * the uvula, as long and thick as on MRI for the size of the head.
+ * Raised (velum 0) it closes the port; lowered (velum 1) it swings
+ * about the posterior nasal spine towards the tongue and opens it.
  * @param {Record<string, number>} head
  * @param {{lod?: number, velum?: number}} [options]
  */
 export function velumMesh(head, options = {}) {
   const config = normalizeHeadConfig(head);
   const lod = ANATOMY_LODS[anatomyLod(options.lod)];
-  const { lips } = headLandmarks(config);
-  const palate = hardPalate(config);
-  const { layout } = tractCenterline(config, { sections: 1 });
-  const start = [0, palate.gum + vaultHeight(palate.end), palate.back];
-  const raised = [0, lips[1] + 0.9, layout.origin[2] - 0.2];
-  const lowered = [0, lips[1] + 0.2, palate.back - 1.5];
-  const open = clamp(options.velum ?? 0);
-  const end = raised.map((value, axis) => lerp(value, lowered[axis], open));
-  const control = [0, start[1] - 0.2, lerp(start[2], end[2], 0.5) + 0.3];
-  const count = lod.velum;
-  const points = new Float64Array(count * 3);
-  const tangents = new Float64Array(count * 3);
-  for (let index = 0; index < count; index++) {
-    const t = index / (count - 1);
-    const u = 1 - t;
-    const derivative = [];
-    for (let axis = 0; axis < 3; axis++) {
-      points[index * 3 + axis] =
-        u * u * start[axis] + 2 * u * t * control[axis] + t * t * end[axis];
-      derivative.push(
-        2 * u * (control[axis] - start[axis]) +
-          2 * t * (end[axis] - control[axis])
-      );
-    }
-    const norm = Math.hypot(...derivative) || 1;
-    tangents.set(
-      derivative.map((value) => value / norm),
-      index * 3
-    );
-  }
-  const positionOf = Array.from({ length: count }, (_, index) => index);
-  const mesh = tubeMesh({ points, tangents, count }, positionOf, {
-    lod: Math.min(anatomyLod(options.lod), MESH_LODS.length - 1),
-    axes: (_, position) => {
-      const uvula = Math.exp(-(((position - 0.9) / 0.1) ** 2));
-      return [
-        lerp(1.3, 0.3, position ** 1.5) + 0.1 * uvula,
-        lerp(0.45, 0.25, position) + 0.1 * uvula,
-      ];
-    },
+  const frame = mouthFrame(config);
+  const { back, end, shape } = cached(`velum ${JSON.stringify(config)}`, () =>
+    velumSpan(frame, config)
+  );
+  const pivot = restSection(frame, back).point;
+  const tip = restSection(frame, portDistance(frame));
+  // Swing the knee away from the upper wall, towards the tongue.
+  const arm = [tip.point[1] - pivot[1], tip.point[2] - pivot[2]];
+  const sign = -Math.sign(-arm[1] * tip.normal[1] + arm[0] * tip.normal[2]);
+  const angle = sign * VELUM_DROP * clamp(options.velum ?? 0);
+  return wallSlab(frame, back, end, lod.velum, lod.across, {
+    ...shape,
+    place: (vertex) => rotateJaw(vertex, pivot, angle),
   });
-  return { positions: mesh.positions, indices: mesh.indices };
+}
+
+/** Width, thickness and free part of a soft palate ending at `end`. */
+function velumShape(frame, config, back, end) {
+  const size = config.vocalTractLength / REFERENCE_TRACT;
+  const knee = (back - portDistance(frame)) / (back - end);
+  const free = (s) => smoothstep(knee, (1 + knee) / 2, s);
+  return {
+    // It leaves the wall gradually, from before the knee to the uvula.
+    sag: (s) => smoothstep(knee / 2, 1, s),
+    width: (s) => lerp(1.5, 0.45, free(s)) * config.mouthWidth,
+    thickness: (s) =>
+      VELUM_THICKNESS *
+      size *
+      (0.6 +
+        0.4 * Math.sin((Math.PI / 2) * Math.min(1, s / knee)) ** 2 -
+        0.4 * free(s)),
+    free,
+  };
+}
+
+/**
+ * Where along the rest tract the soft palate ends so that its middle,
+ * which runs outside the bend of the tract and sags off the wall, is
+ * VELUM_LENGTH long for the size of the head.
+ */
+function velumSpan(frame, config) {
+  const back = palateBack(frame, config);
+  const target = (VELUM_LENGTH * config.vocalTractLength) / REFERENCE_TRACT;
+  const middleLength = (end) => {
+    const shape = velumShape(frame, config, back, end);
+    let length = 0;
+    let last = null;
+    for (let row = 0; row <= 16; row++) {
+      const s = row / 16;
+      const { point, normal, minor, shift } = restSection(
+        frame,
+        lerp(back, end, s)
+      );
+      const height = shift + minor + shape.thickness(s) * (0.5 - shape.sag(s));
+      const middle = [1, 2].map((axis) => point[axis] + normal[axis] * height);
+      length += last ? Math.hypot(middle[0] - last[0], middle[1] - last[1]) : 0;
+      last = middle;
+    }
+    return length;
+  };
+  let low = Math.max(0, back - target);
+  let high = Math.max(low, portDistance(frame) - 0.1);
+  for (let iteration = 0; iteration < 24; iteration++) {
+    const middle = (low + high) / 2;
+    if (middleLength(middle) > target) {
+      low = middle;
+    } else {
+      high = middle;
+    }
+  }
+  return { back, end: low, shape: velumShape(frame, config, back, low) };
 }
 
 /**

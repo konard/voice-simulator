@@ -44,7 +44,9 @@ import {
   lowerTeethMesh,
   microphonePosition,
   nasalCenterline,
+  noseAxes,
   noseShape,
+  tractAxes,
   tractCenterline,
   tongueMesh,
   tractShape,
@@ -220,13 +222,15 @@ export class HeadViewer {
     wire.renderOrder = 3;
 
     const neutral = tractShape({}, head);
+    // The palate and the back of the pharynx stay put; the tongue moves.
+    this.tractAxes = tractAxes(head, neutral.areas);
     this.tractMesh = tubeMesh(
       tractCenterline(head, {
         sections: neutral.areas.length,
         length: neutral.length,
       }),
       neutral.areas,
-      { lod, head }
+      { lod, axes: this.tractAxes }
     );
     this.tract = new Mesh(
       geometryFrom(this.tractMesh, true),
@@ -240,9 +244,10 @@ export class HeadViewer {
         sections: nose.areas.length,
         velumDistance,
         length: nose.length,
+        tractLength: neutral.length,
       }),
       nose.areas,
-      { lod, head }
+      { lod, axes: noseAxes }
     );
     this.nose = new Mesh(
       geometryFrom(this.noseMesh, true),
@@ -362,7 +367,7 @@ export class HeadViewer {
     });
     updateTubeMesh(this.tractMesh, path, shape.areas, {
       lod: this.lod,
-      head: this.head,
+      axes: this.tractAxes,
     });
     const attribute = this.tract.geometry.getAttribute('position');
     attribute.array.set(this.tractMesh.positions);

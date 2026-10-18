@@ -3,5 +3,10 @@
     "path": "v1",
     "commit": "a1129cb4efd2be8d7d2ec67403a4ee9290e1f467",
     "description": "Voice simulator as released by pull request #4, before issue 5"
+  },
+  {
+    "path": "v2",
+    "commit": "4b6986b8cd5f267edd9482ab8aaf57812a3b1771",
+    "description": "Voice simulator as released by pull requests #6 and #8, before issue 9"
   }
 ]

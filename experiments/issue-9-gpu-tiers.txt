@@ -1,0 +1,9 @@
+WebGPU adapter found
+  minimal    cpu 0.23  gpu -
+  low        cpu 0.17  gpu -
+  medium     cpu 0.12  gpu -
+  high       cpu 1.66  gpu 9.38
+  ultra      cpu -  gpu -
+  studio     cpu -  gpu -
+  reference  cpu -  gpu -
+chosen: medium on the CPU

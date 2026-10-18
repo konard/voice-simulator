@@ -1,0 +1,47 @@
+$ blender --background --factory-startup --python scripts/blender/head_model.py -- --glb models/head-male-lod3.glb --decimate 0.25 --export head-male-lod3-decimated-0.25.glb --render head-lod3-decimated-cutaway.png --hide head --size 640
+12:58:46 | INFO: Data are loaded, start creating Blender stuff
+12:58:46 | INFO: Blender create Mesh node head
+12:58:46 | INFO: Blender create Mesh node tract
+12:58:46 | INFO: Blender create Mesh node nose
+12:58:46 | INFO: Blender create Mesh node lips
+12:58:46 | INFO: Blender create Mesh node upperTeeth
+12:58:46 | INFO: Blender create Mesh node lowerTeeth
+12:58:46 | INFO: Blender create Mesh node tongue
+12:58:46 | INFO: Blender create Mesh node palate
+12:58:46 | INFO: Blender create Mesh node velum
+12:58:46 | INFO: glTF import finished in 0.10s
+12:58:46 | INFO: Starting glTF 2.0 export
+12:58:46 | INFO: Extracting primitive: head
+12:58:46 | INFO: Primitives created: 1
+12:58:46 | INFO: Extracting primitive: tract
+12:58:46 | INFO: Primitives created: 1
+12:58:46 | INFO: Extracting primitive: nose
+12:58:46 | INFO: Primitives created: 1
+12:58:46 | INFO: Extracting primitive: lips
+12:58:46 | INFO: Primitives created: 1
+12:58:46 | INFO: Extracting primitive: upperTeeth
+12:58:46 | INFO: Primitives created: 1
+12:58:46 | INFO: Extracting primitive: lowerTeeth
+12:58:46 | INFO: Primitives created: 1
+12:58:46 | INFO: Extracting primitive: tongue
+12:58:46 | INFO: Primitives created: 1
+12:58:46 | INFO: Extracting primitive: palate
+12:58:46 | INFO: Primitives created: 1
+12:58:46 | INFO: Extracting primitive: velum
+12:58:46 | INFO: Primitives created: 1
+12:58:46 | INFO: Finished glTF 2.0 export in 0.08865809440612793 s
+Blender 4.2.3 LTS (hash 0e22e4fcea03 built 2024-10-14 23:31:34)
+Saved: 'docs/case-studies/issue-9/blender/head-lod3-decimated-cutaway.png'
+Time: 00:06.64 (Saving: 00:00.35)
+head_model: 9 parts, 16840 -> 4209 triangles
+head_model: part head 594 triangles
+head_model: part lips 660 triangles
+head_model: part lowerTeeth 582 triangles
+head_model: part nose 216 triangles
+head_model: part palate 608 triangles
+head_model: part tongue 320 triangles
+head_model: part tract 343 triangles
+head_model: part upperTeeth 582 triangles
+head_model: part velum 304 triangles
+INFO Draco mesh compression is available, use library at libextern_draco.so
+Blender quit

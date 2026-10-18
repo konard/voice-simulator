@@ -6,7 +6,16 @@
 import { describe, it, expect } from 'test-anywhere';
 import { planUtterance } from '../src/articulation/plan.js';
 import { renderPlan } from '../src/acoustics/voice.js';
-import { estimateFormants, estimatePitch } from '../src/acoustics/analysis.js';
+import {
+  estimateFormants,
+  estimatePitch,
+  spectralTilt,
+} from '../src/acoustics/analysis.js';
+import { tubeFormants } from '../src/acoustics/transfer.js';
+import { piriformBranch } from '../src/acoustics/waveguide.js';
+import { tractShape } from '../src/articulation/tract-shape.js';
+import { HILLENBRAND } from '../src/articulation/vowel-norms.js';
+import { STORY_FEATURES } from '../src/articulation/vowel-space.js';
 import {
   HEAD_PARAMETERS,
   HEAD_PRESETS,
@@ -78,7 +87,9 @@ describe('head presets', () => {
     }
     expect(male / 40 > 16.5).toBe(true);
     expect(female / 40 < 15.2).toBe(true);
-    expect(child / 40 < 13).toBe(true);
+    // Ten to twelve year olds: about 13-14 cm (Fitch and Giedd 1999).
+    expect(child / 40 < 14.5).toBe(true);
+    expect(child < female && female < male).toBe(true);
     expect(presetHeadConfig('female').pitch).toBeGreaterThan(
       presetHeadConfig('male').pitch * 1.6
     );
@@ -103,6 +114,32 @@ describe('head presets', () => {
     for (const seed of [1, 2, 3]) {
       const voice = measure(randomHeadConfig(seed, { preset: 'female' }), 'ə');
       expect(voice.f0).toBeGreaterThan(165);
+    }
+  });
+
+  it('resonates at the mean vowel formants of each speaker group', () => {
+    // Tube model of the measured vowels, piriform fossae included, on the
+    // mid-size head of each preset against Hillenbrand et al. (1995).
+    for (const preset of ['male', 'female', 'child']) {
+      const head = presetHeadConfig(preset);
+      const errors = [];
+      for (const [vowel, [height, backness, rounding]] of Object.entries(
+        STORY_FEATURES
+      )) {
+        const shape = tractShape({ height, backness, rounding }, head);
+        const formants = tubeFormants(shape.areas, shape.length, {
+          count: 3,
+          branches: [piriformBranch(shape.areas.length, shape.length, head)],
+        });
+        HILLENBRAND[preset][vowel].forEach((target, index) => {
+          errors.push(Math.log(formants[index] / target));
+        });
+      }
+      const rms = Math.sqrt(
+        errors.reduce((sum, value) => sum + value * value, 0) / errors.length
+      );
+      expect(rms).toBeLessThan(preset === 'male' ? 0.03 : 0.07);
+      expect(Math.max(...errors.map(Math.abs))).toBeLessThan(0.16);
     }
   });
 
@@ -135,5 +172,47 @@ describe('head presets', () => {
     expect(() =>
       synthesisOptions({ text: 'a', head: 'random', preset: 'robot' })
     ).toThrow();
+  });
+});
+
+describe('head preset voice sources', () => {
+  it('gives the female and child presets the spectral tilt of women', () => {
+    // Hanson and Chuang (1999, table X): corrected for the vowel, H1*-H2*
+    // and H1*-A3* of women exceed those of men by 3.1 and 9.6 dB (Klatt and
+    // Klatt 1990: H1-H2 by 5.7 dB). A raised f0 and a laxer pulse alone give
+    // about 3 dB of H1*-A3*: the posterior glottal chink adds the rest.
+    const tilt = (preset) => {
+      const head = presetHeadConfig(preset);
+      const sums = { h1h2Corrected: 0, h1a3Corrected: 0 };
+      for (const vowel of ['æ', 'ɑ', 'ʌ']) {
+        const plan = planUtterance(`ˈ${vowel}ː`, { head });
+        const samples = renderPlan(plan, { sampleRate: RATE });
+        const segment = plan.segments.find((entry) => entry.kind === 'vowel');
+        const range = {
+          start: (segment.start + segment.end) / 2 - 0.04,
+          duration: 0.08,
+        };
+        const f0 = estimatePitch(samples, RATE, { ...range, min: 70 });
+        const measures = spectralTilt(samples, RATE, {
+          ...range,
+          f0,
+          formants: HILLENBRAND[preset][vowel],
+        });
+        for (const key of Object.keys(sums)) {
+          sums[key] += measures[key] / 3;
+        }
+      }
+      return sums;
+    };
+    const male = tilt('male');
+    for (const preset of ['female', 'child']) {
+      const voice = tilt(preset);
+      const h1h2 = voice.h1h2Corrected - male.h1h2Corrected;
+      const h1a3 = voice.h1a3Corrected - male.h1a3Corrected;
+      expect(h1h2).toBeGreaterThan(2);
+      expect(h1h2).toBeLessThan(7);
+      expect(h1a3).toBeGreaterThan(6.5);
+      expect(h1a3).toBeLessThan(14);
+    }
   });
 });

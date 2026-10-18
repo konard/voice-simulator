@@ -3,9 +3,43 @@
  * the one-parameter Rd shaping of Fant (1995), plus aspiration noise that
  * is modulated by the glottal opening. The parametrisation follows the
  * well known Pink Trombone glottis (Neil Thapen, MIT licence).
+ *
+ * A posterior glottal chink, a gap that stays open through the cycle, adds
+ * two effects (Hanson and Chuang 1999, JASA 106, table II): the air in it
+ * cannot stop at once, which low-pass filters the pulse with a time
+ * constant of about 1.1 sqrt(A) ms (A in cm², 0.23 ms for 5 mm², 12 dB less
+ * at 2.5 kHz), and the open glottis absorbs more, widening the formants by
+ * about 1550 A Hz. Women have such chinks far more often than men, which
+ * makes their H1-A3 about 10 dB larger.
  */
 
 import { randomNormal, createRandom } from '../random.js';
+import { SPEED_OF_SOUND } from './transfer.js';
+
+/** Reflection of the tract at a closed glottis (no chink). */
+export const GLOTTAL_REFLECTION = 0.75;
+
+/**
+ * Time constant (s) of the flow cutoff through a glottal chink.
+ * @param {number} chink Area (mm²).
+ */
+export function chinkTimeConstant(chink) {
+  return 1.1e-3 * Math.sqrt(Math.max(0, chink) / 100);
+}
+
+/**
+ * Reflection of the tract at the glottis, lowered so that a chink widens
+ * the formants of a tract of the head's length by 1550 A Hz.
+ * @param {{glottalChink?: number, vocalTractLength?: number}} [head]
+ */
+export function glottalReflection(head = {}) {
+  const bandwidth = 15.5 * Math.max(0, head.glottalChink ?? 0);
+  const length = head.vocalTractLength ?? 16.5;
+  return (
+    GLOTTAL_REFLECTION *
+    Math.exp((-2 * Math.PI * length * bandwidth) / SPEED_OF_SOUND)
+  );
+}
 
 /**
  * LF pulse parameters for a tenseness value (0 = breathy/lax, 1 = pressed).
@@ -49,8 +83,9 @@ export function lfWaveform(p, t) {
 
 export class Glottis {
   /**
-   * @param {{seed?: string|number, tenseness?: number, breathiness?: number, jitter?: number, shimmer?: number, aspirationLevel?: number}} [options]
-   *   `jitter` and `shimmer` are standard deviations in percent.
+   * @param {{seed?: string|number, tenseness?: number, breathiness?: number, jitter?: number, shimmer?: number, aspirationLevel?: number, chink?: number}} [options]
+   *   `jitter` and `shimmer` are standard deviations in percent, `chink`
+   *   the area of the glottal chink in mm².
    */
   constructor(options = {}) {
     this.random = createRandom(`${options.seed ?? 1}:glottis`);
@@ -59,6 +94,8 @@ export class Glottis {
     this.jitterDepth = 0.01 * (options.jitter ?? 0.4);
     this.shimmerDepth = 0.01 * (options.shimmer ?? 3);
     this.aspirationLevel = options.aspirationLevel ?? 1;
+    this.chinkTime = chinkTimeConstant(options.chink ?? 0);
+    this.smoothed = 0;
     this.phase = 0;
     this.period = 1 / 120;
     this.jitter = 1;
@@ -96,8 +133,13 @@ export class Glottis {
     }
     const t = this.phase / this.period;
     this.intensity = voicing * loudness * this.shimmer;
-    const voiced =
+    let voiced =
       lfWaveform(this.pulse, t) * this.intensity * (0.7 + 0.3 * tenseness);
+    if (this.chinkTime > 0) {
+      this.smoothed +=
+        (1 - Math.exp(-dt / this.chinkTime)) * (voiced - this.smoothed);
+      voiced = this.smoothed;
+    }
     // Aspiration is strongest while the folds are open.
     const opening = Math.max(0, Math.sin(2 * Math.PI * t));
     const modulation =

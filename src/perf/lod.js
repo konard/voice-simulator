@@ -50,7 +50,30 @@ export const AUDIO_TIERS = Object.freeze([
     sampleRate: 48000,
     cost: 65,
   }),
+  Object.freeze({
+    name: 'studio',
+    solver: 'fdtd3d',
+    dx: 0.5,
+    sampleRate: 48000,
+    cost: 105,
+  }),
+  Object.freeze({
+    name: 'reference',
+    solver: 'fdtd3d',
+    dx: 0.4,
+    sampleRate: 48000,
+    cost: 220,
+  }),
 ]);
+
+/**
+ * Tier used when none is asked for: full 3D acoustics at 0.5 cm cells,
+ * which resolve the incisors, the pouches and transverse modes to well
+ * above 5 kHz. It renders slower than real time on today's CPUs; the web
+ * app picks its tier per device with benchmarkAudioTiersAsync and renders
+ * ahead when a slower tier is chosen. 'medium' is the real-time waveguide.
+ */
+export const DEFAULT_AUDIO_TIER = 'studio';
 
 /** Visual tiers: head mesh LOD, tube rings and pressure field points. */
 export const VISUAL_TIERS = Object.freeze([
@@ -139,6 +162,38 @@ export function fallbackLevel(tiers, level, load, target = 0.8) {
 }
 
 /**
+ * The steps of chooseTier: yields `{tier, limit}` for each tier to measure
+ * and takes its load back through next(load).
+ */
+function* tierSteps(options) {
+  const tiers = options.tiers ?? AUDIO_TIERS;
+  const target = options.target ?? 0.8;
+  const limit = target * (options.skip ?? 2);
+  const loads = [];
+  const measured = [];
+  let level = 0;
+  for (let index = 0; index < tiers.length; index++) {
+    const previous = tiers[index - 1];
+    if (previous) {
+      const predicted = (loads[index - 1] * tiers[index].cost) / previous.cost;
+      if (predicted > limit) {
+        loads.push(predicted);
+        measured.push(false);
+        break;
+      }
+    }
+    const load = yield { tier: tiers[index], limit };
+    loads.push(load);
+    measured.push(true);
+    if (load > target) {
+      break;
+    }
+    level = index;
+  }
+  return { level, loads, measured };
+}
+
+/**
  * Pick the most detailed tier whose measured load fits the target.
  *
  * To find the limit of slow hardware quickly, a tier whose load predicted
@@ -150,31 +205,73 @@ export function fallbackLevel(tiers, level, load, target = 0.8) {
  * @returns {{level: number, loads: number[], measured: boolean[]}}
  */
 export function chooseTier(measure, options = {}) {
-  const tiers = options.tiers ?? AUDIO_TIERS;
-  const target = options.target ?? 0.8;
-  const limit = target * (options.skip ?? 2);
-  const loads = [];
-  const measured = [];
-  let level = 0;
-  for (let index = 0; index < tiers.length; index++) {
-    if (index > 0) {
-      const ratio = tiers[index].cost / tiers[index - 1].cost;
-      const predicted = loads[index - 1] * ratio;
-      if (predicted > limit) {
-        loads.push(predicted);
-        measured.push(false);
-        break;
-      }
-    }
-    const load = measure(tiers[index], { limit });
-    loads.push(load);
-    measured.push(true);
-    if (load > target) {
-      break;
-    }
-    level = index;
+  const steps = tierSteps(options);
+  let step = steps.next();
+  while (!step.done) {
+    step = steps.next(measure(step.value.tier, { limit: step.value.limit }));
   }
-  return { level, loads, measured };
+  return step.value;
+}
+
+/**
+ * chooseTier with an asynchronous `measure`, for tiers measured on the GPU.
+ * @param {(tier: object, options: {limit: number}) => Promise<number>} measure
+ * @param {Parameters<typeof chooseTier>[1]} [options]
+ * @returns {Promise<ReturnType<typeof chooseTier>>}
+ */
+export async function chooseTierAsync(measure, options = {}) {
+  const steps = tierSteps(options);
+  let step = steps.next();
+  while (!step.done) {
+    step = steps.next(
+      await measure(step.value.tier, { limit: step.value.limit })
+    );
+  }
+  return step.value;
+}
+
+/**
+ * chooseTierAsync for a machine with a GPU: the tiers are first measured
+ * on the CPU, then the accelerated tiers above the CPU's choice (the 3D
+ * ones by default) on the GPU. A fast GPU lifts the choice to the tiers
+ * only it renders in real time; a slow one (an integrated or software
+ * adapter) cannot pull it below what the CPU manages.
+ * @param {(tier: object, options: {limit: number, gpu: boolean}) => Promise<number>} measure
+ * @param {Parameters<typeof chooseTier>[1] & {gpu?: boolean, accelerated?: (tier: object) => boolean}} [options]
+ *   gpu: whether a GPU is available.
+ * @returns {Promise<ReturnType<typeof chooseTier> & {gpu: boolean, gpuLoads: (number|null)[]}>}
+ *   loads and measured are the CPU's; gpuLoads[i] is the load of tier i on
+ *   the GPU (null where it was not measured there); gpu tells whether the
+ *   chosen tier runs on the GPU.
+ */
+export async function chooseTierWithGpu(measure, options = {}) {
+  const tiers = options.tiers ?? AUDIO_TIERS;
+  const accelerated =
+    options.accelerated ?? ((tier) => tier.solver === 'fdtd3d');
+  const on =
+    (gpu) =>
+    (tier, { limit }) =>
+      measure(tier, { limit, gpu });
+  const cpu = await chooseTierAsync(on(false), { ...options, tiers });
+  const gpuLoads = tiers.map(() => null);
+  const result = { ...cpu, gpu: false, gpuLoads };
+  const start = tiers.findIndex(
+    (tier, index) => index > cpu.level && accelerated(tier)
+  );
+  if (!options.gpu || start < 0) {
+    return result;
+  }
+  const gpu = await chooseTierAsync(on(true), {
+    ...options,
+    tiers: tiers.slice(start),
+  });
+  gpu.loads.forEach((load, index) => {
+    gpuLoads[start + index] = gpu.measured[index] ? load : null;
+  });
+  if (gpu.loads[0] > (options.target ?? 0.8)) {
+    return result;
+  }
+  return { ...result, level: start + gpu.level, gpu: true };
 }
 
 /**

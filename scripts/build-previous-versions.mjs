@@ -7,8 +7,10 @@
  * {path, commit}. Each commit is checked out into a temporary git worktree
  * (fetched first when the clone is shallow), its app dependencies installed
  * with `npm ci` and built with a relative base path, then copied into
- * examples/universal-app/dist/<path>. Run it after `npm run
- * example:web:build`, which empties dist.
+ * examples/universal-app/dist/<path>. The current app is built once more
+ * with a relative base into the next free path (e.g. /v3/), so every
+ * release keeps a permanent URL. Run it after `npm run example:web:build`,
+ * which empties dist.
  *
  * Usage: node scripts/build-previous-versions.mjs [--dist <dir>]
  */
@@ -18,15 +20,18 @@ import { cpSync, existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { currentVersionPath } from '../examples/universal-app/src/versions.js';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const app = path.join(root, 'examples/universal-app');
 
 export function readVersions(file = path.join(app, 'previous-versions.json')) {
   const versions = JSON.parse(readFileSync(file, 'utf8'));
-  for (const version of versions) {
-    if (!/^v\d+$/.test(version.path)) {
-      throw new Error(`Invalid version path: ${version.path}`);
+  for (const [index, version] of versions.entries()) {
+    if (version.path !== `v${index + 1}`) {
+      throw new Error(
+        `Invalid version path: ${version.path} (expected v${index + 1})`
+      );
     }
     if (!/^[0-9a-f]{40}$/.test(version.commit)) {
       throw new Error(`Use a full commit SHA for ${version.path}`);
@@ -74,6 +79,17 @@ export function buildVersion(version, dist) {
   }
 }
 
+/** Build the current app with a relative base into its own version path. */
+export function buildCurrentVersion(versions, dist) {
+  const target = path.join(dist, currentVersionPath(versions));
+  const env = { ...process.env, GITHUB_PAGES: 'false' };
+  run('npm', ['run', 'build', '--', '--outDir', target, '--emptyOutDir'], {
+    cwd: app,
+    env,
+  });
+  console.log(`Built the current version into ${target}`);
+}
+
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const flag = process.argv.indexOf('--dist');
   const dist =
@@ -81,7 +97,9 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   if (!existsSync(dist)) {
     throw new Error(`Build the current app first: ${dist} is missing`);
   }
-  for (const version of readVersions()) {
+  const versions = readVersions();
+  for (const version of versions) {
     buildVersion(version, dist);
   }
+  buildCurrentVersion(versions, dist);
 }

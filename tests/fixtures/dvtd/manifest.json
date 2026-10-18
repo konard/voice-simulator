@@ -1,0 +1,53 @@
+{
+  "dataset": "Dresden Vocal Tract Dataset (DVTD)",
+  "citation": "Birkholz P, Kürbis S, Stone S, Häsner P, Blandin R, Fleischer M (2020) Printable 3D vocal tract shapes from MRI data and their acoustic and aerodynamic properties. Scientific Data 7, 255. doi:10.1038/s41597-020-00597-w",
+  "license": "CC0 1.0 (public domain dedication), figshare article 11897187",
+  "source": "https://www.vocaltractlab.de/dvtd.zip",
+  "units": "millimetres; +z superior, +y anterior, x lateral",
+  "femSpeedOfSound": "345 m/s",
+  "notes": "Inner tract surfaces (open at the glottis and the lips), gzip-compressed; femResonances are the first peaks of the matching *-vvtf-calculated.txt finite-element transfer functions.",
+  "files": [
+    {
+      "file": "s1-01-bahn-tense-a-inner-surface.stl.gz",
+      "member": "subject-1/s1-01-bahn-tense-a/s1-01-bahn-tense-a-inner-surface.stl",
+      "bytes": 2124134,
+      "sha256": "d0c99e1bbf21af75778768205ece942932313957ca5e411564712e7824f9bc33",
+      "femResonances": [514, 1105, 2304]
+    },
+    {
+      "file": "s1-03-tiere-tense-i-inner-surface.stl.gz",
+      "member": "subject-1/s1-03-tiere-tense-i/s1-03-tiere-tense-i-inner-surface.stl",
+      "bytes": 2092984,
+      "sha256": "0fca50624015a91181e46e6ed772185d8aba523e15298d1dbe0cd895f3ed7925",
+      "femResonances": [192, 1794, 2612]
+    },
+    {
+      "file": "s1-22-ehe-schwa-inner-surface.stl.gz",
+      "member": "subject-1/s1-22-ehe-schwa/s1-22-ehe-schwa-inner-surface.stl",
+      "bytes": 2023884,
+      "sha256": "c38328ec90cbb4ad90c5b71d7b1d6acd93865ac08117aae295b0c69b37ff747d",
+      "femResonances": [329, 1561, 2223]
+    },
+    {
+      "file": "s2-01-bahn-tense-a-inner-surface.stl.gz",
+      "member": "subject-2/s2-01-bahn-tense-a/s2-01-bahn-tense-a-inner-surface.stl",
+      "bytes": 666584,
+      "sha256": "d0931304c5bd897def8f7d1fba440a5208fe814d11e7aeeac756758779e2664f",
+      "femResonances": [758, 1393, 3149]
+    },
+    {
+      "file": "s2-03-tiere-tense-i-inner-surface.stl.gz",
+      "member": "subject-2/s2-03-tiere-tense-i/s2-03-tiere-tense-i-inner-surface.stl",
+      "bytes": 596334,
+      "sha256": "cc484c4f5df56e9c434c6177ff62ce6e7e89a85111a36ad3d04bbe488d9dc8d8",
+      "femResonances": [225, 2501, 3515]
+    },
+    {
+      "file": "s2-22-ehe-schwa-inner-surface.stl.gz",
+      "member": "subject-2/s2-22-ehe-schwa/s2-22-ehe-schwa-inner-surface.stl",
+      "bytes": 362434,
+      "sha256": "5baad960d71b86bde4fae8700dabf1b30aceba42589267afd742ebd8c52b35e4",
+      "femResonances": [512, 1500, 2574]
+    }
+  ]
+}

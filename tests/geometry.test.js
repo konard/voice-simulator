@@ -4,6 +4,7 @@
 
 import { describe, it, expect } from 'test-anywhere';
 import {
+  arcPoint,
   headLandmarks,
   nasalCenterline,
   tractCenterline,
@@ -13,11 +14,12 @@ import {
   deformJaw,
   headField,
   headMesh,
-  lipsMesh,
   meshesToObj,
   sectionAxes,
+  tractAxes,
   tubeMesh,
 } from '../src/geometry/mesh.js';
+import { lipsMesh } from '../src/geometry/lips.js';
 import { noseShape } from '../src/articulation/tract-shape.js';
 import { DEFAULT_HEAD, normalizeHeadConfig } from '../src/head-config.js';
 
@@ -40,18 +42,32 @@ describe('tract centreline', () => {
       const head = normalizeHeadConfig({ ...DEFAULT_HEAD, vocalTractLength });
       const path = tractCenterline(head, { sections: 88 });
       expect(Math.abs(pathLength(path) - vocalTractLength)).toBeLessThan(0.05);
-      const last = path.points.subarray(87 * 3);
       const { lips } = headLandmarks(head);
-      expect(Math.abs(last[1] - lips[1])).toBeLessThan(0.01);
+      const end = arcPoint(vocalTractLength, path.layout).point;
+      expect(
+        Math.hypot(...end.map((value, axis) => value - lips[axis]))
+      ).toBeLessThan(1e-9);
+      // The last section centre lies half a section back along the tract.
+      const last = path.points.subarray(87 * 3);
+      const back = Math.hypot(...lips.map((value, axis) => value - last[axis]));
+      expect(Math.abs(back - path.sectionLength / 2)).toBeLessThan(0.01);
       expect(lips[2] - last[2]).toBeGreaterThan(0);
-      expect(lips[2] - last[2]).toBeLessThan(0.2);
     }
   });
 
-  it('starts vertically at the glottis and ends pointing forward', () => {
-    const path = tractCenterline(DEFAULT_HEAD);
-    expect(path.tangents[1]).toBe(1);
-    expect(path.tangents[(path.count - 1) * 3 + 2]).toBe(1);
+  it('bends like the MRI tracts: up from the glottis, forward and down to the lips', () => {
+    const path = tractCenterline(DEFAULT_HEAD, { sections: 88 });
+    const tangent = (index) => path.tangents.subarray(index * 3, index * 3 + 3);
+    expect(tangent(0)[1]).toBeGreaterThan(0.999);
+    const end = tangent(path.count - 1);
+    expect(end[0]).toBe(0);
+    expect(end[2]).toBeGreaterThan(0.85);
+    expect(end[1]).toBeLessThan(0);
+    // The oral cavity runs forward under the palate.
+    const forward = Array.from({ length: path.count }, (_, index) =>
+      tangent(index)
+    ).some((value) => value[2] > 0.999);
+    expect(forward).toBe(true);
   });
 
   it('nasal path matches the acoustic nose length', () => {
@@ -95,6 +111,25 @@ describe('head meshes', () => {
         expect(major).toBeGreaterThan(minor - 1e-9);
       }
     }
+  });
+
+  it('tract axes keep the palate side of a section at rest', () => {
+    const rest = new Float64Array(44).fill(3);
+    const axes = tractAxes(DEFAULT_HEAD, rest);
+    for (const position of [0.3, 0.6, 0.8]) {
+      for (const area of [0.3, 1, 6]) {
+        const [major, minor, shift] = axes(area, position);
+        const [, restMinor] = sectionAxes(3, position, DEFAULT_HEAD);
+        expect(Math.abs(Math.PI * major * minor - area) / area).toBeLessThan(
+          0.01
+        );
+        // The upper wall (centre + shift + minor) stays where it is at rest.
+        expect(Math.abs(shift + minor - restMinor)).toBeLessThan(1e-9);
+      }
+    }
+    // The shift fades out at the glottis and at the lips.
+    expect(axes(0.3, 0)[2]).toBe(0);
+    expect(axes(0.3, 1)[2]).toBe(0);
   });
 
   it('tube mesh follows the area function', () => {

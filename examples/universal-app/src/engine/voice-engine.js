@@ -15,36 +15,41 @@ import {
 } from '../../../../src/index.js';
 import { exportAudio } from './audio-export.js';
 import { AudioPlayer } from './audio-player.js';
+import { readyToPlay, secondsToPlay } from './render-ahead.js';
 
 const TAIL = 0.15;
 const BENCHMARK_KEY = 'voice-simulator:benchmark';
 
-/** Identifies the device and build a cached benchmark belongs to. */
-function deviceKey() {
+/**
+ * Identifies the device, build and backends (whether WebGPU may be used)
+ * a cached benchmark belongs to.
+ */
+function deviceKey(allowGpu) {
   const navigator = globalThis.navigator ?? {};
   return [
     navigator.userAgent ?? '',
     navigator.hardwareConcurrency ?? 0,
     AUDIO_TIERS.map((tier) => `${tier.name}:${tier.cost}`).join(','),
+    allowGpu ? 'gpu' : 'cpu',
   ].join('|');
 }
 
-function readCachedBenchmark() {
+function readCachedBenchmark(allowGpu) {
   try {
     const cached = JSON.parse(
       globalThis.localStorage?.getItem(BENCHMARK_KEY) ?? 'null'
     );
-    return cached?.device === deviceKey() ? cached : null;
+    return cached?.device === deviceKey(allowGpu) ? cached : null;
   } catch {
     return null;
   }
 }
 
-function writeCachedBenchmark({ level, loads }) {
+function writeCachedBenchmark({ level, loads, gpu }, allowGpu) {
   try {
     globalThis.localStorage?.setItem(
       BENCHMARK_KEY,
-      JSON.stringify({ device: deviceKey(), level, loads })
+      JSON.stringify({ device: deviceKey(allowGpu), level, loads, gpu })
     );
   } catch {
     // Storage may be unavailable (private mode); the cache is optional.
@@ -73,6 +78,9 @@ export class VoiceEngine {
     });
     this.auto = true;
     this.fixedLevel = 0;
+    // Whether the benchmark may use WebGPU, and whether its choice runs there.
+    this.allowGpu = true;
+    this.benchmarkGpu = null;
     this.nextId = 1;
     this.job = null;
     this.state = {};
@@ -106,12 +114,17 @@ export class VoiceEngine {
   }
 
   /**
-   * Measure the audio tiers on this device (runs in the worker). A result
-   * cached by an earlier visit on the same device applies at once, and the
-   * fresh measurement replaces it when it arrives.
+   * Measure the audio tiers on this device (runs in the worker), the 3D
+   * ones on WebGPU too unless `gpu` is false. A result cached by an earlier
+   * visit on the same device applies at once, and the fresh measurement
+   * replaces it when it arrives.
+   * @param {object} head
+   * @param {{gpu?: boolean}} [options]
    */
-  benchmark(head) {
-    const cached = readCachedBenchmark();
+  benchmark(head, options = {}) {
+    this.allowGpu = options.gpu !== false;
+    const cached = readCachedBenchmark(this.allowGpu);
+    this.benchmarkGpu = cached ? Boolean(cached.gpu) : null;
     if (cached) {
       this.governor.level = Math.min(cached.level, AUDIO_TIERS.length - 1);
       this.#emit({
@@ -122,7 +135,11 @@ export class VoiceEngine {
     } else {
       this.#emit({ phase: 'benchmark' });
     }
-    this.#ensureWorker().postMessage({ type: 'benchmark', head });
+    this.#ensureWorker().postMessage({
+      type: 'benchmark',
+      head,
+      gpu: this.allowGpu,
+    });
   }
 
   /** Use a fixed audio tier (index) or `null` for automatic selection. */
@@ -140,7 +157,7 @@ export class VoiceEngine {
 
   /**
    * Speak text.
-   * @param {{text: string, lang: string, accent?: string, head: object, seed: string, mode: 'both'|'sound'|'visual', ipa?: boolean, microphone?: object, room?: string, enclosure?: object}} request
+   * @param {{text: string, lang: string, accent?: string, head: object, seed: string, mode: 'both'|'sound'|'visual', ipa?: boolean, microphone?: object, room?: string, enclosure?: object, gpu?: boolean}} request
    *   `microphone`, `room` and `enclosure` are the listening settings
    *   (see synthesize).
    */
@@ -170,6 +187,9 @@ export class VoiceEngine {
       chunks: [],
       sampleRate: 0,
       totalSamples: 0,
+      rendered: 0,
+      busy: 0,
+      playing: false,
       finished: false,
     };
     this.job = job;
@@ -183,6 +203,7 @@ export class VoiceEngine {
       timeline,
       utterance: id,
       underruns: 0,
+      rendering: null,
     });
     if (!job.sound) {
       job.startedAt = globalThis.performance.now();
@@ -204,13 +225,27 @@ export class VoiceEngine {
       microphone: request.microphone,
       room: request.room,
       enclosure: request.enclosure,
+      gpu: this.#gpu(request),
     });
     return job;
   }
 
+  /**
+   * Whether the 3D tiers of a request may run on WebGPU: not when the
+   * request says so, nor in automatic mode when the benchmark found the
+   * CPU faster.
+   */
+  #gpu(request) {
+    if (request.gpu === false || (this.auto && this.benchmarkGpu === false)) {
+      return false;
+    }
+    return request.gpu;
+  }
+
   #handle(message) {
     if (message.type === 'benchmark') {
-      writeCachedBenchmark(message);
+      writeCachedBenchmark(message, this.allowGpu);
+      this.benchmarkGpu = Boolean(message.gpu);
       this.governor.level = message.level;
       this.#emit({
         phase: this.job ? 'speaking' : 'idle',
@@ -230,6 +265,7 @@ export class VoiceEngine {
       overload: () => this.#overload(job, message),
       end: () => {
         job.finished = true;
+        this.#play(job);
       },
       error: () => {
         this.#emit({ error: message.message });
@@ -245,7 +281,10 @@ export class VoiceEngine {
     job.solver = message.solver;
     this.cells = message.model;
     this.player.begin(message.sampleRate);
-    this.#emit({ solver: message.solver, cells: Boolean(message.model) });
+    this.#emit({
+      solver: message.gpu ? `${message.solver} · GPU` : message.solver,
+      cells: Boolean(message.model),
+    });
   }
 
   /** The worker restarts the utterance on a cheaper tier. */
@@ -256,6 +295,8 @@ export class VoiceEngine {
     job.chunks = [];
     job.fields = [];
     job.fieldIndex = 0;
+    job.rendered = 0;
+    job.busy = 0;
     this.#emit({
       audioLevel: this.audioLevel,
       audioLoad: message.load,
@@ -266,7 +307,32 @@ export class VoiceEngine {
   #chunk(job, message) {
     const { start, samples, field, load } = message;
     job.chunks.push({ start, samples });
-    this.player.push(start, samples);
+    job.rendered = Math.max(job.rendered, start + samples.length);
+    job.busy += (load * samples.length) / job.sampleRate;
+    if (job.playing) {
+      this.player.push(start, samples);
+    } else if (
+      readyToPlay({
+        rendered: job.rendered,
+        total: job.totalSamples,
+        busy: job.busy,
+        sampleRate: job.sampleRate,
+      })
+    ) {
+      this.#play(job);
+    } else {
+      this.#emit({
+        rendering: {
+          progress: job.rendered / Math.max(1, job.totalSamples),
+          wait: secondsToPlay({
+            rendered: job.rendered,
+            total: job.totalSamples,
+            busy: job.busy,
+            sampleRate: job.sampleRate,
+          }),
+        },
+      });
+    }
     if (field) {
       job.fields.push({
         end: (start + samples.length) / job.sampleRate,
@@ -281,6 +347,21 @@ export class VoiceEngine {
       audioLoad: this.auto ? this.governor.load : load,
       underruns: this.player.underruns,
     });
+  }
+
+  /**
+   * Start playback with everything rendered so far; later chunks play as
+   * they arrive (see render-ahead.js).
+   */
+  #play(job) {
+    if (job.playing || !job.sound) {
+      return;
+    }
+    job.playing = true;
+    for (const { start, samples } of job.chunks) {
+      this.player.push(start, samples);
+    }
+    this.#emit({ rendering: null });
   }
 
   /** Current time in the utterance (seconds), or null before audio starts. */
@@ -320,6 +401,12 @@ export class VoiceEngine {
         timeline: null,
       };
     }
+    if (job.sound && this.player.stalled()) {
+      // The audio clock stopped (e.g. the output device went away while
+      // the tab was in the background): continue on a fresh context.
+      this.player.recover(job.chunks);
+      this.#emit({ audioRecoveries: this.player.recoveries });
+    }
     const time = this.#time(job) ?? 0;
     const clamped = Math.max(0, Math.min(job.plan.duration, time));
     sampleState(job.plan, clamped, this.state);
@@ -350,7 +437,11 @@ export class VoiceEngine {
     }
     this.player.stop();
     if (this.status.phase === 'speaking') {
-      this.#emit({ phase: 'idle', audioLevel: this.audioLevel });
+      this.#emit({
+        phase: 'idle',
+        audioLevel: this.audioLevel,
+        rendering: null,
+      });
     }
   }
 

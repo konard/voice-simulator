@@ -111,7 +111,13 @@ export interface RenderOptions {
   dx?: number;
   model?: object;
   output?: OutputMode;
+  kernel?: 'wasm' | 'js';
+  /** WebGPU device for the 3D solver (render with renderAsync). */
+  device?: GPUDeviceLike;
 }
+
+/** A WebGPU GPUDevice (typed loosely so the package needs no WebGPU types). */
+export type GPUDeviceLike = object;
 
 export interface SynthesizeOptions {
   lang?: 'auto' | LanguageCode;
@@ -130,6 +136,8 @@ export interface SynthesizeOptions {
   sampleRate?: number;
   output?: OutputMode;
   model?: object;
+  /** WebGPU device for the 3D solver (synthesizeAsync, synthesizeStream). */
+  device?: GPUDeviceLike;
 }
 
 export interface SynthesisResult extends Transcription {
@@ -146,6 +154,10 @@ export declare function synthesize(
   text: string,
   options?: SynthesizeOptions
 ): SynthesisResult;
+export declare function synthesizeAsync(
+  text: string,
+  options?: SynthesizeOptions & { chunkSize?: number }
+): Promise<SynthesisResult>;
 export declare function synthesizeStream(
   text: string,
   options?: SynthesizeOptions & { chunkSize?: number }
@@ -258,6 +270,9 @@ export interface Solver {
   ): void;
   setNose(areas: ArrayLike<number>): void;
   step(glottalFlow: number, noisePosition: number, noise: number): number;
+  /** Queue a step; its output comes with the next flushSteps. */
+  queueStep?(glottalFlow: number, noisePosition: number, noise: number): void;
+  flushSteps?(options?: { field?: boolean }): Promise<Float64Array>;
   /** Optional pressure snapshot for visualisation. */
   field?(): object;
   reset(): void;
@@ -271,11 +286,32 @@ export declare class VoiceRenderer {
   readonly totalSamples: number;
   position: number;
   render(target: Float32Array): number;
+  /** render() for solvers that queue their steps (the GPU solver). */
+  renderAsync(
+    target: Float32Array,
+    options?: { field?: boolean }
+  ): Promise<number>;
 }
 export declare function renderPlan(
   plan: Plan,
   options?: RenderOptions
 ): Float32Array;
+export declare function renderPlanAsync(
+  plan: Plan,
+  options?: RenderOptions & { chunkSize?: number }
+): Promise<Float32Array>;
+/** A WebGPU device for the 3D solver, or null without WebGPU. */
+export declare function requestGpuDevice(options?: {
+  gpu?: object;
+}): Promise<GPUDeviceLike | null>;
+export declare class FdtdGpu {
+  constructor(solver: Fdtd3d, device: GPUDeviceLike);
+  readonly workgroup: number;
+  queue(force: number, inject: number): void;
+  flush(options?: { field?: boolean }): Promise<Float64Array>;
+  reset(): void;
+  destroy(): void;
+}
 export declare function registerSolver(
   name: string,
   factory: (options: object) => Solver
@@ -307,12 +343,25 @@ export declare class Fdtd3d implements Solver {
     output?: OutputMode;
     microphone?: MicrophoneOptions;
     enclosure?: EnclosureOptions;
+    kernel?: 'wasm' | 'js';
+    /** Run the step loop on this WebGPU device (queueStep/flushSteps). */
+    device?: GPUDeviceLike;
+    /** `false` leaves out the piriform fossae. */
+    piriform?: boolean;
+    /** `false` leaves out the vallecula. */
+    vallecula?: boolean;
   });
+  /** The GPU step loop, with a `device`. */
+  readonly gpu: FdtdGpu | null;
   /** Distance of the receiver from the lips (cm), with a microphone. */
   readonly microphoneDistance?: number;
   /** True when the grid contains the enclosure walls. */
   readonly simulatesEnclosure: boolean;
-  stepDuration(): number;
+  /**
+   * Seconds per step; with a shape the grid runs slower by its length over
+   * the rest length so the formants follow the tract length.
+   */
+  stepDuration(shape?: { length?: number }): number;
   setShape(
     areas: ArrayLike<number>,
     velumArea: number,
@@ -321,6 +370,9 @@ export declare class Fdtd3d implements Solver {
   ): void;
   setNose(areas: ArrayLike<number>): void;
   step(glottalFlow: number, noisePosition: number, noise: number): number;
+  queueStep(glottalFlow: number, noisePosition: number, noise: number): void;
+  /** With `field` on the GPU, field() holds the RMS over these steps. */
+  flushSteps(options?: { field?: boolean }): Promise<Float64Array>;
   /** Pressure field for visualisation. */
   field(): {
     positions: Float32Array;
@@ -335,6 +387,10 @@ export declare function buildVoxelModel(
     dx?: number;
     radiationRadius?: number;
     enclosure?: EnclosureOptions;
+    /** `false` leaves out the piriform fossae. */
+    piriform?: boolean;
+    /** `false` leaves out the vallecula. */
+    vallecula?: boolean;
   }
 ): object;
 export declare class Glottis {
@@ -403,26 +459,57 @@ export declare function tractCenterline(
 ): Path;
 export declare function nasalCenterline(
   head: HeadConfig,
-  options: { sections: number; velumDistance: number; length: number }
+  options: {
+    sections?: number;
+    velumDistance: number;
+    length: number;
+    tractLength?: number;
+  }
 ): Path;
 export declare function headMesh(
   head?: HeadConfig,
   options?: { lod?: number }
 ): Mesh;
+export interface TubeOptions {
+  lod?: number;
+  head?: HeadConfig;
+  /** Lateral and midsagittal semi-axes (cm) of a section. */
+  axes?: (area: number, position: number) => number[];
+}
+export declare const NOSE_ASPECT: number;
+export declare function noseAxes(area: number): number[];
+export declare function sectionAxes(
+  area: number,
+  position: number,
+  head?: HeadConfig
+): number[];
+export declare function tractAxes(
+  head: HeadConfig,
+  restAreas: ArrayLike<number>
+): (area: number, position: number) => number[];
 export declare function tubeMesh(
   path: Path,
   areas: ArrayLike<number>,
-  options?: { lod?: number; head?: HeadConfig }
+  options?: TubeOptions
 ): Mesh;
 export declare function updateTubeMesh(
   mesh: Mesh,
   path: Path,
   areas: ArrayLike<number>,
-  options?: { lod?: number; head?: HeadConfig }
+  options?: TubeOptions
 ): Mesh;
+/** Columns across the mouth and points around each lip section per LOD. */
+export declare const LIP_LODS: readonly { columns: number; ring: number }[];
+/** Semi-axes (cm) of the lip opening for an area (cm²) and rounding 0..1. */
+export declare function lipOpening(
+  area: number,
+  rounding: number,
+  head: HeadConfig
+): [number, number];
+/** Upper and lower lip; the vertex count depends only on `lod`. */
 export declare function lipsMesh(
   head?: HeadConfig,
-  options?: { area?: number; lod?: number }
+  options?: { area?: number; rounding?: number; lod?: number }
 ): Mesh;
 export declare function deformJaw(
   base: Float32Array,
@@ -433,15 +520,46 @@ export declare function deformJaw(
 export declare function meshesToObj(meshes: Mesh[]): string;
 export declare function headModel(
   head: HeadConfig,
-  options?: { lod?: number; state?: Record<string, number> }
+  options?: {
+    lod?: number;
+    state?: Record<string, number>;
+    /** Articulators from registered sources (see composeAnatomy). */
+    anatomy?: AnatomySelection;
+    /** Scale the sources to the head. */
+    scale?: boolean;
+  }
 ): (Mesh & { name: string })[];
 export declare function headModelObj(
   head: HeadConfig,
   options?: { lod?: number; state?: Record<string, number> }
 ): string;
+/** Binary glTF 2.0 of the whole head model, in metres. */
+export declare function headModelGlb(
+  head: HeadConfig,
+  options?: { lod?: number; state?: Record<string, number> }
+): Uint8Array;
+/** Part colours (sRGB integers), roughness and opacity of the glTF export. */
+export declare const PART_MATERIALS: Readonly<
+  Record<string, { color: number; roughness: number; opacity?: number }>
+>;
+export declare function vertexNormals(
+  positions: ArrayLike<number>,
+  indices: ArrayLike<number>
+): Float32Array;
+/** Binary glTF 2.0; `scale` defaults to 0.01 (centimetres to metres). */
+export declare function meshesToGlb(
+  meshes: (Mesh & { name: string })[],
+  options?: { scale?: number; generator?: string }
+): Uint8Array;
+export declare function parseGlb(bytes: Uint8Array): {
+  json: Record<string, unknown>;
+  meshes: (Mesh & { name: string; normals: Float32Array })[];
+};
 
 // Levels of detail
 export declare const AUDIO_TIERS: readonly AudioTier[];
+/** Name of the tier used when no tier or solver is given ('studio', 3D). */
+export declare const DEFAULT_AUDIO_TIER: string;
 export declare const VISUAL_TIERS: readonly VisualTier[];
 export declare class LodGovernor<T extends { cost: number } = AudioTier> {
   constructor(options?: {
@@ -465,8 +583,43 @@ export declare class LodGovernor<T extends { cost: number } = AudioTier> {
  */
 export declare function chooseTier<T>(
   measure: (tier: T, options: { limit: number }) => number,
-  options?: { tiers?: readonly T[]; target?: number; skip?: number }
-): { level: number; loads: number[]; measured: boolean[] };
+  options?: ChooseTierOptions<T>
+): TierChoice;
+/** chooseTier with an asynchronous `measure` (tiers measured on the GPU). */
+export declare function chooseTierAsync<T>(
+  measure: (tier: T, options: { limit: number }) => Promise<number> | number,
+  options?: ChooseTierOptions<T>
+): Promise<TierChoice>;
+/**
+ * chooseTierAsync on the CPU, then on the GPU (when `gpu`) for the
+ * accelerated tiers (3D by default) above the CPU's choice.
+ */
+export declare function chooseTierWithGpu<T>(
+  measure: (
+    tier: T,
+    options: { limit: number; gpu: boolean }
+  ) => Promise<number> | number,
+  options?: ChooseTierOptions<T> & {
+    gpu?: boolean;
+    accelerated?: (tier: T) => boolean;
+  }
+): Promise<GpuTierChoice>;
+export interface GpuTierChoice extends TierChoice {
+  /** Whether the chosen tier runs on the GPU. */
+  gpu: boolean;
+  /** Load of each tier on the GPU, null where not measured there. */
+  gpuLoads: (number | null)[];
+}
+export interface ChooseTierOptions<T> {
+  tiers?: readonly T[];
+  target?: number;
+  skip?: number;
+}
+export interface TierChoice {
+  level: number;
+  loads: number[];
+  measured: boolean[];
+}
 /** Most detailed tier below `level` predicted to fit `target`. */
 export declare function fallbackLevel(
   tiers: readonly { cost: number }[],
@@ -504,6 +657,28 @@ export declare function benchmarkAudioTiers(options?: {
   loads: number[];
   measured: boolean[];
 };
+/**
+ * measureAudioTier on the backend the app would use: with a WebGPU
+ * `device` the 3D tiers run on the GPU, `chunk` samples per dispatch.
+ */
+export declare function measureAudioTierAsync(
+  tier: AudioTier,
+  options?: {
+    head?: HeadConfig;
+    ipa?: string;
+    seconds?: number;
+    limit?: number;
+    device?: GPUDeviceLike | null;
+    chunk?: number;
+  }
+): Promise<number>;
+/** benchmarkAudioTiers with the 3D tiers on a WebGPU `device` when given. */
+export declare function benchmarkAudioTiersAsync(options?: {
+  target?: number;
+  head?: HeadConfig;
+  seconds?: number;
+  device?: GPUDeviceLike | null;
+}): Promise<GpuTierChoice & { tier: AudioTier }>;
 
 // Audio formats (issue 5)
 /** One channel, or a list of equally long channels (interleaved on write). */
@@ -626,8 +801,10 @@ export declare function resample(
 export interface RenderOptions {
   /** `false` leaves out the incisors. */
   teeth?: boolean;
-  /** `false` leaves out the piriform fossae (waveguide). */
+  /** `false` leaves out the piriform fossae (both solvers). */
   piriform?: boolean;
+  /** `false` leaves out the vallecula (3D FDTD). */
+  vallecula?: boolean;
 }
 export interface Teeth {
   /** Inter-incisor gap (cm). */
@@ -709,6 +886,270 @@ export declare function anatomyMeshes(
   head: HeadConfig,
   options?: AnatomyOptions
 ): (Mesh & { name: string })[];
+/** Pivot (cm), angle (radians) and point motion of the jaw for a gap. */
+export declare function jawPose(
+  gap: number,
+  head: HeadConfig
+): {
+  pivot: number[];
+  angle: number;
+  move: (point: number[]) => number[];
+};
+
+// Anatomy from other 3D sources, switched part by part
+export type AnatomyPart =
+  | 'upperTeeth'
+  | 'lowerTeeth'
+  | 'tongue'
+  | 'palate'
+  | 'velum';
+/** A segmented 3D dataset: one mesh per part (mm) and its key points. */
+export interface AnatomySource {
+  readonly name: string;
+  readonly citation: string;
+  readonly license: string;
+  readonly parts: Partial<Record<AnatomyPart, Mesh>>;
+  readonly keyPoints: Record<string, number[]>;
+  /** Distance (mm) between the upper first molars' occlusal points. */
+  readonly archWidth: number;
+}
+/** One source for every part it has, or a source per part. */
+export type AnatomySelection =
+  | string
+  | AnatomySource
+  | Partial<Record<AnatomyPart, string | AnatomySource>>;
+export interface RigidTransform {
+  rotation: number[][];
+  translation: number[];
+  scale?: number;
+}
+export declare const ANATOMY_PARTS: readonly AnatomyPart[];
+export declare const DENTAL_KEY_POINTS: readonly string[];
+export declare const PROCEDURAL: 'procedural';
+/** Vertex clustering cube (mm) per anatomy LOD; 0 keeps every vertex. */
+export declare const SOURCE_LOD_CELLS: readonly number[];
+export declare function anatomySource(
+  name: string,
+  meshes: Mesh[],
+  options?: {
+    roles?: Record<string, (name: string) => boolean>;
+    keyPoints?: Record<string, number[]>;
+    citation?: string;
+    license?: string;
+  }
+): AnatomySource;
+export declare function anatomySourceFromGlb(
+  name: string,
+  bytes: ArrayBuffer | Uint8Array,
+  options?: {
+    scale?: number;
+    mirror?: boolean;
+    roles?: Record<string, (name: string) => boolean>;
+    citation?: string;
+    license?: string;
+  }
+): AnatomySource;
+export declare function registerAnatomySource(
+  source: AnatomySource
+): AnatomySource;
+export declare function unregisterAnatomySource(name: string): boolean;
+export declare function anatomySourceNames(): string[];
+export declare function anatomySourceParts(): Record<string, AnatomyPart[]>;
+export declare function anatomySelection(
+  selection?: AnatomySelection
+): Partial<Record<AnatomyPart, AnatomySource>>;
+export declare function similarityFit(
+  source: number[][],
+  target: number[][]
+): RigidTransform & { scale: number };
+export declare function fitAnatomySource(
+  source: AnatomySource,
+  head: HeadConfig,
+  options?: { fit?: string[]; scale?: boolean }
+): RigidTransform;
+export declare function composeAnatomy(
+  head: HeadConfig,
+  options?: AnatomyOptions & {
+    anatomy?: AnatomySelection;
+    scale?: boolean;
+    fit?: string[];
+  }
+): (Mesh & { name: string; source: string })[];
+/** Head whose mouthWidth gives the source's intermolar arch width. */
+export declare function sourceHead(
+  head: HeadConfig,
+  source: string | AnatomySource
+): HeadConfig;
+/** Mesh with its vertices clustered into cubes of `cell`. */
+export declare function clusterVertices(mesh: Mesh, cell: number): Mesh;
+
+/** The HuBMAP HRA Visible Human mouth and larynx (CC BY 4.0). */
+export declare const HRA: {
+  readonly name: string;
+  readonly citation: string;
+  readonly license: string;
+  readonly urls: { readonly male: string[]; readonly female: string[] };
+  readonly units: string;
+};
+/** HRA meshes in millimetres, head frame, fetched just in time. */
+export declare function fetchHra(
+  sex: 'male' | 'female',
+  options?: { fetchFn?: typeof fetch }
+): Promise<(Mesh & { name: string })[]>;
+/** The HRA male or female as source `hra-male` or `hra-female`. */
+export declare function hraSource(
+  sex: 'male' | 'female',
+  options?: { fetchFn?: typeof fetch }
+): Promise<AnatomySource>;
+
+// Mouths read as MRI is read, from any glTF, and compared key point for
+// key point (millimetres, y up, z forward, the model's left at -x).
+export interface NamedMesh extends Mesh {
+  name: string;
+}
+export type MeshNames = string[] | ((name: string) => boolean);
+/** The JSON chunk of a .glb and where its binary chunk starts. */
+export declare function glbJson(bytes: Uint8Array): {
+  json: Record<string, unknown>;
+  binOffset: number;
+};
+/** Accessors (positions, indices) the selected nodes' meshes read. */
+export declare function meshAccessors(
+  json: Record<string, unknown>,
+  options?: { names?: MeshNames }
+): number[];
+/** Triangle meshes of the selected nodes, in world coordinates. */
+export declare function gltfMeshes(
+  json: Record<string, unknown>,
+  read: (accessor: number) => ArrayLike<number>,
+  options?: { names?: MeshNames; scale?: number }
+): NamedMesh[];
+export declare function readGlbMeshes(
+  bytes: Uint8Array,
+  options?: { names?: MeshNames; scale?: number }
+): NamedMesh[];
+/** Meshes of a remote .glb, fetching only the bytes they need. */
+export declare function fetchGlbMeshes(
+  url: string,
+  options?: { names?: MeshNames; scale?: number; fetchFn?: typeof fetch }
+): Promise<NamedMesh[]>;
+export type KeyPoint =
+  | 'upperIncisor'
+  | 'lowerIncisor'
+  | 'upperFirstMolar'
+  | 'upperSecondMolar'
+  | 'staphylion'
+  | 'palateVault'
+  | 'uvula'
+  | 'tongueTip'
+  | 'tongueDorsum'
+  | 'glottis';
+export type KeyPoints = Record<KeyPoint, number[]>;
+export interface SortedTooth {
+  jaw: 'upper' | 'lower';
+  side: 'l' | 'r';
+  type: number;
+  positions: ArrayLike<number>;
+}
+export declare const KEY_POINTS: readonly KeyPoint[];
+export declare const HRA_PARTS: Readonly<
+  Record<string, (name: string) => boolean>
+>;
+/** Connected shells of a mesh, split vertices welded, largest first. */
+export declare function meshShells(
+  mesh: { positions: ArrayLike<number>; indices: ArrayLike<number> },
+  tolerance?: number
+): Mesh[];
+/** Teeth of an arch sorted into sides and types (0 central incisor). */
+export declare function classifyTeeth(
+  shells: { positions: ArrayLike<number>; indices: ArrayLike<number> }[],
+  jaw: 'upper' | 'lower',
+  options?: { leftSign?: number }
+): SortedTooth[];
+export declare function midsagittalPoints(
+  mesh: { positions: ArrayLike<number>; indices: ArrayLike<number> },
+  midline?: number
+): number[][];
+/** Points of the parasagittal cut at x, densified to 0.25 mm. */
+export declare function sagittalPoints(
+  mesh: { positions: ArrayLike<number>; indices: ArrayLike<number> },
+  x: number
+): number[][];
+export declare function mouthKeyPoints(
+  parts: Record<string, unknown>,
+  midline?: number
+): KeyPoints;
+export declare function glottisPoint(larynx: {
+  arytenoids: Mesh[];
+  thyroid: Mesh;
+}): number[];
+/** The model's key points for a head at rest. */
+export declare function modelKeyPoints(head: HeadConfig): KeyPoints;
+/** Rigid fit of the model onto a reference and the distances after it. */
+export declare function compareKeyPoints(
+  model: Partial<KeyPoints>,
+  reference: Partial<KeyPoints>,
+  options?: { fit?: KeyPoint[] }
+): {
+  transform: {
+    rotation: number[][];
+    translation: number[];
+    scale: number;
+    rms: number;
+  };
+  distances: Partial<Record<KeyPoint, number>>;
+  rms: number;
+  fitted: KeyPoint[];
+};
+export declare function referenceParts(
+  meshes: NamedMesh[],
+  roles?: Record<string, (name: string) => boolean>
+): Record<string, NamedMesh[]>;
+export declare function sortedReferenceTeeth(
+  parts: Record<string, NamedMesh[]>
+): SortedTooth[];
+/** Tooth landmarks of a reference's arches (see toothLandmarks). */
+export declare function referenceTeeth(parts: Record<string, NamedMesh[]>): {
+  jaw: 'upper' | 'lower';
+  side: 'l' | 'r';
+  type: number;
+  occlusal: number[];
+  width: number | null;
+  thickness: number | null;
+}[];
+export declare function referenceKeyPoints(
+  parts: Record<string, NamedMesh[]>
+): KeyPoints & { midline: number };
+/** Degrees of a long axis from vertical, positive with its top forward. */
+export declare function sagittalLean(positions: ArrayLike<number>): number;
+/** Degrees of an incisor crown's labial face from vertical. */
+export declare function labialLean(
+  positions: ArrayLike<number>,
+  jaw: 'upper' | 'lower',
+  options?: { crown?: number }
+): number;
+/** Mean lean of each jaw's central incisors (degrees). */
+export declare function incisorLean(
+  teeth: SortedTooth[],
+  measure?: (tooth: SortedTooth) => number
+): { upper: number; lower: number };
+/** Labial-face lean of the model's central incisors at rest (degrees). */
+export declare function modelIncisorLean(head: HeadConfig): {
+  upper: number;
+  lower: number;
+};
+/** Clinical distances (mm) between key points. */
+export declare function keyPointMeasures(points: KeyPoints): {
+  incisorToStaphylion: number;
+  velumChord: number;
+  overjet: number;
+  overbite: number;
+  dorsumHeight: number;
+  palateHeight: number;
+  glottisDepth: number;
+};
+/** Mirror meshes in x, keeping their faces outward. */
+export declare function mirrorX<T extends Mesh>(meshes: T[]): T[];
 
 // Listening: microphone position, room reverb and the box around the head
 /**
@@ -785,8 +1226,10 @@ export interface RenderOptions {
 export interface SynthesizeOptions {
   /** `false` leaves out the incisors. */
   teeth?: boolean;
-  /** `false` leaves out the piriform fossae (waveguide). */
+  /** `false` leaves out the piriform fossae (both solvers). */
   piriform?: boolean;
+  /** `false` leaves out the vallecula (3D FDTD). */
+  vallecula?: boolean;
   microphone?: MicrophoneOptions;
   room?: RoomPreset | RoomSpec | null;
   enclosure?: EnclosureOptions | null;
@@ -853,7 +1296,15 @@ export declare function voxelModelOptions(options?: {
   dx?: number;
   microphone?: MicrophoneOptions;
   enclosure?: EnclosureOptions | null;
-}): { dx: number; radiationRadius?: number; enclosure?: ResolvedEnclosure };
+  piriform?: boolean;
+  vallecula?: boolean;
+}): {
+  dx: number;
+  radiationRadius?: number;
+  enclosure?: ResolvedEnclosure;
+  piriform?: false;
+  vallecula?: false;
+};
 /** Listening chain after a solver, or null for the default output. */
 export declare function createListener(options: {
   microphone?: MicrophoneOptions;
@@ -999,3 +1450,183 @@ export declare function timelineAt(
   timeline: Timeline | null | undefined,
   time: number
 ): { word: number; syllable: number } | null;
+// Face animation: ARKit blendshapes, VRM expressions and Oculus visemes
+export type VisemeFormat = 'arkit' | 'vrm' | 'oculus';
+export declare const ARKIT_BLENDSHAPES: readonly string[];
+export declare const VRM_VISEMES: readonly ['aa', 'ih', 'ou', 'ee', 'oh'];
+export declare const OVR_VISEMES: readonly string[];
+export declare const VISEME_FORMATS: Readonly<
+  Record<VisemeFormat, readonly string[]>
+>;
+/** Largest inter-incisor opening (cm), jawOpen 1. */
+export declare const MAX_OPENING: number;
+export interface VowelShapes {
+  aa: number;
+  ee: number;
+  ih: number;
+  oh: number;
+  ou: number;
+}
+/** Physical face measures of an articulator state. */
+export interface FaceRig {
+  /** Inter-incisor gap (cm). */
+  gap: number;
+  /** Jaw rotation (radians) about the jaw pivot. */
+  jawAngle: number;
+  /** Jaw angle over the angle at the largest opening, 0..1. */
+  jawOpen: number;
+  /** Lip opening width and height (cm). */
+  lipWidth: number;
+  lipHeight: number;
+  lipsSealed: number;
+  /** Lip opening beyond the incisor gap (cm). */
+  lipParting: number;
+  /** Forward push of the lips (cm). */
+  protrusion: number;
+  rounding: number;
+  spread: number;
+  bilabial: number;
+  labiodental: number;
+  roundedLabial: number;
+  tongueAmount: number;
+  tongueLocation: number;
+  tongue: {
+    dental: number;
+    alveolar: number;
+    postalveolar: number;
+    palatal: number;
+    velar: number;
+  };
+  sibilance: number;
+  rhotic: number;
+  lateral: number;
+  nasal: number;
+  vowel: VowelShapes;
+  silence: number;
+}
+export interface VisemeTrack {
+  format: VisemeFormat;
+  fps: number;
+  duration: number;
+  names: readonly string[];
+  frames: { time: number; weights: Record<string, number> }[];
+}
+export declare function vowelShapes(state: {
+  height?: number;
+  backness?: number;
+  rounding?: number;
+}): VowelShapes;
+export declare function faceRig(
+  state: Record<string, number>,
+  head?: Partial<HeadConfig>,
+  options?: { shape?: object; maxOpening?: number }
+): FaceRig;
+export declare function arkitBlendshapes(rig: FaceRig): Record<string, number>;
+export declare function vrmExpressions(rig: FaceRig): Record<string, number>;
+export declare function ovrVisemes(rig: FaceRig): Record<string, number>;
+export declare function rigWeights(
+  rig: FaceRig,
+  format: VisemeFormat
+): Record<string, number>;
+export declare function visemeTrack(
+  plan: Plan,
+  head?: Partial<HeadConfig>,
+  options?: {
+    fps?: number;
+    format?: VisemeFormat;
+    maxOpening?: number;
+    digits?: number;
+  }
+): VisemeTrack;
+export declare function rigFrames<T>(
+  plan: Plan,
+  head: Partial<HeadConfig> | undefined,
+  options: { fps?: number; maxOpening?: number },
+  weigh: (rig: FaceRig) => T
+): { fps: number; frames: { time: number; weights: T }[] };
+export interface RigBinding {
+  format: VisemeFormat | null;
+  targets: { name: string; index: number; channel: string }[];
+}
+export declare function bindRig(
+  names: readonly string[],
+  options?: { format?: VisemeFormat }
+): RigBinding;
+export declare function rigFrame(
+  binding: RigBinding,
+  rig: FaceRig
+): Record<string, number>;
+export declare function characterTrack(
+  plan: Plan,
+  head: Partial<HeadConfig> | undefined,
+  names: readonly string[],
+  options?: { fps?: number; maxOpening?: number; format?: VisemeFormat }
+): {
+  format: VisemeFormat | null;
+  fps: number;
+  duration: number;
+  names: string[];
+  frames: { time: number; weights: number[] }[];
+};
+export interface VrmBind {
+  node?: number;
+  mesh?: number;
+  index: number;
+  weight: number;
+}
+export declare function vrmVowelBinds(
+  json: object
+): Record<'aa' | 'ih' | 'ou' | 'ee' | 'oh', VrmBind[]> | null;
+
+// The z-up atlases on the Visible Human Japanese male: Z-Anatomy
+// (CC BY-SA 4.0) and BodyParts3D (CC BY 4.0), fetched just in time.
+export interface Atlas {
+  readonly name: string;
+  readonly citation: string;
+  readonly license: string;
+}
+type TriangleMesh = {
+  positions: ArrayLike<number>;
+  indices: ArrayLike<number>;
+};
+type AtlasMesh = TriangleMesh & { name: string };
+type AtlasRoles = Readonly<Record<string, (name: string) => boolean>>;
+/** Height (mm) above the palatal vault where the palate bones are cut. */
+export declare const PALATE_BONE_CUT: number;
+/** Distance (mm) beside the midline where the bony palate is read. */
+export declare const PALATE_SUTURE: number;
+export declare const Z_ANATOMY_ATLAS: Atlas;
+export declare const BODYPARTS3D_ATLAS: Atlas;
+export declare const Z_ANATOMY_PARTS: AtlasRoles;
+/** BodyParts3D 4.0 element file ids per role. */
+export declare const BODYPARTS3D_FILES: Readonly<
+  Record<string, readonly string[]>
+>;
+export declare const BODYPARTS3D_PARTS: AtlasRoles;
+/** Meshes of a z-up atlas in the head frame, their faces kept outward. */
+export declare function atlasToHeadFrame<T extends TriangleMesh>(
+  meshes: T[]
+): (T & { positions: Float64Array; indices: Uint32Array })[];
+/** Triangles wholly at or below a height (y, mm). */
+export declare function cutAbove<T extends TriangleMesh>(
+  mesh: T,
+  height: number
+): T & { positions: Float64Array; indices: Uint32Array };
+/** Staphylion and palatal vault of a bony palate (mm, head frame). */
+export declare function bonyPalateKeyPoints(
+  palate: TriangleMesh,
+  midline: number,
+  molarDepth: number
+): { staphylion: number[]; palateVault: number[] };
+export declare function atlasSource(
+  atlas: Atlas,
+  meshes: AtlasMesh[],
+  roles: AtlasRoles
+): AnatomySource;
+export declare function zAnatomySource(meshes: AtlasMesh[]): AnatomySource;
+export declare function bodyParts3dSource(meshes: AtlasMesh[]): AnatomySource;
+/** A Wavefront OBJ as one triangle mesh. */
+export declare function parseObj(text: string): {
+  positions: Float64Array;
+  indices: Uint32Array;
+};

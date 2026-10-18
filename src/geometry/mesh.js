@@ -9,7 +9,12 @@
  */
 
 import { DEFAULT_HEAD, normalizeHeadConfig } from '../head-config.js';
-import { headLandmarks } from './centerline.js';
+import {
+  headLandmarks,
+  templatePosition,
+  templateValue,
+} from './centerline.js';
+import { TRACT_TEMPLATE } from './tract-template.js';
 
 /** Level-of-detail resolutions: [latitude rings, longitude segments, tube ring]. */
 export const MESH_LODS = Object.freeze([
@@ -150,24 +155,88 @@ function sphereIndices(rings, segments) {
 }
 
 /**
- * Lateral and midsagittal semi-axes (cm) of a tract cross-section. The
- * pharynx and oral cavity are wider than high; near the lips the opening
- * keeps the mouth width and only its height follows the area (a slit).
+ * Lateral and midsagittal semi-axes (cm) of an elliptical section.
+ * @param {number} area cm².
+ * @param {number} aspect Lateral over midsagittal width.
+ */
+export function ellipseAxes(area, aspect) {
+  const minor = Math.sqrt(Math.max(area, 1e-4) / (Math.PI * aspect));
+  return [minor * aspect, minor];
+}
+
+/** Width-to-height ratio of the nasal passage sections. */
+export const NOSE_ASPECT = 1.3;
+
+/**
+ * Lateral and midsagittal semi-axes (cm) of a nasal passage section.
+ * @param {number} area cm².
+ */
+export function noseAxes(area) {
+  return ellipseAxes(area, NOSE_ASPECT);
+}
+
+/**
+ * Lateral and midsagittal semi-axes (cm) of a tract cross-section, with
+ * the width-to-depth ratio of MRI tracts (tract-template.js): round at
+ * the glottis, wide in the lower pharynx, flat under the palate. Near the
+ * lips the opening keeps the mouth width and only its height follows the
+ * area (a slit).
  * @param {number} area cm².
  * @param {number} position 0 = glottis, 1 = lips.
  * @param {Record<string, number>} head
  */
 export function sectionAxes(area, position, head = DEFAULT_HEAD) {
   const safe = Math.max(area, 1e-4);
-  let aspect = position < head.pharynxRatio ? 1.3 : 1.6;
+  let aspect = templateValue(
+    TRACT_TEMPLATE.aspects,
+    templatePosition(position, head.pharynxRatio)
+  );
   if (position > 0.9) {
     const halfWidth = 1.25 * head.mouthWidth;
     const slit = (Math.PI * halfWidth * halfWidth) / safe;
     const blend = (position - 0.9) / 0.1;
     aspect = aspect * (1 - blend) + Math.max(1, Math.min(14, slit)) * blend;
   }
-  const minor = Math.sqrt(safe / (Math.PI * aspect));
-  return [minor * aspect, minor];
+  return ellipseAxes(safe, aspect);
+}
+
+/** Linear interpolation of a per-section table at a relative position. */
+function sampleAt(values, position) {
+  const source = Math.min(1, Math.max(0, position)) * (values.length - 1);
+  const lower = Math.floor(source);
+  const upper = Math.min(values.length - 1, lower + 1);
+  return values[lower] + (values[upper] - values[lower]) * (source - lower);
+}
+
+function smoothstep(low, high, value) {
+  const t = Math.min(1, Math.max(0, (value - low) / (high - low)));
+  return t * t * (3 - 2 * t);
+}
+
+/**
+ * Tract sections whose upper wall (the palate, and the back wall of the
+ * pharynx) stays where it is at rest, so a narrower or wider section moves
+ * the tongue side only: semi-axes as sectionAxes() plus the `shift` (cm)
+ * of the section centre towards the upper wall. The larynx and the lips
+ * close from both sides, so the shift fades out at both ends.
+ * @param {Record<string, number>} head
+ * @param {ArrayLike<number>} restAreas Area function at rest, e.g.
+ *   tractShape({}, head).areas.
+ * @returns {(area: number, position: number) => number[]}
+ */
+export function tractAxes(head, restAreas) {
+  const config = normalizeHeadConfig(head);
+  return (area, position) => {
+    const [major, minor] = sectionAxes(area, position, config);
+    const [, rest] = sectionAxes(
+      sampleAt(restAreas, position),
+      position,
+      config
+    );
+    const hold =
+      smoothstep(0.04, 0.16, position) * (1 - smoothstep(0.88, 0.98, position));
+    return [major, minor, (rest - minor) * hold];
+  };
 }
 
 function frame(tangent) {
@@ -185,6 +254,8 @@ function frame(tangent) {
  * @param {{points: Float64Array, tangents: Float64Array, count: number}} path
  * @param {ArrayLike<number>} areas One area per section (resampled if needed).
  * @param {{lod?: number, head?: Record<string, number>, axes?: (area: number, position: number) => number[]}} [options]
+ *   `axes` gives the lateral and midsagittal semi-axes of a section and
+ *   optionally a shift of its centre along the upper normal.
  */
 export function tubeMesh(path, areas, options = {}) {
   const ring = MESH_LODS[options.lod ?? 1].tube;
@@ -204,18 +275,13 @@ export function updateTubeMesh(mesh, path, areas, options = {}) {
   const { ring, positions } = mesh;
   for (let section = 0; section < path.count; section++) {
     const position = path.count > 1 ? section / (path.count - 1) : 0;
-    const source = position * (areas.length - 1);
-    const lower = Math.floor(source);
-    const upper = Math.min(areas.length - 1, lower + 1);
-    const area =
-      areas[lower] + (areas[upper] - areas[lower]) * (source - lower);
-    const [major, minor] = axes(area, position);
+    const [major, minor, shift = 0] = axes(sampleAt(areas, position), position);
     const tangent = path.tangents.subarray(section * 3, section * 3 + 3);
     const { side, normal } = frame(tangent);
     for (let step = 0; step < ring; step++) {
       const angle = (2 * Math.PI * step) / ring;
       const u = Math.cos(angle) * major;
-      const v = Math.sin(angle) * minor;
+      const v = Math.sin(angle) * minor + shift;
       const offset = (section * ring + step) * 3;
       for (let axis = 0; axis < 3; axis++) {
         positions[offset + axis] =
@@ -268,47 +334,6 @@ export function deformJaw(base, target, head, openness) {
       jawPivot[2] + dy * Math.sin(theta) + dz * Math.cos(theta);
   }
   return target;
-}
-
-/**
- * Lips as a flattened torus around the mouth opening.
- * @param {Record<string, number>} head
- * @param {{area?: number, rounding?: number, lod?: number}} [options]
- */
-export function lipsMesh(head = DEFAULT_HEAD, options = {}) {
-  const config = normalizeHeadConfig(head);
-  const { lips } = headLandmarks(config);
-  const ring = MESH_LODS[options.lod ?? 1].tube * 2;
-  const tube = 6;
-  const [major, minor] = sectionAxes(options.area ?? 1, 1, config);
-  const rounding = options.rounding ?? 0;
-  const thickness = 0.45 * config.lipThickness;
-  const width = major * (1 - 0.35 * rounding) + thickness;
-  const height = minor + thickness;
-  const positions = new Float32Array(ring * tube * 3);
-  let offset = 0;
-  for (let step = 0; step < ring; step++) {
-    const angle = (2 * Math.PI * step) / ring;
-    for (let around = 0; around < tube; around++) {
-      const phi = (2 * Math.PI * around) / tube;
-      const radial = thickness * Math.cos(phi);
-      positions[offset++] = lips[0] + Math.cos(angle) * (width + radial);
-      positions[offset++] = lips[1] + Math.sin(angle) * (height + radial);
-      positions[offset++] =
-        lips[2] + 0.2 + 0.8 * rounding + thickness * 0.8 * Math.sin(phi);
-    }
-  }
-  const indices = [];
-  for (let step = 0; step < ring; step++) {
-    for (let around = 0; around < tube; around++) {
-      const a = step * tube + around;
-      const b = step * tube + ((around + 1) % tube);
-      const c = ((step + 1) % ring) * tube + around;
-      const d = ((step + 1) % ring) * tube + ((around + 1) % tube);
-      indices.push(a, c, b, b, c, d);
-    }
-  }
-  return { positions, indices: Uint32Array.from(indices) };
 }
 
 /**

@@ -101,13 +101,20 @@ function tongueArea(state) {
   return state.tongueArea * (1 - trill) + trill * 0.35 * flap ** 2;
 }
 
-/** Articulated tract in reference proportions (before head warping). */
-export function referenceShape(state) {
-  const base = vowelShape({
-    height: state.height,
-    backness: state.backness,
-    rounded: Math.max(0, Math.min(1, state.rounding)),
-  });
+/**
+ * Articulated tract in reference proportions (before head warping).
+ * @param {Record<string, number>} state
+ * @param {Record<string, number[]>} [corrections] See vowelShape.
+ */
+export function referenceShape(state, corrections) {
+  const base = vowelShape(
+    {
+      height: state.height,
+      backness: state.backness,
+      rounded: Math.max(0, Math.min(1, state.rounding)),
+    },
+    corrections
+  );
   const { areas } = base;
   applySecondary(areas, state);
   applyRhotic(areas, state);
@@ -271,12 +278,13 @@ function applyTeeth(areas, state, head, length) {
  * Full tract description for one moment.
  * @param {Record<string, number>} state Articulator channels (see plan.js).
  * @param {Record<string, number>} head Normalised head config.
- * @param {{sections?: number, teeth?: boolean}} [options] `teeth: false`
- *   leaves out the incisors (constriction and obstacle noise source).
+ * @param {{sections?: number, teeth?: boolean, vowelCorrections?: Record<string, number[]>}} [options]
+ *   `teeth: false` leaves out the incisors (constriction and obstacle noise
+ *   source); `vowelCorrections` overrides the vowel calibration.
  */
 export function tractShape(state, head, options = {}) {
   const full = { ...CHANNEL_DEFAULTS, time: 0, ...state };
-  const reference = referenceShape(full);
+  const reference = referenceShape(full, options.vowelCorrections);
   const openness = Math.max(0, Math.min(1, 1 - full.height));
   const { areas, length } = fitToHead(reference, head, {
     sections: options.sections,

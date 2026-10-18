@@ -11,13 +11,22 @@ import {
 import { sampleState, tractShape } from '../src/articulation/tract-shape.js';
 import { vowelTarget } from '../src/articulation/phones.js';
 import { tubeFormants } from '../src/acoustics/transfer.js';
-import { DEFAULT_HEAD, normalizeHeadConfig } from '../src/head-config.js';
+import { piriformBranch } from '../src/acoustics/waveguide.js';
+import { HILLENBRAND } from '../src/articulation/vowel-norms.js';
+import {
+  DEFAULT_HEAD,
+  normalizeHeadConfig,
+  presetHeadConfig,
+} from '../src/head-config.js';
 import { getPhoneme } from '../src/ipa/inventory.js';
 
-function vowelFormants(symbol, head = DEFAULT_HEAD) {
+function vowelFormants(symbol, head = DEFAULT_HEAD, branches = () => []) {
   const target = vowelTarget({ phoneme: getPhoneme(symbol) });
   const shape = tractShape({ ...target, rhotic: 0 }, head);
-  return tubeFormants(shape.areas, shape.length, { count: 3 });
+  return tubeFormants(shape.areas, shape.length, {
+    count: 3,
+    branches: branches(shape),
+  });
 }
 
 function segmentMiddle(plan, kind, symbol) {
@@ -97,18 +106,29 @@ describe('smoothChannel', () => {
 });
 
 describe('tractShape', () => {
-  it('produces textbook vowel formants for the default head', () => {
-    const references = {
-      i: [270, 2290],
-      ɑ: [730, 1090],
-      ə: [600, 1400],
-    };
-    for (const [symbol, expected] of Object.entries(references)) {
-      const formants = vowelFormants(symbol);
-      for (let index = 0; index < expected.length; index++) {
-        const error = Math.abs(formants[index] - expected[index]);
-        expect(error / expected[index]).toBeLessThan(0.15);
-      }
+  it('matches the mean vowel formants of men on the male head', () => {
+    const head = presetHeadConfig('male');
+    const fossae = (shape) => [
+      piriformBranch(shape.areas.length, shape.length, head),
+    ];
+    for (const symbol of [
+      'i',
+      'ɪ',
+      'e',
+      'ɛ',
+      'æ',
+      'ʌ',
+      'ɑ',
+      'ɔ',
+      'o',
+      'ʊ',
+      'u',
+    ]) {
+      const formants = vowelFormants(symbol, head, fossae);
+      HILLENBRAND.male[symbol].forEach((expected, index) => {
+        const error = Math.abs(formants[index] - expected);
+        expect(error / expected).toBeLessThan(0.1);
+      });
     }
   });
 

@@ -27,20 +27,86 @@ a pressure wave travelling through the 3D shape of a parametric low-poly head
   - `waveguide`: a branched Kelly-Lochbaum tube (tract + nose) that follows
     the 3D centreline of the head; real time on any device.
   - `fdtd3d`: a sparse-voxel 3D finite-difference time-domain solver of the
-    acoustic wave equation inside the voxelised head and the air around it.
+    acoustic wave equation inside the voxelised head and the air around it;
+    the default of the library, the CLI and the server (`studio` tier).
 - **Low-poly head model** with only acoustically relevant detail (tract tube,
   nasal tube, lips, jaw, skin hull, teeth, tongue, hard and soft palate),
-  four mesh LODs and OBJ export.
+  four mesh LODs and OBJ, STL and glTF export (`npm run export:model`, opens
+  in Blender). The tract bends like the MRI tracts of the Dresden Vocal
+  Tract Dataset, the upper and lower lips outline the acoustic opening, the
+  teeth lie on a dental arch fitted to 17 segmented CBCT scans, the jaw
+  opens per phoneme as measured by MRI, and the hard palate and velum have
+  the lengths, vault height and thickness measured on skulls, CT and MRI.
+- **Anatomy checks**: `scripts/compare-anatomy.mjs` renders the model next
+  to MRI vocal tracts and measures their agreement on midsagittal, coronal,
+  axial and oblique cuts; `scripts/fetch-dvtd.mjs` and
+  `scripts/fetch-anatomy.mjs` fetch MRI tracts, segmented teeth and the
+  HuBMAP Visible Human mouth and larynx just in time, and
+  `scripts/compare-hra.mjs` cuts the model and the HuBMAP organs like MRI
+  slices and compares ten key points after a rigid fit; with
+  `--atlas z-anatomy|bodyparts3d --dir DIR` it does the same against the
+  Z-Anatomy and BodyParts3D atlases (see
+  [the issue 9 case study](docs/case-studies/issue-9/README.md)).
+- **Anatomy from any 3D source, part by part**: each articulator (upper
+  and lower teeth, tongue, hard palate, velum) comes from the procedural
+  model or from a segmented dataset (the HuBMAP Visible Human male and
+  female, or any glTF binary), fitted onto the model's dental key points,
+  carried by the jaw and reduced from full resolution to each LOD by vertex
+  clustering:
+
+  ```js
+  import { headModel, hraSource, registerAnatomySource } from 'voice-simulator';
+
+  registerAnatomySource(await hraSource('male')); // fetched just in time
+  const meshes = headModel(head, {
+    lod: 3,
+    anatomy: { tongue: 'hra-male', palate: 'hra-male' }, // or 'hra-male'
+  });
+  ```
+
+  `npm run export:model -- --anatomy hra-female --scale` exports the same,
+  `anatomySourceFromGlb` reads a character's own mouth, and
+  `zAnatomySource` and `bodyParts3dSource` read the Z-Anatomy STLs and
+  BodyParts3D OBJs that `scripts/fetch-anatomy.mjs` downloads
+  (`npm run export:model -- --atlas z-anatomy=DIR --anatomy z-anatomy`).
+
+- **Talking animation for character models**: `visemeTrack(plan, head,
+{ format, fps })` turns the articulation the solvers hear into ARKit
+  blendshapes (the 52 curves of MetaHuman, Ready Player Me and face
+  trackers), VRM 1.0 expressions (`aa ih ou ee oh`) or the 15 Oculus
+  visemes. Each frame comes from the jaw angle that opens the incisors as
+  far as the tract needs, the lip opening with the area of the last tract
+  section, and where the lips and the tongue constrict: /m b p/ close the
+  lips, /f v/ tuck the lower lip under the upper incisors, /θ ð/ show the
+  tongue tip, and coarticulation carries over (`faceRig` gives the
+  physical measures in cm and radians).
+- **Bridges to any character model**: `bindRig(morphTargetNames)` reads
+  the mouth shapes a model has and binds them to the face rig, whichever
+  convention they follow: ARKit names (also MetaHuman
+  `CTRL_expressions_*`, `blendShape1.*` and Ready Player Me), Oculus
+  visemes (`viseme_PP`, VRChat `vrc.v_pp`), VRM 1.0 and 0.x vowels, VRoid
+  `Fcl_MTH_*` and MMD `あいうえお`. `rigFrame(binding, faceRig(state, head))`
+  gives the morph target weights of one frame, `characterTrack(plan, head,
+names)` a whole utterance, and `vrmVowelBinds(gltfJson)` reads the morph
+  targets a VRM file declares for its vowels. The example app's **Talking
+  character** panel animates a procedural head or any `.vrm`, `.glb` or
+  `.gltf` model the user loads.
+
+  ![Talking character poses](docs/case-studies/issue-9/character/poses.png)
+
 - **Teeth and piriform fossae in the acoustics**: the incisors narrow the
   tract and turn the frication jet into a sibilant source; the piriform
-  fossae add their side-branch antiresonance (waveguide).
+  fossae add their side-branch antiresonance in both solvers, the
+  vallecula in the 3D solver.
 - **Head and voice editor**: 32 parameters, everything that changes the
   sound (tract length, pharynx, mouth, jaw, nose, pitch, breathiness,
   jitter, shimmer, vibrato, declination, accent strength, lengthening,
   pauses, wall loss, nasal coupling, frication level, ...). Every page
   refresh starts from a new random seed; `?seed=` makes it reproducible.
 - **Male, female and child presets** for random heads (`preset`), with f0
-  and formants in the ranges measured by Hillenbrand et al. (1995).
+  and formants fitted to the men's, women's and children's means of
+  Hillenbrand et al. (1995), and a posterior glottal chink (`glottalChink`)
+  that gives women and children their measured spectral tilt.
 - **Copy a voice**: `matchVoice` analyses a recording (f0, formants,
   vocal-tract length, H1-H2, HNR, speaking rate) and searches for the head
   that sounds most like it; in the app, upload a file or record yourself.
@@ -51,8 +117,11 @@ a pressure wave travelling through the 3D shape of a parametric low-poly head
 - **Audio formats**: WAV (8-32-bit integer and 32/64-bit float), FLAC,
   AIFF, AU and raw PCM, for both writing and reading, with band-limited
   resampling (`encodeAudio`, `decodeAudio`, `resample`).
-- **Automatic LODs** for audio and visuals: a startup benchmark plus a
-  runtime governor keep about 20% headroom (target load 80%).
+- **Automatic LODs** for audio and visuals: a startup benchmark (on the CPU
+  and, for the 3D tiers, on WebGPU) plus a runtime governor keep about 20%
+  headroom (target load 80%).
+- **WebGPU**: the 3D solver can run on the GPU (`device` option), and the
+  app uses it when the browser has WebGPU, with the CPU as fallback.
 - **Modes**: sound only, 3D only, or both, with optional jaw/lip animation and
   a live pressure-field view.
 - **Delivery**: GitHub Pages web app, JavaScript library, CLI, HTTP API with
@@ -62,7 +131,10 @@ The full research, the list of requirements and the plan behind each of them
 are in [docs/case-studies/issue-1](docs/case-studies/issue-1/README.md); the
 second round (precision, anatomy, listening, presets, voice matching,
 formats, linguistics) is in
-[docs/case-studies/issue-5](docs/case-studies/issue-5/README.md).
+[docs/case-studies/issue-5](docs/case-studies/issue-5/README.md), and the
+third (full 3D by default, anatomy against MRI and segmented scans, female
+and child voices, WebGPU) in
+[docs/case-studies/issue-9](docs/case-studies/issue-9/README.md).
 
 ## Quick Start
 
@@ -80,9 +152,11 @@ Synthesis runs in a Web Worker and is streamed to Web Audio in chunks; the 3D
 view uses three.js and colours the tract (or every air voxel with the 3D
 solver) by the simulated acoustic pressure.
 
-Every published release stays online: the previous version of the app is at
-`/v1/` (`https://konard.github.io/voice-simulator/v1/` once this version is
-deployed to GitHub Pages).
+Every published release stays online at its own path so all versions can be
+compared: `/v1/`, `/v2/` (the release before issue 9) and so on, with the
+current version at both `/` and the next path (`/v3/` for this one). The
+header of the app links every version
+(`https://konard.github.io/voice-simulator/v2/`).
 
 ### Library
 
@@ -138,10 +212,21 @@ for await (const chunk of synthesizeStream('नमस्ते', { tier: 'low' }
 }
 ```
 
+On the GPU, pass a WebGPU device and render asynchronously; the GPU
+follows the CPU kernel within 1e-5 relative RMS error:
+
+```js
+import { requestGpuDevice, synthesizeAsync } from 'voice-simulator';
+
+const device = await requestGpuDevice(); // null without WebGPU
+const gpuResult = await synthesizeAsync('Hello world', { device });
+```
+
 Lower-level building blocks are exported too: `planUtterance`,
 `sampleState`, `tractShape`, `Waveguide`, `Fdtd3d`, `buildVoxelModel`,
 `VoiceRenderer`, `headMesh`, `tubeMesh`, `headModelObj`, `LodGovernor`,
-`chooseTier`, `measureAudioTier` and more; see
+`chooseTier`, `chooseTierWithGpu`, `measureAudioTier`,
+`benchmarkAudioTiersAsync` and more; see
 [`src/index.d.ts`](src/index.d.ts). A runnable example is in
 [`examples/basic-usage.js`](examples/basic-usage.js).
 
@@ -151,6 +236,7 @@ Lower-level building blocks are exported too: `planUtterance`,
 npx voice-simulator ipa "你好世界"
 npx voice-simulator ipa "Water, please." --accent en-GB
 npx voice-simulator timeline "Hello world, how are you?"   # word and syllable times
+npx voice-simulator visemes "Hello world" -f vrm --fps 30 -o hello.json  # face animation
 npx voice-simulator say "Hello world" -o hello.wav --seed 7
 npx voice-simulator say "Привет" --tier high -o fdtd.wav   # 3D FDTD solver
 npx voice-simulator say "Hello" --preset female --head random -o hi.flac -b 24
@@ -171,17 +257,18 @@ npx voice-simulator --help
 bundles) serves a small test page at `/` and these endpoints. Parameters can
 be passed as a query string or as a JSON `POST` body.
 
-| Endpoint               | Result                                                       |
-| ---------------------- | ------------------------------------------------------------ |
-| `GET /api/health`      | `{ status, version }`                                        |
-| `GET /api/languages`   | Supported languages with sample sentences                    |
-| `GET /api/tiers`       | Audio and visual LOD tiers                                   |
-| `GET /api/ipa`         | `text`, `lang`, `accent` → IPA transcription                 |
-| `GET /api/timeline`    | `text`, `lang`, `accent` → word and syllable times           |
-| `GET /api/head/random` | `seed` → random head configuration                           |
-| `GET /api/mesh.obj`    | `head`, `seed`, `lod` → OBJ model                            |
-| `GET /api/synthesize`  | `text`, `lang`, `tier`, `seed`, `head`, `sampleRate` → WAV   |
-| `GET /api/stream`      | Same parameters → chunked WAV that starts playing right away |
+| Endpoint               | Result                                                        |
+| ---------------------- | ------------------------------------------------------------- |
+| `GET /api/health`      | `{ status, version }`                                         |
+| `GET /api/languages`   | Supported languages with sample sentences                     |
+| `GET /api/tiers`       | Audio and visual LOD tiers                                    |
+| `GET /api/ipa`         | `text`, `lang`, `accent` → IPA transcription                  |
+| `GET /api/timeline`    | `text`, `lang`, `accent` → word and syllable times            |
+| `GET /api/visemes`     | `text`, `format` (arkit, vrm, oculus), `fps` → face animation |
+| `GET /api/head/random` | `seed` → random head configuration                            |
+| `GET /api/mesh.obj`    | `head`, `seed`, `lod` → OBJ model                             |
+| `GET /api/synthesize`  | `text`, `lang`, `tier`, `seed`, `head`, `sampleRate` → WAV    |
+| `GET /api/stream`      | Same parameters → chunked WAV that starts playing right away  |
 
 Synthesis also accepts `accent` (`en-US`, `en-GB`, `en-AU`, `en-IN`),
 `preset` (`male`, `female`, `child`, used with `head=random`), `micDistance`
@@ -206,16 +293,41 @@ The image runs `voice-simulator serve` on port 8080 with a health check on
 
 ### Quality tiers
 
-| Audio tier | Solver    | Detail        | Sample rate | Relative cost |
-| ---------- | --------- | ------------- | ----------- | ------------- |
-| `minimal`  | waveguide | 22 sections   | 22.05 kHz   | 1             |
-| `low`      | waveguide | 32 sections   | 32 kHz      | 1.6           |
-| `medium`   | waveguide | 44 sections   | 48 kHz      | 2.6           |
-| `high`     | fdtd3d    | 1 cm voxels   | 48 kHz      | 10            |
-| `ultra`    | fdtd3d    | 0.6 cm voxels | 48 kHz      | 65            |
+| Audio tier  | Solver    | Detail        | Sample rate | Relative cost |
+| ----------- | --------- | ------------- | ----------- | ------------- |
+| `minimal`   | waveguide | 22 sections   | 22.05 kHz   | 1             |
+| `low`       | waveguide | 32 sections   | 32 kHz      | 1.6           |
+| `medium`    | waveguide | 44 sections   | 48 kHz      | 2.6           |
+| `high`      | fdtd3d    | 1 cm voxels   | 48 kHz      | 10            |
+| `ultra`     | fdtd3d    | 0.6 cm voxels | 48 kHz      | 65            |
+| `studio`    | fdtd3d    | 0.5 cm voxels | 48 kHz      | 105           |
+| `reference` | fdtd3d    | 0.4 cm voxels | 48 kHz      | 220           |
 
-The web app and `voice-simulator benchmark` pick the most detailed tier
-whose measured load stays under 80%. The benchmark does not run tiers whose
+`studio` is the default of the library, the CLI and the server
+(`DEFAULT_AUDIO_TIER`): full 3D acoustics whose 0.5 cm cells resolve the
+incisors, the piriform fossae, the vallecula and transverse modes well
+above 5 kHz. It renders about 12 times slower than real time on a desktop
+CPU. The web app starts in Auto: it benchmarks the tiers on the CPU, then
+the 3D tiers above the CPU's choice on WebGPU, and uses the most detailed
+tier whose load stays under 80%, so a fast GPU gets the 3D tiers and a
+laptop or phone the real-time waveguide. Every tier stays in the menu;
+when a slower one is chosen, the app renders ahead: it shows the progress
+and starts playback as soon as the rest of the utterance is predicted to be
+ready before the player reaches it, so the voice never breaks up. Choose
+`--tier medium` (or `tier: 'medium'`) for the real-time 1D waveguide.
+
+The 3D tiers also run on the GPU: give `synthesizeAsync`,
+`renderPlanAsync` or `new Fdtd3d` a WebGPU `device` (`requestGpuDevice()`
+finds one). One workgroup runs a whole chunk of steps per dispatch, so the
+field stays on the GPU and only the output samples come back. The web app
+uses WebGPU whenever the browser offers it (Acoustics → Simulation turns it
+off) and says the utterance again on the CPU if the GPU fails; the audio
+meter shows `studio · fdtd3d · GPU` or `studio · fdtd3d`.
+
+The web app (`benchmarkAudioTiersAsync`) and `voice-simulator benchmark`
+pick the most detailed tier whose measured load stays under 80%. On a
+machine with WebGPU, the GPU is only tried for the 3D tiers above the CPU's
+choice, so a slow integrated or software adapter never lowers it. The benchmark does not run tiers whose
 load, predicted from the cheaper tier, is far above the target, and it stops
 measuring a tier as soon as it is clearly too slow; the app remembers the
 result per device. In the first 40-300 ms of each utterance an
@@ -271,6 +383,7 @@ npm run example:desktop:package
 │   ├── ipa/               # IPA parsing, phone inventory, syllables
 │   ├── articulation/      # Plan, prosody, timeline and tract shapes
 │   ├── geometry/          # Head model, centrelines and meshes
+│   ├── animation/         # ARKit, VRM and Oculus face animation
 │   ├── acoustics/         # Glottis, waveguide, voxel model, 3D FDTD,
 │   │                      # microphone and room
 │   ├── analysis/          # Voice features and voice matching

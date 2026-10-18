@@ -1,0 +1,17 @@
+male /æ/: f0 119 F3 2575 H1-H2 3.2 H1-A3 26.8
+male /ɑ/: f0 119 F3 2665 H1-H2 3.6 H1-A3 29.9
+male /ʌ/: f0 118 F3 2570 H1-H2 3.4 H1-A3 30.4
+male /ɛ/: f0 119 F3 2545 H1-H2 3.2 H1-A3 28.2
+male (chink 0 mm²) mean: H1-H2 3.3 dB, H1-A3 28.8 dB; bare source H1-H2 4.6 dB, H1-A3 42.4 dB
+female /æ/: f0 222 F3 2835 H1-H2 5.4 H1-A3 30.6
+female /ɑ/: f0 220 F3 3020 H1-H2 6.8 H1-A3 44.8
+female /ʌ/: f0 216 F3 2975 H1-H2 6.2 H1-A3 47.2
+female /ɛ/: f0 222 F3 2810 H1-H2 5.2 H1-A3 36.3
+female (chink 1 mm²) mean: H1-H2 5.9 dB, H1-A3 39.7 dB; bare source H1-H2 9.0 dB, H1-A3 45.8 dB
+child /æ/: f0 242 F3 3245 H1-H2 5.2 H1-A3 36.3
+child /ɑ/: f0 242 F3 2975 H1-H2 6.8 H1-A3 44.6
+child /ʌ/: f0 245 F3 2765 H1-H2 6.4 H1-A3 50.1
+child /ɛ/: f0 242 F3 3105 H1-H2 4.9 H1-A3 43.5
+child (chink 1 mm²) mean: H1-H2 5.8 dB, H1-A3 43.6 dB; bare source H1-H2 9.6 dB, H1-A3 47.0 dB
+female - male: raw H1-H2 2.6 dB, H1-A3 10.9 dB; corrected H1*-H2* 4.7 dB, H1*-A3* 12.7 dB; bare source H1-H2 4.4 dB, H1-A3 3.4 dB (women - men, Hanson and Chuang 1999: 3.1 and 9.6 dB)
+child - male: raw H1-H2 2.5 dB, H1-A3 14.8 dB; corrected H1*-H2* 5.2 dB, H1*-A3* 15.5 dB; bare source H1-H2 4.9 dB, H1-A3 4.6 dB (women - men, Hanson and Chuang 1999: 3.1 and 9.6 dB)

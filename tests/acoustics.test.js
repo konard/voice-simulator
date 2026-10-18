@@ -8,10 +8,17 @@ import { planUtterance } from '../src/articulation/plan.js';
 import { tractShape } from '../src/articulation/tract-shape.js';
 import { vowelTarget } from '../src/articulation/phones.js';
 import { renderPlan, VoiceRenderer } from '../src/acoustics/voice.js';
-import { lfParameters, lfWaveform } from '../src/acoustics/glottis.js';
+import {
+  GLOTTAL_REFLECTION,
+  Glottis,
+  glottalReflection,
+  lfParameters,
+  lfWaveform,
+} from '../src/acoustics/glottis.js';
 import {
   estimateFormants,
   estimatePitch,
+  harmonicLevel,
   rms,
   spectralPeaks,
 } from '../src/acoustics/analysis.js';
@@ -46,13 +53,50 @@ describe('LF glottal pulse', () => {
     expect(minimum).toBeLessThan(-0.8);
     expect(Math.abs(lfWaveform(pulse, 0.999))).toBeLessThan(0.05);
   });
+
+  it('loses high harmonics through a glottal chink as measured', () => {
+    // Hanson and Chuang (1999, table II): a 5 mm² chink tilts the source
+    // spectrum down by about 12 dB at 2.5 kHz and widens the formants.
+    const tilt = (chink) => {
+      const glottis = new Glottis({ jitter: 0, shimmer: 0, chink });
+      const control = {
+        f0: 125,
+        voicing: 1,
+        aspiration: 0,
+        closure: 0,
+        loudness: 1,
+      };
+      const samples = new Float64Array(RATE * 0.3);
+      for (let n = 0; n < samples.length; n++) {
+        samples[n] = glottis.step(1 / RATE, control, 0);
+      }
+      const options = { start: 0.1, duration: 0.16, search: 0 };
+      return (
+        harmonicLevel(samples, RATE, 125, options) -
+        harmonicLevel(samples, RATE, 2500, options)
+      );
+    };
+    const extra = tilt(5) - tilt(0);
+    expect(extra).toBeGreaterThan(10);
+    expect(extra).toBeLessThan(14);
+    expect(glottalReflection({})).toBe(GLOTTAL_REFLECTION);
+    const reflections = [1, 5, 10].map((glottalChink) =>
+      glottalReflection({ glottalChink })
+    );
+    expect(reflections[0]).toBeLessThan(GLOTTAL_REFLECTION);
+    expect(reflections[2]).toBeLessThan(reflections[1]);
+    expect(reflections[1]).toBeLessThan(reflections[0]);
+  });
 });
 
 describe('waveguide synthesis', () => {
   it('reproduces the formants of the tract shape', () => {
+    // LPC locks onto a harmonic next to a sharp formant; at 100 Hz the
+    // harmonics are dense enough for F1 of /ɑ/ (about 650 Hz).
+    const head = normalizeHeadConfig({ pitch: 100, vibrato: 0 });
     for (const symbol of ['i', 'ɑ', 'ə']) {
-      const plan = planUtterance(`ˈ${symbol}ː`);
-      const samples = renderPlan(plan, { sampleRate: RATE });
+      const plan = planUtterance(`ˈ${symbol}ː`, { head });
+      const samples = renderPlan(plan, { sampleRate: RATE, head });
       const measured = estimateFormants(samples, RATE, {
         start: vowelMiddle(plan) - 0.03,
         duration: 0.06,
@@ -153,6 +197,24 @@ describe('spectral peaks', () => {
     const strong = spectralPeaks(response, rate, { floor: 12 });
     expect(all).toContain(3000);
     expect(strong).toEqual([500, 1500]);
+  });
+
+  it('drops ripples on the flank of a resonance by prominence', () => {
+    const rate = 16000;
+    const response = new Float64Array(rate / 10);
+    for (let n = 0; n < response.length; n++) {
+      // A broad resonance and a faint narrow one on its flank.
+      response[n] =
+        Math.exp(-n / 40) * Math.sin((2 * Math.PI * 700 * n) / rate) +
+        0.005 * Math.exp(-n / 400) * Math.sin((2 * Math.PI * 450 * n) / rate);
+    }
+    const all = spectralPeaks(response, rate, { to: 1000 });
+    const prominent = spectralPeaks(response, rate, {
+      to: 1000,
+      prominence: 1,
+    });
+    expect(all).toEqual([440, 700]);
+    expect(prominent).toEqual([700]);
   });
 });
 

@@ -266,6 +266,18 @@ export const HEAD_PARAMETERS = Object.freeze([
     description: 'Scales the turbulent noise generated at the glottis.',
   },
   {
+    key: 'glottalChink',
+    label: 'Glottal chink',
+    group: 'source',
+    unit: 'mm²',
+    min: 0,
+    max: 10,
+    step: 0.1,
+    default: 0,
+    description:
+      'Posterior gap left open through the glottal cycle, common in women: a darker, softer voice with wider formants.',
+  },
+  {
     key: 'declination',
     label: 'Declination',
     group: 'prosody',

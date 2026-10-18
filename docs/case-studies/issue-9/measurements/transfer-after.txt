@@ -1,0 +1,16 @@
+/i/ tube formants: 276 2260 3161 4175 4988
+  waveguide peaks<5k 260 2200 3180
+  3D dx 1 (638 cells) peaks<5k 200 1800 2340 3240 3520 4240 4580 4900 | rms dB 0.2-3k 6.4 0.2-5k 10.8
+  3D dx 0.5 (4332 cells) peaks<5k 200 1980 2640 3400 4120 4840 | rms dB 0.2-3k 7.2 0.2-5k 7.1
+/ɑ/ tube formants: 700 981 3134 4193 5104
+  waveguide peaks<5k 1060 3260 4340
+  3D dx 1 (638 cells) peaks<5k 820 2440 3320 4320 | rms dB 0.2-3k 8.3 0.2-5k 8.0
+  3D dx 0.5 (4332 cells) peaks<5k 520 820 2220 2760 3680 4560 | rms dB 0.2-3k 7.8 0.2-5k 8.7
+/u/ tube formants: 260 735 2426 3831 4588
+  waveguide peaks<5k 2300 4620
+  3D dx 1 (638 cells) peaks<5k 1860 3000 3500 3800 3940 4280 4520 | rms dB 0.2-3k 11.5 0.2-5k 14.1
+  3D dx 0.5 (4332 cells) peaks<5k 1940 2080 2880 3100 3520 4740 | rms dB 0.2-3k 5.6 0.2-5k 9.5
+/ə/ tube formants: 635 1413 2619 4048 5173
+  waveguide peaks<5k 660 1340 2560 4040
+  3D dx 1 (638 cells) peaks<5k 460 1060 2100 2560 3140 3480 4280 4600 | rms dB 0.2-3k 9.1 0.2-5k 11.8
+  3D dx 0.5 (4332 cells) peaks<5k 460 1120 2240 3460 4300 | rms dB 0.2-3k 8.9 0.2-5k 11.6

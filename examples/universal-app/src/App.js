@@ -13,6 +13,7 @@ import {
 } from '../../../src/index.js';
 import { ExportControls } from './components/ExportControls.js';
 import { AcousticsSettings } from './components/AcousticsSettings.js';
+import { CharacterPanel } from './components/CharacterPanel.js';
 import { HeadEditor } from './components/HeadEditor.js';
 import { DEFAULT_ACOUSTICS, listeningSettings } from './engine/listening.js';
 import { PresetSelect, initialPreset } from './components/PresetSelect.js';
@@ -20,13 +21,15 @@ import { VoiceMatch } from './components/VoiceMatch.js';
 import { SpokenText } from './components/SpokenText.js';
 import { useSimulator } from './engine/use-simulator.js';
 import { detectLocale, strings } from './i18n.js';
+import { versionLinks } from './versions.js';
+import previousVersions from '../previous-versions.json';
 
 const repositoryUrl =
   import.meta.env.VITE_REPOSITORY_URL ??
   'https://github.com/konard/voice-simulator';
 
-// The previous release stays published next to the current one.
-const PREVIOUS_VERSION_URL = 'https://konard.github.io/voice-simulator/v1/';
+// Every release stays published next to the current one (see versions.js).
+const VERSIONS = versionLinks(previousVersions);
 const THEMES = ['system', 'light', 'dark'];
 
 function initialSeed() {
@@ -129,6 +132,15 @@ function Meter({ label, tier, load, detail, t }) {
   );
 }
 
+/** "Rendering 3D acoustics 42% · plays in 3 s" while rendering ahead. */
+function renderingNote({ progress, wait }, t) {
+  const percent = Math.floor(progress * 100);
+  const seconds = Number.isFinite(wait)
+    ? ` · ${t.playsIn} ${Math.ceil(wait)} s`
+    : '';
+  return `${t.rendering} ${percent}%${seconds}`;
+}
+
 function Hud({ status, visual, mode, t }) {
   const audioTier = AUDIO_TIERS[status.audioLevel ?? 0];
   const solver = status.solver ?? audioTier.solver;
@@ -157,6 +169,13 @@ function Hud({ status, visual, mode, t }) {
       : null,
     status.phase === 'benchmark'
       ? h('small', { className: 'hud-note' }, t.benchmarking)
+      : null,
+    status.rendering && mode !== 'visual'
+      ? h(
+          'small',
+          { className: 'hud-note', role: 'status' },
+          renderingNote(status.rendering, t)
+        )
       : null
   );
 }
@@ -436,6 +455,8 @@ export function App() {
     lang: 'auto',
     accent: 'en-US',
     mode: 'both',
+    // The most detailed tier this device renders in real time with 20%
+    // headroom, measured on the CPU and on WebGPU.
     tier: 'auto',
     animateMouth: true,
     showField: true,
@@ -487,9 +508,25 @@ export function App() {
           `${t.theme}: ${t.themes[theme]}`
         ),
         h(
-          'a',
-          { href: PREVIOUS_VERSION_URL, target: '_blank', rel: 'noreferrer' },
-          t.previousVersion
+          'span',
+          { className: 'versions' },
+          `${t.versions}:`,
+          VERSIONS.map((version) =>
+            h(
+              'a',
+              {
+                key: version.path,
+                href: version.href,
+                target: '_blank',
+                rel: 'noreferrer',
+                title: version.current
+                  ? t.currentVersion
+                  : `${t.version} ${version.number}`,
+                'aria-current': version.current ? 'page' : undefined,
+              },
+              version.path
+            )
+          )
         ),
         h(
           'a',
@@ -520,6 +557,7 @@ export function App() {
         onStop: () => simulator.engineRef.current?.stop(),
       })
     ),
+    h(CharacterPanel, { simulator, head, t }),
     h(EditorPanel, {
       head,
       seed,

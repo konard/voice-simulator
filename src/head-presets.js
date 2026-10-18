@@ -15,9 +15,20 @@
  *   Fitch and Giedd 1999, JASA 106(3));
  * - the male pharynx grows more after puberty, so the pharynx/oral ratio is
  *   lower for women and children (Fant 1966; Vorperian et al. 2009);
+ * - the vocal tract anatomy of the mid-size female and child heads (length,
+ *   pharynx ratio, widths, tongue, jaw and lips) is fitted within those
+ *   anatomical bounds so that the eleven measured vowels, piriform fossae
+ *   included, resonate at the mean F1-F3 of the women and children of
+ *   Hillenbrand et al. (1995), as the measured shapes do for the men
+ *   (experiments/issue-9-preset-fit.mjs, rms error about 5%);
  * - female voices are on average breathier, with a laxer (higher Rd) pulse
  *   and more aspiration noise (Klatt and Klatt 1990, JASA 87; Hanson 1997,
- *   JASA 101). Raising f0 alone gives a "high-pitched man".
+ *   JASA 101). Raising f0 alone gives a "high-pitched man";
+ * - corrected for the vowel, H1*-A3* of women is 9.6 dB above that of men
+ *   and H1*-H2* 3.1 dB (Hanson and Chuang 1999, JASA 106, table X), mostly
+ *   through posterior glottal chinks. A 1 mm² chink on the female and child
+ *   presets gives 10 dB, the laxer pulse 4-5 dB
+ *   (experiments/issue-9-preset-source.mjs); men keep a closed glottis.
  */
 
 export const HEAD_PRESETS = Object.freeze({
@@ -47,14 +58,14 @@ export const HEAD_PRESETS = Object.freeze({
   female: Object.freeze({
     label: 'Female adult',
     ranges: Object.freeze({
-      vocalTractLength: [13.8, 15.4, 0.35],
-      pharynxRatio: [0.41, 0.44, 0.015],
-      pharynxWidth: [0.86, 0.95, 0.04],
-      oralWidth: [0.93, 0.99, 0.05],
-      mouthWidth: [0.9, 0.98, 0.08],
-      lipThickness: [1, 1.08, 0.15],
-      jawRange: [0.94, 1, 0.08],
-      tongueSize: [0.92, 0.98, 0.04],
+      vocalTractLength: [14, 15.6, 0.35],
+      pharynxRatio: [0.455, 0.485, 0.015],
+      pharynxWidth: [0.76, 0.84, 0.04],
+      oralWidth: [0.78, 0.86, 0.05],
+      mouthWidth: [0.98, 1.06, 0.08],
+      lipThickness: [1.02, 1.1, 0.15],
+      jawRange: [0.89, 0.95, 0.08],
+      tongueSize: [0.99, 1.05, 0.04],
       nasalSize: [0.85, 0.95, 0.06],
       headWidth: [0.93, 0.98, 0.03],
       headHeight: [0.93, 0.98, 0.03],
@@ -66,19 +77,20 @@ export const HEAD_PRESETS = Object.freeze({
       vibrato: [0.25, 0.25, 0.1],
       speechRate: [1.02, 1.02, 0.06],
       aspirationLevel: [1.3, 1.3, 0.15],
+      glottalChink: [1, 1, 0.4],
     }),
   }),
   child: Object.freeze({
     label: 'Child (about ten years)',
     ranges: Object.freeze({
-      vocalTractLength: [11.4, 13.2, 0.35],
-      pharynxRatio: [0.37, 0.41, 0.015],
-      pharynxWidth: [0.78, 0.86, 0.04],
-      oralWidth: [0.85, 0.92, 0.05],
-      mouthWidth: [0.8, 0.88, 0.06],
-      lipThickness: [0.85, 0.95, 0.1],
-      jawRange: [0.85, 0.92, 0.06],
-      tongueSize: [0.85, 0.9, 0.03],
+      vocalTractLength: [13, 14.6, 0.35],
+      pharynxRatio: [0.46, 0.5, 0.015],
+      pharynxWidth: [0.71, 0.79, 0.04],
+      oralWidth: [0.735, 0.805, 0.05],
+      mouthWidth: [0.96, 1.04, 0.06],
+      lipThickness: [0.9, 1, 0.1],
+      jawRange: [0.865, 0.935, 0.06],
+      tongueSize: [1.035, 1.085, 0.03],
       nasalSize: [0.68, 0.78, 0.05],
       headWidth: [0.86, 0.92, 0.02],
       headHeight: [0.86, 0.92, 0.02],
@@ -90,6 +102,7 @@ export const HEAD_PRESETS = Object.freeze({
       vibrato: [0.2, 0.2, 0.08],
       speechRate: [0.92, 0.92, 0.06],
       aspirationLevel: [1.2, 1.2, 0.15],
+      glottalChink: [1, 1, 0.4],
     }),
   }),
 });

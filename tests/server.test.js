@@ -4,7 +4,8 @@
 
 import { describe, expect, it } from 'test-anywhere';
 import { decodeAudio, decodeWav } from '../src/index.js';
-import { encodingOptions } from '../src/server/server.js';
+import { encodingOptions, synthesisOptions } from '../src/server/server.js';
+import { INDEX_PAGE } from '../src/server/index-page.js';
 import { itUnless, sandboxed } from './helpers/skip.js';
 import { withVoiceServer } from './helpers/voice-server.js';
 
@@ -12,6 +13,17 @@ const withServer = (run) =>
   withVoiceServer({ version: '1.2.3', index: '<h1>hi</h1>' }, run);
 
 const itNet = itUnless(sandboxed);
+
+describe('default tier', () => {
+  it('renders 3D acoustics unless a request asks for another tier', () => {
+    expect(synthesisOptions({ text: 'a' }).options.tier).toBe('studio');
+    expect(synthesisOptions({ text: 'a', tier: 'medium' }).options.tier).toBe(
+      'medium'
+    );
+    expect(INDEX_PAGE).toContain('<option selected>studio</option>');
+    expect(INDEX_PAGE).toContain('<option>reference</option>');
+  });
+});
 
 describe('voice server', () => {
   itNet('serves health, IPA, tiers and the index page', async () => {
@@ -26,6 +38,7 @@ describe('voice server', () => {
       expect(ipa.ipa).toBe('ˈmamə');
       const tiers = await fetch(`${base}/api/tiers`).then((r) => r.json());
       expect(tiers.audio[0].name).toBe('minimal');
+      expect(tiers.default).toBe('studio');
       const page = await fetch(base);
       expect(page.headers.get('access-control-allow-origin')).toBe('*');
       expect(await page.text()).toBe('<h1>hi</h1>');

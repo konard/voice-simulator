@@ -3,7 +3,7 @@
  *
  *   GET  /api/health              -> {status, version}
  *   GET  /api/languages           -> supported languages with samples
- *   GET  /api/tiers               -> audio and visual LOD tiers
+ *   GET  /api/tiers               -> audio and visual LOD tiers, default tier
  *   GET  /api/ipa?text=&lang=&accent= -> {lang, accent, ipa, words}
  *   GET|POST /api/timeline        -> {lang, accent, ipa, timeline}: when
  *                                    each word and syllable is spoken
@@ -30,6 +30,7 @@ import {
 } from '../audio/formats.js';
 import { LANGUAGES, textToIpa } from '../g2p/index.js';
 import { headModelObj } from '../geometry/model.js';
+import { visemeTrack } from '../animation/visemes.js';
 import {
   DEFAULT_HEAD,
   decodeHeadConfig,
@@ -38,7 +39,7 @@ import {
 } from '../head-config.js';
 import { resolveMicrophone } from '../acoustics/microphone.js';
 import { resolveRoom } from '../acoustics/room.js';
-import { AUDIO_TIERS, VISUAL_TIERS } from '../perf/lod.js';
+import { AUDIO_TIERS, DEFAULT_AUDIO_TIER, VISUAL_TIERS } from '../perf/lod.js';
 import {
   prepareUtterance,
   synthesize,
@@ -118,7 +119,7 @@ export function synthesisOptions(params) {
   if (!SAMPLE_RATES.has(sampleRate)) {
     throw new HttpError(400, `Unsupported sampleRate ${params.sampleRate}`);
   }
-  const tier = params.tier ?? 'medium';
+  const tier = params.tier ?? DEFAULT_AUDIO_TIER;
   if (!AUDIO_TIERS.some((entry) => entry.name === tier)) {
     throw new HttpError(400, `Unknown tier ${tier}`);
   }
@@ -223,7 +224,11 @@ function createRoutes(version) {
   return {
     'GET /api/health': () => ({ status: 'ok', version }),
     'GET /api/languages': () => Object.values(LANGUAGES),
-    'GET /api/tiers': () => ({ audio: AUDIO_TIERS, visual: VISUAL_TIERS }),
+    'GET /api/tiers': () => ({
+      audio: AUDIO_TIERS,
+      visual: VISUAL_TIERS,
+      default: DEFAULT_AUDIO_TIER,
+    }),
     'GET /api/ipa': (params) => {
       const { text, options } = synthesisOptions(params);
       return textToIpa(text, { lang: options.lang, accent: options.accent });
@@ -232,6 +237,22 @@ function createRoutes(version) {
       const { text, options } = synthesisOptions(params);
       const { lang, accent, ipa, timeline } = prepareUtterance(text, options);
       return { lang, accent: accent ?? null, ipa, timeline };
+    },
+    'GET /api/visemes': (params) => {
+      const { text, options } = synthesisOptions(params);
+      const { plan, head } = prepareUtterance(text, options);
+      const fps = Number(params.fps ?? 60);
+      if (!(fps > 0 && fps <= 240)) {
+        throw new HttpError(400, `fps must be in (0, 240], got ${params.fps}`);
+      }
+      try {
+        return visemeTrack(plan, head, {
+          format: params.format ?? 'arkit',
+          fps,
+        });
+      } catch (error) {
+        throw new HttpError(400, error.message);
+      }
     },
     'GET /api/head/random': (params) =>
       randomHeadConfig(params.seed ?? Date.now(), {

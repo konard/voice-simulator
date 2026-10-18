@@ -1,3 +1,5 @@
+import { AUDIO_TIERS, DEFAULT_AUDIO_TIER } from '../perf/lod.js';
+
 /** Minimal HTML page served by `voice-simulator serve` at "/". */
 
 export const INDEX_PAGE = `<!doctype html>
@@ -19,8 +21,10 @@ code { background: #eee; padding: 0 .3em; }
 <textarea id="text">Hello! Привет! नमस्ते! 你好！</textarea>
 <p>
 <label>Tier <select id="tier">
-<option>minimal</option><option>low</option><option selected>medium</option>
-<option>high</option><option>ultra</option>
+${AUDIO_TIERS.map(
+  (tier) =>
+    `<option${tier.name === DEFAULT_AUDIO_TIER ? ' selected' : ''}>${tier.name}</option>`
+).join('')}
 </select></label>
 <label>Seed <input id="seed" value="1" size="8"></label>
 <button>Speak (streamed)</button>

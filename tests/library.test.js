@@ -5,9 +5,11 @@
 import { describe, it, expect } from 'test-anywhere';
 import {
   AUDIO_TIERS,
+  DEFAULT_AUDIO_TIER,
   LodGovernor,
   VISUAL_TIERS,
   chooseTier,
+  chooseTierWithGpu,
   fallbackLevel,
   OverloadDetector,
   decodeWav,
@@ -16,11 +18,13 @@ import {
   headModel,
   headModelObj,
   measureAudioTier,
+  measureAudioTierAsync,
   prepareUtterance,
   randomHeadConfig,
   synthesize,
   synthesizeStream,
 } from '../src/index.js';
+import { runCli } from '../bin/voice-simulator.js';
 
 describe('synthesize', () => {
   it('turns text of each language into audible audio', () => {
@@ -67,6 +71,35 @@ describe('synthesize', () => {
     expect(prepared.renderOptions.solver).toBe('waveguide');
     expect(prepared.renderOptions.dx).toBe(1);
     expect(prepared.renderOptions.sampleRate).toBe(16000);
+  });
+
+  it('defaults to full 3D acoustics at 0.5 cm and keeps the waveguide a choice away', () => {
+    expect(DEFAULT_AUDIO_TIER).toBe('studio');
+    const names = AUDIO_TIERS.map((tier) => tier.name);
+    expect(names.slice(-2)).toEqual(['studio', 'reference']);
+    for (let level = 1; level < AUDIO_TIERS.length; level++) {
+      expect(AUDIO_TIERS[level].cost > AUDIO_TIERS[level - 1].cost).toBe(true);
+    }
+    const byDefault = prepareUtterance('a', { ipa: true }).renderOptions;
+    expect(byDefault.solver).toBe('fdtd3d');
+    expect(byDefault.dx).toBe(0.5);
+    expect(byDefault.sampleRate).toBe(48000);
+    const earlier = prepareUtterance('a', { ipa: true, tier: 'medium' });
+    expect(earlier.renderOptions.solver).toBe('waveguide');
+    // A solver alone keeps its own defaults, not the default tier's.
+    const waveguide = prepareUtterance('a', { ipa: true, solver: 'waveguide' });
+    expect(waveguide.renderOptions.solver).toBe('waveguide');
+    expect(waveguide.renderOptions.dx).toBe(undefined);
+  });
+
+  it('names the default tier and the waveguide fallback in the CLI help', async () => {
+    const lines = [];
+    expect(
+      await runCli(['--help'], { stdout: (line) => lines.push(line) })
+    ).toBe(0);
+    expect(lines.join('\n')).toContain(
+      'default studio: 3D; medium: real-time waveguide'
+    );
   });
 
   it('round-trips through WAV encoding', () => {
@@ -173,6 +206,46 @@ describe('chooseTier', () => {
     expect(result.level).toBe(1);
     expect(result.measured).toEqual([true, true, false]);
     expect(Math.abs(result.loads[2] - 6) < 1e-9).toBe(true);
+  });
+
+  it('measures the 3D tiers above the CPU choice on the GPU', async () => {
+    const tiers = [
+      { cost: 1, solver: 'waveguide' },
+      { cost: 2, solver: 'waveguide' },
+      { cost: 60, solver: 'fdtd3d' },
+      { cost: 120, solver: 'fdtd3d' },
+      { cost: 400, solver: 'fdtd3d' },
+    ];
+    const run = (gpuLoad) => {
+      const measured = [];
+      const measure = (tier, { gpu }) => {
+        measured.push(`${gpu ? 'gpu' : 'cpu'}${tier.cost}`);
+        return Promise.resolve(gpu ? gpuLoad(tier) : tier.cost * 0.1);
+      };
+      return chooseTierWithGpu(measure, { tiers, gpu: true }).then(
+        (result) => ({ ...result, measured })
+      );
+    };
+    const fast = await run((tier) => tier.cost / 200);
+    expect(fast.measured).toEqual(['cpu1', 'cpu2', 'gpu60', 'gpu120']);
+    expect(fast.level).toBe(3);
+    expect(fast.gpu).toBe(true);
+    expect(fast.gpuLoads).toEqual([null, null, 0.3, 0.6, null]);
+    const slow = await run((tier) => tier.cost);
+    expect(slow.level).toBe(1);
+    expect(slow.gpu).toBe(false);
+    const cpu = await chooseTierWithGpu(
+      (tier) => Promise.resolve(tier.cost * 0.1),
+      { tiers }
+    );
+    expect([cpu.level, cpu.gpu]).toEqual([1, false]);
+  });
+
+  it('measures tiers asynchronously on the CPU without a device', async () => {
+    const load = await measureAudioTierAsync(AUDIO_TIERS[0], {
+      seconds: 0.05,
+    });
+    expect(load > 0).toBe(true);
   });
 
   it('stops measuring a tier once it exceeds the limit', () => {

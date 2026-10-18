@@ -84,8 +84,9 @@ jobs:
           GITHUB_PAGES: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
           VITE_REPOSITORY_URL: https://github.com/${{ github.repository }}
 
-      # Earlier releases stay online under /v1/ and so on; the list of
-      # versions is examples/universal-app/previous-versions.json.
+      # Earlier releases stay online under /v1/, /v2/ and so on and the
+      # current version also under the next path; the list of versions is
+      # examples/universal-app/previous-versions.json.
       - name: Build previous versions
         run: node scripts/build-previous-versions.mjs
 

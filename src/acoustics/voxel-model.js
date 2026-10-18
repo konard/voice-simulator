@@ -14,6 +14,11 @@
  * and inside the free air. Cubes on the outer surface of the free-air shell
  * get an absorbing boundary so the radiated wave leaves the domain.
  *
+ * Two pouches of the lower pharynx have tubes of their own (issue 9): the
+ * piriform fossae beside the larynx tube and the vallecula in front of the
+ * epiglottis (see sinuses.js). They open into the tract only at their
+ * upper end, so each adds its antiresonance to every vowel.
+ *
  * The free-air shell grows to reach a distant microphone (up to
  * MAX_RADIATION_RADIUS). An enclosure replaces the shell by a box of air
  * around the head whose walls reflect part of the sound, so the solver
@@ -25,34 +30,47 @@ import { noseShape, tractShape } from '../articulation/tract-shape.js';
 import {
   INCISOR_THICKNESS,
   REST_GAP,
-  incisorDepth,
   teethWidth,
 } from '../articulation/teeth.js';
 import {
   headLandmarks,
+  incisorFrame,
   nasalCenterline,
   tractCenterline,
 } from '../geometry/centerline.js';
-import { headField, headMesh, sectionAxes } from '../geometry/mesh.js';
+import {
+  noseAxes,
+  headField,
+  headMesh,
+  sectionAxes,
+} from '../geometry/mesh.js';
 import { checkedNumber } from './room.js';
+import { sinusTubes } from './sinuses.js';
 import { normalizeHeadConfig } from '../head-config.js';
 import { getPhoneme } from '../ipa/inventory.js';
 
 export const CELL_TRACT = 0;
 export const CELL_NOSE = 1;
 export const CELL_AIR = 2;
+/** Piriform fossae and vallecula (see sinuses.js). */
+export const CELL_SINUS = 3;
 
 export const LINK_INNER = 0;
 export const LINK_LIPS = 1;
 export const LINK_NOSTRILS = 2;
 export const LINK_VELUM = 3;
+/** Opening of a pouch into the tract (4 is the solver's radiation link). */
+export const LINK_SINUS = 5;
 
 /** Radius of the free-air shell around lips and nostrils (cm). */
 const RADIATION_RADIUS = 4;
 /** Largest free-air shell used to reach a distant microphone (cm). */
 export const MAX_RADIATION_RADIUS = 12;
-/** Most cells an enclosure may hold (memory and time grow with it). */
-export const MAX_ENCLOSURE_CELLS = 300000;
+/**
+ * Most cells an enclosure may hold (memory and time grow with it): enough
+ * for a 30 x 44 x 30 cm box at the 0.4 cm reference tier.
+ */
+export const MAX_ENCLOSURE_CELLS = 700000;
 const MIN_ENCLOSURE_SIZE = 10;
 const MAX_ENCLOSURE_SIZE = 200;
 /** Air an enclosure must leave around the lips and nostrils (cm). */
@@ -83,6 +101,152 @@ function tractEnvelope(head) {
   }
   const widest = 1.15 * Math.max(...max);
   return () => widest;
+}
+
+/** Target spacing of the points that sample each tract cube (cm). */
+const OPENING_SPACING = 0.17;
+/** Shortest stretch of tract with its own opening scale (cm). */
+const OPENING_BIN = 0.25;
+/** Reach of the pull towards the teeth slot in front of and behind it (cm). */
+export const TEETH_APPROACH = 1.5;
+/**
+ * Spread of the opening weights: the weight of a point falls by e for
+ * every TEETH_SOFTNESS of pull, so a smaller value gathers the air closer
+ * to the slot.
+ */
+const TEETH_SOFTNESS = 0.15;
+/** Pull lost per (0.5 cm)² of distance from the teeth slot. */
+const TEETH_PULL = 1;
+
+/**
+ * Pull of the air towards the slot between the incisal edges in the
+ * slices around the incisors: the flow converges on the slot, so the air
+ * there gathers in line with it (the slot as at rest, see teethCells).
+ */
+function teethPull(point, teeth) {
+  if (!teeth) {
+    return 0;
+  }
+  const along = Math.abs(point[2] - teeth.plane) - teeth.reach;
+  if (along >= TEETH_APPROACH) {
+    return 0;
+  }
+  const taper = Math.min(1, 1 - along / TEETH_APPROACH);
+  const vertical = Math.max(
+    0,
+    point[1] - teeth.edge,
+    teeth.edge - REST_GAP - point[1]
+  );
+  const lateral = Math.max(0, Math.abs(point[0]) - teeth.width / 2);
+  return (-TEETH_PULL * taper * (vertical ** 2 + lateral ** 2)) / 0.25;
+}
+
+/** Weights sorted from high to low and the sums of each tail. */
+function sortedWeights(values) {
+  const weights = Float64Array.from(values).sort().reverse();
+  const tails = new Float64Array(weights.length + 1);
+  for (let index = weights.length - 1; index >= 0; index--) {
+    tails[index] = tails[index + 1] + weights[index];
+  }
+  return { weights, tails };
+}
+
+/**
+ * Weighted points of a stretch sorted by weight from high to low, with
+ * the sums of the shares before each point (`heads`) and of share times
+ * weight from each point on (`tails`).
+ */
+function sortedShares(points) {
+  points.sort((a, b) => b[0] - a[0]);
+  const count = points.length;
+  const weights = new Float64Array(count);
+  const shares = new Float64Array(count);
+  const heads = new Float64Array(count + 1);
+  const tails = new Float64Array(count + 1);
+  points.forEach(([weight, share], index) => {
+    weights[index] = weight;
+    shares[index] = share;
+    heads[index + 1] = heads[index] + share;
+  });
+  for (let index = count - 1; index >= 0; index--) {
+    tails[index] = tails[index + 1] + shares[index] * weights[index];
+  }
+  return { weights, shares, heads, tails };
+}
+
+/**
+ * Opening weights w = exp(pull / TEETH_SOFTNESS) of points spread through
+ * every tract cube. A section of area A fills each point to min(1, c w),
+ * with the scale c of its stretch of arc chosen so the points of that
+ * stretch (`sample` cm² of cross-section each) add up to A, and a cube is
+ * open by the mean fill of its points (fdtd3d.js). Away from the teeth
+ * every weight is 1 and the section fills evenly; around them the air
+ * gathers in line with the slot between the incisal edges, so the flow
+ * through the slot does not funnel in from the whole envelope (an extra
+ * acoustic mass that lowers the formants). Neighbouring slices open
+ * overlapping cubes, so the flow stays connected round the grid steps.
+ * `cell*` hold each cube's `per` weights, `bins` those of each stretch of
+ * `binLength` cm; both sorted with the sums of their tails.
+ */
+function openingTable(cells, tract, dx, teeth) {
+  const steps = Math.max(2, Math.round(dx / OPENING_SPACING));
+  const per = steps ** 3;
+  const binLength = Math.max(OPENING_BIN, dx / 2);
+  const bins = Math.max(1, Math.ceil(tract.length / binLength));
+  const cellWeights = new Float64Array(cells.length * per);
+  const cellTails = new Float64Array(cells.length * (per + 1));
+  const perBin = Array.from({ length: bins }, () => []);
+  const values = new Float64Array(per);
+  cells.forEach((cell, index) => {
+    if (cell.kind !== CELL_TRACT) {
+      return;
+    }
+    let at = 0;
+    for (let i = 0; i < steps; i++) {
+      for (let j = 0; j < steps; j++) {
+        for (let k = 0; k < steps; k++) {
+          const offset = [i, j, k].map(
+            (step) => ((step + 0.5) / steps - 0.5) * dx
+          );
+          const point = cell.point.map((value, axis) => value + offset[axis]);
+          const place = locateInTube(point, tract, dx / 2);
+          // Points past the glottis or the lips fill like the end slice but
+          // do not add to its cross-section.
+          const inside = place.arc >= 0 && place.arc <= tract.length;
+          place.arc = Math.min(tract.length, Math.max(0, place.arc));
+          const weight = Math.exp(teethPull(point, teeth) / TEETH_SOFTNESS);
+          values[at++] = weight;
+          if (!inside) {
+            continue;
+          }
+          // Shared between the two nearest stretches so every stretch
+          // counts the same density of points whatever the grid.
+          const position = Math.min(
+            bins - 1,
+            Math.max(0, place.arc / binLength - 0.5)
+          );
+          const lower = Math.floor(position);
+          const part = position - lower;
+          perBin[lower].push([weight, 1 - part]);
+          if (part > 0) {
+            perBin[Math.min(bins - 1, lower + 1)].push([weight, part]);
+          }
+        }
+      }
+    }
+    const { weights, tails } = sortedWeights(values);
+    cellWeights.set(weights, index * per);
+    cellTails.set(tails, index * (per + 1));
+  });
+  const volume = (dx / steps) ** 3;
+  return {
+    binLength,
+    bins: perBin.map(sortedShares),
+    sample: volume / binLength,
+    cellWeights,
+    cellTails,
+    per,
+  };
 }
 
 function cross(a, b) {
@@ -131,23 +295,39 @@ function locateInTube(point, tube, margin) {
   const arc = (best + 0.5) * sectionLength + axial;
   const normal = cross(tangent, [1, 0, 0]);
   const v = delta[0] * normal[0] + delta[1] * normal[1] + delta[2] * normal[2];
-  const radius = Math.hypot(
-    delta[0] / (axes[best * 2] + margin),
-    v / (axes[best * 2 + 1] + margin)
-  );
-  return { arc, radius };
+  const u = delta[0] / (axes[best * 2] + margin);
+  const w = v / (axes[best * 2 + 1] + margin);
+  return { arc, radius: Math.hypot(u, w) };
+}
+
+/**
+ * The upper lip parts the nostrils from the mouth: a tube with a
+ * `philtrum` (the nose) does not reach below its middle in front of the
+ * lips, where its widened end would cover the mouth on coarse grids.
+ */
+function belowPhiltrum(point, philtrum) {
+  return Boolean(philtrum) && point[2] > philtrum.z && point[1] < philtrum.y;
 }
 
 function classifyPoint(point, tubes, dx) {
   let found = null;
   for (const tube of tubes) {
-    const { arc, radius } = locateInTube(point, tube, dx / 2);
-    const inside = radius <= 1 && arc >= -dx / 2 && arc <= tube.length + dx / 2;
+    const place = locateInTube(point, tube, dx / 2);
+    const { arc, radius } = place;
+    // A tube with a `front` (the lips) ends at that face plane even
+    // where its last section is tilted.
+    const inside =
+      radius <= 1 &&
+      arc >= -dx / 2 &&
+      arc <= tube.length + dx / 2 &&
+      !(point[2] > (tube.front ?? Infinity) + dx / 2) &&
+      !belowPhiltrum(point, tube.philtrum);
     if (inside && (!found || radius < found.radius)) {
       found = {
+        ...place,
         kind: tube.kind,
+        tube: tube.index,
         arc: Math.min(tube.length, Math.max(0, arc)),
-        radius,
       };
     }
   }
@@ -244,9 +424,9 @@ function collectCells(grid, tubes, field, centres, shape) {
         const tube = near.length > 0 ? classifyPoint(point, near, dx) : null;
         let cell = null;
         if (tube) {
-          cell = { kind: tube.kind, arc: tube.arc, point };
+          cell = { kind: tube.kind, arc: tube.arc, point, tube: tube.tube };
         } else if (isRadiating(point, field, centres, shape)) {
-          cell = { kind: CELL_AIR, arc: 0, point };
+          cell = { kind: CELL_AIR, arc: 0, point, tube: -1 };
         }
         if (cell) {
           index[(i * size[1] + j) * size[2] + k] = cells.length;
@@ -262,6 +442,9 @@ function collectCells(grid, tubes, field, centres, shape) {
 function linkKind(a, b, context) {
   const { dx, lengths, velumDistance } = context;
   const reach = 3 * dx;
+  if (a.kind === CELL_SINUS || b.kind === CELL_SINUS) {
+    return sinusLink(a, b, context);
+  }
   if (a.kind === b.kind) {
     if (a.kind === CELL_AIR || Math.abs(a.arc - b.arc) <= reach) {
       return LINK_INNER;
@@ -280,6 +463,22 @@ function linkKind(a, b, context) {
     return LINK_VELUM;
   }
   return -1;
+}
+
+/** Pouch cells connect to their own pouch, and to the tract at the opening. */
+function sinusLink(a, b, context) {
+  const { dx, entries } = context;
+  if (a.kind === b.kind) {
+    return a.tube === b.tube && Math.abs(a.arc - b.arc) <= 3 * dx
+      ? LINK_INNER
+      : -1;
+  }
+  const [sinus, other] = a.kind === CELL_SINUS ? [a, b] : [b, a];
+  const opening =
+    other.kind === CELL_TRACT &&
+    sinus.arc <= 1.5 * dx &&
+    Math.abs(other.arc - entries[sinus.tube]) <= 2 * dx;
+  return opening ? LINK_SINUS : -1;
 }
 
 function neighbourAt(grid, index, i, j, k) {
@@ -454,8 +653,9 @@ export function radiationRadius(microphone, dx) {
 
 /**
  * Options of buildVoxelModel for render options (dx, microphone,
- * enclosure), e.g. to build or cache a model once for many utterances.
- * @param {{dx?: number, microphone?: object, enclosure?: object}} options
+ * enclosure, pouches), e.g. to build or cache a model once for many
+ * utterances.
+ * @param {{dx?: number, microphone?: object, enclosure?: object, piriform?: boolean, vallecula?: boolean}} options
  */
 export function voxelModelOptions(options = {}) {
   const dx = options.dx ?? 0.8;
@@ -465,6 +665,11 @@ export function voxelModelOptions(options = {}) {
   }
   if (options.enclosure) {
     result.enclosure = resolveEnclosure(options.enclosure);
+  }
+  for (const pouch of ['piriform', 'vallecula']) {
+    if (options[pouch] === false) {
+      result[pouch] = false;
+    }
   }
   return result;
 }
@@ -476,25 +681,35 @@ function wallAdmittance(absorption) {
 }
 
 /**
- * Tract cells in the incisor slices. They become solid tooth or stay air
- * depending on the incisor gap (see Fdtd3d#applyTeeth). The upper incisal
- * edge is fixed to the skull; the lower edge drops with the jaw.
+ * Tract cells in the incisor slices: the grid slices across z through the
+ * incisor row, as the incisors are upright plates whatever the slope of
+ * the airway between them. They become solid tooth or stay air depending
+ * on the incisor gap (see Fdtd3d#applyTeeth). The upper incisal edge is
+ * fixed to the skull where the 3D model draws it (incisorFrame); the
+ * lower edge drops with the jaw.
  */
-function teethCells(cells, config, length, lips, dx) {
-  const centre = length - incisorDepth(config) - INCISOR_THICKNESS / 2;
+function teethCells(cells, config, layout, dx) {
+  const { centre, edge, plane } = incisorFrame(config, layout);
   const reach = Math.max(dx, INCISOR_THICKNESS) / 2;
   const members = [];
   const groups = [];
   cells.forEach((cell, index) => {
-    if (cell.kind === CELL_TRACT && Math.abs(cell.arc - centre) <= reach) {
+    if (
+      cell.kind === CELL_TRACT &&
+      cell.arc > centre - TEETH_APPROACH &&
+      Math.abs(cell.point[2] - plane) <= reach
+    ) {
       members.push(index);
-      groups.push(Math.round(cell.arc / dx));
+      groups.push(Math.round(cell.point[2] / dx));
     }
   });
   return {
     cells: Int32Array.from(members),
     groups: Int32Array.from(groups),
-    edge: lips[1] + REST_GAP / 2,
+    centre,
+    plane,
+    reach,
+    edge,
     width: teethWidth(config),
   };
 }
@@ -502,10 +717,11 @@ function teethCells(cells, config, length, lips, dx) {
 /**
  * Build the voxel model of a head.
  * @param {Record<string, number>} head
- * @param {{dx?: number, radiationRadius?: number, enclosure?: object}} [options]
+ * @param {{dx?: number, radiationRadius?: number, enclosure?: object, piriform?: boolean, vallecula?: boolean}} [options]
  *   Cube size in cm (smaller = more detail), radius of the free-air shell
  *   around lips and nostrils (cm, 4 by default) or an enclosure (see
- *   resolveEnclosure) that replaces the shell.
+ *   resolveEnclosure) that replaces the shell. `piriform: false` and
+ *   `vallecula: false` leave out the pouches.
  */
 export function buildVoxelModel(head, options = {}) {
   const config = normalizeHeadConfig(head);
@@ -548,11 +764,21 @@ export function buildVoxelModel(head, options = {}) {
       velumDistance,
       length: nose.length,
     }),
-    () => sectionAxes(noseMax, 0.5, { ...config, pharynxRatio: 1 }),
+    () => noseAxes(noseMax),
     CELL_NOSE
   );
-  const tubes = [tract, nasal];
   const { lips, nostrils } = headLandmarks(config);
+  tract.front = lips[2];
+  nasal.philtrum = { y: (lips[1] + nostrils[1]) / 2, z: lips[2] - dx / 2 };
+  const sinuses = sinusTubes(tract, config, dx, options);
+  const tubes = [
+    tract,
+    nasal,
+    ...sinuses.map((tube) => ({ ...tube, kind: CELL_SINUS })),
+  ];
+  tubes.forEach((tube, index) => {
+    tube.index = index;
+  });
   const field = headField(config);
   const grid = boundingBox(tubes, [lips, nostrils], dx, shape);
   const collected = collectCells(grid, tubes, field, [lips, nostrils], shape);
@@ -560,12 +786,15 @@ export function buildVoxelModel(head, options = {}) {
     dx,
     velumDistance,
     lengths: [tract.length, nasal.length],
+    entries: tubes.map((tube) => tube.entry ?? 0),
   };
   const links = connect(grid, collected, context);
+  const teeth = teethCells(collected.cells, config, tract.layout, dx);
   const open = openFaces(grid, collected, field, dx);
   return {
     dx,
     head: config,
+    opening: openingTable(collected.cells, tract, dx, teeth),
     cells: collected.cells,
     links,
     openFaces: open.faces,
@@ -576,8 +805,17 @@ export function buildVoxelModel(head, options = {}) {
     radiationRadius: box ? null : radius,
     enclosure: box,
     lengths: context.lengths,
+    // Pouch tubes: tube index (as in cell.tube), name, opening arc on the
+    // tract, depth (cm) and cross-section (cm²).
+    sinuses: sinuses.map((tube, index) => ({
+      tube: index + 2,
+      name: tube.name,
+      entry: tube.entry,
+      length: tube.length,
+      area: tube.area,
+    })),
     velumDistance,
     landmarks: { lips, nostrils },
-    teeth: teethCells(collected.cells, config, length, lips, dx),
+    teeth,
   };
 }

@@ -4,12 +4,17 @@
  * 3D view can show the waves that produced the sound.
  *
  * Messages in:
- *   {type: 'benchmark', head}                 -> {type: 'benchmark', level, loads}
+ *   {type: 'benchmark', head, gpu?}  -> {type: 'benchmark', level, loads,
+ *     measured, gpu, gpuLoads}  (the 3D tiers above the CPU's choice are
+ *     measured on WebGPU too unless `gpu: false`; `gpu` in the reply tells
+ *     whether the chosen tier runs there)
  *   {type: 'speak', id, ipa, lang, head, seed, tier, auto, chunkSize,
- *    microphone?, room?, enclosure?}
+ *    microphone?, room?, enclosure?, gpu?}
+ *   (`gpu: false` keeps the 3D tiers on the CPU; otherwise they run on
+ *   WebGPU where the browser has it, and on the CPU where it does not)
  *   {type: 'cancel', id}
  * Messages out (per utterance):
- *   {type: 'start', id, sampleRate, solver, totalSamples, model?}
+ *   {type: 'start', id, sampleRate, solver, gpu, totalSamples, model?}
  *   {type: 'overload', id, from, level, load}  (auto mode: the tier could
  *     not keep up, the utterance restarts on the cheaper `level`)
  *   {type: 'chunk', id, start, samples, field, load}
@@ -21,12 +26,12 @@ import {
   AUDIO_TIERS,
   OverloadDetector,
   VoiceRenderer,
+  benchmarkAudioTiersAsync,
   buildVoxelModel,
-  chooseTier,
   encodeHeadConfig,
   fallbackLevel,
-  measureAudioTier,
   prepareUtterance,
+  requestGpuDevice,
   voxelModelOptions,
 } from '../../../../src/index.js';
 
@@ -35,6 +40,13 @@ const BENCHMARK_SECONDS = 0.08;
 const FIELD_BLOCK = 128;
 const models = new Map();
 let current = 0;
+/** The WebGPU device, requested once; null without WebGPU or after a failure. */
+let gpuDevice;
+
+function gpu() {
+  gpuDevice ??= requestGpuDevice().catch(() => null);
+  return gpuDevice;
+}
 
 /** Voxel model for a head, cell size and listening settings (cached). */
 function voxelModel(head, settings) {
@@ -98,7 +110,13 @@ function accumulate(sums, values) {
   }
 }
 
-function renderChunk(renderer, samples, meter) {
+async function renderChunk(renderer, samples, meter) {
+  if (renderer.solver.gpu) {
+    // One dispatch for the whole chunk; the field is its RMS pressure.
+    const written = await renderer.renderAsync(samples, { field: true });
+    meter.add(renderer.solver);
+    return written;
+  }
   let written = 0;
   while (written < samples.length && !renderer.done) {
     const end = Math.min(samples.length, written + FIELD_BLOCK);
@@ -124,6 +142,38 @@ function modelPayload(solver) {
 }
 
 async function speak(message) {
+  const tier = AUDIO_TIERS[message.tier];
+  const device =
+    tier.solver === 'fdtd3d' && message.gpu !== false ? await gpu() : null;
+  const progress = { busy: 0, chunks: 0 };
+  let outcome;
+  try {
+    outcome = await run(message, device, progress);
+  } catch (error) {
+    if (!device) {
+      throw error;
+    }
+    // A lost or failing GPU: start the utterance again on the CPU.
+    console.warn('WebGPU synthesis failed, using the CPU', error);
+    gpuDevice = Promise.resolve(null);
+    if (progress.chunks > 0) {
+      globalThis.postMessage({
+        type: 'overload',
+        id: message.id,
+        from: message.tier,
+        level: message.tier,
+        load: 0,
+      });
+    }
+    outcome = message.tier;
+  }
+  if (typeof outcome === 'number') {
+    await speak({ ...message, tier: outcome });
+  }
+}
+
+/** Set up the renderer and stream the utterance (see stream). */
+async function run(message, device, progress) {
   const { id } = message;
   const tier = AUDIO_TIERS[message.tier];
   const prepared = prepareUtterance(message.ipa, {
@@ -135,6 +185,7 @@ async function speak(message) {
     microphone: message.microphone,
     room: message.room,
     enclosure: message.enclosure,
+    device: device ?? undefined,
     model:
       tier.solver === 'fdtd3d'
         ? voxelModel(message.head, {
@@ -145,28 +196,50 @@ async function speak(message) {
         : undefined,
   });
   const renderer = new VoiceRenderer(prepared.plan, prepared.renderOptions);
-  globalThis.postMessage({
-    type: 'start',
-    id,
-    sampleRate: renderer.sampleRate,
-    solver: tier.solver,
-    totalSamples: renderer.totalSamples,
-    model: modelPayload(renderer.solver),
-  });
+  try {
+    globalThis.postMessage({
+      type: 'start',
+      id,
+      sampleRate: renderer.sampleRate,
+      solver: tier.solver,
+      gpu: Boolean(device),
+      totalSamples: renderer.totalSamples,
+      model: modelPayload(renderer.solver),
+    });
+    const outcome = await stream(message, renderer, progress);
+    if (outcome === 'done') {
+      globalThis.postMessage({
+        type: 'end',
+        id,
+        load: progress.busy / prepared.plan.duration,
+      });
+    }
+    return outcome;
+  } finally {
+    renderer.solver.gpu?.destroy();
+  }
+}
+
+/**
+ * Render and post the chunks of an utterance.
+ * @returns {Promise<'done'|'cancelled'|number>} the cheaper tier to restart
+ *   on when this one could not keep up
+ */
+async function stream(message, renderer, progress) {
+  const { id } = message;
   const chunkSize = message.chunkSize ?? 1024;
   const meter = new FieldMeter();
   const detector = new OverloadDetector();
-  let busyTotal = 0;
   while (!renderer.done) {
     if (current !== id) {
-      return;
+      return 'cancelled';
     }
     const start = renderer.position;
     const samples = new Float32Array(chunkSize);
     const began = globalThis.performance.now();
-    const written = renderChunk(renderer, samples, meter);
+    const written = await renderChunk(renderer, samples, meter);
     const busy = (globalThis.performance.now() - began) / 1000;
-    busyTotal += busy;
+    progress.busy += busy;
     const overloaded = detector.record(busy, written / renderer.sampleRate);
     if (overloaded && message.auto && message.tier > 0) {
       // Detected within the first chunks, while the audio is still in the
@@ -179,8 +252,7 @@ async function speak(message) {
         level,
         load: detector.load,
       });
-      await speak({ ...message, tier: level });
-      return;
+      return level;
     }
     const field = meter.take();
     const transfer = [samples.buffer];
@@ -201,26 +273,41 @@ async function speak(message) {
       },
       transfer
     );
+    progress.chunks++;
     await yieldToMessages();
   }
-  globalThis.postMessage({
-    type: 'end',
-    id,
-    load: busyTotal / prepared.plan.duration,
-  });
+  return 'done';
 }
 
-function benchmark(message) {
-  const result = chooseTier(
-    (tier, { limit }) =>
-      measureAudioTier(tier, {
-        head: message.head,
-        seconds: BENCHMARK_SECONDS,
-        limit,
-      }),
-    { tiers: AUDIO_TIERS, target: 0.8 }
-  );
-  globalThis.postMessage({ type: 'benchmark', ...result });
+async function benchmark(message) {
+  const device = message.gpu === false ? null : await gpu();
+  const measure = (target) =>
+    benchmarkAudioTiersAsync({
+      head: message.head,
+      seconds: BENCHMARK_SECONDS,
+      target: 0.8,
+      device: target ?? undefined,
+    });
+  let result;
+  try {
+    result = await measure(device);
+  } catch (error) {
+    if (!device) {
+      throw error;
+    }
+    console.warn('WebGPU benchmark failed, measuring the CPU', error);
+    gpuDevice = Promise.resolve(null);
+    result = await measure(null);
+  }
+  const { level, loads, measured, gpuLoads } = result;
+  globalThis.postMessage({
+    type: 'benchmark',
+    level,
+    loads,
+    measured,
+    gpuLoads,
+    gpu: result.gpu,
+  });
 }
 
 globalThis.addEventListener('message', (event) => {
@@ -230,7 +317,11 @@ globalThis.addEventListener('message', (event) => {
     return;
   }
   if (message.type === 'benchmark') {
-    benchmark(message);
+    benchmark(message).catch((error) => {
+      // Stay on the cheapest tier.
+      console.warn('Benchmark failed', error);
+      globalThis.postMessage({ type: 'benchmark', level: 0, loads: [] });
+    });
     return;
   }
   if (message.type === 'speak') {

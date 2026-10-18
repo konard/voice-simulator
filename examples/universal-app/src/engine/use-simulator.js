@@ -40,6 +40,8 @@ export function useSimulator(settings) {
   const progressRef = useRef(null);
   const spokenRef = useRef(null);
   const engineRef = useRef(null);
+  // Latest animation frame, for views with their own loop (CharacterPanel).
+  const frameRef = useRef(null);
   const viewerRef = useRef(null);
   const settingsRef = useRef(settings);
   const warmupRef = useRef(WARMUP_FRAMES);
@@ -52,8 +54,10 @@ export function useSimulator(settings) {
     const engine = new VoiceEngine({ onChange: setStatus });
     engineRef.current = engine;
     engine.setTier(settingsRef.current.tier);
-    engine.benchmark(settingsRef.current.head);
+    // Browsers suspend the audio of background tabs: resume it on return.
+    const unwatch = engine.player.watch();
     return () => {
+      unwatch();
       engine.dispose();
       engineRef.current = null;
     };
@@ -77,6 +81,12 @@ export function useSimulator(settings) {
   useEffect(() => {
     engineRef.current?.setTier(settings.tier);
   }, [settings.tier]);
+
+  // Measure the tiers on the backends the acoustics settings allow.
+  const allowGpu = settings.listening?.gpu !== false;
+  useEffect(() => {
+    engineRef.current?.benchmark(settingsRef.current.head, { gpu: allowGpu });
+  }, [allowGpu]);
 
   const meshLod = VISUAL_TIERS[visual.level].meshLod;
   useEffect(() => {
@@ -122,6 +132,7 @@ export function useSimulator(settings) {
         return;
       }
       const frame = engine.frame();
+      frameRef.current = frame;
       writeProgress(refs, frame);
       const current = settingsRef.current;
       if (!viewer || current.mode === 'sound') {
@@ -163,6 +174,7 @@ export function useSimulator(settings) {
     progressRef,
     spokenRef,
     engineRef,
+    frameRef,
     status,
     visual,
     webglError,

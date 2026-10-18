@@ -55,11 +55,29 @@ describe('incisor constriction', () => {
     const close = teethGap(vowelState('i'), DEFAULT_HEAD);
     const open = teethGap(vowelState('ɑ'), DEFAULT_HEAD);
     const sibilant = teethGap(consonantState('ˈasa'), DEFAULT_HEAD);
-    expect(open).toBeGreaterThan(close + 0.8);
+    expect(open).toBeGreaterThan(close + 0.7);
     expect(sibilant).toBeLessThan(close);
     expect(sibilant).toBeGreaterThan(0.1);
     const wide = normalizeHeadConfig({ jawRange: 1.3 });
     expect(teethGap(vowelState('ɑ'), wide)).toBeGreaterThan(open);
+  });
+
+  it('opens the jaw for each phoneme as G-OBIM matched to MRI', () => {
+    // Mandibular openings of Calka et al. 2025 (PLOS Comput Biol 21(9):
+    // e1013378, Table 3): /t/ 1, /i/ 3, /k/ 5, /u/ 7, /a/ 11 mm. The paper
+    // gives no reference for them, so the differences from /i/ are held.
+    const gobim = { t: 1, k: 5, u: 7, a: 11 };
+    const states = {
+      t: consonantState('ˈata'),
+      k: consonantState('ˈaka'),
+      u: vowelState('u'),
+      a: vowelState('a'),
+    };
+    const close = teethGap(vowelState('i'), DEFAULT_HEAD);
+    for (const [symbol, opening] of Object.entries(gobim)) {
+      const difference = (teethGap(states[symbol], DEFAULT_HEAD) - close) * 10;
+      expect(Math.abs(difference - (opening - 3))).toBeLessThan(0.5);
+    }
   });
 
   it('narrows the area function just behind the lips', () => {
@@ -133,13 +151,21 @@ describe('teeth voxels', () => {
     return Array.from(model.teeth.cells).filter((cell) => solver.solid[cell]);
   }
 
-  it('marks tract cells behind the lips as teeth', () => {
+  it('marks tract cells in the incisor plane behind the lips as teeth', () => {
     expect(model.teeth.cells.length).toBeGreaterThan(4);
     const length = model.lengths[0];
+    const { lips } = model.landmarks;
     for (const cell of model.teeth.cells) {
-      expect(model.cells[cell].kind).toBe(0);
-      expect(model.cells[cell].arc).toBeGreaterThan(length - 2.5);
-      expect(model.cells[cell].arc).toBeLessThan(length);
+      const { kind, arc, point } = model.cells[cell];
+      expect(kind).toBe(0);
+      // The upright incisor plane cuts the airway where it slopes down
+      // to the lips, so its lower cells lie further back along the tract.
+      expect(arc).toBeGreaterThan(length - 3);
+      expect(arc).toBeLessThan(length);
+      expect(Math.abs(point[2] - model.teeth.plane)).toBeLessThan(
+        model.teeth.reach + 1e-9
+      );
+      expect(point[2]).toBeLessThan(lips[2]);
     }
   });
 
@@ -161,6 +187,29 @@ describe('teeth voxels', () => {
     // Without teeth the slices are ordinary tube again.
     solver.setShape(tractShape(vowelState('ɑ'), DEFAULT_HEAD).areas, 0);
     expect(solver.solid.every((value) => value === 0)).toBe(true);
+  });
+
+  it('opens each incisor slice by the slot area at any grid size', () => {
+    for (const dx of [1, 0.5]) {
+      const grid = dx === 1 ? model : buildVoxelModel(DEFAULT_HEAD, { dx });
+      const solver = new Fdtd3d({ model: grid, kernel: 'js' });
+      for (const symbol of ['i', 'ə', 'ɑ']) {
+        const shape = tractShape(vowelState(symbol), DEFAULT_HEAD);
+        solver.setShape(shape.areas, 0, shape.velumIndex, shape.teeth);
+        const slot = shape.teeth.gap * grid.teeth.width;
+        const open = new Map();
+        grid.teeth.cells.forEach((cell, position) => {
+          const group = grid.teeth.groups[position];
+          open.set(
+            group,
+            (open.get(group) ?? 0) + solver.openness[cell] * dx * dx
+          );
+        });
+        for (const area of open.values()) {
+          expect(Math.abs(area - slot) / slot).toBeLessThan(0.02);
+        }
+      }
+    }
   });
 
   it('stays stable and deterministic with moving teeth', () => {

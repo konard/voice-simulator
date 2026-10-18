@@ -141,6 +141,18 @@ export function AcousticsSettings({ acoustics, head, t, onChange }) {
                 `${strings.boxTooLarge} (${problem.tiers.join(', ')}; ≤ ${MAX_ENCLOSURE_CELLS})`
             )
           : null
+      ),
+      h(
+        'fieldset',
+        { className: 'editor-group' },
+        h('legend', null, strings.simulation),
+        h(Check, {
+          id: 'acoustics-gpu',
+          label: strings.gpu,
+          checked: acoustics.gpu,
+          onChange: (value) => update('gpu', value),
+        }),
+        h('small', null, strings.gpuNote)
       )
     )
   );

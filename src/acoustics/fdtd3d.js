@@ -20,28 +20,42 @@
  * The incisors are solid voxels in the slices just behind the lips: tract
  * cells outside the slot between the incisal edges are walls (no links),
  * and the slot cells carry the whole teeth cross-section, so the slot
- * width follows the jaw.
+ * width follows the jaw. In the slices around the incisors the air of a
+ * section gathers in line with the slot (see openingTable in
+ * voxel-model.js); elsewhere every cube of a section has the same fill.
+ * The piriform fossae and the vallecula are blind pouches with a fixed
+ * fill (see sinuses.js).
  *
- * Simplifications: the voxel tract has the head's rest vocal tract length
- * (dynamic lengthening by the larynx or lips only rescales the area
- * function), and wall losses use the same empirical loss model as the 1D
- * waveguide, converted to a loss per unit of time.
+ * The voxel tract has the head's rest vocal tract length; the dynamic
+ * length of the larynx and lips stretches the time step instead (see
+ * stepDuration). Simplifications: that stretch scales the nose and the
+ * air around the head with the tract, and wall losses use the same
+ * empirical loss model as the 1D waveguide, converted to a loss per unit
+ * of time.
  *
  * A `microphone` option ({distance, azimuth, elevation} relative to the
  * lips) moves the receiver cell; the free-air shell grows to reach it (up
  * to MAX_RADIATION_RADIUS, the listener extrapolates beyond). An
  * `enclosure` option surrounds the head with a box of air whose walls
  * reflect according to their absorption.
+ *
+ * With a WebGPU `device` the step loop runs on the GPU (see fdtd-gpu.js):
+ * steps are then queued with queueStep and their outputs collected with
+ * flushSteps. Without one, queueStep runs the step right away, so the same
+ * calls work on any solver.
  */
 
-import { lossFactor } from './waveguide.js';
+import { LOSS_REFERENCE_SECTIONS, lossFactor } from './waveguide.js';
 import { SPEED_OF_SOUND } from './transfer.js';
+import { glottalReflection } from './glottis.js';
 import {
   CELL_AIR,
+  CELL_SINUS,
   CELL_TRACT,
   LINK_INNER,
   LINK_LIPS,
   LINK_NOSTRILS,
+  LINK_SINUS,
   LINK_VELUM,
   OPEN_FACE_NORMALS,
   buildVoxelModel,
@@ -49,13 +63,10 @@ import {
 } from './voxel-model.js';
 import { microphonePosition, resolveMicrophone } from './microphone.js';
 import { createKernel } from './fdtd-kernel.js';
+import { FdtdGpu } from './fdtd-gpu.js';
 
 const COURANT = 0.5;
 const MIN_FILL = 1e-4;
-/** Glottis termination admittance (reflection 0.75, like the waveguide). */
-const GLOTTIS_ADMITTANCE = 1 / 7;
-/** Waveguide sections that the empirical loss model is calibrated for. */
-const LOSS_REFERENCE_SECTIONS = 44;
 /**
  * Microphone level per cm of cell size: matches the waveguide output level
  * for the same source (the radiated pressure is sampled at one point).
@@ -84,6 +95,42 @@ function resample(values, position) {
   return values[lower] + (values[upper] - values[lower]) * (source - lower);
 }
 
+/** Cell indices of every tube (tract, nose, pouches) sorted by arc. */
+function tubeMembers(cells) {
+  const tubes = [];
+  cells.forEach((cell, index) => {
+    if (cell.kind !== CELL_AIR) {
+      const tube = cell.tube ?? cell.kind;
+      (tubes[tube] ??= []).push(index);
+    }
+  });
+  return tubes
+    .filter(Boolean)
+    .map((members) => members.sort((a, b) => cells[a].arc - cells[b].arc));
+}
+
+/**
+ * Calls visit(index, other, weight) for every pair of cells of a tube
+ * within 2 dx of arc, weighted by a triangular kernel of half-width 2 dx.
+ */
+function forNeighbours(cells, sorted, dx, visit) {
+  const reach = 2 * dx;
+  let low = 0;
+  for (const index of sorted) {
+    const arc = cells[index].arc;
+    while (cells[sorted[low]].arc < arc - reach) {
+      low++;
+    }
+    for (let position = low; position < sorted.length; position++) {
+      const other = sorted[position];
+      if (cells[other].arc > arc + reach) {
+        break;
+      }
+      visit(index, other, 1 - Math.abs(cells[other].arc - arc) / reach);
+    }
+  }
+}
+
 /**
  * Cross-section of the envelope at each tube cell. Cells of a tube form
  * slices about `dx` apart in arc length; a triangular kernel of half-width
@@ -92,32 +139,14 @@ function resample(values, position) {
  */
 function envelopeAreas(model) {
   const { cells, dx } = model;
-  const reach = 2 * dx;
   const areas = new Float64Array(cells.length).fill(dx * dx);
-  const byKind = [[], []];
-  cells.forEach((cell, index) => {
-    if (cell.kind !== CELL_AIR) {
-      byKind[cell.kind].push(index);
-    }
-  });
-  for (const members of byKind) {
-    const sorted = members.sort((a, b) => cells[a].arc - cells[b].arc);
-    let low = 0;
+  for (const sorted of tubeMembers(cells)) {
     for (const index of sorted) {
-      const arc = cells[index].arc;
-      while (cells[sorted[low]].arc < arc - reach) {
-        low++;
-      }
-      let weight = 0;
-      for (let other = low; other < sorted.length; other++) {
-        const distance = Math.abs(cells[sorted[other]].arc - arc);
-        if (cells[sorted[other]].arc > arc + reach) {
-          break;
-        }
-        weight += 1 - distance / reach;
-      }
-      areas[index] = (weight * dx ** 3) / reach;
+      areas[index] = 0;
     }
+    forNeighbours(cells, sorted, dx, (index, other, weight) => {
+      areas[index] += (weight * dx * dx) / 2;
+    });
   }
   return areas;
 }
@@ -208,11 +237,12 @@ function nearestAirCell(cells, point) {
 export class Fdtd3d {
   /**
    * `kernel` selects the step loop: 'wasm' (default when WebAssembly is
-   * available) or 'js'; both produce bit-identical output.
+   * available) or 'js'; both produce bit-identical output. A `device`
+   * (GPUDevice, see requestGpuDevice) runs it on the GPU instead.
    * A `microphone` or `enclosure` switches the default output to
    * 'microphone'; a prebuilt `model` must then come from
    * buildVoxelModel(head, voxelModelOptions(options)).
-   * @param {{head?: object, dx?: number, model?: object, output?: 'flow'|'microphone', kernel?: 'wasm'|'js', microphone?: object, enclosure?: object}} [options]
+   * @param {{head?: object, dx?: number, model?: object, output?: 'flow'|'microphone', kernel?: 'wasm'|'js', device?: object, microphone?: object, enclosure?: object}} [options]
    */
   constructor(options = {}) {
     const model =
@@ -224,9 +254,16 @@ export class Fdtd3d {
     this.model = model;
     this.dx = model.dx;
     this.dt = (COURANT * model.dx) / SPEED_OF_SOUND;
+    this.courant = COURANT;
+    /** Bumped whenever the link or cell coefficients change. */
+    this.version = 0;
+    this.noiseVersion = 0;
     const listening = Boolean(options.microphone || model.enclosure);
     this.output = options.output ?? (listening ? 'microphone' : 'flow');
     this.wallLoss = options.head?.wallLoss ?? 1;
+    /** Glottis termination admittance (the waveguide's reflection). */
+    const reflection = glottalReflection(options.head);
+    this.glottisAdmittance = (1 - reflection) / (1 + reflection);
     this.#prepareGrid(model, options);
     this.#placeMicrophone(model, resolveMicrophone(options.microphone));
     this.noiseArc = -1;
@@ -237,6 +274,8 @@ export class Fdtd3d {
     this.noiseState = 0;
     this.leak = 1 - this.dt / MICROPHONE_LEAK_TIME;
     this.tubeAreas = [null, null];
+    this.pending = [];
+    this.gpu = options.device ? new FdtdGpu(this, options.device) : null;
   }
 
   #prepareGrid(model, options) {
@@ -247,7 +286,8 @@ export class Fdtd3d {
         ? withSphericalBoundary(model)
         : null;
     const grid = spherical?.model ?? model;
-    this.#allocate(grid, options.kernel ?? 'wasm');
+    // On the GPU the CPU arrays only hold the coefficients.
+    this.#allocate(grid, options.device ? 'js' : (options.kernel ?? 'wasm'));
     this.#prepareBoundaries(grid);
     this.microphoneGain =
       spherical || model.enclosure ? SPHERICAL_MICROPHONE_GAIN : 1;
@@ -269,6 +309,7 @@ export class Fdtd3d {
     this.pressure = array('pressure', Float64Array, cellCount);
     this.divergence = array('divergence', Float64Array, cellCount);
     this.fill = new Float64Array(cellCount).fill(1);
+    this.cellArea = new Float64Array(cellCount);
     this.keep = array('keep', Float64Array, cellCount).fill(1);
     this.gain = array('gain', Float64Array, cellCount).fill(COURANT);
     this.cellKind = Uint8Array.from(model.cells, (cell) => cell.kind);
@@ -276,6 +317,13 @@ export class Fdtd3d {
     this.envelope = envelopeAreas(model);
     // Envelope seen by the area function: smaller in the teeth slot cells.
     this.effective = Float64Array.from(this.envelope);
+    this.opening = model.opening ?? null;
+    this.teethCell = new Uint8Array(cellCount);
+    // Share of each teeth cell that lies in the slot between the incisors.
+    this.openness = new Float64Array(cellCount).fill(1);
+    for (const cell of model.teeth?.cells ?? []) {
+      this.teethCell[cell] = 1;
+    }
     this.solid = new Uint8Array(cellCount);
     this.teethGap = null;
     this.velocity = array('velocity', Float64Array, linkCount);
@@ -312,6 +360,150 @@ export class Fdtd3d {
         this.sourceCells.push(index);
       }
     });
+    this.#fillSinuses(model);
+  }
+
+  /**
+   * Pouches hold their anatomical volume (area x depth) spread evenly over
+   * their cells. The tract cells at a pouch opening hold at least the
+   * pouch fill, so the opening is about as wide as the pouch: a narrow
+   * neck would turn the pouch into a Helmholtz resonator.
+   */
+  #fillSinuses(model) {
+    const cubic = model.dx ** 3;
+    for (const sinus of model.sinuses ?? []) {
+      const cells = [];
+      model.cells.forEach((cell, index) => {
+        if (cell.kind === CELL_SINUS && cell.tube === sinus.tube) {
+          cells.push(index);
+        }
+      });
+      const fill = Math.min(
+        1,
+        Math.max(MIN_FILL, (sinus.area * sinus.length) / (cells.length * cubic))
+      );
+      for (const index of cells) {
+        this.fill[index] = fill;
+      }
+    }
+    const floors = new Map();
+    for (let link = 0; link < this.linkCount; link++) {
+      if (this.linkKind[link] === LINK_SINUS) {
+        const [tract, sinus] =
+          this.cellKind[this.linkA[link]] === CELL_SINUS
+            ? [this.linkB[link], this.linkA[link]]
+            : [this.linkA[link], this.linkB[link]];
+        floors.set(tract, Math.max(floors.get(tract) ?? 0, this.fill[sinus]));
+      }
+    }
+    this.openingFloors = [...floors];
+  }
+
+  /**
+   * True for the tract cells whose fill comes from the opening weights
+   * (see openingTable): all but the teeth cells, which share the slot area
+   * evenly, while the teeth are in place. Without teeth every cell of a
+   * section has the same fill.
+   */
+  #ranked(index) {
+    return (
+      this.opening !== null &&
+      this.teethGap !== null &&
+      this.cellKind[index] === CELL_TRACT &&
+      !this.teethCell[index]
+    );
+  }
+
+  /**
+   * Fill of a cell on a link that crosses a section narrower than the
+   * cell's own. Ranked cells keep their open pattern and close in
+   * proportion, so a link between two open cells never shuts because the
+   * other cell's window ranks it lower.
+   */
+  #narrowedFill(index, narrowest) {
+    if (this.#ranked(index)) {
+      return (
+        this.fill[index] *
+        Math.min(1, narrowest / Math.max(this.cellArea[index], 1e-12))
+      );
+    }
+    return this.#fillAt(index, narrowest);
+  }
+
+  /**
+   * Opening scale c that fills a stretch of points to `area` cm² (see
+   * openingTable in voxel-model.js): the points with the highest weights
+   * saturate at 1 and the rest hold c times their weight.
+   */
+  #binScale(bin, area) {
+    const { weights, shares, heads, tails } = this.opening.bins[bin];
+    const target = area / this.opening.sample;
+    const count = weights.length;
+    if (count === 0) {
+      return 0;
+    }
+    if (target >= heads[count]) {
+      return Infinity;
+    }
+    // Largest k whose point saturates first at c = 1 / w[k].
+    let low = -1;
+    let high = count - 1;
+    while (low < high) {
+      const middle = (low + high + 1) >> 1;
+      const filled =
+        heads[middle] + shares[middle] + tails[middle + 1] / weights[middle];
+      if (filled <= target) {
+        low = middle;
+      } else {
+        high = middle - 1;
+      }
+    }
+    return (target - heads[low + 1]) / tails[low + 1];
+  }
+
+  /** Opening scale at `arc`, interpolated between stretches. */
+  #scale(arc, area) {
+    const { binLength, bins } = this.opening;
+    const last = bins.length - 1;
+    const at = Math.min(last, Math.max(0, arc / binLength - 0.5));
+    const lower = Math.floor(at);
+    const upper = Math.min(last, lower + 1);
+    const low = this.#binScale(lower, area);
+    const high = this.#binScale(upper, area);
+    if (!Number.isFinite(low) || !Number.isFinite(high) || low <= 0) {
+      return Math.max(low, high);
+    }
+    return low * (high / low) ** (at - lower);
+  }
+
+  /** Mean fill min(1, c w) of the points of a tract cube. */
+  #openShare(index, scale) {
+    const { cellWeights, cellTails, per } = this.opening;
+    if (scale === Infinity) {
+      return 1;
+    }
+    const start = index * per;
+    let low = 0;
+    let high = per;
+    while (low < high) {
+      const middle = (low + high) >> 1;
+      if (scale * cellWeights[start + middle] >= 1) {
+        low = middle + 1;
+      } else {
+        high = middle;
+      }
+    }
+    return (low + scale * cellTails[index * (per + 1) + low]) / per;
+  }
+
+  #fillAt(index, area) {
+    if (this.#ranked(index)) {
+      return this.#openShare(index, this.#scale(this.cellArc[index], area));
+    }
+    return (
+      this.openness[index] *
+      Math.min(1, Math.max(0, area / this.effective[index]))
+    );
   }
 
   /** Tube links and cells: only these change with the articulation. */
@@ -381,12 +573,13 @@ export class Fdtd3d {
       slices += (this.dx * this.dx) / this.envelope[index];
     }
     for (const index of this.sourceCells) {
-      this.admittance[index] = GLOTTIS_ADMITTANCE / Math.max(1, slices);
+      this.admittance[index] = this.glottisAdmittance / Math.max(1, slices);
     }
     this.#updateCellCoefficients();
   }
 
   #updateCellCoefficients(cells = null) {
+    this.version++;
     const count = cells ? cells.length : this.cellCount;
     for (let position = 0; position < count; position++) {
       const index = cells ? cells[position] : position;
@@ -396,9 +589,20 @@ export class Fdtd3d {
     }
   }
 
-  /** Time step in seconds (the solver runs at 1 / dt). */
-  stepDuration() {
-    return this.dt;
+  /**
+   * Time step in seconds (the solver runs at 1 / dt). With a tract shape
+   * the step stretches with its length, as in the waveguide: the voxel
+   * tract has the rest length, and running it slower by length / rest
+   * length scales every distance of the grid by that ratio, so a
+   * protruded or lowered tract keeps its formants.
+   * @param {{length?: number}} [shape]
+   */
+  stepDuration(shape) {
+    const length = shape?.length;
+    if (!(length > 0)) {
+      return this.dt;
+    }
+    return (this.dt * length) / this.model.lengths[CELL_TRACT];
   }
 
   /** Returns false when the areas did not change since the last call. */
@@ -417,12 +621,15 @@ export class Fdtd3d {
     const length = this.model.lengths[kind];
     for (const index of this.tubeCells[kind]) {
       const area = resample(areas, this.cellArc[index] / length);
-      this.fill[index] = Math.min(
-        1,
-        Math.max(MIN_FILL, area / this.effective[index])
-      );
+      this.cellArea[index] = area;
+      this.fill[index] = Math.max(MIN_FILL, this.#fillAt(index, area));
       if (this.solid[index]) {
         this.fill[index] = 1;
+      }
+    }
+    if (kind === CELL_TRACT) {
+      for (const [index, floor] of this.openingFloors) {
+        this.fill[index] = Math.max(this.fill[index], floor);
       }
     }
     return true;
@@ -458,22 +665,31 @@ export class Fdtd3d {
         this.pressure[cell] = 0;
       }
       this.solid[cell] = solid ? 1 : 0;
+      this.openness[cell] = gap === null ? 1 : open[position];
       this.effective[cell] = this.envelope[cell] * (gap === null ? 1 : share);
     });
     return true;
   }
 
-  /** 1 for teeth cells inside the slot (at least one per slice). */
+  /**
+   * Share of each teeth cell's cross-section inside the slot between the
+   * incisal edges (at least one open cell per slice), so the open cells
+   * add up to the slot area at any grid size.
+   */
   #teethSlot(gap, edge, width) {
     const { cells, groups } = this.model.teeth;
-    const half = this.dx / 2;
-    const open = new Uint8Array(cells.length);
+    const { dx } = this;
+    const half = dx / 2;
+    const open = new Float64Array(cells.length);
     const nearest = new Map();
+    const overlap = (low, high) => Math.min(1, Math.max(0, high - low) / dx);
     cells.forEach((cell, position) => {
       const [x, y] = this.model.cells[cell].point;
+      open[position] =
+        overlap(Math.max(y - half, edge - gap), Math.min(y + half, edge)) *
+        overlap(Math.max(x - half, -width / 2), Math.min(x + half, width / 2));
       const vertical = Math.max(y - half - edge, edge - gap - (y + half));
       const lateral = Math.abs(x) - half - width / 2;
-      open[position] = vertical < 0 && lateral < 0 ? 1 : 0;
       const distance = Math.max(vertical, 0) + Math.max(lateral, 0);
       const best = nearest.get(groups[position]);
       if (!best || distance < best.distance) {
@@ -481,7 +697,9 @@ export class Fdtd3d {
       }
     });
     for (const { position } of nearest.values()) {
-      open[position] = 1;
+      if (open[position] === 0) {
+        open[position] = 1;
+      }
     }
     return open;
   }
@@ -533,18 +751,29 @@ export class Fdtd3d {
         this.velocity[link] = 0;
         continue;
       }
-      let g = Math.min(fill[a], fill[b]);
-      let area = Math.min(fill[a] * envelope[a], fill[b] * envelope[b]);
+      let fillA = fill[a];
+      let fillB = fill[b];
+      let area = Math.min(fillA * envelope[a], fillB * envelope[b]);
       if (from[link] >= 0) {
         const areas = this.tubeAreas[cellKind[a]];
-        let narrowest = Infinity;
+        // The sections the link spans are in series: their inertances
+        // add, so a closed section shuts the link but a short narrow one
+        // does not narrow the whole cell.
+        let inverse = 0;
         for (let index = from[link]; index <= to[link]; index++) {
-          narrowest = Math.min(narrowest, areas[index]);
+          inverse += 1 / Math.max(areas[index], 1e-12);
         }
-        g = Math.min(g, narrowest / Math.max(envelope[a], envelope[b]));
+        const narrowest = (to[link] - from[link] + 1) / inverse;
+        fillA = Math.min(fillA, this.#narrowedFill(a, narrowest));
+        fillB = Math.min(fillB, this.#narrowedFill(b, narrowest));
         area = Math.min(area, narrowest);
       }
-      this.conductance[link] = Math.max(0, g);
+      // Each cell holds half of the link: two inertances in series, so
+      // the link opens by the harmonic mean of the two fills.
+      this.conductance[link] = Math.max(
+        0,
+        (2 * fillA * fillB) / Math.max(fillA + fillB, 1e-12)
+      );
       this.damping[link] =
         Math.max(0, lossFactor(area, this.wallLoss)) ** exponent;
     }
@@ -596,6 +825,7 @@ export class Fdtd3d {
       return;
     }
     this.noiseArc = arc;
+    this.noiseVersion++;
     const links = [];
     const signs = [];
     for (let link = 0; link < this.linkCount; link++) {
@@ -618,18 +848,30 @@ export class Fdtd3d {
     this.noiseSigns = Float64Array.from(signs);
   }
 
-  #addNoise(noisePosition, noise) {
+  /**
+   * Velocity added to the noise links for a turbulence pressure `noise`
+   * (integrated like the glottal source in microphone mode), after
+   * selecting the links that cross the noise plane.
+   */
+  #noiseForce(noisePosition, noise) {
+    let force = noise;
+    if (this.output === 'microphone') {
+      // Integrated like the glottal source (see #sourcePressure).
+      this.noiseState = this.noiseState * this.leak + noise;
+      force = this.noiseState * this.dx * MICROPHONE_GAIN;
+    }
+    if (force === 0) {
+      return 0;
+    }
     const sections = this.areaCount ?? 44;
     const arc = (noisePosition / sections) * this.model.lengths[CELL_TRACT];
     this.#selectNoiseLinks(arc);
     // A pressure jump across the noise plane enters the momentum equation.
-    const force = COURANT * NOISE_GAIN * noise;
-    for (let index = 0; index < this.noiseLinks.length; index++) {
-      this.velocity[this.noiseLinks[index]] += force * this.noiseSigns[index];
-    }
+    return COURANT * NOISE_GAIN * force;
   }
 
-  #injectSource(glottalFlow) {
+  /** Pressure the glottal flow adds to the source cells (per keep). */
+  #sourcePressure(glottalFlow) {
     let flow = glottalFlow;
     if (this.output === 'microphone') {
       // The microphone hears dp/dt of the radiated flow: integrate once.
@@ -642,10 +884,7 @@ export class Fdtd3d {
     for (const index of this.sourceCells) {
       area += this.fill[index] * this.dx * this.dx;
     }
-    const pressure = (COURANT * flow) / Math.max(area, 1e-3);
-    for (const index of this.sourceCells) {
-      this.pressure[index] += pressure * this.keep[index];
-    }
+    return (COURANT * flow) / Math.max(area, 1e-3);
   }
 
   #measure() {
@@ -669,22 +908,54 @@ export class Fdtd3d {
    * @returns {number} Radiated output.
    */
   step(glottalFlow, noisePosition, noise) {
-    let force = noise;
-    if (this.output === 'microphone') {
-      // Integrated like the glottal source (see #injectSource).
-      this.noiseState = this.noiseState * this.leak + noise;
-      force = this.noiseState * this.dx * MICROPHONE_GAIN;
+    if (this.gpu) {
+      throw new Error('A GPU solver runs queued steps (queueStep)');
     }
+    const force = this.#noiseForce(noisePosition, noise);
     if (force !== 0) {
-      this.#addNoise(noisePosition, force);
+      for (let index = 0; index < this.noiseLinks.length; index++) {
+        this.velocity[this.noiseLinks[index]] += force * this.noiseSigns[index];
+      }
     }
     if (this.kernel) {
       this.kernel.step();
     } else {
       this.#stepJs();
     }
-    this.#injectSource(glottalFlow);
+    const pressure = this.#sourcePressure(glottalFlow);
+    for (const index of this.sourceCells) {
+      this.pressure[index] += pressure * this.keep[index];
+    }
     return this.#measure();
+  }
+
+  /**
+   * Queue a step (arguments as for step); flushSteps returns the outputs.
+   * On the CPU the step runs right away, on the GPU with the next flush.
+   */
+  queueStep(glottalFlow, noisePosition, noise) {
+    if (!this.gpu) {
+      this.pending.push(this.step(glottalFlow, noisePosition, noise));
+      return;
+    }
+    const force = this.#noiseForce(noisePosition, noise);
+    this.gpu.queue(force, this.#sourcePressure(glottalFlow));
+  }
+
+  /**
+   * Outputs of the steps queued since the last flush. With `field` on the
+   * GPU, field() then holds the RMS pressure over these steps (on the CPU
+   * it is always the current pressure).
+   * @param {{field?: boolean}} [options]
+   * @returns {Promise<Float64Array>}
+   */
+  flushSteps(options = {}) {
+    if (this.gpu) {
+      return this.gpu.flush(options);
+    }
+    const outputs = Float64Array.from(this.pending);
+    this.pending = [];
+    return Promise.resolve(outputs);
   }
 
   /** Reference step loop; the wasm kernel mirrors it operation by operation. */
@@ -730,5 +1001,6 @@ export class Fdtd3d {
     this.velocity.fill(0);
     this.sourceState = 0;
     this.noiseState = 0;
+    this.gpu?.reset();
   }
 }

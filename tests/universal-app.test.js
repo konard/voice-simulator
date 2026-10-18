@@ -160,22 +160,50 @@ describe('universal React example app', () => {
 });
 
 describe('previous app versions', () => {
-  it('keeps v1 published from the commit before issue 5', async () => {
+  it('keeps every earlier version published at /vN/', async () => {
     const { readVersions } =
       await import('../scripts/build-previous-versions.mjs');
     const versions = readVersions();
-    expect(versions.map((version) => version.path)).toContain('v1');
-    expect(versions.find((version) => version.path === 'v1').commit).toBe(
-      'a1129cb4efd2be8d7d2ec67403a4ee9290e1f467'
-    );
+    expect(versions.map((version) => version.path)).toEqual(['v1', 'v2']);
+    expect(versions[0].commit).toBe('a1129cb4efd2be8d7d2ec67403a4ee9290e1f467');
+    // Issue 9: the version released before it stays online at /v2/.
+    expect(versions[1].commit).toBe('4b6986b8cd5f267edd9482ab8aaf57812a3b1771');
     const workflow = readText(workflowPath);
     const build = workflow.indexOf('run: npm run example:web:build');
     const previous = workflow.indexOf(
       'run: node scripts/build-previous-versions.mjs'
     );
     expect(build > 0 && previous > build).toBe(true);
-    expect(readText(appSourcePath)).toContain(
-      'https://konard.github.io/voice-simulator/v1/'
+    expect(readText(appSourcePath)).toContain('versionLinks(previousVersions)');
+  });
+
+  it('links all versions in the app and gives the current one a path', async () => {
+    const { currentVersionPath, versionLinks } =
+      await import('../examples/universal-app/src/versions.js');
+    const previous = [{ path: 'v1' }, { path: 'v2' }];
+    expect(currentVersionPath(previous)).toBe('v3');
+    expect(currentVersionPath([])).toBe('v1');
+    const links = versionLinks(previous);
+    expect(links.map((link) => link.href)).toEqual([
+      'https://konard.github.io/voice-simulator/v1/',
+      'https://konard.github.io/voice-simulator/v2/',
+      'https://konard.github.io/voice-simulator/v3/',
+    ]);
+    expect(links.map((link) => link.current)).toEqual([false, false, true]);
+    const script = readText('scripts/build-previous-versions.mjs');
+    expect(script).toContain('buildCurrentVersion(versions, dist)');
+  });
+
+  it('rejects gaps in the version paths', async () => {
+    const { readVersions } =
+      await import('../scripts/build-previous-versions.mjs');
+    const { mkdtempSync, writeFileSync } = await import('node:fs');
+    const { tmpdir } = await import('node:os');
+    const file = `${mkdtempSync(`${tmpdir()}/versions-`)}/versions.json`;
+    writeFileSync(
+      file,
+      JSON.stringify([{ path: 'v2', commit: 'a'.repeat(40) }])
     );
+    expect(() => readVersions(file)).toThrow();
   });
 });

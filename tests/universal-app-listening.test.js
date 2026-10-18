@@ -40,6 +40,13 @@ describe('example app listening settings', () => {
     ).toBe(true);
   });
 
+  it('runs the 3D tiers on the GPU unless it is turned off', () => {
+    expect(DEFAULT_ACOUSTICS.gpu).toBe(true);
+    expect(listeningSettings({ ...DEFAULT_ACOUSTICS, gpu: false })).toEqual({
+      gpu: false,
+    });
+  });
+
   it('accepts the default box on every tier and flags boxes that cannot work', () => {
     const box = { ...DEFAULT_ACOUSTICS, box: true };
 
@@ -48,7 +55,9 @@ describe('example app listening settings', () => {
     expect(enclosureCells(box, 1)).toBe(30 * 44 * 30);
 
     const large = { ...box, boxWidth: 60, boxHeight: 60, boxDepth: 60 };
-    expect(boxProblem(large, DEFAULT_HEAD)).toEqual({ tiers: ['ultra'] });
+    expect(boxProblem(large, DEFAULT_HEAD)).toEqual({
+      tiers: ['ultra', 'studio', 'reference'],
+    });
 
     const shallow = boxProblem({ ...box, boxDepth: 12 }, DEFAULT_HEAD);
     expect(shallow.message).toContain('lips');

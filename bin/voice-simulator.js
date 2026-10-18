@@ -8,6 +8,7 @@ import { parseArgs } from 'node:util';
 import {
   AUDIO_FORMAT_NAMES,
   AUDIO_TIERS,
+  DEFAULT_AUDIO_TIER,
   audioEncoding,
   ROOM_PRESETS,
   benchmarkAudioTiers,
@@ -23,6 +24,8 @@ import {
   resample,
   synthesize,
   textToIpa,
+  visemeTrack,
+  VISEME_FORMATS,
 } from '../src/index.js';
 import { INDEX_PAGE, createVoiceServer } from '../src/server/server.js';
 
@@ -56,6 +59,7 @@ const OPTIONS = {
   host: { type: 'string' },
   transcript: { type: 'string' },
   iterations: { type: 'string' },
+  fps: { type: 'string' },
   json: { type: 'boolean' },
   help: { type: 'boolean', short: 'h' },
   version: { type: 'boolean', short: 'v' },
@@ -70,6 +74,7 @@ function usage() {
     '  say <text> -o f.wav Simulate speech and write an audio file',
     '  convert <in> -o out Convert an audio file (WAV, FLAC, AIFF, AU) to mono',
     '  timeline <text>     Print when each word and syllable is spoken',
+    '  visemes <text>      Face animation as JSON (ARKit, VRM or Oculus)',
     '  head                Print a random head configuration',
     '  mesh -o head.obj    Export the low-poly head model as OBJ',
     '  match <file>        Find the head that sounds like a recording',
@@ -81,6 +86,7 @@ function usage() {
     '      --accent <code>   English accent: en-US | en-GB | en-AU | en-IN',
     '  -o, --out <file>      Output file ("-" for stdout)',
     `  -t, --tier <name>     ${AUDIO_TIERS.map((tier) => tier.name).join(' | ')}`,
+    `                        (default ${DEFAULT_AUDIO_TIER}: 3D; medium: real-time waveguide)`,
     '      --solver <name>   waveguide | fdtd3d (overrides the tier)',
     '      --dx <cm>         FDTD voxel size',
     '  -s, --seed <seed>     Random seed for the head and the voice',
@@ -104,6 +110,8 @@ function usage() {
     '      --transcript <t>  What the recording says (closer match)',
     '      --iterations <n>  Renders while matching (default 4, max 12)',
     '      --lod <0-3>      Mesh level of detail',
+    `      --fps <n>         Visemes per second (default 60); visemes take
+                        -f ${Object.keys(VISEME_FORMATS).join(' | ')} (default arkit)`,
     '  -p, --port <port>     Server port (default 8080, env PORT)',
     '      --host <host>     Server host (default 127.0.0.1, env HOST)',
     '      --json            Machine-readable output',
@@ -261,7 +269,7 @@ const COMMANDS = {
       ipa: values.ipa,
       seed: values.seed,
       head: resolveHead(values),
-      tier: values.tier ?? 'medium',
+      tier: values.tier,
       solver: values.solver,
       dx: optionalNumber(values.dx, 'dx'),
       output: values.output,
@@ -331,6 +339,27 @@ const COMMANDS = {
         `${word.start.toFixed(3)} ${word.end.toFixed(3)} ${word.text} /${word.syllables.map((syllable) => syllable.ipa).join('.')}/ ${syllables}`
       );
     }
+  },
+
+  visemes(values, positionals, io) {
+    const head = resolveHead(values);
+    const { plan, head: resolved } = prepareUtterance(
+      requireText(positionals),
+      { lang: values.lang, accent: values.accent, ipa: values.ipa, head }
+    );
+    const track = visemeTrack(plan, resolved, {
+      format: values.format ?? 'arkit',
+      fps: optionalNumber(values.fps, 'fps'),
+    });
+    const json = JSON.stringify(track);
+    if (values.out && values.out !== '-') {
+      writeFileSync(values.out, json);
+      io.stdout(
+        `${track.frames.length} ${track.format} frames at ${track.fps} fps -> ${values.out}`
+      );
+      return;
+    }
+    io.stdout(json);
   },
 
   head(values, positionals, io) {

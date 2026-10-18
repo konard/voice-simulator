@@ -77,7 +77,8 @@ textarea {
   color: inherit;
 }
 
-button {
+button,
+.file-button {
   min-height: 38px;
   padding: 0 14px;
   border: 1px solid var(--line);
@@ -86,7 +87,8 @@ button {
   cursor: pointer;
 }
 
-button:hover {
+button:hover,
+.file-button:hover {
   border-color: var(--accent);
 }
 
@@ -183,6 +185,18 @@ h2 {
 .header-links a {
   color: var(--accent);
   font-weight: 700;
+}
+
+.versions {
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
+  color: var(--muted);
+}
+
+.versions a[aria-current] {
+  text-decoration: none;
+  border-bottom: 2px solid currentColor;
 }
 
 .workspace {
@@ -470,6 +484,35 @@ h2 {
   flex-wrap: wrap;
   gap: 10px;
   align-items: end;
+}
+
+.character-stage {
+  position: relative;
+  height: 420px;
+  overflow: hidden;
+  border-radius: 8px;
+  background: linear-gradient(180deg, var(--stage-top), var(--stage-bottom));
+}
+
+.character-status,
+.character-panel .hint {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.file-button {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  overflow: hidden;
+}
+
+.file-button input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
 }
 
 .editor-header h2 {

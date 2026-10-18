@@ -1,0 +1,75 @@
+Head model against HuBMAP Human Reference Atlas 3D reference organs (Visible Human)
+Schlehlein H, Herr BW II, Quardokus EM, Bueckle A, Börner K (2024) HuBMAP CCF 3D Reference Object Library; mouth and larynx: Schlehlein H (2024), Human Reference Atlas, doi:10.48539/HBM568.RFGM.978. CC BY 4.0, HuBMAP.
+Produced by scripts/compare-hra.mjs.
+
+male: key point distance after a rigid fit (mm)
+  key point          dental fit  all-point fit
+  upperIncisor              2.3            5.3
+  lowerIncisor              3.9            5.8
+  upperFirstMolar           3.1            7.5
+  upperSecondMolar          2.3            4.7
+  staphylion               16.2           13.2
+  palateVault               2.0            5.6
+  uvula                     5.5            7.7
+  tongueTip                 9.0            6.4
+  tongueDorsum              7.3            5.0
+  glottis                  21.4           11.5
+  rms (fitted)             2.81           7.77
+male: outline distance per cut and part after the dental fit (mm)
+  MIDSAGITTAL         upperTeeth     0.91
+  MIDSAGITTAL         lowerTeeth     2.36
+  MIDSAGITTAL         palate         3.43
+  MIDSAGITTAL         velum          2.64
+  MIDSAGITTAL         tongue         4.41
+  PARASAGITTAL 15 MM  upperTeeth     2.05
+  PARASAGITTAL 15 MM  lowerTeeth     2.13
+  PARASAGITTAL 15 MM  palate         4.19
+  PARASAGITTAL 15 MM  velum          3.73
+  PARASAGITTAL 15 MM  tongue         5.87
+  CORONAL AT M1       upperTeeth     2.60
+  CORONAL AT M1       lowerTeeth     3.37
+  CORONAL AT M1       palate         2.61
+  CORONAL AT M1       tongue         3.62
+  AXIAL CROWNS        upperTeeth     2.29
+  AXIAL CROWNS        palate        10.00
+  AXIAL CROWNS        velum          2.00
+  AXIAL CROWNS        tongue         5.71
+  AXIAL PALATE        upperTeeth     7.57
+  AXIAL PALATE        palate         9.03
+  AXIAL PALATE        velum          1.50
+
+female: key point distance after a rigid fit (mm)
+  key point          dental fit  all-point fit
+  upperIncisor              4.7            6.6
+  lowerIncisor              6.4            7.9
+  upperFirstMolar           4.6            6.7
+  upperSecondMolar          3.4            4.3
+  staphylion               15.6           14.5
+  palateVault               4.9            3.8
+  uvula                    18.5           20.0
+  tongueTip                11.1           11.0
+  tongueDorsum             12.2           11.2
+  glottis                  23.2           18.4
+  rms (fitted)             4.89          11.74
+female: outline distance per cut and part after the dental fit (mm)
+  MIDSAGITTAL         upperTeeth     1.97
+  MIDSAGITTAL         lowerTeeth     4.13
+  MIDSAGITTAL         palate         3.99
+  MIDSAGITTAL         velum          7.43
+  MIDSAGITTAL         tongue         7.19
+  PARASAGITTAL 15 MM  upperTeeth     1.90
+  PARASAGITTAL 15 MM  lowerTeeth     4.15
+  PARASAGITTAL 15 MM  palate         6.40
+  PARASAGITTAL 15 MM  velum          6.59
+  PARASAGITTAL 15 MM  tongue         9.54
+  CORONAL AT M1       upperTeeth     2.60
+  CORONAL AT M1       lowerTeeth     2.65
+  CORONAL AT M1       palate         3.92
+  CORONAL AT M1       tongue         4.28
+  AXIAL CROWNS        upperTeeth     1.61
+  AXIAL CROWNS        palate         7.73
+  AXIAL CROWNS        velum          4.93
+  AXIAL CROWNS        tongue         6.13
+  AXIAL PALATE        upperTeeth     7.53
+  AXIAL PALATE        palate         8.06
+  AXIAL PALATE        velum          5.91
