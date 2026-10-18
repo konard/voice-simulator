@@ -75,17 +75,37 @@ function sectionMatrix(frequency, area, length, loss) {
 }
 
 /**
+ * Shunt of a blind side tube (closed far end): its admittance at the
+ * junction is j (A / rho c) tan(k L).
+ */
+function branchMatrix(frequency, { area, length }) {
+  const admittance =
+    (area / (AIR_DENSITY * SPEED_OF_SOUND)) *
+    Math.tan((2 * Math.PI * frequency * length) / SPEED_OF_SOUND);
+  return [complex(1), complex(0), complex(0, admittance), complex(1)];
+}
+
+/**
  * Volume velocity transfer function |U_lips / U_glottis| of a tube.
  * @param {ArrayLike<number>} areas Areas in cm², glottis first.
  * @param {number} length Total length in cm.
  * @param {number} frequency Hz.
- * @param {{loss?: number}} [options]
+ * @param {{loss?: number, branches?: {index: number, area: number, length: number}[]}} [options]
+ *   `branches` are blind side tubes (the piriform fossae) joined in front
+ *   of section `index`.
  */
 export function tubeTransfer(areas, length, frequency, options = {}) {
   const loss = options.loss ?? 2e-5;
+  const branches = options.branches ?? [];
   const sectionLength = length / areas.length;
   let chain = [complex(1), complex(0), complex(0), complex(1)];
-  for (const area of areas) {
+  for (let index = 0; index < areas.length; index++) {
+    const area = areas[index];
+    for (const branch of branches) {
+      if (branch.index === index) {
+        chain = multiplyMatrix(chain, branchMatrix(frequency, branch));
+      }
+    }
     chain = multiplyMatrix(
       chain,
       sectionMatrix(frequency, Math.max(area, 1e-4), sectionLength, loss)

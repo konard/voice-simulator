@@ -32,6 +32,25 @@ export const PIRIFORM_HEIGHT = 2.4;
 export const REST_LENGTH = 16.5;
 
 /**
+ * The piriform side branch the waveguide builds: junction section, opening
+ * (cm²), number of sections and depth (cm) for a tract of `length` cm, in
+ * the form tubeTransfer takes for a branch.
+ * @param {number} sections
+ * @param {number} length Tract length (cm).
+ * @param {{vocalTractLength?: number, pharynxWidth?: number}} [head]
+ */
+export function piriformBranch(sections, length, head = {}) {
+  const rest = head.vocalTractLength ?? REST_LENGTH;
+  const count = Math.max(2, Math.round((sections * PIRIFORM_LENGTH) / rest));
+  return {
+    index: Math.max(1, Math.round((sections * PIRIFORM_HEIGHT) / rest)),
+    area: PIRIFORM_AREA * (head.pharynxWidth ?? 1),
+    sections: count,
+    length: (count * length) / sections,
+  };
+}
+
+/**
  * Attenuation of a reference section (length / LOSS_REFERENCE_SECTIONS):
  * boundary-layer losses grow with perimeter / area, and the flow
  * resistance of narrow constrictions (Bernoulli/kinetic losses) dominates
@@ -101,14 +120,12 @@ export class Waveguide {
   }
 
   #allocatePiriform(options) {
-    const length = options.head?.vocalTractLength ?? REST_LENGTH;
     const enabled = options.piriform !== false;
-    const count = enabled
-      ? Math.max(2, Math.round((this.n * PIRIFORM_LENGTH) / length))
-      : 0;
+    const branch = piriformBranch(this.n, REST_LENGTH, options.head);
+    const count = enabled ? branch.sections : 0;
     this.piriform = {
-      index: Math.max(1, Math.round((this.n * PIRIFORM_HEIGHT) / length)),
-      area: PIRIFORM_AREA * (options.head?.pharynxWidth ?? 1),
+      index: branch.index,
+      area: branch.area,
       right: new Float64Array(count),
       left: new Float64Array(count),
       damping: this.#loss(PIRIFORM_AREA / 2),

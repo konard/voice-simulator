@@ -5,9 +5,13 @@
 
 import { describe, it, expect } from 'test-anywhere';
 import { Radiation, RADIATION_RESISTANCE } from '../src/acoustics/radiation.js';
-import { Waveguide } from '../src/acoustics/waveguide.js';
+import { Waveguide, piriformBranch } from '../src/acoustics/waveguide.js';
 import { spectralPeaks } from '../src/acoustics/analysis.js';
-import { SPEED_OF_SOUND, tubeFormants } from '../src/acoustics/transfer.js';
+import {
+  SPEED_OF_SOUND,
+  tubeFormants,
+  tubeTransfer,
+} from '../src/acoustics/transfer.js';
 import { vowelTarget } from '../src/articulation/phones.js';
 import { noseShape, tractShape } from '../src/articulation/tract-shape.js';
 import { DEFAULT_HEAD } from '../src/head-config.js';
@@ -138,5 +142,33 @@ describe('waveguide resonances with radiation', () => {
         }
       }
     }
+  });
+
+  it('matches the tube model with the piriform fossae as a side branch', () => {
+    for (const symbol of ['ə', 'i', 'ɑ', 'u']) {
+      const shape = vowelShape(symbol);
+      const bare = tubeFormants(shape.areas, shape.length, { count: 3 });
+      const fossae = tubeFormants(shape.areas, shape.length, {
+        count: 3,
+        branches: [piriformBranch(44, shape.length, DEFAULT_HEAD)],
+      });
+      const peaks = waveguidePeaks(shape, 44);
+      fossae.forEach((target, index) => {
+        // The blind fossae lower every formant, as in the waveguide.
+        expect(target).toBeLessThan(bare[index]);
+        const error = Math.abs(nearest(peaks, target) - target) / target;
+        expect(error).toBeLessThan(0.03);
+      });
+    }
+  });
+
+  it('puts the antiresonance of a blind side tube at a quarter wavelength', () => {
+    const areas = new Array(44).fill(3);
+    const branch = { index: 10, area: 1, length: 2 };
+    const zero = SPEED_OF_SOUND / (4 * branch.length);
+    const level = (frequency) =>
+      tubeTransfer(areas, 17, frequency, { branches: [branch] });
+    expect(level(zero)).toBeLessThan(0.01 * level(zero * 0.9));
+    expect(level(zero)).toBeLessThan(0.01 * level(zero * 1.1));
   });
 });
