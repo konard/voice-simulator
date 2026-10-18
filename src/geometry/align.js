@@ -73,7 +73,7 @@ export function composeTransforms(first, second) {
 }
 
 /** Eigenvector of the largest eigenvalue of a symmetric matrix (Jacobi). */
-function principalEigenvector(matrix) {
+export function principalEigenvector(matrix) {
   const size = matrix.length;
   const a = matrix.map((row) => [...row]);
   const vectors = a.map((row, i) => row.map((_, j) => (i === j ? 1 : 0)));
