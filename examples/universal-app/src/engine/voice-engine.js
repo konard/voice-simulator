@@ -320,6 +320,12 @@ export class VoiceEngine {
         timeline: null,
       };
     }
+    if (job.sound && this.player.stalled()) {
+      // The audio clock stopped (e.g. the output device went away while
+      // the tab was in the background): continue on a fresh context.
+      this.player.recover(job.chunks);
+      this.#emit({ audioRecoveries: this.player.recoveries });
+    }
     const time = this.#time(job) ?? 0;
     const clamped = Math.max(0, Math.min(job.plan.duration, time));
     sampleState(job.plan, clamped, this.state);

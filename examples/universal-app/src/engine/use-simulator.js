@@ -53,7 +53,10 @@ export function useSimulator(settings) {
     engineRef.current = engine;
     engine.setTier(settingsRef.current.tier);
     engine.benchmark(settingsRef.current.head);
+    // Browsers suspend the audio of background tabs: resume it on return.
+    const unwatch = engine.player.watch();
     return () => {
+      unwatch();
       engine.dispose();
       engineRef.current = null;
     };
