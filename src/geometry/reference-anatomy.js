@@ -100,35 +100,41 @@ export function meshShells({ positions, indices }, tolerance = 1e-4) {
     join(indices[index], indices[index + 1]);
     join(indices[index], indices[index + 2]);
   }
-  const groups = new Map();
+  // One pass over vertices and one over triangles, sorted by shell root.
+  const shellOf = new Map();
+  const local = new Int32Array(count);
+  const shells = [];
   for (let index = 0; index < count; index++) {
     const root = find(index);
-    groups.set(root, [...(groups.get(root) ?? []), index]);
-  }
-  const shells = [...groups.values()].map((vertices) => {
-    const local = new Map(vertices.map((vertex, at) => [vertex, at]));
-    const shellPositions = new Float64Array(vertices.length * 3);
-    vertices.forEach((vertex, at) => {
-      for (let axis = 0; axis < 3; axis++) {
-        shellPositions[at * 3 + axis] = positions[vertex * 3 + axis];
-      }
-    });
-    const shellIndices = [];
-    for (let index = 0; index < indices.length; index += 3) {
-      if (local.has(indices[index])) {
-        shellIndices.push(
-          local.get(indices[index]),
-          local.get(indices[index + 1]),
-          local.get(indices[index + 2])
-        );
-      }
+    let shell = shellOf.get(root);
+    if (!shell) {
+      shell = { vertices: [], triangles: [] };
+      shellOf.set(root, shell);
+      shells.push(shell);
     }
-    return {
-      positions: shellPositions,
-      indices: Uint32Array.from(shellIndices),
-    };
-  });
-  return shells.sort((a, b) => b.positions.length - a.positions.length);
+    local[index] = shell.vertices.length;
+    shell.vertices.push(index);
+  }
+  for (let index = 0; index < indices.length; index += 3) {
+    const { triangles } = shellOf.get(find(indices[index]));
+    for (let corner = 0; corner < 3; corner++) {
+      triangles.push(local[indices[index + corner]]);
+    }
+  }
+  return shells
+    .map(({ vertices, triangles }) => {
+      const shellPositions = new Float64Array(vertices.length * 3);
+      vertices.forEach((vertex, at) => {
+        for (let axis = 0; axis < 3; axis++) {
+          shellPositions[at * 3 + axis] = positions[vertex * 3 + axis];
+        }
+      });
+      return {
+        positions: shellPositions,
+        indices: Uint32Array.from(triangles),
+      };
+    })
+    .sort((a, b) => b.positions.length - a.positions.length);
 }
 
 function centroid({ positions }) {
@@ -209,7 +215,9 @@ function lowestAt(points, z) {
 }
 
 function extreme(points, axis, sign) {
-  return points.reduce((a, b) => (sign * b[axis] > sign * a[axis] ? b : a));
+  return points.length
+    ? points.reduce((a, b) => (sign * b[axis] > sign * a[axis] ? b : a))
+    : [NaN, NaN, NaN];
 }
 
 /**
@@ -359,17 +367,36 @@ export const HRA_PARTS = Object.freeze({
 });
 
 /**
- * Meshes of a segmented reference sorted into the roles of HRA_PARTS.
+ * Meshes of a segmented reference sorted into roles.
  * @param {{name: string, positions: ArrayLike<number>, indices: ArrayLike<number>}[]} meshes
+ * @param {Record<string, (name: string) => boolean>} [roles] A test on
+ *   the mesh name per role (HRA_PARTS by default).
  * @returns {Record<string, object[]>}
  */
-export function referenceParts(meshes) {
+export function referenceParts(meshes, roles = HRA_PARTS) {
   return Object.fromEntries(
-    Object.entries(HRA_PARTS).map(([role, test]) => [
+    Object.entries(roles).map(([role, test]) => [
       role,
       meshes.filter((mesh) => test(mesh.name)),
     ])
   );
+}
+
+/**
+ * Tooth landmarks (toothLandmarks()) of a segmented reference's arches,
+ * split into crowns and sorted by jaw, side and type.
+ * @param {Record<string, object[]>} parts From referenceParts().
+ */
+export function referenceTeeth(parts) {
+  const teeth = (role, jaw) => {
+    const shells = (parts[role] ?? []).flatMap((mesh) => meshShells(mesh));
+    return shells.length >= 2 ? classifyTeeth(shells, jaw) : [];
+  };
+  const sorted = [
+    ...teeth('upperTeeth', 'upper'),
+    ...teeth('lowerTeeth', 'lower'),
+  ];
+  return sorted.length >= 3 ? toothLandmarks(sorted) : [];
 }
 
 /**
@@ -380,14 +407,7 @@ export function referenceParts(meshes) {
  * @param {Record<string, object[]>} parts From referenceParts().
  */
 export function referenceKeyPoints(parts) {
-  const teeth = (role, jaw) =>
-    classifyTeeth(
-      parts[role].flatMap((mesh) => meshShells(mesh)),
-      jaw
-    );
-  const upperTeeth = teeth('upperTeeth', 'upper');
-  const lowerTeeth = teeth('lowerTeeth', 'lower');
-  const landmarks = toothLandmarks([...upperTeeth, ...lowerTeeth]);
+  const landmarks = referenceTeeth(parts);
   const midline = mean(
     landmarks.filter((tooth) => tooth.type === 0).map((tooth) => tooth.occlusal)
   )[0];
@@ -402,9 +422,9 @@ export function referenceKeyPoints(parts) {
     {
       upperTeeth: landmarks.filter((tooth) => tooth.jaw === 'upper'),
       lowerTeeth: landmarks.filter((tooth) => tooth.jaw === 'lower'),
-      palate: mergeMeshes(parts.palate),
-      velum: mergeMeshes(parts.velum),
-      tongue: parts.tongue,
+      palate: mergeMeshes(parts.palate ?? []),
+      velum: mergeMeshes(parts.velum ?? []),
+      tongue: parts.tongue ?? [],
       glottis,
     },
     midline
