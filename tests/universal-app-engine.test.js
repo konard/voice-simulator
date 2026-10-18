@@ -83,6 +83,65 @@ describe('voice engine benchmark', () => {
   });
 });
 
+describe('voice engine modes', () => {
+  const request = {
+    text: 'ˈmama',
+    ipa: true,
+    lang: 'en',
+    head: {},
+    seed: '1',
+  };
+  const quietPlayer = {
+    unlock: async () => {},
+    stalled: () => false,
+    begin() {},
+    stop() {},
+  };
+
+  it('animates without sound in the visual mode', async () => {
+    const worker = fakeWorker();
+    const engine = new VoiceEngine({ createWorker: () => worker });
+    engine.player = quietPlayer;
+    const job = await engine.speak({ ...request, mode: 'visual' });
+    expect(job.sound).toBe(false);
+    expect(worker.posted.some((message) => message.type === 'speak')).toBe(
+      false
+    );
+    const frame = engine.frame();
+    expect(frame.speaking).toBe(true);
+    expect(frame.plan.segments.length > 0).toBe(true);
+  });
+
+  it('simulates the sound in the sound and both modes', async () => {
+    for (const mode of ['sound', 'both']) {
+      const worker = fakeWorker();
+      const engine = new VoiceEngine({ createWorker: () => worker });
+      engine.player = quietPlayer;
+      const job = await engine.speak({ ...request, mode, gpu: false });
+      expect(job.sound).toBe(true);
+      const speak = worker.posted.find((message) => message.type === 'speak');
+      expect(speak.ipa).toBe('ˈmama');
+      expect(speak.gpu).toBe(false);
+    }
+  });
+
+  it('shows when the worker simulates on the GPU', async () => {
+    const worker = fakeWorker();
+    const engine = new VoiceEngine({ createWorker: () => worker });
+    engine.player = quietPlayer;
+    const job = await engine.speak({ ...request, mode: 'sound' });
+    worker.reply({
+      type: 'start',
+      id: job.id,
+      sampleRate: 16000,
+      solver: 'fdtd3d',
+      gpu: true,
+      totalSamples: 100,
+    });
+    expect(engine.status.solver).toBe('fdtd3d · GPU');
+  });
+});
+
 /** The worker's message handler, from a single import of the module. */
 let workerHandler = null;
 
