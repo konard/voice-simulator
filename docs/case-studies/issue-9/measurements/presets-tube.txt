@@ -1,0 +1,40 @@
+male: VTL 17.2 pharynx 0.5
+  /i/ tube 335 2284 3068 | Hillenbrand 343 2323 3001
+  /ɪ/ tube 430 2006 2730 | Hillenbrand 429 2034 2687
+  /e/ tube 476 2089 2675 | Hillenbrand 476 2090 2692
+  /ɛ/ tube 589 1788 2603 | Hillenbrand 588 1803 2604
+  /æ/ tube 599 1887 2605 | Hillenbrand 591 1930 2595
+  /ʌ/ tube 615 1152 2631 | Hillenbrand 621 1181 2548
+  /ɑ/ tube 744 1278 2630 | Hillenbrand 756 1309 2535
+  /ɔ/ tube 641 1000 2623 | Hillenbrand 656 1023 2521
+  /o/ tube 496 905 2465 | Hillenbrand 498 910 2459
+  /ʊ/ tube 469 1107 2458 | Hillenbrand 469 1123 2435
+  /u/ tube 370 984 2374 | Hillenbrand 380 992 2355
+  error: F1 mean -0.8% rms 1.4%, F2 mean -1.5% rms 1.7%, F3 mean 1.5% rms 2.1%
+female: VTL 14.8 pharynx 0.47
+  /i/ tube 400 2650 3502 | Hillenbrand 437 2761 3373
+  /ɪ/ tube 504 2355 3073 | Hillenbrand 484 2369 3057
+  /e/ tube 557 2451 3038 | Hillenbrand 535 2526 3050
+  /ɛ/ tube 674 2098 2991 | Hillenbrand 727 2063 2953
+  /æ/ tube 691 2208 2960 | Hillenbrand 676 2335 2973
+  /ʌ/ tube 723 1291 3012 | Hillenbrand 760 1416 2901
+  /ɑ/ tube 875 1457 3003 | Hillenbrand 921 1526 2832
+  /ɔ/ tube 748 1126 3042 | Hillenbrand 804 1188 2824
+  /o/ tube 580 1014 2945 | Hillenbrand 555 1036 2828
+  /ʊ/ tube 556 1229 2972 | Hillenbrand 519 1229 2829
+  /u/ tube 438 1087 2840 | Hillenbrand 460 1106 2735
+  error: F1 mean -1.5% rms 5.8%, F2 mean -3.2% rms 4.3%, F3 mean 3.1% rms 4.0%
+child: VTL 13.8 pharynx 0.48
+  /i/ tube 420 2886 3817 | Hillenbrand 452 3082 3702
+  /ɪ/ tube 530 2566 3362 | Hillenbrand 513 2556 3409
+  /e/ tube 585 2688 3329 | Hillenbrand 565 2649 3323
+  /ɛ/ tube 713 2296 3252 | Hillenbrand 740 2279 3297
+  /æ/ tube 724 2400 3221 | Hillenbrand 718 2497 3289
+  /ʌ/ tube 767 1428 3256 | Hillenbrand 738 1538 3126
+  /ɑ/ tube 931 1615 3232 | Hillenbrand 992 1689 2937
+  /ɔ/ tube 800 1249 3299 | Hillenbrand 836 1303 2951
+  /o/ tube 620 1120 3158 | Hillenbrand 599 1140 3006
+  /ʊ/ tube 588 1367 3211 | Hillenbrand 571 1506 3076
+  /u/ tube 461 1205 3060 | Hillenbrand 493 1404 2992
+  error: F1 mean -1.0% rms 4.6%, F2 mean -4.6% rms 6.6%, F3 mean 3.2% rms 5.2%
+all presets rms 4.3%
