@@ -8,7 +8,14 @@
  * features. That turns the 11 measured shapes into a continuous space:
  * any IPA vowel (height, backness, rounding) gets a physically plausible
  * area function, and blending two vowels is a smooth tube deformation.
+ *
+ * The measured shapes carry smooth log-area corrections (vowel-calibration.js)
+ * so that, with the incisors and piriform fossae, their resonances on the typical male
+ * head match the mean formants of men (Hillenbrand et al. 1995, see
+ * vowel-norms.js): one speaker's MRI shapes become an average male voice.
  */
+
+import { VOWEL_CORRECTIONS } from './vowel-calibration.js';
 
 /** Story (2008) Table I: area in cm², section 1 = glottis, 44 = lips. */
 export const STORY_AREAS = Object.freeze({
@@ -111,7 +118,7 @@ export const STORY_FORMANTS = Object.freeze({
 });
 
 /** Vowel chart coordinates of the measured vowels (height, backness, round). */
-const STORY_FEATURES = {
+export const STORY_FEATURES = {
   i: [1, 0, 0],
   ɪ: [0.83, 0.2, 0],
   e: [0.67, 0, 0],
@@ -199,17 +206,62 @@ export function fitInterpolator(centers, values) {
   };
 }
 
-let interpolate = null;
+const interpolators = new WeakMap();
 
-function getInterpolator() {
+/**
+ * Log-area correction of a measured vowel at a section: a cosine series
+ * along the tract (see vowel-calibration.js). The first coefficient is the
+ * log length correction, so the series starts at the half cosine.
+ * @param {number[]|undefined} coefficients
+ * @param {number} section
+ */
+export function areaCorrection(coefficients, section) {
+  if (!coefficients) {
+    return 0;
+  }
+  const x = section / (VOWEL_SECTIONS - 1);
+  let sum = 0;
+  for (let k = 1; k < coefficients.length; k++) {
+    sum += coefficients[k] * Math.cos(Math.PI * k * x);
+  }
+  return sum;
+}
+
+/**
+ * Measured length of a vowel (cm) with its calibration applied.
+ * @param {string} name
+ * @param {Record<string, number[]>} [corrections]
+ */
+export function calibratedLength(name, corrections = VOWEL_CORRECTIONS) {
+  return STORY_LENGTHS[name] * Math.exp(corrections[name]?.[0] ?? 0);
+}
+
+/**
+ * Measured area function of a vowel with its calibration applied.
+ * @param {string} name
+ * @param {Record<string, number[]>} [corrections]
+ */
+export function calibratedAreas(name, corrections = VOWEL_CORRECTIONS) {
+  return STORY_AREAS[name].map(
+    (area, section) =>
+      area * Math.exp(areaCorrection(corrections[name], section))
+  );
+}
+
+function getInterpolator(corrections) {
+  let interpolate = interpolators.get(corrections);
   if (!interpolate) {
     const names = Object.keys(STORY_AREAS);
     const centers = names.map((name) => point(STORY_FEATURES[name]));
-    const values = Array.from({ length: VOWEL_SECTIONS }, (_, section) =>
-      names.map((name) => Math.sqrt(STORY_AREAS[name][section]))
+    const roots = names.map((name) =>
+      calibratedAreas(name, corrections).map(Math.sqrt)
     );
-    values.push(names.map((name) => STORY_LENGTHS[name]));
+    const values = Array.from({ length: VOWEL_SECTIONS }, (_, section) =>
+      roots.map((root) => root[section])
+    );
+    values.push(names.map((name) => calibratedLength(name, corrections)));
     interpolate = fitInterpolator(centers, values);
+    interpolators.set(corrections, interpolate);
   }
   return interpolate;
 }
@@ -217,14 +269,22 @@ function getInterpolator() {
 /**
  * Area function (cm², 44 sections, glottis to lips) for a vowel position.
  * @param {{height: number, backness: number, rounded: number|boolean}} vowel
+ * @param {Record<string, number[]>} [corrections] Log-area corrections of
+ *   the measured vowels (VOWEL_CORRECTIONS by default, `{}` for the raw
+ *   MRI shapes).
  * @returns {{areas: Float64Array, length: number}}
  */
-export function vowelShape({ height, backness, rounded }) {
+export function vowelShape(
+  { height, backness, rounded },
+  corrections = VOWEL_CORRECTIONS
+) {
   const rounding = Number(rounded);
   // The measured set has rounding only on back vowels, so front and central
   // rounded vowels start from the unrounded shape and get rounded lips.
   const measuredRounding = backness >= 0.6 ? rounding : 0;
-  const values = getInterpolator()(point([height, backness, measuredRounding]));
+  const values = getInterpolator(corrections)(
+    point([height, backness, measuredRounding])
+  );
   const areas = new Float64Array(VOWEL_SECTIONS);
   for (let index = 0; index < VOWEL_SECTIONS; index++) {
     const root = Math.max(0.25, values[index]);
