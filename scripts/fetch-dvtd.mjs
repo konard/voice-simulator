@@ -6,7 +6,8 @@
 // inflated and checked against their CRC-32.
 //
 // Usage: node scripts/fetch-dvtd.mjs <output directory> <name pattern>...
-//   e.g. node scripts/fetch-dvtd.mjs /tmp/dvtd s2-01-.*inner-surface.stl$
+//   e.g. node scripts/fetch-dvtd.mjs /tmp/dvtd '*s2-01-*inner-surface.stl'
+//   A pattern matches whole member paths; `*` stands for any text.
 //   With --list, only print the matching members and their sizes.
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { basename, join } from 'node:path';
@@ -131,14 +132,41 @@ export async function fetchMember(member, url = DVTD_ARCHIVE) {
   return data;
 }
 
+/**
+ * Whether a member path matches a pattern in which `*` stands for any
+ * text (plain string matching: patterns come from the command line).
+ * @param {string} pattern
+ * @param {string} name
+ */
+export function matchesPattern(pattern, name) {
+  const parts = pattern.split('*');
+  const first = parts[0];
+  const last = parts.at(-1);
+  if (parts.length === 1) {
+    return name === pattern;
+  }
+  if (!name.startsWith(first) || !name.endsWith(last)) {
+    return false;
+  }
+  let from = first.length;
+  const end = name.length - last.length;
+  for (const part of parts.slice(1, -1)) {
+    const at = name.indexOf(part, from);
+    if (at < 0 || at + part.length > end) {
+      return false;
+    }
+    from = at + part.length;
+  }
+  return from <= end;
+}
+
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const list = process.argv.includes('--list');
   const [output, ...patterns] = process.argv
     .slice(2)
     .filter((value) => value !== '--list');
-  const expressions = patterns.map((pattern) => new RegExp(pattern));
   const members = (await listMembers()).filter((member) =>
-    expressions.some((expression) => expression.test(member.name))
+    patterns.some((pattern) => matchesPattern(pattern, member.name))
   );
   if (!list) {
     mkdirSync(output, { recursive: true });

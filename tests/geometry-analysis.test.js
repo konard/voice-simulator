@@ -38,6 +38,7 @@ import {
   DVTD_ARCHIVE,
   fetchMember,
   listMembers,
+  matchesPattern,
 } from '../scripts/fetch-dvtd.mjs';
 import { networkSkipReason } from './helpers/network.js';
 import { itUnless } from './helpers/skip.js';
@@ -194,6 +195,20 @@ describe('Dresden Vocal Tract Dataset fixtures', () => {
 });
 
 describe('Dresden Vocal Tract Dataset download', () => {
+  it('selects archive members by wildcard patterns, not expressions', () => {
+    const name = 'dvtd/s2/s2-01-ehe-schwa-inner-surface.stl';
+    expect(matchesPattern('*s2-01-*inner-surface.stl', name)).toBe(true);
+    expect(matchesPattern(name, name)).toBe(true);
+    expect(matchesPattern('*', name)).toBe(true);
+    expect(matchesPattern('*s2-01-*', name)).toBe(true);
+    expect(matchesPattern('s2-01-*', name)).toBe(false);
+    expect(matchesPattern('*s1-01-*', name)).toBe(false);
+    expect(matchesPattern('*surface.stl*surface.stl', name)).toBe(false);
+    // Expression syntax is plain text.
+    expect(matchesPattern('.*', name)).toBe(false);
+    expect(matchesPattern('*s2-0[1]-*', name)).toBe(false);
+  });
+
   itUnless(offline)(
     'fetches a /u/ tract and its FEM transfer function just in time',
     async () => {
