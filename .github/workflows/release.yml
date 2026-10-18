@@ -277,7 +277,10 @@ jobs:
   # See docs/case-studies/issue-23 for why this is critical.
   # Fast-fail: slow test matrix only runs after fast checks pass (hive-mind principle #5)
   test:
-    name: Test (${{ matrix.runtime }} on ${{ matrix.os }})
+    # GitHub evaluates `if` before it expands the matrix, so a skipped job
+    # would show a literal matrix expression in its name. A static name gets
+    # the matrix values appended instead: "Test (node, ubuntu-24.04)".
+    name: Test
     runs-on: ${{ matrix.os }}
     # Typical run: <1min per runtime/OS on warm runners, with Windows
     # sometimes slower on cold starts. Each test step owns an explicit
@@ -317,8 +320,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-24.04, macos-15, windows-2025]
         runtime: [node, bun, deno]
+        os: [ubuntu-24.04, macos-15, windows-2025]
     steps:
       - uses: actions/checkout@v7
         with:
@@ -869,7 +872,8 @@ jobs:
   # Build each architecture on a native runner. Each build is pushed by digest;
   # docker-publish combines those immutable digests into the release tags.
   docker-publish-build:
-    name: Build Docker Image (${{ matrix.platform }})
+    # A static name, as in the test job: GitHub appends the matrix values.
+    name: Build Docker Image
     needs: [docker-publish-config]
     if: needs.docker-publish-config.outputs.enabled == 'true'
     timeout-minutes: 30

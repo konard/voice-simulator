@@ -1,0 +1,18 @@
+Release Preflight	success
+Check for Manual Version Changes	success
+Detect Changes	success
+Simulation Checks	success
+Test Compilation	success
+Check File Line Limits	success
+Docker Image Build Check	success
+Lint and Format Check	success
+Check for Changesets	failure
+Validate Documentation	skipped
+Release	skipped
+Create Changeset PR	skipped
+Pipeline Status	failure
+Instant Release	skipped
+Test (${{ matrix.runtime }} on ${{ matrix.os }})	skipped
+Configure Docker Hub Publish	skipped
+Build Docker Image (${{ matrix.platform }})	skipped
+Optional Docker Hub Publish	skipped

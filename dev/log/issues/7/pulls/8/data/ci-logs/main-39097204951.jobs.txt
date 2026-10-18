@@ -1,0 +1,26 @@
+Release Preflight	failure	2026-10-18T04:28:24Z	2026-10-18T04:28:30Z
+Detect Changes	success	2026-10-18T04:28:24Z	2026-10-18T04:28:30Z
+Check for Manual Version Changes	skipped	2026-10-18T04:28:23Z	2026-10-18T04:28:22Z
+Lint and Format Check	success	2026-10-18T04:28:32Z	2026-10-18T04:28:59Z
+Simulation Checks	success	2026-10-18T04:28:32Z	2026-10-18T04:29:04Z
+Test Compilation	success	2026-10-18T04:28:32Z	2026-10-18T04:28:37Z
+Validate Documentation	success	2026-10-18T04:28:32Z	2026-10-18T04:28:37Z
+Check File Line Limits	success	2026-10-18T04:28:32Z	2026-10-18T04:28:37Z
+Check for Changesets	skipped	2026-10-18T04:28:31Z	2026-10-18T04:28:30Z
+Docker Image Build Check	skipped	2026-10-18T04:28:31Z	2026-10-18T04:28:30Z
+Test (node on macos-15)	success	2026-10-18T04:29:06Z	2026-10-18T04:30:05Z
+Test (node on windows-2025)	success	2026-10-18T04:29:01Z	2026-10-18T04:30:11Z
+Test (deno on macos-15)	success	2026-10-18T04:29:05Z	2026-10-18T04:29:49Z
+Test (deno on ubuntu-24.04)	success	2026-10-18T04:29:01Z	2026-10-18T04:29:46Z
+Test (bun on macos-15)	success	2026-10-18T04:29:05Z	2026-10-18T04:30:29Z
+Test (deno on windows-2025)	success	2026-10-18T04:29:02Z	2026-10-18T04:30:23Z
+Test (bun on windows-2025)	success	2026-10-18T04:29:01Z	2026-10-18T04:31:15Z
+Test (bun on ubuntu-24.04)	success	2026-10-18T04:29:02Z	2026-10-18T04:30:10Z
+Test (node on ubuntu-24.04)	success	2026-10-18T04:29:02Z	2026-10-18T04:29:51Z
+Create Changeset PR	skipped	2026-10-18T04:29:00Z	2026-10-18T04:28:59Z
+Instant Release	skipped	2026-10-18T04:31:16Z	2026-10-18T04:31:15Z
+Release	skipped	2026-10-18T04:31:16Z	2026-10-18T04:31:15Z
+Configure Docker Hub Publish	skipped	2026-10-18T04:31:16Z	2026-10-18T04:31:16Z
+Pipeline Status	failure	2026-10-18T04:31:18Z	2026-10-18T04:31:25Z
+Build Docker Image (${{ matrix.platform }})	skipped	2026-10-18T04:31:16Z	2026-10-18T04:31:16Z
+Optional Docker Hub Publish	skipped	2026-10-18T04:31:16Z	2026-10-18T04:31:16Z

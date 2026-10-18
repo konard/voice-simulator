@@ -1,0 +1,9 @@
+Regenerate Preview Images	failure	2026-10-18T04:28:24Z	2026-10-18T04:29:40Z
+Package desktop app (ubuntu-24.04)	success	2026-10-18T04:28:25Z	2026-10-18T04:29:02Z
+Package desktop app (windows-2025)	success	2026-10-18T04:28:26Z	2026-10-18T04:29:42Z
+Build web app	success	2026-10-18T04:28:25Z	2026-10-18T04:28:56Z
+Package desktop app (macos-15)	success	2026-10-18T04:28:31Z	2026-10-18T04:29:49Z
+Build Android app	skipped	2026-10-18T04:28:23Z	2026-10-18T04:28:22Z
+Build iOS app	skipped	2026-10-18T04:28:32Z	2026-10-18T04:28:22Z
+Deploy GitHub Pages	success	2026-10-18T04:29:42Z	2026-10-18T04:29:52Z
+Pipeline Status	failure	2026-10-18T04:29:54Z	2026-10-18T04:30:00Z

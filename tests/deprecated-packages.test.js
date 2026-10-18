@@ -16,8 +16,6 @@ const KNOWN = {
     'glob@7.2.3':
       'app-builder-lib 26 pins @electron/asar 3.4.1, which uses the glob 7 callback API; electron-builder 27 moves to @electron/asar 4',
     'inflight@1.0.6': 'glob 7.2.3 above',
-    'boolean@3.2.0':
-      'app-builder-lib 26 -> @electron/get 3 -> global-agent -> roarr; electron-builder 27 moves to @electron/get 5',
   },
 };
 

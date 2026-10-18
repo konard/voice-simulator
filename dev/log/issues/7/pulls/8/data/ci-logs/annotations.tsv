@@ -1,0 +1,19 @@
+39097205026	117586016051	notice	.github	Summary report available at: https://github.com/konard/voice-simulator/actions/runs/39097205026#summary-117586016051
+39097205073	117586016860	notice	.github	Preview images regenerated and (if applicable) committed to main.
+39097205073	117586016860	failure	.github	Process completed with exit code 1.
+39097205073	117586016860	failure	.github	RELEASE_PR_TOKEN is required to push generated preview images.
+39097205073	117586017074	notice	.github	Due to capacity constraints, jobs targeting macOS arm64 runners may experience longer queue times.
+39097205073	117586263182	failure	.github	Process completed with exit code 1.
+39097205073	117586263182	failure	.github	Failing jobs: preview-regen
+39097204907	117586015849	failure	.github	Process completed with exit code 1.
+39097204907	117586015849	failure	.github	Dependency graph is disabled for konard/voice-simulator, so pull requests skip dependency review. A maintainer must act: Enable it at https://github.com/konard/voice-simulator/settings/security_analysis (Settings -> Advanced Security -> Dependency graph -> Enable), then re-run this workflow.
+39097204907	117586310356	failure	.github	Process completed with exit code 1.
+39097204907	117586310356	failure	.github	Failing jobs: dependency-graph
+39097204951	117586015779	failure	.github	Process completed with exit code 1.
+39097204951	117586015779	failure	.github	release-preflight: refusing to release with 1 refused credential(s)
+39097204951	117586015779	failure	.github	release-preflight: npm has no package voice-simulator yet, and npm configures trusted publishing only for published packages. Add an NPM_TOKEN repository secret (a granular token allowed to publish voice-simulator) at https://github.com/konard/voice-simulator/settings/secrets/actions for the first release, then add a trusted publisher for konard/voice-simulator, workflow release.yml, at https://www.npmjs.com/package/voice-simulator/access and delete the secret
+39097204951	117586117254	notice	.github	Due to capacity constraints, jobs targeting macOS arm64 runners may experience longer queue times.
+39097204951	117586117267	notice	.github	Due to capacity constraints, jobs targeting macOS arm64 runners may experience longer queue times.
+39097204951	117586117294	notice	.github	Due to capacity constraints, jobs targeting macOS arm64 runners may experience longer queue times.
+39097204951	117586519583	failure	.github	Process completed with exit code 1.
+39097204951	117586519583	failure	.github	Failing jobs: release-preflight
