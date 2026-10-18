@@ -117,6 +117,15 @@ describe('reference anatomy tools', () => {
     );
   });
 
+  it('samples the cut finely enough for the key point bands', () => {
+    // A 20 mm long slab cut into two long segments per side: the band
+    // 0.75 mm around z = 3 must still find points on its floor.
+    const points = midsagittalPoints(box([0, 0, 0], [4, 2, 20]));
+    const band = points.filter((point) => Math.abs(point[2] - 3) <= 0.75);
+    expect(band.some((point) => Math.abs(point[1] + 1) < 1e-9)).toBe(true);
+    expect(band.some((point) => Math.abs(point[1] - 1) < 1e-9)).toBe(true);
+  });
+
   it('reads the lean of a long axis from its vertices', () => {
     const tan = Math.tan((20 * Math.PI) / 180);
     // Corners of a 6 x 20 x 6 box: var(y) 100, var(z) 9 + 100 tan^2.
