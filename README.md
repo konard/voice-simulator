@@ -28,7 +28,7 @@ a pressure wave travelling through the 3D shape of a parametric low-poly head
     the 3D centreline of the head; real time on any device.
   - `fdtd3d`: a sparse-voxel 3D finite-difference time-domain solver of the
     acoustic wave equation inside the voxelised head and the air around it;
-    the default (`studio` tier).
+    the default of the library, the CLI and the server (`studio` tier).
 - **Low-poly head model** with only acoustically relevant detail (tract tube,
   nasal tube, lips, jaw, skin hull, teeth, tongue, hard and soft palate),
   four mesh LODs and OBJ, STL and glTF export (`npm run export:model`, opens
@@ -112,8 +112,9 @@ names)` a whole utterance, and `vrmVowelBinds(gltfJson)` reads the morph
 - **Audio formats**: WAV (8-32-bit integer and 32/64-bit float), FLAC,
   AIFF, AU and raw PCM, for both writing and reading, with band-limited
   resampling (`encodeAudio`, `decodeAudio`, `resample`).
-- **Automatic LODs** for audio and visuals: a startup benchmark plus a
-  runtime governor keep about 20% headroom (target load 80%).
+- **Automatic LODs** for audio and visuals: a startup benchmark (on the CPU
+  and, for the 3D tiers, on WebGPU) plus a runtime governor keep about 20%
+  headroom (target load 80%).
 - **WebGPU**: the 3D solver can run on the GPU (`device` option), and the
   app uses it when the browser has WebGPU, with the CPU as fallback.
 - **Modes**: sound only, 3D only, or both, with optional jaw/lip animation and
@@ -219,7 +220,8 @@ const gpuResult = await synthesizeAsync('Hello world', { device });
 Lower-level building blocks are exported too: `planUtterance`,
 `sampleState`, `tractShape`, `Waveguide`, `Fdtd3d`, `buildVoxelModel`,
 `VoiceRenderer`, `headMesh`, `tubeMesh`, `headModelObj`, `LodGovernor`,
-`chooseTier`, `measureAudioTier` and more; see
+`chooseTier`, `chooseTierWithGpu`, `measureAudioTier`,
+`benchmarkAudioTiersAsync` and more; see
 [`src/index.d.ts`](src/index.d.ts). A runnable example is in
 [`examples/basic-usage.js`](examples/basic-usage.js).
 
@@ -296,15 +298,18 @@ The image runs `voice-simulator serve` on port 8080 with a health check on
 | `studio`    | fdtd3d    | 0.5 cm voxels | 48 kHz      | 105           |
 | `reference` | fdtd3d    | 0.4 cm voxels | 48 kHz      | 220           |
 
-`studio` is the default of the library, the CLI, the server and the web
-app (`DEFAULT_AUDIO_TIER`): full 3D acoustics whose 0.5 cm cells resolve
-the incisors, the piriform fossae, the vallecula and transverse modes well
+`studio` is the default of the library, the CLI and the server
+(`DEFAULT_AUDIO_TIER`): full 3D acoustics whose 0.5 cm cells resolve the
+incisors, the piriform fossae, the vallecula and transverse modes well
 above 5 kHz. It renders about 12 times slower than real time on a desktop
-CPU, so the app renders ahead: it shows the progress and starts playback
-as soon as the rest of the utterance is predicted to be ready before the
-player reaches it, so the voice never breaks up. Choose `--tier medium`
-(or `tier: 'medium'`, or the tier menu in the app) for the real-time 1D
-waveguide, or "auto" in the app to let the benchmark pick.
+CPU. The web app starts in Auto: it benchmarks the tiers on the CPU, then
+the 3D tiers above the CPU's choice on WebGPU, and uses the most detailed
+tier whose load stays under 80%, so a fast GPU gets the 3D tiers and a
+laptop or phone the real-time waveguide. Every tier stays in the menu;
+when a slower one is chosen, the app renders ahead: it shows the progress
+and starts playback as soon as the rest of the utterance is predicted to be
+ready before the player reaches it, so the voice never breaks up. Choose
+`--tier medium` (or `tier: 'medium'`) for the real-time 1D waveguide.
 
 The 3D tiers also run on the GPU: give `synthesizeAsync`,
 `renderPlanAsync` or `new Fdtd3d` a WebGPU `device` (`requestGpuDevice()`
@@ -314,8 +319,10 @@ uses WebGPU whenever the browser offers it (Acoustics → Simulation turns it
 off) and says the utterance again on the CPU if the GPU fails; the audio
 meter shows `studio · fdtd3d · GPU` or `studio · fdtd3d`.
 
-The web app and `voice-simulator benchmark` pick the most detailed tier
-whose measured load stays under 80%. The benchmark does not run tiers whose
+The web app (`benchmarkAudioTiersAsync`) and `voice-simulator benchmark`
+pick the most detailed tier whose measured load stays under 80%. On a
+machine with WebGPU, the GPU is only tried for the 3D tiers above the CPU's
+choice, so a slow integrated or software adapter never lowers it. The benchmark does not run tiers whose
 load, predicted from the cheaper tier, is far above the target, and it stops
 measuring a tier as soon as it is clearly too slow; the app remembers the
 result per device. In the first 40-300 ms of each utterance an

@@ -169,10 +169,26 @@ The audio tiers, from the README:
 | `studio`    | fdtd3d    | 0.5 cm voxels | 105 (default) |
 | `reference` | fdtd3d    | 0.4 cm voxels | 220           |
 
-`studio` renders slower than real time on a CPU
+`studio` is the default of the library, the CLI and the server. It renders
+slower than real time on a CPU
 ([fdtd-grid-size.txt](measurements/fdtd-grid-size.txt): 6.7 s per second
-of audio in WASM), so the app renders ahead and starts playback once the
-rest is predicted to be ready in time; the solver also runs on WebGPU. The
+of audio in WASM), so the web app starts in Auto and picks the most
+detailed tier this device renders with 20% headroom
+(`benchmarkAudioTiersAsync`, `chooseTierWithGpu` in `src/perf/lod.js`): it
+measures the tiers on the CPU, then the 3D tiers above the CPU's choice on
+WebGPU, so a fast GPU gets the 3D tiers while a slow or software adapter
+cannot pull the choice below the CPU's. Any tier can still be chosen in
+the menu; a slow one is rendered ahead, with playback starting once the
+rest is predicted to be ready in time. In headless Chromium without WebGPU
+the benchmark measured loads of 0.66, 0.34 and 0.31 for the waveguide
+tiers and 3.68 for `high`, and chose `medium`; under Deno's software WebGPU
+adapter `high` took 1.66 on the CPU and 9.38 on the GPU, and the choice
+stayed `medium` on the CPU ([issue-9-gpu-tiers.txt](../../../experiments/issue-9-gpu-tiers.txt);
+`tests/library.test.js`, `tests/fdtd-gpu.test.js`,
+`tests/universal-app-engine.test.js`).
+
+![The app in Auto: medium, load 31% of the 80% target](auto-tier.png)
+The
 3D vowels are calibrated to Hillenbrand et al. (1995): at 0.5 cm the RMS
 log formant error over the male, female and child presets is 4.9 % (1D:
 4.4 %, [presets-3d-dx0.5.txt](measurements/presets-3d-dx0.5.txt)), and the
@@ -222,14 +238,15 @@ The research ([research/3-3d-acoustics-sota.md](research/3-3d-acoustics-sota.md)
 
 ## R10: audit of issues 1 and 5
 
-All 25 requirements of issues 1 and 5 were checked against the code: 22
-delivered, 3 partly:
+All 25 requirements of issues 1 and 5 were checked against the code. The
+table lists those that were not fully delivered at the start of this work
+and what became of them:
 
-| #   | Requirement                         | Finding                                                                                                                                                                                                                       |
-| --- | ----------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 6   | Auto-adjust with about 20% headroom | The governor exists (`src/perf/lod.js`), but the app's default audio tier is the fixed `studio`, chosen to meet R6; Auto stays in the menu                                                                                    |
-| 8   | GPU and CPU optimisation            | CPU: worker and WASM. GPU: WebGPU solver checked against the CPU within 1e-3, but CI has no GPU adapter, so those tests are skipped there                                                                                     |
-| 25  | Competitors and science video       | Blocked: covered by the issue 5 research from articles that embed the video, but YouTube answers "Sign in to confirm you're not a bot" to `yt-dlp` and to a browser here, so neither the video nor its captions could be read |
+| #   | Requirement                         | Finding                                                                                                                                                                                                                          |
+| --- | ----------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 6   | Auto-adjust with about 20% headroom | Delivered: the app starts in Auto and benchmarks the CPU and, for the 3D tiers, WebGPU (`chooseTierWithGpu`, `benchmarkAudioTiersAsync`); the governor and the overload detector keep the 80% target while speaking              |
+| 8   | GPU and CPU optimisation            | Delivered: CPU in a worker with a WASM kernel; the WebGPU solver matches the CPU within 1e-3 and the benchmark measures it. CI has no GPU adapter, so the GPU tests run locally on Deno's software adapter and are skipped in CI |
+| 25  | Competitors and science video       | Blocked: covered by the issue 5 research from articles that embed the video, but YouTube answers "Sign in to confirm you're not a bot" to `yt-dlp` and to a browser here, so neither the video nor its captions could be read    |
 
 The other gaps the audit found are listed in [Known limitations](#known-limitations).
 
@@ -314,8 +331,9 @@ More, with licences checked, in
 
 ## Known limitations
 
-- The `studio` default is slower than real time on a CPU; the app hides
-  this by rendering ahead, and WebGPU makes it faster where it exists.
+- The `studio` default of the library, the CLI and the server is slower
+  than real time on a CPU; the app picks a real-time tier per device and
+  renders ahead when a slower one is chosen.
 - The WebGPU solver is not exercised in CI, which has no GPU adapter.
 - The HuBMAP organs are a cadaver: the staphylion, uvula, tongue and glottis key
   points disagree by 6 to 21 mm for reasons of posture, not of the model.

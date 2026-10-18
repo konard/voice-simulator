@@ -69,9 +69,9 @@ export const AUDIO_TIERS = Object.freeze([
 /**
  * Tier used when none is asked for: full 3D acoustics at 0.5 cm cells,
  * which resolve the incisors, the pouches and transverse modes to well
- * above 5 kHz. It renders slower than real time on today's CPUs, so the
- * app renders ahead; 'medium' is the real-time waveguide of earlier
- * versions.
+ * above 5 kHz. It renders slower than real time on today's CPUs; the web
+ * app picks its tier per device with benchmarkAudioTiersAsync and renders
+ * ahead when a slower tier is chosen. 'medium' is the real-time waveguide.
  */
 export const DEFAULT_AUDIO_TIER = 'studio';
 
