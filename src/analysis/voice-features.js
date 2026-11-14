@@ -8,7 +8,8 @@
  *   gives the vocal tract length L = c / (2 ΔF) (Fitch 1997);
  * - H1-H2, the level of the first harmonic over the second, which grows
  *   with a lax, breathy source (Hanson 1997);
- * - harmonics-to-noise ratio from the YIN aperiodicity;
+ * - harmonics-to-noise ratio from the YIN aperiodicity of frames resampled
+ *   to a constant pitch, so that pitch movement does not read as noise;
  * - syllable rate from peaks of the loudness envelope.
  */
 
@@ -26,6 +27,8 @@ const MAX_F0 = 600;
 const YIN_THRESHOLD = 0.15;
 const VOICED_APERIODICITY = 0.35;
 const FORMANT_FRAMES = 300;
+/** Largest pitch slope (per second, relative to f0) that is straightened. */
+const MAX_SLOPE = 4;
 
 /**
  * Low-pass and linearly interpolate to a lower rate (analysis quality).
@@ -126,6 +129,81 @@ export function yinPitch(signal, start, length, sampleRate) {
     f0: sampleRate / (best + Math.max(-0.5, Math.min(0.5, shift))),
     aperiodicity: Math.max(0, normalized[best]),
   };
+}
+
+/** Cubic (Catmull-Rom) interpolation of a signal at a fractional index. */
+function cubicAt(signal, position) {
+  const index = Math.floor(position);
+  const x = position - index;
+  const at = (offset) =>
+    signal[Math.min(signal.length - 1, Math.max(0, index + offset))] ?? 0;
+  const p0 = at(-1);
+  const p1 = at(0);
+  const p2 = at(1);
+  const p3 = at(2);
+  return (
+    p1 +
+    0.5 *
+      x *
+      (p2 -
+        p0 +
+        x * (2 * p0 - 5 * p1 + 4 * p2 - p3 + x * (3 * (p1 - p2) + p3 - p0)))
+  );
+}
+
+/**
+ * Resample a stretch of signal so that its pitch is constant: with the pitch
+ * f0 + slope t around the middle of the stretch, the phase grows as
+ * f0 t + slope t² / 2, so output time t is read from input time
+ * t - slope t² / (2 f0) (to second order). A gliding voice then repeats
+ * itself period by period, as YIN assumes.
+ * @param {ArrayLike<number>} signal
+ * @param {number} start First sample of the stretch.
+ * @param {number} length Number of samples.
+ * @param {number} sampleRate
+ * @param {number} slope Pitch change (Hz per second).
+ * @param {number} f0 Pitch (Hz) in the middle of the stretch.
+ * @returns {Float64Array}
+ */
+function straighten(signal, start, length, sampleRate, slope, f0) {
+  const output = new Float64Array(length);
+  const middle = start + length / 2;
+  const warp = slope / (2 * f0);
+  for (let n = 0; n < length; n++) {
+    const t = (n - length / 2) / sampleRate;
+    output[n] = cubicAt(signal, middle + (t - warp * t * t) * sampleRate);
+  }
+  return output;
+}
+
+/**
+ * Pitch slope (Hz per second) at a voiced frame from the pitch of the frames
+ * before and after it; 0 when one of them is unvoiced. Limited to
+ * MAX_SLOPE f0 per second.
+ */
+function pitchSlope(frames, index, f0) {
+  const previous = frames[index - 1];
+  const next = frames[index + 1];
+  if (!previous?.voiced || !next?.voiced) {
+    return 0;
+  }
+  const limit = MAX_SLOPE * f0;
+  return Math.max(-limit, Math.min(limit, (next.f0 - previous.f0) / (2 * HOP)));
+}
+
+/**
+ * YIN aperiodicity of a voiced frame after its pitch movement is taken out.
+ * The stretch covers the frame and the longest lag YIN compares it with.
+ */
+function straightAperiodicity(signal, frames, index, hop, length, rate) {
+  const { f0 } = frames[index];
+  const slope = pitchSlope(frames, index, f0);
+  if (slope === 0) {
+    return frames[index].aperiodicity;
+  }
+  const span = length + Math.ceil(rate / MIN_F0) + 2;
+  const straight = straighten(signal, index * hop, span, rate, slope, f0);
+  return yinPitch(straight, 0, length, rate).aperiodicity;
 }
 
 function harmonicLevel(signal, start, length, frequency, sampleRate) {
@@ -261,7 +339,10 @@ export function analyzeVoice(samples, sampleRate, options = {}) {
     tilts.push(20 * Math.log10((h1 + 1e-12) / (h2 + 1e-12)));
     const aperiodicity = Math.min(
       0.999,
-      Math.max(1e-3, frames[index].aperiodicity)
+      Math.max(
+        1e-3,
+        straightAperiodicity(signal, frames, index, hop, length, rate)
+      )
     );
     noise.push(10 * Math.log10((1 - aperiodicity) / aperiodicity));
   }
