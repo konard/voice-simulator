@@ -151,6 +151,12 @@ component.
 
 ## Index
 
+The issues were created in the order of their identifiers, so `P01` is issue
+[#13](https://github.com/konard/voice-simulator/issues/13) and `P74` is issue
+[#86](https://github.com/konard/voice-simulator/issues/86): add 12 to the
+number of the identifier. The exact list is in
+[created-issues.json](../data/created-issues.json).
+
 | Id  | Type    | Milestone | Title                                                                          | Blocked by                        |
 | --- | ------- | --------- | ------------------------------------------------------------------------------ | --------------------------------- |
 | P01 | Bug     | M0        | Template case studies occupy `docs/case-studies/issue-N` folders               |                                   |

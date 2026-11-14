@@ -52,30 +52,30 @@ means delivered by this pull request. "Planned" means that the issue asks for a
 plan and the plan exists as the named issues; the behaviour itself is not
 implemented yet.
 
-| #   | Requirement (issue text, condensed)                                                                   | Status  | Issues or documents                                                                 |
-| --- | ----------------------------------------------------------------------------------------------------- | ------- | ----------------------------------------------------------------------------------- |
-| R1  | Plan issues so that the highest possible quality of sound simulation is fully supported               | Done    | [Roadmap](../../ROADMAP.md), all 74 issues                                          |
-| R2  | If performance blocks us: sound simulation in a Rust background worker, and make it the default       | Planned | {{P09}}, {{P10}}, {{P11}}, {{P13}}, {{P70}}                                         |
-| R3  | Streaming with variable quality: when the algorithm is too slow for the device, make it cheaper       | Planned | {{P15}}, {{P17}}, {{P14}}                                                           |
-| R4  | Background checks on page load, without sound and without locking the UI: a small benchmark           | Planned | {{P16}}, {{P19}}                                                                    |
-| R5  | Much more configuration of the voice, so that it is as realistic as possible                          | Planned | {{P29}}, {{P20}} to {{P28}}                                                         |
-| R6  | Run our own simulation in reverse: speech to text as well as text to speech                           | Planned | {{P46}} to {{P65}}                                                                  |
-| R7  | Always text in a language → IPA → audio, and audio → IPA → detected language or mix of languages      | Planned | {{P54}}, {{P56}}, {{P57}}, {{P61}}; principle 3 of the vision                       |
-| R8  | Datasets of real recordings, preferably public domain with transcripts, to recognise and to reproduce | Planned | {{P04}}, {{P05}}, {{P07}}, {{P64}}                                                  |
-| R9  | Multi-pass algorithm: fit the voice, invert with that voice, stabilise, then copy and recognise       | Planned | {{P51}}, {{P53}}, {{P66}}, {{P67}}, {{P68}}                                         |
-| R10 | Highlight every syllable while speaking and while recognising                                         | Planned | {{P34}}, {{P62}}, {{P68}}                                                           |
-| R11 | Expensive tests in manually triggered GitHub Actions                                                  | Planned | {{P02}}, {{P18}}, {{P19}}, {{P63}}, {{P64}}                                         |
-| R12 | Fast on CPUs, multicore when possible, and fine with a single CPU                                     | Planned | {{P12}}, {{P65}}, {{P69}}                                                           |
-| R13 | Everything works with the lowest audio settings: synthesis, recognition, copying                      | Planned | {{P14}}, {{P63}}, {{P69}}                                                           |
-| R14 | Check best practices; list all similar projects and projects that implement parts of the vision       | Done    | [Similar projects](#similar-projects), [research 1](research/1-similar-projects.md) |
-| R15 | The vision must be updated by this pull request                                                       | Done    | [docs/VISION.md](../../VISION.md)                                                   |
-| R16 | Issues detailed enough for a weak agent, marked bug or feature, blockers between them, the full plan  | Done    | [The plan](#the-plan), [plan](plan/README.md)                                       |
-| R17 | Tones, accents, loudness changes, question and exclamation intonation, whisper, emotions: in and out  | Planned | {{P30}} to {{P45}}, {{P73}}, {{P74}}, {{P58}}, {{P59}}, {{P60}}                     |
-| R18 | No neural networks: algorithms, mathematics, physically accurate simulation and its reverse           | Planned | {{P03}}; principle 1 of the vision; rules in every issue                            |
-| R19 | A new state-of-the-art system that never existed, a public-domain gift to humanity                    | Planned | {{P07}}, {{P08}}, {{P71}}; [what is new](#what-is-new-and-what-is-uncertain)        |
-| R20 | Scope: a docs update, and actually created GitHub issues with the full plan                           | Done    | This pull request, [created issues](data/created-issues.json)                       |
-| R21 | Collect the data in `docs/case-studies/issue-11`, analyse, research online, plan every requirement    | Done    | This document, [data](data), [research](research)                                   |
-| R22 | Everything in this single pull request                                                                | Done    | [Pull request 12](https://github.com/konard/voice-simulator/pull/12)                |
+| #   | Requirement (issue text, condensed)                                                                   | Status  | Issues or documents                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| --- | ----------------------------------------------------------------------------------------------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| R1  | Plan issues so that the highest possible quality of sound simulation is fully supported               | Done    | [Roadmap](../../ROADMAP.md), all 74 issues                                                                                                                                                                                                                                                                                                                                                                                           |
+| R2  | If performance blocks us: sound simulation in a Rust background worker, and make it the default       | Planned | [#21](https://github.com/konard/voice-simulator/issues/21), [#22](https://github.com/konard/voice-simulator/issues/22), [#23](https://github.com/konard/voice-simulator/issues/23), [#25](https://github.com/konard/voice-simulator/issues/25), [#82](https://github.com/konard/voice-simulator/issues/82)                                                                                                                           |
+| R3  | Streaming with variable quality: when the algorithm is too slow for the device, make it cheaper       | Planned | [#27](https://github.com/konard/voice-simulator/issues/27), [#29](https://github.com/konard/voice-simulator/issues/29), [#26](https://github.com/konard/voice-simulator/issues/26)                                                                                                                                                                                                                                                   |
+| R4  | Background checks on page load, without sound and without locking the UI: a small benchmark           | Planned | [#28](https://github.com/konard/voice-simulator/issues/28), [#31](https://github.com/konard/voice-simulator/issues/31)                                                                                                                                                                                                                                                                                                               |
+| R5  | Much more configuration of the voice, so that it is as realistic as possible                          | Planned | [#41](https://github.com/konard/voice-simulator/issues/41), [#32](https://github.com/konard/voice-simulator/issues/32) to [#40](https://github.com/konard/voice-simulator/issues/40)                                                                                                                                                                                                                                                 |
+| R6  | Run our own simulation in reverse: speech to text as well as text to speech                           | Planned | [#58](https://github.com/konard/voice-simulator/issues/58) to [#77](https://github.com/konard/voice-simulator/issues/77)                                                                                                                                                                                                                                                                                                             |
+| R7  | Always text in a language → IPA → audio, and audio → IPA → detected language or mix of languages      | Planned | [#66](https://github.com/konard/voice-simulator/issues/66), [#68](https://github.com/konard/voice-simulator/issues/68), [#69](https://github.com/konard/voice-simulator/issues/69), [#73](https://github.com/konard/voice-simulator/issues/73); principle 3 of the vision                                                                                                                                                            |
+| R8  | Datasets of real recordings, preferably public domain with transcripts, to recognise and to reproduce | Planned | [#16](https://github.com/konard/voice-simulator/issues/16), [#17](https://github.com/konard/voice-simulator/issues/17), [#19](https://github.com/konard/voice-simulator/issues/19), [#76](https://github.com/konard/voice-simulator/issues/76)                                                                                                                                                                                       |
+| R9  | Multi-pass algorithm: fit the voice, invert with that voice, stabilise, then copy and recognise       | Planned | [#63](https://github.com/konard/voice-simulator/issues/63), [#65](https://github.com/konard/voice-simulator/issues/65), [#78](https://github.com/konard/voice-simulator/issues/78), [#79](https://github.com/konard/voice-simulator/issues/79), [#80](https://github.com/konard/voice-simulator/issues/80)                                                                                                                           |
+| R10 | Highlight every syllable while speaking and while recognising                                         | Planned | [#46](https://github.com/konard/voice-simulator/issues/46), [#74](https://github.com/konard/voice-simulator/issues/74), [#80](https://github.com/konard/voice-simulator/issues/80)                                                                                                                                                                                                                                                   |
+| R11 | Expensive tests in manually triggered GitHub Actions                                                  | Planned | [#14](https://github.com/konard/voice-simulator/issues/14), [#30](https://github.com/konard/voice-simulator/issues/30), [#31](https://github.com/konard/voice-simulator/issues/31), [#75](https://github.com/konard/voice-simulator/issues/75), [#76](https://github.com/konard/voice-simulator/issues/76)                                                                                                                           |
+| R12 | Fast on CPUs, multicore when possible, and fine with a single CPU                                     | Planned | [#24](https://github.com/konard/voice-simulator/issues/24), [#77](https://github.com/konard/voice-simulator/issues/77), [#81](https://github.com/konard/voice-simulator/issues/81)                                                                                                                                                                                                                                                   |
+| R13 | Everything works with the lowest audio settings: synthesis, recognition, copying                      | Planned | [#26](https://github.com/konard/voice-simulator/issues/26), [#75](https://github.com/konard/voice-simulator/issues/75), [#81](https://github.com/konard/voice-simulator/issues/81)                                                                                                                                                                                                                                                   |
+| R14 | Check best practices; list all similar projects and projects that implement parts of the vision       | Done    | [Similar projects](#similar-projects), [research 1](research/1-similar-projects.md)                                                                                                                                                                                                                                                                                                                                                  |
+| R15 | The vision must be updated by this pull request                                                       | Done    | [docs/VISION.md](../../VISION.md)                                                                                                                                                                                                                                                                                                                                                                                                    |
+| R16 | Issues detailed enough for a weak agent, marked bug or feature, blockers between them, the full plan  | Done    | [The plan](#the-plan), [plan](plan/README.md)                                                                                                                                                                                                                                                                                                                                                                                        |
+| R17 | Tones, accents, loudness changes, question and exclamation intonation, whisper, emotions: in and out  | Planned | [#42](https://github.com/konard/voice-simulator/issues/42) to [#57](https://github.com/konard/voice-simulator/issues/57), [#85](https://github.com/konard/voice-simulator/issues/85), [#86](https://github.com/konard/voice-simulator/issues/86), [#70](https://github.com/konard/voice-simulator/issues/70), [#71](https://github.com/konard/voice-simulator/issues/71), [#72](https://github.com/konard/voice-simulator/issues/72) |
+| R18 | No neural networks: algorithms, mathematics, physically accurate simulation and its reverse           | Planned | [#15](https://github.com/konard/voice-simulator/issues/15); principle 1 of the vision; rules in every issue                                                                                                                                                                                                                                                                                                                          |
+| R19 | A new state-of-the-art system that never existed, a public-domain gift to humanity                    | Planned | [#19](https://github.com/konard/voice-simulator/issues/19), [#20](https://github.com/konard/voice-simulator/issues/20), [#83](https://github.com/konard/voice-simulator/issues/83); [what is new](#what-is-new-and-what-is-uncertain)                                                                                                                                                                                                |
+| R20 | Scope: a docs update, and actually created GitHub issues with the full plan                           | Done    | This pull request, [created issues](data/created-issues.json)                                                                                                                                                                                                                                                                                                                                                                        |
+| R21 | Collect the data in `docs/case-studies/issue-11`, analyse, research online, plan every requirement    | Done    | This document, [data](data), [research](research)                                                                                                                                                                                                                                                                                                                                                                                    |
+| R22 | Everything in this single pull request                                                                | Done    | [Pull request 12](https://github.com/konard/voice-simulator/pull/12)                                                                                                                                                                                                                                                                                                                                                                 |
 
 The issue also says "all requirements you recommended to achieve our previous
 vision". Those are covered in
@@ -106,29 +106,29 @@ Run `node experiments/issue-11-audit.mjs`; the output is
 [issue-11-audit.txt](../../../experiments/issue-11-audit.txt). The other
 `issue-11-audit-*.mjs` scripts measure what single issues needed.
 
-| What                                 | Measured today                                                                                                                                                | Consequence                                                                                    |
-| ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
-| Mandarin third tone `mǎ`             | Planned pitch 105, 108, 128, 136, 137 Hz: it only rises                                                                                                       | Bug {{P30}}; the tone model {{P37}}                                                            |
-| Mandarin `花儿`                      | `xwa˥ ɚ˧˥`: the suffix is a syllable of its own with a rising tone                                                                                            | Bug {{P31}}                                                                                    |
-| English "record the record"          | `ɹəˈkɔɹd ðə ɹəˈkɔɹd`; "lead pipe" and "they lead" both `lɛd`; "the wind" and "wind the clock" both `waɪnd`                                                    | Bug {{P32}}; lexicons {{P35}}                                                                  |
-| Russian "Замок на замке"             | `ˈzamək na ˈzamkʲə`: the lock is read as the castle                                                                                                           | Bug {{P36}}                                                                                    |
-| English "a cup of tea for you"       | `ə ˈkʌp ˈʌv ˈti ˈfɔɹ ˈju`: every function word is stressed and full; the planned sentence is 14 % too long                                                    | Bug {{P73}}                                                                                    |
-| Russian "из дома", "с братом"        | `is ˈdomə`, `s ˈbratəm`: prepositions and particles are read as separate words, devoiced and with full vowels                                                 | Bug {{P74}}                                                                                    |
-| Mandarin "我 很 好", `wǒ hěn hǎo`    | `wo˨˩˦ xən˨˩˦ xɑʊ˨˩˦`: tone sandhi stops at every space, so typed pinyin never gets it                                                                        | Part of the tone model {{P37}}                                                                 |
-| Hindi "क्या तुम आओगे?"               | The yes/no question gets a falling mark `↘`                                                                                                                   | Bug {{P33}}                                                                                    |
-| "I have 25 apples on 3/4/2024."      | The words `25` and `3/4/2024` have 3 and 7 syllables without text, so nothing can be highlighted inside them                                                  | Bug {{P34}}                                                                                    |
-| `breathiness` 0 → 1                  | Harmonics-to-noise ratio 15.19 → 14.59 dB, H1-H2 3.43 → 3.46 dB: almost no measurable change                                                                  | Bug {{P20}}; blocks the voice fit {{P51}}                                                      |
-| Nasal against the vowel in `ˈama`    | Level ratio 0.32 with the 1D solver, 1.22 with the 3D solver                                                                                                  | Bug {{P72}}                                                                                    |
-| Sentence types in English            | Statement 141 → 94 Hz, yes/no question 141 → 140 Hz, exclamation starts at 161 Hz and is 1.41 times louder                                                    | Only final movements exist; intonation models {{P39}}                                          |
-| Lowest settings                      | `minimal` tier is 22.05 kHz; forcing 8, 11.025 and 16 kHz works and keeps the formants                                                                        | Narrow-band tiers {{P14}}                                                                      |
-| Rendering straight at 8 kHz          | Sibilants `sː` and `ʃː` come out 1.2 to 1.5 dB too loud from aliasing, the vowel `aː` 0.2 dB (`issue-11-audit-m1.txt`)                                        | The narrow-band tiers render at a higher rate and decimate {{P14}}                             |
-| Load-time benchmark                  | Three runs in one process took 497, 397 and 286 ms and read the load of `minimal` as 0.51, 0.09 and 0.07: the first cold probe is about 7 times too high      | Silent benchmark in slices, with a warm-up and a cache {{P16}}                                 |
-| Level across tiers                   | `minimal`, `low` and `medium` agree within 0.2 dB; `high` (3D) is 1.2 dB quieter; two tiers of a vowel correlate with 0.84 to 0.999, of a sibilant not at all | Switching the tier inside an utterance needs level matching and two kinds of crossfade {{P17}} |
-| WebGPU tests in CI                   | They run on the `windows-2025` and `macos-15` Deno jobs and are skipped only on `ubuntu-24.04`                                                                | A software adapter on Linux and the heavy suite `gpu` {{P18}}                                  |
-| WebAssembly kernel                   | 332 bytes, written by hand and pasted as base64; no CI job builds it                                                                                          | Rust workspace with a build that CI checks {{P09}}                                             |
-| Configuration                        | 33 head and voice parameters                                                                                                                                  | Expanded configuration {{P29}}                                                                 |
-| Speed, one core of the audit machine | Real-time factor 0.05 (`minimal`), 0.10 (`low`), 0.14 (`medium`), 1.32 (`high`), 6.77 (`ultra`)                                                               | 1D is real time everywhere; 3D is not: Rust engine {{P09}}-{{P13}}                             |
-| Case-study folders of the template   | `docs/case-studies/issue-13`, `-21`, `-23` and 16 more belong to another repository and collide with new numbers                                              | Bug {{P01}}                                                                                    |
+| What                                 | Measured today                                                                                                                                                | Consequence                                                                                                                                                              |
+| ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Mandarin third tone `mǎ`             | Planned pitch 105, 108, 128, 136, 137 Hz: it only rises                                                                                                       | Bug [#42](https://github.com/konard/voice-simulator/issues/42); the tone model [#49](https://github.com/konard/voice-simulator/issues/49)                                |
+| Mandarin `花儿`                      | `xwa˥ ɚ˧˥`: the suffix is a syllable of its own with a rising tone                                                                                            | Bug [#43](https://github.com/konard/voice-simulator/issues/43)                                                                                                           |
+| English "record the record"          | `ɹəˈkɔɹd ðə ɹəˈkɔɹd`; "lead pipe" and "they lead" both `lɛd`; "the wind" and "wind the clock" both `waɪnd`                                                    | Bug [#44](https://github.com/konard/voice-simulator/issues/44); lexicons [#47](https://github.com/konard/voice-simulator/issues/47)                                      |
+| Russian "Замок на замке"             | `ˈzamək na ˈzamkʲə`: the lock is read as the castle                                                                                                           | Bug [#48](https://github.com/konard/voice-simulator/issues/48)                                                                                                           |
+| English "a cup of tea for you"       | `ə ˈkʌp ˈʌv ˈti ˈfɔɹ ˈju`: every function word is stressed and full; the planned sentence is 14 % too long                                                    | Bug [#85](https://github.com/konard/voice-simulator/issues/85)                                                                                                           |
+| Russian "из дома", "с братом"        | `is ˈdomə`, `s ˈbratəm`: prepositions and particles are read as separate words, devoiced and with full vowels                                                 | Bug [#86](https://github.com/konard/voice-simulator/issues/86)                                                                                                           |
+| Mandarin "我 很 好", `wǒ hěn hǎo`    | `wo˨˩˦ xən˨˩˦ xɑʊ˨˩˦`: tone sandhi stops at every space, so typed pinyin never gets it                                                                        | Part of the tone model [#49](https://github.com/konard/voice-simulator/issues/49)                                                                                        |
+| Hindi "क्या तुम आओगे?"               | The yes/no question gets a falling mark `↘`                                                                                                                   | Bug [#45](https://github.com/konard/voice-simulator/issues/45)                                                                                                           |
+| "I have 25 apples on 3/4/2024."      | The words `25` and `3/4/2024` have 3 and 7 syllables without text, so nothing can be highlighted inside them                                                  | Bug [#46](https://github.com/konard/voice-simulator/issues/46)                                                                                                           |
+| `breathiness` 0 → 1                  | Harmonics-to-noise ratio 15.19 → 14.59 dB, H1-H2 3.43 → 3.46 dB: almost no measurable change                                                                  | Bug [#32](https://github.com/konard/voice-simulator/issues/32); blocks the voice fit [#63](https://github.com/konard/voice-simulator/issues/63)                          |
+| Nasal against the vowel in `ˈama`    | Level ratio 0.32 with the 1D solver, 1.22 with the 3D solver                                                                                                  | Bug [#84](https://github.com/konard/voice-simulator/issues/84)                                                                                                           |
+| Sentence types in English            | Statement 141 → 94 Hz, yes/no question 141 → 140 Hz, exclamation starts at 161 Hz and is 1.41 times louder                                                    | Only final movements exist; intonation models [#51](https://github.com/konard/voice-simulator/issues/51)                                                                 |
+| Lowest settings                      | `minimal` tier is 22.05 kHz; forcing 8, 11.025 and 16 kHz works and keeps the formants                                                                        | Narrow-band tiers [#26](https://github.com/konard/voice-simulator/issues/26)                                                                                             |
+| Rendering straight at 8 kHz          | Sibilants `sː` and `ʃː` come out 1.2 to 1.5 dB too loud from aliasing, the vowel `aː` 0.2 dB (`issue-11-audit-m1.txt`)                                        | The narrow-band tiers render at a higher rate and decimate [#26](https://github.com/konard/voice-simulator/issues/26)                                                    |
+| Load-time benchmark                  | Three runs in one process took 497, 397 and 286 ms and read the load of `minimal` as 0.51, 0.09 and 0.07: the first cold probe is about 7 times too high      | Silent benchmark in slices, with a warm-up and a cache [#28](https://github.com/konard/voice-simulator/issues/28)                                                        |
+| Level across tiers                   | `minimal`, `low` and `medium` agree within 0.2 dB; `high` (3D) is 1.2 dB quieter; two tiers of a vowel correlate with 0.84 to 0.999, of a sibilant not at all | Switching the tier inside an utterance needs level matching and two kinds of crossfade [#29](https://github.com/konard/voice-simulator/issues/29)                        |
+| WebGPU tests in CI                   | They run on the `windows-2025` and `macos-15` Deno jobs and are skipped only on `ubuntu-24.04`                                                                | A software adapter on Linux and the heavy suite `gpu` [#30](https://github.com/konard/voice-simulator/issues/30)                                                         |
+| WebAssembly kernel                   | 332 bytes, written by hand and pasted as base64; no CI job builds it                                                                                          | Rust workspace with a build that CI checks [#21](https://github.com/konard/voice-simulator/issues/21)                                                                    |
+| Configuration                        | 33 head and voice parameters                                                                                                                                  | Expanded configuration [#41](https://github.com/konard/voice-simulator/issues/41)                                                                                        |
+| Speed, one core of the audit machine | Real-time factor 0.05 (`minimal`), 0.10 (`low`), 0.14 (`medium`), 1.32 (`high`), 6.77 (`ultra`)                                                               | 1D is real time everywhere; 3D is not: Rust engine [#21](https://github.com/konard/voice-simulator/issues/21)-[#25](https://github.com/konard/voice-simulator/issues/25) |
+| Case-study folders of the template   | `docs/case-studies/issue-13`, `-21`, `-23` and 16 more belong to another repository and collide with new numbers                                              | Bug [#13](https://github.com/konard/voice-simulator/issues/13)                                                                                                           |
 
 ## Analysis and solution per requirement
 
@@ -161,12 +161,12 @@ stress, durations and voice quality.
 | Physical source, noise and dynamics first | Largest audible gain per unit of computation | New models to validate                                                 |
 | Learned control or a neural residual      | Proposed by the issue 9 case study           | Ruled out by R18                                                       |
 
-**Chosen.** Measure first ({{P04}} to {{P08}}), then improve in the order of
-audible gain: vocal folds driven by lung pressure ({{P21}}), their coupling to
-the tract and the trachea ({{P22}}), turbulence and bursts ({{P23}}), losses
-({{P24}}), articulator dynamics calibrated on real data ({{P26}}), durations
-({{P27}}), more articulators ({{P28}}), a 2D tier ({{P25}}). The claim "state of
-the art" is tested at the end by {{P71}}, which publishes the numbers whatever
+**Chosen.** Measure first ([#16](https://github.com/konard/voice-simulator/issues/16) to [#20](https://github.com/konard/voice-simulator/issues/20)), then improve in the order of
+audible gain: vocal folds driven by lung pressure ([#33](https://github.com/konard/voice-simulator/issues/33)), their coupling to
+the tract and the trachea ([#34](https://github.com/konard/voice-simulator/issues/34)), turbulence and bursts ([#35](https://github.com/konard/voice-simulator/issues/35)), losses
+([#36](https://github.com/konard/voice-simulator/issues/36)), articulator dynamics calibrated on real data ([#38](https://github.com/konard/voice-simulator/issues/38)), durations
+([#39](https://github.com/konard/voice-simulator/issues/39)), more articulators ([#40](https://github.com/konard/voice-simulator/issues/40)), a 2D tier ([#37](https://github.com/konard/voice-simulator/issues/37)). The claim "state of
+the art" is tested at the end by [#83](https://github.com/konard/voice-simulator/issues/83), which publishes the numbers whatever
 they are.
 
 ### R2, R12: Rust engine in a background worker, multicore and single core
@@ -189,13 +189,13 @@ slower and the tier `reference` 30 to 39 times slower
 | WebAssembly threads for the solver           | Uses all cores                                           | Needs cross-origin isolation; not available on GitHub Pages by default   |
 | Plain pool of workers                        | Works everywhere; near-linear for independent work       | Does not speed up one solver run                                         |
 
-**Chosen.** A Rust workspace with a dependency-free core ({{P09}}), ports of
-the 1D chain ({{P10}}) and the 3D solver with a scalar and a SIMD binary
-({{P11}}), the Rust engine in the worker as the default with the JavaScript
-engine as the fallback and as the readable reference ({{P13}}). Multicore is an
-enhancement that is detected at run time and never required ({{P12}}, {{P65}});
-single-core operation is certified by {{P69}}. Everything that is added to the
-JavaScript reference later is brought to Rust by {{P70}}.
+**Chosen.** A Rust workspace with a dependency-free core ([#21](https://github.com/konard/voice-simulator/issues/21)), ports of
+the 1D chain ([#22](https://github.com/konard/voice-simulator/issues/22)) and the 3D solver with a scalar and a SIMD binary
+([#23](https://github.com/konard/voice-simulator/issues/23)), the Rust engine in the worker as the default with the JavaScript
+engine as the fallback and as the readable reference ([#25](https://github.com/konard/voice-simulator/issues/25)). Multicore is an
+enhancement that is detected at run time and never required ([#24](https://github.com/konard/voice-simulator/issues/24), [#77](https://github.com/konard/voice-simulator/issues/77));
+single-core operation is certified by [#81](https://github.com/konard/voice-simulator/issues/81). Everything that is added to the
+JavaScript reference later is brought to Rust by [#82](https://github.com/konard/voice-simulator/issues/82).
 
 ### R3, R4: quality that follows the device
 
@@ -203,12 +203,12 @@ JavaScript reference later is brought to Rust by {{P70}}.
 cheaper tier during its first 40 to 300 ms. After that the tier is fixed for
 the utterance. Playback uses scheduled buffers.
 
-**Chosen.** Playback through an AudioWorklet fed from a ring buffer ({{P15}});
+**Chosen.** Playback through an AudioWorklet fed from a ring buffer ([#27](https://github.com/konard/voice-simulator/issues/27));
 a governor that watches how full the buffer is and switches the tier in the
-middle of an utterance with a short pre-roll and a crossfade ({{P17}}); a silent
+middle of an utterance with a short pre-roll and a crossfade ([#29](https://github.com/konard/voice-simulator/issues/29)); a silent
 benchmark in small slices in the worker after the page has loaded, cached per
-device ({{P16}}); three narrow-band tiers below today's lowest one ({{P14}});
-the speed of every tier tracked in CI ({{P19}}). The design numbers (slices of
+device ([#28](https://github.com/konard/voice-simulator/issues/28)); three narrow-band tiers below today's lowest one ([#26](https://github.com/konard/voice-simulator/issues/26));
+the speed of every tier tracked in CI ([#31](https://github.com/konard/voice-simulator/issues/31)). The design numbers (slices of
 20 to 40 ms, about 30 ms of pre-roll, 5 to 20 ms of crossfade) come from
 [research 5](research/5-performance-and-physics.md) and are marked there as
 estimates to be measured.
@@ -219,12 +219,12 @@ estimates to be measured.
 breathiness, jitter, shimmer and vibrato, and the microphone and room.
 
 **Chosen.** Parameters follow the models. The vocal folds get length,
-thickness, stiffness, rest gap and lung pressure ({{P21}}); the trachea and the
-source-tract coupling get their own ({{P22}}); noise, losses and articulators
-theirs ({{P23}}, {{P24}}, {{P28}}); speaking habits (rate, pauses, precision of
+thickness, stiffness, rest gap and lung pressure ([#33](https://github.com/konard/voice-simulator/issues/33)); the trachea and the
+source-tract coupling get their own ([#34](https://github.com/konard/voice-simulator/issues/34)); noise, losses and articulators
+theirs ([#35](https://github.com/konard/voice-simulator/issues/35), [#36](https://github.com/konard/voice-simulator/issues/36), [#40](https://github.com/konard/voice-simulator/issues/40)); speaking habits (rate, pauses, precision of
 articulation, pitch range, declination) come with the duration and dynamics
-models ({{P26}}, {{P27}}). {{P29}} collects them in a versioned voice file that
-can be saved, loaded, compared and fitted. {{P20}} repairs a parameter that
+models ([#38](https://github.com/konard/voice-simulator/issues/38), [#39](https://github.com/konard/voice-simulator/issues/39)). [#41](https://github.com/konard/voice-simulator/issues/41) collects them in a versioned voice file that
+can be saved, loaded, compared and fitted. [#32](https://github.com/konard/voice-simulator/issues/32) repairs a parameter that
 exists but has almost no measurable effect.
 
 ### R6, R7: the simulation in reverse, always through IPA
@@ -243,13 +243,13 @@ parameters. Nothing recognises phonemes, language or text.
 
 **Chosen.** A pipeline that combines the last three, in the order of
 [research 2, section 8](research/2-inversion-and-recognition.md): a streaming
-front end ({{P46}}), pitch, formants and the glottal source ({{P47}}, {{P48}},
-{{P49}}), syllable nuclei and landmarks ({{P50}}), a codebook made by the
-simulator ({{P52}}), inversion to articulator movements with a continuity
-constraint ({{P53}}), decoding to IPA with times ({{P54}}), rescoring by
-resynthesis ({{P55}}), IPA to text per language with the project's own lexicons
-({{P56}}), language identification including mixed speech ({{P57}}), and one
-API, command and server route ({{P61}}). The Rust port follows ({{P65}}).
+front end ([#58](https://github.com/konard/voice-simulator/issues/58)), pitch, formants and the glottal source ([#59](https://github.com/konard/voice-simulator/issues/59), [#60](https://github.com/konard/voice-simulator/issues/60),
+[#61](https://github.com/konard/voice-simulator/issues/61)), syllable nuclei and landmarks ([#62](https://github.com/konard/voice-simulator/issues/62)), a codebook made by the
+simulator ([#64](https://github.com/konard/voice-simulator/issues/64)), inversion to articulator movements with a continuity
+constraint ([#65](https://github.com/konard/voice-simulator/issues/65)), decoding to IPA with times ([#66](https://github.com/konard/voice-simulator/issues/66)), rescoring by
+resynthesis ([#67](https://github.com/konard/voice-simulator/issues/67)), IPA to text per language with the project's own lexicons
+([#68](https://github.com/konard/voice-simulator/issues/68)), language identification including mixed speech ([#69](https://github.com/konard/voice-simulator/issues/69)), and one
+API, command and server route ([#73](https://github.com/konard/voice-simulator/issues/73)). The Rust port follows ([#77](https://github.com/konard/voice-simulator/issues/77)).
 
 The path audio → IPA → language → text is fixed by the result shape that all
 of these issues share (see [plan/README.md](plan/README.md)): IPA is always
@@ -259,7 +259,7 @@ returned, and the text is derived from it.
 error on TIMIT with monophones and 19.7 % with its best non-neural recipe. A
 rule- and physics-based recogniser will start far behind that. The plan asks
 first for 80 to 90 % correct broad classes and for a perfect round trip on the
-simulator's own output ({{P63}}), then measures real recordings ({{P64}}) and
+simulator's own output ([#75](https://github.com/konard/voice-simulator/issues/75)), then measures real recordings ([#76](https://github.com/konard/voice-simulator/issues/76)) and
 reports the numbers without a pass mark that would have to be invented.
 
 ### R8: recordings of real voices
@@ -267,19 +267,19 @@ reports the numbers without a pass mark that would have to be invented.
 **Today.** No recording of running speech is used anywhere in the tests.
 
 **Chosen.** A registry of datasets with licences and checksums and a fetcher
-that refuses licences outside the allow list ({{P04}}); a small golden set of
-public-domain recordings with transcripts and IPA that is committed ({{P05}});
-larger sets downloaded only inside the manually triggered workflow ({{P64}});
-the first report against real speech ({{P07}}). The survey of datasets with
+that refuses licences outside the allow list ([#16](https://github.com/konard/voice-simulator/issues/16)); a small golden set of
+public-domain recordings with transcripts and IPA that is committed ([#17](https://github.com/konard/voice-simulator/issues/17));
+larger sets downloaded only inside the manually triggered workflow ([#76](https://github.com/konard/voice-simulator/issues/76));
+the first report against real speech ([#19](https://github.com/konard/voice-simulator/issues/19)). The survey of datasets with
 their licences is [research 3](research/3-datasets.md).
 
 The sets that the plan uses, all reachable without downloading a whole corpus:
 
-| Use                                                                       | English                                                     | Russian                                                | Hindi                           | Mandarin                                                                                                        |
-| ------------------------------------------------------------------------- | ----------------------------------------------------------- | ------------------------------------------------------ | ------------------------------- | --------------------------------------------------------------------------------------------------------------- |
-| Committed golden set, six sentences per language, public domain ({{P05}}) | LibriVox "Aesop's Fables" with "The North Wind and the Sun" | LibriVox "Aesop's fables in Russian"                   | A LibriVox reading of Premchand | A LibriVox reading (that the reader speaks Mandarin has to be confirmed)                                        |
-| Downloaded in the manual workflow, never committed ({{P04}}, {{P64}})     | FLEURS `en_us`, LibriTTS-R `dev.clean` (both CC BY 4.0)     | FLEURS `ru_ru`, SOVA RuDevices `test` (both CC BY 4.0) | FLEURS `hi_in` (CC BY 4.0)      | FLEURS `cmn_hans_cn` (CC BY 4.0), the transcripts of the AISHELL-3 test set (Apache-2.0) for the tone reference |
-| Emotions, downloaded only ({{P59}})                                       | none that the licence gate accepts                          | RESD (MIT)                                             | none found                      | none found                                                                                                      |
+| Use                                                                                                                                                                         | English                                                     | Russian                                                | Hindi                           | Mandarin                                                                                                        |
+| --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------- | ------------------------------------------------------ | ------------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| Committed golden set, six sentences per language, public domain ([#17](https://github.com/konard/voice-simulator/issues/17))                                                | LibriVox "Aesop's Fables" with "The North Wind and the Sun" | LibriVox "Aesop's fables in Russian"                   | A LibriVox reading of Premchand | A LibriVox reading (that the reader speaks Mandarin has to be confirmed)                                        |
+| Downloaded in the manual workflow, never committed ([#16](https://github.com/konard/voice-simulator/issues/16), [#76](https://github.com/konard/voice-simulator/issues/76)) | FLEURS `en_us`, LibriTTS-R `dev.clean` (both CC BY 4.0)     | FLEURS `ru_ru`, SOVA RuDevices `test` (both CC BY 4.0) | FLEURS `hi_in` (CC BY 4.0)      | FLEURS `cmn_hans_cn` (CC BY 4.0), the transcripts of the AISHELL-3 test set (Apache-2.0) for the tone reference |
+| Emotions, downloaded only ([#71](https://github.com/konard/voice-simulator/issues/71))                                                                                      | none that the licence gate accepts                          | RESD (MIT)                                             | none found                      | none found                                                                                                      |
 
 The sustained sounds of the Dresden Vocal Tract Dataset (CC0), which come with
 the measured shape of the vocal tract, are already downloaded by a test of the
@@ -290,15 +290,15 @@ Libre (CC0), the vowels of `All IPA Vowels.ogg` (CC0) and the clips of LJ
 Speech (public domain) are left out of the golden set to keep it under two
 megabytes and reviewable by a person; an issue that needs them adds them
 through the registry. CREMA-D (emotions in English) is under the ODbL, a
-share-alike licence, and the licence gate of {{P04}} refuses share-alike
+share-alike licence, and the licence gate of [#16](https://github.com/konard/voice-simulator/issues/16) refuses share-alike
 licences, so it is not used.
 
 Three findings shape the plan. No public-domain or CC0 corpus of whispered,
-shouted or emotional speech was found, so the committed golden set ({{P05}})
+shouted or emotional speech was found, so the committed golden set ([#17](https://github.com/konard/voice-simulator/issues/17))
 holds none. Recognised emotions are measured on one downloaded set in one
-language ({{P59}}); for whispered speech no recording passes the licence gate,
+language ([#71](https://github.com/konard/voice-simulator/issues/71)); for whispered speech no recording passes the licence gate,
 so whisper is verified by the round trip through the simulator only, and
-{{P60}} says so. Several well-known sets cannot be used the obvious way: Common
+[#72](https://github.com/konard/voice-simulator/issues/72) says so. Several well-known sets cannot be used the obvious way: Common
 Voice is CC0 but may not be re-hosted, most IPA samples on Wikipedia are CC
 BY-SA, and several Mandarin and emotion corpora are non-commercial or
 research-only. And LibriVox recordings are public domain in the USA, which the
@@ -307,24 +307,24 @@ manifest of the golden set records per file.
 ### R9: the multi-pass algorithm
 
 **Chosen.** The three passes of the issue map to three components. Pass 1 fits
-the voice configuration from the first seconds of speech ({{P51}}). Pass 2
-inverts the simulator with that configuration ({{P53}}, {{P54}}). The session
-({{P66}}) alternates them: it freezes the speaker parameters inside an
+the voice configuration from the first seconds of speech ([#63](https://github.com/konard/voice-simulator/issues/63)). Pass 2
+inverts the simulator with that configuration ([#65](https://github.com/konard/voice-simulator/issues/65), [#66](https://github.com/konard/voice-simulator/issues/66)). The session
+([#78](https://github.com/konard/voice-simulator/issues/78)) alternates them: it freezes the speaker parameters inside an
 utterance and updates them between utterances, which is the proven design of
 online speaker adaptation, and it reports when both estimates have stopped
 moving. From then on the same object holds a voice to speak with and a
-recogniser tuned to the speaker. Copy synthesis ({{P67}}) replays a recording
+recogniser tuned to the speaker. Copy synthesis ([#79](https://github.com/konard/voice-simulator/issues/79)) replays a recording
 through the fitted voice with the recognised timing, melody and voice quality,
-and measures the distance to the original. The app shows it live ({{P68}}).
+and measures the distance to the original. The app shows it live ([#80](https://github.com/konard/voice-simulator/issues/80)).
 
 ### R10: syllable highlighting in both directions
 
 **Today.** The app highlights syllables while speaking from the planned
-timeline. Numbers and dates are one block ({{P34}}).
+timeline. Numbers and dates are one block ([#46](https://github.com/konard/voice-simulator/issues/46)).
 
 **Chosen.** Recognition returns syllables with start and end times inside every
 word, in the same shape as the speaking timeline, so the app can reuse one
-highlighter ({{P62}}, {{P68}}). A syllable that was shown is never taken back;
+highlighter ([#74](https://github.com/konard/voice-simulator/issues/74), [#80](https://github.com/konard/voice-simulator/issues/80)). A syllable that was shown is never taken back;
 its text may still change until the word is final. The timing budget (a
 syllable within 100 to 200 ms, provisional IPA within 300 to 500 ms, final text
 within 2 to 3 s) is from
@@ -336,19 +336,19 @@ within 2 to 3 s) is from
 30 s per test.
 
 **Chosen.** One workflow, "Heavy checks", started by hand with a choice of the
-suite ({{P02}}). Everything expensive hangs on it: the WebGPU solver ({{P18}}),
-speed tracking ({{P19}}), round trips in every tier ({{P63}}), recognition of
-datasets ({{P64}}), the certification of the lowest settings ({{P69}}) and the
-final evaluation ({{P71}}).
+suite ([#14](https://github.com/konard/voice-simulator/issues/14)). Everything expensive hangs on it: the WebGPU solver ([#30](https://github.com/konard/voice-simulator/issues/30)),
+speed tracking ([#31](https://github.com/konard/voice-simulator/issues/31)), round trips in every tier ([#75](https://github.com/konard/voice-simulator/issues/75)), recognition of
+datasets ([#76](https://github.com/konard/voice-simulator/issues/76)), the certification of the lowest settings ([#81](https://github.com/konard/voice-simulator/issues/81)) and the
+final evaluation ([#83](https://github.com/konard/voice-simulator/issues/83)).
 
 ### R13: everything works at the lowest settings
 
 **Today.** The lowest tier is 22.05 kHz with 22 tube sections. Forcing 8 kHz
 works for synthesis (measured above).
 
-**Chosen.** Tiers at 8, 11.025 and 16 kHz ({{P14}}) with the measures that keep
+**Chosen.** Tiers at 8, 11.025 and 16 kHz ([#26](https://github.com/konard/voice-simulator/issues/26)) with the measures that keep
 them clean: a fixed high internal rate with decimation, and fractional tract
-lengths (in {{P24}}). Round-trip tests run in every tier ({{P63}}). {{P69}} is
+lengths (in [#36](https://github.com/konard/voice-simulator/issues/36)). Round-trip tests run in every tier ([#75](https://github.com/konard/voice-simulator/issues/75)). [#81](https://github.com/konard/voice-simulator/issues/81) is
 the certification: synthesis, recognition and copying on the lowest tier, on
 one core, with pass marks relative to the best tier.
 
@@ -375,21 +375,21 @@ See [The plan](#the-plan).
 punctuation, four English accents. No whisper, no loudness control inside a
 sentence, no emotions, no markup.
 
-**Chosen.** Bugs first ({{P30}} to {{P34}}, {{P36}}, {{P73}}, {{P74}}). Then one markup that both
-directions share ({{P38}}): what the speaker is asked to do and what the
+**Chosen.** Bugs first ([#42](https://github.com/konard/voice-simulator/issues/42) to [#46](https://github.com/konard/voice-simulator/issues/46), [#48](https://github.com/konard/voice-simulator/issues/48), [#85](https://github.com/konard/voice-simulator/issues/85), [#86](https://github.com/konard/voice-simulator/issues/86)). Then one markup that both
+directions share ([#50](https://github.com/konard/voice-simulator/issues/50)): what the speaker is asked to do and what the
 recogniser reports use the same names. On top of it: a tone model with targets
-({{P37}}), intonation per language ({{P39}}), vocal effort from soft to shouted
-with gradual changes ({{P40}}), whisper ({{P41}}), breathy, creaky, pressed and
-falsetto voice ({{P42}}), emotions and attitudes as documented changes of the
-physical parameters ({{P43}}), breaths, laughter and hesitations ({{P44}}),
-accents beyond English ({{P45}}), large lexicons ({{P35}}). The reverse side
-recognises tones, stress and sentence type ({{P58}}), loudness, whisper, voice
-quality and emotion ({{P59}}) and whispered speech ({{P60}}).
+([#49](https://github.com/konard/voice-simulator/issues/49)), intonation per language ([#51](https://github.com/konard/voice-simulator/issues/51)), vocal effort from soft to shouted
+with gradual changes ([#52](https://github.com/konard/voice-simulator/issues/52)), whisper ([#53](https://github.com/konard/voice-simulator/issues/53)), breathy, creaky, pressed and
+falsetto voice ([#54](https://github.com/konard/voice-simulator/issues/54)), emotions and attitudes as documented changes of the
+physical parameters ([#55](https://github.com/konard/voice-simulator/issues/55)), breaths, laughter and hesitations ([#56](https://github.com/konard/voice-simulator/issues/56)),
+accents beyond English ([#57](https://github.com/konard/voice-simulator/issues/57)), large lexicons ([#47](https://github.com/konard/voice-simulator/issues/47)). The reverse side
+recognises tones, stress and sentence type ([#70](https://github.com/konard/voice-simulator/issues/70)), loudness, whisper, voice
+quality and emotion ([#71](https://github.com/konard/voice-simulator/issues/71)) and whispered speech ([#72](https://github.com/konard/voice-simulator/issues/72)).
 
 The numbers behind the presets (for example pitch +2.3 to +2.9 semitones under
 focus, whisper about 25 dB quieter and 1.32 times longer) and their sources are
 in [research 4](research/4-linguistics-and-speech-modes.md). One limit is
-stated there and repeated in {{P59}}: three prosodic cues classify emotions
+stated there and repeated in [#71](https://github.com/konard/voice-simulator/issues/71): three prosodic cues classify emotions
 correctly only 58 % of the time in the literature, so emotion recognition
 reports a few coarse classes with a confidence, not a fine label.
 
@@ -397,7 +397,7 @@ reports a few coarse classes with a confidence, not a fine label.
 
 The boundary is written in the vision
 ([What counts as a neural network](../../VISION.md#what-counts-as-a-neural-network)).
-{{P03}} turns it into a check that fails CI when a dependency, a model file or
+[#15](https://github.com/konard/voice-simulator/issues/15) turns it into a check that fails CI when a dependency, a model file or
 an import of a neural library appears, and that also enforces the licence
 allow list. Every issue repeats the rule. Neural systems stay as a yardstick
 that is quoted, never run by the project.
@@ -410,14 +410,14 @@ This folder and [pull request 12](https://github.com/konard/voice-simulator/pull
 
 The issue asks that the plan also covers what was recommended earlier.
 
-| Left open by                                  | What                                                                                       | Now                                                               |
-| --------------------------------------------- | ------------------------------------------------------------------------------------------ | ----------------------------------------------------------------- |
-| [Issue 9](../issue-9/README.md), R9           | No listening test shows the simulator near neural TTS; the gap is in control and prosody   | {{P08}}, {{P26}}, {{P27}}, {{P39}}, {{P71}}                       |
-| Issue 9, research on the path past neural TTS | Learned control, a neural residual, scoring with neural recognisers and quality predictors | Withdrawn (R18); replaced by calibrated rules and physical models |
-| [Issue 5](../issue-5/README.md)               | Voice matching fits six parameters and was tested on synthetic recordings only             | {{P51}}, {{P66}}, {{P67}}                                         |
-| Issue 5                                       | Small dictionaries: stress and readings of words spelled alike                             | {{P32}}, {{P35}}, {{P36}}                                         |
-| Issue 9                                       | The WebGPU solver is not exercised in CI                                                   | {{P18}}                                                           |
-| [Issue 1](../issue-1/README.md)               | Real time for the 3D tiers on ordinary devices                                             | {{P09}} to {{P13}}, {{P25}}                                       |
+| Left open by                                  | What                                                                                       | Now                                                                                                                                                                                                                                                                                                        |
+| --------------------------------------------- | ------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [Issue 9](../issue-9/README.md), R9           | No listening test shows the simulator near neural TTS; the gap is in control and prosody   | [#20](https://github.com/konard/voice-simulator/issues/20), [#38](https://github.com/konard/voice-simulator/issues/38), [#39](https://github.com/konard/voice-simulator/issues/39), [#51](https://github.com/konard/voice-simulator/issues/51), [#83](https://github.com/konard/voice-simulator/issues/83) |
+| Issue 9, research on the path past neural TTS | Learned control, a neural residual, scoring with neural recognisers and quality predictors | Withdrawn (R18); replaced by calibrated rules and physical models                                                                                                                                                                                                                                          |
+| [Issue 5](../issue-5/README.md)               | Voice matching fits six parameters and was tested on synthetic recordings only             | [#63](https://github.com/konard/voice-simulator/issues/63), [#78](https://github.com/konard/voice-simulator/issues/78), [#79](https://github.com/konard/voice-simulator/issues/79)                                                                                                                         |
+| Issue 5                                       | Small dictionaries: stress and readings of words spelled alike                             | [#44](https://github.com/konard/voice-simulator/issues/44), [#47](https://github.com/konard/voice-simulator/issues/47), [#48](https://github.com/konard/voice-simulator/issues/48)                                                                                                                         |
+| Issue 9                                       | The WebGPU solver is not exercised in CI                                                   | [#30](https://github.com/konard/voice-simulator/issues/30)                                                                                                                                                                                                                                                 |
+| [Issue 1](../issue-1/README.md)               | Real time for the 3D tiers on ordinary devices                                             | [#21](https://github.com/konard/voice-simulator/issues/21) to [#25](https://github.com/konard/voice-simulator/issues/25), [#37](https://github.com/konard/voice-simulator/issues/37)                                                                                                                       |
 
 ## Similar projects
 
@@ -458,7 +458,7 @@ The largest uncertainty is the same finding seen from the other side: **no
 listening test was found in which a physical synthesiser without networks
 matches neural text-to-speech.** The vision states this as a goal. The roadmap
 builds the means to measure it first and publishes the result at the end
-({{P71}}), whichever way it falls.
+([#83](https://github.com/konard/voice-simulator/issues/83)), whichever way it falls.
 
 ## Components and libraries
 
@@ -467,20 +467,20 @@ from a licence file and what only from a summary. The rule of the project:
 code under GPL, AGPL, LGPL, EUPL or a non-commercial licence is read for ideas
 and never copied or linked.
 
-| Need                          | Candidates                                                             | Licence                             | Decision                                                                                 |
-| ----------------------------- | ---------------------------------------------------------------------- | ----------------------------------- | ---------------------------------------------------------------------------------------- |
-| Rust core                     | `core`, `alloc`, `libm`                                                | MIT or Apache-2.0                   | The only dependencies of the WebAssembly core ({{P09}})                                  |
-| SIMD                          | `core::arch::wasm32`, `wide`                                           | Zlib, Apache-2.0 or MIT             | Fixed-width SIMD only; relaxed SIMD is not deterministic and is not used ({{P11}})       |
-| Threads in WebAssembly        | `wasm-bindgen-rayon`, plain worker pool, `coi-serviceworker`           | Permissive                          | Worker pool first; threads optional behind detection ({{P12}})                           |
-| Audio output                  | AudioWorklet with a ring buffer (`rtrb` natively)                      | Web standard; MIT or Apache-2.0     | Own ring buffer; MessagePort fallback without cross-origin isolation ({{P15}})           |
-| FFT and resampling in tools   | `rustfft`, `realfft`, `rubato`                                         | MIT or Apache-2.0                   | Allowed in the command line tool and tests, not in the core                              |
-| Benchmarks and licence checks | `criterion`, `cargo deny`                                              | Permissive                          | Development only ({{P09}}, {{P03}})                                                      |
-| Optimisers                    | `argmin`, `cmaes`, own Nelder-Mead and CMA-ES                          | MIT or Apache-2.0                   | Own small implementations in JavaScript and Rust so that both give the same result       |
-| Front-end algorithms          | Burg LPC, autocorrelation pitch (Boersma 1993), IAIF inverse filtering | Published algorithms                | Reimplemented from the papers ({{P46}} to {{P49}})                                       |
-| Recognition design            | Kaldi online decoding, PocketSphinx                                    | Apache-2.0; BSD                     | Design ideas (fixed-lag commit, speaker adaptation between utterances); no code taken    |
-| Pronunciation data            | CMUdict, CLDR, ipa-dict, WikiPron, PHOIBLE                             | BSD-style; Unicode-3.0; MIT; CC BY  | Per source in {{P35}}: commit only public-domain or CC0 data, fetch the rest             |
-| Objective quality             | Mel-cepstral distortion, log-spectral distance, ESTOI, ViSQOL          | Formulas; Apache-2.0                | Own implementations of the formulas ({{P06}}); PESQ and POLQA are licensed: not used     |
-| Listening tests               | webMUSHRA; ITU-R BS.1534                                               | Custom Fraunhofer licence; standard | Own small harness that follows the standard ({{P08}}); webMUSHRA is linked, not vendored |
+| Need                          | Candidates                                                             | Licence                             | Decision                                                                                                                                                 |
+| ----------------------------- | ---------------------------------------------------------------------- | ----------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Rust core                     | `core`, `alloc`, `libm`                                                | MIT or Apache-2.0                   | The only dependencies of the WebAssembly core ([#21](https://github.com/konard/voice-simulator/issues/21))                                               |
+| SIMD                          | `core::arch::wasm32`, `wide`                                           | Zlib, Apache-2.0 or MIT             | Fixed-width SIMD only; relaxed SIMD is not deterministic and is not used ([#23](https://github.com/konard/voice-simulator/issues/23))                    |
+| Threads in WebAssembly        | `wasm-bindgen-rayon`, plain worker pool, `coi-serviceworker`           | Permissive                          | Worker pool first; threads optional behind detection ([#24](https://github.com/konard/voice-simulator/issues/24))                                        |
+| Audio output                  | AudioWorklet with a ring buffer (`rtrb` natively)                      | Web standard; MIT or Apache-2.0     | Own ring buffer; MessagePort fallback without cross-origin isolation ([#27](https://github.com/konard/voice-simulator/issues/27))                        |
+| FFT and resampling in tools   | `rustfft`, `realfft`, `rubato`                                         | MIT or Apache-2.0                   | Allowed in the command line tool and tests, not in the core                                                                                              |
+| Benchmarks and licence checks | `criterion`, `cargo deny`                                              | Permissive                          | Development only ([#21](https://github.com/konard/voice-simulator/issues/21), [#15](https://github.com/konard/voice-simulator/issues/15))                |
+| Optimisers                    | `argmin`, `cmaes`, own Nelder-Mead and CMA-ES                          | MIT or Apache-2.0                   | Own small implementations in JavaScript and Rust so that both give the same result                                                                       |
+| Front-end algorithms          | Burg LPC, autocorrelation pitch (Boersma 1993), IAIF inverse filtering | Published algorithms                | Reimplemented from the papers ([#58](https://github.com/konard/voice-simulator/issues/58) to [#61](https://github.com/konard/voice-simulator/issues/61)) |
+| Recognition design            | Kaldi online decoding, PocketSphinx                                    | Apache-2.0; BSD                     | Design ideas (fixed-lag commit, speaker adaptation between utterances); no code taken                                                                    |
+| Pronunciation data            | CMUdict, CLDR, ipa-dict, WikiPron, PHOIBLE                             | BSD-style; Unicode-3.0; MIT; CC BY  | Per source in [#47](https://github.com/konard/voice-simulator/issues/47): commit only public-domain or CC0 data, fetch the rest                          |
+| Objective quality             | Mel-cepstral distortion, log-spectral distance, ESTOI, ViSQOL          | Formulas; Apache-2.0                | Own implementations of the formulas ([#18](https://github.com/konard/voice-simulator/issues/18)); PESQ and POLQA are licensed: not used                  |
+| Listening tests               | webMUSHRA; ITU-R BS.1534                                               | Custom Fraunhofer licence; standard | Own small harness that follows the standard ([#20](https://github.com/konard/voice-simulator/issues/20)); webMUSHRA is linked, not vendored              |
 
 ## Best practices
 
@@ -520,14 +520,14 @@ sections: Goal, Why, Current state, What to do, Tests, Acceptance criteria, Out
 of scope, References. The tables with numbers and the dependency graph are in
 [docs/ROADMAP.md](../../ROADMAP.md).
 
-| Milestone                                     | Issues                            | Bugs | Features |
-| --------------------------------------------- | --------------------------------- | ---- | -------- |
-| 0. Foundations and measurement                | {{P01}}-{{P08}}                   | 1    | 7        |
-| 1. Rust engine and adaptive quality           | {{P09}}-{{P19}}                   | 0    | 11       |
-| 2. Voice physics and configuration            | {{P20}}-{{P29}}, {{P72}}          | 2    | 9        |
-| 3. Languages and modes of speech              | {{P30}}-{{P45}}, {{P73}}, {{P74}} | 8    | 10       |
-| 4. Reverse simulation (listening)             | {{P46}}-{{P65}}                   | 0    | 20       |
-| 5. Voice copy and state-of-the-art validation | {{P66}}-{{P71}}                   | 0    | 6        |
+| Milestone                                     | Issues                                                                                                                                                                                                                                        | Bugs | Features |
+| --------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---- | -------- |
+| 0. Foundations and measurement                | [#13](https://github.com/konard/voice-simulator/issues/13)-[#20](https://github.com/konard/voice-simulator/issues/20)                                                                                                                         | 1    | 7        |
+| 1. Rust engine and adaptive quality           | [#21](https://github.com/konard/voice-simulator/issues/21)-[#31](https://github.com/konard/voice-simulator/issues/31)                                                                                                                         | 0    | 11       |
+| 2. Voice physics and configuration            | [#32](https://github.com/konard/voice-simulator/issues/32)-[#41](https://github.com/konard/voice-simulator/issues/41), [#84](https://github.com/konard/voice-simulator/issues/84)                                                             | 2    | 9        |
+| 3. Languages and modes of speech              | [#42](https://github.com/konard/voice-simulator/issues/42)-[#57](https://github.com/konard/voice-simulator/issues/57), [#85](https://github.com/konard/voice-simulator/issues/85), [#86](https://github.com/konard/voice-simulator/issues/86) | 8    | 10       |
+| 4. Reverse simulation (listening)             | [#58](https://github.com/konard/voice-simulator/issues/58)-[#77](https://github.com/konard/voice-simulator/issues/77)                                                                                                                         | 0    | 20       |
+| 5. Voice copy and state-of-the-art validation | [#78](https://github.com/konard/voice-simulator/issues/78)-[#83](https://github.com/konard/voice-simulator/issues/83)                                                                                                                         | 0    | 6        |
 
 How the issues were made deliverable by a weak agent:
 
@@ -562,17 +562,17 @@ How the issues were made deliverable by a weak agent:
 
 ## Risks
 
-| Risk                                                                                | Where it is handled                                                                     |
-| ----------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- |
-| A physical synthesiser without networks may not reach the naturalness of neural TTS | Measured from the start ({{P07}}, {{P08}}); reported honestly at the end ({{P71}})      |
-| Inversion is not unique: many tract shapes give the same sound                      | Continuity constraint and speaker fit ({{P53}}); rescoring by resynthesis ({{P55}})     |
-| Consonants carry little energy and decide the words                                 | Landmarks and consonant cues ({{P50}}, {{P54}}); physical noise for templates ({{P23}}) |
-| The simulator's own speech is easier than real speech                               | Round trip first ({{P63}}), real recordings measured apart ({{P64}})                    |
-| Real time for recognition on one core at the lowest tier                            | Budget per stage in the issues; Rust port ({{P65}}); certification ({{P69}})            |
-| Speaker fit drifts while the person speaks                                          | Parameters frozen inside an utterance; stability criterion ({{P66}})                    |
-| Datasets and dictionaries with attribution or share-alike licences                  | Licence gate ({{P04}}); such data is fetched, never committed                           |
-| The Rust and JavaScript engines diverge                                             | Parity tests from the first port ({{P10}}); {{P70}}                                     |
-| Cross-origin isolation is missing on GitHub Pages                                   | Everything works without shared memory ({{P12}}, {{P15}})                               |
+| Risk                                                                                | Where it is handled                                                                                                                                                                                                                              |
+| ----------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| A physical synthesiser without networks may not reach the naturalness of neural TTS | Measured from the start ([#19](https://github.com/konard/voice-simulator/issues/19), [#20](https://github.com/konard/voice-simulator/issues/20)); reported honestly at the end ([#83](https://github.com/konard/voice-simulator/issues/83))      |
+| Inversion is not unique: many tract shapes give the same sound                      | Continuity constraint and speaker fit ([#65](https://github.com/konard/voice-simulator/issues/65)); rescoring by resynthesis ([#67](https://github.com/konard/voice-simulator/issues/67))                                                        |
+| Consonants carry little energy and decide the words                                 | Landmarks and consonant cues ([#62](https://github.com/konard/voice-simulator/issues/62), [#66](https://github.com/konard/voice-simulator/issues/66)); physical noise for templates ([#35](https://github.com/konard/voice-simulator/issues/35)) |
+| The simulator's own speech is easier than real speech                               | Round trip first ([#75](https://github.com/konard/voice-simulator/issues/75)), real recordings measured apart ([#76](https://github.com/konard/voice-simulator/issues/76))                                                                       |
+| Real time for recognition on one core at the lowest tier                            | Budget per stage in the issues; Rust port ([#77](https://github.com/konard/voice-simulator/issues/77)); certification ([#81](https://github.com/konard/voice-simulator/issues/81))                                                               |
+| Speaker fit drifts while the person speaks                                          | Parameters frozen inside an utterance; stability criterion ([#78](https://github.com/konard/voice-simulator/issues/78))                                                                                                                          |
+| Datasets and dictionaries with attribution or share-alike licences                  | Licence gate ([#16](https://github.com/konard/voice-simulator/issues/16)); such data is fetched, never committed                                                                                                                                 |
+| The Rust and JavaScript engines diverge                                             | Parity tests from the first port ([#22](https://github.com/konard/voice-simulator/issues/22)); [#82](https://github.com/konard/voice-simulator/issues/82)                                                                                        |
+| Cross-origin isolation is missing on GitHub Pages                                   | Everything works without shared memory ([#24](https://github.com/konard/voice-simulator/issues/24), [#27](https://github.com/konard/voice-simulator/issues/27))                                                                                  |
 
 ## What could not be verified
 
@@ -582,9 +582,9 @@ plan:
 - The two listening studies that set the order of the physics work were read
   as abstracts and summaries, not as full texts.
 - Speed-up figures for SIMD, threads and the 2D tier are estimates until
-  {{P11}}, {{P12}} and {{P25}} measure them.
+  [#23](https://github.com/konard/voice-simulator/issues/23), [#24](https://github.com/konard/voice-simulator/issues/24) and [#37](https://github.com/konard/voice-simulator/issues/37) measure them.
 - No accuracy figure exists for a recogniser of this design; the targets in the
   recognition issues are the first measurements to make, not promises.
 - Licences that were read from summaries and not from licence files are marked
-  in [research 1](research/1-similar-projects.md); {{P03}} and {{P04}} require
+  in [research 1](research/1-similar-projects.md); [#15](https://github.com/konard/voice-simulator/issues/15) and [#16](https://github.com/konard/voice-simulator/issues/16) require
   the licence file to be checked before anything is added.
