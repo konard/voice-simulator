@@ -6,7 +6,7 @@ zh ma: {"ipa":"ma","f0":[120,119,114,107,101]}
 zh 你好: {"ipa":"ni˧˥ xɑʊ˨˩˦","f0":[121,135,115,92,124]}
 zh 我很好: {"ipa":"wo˨˩ xən˧˥ xɑʊ˨˩˦","f0":[105,97,142,107,122]}
 zh 银行: {"ipa":"in˧˥ xɑŋ˧˥","f0":[125,148,118,136,144]}
-zh 花儿: {"ipa":"xwa˥ ɚ˧˥","f0":[156,155,140,131,145]}
+zh 花儿: {"ipa":"xwaɻ˥","f0":[156,156,155,156,156]}
 en: "ˈaɪ ˈɹɛd ðə ˈbʊk ˈjɛstɚˌdeɪ . ˈdɪd ˈju ɹəˈkɔɹd ðə ɹəˈkɔɹd ?"
 en: "ˈaɪ ˈlaɪv ˈhiɹ . ə ˈlaɪv ˈʃoʊ . ˈlɛd ˈpaɪp . ˈðeɪ ˈlɛd ."
 en: "ðə ˈwaɪnd ˈbloʊz . ˈwaɪnd ðə ˈklɑk ."
@@ -32,7 +32,7 @@ en Are you coming?: {"first":141,"last":140,"peakLoudness":1}
 en Where are you going?: {"first":141,"last":96,"peakLoudness":1}
 en Tea or coffee?: {"first":141,"last":143,"peakLoudness":1}
 rtf minimal: 0.05
-rtf low: 0.08
-rtf medium: 0.12
-rtf high: 1.14
-rtf ultra: 6.77
+rtf low: 0.1
+rtf medium: 0.15
+rtf high: 1.31
+rtf ultra: 7.36
