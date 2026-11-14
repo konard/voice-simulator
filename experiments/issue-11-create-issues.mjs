@@ -117,6 +117,17 @@ function parseList(value) {
   return inner ? inner.split(',').map((item) => item.trim()) : [];
 }
 
+/** The value of a YAML scalar that may be in single or double quotes. */
+export function unquote(value) {
+  if (/^'.*'$/u.test(value)) {
+    return value.slice(1, -1).replaceAll("''", "'");
+  }
+  if (/^".*"$/u.test(value)) {
+    return value.slice(1, -1).replaceAll('\\"', '"');
+  }
+  return value;
+}
+
 function parsePlanFile(file) {
   const text = readFileSync(join(PLAN, file), 'utf8');
   const match = /^---\n([\s\S]*?)\n---\n([\s\S]*)$/u.exec(text);
@@ -133,7 +144,7 @@ function parsePlanFile(file) {
   return {
     file,
     id: meta.id,
-    title: (meta.title ?? '').replace(/^"(.*)"$/u, '$1'),
+    title: unquote(meta.title ?? ''),
     type: meta.type,
     milestone: meta.milestone,
     blockedBy: parseList(meta.blocked_by ?? ''),
@@ -187,7 +198,22 @@ function validateBody(item) {
   if (!/- \[ \] /u.test(item.body)) {
     errors.push('no acceptance checklist');
   }
+  if (item.body.length > 60000) {
+    errors.push('body longer than 60000 characters (GitHub allows 65536)');
+  }
+  for (const name of bareMentions(item.body)) {
+    errors.push(`"@${name}" outside code would notify a GitHub account`);
+  }
   return errors;
+}
+
+/** Names that GitHub would read as a mention: `@name` outside code. */
+export function bareMentions(text) {
+  const prose = text
+    .replace(/^ *```[\s\S]*?^ *```/gmu, '')
+    .replace(/`[^`\n]*`/gu, '');
+  const found = prose.matchAll(/(?<![\w/.`-])@([A-Za-z\d][A-Za-z\d-]*)/gu);
+  return [...new Set([...found].map((match) => match[1]))];
 }
 
 /** Problems that would make the created issues wrong. */

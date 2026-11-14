@@ -120,7 +120,7 @@ Run `node experiments/issue-11-audit.mjs`; the output is
 | Lowest settings                      | `minimal` tier is 22.05 kHz; forcing 8, 11.025 and 16 kHz works and keeps the formants                           | Narrow-band tiers {{P14}}                                          |
 | Configuration                        | 33 head and voice parameters                                                                                     | Expanded configuration {{P29}}                                     |
 | Speed, one core of the audit machine | Real-time factor 0.05 (`minimal`), 0.10 (`low`), 0.14 (`medium`), 1.32 (`high`), 6.77 (`ultra`)                  | 1D is real time everywhere; 3D is not: Rust engine {{P09}}-{{P13}} |
-| Case-study folders of the template   | `docs/case-studies/issue-13`, `-21`, `-23` and 14 more belong to another repository and collide with new numbers | Bug {{P01}}                                                        |
+| Case-study folders of the template   | `docs/case-studies/issue-13`, `-21`, `-23` and 16 more belong to another repository and collide with new numbers | Bug {{P01}}                                                        |
 
 ## Analysis and solution per requirement
 
@@ -166,7 +166,10 @@ they are.
 **Today.** The engine is JavaScript in a Web Worker with one hand-written
 WebAssembly kernel for the 3D solver and an optional WebGPU path. It uses one
 core. The default tier `studio` is about 12 times slower than real time on a
-CPU.
+desktop CPU according to `README.md`. On the six-core machine used for this
+case study, which ran other work at the same time, it measured 14 to 18 times
+slower and the tier `reference` 30 to 39 times slower
+(`experiments/issue-11-audit-studio.mjs`).
 
 **Options.**
 
@@ -261,6 +264,29 @@ public-domain recordings with transcripts and IPA that is committed ({{P05}});
 larger sets downloaded only inside the manually triggered workflow ({{P64}});
 the first report against real speech ({{P07}}). The survey of datasets with
 their licences is [research 3](research/3-datasets.md).
+
+The first choice per language, all reachable without downloading a whole
+corpus:
+
+| Use                                                | English                                                                                              | Russian                                                  | Hindi                                            | Mandarin                                                                                                   |
+| -------------------------------------------------- | ---------------------------------------------------------------------------------------------------- | -------------------------------------------------------- | ------------------------------------------------ | ---------------------------------------------------------------------------------------------------------- |
+| Committed golden set (public domain or CC0)        | LibriVox "Aesop's Fables" with "The North Wind and the Sun"; ten LJ Speech clips; Lingua Libre words | LibriVox "Aesop's fables in Russian"; Lingua Libre words | A LibriVox Premchand reading; Lingua Libre words | LibriVox readings (the reader's dialect has to be confirmed); Lingua Libre single characters for the tones |
+| Downloaded in the manual workflow, never committed | LibriTTS-R dev-clean (CC BY 4.0)                                                                     | FLEURS `ru_ru`, SOVA RuDevices (both CC BY 4.0)          | FLEURS `hi_in` (CC BY 4.0)                       | AISHELL-3 test set (Apache-2.0), FLEURS `cmn_hans_cn`                                                      |
+| Emotions and modes, downloaded only                | CREMA-D (ODbL)                                                                                       | RESD (MIT)                                               | none found                                       | none found                                                                                                 |
+
+For all four languages the golden set also holds the isolated vowels of
+`All IPA Vowels.ogg` (CC0, Wikimedia Commons) and the sustained sounds of the
+Dresden Vocal Tract Dataset (CC0), which come with the measured shape of the
+vocal tract.
+
+Three findings shape the plan. No public-domain or CC0 corpus of whispered,
+shouted or emotional speech was found, so the committed golden set ({{P05}})
+holds none, and those modes are checked against sets that are only downloaded.
+Several well-known sets cannot be used the obvious way: Common Voice is CC0 but
+may not be re-hosted, most IPA samples on Wikipedia are CC BY-SA, and several
+Mandarin and emotion corpora are non-commercial or research-only. And LibriVox
+recordings are public domain in the USA, which the manifest of the golden set
+records per file.
 
 ### R9: the multi-pass algorithm
 

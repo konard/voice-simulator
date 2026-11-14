@@ -156,7 +156,7 @@ component.
 | P01 | Bug     | M0        | Template case studies occupy `docs/case-studies/issue-N` folders               |                                   |
 | P02 | Feature | M0        | Manually triggered workflow for expensive checks                               |                                   |
 | P03 | Feature | M0        | Policy check: no neural networks, permissive licences only                     |                                   |
-| P04 | Feature | M0        | Speech dataset registry and fetcher with checksums and a licence gate          | P03                               |
+| P04 | Feature | M0        | Speech dataset registry and fetcher with checksums and a licence gate          | P02, P03                          |
 | P05 | Feature | M0        | Golden set of public-domain recordings with transcripts and IPA                | P04                               |
 | P06 | Feature | M0        | Objective speech metrics and a `compare` command                               |                                   |
 | P07 | Feature | M0        | Baseline quality report against real recordings                                | P02, P05, P06                     |
