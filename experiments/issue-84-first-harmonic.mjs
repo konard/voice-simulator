@@ -6,7 +6,8 @@
  * H1(vowel) / RMS(vowel) unless the vowel's own spectrum changes.
  * The first harmonic is taken by projecting the 30 ms window (the same one
  * as the ratio of the issue) on a sine and cosine at the local f0, found as
- * the strongest component between 70 and 300 Hz.
+ * the strongest component between 70 and 300 Hz. A1 is the strongest
+ * harmonic between 400 and 1000 Hz (F1 of [a]).
  *
  *   node experiments/issue-84-first-harmonic.mjs '{"nasalLoss":3}' medium high
  */
@@ -53,7 +54,14 @@ export function firstHarmonic(tier, head = {}) {
         best = [frequency, level];
       }
     }
-    result[kind] = { rms, f0: best[0], h1: best[1] };
+    // A1: the strongest harmonic in the F1 range of [a].
+    let a1 = 0;
+    for (let k = 2; k * best[0] <= 1000; k++) {
+      if (k * best[0] >= 400) {
+        a1 = Math.max(a1, component(values, sampleRate, k * best[0]));
+      }
+    }
+    result[kind] = { rms, f0: best[0], h1: best[1], a1 };
   }
   const { vowel, consonant } = result;
   return {
@@ -66,6 +74,10 @@ export function firstHarmonic(tier, head = {}) {
     ratio: consonant.rms / vowel.rms,
     floor: consonant.h1 / vowel.rms,
     h1Share: vowel.h1 / vowel.rms,
+    // H1 - A1 of the vowel (dB); real [a] has A1 above H1 (negative).
+    vowelH1A1: 20 * Math.log10(vowel.h1 / vowel.a1),
+    // Murmur H1 against vowel H1 (dB).
+    nasalH1dB: 20 * Math.log10(consonant.h1 / vowel.h1),
   };
 }
 

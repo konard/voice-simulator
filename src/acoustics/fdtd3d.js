@@ -45,11 +45,13 @@
  * calls work on any solver.
  */
 
+import { DEFAULT_HEAD } from '../head-config.js';
 import { LOSS_REFERENCE_SECTIONS, lossFactor } from './waveguide.js';
 import { SPEED_OF_SOUND } from './transfer.js';
 import { glottalReflection } from './glottis.js';
 import {
   CELL_AIR,
+  CELL_NOSE,
   CELL_SINUS,
   CELL_TRACT,
   LINK_INNER,
@@ -261,6 +263,8 @@ export class Fdtd3d {
     const listening = Boolean(options.microphone || model.enclosure);
     this.output = options.output ?? (listening ? 'microphone' : 'flow');
     this.wallLoss = options.head?.wallLoss ?? 1;
+    // The nasal walls are folded: more wall per area than a round tube.
+    this.nasalLoss = options.head?.nasalLoss ?? DEFAULT_HEAD.nasalLoss;
     /** Glottis termination admittance (the waveguide's reflection). */
     const reflection = glottalReflection(options.head);
     this.glottisAdmittance = (1 - reflection) / (1 + reflection);
@@ -519,7 +523,7 @@ export class Fdtd3d {
       }
     }
     this.tubeLinks = Int32Array.from(tubeLinks);
-    this.tubeCells = [CELL_TRACT, 1].map((kind) => {
+    this.tubeCells = [CELL_TRACT, CELL_NOSE].map((kind) => {
       const cells = [];
       for (let index = 0; index < cellCount; index++) {
         if (this.cellKind[index] === kind) {
@@ -740,7 +744,8 @@ export class Fdtd3d {
     const exponent =
       (SPEED_OF_SOUND * this.dt * LOSS_REFERENCE_SECTIONS) /
       this.model.lengths[CELL_TRACT];
-    const { fill, effective: envelope, linkA, linkB, cellKind, solid } = this;
+    const { fill, effective: envelope, linkA, linkB, linkKind } = this;
+    const { cellKind, solid } = this;
     const { from, to } = this.#linkSpans();
     for (const link of this.tubeLinks) {
       const a = linkA[link];
@@ -769,14 +774,18 @@ export class Fdtd3d {
         area = Math.min(area, narrowest);
       }
       // Each cell holds half of the link: two inertances in series, so
-      // the link opens by the harmonic mean of the two fills.
-      this.conductance[link] = Math.max(
-        0,
-        (2 * fillA * fillB) / Math.max(fillA + fillB, 1e-12)
-      );
-      this.damping[link] =
-        Math.max(0, lossFactor(area, this.wallLoss)) ** exponent;
+      // the link opens by the harmonic mean of the two fills. The opening
+      // of the lips and nostrils into the free air is the tube's own
+      // cross-section.
+      this.conductance[link] =
+        linkKind[link] === LINK_LIPS || linkKind[link] === LINK_NOSTRILS
+          ? Math.max(0, Math.min(fillA, fillB))
+          : Math.max(0, (2 * fillA * fillB) / Math.max(fillA + fillB, 1e-12));
+      const nasal = cellKind[a] === CELL_NOSE || cellKind[b] === CELL_NOSE;
+      const wallLoss = nasal ? this.wallLoss * this.nasalLoss : this.wallLoss;
+      this.damping[link] = Math.max(0, lossFactor(area, wallLoss)) ** exponent;
     }
+    this.#scaleOpenings();
     const portArea = this.velumLinks.length * this.dx * this.dx;
     const open = Math.min(1, this.velumArea / Math.max(portArea, 1e-9));
     for (const link of this.velumLinks) {
@@ -785,6 +794,29 @@ export class Fdtd3d {
         this.conductance[link] = 0;
         this.velocity[link] = 0;
       }
+    }
+  }
+
+  /**
+   * Lips and nostrils open by the end area of their tube at any grid size:
+   * the cubes at a tilted or partly covered end leave more or fewer faces
+   * to the free air than the cross-section holds, so scale the opening
+   * links of each tube until their conductances add up to that area.
+   */
+  #scaleOpenings() {
+    const { outputLinks, conductance, linkKind, dx } = this;
+    const totals = [0, 0];
+    for (const link of outputLinks) {
+      totals[linkKind[link] === LINK_LIPS ? 0 : 1] +=
+        conductance[link] * dx * dx;
+    }
+    const scales = [CELL_TRACT, CELL_NOSE].map((kind, position) => {
+      const area = this.tubeAreas[kind]?.at(-1) ?? 0;
+      return area / Math.max(totals[position], 1e-12);
+    });
+    for (const link of outputLinks) {
+      const scale = scales[linkKind[link] === LINK_LIPS ? 0 : 1];
+      conductance[link] = Math.min(1, conductance[link] * scale);
     }
   }
 
