@@ -189,6 +189,14 @@ describe('heavy test helpers', () => {
   });
 });
 
+// Windows checkouts may have CRLF line endings.
+function readWorkflow() {
+  return readFileSync('.github/workflows/heavy.yml', 'utf8').replace(
+    /\r\n/g,
+    '\n'
+  );
+}
+
 describe('heavy test isolation', () => {
   it('keeps heavy tests out of the regular runs', () => {
     expect(readFileSync('bunfig.toml', 'utf8')).toContain('tests/heavy/**');
@@ -201,7 +209,7 @@ describe('heavy test isolation', () => {
   });
 
   it('starts the heavy workflow only by hand', () => {
-    const workflow = readFileSync('.github/workflows/heavy.yml', 'utf8');
+    const workflow = readWorkflow();
     const triggers = workflow.slice(
       workflow.indexOf('\non:\n'),
       workflow.indexOf('\npermissions:\n')
@@ -216,7 +224,7 @@ describe('heavy test isolation', () => {
   // The step budget owns the deadline (docs/CI-TIMEOUT-BUDGETS.md): it must
   // expire with room for checkout, install and upload before the job cap.
   it('lets the heavy step budget expire before the job backstop', () => {
-    const workflow = readFileSync('.github/workflows/heavy.yml', 'utf8');
+    const workflow = readWorkflow();
     const budget = Number(
       workflow.match(/run-with-budget-warning\.sh (\d+) "Heavy checks"/)[1]
     );
