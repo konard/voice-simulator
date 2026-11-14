@@ -383,7 +383,10 @@ jobs:
       - name: Run tests (Deno)
         if: matrix.runtime == 'deno'
         shell: bash
-        run: bash scripts/run-with-budget-warning.sh 100 "Deno test suite" deno test -A --parallel
+        # 200s, as for Bun: on windows-2025 the suite took 93-94s on main
+        # after #90 and 101-103s on PR #91, mostly in tests that spawn git
+        # and shell fixtures, so 100s left no room for runner variance.
+        run: bash scripts/run-with-budget-warning.sh 200 "Deno test suite" deno test -A --parallel
 
   # === DOCKER IMAGE BUILD CHECK (pull requests) ===
   # Builds the Dockerfile without pushing so a broken image fails the pull

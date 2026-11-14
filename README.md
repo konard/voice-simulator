@@ -25,6 +25,8 @@ a pressure wave travelling through the 3D shape of a parametric low-poly head
   question words fall wherever they stand, and sentence-initial क्या is
   read as the yes/no particle (`क्या तुम आओगे?` rises) unless the next word
   makes it mean "what" (`क्या हुआ?` falls).
+- **Lexical tones**: every level of a tone written with Chao tone letters is
+  a pitch target, so the Mandarin third tone `˨˩˦` dips before it rises.
 - **Word and syllable timeline**: `utteranceTimeline` (also in
   `synthesize`) tells when every word and syllable is spoken; the app
   highlights the current word and syllable in the text and the IPA.

@@ -9,6 +9,9 @@ import {
   BOUNDARIES,
   intonationPhrases,
   phraseContour,
+  pitchTargets,
+  TONE_POINT_POSITIONS,
+  tonePitch,
 } from '../src/articulation/prosody.js';
 import { textToIpa } from '../src/g2p/index.js';
 import { normalizeHeadConfig } from '../src/head-config.js';
@@ -165,5 +168,41 @@ describe('punctuation intonation', () => {
   it('keeps Mandarin tones and still reads the punctuation pauses', () => {
     const utterance = plan('你好，世界。', 'zh');
     expect(pauses(utterance)[0].boundary).toBe('comma');
+  });
+});
+
+describe('lexical tones', () => {
+  it('returns one pitch target per tone level', () => {
+    const utterance = planUtterance('ma˨˩˦', { head: HEAD, language: 'zh' });
+    const [target] = pitchTargets(utterance.segments, HEAD);
+    expect(target.points.length).toBe(3);
+    expect(Math.min(...target.points)).toBe(target.points[1]);
+    expect(target.from).toBe(target.points[0]);
+    expect(target.to).toBe(target.points[2]);
+  });
+
+  it('turns every tone level into a pitch around the base', () => {
+    const pitches = tonePitch([2, 1, 4], 100, 2);
+    expect(pitches.map((pitch) => Math.round(pitch * 10) / 10)).toEqual([
+      89.1, 79.4, 112.2,
+    ]);
+  });
+
+  it('keeps a single tone level level', () => {
+    expect(tonePitch([5], 100, 2)).toEqual([
+      100 * 2 ** (4 / 12),
+      100 * 2 ** (4 / 12),
+    ]);
+  });
+
+  it('places the low point of a three-level tone before the middle', () => {
+    expect(TONE_POINT_POSITIONS[3]).toEqual([0, 0.4, 1]);
+  });
+
+  it('keeps two pitch targets for syllables without a tone', () => {
+    const utterance = planUtterance('ˈmama', { head: HEAD, language: 'en' });
+    for (const target of pitchTargets(utterance.segments, HEAD)) {
+      expect(target.points).toEqual([target.from, target.to]);
+    }
   });
 });
