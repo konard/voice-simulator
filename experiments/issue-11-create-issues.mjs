@@ -40,6 +40,7 @@ import {
 } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { format } from 'prettier';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const CASE = join(ROOT, 'docs/case-studies/issue-11');
@@ -109,7 +110,7 @@ const RULES = (repo) => `## Rules for every roadmap issue
 - Same input, seed and options must give the same samples on Node.js, Bun and Deno. Take randomness only from \`src/random.js\`.
 - Add tests in \`tests/\` that fail before the change and pass after it. Tests that need more than about 10 seconds or a download run only in the manually triggered workflow.
 - Keep every source and Markdown file under 1500 lines, run \`npm run check\` and \`npm test\`, and add a changeset (\`npm run changeset\`) when code changes.
-- Update \`README.md\`, \`src/index.d.ts\`, the command line help and \`docs/ROADMAP.md\` when behaviour or the public API changes. Put experiment scripts in \`experiments/\` and name them after this issue's number.
+- Update \`README.md\`, \`src/index.d.ts\`, the command line help and \`docs/ROADMAP.md\` when behaviour or the public API changes. Put experiment scripts in \`experiments/\` and name them after this issue's number unless the issue gives a file name.
 - Report measured numbers with the command that produced them. Do not write a claim that was not measured.`;
 
 function parseList(value) {
@@ -204,14 +205,26 @@ function validateBody(item) {
   for (const name of bareMentions(item.body)) {
     errors.push(`"@${name}" outside code would notify a GitHub account`);
   }
+  for (const number of bareIssueNumbers(item.body)) {
+    errors.push(`"#${number}" outside code would link to another issue`);
+  }
   return errors;
+}
+
+/** The text without fenced code blocks and inline code. */
+function proseOf(text) {
+  return text.replace(/^ *```[\s\S]*?^ *```/gmu, '').replace(/`[^`\n]*`/gu, '');
+}
+
+/** Numbers that GitHub would turn into a link to an issue: `#12` in prose. */
+export function bareIssueNumbers(text) {
+  const found = proseOf(text).matchAll(/(?<![&\w/#])#(\d+)\b/gu);
+  return [...new Set([...found].map((match) => match[1]))];
 }
 
 /** Names that GitHub would read as a mention: `@name` outside code. */
 export function bareMentions(text) {
-  const prose = text
-    .replace(/^ *```[\s\S]*?^ *```/gmu, '')
-    .replace(/`[^`\n]*`/gu, '');
+  const prose = proseOf(text);
   const found = prose.matchAll(/(?<![\w/.`-])@([A-Za-z\d][A-Za-z\d-]*)/gu);
   return [...new Set([...found].map((match) => match[1]))];
 }
@@ -381,8 +394,31 @@ function nextIssueNumber(repo) {
   return (latest?.number ?? 0) + 1;
 }
 
+/**
+ * Plan files are wrapped at 80 columns for reading in an editor. GitHub
+ * shows every line end of an issue body as a line break, so the paragraphs
+ * are joined into one line each before a body is sent. Only white space
+ * and the width of table rules change; that is checked.
+ */
+export async function unwrapBodies(plan) {
+  // Table rules shrink to three dashes; nothing else may differ.
+  const bare = (text) => text.replace(/\s+/gu, '').replace(/-{3,}/gu, '---');
+  for (const item of plan) {
+    const joined = await format(item.body, {
+      parser: 'markdown',
+      proseWrap: 'never',
+      embeddedLanguageFormatting: 'off',
+    });
+    if (bare(joined) !== bare(item.body)) {
+      throw new Error(`${item.id}: joining the lines changed the text`);
+    }
+    item.body = joined.trim();
+  }
+  return plan;
+}
+
 async function create(repo) {
-  const plan = loadPlan();
+  const plan = await unwrapBodies(loadPlan());
   const errors = validate(plan);
   if (errors.length) {
     throw new Error(errors.join('\n'));
@@ -451,7 +487,7 @@ async function create(repo) {
       );
       state.dependencies.push(key);
       writeState(state);
-      await sleep(800);
+      await sleep(1500);
     }
   }
   console.log(
@@ -466,8 +502,8 @@ function numbersFromState() {
   );
 }
 
-function render(directory) {
-  const plan = loadPlan();
+async function render(directory) {
+  const plan = await unwrapBodies(loadPlan());
   const numbers = numbersFromState();
   mkdirSync(directory, { recursive: true });
   for (const item of plan) {
@@ -594,7 +630,7 @@ const repo = repoFlag >= 0 ? rest[repoFlag + 1] : DEFAULT_REPO;
 if (command === 'check') {
   check();
 } else if (command === 'render') {
-  render(rest[0] ?? join(CASE, 'data/rendered-issues'));
+  await render(rest[0] ?? join(CASE, 'data/rendered-issues'));
 } else if (command === 'create') {
   await create(repo);
 } else if (command === 'roadmap') {
