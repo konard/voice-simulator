@@ -19,7 +19,10 @@ a pressure wave travelling through the 3D shape of a parametric low-poly head
 - **Punctuation prosody**: commas, semicolons, dashes, parentheses, quotes,
   periods, exclamations, questions and ellipses each have their own pause,
   final pitch movement and lengthening; questions with a question word
-  fall, yes/no questions rise, exclamations are higher and louder.
+  fall, yes/no questions rise, exclamations are higher and louder. Hindi
+  question words fall wherever they stand, and sentence-initial क्या is
+  read as the yes/no particle (`क्या तुम आओगे?` rises) unless the next word
+  makes it mean "what" (`क्या हुआ?` falls).
 - **Word and syllable timeline**: `utteranceTimeline` (also in
   `synthesize`) tells when every word and syllable is spoken; the app
   highlights the current word and syllable in the text and the IPA.

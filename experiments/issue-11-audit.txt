@@ -6,14 +6,14 @@ zh ma: {"ipa":"ma","f0":[120,118,104,99,99]}
 zh 你好: {"ipa":"ni˧˥ xɑʊ˨˩˦","f0":[120,143,114,122,126]}
 zh 我很好: {"ipa":"wo˨˩ xən˧˥ xɑʊ˨˩˦","f0":[105,103,130,109,125]}
 zh 银行: {"ipa":"in˧˥ xɑŋ˧˥","f0":[121,146,120,144,144]}
-zh 花儿: {"ipa":"xwa˥ ɚ˧˥","f0":[156,156,134,146,148]}
+zh 花儿: {"ipa":"xwaɻ˥","f0":[156,156,155,155,156]}
 en: "ˈaɪ ˈɹɛd ðə ˈbʊk ˈjɛstɚˌdeɪ . ˈdɪd ˈju ɹəˈkɔɹd ðə ɹəˈkɔɹd ?"
 en: "ˈaɪ ˈlaɪv ˈhiɹ . ə ˈlaɪv ˈʃoʊ . ˈlɛd ˈpaɪp . ˈðeɪ ˈlɛd ."
 en: "ðə ˈwaɪnd ˈbloʊz . ˈwaɪnd ðə ˈklɑk ."
 ru: "ˈzamək na ˈzamkʲə . ja xɐˈt͡ɕu bɐlʲˈʂɨjə ɡɐˈrodə ."
 ru: "ja ˈvʲiʐʊ ˈstrʲeɫkʲɪ ˈt͡ɕasəf . ˈbʲeɫkʲɪ ˈjedʲɪt ɐˈrʲexʲɪ . ˈsorək ˈsorək ."
-hi: "nəməst̪eː , aːp kɛːseː ɦɛ̃ː ?"
-hi: "kjaː t̪ʊm aːoːɡeː ↘ ?"
+hi: "nəməst̪eː , aːp kɛːseː ɦɛ̃ː ↘ ?"
+hi: "kjaː t̪ʊm aːoːɡeː ?"
 tiers: ["minimal@22050","low@32000","medium@48000","high@48000","ultra@48000","studio@48000","reference@48000"]
 minimal@8000: {"rate":8000,"f0":122,"formants":[510,1445,2395,3175]}
 minimal@11025: {"rate":11025,"f0":122,"formants":[500,1465,2475,3783]}

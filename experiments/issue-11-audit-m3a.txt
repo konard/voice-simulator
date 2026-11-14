@@ -25,16 +25,16 @@ en: "ðə ˈɑbd͡ʒɛkt ˈɪz ˈɹɛd . ˈaɪ ˈɑbd͡ʒɛkt ˈtu ˈðæt ."
 en: "ðə ˈdoʊv ˈflu . ˈhi ˈdoʊv ɪn ."
 en: "ə ˈmɪnət əˈɡoʊ . ə ˈmɪnət dɪˈteɪl ."
 en: "ðə ˈbæs ɡɪˈtɑɹ . ə ˈbæs ˈswæm ˈbaɪ ."
-hi क्या तुम आओगे?: {"ipa":"kjaː t̪ʊm aːoːɡeː ↘ ?","lastVowelStart":108,"lastVowelEnd":92}
+hi क्या तुम आओगे?: {"ipa":"kjaː t̪ʊm aːoːɡeː ?","lastVowelStart":114,"lastVowelEnd":147}
 hi तुम आओगे?: {"ipa":"t̪ʊm aːoːɡeː ?","lastVowelStart":116,"lastVowelEnd":148}
 hi तुम क्या खाओगे?: {"ipa":"t̪ʊm kjaː kʰaːoːɡeː ↘ ?","lastVowelStart":107,"lastVowelEnd":92}
 hi यह क्या है?: {"ipa":"jəɦ kjaː ɦɛː ↘ ?","lastVowelStart":108,"lastVowelEnd":93}
 hi क्या हुआ?: {"ipa":"kjaː ɦʊaː ↘ ?","lastVowelStart":110,"lastVowelEnd":94}
 hi क्या बात है?: {"ipa":"kjaː baːt̪ ɦɛː ↘ ?","lastVowelStart":108,"lastVowelEnd":93}
-hi क्या आप ठीक हैं?: {"ipa":"kjaː aːp ʈʰiːk ɦɛ̃ː ↘ ?","lastVowelStart":107,"lastVowelEnd":92}
+hi क्या आप ठीक हैं?: {"ipa":"kjaː aːp ʈʰiːk ɦɛ̃ː ?","lastVowelStart":114,"lastVowelEnd":146}
 hi आप कहाँ जा रहे हैं?: {"ipa":"aːp kəɦãː d͡ʒaː ɾəɦeː ɦɛ̃ː ↘ ?","lastVowelStart":106,"lastVowelEnd":91}
-hi आप कल कहाँ जा रहे हैं?: {"ipa":"aːp kəl kəɦãː d͡ʒaː ɾəɦeː ɦɛ̃ː ?","lastVowelStart":113,"lastVowelEnd":145}
-hi तुम्हारा नाम क्या है?: {"ipa":"t̪ʊmɦaːɾaː naːm kjaː ɦɛː ?","lastVowelStart":114,"lastVowelEnd":145}
+hi आप कल कहाँ जा रहे हैं?: {"ipa":"aːp kəl kəɦãː d͡ʒaː ɾəɦeː ɦɛ̃ː ↘ ?","lastVowelStart":106,"lastVowelEnd":91}
+hi तुम्हारा नाम क्या है?: {"ipa":"t̪ʊmɦaːɾaː naːm kjaː ɦɛː ↘ ?","lastVowelStart":107,"lastVowelEnd":91}
 highlight en: [{"text":"I","ipa":"ˈaɪ","syllables":["I"]},{"text":"have","ipa":"ˈhæv","syllables":["have"]},{"text":"25","ipa":"ˈtwɛnti ˈfaɪv","syllables":[null,null,null]},{"text":"apples","ipa":"ˈæpəlz","syllables":["ap","ples"]},{"text":"on","ipa":"ˈɑn","syllables":["on"]},{"text":"3/4/2024","ipa":"ˈmɑɹt͡ʃ ˈfɔɹθ ˈtwɛnti ˈtwɛnti ˈfɔɹ","syllables":[null,null,null,null,null,null,null]}]
 highlight en: [{"text":"It","ipa":"ˈɪt","syllables":["It"]},{"text":"costs","ipa":"ˈkɑsts","syllables":["costs"]},{"text":"$5","ipa":"ˈfaɪv ˈdɑlɚz","syllables":[null,null,null]},{"text":"at","ipa":"ˈæt","syllables":["at"]},{"text":"3:30","ipa":"ˈθɹi ˈθɝˌdi","syllables":[null,null,null]}]
 highlight ru: [{"text":"У","ipa":"u","syllables":["У"]},{"text":"меня","ipa":"mʲɪˈnʲa","syllables":["ме","ня"]},{"text":"25","ipa":"ˈdvat͡sətʲ pʲatʲ","syllables":[null,null,null]},{"text":"яблок","ipa":"ˈjabɫək","syllables":["я","блок"]}]
