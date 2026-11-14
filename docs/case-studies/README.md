@@ -8,7 +8,10 @@ The template repository is
 [link-foundation/js-ai-driven-development-pipeline-template](https://github.com/link-foundation/js-ai-driven-development-pipeline-template).
 Its case studies were moved from `issue-N` to `template-issue-N` in
 [issue 13](https://github.com/konard/voice-simulator/issues/13) so that the
-names `issue-N` are free for the issues of this repository.
+names `issue-N` are free for the issues of this repository. The content of the
+moved files was not changed, so a path such as `docs/case-studies/issue-3/`
+written inside a `template-issue-N` folder means a folder of the template
+repository (or of the repository the study quotes), not a folder of this one.
 
 Every issue of this repository collects its data and analysis in
 `docs/case-studies/issue-N`, where N is the number of the issue. Add a row to
