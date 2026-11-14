@@ -5,8 +5,8 @@
  * A proclitic (`в`, `из`, `на`, `не` ...) is read as the first syllables of
  * the next word: its vowel is reduced as in a syllable right before the
  * stressed one or farther from it, and its last consonant takes the
- * voicing of the sound that follows (`из дома` ɪz ˈdomə, `с братом` z ˈbratəm, `на работе`
- * nə rɐˈbotʲə). An enclitic (`же`, `ли`, `бы`) is read as the last
+ * voicing of the sound that follows (`из дома` ɪz ˈdomə, `с братом`
+ * z ˈbratəm, `на работе` nə rɐˈbotʲə). An enclitic (`же`, `ли`, `бы`) is read as the last
  * syllable of the word before; `же` and `бы` voice its last consonant
  * (`как же` kaɡ ʐɨ). Every written word stays one item, so highlighting
  * does not change.
@@ -82,11 +82,13 @@ const VOICELESS_START = /^[pfktsʂxɕ]/u;
 const VOICED_START = /^[bɡdzʐ]/u;
 const VOWEL = /[aeiouɨəɐɪʊɛɔ]/gu;
 const HARD_END = /[^aeiouɨəɐɪʊɛɔʲ]$/u;
-const STRESS_MARK = /\+|́/u;
+const STRESS_MARK = /\+|\u0301/u;
+const TIE_BAR = '\u0361';
 
 /**
  * Change the voicing of the last consonant of `ipa` by `table`
- * (`DEVOICE` or `VOICE`), keeping a palatal mark `ʲ` after it.
+ * (`DEVOICE` or `VOICE`), keeping a palatal mark `ʲ` after it. The second
+ * half of an affricate (`s` of t͡s) is left alone.
  * @param {string} ipa
  * @param {Record<string, string>} table
  * @returns {string}
@@ -95,7 +97,10 @@ export function setFinalVoicing(ipa, table) {
   const mark = ipa.endsWith('ʲ') ? 'ʲ' : '';
   const body = mark ? ipa.slice(0, -1) : ipa;
   const last = body.at(-1);
-  return table[last] ? `${body.slice(0, -1)}${table[last]}${mark}` : ipa;
+  if (!table[last] || body.at(-2) === TIE_BAR) {
+    return ipa;
+  }
+  return `${body.slice(0, -1)}${table[last]}${mark}`;
 }
 
 /**
@@ -140,7 +145,7 @@ function joinPhrase(phrase) {
     const item = phrase[index];
     const next = phrase[index + 1];
     const previous = phrase[index - 1];
-    if (isProclitic(item) && next?.lang === 'ru') {
+    if (isProclitic(item) && next?.lang === 'ru' && next.ipa) {
       item.ipa = procliticIpa(item, next);
       clitics.add(item);
       if (HARD_END.test(item.ipa) && !clitics.has(next)) {
