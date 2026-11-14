@@ -4,8 +4,12 @@
 // noise, 120 Hz, tenseness 0.6, 48 kHz, 1 s) for breathiness 0.2, 0.5, 1.
 // The noise gain is linear in the gain, so the level for any gain follows
 // from the level measured with gain 1.
-// Run: node experiments/issue-32-breath-tuning.mjs
-import { Glottis, BREATH_GAIN } from '../src/acoustics/glottis.js';
+// Run: node experiments/issue-32-breath-tuning.mjs > experiments/issue-32-breath-tuning.txt
+import {
+  Glottis,
+  BREATH_GAIN,
+  BREATH_EXPONENT,
+} from '../src/acoustics/glottis.js';
 import { Biquad, createNoise } from '../src/acoustics/filters.js';
 
 const RATE = 48000;
@@ -36,7 +40,7 @@ const points = [0.2, 0.5, 1];
 // Noise RMS per unit of breath gain (independent of the constants).
 const measured = points.map((breathiness) => {
   const { pulses, noise } = levels(breathiness);
-  const gain = BREATH_GAIN * breathiness ** Number(process.env.EXPONENT ?? 0);
+  const gain = BREATH_GAIN * breathiness ** BREATH_EXPONENT;
   return { breathiness, pulses, unitNoise: noise / gain };
 });
 console.log(

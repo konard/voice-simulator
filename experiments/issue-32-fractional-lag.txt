@@ -1,0 +1,12 @@
+breathiness 0
+  t 0.10 s f0 114.7 slope -83: integer lag 21.4 dB, fractional lag 32.9 dB
+  t 0.13 s f0 112.2 slope -90: integer lag 26.5 dB, fractional lag 30.9 dB
+  t 0.16 s f0 109.7 slope -91: integer lag 27.8 dB, fractional lag 30.8 dB
+  t 0.19 s f0 107.1 slope -81: integer lag 19.6 dB, fractional lag 31.4 dB
+  t 0.22 s f0 104.7 slope -77: integer lag 28.2 dB, fractional lag 30.6 dB
+breathiness 0.25
+  t 0.10 s f0 114.7 slope -83: integer lag 23.0 dB, fractional lag 30.3 dB
+  t 0.13 s f0 112.2 slope -87: integer lag 26.2 dB, fractional lag 28.6 dB
+  t 0.16 s f0 109.7 slope -88: integer lag 27.7 dB, fractional lag 29.1 dB
+  t 0.19 s f0 107.1 slope -84: integer lag 21.4 dB, fractional lag 29.6 dB
+  t 0.22 s f0 104.7 slope -77: integer lag 26.2 dB, fractional lag 26.6 dB
