@@ -18,7 +18,7 @@ ru Ты придёшь?: {"ipa":"tɨ prʲɪˈdʲoʂ ?","first":120,"last":150,"m
 ru Кто пришёл?: {"ipa":"kto prʲɪˈʂoɫ ↘ ?","first":120,"last":96,"mean":114,"peakLoudness":1}
 hi तुम आओगे।: {"ipa":"t̪ʊm aːoːɡeː .","first":120,"last":93,"mean":111,"peakLoudness":1}
 hi तुम आओगे?: {"ipa":"t̪ʊm aːoːɡeː ?","first":120,"last":148,"mean":122,"peakLoudness":1}
-hi क्या तुम आओगे?: {"ipa":"kjaː t̪ʊm aːoːɡeː ↘ ?","first":120,"last":92,"mean":111,"peakLoudness":1}
+hi क्या तुम आओगे?: {"ipa":"kjaː t̪ʊm aːoːɡeː ?","first":120,"last":147,"mean":120,"peakLoudness":1}
 zh 你来。: {"ipa":"ni˨˩ laɪ˧˥ .","first":102,"last":140,"mean":116,"peakLoudness":1}
 zh 你来？: {"ipa":"ni˨˩ laɪ˧˥ ?","first":102,"last":140,"mean":116,"peakLoudness":1}
 zh 你来吗？: {"ipa":"ni˨˩ laɪ˧˥ ma ?","first":102,"last":145,"mean":120,"peakLoudness":1}

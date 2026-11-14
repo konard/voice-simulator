@@ -85,6 +85,14 @@ describe('punctuation intonation', () => {
     expect(Math.abs(wh - statement) / statement < 0.05).toBe(true);
   });
 
+  it('ends a Hindi particle question high', () => {
+    const utterance = plan('क्या तुम आओगे?', 'hi');
+    const last = vowels(utterance).at(-1);
+    const start = f0At(utterance, last.start + 0.02);
+    const end = f0At(utterance, last.end - 0.02);
+    expect(end >= start * 1.15).toBe(true);
+  });
+
   it('keeps the pitch up before a comma', () => {
     const comma = plan('Red, green.');
     const firstEnd = f0At(comma, vowels(comma)[0].end - 0.01);

@@ -124,9 +124,52 @@ const SYMBOLS = {
   '°': ['डिग्री'],
 };
 
-const WH_WORDS = new Set(
-  'क्या कौन कहाँ कब क्यों कैसे कितना कितने कितनी किसका किसकी किसके'.split(' ')
-);
+/**
+ * Question words that make a question fall at the end. क्या is not here:
+ * at the start of a sentence it is the yes/no particle (see
+ * `questionFalls`).
+ */
+const WH_WORDS = new Set([
+  ...'कौन कहाँ कब क्यों कैसे कैसा कैसी कितना कितने कितनी'.split(' '),
+  ...'किसका किसकी किसके किस किसे किसको किसने किन किधर कौनसा कौनसी'.split(' '),
+]);
+
+/** Polar-question particle when it opens a sentence. */
+export const POLAR_PARTICLE = 'क्या';
+
+/** After sentence-initial क्या these words make it mean "what". */
+export const KYA_WHAT_NEXT = new Set([
+  ...'है हैं था थी थे हुआ हुई हुए हो होगा होगी बात हाल'.split(' '),
+  ...'मतलब चाहिए करूँ करें करना किया कहा कहूँ'.split(' '),
+]);
+
+/**
+ * Whether a Hindi question falls at the end (`true`) or rises (`false`).
+ * Hindi keeps the question word where the answer would stand, so it is
+ * looked for anywhere in the sentence. क्या opening a sentence is the
+ * yes/no particle (`क्या तुम आओगे?` rises) unless the next word shows it
+ * means "what" (`क्या हुआ?`, `क्या बात है?` fall); क्या anywhere else
+ * means "what" (`तुम क्या खाओगे?` falls).
+ *
+ * Known limit: a two-word question such as `क्या आओगे?` ("Will you
+ * come?", subject left out) is read as a "what" question and falls. Until
+ * sentence types can be marked by hand (issue 50), IPA input with `↗` is
+ * the only way around it.
+ * @param {string[]} words lower-cased word texts of one sentence
+ * @returns {boolean}
+ */
+export function questionFalls(words) {
+  if (words.some((word) => WH_WORDS.has(word))) {
+    return true;
+  }
+  if (words.indexOf(POLAR_PARTICLE, 1) !== -1) {
+    return true;
+  }
+  if (words[0] === POLAR_PARTICLE) {
+    return words.length === 2 || KYA_WHAT_NEXT.has(words[1]);
+  }
+  return false;
+}
 
 /** Hindi text normalisation rules. */
 export const HINDI = {
@@ -200,5 +243,6 @@ export const HINDI = {
   endsSentence: () => false,
   acronym: () => null,
   spell: () => [],
-  isWhWord: (text) => WH_WORDS.has(text),
+  isWhWord: (text) => text === POLAR_PARTICLE || WH_WORDS.has(text),
+  questionFalls,
 };
