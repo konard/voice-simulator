@@ -7,6 +7,7 @@ import { describe, it, expect } from 'test-anywhere';
 import { prepareUtterance } from '../src/synthesize.js';
 import { timelineAt, utteranceTimeline } from '../src/articulation/timeline.js';
 import { hindiAksharas, syllableSpans } from '../src/g2p/orthography.js';
+import { runCli } from '../bin/voice-simulator.js';
 
 const timeline = (text, options) => prepareUtterance(text, options).timeline;
 
@@ -226,6 +227,19 @@ describe('spoken words of verbalised text', () => {
       );
       expect(word.syllables.some((s) => 'spoken' in s)).toBe(false);
     }
+  });
+
+  it('prints the spoken words in the CLI', async () => {
+    const stdout = [];
+    const code = await runCli(['timeline', '-l', 'en', 'I have 25 apples'], {
+      stderr: () => {},
+      stdout: (line) => stdout.push(line),
+      stdoutBytes: () => {},
+    });
+    expect(code).toBe(0);
+    expect(stdout[2]).toContain('25 (twenty five) /');
+    expect(stdout[2].endsWith(' twen·ty·five')).toBe(true);
+    expect(stdout[3]).toContain('apples /');
   });
 });
 
