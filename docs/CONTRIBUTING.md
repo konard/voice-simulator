@@ -79,9 +79,10 @@ They run in the workflow `Heavy checks`
 started by hand:
 
 - in the **Actions** tab: choose **Heavy checks**, then **Run workflow**, pick
-  the branch, the suite, optionally a `ref` (branch, tag or commit; empty means
-  the branch picked) and a `limit` (largest number of items, such as
-  utterances or files, that each test may process; empty means no limit);
+  the branch, the suite, optionally a `ref` (a branch or tag of this
+  repository, or a commit already on `main`; empty means the branch picked)
+  and a `limit` (largest number of items, such as utterances or files, that
+  each test may process; empty means no limit);
 - from the command line:
 
   ```bash
@@ -89,6 +90,12 @@ started by hand:
   # on another branch
   gh workflow run heavy.yml --ref my-branch -f suite=performance
   ```
+
+A run started on `main` writes to the cache scope of `main`, so
+[scripts/resolve-heavy-ref.sh](../scripts/resolve-heavy-ref.sh) refuses a
+`ref` that names anything else, such as a commit of a fork; to test a pull
+request from a fork, start the workflow on its branch after pushing that
+branch here.
 
 The run summary shows one row per test file with its result and wall time,
 followed by the reports the tests wrote; the reports are also uploaded as the

@@ -19,7 +19,7 @@ on:
           - gpu
         default: all
       ref:
-        description: Branch, tag or commit to test (empty = the branch chosen above)
+        description: Branch or tag of this repository, or a commit on the default branch, to test (empty = the branch chosen above)
         type: string
         default: ''
       limit:
@@ -53,9 +53,28 @@ jobs:
     permissions:
       contents: read
     steps:
+      # The branch chosen in the form: always a branch of this repository.
       - uses: actions/checkout@v7
         with:
-          ref: ${{ inputs.ref }}
+          persist-credentials: false
+
+      # A run started on the default branch writes to its cache scope, so the
+      # ref input may only name code of this repository; see the script.
+      - name: Resolve the ref to test
+        id: target
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+          FALLBACK_SHA: ${{ github.sha }}
+          WANTED: ${{ inputs.ref }}
+        run: bash scripts/resolve-heavy-ref.sh
+
+      - name: Check out the ref to test
+        if: ${{ steps.target.outputs.revision != github.sha }}
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ steps.target.outputs.revision }}
           persist-credentials: false
 
       - name: Setup Node.js
