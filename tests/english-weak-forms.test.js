@@ -23,7 +23,7 @@ function prototypeLines() {
   );
   return readFileSync(url, 'utf8')
     .trim()
-    .split('\n')
+    .split(/\r?\n/u)
     .map((line) => {
       const [, lang, text, ipa] = /^(\S+) (.*): (".*")$/u.exec(line);
       return { lang, text, ipa: JSON.parse(ipa) };
