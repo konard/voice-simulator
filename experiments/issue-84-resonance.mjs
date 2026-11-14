@@ -62,7 +62,7 @@ export function impulseSpectrum(response, rate, frequencies) {
   });
 }
 
-export function waveguideResponse(shape, head, seconds = 0.25) {
+export function waveguideResponse(shape, head, seconds = 0.25, each) {
   const nose = noseShape(head);
   const noseSections = Math.max(
     6,
@@ -76,6 +76,7 @@ export function waveguideResponse(shape, head, seconds = 0.25) {
   const response = new Float64Array(Math.round(seconds * rate));
   for (let index = 0; index < response.length; index++) {
     response[index] = solver.step(index === 0 ? 1 : 0, 0, 0);
+    each?.(solver);
   }
   return { response, rate, noseSections };
 }

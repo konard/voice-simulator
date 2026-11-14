@@ -141,14 +141,16 @@ function drive(chain, load) {
  *   branches?: {index: number, area: number, length: number}[],
  *   nose?: {areas: ArrayLike<number>, length: number, velumArea: number,
  *     velumIndex: number, loss?: number, branches?: object[]},
+ *   output?: 'both' | 'lips' | 'nostrils',
  * }} [options]
  *   `branches` are blind side tubes (the piriform fossae) joined in front
  *   of section `index`; a branch with a `volume` is a Helmholtz resonator
  *   (see branchMatrix). `nose` is the nasal tract, joined in front of
  *   section `velumIndex` through a port of `velumArea` that replaces its
  *   first section (as in the waveguide) and radiating from the nostrils;
- *   the result is then |U_lips + U_nostrils| / |U_glottis|. Its own
- *   `branches` (the sinuses) join in front of nose sections.
+ *   the result is then |U_lips + U_nostrils| / |U_glottis|, or the flow
+ *   of the lips or of the nostrils alone with `output`. Its own `branches`
+ *   (the sinuses) join in front of nose sections.
  */
 export function tubeTransfer(areas, length, frequency, options = {}) {
   const loss = options.loss ?? 2e-5;
@@ -189,7 +191,12 @@ export function tubeTransfer(areas, length, frequency, options = {}) {
     multiply(front[2], oral.pressure),
     multiply(front[3], junctionFlow)
   );
-  const result = divide(add(complex(1), nostrilFlow), glottalFlow);
+  const radiated = {
+    both: add(complex(1), nostrilFlow),
+    lips: complex(1),
+    nostrils: nostrilFlow,
+  }[options.output ?? 'both'];
+  const result = divide(radiated, glottalFlow);
   return Math.hypot(result.re, result.im);
 }
 
