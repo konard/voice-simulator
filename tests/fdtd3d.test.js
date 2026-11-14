@@ -22,7 +22,11 @@ import { rms, spectralPeaks } from '../src/acoustics/analysis.js';
 import { SPEED_OF_SOUND, tubeFormants } from '../src/acoustics/transfer.js';
 import { planUtterance } from '../src/articulation/plan.js';
 import { vowelTarget } from '../src/articulation/phones.js';
-import { noseShape, tractShape } from '../src/articulation/tract-shape.js';
+import {
+  noseShape,
+  sampleState,
+  tractShape,
+} from '../src/articulation/tract-shape.js';
 import {
   DEFAULT_HEAD,
   presetHeadConfig,
@@ -32,6 +36,8 @@ import { VOWEL_CORRECTIONS_3D } from '../src/articulation/vowel-calibration.js';
 import { HILLENBRAND } from '../src/articulation/vowel-norms.js';
 import { STORY_FEATURES } from '../src/articulation/vowel-space.js';
 import { getPhoneme } from '../src/ipa/inventory.js';
+import { synthesize } from '../src/index.js';
+import { itUnless } from './helpers/skip.js';
 
 const DX = 1;
 const RATE = 16000;
@@ -48,6 +54,40 @@ function vowelShape(symbol) {
     { ...vowelTarget({ phoneme: getPhoneme(symbol) }), rhotic: 0 },
     DEFAULT_HEAD
   );
+}
+
+/** Why the murmur stays above half the level of the vowel. */
+const NASAL_TARGET_BLOCKED =
+  'blocked: the first harmonic of the vowel puts a floor near 0.71 (experiments/issue-84-first-harmonic.mjs)';
+
+/**
+ * RMS of the [m] of ˈama over 30 ms in its middle, divided by that of the
+ * first [a].
+ */
+function nasalRatio(tier) {
+  const { samples, sampleRate, plan } = synthesize('ˈama', {
+    ipa: true,
+    tier,
+    seed: 1,
+  });
+  const level = (kind) => {
+    const segment = plan.segments.find((item) => item.kind === kind);
+    const centre = Math.round(((segment.start + segment.end) / 2) * sampleRate);
+    const half = Math.round(0.015 * sampleRate);
+    return rms(samples, centre - half, centre + half);
+  };
+  return level('consonant') / level('vowel');
+}
+
+/** Sum of conductance * dx² over the links of one kind (cm²). */
+function linkArea(solver, kind) {
+  let area = 0;
+  for (let link = 0; link < solver.linkCount; link++) {
+    if (solver.linkKind[link] === kind) {
+      area += solver.conductance[link] * solver.dx ** 2;
+    }
+  }
+  return area;
 }
 
 /** Spectral peaks (Hz) of a solver's impulse response. */
@@ -351,6 +391,55 @@ describe('3D FDTD rendering', () => {
     });
     expect(heard.every(Number.isFinite)).toBe(true);
     expect(rms(heard)).toBeGreaterThan(0.01);
+  });
+
+  describe('nasal murmur', () => {
+    let ratios;
+    const measured = () => {
+      ratios ??= { medium: nasalRatio('medium'), high: nasalRatio('high') };
+      return ratios;
+    };
+
+    it('keeps the nasal murmur as weak as the waveguide', () => {
+      const { medium, high } = measured();
+      expect(Math.abs(20 * Math.log10(high / medium))).toBeLessThan(3);
+    });
+
+    itUnless(NASAL_TARGET_BLOCKED)(
+      'keeps the nasal murmur at a quarter to half of the vowel',
+      () => {
+        const { high } = measured();
+        expect(high).toBeGreaterThan(0.25);
+        expect(high).toBeLessThan(0.5);
+      }
+    );
+  });
+
+  it('opens the velar port by the requested area', () => {
+    const plan = planUtterance('ˈama');
+    const segment = plan.segments.find((item) => item.kind === 'consonant');
+    const state = sampleState(plan, (segment.start + segment.end) / 2, {});
+    const shape = tractShape(state, DEFAULT_HEAD, {
+      sections: 44,
+      teeth: true,
+    });
+    const nose = noseShape(DEFAULT_HEAD).areas;
+    for (const dx of [1, 0.6]) {
+      const solver = new Fdtd3d({ model: dx === DX ? model : undefined, dx });
+      expect(solver.dx).toBe(dx);
+      solver.setNose(nose);
+      for (const velumArea of [0.3, 0.8, 1.3]) {
+        solver.setShape(shape.areas, velumArea, shape.velumIndex, shape.teeth);
+        const port = linkArea(solver, LINK_VELUM);
+        expect([dx, velumArea, Math.abs(port / velumArea - 1) < 0.15]).toEqual([
+          dx,
+          velumArea,
+          true,
+        ]);
+      }
+      const nostrils = linkArea(solver, LINK_NOSTRILS);
+      expect(Math.abs(nostrils / nose.at(-1) - 1)).toBeLessThan(0.15);
+    }
   });
 
   it('exposes the pressure field and resets it', () => {

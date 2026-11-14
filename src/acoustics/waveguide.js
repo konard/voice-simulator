@@ -12,6 +12,13 @@
  * length / LOSS_REFERENCE_SECTIONS, so they do not depend on the number
  * of sections.
  *
+ * Nose section 0 is the velopharyngeal port: it takes the port area, so
+ * the three-port junction at the velum and the nose conserve volume flow
+ * (issue 84). The nose walls lose `nasalLoss` times more than a smooth
+ * round tube of the same area: the septum and the turbinates give the
+ * nasal cavity several times the wetted perimeter of a circle, and the
+ * mucosa is soft (Dang, Honda & Suzuki 1994).
+ *
  * The piriform fossae, two blind pouches either side of the larynx tube,
  * hang off the lower pharynx as one closed side branch about 2 cm long.
  * Their quarter-wave resonance puts an antiresonance near 4-5 kHz into
@@ -21,6 +28,7 @@
 import { glottalReflection } from './glottis.js';
 import { Radiation } from './radiation.js';
 import { SPEED_OF_SOUND } from './transfer.js';
+import { DEFAULT_HEAD } from '../head-config.js';
 
 const MIN_AREA = 1e-4;
 /** Sections over which lossFactor gives the attenuation of one section. */
@@ -68,13 +76,15 @@ export function lossFactor(area, wall = 1) {
 export class Waveguide {
   /**
    * `piriform: false` leaves out the piriform fossae side branch.
-   * @param {{sections?: number, noseSections?: number, head?: {wallLoss?: number}, piriform?: boolean}} [options]
+   * @param {{sections?: number, noseSections?: number, head?: {wallLoss?: number, nasalLoss?: number}, piriform?: boolean}} [options]
    */
   constructor(options = {}) {
     const n = options.sections ?? 44;
     const nose = options.noseSections ?? 28;
     /** Scale of the boundary (wall and viscous) losses. */
     this.wallLoss = options.head?.wallLoss ?? 1;
+    /** Extra boundary losses of the nose relative to a round tube. */
+    this.nasalLoss = options.head?.nasalLoss ?? DEFAULT_HEAD.nasalLoss;
     this.glottalReflection = glottalReflection(options.head);
     this.n = n;
     this.noseN = nose;
@@ -94,10 +104,13 @@ export class Waveguide {
     this.noseJunctionRight = new Float64Array(nose + 1);
     this.noseJunctionLeft = new Float64Array(nose + 1);
     this.noseAreas = new Float64Array(nose).fill(1);
+    /** Nose profile from setNose; section 0 is replaced by the port. */
+    this.noseProfile = new Float64Array(nose).fill(1);
     this.noseReflection = new Float64Array(nose + 1);
-    this.noseDamping = new Float64Array(nose).fill(this.#loss(1));
+    this.noseDamping = new Float64Array(nose).fill(this.#noseLoss(1));
     this.velumArea = 0;
     this.velumIndex = Math.round(n * 0.45);
+    this.#applyPort();
     this.lipOutput = 0;
     this.noseOutput = 0;
     this.#allocatePiriform(options);
@@ -106,6 +119,11 @@ export class Waveguide {
 
   #loss(area) {
     return Math.max(0, lossFactor(area, this.wallLoss)) ** this.lossExponent;
+  }
+
+  #noseLoss(area) {
+    const wall = this.wallLoss * this.nasalLoss;
+    return Math.max(0, lossFactor(area, wall)) ** this.lossExponent;
   }
 
   /**
@@ -136,6 +154,8 @@ export class Waveguide {
 
   /**
    * Set the nasal tract cross-sections (they do not move during speech).
+   * Section 0 is the velopharyngeal port and takes the port area of
+   * setShape instead.
    * @param {ArrayLike<number>} areas
    */
   setNose(areas) {
@@ -145,15 +165,35 @@ export class Waveguide {
       const upper = Math.min(areas.length - 1, lower + 1);
       const fraction = position - lower;
       const area = areas[lower] * (1 - fraction) + areas[upper] * fraction;
-      this.noseAreas[index] = Math.max(MIN_AREA, area);
-      this.noseDamping[index] = this.#loss(area);
+      this.noseProfile[index] = Math.max(MIN_AREA, area);
     }
     for (let index = 1; index < this.noseN; index++) {
+      const area = this.noseProfile[index];
+      this.noseAreas[index] = area;
+      this.noseDamping[index] = this.#noseLoss(area);
+    }
+    for (let index = 2; index < this.noseN; index++) {
       const a = this.noseAreas[index - 1];
       const b = this.noseAreas[index];
       this.noseReflection[index] = (a - b) / (a + b);
     }
+    this.#applyPort();
     this.nostrils.configure(this.noseAreas[this.noseN - 1], this.rate);
+  }
+
+  /**
+   * Nose section 0 is the velopharyngeal port: give it the port area, so
+   * the flow that enters the nose at the velum junction is the flow that
+   * travels on (a port wider than the first nose section is allowed).
+   */
+  #applyPort() {
+    const area = Math.max(MIN_AREA, this.velumArea);
+    this.noseAreas[0] = area;
+    this.noseDamping[0] = this.#noseLoss(area);
+    if (this.noseN > 1) {
+      const next = this.noseAreas[1];
+      this.noseReflection[1] = (area - next) / (area + next);
+    }
   }
 
   /**
@@ -175,6 +215,7 @@ export class Waveguide {
     }
     this.velumArea = Math.max(0, velumArea);
     this.velumIndex = Math.min(this.n - 2, Math.max(1, velumIndex));
+    this.#applyPort();
     this.lips.configure(this.areas[this.n - 1], this.rate);
   }
 

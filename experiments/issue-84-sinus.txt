@@ -1,0 +1,5 @@
+sinus at nose section 11 of 28
+nose loss x1: no sinus level 13.4 dB, N1 344/34/10 | one sinus level 10.1 dB, N1 294/32/10 (-3.2 dB) | two level 16.3 dB, N1 264/32/8 (2.9 dB)
+nose loss x3: no sinus level 9.7 dB, N1 344/26/22 | one sinus level 9.0 dB, N1 294/25/20 (-0.7 dB) | two level 12.6 dB, N1 264/25/18 (2.9 dB)
+nose loss x8: no sinus level 6.9 dB, N1 342/18/52 | one sinus level 7.3 dB, N1 294/17/44 (0.4 dB) | two level 8.7 dB, N1 262/17/40 (1.8 dB)
+nose loss x30: no sinus level 3.6 dB, N1 324/7/192 | one sinus level 3.8 dB, N1 276/7/160 (0.2 dB) | two level 3.9 dB, N1 244/6/146 (0.3 dB)

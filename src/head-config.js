@@ -358,6 +358,18 @@ export const HEAD_PARAMETERS = Object.freeze([
       'Viscous and wall vibration losses of the tract and nose (formant bandwidths).',
   },
   {
+    key: 'nasalLoss',
+    label: 'Nasal losses',
+    group: 'acoustics',
+    unit: '',
+    min: 1,
+    max: 8,
+    step: 0.1,
+    default: 3,
+    description:
+      'Wall losses of the nasal cavity relative to a smooth round tube of the same area.',
+  },
+  {
     key: 'nasalCoupling',
     label: 'Nasal coupling',
     group: 'acoustics',
