@@ -76,8 +76,9 @@ What is checked, in every file that `git ls-files` lists:
 
 - **Dependencies** (`package`): the names in every `package.json`
   (`dependencies`, `devDependencies`, `optionalDependencies`,
-  `peerDependencies`), every `package-lock.json`, `deno.lock`, `Cargo.toml`,
-  `Cargo.lock`, `requirements*.txt` and `pyproject.toml` are compared with
+  `peerDependencies`), every `package-lock.json`, `deno.lock`, the import map
+  of `deno.json`, `Cargo.toml`, `Cargo.lock`, `requirements*.txt` and
+  `pyproject.toml` are compared with
   `deniedPackages` (npm, cargo and python). A pattern is an exact name or a
   prefix that ends with `*`; Rust and Python names treat `-` and `_` alike.
 - **Imports** (`package`): in `.js`, `.mjs`, `.cjs`, `.jsx`, `.ts`, `.tsx`,
