@@ -4,11 +4,6 @@ name: Heavy checks
 # hand only: Actions tab -> Heavy checks -> Run workflow, or
 #   gh workflow run heavy.yml -f suite=quality -f limit=5
 on:
-  # TEMPORARY (issue 14): registers the workflow so it can be dispatched
-  # on the pull request branch; removed by the next commit.
-  push:
-    branches: [issue-14-0d75e7c805b4]
-    paths: ['.github/workflows/heavy.yml']
   workflow_dispatch:
     inputs:
       suite:
