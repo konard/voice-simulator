@@ -1,7 +1,7 @@
 // Issue 32: the default head must sound the same after the breathiness fix.
-// Prints the RMS level (dB re full scale) and the H1-H2 (dB) of audio
-// rendered with the default head, per tier and text, and the raw samples'
-// checksum so two runs can be compared.
+// Prints the RMS level (dB re full scale), the H1-H2 and the HNR (dB) of
+// audio rendered with the default head, per tier and text. The HNR moves
+// with the measure itself; the level and H1-H2 show the audio.
 // Run: node experiments/issue-32-default-head.mjs > experiments/issue-32-default-head-after.txt
 // (the "before" file was written with the same script on the code of main)
 import { synthesize, analyzeVoice } from '../src/index.js';
