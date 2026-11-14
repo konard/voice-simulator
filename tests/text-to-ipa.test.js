@@ -78,6 +78,64 @@ describe('textToIpa', () => {
   });
 });
 
+describe('Hindi questions', () => {
+  const hi = (text) => textToIpa(text, { lang: 'hi' }).ipa;
+
+  it('rises on polar questions with the particle', () => {
+    for (const text of [
+      'क्या तुम आओगे?',
+      'क्या आप ठीक हैं?',
+      'क्या यह आपकी किताब है?',
+      'क्या वह घर पर है?',
+    ]) {
+      expect(hi(text)).not.toContain('↘');
+    }
+  });
+
+  it('falls when क्या means what', () => {
+    for (const text of [
+      'तुम क्या खाओगे?',
+      'यह क्या है?',
+      'तुम्हारा नाम क्या है?',
+      'क्या हुआ?',
+      'क्या बात है?',
+    ]) {
+      expect(hi(text).endsWith('↘ ?')).toBe(true);
+    }
+  });
+
+  it('falls on question words in any position', () => {
+    for (const text of [
+      'आप कहाँ जा रहे हैं?',
+      'आप कल कहाँ जा रहे हैं?',
+      'वह आदमी कौन है?',
+      'तुम इतनी देर से क्यों आए?',
+    ]) {
+      expect(hi(text).endsWith('↘ ?')).toBe(true);
+    }
+  });
+
+  it('rises on plain polar questions', () => {
+    expect(hi('तुम आओगे?')).not.toContain('↘');
+  });
+
+  it('keeps a statement unchanged', () => {
+    expect(hi('क्या बात है!')).not.toContain('↘');
+  });
+});
+
+describe('question marking', () => {
+  it('keeps question marking of other languages', () => {
+    expect(
+      textToIpa('Where are you going?', { lang: 'en' }).ipa.endsWith('↘ ?')
+    ).toBe(true);
+    expect(textToIpa('Are you coming?', { lang: 'en' }).ipa).not.toContain('↘');
+    expect(textToIpa('Кто это?', { lang: 'ru' }).ipa.endsWith('↘ ?')).toBe(
+      true
+    );
+  });
+});
+
 describe('erhua', () => {
   const zh = (text) => textToIpa(text, { lang: 'zh' }).ipa;
 

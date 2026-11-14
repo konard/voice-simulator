@@ -212,8 +212,12 @@ function addBreak(items, item) {
 }
 
 /**
- * Questions that start with a question word (who, what, ...) fall at the
- * at the end: mark them with `↘` before the `?`.
+ * Mark questions that fall at the end with `↘` before the `?`. Each
+ * language decides through its verbaliser's `questionFalls` hook; without
+ * one, a question falls when a question word (who, what, ...) is among its
+ * first two words, as in English and Russian. Hindi keeps question words in
+ * place (usually just before the verb) and uses क्या both as "what" and as
+ * the yes/no particle, so its hook looks at the whole sentence.
  */
 function markQuestions(items) {
   let sentence = [];
@@ -223,11 +227,12 @@ function markQuestions(items) {
       continue;
     }
     if (item.ipa === '?') {
-      const opening = sentence.slice(0, 2);
-      const wh = opening.some((word) =>
-        VERBALIZERS[word.lang]?.isWhWord(word.text.toLowerCase())
-      );
-      if (wh) {
+      const lang = sentence[0]?.lang;
+      const texts = sentence.map((word) => word.text.toLowerCase());
+      const fall = VERBALIZERS[lang]?.questionFalls
+        ? VERBALIZERS[lang].questionFalls(texts)
+        : texts.slice(0, 2).some((text) => VERBALIZERS[lang]?.isWhWord(text));
+      if (fall) {
         item.ipa = '↘ ?';
       }
     }
