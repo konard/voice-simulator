@@ -12,6 +12,8 @@ a pressure wave travelling through the 3D shape of a parametric low-poly head
 - **Text to IPA** for English, Russian, Hindi and Chinese, with automatic
   language detection per word (`textToIpa`). Numbers, dates, times, money,
   units and abbreviations are read out per language (`normalizeText`).
+  Mandarin applies tone sandhi and erhua: 花儿 and `huār` are one syllable,
+  `xwaɻ˥`.
 - **English accents**: General American, Southern British, Australian and
   Indian English (`accent: 'en-GB'`, or `lang: 'en-GB'`).
 - **Punctuation prosody**: commas, semicolons, dashes, parentheses, quotes,
