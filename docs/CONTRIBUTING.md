@@ -269,3 +269,8 @@ git push
 ## Questions?
 
 If you have questions about contributing, feel free to open an issue for discussion.
+
+## Case Studies
+
+Case studies of this repository live in `docs/case-studies/issue-N` where N is the number of the issue in this repository.
+Folders named `template-issue-N` were inherited from the template repository and are kept for reference only; see the [index of case studies](case-studies/README.md).
