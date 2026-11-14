@@ -54,9 +54,15 @@ export const LETTER_IPA = {
   z: 'ˈzi',
 };
 
+/** Whether a word is in the dictionary or the heteronym table. */
+function isListedWord(word) {
+  const { source } = englishWordToIpa(word);
+  return source === 'dictionary' || source === 'heteronym';
+}
+
 /** Derive a word's IPA by appending a suffix to its dictionary form. */
 function suffixed(text, base, ipaSuffix) {
-  if (englishWordToIpa(text).source === 'dictionary') {
+  if (isListedWord(text)) {
     return text;
   }
   return { text, ipa: englishWordToIpa(base).ipa + ipaSuffix };
@@ -333,8 +339,7 @@ export const ENGLISH = {
       return null;
     }
     const hasVowel = /[AEIOUY]/.test(token);
-    const known = englishWordToIpa(token.toLowerCase()).source;
-    if (hasVowel && token.length >= 3 && known === 'dictionary') {
+    if (hasVowel && token.length >= 3 && isListedWord(token.toLowerCase())) {
       return null;
     }
     const plural = /[A-Z]s$/.test(token);
