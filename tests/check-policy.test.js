@@ -19,6 +19,7 @@ import {
   checkPolicy,
   deniedDependencies,
   deniedFiles,
+  dependencyEntries,
   deniedImports,
   evaluateLicence,
   licenceFindings,
@@ -373,5 +374,23 @@ describe('check-policy parsers', () => {
     expect(
       urlPackageNames('https://github.com/konard/voice-simulator')
     ).toEqual([]);
+  });
+
+  it('reads the import map of deno.json', () => {
+    const json = JSON.stringify(
+      {
+        imports: { a: `npm:${ONNX_NODE}@1`, b: 'jsr:@std/assert@1' },
+        scopes: { '/x/': { c: `https://esm.sh/${TFJS_CORE}@4` } },
+      },
+      null,
+      2
+    );
+    const entries = dependencyEntries('deno.json', json);
+    expect(entries.map((entry) => entry.name)).toEqual([
+      ONNX_NODE,
+      '@std/assert',
+      TFJS_CORE,
+    ]);
+    expect(entries.map((entry) => entry.line)).toEqual([3, 4, 8]);
   });
 });

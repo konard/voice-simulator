@@ -271,6 +271,32 @@ function denoLockEntries(file, text) {
   return entries;
 }
 
+/**
+ * The import map of `deno.json`: `npm:`/`jsr:` specifiers and CDN URLs,
+ * also in `scopes`. The lock file lists only what was resolved.
+ */
+function denoJsonEntries(file, text) {
+  const json = JSON.parse(text);
+  const lines = text.split('\n');
+  const maps = [json.imports ?? {}, ...Object.values(json.scopes ?? {})];
+  const entries = [];
+  for (const map of maps) {
+    for (const value of Object.values(map)) {
+      if (typeof value !== 'string') {
+        continue;
+      }
+      const names = /^(?:npm|jsr):/.test(value)
+        ? [npmPackageName(value.replace(/^jsr:/, ''))]
+        : urlPackageNames(value);
+      const line = lineOf(lines, value);
+      for (const name of names) {
+        entries.push({ ecosystem: 'npm', name, file, line });
+      }
+    }
+  }
+  return entries;
+}
+
 /** Splits a TOML key such as `target.'cfg(unix)'.dependencies` on dots. */
 function tomlKeyParts(key) {
   const parts = [];
@@ -474,6 +500,9 @@ export function dependencyEntries(file, text) {
   if (name === 'deno.lock') {
     return denoLockEntries(file, text);
   }
+  if (name === 'deno.json') {
+    return denoJsonEntries(file, text);
+  }
   if (name === 'Cargo.toml') {
     return cargoTomlDependencies(text).map((entry) => ({
       ecosystem: 'cargo',
@@ -525,6 +554,7 @@ function isManifest(file) {
       'package-lock.json',
       'npm-shrinkwrap.json',
       'deno.lock',
+      'deno.json',
       'Cargo.toml',
       'Cargo.lock',
       'pyproject.toml',
