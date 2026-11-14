@@ -34,15 +34,16 @@ const rootMeanSquare = (values, from = 0, to = values.length) => {
 // --- P20 -----------------------------------------------------------------
 
 // 1. The source alone: level of the breath noise against the pulse train.
-// Two glottises with the same seed get the same pulses; their difference
-// is the noise that `breathiness` adds.
+// Two glottises with the same seed and breathiness get the same pulses (the
+// pulse shape depends on breathiness since issue 32); one gets the noise
+// and the other none, so their difference is the noise that `breathiness`
+// adds.
 const RATE = 48000;
 const control = { f0: 120, voicing: 1, aspiration: 0, closure: 0, loudness: 1 };
 function sourceNoise(breathiness) {
-  const make = (value) =>
-    new Glottis({ seed: 1, tenseness: 0.6, breathiness: value });
-  const clean = make(0);
-  const breathy = make(breathiness);
+  const make = () => new Glottis({ seed: 1, tenseness: 0.6, breathiness });
+  const clean = make();
+  const breathy = make();
   const white = createNoise('m2:noise');
   const band = new Biquad();
   band.bandpass(800, 0.5, RATE);
@@ -50,7 +51,7 @@ function sourceNoise(breathiness) {
   const noise = new Float64Array(RATE);
   for (let index = 0; index < RATE; index++) {
     const sample = band.process(white());
-    pulses[index] = clean.step(1 / RATE, control, sample);
+    pulses[index] = clean.step(1 / RATE, control, 0);
     noise[index] = breathy.step(1 / RATE, control, sample) - pulses[index];
   }
   return decibels(rootMeanSquare(noise) / rootMeanSquare(pulses));

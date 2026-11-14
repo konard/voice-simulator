@@ -8,7 +8,10 @@
  *   gives the vocal tract length L = c / (2 ΔF) (Fitch 1997);
  * - H1-H2, the level of the first harmonic over the second, which grows
  *   with a lax, breathy source (Hanson 1997);
- * - harmonics-to-noise ratio from the YIN aperiodicity;
+ * - harmonics-to-noise ratio from the YIN aperiodicity of frames resampled
+ *   to a constant pitch, so that pitch movement does not read as noise,
+ *   taken above 400 Hz at the best fractional lag, and summed up by the
+ *   upper quartile over frames;
  * - syllable rate from peaks of the loudness envelope.
  */
 
@@ -26,6 +29,25 @@ const MAX_F0 = 600;
 const YIN_THRESHOLD = 0.15;
 const VOICED_APERIODICITY = 0.35;
 const FORMANT_FRAMES = 300;
+/** Largest pitch slope (per second, relative to f0) that is straightened. */
+const MAX_SLOPE = 4;
+/**
+ * Corner (Hz) of the high-pass before HNR. It removes the first harmonics,
+ * whose share of the energy grows with a lax source (that is what H1-H2
+ * measures) and which line up from period to period even when jitter and
+ * moving formants spoil the upper ones, so a smoother pulse would otherwise
+ * read as a cleaner voice. The breath noise of the source lies above it.
+ */
+const HNR_HIGHPASS = 400;
+/**
+ * HNR is the upper quartile of the frame values: transitions (moving
+ * formants, onsets and offsets) read as noise whatever the voice, and they
+ * fill about half the voiced frames of running speech.
+ */
+const HNR_PERCENTILE = 0.75;
+/** Step and half-width (samples) of the fractional lag search for HNR. */
+const LAG_STEP = 0.1;
+const LAG_SPAN = 0.6;
 
 /**
  * Low-pass and linearly interpolate to a lower rate (analysis quality).
@@ -126,6 +148,144 @@ export function yinPitch(signal, start, length, sampleRate) {
     f0: sampleRate / (best + Math.max(-0.5, Math.min(0.5, shift))),
     aperiodicity: Math.max(0, normalized[best]),
   };
+}
+
+/** Cubic (Catmull-Rom) interpolation of a signal at a fractional index. */
+function cubicAt(signal, position) {
+  const index = Math.floor(position);
+  const x = position - index;
+  const at = (offset) =>
+    signal[Math.min(signal.length - 1, Math.max(0, index + offset))] ?? 0;
+  const p0 = at(-1);
+  const p1 = at(0);
+  const p2 = at(1);
+  const p3 = at(2);
+  return (
+    p1 +
+    0.5 *
+      x *
+      (p2 -
+        p0 +
+        x * (2 * p0 - 5 * p1 + 4 * p2 - p3 + x * (3 * (p1 - p2) + p3 - p0)))
+  );
+}
+
+/**
+ * Resample a stretch of signal so that its pitch is constant: with the pitch
+ * f0 + slope t around the middle of the stretch, the phase grows as
+ * f0 t + slope t² / 2, so output time t is read from input time
+ * t - slope t² / (2 f0) (to second order). A gliding voice then repeats
+ * itself period by period, as YIN assumes.
+ * @param {ArrayLike<number>} signal
+ * @param {number} start First sample of the stretch.
+ * @param {number} length Number of samples.
+ * @param {number} sampleRate
+ * @param {number} slope Pitch change (Hz per second).
+ * @param {number} f0 Pitch (Hz) in the middle of the stretch.
+ * @returns {Float64Array}
+ */
+function straighten(signal, start, length, sampleRate, slope, f0) {
+  const output = new Float64Array(length);
+  const middle = start + length / 2;
+  const warp = slope / (2 * f0);
+  for (let n = 0; n < length; n++) {
+    const t = (n - length / 2) / sampleRate;
+    output[n] = cubicAt(signal, middle + (t - warp * t * t) * sampleRate);
+  }
+  return output;
+}
+
+/**
+ * Pitch slope (Hz per second) at a voiced frame from the pitch of the frames
+ * before and after it; 0 when one of them is unvoiced. Limited to
+ * MAX_SLOPE f0 per second.
+ */
+function pitchSlope(frames, index, f0) {
+  const previous = frames[index - 1];
+  const next = frames[index + 1];
+  if (!previous?.voiced || !next?.voiced) {
+    return 0;
+  }
+  const limit = MAX_SLOPE * f0;
+  return Math.max(-limit, Math.min(limit, (next.f0 - previous.f0) / (2 * HOP)));
+}
+
+/**
+ * YIN aperiodicity of a voiced frame after its pitch movement is taken out.
+ * The stretch covers the frame and the longest lag YIN compares it with.
+ */
+function straightAperiodicity(signal, frames, index, hop, length, rate) {
+  const { f0 } = frames[index];
+  const slope = pitchSlope(frames, index, f0);
+  const span = length + Math.ceil(rate / MIN_F0) + 2;
+  const straight = straighten(signal, index * hop, span, rate, slope, f0);
+  return fractionalAperiodicity(straight, length, rate / f0);
+}
+
+/**
+ * Mean of the YIN difference function over the lags 1 to `lags`, which
+ * normalizes it (de Cheveigné & Kawahara 2002, step 3).
+ */
+function meanDifference(signal, length, lags) {
+  let total = 0;
+  for (let lag = 1; lag <= lags; lag++) {
+    for (let index = 0; index < length; index++) {
+      total += (signal[index] - signal[index + lag]) ** 2;
+    }
+  }
+  return total / lags;
+}
+
+/**
+ * YIN aperiodicity at the best fractional lag near the period. A period is
+ * rarely a whole number of samples, and at the nearest integer lag the upper
+ * harmonics no longer line up: frames of a noise-free gliding [aː] read 20
+ * to 28 dB there and 31 to 33 dB at the best lag
+ * (experiments/issue-32-fractional-lag.mjs). The lag is searched in steps of LAG_STEP samples and
+ * refined with a parabola; the signal is read at fractional positions by
+ * cubic interpolation.
+ */
+function fractionalAperiodicity(signal, length, period) {
+  const mean = meanDifference(signal, length, Math.round(period));
+  if (!(mean > 0)) {
+    return 1;
+  }
+  const difference = (lag) => {
+    let sum = 0;
+    for (let index = 0; index < length; index++) {
+      sum += (signal[index] - cubicAt(signal, index + lag)) ** 2;
+    }
+    return sum / mean;
+  };
+  const steps = Math.round(LAG_SPAN / LAG_STEP);
+  const values = [];
+  for (let step = -steps; step <= steps; step++) {
+    values.push(difference(period + step * LAG_STEP));
+  }
+  let at = 0;
+  values.forEach((value, step) => {
+    if (value < values[at]) {
+      at = step;
+    }
+  });
+  let lowest = values[at];
+  if (at > 0 && at < values.length - 1) {
+    const curvature = values[at - 1] - 2 * values[at] + values[at + 1];
+    if (curvature > 0) {
+      const shift = (0.5 * (values[at - 1] - values[at + 1])) / curvature;
+      const lag = period + (at - steps + shift) * LAG_STEP;
+      lowest = Math.min(lowest, difference(lag));
+    }
+  }
+  return lowest;
+}
+
+/** Fourth-order Butterworth high-pass (two biquads). */
+function highpass(signal, frequency, rate) {
+  const filters = [new Biquad(), new Biquad()];
+  filters[0].highpass(frequency, 0.54, rate);
+  filters[1].highpass(frequency, 1.31, rate);
+  return signal.map((value) => filters[1].process(filters[0].process(value)));
 }
 
 function harmonicLevel(signal, start, length, frequency, sampleRate) {
@@ -238,6 +398,7 @@ export function analyzeVoice(samples, sampleRate, options = {}) {
   const f0Low = percentile(f0s, 0.05);
   const f0High = percentile(f0s, 0.95);
   const stride = Math.max(1, voicedIndices.length / FORMANT_FRAMES);
+  const upper = highpass(signal, HNR_HIGHPASS, rate);
   const tracks = [[], [], [], []];
   const spacings = [];
   const tilts = [];
@@ -261,7 +422,10 @@ export function analyzeVoice(samples, sampleRate, options = {}) {
     tilts.push(20 * Math.log10((h1 + 1e-12) / (h2 + 1e-12)));
     const aperiodicity = Math.min(
       0.999,
-      Math.max(1e-3, frames[index].aperiodicity)
+      Math.max(
+        1e-3,
+        straightAperiodicity(upper, frames, index, hop, length, rate)
+      )
     );
     noise.push(10 * Math.log10((1 - aperiodicity) / aperiodicity));
   }
@@ -279,7 +443,7 @@ export function analyzeVoice(samples, sampleRate, options = {}) {
     formantSpacing: spacing,
     vocalTractLength: spacing > 0 ? SPEED_OF_SOUND / (2 * spacing) : 0,
     h1h2: median(tilts),
-    hnr: median(noise),
+    hnr: percentile(noise, HNR_PERCENTILE),
     syllableRate:
       activeSeconds > 0
         ? countSyllables(

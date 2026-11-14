@@ -26,18 +26,18 @@ hi baː: {"segments":["consonant:75ms","vowel:250ms"],"peakAspiration":0}
 hi bʱaː: {"segments":["consonant:75ms","vowel:250ms"],"peakAspiration":0}
 hi pʰaː: {"segments":["consonant:86ms","release:60ms","vowel:250ms"],"peakAspiration":0.95}
 hi paː: {"segments":["consonant:86ms","release:15ms","vowel:250ms"],"peakAspiration":0.19}
-tenseness 0: {"levelDb":-14.4,"f0":127,"f1":430,"h1h2":13.18,"hnr":17.76,"voicedShare":0.89}
-tenseness 0.3: {"levelDb":-14,"f0":127,"f1":405,"h1h2":10.46,"hnr":16.9,"voicedShare":0.89}
-tenseness 0.6: {"levelDb":-13.6,"f0":127,"f1":420,"h1h2":3.84,"hnr":14.7,"voicedShare":0.89}
-tenseness 0.9: {"levelDb":-13.1,"f0":127,"f1":455,"h1h2":-4.31,"hnr":13.1,"voicedShare":0.86}
-tenseness 1: {"levelDb":-12.9,"f0":127,"f1":455,"h1h2":-4.29,"hnr":13.58,"voicedShare":0.88}
-outputGain 0.5: {"levelDb":-18.8,"f0":127,"f1":420,"h1h2":3.82,"hnr":14.67,"voicedShare":0.9}
-outputGain 1: {"levelDb":-13.6,"f0":127,"f1":420,"h1h2":3.84,"hnr":14.7,"voicedShare":0.89}
-outputGain 2: {"levelDb":-9.3,"f0":127,"f1":430,"h1h2":3.92,"hnr":14.81,"voicedShare":0.88}
-jitter 0.4: {"levelDb":-13.6,"f0":127,"f1":420,"h1h2":3.84,"hnr":14.7,"voicedShare":0.89}
-jitter 3: {"levelDb":-13.7,"f0":127,"f1":420,"h1h2":3.79,"hnr":9.68,"voicedShare":0.89}
-pitch 60: {"levelDb":-15.9,"f0":64,"f1":428,"h1h2":5.1,"hnr":12.5,"voicedShare":0.74}
-breathiness 1 aspirationLevel 3 chink 10: {"levelDb":-13.6,"f0":126,"f1":325,"h1h2":13.99,"hnr":13.15,"voicedShare":0.88}
+tenseness 0: {"levelDb":-14.4,"f0":127,"f1":435,"h1h2":13.18,"hnr":20.39,"voicedShare":0.89}
+tenseness 0.3: {"levelDb":-14,"f0":127,"f1":405,"h1h2":10.46,"hnr":20.97,"voicedShare":0.89}
+tenseness 0.6: {"levelDb":-13.6,"f0":127,"f1":420,"h1h2":3.84,"hnr":21.35,"voicedShare":0.89}
+tenseness 0.9: {"levelDb":-13.1,"f0":127,"f1":455,"h1h2":-4.31,"hnr":21.24,"voicedShare":0.86}
+tenseness 1: {"levelDb":-12.9,"f0":127,"f1":455,"h1h2":-4.29,"hnr":21.58,"voicedShare":0.88}
+outputGain 0.5: {"levelDb":-18.8,"f0":127,"f1":420,"h1h2":3.82,"hnr":21.29,"voicedShare":0.9}
+outputGain 1: {"levelDb":-13.6,"f0":127,"f1":420,"h1h2":3.84,"hnr":21.35,"voicedShare":0.89}
+outputGain 2: {"levelDb":-9.3,"f0":127,"f1":430,"h1h2":3.92,"hnr":21.5,"voicedShare":0.88}
+jitter 0.4: {"levelDb":-13.6,"f0":127,"f1":420,"h1h2":3.84,"hnr":21.35,"voicedShare":0.89}
+jitter 3: {"levelDb":-13.7,"f0":127,"f1":420,"h1h2":3.79,"hnr":10.93,"voicedShare":0.89}
+pitch 60: {"levelDb":-15.9,"f0":64,"f1":428,"h1h2":5.1,"hnr":16.66,"voicedShare":0.74}
+breathiness 1 aspirationLevel 3 chink 10: {"levelDb":-10.7,"f0":124,"f1":1025,"h1h2":12.64,"hnr":-3.32,"voicedShare":0.21}
 filler en um: "ˈʌm"
 filler en uh: "ˈʌ"
 filler en haha: "ˈhæhæ"

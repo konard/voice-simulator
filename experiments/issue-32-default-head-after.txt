@@ -1,0 +1,4 @@
+sentence medium: {"rmsDb":-13.66,"h1h2":3.46,"hnr":21.05}
+sentence minimal: {"rmsDb":-13.65,"h1h2":3.42,"hnr":21.48}
+north wind waveguide 16 kHz: {"rmsDb":-11.89,"h1h2":4.27,"hnr":15.92}
+steady [aː] medium: {"rmsDb":-21.18,"h1h2":5.28,"hnr":21.87}
