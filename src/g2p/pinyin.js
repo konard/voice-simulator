@@ -4,6 +4,8 @@
  * Accepts tone marks (hǎo) or tone numbers (hao3, neutral 5 or no number).
  * Initials map to Standard Mandarin consonants, finals are rewritten for
  * y/w spellings and j/q/x + u = ü, and tones become Chao tone letters.
+ * Erhua (`huār`, `hua1r`, `huar1`) is one syllable whose rime ends in the
+ * consonant ɻ, with the rime taken from `ERHUA_FINALS`.
  */
 
 const INITIALS = [
@@ -30,7 +32,7 @@ const INITIALS = [
   ['s', 's'],
 ];
 
-const FINALS = {
+export const FINALS = {
   a: 'a',
   o: 'wo',
   e: 'ɤ',
@@ -71,6 +73,54 @@ const FINALS = {
   üe: 'ɥɛ',
   üan: 'ɥɛn',
   ün: 'yn',
+};
+
+/**
+ * Rimes of the finals with the erhua suffix (Duanmu 2007, Lin 2007): a
+ * final `i` glide or `n` is dropped, `ng` is dropped and nasalises the
+ * vowel, and the high vowels `i` and `ü` become glides before `əɻ`.
+ * Sources differ in the vowel of `ie`, `üe` and `o`; correct them here.
+ * The apical vowel (`zi`, `shi`) is handled in `erhuaIpa`.
+ */
+export const ERHUA_FINALS = {
+  a: 'aɻ',
+  ai: 'aɻ',
+  an: 'aɻ',
+  ia: 'jaɻ',
+  ian: 'jaɻ',
+  ua: 'waɻ',
+  uai: 'waɻ',
+  uan: 'waɻ',
+  üan: 'ɥaɻ',
+  ang: 'ɑ̃ɻ',
+  iang: 'jɑ̃ɻ',
+  uang: 'wɑ̃ɻ',
+  e: 'ɤɻ',
+  ei: 'əɻ',
+  en: 'əɻ',
+  ui: 'wəɻ',
+  uei: 'wəɻ',
+  un: 'wəɻ',
+  uen: 'wəɻ',
+  eng: 'ə̃ɻ',
+  ueng: 'wə̃ɻ',
+  i: 'jəɻ',
+  in: 'jəɻ',
+  ing: 'jə̃ɻ',
+  ü: 'ɥəɻ',
+  ün: 'ɥəɻ',
+  ie: 'jɛɻ',
+  üe: 'ɥɛɻ',
+  o: 'woɻ',
+  uo: 'woɻ',
+  ao: 'ɑʊɻ',
+  iao: 'jɑʊɻ',
+  ou: 'oʊɻ',
+  iu: 'joʊɻ',
+  iou: 'joʊɻ',
+  u: 'uɻ',
+  ong: 'ʊ̃ɻ',
+  iong: 'jʊ̃ɻ',
 };
 
 /** y/w spellings rewritten to the underlying final. */
@@ -156,6 +206,8 @@ function splitInitial(letters) {
   };
 }
 
+const APICAL_INITIALS = /^(?:z|c|s|zh|ch|sh|r)$/;
+
 function finalIpa(initial, final) {
   if (final === 'i' && /^(?:z|c|s)$/.test(initial)) {
     return 'ɹ̩';
@@ -163,18 +215,39 @@ function finalIpa(initial, final) {
   if (final === 'i' && /^(?:zh|ch|sh|r)$/.test(initial)) {
     return 'ɻ̩';
   }
+  return FINALS[resolveFinal(initial, final)] ?? null;
+}
+
+/** The final as written in the tables: j/q/x + u = ü, b/p/m/f + o = uo. */
+function resolveFinal(initial, final) {
   const palatal = /^[jqx]$/.test(initial);
   const resolved = palatal ? final.replace(/^u/, 'ü') : final;
-  if (/^[bpmf]$/.test(initial) && resolved === 'o') {
-    return 'wo';
+  return /^[bpmf]$/.test(initial) && resolved === 'o' ? 'uo' : resolved;
+}
+
+/**
+ * IPA of a syllable with the erhua suffix: the initial consonant plus the
+ * r-coloured rime of `ERHUA_FINALS` (`əɻ` for the apical vowel).
+ * @param {string} initial Pinyin initial (`'zh'`, `'h'`) or `''`.
+ * @param {string} final Pinyin final without the `r` (`'ua'`, `'i'`).
+ * @returns {string|null} `null` when the final has no erhua form.
+ */
+export function erhuaIpa(initial, final) {
+  const initialIpa =
+    INITIALS.find(([spelling]) => spelling === initial)?.[1] ?? '';
+  if (final === 'i' && APICAL_INITIALS.test(initial)) {
+    return `${initialIpa}əɻ`;
   }
-  return FINALS[resolved] ?? null;
+  const rime = ERHUA_FINALS[resolveFinal(initial, final)];
+  return rime ? `${initialIpa}${rime}` : null;
 }
 
 /**
  * Convert a single toned pinyin syllable to IPA segments and tone.
+ * A syllable with the erhua suffix (`huār`, `huar1`, `hua1r`) gives one
+ * syllable with an r-coloured rime and `erhua: true`.
  * @param {string} syllable
- * @returns {{ipa: string, tone: number, base: string}|null}
+ * @returns {{ipa: string, tone: number, base: string, erhua?: true}|null}
  */
 export function pinyinSyllableToIpa(syllable) {
   const parsed = splitTone(syllable);
@@ -183,14 +256,26 @@ export function pinyinSyllableToIpa(syllable) {
   }
   const { initial, initialIpa, final } = splitInitial(parsed.letters);
   const vowel = finalIpa(initial, final);
-  if (!vowel) {
+  if (vowel) {
+    return {
+      ipa: `${initialIpa}${vowel}`,
+      tone: parsed.tone,
+      base: parsed.letters,
+    };
+  }
+  return erhuaSyllable(parsed);
+}
+
+function erhuaSyllable({ letters, tone }) {
+  if (!letters.endsWith('r') || letters === 'er') {
     return null;
   }
-  return {
-    ipa: `${initialIpa}${vowel}`,
-    tone: parsed.tone,
-    base: parsed.letters,
-  };
+  const host = splitInitial(letters.slice(0, -1));
+  if (!finalIpa(host.initial, host.final)) {
+    return null;
+  }
+  const ipa = erhuaIpa(host.initial, host.final);
+  return ipa ? { ipa, tone, base: letters, erhua: true } : null;
 }
 
 /**
@@ -231,16 +316,24 @@ export function syllableWithTone(syllable, phraseFinal) {
   return `${syllable.ipa}${TONE_CONTOURS[tone] ?? ''}`;
 }
 
+const LETTERS = '[a-zêüāáǎàēéěèīíǐìōóǒòūúǔùǖǘǚǜv:]';
+
+/** Letters and a tone digit; an `r` after the digit ends the word. */
+const PINYIN_WORD = new RegExp(
+  `${LETTERS}+(?:[1-5](?:r(?!${LETTERS}))?)?`,
+  'giu'
+);
+
 /**
  * Split running pinyin such as `ni3hao3` or `nǐhǎo` into syllables.
- * Uses greedy longest-match against valid syllables.
+ * Uses greedy longest-match against valid syllables. An erhua syllable
+ * (`huār`, `hua1r`) is accepted only at the end of a word.
  * @param {string} text
  * @returns {string[]|null}
  */
 export function segmentPinyin(text) {
   const syllables = [];
-  const pattern = /[a-zêüāáǎàēéěèīíǐìōóǒòūúǔùǖǘǚǜv:]+[1-5]?/giu;
-  for (const match of text.normalize('NFC').matchAll(pattern)) {
+  for (const match of text.normalize('NFC').matchAll(PINYIN_WORD)) {
     const parts = segmentWord(match[0]);
     if (!parts) {
       return null;
@@ -250,17 +343,21 @@ export function segmentPinyin(text) {
   return syllables.length ? syllables : null;
 }
 
+/** Longest spelling of one syllable: `zhuangr` with a tone digit. */
+const MAX_SYLLABLE = 8;
+
 function segmentWord(word) {
   if (!word) {
     return [];
   }
-  for (let length = Math.min(7, word.length); length > 0; length--) {
+  for (let length = Math.min(MAX_SYLLABLE, word.length); length > 0; length--) {
     let end = length;
     if (/[1-5]/.test(word[end] ?? '')) {
       end++;
     }
     const head = word.slice(0, end);
-    if (!pinyinSyllableToIpa(head)) {
+    const syllable = pinyinSyllableToIpa(head);
+    if (!syllable || (syllable.erhua && end < word.length)) {
       continue;
     }
     const rest = segmentWord(word.slice(end));
