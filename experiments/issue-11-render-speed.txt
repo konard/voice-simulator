@@ -1,0 +1,2 @@
+16000 Hz, 4.69 s: renderPlan rtf 0.124 0.098 0.119
+8000 Hz, 4.69 s: renderPlan rtf 0.085 0.089 0.092

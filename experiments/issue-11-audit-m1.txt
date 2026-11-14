@@ -1,0 +1,56 @@
+reference 44@48000: {"formants":{"aː":[725,1810,2680],"iː":[340,2390,3140],"uː":[370,930,2608]},"rtf":0.124}
+8@8000: {"formants":{"aː":[673,1530,3025],"iː":[355,1865,2700],"uː":[305,855,2358]},"worstDeviation":0.22,"rtf":0.011}
+11@8000: {"formants":{"aː":[720,1768,2688],"iː":[348,2360,2945],"uː":[325,865,2390]},"worstDeviation":0.122,"rtf":0.017}
+12@8000: {"formants":{"aː":[720,1740,2685],"iː":[350,2388,3035],"uː":[345,938,2458]},"worstDeviation":0.068,"rtf":0.018}
+16@8000: {"formants":{"aː":[725,1798,2700],"iː":[350,2410,3098],"uː":[348,875,2445]},"worstDeviation":0.063,"rtf":0.024}
+22@8000: {"formants":{"aː":[718,1780,2693],"iː":[345,2400,3105],"uː":[365,915,2450]},"worstDeviation":0.061,"rtf":0.033}
+44@8000: {"formants":{"aː":[720,1810,2695],"iː":[340,2400,3150],"uː":[385,935,2485]},"worstDeviation":0.047,"rtf":0.09}
+8@11025: {"formants":{"aː":[675,1540,3000],"iː":[340,2115,3500],"uː":[293,823,2915]},"worstDeviation":0.208,"rtf":0.018}
+11@11025: {"formants":{"aː":[730,1780,2665],"iː":[355,2365,2990],"uː":[320,850,2515]},"worstDeviation":0.135,"rtf":0.018}
+12@11025: {"formants":{"aː":[725,1755,2670],"iː":[350,2375,3005],"uː":[330,930,2600]},"worstDeviation":0.108,"rtf":0.018}
+16@11025: {"formants":{"aː":[735,1805,2675],"iː":[345,2395,3080],"uː":[335,870,2595]},"worstDeviation":0.095,"rtf":0.025}
+22@11025: {"formants":{"aː":[725,1785,2655],"iː":[340,2375,3080],"uː":[355,905,2580]},"worstDeviation":0.041,"rtf":0.036}
+44@11025: {"formants":{"aː":[725,1810,2670],"iː":[340,2390,3140],"uː":[370,930,2605]},"worstDeviation":0.004,"rtf":0.082}
+8@16000: {"formants":{"aː":[680,1535,3015],"iː":[345,2050,3415],"uː":[295,813,2748]},"worstDeviation":0.203,"rtf":0.017}
+11@16000: {"formants":{"aː":[730,1775,2660],"iː":[350,2360,2955],"uː":[320,845,2525]},"worstDeviation":0.135,"rtf":0.019}
+12@16000: {"formants":{"aː":[725,1755,2670],"iː":[345,2375,3000],"uː":[335,935,2600]},"worstDeviation":0.095,"rtf":0.019}
+16@16000: {"formants":{"aː":[735,1805,2665],"iː":[345,2395,3085],"uː":[335,875,2605]},"worstDeviation":0.095,"rtf":0.026}
+22@16000: {"formants":{"aː":[730,1785,2660],"iː":[335,2375,3075],"uː":[355,910,2588]},"worstDeviation":0.041,"rtf":0.036}
+44@16000: {"formants":{"aː":[730,1810,2660],"iː":[335,2390,3140],"uː":[370,930,2610]},"worstDeviation":0.015,"rtf":0.087}
+shape share 22@22050: {"duration":3.98,"frames":2743,"renderSeconds":0.184,"shapeSeconds":0.042,"share":0.23}
+shape share 44@48000: {"duration":3.98,"frames":5971,"renderSeconds":0.526,"shapeSeconds":0.116,"share":0.22}
+present 22@22050: {"rtf":0.041}
+present 32@32000: {"rtf":0.064}
+control interval 12@8000: {"blockSize":12,"rtf32":0.018,"rtfFine":0.024,"differenceDb":-5.8}
+control interval 16@11025: {"blockSize":16,"rtf32":0.022,"rtfFine":0.029,"differenceDb":-12.8}
+control interval 22@16000: {"blockSize":24,"rtf32":0.037,"rtfFine":0.039,"differenceDb":-13.7}
+voxels dx 1: {"cells":637,"links":1469,"stepsPerSecond":70000,"buildSeconds":0.22}
+voxels dx 0.6: {"cells":2595,"links":6583,"stepsPerSecond":116667,"buildSeconds":0.2}
+voxels dx 0.5: {"cells":4298,"links":11183,"stepsPerSecond":140000,"buildSeconds":0.19}
+voxels dx 0.4: {"cells":8202,"links":21906,"stepsPerSecond":175000,"buildSeconds":0.17}
+voxels dx 1 in a 40 cm box: {"cells":59852,"links":173292,"stepsPerSecond":70000,"buildSeconds":0.27}
+voxels dx 0.5 in a 40 cm box: {"cells":477948,"links":1408925,"stepsPerSecond":140000,"buildSeconds":1.64}
+wasm kernel: {"base64Characters":444,"bytes":332}
+aliasing 12@8000 aː: {"samples":4080,"excessDb":0.2}
+aliasing 12@8000 sː: {"samples":4167,"excessDb":1.5}
+aliasing 12@8000 ʃː: {"samples":4167,"excessDb":1.2}
+benchmark run 1: {"milliseconds":497,"selected":"medium","loads":[0.51,0.22,0.23,1.56],"measured":[true,true,true,true]}
+benchmark run 2: {"milliseconds":397,"selected":"medium","loads":[0.09,0.12,0.16,1.79],"measured":[true,true,true,true]}
+benchmark run 3: {"milliseconds":286,"selected":"medium","loads":[0.07,0.07,0.12,1.21],"measured":[true,true,true,true]}
+probe minimal: {"milliseconds":6,"load":0.06}
+probe low: {"milliseconds":8,"load":0.09}
+probe medium: {"milliseconds":12,"load":0.13}
+probe high: {"milliseconds":260,"load":1.39}
+probe ultra: {"milliseconds":476,"load":9.73}
+probe studio: {"milliseconds":334,"load":14.81}
+probe reference: {"milliseconds":518,"load":29.33}
+level minimal: {"sampleRate":22050,"rmsDb":-18,"peak":0.469}
+level low: {"sampleRate":32000,"rmsDb":-18.1,"peak":0.47}
+level medium: {"sampleRate":48000,"rmsDb":-18.2,"peak":0.471}
+level high: {"sampleRate":48000,"rmsDb":-19.4,"peak":0.44}
+crossfade aː medium to minimal: {"r":0.999,"lag":-1,"bumpDb":3.01}
+crossfade aː medium to low: {"r":0.999,"lag":0,"bumpDb":3.01}
+crossfade aː medium to high: {"r":0.844,"lag":7,"bumpDb":2.66}
+crossfade sː medium to minimal: {"r":-0.049,"lag":28,"bumpDb":0}
+crossfade sː medium to low: {"r":0.046,"lag":13,"bumpDb":0.2}
+crossfade sː medium to high: {"r":0.021,"lag":55,"bumpDb":0.09}
