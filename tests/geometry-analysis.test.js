@@ -40,13 +40,50 @@ import {
   fetchRange,
   listMembers,
   matchesPattern,
+  RangeRefusedError,
 } from '../scripts/fetch-dvtd.mjs';
 import { networkSkipReason } from './helpers/network.js';
 import { itUnless } from './helpers/skip.js';
 
+/**
+ * The surface and the transfer function of the tense /u/ of speaker 2, or
+ * the reason why they could not be fetched. The server can answer the probe
+ * and refuse the ranges of the download a moment later, so only the download
+ * itself tells whether the test can run. A refusal that outlasts the retries
+ * of `fetchRange` becomes the skip reason; any other error is kept and fails
+ * the test.
+ * @param {{probe?: typeof networkSkipReason, list?: typeof listMembers,
+ *   fetchOne?: typeof fetchMember}} [options] replaced in tests
+ * @returns {Promise<{reason?: string, error?: unknown, surface?: Buffer,
+ *   transfer?: Buffer}>}
+ */
+async function fetchTenseU({
+  probe = networkSkipReason,
+  list = listMembers,
+  fetchOne = fetchMember,
+} = {}) {
+  const reason = await probe({ url: DVTD_ARCHIVE, range: true });
+  if (reason) {
+    return { reason };
+  }
+  try {
+    const members = await list();
+    const fetchNamed = (suffix) =>
+      fetchOne(members.find((member) => member.name.endsWith(suffix)));
+    return {
+      surface: await fetchNamed('s2-05-bude-tense-u-inner-surface.stl'),
+      transfer: await fetchNamed('s2-05-bude-tense-u-vvtf-calculated.txt'),
+    };
+  } catch (error) {
+    return error instanceof RangeRefusedError
+      ? { reason: error.message }
+      : { error };
+  }
+}
+
 // Before any test is registered: the CPU-bound tests start right away and
-// would stall the probe past its timeout.
-const offline = await networkSkipReason({ url: DVTD_ARCHIVE, range: true });
+// would stall the requests past their timeout.
+const remote = await fetchTenseU();
 
 const FIXTURES = new globalThis.URL('./fixtures/dvtd/', import.meta.url);
 const MANIFEST = JSON.parse(
@@ -236,16 +273,38 @@ describe('Dresden Vocal Tract Dataset download', () => {
     expect(message).toContain('range request answered 416');
   });
 
-  itUnless(offline)(
+  it('skips the download when the server refuses a range after the probe', async () => {
+    const probe = async () => null;
+    const refused = await fetchTenseU({
+      probe,
+      list: async () => {
+        throw new RangeRefusedError(DVTD_ARCHIVE, 416);
+      },
+    });
+    expect(refused).toEqual({
+      reason: `${DVTD_ARCHIVE}: range request answered 416`,
+    });
+    const broken = await fetchTenseU({
+      probe,
+      list: async () => [{ name: 's2-05-bude-tense-u-inner-surface.stl' }],
+      fetchOne: async () => {
+        throw new Error('size or CRC-32 mismatch');
+      },
+    });
+    expect(broken.reason).toBe(undefined);
+    expect(broken.error.message).toBe('size or CRC-32 mismatch');
+    expect(await fetchTenseU({ probe: async () => 'no network' })).toEqual({
+      reason: 'no network',
+    });
+  });
+
+  itUnless(remote.reason)(
     'fetches a /u/ tract and its FEM transfer function just in time',
-    async () => {
-      const members = await listMembers();
-      const fetchNamed = (suffix) =>
-        fetchMember(members.find((member) => member.name.endsWith(suffix)));
-      const surface = await fetchNamed('s2-05-bude-tense-u-inner-surface.stl');
-      const transfer = await fetchNamed(
-        's2-05-bude-tense-u-vvtf-calculated.txt'
-      );
+    () => {
+      if (remote.error) {
+        throw remote.error;
+      }
+      const { surface, transfer } = remote;
       const result = tractAreaFunction(parseStl(surface));
       const tube = tubeFormants(
         result.areas.map((area) => area / 100),

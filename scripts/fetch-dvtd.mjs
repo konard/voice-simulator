@@ -24,12 +24,25 @@ const RANGE_RETRY_DELAY = 2000;
 
 const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
+/** The server answered a range request with something other than the range. */
+export class RangeRefusedError extends Error {
+  /**
+   * @param {string} url
+   * @param {number} status HTTP status of the answer
+   */
+  constructor(url, status) {
+    super(`${url}: range request answered ${status}`);
+    this.name = 'RangeRefusedError';
+    this.status = status;
+  }
+}
+
 async function rangeOnce(url, start, end, fetcher) {
   const response = await fetcher(url, {
     headers: { Range: `bytes=${start}-${end - 1}` },
   });
   if (response.status !== 206) {
-    throw new Error(`${url}: range request answered ${response.status}`);
+    throw new RangeRefusedError(url, response.status);
   }
   return Buffer.from(await response.arrayBuffer());
 }
