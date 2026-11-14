@@ -115,7 +115,7 @@ parallel. GitHub Actions concurrency blocks support only `group` and
 `cancel-in-progress: false`, GitHub preserves the running job and manages one
 pending job for the group.
 
-See [DETAILED-COMPARISON.md](./case-studies/issue-25/DETAILED-COMPARISON.md) for the full analysis of best practices from both repositories.
+See [DETAILED-COMPARISON.md](./case-studies/template-issue-25/DETAILED-COMPARISON.md) for the full analysis of best practices from both repositories.
 
 #### Pushing to a `main` That Refuses Direct Pushes
 
@@ -302,6 +302,6 @@ Each layer catches different issues, ensuring no problematic code reaches produc
 - [Code Architecture Principles](https://github.com/link-foundation/code-architecture-principles)
 - [hive-mind CI/CD Best Practices](https://github.com/link-assistant/hive-mind/blob/main/docs/CI-CD-BEST-PRACTICES.md)
 - [hive-mind CI/CD Case Studies](https://github.com/link-assistant/hive-mind/tree/main/docs/case-studies)
-- [Issue #1274 Analysis](./case-studies/issue-25/data/issue-1274-case-study.md) - Concurrency blocking
-- [Issue #1278 Analysis](./case-studies/issue-25/data/issue-1278-case-study.md) - always() cancellation prevention
-- [Issue #29 Analysis](./case-studies/issue-29/README.md) - CI/CD best practices alignment
+- [Issue #1274 Analysis](./case-studies/template-issue-25/data/issue-1274-case-study.md) - Concurrency blocking
+- [Issue #1278 Analysis](./case-studies/template-issue-25/data/issue-1278-case-study.md) - always() cancellation prevention
+- [Issue #29 Analysis](./case-studies/template-issue-29/README.md) - CI/CD best practices alignment
