@@ -129,6 +129,21 @@ function isMagicE(word, index) {
   );
 }
 
+export const VOICELESS_FINAL = /[ptkfθ]$/;
+export const SIBILANT_FINAL = /(?:s|z|ʃ|ʒ|t͡ʃ|d͡ʒ)$/;
+
+/**
+ * The plural or third-person `-s` ending after a pronunciation: `ɪz` after
+ * a sibilant, `s` after a voiceless consonant, `z` otherwise.
+ * @param {string} ipa
+ */
+export function pluralEnding(ipa) {
+  if (SIBILANT_FINAL.test(ipa)) {
+    return 'ɪz';
+  }
+  return VOICELESS_FINAL.test(ipa) ? 's' : 'z';
+}
+
 /**
  * Pronounce an out-of-vocabulary word with spelling rules.
  * @param {string} word lowercase word

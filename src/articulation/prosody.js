@@ -31,7 +31,12 @@
  * are 1.5 semitones higher with a 1.3x accent range and +3 dB; segments
  * inside parentheses are 2 semitones lower with a 0.7x range and -3 dB.
  * Tonal languages keep their lexical tones and only get the declination
- * and register shifts.
+ * and register shifts. Every Chao level of a tone is a pitch target, so a
+ * contour tone such as the Mandarin third tone `˨˩˦` falls to its lowest
+ * level before it rises. The targets sit at the fractions of the nucleus
+ * in `TONE_POINT_POSITIONS`: the ends for two levels, `0, 0.4, 1` for
+ * three (the low point comes before the middle of the vowel, Xu 1997,
+ * figure 3) and evenly spaced for more. A single-level tone is level.
  */
 
 /** Pause length (s), final contour and final-syllable lengthening. */
@@ -204,7 +209,44 @@ export function segmentRegister(segment, phrase) {
 const semitones = (base, steps) => base * 2 ** (steps / 12);
 
 /**
- * Pitch targets (Hz) at the start and end of a syllable nucleus.
+ * Where each pitch target of a nucleus sits, as fractions of the nucleus,
+ * by number of targets. Counts not listed are evenly spaced.
+ */
+export const TONE_POINT_POSITIONS = Object.freeze({
+  3: Object.freeze([0, 0.4, 1]),
+});
+
+/**
+ * Fractions of the nucleus at which `count` pitch targets sit.
+ * @param {number} count
+ * @returns {readonly number[]}
+ */
+export function pointPositions(count) {
+  if (TONE_POINT_POSITIONS[count]) {
+    return TONE_POINT_POSITIONS[count];
+  }
+  if (count < 2) {
+    return [0];
+  }
+  return Array.from({ length: count }, (_, index) => index / (count - 1));
+}
+
+/**
+ * One pitch (Hz) per Chao tone level (1 lowest, 5 highest, 3 = `base`).
+ * A single-level tone gives its level twice so the pitch stays level.
+ * @param {number[]} tone
+ * @param {number} base
+ * @param {number} scale Semitones per tone level.
+ * @returns {number[]}
+ */
+export function tonePitch(tone, base, scale) {
+  const levels = tone.length === 1 ? [tone[0], tone[0]] : tone;
+  return levels.map((level) => semitones(base, (level - 3) * scale));
+}
+
+/**
+ * Pitch targets (Hz) of a syllable nucleus: start and end, or one per
+ * level of a lexical tone.
  * @param {object} segment
  * @param {{head: object, phrase: object, last: boolean}} context
  */
@@ -228,10 +270,7 @@ export function syllablePitch(segment, context) {
   const tone = segment.token.tone;
   if (tone) {
     const scale = (1.2 + 0.35 * head.pitchRange) * register.range;
-    return [
-      semitones(base, (tone[0] - 3) * scale),
-      semitones(base, (tone.at(-1) - 3) * scale),
-    ];
+    return tonePitch(tone, base, scale);
   }
   const accent =
     segment.token.stress === 1 ? range * (head.accentStrength ?? 1) : 0;
@@ -244,21 +283,23 @@ export function syllablePitch(segment, context) {
 }
 
 /**
- * Start and end pitch of every syllable nucleus in the utterance.
+ * Pitch targets of every syllable nucleus in the utterance: `points` has
+ * one pitch per target (two, or one per tone level) and `from` and `to`
+ * are its first and last value.
  * @param {object[]} segments
  * @param {object} head
- * @returns {{segment: object, from: number, to: number}[]}
+ * @returns {{segment: object, from: number, to: number, points: number[]}[]}
  */
 export function pitchTargets(segments, head) {
   const targets = [];
   for (const phrase of intonationPhrases(segments)) {
     phrase.nuclei.forEach((segment, index) => {
-      const [from, to] = syllablePitch(segment, {
+      const points = syllablePitch(segment, {
         head,
         phrase,
         last: index === phrase.nuclei.length - 1,
       });
-      targets.push({ segment, from, to });
+      targets.push({ segment, from: points[0], to: points.at(-1), points });
     });
   }
   return targets;

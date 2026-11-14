@@ -14,17 +14,40 @@ export interface Language {
   sample: string;
 }
 
+/**
+ * Where a word's pronunciation came from. `heteronym`: an English word
+ * spelled one way and spoken two ways (`record`, `read`), read as fits
+ * the words around it.
+ */
+export type WordSource =
+  | 'dictionary'
+  | 'morphology'
+  | 'rules'
+  | 'heteronym'
+  | 'exception'
+  | 'pinyin'
+  | 'unknown';
+
 export interface Word {
   text: string;
   lang: string;
   ipa: string;
-  source?: string;
+  source?: WordSource;
+  /**
+   * For a heteronym: the part of speech that chose its reading (`N` noun,
+   * `A` adjective, `V` verb, `D` past tense or participle), or the tags of
+   * the reading when a neighbouring word or the default chose it.
+   */
+  tag?: string;
   pinyin?: string;
   /** The written text the word was read from (before verbalisation). */
   original?: string;
   sourceStart?: number;
   sourceEnd?: number;
   token?: number;
+  /** Range of the part of the token this word reads (`3` of `3/4/2024`). */
+  partStart?: number;
+  partEnd?: number;
   linkingR?: boolean;
 }
 
@@ -49,10 +72,19 @@ export interface TimelineSyllable {
   text?: string;
   sourceStart?: number;
   sourceEnd?: number;
+  /** Letters of the spoken word for this syllable, in a verbalised word. */
+  spoken?: string;
+  /** Index of the spoken word (into `word.spoken.split(' ')`). */
+  spokenWord?: number;
+  /** Range of the part of the token this spoken word reads (date, time, money, unit). */
+  partStart?: number;
+  partEnd?: number;
 }
 
 export interface TimelineWord {
   text: string;
+  /** Spoken words joined by a space, when the word is not read as written. */
+  spoken?: string;
   lang: string;
   ipa: string;
   start: number;

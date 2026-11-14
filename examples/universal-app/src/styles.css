@@ -459,6 +459,20 @@ h2 {
   color: var(--muted);
 }
 
+/* The words a number, date or sum is read as, shown while it is spoken. */
+.spoken-said {
+  min-height: 1.7em;
+  color: var(--muted);
+}
+
+.spoken-said > [data-word]:not(.word-current) {
+  display: none;
+}
+
+.spoken-said > .word-current {
+  background: none;
+}
+
 .spoken span {
   border-radius: 4px;
   transition: background-color 80ms linear;

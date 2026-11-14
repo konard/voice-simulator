@@ -75,7 +75,8 @@ for (const text of [
   });
 }
 
-// 4. Highlighting of expanded tokens (P34).
+// 4. Highlighting of expanded tokens (P34): verbalised words print what
+// is spoken (#46), words read as written print the letters they spell.
 for (const [lang, text] of [
   ['en', 'I have 25 apples on 3/4/2024.'],
   ['en', 'It costs $5 at 3:30.'],
@@ -88,8 +89,11 @@ for (const [lang, text] of [
     `highlight ${lang}`,
     timeline.words.map((word) => ({
       text: word.text,
+      ...(word.spoken ? { spoken: word.spoken } : {}),
       ipa: word.ipa,
-      syllables: word.syllables.map((syllable) => syllable.text ?? null),
+      syllables: word.syllables.map(
+        (syllable) => syllable.spoken ?? syllable.text ?? null
+      ),
     }))
   );
 }

@@ -8,7 +8,10 @@
  * (a Chinese word has one per character). Words that verbalise the same
  * source text ("3/5/2024" as "March fifth ...") form one timeline word.
  * Syllables come from `syllabifyTokens` and are mapped back to the
- * letters that spell them by `syllableSpans`.
+ * letters that spell them by `syllableSpans`. A verbalised word keeps its
+ * written text and range, and tells what is spoken instead: `spoken` on
+ * the word and `spoken`, `spokenWord`, `partStart`, `partEnd` on each
+ * syllable (see `speakSyllables`).
  */
 
 import { syllableSpans } from '../g2p/orthography.js';
@@ -78,7 +81,11 @@ const sameSource = (a, b) =>
     a.sourceStart === b?.sourceStart &&
     a.sourceEnd === b?.sourceEnd);
 
-/** Consecutive IPA words that spell the same source text, merged. */
+/**
+ * Consecutive IPA words that spell the same source text, merged. Each
+ * group keeps its IPA words (`chunks`), the source of every chunk
+ * (`chunkSources`) and the distinct sources in order (`sources`).
+ */
 function groupWords(groups, sources) {
   const merged = [];
   groups.forEach((tokens, index) => {
@@ -86,11 +93,16 @@ function groupWords(groups, sources) {
     const last = merged.at(-1);
     if (last && source && sameSource(last.sources.at(-1), source)) {
       last.chunks.push(tokens);
+      last.chunkSources.push(source);
       if (!last.sources.includes(source)) {
         last.sources.push(source);
       }
     } else {
-      merged.push({ chunks: [tokens], sources: source ? [source] : [] });
+      merged.push({
+        chunks: [tokens],
+        chunkSources: [source],
+        sources: source ? [source] : [],
+      });
     }
   });
   return merged;
@@ -130,6 +142,67 @@ function spellSyllables(syllables, tokens, sources) {
   });
 }
 
+/** Whether a group is spoken in words other than the ones written. */
+function isVerbalised(group) {
+  const { sources } = group;
+  return (
+    sources.length > 1 || (sources.length === 1 && !readAsWritten(sources[0]))
+  );
+}
+
+/**
+ * The letters of a spoken word for each of its syllables: a Chinese word
+ * gives one character per chunk (one Hanzi per IPA word), other words are
+ * mapped by `syllableSpans`. When the letters cannot be mapped, the first
+ * syllable gets the whole word.
+ */
+function spokenLetters(source, chunks) {
+  const text = String(source.text ?? '');
+  const tokens = chunks.flat();
+  const characters = Array.from(text);
+  if (source.lang === 'zh' && characters.length === chunks.length) {
+    return chunks.flatMap((chunk, index) =>
+      chunk.map((_, syllable) => (syllable === 0 ? characters[index] : ''))
+    );
+  }
+  const spans =
+    source.lang === 'zh' ? null : syllableSpans(text, tokens.map(phoneCounts));
+  return spans
+    ? spans.map((span) => text.slice(span.start, span.end))
+    : tokens.map((_, index) => (index === 0 ? text : ''));
+}
+
+/**
+ * Tell every syllable of a verbalised word what is spoken: `spoken` (its
+ * letters), `spokenWord` (index of the spoken word, one per source) and,
+ * when known, the part of the written token it reads (`partStart`,
+ * `partEnd`).
+ */
+function speakSyllables(syllables, split, group) {
+  if (!isVerbalised(group)) {
+    return;
+  }
+  let next = 0;
+  const chunksOf = new Map();
+  split.forEach((chunk, index) => {
+    const source = group.chunkSources[index];
+    const entry = chunksOf.get(source) ?? { chunks: [], first: next };
+    entry.chunks.push(chunk);
+    chunksOf.set(source, entry);
+    next += chunk.length;
+  });
+  group.sources.forEach((source, spokenWord) => {
+    const { chunks, first } = chunksOf.get(source);
+    const part =
+      source.partStart !== undefined && source.partEnd !== undefined
+        ? { partStart: source.partStart, partEnd: source.partEnd }
+        : {};
+    spokenLetters(source, chunks).forEach((spoken, index) => {
+      Object.assign(syllables[first + index], { spoken, spokenWord, ...part });
+    });
+  });
+}
+
 function timedSyllable(tokens, times) {
   return {
     ipa: syllableIpa(tokens),
@@ -151,13 +224,18 @@ function timelineWord(group, times, language) {
     return null;
   }
   spellSyllables(syllables, split.flat(), group.sources);
+  speakSyllables(syllables, split, group);
   let next = 0;
   const ipa = split
     .map((chunk) => chunk.map(() => syllables[next++].ipa).join(''))
     .join(' ');
   const first = group.sources[0];
+  const spoken = isVerbalised(group)
+    ? { spoken: group.sources.map((source) => source.text).join(' ') }
+    : {};
   return {
     text: first ? (first.original ?? first.text) : ipa,
+    ...spoken,
     lang,
     ipa,
     start: syllables[0].start,
@@ -175,7 +253,7 @@ function timelineWord(group, times, language) {
  * @param {{words?: object[], ipa?: string, language?: string}} [options]
  *   `words` from `textToIpa` map the timeline to the source text; with
  *   no words, the whitespace-separated chunks of `ipa` are the source.
- * @returns {{duration: number, words: {text: string, lang: string, ipa: string, start: number, end: number, sourceStart: number|null, sourceEnd: number|null, syllables: {ipa: string, stress: number, start: number, end: number, text?: string, sourceStart?: number, sourceEnd?: number}[]}[]}}
+ * @returns {{duration: number, words: {text: string, lang: string, ipa: string, start: number, end: number, sourceStart: number|null, sourceEnd: number|null, spoken?: string, syllables: {ipa: string, stress: number, start: number, end: number, text?: string, sourceStart?: number, sourceEnd?: number, spoken?: string, spokenWord?: number, partStart?: number, partEnd?: number}[]}[]}}
  */
 export function utteranceTimeline(plan, options = {}) {
   const times = tokenTimes(plan.segments);

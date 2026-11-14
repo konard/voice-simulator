@@ -1,0 +1,16 @@
+differences: 1475
+{"label":"time 0:1","parts":["零点","零一分"],"whole":"liŋ˧˥ tjɛn˨˩ liŋ˧˥ i˥˩ fən˥","split":"liŋ˧˥ tjɛn˨˩˦ liŋ˧˥ i˥˩ fən˥"}
+{"label":"time 0:2","parts":["零点","零二分"],"whole":"liŋ˧˥ tjɛn˨˩ liŋ˧˥ ɚ˥˩ fən˥","split":"liŋ˧˥ tjɛn˨˩˦ liŋ˧˥ ɚ˥˩ fən˥"}
+{"label":"time 0:3","parts":["零点","零三分"],"whole":"liŋ˧˥ tjɛn˨˩ liŋ˧˥ san˥ fən˥","split":"liŋ˧˥ tjɛn˨˩˦ liŋ˧˥ san˥ fən˥"}
+{"label":"time 0:4","parts":["零点","零四分"],"whole":"liŋ˧˥ tjɛn˨˩ liŋ˧˥ sɹ̩˥˩ fən˥","split":"liŋ˧˥ tjɛn˨˩˦ liŋ˧˥ sɹ̩˥˩ fən˥"}
+{"label":"time 0:5","parts":["零点","零五分"],"whole":"liŋ˧˥ tjɛn˨˩ liŋ˧˥ u˨˩ fən˥","split":"liŋ˧˥ tjɛn˨˩˦ liŋ˧˥ u˨˩ fən˥"}
+{"label":"time 0:6","parts":["零点","零六分"],"whole":"liŋ˧˥ tjɛn˨˩ liŋ˧˥ ljoʊ˥˩ fən˥","split":"liŋ˧˥ tjɛn˨˩˦ liŋ˧˥ ljoʊ˥˩ fən˥"}
+{"label":"time 0:7","parts":["零点","零七分"],"whole":"liŋ˧˥ tjɛn˨˩ liŋ˧˥ t͡ɕʰi˥ fən˥","split":"liŋ˧˥ tjɛn˨˩˦ liŋ˧˥ t͡ɕʰi˥ fən˥"}
+{"label":"time 0:8","parts":["零点","零八分"],"whole":"liŋ˧˥ tjɛn˨˩ liŋ˧˥ pa˥ fən˥","split":"liŋ˧˥ tjɛn˨˩˦ liŋ˧˥ pa˥ fən˥"}
+{"label":"time 0:9","parts":["零点","零九分"],"whole":"liŋ˧˥ tjɛn˨˩ liŋ˧˥ t͡ɕjoʊ˨˩ fən˥","split":"liŋ˧˥ tjɛn˨˩˦ liŋ˧˥ t͡ɕjoʊ˨˩ fən˥"}
+{"label":"time 0:10","parts":["零点","十分"],"whole":"liŋ˧˥ tjɛn˨˩ ʂɻ̩˧˥ fən˥","split":"liŋ˧˥ tjɛn˨˩˦ ʂɻ̩˧˥ fən˥"}
+{"label":"time 0:11","parts":["零点","十一分"],"whole":"liŋ˧˥ tjɛn˨˩ ʂɻ̩˧˥ i˥˩ fən˥","split":"liŋ˧˥ tjɛn˨˩˦ ʂɻ̩˧˥ i˥˩ fən˥"}
+{"label":"time 0:12","parts":["零点","十二分"],"whole":"liŋ˧˥ tjɛn˨˩ ʂɻ̩˧˥ ɚ˥˩ fən˥","split":"liŋ˧˥ tjɛn˨˩˦ ʂɻ̩˧˥ ɚ˥˩ fən˥"}
+{"label":"time 0:13","parts":["零点","十三分"],"whole":"liŋ˧˥ tjɛn˨˩ ʂɻ̩˧˥ san˥ fən˥","split":"liŋ˧˥ tjɛn˨˩˦ ʂɻ̩˧˥ san˥ fən˥"}
+{"label":"time 0:14","parts":["零点","十四分"],"whole":"liŋ˧˥ tjɛn˨˩ ʂɻ̩˧˥ sɹ̩˥˩ fən˥","split":"liŋ˧˥ tjɛn˨˩˦ ʂɻ̩˧˥ sɹ̩˥˩ fən˥"}
+{"label":"time 0:15","parts":["零点","十五分"],"whole":"liŋ˧˥ tjɛn˨˩ ʂɻ̩˧˥ u˨˩ fən˥","split":"liŋ˧˥ tjɛn˨˩˦ ʂɻ̩˧˥ u˨˩ fən˥"}

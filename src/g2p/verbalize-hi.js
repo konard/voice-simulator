@@ -111,6 +111,16 @@ const UNITS = {
   किग्रा: 'किलोग्राम',
 };
 
+/** Scale words after a sum (`$5m`), as said in Hindi news. */
+const MONEY_SCALES = {
+  thousand: 'हज़ार',
+  million: 'मिलियन',
+  billion: 'बिलियन',
+  тыс: 'हज़ार',
+  млн: 'मिलियन',
+  млрд: 'बिलियन',
+};
+
 const SYMBOLS = {
   '&': ['और'],
   '+': ['प्लस'],
@@ -202,28 +212,51 @@ export const HINDI = {
     return number.words;
   },
   time(hours, minutes) {
+    const order = ['hour', 'minute'];
     if (minutes === 0) {
-      return [...hindiCardinal(hours), 'बजे'];
+      return { order, hour: [...hindiCardinal(hours), 'बजे'], minute: [] };
     }
-    return [...hindiCardinal(hours), 'बजकर', ...hindiCardinal(minutes), 'मिनट'];
+    return {
+      order,
+      hour: [...hindiCardinal(hours), 'बजकर'],
+      minute: [...hindiCardinal(minutes), 'मिनट'],
+    };
   },
   date({ year: yearValue, month, day }) {
-    const words = [...hindiCardinal(day), MONTHS[month - 1]];
-    return yearValue ? [...words, ...year(yearValue)] : words;
+    return {
+      order: ['day', 'month', 'year'],
+      day: hindiCardinal(day),
+      month: [MONTHS[month - 1]],
+      year: yearValue ? year(yearValue) : [],
+    };
   },
+  /** Parts as in English: `amount` or `major` and `minor`, `scale`, `currency`. */
   money(number, code, scale) {
     const [names, minor] = CURRENCIES[code] ?? [[code, code]];
     if (scale) {
-      return [...number.words, ...this.unit(number, scale).slice(-1), names[1]];
+      return {
+        order: ['amount', 'scale', 'currency'],
+        amount: number.words,
+        scale: [MONEY_SCALES[scale]],
+        currency: [names[1]],
+      };
     }
     const { integer, fraction } = number;
     if (fraction && fraction.length === 2 && minor) {
       const cents = Number(fraction);
-      const words = [...hindiCardinal(integer), names[integer === 1 ? 0 : 1]];
-      return cents ? [...words, ...hindiCardinal(cents), minor] : words;
+      return {
+        order: ['major', 'currency', 'minor'],
+        major: hindiCardinal(integer),
+        currency: [names[integer === 1 ? 0 : 1]],
+        minor: cents ? [...hindiCardinal(cents), minor] : [],
+      };
     }
     const single = !fraction && integer === 1;
-    return [...number.words, names[single ? 0 : 1]];
+    return {
+      order: ['amount', 'currency'],
+      amount: number.words,
+      currency: [names[single ? 0 : 1]],
+    };
   },
   unit(number, unit) {
     const key = unit.toLowerCase();
@@ -235,7 +268,13 @@ export const HINDI = {
       करोड़: 'करोड़',
     };
     const name = UNITS[key] ?? scales[key];
-    return name ? [...number.words, ...name.split(' ')] : null;
+    return name
+      ? {
+          order: ['amount', 'unit'],
+          amount: number.words,
+          unit: name.split(' '),
+        }
+      : null;
   },
   hasUnit: (unit) => Boolean(UNITS[unit.toLowerCase()]),
   symbol: (char) => SYMBOLS[char] ?? null,
