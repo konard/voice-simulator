@@ -7,7 +7,15 @@
  */
 
 import { ENGLISH_DICTIONARY } from './english-dict.js';
-import { englishNumberWords, spellToIpa } from './english-rules.js';
+import { ENGLISH_HETERONYMS } from './english-heteronyms.js';
+import { selectReading } from './english-context.js';
+import {
+  SIBILANT_FINAL,
+  VOICELESS_FINAL,
+  englishNumberWords,
+  pluralEnding,
+  spellToIpa,
+} from './english-rules.js';
 
 let dictionary = null;
 
@@ -30,9 +38,6 @@ function getDictionary() {
   return dictionary;
 }
 
-const VOICELESS_FINAL = /[ptkfθ]$/;
-const SIBILANT_FINAL = /(?:s|z|ʃ|ʒ|t͡ʃ|d͡ʒ)$/;
-
 /** Suffix handlers: [suffix, stem candidates, pronounce(stemIpa)]. */
 const SUFFIXES = [
   ["'s", (word) => [word.slice(0, -2)], (ipa) => `${ipa}${pluralEnding(ipa)}`],
@@ -52,13 +57,6 @@ const SUFFIXES = [
   ['er', (word) => [word.slice(0, -2), word.slice(0, -1)], (ipa) => `${ipa}ɚ`],
   ['ness', (word) => [word.slice(0, -4)], (ipa) => `${ipa}nəs`],
 ];
-
-function pluralEnding(ipa) {
-  if (SIBILANT_FINAL.test(ipa)) {
-    return 'ɪz';
-  }
-  return VOICELESS_FINAL.test(ipa) ? 's' : 'z';
-}
 
 function pastEnding(ipa) {
   if (/[td]$/.test(ipa)) {
@@ -83,11 +81,27 @@ function lookupWithSuffix(word) {
 
 /**
  * Pronounce one English word.
+ *
+ * Heteronyms (`record`, `read`, `live`, see `english-heteronyms.js`) are
+ * looked up first: with a `context` the reading that fits it is chosen
+ * (`english-context.js`) and reported with source `heteronym` and the
+ * tag that chose it; without one the first (default) reading is used.
  * @param {string} word
- * @returns {{ipa: string, source: 'dictionary'|'morphology'|'rules'}}
+ * @param {{before?: string[], after?: string[], sentence?: string[]}} [context]
+ *   lowercased words before the word (nearest first) and after it in the
+ *   same clause, and all words of the sentence
+ * @returns {{ipa: string, source: 'heteronym'|'dictionary'|'morphology'|'rules',
+ *   tag?: string}}
  */
-export function englishWordToIpa(word) {
+export function englishWordToIpa(word, context) {
   const lower = word.toLowerCase().replaceAll('’', "'");
+  if (Object.hasOwn(ENGLISH_HETERONYMS, lower)) {
+    const readings = ENGLISH_HETERONYMS[lower];
+    const { reading, tag } = context
+      ? selectReading(readings, context)
+      : { reading: readings[0], tag: readings[0].tags };
+    return { ipa: reading.ipa, source: 'heteronym', tag };
+  }
   const known = getDictionary().get(lower);
   if (known) {
     return { ipa: known, source: 'dictionary' };

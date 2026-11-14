@@ -14,11 +14,31 @@ export interface Language {
   sample: string;
 }
 
+/**
+ * Where a word's pronunciation came from. `heteronym`: an English word
+ * spelled one way and spoken two ways (`record`, `read`), read as fits
+ * the words around it.
+ */
+export type WordSource =
+  | 'dictionary'
+  | 'morphology'
+  | 'rules'
+  | 'heteronym'
+  | 'exception'
+  | 'pinyin'
+  | 'unknown';
+
 export interface Word {
   text: string;
   lang: string;
   ipa: string;
-  source?: string;
+  source?: WordSource;
+  /**
+   * For a heteronym: the part of speech that chose its reading (`N` noun,
+   * `A` adjective, `V` verb, `D` past tense or participle), or the tags of
+   * the reading when a neighbouring word or the default chose it.
+   */
+  tag?: string;
   pinyin?: string;
   /** The written text the word was read from (before verbalisation). */
   original?: string;
