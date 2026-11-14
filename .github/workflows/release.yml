@@ -269,6 +269,9 @@ jobs:
       - name: Check code duplication
         run: npm run check:duplication
 
+      - name: Check policy (no neural networks, permissive licences)
+        run: npm run check:policy
+
       - name: Check for secrets
         run: npx --yes -p secretlint@13.0.7 -p @secretlint/secretlint-rule-preset-recommend@13.0.7 secretlint "**/*"
 

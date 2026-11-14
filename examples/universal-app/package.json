@@ -2,6 +2,7 @@
   "name": "universal-example-app",
   "version": "0.1.0",
   "private": true,
+  "license": "Unlicense",
   "description": "Universal React example for the JavaScript template package",
   "type": "module",
   "main": "electron/main.cjs",
