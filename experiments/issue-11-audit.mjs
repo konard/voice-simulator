@@ -14,7 +14,9 @@ import {
 const show = (label, value) =>
   console.log(`${label}: ${JSON.stringify(value)}`);
 
-// 1. Mandarin tones: which pitch does each tone get (quartiles of f0)?
+// 1. Mandarin tones: which pitch does each tone get (quartiles of f0 over
+// the voiced frames; f0 is defined in every frame, so the frames are picked
+// by the voicing channel, see issue 42)?
 for (const text of [
   'mā',
   'má',
@@ -27,8 +29,9 @@ for (const text of [
   '花儿',
 ]) {
   const { ipa } = textToIpa(text, { lang: 'zh' });
-  const voiced = Array.from(planUtterance(ipa, {}).channels.f0).filter(
-    (value) => value > 0
+  const { channels } = planUtterance(ipa, {});
+  const voiced = Array.from(channels.f0).filter(
+    (_, frame) => channels.voicing[frame] > 0.5
   );
   const pick = (quantile) =>
     Math.round(voiced[Math.floor(quantile * (voiced.length - 1))] ?? 0);

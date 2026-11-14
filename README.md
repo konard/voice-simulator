@@ -18,6 +18,8 @@ a pressure wave travelling through the 3D shape of a parametric low-poly head
   periods, exclamations, questions and ellipses each have their own pause,
   final pitch movement and lengthening; questions with a question word
   fall, yes/no questions rise, exclamations are higher and louder.
+- **Lexical tones**: every level of a tone written with Chao tone letters is
+  a pitch target, so the Mandarin third tone `˨˩˦` dips before it rises.
 - **Word and syllable timeline**: `utteranceTimeline` (also in
   `synthesize`) tells when every word and syllable is spoken; the app
   highlights the current word and syllable in the text and the IPA.
