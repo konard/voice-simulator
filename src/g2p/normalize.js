@@ -92,11 +92,13 @@ const HAN = /\p{Script=Han}+/uy;
 const WORD = /(?:\+?[\p{L}\p{M}](?:[\p{L}\p{M}+]|['’](?=[\p{L}\p{M}]))*\d?)+/uy;
 const DOTTED_ACRONYM = /(?:\p{Lu}\.){2,}/uy;
 const ABBREVIATION = /[\p{L}\p{M}]+\.(?:\s?[\p{L}\p{M}]{1,4}\.)*/uy;
-const ISO_DATE = /(\d{4})-(\d{1,2})-(\d{1,2})(?!\d)/y;
-const DOTTED_DATE = /(\d{1,2})\.(\d{1,2})\.(\d{4}|\d{2})(?!\d|\.\d)/y;
-const SLASH_DATE = /(\d{1,2})\/(\d{1,2})\/(\d{4}|\d{2})(?!\d)/y;
-const CLOCK_TIME = /(\d{1,2}):(\d{2})(?!\d)(?:\s?([ap])\.?\s?m\b\.?)?/iy;
-const HOUR_TIME = /(\d{1,2})\s?([ap])\.?m\b\.?/iy;
+// The `d` flag gives the offsets of the groups: the parts of the token
+// (day, hour, ...) that the spoken words read.
+const ISO_DATE = /(\d{4})-(\d{1,2})-(\d{1,2})(?!\d)/dy;
+const DOTTED_DATE = /(\d{1,2})\.(\d{1,2})\.(\d{4}|\d{2})(?!\d|\.\d)/dy;
+const SLASH_DATE = /(\d{1,2})\/(\d{1,2})\/(\d{4}|\d{2})(?!\d)/dy;
+const CLOCK_TIME = /(\d{1,2}):(\d{2})(?!\d)(?:\s?(([ap])\.?\s?m\b\.?))?/diy;
+const HOUR_TIME = /(\d{1,2})\s?(([ap])\.?m\b\.?)/diy;
 const MINUS = /[-−](?=\d)/y;
 const RANGE = /[-–—](?=\d)/y;
 const NEXT_WORD = /\s*([\p{L}\p{M}]+)/uy;
@@ -150,7 +152,57 @@ function parseNumber(text, index, verbalizer) {
   const end = index + found[0].length + (decimal ? decimal[0].length : 0);
   const integer = Number(digits);
   const words = numberWords(verbalizer, digits, integer, fraction);
-  return { text: digits, integer, fraction, words, end };
+  const integerEnd = index + found[0].length;
+  return {
+    text: digits,
+    integer,
+    fraction,
+    words,
+    start: index,
+    integerEnd,
+    end,
+  };
+}
+
+/**
+ * Source ranges of the parts of a number: the whole `amount`, its
+ * integer (`major`) and its fraction (`minor`, as cents).
+ */
+function numberRanges(number) {
+  return {
+    amount: [number.start, number.end],
+    major: [number.start, number.integerEnd],
+    minor: number.fraction ? [number.integerEnd + 1, number.end] : undefined,
+  };
+}
+
+/** Range of the last group of a match, as `[start, end]` offsets. */
+function tailRange(found, start) {
+  const end = start + found[0].length;
+  return [end - found[1].length, end];
+}
+
+/**
+ * Words of a verbaliser result. A flat list has no parts; an object
+ * names its parts and lists them in spoken `order` (`{order: ['month',
+ * 'day', 'year'], month: [...], ...}`), and every word of a part with a
+ * known source range gets `partStart` and `partEnd`.
+ * @param {string[]|object[]|{order: string[]}} result
+ * @param {Object<string, number[]|undefined>} ranges
+ */
+function partWords(result, ranges) {
+  if (Array.isArray(result)) {
+    return result;
+  }
+  return result.order.flatMap((name) =>
+    (result[name] ?? []).map((word) => {
+      const entry = typeof word === 'string' ? { text: word } : word;
+      const range = ranges[name];
+      return range
+        ? { ...entry, partStart: range[0], partEnd: range[1] }
+        : entry;
+    })
+  );
 }
 
 function validDate({ month, day }) {
@@ -165,17 +217,18 @@ function fullYear(text) {
   return value < 50 ? 2000 + value : 1900 + value;
 }
 
-/** Date formats: pattern and a function returning [year, month, day]. */
+/**
+ * Date formats: pattern and a function returning the groups of the year,
+ * the month and the day.
+ */
 const DATE_FORMATS = [
-  [ISO_DATE, (found) => [found[1], found[2], found[3]]],
-  [DOTTED_DATE, (found) => [found[3], found[2], found[1]]],
+  [ISO_DATE, () => [1, 2, 3]],
+  [DOTTED_DATE, () => [3, 2, 1]],
   [
     SLASH_DATE,
     (found, lang) =>
       // US order (month/day) for English unless the first part is a day.
-      lang === 'en' && Number(found[1]) <= 12
-        ? [found[3], found[1], found[2]]
-        : [found[3], found[2], found[1]],
+      lang === 'en' && Number(found[1]) <= 12 ? [3, 1, 2] : [3, 2, 1],
   ],
 ];
 
@@ -244,6 +297,11 @@ class Normalizer {
     return end;
   }
 
+  /** Emit a verbaliser result whose parts read the given ranges. */
+  emitParts(result, ranges, end, historyText) {
+    return this.emitNumber(partWords(result, ranges), end, historyText);
+  }
+
   run() {
     const rules = [
       this.space,
@@ -302,7 +360,8 @@ class Normalizer {
       if (!found) {
         continue;
       }
-      const [year, month, day] = parts(found, this.verbalizer.lang);
+      const groups = parts(found, this.verbalizer.lang);
+      const [year, month, day] = groups.map((group) => found[group]);
       const date = {
         year: fullYear(year),
         month: Number(month),
@@ -311,7 +370,11 @@ class Normalizer {
       if (validDate(date)) {
         const end = this.index + found[0].length;
         const words = this.verbalizer.date(date, this.context(this.index));
-        return this.emitNumber(words, end, year);
+        const [yearRange, monthRange, dayRange] = groups.map(
+          (group) => found.indices[group]
+        );
+        const ranges = { year: yearRange, month: monthRange, day: dayRange };
+        return this.emitParts(words, ranges, end, year);
       }
     }
     return null;
@@ -328,14 +391,19 @@ class Normalizer {
     }
     const hours = Number(found[1]);
     const minutes = clock ? Number(clock[2]) : 0;
-    const meridiem = (clock ? clock[3] : hour[2])?.toLowerCase();
+    const meridiem = (clock ? clock[4] : hour[3])?.toLowerCase();
     const valid = meridiem ? hours >= 1 && hours <= 12 : hours <= 24;
     if (!valid || minutes >= 60) {
       return null;
     }
     const end = this.index + found[0].length;
     const words = verbalizer.time(hours, minutes, meridiem);
-    return this.emitNumber(words, end, found[1]);
+    const ranges = {
+      hour: found.indices[1],
+      minute: clock ? clock.indices[2] : undefined,
+      period: clock ? clock.indices[3] : hour.indices[2],
+    };
+    return this.emitParts(words, ranges, end, found[1]);
   }
 
   /** "$3.50", "€ 20", "£5m". */
@@ -349,7 +417,12 @@ class Normalizer {
     const scale = match(SCALE, this.text, number.end);
     const end = scale ? number.end + scale[0].length : number.end;
     const words = this.verbalizer.money(number, code, scaleKey(scale));
-    return this.emitNumber(words, end, number.text);
+    const ranges = {
+      ...numberRanges(number),
+      scale: scale ? tailRange(scale, number.end) : undefined,
+      currency: [this.index, this.index + 1],
+    };
+    return this.emitParts(words, ranges, end, number.text);
   }
 
   number() {
@@ -434,7 +507,12 @@ class Normalizer {
       return null;
     }
     const words = this.verbalizer.money(number, code, scaleKey(scale));
-    return this.emitNumber(words, start + found[0].length, number.text);
+    const ranges = {
+      ...numberRanges(number),
+      scale: scale ? tailRange(scale, number.end) : undefined,
+      currency: tailRange(found, start),
+    };
+    return this.emitParts(words, ranges, start + found[0].length, number.text);
   }
 
   /** "5 km", "20%", "36,6 °C", "5 тыс. человек". */
@@ -449,7 +527,14 @@ class Normalizer {
       end++;
     }
     const words = this.verbalizer.unit(number, found[1]);
-    return words ? this.emitNumber(words, end, number.text) : null;
+    if (!words) {
+      return null;
+    }
+    const ranges = {
+      amount: [number.start, number.end],
+      unit: [tailRange(found, number.end)[0], end],
+    };
+    return this.emitParts(words, ranges, end, number.text);
   }
 
   isUnit(found, number) {
@@ -566,9 +651,11 @@ class Normalizer {
  *   `lang` is the base language; `wordLanguage` tells the language of a
  *   written word (by script).
  * @returns {object[]} items `{kind: 'word', text, say?, ipa?, letter?,
- *   lang, sourceStart, sourceEnd, token}` and `{kind: 'break', symbol,
- *   sourceStart, sourceEnd}`; `say` keeps Russian stress marks (`+`),
- *   and words generated from one source token share `token`.
+ *   lang, sourceStart, sourceEnd, partStart?, partEnd?, token}` and
+ *   `{kind: 'break', symbol, sourceStart, sourceEnd}`; `say` keeps
+ *   Russian stress marks (`+`), words generated from one source token
+ *   share `token`, and `partStart`/`partEnd` give the part of the token
+ *   that a word reads (the day of a date, the currency of a sum).
  */
 export function normalizeText(text, options) {
   return new Normalizer(String(text ?? ''), options).run();

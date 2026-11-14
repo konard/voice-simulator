@@ -45,6 +45,9 @@ export interface Word {
   sourceStart?: number;
   sourceEnd?: number;
   token?: number;
+  /** Range of the part of the token this word reads (`3` of `3/4/2024`). */
+  partStart?: number;
+  partEnd?: number;
   linkingR?: boolean;
 }
 
@@ -69,10 +72,19 @@ export interface TimelineSyllable {
   text?: string;
   sourceStart?: number;
   sourceEnd?: number;
+  /** Letters of the spoken word for this syllable, in a verbalised word. */
+  spoken?: string;
+  /** Index of the spoken word (into `word.spoken.split(' ')`). */
+  spokenWord?: number;
+  /** Range of the part of the token this spoken word reads (date, time, money, unit). */
+  partStart?: number;
+  partEnd?: number;
 }
 
 export interface TimelineWord {
   text: string;
+  /** Spoken words joined by a space, when the word is not read as written. */
+  spoken?: string;
   lang: string;
   ipa: string;
   start: number;

@@ -131,7 +131,14 @@ const CURRENCIES = {
   RUB: ['ruble', 'rubles', 'kopeck', 'kopecks'],
 };
 
-const SCALES = { thousand: 'thousand', million: 'million', billion: 'billion' };
+const SCALES = {
+  thousand: 'thousand',
+  million: 'million',
+  billion: 'billion',
+  тыс: 'thousand',
+  млн: 'million',
+  млрд: 'billion',
+};
 
 const UNITS = {
   km: ['kilometer', 'kilometers'],
@@ -256,17 +263,26 @@ export const ENGLISH = {
     return replaceLast(year(value), pluralWord);
   },
   time(hours, minutes, meridiem) {
-    const words = cardinal(hours);
+    let minute = [];
     if (minutes > 0) {
-      words.push(...(minutes < 10 ? ['oh'] : []), ...cardinal(minutes));
+      minute = [...(minutes < 10 ? ['oh'] : []), ...cardinal(minutes)];
     } else if (!meridiem) {
-      words.push("o'clock");
+      minute = ["o'clock"];
     }
-    return meridiem ? [...words, ...spell(`${meridiem}m`)] : words;
+    return {
+      order: ['hour', 'minute', 'period'],
+      hour: cardinal(hours),
+      minute,
+      period: meridiem ? spell(`${meridiem}m`) : [],
+    };
   },
   date({ year: yearValue, month, day }) {
-    const words = [MONTHS[month - 1], ...this.ordinal(day)];
-    return yearValue ? [...words, ...year(yearValue)] : words;
+    return {
+      order: ['month', 'day', 'year'],
+      month: [MONTHS[month - 1]],
+      day: this.ordinal(day),
+      year: yearValue ? year(yearValue) : [],
+    };
   },
   /** Numbers are read as years after these words. */
   yearContext: new Set(
@@ -274,24 +290,38 @@ export const ENGLISH = {
       ' '
     )
   ),
+  /**
+   * Parts: the `amount`, or its `major` (dollars) and `minor` (cents)
+   * units, the `scale` (million) and the `currency`.
+   */
   money(number, code, scale) {
     const [one, many, minorOne, minorMany] = CURRENCIES[code] ?? [code, code];
+    const order = ['amount', 'scale', 'currency'];
     if (scale) {
-      return [...number.words, SCALES[scale], many];
+      const amount = number.words;
+      return { order, amount, scale: [SCALES[scale]], currency: [many] };
     }
     const { integer, fraction } = number;
     if (fraction.length !== 2 || !minorOne) {
       const single = !fraction && integer === 1;
-      return [...number.words, single ? one : many];
+      return { order, amount: number.words, currency: [single ? one : many] };
     }
-    const count = (value, singular, plural) =>
-      value > 0 ? [...cardinal(value), value === 1 ? singular : plural] : [];
-    const major = count(integer, one, many);
-    const minor = count(Number(fraction), minorOne, minorMany);
-    if (major.length && minor.length) {
-      return [...major, 'and', ...minor];
+    const minorValue = Number(fraction);
+    const minor =
+      minorValue > 0
+        ? [...cardinal(minorValue), minorValue === 1 ? minorOne : minorMany]
+        : [];
+    if (integer > 0) {
+      return {
+        order: ['major', 'currency', 'minor'],
+        major: cardinal(integer),
+        currency: [integer === 1 ? one : many],
+        minor: minor.length ? ['and', ...minor] : [],
+      };
     }
-    return major.length ? major : minor.length ? minor : ['zero', many];
+    return minor.length
+      ? { order: ['minor'], minor }
+      : { order, amount: ['zero'], currency: [many] };
   },
   scaleWord: (scale) => SCALES[scale],
   unit(number, unit) {
@@ -300,7 +330,11 @@ export const ENGLISH = {
       return null;
     }
     const single = !number.fraction && number.integer === 1;
-    return [...number.words, ...(single ? forms[0] : forms[1]).split(' ')];
+    return {
+      order: ['amount', 'unit'],
+      amount: number.words,
+      unit: (single ? forms[0] : forms[1]).split(' '),
+    };
   },
   hasUnit: (unit) => Boolean(UNITS[unit.toLowerCase()]),
   symbol: (char) => SYMBOLS[char] ?? null,

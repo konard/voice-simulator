@@ -333,10 +333,11 @@ const COMMANDS = {
     }
     for (const word of timeline.words) {
       const syllables = word.syllables
-        .map((syllable) => syllable.text ?? syllable.ipa)
+        .map((syllable) => syllable.text ?? syllable.spoken ?? syllable.ipa)
         .join('·');
+      const said = word.spoken ? ` (${word.spoken})` : '';
       io.stdout(
-        `${word.start.toFixed(3)} ${word.end.toFixed(3)} ${word.text} /${word.syllables.map((syllable) => syllable.ipa).join('.')}/ ${syllables}`
+        `${word.start.toFixed(3)} ${word.end.toFixed(3)} ${word.text}${said} /${word.syllables.map((syllable) => syllable.ipa).join('.')}/ ${syllables}`
       );
     }
   },

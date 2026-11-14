@@ -30,6 +30,10 @@ a pressure wave travelling through the 3D shape of a parametric low-poly head
 - **Word and syllable timeline**: `utteranceTimeline` (also in
   `synthesize`) tells when every word and syllable is spoken; the app
   highlights the current word and syllable in the text and the IPA.
+  Numbers, dates, times, money and units stay one word of the text with
+  `spoken` set to what is said (`25` → `twenty five`); their syllables
+  carry the spoken letters, and the part of the token they read
+  (`partStart`/`partEnd`), so `3/4/2024` lights 3, then 4, then 2024.
 - **Smooth articulation**: IPA becomes a time plan of tract shapes with
   coarticulated transitions, glottal source and pitch contour.
 - **Physical acoustics** with two interchangeable solvers:
