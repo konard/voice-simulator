@@ -290,7 +290,11 @@ function isObstruent(phone) {
   return base in DEVOICE || base in VOICE;
 }
 
-/** Final devoicing and regressive voicing assimilation (right to left). */
+/**
+ * Final devoicing and regressive voicing assimilation (right to left),
+ * inside one word. Voicing across a clitic boundary (`из дома` ɪz ˈdomə,
+ * `как же` kaɡ ʐɨ) is done in `russian-clitics.js`.
+ */
 function assimilateVoicing(phones) {
   const result = [...phones];
   for (let index = result.length - 1; index >= 0; index--) {
