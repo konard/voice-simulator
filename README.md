@@ -16,6 +16,11 @@ a pressure wave travelling through the 3D shape of a parametric low-poly head
   ɹid, `I read it yesterday` ɹɛd, `record the record` ɹəˈkɔɹd ˈɹɛkɚd) by
   written rules on the neighbouring words. Mandarin applies tone sandhi and
   erhua: 花儿 and `huār` are one syllable, `xwaɻ˥`.
+- **English weak forms**: function words are weak and unstressed inside a
+  phrase (`a cup of tea for you` ə ˈkʌp əv ˈti fɚ ju, `the end` ði ˈɛnd,
+  `I have to go` aɪ ˈhæf tə ˈɡoʊ) and keep their strong form alone and at
+  the end of a phrase (`Yes, I can.`). The table is `WEAK_FORMS`;
+  `weakForms: false` (CLI `--strong-forms`) turns them off.
 - **English accents**: General American, Southern British, Australian and
   Indian English (`accent: 'en-GB'`, or `lang: 'en-GB'`).
 - **Punctuation prosody**: commas, semicolons, dashes, parentheses, quotes,
@@ -204,6 +209,9 @@ import {
 
 textToIpa('Привет, мир'); // { lang: 'ru', ipa: 'prʲɪˈvʲet | mʲir', ... }
 textToIpa('water', { lang: 'en', accent: 'en-GB' }).ipa; // 'ˈwɔːtə'
+textToIpa('a cup of tea for you', { lang: 'en' }).ipa; // 'ə ˈkʌp əv ˈti fɚ ju'
+// weakForms: false keeps every English word in its stressed dictionary form.
+textToIpa('I can do it', { lang: 'en', weakForms: false }).ipa; // 'ˈaɪ ˈkæn ˈdu ˈɪt'
 
 const head = randomHeadConfig(42); // a different person for every seed
 const result = synthesize('Hello world', { head, tier: 'medium' });
