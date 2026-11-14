@@ -14,8 +14,12 @@ a pressure wave travelling through the 3D shape of a parametric low-poly head
   units and abbreviations are read out per language (`normalizeText`).
   English heteronyms get the reading that fits the sentence (`I will read`
   ɹid, `I read it yesterday` ɹɛd, `record the record` ɹəˈkɔɹd ˈɹɛkɚd) by
-  written rules on the neighbouring words. Mandarin applies tone sandhi and
-  erhua: 花儿 and `huār` are one syllable, `xwaɻ˥`.
+  written rules on the neighbouring words. Russian prepositions and the
+  particles `не`, `ни`, `же`, `ли`, `бы` are spoken as part of the word they
+  lean on, with a reduced vowel and the voicing of the next sound (`из дома`
+  ɪz ˈdomə, `на работе` nə rɐˈbotʲə, `как же` kaɡ ʐɨ); each stays its own
+  word for highlighting. Mandarin applies tone sandhi and erhua: 花儿 and
+  `huār` are one syllable, `xwaɻ˥`.
 - **English weak forms**: function words are weak and unstressed inside a
   phrase (`a cup of tea for you` ə ˈkʌp əv ˈti fɚ ju, `the end` ði ˈɛnd,
   `I have to go` aɪ ˈhæf tə ˈɡoʊ) and keep their strong form alone and at

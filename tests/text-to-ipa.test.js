@@ -5,7 +5,13 @@
 import { describe, it, expect } from 'test-anywhere';
 import { parseIpa, formatIpa } from '../src/ipa/parse.js';
 import { getPhoneme } from '../src/ipa/inventory.js';
+import { readFileSync } from 'node:fs';
 import { textToIpa, detectLanguage } from '../src/g2p/index.js';
+import { russianWordToIpa } from '../src/g2p/russian.js';
+import {
+  RUSSIAN_ENCLITICS,
+  RUSSIAN_PROCLITICS,
+} from '../src/g2p/russian-clitics.js';
 import { ERHUA_FINALS, FINALS } from '../src/g2p/pinyin.js';
 import { syllabifyTokens } from '../src/ipa/syllables.js';
 import {
@@ -204,6 +210,167 @@ describe('head configuration', () => {
       expect(
         Math.abs(decoded[parameter.key] - head[parameter.key])
       ).toBeLessThan(parameter.step + 1e-9);
+    }
+  });
+});
+
+describe('Russian clitics', () => {
+  const ru = (text) => textToIpa(text, { lang: 'ru' }).ipa;
+  const check = (pairs) => {
+    for (const [text, ipa] of pairs) {
+      expect(ru(text)).toBe(ipa);
+    }
+  };
+
+  it('keeps the voiced consonant before a voiced sound', () => {
+    check([
+      ['из дома', 'ɪz ˈdomə'],
+      ['в доме', 'v ˈdomʲə'],
+      ['об этом', 'ɐb ˈɛtəm'],
+      ['без меня', 'bʲɪz mʲɪˈnʲa'],
+      ['под домом', 'pɐd ˈdoməm'],
+    ]);
+  });
+
+  it('devoices before a voiceless sound', () => {
+    check([
+      ['из парка', 'ɪs ˈparkə'],
+      ['в парке', 'f ˈparkʲə'],
+    ]);
+  });
+
+  it('voices before a voiced obstruent', () => {
+    check([
+      ['с братом', 'z ˈbratəm'],
+      ['от брата', 'ɐd ˈbratə'],
+      ['к дому', 'ɡ ˈdomʊ'],
+    ]);
+  });
+
+  it('does not voice before sonorants and в', () => {
+    check([
+      ['от мамы', 'ɐt ˈmamɨ'],
+      ['к маме', 'k ˈmamʲə'],
+      ['к вам', 'k vam'],
+    ]);
+  });
+
+  it('reduces the vowels', () => {
+    check([
+      ['на работе', 'nə rɐˈbotʲə'],
+      ['до завтра', 'dɐ ˈzaftrə'],
+      ['по дороге', 'pə dɐˈroɡʲə'],
+      ['для меня', 'dlʲɪ mʲɪˈnʲa'],
+      ['у меня', 'ʊ mʲɪˈnʲa'],
+      ['через дорогу', 't͡ɕɪrʲɪz dɐˈroɡʊ'],
+      ['перед домом', 'pʲɪrʲɪd ˈdoməm'],
+      ['со мной', 'sɐ mnoj'],
+      ['обо мне', 'ɐbɐ mnʲe'],
+    ]);
+  });
+
+  it('hardens и after a hard consonant', () => {
+    check([
+      ['с Иваном', 's ɨˈvanəm'],
+      ['от Ивана', 'ɐt ɨˈvanə'],
+    ]);
+  });
+
+  it('joins chains', () => {
+    check([
+      ['из-за дома', 'ɪz zɐ ˈdomə'],
+      ['из-под дома', 'ɪs pɐd ˈdomə'],
+      ['не для меня', 'nʲɪ dlʲɪ mʲɪˈnʲa'],
+    ]);
+  });
+
+  it('reduces particles', () => {
+    check([
+      ['Я не знаю', 'ja nʲɪ ˈznajʊ'],
+      ['Он же сказал', 'on ʐɨ skɐˈzaɫ'],
+      ['знаешь ли', 'ˈznajɪʂ lʲɪ'],
+    ]);
+  });
+
+  it('voices before же and бы', () => {
+    check([
+      ['как же', 'kaɡ ʐɨ'],
+      ['вот бы', 'vod bɨ'],
+      ['друг же', 'druɡ ʐɨ'],
+      ['сказал бы', 'skɐˈzaɫ bɨ'],
+    ]);
+  });
+
+  it('does not voice an affricate, ч or х before же and бы', () => {
+    check([
+      ['отец бы', 'ˈotʲɪt͡s bɨ'],
+      ['врач бы', 'vrat͡ɕ bɨ'],
+      ['смех же', 'smʲex ʐɨ'],
+    ]);
+  });
+
+  it('stops at a break', () => {
+    check([
+      ['Он сказал, в доме', 'on skɐˈzaɫ , v ˈdomʲə'],
+      ['Да, на.', 'da , na .'],
+    ]);
+  });
+
+  it('leaves single words alone', () => {
+    check([
+      ['на', 'na'],
+      ['в', 'f'],
+      ['не', 'nʲe'],
+      ['бы', 'bɨ'],
+    ]);
+    for (const word of [
+      ...Object.keys(RUSSIAN_PROCLITICS),
+      ...Object.keys(RUSSIAN_ENCLITICS),
+    ]) {
+      expect(ru(word)).toBe(russianWordToIpa(word).ipa);
+    }
+  });
+
+  it('keeps a typed stress mark', () => {
+    check([
+      ['на́ гору', 'na ˈɡorʊ'],
+      ['н+а гору', 'na ˈɡorʊ'],
+    ]);
+  });
+
+  it('stops at another language', () => {
+    check([['в office', 'f ˈɔfɪs']]);
+  });
+
+  it('does not read a letter of a spelled abbreviation as a clitic', () => {
+    // США is spelled letter by letter; its first letter с is not the preposition.
+    check([['в США', 'v ɛs ʂa a']]);
+  });
+
+  it('keeps one word item per written word', () => {
+    const before = textToIpa('из-за дома', { lang: 'ru' }).words;
+    expect(before.map((word) => word.text)).toEqual(['из', 'за', 'дома']);
+    expect(before.map((word) => word.sourceStart)).toEqual([0, 3, 6]);
+  });
+
+  it('gives the IPA of the prototype for every phrase', () => {
+    const lines = readFileSync(
+      new globalThis.URL(
+        '../experiments/issue-11-russian-clitics-prototype.txt',
+        import.meta.url
+      ),
+      'utf8'
+    )
+      .trim()
+      .split('\n');
+    expect(lines.length).toBe(56);
+    for (const line of lines) {
+      const [, text, expected] = /^ru (.*): "(.*)" {3}today/u.exec(line);
+      // The prototype prints | for a break and leaves out the final break.
+      const actual = ru(text)
+        .replace(/ [,.?!;…] /gu, ' | ')
+        .replace(/ [.?!…]$/u, '');
+      expect(`${text}: ${actual}`).toBe(`${text}: ${expected}`);
     }
   });
 });

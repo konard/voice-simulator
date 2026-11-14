@@ -203,18 +203,18 @@ the pull request. Do not change a test of a single word.
 
 ## Acceptance criteria
 
-- [ ] `node experiments/issue-11-audit-m3c.mjs` prints in section 2 the
+- [x] `node experiments/issue-11-audit-m3c.mjs` prints in section 2 the
       strings of the Tests section; the refreshed
       `experiments/issue-11-audit-m3c.txt` is committed.
-- [ ] `textToIpa(text, { lang: 'ru' }).ipa` equals the left value of
+- [x] `textToIpa(text, { lang: 'ru' }).ipa` equals the left value of
       `experiments/issue-11-russian-clitics-prototype.txt` for every phrase
       of that file (the prototype prints `|` where `textToIpa` prints the
       break mark).
-- [ ] `textToIpa(word, { lang: 'ru' })` is unchanged for every key of
+- [x] `textToIpa(word, { lang: 'ru' })` is unchanged for every key of
       `RUSSIAN_PROCLITICS` and `RUSSIAN_ENCLITICS` given alone.
-- [ ] English, Hindi and Chinese results are unchanged: the tests of those
+- [x] English, Hindi and Chinese results are unchanged: the tests of those
       languages pass without edits.
-- [ ] The new tests exist and pass; `npm run check` and `npm test` pass; a
+- [x] The new tests exist and pass; `npm run check` and `npm test` pass; a
       patch changeset is added.
 
 ## Out of scope

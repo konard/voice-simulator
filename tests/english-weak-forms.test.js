@@ -74,7 +74,12 @@ describe('WEAK_FORMS', () => {
       'en-US'
     );
     expect(items[0].ipa).toBe('kan');
-    expect(textToIpa('Я не знаю', { lang: 'ru' }).ipa).toBe('ja nʲe ˈznajʊ');
+    // Russian `не` is reduced as a clitic (`russian-clitics.js`), not as an
+    // English weak form: switching weak forms off changes nothing.
+    const russian = (weakForms) =>
+      textToIpa('Я не знаю', { lang: 'ru', weakForms }).ipa;
+    expect(russian(true)).toBe('ja nʲɪ ˈznajʊ');
+    expect(russian(false)).toBe(russian(true));
   });
 });
 

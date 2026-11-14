@@ -31,6 +31,11 @@ export type WordSource =
 export interface Word {
   text: string;
   lang: string;
+  /**
+   * The word as spoken in its phrase: a Russian preposition or particle
+   * (`из`, `на`, `не`, `же` ...) has the reduced, assimilated form it takes
+   * next to the word it leans on (`из дома` gives ɪz, then ˈdomə).
+   */
   ipa: string;
   source?: WordSource;
   /**

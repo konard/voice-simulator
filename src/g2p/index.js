@@ -9,6 +9,11 @@
  * `|` (dash), `(` `)` and `"`, and questions opening with a question word
  * get a falling `↘` contour. Every word keeps `sourceStart`/`sourceEnd`
  * (UTF-16 offsets into the input) and the `original` text it came from.
+ * Words are pronounced one at a time; then Russian clitics join the word
+ * they lean on (see `russian-clitics.js`): a preposition or `не`, `ни`
+ * joins the next word (`из дома` ɪz ˈdomə), the particles `же`, `ли`, `бы`
+ * join the previous one (`как же` kaɡ ʐɨ). Each written word stays one
+ * item of `words`.
  * English function words (`of`, `to`, `can`, `you`, ...) are weak and
  * unstressed inside a phrase and keep their strong form alone and at its
  * end (see `weak-forms.js`).
@@ -18,6 +23,7 @@ import { englishWordToIpa } from './english.js';
 import { hindiWordToIpa, normalizeDevanagariDigits } from './hindi.js';
 import { chineseSyllables, chineseWordToIpa, isPinyin } from './chinese.js';
 import { russianWordToIpa } from './russian.js';
+import { joinRussianClitics } from './russian-clitics.js';
 import { VERBALIZERS, normalizeText } from './normalize.js';
 import {
   adaptEnglishWord,
@@ -371,6 +377,7 @@ export function textToIpa(text, options = {}) {
       items.push(...pronounceItem(item, source, accent, contexts[index]));
     }
   });
+  joinRussianClitics(items);
   if (options.weakForms !== false) {
     weakenFunctionWords(items, accent);
   }
