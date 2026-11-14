@@ -62,6 +62,61 @@ npm test
 deno test -A --parallel
 ```
 
+### Policy check
+
+The [vision](VISION.md) rules out neural networks and asks for a result in
+the public domain. `npm run check:policy` (part of `npm run check` and of the
+CI job "Lint and Format Check") enforces both by machine. It uses Node.js
+built-ins only, so it also runs before `npm install`. What counts as a neural
+network is described in
+[What counts as a neural network](VISION.md#what-counts-as-a-neural-network);
+the lists the check uses are in `scripts/policy-denylist.json`.
+
+What is checked, in every file that `git ls-files` lists:
+
+- **Dependencies** (`package`): the names in every `package.json`
+  (`dependencies`, `devDependencies`, `optionalDependencies`,
+  `peerDependencies`), every `package-lock.json`, `deno.lock`, `Cargo.toml`,
+  `Cargo.lock`, `requirements*.txt` and `pyproject.toml` are compared with
+  `deniedPackages` (npm, cargo and python). A pattern is an exact name or a
+  prefix that ends with `*`; Rust and Python names treat `-` and `_` alike.
+- **Imports** (`package`): in `.js`, `.mjs`, `.cjs`, `.jsx`, `.ts`, `.tsx`,
+  `.html`, `.rs`, `.py`, `.sh`, `.yml`, `.yaml` files and in `Dockerfile`, a
+  denied name in `from '...'`, `import('...')`, `require('...')`,
+  `use <crate>::`, `extern crate`, Python `import` / `from ... import`, a CDN
+  URL (`.../npm/<name>`, `/<name>@<version>`), or after an install command
+  such as `npm install`, `npx`, `bunx`, `pip install` or `cargo add`.
+- **Model files** (`file`): a file name that ends with one of
+  `deniedFileExtensions` (`.onnx`, `.pt`, `.safetensors`, `.gguf`, ...), in
+  any case.
+- **Licences** (`licence`): the `license` of every package in every npm lock
+  file, and of every crate in `cargo metadata` when there is a `Cargo.toml` at
+  the root, must pass `allowedLicences`. `A OR B` passes when one side passes,
+  `A AND B` when both do; a missing licence fails.
+
+Words are not checked: `docs/`, `dev/log/`, `CHANGELOG.md`, `.changeset/`,
+the list itself and its test are skipped, and "neural" may be written
+anywhere.
+
+A finding is printed as `file:line rule name: message`, for example:
+
+```text
+package.json:4 package onnxruntime-node: depends on the denied npm package (pattern "onnxruntime-*")
+```
+
+It means: line 4 of `package.json` names the package `onnxruntime-node`,
+which matches the npm pattern `onnxruntime-*`. Remove the dependency, the
+import or the file, or choose a package with a permissive licence. Without a
+finding the check prints `policy: ok (N packages, M files)`; with `--json` it
+prints the findings as JSON, and `--root <dir>` checks another repository.
+
+An exception is an entry
+`{"rule": "package" | "file" | "licence", "match": "<package name or file path>", "reason": "<sentence>"}`
+in `exceptions`. It needs a non-empty reason and the approval of the
+repository owner in the pull request that adds it. An exception that matches
+nothing is itself a finding (rule `exception`), so stale exceptions are
+removed.
+
 ## Version Management with Changesets
 
 This project uses [Changesets](https://github.com/changesets/changesets) to manage versions and changelogs. This eliminates merge conflicts that occur when multiple PRs bump the version in `package.json`.
