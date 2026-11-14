@@ -12,12 +12,12 @@
 #
 # Exit code 0 = merge succeeded or not needed; non-zero = merge conflict detected.
 #
-# See docs/case-studies/issue-23 for why this is critical.
+# See docs/case-studies/template-issue-23 for why this is critical.
 
 set -euo pipefail
 
 echo "=== Synchronizing PR with latest $BASE_REF ==="
-echo "This prevents stale merge preview issues (see docs/case-studies/issue-23)"
+echo "This prevents stale merge preview issues (see docs/case-studies/template-issue-23)"
 echo ""
 
 # Configure git for merge

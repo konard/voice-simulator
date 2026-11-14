@@ -207,7 +207,7 @@ jobs:
   # Lint runs independently of changeset-check - it's a fast check that should always run
   # See: https://github.com/link-assistant/hive-mind/pull/1024 for why this dependency was removed
   # IMPORTANT: ESLint includes max-lines rule (1500 lines) to ensure files stay maintainable
-  # See docs/case-studies/issue-23 for why fresh merge simulation is critical
+  # See docs/case-studies/template-issue-23 for why fresh merge simulation is critical
   lint:
     name: Lint and Format Check
     runs-on: ubuntu-24.04
@@ -274,7 +274,7 @@ jobs:
 
   # Test matrix: 3 runtimes (Node.js, Bun, Deno) x 3 OS (Ubuntu, macOS, Windows)
   # IMPORTANT: Tests must validate the ACTUAL merge result, not a stale merge preview.
-  # See docs/case-studies/issue-23 for why this is critical.
+  # See docs/case-studies/template-issue-23 for why this is critical.
   # Fast-fail: slow test matrix only runs after fast checks pass (hive-mind principle #5)
   test:
     # GitHub evaluates `if` before it expands the matrix, so a skipped job
