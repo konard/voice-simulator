@@ -93,6 +93,15 @@ describe('utteranceTimeline', () => {
     ]);
   });
 
+  it('highlights an erhua word as one syllable', () => {
+    const text = '我喜欢花儿';
+    const result = timeline(text, { lang: 'zh' });
+    const word = result.words.find((item) => item.text === '花儿');
+    expect(word.syllables.length).toBe(1);
+    expect(word.syllables[0].text).toBe('花儿');
+    expect(spelled(text, word)).toEqual(['花儿']);
+  });
+
   it('spells Hindi syllables as aksharas', () => {
     const text = 'नमस्ते बनती तरंगों';
     const result = timeline(text, { lang: 'hi' });
@@ -182,6 +191,15 @@ describe('syllableSpans', () => {
   it('refuses spellings that cannot hold the syllables', () => {
     expect(syllableSpans('', counts(1))).toBe(null);
     expect(syllableSpans('你', counts(2))).toBe(null);
+  });
+
+  it('gives an erhua word one span', () => {
+    expect(syllableSpans('花儿', counts(1))).toEqual([{ start: 0, end: 2 }]);
+    expect(syllableSpans('女儿', counts(2))).toEqual([
+      { start: 0, end: 1 },
+      { start: 1, end: 2 },
+    ]);
+    expect(syllableSpans('儿', counts(2))).toBe(null);
   });
 
   it('marks deleted Hindi schwas', () => {

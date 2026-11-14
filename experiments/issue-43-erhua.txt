@@ -1,0 +1,6 @@
+{"text":"花儿","ipa":"xwaɻ˥","vowelSegments":1,"duration":0.6818,"syllables":[["花儿"]]}
+{"text":"一点儿","ipa":"i˥˩ tjaɻ˨˩˦","vowelSegments":2,"duration":0.7951,"syllables":[["一"],["点儿"]]}
+{"text":"小孩儿","ipa":"ɕjɑʊ˨˩ xaɻ˧˥","vowelSegments":3,"duration":1.056,"syllables":[["小"],["孩儿"]]}
+{"text":"事儿","ipa":"ʂəɻ˥˩","vowelSegments":1,"duration":0.6218,"syllables":[["事儿"]]}
+{"text":"女儿","ipa":"ny˨˩ ɚ˧˥","vowelSegments":2,"duration":0.6318,"syllables":[["女"],["儿"]]}
+{"text":"hua1r","ipa":"xwaɻ˥","vowelSegments":1,"duration":0.6818,"syllables":[["hua1r"]]}

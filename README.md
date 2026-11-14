@@ -12,6 +12,8 @@ a pressure wave travelling through the 3D shape of a parametric low-poly head
 - **Text to IPA** for English, Russian, Hindi and Chinese, with automatic
   language detection per word (`textToIpa`). Numbers, dates, times, money,
   units and abbreviations are read out per language (`normalizeText`).
+  Mandarin applies tone sandhi and erhua: 花儿 and `huār` are one syllable,
+  `xwaɻ˥`.
 - **English accents**: General American, Southern British, Australian and
   Indian English (`accent: 'en-GB'`, or `lang: 'en-GB'`).
 - **Punctuation prosody**: commas, semicolons, dashes, parentheses, quotes,
@@ -476,7 +478,7 @@ The GitHub Actions workflow (`.github/workflows/release.yml`) implements a fast-
 **Fast checks** (~7-30s each, run first for fastest feedback):
 
 1. **Test compilation**: Syntax-checks all `.mjs` files with `node --check`
-2. **Lint, format & secrets scan**: ESLint, Prettier, jscpd, and [secretlint](https://github.com/secretlint/secretlint) for credential leak detection
+2. **Lint, format & secrets scan**: ESLint, Prettier, jscpd, and [secretlint](https://github.com/secretlint/secretlint) for credential leak detection, plus the policy check (`npm run check:policy`: no neural network libraries or model files, permissive licences only; see [Policy check](docs/CONTRIBUTING.md#policy-check))
 3. **File line limits**: Enforces the 1500-line limit on JavaScript (`.js`, `.mjs`, `.cjs`) and Markdown (`.md`) files plus `release.yml`
 4. **Changeset check**: Validates PR has exactly one changeset (added by that PR)
 5. **Version check**: Blocks manual version changes in `package.json`

@@ -2,7 +2,8 @@
  * Map spoken syllables back to the letters that spell them, so a reader
  * can highlight the syllable being spoken inside the written word.
  *
- * - Mandarin: one Han character per syllable (exact).
+ * - Mandarin: one Han character per syllable (exact); an erhua 儿 joins
+ *   the syllable before it.
  * - Hindi: one akshara per pronounced vowel; an akshara whose inherent
  *   schwa is deleted joins the syllable before it (exact up to the
  *   schwa-deletion rule shared with `hindi.js`).
@@ -20,17 +21,33 @@ const HAN = /\p{Script=Han}/u;
 const CYRILLIC = /\p{Script=Cyrillic}/u;
 const RUSSIAN_VOWELS = /[аеёиоуыэюя]/i;
 
-/** Han characters of a word, one per syllable. */
+/**
+ * Han characters of a word, one per syllable. An erhua 儿 (花儿 huār) is
+ * not a syllable: while there are more characters than syllables, the
+ * last 儿 that is not the first character joins the span before it.
+ */
 function hanSpans(word, count) {
   const spans = [];
   let offset = 0;
   for (const char of word) {
     if (HAN.test(char)) {
-      spans.push({ start: offset, end: offset + char.length });
+      spans.push({ start: offset, end: offset + char.length, char });
     }
     offset += char.length;
   }
-  return spans.length === count ? spans : null;
+  while (spans.length > count) {
+    const index = spans.findLastIndex(
+      (span, position) => position > 0 && span.char === '儿'
+    );
+    if (index < 0) {
+      return null;
+    }
+    spans[index - 1].end = spans[index].end;
+    spans.splice(index, 1);
+  }
+  return spans.length === count
+    ? spans.map(({ start, end }) => ({ start, end }))
+    : null;
 }
 
 const DEVANAGARI = {

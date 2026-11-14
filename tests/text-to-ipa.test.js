@@ -6,6 +6,8 @@ import { describe, it, expect } from 'test-anywhere';
 import { parseIpa, formatIpa } from '../src/ipa/parse.js';
 import { getPhoneme } from '../src/ipa/inventory.js';
 import { textToIpa, detectLanguage } from '../src/g2p/index.js';
+import { ERHUA_FINALS, FINALS } from '../src/g2p/pinyin.js';
+import { syllabifyTokens } from '../src/ipa/syllables.js';
 import {
   HEAD_PARAMETERS,
   DEFAULT_HEAD,
@@ -73,6 +75,49 @@ describe('textToIpa', () => {
   it('converts Chinese characters and numbered pinyin with tones', () => {
     expect(textToIpa('你好世界').ipa).toBe('ni˧˥ xɑʊ˨˩ ʂɻ̩˥˩ t͡ɕjɛ˥˩');
     expect(textToIpa('ni3 hao3', { lang: 'zh' }).ipa).toBe('ni˨˩˦ xɑʊ˨˩˦');
+  });
+});
+
+describe('erhua', () => {
+  const zh = (text) => textToIpa(text, { lang: 'zh' }).ipa;
+
+  it('merges 儿 into the previous syllable', () => {
+    expect(zh('花儿')).toBe('xwaɻ˥');
+    expect(zh('一点儿')).toBe('i˥˩ tjaɻ˨˩˦');
+    expect(zh('小孩儿')).toBe('ɕjɑʊ˨˩ xaɻ˧˥');
+    expect(zh('玩儿')).toBe('waɻ˧˥');
+    expect(zh('事儿')).toBe('ʂəɻ˥˩');
+    expect(zh('哪儿')).toBe('naɻ˨˩˦');
+  });
+
+  it('keeps a syllabic 儿', () => {
+    expect(zh('儿子').startsWith('ɚ˧˥')).toBe(true);
+    expect(zh('女儿')).toBe('ny˨˩ ɚ˧˥');
+    expect(zh('儿童')).toBe('ɚ˧˥ tʰʊŋ˧˥');
+    expect(zh('他儿子').split(' ').length).toBe(3);
+  });
+
+  it('reads pinyin erhua', () => {
+    for (const pinyin of ['huār', 'huar1', 'hua1r']) {
+      expect(zh(pinyin)).toBe('xwaɻ˥');
+    }
+    expect(zh('yìdiǎnr')).toBe('i˥˩ tjaɻ˨˩˦');
+    expect(zh('huaren').split(' ').length).toBe(2);
+  });
+
+  it('covers every final', () => {
+    for (const final of Object.keys(FINALS)) {
+      if (final === 'er' || final === 'ê') {
+        continue;
+      }
+      const rime = ERHUA_FINALS[final];
+      expect(typeof rime).toBe('string');
+      expect(rime.endsWith('ɻ')).toBe(true);
+      const tokens = parseIpa(`p${rime}˥`).tokens.filter(
+        (token) => token.kind !== 'pause'
+      );
+      expect(syllabifyTokens(tokens, { language: 'zh' }).length).toBe(1);
+    }
   });
 });
 
