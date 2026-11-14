@@ -195,7 +195,8 @@ export const HEAD_PARAMETERS = Object.freeze([
     max: 1,
     step: 0.01,
     default: 0.2,
-    description: 'Amount of turbulent aspiration noise at the glottis.',
+    description:
+      'Breathy voice: more aspiration noise at the glottis and a longer open phase.',
   },
   {
     key: 'vibrato',

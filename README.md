@@ -14,13 +14,17 @@ a pressure wave travelling through the 3D shape of a parametric low-poly head
   units and abbreviations are read out per language (`normalizeText`).
   English heteronyms get the reading that fits the sentence (`I will read`
   ɹid, `I read it yesterday` ɹɛd, `record the record` ɹəˈkɔɹd ˈɹɛkɚd) by
-  written rules on the neighbouring words.
+  written rules on the neighbouring words. Mandarin applies tone sandhi and
+  erhua: 花儿 and `huār` are one syllable, `xwaɻ˥`.
 - **English accents**: General American, Southern British, Australian and
   Indian English (`accent: 'en-GB'`, or `lang: 'en-GB'`).
 - **Punctuation prosody**: commas, semicolons, dashes, parentheses, quotes,
   periods, exclamations, questions and ellipses each have their own pause,
   final pitch movement and lengthening; questions with a question word
-  fall, yes/no questions rise, exclamations are higher and louder.
+  fall, yes/no questions rise, exclamations are higher and louder. Hindi
+  question words fall wherever they stand, and sentence-initial क्या is
+  read as the yes/no particle (`क्या तुम आओगे?` rises) unless the next word
+  makes it mean "what" (`क्या हुआ?` falls).
 - **Word and syllable timeline**: `utteranceTimeline` (also in
   `synthesize`) tells when every word and syllable is spoken; the app
   highlights the current word and syllable in the text and the IPA.
