@@ -27,6 +27,7 @@
   },
   "scripts": {
     "test": "node --test --test-timeout=30000 tests/*.test.js",
+    "test:heavy": "node scripts/run-heavy.mjs",
     "lint": "node scripts/lint.mjs",
     "lint:all": "eslint .",
     "lint:fix": "eslint . --fix",

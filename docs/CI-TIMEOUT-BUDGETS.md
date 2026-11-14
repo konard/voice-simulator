@@ -124,6 +124,16 @@ neither of which was involved in the original failure.
 | `docker-publish-build`  | 30 min   | image build and push 20 min                      |
 | `release`               | 65 min   | install 240s, npm publish 1800s, smoke test 600s |
 | `instant-release`       | 65 min   | npm publish 1800s, smoke test 600s               |
+| `heavy` (`heavy.yml`)   | 330 min  | heavy checks 18000s                              |
+
+The `heavy` job of the manually started `Heavy checks` workflow is the one
+exception to the 70% share: its step budget is 91% of the backstop. A hosted
+runner stops every job after 360 minutes, so a 70% share would cut the budget
+for slow suites to 231 minutes without making the run safer; what the share
+protects is room for the unbudgeted setup, and 30 minutes is far more than
+checkout, `npm install` and the artifact upload need.
+`tests/heavy-runner.test.js` asserts that the backstop stays at most 360
+minutes and at least 20 minutes above the budget.
 
 ## Reference
 

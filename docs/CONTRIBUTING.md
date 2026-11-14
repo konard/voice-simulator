@@ -62,6 +62,51 @@ npm test
 deno test -A --parallel
 ```
 
+Tests that need more than about 10 seconds or a download do not belong in
+`tests/*.test.js`; put them into `tests/heavy/` (see "Heavy checks" below).
+
+### Heavy checks
+
+Slow tests (full 3D renders, quality reports against recordings, recognition
+of datasets, round trips, voice copying) live in `tests/heavy/` and are named
+`<suite>-<topic>.test.js`, where the suite is `quality`, `recognition`,
+`roundtrip`, `copy`, `performance` or `gpu`. `npm test`, `bun test` and
+`deno test` never run them; [tests/heavy/README.md](../tests/heavy/README.md)
+describes the folder and its helpers.
+
+They run in the workflow `Heavy checks`
+([.github/workflows/heavy.yml](../.github/workflows/heavy.yml)), which is only
+started by hand:
+
+- in the **Actions** tab: choose **Heavy checks**, then **Run workflow**, pick
+  the branch, the suite, optionally a `ref` (branch, tag or commit; empty means
+  the branch picked) and a `limit` (largest number of items, such as
+  utterances or files, that each test may process; empty means no limit);
+- from the command line:
+
+  ```bash
+  gh workflow run heavy.yml -f suite=quality -f limit=5
+  # on another branch
+  gh workflow run heavy.yml --ref my-branch -f suite=performance
+  ```
+
+The run summary shows one row per test file with its result and wall time,
+followed by the reports the tests wrote; the reports are also uploaded as the
+artifact `heavy-<suite>-<run id>` and kept for 30 days. The step has a budget
+of 300 minutes (see [CI-TIMEOUT-BUDGETS.md](CI-TIMEOUT-BUDGETS.md)).
+
+Locally:
+
+```bash
+npm run test:heavy -- --suite performance
+npm run test:heavy -- --suite performance --limit 2 --out /tmp/heavy
+```
+
+Reports go to `reports/heavy/` (`--out` changes the folder): every test writes
+`<name>.md` and `<name>.json`, and the runner writes `summary.md`. `reports/`
+is never committed. A report that should be kept is copied to `docs/reports/`
+by the issue that owns it.
+
 ## Version Management with Changesets
 
 This project uses [Changesets](https://github.com/changesets/changesets) to manage versions and changelogs. This eliminates merge conflicts that occur when multiple PRs bump the version in `package.json`.

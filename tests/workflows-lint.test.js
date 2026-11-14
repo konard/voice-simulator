@@ -7,6 +7,7 @@ function readWorkflow(filePath) {
 
 const activeWorkflows = [
   '.github/workflows/example-app.yml',
+  '.github/workflows/heavy.yml',
   '.github/workflows/links.yml',
   '.github/workflows/release.yml',
   '.github/workflows/security.yml',
