@@ -114,6 +114,13 @@ describe('Hindi and Chinese normalisation', () => {
     expect(spoken('30%', 'zh')).toBe('百分之三十');
   });
 
+  it('reads money with a scale in every language', () => {
+    expect(spoken('$5m', 'ru')).toBe('пять миллионов долларов');
+    expect(spoken('€3m', 'ru')).toBe('три миллиона евро');
+    expect(spoken('$5m', 'hi')).toBe('पाँच मिलियन डॉलर');
+    expect(spoken('$5m', 'zh')).toBe('五百万美元');
+  });
+
   it('keeps Chinese IPA and splits Hanzi into highlightable words', () => {
     const result = textToIpa('你好世界', { lang: 'zh' });
     expect(result.ipa).toBe('ni˧˥ xɑʊ˨˩ ʂɻ̩˥˩ t͡ɕjɛ˥˩');
@@ -188,5 +195,32 @@ describe('source ranges', () => {
       '.',
     ]);
     expect(items[1].sourceStart).toBe(2);
+  });
+
+  it('maps the words of a date, money and time to their parts', () => {
+    const text = 'I have 25 apples on 3/4/2024. Pay $3.50 at 5:30 pm';
+    const parts = (original) =>
+      textToIpa(text, { lang: 'en' })
+        .words.filter((word) => word.original === original)
+        .map((word) => [word.text, text.slice(word.partStart, word.partEnd)]);
+    expect(parts('3/4/2024')).toEqual([
+      ['March', '3'],
+      ['fourth', '4'],
+      ['twenty', '2024'],
+      ['twenty', '2024'],
+      ['four', '2024'],
+    ]);
+    expect(parts('$3.50').slice(0, 2)).toEqual([
+      ['three', '3'],
+      ['dollars', '$'],
+    ]);
+    expect(parts('5:30 pm').map((pair) => pair[1])).toEqual([
+      '5',
+      '30',
+      'pm',
+      'pm',
+    ]);
+    const number = textToIpa(text, { lang: 'en' }).words[2];
+    expect([number.partStart, number.partEnd]).toEqual([undefined, undefined]);
   });
 });
