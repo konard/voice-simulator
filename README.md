@@ -136,6 +136,19 @@ third (full 3D by default, anatomy against MRI and segmented scans, female
 and child voices, WebGPU) in
 [docs/case-studies/issue-9](docs/case-studies/issue-9/README.md).
 
+### Vision and roadmap
+
+Where the project is going is written in [docs/VISION.md](docs/VISION.md): one
+physical model that both speaks (text → IPA → audio) and listens (audio → IPA
+→ language → text), copies voices, uses no neural networks and stays in the
+public domain. Today the simulator speaks; listening and voice copying from
+real recordings are planned, not delivered.
+
+The plan is [docs/ROADMAP.md](docs/ROADMAP.md): GitHub issues marked as bugs
+and features, grouped in six milestones, with the blockers between them. The
+analysis, the survey of similar projects and the research behind the plan are
+in [docs/case-studies/issue-11](docs/case-studies/issue-11/README.md).
+
 ## Quick Start
 
 ### Web app

@@ -1,0 +1,743 @@
+{
+  "repo": "konard/voice-simulator",
+  "milestones": {
+    "M0": {
+      "number": 1,
+      "url": "https://github.com/konard/voice-simulator/milestone/1"
+    },
+    "M1": {
+      "number": 2,
+      "url": "https://github.com/konard/voice-simulator/milestone/2"
+    },
+    "M2": {
+      "number": 3,
+      "url": "https://github.com/konard/voice-simulator/milestone/3"
+    },
+    "M3": {
+      "number": 4,
+      "url": "https://github.com/konard/voice-simulator/milestone/4"
+    },
+    "M4": {
+      "number": 5,
+      "url": "https://github.com/konard/voice-simulator/milestone/5"
+    },
+    "M5": {
+      "number": 6,
+      "url": "https://github.com/konard/voice-simulator/milestone/6"
+    }
+  },
+  "issues": {
+    "P01": {
+      "number": 13,
+      "id": 6393858340,
+      "url": "https://github.com/konard/voice-simulator/issues/13",
+      "title": "Template case studies occupy `docs/case-studies/issue-N` folders",
+      "type": "Bug",
+      "milestone": "M0"
+    },
+    "P02": {
+      "number": 14,
+      "id": 6393858987,
+      "url": "https://github.com/konard/voice-simulator/issues/14",
+      "title": "Manually triggered workflow for expensive checks",
+      "type": "Feature",
+      "milestone": "M0"
+    },
+    "P03": {
+      "number": 15,
+      "id": 6393859728,
+      "url": "https://github.com/konard/voice-simulator/issues/15",
+      "title": "Policy check: no neural networks, permissive licences only",
+      "type": "Feature",
+      "milestone": "M0"
+    },
+    "P04": {
+      "number": 16,
+      "id": 6393860425,
+      "url": "https://github.com/konard/voice-simulator/issues/16",
+      "title": "Speech dataset registry and fetcher with checksums and a licence gate",
+      "type": "Feature",
+      "milestone": "M0"
+    },
+    "P05": {
+      "number": 17,
+      "id": 6393861046,
+      "url": "https://github.com/konard/voice-simulator/issues/17",
+      "title": "Golden set of public-domain recordings with transcripts and IPA",
+      "type": "Feature",
+      "milestone": "M0"
+    },
+    "P06": {
+      "number": 18,
+      "id": 6393861731,
+      "url": "https://github.com/konard/voice-simulator/issues/18",
+      "title": "Objective speech metrics and a `compare` command",
+      "type": "Feature",
+      "milestone": "M0"
+    },
+    "P07": {
+      "number": 19,
+      "id": 6393862539,
+      "url": "https://github.com/konard/voice-simulator/issues/19",
+      "title": "Baseline quality report against real recordings",
+      "type": "Feature",
+      "milestone": "M0"
+    },
+    "P08": {
+      "number": 20,
+      "id": 6393863296,
+      "url": "https://github.com/konard/voice-simulator/issues/20",
+      "title": "Listening-test harness: MUSHRA, ABX and intelligibility",
+      "type": "Feature",
+      "milestone": "M0"
+    },
+    "P09": {
+      "number": 21,
+      "id": 6393864046,
+      "url": "https://github.com/konard/voice-simulator/issues/21",
+      "title": "Rust workspace and WebAssembly build pipeline",
+      "type": "Feature",
+      "milestone": "M1"
+    },
+    "P10": {
+      "number": 22,
+      "id": 6393864778,
+      "url": "https://github.com/konard/voice-simulator/issues/22",
+      "title": "Port the waveguide, the glottal source and the voice renderer to Rust",
+      "type": "Feature",
+      "milestone": "M1"
+    },
+    "P11": {
+      "number": 23,
+      "id": 6393865468,
+      "url": "https://github.com/konard/voice-simulator/issues/23",
+      "title": "Port the 3D FDTD solver to Rust with WebAssembly SIMD",
+      "type": "Feature",
+      "milestone": "M1"
+    },
+    "P12": {
+      "number": 24,
+      "id": 6393866215,
+      "url": "https://github.com/konard/voice-simulator/issues/24",
+      "title": "Multicore 3D solver with a single-core fallback",
+      "type": "Feature",
+      "milestone": "M1"
+    },
+    "P13": {
+      "number": 25,
+      "id": 6393866975,
+      "url": "https://github.com/konard/voice-simulator/issues/25",
+      "title": "Rust engine in a background worker as the default, JavaScript as the fallback",
+      "type": "Feature",
+      "milestone": "M1"
+    },
+    "P14": {
+      "number": 26,
+      "id": 6393867677,
+      "url": "https://github.com/konard/voice-simulator/issues/26",
+      "title": "Narrow-band tiers: 8, 11.025 and 16 kHz",
+      "type": "Feature",
+      "milestone": "M1"
+    },
+    "P15": {
+      "number": 27,
+      "id": 6393868438,
+      "url": "https://github.com/konard/voice-simulator/issues/27",
+      "title": "AudioWorklet playback with a ring buffer",
+      "type": "Feature",
+      "milestone": "M1"
+    },
+    "P16": {
+      "number": 28,
+      "id": 6393869112,
+      "url": "https://github.com/konard/voice-simulator/issues/28",
+      "title": "Silent load-time device benchmark that sets the precision",
+      "type": "Feature",
+      "milestone": "M1"
+    },
+    "P17": {
+      "number": 29,
+      "id": 6393869806,
+      "url": "https://github.com/konard/voice-simulator/issues/29",
+      "title": "Change quality in the middle of an utterance while streaming",
+      "type": "Feature",
+      "milestone": "M1"
+    },
+    "P18": {
+      "number": 30,
+      "id": 6393870531,
+      "url": "https://github.com/konard/voice-simulator/issues/30",
+      "title": "Run the WebGPU solver in CI",
+      "type": "Feature",
+      "milestone": "M1"
+    },
+    "P19": {
+      "number": 31,
+      "id": 6393871268,
+      "url": "https://github.com/konard/voice-simulator/issues/31",
+      "title": "Performance tracking: real-time factor per tier in CI",
+      "type": "Feature",
+      "milestone": "M1"
+    },
+    "P20": {
+      "number": 32,
+      "id": 6393871966,
+      "url": "https://github.com/konard/voice-simulator/issues/32",
+      "title": "`breathiness` hardly changes the measured noise level",
+      "type": "Bug",
+      "milestone": "M2"
+    },
+    "P21": {
+      "number": 33,
+      "id": 6393872686,
+      "url": "https://github.com/konard/voice-simulator/issues/33",
+      "title": "Physical vocal-fold model driven by lung pressure",
+      "type": "Feature",
+      "milestone": "M2"
+    },
+    "P22": {
+      "number": 34,
+      "id": 6393873357,
+      "url": "https://github.com/konard/voice-simulator/issues/34",
+      "title": "Source-tract interaction and the subglottal tract",
+      "type": "Feature",
+      "milestone": "M2"
+    },
+    "P23": {
+      "number": 35,
+      "id": 6393874086,
+      "url": "https://github.com/konard/voice-simulator/issues/35",
+      "title": "Physically based turbulence noise: frication, aspiration and bursts",
+      "type": "Feature",
+      "milestone": "M2"
+    },
+    "P24": {
+      "number": 36,
+      "id": 6393874819,
+      "url": "https://github.com/konard/voice-simulator/issues/36",
+      "title": "Frequency-dependent losses in the 1D solver",
+      "type": "Feature",
+      "milestone": "M2"
+    },
+    "P25": {
+      "number": 37,
+      "id": 6393875610,
+      "url": "https://github.com/konard/voice-simulator/issues/37",
+      "title": "2D acoustic tier between the waveguide and 3D",
+      "type": "Feature",
+      "milestone": "M2"
+    },
+    "P26": {
+      "number": 38,
+      "id": 6393876428,
+      "url": "https://github.com/konard/voice-simulator/issues/38",
+      "title": "Articulator dynamics and coarticulation calibrated on real data",
+      "type": "Feature",
+      "milestone": "M2"
+    },
+    "P27": {
+      "number": 39,
+      "id": 6393877323,
+      "url": "https://github.com/konard/voice-simulator/issues/39",
+      "title": "Rule-based segment duration model per language",
+      "type": "Feature",
+      "milestone": "M2"
+    },
+    "P28": {
+      "number": 40,
+      "id": 6393878125,
+      "url": "https://github.com/konard/voice-simulator/issues/40",
+      "title": "Explicit jaw, larynx height and lip protrusion articulators",
+      "type": "Feature",
+      "milestone": "M2"
+    },
+    "P29": {
+      "number": 41,
+      "id": 6393878829,
+      "url": "https://github.com/konard/voice-simulator/issues/41",
+      "title": "Expanded voice configuration: voice files, groups, presets and an editor",
+      "type": "Feature",
+      "milestone": "M2"
+    },
+    "P30": {
+      "number": 42,
+      "id": 6393879574,
+      "url": "https://github.com/konard/voice-simulator/issues/42",
+      "title": "Mandarin third tone is spoken as a plain rise because the dip is dropped",
+      "type": "Bug",
+      "milestone": "M3"
+    },
+    "P31": {
+      "number": 43,
+      "id": 6393880292,
+      "url": "https://github.com/konard/voice-simulator/issues/43",
+      "title": "Mandarin erhua is spoken as a separate syllable",
+      "type": "Bug",
+      "milestone": "M3"
+    },
+    "P32": {
+      "number": 44,
+      "id": 6393881071,
+      "url": "https://github.com/konard/voice-simulator/issues/44",
+      "title": "English heteronyms are always read the same way",
+      "type": "Bug",
+      "milestone": "M3"
+    },
+    "P33": {
+      "number": 45,
+      "id": 6393881898,
+      "url": "https://github.com/konard/voice-simulator/issues/45",
+      "title": "Hindi yes/no questions that start with क्या get a falling contour",
+      "type": "Bug",
+      "milestone": "M3"
+    },
+    "P34": {
+      "number": 46,
+      "id": 6393882678,
+      "url": "https://github.com/konard/voice-simulator/issues/46",
+      "title": "Expanded numbers and dates are highlighted as one word",
+      "type": "Bug",
+      "milestone": "M3"
+    },
+    "P35": {
+      "number": 47,
+      "id": 6393883306,
+      "url": "https://github.com/konard/voice-simulator/issues/47",
+      "title": "Pronunciation lexicons at scale from permissive sources",
+      "type": "Feature",
+      "milestone": "M3"
+    },
+    "P36": {
+      "number": 48,
+      "id": 6393883958,
+      "url": "https://github.com/konard/voice-simulator/issues/48",
+      "title": "Russian stress is wrong outside the small dictionary and for homographs",
+      "type": "Bug",
+      "milestone": "M3"
+    },
+    "P37": {
+      "number": 49,
+      "id": 6393884722,
+      "url": "https://github.com/konard/voice-simulator/issues/49",
+      "title": "Tone model with targets, the neutral tone and tone coarticulation",
+      "type": "Feature",
+      "milestone": "M3"
+    },
+    "P38": {
+      "number": 50,
+      "id": 6393885431,
+      "url": "https://github.com/konard/voice-simulator/issues/50",
+      "title": "Speech markup: an SSML subset, inline tags and voice-quality symbols in IPA",
+      "type": "Feature",
+      "milestone": "M3"
+    },
+    "P39": {
+      "number": 51,
+      "id": 6393886196,
+      "url": "https://github.com/konard/voice-simulator/issues/51",
+      "title": "Intonation models per language: sentence types, focus and Russian contours",
+      "type": "Feature",
+      "milestone": "M3"
+    },
+    "P40": {
+      "number": 52,
+      "id": 6393886896,
+      "url": "https://github.com/konard/voice-simulator/issues/52",
+      "title": "Vocal effort and loudness dynamics",
+      "type": "Feature",
+      "milestone": "M3"
+    },
+    "P41": {
+      "number": 53,
+      "id": 6393887546,
+      "url": "https://github.com/konard/voice-simulator/issues/53",
+      "title": "Whisper",
+      "type": "Feature",
+      "milestone": "M3"
+    },
+    "P42": {
+      "number": 54,
+      "id": 6393888259,
+      "url": "https://github.com/konard/voice-simulator/issues/54",
+      "title": "Phonation types: breathy, creaky, pressed and falsetto",
+      "type": "Feature",
+      "milestone": "M3"
+    },
+    "P43": {
+      "number": 55,
+      "id": 6393888891,
+      "url": "https://github.com/konard/voice-simulator/issues/55",
+      "title": "Emotions and attitudes",
+      "type": "Feature",
+      "milestone": "M3"
+    },
+    "P44": {
+      "number": 56,
+      "id": 6393889553,
+      "url": "https://github.com/konard/voice-simulator/issues/56",
+      "title": "Paralinguistic sounds: breaths, laughter, sighs and hesitations",
+      "type": "Feature",
+      "milestone": "M3"
+    },
+    "P45": {
+      "number": 57,
+      "id": 6393890327,
+      "url": "https://github.com/konard/voice-simulator/issues/57",
+      "title": "Accents beyond English and foreign accents",
+      "type": "Feature",
+      "milestone": "M3"
+    },
+    "P46": {
+      "number": 58,
+      "id": 6393891093,
+      "url": "https://github.com/konard/voice-simulator/issues/58",
+      "title": "Streaming analysis front end",
+      "type": "Feature",
+      "milestone": "M4"
+    },
+    "P47": {
+      "number": 59,
+      "id": 6393891834,
+      "url": "https://github.com/konard/voice-simulator/issues/59",
+      "title": "Robust pitch and voicing tracker",
+      "type": "Feature",
+      "milestone": "M4"
+    },
+    "P48": {
+      "number": 60,
+      "id": 6393892549,
+      "url": "https://github.com/konard/voice-simulator/issues/60",
+      "title": "Formant tracker",
+      "type": "Feature",
+      "milestone": "M4"
+    },
+    "P49": {
+      "number": 61,
+      "id": 6393893285,
+      "url": "https://github.com/konard/voice-simulator/issues/61",
+      "title": "Glottal inverse filtering and source parameters",
+      "type": "Feature",
+      "milestone": "M4"
+    },
+    "P50": {
+      "number": 62,
+      "id": 6393894005,
+      "url": "https://github.com/konard/voice-simulator/issues/62",
+      "title": "Syllable nuclei, landmarks and broad sound classes",
+      "type": "Feature",
+      "milestone": "M4"
+    },
+    "P51": {
+      "number": 63,
+      "id": 6393894691,
+      "url": "https://github.com/konard/voice-simulator/issues/63",
+      "title": "Voice configuration fit on real speakers (pass 1)",
+      "type": "Feature",
+      "milestone": "M4"
+    },
+    "P52": {
+      "number": 64,
+      "id": 6393895393,
+      "url": "https://github.com/konard/voice-simulator/issues/64",
+      "title": "Articulatory codebook generated by the simulator",
+      "type": "Feature",
+      "milestone": "M4"
+    },
+    "P53": {
+      "number": 65,
+      "id": 6393896004,
+      "url": "https://github.com/konard/voice-simulator/issues/65",
+      "title": "Acoustic-to-articulatory inversion (pass 2)",
+      "type": "Feature",
+      "milestone": "M4"
+    },
+    "P54": {
+      "number": 66,
+      "id": 6393896673,
+      "url": "https://github.com/konard/voice-simulator/issues/66",
+      "title": "Decode articulation into IPA with times",
+      "type": "Feature",
+      "milestone": "M4"
+    },
+    "P55": {
+      "number": 67,
+      "id": 6393897393,
+      "url": "https://github.com/konard/voice-simulator/issues/67",
+      "title": "Analysis-by-synthesis rescoring",
+      "type": "Feature",
+      "milestone": "M4"
+    },
+    "P56": {
+      "number": 68,
+      "id": 6393898031,
+      "url": "https://github.com/konard/voice-simulator/issues/68",
+      "title": "IPA to text per language",
+      "type": "Feature",
+      "milestone": "M4"
+    },
+    "P57": {
+      "number": 69,
+      "id": 6393898758,
+      "url": "https://github.com/konard/voice-simulator/issues/69",
+      "title": "Language identification and mixed-language speech from IPA",
+      "type": "Feature",
+      "milestone": "M4"
+    },
+    "P58": {
+      "number": 70,
+      "id": 6393899555,
+      "url": "https://github.com/konard/voice-simulator/issues/70",
+      "title": "Recognise tones, stress and sentence type",
+      "type": "Feature",
+      "milestone": "M4"
+    },
+    "P59": {
+      "number": 71,
+      "id": 6393900359,
+      "url": "https://github.com/konard/voice-simulator/issues/71",
+      "title": "Recognise loudness, whisper, voice quality and emotion",
+      "type": "Feature",
+      "milestone": "M4"
+    },
+    "P60": {
+      "number": 72,
+      "id": 6393901223,
+      "url": "https://github.com/konard/voice-simulator/issues/72",
+      "title": "Recognise whispered speech",
+      "type": "Feature",
+      "milestone": "M4"
+    },
+    "P61": {
+      "number": 73,
+      "id": 6393901960,
+      "url": "https://github.com/konard/voice-simulator/issues/73",
+      "title": "Recognition API, command and server route with streaming results",
+      "type": "Feature",
+      "milestone": "M4"
+    },
+    "P62": {
+      "number": 74,
+      "id": 6393902646,
+      "url": "https://github.com/konard/voice-simulator/issues/74",
+      "title": "App: recognition from the microphone and files with live syllable highlighting",
+      "type": "Feature",
+      "milestone": "M4"
+    },
+    "P63": {
+      "number": 75,
+      "id": 6393903372,
+      "url": "https://github.com/konard/voice-simulator/issues/75",
+      "title": "Round-trip tests: text to audio to text in the heavy workflow",
+      "type": "Feature",
+      "milestone": "M4"
+    },
+    "P64": {
+      "number": 76,
+      "id": 6393904426,
+      "url": "https://github.com/konard/voice-simulator/issues/76",
+      "title": "Recognition benchmark on public recordings",
+      "type": "Feature",
+      "milestone": "M4"
+    },
+    "P65": {
+      "number": 77,
+      "id": 6393905155,
+      "url": "https://github.com/konard/voice-simulator/issues/77",
+      "title": "Recognition in Rust and on several cores with a single-core fallback",
+      "type": "Feature",
+      "milestone": "M4"
+    },
+    "P66": {
+      "number": 78,
+      "id": 6393905839,
+      "url": "https://github.com/konard/voice-simulator/issues/78",
+      "title": "Multi-pass voice session: fit, invert, stabilise, keep recognising",
+      "type": "Feature",
+      "milestone": "M5"
+    },
+    "P67": {
+      "number": 79,
+      "id": 6393906629,
+      "url": "https://github.com/konard/voice-simulator/issues/79",
+      "title": "Copy synthesis: reproduce a real recording",
+      "type": "Feature",
+      "milestone": "M5"
+    },
+    "P68": {
+      "number": 80,
+      "id": 6393907323,
+      "url": "https://github.com/konard/voice-simulator/issues/80",
+      "title": "App: copy a voice while the person keeps speaking",
+      "type": "Feature",
+      "milestone": "M5"
+    },
+    "P69": {
+      "number": 81,
+      "id": 6393907981,
+      "url": "https://github.com/konard/voice-simulator/issues/81",
+      "title": "Lowest-settings certification: 8 kHz and one core",
+      "type": "Feature",
+      "milestone": "M5"
+    },
+    "P70": {
+      "number": 82,
+      "id": 6393908690,
+      "url": "https://github.com/konard/voice-simulator/issues/82",
+      "title": "Rust parity for everything added after the port",
+      "type": "Feature",
+      "milestone": "M5"
+    },
+    "P71": {
+      "number": 83,
+      "id": 6393909404,
+      "url": "https://github.com/konard/voice-simulator/issues/83",
+      "title": "State-of-the-art evaluation and public report",
+      "type": "Feature",
+      "milestone": "M5"
+    },
+    "P72": {
+      "number": 84,
+      "id": 6393910023,
+      "url": "https://github.com/konard/voice-simulator/issues/84",
+      "title": "Nasal consonants are about four times louder in the 3D solver",
+      "type": "Bug",
+      "milestone": "M2"
+    },
+    "P73": {
+      "number": 85,
+      "id": 6393910677,
+      "url": "https://github.com/konard/voice-simulator/issues/85",
+      "title": "English function words are spoken as full stressed words",
+      "type": "Bug",
+      "milestone": "M3"
+    },
+    "P74": {
+      "number": 86,
+      "id": 6393911372,
+      "url": "https://github.com/konard/voice-simulator/issues/86",
+      "title": "Russian prepositions and particles are read as separate stressed words",
+      "type": "Bug",
+      "milestone": "M3"
+    }
+  },
+  "dependencies": [
+    "P04<-P02",
+    "P04<-P03",
+    "P05<-P04",
+    "P07<-P02",
+    "P07<-P05",
+    "P07<-P06",
+    "P10<-P09",
+    "P10<-P02",
+    "P11<-P09",
+    "P11<-P10",
+    "P12<-P11",
+    "P13<-P10",
+    "P13<-P11",
+    "P16<-P13",
+    "P16<-P14",
+    "P17<-P13",
+    "P17<-P15",
+    "P18<-P02",
+    "P19<-P02",
+    "P19<-P13",
+    "P22<-P21",
+    "P26<-P06",
+    "P26<-P05",
+    "P27<-P05",
+    "P27<-P06",
+    "P29<-P21",
+    "P29<-P23",
+    "P29<-P24",
+    "P35<-P03",
+    "P35<-P04",
+    "P36<-P35",
+    "P37<-P30",
+    "P39<-P38",
+    "P40<-P38",
+    "P41<-P38",
+    "P41<-P23",
+    "P42<-P38",
+    "P42<-P20",
+    "P43<-P39",
+    "P43<-P40",
+    "P43<-P42",
+    "P43<-P08",
+    "P44<-P38",
+    "P44<-P23",
+    "P47<-P46",
+    "P47<-P06",
+    "P47<-P04",
+    "P48<-P46",
+    "P48<-P06",
+    "P48<-P05",
+    "P49<-P46",
+    "P50<-P46",
+    "P50<-P05",
+    "P51<-P47",
+    "P51<-P48",
+    "P51<-P49",
+    "P51<-P05",
+    "P51<-P20",
+    "P52<-P46",
+    "P53<-P52",
+    "P53<-P48",
+    "P53<-P51",
+    "P54<-P53",
+    "P54<-P50",
+    "P55<-P54",
+    "P55<-P06",
+    "P56<-P35",
+    "P57<-P56",
+    "P58<-P54",
+    "P58<-P47",
+    "P58<-P37",
+    "P58<-P39",
+    "P59<-P49",
+    "P59<-P40",
+    "P59<-P41",
+    "P59<-P42",
+    "P59<-P43",
+    "P59<-P05",
+    "P60<-P54",
+    "P60<-P41",
+    "P61<-P54",
+    "P61<-P56",
+    "P61<-P57",
+    "P62<-P61",
+    "P63<-P61",
+    "P63<-P02",
+    "P63<-P14",
+    "P64<-P61",
+    "P64<-P04",
+    "P64<-P06",
+    "P64<-P02",
+    "P65<-P61",
+    "P65<-P09",
+    "P66<-P51",
+    "P66<-P61",
+    "P67<-P66",
+    "P67<-P58",
+    "P67<-P59",
+    "P67<-P08",
+    "P68<-P66",
+    "P68<-P62",
+    "P69<-P63",
+    "P69<-P64",
+    "P69<-P67",
+    "P69<-P14",
+    "P70<-P13",
+    "P70<-P21",
+    "P70<-P22",
+    "P70<-P23",
+    "P70<-P24",
+    "P70<-P41",
+    "P70<-P42",
+    "P71<-P07",
+    "P71<-P08",
+    "P71<-P67",
+    "P71<-P69",
+    "P71<-P19",
+    "P71<-P16"
+  ]
+}

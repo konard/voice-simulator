@@ -1,0 +1,10 @@
+Output of `node experiments/issue-11-audit-studio.mjs` on a six-core machine
+that ran other work at the same time (load average 5 to 7).
+
+Run 1
+rtf studio: 17.72 (24.3 s for 1.37 s of audio)
+rtf reference: 39.28 (53.9 s for 1.37 s of audio)
+
+Run 2
+rtf studio: 13.75 (18.9 s for 1.37 s of audio)
+rtf reference: 29.61 (40.6 s for 1.37 s of audio)
