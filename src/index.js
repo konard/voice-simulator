@@ -275,6 +275,7 @@ export {
   syllableIpa,
 } from './ipa/syllables.js';
 export { syllableSpans, hindiAksharas } from './g2p/orthography.js';
+export { WEAK_FORMS } from './g2p/weak-forms.js';
 export { utteranceTimeline, timelineAt } from './articulation/timeline.js';
 // Face animation: ARKit blendshapes, VRM expressions and Oculus visemes
 export {

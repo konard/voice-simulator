@@ -14,6 +14,9 @@
  * joins the next word (`из дома` ɪz ˈdomə), the particles `же`, `ли`, `бы`
  * join the previous one (`как же` kaɡ ʐɨ). Each written word stays one
  * item of `words`.
+ * English function words (`of`, `to`, `can`, `you`, ...) are weak and
+ * unstressed inside a phrase and keep their strong form alone and at its
+ * end (see `weak-forms.js`).
  */
 
 import { englishWordToIpa } from './english.js';
@@ -28,6 +31,7 @@ import {
   isNonRhotic,
   resolveAccent,
 } from './accents.js';
+import { weakenFunctionWords } from './weak-forms.js';
 
 /** Supported languages with display names and sample sentences. */
 export const LANGUAGES = Object.freeze({
@@ -343,10 +347,13 @@ function splitLanguageTag(tag) {
 /**
  * Convert text to IPA.
  * @param {string} text
- * @param {{lang?: string, accent?: string}} [options]
+ * @param {{lang?: string, accent?: string, weakForms?: boolean}} [options]
  *   `lang` is 'auto', 'en', 'ru', 'hi' or 'zh', or a regional tag such as
  *   'en-GB'. `accent` picks an English accent (`en-US`, `en-GB`, `en-AU`,
  *   `en-IN`; see `accents.js`) and wins over the region of `lang`.
+ *   `weakForms` (default `true`) speaks English function words in their
+ *   weak, unstressed form inside a phrase (`a cup of tea for you`
+ *   ə ˈkʌp əv ˈti fɚ ju); `false` keeps every word in its dictionary form.
  * @returns {{lang: string, accent: string|null, ipa: string, words: object[]}}
  */
 export function textToIpa(text, options = {}) {
@@ -371,6 +378,9 @@ export function textToIpa(text, options = {}) {
     }
   });
   joinRussianClitics(items);
+  if (options.weakForms !== false) {
+    weakenFunctionWords(items, accent);
+  }
   markQuestions(items);
   linkRs(items, accent);
   const ipa = items

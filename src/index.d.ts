@@ -160,6 +160,8 @@ export interface SynthesizeOptions {
   lang?: 'auto' | LanguageCode;
   /** English accent (code or region such as "GB"). */
   accent?: AccentCode | string;
+  /** Weak, unstressed English function words inside a phrase (default true). */
+  weakForms?: boolean;
   /** Treat the text as IPA. */
   ipa?: boolean;
   head?: HeadConfig | 'random';
@@ -220,6 +222,11 @@ export declare function textToIpa(
     /** A language, or a regional tag such as 'en-GB' that picks the accent. */
     lang?: 'auto' | LanguageCode | AccentCode | string;
     accent?: AccentCode | string;
+    /**
+     * Speak English function words in their weak, unstressed form inside a
+     * phrase (`a cup of tea for you` ə ˈkʌp əv ˈti fɚ ju). Default true.
+     */
+    weakForms?: boolean;
   }
 ): Transcription;
 export declare function detectLanguage(text: string): LanguageCode;
@@ -1498,6 +1505,17 @@ export declare function adaptEnglishWord(
   accent: AccentCode | string
 ): string;
 export declare function isNonRhotic(accent: AccentCode | string): boolean;
+/** Kind of an English function word in `WEAK_FORMS`. */
+export type FunctionWordKind =
+  | 'article'
+  | 'conjunction'
+  | 'preposition'
+  | 'auxiliary'
+  | 'pronoun';
+/** Weak (General American) form of every English function word. */
+export declare const WEAK_FORMS: Readonly<
+  Record<string, Readonly<{ kind: FunctionWordKind; weak: string }>>
+>;
 export declare const BOUNDARIES: Readonly<Record<string, object>>;
 export declare const CONTOURS: Readonly<Record<string, object>>;
 export declare function boundaryOf(pause: object | null | undefined): string;

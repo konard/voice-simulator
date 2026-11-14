@@ -53,6 +53,7 @@ const OPTIONS = {
   box: { type: 'string' },
   'box-absorption': { type: 'string' },
   ipa: { type: 'boolean' },
+  'strong-forms': { type: 'boolean' },
   lod: { type: 'string' },
   seconds: { type: 'string' },
   port: { type: 'string', short: 'p' },
@@ -84,6 +85,7 @@ function usage() {
     'Options:',
     '  -l, --lang <code>     auto | en | ru | hi | zh (default auto)',
     '      --accent <code>   English accent: en-US | en-GB | en-AU | en-IN',
+    '      --strong-forms    Keep English function words strong (no weak forms)',
     '  -o, --out <file>      Output file ("-" for stdout)',
     `  -t, --tier <name>     ${AUDIO_TIERS.map((tier) => tier.name).join(' | ')}`,
     `                        (default ${DEFAULT_AUDIO_TIER}: 3D; medium: real-time waveguide)`,
@@ -257,6 +259,7 @@ const COMMANDS = {
     const result = textToIpa(requireText(positionals), {
       lang: values.lang,
       accent: values.accent,
+      weakForms: !values['strong-forms'],
     });
     io.stdout(values.json ? JSON.stringify(result) : result.ipa);
   },
@@ -266,6 +269,7 @@ const COMMANDS = {
     const result = synthesize(requireText(positionals), {
       lang: values.lang,
       accent: values.accent,
+      weakForms: !values['strong-forms'],
       ipa: values.ipa,
       seed: values.seed,
       head: resolveHead(values),
@@ -322,6 +326,7 @@ const COMMANDS = {
     const prepared = prepareUtterance(requireText(positionals), {
       lang: values.lang,
       accent: values.accent,
+      weakForms: !values['strong-forms'],
       ipa: values.ipa,
     });
     const { lang, accent, ipa, timeline } = prepared;
@@ -346,7 +351,13 @@ const COMMANDS = {
     const head = resolveHead(values);
     const { plan, head: resolved } = prepareUtterance(
       requireText(positionals),
-      { lang: values.lang, accent: values.accent, ipa: values.ipa, head }
+      {
+        lang: values.lang,
+        accent: values.accent,
+        weakForms: !values['strong-forms'],
+        ipa: values.ipa,
+        head,
+      }
     );
     const track = visemeTrack(plan, resolved, {
       format: values.format ?? 'arkit',

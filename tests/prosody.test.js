@@ -206,3 +206,14 @@ describe('lexical tones', () => {
     }
   });
 });
+
+describe('English weak forms in the plan', () => {
+  it('shortens function words', () => {
+    const text = 'a cup of tea for you';
+    const weak = textToIpa(text).ipa;
+    const strong = textToIpa(text, { weakForms: false }).ipa;
+    const duration = (ipa) =>
+      planUtterance(ipa, { head: HEAD, language: 'en' }).duration;
+    expect(duration(weak)).toBeLessThan(0.9 * duration(strong));
+  });
+});

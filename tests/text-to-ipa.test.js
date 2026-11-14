@@ -374,3 +374,77 @@ describe('Russian clitics', () => {
     }
   });
 });
+
+describe('English weak forms', () => {
+  const ipa = (text, options = {}) =>
+    textToIpa(text, { lang: 'en-US', ...options }).ipa;
+
+  it('weakens function words inside a phrase', () => {
+    expect(ipa('a cup of tea for you')).toBe('ə ˈkʌp əv ˈti fɚ ju');
+    expect(ipa('He was at home')).toBe('hi wəz ət ˈhoʊm');
+    expect(ipa('I can do it')).toBe('aɪ kən ˈdu ɪt');
+    expect(ipa('an apple')).toBe('ən ˈæpəl');
+  });
+
+  it('uses the forms before a vowel', () => {
+    expect(ipa('the end')).toBe('ði ˈɛnd');
+    expect(ipa('the apple and the pear')).toBe('ði ˈæpəl ənd ðə ˈpɛɹ');
+    expect(ipa('to eat')).toBe('tu ˈit');
+  });
+
+  it('keeps the strong form at the end of a phrase', () => {
+    expect(ipa('Yes, I can.')).toBe('ˈjɛs , aɪ ˈkæn .');
+    expect(ipa('What are you looking at?')).toBe('ˈwʌt ɚ ju ˈlʊkɪŋ ˈæt ↘ ?');
+  });
+
+  it('keeps one stress in every phrase', () => {
+    expect(ipa('Is it?').startsWith('ˈɪz ɪt')).toBe(true);
+    expect(ipa('It is.').startsWith('ɪt ˈɪz')).toBe(true);
+    expect(ipa('For you.').startsWith('fɚ ˈju')).toBe(true);
+  });
+
+  it('leaves single words alone', () => {
+    for (const word of ['you', 'can', 'at', 'of', 'the']) {
+      expect(ipa(word)).toBe(ipa(word, { weakForms: false }));
+    }
+  });
+
+  it('fuses have to and used to', () => {
+    expect(ipa('I have to go')).toBe('aɪ ˈhæf tə ˈɡoʊ');
+    // `live` is the verb after `to` (the heteronym rules of issue 44).
+    // eslint-disable-next-line local/no-changelog-comments -- a test sentence
+    expect(ipa('I used to live there')).toBe('aɪ ˈjus tə ˈlɪv ˈðɛɹ');
+    expect(ipa('It is used to make bread')).toBe('ɪt ɪz ˈjuzd tə ˈmeɪk ˈbɹɛd');
+  });
+
+  it('keeps nouns and negations strong', () => {
+    expect(ipa('a can of beans')).toBe('ə ˈkæn əv ˈbinz');
+    expect(ipa('my will is strong')).toBe('maɪ ˈwɪl ɪz ˈstɹɔŋ');
+    expect(ipa('You must not go')).toBe('ju ˈmʌst ˈnɑt ˈɡoʊ');
+  });
+
+  it('adapts weak forms to the accent', () => {
+    const british = (text) => ipa(text, { lang: 'en-GB' });
+    expect(british('for a while')).toBe('fəɹ ə ˈwaɪl');
+    expect(british('a cup of tea for you')).toBe('ə ˈkʌp əv ˈtiː fə ju');
+    expect(british('He was at home')).toBe('hi wəz ət ˈhəʊm');
+  });
+
+  it('does not touch spelled letters', () => {
+    expect(ipa('US and IT')).toBe('ˈju ˈɛs ənd ˈaɪ ˈti');
+  });
+
+  it('can be switched off', () => {
+    expect(ipa('I can do it', { weakForms: false })).toBe('ˈaɪ ˈkæn ˈdu ˈɪt');
+  });
+
+  it('keeps one word item per written word', () => {
+    const text = 'I have to go';
+    const { words } = textToIpa(text, { lang: 'en-US' });
+    const strong = textToIpa(text, { lang: 'en-US', weakForms: false });
+    expect(words.map((word) => word.text)).toEqual(['I', 'have', 'to', 'go']);
+    expect(words.map((word) => word.sourceStart)).toEqual(
+      strong.words.map((word) => word.sourceStart)
+    );
+  });
+});
