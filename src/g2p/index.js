@@ -109,14 +109,19 @@ function wordLanguage(word, preferred) {
   return script ?? preferred;
 }
 
-function pronounceWord(word, language) {
-  const result = WORD_PRONOUNCERS[language](word);
+/**
+ * Pronounce one word. The `context` (words around it, see
+ * `wordContexts()`) lets English choose between the readings of a
+ * heteronym; other pronouncers ignore it.
+ */
+function pronounceWord(word, language, context) {
+  const result = WORD_PRONOUNCERS[language](word, context);
   return { text: word, lang: language, ...result };
 }
 
 /** Pronounce a normalised word item in its accent. */
-function pronounceItem(item, source, accent) {
-  return pronounceSource(item, source).map((word) => {
+function pronounceItem(item, source, accent, context) {
+  return pronounceSource(item, source, context).map((word) => {
     if (word.lang !== 'en' || !word.ipa) {
       return word;
     }
@@ -126,7 +131,7 @@ function pronounceItem(item, source, accent) {
 }
 
 /** Pronounce a normalised word item, keeping its source range. */
-function pronounceSource(item, source) {
+function pronounceSource(item, source, context) {
   const { sourceStart, sourceEnd, token } = item;
   const original = source.slice(sourceStart, sourceEnd);
   const range = { sourceStart, sourceEnd, original, token };
@@ -145,7 +150,7 @@ function pronounceSource(item, source) {
   }
   return [
     {
-      ...pronounceWord(item.say ?? item.text, item.lang),
+      ...pronounceWord(item.say ?? item.text, item.lang, context),
       text: item.text,
       ...range,
     },
@@ -187,6 +192,54 @@ function splitHanRun(item, range) {
       };
     })
     .filter((word) => word.ipa);
+}
+
+/** Lowercased spelling of a normalised word, as context for its neighbours. */
+function contextWord(item) {
+  return item.text.toLowerCase().replaceAll('’', "'");
+}
+
+/**
+ * The context of every word item of `normalized`: the words before it
+ * (nearest first) and after it in the same clause, and all words of its
+ * sentence. A clause ends at any break; a sentence ends at a break whose
+ * symbol ends in `.`, `!`, `?` or `…`.
+ * @param {object[]} normalized items from `normalizeText()`
+ * @returns {({before: string[], after: string[], sentence: string[]}|undefined)[]}
+ */
+function wordContexts(normalized) {
+  const contexts = [];
+  // Every context of a sentence shares one array, which is complete once
+  // the sentence ends.
+  let sentence = [];
+  let clause = [];
+  const closeClause = () => {
+    clause.forEach(({ index }, position) => {
+      contexts[index] = {
+        before: clause
+          .slice(0, position)
+          .reverse()
+          .map(({ word }) => word),
+        after: clause.slice(position + 1).map(({ word }) => word),
+        sentence,
+      };
+    });
+    clause = [];
+  };
+  normalized.forEach((item, index) => {
+    if (item.kind !== 'break') {
+      const word = contextWord(item);
+      clause.push({ index, word });
+      sentence.push(word);
+      return;
+    }
+    closeClause();
+    if ('.!?…'.includes(item.symbol.at(-1))) {
+      sentence = [];
+    }
+  });
+  closeClause();
+  return contexts;
 }
 
 function addBreak(items, item) {
@@ -300,13 +353,14 @@ export function textToIpa(text, options = {}) {
     lang,
     wordLanguage: (word) => wordLanguage(word, lang),
   });
-  for (const item of normalized) {
+  const contexts = wordContexts(normalized);
+  normalized.forEach((item, index) => {
     if (item.kind === 'break') {
       addBreak(items, item);
     } else {
-      items.push(...pronounceItem(item, source, accent));
+      items.push(...pronounceItem(item, source, accent, contexts[index]));
     }
-  }
+  });
   markQuestions(items);
   linkRs(items, accent);
   const ipa = items
