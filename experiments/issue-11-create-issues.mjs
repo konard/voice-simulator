@@ -21,6 +21,10 @@
  *   node experiments/issue-11-create-issues.mjs render <directory>
  *   node experiments/issue-11-create-issues.mjs create [--repo owner/name]
  *   node experiments/issue-11-create-issues.mjs roadmap
+ *   node experiments/issue-11-create-issues.mjs link <file>
+ *
+ * `link` replaces every `{{P30}}` in a document with a link to the created
+ * issue, for documents that refer to the plan.
  *
  * `create` is idempotent: what it created is recorded in
  * docs/case-studies/issue-11/data/created-issues.json and skipped next time.
@@ -517,6 +521,25 @@ function roadmap() {
   console.log(`${ROADMAP} updated with ${plan.length} issues`);
 }
 
+function link(file) {
+  const state = readState();
+  const text = readFileSync(file, 'utf8');
+  const missing = new Set();
+  const linked = text.replace(/\{\{(P\d+)\}\}/gu, (token, id) => {
+    const issue = state.issues[id];
+    if (!issue) {
+      missing.add(id);
+      return token;
+    }
+    return `[#${issue.number}](${issue.url})`;
+  });
+  if (missing.size) {
+    throw new Error(`${file}: no created issue for ${[...missing].join(', ')}`);
+  }
+  writeFileSync(file, linked);
+  console.log(`${file} linked`);
+}
+
 function check() {
   const plan = loadPlan();
   const errors = validate(plan);
@@ -550,9 +573,11 @@ if (command === 'check') {
   await create(repo);
 } else if (command === 'roadmap') {
   roadmap();
+} else if (command === 'link' && rest[0]) {
+  link(rest[0]);
 } else {
   console.error(
-    'Usage: issue-11-create-issues.mjs check|render|create|roadmap'
+    'Usage: issue-11-create-issues.mjs check|render|create|roadmap|link'
   );
   process.exitCode = 1;
 }
