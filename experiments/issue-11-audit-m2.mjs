@@ -18,6 +18,13 @@ import {
 import { SPEED_OF_SOUND, tubeFormants } from '../src/acoustics/transfer.js';
 import { Biquad, createNoise } from '../src/acoustics/filters.js';
 import { LINK_LIPS, LINK_NOSTRILS } from '../src/acoustics/voxel-model.js';
+import {
+  closedPortLeak,
+  murmurResonance,
+  portAreas,
+  referenceResonances,
+} from './issue-84-port-3d.mjs';
+import { leakSpectrum } from './issue-84-leak-spectrum.mjs';
 
 const show = (label, value) =>
   console.log(`${label}: ${JSON.stringify(value)}`);
@@ -344,6 +351,32 @@ for (const kind of ['vowel', 'consonant']) {
     kind
   );
   transferGains('fdtd3d dx 1', (head) => new Fdtd3d({ head, dx: 1 }), kind);
+}
+
+// 5b. Issue 84, step 4: the velar port and the nostrils of the 3D solver
+// for a static [m] against the areas they should have (effective area =
+// sum of conductance * dx² over the links), the lowest resonance of [m]
+// (impulse response, 0.25 s: frequency Hz, gain dB, -3 dB bandwidth Hz)
+// against the tube model with the nasal branch and the waveguide, and the
+// nostril flow of [a] with a closed port (RMS of the impulse response, and
+// nostrils minus lips in dB per band).
+show(
+  '[m] lowest resonance, references',
+  referenceResonances(normalizeHeadConfig({}))
+);
+for (const dx of [1, 0.6, 0.5]) {
+  const { solver, shape, result } = portAreas(dx, [0.3, 0.8, 1.3]);
+  for (const row of result) {
+    show(`fdtd3d dx ${dx} velar port and nostrils`, row);
+  }
+  show(`fdtd3d dx ${dx} [m] lowest resonance`, murmurResonance(solver, shape));
+  const leak = closedPortLeak(dx);
+  show(`fdtd3d dx ${dx} [a] closed port`, {
+    lips: round(leak.lips, 4),
+    nostrils: round(leak.nostrils, 4),
+    ratio: round(leak.nostrils / leak.lips),
+    bands: leakSpectrum(dx),
+  });
 }
 
 // --- P24 -----------------------------------------------------------------
