@@ -4,7 +4,9 @@
  * Hanzi are converted to pinyin with the generated Unihan reading table,
  * corrected by a small list of frequent polyphonic words (greedy longest
  * match), then tone sandhi is applied per phrase and syllables are rendered
- * as IPA with Chao tone letters.
+ * as IPA with Chao tone letters. A 儿 after a syllable is the erhua suffix
+ * of that syllable (花儿 huār) unless it starts or ends a word in which it
+ * is a syllable of its own (儿子, 女儿).
  */
 
 import { CHINESE_READINGS } from './chinese-dict.js';
@@ -12,6 +14,7 @@ import {
   applyToneSandhi,
   pinyinSyllableToIpa,
   segmentPinyin,
+  splitTone,
   syllableWithTone,
 } from './pinyin.js';
 
@@ -90,6 +93,38 @@ const PHRASES = {
   空气: 'kōng qì',
 };
 
+/** Words that start with a syllabic 儿 ér: 他儿子 is not erhua. */
+export const SYLLABIC_ER_BEFORE = new Set([
+  '儿子',
+  '儿童',
+  '儿女',
+  '儿孙',
+  '儿歌',
+  '儿科',
+  '儿媳',
+  '儿时',
+  '儿戏',
+]);
+
+/** Words that end with a syllabic 儿 ér: 女儿 is two syllables. */
+export const SYLLABIC_ER_AFTER = new Set([
+  '女儿',
+  '婴儿',
+  '幼儿',
+  '孤儿',
+  '胎儿',
+  '少儿',
+  '男儿',
+  '健儿',
+  '宠儿',
+  '患儿',
+  '妻儿',
+  '小儿',
+  '混血儿',
+  '新生儿',
+  '托儿',
+]);
+
 const MAX_PHRASE = Math.max(...Object.keys(PHRASES).map((key) => key.length));
 
 let readings = null;
@@ -116,11 +151,34 @@ export function isHanzi(char) {
 }
 
 /**
+ * True when the 儿 at `index` is the erhua suffix of the character before
+ * it: not the first character, not part of a word of
+ * `SYLLABIC_ER_BEFORE` or `SYLLABIC_ER_AFTER`, and the character before it
+ * has a known reading other than `er`.
+ * @param {string[]} chars
+ * @param {number} index
+ * @param {{pinyin: string|null}|undefined} previous
+ */
+function isErhua(chars, index, previous) {
+  if (chars[index] !== '儿' || index === 0 || !previous?.pinyin) {
+    return false;
+  }
+  const after = chars.slice(index).join('');
+  const before = chars.slice(0, index + 1).join('');
+  const syllabic =
+    [...SYLLABIC_ER_BEFORE].some((word) => after.startsWith(word)) ||
+    [...SYLLABIC_ER_AFTER].some((word) => before.endsWith(word));
+  return !syllabic && splitTone(previous.pinyin)?.letters !== 'er';
+}
+
+/**
  * Convert a run of Hanzi to toned pinyin syllables.
  * @param {string} text
- * @returns {{char: string, pinyin: string|null, group: number}[]}
+ * @returns {{char: string, pinyin: string|null, group: number, erhua?: true}[]}
  *   `group` is the index of the first character of the dictionary phrase
  *   the character belongs to (the character itself when not in a phrase).
+ *   An erhua 儿 has no pinyin of its own, the group of the character before
+ *   it and `erhua: true`; that character's pinyin gets the `r` (`huār`).
  */
 export function hanziToPinyin(text) {
   const chars = [...text];
@@ -146,7 +204,17 @@ export function hanziToPinyin(text) {
         break;
       }
     }
-    if (!matched) {
+    const previous = result.at(-1);
+    if (!matched && isErhua(chars, index, previous)) {
+      previous.pinyin += 'r';
+      result.push({
+        char: chars[index],
+        pinyin: null,
+        group: previous.group,
+        erhua: true,
+      });
+      index++;
+    } else if (!matched) {
       result.push({
         char: chars[index],
         pinyin: getReadings().get(chars[index]) ?? null,
