@@ -1,0 +1,39 @@
+# node experiments/issue-5-voice-sensitivity.mjs male breathiness tenseness
+tenseness=0.3          f0 120 range 6.2 vtl 14.84 h1h2 10.2 hnr 16.1 rate 4.12 active 2.43 voiced 2.34
+tenseness=0.5          f0 120 range 6.2 vtl 15.83 h1h2 6.1 hnr 16.2 rate 4.07 active 2.46 voiced 2.32
+tenseness=0.7          f0 121 range 6.3 vtl 17.07 h1h2 -0.2 hnr 16.8 rate 4.08 active 2.45 voiced 2.30
+tenseness=0.9          f0 121 range 6.3 vtl 18.60 h1h2 -3.9 hnr 16.9 rate 3.24 active 2.47 voiced 2.26
+tenseness slope:       h1h2 -24.15 hnr 1.53 f0Range 0.16 vocalTractLength 6.26
+breathiness=0          f0 120 range 6.4 vtl 17.01 h1h2 0.1 hnr 16.8 rate 4.08 active 2.45 voiced 2.29
+breathiness=0.05       f0 120 range 6.3 vtl 16.90 h1h2 1.0 hnr 16.6 rate 4.07 active 2.46 voiced 2.30
+breathiness=0.25       f0 120 range 6.3 vtl 16.48 h1h2 4.2 hnr 16.0 rate 4.05 active 2.47 voiced 2.29
+breathiness=0.5        f0 120 range 6.3 vtl 16.20 h1h2 7.6 hnr 12.0 rate 4.07 active 2.46 voiced 2.32
+breathiness=0.8        f0 118 range 12.3 vtl 17.19 h1h2 10.0 hnr 4.7 rate 4.07 active 2.46 voiced 2.30
+breathiness=1          f0 115 range 12.7 vtl 17.07 h1h2 11.3 hnr 1.8 rate 2.85 active 2.46 voiced 1.81
+breathiness slope:     h1h2 11.29 hnr -15.75 f0Range 7.00 vocalTractLength 0.22
+# node experiments/issue-5-voice-sensitivity.mjs female breathiness tenseness
+tenseness=0.3          f0 221 range 6.9 vtl 15.22 h1h2 7.7 hnr 19.3 rate 4.18 active 2.39 voiced 2.34
+tenseness=0.5          f0 221 range 6.6 vtl 15.39 h1h2 4.5 hnr 20.3 rate 4.17 active 2.40 voiced 2.35
+tenseness=0.7          f0 221 range 6.8 vtl 15.42 h1h2 -0.8 hnr 20.7 rate 4.17 active 2.40 voiced 2.36
+tenseness=0.9          f0 223 range 17.0 vtl 16.29 h1h2 -6.2 hnr 19.3 rate 5.04 active 2.38 voiced 2.36
+tenseness slope:       h1h2 -23.61 hnr 0.33 f0Range 15.35 vocalTractLength 1.62
+breathiness=0          f0 222 range 6.6 vtl 15.51 h1h2 -1.0 hnr 21.8 rate 4.17 active 2.40 voiced 2.36
+breathiness=0.05       f0 221 range 6.6 vtl 15.39 h1h2 -0.2 hnr 21.7 rate 4.17 active 2.40 voiced 2.36
+breathiness=0.25       f0 221 range 6.4 vtl 15.35 h1h2 2.7 hnr 21.2 rate 4.17 active 2.40 voiced 2.35
+breathiness=0.5        f0 222 range 6.5 vtl 15.20 h1h2 5.3 hnr 14.7 rate 4.17 active 2.40 voiced 2.35
+breathiness=0.8        f0 217 range 20.2 vtl 15.77 h1h2 6.5 hnr 7.1 rate 4.15 active 2.41 voiced 2.35
+breathiness=1          f0 211 range 22.7 vtl 16.03 h1h2 5.8 hnr 3.2 rate 4.13 active 2.42 voiced 2.12
+breathiness slope:     h1h2 7.28 hnr -19.65 f0Range 17.12 vocalTractLength 0.54
+# node experiments/issue-5-voice-sensitivity.mjs child breathiness tenseness
+tenseness=0.3          f0 249 range 6.1 vtl 14.34 h1h2 7.5 hnr 19.8 rate 3.91 active 2.56 voiced 2.56
+tenseness=0.5          f0 249 range 6.1 vtl 14.17 h1h2 3.8 hnr 20.9 rate 3.50 active 2.57 voiced 2.57
+tenseness=0.7          f0 246 range 7.2 vtl 14.26 h1h2 -1.5 hnr 22.0 rate 4.26 active 2.58 voiced 2.56
+tenseness=0.9          f0 254 range 14.1 vtl 14.97 h1h2 -7.0 hnr 21.2 rate 4.28 active 2.57 voiced 2.56
+tenseness slope:       h1h2 -24.38 hnr 2.70 f0Range 12.56 vocalTractLength 0.99
+breathiness=0          f0 246 range 7.2 vtl 14.31 h1h2 -0.8 hnr 22.6 rate 3.50 active 2.57 voiced 2.56
+breathiness=0.05       f0 246 range 6.9 vtl 14.23 h1h2 -0.1 hnr 22.5 rate 3.50 active 2.57 voiced 2.55
+breathiness=0.25       f0 247 range 6.4 vtl 14.14 h1h2 2.6 hnr 21.5 rate 3.50 active 2.57 voiced 2.56
+breathiness=0.5        f0 246 range 6.8 vtl 14.35 h1h2 5.4 hnr 16.3 rate 3.47 active 2.59 voiced 2.59
+breathiness=0.8        f0 243 range 15.9 vtl 14.53 h1h2 7.3 hnr 8.5 rate 3.88 active 2.58 voiced 2.57
+breathiness=1          f0 231 range 20.7 vtl 14.70 h1h2 7.3 hnr 4.3 rate 3.86 active 2.59 voiced 2.49
+breathiness slope:     h1h2 8.58 hnr -18.98 f0Range 13.36 vocalTractLength 0.44

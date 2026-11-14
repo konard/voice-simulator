@@ -42,12 +42,50 @@ export function glottalReflection(head = {}) {
 }
 
 /**
- * LF pulse parameters for a tenseness value (0 = breathy/lax, 1 = pressed).
+ * Change of the LF shape parameter Rd per unit of breathiness: a breathy
+ * voice has a longer open phase and a stronger first harmonic (H1-H2 of 7
+ * to 12 dB against 0 to 4 dB for a modal voice; Klatt and Klatt 1990,
+ * Hanson 1997).
+ */
+export const BREATHINESS_RD = 1.5;
+
+/** Breathiness at which the pulse depends on tenseness alone (default). */
+export const BREATHINESS_REFERENCE = 0.2;
+
+/**
+ * Gain and exponent of the breath noise against breathiness:
+ * `BREATH_GAIN * breathiness ** BREATH_EXPONENT`. The default breathiness
+ * 0.2 keeps the noise about 40 dB below the pulses at the source, and
+ * breathiness 1 brings it to about 10 dB below them, the level of a
+ * clearly breathy voice (Klatt and Klatt 1990: 10 to 20 dB below the
+ * voiced part). The pulse grows by about 3 dB from breathiness 0.2 to 1
+ * (its longer open phase), so the noise gain rises by 33 dB to give 30 dB
+ * more noise against the pulses. Measured with part 1 of
+ * experiments/issue-11-audit-m2.mjs (tuning in
+ * experiments/issue-32-breath-tuning.mjs): -40.2, -22.8 and -10.1 dB at
+ * breathiness 0.2, 0.5 and 1.
+ */
+export const BREATH_GAIN = 3;
+export const BREATH_EXPONENT = 2.35;
+
+/**
+ * LF pulse parameters for a tenseness value (0 = breathy/lax, 1 = pressed)
+ * and a breathiness value (0 = clear, 1 = very breathy). Both set the Rd
+ * shape parameter of Fant (1995): 0.5 is a pressed voice, 2.7 a very
+ * breathy one. The default breathiness leaves the pulse of tenseness alone.
  * The pulse is normalised to period 1 and a negative peak of about -1.
  * @param {number} tenseness
+ * @param {number} [breathiness]
  */
-export function lfParameters(tenseness) {
-  const rd = Math.min(2.7, Math.max(0.5, 3 * (1 - tenseness)));
+export function lfParameters(tenseness, breathiness = BREATHINESS_REFERENCE) {
+  const rd = Math.min(
+    2.7,
+    Math.max(
+      0.5,
+      3 * (1 - tenseness) +
+        BREATHINESS_RD * (breathiness - BREATHINESS_REFERENCE)
+    )
+  );
   const ra = -0.01 + 0.048 * rd;
   const rk = 0.224 + 0.118 * rd;
   const rg =
@@ -66,7 +104,7 @@ export function lfParameters(tenseness) {
   const y = (-Math.PI * sine * upperIntegral) / (tp * 2);
   const alpha = Math.log(y) / (tp / 2 - te);
   const e0 = -1 / (sine * Math.exp(alpha * te));
-  return { alpha, e0, epsilon, shift, delta, te, omega };
+  return { rd, alpha, e0, epsilon, shift, delta, te, omega };
 }
 
 /**
@@ -101,7 +139,7 @@ export class Glottis {
     this.jitter = 1;
     this.shimmer = 1;
     this.intensity = 0;
-    this.pulse = lfParameters(this.tenseness);
+    this.pulse = lfParameters(this.tenseness, this.breathiness);
     this.noiseModulation = 0;
   }
 
@@ -110,7 +148,7 @@ export class Glottis {
     this.jitter = 1 + this.jitterDepth * randomNormal(this.random);
     this.shimmer = 1 + this.shimmerDepth * randomNormal(this.random);
     this.period = 1 / Math.max(30, frequency * this.jitter);
-    this.pulse = lfParameters(tenseness);
+    this.pulse = lfParameters(tenseness, this.breathiness);
   }
 
   /**
@@ -146,7 +184,8 @@ export class Glottis {
       voicing > 0.1 ? 0.3 + 0.7 * opening * Math.min(1, voicing) : 1;
     this.noiseModulation = modulation;
     const breath =
-      (control.aspiration + this.breathiness * voicing * 0.35) *
+      (control.aspiration +
+        BREATH_GAIN * this.breathiness ** BREATH_EXPONENT * voicing) *
       (1 - control.closure);
     return (
       voiced +

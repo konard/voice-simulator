@@ -1,0 +1,52 @@
+# node experiments/issue-32-recover-breathiness.mjs 0.1 0.3 0.5 0.8 1 --transcript
+target breathiness 0.1: hnr 21.30 h1h2 1.78 f0Range 3.31
+  step 0: breathiness 0.12 tenseness 0.64 speechRate 0.72 -> hnr 23.14 h1h2 -0.12 distance Infinity
+  step 1: breathiness 0.12 tenseness 0.64 speechRate 0.72 -> hnr 23.14 h1h2 -0.12 distance 2.605
+  step 2: breathiness 0.22 tenseness 0.64 speechRate 1.01 -> hnr 21.98 h1h2 0.98 distance 0.435
+  step 3: breathiness 0.28 tenseness 0.63 speechRate 0.99 -> hnr 21.33 h1h2 2.10 distance 0.843
+  step 4: breathiness 0.28 tenseness 0.64 speechRate 0.98 -> hnr 19.61 h1h2 2.76 distance 0.451
+  result male: breathiness 0.22 tenseness 0.64 hnr 21.98 h1h2 0.98
+target breathiness 0.3: hnr 19.38 h1h2 4.92 f0Range 3.71
+  step 0: breathiness 0.13 tenseness 0.63 speechRate 0.73 -> hnr 22.95 h1h2 0.88 distance Infinity
+  step 1: breathiness 0.13 tenseness 0.63 speechRate 0.73 -> hnr 22.95 h1h2 0.88 distance 2.690
+  step 2: breathiness 0.33 tenseness 0.62 speechRate 1.02 -> hnr 19.35 h1h2 4.32 distance 0.630
+  step 3: breathiness 0.33 tenseness 0.6 speechRate 1.01 -> hnr 19.32 h1h2 5.26 distance 0.468
+  step 4: breathiness 0.33 tenseness 0.61 speechRate 1.01 -> hnr 19.74 h1h2 5.14 distance 0.660
+  result male: breathiness 0.33 tenseness 0.6 hnr 19.32 h1h2 5.26
+target breathiness 0.5: hnr 14.24 h1h2 7.49 f0Range 3.37
+  step 0: breathiness 0.13 tenseness 0.63 speechRate 0.72 -> hnr 23.17 h1h2 0.99 distance Infinity
+  step 1: breathiness 0.13 tenseness 0.63 speechRate 0.72 -> hnr 23.17 h1h2 0.99 distance 3.119
+  step 2: breathiness 0.38 tenseness 0.61 speechRate 1.02 -> hnr 18.35 h1h2 5.60 distance 0.671
+  step 3: breathiness 0.59 tenseness 0.66 speechRate 1.01 -> hnr 12.01 h1h2 6.79 distance 0.816
+  step 4: breathiness 0.52 tenseness 0.59 speechRate 1 -> hnr 14.22 h1h2 8.32 distance 0.568
+  result male: breathiness 0.52 tenseness 0.59 hnr 14.22 h1h2 8.32
+target breathiness 0.8: hnr 5.91 h1h2 10.12 f0Range 6.73
+  step 0: breathiness 0.13 tenseness 0.63 speechRate 0.72 -> hnr 23.61 h1h2 0.10 distance Infinity
+  step 1: breathiness 0.13 tenseness 0.63 speechRate 0.72 -> hnr 23.61 h1h2 0.10 distance 3.774
+  step 2: breathiness 0.38 tenseness 0.61 speechRate 0.99 -> hnr 18.55 h1h2 5.08 distance 1.999
+  step 3: breathiness 0.63 tenseness 0.59 speechRate 0.98 -> hnr 10.79 h1h2 8.62 distance 0.891
+  step 4: breathiness 0.79 tenseness 0.61 speechRate 0.99 -> hnr 7.03 h1h2 10.11 distance 0.713
+  result male: breathiness 0.79 tenseness 0.61 hnr 7.03 h1h2 10.11
+target breathiness 1: hnr 2.03 h1h2 11.20 f0Range 13.36
+  step 0: breathiness 0.13 tenseness 0.63 speechRate 0.66 -> hnr 23.04 h1h2 -0.36 distance Infinity
+  step 1: breathiness 0.13 tenseness 0.63 speechRate 0.66 -> hnr 23.04 h1h2 -0.36 distance 5.149
+  step 2: breathiness 0.38 tenseness 0.61 speechRate 0.98 -> hnr 17.00 h1h2 5.67 distance 2.677
+  step 3: breathiness 0.63 tenseness 0.6 speechRate 1 -> hnr 9.97 h1h2 8.59 distance 1.995
+  step 4: breathiness 0.88 tenseness 0.6 speechRate 0.99 -> hnr 4.80 h1h2 10.26 distance 1.333
+  result male: breathiness 0.88 tenseness 0.6 hnr 4.80 h1h2 10.26
+
+# node experiments/issue-32-recover-breathiness.mjs 0.1 0.8
+target breathiness 0.1: hnr 21.30 h1h2 1.78 f0Range 3.31
+  step 0: breathiness 0.12 tenseness 0.64 speechRate 0.72 -> hnr 23.14 h1h2 -0.12 distance Infinity
+  step 1: breathiness 0.12 tenseness 0.64 speechRate 0.72 -> hnr 23.14 h1h2 -0.12 distance 1.183
+  step 2: breathiness 0.22 tenseness 0.64 speechRate 0.84 -> hnr 24.29 h1h2 1.05 distance 0.538
+  step 3: breathiness 0.39 tenseness 0.69 speechRate 0.84 -> hnr 20.28 h1h2 2.29 distance 0.557
+  step 4: breathiness 0.35 tenseness 0.68 speechRate 0.73 -> hnr 20.65 h1h2 2.29 distance 0.200
+  result male: breathiness 0.35 tenseness 0.68 hnr 20.65 h1h2 2.29
+target breathiness 0.8: hnr 5.91 h1h2 10.12 f0Range 6.73
+  step 0: breathiness 0.13 tenseness 0.63 speechRate 0.72 -> hnr 23.61 h1h2 0.10 distance Infinity
+  step 1: breathiness 0.13 tenseness 0.63 speechRate 0.72 -> hnr 23.61 h1h2 0.10 distance 2.988
+  step 2: breathiness 0.38 tenseness 0.61 speechRate 0.62 -> hnr 20.44 h1h2 5.10 distance 2.347
+  step 3: breathiness 0.63 tenseness 0.59 speechRate 0.72 -> hnr 10.77 h1h2 8.64 distance 0.963
+  step 4: breathiness 0.76 tenseness 0.59 speechRate 0.84 -> hnr 7.39 h1h2 9.74 distance 0.473
+  result male: breathiness 0.76 tenseness 0.59 hnr 7.39 h1h2 9.74

@@ -27,7 +27,7 @@ const SYMBOLS = ['æ', 'ɑ', 'ʌ', 'ɛ'];
 export function bareSourceMeasures(head, f3) {
   const glottis = new Glottis({
     tenseness: head.tenseness,
-    breathiness: 0,
+    breathiness: head.breathiness,
     jitter: 0,
     shimmer: 0,
     aspirationLevel: 0,

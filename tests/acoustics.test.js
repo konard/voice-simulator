@@ -23,6 +23,7 @@ import {
   spectralPeaks,
 } from '../src/acoustics/analysis.js';
 import { tubeFormants } from '../src/acoustics/transfer.js';
+import { createRandom, randomNormal } from '../src/random.js';
 import { encodeWav, decodeWav, wavHeader } from '../src/audio/wav.js';
 import { DEFAULT_HEAD, normalizeHeadConfig } from '../src/head-config.js';
 import { getPhoneme } from '../src/ipa/inventory.js';
@@ -86,6 +87,45 @@ describe('LF glottal pulse', () => {
     expect(reflections[0]).toBeLessThan(GLOTTAL_REFLECTION);
     expect(reflections[2]).toBeLessThan(reflections[1]);
     expect(reflections[1]).toBeLessThan(reflections[0]);
+  });
+
+  it('makes the pulse breathier with breathiness', () => {
+    // A breathy voice has a longer open phase: a larger Rd (Fant 1995).
+    expect(lfParameters(0.6, 1).rd - lfParameters(0.6, 0).rd).toBeGreaterThan(
+      1.2
+    );
+    expect(lfParameters(0.6)).toEqual(lfParameters(0.6, 0.2));
+  });
+
+  it('raises the breath noise by 30 dB over the range', () => {
+    // Breath noise against the pulses at the source, from the difference
+    // of the same glottis with and without unit-RMS white noise.
+    const rate = 48000;
+    const control = {
+      f0: 120,
+      voicing: 1,
+      aspiration: 0,
+      closure: 0,
+      loudness: 1,
+    };
+    const level = (breathiness) => {
+      const clean = new Glottis({ breathiness });
+      const noisy = new Glottis({ breathiness });
+      const random = createRandom('breath');
+      let pulses = 0;
+      let noise = 0;
+      for (let n = 0; n < rate; n++) {
+        const pulse = clean.step(1 / rate, control, 0);
+        const difference =
+          noisy.step(1 / rate, control, randomNormal(random)) - pulse;
+        pulses += pulse * pulse;
+        noise += difference * difference;
+      }
+      return 10 * Math.log10(noise / pulses);
+    };
+    const rise = level(1) - level(0.2);
+    expect(rise).toBeGreaterThan(28);
+    expect(rise).toBeLessThan(32);
   });
 });
 

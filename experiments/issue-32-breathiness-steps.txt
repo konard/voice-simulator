@@ -1,0 +1,5 @@
+breathiness 0: hnr 21.91 h1h2 0.06 f0 127.8 voiced 3.27
+breathiness 0.25: hnr 20.58 h1h2 4.21 f0 127.8 voiced 3.27
+breathiness 0.5: hnr 12.77 h1h2 7.46 f0 127.7 voiced 3.28
+breathiness 0.75: hnr 5.22 h1h2 9.51 f0 127.0 voiced 3.21
+breathiness 1: hnr 0.40 h1h2 10.39 f0 126.3 voiced 2.50
