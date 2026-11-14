@@ -3,7 +3,7 @@ id: P71
 title: State-of-the-art evaluation and public report
 type: Feature
 milestone: M5
-blocked_by: [P07, P08, P67, P69]
+blocked_by: [P07, P08, P67, P69, P19, P16]
 requirements: [R19, R1, R8, R14]
 ---
 
@@ -134,9 +134,14 @@ is the gift: other people can check it, repeat it and build on it.
    `RESULTS` file). The column "Comparable" says "yes" only when {{P64}}
    measured on the same test set; otherwise "no, other data".
 8. Part D: the matrix of `docs/reports/lowest-settings.json` ({{P69}}),
-   unchanged. Part E, speed: real-time factor per tier and engine on one
-   core and on all cores, time to first sound and the cost of the load-time
-   benchmark, from the suite `performance` ({{P19}}), with the CPU model.
+   unchanged. Part E, speed, with the CPU model:
+   - the real-time factor per tier and engine (one thread, and the
+     `rust-mt` rows when they exist) of the newest run in
+     `docs/reports/performance-history.json` ({{P19}});
+   - the time to first sound: the row `app` of the lowest-settings report
+     ({{P69}});
+   - the cost of the load-time benchmark: `cpuSeconds` and `longestSlice`
+     of one call of `benchmarkDevice()` ({{P16}}) on the same machine.
 9. Goals table. One row for every sentence under "What the system does when
    the vision is reached" and "How quality is judged" in `docs/VISION.md`:
    goal, evidence (number and link to the part), status. For every row that

@@ -211,7 +211,8 @@ Add `tests/golden-set.test.js`:
 ## Out of scope
 
 - Single words, vowels and tone syllables (CC0 files of Lingua Libre and the
-  Dresden Vocal Tract Dataset): {{P26}} and {{P58}} add what they need.
+  Dresden Vocal Tract Dataset): a later issue that needs them adds them
+  through the registry of {{P04}}.
 - Whisper, shout, emotions and song: no public-domain source was found.
 - Phone-level time alignment of the recordings.
 - Larger sets for statistics: fetched by {{P04}}, used by {{P64}}.

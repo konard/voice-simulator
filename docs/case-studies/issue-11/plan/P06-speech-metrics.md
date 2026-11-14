@@ -55,7 +55,10 @@ not smaller than the window in samples (512 at 16000 Hz), floor
 
 1. `src/metrics/spectrum.js`
    - `fft(re, im)`: in-place radix-2 transform of two `Float64Array`s whose
-     length is a power of two; throw otherwise.
+     length is a power of two; throw otherwise. If `src/recognition/fft.js`
+     of {{P46}} exists already, do not write a second transform: call its
+     `createFft(size).forward(re, im)` and keep one object per size in a
+     `Map`. Otherwise {{P46}} makes that change.
    - `powerFrames(samples, sampleRate, options)`: list of `Float64Array`
      power spectra `P[k] = re[k]^2 + im[k]^2` for `k = 0 .. size/2`.
    - `melFilterbank(count, size, sampleRate)`: `count` triangular filters

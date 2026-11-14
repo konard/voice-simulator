@@ -3,7 +3,7 @@ id: P67
 title: Copy synthesis: reproduce a real recording
 type: Feature
 milestone: M5
-blocked_by: [P66, P58, P59]
+blocked_by: [P66, P58, P59, P08]
 requirements: [R8, R9]
 ---
 

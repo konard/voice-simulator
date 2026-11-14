@@ -162,8 +162,8 @@ component.
 | P07 | Feature | M0        | Baseline quality report against real recordings                                | P02, P05, P06                     |
 | P08 | Feature | M0        | Listening-test harness: MUSHRA, ABX and intelligibility                        |                                   |
 | P09 | Feature | M1        | Rust workspace and WebAssembly build pipeline                                  |                                   |
-| P10 | Feature | M1        | Port the waveguide, the glottal source and the voice renderer to Rust          | P09                               |
-| P11 | Feature | M1        | Port the 3D FDTD solver to Rust with WebAssembly SIMD                          | P09                               |
+| P10 | Feature | M1        | Port the waveguide, the glottal source and the voice renderer to Rust          | P09, P02                          |
+| P11 | Feature | M1        | Port the 3D FDTD solver to Rust with WebAssembly SIMD                          | P09, P10                          |
 | P12 | Feature | M1        | Multicore 3D solver with a single-core fallback                                | P11                               |
 | P13 | Feature | M1        | Rust engine in a background worker as the default, JavaScript as the fallback  | P10, P11                          |
 | P14 | Feature | M1        | Narrow-band tiers: 8, 11.025 and 16 kHz                                        |                                   |
@@ -178,8 +178,8 @@ component.
 | P23 | Feature | M2        | Physically based turbulence noise: frication, aspiration and bursts            |                                   |
 | P24 | Feature | M2        | Frequency-dependent losses in the 1D solver                                    |                                   |
 | P25 | Feature | M2        | 2D acoustic tier between the waveguide and 3D                                  |                                   |
-| P26 | Feature | M2        | Articulator dynamics and coarticulation calibrated on real data                | P06                               |
-| P27 | Feature | M2        | Rule-based segment duration model per language                                 |                                   |
+| P26 | Feature | M2        | Articulator dynamics and coarticulation calibrated on real data                | P06, P05                          |
+| P27 | Feature | M2        | Rule-based segment duration model per language                                 | P05, P06                          |
 | P28 | Feature | M2        | Explicit jaw, larynx height and lip protrusion articulators                    |                                   |
 | P29 | Feature | M2        | Expanded voice configuration: voice files, groups, presets and an editor       | P21, P23, P24                     |
 | P72 | Bug     | M2        | Nasal consonants are about four times louder in the 3D solver                  |                                   |
@@ -188,7 +188,7 @@ component.
 | P32 | Bug     | M3        | English heteronyms are always read the same way                                |                                   |
 | P33 | Bug     | M3        | Hindi yes/no questions that start with क्या get a falling contour              |                                   |
 | P34 | Bug     | M3        | Expanded numbers and dates are highlighted as one word                         |                                   |
-| P35 | Feature | M3        | Pronunciation lexicons at scale from permissive sources                        | P03                               |
+| P35 | Feature | M3        | Pronunciation lexicons at scale from permissive sources                        | P03, P04                          |
 | P36 | Bug     | M3        | Russian stress is wrong outside the small dictionary and for homographs        | P35                               |
 | P37 | Feature | M3        | Tone model with targets, the neutral tone and tone coarticulation              | P30                               |
 | P38 | Feature | M3        | Speech markup: an SSML subset, inline tags and voice-quality symbols in IPA    |                                   |
@@ -196,14 +196,16 @@ component.
 | P40 | Feature | M3        | Vocal effort and loudness dynamics                                             | P38                               |
 | P41 | Feature | M3        | Whisper                                                                        | P38, P23                          |
 | P42 | Feature | M3        | Phonation types: breathy, creaky, pressed and falsetto                         | P38, P20                          |
-| P43 | Feature | M3        | Emotions and attitudes                                                         | P39, P40, P42                     |
+| P43 | Feature | M3        | Emotions and attitudes                                                         | P39, P40, P42, P08                |
 | P44 | Feature | M3        | Paralinguistic sounds: breaths, laughter, sighs and hesitations                | P38, P23                          |
 | P45 | Feature | M3        | Accents beyond English and foreign accents                                     |                                   |
+| P73 | Bug     | M3        | English function words are spoken as full stressed words                       |                                   |
+| P74 | Bug     | M3        | Russian prepositions and particles are read as separate stressed words         |                                   |
 | P46 | Feature | M4        | Streaming analysis front end                                                   |                                   |
-| P47 | Feature | M4        | Robust pitch and voicing tracker                                               | P46, P06                          |
-| P48 | Feature | M4        | Formant tracker                                                                | P46, P06                          |
+| P47 | Feature | M4        | Robust pitch and voicing tracker                                               | P46, P06, P04                     |
+| P48 | Feature | M4        | Formant tracker                                                                | P46, P06, P05                     |
 | P49 | Feature | M4        | Glottal inverse filtering and source parameters                                | P46                               |
-| P50 | Feature | M4        | Syllable nuclei, landmarks and broad sound classes                             | P46                               |
+| P50 | Feature | M4        | Syllable nuclei, landmarks and broad sound classes                             | P46, P05                          |
 | P51 | Feature | M4        | Voice configuration fit on real speakers (pass 1)                              | P47, P48, P49, P05, P20           |
 | P52 | Feature | M4        | Articulatory codebook generated by the simulator                               | P46                               |
 | P53 | Feature | M4        | Acoustic-to-articulatory inversion (pass 2)                                    | P52, P48, P51                     |
@@ -212,7 +214,7 @@ component.
 | P56 | Feature | M4        | IPA to text per language                                                       | P35                               |
 | P57 | Feature | M4        | Language identification and mixed-language speech from IPA                     | P56                               |
 | P58 | Feature | M4        | Recognise tones, stress and sentence type                                      | P54, P47, P37, P39                |
-| P59 | Feature | M4        | Recognise loudness, whisper, voice quality and emotion                         | P49, P40, P41, P42, P43           |
+| P59 | Feature | M4        | Recognise loudness, whisper, voice quality and emotion                         | P49, P40, P41, P42, P43, P05      |
 | P60 | Feature | M4        | Recognise whispered speech                                                     | P54, P41                          |
 | P61 | Feature | M4        | Recognition API, command and server route with streaming results               | P54, P56, P57                     |
 | P62 | Feature | M4        | App: recognition from the microphone and files with live syllable highlighting | P61                               |
@@ -220,8 +222,8 @@ component.
 | P64 | Feature | M4        | Recognition benchmark on public recordings                                     | P61, P04, P06, P02                |
 | P65 | Feature | M4        | Recognition in Rust and on several cores with a single-core fallback           | P61, P09                          |
 | P66 | Feature | M5        | Multi-pass voice session: fit, invert, stabilise, keep recognising             | P51, P61                          |
-| P67 | Feature | M5        | Copy synthesis: reproduce a real recording                                     | P66, P58, P59                     |
+| P67 | Feature | M5        | Copy synthesis: reproduce a real recording                                     | P66, P58, P59, P08                |
 | P68 | Feature | M5        | App: copy a voice while the person keeps speaking                              | P66, P62                          |
 | P69 | Feature | M5        | Lowest-settings certification: 8 kHz and one core                              | P63, P64, P67, P14                |
 | P70 | Feature | M5        | Rust parity for everything added after the port                                | P13, P21, P22, P23, P24, P41, P42 |
-| P71 | Feature | M5        | State-of-the-art evaluation and public report                                  | P07, P08, P67, P69                |
+| P71 | Feature | M5        | State-of-the-art evaluation and public report                                  | P07, P08, P67, P69, P19, P16      |
