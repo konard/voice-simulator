@@ -1,0 +1,12 @@
+a cup of tea for you
+  strong 1.904 s  ə ˈkʌp ˈʌv ˈti ˈfɔɹ ˈju
+  weak   1.666 s  ə ˈkʌp əv ˈti fɚ ju  (-12.5 %)
+I can do it
+  strong 1.377 s  ˈaɪ ˈkæn ˈdu ˈɪt
+  weak   1.189 s  aɪ kən ˈdu ɪt  (-13.7 %)
+He was at home
+  strong 1.521 s  ˈhi ˈwɑz ˈæt ˈhoʊm
+  weak   1.358 s  hi wəz ət ˈhoʊm  (-10.7 %)
+Hello! This voice is simulated by sound waves in a 3D head.
+  strong 5.773 s  həˈloʊ ! ˈðɪs ˈvɔɪs ˈɪz ˈsɪmjəˌleɪɾɪd ˈbaɪ ˈsaʊnd ˈweɪvz ɪn ə ˈθɹi ˈdi ˈhɛd .
+  weak   5.673 s  həˈloʊ ! ˈðɪs ˈvɔɪs ɪz ˈsɪmjəˌleɪɾɪd baɪ ˈsaʊnd ˈweɪvz ɪn ə ˈθɹi ˈdi ˈhɛd .  (-1.7 %)
