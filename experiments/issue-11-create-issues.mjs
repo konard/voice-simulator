@@ -20,6 +20,7 @@
  *   node experiments/issue-11-create-issues.mjs check
  *   node experiments/issue-11-create-issues.mjs render <directory>
  *   node experiments/issue-11-create-issues.mjs create [--repo owner/name]
+ *   node experiments/issue-11-create-issues.mjs update [--repo owner/name]
  *   node experiments/issue-11-create-issues.mjs roadmap
  *   node experiments/issue-11-create-issues.mjs link <file>
  *
@@ -28,6 +29,7 @@
  *
  * `create` is idempotent: what it created is recorded in
  * docs/case-studies/issue-11/data/created-issues.json and skipped next time.
+ * `update` sends the bodies again that differ from the plan files.
  */
 
 import { execFileSync } from 'node:child_process';
@@ -312,7 +314,7 @@ export function renderBody(item, plan, numbers, repo = DEFAULT_REPO) {
   const milestone = MILESTONES.find((entry) => entry.id === item.milestone);
   const body = item.body.replace(/\{\{(P\d+)\}\}/gu, (_, id) => reference(id));
   return [
-    `> Part of the roadmap planned in #11 (${milestone.title}). Type: **${item.type}**. Requirements of #11 covered: ${item.requirements.join(', ')} (see the [case study](${BLOB(repo)}/docs/case-studies/issue-11/README.md)).`,
+    `> Part of the [roadmap](${BLOB(repo)}/docs/ROADMAP.md) planned in #11 (${milestone.title}). Type: **${item.type}**. Requirements of #11 covered: ${item.requirements.join(', ')} (see the [case study](${BLOB(repo)}/docs/case-studies/issue-11/README.md)).`,
     '',
     body,
     '',
@@ -495,6 +497,43 @@ async function create(repo) {
   );
 }
 
+/**
+ * Sends the body of every created issue again when it differs from the plan
+ * file. Run it after a plan file was edited. It is also needed once after
+ * `create`: GitHub turns `#number` into a link only if that issue exists at
+ * the moment the body is saved, so issues that were created later are plain
+ * text in the first version of a body.
+ */
+async function update(repo) {
+  const plan = await unwrapBodies(loadPlan());
+  const state = readState();
+  const numbers = numbersFromState();
+  let changed = 0;
+  for (const item of plan) {
+    const issue = state.issues[item.id];
+    if (!issue) {
+      throw new Error(`${item.id}: no created issue`);
+    }
+    const body = renderBody(item, plan, numbers, repo);
+    const current = api('GET', `repos/${repo}/issues/${issue.number}`);
+    const same = (text) => text.replace(/\r\n/gu, '\n').trim();
+    if (
+      same(current.body ?? '') === same(body) &&
+      current.title === item.title
+    ) {
+      continue;
+    }
+    api('PATCH', `repos/${repo}/issues/${issue.number}`, {
+      title: item.title,
+      body,
+    });
+    changed += 1;
+    console.log(`updated #${issue.number} ${item.title}`);
+    await sleep(1500);
+  }
+  console.log(`${changed} of ${plan.length} issues updated`);
+}
+
 function numbersFromState() {
   const state = readState();
   return Object.fromEntries(
@@ -633,13 +672,15 @@ if (command === 'check') {
   await render(rest[0] ?? join(CASE, 'data/rendered-issues'));
 } else if (command === 'create') {
   await create(repo);
+} else if (command === 'update') {
+  await update(repo);
 } else if (command === 'roadmap') {
   roadmap();
 } else if (command === 'link' && rest[0]) {
   link(rest[0]);
 } else {
   console.error(
-    'Usage: issue-11-create-issues.mjs check|render|create|roadmap|link'
+    'Usage: issue-11-create-issues.mjs check|render|create|update|roadmap|link'
   );
   process.exitCode = 1;
 }
