@@ -15,13 +15,13 @@ deliver.
 What this pull request delivers:
 
 - The vision, rewritten: [docs/VISION.md](../../VISION.md).
-- The plan: [docs/ROADMAP.md](../../ROADMAP.md) and 72 GitHub issues in six
+- The plan: [docs/ROADMAP.md](../../ROADMAP.md) and 74 GitHub issues in six
   milestones with their "blocked by" links. The text of every issue is in
   [plan](plan/README.md).
 - This case study: every requirement of the issue, what exists today, the
   options, the chosen solution and the issues that implement it.
 - Research with sources in five parts: [research](research).
-- A measured audit of the current behaviour, which found nine bugs:
+- A measured audit of the current behaviour, which found eleven bugs:
   [experiments/issue-11-audit.mjs](../../../experiments/issue-11-audit.mjs).
 
 Nothing in `src/` changes. No requirement is claimed as implemented in code by
@@ -54,7 +54,7 @@ implemented yet.
 
 | #   | Requirement (issue text, condensed)                                                                   | Status  | Issues or documents                                                                 |
 | --- | ----------------------------------------------------------------------------------------------------- | ------- | ----------------------------------------------------------------------------------- |
-| R1  | Plan issues so that the highest possible quality of sound simulation is fully supported               | Done    | [Roadmap](../../ROADMAP.md), all 72 issues                                          |
+| R1  | Plan issues so that the highest possible quality of sound simulation is fully supported               | Done    | [Roadmap](../../ROADMAP.md), all 74 issues                                          |
 | R2  | If performance blocks us: sound simulation in a Rust background worker, and make it the default       | Planned | {{P09}}, {{P10}}, {{P11}}, {{P13}}, {{P70}}                                         |
 | R3  | Streaming with variable quality: when the algorithm is too slow for the device, make it cheaper       | Planned | {{P15}}, {{P17}}, {{P14}}                                                           |
 | R4  | Background checks on page load, without sound and without locking the UI: a small benchmark           | Planned | {{P16}}, {{P19}}                                                                    |
@@ -70,7 +70,7 @@ implemented yet.
 | R14 | Check best practices; list all similar projects and projects that implement parts of the vision       | Done    | [Similar projects](#similar-projects), [research 1](research/1-similar-projects.md) |
 | R15 | The vision must be updated by this pull request                                                       | Done    | [docs/VISION.md](../../VISION.md)                                                   |
 | R16 | Issues detailed enough for a weak agent, marked bug or feature, blockers between them, the full plan  | Done    | [The plan](#the-plan), [plan](plan/README.md)                                       |
-| R17 | Tones, accents, loudness changes, question and exclamation intonation, whisper, emotions: in and out  | Planned | {{P30}} to {{P45}}, {{P58}}, {{P59}}, {{P60}}                                       |
+| R17 | Tones, accents, loudness changes, question and exclamation intonation, whisper, emotions: in and out  | Planned | {{P30}} to {{P45}}, {{P73}}, {{P74}}, {{P58}}, {{P59}}, {{P60}}                     |
 | R18 | No neural networks: algorithms, mathematics, physically accurate simulation and its reverse           | Planned | {{P03}}; principle 1 of the vision; rules in every issue                            |
 | R19 | A new state-of-the-art system that never existed, a public-domain gift to humanity                    | Planned | {{P07}}, {{P08}}, {{P71}}; [what is new](#what-is-new-and-what-is-uncertain)        |
 | R20 | Scope: a docs update, and actually created GitHub issues with the full plan                           | Done    | This pull request, [created issues](data/created-issues.json)                       |
@@ -92,7 +92,7 @@ vision". Those are covered in
    something similar, how a simulator can be inverted without neural networks,
    which recordings can be used, how the modes of speech work in numbers, and
    how to make the engine fast and the physics better.
-4. **Plan.** The requirements were cut into 72 issues. Shared names (files,
+4. **Plan.** The requirements were cut into 74 issues. Shared names (files,
    functions, formats, tiers) were fixed first in
    [plan/README.md](plan/README.md) so that issues written apart still fit
    together. A script checks that every issue has all sections, that every
@@ -106,21 +106,29 @@ Run `node experiments/issue-11-audit.mjs`; the output is
 [issue-11-audit.txt](../../../experiments/issue-11-audit.txt). The other
 `issue-11-audit-*.mjs` scripts measure what single issues needed.
 
-| What                                 | Measured today                                                                                                   | Consequence                                                        |
-| ------------------------------------ | ---------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------ |
-| Mandarin third tone `mǎ`             | Planned pitch 105, 108, 128, 136, 137 Hz: it only rises                                                          | Bug {{P30}}; the tone model {{P37}}                                |
-| Mandarin `花儿`                      | `xwa˥ ɚ˧˥`: the suffix is a syllable of its own with a rising tone                                               | Bug {{P31}}                                                        |
-| English "record the record"          | `ɹəˈkɔɹd ðə ɹəˈkɔɹd`; "lead pipe" and "they lead" both `lɛd`; "the wind" and "wind the clock" both `waɪnd`       | Bug {{P32}}; lexicons {{P35}}                                      |
-| Russian "Замок на замке"             | `ˈzamək na ˈzamkʲə`: the lock is read as the castle                                                              | Bug {{P36}}                                                        |
-| Hindi "क्या तुम आओगे?"               | The yes/no question gets a falling mark `↘`                                                                      | Bug {{P33}}                                                        |
-| "I have 25 apples on 3/4/2024."      | The words `25` and `3/4/2024` have 3 and 7 syllables without text, so nothing can be highlighted inside them     | Bug {{P34}}                                                        |
-| `breathiness` 0 → 1                  | Harmonics-to-noise ratio 15.19 → 14.59 dB, H1-H2 3.43 → 3.46 dB: almost no measurable change                     | Bug {{P20}}; blocks the voice fit {{P51}}                          |
-| Nasal against the vowel in `ˈama`    | Level ratio 0.32 with the 1D solver, 1.22 with the 3D solver                                                     | Bug {{P72}}                                                        |
-| Sentence types in English            | Statement 141 → 94 Hz, yes/no question 141 → 140 Hz, exclamation starts at 161 Hz and is 1.41 times louder       | Only final movements exist; intonation models {{P39}}              |
-| Lowest settings                      | `minimal` tier is 22.05 kHz; forcing 8, 11.025 and 16 kHz works and keeps the formants                           | Narrow-band tiers {{P14}}                                          |
-| Configuration                        | 33 head and voice parameters                                                                                     | Expanded configuration {{P29}}                                     |
-| Speed, one core of the audit machine | Real-time factor 0.05 (`minimal`), 0.10 (`low`), 0.14 (`medium`), 1.32 (`high`), 6.77 (`ultra`)                  | 1D is real time everywhere; 3D is not: Rust engine {{P09}}-{{P13}} |
-| Case-study folders of the template   | `docs/case-studies/issue-13`, `-21`, `-23` and 16 more belong to another repository and collide with new numbers | Bug {{P01}}                                                        |
+| What                                 | Measured today                                                                                                                                                | Consequence                                                                                    |
+| ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| Mandarin third tone `mǎ`             | Planned pitch 105, 108, 128, 136, 137 Hz: it only rises                                                                                                       | Bug {{P30}}; the tone model {{P37}}                                                            |
+| Mandarin `花儿`                      | `xwa˥ ɚ˧˥`: the suffix is a syllable of its own with a rising tone                                                                                            | Bug {{P31}}                                                                                    |
+| English "record the record"          | `ɹəˈkɔɹd ðə ɹəˈkɔɹd`; "lead pipe" and "they lead" both `lɛd`; "the wind" and "wind the clock" both `waɪnd`                                                    | Bug {{P32}}; lexicons {{P35}}                                                                  |
+| Russian "Замок на замке"             | `ˈzamək na ˈzamkʲə`: the lock is read as the castle                                                                                                           | Bug {{P36}}                                                                                    |
+| English "a cup of tea for you"       | `ə ˈkʌp ˈʌv ˈti ˈfɔɹ ˈju`: every function word is stressed and full; the planned sentence is 14 % too long                                                    | Bug {{P73}}                                                                                    |
+| Russian "из дома", "с братом"        | `is ˈdomə`, `s ˈbratəm`: prepositions and particles are read as separate words, devoiced and with full vowels                                                 | Bug {{P74}}                                                                                    |
+| Mandarin "我 很 好", `wǒ hěn hǎo`    | `wo˨˩˦ xən˨˩˦ xɑʊ˨˩˦`: tone sandhi stops at every space, so typed pinyin never gets it                                                                        | Part of the tone model {{P37}}                                                                 |
+| Hindi "क्या तुम आओगे?"               | The yes/no question gets a falling mark `↘`                                                                                                                   | Bug {{P33}}                                                                                    |
+| "I have 25 apples on 3/4/2024."      | The words `25` and `3/4/2024` have 3 and 7 syllables without text, so nothing can be highlighted inside them                                                  | Bug {{P34}}                                                                                    |
+| `breathiness` 0 → 1                  | Harmonics-to-noise ratio 15.19 → 14.59 dB, H1-H2 3.43 → 3.46 dB: almost no measurable change                                                                  | Bug {{P20}}; blocks the voice fit {{P51}}                                                      |
+| Nasal against the vowel in `ˈama`    | Level ratio 0.32 with the 1D solver, 1.22 with the 3D solver                                                                                                  | Bug {{P72}}                                                                                    |
+| Sentence types in English            | Statement 141 → 94 Hz, yes/no question 141 → 140 Hz, exclamation starts at 161 Hz and is 1.41 times louder                                                    | Only final movements exist; intonation models {{P39}}                                          |
+| Lowest settings                      | `minimal` tier is 22.05 kHz; forcing 8, 11.025 and 16 kHz works and keeps the formants                                                                        | Narrow-band tiers {{P14}}                                                                      |
+| Rendering straight at 8 kHz          | Sibilants `sː` and `ʃː` come out 1.2 to 1.5 dB too loud from aliasing, the vowel `aː` 0.2 dB (`issue-11-audit-m1.txt`)                                        | The narrow-band tiers render at a higher rate and decimate {{P14}}                             |
+| Load-time benchmark                  | Three runs in one process took 497, 397 and 286 ms and read the load of `minimal` as 0.51, 0.09 and 0.07: the first cold probe is about 7 times too high      | Silent benchmark in slices, with a warm-up and a cache {{P16}}                                 |
+| Level across tiers                   | `minimal`, `low` and `medium` agree within 0.2 dB; `high` (3D) is 1.2 dB quieter; two tiers of a vowel correlate with 0.84 to 0.999, of a sibilant not at all | Switching the tier inside an utterance needs level matching and two kinds of crossfade {{P17}} |
+| WebGPU tests in CI                   | They run on the `windows-2025` and `macos-15` Deno jobs and are skipped only on `ubuntu-24.04`                                                                | A software adapter on Linux and the heavy suite `gpu` {{P18}}                                  |
+| WebAssembly kernel                   | 332 bytes, written by hand and pasted as base64; no CI job builds it                                                                                          | Rust workspace with a build that CI checks {{P09}}                                             |
+| Configuration                        | 33 head and voice parameters                                                                                                                                  | Expanded configuration {{P29}}                                                                 |
+| Speed, one core of the audit machine | Real-time factor 0.05 (`minimal`), 0.10 (`low`), 0.14 (`medium`), 1.32 (`high`), 6.77 (`ultra`)                                                               | 1D is real time everywhere; 3D is not: Rust engine {{P09}}-{{P13}}                             |
+| Case-study folders of the template   | `docs/case-studies/issue-13`, `-21`, `-23` and 16 more belong to another repository and collide with new numbers                                              | Bug {{P01}}                                                                                    |
 
 ## Analysis and solution per requirement
 
@@ -265,28 +273,36 @@ larger sets downloaded only inside the manually triggered workflow ({{P64}});
 the first report against real speech ({{P07}}). The survey of datasets with
 their licences is [research 3](research/3-datasets.md).
 
-The first choice per language, all reachable without downloading a whole
-corpus:
+The sets that the plan uses, all reachable without downloading a whole corpus:
 
-| Use                                                | English                                                                                              | Russian                                                  | Hindi                                            | Mandarin                                                                                                   |
-| -------------------------------------------------- | ---------------------------------------------------------------------------------------------------- | -------------------------------------------------------- | ------------------------------------------------ | ---------------------------------------------------------------------------------------------------------- |
-| Committed golden set (public domain or CC0)        | LibriVox "Aesop's Fables" with "The North Wind and the Sun"; ten LJ Speech clips; Lingua Libre words | LibriVox "Aesop's fables in Russian"; Lingua Libre words | A LibriVox Premchand reading; Lingua Libre words | LibriVox readings (the reader's dialect has to be confirmed); Lingua Libre single characters for the tones |
-| Downloaded in the manual workflow, never committed | LibriTTS-R dev-clean (CC BY 4.0)                                                                     | FLEURS `ru_ru`, SOVA RuDevices (both CC BY 4.0)          | FLEURS `hi_in` (CC BY 4.0)                       | AISHELL-3 test set (Apache-2.0), FLEURS `cmn_hans_cn`                                                      |
-| Emotions and modes, downloaded only                | CREMA-D (ODbL)                                                                                       | RESD (MIT)                                               | none found                                       | none found                                                                                                 |
+| Use                                                                       | English                                                     | Russian                                                | Hindi                           | Mandarin                                                                                                        |
+| ------------------------------------------------------------------------- | ----------------------------------------------------------- | ------------------------------------------------------ | ------------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| Committed golden set, six sentences per language, public domain ({{P05}}) | LibriVox "Aesop's Fables" with "The North Wind and the Sun" | LibriVox "Aesop's fables in Russian"                   | A LibriVox reading of Premchand | A LibriVox reading (that the reader speaks Mandarin has to be confirmed)                                        |
+| Downloaded in the manual workflow, never committed ({{P04}}, {{P64}})     | FLEURS `en_us`, LibriTTS-R `dev.clean` (both CC BY 4.0)     | FLEURS `ru_ru`, SOVA RuDevices `test` (both CC BY 4.0) | FLEURS `hi_in` (CC BY 4.0)      | FLEURS `cmn_hans_cn` (CC BY 4.0), the transcripts of the AISHELL-3 test set (Apache-2.0) for the tone reference |
+| Emotions, downloaded only ({{P59}})                                       | none that the licence gate accepts                          | RESD (MIT)                                             | none found                      | none found                                                                                                      |
 
-For all four languages the golden set also holds the isolated vowels of
-`All IPA Vowels.ogg` (CC0, Wikimedia Commons) and the sustained sounds of the
-Dresden Vocal Tract Dataset (CC0), which come with the measured shape of the
-vocal tract.
+The sustained sounds of the Dresden Vocal Tract Dataset (CC0), which come with
+the measured shape of the vocal tract, are already downloaded by a test of the
+3D solver (`tests/geometry-analysis.test.js`) and stay in use there.
+
+The research found more candidates than the plan uses. Single words of Lingua
+Libre (CC0), the vowels of `All IPA Vowels.ogg` (CC0) and the clips of LJ
+Speech (public domain) are left out of the golden set to keep it under two
+megabytes and reviewable by a person; an issue that needs them adds them
+through the registry. CREMA-D (emotions in English) is under the ODbL, a
+share-alike licence, and the licence gate of {{P04}} refuses share-alike
+licences, so it is not used.
 
 Three findings shape the plan. No public-domain or CC0 corpus of whispered,
 shouted or emotional speech was found, so the committed golden set ({{P05}})
-holds none, and those modes are checked against sets that are only downloaded.
-Several well-known sets cannot be used the obvious way: Common Voice is CC0 but
-may not be re-hosted, most IPA samples on Wikipedia are CC BY-SA, and several
-Mandarin and emotion corpora are non-commercial or research-only. And LibriVox
-recordings are public domain in the USA, which the manifest of the golden set
-records per file.
+holds none. Recognised emotions are measured on one downloaded set in one
+language ({{P59}}); for whispered speech no recording passes the licence gate,
+so whisper is verified by the round trip through the simulator only, and
+{{P60}} says so. Several well-known sets cannot be used the obvious way: Common
+Voice is CC0 but may not be re-hosted, most IPA samples on Wikipedia are CC
+BY-SA, and several Mandarin and emotion corpora are non-commercial or
+research-only. And LibriVox recordings are public domain in the USA, which the
+manifest of the golden set records per file.
 
 ### R9: the multi-pass algorithm
 
@@ -359,7 +375,7 @@ See [The plan](#the-plan).
 punctuation, four English accents. No whisper, no loudness control inside a
 sentence, no emotions, no markup.
 
-**Chosen.** Bugs first ({{P30}} to {{P34}}, {{P36}}). Then one markup that both
+**Chosen.** Bugs first ({{P30}} to {{P34}}, {{P36}}, {{P73}}, {{P74}}). Then one markup that both
 directions share ({{P38}}): what the speaker is asked to do and what the
 recogniser reports use the same names. On top of it: a tone model with targets
 ({{P37}}), intonation per language ({{P39}}), vocal effort from soft to shouted
@@ -498,20 +514,20 @@ Taken from the research and turned into rules of the plan.
 
 ## The plan
 
-72 issues in six milestones. Each is a Bug or a Feature (GitHub issue type and
+74 issues in six milestones. Each is a Bug or a Feature (GitHub issue type and
 label), names its blockers (GitHub "blocked by" links), and has the same eight
 sections: Goal, Why, Current state, What to do, Tests, Acceptance criteria, Out
 of scope, References. The tables with numbers and the dependency graph are in
 [docs/ROADMAP.md](../../ROADMAP.md).
 
-| Milestone                                     | Issues                   | Bugs | Features |
-| --------------------------------------------- | ------------------------ | ---- | -------- |
-| 0. Foundations and measurement                | {{P01}}-{{P08}}          | 1    | 7        |
-| 1. Rust engine and adaptive quality           | {{P09}}-{{P19}}          | 0    | 11       |
-| 2. Voice physics and configuration            | {{P20}}-{{P29}}, {{P72}} | 2    | 9        |
-| 3. Languages and modes of speech              | {{P30}}-{{P45}}          | 6    | 10       |
-| 4. Reverse simulation (listening)             | {{P46}}-{{P65}}          | 0    | 20       |
-| 5. Voice copy and state-of-the-art validation | {{P66}}-{{P71}}          | 0    | 6        |
+| Milestone                                     | Issues                            | Bugs | Features |
+| --------------------------------------------- | --------------------------------- | ---- | -------- |
+| 0. Foundations and measurement                | {{P01}}-{{P08}}                   | 1    | 7        |
+| 1. Rust engine and adaptive quality           | {{P09}}-{{P19}}                   | 0    | 11       |
+| 2. Voice physics and configuration            | {{P20}}-{{P29}}, {{P72}}          | 2    | 9        |
+| 3. Languages and modes of speech              | {{P30}}-{{P45}}, {{P73}}, {{P74}} | 8    | 10       |
+| 4. Reverse simulation (listening)             | {{P46}}-{{P65}}                   | 0    | 20       |
+| 5. Voice copy and state-of-the-art validation | {{P66}}-{{P71}}                   | 0    | 6        |
 
 How the issues were made deliverable by a weak agent:
 
