@@ -302,6 +302,7 @@ export function main(argv) {
   console.log(`Summary written to ${summaryPath}`);
   if (process.env.GITHUB_STEP_SUMMARY) {
     appendFileSync(process.env.GITHUB_STEP_SUMMARY, `${summary}\n`);
+    console.log(`Summary appended to ${process.env.GITHUB_STEP_SUMMARY}`);
   }
   return exitCode;
 }

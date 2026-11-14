@@ -38,10 +38,15 @@ test('b fails', () => {
 });
 `;
 
-function runHeavy(args) {
+function runHeavy(args, extraEnv = {}) {
   // A run inside GitHub Actions must not append to the real step summary;
   // blank values count as unset.
-  const env = { ...process.env, GITHUB_STEP_SUMMARY: '', HEAVY_LIMIT: '' };
+  const env = {
+    ...process.env,
+    GITHUB_STEP_SUMMARY: '',
+    HEAVY_LIMIT: '',
+    ...extraEnv,
+  };
   const result = spawnSync('node', [scriptPath, ...args], {
     encoding: 'utf8',
     env,
@@ -145,7 +150,11 @@ describe('run-heavy.mjs', () => {
       expect(qualitySummary).toContain('## Report of a, limit 4');
 
       const allOut = path.join(root, 'out-all');
-      const all = runHeavy(['--suite', 'all', '--dir', dir, '--out', allOut]);
+      const stepSummary = path.join(root, 'step-summary.md');
+      writeFileSync(stepSummary, 'earlier step\n');
+      const all = runHeavy(['--suite', 'all', '--dir', dir, '--out', allOut], {
+        GITHUB_STEP_SUMMARY: stepSummary,
+      });
 
       expect(all.status).toBe(1);
       const allRows = summaryRows(allOut);
@@ -155,6 +164,10 @@ describe('run-heavy.mjs', () => {
       expect(readFileSync(path.join(allOut, 'summary.md'), 'utf8')).toContain(
         '## Report of a, limit undefined'
       );
+      const stepSummaryText = readFileSync(stepSummary, 'utf8');
+      expect(stepSummaryText.startsWith('earlier step\n')).toBe(true);
+      expect(stepSummaryText).toContain('| copy-b.test.js | fail |');
+      expect(stepSummaryText).toContain('## Report of a, limit undefined');
     });
   });
 });
