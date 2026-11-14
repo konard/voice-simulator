@@ -429,15 +429,53 @@ export declare class Glottis {
   constructor(options?: { seed?: string | number; head?: HeadConfig });
   step(dt: number, control: Record<string, number>, noise: number): number;
 }
+/** Side branch of a tube: a blind tube, or a Helmholtz resonator with `volume`. */
+export interface TubeBranch {
+  /** Section in front of which the branch joins. */
+  index: number;
+  /** cm² */
+  area: number;
+  /** cm */
+  length: number;
+  /** cm³ of the cavity behind the neck. */
+  volume?: number;
+  loss?: number;
+}
+/** Chain-matrix tube model options (tubeFormants and tubeSpectrum). */
+export interface TubeOptions {
+  /** Boundary-layer loss coefficient (default 2e-5). */
+  loss?: number;
+  branches?: TubeBranch[];
+  /**
+   * Nasal tract joined in front of section `velumIndex` through a port of
+   * `velumArea` cm² that replaces its first section, radiating from the
+   * nostrils.
+   */
+  nose?: {
+    areas: ArrayLike<number>;
+    length: number;
+    velumArea: number;
+    velumIndex: number;
+    loss?: number;
+    branches?: TubeBranch[];
+  };
+  /** Radiated flow with a nose: lips plus nostrils (default) or either. */
+  output?: 'both' | 'lips' | 'nostrils';
+  /** Frequency step (Hz) of the spectrum. */
+  step?: number;
+  maxFrequency?: number;
+  /** Number of formants. */
+  count?: number;
+}
 export declare function tubeFormants(
   areas: ArrayLike<number>,
   length: number,
-  options?: object
+  options?: TubeOptions
 ): number[];
 export declare function tubeSpectrum(
   areas: ArrayLike<number>,
   length: number,
-  options?: object
+  options?: TubeOptions
 ): { frequencies: Float64Array; magnitudes: Float64Array };
 export declare function estimateFormants(
   samples: Float32Array,

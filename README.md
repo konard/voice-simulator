@@ -111,10 +111,10 @@ names)` a whole utterance, and `vrmVowelBinds(gltfJson)` reads the morph
   tract and turn the frication jet into a sibilant source; the piriform
   fossae add their side-branch antiresonance in both solvers, the
   vallecula in the 3D solver.
-- **Head and voice editor**: 32 parameters, everything that changes the
+- **Head and voice editor**: 34 parameters, everything that changes the
   sound (tract length, pharynx, mouth, jaw, nose, pitch, breathiness,
   jitter, shimmer, vibrato, declination, accent strength, lengthening,
-  pauses, wall loss, nasal coupling, frication level, ...). Every page
+  pauses, wall loss, nasal losses, nasal coupling, frication level, ...). Every page
   refresh starts from a new random seed; `?seed=` makes it reproducible.
 - **Male, female and child presets** for random heads (`preset`), with f0
   and formants fitted to the men's, women's and children's means of

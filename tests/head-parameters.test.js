@@ -25,6 +25,7 @@ const NEW_KEYS = [
   'articulationSpeed',
   'wallLoss',
   'nasalCoupling',
+  'nasalLoss',
   'fricationLevel',
   'outputGain',
 ];
@@ -75,5 +76,24 @@ describe('head parameters', () => {
       rms(quiet.samples, 0, quiet.samples.length) <
         rms(base.samples, 0, base.samples.length)
     ).toBe(true);
+  });
+
+  it('lowers the nasal murmur with higher nasal losses', () => {
+    const level = (nasalLoss) => {
+      const head = normalizeHeadConfig({ nasalLoss });
+      const plan = planUtterance('ˈama', { head });
+      const samples = renderPlan(plan, { sampleRate: RATE, seed: 3 });
+      const nasal = plan.segments.find((item) => item.kind === 'consonant');
+      return rms(
+        samples,
+        Math.floor(nasal.start * RATE),
+        Math.floor(nasal.end * RATE)
+      );
+    };
+    const parameter = HEAD_PARAMETERS.find(
+      (entry) => entry.key === 'nasalLoss'
+    );
+    expect(level(parameter.max)).toBeLessThan(0.9 * level(parameter.default));
+    expect(level(parameter.default)).toBeLessThan(0.9 * level(parameter.min));
   });
 });

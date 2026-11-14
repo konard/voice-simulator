@@ -9,11 +9,18 @@ import { Waveguide, piriformBranch } from '../src/acoustics/waveguide.js';
 import { spectralPeaks } from '../src/acoustics/analysis.js';
 import {
   SPEED_OF_SOUND,
+  findPeaks,
   tubeFormants,
+  tubeSpectrum,
   tubeTransfer,
 } from '../src/acoustics/transfer.js';
 import { vowelTarget } from '../src/articulation/phones.js';
-import { noseShape, tractShape } from '../src/articulation/tract-shape.js';
+import {
+  noseShape,
+  sampleState,
+  tractShape,
+} from '../src/articulation/tract-shape.js';
+import { planUtterance } from '../src/articulation/plan.js';
 import { DEFAULT_HEAD } from '../src/head-config.js';
 import { getPhoneme } from '../src/ipa/inventory.js';
 
@@ -170,5 +177,51 @@ describe('waveguide resonances with radiation', () => {
       tubeTransfer(areas, 17, frequency, { branches: [branch] });
     expect(level(zero)).toBeLessThan(0.01 * level(zero * 0.9));
     expect(level(zero)).toBeLessThan(0.01 * level(zero * 1.1));
+  });
+
+  it('adds a nasal branch to the tube transfer', () => {
+    const plan = planUtterance('ˈama');
+    const [vowel, nasal] = ['vowel', 'consonant'].map((kind) => {
+      const segment = plan.segments.find((item) => item.kind === kind);
+      const state = sampleState(plan, (segment.start + segment.end) / 2, {});
+      return tractShape(state, DEFAULT_HEAD, { sections: 44 });
+    });
+    const nose = noseShape(DEFAULT_HEAD);
+    const options = (shape, velumArea = shape.velumArea) => ({
+      nose: {
+        areas: nose.areas,
+        length: nose.length,
+        velumArea,
+        velumIndex: shape.velumIndex,
+      },
+    });
+    const decibels = (shape, frequency, extra) =>
+      20 *
+      Math.log10(tubeTransfer(shape.areas, shape.length, frequency, extra));
+    // At 50 Hz no air is stored: an open port does not change the flow,
+    // and the closed mouth of [m] passes it all through the nose.
+    const open = decibels(vowel, 50);
+    const ported = decibels(vowel, 50, options(vowel, nasal.velumArea));
+    expect(Math.abs(ported - open)).toBeLessThan(0.5);
+    expect(Math.abs(decibels(nasal, 50, options(nasal)) - open)).toBeLessThan(
+      0.5
+    );
+    // Without the nose the closed lips block the flow of [m].
+    expect(decibels(nasal, 50)).toBeLessThan(open - 10);
+    const spectrum = tubeSpectrum(nasal.areas, nasal.length, {
+      ...options(nasal),
+      step: 2,
+      maxFrequency: 1000,
+    });
+    const [lowest] = findPeaks(spectrum, 1);
+    expect(lowest).toBeGreaterThan(200);
+    expect(lowest).toBeLessThan(500);
+    // The flow of the lips and of the nostrils make up the total.
+    const both = tubeTransfer(nasal.areas, nasal.length, 300, options(nasal));
+    const nostrils = tubeTransfer(nasal.areas, nasal.length, 300, {
+      ...options(nasal),
+      output: 'nostrils',
+    });
+    expect(nostrils / both).toBeGreaterThan(0.99);
   });
 });
