@@ -1348,7 +1348,11 @@ export interface VoiceFeatures {
   vocalTractLength: number;
   /** First minus second harmonic level (dB). */
   h1h2: number;
-  /** Harmonics-to-noise ratio (dB). */
+  /**
+   * Harmonics-to-noise ratio (dB, at most 30) above 400 Hz, from the
+   * aperiodicity of pitch-straightened frames at the best fractional lag;
+   * the upper quartile over the voiced frames.
+   */
   hnr: number;
   syllableRate: number;
 }
