@@ -127,9 +127,12 @@ function pronounceItem(item, source, accent) {
 
 /** Pronounce a normalised word item, keeping its source range. */
 function pronounceSource(item, source) {
-  const { sourceStart, sourceEnd, token } = item;
+  const { sourceStart, sourceEnd, token, partStart, partEnd } = item;
   const original = source.slice(sourceStart, sourceEnd);
   const range = { sourceStart, sourceEnd, original, token };
+  if (partStart !== undefined && partEnd !== undefined) {
+    Object.assign(range, { partStart, partEnd });
+  }
   if (item.ipa) {
     const extra = item.letter ? { letter: true } : {};
     return [

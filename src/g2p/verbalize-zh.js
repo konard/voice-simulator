@@ -52,7 +52,20 @@ const UNITS = {
   '°': '度',
 };
 
-const SCALES = { k: '千', w: '万', 万: '万', 亿: '亿', m: '百万', bn: '十亿' };
+const SCALES = {
+  k: '千',
+  w: '万',
+  万: '万',
+  亿: '亿',
+  m: '百万',
+  bn: '十亿',
+  thousand: '千',
+  million: '百万',
+  billion: '十亿',
+  тыс: '千',
+  млн: '百万',
+  млрд: '十亿',
+};
 
 const SYMBOLS = {
   '&': ['和'],
