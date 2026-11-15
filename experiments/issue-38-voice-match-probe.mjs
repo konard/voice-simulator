@@ -14,7 +14,7 @@ const { synthesize, presetHeadConfig, matchVoice } = await load('src/index.js');
 const { analyzeVoice } = await load('src/analysis/voice-features.js');
 const { MATCH_TEXT } = await load('src/analysis/voice-match.js');
 const source = readFileSync(`${root}/tests/voice-match.test.js`, 'utf8');
-// eslint-disable-next-line no-eval
+
 const TEXT = eval(source.match(/const TEXT\s*=\s*([^;]+);/)[1]);
 
 for (const [name, text] of [
