@@ -90,6 +90,8 @@ The tiers `telephone` (8 kHz), `narrowband` (11.025 kHz) and `wideband` (16 kHz)
 
 The WebGPU solver of [#30](https://github.com/konard/voice-simulator/issues/30) is compared with the CPU kernel in suite `gpu` of the heavy checks, on Linux through Mesa's software adapter: [reports/gpu-solver.md](reports/gpu-solver.md). The Deno jobs on macOS and Windows set `REQUIRE_GPU=1`, so a runner image without an adapter fails instead of skipping the GPU tests.
 
+The AudioWorklet player of [#27](https://github.com/konard/voice-simulator/issues/27) is the export `voice-simulator/playback` (processor, ring buffer) with the stream resampler `createStreamResampler`; its latency and underrun measurements are in `experiments/issue-27-latency.txt`, and the resampler is ported to the Rust core with class B parity tests.
+
 | Issue                                                      | Type    | Title                                                                         | Blocked by                                                                                                             | Requirements  |
 | ---------------------------------------------------------- | ------- | ----------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- | ------------- |
 | [#21](https://github.com/konard/voice-simulator/issues/21) | Feature | Rust workspace and WebAssembly build pipeline                                 | nothing                                                                                                                | R2, R12, R19  |

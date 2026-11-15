@@ -463,6 +463,59 @@ streams `wav`, `au` and `raw`), `bitDepth` and `float`.
 curl -o hello.wav "http://127.0.0.1:8080/api/stream?text=Hello&tier=medium"
 ```
 
+### Streaming playback in the browser
+
+`voice-simulator/playback` holds the pieces of a gapless streaming player
+on one `AudioWorkletNode`: the processor module (`PLAYER_PROCESSOR_URL`,
+registered as `PLAYER_PROCESSOR_NAME`, no imports, so `addModule` loads it
+as it is) and the ring buffer it reads (`createRing`, `ringWrite`,
+`ringEnd`, `ringReset`, …). `createStreamResampler(fromRate, toRate)` of the
+main export converts the chunks to the device rate one at a time and joins
+them into exactly the samples `resample` gives for the whole utterance.
+
+```javascript
+import { createStreamResampler } from 'voice-simulator';
+import {
+  PLAYER_PROCESSOR_NAME,
+  PLAYER_PROCESSOR_URL,
+} from 'voice-simulator/playback';
+
+const context = new AudioContext();
+await context.audioWorklet.addModule(PLAYER_PROCESSOR_URL);
+const node = new AudioWorkletNode(context, PLAYER_PROCESSOR_NAME, {
+  numberOfInputs: 0,
+  outputChannelCount: [1],
+});
+node.connect(context.destination);
+const resampler = createStreamResampler(16000, context.sampleRate);
+// For every chunk of the utterance:
+const samples = resampler.push(chunk);
+node.port.postMessage({ type: 'chunk', samples }, [samples.buffer]);
+// After the last one:
+const rest = resampler.flush();
+node.port.postMessage({ type: 'chunk', samples: rest }, [rest.buffer]);
+node.port.postMessage({ type: 'end' });
+```
+
+The processor waits for 50 ms of audio, then plays. When it runs dry before
+the end it fades the last block out, counts an underrun and fades in again
+once 100 ms are buffered, so a slow device hears a short pause, not a
+click. On a cross-origin isolated page the samples go through a
+`SharedArrayBuffer` ring (`{type: 'ring', buffer}`) and the processor
+posts nothing; otherwise it reports `{type: 'position', played, underruns,
+…}` every 8 blocks. The header comment of `src/playback/worklet-processor.js`
+lists every message.
+
+The web app plays this way (`WorkletPlayer`); the HUD shows the mode —
+`worklet-shared`, `worklet-port`, or `buffer` (one buffer source per chunk,
+used where `AudioWorklet` is missing) — and the underruns of the utterance.
+`VITE_CROSS_ORIGIN_ISOLATION=1 npm run example:web:dev` serves the app with
+COOP/COEP headers so it takes the shared ring. Measured in headless
+Chromium and Firefox, the worklet adds at most 21.4 ms between a chunk and
+its first sample on the audio clock, against 110.2-150.4 ms for buffer sources
+(`node experiments/issue-27-latency.mjs`, results in
+`experiments/issue-27-latency.txt`).
+
 ### Docker
 
 ```bash

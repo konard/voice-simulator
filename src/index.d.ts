@@ -988,13 +988,11 @@ export declare function decodeRaw(
   bytes: Uint8Array,
   options?: SampleEncoding & { sampleRate?: number; channels?: number }
 ): DecodedAudio;
-/** Band-limited (windowed-sinc) sample-rate conversion. */
-export declare function resample(
-  samples: ArrayLike<number>,
-  fromRate: number,
-  toRate: number,
-  options?: { zeroCrossings?: number }
-): Float32Array;
+export {
+  createStreamResampler,
+  resample,
+  type StreamResampler,
+} from './audio/resample.js';
 
 // Anatomy (issue 5): teeth, tongue, hard and soft palate, piriform fossae.
 export interface RenderOptions {

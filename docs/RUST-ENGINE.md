@@ -7,9 +7,11 @@ expected output; the Rust engine has to reproduce it, and the parity tests
 check that it does. The package keeps working when no Rust tool is
 installed: the file is optional and everything falls back to JavaScript.
 
-So far the engine holds one algorithm, the random generator of
-`src/random.js`. It proves that every link of the chain works: workspace,
-build, loader, CI job and parity tests.
+So far the engine holds two algorithms: the random generator of
+`src/random.js` and the band-limited resampler of `src/audio/resample.js`
+(`resample` and `createStreamResampler`, issue 27). The random generator
+proves that every link of the chain works: workspace, build, loader, CI job
+and parity tests.
 
 ## Layout
 
@@ -26,7 +28,8 @@ build, loader, CI job and parity tests.
 | `tests/rust-crates.test.js`   | The crate licence gate and the shape of the workspace                                      |
 
 The core crate may depend on `libm` only, and only `src/math.rs` may call
-it (`sin`, `cos`, `exp`, `ln`, `pow`, `tanh`, `sqrt`); every other file
+it (`sin`, `cos`, `exp`, `ln`, `pow`, `tanh`, `sqrt`, `floor`, `ceil`;
+`round_half_up` is `Math.round` of JavaScript); every other file
 calls `math::…`. A different libm could round a transcendental function
 differently, so this keeps the choice in one place.
 
@@ -43,9 +46,9 @@ copies `target/wasm32-unknown-unknown/release/voice_simulator_wasm.wasm` to
 `src/engine/voice-simulator.wasm` and prints its size and SHA-256:
 
 ```text
-src/engine/voice-simulator.wasm: 17443 bytes
-SHA-256: 9ab913542bf4563adf4e4aa678ca44490ccf236dd2c9243e9cadfea7b7aff556
-WASM_SIZE_BUDGET: 32768 bytes
+src/engine/voice-simulator.wasm: 33260 bytes
+SHA-256: 2a0f7a7bc2760b5e211f51901972698ea82e7c8b1790becb6a789f3bc1f54b8c
+WASM_SIZE_BUDGET: 49152 bytes
 ```
 
 (Rust 1.100.0 on x86_64 Linux. The build does not depend on the folder or
@@ -110,25 +113,34 @@ The module imports nothing.
 
 ### Exports
 
-| Export                                           | Result                                                                   |
-| ------------------------------------------------ | ------------------------------------------------------------------------ |
-| `vs_abi_version() -> u32`                        | 1                                                                        |
-| `vs_alloc(bytes) -> u32`                         | Offset of a block aligned to 8, or 0                                     |
-| `vs_free(ptr, bytes)`                            | Frees a block of `vs_alloc`                                              |
-| `vs_hash_seed_utf16(ptr, len) -> u32`            | `hashSeed` of the `len` UTF-16 code units at `ptr`; traps on a bad range |
-| `vs_random_fill(seed, out, count) -> i32`        | Writes `count` `f64` values of `createRandom(seed)` at `out`; 0 or error |
-| `vs_random_normal_fill(seed, out, count) -> i32` | The same for `randomNormal(createRandom(seed))`                          |
+| Export                                                   | Result                                                                               |
+| -------------------------------------------------------- | ------------------------------------------------------------------------------------ |
+| `vs_abi_version() -> u32`                                | 1                                                                                    |
+| `vs_alloc(bytes) -> u32`                                 | Offset of a block aligned to 8, or 0                                                 |
+| `vs_free(ptr, bytes)`                                    | Frees a block of `vs_alloc`                                                          |
+| `vs_hash_seed_utf16(ptr, len) -> u32`                    | `hashSeed` of the `len` UTF-16 code units at `ptr`; traps on a bad range             |
+| `vs_random_fill(seed, out, count) -> i32`                | Writes `count` `f64` values of `createRandom(seed)` at `out`; 0 or error             |
+| `vs_random_normal_fill(seed, out, count) -> i32`         | The same for `randomNormal(createRandom(seed))`                                      |
+| `vs_resample_length(len, from, to) -> i32`               | `Math.round(len * to / from)`, the output length of `vs_resample`                    |
+| `vs_resample(in, len, from, to, zc, out, outLen) -> i32` | `resample` of the `len` `f32` samples at `in` into the `outLen` at `out`; 0 or error |
+| `vs_resampler_new(from, to, zc) -> i32`                  | Handle of a `createStreamResampler(from, to, {zeroCrossings: zc})`                   |
+| `vs_resampler_push(handle, in, len) -> i32`              | `push` of `len` `f32` samples; the number of outputs waiting to be read              |
+| `vs_resampler_flush(handle) -> i32`                      | `flush`; the number of outputs waiting to be read                                    |
+| `vs_resampler_read(handle, out, count) -> i32`           | Moves up to `count` waiting outputs (`f32`, oldest first) to `out`; how many         |
+| `vs_resampler_held(handle) -> i32`                       | `held()`: the input samples kept for the outputs still to come                       |
+| `vs_resampler_free(handle) -> i32`                       | Frees the resampler; 0 or `BAD_HANDLE`                                               |
 
 ### Error codes
 
-| Code | Name            | Meaning                                          |
-| ---- | --------------- | ------------------------------------------------ |
-| 0    | `OK`            | Success                                          |
-| -1   | `NULL`          | The offset is 0 while the length is not          |
-| -2   | `MISALIGNED`    | The offset is not a multiple of the element size |
-| -3   | `OUT_OF_BOUNDS` | The range runs past the end of the linear memory |
-| -4   | `NO_MEMORY`     | The engine could not allocate memory             |
-| -5   | `BAD_HANDLE`    | The integer handle names no live object          |
+| Code | Name            | Meaning                                                                                                    |
+| ---- | --------------- | ---------------------------------------------------------------------------------------------------------- |
+| 0    | `OK`            | Success                                                                                                    |
+| -1   | `NULL`          | The offset is 0 while the length is not                                                                    |
+| -2   | `MISALIGNED`    | The offset is not a multiple of the element size                                                           |
+| -3   | `OUT_OF_BOUNDS` | The range runs past the end of the linear memory                                                           |
+| -4   | `NO_MEMORY`     | The engine could not allocate memory                                                                       |
+| -5   | `BAD_HANDLE`    | The integer handle names no live object                                                                    |
+| -6   | `BAD_ARGUMENT`  | A rate or a zero-crossing count that is not positive, or an output length that is not `vs_resample_length` |
 
 A length of 0 is always accepted, whatever the offset.
 
@@ -172,7 +184,9 @@ Each ported function has a class, stated by the issue that ports it.
   engine. The measure is the relative RMS error
   `sqrt(sum((a - e)^2) / sum(e^2))` of the Rust output `a` against the
   JavaScript output `e`, with the limit stated by the issue that ports the
-  code.
+  code. The resampler is class B with a limit of `1e-6` (issue 27); on
+  Node.js 26, Bun 1.4.4 and Deno 2.9.7 the measured error is 0, every sample is
+  bit-identical (`node experiments/issue-27-resample-parity.mjs`).
 
 ## Tests
 
