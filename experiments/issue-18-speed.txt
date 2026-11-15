@@ -1,0 +1,4 @@
+recordings: 5.00 s and 5.00 s at 22050 Hz (rendered 8.02 s and 8.02 s)
+run 1: 1.95 s, frames 495x495, MCD 50.39 dB, LSD 10.83 dB, F0 RMSE 1051 cents
+run 2: 1.85 s, frames 495x495, MCD 50.39 dB, LSD 10.83 dB, F0 RMSE 1051 cents
+run 3: 1.60 s, frames 495x495, MCD 50.39 dB, LSD 10.83 dB, F0 RMSE 1051 cents

@@ -12,6 +12,7 @@ import {
   audioEncoding,
   ROOM_PRESETS,
   benchmarkAudioTiers,
+  compareRecordings,
   decodeAudio,
   decodeHeadConfig,
   encodeHeadConfig,
@@ -79,6 +80,9 @@ function usage() {
     '  head                Print a random head configuration',
     '  mesh -o head.obj    Export the low-poly head model as OBJ',
     '  match <file>        Find the head that sounds like a recording',
+    '  compare <ref> <test>',
+    '                      Distances of a recording from a reference',
+    '                      (LSD, MCD, f0, formants, timing)',
     '  benchmark           Measure the audio LOD tiers on this machine',
     '  serve               Start the HTTP API (with streaming)',
     '',
@@ -254,6 +258,48 @@ function audioOutput(values, baseName) {
   };
 }
 
+function fixed(value, digits, unit = '') {
+  return value === null || value === undefined
+    ? 'n/a'
+    : `${value.toFixed(digits)}${unit}`;
+}
+
+/**
+ * One line per metric of a `compareRecordings` result.
+ * @param {object} result
+ * @returns {string[]}
+ */
+export function formatComparison(result) {
+  const { f0, formants, timing, duration } = result;
+  const lines = [
+    `LSD ${fixed(result.lsd, 2, ' dB')}`,
+    `MCD ${fixed(result.mcd, 2, ' dB')}`,
+    `F0 RMSE ${fixed(f0.rmseCents, 1, ' cents')}, mean ${fixed(f0.meanCents, 1, ' cents')}, ` +
+      `correlation ${fixed(f0.correlation, 3)}`,
+    `GPE ${fixed(f0.gpe === null ? null : 100 * f0.gpe, 1, ' %')}, ` +
+      `VDE ${fixed(f0.vde === null ? null : 100 * f0.vde, 1, ' %')}, ` +
+      `FFE ${fixed(f0.ffe === null ? null : 100 * f0.ffe, 1, ' %')} ` +
+      `(${f0.voicedFrames} of ${f0.frames} frames voiced in both)`,
+  ];
+  if (formants) {
+    const names = ['f1', 'f2', 'f3'];
+    lines.push(
+      `Formants ${names
+        .map(
+          (name, index) =>
+            `F${index + 1} ${fixed(formants[name].hz, 0, ' Hz')} (${fixed(formants[name].percent, 1, ' %')})`
+        )
+        .join(', ')} over ${formants.frames} frames`
+    );
+  }
+  lines.push(
+    `Timing RMS ${fixed(timing.rmsSeconds, 3, ' s')}, max ${fixed(timing.maxSeconds, 3, ' s')}`,
+    `Duration ${fixed(duration.reference, 2, ' s')} -> ${fixed(duration.test, 2, ' s')} (ratio ${fixed(duration.ratio, 3)})`,
+    `DTW cost ${fixed(result.dtw.normalizedCost, 3)} per step at ${result.sampleRate} Hz`
+  );
+  return lines;
+}
+
 const COMMANDS = {
   ipa(values, positionals, io) {
     const result = textToIpa(requireText(positionals), {
@@ -425,6 +471,24 @@ const COMMANDS = {
     );
     io.stdout(`${result.preset}, distance ${result.distance.toFixed(2)}`);
     io.stdout(encodeHeadConfig(result.head));
+  },
+
+  compare(values, positionals, io) {
+    const [referenceFile, testFile] = positionals;
+    if (!referenceFile || !testFile) {
+      throw new Error('Missing <reference> <test>');
+    }
+    const result = compareRecordings(
+      decodeAudio(readFileSync(referenceFile)),
+      decodeAudio(readFileSync(testFile))
+    );
+    if (values.json) {
+      io.stdout(JSON.stringify(result));
+      return;
+    }
+    for (const line of formatComparison(result)) {
+      io.stdout(line);
+    }
   },
 
   benchmark(values, positionals, io) {

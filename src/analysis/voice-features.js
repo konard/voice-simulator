@@ -79,7 +79,8 @@ export function resample(samples, sampleRate, targetRate = ANALYSIS_RATE) {
   return { samples: output, sampleRate: targetRate };
 }
 
-function percentile(values, fraction) {
+/** Linear-interpolated percentile of a list (`fraction` 0 to 1; 0 when empty). */
+export function percentile(values, fraction) {
   if (values.length === 0) {
     return 0;
   }

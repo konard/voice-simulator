@@ -282,11 +282,70 @@ npx voice-simulator say "Hello" --mic-distance 100 --mic-azimuth 45 --room hall 
 npx voice-simulator say "Hello" --tier high --box 30x44x30 -o box.wav  # simulated box
 npx voice-simulator convert hello.flac -o hello.aiff --sample-rate 16000
 npx voice-simulator match recording.wav --transcript "What it says" --json
+npx voice-simulator compare recording.wav hello.wav --json   # distances from a reference
 npx voice-simulator mesh --lod 3 -o head.obj
 npx voice-simulator benchmark
 npx voice-simulator serve --port 8080
 npx voice-simulator --help
 ```
+
+### Comparing recordings
+
+`compareRecordings(reference, test)` measures how far a recording is from a
+reference, and `voice-simulator compare <reference> <test> [--json]` does the
+same for two audio files. Both recordings are resampled to
+min(16000 Hz, both rates), the silence at both ends is cut (frames more than
+40 dB below the loudest), both are scaled to an RMS of 0.1 and aligned by
+dynamic time warping (DTW; Sakoe & Chiba 1978) on the mel cepstra c1 to c13.
+Every metric is then taken along the alignment. Frames are 0.025 s long with
+a Hann window, taken every 0.01 s, with a 512-point FFT.
+
+| Metric                                       | Field                             | Unit     | Formula                                                                           |
+| -------------------------------------------- | --------------------------------- | -------- | --------------------------------------------------------------------------------- |
+| Log-spectral distance (LSD)                  | `lsd`                             | dB       | per frame pair √(mean over bins of (10 log10 Pr − 10 log10 Pt)²), mean over pairs |
+| Mel-cepstral distortion (MCD; Kubichek 1993) | `mcd`                             | dB       | per pair (10 / ln 10) √(2 Σ₁¹³ (cr[n] − ct[n])²), mean over pairs                 |
+| f0 root mean square error                    | `f0.rmseCents`                    | cents    | √mean e², e = 1200 log2(f0 test / f0 reference) over frames voiced in both        |
+| Mean f0 error                                | `f0.meanCents`                    | cents    | mean e (positive: the test is higher)                                             |
+| Gross pitch error (GPE)                      | `f0.gpe`                          | fraction | share of frames voiced in both with \|test / reference − 1\| > 0.2                |
+| Voicing decision error (VDE)                 | `f0.vde`                          | fraction | share of all frames voiced in only one recording                                  |
+| f0 frame error (FFE; Chu & Alwan 2009)       | `f0.ffe`                          | fraction | (gross errors + voicing errors) / frames                                          |
+| f0 correlation                               | `f0.correlation`                  | −1 to 1  | Pearson correlation of log f0 over frames voiced in both                          |
+| Formant errors                               | `formants.f1` … `f3`              | Hz and % | mean \|F test − F reference\| over voiced frames with formants in both            |
+| Timing error                                 | `timing.rmsSeconds`, `maxSeconds` | s        | per pair d = j·hop − i·hop·(Tt / Tr)                                              |
+
+Pitch comes from YIN (de Cheveigné & Kawahara 2002) at 11025 Hz on 0.04 s
+windows; a frame is unvoiced when it is quieter than 10 % of the 95th
+percentile level or its aperiodicity is 0.35 or more. Formants come from LPC
+on 0.03 s of each voiced frame.
+
+`errorRate(reference, hypothesis, unit)` compares two transcripts by the
+Levenshtein distance: the word error rate (WER, `unit = 'word'`), the
+character error rate (CER, `'char'`) and the phoneme error rate (PER,
+`'phone'`, IPA without stress marks and tones), each a fraction of the
+reference length.
+
+```js
+import { compareRecordings, errorRate, decodeAudio } from 'voice-simulator';
+
+const result = compareRecordings(decodeAudio(refBytes), decodeAudio(testBytes));
+result.mcd; // dB
+result.f0.ffe; // fraction of frames
+errorRate('The cat sat on the mat.', 'the cat sit on mat').rate; // 0.333
+errorRate('你好吗', '你好', 'char').rate; // 0.333
+```
+
+The lower-level functions `fft`, `powerFrames`, `melFilterbank`, `mfcc`,
+`dtw`, `logSpectralDistance`, `melCepstralDistortion`, `pitchTrack`,
+`f0Errors`, `formantTrack`, `formantErrors`, `editDistance` and `tokenize` are
+exported too.
+
+Mel-cepstral distortion depends on how the cepstrum is computed (here: 26 mel
+filters, 13 coefficients, 16 kHz). Values are comparable inside this project
+and only roughly with published ones. In particular this cepstrum is taken
+from the natural logarithm of the filter energies (power, not amplitude) with
+an orthonormal DCT, so its values are larger than those of tools that use the
+SPTK mel-generalised cepstrum: two different synthetic voices saying the same
+sentence are 30 to 50 dB apart here.
 
 ### HTTP API and streaming
 
@@ -426,6 +485,7 @@ npm run example:desktop:package
 │   ├── acoustics/         # Glottis, waveguide, voxel model, 3D FDTD,
 │   │                      # microphone and room
 │   ├── analysis/          # Voice features and voice matching
+│   ├── metrics/           # Objective speech metrics and recording comparison
 │   ├── perf/              # Benchmarks and LOD governor
 │   ├── audio/             # WAV, FLAC, AIFF, AU, raw and resampling
 │   ├── server/            # HTTP API (voice-simulator/server)
