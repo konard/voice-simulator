@@ -175,8 +175,17 @@ describe('waveguide resonances with radiation', () => {
     const zero = SPEED_OF_SOUND / (4 * branch.length);
     const level = (frequency) =>
       tubeTransfer(areas, 17, frequency, { branches: [branch] });
-    expect(level(zero)).toBeLessThan(0.01 * level(zero * 0.9));
-    expect(level(zero)).toBeLessThan(0.01 * level(zero * 1.1));
+    // The boundary-layer loss of the branch (issue 36) leaves a finite
+    // notch, about -35 dB against 10 % off it.
+    expect(level(zero)).toBeLessThan(0.03 * level(zero * 0.9));
+    expect(level(zero)).toBeLessThan(0.03 * level(zero * 1.1));
+    let deepest = zero * 0.9;
+    for (let frequency = zero * 0.9; frequency < zero * 1.1; frequency++) {
+      if (level(frequency) < level(deepest)) {
+        deepest = frequency;
+      }
+    }
+    expect(Math.abs(deepest / zero - 1)).toBeLessThan(0.005);
   });
 
   it('adds a nasal branch to the tube transfer', () => {

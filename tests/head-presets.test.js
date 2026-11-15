@@ -139,7 +139,10 @@ describe('head presets', () => {
         errors.reduce((sum, value) => sum + value * value, 0) / errors.length
       );
       expect(rms).toBeLessThan(preset === 'male' ? 0.03 : 0.07);
-      expect(Math.max(...errors.map(Math.abs))).toBeLessThan(0.16);
+      // The worst is F2 of the child [u], whose shape is the male one
+      // scaled down: -0.158 before issue 36, -0.171 with the yielding walls
+      // (experiments/issue-36-presets.mjs), any vowel fit penalty.
+      expect(Math.max(...errors.map(Math.abs))).toBeLessThan(0.18);
     }
   });
 
