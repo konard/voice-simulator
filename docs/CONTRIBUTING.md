@@ -62,6 +62,58 @@ npm test
 deno test -A --parallel
 ```
 
+Tests that need more than about 10 seconds or a download do not belong in
+`tests/*.test.js`; put them into `tests/heavy/` (see "Heavy checks" below).
+
+### Heavy checks
+
+Slow tests (full 3D renders, quality reports against recordings, recognition
+of datasets, round trips, voice copying) live in `tests/heavy/` and are named
+`<suite>-<topic>.test.js`, where the suite is `quality`, `recognition`,
+`roundtrip`, `copy`, `performance` or `gpu`. `npm test`, `bun test` and
+`deno test` never run them; [tests/heavy/README.md](../tests/heavy/README.md)
+describes the folder and its helpers.
+
+They run in the workflow `Heavy checks`
+([.github/workflows/heavy.yml](../.github/workflows/heavy.yml)), which is only
+started by hand:
+
+- in the **Actions** tab: choose **Heavy checks**, then **Run workflow**, pick
+  the branch, the suite, optionally a `ref` (a branch or tag of this
+  repository, or a commit already on `main`; empty means the branch picked)
+  and a `limit` (largest number of items, such as utterances or files, that
+  each test may process; empty means no limit);
+- from the command line:
+
+  ```bash
+  gh workflow run heavy.yml -f suite=quality -f limit=5
+  # on another branch
+  gh workflow run heavy.yml --ref my-branch -f suite=performance
+  ```
+
+A run started on `main` writes to the cache scope of `main`, so
+[scripts/resolve-heavy-ref.sh](../scripts/resolve-heavy-ref.sh) refuses a
+`ref` that names anything else, such as a commit of a fork; to test a pull
+request from a fork, start the workflow on its branch after pushing that
+branch here.
+
+The run summary shows one row per test file with its result and wall time,
+followed by the reports the tests wrote; the reports are also uploaded as the
+artifact `heavy-<suite>-<run id>` and kept for 30 days. The step has a budget
+of 300 minutes (see [CI-TIMEOUT-BUDGETS.md](CI-TIMEOUT-BUDGETS.md)).
+
+Locally:
+
+```bash
+npm run test:heavy -- --suite performance
+npm run test:heavy -- --suite performance --limit 2 --out /tmp/heavy
+```
+
+Reports go to `reports/heavy/` (`--out` changes the folder): every test writes
+`<name>.md` and `<name>.json`, and the runner writes `summary.md`. `reports/`
+is never committed. A report that should be kept is copied to `docs/reports/`
+by the issue that owns it.
+
 ### Policy check
 
 The [vision](VISION.md) rules out neural networks and asks for a result in
@@ -94,6 +146,11 @@ What is checked, in every file that `git ls-files` lists:
   file, and of every crate in `cargo metadata` when there is a `Cargo.toml` at
   the root, must pass `allowedLicences`. `A OR B` passes when one side passes,
   `A AND B` when both do; a missing licence fails.
+- **Datasets** (`dataset`): every error that `validateRegistry` of
+  `scripts/datasets.mjs` finds in `datasets/registry.json` (see
+  [Datasets](#datasets)), including a licence that is not in
+  `allowedDatasetLicences`, and every tracked file under `.datasets/`. These
+  findings cannot be excepted.
 
 Words are not checked: `docs/`, `dev/log/`, `CHANGELOG.md`, `.changeset/`,
 the list itself and its test are skipped, and "neural" may be written
@@ -117,6 +174,78 @@ in `exceptions`. It needs a non-empty reason and the approval of the
 repository owner in the pull request that adds it. An exception that matches
 nothing is itself a finding (rule `exception`), so stale exceptions are
 removed.
+
+### Datasets
+
+Tests that need real speech take it from the datasets listed in
+[datasets/registry.json](../datasets/registry.json). Only that list is
+committed; `npm run datasets` (`scripts/datasets.mjs`, Node.js built-ins
+only) downloads a small part of a dataset into `.datasets/<id>/`, which git
+ignores, and checks it against the SHA-256 in the list.
+
+```bash
+npm run datasets -- list                 # id, languages, licence, kind, cached or not
+npm run datasets -- fetch fleurs-ru --limit 3
+npm run datasets -- verify               # the registry, and the cache without the network
+```
+
+`fetch` prints one line per file (`cached`, `downloaded` or `resumed` and
+the byte count) and fetches a cached file with the right checksum only once.
+Options: `--cache <dir>` (default `.datasets`), `--limit <n>` (kind `rows`:
+the audio of the first `n` rows, default 20), `--max-bytes <n>` (refuse a
+larger download, default 209715200) and `--record`. Exit codes: 0 ok, 2 wrong
+usage or unknown id, 3 licence refused, 4 checksum or size mismatch, 5 too
+large, 6 network failure. A download is resumed from `<file>.part` with a
+range request; a failed request is tried up to 4 times, waiting 2, 4 and 6
+seconds between the attempts.
+
+Every dataset belongs to one of three classes:
+
+1. **May be committed**: licence `Public-Domain` or `CC0-1.0` and no extra
+   terms; the entry has `"redistribution": true`. A part of it may be added
+   to the repository by the issue that needs it, never the whole cache.
+2. **Fetch only**: any other licence of `allowedDatasetLicences` in
+   `scripts/policy-denylist.json` (`CC-BY-4.0`, `CC-BY-3.0`, `Apache-2.0`,
+   `MIT`, `BSD-2-Clause`, `BSD-3-Clause`, `Custom-Attribution`); the entry has
+   `"redistribution": false`. Tests download it at run time.
+3. **Refused**: everything else (non-commercial, no-derivatives, share-alike,
+   GPL, paid, behind a login, re-hosting forbidden, unknown). Well-known
+   examples are listed with the reason in
+   [datasets/refused.json](../datasets/refused.json); a registry entry that
+   names one of their URLs is an error. The licence gate has no switch.
+
+To add an entry:
+
+1. Read the licence page and copy the sentence that grants the licence into
+   `licenceQuote`, its address into `licenceUrl` and the day into
+   `licenceChecked` (`YYYY-MM-DD`). `licence` is an SPDX identifier,
+   `Public-Domain` or `Custom-Attribution`.
+2. Fill in `id` (lower case letters, digits and `-`), `title`, `languages`
+   (`en`, `ru`, `hi`, `zh`), `redistribution`, `citation` and `source`: kind
+   `files` (a list of `name`, `url`, `size`, `sha256` and an optional
+   `transcripts`, the name of the file with the text) or kind `rows` (the
+   Hugging Face rows interface: `dataset`, `config`, `split`, `length` of at
+   most 100, `textColumn`, `textSha256`). URLs are `https://`.
+3. Never invent a checksum: write `null`, run
+   `npm run datasets -- fetch <id> --record`, which downloads the data and
+   writes the size and the SHA-256 into the registry, and commit the result.
+   `textSha256` of kind `rows` is the SHA-256 of the texts of the rows joined
+   with `\n`; it pins the revision, so a changed dataset fails with exit 4.
+4. `npm run datasets -- verify` and `npm run check:policy` must pass.
+
+Fetched audio and text never enter the repository, a release or an
+artifact: `.datasets/` is ignored, `npm run check:policy` reports a tracked
+file under it, and `fetch` writes `ATTRIBUTION.txt` (title, licence, licence
+source and citation) next to the data. The workflow `Heavy checks` keeps
+`.datasets` in the GitHub Actions cache under the key
+`datasets-<hash of datasets/registry.json>`, so a changed registry fetches
+again.
+
+In a test, `datasetSkipReason(id)` of `tests/helpers/datasets.js` returns
+`null` when the dataset is in the cache and verifies, otherwise the reason
+why its first URL cannot be reached (or `null` when it can); pass it to
+`itUnless`, then call `fetchDataset(id)` and `readDataset(id)`, which returns
+`{id, text, audioPath, gender}` for every cached recording.
 
 ## Version Management with Changesets
 

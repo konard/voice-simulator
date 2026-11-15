@@ -27,6 +27,7 @@
   },
   "scripts": {
     "test": "node --test --test-timeout=30000 tests/*.test.js",
+    "test:heavy": "node scripts/run-heavy.mjs",
     "lint": "node scripts/lint.mjs",
     "lint:all": "eslint .",
     "lint:fix": "eslint . --fix",
@@ -34,6 +35,7 @@
     "format:check": "prettier --check .",
     "check:duplication": "jscpd .",
     "check:policy": "node scripts/check-policy.mjs",
+    "datasets": "node scripts/datasets.mjs",
     "check": "npm run lint && npm run format:check && npm run check:duplication && npm run check:policy",
     "export:model": "node scripts/export-head-model.mjs",
     "example:web:dev": "npm --prefix examples/universal-app run dev",
