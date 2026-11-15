@@ -14,12 +14,36 @@
  * low formants and a wide one (/a/) radiates more. The bilinear transform
  * at the waveguide step rate turns r(s) into a first-order filter, which
  * stays passive (|r| <= 1) and stable for every area.
+ *
+ * The face around the lips is a small, curved baffle, between a piston in
+ * an infinite baffle (`baffle` 1) and the open end of a free pipe
+ * (`baffle` 0), which radiates half the power and has the shorter end
+ * correction 0.61 a (Levine & Schwinger 1948): the resistance scales by
+ * 0.5 + 0.5 baffle and the end correction is (0.61 + 0.24 baffle) a.
  */
 
-import { SPEED_OF_SOUND } from './transfer.js';
+import { SPEED_OF_SOUND } from './constants.js';
 
 /** Radiation resistance relative to rho c / A. */
 export const RADIATION_RESISTANCE = 128 / (9 * Math.PI ** 2);
+
+/**
+ * How much of an infinite baffle the face is (0.3-1): calibrated with
+ * experiments/issue-11-bandwidths.mjs (issue 36).
+ */
+export const RADIATION_BAFFLE = 1;
+
+/**
+ * Radiation resistance (relative to rho c / A) and end correction (in
+ * radii) of an opening in a baffle of `baffle` (0 free pipe, 1 infinite).
+ * @param {number} [baffle]
+ */
+export function radiationLoad(baffle = RADIATION_BAFFLE) {
+  return {
+    resistance: RADIATION_RESISTANCE * (0.5 + 0.5 * baffle),
+    endCorrection: 0.61 + 0.24 * baffle,
+  };
+}
 
 export class Radiation {
   constructor() {
@@ -31,15 +55,18 @@ export class Radiation {
   }
 
   /**
-   * Set the opening area (cm²) and the step rate (steps per second).
+   * Set the opening area (cm²), the step rate (steps per second) and the
+   * baffle (0 free pipe end, 1 infinite baffle).
    * @param {number} area
    * @param {number} rate
+   * @param {number} [baffle]
    */
-  configure(area, rate) {
+  configure(area, rate, baffle = 1) {
     const radius = Math.sqrt(Math.max(area, 0) / Math.PI);
-    const inertance = (8 * radius) / (3 * Math.PI * SPEED_OF_SOUND);
+    const { resistance, endCorrection } = radiationLoad(baffle);
+    const inertance = (endCorrection * radius) / SPEED_OF_SOUND;
     const k = 2 * rate * inertance;
-    const r = RADIATION_RESISTANCE;
+    const r = resistance;
     const scale = k * (r + 1) + r;
     this.b0 = (k * (r - 1) - r) / scale;
     this.b1 = -(k * (r - 1) + r) / scale;

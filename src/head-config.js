@@ -355,7 +355,43 @@ export const HEAD_PARAMETERS = Object.freeze([
     step: 0.01,
     default: 1,
     description:
-      'Viscous and wall vibration losses of the tract and nose (formant bandwidths).',
+      'Viscous and wall vibration losses of the tract and nose (formant bandwidths): scales the boundary-layer loss and the wall resistance.',
+  },
+  {
+    key: 'wallMass',
+    label: 'Wall mass',
+    group: 'acoustics',
+    unit: 'g/cm²',
+    min: 1,
+    max: 3,
+    step: 0.01,
+    default: 2.1,
+    description:
+      'Mass per area of the yielding tract walls: heavier walls lower the closed-tract resonance and raise F1 of close vowels less.',
+  },
+  {
+    key: 'wallResistance',
+    label: 'Wall resistance',
+    group: 'acoustics',
+    unit: 'g/(cm² s)',
+    min: 400,
+    max: 2400,
+    step: 10,
+    default: 800,
+    description:
+      'Resistance per area of the yielding tract walls: widens F1 of close vowels.',
+  },
+  {
+    key: 'wallStiffness',
+    label: 'Wall stiffness',
+    group: 'acoustics',
+    unit: 'g/(cm² s²)',
+    min: 30000,
+    max: 500000,
+    step: 500,
+    default: 84500,
+    description:
+      'Stiffness per area of the yielding tract walls (tense or relaxed tissue).',
   },
   {
     key: 'nasalLoss',

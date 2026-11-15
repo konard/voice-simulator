@@ -158,6 +158,105 @@ export function rms(samples, start = 0, end = samples.length) {
 }
 
 /**
+ * Magnitude spectrum of an impulse response on a regular frequency grid
+ * (direct DFT).
+ * @param {ArrayLike<number>} response
+ * @param {number} sampleRate
+ * @param {{from?: number, to?: number, step?: number}} [options]
+ * @returns {{frequencies: Float64Array, magnitudes: Float64Array}}
+ */
+export function impulseSpectrum(response, sampleRate, options = {}) {
+  const { from = 100, to = 4000, step = 10 } = options;
+  const count = Math.floor((to - from) / step) + 1;
+  const frequencies = new Float64Array(count);
+  const magnitudes = new Float64Array(count);
+  for (let bin = 0; bin < count; bin++) {
+    const frequency = from + bin * step;
+    // Goertzel recursion: one cosine per bin.
+    const coefficient = 2 * Math.cos((2 * Math.PI * frequency) / sampleRate);
+    let previous = 0;
+    let before = 0;
+    for (let n = 0; n < response.length; n++) {
+      const value = response[n] + coefficient * previous - before;
+      before = previous;
+      previous = value;
+    }
+    frequencies[bin] = frequency;
+    magnitudes[bin] = Math.sqrt(
+      Math.max(
+        0,
+        previous * previous + before * before - coefficient * previous * before
+      )
+    );
+  }
+  return { frequencies, magnitudes };
+}
+
+/**
+ * Resonances of a magnitude spectrum: the frequency of each local maximum
+ * (parabolic interpolation) above `from` Hz and its -3 dB bandwidth, the
+ * width where the power falls to half the peak (linear interpolation
+ * between grid points). A peak whose half-power point on a side is not
+ * reached before a higher peak takes twice its width on the other side.
+ * @param {{frequencies: ArrayLike<number>, magnitudes: ArrayLike<number>}} spectrum
+ * @param {{count?: number, from?: number}} [options]
+ * @returns {{frequency: number, bandwidth: number}[]}
+ */
+export function resonances({ frequencies, magnitudes }, options = {}) {
+  const { count = 4, from = 100 } = options;
+  const step = frequencies[1] - frequencies[0];
+  const half = Math.SQRT1_2;
+  const result = [];
+  for (let index = 1; index < magnitudes.length - 1; index++) {
+    const peak = magnitudes[index];
+    if (
+      frequencies[index] < from ||
+      peak <= magnitudes[index - 1] ||
+      peak < magnitudes[index + 1]
+    ) {
+      continue;
+    }
+    const level = peak * half;
+    /** Distance (Hz) to the half-power point in a direction, or NaN. */
+    const edge = (direction) => {
+      let at = index;
+      while (
+        at + direction >= 0 &&
+        at + direction < magnitudes.length &&
+        magnitudes[at + direction] > level
+      ) {
+        at += direction;
+        if (magnitudes[at] > peak) {
+          return NaN;
+        }
+      }
+      const next = at + direction;
+      if (next < 0 || next >= magnitudes.length) {
+        return NaN;
+      }
+      const fraction =
+        (magnitudes[at] - level) / (magnitudes[at] - magnitudes[next]);
+      return (Math.abs(at - index) + fraction) * step;
+    };
+    const lower = edge(-1);
+    const upper = edge(1);
+    const left = magnitudes[index - 1];
+    const right = magnitudes[index + 1];
+    const offset = (0.5 * (left - right)) / (left - 2 * peak + right || 1);
+    const bandwidth = Number.isNaN(lower)
+      ? 2 * upper
+      : Number.isNaN(upper)
+        ? 2 * lower
+        : lower + upper;
+    result.push({
+      frequency: frequencies[index] + offset * step,
+      bandwidth,
+    });
+  }
+  return result.slice(0, count);
+}
+
+/**
  * Local maxima (Hz) of the magnitude spectrum of an impulse response,
  * evaluated with a direct DFT on a regular frequency grid. Peaks more than
  * `floor` dB below the strongest one are dropped, and so are peaks that

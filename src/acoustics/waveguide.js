@@ -8,9 +8,17 @@
  * and the output is the volume velocity leaving lips and nostrils, which
  * (with a flow-derivative source) is proportional to the radiated sound.
  * Lips and nostrils reflect according to their opening area (see
- * radiation.js), and the losses are given per reference section of
- * length / LOSS_REFERENCE_SECTIONS, so they do not depend on the number
- * of sections.
+ * radiation.js).
+ *
+ * Losses (issue 36, losses.js): the tract is split into LOSS_STAGES
+ * groups of sections (the nose into NOSE_LOSS_STAGES). At the end of each
+ * group a first-order filter per travelling wave applies the viscous and
+ * thermal boundary-layer loss of the whole group, which grows with
+ * sqrt(f), and a mass-damper-spring wall branch takes the flow of the
+ * yielding walls of the group out of the tract. The flow resistance of
+ * narrow constrictions stays a per-section factor (lossFactor), given per
+ * reference section of length / LOSS_REFERENCE_SECTIONS so that it does
+ * not depend on the number of sections.
  *
  * Nose section 0 is the velopharyngeal port: it takes the port area, so
  * the three-port junction at the velum and the nose conserve volume flow
@@ -26,8 +34,19 @@
  */
 
 import { glottalReflection } from './glottis.js';
-import { Radiation } from './radiation.js';
-import { SPEED_OF_SOUND } from './transfer.js';
+import { Radiation, RADIATION_BAFFLE } from './radiation.js';
+import { AIR_DENSITY, SPEED_OF_SOUND } from './constants.js';
+import {
+  LOSS_SHAPE,
+  LOSS_STAGES,
+  NOSE_LOSS_STAGES,
+  WALL_MASS,
+  WALL_RESISTANCE,
+  WALL_STIFFNESS,
+  designLossFilter,
+  viscothermalLoss,
+  wallSurface,
+} from './losses.js';
 import { DEFAULT_HEAD } from '../head-config.js';
 
 const MIN_AREA = 1e-4;
@@ -59,30 +78,104 @@ export function piriformBranch(sections, length, head = {}) {
 }
 
 /**
- * Attenuation of a reference section (length / LOSS_REFERENCE_SECTIONS):
- * boundary-layer losses grow with perimeter / area, and the flow
- * resistance of narrow constrictions (Bernoulli/kinetic losses) dominates
- * below a few tenths of a cm². The kinetic term matches the resistance
- * rho U / A² of a steady flow U of about 150 cm³/s: a 1.5 cm long 0.15 cm²
- * constriction (/u/) loses U / (2 A c), about 1.5 % of the wave amplitude,
- * so the low formants of rounded and close vowels stay sharp.
+ * Attenuation of a reference section (length / LOSS_REFERENCE_SECTIONS)
+ * by the flow resistance of narrow constrictions (Bernoulli/kinetic
+ * losses), which dominates below a few tenths of a cm². It matches the
+ * resistance rho U / A² of a steady flow U of about 150 cm³/s: a 1.5 cm
+ * long 0.15 cm² constriction (/u/) loses U / (2 A c), about 1.5 % of the
+ * wave amplitude, so the low formants of rounded and close vowels stay
+ * sharp. The wall losses are frequency dependent (losses.js).
+ * @param {number} area
  */
-export function lossFactor(area, wall = 1) {
+export function lossFactor(area) {
+  return 1 - Math.min(0.3, 0.0001 / Math.max(area, 1e-3) ** 2);
+}
+
+/**
+ * Attenuation of a reference section with the constriction loss and a
+ * boundary loss that does not depend on frequency, scaled by `wall`: the
+ * waveguide loss before issue 36, which the 3D solver keeps.
+ * @param {number} area
+ * @param {number} [wall]
+ */
+export function boundaryLossFactor(area, wall = 1) {
   const boundary = 0.0004 / Math.sqrt(Math.max(area, 0.05));
-  const constriction = Math.min(0.3, 0.0001 / Math.max(area, 1e-3) ** 2);
-  return 1 - 0.0007 * wall - boundary * wall - constriction;
+  return lossFactor(area) - 0.0007 * wall - boundary * wall;
+}
+
+/**
+ * Last section of each of `stages` groups of `sections` sections.
+ * @param {number} sections
+ * @param {number} stages
+ */
+function groupEnds(sections, stages) {
+  const count = Math.max(1, Math.min(sections, Math.round(stages)));
+  return Int32Array.from(
+    { length: count },
+    (_, group) => Math.round((sections * (group + 1)) / count) - 1
+  );
+}
+
+/**
+ * Loss filters (one per travelling wave) at the ends of groups of
+ * sections; coefficients and states per group.
+ */
+function lossStages(sections, stages) {
+  const ends = groupEnds(sections, stages);
+  const filter = () => new Float64Array(ends.length);
+  return {
+    ends,
+    b0: filter().fill(1),
+    b1: filter(),
+    a1: filter(),
+    rightInput: filter(),
+    rightOutput: filter(),
+    leftInput: filter(),
+    leftOutput: filter(),
+  };
+}
+
+/** One step of a group's loss filter on `value`. */
+function filterStage(stages, group, value, input, output) {
+  const result =
+    stages.b0[group] * value +
+    stages.b1[group] * input[group] -
+    stages.a1[group] * output[group];
+  input[group] = value;
+  output[group] = result;
+  return result;
 }
 
 export class Waveguide {
   /**
    * `piriform: false` leaves out the piriform fossae side branch.
-   * @param {{sections?: number, noseSections?: number, head?: {wallLoss?: number, nasalLoss?: number}, piriform?: boolean}} [options]
+   * `lossShape`, `lossStages` and `baffle` replace LOSS_SHAPE,
+   * LOSS_STAGES and RADIATION_BAFFLE (for calibration), and `walls: false`
+   * makes the walls rigid.
+   * @param {{sections?: number, noseSections?: number, head?: {wallLoss?: number, nasalLoss?: number, wallMass?: number, wallResistance?: number, wallStiffness?: number}, piriform?: boolean, lossShape?: number, lossStages?: number, baffle?: number, walls?: boolean}} [options]
    */
   constructor(options = {}) {
     const n = options.sections ?? 44;
     const nose = options.noseSections ?? 28;
+    const head = options.head ?? {};
     /** Scale of the boundary (wall and viscous) losses. */
-    this.wallLoss = options.head?.wallLoss ?? 1;
+    this.wallLoss = head.wallLoss ?? 1;
+    /** Boundary-layer loss relative to a smooth round tube. */
+    this.lossShape = options.lossShape ?? LOSS_SHAPE;
+    this.baffle = options.baffle ?? RADIATION_BAFFLE;
+    this.stages = lossStages(n, options.lossStages ?? LOSS_STAGES);
+    this.noseStages = lossStages(nose, NOSE_LOSS_STAGES);
+    /** Yielding wall of each group: mass, resistance, stiffness per cm². */
+    this.walls = options.walls !== false;
+    this.wallMass = head.wallMass ?? WALL_MASS;
+    this.wallResistance =
+      (head.wallResistance ?? WALL_RESISTANCE) * this.wallLoss;
+    this.wallStiffness = head.wallStiffness ?? WALL_STIFFNESS;
+    const groups = this.stages.ends.length;
+    this.wallJunction = new Int32Array(groups);
+    this.wallSurface = new Float64Array(groups);
+    this.wallFlow = new Float64Array(groups);
+    this.wallVolume = new Float64Array(groups);
     /** Extra boundary losses of the nose relative to a round tube. */
     this.nasalLoss = options.head?.nasalLoss ?? DEFAULT_HEAD.nasalLoss;
     this.glottalReflection = glottalReflection(options.head);
@@ -118,24 +211,108 @@ export class Waveguide {
   }
 
   #loss(area) {
-    return Math.max(0, lossFactor(area, this.wallLoss)) ** this.lossExponent;
+    return Math.max(0, lossFactor(area)) ** this.lossExponent;
   }
 
   #noseLoss(area) {
-    const wall = this.wallLoss * this.nasalLoss;
-    return Math.max(0, lossFactor(area, wall)) ** this.lossExponent;
+    return this.#loss(area);
   }
 
   /**
    * Tract length (cm), which sets the step rate n c / length and with it
-   * the radiation filters of lips and nostrils.
+   * the radiation filters of lips and nostrils and the loss filters.
    * @param {number} length
    */
   setLength(length) {
     this.length = length;
     this.rate = (this.n * SPEED_OF_SOUND) / length;
-    this.lips.configure(this.areas[this.n - 1], this.rate);
-    this.nostrils.configure(this.noseAreas[this.noseN - 1], this.rate);
+    this.lips.configure(this.areas[this.n - 1], this.rate, this.baffle);
+    this.nostrils.configure(
+      this.noseAreas[this.noseN - 1],
+      this.rate,
+      this.baffle
+    );
+    this.#configurePiriform();
+    this.#configureLosses();
+    this.#configureNoseLosses();
+  }
+
+  /**
+   * Loss filter of each group of oral sections, and the junction and
+   * wall surface of its wall branch.
+   */
+  #configureLosses() {
+    if (!this.rate) {
+      return;
+    }
+    const { ends } = this.stages;
+    const sectionLength = this.length / this.n;
+    const scale = this.lossShape * this.wallLoss;
+    let start = 0;
+    for (let group = 0; group < ends.length; group++) {
+      let K = 0;
+      let surface = 0;
+      for (let index = start; index <= ends[group]; index++) {
+        const area = this.areas[index];
+        K += viscothermalLoss(1, area, scale) * sectionLength;
+        surface += wallSurface(area, sectionLength);
+      }
+      this.#setFilter(this.stages, group, K);
+      this.wallSurface[group] = surface;
+      // The branch hangs at the junction in front of the last section
+      // (a two-port junction: not the velum or the piriform fossae).
+      let junction = Math.max(1, Math.min(this.n - 1, ends[group]));
+      if (junction === this.velumIndex || junction === this.piriform.index) {
+        junction = junction > 1 ? junction - 1 : junction + 1;
+      }
+      this.wallJunction[group] = junction;
+      start = ends[group] + 1;
+    }
+  }
+
+  /** Loss filters of the nose: the nasal walls lose nasalLoss times more. */
+  #configureNoseLosses() {
+    if (!this.rate) {
+      return;
+    }
+    const { ends } = this.noseStages;
+    const sectionLength = this.length / this.n;
+    const scale = this.lossShape * this.wallLoss * this.nasalLoss;
+    let start = 0;
+    for (let group = 0; group < ends.length; group++) {
+      let K = 0;
+      for (let index = start; index <= ends[group]; index++) {
+        K += viscothermalLoss(1, this.noseAreas[index], scale) * sectionLength;
+      }
+      this.#setFilter(this.noseStages, group, K);
+      start = ends[group] + 1;
+    }
+  }
+
+  #setFilter(stages, group, K) {
+    const { b0, b1, a1 } = designLossFilter(K, this.rate);
+    stages.b0[group] = b0;
+    stages.b1[group] = b1;
+    stages.a1[group] = a1;
+  }
+
+  /**
+   * The piriform branch is too short for a loss filter: each of its
+   * sections loses the boundary-layer loss of its quarter-wave resonance.
+   */
+  #configurePiriform() {
+    const { piriform } = this;
+    if (!piriform.right.length) {
+      return;
+    }
+    const sectionLength = this.length / this.n;
+    const depth = piriform.right.length * sectionLength;
+    const resonance = SPEED_OF_SOUND / (4 * depth);
+    const shape = this.lossShape * this.wallLoss;
+    // Two fossae of half the opening each.
+    const boundary = viscothermalLoss(resonance, piriform.area / 2, shape);
+    piriform.damping =
+      this.#loss(PIRIFORM_AREA / 2) * Math.exp(-boundary * sectionLength);
   }
 
   #allocatePiriform(options) {
@@ -178,7 +355,12 @@ export class Waveguide {
       this.noseReflection[index] = (a - b) / (a + b);
     }
     this.#applyPort();
-    this.nostrils.configure(this.noseAreas[this.noseN - 1], this.rate);
+    this.#configureNoseLosses();
+    this.nostrils.configure(
+      this.noseAreas[this.noseN - 1],
+      this.rate,
+      this.baffle
+    );
   }
 
   /**
@@ -216,7 +398,9 @@ export class Waveguide {
     this.velumArea = Math.max(0, velumArea);
     this.velumIndex = Math.min(this.n - 2, Math.max(1, velumIndex));
     this.#applyPort();
-    this.lips.configure(this.areas[this.n - 1], this.rate);
+    this.#configureLosses();
+    this.#configureNoseLosses();
+    this.lips.configure(this.areas[this.n - 1], this.rate, this.baffle);
   }
 
   #scatterOral() {
@@ -301,6 +485,36 @@ export class Waveguide {
     this.noseOutput = (noseRight[last] - reflected) * this.noseAreas[last];
   }
 
+  /**
+   * Yielding walls: each group's wall, a mass-damper-spring per cm² driven
+   * by the pressure at its junction, takes its flow U_w out of the tract
+   * (semi-implicit Euler, U_w first, then the wall volume V_w).
+   */
+  #yieldWalls() {
+    const { junctionRight, junctionLeft, left, areas } = this;
+    const step = 1 / this.rate;
+    const mass = this.wallMass;
+    const resistance = this.wallResistance;
+    const stiffness = this.wallStiffness;
+    const impedance = AIR_DENSITY * SPEED_OF_SOUND;
+    for (let group = 0; group < this.wallJunction.length; group++) {
+      const junction = this.wallJunction[group];
+      const pressure = impedance * (junctionRight[junction] + left[junction]);
+      const surface = this.wallSurface[group];
+      let flow = this.wallFlow[group];
+      const volume = this.wallVolume[group];
+      flow +=
+        (step / mass) *
+        (surface * pressure - resistance * flow - stiffness * volume);
+      this.wallFlow[group] = flow;
+      this.wallVolume[group] = volume + step * flow;
+      // A flow source -U_w lowers both outgoing waves by U_w / (a + b).
+      const drop = flow / (areas[junction - 1] + areas[junction]);
+      junctionRight[junction] -= drop;
+      junctionLeft[junction] -= drop;
+    }
+  }
+
   #propagate() {
     const { right, left, junctionRight, junctionLeft, damping } = this;
     for (let index = 0; index < this.n; index++) {
@@ -311,6 +525,30 @@ export class Waveguide {
     for (let index = 0; index < this.noseN; index++) {
       noseRight[index] = this.noseJunctionRight[index] * noseDamping[index];
       noseLeft[index] = this.noseJunctionLeft[index + 1] * noseDamping[index];
+    }
+    this.#filterStages(this.stages, right, left);
+    this.#filterStages(this.noseStages, noseRight, noseLeft);
+  }
+
+  /** Boundary-layer loss of each group on both waves of its last section. */
+  #filterStages(stages, right, left) {
+    const { ends } = stages;
+    for (let group = 0; group < ends.length; group++) {
+      const end = ends[group];
+      right[end] = filterStage(
+        stages,
+        group,
+        right[end],
+        stages.rightInput,
+        stages.rightOutput
+      );
+      left[end] = filterStage(
+        stages,
+        group,
+        left[end],
+        stages.leftInput,
+        stages.leftOutput
+      );
     }
   }
 
@@ -336,6 +574,9 @@ export class Waveguide {
       const position = Math.min(this.n - 1, Math.max(1, noisePosition));
       this.junctionRight[position] += noise * 0.5;
       this.junctionLeft[position] -= noise * 0.5;
+    }
+    if (this.walls) {
+      this.#yieldWalls();
     }
     this.#propagatePiriform();
     this.#propagate();
@@ -371,8 +612,16 @@ export class Waveguide {
       this.noseJunctionLeft,
       this.piriform.right,
       this.piriform.left,
+      this.wallFlow,
+      this.wallVolume,
     ]) {
       array.fill(0);
+    }
+    for (const stages of [this.stages, this.noseStages]) {
+      stages.rightInput.fill(0);
+      stages.rightOutput.fill(0);
+      stages.leftInput.fill(0);
+      stages.leftOutput.fill(0);
     }
     this.piriform.entering = 0;
     this.lips.reset();

@@ -46,7 +46,7 @@
  */
 
 import { DEFAULT_HEAD } from '../head-config.js';
-import { LOSS_REFERENCE_SECTIONS, lossFactor } from './waveguide.js';
+import { LOSS_REFERENCE_SECTIONS, boundaryLossFactor } from './waveguide.js';
 import { SPEED_OF_SOUND } from './transfer.js';
 import { glottalReflection } from './glottis.js';
 import {
@@ -739,7 +739,8 @@ export class Fdtd3d {
   }
 
   #updateLinks() {
-    // lossFactor is the attenuation per crossed waveguide section; a wave
+    // boundaryLossFactor (the frequency-independent waveguide loss before
+    // issue 36) is the attenuation per crossed waveguide section; a wave
     // crosses one section in (L / 44) / c seconds.
     const exponent =
       (SPEED_OF_SOUND * this.dt * LOSS_REFERENCE_SECTIONS) /
@@ -783,7 +784,8 @@ export class Fdtd3d {
           : Math.max(0, (2 * fillA * fillB) / Math.max(fillA + fillB, 1e-12));
       const nasal = cellKind[a] === CELL_NOSE || cellKind[b] === CELL_NOSE;
       const wallLoss = nasal ? this.wallLoss * this.nasalLoss : this.wallLoss;
-      this.damping[link] = Math.max(0, lossFactor(area, wallLoss)) ** exponent;
+      this.damping[link] =
+        Math.max(0, boundaryLossFactor(area, wallLoss)) ** exponent;
     }
     this.#scaleOpenings();
     const portArea = this.velumLinks.length * this.dx * this.dx;
