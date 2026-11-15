@@ -2,13 +2,13 @@
  * Queued steps and asynchronous rendering of the 3D solver, and its
  * WebGPU step loop (src/acoustics/fdtd-gpu.js) against the CPU kernel.
  * The GPU tests run where the runtime has a WebGPU adapter (Deno, which
- * falls back to a software adapter on machines without a GPU).
+ * falls back to a software adapter on machines without a GPU); with
+ * REQUIRE_GPU=1 a missing adapter is a failure (tests/helpers/gpu.js).
  */
 
 import { describe, it, expect } from 'test-anywhere';
 import { buildVoxelModel } from '../src/acoustics/voxel-model.js';
 import { Fdtd3d } from '../src/acoustics/fdtd3d.js';
-import { requestGpuDevice } from '../src/acoustics/fdtd-gpu.js';
 import {
   VoiceRenderer,
   renderPlan,
@@ -22,6 +22,11 @@ import { AUDIO_TIERS } from '../src/perf/lod.js';
 import { measureAudioTierAsync } from '../src/perf/benchmark.js';
 import { getPhoneme } from '../src/ipa/inventory.js';
 import { synthesize, synthesizeAsync } from '../src/synthesize.js';
+import {
+  drive as driveSolver,
+  gpuForTests,
+  relativeError,
+} from './helpers/gpu.js';
 import { itUnless } from './helpers/skip.js';
 
 const RATE = 16000;
@@ -33,42 +38,11 @@ const shapes = ['a', 'i'].map((symbol) =>
   )
 );
 
-// Before any test is registered, like the network probes.
-const device = await requestGpuDevice().catch(() => null);
-const noGpu = device ? null : 'no WebGPU adapter in this runtime';
-
-/**
- * Drive a solver with alternating vowels, a pulsed source and frication
- * noise in the second half, through queueStep and flushSteps.
- */
-async function drive(solver, steps = 1200, flushEvery = 500) {
-  solver.setNose(noseShape(DEFAULT_HEAD).areas);
-  const outputs = [];
-  for (let step = 0; step < steps; step++) {
-    if (step % 100 === 0) {
-      const shape = shapes[(step / 100) % 2];
-      solver.setShape(shape.areas, shape.velumArea, shape.velumIndex);
-    }
-    const flow = Math.sin(step * 0.05) * (step % 80 < 40 ? 1 : 0);
-    const noise = step > steps / 2 ? Math.sin(step * 1.7) * 0.3 : 0;
-    solver.queueStep(flow, 30, noise);
-    if (step % flushEvery === flushEvery - 1) {
-      outputs.push(...(await solver.flushSteps()));
-    }
-  }
-  outputs.push(...(await solver.flushSteps()));
-  return Float64Array.from(outputs);
-}
-
-function relativeError(actual, expected) {
-  let error = 0;
-  let energy = 0;
-  for (let index = 0; index < expected.length; index++) {
-    error += (actual[index] - expected[index]) ** 2;
-    energy += expected[index] ** 2;
-  }
-  return Math.sqrt(error / energy);
-}
+// Before any test is registered, like the network probes. With
+// REQUIRE_GPU=1 a runtime without an adapter fails here: no silent skip.
+const { device, noGpu, info } = await gpuForTests();
+const drive = (solver, steps, flushEvery) =>
+  driveSolver(solver, steps, flushEvery, shapes);
 
 describe('queued 3D FDTD steps on the CPU', () => {
   it('give the outputs of step()', async () => {
@@ -125,6 +99,7 @@ describe('WebGPU 3D FDTD step loop', () => {
   itUnless(noGpu)(
     'refuses step() and follows the CPU kernel at the lips',
     async () => {
+      console.log('WebGPU adapter:', JSON.stringify(info));
       const cpu = await drive(new Fdtd3d({ model }));
       const solver = new Fdtd3d({ model, device });
       try {

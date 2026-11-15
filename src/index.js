@@ -51,7 +51,11 @@ export {
 } from './acoustics/voice.js';
 export { Waveguide } from './acoustics/waveguide.js';
 export { Fdtd3d } from './acoustics/fdtd3d.js';
-export { FdtdGpu, requestGpuDevice } from './acoustics/fdtd-gpu.js';
+export {
+  FdtdGpu,
+  describeGpuDevice,
+  requestGpuDevice,
+} from './acoustics/fdtd-gpu.js';
 export {
   MAX_ENCLOSURE_CELLS,
   MAX_RADIATION_RADIUS,
