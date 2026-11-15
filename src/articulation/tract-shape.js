@@ -11,8 +11,10 @@
  */
 
 import { CHANNEL_DEFAULTS } from './plan.js';
-import { carveTeeth, dentition } from './teeth.js';
-import { VOWEL_SECTIONS, vowelShape } from './vowel-space.js';
+import { carveTeeth, dentition, teethGap } from './teeth.js';
+import { LIP_PROTRUSION, VOWEL_SECTIONS, vowelShape } from './vowel-space.js';
+
+export { LIP_PROTRUSION };
 
 export const TRACT_SECTIONS = VOWEL_SECTIONS;
 export const NOSE_SECTIONS = 28;
@@ -25,6 +27,24 @@ const REFERENCE_PHARYNX = 0.455;
 export const VELUM_POSITION = 0.46;
 const TRILL_RATE = 26;
 const MAX_VELUM_AREA = 1.6;
+
+/**
+ * Change of the mouth cross-sections per cm of incisor gap away from the
+ * gap the vowel and consonant channels ask for (range 0.3 to 1.5 per cm).
+ * 0.5 cm more gap raises F1 of [ɛ] by 11 %
+ * (`node experiments/issue-40-articulators.mjs`).
+ */
+export const JAW_AREA = 0.8;
+/** Length of the lip end of the tract that protrusion stretches (cm). */
+export const LIP_REGION = 1.5;
+/** Length of the glottis end of the tract that the larynx stretches (cm). */
+export const LARYNX_REGION = 3;
+/** Change of the pharynx cross-sections per unit of `tongueRoot` (0.2 to 0.6). */
+export const TONGUE_ROOT_AREA = 0.4;
+/** The tongue root starts this far above the glottis (cm). */
+const TONGUE_ROOT_START = 2;
+/** No section gets shorter than this share of its length. */
+const MIN_STRETCH = 0.3;
 
 /** Nasal cavity cross-sections (cm²) from velum to nostrils. */
 const NOSE_PROFILE = Array.from({ length: NOSE_SECTIONS }, (_, index) => {
@@ -157,12 +177,13 @@ function sampleLinear(values, position) {
   return values[index] * (1 - fraction) + values[index + 1] * fraction;
 }
 
-function regionScale(x, head, openness) {
+function regionScale(x, head, openness, jawScale = 1) {
   const blend = Math.min(1, Math.max(0, (x - head.pharynxRatio) / 0.08 + 0.5));
   let scale = head.pharynxWidth * (1 - blend) + head.oralWidth * blend;
   if (x > 0.55 && x < 0.95) {
     scale /= head.tongueSize ** 2;
     scale *= 1 + (head.jawRange - 1) * openness * 0.9;
+    scale *= jawScale;
   }
   if (x > 0.93) {
     scale *= head.mouthWidth;
@@ -174,21 +195,146 @@ function regionScale(x, head, openness) {
  * Warp a reference shape onto a head and resample it.
  * @param {{areas: Float64Array, length: number}} shape
  * @param {Record<string, number>} head Normalised head config.
- * @param {{sections?: number, openness?: number}} [options]
+ * @param {{sections?: number, openness?: number, jawScale?: number}} [options]
+ *   `jawScale` multiplies the mouth cross-sections (see jawScale()).
  */
 export function fitToHead(shape, head, options = {}) {
   const sections = options.sections ?? TRACT_SECTIONS;
   const openness = options.openness ?? 0.5;
+  const jaw = options.jawScale ?? 1;
   const areas = new Float64Array(sections);
   for (let index = 0; index < sections; index++) {
     const x = index / (sections - 1);
     const area = sampleLinear(shape.areas, warpPosition(x, head.pharynxRatio));
-    areas[index] = area * regionScale(x, head, openness);
+    areas[index] = area * regionScale(x, head, openness, jaw);
   }
   const lipExtension = 0.5 * (head.lipThickness - 1);
   const length =
     (shape.length * head.vocalTractLength) / REFERENCE_LENGTH + lipExtension;
   return { areas, length };
+}
+
+/** Length of the overlap of [from, to] and [low, high]. */
+function overlap(from, to, low, high) {
+  return Math.max(0, Math.min(to, high) - Math.max(from, low));
+}
+
+/**
+ * Sections of unequal length -> `sections` equal ones. Each new section
+ * gets the mean area of the old ones over its stretch, so every stretch of
+ * the tract keeps its volume.
+ * @param {ArrayLike<number>} areas Cross-sections (cm²).
+ * @param {ArrayLike<number>} lengths Length of each section (cm).
+ * @param {number} [sections] Number of equal sections (default: as many).
+ * @returns {{areas: Float64Array, length: number}} New sections and the
+ *   total length (cm).
+ */
+export function stretchSections(areas, lengths, sections = areas.length) {
+  const count = areas.length;
+  let length = 0;
+  for (let index = 0; index < count; index++) {
+    length += lengths[index];
+  }
+  const result = new Float64Array(sections);
+  const step = length / sections;
+  let index = 0;
+  let start = 0;
+  for (let section = 0; section < sections; section++) {
+    const from = section * step;
+    const to = section === sections - 1 ? length : from + step;
+    while (index < count - 1 && start + lengths[index] <= from) {
+      start += lengths[index];
+      index++;
+    }
+    let volume = 0;
+    let at = start;
+    for (let old = index; old < count && at < to; old++) {
+      const end = old === count - 1 ? Math.max(length, to) : at + lengths[old];
+      volume += areas[old] * overlap(at, end, from, to);
+      at = end;
+    }
+    result[section] = to > from ? volume / (to - from) : areas[index];
+  }
+  return { areas: result, length };
+}
+
+/**
+ * Lengths of the sections of a tract of `length` cm after the larynx moves
+ * `larynx` cm down and the lips `lips` cm forward: the first LARYNX_REGION
+ * and the last LIP_REGION cm share them; no section gets shorter than
+ * MIN_STRETCH of its length.
+ */
+function stretchedLengths(count, length, larynx, lips) {
+  const step = length / count;
+  const larynxRegion = Math.min(LARYNX_REGION, length);
+  const lipRegion = Math.min(LIP_REGION, length);
+  const lengths = new Float64Array(count);
+  for (let index = 0; index < count; index++) {
+    const from = index * step;
+    const to = from + step;
+    const added =
+      (larynx * overlap(from, to, 0, larynxRegion)) / larynxRegion +
+      (lips * overlap(from, to, length - lipRegion, length)) / lipRegion;
+    lengths[index] = Math.max(MIN_STRETCH * step, step + added);
+  }
+  return lengths;
+}
+
+/**
+ * Where a place `position` cm above the glottis of the unstretched tract
+ * lies in the stretched one (cm above its glottis).
+ */
+function stretchedPosition(lengths, step, position) {
+  const index = Math.min(
+    lengths.length - 1,
+    Math.max(0, Math.floor(position / step))
+  );
+  let start = 0;
+  for (let previous = 0; previous < index; previous++) {
+    start += lengths[previous];
+  }
+  return start + ((position - index * step) / step) * lengths[index];
+}
+
+/**
+ * Section index of a landmark of a tract with `count` sections: `place`
+ * maps the index of the unstretched tract (as a position in cm above its
+ * glottis, at the section middle) onto the stretched tract, so the landmark
+ * keeps its distance from the lips when the larynx moves.
+ */
+function landmarkMap(lengths, length, stretched) {
+  const count = lengths.length;
+  const step = length / count;
+  return (index) => {
+    const position = stretchedPosition(lengths, step, (index + 0.5) * step);
+    return Math.min(
+      count - 1,
+      Math.max(0, Math.round((position / stretched) * count - 0.5))
+    );
+  };
+}
+
+/** Narrow (tongueRoot < 0) or widen the pharynx from TONGUE_ROOT_START to the velum. */
+function applyTongueRoot(areas, length, velumIndex, amount) {
+  if (amount === 0) {
+    return;
+  }
+  const count = areas.length;
+  const step = length / count;
+  const top = ((velumIndex + 0.5) / count) * length;
+  for (let index = 0; index < count; index++) {
+    const share =
+      overlap(index * step, (index + 1) * step, TONGUE_ROOT_START, top) / step;
+    areas[index] *= 1 + TONGUE_ROOT_AREA * amount * share;
+  }
+}
+
+/**
+ * Factor on the mouth cross-sections of an incisor gap `jaw` (cm) where
+ * the vowel and consonant channels ask for `expected` cm.
+ */
+export function jawScale(jaw, expected) {
+  return Math.min(2, Math.max(0.3, 1 + JAW_AREA * (jaw - expected)));
 }
 
 /**
@@ -208,11 +354,13 @@ export function noseShape(head, sections = NOSE_SECTIONS) {
 }
 
 /** Narrowest section near the active articulator. */
-function constrictionIndex(areas, state, head) {
+function constrictionIndex(areas, state, head, place) {
   const lips = (state.lipAmount ?? 0) > (state.tongueAmount ?? 0);
   const location = lips ? 1 : state.tongueLocation;
   const last = areas.length - 1;
-  const center = Math.round(headPosition(location, head.pharynxRatio) * last);
+  const center = place(
+    Math.round(headPosition(location, head.pharynxRatio) * last)
+  );
   let best = Math.min(last, center);
   for (
     let index = Math.max(1, center - 3);
@@ -235,8 +383,8 @@ function obstacleStrength(state, teeth) {
   return (state.sibilance ?? 0) * narrow;
 }
 
-function fricationSource(areas, state, head, teeth) {
-  const index = constrictionIndex(areas, state, head);
+function fricationSource(areas, state, head, teeth, place) {
+  const index = constrictionIndex(areas, state, head, place);
   const obstacle = obstacleStrength(state, teeth);
   // Sibilant jets hit the incisors: the noise starts just past them.
   const target = obstacle > 0.5 ? Math.max(index + 1, teeth.outlet) : index + 1;
@@ -263,6 +411,34 @@ function applyTeeth(areas, state, head, length) {
 }
 
 /**
+ * The four free articulators of a state with the head's postures added:
+ * incisor gap `jaw` (cm), `lipProtrusion` (cm), `larynxHeight` (cm, negative
+ * lowered) and `tongueRoot` (-1 back to 1 forward). A missing `jaw` or
+ * `lipProtrusion` is the one the other channels imply (`expectedJaw`,
+ * LIP_PROTRUSION * rounding), as the planner writes it.
+ * @param {Record<string, number>} state
+ * @param {Record<string, number>} head
+ */
+export function articulatorState(state, head) {
+  const full = { ...CHANNEL_DEFAULTS, ...state };
+  const expectedJaw = teethGap({ ...full, jaw: undefined }, head);
+  const rounding = Math.max(0, Math.min(1, full.rounding));
+  const expectedProtrusion = LIP_PROTRUSION * rounding;
+  return {
+    jaw: Math.max(0, (state.jaw ?? expectedJaw) + (head.jawPosture ?? 0)),
+    expectedJaw,
+    lipProtrusion:
+      (state.lipProtrusion ?? expectedProtrusion) + (head.lipPosture ?? 0),
+    expectedProtrusion,
+    larynxHeight: (state.larynxHeight ?? 0) + (head.larynxPosture ?? 0),
+    tongueRoot: Math.max(
+      -1,
+      Math.min(1, (state.tongueRoot ?? 0) + (head.tongueRootPosture ?? 0))
+    ),
+  };
+}
+
+/**
  * Full tract description for one moment.
  * @param {Record<string, number>} state Articulator channels (see plan.js).
  * @param {Record<string, number>} head Normalised head config.
@@ -271,13 +447,32 @@ function applyTeeth(areas, state, head, length) {
  *   source); `vowelCorrections` overrides the vowel calibration.
  */
 export function tractShape(state, head, options = {}) {
-  const full = { ...CHANNEL_DEFAULTS, time: 0, ...state };
+  const free = articulatorState(state, head);
+  const full = { ...CHANNEL_DEFAULTS, time: 0, ...state, jaw: free.jaw };
   const reference = referenceShape(full, options.vowelCorrections);
   const openness = Math.max(0, Math.min(1, 1 - full.height));
-  const { areas, length } = fitToHead(reference, head, {
+  const fitted = fitToHead(reference, head, {
     sections: options.sections,
     openness,
+    jawScale: jawScale(free.jaw, free.expectedJaw),
   });
+  let { areas, length } = fitted;
+  const restVelum = Math.round(
+    ((areas.length - 1) * head.pharynxRatio * VELUM_POSITION) /
+      REFERENCE_PHARYNX
+  );
+  applyTongueRoot(areas, length, restVelum, free.tongueRoot);
+  // Each change of length goes to the place of its organ; landmarks keep
+  // their distance from the lips.
+  const larynx = -free.larynxHeight;
+  const lips = free.lipProtrusion - free.expectedProtrusion;
+  let place = (index) => index;
+  if (larynx !== 0 || lips !== 0) {
+    const lengths = stretchedLengths(areas.length, length, larynx, lips);
+    const stretched = stretchSections(areas, lengths, areas.length);
+    place = landmarkMap(lengths, length, stretched.length);
+    ({ areas, length } = stretched);
+  }
   const teeth =
     options.teeth === false ? null : applyTeeth(areas, full, head, length);
   return {
@@ -287,11 +482,8 @@ export function tractShape(state, head, options = {}) {
       MAX_VELUM_AREA *
       Math.max(0, Math.min(1, full.velum)) *
       (head.nasalCoupling ?? 1),
-    velumIndex: Math.round(
-      ((areas.length - 1) * head.pharynxRatio * VELUM_POSITION) /
-        REFERENCE_PHARYNX
-    ),
-    frication: fricationSource(areas, full, head, teeth),
+    velumIndex: place(restVelum),
+    frication: fricationSource(areas, full, head, teeth, place),
     glottis: {
       f0: full.f0,
       voicing: full.voicing,
@@ -304,6 +496,16 @@ export function tractShape(state, head, options = {}) {
     },
     lipOpening: areas.at(-1),
     jaw: openness,
+    /**
+     * The free articulators with the head's postures (articulatorState()):
+     * incisor gap, lip protrusion and larynx height in cm, tongue root.
+     */
+    articulators: {
+      jaw: free.jaw,
+      lipProtrusion: free.lipProtrusion,
+      larynxHeight: free.larynxHeight,
+      tongueRoot: free.tongueRoot,
+    },
     teeth,
     /**
      * Lateral channel (0..1): at 1 the tongue blocks the middle of the

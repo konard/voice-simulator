@@ -28,6 +28,8 @@ import {
   vowelTarget,
 } from './phones.js';
 import { DYNAMICS_ORDER, approachTargets } from './dynamics.js';
+import { consonantJaw, teethGap } from './teeth.js';
+import { LIP_PROTRUSION } from './vowel-space.js';
 import {
   BOUNDARIES,
   boundaryOf,
@@ -94,6 +96,12 @@ export const ARTICULATORS = Object.freeze({
   sibilance: articulator(0.01),
   trill: articulator(0.01),
   lateral: articulator(0.015),
+  // Free articulators (issue 40): the planner sets them from the other
+  // channels; voices and emotions move them apart (tract-shape.js).
+  jaw: articulator(0.035),
+  lipProtrusion: articulator(0.02, ROUNDING_LEAD, [0.05, 0.25]),
+  larynxHeight: articulator(0.04),
+  tongueRoot: articulator(0.03),
 });
 
 /** Zero-phase smoothing time constants of the source channels, seconds. */
@@ -122,7 +130,7 @@ export const CHANNELS = Object.freeze({
 const CHANNEL_NAMES = Object.keys(CHANNELS);
 const ARTICULATOR_NAMES = Object.keys(ARTICULATORS);
 /** Channels whose lead stops at the previous sound with its own target. */
-const LIMITED_LEADS = new Set(['rounding', 'velum']);
+const LIMITED_LEADS = new Set(['rounding', 'lipProtrusion', 'velum']);
 /** Glottal channels that the fold drive reads before any smoothing. */
 const GLOTTAL_CHANNELS = ['voicing', 'aspiration', 'glottalClosure'];
 const CONSONANT_SHAPE = new Set([
@@ -392,6 +400,10 @@ const DEFAULTS = {
   sibilance: 0,
   trill: 0,
   lateral: 0,
+  jaw: teethGap(NEUTRAL_VOWEL, { jawRange: 1 }),
+  lipProtrusion: 0,
+  larynxHeight: 0,
+  tongueRoot: 0,
   loudness: 1,
   f0: 120,
   lungPressure: 800,
@@ -545,16 +557,60 @@ function shapeTarget(segments, index, name) {
     : { value: DEFAULTS[name], strength: 0 };
 }
 
+/** Consonant channels that raise the jaw (see teethGap()). */
+const JAW_CHANNELS = [
+  'tongueAmount',
+  'tongueLocation',
+  'lipAmount',
+  'sibilance',
+];
+
+/**
+ * Jaw: the incisor gap of today's formula (teethGap()) on the targets of
+ * the segment. Vowels hold their gap; a consonant pulls the jaw towards the
+ * gap it raises it to with the weight of that raise, so that the
+ * consonant's middle has the gap of teethGap() between its vowels; pauses
+ * and sounds that do not raise the jaw leave it free.
+ */
+function jawTarget(segments, index, levels, head) {
+  const segment = segments[index];
+  if (segment.kind === 'pause') {
+    return { value: DEFAULTS.jaw, strength: 0 };
+  }
+  const state = {
+    height: segmentTarget(segments, index, 'height', levels).value,
+    backness: segmentTarget(segments, index, 'backness', levels).value,
+  };
+  for (const name of JAW_CHANNELS) {
+    state[name] = segmentTarget(segments, index, name, levels).value;
+  }
+  if (segment.kind === 'vowel') {
+    return { value: teethGap(state, head), strength: 1 };
+  }
+  const { gap, weight } = consonantJaw(state, head);
+  return { value: gap, strength: weight };
+}
+
+/** Lip protrusion: LIP_PROTRUSION times the rounding target. */
+function protrusionTarget(segment) {
+  const target = roundingTarget(segment);
+  return { ...target, value: LIP_PROTRUSION * target.value };
+}
+
 const TARGETS_OF = {
   height: tongueTarget,
   backness: tongueTarget,
   rounding: (segments, index) => roundingTarget(segments[index]),
+  lipProtrusion: (segments, index) => protrusionTarget(segments[index]),
   rhotic: (segments, index) => rhoticTarget(segments[index]),
   velum: (segments, index) => velumTarget(segments[index]),
 };
 
 /** Value and strength of one segment for one articulation channel. */
-function segmentTarget(segments, index, name, levels) {
+function segmentTarget(segments, index, name, levels, head) {
+  if (name === 'jaw') {
+    return jawTarget(segments, index, levels, head);
+  }
   if (TARGETS_OF[name]) {
     return TARGETS_OF[name](segments, index, name, levels);
   }
@@ -572,15 +628,18 @@ function segmentTarget(segments, index, name, levels) {
  * neighbouring targets of strength 1 (src/articulation/dynamics.js).
  * @param {object[]} segments Segments of a plan (`plan.segments`).
  * @param {string} name Channel name, a key of `ARTICULATORS`.
- * @param {{resistance?: Record<string, number>}} [options] Values of the
- *   levels of `COARTICULATION_RESISTANCE` that replace the defaults.
+ * @param {{resistance?: Record<string, number>, head?: object}} [options]
+ *   Values of the levels of `COARTICULATION_RESISTANCE` that replace the
+ *   defaults; the head whose `jawRange` scales the `jaw` targets.
  */
 export function channelTargets(segments, name, options = {}) {
   const levels = options.resistance
     ? { ...COARTICULATION_RESISTANCE.levels, ...options.resistance }
     : COARTICULATION_RESISTANCE.levels;
+  const head =
+    name === 'jaw' ? normalizeHeadConfig(options.head ?? DEFAULT_HEAD) : null;
   return segments.map((segment, index) => {
-    const target = segmentTarget(segments, index, name, levels);
+    const target = segmentTarget(segments, index, name, levels, head);
     return {
       value: target.value,
       start: segment.start,
@@ -628,8 +687,11 @@ function piecewiseLinear(values, positions, t) {
  * Returns the tone shape: per frame, the ratio of that curve to the straight
  * line between the first and the last point of its nucleus. It is 1 outside
  * nuclei with three or more points (the Mandarin third tone `˨˩˦`).
+ * With the `height` channel and `head.intrinsicPitch` (semitones between the
+ * closest and the most open vowel), close vowels get a higher pitch
+ * (Whalen & Levitt 1995).
  */
-function fillPitch(values, segments, head, frameRate) {
+function fillPitch(values, segments, head, frameRate, height) {
   values.fill(Number.NaN);
   const shape = new Float32Array(values.length).fill(1);
   for (const { segment, from, to, points } of pitchTargets(segments, head)) {
@@ -644,7 +706,27 @@ function fillPitch(values, segments, head, frameRate) {
     }
   }
   interpolateGaps(values, head.pitch);
+  const intrinsic = head.intrinsicPitch ?? 0;
+  if (intrinsic !== 0 && height) {
+    for (let frame = 0; frame < values.length; frame++) {
+      values[frame] *= 2 ** ((intrinsic * (height[frame] - 0.5)) / 12);
+    }
+  }
   return shape;
+}
+
+/**
+ * Larynx rising with the pitch: `head.larynxPitch` cm per octave of f0
+ * above the speaker's pitch (lower below it).
+ */
+function addLarynxPitch(larynxHeight, f0, head) {
+  const coupling = head.larynxPitch ?? 0;
+  if (coupling === 0) {
+    return;
+  }
+  for (let frame = 0; frame < larynxHeight.length; frame++) {
+    larynxHeight[frame] += coupling * Math.log2(f0[frame] / head.pitch);
+  }
 }
 
 /**
@@ -804,7 +886,7 @@ export function planUtterance(ipa, options = {}) {
   const channels = {};
   const articulators = articulatorsFor(head, options.articulators);
   for (const name of ARTICULATOR_NAMES) {
-    const targets = channelTargets(segments, name, options);
+    const targets = channelTargets(segments, name, { ...options, head });
     const { timeConstant, lead } = articulators[name];
     channels[name] = approachTargets(
       targets,
@@ -824,7 +906,13 @@ export function planUtterance(ipa, options = {}) {
   }
   fillDefaults(channels, segments, frameRate);
   applyRegisterGain(channels.loudness, segments, frameRate);
-  const toneShape = fillPitch(channels.f0, segments, head, frameRate);
+  const toneShape = fillPitch(
+    channels.f0,
+    segments,
+    head,
+    frameRate,
+    channels.height
+  );
   const steps = { loudness: channels.loudness };
   for (const name of GLOTTAL_CHANNELS) {
     steps[name] = new Float32Array(frameCount);
@@ -840,6 +928,7 @@ export function planUtterance(ipa, options = {}) {
     }
   }
   addVibrato(channels.f0, head, frameRate);
+  addLarynxPitch(channels.larynxHeight, channels.f0, head);
   fillFoldTension(channels, head);
   const ordered = Object.fromEntries(
     CHANNEL_NAMES.map((name) => [name, channels[name]])

@@ -110,6 +110,54 @@ export const HEAD_PARAMETERS = Object.freeze([
     description: 'Tongue volume; bigger tongues constrict more.',
   },
   {
+    key: 'jawPosture',
+    label: 'Jaw posture',
+    group: 'mouth',
+    unit: 'cm',
+    min: -0.2,
+    max: 0.6,
+    step: 0.01,
+    default: 0,
+    description:
+      'Speaker habit added to the jaw channel: a wider gap between the incisors in every sound (negative: a closer jaw).',
+  },
+  {
+    key: 'lipPosture',
+    label: 'Lip posture',
+    group: 'mouth',
+    unit: 'cm',
+    min: -0.3,
+    max: 0.6,
+    step: 0.01,
+    default: 0,
+    description:
+      'Speaker habit added to the lip protrusion channel: pushed-out lips lengthen the tract, negative values spread the lips (a smile).',
+  },
+  {
+    key: 'larynxPosture',
+    label: 'Larynx posture',
+    group: 'mouth',
+    unit: 'cm',
+    min: -1,
+    max: 1,
+    step: 0.01,
+    default: 0,
+    description:
+      'Speaker habit added to the larynx height channel: a lowered larynx (negative) lengthens the pharynx and darkens the voice.',
+  },
+  {
+    key: 'tongueRootPosture',
+    label: 'Tongue root posture',
+    group: 'mouth',
+    unit: '',
+    min: -1,
+    max: 1,
+    step: 0.01,
+    default: 0,
+    description:
+      'Speaker habit added to the tongue root channel: -1 pulls the root back and narrows the pharynx, +1 pushes it forward.',
+  },
+  {
     key: 'nasalSize',
     label: 'Nasal cavity size',
     group: 'anatomy',
@@ -416,6 +464,30 @@ export const HEAD_PARAMETERS = Object.freeze([
     default: 1,
     description:
       'How early articulators start moving towards the next sound (factor on all leads).',
+  },
+  {
+    key: 'intrinsicPitch',
+    label: 'Intrinsic pitch',
+    group: 'prosody',
+    unit: 'st',
+    min: 0,
+    max: 3,
+    step: 0.1,
+    default: 0,
+    description:
+      'Pitch difference between the closest and the most open vowel (real speakers about 1.5 semitones); 0 turns it off.',
+  },
+  {
+    key: 'larynxPitch',
+    label: 'Larynx pitch coupling',
+    group: 'prosody',
+    unit: 'cm/oct',
+    min: 0,
+    max: 1,
+    step: 0.01,
+    default: 0,
+    description:
+      'How far the larynx rises per octave of pitch above the speaker pitch (and falls below it); 0 turns it off.',
   },
   {
     key: 'wallLoss',

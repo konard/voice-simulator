@@ -298,6 +298,13 @@ export function vowelShape(
 const LIP_ROUNDING = [0.85, 0.65, 0.45, 0.32, 0.25];
 
 /**
+ * How far rounded lips push forward (cm per unit of `rounding`): the
+ * `lipProtrusion` the planner writes for a rounded sound and the face
+ * shows (re-exported by tract-shape.js).
+ */
+export const LIP_PROTRUSION = 0.6;
+
+/**
  * Narrow and protrude the lips: the last sections shrink and the tract
  * gets longer, which lowers all formants (mostly F2 and F3).
  * @param {{areas: Float64Array, length: number}} shape
