@@ -3,9 +3,10 @@
  * compares between a recording and the simulator.
  *
  * - f0 (median and 5-95 % range) with YIN (de Cheveigné & Kawahara 2002);
- * - formants F1-F4 with LPC, and the formant spacing ΔF fitted to the
- *   uniform-tube pattern F_i = (2i - 1) ΔF / 2 (Reby & McComb 2003), which
- *   gives the vocal tract length L = c / (2 ΔF) (Fitch 1997);
+ * - formants F1-F4 (F1-F3 at 8 kHz) with LPC, and the formant spacing ΔF
+ *   fitted to the uniform-tube pattern F_i = (2i - 1) ΔF / 2 (Reby &
+ *   McComb 2003), which gives the vocal tract length L = c / (2 ΔF)
+ *   (Fitch 1997);
  * - H1-H2, the level of the first harmonic over the second, which grows
  *   with a lax, breathy source (Hanson 1997);
  * - harmonics-to-noise ratio from the YIN aperiodicity of frames resampled
@@ -357,9 +358,15 @@ function countSyllables(levels, voiced) {
  * Measure the voice features of a recording.
  * @param {ArrayLike<number>} samples Mono samples.
  * @param {number} sampleRate
- * @param {{maxDuration?: number, analysisRate?: number, order?: number}} [options]
+ * @param {{maxDuration?: number, analysisRate?: number, order?: number, formantCount?: number}} [options]
  *   maxDuration (s) caps the analysed audio (default 30); order is the LPC
- *   order (default 1 + rate / 1000, 12 at the analysis rate).
+ *   order (default 1 + rate / 1000, 12 at the analysis rate). formantCount
+ *   is the number of formants measured and fitted for the formant spacing
+ *   and the vocal tract length (default min(4, floor(0.45 rate / 1000)),
+ *   where rate is the rate after resampling: 3 at 8000 Hz, 4 from
+ *   11025 Hz, so that no formant is looked for above the band of
+ *   telephone speech). `formants` always has four entries; those that
+ *   were not measured are 0.
  */
 export function analyzeVoice(samples, sampleRate, options = {}) {
   const limit = Math.floor((options.maxDuration ?? 30) * sampleRate);
@@ -373,6 +380,8 @@ export function analyzeVoice(samples, sampleRate, options = {}) {
     options.analysisRate ?? ANALYSIS_RATE
   );
   const order = options.order ?? Math.round(rate / 1000) + 1;
+  const formantCount =
+    options.formantCount ?? Math.min(4, Math.floor((0.45 * rate) / 1000));
   const hop = Math.round(HOP * rate);
   const length = Math.round(WINDOW * rate);
   const levels = [];
@@ -410,11 +419,11 @@ export function analyzeVoice(samples, sampleRate, options = {}) {
     const formants = estimateFormants(signal, rate, {
       start: start / rate,
       duration: 0.03,
-      count: 4,
+      count: formantCount,
       analysisRate: rate,
       order,
     });
-    formants.forEach((value, order) => tracks[order].push(value));
+    formants.slice(0, 4).forEach((value, order) => tracks[order].push(value));
     if (formants.length >= 3) {
       spacings.push(formantSpacing(formants));
     }

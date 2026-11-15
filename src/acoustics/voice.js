@@ -87,14 +87,30 @@ class NoiseSources {
   }
 }
 
+/** Q of the biquads of a fourth-order Butterworth low-pass. */
+const BUTTERWORTH_4 = [0.54, 1.31];
+/** Q of the biquads of an eighth-order Butterworth low-pass. */
+const BUTTERWORTH_8 = [0.5098, 0.6013, 0.9, 2.5629];
+
+/**
+ * Low-pass at the solver rate, DC blocker and soft limiter. Without a
+ * `bandLimit` the low-pass is fourth order at 0.45 times the output rate
+ * (at most 20 kHz); with one (Hz) it is eighth order at
+ * min(bandLimit, 0.45 sampleRate), steep enough that the solver output
+ * taken at a low output rate keeps no energy that would fold back.
+ */
 class OutputStage {
-  constructor(sampleRate, gain = 1) {
+  constructor(sampleRate, gain = 1, bandLimit = undefined) {
     this.gain = OUTPUT_GAIN * gain;
-    this.lowpass = [new Biquad(), new Biquad()];
+    const narrow = bandLimit !== undefined && bandLimit !== null;
+    this.qualities = narrow ? BUTTERWORTH_8 : BUTTERWORTH_4;
+    this.lowpass = this.qualities.map(() => new Biquad());
     this.dcInput = 0;
     this.dcOutput = 0;
     this.dcCoefficient = 1 - (2 * Math.PI * 30) / sampleRate;
-    this.cutoff = Math.min(sampleRate * 0.45, 20000);
+    this.cutoff = narrow
+      ? Math.min(bandLimit, 0.45 * sampleRate)
+      : Math.min(sampleRate * 0.45, 20000);
     this.rate = 0;
   }
 
@@ -103,12 +119,17 @@ class OutputStage {
       return;
     }
     this.rate = rate;
-    this.lowpass[0].lowpass(this.cutoff, 0.54, rate);
-    this.lowpass[1].lowpass(this.cutoff, 1.31, rate);
+    this.qualities.forEach((quality, index) =>
+      this.lowpass[index].lowpass(this.cutoff, quality, rate)
+    );
   }
 
   filter(value) {
-    return this.lowpass[1].process(this.lowpass[0].process(value));
+    let result = value;
+    for (const filter of this.lowpass) {
+      result = filter.process(result);
+    }
+    return result;
   }
 
   finish(value) {
@@ -128,10 +149,12 @@ export class VoiceRenderer {
    * and `enclosure` ({width, height, depth, absorption, center} in cm, a
    * box around the head) choose where and in what space the voice is
    * heard. The output grows by the reverberation tail.
-   * @param {{sampleRate?: number, sections?: number, solver?: string, seed?: string|number, blockSize?: number, head?: object, dx?: number, model?: object, output?: string, kernel?: string, device?: object, microphone?: object, room?: string|object, enclosure?: object, teeth?: boolean, piriform?: boolean, vallecula?: boolean}} [options]
+   * @param {{sampleRate?: number, sections?: number, solver?: string, seed?: string|number, blockSize?: number, bandLimit?: number, head?: object, dx?: number, model?: object, output?: string, kernel?: string, device?: object, microphone?: object, room?: string|object, enclosure?: object, teeth?: boolean, piriform?: boolean, vallecula?: boolean}} [options]
    *   `teeth: false` leaves out the incisors, `piriform: false` the
    *   piriform fossae (both solvers) and `vallecula: false` the vallecula
-   *   (3D only). A WebGPU `device` runs the 3D solver on the GPU; such a
+   *   (3D only). `blockSize` is the control interval in output samples
+   *   (default 32) and `bandLimit` (Hz) switches the output low-pass to
+   *   eighth order at min(bandLimit, 0.45 sampleRate). A WebGPU `device` runs the 3D solver on the GPU; such a
    *   renderer renders with renderAsync.
    */
   constructor(plan, options = {}) {
@@ -173,7 +196,11 @@ export class VoiceRenderer {
       chink: this.head.glottalChink,
     });
     this.noise = new NoiseSources(seed);
-    this.output = new OutputStage(this.sampleRate, this.head.outputGain);
+    this.output = new OutputStage(
+      this.sampleRate,
+      this.head.outputGain,
+      options.bandLimit
+    );
     this.state = {};
     this.time = 0;
     this.position = 0;

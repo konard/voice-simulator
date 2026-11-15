@@ -18,7 +18,9 @@
  * (cm), micAzimuth and micElevation (degrees), micCompensate (boolean) and
  * room (a preset name, or a {width, height, depth, rt60} object in a JSON
  * body), and the encoding: format (wav | flac | aiff | au | raw), bitDepth,
- * float (boolean).
+ * float (boolean). sampleRate is one of 8000, 11025, 16000, 22050, 24000,
+ * 32000, 44100, 48000; without it the narrow-band tiers (telephone,
+ * narrowband, wideband) render at their own rate and the others at 24000.
  */
 
 import { createServer } from 'node:http';
@@ -50,7 +52,11 @@ export { INDEX_PAGE } from './index-page.js';
 
 const MAX_TEXT = 2000;
 const MAX_BODY = 64 * 1024;
-const SAMPLE_RATES = new Set([16000, 22050, 24000, 32000, 44100, 48000]);
+const SAMPLE_RATES = new Set([
+  8000, 11025, 16000, 22050, 24000, 32000, 44100, 48000,
+]);
+/** Output rate when a request names none (narrow-band tiers use theirs). */
+const DEFAULT_SAMPLE_RATE = 24000;
 
 export class HttpError extends Error {
   constructor(status, message) {
@@ -115,13 +121,19 @@ export function synthesisOptions(params) {
   if (text.length > MAX_TEXT) {
     throw new HttpError(413, `Text longer than ${MAX_TEXT} characters`);
   }
-  const sampleRate = Number(params.sampleRate ?? 24000);
+  const tier = params.tier ?? DEFAULT_AUDIO_TIER;
+  const entry = AUDIO_TIERS.find((candidate) => candidate.name === tier);
+  if (!entry) {
+    throw new HttpError(400, `Unknown tier ${tier}`);
+  }
+  // A narrow-band tier (one with a band limit) renders at its own rate
+  // unless the request asks for another; the others at 24 kHz.
+  const sampleRate = Number(
+    params.sampleRate ??
+      (entry.bandLimit ? entry.sampleRate : DEFAULT_SAMPLE_RATE)
+  );
   if (!SAMPLE_RATES.has(sampleRate)) {
     throw new HttpError(400, `Unsupported sampleRate ${params.sampleRate}`);
-  }
-  const tier = params.tier ?? DEFAULT_AUDIO_TIER;
-  if (!AUDIO_TIERS.some((entry) => entry.name === tier)) {
-    throw new HttpError(400, `Unknown tier ${tier}`);
   }
   const seed = params.seed ?? 1;
   return {
