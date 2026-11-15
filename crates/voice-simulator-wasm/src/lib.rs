@@ -283,6 +283,13 @@ pub extern "C" fn vs_abi_version() -> u32 {
     ABI_VERSION
 }
 
+/// 1 when this file was built with `-C target-feature=+simd128` (the 3D
+/// solver then steps with the SIMD kernel), else 0.
+#[no_mangle]
+pub extern "C" fn vs_simd() -> u32 {
+    u32::from(cfg!(target_feature = "simd128"))
+}
+
 /// Allocates `bytes` bytes (at least 1) aligned to 8; returns the offset, or
 /// 0 when the memory is exhausted. Can grow the memory: JavaScript must
 /// create its typed-array views again afterwards.
@@ -530,6 +537,11 @@ mod tests {
     #[test]
     fn abi_version_is_two() {
         assert_eq!(vs_abi_version(), 2);
+    }
+
+    #[test]
+    fn native_tests_are_not_simd() {
+        assert_eq!(vs_simd(), 0);
     }
 
     #[test]

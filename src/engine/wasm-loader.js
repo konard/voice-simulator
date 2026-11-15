@@ -1,6 +1,8 @@
 /**
  * Loader of the Rust engine (`src/engine/voice-simulator.wasm`, built by
- * `npm run build:wasm`; see docs/RUST-ENGINE.md).
+ * `npm run build:wasm`; see docs/RUST-ENGINE.md), and of its build with
+ * WebAssembly SIMD (`voice-simulator-simd.wasm`, issue 23) when that file
+ * is shipped and the runtime compiles it.
  *
  * Hand-written on purpose: the module imports nothing and exports plain
  * `vs_*` functions, so this file is the whole glue, and the same code loads
@@ -16,11 +18,16 @@
  */
 
 /** The `vs_abi_version()` this loader speaks; see docs/RUST-ENGINE.md. */
-export const ENGINE_ABI_VERSION = 1;
+export const ENGINE_ABI_VERSION = 2;
 
 /** Where the engine lives next to this file. */
 export function defaultEngineUrl() {
   return new globalThis.URL('./voice-simulator.wasm', import.meta.url);
+}
+
+/** Where the SIMD build of the engine lives next to this file. */
+export function defaultSimdEngineUrl() {
+  return new globalThis.URL('./voice-simulator-simd.wasm', import.meta.url);
 }
 
 /**
@@ -60,11 +67,7 @@ async function compileSource(wasm, source) {
   }
   let bytes = source;
   if (!isBufferSource(source)) {
-    const url =
-      source === undefined || source === null
-        ? defaultEngineUrl()
-        : new globalThis.URL(String(source), import.meta.url);
-    bytes = await readUrl(url);
+    bytes = await readUrl(new globalThis.URL(String(source), import.meta.url));
   }
   if (!bytes) {
     return null;
@@ -80,15 +83,53 @@ async function compileSource(wasm, source) {
  * Load the engine.
  *
  * @param {WebAssembly.Module | ArrayBuffer | ArrayBufferView | URL | string}
- *   [source] a compiled module, the bytes of the file, or its URL; nothing
- *   means `./voice-simulator.wasm` next to this file (read with
- *   `node:fs/promises` for a `file:` URL and with `fetch` otherwise)
+ *   [source] a compiled module, the bytes of a file, or its URL; nothing
+ *   means the files next to this file (read with `node:fs/promises` for a
+ *   `file:` URL and with `fetch` otherwise): `./voice-simulator-simd.wasm`
+ *   or `./voice-simulator.wasm` as `simd` says
+ * @param {{simd?: 'auto' | boolean}} [options] `simd`: with no `source`,
+ *   `'auto'` (the default) tries the SIMD file first and loads the scalar
+ *   file when it is missing or does not compile, `false` loads only the
+ *   scalar file and `true` only the SIMD file. With a `source`, the source
+ *   is loaded and `true` (`false`) gives null when it is not (is) a SIMD
+ *   build.
  * @returns {Promise<{exports: Record<string, Function | WebAssembly.Memory>,
- *   memory: WebAssembly.Memory, abiVersion: number} | null>} null when
- *   WebAssembly is missing, the file is missing or it does not compile
+ *   memory: WebAssembly.Memory, abiVersion: number, simd: boolean} | null>}
+ *   `simd` tells whether the engine was built with WebAssembly SIMD
+ *   (`vs_simd()`); null when WebAssembly is missing, the file is missing or
+ *   it does not compile
  * @throws {Error} when the engine reports another `vs_abi_version()`
  */
-export async function loadEngineModule(source) {
+export async function loadEngineModule(source, options = {}) {
+  const simd = simdOption(options);
+  if (source !== undefined && source !== null) {
+    return matching(await loadOne(source), simd);
+  }
+  if (simd !== false) {
+    const engine = matching(await loadOne(defaultSimdEngineUrl()), true);
+    if (engine || simd === true) {
+      return engine;
+    }
+  }
+  return matching(await loadOne(defaultEngineUrl()), false);
+}
+
+/** The `simd` option, checked. */
+function simdOption(options) {
+  const simd = options.simd ?? 'auto';
+  if (simd !== 'auto' && typeof simd !== 'boolean') {
+    throw new Error(`loadEngineModule: simd must be 'auto', true or false`);
+  }
+  return simd;
+}
+
+/** `engine` when its `simd` agrees with the wanted one, else null. */
+function matching(engine, simd) {
+  return engine && (simd === 'auto' || engine.simd === simd) ? engine : null;
+}
+
+/** One engine file, or null when it cannot be loaded. */
+async function loadOne(source) {
   const wasm = globalThis.WebAssembly;
   if (typeof wasm !== 'object' || wasm === null) {
     return null;
@@ -114,7 +155,8 @@ export async function loadEngineModule(source) {
         `this loader speaks ${ENGINE_ABI_VERSION}; rebuild it with npm run build:wasm`
     );
   }
-  return { exports, memory: exports.memory, abiVersion };
+  const simd = exports.vs_simd() === 1;
+  return { exports, memory: exports.memory, abiVersion, simd };
 }
 
 /**

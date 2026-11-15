@@ -1,17 +1,22 @@
 #!/usr/bin/env node
 
 /**
- * Build the Rust engine into one WebAssembly file.
+ * Build the Rust engine into its WebAssembly files.
  *
  *   node scripts/build-wasm.mjs [--check-size] [--require]
  *
  * Runs `cargo build --release --locked --target wasm32-unknown-unknown
  * -p voice-simulator-wasm`, copies the result to
  * src/engine/voice-simulator.wasm and prints its size in bytes and its
- * SHA-256. The output depends only on the compiler pinned in
- * rust-toolchain.toml, so two builds print the same hash.
+ * SHA-256. Then builds the same crate again with WebAssembly SIMD
+ * (`RUSTFLAGS="-C target-feature=+simd128"`, `--target-dir target/simd`,
+ * issue 23) and copies it to src/engine/voice-simulator-simd.wasm when
+ * SHIP_SIMD is true; the loader picks that file when the runtime compiles
+ * it. The output depends only on the compiler pinned in
+ * rust-toolchain.toml, so two builds print the same hashes.
  *
- * --check-size  exit with 1 when the file is larger than WASM_SIZE_BUDGET
+ * --check-size  exit with 1 when a shipped file is larger than
+ *               WASM_SIZE_BUDGET
  * --require     exit with 1 when cargo is not installed (CI); without it a
  *               missing cargo is not an error, because the package falls
  *               back to its JavaScript engine
@@ -19,19 +24,27 @@
 
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { copyFileSync, mkdirSync, readFileSync } from 'node:fs';
+import { copyFileSync, mkdirSync, readFileSync, rmSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 /**
- * Largest allowed size of src/engine/voice-simulator.wasm in bytes: the
- * size measured when the budget was last raised, rounded up to the next
- * 16 384 bytes: 93 300 bytes with Rust 1.100.0, once the waveguide voice
- * renderer of issue 22, with the frequency-dependent losses of issue 36,
- * joined the resampler of issue 27. Raise it only with the newly measured
+ * Largest allowed size of each shipped engine file in bytes: the size
+ * measured when the budget was last raised, rounded up to the next 16 384
+ * bytes. Raised for issue 23 (the 3D FDTD solver and its kernels) from
+ * 98 304 to SIZE_BUDGET_PLACEHOLDER. Raise it only with the newly measured
  * size in the commit message.
  */
 export const WASM_SIZE_BUDGET = 98304;
+
+/**
+ * Whether src/engine/voice-simulator-simd.wasm is shipped: only when it
+ * measured at least 1.15 times faster than the scalar file on the `high`
+ * tier (tests/heavy/performance-rust-fdtd.test.js; the numbers are in
+ * docs/RUST-ENGINE.md). The SIMD build runs either way, so the code keeps
+ * compiling.
+ */
+export const SHIP_SIMD = false;
 
 export const CARGO_ARGS = [
   'build',
@@ -46,6 +59,38 @@ export const CARGO_ARGS = [
 export const BUILT_WASM =
   'target/wasm32-unknown-unknown/release/voice_simulator_wasm.wasm';
 export const ENGINE_WASM = 'src/engine/voice-simulator.wasm';
+
+/** The SIMD build: its own target directory, so neither evicts the other. */
+export const SIMD_TARGET_DIR = 'target/simd';
+export const SIMD_CARGO_ARGS = [...CARGO_ARGS, '--target-dir', SIMD_TARGET_DIR];
+export const SIMD_RUSTFLAGS = '-C target-feature=+simd128';
+export const SIMD_BUILT_WASM = `${SIMD_TARGET_DIR}/wasm32-unknown-unknown/release/voice_simulator_wasm.wasm`;
+export const SIMD_ENGINE_WASM = 'src/engine/voice-simulator-simd.wasm';
+
+/**
+ * The builds, in order: cargo arguments, extra RUSTFLAGS, the built file,
+ * the shipped file and whether it is shipped.
+ * @type {{name: string, args: string[], rustflags: string, built: string,
+ *   engine: string, ship: boolean}[]}
+ */
+export const BUILDS = [
+  {
+    name: 'scalar',
+    args: CARGO_ARGS,
+    rustflags: '',
+    built: BUILT_WASM,
+    engine: ENGINE_WASM,
+    ship: true,
+  },
+  {
+    name: 'simd',
+    args: SIMD_CARGO_ARGS,
+    rustflags: SIMD_RUSTFLAGS,
+    built: SIMD_BUILT_WASM,
+    engine: SIMD_ENGINE_WASM,
+    ship: SHIP_SIMD,
+  },
+];
 
 export const NO_CARGO_MESSAGE =
   'cargo not found: the JavaScript engine will be used';
@@ -84,12 +129,26 @@ export function describeWasm(bytes) {
 /**
  * @param {number} size
  * @param {number} [budget]
+ * @param {string} [file]
  * @returns {string|null} why the size is over the budget, or null
  */
-export function sizeProblem(size, budget = WASM_SIZE_BUDGET) {
+export function sizeProblem(
+  size,
+  budget = WASM_SIZE_BUDGET,
+  file = ENGINE_WASM
+) {
   return size > budget
-    ? `${ENGINE_WASM} is ${size} bytes, over WASM_SIZE_BUDGET (${budget} bytes) by ${size - budget}`
+    ? `${file} is ${size} bytes, over WASM_SIZE_BUDGET (${budget} bytes) by ${size - budget}`
     : null;
+}
+
+/** The environment of a build: `env` with its RUSTFLAGS appended. */
+export function buildEnv(env, rustflags) {
+  if (!rustflags) {
+    return env;
+  }
+  const flags = [env.RUSTFLAGS, rustflags].filter(Boolean).join(' ');
+  return { ...env, RUSTFLAGS: flags };
 }
 
 /** Whether `cargo` can be started at all. */
@@ -124,28 +183,47 @@ export function main({
   return buildAndReport({ options, root, env, log, error });
 }
 
-/** Run cargo, copy the file and print its size and hash; returns the exit code. */
+/** Run every build of BUILDS; returns the exit code. */
 function buildAndReport({ options, root, env, log, error }) {
-  log(`cargo ${CARGO_ARGS.join(' ')}`);
-  const build = spawnSync('cargo', CARGO_ARGS, {
+  log(`WASM_SIZE_BUDGET: ${WASM_SIZE_BUDGET} bytes`);
+  for (const build of BUILDS) {
+    const code = runBuild({ build, options, root, env, log, error });
+    if (code !== 0) {
+      return code;
+    }
+  }
+  return 0;
+}
+
+/** One build: cargo, copy when shipped, size and hash; the exit code. */
+function runBuild({ build, options, root, env, log, error }) {
+  const prefix = build.rustflags ? `RUSTFLAGS="${build.rustflags}" ` : '';
+  log(`${prefix}cargo ${build.args.join(' ')}`);
+  const cargo = spawnSync('cargo', build.args, {
     cwd: root,
-    env,
+    env: buildEnv(env, build.rustflags),
     stdio: 'inherit',
   });
-  if (build.error || build.status !== 0) {
+  if (cargo.error || cargo.status !== 0) {
     error(
-      `cargo build failed (${build.error?.message ?? `exit ${build.status}`})`
+      `cargo build (${build.name}) failed (${cargo.error?.message ?? `exit ${cargo.status}`})`
     );
     return 1;
   }
-  const target = path.join(root, ENGINE_WASM);
+  const built = path.join(root, build.built);
+  const { size, sha256 } = describeWasm(readFileSync(built));
+  if (!build.ship) {
+    rmSync(path.join(root, build.engine), { force: true });
+    log(`${build.built}: ${size} bytes (not shipped)`);
+    log(`SHA-256: ${sha256}`);
+    return 0;
+  }
+  const target = path.join(root, build.engine);
   mkdirSync(path.dirname(target), { recursive: true });
-  copyFileSync(path.join(root, BUILT_WASM), target);
-  const { size, sha256 } = describeWasm(readFileSync(target));
-  log(`${ENGINE_WASM}: ${size} bytes`);
+  copyFileSync(built, target);
+  log(`${build.engine}: ${size} bytes`);
   log(`SHA-256: ${sha256}`);
-  log(`WASM_SIZE_BUDGET: ${WASM_SIZE_BUDGET} bytes`);
-  const problem = sizeProblem(size);
+  const problem = sizeProblem(size, WASM_SIZE_BUDGET, build.engine);
   if (problem && options.checkSize) {
     error(problem);
     return 1;

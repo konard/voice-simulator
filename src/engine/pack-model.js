@@ -77,7 +77,7 @@ function align(offset) {
 }
 
 /** The arrays of a model in layout order, as [type, values] pairs. */
-function modelArrays(model) {
+export function modelArrays(model) {
   const { cells, links, opening, teeth } = model;
   const count = cells.length;
   const arrays = [['f64', [model.dx]]];

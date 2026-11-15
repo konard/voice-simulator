@@ -193,15 +193,20 @@ impl Grid {
             incident_sign,
             ..
         } = self;
-        for cell in 0..pressure.len() {
+        let cells = pressure
+            .iter_mut()
+            .zip(keep.iter())
+            .zip(gain.iter())
+            .zip(incident_start.windows(2));
+        for (((p, &k), &g), range) in cells {
             let d = incident_sum(
                 flux,
                 incident_link,
                 incident_sign,
-                incident_start[cell] as usize,
-                incident_start[cell + 1] as usize,
+                range[0] as usize,
+                range[1] as usize,
             );
-            pressure[cell] = keep[cell] * pressure[cell] - gain[cell] * d;
+            *p = k * *p - g * d;
         }
     }
 
@@ -219,12 +224,17 @@ impl Grid {
             pressure,
             ..
         } = self;
-        for link in from..link_a.len() {
-            let a = link_a[link] as usize;
-            let b = link_b[link] as usize;
-            let u = damping[link] * (velocity[link] - COURANT * (pressure[b] - pressure[a]));
-            velocity[link] = u;
-            flux[link] = conductance[link] * u;
+        let links = link_a[from..]
+            .iter()
+            .zip(&link_b[from..])
+            .zip(&mut velocity[from..])
+            .zip(&damping[from..])
+            .zip(&conductance[from..])
+            .zip(&mut flux[from..]);
+        for (((((&a, &b), v), &k), &c), f) in links {
+            let u = k * (*v - COURANT * (pressure[b as usize] - pressure[a as usize]));
+            *v = u;
+            *f = c * u;
         }
     }
 }

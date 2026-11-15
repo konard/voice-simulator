@@ -15,7 +15,9 @@ const rowsUsed = new Set();
 const { cellWeights, per } = model.opening;
 for (let cell = 0; cell < model.cells.length; cell++) {
   for (let k = 0; k < per; k++) {
-    if (cellWeights[cell * per + k] !== 0) rowsUsed.add(model.cells[cell].kind);
+    if (cellWeights[cell * per + k] !== 0) {
+      rowsUsed.add(model.cells[cell].kind);
+    }
   }
 }
 console.log('kinds with nonzero opening rows', [...rowsUsed]);

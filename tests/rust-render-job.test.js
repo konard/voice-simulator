@@ -1,6 +1,7 @@
 /**
- * Render jobs of the Rust renderer (issue 22): `renderJob` writes the
- * configuration and every frame of a render as little-endian f64 values,
+ * Render jobs of the Rust renderer (issues 22, 23): `renderJob` writes the
+ * configuration, the packed voxel model of the 3D solver and every frame of
+ * a render as little-endian f64 values,
  * WebAssembly renders a job in one call like RustVoiceRenderer renders the
  * plan, and `voice-simulator-cli render-job` renders the same job natively
  * with the same SHA-256.
@@ -80,12 +81,31 @@ describe('Rust render jobs (issue 22)', () => {
     const configLength = job.config.length;
     expect(value(0)).toBe(configLength);
     expect(value(1 + RENDERER_CONFIG.TOTAL_SAMPLES)).toBe(job.samples);
-    expect(value(1 + configLength)).toBe(job.frameCount);
+    expect(value(1 + configLength)).toBe(0);
+    expect(value(2 + configLength)).toBe(job.frameCount);
     const total = job.bytes.length / 8;
-    expect(total).toBe(configLength + job.frames.length + 3);
+    expect(total).toBe(configLength + job.frames.length + 4);
     expect(value(total - 1)).toBe(job.samples);
     const blockSize = job.config[RENDERER_CONFIG.BLOCK_SIZE];
     expect(job.frameCount).toBe(Math.ceil(job.samples / blockSize));
+  });
+
+  alwaysIt('a job of the 3D solver carries the packed model', () => {
+    const { job } = helloJob('high');
+    const view = new DataView(job.bytes.buffer);
+    const value = (index) => view.getFloat64(index * 8, true);
+    const configLength = job.config.length;
+    expect(job.config[RENDERER_CONFIG.SOLVER]).toBe(1);
+    expect(job.model.length % 8).toBe(0);
+    expect(job.model.length).toBeGreaterThan(0);
+    expect(value(1 + configLength)).toBe(job.model.length);
+    const start = 8 * (2 + configLength);
+    expect([...job.bytes.subarray(start, start + job.model.length)]).toEqual([
+      ...job.model,
+    ]);
+    const after = 2 + configLength + job.model.length / 8;
+    expect(value(after)).toBe(job.frameCount);
+    expect(value(job.bytes.length / 8 - 1)).toBe(job.samples);
   });
 
   itUnless(noRust)('a job renders like the plan', async () => {
@@ -102,7 +122,7 @@ describe('Rust render jobs (issue 22)', () => {
       const engine = await loadRustEngine();
       const folder = mkdtempSync(path.join(tmpdir(), 'render-job-'));
       try {
-        for (const tier of ['minimal', 'low', 'medium']) {
+        for (const tier of ['minimal', 'low', 'medium', 'high']) {
           const { job } = helloJob(tier);
           const file = path.join(folder, `${tier}.job`);
           writeFileSync(file, job.bytes);

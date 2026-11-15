@@ -249,6 +249,7 @@ impl Reader<'_> {
         }
     }
 
+    #[inline(never)]
     fn i32s(&mut self, count: usize) -> Result<Vec<i32>, ModelError> {
         Ok(self
             .take(4, count)?
@@ -260,6 +261,7 @@ impl Reader<'_> {
     }
 
     /// Indices below `limit`.
+    #[inline(never)]
     fn indices(&mut self, count: usize, limit: usize) -> Result<Vec<usize>, ModelError> {
         self.i32s(count)?
             .into_iter()
@@ -282,18 +284,23 @@ impl Writer {
         self.bytes.resize(self.bytes.len().div_ceil(8) * 8, 0);
     }
 
+    // Not inlined: pack writes some forty arrays, and the copies inlined
+    // into it cost kilobytes of WebAssembly for a function only tests call.
+    #[inline(never)]
     fn f64s(&mut self, values: &[f64]) {
         self.bytes
             .extend(values.iter().flat_map(|value| value.to_le_bytes()));
         self.pad();
     }
 
+    #[inline(never)]
     fn i32s(&mut self, values: &[i32]) {
         self.bytes
             .extend(values.iter().flat_map(|value| value.to_le_bytes()));
         self.pad();
     }
 
+    #[inline(never)]
     fn indices(&mut self, values: &[usize]) {
         let values: Vec<i32> = values.iter().map(|&value| value as i32).collect();
         self.i32s(&values);

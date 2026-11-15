@@ -471,23 +471,33 @@ export interface EngineModule {
   exports: Record<string, (...args: number[]) => number>;
   memory: WebAssembly.Memory;
   abiVersion: number;
+  /** Built with WebAssembly SIMD (`voice-simulator-simd.wasm`, issue 23). */
+  simd: boolean;
 }
 /**
  * Load the Rust engine (`npm run build:wasm` builds it). `source` is a
- * WebAssembly.Module, the bytes, a URL, or nothing for the file next to the
- * loader. Resolves to null without WebAssembly, without the file or when it
- * does not compile; throws when its interface version differs.
+ * WebAssembly.Module, the bytes, a URL, or nothing for the files next to
+ * the loader. Without a source, `simd: 'auto'` (the default) tries
+ * `voice-simulator-simd.wasm` first and falls back to
+ * `voice-simulator.wasm`, `false` loads only the scalar file and `true`
+ * only the SIMD file; with a source, `true` (`false`) resolves to null when
+ * it is not (is) a SIMD build. Resolves to null without WebAssembly,
+ * without the file or when it does not compile; throws when its interface
+ * version differs.
  */
 export declare function loadEngineModule(
-  source?: WebAssembly.Module | BufferSource | URL | string
+  source?: WebAssembly.Module | BufferSource | URL | string | null,
+  options?: { simd?: 'auto' | boolean }
 ): Promise<EngineModule | null>;
 /**
- * VoiceRenderer with the waveguide solver on the Rust engine (issue 22):
- * the same samples within parity class B (measured: largest difference
- * 1.7e-18). Options
- * the engine does not handle (`solver` other than `'waveguide'`, `device`,
- * `source: 'folds'`, `bandLimit <= 0`) throw an Error with
- * `code === 'ENGINE_UNSUPPORTED'`. Call free() when done.
+ * VoiceRenderer with the waveguide (issue 22) or the 3D FDTD solver (issue
+ * 23) on the Rust engine: the same samples within parity class B. Options
+ * the engine does not handle (`solver` other than `'waveguide'` and
+ * `'fdtd3d'`, `device`, `source: 'folds'`, `bandLimit <= 0`) throw an
+ * Error with `code === 'ENGINE_UNSUPPORTED'`. With `'fdtd3d'` the voxel
+ * model is `options.model`, or the one Fdtd3d builds from `dx`,
+ * `microphone`, `enclosure`, `piriform` and `vallecula`. Call free() when
+ * done.
  */
 export declare class RustVoiceRenderer {
   constructor(module: EngineModule, plan: Plan, options?: RenderOptions);
@@ -501,8 +511,11 @@ export declare class RustVoiceRenderer {
   readonly prepareTime: number;
   render(target: Float32Array): number;
   renderAsync(target: Float32Array): Promise<number>;
-  /** Acoustic pressure per oral and nasal section. */
-  field(): { pressure: Float64Array; nose: Float64Array };
+  /**
+   * Acoustic pressure per oral and nasal section; with `solver: 'fdtd3d'`,
+   * `pressure` holds the pressure of every cell of the voxel model.
+   */
+  field(): { pressure: Float64Array; nose?: Float64Array };
   /** Free the engine memory of this renderer. */
   free(): void;
 }
@@ -514,13 +527,16 @@ export declare function renderPlanRust(
 ): Float32Array;
 /**
  * A job for `voice-simulator-cli render-job`: little-endian f64 values
- * `[config length, config..., frame count, frames..., sample count]`.
+ * `[config length, config..., model length, model..., frame count,
+ * frames..., sample count]`; the model is the packed voxel model of the 3D
+ * solver (its length in bytes, 0 for the waveguide).
  */
 export declare function renderJob(
   plan: Plan,
   options?: RenderOptions
 ): {
   config: Float64Array;
+  model: Uint8Array;
   frames: Float64Array;
   frameCount: number;
   samples: number;
