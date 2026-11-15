@@ -33,10 +33,13 @@ const GAMMA = 1.4;
  * same area (1-3): calibrated against Hawks & Miller (1995) with
  * experiments/issue-11-bandwidths.mjs.
  */
-export const LOSS_SHAPE = 1.5;
+export const LOSS_SHAPE = 1.3;
 
-/** Groups of oral tract sections that share one loss filter and wall. */
-export const LOSS_STAGES = 4;
+/**
+ * Groups of oral tract sections that share one loss filter and wall
+ * (calibrated with LOSS_SHAPE).
+ */
+export const LOSS_STAGES = 5;
 /** Groups of nose sections. */
 export const NOSE_LOSS_STAGES = 2;
 

@@ -60,7 +60,10 @@ function shelf(K, rate, a1) {
   const b = 2 * (c2 - rho * c1);
   const disc = b * b - 4 * a * a;
   if (disc < 0) return null;
-  const roots = [(-b + Math.sqrt(disc)) / (2 * a), (-b - Math.sqrt(disc)) / (2 * a)];
+  const roots = [
+    (-b + Math.sqrt(disc)) / (2 * a),
+    (-b - Math.sqrt(disc)) / (2 * a),
+  ];
   const beta = roots.find((r) => Math.abs(r) <= 1);
   const g = Math.sqrt((t1 * d1) / (1 + beta * beta + 2 * beta * c1));
   return { b0: g, b1: g * beta, a1 };

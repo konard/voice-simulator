@@ -11,7 +11,13 @@ const area = Number(process.argv[2] ?? 3);
 const lossStages = Number(process.argv[3] ?? 4);
 const length = 17;
 const areas = new Array(44).fill(area);
-const show = (peaks) => peaks.map(({ frequency, bandwidth }) => `${frequency.toFixed(0)}/${bandwidth.toFixed(1)}`).join(' ');
+const show = (peaks) =>
+  peaks
+    .map(
+      ({ frequency, bandwidth }) =>
+        `${frequency.toFixed(0)}/${bandwidth.toFixed(1)}`
+    )
+    .join(' ');
 for (const lossShape of [0, 1, 3]) {
   const options = { walls: false, piriform: false, lossShape, lossStages };
   const solver = new Waveguide({ sections: 44, ...options });
@@ -23,8 +29,12 @@ for (const lossShape of [0, 1, 3]) {
   for (let index = 0; index < response.length; index++) {
     response[index] = solver.step(index === 0 ? 1 : 0, 0, 0);
   }
-  const wave = resonances(impulseSpectrum(response, rate, { from: 100, to: 4000, step: 1 }));
-  const tube = resonances(tubeSpectrum(areas, length, { ...options, step: 1, maxFrequency: 4000 }));
+  const wave = resonances(
+    impulseSpectrum(response, rate, { from: 100, to: 4000, step: 1 })
+  );
+  const tube = resonances(
+    tubeSpectrum(areas, length, { ...options, step: 1, maxFrequency: 4000 })
+  );
   console.log(`shape ${lossShape}: waveguide ${show(wave)}`);
   console.log(`         tube      ${show(tube)}`);
 }

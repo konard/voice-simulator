@@ -18,8 +18,12 @@
  * The face around the lips is a small, curved baffle, between a piston in
  * an infinite baffle (`baffle` 1) and the open end of a free pipe
  * (`baffle` 0), which radiates half the power and has the shorter end
- * correction 0.61 a (Levine & Schwinger 1948): the resistance scales by
- * 0.5 + 0.5 baffle and the end correction is (0.61 + 0.24 baffle) a.
+ * correction 0.61 a (Levine & Schwinger 1948): the radiation resistance
+ * at low frequencies, (k a)^2 / 2 for the piston, scales by
+ * 0.5 + 0.5 baffle and the end correction is (0.61 + 0.24 baffle) a. In
+ * the parallel R-L load that resistance is (w L)^2 / R, so R scales by
+ * (end correction / 0.85)^2 / (0.5 + 0.5 baffle); scaling R itself by
+ * 0.5 + 0.5 baffle would make a free pipe radiate more, not less.
  */
 
 import { SPEED_OF_SOUND } from './constants.js';
@@ -29,9 +33,11 @@ export const RADIATION_RESISTANCE = 128 / (9 * Math.PI ** 2);
 
 /**
  * How much of an infinite baffle the face is (0.3-1): calibrated with
- * experiments/issue-11-bandwidths.mjs (issue 36).
+ * experiments/issue-11-bandwidths.mjs (issue 36), where 0.3-0.7 fit
+ * equally well (mean bandwidth error 23.6-23.8 %) and 0.5, half a baffle,
+ * is the middle.
  */
-export const RADIATION_BAFFLE = 1;
+export const RADIATION_BAFFLE = 0.5;
 
 /**
  * Radiation resistance (relative to rho c / A) and end correction (in
@@ -39,9 +45,12 @@ export const RADIATION_BAFFLE = 1;
  * @param {number} [baffle]
  */
 export function radiationLoad(baffle = RADIATION_BAFFLE) {
+  const endCorrection = 0.61 + 0.24 * baffle;
   return {
-    resistance: RADIATION_RESISTANCE * (0.5 + 0.5 * baffle),
-    endCorrection: 0.61 + 0.24 * baffle,
+    resistance:
+      (RADIATION_RESISTANCE * (endCorrection / 0.85) ** 2) /
+      (0.5 + 0.5 * baffle),
+    endCorrection,
   };
 }
 

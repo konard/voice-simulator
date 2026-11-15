@@ -6,9 +6,16 @@ import { STORY_AREAS, STORY_LENGTHS } from '../src/articulation/vowel-space.js';
 import { normalizeHeadConfig } from '../src/head-config.js';
 
 const head = normalizeHeadConfig({});
-const vowels = process.argv.slice(2).length ? process.argv.slice(2) : ['o', 'ʊ', 'u', 'ɑ'];
+const vowels = process.argv.slice(2).length
+  ? process.argv.slice(2)
+  : ['o', 'ʊ', 'u', 'ɑ'];
 for (const name of vowels) {
-  for (const options of [{}, { walls: false }, { lossShape: 0 }, { walls: false, lossShape: 0 }]) {
+  for (const options of [
+    {},
+    { walls: false },
+    { lossShape: 0 },
+    { walls: false, lossShape: 0 },
+  ]) {
     const areas = STORY_AREAS[name];
     const solver = new Waveguide({ sections: areas.length, head, ...options });
     solver.setShape(areas, 0, Math.round(areas.length * 0.45));
