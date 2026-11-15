@@ -50,6 +50,19 @@ describe('CLI audio formats', () => {
     expect(decodeAudio(float.bytes).bitDepth).toBe(32);
   });
 
+  it('selects the voice source with --source', async () => {
+    const folds = await cli([...SAY, '-o', '-', '--source', 'folds']);
+    expect(folds.code).toBe(0);
+    const decoded = decodeAudio(folds.bytes);
+    expect(decoded.format).toBe('wav');
+    expect(decoded.samples.length > 1000).toBe(true);
+    const lf = await cli([...SAY, '-o', '-', '--source', 'lf']);
+    expect(lf.bytes).toEqual((await cli([...SAY, '-o', '-'])).bytes);
+    const unknown = await cli([...SAY, '-o', '-', '--source', 'x']);
+    expect(unknown.code).not.toBe(0);
+    expect(unknown.stderr[0]).toContain('Unknown source: x');
+  });
+
   it('rejects encodings the format cannot store', async () => {
     const result = await cli([...SAY, '-o', '-', '-f', 'flac', '--float']);
     expect(result.code).toBe(1);

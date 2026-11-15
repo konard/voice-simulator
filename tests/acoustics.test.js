@@ -278,6 +278,29 @@ describe('waveguide synthesis', () => {
     expect(Math.abs(pitch - 180) / 180).toBeLessThan(0.2);
   });
 
+  it('speaks with the fold source', () => {
+    const render = (source) => {
+      const { samples, sampleRate, plan } = synthesize('ma', {
+        ipa: true,
+        tier: 'minimal',
+        source,
+      });
+      const pitch = estimatePitch(samples, sampleRate, {
+        start: vowelMiddle(plan) - 0.03,
+      });
+      return { samples, pitch, level: rms(samples) };
+    };
+    const lf = render('lf');
+    const folds = render('folds');
+    for (const value of folds.samples) {
+      expect(Number.isFinite(value)).toBe(true);
+      expect(Math.abs(value)).toBeLessThanOrEqual(1);
+    }
+    expect(Math.abs(folds.pitch / lf.pitch - 1)).toBeLessThan(0.08);
+    const difference = 20 * Math.log10(folds.level / lf.level);
+    expect(Math.abs(difference)).toBeLessThan(3);
+  });
+
   it('is deterministic for a seed and stays in range', () => {
     const plan = planUtterance('ˈsa');
     const a = renderPlan(plan, { sampleRate: RATE, seed: 7 });
