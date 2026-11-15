@@ -80,7 +80,8 @@ started by hand:
 
 - in the **Actions** tab: choose **Heavy checks**, then **Run workflow**, pick
   the branch, the suite, optionally a `ref` (a branch or tag of this
-  repository, or a commit already on `main`; empty means the branch picked)
+  repository, or a commit already on `main` or on the branch picked; empty
+  means the branch picked)
   and a `limit` (largest number of items, such as utterances or files, that
   each test may process; empty means no limit);
 - from the command line:

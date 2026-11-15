@@ -9,6 +9,7 @@ import { describe, expect } from 'test-anywhere';
 import { spawnSync } from 'node:child_process';
 import {
   existsSync,
+  mkdirSync,
   mkdtempSync,
   readFileSync,
   rmSync,
@@ -31,8 +32,10 @@ function resolve(wanted, fixture = {}) {
     writeFileSync(join(dir, 'heads'), 'main\nfeature/x\n');
     writeFileSync(join(dir, 'tags'), 'v1.0.0\n');
     writeFileSync(join(dir, 'sha'), `${fixture.sha ?? RESOLVED}\n`);
-    if (fixture.compareStatus !== undefined) {
-      writeFileSync(join(dir, 'compare_status'), `${fixture.compareStatus}\n`);
+    // fixture.compare maps the head of `compare/<sha>...<head>` to a status.
+    mkdirSync(join(dir, 'compare'));
+    for (const [head, status] of Object.entries(fixture.compare ?? {})) {
+      writeFileSync(join(dir, 'compare', head), `${status}\n`);
     }
     const output = join(dir, 'output');
     const result = spawnSync('bash', [SCRIPT], {
@@ -88,29 +91,53 @@ describe('resolve-heavy-ref.sh', () => {
   });
 
   itShell('accepts a commit that is on the default branch', () => {
-    for (const compareStatus of ['ahead', 'identical']) {
-      const result = resolve('abc1234', { compareStatus });
+    for (const status of ['ahead', 'identical']) {
+      const result = resolve('abc1234', { compare: { main: status } });
 
       expect(result.status).toBe(0);
       expect(result.output).toBe(`revision=${RESOLVED}\n`);
       expect(result.requests).toContain(
         'api repos/owner/repo/compare/abc1234...main --jq .status'
       );
+      expect(result.requests).not.toContain(`...${FALLBACK}`);
     }
   });
 
-  itShell('rejects a commit that is not on the default branch', () => {
-    for (const fixture of [{ compareStatus: 'diverged' }, {}]) {
-      const result = resolve('abc1234', fixture);
+  itShell('accepts a commit that is only on the chosen branch', () => {
+    for (const status of ['ahead', 'identical']) {
+      const result = resolve('abc1234', {
+        compare: { main: 'diverged', [FALLBACK]: status },
+      });
 
-      expect(result.status).toBe(1);
-      expect(result.output).toBe('');
-      expect(result.stdout).toContain(
-        "::error::ref 'abc1234' is neither a branch or tag"
+      expect(result.status).toBe(0);
+      expect(result.output).toBe(`revision=${RESOLVED}\n`);
+      expect(result.requests).toContain(
+        `api repos/owner/repo/compare/abc1234...${FALLBACK} --jq .status`
       );
-      expect(result.requests).not.toContain('/commits/');
     }
   });
+
+  itShell(
+    'rejects a commit on neither the default nor the chosen branch',
+    () => {
+      for (const compare of [
+        { main: 'diverged', [FALLBACK]: 'diverged' },
+        { main: 'behind', [FALLBACK]: 'behind' },
+        {},
+      ]) {
+        const result = resolve('abc1234', { compare });
+
+        expect(result.status).toBe(1);
+        expect(result.output).toBe('');
+        expect(result.stdout).toContain(
+          "::error::ref 'abc1234' is neither a branch or tag"
+        );
+        expect(result.requests).toContain('/compare/abc1234...main ');
+        expect(result.requests).toContain(`/compare/abc1234...${FALLBACK} `);
+        expect(result.requests).not.toContain('/commits/');
+      }
+    }
+  );
 
   itShell('rejects an unknown name without a commit lookup', () => {
     const result = resolve('missing-branch');
