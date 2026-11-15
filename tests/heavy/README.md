@@ -35,7 +35,11 @@ Files are named `<suite>-<topic>.test.js`, for example
 ## Environment
 
 [`scripts/run-heavy.mjs`](../../scripts/run-heavy.mjs) runs the files one
-after another in `node --test` with a one-hour timeout per test and sets:
+after another in `node --test` with a one-hour timeout per test; the files
+`gpu-*.test.js` need WebGPU and run after them in
+`deno test -A --config deno.heavy.json`, together with
+`tests/fdtd-gpu.test.js` (see "Suite `gpu`" in
+[docs/CONTRIBUTING.md](../../docs/CONTRIBUTING.md)). Both get:
 
 - `HEAVY=1`;
 - `HEAVY_LIMIT`: the value of `--limit`, the largest number of items
@@ -57,7 +61,8 @@ be kept is copied to `docs/reports/` by the issue that owns it.
 
 ## Tests
 
-| File                        | What it does                                                                                                                                                                     |
-| --------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `performance-tiers.test.js` | renders one sentence on every tier and reports the real-time factor                                                                                                              |
-| `quality-baseline.test.js`  | scores every tier against the golden set with `scripts/quality-report.mjs` (one test per tier) and writes `baseline-quality.md` / `.json`, copied to `docs/reports/` by issue 19 |
+| File                        | What it does                                                                                                                                                                                                        |
+| --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `performance-tiers.test.js` | renders one sentence on every tier and reports the real-time factor                                                                                                                                                 |
+| `quality-baseline.test.js`  | scores every tier against the golden set with `scripts/quality-report.mjs` (one test per tier) and writes `baseline-quality.md` / `.json`, copied to `docs/reports/` by issue 19                                    |
+| `gpu-solver.test.js`        | compares the WebGPU 3D solver with the CPU kernel over 20 000 steps and the word `həˈloʊ` at tiers `high` and `ultra`, and writes `gpu-solver.md` / `.json` with the adapter, copied to `docs/reports/` by issue 30 |

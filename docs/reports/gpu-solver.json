@@ -1,0 +1,32 @@
+{
+  "adapter": {
+    "description": "llvmpipe (LLVM 20.1.2, 256 bits)",
+    "vendor": "65541",
+    "architecture": "",
+    "fallback": true
+  },
+  "deno": "2.9.8",
+  "rows": [
+    {
+      "name": "long run, 20000 steps",
+      "steps": 20000,
+      "cpuSeconds": 0.13319927999999998,
+      "gpuSeconds": 1.6020616220000001,
+      "error": 0.00006659462596618456
+    },
+    {
+      "name": "həˈloʊ at tier high",
+      "steps": 35156,
+      "cpuSeconds": 0.5402792,
+      "gpuSeconds": 2.6850285279999997,
+      "error": 4.7648022350479427e-7
+    },
+    {
+      "name": "həˈloʊ at tier ultra",
+      "steps": 35156,
+      "cpuSeconds": 2.602659001,
+      "gpuSeconds": 10.341028856000001,
+      "error": 7.402024158833836e-7
+    }
+  ]
+}

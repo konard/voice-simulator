@@ -115,6 +115,35 @@ Reports go to `reports/heavy/` (`--out` changes the folder): every test writes
 is never committed. A report that should be kept is copied to `docs/reports/`
 by the issue that owns it.
 
+#### Suite `gpu`
+
+The files `gpu-*.test.js` run the WebGPU 3D solver, which Node.js and Bun
+lack, so the runner gives them, together with `tests/fdtd-gpu.test.js`, to
+`deno test -A --config deno.heavy.json` after the Node.js files. The suite
+needs Deno on `PATH`; without it their rows in `summary.md` say
+`skipped (no Deno)`. `deno.heavy.json` has its own import of `test-anywhere`
+and `"lock": false`: Deno finds `package.json` only next to `deno.json`, and
+the lock it would write for this config would replace `deno.lock`.
+
+`REQUIRE_GPU=1` turns a missing adapter into a failure:
+`tests/helpers/gpu.js` throws
+`REQUIRE_GPU=1 but this runtime has no WebGPU adapter` and the runner exits
+with 1 and prints `suite gpu needs Deno on PATH` when Deno is missing. The
+workflow sets it for the suites `gpu` and `all`, and the Deno test jobs of
+`release.yml` set it on macOS and Windows, whose runners have an adapter.
+
+On Linux without a GPU, Deno's WebGPU falls back to Mesa's software OpenGL ES
+driver; install it with
+
+```bash
+sudo apt-get install -y --no-install-recommends libegl1 libgles2 libegl-mesa0 libgl1-mesa-dri
+deno run -A scripts/gpu-adapter.mjs   # prints the adapter, or null
+REQUIRE_GPU=1 npm run test:heavy -- --suite gpu
+```
+
+Every GPU test prints its adapter (`WebGPU adapter: {...}`) and the report
+`gpu-solver.md` names it. A software adapter says nothing about GPU speed.
+
 ### Policy check
 
 The [vision](VISION.md) rules out neural networks and asks for a result in
