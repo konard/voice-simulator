@@ -383,6 +383,11 @@ jobs:
       - name: Run tests (Deno)
         if: matrix.runtime == 'deno'
         shell: bash
+        # macOS and Windows runners have a WebGPU adapter, so the GPU tests
+        # of tests/fdtd-gpu.test.js must run there: without one they fail
+        # (tests/helpers/gpu.js). Ubuntu runners have none (issue 30).
+        env:
+          REQUIRE_GPU: ${{ matrix.os != 'ubuntu-24.04' && '1' || '' }}
         # 200s, as for Bun: on windows-2025 the suite took 93-94s on main
         # after #90 and 101-103s on PR #91, mostly in tests that spawn git
         # and shell fixtures, so 100s left no room for runner variance.

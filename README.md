@@ -254,10 +254,16 @@ On the GPU, pass a WebGPU device and render asynchronously; the GPU
 follows the CPU kernel within 1e-5 relative RMS error:
 
 ```js
-import { requestGpuDevice, synthesizeAsync } from 'voice-simulator';
+import {
+  describeGpuDevice,
+  requestGpuDevice,
+  synthesizeAsync,
+} from 'voice-simulator';
 
 const device = await requestGpuDevice(); // null without WebGPU
 const gpuResult = await synthesizeAsync('Hello world', { device });
+// {description, vendor, architecture, fallback} of the adapter, or null
+console.log(describeGpuDevice(device));
 ```
 
 Lower-level building blocks are exported too: `planUtterance`,
@@ -490,6 +496,14 @@ field stays on the GPU and only the output samples come back. The web app
 uses WebGPU whenever the browser offers it (Acoustics → Simulation turns it
 off) and says the utterance again on the CPU if the GPU fails; the audio
 meter shows `studio · fdtd3d · GPU` or `studio · fdtd3d`.
+
+The GPU solver is checked against the CPU kernel in CI: the Deno test jobs on
+macOS and Windows run `tests/fdtd-gpu.test.js` with `REQUIRE_GPU=1`, so a
+missing adapter fails the job, and suite `gpu` of the `Heavy checks` workflow
+(`npm run test:heavy -- --suite gpu`, which needs Deno) runs a 20 000-step
+comparison and the word `həˈloʊ` at tiers `high` and `ultra` on Linux through
+Mesa's software adapter. The last report is
+[docs/reports/gpu-solver.md](docs/reports/gpu-solver.md).
 
 The web app (`benchmarkAudioTiersAsync`) and `voice-simulator benchmark`
 pick the most detailed tier whose measured load stays under 80%. On a

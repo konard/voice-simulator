@@ -348,6 +348,17 @@ export declare function renderPlanAsync(
 export declare function requestGpuDevice(options?: {
   gpu?: object;
 }): Promise<GPUDeviceLike | null>;
+/** The adapter a device runs on (`device.adapterInfo`), or null. */
+export interface GpuDeviceInfo {
+  description: string;
+  vendor: string;
+  architecture: string;
+  /** `adapterInfo.isFallbackAdapter`: a software adapter. */
+  fallback: boolean;
+}
+export declare function describeGpuDevice(
+  device: GPUDeviceLike | null | undefined
+): GpuDeviceInfo | null;
 export declare class FdtdGpu {
   constructor(solver: Fdtd3d, device: GPUDeviceLike);
   readonly workgroup: number;
