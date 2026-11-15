@@ -1,0 +1,11 @@
+RMS of the source, 1600 Pa against 800 Pa: 8.61 dB
+Half of the steady peak-to-peak flow (10 ms window) after 14.1 ms
+Largest flow from 10 ms after the stop: 3.256 % of the steady peak-to-peak
+Largest flow from 20 ms after the stop: 0.787 % of the steady peak-to-peak
+Largest flow from 30 ms after the stop: 0.173 % of the steady peak-to-peak
+Largest flow from 40 ms after the stop: 0.032 % of the steady peak-to-peak
+Pitch at 44100 Hz: 147.53 Hz, at 88200 Hz: 147.43 Hz (-0.068 %)
+tensionForPitch(90, 800) = 0.6362 -> 90.23 Hz (0.26 %)
+tensionForPitch(120, 800) = 0.8163 -> 120.35 Hz (0.29 %)
+tensionForPitch(200, 800) = 1.3875 -> 200.00 Hz (0.00 %)
+tensionForPitch(300, 800) = 2.1670 -> 299.94 Hz (-0.02 %)

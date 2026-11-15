@@ -1,0 +1,7 @@
+audio duration        3.98 s
+first folds run       775 ms (fills the table)
+lf runs (ms)          623 520 510 484 484
+folds runs (ms)       650 483 515 529 523
+median lf             510 ms
+median folds          523 ms
+folds / lf            1.026

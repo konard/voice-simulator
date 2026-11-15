@@ -55,6 +55,11 @@ a pressure wave travelling through the 3D shape of a parametric low-poly head
   - `fdtd3d`: a sparse-voxel 3D finite-difference time-domain solver of the
     acoustic wave equation inside the voxelised head and the air around it;
     the default of the library, the CLI and the server (`studio` tier).
+- **Two voice sources**: the LF pulse (`source: 'lf'`, the default) and a
+  two-mass model of the vocal folds driven by the lung pressure
+  (`source: 'folds'`), whose pitch, loudness and voice quality follow
+  from the lung pressure, the fold tension and the adduction; see
+  [Voice source](#voice-source).
 - **Low-poly head model** with only acoustically relevant detail (tract tube,
   nasal tube, lips, jaw, skin hull, teeth, tongue, hard and soft palate),
   four mesh LODs and OBJ, STL and glTF export (`npm run export:model`, opens
@@ -243,6 +248,9 @@ const { head: copied } = matchVoice(samples, sampleRate, {
   transcript: 'What the recording says',
 });
 
+// The vocal folds as the voice source (the default is source: 'lf').
+const folds = synthesize('Hello world', { tier: 'medium', source: 'folds' });
+
 // When each word and syllable is spoken, in seconds of the audio.
 for (const word of result.timeline.words) {
   console.log(word.start, word.end, word.text, word.syllables.length);
@@ -290,6 +298,7 @@ npx voice-simulator say "Привет" --tier high -o fdtd.wav   # 3D FDTD solve
 npx voice-simulator say "Hello" --preset female --head random -o hi.flac -b 24
 npx voice-simulator say "Hello" --mic-distance 100 --mic-azimuth 45 --room hall -o hall.wav
 npx voice-simulator say "Hello" --tier high --box 30x44x30 -o box.wav  # simulated box
+npx voice-simulator say "Hello" --source folds -o folds.wav  # vocal-fold source
 npx voice-simulator convert hello.flac -o hello.aiff --sample-rate 16000
 npx voice-simulator match recording.wav --transcript "What it says" --json
 npx voice-simulator compare recording.wav hello.wav --json   # distances from a reference
@@ -458,6 +467,59 @@ streams `wav`, `au` and `raw`), `bitDepth` and `float`.
 curl -o hello.wav "http://127.0.0.1:8080/api/stream?text=Hello&tier=medium"
 ```
 
+### Streaming playback in the browser
+
+`voice-simulator/playback` holds the pieces of a gapless streaming player
+on one `AudioWorkletNode`: the processor module (`PLAYER_PROCESSOR_URL`,
+registered as `PLAYER_PROCESSOR_NAME`, no imports, so `addModule` loads it
+as it is) and the ring buffer it reads (`createRing`, `ringWrite`,
+`ringEnd`, `ringReset`, …). `createStreamResampler(fromRate, toRate)` of the
+main export converts the chunks to the device rate one at a time and joins
+them into exactly the samples `resample` gives for the whole utterance.
+
+```javascript
+import { createStreamResampler } from 'voice-simulator';
+import {
+  PLAYER_PROCESSOR_NAME,
+  PLAYER_PROCESSOR_URL,
+} from 'voice-simulator/playback';
+
+const context = new AudioContext();
+await context.audioWorklet.addModule(PLAYER_PROCESSOR_URL);
+const node = new AudioWorkletNode(context, PLAYER_PROCESSOR_NAME, {
+  numberOfInputs: 0,
+  outputChannelCount: [1],
+});
+node.connect(context.destination);
+const resampler = createStreamResampler(16000, context.sampleRate);
+// For every chunk of the utterance:
+const samples = resampler.push(chunk);
+node.port.postMessage({ type: 'chunk', samples }, [samples.buffer]);
+// After the last one:
+const rest = resampler.flush();
+node.port.postMessage({ type: 'chunk', samples: rest }, [rest.buffer]);
+node.port.postMessage({ type: 'end' });
+```
+
+The processor waits for 50 ms of audio, then plays. When it runs dry before
+the end it fades the last block out, counts an underrun and fades in again
+once 100 ms are buffered, so a slow device hears a short pause, not a
+click. On a cross-origin isolated page the samples go through a
+`SharedArrayBuffer` ring (`{type: 'ring', buffer}`) and the processor
+posts nothing; otherwise it reports `{type: 'position', played, underruns,
+…}` every 8 blocks. The header comment of `src/playback/worklet-processor.js`
+lists every message.
+
+The web app plays this way (`WorkletPlayer`); the HUD shows the mode —
+`worklet-shared`, `worklet-port`, or `buffer` (one buffer source per chunk,
+used where `AudioWorklet` is missing) — and the underruns of the utterance.
+`VITE_CROSS_ORIGIN_ISOLATION=1 npm run example:web:dev` serves the app with
+COOP/COEP headers so it takes the shared ring. Measured in headless
+Chromium and Firefox, the worklet adds at most 21.4 ms between a chunk and
+its first sample on the audio clock, against 110.2-150.4 ms for buffer sources
+(`node experiments/issue-27-latency.mjs`, results in
+`experiments/issue-27-latency.txt`).
+
 ### Docker
 
 ```bash
@@ -546,6 +608,53 @@ immediately when the load exceeds the target and steps up only after a dwell
 period when the next tier is predicted to fit with margin. Visual tiers
 (mesh LOD 0-3, pressure-field points) are governed the same way from the
 measured frame time.
+
+### Voice source
+
+`source: 'lf'` (`DEFAULT_SOURCE`, CLI `--source lf`) draws every glottal
+pulse with the LF model (Fant, Liljencrants and Lin 1985) at the pitch of
+the plan. `source: 'folds'` (CLI `--source folds`) simulates the vocal folds
+instead: `VocalFolds` in
+[`src/acoustics/folds.js`](src/acoustics/folds.js) is the symmetric
+two-mass model of Steinecke and Herzel (1995), a simplified form of
+Ishizaka and Flanagan (1972), in cgs units at 44100 inner steps per second.
+The air from the lungs pushes the lower mass of each fold apart, the folds
+close again on their springs and collide, and the flow through the glottis
+follows Bernoulli; the source is the derivative of that flow. Any other
+value throws `Unknown source: <value>`.
+
+The plan drives the folds with three channels: `lungPressure`
+(`head.lungPressure * loudness ** (2 / 3)`, default 800 Pa), `adduction`
+(0 open, 0.5 modal, 1 pressed; lower in breathy voice and `h`, 1 in a
+glottal stop) and `foldTension` (the factor Q of Ishizaka and Flanagan).
+`tensionForPitch(f0, lungPressure, head)` finds the tension for the pitch
+of the plan from a table of simulated pitches, so the voice keeps its
+intonation. The head parameters `lungPressure`, `foldLength`, `foldMass`,
+`foldStiffness` and `foldDamping` (group `source`) set the larynx; the
+presets give men 1.4 to 1.6 cm long folds, women 0.9 to 1.1 cm and children
+0.6 to 0.8 cm (Titze 1989).
+
+Measured with constant controls and no noise
+([experiments/issue-11-folds.txt](experiments/issue-11-folds.txt),
+`node experiments/issue-11-folds.mjs`):
+
+- the folds start by themselves above 125 Pa and reach 1 % of their
+  amplitude at 800 Pa from 175 Pa (the phonation threshold; people need
+  about 200 to 500 Pa, Titze 1988);
+- the pitch at 800 Pa is 65.6, 147.5, 278.8 and 549.2 Hz for Q 0.5, 1, 2
+  and 4;
+- the open quotient falls from 0.88 to 0.56 and H1-H2 from 7.7 to 2.3 dB
+  when the adduction rises from 0.3 to 0.9;
+- doubling the pressure from 800 to 1600 Pa raises the level by 8.6 dB
+  ([experiments/issue-33-folds-tests.txt](experiments/issue-33-folds-tests.txt)).
+
+The folds reach half of their steady amplitude 14 ms after the pressure is
+on, and the flow is below 1 % of it 20 ms after the pressure is off. With
+the CLI `match` of a rendered word the pitch of the folds is 2.5 % from
+that of LF, and tier `medium` renders it as fast as LF
+([experiments/issue-33-folds-match.txt](experiments/issue-33-folds-match.txt),
+[experiments/issue-33-folds-speed.txt](experiments/issue-33-folds-speed.txt)).
+LF stays the default and renders bit for bit as before.
 
 ### Development
 
