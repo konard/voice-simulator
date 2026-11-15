@@ -44,7 +44,24 @@ a pressure wave travelling through the 3D shape of a parametric low-poly head
   carry the spoken letters, and the part of the token they read
   (`partStart`/`partEnd`), so `3/4/2024` lights 3, then 4, then 2024.
 - **Smooth articulation**: IPA becomes a time plan of tract shapes with
-  coarticulated transitions, glottal source and pitch contour.
+  coarticulated transitions, glottal source and pitch contour. Every
+  articulator approaches its targets like a critically damped mass
+  (`approachTargets` in `src/articulation/dynamics.js`, two one-pole
+  filters forwards). `ARTICULATORS` holds its time constant and its lead
+  (by default 1.68 time constants, which keeps the middle of a transition at
+  the boundary between two sounds; the lips round `ROUNDING_LEAD` = 0.12 s
+  and the velum opens `VELUM_LEAD` = 0.08 s ahead of their sound, but not
+  before the end of the previous sound with its own target).
+  `channelTargets(segments, name)` lists the targets
+  `{value, start, end, strength}` of a channel: inside a consonant the vowel
+  channels mix the consonant's own tongue position with the line between
+  the vowels by its `COARTICULATION_RESISTANCE` (0 for `[p]`, 1 for `[ʃ]`),
+  so labials let the vowels pass and palatals resist. The head parameters
+  `articulationSpeed` (divides time constants and leads) and
+  `coarticulation` (multiplies the leads) change both, and
+  `planUtterance(ipa, {durations})` takes measured durations per token.
+  The fit to the golden recordings is in
+  `experiments/issue-11-fit-dynamics.txt`.
 - **Physical acoustics** with three interchangeable solvers:
   - `waveguide`: a branched Kelly-Lochbaum tube (tract + nose) that follows
     the 3D centreline of the head; real time on any device. Its losses
