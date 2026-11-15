@@ -1,0 +1,19 @@
+# node experiments/issue-35-frication-tuning.mjs /tmp/base-vs (main e113bd5)
+ˈasa   consonant -26.36 dB, against the vowel -9.63 dB
+ˈaʃa   consonant -24.99 dB, against the vowel -8.26 dB
+ˈafa   consonant -34.20 dB, against the vowel -17.47 dB
+ˈaθa   consonant -32.99 dB, against the vowel -16.26 dB
+ˈaxa   consonant -32.60 dB, against the vowel -15.88 dB
+ˈaza   consonant -17.79 dB, against the vowel -1.08 dB
+ˈava   consonant -17.57 dB, against the vowel -0.86 dB
+ˈaha   consonant -23.48 dB, against the vowel -6.74 dB
+
+# node experiments/issue-35-frication-tuning.mjs (this branch)
+ˈasa   consonant -26.19 dB, against the vowel -9.45 dB
+ˈaʃa   consonant -25.81 dB, against the vowel -9.08 dB
+ˈafa   consonant -53.17 dB, against the vowel -36.44 dB
+ˈaθa   consonant -51.54 dB, against the vowel -34.81 dB
+ˈaxa   consonant -50.38 dB, against the vowel -33.64 dB
+ˈaza   consonant -17.71 dB, against the vowel -1.00 dB
+ˈava   consonant -17.47 dB, against the vowel -0.76 dB
+ˈaha   consonant -30.44 dB, against the vowel -13.70 dB
