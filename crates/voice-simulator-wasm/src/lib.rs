@@ -27,7 +27,7 @@ pub mod renderer;
 
 /// Version of the interface; raise it on any breaking change of a `vs_`
 /// export (a removed or renamed function, a changed signature or meaning).
-pub const ABI_VERSION: u32 = 1;
+pub const ABI_VERSION: u32 = 2;
 
 /// Alignment of every block that [`vs_alloc`] returns.
 pub const ALLOC_ALIGN: usize = 8;
@@ -259,6 +259,16 @@ pub(crate) fn f32_slice<'a>(offset: u32, count: u32) -> Result<&'a mut [f32], i3
     }
     // SAFETY: as in `f64_slice`, with an alignment of 4.
     Ok(unsafe { core::slice::from_raw_parts_mut(offset as usize as *mut f32, count as usize) })
+}
+
+/// A view of the `count` bytes at `offset`, after [`check_range`].
+pub(crate) fn u8_slice<'a>(offset: u32, count: u32) -> Result<&'a [u8], i32> {
+    check_range(offset, count, 1)?;
+    if count == 0 {
+        return Ok(&[]);
+    }
+    // SAFETY: as in `f64_slice`, with an alignment of 1.
+    Ok(unsafe { core::slice::from_raw_parts(offset as usize as *const u8, count as usize) })
 }
 
 /// A copy of the `count` `f32` values at `offset`, so the input may overlap
@@ -518,8 +528,8 @@ mod tests {
     use super::*;
 
     #[test]
-    fn abi_version_is_one() {
-        assert_eq!(vs_abi_version(), 1);
+    fn abi_version_is_two() {
+        assert_eq!(vs_abi_version(), 2);
     }
 
     #[test]

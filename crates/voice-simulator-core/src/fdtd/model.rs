@@ -271,6 +271,35 @@ impl Reader<'_> {
     }
 }
 
+/// Appends arrays the way [`Reader`] reads them.
+struct Writer {
+    bytes: Vec<u8>,
+}
+
+impl Writer {
+    /// Zeros up to the next multiple of 8 bytes.
+    fn pad(&mut self) {
+        self.bytes.resize(self.bytes.len().div_ceil(8) * 8, 0);
+    }
+
+    fn f64s(&mut self, values: &[f64]) {
+        self.bytes
+            .extend(values.iter().flat_map(|value| value.to_le_bytes()));
+        self.pad();
+    }
+
+    fn i32s(&mut self, values: &[i32]) {
+        self.bytes
+            .extend(values.iter().flat_map(|value| value.to_le_bytes()));
+        self.pad();
+    }
+
+    fn indices(&mut self, values: &[usize]) {
+        let values: Vec<i32> = values.iter().map(|&value| value as i32).collect();
+        self.i32s(&values);
+    }
+}
+
 fn word(bytes: &[u8], index: usize) -> Result<usize, ModelError> {
     let start = 4 * index;
     let chunk = bytes.get(start..start + 4).ok_or(ModelError::Header)?;
@@ -442,6 +471,79 @@ impl Model {
         })
     }
 
+    /// The buffer `packVoxelModel` writes for this model: `unpack` and
+    /// `pack` round-trip byte for byte.
+    pub fn pack(&self) -> Vec<u8> {
+        let mut words = [0_u32; header::WORDS];
+        let mut writer = Writer { bytes: Vec::new() };
+        writer.bytes.resize((4 * header::WORDS).div_ceil(8) * 8, 0);
+        writer.f64s(&[self.dx]);
+        let mut model_flags = 0;
+        if let Some(opening) = &self.opening {
+            model_flags |= flags::OPENING;
+            let bins = opening.bins();
+            words[header::OPENING_PER] = opening.per as u32;
+            words[header::OPENING_BINS] = bins as u32;
+            words[header::OPENING_POINTS] = opening.starts[bins] as u32;
+            words[header::OPENING_ROWS] = (opening.cell_weights.len() / opening.per) as u32;
+            writer.f64s(&[opening.bin_length, opening.sample]);
+            writer.indices(&opening.starts);
+            writer.f64s(&opening.weights);
+            writer.f64s(&opening.shares);
+            writer.f64s(&opening.heads);
+            writer.f64s(&opening.tails);
+            let rows: Vec<i32> = opening
+                .rows
+                .iter()
+                .map(|row| row.map_or(-1, |row| row as i32))
+                .collect();
+            writer.i32s(&rows);
+            writer.f64s(&opening.cell_weights);
+            writer.f64s(&opening.cell_tails);
+        }
+        let kind: Vec<i32> = self.kind.iter().map(|&kind| i32::from(kind)).collect();
+        writer.i32s(&kind);
+        writer.i32s(&self.tube);
+        writer.f64s(&self.arc);
+        writer.f64s(self.point.as_flattened());
+        let to_i32 = |values: &[u32]| -> Vec<i32> { values.iter().map(|&v| v as i32).collect() };
+        writer.i32s(&to_i32(&self.link_a));
+        writer.i32s(&to_i32(&self.link_b));
+        let link_kind: Vec<i32> = self.link_kind.iter().map(|&kind| i32::from(kind)).collect();
+        writer.i32s(&link_kind);
+        writer.f64s(&self.open_faces);
+        writer.f64s(&[self.boundary_admittance]);
+        writer.f64s(&[if self.enclosure { 1.0 } else { 0.0 }]);
+        writer.f64s(&self.lengths);
+        let sinuses: Vec<f64> = self
+            .sinuses
+            .iter()
+            .flat_map(|sinus| [f64::from(sinus.tube), sinus.area, sinus.length])
+            .collect();
+        writer.f64s(&sinuses);
+        writer.f64s(&self.lips);
+        writer.f64s(&self.nostrils);
+        if let Some(teeth) = &self.teeth {
+            model_flags |= flags::TEETH;
+            words[header::TEETH_CELLS] = teeth.cells.len() as u32;
+            writer.f64s(&[teeth.edge, teeth.width]);
+            writer.indices(&teeth.cells);
+            writer.i32s(&teeth.groups);
+        }
+        writer.i32s(&to_i32(&self.open_masks));
+        words[header::MAGIC] = MAGIC;
+        words[header::VERSION] = VERSION;
+        words[header::BYTES] = writer.bytes.len() as u32;
+        words[header::CELLS] = self.cells() as u32;
+        words[header::LINKS] = self.links() as u32;
+        words[header::SINUSES] = self.sinuses.len() as u32;
+        words[header::FLAGS] = model_flags;
+        for (index, word) in words.iter().enumerate() {
+            writer.bytes[4 * index..4 * index + 4].copy_from_slice(&word.to_le_bytes());
+        }
+        writer.bytes
+    }
+
     /// Number of cells.
     pub fn cells(&self) -> usize {
         self.kind.len()
@@ -506,6 +608,7 @@ mod tests {
         assert_eq!(model.nostrils, [4.0, 5.0, 6.0]);
         assert_eq!(model.open_masks, vec![0, 3]);
         assert!(model.opening.is_none() && model.teeth.is_none());
+        assert_eq!(model.pack(), packed());
     }
 
     #[test]

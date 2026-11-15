@@ -25,8 +25,10 @@ Commands:
                           string, hashed like hashSeed(string).
   render-job <file>       Render a job of scripts/write-render-job.mjs
                           (little-endian f64 values: config length, config,
-                          frame count, frames, sample count) with the
-                          waveguide renderer, natively, in one call. Prints
+                          model length in bytes, packed voxel model, frame
+                          count, frames, sample count) with the renderer of
+                          the job (the waveguide, or the 3D FDTD solver
+                          with its model), natively, in one call. Prints
                           the SHA-256 of the samples (their f32
                           little-endian bytes), the number of samples, the
                           seconds the render took and its real-time factor.
