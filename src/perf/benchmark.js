@@ -7,7 +7,12 @@ import { VoiceRenderer } from '../acoustics/voice.js';
 import { buildVoxelModel } from '../acoustics/voxel-model.js';
 import { planUtterance } from '../articulation/plan.js';
 import { DEFAULT_HEAD, normalizeHeadConfig } from '../head-config.js';
-import { AUDIO_TIERS, chooseTier, chooseTierWithGpu } from './lod.js';
+import {
+  AUDIO_TIERS,
+  BASE_AUDIO_LEVEL,
+  chooseTier,
+  chooseTierWithGpu,
+} from './lod.js';
 
 const BENCHMARK_IPA = 'ˈhæloʊ ˈwɜːld';
 
@@ -46,16 +51,8 @@ function timeRendering(renderer, options, renderBlock) {
   return renderBlock(step, load);
 }
 
-/**
- * Load of one audio tier (work seconds per audio second).
- *
- * With a `limit`, rendering stops as soon as the time spent exceeds
- * `limit` times the audio duration, so a tier that is far too slow for
- * this machine is detected after a fraction of the benchmark.
- * @param {object} tier Entry of AUDIO_TIERS.
- * @param {{head?: object, ipa?: string, seconds?: number, limit?: number}} [options]
- */
-export function measureAudioTier(tier, options = {}) {
+/** One measurement of measureAudioTier. */
+function measureOnce(tier, options) {
   const renderer = benchmarkRenderer(tier, options);
   const block = new Float32Array(BLOCK);
   return timeRendering(renderer, options, (step, load) => {
@@ -64,6 +61,30 @@ export function measureAudioTier(tier, options = {}) {
     }
     return load();
   });
+}
+
+/**
+ * Load of one audio tier (work seconds per audio second).
+ *
+ * With a `limit`, rendering stops as soon as the time spent exceeds
+ * `limit` times the audio duration, so a tier that is far too slow for
+ * this machine is detected after a fraction of the benchmark. With
+ * `repeats` (default 1) the tier is measured that many times and the
+ * median load is returned: the first measurement also pays for the
+ * just-in-time compilation of the solver, and one 0.3 s measurement
+ * varies by about 20 % on a busy machine. The repeats stop at the first
+ * load above `limit`.
+ * @param {object} tier Entry of AUDIO_TIERS.
+ * @param {{head?: object, ipa?: string, seconds?: number, limit?: number, repeats?: number}} [options]
+ */
+export function measureAudioTier(tier, options = {}) {
+  const loads = [];
+  const limit = options.limit ?? Infinity;
+  do {
+    loads.push(measureOnce(tier, options));
+  } while (loads.length < (options.repeats ?? 1) && loads.at(-1) <= limit);
+  loads.sort((a, b) => a - b);
+  return loads[Math.floor((loads.length - 1) / 2)];
 }
 
 /**
@@ -99,11 +120,29 @@ export async function measureAudioTierAsync(tier, options = {}) {
 }
 
 /**
+ * Render the tiers up to `minimal` in turn, untimed, for `seconds` of
+ * wall-clock time, so the just-in-time compiler has optimised the solver
+ * for all of them before the first is measured. Without it the tier
+ * measured first (`telephone`) pays for the compilation and looks slower
+ * than `minimal`.
+ */
+function warmUp(seconds, options) {
+  const end = globalThis.performance.now() + 1000 * seconds;
+  for (let index = 0; globalThis.performance.now() < end; index++) {
+    const tier = AUDIO_TIERS[index % (BASE_AUDIO_LEVEL + 1)];
+    measureOnce(tier, { head: options.head, seconds: 0.1 });
+  }
+}
+
+/**
  * Benchmark the audio tiers from cheapest up and pick the best that fits.
- * @param {{target?: number, head?: object, seconds?: number}} [options]
+ * `repeats` is passed to measureAudioTier; `warmUp` (default 0) is the
+ * time in seconds spent rendering the cheap tiers before measuring.
+ * @param {{target?: number, head?: object, seconds?: number, repeats?: number, warmUp?: number}} [options]
  * @returns {{level: number, tier: object, loads: number[], measured: boolean[]}}
  */
 export function benchmarkAudioTiers(options = {}) {
+  warmUp(options.warmUp ?? 0, options);
   const { level, loads, measured } = chooseTier(
     (tier, { limit }) => measureAudioTier(tier, { limit, ...options }),
     { tiers: AUDIO_TIERS, target: options.target }

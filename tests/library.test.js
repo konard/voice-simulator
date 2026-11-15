@@ -258,6 +258,18 @@ describe('chooseTier', () => {
     expect(globalThis.performance.now() - began < 500).toBe(true);
   });
 
+  it('takes the median of repeated measurements', () => {
+    const cheap = AUDIO_TIERS[0];
+    expect(measureAudioTier(cheap, { seconds: 0.05, repeats: 3 }) > 0).toBe(
+      true
+    );
+    // Above the limit the repeats stop after the first measurement.
+    const slow = { ...AUDIO_TIERS[audioTierIndex('medium')], name: 'slow' };
+    const began = globalThis.performance.now();
+    measureAudioTier(slow, { seconds: 1, limit: 0.001, repeats: 50 });
+    expect(globalThis.performance.now() - began < 500).toBe(true);
+  });
+
   it('detects overload early and picks a cheaper tier', () => {
     const detector = new OverloadDetector();
     expect(detector.record(0.01, 0.021)).toBe(false);
@@ -271,12 +283,13 @@ describe('chooseTier', () => {
       audioTierIndex('medium')
     );
     // Load 3 on medium (2.6): low 1.85, minimal 1.15, wideband 1.10 and
-    // narrowband 0.90 all exceed 0.8, so it goes down to telephone.
+    // narrowband 0.88 all exceed 0.8, so it goes down to telephone.
     expect(fallbackLevel(AUDIO_TIERS, audioTierIndex('medium'), 3)).toBe(
       audioTierIndex('telephone')
     );
-    // Load 1.3 on medium: minimal (1) is predicted at 0.5.
-    expect(fallbackLevel(AUDIO_TIERS, audioTierIndex('medium'), 1.3)).toBe(
+    // Load 1.5 on medium: low (1.6) is predicted at 0.92, minimal (1) at
+    // 0.58.
+    expect(fallbackLevel(AUDIO_TIERS, audioTierIndex('medium'), 1.5)).toBe(
       BASE_AUDIO_LEVEL
     );
     const late = new OverloadDetector();
