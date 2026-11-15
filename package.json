@@ -49,7 +49,8 @@
     "changeset": "changeset",
     "changeset:version": "node scripts/changeset-version.mjs",
     "changeset:publish": "changeset publish",
-    "changeset:status": "changeset status --since=origin/main"
+    "changeset:status": "changeset status --since=origin/main",
+    "build:wasm": "node scripts/build-wasm.mjs"
   },
   "keywords": [
     "voice",
