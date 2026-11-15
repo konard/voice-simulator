@@ -14,6 +14,9 @@ import {
   foldPitch,
   tensionForPitch,
 } from '../src/acoustics/folds.js';
+import { planUtterance } from '../src/articulation/plan.js';
+import { VoiceRenderer } from '../src/acoustics/voice.js';
+import { rms } from '../src/acoustics/analysis.js';
 
 const RATE = FOLD_RATE;
 
@@ -37,15 +40,20 @@ function simulate(options = {}) {
   const flow = new Float64Array(length);
   const area = new Float64Array(length);
   const source = new Float64Array(length);
+  const meanArea = new Float64Array(length);
   for (let index = 0; index < length; index++) {
     if (options.schedule) {
       control.lungPressure = options.schedule(index / rate);
     }
+    if (options.closure) {
+      control.closure = options.closure(index / rate);
+    }
     source[index] = folds.step(1 / rate, control, 0);
     flow[index] = folds.flow;
     area[index] = folds.area;
+    meanArea[index] = folds.meanArea;
   }
-  return { flow, area, source, rate };
+  return { flow, area, meanArea, source, rate };
 }
 
 /** The last `duration` seconds of a run. */
@@ -198,5 +206,81 @@ describe('vocal folds', () => {
       const pitch = foldPitch(800, tension, {}, { duration: 0.4 });
       expect(Math.abs(pitch / f0 - 1)).toBeLessThan(0.03);
     }
+  });
+
+  it('keeps a mean area for the air flow (issue 35)', () => {
+    const run = simulate({
+      duration: 0.4,
+      closure: (time) => (time < 0.3 ? 0 : 1),
+    });
+    const at = (time) => Math.round(time * RATE);
+    const open = run.area.subarray(at(0.2), at(0.3));
+    const average = open.reduce((sum, value) => sum + value, 0) / open.length;
+    const mean = run.meanArea.subarray(at(0.2), at(0.3));
+    expect(average).toBeGreaterThan(0.01);
+    // Within 25 % of the true mean, and smooth: a ripple far below the
+    // swing of the area.
+    for (const value of mean) {
+      expect(Math.abs(value / average - 1)).toBeLessThan(0.25);
+    }
+    expect(peakToPeak(mean)).toBeLessThan(0.25 * peakToPeak(open));
+    // A glottal closure shuts it within a few time constants.
+    expect(run.meanArea[at(0.4) - 1]).toBeLessThan(0.01 * average);
+  });
+
+  it('drives the air flow of the renderer with its area (issue 35)', () => {
+    const plan = planUtterance('ˈaha', { ipa: true });
+    const renderer = new VoiceRenderer(plan, {
+      sampleRate: 16000,
+      source: 'folds',
+      seed: 1,
+    });
+    const areas = [];
+    const air = renderer.aerodynamics;
+    const step = air.step.bind(air);
+    air.step = (dt, lungPressure, glottalArea, constrictionArea) => {
+      if (renderer.glottis.started) {
+        expect(glottalArea).toBe(renderer.glottis.meanArea);
+      }
+      areas.push(glottalArea);
+      return step(dt, lungPressure, glottalArea, constrictionArea);
+    };
+    renderer.render(new Float32Array(renderer.totalSamples));
+    expect(areas.length).toBeGreaterThan(10);
+    // [h] opens the folds (adduction 0) far wider than the vowels.
+    const largest = Math.max(...areas);
+    const vowel = areas[Math.round(areas.length * 0.2)];
+    expect(largest).toBeGreaterThan(2 * vowel);
+  });
+
+  it('keeps its cycles out of the burst transient (issue 35)', () => {
+    // The ripple of the mean area at the pitch becomes a flow derivative
+    // that the renderer injects at the constriction; with one 10 ms stage
+    // it took 1.8 dB off the vowel.
+    const plan = planUtterance('ˈasa', { language: 'en' });
+    const vowel = plan.segments.find((item) => item.kind === 'vowel');
+    const rate = 16000;
+    const level = (steady) => {
+      const renderer = new VoiceRenderer(plan, {
+        sampleRate: rate,
+        source: 'folds',
+        seed: 1,
+      });
+      if (steady) {
+        const air = renderer.aerodynamics;
+        const step = air.step.bind(air);
+        air.step = (...inputs) => ({ ...step(...inputs), flowDerivative: 0 });
+      }
+      const samples = new Float32Array(renderer.totalSamples);
+      renderer.render(samples);
+      const span = vowel.end - vowel.start;
+      return rms(
+        samples,
+        Math.floor((vowel.start + 0.2 * span) * rate),
+        Math.floor((vowel.start + 0.8 * span) * rate)
+      );
+    };
+    const difference = 20 * Math.log10(level(false) / level(true));
+    expect(Math.abs(difference)).toBeLessThan(0.5);
   });
 });

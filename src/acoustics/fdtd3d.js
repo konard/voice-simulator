@@ -276,6 +276,8 @@ export class Fdtd3d {
     this.velumArea = 0;
     this.sourceState = 0;
     this.noiseState = 0;
+    this.burstInput = 0;
+    this.burstState = 0;
     this.leak = 1 - this.dt / MICROPHONE_LEAK_TIME;
     this.tubeAreas = [null, null];
     this.pending = [];
@@ -902,6 +904,18 @@ export class Fdtd3d {
     return COURANT * NOISE_GAIN * force;
   }
 
+  /**
+   * Burst transient of a stop as a pressure jump on the noise plane. The
+   * flow derivative has a net integral (the change of the mean flow) that a
+   * pressure jump would turn into lasting momentum in a lossless field, so
+   * a DC blocker with the microphone leak (about 20 Hz) removes it.
+   */
+  #burst(flow) {
+    this.burstState = flow - this.burstInput + this.leak * this.burstState;
+    this.burstInput = flow;
+    return this.burstState;
+  }
+
   /** Pressure the glottal flow adds to the source cells (per keep). */
   #sourcePressure(glottalFlow) {
     let flow = glottalFlow;
@@ -937,13 +951,15 @@ export class Fdtd3d {
    * @param {number} glottalFlow Source volume velocity (derivative).
    * @param {number} noisePosition Section boundary of the turbulence source.
    * @param {number} noise Turbulence pressure.
+   * @param {number} [flow] Burst transient of a stop: the 3D field gets it
+   *   through the noise source at the same place, without its DC.
    * @returns {number} Radiated output.
    */
-  step(glottalFlow, noisePosition, noise) {
+  step(glottalFlow, noisePosition, noise, flow = 0) {
     if (this.gpu) {
       throw new Error('A GPU solver runs queued steps (queueStep)');
     }
-    const force = this.#noiseForce(noisePosition, noise);
+    const force = this.#noiseForce(noisePosition, noise + this.#burst(flow));
     if (force !== 0) {
       for (let index = 0; index < this.noiseLinks.length; index++) {
         this.velocity[this.noiseLinks[index]] += force * this.noiseSigns[index];
@@ -965,12 +981,12 @@ export class Fdtd3d {
    * Queue a step (arguments as for step); flushSteps returns the outputs.
    * On the CPU the step runs right away, on the GPU with the next flush.
    */
-  queueStep(glottalFlow, noisePosition, noise) {
+  queueStep(glottalFlow, noisePosition, noise, flow = 0) {
     if (!this.gpu) {
-      this.pending.push(this.step(glottalFlow, noisePosition, noise));
+      this.pending.push(this.step(glottalFlow, noisePosition, noise, flow));
       return;
     }
-    const force = this.#noiseForce(noisePosition, noise);
+    const force = this.#noiseForce(noisePosition, noise + this.#burst(flow));
     this.gpu.queue(force, this.#sourcePressure(glottalFlow));
   }
 
@@ -1033,6 +1049,8 @@ export class Fdtd3d {
     this.velocity.fill(0);
     this.sourceState = 0;
     this.noiseState = 0;
+    this.burstInput = 0;
+    this.burstState = 0;
     this.gpu?.reset();
   }
 }

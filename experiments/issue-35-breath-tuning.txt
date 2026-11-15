@@ -1,0 +1,4 @@
+targets: breathiness 0.2: -40.19 dB, 1: -10.11 dB (main)
+solved gain 3.8743 exponent 2.1136: 0.2: -40.19 dB, 0.5: -23.18 dB, 1: -10.11 dB
+rounded gain 3.87 exponent 2.114: 0.2: -40.20 dB, 0.5: -23.19 dB, 1: -10.12 dB
+current gain 3.87 exponent 2.114: 0.2: -40.20 dB, 0.5: -23.19 dB, 1: -10.12 dB

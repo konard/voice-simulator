@@ -7,11 +7,14 @@ expected output; the Rust engine has to reproduce it, and the parity tests
 check that it does. The package keeps working when no Rust tool is
 installed: the file is optional and everything falls back to JavaScript.
 
-So far the engine holds two algorithms: the random generator of
-`src/random.js` and the band-limited resampler of `src/audio/resample.js`
-(`resample` and `createStreamResampler`, issue 27). The random generator
-proves that every link of the chain works: workspace, build, loader, CI job
-and parity tests.
+So far the engine holds three algorithms: the random generator of
+`src/random.js`, the band-limited resampler of `src/audio/resample.js`
+(`resample` and `createStreamResampler`, issue 27) and the air flow of
+`src/acoustics/aerodynamics.js` with `strouhalFrequency` of
+`src/acoustics/voice.js` (`crates/voice-simulator-core/src/aerodynamics.rs`,
+issue 35): mouth pressure, flow, turbulence source strength and the peak
+frequency of the frication noise. The random generator proves that every
+link of the chain works: workspace, build, loader, CI job and parity tests.
 
 ## Layout
 
@@ -129,6 +132,19 @@ The module imports nothing.
 | `vs_resampler_read(handle, out, count) -> i32`           | Moves up to `count` waiting outputs (`f32`, oldest first) to `out`; how many         |
 | `vs_resampler_held(handle) -> i32`                       | `held()`: the input samples kept for the outputs still to come                       |
 | `vs_resampler_free(handle) -> i32`                       | Frees the resampler; 0 or `BAD_HANDLE`                                               |
+| `vs_aero_reynolds(flow, area) -> f64`                    | `reynolds` of `aerodynamics.js`                                                      |
+| `vs_aero_source_strength(dp, area, flow) -> f64`         | `sourceStrength`                                                                     |
+| `vs_aero_open_tract_strength(lung, area) -> f64`         | `openTractStrength`                                                                  |
+| `vs_aero_glottal_area(v, a, c, b, chink) -> f64`         | `glottalArea({voicing: v, aspiration: a, closure: c}, b, chink)`                     |
+| `vs_aero_strouhal_frequency(flow, area) -> f64`          | `strouhalFrequency` of `voice.js`                                                    |
+| `vs_aero_steady_flow(lung, g, c, out) -> i32`            | Writes `[oralPressure, flow]` of `steadyFlow` at `out`; 0 or error                   |
+| `vs_aero_run(dt, compliance, steps, count) -> i32`       | Steps a new `Aerodynamics` in place (below); 0 or error                              |
+
+`vs_aero_run` steps a new `Aerodynamics` of `src/acoustics/aerodynamics.js`
+`count` times by `dt` seconds over the `5 * count` `f64` values at `steps`:
+each step reads `[lungPressure, glottalArea, constrictionArea, -, -]` and
+writes `[flow, flowDerivative, oralPressure, glottalDrop, constrictionDrop]`
+in place.
 
 ### Error codes
 
@@ -187,6 +203,19 @@ Each ported function has a class, stated by the issue that ports it.
   code. The resampler is class B with a limit of `1e-6` (issue 27); on
   Node.js 26, Bun 1.4.4 and Deno 2.9.7 the measured error is 0, every sample is
   bit-identical (`node experiments/issue-27-resample-parity.mjs`).
+
+| Module (issue)         | Class |
+| ---------------------- | ----- |
+| `random.rs`            | A     |
+| `resample.rs` (27)     | B     |
+| `aerodynamics.rs` (35) | A     |
+
+The lag of the mouth pressure in `Aerodynamics::step` uses `lag_factor`
+(`lagFactor` in JavaScript), a rational form of 1 - exp(-x), instead of
+`exp`: JavaScriptCore and V8 round `Math.exp` differently, so `exp` gave
+Bun and Node.js different samples, and without it the step is class A. All
+48 000 values of the closure and release are bit-identical
+(`node experiments/issue-35-rust-airflow-parity.mjs`).
 
 ## Tests
 

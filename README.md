@@ -129,10 +129,20 @@ names)` a whole utterance, and `vrmVowelBinds(gltfJson)` reads the morph
   tract and turn the frication jet into a sibilant source; the piriform
   fossae add their side-branch antiresonance in both solvers, the
   vallecula in the 3D solver.
-- **Head and voice editor**: 34 parameters, everything that changes the
+- **Turbulence noise driven by the air flow**: the lung pressure pushes air
+  through the glottis and the narrowest place of the mouth; the mouth
+  pressure that splits it between them sets the flow, and the noise at each
+  orifice grows as dp^1.5 A^0.5 (Stevens 1971) once the jet is turbulent,
+  with its band centred on the Strouhal frequency of the jet. Frication,
+  aspiration and breath noise all come from this model, and the jump of the
+  flow at the release of a stop adds a burst transient, so [s] peaks near
+  7 kHz above [ʃ], aspirated stops get a voice onset time of about 60 ms and
+  a louder lung pressure (`lungPressure`) gives louder noise.
+- **Head and voice editor**: 35 parameters, everything that changes the
   sound (tract length, pharynx, mouth, jaw, nose, pitch, breathiness,
   jitter, shimmer, vibrato, declination, accent strength, lengthening,
-  pauses, wall loss, nasal losses, nasal coupling, frication level, ...). Every page
+  pauses, wall loss, nasal losses, nasal coupling, frication level, lung
+  pressure, ...). Every page
   refresh starts from a new random seed; `?seed=` makes it reproducible.
 - **Male, female and child presets** for random heads (`preset`), with f0
   and formants fitted to the men's, women's and children's means of
@@ -548,7 +558,11 @@ The image runs `voice-simulator serve` on port 8080 with a health check on
 The 2D solver `fdtd2d` (`--solver fdtd2d`, `{ solver: 'fdtd2d' }`) is not a
 tier: at 0.6 cm it renders in 0.43 times the time of `high`, but its 4 to
 8 kHz band is further from the 3D solver than the waveguide's (13.22 against
-10.20 dB, `experiments/issue-11-fdtd2d-compare.txt`).
+10.20 dB, `experiments/issue-11-fdtd2d-compare.txt`). Like the 3D solver it
+takes the burst transient of a stop through the plane of the noise source
+without its DC: the burst of [t] is 4.37 dB above the peak of its frication,
+against 4.92 dB in the waveguide
+(`node experiments/issue-35-burst-solvers.mjs`).
 
 The three narrow-band tiers below `minimal` low-pass the voice with an
 eighth-order Butterworth filter at 3.4, 4.8 and 7 kHz (`bandLimit`), once at
@@ -655,6 +669,17 @@ that of LF, and tier `medium` renders it as fast as LF
 ([experiments/issue-33-folds-match.txt](experiments/issue-33-folds-match.txt),
 [experiments/issue-33-folds-speed.txt](experiments/issue-33-folds-speed.txt)).
 LF stays the default and renders bit for bit as before.
+
+With the folds, the glottal area that drives the turbulence noise (the air
+flow of `src/acoustics/aerodynamics.js`) is the mean area of the folds
+(`VocalFolds.meanArea`, three one-pole stages of 5 ms), so [h] and
+aspiration open the glottis by the adduction of the plan, and the breath
+noise of the folds grows with the source strength of that area. The stages
+keep the cycles of the folds out of the burst transient, so the vowels of
+the folds stay within 0.15 dB of their level before (ˈasa -17.91 dB, was
+-18.03 dB; one stage of 10 ms cost 1.8 dB) while [h] gets 5.9 dB quieter
+([experiments/issue-35-folds-airflow.txt](experiments/issue-35-folds-airflow.txt),
+`node experiments/issue-35-folds-airflow.mjs`).
 
 ### Development
 

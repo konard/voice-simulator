@@ -1,0 +1,30 @@
+1. Fricatives between [a] (noise level of the middle 60 %)
+word   level dB  against vowel dB  above 4 kHz dB  centre of gravity Hz  peak Hz
+ˈasa     -26.19             -9.45          -29.10                  5074     6984
+ˈaʃa     -25.81             -9.08          -28.02                  5456     5766
+ˈafa     -53.17            -36.44          -68.93                  1640     1500
+ˈaθa     -51.54            -34.81          -58.69                  2800     1500
+ˈaxa     -50.38            -33.64          -62.72                  2282     2250
+ˈaza     -17.71             -1.00          -38.71                  2993     1500
+ˈava     -17.47             -0.76          -73.64                   648     1219
+
+2. Stops before [a]: times (ms) after the release (constriction area
+   above 0.001 cm²) of the peaks of the flow derivative (transient),
+   the frication and the aspiration source strengths, of the voicing
+   channel crossing 0.5 and of the acoustic voice onset, and the peak of
+   the first 3 ms against the peak of the first 20 ms rendered without
+   the transient (TRANSIENT_GAIN 0), the frication alone (burst, dB).
+word   transient  frication  aspiration  voicing  voice onset  burst dB
+pa           0.7        2.7        13.3     27.3         12.0      2.80
+ta           2.7        4.0        16.7     30.0          8.0      4.92
+ka           7.3        5.3        18.7     29.3          6.0    -11.97
+pʰa          0.7        3.3        34.0     72.0         61.0     -6.82
+tʰa          2.7        4.7        36.7     74.7         64.0     -3.47
+kʰa          7.3        7.3        41.3     74.0         63.0    -18.17
+ba           0.7        2.7         0.0      0.0          7.0     -2.55
+
+3. [s] of ˈasa against the lung pressure (middle 60 %)
+lungPressure Pa  level dB  against 800 Pa dB
+            400    -36.75             -10.56
+            800    -26.19               0.00
+           1600    -15.91              10.28

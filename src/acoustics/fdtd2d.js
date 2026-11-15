@@ -38,9 +38,10 @@
  *   the flow they take.
  *
  * Turbulence noise is a pressure jump across the open faces of the plane
- * at `noisePosition`, as in the waveguide. The grid has the head's rest
- * tract length; a longer or shorter tract stretches the time step (see
- * stepDuration).
+ * at `noisePosition`, as in the waveguide; the burst transient of a stop
+ * (issue 35) enters the same plane without its DC, as in the 3D solver.
+ * The grid has the head's rest tract length; a longer or shorter tract
+ * stretches the time step (see stepDuration).
  */
 
 import { glottalReflection } from './glottis.js';
@@ -57,6 +58,8 @@ import { DEFAULT_HEAD, normalizeHeadConfig } from '../head-config.js';
 export const COURANT_2D = 0.68;
 /** Waveguide boundary-loss coefficient (see lossFactor). */
 const BOUNDARY_LOSS = 0.0004;
+/** Time constant of the DC blocker of the burst transient (s, as in 3D). */
+const BURST_LEAK_TIME = 0.008;
 /** Smallest column area the losses see (cm², as in lossFactor). */
 const LOSS_AREA = 0.05;
 const MIN_AREA = 1e-4;
@@ -101,6 +104,9 @@ export class Fdtd2d {
     this.#allocate();
     this.#allocateLines(options, exponent);
     this.pending = [];
+    this.burstInput = 0;
+    this.burstState = 0;
+    this.burstLeak = 1 - this.dt / BURST_LEAK_TIME;
     this.noiseColumn = -1;
     this.areaCount = 44;
     this.dirty = true;
@@ -478,18 +484,21 @@ export class Fdtd2d {
    * @param {number} glottalFlow Source volume velocity (derivative).
    * @param {number} noisePosition Section boundary of the turbulence source.
    * @param {number} noise Turbulence pressure.
+   * @param {number} [flow] Burst transient of a stop: it enters through the
+   *   noise plane without its DC (see #burst).
    * @returns {number} Radiated output (lips + nostrils).
    */
-  step(glottalFlow, noisePosition, noise) {
+  step(glottalFlow, noisePosition, noise, flow = 0) {
     if (this.dirty) {
       this.#update();
     }
     const { rows, pressure, divergence, keep, gain } = this;
     const { areas } = this.sheet;
-    if (noise !== 0) {
+    const jump = noise + this.#burst(flow);
+    if (jump !== 0) {
       // A pressure jump across the plane enters the momentum equation.
       const column = this.#noiseFaces(noisePosition) - 1;
-      const force = COURANT_2D * noise;
+      const force = COURANT_2D * jump;
       for (let face = column * rows; face < (column + 1) * rows; face++) {
         if (this.depthX[face] > 0) {
           this.velocityX[face] += force;
@@ -530,8 +539,20 @@ export class Fdtd2d {
    * Queue a step (arguments as for step); flushSteps returns the outputs.
    * The step runs right away.
    */
-  queueStep(glottalFlow, noisePosition, noise) {
-    this.pending.push(this.step(glottalFlow, noisePosition, noise));
+  queueStep(glottalFlow, noisePosition, noise, flow = 0) {
+    this.pending.push(this.step(glottalFlow, noisePosition, noise, flow));
+  }
+
+  /**
+   * Burst transient of a stop as a pressure jump on the noise plane. The
+   * flow derivative has a net integral (the change of the mean flow) that
+   * a pressure jump would turn into lasting momentum, so a DC blocker of
+   * about 20 Hz removes it (as #burst of the 3D solver).
+   */
+  #burst(flow) {
+    this.burstState = flow - this.burstInput + this.burstLeak * this.burstState;
+    this.burstInput = flow;
+    return this.burstState;
   }
 
   /**
@@ -578,6 +599,8 @@ export class Fdtd2d {
       port.mean = 0;
       port.left = 0;
     }
+    this.burstInput = 0;
+    this.burstState = 0;
     this.pending = [];
   }
 }

@@ -226,20 +226,6 @@ function constrictionIndex(areas, state, head) {
   return best;
 }
 
-/**
- * Turbulence efficiency of a constriction: silent when closed, strongest
- * for slit-like openings, fading as the channel gets wide.
- */
-export function turbulence(area) {
-  if (area <= 0.005) {
-    return 0;
-  }
-  if (area < 0.06) {
-    return (area - 0.005) / 0.055;
-  }
-  return Math.max(0, 1 - (area - 0.06) / 0.4) ** 2;
-}
-
 /** How much a sibilant jet is aimed at the incisors (0..1). */
 function obstacleStrength(state, teeth) {
   if (!teeth) {
@@ -258,7 +244,9 @@ function fricationSource(areas, state, head, teeth) {
     index,
     position: Math.min(areas.length - 1, target),
     area: areas[index],
-    gain: (state.frication ?? 0) * turbulence(areas[index]),
+    // The plan's frication gain; the renderer scales it by the source
+    // strength of the air flow (src/acoustics/aerodynamics.js).
+    gain: Math.max(0, state.frication ?? 0),
     sibilance: state.sibilance ?? 0,
     obstacle,
   };

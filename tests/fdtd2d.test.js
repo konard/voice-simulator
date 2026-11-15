@@ -340,6 +340,31 @@ describe('2D FDTD rendering', () => {
     }
   );
 
+  it('radiates the burst transient without its DC (issue 35)', () => {
+    const shape = vowelShape('a');
+    const run = (flow) => {
+      const solver = new Fdtd2d({ head: DEFAULT_HEAD });
+      solver.setNose(noseShape(DEFAULT_HEAD).areas);
+      solver.setShape(shape.areas, 0, shape.velumIndex, null, shape);
+      const steps = Math.round(0.06 / solver.dt);
+      return Float64Array.from({ length: steps }, (_, n) =>
+        solver.step(0, 36, 0, flow(n))
+      );
+    };
+    const peak = (values) => Math.max(...values.map(Math.abs));
+    // A step of the flow derivative, as at the release of a stop, sounds
+    // at once and dies away: the DC blocker keeps it from driving a
+    // lasting flow.
+    const outputs = run(() => 1);
+    const early = peak(outputs.subarray(0, outputs.length / 6));
+    expect(early).toBeGreaterThan(0);
+    expect(peak(outputs.subarray(-outputs.length / 6))).toBeLessThan(
+      0.05 * early
+    );
+    // Without a flow or a noise the solver stays silent.
+    expect(peak(run(() => 0))).toBe(0);
+  });
+
   it('exposes the pressure per column and in the nose', () => {
     const solver = new Fdtd2d({ head: DEFAULT_HEAD });
     solver.setNose(noseShape(DEFAULT_HEAD).areas);

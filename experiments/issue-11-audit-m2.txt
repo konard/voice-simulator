@@ -1,15 +1,15 @@
-source noise re pulses, breathiness 0.2: {"dB":-40.19}
-source noise re pulses, breathiness 0.5: {"dB":-22.84}
-source noise re pulses, breathiness 1: {"dB":-10.11}
+source noise re pulses, breathiness 0.2: {"dB":-40.2}
+source noise re pulses, breathiness 0.5: {"dB":-23.19}
+source noise re pulses, breathiness 1: {"dB":-10.12}
 steady [aː], no jitter/shimmer/vibrato, breathiness 0: {"hnr":28.58,"h1h2":1.83}
-steady [aː], no jitter/shimmer/vibrato, breathiness 0.5: {"hnr":8.38,"h1h2":9.35}
-steady [aː], no jitter/shimmer/vibrato, breathiness 1: {"hnr":-2.55,"h1h2":13.43}
-sentence, no jitter/shimmer/vibrato, breathiness 0: {"hnr":24.91,"h1h2":0.02}
-steady [aː], tenseness 0.2: {"hnr":29.14,"h1h2":12.01}
+steady [aː], no jitter/shimmer/vibrato, breathiness 0.5: {"hnr":10.01,"h1h2":9.41}
+steady [aː], no jitter/shimmer/vibrato, breathiness 1: {"hnr":-2.21,"h1h2":13.36}
+sentence, no jitter/shimmer/vibrato, breathiness 0: {"hnr":22.58,"h1h2":0.89}
+steady [aː], tenseness 0.2: {"hnr":29.14,"h1h2":12.04}
 steady [aː], tenseness 0.6: {"hnr":28.58,"h1h2":1.83}
-steady [aː], tenseness 0.9: {"hnr":27.75,"h1h2":-2.83}
+steady [aː], tenseness 0.9: {"hnr":27.74,"h1h2":-2.81}
 steady [aː], breathiness 1 and aspirationLevel 3: {"hnr":0,"h1h2":0}
-steady [aː], breathiness 1 and glottalChink 10: {"hnr":-3.91,"h1h2":13.87}
+steady [aː], breathiness 1 and glottalChink 10: {"hnr":-3.77,"h1h2":13.75}
 noise-free harmonic signal, 110.25 Hz: {"hnr":30}
 noise-free harmonic signal, 120 Hz: {"hnr":30}
 noise-free harmonic signal, gliding 126 to 114 Hz: {"hnr":29.98}
@@ -17,22 +17,22 @@ planned f0 of [aː], default prosody: {"from":119.8,"to":98.6,"seconds":0.51}
 planned f0 of [aː], declination 0 and accentStrength 0: {"from":119.8,"to":98.6}
 steady [aː], breathiness 0, declination 0 and accentStrength 0: {"hnr":28.58,"h1h2":1.83}
 steady [aː], pitchRange 0.5, breathiness 0: {"hnr":30,"h1h2":1.75}
-steady [aː], pitchRange 0.5, breathiness 1: {"hnr":-1.73,"h1h2":13.58}
-ama waveguide 44: {"vowelLips":0.4407,"vowelNose":0.0966,"nasalLips":0,"nasalNose":0.582,"audioVowel":0.1414,"audioNasal":0.1688,"ratio":1.19}
-ama fdtd3d dx 1: {"vowelLips":0.3815,"vowelNose":0.1423,"nasalLips":0,"nasalNose":0.4945,"audioVowel":0.1291,"audioNasal":0.1445,"ratio":1.12}
-ama fdtd3d dx 0.6: {"vowelLips":0.3462,"vowelNose":0.1351,"nasalLips":0,"nasalNose":0.523,"audioVowel":0.1225,"audioNasal":0.1527,"ratio":1.25}
-ama waveguide 44, nasalCoupling 0.25: {"vowelLips":0.4938,"vowelNose":0.0108,"nasalLips":0.0001,"nasalNose":0.5853,"audioVowel":0.145,"audioNasal":0.1698,"ratio":1.17}
-ama fdtd3d dx 1, nasalCoupling 0.25: {"vowelLips":0.4545,"vowelNose":0.0679,"nasalLips":0,"nasalNose":0.511,"audioVowel":0.1325,"audioNasal":0.1492,"ratio":1.13}
-ama waveguide 44, nasalCoupling 0.5: {"vowelLips":0.4816,"vowelNose":0.0363,"nasalLips":0.0001,"nasalNose":0.5843,"audioVowel":0.1437,"audioNasal":0.1694,"ratio":1.18}
-ama fdtd3d dx 1, nasalCoupling 0.5: {"vowelLips":0.4263,"vowelNose":0.105,"nasalLips":0,"nasalNose":0.4997,"audioVowel":0.1289,"audioNasal":0.146,"ratio":1.13}
-ama waveguide 44, nasalCoupling 2: {"vowelLips":0.3742,"vowelNose":0.1593,"nasalLips":0,"nasalNose":0.5813,"audioVowel":0.1412,"audioNasal":0.1686,"ratio":1.19}
-ama fdtd3d dx 1, nasalCoupling 2: {"vowelLips":0.3432,"vowelNose":0.1737,"nasalLips":0,"nasalNose":0.4922,"audioVowel":0.1356,"audioNasal":0.1438,"ratio":1.06}
-ama waveguide 44, wallLoss 0: {"vowelLips":0.456,"vowelNose":0.146,"nasalLips":0.0002,"nasalNose":1.496,"audioVowel":0.1518,"audioNasal":0.4018,"ratio":2.65}
-ama fdtd3d dx 1, wallLoss 0: {"vowelLips":0.4653,"vowelNose":0.2895,"nasalLips":0,"nasalNose":0.5569,"audioVowel":0.179,"audioNasal":0.1627,"ratio":0.91}
-ama waveguide 44, wallLoss 3: {"vowelLips":0.4176,"vowelNose":0.0517,"nasalLips":0,"nasalNose":0.4041,"audioVowel":0.1293,"audioNasal":0.1175,"ratio":0.91}
-ama fdtd3d dx 1, wallLoss 3: {"vowelLips":0.3561,"vowelNose":0.0775,"nasalLips":0,"nasalNose":0.3959,"audioVowel":0.116,"audioNasal":0.1151,"ratio":0.99}
+steady [aː], pitchRange 0.5, breathiness 1: {"hnr":-1.37,"h1h2":13.49}
+ama waveguide 44: {"vowelLips":0.4408,"vowelNose":0.0966,"nasalLips":0,"nasalNose":0.5819,"audioVowel":0.1413,"audioNasal":0.1688,"ratio":1.19}
+ama fdtd3d dx 1: {"vowelLips":0.3814,"vowelNose":0.1423,"nasalLips":0,"nasalNose":0.4945,"audioVowel":0.1291,"audioNasal":0.1445,"ratio":1.12}
+ama fdtd3d dx 0.6: {"vowelLips":0.3461,"vowelNose":0.1351,"nasalLips":0,"nasalNose":0.523,"audioVowel":0.1225,"audioNasal":0.1527,"ratio":1.25}
+ama waveguide 44, nasalCoupling 0.25: {"vowelLips":0.4939,"vowelNose":0.0108,"nasalLips":0.0001,"nasalNose":0.5853,"audioVowel":0.145,"audioNasal":0.1697,"ratio":1.17}
+ama fdtd3d dx 1, nasalCoupling 0.25: {"vowelLips":0.4544,"vowelNose":0.0679,"nasalLips":0,"nasalNose":0.5111,"audioVowel":0.1325,"audioNasal":0.1492,"ratio":1.13}
+ama waveguide 44, nasalCoupling 0.5: {"vowelLips":0.4817,"vowelNose":0.0363,"nasalLips":0.0001,"nasalNose":0.5843,"audioVowel":0.1437,"audioNasal":0.1694,"ratio":1.18}
+ama fdtd3d dx 1, nasalCoupling 0.5: {"vowelLips":0.4262,"vowelNose":0.105,"nasalLips":0,"nasalNose":0.4997,"audioVowel":0.1289,"audioNasal":0.146,"ratio":1.13}
+ama waveguide 44, nasalCoupling 2: {"vowelLips":0.3743,"vowelNose":0.1593,"nasalLips":0,"nasalNose":0.5813,"audioVowel":0.1412,"audioNasal":0.1686,"ratio":1.19}
+ama fdtd3d dx 1, nasalCoupling 2: {"vowelLips":0.3431,"vowelNose":0.1737,"nasalLips":0,"nasalNose":0.4922,"audioVowel":0.1356,"audioNasal":0.1438,"ratio":1.06}
+ama waveguide 44, wallLoss 0: {"vowelLips":0.4561,"vowelNose":0.146,"nasalLips":0.0002,"nasalNose":1.4958,"audioVowel":0.1518,"audioNasal":0.4017,"ratio":2.65}
+ama fdtd3d dx 1, wallLoss 0: {"vowelLips":0.4905,"vowelNose":0.3343,"nasalLips":0,"nasalNose":0.5565,"audioVowel":0.179,"audioNasal":0.1625,"ratio":0.91}
+ama waveguide 44, wallLoss 3: {"vowelLips":0.4177,"vowelNose":0.0517,"nasalLips":0,"nasalNose":0.4041,"audioVowel":0.1293,"audioNasal":0.1175,"ratio":0.91}
+ama fdtd3d dx 1, wallLoss 3: {"vowelLips":0.356,"vowelNose":0.0775,"nasalLips":0,"nasalNose":0.3959,"audioVowel":0.116,"audioNasal":0.1151,"ratio":0.99}
 ama fdtd3d dx 1, no pouches: {"vowelLips":0.3688,"vowelNose":0.1185,"nasalLips":0,"nasalNose":0.4886,"audioVowel":0.1231,"audioNasal":0.1428,"ratio":1.16}
-ama fdtd3d dx 1, microphone output: {"vowelLips":109.0936,"vowelNose":23.774,"nasalLips":0,"nasalNose":176.5278,"audioVowel":0.1563,"audioNasal":0.2086,"ratio":1.33}
+ama fdtd3d dx 1, microphone output: {"vowelLips":108.6726,"vowelNose":24.1555,"nasalLips":0,"nasalNose":176.5276,"audioVowel":0.1563,"audioNasal":0.2086,"ratio":1.33}
 ama velar port area: {"vowel":0.037,"nasal":1.2681,"firstNoseSection":0.6}
 gain dB waveguide 44 [a]: {"50":1.17,"100":1.33,"250":2.59,"500":9.02,"1000":8.29,"2000":13.12}
 gain dB fdtd3d dx 1 [a]: {"50":-0.19,"100":0.12,"250":2.54,"500":11.11,"1000":2.77,"2000":2.87}

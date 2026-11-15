@@ -49,7 +49,33 @@ export {
   renderPlan,
   renderPlanAsync,
   registerSolver,
+  FRICATION_GAIN,
+  STROUHAL,
+  TRANSIENT_GAIN,
+  WALL_SOURCE,
+  strouhalFrequency,
 } from './acoustics/voice.js';
+// Air flow and turbulence noise sources (issue 35)
+export {
+  ASPIRATION_REFERENCE,
+  Aerodynamics,
+  FRICATION_REFERENCE,
+  GLOTTIS_BREATHY,
+  GLOTTIS_OPEN,
+  GLOTTIS_VOICED,
+  ORAL_COMPLIANCE,
+  RE_CRITICAL,
+  REFERENCE_CONSTRICTION,
+  REFERENCE_GLOTTIS,
+  REFERENCE_LUNG_PRESSURE,
+  VISCOSITY,
+  glottalArea,
+  lagFactor,
+  openTractStrength,
+  reynolds,
+  sourceStrength,
+  steadyFlow,
+} from './acoustics/aerodynamics.js';
 export { Waveguide } from './acoustics/waveguide.js';
 export { Fdtd3d } from './acoustics/fdtd3d.js';
 export { COURANT_2D, Fdtd2d } from './acoustics/fdtd2d.js';
@@ -81,11 +107,18 @@ export {
   reverberationTime,
   roomImpulseResponse,
 } from './acoustics/room.js';
-export { Glottis } from './acoustics/glottis.js';
+export {
+  BREATH_EXPONENT,
+  BREATH_GAIN,
+  CHINK_NOISE,
+  Glottis,
+} from './acoustics/glottis.js';
 export {
   ADDUCTION_TABLE,
   FOLDS_FLOW_SCALE,
   FOLD_RATE,
+  MEAN_AREA_STAGES,
+  MEAN_AREA_TIME,
   MAX_FOLD_TENSION,
   MIN_FOLD_TENSION,
   VocalFolds,

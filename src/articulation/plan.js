@@ -173,7 +173,13 @@ function pushConsonant(segments, token, index, context) {
   pushRelease(segments, token, index, context);
 }
 
-/** Voice onset time after an oral stop: a short or aspirated release. */
+/**
+ * Voice onset time after an oral stop: a short or aspirated release. The
+ * constriction keeps its frication gain until the end of the release: the
+ * opening areas and the falling mouth pressure time the burst (see
+ * src/acoustics/aerodynamics.js). Aspirated stops hold the glottis open
+ * (`aspiration` 1) from the closure to the end of the release.
+ */
 function pushRelease(segments, token, index, context) {
   const manner = token.phoneme.manner;
   if (manner !== 'plosive' || token.voiced || token.affricate) {
@@ -183,13 +189,16 @@ function pushRelease(segments, token, index, context) {
     return;
   }
   const aspirated = isAspirated(context.tokens, index, context.language);
+  const closure = segments.at(-1);
+  const aspiration = aspirated ? 1 : closure.target.aspiration;
+  closure.target = { ...closure.target, aspiration };
   segments.push({
     token,
     kind: 'release',
     target: {
       voicing: 0,
-      aspiration: aspirated ? 1 : 0.35,
-      frication: 0,
+      aspiration,
+      frication: closure.target.frication,
     },
     duration: (aspirated ? 0.06 : 0.015) * context.rate,
   });

@@ -1,0 +1,17 @@
+# node experiments/issue-35-burst-solvers.mjs (merge of main 0575e6e)
+solver     word  burst dB
+waveguide  pa        2.80
+waveguide  ta        4.92
+waveguide  ka      -11.97
+fdtd2d     pa       19.01
+fdtd2d     ta        4.37
+fdtd2d     ka       -4.93
+fdtd3d     pa       13.06
+fdtd3d     ta      -19.33
+fdtd3d     ka        0.64
+
+# the same for fdtd2d of main 0575e6e, which ignored the flow argument
+solver     word  burst dB
+fdtd2d     pa      -12.83
+fdtd2d     ta      -21.19
+fdtd2d     ka      -24.67
