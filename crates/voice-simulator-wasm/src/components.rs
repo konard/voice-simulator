@@ -109,15 +109,22 @@ pub extern "C" fn vs_glottis_run(seed: u32, parameters: u32, data: u32, count: u
 }
 
 /// `new Radiation()` of `radiation.js`, configured for `area` (cm²) at
-/// `rate` steps per second, run over the `count` `f64` incident waves at
+/// `rate` steps per second and `baffle` (0 free pipe end, 1 infinite
+/// baffle), run over the `count` `f64` incident waves at
 /// `data`; each is replaced by the reflected wave. Returns 0 or a negative
 /// code of [`error`].
 #[no_mangle]
-pub extern "C" fn vs_radiation_run(area: f64, rate: f64, data: u32, count: u32) -> i32 {
+pub extern "C" fn vs_radiation_run(
+    area: f64,
+    rate: f64,
+    baffle: f64,
+    data: u32,
+    count: u32,
+) -> i32 {
     match f64_slice(data, count) {
         Ok(slice) => {
             let mut radiation = Radiation::new();
-            radiation.configure(area, rate);
+            radiation.configure(area, rate, baffle);
             for value in slice {
                 *value = radiation.process(*value);
             }
@@ -128,12 +135,13 @@ pub extern "C" fn vs_radiation_run(area: f64, rate: f64, data: u32, count: u32) 
 }
 
 /// Fixed `f64` parameters of [`vs_waveguide_run`] before the areas.
-pub const WAVEGUIDE_PARAMETERS: usize = 11;
+pub const WAVEGUIDE_PARAMETERS: usize = 14;
 
 /// Runs a waveguide over `data`, which holds the glottal flow derivative
 /// on entry and the radiated output on return. `parameters` are sections,
 /// noseSections, wallLoss, nasalLoss, glottalChink, vocalTractLength, the
-/// piriform index, area and sections, velumArea and velumIndex, then the
+/// piriform index, area and sections, velumArea, velumIndex, wallMass,
+/// wallResistance and wallStiffness, then the
 /// `sections` oral areas and the nose profile (`setNose`; may be empty).
 /// Returns false if the parameters do not fit.
 pub fn run_waveguide(parameters: &[f64], data: &mut [f64]) -> bool {
@@ -156,6 +164,9 @@ pub fn run_waveguide(parameters: &[f64], data: &mut [f64]) -> bool {
         nose_sections,
         wall_loss: header[2],
         nasal_loss: header[3],
+        wall_mass: header[11],
+        wall_resistance: header[12],
+        wall_stiffness: header[13],
         glottal_chink: header[4],
         vocal_tract_length: header[5],
         piriform: PiriformBranch {

@@ -14,7 +14,7 @@ import { describe, expect, it as alwaysIt } from 'test-anywhere';
 
 import { Biquad, createNoise } from '../src/acoustics/filters.js';
 import { Glottis } from '../src/acoustics/glottis.js';
-import { Radiation } from '../src/acoustics/radiation.js';
+import { Radiation, RADIATION_BAFFLE } from '../src/acoustics/radiation.js';
 import {
   NoiseSources,
   OutputStage,
@@ -146,10 +146,10 @@ describe('Rust sources (issue 22)', () => {
     const noise = createNoise(3);
     const input = Float64Array.from({ length: 4096 }, () => noise());
     const radiation = new Radiation();
-    radiation.configure(3, rate);
+    radiation.configure(3, rate, RADIATION_BAFFLE);
     const expected = input.map((value) => radiation.process(value));
     const { result, values } = inEngine(engine, input, (pointer, count) =>
-      engine.exports.vs_radiation_run(3, rate, pointer, count)
+      engine.exports.vs_radiation_run(3, rate, RADIATION_BAFFLE, pointer, count)
     );
     expect(result).toBe(0);
     const measured = error(values, expected);
@@ -189,6 +189,9 @@ describe('Rust waveguide and output (issue 22)', () => {
       branch.sections,
       velumArea,
       velumIndex,
+      head.wallMass,
+      head.wallResistance,
+      head.wallStiffness,
       ...areas,
       ...nose,
     ];

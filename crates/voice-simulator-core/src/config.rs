@@ -63,5 +63,11 @@ pub const PIRIFORM_SECTIONS: usize = 25;
 pub const NOSE_AREA_COUNT: usize = 26;
 /// Number of listener values after the nose areas.
 pub const LISTENER_LENGTH: usize = 27;
+/// `head.wallMass` (g/cm²).
+pub const WALL_MASS: usize = 28;
+/// `head.wallResistance` (g/(cm² s)).
+pub const WALL_RESISTANCE: usize = 29;
+/// `head.wallStiffness` (g/(cm² s²)).
+pub const WALL_STIFFNESS: usize = 30;
 /// Fixed fields before the nose areas.
-pub const HEADER: usize = 28;
+pub const HEADER: usize = 31;

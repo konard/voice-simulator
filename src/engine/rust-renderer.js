@@ -20,6 +20,11 @@ import {
   noseSections,
 } from '../acoustics/voice.js';
 import { piriformBranch } from '../acoustics/waveguide.js';
+import {
+  WALL_MASS,
+  WALL_RESISTANCE,
+  WALL_STIFFNESS,
+} from '../acoustics/losses.js';
 import { createListener } from '../acoustics/microphone.js';
 import { enclosureBounds } from '../acoustics/voxel-model.js';
 import { RENDERER_CONFIG, frameStride, writeFrame } from './layout.js';
@@ -138,6 +143,9 @@ export function rendererConfig(settings) {
   values[C.PIRIFORM_SECTIONS] = settings.piriform ? branch.sections : 0;
   values[C.NOSE_AREA_COUNT] = nose.length;
   values[C.LISTENER_LENGTH] = listener.length;
+  values[C.WALL_MASS] = head.wallMass ?? WALL_MASS;
+  values[C.WALL_RESISTANCE] = head.wallResistance ?? WALL_RESISTANCE;
+  values[C.WALL_STIFFNESS] = head.wallStiffness ?? WALL_STIFFNESS;
   values.set(nose, C.HEADER);
   values.set(listener, C.HEADER + nose.length);
   return values;

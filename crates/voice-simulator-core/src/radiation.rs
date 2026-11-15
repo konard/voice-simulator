@@ -3,7 +3,10 @@
 //!
 //! Flanagan's piston in a baffle, R = 128 / (9 pi²) in parallel with
 //! L = 8 a / (3 pi c), turned into a first-order filter by the bilinear
-//! transform at the waveguide step rate. Parity class A: only `sqrt` and
+//! transform at the waveguide step rate. The face is a partial baffle
+//! (issue 36): `baffle` 0 is a free pipe end, 1 an infinite baffle, which
+//! scales the end correction to (0.61 + 0.24 baffle) a and the resistance
+//! as `radiationLoad` does. Parity class B: `pow` for a square, `sqrt` and
 //! the four basic operations, in the order of the JavaScript code.
 
 use core::f64::consts::PI;
@@ -13,6 +16,19 @@ use crate::math::{self, max};
 
 /// Radiation resistance relative to rho c / A (`RADIATION_RESISTANCE`).
 pub const RADIATION_RESISTANCE: f64 = 128.0 / (9.0 * (PI * PI));
+
+/// How much of an infinite baffle the face around the lips and nostrils is
+/// (`RADIATION_BAFFLE`).
+pub const RADIATION_BAFFLE: f64 = 0.5;
+
+/// Radiation resistance (relative to rho c / A) and end correction (in
+/// radii) of an opening in a baffle of `baffle` (`radiationLoad`).
+pub fn radiation_load(baffle: f64) -> (f64, f64) {
+    let end_correction = 0.61 + 0.24 * baffle;
+    let resistance =
+        (RADIATION_RESISTANCE * math::pow(end_correction / 0.85, 2.0)) / (0.5 + 0.5 * baffle);
+    (resistance, end_correction)
+}
 
 /// The reflection filter at an open end (`Radiation`).
 #[derive(Clone, Debug, PartialEq)]
@@ -47,12 +63,14 @@ impl Radiation {
         }
     }
 
-    /// Set the opening `area` (cm²) and the step `rate` (steps per second).
-    pub fn configure(&mut self, area: f64, rate: f64) {
+    /// Set the opening `area` (cm²), the step `rate` (steps per second) and
+    /// the `baffle` (0 free pipe end, 1 infinite baffle).
+    pub fn configure(&mut self, area: f64, rate: f64, baffle: f64) {
         let radius = math::sqrt(max(area, 0.0) / PI);
-        let inertance = (8.0 * radius) / (3.0 * PI * SPEED_OF_SOUND);
+        let (resistance, end_correction) = radiation_load(baffle);
+        let inertance = (end_correction * radius) / SPEED_OF_SOUND;
         let k = 2.0 * rate * inertance;
-        let r = RADIATION_RESISTANCE;
+        let r = resistance;
         let scale = k * (r + 1.0) + r;
         self.b0 = (k * (r - 1.0) - r) / scale;
         self.b1 = -(k * (r - 1.0) + r) / scale;
@@ -82,13 +100,17 @@ mod tests {
     #[test]
     fn matches_javascript() {
         // Printed by Node.js: RADIATION_RESISTANCE and
-        // new Radiation().configure(3, 46666.666666666664).
+        // new Radiation().configure(3, 46666.666666666664, baffle).
         assert_eq!(RADIATION_RESISTANCE, 1.441012389579915);
         let mut radiation = Radiation::new();
-        radiation.configure(3.0, 46_666.666_666_666_664);
-        assert_eq!(radiation.b0, -0.06805459132757398);
-        assert_eq!(radiation.b1, -0.35327037060097216);
-        assert_eq!(radiation.a1, -0.5786750380714539);
+        radiation.configure(3.0, 46_666.666_666_666_664, RADIATION_BAFFLE);
+        assert_eq!(radiation.b0, -0.10367181476690462);
+        assert_eq!(radiation.b1, -0.3675113552849279);
+        assert_eq!(radiation.a1, -0.5288168299481676);
+        radiation.configure(3.0, 46_666.666_666_666_664, 1.0);
+        assert_eq!(radiation.b0, -0.06778343557714876);
+        assert_eq!(radiation.b1, -0.3530822002893315);
+        assert_eq!(radiation.a1, -0.5791343641335198);
     }
 
     #[test]

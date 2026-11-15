@@ -145,6 +145,9 @@ impl Renderer<Waveguide> {
             nose_sections,
             wall_loss: finite(header[config::WALL_LOSS])?,
             nasal_loss: finite(header[config::NASAL_LOSS])?,
+            wall_mass: finite(header[config::WALL_MASS])?,
+            wall_resistance: finite(header[config::WALL_RESISTANCE])?,
+            wall_stiffness: finite(header[config::WALL_STIFFNESS])?,
             glottal_chink: settings.glottal_chink,
             vocal_tract_length,
             piriform: PiriformBranch {
@@ -452,6 +455,9 @@ mod tests {
         values[config::PIRIFORM_INDEX] = 3.0;
         values[config::PIRIFORM_AREA] = 0.5;
         values[config::PIRIFORM_SECTIONS] = 3.0;
+        values[config::WALL_MASS] = crate::losses::WALL_MASS;
+        values[config::WALL_RESISTANCE] = crate::losses::WALL_RESISTANCE;
+        values[config::WALL_STIFFNESS] = crate::losses::WALL_STIFFNESS;
         values
     }
 

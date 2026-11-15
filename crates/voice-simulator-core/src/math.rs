@@ -80,6 +80,12 @@ pub fn exp(x: f64) -> f64 {
     libm::exp(x)
 }
 
+/// e^x - 1, exact for small x (`Math.expm1`).
+#[inline]
+pub fn expm1(x: f64) -> f64 {
+    libm::expm1(x)
+}
+
 /// Natural logarithm.
 #[inline]
 pub fn ln(x: f64) -> f64 {
