@@ -1,0 +1,38 @@
+# Branch (after the rational lag), first 16 hex digits of SHA-256
+## node
+minimal c968718f39c4af8d Hi.
+minimal 85246d7f72ff33a3 She sells sea shells, the fox thinks.
+low     ef2a79e3647786b4 Peter took a cup of hot coffee.
+medium  bbd46df3d5a4f7a4 ˈasa ˈaʃa ˈafa ˈaθa ˈaxa ˈpʰa ˈtʰa ˈkʰa ˈba
+## bun
+minimal c968718f39c4af8d Hi.
+minimal 5bebab374fee4621 She sells sea shells, the fox thinks.
+low     1c0eda7a02a05974 Peter took a cup of hot coffee.
+medium  bbd46df3d5a4f7a4 ˈasa ˈaʃa ˈafa ˈaθa ˈaxa ˈpʰa ˈtʰa ˈkʰa ˈba
+## deno
+minimal c968718f39c4af8d Hi.
+minimal 85246d7f72ff33a3 She sells sea shells, the fox thinks.
+low     d87c0dc8d277d851 Peter took a cup of hot coffee.
+medium  bbd46df3d5a4f7a4 ˈasa ˈaʃa ˈafa ˈaθa ˈaxa ˈpʰa ˈtʰa ˈkʰa ˈba
+
+# main e113bd5 (before issue 35), same script
+## node
+minimal b3a8dab2cb18d76b Hi.
+minimal 21df26861ea4f078 She sells sea shells, the fox thinks.
+low     411f106d350a0b8c Peter took a cup of hot coffee.
+medium  c9f4fb889b956e51 ˈasa ˈaʃa ˈafa ˈaθa ˈaxa ˈpʰa ˈtʰa ˈkʰa ˈba
+## bun
+minimal b3a8dab2cb18d76b Hi.
+minimal e31ba55522309e39 She sells sea shells, the fox thinks.
+low     ce63f95d00143650 Peter took a cup of hot coffee.
+medium  c9f4fb889b956e51 ˈasa ˈaʃa ˈafa ˈaθa ˈaxa ˈpʰa ˈtʰa ˈkʰa ˈba
+## deno
+minimal b3a8dab2cb18d76b Hi.
+minimal 21df26861ea4f078 She sells sea shells, the fox thinks.
+low     e388f21fb042caf9 Peter took a cup of hot coffee.
+medium  c9f4fb889b956e51 ˈasa ˈaʃa ˈafa ˈaθa ˈaxa ˈpʰa ˈtʰa ˈkʰa ˈba
+
+Hi. (the hash of tests/narrow-band.test.js) and the IPA fricatives and stops
+match on all three runtimes on both; the two English sentences already
+differ on main (Math.sin, Math.exp and Math.log of JavaScriptCore and V8
+differ in the last bit), tier low between Node.js and Deno too.

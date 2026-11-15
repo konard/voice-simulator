@@ -247,7 +247,7 @@ describe('Rust engine parity: aerodynamics (issue 35)', () => {
     }
   });
 
-  it('the mouth pressure follows within 1e-12 (class B: exp)', async () => {
+  it('the mouth pressure is bit-identical (class A)', async () => {
     const engine = await loadRustEngine();
     const { vs_alloc: alloc, vs_free: free } = engine.exports;
     // A closure and release at 48 kHz: lung pressure ramps up, the
@@ -271,8 +271,7 @@ describe('Rust engine parity: aerodynamics (issue 35)', () => {
       expect(engine.exports.vs_aero_run(dt, 1e-3, pointer, count)).toBe(0);
       const actual = float64View(engine, pointer, count * 5);
       const air = new Aerodynamics();
-      let error = 0;
-      let energy = 0;
+      let different = 0;
       inputs.forEach(([lung, glottis, constriction], index) => {
         const state = air.step(dt, lung, glottis, constriction);
         const expected = [
@@ -283,11 +282,12 @@ describe('Rust engine parity: aerodynamics (issue 35)', () => {
           state.constrictionDrop,
         ];
         expected.forEach((value, offset) => {
-          error += (actual[index * 5 + offset] - value) ** 2;
-          energy += value ** 2;
+          if (!Object.is(actual[index * 5 + offset], value)) {
+            different++;
+          }
         });
       });
-      expect(Math.sqrt(error / energy) < 1e-12).toBe(true);
+      expect(different).toBe(0);
     } finally {
       free(pointer, bytes);
     }

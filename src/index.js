@@ -69,6 +69,7 @@ export {
   REFERENCE_LUNG_PRESSURE,
   VISCOSITY,
   glottalArea,
+  lagFactor,
   openTractStrength,
   reynolds,
   sourceStrength,

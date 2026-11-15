@@ -13,8 +13,8 @@
 //! All quantities are cgs: areas cm², flow cm³/s, pressure dyn/cm².
 //!
 //! Parity: every function is class A (only `+ - * /` and `sqrt`, in the
-//! order of the JavaScript code) except [`Aerodynamics::step`], which calls
-//! `exp` and is class B.
+//! order of the JavaScript code), [`Aerodynamics::step`] included: its lag
+//! uses [`lag_factor`] instead of `exp`.
 
 use crate::math;
 
@@ -174,6 +174,13 @@ pub fn strouhal_frequency(flow: f64, area: f64) -> f64 {
     min(STROUHAL_RANGE[1], max(STROUHAL_RANGE[0], frequency))
 }
 
+/// 1 - exp(-x) of a first-order lag over `x` time constants, with exp(-x)
+/// replaced by 1 / (1 + x + x²/2 + x³/6), `lagFactor` of the JavaScript
+/// code: between 0 and 1 for every x >= 0 and bit-identical everywhere.
+pub fn lag_factor(x: f64) -> f64 {
+    1.0 - 1.0 / (1.0 + x * (1.0 + x * (0.5 + x / 6.0)))
+}
+
 /// One step of [`Aerodynamics::step`].
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct AirflowState {
@@ -241,7 +248,7 @@ impl Aerodynamics {
             let target = (lung * g2) / (g2 + constriction * constriction);
             let tau = (self.compliance * math::sqrt((AIR_DENSITY * lung) / 2.0)) / total;
             self.oral_pressure += if tau > 0.0 {
-                (target - self.oral_pressure) * (1.0 - math::exp(-dt / tau))
+                (target - self.oral_pressure) * lag_factor(dt / tau)
             } else {
                 target - self.oral_pressure
             };
@@ -296,6 +303,13 @@ mod tests {
         assert!((state.oral_pressure - oral).abs() < 1e-6 * oral);
         assert!((state.flow - flow).abs() < 1e-6 * flow);
         assert_eq!(state.glottal_drop + state.constriction_drop, 8000.0);
+    }
+
+    #[test]
+    fn lag_factor_stays_in_range() {
+        assert_eq!(lag_factor(0.0), 0.0);
+        assert!((lag_factor(0.1) - (1.0 - math::exp(-0.1))).abs() < 5e-6);
+        assert!(lag_factor(1e6) <= 1.0 && lag_factor(1e6) > 0.999);
     }
 
     #[test]

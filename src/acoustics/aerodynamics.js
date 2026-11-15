@@ -150,6 +150,18 @@ export function glottalArea(control, breathiness = 0.2, chink = 0) {
   );
 }
 
+/**
+ * 1 - exp(-x) of a first-order lag over x time constants, with exp(-x)
+ * replaced by 1 / (1 + x + x²/2 + x³/6): relative error of exp(-x) below
+ * 5e-6 at x = 0.1 (a control block against the shortest time constant),
+ * between 0 and 1 for every x >= 0, and only + and / so that every runtime
+ * gives the same bits (JavaScriptCore and V8 round Math.exp differently).
+ * @param {number} x
+ */
+export function lagFactor(x) {
+  return 1 - 1 / (1 + x * (1 + x * (0.5 + x / 6)));
+}
+
 export class Aerodynamics {
   /**
    * @param {{compliance?: number}} [options]
@@ -184,7 +196,7 @@ export class Aerodynamics {
         (this.compliance * Math.sqrt((AIR_DENSITY * lung) / 2)) / total;
       this.oralPressure +=
         tau > 0
-          ? (target - this.oralPressure) * (1 - Math.exp(-dt / tau))
+          ? (target - this.oralPressure) * lagFactor(dt / tau)
           : target - this.oralPressure;
     }
     const flow =

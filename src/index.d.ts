@@ -606,6 +606,11 @@ export declare function glottalArea(
   breathiness?: number,
   chink?: number
 ): number;
+/**
+ * 1 - exp(-x) of a first-order lag over x time constants, as a rational
+ * function that gives the same bits on every runtime.
+ */
+export declare function lagFactor(x: number): number;
 /** Amplitude of the frication noise at relative strength 1. */
 export declare const FRICATION_GAIN: number;
 /** Wall source against the obstacle source of a sibilant (-15 dB). */

@@ -191,14 +191,17 @@ Each ported function has a class, stated by the issue that ports it.
   JavaScript output `e`, with the limit stated by the issue that ports the
   code.
 
-| Module (issue)         | Class                                                              |
-| ---------------------- | ------------------------------------------------------------------ |
-| `random.rs`            | A                                                                  |
-| `aerodynamics.rs` (35) | A, except `Aerodynamics::step` (calls `exp`): class B, limit 1e-12 |
+| Module (issue)         | Class |
+| ---------------------- | ----- |
+| `random.rs`            | A     |
+| `aerodynamics.rs` (35) | A     |
 
-The step of `aerodynamics.rs` measured an error of 0, all 48 000 values
-bit-identical (`node experiments/issue-35-rust-airflow-parity.mjs`): libm
-and V8 both derive `exp` from fdlibm.
+The lag of the mouth pressure in `Aerodynamics::step` uses `lag_factor`
+(`lagFactor` in JavaScript), a rational form of 1 - exp(-x), instead of
+`exp`: JavaScriptCore and V8 round `Math.exp` differently, so `exp` gave
+Bun and Node.js different samples, and without it the step is class A. All
+48 000 values of the closure and release are bit-identical
+(`node experiments/issue-35-rust-airflow-parity.mjs`).
 
 ## Tests
 
