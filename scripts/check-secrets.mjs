@@ -161,7 +161,7 @@ function runScanner(args, input) {
   const result = spawnSync('secretlint', args, {
     input,
     stdio: [input === undefined ? 'inherit' : 'pipe', 'inherit', 'inherit'],
-    // npm exec supplies the pinned scanner; v14 has the recommended rules built in.
+    // npm exec supplies the pinned scanner and preset from one execution tree.
     shell: process.platform === 'win32',
   });
   if (result.error) {

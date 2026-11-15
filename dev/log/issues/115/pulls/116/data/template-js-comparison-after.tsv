@@ -121,7 +121,7 @@ same-head	tests/check-staged-formatting.test.js
 same-head	tests/check-web-archive.test.js
 same-head	tests/checkout-credentials.test.js
 same-head	tests/ci-audit-regressions.test.js
-same-head	tests/ci-issue-299.test.js
+customized	tests/ci-issue-299.test.js
 customized	tests/ci-timeouts.test.js
 same-head	tests/ci-workflow-policy.test.js
 same-head	tests/codeql-results.test.js
@@ -169,7 +169,7 @@ same-head	tests/package-manager.test.js
 customized	tests/package-metadata.test.js
 customized	tests/pipeline-requirements.test.js
 customized	tests/pipeline-status.test.js
-customized	tests/pr-guards.test.js
+same-head	tests/pr-guards.test.js
 same-head	tests/preview-tools.test.js
 same-head	tests/publish-failure-classifier.test.js
 same-head	tests/publish-retry.test.js
