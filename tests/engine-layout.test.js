@@ -2,19 +2,23 @@
  * The layouts of src/engine/layout.js and the Rust constants agree (issue
  * 22): the names and indices of RENDERER_CONFIG are those of
  * crates/voice-simulator-core/src/config.rs, the ones of FRAME those of
- * frame.rs. Compared as text, so no Rust build is needed.
+ * frame.rs, the ones of LISTENER those of listener.rs. Compared as text,
+ * so no Rust build is needed.
  */
 
 import { readFileSync } from 'node:fs';
 
 import { describe, it, expect } from 'test-anywhere';
 
+import { createListener } from '../src/acoustics/microphone.js';
 import {
   FRAME,
+  LISTENER,
   RENDERER_CONFIG,
   frameStride,
   writeFrame,
 } from '../src/engine/layout.js';
+import { listenerValues } from '../src/engine/listener-layout.js';
 
 /** `pub const NAME: usize = N;` lines of a Rust file, as an object. */
 function rustConstants(path) {
@@ -40,6 +44,11 @@ describe('engine layouts (issue 22)', () => {
   it('FRAME matches frame.rs', () => {
     const rust = rustConstants('crates/voice-simulator-core/src/frame.rs');
     expect(rust).toEqual({ ...FRAME });
+  });
+
+  it('LISTENER matches listener.rs', () => {
+    const rust = rustConstants('crates/voice-simulator-core/src/listener.rs');
+    expect(rust).toEqual({ ...LISTENER });
   });
 
   it('indices are distinct and the headers come last', () => {
@@ -79,5 +88,40 @@ describe('engine layouts (issue 22)', () => {
     expect(frame[1 + FRAME.LUNG_PRESSURE]).toBe(800);
     expect(frame[1 + FRAME.RESERVED]).toBe(0);
     expect([...frame.subarray(1 + FRAME.AREAS)]).toEqual([1, 2, 3]);
+  });
+
+  it('listenerValues serializes the microphone and the room', () => {
+    expect([...listenerValues(null)]).toEqual([]);
+    const listener = createListener({
+      microphone: { distance: 30, azimuth: 120 },
+      room: 'studio',
+      solver: {},
+      sampleRate: 48000,
+    });
+    const [microphone, room] = listener.stages;
+    const values = listenerValues(listener);
+    const taps = room.tapDelays.length;
+    expect(values.length).toBe(
+      1 + LISTENER.MICROPHONE_VALUES + LISTENER.ROOM_VALUES + 2 * taps
+    );
+    expect(values[0]).toBe(2);
+    expect([...values.subarray(1, 1 + LISTENER.MICROPHONE_VALUES)]).toEqual([
+      LISTENER.MICROPHONE,
+      microphone.gain,
+      microphone.delay,
+      microphone.fraction,
+      microphone.size,
+      1,
+      microphone.lowGain,
+      microphone.highGain,
+      microphone.smoothing,
+    ]);
+    const start = 1 + LISTENER.MICROPHONE_VALUES;
+    expect(values[start]).toBe(LISTENER.ROOM);
+    expect(values[start + 4]).toBe(taps);
+    expect(values.at(-1)).toBe(room.tapGains.at(-1));
+    expect(listenerValues({ stages: [{ process: (value) => value }] })).toBe(
+      null
+    );
   });
 });

@@ -274,6 +274,24 @@ describe('Rust renderer (issue 22)', () => {
     });
   }
 
+  it('renders a microphone in a room like VoiceRenderer', async () => {
+    const engine = await loadRustEngine();
+    const { plan, renderOptions } = prepareUtterance('Hello world.', {
+      tier: 'minimal',
+      seed: 1,
+    });
+    const options = {
+      ...renderOptions,
+      room: 'studio',
+      microphone: { distance: 30 },
+    };
+    const expected = renderPlan(plan, options);
+    const actual = renderPlanRust(engine, plan, options);
+    const measured = maxDifference(actual, expected);
+    globalThis.console.log(`render (room) max abs diff ${measured}`);
+    expect(measured < 1e-4).toBe(true);
+  });
+
   it('gives the same samples for any chunking', async () => {
     const engine = await loadRustEngine();
     const { plan, renderOptions } = prepareUtterance('Hello world.', {

@@ -1,9 +1,8 @@
 /**
  * Layouts of the arrays the JavaScript side hands to the Rust renderer
- * (issue 22, docs/RUST-ENGINE.md). Each name is the index of one `f64`;
- * the same names and numbers are constants in
- * `crates/voice-simulator-core/src/config.rs` (RENDERER_CONFIG) and
- * `crates/voice-simulator-core/src/frame.rs` (FRAME), and
+ * (issue 22, docs/RUST-ENGINE.md). The same names and numbers are
+ * constants in `crates/voice-simulator-core/src/config.rs`
+ * (RENDERER_CONFIG), `frame.rs` (FRAME) and `listener.rs` (LISTENER);
  * tests/engine-layout.test.js compares the files as text.
  */
 
@@ -69,6 +68,20 @@ export const FRAME = Object.freeze({
   RESERVED: 15,
   AREAS: 16,
   STRIDE: 16,
+});
+
+/**
+ * The listener values of RENDERER_CONFIG: `[stage count, stages...]`,
+ * each stage starting with its kind (src/engine/listener-layout.js). The
+ * same names and numbers are constants in
+ * `crates/voice-simulator-core/src/listener.rs`.
+ */
+export const LISTENER = Object.freeze({
+  MICROPHONE: 1,
+  ROOM: 2,
+  MICROPHONE_VALUES: 9,
+  ROOM_VALUES: 29,
+  LINES: 8,
 });
 
 /** Values of one frame for a tract of `sections` sections. */
