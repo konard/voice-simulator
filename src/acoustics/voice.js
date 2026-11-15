@@ -19,7 +19,10 @@ import {
   noseShape,
 } from '../articulation/tract-shape.js';
 import { normalizeHeadConfig } from '../head-config.js';
-import { VOWEL_CORRECTIONS_3D } from '../articulation/vowel-calibration.js';
+import {
+  VOWEL_CORRECTIONS_2D,
+  VOWEL_CORRECTIONS_3D,
+} from '../articulation/vowel-calibration.js';
 import { Biquad, createNoise } from './filters.js';
 import { Glottis } from './glottis.js';
 import { SPEED_OF_SOUND } from './transfer.js';
@@ -35,7 +38,10 @@ const OUTPUT_GAIN = 0.3;
  * Vowel calibration of each solver (scripts/calibrate-vowels.mjs); the
  * others use the tube-model table.
  */
-const VOWEL_TABLES = new Map([['fdtd3d', VOWEL_CORRECTIONS_3D]]);
+const VOWEL_TABLES = new Map([
+  ['fdtd2d', VOWEL_CORRECTIONS_2D],
+  ['fdtd3d', VOWEL_CORRECTIONS_3D],
+]);
 
 /** Solver factories by name: 1D waveguide, 2D and 3D FDTD. */
 const SOLVERS = new Map([
