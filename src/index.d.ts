@@ -516,7 +516,7 @@ export declare function sampleState(
  * consonant channels alone.
  */
 export interface ArticulatorChannels {
-  /** Gap between the incisors (cm), 0.1 to 1.8; time constant 0.035 s. */
+  /** Gap between the incisors (cm), 0.1 to 1.8; time constant 0.02 s. */
   jaw?: number;
   /**
    * Lips pushed forward (cm), -0.3 to 1.2, by default LIP_PROTRUSION times

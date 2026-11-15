@@ -1,5 +1,6 @@
 // Issue 40: which planned channel changes the consonant levels of the
-// acoustics tests (closure of [t] against [a], [s] against [z] above 4 kHz).
+// acoustics tests (closure of [t] against [a], [s] against [z] above 4 kHz,
+// as stressed onsets: [aˈsa], [aˈza]).
 // Each channel is dropped from the plan in turn, so tractShape() falls back
 // to the value it implies.
 // Usage: node experiments/issue-40-consonant-levels.mjs
@@ -63,8 +64,9 @@ for (const drop of [[], ['jaw'], ['lipProtrusion'], ['jaw', 'lipProtrusion']]) {
   const ratio =
     level(samples, plan, 'consonant', RATE) /
     level(samples, plan, 'vowel', RATE);
-  const sz = noiseLevel('ˈasa', drop) - noiseLevel('ˈaza', drop);
+  const sz = noiseLevel('aˈsa', drop) - noiseLevel('aˈza', drop);
+  const s = noiseLevel('aˈsa', drop);
   console.log(
-    `without [${drop.join(', ')}]: closure/vowel ${ratio.toFixed(4)} (test < 0.4 of a ratio), [s]-[z] above 4 kHz ${sz.toFixed(2)} dB (test 3..12)`
+    `without [${drop.join(', ')}]: closure/vowel ${ratio.toFixed(4)} (test < 0.4 of a ratio), [s] ${s.toFixed(2)} dB, [s]-[z] above 4 kHz ${sz.toFixed(2)} dB (test 3..12)`
   );
 }

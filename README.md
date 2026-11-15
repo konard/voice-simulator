@@ -78,7 +78,7 @@ table)` gives one sound from `durationFeatures(tokens, index)`, and
   `experiments/issue-11-fit-dynamics.txt`.
 - **Free articulators** (issue 40): four channels of the plan move the jaw,
   the lips, the larynx and the tongue root on their own time constants.
-  `jaw` is the gap between the incisors (cm, 0.1 to 1.8, 0.035 s; the
+  `jaw` is the gap between the incisors (cm, 0.1 to 1.8, 0.02 s; the
   planner writes the gap each sound needs), `lipProtrusion` pushes the
   lips forward (cm, -0.3 to 1.2, 0.02 s; `LIP_PROTRUSION` = 0.6 times the
   rounding), `larynxHeight` raises the larynx (cm, -1.5 to 1.5, 0.04 s;

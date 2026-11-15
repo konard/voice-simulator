@@ -102,8 +102,10 @@ export const ARTICULATORS = Object.freeze({
   trill: articulator(0.01),
   lateral: articulator(0.015),
   // Free articulators (issue 40): the planner sets them from the other
-  // channels; voices and emotions move them apart (tract-shape.js).
-  jaw: articulator(0.035),
+  // channels; voices and emotions move them apart (tract-shape.js). The
+  // jaw lags the tongue tip, but reaches the sibilant gap within the 66 ms
+  // of a stressed [z] (experiments/issue-40-sibilant-jaw.txt).
+  jaw: articulator(0.02),
   lipProtrusion: articulator(0.02, ROUNDING_LEAD, [0.05, 0.25]),
   larynxHeight: articulator(0.04),
   tongueRoot: articulator(0.03),
