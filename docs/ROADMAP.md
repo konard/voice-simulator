@@ -84,6 +84,8 @@ Simulation core in Rust (WebAssembly and native), multicore with a single-core f
 
 The workspace, the WebAssembly build, the loader, the CI job `rust` and the parity tests of [#21](https://github.com/konard/voice-simulator/issues/21) are described in [RUST-ENGINE.md](RUST-ENGINE.md); the ports below add their code to that pipeline.
 
+The AudioWorklet player of [#27](https://github.com/konard/voice-simulator/issues/27) is the export `voice-simulator/playback` (processor, ring buffer) with the stream resampler `createStreamResampler`; its latency and underrun measurements are in `experiments/issue-27-latency.txt`, and the resampler is ported to the Rust core with class B parity tests.
+
 | Issue                                                      | Type    | Title                                                                         | Blocked by                                                                                                             | Requirements  |
 | ---------------------------------------------------------- | ------- | ----------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- | ------------- |
 | [#21](https://github.com/konard/voice-simulator/issues/21) | Feature | Rust workspace and WebAssembly build pipeline                                 | nothing                                                                                                                | R2, R12, R19  |
