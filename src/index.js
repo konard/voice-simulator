@@ -253,6 +253,26 @@ export {
   matchVoice,
   matchVoiceSteps,
 } from './analysis/voice-match.js';
+// Objective speech metrics and recording comparison (issue 18)
+export {
+  EPSILON,
+  METRIC_DEFAULTS,
+  compareRecordings,
+  dtw,
+  editDistance,
+  errorRate,
+  f0Errors,
+  fft,
+  formantErrors,
+  formantTrack,
+  logSpectralDistance,
+  melCepstralDistortion,
+  melFilterbank,
+  mfcc,
+  pitchTrack,
+  powerFrames,
+  tokenize,
+} from './metrics/index.js';
 // Linguistics: text normalisation, accents, prosody, syllables, timeline
 export { normalizeText, VERBALIZERS } from './g2p/normalize.js';
 export {

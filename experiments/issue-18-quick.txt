@@ -1,0 +1,50 @@
+fft bin 8 share 1
+lsd gain 6.020599912962591
+lsd normalized 0
+lsd self 0
+mcd gain 0
+mcd filtered 57.671217818882916
+dtw {
+  cost: 0,
+  normalizedCost: 0,
+  path: [ [ 0, 0 ], [ 1, 1 ], [ 1, 2 ], [ 2, 3 ], [ 3, 4 ] ]
+}
+f0 {
+  rmseCents: 321.1777626727681,
+  meanCents: 227.10697395223792,
+  gpe: 0.5,
+  vde: 0.5,
+  ffe: 0.75,
+  correlation: null,
+  voicedFrames: 2,
+  frames: 4
+}
+kitten { distance: 3, substitutions: 2, deletions: 0, insertions: 1 }
+wer {
+  distance: 2,
+  substitutions: 1,
+  deletions: 1,
+  insertions: 0,
+  referenceLength: 6,
+  rate: 0.3333333333333333
+}
+cer {
+  distance: 1,
+  substitutions: 0,
+  deletions: 1,
+  insertions: 0,
+  referenceLength: 3,
+  rate: 0.3333333333333333
+}
+per {
+  distance: 0,
+  substitutions: 0,
+  deletions: 0,
+  insertions: 0,
+  referenceLength: 5,
+  rate: 0
+}
+self {"sampleRate":16000,"duration":{"reference":0.525,"test":0.525,"ratio":1},"lsd":0,"mcd":0,"f0":{"rmseCents":0,"meanCents":0,"gpe":0,"vde":0,"ffe":0,"correlation":1,"voicedFrames":35,"frames":51},"formants":{"frames":35,"f1":{"hz":0,"percent":0},"f2":{"hz":0,"percent":0},"f3":{"hz":0,"percent":0}},"timing":{"rmsSeconds":0,"maxSeconds":0},"dtw":{"normalizedCost":0},"frames":{"reference":51,"test":51,"path":51}}
+ms 280.07095200000003
+other {"sampleRate":16000,"duration":{"reference":0.525,"test":0.535,"ratio":1.019047619047619},"lsd":10.752474777212075,"mcd":44.80310015913308,"f0":{"rmseCents":1036.7474909895625,"meanCents":1036.5074740224488,"gpe":1,"vde":0.0392156862745098,"ffe":0.7254901960784313,"correlation":0.9954480267641597,"voicedFrames":35,"frames":51},"formants":{"frames":35,"f1":{"hz":61.285714285714285,"percent":10.129115973868279},"f2":{"hz":1141.5714285714287,"percent":99.29479437779852},"f3":{"hz":1291.4285714285713,"percent":42.88795133476942}},"timing":{"rmsSeconds":0.0029865679882031494,"maxSeconds":0.005142857142857116},"dtw":{"normalizedCost":7.2947221898528785},"frames":{"reference":51,"test":52,"path":52}}
+ms 294.7873299999999

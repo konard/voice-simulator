@@ -1,0 +1,262 @@
+/**
+ * Objective speech metrics (issue 18): spectra, DTW, spectral distances,
+ * pitch and formant errors, transcript error rates and the comparison of
+ * two recordings.
+ */
+
+import { describe, it, expect } from 'test-anywhere';
+import {
+  METRIC_DEFAULTS,
+  compareRecordings,
+  createRandom,
+  dtw,
+  editDistance,
+  errorRate,
+  f0Errors,
+  fft,
+  formantErrors,
+  logSpectralDistance,
+  melCepstralDistortion,
+  melFilterbank,
+  mfcc,
+  pitchTrack,
+  powerFrames,
+  synthesize,
+  tokenize,
+} from '../src/index.js';
+import { median } from '../src/analysis/voice-features.js';
+
+function noise(seconds = 1, sampleRate = 16000) {
+  const random = createRandom(1);
+  return Float64Array.from(
+    { length: Math.round(seconds * sampleRate) },
+    () => random() * 2 - 1
+  );
+}
+
+function near(value, expected, tolerance) {
+  expect(Math.abs(value - expected) <= tolerance).toBe(true);
+}
+
+describe('metrics: spectrum', () => {
+  it('has the documented defaults', () => {
+    expect(METRIC_DEFAULTS.sampleRate).toBe(16000);
+    expect(METRIC_DEFAULTS.fftSize).toBe(512);
+    expect(METRIC_DEFAULTS.window).toBe(0.025);
+    expect(METRIC_DEFAULTS.hop).toBe(0.01);
+  });
+
+  it('fft finds a sine', () => {
+    const re = Float64Array.from({ length: 512 }, (_, n) =>
+      Math.sin((2 * Math.PI * 8 * n) / 512)
+    );
+    const im = new Float64Array(512);
+    fft(re, im);
+    let total = 0;
+    for (let k = 1; k <= 255; k++) {
+      total += re[k] ** 2 + im[k] ** 2;
+    }
+    expect((re[8] ** 2 + im[8] ** 2) / total > 0.99).toBe(true);
+  });
+
+  it('fft rejects a length that is not a power of two', () => {
+    expect(() => fft(new Float64Array(6), new Float64Array(6))).toThrow();
+  });
+
+  it('frames, filters and cepstra have the documented shapes', () => {
+    const frames = powerFrames(noise(), 16000);
+    expect(frames.length).toBe(98);
+    expect(frames[0].length).toBe(257);
+    const filters = melFilterbank(26, 512, 16000);
+    expect(filters.length).toBe(26);
+    expect(Math.max(...filters[10])).toBeLessThanOrEqual(1);
+    expect(Math.max(...filters[10]) > 0.8).toBe(true);
+    const coefficients = mfcc(noise(), 16000);
+    expect(coefficients.length).toBe(98);
+    expect(coefficients[0].length).toBe(14);
+  });
+});
+
+describe('metrics: spectral distances', () => {
+  const x = noise();
+  const half = x.map((value) => value * 0.5);
+
+  it('lsd of a signal with itself is zero', () => {
+    expect(logSpectralDistance(x, x, 16000)).toBe(0);
+    expect(
+      logSpectralDistance(x, half, 16000, { normalize: true }) < 0.01
+    ).toBe(true);
+  });
+
+  it('lsd without normalisation measures gain', () => {
+    near(logSpectralDistance(x, half, 16000, { normalize: false }), 6.02, 0.01);
+  });
+
+  it('mcd ignores gain', () => {
+    expect(melCepstralDistortion(x, half, 16000) < 1e-6).toBe(true);
+    const raw = melCepstralDistortion(x, half, 16000, { normalize: false });
+    expect(raw < 1e-6).toBe(true);
+  });
+
+  it('mcd grows with spectral change', () => {
+    const y = new Float64Array(x.length);
+    for (let n = 0; n < x.length; n++) {
+      y[n] = x[n] + 0.9 * (n > 0 ? y[n - 1] : 0);
+    }
+    expect(melCepstralDistortion(x, y, 16000) > 3).toBe(true);
+  });
+});
+
+describe('metrics: dtw', () => {
+  it('dtw aligns a stretched sequence', () => {
+    const result = dtw([[0], [1], [2], [3]], [[0], [1], [1], [2], [3]]);
+    expect(result.cost).toBe(0);
+    expect(result.path.length).toBe(5);
+    expect(result.path[0]).toEqual([0, 0]);
+    expect(result.path[4]).toEqual([3, 4]);
+    expect(result.normalizedCost).toBe(0);
+  });
+
+  it('dtw respects the band', () => {
+    const a = [[0], [5], [1], [7], [2]];
+    const b = [[5], [0], [7], [1], [2]];
+    const result = dtw(a, b, { band: 0 });
+    expect(result.path).toEqual([0, 1, 2, 3, 4].map((index) => [index, index]));
+    expect(dtw(a, b).path.length > 5).toBe(true);
+  });
+
+  it('dtw prefers the diagonal on ties', () => {
+    const result = dtw([[0], [0]], [[0], [0]]);
+    expect(result.path).toEqual([
+      [0, 0],
+      [1, 1],
+    ]);
+  });
+
+  it('dtw refuses too many cells', () => {
+    const long = new Array(5001).fill([0]);
+    expect(() => dtw(long, long)).toThrow(RangeError);
+  });
+});
+
+describe('metrics: pitch and formants', () => {
+  it('f0 errors on a known case', () => {
+    const result = f0Errors([100, 100, 0, 200], [100, 130, 100, 0]);
+    expect(result.gpe).toBe(0.5);
+    expect(result.vde).toBe(0.5);
+    expect(result.ffe).toBe(0.75);
+    near(result.rmseCents, 321.18, 0.01);
+    expect(result.voicedFrames).toBe(2);
+  });
+
+  it('f0 errors are null without frames voiced in both', () => {
+    const result = f0Errors([0, 100], [100, 0]);
+    expect(result.rmseCents).toBe(null);
+    expect(result.gpe).toBe(null);
+    expect(result.vde).toBe(1);
+  });
+
+  it('pitchTrack follows a glide', () => {
+    const sampleRate = 16000;
+    const samples = new Float64Array(sampleRate);
+    const truth = (seconds) => 100 + 100 * seconds;
+    // Pulses smoothed by two one-pole low-pass filters (a glottal-like
+    // -12 dB/octave tilt). Single-sample pulses under a 100 Hz/s glide are
+    // judged unvoiced in about half the frames by the YIN aperiodicity
+    // threshold (see experiments/issue-18-glide.mjs).
+    let phase = 0;
+    let first = 0;
+    let second = 0;
+    for (let index = 0; index < samples.length; index++) {
+      const previous = phase;
+      phase += truth(index / sampleRate) / sampleRate;
+      const pulse = Math.floor(phase) > Math.floor(previous) ? 1 : 0;
+      first = pulse + 0.9 * first;
+      second = first + 0.9 * second;
+      samples[index] = second;
+    }
+    const track = pitchTrack(samples, sampleRate);
+    const errors = [];
+    track.forEach((f0, frame) => {
+      const centre = frame * 0.01 + 0.02;
+      if (centre < 0.98) {
+        errors.push(f0 > 0 ? Math.abs(f0 / truth(centre) - 1) : 1);
+      }
+    });
+    expect(median(errors) < 0.02).toBe(true);
+  });
+
+  it('formant errors average over frames with formants in both', () => {
+    const result = formantErrors(
+      [[500, 1500, 2500], null, [600, 1600, 2600]],
+      [[550, 1500, 2400], [500, 1500, 2500], null]
+    );
+    expect(result.frames).toBe(1);
+    expect(result.f1.hz).toBe(50);
+    expect(result.f1.percent).toBe(10);
+    expect(result.f2.hz).toBe(0);
+    expect(result.f3.percent).toBe(4);
+  });
+});
+
+describe('metrics: transcripts', () => {
+  it('edit distance of kitten and sitting', () => {
+    const result = editDistance([...'kitten'], [...'sitting']);
+    expect(result.distance).toBe(3);
+    expect(result.substitutions).toBe(2);
+    expect(result.insertions).toBe(1);
+    expect(result.deletions).toBe(0);
+  });
+
+  it('word error rate', () => {
+    const result = errorRate('The cat sat on the mat.', 'the cat sit on mat');
+    near(result.rate, 0.3333, 0.0001);
+    expect(result.substitutions).toBe(1);
+    expect(result.deletions).toBe(1);
+    expect(result.insertions).toBe(0);
+    expect(result.referenceLength).toBe(6);
+  });
+
+  it('character error rate handles Chinese', () => {
+    near(errorRate('你好吗', '你好', 'char').rate, 0.3333, 0.0001);
+  });
+
+  it('phoneme error rate ignores stress and tone', () => {
+    expect(errorRate('ˈhɛloʊ', 'hɛloʊ', 'phone').rate).toBe(0);
+    expect(errorRate('ma˨˩˦', 'ma˥', 'phone').rate).toBe(0);
+    expect(tokenize('t͡ʃaː bʰ', 'phone')).toEqual(['t͡ʃ', 'aː', 'bʰ']);
+  });
+
+  it('tokenize rejects an unknown unit', () => {
+    expect(() => tokenize('a', 'syllable')).toThrow(RangeError);
+  });
+});
+
+describe('metrics: compareRecordings', () => {
+  const first = synthesize('Hello.', { tier: 'minimal', seed: 1 });
+
+  it('compareRecordings of a rendering with itself', () => {
+    const result = compareRecordings(first, first);
+    expect(result.lsd).toBe(0);
+    expect(result.mcd).toBe(0);
+    expect(result.timing.rmsSeconds).toBe(0);
+    expect(result.f0.gpe).toBe(0);
+    expect(result.f0.voicedFrames > 10).toBe(true);
+    expect(result.formants.f1.hz).toBe(0);
+    expect(result.sampleRate).toBe(16000);
+    expect(result.duration.ratio).toBe(1);
+  });
+
+  it('compareRecordings separates voices', () => {
+    const second = synthesize('Hello.', {
+      tier: 'minimal',
+      seed: 2,
+      head: { pitch: 220 },
+    });
+    const result = compareRecordings(first, second);
+    expect(result.mcd > 1).toBe(true);
+    expect(result.f0.rmseCents > 300).toBe(true);
+    expect(Number.isFinite(result.lsd)).toBe(true);
+    expect(Number.isFinite(result.timing.rmsSeconds)).toBe(true);
+  });
+});
