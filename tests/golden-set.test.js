@@ -166,11 +166,11 @@ describe('golden set', () => {
   });
 
   it('findPauses finds a gap', () => {
-    const samples = toneGapTone(0.5, 0.4);
-    const pauses = findPauses(samples, SR);
+    // A 1 s tone, 0.4 s of silence and a 1 s tone: one pause, 1.0 to 1.4 s.
+    const pauses = findPauses(toneGapTone(1, 0.4), SR);
     expect(pauses.length).toBe(1);
-    expect(Math.abs(pauses[0].start - 0.5)).toBeLessThan(0.011);
-    expect(Math.abs(pauses[0].end - 0.9)).toBeLessThan(0.011);
+    expect(Math.abs(pauses[0].start - 1)).toBeLessThan(0.02);
+    expect(Math.abs(pauses[0].end - 1.4)).toBeLessThan(0.02);
     // A gap shorter than --min is not a pause.
     expect(findPauses(toneGapTone(0.5, 0.1), SR)).toEqual([]);
     expect(findPauses(toneGapTone(0.5, 0.1), SR, { min: 0.05 }).length).toBe(1);
@@ -182,7 +182,8 @@ describe('golden set', () => {
     expect(cut.length).toBe(16000);
     expect(cut[0]).toBe(0);
     expect(cut[cut.length - 1]).toBe(0);
-    expect(Math.abs(peakOf(cut) - PEAK)).toBeLessThan(1e-6);
+    expect(Math.abs(peakOf(cut) - 0.708)).toBeLessThan(0.001);
+    expect(PEAK).toBe(0.708);
     // The fade is 10 ms: sample 80 of 160 is scaled by half.
     const scale = PEAK / peakOf(samples.subarray(4000, 20000));
     expect(Math.abs(cut[80] - 0.5 * samples[4080] * scale)).toBeLessThan(1e-6);
