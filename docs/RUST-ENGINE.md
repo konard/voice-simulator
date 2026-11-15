@@ -7,9 +7,13 @@ expected output; the Rust engine has to reproduce it, and the parity tests
 check that it does. The package keeps working when no Rust tool is
 installed: the file is optional and everything falls back to JavaScript.
 
-So far the engine holds one algorithm, the random generator of
-`src/random.js`. It proves that every link of the chain works: workspace,
-build, loader, CI job and parity tests.
+So far the engine holds two modules: the random generator of
+`src/random.js`, which proves that every link of the chain works
+(workspace, build, loader, CI job and parity tests), and the air flow of
+`src/acoustics/aerodynamics.js` with `strouhalFrequency` of
+`src/acoustics/voice.js` (`crates/voice-simulator-core/src/aerodynamics.rs`,
+issue 35): mouth pressure, flow, turbulence source strength and the peak
+frequency of the frication noise.
 
 ## Layout
 
@@ -110,14 +114,27 @@ The module imports nothing.
 
 ### Exports
 
-| Export                                           | Result                                                                   |
-| ------------------------------------------------ | ------------------------------------------------------------------------ |
-| `vs_abi_version() -> u32`                        | 1                                                                        |
-| `vs_alloc(bytes) -> u32`                         | Offset of a block aligned to 8, or 0                                     |
-| `vs_free(ptr, bytes)`                            | Frees a block of `vs_alloc`                                              |
-| `vs_hash_seed_utf16(ptr, len) -> u32`            | `hashSeed` of the `len` UTF-16 code units at `ptr`; traps on a bad range |
-| `vs_random_fill(seed, out, count) -> i32`        | Writes `count` `f64` values of `createRandom(seed)` at `out`; 0 or error |
-| `vs_random_normal_fill(seed, out, count) -> i32` | The same for `randomNormal(createRandom(seed))`                          |
+| Export                                             | Result                                                                   |
+| -------------------------------------------------- | ------------------------------------------------------------------------ |
+| `vs_abi_version() -> u32`                          | 1                                                                        |
+| `vs_alloc(bytes) -> u32`                           | Offset of a block aligned to 8, or 0                                     |
+| `vs_free(ptr, bytes)`                              | Frees a block of `vs_alloc`                                              |
+| `vs_hash_seed_utf16(ptr, len) -> u32`              | `hashSeed` of the `len` UTF-16 code units at `ptr`; traps on a bad range |
+| `vs_random_fill(seed, out, count) -> i32`          | Writes `count` `f64` values of `createRandom(seed)` at `out`; 0 or error |
+| `vs_random_normal_fill(seed, out, count) -> i32`   | The same for `randomNormal(createRandom(seed))`                          |
+| `vs_aero_reynolds(flow, area) -> f64`              | `reynolds` of `aerodynamics.js`                                          |
+| `vs_aero_source_strength(dp, area, flow) -> f64`   | `sourceStrength`                                                         |
+| `vs_aero_open_tract_strength(lung, area) -> f64`   | `openTractStrength`                                                      |
+| `vs_aero_glottal_area(v, a, c, b, chink) -> f64`   | `glottalArea({voicing: v, aspiration: a, closure: c}, b, chink)`         |
+| `vs_aero_strouhal_frequency(flow, area) -> f64`    | `strouhalFrequency` of `voice.js`                                        |
+| `vs_aero_steady_flow(lung, g, c, out) -> i32`      | Writes `[oralPressure, flow]` of `steadyFlow` at `out`; 0 or error       |
+| `vs_aero_run(dt, compliance, steps, count) -> i32` | Steps a new `Aerodynamics` in place (below); 0 or error                  |
+
+`vs_aero_run` steps a new `Aerodynamics` of `src/acoustics/aerodynamics.js`
+`count` times by `dt` seconds over the `5 * count` `f64` values at `steps`:
+each step reads `[lungPressure, glottalArea, constrictionArea, -, -]` and
+writes `[flow, flowDerivative, oralPressure, glottalDrop, constrictionDrop]`
+in place.
 
 ### Error codes
 
@@ -173,6 +190,15 @@ Each ported function has a class, stated by the issue that ports it.
   `sqrt(sum((a - e)^2) / sum(e^2))` of the Rust output `a` against the
   JavaScript output `e`, with the limit stated by the issue that ports the
   code.
+
+| Module (issue)         | Class                                                              |
+| ---------------------- | ------------------------------------------------------------------ |
+| `random.rs`            | A                                                                  |
+| `aerodynamics.rs` (35) | A, except `Aerodynamics::step` (calls `exp`): class B, limit 1e-12 |
+
+The step of `aerodynamics.rs` measured an error of 0, all 48 000 values
+bit-identical (`node experiments/issue-35-rust-airflow-parity.mjs`): libm
+and V8 both derive `exp` from fdlibm.
 
 ## Tests
 

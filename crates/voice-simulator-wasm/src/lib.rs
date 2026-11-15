@@ -15,6 +15,7 @@
 
 use std::alloc::{alloc, dealloc, Layout};
 
+use voice_simulator_core::aerodynamics::{self, Aerodynamics};
 use voice_simulator_core::random::{hash_seed_utf16, Random};
 
 /// Version of the interface; raise it on any breaking change of a `vs_`
@@ -54,6 +55,28 @@ pub fn fill_normal(seed: u32, out: &mut [f64]) {
     let mut random = Random::new(seed);
     for value in out {
         *value = random.normal();
+    }
+}
+
+/// Values per step of [`run_airflow`]: three inputs, overwritten by five
+/// outputs.
+pub const AIRFLOW_STRIDE: usize = 5;
+
+/// Steps an [`Aerodynamics`] state through `steps.len() / 5` steps of `dt`
+/// seconds. Each step reads `[lung pressure, glottal area, constriction
+/// area, -, -]` and writes `[flow, flow derivative, oral pressure, glottal
+/// drop, constriction drop]` in place.
+pub fn run_airflow(dt: f64, compliance: f64, steps: &mut [f64]) {
+    let mut air = Aerodynamics::new(compliance);
+    for step in steps.as_chunks_mut::<AIRFLOW_STRIDE>().0 {
+        let state = air.step(dt, step[0], step[1], step[2]);
+        step.copy_from_slice(&[
+            state.flow,
+            state.flow_derivative,
+            state.oral_pressure,
+            state.glottal_drop,
+            state.constriction_drop,
+        ]);
     }
 }
 
@@ -186,6 +209,82 @@ pub extern "C" fn vs_random_normal_fill(seed: u32, out: u32, count: u32) -> i32 
     }
 }
 
+/// `reynolds(flow, area)` of `src/acoustics/aerodynamics.js`.
+#[no_mangle]
+pub extern "C" fn vs_aero_reynolds(flow: f64, area: f64) -> f64 {
+    aerodynamics::reynolds(flow, area)
+}
+
+/// `sourceStrength(dp, area, flow)` of `src/acoustics/aerodynamics.js`.
+#[no_mangle]
+pub extern "C" fn vs_aero_source_strength(dp: f64, area: f64, flow: f64) -> f64 {
+    aerodynamics::source_strength(dp, area, flow)
+}
+
+/// `openTractStrength(lungPressure, glottalArea)` of
+/// `src/acoustics/aerodynamics.js`.
+#[no_mangle]
+pub extern "C" fn vs_aero_open_tract_strength(lung_pressure: f64, glottal_area: f64) -> f64 {
+    aerodynamics::open_tract_strength(lung_pressure, glottal_area)
+}
+
+/// `glottalArea({voicing, aspiration, closure}, breathiness, chink)` of
+/// `src/acoustics/aerodynamics.js`.
+#[no_mangle]
+pub extern "C" fn vs_aero_glottal_area(
+    voicing: f64,
+    aspiration: f64,
+    closure: f64,
+    breathiness: f64,
+    chink: f64,
+) -> f64 {
+    aerodynamics::glottal_area(voicing, aspiration, closure, breathiness, chink)
+}
+
+/// `strouhalFrequency(flow, area)` of `src/acoustics/voice.js`.
+#[no_mangle]
+pub extern "C" fn vs_aero_strouhal_frequency(flow: f64, area: f64) -> f64 {
+    aerodynamics::strouhal_frequency(flow, area)
+}
+
+/// `steadyFlow(lungPressure, glottalArea, constrictionArea)` of
+/// `src/acoustics/aerodynamics.js`: writes `[oral pressure, flow]` at
+/// `out`. Returns 0 or a negative code of [`error`].
+#[no_mangle]
+pub extern "C" fn vs_aero_steady_flow(
+    lung_pressure: f64,
+    glottal_area: f64,
+    constriction_area: f64,
+    out: u32,
+) -> i32 {
+    match f64_slice(out, 2) {
+        Ok(slice) => {
+            let (oral_pressure, flow) =
+                aerodynamics::steady_flow(lung_pressure, glottal_area, constriction_area);
+            slice.copy_from_slice(&[oral_pressure, flow]);
+            error::OK
+        }
+        Err(code) => code,
+    }
+}
+
+/// Runs `count` steps of a fresh `Aerodynamics` (see [`run_airflow`]) on
+/// the `5 * count` values at `steps`. Returns 0 or a negative code of
+/// [`error`].
+#[no_mangle]
+pub extern "C" fn vs_aero_run(dt: f64, compliance: f64, steps: u32, count: u32) -> i32 {
+    let Some(values) = count.checked_mul(AIRFLOW_STRIDE as u32) else {
+        return error::OUT_OF_BOUNDS;
+    };
+    match f64_slice(steps, values) {
+        Ok(slice) => {
+            run_airflow(dt, compliance, slice);
+            error::OK
+        }
+        Err(code) => code,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -228,6 +327,19 @@ mod tests {
         assert_eq!(vs_random_fill(1, 0, 4), error::NULL);
         assert_eq!(vs_random_normal_fill(1, 12, 4), error::MISALIGNED);
         assert_eq!(vs_hash_seed_utf16(0, 0), 0x811c_9dc5);
+    }
+
+    #[test]
+    fn airflow_runs_in_place() {
+        let mut steps = [8000.0, 0.25, 0.09, 0.0, 0.0, 8000.0, 0.25, 0.09, 0.0, 0.0];
+        run_airflow(1.0 / 48000.0, 1e-3, &mut steps);
+        let mut air = Aerodynamics::new(1e-3);
+        let first = air.step(1.0 / 48000.0, 8000.0, 0.25, 0.09);
+        let second = air.step(1.0 / 48000.0, 8000.0, 0.25, 0.09);
+        assert_eq!(steps[0], first.flow);
+        assert_eq!(steps[7], second.oral_pressure);
+        assert_eq!(vs_aero_run(0.0, 1e-3, 0, 1), error::NULL);
+        assert_eq!(vs_aero_run(0.0, 1e-3, 8, u32::MAX), error::OUT_OF_BOUNDS);
     }
 
     #[test]

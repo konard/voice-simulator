@@ -10,6 +10,15 @@
 import { describe, expect } from 'test-anywhere';
 
 import { createRandom, hashSeed, randomNormal } from '../src/random.js';
+import {
+  Aerodynamics,
+  glottalArea,
+  openTractStrength,
+  reynolds,
+  sourceStrength,
+  steadyFlow,
+} from '../src/acoustics/aerodynamics.js';
+import { strouhalFrequency } from '../src/acoustics/voice.js';
 import { float64View, uint16View } from '../src/engine/wasm-loader.js';
 import { loadRustEngine, noRust } from './helpers/rust-engine.js';
 import { itUnless } from './helpers/skip.js';
@@ -140,5 +149,154 @@ describe('Rust engine parity', () => {
     expect(fill(1, 0, 4)).toBe(-1);
     expect(fill(1, 12, 4)).toBe(-2);
     expect(fill(1, engine.memory.buffer.byteLength - 8, 2)).toBe(-3);
+  });
+});
+
+/**
+ * Inputs of the air flow functions: a seeded grid over the ranges the
+ * renderer uses (pressures up to 20000 dyn/cm², areas up to 3 cm², flows
+ * up to 2000 cm³/s), plus the edges 0 and negative values.
+ */
+function airflowInputs(count) {
+  const random = createRandom('aerodynamics');
+  const rows = [
+    [0, 0, 0],
+    [8000, 0.25, 0.09],
+    [-1, 0.1, 100],
+    [7034, 0.09, 316],
+  ];
+  while (rows.length < count) {
+    rows.push([20000 * random(), 3 * random() ** 2, 2000 * random()]);
+  }
+  return rows;
+}
+
+describe('Rust engine parity: aerodynamics (issue 35)', () => {
+  it('turbulence strengths are bit-identical (class A)', async () => {
+    const { exports } = await loadRustEngine();
+    for (const [pressure, area, flow] of airflowInputs(5000)) {
+      expect(exports.vs_aero_reynolds(flow, area)).toBe(reynolds(flow, area));
+      expect(
+        Object.is(
+          exports.vs_aero_source_strength(pressure, area, flow),
+          sourceStrength(pressure, area, flow)
+        )
+      ).toBe(true);
+      expect(
+        Object.is(
+          exports.vs_aero_open_tract_strength(pressure, area),
+          openTractStrength(pressure, area)
+        )
+      ).toBe(true);
+      expect(
+        Object.is(
+          exports.vs_aero_strouhal_frequency(flow, area),
+          strouhalFrequency(flow, area)
+        )
+      ).toBe(true);
+    }
+  });
+
+  it('glottal areas are bit-identical (class A)', async () => {
+    const { exports } = await loadRustEngine();
+    const random = createRandom('glottal-area');
+    for (let index = 0; index < 2000; index++) {
+      const control = {
+        voicing: 1.2 * random() - 0.1,
+        aspiration: 1.2 * random() - 0.1,
+        closure: 1.2 * random() - 0.1,
+      };
+      const breathiness = random();
+      const chink = 20 * random() - 1;
+      expect(
+        Object.is(
+          exports.vs_aero_glottal_area(
+            control.voicing,
+            control.aspiration,
+            control.closure,
+            breathiness,
+            chink
+          ),
+          glottalArea(control, breathiness, chink)
+        )
+      ).toBe(true);
+    }
+  });
+
+  it('steady flows are bit-identical (class A)', async () => {
+    const engine = await loadRustEngine();
+    const { vs_alloc: alloc, vs_free: free } = engine.exports;
+    const pointer = alloc(16);
+    try {
+      for (const [pressure, glottis, constriction] of airflowInputs(2000)) {
+        expect(
+          engine.exports.vs_aero_steady_flow(
+            pressure,
+            glottis,
+            constriction / 1000,
+            pointer
+          )
+        ).toBe(0);
+        const [oral, flow] = float64View(engine, pointer, 2);
+        const expected = steadyFlow(pressure, glottis, constriction / 1000);
+        expect(Object.is(oral, expected.oralPressure)).toBe(true);
+        expect(Object.is(flow, expected.flow)).toBe(true);
+      }
+    } finally {
+      free(pointer, 16);
+    }
+  });
+
+  it('the mouth pressure follows within 1e-12 (class B: exp)', async () => {
+    const engine = await loadRustEngine();
+    const { vs_alloc: alloc, vs_free: free } = engine.exports;
+    // A closure and release at 48 kHz: lung pressure ramps up, the
+    // constriction closes for 50 ms and opens again, the glottis opens.
+    const count = 9600;
+    const dt = 1 / 48000;
+    const inputs = Array.from({ length: count }, (_, index) => {
+      const time = index * dt;
+      const closed = time > 0.05 && time < 0.1;
+      return [
+        Math.min(8000, time * 160000),
+        0.05 + 0.2 * Math.min(1, Math.max(0, (time - 0.04) / 0.05)),
+        closed ? 0 : 0.09 + 0.5 * Math.max(0, time - 0.1),
+      ];
+    });
+    const bytes = count * 5 * 8;
+    const pointer = alloc(bytes);
+    try {
+      const steps = float64View(engine, pointer, count * 5);
+      inputs.forEach((row, index) => steps.set(row, index * 5));
+      expect(engine.exports.vs_aero_run(dt, 1e-3, pointer, count)).toBe(0);
+      const actual = float64View(engine, pointer, count * 5);
+      const air = new Aerodynamics();
+      let error = 0;
+      let energy = 0;
+      inputs.forEach(([lung, glottis, constriction], index) => {
+        const state = air.step(dt, lung, glottis, constriction);
+        const expected = [
+          state.flow,
+          state.flowDerivative,
+          state.oralPressure,
+          state.glottalDrop,
+          state.constrictionDrop,
+        ];
+        expected.forEach((value, offset) => {
+          error += (actual[index * 5 + offset] - value) ** 2;
+          energy += value ** 2;
+        });
+      });
+      expect(Math.sqrt(error / energy) < 1e-12).toBe(true);
+    } finally {
+      free(pointer, bytes);
+    }
+  });
+
+  it('rejects a bad airflow buffer', async () => {
+    const { exports } = await loadRustEngine();
+    expect(exports.vs_aero_run(0, 1e-3, 0, 1)).toBe(-1);
+    expect(exports.vs_aero_run(0, 1e-3, 12, 1)).toBe(-2);
+    expect(exports.vs_aero_steady_flow(1, 1, 1, 0)).toBe(-1);
   });
 });
