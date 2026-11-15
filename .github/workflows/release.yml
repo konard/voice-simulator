@@ -456,7 +456,7 @@ jobs:
         run: bash scripts/run-with-budget-warning.sh 30 "cargo fmt" cargo fmt --all --check
 
       - name: Run Clippy
-        run: bash scripts/run-with-budget-warning.sh 120 "cargo clippy" cargo clippy --workspace --all-targets --locked -- -D warnings
+        run: bash scripts/run-with-budget-warning.sh 90 "cargo clippy" cargo clippy --workspace --all-targets --locked -- -D warnings
 
       - name: Run Rust tests
         run: bash scripts/run-with-budget-warning.sh 120 "cargo test" cargo test --workspace --locked
@@ -467,7 +467,7 @@ jobs:
       # The native CLI renders the jobs of tests/rust-render-job.test.js,
       # which checks that it prints the SHA-256 of the WebAssembly render.
       - name: Build the native CLI
-        run: bash scripts/run-with-budget-warning.sh 120 "CLI build" cargo build --release --locked -p voice-simulator-cli
+        run: bash scripts/run-with-budget-warning.sh 60 "CLI build" cargo build --release --locked -p voice-simulator-cli
 
       - name: Run Rust parity tests
         env:
