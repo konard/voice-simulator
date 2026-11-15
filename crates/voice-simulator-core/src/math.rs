@@ -5,29 +5,58 @@
 //! every target. `libm` is a pure Rust port of musl's maths library: it
 //! gives the same bits on `wasm32` and on the host, which the `f64` methods
 //! of `std` (backed by the platform's C library) do not promise.
+//!
+//! The one exception: with the feature `std` on `wasm32`, `sqrt`, `floor`
+//! and `ceil` are the `f64` methods of `std`, which compile to the
+//! WebAssembly instructions `f64.sqrt`, `f64.floor` and `f64.ceil`, not to
+//! a C library. IEEE 754 defines one result for each, so they give the
+//! bits of `libm`, which on stable Rust computes them in software on
+//! `wasm32` (its `wasm32` intrinsics need a nightly feature). `abs` is the
+//! `f64::abs` of `core`, a sign-bit clear on every target.
 
 /// Square root; correctly rounded (IEEE 754), so it is allowed in class A code.
 #[inline]
 pub fn sqrt(x: f64) -> f64 {
-    libm::sqrt(x)
+    #[cfg(all(feature = "std", target_arch = "wasm32"))]
+    {
+        x.sqrt()
+    }
+    #[cfg(not(all(feature = "std", target_arch = "wasm32")))]
+    {
+        libm::sqrt(x)
+    }
 }
 
 /// Absolute value; exact, so it is allowed in class A code.
 #[inline]
 pub fn abs(x: f64) -> f64 {
-    libm::fabs(x)
+    x.abs()
 }
 
 /// Largest integer not above `x`; exact, so it is allowed in class A code.
 #[inline]
 pub fn floor(x: f64) -> f64 {
-    libm::floor(x)
+    #[cfg(all(feature = "std", target_arch = "wasm32"))]
+    {
+        x.floor()
+    }
+    #[cfg(not(all(feature = "std", target_arch = "wasm32")))]
+    {
+        libm::floor(x)
+    }
 }
 
 /// Smallest integer not below `x`; exact, so it is allowed in class A code.
 #[inline]
 pub fn ceil(x: f64) -> f64 {
-    libm::ceil(x)
+    #[cfg(all(feature = "std", target_arch = "wasm32"))]
+    {
+        x.ceil()
+    }
+    #[cfg(not(all(feature = "std", target_arch = "wasm32")))]
+    {
+        libm::ceil(x)
+    }
 }
 
 /// `Math.round` of JavaScript: the nearest integer, halves towards +∞.

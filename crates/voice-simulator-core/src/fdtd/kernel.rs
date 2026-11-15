@@ -11,7 +11,9 @@
 //! pressure = keep * pressure - gain * divergence;  divergence = 0
 //! ```
 //!
-//! [`Grid::step_scatter`] is that loop as written. [`Grid::step_gather`]
+//! [`Grid::step_scatter`] is that loop as written, and [`Grid::step`],
+//! the step of the solver, the same loop without storing the flux.
+//! [`Grid::step_gather`]
 //! computes the same numbers without writing to two cells per link: it
 //! stores the flux of every link, then sums, for every cell, the fluxes of
 //! its incident links in increasing link order, starting from `0.0`.
@@ -173,8 +175,32 @@ impl Grid {
             && self.flux.len() == self.links() + 1
     }
 
-    /// One step in the scatter form of `#stepJs`.
+    /// One step in the scatter form of `#stepJs`, storing the flux of
+    /// every link in `flux` as the gather form does.
     pub fn step_scatter(&mut self) {
+        self.scatter::<true>();
+    }
+
+    /// The step of the solver: the scatter form of `#stepJs` without
+    /// storing `flux` (no code reads it after a step), bit-identical with
+    /// [`Grid::step_scatter`] in `velocity`, `pressure` and `divergence`.
+    /// The `simd128` build runs the same loop with two links and two cells
+    /// per vector (`kernel_simd.rs`). The solver uses it rather than
+    /// [`Grid::step_gather`], which takes more time (see "Kernel" in
+    /// `docs/RUST-ENGINE.md`).
+    pub fn step(&mut self) {
+        #[cfg(all(target_arch = "wasm32", target_feature = "simd128"))]
+        {
+            super::kernel_simd::step_scatter(self);
+        }
+        #[cfg(not(all(target_arch = "wasm32", target_feature = "simd128")))]
+        {
+            self.scatter::<false>();
+        }
+    }
+
+    /// The scatter loop; `FLUX` stores the flux of every link.
+    fn scatter<const FLUX: bool>(&mut self) {
         let Self {
             link_a,
             link_b,
@@ -184,23 +210,53 @@ impl Grid {
             flux,
             pressure,
             divergence,
+            ..
+        } = self;
+        // Iterators instead of indices: the compiler then checks only the
+        // two cell indices of a link, as `#stepJs` reads them.
+        let cells = pressure.len();
+        let divergence = &mut divergence[..cells];
+        let links = link_a
+            .iter()
+            .zip(link_b.iter())
+            .zip(velocity.iter_mut())
+            .zip(damping.iter())
+            .zip(conductance.iter())
+            .enumerate();
+        for (link, ((((&a, &b), v), &k), &c)) in links {
+            let a = a as usize;
+            let b = b as usize;
+            let u = k * (*v - COURANT * (pressure[b] - pressure[a]));
+            *v = u;
+            let value = c * u;
+            if FLUX {
+                flux[link] = value;
+            }
+            divergence[a] += value;
+            divergence[b] -= value;
+        }
+        self.pressure_pass();
+    }
+
+    /// The pressure update of the scatter form, which also zeroes
+    /// `divergence`.
+    #[inline]
+    fn pressure_pass(&mut self) {
+        let Self {
+            pressure,
+            divergence,
             keep,
             gain,
             ..
         } = self;
-        for link in 0..link_a.len() {
-            let a = link_a[link] as usize;
-            let b = link_b[link] as usize;
-            let u = damping[link] * (velocity[link] - COURANT * (pressure[b] - pressure[a]));
-            velocity[link] = u;
-            let value = conductance[link] * u;
-            flux[link] = value;
-            divergence[a] += value;
-            divergence[b] -= value;
-        }
-        for cell in 0..pressure.len() {
-            pressure[cell] = keep[cell] * pressure[cell] - gain[cell] * divergence[cell];
-            divergence[cell] = 0.0;
+        let cells = pressure
+            .iter_mut()
+            .zip(divergence.iter_mut())
+            .zip(keep.iter())
+            .zip(gain.iter());
+        for (((p, d), &k), &g) in cells {
+            *p = k * *p - g * *d;
+            *d = 0.0;
         }
     }
 
@@ -447,6 +503,25 @@ mod tests {
         }
         assert!(scatter.pressure.iter().any(|&value| value != 0.0));
         assert_bit_equal(&scatter, &gather);
+    }
+
+    #[test]
+    fn step_equals_scatter() {
+        // The step of the solver leaves `flux` alone; everything else
+        // matches the scatter form bit for bit, on an odd number of links
+        // and cells (the scalar tails of the SIMD form).
+        for (seed, cells, links) in [(1, 500, 1400), (4, 499, 1399)] {
+            let mut scatter = random_grid(seed, cells, links);
+            let mut step = scatter.clone();
+            for _ in 0..200 {
+                scatter.step_scatter();
+                step.step();
+            }
+            assert!(scatter.pressure.iter().any(|&value| value != 0.0));
+            assert!(step.flux.iter().all(|&value| value == 0.0));
+            step.flux.clone_from(&scatter.flux);
+            assert_bit_equal(&scatter, &step);
+        }
     }
 
     #[test]

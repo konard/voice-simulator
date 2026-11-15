@@ -139,14 +139,17 @@ function rustKernel(engine, solver) {
   };
 }
 
+/** The forms of `vs_fdtd_kernel_steps`: scatter, gather, the solver step. */
+const FORMS = [0, 1, 2];
+
 /** The pressure and velocity after STEPS steps of a Rust kernel. */
-function runKernel(engine, solver, gather) {
+function runKernel(engine, solver, form) {
   const kernel = rustKernel(engine, solver);
   try {
     kernel.copy();
     kernel.pressure()[0] = 1;
     expect(
-      engine.exports.vs_fdtd_kernel_steps(kernel.handle, STEPS, gather)
+      engine.exports.vs_fdtd_kernel_steps(kernel.handle, STEPS, form)
     ).toBe(0);
     return {
       pressure: kernel.pressure().slice(),
@@ -371,7 +374,7 @@ describe('the 3D FDTD solver in Rust (issue 23)', () => {
   it('kernel is bit-identical with JavaScript', async () => {
     const engine = await loadRustEngine();
     const solver = javascriptSolver();
-    const results = [0, 1].map((gather) => runKernel(engine, solver, gather));
+    const results = FORMS.map((form) => runKernel(engine, solver, form));
     solver.pressure[0] = 1;
     for (let step = 0; step < STEPS; step++) {
       solver.step(0, 0, 0);
@@ -388,9 +391,9 @@ describe('the 3D FDTD solver in Rust (issue 23)', () => {
     expect(scalar.simd).toBe(false);
     expect(simd.simd).toBe(true);
     const solver = javascriptSolver();
-    for (const gather of [0, 1]) {
-      const expected = runKernel(scalar, solver, gather);
-      const actual = runKernel(simd, solver, gather);
+    for (const form of FORMS) {
+      const expected = runKernel(scalar, solver, form);
+      const actual = runKernel(simd, solver, form);
       expect(mismatches(actual.pressure, expected.pressure)).toBe(0);
       expect(mismatches(actual.velocity, expected.velocity)).toBe(0);
     }

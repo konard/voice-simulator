@@ -11,4 +11,4 @@ repository.workspace = true
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-voice-simulator-core = { path = "../voice-simulator-core" }
+voice-simulator-core = { path = "../voice-simulator-core", features = ["std"] }

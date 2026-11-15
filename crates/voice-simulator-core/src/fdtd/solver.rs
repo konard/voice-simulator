@@ -15,8 +15,8 @@ use alloc::vec::Vec;
 
 use super::kernel::{Grid, COURANT};
 use super::model::{
-    Model, CELL_AIR, CELL_NOSE, CELL_SINUS, CELL_TRACT, LINK_INNER, LINK_LIPS, LINK_NOSTRILS,
-    LINK_RADIATION, LINK_SINUS, LINK_VELUM,
+    Model, Opening, CELL_AIR, CELL_NOSE, CELL_SINUS, CELL_TRACT, LINK_INNER, LINK_LIPS,
+    LINK_NOSTRILS, LINK_RADIATION, LINK_SINUS, LINK_VELUM,
 };
 use crate::frame;
 use crate::glottis::{glottal_reflection, SPEED_OF_SOUND};
@@ -229,6 +229,25 @@ pub fn nearest_air_cell(model: &Model, point: [f64; 3]) -> Option<usize> {
     best
 }
 
+/// The thresholds of [`Fdtd3d::bin_scale`] for every point of the opening
+/// table, in the order of `weights`.
+fn bin_thresholds(opening: Option<&Opening>) -> Vec<f64> {
+    let Some(opening) = opening else {
+        return Vec::new();
+    };
+    let mut filled = vec![0.0; opening.weights.len()];
+    for bin in 0..opening.bins() {
+        let start = opening.starts[bin];
+        for m in 0..opening.starts[bin + 1] - start {
+            let head = opening.heads[start + bin + m];
+            let tail = opening.tails[start + bin + m + 1];
+            filled[start + m] =
+                head + opening.shares[start + m] + tail / opening.weights[start + m];
+        }
+    }
+    filled
+}
+
 /// The 3D FDTD solver (`Fdtd3d`).
 #[derive(Clone, Debug)]
 pub struct Fdtd3d {
@@ -274,6 +293,13 @@ pub struct Fdtd3d {
     tube_areas: [Option<Vec<f64>>; 2],
     area_count: Option<usize>,
     length: f64,
+    /// `heads[m] + shares[m] + tails[m + 1] / weights[m]` of every point of
+    /// the opening table, the threshold that the search of `#binScale`
+    /// computes again and again; the same operations, so the same bits.
+    bin_filled: Vec<f64>,
+    /// The last base and result of the damping `pow` of every link: the
+    /// exponent is fixed, so the same base gives the same bits.
+    damping_cache: Vec<(f64, f64)>,
 }
 
 impl Fdtd3d {
@@ -354,11 +380,14 @@ impl Fdtd3d {
             tube_areas: [None, None],
             area_count: None,
             length: 0.0,
+            bin_filled: Vec::new(),
+            damping_cache: vec![(f64::NAN, f64::NAN); link_count],
             cell_kind: grid_model.kind.clone(),
             cell_arc: grid_model.arc.clone(),
             grid,
             model,
         };
+        solver.bin_filled = bin_thresholds(solver.model.opening.as_ref());
         solver.allocate();
         solver.prepare_boundaries(&grid_model);
         if let Some((first, ghost, conductance)) = radiation {
@@ -487,8 +516,7 @@ impl Fdtd3d {
         };
         let start = opening.starts[bin];
         let count = opening.starts[bin + 1] - start;
-        let weights = &opening.weights[start..start + count];
-        let shares = &opening.shares[start..start + count];
+        let filled = &self.bin_filled[start..start + count];
         let heads = &opening.heads[start + bin..start + bin + count + 1];
         let tails = &opening.tails[start + bin..start + bin + count + 1];
         let target = area / opening.sample;
@@ -502,9 +530,7 @@ impl Fdtd3d {
         let mut high: i64 = count as i64 - 1;
         while low < high {
             let middle = (low + high + 1) >> 1;
-            let m = middle as usize;
-            let filled = heads[m] + shares[m] + tails[m + 1] / weights[m];
-            if filled <= target {
+            if filled[middle as usize] <= target {
                 low = middle;
             } else {
                 high = middle - 1;
@@ -791,8 +817,12 @@ impl Fdtd3d {
             } else {
                 self.wall_loss
             };
-            self.grid.damping[link] =
-                math::pow(max(0.0, boundary_loss_factor(area, wall_loss)), exponent);
+            let base = max(0.0, boundary_loss_factor(area, wall_loss));
+            let cached = &mut self.damping_cache[link];
+            if cached.0.to_bits() != base.to_bits() {
+                *cached = (base, math::pow(base, exponent));
+            }
+            self.grid.damping[link] = cached.1;
         }
         self.spans = Some(spans);
         self.scale_openings();
@@ -986,7 +1016,7 @@ impl Solver for Fdtd3d {
                 self.grid.velocity[link] += force * sign;
             }
         }
-        self.grid.step_gather();
+        self.grid.step();
         let pressure = self.source_pressure(flow);
         for &index in &self.source_cells {
             self.grid.pressure[index] += pressure * self.grid.keep[index];

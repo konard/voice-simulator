@@ -102,10 +102,18 @@ pub fn kernel_array(handle: i32, which: u32) -> u32 {
     })
 }
 
-/// Runs `count` steps, in the gather form when `gather` is not 0, else in
-/// the scatter form. Returns 0, [`error::BAD_HANDLE`], or
-/// [`error::BAD_ARGUMENT`] when a link names a missing cell.
-pub fn kernel_steps(handle: i32, count: u32, gather: u32) -> i32 {
+/// Runs `count` steps in the form `form`: 0 the scatter form
+/// ([`Grid::step_scatter`]), 1 the gather form ([`Grid::step_gather`]), 2
+/// the step of the solver ([`Grid::step`], which leaves `flux` alone).
+/// Returns 0, [`error::BAD_HANDLE`], or [`error::BAD_ARGUMENT`] for another
+/// form or when a link names a missing cell.
+pub fn kernel_steps(handle: i32, count: u32, form: u32) -> i32 {
+    let step = match form {
+        0 => Grid::step_scatter,
+        1 => Grid::step_gather,
+        2 => Grid::step,
+        _ => return error::BAD_ARGUMENT,
+    };
     with_kernel(handle, error::BAD_HANDLE, |kernel| {
         if kernel.stale {
             if !kernel.grid.index() {
@@ -114,11 +122,7 @@ pub fn kernel_steps(handle: i32, count: u32, gather: u32) -> i32 {
             kernel.stale = false;
         }
         for _ in 0..count {
-            if gather != 0 {
-                kernel.grid.step_gather();
-            } else {
-                kernel.grid.step_scatter();
-            }
+            step(&mut kernel.grid);
         }
         error::OK
     })
@@ -155,8 +159,8 @@ pub extern "C" fn vs_fdtd_kernel_array(handle: i32, which: u32) -> u32 {
 
 /// Runs `count` steps (see [`kernel_steps`]).
 #[no_mangle]
-pub extern "C" fn vs_fdtd_kernel_steps(handle: i32, count: u32, gather: u32) -> i32 {
-    kernel_steps(handle, count, gather)
+pub extern "C" fn vs_fdtd_kernel_steps(handle: i32, count: u32, form: u32) -> i32 {
+    kernel_steps(handle, count, form)
 }
 
 /// Frees the kernel of `handle`; 0 or [`error::BAD_HANDLE`].
@@ -416,7 +420,10 @@ mod tests {
             grid.pressure[0] = 1.0;
         });
         kernel_array(handle, 1);
-        assert_eq!(kernel_steps(handle, 3, 1), error::OK);
+        for form in 0..3 {
+            assert_eq!(kernel_steps(handle, 3, form), error::OK);
+        }
+        assert_eq!(kernel_steps(handle, 1, 3), error::BAD_ARGUMENT);
         assert_eq!(kernel_free(handle), error::OK);
         assert_eq!(kernel_free(handle), error::BAD_HANDLE);
         assert_eq!(kernel_steps(handle, 1, 0), error::BAD_HANDLE);
