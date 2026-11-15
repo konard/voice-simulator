@@ -41,7 +41,7 @@
  *   could not be reached.
  */
 
-import { AIR_DENSITY } from './transfer.js';
+import { AIR_DENSITY, SPEED_OF_SOUND } from './transfer.js';
 import { BREATH_EXPONENT, BREATH_GAIN } from './glottis.js';
 import { lagFactor, openTractStrength } from './aerodynamics.js';
 
@@ -245,6 +245,7 @@ export class VocalFolds {
     this.u = 0;
     this.pressure = 0;
     this.oralPressure = 0;
+    this.slowFlow = 0;
     this.started = false;
     this.intensity = 0;
     this.noiseModulation = 0;
@@ -402,9 +403,21 @@ export class VocalFolds {
     const impedance = AIR_DENSITY * SPEED_OF_SOUND;
     const belowLoad = impedance / subglottalArea;
     const aboveLoad = impedance / supraglottalArea;
-    const belowBase = lung + 2 * below.pressure;
-    const aboveBase = oral + 2 * above.pressure;
-    const transglottal = (lung - oral) / 2 + below.pressure - above.pressure;
+    // The incident pressures miss what the leaky integrator removed: the
+    // waves returning the slow part of the flow (below PRESSURE_CORNER),
+    // which the open ends of both tubes reflect with the opposite sign.
+    // They would cancel the slow part of the rho c U / A terms, so that
+    // part (slowFlow, low-passed as the integrator high-passes) is left
+    // out of them and the mean flow and pressures follow the lung and the
+    // oral pressure (aerodynamics.js) alone.
+    const slow = this.started ? this.slowFlow : 0;
+    const belowBase = lung + 2 * below.pressure + belowLoad * slow;
+    const aboveBase = oral + 2 * above.pressure - aboveLoad * slow;
+    const transglottal =
+      (lung - oral) / 2 +
+      below.pressure -
+      above.pressure +
+      ((belowLoad + aboveLoad) * slow) / 2;
     const twoL = 2 * this.length;
     const lower = this.length * FOLD_THICKNESS_1;
     const upper = this.length * FOLD_THICKNESS_2;
@@ -461,6 +474,9 @@ export class VocalFolds {
       area * (1 - closure),
       Math.max(0, a02) * (1 - closure)
     );
+    this.slowFlow = this.started
+      ? this.slowFlow + 2 * Math.PI * PRESSURE_CORNER * dt * (flow - slow)
+      : flow;
     this.started = true;
     const derivative = ((flow - previous) / dt) * FOLDS_FLOW_SCALE;
     this.area = area;
