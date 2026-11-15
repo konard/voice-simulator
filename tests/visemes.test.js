@@ -71,6 +71,25 @@ describe('faceRig', () => {
     expect(u.spread).toBe(0);
   });
 
+  it('pushes the lips forward with the lipProtrusion channel', () => {
+    const { plan, head } = prepareUtterance('i', { ipa: true });
+    const segment = plan.segments.find((entry) => entry.kind === 'vowel');
+    const state = sampleState(plan, (segment.start + segment.end) / 2);
+    expect(faceRig({ ...state, lipProtrusion: 1 }, head).protrusion).toBe(1);
+    expect(faceRig(state, head).protrusion).toBeLessThan(0.05);
+    const posture = faceRig(
+      { ...state, lipProtrusion: 1 },
+      {
+        ...head,
+        lipPosture: 0.2,
+      }
+    );
+    expect(Math.abs(posture.protrusion - 1.2)).toBeLessThan(1e-12);
+    expect(faceRig({ ...state, larynxHeight: -0.5 }, head).larynxHeight).toBe(
+      -0.5
+    );
+  });
+
   it('places the tongue for /θ/, /s/, /ʃ/ and /k/', () => {
     expect(strongest(rigOf('θ').tongue)).toBe('dental');
     expect(strongest(rigOf('s').tongue)).toBe('alveolar');

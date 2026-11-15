@@ -17,11 +17,12 @@
 // table, fitted through the tube model with targets moved by the measured
 // solver/tube formant ratios.
 //
-// Usage: node scripts/calibrate-vowels.mjs [--check] [--solver fdtd3d|fdtd2d] [--dx 0.5]
+// Usage: node scripts/calibrate-vowels.mjs [--check] [--solver fdtd3d|fdtd2d] [--dx 0.5] [--vowels i,ɔ]
 //   --check   only report the remaining formant errors of the stored table.
 //   --solver  tube (default; 1D waveguide), fdtd3d (3D solver table) or
 //             fdtd2d (2D sheet table).
 //   --dx      cell size of the solver (default 0.5 for 3D, 0.6 for 2D).
+//   --vowels  refit only these vowels and keep the stored rows of the others.
 //   PENALTY  environment variable, the regularization weight (0.01).
 import { readFileSync, writeFileSync } from 'node:fs';
 import { URL, fileURLToPath } from 'node:url';
@@ -38,6 +39,7 @@ import { HILLENBRAND } from '../src/articulation/vowel-norms.js';
 import {
   STORY_AREAS,
   STORY_FEATURES,
+  VOWEL_LENGTH_SCALE_3D,
 } from '../src/articulation/vowel-space.js';
 import { presetHeadConfig } from '../src/head-config.js';
 
@@ -49,6 +51,7 @@ const option = (flag, fallback) => {
 };
 const SOLVER = option('--solver', 'tube');
 const DX = Number(option('--dx', SOLVER === 'fdtd2d' ? SHEET_DX : 0.5));
+const ONLY = option('--vowels', NAMES.join(',')).split(',');
 /** Name and cell size of the stored table of each solver. */
 const SOLVER_TABLES = {
   fdtd3d: { name: 'VOWEL_CORRECTIONS_3D', label: '3D solver' },
@@ -101,7 +104,8 @@ function createSolver() {
     return new Fdtd2d({ head: REFERENCE_HEAD, dx: DX });
   }
   voxelModel ??= buildVoxelModel(REFERENCE_HEAD, { dx: DX });
-  return new Fdtd3d({ model: voxelModel });
+  // The source plane follows the length as in voice.js.
+  return new Fdtd3d({ model: voxelModel, lengthScale: VOWEL_LENGTH_SCALE_3D });
 }
 
 /**
@@ -264,6 +268,31 @@ function fitSolver(name, start) {
   return best;
 }
 
+/** Length changes (log) tried around a 3D fit, about one and two cells. */
+const LENGTH_STEPS = [-0.06, -0.03, 0.03, 0.06];
+
+/**
+ * The length moves the 3D source plane by whole cells (issue 40), a step
+ * the fit of the smooth tube model cannot see: the fit is tried at a few
+ * lengths around it and fitted again from the best of them.
+ * @param {string} name
+ * @param {{coefficients: number[], error: number}} fit
+ */
+function searchLength(name, fit) {
+  const goal = HILLENBRAND.male[name];
+  let best = fit;
+  for (const change of LENGTH_STEPS) {
+    const coefficients = [...fit.coefficients];
+    coefficients[0] = Number((coefficients[0] + change).toFixed(4));
+    const solver = solverFormants(name, { [name]: coefficients });
+    const error = rmsError(solver, goal);
+    if (error < best.error) {
+      best = { coefficients, error };
+    }
+  }
+  return best === fit ? fit : fitSolver(name, best.coefficients);
+}
+
 /**
  * Corrections for the solver: the better of the fits started from its
  * stored table and from the tube table.
@@ -274,9 +303,10 @@ export function calibrateSolver(name) {
   const starts = [stored?.[name], calibrate(name)].filter(
     (start) => start?.length === TERMS
   );
-  return starts
+  const fit = starts
     .map((start) => fitSolver(name, [...start]))
-    .reduce((best, fit) => (fit.error < best.error ? fit : best)).coefficients;
+    .reduce((best, next) => (next.error < best.error ? next : best));
+  return (SOLVER === 'fdtd3d' ? searchLength(name, fit) : fit).coefficients;
 }
 
 function report(corrections) {
@@ -315,7 +345,10 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   } else {
     const fit = target ? calibrateSolver : (name) => calibrate(name);
     const corrections = Object.fromEntries(
-      NAMES.map((name) => [name, fit(name)])
+      NAMES.map((name) => [
+        name,
+        ONLY.includes(name) ? fit(name) : stored[name],
+      ])
     );
     report(corrections);
     const tube = target ? TABLES.VOWEL_CORRECTIONS : corrections;

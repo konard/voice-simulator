@@ -1,0 +1,7 @@
+jaw tau 0.035 s: [s] -37.21 dB gap 0.328 cm (107 ms), [z] -52.17 dB gap 0.620 cm (66 ms), [s]-[z] 14.96 dB; [t] of [ata]: jaw - implied 0.348 cm
+jaw tau 0.030 s: [s] -36.47 dB gap 0.282 cm (107 ms), [z] -50.47 dB gap 0.543 cm (66 ms), [s]-[z] 14.00 dB; [t] of [ata]: jaw - implied 0.267 cm
+jaw tau 0.025 s: [s] -35.99 dB gap 0.249 cm (107 ms), [z] -48.07 dB gap 0.435 cm (66 ms), [s]-[z] 12.08 dB; [t] of [ata]: jaw - implied 0.182 cm
+jaw tau 0.020 s: [s] -35.67 dB gap 0.212 cm (107 ms), [z] -44.79 dB gap 0.323 cm (66 ms), [s]-[z] 9.12 dB; [t] of [ata]: jaw - implied 0.113 cm
+jaw tau 0.015 s: [s] -35.54 dB gap 0.179 cm (107 ms), [z] -45.63 dB gap 0.226 cm (66 ms), [s]-[z] 10.09 dB; [t] of [ata]: jaw - implied 0.066 cm
+jaw tau 0.012 s: [s] -35.48 dB gap 0.163 cm (107 ms), [z] -45.31 dB gap 0.195 cm (66 ms), [s]-[z] 9.82 dB; [t] of [ata]: jaw - implied 0.038 cm
+ARTICULATORS.jaw: {"timeConstant":0.035,"lead":0.058800000000000005,"min":0.005,"max":0.08,"leadMin":0.029400000000000003,"leadMax":0.11760000000000001}

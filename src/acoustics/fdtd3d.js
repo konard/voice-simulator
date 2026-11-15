@@ -26,12 +26,17 @@
  * The piriform fossae and the vallecula are blind pouches with a fixed
  * fill (see sinuses.js).
  *
- * The voxel tract has the head's rest vocal tract length; the dynamic
- * length of the larynx and lips stretches the time step instead (see
- * stepDuration). Simplifications: that stretch scales the nose and the
- * air around the head with the tract, and wall losses use the same
- * empirical loss model as the 1D waveguide, converted to a loss per unit
- * of time.
+ * The voxel tract goes on below the glottis (see LARYNX_TRAVEL in
+ * voxel-model.js), and the source plane moves along it in whole cells
+ * with the tract length: a lower larynx or a shorter tract moves the
+ * glottis end, while the lips stay where the face has them (see
+ * setShape). The cells below the source plane are closed, and the area
+ * function maps onto the active part between the source plane and the
+ * lips. The rest of the length, less than a cell, stretches the time
+ * step (see stepDuration). Simplifications: that stretch scales the nose
+ * and the air around the head with the tract (by at most half a cell,
+ * 3 % at dx 1 cm), and wall losses use the same empirical loss model as
+ * the 1D waveguide, converted to a loss per unit of time.
  *
  * A `microphone` option ({distance, azimuth, elevation} relative to the
  * lips) moves the receiver cell; the free-air shell grows to reach it (up
@@ -77,6 +82,11 @@ const MICROPHONE_GAIN = 3.9;
 /** Time constant of the leaky source integrator in microphone mode (s). */
 const MICROPHONE_LEAK_TIME = 0.008;
 const NOISE_GAIN = 1.5;
+/**
+ * The source plane moves to another cell when the tract length is this
+ * many cells past the middle between two places (issue 40).
+ */
+export const GLOTTIS_HYSTERESIS = 0.15;
 /**
  * Extra microphone level with the spherical boundary: the plane-wave shell
  * that MICROPHONE_GAIN was calibrated with reflects the low frequencies
@@ -263,6 +273,7 @@ export class Fdtd3d {
     const listening = Boolean(options.microphone || model.enclosure);
     this.output = options.output ?? (listening ? 'microphone' : 'flow');
     this.wallLoss = options.head?.wallLoss ?? 1;
+    this.lengthScale = options.lengthScale ?? 1;
     // The nasal walls are folded: more wall per area than a round tube.
     this.nasalLoss = options.head?.nasalLoss ?? DEFAULT_HEAD.nasalLoss;
     /** Glottis termination admittance (the waveguide's reflection). */
@@ -368,25 +379,182 @@ export class Fdtd3d {
     this.outputSigns = Float64Array.from(outputLinks, (link) =>
       this.cellKind[this.linkA[link]] === CELL_AIR ? -1 : 1
     );
-    // Lower boundary: absorbing glottis termination on the first tract cells.
-    this.sourceCells = [];
+    this.#placeGlottis(model);
+    this.#placePouches(model);
+    this.#closeLinks();
+  }
+
+  /**
+   * Lower boundary: an absorbing glottis termination on the tract cells
+   * within about a cell of the source plane. The plane sits at a whole
+   * number of cells from the rest glottis, from the lowest place the tube
+   * below reaches up to as far above; the cells of every place are listed
+   * here (see setShape).
+   */
+  #placeGlottis(model) {
+    const { dx } = model;
+    const travel = Math.floor((model.larynxTravel ?? 0) / dx + 1e-9);
+    const tract = [];
     model.cells.forEach((cell, index) => {
-      if (cell.kind === CELL_TRACT && cell.arc <= 0.75 * model.dx) {
-        this.sourceCells.push(index);
+      if (cell.kind === CELL_TRACT) {
+        tract.push(index);
       }
     });
-    this.#fillSinuses(model);
+    this.glottisTravel = travel;
+    this.glottisPlaces = [];
+    for (let rise = -travel; rise <= travel; rise++) {
+      const arc = rise * dx;
+      const sources = tract.filter(
+        (index) =>
+          this.cellArc[index] >= arc - dx / 2 &&
+          this.cellArc[index] <= arc + 0.75 * dx
+      );
+      // At rise 0 the source cells reach down to the rest glottis cells.
+      this.glottisPlaces.push({ rise, arc, sourceCells: sources });
+    }
+    // Cells that a place of the glottis may close.
+    this.larynxCells = Int32Array.from(
+      tract.filter((index) => this.cellArc[index] < (travel - 0.5) * dx)
+    );
+    this.rise = 0;
+    this.placed = false;
+    this.sourceCell = new Uint8Array(this.cellCount);
+    this.sourceCells = this.glottisPlaces[travel].sourceCells;
+    for (const index of this.sourceCells) {
+      this.sourceCell[index] = 1;
+    }
+    for (const index of this.larynxCells) {
+      this.solid[index] = this.cellArc[index] < -dx / 2 ? 1 : 0;
+    }
+  }
+
+  /** Links with a solid end or shut carry no flow until #updateLinks. */
+  #closeLinks() {
+    for (let link = 0; link < this.linkCount; link++) {
+      if (
+        this.shut[link] ||
+        this.solid[this.linkA[link]] ||
+        this.solid[this.linkB[link]]
+      ) {
+        this.conductance[link] = 0;
+        this.damping[link] = 0;
+      }
+    }
+    this.#skipClosed();
+  }
+
+  /**
+   * The voxel model lists the links of the cells the glottis may close
+   * first, from the lowest (see orderLarynxLinks in voxel-model.js): the
+   * run of links with a solid end there carries no flow (conductance,
+   * damping and velocity 0), so the step loop starts after it.
+   */
+  #skipClosed() {
+    const { linkA, linkB, solid, linkCount } = this;
+    let from = 0;
+    while (from < linkCount && (solid[linkA[from]] || solid[linkB[from]])) {
+      from++;
+    }
+    this.activeFrom = from;
+  }
+
+  /** Arc of the source plane from the rest glottis (cm). */
+  get glottisArc() {
+    return this.rise * this.dx;
+  }
+
+  /** Length (cm) from the source plane to the lips. */
+  get activeLength() {
+    return this.model.lengths[CELL_TRACT] - this.glottisArc;
+  }
+
+  /**
+   * Whole-cell place of the source plane for a tract of `length` cm (over
+   * lengthScale, see VOWEL_LENGTH_SCALE_3D in vowel-space.js): the nearest,
+   * kept until the length moves 0.15 cells past the middle between two
+   * places, so a length near a boundary does not flip it.
+   */
+  #riseFor(length) {
+    if (!(length > 0)) {
+      return this.rise;
+    }
+    const target =
+      (this.model.lengths[CELL_TRACT] - length / this.lengthScale) / this.dx;
+    const nearest = Math.max(
+      -this.glottisTravel,
+      Math.min(this.glottisTravel, Math.round(target))
+    );
+    if (
+      !this.placed ||
+      Math.abs(target - this.rise) > 0.5 + GLOTTIS_HYSTERESIS
+    ) {
+      this.placed = true;
+      return nearest;
+    }
+    return this.rise;
+  }
+
+  /**
+   * Move the source plane to a place: the glottis admittance moves to its
+   * cells, the cells below it close and those above open. Cells that open
+   * or close start from rest (pressure 0, their links lose their flow in
+   * #updateLinks). Returns false when the place did not change.
+   */
+  #setGlottis(rise) {
+    if (rise === this.rise) {
+      return false;
+    }
+    const { dx, glottisTravel: travel } = this;
+    for (const index of this.sourceCells) {
+      this.sourceCell[index] = 0;
+      this.admittance[index] = this.baseAdmittance[index];
+    }
+    const place = this.glottisPlaces[rise + travel];
+    this.rise = rise;
+    this.sourceCells = place.sourceCells;
+    this.#shareGlottis();
+    for (const index of this.larynxCells) {
+      const closed = this.cellArc[index] < place.arc - dx / 2 ? 1 : 0;
+      if (closed !== this.solid[index]) {
+        this.pressure[index] = 0;
+        this.solid[index] = closed;
+      }
+    }
+    this.#setPouches(rise);
+    return true;
+  }
+
+  /**
+   * The source cells span about one slice per dx of arc; share the glottis
+   * admittance between the slices so the total matches.
+   */
+  #shareGlottis() {
+    let slices = 0;
+    for (const index of this.sourceCells) {
+      slices += (this.dx * this.dx) / this.envelope[index];
+    }
+    for (const index of this.sourceCells) {
+      this.sourceCell[index] = 1;
+      this.admittance[index] =
+        this.baseAdmittance[index] +
+        this.glottisAdmittance / Math.max(1, slices);
+    }
   }
 
   /**
    * Pouches hold their anatomical volume (area x depth) spread evenly over
-   * their cells. The tract cells at a pouch opening hold at least the
-   * pouch fill, so the opening is about as wide as the pouch: a narrow
-   * neck would turn the pouch into a Helmholtz resonator.
+   * their cells. They ride along with the larynx: at each place of the
+   * glottis only that place's opening links (see movePouchOpenings in
+   * voxel-model.js) carry flow, the others are shut. The tract cells at an
+   * opening hold at least the pouch fill, so the opening is about as wide
+   * as the pouch: a narrow neck would turn the pouch into a Helmholtz
+   * resonator.
    */
-  #fillSinuses(model) {
+  #placePouches(model) {
     const cubic = model.dx ** 3;
-    for (const sinus of model.sinuses ?? []) {
+    const pouches = model.sinuses ?? [];
+    const fills = new Map();
+    for (const sinus of pouches) {
       const cells = [];
       model.cells.forEach((cell, index) => {
         if (cell.kind === CELL_SINUS && cell.tube === sinus.tube) {
@@ -400,18 +568,40 @@ export class Fdtd3d {
       for (const index of cells) {
         this.fill[index] = fill;
       }
+      fills.set(sinus.tube, fill);
     }
-    const floors = new Map();
+    const openings = [];
     for (let link = 0; link < this.linkCount; link++) {
       if (this.linkKind[link] === LINK_SINUS) {
-        const [tract, sinus] =
-          this.cellKind[this.linkA[link]] === CELL_SINUS
-            ? [this.linkB[link], this.linkA[link]]
-            : [this.linkA[link], this.linkB[link]];
-        floors.set(tract, Math.max(floors.get(tract) ?? 0, this.fill[sinus]));
+        openings.push(link);
       }
     }
-    this.openingFloors = [...floors];
+    this.sinusOpenings = Int32Array.from(openings);
+    this.shut = new Uint8Array(this.linkCount);
+    this.pouchPlaces = this.glottisPlaces.map((_, place) => {
+      const links = new Set();
+      const floors = new Map();
+      for (const sinus of pouches) {
+        const fill = fills.get(sinus.tube);
+        for (const link of sinus.openings?.[place] ?? []) {
+          links.add(link);
+          const a = this.linkA[link];
+          const tract = this.cellKind[a] === CELL_SINUS ? this.linkB[link] : a;
+          floors.set(tract, Math.max(floors.get(tract) ?? 0, fill));
+        }
+      }
+      return { links, floors: [...floors] };
+    });
+    this.#setPouches(this.rise);
+  }
+
+  /** Open the pouches into the tract at the place of the glottis. */
+  #setPouches(rise) {
+    const place = this.pouchPlaces[rise + this.glottisTravel];
+    for (const link of this.sinusOpenings) {
+      this.shut[link] = place.links.has(link) ? 0 : 1;
+    }
+    this.openingFloors = place.floors;
   }
 
   /**
@@ -478,9 +668,9 @@ export class Fdtd3d {
 
   /** Opening scale at `arc`, interpolated between stretches. */
   #scale(arc, area) {
-    const { binLength, bins } = this.opening;
+    const { binLength, bins, origin = 0 } = this.opening;
     const last = bins.length - 1;
-    const at = Math.min(last, Math.max(0, arc / binLength - 0.5));
+    const at = Math.min(last, Math.max(0, (arc - origin) / binLength - 0.5));
     const lower = Math.floor(at);
     const upper = Math.min(last, lower + 1);
     const low = this.#binScale(lower, area);
@@ -581,22 +771,9 @@ export class Fdtd3d {
     model.openFaces.forEach((faces, index) => {
       this.admittance[index] = faces * wall;
     });
-    this.#shareGlottisAdmittance();
+    this.baseAdmittance = Float64Array.from(this.admittance);
+    this.#shareGlottis();
     this.#updateCellCoefficients();
-  }
-
-  /**
-   * The source cells span about one slice per dx of arc; share the
-   * glottis admittance between the slices so the total matches.
-   */
-  #shareGlottisAdmittance() {
-    let slices = 0;
-    for (const index of this.sourceCells) {
-      slices += (this.dx * this.dx) / this.envelope[index];
-    }
-    for (const index of this.sourceCells) {
-      this.admittance[index] = this.glottisAdmittance / Math.max(1, slices);
-    }
   }
 
   /**
@@ -606,7 +783,7 @@ export class Fdtd3d {
    */
   setGlottalReflection(reflection) {
     this.glottisAdmittance = (1 - reflection) / (1 + reflection);
-    this.#shareGlottisAdmittance();
+    this.#shareGlottis();
     this.#updateCellCoefficients(this.sourceCells);
   }
 
@@ -656,10 +833,11 @@ export class Fdtd3d {
 
   /**
    * Time step in seconds (the solver runs at 1 / dt). With a tract shape
-   * the step stretches with its length, as in the waveguide: the voxel
-   * tract has the rest length, and running it slower by length / rest
-   * length scales every distance of the grid by that ratio, so a
-   * protruded or lowered tract keeps its formants.
+   * the step stretches with its length, as in the waveguide: the source
+   * plane (see setShape) leaves the active part of the voxel tract within
+   * half a cell of the length, and running the grid slower by length /
+   * active length scales every distance of the grid by that ratio, so the
+   * tract keeps its formants.
    * @param {{length?: number}} [shape]
    */
   stepDuration(shape) {
@@ -667,7 +845,7 @@ export class Fdtd3d {
     if (!(length > 0)) {
       return this.dt;
     }
-    return (this.dt * length) / this.model.lengths[CELL_TRACT];
+    return (this.dt * length) / this.activeLength;
   }
 
   /** Returns false when the areas did not change since the last call. */
@@ -683,14 +861,19 @@ export class Fdtd3d {
       }
     }
     this.tubeAreas[kind] = Float64Array.from(areas);
-    const length = this.model.lengths[kind];
+    // The tract's area function maps onto its active part.
+    const [start, length] =
+      kind === CELL_TRACT
+        ? [this.glottisArc, this.activeLength]
+        : [0, this.model.lengths[kind]];
     for (const index of this.tubeCells[kind]) {
-      const area = resample(areas, this.cellArc[index] / length);
+      const area = resample(areas, (this.cellArc[index] - start) / length);
       this.cellArea[index] = area;
-      this.fill[index] = Math.max(MIN_FILL, this.#fillAt(index, area));
-      if (this.solid[index]) {
-        this.fill[index] = 1;
-      }
+      // A solid cell (the larynx extension below the source plane, a
+      // closed tooth) keeps fill 1; its links carry no flow.
+      this.fill[index] = this.solid[index]
+        ? 1
+        : Math.max(MIN_FILL, this.#fillAt(index, area));
     }
     if (kind === CELL_TRACT) {
       for (const [index, floor] of this.openingFloors) {
@@ -776,7 +959,11 @@ export class Fdtd3d {
    */
   #linkSpans() {
     const counts = this.tubeAreas.map((areas) => areas?.length ?? 0);
-    if (this.spans && this.spans.counts.every((n, i) => n === counts[i])) {
+    const { rise } = this;
+    if (
+      this.spans?.rise === rise &&
+      this.spans.counts.every((n, i) => n === counts[i])
+    ) {
       return this.spans;
     }
     const from = new Int32Array(this.linkCount).fill(-1);
@@ -788,14 +975,20 @@ export class Fdtd3d {
       if (this.linkKind[link] !== LINK_INNER || !counts[kind]) {
         continue;
       }
-      const scale = counts[kind] / this.model.lengths[kind];
+      const [start, length] =
+        kind === CELL_TRACT
+          ? [this.glottisArc, this.activeLength]
+          : [0, this.model.lengths[kind]];
+      const scale = counts[kind] / length;
       const last = counts[kind] - 1;
+      const section = (arc) =>
+        Math.min(last, Math.max(0, Math.floor((arc - start) * scale)));
       const arcA = this.cellArc[a];
       const arcB = this.cellArc[b];
-      from[link] = Math.min(last, Math.floor(Math.min(arcA, arcB) * scale));
-      to[link] = Math.min(last, Math.floor(Math.max(arcA, arcB) * scale));
+      from[link] = section(Math.min(arcA, arcB));
+      to[link] = section(Math.max(arcA, arcB));
     }
-    this.spans = { counts, from, to };
+    this.spans = { counts, rise, from, to };
     return this.spans;
   }
 
@@ -804,15 +997,14 @@ export class Fdtd3d {
     // issue 36) is the attenuation per crossed waveguide section; a wave
     // crosses one section in (L / 44) / c seconds.
     const exponent =
-      (SPEED_OF_SOUND * this.dt * LOSS_REFERENCE_SECTIONS) /
-      this.model.lengths[CELL_TRACT];
+      (SPEED_OF_SOUND * this.dt * LOSS_REFERENCE_SECTIONS) / this.activeLength;
     const { fill, effective: envelope, linkA, linkB, linkKind } = this;
-    const { cellKind, solid } = this;
+    const { cellKind, solid, shut } = this;
     const { from, to } = this.#linkSpans();
     for (const link of this.tubeLinks) {
       const a = linkA[link];
       const b = linkB[link];
-      if (solid[a] || solid[b]) {
+      if (solid[a] || solid[b] || shut[link]) {
         this.conductance[link] = 0;
         this.damping[link] = 0;
         this.velocity[link] = 0;
@@ -849,6 +1041,7 @@ export class Fdtd3d {
         Math.max(0, boundaryLossFactor(area, wallLoss)) ** exponent;
     }
     this.#scaleOpenings();
+    this.#skipClosed();
     const portArea = this.velumLinks.length * this.dx * this.dx;
     const open = Math.min(1, this.velumArea / Math.max(portArea, 1e-9));
     for (const link of this.velumLinks) {
@@ -901,10 +1094,14 @@ export class Fdtd3d {
    * @param {number} [velumIndex] Unused: the voxel model has its own port.
    * @param {{gap: number}|null} [teeth] Incisor gap (cm), see tractShape;
    *   without it the teeth slices are plain tube.
+   * @param {{length?: number}} [shape] The tract shape: its length places
+   *   the source plane (the whole cell nearest to it, with a hysteresis
+   *   of GLOTTIS_HYSTERESIS cells). Without it the plane stays.
    */
-  setShape(areas, velumArea, velumIndex, teeth) {
+  setShape(areas, velumArea, velumIndex, teeth, shape) {
     const velum = Math.max(0, velumArea);
-    const moved = this.#applyTeeth(teeth);
+    const raised = this.#setGlottis(this.#riseFor(shape?.length));
+    const moved = this.#applyTeeth(teeth) || raised;
     const changed = this.#setTube(CELL_TRACT, areas, moved) || moved;
     if (!changed && velum === this.velumArea) {
       return;
@@ -959,7 +1156,8 @@ export class Fdtd3d {
       return 0;
     }
     const sections = this.areaCount ?? 44;
-    const arc = (noisePosition / sections) * this.model.lengths[CELL_TRACT];
+    const arc =
+      this.glottisArc + (noisePosition / sections) * this.activeLength;
     this.#selectNoiseLinks(arc);
     // A pressure jump across the noise plane enters the momentum equation.
     return COURANT * NOISE_GAIN * force;
@@ -1033,7 +1231,7 @@ export class Fdtd3d {
       }
     }
     if (this.kernel) {
-      this.kernel.step();
+      this.kernel.step(this.activeFrom);
     } else {
       this.#stepJs();
     }
@@ -1081,7 +1279,7 @@ export class Fdtd3d {
   #stepJs() {
     const { pressure, velocity, damping, conductance, linkA, linkB } = this;
     const { divergence, keep, gain, linkCount, cellCount } = this;
-    for (let link = 0; link < linkCount; link++) {
+    for (let link = this.activeFrom; link < linkCount; link++) {
       const a = linkA[link];
       const b = linkB[link];
       const u =

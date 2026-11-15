@@ -49,33 +49,82 @@ export function teethWidth(head) {
   return 2.6 * head.mouthWidth;
 }
 
+/** Gap (cm) of the vowel channels alone: openness and backness. */
+function vowelGapOf(state, head) {
+  const height = clamp(state.height ?? 0.5);
+  const back = clamp(state.backness ?? 0.5);
+  return (
+    REST_GAP +
+    (OPEN_GAP * (1 - height) + BACK_GAP * back * height) * head.jawRange
+  );
+}
+
+/** Gaps (cm) that the consonant channels raise the jaw towards, with weights. */
+function consonantGaps(state) {
+  const front = smoothstep(0.66, 0.9, state.tongueLocation ?? 0.9);
+  const tongueGap = VELAR_GAP + (SIBILANT_GAP - VELAR_GAP) * front;
+  return [
+    [SIBILANT_GAP, clamp(state.sibilance ?? 0)],
+    [tongueGap, clamp((state.tongueAmount ?? 0) / 0.85)],
+    [SIBILANT_GAP, clamp((0.4 * (state.lipAmount ?? 0)) / 0.85)],
+  ];
+}
+
 /**
  * Inter-incisor gap (cm) for an articulator state: the jaw follows vowel
  * openness, stays a little lower for back vowels, and rises for
  * consonants: fully for sibilants and stops made with the tongue tip, less
  * for velars, partly for the lips (which can close with the jaw lowered).
+ * A state with a `jaw` channel (cm, src/articulation/plan.js) has its own
+ * gap.
  * @param {Record<string, number>} state
  * @param {Record<string, number>} head
  */
 export function teethGap(state, head) {
-  const height = clamp(state.height ?? 0.5);
-  const back = clamp(state.backness ?? 0.5);
-  const vowelGap =
-    REST_GAP +
-    (OPEN_GAP * (1 - height) + BACK_GAP * back * height) * head.jawRange;
+  if (state.jaw !== undefined && state.jaw !== null) {
+    return Math.max(0, state.jaw);
+  }
+  return impliedGap(state, head);
+}
+
+/**
+ * The gap (cm) that the vowel and consonant channels of `state` imply,
+ * whatever its `jaw` channel: teethGap() of a state without one.
+ * @param {Record<string, number>} state
+ * @param {Record<string, number>} head
+ */
+export function impliedGap(state, head) {
+  const vowelGap = vowelGapOf(state, head);
   // A consonant only ever raises the jaw towards its own gap.
-  const raise = (gap, weight) =>
-    gap < vowelGap ? (gap - vowelGap) * clamp(weight) : 0;
-  const front = smoothstep(0.66, 0.9, state.tongueLocation ?? 0.9);
-  const tongueGap = VELAR_GAP + (SIBILANT_GAP - VELAR_GAP) * front;
-  return (
-    vowelGap +
-    Math.min(
-      raise(SIBILANT_GAP, state.sibilance ?? 0),
-      raise(tongueGap, (state.tongueAmount ?? 0) / 0.85),
-      raise(SIBILANT_GAP, (0.4 * (state.lipAmount ?? 0)) / 0.85)
-    )
-  );
+  let raised = 0;
+  for (const [gap, weight] of consonantGaps(state)) {
+    raised = Math.min(raised, gap < vowelGap ? (gap - vowelGap) * weight : 0);
+  }
+  return vowelGap + raised;
+}
+
+/**
+ * The gap (cm) towards which the consonant channels of `state` raise the
+ * jaw and how strongly (0 to 1): teethGap() is `vowelGap + (gap -
+ * vowelGap) * weight` for the vowel gap of the surrounding vowels. Weight 0
+ * when the consonant does not raise the jaw above the gap of its own
+ * tongue body (`state.height`, `state.backness`).
+ * @param {Record<string, number>} state
+ * @param {Record<string, number>} head
+ * @returns {{gap: number, weight: number}}
+ */
+export function consonantJaw(state, head) {
+  const vowelGap = vowelGapOf(state, head);
+  let best = { gap: vowelGap, weight: 0 };
+  let raised = 0;
+  for (const [gap, weight] of consonantGaps(state)) {
+    const change = gap < vowelGap ? (gap - vowelGap) * weight : 0;
+    if (change < raised) {
+      raised = change;
+      best = { gap, weight };
+    }
+  }
+  return best;
 }
 
 /**

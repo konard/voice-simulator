@@ -34,7 +34,11 @@ import {
 } from '../src/head-config.js';
 import { VOWEL_CORRECTIONS_3D } from '../src/articulation/vowel-calibration.js';
 import { HILLENBRAND } from '../src/articulation/vowel-norms.js';
-import { STORY_FEATURES } from '../src/articulation/vowel-space.js';
+import {
+  STORY_FEATURES,
+  VOWEL_LENGTH_SCALE_3D,
+  tableLengthScale,
+} from '../src/articulation/vowel-space.js';
 import { getPhoneme } from '../src/ipa/inventory.js';
 import { synthesize } from '../src/index.js';
 import { itUnless } from './helpers/skip.js';
@@ -127,7 +131,8 @@ function pouchAir(solver) {
     }
   });
   links.kind.forEach((kind, link) => {
-    if (kind === LINK_SINUS) {
+    // The pouches open at the place of the glottis (see #placePouches).
+    if (kind === LINK_SINUS && !solver.shut[link]) {
       const [a, b] = [links.a[link], links.b[link]];
       const pouch = cells[a].kind === CELL_SINUS ? cells[a] : cells[b];
       air.get(pouch.tube).opening +=
@@ -135,6 +140,54 @@ function pouchAir(solver) {
     }
   });
   return air;
+}
+
+/** Channels in the middle of the vowel of `ipa`. */
+function vowelFrame(ipa) {
+  const plan = planUtterance(ipa);
+  const segment = plan.segments.find((entry) => entry.kind === 'vowel');
+  const frame = Math.round(
+    ((segment.start + segment.end) / 2) * plan.frameRate
+  );
+  return { plan, frame };
+}
+
+/**
+ * A voiced plan that holds the vowel of `from` for 0.15 s, glides to that
+ * of `to` in `glide` seconds (every channel at once) and holds it 0.15 s.
+ */
+function glidePlan(from, to, glide, hold = 0.15) {
+  const a = vowelFrame(from);
+  const b = vowelFrame(to);
+  const { frameRate } = a.plan;
+  const frameCount = Math.round((glide + 2 * hold) * frameRate);
+  const channels = {};
+  for (const [name, values] of Object.entries(a.plan.channels)) {
+    const start = values[a.frame];
+    const end = b.plan.channels[name][b.frame];
+    channels[name] = Float64Array.from({ length: frameCount }, (_, frame) => {
+      const t = Math.min(1, Math.max(0, (frame / frameRate - hold) / glide));
+      return start + (end - start) * t;
+    });
+  }
+  const duration = frameCount / frameRate;
+  const vowel = a.plan.segments.find((entry) => entry.kind === 'vowel');
+  return {
+    ...a.plan,
+    segments: [{ ...vowel, start: 0, end: duration }],
+    frameCount,
+    duration,
+    channels,
+  };
+}
+
+/** Largest step between two samples over the RMS, from `from` to `to`. */
+function largestStep(samples, from, to) {
+  let largest = 0;
+  for (let n = from + 1; n < to; n++) {
+    largest = Math.max(largest, Math.abs(samples[n] - samples[n - 1]));
+  }
+  return largest / rms(samples, from, to);
 }
 
 function relativeError(value, target) {
@@ -180,6 +233,18 @@ describe('voxel model', () => {
       }
     });
     expect(opened.size).toBe(3);
+    // The openings ride along with the larynx: every place of the glottis
+    // has its own links into the tract.
+    const places = 2 * Math.floor(model.larynxTravel / DX + 1e-9) + 1;
+    for (const sinus of model.sinuses) {
+      expect(sinus.openings.length).toBe(places);
+      for (const links of sinus.openings) {
+        expect(links.length).toBeGreaterThan(0);
+        for (const link of links) {
+          expect(model.links.kind[link]).toBe(LINK_SINUS);
+        }
+      }
+    }
     expect(bare.cells.some((cell) => cell.kind === CELL_SINUS)).toBe(false);
     expect(bare.sinuses.length).toBe(0);
   });
@@ -258,18 +323,30 @@ describe('3D FDTD vowel table', () => {
     const shape = tractShape({ height, backness, rounding }, head, {
       vowelCorrections,
     });
-    const solver = new Fdtd3d({ model: voxels });
+    // As the synthesizer runs it: the source plane follows the length.
+    const solver = new Fdtd3d({
+      model: voxels,
+      lengthScale: VOWEL_LENGTH_SCALE_3D,
+    });
     solver.setNose(noseShape(head).areas);
     solver.setShape(
       shape.areas,
       shape.velumArea,
       shape.velumIndex,
-      shape.teeth
+      shape.teeth,
+      shape
     );
     return responsePeaks(solver, 1 / solver.stepDuration(shape), 0.08)
       .filter((value) => value > 150)
       .slice(0, 3);
   }
+
+  it('keeps the larynx of the table vowels near its rest place', () => {
+    // The source plane sits at length / VOWEL_LENGTH_SCALE_3D; a table whose
+    // lengths drift from that scale would move every vowel's glottis.
+    const scale = tableLengthScale(VOWEL_CORRECTIONS_3D);
+    expect(Math.abs(scale / VOWEL_LENGTH_SCALE_3D - 1)).toBeLessThan(0.03);
+  });
 
   it('matches the mean vowel formants of men better than the tube table', () => {
     const error = (formants, targets) =>
@@ -336,6 +413,40 @@ describe('3D FDTD geometry against the waveguide', () => {
     // The 3D fossae open along the bent MRI pharynx a little nearer the
     // glottis than the waveguide's branch and lower F1 a few per cent more.
     expect(Math.abs(shift3d - shift1d)).toBeLessThan(0.06);
+  });
+
+  it('keeps the nose still when the tract gets longer', () => {
+    // [u] is 11 % longer than [æ]: the glottis end moves, and the time
+    // step only takes the rest, under half a cell.
+    const [u, ae] = ['u', 'æ'].map((symbol) => {
+      const shape = vowelShape(symbol);
+      const solver = new Fdtd3d({ model });
+      solver.setShape(shape.areas, 0, shape.velumIndex, shape.teeth, shape);
+      return { shape, solver, step: solver.stepDuration(shape) };
+    });
+    expect(u.shape.length / ae.shape.length).toBeGreaterThan(1.1);
+    expect(u.solver.rise).toBeLessThan(ae.solver.rise);
+    expect(relativeError(u.step, ae.step)).toBeLessThan(0.07);
+  });
+
+  it('follows the length with the source plane', () => {
+    for (const symbol of ['u', 'æ']) {
+      const shape = vowelShape(symbol);
+      const solver = new Fdtd3d({ model: bare });
+      solver.setNose(noseShape(DEFAULT_HEAD).areas);
+      solver.setShape(shape.areas, 0, shape.velumIndex, null, shape);
+      const peaks = responsePeaks(solver, 1 / solver.stepDuration(shape), 0.08);
+      const targets = tubeFormants(shape.areas, shape.length, {
+        count: 3,
+        walls: false,
+      });
+      for (const target of targets) {
+        const nearest = peaks.reduce((best, peak) =>
+          Math.abs(peak - target) < Math.abs(best - target) ? peak : best
+        );
+        expect(relativeError(nearest, target)).toBeLessThan(0.2);
+      }
+    }
   });
 
   it('runs slower for a longer tract so the formants follow its length', () => {
@@ -449,6 +560,20 @@ describe('3D FDTD rendering', () => {
       const nostrils = linkArea(solver, LINK_NOSTRILS);
       expect(Math.abs(nostrils / nose.at(-1) - 1)).toBeLessThan(0.15);
     }
+  });
+
+  it('moves the source without a click', () => {
+    const plan = glidePlan('ˈæ', 'ˈu', 0.3);
+    const [from, to] = [0.15, 0.45].map((time) => Math.round(time * RATE));
+    const voxels = renderPlan(plan, {
+      sampleRate: RATE,
+      solver: 'fdtd3d',
+      model,
+    });
+    const wave = renderPlan(plan, { sampleRate: RATE });
+    expect(largestStep(voxels, from, to)).toBeLessThan(
+      1.5 * largestStep(wave, from, to)
+    );
   });
 
   it('exposes the pressure field and resets it', () => {

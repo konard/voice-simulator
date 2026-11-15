@@ -420,6 +420,7 @@ export class HeadViewer {
     const lips = lipsMesh(this.head, {
       area,
       rounding: animate ? (state.rounding ?? 0) : 0,
+      protrusion: animate ? shape.articulators?.lipProtrusion : 0,
       lod: this.lod,
     });
     const attribute = this.lips.geometry.getAttribute('position');

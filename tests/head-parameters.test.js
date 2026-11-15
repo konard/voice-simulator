@@ -10,6 +10,7 @@ import { impulseSpectrum, resonances, rms } from '../src/acoustics/analysis.js';
 import { Waveguide } from '../src/acoustics/waveguide.js';
 import { SPEED_OF_SOUND } from '../src/acoustics/transfer.js';
 import { STORY_AREAS, STORY_LENGTHS } from '../src/articulation/vowel-space.js';
+import { sampleState, tractShape } from '../src/articulation/tract-shape.js';
 import { HEAD_PARAMETERS, normalizeHeadConfig } from '../src/head-config.js';
 
 const RATE = 16000;
@@ -35,6 +36,12 @@ const NEW_KEYS = [
   'nasalLoss',
   'fricationLevel',
   'outputGain',
+  'jawPosture',
+  'lipPosture',
+  'larynxPosture',
+  'tongueRootPosture',
+  'intrinsicPitch',
+  'larynxPitch',
 ];
 
 function render(overrides = {}) {
@@ -64,6 +71,26 @@ function firstFormant(overrides) {
   });
   const [{ frequency }] = resonances(spectrum, { count: 1 });
   return { frequency, level: Math.max(...spectrum.magnitudes) };
+}
+
+/** Plan of `ipa` and the tract in the middle of its first vowel. */
+function vowelMiddle(ipa, overrides = {}) {
+  const head = normalizeHeadConfig(overrides);
+  const plan = planUtterance(ipa, { head });
+  const segment = plan.segments.find((entry) => entry.kind === 'vowel');
+  const state = sampleState(plan, (segment.start + segment.end) / 2);
+  return { plan, state, shape: tractShape(state, head) };
+}
+
+/** Mean cross-section (cm²) of the sections from `from` to `to` (0..1). */
+function meanArea(shape, from, to) {
+  const first = Math.round(from * (shape.areas.length - 1));
+  const last = Math.round(to * (shape.areas.length - 1));
+  let sum = 0;
+  for (let index = first; index <= last; index++) {
+    sum += shape.areas[index];
+  }
+  return sum / (last - first + 1);
 }
 
 function differs(first, second) {
@@ -106,6 +133,47 @@ describe('head parameters', () => {
       rms(quiet.samples, 0, quiet.samples.length) <
         rms(base.samples, 0, base.samples.length)
     ).toBe(true);
+  });
+
+  it('moves the free articulators and their postures as named', () => {
+    // Channels: the planned jaw opens for [a] and closes for [i], the lips
+    // protrude for [u], larynx and tongue root rest at 0.
+    const a = vowelMiddle('ˈma');
+    const i = vowelMiddle('ˈmi');
+    const u = vowelMiddle('ˈmu');
+    expect(a.state.jaw).toBeGreaterThan(i.state.jaw + 0.5);
+    expect(u.state.lipProtrusion).toBeGreaterThan(0.5);
+    expect(i.state.lipProtrusion).toBeLessThan(0.05);
+    expect([a.state.larynxHeight, a.state.tongueRoot]).toEqual([0, 0]);
+    expect(a.shape.articulators.jaw).toBe(a.state.jaw);
+    // Postures: a more open jaw widens the mouth, pushed lips and a lower
+    // larynx lengthen the tract, a forward tongue root widens the pharynx.
+    const open = vowelMiddle('ˈma', { jawPosture: 0.3 });
+    expect(open.shape.teeth.gap).toBeGreaterThan(a.shape.teeth.gap + 0.29);
+    expect(meanArea(open.shape, 0.6, 1)).toBeGreaterThan(
+      meanArea(a.shape, 0.6, 1)
+    );
+    const pushed = vowelMiddle('ˈma', { lipPosture: 0.3 });
+    expect(Math.abs(pushed.shape.length - a.shape.length - 0.3)).toBeLessThan(
+      1e-9
+    );
+    const low = vowelMiddle('ˈma', { larynxPosture: -1 });
+    expect(Math.abs(low.shape.length - a.shape.length - 1)).toBeLessThan(1e-9);
+    expect(low.shape.articulators.larynxHeight).toBe(-1);
+    const wide = vowelMiddle('ˈma', { tongueRootPosture: 1 });
+    expect(meanArea(wide.shape, 0.2, 0.4)).toBeGreaterThan(
+      1.2 * meanArea(a.shape, 0.2, 0.4)
+    );
+    // Prosody: close vowels get a higher pitch, the larynx rises with it.
+    const f0 = (entry) => entry.state.f0;
+    const flat = f0(vowelMiddle('ˈmi')) / f0(vowelMiddle('ˈma'));
+    const head = { intrinsicPitch: 2 };
+    const raised = f0(vowelMiddle('ˈmi', head)) / f0(vowelMiddle('ˈma', head));
+    expect(raised).toBeGreaterThan(flat * 2 ** (1.5 / 12));
+    const coupled = vowelMiddle('ˈma ˈma ?', { larynxPitch: 0.5 }).plan;
+    const plain = vowelMiddle('ˈma ˈma ?').plan;
+    expect(Math.max(...coupled.channels.larynxHeight)).toBeGreaterThan(0.05);
+    expect(Math.max(...plain.channels.larynxHeight)).toBe(0);
   });
 
   it('lowers the nasal murmur with higher nasal losses', () => {

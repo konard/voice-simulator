@@ -76,6 +76,29 @@ table)` gives one sound from `durationFeatures(tokens, index)`, and
   `planUtterance(ipa, {durations})` takes measured durations per token.
   The fit to the golden recordings is in
   `experiments/issue-11-fit-dynamics.txt`.
+- **Free articulators** (issue 40): four channels of the plan move the jaw,
+  the lips, the larynx and the tongue root on their own time constants.
+  `jaw` is the gap between the incisors (cm, 0.1 to 1.8, 0.02 s; the
+  planner writes the gap each sound needs), `lipProtrusion` pushes the
+  lips forward (cm, -0.3 to 1.2, 0.02 s; `LIP_PROTRUSION` = 0.6 times the
+  rounding), `larynxHeight` raises the larynx (cm, -1.5 to 1.5, 0.04 s;
+  negative lowers it) and `tongueRoot` moves the root of the tongue
+  (-1 pulled back to +1 pushed forward, 0.03 s). At their defaults the
+  tract keeps the shape of the vowel and consonant channels; moved, a
+  wider jaw widens the mouth (`JAW_AREA` = 0.8 per cm, 0.5 cm more gap
+  raises F1 of `[ɛ]` by 9 %; the tongue and the lips make up for the jaw
+  while they form a consonant), protrusion lengthens the last
+  `LIP_REGION` = 1.5 cm and a lower larynx the first `LARYNX_REGION` = 3 cm
+  of the tract (`stretchSections` keeps the volume, so 1 cm lower lowers
+  F1 to F4 of `[ɑ]` by 1 to 9 % as in Lindblom & Sundberg 1971), and the
+  tongue root scales the pharynx (`TONGUE_ROOT_AREA` = 0.4). The velum,
+  the teeth and the noise source keep their distance from the lips.
+  Speaker habits add to the channels: the head parameters `jawPosture`,
+  `lipPosture`, `larynxPosture` and `tongueRootPosture`. Two couplings,
+  off by default, change the pitch: `intrinsicPitch` (semitones between
+  the closest and the most open vowel, about 1.5 in real speakers) and
+  `larynxPitch` (cm the larynx rises per octave). `faceRig` reads
+  `lipProtrusion` and returns `larynxHeight` too.
 - **Physical acoustics** with three interchangeable solvers:
   - `waveguide`: a branched Kelly-Lochbaum tube (tract + nose) that follows
     the 3D centreline of the head; real time on any device. Its losses
@@ -92,6 +115,11 @@ table)` gives one sound from `durationFeatures(tokens, index)`, and
   - `fdtd3d`: a sparse-voxel 3D finite-difference time-domain solver of the
     acoustic wave equation inside the voxelised head and the air around it;
     the default of the library, the CLI and the server (`studio` tier).
+    The voxel tract goes on below the glottis by a quarter of its length
+    and the source plane moves along it in whole cells with the tract
+    length, so a longer tract no longer stretches the nose and the air
+    around the head; the piriform fossae and the vallecula open where the
+    larynx puts them.
 - **Two voice sources**: the LF pulse (`source: 'lf'`, the default) and a
   two-mass model of the vocal folds driven by the lung pressure
   (`source: 'folds'`), whose pitch, loudness and voice quality follow

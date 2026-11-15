@@ -23,6 +23,7 @@ import {
   VOWEL_CORRECTIONS_2D,
   VOWEL_CORRECTIONS_3D,
 } from '../articulation/vowel-calibration.js';
+import { VOWEL_LENGTH_SCALE_3D } from '../articulation/vowel-space.js';
 import { Biquad, createNoise } from './filters.js';
 import { Glottis } from './glottis.js';
 import {
@@ -125,6 +126,13 @@ const VOWEL_TABLES = new Map([
   ['fdtd2d', VOWEL_CORRECTIONS_2D],
   ['fdtd3d', VOWEL_CORRECTIONS_3D],
 ]);
+/** Length scale of each solver's vowel table (Fdtd3d's lengthScale). */
+const LENGTH_SCALES = new Map([['fdtd3d', VOWEL_LENGTH_SCALE_3D]]);
+
+/** Where Fdtd3d puts the source plane for a length (see #riseFor). */
+function lengthScaleOf(options) {
+  return options.lengthScale ?? LENGTH_SCALES.get(options.solver);
+}
 
 /** Solver factories by name: 1D waveguide, 2D and 3D FDTD. */
 const SOLVERS = new Map([
@@ -345,6 +353,7 @@ export class VoiceRenderer {
       device: options.device,
       piriform: options.piriform,
       vallecula: options.vallecula,
+      lengthScale: lengthScaleOf(options),
       microphone: options.microphone,
       enclosure: options.enclosure,
     });

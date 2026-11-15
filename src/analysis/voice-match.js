@@ -3,7 +3,7 @@
  * recording, so the simulator can copy that voice.
  *
  * 1. Measure the recording (analyzeVoice): f0 level and range, formant
- *    spacing (vocal tract length), H1-H2, harmonics-to-noise ratio and
+ *    spacing of F1 to F3 (vocal tract length), H1-H2, harmonics-to-noise ratio and
  *    syllable rate.
  * 2. Start from the closest preset person (male, female or child at the
  *    best relative size) with the measured pitch and rate.
@@ -14,7 +14,8 @@
  *    the same head.
  */
 
-import { analyzeVoice } from './voice-features.js';
+import { analyzeVoice, formantSpacing } from './voice-features.js';
+import { SPEED_OF_SOUND } from '../acoustics/constants.js';
 import {
   HEAD_PRESETS,
   getHeadParameter,
@@ -31,6 +32,24 @@ export const MATCH_TEXT =
 const MATCH_PRESETS = ['male', 'female', 'child'];
 const SIZES = 11;
 const semitones = (value) => 12 * Math.log2(value);
+
+/**
+ * Tract length (cm) from the spacing of F1 to F3 of the median formant
+ * tracks, 0 when one of them is missing. F4 lies near the top of the
+ * analysis band and moves by up to 3 % from one head to the next, so the
+ * length read with it (analyzeVoice's vocalTractLength) stays flat over
+ * 1.5 cm and reverses: the female preset reads 15.83 at 14.8 cm and 15.97
+ * at 16.1 cm. Without F4 the reading rises by 0.8 per cm and scatters by
+ * 0.23 cm of length over the adult people, against 0.40 cm with F4
+ * (experiments/issue-40-length-feature.txt).
+ * @param {{formants?: number[]}} features
+ */
+export function lowerFormantLength(features) {
+  const formants = (features.formants ?? []).slice(0, 3);
+  return formants.length === 3 && formants.every((value) => value > 0)
+    ? SPEED_OF_SOUND / (2 * formantSpacing(formants))
+    : 0;
+}
 
 /**
  * Change of tenseness that keeps the LF pulse of a head's breathiness the
@@ -69,7 +88,8 @@ const CONTROLS = [
   {
     key: 'vocalTractLength',
     feature: 'vocalTractLength',
-    slope: 0.55,
+    read: lowerFormantLength,
+    slope: 0.8,
     maxStep: 2.5,
     scale: 0.5,
   },
@@ -144,7 +164,9 @@ function controlsFor(options) {
 const identity = (value) => value;
 
 function featureY(control, features) {
-  const value = features[control.feature];
+  const value = control.read
+    ? control.read(features)
+    : features[control.feature];
   return Number.isFinite(value) && value !== 0
     ? (control.toY ?? identity)(value)
     : null;
@@ -173,11 +195,12 @@ export function featureDistance(target, candidate, options = {}) {
 }
 
 /**
- * Tract length implied by a measured formant spacing in this simulator:
- * the LPC estimate is compressed towards 14.4 cm with a slope of about 0.55.
+ * Tract length implied by the length read from F1 to F3 in this simulator:
+ * the estimate is compressed towards 15.15 cm with a slope of about 0.8
+ * (experiments/issue-40-length-feature.txt).
  */
 function lengthGuess(measured) {
-  return 15.5 + (measured - 14.4) / 0.55;
+  return 15.5 + (measured - 15.15) / 0.8;
 }
 
 /**
@@ -226,7 +249,7 @@ function withPerson(head, preset, controls) {
 function initialHead(features, preset, controls) {
   const head = {
     pitch: features.f0 / 1.03,
-    vocalTractLength: lengthGuess(features.vocalTractLength || 15.5),
+    vocalTractLength: lengthGuess(lowerFormantLength(features) || 15.15),
     pitchRange: features.f0Range > 0 ? (features.f0Range - 2.4) / 1.1 : 3,
     tenseness: 0.6,
     breathiness: 0.2,

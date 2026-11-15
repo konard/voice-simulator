@@ -26,11 +26,20 @@ function vowelState(symbol) {
   return { ...vowelTarget({ phoneme: getPhoneme(symbol) }), rhotic: 0 };
 }
 
-/** Articulator state in the middle of the first consonant of `text`. */
+/**
+ * Articulator state in the middle of the first consonant of `text`. The
+ * planned jaw lags the tongue (issue 40), so the jaw is left out: the gap is
+ * then the one the other channels ask for (teethGap()).
+ */
 function consonantState(text) {
   const plan = planUtterance(text);
   const segment = plan.segments.find((entry) => entry.kind === 'consonant');
-  return sampleState(plan, (segment.start + segment.end) / 2);
+  const { jaw, ...state } = sampleState(
+    plan,
+    (segment.start + segment.end) / 2
+  );
+  expect(jaw).toBeGreaterThan(0);
+  return state;
 }
 
 function highFrequencyLevel(text, options) {
@@ -184,9 +193,13 @@ describe('teeth voxels', () => {
     const open = solidCells(solver, vowelState('ɑ'));
     expect(open.length).toBeLessThan(sibilant.length);
     expect(open.length).toBeGreaterThan(0);
-    // Without teeth the slices are ordinary tube again.
+    // Without teeth the slices are ordinary tube again (the only solid
+    // cells left close the larynx extension below the glottis, issue 40).
     solver.setShape(tractShape(vowelState('ɑ'), DEFAULT_HEAD).areas, 0);
-    expect(solver.solid.every((value) => value === 0)).toBe(true);
+    const larynx = new Set(solver.larynxCells);
+    expect(
+      solver.solid.every((value, cell) => value === 0 || larynx.has(cell))
+    ).toBe(true);
   });
 
   it('opens each incisor slice by the slot area at any grid size', () => {

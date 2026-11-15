@@ -17,7 +17,11 @@
 import { normalizeHeadConfig } from '../head-config.js';
 import { CHANNEL_DEFAULTS } from '../articulation/plan.js';
 import { PLACES } from '../articulation/phones.js';
-import { sampleState, tractShape } from '../articulation/tract-shape.js';
+import {
+  articulatorState,
+  sampleState,
+  tractShape,
+} from '../articulation/tract-shape.js';
 import { REST_GAP } from '../articulation/teeth.js';
 import { jawAngle } from '../geometry/anatomy.js';
 import { lipOpening } from '../geometry/lips.js';
@@ -125,8 +129,6 @@ const FUNNEL_HEIGHT = 1;
 const LOWER_SHARE = 0.6;
 const MAX_LOWER_DROP = 1.2;
 const MAX_UPPER_LIFT = 1;
-/** Forward push of fully rounded lips (cm), as in lipsMesh. */
-const PROTRUSION = 0.6;
 /**
  * Lip corners of /i/ draw back about half as far as in a full stretch, an
  * estimate from lip spreading in Fromkin (1964).
@@ -208,7 +210,9 @@ function tonguePlaces(location) {
 
 /**
  * Physical face measures of an articulator state: the jaw, the lips and
- * where the lips and the tongue constrict.
+ * where the lips and the tongue constrict. `protrusion` (cm) is the
+ * `lipProtrusion` channel and `larynxHeight` (cm, negative lowered) the
+ * larynx, both with the head's postures (articulatorState()).
  * @param {Record<string, number>} state sampleState() output.
  * @param {Record<string, number>} head
  * @param {{shape?: object, maxOpening?: number}} [options] `shape` is a
@@ -218,7 +222,9 @@ function tonguePlaces(location) {
 export function faceRig(state, head, options = {}) {
   const config = normalizeHeadConfig(head);
   const full = { ...CHANNEL_DEFAULTS, ...state };
-  const shape = options.shape ?? tractShape(full, config);
+  // The raw state: a missing jaw or protrusion follows the other channels.
+  const shape = options.shape ?? tractShape(state, config);
+  const free = shape.articulators ?? articulatorState(state, config);
   const gap = shape.teeth?.gap ?? REST_GAP;
   const angle = jawAngle(gap, config);
   const rounding = clamp(full.rounding);
@@ -248,7 +254,8 @@ export function faceRig(state, head, options = {}) {
     lipsSealed: clamp(1 - lipHeight / SEALED_HEIGHT),
     // Lips parted beyond the incisor gap (cm) draw off the teeth.
     lipParting: Math.max(0, lipHeight - gap),
-    protrusion: PROTRUSION * rounding,
+    protrusion: free.lipProtrusion,
+    larynxHeight: free.larynxHeight,
     rounding,
     spread: (1 - rounding) * clamp(full.height) * (1 - clamp(full.backness)),
     bilabial,

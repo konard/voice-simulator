@@ -237,6 +237,37 @@ export function calibratedLength(name, corrections = VOWEL_CORRECTIONS) {
 }
 
 /**
+ * Length the 3D solver's vowel table gives its vowels, relative to the
+ * tube-model table: its tract sounds longer than its arc (the bend, the
+ * lip opening), so VOWEL_CORRECTIONS_3D shortens every vowel by about the
+ * same factor. Fdtd3d places its source plane for length / this scale, so
+ * the larynx sits near its rest place for every vowel. It is the
+ * tableLengthScale the table had when the plane started to follow the
+ * length (issue 40) and stays fixed: a shift of all its lengths together
+ * would move only the plane, so a refit could otherwise drift with it.
+ */
+export const VOWEL_LENGTH_SCALE_3D = 0.8369;
+
+/**
+ * Mean length ratio of a solver's vowel table to the tube-model table.
+ * @param {Record<string, number[]>} corrections
+ * @param {Record<string, number[]>} [reference]
+ */
+export function tableLengthScale(corrections, reference = VOWEL_CORRECTIONS) {
+  const names = Object.keys(STORY_LENGTHS).filter(
+    (name) => corrections[name] && reference[name]
+  );
+  if (names.length === 0) {
+    return 1;
+  }
+  const total = names.reduce(
+    (sum, name) => sum + corrections[name][0] - reference[name][0],
+    0
+  );
+  return Math.exp(total / names.length);
+}
+
+/**
  * Measured area function of a vowel with its calibration applied.
  * @param {string} name
  * @param {Record<string, number[]>} [corrections]
@@ -296,6 +327,13 @@ export function vowelShape(
 }
 
 const LIP_ROUNDING = [0.85, 0.65, 0.45, 0.32, 0.25];
+
+/**
+ * How far rounded lips push forward (cm per unit of `rounding`): the
+ * `lipProtrusion` the planner writes for a rounded sound and the face
+ * shows (re-exported by tract-shape.js).
+ */
+export const LIP_PROTRUSION = 0.6;
 
 /**
  * Narrow and protrude the lips: the last sections shrink and the tract

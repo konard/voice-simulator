@@ -45,7 +45,7 @@ import {
   sectionAxes,
 } from '../geometry/mesh.js';
 import { checkedNumber } from './room.js';
-import { sinusTubes } from './sinuses.js';
+import { pouchShift, sinusTubes } from './sinuses.js';
 import { normalizeHeadConfig } from '../head-config.js';
 import { getPhoneme } from '../ipa/inventory.js';
 
@@ -77,6 +77,12 @@ const MAX_ENCLOSURE_SIZE = 200;
 const ENCLOSURE_CLEARANCE = 1;
 /** Fine centreline spacing used to find the nearest tube point (cm). */
 const PATH_STEP = 0.1;
+/**
+ * The tract tube goes on below the glottis, straight down along its first
+ * section, by this share of the rest length (issue 40): a lower larynx
+ * moves the source plane of the 3D solver into it (see Fdtd3d#setGlottis).
+ */
+export const LARYNX_TRAVEL = 0.25;
 const ENVELOPE_VOWELS = ['i', 'e', 'ɛ', 'a', 'æ', 'ɑ', 'ɔ', 'o', 'u', 'ə', 'ʌ'];
 const DIRECTIONS = [
   [1, 0, 0],
@@ -192,7 +198,10 @@ function openingTable(cells, tract, dx, teeth) {
   const steps = Math.max(2, Math.round(dx / OPENING_SPACING));
   const per = steps ** 3;
   const binLength = Math.max(OPENING_BIN, dx / 2);
-  const bins = Math.max(1, Math.ceil(tract.length / binLength));
+  // The stretches start below the glottis, where the larynx moves to, on
+  // the same raster as the rest tube.
+  const origin = -Math.ceil(-(tract.start ?? 0) / binLength - 1e-9) * binLength;
+  const bins = Math.max(1, Math.ceil((tract.length - origin) / binLength));
   const cellWeights = new Float64Array(cells.length * per);
   const cellTails = new Float64Array(cells.length * (per + 1));
   const perBin = Array.from({ length: bins }, () => []);
@@ -210,10 +219,10 @@ function openingTable(cells, tract, dx, teeth) {
           );
           const point = cell.point.map((value, axis) => value + offset[axis]);
           const place = locateInTube(point, tract, dx / 2);
-          // Points past the glottis or the lips fill like the end slice but
-          // do not add to its cross-section.
-          const inside = place.arc >= 0 && place.arc <= tract.length;
-          place.arc = Math.min(tract.length, Math.max(0, place.arc));
+          // Points past the end of the tube or the lips fill like the end
+          // slice but do not add to its cross-section.
+          const start = tract.start ?? 0;
+          const inside = place.arc >= start && place.arc <= tract.length;
           const weight = Math.exp(teethPull(point, teeth) / TEETH_SOFTNESS);
           values[at++] = weight;
           if (!inside) {
@@ -223,7 +232,7 @@ function openingTable(cells, tract, dx, teeth) {
           // counts the same density of points whatever the grid.
           const position = Math.min(
             bins - 1,
-            Math.max(0, place.arc / binLength - 0.5)
+            Math.max(0, (place.arc - origin) / binLength - 0.5)
           );
           const lower = Math.floor(position);
           const part = position - lower;
@@ -241,6 +250,7 @@ function openingTable(cells, tract, dx, teeth) {
   const volume = (dx / steps) ** 3;
   return {
     binLength,
+    origin,
     bins: perBin.map(sortedShares),
     sample: volume / binLength,
     cellWeights,
@@ -269,6 +279,41 @@ function buildTube(path, axesAt, kind) {
 }
 
 /**
+ * The tube continued straight on before its first point by at least
+ * `travel` cm, along the first tangent with the first cross-section.
+ * `start` is the arc (negative) where the continued tube begins.
+ */
+function extendTube(tube, travel) {
+  const { sectionLength } = tube;
+  const extra = Math.ceil(travel / sectionLength - 1e-9);
+  const count = tube.count + extra;
+  const points = new Float64Array(count * 3);
+  const tangents = new Float64Array(count * 3);
+  const axes = new Float64Array(count * 2);
+  points.set(tube.points, extra * 3);
+  tangents.set(tube.tangents, extra * 3);
+  axes.set(tube.axes, extra * 2);
+  for (let index = 0; index < extra; index++) {
+    const distance = (extra - index) * sectionLength;
+    for (let axis = 0; axis < 3; axis++) {
+      const tangent = tube.tangents[axis];
+      points[index * 3 + axis] = tube.points[axis] - tangent * distance;
+      tangents[index * 3 + axis] = tangent;
+    }
+    axes[index * 2] = tube.axes[0];
+    axes[index * 2 + 1] = tube.axes[1];
+  }
+  return {
+    ...tube,
+    points,
+    tangents,
+    axes,
+    count,
+    start: -extra * sectionLength,
+  };
+}
+
+/**
  * Where a point sits relative to a tube: arc position and normalised
  * elliptical radius (<= 1 means inside the envelope).
  */
@@ -292,7 +337,7 @@ function locateInTube(point, tube, margin) {
   const tangent = tangents.subarray(offset, offset + 3);
   const axial =
     delta[0] * tangent[0] + delta[1] * tangent[1] + delta[2] * tangent[2];
-  const arc = (best + 0.5) * sectionLength + axial;
+  const arc = (best + 0.5) * sectionLength + axial + (tube.start ?? 0);
   const normal = cross(tangent, [1, 0, 0]);
   const v = delta[0] * normal[0] + delta[1] * normal[1] + delta[2] * normal[2];
   const u = delta[0] / (axes[best * 2] + margin);
@@ -314,20 +359,27 @@ function classifyPoint(point, tubes, dx) {
   for (const tube of tubes) {
     const place = locateInTube(point, tube, dx / 2);
     const { arc, radius } = place;
+    const start = tube.start ?? 0;
     // A tube with a `front` (the lips) ends at that face plane even
     // where its last section is tilted.
     const inside =
       radius <= 1 &&
-      arc >= -dx / 2 &&
+      arc >= start - dx / 2 &&
       arc <= tube.length + dx / 2 &&
       !(point[2] > (tube.front ?? Infinity) + dx / 2) &&
       !belowPhiltrum(point, tube.philtrum);
-    if (inside && (!found || radius < found.radius)) {
+    // The tract below the glottis only takes the cells no other tube
+    // holds, so the pouches beside the larynx keep their shape.
+    const spare = arc < -dx / 2;
+    const better =
+      !found || (spare === found.spare ? radius < found.radius : found.spare);
+    if (inside && better) {
       found = {
         ...place,
         kind: tube.kind,
         tube: tube.index,
-        arc: Math.min(tube.length, Math.max(0, arc)),
+        arc: Math.min(tube.length, Math.max(start, arc)),
+        spare,
       };
     }
   }
@@ -357,27 +409,46 @@ function insideBounds(point, bounds) {
   return true;
 }
 
-function boundingBox(tubes, centres, dx, shape) {
-  const low = [Infinity, Infinity, Infinity];
-  const high = [-Infinity, -Infinity, -Infinity];
-  const include = (point, reach) => {
+/**
+ * Grid bounds around the tubes and radiation centres. The `grow` tubes
+ * (the tract below the glottis) add whole cells, so the lattice stays
+ * where the other tubes put it.
+ */
+function boundingBox(tubes, centres, dx, shape, grow = []) {
+  const bounds = () => ({
+    low: [Infinity, Infinity, Infinity],
+    high: [-Infinity, -Infinity, -Infinity],
+  });
+  const include = (box, point, reach) => {
     for (let axis = 0; axis < 3; axis++) {
-      low[axis] = Math.min(low[axis], point[axis] - reach);
-      high[axis] = Math.max(high[axis], point[axis] + reach);
+      box.low[axis] = Math.min(box.low[axis], point[axis] - reach);
+      box.high[axis] = Math.max(box.high[axis], point[axis] + reach);
     }
   };
-  for (const tube of tubes) {
+  const includeTube = (box, tube) => {
     const reach = Math.max(...tube.axes) + dx;
     for (let index = 0; index < tube.count; index++) {
-      include(tube.points.subarray(index * 3, index * 3 + 3), reach);
+      include(box, tube.points.subarray(index * 3, index * 3 + 3), reach);
     }
+  };
+  const { low, high } = bounds();
+  for (const tube of tubes) {
+    includeTube({ low, high }, tube);
   }
   for (const centre of centres) {
-    include(centre, shape.radius + dx);
+    include({ low, high }, centre, shape.radius + dx);
   }
   if (shape.box) {
-    include(shape.box.low, 0);
-    include(shape.box.high, 0);
+    include({ low, high }, shape.box.low, 0);
+    include({ low, high }, shape.box.high, 0);
+  }
+  const extra = bounds();
+  grow.forEach((tube) => includeTube(extra, tube));
+  for (let axis = 0; axis < 3; axis++) {
+    if (extra.low[axis] < low[axis]) {
+      low[axis] -= Math.ceil((low[axis] - extra.low[axis]) / dx) * dx;
+    }
+    high[axis] = Math.max(high[axis], extra.high[axis]);
   }
   const size = [0, 1, 2].map((axis) =>
     Math.ceil((high[axis] - low[axis]) / dx)
@@ -500,6 +571,126 @@ function sinusLink(a, b, context) {
     sinus.arc <= 1.5 * dx &&
     Math.abs(other.arc - entries[sinus.tube]) <= 2 * dx;
   return opening ? LINK_SINUS : -1;
+}
+
+/**
+ * The pouches ride along with the larynx (issue 40): for every place of
+ * the glottis, `places` whole cells below its rest place up to as many
+ * above, each pouch opens into the tract cells its rest opening reaches
+ * when moved by the shift of the tract centreline at its entry (see
+ * pouchShift). The pouch cells stay where they are, so its volume and
+ * shape do not change; at any place other than the rest the opening
+ * links join cells that are not neighbours on the grid, a neck of one
+ * cell to the tract wall the pouch would lie beside. Adds the links and
+ * returns, per pouch, the opening links of each place.
+ */
+function movePouchOpenings(grid, collected, links, tubes, context) {
+  const { dx, places, tract } = context;
+  const { index, cells } = collected;
+  const nearestTract = (target) => {
+    const centre = target.map((value, axis) =>
+      Math.floor((value - grid.low[axis]) / dx)
+    );
+    let best = -1;
+    let bestDistance = Infinity;
+    for (let i = centre[0] - 2; i <= centre[0] + 2; i++) {
+      for (let j = centre[1] - 2; j <= centre[1] + 2; j++) {
+        for (let k = centre[2] - 2; k <= centre[2] + 2; k++) {
+          const cell = neighbourAt(grid, index, i, j, k);
+          if (cell < 0 || cells[cell].kind !== CELL_TRACT) {
+            continue;
+          }
+          const distance = Math.hypot(
+            ...target.map((value, axis) => value - cells[cell].point[axis])
+          );
+          if (distance < bestDistance) {
+            bestDistance = distance;
+            best = cell;
+          }
+        }
+      }
+    }
+    return best;
+  };
+  const known = new Map();
+  const key = (a, b) => (a < b ? `${a}:${b}` : `${b}:${a}`);
+  links.a.forEach((a, link) => {
+    known.set(key(a, links.b[link]), link);
+  });
+  const linkTo = (sinus, target) => {
+    if (!known.has(key(sinus, target))) {
+      known.set(key(sinus, target), links.a.length);
+      links.a.push(sinus);
+      links.b.push(target);
+      links.kind.push(LINK_SINUS);
+    }
+    return known.get(key(sinus, target));
+  };
+  return tubes.map((tube) => {
+    const rest = [];
+    links.kind.forEach((kind, link) => {
+      const [a, b] = [links.a[link], links.b[link]];
+      if (kind === LINK_SINUS && cells[a].tube === tube.index) {
+        rest.push([a, b]);
+      } else if (kind === LINK_SINUS && cells[b].tube === tube.index) {
+        rest.push([b, a]);
+      }
+    });
+    return Array.from({ length: 2 * places + 1 }, (_, place) => {
+      const rise = (place - places) * dx;
+      const shift = pouchShift(tract, tube.entry, rise);
+      const opening = new Set();
+      for (const [sinus, wall] of rest) {
+        const target = nearestTract(
+          cells[wall].point.map((value, axis) => value + shift[axis])
+        );
+        if (target >= 0) {
+          opening.add(linkTo(sinus, target));
+        }
+      }
+      return Int32Array.from(opening);
+    });
+  });
+}
+
+/**
+ * Put the links that touch a tract cell the glottis may close (arc below
+ * `below`, see Fdtd3d#placeGlottis) first, by the lowest arc of those
+ * cells: the links a place of the glottis closes are then a run from the
+ * first link, which the step loop skips (Fdtd3d#activeFrom). The other
+ * links keep their order; the pouch openings are renumbered.
+ */
+function orderLarynxLinks(links, openings, cells, below) {
+  const lowest = links.a.map((a, link) => {
+    let arc = Infinity;
+    for (const cell of [a, links.b[link]]) {
+      if (cells[cell].kind === CELL_TRACT && cells[cell].arc < below) {
+        arc = Math.min(arc, cells[cell].arc);
+      }
+    }
+    return arc;
+  });
+  const order = links.a.map((_, link) => link);
+  // Array.prototype.sort is stable: equal arcs keep the grid order.
+  order.sort((first, second) => {
+    const a = lowest[first];
+    const b = lowest[second];
+    return a === b ? 0 : a === Infinity ? 1 : b === Infinity ? -1 : a - b;
+  });
+  const renumber = new Int32Array(order.length);
+  order.forEach((link, position) => {
+    renumber[link] = position;
+  });
+  return {
+    links: {
+      a: order.map((link) => links.a[link]),
+      b: order.map((link) => links.b[link]),
+      kind: order.map((link) => links.kind[link]),
+    },
+    openings: openings.map((places) =>
+      places.map((place) => place.map((link) => renumber[link]))
+    ),
+  };
 }
 
 function neighbourAt(grid, index, i, j, k) {
@@ -792,8 +983,9 @@ export function buildVoxelModel(head, options = {}) {
   tract.front = lips[2];
   nasal.philtrum = { y: (lips[1] + nostrils[1]) / 2, z: lips[2] - dx / 2 };
   const sinuses = sinusTubes(tract, config, dx, options);
+  const travel = LARYNX_TRAVEL * length;
   const tubes = [
-    tract,
+    extendTube(tract, travel),
     nasal,
     ...sinuses.map((tube) => ({ ...tube, kind: CELL_SINUS })),
   ];
@@ -801,7 +993,14 @@ export function buildVoxelModel(head, options = {}) {
     tube.index = index;
   });
   const field = headField(config);
-  const grid = boundingBox(tubes, [lips, nostrils], dx, shape);
+  // The lattice is that of the rest tract; the tube below grows it.
+  const grid = boundingBox(
+    [tract, ...tubes.slice(1)],
+    [lips, nostrils],
+    dx,
+    shape,
+    [tubes[0]]
+  );
   const collected = collectCells(grid, tubes, field, [lips, nostrils], shape);
   const context = {
     dx,
@@ -809,14 +1008,26 @@ export function buildVoxelModel(head, options = {}) {
     lengths: [tract.length, nasal.length],
     outward: [outwardAxis(tract), outwardAxis(nasal)],
     entries: tubes.map((tube) => tube.entry ?? 0),
+    // Places of the glottis: whole cells up and down from the rest glottis.
+    places: Math.floor(travel / dx + 1e-9),
   };
-  const links = connect(grid, collected, context);
+  const unordered = connect(grid, collected, context);
+  const moved = movePouchOpenings(grid, collected, unordered, tubes.slice(2), {
+    ...context,
+    tract,
+  });
+  const { links, openings } = orderLarynxLinks(
+    unordered,
+    moved,
+    collected.cells,
+    (context.places - 0.5) * dx
+  );
   const teeth = teethCells(collected.cells, config, tract.layout, dx);
   const open = openFaces(grid, collected, field, dx);
   return {
     dx,
     head: config,
-    opening: openingTable(collected.cells, tract, dx, teeth),
+    opening: openingTable(collected.cells, tubes[0], dx, teeth),
     cells: collected.cells,
     links,
     openFaces: open.faces,
@@ -827,14 +1038,20 @@ export function buildVoxelModel(head, options = {}) {
     radiationRadius: box ? null : radius,
     enclosure: box,
     lengths: context.lengths,
+    // How far (cm) the glottis may move down into the tube below it, and
+    // up from its rest place (see Fdtd3d#setGlottis).
+    larynxTravel: travel,
     // Pouch tubes: tube index (as in cell.tube), name, opening arc on the
-    // tract, depth (cm) and cross-section (cm²).
+    // tract, depth (cm), cross-section (cm²) and, for each place of the
+    // glottis from the lowest, the links that open it into the tract (see
+    // movePouchOpenings).
     sinuses: sinuses.map((tube, index) => ({
       tube: index + 2,
       name: tube.name,
       entry: tube.entry,
       length: tube.length,
       area: tube.area,
+      openings: openings[index],
     })),
     velumDistance,
     landmarks: { lips, nostrils },

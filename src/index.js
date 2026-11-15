@@ -57,6 +57,8 @@ export {
   sampleState,
   tractShape,
   noseShape,
+  stretchSections,
+  LIP_PROTRUSION,
   TRACT_SECTIONS,
 } from './articulation/tract-shape.js';
 export {

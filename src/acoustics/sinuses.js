@@ -12,6 +12,13 @@
  * Positions follow the tract centreline in the head frame (cm): the
  * pharynx is vertical there, +x is lateral and the local normal of the
  * centreline points to the posterior pharyngeal wall.
+ *
+ * The openings move with the larynx (issue 40): when the source plane of
+ * the 3D solver moves up or down the tract, each pouch opens into the
+ * tract cells nearest to its rest opening shifted along the centreline
+ * (see pouchShift and movePouchOpenings in voxel-model.js). The pouch
+ * cells stay where they are, so the volume and the shape stay too; only
+ * the place where the pouch joins the tract follows the glottis.
  */
 
 import {
@@ -169,6 +176,27 @@ export function sinusTubes(tract, head, dx, options = {}) {
     );
   }
   return tubes;
+}
+
+/**
+ * Centreline point of the tract `height` cm above the rest glottis; below
+ * it the tract goes on straight (see extendTube in voxel-model.js).
+ */
+function tractPoint(tract, height) {
+  const { point, tangent } = arcPoint(Math.max(0, height), tract.layout);
+  const below = Math.min(0, height);
+  return point.map((value, axis) => value + tangent[axis] * below);
+}
+
+/**
+ * How far (cm, x/y/z) the opening of a pouch at `entry` cm of tract arc
+ * moves when the glottis rises by `rise` cm: the tract centreline point
+ * `rise` cm further along, as the pouches ride up with the larynx.
+ */
+export function pouchShift(tract, entry, rise) {
+  const from = tractPoint(tract, entry);
+  const to = tractPoint(tract, entry + rise);
+  return to.map((value, axis) => value - from[axis]);
 }
 
 /**
