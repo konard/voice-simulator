@@ -1,0 +1,6 @@
+{
+  "nodeModulesDir": "auto",
+  "lock": false,
+  "imports": { "test-anywhere": "npm:test-anywhere@^0.8.48" },
+  "test": { "include": ["tests/"] }
+}

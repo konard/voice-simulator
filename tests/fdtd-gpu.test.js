@@ -2,73 +2,41 @@
  * Queued steps and asynchronous rendering of the 3D solver, and its
  * WebGPU step loop (src/acoustics/fdtd-gpu.js) against the CPU kernel.
  * The GPU tests run where the runtime has a WebGPU adapter (Deno, which
- * falls back to a software adapter on machines without a GPU).
+ * falls back to a software adapter on machines without a GPU); with
+ * REQUIRE_GPU=1 a missing adapter is a failure (tests/helpers/gpu.js).
  */
 
 import { describe, it, expect } from 'test-anywhere';
 import { buildVoxelModel } from '../src/acoustics/voxel-model.js';
 import { Fdtd3d } from '../src/acoustics/fdtd3d.js';
-import { requestGpuDevice } from '../src/acoustics/fdtd-gpu.js';
 import {
   VoiceRenderer,
   renderPlan,
   renderPlanAsync,
 } from '../src/acoustics/voice.js';
 import { planUtterance } from '../src/articulation/plan.js';
-import { vowelTarget } from '../src/articulation/phones.js';
-import { noseShape, tractShape } from '../src/articulation/tract-shape.js';
+import { noseShape } from '../src/articulation/tract-shape.js';
 import { DEFAULT_HEAD } from '../src/head-config.js';
 import { AUDIO_TIERS } from '../src/perf/lod.js';
 import { measureAudioTierAsync } from '../src/perf/benchmark.js';
-import { getPhoneme } from '../src/ipa/inventory.js';
 import { synthesize, synthesizeAsync } from '../src/synthesize.js';
+import {
+  drive as driveSolver,
+  gpuForTests,
+  relativeError,
+  vowelShapes,
+} from './helpers/gpu.js';
 import { itUnless } from './helpers/skip.js';
 
 const RATE = 16000;
 const model = buildVoxelModel(DEFAULT_HEAD, { dx: 1 });
-const shapes = ['a', 'i'].map((symbol) =>
-  tractShape(
-    { ...vowelTarget({ phoneme: getPhoneme(symbol) }), rhotic: 0 },
-    DEFAULT_HEAD
-  )
-);
+const shapes = vowelShapes();
 
-// Before any test is registered, like the network probes.
-const device = await requestGpuDevice().catch(() => null);
-const noGpu = device ? null : 'no WebGPU adapter in this runtime';
-
-/**
- * Drive a solver with alternating vowels, a pulsed source and frication
- * noise in the second half, through queueStep and flushSteps.
- */
-async function drive(solver, steps = 1200, flushEvery = 500) {
-  solver.setNose(noseShape(DEFAULT_HEAD).areas);
-  const outputs = [];
-  for (let step = 0; step < steps; step++) {
-    if (step % 100 === 0) {
-      const shape = shapes[(step / 100) % 2];
-      solver.setShape(shape.areas, shape.velumArea, shape.velumIndex);
-    }
-    const flow = Math.sin(step * 0.05) * (step % 80 < 40 ? 1 : 0);
-    const noise = step > steps / 2 ? Math.sin(step * 1.7) * 0.3 : 0;
-    solver.queueStep(flow, 30, noise);
-    if (step % flushEvery === flushEvery - 1) {
-      outputs.push(...(await solver.flushSteps()));
-    }
-  }
-  outputs.push(...(await solver.flushSteps()));
-  return Float64Array.from(outputs);
-}
-
-function relativeError(actual, expected) {
-  let error = 0;
-  let energy = 0;
-  for (let index = 0; index < expected.length; index++) {
-    error += (actual[index] - expected[index]) ** 2;
-    energy += expected[index] ** 2;
-  }
-  return Math.sqrt(error / energy);
-}
+// Before any test is registered, like the network probes. With
+// REQUIRE_GPU=1 a runtime without an adapter fails here: no silent skip.
+const { device, noGpu, info } = await gpuForTests();
+const drive = (solver, steps, flushEvery) =>
+  driveSolver(solver, steps, flushEvery, shapes);
 
 describe('queued 3D FDTD steps on the CPU', () => {
   it('give the outputs of step()', async () => {
@@ -125,6 +93,7 @@ describe('WebGPU 3D FDTD step loop', () => {
   itUnless(noGpu)(
     'refuses step() and follows the CPU kernel at the lips',
     async () => {
+      console.log('WebGPU adapter:', JSON.stringify(info));
       const cpu = await drive(new Fdtd3d({ model }));
       const solver = new Fdtd3d({ model, device });
       try {
@@ -167,6 +136,35 @@ describe('WebGPU 3D FDTD step loop', () => {
     } finally {
       renderer.solver.gpu.destroy();
     }
+  });
+
+  itUnless(noGpu)('renderPlanAsync frees the GPU buffers it made', async () => {
+    const buffers = [];
+    let destroyed = 0;
+    // The real device, except that the buffers it makes count destroy().
+    const counting = new Proxy(device, {
+      get(target, key) {
+        if (key === 'createBuffer') {
+          return (descriptor) => {
+            const buffer = target.createBuffer(descriptor);
+            const destroy = buffer.destroy.bind(buffer);
+            buffer.destroy = () => {
+              destroyed++;
+              destroy();
+            };
+            buffers.push(buffer);
+            return buffer;
+          };
+        }
+        const value = Reflect.get(target, key, target);
+        return typeof value === 'function' ? value.bind(target) : value;
+      },
+    });
+    const plan = planUtterance('ˈa');
+    const options = { sampleRate: RATE, solver: 'fdtd3d', model };
+    await renderPlanAsync(plan, { ...options, device: counting });
+    expect(buffers.length > 0).toBe(true);
+    expect(destroyed >= buffers.length).toBe(true);
   });
 
   itUnless(noGpu)('measures the load of a 3D tier on the GPU', async () => {

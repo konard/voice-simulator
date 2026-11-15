@@ -254,10 +254,16 @@ On the GPU, pass a WebGPU device and render asynchronously; the GPU
 follows the CPU kernel within 1e-5 relative RMS error:
 
 ```js
-import { requestGpuDevice, synthesizeAsync } from 'voice-simulator';
+import {
+  describeGpuDevice,
+  requestGpuDevice,
+  synthesizeAsync,
+} from 'voice-simulator';
 
 const device = await requestGpuDevice(); // null without WebGPU
 const gpuResult = await synthesizeAsync('Hello world', { device });
+// {description, vendor, architecture, fallback} of the adapter, or null
+console.log(describeGpuDevice(device));
 ```
 
 Lower-level building blocks are exported too: `planUtterance`,
@@ -298,7 +304,13 @@ min(16000 Hz, both rates), the silence at both ends is cut (frames more than
 40 dB below the loudest), both are scaled to an RMS of 0.1 and aligned by
 dynamic time warping (DTW; Sakoe & Chiba 1978) on the mel cepstra c1 to c13.
 Every metric is then taken along the alignment. Frames are 0.025 s long with
-a Hann window, taken every 0.01 s, with a 512-point FFT.
+a Hann window, taken every 0.01 s, with a 512-point FFT. Before a logarithm,
+bin powers and mel filter energies weaker than 60 dB below the strongest one
+of the same recording are raised to that level (`DYNAMIC_RANGE_DB`, option
+`range`), so an empty band costs at most the dynamic range. LSD and MCD skip
+the pairs whose reference frame is silent (40 dB below the loudest reference
+frame): pauses and background noise of a recording are not speech to compare
+with.
 
 | Metric                                       | Field                             | Unit     | Formula                                                                           |
 | -------------------------------------------- | --------------------------------- | -------- | --------------------------------------------------------------------------------- |
@@ -344,8 +356,33 @@ filters, 13 coefficients, 16 kHz). Values are comparable inside this project
 and only roughly with published ones. In particular this cepstrum is taken
 from the natural logarithm of the filter energies (power, not amplitude) with
 an orthonormal DCT, so its values are larger than those of tools that use the
-SPTK mel-generalised cepstrum: two different synthetic voices saying the same
-sentence are 30 to 50 dB apart here.
+SPTK mel-generalised cepstrum: the female and the male preset head saying the
+same sentence on the `minimal` tier are 47 to 52 dB apart here, and two
+renderings with seeds 1 and 2 are 10 to 11 dB apart
+(`node experiments/issue-19-voice-pairs.mjs`).
+
+### Quality
+
+[docs/reports/baseline-quality.md](docs/reports/baseline-quality.md) is the
+first measurement of how far the synthetic voice is from human speech: every
+sentence of the golden set (24 LibriVox recordings in English, Russian, Hindi
+and Chinese) is rendered on every tier and compared with its recording by
+`compareRecordings`, next to two anchors (the recording low-passed at 3.5 kHz,
+and white noise). Three numbers of the
+[run of 15 November 2026](https://github.com/konard/voice-simulator/actions/runs/43705076861)
+sum it up. **MCD** of the best tier (`high`) is 68.0 dB (all tiers 68 to
+73 dB), between 49.2 dB for `lowpass` and 89.7 dB for `noise`: the voice is
+about halfway between a recording and noise. **Pitch** is the largest gap: the
+f0 RMSE is about 630 cents and the gross pitch error about 53 % on every tier,
+partly because every sentence is rendered with the female preset head while
+the manifest does not record the sex of the speaker (`en-02` is more than an
+octave off). **PER** of the
+text front end is 9.0 % in English and 11.4 % in Russian and below 0.5 % in
+Hindi and Chinese (against IPA that nobody has reviewed yet).
+`node scripts/quality-report.mjs [--lang en --limit 2] [--baseline docs/reports/baseline-quality.json]`
+measures again; a pull request that claims an improvement puts that table
+into its description. The baseline itself is regenerated only by the
+`quality` suite of the `Heavy checks` workflow.
 
 ### Listening tests
 
@@ -482,15 +519,31 @@ The image runs `voice-simulator serve` on port 8080 with a health check on
 
 ### Quality tiers
 
-| Audio tier  | Solver    | Detail        | Sample rate | Relative cost |
-| ----------- | --------- | ------------- | ----------- | ------------- |
-| `minimal`   | waveguide | 22 sections   | 22.05 kHz   | 1             |
-| `low`       | waveguide | 32 sections   | 32 kHz      | 1.6           |
-| `medium`    | waveguide | 44 sections   | 48 kHz      | 2.6           |
-| `high`      | fdtd3d    | 1 cm voxels   | 48 kHz      | 10            |
-| `ultra`     | fdtd3d    | 0.6 cm voxels | 48 kHz      | 65            |
-| `studio`    | fdtd3d    | 0.5 cm voxels | 48 kHz      | 105           |
-| `reference` | fdtd3d    | 0.4 cm voxels | 48 kHz      | 220           |
+| Audio tier   | Solver    | Detail        | Sample rate | Relative cost |
+| ------------ | --------- | ------------- | ----------- | ------------- |
+| `telephone`  | waveguide | 12 sections   | 8 kHz       | 0.56          |
+| `narrowband` | waveguide | 16 sections   | 11.025 kHz  | 0.76          |
+| `wideband`   | waveguide | 22 sections   | 16 kHz      | 0.95          |
+| `minimal`    | waveguide | 22 sections   | 22.05 kHz   | 1             |
+| `low`        | waveguide | 32 sections   | 32 kHz      | 1.6           |
+| `medium`     | waveguide | 44 sections   | 48 kHz      | 2.6           |
+| `high`       | fdtd3d    | 1 cm voxels   | 48 kHz      | 10            |
+| `ultra`      | fdtd3d    | 0.6 cm voxels | 48 kHz      | 65            |
+| `studio`     | fdtd3d    | 0.5 cm voxels | 48 kHz      | 105           |
+| `reference`  | fdtd3d    | 0.4 cm voxels | 48 kHz      | 220           |
+
+The three narrow-band tiers below `minimal` low-pass the voice with an
+eighth-order Butterworth filter at 3.4, 4.8 and 7 kHz (`bandLimit`), once at
+the solver rate so nothing folds back at the low output rate and once at the
+output rate so that the band above 1.1 times the limit is more than 70 dB
+down, and update the tract about every
+1.5 ms (`blockSize` 12, 16 and 24 samples). They keep F1 to F3 of the
+48 kHz render, and `analyzeVoice` measures only F1 to F3 at 8 kHz. The
+server renders them at their own rate when the request names no
+`sampleRate`. `wideband` costs almost the same CPU time as `minimal`; it
+exists for the 16 kHz output rate. Auto in the web app starts at `minimal`
+(`BASE_AUDIO_LEVEL`) and falls back to the narrow-band tiers only when a
+device cannot keep up.
 
 `studio` is the default of the library, the CLI and the server
 (`DEFAULT_AUDIO_TIER`): full 3D acoustics whose 0.5 cm cells resolve the
@@ -513,13 +566,23 @@ uses WebGPU whenever the browser offers it (Acoustics → Simulation turns it
 off) and says the utterance again on the CPU if the GPU fails; the audio
 meter shows `studio · fdtd3d · GPU` or `studio · fdtd3d`.
 
+The GPU solver is checked against the CPU kernel in CI: the Deno test jobs on
+macOS and Windows run `tests/fdtd-gpu.test.js` with `REQUIRE_GPU=1`, so a
+missing adapter fails the job, and suite `gpu` of the `Heavy checks` workflow
+(`npm run test:heavy -- --suite gpu`, which needs Deno) runs a 20 000-step
+comparison and the word `həˈloʊ` at tiers `high` and `ultra` on Linux through
+Mesa's software adapter. The last report is
+[docs/reports/gpu-solver.md](docs/reports/gpu-solver.md).
+
 The web app (`benchmarkAudioTiersAsync`) and `voice-simulator benchmark`
 pick the most detailed tier whose measured load stays under 80%. On a
 machine with WebGPU, the GPU is only tried for the 3D tiers above the CPU's
 choice, so a slow integrated or software adapter never lowers it. The benchmark does not run tiers whose
 load, predicted from the cheaper tier, is far above the target, and it stops
 measuring a tier as soon as it is clearly too slow; the app remembers the
-result per device. In the first 40-300 ms of each utterance an
+result per device. `voice-simulator benchmark` first renders the cheap tiers
+for 0.5 s so the just-in-time compiler is warm, then reports the median of
+`--repeats` (default 5) measurements of `--seconds` (default 0.3) per tier. In the first 40-300 ms of each utterance an
 `OverloadDetector` checks that the tier keeps up with real time and, if not,
 the utterance restarts at once on a cheaper tier before any gap is audible.
 While speaking, `LodGovernor` steps down
@@ -862,6 +925,7 @@ Configured in `.prettierrc`:
 | `npm run test:heavy`                 | Run the slow tests of `tests/heavy/` (CONTRIBUTING)   |
 | `npm run datasets -- list`           | List, fetch or verify speech datasets (CONTRIBUTING)  |
 | `node scripts/golden.mjs verify`     | Check the golden set of `tests/fixtures/golden/`      |
+| `node scripts/quality-report.mjs`    | Score the tiers against the golden set (Quality)      |
 | `bun run lint`                       | Check code with ESLint                                |
 | `bun run lint:fix`                   | Fix ESLint issues automatically                       |
 | `bun run format`                     | Format code with Prettier                             |

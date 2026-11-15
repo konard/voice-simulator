@@ -184,7 +184,10 @@ research are in the case studies:
   of the same sentence: spectral distortion, pitch and formant error, timing
   of syllables. Intelligibility measured by people and by our own recogniser.
   Naturalness measured by people in blind comparisons that include real
-  recordings and other synthesisers.
+  recordings and other synthesisers. The first measurement of the spectral,
+  pitch, formant and timing distances on the golden set is
+  [reports/baseline-quality.md](reports/baseline-quality.md); later work
+  compares itself with it (`scripts/quality-report.mjs --baseline`).
 - **Listening.** Phoneme, syllable, word and character error rates on public
   recordings with transcripts, per language and per audio setting, including
   the lowest one. Language identification accuracy, including mixed speech.

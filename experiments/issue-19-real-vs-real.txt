@@ -1,0 +1,7 @@
+ru-01 vs ru-02: MCD 65.6 LSD 11.4 | ru-01 vs noise: MCD 81.3 LSD 22.6
+ru-05 vs ru-06: MCD 62.3 LSD 10.3 | ru-05 vs noise: MCD 93.1 LSD 23.7
+hi-01 vs hi-02: MCD 61.3 LSD 8.3 | hi-01 vs noise: MCD 116.7 LSD 26.7
+zh-01 vs zh-02: MCD 73.4 LSD 10.3 | zh-01 vs noise: MCD 81.5 LSD 20.6
+en-03 vs en-04: MCD 66.7 LSD 12.7 | en-03 vs noise: MCD 85.0 LSD 24.8
+en-01 vs en-02: MCD 72.7 LSD 14.2 | en-01 vs noise: MCD 68.9 LSD 21.6
+en-01 vs ru-01: MCD 60.4 LSD 11.2 | en-01 vs noise: MCD 68.9 LSD 21.6

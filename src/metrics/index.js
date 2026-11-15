@@ -5,6 +5,7 @@
  */
 
 export {
+  DYNAMIC_RANGE_DB,
   EPSILON,
   METRIC_DEFAULTS,
   cepstra,
@@ -14,6 +15,7 @@ export {
   melToHz,
   mfcc,
   nextPowerOfTwo,
+  powerFloor,
   powerFrames,
 } from './spectrum.js';
 export { DTW_MAX_CELLS, dtw, euclideanDistance } from './dtw.js';

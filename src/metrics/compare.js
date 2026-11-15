@@ -108,7 +108,11 @@ export function compareRecordings(reference, test, options = {}) {
     reference.sampleRate,
     test.sampleRate
   );
-  const settings = { window: options.window, hop: options.hop };
+  const settings = {
+    window: options.window,
+    hop: options.hop,
+    range: options.range,
+  };
   const ref = prepare(reference, rate, settings);
   const tst = prepare(test, rate, settings);
   if (ref.length === 0 || tst.length === 0) {

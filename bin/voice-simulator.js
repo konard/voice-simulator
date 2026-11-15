@@ -57,6 +57,7 @@ const OPTIONS = {
   'strong-forms': { type: 'boolean' },
   lod: { type: 'string' },
   seconds: { type: 'string' },
+  repeats: { type: 'string' },
   port: { type: 'string', short: 'p' },
   host: { type: 'string' },
   transcript: { type: 'string' },
@@ -93,6 +94,9 @@ function usage() {
     '  -o, --out <file>      Output file ("-" for stdout)',
     `  -t, --tier <name>     ${AUDIO_TIERS.map((tier) => tier.name).join(' | ')}`,
     `                        (default ${DEFAULT_AUDIO_TIER}: 3D; medium: real-time waveguide)`,
+    `                        ${AUDIO_TIERS.filter((tier) => tier.bandLimit)
+      .map((tier) => `${tier.name} ${tier.sampleRate / 1000}`)
+      .join(', ')} kHz: band-limited`,
     '      --solver <name>   waveguide | fdtd3d (overrides the tier)',
     '      --dx <cm>         FDTD voxel size',
     '  -s, --seed <seed>     Random seed for the head and the voice',
@@ -115,6 +119,8 @@ function usage() {
     '      --ipa             Treat <text> as IPA',
     '      --transcript <t>  What the recording says (closer match)',
     '      --iterations <n>  Renders while matching (default 4, max 12)',
+    '      --seconds <s>     Audio per benchmark measurement (default 0.3)',
+    '      --repeats <n>     Benchmark measurements per tier, median (default 5)',
     '      --lod <0-3>      Mesh level of detail',
     `      --fps <n>         Visemes per second (default 60); visemes take
                         -f ${Object.keys(VISEME_FORMATS).join(' | ')} (default arkit)`,
@@ -493,16 +499,17 @@ const COMMANDS = {
 
   benchmark(values, positionals, io) {
     const seconds = optionalNumber(values.seconds, 'seconds') ?? 0.3;
+    const repeats = optionalNumber(values.repeats, 'repeats') ?? 5;
     if (values.tier) {
       const tier = AUDIO_TIERS.find((entry) => entry.name === values.tier);
       if (!tier) {
         throw new Error(`Unknown tier: ${values.tier}`);
       }
-      const load = measureAudioTier(tier, { seconds });
+      const load = measureAudioTier(tier, { seconds, repeats });
       io.stdout(`${tier.name}: load ${load.toFixed(3)}`);
       return;
     }
-    const result = benchmarkAudioTiers({ seconds });
+    const result = benchmarkAudioTiers({ seconds, repeats, warmUp: 0.5 });
     if (values.json) {
       io.stdout(JSON.stringify(result));
       return;

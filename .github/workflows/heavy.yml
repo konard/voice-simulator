@@ -95,11 +95,32 @@ jobs:
           path: .datasets
           key: datasets-${{ hashFiles('datasets/registry.json') }}
 
+      # Suite gpu (tests/heavy/gpu-*.test.js) runs in Deno, whose WebGPU
+      # falls back to Mesa's software OpenGL ES driver on a runner without
+      # a GPU (issue 30). REQUIRE_GPU=1 below turns a missing adapter into a
+      # failure.
+      - name: Install the software OpenGL ES driver
+        if: inputs.suite == 'gpu' || inputs.suite == 'all'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends libegl1 libgles2 libegl-mesa0 libgl1-mesa-dri
+
+      - name: Setup Deno
+        if: inputs.suite == 'gpu' || inputs.suite == 'all'
+        uses: denoland/setup-deno@22d081ff2d3a40755e97629de92e3bcbfa7cf2ed # v2.0.5
+        with:
+          deno-version: v2.x
+
+      - name: Show the WebGPU adapter
+        if: inputs.suite == 'gpu' || inputs.suite == 'all'
+        run: deno run -A scripts/gpu-adapter.mjs
+
       - name: Run heavy checks
         shell: bash
         env:
           SUITE: ${{ inputs.suite }}
           LIMIT: ${{ inputs.limit }}
+          REQUIRE_GPU: ${{ (inputs.suite == 'gpu' || inputs.suite == 'all') && '1' || '' }}
         run: |
           LIMIT_FLAG=''
           if [[ "$LIMIT" =~ ^[0-9]+$ ]]; then

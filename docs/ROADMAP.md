@@ -67,6 +67,8 @@ and sources are in
 
 Clean up, policy checks, manually triggered heavy checks, public datasets, objective metrics and listening tests. Everything later is measured with these.
 
+The first measurement of [#19](https://github.com/konard/voice-simulator/issues/19) is [reports/baseline-quality.md](reports/baseline-quality.md) (`scripts/quality-report.mjs`, suite `quality` of the heavy checks). An issue that claims an improvement runs the script with `--baseline docs/reports/baseline-quality.json` and puts the table into its pull request; the baseline files stay unchanged until [#83](https://github.com/konard/voice-simulator/issues/83).
+
 | Issue                                                      | Type    | Title                                                                 | Blocked by                                                                                                                                                                         | Requirements |
 | ---------------------------------------------------------- | ------- | --------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------ |
 | [#13](https://github.com/konard/voice-simulator/issues/13) | Bug     | Template case studies occupy `docs/case-studies/issue-N` folders      | nothing                                                                                                                                                                            | R16, R21     |
@@ -83,6 +85,10 @@ Clean up, policy checks, manually triggered heavy checks, public datasets, objec
 Simulation core in Rust (WebAssembly and native), multicore with a single-core fallback, load-time benchmark, lowest-settings tiers and quality that adapts while streaming.
 
 The workspace, the WebAssembly build, the loader, the CI job `rust` and the parity tests of [#21](https://github.com/konard/voice-simulator/issues/21) are described in [RUST-ENGINE.md](RUST-ENGINE.md); the ports below add their code to that pipeline.
+
+The tiers `telephone` (8 kHz), `narrowband` (11.025 kHz) and `wideband` (16 kHz) of [#26](https://github.com/konard/voice-simulator/issues/26) are in `AUDIO_TIERS` below `minimal`, which stays the start level of automatic quality (`BASE_AUDIO_LEVEL`); the README section "Quality tiers" lists them and `experiments/issue-26-narrow-band.txt` holds their formant, aliasing and band-limit measurements. Their `blockSize` and `bandLimit` are not yet in the Rust port of [#22](https://github.com/konard/voice-simulator/issues/22).
+
+The WebGPU solver of [#30](https://github.com/konard/voice-simulator/issues/30) is compared with the CPU kernel in suite `gpu` of the heavy checks, on Linux through Mesa's software adapter: [reports/gpu-solver.md](reports/gpu-solver.md). The Deno jobs on macOS and Windows set `REQUIRE_GPU=1`, so a runner image without an adapter fails instead of skipping the GPU tests.
 
 The AudioWorklet player of [#27](https://github.com/konard/voice-simulator/issues/27) is the export `voice-simulator/playback` (processor, ring buffer) with the stream resampler `createStreamResampler`; its latency and underrun measurements are in `experiments/issue-27-latency.txt`, and the resampler is ported to the Rust core with class B parity tests.
 

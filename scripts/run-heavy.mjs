@@ -15,10 +15,15 @@
  *   --dir    folder with the test files, default tests/heavy.
  *
  * The files run in one `node --test` process, one file at a time, with
- * HEAVY=1 in the environment; its exit code is the exit code of this
- * script. At the end <out>/summary.md gets one row per test file with its
- * result and wall time, followed by every <out>/*.md the tests wrote, and
- * is appended to $GITHUB_STEP_SUMMARY when that is set.
+ * HEAVY=1 in the environment. Files named gpu-*.test.js need WebGPU, which
+ * Node.js lacks: they run after it in one `deno test -A --config
+ * deno.heavy.json` process with the same environment, together with
+ * tests/fdtd-gpu.test.js when --dir is the default. Without Deno on PATH
+ * their rows say `skipped (no Deno)`, and with REQUIRE_GPU=1 the run fails.
+ * The exit code is the first non-zero exit code of the two commands. At
+ * the end <out>/summary.md gets one row per test file with its result and
+ * wall time, followed by every <out>/*.md the tests wrote, and is appended
+ * to $GITHUB_STEP_SUMMARY when that is set.
  */
 
 import { spawnSync } from 'node:child_process';
@@ -50,11 +55,21 @@ export const SUITES = Object.freeze([
 /** One hour per test: the heavy tests render and recognise whole datasets. */
 export const TEST_TIMEOUT_MS = 3_600_000;
 
+/** Prefix of the test files that run in Deno, the runtime with WebGPU. */
+export const GPU_PREFIX = 'gpu-';
+
+const DEFAULT_DIR = 'tests/heavy';
+/** The fast GPU tests, run with the heavy ones from the default folder. */
+const FAST_GPU_TEST = 'tests/fdtd-gpu.test.js';
+
 const USAGE =
   'Usage: node scripts/run-heavy.mjs [--suite <name>] [--limit <n>] [--out <dir>] [--dir <dir>]';
 
 const reporterPath = fileURLToPath(
   new URL('./heavy-reporter.mjs', import.meta.url)
+);
+const denoConfigPath = fileURLToPath(
+  new URL('../deno.heavy.json', import.meta.url)
 );
 
 class UsageError extends Error {}
@@ -68,7 +83,7 @@ export function parseArgs(argv) {
     suite: 'all',
     limit: null,
     out: 'reports/heavy',
-    dir: 'tests/heavy',
+    dir: DEFAULT_DIR,
   };
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index];
@@ -177,6 +192,67 @@ export function summarizeFiles(files, events) {
   });
 }
 
+function xmlAttribute(tag, name) {
+  const match = tag.match(new RegExp(`\\s${name}="([^"]*)"`));
+  return match
+    ? match[1]
+        .replace(/&quot;/g, '"')
+        .replace(/&apos;/g, "'")
+        .replace(/&lt;/g, '<')
+        .replace(/&gt;/g, '>')
+        .replace(/&amp;/g, '&')
+    : null;
+}
+
+/**
+ * Result and wall time of each file from the JUnit report of `deno test
+ * --junit-path`: one <testsuite> per file, named by its path relative to
+ * cwd; the wall time is the sum of the times of its test cases.
+ * @param {string[]} files absolute paths
+ * @param {string} xml
+ * @param {string} [cwd]
+ */
+export function summarizeJunit(files, xml, cwd = process.cwd()) {
+  const suites = [
+    ...xml.matchAll(/<testsuite\s[^>]*>[\s\S]*?<\/testsuite>/g),
+  ].map(([text]) => {
+    const tag = text.slice(0, text.indexOf('>') + 1);
+    const times = [...text.matchAll(/<testcase\s[^>]*>/g)].map(([caseTag]) =>
+      Number(xmlAttribute(caseTag, 'time') ?? 0)
+    );
+    return {
+      file: path.resolve(cwd, xmlAttribute(tag, 'name') ?? ''),
+      tests: Number(xmlAttribute(tag, 'tests') ?? 0),
+      failed:
+        Number(xmlAttribute(tag, 'failures') ?? 0) +
+          Number(xmlAttribute(tag, 'errors') ?? 0) >
+        0,
+      durationMs: times.reduce((sum, time) => sum + time, 0) * 1000,
+    };
+  });
+  return files.map((file) => {
+    const suite = suites.find((entry) => entry.file === path.resolve(file));
+    if (!suite) {
+      return {
+        file: path.basename(file),
+        result: 'no result',
+        durationMs: null,
+      };
+    }
+    let result = 'no result';
+    if (suite.failed) {
+      result = 'fail';
+    } else if (suite.tests > 0) {
+      result = 'pass';
+    }
+    return {
+      file: path.basename(file),
+      result,
+      durationMs: suite.durationMs,
+    };
+  });
+}
+
 /**
  * @param {{suite: string, limit: number|null, rows: object[], reports: {name: string, markdown: string}[], exitCode: number}} summary
  */
@@ -224,6 +300,85 @@ function nodeExecutable() {
 }
 
 /**
+ * Run the files in `node --test`.
+ * @returns {{exitCode: number, rows: object[]}}
+ */
+function runNode(files, env) {
+  const eventsDir = mkdtempSync(path.join(tmpdir(), 'heavy-events-'));
+  const eventsPath = path.join(eventsDir, 'events.jsonl');
+  const child = spawnSync(
+    nodeExecutable(),
+    [
+      '--test',
+      `--test-timeout=${TEST_TIMEOUT_MS}`,
+      '--test-concurrency=1',
+      '--test-reporter=spec',
+      '--test-reporter-destination=stdout',
+      `--test-reporter=${pathToFileURL(reporterPath).href}`,
+      `--test-reporter-destination=${eventsPath}`,
+      ...files,
+    ],
+    { env, stdio: 'inherit' }
+  );
+  if (child.error) {
+    console.error(`Could not start Node.js: ${child.error.message}`);
+  }
+  const rows = summarizeFiles(files, readEvents(eventsPath));
+  rmSync(eventsDir, { recursive: true, force: true });
+  return { exitCode: child.status ?? 1, rows };
+}
+
+/** @returns {string|null} the output of `deno --version`, or null */
+function denoVersion(env) {
+  const result = spawnSync('deno', ['--version'], { env, encoding: 'utf8' });
+  return result.error || result.status !== 0 ? null : result.stdout.trim();
+}
+
+/**
+ * Run the files that need WebGPU in `deno test`.
+ * @returns {{exitCode: number, rows: object[]}}
+ */
+function runDeno(files, env) {
+  const version = denoVersion(env);
+  if (version === null) {
+    const rows = files.map((file) => ({
+      file: path.basename(file),
+      result: 'skipped (no Deno)',
+      durationMs: null,
+    }));
+    if (env.REQUIRE_GPU === '1') {
+      console.error('suite gpu needs Deno on PATH');
+      return { exitCode: 1, rows };
+    }
+    console.log(
+      `Deno is not on PATH: skipping ${files.length} GPU test file(s)`
+    );
+    return { exitCode: 0, rows };
+  }
+  console.log(`${version.split('\n')[0]}: ${files.length} GPU test file(s)`);
+  const junitDir = mkdtempSync(path.join(tmpdir(), 'heavy-junit-'));
+  const junitPath = path.join(junitDir, 'deno.xml');
+  const child = spawnSync(
+    'deno',
+    [
+      'test',
+      '-A',
+      '--config',
+      denoConfigPath,
+      `--junit-path=${junitPath}`,
+      ...files,
+    ],
+    { env, stdio: 'inherit' }
+  );
+  if (child.error) {
+    console.error(`Could not start Deno: ${child.error.message}`);
+  }
+  const xml = existsSync(junitPath) ? readFileSync(junitPath, 'utf8') : '';
+  rmSync(junitDir, { recursive: true, force: true });
+  return { exitCode: child.status ?? 1, rows: summarizeJunit(files, xml) };
+}
+
+/**
  * @param {string[]} argv
  * @returns {number} exit code
  */
@@ -250,9 +405,15 @@ export function main(argv) {
   }
   mkdirSync(out, { recursive: true });
 
-  const files = names.map((name) => path.join(dir, name));
-  const eventsDir = mkdtempSync(path.join(tmpdir(), 'heavy-events-'));
-  const eventsPath = path.join(eventsDir, 'events.jsonl');
+  const nodeFiles = names
+    .filter((name) => !name.startsWith(GPU_PREFIX))
+    .map((name) => path.join(dir, name));
+  const gpuFiles = names
+    .filter((name) => name.startsWith(GPU_PREFIX))
+    .map((name) => path.join(dir, name));
+  if (gpuFiles.length > 0 && dir === path.resolve(DEFAULT_DIR)) {
+    gpuFiles.push(path.resolve(FAST_GPU_TEST));
+  }
   const env = { ...process.env, HEAVY: '1', HEAVY_OUT: out };
   // Set when this script itself runs under `node --test`; it would make the
   // inner run report to the outer one and skip the reporters given here.
@@ -269,31 +430,19 @@ export function main(argv) {
       options.limit ?? 'none'
     }, reports in ${out}`
   );
-  const child = spawnSync(
-    nodeExecutable(),
-    [
-      '--test',
-      `--test-timeout=${TEST_TIMEOUT_MS}`,
-      '--test-concurrency=1',
-      '--test-reporter=spec',
-      '--test-reporter-destination=stdout',
-      `--test-reporter=${pathToFileURL(reporterPath).href}`,
-      `--test-reporter-destination=${eventsPath}`,
-      ...files,
-    ],
-    { env, stdio: 'inherit' }
-  );
-  if (child.error) {
-    console.error(`Could not start Node.js: ${child.error.message}`);
+  const runs = [];
+  if (nodeFiles.length > 0) {
+    runs.push(runNode(nodeFiles, env));
   }
-  const exitCode = child.status ?? 1;
+  if (gpuFiles.length > 0) {
+    runs.push(runDeno(gpuFiles, env));
+  }
+  const exitCode = runs.find((run) => run.exitCode !== 0)?.exitCode ?? 0;
 
-  const rows = summarizeFiles(files, readEvents(eventsPath));
-  rmSync(eventsDir, { recursive: true, force: true });
   const summary = formatSummary({
     suite: options.suite,
     limit: options.limit,
-    rows,
+    rows: runs.flatMap((run) => run.rows),
     reports: readReports(out, startedMs),
     exitCode,
   });

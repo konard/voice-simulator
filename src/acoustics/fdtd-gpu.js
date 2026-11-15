@@ -240,6 +240,26 @@ export async function requestGpuDevice(options = {}) {
 }
 
 /**
+ * Which adapter a device runs on, for logs and reports: the three strings
+ * of `device.adapterInfo` ('' when missing) and whether it is a fallback
+ * (software) adapter. Null without a device or without `adapterInfo`.
+ * @param {object|null|undefined} device A GPUDevice.
+ * @returns {{description: string, vendor: string, architecture: string, fallback: boolean}|null}
+ */
+export function describeGpuDevice(device) {
+  const info = device?.adapterInfo;
+  if (!info) {
+    return null;
+  }
+  return {
+    description: info.description ?? '',
+    vendor: info.vendor ?? '',
+    architecture: info.architecture ?? '',
+    fallback: Boolean(info.isFallbackAdapter),
+  };
+}
+
+/**
  * GPU step loop of one Fdtd3d solver. The solver queues steps
  * (`queue(force, inject)`) and collects their outputs with `flush()`.
  */

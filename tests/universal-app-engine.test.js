@@ -5,6 +5,9 @@
 
 import { describe, it, expect } from 'test-anywhere';
 import { VoiceEngine } from '../examples/universal-app/src/engine/voice-engine.js';
+import { AUDIO_TIERS, BASE_AUDIO_LEVEL, audioTierIndex } from '../src/index.js';
+
+const HIGH = audioTierIndex('high');
 
 function fakeWorker() {
   const worker = {
@@ -52,6 +55,16 @@ function withStorage(run) {
 }
 
 describe('voice engine benchmark', () => {
+  it('starts automatic quality at minimal, above the narrow-band tiers', () => {
+    const engine = new VoiceEngine({ createWorker: fakeWorker });
+    expect(engine.auto).toBe(true);
+    expect(engine.audioLevel).toBe(BASE_AUDIO_LEVEL);
+    expect(engine.status.audioLevel).toBe(BASE_AUDIO_LEVEL);
+    expect(AUDIO_TIERS[engine.audioLevel].name).toBe('minimal');
+    engine.setTier(audioTierIndex('telephone'));
+    expect(AUDIO_TIERS[engine.audioLevel].name).toBe('telephone');
+  });
+
   it('starts at the tier cached by an earlier visit', () => {
     withStorage(() => {
       const worker = fakeWorker();
@@ -271,17 +284,20 @@ const brokenGpu = {
 describe('synthesis worker', () => {
   it('restarts an utterance on a cheaper tier as soon as it falls behind', async () => {
     let clock = 0;
-    // Every chunk "takes" 60 ms: far slower than real time on every tier.
+    // Every clock reading "takes" 100 ms, so a 1024-sample chunk takes at
+    // least 100 ms: far slower than real time on every wide-band tier
+    // (46 ms of audio at 22.05 kHz).
     const posted = await speakInWorker(
-      { id: 1, ipa: 'ˈa', seed: 1, tier: 3, auto: true, gpu: false },
-      { now: () => (clock += 30) }
+      { id: 1, ipa: 'ˈa', seed: 1, tier: HIGH, auto: true, gpu: false },
+      { now: () => (clock += 100) }
     );
     const steps = posted
       .filter((message) => message.type === 'overload')
       .map((message) => [message.from, message.level]);
     expect(steps.length > 0).toBe(true);
-    expect(steps[0][0]).toBe(3);
-    expect(steps.at(-1)[1]).toBe(0);
+    expect(steps[0][0]).toBe(HIGH);
+    // An overloaded device may go down to the narrow-band tiers.
+    expect(steps.at(-1)[1]).toBe(audioTierIndex('telephone'));
     const starts = posted.filter((message) => message.type === 'start');
     expect(starts.at(-1).solver).toBe('waveguide');
     expect(posted.at(-1).type).toBe('end');
@@ -289,7 +305,7 @@ describe('synthesis worker', () => {
 
   it('keeps the 3D tiers on the CPU when the GPU is turned off', async () => {
     const posted = await speakInWorker(
-      { id: 2, ipa: 'ˈa', seed: 1, tier: 3, auto: false, gpu: false },
+      { id: 2, ipa: 'ˈa', seed: 1, tier: HIGH, auto: false, gpu: false },
       { gpu: brokenGpu }
     );
     const starts = posted.filter((message) => message.type === 'start');
@@ -301,7 +317,7 @@ describe('synthesis worker', () => {
 
   it('falls back to the CPU when the GPU fails', async () => {
     const posted = await speakInWorker(
-      { id: 3, ipa: 'ˈa', seed: 1, tier: 3, auto: false },
+      { id: 3, ipa: 'ˈa', seed: 1, tier: HIGH, auto: false },
       { gpu: brokenGpu }
     );
     expect(posted.some((message) => message.type === 'error')).toBe(false);

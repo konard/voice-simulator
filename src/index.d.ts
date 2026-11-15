@@ -128,6 +128,14 @@ export interface AudioTier {
   sections?: number;
   dx?: number;
   sampleRate: number;
+  /** Control interval in output samples (narrow-band tiers; default 32). */
+  blockSize?: number;
+  /**
+   * Corner (Hz) of the eighth-order Butterworth output low-pass of the
+   * narrow-band tiers (telephone, narrowband, wideband), applied at the
+   * solver rate and again at the output rate.
+   */
+  bandLimit?: number;
   cost: number;
 }
 
@@ -143,7 +151,15 @@ export interface RenderOptions {
   sections?: number;
   solver?: SolverName | string;
   seed?: string | number;
+  /** Output samples between two updates of the tract (default 32). */
   blockSize?: number;
+  /**
+   * With a corner (Hz), the output low-pass is eighth-order Butterworth at
+   * min(bandLimit, 0.45 sampleRate) instead of fourth order at
+   * min(0.45 sampleRate, 20000), at the solver rate and again at the
+   * output rate.
+   */
+  bandLimit?: number;
   head?: HeadConfig;
   dx?: number;
   model?: object;
@@ -173,6 +189,10 @@ export interface SynthesizeOptions {
   sections?: number;
   dx?: number;
   sampleRate?: number;
+  /** Control interval in output samples (default: the tier's, else 32). */
+  blockSize?: number;
+  /** Output band limit (Hz; default: the tier's, else none). */
+  bandLimit?: number;
   output?: OutputMode;
   model?: object;
   /** WebGPU device for the 3D solver (synthesizeAsync, synthesizeStream). */
@@ -348,6 +368,17 @@ export declare function renderPlanAsync(
 export declare function requestGpuDevice(options?: {
   gpu?: object;
 }): Promise<GPUDeviceLike | null>;
+/** The adapter a device runs on (`device.adapterInfo`), or null. */
+export interface GpuDeviceInfo {
+  description: string;
+  vendor: string;
+  architecture: string;
+  /** `adapterInfo.isFallbackAdapter`: a software adapter. */
+  fallback: boolean;
+}
+export declare function describeGpuDevice(
+  device: GPUDeviceLike | null | undefined
+): GpuDeviceInfo | null;
 export declare class FdtdGpu {
   constructor(solver: Fdtd3d, device: GPUDeviceLike);
   readonly workgroup: number;
@@ -642,6 +673,13 @@ export declare function parseGlb(bytes: Uint8Array): {
 export declare const AUDIO_TIERS: readonly AudioTier[];
 /** Name of the tier used when no tier or solver is given ('studio', 3D). */
 export declare const DEFAULT_AUDIO_TIER: string;
+/** Index of a tier in AUDIO_TIERS; throws `Unknown audio tier: <name>`. */
+export declare function audioTierIndex(name: string): number;
+/**
+ * Index of `minimal`: where automatic quality starts. The narrow-band tiers
+ * (telephone, narrowband, wideband) lie below it.
+ */
+export declare const BASE_AUDIO_LEVEL: number;
 export declare const VISUAL_TIERS: readonly VisualTier[];
 export declare class LodGovernor<T extends { cost: number } = AudioTier> {
   constructor(options?: {
@@ -719,7 +757,10 @@ export declare class OverloadDetector {
   readonly load: number;
   record(busy: number, audio: number): boolean;
 }
-/** Load of a tier; stops early once the load exceeds `limit`. */
+/**
+ * Load of a tier; stops early once the load exceeds `limit`. With
+ * `repeats` (default 1) the median of that many measurements.
+ */
 export declare function measureAudioTier(
   tier: AudioTier,
   options?: {
@@ -727,12 +768,16 @@ export declare function measureAudioTier(
     ipa?: string;
     seconds?: number;
     limit?: number;
+    repeats?: number;
   }
 ): number;
 export declare function benchmarkAudioTiers(options?: {
   target?: number;
   head?: HeadConfig;
   seconds?: number;
+  repeats?: number;
+  /** Seconds spent rendering the cheap tiers before measuring (default 0). */
+  warmUp?: number;
 }): {
   level: number;
   tier: AudioTier;
@@ -1443,7 +1488,10 @@ export interface VoiceFeatures {
   f0High: number;
   /** 5-95 % f0 range in semitones. */
   f0Range: number;
-  /** Median F1-F4 (Hz). */
+  /**
+   * Median F1-F4 (Hz). Always four entries; formants beyond `formantCount`
+   * (3 at 8000 Hz) were not measured and are 0.
+   */
   formants: number[];
   formantSpacing: number;
   /** Vocal tract length (cm) from the formant spacing. */
@@ -1461,7 +1509,17 @@ export interface VoiceFeatures {
 export declare function analyzeVoice(
   samples: ArrayLike<number>,
   sampleRate: number,
-  options?: { maxDuration?: number; analysisRate?: number; order?: number }
+  options?: {
+    maxDuration?: number;
+    analysisRate?: number;
+    order?: number;
+    /**
+     * Formants measured and fitted for the formant spacing and the vocal
+     * tract length. Default min(4, floor(0.45 rate / 1000)) where rate is
+     * the rate after resampling: 3 at 8000 Hz, 4 from 11025 Hz.
+     */
+    formantCount?: number;
+  }
 ): VoiceFeatures;
 export interface VoiceMatchOptions {
   /** Restrict the starting person to one preset. */
@@ -1505,8 +1563,18 @@ export declare function matchVoiceSteps(
   options?: VoiceMatchOptions
 ): Generator<VoiceMatchStep, VoiceMatch, void>;
 // Objective speech metrics and recording comparison
-/** Floor added to powers before taking logarithms (1e-10). */
+/** Absolute floor under powers before taking logarithms (1e-10). */
 export declare const EPSILON: number;
+/**
+ * Dynamic range (dB, 60) kept below the strongest bin power or mel filter
+ * energy of a signal before a logarithm; weaker values are raised to it.
+ */
+export declare const DYNAMIC_RANGE_DB: number;
+/** max(EPSILON, 10^(-range / 10) * the largest value of all frames). */
+export declare function powerFloor(
+  frames: ArrayLike<number>[],
+  range?: number
+): number;
 export declare const METRIC_DEFAULTS: Readonly<{
   sampleRate: 16000;
   /** Hann window (s). */
@@ -1518,6 +1586,8 @@ export declare const METRIC_DEFAULTS: Readonly<{
   /** Cepstral coefficients c[1] .. c[13] besides c[0]. */
   coefficients: 13;
   epsilon: number;
+  /** DYNAMIC_RANGE_DB. */
+  dynamicRange: number;
 }>;
 export interface FrameOptions {
   /** Window length in seconds (default 0.025). */
@@ -1532,6 +1602,8 @@ export interface CepstrumOptions extends FrameOptions {
   filters?: number;
   /** Coefficients besides c[0] (default 13). */
   coefficients?: number;
+  /** Dynamic range (dB) below the strongest value (default 60). */
+  range?: number;
 }
 /** In-place radix-2 FFT; the length must be a power of two. */
 export declare function fft(re: Float64Array, im: Float64Array): void;
@@ -1577,14 +1649,20 @@ export interface DistortionOptions extends CepstrumOptions {
   /** Scale both signals to an RMS of 0.1 first (default true). */
   normalize?: boolean;
 }
-/** Log-spectral distance (dB). */
+/**
+ * Log-spectral distance (dB), averaged over the frame pairs whose reference
+ * frame is not silent (40 dB below the loudest reference frame).
+ */
 export declare function logSpectralDistance(
   reference: ArrayLike<number>,
   test: ArrayLike<number>,
   sampleRate: number,
   options?: DistortionOptions
 ): number;
-/** Mel-cepstral distortion (dB) over c[1] .. c[13]. */
+/**
+ * Mel-cepstral distortion (dB) over c[1] .. c[13], averaged over the frame
+ * pairs whose reference frame is not silent.
+ */
 export declare function melCepstralDistortion(
   reference: ArrayLike<number>,
   test: ArrayLike<number>,
@@ -1694,6 +1772,8 @@ export declare function compareRecordings(
     hop?: number;
     /** false skips the formant tracks (default true). */
     formants?: boolean;
+    /** Dynamic range (dB) of the spectral distances (default 60). */
+    range?: number;
   }
 ): RecordingComparison;
 // Linguistics: text normalisation, accents, prosody, syllables, timeline

@@ -5,8 +5,18 @@
  * numbers, so every runtime gives the same values.
  */
 
-/** Floor under powers and filter energies before a logarithm. */
+/** Absolute floor under powers and filter energies before a logarithm. */
 export const EPSILON = 1e-10;
+
+/**
+ * Dynamic range (dB) kept below the strongest filter energy or bin power of
+ * a signal before a logarithm. Weaker values are raised to that floor, so an
+ * empty band (a low-passed recording, a deep spectral valley of a synthetic
+ * voice, digital silence) counts as "this much quieter than the peak" and
+ * not as the absolute EPSILON, about 100 dB below a normalised frame, which
+ * made such a band dominate the distance (issue 19).
+ */
+export const DYNAMIC_RANGE_DB = 60;
 
 /** Next power of two that is not smaller than `value` (at least 1). */
 export function nextPowerOfTwo(value) {
@@ -30,7 +40,27 @@ export const METRIC_DEFAULTS = Object.freeze({
   melFilters: 26,
   coefficients: 13,
   epsilon: EPSILON,
+  dynamicRange: DYNAMIC_RANGE_DB,
 });
+
+/**
+ * Floor of a signal before a logarithm: `range` dB below its largest value,
+ * and never below EPSILON.
+ * @param {ArrayLike<number>[]} frames Powers or filter energies per frame.
+ * @param {number} [range] dB (default DYNAMIC_RANGE_DB).
+ * @returns {number}
+ */
+export function powerFloor(frames, range = DYNAMIC_RANGE_DB) {
+  let peak = 0;
+  for (const values of frames) {
+    for (let index = 0; index < values.length; index++) {
+      if (values[index] > peak) {
+        peak = values[index];
+      }
+    }
+  }
+  return Math.max(EPSILON, peak * 10 ** (-range / 10));
+}
 
 /** Twiddle factors and bit-reversal table per transform size. */
 const FFT_TABLES = new Map();
@@ -246,7 +276,9 @@ function cachedFilterbank(count, size, sampleRate) {
  * MFCC of precomputed power frames (see `mfcc`).
  * @param {Float64Array[]} frames Output of `powerFrames`.
  * @param {number} sampleRate
- * @param {{filters?: number, coefficients?: number}} [options]
+ * @param {{filters?: number, coefficients?: number, range?: number}} [options]
+ *   range: dynamic range in dB below the strongest filter energy of all
+ *   frames (default DYNAMIC_RANGE_DB).
  * @returns {Float64Array[]}
  */
 export function cepstra(frames, sampleRate, options = {}) {
@@ -266,15 +298,21 @@ export function cepstra(frames, sampleRate, options = {}) {
     }
     basis.push(row);
   }
-  const logEnergy = new Float64Array(count);
-  return frames.map((power) => {
-    filters.forEach((weights, m) => {
+  const energies = frames.map((power) =>
+    Float64Array.from(filters, (weights) => {
       let energy = 0;
       for (let k = 0; k < weights.length; k++) {
         energy += weights[k] * power[k];
       }
-      logEnergy[m] = Math.log(Math.max(energy, EPSILON));
-    });
+      return energy;
+    })
+  );
+  const floor = powerFloor(energies, options.range ?? DYNAMIC_RANGE_DB);
+  const logEnergy = new Float64Array(count);
+  return energies.map((energy) => {
+    for (let m = 0; m < count; m++) {
+      logEnergy[m] = Math.log(Math.max(energy[m], floor));
+    }
     const coefficients = new Float64Array(highest + 1);
     basis.forEach((row, n) => {
       let sum = 0;
@@ -289,11 +327,12 @@ export function cepstra(frames, sampleRate, options = {}) {
 
 /**
  * Mel-frequency cepstral coefficients c[0] .. c[13] per frame: with E[m] the
- * energy of mel filter m (26 filters) and L[m] = ln(max(E[m], EPSILON)),
+ * energy of mel filter m (26 filters), F = max(EPSILON, 10^(-range / 10)
+ * max E over all frames and filters) and L[m] = ln(max(E[m], F)),
  * c[n] = sqrt(2 / M) sum_{m=1..M} L[m] cos(pi n (m - 0.5) / M).
  * @param {ArrayLike<number>} samples
  * @param {number} sampleRate
- * @param {{window?: number, hop?: number, size?: number, filters?: number, coefficients?: number}} [options]
+ * @param {{window?: number, hop?: number, size?: number, filters?: number, coefficients?: number, range?: number}} [options]
  * @returns {Float64Array[]}
  */
 export function mfcc(samples, sampleRate, options = {}) {
