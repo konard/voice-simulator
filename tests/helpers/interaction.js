@@ -51,16 +51,12 @@ export function vowelShape(ipa, head) {
 }
 
 /**
- * Run the folds on a static vowel.
+ * A 44-section waveguide shaped as the middle of a vowel.
  * @param {string} ipa
- * @param {{interaction?: boolean, subglottal?: boolean, f0?: number, adduction?: number, duration?: number, head?: object}} [options]
- * @returns {{flow: Float64Array, output: Float64Array, rate: number, f0: number, head: object}}
- *   The glottal flow (cm³/s) and the radiated output at every step of the
- *   waveguide (`rate` Hz).
+ * @param {object} head Normalized head.
+ * @returns {{guide: Waveguide, dt: number, shape: object}}
  */
-export function runVowel(ipa, options = {}) {
-  const head = normalizeHeadConfig(options.head ?? DEFAULT_HEAD);
-  const f0 = options.f0 ?? 120;
+export function vowelTract(ipa, head) {
   const shape = vowelShape(ipa, head);
   const guide = new Waveguide({
     sections: SECTIONS,
@@ -76,7 +72,44 @@ export function runVowel(ipa, options = {}) {
     shape
   );
   guide.setLength(shape.length);
-  const dt = shape.length / (SECTIONS * SPEED_OF_SOUND);
+  return { guide, dt: shape.length / (SECTIONS * SPEED_OF_SOUND), shape };
+}
+
+/**
+ * First resonance (Hz, -3 dB bandwidth) of a vowel's tract whose glottal
+ * end reflects `reflection` of the arriving waves: 1 for a closed glottis,
+ * 0 for one that absorbs them all.
+ * @param {string} ipa
+ * @param {number} reflection
+ * @param {object} [head]
+ */
+export function tractResonance(ipa, reflection, head = DEFAULT_HEAD) {
+  const { guide, dt } = vowelTract(ipa, normalizeHeadConfig(head));
+  guide.setGlottalReflection(reflection);
+  const response = new Float64Array(Math.round(0.1 / dt));
+  for (let index = 0; index < response.length; index++) {
+    response[index] = guide.step(index === 0 ? 1 : 0, 1, 0, 0);
+  }
+  const spectrum = impulseSpectrum(response, 1 / dt, {
+    from: 150,
+    to: 2500,
+    step: 5,
+  });
+  return resonances(spectrum, { count: 1, from: 150 })[0];
+}
+
+/**
+ * Run the folds on a static vowel.
+ * @param {string} ipa
+ * @param {{interaction?: boolean, subglottal?: boolean, f0?: number, adduction?: number, duration?: number, head?: object}} [options]
+ * @returns {{flow: Float64Array, output: Float64Array, rate: number, f0: number, head: object}}
+ *   The glottal flow (cm³/s) and the radiated output at every step of the
+ *   waveguide (`rate` Hz).
+ */
+export function runVowel(ipa, options = {}) {
+  const head = normalizeHeadConfig(options.head ?? DEFAULT_HEAD);
+  const f0 = options.f0 ?? 120;
+  const { guide, dt } = vowelTract(ipa, head);
   const folds = new VocalFolds({
     breathiness: head.breathiness,
     aspirationLevel: head.aspirationLevel,
