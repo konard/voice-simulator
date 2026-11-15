@@ -398,6 +398,17 @@ export declare class Waveguide implements Solver {
     head?: HeadConfig;
     /** `false` leaves out the piriform fossae side branch. */
     piriform?: boolean;
+    /**
+     * Boundary-layer loss in units of a round tube's viscothermal loss
+     * (LOSS_SHAPE, 1.3).
+     */
+    lossShape?: number;
+    /** Groups of tract sections sharing one loss filter (LOSS_STAGES). */
+    lossStages?: number;
+    /** Radiation load: 1 a piston in a baffle, 0 a free pipe end. */
+    baffle?: number;
+    /** `false` makes the tract walls rigid. */
+    walls?: boolean;
   });
   setShape(
     areas: ArrayLike<number>,
@@ -486,8 +497,21 @@ export interface TubeBranch {
 }
 /** Chain-matrix tube model options (tubeFormants and tubeSpectrum). */
 export interface TubeOptions {
-  /** Boundary-layer loss coefficient (default 2e-5). */
+  /** Wall loss, mass, resistance and stiffness of the head (losses.js). */
+  head?: HeadConfig;
+  /**
+   * Constant loss coefficient: the loss sqrt(f / area) of earlier
+   * versions instead of the viscothermal loss.
+   */
   loss?: number;
+  /** Viscothermal loss in units of a round tube's (LOSS_SHAPE). */
+  lossShape?: number;
+  /** `false` makes the walls rigid. */
+  walls?: boolean;
+  /** Radiation load: 1 a piston in a baffle, 0 a free pipe end. */
+  baffle?: number;
+  /** `false` leaves out the constriction loss of the waveguide. */
+  constriction?: boolean;
   branches?: TubeBranch[];
   /**
    * Nasal tract joined in front of section `velumIndex` through a port of
@@ -502,8 +526,12 @@ export interface TubeOptions {
     loss?: number;
     branches?: TubeBranch[];
   };
-  /** Radiated flow with a nose: lips plus nostrils (default) or either. */
-  output?: 'both' | 'lips' | 'nostrils';
+  /**
+   * Radiated flow with a nose: lips plus nostrils (default) or either;
+   * 'pressure' is the pressure in section `probe` (no nose).
+   */
+  output?: 'both' | 'lips' | 'nostrils' | 'pressure';
+  probe?: number;
   /** Frequency step (Hz) of the spectrum. */
   step?: number;
   maxFrequency?: number;
@@ -520,6 +548,40 @@ export declare function tubeSpectrum(
   length: number,
   options?: TubeOptions
 ): { frequencies: Float64Array; magnitudes: Float64Array };
+/** Viscothermal loss of the tract walls in units of a round tube's. */
+export declare const LOSS_SHAPE: number;
+/** Groups of waveguide sections that share one loss filter and wall. */
+export declare const LOSS_STAGES: number;
+/** Radiation load between a free pipe end (0) and a piston in a baffle (1). */
+export declare const RADIATION_BAFFLE: number;
+/**
+ * Formant bandwidth (Hz) at `frequency` after Hawks & Miller (1995), for a
+ * fundamental `f0` (132 Hz).
+ */
+export declare function publishedBandwidth(
+  frequency: number,
+  f0?: number
+): number;
+/**
+ * Viscothermal loss (nepers per cm) of a tube of `area` cm² at
+ * `frequency`, times `shape` (1 for a round tube).
+ */
+export declare function viscothermalLoss(
+  frequency: number,
+  area: number,
+  shape?: number
+): number;
+/** Magnitude spectrum of an impulse response on a regular grid (Goertzel). */
+export declare function impulseSpectrum(
+  response: ArrayLike<number>,
+  sampleRate: number,
+  options?: { from?: number; to?: number; step?: number }
+): { frequencies: Float64Array; magnitudes: Float64Array };
+/** Peaks of a magnitude spectrum above `from` Hz and their -3 dB widths. */
+export declare function resonances(
+  spectrum: { frequencies: ArrayLike<number>; magnitudes: ArrayLike<number> },
+  options?: { count?: number; from?: number }
+): { frequency: number; bandwidth: number }[];
 export declare function estimateFormants(
   samples: Float32Array,
   sampleRate: number,

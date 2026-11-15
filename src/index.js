@@ -81,8 +81,17 @@ export {
 export { Glottis } from './acoustics/glottis.js';
 export { tubeFormants, tubeSpectrum } from './acoustics/transfer.js';
 export {
+  LOSS_SHAPE,
+  LOSS_STAGES,
+  publishedBandwidth,
+  viscothermalLoss,
+} from './acoustics/losses.js';
+export { RADIATION_BAFFLE } from './acoustics/radiation.js';
+export {
   estimateFormants,
   estimatePitch,
+  impulseSpectrum,
+  resonances,
   rms,
   spectralPeaks,
 } from './acoustics/analysis.js';
