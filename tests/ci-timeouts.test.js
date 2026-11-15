@@ -289,6 +289,7 @@ describe('CI timeout policy', () => {
       'changeset-pr': 10,
       'pipeline-status': 5,
       'release-preflight': 5,
+      rust: 15,
     };
 
     expect(listWorkflowJobs(releaseWorkflow).sort()).toEqual(
@@ -389,6 +390,7 @@ describe('CI execution budgets', () => {
       'docker-publish-config',
       'instant-release',
       'release',
+      'rust',
       'simulation',
       'test',
     ]);

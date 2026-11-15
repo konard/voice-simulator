@@ -33,7 +33,7 @@ differently, so this keeps the choice in one place.
 ## Building
 
 ```sh
-rustup show                 # installs the toolchain of rust-toolchain.toml
+rustup toolchain install    # installs the toolchain of rust-toolchain.toml
 npm run build:wasm          # or: node scripts/build-wasm.mjs
 ```
 
@@ -207,5 +207,7 @@ need it and download the artifact into `src/engine/` before they publish.
 In `example-app.yml` the job `wasm-build` does the same build and upload,
 and `web-build`, `desktop-package`, `android-build` and `ios-build`
 download the file before they build. Both jobs use the `rustup` of the
-runner image, which installs the toolchain of `rust-toolchain.toml` on
-`rustup show`.
+runner image: `rustup toolchain install` without arguments installs the
+toolchain of `rust-toolchain.toml` (rustup 1.29 warns that the automatic
+install of `rustup show` is deprecated), and `rustup show` then prints the
+active versions into the log.
