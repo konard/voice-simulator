@@ -98,10 +98,10 @@ function usage() {
     `                        ${AUDIO_TIERS.filter((tier) => tier.bandLimit)
       .map((tier) => `${tier.name} ${tier.sampleRate / 1000}`)
       .join(', ')} kHz: band-limited`,
-    '      --solver <name>   waveguide | fdtd3d (overrides the tier)',
+    '      --solver <name>   waveguide | fdtd2d | fdtd3d (overrides the tier)',
     '      --source <name>   lf | folds: voice source (default lf; folds =',
     '                        vocal folds driven by the lung pressure)',
-    '      --dx <cm>         FDTD voxel size',
+    '      --dx <cm>         FDTD cell (2D) or voxel (3D) size',
     '  -s, --seed <seed>     Random seed for the head and the voice',
     '      --head <value>    "random" or an encoded head (key=value&...)',
     '                        e.g. lungPressure=1600 (Pa, default 800): louder',

@@ -45,9 +45,13 @@ a pressure wave travelling through the 3D shape of a parametric low-poly head
   (`partStart`/`partEnd`), so `3/4/2024` lights 3, then 4, then 2024.
 - **Smooth articulation**: IPA becomes a time plan of tract shapes with
   coarticulated transitions, glottal source and pitch contour.
-- **Physical acoustics** with two interchangeable solvers:
+- **Physical acoustics** with three interchangeable solvers:
   - `waveguide`: a branched Kelly-Lochbaum tube (tract + nose) that follows
     the 3D centreline of the head; real time on any device.
+  - `fdtd2d`: a 2D finite-difference time-domain solver on the midsagittal
+    sheet of the tract (0.6 cm cells, a depth per cell), with the nose, the
+    piriform fossae and the vallecula as 1D lines; about 0.5 times real
+    time on one core. No tier uses it yet (see "Quality tiers").
   - `fdtd3d`: a sparse-voxel 3D finite-difference time-domain solver of the
     acoustic wave equation inside the voxelised head and the air around it;
     the default of the library, the CLI and the server (`studio` tier).
@@ -285,9 +289,9 @@ console.log(describeGpuDevice(device));
 ```
 
 Lower-level building blocks are exported too: `planUtterance`,
-`sampleState`, `tractShape`, `Waveguide`, `Fdtd3d`, `buildVoxelModel`,
-`VoiceRenderer`, `headMesh`, `tubeMesh`, `headModelObj`, `LodGovernor`,
-`chooseTier`, `chooseTierWithGpu`, `measureAudioTier`,
+`sampleState`, `tractShape`, `Waveguide`, `Fdtd2d`, `buildSheet`, `Fdtd3d`,
+`buildVoxelModel`, `VoiceRenderer`, `headMesh`, `tubeMesh`, `headModelObj`,
+`LodGovernor`, `chooseTier`, `chooseTierWithGpu`, `measureAudioTier`,
 `benchmarkAudioTiersAsync` and more; see
 [`src/index.d.ts`](src/index.d.ts). A runnable example is in
 [`examples/basic-usage.js`](examples/basic-usage.js).
@@ -550,6 +554,15 @@ The image runs `voice-simulator serve` on port 8080 with a health check on
 | `ultra`      | fdtd3d    | 0.6 cm voxels | 48 kHz      | 65            |
 | `studio`     | fdtd3d    | 0.5 cm voxels | 48 kHz      | 105           |
 | `reference`  | fdtd3d    | 0.4 cm voxels | 48 kHz      | 220           |
+
+The 2D solver `fdtd2d` (`--solver fdtd2d`, `{ solver: 'fdtd2d' }`) is not a
+tier: at 0.6 cm it renders in 0.43 times the time of `high`, but its 4 to
+8 kHz band is further from the 3D solver than the waveguide's (13.22 against
+10.20 dB, `experiments/issue-11-fdtd2d-compare.txt`). Like the 3D solver it
+takes the burst transient of a stop through the plane of the noise source
+without its DC: the burst of [t] is 4.37 dB above the peak of its frication,
+against 4.92 dB in the waveguide
+(`node experiments/issue-35-burst-solvers.mjs`).
 
 The three narrow-band tiers below `minimal` low-pass the voice with an
 eighth-order Butterworth filter at 3.4, 4.8 and 7 kHz (`bandLimit`), once at
