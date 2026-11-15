@@ -278,6 +278,9 @@ export class Fdtd3d {
     this.noiseState = 0;
     this.burstInput = 0;
     this.burstState = 0;
+    /** Mean pressure of the source cells after the last two steps. */
+    this.glottisPressure = 0;
+    this.previousGlottisPressure = 0;
     this.leak = 1 - this.dt / MICROPHONE_LEAK_TIME;
     this.tubeAreas = [null, null];
     this.pending = [];
@@ -572,8 +575,15 @@ export class Fdtd3d {
     model.openFaces.forEach((faces, index) => {
       this.admittance[index] = faces * wall;
     });
-    // The source cells span about one slice per dx of arc; share the
-    // glottis admittance between the slices so the total matches.
+    this.#shareGlottisAdmittance();
+    this.#updateCellCoefficients();
+  }
+
+  /**
+   * The source cells span about one slice per dx of arc; share the
+   * glottis admittance between the slices so the total matches.
+   */
+  #shareGlottisAdmittance() {
     let slices = 0;
     for (const index of this.sourceCells) {
       slices += (this.dx * this.dx) / this.envelope[index];
@@ -581,7 +591,42 @@ export class Fdtd3d {
     for (const index of this.sourceCells) {
       this.admittance[index] = this.glottisAdmittance / Math.max(1, slices);
     }
-    this.#updateCellCoefficients();
+  }
+
+  /**
+   * Reflection of the glottis termination (glottalReflection of the head
+   * by default); 1 makes it rigid. Recomputes the glottis admittance.
+   * @param {number} reflection
+   */
+  setGlottalReflection(reflection) {
+    this.glottisAdmittance = (1 - reflection) / (1 + reflection);
+    this.#shareGlottisAdmittance();
+    this.#updateCellCoefficients(this.sourceCells);
+  }
+
+  /**
+   * The vocal tract as the folds see it (issue 34): half the mean pressure
+   * p of the source cells after the last step and an infinite area, since
+   * p already holds the response to the glottal flow. In microphone output
+   * the field holds the integrated source (#sourcePressure); the incident
+   * wave undoes that integration so that it is a derivative as the source
+   * in both outputs. Steps on the GPU are batched, so there is no load
+   * there. The object is reused.
+   * @returns {{incident: number, area: number}}
+   */
+  glottalLoad() {
+    if (this.gpu) {
+      throw new Error('The GPU solver has no glottal load (queued steps)');
+    }
+    this.load ??= { incident: 0, area: Infinity };
+    let pressure = this.glottisPressure;
+    if (this.output === 'microphone') {
+      pressure =
+        (pressure - this.leak * this.previousGlottisPressure) /
+        (this.dx * MICROPHONE_GAIN);
+    }
+    this.load.incident = pressure / 2;
+    return this.load;
   }
 
   #updateCellCoefficients(cells = null) {
@@ -973,9 +1018,13 @@ export class Fdtd3d {
       this.#stepJs();
     }
     const pressure = this.#sourcePressure(glottalFlow);
+    let sum = 0;
     for (const index of this.sourceCells) {
       this.pressure[index] += pressure * this.keep[index];
+      sum += this.pressure[index];
     }
+    this.previousGlottisPressure = this.glottisPressure;
+    this.glottisPressure = sum / Math.max(1, this.sourceCells.length);
     return this.#measure();
   }
 
@@ -1053,6 +1102,8 @@ export class Fdtd3d {
     this.noiseState = 0;
     this.burstInput = 0;
     this.burstState = 0;
+    this.glottisPressure = 0;
+    this.previousGlottisPressure = 0;
     this.gpu?.reset();
   }
 }

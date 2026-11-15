@@ -536,6 +536,29 @@ export class Fdtd2d {
   }
 
   /**
+   * The vocal tract as the folds see it (issue 34): half the mean pressure
+   * of the glottis column (pressure / rho c, a derivative as the source)
+   * and an infinite area, since that pressure already holds the response
+   * to the glottal flow. The object is reused.
+   * @returns {{incident: number, area: number}}
+   */
+  glottalLoad() {
+    this.load ??= { incident: 0, area: Infinity };
+    this.load.incident = this.#columnMean(0) / 2;
+    return this.load;
+  }
+
+  /**
+   * Reflection of the glottis termination (glottalReflection of the head
+   * by default); 1 makes it rigid.
+   * @param {number} reflection
+   */
+  setGlottalReflection(reflection) {
+    this.glottisAdmittance = (1 - reflection) / (1 + reflection);
+    this.dirty = true;
+  }
+
+  /**
    * Queue a step (arguments as for step); flushSteps returns the outputs.
    * The step runs right away.
    */
