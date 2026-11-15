@@ -3,7 +3,12 @@
 // loop must settle; prints the flow and the pressure above over time.
 // Usage: node experiments/issue-34-loop.mjs [glottalArea] [tubeArea] [slow 0|1]
 import { Waveguide } from '../src/acoustics/waveguide.js';
-import { interactiveFlow, IncidentPressure, PRESSURE_CORNER, FOLDS_FLOW_SCALE } from '../src/acoustics/folds.js';
+import {
+  interactiveFlow,
+  IncidentPressure,
+  PRESSURE_CORNER,
+  FOLDS_FLOW_SCALE,
+} from '../src/acoustics/folds.js';
 import { AIR_DENSITY, SPEED_OF_SOUND } from '../src/acoustics/constants.js';
 
 const a = Number(process.argv[2] ?? 0.3);
@@ -27,12 +32,18 @@ for (let step = 0; step < 20000; step++) {
   const drive = lung / 2 - p + (load * s) / 2;
   const flow = interactiveFlow(a, Infinity, A, drive);
   const derivative = started ? ((flow - u) / dt) * FOLDS_FLOW_SCALE : 0;
-  slow = started ? slow + 2 * Math.PI * PRESSURE_CORNER * dt * (flow - s) : flow;
+  slow = started
+    ? slow + 2 * Math.PI * PRESSURE_CORNER * dt * (flow - s)
+    : flow;
   started = true;
   u = flow;
   guide.step(derivative, 0, 0, 0);
   if (step % 1000 === 0 || (step < 200 && step % 10 === 0)) {
-    console.log(`${step} u=${u.toFixed(2)} slow=${slow.toFixed(2)} pAbove=${((2 * p + load * (u - s)) / 10).toFixed(1)}Pa`);
+    console.log(
+      `${step} u=${u.toFixed(2)} slow=${slow.toFixed(2)} pAbove=${((2 * p + load * (u - s)) / 10).toFixed(1)}Pa`
+    );
   }
 }
-console.log(`bernoulli ${(a * Math.sqrt((2 * lung) / (1.1 * AIR_DENSITY))).toFixed(2)}`);
+console.log(
+  `bernoulli ${(a * Math.sqrt((2 * lung) / (1.1 * AIR_DENSITY))).toFixed(2)}`
+);

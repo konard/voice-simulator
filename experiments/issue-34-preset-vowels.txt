@@ -1,0 +1,24 @@
+== lf
+  [i] female f0 219.178 ok, male f0 118.519 ok, F2 female/male 1.129 ok
+  [ə] female f0 219.178 ok, male f0 118.519 ok, F2 female/male 1.223 ok
+  random female 1 [ə] f0 231.884 ok
+  random female 2 [ə] f0 266.667 ok
+  random female 3 [ə] f0 253.968 ok
+  female - male: H1*-H2* 4.548 ok dB, H1*-A3* 6.093 ok dB
+  child - male: H1*-H2* 5.355 ok dB, H1*-A3* 8.389 ok dB
+== folds
+  [i] female f0 103.896 FAILS (180..260), male f0 119.403 ok, F2 female/male 1.155 ok
+  [ə] female f0 210.526 ok, male f0 120.301 ok, F2 female/male 1.118 ok
+  random female 1 [ə] f0 222.222 ok
+  random female 2 [ə] f0 266.667 ok
+  random female 3 [ə] f0 250.000 ok
+  female - male: H1*-H2* 4.978 ok dB, H1*-A3* 3.635 FAILS (5.5..14) dB
+  child - male: H1*-H2* -7.650 FAILS (2..7) dB, H1*-A3* Infinity FAILS (5.5..14) dB
+== interaction
+  [i] female f0 210.526 ok, male f0 119.403 ok, F2 female/male 1.193 ok
+  [ə] female f0 213.333 ok, male f0 122.137 ok, F2 female/male 1.168 ok
+  random female 1 [ə] f0 222.222 ok
+  random female 2 [ə] f0 271.186 ok
+  random female 3 [ə] f0 253.968 ok
+  female - male: H1*-H2* 0.892 FAILS (2..7) dB, H1*-A3* 9.294 ok dB
+  child - male: H1*-H2* -53.375 FAILS (2..7) dB, H1*-A3* -39.035 FAILS (5.5..14) dB

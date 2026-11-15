@@ -11,5 +11,7 @@ const dt = Number(process.argv[3] ?? 16.5 / (44 * 35000));
 const head = { ...DEFAULT_HEAD, wallLoss: loss / SUBGLOTTAL_LOSS };
 console.log(`SUBGLOTTAL_LOSS ${loss}, dt ${dt.toExponential(4)} s`);
 for (const { frequency, bandwidth } of subglottalResonances(head, dt)) {
-  console.log(`  ${frequency.toFixed(0)} Hz, bandwidth ${bandwidth.toFixed(0)} Hz`);
+  console.log(
+    `  ${frequency.toFixed(0)} Hz, bandwidth ${bandwidth.toFixed(0)} Hz`
+  );
 }

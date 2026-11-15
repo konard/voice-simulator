@@ -6,7 +6,12 @@ import { VoiceRenderer } from '../src/acoustics/voice.js';
 const ipa = process.argv[2] ?? 'ˈɑː';
 const subglottal = process.argv[3] !== '0';
 const plan = planUtterance(ipa, { ipa: true });
-const renderer = new VoiceRenderer(plan, { source: 'folds', interaction: true, subglottal, sampleRate: 48000 });
+const renderer = new VoiceRenderer(plan, {
+  source: 'folds',
+  interaction: true,
+  subglottal,
+  sampleRate: 48000,
+});
 const target = new Float32Array(48);
 const glottis = renderer.glottis;
 for (let ms = 0; ms < 300; ms++) {
