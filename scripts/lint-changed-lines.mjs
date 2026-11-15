@@ -1,15 +1,28 @@
 /**
- * Helpers for reporting ESLint warnings only on changed lines.
+ * Helpers for reporting ESLint warnings only in changed files.
  *
- * Errors are always reported, everywhere. Warnings are noise when they come
- * from untouched code: every run repeats the same findings and hides the new
- * ones. These helpers map a unified diff to the set of added/modified lines per
- * file and drop warnings that fall outside that set.
+ * Errors are always reported, everywhere. Warnings are reported for every
+ * file the branch changes, the same scope the pre-commit hook lints
+ * (`eslint --max-warnings 0` on each staged file), and for every file when the
+ * lint configuration or the ESLint packages change.
+ *
+ * The scope is a whole file, not the changed lines: `complexity`,
+ * `max-statements`, `max-lines-per-function` and similar rules report on the
+ * first line of a function, which an edit to its body leaves unchanged
+ * (docs: dev/log/issues/115/pulls/116/README.md).
  */
 
 import path from 'node:path';
 
 const HUNK_HEADER = /^@@ -\d+(?:,\d+)? \+(\d+)(?:,(\d+))? @@/;
+
+/**
+ * Files whose change can alter the warnings of any other file: the ESLint
+ * configuration, local rules, and the manifests that pin ESLint and its
+ * plugins.
+ */
+const LINT_CONFIG_FILE =
+  /^(?:eslint\.config\.[cm]?js|eslint-rules\/.+|package(?:-lock)?\.json)$/;
 
 /**
  * Parse a unified diff into a map of file path -> Set of changed line numbers
@@ -54,50 +67,36 @@ export function parseChangedLines(diff) {
   return changed;
 }
 
+/**
+ * Whether a change set touches the lint configuration, so that every file
+ * must be checked again.
+ *
+ * @param {Map<string, unknown>} changedFiles keys are repository paths
+ * @returns {boolean}
+ */
+export function changesLintConfig(changedFiles) {
+  return [...changedFiles.keys()].some((file) => LINT_CONFIG_FILE.test(file));
+}
+
 function relativePath(filePath, cwd) {
   return path.relative(cwd, filePath).split(path.sep).join('/');
 }
 
 /**
- * Keep every error, and keep warnings only when they touch a changed line of a
- * changed file.
+ * Keep every error, and keep warnings only in files the change set touches.
  *
  * @param {Array<object>} results ESLint result objects
- * @param {Map<string, Set<number>|true>} changedLines from {@link parseChangedLines};
- *   a `true` value means the whole file is new
-
+ * @param {Map<string, Set<number>|true>} changedFiles from
+ *   {@link parseChangedLines}; a `true` value marks an untracked file
  * @param {string} cwd directory the result paths are relative to
  * @returns {Array<object>} filtered ESLint results
  */
-export function filterWarningsToChangedLines(results, changedLines, cwd) {
+export function filterWarningsToChangedFiles(results, changedFiles, cwd) {
   return results.map((result) => {
-    const fileChanges = changedLines.get(relativePath(result.filePath, cwd));
-
-    const messages = result.messages.filter((message) => {
-      if (message.severity !== 1) {
-        return true;
-      }
-
-      if (!fileChanges) {
-        return false;
-      }
-
-      // `true` marks a wholly new file: every line counts as changed.
-      if (fileChanges === true) {
-        return true;
-      }
-
-      const start = message.line ?? 0;
-      const end = message.endLine ?? start;
-
-      for (let line = start; line <= end; line += 1) {
-        if (fileChanges.has(line)) {
-          return true;
-        }
-      }
-
-      return false;
-    });
+    const changed = changedFiles.has(relativePath(result.filePath, cwd));
+    const messages = result.messages.filter(
+      (message) => message.severity !== 1 || changed
+    );
 
     return {
       ...result,
@@ -112,8 +111,8 @@ export function filterWarningsToChangedLines(results, changedLines, cwd) {
 
 /**
  * Exit code for the reported results: any error or any reported warning
- * fails. The pre-commit hook runs ESLint with --max-warnings 0, so CI rejects
- * what a skipped hook would have rejected.
+ * fails. The pre-commit hook runs ESLint with --max-warnings 0 on every
+ * staged file, so CI rejects what a skipped hook would have rejected.
  *
  * @param {Array<object>} reported ESLint results after filtering
  * @returns {0 | 1}
