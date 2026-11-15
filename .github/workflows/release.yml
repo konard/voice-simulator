@@ -254,7 +254,7 @@ jobs:
           node-version: '24.x'
 
       - name: Check for secrets
-        run: npx --yes -p secretlint@13.0.7 -p @secretlint/secretlint-rule-preset-recommend@13.0.7 node scripts/check-secrets.mjs
+        run: npx --yes -p secretlint@14.0.0 node scripts/check-secrets.mjs
 
       - name: Install dependencies
         run: npm ci
