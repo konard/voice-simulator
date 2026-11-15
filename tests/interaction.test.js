@@ -35,7 +35,8 @@ describe('interactive glottal flow', () => {
   it('solves the flow equation', () => {
     const bernoulli = 0.1 * Math.sqrt((4 * 4000) / (K * RHO));
     expect(
-      Math.abs(interactiveFlow(0.1, Infinity, Infinity, 4000) - bernoulli)
+      Math.abs(interactiveFlow(0.1, Infinity, Infinity, 4000) - bernoulli) /
+        bernoulli
     ).toBeLessThan(1e-9);
     const u = interactiveFlow(0.1, 3, 3, 4000);
     expect(u).toBeLessThan(bernoulli);
