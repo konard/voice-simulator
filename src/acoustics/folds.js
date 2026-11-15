@@ -97,12 +97,16 @@ export const ADDUCTION_TABLE = Object.freeze([
 ]);
 
 /**
- * Time constant (s) of the mean glottal area that the air flow of
- * VoiceRenderer uses (issue 35): longer than a period of the folds, so
- * that the mouth pressure and the burst transient do not follow every
- * cycle, and shorter than a phone.
+ * Time constant (s) of each of the MEAN_AREA_STAGES one-pole stages of the
+ * mean glottal area that the air flow of VoiceRenderer uses (issue 35).
+ * The mean must not follow the cycles of the folds: their ripple becomes a
+ * flow derivative, and the burst transient injects it at the constriction.
+ * One stage of 10 ms left a ripple that took 1.8 dB off the vowels of the
+ * fold source; three of 5 ms (together 15 ms, shorter than a phone) leave
+ * 0.1 dB (experiments/issue-35-folds-airflow.mjs).
  */
-export const MEAN_AREA_TIME = 0.01;
+export const MEAN_AREA_TIME = 0.005;
+export const MEAN_AREA_STAGES = 3;
 
 const PASCAL = 10; // dyn/cm² per Pa
 const REFERENCE_PRESSURE = 800 * PASCAL;
@@ -159,6 +163,7 @@ export class VocalFolds {
     this.v2 = 0;
     this.area = 0;
     this.meanArea = 0;
+    this.meanStages = new Float64Array(MEAN_AREA_STAGES);
     this.u = 0;
     this.pressure = 0;
     this.started = false;
@@ -189,6 +194,25 @@ export class VocalFolds {
     // Collision springs act on the area: c_i a_i / (2 L).
     this.c1 = (FOLD_COLLISION * this.k1) / (2 * this.length);
     this.c2 = (FOLD_COLLISION * this.k2) / (2 * this.length);
+  }
+
+  /**
+   * Low-pass the open area through MEAN_AREA_STAGES one-pole stages; the
+   * first step after a reset starts them at the rest area.
+   */
+  #updateMeanArea(open, rest) {
+    if (!this.started) {
+      this.meanArea = rest;
+      this.meanStages.fill(rest);
+      return;
+    }
+    let input = open;
+    for (let index = 0; index < MEAN_AREA_STAGES; index++) {
+      const stage = this.meanStages[index];
+      input = stage + this.meanFollow * (input - stage);
+      this.meanStages[index] = input;
+    }
+    this.meanArea = input;
   }
 
   /**
@@ -259,10 +283,10 @@ export class VocalFolds {
     const flow = area * Math.sqrt((2 * pressure) / AIR_DENSITY);
     // The first step after a reset sets the flow without a jump to it.
     const previous = this.started ? this.u : flow;
-    const open = area * (1 - closure);
-    this.meanArea = this.started
-      ? this.meanArea + this.meanFollow * (open - this.meanArea)
-      : Math.max(0, a02) * (1 - closure);
+    this.#updateMeanArea(
+      area * (1 - closure),
+      Math.max(0, a02) * (1 - closure)
+    );
     this.started = true;
     const derivative = ((flow - previous) / dt) * FOLDS_FLOW_SCALE;
     this.area = area;

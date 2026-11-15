@@ -662,14 +662,16 @@ export declare class VocalFolds {
   readonly flow: number;
   /** Area between the folds after the last step (cm²). */
   area: number;
-  /** Mean of `area` over MEAN_AREA_TIME, zero under a glottal closure (cm²). */
+  /** Low-passed `area` (MEAN_AREA_STAGES stages of MEAN_AREA_TIME), zero under a glottal closure (cm²). */
   meanArea: number;
   intensity: number;
   noiseModulation: number;
 }
 export declare const FOLD_RATE: number;
-/** Time constant (s) of VocalFolds.meanArea. */
+/** Time constant (s) of each stage of VocalFolds.meanArea. */
 export declare const MEAN_AREA_TIME: number;
+/** One-pole stages of VocalFolds.meanArea. */
+export declare const MEAN_AREA_STAGES: number;
 export declare const FOLDS_FLOW_SCALE: number;
 export declare const MIN_FOLD_TENSION: number;
 export declare const MAX_FOLD_TENSION: number;

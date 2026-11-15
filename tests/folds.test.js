@@ -16,6 +16,7 @@ import {
 } from '../src/acoustics/folds.js';
 import { planUtterance } from '../src/articulation/plan.js';
 import { VoiceRenderer } from '../src/acoustics/voice.js';
+import { rms } from '../src/acoustics/analysis.js';
 
 const RATE = FOLD_RATE;
 
@@ -250,5 +251,36 @@ describe('vocal folds', () => {
     const largest = Math.max(...areas);
     const vowel = areas[Math.round(areas.length * 0.2)];
     expect(largest).toBeGreaterThan(2 * vowel);
+  });
+
+  it('keeps its cycles out of the burst transient (issue 35)', () => {
+    // The ripple of the mean area at the pitch becomes a flow derivative
+    // that the renderer injects at the constriction; with one 10 ms stage
+    // it took 1.8 dB off the vowel.
+    const plan = planUtterance('ˈasa', { language: 'en' });
+    const vowel = plan.segments.find((item) => item.kind === 'vowel');
+    const rate = 16000;
+    const level = (steady) => {
+      const renderer = new VoiceRenderer(plan, {
+        sampleRate: rate,
+        source: 'folds',
+        seed: 1,
+      });
+      if (steady) {
+        const air = renderer.aerodynamics;
+        const step = air.step.bind(air);
+        air.step = (...inputs) => ({ ...step(...inputs), flowDerivative: 0 });
+      }
+      const samples = new Float32Array(renderer.totalSamples);
+      renderer.render(samples);
+      const span = vowel.end - vowel.start;
+      return rms(
+        samples,
+        Math.floor((vowel.start + 0.2 * span) * rate),
+        Math.floor((vowel.start + 0.8 * span) * rate)
+      );
+    };
+    const difference = 20 * Math.log10(level(false) / level(true));
+    expect(Math.abs(difference)).toBeLessThan(0.5);
   });
 });

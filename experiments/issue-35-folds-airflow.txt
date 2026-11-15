@@ -1,0 +1,27 @@
+# node experiments/issue-35-folds-airflow.mjs /tmp/main-a2f (main a2f0ad7)
+lf    ˈasa   consonant -26.36 dB, vowel -16.73 dB
+lf    ˈaza   consonant -17.79 dB, vowel -16.71 dB
+lf    ˈafa   consonant -34.20 dB, vowel -16.73 dB
+lf    ˈaha   consonant -23.48 dB, vowel -16.74 dB
+lf    ˈapʰa  consonant -80.56 dB, vowel -16.73 dB
+lf    ˈama   consonant -15.41 dB, vowel -16.87 dB
+folds ˈasa   consonant -25.88 dB, vowel -18.03 dB
+folds ˈaza   consonant -18.26 dB, vowel -17.88 dB
+folds ˈafa   consonant -31.69 dB, vowel -18.03 dB
+folds ˈaha   consonant -23.08 dB, vowel -18.03 dB
+folds ˈapʰa  consonant -58.70 dB, vowel -18.02 dB
+folds ˈama   consonant -17.25 dB, vowel -18.09 dB
+
+# node experiments/issue-35-folds-airflow.mjs (this branch)
+lf    ˈasa   consonant -26.19 dB, vowel -16.74 dB
+lf    ˈaza   consonant -17.71 dB, vowel -16.71 dB
+lf    ˈafa   consonant -53.17 dB, vowel -16.74 dB
+lf    ˈaha   consonant -30.44 dB, vowel -16.74 dB
+lf    ˈapʰa  consonant -71.32 dB, vowel -16.74 dB
+lf    ˈama   consonant -15.41 dB, vowel -16.87 dB
+folds ˈasa   consonant -25.70 dB, vowel -17.91 dB
+folds ˈaza   consonant -18.34 dB, vowel -17.78 dB
+folds ˈafa   consonant -35.32 dB, vowel -17.90 dB
+folds ˈaha   consonant -28.99 dB, vowel -18.02 dB
+folds ˈapʰa  consonant -60.55 dB, vowel -17.89 dB
+folds ˈama   consonant -17.25 dB, vowel -17.96 dB
