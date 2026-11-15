@@ -67,6 +67,8 @@ and sources are in
 
 Clean up, policy checks, manually triggered heavy checks, public datasets, objective metrics and listening tests. Everything later is measured with these.
 
+The first measurement of [#19](https://github.com/konard/voice-simulator/issues/19) is [reports/baseline-quality.md](reports/baseline-quality.md) (`scripts/quality-report.mjs`, suite `quality` of the heavy checks). An issue that claims an improvement runs the script with `--baseline docs/reports/baseline-quality.json` and puts the table into its pull request; the baseline files stay unchanged until [#83](https://github.com/konard/voice-simulator/issues/83).
+
 | Issue                                                      | Type    | Title                                                                 | Blocked by                                                                                                                                                                         | Requirements |
 | ---------------------------------------------------------- | ------- | --------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------ |
 | [#13](https://github.com/konard/voice-simulator/issues/13) | Bug     | Template case studies occupy `docs/case-studies/issue-N` folders      | nothing                                                                                                                                                                            | R16, R21     |

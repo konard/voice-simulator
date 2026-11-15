@@ -54,3 +54,10 @@ result and wall time, followed by every Markdown report the tests wrote. In
 GitHub Actions it is also shown in the run summary, and the whole folder is
 uploaded as an artifact. `reports/` is never committed; a report that should
 be kept is copied to `docs/reports/` by the issue that owns it.
+
+## Tests
+
+| File                        | What it does                                                                                                                                                                     |
+| --------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `performance-tiers.test.js` | renders one sentence on every tier and reports the real-time factor                                                                                                              |
+| `quality-baseline.test.js`  | scores every tier against the golden set with `scripts/quality-report.mjs` (one test per tier) and writes `baseline-quality.md` / `.json`, copied to `docs/reports/` by issue 19 |
