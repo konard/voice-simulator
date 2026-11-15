@@ -142,7 +142,12 @@ export function registerSolver(name, factory) {
   SOLVERS.set(name, factory);
 }
 
-function noseSections(head, sections) {
+/**
+ * Sections of the nasal tract for an oral tract of `sections` sections.
+ * @param {object} head Normalized head.
+ * @param {number} sections
+ */
+export function noseSections(head, sections) {
   const nose = noseShape(head);
   return Math.max(
     6,
@@ -150,7 +155,23 @@ function noseSections(head, sections) {
   );
 }
 
-class NoiseSources {
+/**
+ * Tract shape of the control block that starts at `time` (s): samples the
+ * plan into `state` (reused between calls) and shapes the tract. Shared by
+ * VoiceRenderer and the Rust renderer (src/engine/rust-renderer.js), so
+ * both see the same frames.
+ * @param {object} plan
+ * @param {number} time
+ * @param {object} state
+ * @param {object} head Normalized head.
+ * @param {{sections: number, teeth: boolean, vowelCorrections?: object}} options
+ */
+export function blockShape(plan, time, state, head, options) {
+  sampleState(plan, time, state);
+  return tractShape(state, head, options);
+}
+
+export class NoiseSources {
   constructor(seed) {
     this.white = createNoise(`${seed}:noise`);
     this.aspiration = new Biquad();
@@ -209,7 +230,7 @@ const BUTTERWORTH_8 = [0.5098, 0.6013, 0.9, 2.5629];
  * Nyquist, about 60 dB down at 8 kHz, which the filter at the solver rate
  * (about 7 dB at 1.1 bandLimit) cannot reach.
  */
-class OutputStage {
+export class OutputStage {
   constructor(sampleRate, gain = 1, bandLimit = undefined) {
     this.gain = OUTPUT_GAIN * gain;
     const narrow = bandLimit !== undefined && bandLimit !== null;
@@ -358,8 +379,7 @@ export class VoiceRenderer {
   }
 
   #updateShape() {
-    sampleState(this.plan, this.time, this.state);
-    this.shape = tractShape(this.state, this.head, {
+    this.shape = blockShape(this.plan, this.time, this.state, this.head, {
       sections: this.sections,
       teeth: this.teeth,
       vowelCorrections: this.vowelCorrections,

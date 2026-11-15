@@ -89,6 +89,15 @@ jobs:
       # changes with the registry, so a changed checksum fetches again.
       # The cache stays on the runner side: .datasets/ is never uploaded as
       # an artifact or committed.
+      # performance-rust-waveguide.test.js compares the JavaScript renderer
+      # with src/engine/voice-simulator.wasm (issue 22). The rustup of the
+      # runner image installs the toolchain of rust-toolchain.toml.
+      - name: Build the WebAssembly engine
+        if: inputs.suite == 'performance' || inputs.suite == 'all'
+        run: |
+          bash scripts/run-with-budget-warning.sh 150 "Rust toolchain install" rustup toolchain install
+          bash scripts/run-with-budget-warning.sh 120 "wasm build" node scripts/build-wasm.mjs --require
+
       - name: Restore the speech dataset cache
         uses: actions/cache@v6
         with:
@@ -121,6 +130,7 @@ jobs:
           SUITE: ${{ inputs.suite }}
           LIMIT: ${{ inputs.limit }}
           REQUIRE_GPU: ${{ (inputs.suite == 'gpu' || inputs.suite == 'all') && '1' || '' }}
+          REQUIRE_WASM: ${{ (inputs.suite == 'performance' || inputs.suite == 'all') && '1' || '' }}
         run: |
           LIMIT_FLAG=''
           if [[ "$LIMIT" =~ ^[0-9]+$ ]]; then

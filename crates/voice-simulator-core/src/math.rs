@@ -12,6 +12,12 @@ pub fn sqrt(x: f64) -> f64 {
     libm::sqrt(x)
 }
 
+/// Absolute value; exact, so it is allowed in class A code.
+#[inline]
+pub fn abs(x: f64) -> f64 {
+    libm::fabs(x)
+}
+
 /// Largest integer not above `x`; exact, so it is allowed in class A code.
 #[inline]
 pub fn floor(x: f64) -> f64 {
@@ -35,6 +41,27 @@ pub fn round_half_up(x: f64) -> f64 {
     }
 }
 
+/// `Math.min(a, b)` of JavaScript for numbers that are not NaN; exact, so
+/// it is allowed in class A code.
+#[inline]
+pub fn min(a: f64, b: f64) -> f64 {
+    if a < b {
+        a
+    } else {
+        b
+    }
+}
+
+/// `Math.max(a, b)` of JavaScript for numbers that are not NaN; exact.
+#[inline]
+pub fn max(a: f64, b: f64) -> f64 {
+    if a > b {
+        a
+    } else {
+        b
+    }
+}
+
 /// Sine of `x` radians.
 #[inline]
 pub fn sin(x: f64) -> f64 {
@@ -51,6 +78,12 @@ pub fn cos(x: f64) -> f64 {
 #[inline]
 pub fn exp(x: f64) -> f64 {
     libm::exp(x)
+}
+
+/// e^x - 1, exact for small x (`Math.expm1`).
+#[inline]
+pub fn expm1(x: f64) -> f64 {
+    libm::expm1(x)
 }
 
 /// Natural logarithm.
