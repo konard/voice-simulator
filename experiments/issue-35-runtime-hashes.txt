@@ -1,4 +1,4 @@
-# Branch (after the merge of main a2f0ad7 and the rational lag), first 16 hex
+# Branch (after the merges of main a2f0ad7 and 0575e6e, which gave the same hashes, and the rational lag), first 16 hex
 # digits of SHA-256: node|bun|deno run -A experiments/issue-35-runtime-hashes.mjs
 ## node
 minimal c968718f39c4af8d Hi.
