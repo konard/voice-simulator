@@ -143,7 +143,7 @@ export {
   decodeRaw,
   formatFromFileName,
 } from './audio/formats.js';
-export { resample } from './audio/resample.js';
+export { createStreamResampler, resample } from './audio/resample.js';
 
 // Anatomy (issue 5): teeth, tongue, hard and soft palate, piriform fossae.
 export {
