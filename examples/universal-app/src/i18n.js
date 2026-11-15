@@ -312,6 +312,7 @@ const PARAMETER_LABELS_RU = {
   finalLengthening: 'Удлинение в конце фразы',
   pauseLength: 'Длина пауз',
   articulationSpeed: 'Скорость артикуляции',
+  coarticulation: 'Коартикуляция',
   wallLoss: 'Потери в стенках',
   wallMass: 'Масса стенок',
   wallResistance: 'Сопротивление стенок',

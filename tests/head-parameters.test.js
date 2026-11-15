@@ -26,6 +26,7 @@ const NEW_KEYS = [
   'finalLengthening',
   'pauseLength',
   'articulationSpeed',
+  'coarticulation',
   'wallLoss',
   'wallMass',
   'wallResistance',

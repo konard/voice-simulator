@@ -26,7 +26,17 @@ export {
   VOWELS,
   CONSONANTS,
 } from './ipa/inventory.js';
-export { planUtterance, CONTROL_RATE, CHANNELS } from './articulation/plan.js';
+export {
+  planUtterance,
+  channelTargets,
+  CONTROL_RATE,
+  CHANNELS,
+  ARTICULATORS,
+  ROUNDING_LEAD,
+  VELUM_LEAD,
+} from './articulation/plan.js';
+export { approachTargets, DYNAMICS_ORDER } from './articulation/dynamics.js';
+export { COARTICULATION_RESISTANCE } from './articulation/phones.js';
 export {
   sampleState,
   tractShape,

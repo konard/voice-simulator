@@ -1,0 +1,125 @@
+Fit of the articulator dynamics to the golden recordings (issue 38).
+Run: node experiments/issue-11-fit-dynamics.mjs
+
+Tier minimal, analysis at 16000 Hz; error = mean of the F1, F2 and F3
+errors in percent of formantErrors() over the voiced frames of both signals,
+averaged over the recordings. Held out: every 5th recording of a language.
+300 evaluations on 5 workers in 2217 s.
+
+Recordings (head preset from the median f0; offset = start of the first
+sound in the recording minus in the plan, s; DTW cost in dB per frame):
+  en-02  train male   f0  94.7  offset -0.020  cost 12.40
+  en-04  train female f0 198.4  offset  0.820  cost 10.43
+  en-06  train female f0 203.4  offset  0.050  cost 11.33
+  ru-02  train female f0 171.8  offset  0.000  cost 9.51
+  en-01  train female f0 216.4  offset  0.010  cost 10.96
+  en-05  held  female f0 254.9  offset  0.420  cost 9.33
+  hi-03  train female f0   202  offset  0.420  cost 9.02
+  hi-06  train female f0 216.3  offset  0.380  cost 9.17
+  zh-05  held  female f0 251.2  offset  0.000  cost 9.98
+  en-03  train female f0 391.1  offset  0.050  cost 12.28
+  ru-04  train male   f0 122.1  offset  0.740  cost 10.20
+  ru-05  held  female f0 353.1  offset  0.200  cost 11.32
+  zh-01  train female f0   312  offset  0.000  cost 10.66
+  zh-03  train female f0 293.1  offset  0.160  cost 10.79
+  ru-03  train female f0 228.7  offset  0.175  cost 9.73
+  hi-02  train female f0   212  offset  0.480  cost 9.50
+  hi-04  train female f0 199.7  offset  0.220  cost 9.79
+  zh-02  train female f0 313.7  offset  0.000  cost 9.42
+  zh-06  train female f0 306.9  offset  0.200  cost 10.83
+  ru-01  train female f0 267.4  offset  0.360  cost 9.41
+  ru-06  train female f0 262.3  offset  0.370  cost 9.81
+  hi-01  train female f0 223.9  offset  0.380  cost 9.50
+  hi-05  held  female f0 237.5  offset  0.120  cost 8.89
+  zh-04  train female f0 291.7  offset  0.330  cost 10.41
+
+Effect of each channel (largest change of the train error, percentage
+points, with its time constant or lead changed by ±20 %):
+  backness        0.3441 (fitted)
+  height          0.2584 (fitted)
+  tongueAmount    0.2488 (fitted)
+  voicing         0.2347 (fitted)
+  rounding        0.1269 (fitted)
+  frication       0.1117 (fitted)
+  rhotic          0.1045 (fitted)
+  sibilance       0.0999 (fitted)
+  tongueLocation  0.0978
+  lipAmount       0.0886
+  aspiration      0.0864
+  tongueArea      0.0490
+  velum           0.0479
+  tongueWidth     0.0435
+  lipArea         0.0400
+  palatalization  0.0294
+  trill           0.0080
+  glottalClosure  0.0000
+  lateral         0.0000
+
+Coordinate descent (train error, %):
+  round 1  step ±15 %  34.465
+  round 2  step ±15 %  34.386
+  round 3  step ±15 %  34.377
+  round 4  step ±15 %  34.377
+  round 5  step ±5 %  34.344
+  round 6  step ±5 %  34.343
+
+Before the fit:
+set        lang  rec  frames    F1 %    F2 %    F3 %  mean %
+train     all     20    3909  34.60  37.02  33.09  34.90
+train     en       5     806  44.18  37.48  35.71  39.12
+train     ru       5     921  28.31  35.25  36.24  33.27
+train     hi       5    1248  38.38  33.40  30.81  34.20
+train     zh       5     934  27.52  41.95  29.59  33.02
+held      all      4     700  28.84  28.17  34.75  30.59
+held      en       1     197  17.53  25.75  39.57  27.62
+held      ru       1     151  25.78  39.98  35.63  33.80
+held      hi       1     178  35.64  14.78  30.66  27.03
+held      zh       1     174  36.39  32.16  33.14  33.90
+
+After the fit:
+set        lang  rec  frames    F1 %    F2 %    F3 %  mean %
+train     all     20    3890  33.77  36.59  32.67  34.34
+train     en       5     802  43.92  36.61  34.35  38.29
+train     ru       5     918  28.07  34.99  36.47  33.18
+train     hi       5    1239  37.94  33.12  30.67  33.91
+train     zh       5     931  25.14  41.65  29.19  31.99
+held      all      4     697  27.02  27.84  34.03  29.63
+held      en       1     197  17.34  25.64  39.95  27.64
+held      ru       1     150  25.32  39.14  33.32  32.60
+held      hi       1     177  35.97  16.88  30.45  27.77
+held      zh       1     173  29.45  29.70  32.41  30.52
+
+Held-out error: 30.585 % before, 29.630 % after (3.1 % lower).
+REJECTED: the held-out error falls by less than 5 %; ARTICULATORS and COARTICULATION_RESISTANCE keep their starting values.
+
+Values (start -> fitted):
+  backness.timeConstant           0.03 -> 0.03
+  backness.lead                 0.0504 -> 0.0504
+  height.timeConstant             0.03 -> 0.03
+  height.lead                   0.0504 -> 0.0504
+  tongueAmount.timeConstant      0.012 -> 0.0097
+  tongueAmount.lead             0.0202 -> 0.022
+  voicing.timeConstant           0.008 -> 0.008
+  voicing.lead                  0.0134 -> 0.0134
+  rounding.timeConstant           0.02 -> 0.02
+  rounding.lead                   0.12 -> 0.12
+  frication.timeConstant         0.006 -> 0.0057
+  frication.lead                0.0101 -> 0.0096
+  rhotic.timeConstant            0.025 -> 0.0331
+  rhotic.lead                    0.042 -> 0.0258
+  sibilance.timeConstant          0.01 -> 0.0115
+  sibilance.lead                0.0168 -> 0.0143
+  resistance.high                    1 -> 1
+  resistance.medium                0.6 -> 0.6
+  resistance.low                   0.3 -> 0.3
+  resistance.none                    0 -> 0
+
+Reduced vowels (step 5), with the values that are kept:
+  formant error inside reduced vowels, own shapes:   32.40 % (854 frames)
+  same frames with the full vowels ə->ʌ ɐ->a ɪ->i ʊ->u ɨ->i ɚ->ɝ:  34.36 %
+  duration of unstressed reduced / unstressed full vowels (plan has the factor 0.75):
+  lang  reduced  full  planned  measured
+  en         53     9    0.686     0.701
+  ru         49    18     0.76     0.901
+  hi         38    71    0.427     0.488
+  zh         18    62    1.046     0.935

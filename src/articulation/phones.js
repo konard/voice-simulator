@@ -61,6 +61,94 @@ const VOICELESS_OPENING = {
   'lateral-fricative': 1,
 };
 
+/**
+ * Coarticulation resistance (Recasens et al. 1997): how strongly a
+ * consonant holds the tongue body (`height`, `backness`) against the
+ * straight line between the neighbouring vowels. During a consonant the
+ * vowel channels get `r * own + (1 - r) * line`. `levels` holds the four
+ * values that experiments/issue-11-fit-dynamics.mjs fits; `phones`,
+ * `manners` and `places` map a consonant to a level (first match wins);
+ * `own` is the tongue-body position of a place.
+ *
+ * Starting levels after the scale of Recasens et al. (1997): 1 for
+ * palatals, alveolo-palatals, `[ʃ ʒ]`, trills and dark `[ɫ]`; 0.6 for
+ * `[s z]` and velars; 0.3 for other alveolars and dentals; 0 for labials
+ * and glottals. Places the issue does not name follow their tongue body:
+ * retroflex, uvular, pharyngeal and labial-velar as velars, labial-palatal
+ * as palatals. Palatalized consonants hold a palatal and velarized ones a
+ * dark-`[ɫ]` tongue body with the highest level.
+ */
+export const COARTICULATION_RESISTANCE = Object.freeze({
+  levels: Object.freeze({ high: 1, medium: 0.6, low: 0.3, none: 0 }),
+  phones: Object.freeze({
+    s: 'medium',
+    z: 'medium',
+    ʃ: 'high',
+    ʒ: 'high',
+    ɫ: 'high',
+  }),
+  manners: Object.freeze({ trill: 'high' }),
+  places: Object.freeze({
+    bilabial: 'none',
+    labiodental: 'none',
+    dental: 'low',
+    alveolar: 'low',
+    postalveolar: 'high',
+    retroflex: 'medium',
+    alveolopalatal: 'high',
+    palatal: 'high',
+    velar: 'medium',
+    uvular: 'medium',
+    pharyngeal: 'medium',
+    'labial-velar': 'medium',
+    'labial-palatal': 'high',
+    glottal: 'none',
+  }),
+  own: Object.freeze({
+    bilabial: Object.freeze({ height: 0.5, backness: 0.5 }),
+    labiodental: Object.freeze({ height: 0.5, backness: 0.5 }),
+    dental: Object.freeze({ height: 0.7, backness: 0.3 }),
+    alveolar: Object.freeze({ height: 0.7, backness: 0.3 }),
+    postalveolar: Object.freeze({ height: 0.85, backness: 0.2 }),
+    retroflex: Object.freeze({ height: 0.6, backness: 0.45 }),
+    alveolopalatal: Object.freeze({ height: 1, backness: 0 }),
+    palatal: Object.freeze({ height: 1, backness: 0 }),
+    velar: Object.freeze({ height: 0.9, backness: 0.8 }),
+    uvular: Object.freeze({ height: 0.6, backness: 1 }),
+    pharyngeal: Object.freeze({ height: 0.2, backness: 1 }),
+    'labial-velar': Object.freeze({ height: 0.9, backness: 0.8 }),
+    'labial-palatal': Object.freeze({ height: 1, backness: 0 }),
+    glottal: Object.freeze({ height: 0.5, backness: 0.5 }),
+    dark: Object.freeze({ height: 0.6, backness: 0.85 }),
+  }),
+});
+
+/**
+ * Resistance level name, value and own tongue-body position of a consonant
+ * token.
+ * @param {object} token Segment token from parseIpa.
+ * @param {Record<string, number>} [levels] Values of the four levels.
+ * @returns {{level: string, resistance: number, height: number, backness: number}}
+ */
+export function resistance(token, levels = COARTICULATION_RESISTANCE.levels) {
+  const { phoneme } = token;
+  const table = COARTICULATION_RESISTANCE;
+  const place = table.places[phoneme.place] ? phoneme.place : 'alveolar';
+  let own = table.own[place];
+  let level =
+    table.phones[phoneme.symbol] ??
+    table.manners[phoneme.manner] ??
+    table.places[place];
+  if (token.palatalized) {
+    level = 'high';
+    own = table.own.palatal;
+  } else if (token.velarized || phoneme.velarized) {
+    level = 'high';
+    own = table.own.dark;
+  }
+  return { level, resistance: levels[level] ?? 0, ...own };
+}
+
 /** Neutral vowel used when a phrase starts or ends with consonants. */
 export const NEUTRAL_VOWEL = Object.freeze({
   height: 0.5,
