@@ -135,7 +135,7 @@ describe('vocal folds', () => {
     expect(threshold).toBeLessThanOrEqual(600);
   });
 
-  it('raises the pitch with the tension', () => {
+  it('raises the pitch with tension', () => {
     const pitches = [0.5, 1, 2, 4].map((tension) => steadyPitch({ tension }));
     for (let index = 1; index < pitches.length; index++) {
       expect(pitches[index]).toBeGreaterThan(pitches[index - 1]);
@@ -145,7 +145,7 @@ describe('vocal folds', () => {
     expect(ratio).toBeLessThan(2.4);
   });
 
-  it('closes longer with more adduction', () => {
+  it('goes from breathy to pressed with adduction', () => {
     const quotients = [0.3, 0.5, 0.7, 0.9].map((adduction) => {
       const run = simulate({ adduction });
       return openQuotient(tail(run.flow, 0.1), tail(run.area, 0.1));
@@ -157,7 +157,7 @@ describe('vocal folds', () => {
     expect(quotients[0] - quotients[3]).toBeGreaterThanOrEqual(0.15);
   });
 
-  it('gets louder with the lung pressure', () => {
+  it('gets louder with lung pressure', () => {
     const level = (pressure) =>
       rootMeanSquare(tail(simulate({ pressure }).source, 0.1));
     const gain = 20 * Math.log10(level(1600) / level(800));
