@@ -390,7 +390,7 @@ jobs:
         # 29s each pass every per-test check. The suite budget below is
         # what bounds the whole run.
         # 300s, as for Node.js: Bun runs the 171 files one after another, so
-        # it took 109-194s on main and PR #116 (issue 115) and crossed the 70%
+        # it took 80-194s on main and PR #116 (issue 115) and crossed the 70%
         # warning of a 200s budget. `--parallel` ran 2.7x faster locally, but
         # Bun's workers can still lose a child's exit (oven-sh/bun#45483,
         # #41024, #39987), which would hang this subprocess-heavy suite.

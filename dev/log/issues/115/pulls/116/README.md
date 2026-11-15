@@ -51,12 +51,14 @@ All times are UTC on 2026-11-15.
 | 18:31    | `f28e23d`: previous versions install only their web build dependencies.                                                                                                                                              |
 | 18:44    | `d56f2ff`: the Rust step budgets fit the 15 min backstop again (Checks and release 43746539860 had failed on it). `44e9e4a`: the WebGPU warning is asserted.                                                         |
 | 18:49    | The Security run on `f9866be` warns about GHSA-474x-hrwr-fgx4 in the `artifact-transport` lockfile; `77832fa` fixes it, filed as template #302.                                                                      |
+| 19:00    | All five runs on `3de83a4` pass. Checks and release 43749293266 still warns: secretlint's preset is deprecated (F15), Bun used 140s+ of 200s (F16), and the Windows warning line has no annotation (F17).            |
+| 19:25    | `747fe16` (secretlint 14), `18b20f0` (annotation line start, template budget fixes), `09a75f4` (Bun budget); filed as template #303 and #304.                                                                        |
 
 ## Requirements
 
 | #         | Requirement                                                                                               | Where it is handled                |
 | --------- | --------------------------------------------------------------------------------------------------------- | ---------------------------------- |
-| R1        | Find every false positive, false negative, warning and error in CI/CD and fix them all                    | Findings F1–F14                    |
+| R1        | Find every false positive, false negative, warning and error in CI/CD and fix them all                    | Findings F1–F17                    |
 | R2        | Use the best practices of the JS, Rust and Python templates; compare every workflow and CI script         | "Template comparison", F7, F9, F10 |
 | R3        | Report in the templates the issues they share                                                             | "Upstream issues"                  |
 | R4        | Follow hive-mind CI-CD-BEST-PRACTICES.md                                                                  | "Best practices"                   |
@@ -233,6 +235,66 @@ with a stack trace into every test run. `44e9e4a` captures and asserts it.
   for all three tracked lockfiles (root, example app, `artifact-transport`).
 - **Template:** same lockfile, #302.
 
+### F15. Deprecated secretlint preset package (warning)
+
+- **Symptom:** `npm warn deprecated @secretlint/secretlint-rule-preset-recommend@13.0.7: Built into secretlint v14 and later` in `Check for secrets` (43749293266).
+- **Root cause:** secretlint 14.0.0 came out on the same day, 2026-11-15,
+  and deprecated the rule packages. The workflow still installed the preset
+  package next to the CLI.
+- **Fix:** `747fe16` pins only `secretlint@14.0.0`. The rule id in
+  `.secretlintrc.json` still resolves (migration guide). With that config,
+  13.0.7 and 14.0.0 report the same GitHub and Slack test tokens, through
+  both the file path and the stdin path (gzip evidence) of
+  `scripts/check-secrets.mjs`. The repository scan passes (1586 files, 17s).
+- **Everywhere:** the step is the only install of secretlint (`git grep`);
+  `tests/workflows-lint.test.js` now fails if the preset package returns.
+- **Template:** same step, #303.
+
+### F16. The Bun suite outgrew its 200s budget (warning, near false positive)
+
+- **Symptom:** `Bun test suite has run for 140s of its 200s budget` on
+  `macos-15` and `windows-2025`. The Windows step finished in 194s, 6s
+  short of a red step without any fault.
+- **Root cause:** Bun runs the 171 test files one after another; Node.js
+  (`node --test`) and Deno (`--parallel`) run files in parallel and took
+  73–113s in the same run. Bun took 107–170s on the last three `main` runs
+  and 80–194s on this PR (`data/bun-durations.tsv`), so the 200s budget no
+  longer held the suite with the runner variance.
+- **Fix:** `09a75f4` gives Bun the 300s budget of Node.js (warning at
+  210s). The test job's legs are alternatives, so the job still budgets
+  300s of its 630s share.
+- **Rejected:** `bun test --parallel` ran in 100s instead of 268s locally
+  with the same 2325 pass / 37 skip, but open Bun issues lose a child's exit
+  or wedge a worker under `--parallel`
+  ([#45483](https://github.com/oven-sh/bun/issues/45483),
+  [#41024](https://github.com/oven-sh/bun/issues/41024),
+  [#39987](https://github.com/oven-sh/bun/issues/39987),
+  [#44586](https://github.com/oven-sh/bun/issues/44586)), in 2 of 30 (#39987) and 3 of 8 (#41024) full
+  runs in their reports. This suite spawns git and CLI processes in many files, so
+  that would trade a slow green step for intermittent red ones. Revisit when
+  those issues close.
+- **Template:** its sample suite is small; not reported.
+
+### F17. Budget annotations lost after unterminated output (false negative)
+
+- **Symptom:** on `windows-2025` the warning of F16 was logged as
+  `M^@src.js^@::warning title=Bun test suite is approaching ...` and
+  produced no annotation; on `macos-15` it did.
+- **Root cause:** `scripts/run-with-budget-warning.sh` relays the captured
+  stdout and then `echo`es its workflow commands. GitHub reads a command only
+  at the start of a line, and a test had left `git status -z` output
+  without a newline.
+- **Fix:** `18b20f0` records whether the relayed stdout ended mid-line
+  (`od`, since command substitution drops NUL bytes) and starts a new line
+  before every `::warning`, `::error` and status line. The new test in
+  `tests/run-with-budget-warning.test.js` fails on the old script.
+- **Also:** the script, its test and `tests/pr-guards.test.js` had not changed
+  since the fork, but predated the template's squashed base `0e4f6a5`, so the
+  comparison listed them as customized instead of outdated. They now carry the
+  template's `deadline_elapsed` fix (template #252) and its boundary and
+  Dependabot tests.
+- **Template:** same script, #304.
+
 ### Not actioned
 
 - `Due to capacity constraints ... macOS arm64` is a GitHub runner notice.
@@ -266,12 +328,14 @@ the changed-lines lint (F1).
 
 ## Upstream issues
 
-| Finding | Issue                                                                                                                                                |
-| ------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
-| F1      | https://github.com/link-foundation/js-ai-driven-development-pipeline-template/issues/301 (`upstream-issues/js-template-lint-changed-lines.md`)       |
-| F14     | https://github.com/link-foundation/js-ai-driven-development-pipeline-template/issues/302 (`upstream-issues/js-template-fast-xml-parser-advisory.md`) |
-| F12     | https://github.com/link-foundation/command-stream/issues/237 (`upstream-issues/command-stream-resvg-dependency.md`)                                  |
-| F7      | existing: https://github.com/actions/deploy-pages/issues/413, https://github.com/actions/deploy-pages/issues/434                                     |
+| Finding | Issue                                                                                                                                                 |
+| ------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| F1      | https://github.com/link-foundation/js-ai-driven-development-pipeline-template/issues/301 (`upstream-issues/js-template-lint-changed-lines.md`)        |
+| F14     | https://github.com/link-foundation/js-ai-driven-development-pipeline-template/issues/302 (`upstream-issues/js-template-fast-xml-parser-advisory.md`)  |
+| F15     | https://github.com/link-foundation/js-ai-driven-development-pipeline-template/issues/303 (`upstream-issues/js-template-secretlint-14.md`)             |
+| F17     | https://github.com/link-foundation/js-ai-driven-development-pipeline-template/issues/304 (`upstream-issues/js-template-budget-annotation-newline.md`) |
+| F12     | https://github.com/link-foundation/command-stream/issues/237 (`upstream-issues/command-stream-resvg-dependency.md`)                                   |
+| F7      | existing: https://github.com/actions/deploy-pages/issues/413, https://github.com/actions/deploy-pages/issues/434                                      |
 
 Each filed issue has a reproduction, a workaround and a suggested fix.
 
@@ -284,9 +348,9 @@ Each filed issue has a reproduction, a workaround and a suggested fix.
 | Lint everything that is tracked  | ShellCheck on every script (F8), Ruff on Python (F10), rustdoc (F9)                    |
 | Warnings are errors              | rustc, Cargo and rustdoc (F9); Vite chunk and `node:` warnings removed (F5, F6)        |
 | Lint the workflows               | actionlint 1.7.12 and zizmor pass                                                      |
-| Timeouts                         | Step budgets ≤ 70% of the job backstop (F9)                                            |
+| Timeouts                         | Step budgets ≤ 70% of the job backstop (F9), sized to measured runtimes (F16)          |
 | Broken pipeline or changed world | npm and dependency graph checks warn on PRs and fail `main` with instructions (F2, F3) |
-| Truthful reporting               | No masked commands (F7); expected warnings asserted, not printed (F13)                 |
+| Truthful reporting               | No masked commands (F7); expected warnings asserted (F13); annotations kept (F17)      |
 
 ## Maintainer actions (cannot be done from a pull request)
 
@@ -319,6 +383,11 @@ and pull requests only warn.
 - `npm uninstall --package-lock-only`:
   https://docs.npmjs.com/cli/v11/commands/npm-uninstall
 - Ruff: https://docs.astral.sh/ruff/
+- secretlint v13 → v14 migration:
+  https://github.com/secretlint/secretlint/blob/HEAD/docs/migrations/v13-to-v14.md
+- Workflow commands must start a line:
+  https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-commands
+- `bun test --parallel`, `--shard`: `bun test --help` (Bun 1.4.4).
 
 ## Libraries and tools considered
 
@@ -330,6 +399,9 @@ and pull requests only warn.
   the lockfile was chosen over `npm install --omit=dev` (which would drop
   `vite`) and over re-resolving (which would change the old builds).
 - **Python lint:** Ruff (as the Python template), instead of flake8 + black.
+- **Bun suite time:** `--parallel` (rejected for now, F16), `--shard` across
+  more matrix jobs (more runner minutes for the same work), or a larger
+  budget (chosen).
 - **Workflow lint:** actionlint 1.7.12 (Docker), zizmor, ShellCheck
   0.11.0.1.
 
