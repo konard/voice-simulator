@@ -106,6 +106,8 @@ The WebGPU solver of [#30](https://github.com/konard/voice-simulator/issues/30) 
 
 Physical vocal folds and lungs, noise sources, losses, articulation dynamics, durations and a much larger voice configuration.
 
+The two-mass vocal folds of [#33](https://github.com/konard/voice-simulator/issues/33) are the voice source `source: 'folds'` (`src/acoustics/folds.js`), driven by the plan channels `lungPressure`, `adduction` and `foldTension`; LF stays the default. The measurements are in [experiments/issue-11-folds.txt](../experiments/issue-11-folds.txt) and the section [Voice source](../README.md#voice-source) of the README. The later issues of this roadmap build on these channels and on `VocalFolds`.
+
 | Issue                                                      | Type    | Title                                                                    | Blocked by                                                                                                                                                                         | Requirements     |
 | ---------------------------------------------------------- | ------- | ------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------- |
 | [#32](https://github.com/konard/voice-simulator/issues/32) | Bug     | `breathiness` hardly changes the measured noise level                    | nothing                                                                                                                                                                            | R5, R9, R18      |
