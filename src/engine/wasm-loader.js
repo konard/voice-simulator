@@ -114,8 +114,8 @@ async function compileSource(wasm, source) {
  * @returns {Promise<{exports: Record<string, Function | WebAssembly.Memory>,
  *   memory: WebAssembly.Memory, abiVersion: number, simd: boolean} | null>}
  *   `simd` tells whether the engine was built with WebAssembly SIMD
- *   (`vs_simd()`); null when WebAssembly is missing, the file is missing or
- *   it does not compile
+ *   (`vs_simd()`, false when it is not exported); null when WebAssembly
+ *   is missing, the file is missing or it does not compile
  * @throws {Error} when the engine reports another `vs_abi_version()`
  */
 export async function loadEngineModule(source, options = {}) {
@@ -173,7 +173,8 @@ async function loadOne(source) {
         `this loader speaks ${ENGINE_ABI_VERSION}; rebuild it with npm run build:wasm`
     );
   }
-  const simd = exports.vs_simd() === 1;
+  // An engine without `vs_simd` (older or minimal builds) is scalar.
+  const simd = typeof exports.vs_simd === 'function' && exports.vs_simd() === 1;
   return { exports, memory: exports.memory, abiVersion, simd };
 }
 
