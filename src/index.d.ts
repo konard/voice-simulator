@@ -1484,6 +1484,198 @@ export declare function matchVoiceSteps(
   sampleRate: number,
   options?: VoiceMatchOptions
 ): Generator<VoiceMatchStep, VoiceMatch, void>;
+// Objective speech metrics and recording comparison
+/** Floor added to powers before taking logarithms (1e-10). */
+export declare const EPSILON: number;
+export declare const METRIC_DEFAULTS: Readonly<{
+  sampleRate: 16000;
+  /** Hann window (s). */
+  window: number;
+  /** Frame step (s). */
+  hop: number;
+  fftSize: 512;
+  melFilters: 26;
+  /** Cepstral coefficients c[1] .. c[13] besides c[0]. */
+  coefficients: 13;
+  epsilon: number;
+}>;
+export interface FrameOptions {
+  /** Window length in seconds (default 0.025). */
+  window?: number;
+  /** Frame step in seconds (default 0.01). */
+  hop?: number;
+  /** FFT size (default the next power of two of the window). */
+  size?: number;
+}
+export interface CepstrumOptions extends FrameOptions {
+  /** Mel filters (default 26). */
+  filters?: number;
+  /** Coefficients besides c[0] (default 13). */
+  coefficients?: number;
+}
+/** In-place radix-2 FFT; the length must be a power of two. */
+export declare function fft(re: Float64Array, im: Float64Array): void;
+/** Power spectra |X[k]|^2, k = 0 .. size / 2, of Hann-windowed frames. */
+export declare function powerFrames(
+  samples: ArrayLike<number>,
+  sampleRate: number,
+  options?: FrameOptions
+): Float64Array[];
+/** Triangular mel filters, one weight per FFT bin each. */
+export declare function melFilterbank(
+  count: number,
+  size: number,
+  sampleRate: number
+): Float64Array[];
+/** Mel cepstra c[0] .. c[13] per frame (natural log, DCT-II with sqrt(2/M)). */
+export declare function mfcc(
+  samples: ArrayLike<number>,
+  sampleRate: number,
+  options?: CepstrumOptions
+): Float64Array[];
+export interface DtwResult {
+  cost: number;
+  /** cost / path.length. */
+  normalizedCost: number;
+  /** Pairs [reference frame, test frame] from [0, 0] to [n - 1, m - 1]. */
+  path: [number, number][];
+}
+/** Dynamic time warping; throws a RangeError above 25e6 cells. */
+export declare function dtw<T = ArrayLike<number> | number>(
+  a: ArrayLike<T>,
+  b: ArrayLike<T>,
+  options?: {
+    /** Local distance (default Euclidean). */
+    distance?: (x: T, y: T) => number;
+    /** Sakoe-Chiba band 0 to 1 on relative positions (default 1). */
+    band?: number;
+  }
+): DtwResult;
+export interface DistortionOptions extends CepstrumOptions {
+  /** Frame pairs (default frame t with frame t). */
+  path?: [number, number][];
+  /** Scale both signals to an RMS of 0.1 first (default true). */
+  normalize?: boolean;
+}
+/** Log-spectral distance (dB). */
+export declare function logSpectralDistance(
+  reference: ArrayLike<number>,
+  test: ArrayLike<number>,
+  sampleRate: number,
+  options?: DistortionOptions
+): number;
+/** Mel-cepstral distortion (dB) over c[1] .. c[13]. */
+export declare function melCepstralDistortion(
+  reference: ArrayLike<number>,
+  test: ArrayLike<number>,
+  sampleRate: number,
+  options?: DistortionOptions
+): number;
+/** Pitch (Hz, 0 = unvoiced) every hop seconds by YIN. */
+export declare function pitchTrack(
+  samples: ArrayLike<number>,
+  sampleRate: number,
+  options?: { hop?: number; window?: number }
+): Float64Array;
+export interface F0Errors {
+  /** Root mean square error over frames voiced in both (cents). */
+  rmseCents: number | null;
+  /** Mean error (cents, test above reference is positive). */
+  meanCents: number | null;
+  /** Gross pitch error: share of frames voiced in both off by more than 20 %. */
+  gpe: number | null;
+  /** Voicing decision error: share of frames voiced in only one track. */
+  vde: number | null;
+  /** f0 frame error: (gross errors + voicing errors) / frames. */
+  ffe: number | null;
+  /** Pearson correlation of log f0 over frames voiced in both. */
+  correlation: number | null;
+  voicedFrames: number;
+  frames: number;
+}
+export declare function f0Errors(
+  reference: ArrayLike<number>,
+  test: ArrayLike<number>
+): F0Errors;
+/** F1-F3 (Hz) per frame, null for unvoiced frames. */
+export declare function formantTrack(
+  samples: ArrayLike<number>,
+  sampleRate: number,
+  options?: { hop?: number; pitch?: ArrayLike<number> }
+): (number[] | null)[];
+export interface FormantError {
+  /** Mean absolute difference (Hz). */
+  hz: number | null;
+  /** Mean absolute difference in percent of the reference. */
+  percent: number | null;
+}
+export interface FormantErrors {
+  /** Frames with formants in both tracks. */
+  frames: number;
+  f1: FormantError;
+  f2: FormantError;
+  f3: FormantError;
+}
+export declare function formantErrors(
+  reference: readonly (ArrayLike<number> | null)[],
+  test: readonly (ArrayLike<number> | null)[]
+): FormantErrors;
+export interface EditDistance {
+  distance: number;
+  substitutions: number;
+  deletions: number;
+  insertions: number;
+}
+export type ErrorRateUnit = 'word' | 'char' | 'phone';
+export interface ErrorRate extends EditDistance {
+  referenceLength: number;
+  /** distance / max(1, referenceLength). */
+  rate: number;
+}
+/** Levenshtein distance between two token lists. */
+export declare function editDistance(
+  reference: ArrayLike<unknown>,
+  hypothesis: ArrayLike<unknown>
+): EditDistance;
+export declare function tokenize(text: string, unit?: ErrorRateUnit): string[];
+/** Word (WER), character (CER) or phoneme (PER) error rate. */
+export declare function errorRate(
+  reference: string | ArrayLike<unknown>,
+  hypothesis: string | ArrayLike<unknown>,
+  unit?: ErrorRateUnit
+): ErrorRate;
+export interface AudioInput {
+  samples: ArrayLike<number>;
+  sampleRate: number;
+}
+export interface RecordingComparison {
+  /** Rate both recordings were compared at: min(16000, both rates). */
+  sampleRate: number;
+  /** Seconds after the silence at both ends is cut; ratio = test / reference. */
+  duration: { reference: number; test: number; ratio: number };
+  /** Log-spectral distance along the DTW path (dB). */
+  lsd: number;
+  /** Mel-cepstral distortion along the DTW path (dB). */
+  mcd: number;
+  f0: F0Errors;
+  /** Null when `formants: false`. */
+  formants: FormantErrors | null;
+  timing: { rmsSeconds: number; maxSeconds: number };
+  dtw: { normalizedCost: number };
+  frames: { reference: number; test: number; path: number };
+}
+/** Align two recordings by DTW on mel cepstra and measure their distances. */
+export declare function compareRecordings(
+  reference: AudioInput,
+  test: AudioInput,
+  options?: {
+    band?: number;
+    window?: number;
+    hop?: number;
+    /** false skips the formant tracks (default true). */
+    formants?: boolean;
+  }
+): RecordingComparison;
 // Linguistics: text normalisation, accents, prosody, syllables, timeline
 export declare const VERBALIZERS: Readonly<Record<LanguageCode, object>>;
 export declare function normalizeText(
