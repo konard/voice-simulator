@@ -500,8 +500,13 @@ export class VoiceRenderer {
       const { obstacle } = frication;
       this.fricationAmplitude *= obstacle + WALL_SOURCE * (1 - obstacle);
     }
-    // The transient ramps from the last block's value to this one's.
-    const target = air.flowDerivative * TRANSIENT_GAIN;
+    // The transient ramps from the last block's value to this one's. With
+    // interaction the folds solve their flow from the lung and the oral
+    // pressure, so the change of the mean flow is already in their source;
+    // a second copy, from the folds' own mean area, closes a loop through
+    // the tract to the folds that runs away in 3D, where the transient is
+    // a pressure jump (issue 34).
+    const target = this.interaction ? 0 : air.flowDerivative * TRANSIENT_GAIN;
     const steps = Math.max(1, blockDuration * rate);
     this.transientStep = (target - this.transient) / steps;
   }

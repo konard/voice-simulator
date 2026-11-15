@@ -1,5 +1,5 @@
 closure: frication area < 0.001 cm²; pulse: a flow peak > 10 % of the peak-to-peak flow of the 10 ms before the closure
 [ˈaba] folds       closes at 214.8 ms for 47.9 ms, mouth pressure 40 ms in 616 Pa, voicing 41.4 ms (period 7.6 ms; 41.4 ms at 5 %, 41.4 ms at 20 %)
-[ˈaba] interaction closes at 214.8 ms for 47.9 ms, mouth pressure 40 ms in 698 Pa, voicing 40.5 ms (period 7.4 ms; 40.5 ms at 5 %, 40.5 ms at 20 %)
+[ˈaba] interaction closes at 214.8 ms for 47.9 ms, mouth pressure 40 ms in 699 Pa, voicing 41.2 ms (period 7.4 ms; 41.2 ms at 5 %, 41.2 ms at 20 %)
 [ˈapa] folds       closes at 214.8 ms for 58.8 ms, mouth pressure 40 ms in 784 Pa, voicing 32.5 ms (period 7.8 ms; 42.3 ms at 5 %, 23.0 ms at 20 %)
-[ˈapa] interaction closes at 214.8 ms for 58.8 ms, mouth pressure 40 ms in 791 Pa, voicing 4.6 ms (period 7.9 ms; 4.6 ms at 5 %, 4.6 ms at 20 %)
+[ˈapa] interaction closes at 214.8 ms for 58.8 ms, mouth pressure 40 ms in 791 Pa, voicing 4.8 ms (period 7.6 ms; 4.8 ms at 5 %, 4.8 ms at 20 %)

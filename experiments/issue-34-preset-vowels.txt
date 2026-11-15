@@ -15,10 +15,10 @@
   female - male: H1*-H2* 4.978 ok dB, H1*-A3* 3.635 FAILS (5.5..14) dB
   child - male: H1*-H2* -7.650 FAILS (2..7) dB, H1*-A3* Infinity FAILS (5.5..14) dB
 == interaction
-  [i] female f0 210.526 ok, male f0 119.403 ok, F2 female/male 1.193 ok
-  [ə] female f0 213.333 ok, male f0 122.137 ok, F2 female/male 1.168 ok
+  [i] female f0 210.526 ok, male f0 119.403 ok, F2 female/male 1.198 ok
+  [ə] female f0 213.333 ok, male f0 122.137 ok, F2 female/male 1.172 ok
   random female 1 [ə] f0 222.222 ok
-  random female 2 [ə] f0 271.186 ok
+  random female 2 [ə] f0 275.862 ok
   random female 3 [ə] f0 253.968 ok
-  female - male: H1*-H2* 0.892 FAILS (2..7) dB, H1*-A3* 9.294 ok dB
-  child - male: H1*-H2* -53.375 FAILS (2..7) dB, H1*-A3* -39.035 FAILS (5.5..14) dB
+  female - male: H1*-H2* 2.222 ok dB, H1*-A3* 10.921 ok dB
+  child - male: H1*-H2* -51.693 FAILS (2..7) dB, H1*-A3* -36.910 FAILS (5.5..14) dB

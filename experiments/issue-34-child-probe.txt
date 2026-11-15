@@ -1,9 +1,9 @@
 male 118 {"source":"lf"} rms 0.1448 f0 118.5
 male 118 {"source":"folds"} rms 0.1733 f0 119.4
-male 118 {"source":"folds","interaction":true} rms 0.3515 f0 121.2
+male 118 {"source":"folds","interaction":true} rms 0.3427 f0 121.2
 female 216 {"source":"lf"} rms 0.1744 f0 219.2
 female 216 {"source":"folds"} rms 0.0375 f0 207.8
-female 216 {"source":"folds","interaction":true} rms 0.3251 f0 213.3
+female 216 {"source":"folds","interaction":true} rms 0.3248 f0 213.3
 child 239 {"source":"lf"} rms 0.1663 f0 242.4
 child 239 {"source":"folds"} rms 0.0072 f0 0.0
 child 239 {"source":"folds","interaction":true} rms 0.0103 f0 112.7
