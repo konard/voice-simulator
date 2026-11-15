@@ -1,7 +1,9 @@
 /**
  * The Rust engine gives the same numbers as the JavaScript reference
  * (docs/RUST-ENGINE.md). The random generator is parity class
- * A, so every value must be bit-identical (`Object.is`).
+ * A, so every value must be bit-identical (`Object.is`). The resampler of
+ * src/audio/resample.js is class B (it calls `sin` and `cos`): its relative
+ * RMS error against JavaScript must stay at most `RESAMPLE_LIMIT`.
  *
  * Skipped with a visible reason when src/engine/voice-simulator.wasm has
  * not been built; CI builds it and runs this file with REQUIRE_WASM=1.
@@ -10,7 +12,12 @@
 import { describe, expect } from 'test-anywhere';
 
 import { createRandom, hashSeed, randomNormal } from '../src/random.js';
-import { float64View, uint16View } from '../src/engine/wasm-loader.js';
+import { createStreamResampler, resample } from '../src/audio/resample.js';
+import {
+  float32View,
+  float64View,
+  uint16View,
+} from '../src/engine/wasm-loader.js';
 import { loadRustEngine, noRust } from './helpers/rust-engine.js';
 import { itUnless } from './helpers/skip.js';
 
@@ -61,6 +68,115 @@ function hashInEngine(engine, text) {
   } finally {
     free(pointer, bytes);
   }
+}
+
+/** Class B limit of the resampler (issue 27): relative RMS error. */
+const RESAMPLE_LIMIT = 1e-6;
+
+/** The rate pairs of the player (TTS rates to device rates) and back. */
+const RATE_PAIRS = [
+  [16000, 44100],
+  [16000, 48000],
+  [22050, 48000],
+  [24000, 44100],
+  [48000, 44100],
+  [44100, 16000],
+];
+
+/** `seconds` of two tones and seeded noise at `rate`. */
+function testSignal(rate, seconds = 0.5) {
+  const random = createRandom(`issue-27-${rate}`);
+  return Float32Array.from(
+    { length: Math.round(rate * seconds) },
+    (_, index) =>
+      0.4 * Math.sin((2 * Math.PI * 440 * index) / rate) +
+      0.2 * Math.sin((2 * Math.PI * 3100 * index) / rate) +
+      0.2 * (random() - 0.5)
+  );
+}
+
+/** `sqrt(sum((a - e)^2) / sum(e^2))`, the class B measure. */
+function relativeRms(actual, expected) {
+  expect(actual.length).toBe(expected.length);
+  let error = 0;
+  let energy = 0;
+  for (let index = 0; index < expected.length; index++) {
+    error += (actual[index] - expected[index]) ** 2;
+    energy += expected[index] ** 2;
+  }
+  return Math.sqrt(error / energy);
+}
+
+/** Copy `samples` into a fresh block; returns its pointer and byte size. */
+function writeSamples(engine, samples) {
+  const bytes = Math.max(samples.length * 4, 1);
+  const pointer = engine.exports.vs_alloc(bytes);
+  expect(pointer).not.toBe(0);
+  float32View(engine, pointer, samples.length).set(samples);
+  return { pointer, bytes };
+}
+
+/** `resample` in the engine. */
+function engineResample(engine, samples, from, to, zeroCrossings) {
+  const { vs_free: free, vs_resample_length: lengthOf } = engine.exports;
+  const length = lengthOf(samples.length, from, to);
+  expect(length).toBe(Math.round((samples.length * to) / from));
+  const input = writeSamples(engine, samples);
+  const output = writeSamples(engine, new Float32Array(length));
+  try {
+    const code = engine.exports.vs_resample(
+      input.pointer,
+      samples.length,
+      from,
+      to,
+      zeroCrossings,
+      output.pointer,
+      length
+    );
+    expect(code).toBe(0);
+    return float32View(engine, output.pointer, length).slice();
+  } finally {
+    free(input.pointer, input.bytes);
+    free(output.pointer, output.bytes);
+  }
+}
+
+/** Take the waiting outputs of resampler `handle` (`ready` of them). */
+function engineRead(engine, handle, ready) {
+  expect(ready >= 0).toBe(true);
+  const output = writeSamples(engine, new Float32Array(ready));
+  try {
+    expect(
+      engine.exports.vs_resampler_read(handle, output.pointer, ready)
+    ).toBe(ready);
+    return float32View(engine, output.pointer, ready).slice();
+  } finally {
+    engine.exports.vs_free(output.pointer, output.bytes);
+  }
+}
+
+/** Chunk sizes from 1 to 2000 samples, seeded. */
+function chunkSizes(total, seed) {
+  const random = createRandom(seed);
+  const sizes = [];
+  for (let used = 0; used < total; ) {
+    const size = Math.min(total - used, 1 + Math.floor(random() * 2000));
+    sizes.push(size);
+    used += size;
+  }
+  return sizes;
+}
+
+function join(parts) {
+  const result = new Float32Array(
+    parts.reduce((sum, part) => sum + part.length, 0)
+  );
+  let offset = 0;
+  for (const part of parts) {
+    result.set(part, offset);
+    offset += part.length;
+  }
+  return result;
 }
 
 describe('Rust engine parity', () => {
@@ -140,5 +256,79 @@ describe('Rust engine parity', () => {
     expect(fill(1, 0, 4)).toBe(-1);
     expect(fill(1, 12, 4)).toBe(-2);
     expect(fill(1, engine.memory.buffer.byteLength - 8, 2)).toBe(-3);
+  });
+
+  it('resamples whole buffers like JavaScript (class B)', async () => {
+    const engine = await loadRustEngine();
+    let worst = 0;
+    for (const [from, to] of RATE_PAIRS) {
+      const input = testSignal(from);
+      for (const zeroCrossings of [8, 16]) {
+        const expected = resample(input, from, to, { zeroCrossings });
+        const actual = engineResample(engine, input, from, to, zeroCrossings);
+        worst = Math.max(worst, relativeRms(actual, expected));
+      }
+    }
+    expect(worst <= RESAMPLE_LIMIT).toBe(true);
+    // Equal rates copy the samples.
+    const same = testSignal(8000, 0.01);
+    expect(
+      firstMismatch(engineResample(engine, same, 8000, 8000, 16), same)
+    ).toBe(-1);
+  });
+
+  it('stream resamplers match createStreamResampler (class B)', async () => {
+    const engine = await loadRustEngine();
+    const { exports } = engine;
+    let worst = 0;
+    for (const [from, to] of RATE_PAIRS) {
+      const input = testSignal(from);
+      const reference = createStreamResampler(from, to);
+      const handle = exports.vs_resampler_new(from, to, 8);
+      expect(handle > 0).toBe(true);
+      const expectedParts = [];
+      const actualParts = [];
+      try {
+        let start = 0;
+        for (const size of chunkSizes(input.length, `${from}-${to}`)) {
+          const chunk = input.subarray(start, start + size);
+          start += size;
+          const expected = reference.push(chunk);
+          const { pointer, bytes } = writeSamples(engine, chunk);
+          const ready = exports.vs_resampler_push(handle, pointer, size);
+          exports.vs_free(pointer, bytes);
+          // The same outputs are ready after every chunk.
+          expect(ready).toBe(expected.length);
+          expect(exports.vs_resampler_held(handle)).toBe(reference.held());
+          expectedParts.push(expected);
+          actualParts.push(engineRead(engine, handle, ready));
+        }
+        const expected = reference.flush();
+        const ready = exports.vs_resampler_flush(handle);
+        expect(ready).toBe(expected.length);
+        expectedParts.push(expected);
+        actualParts.push(engineRead(engine, handle, ready));
+      } finally {
+        expect(exports.vs_resampler_free(handle)).toBe(0);
+      }
+      worst = Math.max(
+        worst,
+        relativeRms(join(actualParts), join(expectedParts))
+      );
+    }
+    expect(worst <= RESAMPLE_LIMIT).toBe(true);
+  });
+
+  it('reports bad resampler arguments and handles', async () => {
+    const { exports } = await loadRustEngine();
+    expect(exports.vs_resample_length(10, 0, 48000)).toBe(-6);
+    expect(exports.vs_resampler_new(16000, Number.NaN, 8)).toBe(-6);
+    expect(exports.vs_resampler_new(16000, 48000, 0)).toBe(-6);
+    expect(exports.vs_resample(0, 0, 16000, 48000, 16, 0, 1)).toBe(-6);
+    const handle = exports.vs_resampler_new(16000, 48000, 8);
+    expect(exports.vs_resampler_free(handle)).toBe(0);
+    expect(exports.vs_resampler_free(handle)).toBe(-5);
+    expect(exports.vs_resampler_push(handle, 0, 0)).toBe(-5);
+    expect(exports.vs_resampler_read(0, 0, 0)).toBe(-5);
   });
 });

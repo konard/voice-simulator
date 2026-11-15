@@ -12,6 +12,29 @@ pub fn sqrt(x: f64) -> f64 {
     libm::sqrt(x)
 }
 
+/// Largest integer not above `x`; exact, so it is allowed in class A code.
+#[inline]
+pub fn floor(x: f64) -> f64 {
+    libm::floor(x)
+}
+
+/// Smallest integer not below `x`; exact, so it is allowed in class A code.
+#[inline]
+pub fn ceil(x: f64) -> f64 {
+    libm::ceil(x)
+}
+
+/// `Math.round` of JavaScript: the nearest integer, halves towards +∞.
+#[inline]
+pub fn round_half_up(x: f64) -> f64 {
+    let floor = floor(x);
+    if x - floor >= 0.5 {
+        floor + 1.0
+    } else {
+        floor
+    }
+}
+
 /// Sine of `x` radians.
 #[inline]
 pub fn sin(x: f64) -> f64 {
@@ -57,6 +80,16 @@ mod tests {
         // Math.sqrt(3) in JavaScript.
         assert_eq!(sqrt(3.0).to_bits(), 1.732_050_807_568_877_2_f64.to_bits());
         assert_eq!(sqrt(4.0), 2.0);
+    }
+
+    #[test]
+    fn rounding_follows_javascript() {
+        assert_eq!(floor(-0.5), -1.0);
+        assert_eq!(ceil(1.25), 2.0);
+        // Math.round(2.5) = 3, Math.round(-2.5) = -2, Math.round(0.49999999999999994) = 0.
+        assert_eq!(round_half_up(2.5), 3.0);
+        assert_eq!(round_half_up(-2.5), -2.0);
+        assert_eq!(round_half_up(0.499_999_999_999_999_94), 0.0);
     }
 
     #[test]
