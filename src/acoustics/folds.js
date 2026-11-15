@@ -27,15 +27,18 @@
  *   prephonatory shape (Titze 1988);
  * - tension Q multiplies k_i and kc and divides m_i and the damping r_i, and
  *   leaves d_i alone. Dividing d_i by Q (Ishizaka and Flanagan) with a fixed
- *   damping raises the threshold pressure with Q² and silences the folds
- *   above about Q = 1.6 at 800 Pa, i.e. above about 220 Hz, so a female or
- *   child voice could not phonate. With this scaling the damping times
- *   2 m_i / r_i stay as in the table and the threshold does not depend on Q;
+ *   damping raises the threshold pressure from 175 Pa at Q = 1 to 575 Pa at
+ *   Q = 2 and 2050 Pa at Q = 4; at 800 Pa the flow shrinks to 4 % at Q = 2
+ *   (250 Hz) and stops above Q = 2.5 (310 Hz), so a female or child voice
+ *   could hardly phonate. With this scaling the damping times 2 m_i / r_i
+ *   stay as in the table, the threshold only rises to 400 Pa at Q = 4 and
+ *   the flow at 800 Pa keeps 73 % at Q = 2;
  * - while the lower mass is closed (a_1 <= 0) the full lung pressure acts
  *   on it, as in Ishizaka and Flanagan (1972); the literal model has no
- *   pressure there. Without it the force jumps by L d_1 Ps when the lower mass starts to
- *   touch, and the pitch jumps by 5 % there (from 294 to 309 Hz at Q 2.24
- *   and 800 Pa), so pitches in between could not be reached.
+ *   pressure there. Without it the force jumps by L d_1 Ps when the lower
+ *   mass starts to touch, and the pitch jumps by 5 % there (from 294.5 Hz
+ *   at Q = 2.23 to 309.5 Hz at Q = 2.24, at 800 Pa), so pitches in between
+ *   could not be reached.
  */
 
 import { AIR_DENSITY } from './transfer.js';

@@ -1,0 +1,37 @@
+Check: this stepper with the switches of folds.js against VocalFolds
+  Q 0.5: 65.640 Hz, VocalFolds 65.640 Hz
+  Q 1: 147.531 Hz, VocalFolds 147.531 Hz
+  Q 2: 278.771 Hz, VocalFolds 278.771 Hz
+  Q 4: 549.205 Hz, VocalFolds 549.205 Hz
+
+1. Start from rest at 800 Pa, Q = 1, adduction 0.5: p2p flow in 0.3-0.4 s (cm³/s)
+  rest convergence 0 cm²: 0.000e+0
+  rest convergence 0.0005 cm²: 7.369e+2
+
+2. Tension scaling at adduction 0.5: threshold, and at 800 Pa the p2p flow
+   in 0.3-0.4 s as a share of Q = 1 and the pitch ("-" below 1 %)
+  Q     literal (d/Q, r fixed)       folds.js (r/Q, d fixed)
+  0.5     50 Pa 3.150  79.8 Hz        150 Pa 1.074  65.6 Hz
+  1      175 Pa 1.000 147.5 Hz        175 Pa 1.000 147.5 Hz
+  1.5    350 Pa 0.481 197.2 Hz        200 Pa 0.843 214.8 Hz
+  2      575 Pa 0.042 248.7 Hz        250 Pa 0.733 278.8 Hz
+  2.5    825 Pa 0.010        -        275 Pa 0.627 345.6 Hz
+  2.6    875 Pa 0.000        -        275 Pa 0.610 359.5 Hz
+  3     1150 Pa 0.000        -        300 Pa 0.550 414.6 Hz
+  4     2050 Pa 0.000        -        400 Pa 0.415 549.2 Hz
+
+3. Pressure on the closed lower mass: pitch (Hz) at 800 Pa by Q
+  Q      none (literal)  full (folds.js)
+  2.18           287.3           301.6
+  2.19           288.3           302.9
+  2.20           289.5           304.2
+  2.21           291.2           305.5
+  2.22           292.9           306.8
+  2.23           294.5           308.1
+  2.24           309.5           309.5
+  2.25           310.9           310.9
+  2.26           312.3           312.3
+  2.27           313.7           313.7
+  2.28           315.1           315.1
+  2.29           316.5           316.5
+  2.30           317.9           317.9
