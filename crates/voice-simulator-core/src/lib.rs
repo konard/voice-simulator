@@ -11,9 +11,12 @@
 #![forbid(unsafe_code)]
 
 extern crate alloc;
+#[cfg(feature = "std")]
+extern crate std;
 
 pub mod aerodynamics;
 pub mod config;
+pub mod fdtd;
 pub mod filters;
 pub mod frame;
 pub mod glottis;

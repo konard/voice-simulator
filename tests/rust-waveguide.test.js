@@ -340,9 +340,9 @@ describe('Rust renderer (issue 22)', () => {
 describe('Rust renderer options (issue 22)', () => {
   const { plan } = prepareUtterance('a', { tier: 'minimal' });
   for (const options of [
-    { solver: 'fdtd3d' },
     { solver: 'fdtd2d' },
     { device: {} },
+    { solver: 'fdtd3d', device: {} },
     { source: 'folds' },
     { bandLimit: 0 },
   ]) {

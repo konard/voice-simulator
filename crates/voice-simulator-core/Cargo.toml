@@ -10,3 +10,10 @@ repository.workspace = true
 [dependencies]
 # Only src/math.rs may call it; see docs/RUST-ENGINE.md.
 libm = "0.2"
+
+[features]
+# Links `std` so that `src/math.rs` can use the `f64` methods `sqrt`,
+# `floor` and `ceil` on `wasm32`, where they are the exact instructions
+# `f64.sqrt`, `f64.floor` and `f64.ceil` (libm computes them in software
+# there on stable Rust). The WebAssembly crate turns it on.
+std = []

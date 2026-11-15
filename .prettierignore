@@ -1,6 +1,8 @@
 node_modules
 coverage
 dist
+# Cargo build output (cargo build, cargo doc), never committed
+target
 *.min.js
 package-lock.json
 .eslintcache

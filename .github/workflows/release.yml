@@ -483,9 +483,11 @@ jobs:
       # that rust-toolchain.toml selects; `rustup show` would install it too,
       # but rustup 1.29 warns that this auto-installation is deprecated
       # (rust-lang/rustup#4836). `rustup show` then logs what is active.
+      # The install took 10s (issue 23); its budget gave 60s to the parity
+      # tests, which gained the 3D solver, within the 630s of the backstop.
       - name: Install the pinned Rust toolchain
         run: |
-          bash scripts/run-with-budget-warning.sh 150 "Rust toolchain install" rustup toolchain install
+          bash scripts/run-with-budget-warning.sh 90 "Rust toolchain install" rustup toolchain install
           rustup show
 
       - name: Check Rust formatting
@@ -521,7 +523,10 @@ jobs:
         env:
           REQUIRE_WASM: '1'
           REQUIRE_CLI: '1'
-        run: bash scripts/run-with-budget-warning.sh 30 "Rust parity tests" node --test tests/rust-parity.test.js tests/rust-waveguide.test.js tests/rust-render-job.test.js tests/engine-layout.test.js
+        # tests/rust-fdtd.test.js renders 'Hello.' on the 3D tier `high`
+        # three times and the first 50 ms in a 40 cm room (about 17s on a
+        # developer machine, issue 23), hence the larger budget.
+        run: bash scripts/run-with-budget-warning.sh 90 "Rust parity tests" node --test tests/rust-parity.test.js tests/rust-waveguide.test.js tests/rust-fdtd.test.js tests/rust-render-job.test.js tests/engine-layout.test.js
 
       - name: Upload the WebAssembly engine
         uses: ./.github/actions/artifact-transport

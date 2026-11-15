@@ -6,6 +6,7 @@
 //! The array has `HEADER` fixed fields, then `NOSE_AREA_COUNT` nose areas
 //! (`noseShape(head).areas`), then `LISTENER_LENGTH` listener values (see
 //! [`crate::listener`]). Flags are 0 or 1; seeds are `hashSeed` values.
+//! The waveguide ignores the 3D fields (`FDTD_OUTPUT` to `MICROPHONE_Z`).
 
 /// Output sample rate (Hz).
 pub const SAMPLE_RATE: usize = 0;
@@ -69,5 +70,24 @@ pub const WALL_MASS: usize = 28;
 pub const WALL_RESISTANCE: usize = 29;
 /// `head.wallStiffness` (g/(cm² s²)).
 pub const WALL_STIFFNESS: usize = 30;
+/// Acoustic solver: 0 the 1D waveguide, 1 the 3D FDTD solver (which reads
+/// the packed voxel model, see [`crate::fdtd::model`]).
+pub const SOLVER: usize = 31;
+/// 3D solver output: 0 the volume flow out of the lips and nostrils, 1 the
+/// pressure at the receiver cell.
+pub const FDTD_OUTPUT: usize = 32;
+/// Flag: the 3D solver gives the free-air shell the spherical boundary.
+pub const FDTD_SPHERICAL: usize = 33;
+/// Point the 3D receiver cell is the closest free-air cell to (cm), x.
+pub const MICROPHONE_X: usize = 34;
+/// Same, y.
+pub const MICROPHONE_Y: usize = 35;
+/// Same, z.
+pub const MICROPHONE_Z: usize = 36;
 /// Fixed fields before the nose areas.
-pub const HEADER: usize = 31;
+pub const HEADER: usize = 37;
+
+/// Values of [`SOLVER`].
+pub const SOLVER_WAVEGUIDE: f64 = 0.0;
+/// Values of [`SOLVER`].
+pub const SOLVER_FDTD3D: f64 = 1.0;

@@ -1,28 +1,33 @@
-//! Exports of the waveguide voice renderer (issue 22): a renderer is made
-//! from the configuration array of `src/engine/layout.js` and rendered in
+//! Exports of the voice renderer (issues 22 and 23): a renderer is made
+//! from the configuration array of `src/engine/layout.js` (and, for the 3D
+//! solver, the voxel model of `src/engine/pack-model.js`) and rendered in
 //! chunks with one frame per control block (`src/engine/rust-renderer.js`).
 
 use std::cell::RefCell;
 
-use voice_simulator_core::renderer::{RenderError, Renderer};
+use voice_simulator_core::renderer::{AnyRenderer, RenderError};
 
-use crate::{check_range, error, f32_slice, f64_slice};
+use crate::{check_range, error, f32_slice, f64_slice, u8_slice};
 
 thread_local! {
     /// The live renderers; handle `h` is slot `h - 1`.
-    static RENDERERS: RefCell<Vec<Option<Renderer>>> = const { RefCell::new(Vec::new()) };
+    static RENDERERS: RefCell<Vec<Option<AnyRenderer>>> = const { RefCell::new(Vec::new()) };
 }
 
 fn code(error: RenderError) -> i32 {
     match error {
-        RenderError::Config | RenderError::TooFewFrames | RenderError::Frame => error::BAD_ARGUMENT,
+        RenderError::Config
+        | RenderError::TooFewFrames
+        | RenderError::Frame
+        | RenderError::Model => error::BAD_ARGUMENT,
     }
 }
 
-/// A new renderer for the configuration `values`; returns its handle (> 0)
-/// or [`error::BAD_ARGUMENT`].
-pub fn renderer_new(values: &[f64]) -> i32 {
-    let renderer = match Renderer::new(values) {
+/// A new renderer for the configuration `values` and the packed voxel
+/// model `model` (the 3D solver only); returns its handle (> 0) or
+/// [`error::BAD_ARGUMENT`].
+pub fn renderer_new(values: &[f64], model: &[u8]) -> i32 {
+    let renderer = match AnyRenderer::new(values, model) {
         Ok(renderer) => renderer,
         Err(error) => return code(error),
     };
@@ -42,7 +47,7 @@ pub fn renderer_new(values: &[f64]) -> i32 {
 }
 
 /// Runs `action` on the renderer of `handle`, or returns [`error::BAD_HANDLE`].
-pub fn with_renderer(handle: i32, action: impl FnOnce(&mut Renderer) -> i32) -> i32 {
+pub fn with_renderer(handle: i32, action: impl FnOnce(&mut AnyRenderer) -> i32) -> i32 {
     let Some(index) = usize::try_from(handle).ok().and_then(|h| h.checked_sub(1)) else {
         return error::BAD_HANDLE;
     };
@@ -52,7 +57,7 @@ pub fn with_renderer(handle: i32, action: impl FnOnce(&mut Renderer) -> i32) -> 
     })
 }
 
-/// [`Renderer::render`]: the number of samples written or a negative code.
+/// [`AnyRenderer::render`]: the number of samples written or a negative code.
 pub fn renderer_render(handle: i32, frames: &[f64], out: &mut [f32]) -> i32 {
     with_renderer(handle, |renderer| match renderer.render(frames, out) {
         Ok(written) => i32::try_from(written).unwrap_or(error::NO_MEMORY),
@@ -70,13 +75,16 @@ pub fn renderer_free(handle: i32) -> i32 {
 }
 
 /// A renderer for the `length` `f64` configuration values at `config`
-/// (`RENDERER_CONFIG` of `src/engine/layout.js`). Returns its handle (> 0)
-/// or a negative code of [`error`].
+/// (`RENDERER_CONFIG` of `src/engine/layout.js`) and, when its SOLVER is
+/// the 3D solver, the `model_length` bytes of the packed voxel model at
+/// `model` (`packVoxelModel` of `src/engine/pack-model.js`; 0 and 0 for
+/// the waveguide). Returns its handle (> 0) or a negative code of
+/// [`error`].
 #[no_mangle]
-pub extern "C" fn vs_renderer_new(config: u32, length: u32) -> i32 {
-    match f64_slice(config, length) {
-        Ok(values) => renderer_new(values),
-        Err(code) => code,
+pub extern "C" fn vs_renderer_new(config: u32, length: u32, model: u32, model_length: u32) -> i32 {
+    match (f64_slice(config, length), u8_slice(model, model_length)) {
+        (Ok(values), Ok(model)) => renderer_new(values, model),
+        (Err(code), _) | (_, Err(code)) => code,
     }
 }
 
@@ -130,8 +138,9 @@ pub extern "C" fn vs_renderer_position(handle: i32) -> i32 {
     })
 }
 
-/// Writes the acoustic pressure of the solver (the oral sections, then the
-/// nasal sections) as `f64` into the `capacity` values at `out`. Returns
+/// Writes the acoustic pressure of the solver (the waveguide: the oral
+/// sections, then the nasal sections; the 3D solver: every cell of the
+/// model) as `f64` into the `capacity` values at `out`. Returns
 /// the number written, or a negative code of [`error`].
 #[no_mangle]
 pub extern "C" fn vs_renderer_field(handle: i32, out: u32, capacity: u32) -> i32 {
@@ -153,9 +162,10 @@ mod tests {
 
     #[test]
     fn handles_come_and_go() {
-        assert_eq!(renderer_new(&[1.0]), error::BAD_ARGUMENT);
+        assert_eq!(renderer_new(&[1.0], &[]), error::BAD_ARGUMENT);
         assert_eq!(renderer_free(1), error::BAD_HANDLE);
         assert_eq!(vs_renderer_position(0), error::BAD_HANDLE);
-        assert_eq!(vs_renderer_new(0, 3), error::NULL);
+        assert_eq!(vs_renderer_new(0, 3, 0, 0), error::NULL);
+        assert_eq!(vs_renderer_new(8, 0, 0, 5), error::NULL);
     }
 }

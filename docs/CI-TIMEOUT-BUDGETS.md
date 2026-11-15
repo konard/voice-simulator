@@ -116,17 +116,17 @@ neither of which was involved in the original failure.
 
 ## Current budgets
 
-| Job                              | Backstop | Step budgets                                                                                                                                                       |
-| -------------------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `test`                           | 15 min   | Node.js 300s, Bun 300s, Deno 300s                                                                                                                                  |
-| `rust`                           | 15 min   | toolchain install 150s, `cargo fmt` 30s, `cargo check` 60s, `cargo clippy` 60s, `cargo doc` 60s, `cargo test` 90s, wasm build 90s, CLI build 60s, parity tests 30s |
-| `docker-build`                   | 30 min   | image build 20 min                                                                                                                                                 |
-| `docker-publish-config`          | 45 min   | npm availability wait 1800s                                                                                                                                        |
-| `docker-publish-build`           | 30 min   | image build and push 20 min                                                                                                                                        |
-| `release`                        | 65 min   | install 240s, npm publish 1800s, smoke test 600s                                                                                                                   |
-| `instant-release`                | 65 min   | npm publish 1800s, smoke test 600s                                                                                                                                 |
-| `heavy` (`heavy.yml`)            | 330 min  | heavy checks 18000s                                                                                                                                                |
-| `wasm-build` (`example-app.yml`) | 10 min   | toolchain install 150s, wasm build 180s                                                                                                                            |
+| Job                              | Backstop | Step budgets                                                                                                                                                      |
+| -------------------------------- | -------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `test`                           | 15 min   | Node.js 300s, Bun 300s, Deno 300s                                                                                                                                 |
+| `rust`                           | 15 min   | toolchain install 90s, `cargo fmt` 30s, `cargo check` 60s, `cargo clippy` 60s, `cargo doc` 60s, `cargo test` 90s, wasm build 90s, CLI build 60s, parity tests 90s |
+| `docker-build`                   | 30 min   | image build 20 min                                                                                                                                                |
+| `docker-publish-config`          | 45 min   | npm availability wait 1800s                                                                                                                                       |
+| `docker-publish-build`           | 30 min   | image build and push 20 min                                                                                                                                       |
+| `release`                        | 65 min   | install 240s, npm publish 1800s, smoke test 600s                                                                                                                  |
+| `instant-release`                | 65 min   | npm publish 1800s, smoke test 600s                                                                                                                                |
+| `heavy` (`heavy.yml`)            | 330 min  | heavy checks 18000s                                                                                                                                               |
+| `wasm-build` (`example-app.yml`) | 10 min   | toolchain install 150s, wasm build 180s                                                                                                                           |
 
 The `heavy` job of the manually started `Heavy checks` workflow is the one
 exception to the 70% share: its step budget is 91% of the backstop. A hosted

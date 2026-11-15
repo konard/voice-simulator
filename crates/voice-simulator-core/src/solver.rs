@@ -1,5 +1,5 @@
-//! The acoustic solver of the Rust renderer: the 1D waveguide now, the 3D
-//! FDTD solver of issue 23 later.
+//! The acoustic solver of the Rust renderer: the 1D waveguide
+//! ([`crate::waveguide`]) or the 3D FDTD solver ([`crate::fdtd::solver`]).
 
 /// What the renderer needs from a solver.
 pub trait Solver {

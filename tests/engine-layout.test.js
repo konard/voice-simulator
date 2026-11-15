@@ -13,6 +13,7 @@ import { describe, it, expect } from 'test-anywhere';
 import { createListener } from '../src/acoustics/microphone.js';
 import {
   FRAME,
+  FRAME_EXTRA_VALUES,
   LISTENER,
   RENDERER_CONFIG,
   frameStride,
@@ -43,7 +44,7 @@ describe('engine layouts (issue 22)', () => {
 
   it('FRAME matches frame.rs', () => {
     const rust = rustConstants('crates/voice-simulator-core/src/frame.rs');
-    expect(rust).toEqual({ ...FRAME });
+    expect(rust).toEqual({ ...FRAME, EXTRA_VALUES: FRAME_EXTRA_VALUES });
   });
 
   it('LISTENER matches listener.rs', () => {
@@ -82,12 +83,17 @@ describe('engine layouts (issue 22)', () => {
       glottis: { f0: 110, voicing: 1, aspiration: 0, closure: 0, loudness: 1 },
     };
     const frame = new Float64Array(frameStride(3) + 1).fill(-1);
+    expect(frameStride(3)).toBe(FRAME.STRIDE + 3 + FRAME_EXTRA_VALUES);
     writeFrame(frame, 1, shape, 800);
     expect(frame[1 + FRAME.LENGTH]).toBe(16);
     expect(frame[1 + FRAME.FRICATION_OBSTACLE]).toBe(0.7);
     expect(frame[1 + FRAME.LUNG_PRESSURE]).toBe(800);
-    expect(frame[1 + FRAME.RESERVED]).toBe(0);
-    expect([...frame.subarray(1 + FRAME.AREAS)]).toEqual([1, 2, 3]);
+    expect(frame[1 + FRAME.TEETH]).toBe(0);
+    expect(frame[1 + FRAME.EXTRA]).toBe(FRAME_EXTRA_VALUES);
+    expect([...frame.subarray(1 + FRAME.AREAS)]).toEqual([1, 2, 3, 0]);
+    writeFrame(frame, 1, { ...shape, teeth: { gap: 0.4 } }, 800);
+    expect(frame[1 + FRAME.TEETH]).toBe(1);
+    expect(frame.at(-1)).toBe(0.4);
   });
 
   it('listenerValues serializes the microphone and the room', () => {

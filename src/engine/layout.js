@@ -10,7 +10,10 @@
  * The renderer configuration, filled once per renderer: HEADER fixed
  * fields, then NOSE_AREA_COUNT nose areas (`noseShape(head).areas`), then
  * LISTENER_LENGTH listener values (LISTENER below). Flags are 0 or 1,
- * seeds are `hashSeed` values and BAND_LIMIT is 0 for none.
+ * seeds are `hashSeed` values and BAND_LIMIT is 0 for none. SOLVER is
+ * SOLVER_CODES[solver]; the 3D fields (FDTD_OUTPUT to MICROPHONE_Z) come
+ * from `fdtdListening` (src/engine/pack-model.js) and are 0 for the
+ * waveguide.
  */
 export const RENDERER_CONFIG = Object.freeze({
   SAMPLE_RATE: 0,
@@ -44,13 +47,26 @@ export const RENDERER_CONFIG = Object.freeze({
   WALL_MASS: 28,
   WALL_RESISTANCE: 29,
   WALL_STIFFNESS: 30,
-  HEADER: 31,
+  SOLVER: 31,
+  FDTD_OUTPUT: 32,
+  FDTD_SPHERICAL: 33,
+  MICROPHONE_X: 34,
+  MICROPHONE_Y: 35,
+  MICROPHONE_Z: 36,
+  HEADER: 37,
 });
+
+/** Values of RENDERER_CONFIG.SOLVER and FDTD_OUTPUT. */
+export const SOLVER_CODES = Object.freeze({ waveguide: 0, fdtd3d: 1 });
+export const FDTD_OUTPUT_CODES = Object.freeze({ flow: 0, microphone: 1 });
 
 /**
  * One control frame: the shape of one control block. STRIDE fixed fields,
- * then the area of every section (cm²), so a frame has STRIDE + sections
+ * then the area of every section (cm²), then EXTRA (= FRAME_EXTRA_VALUES)
+ * more values, so a frame has STRIDE + sections + FRAME_EXTRA_VALUES
  * values. LUNG_PRESSURE (Pa) is `state.lungPressure ?? head.lungPressure`.
+ * TEETH is 1 when the shape has incisors (`shape.teeth`), and the first
+ * extra value is then their gap (cm), else 0.
  */
 export const FRAME = Object.freeze({
   LENGTH: 0,
@@ -68,10 +84,14 @@ export const FRAME = Object.freeze({
   CLOSURE: 12,
   LOUDNESS: 13,
   LUNG_PRESSURE: 14,
-  RESERVED: 15,
-  AREAS: 16,
-  STRIDE: 16,
+  TEETH: 15,
+  EXTRA: 16,
+  AREAS: 17,
+  STRIDE: 17,
 });
+
+/** Values after the areas of a frame: the incisor gap. */
+export const FRAME_EXTRA_VALUES = 1;
 
 /**
  * The listener values of RENDERER_CONFIG: `[stage count, stages...]`,
@@ -89,7 +109,7 @@ export const LISTENER = Object.freeze({
 
 /** Values of one frame for a tract of `sections` sections. */
 export function frameStride(sections) {
-  return FRAME.STRIDE + sections;
+  return FRAME.STRIDE + sections + FRAME_EXTRA_VALUES;
 }
 
 /**
@@ -117,6 +137,8 @@ export function writeFrame(target, offset, shape, lungPressure) {
   target[offset + FRAME.CLOSURE] = glottis.closure;
   target[offset + FRAME.LOUDNESS] = glottis.loudness;
   target[offset + FRAME.LUNG_PRESSURE] = lungPressure;
-  target[offset + FRAME.RESERVED] = 0;
+  target[offset + FRAME.TEETH] = shape.teeth ? 1 : 0;
+  target[offset + FRAME.EXTRA] = FRAME_EXTRA_VALUES;
   target.set(shape.areas, offset + FRAME.AREAS);
+  target[offset + FRAME.AREAS + shape.areas.length] = shape.teeth?.gap ?? 0;
 }

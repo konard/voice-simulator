@@ -1,19 +1,21 @@
 #!/usr/bin/env node
 
 /**
- * Writes a render job for `voice-simulator-cli render-job` (issue 22).
+ * Writes a render job for `voice-simulator-cli render-job` (issues 22, 23).
  *
- * JavaScript plans the utterance and computes the configuration and the
- * frame of every control block (`renderJob` of src/engine/rust-renderer.js);
- * the job file holds them as little-endian f64 values: config length,
- * config, frame count, frames, sample count. The CLI then renders the job
- * natively, so the native speed can be compared with WebAssembly.
+ * JavaScript plans the utterance and computes the configuration, the packed
+ * voxel model of the 3D solver and the frame of every control block
+ * (`renderJob` of src/engine/rust-renderer.js); the job file holds them as
+ * little-endian f64 values: config length, config, model length (bytes, 0
+ * for the waveguide), model, frame count, frames, sample count. The CLI then
+ * renders the job natively, so the native speed can be compared with
+ * WebAssembly.
  *
  * Usage:
  *   node scripts/write-render-job.mjs <text> <tier> <out> [--seed <seed>]
  *
- * <tier> is an audio tier with the waveguide solver (minimal, low,
- * medium); the seed is 1 by default. When src/engine/voice-simulator.wasm
+ * <tier> is an audio tier: one with the waveguide (minimal, low, medium)
+ * or with the 3D solver (high, ultra, studio); the seed is 1 by default. When src/engine/voice-simulator.wasm
  * has been built (npm run build:wasm), the script also renders the job
  * with it and prints the SHA-256 of the samples, which
  * `voice-simulator-cli render-job <out>` must print too.
@@ -81,10 +83,12 @@ async function main() {
   writeFileSync(out, job.bytes);
   const log = globalThis.console.log;
   log(`wrote ${out}: ${job.bytes.length} bytes`);
-  log(`config ${job.config.length} values, ${job.frameCount} frames`);
+  log(
+    `config ${job.config.length} values, model ${job.model.length} bytes, ${job.frameCount} frames`
+  );
   log(`samples ${job.samples}`);
   if (existsSync(defaultEngineUrl())) {
-    const engine = await loadEngineModule();
+    const engine = await loadEngineModule(undefined, { simd: false });
     const started = globalThis.performance.now();
     const samples = renderJobRust(engine, job);
     const seconds = (globalThis.performance.now() - started) / 1000;

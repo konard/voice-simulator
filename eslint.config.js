@@ -141,6 +141,8 @@ export default [
       '**/out/**',
       '*.min.js',
       '.eslintcache',
+      // Cargo build output (cargo build, cargo doc), never committed
+      'target/**',
       // The jscpd HTML reporter writes a bundled prism.js here
       'reports/**',
       // Case study raw data files (downloaded from external sources)

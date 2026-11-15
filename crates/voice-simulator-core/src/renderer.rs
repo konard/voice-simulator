@@ -1,4 +1,4 @@
-//! The waveguide voice renderer: a port of `#step`, `#record` and
+//! The voice renderer, with the 1D waveguide or the 3D FDTD solver: a port of `#step`, `#record` and
 //! `#finish` of `VoiceRenderer` (`src/acoustics/voice.js`).
 //!
 //! The JavaScript side samples the plan and computes the tract shape of
@@ -9,6 +9,7 @@
 //! that computed it, which is what `#finish` does with its list of rates;
 //! so the samples do not depend on how the render is split into calls.
 
+use alloc::boxed::Box;
 use alloc::vec::Vec;
 
 use crate::aerodynamics::{
@@ -16,6 +17,8 @@ use crate::aerodynamics::{
     Aerodynamics,
 };
 use crate::config;
+use crate::fdtd::model::Model;
+use crate::fdtd::solver::{Fdtd3d, FdtdOptions, Output};
 use crate::frame;
 use crate::glottis::{GlottalControl, Glottis, GlottisOptions};
 use crate::listener::Listener;
@@ -30,7 +33,7 @@ pub const FRICATION_GAIN: f64 = 0.592;
 pub const WALL_SOURCE: f64 = 0.18;
 /// Gain of the burst transient.
 pub const TRANSIENT_GAIN: f64 = 5e-6;
-/// Most sections the renderer accepts (the 3D tiers stay in JavaScript).
+/// Most sections the renderer accepts.
 pub const MAX_SECTIONS: usize = 4096;
 
 /// Why a configuration or a render call was refused.
@@ -43,6 +46,9 @@ pub enum RenderError {
     /// A frame holds a value the solver cannot take (not finite, or a
     /// tract length that is not positive).
     Frame,
+    /// The voxel model of the 3D solver is malformed or has no free-air
+    /// cell for the receiver.
+    Model,
 }
 
 /// What the renderer reads from the configuration besides the solver.
@@ -79,7 +85,7 @@ fn finite(value: f64) -> Result<f64, RenderError> {
     }
 }
 
-/// The voice renderer with the 1D waveguide.
+/// The voice renderer with the solver `S`.
 #[derive(Clone, Debug)]
 pub struct Renderer<S: Solver = Waveguide> {
     solver: S,
@@ -105,12 +111,24 @@ pub struct Renderer<S: Solver = Waveguide> {
     current: f64,
 }
 
-impl Renderer<Waveguide> {
-    /// A renderer for the configuration `values` (see [`crate::config`]).
-    pub fn new(values: &[f64]) -> Result<Self, RenderError> {
+/// The parts of a renderer every solver shares, read from the
+/// configuration header.
+struct Common<'a> {
+    header: &'a [f64],
+    nose: &'a [f64],
+    settings: Settings,
+    vocal_tract_length: f64,
+    glottis: Glottis,
+    noise: NoiseSources,
+    output: OutputStage,
+    listener: Listener,
+}
+
+impl<'a> Common<'a> {
+    fn parse(values: &'a [f64]) -> Result<Self, RenderError> {
         let header = values.get(..config::HEADER).ok_or(RenderError::Config)?;
         let sections = count(header[config::SECTIONS], 3, MAX_SECTIONS)?;
-        let nose_sections = count(header[config::NOSE_SECTIONS], 1, MAX_SECTIONS)?;
+        count(header[config::NOSE_SECTIONS], 1, MAX_SECTIONS)?;
         let nose_count = count(header[config::NOSE_AREA_COUNT], 0, MAX_SECTIONS)?;
         let listener_length = count(header[config::LISTENER_LENGTH], 0, usize::MAX >> 8)?;
         if values.len() != config::HEADER + nose_count + listener_length {
@@ -131,33 +149,9 @@ impl Renderer<Waveguide> {
             glottal_chink: finite(header[config::GLOTTAL_CHINK])?,
             frication_level: finite(header[config::FRICATION_LEVEL])?,
         };
-        let piriform_sections = count(header[config::PIRIFORM_SECTIONS], 0, MAX_SECTIONS)?;
-        let piriform_index = count(header[config::PIRIFORM_INDEX], 0, sections - 1)?;
-        if piriform_sections > 0 && piriform_index == 0 {
-            return Err(RenderError::Config);
-        }
         let vocal_tract_length = finite(header[config::VOCAL_TRACT_LENGTH])?;
         if vocal_tract_length <= 0.0 {
             return Err(RenderError::Config);
-        }
-        let mut solver = Waveguide::new(&WaveguideOptions {
-            sections,
-            nose_sections,
-            wall_loss: finite(header[config::WALL_LOSS])?,
-            nasal_loss: finite(header[config::NASAL_LOSS])?,
-            wall_mass: finite(header[config::WALL_MASS])?,
-            wall_resistance: finite(header[config::WALL_RESISTANCE])?,
-            wall_stiffness: finite(header[config::WALL_STIFFNESS])?,
-            glottal_chink: settings.glottal_chink,
-            vocal_tract_length,
-            piriform: PiriformBranch {
-                index: piriform_index,
-                area: finite(header[config::PIRIFORM_AREA])?,
-                sections: piriform_sections,
-            },
-        });
-        if !nose.is_empty() {
-            solver.set_nose(nose);
         }
         let mut glottis_options = GlottisOptions::new(seed(header[config::GLOTTIS_SEED])?);
         glottis_options.tenseness = finite(header[config::TENSENESS])?;
@@ -177,15 +171,166 @@ impl Renderer<Waveguide> {
                 None
             },
         );
-        let listener = Listener::new(listener_values).ok_or(RenderError::Config)?;
-        Ok(Self::with_solver(
-            solver,
-            Glottis::new(&glottis_options),
-            NoiseSources::new(seed(header[config::NOISE_SEED])?),
-            output,
-            listener,
+        Ok(Self {
+            header,
+            nose,
             settings,
-        ))
+            vocal_tract_length,
+            glottis: Glottis::new(&glottis_options),
+            noise: NoiseSources::new(seed(header[config::NOISE_SEED])?),
+            output,
+            listener: Listener::new(listener_values).ok_or(RenderError::Config)?,
+        })
+    }
+
+    fn renderer<S: Solver>(self, solver: S) -> Renderer<S> {
+        Renderer::with_solver(
+            solver,
+            self.glottis,
+            self.noise,
+            self.output,
+            self.listener,
+            self.settings,
+        )
+    }
+}
+
+impl Renderer<Waveguide> {
+    /// A renderer for the configuration `values` (see [`crate::config`]).
+    pub fn new(values: &[f64]) -> Result<Self, RenderError> {
+        let common = Common::parse(values)?;
+        let header = common.header;
+        let sections = common.settings.sections;
+        let piriform_sections = count(header[config::PIRIFORM_SECTIONS], 0, MAX_SECTIONS)?;
+        let piriform_index = count(header[config::PIRIFORM_INDEX], 0, sections - 1)?;
+        if piriform_sections > 0 && piriform_index == 0 {
+            return Err(RenderError::Config);
+        }
+        let mut solver = Waveguide::new(&WaveguideOptions {
+            sections,
+            nose_sections: count(header[config::NOSE_SECTIONS], 1, MAX_SECTIONS)?,
+            wall_loss: finite(header[config::WALL_LOSS])?,
+            nasal_loss: finite(header[config::NASAL_LOSS])?,
+            wall_mass: finite(header[config::WALL_MASS])?,
+            wall_resistance: finite(header[config::WALL_RESISTANCE])?,
+            wall_stiffness: finite(header[config::WALL_STIFFNESS])?,
+            glottal_chink: common.settings.glottal_chink,
+            vocal_tract_length: common.vocal_tract_length,
+            piriform: PiriformBranch {
+                index: piriform_index,
+                area: finite(header[config::PIRIFORM_AREA])?,
+                sections: piriform_sections,
+            },
+        });
+        if !common.nose.is_empty() {
+            solver.set_nose(common.nose);
+        }
+        Ok(common.renderer(solver))
+    }
+}
+
+impl Renderer<Fdtd3d> {
+    /// A renderer with the 3D solver for the configuration `values` and
+    /// the voxel model `model` (`packVoxelModel` of
+    /// `src/engine/pack-model.js`).
+    pub fn new_fdtd(values: &[f64], model: &[u8]) -> Result<Self, RenderError> {
+        let common = Common::parse(values)?;
+        let header = common.header;
+        let flag = |value: f64| match value {
+            0.0 => Ok(false),
+            1.0 => Ok(true),
+            _ => Err(RenderError::Config),
+        };
+        let options = FdtdOptions {
+            output: if flag(header[config::FDTD_OUTPUT])? {
+                Output::Microphone
+            } else {
+                Output::Flow
+            },
+            spherical: flag(header[config::FDTD_SPHERICAL])?,
+            target: [
+                finite(header[config::MICROPHONE_X])?,
+                finite(header[config::MICROPHONE_Y])?,
+                finite(header[config::MICROPHONE_Z])?,
+            ],
+            wall_loss: finite(header[config::WALL_LOSS])?,
+            nasal_loss: finite(header[config::NASAL_LOSS])?,
+            glottal_chink: common.settings.glottal_chink,
+            vocal_tract_length: common.vocal_tract_length,
+        };
+        let model = Model::unpack(model).map_err(|_| RenderError::Model)?;
+        let mut solver = Fdtd3d::new(model, &options).ok_or(RenderError::Model)?;
+        if !common.nose.is_empty() {
+            solver.set_nose(common.nose);
+        }
+        Ok(common.renderer(solver))
+    }
+}
+
+/// A renderer with the solver `config::SOLVER` names.
+#[derive(Clone, Debug)]
+pub enum AnyRenderer {
+    /// The 1D waveguide.
+    Waveguide(Box<Renderer<Waveguide>>),
+    /// The 3D FDTD solver.
+    Fdtd3d(Box<Renderer<Fdtd3d>>),
+}
+
+/// Runs `$body` with `$renderer` bound to the renderer inside `$any`.
+macro_rules! dispatch {
+    ($any:expr, $renderer:ident => $body:expr) => {
+        match $any {
+            AnyRenderer::Waveguide($renderer) => $body,
+            AnyRenderer::Fdtd3d($renderer) => $body,
+        }
+    };
+}
+
+impl AnyRenderer {
+    /// A renderer for the configuration `values`; `model` is the packed
+    /// voxel model of the 3D solver and is ignored by the waveguide.
+    pub fn new(values: &[f64], model: &[u8]) -> Result<Self, RenderError> {
+        let solver = values
+            .get(config::SOLVER)
+            .copied()
+            .ok_or(RenderError::Config)?;
+        if solver == config::SOLVER_WAVEGUIDE {
+            Renderer::new(values).map(|renderer| Self::Waveguide(Box::new(renderer)))
+        } else if solver == config::SOLVER_FDTD3D {
+            Renderer::new_fdtd(values, model).map(|renderer| Self::Fdtd3d(Box::new(renderer)))
+        } else {
+            Err(RenderError::Config)
+        }
+    }
+
+    /// [`Renderer::position`].
+    pub fn position(&self) -> usize {
+        dispatch!(self, renderer => renderer.position())
+    }
+
+    /// [`Renderer::total_samples`].
+    pub fn total_samples(&self) -> usize {
+        dispatch!(self, renderer => renderer.total_samples())
+    }
+
+    /// [`Renderer::frame_stride`].
+    pub fn frame_stride(&self) -> usize {
+        dispatch!(self, renderer => renderer.frame_stride())
+    }
+
+    /// [`Renderer::blocks`].
+    pub fn blocks(&self, samples: usize) -> usize {
+        dispatch!(self, renderer => renderer.blocks(samples))
+    }
+
+    /// [`Renderer::render`].
+    pub fn render(&mut self, frames: &[f64], out: &mut [f32]) -> Result<usize, RenderError> {
+        dispatch!(self, renderer => renderer.render(frames, out))
+    }
+
+    /// [`Renderer::field`].
+    pub fn field(&self, out: &mut [f64]) -> usize {
+        dispatch!(self, renderer => renderer.field(out))
     }
 }
 
@@ -405,8 +550,8 @@ impl<S: Solver> Renderer<S> {
 /// Refuses frames the solver cannot take: fields that are not finite and
 /// tract lengths that are not positive (they would stop the step clock).
 fn check_frame(frame: &[f64]) -> Result<(), RenderError> {
-    let finite = frame[..frame::STRIDE].iter().all(|value| value.is_finite());
-    if finite && frame[frame::LENGTH] > 0.0 {
+    let finite = frame.iter().all(|value| value.is_finite());
+    if finite && frame[frame::LENGTH] > 0.0 && frame[frame::EXTRA] == frame::EXTRA_VALUES as f64 {
         Ok(())
     } else {
         Err(RenderError::Frame)
@@ -473,6 +618,7 @@ mod tests {
         frame[frame::VOICING] = 1.0;
         frame[frame::LOUDNESS] = 1.0;
         frame[frame::LUNG_PRESSURE] = 800.0;
+        frame[frame::EXTRA] = frame::EXTRA_VALUES as f64;
         frame
     }
 
