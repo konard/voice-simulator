@@ -34,6 +34,20 @@ a pressure wave travelling through the 3D shape of a parametric low-poly head
   question words fall wherever they stand, and sentence-initial क्या is
   read as the yes/no particle (`क्या तुम आओगे?` rises) unless the next word
   makes it mean "what" (`क्या हुआ?` falls).
+- **Segment durations**: every sound lasts as long as the rules of Klatt
+  (1979) say, `(inherent - minimum) * percent / 100 + minimum`, with a
+  table per language (`DURATION_TABLES`: `en`, `ru`, `hi`, `zh` and
+  `default`) and the rules of `DURATION_RULES` (end of a clause or phrase,
+  position in the word, number of syllables, stress, emphasis, the next
+  consonant, clusters, Russian vowel reduction in two degrees, Hindi vowel
+  length, the Mandarin neutral tone). `segmentDuration(token, features,
+table)` gives one sound from `durationFeatures(tokens, index)`, and
+  `planUtterance(ipa, {durationTable})` takes another table. `speechRate`
+  shortens the minimum with `RATE_MINIMUM` = 0.5 and the rest with
+  `RATE_STRETCH` = 1.2 as exponent, and phrase pauses with `RATE_PAUSE` =
+  1.5 (`scalePause`), so fast speech drops pauses first and no sound gets
+  shorter than its minimum. The inherent durations are fitted to the
+  golden recordings in `experiments/issue-11-fit-durations.txt`.
 - **Lexical tones**: every level of a tone written with Chao tone letters is
   a pitch target, so the Mandarin third tone `˨˩˦` dips before it rises.
 - **Word and syllable timeline**: `utteranceTimeline` (also in

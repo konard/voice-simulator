@@ -426,9 +426,13 @@ describe('turbulence noise', () => {
     expect(difference).toBeGreaterThan(6);
   });
 
+  // The fricative is a stressed onset: as the onset of an unstressed
+  // syllable the duration rules of issue 39 give [z] 50 ms, whose middle
+  // 60 % is mostly the closing and opening movement; stressed it gets
+  // 66 ms and [s] 107 ms (experiments/issue-39-fricative-levels.mjs).
   it('weakens the noise of voiced fricatives', () => {
-    const s = render('ˈasa');
-    const z = render('ˈaza');
+    const s = render('aˈsa');
+    const z = render('aˈza');
     const difference =
       consonantLevel(s, above4k(s.sampleRate)) -
       consonantLevel(z, above4k(z.sampleRate));

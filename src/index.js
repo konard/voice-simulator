@@ -36,6 +36,22 @@ export {
   VELUM_LEAD,
 } from './articulation/plan.js';
 export { approachTargets, DYNAMICS_ORDER } from './articulation/dynamics.js';
+export {
+  DURATION_RULES,
+  DURATION_TABLES,
+  RATE_MINIMUM,
+  RATE_PAUSE,
+  RATE_STRETCH,
+  applyingRules,
+  durationFeatures,
+  durationFormula,
+  durationTable,
+  minimumDuration,
+  phonemeDurations,
+  scalePause,
+  segmentDuration,
+  segmentParts,
+} from './articulation/durations.js';
 export { COARTICULATION_RESISTANCE } from './articulation/phones.js';
 export {
   sampleState,

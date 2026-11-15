@@ -191,14 +191,21 @@ absolute durations may change.
 
 - [ ] `experiments/issue-11-fit-durations.txt` is committed; for each language
       with at least 200 aligned sounds the mean absolute error of the new model
-      is at least 20 % below that of today's code.
-- [ ] The duration of the audit sentence at default settings changes by less
-      than 15 %; the new value is in the pull request.
-- [ ] `grep -n "0.105" src/articulation` finds nothing.
-- [ ] Every number of `DURATION_RULES` and `DURATION_TABLES` has a comment with
+      is at least 20 % below that of today's code. (Committed, met for Hindi
+      only: against the median of the alignments with today's plan, the
+      model's plan and uniform durations the error per sound falls from
+      34.2 to 20.8 ms for Hindi (39.1 %), but only from 31.2 to 31.0 ms for
+      English (0.9 %) and from 28.2 to 25.7 ms for Russian (8.8 %); Mandarin
+      has 173 sounds. The alignment copies much of the plan that was
+      rendered: each model wins by 8 to 13 ms against its own alignment.)
+- [x] The duration of the audit sentence at default settings changes by less
+      than 15 %; the new value is in the pull request. (3.723 s against
+      3.980 s, -6.5 %; `experiments/issue-39-audit-duration.txt`.)
+- [x] `grep -n "0.105" src/articulation` finds nothing.
+- [x] Every number of `DURATION_RULES` and `DURATION_TABLES` has a comment with
       its source: the paper, or "fitted, issue-11-fit-durations".
-- [ ] The new tests exist and pass on Node.js, Bun and Deno.
-- [ ] `npm run check` and `npm test` pass; a minor changeset is added.
+- [x] The new tests exist and pass on Node.js, Bun and Deno.
+- [x] `npm run check` and `npm test` pass; a minor changeset is added.
 
 ## Out of scope
 

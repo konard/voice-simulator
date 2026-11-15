@@ -1,0 +1,7 @@
+main (today's code):
+speechRate 1: 3.980 s (ðə ˈkwɪk ˈbɹaʊn ˈfɑks ˈd͡ʒʌmps ˈoʊvɚ ðə ˈleɪzi ˈdɔɡ .)
+speechRate 1.5: 2.862 s (ðə ˈkwɪk ˈbɹaʊn ˈfɑks ˈd͡ʒʌmps ˈoʊvɚ ðə ˈleɪzi ˈdɔɡ .)
+duration model:
+speechRate 1: 3.723 s (ðə ˈkwɪk ˈbɹaʊn ˈfɑks ˈd͡ʒʌmps ˈoʊvɚ ðə ˈleɪzi ˈdɔɡ .)
+speechRate 1.5: 2.633 s (ðə ˈkwɪk ˈbɹaʊn ˈfɑks ˈd͡ʒʌmps ˈoʊvɚ ðə ˈleɪzi ˈdɔɡ .)
+change at speechRate 1: -6.5 %
