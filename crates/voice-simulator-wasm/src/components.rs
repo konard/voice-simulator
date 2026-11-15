@@ -1,9 +1,10 @@
 //! Exports that run one part of the voice renderer on its own, for the
 //! parity tests of `tests/rust-waveguide.test.js`: the biquad, the LF
-//! glottis and the waveguide (`docs/RUST-ENGINE.md`).
+//! glottis, the radiation filter and the waveguide (`docs/RUST-ENGINE.md`).
 
 use voice_simulator_core::filters::Biquad;
 use voice_simulator_core::glottis::{GlottalControl, Glottis, GlottisOptions};
+use voice_simulator_core::radiation::Radiation;
 
 use crate::{error, f64_slice};
 
@@ -101,6 +102,25 @@ pub extern "C" fn vs_glottis_run(seed: u32, parameters: u32, data: u32, count: u
     }
     match f64_slice(data, count) {
         Ok(slice) => i32::try_from(run_glottis(seed, &values, slice)).unwrap_or(i32::MAX),
+        Err(code) => code,
+    }
+}
+
+/// `new Radiation()` of `radiation.js`, configured for `area` (cm²) at
+/// `rate` steps per second, run over the `count` `f64` incident waves at
+/// `data`; each is replaced by the reflected wave. Returns 0 or a negative
+/// code of [`error`].
+#[no_mangle]
+pub extern "C" fn vs_radiation_run(area: f64, rate: f64, data: u32, count: u32) -> i32 {
+    match f64_slice(data, count) {
+        Ok(slice) => {
+            let mut radiation = Radiation::new();
+            radiation.configure(area, rate);
+            for value in slice {
+                *value = radiation.process(*value);
+            }
+            error::OK
+        }
         Err(code) => code,
     }
 }

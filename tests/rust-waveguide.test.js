@@ -14,6 +14,7 @@ import { describe, expect } from 'test-anywhere';
 
 import { Biquad, createNoise } from '../src/acoustics/filters.js';
 import { Glottis } from '../src/acoustics/glottis.js';
+import { Radiation } from '../src/acoustics/radiation.js';
 import { float64View } from '../src/engine/wasm-loader.js';
 import { hashSeed } from '../src/random.js';
 import { loadRustEngine, noRust } from './helpers/rust-engine.js';
@@ -124,5 +125,22 @@ describe('Rust waveguide renderer (issue 22)', () => {
     const measured = error(values, expected);
     globalThis.console.log(`glottis error ${measured}, ${periods} periods`);
     expect(measured < 1e-6).toBe(true);
+  });
+
+  it('radiation matches', async () => {
+    const engine = await loadRustEngine();
+    const rate = (22 * 35000) / 16.5;
+    const noise = createNoise(3);
+    const input = Float64Array.from({ length: 4096 }, () => noise());
+    const radiation = new Radiation();
+    radiation.configure(3, rate);
+    const expected = input.map((value) => radiation.process(value));
+    const { result, values } = inEngine(engine, input, (pointer, count) =>
+      engine.exports.vs_radiation_run(3, rate, pointer, count)
+    );
+    expect(result).toBe(0);
+    const measured = error(values, expected);
+    globalThis.console.log(`radiation error ${measured}`);
+    expect(measured).toBe(0);
   });
 });
