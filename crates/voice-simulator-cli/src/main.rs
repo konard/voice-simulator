@@ -1,10 +1,14 @@
 //! `voice-simulator-cli`: the command line tool of the Rust engine.
 //!
-//! Arguments are parsed by hand (no dependencies besides the core). Later
-//! issues add commands that render; this one has `version` and `random`.
+//! Arguments are parsed by hand (no dependencies besides the core). The
+//! commands are `version`, `random` and `render-job` (issue 22).
+
+mod render_job;
+mod sha256;
 
 use std::io::{self, BufWriter, Write};
 use std::process::ExitCode;
+use std::time::Instant;
 
 use voice_simulator_core::random::{hash_seed_utf16, Random};
 
@@ -19,6 +23,13 @@ Commands:
                           (with an optional minus sign) is a number, reduced
                           to 32 bits like `seed >>> 0`; any other seed is a
                           string, hashed like hashSeed(string).
+  render-job <file>       Render a job of scripts/write-render-job.mjs
+                          (little-endian f64 values: config length, config,
+                          frame count, frames, sample count) with the
+                          waveguide renderer, natively, in one call. Prints
+                          the SHA-256 of the samples (their f32
+                          little-endian bytes), the number of samples, the
+                          seconds the render took and its real-time factor.
   help                    Print this help
 ";
 
@@ -31,6 +42,10 @@ fn main() -> ExitCode {
             eprintln!("voice-simulator-cli: {message}\n\n{USAGE}");
             ExitCode::from(2)
         }
+        Err(Failure::Job(message)) => {
+            eprintln!("voice-simulator-cli: {message}");
+            ExitCode::FAILURE
+        }
         Err(Failure::Io(error)) if error.kind() == io::ErrorKind::BrokenPipe => ExitCode::SUCCESS,
         Err(Failure::Io(error)) => {
             eprintln!("voice-simulator-cli: {error}");
@@ -42,6 +57,7 @@ fn main() -> ExitCode {
 #[derive(Debug)]
 enum Failure {
     Usage(String),
+    Job(String),
     Io(io::Error),
 }
 
@@ -76,6 +92,20 @@ fn run(args: &[&str], out: &mut impl Write) -> Result<(), Failure> {
             Ok(())
         }
         ["random", ..] => Err(Failure::Usage("random needs <seed> and <count>".into())),
+        ["render-job", file] => {
+            let bytes = std::fs::read(file)?;
+            let job = render_job::parse(&bytes).map_err(Failure::Job)?;
+            let started = Instant::now();
+            let samples = render_job::render(&job).map_err(Failure::Job)?;
+            let seconds = started.elapsed().as_secs_f64();
+            let duration = samples.len() as f64 / job.config.first().copied().unwrap_or(1.0);
+            writeln!(out, "sha256 {}", render_job::fingerprint(&samples))?;
+            writeln!(out, "samples {}", samples.len())?;
+            writeln!(out, "seconds {seconds:.6}")?;
+            writeln!(out, "rtf {:.6}", seconds / duration)?;
+            Ok(())
+        }
+        ["render-job", ..] => Err(Failure::Usage("render-job needs <file>".into())),
         [] => Err(Failure::Usage("no command given".into())),
         [command, ..] => Err(Failure::Usage(format!("unknown command {command:?}"))),
     }

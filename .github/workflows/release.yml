@@ -464,10 +464,16 @@ jobs:
       - name: Build the WebAssembly engine
         run: bash scripts/run-with-budget-warning.sh 120 "wasm build" node scripts/build-wasm.mjs --require --check-size
 
+      # The native CLI renders the jobs of tests/rust-render-job.test.js,
+      # which checks that it prints the SHA-256 of the WebAssembly render.
+      - name: Build the native CLI
+        run: bash scripts/run-with-budget-warning.sh 120 "CLI build" cargo build --release --locked -p voice-simulator-cli
+
       - name: Run Rust parity tests
         env:
           REQUIRE_WASM: '1'
-        run: bash scripts/run-with-budget-warning.sh 60 "Rust parity tests" node --test tests/rust-parity.test.js
+          REQUIRE_CLI: '1'
+        run: bash scripts/run-with-budget-warning.sh 60 "Rust parity tests" node --test tests/rust-parity.test.js tests/rust-waveguide.test.js tests/rust-render-job.test.js tests/engine-layout.test.js
 
       - name: Upload the WebAssembly engine
         uses: actions/upload-artifact@v7

@@ -143,23 +143,33 @@ export function rendererConfig(settings) {
   return values;
 }
 
+/** A renderer of the engine for `config`; returns its handle. */
+function createRenderer(module, config) {
+  const scratch = new Scratch(module, 8);
+  try {
+    const pointer = scratch.reserve(config.length);
+    float64View(module, pointer, config.length).set(config);
+    return check(
+      module.exports.vs_renderer_new(pointer, config.length),
+      'vs_renderer_new'
+    );
+  } finally {
+    scratch.free();
+  }
+}
+
 /**
- * VoiceRenderer with the waveguide, on the Rust engine. Free its engine
- * memory with free() when done.
+ * The JavaScript half of the Rust renderer: the configuration and the
+ * frames, one per control block, computed as VoiceRenderer computes its
+ * shapes. Needs no engine, so a job can be written for the CLI.
  */
-export class RustVoiceRenderer {
+export class FramePlanner {
   /**
-   * @param {{exports: Record<string, Function>, memory: WebAssembly.Memory}} module
-   *   the engine of loadEngineModule (src/engine/wasm-loader.js)
    * @param {object} plan Result of planUtterance.
-   * @param {ConstructorParameters<typeof import('../acoustics/voice.js').VoiceRenderer>[1]} [options]
-   *   as for VoiceRenderer; `solver` other than 'waveguide', `device`,
-   *   `source: 'folds'` and a `bandLimit` that is not above 0 throw an
-   *   Error with `code = 'ENGINE_UNSUPPORTED'`.
+   * @param {object} [options] as for RustVoiceRenderer
    */
-  constructor(module, plan, options = {}) {
+  constructor(plan, options = {}) {
     checkSupported(options);
-    this.engine = module;
     this.plan = plan;
     this.head = normalizeHeadConfig(options.head ?? plan.head);
     this.sampleRate = options.sampleRate ?? 48000;
@@ -181,7 +191,7 @@ export class RustVoiceRenderer {
     this.totalSamples = Math.ceil(
       (plan.duration + (listener?.tail ?? 0)) * this.sampleRate
     );
-    const config = rendererConfig({
+    this.config = rendererConfig({
       head: this.head,
       sections: this.sections,
       sampleRate: this.sampleRate,
@@ -193,21 +203,7 @@ export class RustVoiceRenderer {
       bandLimit: options.bandLimit,
       listener: values,
     });
-    const scratch = new Scratch(module, 8);
-    try {
-      const pointer = scratch.reserve(config.length);
-      float64View(module, pointer, config.length).set(config);
-      this.handle = check(
-        module.exports.vs_renderer_new(pointer, config.length),
-        'vs_renderer_new'
-      );
-    } finally {
-      scratch.free();
-    }
-    this.frames = new Scratch(module, 8);
-    this.out = new Scratch(module, 4);
-    this.fieldValues = new Scratch(module, 8);
-    this.frameList = new FrameList(this.stride);
+    this.frames = new FrameList(this.stride);
     this.state = {};
     this.shapeOptions = { sections: this.sections, teeth: this.teeth };
     /** Time of the next sample, summed as VoiceRenderer sums it. */
@@ -216,21 +212,14 @@ export class RustVoiceRenderer {
     this.hasShape = false;
   }
 
-  get duration() {
-    return this.plan.duration;
-  }
-
-  get done() {
-    return this.position >= this.totalSamples;
-  }
-
   /**
    * Write the frames of the blocks that start in the next `count` samples
-   * into `target` and advance the clock; returns the number of frames.
+   * into `this.frames.values` and advance the clock.
+   * @returns {number} the number of frames
    */
-  #prepare(count, frames) {
+  prepare(count) {
     const outputStep = 1 / this.sampleRate;
-    const { blockSize, stride } = this;
+    const { blockSize, stride, frames } = this;
     let blocks = 0;
     for (let index = 0; index < count; index++) {
       if ((this.position + index) % blockSize === 0 || !this.hasShape) {
@@ -249,7 +238,49 @@ export class RustVoiceRenderer {
       }
       this.time += outputStep;
     }
+    this.position += count;
     return blocks;
+  }
+}
+
+/**
+ * VoiceRenderer with the waveguide, on the Rust engine. Free its engine
+ * memory with free() when done.
+ */
+export class RustVoiceRenderer {
+  /**
+   * @param {{exports: Record<string, Function>, memory: WebAssembly.Memory}} module
+   *   the engine of loadEngineModule (src/engine/wasm-loader.js)
+   * @param {object} plan Result of planUtterance.
+   * @param {ConstructorParameters<typeof import('../acoustics/voice.js').VoiceRenderer>[1]} [options]
+   *   as for VoiceRenderer; `solver` other than 'waveguide', `device`,
+   *   `source: 'folds'` and a `bandLimit` that is not above 0 throw an
+   *   Error with `code = 'ENGINE_UNSUPPORTED'`.
+   */
+  constructor(module, plan, options = {}) {
+    this.planner = new FramePlanner(plan, options);
+    this.engine = module;
+    this.plan = plan;
+    const { sampleRate, sections, totalSamples, head, config } = this.planner;
+    this.head = head;
+    this.sampleRate = sampleRate;
+    this.sections = sections;
+    this.totalSamples = totalSamples;
+    this.handle = createRenderer(module, config);
+    this.frames = new Scratch(module, 8);
+    this.out = new Scratch(module, 4);
+    this.fieldValues = new Scratch(module, 8);
+    this.position = 0;
+    /** Milliseconds spent preparing frames in JavaScript. */
+    this.prepareTime = 0;
+  }
+
+  get duration() {
+    return this.plan.duration;
+  }
+
+  get done() {
+    return this.position >= this.totalSamples;
   }
 
   /**
@@ -269,14 +300,15 @@ export class RustVoiceRenderer {
     if (this.handle === undefined) {
       throw new Error('Rust renderer: used after free()');
     }
-    const frames = this.frameList;
-    const blocks = this.#prepare(count, frames);
-    const { engine } = this;
-    const frameValues = blocks * this.stride;
+    const { engine, planner } = this;
+    const started = globalThis.performance.now();
+    const blocks = planner.prepare(count);
+    this.prepareTime += globalThis.performance.now() - started;
+    const frameValues = blocks * planner.stride;
     const framePointer = this.frames.reserve(Math.max(1, frameValues));
     const outPointer = this.out.reserve(count);
     float64View(engine, framePointer, frameValues).set(
-      frames.values.subarray(0, frameValues)
+      planner.frames.values.subarray(0, frameValues)
     );
     const written = check(
       engine.exports.vs_renderer_render(
@@ -366,5 +398,63 @@ export function renderPlanRust(module, plan, options = {}) {
     return samples;
   } finally {
     renderer.free();
+  }
+}
+
+/**
+ * A render job for `voice-simulator-cli render-job`: little-endian `f64`
+ * values `[config length, config..., frame count, frames..., sample
+ * count]` with the frames of the whole utterance.
+ * @param {object} plan
+ * @param {object} [options] as for RustVoiceRenderer
+ * @returns {{config: Float64Array, frames: Float64Array, frameCount: number, samples: number, bytes: Uint8Array}}
+ */
+export function renderJob(plan, options = {}) {
+  const planner = new FramePlanner(plan, options);
+  const samples = planner.totalSamples;
+  const frameCount = planner.prepare(samples);
+  const frames = planner.frames.values.slice(0, frameCount * planner.stride);
+  const { config } = planner;
+  const values = new Float64Array(config.length + frames.length + 3);
+  values[0] = config.length;
+  values.set(config, 1);
+  values[1 + config.length] = frameCount;
+  values.set(frames, 2 + config.length);
+  values[values.length - 1] = samples;
+  const bytes = new Uint8Array(values.length * 8);
+  const view = new DataView(bytes.buffer);
+  values.forEach((value, index) => view.setFloat64(index * 8, value, true));
+  return { config, frames, frameCount, samples, bytes };
+}
+
+/**
+ * Render a job of renderJob in one call of the engine, as the CLI does.
+ * @param {ConstructorParameters<typeof RustVoiceRenderer>[0]} module
+ * @param {ReturnType<typeof renderJob>} job
+ * @returns {Float32Array}
+ */
+export function renderJobRust(module, job) {
+  const handle = createRenderer(module, job.config);
+  const frames = new Scratch(module, 8);
+  const out = new Scratch(module, 4);
+  try {
+    const framePointer = frames.reserve(Math.max(1, job.frames.length));
+    const outPointer = out.reserve(Math.max(1, job.samples));
+    float64View(module, framePointer, job.frames.length).set(job.frames);
+    const written = check(
+      module.exports.vs_renderer_render(
+        handle,
+        framePointer,
+        job.frameCount,
+        outPointer,
+        job.samples
+      ),
+      'vs_renderer_render'
+    );
+    return float32View(module, outPointer, written).slice();
+  } finally {
+    module.exports.vs_renderer_free(handle);
+    frames.free();
+    out.free();
   }
 }
