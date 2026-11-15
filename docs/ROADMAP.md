@@ -82,6 +82,8 @@ Clean up, policy checks, manually triggered heavy checks, public datasets, objec
 
 Simulation core in Rust (WebAssembly and native), multicore with a single-core fallback, load-time benchmark, lowest-settings tiers and quality that adapts while streaming.
 
+The workspace, the WebAssembly build, the loader, the CI job `rust` and the parity tests of [#21](https://github.com/konard/voice-simulator/issues/21) are described in [RUST-ENGINE.md](RUST-ENGINE.md); the ports below add their code to that pipeline.
+
 | Issue                                                      | Type    | Title                                                                         | Blocked by                                                                                                             | Requirements  |
 | ---------------------------------------------------------- | ------- | ----------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- | ------------- |
 | [#21](https://github.com/konard/voice-simulator/issues/21) | Feature | Rust workspace and WebAssembly build pipeline                                 | nothing                                                                                                                | R2, R12, R19  |
@@ -411,7 +413,9 @@ The same rules are printed at the end of every issue.
   by" is closed.
 - Work in the JavaScript reference implementation in `src/` unless the issue
   says otherwise. If the directory `crates/` exists when you start, implement
-  the same numerical code in the Rust core too and extend the parity tests.
+  the same numerical code in the Rust core too and extend the parity tests,
+  following the interface rules, the determinism rules and the parity classes
+  of [RUST-ENGINE.md](RUST-ENGINE.md).
 - Same input, seed and options must give the same samples on Node.js, Bun and
   Deno. Take randomness only from `src/random.js`.
 - Add tests in `tests/` that fail before the change and pass after it. Tests

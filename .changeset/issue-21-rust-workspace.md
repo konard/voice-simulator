@@ -1,0 +1,5 @@
+---
+'voice-simulator': patch
+---
+
+Add the Rust workspace and the WebAssembly build pipeline (issue 21). `Cargo.toml` holds three crates: `voice-simulator-core` (`no_std`, no `unsafe`, `libm` only through `math.rs`), which ports the random generator of `src/random.js`; `voice-simulator-wasm`, a module with no imports whose plain `vs_*` exports are listed in `docs/RUST-ENGINE.md`; and `voice-simulator-cli` (`version`, `random <seed> <count>`). `rust-toolchain.toml` pins Rust 1.100.0. `npm run build:wasm` builds `src/engine/voice-simulator.wasm`, which is 17443 bytes against a budget of 32768 and has the same SHA-256 on every build. Without `cargo` the script prints a note and exits with 0. The file is git-ignored; the package contains it only when it was built before packing, and the release jobs download the file built by the new CI job `rust`. `src/engine/wasm-loader.js` loads it in a page, a worker, Node.js, Bun and Deno. The parity tests compare 10000 uniform and 10000 normal values per seed bit for bit with JavaScript, and they are skipped when the file is missing. The public API does not change.

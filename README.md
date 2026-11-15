@@ -497,6 +497,10 @@ bun run format
 # Check all (lint + format + file size)
 bun run check
 
+# Optional: build the Rust engine into src/engine/voice-simulator.wasm
+# (needs rustup; without cargo it prints a note and the JavaScript engine is used)
+npm run build:wasm
+
 # Build the web app
 npm install --prefix examples/universal-app
 npm run example:web:build
@@ -508,6 +512,8 @@ npm run example:desktop:package
 ```
 .
 ├── bin/voice-simulator.js # CLI
+├── crates/                # Rust engine: core (no_std), wasm (vs_* exports), cli
+├── Cargo.toml             # Rust workspace (Cargo.lock, rust-toolchain.toml)
 ├── datasets/              # Speech dataset registry (data is fetched, never committed)
 ├── Dockerfile             # Server image
 ├── docs/case-studies/     # Research, requirements and plans
@@ -530,6 +536,7 @@ npm run example:desktop:package
 │   ├── perf/              # Benchmarks and LOD governor
 │   ├── audio/             # WAV, FLAC, AIFF, AU, raw and resampling
 │   ├── server/            # HTTP API (voice-simulator/server)
+│   ├── engine/            # WebAssembly loader of the Rust engine (the .wasm is built, never committed)
 │   ├── index.js           # Library entry point
 │   └── index.d.ts         # TypeScript definitions
 └── tests/                 # test-anywhere tests (Node, Bun, Deno)
@@ -613,6 +620,7 @@ The GitHub Actions workflow (`.github/workflows/release.yml`) implements a fast-
 **Slow checks** (only run after all fast checks pass):
 
 7. **Test matrix**: 3 runtimes × 3 OS = 9 test combinations
+   - **Rust engine** (job `rust`): `cargo fmt`, `cargo clippy -D warnings`, `cargo test`, the WebAssembly build with its size budget and the Rust-against-JavaScript parity tests; the release jobs publish the file it builds (see [RUST-ENGINE.md](docs/RUST-ENGINE.md))
 8. **Broken link checks**: Validates all links in Markdown/HTML files (separate workflow)
 
 **Release** (on merge to main):
@@ -811,6 +819,7 @@ Configured in `.prettierrc`:
 | `npm run example:web:preview-images` | Regenerate preview screenshots via browser-commander  |
 | `npm run example:desktop:package`    | Package the Electron desktop app locally              |
 | `npm run example:mobile:sync`        | Build and sync the app bundle into Capacitor projects |
+| `npm run build:wasm`                 | Build the Rust engine into `src/engine/` (optional)   |
 | `bun run changeset`                  | Create a new changeset                                |
 
 ## Contributing
