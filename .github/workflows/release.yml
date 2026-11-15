@@ -447,6 +447,12 @@ jobs:
       )
     permissions:
       contents: read
+    # rustc warnings fail every cargo step, the wasm32 build and the native
+    # CLI included, not only Clippy (the Rust template's setting). Lint
+    # levels do not change code generation: the engine is byte for byte the
+    # same file with and without this flag (issue 115).
+    env:
+      RUSTFLAGS: -Dwarnings
     steps:
       - uses: actions/checkout@v7
         with:
@@ -479,8 +485,20 @@ jobs:
       - name: Check Rust formatting
         run: bash scripts/run-with-budget-warning.sh 30 "cargo fmt" cargo fmt --all --check
 
+      # RUSTFLAGS covers rustc, but Cargo's own manifest warnings still exit 0.
+      - name: Fail on Cargo manifest warnings
+        run: bash scripts/run-with-budget-warning.sh 90 "cargo check" bash scripts/check-cargo-warnings.sh --workspace
+
       - name: Run Clippy
         run: bash scripts/run-with-budget-warning.sh 90 "cargo clippy" cargo clippy --workspace --all-targets --locked -- -D warnings
+
+      # rustdoc-only lints (broken intra-doc links, for one) are reported by
+      # neither Clippy nor the tests: `[h]` in a doc comment of
+      # aerodynamics.rs passed every Rust step until this gate (issue 115).
+      - name: Build documentation
+        env:
+          RUSTDOCFLAGS: -D warnings
+        run: bash scripts/run-with-budget-warning.sh 90 "cargo doc" cargo doc --workspace --no-deps --locked
 
       - name: Run Rust tests
         run: bash scripts/run-with-budget-warning.sh 120 "cargo test" cargo test --workspace --locked
