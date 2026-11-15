@@ -49,9 +49,9 @@ copies `target/wasm32-unknown-unknown/release/voice_simulator_wasm.wasm` to
 `src/engine/voice-simulator.wasm` and prints its size and SHA-256:
 
 ```text
-src/engine/voice-simulator.wasm: 33260 bytes
-SHA-256: 2a0f7a7bc2760b5e211f51901972698ea82e7c8b1790becb6a789f3bc1f54b8c
-WASM_SIZE_BUDGET: 49152 bytes
+src/engine/voice-simulator.wasm: 80451 bytes
+SHA-256: f393631dca612d1e9427f694c33458c539e72ee8ffc046f27ff182967458fa88
+WASM_SIZE_BUDGET: 81920 bytes
 ```
 
 (Rust 1.100.0 on x86_64 Linux. The build does not depend on the folder or
