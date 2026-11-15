@@ -1,0 +1,9 @@
+audio duration        3.98 s
+lf runs (ms)          683 619 620 561 565
+folds runs (ms)       682 558 523 601 534
+interaction runs (ms) 714 799 702 591 633
+median lf             619 ms
+median folds          558 ms
+median interaction    702 ms
+folds / lf            0.901
+interaction / lf      1.133
