@@ -154,6 +154,15 @@ export interface RenderOptions {
   solver?: SolverName | string;
   /** Voice source (default `'lf'`); unknown names throw `Unknown source`. */
   source?: SourceName;
+  /**
+   * Source-tract interaction (default DEFAULT_INTERACTION; folds only, CPU
+   * solvers): the folds feel the waves of the vocal tract and, with
+   * `subglottal` (default: as `interaction`), of the trachea. With `'lf'`
+   * it throws `Interaction needs source: 'folds'`.
+   */
+  interaction?: boolean;
+  /** Couple the subglottal tract (trachea and bronchi) under interaction. */
+  subglottal?: boolean;
   seed?: string | number;
   /** Output samples between two updates of the tract (default 32). */
   blockSize?: number;
@@ -192,6 +201,15 @@ export interface SynthesizeOptions {
   solver?: SolverName;
   /** Voice source (default `'lf'`): `'folds'` is the two-mass fold model. */
   source?: SourceName;
+  /**
+   * Source-tract interaction (default DEFAULT_INTERACTION; folds only, CPU
+   * solvers): the folds feel the waves of the vocal tract and, with
+   * `subglottal` (default: as `interaction`), of the trachea. With `'lf'`
+   * it throws `Interaction needs source: 'folds'`.
+   */
+  interaction?: boolean;
+  /** Couple the subglottal tract (trachea and bronchi) under interaction. */
+  subglottal?: boolean;
   sections?: number;
   dx?: number;
   sampleRate?: number;
@@ -435,7 +453,20 @@ export interface Solver {
   flushSteps?(options?: { field?: boolean }): Promise<Float64Array>;
   /** Optional pressure snapshot for visualisation. */
   field?(): object;
+  /**
+   * The tract as the glottis sees it (issue 34): the wave arriving there
+   * (pressure / rho c, a derivative as the source) and the area (cm²,
+   * Infinity for a field solver). The object is reused.
+   */
+  glottalLoad?(): GlottalLoad;
+  /** Reflection of the waves arriving at the glottis (1 under interaction). */
+  setGlottalReflection?(reflection: number): void;
   reset(): void;
+}
+/** Wave arriving at the glottis and the tube area there. */
+export interface GlottalLoad {
+  incident: number;
+  area: number;
 }
 export declare class VoiceRenderer {
   constructor(plan: Plan, options?: RenderOptions);
@@ -449,6 +480,10 @@ export declare class VoiceRenderer {
   readonly airflow: AirflowState | null;
   /** Amplitude of the frication noise of the last control block. */
   readonly fricationAmplitude: number;
+  /** Whether the folds and the tract interact (issue 34). */
+  readonly interaction: boolean;
+  /** The subglottal line under interaction, else null. */
+  readonly subglottal: Subglottal | null;
   render(target: Float32Array): number;
   /** render() for solvers that queue their steps (the GPU solver). */
   renderAsync(
@@ -852,6 +887,61 @@ export declare const TRANSIENT_GAIN: number;
 /** Peak frequency (Hz, 500 to 6000) of the noise of a jet. */
 export declare function strouhalFrequency(flow: number, area: number): number;
 export declare const DEFAULT_SOURCE: SourceName;
+/** Source-tract interaction of VoiceRenderer when none is asked for. */
+export declare const DEFAULT_INTERACTION: boolean;
+/** Pressure coefficient k_t of the glottis (Bernoulli plus exit loss). */
+export declare const GLOTTAL_PRESSURE_COEFFICIENT: number;
+/** Corner (Hz) of the leaky integrator of IncidentPressure. */
+export declare const PRESSURE_CORNER: number;
+/**
+ * Glottal flow (cm³/s) of the interactive source (Titze 2008) through an
+ * area `a` (cm²) between tubes of areas A_s and A_e (cm², Infinity for
+ * none) at the drive D = (P_L - P_o) / 2 + p_s - p_e (dyn/cm²).
+ */
+export declare function interactiveFlow(
+  a: number,
+  subglottalArea: number,
+  supraglottalArea: number,
+  drive: number
+): number;
+/** Leaky integrator from incident waves (derivatives) to pressure. */
+export declare class IncidentPressure {
+  constructor();
+  /** Pressure (dyn/cm²) after the step of a wave (pressure / rho c). */
+  step(wave: number, dt: number): number;
+  readonly pressure: number;
+  reset(): void;
+}
+/** Trachea length (cm) and area (cm²) at a 16.5 cm vocal tract. */
+export declare const TRACHEA_LENGTH: number;
+export declare const TRACHEA_AREA: number;
+/** Bronchi length (cm) and the area (cm²) they widen to. */
+export declare const BRONCHI_LENGTH: number;
+export declare const BRONCHI_AREA: number;
+/** Wall loss of the subglottal tract relative to the vocal tract. */
+export declare const SUBGLOTTAL_LOSS: number;
+/** The subglottal line runs this many times slower than the tract. */
+export declare const SUBGLOTTAL_DECIMATION: number;
+/** Lengths (cm) and the area (cm²) at a distance below the glottis. */
+export declare function subglottalShape(head?: HeadConfig): {
+  trachea: number;
+  bronchi: number;
+  length: number;
+  area(distance: number): number;
+};
+/** The trachea and bronchi as a Kelly-Lochbaum line (issue 34). */
+export declare class Subglottal {
+  constructor(head?: HeadConfig, dt?: number);
+  /** Set the step (s) of the tract solver. */
+  configure(dt: number): void;
+  /** Advance one tract step with the flow (derivative) entering it. */
+  step(flowIn: number): void;
+  /** Wave arriving at the glottis from below (pressure / rho c). */
+  readonly incident: number;
+  /** Area (cm²) at the glottis. */
+  readonly area: number;
+  reset(): void;
+}
 /** Controls of one VocalFolds step (pressure in Pa). */
 export interface FoldControl {
   voicing: number;
@@ -863,8 +953,18 @@ export interface FoldControl {
   foldTension: number;
   /** Relative turbulence strength at the glottis from the air flow. */
   aspirationStrength?: number;
-  /** Pressure in the mouth (dyn/cm²); not used yet. */
+  /** Mean pressure above the glottis (dyn/cm²), used with a load. */
   oralPressure?: number;
+}
+/** Pressure (dyn/cm²) and area (cm², Infinity for none) of a tube end. */
+export interface FoldLoadSide {
+  pressure: number;
+  area: number;
+}
+/** Waves arriving at the glottis from below and above (interaction). */
+export interface FoldLoad {
+  below: FoldLoadSide;
+  above: FoldLoadSide;
 }
 /**
  * Two-mass model of the vocal folds (Steinecke and Herzel 1995) driven by
@@ -881,7 +981,17 @@ export declare class VocalFolds {
     /** Inner step rate (Hz, default FOLD_RATE). */
     rate?: number;
   });
-  step(dt: number, control: FoldControl, noise: number): number;
+  /**
+   * Advance by dt (s); with a `load` the flow solves the interaction
+   * equation of Titze (2008) (interactiveFlow) and the forces use the
+   * pressures below and above the glottis.
+   */
+  step(
+    dt: number,
+    control: FoldControl,
+    noise: number,
+    load?: FoldLoad
+  ): number;
   reset(): void;
   /** Glottal flow after the last step (cm³/s). */
   readonly flow: number;

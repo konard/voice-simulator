@@ -4,7 +4,7 @@
 // Usage: node experiments/issue-34-subglottal-probe.mjs [loss] [dt]
 import { SUBGLOTTAL_LOSS, Subglottal } from '../src/acoustics/subglottal.js';
 import { DEFAULT_HEAD } from '../src/head-config.js';
-import { resonances } from './issue-34-resonances.mjs';
+import { impulseSpectrum, resonances } from '../src/acoustics/analysis.js';
 
 const loss = Number(process.argv[2] ?? SUBGLOTTAL_LOSS);
 const dt = Number(process.argv[3] ?? 16.5 / (44 * 35000));
@@ -16,6 +16,7 @@ for (let index = 0; index < response.length; index++) {
   response[index] = line.incident;
 }
 console.log(`SUBGLOTTAL_LOSS ${loss}, dt ${dt.toExponential(4)} s, ${line.n} sections`);
-for (const { frequency, bandwidth } of resonances(response, 1 / dt, 3)) {
+const spectrum = impulseSpectrum(response, 1 / dt, { from: 100, to: 4000, step: 5 });
+for (const { frequency, bandwidth } of resonances(spectrum, { count: 3 })) {
   console.log(`  ${frequency.toFixed(0)} Hz, bandwidth ${bandwidth.toFixed(0)} Hz`);
 }
