@@ -72,17 +72,29 @@ const S_CLUSTER = (onset) =>
 const ENGLISH_BANNED = /^(?:ŋ|[td]l|sɹ|.*ŋ)/u;
 
 /** Whether `onset` (a list of consonant tokens) can start a syllable. */
-const ONSETS = {
-  en: (onset) =>
-    !ENGLISH_BANNED.test(onset.map((token) => token.base).join('')) &&
-    (rising(onset, { plateau: false }) || S_CLUSTER(onset)),
-  ru: (onset) => rising(onset, { plateau: true }),
-  hi: (onset) =>
-    onset.length === 1 || (onset.length === 2 && GLIDES.has(onset[1].base)),
-  zh: (onset) =>
-    onset.length === 1 || (onset.length === 2 && GLIDES.has(onset[1].base)),
-  default: (onset) => rising(onset, { plateau: false }) || S_CLUSTER(onset),
-};
+const DEFAULT_ONSET = (onset) =>
+  rising(onset, { plateau: false }) || S_CLUSTER(onset);
+
+const GLIDE_ONSET = (onset) =>
+  onset.length === 1 || (onset.length === 2 && GLIDES.has(onset[1].base));
+
+/**
+ * Onset rules per language. A Map, not an object literal: the key comes from
+ * the caller (a worker message in the example app), and a property lookup
+ * would also return inherited `Object.prototype` members and call them
+ * (CodeQL js/unvalidated-dynamic-method-call, issue 115).
+ */
+const ONSETS = new Map([
+  [
+    'en',
+    (onset) =>
+      !ENGLISH_BANNED.test(onset.map((token) => token.base).join('')) &&
+      DEFAULT_ONSET(onset),
+  ],
+  ['ru', (onset) => rising(onset, { plateau: true })],
+  ['hi', GLIDE_ONSET],
+  ['zh', GLIDE_ONSET],
+]);
 
 /** Whether the vowel at `index` joins the nucleus before it. */
 function joinsNucleus(tokens, index, tonal) {
@@ -136,7 +148,7 @@ function onsetStart(tokens, from, to, allowed) {
 export function syllabifyTokens(tokens, options = {}) {
   const tonal = tokens.some((token) => token.tone);
   const allowed =
-    ONSETS[String(options.language ?? '').slice(0, 2)] ?? ONSETS.default;
+    ONSETS.get(String(options.language ?? '').slice(0, 2)) ?? DEFAULT_ONSET;
   const ranges = nuclei(tokens, tonal);
   if (ranges.length < 2) {
     return tokens.length ? [tokens] : [];
