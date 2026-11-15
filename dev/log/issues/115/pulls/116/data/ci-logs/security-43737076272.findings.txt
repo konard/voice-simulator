@@ -1,0 +1,6 @@
+Dependency graph enabled	Require Dependency graph	##[error]Dependency graph is disabled for konard/voice-simulator, so pull requests skip dependency review. A maintainer must act: Enable it at https://github.com/konard/voice-simulator/settings/security_analysis (Settings -> Advanced Security -> Dependency graph -> Enable), then re-run this workflow.
+Dependency graph enabled	Require Dependency graph	##[error]Process completed with exit code 1.
+CodeQL (javascript-typescript)	Analyze	[2026-11-15 16:44:06] [build-stdout] Extracting /home/runner/work/voice-simulator/voice-simulator/tests/deprecated-packages.test.js
+CodeQL (javascript-typescript)	Analyze	[2026-11-15 16:44:06] [build-stdout] Done extracting /home/runner/work/voice-simulator/voice-simulator/tests/deprecated-packages.test.js (5 ms)
+Pipeline Status	Fail the run when a required job was cancelled or failed	##[error]Failing jobs: dependency-graph
+Pipeline Status	Fail the run when a required job was cancelled or failed	##[error]Process completed with exit code 1.
