@@ -293,6 +293,11 @@ export declare function tractShape(
   glottis: Record<string, number>;
   /** Incisors; null with `teeth: false`. */
   teeth: Teeth | null;
+  /**
+   * Lateral channel (0..1): the tongue blocks the middle of the tract at
+   * the constriction and the air passes beside it (2D solver only).
+   */
+  lateral: number;
 };
 export declare function noseShape(
   head: HeadConfig,

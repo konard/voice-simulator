@@ -314,5 +314,11 @@ export function tractShape(state, head, options = {}) {
     lipOpening: areas.at(-1),
     jaw: openness,
     teeth,
+    /**
+     * Lateral channel (0..1): at 1 the tongue blocks the middle of the
+     * tract at the constriction and the air passes beside it ([l]); only
+     * the 2D sheet (sheet-model.js) has a width to show that.
+     */
+    lateral: Math.max(0, Math.min(1, full.lateral ?? 0)),
   };
 }

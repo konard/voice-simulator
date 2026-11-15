@@ -170,3 +170,36 @@ export function sinusTubes(tract, head, dx, options = {}) {
   }
   return tubes;
 }
+
+/**
+ * The pouches as 1D blind side branches of a tract of the head's rest
+ * length, for the 1D-style solvers (the 2D sheet, fdtd2d.js): the two
+ * piriform fossae as one branch with their combined opening, as in the
+ * waveguide (piriformBranch), and the vallecula. `entry` is the height of
+ * the opening above the glottis along the tract and `depth` the length of
+ * the pouch (cm), `area` its cross-section (cm²).
+ * @param {Record<string, number>} head Normalised head configuration.
+ * @param {{piriform?: boolean, vallecula?: boolean}} [options]
+ * @returns {{name: string, entry: number, depth: number, area: number}[]}
+ */
+export function sideBranches(head, options = {}) {
+  const scale = head.vocalTractLength / REST_LENGTH;
+  const branches = [];
+  if (options.piriform !== false) {
+    branches.push({
+      name: 'piriform',
+      entry: PIRIFORM_HEIGHT * scale,
+      depth: PIRIFORM_LENGTH * scale,
+      area: PIRIFORM_AREA * head.pharynxWidth,
+    });
+  }
+  if (options.vallecula !== false) {
+    branches.push({
+      name: 'vallecula',
+      entry: VALLECULA_HEIGHT * scale,
+      depth: VALLECULA_DEPTH * scale,
+      area: VALLECULA_AREA * head.pharynxWidth,
+    });
+  }
+  return branches;
+}
