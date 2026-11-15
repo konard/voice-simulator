@@ -1,0 +1,44 @@
+# Branch (after the merges of main a2f0ad7 and 0575e6e, which gave the same hashes, and the rational lag), first 16 hex
+# digits of SHA-256: node|bun|deno run -A experiments/issue-35-runtime-hashes.mjs
+## node
+minimal c968718f39c4af8d Hi.
+minimal 85246d7f72ff33a3 She sells sea shells, the fox thinks.
+low     ef2a79e3647786b4 Peter took a cup of hot coffee.
+medium  bbd46df3d5a4f7a4 ˈasa ˈaʃa ˈafa ˈaθa ˈaxa ˈpʰa ˈtʰa ˈkʰa ˈba
+minimal 5003cd53ea3cf74c ˈasa ˈaha ˈpʰa (folds)
+## bun
+minimal c968718f39c4af8d Hi.
+minimal 5bebab374fee4621 She sells sea shells, the fox thinks.
+low     1c0eda7a02a05974 Peter took a cup of hot coffee.
+medium  bbd46df3d5a4f7a4 ˈasa ˈaʃa ˈafa ˈaθa ˈaxa ˈpʰa ˈtʰa ˈkʰa ˈba
+minimal 5003cd53ea3cf74c ˈasa ˈaha ˈpʰa (folds)
+## deno
+minimal c968718f39c4af8d Hi.
+minimal 85246d7f72ff33a3 She sells sea shells, the fox thinks.
+low     d87c0dc8d277d851 Peter took a cup of hot coffee.
+medium  bbd46df3d5a4f7a4 ˈasa ˈaʃa ˈafa ˈaθa ˈaxa ˈpʰa ˈtʰa ˈkʰa ˈba
+minimal a237b765df8dd890 ˈasa ˈaha ˈpʰa (folds)
+
+# main a2f0ad7 (issues 27 and 33, before issue 35), same script
+## node
+minimal b3a8dab2cb18d76b Hi.
+minimal 21df26861ea4f078 She sells sea shells, the fox thinks.
+low     411f106d350a0b8c Peter took a cup of hot coffee.
+medium  c9f4fb889b956e51 ˈasa ˈaʃa ˈafa ˈaθa ˈaxa ˈpʰa ˈtʰa ˈkʰa ˈba
+minimal f8535169058285ea ˈasa ˈaha ˈpʰa (folds)
+## bun
+minimal b3a8dab2cb18d76b Hi.
+minimal e31ba55522309e39 She sells sea shells, the fox thinks.
+low     ce63f95d00143650 Peter took a cup of hot coffee.
+medium  c9f4fb889b956e51 ˈasa ˈaʃa ˈafa ˈaθa ˈaxa ˈpʰa ˈtʰa ˈkʰa ˈba
+minimal f8535169058285ea ˈasa ˈaha ˈpʰa (folds)
+## deno
+minimal b3a8dab2cb18d76b Hi.
+minimal 21df26861ea4f078 She sells sea shells, the fox thinks.
+low     e388f21fb042caf9 Peter took a cup of hot coffee.
+medium  c9f4fb889b956e51 ˈasa ˈaʃa ˈafa ˈaθa ˈaxa ˈpʰa ˈtʰa ˈkʰa ˈba
+minimal 5c34f0399d4e7d94 ˈasa ˈaha ˈpʰa (folds)
+
+# Node.js 26, Bun 1.4.4 and Deno 2.9.7 already differ on main for the longer
+# phrases (Math.exp, sin and log differ in the last bit between JavaScriptCore
+# and the V8 versions); the issue 35 code itself gives the same bits everywhere.

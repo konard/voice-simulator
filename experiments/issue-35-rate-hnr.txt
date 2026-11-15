@@ -1,0 +1,13 @@
+head     speechRate  hnr dB  h1h2 dB  per log rate: hnr  h1h2
+default         0.6   24.44     4.24                         
+default         0.8   22.70     4.19               -6.1  -0.2
+default           1   20.62     4.25               -9.3   0.3
+default        1.25   18.82     4.31               -8.1   0.3
+male            0.6   23.98     2.44                         
+male            0.8   22.55     2.40               -4.9  -0.1
+male              1   20.66     2.45               -8.5   0.2
+male           1.25   18.76     2.37               -8.5  -0.4
+female          0.6   24.41     3.85                         
+female          0.8   23.28     3.76               -3.9  -0.3
+female            1   22.24     3.98               -4.7   1.0
+female         1.25   21.53     4.06               -3.2   0.3

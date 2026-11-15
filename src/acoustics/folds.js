@@ -43,6 +43,7 @@
 
 import { AIR_DENSITY } from './transfer.js';
 import { BREATH_EXPONENT, BREATH_GAIN } from './glottis.js';
+import { lagFactor, openTractStrength } from './aerodynamics.js';
 
 /** Masses of the lower and the upper part of a fold (g). */
 export const FOLD_MASS_1 = 0.125;
@@ -94,6 +95,18 @@ export const ADDUCTION_TABLE = Object.freeze([
   Object.freeze([0.5, 0.05]),
   Object.freeze([1, -0.02]),
 ]);
+
+/**
+ * Time constant (s) of each of the MEAN_AREA_STAGES one-pole stages of the
+ * mean glottal area that the air flow of VoiceRenderer uses (issue 35).
+ * The mean must not follow the cycles of the folds: their ripple becomes a
+ * flow derivative, and the burst transient injects it at the constriction.
+ * One stage of 10 ms left a ripple that took 1.8 dB off the vowels of the
+ * fold source; three of 5 ms (together 15 ms, shorter than a phone) leave
+ * 0.1 dB (experiments/issue-35-folds-airflow.mjs).
+ */
+export const MEAN_AREA_TIME = 0.005;
+export const MEAN_AREA_STAGES = 3;
 
 const PASCAL = 10; // dyn/cm² per Pa
 const REFERENCE_PRESSURE = 800 * PASCAL;
@@ -149,6 +162,8 @@ export class VocalFolds {
     this.v1 = 0;
     this.v2 = 0;
     this.area = 0;
+    this.meanArea = 0;
+    this.meanStages = new Float64Array(MEAN_AREA_STAGES);
     this.u = 0;
     this.pressure = 0;
     this.started = false;
@@ -182,9 +197,32 @@ export class VocalFolds {
   }
 
   /**
+   * Low-pass the open area through MEAN_AREA_STAGES one-pole stages; the
+   * first step after a reset starts them at the rest area.
+   */
+  #updateMeanArea(open, rest) {
+    if (!this.started) {
+      this.meanArea = rest;
+      this.meanStages.fill(rest);
+      return;
+    }
+    let input = open;
+    for (let index = 0; index < MEAN_AREA_STAGES; index++) {
+      const stage = this.meanStages[index];
+      input = stage + this.meanFollow * (input - stage);
+      this.meanStages[index] = input;
+    }
+    this.meanArea = input;
+  }
+
+  /**
    * Advance by dt seconds and return the flow derivative sample.
    * @param {number} dt
-   * @param {{voicing: number, aspiration: number, closure: number, loudness: number, lungPressure: number, adduction: number, foldTension: number}} control
+   * @param {{voicing: number, aspiration: number, closure: number, loudness: number, lungPressure: number, adduction: number, foldTension: number, aspirationStrength?: number, oralPressure?: number}} control
+   *   `aspirationStrength` is the relative turbulence strength at the
+   *   glottis from the air flow (VoiceRenderer); without it the folds
+   *   assume an open tract at the lung pressure and their mean area.
+   *   `oralPressure` (dyn/cm²) is not used yet (#34).
    * @param {number} noise White noise sample in [-1, 1].
    */
   step(dt, control, noise) {
@@ -198,6 +236,7 @@ export class VocalFolds {
       this.dt = dt;
       this.steps = Math.max(1, Math.ceil(dt * this.rate));
       this.follow = 1 - Math.exp(-dt / FOLD_CONTROL_TIME);
+      this.meanFollow = lagFactor(dt / MEAN_AREA_TIME);
     }
     const target = Math.max(0, control.lungPressure) * PASCAL * (1 - closure);
     if (this.started) {
@@ -244,23 +283,29 @@ export class VocalFolds {
     const flow = area * Math.sqrt((2 * pressure) / AIR_DENSITY);
     // The first step after a reset sets the flow without a jump to it.
     const previous = this.started ? this.u : flow;
+    this.#updateMeanArea(
+      area * (1 - closure),
+      Math.max(0, a02) * (1 - closure)
+    );
     this.started = true;
     const derivative = ((flow - previous) / dt) * FOLDS_FLOW_SCALE;
     this.area = area;
     this.u = flow;
 
     const voicing = Math.max(0, control.voicing) * (1 - closure);
-    const loudness = Math.max(0, control.loudness);
     const relative = pressure / REFERENCE_PRESSURE;
     this.intensity = voicing * relative * Math.sqrt(relative);
-    // Breath noise as in Glottis, strongest while the glottis is open.
+    // Breath noise as in Glottis, strongest while the glottis is open and
+    // scaled by the turbulence source strength at the glottis.
     const modulation = Math.min(1, area / NOISE_AREA);
     this.noiseModulation = modulation;
+    const strength =
+      control.aspirationStrength ?? openTractStrength(pressure, this.meanArea);
     const breath =
       (control.aspiration + this.breathGain * voicing) * (1 - closure);
     return (
       derivative +
-      noise * breath * modulation * loudness * 0.45 * this.aspirationLevel
+      noise * breath * modulation * strength * 0.45 * this.aspirationLevel
     );
   }
 }

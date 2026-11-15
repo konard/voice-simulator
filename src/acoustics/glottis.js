@@ -15,6 +15,16 @@
 
 import { randomNormal, createRandom } from '../random.js';
 import { SPEED_OF_SOUND } from './transfer.js';
+import { glottalArea, openTractStrength } from './aerodynamics.js';
+
+/**
+ * Breath noise per 10 mm² of glottal chink (issue 35): the air leaking
+ * through a gap that stays open through the cycle is turbulent too.
+ */
+export const CHINK_NOISE = 0.5;
+
+/** Lung pressure (Pa) of a source that is given none (head default). */
+const DEFAULT_LUNG_PRESSURE = 800;
 
 /** Reflection of the tract at a closed glottis (no chink). */
 export const GLOTTAL_REFLECTION = 0.75;
@@ -54,19 +64,21 @@ export const BREATHINESS_REFERENCE = 0.2;
 
 /**
  * Gain and exponent of the breath noise against breathiness:
- * `BREATH_GAIN * breathiness ** BREATH_EXPONENT`. The default breathiness
- * 0.2 keeps the noise about 40 dB below the pulses at the source, and
- * breathiness 1 brings it to about 10 dB below them, the level of a
- * clearly breathy voice (Klatt and Klatt 1990: 10 to 20 dB below the
+ * `BREATH_GAIN * breathiness ** BREATH_EXPONENT`, then scaled by the
+ * turbulence source strength at the glottis (src/acoustics/aerodynamics.js),
+ * which grows with the glottal area that breathiness opens. The default
+ * breathiness 0.2 keeps the noise about 40 dB below the pulses at the
+ * source, and breathiness 1 brings it to about 10 dB below them, the level
+ * of a clearly breathy voice (Klatt and Klatt 1990: 10 to 20 dB below the
  * voiced part). The pulse grows by about 3 dB from breathiness 0.2 to 1
- * (its longer open phase), so the noise gain rises by 33 dB to give 30 dB
- * more noise against the pulses. Measured with part 1 of
+ * (its longer open phase) and the source strength by 3.3 dB (glottal area
+ * 0.07 to 0.15 cm²), so the gain rises by 30 dB to give 30 dB more noise
+ * against the pulses. Measured with part 1 of
  * experiments/issue-11-audit-m2.mjs (tuning in
- * experiments/issue-32-breath-tuning.mjs): -40.2, -22.8 and -10.1 dB at
- * breathiness 0.2, 0.5 and 1.
+ * experiments/issue-35-breath-tuning.mjs).
  */
-export const BREATH_GAIN = 3;
-export const BREATH_EXPONENT = 2.35;
+export const BREATH_GAIN = 3.87;
+export const BREATH_EXPONENT = 2.114;
 
 /**
  * LF pulse parameters for a tenseness value (0 = breathy/lax, 1 = pressed)
@@ -121,9 +133,10 @@ export function lfWaveform(p, t) {
 
 export class Glottis {
   /**
-   * @param {{seed?: string|number, tenseness?: number, breathiness?: number, jitter?: number, shimmer?: number, aspirationLevel?: number, chink?: number}} [options]
+   * @param {{seed?: string|number, tenseness?: number, breathiness?: number, jitter?: number, shimmer?: number, aspirationLevel?: number, chink?: number, lungPressure?: number}} [options]
    *   `jitter` and `shimmer` are standard deviations in percent, `chink`
-   *   the area of the glottal chink in mm².
+   *   the area of the glottal chink in mm², `lungPressure` (Pa) the
+   *   pressure used when the control gives none.
    */
   constructor(options = {}) {
     this.random = createRandom(`${options.seed ?? 1}:glottis`);
@@ -132,7 +145,11 @@ export class Glottis {
     this.jitterDepth = 0.01 * (options.jitter ?? 0.4);
     this.shimmerDepth = 0.01 * (options.shimmer ?? 3);
     this.aspirationLevel = options.aspirationLevel ?? 1;
-    this.chinkTime = chinkTimeConstant(options.chink ?? 0);
+    this.chink = Math.max(0, options.chink ?? 0);
+    this.chinkTime = chinkTimeConstant(this.chink);
+    this.lungPressure = options.lungPressure ?? DEFAULT_LUNG_PRESSURE;
+    this.strengthKey = [NaN, NaN];
+    this.strength = 0;
     this.smoothed = 0;
     this.phase = 0;
     this.period = 1 / 120;
@@ -152,9 +169,33 @@ export class Glottis {
   }
 
   /**
+   * Relative turbulence strength at the glottis under an open tract, for a
+   * control without `aspirationStrength` (cached: the inputs change at the
+   * control rate).
+   */
+  #openTractStrength(control) {
+    const lung =
+      10 *
+      (control.lungPressure ??
+        this.lungPressure * Math.max(0, control.loudness) ** (2 / 3));
+    const area = glottalArea(control, this.breathiness, this.chink);
+    if (lung !== this.strengthKey[0] || area !== this.strengthKey[1]) {
+      this.strengthKey[0] = lung;
+      this.strengthKey[1] = area;
+      this.strength = openTractStrength(lung, area);
+    }
+    return this.strength;
+  }
+
+  /**
    * Advance by dt seconds and return the flow derivative sample.
    * @param {number} dt
-   * @param {{f0: number, voicing: number, aspiration: number, closure: number, loudness: number}} control
+   * @param {{f0: number, voicing: number, aspiration: number, closure: number, loudness: number, lungPressure?: number, aspirationStrength?: number, oralPressure?: number}} control
+   *   `aspirationStrength` is the relative turbulence strength at the
+   *   glottis from the air flow (VoiceRenderer); without it the glottis
+   *   assumes an open tract at `lungPressure` (Pa, default the head value
+   *   times loudness^(2/3)). `oralPressure` (dyn/cm²) is the pressure in
+   *   the mouth; the LF source does not use it.
    * @param {number} noise White noise sample in [-1, 1].
    */
   step(dt, control, noise) {
@@ -183,13 +224,16 @@ export class Glottis {
     const modulation =
       voicing > 0.1 ? 0.3 + 0.7 * opening * Math.min(1, voicing) : 1;
     this.noiseModulation = modulation;
+    // The lung pressure carries the loudness: the strength grows as the
+    // pressure drop to the power 1.5, and the pressure as loudness^(2/3).
+    const strength =
+      control.aspirationStrength ?? this.#openTractStrength(control);
     const breath =
-      (control.aspiration +
+      ((control.aspiration +
         BREATH_GAIN * this.breathiness ** BREATH_EXPONENT * voicing) *
-      (1 - control.closure);
-    return (
-      voiced +
-      noise * breath * modulation * loudness * 0.45 * this.aspirationLevel
-    );
+        (1 - control.closure) +
+        (CHINK_NOISE * this.chink) / 10) *
+      strength;
+    return voiced + noise * breath * modulation * 0.45 * this.aspirationLevel;
   }
 }

@@ -288,7 +288,7 @@ export const HEAD_PARAMETERS = Object.freeze([
     step: 10,
     default: 800,
     description:
-      'Subglottal pressure of normal loudness that drives the vocal folds (fold source only).',
+      'Subglottal pressure of normal loudness: drives the air flow, the noise at constrictions and at the glottis and, with the fold source, the vocal folds.',
   },
   {
     key: 'foldLength',

@@ -1,0 +1,6 @@
+# node experiments/issue-35-acoustic-tests.mjs
+[s] above [f], dB (> 6): 26.99
+[s] above [z] above 4 kHz, dB (3 to 12): 9.62
+[s] at 1600 Pa above 800 Pa, dB (7 to 11): 10.28
+HNR of [aː], glottalChink 0: 26.57 dB, 10: 8.94 dB
+drop, dB (> 3): 17.63

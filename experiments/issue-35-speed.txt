@@ -1,0 +1,16 @@
+# node experiments/issue-35-speed.mjs <root>, alternating main (/tmp/base-vs, e113bd5) and this branch, 7 pairs; host load about 6.9 on 6 cores
+/tmp/base-vs: 4.52 s of audio, median 649 ms (rtf 0.143)
+/tmp/gh-issue-solver-1794746169098: 4.52 s of audio, median 607 ms (rtf 0.134)
+/tmp/base-vs: 4.52 s of audio, median 558 ms (rtf 0.124)
+/tmp/gh-issue-solver-1794746169098: 4.52 s of audio, median 598 ms (rtf 0.132)
+/tmp/base-vs: 4.52 s of audio, median 621 ms (rtf 0.137)
+/tmp/gh-issue-solver-1794746169098: 4.52 s of audio, median 615 ms (rtf 0.136)
+/tmp/base-vs: 4.52 s of audio, median 641 ms (rtf 0.142)
+/tmp/gh-issue-solver-1794746169098: 4.52 s of audio, median 662 ms (rtf 0.146)
+/tmp/base-vs: 4.52 s of audio, median 588 ms (rtf 0.130)
+/tmp/gh-issue-solver-1794746169098: 4.52 s of audio, median 570 ms (rtf 0.126)
+/tmp/base-vs: 4.52 s of audio, median 671 ms (rtf 0.148)
+/tmp/gh-issue-solver-1794746169098: 4.52 s of audio, median 630 ms (rtf 0.139)
+/tmp/base-vs: 4.52 s of audio, median 566 ms (rtf 0.125)
+/tmp/gh-issue-solver-1794746169098: 4.52 s of audio, median 598 ms (rtf 0.132)
+# median of the 7 medians: main 621 ms, branch 607 ms (means 613 and 611 ms): no slowdown beyond the noise

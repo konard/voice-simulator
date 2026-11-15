@@ -82,6 +82,12 @@ const CONTROLS = [
     key: 'breathiness',
     feature: 'hnr',
     slope: -18,
+    // Faster speech reads a noisier voice: HNR falls by 4 to 9 dB per unit
+    // of log speech rate at a fixed breathiness, and H1-H2 does not change
+    // (experiments/issue-35-rate-hnr.txt). The step subtracts the change
+    // that the speech-rate step brings, so that a first render at a wrong
+    // rate is not read as a wrong breathiness.
+    rateSlope: -7,
     maxStep: 0.25,
     scale: 3,
   },
@@ -235,24 +241,34 @@ function clamp(value, min, max) {
  */
 function updateHead(head, target, history, controls) {
   const next = { ...head };
-  for (const control of controls) {
+  // The speech rate goes first: a control with a rateSlope corrects its
+  // step for the change of the rate.
+  const ordered = [...controls].sort(
+    (a, b) => (b.key === 'speechRate') - (a.key === 'speechRate')
+  );
+  for (const control of ordered) {
     const wanted = featureY(control, target);
     const points = history.get(control.key);
     const last = points.at(-1);
     if (wanted === null || last.y === null) {
       continue;
     }
+    // Change of the feature that comes from the speech rate alone.
+    const rateEffect = (from, to) =>
+      (control.rateSlope ?? 0) * Math.log(to.speechRate / from.speechRate);
     let slope = control.slope;
     const previous = points.at(-2);
     if (previous && previous.y !== null && previous.x !== last.x) {
-      const measured = (last.y - previous.y) / (last.x - previous.x);
+      const measured =
+        (last.y - previous.y - rateEffect(previous, last)) /
+        (last.x - previous.x);
       const ratio = measured / control.slope;
       if (ratio > 0.25 && ratio < 4) {
         slope = measured;
       }
     }
     const step = clamp(
-      (wanted - last.y) / slope,
+      (wanted - last.y - rateEffect(last, next)) / slope,
       -control.maxStep,
       control.maxStep
     );
@@ -309,6 +325,7 @@ export function* matchVoiceSteps(samples, sampleRate, options = {}) {
       history.get(control.key).push({
         x: (control.toX ?? identity)(head[control.key], head),
         y: featureY(control, rendered),
+        speechRate: head.speechRate,
       });
     }
     yield { step, total, head, distance };

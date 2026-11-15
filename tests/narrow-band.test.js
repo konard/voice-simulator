@@ -152,6 +152,8 @@ describe('narrow-band tiers', () => {
     expect(Math.abs(length - 1) <= 0.06).toBe(true);
   });
 
+  // The hash of the flow-driven noise of issue 35; a change of the physics
+  // updates it, a narrow-band change must not.
   itUnless(appleLibm)('present tiers are unchanged', () => {
     const { samples } = synthesize('Hi.', { tier: 'minimal', seed: 1 });
     const bytes = new Uint8Array(
@@ -160,7 +162,7 @@ describe('narrow-band tiers', () => {
       samples.byteLength
     );
     expect(createHash('sha256').update(bytes).digest('hex')).toBe(
-      '3647d2eb0df7cd5dd0e4bd20c6262b7599b271ff5086a04529a233a1d6080900'
+      '8b8a21be8b404e4c058251d4b307effcb7d5cb5fa8fb425bdabca13a6069e3ca'
     );
   });
 });

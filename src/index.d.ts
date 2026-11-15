@@ -344,9 +344,23 @@ export interface Solver {
     velumIndex?: number
   ): void;
   setNose(areas: ArrayLike<number>): void;
-  step(glottalFlow: number, noisePosition: number, noise: number): number;
+  /**
+   * `noise` is the turbulence pressure (a dipole source) and `flow` the
+   * burst transient of a stop (a flow source) at `noisePosition`.
+   */
+  step(
+    glottalFlow: number,
+    noisePosition: number,
+    noise: number,
+    flow?: number
+  ): number;
   /** Queue a step; its output comes with the next flushSteps. */
-  queueStep?(glottalFlow: number, noisePosition: number, noise: number): void;
+  queueStep?(
+    glottalFlow: number,
+    noisePosition: number,
+    noise: number,
+    flow?: number
+  ): void;
   flushSteps?(options?: { field?: boolean }): Promise<Float64Array>;
   /** Optional pressure snapshot for visualisation. */
   field?(): object;
@@ -360,6 +374,10 @@ export declare class VoiceRenderer {
   readonly done: boolean;
   readonly totalSamples: number;
   position: number;
+  /** Air flow of the last control block (null before the first). */
+  readonly airflow: AirflowState | null;
+  /** Amplitude of the frication noise of the last control block. */
+  readonly fricationAmplitude: number;
   render(target: Float32Array): number;
   /** render() for solvers that queue their steps (the GPU solver). */
   renderAsync(
@@ -427,7 +445,12 @@ export declare class Waveguide implements Solver {
     velumIndex?: number
   ): void;
   setNose(areas: ArrayLike<number>): void;
-  step(glottalFlow: number, noisePosition: number, noise: number): number;
+  step(
+    glottalFlow: number,
+    noisePosition: number,
+    noise: number,
+    flow?: number
+  ): number;
   /** Pressure per tract and nose section, for visualisation. */
   field(): { pressure: Float64Array; nose: Float64Array };
   reset(): void;
@@ -490,8 +513,19 @@ export declare class Fdtd2d implements Solver {
   /** Set the cell depths directly (cm, index column * rows + row). */
   setDepths(depths: ArrayLike<number>): void;
   setNose(areas: ArrayLike<number>): void;
-  step(glottalFlow: number, noisePosition: number, noise: number): number;
-  queueStep(glottalFlow: number, noisePosition: number, noise: number): void;
+  /** `flow`, the burst transient, enters the noise plane without its DC. */
+  step(
+    glottalFlow: number,
+    noisePosition: number,
+    noise: number,
+    flow?: number
+  ): number;
+  queueStep(
+    glottalFlow: number,
+    noisePosition: number,
+    noise: number,
+    flow?: number
+  ): void;
   flushSteps(): Promise<Float64Array>;
   /** Pressure per column, per nose section and per cell. */
   field(): { pressure: Float64Array; nose: Float64Array; cells: Float64Array };
@@ -531,8 +565,18 @@ export declare class Fdtd3d implements Solver {
     teeth?: { gap: number } | null
   ): void;
   setNose(areas: ArrayLike<number>): void;
-  step(glottalFlow: number, noisePosition: number, noise: number): number;
-  queueStep(glottalFlow: number, noisePosition: number, noise: number): void;
+  step(
+    glottalFlow: number,
+    noisePosition: number,
+    noise: number,
+    flow?: number
+  ): number;
+  queueStep(
+    glottalFlow: number,
+    noisePosition: number,
+    noise: number,
+    flow?: number
+  ): void;
   /** With `field` on the GPU, field() holds the RMS over these steps. */
   flushSteps(options?: { field?: boolean }): Promise<Float64Array>;
   /** Pressure field for visualisation. */
@@ -555,10 +599,125 @@ export declare function buildVoxelModel(
     vallecula?: boolean;
   }
 ): object;
-export declare class Glottis {
-  constructor(options?: { seed?: string | number; head?: HeadConfig });
-  step(dt: number, control: Record<string, number>, noise: number): number;
+/** Options of the LF glottal source. */
+export interface GlottisOptions {
+  seed?: string | number;
+  tenseness?: number;
+  breathiness?: number;
+  /** Standard deviation of the period (%). */
+  jitter?: number;
+  /** Standard deviation of the amplitude (%). */
+  shimmer?: number;
+  aspirationLevel?: number;
+  /** Area of the glottal chink (mm²). */
+  chink?: number;
+  /** Lung pressure (Pa) used when the control gives none (default 800). */
+  lungPressure?: number;
 }
+/** Control channels of one Glottis.step. */
+export interface GlottisControl {
+  f0: number;
+  voicing: number;
+  aspiration: number;
+  closure: number;
+  loudness: number;
+  /** Lung pressure (Pa); default the option times loudness^(2/3). */
+  lungPressure?: number;
+  /**
+   * Relative turbulence strength at the glottis from the air flow; without
+   * it the glottis assumes an open tract at `lungPressure`.
+   */
+  aspirationStrength?: number;
+  /** Pressure in the mouth (dyn/cm²); the LF source does not use it. */
+  oralPressure?: number;
+}
+/** Breath noise per 10 mm² of glottal chink. */
+export declare const CHINK_NOISE: number;
+/** Breath noise: BREATH_GAIN * breathiness ** BREATH_EXPONENT. */
+export declare const BREATH_GAIN: number;
+export declare const BREATH_EXPONENT: number;
+export declare class Glottis {
+  constructor(options?: GlottisOptions);
+  step(dt: number, control: GlottisControl, noise: number): number;
+}
+/** One step of Aerodynamics (cgs: cm², cm³/s, dyn/cm²). */
+export interface AirflowState {
+  flow: number;
+  /** cm³/s² */
+  flowDerivative: number;
+  /** Pressure in the mouth. */
+  oralPressure: number;
+  glottalDrop: number;
+  constrictionDrop: number;
+}
+/**
+ * Air flow through the glottis and the narrowest place of the mouth in
+ * series; the mouth pressure follows its steady state with the lag of the
+ * oral compliance.
+ */
+export declare class Aerodynamics {
+  constructor(options?: { compliance?: number });
+  compliance: number;
+  oralPressure: number;
+  flow: number;
+  reset(): void;
+  step(
+    dt: number,
+    lungPressure: number,
+    glottalArea: number,
+    constrictionArea: number
+  ): AirflowState;
+}
+/** cm⁵/dyn */
+export declare const ORAL_COMPLIANCE: number;
+/** cm²/s */
+export declare const VISCOSITY: number;
+export declare const RE_CRITICAL: number;
+/** Glottal areas (cm²) of modal voicing, an open glottis, a breathy voice. */
+export declare const GLOTTIS_VOICED: number;
+export declare const GLOTTIS_OPEN: number;
+export declare const GLOTTIS_BREATHY: number;
+export declare const REFERENCE_LUNG_PRESSURE: number;
+export declare const REFERENCE_GLOTTIS: number;
+export declare const REFERENCE_CONSTRICTION: number;
+/** Units of the relative frication and aspiration strengths. */
+export declare const FRICATION_REFERENCE: number;
+export declare const ASPIRATION_REFERENCE: number;
+export declare function reynolds(flow: number, area: number): number;
+/** dp^1.5 A^0.5, gated by the Reynolds number. */
+export declare function sourceStrength(
+  dp: number,
+  area: number,
+  flow: number
+): number;
+export declare function steadyFlow(
+  lungPressure: number,
+  glottalArea: number,
+  constrictionArea: number
+): { oralPressure: number; flow: number };
+export declare function openTractStrength(
+  lungPressure: number,
+  glottalArea: number
+): number;
+export declare function glottalArea(
+  control: { voicing: number; aspiration: number; closure?: number },
+  breathiness?: number,
+  chink?: number
+): number;
+/**
+ * 1 - exp(-x) of a first-order lag over x time constants, as a rational
+ * function that gives the same bits on every runtime.
+ */
+export declare function lagFactor(x: number): number;
+/** Amplitude of the frication noise at relative strength 1. */
+export declare const FRICATION_GAIN: number;
+/** Wall source against the obstacle source of a sibilant (-15 dB). */
+export declare const WALL_SOURCE: number;
+export declare const STROUHAL: number;
+/** Gain of the burst transient (flow derivative to flow source). */
+export declare const TRANSIENT_GAIN: number;
+/** Peak frequency (Hz, 500 to 6000) of the noise of a jet. */
+export declare function strouhalFrequency(flow: number, area: number): number;
 export declare const DEFAULT_SOURCE: SourceName;
 /** Controls of one VocalFolds step (pressure in Pa). */
 export interface FoldControl {
@@ -569,6 +728,10 @@ export interface FoldControl {
   lungPressure: number;
   adduction: number;
   foldTension: number;
+  /** Relative turbulence strength at the glottis from the air flow. */
+  aspirationStrength?: number;
+  /** Pressure in the mouth (dyn/cm²); not used yet. */
+  oralPressure?: number;
 }
 /**
  * Two-mass model of the vocal folds (Steinecke and Herzel 1995) driven by
@@ -591,10 +754,16 @@ export declare class VocalFolds {
   readonly flow: number;
   /** Area between the folds after the last step (cm²). */
   area: number;
+  /** Low-passed `area` (MEAN_AREA_STAGES stages of MEAN_AREA_TIME), zero under a glottal closure (cm²). */
+  meanArea: number;
   intensity: number;
   noiseModulation: number;
 }
 export declare const FOLD_RATE: number;
+/** Time constant (s) of each stage of VocalFolds.meanArea. */
+export declare const MEAN_AREA_TIME: number;
+/** One-pole stages of VocalFolds.meanArea. */
+export declare const MEAN_AREA_STAGES: number;
 export declare const FOLDS_FLOW_SCALE: number;
 export declare const MIN_FOLD_TENSION: number;
 export declare const MAX_FOLD_TENSION: number;

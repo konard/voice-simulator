@@ -495,15 +495,18 @@ export class Waveguide {
    * with the constriction loss of each section, from the waves of the last
    * step (`right`, `left`) into the spare buffers, which then become the
    * waves. Junction 0 (glottis) and n (lips) are given; the three-port
-   * junctions of the velum and the piriform fossae and the noise source
-   * take the slower path of flagged junctions, and the yielding walls
-   * then draw their flow from the new waves (#yieldWalls).
+   * junctions of the velum and the piriform fossae and the noise and flow
+   * sources take the slower path of flagged junctions, and the yielding
+   * walls then draw their flow from the new waves (#yieldWalls).
    * @param {number} glottis Wave leaving the glottis (junction 0).
    * @param {number} lips Wave reflected at the lips (junction n).
    * @param {number} position Junction of the noise source, or -1.
-   * @param {number} half Half the noise pressure.
+   * @param {number} addRight Source added to the right-going wave there:
+   *   half the flow source plus half the noise pressure.
+   * @param {number} addLeft Source added to the left-going wave there:
+   *   half the flow source minus half the noise pressure.
    */
-  #scatterOral(glottis, lips, position, half) {
+  #scatterOral(glottis, lips, position, addRight, addLeft) {
     const { right, left, reflection, damping, specials } = this;
     const nextRight = this.spareRight;
     const nextLeft = this.spareLeft;
@@ -527,7 +530,7 @@ export class Waveguide {
       if (index >= n) {
         break;
       }
-      this.#scatterSpecial(index, position, half);
+      this.#scatterSpecial(index, position, addRight, addLeft);
       if (index === specials[special]) {
         special++;
       }
@@ -535,7 +538,7 @@ export class Waveguide {
     }
     nextLeft[n - 1] = lips * damping[n - 1];
     if (this.walls) {
-      this.#yieldWalls(position, half);
+      this.#yieldWalls(position, addRight);
     }
     this.spareRight = right;
     this.spareLeft = left;
@@ -547,7 +550,7 @@ export class Waveguide {
    * A flagged junction of #scatterOral: the three-port junctions of the
    * velum and the piriform fossae, and the noise source.
    */
-  #scatterSpecial(index, position, half) {
+  #scatterSpecial(index, position, addRight, addLeft) {
     const incomingRight = this.right[index - 1];
     const incomingLeft = this.left[index];
     let outRight;
@@ -564,8 +567,8 @@ export class Waveguide {
       outLeft = incomingLeft + w;
     }
     if (index === position) {
-      outRight += half;
-      outLeft -= half;
+      outRight += addRight;
+      outLeft += addLeft;
     }
     this.spareRight[index] = outRight * this.damping[index];
     this.spareLeft[index - 1] = outLeft * this.damping[index - 1];
@@ -704,9 +707,10 @@ export class Waveguide {
    * decrease with the group), and each sees the pressure the walls before
    * it left.
    * @param {number} position Junction of the noise source, or -1.
-   * @param {number} half Half the noise pressure.
+   * @param {number} addRight Source added to the right-going wave there
+   *   (see #scatterOral).
    */
-  #yieldWalls(position, half) {
+  #yieldWalls(position, addRight) {
     const { right, left, reflection, damping, wallJunction } = this;
     const { wallFlow, wallVolume, wallDrive, wallGain, wallDrop } = this;
     const nextRight = this.spareRight;
@@ -726,7 +730,7 @@ export class Waveguide {
           incomingRight +
           incomingLeft +
           reflection[index] * (incomingRight - incomingLeft) +
-          (index === position ? half : 0);
+          (index === position ? addRight : 0);
       }
       // The wall flow U_w lowers the junction pressure by rho c U_w /
       // (a + b) in the same step, which damps the wall like the
@@ -776,10 +780,12 @@ export class Waveguide {
    * Advance one step.
    * @param {number} glottalFlow Source volume velocity (derivative).
    * @param {number} noisePosition Junction index of the turbulence source.
-   * @param {number} noise Turbulence pressure.
+   * @param {number} noise Turbulence pressure (a dipole source).
+   * @param {number} [flow] Flow source (derivative) at the same junction:
+   *   the burst transient of a stop (a monopole source).
    * @returns {number} Radiated output (lips + nose).
    */
-  step(glottalFlow, noisePosition, noise) {
+  step(glottalFlow, noisePosition, noise, flow = 0) {
     if (this.lossesStale) {
       this.#refreshLosses();
     }
@@ -789,11 +795,13 @@ export class Waveguide {
     this.lipOutput = (lipWave - reflected) * this.areas[last];
     this.#scatterVelum();
     this.#scatterPiriform();
+    const source = noise !== 0 || flow !== 0;
     this.#scatterOral(
       this.left[0] * this.glottalReflection + glottalFlow / this.areas[0],
       reflected,
-      noise !== 0 ? Math.min(last, Math.max(1, noisePosition)) : -1,
-      noise * 0.5
+      source ? Math.min(last, Math.max(1, noisePosition)) : -1,
+      (flow + noise) * 0.5,
+      (flow - noise) * 0.5
     );
     this.#propagatePiriform();
     this.#filterStages(this.stages, this.right, this.left);
