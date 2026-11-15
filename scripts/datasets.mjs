@@ -138,10 +138,10 @@ export function licenceGate(entry, policy) {
   }
   const licence = entry?.licence;
   if (!isText(licence)) {
-    return 'has no licence';
+    return 'the entry names no licence';
   }
   if (!allowed.includes(licence)) {
-    return `licence "${licence}" is not in allowedDatasetLicences of scripts/policy-denylist.json`;
+    return `"${licence}" is not in allowedDatasetLicences of scripts/policy-denylist.json`;
   }
   return null;
 }
