@@ -165,12 +165,8 @@ export class Waveguide {
     this.baffle = options.baffle ?? RADIATION_BAFFLE;
     this.stages = lossStages(n, options.lossStages ?? LOSS_STAGES);
     this.noseStages = lossStages(nose, NOSE_LOSS_STAGES);
-    /** Yielding wall of each group: mass, resistance, stiffness per cm². */
     this.walls = options.walls !== false;
-    this.wallMass = head.wallMass ?? WALL_MASS;
-    this.wallResistance =
-      (head.wallResistance ?? WALL_RESISTANCE) * this.wallLoss;
-    this.wallStiffness = head.wallStiffness ?? WALL_STIFFNESS;
+    this.#setWallProperties(head);
     const groups = this.stages.ends.length;
     this.wallJunction = new Int32Array(groups);
     this.wallSurface = new Float64Array(groups);
@@ -230,6 +226,17 @@ export class Waveguide {
     this.noseOutput = 0;
     this.#allocatePiriform(options);
     this.setLength(options.head?.vocalTractLength ?? REST_LENGTH);
+  }
+
+  /**
+   * Yielding wall of each group: mass, resistance, stiffness per cm².
+   * @param {{wallMass?: number, wallResistance?: number, wallStiffness?: number}} head
+   */
+  #setWallProperties(head) {
+    this.wallMass = head.wallMass ?? WALL_MASS;
+    this.wallResistance =
+      (head.wallResistance ?? WALL_RESISTANCE) * this.wallLoss;
+    this.wallStiffness = head.wallStiffness ?? WALL_STIFFNESS;
   }
 
   #loss(area) {
