@@ -146,6 +146,270 @@
           }
         ]
       }
+    },
+    {
+      "id": "librivox-aesop-en-02",
+      "title": "LibriVox, Aesop's Fables, Volume 1, section 02: The Goose That Laid the Golden Eggs (English, 64 kbps MP3, 66 s)",
+      "languages": ["en"],
+      "licence": "Public-Domain",
+      "licenceUrl": "https://librivox.org/pages/public-domain/",
+      "licenceQuote": "all our recordings are public domain (definitely in the USA, and maybe in your country as well, see below). This means anyone can use all our recordings however they wish (even to sell them).",
+      "licenceChecked": "2026-11-15",
+      "redistribution": true,
+      "citation": "Aesop's Fables, Volume 1 (Fables 1-25), section 02, LibriVox, https://archive.org/details/aesop_fables_volume_one_librivox",
+      "source": {
+        "kind": "files",
+        "files": [
+          {
+            "name": "fables_01_02_aesop_64kb.mp3",
+            "url": "https://www.archive.org/download/aesop_fables_volume_one_librivox/fables_01_02_aesop_64kb.mp3",
+            "size": 536129,
+            "sha256": "70f2f6b7ad6aa5157e4abf561974743f5f24cd45f234a0cdb23a842f8669b365"
+          }
+        ]
+      }
+    },
+    {
+      "id": "librivox-aesop-en-07",
+      "title": "LibriVox, Aesop's Fables, Volume 1, section 07: The Bat and the Weasels (English, 64 kbps MP3, 96 s)",
+      "languages": ["en"],
+      "licence": "Public-Domain",
+      "licenceUrl": "https://librivox.org/pages/public-domain/",
+      "licenceQuote": "all our recordings are public domain (definitely in the USA, and maybe in your country as well, see below). This means anyone can use all our recordings however they wish (even to sell them).",
+      "licenceChecked": "2026-11-15",
+      "redistribution": true,
+      "citation": "Aesop's Fables, Volume 1 (Fables 1-25), section 07, LibriVox, https://archive.org/details/aesop_fables_volume_one_librivox",
+      "source": {
+        "kind": "files",
+        "files": [
+          {
+            "name": "fables_01_07_aesop_64kb.mp3",
+            "url": "https://www.archive.org/download/aesop_fables_volume_one_librivox/fables_01_07_aesop_64kb.mp3",
+            "size": 771008,
+            "sha256": "5fc200573069e2b930dab000be34a79a75f37aa2f39357fb2f149e5eca5cac52"
+          }
+        ]
+      }
+    },
+    {
+      "id": "librivox-aesop-en-09",
+      "title": "LibriVox, Aesop's Fables, Volume 1, section 09: The Fox and the Crow (English, 64 kbps MP3, 96 s)",
+      "languages": ["en"],
+      "licence": "Public-Domain",
+      "licenceUrl": "https://librivox.org/pages/public-domain/",
+      "licenceQuote": "all our recordings are public domain (definitely in the USA, and maybe in your country as well, see below). This means anyone can use all our recordings however they wish (even to sell them).",
+      "licenceChecked": "2026-11-15",
+      "redistribution": true,
+      "citation": "Aesop's Fables, Volume 1 (Fables 1-25), section 09, LibriVox, https://archive.org/details/aesop_fables_volume_one_librivox",
+      "source": {
+        "kind": "files",
+        "files": [
+          {
+            "name": "fables_01_09_aesop_64kb.mp3",
+            "url": "https://www.archive.org/download/aesop_fables_volume_one_librivox/fables_01_09_aesop_64kb.mp3",
+            "size": 769798,
+            "sha256": "6d8a5116bac634bc6383daf7765415a5bbf08e5f205119d67416ee3b9d259056"
+          }
+        ]
+      }
+    },
+    {
+      "id": "librivox-aesop-en-12",
+      "title": "LibriVox, Aesop's Fables, Volume 1, section 12: The Peacock and the Crane (English, 64 kbps MP3, 58 s)",
+      "languages": ["en"],
+      "licence": "Public-Domain",
+      "licenceUrl": "https://librivox.org/pages/public-domain/",
+      "licenceQuote": "all our recordings are public domain (definitely in the USA, and maybe in your country as well, see below). This means anyone can use all our recordings however they wish (even to sell them).",
+      "licenceChecked": "2026-11-15",
+      "redistribution": true,
+      "citation": "Aesop's Fables, Volume 1 (Fables 1-25), section 12, LibriVox, https://archive.org/details/aesop_fables_volume_one_librivox",
+      "source": {
+        "kind": "files",
+        "files": [
+          {
+            "name": "fables_01_12_aesop_64kb.mp3",
+            "url": "https://www.archive.org/download/aesop_fables_volume_one_librivox/fables_01_12_aesop_64kb.mp3",
+            "size": 468608,
+            "sha256": "dfe541d95363cb359eac725564fecf544273dafc2001be4347bc02b42ffda77d"
+          }
+        ]
+      }
+    },
+    {
+      "id": "librivox-aesop-en-18",
+      "title": "LibriVox, Aesop's Fables, Volume 1, section 18: The Ass, the Fox, and the Lion (English, 64 kbps MP3, 112 s)",
+      "languages": ["en"],
+      "licence": "Public-Domain",
+      "licenceUrl": "https://librivox.org/pages/public-domain/",
+      "licenceQuote": "all our recordings are public domain (definitely in the USA, and maybe in your country as well, see below). This means anyone can use all our recordings however they wish (even to sell them).",
+      "licenceChecked": "2026-11-15",
+      "redistribution": true,
+      "citation": "Aesop's Fables, Volume 1 (Fables 1-25), section 18, LibriVox, https://archive.org/details/aesop_fables_volume_one_librivox",
+      "source": {
+        "kind": "files",
+        "files": [
+          {
+            "name": "fables_01_18_aesop_64kb.mp3",
+            "url": "https://www.archive.org/download/aesop_fables_volume_one_librivox/fables_01_18_aesop_64kb.mp3",
+            "size": 897152,
+            "sha256": "c88db66fdb12f021dac34c9d0dd6537c7b76abd2919e425a5c59a625fcd446f6"
+          }
+        ]
+      }
+    },
+    {
+      "id": "librivox-aesop-ru-09",
+      "title": "LibriVox, Aesop's fables in Russian, reading 09: Komar i lev (Russian, 64 kbps MP3, 95 s)",
+      "languages": ["ru"],
+      "licence": "Public-Domain",
+      "licenceUrl": "https://librivox.org/pages/public-domain/",
+      "licenceQuote": "all our recordings are public domain (definitely in the USA, and maybe in your country as well, see below). This means anyone can use all our recordings however they wish (even to sell them).",
+      "licenceChecked": "2026-11-15",
+      "redistribution": true,
+      "citation": "Aesop's fables in Russian, reading 09, LibriVox, https://archive.org/details/aesops_fables_russian_0905_librivox",
+      "source": {
+        "kind": "files",
+        "files": [
+          {
+            "name": "basni_09_ezop_64kb.mp3",
+            "url": "https://www.archive.org/download/aesops_fables_russian_0905_librivox/basni_09_ezop_64kb.mp3",
+            "size": 766258,
+            "sha256": "437edc5c04ed32510f5901d311818ea828b6025a98349a3bb347d3136cbdabac"
+          }
+        ]
+      }
+    },
+    {
+      "id": "librivox-aesop-ru-13",
+      "title": "LibriVox, Aesop's fables in Russian, reading 13: Lev, volk i lisica (Russian, 64 kbps MP3, 108 s)",
+      "languages": ["ru"],
+      "licence": "Public-Domain",
+      "licenceUrl": "https://librivox.org/pages/public-domain/",
+      "licenceQuote": "all our recordings are public domain (definitely in the USA, and maybe in your country as well, see below). This means anyone can use all our recordings however they wish (even to sell them).",
+      "licenceChecked": "2026-11-15",
+      "redistribution": true,
+      "citation": "Aesop's fables in Russian, reading 13, LibriVox, https://archive.org/details/aesops_fables_russian_0905_librivox",
+      "source": {
+        "kind": "files",
+        "files": [
+          {
+            "name": "basni_13_ezop_64kb.mp3",
+            "url": "https://www.archive.org/download/aesops_fables_russian_0905_librivox/basni_13_ezop_64kb.mp3",
+            "size": 868665,
+            "sha256": "ee01fbb08620070670fa625fe148d7730cd8d910d5cb5cfafeaa487c2c9b4632"
+          }
+        ]
+      }
+    },
+    {
+      "id": "librivox-aesop-ru-26",
+      "title": "LibriVox, Aesop's fables in Russian, reading 26: Pchely i trutni (Russian, 64 kbps MP3, 92 s)",
+      "languages": ["ru"],
+      "licence": "Public-Domain",
+      "licenceUrl": "https://librivox.org/pages/public-domain/",
+      "licenceQuote": "all our recordings are public domain (definitely in the USA, and maybe in your country as well, see below). This means anyone can use all our recordings however they wish (even to sell them).",
+      "licenceChecked": "2026-11-15",
+      "redistribution": true,
+      "citation": "Aesop's fables in Russian, reading 26, LibriVox, https://archive.org/details/aesops_fables_russian_0905_librivox",
+      "source": {
+        "kind": "files",
+        "files": [
+          {
+            "name": "basni_26_ezop_64kb.mp3",
+            "url": "https://www.archive.org/download/aesops_fables_russian_0905_librivox/basni_26_ezop_64kb.mp3",
+            "size": 742438,
+            "sha256": "faf1271af93a719d7fed73489fe2219e91ad841b504c75dbcf080cab95a41bc2"
+          }
+        ]
+      }
+    },
+    {
+      "id": "librivox-do-sakhiyan-hi-01",
+      "title": "LibriVox, Do Sakhiyan by Premchand, part 1 (Hindi, 64 kbps MP3, 352 s)",
+      "languages": ["hi"],
+      "licence": "Public-Domain",
+      "licenceUrl": "https://librivox.org/pages/public-domain/",
+      "licenceQuote": "all our recordings are public domain (definitely in the USA, and maybe in your country as well, see below). This means anyone can use all our recordings however they wish (even to sell them).",
+      "licenceChecked": "2026-11-15",
+      "redistribution": true,
+      "citation": "Do Sakhiyan by Premchand, section 01, LibriVox, https://archive.org/details/dosakhiyan_2512_librivox",
+      "source": {
+        "kind": "files",
+        "files": [
+          {
+            "name": "dosakhiyan_01_premchand_64kb.mp3",
+            "url": "https://www.archive.org/download/dosakhiyan_2512_librivox/dosakhiyan_01_premchand_64kb.mp3",
+            "size": 2821286,
+            "sha256": "00ef5ae2bae42999bb9ac8f2557d1294b6ac12a68855ae4b2bea37253a7d1f1c"
+          }
+        ]
+      }
+    },
+    {
+      "id": "librivox-do-sakhiyan-hi-02",
+      "title": "LibriVox, Do Sakhiyan by Premchand, part 2 (Hindi, 64 kbps MP3, 291 s)",
+      "languages": ["hi"],
+      "licence": "Public-Domain",
+      "licenceUrl": "https://librivox.org/pages/public-domain/",
+      "licenceQuote": "all our recordings are public domain (definitely in the USA, and maybe in your country as well, see below). This means anyone can use all our recordings however they wish (even to sell them).",
+      "licenceChecked": "2026-11-15",
+      "redistribution": true,
+      "citation": "Do Sakhiyan by Premchand, section 02, LibriVox, https://archive.org/details/dosakhiyan_2512_librivox",
+      "source": {
+        "kind": "files",
+        "files": [
+          {
+            "name": "dosakhiyan_02_premchand_64kb.mp3",
+            "url": "https://www.archive.org/download/dosakhiyan_2512_librivox/dosakhiyan_02_premchand_64kb.mp3",
+            "size": 2329903,
+            "sha256": "6c130374d55ec94801399e519435605a1d016dcb07933265c65cd7d4e85e6c24"
+          }
+        ]
+      }
+    },
+    {
+      "id": "librivox-do-sakhiyan-hi-06",
+      "title": "LibriVox, Do Sakhiyan by Premchand, part 6 (Hindi, 64 kbps MP3, 241 s)",
+      "languages": ["hi"],
+      "licence": "Public-Domain",
+      "licenceUrl": "https://librivox.org/pages/public-domain/",
+      "licenceQuote": "all our recordings are public domain (definitely in the USA, and maybe in your country as well, see below). This means anyone can use all our recordings however they wish (even to sell them).",
+      "licenceChecked": "2026-11-15",
+      "redistribution": true,
+      "citation": "Do Sakhiyan by Premchand, section 06, LibriVox, https://archive.org/details/dosakhiyan_2512_librivox",
+      "source": {
+        "kind": "files",
+        "files": [
+          {
+            "name": "dosakhiyan_06_premchand_64kb.mp3",
+            "url": "https://www.archive.org/download/dosakhiyan_2512_librivox/dosakhiyan_06_premchand_64kb.mp3",
+            "size": 1931608,
+            "sha256": "a6ffe2d448e7cb95c65b7901e21dacea070e4fe8fafda212b112590b4ad05d0a"
+          }
+        ]
+      }
+    },
+    {
+      "id": "librivox-di-zi-gui-zh-03",
+      "title": "LibriVox, Di Zi Gui by Li Yuxiu, section 03: read in Mandarin (Chinese, 64 kbps MP3, 602 s)",
+      "languages": ["zh"],
+      "licence": "Public-Domain",
+      "licenceUrl": "https://librivox.org/pages/public-domain/",
+      "licenceQuote": "all our recordings are public domain (definitely in the USA, and maybe in your country as well, see below). This means anyone can use all our recordings however they wish (even to sell them).",
+      "licenceChecked": "2026-11-15",
+      "redistribution": true,
+      "citation": "Di Zi Gui by Li Yuexiu, section 03 (Mandarin), LibriVox, https://archive.org/details/di_zi_gui_0805_librivox",
+      "source": {
+        "kind": "files",
+        "files": [
+          {
+            "name": "dizigui_mandarin_liyuexiu_64kb.mp3",
+            "url": "https://www.archive.org/download/di_zi_gui_0805_librivox/dizigui_mandarin_liyuexiu_64kb.mp3",
+            "size": 4817106,
+            "sha256": "b335bca58e16736ecc50a34fec7d848f1f26d424b632074d171a6ce222f51b3e"
+          }
+        ]
+      }
     }
   ]
 }

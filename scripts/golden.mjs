@@ -23,7 +23,13 @@
  */
 
 import { createHash } from 'node:crypto';
-import { existsSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
+import {
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  writeFileSync,
+} from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -743,6 +749,7 @@ function cutCommand(options, out) {
   const cut = cutUtterance(samples, sampleRate, start, end);
   const bytes = encodeFlac(cut, SAMPLE_RATE, { bitDepth: BIT_DEPTH });
   const file = path.join(options.dir ?? GOLDEN_DIR, `${options.id}.flac`);
+  mkdirSync(path.dirname(file), { recursive: true });
   writeFileSync(file, bytes);
   const duration = (cut.length / SAMPLE_RATE).toFixed(3);
   out.log(`${options.id} ${duration} s ${bytes.length} bytes ${sha256(bytes)}`);
