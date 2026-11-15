@@ -22,6 +22,7 @@ use voice_simulator_core::random::{hash_seed_utf16, Random};
 use voice_simulator_core::resample::{output_length, resample, StreamResampler};
 
 pub mod components;
+pub mod renderer;
 
 /// Version of the interface; raise it on any breaking change of a `vs_`
 /// export (a removed or renamed function, a changed signature or meaning).

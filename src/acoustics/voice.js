@@ -142,12 +142,33 @@ export function registerSolver(name, factory) {
   SOLVERS.set(name, factory);
 }
 
-function noseSections(head, sections) {
+/**
+ * Sections of the nasal tract for an oral tract of `sections` sections.
+ * @param {object} head Normalized head.
+ * @param {number} sections
+ */
+export function noseSections(head, sections) {
   const nose = noseShape(head);
   return Math.max(
     6,
     Math.round((sections * nose.length) / head.vocalTractLength)
   );
+}
+
+/**
+ * Tract shape of the control block that starts at `time` (s): samples the
+ * plan into `state` (reused between calls) and shapes the tract. Shared by
+ * VoiceRenderer and the Rust renderer (src/engine/rust-renderer.js), so
+ * both see the same frames.
+ * @param {object} plan
+ * @param {number} time
+ * @param {object} state
+ * @param {object} head Normalized head.
+ * @param {{sections: number, teeth: boolean, vowelCorrections?: object}} options
+ */
+export function blockShape(plan, time, state, head, options) {
+  sampleState(plan, time, state);
+  return tractShape(state, head, options);
 }
 
 export class NoiseSources {
@@ -358,8 +379,7 @@ export class VoiceRenderer {
   }
 
   #updateShape() {
-    sampleState(this.plan, this.time, this.state);
-    this.shape = tractShape(this.state, this.head, {
+    this.shape = blockShape(this.plan, this.time, this.state, this.head, {
       sections: this.sections,
       teeth: this.teeth,
       vowelCorrections: this.vowelCorrections,

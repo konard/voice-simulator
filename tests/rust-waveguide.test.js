@@ -10,17 +10,26 @@
  * not been built; CI builds it and runs this file with REQUIRE_WASM=1.
  */
 
-import { describe, expect } from 'test-anywhere';
+import { describe, expect, it as alwaysIt } from 'test-anywhere';
 
 import { Biquad, createNoise } from '../src/acoustics/filters.js';
 import { Glottis } from '../src/acoustics/glottis.js';
 import { Radiation } from '../src/acoustics/radiation.js';
-import { NoiseSources, OutputStage } from '../src/acoustics/voice.js';
+import {
+  NoiseSources,
+  OutputStage,
+  renderPlan,
+} from '../src/acoustics/voice.js';
 import { piriformBranch, Waveguide } from '../src/acoustics/waveguide.js';
 import { noseShape } from '../src/articulation/tract-shape.js';
+import {
+  renderPlanRust,
+  RustVoiceRenderer,
+} from '../src/engine/rust-renderer.js';
 import { float64View } from '../src/engine/wasm-loader.js';
 import { DEFAULT_HEAD } from '../src/head-config.js';
 import { hashSeed } from '../src/random.js';
+import { prepareUtterance } from '../src/synthesize.js';
 import { loadRustEngine, noRust } from './helpers/rust-engine.js';
 import { itUnless } from './helpers/skip.js';
 
@@ -235,6 +244,94 @@ describe('Rust waveguide and output (issue 22)', () => {
       const measured = error(values, expected);
       globalThis.console.log(`stages (${label}) error ${measured}`);
       expect(measured < 1e-9).toBe(true);
+    });
+  }
+});
+
+/** Largest absolute difference of two equally long arrays. */
+function maxDifference(actual, expected) {
+  expect(actual.length).toBe(expected.length);
+  let max = 0;
+  for (let index = 0; index < expected.length; index++) {
+    max = Math.max(max, Math.abs(actual[index] - expected[index]));
+  }
+  return max;
+}
+
+describe('Rust renderer (issue 22)', () => {
+  for (const tier of ['minimal', 'low', 'medium']) {
+    it(`renders like VoiceRenderer (${tier})`, async () => {
+      const engine = await loadRustEngine();
+      const { plan, renderOptions } = prepareUtterance('Hello world.', {
+        tier,
+        seed: 1,
+      });
+      const expected = renderPlan(plan, renderOptions);
+      const actual = renderPlanRust(engine, plan, renderOptions);
+      const measured = maxDifference(actual, expected);
+      globalThis.console.log(`render (${tier}) max abs diff ${measured}`);
+      expect(measured < 1e-4).toBe(true);
+    });
+  }
+
+  it('gives the same samples for any chunking', async () => {
+    const engine = await loadRustEngine();
+    const { plan, renderOptions } = prepareUtterance('Hello world.', {
+      tier: 'minimal',
+      seed: 1,
+    });
+    const whole = renderPlanRust(engine, plan, renderOptions);
+    for (const size of [1, 37, 1024]) {
+      const renderer = new RustVoiceRenderer(engine, plan, renderOptions);
+      const samples = new Float32Array(renderer.totalSamples);
+      try {
+        for (let start = 0; start < samples.length; start += size) {
+          renderer.render(samples.subarray(start, start + size));
+        }
+        expect(renderer.done).toBe(true);
+        expect(renderer.render(new Float32Array(8))).toBe(0);
+      } finally {
+        renderer.free();
+      }
+      expect(maxDifference(samples, whole)).toBe(0);
+    }
+  });
+
+  it('gives the field of the waveguide', async () => {
+    const engine = await loadRustEngine();
+    const { plan, renderOptions } = prepareUtterance('a', {
+      tier: 'minimal',
+    });
+    const renderer = new RustVoiceRenderer(engine, plan, renderOptions);
+    try {
+      await renderer.renderAsync(new Float32Array(2000));
+      expect(renderer.position).toBe(2000);
+      const { pressure, nose } = renderer.field();
+      expect(pressure.length).toBe(renderOptions.sections);
+      expect(nose.length > 0).toBe(true);
+      expect(pressure.some((value) => value !== 0)).toBe(true);
+    } finally {
+      renderer.free();
+    }
+  });
+});
+
+describe('Rust renderer options (issue 22)', () => {
+  const { plan } = prepareUtterance('a', { tier: 'minimal' });
+  for (const options of [
+    { solver: 'fdtd3d' },
+    { solver: 'fdtd2d' },
+    { device: {} },
+    { source: 'folds' },
+    { bandLimit: 0 },
+  ]) {
+    alwaysIt(`refuses ${JSON.stringify(options)}`, () => {
+      expect(() => new RustVoiceRenderer(null, plan, options)).toThrow();
+      try {
+        new RustVoiceRenderer(null, plan, options);
+      } catch (error) {
+        expect(error.code).toBe('ENGINE_UNSUPPORTED');
+      }
     });
   }
 });

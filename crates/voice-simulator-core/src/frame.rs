@@ -34,7 +34,7 @@ pub const ASPIRATION: usize = 11;
 pub const CLOSURE: usize = 12;
 /// Loudness (0..1).
 pub const LOUDNESS: usize = 13;
-/// Lung pressure (cmH2O): `state.lungPressure ?? head.lungPressure`. The
+/// Lung pressure (Pa): `state.lungPressure ?? head.lungPressure`. The
 /// issue reserves fields 14 and 15; this one carries the respiratory drive.
 pub const LUNG_PRESSURE: usize = 14;
 /// Reserved, zero.
