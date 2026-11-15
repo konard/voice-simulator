@@ -110,7 +110,6 @@ a name.
    and foreign names.
 
    Two experiments were used to decide which words lie between two pauses:
-
    - `experiments/issue-17-align.mjs` matches syllable nuclei to the words of
      the text.
    - `experiments/issue-17-pitch.mjs` checks the tone pattern of Mandarin.
