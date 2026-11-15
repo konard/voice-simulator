@@ -27,12 +27,16 @@ function position(index, length) {
   return length > 1 ? index / (length - 1) : 0;
 }
 
-/** Cheapest predecessor of cell (i, j): DIAGONAL, UP, LEFT or 0 for none. */
-function bestStep(previous, current, i, j) {
+/**
+ * Cheapest predecessor of cell (i, j): DIAGONAL, UP, LEFT or 0 for none.
+ * `extra` is what a diagonal step costs on top of a horizontal or vertical
+ * one ((weight - 1) times the local distance).
+ */
+function bestStep(previous, current, i, j, extra) {
   let best = Infinity;
   let step = 0;
-  if (i > 0 && j > 0 && previous[j - 1] < best) {
-    best = previous[j - 1];
+  if (i > 0 && j > 0 && previous[j - 1] + extra < best) {
+    best = previous[j - 1] + extra;
     step = DIAGONAL;
   }
   if (i > 0 && previous[j] < best) {
@@ -81,14 +85,18 @@ function checkSizes(n, m) {
 }
 
 /**
- * Align two sequences: D(i, j) = d(i, j) + min(D(i-1, j), D(i, j-1),
- * D(i-1, j-1)) with D(0, 0) = d(0, 0). On equal costs the diagonal wins,
- * then (i-1, j), then (i, j-1).
+ * Align two sequences: D(i, j) = min(D(i-1, j) + d(i, j), D(i, j-1) +
+ * d(i, j), D(i-1, j-1) + w d(i, j)) with D(0, 0) = d(0, 0). On equal costs
+ * the diagonal wins, then (i-1, j), then (i, j-1).
  * @param {ArrayLike<ArrayLike<number>|number>} a
  * @param {ArrayLike<ArrayLike<number>|number>} b
- * @param {{distance?: (x: any, y: any) => number, band?: number}} [options]
+ * @param {{distance?: (x: any, y: any) => number, band?: number, diagonalWeight?: number}} [options]
  *   band (0 to 1, default 1 = no limit) allows a cell when
- *   |i / (n - 1) - j / (m - 1)| <= band.
+ *   |i / (n - 1) - j / (m - 1)| <= band. diagonalWeight w (default 1):
+ *   with 1 a diagonal step moves two frames for the price of one, so the
+ *   path keeps to the diagonal; 2 is the symmetric form of Sakoe & Chiba
+ *   (1978), which charges every frame of both sequences once and lets the
+ *   path follow the signals.
  * @returns {{cost: number, normalizedCost: number, path: [number, number][]}}
  */
 export function dtw(a, b, options = {}) {
@@ -97,6 +105,7 @@ export function dtw(a, b, options = {}) {
   checkSizes(n, m);
   const distance = options.distance ?? euclideanDistance;
   const band = options.band ?? 1;
+  const weight = options.diagonalWeight ?? 1;
   const steps = new Uint8Array(n * m);
   let previous = new Float64Array(m).fill(Infinity);
   let current = new Float64Array(m);
@@ -108,11 +117,13 @@ export function dtw(a, b, options = {}) {
         continue;
       }
       const local = distance(a[i], b[j]);
-      const step = bestStep(previous, current, i, j);
+      const step = bestStep(previous, current, i, j, (weight - 1) * local);
       if (i === 0 && j === 0) {
         current[j] = local;
       } else if (step) {
-        current[j] = local + predecessorCost(previous, current, j, step);
+        const factor = step === DIAGONAL ? weight : 1;
+        current[j] =
+          factor * local + predecessorCost(previous, current, j, step);
         steps[i * m + j] = step;
       }
     }

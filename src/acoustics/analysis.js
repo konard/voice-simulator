@@ -60,7 +60,15 @@ export function lpcEnvelope(a, sampleRate, step = 10) {
   return { frequencies, magnitudes };
 }
 
-function decimate(samples, sampleRate, targetRate) {
+/**
+ * Low-pass (fourth-order Butterworth at 0.45 times the new rate) and keep
+ * every n-th sample, n the nearest integer to sampleRate / targetRate.
+ * @param {ArrayLike<number>} samples
+ * @param {number} sampleRate
+ * @param {number} targetRate
+ * @returns {{samples: Float64Array, sampleRate: number}}
+ */
+export function decimate(samples, sampleRate, targetRate) {
   const factor = Math.max(1, Math.round(sampleRate / targetRate));
   const filters = [new Biquad(), new Biquad()];
   const cutoff = (sampleRate / factor) * 0.45;

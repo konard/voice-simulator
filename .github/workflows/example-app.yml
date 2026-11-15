@@ -9,6 +9,14 @@ on:
       - 'package.json'
       - 'package-lock.json'
       - 'scripts/update-preview-images.mjs'
+      - 'scripts/setup-preview-gh.sh'
+      - 'scripts/check-preview-tools.sh'
+      - 'scripts/push-main-with-rebase-retry.mjs'
+      - 'scripts/push-failure-classifier.mjs'
+      - 'scripts/land-via-pull-request.mjs'
+      - 'scripts/run-command.mjs'
+      - 'scripts/release-metadata.mjs'
+      - 'scripts/github-actions-log.mjs'
       - 'scripts/check-pages.sh'
       - 'scripts/build-previous-versions.mjs'
       - 'scripts/build-wasm.mjs'
@@ -16,7 +24,13 @@ on:
       - 'Cargo.lock'
       - 'rust-toolchain.toml'
       - 'crates/**'
+      - 'scripts/check-desktop-compat.mjs'
+      - 'scripts/deploy-pages.mjs'
+      - 'scripts/github-api.mjs'
       - '.github/workflows/example-app.yml'
+      - '.github/actions/artifact-transport/**'
+      - 'scripts/artifact-transport.mjs'
+      - 'scripts/artifact-files.mjs'
   push:
     branches:
       - main
@@ -26,6 +40,14 @@ on:
       - 'package.json'
       - 'package-lock.json'
       - 'scripts/update-preview-images.mjs'
+      - 'scripts/setup-preview-gh.sh'
+      - 'scripts/check-preview-tools.sh'
+      - 'scripts/push-main-with-rebase-retry.mjs'
+      - 'scripts/push-failure-classifier.mjs'
+      - 'scripts/land-via-pull-request.mjs'
+      - 'scripts/run-command.mjs'
+      - 'scripts/release-metadata.mjs'
+      - 'scripts/github-actions-log.mjs'
       - 'scripts/check-pages.sh'
       - 'scripts/build-previous-versions.mjs'
       - 'scripts/build-wasm.mjs'
@@ -33,7 +55,13 @@ on:
       - 'Cargo.lock'
       - 'rust-toolchain.toml'
       - 'crates/**'
+      - 'scripts/check-desktop-compat.mjs'
+      - 'scripts/deploy-pages.mjs'
+      - 'scripts/github-api.mjs'
       - '.github/workflows/example-app.yml'
+      - '.github/actions/artifact-transport/**'
+      - 'scripts/artifact-transport.mjs'
+      - 'scripts/artifact-files.mjs'
   workflow_dispatch:
 
 permissions:
@@ -80,7 +108,7 @@ jobs:
         run: bash scripts/run-with-budget-warning.sh 180 "wasm build" node scripts/build-wasm.mjs --require --check-size
 
       - name: Upload the WebAssembly engine
-        uses: actions/upload-artifact@v7
+        uses: ./.github/actions/artifact-transport
         with:
           name: voice-simulator-wasm
           path: src/engine/voice-simulator.wasm
@@ -101,6 +129,9 @@ jobs:
     permissions:
       contents: read
       pages: read
+    # The deploy job publishes exactly the artifact this run uploaded.
+    outputs:
+      pages-artifact-id: ${{ steps.pages-artifact.outputs.artifact-id }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -127,11 +158,12 @@ jobs:
         uses: actions/configure-pages@v6
 
       - name: Download the WebAssembly engine
-        uses: actions/download-artifact@v8
+        uses: ./.github/actions/artifact-transport
         env:
-          NODE_OPTIONS: --disable-warning=DEP0005
+          NODE_OPTIONS: --pending-deprecation --throw-deprecation
         with:
-          name: voice-simulator-wasm
+          mode: download
+          pattern: voice-simulator-wasm
           path: src/engine
 
       - name: Install app dependencies
@@ -150,16 +182,19 @@ jobs:
         run: node scripts/build-previous-versions.mjs
 
       - name: Upload web build artifact
-        uses: actions/upload-artifact@v7
+        uses: ./.github/actions/artifact-transport
         with:
           name: universal-example-web
           path: examples/universal-app/dist
           if-no-files-found: error
 
       - name: Upload GitHub Pages artifact
+        id: pages-artifact
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        uses: actions/upload-pages-artifact@v5
+        uses: ./.github/actions/artifact-transport
         with:
+          name: github-pages
+          pages: 'true'
           path: examples/universal-app/dist
 
   # Requires Settings → Pages → Source = GitHub Actions to be set once
@@ -176,15 +211,34 @@ jobs:
       cancel-in-progress: false
       queue: max
     permissions:
+      # Read the deployment script; deployment itself needs only pages and
+      # OIDC.
+      contents: read
       pages: write
       id-token: write
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24.x'
+
+      # The REST protocol of actions/deploy-pages@v5, which sends one
+      # creation request and fails the job on a single transient HTTP 500.
+      # The script retries 429/5xx/network failures of that request, adopts a
+      # deployment whose response was lost so one commit is never deployed
+      # twice, fails permanent 4xx at once and cancels what it abandons.
       - name: Deploy Pages artifact
         id: deployment
-        uses: actions/deploy-pages@v5
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          ARTIFACT_ID: ${{ needs.web-build.outputs.pages-artifact-id }}
+        run: node --throw-deprecation scripts/deploy-pages.mjs
 
   desktop-package:
     name: Package desktop app
@@ -211,15 +265,19 @@ jobs:
           cache-dependency-path: examples/universal-app/package-lock.json
 
       - name: Download the WebAssembly engine
-        uses: actions/download-artifact@v8
+        uses: ./.github/actions/artifact-transport
         env:
-          NODE_OPTIONS: --disable-warning=DEP0005
+          NODE_OPTIONS: --pending-deprecation --throw-deprecation
         with:
-          name: voice-simulator-wasm
+          mode: download
+          pattern: voice-simulator-wasm
           path: src/engine
 
       - name: Install app dependencies
         run: npm ci --prefix examples/universal-app --no-audit --no-fund
+
+      - name: Verify desktop compatibility APIs
+        run: node --pending-deprecation --throw-deprecation scripts/check-desktop-compat.mjs
 
       - name: Package Electron app
         shell: bash
@@ -240,7 +298,7 @@ jobs:
           VITE_REPOSITORY_URL: https://github.com/${{ github.repository }}
 
       - name: Upload desktop package
-        uses: actions/upload-artifact@v7
+        uses: ./.github/actions/artifact-transport
         with:
           name: universal-example-desktop-${{ matrix.os }}
           path: examples/universal-app/out
@@ -277,11 +335,12 @@ jobs:
         uses: android-actions/setup-android@9fc6c4e9069bf8d3d10b2204b1fb8f6ef7065407 # v3.2.2
 
       - name: Download the WebAssembly engine
-        uses: actions/download-artifact@v8
+        uses: ./.github/actions/artifact-transport
         env:
-          NODE_OPTIONS: --disable-warning=DEP0005
+          NODE_OPTIONS: --pending-deprecation --throw-deprecation
         with:
-          name: voice-simulator-wasm
+          mode: download
+          pattern: voice-simulator-wasm
           path: src/engine
 
       - name: Install app dependencies
@@ -294,13 +353,13 @@ jobs:
         run: npm --prefix examples/universal-app run mobile:android:build
 
       - name: Upload Android output
-        uses: actions/upload-artifact@v7
+        uses: ./.github/actions/artifact-transport
         with:
           name: universal-example-android
           path: |
             examples/universal-app/android/app/build/outputs/**/*.apk
             examples/universal-app/android/app/build/outputs/**/*.aab
-          if-no-files-found: warn
+          if-no-files-found: error
 
   ios-build:
     name: Build iOS app
@@ -324,11 +383,12 @@ jobs:
           cache-dependency-path: examples/universal-app/package-lock.json
 
       - name: Download the WebAssembly engine
-        uses: actions/download-artifact@v8
+        uses: ./.github/actions/artifact-transport
         env:
-          NODE_OPTIONS: --disable-warning=DEP0005
+          NODE_OPTIONS: --pending-deprecation --throw-deprecation
         with:
-          name: voice-simulator-wasm
+          mode: download
+          pattern: voice-simulator-wasm
           path: src/engine
 
       - name: Install app dependencies
@@ -343,7 +403,33 @@ jobs:
   # Regenerate example-app preview screenshots (docs/screenshots/example-app/*)
   # using browser-commander + Playwright so README/site images always reflect
   # the current UI. Issue: #62. Implementation: scripts/update-preview-images.mjs.
+  preview-tools:
+    name: Preview container tools
+    runs-on: ubuntu-24.04
+    container:
+      image: mcr.microsoft.com/playwright@sha256:b0ab6f3cb99aa7803adbc14d9027ec1785fc6e433b97e134e0f8fe61683b6b53 # v1.59.1-noble
+    timeout-minutes: 5
+    concurrency:
+      group: check-${{ github.workflow }}-${{ github.ref }}-preview-tools
+      cancel-in-progress: true
+    permissions:
+      contents: read
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: Trust the checkout
+        run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+      - name: Install pinned GitHub CLI
+        run: bash scripts/setup-preview-gh.sh
+      - name: Check preview container tools
+        run: bash scripts/check-preview-tools.sh
+
   preview-regen:
+    needs: [preview-tools]
     name: Regenerate Preview Images
     runs-on: ubuntu-24.04
     container:
@@ -382,6 +468,12 @@ jobs:
       # refuses the checkout as dubious ownership until it is trusted.
       - name: Trust the checkout
         run: git config --global --add safe.directory "$GITHUB_WORKSPACE"
+
+      - name: Install pinned GitHub CLI
+        run: bash scripts/setup-preview-gh.sh
+
+      - name: Check preview container tools
+        run: bash scripts/check-preview-tools.sh
 
       - name: Install example app dependencies
         run: npm ci --prefix examples/universal-app --no-audit --no-fund
@@ -444,7 +536,9 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           # Stage only generated artifacts so unrelated changes can't leak in.
-          git add docs/screenshots/example-app/*.png || true
+          # A directory pathspec never fails on an empty match, so a real git
+          # error still fails the step instead of being masked by `|| true`.
+          git add --all -- docs/screenshots/example-app
           if git diff --cached --quiet; then
             echo "::notice::No tracked preview-image changes to commit (drift was outside expected paths)."
             git status --porcelain
@@ -465,12 +559,12 @@ jobs:
 
       - name: Upload screenshot failure artifacts
         if: failure()
-        uses: actions/upload-artifact@v7
+        uses: ./.github/actions/artifact-transport
         with:
           name: preview-regen-failure-${{ github.run_id }}
           path: docs/screenshots/example-app/
           retention-days: 7
-          if-no-files-found: ignore
+          if-no-files-found: error
 
       # One outcome, one message: report what actually happened instead of
       # claiming a commit that a failed step never made.
@@ -515,6 +609,12 @@ jobs:
       - android-build
       - ios-build
       - preview-regen
+      - preview-tools
+    # actions: read lets the gate list this run's jobs and name the ones
+    # GitHub never acquired a runner for.
+    permissions:
+      actions: read
+      contents: read
     steps:
       - uses: actions/checkout@v7
         with:
@@ -528,6 +628,7 @@ jobs:
       - name: Fail the run when a required job was cancelled or failed
         env:
           NEEDS_JSON: ${{ toJSON(needs) }}
+          GH_TOKEN: ${{ github.token }}
           RUN_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
-          BRANCH_NAME: ${{ github.head_ref || github.ref_name }}
+          HEAD_REF: ${{ github.event_name == 'pull_request' && format('refs/pull/{0}/head', github.event.number) || github.ref }}
         run: bash scripts/check-pipeline-status.sh

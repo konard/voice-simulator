@@ -34,6 +34,11 @@ export default defineConfig({
   plugins: [react(), chunkSizeGuard()],
   worker: {
     format: 'es',
+    rollupOptions: {
+      output: {
+        manualChunks: vendorChunk,
+      },
+    },
   },
   build: {
     outDir: 'dist',

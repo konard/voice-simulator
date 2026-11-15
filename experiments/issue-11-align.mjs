@@ -114,6 +114,9 @@ function pathMap(path, frames) {
  *   The plan that `audio` was rendered from.
  * @param {{samples: ArrayLike<number>, sampleRate: number}} audio
  * @param {{samples: ArrayLike<number>, sampleRate: number}} recording
+ * @param {{diagonalWeight?: number}} [options] passed to `dtw`; 2 (the
+ *   symmetric form) lets the durations follow the recording, the default
+ *   1 keeps them close to the plan.
  * @returns {{durations: (number|null)[], boundaries: number[], offset: number, cost: number, path: [number, number][]}}
  *   `durations`: seconds per token of `plan.tokens` (null for a token
  *   without a segment); `boundaries`: the start of every segment and the
@@ -121,10 +124,10 @@ function pathMap(path, frames) {
  *   the first token minus its start in the plan; `cost`: normalized DTW
  *   cost (dB per frame pair).
  */
-export function alignToRecording(plan, audio, recording) {
+export function alignToRecording(plan, audio, recording, options = {}) {
   const a = logMelFrames(audio.samples, audio.sampleRate);
   const b = logMelFrames(recording.samples, recording.sampleRate);
-  const { path, normalizedCost } = dtw(a, b);
+  const { path, normalizedCost } = dtw(a, b, options);
   const map = pathMap(path, a.length);
   const boundaries = [
     ...plan.segments.map((segment) => map(segment.start)),

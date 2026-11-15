@@ -154,6 +154,15 @@ export interface RenderOptions {
   solver?: SolverName | string;
   /** Voice source (default `'lf'`); unknown names throw `Unknown source`. */
   source?: SourceName;
+  /**
+   * Source-tract interaction (default DEFAULT_INTERACTION; folds only, CPU
+   * solvers): the folds feel the waves of the vocal tract and, with
+   * `subglottal` (default: as `interaction`), of the trachea. With `'lf'`
+   * it throws `Interaction needs source: 'folds'`.
+   */
+  interaction?: boolean;
+  /** Couple the subglottal tract (trachea and bronchi) under interaction. */
+  subglottal?: boolean;
   seed?: string | number;
   /** Output samples between two updates of the tract (default 32). */
   blockSize?: number;
@@ -192,6 +201,15 @@ export interface SynthesizeOptions {
   solver?: SolverName;
   /** Voice source (default `'lf'`): `'folds'` is the two-mass fold model. */
   source?: SourceName;
+  /**
+   * Source-tract interaction (default DEFAULT_INTERACTION; folds only, CPU
+   * solvers): the folds feel the waves of the vocal tract and, with
+   * `subglottal` (default: as `interaction`), of the trachea. With `'lf'`
+   * it throws `Interaction needs source: 'folds'`.
+   */
+  interaction?: boolean;
+  /** Couple the subglottal tract (trachea and bronchi) under interaction. */
+  subglottal?: boolean;
   sections?: number;
   dx?: number;
   sampleRate?: number;
@@ -312,6 +330,134 @@ export interface ChannelTarget {
   /** 1 = own target, 0 = free (follows the line between own targets). */
   strength: number;
 }
+/** Inherent and minimum duration of a sound in milliseconds. */
+export interface DurationEntry {
+  inherent: number;
+  minimum: number;
+}
+/** Duration table of one language (issue 39). */
+export interface DurationTable {
+  /** Per class: open, mid, close, reduced, diphthong, nasal, … */
+  classes: Readonly<Record<string, DurationEntry>>;
+  /** Per IPA symbol; wins over the class. */
+  symbols: Readonly<Record<string, DurationEntry>>;
+  /** Factors by rule name; null switches a rule off. */
+  rules: Readonly<Record<string, number | null>>;
+  /** Weight of the main vowel of a diphthong against 1 for the others. */
+  diphthongMain: number;
+  /** Factors of the closure and frication of an affricate. */
+  affricate: Readonly<{ closure: number; frication: number }>;
+}
+/** One rule of the duration model of Klatt (1979). */
+export interface DurationRule {
+  name: string;
+  /** Default factor (ms for `scope: 'add'`); null = off by default. */
+  factor: number | null;
+  /** What the factor scales (default 'percent'). */
+  scope?: 'percent' | 'minimum' | 'total' | 'add';
+  /** Power of the factor in a context (e.g. syllables in the word). */
+  exponent?(features: DurationFeatures): number;
+  /** Weighted 0.7 + 0.3 f outside a phrase-final syllable. */
+  postvocalic?: boolean;
+  /** Divided by stressLengthening / 1.35. */
+  stress?: boolean;
+  /** Only the first applying rule of a group counts. */
+  group?: string;
+  applies(token: object, features: DurationFeatures): boolean;
+}
+/** Context of one token for the duration rules. */
+export interface DurationFeatures {
+  stress: 0 | 1 | 2;
+  emphasis: boolean;
+  /** Boundary class after the syllable ('period', 'comma', …) or null. */
+  phraseFinal: string | null;
+  wordFinalSyllable: boolean;
+  wordInitialSyllable: boolean;
+  syllablesInWord: number;
+  wordInitial: boolean;
+  syllableOnset: boolean;
+  syllableCoda: boolean;
+  pretonic: boolean;
+  /** Class of the previous and the next sound in the word, or null. */
+  previous: string | null;
+  next: string | null;
+  /** Tone 1 to 5 (5 = neutral) in tonal languages, 0 otherwise. */
+  tone: number;
+  afterAspirated: boolean;
+  nucleusSize: number;
+  nucleusMain: boolean;
+  /** Symbols of the vowels of the nucleus, e.g. 'aɪ'. */
+  nucleusSymbol: string | null;
+}
+export interface DurationOptions {
+  speechRate?: number;
+  stressLengthening?: number;
+  finalLengthening?: number;
+}
+/** Exponent of the speech rate on the minimum duration (0.5). */
+export declare const RATE_MINIMUM: number;
+/** Exponent of the speech rate on the stretchable part (1.2). */
+export declare const RATE_STRETCH: number;
+/** Exponent of the speech rate on pauses of strength 2 and more (1.5). */
+export declare const RATE_PAUSE: number;
+export declare const DURATION_RULES: readonly DurationRule[];
+/** Tables of en, ru, hi, zh and default (English). */
+export declare const DURATION_TABLES: Readonly<
+  Record<'en' | 'ru' | 'hi' | 'zh' | 'default', DurationTable>
+>;
+/** Table of a language code (`en-US` finds `en`), `default` otherwise. */
+export declare function durationTable(language?: string): DurationTable;
+export declare function durationFeatures(
+  tokens: object[],
+  index: number,
+  options?: { language?: string }
+): DurationFeatures | null;
+/** (minimum + (inherent - minimum) * percent / 100) / rate, in seconds. */
+export declare function durationFormula(values: {
+  inherent: number;
+  minimum: number;
+  percent: number;
+  speechRate?: number;
+}): number;
+export declare function applyingRules(
+  token: object,
+  features: DurationFeatures,
+  table?: DurationTable,
+  options?: DurationOptions
+): { rule: DurationRule; factor: number }[];
+/** Inherent and minimum (ms) of each part of a token. */
+export declare function phonemeDurations(
+  token: object,
+  features: DurationFeatures,
+  table?: DurationTable
+): DurationEntry[];
+/** Seconds per part (one, or closure and frication of an affricate). */
+export declare function segmentParts(
+  token: object,
+  features: DurationFeatures,
+  table?: DurationTable,
+  options?: DurationOptions
+): number[];
+/** Duration of a token in seconds. */
+export declare function segmentDuration(
+  token: object,
+  features: DurationFeatures,
+  table?: DurationTable,
+  options?: DurationOptions
+): number;
+/** Shortest duration of a token at the speech rate, in seconds. */
+export declare function minimumDuration(
+  token: object,
+  features: DurationFeatures,
+  table?: DurationTable,
+  options?: DurationOptions
+): number;
+/** Pause in seconds: strength 2 and more shrink with speechRate ** 1.5. */
+export declare function scalePause(
+  base: number,
+  strength: number,
+  speechRate?: number
+): number;
 export declare const TRACT_SECTIONS: number;
 export declare function planUtterance(
   ipa: string | object[],
@@ -321,6 +467,8 @@ export declare function planUtterance(
     frameRate?: number;
     /** Measured duration of every token in seconds (null keeps the plan's). */
     durations?: (number | null)[];
+    /** Duration table (an entry of DURATION_TABLES) instead of the language's. */
+    durationTable?: DurationTable;
     /** Overrides of ARTICULATORS entries, e.g. { velum: { lead: 0.1 } }. */
     articulators?: Record<string, Partial<Articulator>>;
     /** Values of the levels of COARTICULATION_RESISTANCE. */
@@ -435,7 +583,20 @@ export interface Solver {
   flushSteps?(options?: { field?: boolean }): Promise<Float64Array>;
   /** Optional pressure snapshot for visualisation. */
   field?(): object;
+  /**
+   * The tract as the glottis sees it (issue 34): the wave arriving there
+   * (pressure / rho c, a derivative as the source) and the area (cm²,
+   * Infinity for a field solver). The object is reused.
+   */
+  glottalLoad?(): GlottalLoad;
+  /** Reflection of the waves arriving at the glottis (1 under interaction). */
+  setGlottalReflection?(reflection: number): void;
   reset(): void;
+}
+/** Wave arriving at the glottis and the tube area there. */
+export interface GlottalLoad {
+  incident: number;
+  area: number;
 }
 export declare class VoiceRenderer {
   constructor(plan: Plan, options?: RenderOptions);
@@ -449,6 +610,10 @@ export declare class VoiceRenderer {
   readonly airflow: AirflowState | null;
   /** Amplitude of the frication noise of the last control block. */
   readonly fricationAmplitude: number;
+  /** Whether the folds and the tract interact (issue 34). */
+  readonly interaction: boolean;
+  /** The subglottal line under interaction, else null. */
+  readonly subglottal: Subglottal | null;
   render(target: Float32Array): number;
   /** render() for solvers that queue their steps (the GPU solver). */
   renderAsync(
@@ -868,6 +1033,61 @@ export declare const TRANSIENT_GAIN: number;
 /** Peak frequency (Hz, 500 to 6000) of the noise of a jet. */
 export declare function strouhalFrequency(flow: number, area: number): number;
 export declare const DEFAULT_SOURCE: SourceName;
+/** Source-tract interaction of VoiceRenderer when none is asked for. */
+export declare const DEFAULT_INTERACTION: boolean;
+/** Pressure coefficient k_t of the glottis (Bernoulli plus exit loss). */
+export declare const GLOTTAL_PRESSURE_COEFFICIENT: number;
+/** Corner (Hz) of the leaky integrator of IncidentPressure. */
+export declare const PRESSURE_CORNER: number;
+/**
+ * Glottal flow (cm³/s) of the interactive source (Titze 2008) through an
+ * area `a` (cm²) between tubes of areas A_s and A_e (cm², Infinity for
+ * none) at the drive D = (P_L - P_o) / 2 + p_s - p_e (dyn/cm²).
+ */
+export declare function interactiveFlow(
+  a: number,
+  subglottalArea: number,
+  supraglottalArea: number,
+  drive: number
+): number;
+/** Leaky integrator from incident waves (derivatives) to pressure. */
+export declare class IncidentPressure {
+  constructor();
+  /** Pressure (dyn/cm²) after the step of a wave (pressure / rho c). */
+  step(wave: number, dt: number): number;
+  readonly pressure: number;
+  reset(): void;
+}
+/** Trachea length (cm) and area (cm²) at a 16.5 cm vocal tract. */
+export declare const TRACHEA_LENGTH: number;
+export declare const TRACHEA_AREA: number;
+/** Bronchi length (cm) and the area (cm²) they widen to. */
+export declare const BRONCHI_LENGTH: number;
+export declare const BRONCHI_AREA: number;
+/** Wall loss of the subglottal tract relative to the vocal tract. */
+export declare const SUBGLOTTAL_LOSS: number;
+/** The subglottal line runs this many times slower than the tract. */
+export declare const SUBGLOTTAL_DECIMATION: number;
+/** Lengths (cm) and the area (cm²) at a distance below the glottis. */
+export declare function subglottalShape(head?: HeadConfig): {
+  trachea: number;
+  bronchi: number;
+  length: number;
+  area(distance: number): number;
+};
+/** The trachea and bronchi as a Kelly-Lochbaum line (issue 34). */
+export declare class Subglottal {
+  constructor(head?: HeadConfig, dt?: number);
+  /** Set the step (s) of the tract solver. */
+  configure(dt: number): void;
+  /** Advance one tract step with the flow (derivative) entering it. */
+  step(flowIn: number): void;
+  /** Wave arriving at the glottis from below (pressure / rho c). */
+  readonly incident: number;
+  /** Area (cm²) at the glottis. */
+  readonly area: number;
+  reset(): void;
+}
 /** Controls of one VocalFolds step (pressure in Pa). */
 export interface FoldControl {
   voicing: number;
@@ -879,8 +1099,18 @@ export interface FoldControl {
   foldTension: number;
   /** Relative turbulence strength at the glottis from the air flow. */
   aspirationStrength?: number;
-  /** Pressure in the mouth (dyn/cm²); not used yet. */
+  /** Mean pressure above the glottis (dyn/cm²), used with a load. */
   oralPressure?: number;
+}
+/** Pressure (dyn/cm²) and area (cm², Infinity for none) of a tube end. */
+export interface FoldLoadSide {
+  pressure: number;
+  area: number;
+}
+/** Waves arriving at the glottis from below and above (interaction). */
+export interface FoldLoad {
+  below: FoldLoadSide;
+  above: FoldLoadSide;
 }
 /**
  * Two-mass model of the vocal folds (Steinecke and Herzel 1995) driven by
@@ -897,7 +1127,17 @@ export declare class VocalFolds {
     /** Inner step rate (Hz, default FOLD_RATE). */
     rate?: number;
   });
-  step(dt: number, control: FoldControl, noise: number): number;
+  /**
+   * Advance by dt (s); with a `load` the flow solves the interaction
+   * equation of Titze (2008) (interactiveFlow) and the forces use the
+   * pressures below and above the glottis.
+   */
+  step(
+    dt: number,
+    control: FoldControl,
+    noise: number,
+    load?: FoldLoad
+  ): number;
   reset(): void;
   /** Glottal flow after the last step (cm³/s). */
   readonly flow: number;
@@ -2141,6 +2381,12 @@ export declare function dtw<T = ArrayLike<number> | number>(
     distance?: (x: T, y: T) => number;
     /** Sakoe-Chiba band 0 to 1 on relative positions (default 1). */
     band?: number;
+    /**
+     * Weight of the local distance on a diagonal step (default 1, which
+     * keeps the path near the diagonal; 2 is the symmetric form of Sakoe &
+     * Chiba 1978, which follows the signals).
+     */
+    diagonalWeight?: number;
   }
 ): DtwResult;
 export interface DistortionOptions extends CepstrumOptions {

@@ -2,7 +2,8 @@ import { readFileSync } from 'node:fs';
 import { describe, it, expect } from 'test-anywhere';
 import {
   parseChangedLines,
-  filterWarningsToChangedLines,
+  changesLintConfig,
+  filterWarningsToChangedFiles,
   lintExitCode,
 } from '../scripts/lint-changed-lines.mjs';
 
@@ -33,97 +34,113 @@ describe('parseChangedLines', () => {
   });
 });
 
-describe('filterWarningsToChangedLines', () => {
+describe('filterWarningsToChangedFiles', () => {
   const cwd = '/repo';
   const changed = parseChangedLines(DIFF);
-
-  it('keeps warnings on changed lines', () => {
-    const [result] = filterWarningsToChangedLines(
+  const filter = (filePath, messages, changes = changed) =>
+    filterWarningsToChangedFiles(
       [
         {
-          filePath: '/repo/scripts/example.mjs',
-          messages: [warning(11)],
-          errorCount: 0,
-          warningCount: 1,
+          filePath,
+          messages,
+          errorCount: messages.filter((m) => m.severity === 2).length,
+          warningCount: messages.filter((m) => m.severity === 1).length,
         },
       ],
-      changed,
+      changes,
       cwd
-    );
+    )[0];
+
+  it('keeps warnings on changed lines', () => {
+    const result = filter('/repo/scripts/example.mjs', [warning(11)]);
 
     expect(result.messages.length).toBe(1);
     expect(result.warningCount).toBe(1);
   });
 
-  it('drops warnings on unchanged lines of a changed file', () => {
-    const [result] = filterWarningsToChangedLines(
+  it('keeps warnings on unchanged lines of a changed file, as the pre-commit hook does', () => {
+    const result = filter('/repo/scripts/example.mjs', [warning(3)]);
+
+    expect(result.messages.length).toBe(1);
+    expect(result.warningCount).toBe(1);
+  });
+
+  // Issue 115: a pull request edited the body of the WaveguideTract
+  // constructor (src/acoustics/waveguide.js) and raised its complexity to 16.
+  // ESLint reports `complexity` on the constructor's first line, 157, which
+  // the pull request did not change, so a line filter hid the warning until
+  // the push to main failed.
+  it('keeps a complexity warning reported on the unchanged first line of an edited function', () => {
+    const bodyEdit = parseChangedLines(
       [
-        {
-          filePath: '/repo/scripts/example.mjs',
-          messages: [warning(3)],
-          errorCount: 0,
-          warningCount: 1,
-        },
-      ],
-      changed,
-      cwd
+        '--- a/src/acoustics/waveguide.js',
+        '+++ b/src/acoustics/waveguide.js',
+        '@@ -201,0 +202,3 @@',
+        '+    this.wallLoss = options.wallLoss ?? 0;',
+        '+    this.baffle = options.baffle ?? true;',
+        '+    this.lossy = this.wallLoss > 0 || this.baffle;',
+        '',
+      ].join('\n')
     );
+    const complexity = {
+      severity: 1,
+      line: 157,
+      endLine: 157,
+      ruleId: 'complexity',
+      message: 'Constructor has a complexity of 16. Maximum allowed is 15.',
+    };
+
+    const result = filter(
+      '/repo/src/acoustics/waveguide.js',
+      [complexity],
+      bodyEdit
+    );
+
+    expect(result.warningCount).toBe(1);
+    expect(lintExitCode([result])).toBe(1);
+  });
+
+  it('drops warnings from files that were not touched at all', () => {
+    const result = filter('/repo/scripts/other.mjs', [warning(1)]);
 
     expect(result.messages.length).toBe(0);
     expect(result.warningCount).toBe(0);
   });
 
-  it('drops warnings from files that were not touched at all', () => {
-    const [result] = filterWarningsToChangedLines(
-      [
-        {
-          filePath: '/repo/scripts/other.mjs',
-          messages: [warning(1)],
-          errorCount: 0,
-          warningCount: 1,
-        },
-      ],
-      changed,
-      cwd
-    );
-
-    expect(result.messages.length).toBe(0);
-  });
-
-  it('keeps every warning of a wholly new file', () => {
-    const newFileChanges = new Map([['scripts/new.mjs', true]]);
-    const [result] = filterWarningsToChangedLines(
-      [
-        {
-          filePath: '/repo/scripts/new.mjs',
-          messages: [warning(42)],
-          errorCount: 0,
-          warningCount: 1,
-        },
-      ],
-      newFileChanges,
-      cwd
-    );
+  it('keeps every warning of an untracked file', () => {
+    const untracked = new Map([['scripts/new.mjs', true]]);
+    const result = filter('/repo/scripts/new.mjs', [warning(42)], untracked);
 
     expect(result.messages.length).toBe(1);
   });
 
   it('always keeps errors regardless of the diff', () => {
-    const [result] = filterWarningsToChangedLines(
-      [
-        {
-          filePath: '/repo/scripts/other.mjs',
-          messages: [{ severity: 2, line: 5, ruleId: 'no-var' }],
-          errorCount: 1,
-          warningCount: 0,
-        },
-      ],
-      changed,
-      cwd
-    );
+    const result = filter('/repo/scripts/other.mjs', [
+      { severity: 2, line: 5, ruleId: 'no-var' },
+    ]);
 
     expect(result.messages.length).toBe(1);
     expect(result.errorCount).toBe(1);
+  });
+});
+
+describe('changesLintConfig', () => {
+  const files = (...paths) => new Map(paths.map((p) => [p, new Set([1])]));
+
+  it('reports every warning when the ESLint configuration or packages change', () => {
+    expect(changesLintConfig(files('eslint.config.js'))).toBe(true);
+    expect(
+      changesLintConfig(files('eslint-rules/no-changelog-comments.js'))
+    ).toBe(true);
+    expect(changesLintConfig(files('package.json'))).toBe(true);
+    expect(changesLintConfig(files('package-lock.json'))).toBe(true);
+  });
+
+  it('keeps the changed-file scope for ordinary source changes', () => {
+    expect(changesLintConfig(files('src/acoustics/waveguide.js'))).toBe(false);
+    expect(
+      changesLintConfig(files('examples/universal-app/package.json'))
+    ).toBe(false);
   });
 });
 

@@ -165,12 +165,8 @@ export class Waveguide {
     this.baffle = options.baffle ?? RADIATION_BAFFLE;
     this.stages = lossStages(n, options.lossStages ?? LOSS_STAGES);
     this.noseStages = lossStages(nose, NOSE_LOSS_STAGES);
-    /** Yielding wall of each group: mass, resistance, stiffness per cm². */
     this.walls = options.walls !== false;
-    this.wallMass = head.wallMass ?? WALL_MASS;
-    this.wallResistance =
-      (head.wallResistance ?? WALL_RESISTANCE) * this.wallLoss;
-    this.wallStiffness = head.wallStiffness ?? WALL_STIFFNESS;
+    this.#setWallProperties(head);
     const groups = this.stages.ends.length;
     this.wallJunction = new Int32Array(groups);
     this.wallSurface = new Float64Array(groups);
@@ -230,6 +226,17 @@ export class Waveguide {
     this.noseOutput = 0;
     this.#allocatePiriform(options);
     this.setLength(options.head?.vocalTractLength ?? REST_LENGTH);
+  }
+
+  /**
+   * Yielding wall of each group: mass, resistance, stiffness per cm².
+   * @param {{wallMass?: number, wallResistance?: number, wallStiffness?: number}} head
+   */
+  #setWallProperties(head) {
+    this.wallMass = head.wallMass ?? WALL_MASS;
+    this.wallResistance =
+      (head.wallResistance ?? WALL_RESISTANCE) * this.wallLoss;
+    this.wallStiffness = head.wallStiffness ?? WALL_STIFFNESS;
   }
 
   #loss(area) {
@@ -815,6 +822,29 @@ export class Waveguide {
       }
     }
     return this.lipOutput + this.noseOutput;
+  }
+
+  /**
+   * The vocal tract as the folds see it (issue 34): the wave arriving at
+   * the glottis (pressure / rho c, a derivative as the source) and the
+   * area there. The object is reused.
+   * @returns {{incident: number, area: number}}
+   */
+  glottalLoad() {
+    this.load ??= { incident: 0, area: 0 };
+    this.load.incident = this.left[0];
+    this.load.area = this.areas[0];
+    return this.load;
+  }
+
+  /**
+   * Reflection of the waves arriving at the glottis (glottalReflection of
+   * the head by default). The interactive fold source sets 1: the folds
+   * then take the tract's load themselves (glottalLoad).
+   * @param {number} reflection
+   */
+  setGlottalReflection(reflection) {
+    this.glottalReflection = reflection;
   }
 
   /**

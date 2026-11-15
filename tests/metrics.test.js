@@ -179,6 +179,28 @@ describe('metrics: dtw', () => {
     ]);
   });
 
+  it('dtw follows the signals with the symmetric weight', () => {
+    // b is a delayed by one frame: with weight 1 a diagonal step costs one
+    // local distance for two frames and the path stays on the diagonal;
+    // with weight 2 (Sakoe & Chiba 1978) it matches the 1 of a with the 1
+    // of b.
+    const a = [1, 2, 0];
+    const b = [0, 1, 0];
+    expect(dtw(a, b).path).toEqual([
+      [0, 0],
+      [1, 1],
+      [2, 2],
+    ]);
+    const symmetric = dtw(a, b, { diagonalWeight: 2 });
+    expect(symmetric.path).toEqual([
+      [0, 0],
+      [0, 1],
+      [1, 1],
+      [2, 2],
+    ]);
+    expect(symmetric.cost).toBe(2);
+  });
+
   it('dtw refuses too many cells', () => {
     const long = new Array(5001).fill([0]);
     expect(() => dtw(long, long)).toThrow(RangeError);

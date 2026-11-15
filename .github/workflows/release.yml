@@ -21,6 +21,7 @@ on:
           - changeset-pr
       bump_type:
         description: 'Manual release type'
+        default: patch
         required: true
         type: choice
         options:
@@ -61,7 +62,7 @@ jobs:
       actions: read
     concurrency:
       group: check-${{ github.workflow }}-${{ github.ref }}-detect-changes
-      cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+      cancel-in-progress: true
     if: github.event_name != 'workflow_dispatch'
     outputs:
       js-changed: ${{ steps.changes.outputs.js-changed }}
@@ -86,7 +87,7 @@ jobs:
   # === FAST CHECKS - run before slow tests for fastest feedback ===
   # See: hive-mind CI/CD best practices principle #5 (fast-fail job ordering)
 
-  # Syntax check all .mjs files with node --check (~7s)
+  # Syntax check every tracked JavaScript file recursively with node --check.
   test-compilation:
     name: Test Compilation
     runs-on: ubuntu-24.04
@@ -94,16 +95,22 @@ jobs:
     timeout-minutes: 5
     concurrency:
       group: check-${{ github.workflow }}-${{ github.ref }}-test-compilation
-      cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+      cancel-in-progress: true
     needs: [detect-changes]
     if: |
-      needs.detect-changes.outputs.js-changed == 'true'
+      !cancelled() &&
+      (github.event_name == 'workflow_dispatch' || needs.detect-changes.outputs.js-changed == 'true')
     steps:
       - uses: actions/checkout@v7
         with:
           persist-credentials: false
 
-      - name: Check .mjs syntax
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: '24.x'
+
+      - name: Check tracked JavaScript syntax
         run: bash scripts/check-mjs-syntax.sh
 
   # Enforce 1500-line limit on .mjs files and release.yml
@@ -114,11 +121,13 @@ jobs:
     timeout-minutes: 5
     concurrency:
       group: check-${{ github.workflow }}-${{ github.ref }}-check-file-line-limits
-      cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+      cancel-in-progress: true
     needs: [detect-changes]
     if: |
+      !cancelled() &&
+      (github.event_name == 'workflow_dispatch' ||
       needs.detect-changes.outputs.docs-changed == 'true' ||
-      needs.detect-changes.outputs.any-code-changed == 'true'
+      needs.detect-changes.outputs.any-code-changed == 'true')
     steps:
       - uses: actions/checkout@v7
         with:
@@ -146,7 +155,7 @@ jobs:
     timeout-minutes: 5
     concurrency:
       group: check-${{ github.workflow }}-${{ github.ref }}-version-check
-      cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+      cancel-in-progress: true
     if: github.event_name == 'pull_request'
     steps:
       - uses: actions/checkout@v7
@@ -168,11 +177,11 @@ jobs:
   changeset-check:
     name: Check for Changesets
     runs-on: ubuntu-24.04
-    # Typical run: <30s including npm install. 10min covers cold runners.
+    # Typical run: <30s including npm ci. 10min covers cold runners.
     timeout-minutes: 10
     concurrency:
       group: check-${{ github.workflow }}-${{ github.ref }}-changeset-check
-      cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+      cancel-in-progress: true
     needs: [detect-changes]
     if: github.event_name == 'pull_request' && needs.detect-changes.outputs.any-code-changed == 'true'
     steps:
@@ -187,7 +196,7 @@ jobs:
           node-version: '24.x'
 
       - name: Install dependencies
-        run: npm install
+        run: npm ci
 
       - name: Check for changesets
         env:
@@ -197,6 +206,7 @@ jobs:
           GITHUB_HEAD_REF: ${{ github.head_ref }}
           GITHUB_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           RELEASE_PR_ACTOR: ${{ vars.RELEASE_PR_ACTOR }}
+          PR_AUTHOR: ${{ github.event.pull_request.user.login }}
         run: |
           # Run changeset validation script
           # This validates that exactly ONE changeset was ADDED by this PR
@@ -216,7 +226,7 @@ jobs:
     timeout-minutes: 10
     concurrency:
       group: check-${{ github.workflow }}-${{ github.ref }}-lint
-      cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+      cancel-in-progress: true
     needs: [detect-changes]
     if: |
       !cancelled() &&
@@ -243,20 +253,29 @@ jobs:
         with:
           node-version: '24.x'
 
+      - name: Check for secrets
+        run: npx --yes -p secretlint@14.0.0 node scripts/check-secrets.mjs
+
       - name: Install dependencies
-        run: npm install
+        run: npm ci
 
       # Exercise versioning without credentials, even if release-preflight fails.
       # Restore consumed changesets and metadata on success or failure so lint
       # checks the fresh merge rather than generated release files.
       - name: Dry-run release versioning (PR only)
         if: github.event_name == 'pull_request'
+        env:
+          npm_config_offline: 'true'
+          npm_config_ignore_scripts: 'true'
         run: |
           trap 'git restore --source=HEAD --staged --worktree -- .' EXIT
           npm run changeset:version
           git status --short
 
-      # Pull requests are held to warnings on the lines they change; main
+      - name: Check npm tarball size
+        run: node scripts/check-npm-tarball-size.mjs
+
+      # Pull requests are held to warnings in the files they change; main
       # must stay free of warnings everywhere.
       - name: Run ESLint
         env:
@@ -271,9 +290,6 @@ jobs:
 
       - name: Check policy (no neural networks, permissive licences)
         run: npm run check:policy
-
-      - name: Check for secrets
-        run: npx --yes -p secretlint@13.0.7 -p @secretlint/secretlint-rule-preset-recommend@13.0.7 secretlint "**/*"
 
   # Test matrix: 3 runtimes (Node.js, Bun, Deno) x 3 OS (Ubuntu, macOS, Windows)
   # IMPORTANT: Tests must validate the ACTUAL merge result, not a stale merge preview.
@@ -294,7 +310,7 @@ jobs:
     timeout-minutes: 15
     concurrency:
       group: check-${{ github.workflow }}-${{ github.ref }}-test-${{ matrix.runtime }}-${{ matrix.os }}
-      cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+      cancel-in-progress: true
     needs:
       [
         detect-changes,
@@ -339,15 +355,20 @@ jobs:
         shell: bash
         run: bash scripts/simulate-fresh-merge.sh
 
+      # Every runtime leg also exercises native Node fixtures (Changesets,
+      # pipeline scripts and the Pages adapter), so each leg pins Node 24 and
+      # installs the owning locks explicitly instead of relying on packages
+      # another runtime happened to resolve.
       - name: Setup Node.js
-        if: matrix.runtime == 'node'
         uses: actions/setup-node@v7
         with:
           node-version: '24.x'
 
-      - name: Install dependencies (Node.js)
-        if: matrix.runtime == 'node'
-        run: npm install
+      - name: Install dependencies (runtime tests and native fixtures)
+        run: npm ci
+
+      - name: Install native CI adapter dependencies
+        run: npm ci --prefix .github/actions/artifact-transport --ignore-scripts --no-audit --no-fund
 
       - name: Run tests (Node.js)
         if: matrix.runtime == 'node'
@@ -360,10 +381,6 @@ jobs:
         with:
           bun-version: '1.x'
 
-      - name: Install dependencies (Bun)
-        if: matrix.runtime == 'bun'
-        run: bun install
-
       - name: Run tests (Bun)
         if: matrix.runtime == 'bun'
         shell: bash
@@ -372,13 +389,25 @@ jobs:
         # It is a per-test bound and does not bound the suite: 25 tests of
         # 29s each pass every per-test check. The suite budget below is
         # what bounds the whole run.
-        run: bash scripts/run-with-budget-warning.sh 200 "Bun test suite" bun test --timeout 30000
+        # 300s, as for Node.js: Bun runs the 171 files one after another, so
+        # it took 80-194s on main and PR #116 (issue 115) and crossed the 70%
+        # warning of a 200s budget. `--parallel` ran 2.7x faster locally, but
+        # Bun's workers can still lose a child's exit (oven-sh/bun#45483,
+        # #41024, #39987), which would hang this subprocess-heavy suite.
+        run: bash scripts/run-with-budget-warning.sh 300 "Bun test suite" bun test --timeout 30000
 
       - name: Setup Deno
         if: matrix.runtime == 'deno'
         uses: denoland/setup-deno@22d081ff2d3a40755e97629de92e3bcbfa7cf2ed # v2.0.5
         with:
           deno-version: v2.x
+
+      # Resolve Deno's own frozen module graph before the timed suite, as npm
+      # ci does for the other runtimes. --no-run executes no test assertions,
+      # so the 100s suite budget below still measures every acceptance test.
+      - name: Prepare Deno test dependencies
+        if: matrix.runtime == 'deno'
+        run: deno test -A --parallel --no-run --frozen
 
       - name: Run tests (Deno)
         if: matrix.runtime == 'deno'
@@ -388,10 +417,11 @@ jobs:
         # (tests/helpers/gpu.js). Ubuntu runners have none (issue 30).
         env:
           REQUIRE_GPU: ${{ matrix.os != 'ubuntu-24.04' && '1' || '' }}
-        # 200s, as for Bun: on windows-2025 the suite took 93-94s on main
-        # after #90 and 101-103s on PR #91, mostly in tests that spawn git
-        # and shell fixtures, so 100s left no room for runner variance.
-        run: bash scripts/run-with-budget-warning.sh 200 "Deno test suite" deno test -A --parallel
+        # 300s, as for Node.js and Bun: on windows-2025 the suite took
+        # 87-150s on main and PR #116 (issue 115), mostly in tests that spawn
+        # git and shell fixtures, and crossed the 70% warning of a 200s budget
+        # in three of four runs. It took 101-103s on PR #91 (100s then).
+        run: bash scripts/run-with-budget-warning.sh 300 "Deno test suite" deno test -A --parallel
 
   # === RUST ENGINE ===
   # Lints and tests the Rust workspace, builds src/engine/voice-simulator.wasm
@@ -408,7 +438,7 @@ jobs:
     timeout-minutes: 15
     concurrency:
       group: check-${{ github.workflow }}-${{ github.ref }}-rust
-      cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+      cancel-in-progress: true
     needs: [detect-changes]
     # The same gate as the test job, so every run that can publish has
     # built the file the publishing jobs download.
@@ -423,6 +453,12 @@ jobs:
       )
     permissions:
       contents: read
+    # rustc warnings fail every cargo step, the wasm32 build and the native
+    # CLI included, not only Clippy (the Rust template's setting). Lint
+    # levels do not change code generation: the engine is byte for byte the
+    # same file with and without this flag (issue 115).
+    env:
+      RUSTFLAGS: -Dwarnings
     steps:
       - uses: actions/checkout@v7
         with:
@@ -441,28 +477,42 @@ jobs:
           node-version: '24.x'
 
       - name: Install dependencies
-        run: npm install
+        run: npm ci
 
       # `rustup toolchain install` without arguments installs the toolchain
       # that rust-toolchain.toml selects; `rustup show` would install it too,
       # but rustup 1.29 warns that this auto-installation is deprecated
       # (rust-lang/rustup#4836). `rustup show` then logs what is active.
+      # The install took 10s (issue 23); its budget gave 60s to the parity
+      # tests, which gained the 3D solver, within the 630s of the backstop.
       - name: Install the pinned Rust toolchain
         run: |
-          bash scripts/run-with-budget-warning.sh 150 "Rust toolchain install" rustup toolchain install
+          bash scripts/run-with-budget-warning.sh 90 "Rust toolchain install" rustup toolchain install
           rustup show
 
       - name: Check Rust formatting
         run: bash scripts/run-with-budget-warning.sh 30 "cargo fmt" cargo fmt --all --check
 
+      # RUSTFLAGS covers rustc, but Cargo's own manifest warnings still exit 0.
+      - name: Fail on Cargo manifest warnings
+        run: bash scripts/run-with-budget-warning.sh 60 "cargo check" bash scripts/check-cargo-warnings.sh --workspace
+
       - name: Run Clippy
-        run: bash scripts/run-with-budget-warning.sh 90 "cargo clippy" cargo clippy --workspace --all-targets --locked -- -D warnings
+        run: bash scripts/run-with-budget-warning.sh 60 "cargo clippy" cargo clippy --workspace --all-targets --locked -- -D warnings
+
+      # rustdoc-only lints (broken intra-doc links, for one) are reported by
+      # neither Clippy nor the tests: `[h]` in a doc comment of
+      # aerodynamics.rs passed every Rust step until this gate (issue 115).
+      - name: Build documentation
+        env:
+          RUSTDOCFLAGS: -D warnings
+        run: bash scripts/run-with-budget-warning.sh 60 "cargo doc" cargo doc --workspace --no-deps --locked
 
       - name: Run Rust tests
-        run: bash scripts/run-with-budget-warning.sh 120 "cargo test" cargo test --workspace --locked
+        run: bash scripts/run-with-budget-warning.sh 90 "cargo test" cargo test --workspace --locked
 
       - name: Build the WebAssembly engine
-        run: bash scripts/run-with-budget-warning.sh 120 "wasm build" node scripts/build-wasm.mjs --require --check-size
+        run: bash scripts/run-with-budget-warning.sh 90 "wasm build" node scripts/build-wasm.mjs --require --check-size
 
       # The native CLI renders the jobs of tests/rust-render-job.test.js,
       # which checks that it prints the SHA-256 of the WebAssembly render.
@@ -476,10 +526,10 @@ jobs:
         # tests/rust-fdtd.test.js renders 'Hello.' on the 3D tier `high`
         # three times and the first 50 ms in a 40 cm room (about 17s on a
         # developer machine, issue 23), hence the larger budget.
-        run: bash scripts/run-with-budget-warning.sh 120 "Rust parity tests" node --test tests/rust-parity.test.js tests/rust-waveguide.test.js tests/rust-fdtd.test.js tests/rust-render-job.test.js tests/engine-layout.test.js
+        run: bash scripts/run-with-budget-warning.sh 90 "Rust parity tests" node --test tests/rust-parity.test.js tests/rust-waveguide.test.js tests/rust-fdtd.test.js tests/rust-render-job.test.js tests/engine-layout.test.js
 
       - name: Upload the WebAssembly engine
-        uses: actions/upload-artifact@v7
+        uses: ./.github/actions/artifact-transport
         with:
           name: voice-simulator-wasm
           path: src/engine/voice-simulator.wasm
@@ -499,7 +549,7 @@ jobs:
     timeout-minutes: 30
     concurrency:
       group: check-${{ github.workflow }}-${{ github.ref }}-docker-build
-      cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+      cancel-in-progress: true
     needs: [detect-changes]
     if: github.event_name == 'pull_request' && needs.detect-changes.outputs.any-code-changed == 'true'
     permissions:
@@ -534,13 +584,9 @@ jobs:
           push: false
           load: true
           tags: pr-check:${{ github.sha }}
-          # Scoped so this build cannot overwrite or be overwritten by the
-          # unscoped default `buildkit` scope: the GitHub Actions cache is a
-          # 10 GB repository-wide pool with LRU eviction, and unscoped
-          # mode=max exports of every intermediate layer crowd out the caches
-          # the rest of the pipeline reads.
+          # Read shared layers without exporting PR-only caches that main
+          # cannot restore and that consume the repository cache quota.
           cache-from: type=gha,scope=docker-image
-          cache-to: type=gha,mode=max,scope=docker-image
 
   # === HEAVY SIMULATION CHECKS ===
   # Fine-grid 3D FDTD resonances, every language on every audio tier up to
@@ -555,7 +601,7 @@ jobs:
     timeout-minutes: 25
     concurrency:
       group: check-${{ github.workflow }}-${{ github.ref }}-simulation
-      cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+      cancel-in-progress: true
     needs: [detect-changes]
     if: |
       !cancelled() &&
@@ -578,11 +624,12 @@ jobs:
 
       - name: Upload simulation report and audio
         if: ${{ !cancelled() }}
-        uses: actions/upload-artifact@v7
+        uses: ./.github/actions/artifact-transport
         with:
           name: simulation-report
           path: ci-artifacts/simulation
           retention-days: 14
+          if-no-files-found: error
 
   # === DOCUMENTATION VALIDATION ===
   # Validate documentation files when docs change (hive-mind principle #12)
@@ -593,7 +640,7 @@ jobs:
     timeout-minutes: 5
     concurrency:
       group: check-${{ github.workflow }}-${{ github.ref }}-validate-docs
-      cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+      cancel-in-progress: true
     needs: [detect-changes]
     if: |
       needs.detect-changes.outputs.docs-changed == 'true'
@@ -731,7 +778,7 @@ jobs:
         run: node scripts/check-package-manager.mjs
 
       - name: Install dependencies
-        run: bash scripts/run-with-budget-warning.sh 240 "Release dependency install" npm install
+        run: bash scripts/run-with-budget-warning.sh 240 "Release dependency install" npm ci
 
       - name: Update npm for OIDC trusted publishing
         run: node scripts/setup-npm.mjs
@@ -768,11 +815,12 @@ jobs:
       # git-ignored, so only this download puts it into the package.
       - name: Download the WebAssembly engine
         timeout-minutes: 5
-        uses: actions/download-artifact@v8
+        uses: ./.github/actions/artifact-transport
         env:
-          NODE_OPTIONS: --disable-warning=DEP0005
+          NODE_OPTIONS: --pending-deprecation --throw-deprecation
         with:
-          name: voice-simulator-wasm
+          mode: download
+          pattern: voice-simulator-wasm
           path: src/engine
 
       - name: Publish to npm
@@ -884,7 +932,7 @@ jobs:
         run: node scripts/sanitize-npm-userconfig.mjs
 
       - name: Install dependencies
-        run: npm install
+        run: npm ci
 
       - name: Update npm for OIDC trusted publishing
         run: node scripts/setup-npm.mjs
@@ -904,11 +952,12 @@ jobs:
       # git-ignored, so only this download puts it into the package.
       - name: Download the WebAssembly engine
         timeout-minutes: 5
-        uses: actions/download-artifact@v8
+        uses: ./.github/actions/artifact-transport
         env:
-          NODE_OPTIONS: --disable-warning=DEP0005
+          NODE_OPTIONS: --pending-deprecation --throw-deprecation
         with:
-          name: voice-simulator-wasm
+          mode: download
+          pattern: voice-simulator-wasm
           path: src/engine
 
       - name: Publish to npm
@@ -1046,7 +1095,7 @@ jobs:
           touch "/tmp/digests/${DIGEST#sha256:}"
 
       - name: Upload image digest
-        uses: actions/upload-artifact@v7
+        uses: ./.github/actions/artifact-transport
         with:
           name: docker-digest-${{ strategy.job-index }}
           path: /tmp/digests/*
@@ -1080,13 +1129,13 @@ jobs:
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
       - name: Download image digests
-        uses: actions/download-artifact@v8
+        uses: ./.github/actions/artifact-transport
         env:
-          NODE_OPTIONS: --disable-warning=DEP0005
+          NODE_OPTIONS: --pending-deprecation --throw-deprecation
         with:
           path: /tmp/digests
           pattern: docker-digest-*
-          merge-multiple: true
+          mode: download
 
       - name: Create multi-architecture manifest
         working-directory: /tmp/digests
@@ -1166,7 +1215,7 @@ jobs:
           node-version: '24.x'
 
       - name: Install dependencies
-        run: npm install
+        run: npm ci
 
       - name: Create changeset file
         env:
@@ -1177,7 +1226,7 @@ jobs:
       - name: Format changeset with Prettier
         run: |
           # Run Prettier on the changeset file to ensure it matches project style
-          npx prettier --write ".changeset/*.md" || true
+          npx prettier --write ".changeset/*.md"
 
           echo "Formatted changeset files"
 
@@ -1216,7 +1265,7 @@ jobs:
     timeout-minutes: 5
     concurrency:
       group: check-${{ github.workflow }}-${{ github.ref }}-pipeline-status
-      cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+      cancel-in-progress: true
     if: >-
       !cancelled()
     needs:
@@ -1238,6 +1287,11 @@ jobs:
       - instant-release
       - docker-publish
       - changeset-pr
+    # actions: read lets the gate list this run's jobs and name the ones
+    # GitHub never acquired a runner for.
+    permissions:
+      actions: read
+      contents: read
     steps:
       - uses: actions/checkout@v7
         with:
@@ -1251,6 +1305,7 @@ jobs:
       - name: Fail the run when a required job was cancelled or failed
         env:
           NEEDS_JSON: ${{ toJSON(needs) }}
+          GH_TOKEN: ${{ github.token }}
           RUN_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
-          BRANCH_NAME: ${{ github.head_ref || github.ref_name }}
+          HEAD_REF: ${{ github.event_name == 'pull_request' && format('refs/pull/{0}/head', github.event.number) || github.ref }}
         run: bash scripts/check-pipeline-status.sh
