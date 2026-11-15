@@ -101,6 +101,8 @@ function usage() {
     '      --dx <cm>         FDTD voxel size',
     '  -s, --seed <seed>     Random seed for the head and the voice',
     '      --head <value>    "random" or an encoded head (key=value&...)',
+    '                        e.g. lungPressure=1600 (Pa, default 800): louder',
+    '                        breath, frication and bursts',
     '      --preset <name>   any | male | female | child (random head range)',
     '      --output <mode>   flow | microphone (FDTD only)',
     '      --sample-rate <n> Output sample rate',
