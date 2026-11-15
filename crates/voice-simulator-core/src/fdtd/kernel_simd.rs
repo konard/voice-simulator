@@ -12,7 +12,7 @@
 //! safe, so the file needs no `unsafe` and the crate keeps
 //! `#![forbid(unsafe_code)]`.
 
-use super::kernel::{incident_sum, Grid, COURANT};
+use super::kernel::{incident_sum, padded_sum, Grid, COURANT};
 use core::arch::wasm32::{f64x2, f64x2_extract_lane, f64x2_mul, f64x2_splat, f64x2_sub};
 
 /// [`Grid::step_gather_scalar`] with two lanes; bit-identical with it.
@@ -53,29 +53,53 @@ pub(super) fn step_gather(grid: &mut Grid) {
         }
     }
     grid.links_pass(2 * pairs);
-    let Grid {
-        pressure,
-        keep,
-        gain,
-        flux,
-        incident_start,
-        incident_link,
-        incident_sign,
-        ..
-    } = grid;
-    let sum = |cell: usize| {
-        incident_sum(
-            flux,
-            incident_link,
-            incident_sign,
-            incident_start[cell] as usize,
-            incident_start[cell + 1] as usize,
-        )
-    };
-    let cells = pressure.len();
+    match grid.incident_width {
+        1 => cells_pass(grid, padded::<1>),
+        2 => cells_pass(grid, padded::<2>),
+        3 => cells_pass(grid, padded::<3>),
+        4 => cells_pass(grid, padded::<4>),
+        5 => cells_pass(grid, padded::<5>),
+        6 => cells_pass(grid, padded::<6>),
+        7 => cells_pass(grid, padded::<7>),
+        8 => cells_pass(grid, padded::<8>),
+        _ => cells_pass(grid, listed),
+    }
+}
+
+/// The incident sum of `cell` from padded lists of `W` links.
+#[inline(always)]
+fn padded<const W: usize>(grid: &Grid, cell: usize) -> f64 {
+    let at = cell * W;
+    let links = grid.incident_link[at..at + W].as_array::<W>();
+    let signs = grid.incident_sign[at..at + W].as_array::<W>();
+    padded_sum(&grid.flux, links.unwrap(), signs.unwrap())
+}
+
+/// The incident sum of `cell` from lists of any length.
+#[inline(always)]
+fn listed(grid: &Grid, cell: usize) -> f64 {
+    incident_sum(
+        &grid.flux,
+        &grid.incident_link,
+        &grid.incident_sign,
+        grid.incident_start[cell] as usize,
+        grid.incident_start[cell + 1] as usize,
+    )
+}
+
+/// Pass 2, two cells per vector, with the incident sums of `sum`.
+#[inline(always)]
+fn cells_pass(grid: &mut Grid, sum: impl Fn(&Grid, usize) -> f64) {
+    let cells = grid.cells();
     let mut cell = 0;
     while cell + 2 <= cells {
-        let d = f64x2(sum(cell), sum(cell + 1));
+        let d = f64x2(sum(grid, cell), sum(grid, cell + 1));
+        let Grid {
+            pressure,
+            keep,
+            gain,
+            ..
+        } = &mut *grid;
         let p = f64x2(pressure[cell], pressure[cell + 1]);
         let next = f64x2_sub(
             f64x2_mul(f64x2(keep[cell], keep[cell + 1]), p),
@@ -86,7 +110,13 @@ pub(super) fn step_gather(grid: &mut Grid) {
         cell += 2;
     }
     if cell < cells {
-        let d = sum(cell);
+        let d = sum(grid, cell);
+        let Grid {
+            pressure,
+            keep,
+            gain,
+            ..
+        } = grid;
         pressure[cell] = keep[cell] * pressure[cell] - gain[cell] * d;
     }
 }

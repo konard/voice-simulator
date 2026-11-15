@@ -19,6 +19,14 @@
 //! form, so the two forms are bit-identical (parity class A); the gather
 //! form vectorises (see `kernel_simd.rs`) because no two lanes write the
 //! same cell.
+//!
+//! When no cell has more than [`MAX_WIDTH`] links (a voxel grid has at
+//! most 6), [`Grid::index`] pads every list to the length of the longest
+//! one with the extra link `links`, whose `flux` slot is always `+0.0`.
+//! The sum of a cell then runs a fixed number of additions, with no
+//! branch that depends on the cell. Adding `+0.0` changes no sum: a sum
+//! that starts from `+0.0` is never `-0.0` (an exact cancellation rounds
+//! to `+0.0`), and `x + 0.0 == x` for every other `x`.
 
 use alloc::vec;
 use alloc::vec::Vec;
@@ -26,8 +34,13 @@ use alloc::vec::Vec;
 /// Courant number of the grid, `COURANT` of `src/acoustics/fdtd3d.js`.
 pub const COURANT: f64 = 0.5;
 
+/// Longest incident list that is padded (see the module comment); grids
+/// with a longer list keep lists of their own lengths.
+pub const MAX_WIDTH: usize = 8;
+
 /// The arrays of one grid. Links point from cell `link_a` to cell
-/// `link_b`; `flux` holds the flux of every link after a step. The
+/// `link_b`; `flux` holds the flux of every link after a step, and one
+/// more value, `+0.0`, for the padding of the incident lists. The
 /// incident lists are built from `link_a`/`link_b` by [`Grid::index`].
 #[derive(Clone, Debug, PartialEq)]
 pub struct Grid {
@@ -43,10 +56,13 @@ pub struct Grid {
     pub gain: Vec<f64>,
     /// `incident_link[incident_start[cell]..incident_start[cell + 1]]` are
     /// the links of `cell` in increasing order, with `incident_sign` +1
-    /// where the cell is `a` and -1 where it is `b`.
+    /// where the cell is `a` and -1 where it is `b`, then (when
+    /// `incident_width` is not 0) the padding link `links` with sign +1.
     pub incident_start: Vec<u32>,
     pub incident_link: Vec<u32>,
     pub incident_sign: Vec<f64>,
+    /// Length of every padded list, or 0 when the lists are not padded.
+    pub incident_width: usize,
 }
 
 impl Grid {
@@ -61,7 +77,7 @@ impl Grid {
             velocity: vec![0.0; links],
             damping: vec![1.0; links],
             conductance: vec![1.0; links],
-            flux: vec![0.0; links],
+            flux: vec![0.0; links + 1],
             pressure: vec![0.0; cells],
             divergence: vec![0.0; cells],
             keep: vec![1.0; cells],
@@ -69,6 +85,7 @@ impl Grid {
             incident_start: Vec::new(),
             incident_link: Vec::new(),
             incident_sign: Vec::new(),
+            incident_width: 0,
         };
         if cells > 0 {
             grid.index();
@@ -86,14 +103,17 @@ impl Grid {
         self.pressure.len()
     }
 
-    /// Build the incident lists from `link_a` and `link_b`. Returns false
-    /// (and leaves the lists empty) when a link names a cell that does not
-    /// exist; the step functions must not run then.
+    /// Build the incident lists from `link_a` and `link_b`, padded when no
+    /// list is longer than [`MAX_WIDTH`]. Returns false (and leaves the
+    /// lists empty) when a link names a cell that does not exist; the step
+    /// functions must not run then.
     pub fn index(&mut self) -> bool {
         let cells = self.cells();
+        let links = self.links();
         self.incident_start.clear();
         self.incident_link.clear();
         self.incident_sign.clear();
+        self.incident_width = 0;
         let valid = self
             .link_a
             .iter()
@@ -102,18 +122,32 @@ impl Grid {
         if !valid {
             return false;
         }
-        let mut start = vec![0u32; cells + 1];
+        let mut degree = vec![0u32; cells];
         for (&a, &b) in self.link_a.iter().zip(&self.link_b) {
-            start[a as usize + 1] += 1;
-            start[b as usize + 1] += 1;
+            degree[a as usize] += 1;
+            degree[b as usize] += 1;
         }
+        let widest = degree.iter().max().map_or(0, |&value| value as usize);
+        let width = if (1..=MAX_WIDTH).contains(&widest) {
+            widest
+        } else {
+            0
+        };
+        let mut start = vec![0u32; cells + 1];
         for cell in 0..cells {
-            start[cell + 1] += start[cell];
+            let length = if width > 0 {
+                width as u32
+            } else {
+                degree[cell]
+            };
+            start[cell + 1] = start[cell] + length;
         }
         let total = start[cells] as usize;
         let mut next = start.clone();
-        self.incident_link = vec![0; total];
-        self.incident_sign = vec![0.0; total];
+        // Padding first: every slot links to the zero flux slot `links`
+        // with sign +1 until a real link takes it.
+        self.incident_link = vec![links as u32; total];
+        self.incident_sign = vec![1.0; total];
         // Links in increasing order, so every cell's list is sorted; a
         // link from a cell to itself adds +flux, then -flux, as the
         // scatter form does.
@@ -126,13 +160,17 @@ impl Grid {
             }
         }
         self.incident_start = start;
+        self.incident_width = width;
+        self.flux.resize(links + 1, 0.0);
+        self.flux[links] = 0.0;
         true
     }
 
     /// Whether the incident lists match the arrays, so a step may run.
     pub fn indexed(&self) -> bool {
         self.incident_start.len() == self.cells() + 1
-            && self.incident_link.len() == 2 * self.links()
+            && self.incident_link.len() == self.incident_start[self.cells()] as usize
+            && self.flux.len() == self.links() + 1
     }
 
     /// One step in the scatter form of `#stepJs`.
@@ -183,6 +221,48 @@ impl Grid {
     /// The scalar gather form, also the reference of `kernel_simd.rs`.
     pub fn step_gather_scalar(&mut self) {
         self.links_pass(0);
+        match self.incident_width {
+            1 => self.cells_padded::<1>(),
+            2 => self.cells_padded::<2>(),
+            3 => self.cells_padded::<3>(),
+            4 => self.cells_padded::<4>(),
+            5 => self.cells_padded::<5>(),
+            6 => self.cells_padded::<6>(),
+            7 => self.cells_padded::<7>(),
+            8 => self.cells_padded::<8>(),
+            _ => self.cells_listed(),
+        }
+    }
+
+    /// Pass 2 of the gather form with lists of `W` links each.
+    fn cells_padded<const W: usize>(&mut self) {
+        let Self {
+            pressure,
+            keep,
+            gain,
+            flux,
+            incident_link,
+            incident_sign,
+            ..
+        } = self;
+        let lists = incident_link
+            .as_chunks::<W>()
+            .0
+            .iter()
+            .zip(incident_sign.as_chunks::<W>().0);
+        let cells = pressure
+            .iter_mut()
+            .zip(keep.iter())
+            .zip(gain.iter())
+            .zip(lists);
+        for (((p, &k), &g), (links, signs)) in cells {
+            let d = padded_sum(flux, links, signs);
+            *p = k * *p - g * d;
+        }
+    }
+
+    /// Pass 2 of the gather form with lists of any length.
+    fn cells_listed(&mut self) {
         let Self {
             pressure,
             keep,
@@ -258,6 +338,16 @@ pub(super) fn incident_sum(
     d
 }
 
+/// [`incident_sum`] of one padded list of `W` links.
+#[inline(always)]
+pub(super) fn padded_sum<const W: usize>(flux: &[f64], links: &[u32; W], signs: &[f64; W]) -> f64 {
+    let mut d = 0.0;
+    for (&link, &sign) in links.iter().zip(signs) {
+        d += sign * flux[link as usize];
+    }
+    d
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -284,6 +374,28 @@ mod tests {
             grid.keep[cell] = 0.9 + 0.1 * random.next();
             grid.gain[cell] = COURANT / (0.05 + random.next());
             grid.pressure[cell] = random.normal();
+        }
+        assert!(grid.index());
+        grid
+    }
+
+    /// A random grid whose cells have at most 6 links, like a voxel grid,
+    /// so [`Grid::index`] pads its lists.
+    fn random_lattice(seed: u32, cells: usize, links: usize) -> Grid {
+        let mut random = Random::new(seed);
+        let mut grid = random_grid(seed, cells, links);
+        let mut degree = vec![0; cells];
+        let pick = |random: &mut Random| (random.next() * cells as f64) as usize;
+        for link in 0..links {
+            let (mut a, mut b) = (pick(&mut random), pick(&mut random));
+            while a == b || degree[a] == 6 || degree[b] == 6 {
+                a = pick(&mut random);
+                b = pick(&mut random);
+            }
+            degree[a] += 1;
+            degree[b] += 1;
+            grid.link_a[link] = a as u32;
+            grid.link_b[link] = b as u32;
         }
         assert!(grid.index());
         grid
@@ -324,6 +436,27 @@ mod tests {
     }
 
     #[test]
+    fn padded_gather_equals_scatter() {
+        let mut scatter = random_lattice(3, 500, 1400);
+        assert_eq!(scatter.incident_width, 6);
+        assert!(scatter.incident_link.contains(&1400));
+        let mut gather = scatter.clone();
+        for _ in 0..200 {
+            scatter.step_scatter();
+            gather.step_gather();
+        }
+        assert!(scatter.pressure.iter().any(|&value| value != 0.0));
+        assert_bit_equal(&scatter, &gather);
+    }
+
+    #[test]
+    fn long_lists_are_not_padded() {
+        let grid = random_grid(1, 500, 1400);
+        assert_eq!(grid.incident_width, 0);
+        assert_eq!(grid.incident_link.len(), 2 * 1400);
+    }
+
+    #[test]
     fn incident_lists_are_sorted_and_signed() {
         let mut grid = Grid::new(3, 3);
         grid.link_a.copy_from_slice(&[0, 1, 2]);
@@ -332,6 +465,17 @@ mod tests {
         assert_eq!(grid.incident_start, [0, 2, 4, 6]);
         assert_eq!(grid.incident_link, [0, 2, 0, 1, 1, 2]);
         assert_eq!(grid.incident_sign, [1.0, -1.0, -1.0, 1.0, -1.0, 1.0]);
+        assert_eq!(grid.incident_width, 2);
+        grid.link_b[2] = 1;
+        assert!(grid.index());
+        // Cell 1 has three links, cell 0 one and cell 2 two: padded to 3
+        // with the zero-flux link 3.
+        assert_eq!(grid.incident_start, [0, 3, 6, 9]);
+        assert_eq!(grid.incident_link, [0, 3, 3, 0, 1, 2, 1, 2, 3]);
+        assert_eq!(
+            grid.incident_sign,
+            [1.0, 1.0, 1.0, -1.0, 1.0, -1.0, -1.0, 1.0, 1.0]
+        );
     }
 
     #[test]
