@@ -73,13 +73,11 @@ console.log('');
 console.log('Subglottal resonances (Hz) and -3 dB bandwidths (Hz):');
 for (const [name, { head, dt }] of lines) {
   const peaks = subglottalResonances(head, dt);
-  console.log(
-    `  [${name}] step ${(dt * 1e6).toFixed(2)} us: ` +
-      peaks
-        .map(
-          ({ frequency, bandwidth }) =>
-            `${frequency.toFixed(0)} (${bandwidth.toFixed(0)})`
-        )
-        .join(', ')
-  );
+  const resonances = peaks
+    .map(
+      ({ frequency, bandwidth }) =>
+        `${frequency.toFixed(0)} (${bandwidth.toFixed(0)})`
+    )
+    .join(', ');
+  console.log(`  [${name}] step ${(dt * 1e6).toFixed(2)} us: ${resonances}`);
 }

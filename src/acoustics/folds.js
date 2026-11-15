@@ -310,7 +310,7 @@ export class VocalFolds {
    *   of the waves arriving at the glottis from the trachea (`below`) and
    *   the vocal tract (`above`) and the areas (cm², Infinity for none) of
    *   the tubes there. Without it the flow is Bernoulli at the lung
-   *   pressure, as before.
+   *   pressure.
    */
   step(dt, control, noise, load) {
     const closure = control.closure;

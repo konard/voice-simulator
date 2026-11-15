@@ -104,16 +104,15 @@ for (const ipa of ['ˈaba', 'ˈapa']) {
     const run = trace(ipa, options);
     const result = voicingAfterClosure(run);
     const at = Math.round((result.closed + 0.04) * RATE);
+    const thresholds = THRESHOLDS.map(
+      (voiced) =>
+        `${(1000 * voicingAfterClosure(run, voiced).voicing).toFixed(1)} ms at ${voiced * 100} %`
+    ).join(', ');
     console.log(
       `[${ipa}] ${name.padEnd(11)} closes at ${(1000 * result.closed).toFixed(1)} ms for ` +
         `${(1000 * result.closure).toFixed(1)} ms, mouth pressure 40 ms in ` +
         `${(run.mouth[at] / 10).toFixed(0)} Pa, voicing ` +
-        `${(1000 * result.voicing).toFixed(1)} ms (period ${(1000 * result.period).toFixed(1)} ms; ` +
-        THRESHOLDS.map(
-          (voiced) =>
-            `${(1000 * voicingAfterClosure(run, voiced).voicing).toFixed(1)} ms at ${voiced * 100} %`
-        ).join(', ') +
-        ')'
+        `${(1000 * result.voicing).toFixed(1)} ms (period ${(1000 * result.period).toFixed(1)} ms; ${thresholds})`
     );
   }
 }

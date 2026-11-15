@@ -1,5 +1,6 @@
 // Smoke render with folds and with folds + interaction.
 // Usage: node experiments/issue-34-smoke.mjs [ipa] [tier]
+import { performance } from 'node:perf_hooks';
 import { synthesize } from '../src/index.js';
 import { estimatePitch, rms } from '../src/acoustics/analysis.js';
 
