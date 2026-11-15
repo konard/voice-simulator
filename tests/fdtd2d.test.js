@@ -155,6 +155,52 @@ describe('2D FDTD resonances', () => {
     }
   });
 
+  it('damps the high resonances of a tube like the waveguide (issue 37)', () => {
+    // With the half cell of air before the lips in parallel with the
+    // radiation inertance, F5-F7 lay 3.7-4.3 dB lower (relative to F1)
+    // than in the waveguide (experiments/issue-37-tube-levels.mjs).
+    const head = { ...DEFAULT_HEAD, vocalTractLength: 17.5 };
+    const areas = new Array(44).fill(3);
+    const sheet = new Fdtd2d({ head, piriform: false, vallecula: false });
+    sheet.setShape(areas, 0);
+    sheet.setLength(17.5);
+    const tube = new Waveguide({ sections: 44, piriform: false, head });
+    tube.setShape(areas, 0);
+    tube.setLength(17.5);
+    const levels = (solver, rate) => {
+      const response = new Float64Array(Math.round(rate * 0.1));
+      for (let n = 0; n < response.length; n++) {
+        response[n] = solver.step(n === 0 ? 1 : 0, 0, 0);
+      }
+      const level = (frequency) => {
+        const omega = (2 * Math.PI * frequency) / rate;
+        let re = 0;
+        let im = 0;
+        for (let n = 0; n < response.length; n++) {
+          re += response[n] * Math.cos(omega * n);
+          im -= response[n] * Math.sin(omega * n);
+        }
+        return 10 * Math.log10(re * re + im * im);
+      };
+      // Peak level near the odd quarter waves 1, 9, 11 and 13.
+      const peak = (k) => {
+        const guess = (k * SPEED_OF_SOUND) / (4 * 17.5);
+        let best = -Infinity;
+        for (let f = guess * 0.95; f <= guess * 1.05; f += 10) {
+          best = Math.max(best, level(f));
+        }
+        return best;
+      };
+      const first = peak(1);
+      return [9, 11, 13].map((k) => peak(k) - first);
+    };
+    const sheetLevels = levels(sheet, 1 / sheet.stepDuration({ length: 17.5 }));
+    const tubeLevels = levels(tube, (44 * SPEED_OF_SOUND) / 17.5);
+    sheetLevels.forEach((value, index) => {
+      expect(Math.abs(value - tubeLevels[index])).toBeLessThan(1);
+    });
+  });
+
   for (const symbol of ['ɑ', 'i', 'u']) {
     it(`follows the area function of /${symbol}/`, () => {
       const shape = vowelShape(symbol);

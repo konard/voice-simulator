@@ -27,9 +27,12 @@
  *   waveguide's loss model (lossFactor without its boundary term);
  * - the glottis: the first column ends in the glottis admittance of the
  *   waveguide's reflection, and the source flow enters it evenly;
- * - the lips: the last column radiates into Flanagan's piston load of the
- *   lip area (radiation.js), a resistance in parallel with an inertance
- *   that is integrated per cell; the output is the flow through that load;
+ * - the lips: the flow of each cell of the last column crosses the half
+ *   cell of air to the lip face (an inertance in series) into Flanagan's
+ *   piston load of the lip area (radiation.js), a resistance in parallel
+ *   with an inertance; the output is the flow through that load (with the
+ *   half cell in parallel instead, the sheet lost 4 dB on F5-F7 of a
+ *   uniform tube against the waveguide, issue 37);
  * - the nose and the pouches: 1D lines (nose-line.js) hang off the column
  *   of their opening, which drives them with its mean pressure and feels
  *   the flow they take.
@@ -120,10 +123,12 @@ export class Fdtd2d {
     this.velocityY = new Float64Array(columns * (rows - 1));
     this.depthY = new Float64Array(columns * (rows - 1));
     this.dampingY = new Float64Array(columns * (rows - 1));
-    /** Inertance flow per unit area through the lip load (normalised). */
+    /** Flow per unit area through the lip face (normalised). */
+    this.lipFlow = new Float64Array(rows);
+    /** Share of it in the inertance branch of the radiation load. */
     this.lipCurrent = new Float64Array(rows);
     this.lipStep = 0;
-    this.lipPressure = new Float64Array(rows);
+    this.halfStep = 0;
     this.fieldPressure = new Float64Array(columns);
   }
 
@@ -315,12 +320,12 @@ export class Fdtd2d {
     const { h, areas } = this.sheet;
     const lipArea = Math.max(this.sheet.lipArea, MIN_AREA);
     const radius = Math.sqrt(lipArea / Math.PI);
-    // The load acts on the pressure of the cell centres, half a cell
-    // inside the lip face: that half cell of air adds its inertance.
+    // The cell centres lie half a cell inside the lip face: the air of
+    // that half cell is an inertance in series with the load.
     const halfCell = (dx / 2) * (this.length / this.restLength);
-    const inertance =
-      ((8 * radius) / (3 * Math.PI) + halfCell) / SPEED_OF_SOUND;
-    this.lipStep = this.stepTime / inertance;
+    this.halfStep = (this.stepTime * SPEED_OF_SOUND) / halfCell;
+    this.lipStep =
+      (this.stepTime * SPEED_OF_SOUND * 3 * Math.PI) / (8 * radius);
     const portAdmittance = new Float64Array(columns);
     for (const port of this.ports) {
       if (port.line.open) {
@@ -342,21 +347,17 @@ export class Fdtd2d {
           this.wallAdmittance *
             ((2 * dx) / depth + this.#wallNeighbours(column, row)) +
           portAdmittance[column];
-        let extra = 0;
         if (column === 0) {
           admittance += this.glottisAdmittance;
         }
-        if (column === columns - 1) {
-          admittance += 1 / RADIATION_RESISTANCE;
-          extra = COURANT_2D * this.lipStep;
-        }
         const half = (COURANT_2D * admittance) / 2;
-        this.keep[index] = (1 - half) / (1 + half + extra);
-        this.gain[index] = COURANT_2D / (depth * (1 + half + extra));
+        this.keep[index] = (1 - half) / (1 + half);
+        this.gain[index] = COURANT_2D / (depth * (1 + half));
       }
     }
     for (let row = 0; row < rows; row++) {
       if (h[(columns - 1) * rows + row] <= 0) {
+        this.lipFlow[row] = 0;
         this.lipCurrent[row] = 0;
       }
     }
@@ -437,6 +438,42 @@ export class Fdtd2d {
   }
 
   /**
+   * Lips: the flow u of each cell of the last column crosses the half cell
+   * to the lip face (inertance), where the pressure q drives the load,
+   * u = q / R + i with an inertance current i. The trapezoidal rule makes
+   * both updates implicit. The flow leaves the cell like a face velocity.
+   * @returns {number} Radiated flow per unit dx.
+   */
+  #stepLips() {
+    const { rows, pressure, divergence, halfStep, lipStep } = this;
+    const { h } = this.sheet;
+    const last = (this.columns - 1) * rows;
+    const r = RADIATION_RESISTANCE;
+    const share = 1 / (1 + (r * lipStep) / 2);
+    let output = 0;
+    for (let row = 0; row < rows; row++) {
+      const depth = h[last + row];
+      if (depth <= 0) {
+        continue;
+      }
+      // q = r (mean u - i - lipStep q / 2) = share r (mean u - i).
+      const flow = this.lipFlow[row];
+      const current = this.lipCurrent[row];
+      const a = (halfStep * share * r) / 2;
+      const next =
+        (flow * (1 - a) +
+          halfStep * (pressure[last + row] + share * r * current)) /
+        (1 + a);
+      const face = share * r * ((flow + next) / 2 - current);
+      this.lipCurrent[row] = current + lipStep * face;
+      this.lipFlow[row] = next;
+      divergence[last + row] += depth * next;
+      output += depth * next;
+    }
+    return output;
+  }
+
+  /**
    * Advance one time step.
    * @param {number} glottalFlow Source volume velocity (derivative).
    * @param {number} noisePosition Section boundary of the turbulence source.
@@ -447,8 +484,8 @@ export class Fdtd2d {
     if (this.dirty) {
       this.#update();
     }
-    const { columns, rows, pressure, divergence, keep, gain } = this;
-    const { h, areas } = this.sheet;
+    const { rows, pressure, divergence, keep, gain } = this;
+    const { areas } = this.sheet;
     if (noise !== 0) {
       // A pressure jump across the plane enters the momentum equation.
       const column = this.#noiseFaces(noisePosition) - 1;
@@ -472,29 +509,12 @@ export class Fdtd2d {
         this.#driveColumn(port.column, -2 * share * port.left);
       }
     }
-    // Lips: the inertance flow of the load leaves the last column.
-    const last = (columns - 1) * rows;
-    for (let row = 0; row < rows; row++) {
-      divergence[last + row] += h[last + row] * this.lipCurrent[row];
-      this.lipPressure[row] = pressure[last + row];
-    }
+    const output = this.#stepLips() * this.dx;
     for (let index = 0; index < this.cellCount; index++) {
       pressure[index] =
         keep[index] * pressure[index] - gain[index] * divergence[index];
       divergence[index] = 0;
     }
-    let output = 0;
-    for (let row = 0; row < rows; row++) {
-      const depth = h[last + row];
-      if (depth <= 0) {
-        continue;
-      }
-      const now = pressure[last + row];
-      this.lipCurrent[row] += this.lipStep * now;
-      const mean = (now + this.lipPressure[row]) / 2;
-      output += depth * (mean / RADIATION_RESISTANCE + this.lipCurrent[row]);
-    }
-    output *= this.dx;
     for (const port of this.ports) {
       const { line } = port;
       line.junctionRight[0] = line.open
@@ -548,8 +568,8 @@ export class Fdtd2d {
       this.divergence,
       this.velocityX,
       this.velocityY,
+      this.lipFlow,
       this.lipCurrent,
-      this.lipPressure,
     ]) {
       array.fill(0);
     }
