@@ -86,7 +86,7 @@ describe('2D sheet geometry', () => {
   });
 
   for (const symbol of ['ɑ', 'i', 'u']) {
-    it(`/${symbol}/ keeps the area of every column`, () => {
+    it(`keeps the area of every column of /${symbol}/`, () => {
       const shape = vowelShape(symbol);
       const sheet = updateSheet(buildSheet(DEFAULT_HEAD), shape);
       for (let column = 0; column < sheet.columns; column++) {
@@ -106,7 +106,7 @@ describe('2D sheet geometry', () => {
     });
   }
 
-  it('lets [l] pass beside the tongue', () => {
+  it('lets the air pass beside the tongue', () => {
     const shape = tractShape(
       consonantTarget({ phoneme: getPhoneme('l') }),
       DEFAULT_HEAD
@@ -156,7 +156,7 @@ describe('2D FDTD resonances', () => {
   });
 
   for (const symbol of ['ɑ', 'i', 'u']) {
-    it(`/${symbol}/ follows the area function like the waveguide`, () => {
+    it(`follows the area function of /${symbol}/`, () => {
       const shape = vowelShape(symbol);
       const peaks = sheetPeaks(shape, { vallecula: false });
       const reference = waveguidePeaks(shape.areas, shape.length);
@@ -168,7 +168,7 @@ describe('2D FDTD resonances', () => {
     });
   }
 
-  it('has the transverse mode of a wide tube, which the waveguide lacks', () => {
+  it('shows a resonance across a wide tube', () => {
     const solver = new Fdtd2d({
       head: DEFAULT_HEAD,
       piriform: false,
@@ -208,7 +208,7 @@ describe('2D FDTD resonances', () => {
     );
   });
 
-  it('runs slower for a longer tract so the formants follow its length', () => {
+  it('runs slower for a longer tract', () => {
     const solver = new Fdtd2d({ head: DEFAULT_HEAD });
     const rest = solver.restLength;
     expect(solver.stepDuration({})).toBe(solver.stepDuration());
@@ -259,7 +259,7 @@ describe('2D FDTD rendering', () => {
     };
   }
 
-  it('is finite and about as loud as the waveguide', () => {
+  it('is stable and about as loud as the waveguide', () => {
     const { sheet, medium } = measured();
     expect(sheet.samples.every(Number.isFinite)).toBe(true);
     const decibels = 20 * Math.log10(rms(sheet.samples) / rms(medium.samples));
@@ -282,6 +282,10 @@ describe('2D FDTD rendering', () => {
     );
   });
 
+  // The murmur of the sheet is as strong as the waveguide's: 1.20 against
+  // 1.19 of the vowel (experiments/issue-37-loudness.mjs). The waveguide's
+  // own test of a murmur below the vowel is blocked by the first harmonic
+  // of the vowel (tests/acoustics.test.js), and the same applies here.
   itUnless(NASAL_TARGET_BLOCKED)(
     'keeps the nasal murmur quieter than the vowels',
     () => {
