@@ -7,11 +7,17 @@
  *
  * The committed result is experiments/issue-11-fit-dynamics.txt; this test
  * repeats the fit so that a change of the synthesis that moves it shows up.
+ * That fit took 37 minutes on 5 workers for 6 rounds; a hosted runner has
+ * 4 cores, so the test stops after `ROUNDS` rounds to stay inside the
+ * one-hour limit per test of scripts/run-heavy.mjs. The first 3 rounds
+ * gave 0.52 of the 0.56 percentage points of the whole fit.
  */
 
 import { describe, it, expect } from 'test-anywhere';
 import { fitDynamics } from '../../experiments/issue-11-fit-dynamics.mjs';
 import { heavyLimit, writeReport } from './helpers/report.js';
+
+const ROUNDS = 3;
 
 const isFiniteNumber = (value) =>
   typeof value === 'number' && Number.isFinite(value);
@@ -20,6 +26,7 @@ describe('articulator dynamics against the golden recordings', () => {
   it('fits time constants, leads and resistance', async () => {
     const { text, data } = await fitDynamics({
       limit: heavyLimit(6),
+      rounds: ROUNDS,
       log: (line) => console.error(line),
     });
     expect(data.recordings.length > 0).toBe(true);

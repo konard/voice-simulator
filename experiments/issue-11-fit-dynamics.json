@@ -1,0 +1,683 @@
+{
+  "settings": {
+    "tier": "minimal",
+    "sampleRate": 16000,
+    "holdOut": 5,
+    "screenStep": 0.2,
+    "steps": [
+      0.15,
+      0.05
+    ],
+    "maxRounds": 6,
+    "limit": null,
+    "workers": 5,
+    "evaluations": 300,
+    "seconds": 2217
+  },
+  "recordings": [
+    {
+      "id": "en-02",
+      "lang": "en",
+      "sex": "male",
+      "f0": 94.7,
+      "offset": -0.02,
+      "cost": 12.4,
+      "vowels": 23,
+      "heldOut": false
+    },
+    {
+      "id": "en-04",
+      "lang": "en",
+      "sex": "female",
+      "f0": 198.4,
+      "offset": 0.82,
+      "cost": 10.43,
+      "vowels": 16,
+      "heldOut": false
+    },
+    {
+      "id": "en-06",
+      "lang": "en",
+      "sex": "female",
+      "f0": 203.4,
+      "offset": 0.05,
+      "cost": 11.33,
+      "vowels": 17,
+      "heldOut": false
+    },
+    {
+      "id": "ru-02",
+      "lang": "ru",
+      "sex": "female",
+      "f0": 171.8,
+      "offset": 0,
+      "cost": 9.51,
+      "vowels": 22,
+      "heldOut": false
+    },
+    {
+      "id": "en-01",
+      "lang": "en",
+      "sex": "female",
+      "f0": 216.4,
+      "offset": 0.01,
+      "cost": 10.96,
+      "vowels": 9,
+      "heldOut": false
+    },
+    {
+      "id": "en-05",
+      "lang": "en",
+      "sex": "female",
+      "f0": 254.9,
+      "offset": 0.42,
+      "cost": 9.33,
+      "vowels": 18,
+      "heldOut": true
+    },
+    {
+      "id": "hi-03",
+      "lang": "hi",
+      "sex": "female",
+      "f0": 202,
+      "offset": 0.42,
+      "cost": 9.02,
+      "vowels": 20,
+      "heldOut": false
+    },
+    {
+      "id": "hi-06",
+      "lang": "hi",
+      "sex": "female",
+      "f0": 216.3,
+      "offset": 0.38,
+      "cost": 9.17,
+      "vowels": 15,
+      "heldOut": false
+    },
+    {
+      "id": "zh-05",
+      "lang": "zh",
+      "sex": "female",
+      "f0": 251.2,
+      "offset": 0,
+      "cost": 9.98,
+      "vowels": 11,
+      "heldOut": true
+    },
+    {
+      "id": "en-03",
+      "lang": "en",
+      "sex": "female",
+      "f0": 391.1,
+      "offset": 0.05,
+      "cost": 12.28,
+      "vowels": 17,
+      "heldOut": false
+    },
+    {
+      "id": "ru-04",
+      "lang": "ru",
+      "sex": "male",
+      "f0": 122.1,
+      "offset": 0.74,
+      "cost": 10.2,
+      "vowels": 18,
+      "heldOut": false
+    },
+    {
+      "id": "ru-05",
+      "lang": "ru",
+      "sex": "female",
+      "f0": 353.1,
+      "offset": 0.2,
+      "cost": 11.32,
+      "vowels": 13,
+      "heldOut": true
+    },
+    {
+      "id": "zh-01",
+      "lang": "zh",
+      "sex": "female",
+      "f0": 312,
+      "offset": 0,
+      "cost": 10.66,
+      "vowels": 16,
+      "heldOut": false
+    },
+    {
+      "id": "zh-03",
+      "lang": "zh",
+      "sex": "female",
+      "f0": 293.1,
+      "offset": 0.16,
+      "cost": 10.79,
+      "vowels": 13,
+      "heldOut": false
+    },
+    {
+      "id": "ru-03",
+      "lang": "ru",
+      "sex": "female",
+      "f0": 228.7,
+      "offset": 0.175,
+      "cost": 9.73,
+      "vowels": 12,
+      "heldOut": false
+    },
+    {
+      "id": "hi-02",
+      "lang": "hi",
+      "sex": "female",
+      "f0": 212,
+      "offset": 0.48,
+      "cost": 9.5,
+      "vowels": 17,
+      "heldOut": false
+    },
+    {
+      "id": "hi-04",
+      "lang": "hi",
+      "sex": "female",
+      "f0": 199.7,
+      "offset": 0.22,
+      "cost": 9.79,
+      "vowels": 15,
+      "heldOut": false
+    },
+    {
+      "id": "zh-02",
+      "lang": "zh",
+      "sex": "female",
+      "f0": 313.7,
+      "offset": 0,
+      "cost": 9.42,
+      "vowels": 11,
+      "heldOut": false
+    },
+    {
+      "id": "zh-06",
+      "lang": "zh",
+      "sex": "female",
+      "f0": 306.9,
+      "offset": 0.2,
+      "cost": 10.83,
+      "vowels": 13,
+      "heldOut": false
+    },
+    {
+      "id": "ru-01",
+      "lang": "ru",
+      "sex": "female",
+      "f0": 267.4,
+      "offset": 0.36,
+      "cost": 9.41,
+      "vowels": 10,
+      "heldOut": false
+    },
+    {
+      "id": "ru-06",
+      "lang": "ru",
+      "sex": "female",
+      "f0": 262.3,
+      "offset": 0.37,
+      "cost": 9.81,
+      "vowels": 22,
+      "heldOut": false
+    },
+    {
+      "id": "hi-01",
+      "lang": "hi",
+      "sex": "female",
+      "f0": 223.9,
+      "offset": 0.38,
+      "cost": 9.5,
+      "vowels": 27,
+      "heldOut": false
+    },
+    {
+      "id": "hi-05",
+      "lang": "hi",
+      "sex": "female",
+      "f0": 237.5,
+      "offset": 0.12,
+      "cost": 8.89,
+      "vowels": 15,
+      "heldOut": true
+    },
+    {
+      "id": "zh-04",
+      "lang": "zh",
+      "sex": "female",
+      "f0": 291.7,
+      "offset": 0.33,
+      "cost": 10.41,
+      "vowels": 16,
+      "heldOut": false
+    }
+  ],
+  "effects": [
+    {
+      "name": "backness",
+      "effect": 0.3441
+    },
+    {
+      "name": "height",
+      "effect": 0.2584
+    },
+    {
+      "name": "tongueAmount",
+      "effect": 0.2488
+    },
+    {
+      "name": "voicing",
+      "effect": 0.2347
+    },
+    {
+      "name": "rounding",
+      "effect": 0.1269
+    },
+    {
+      "name": "frication",
+      "effect": 0.1117
+    },
+    {
+      "name": "rhotic",
+      "effect": 0.1045
+    },
+    {
+      "name": "sibilance",
+      "effect": 0.0999
+    },
+    {
+      "name": "tongueLocation",
+      "effect": 0.0978
+    },
+    {
+      "name": "lipAmount",
+      "effect": 0.0886
+    },
+    {
+      "name": "aspiration",
+      "effect": 0.0864
+    },
+    {
+      "name": "tongueArea",
+      "effect": 0.049
+    },
+    {
+      "name": "velum",
+      "effect": 0.0479
+    },
+    {
+      "name": "tongueWidth",
+      "effect": 0.0435
+    },
+    {
+      "name": "lipArea",
+      "effect": 0.04
+    },
+    {
+      "name": "palatalization",
+      "effect": 0.0294
+    },
+    {
+      "name": "trill",
+      "effect": 0.008
+    },
+    {
+      "name": "glottalClosure",
+      "effect": 0
+    },
+    {
+      "name": "lateral",
+      "effect": 0
+    }
+  ],
+  "channels": [
+    "backness",
+    "height",
+    "tongueAmount",
+    "voicing",
+    "rounding",
+    "frication",
+    "rhotic",
+    "sibilance"
+  ],
+  "rounds": [
+    {
+      "round": 1,
+      "step": 0.15,
+      "error": 34.4652
+    },
+    {
+      "round": 2,
+      "step": 0.15,
+      "error": 34.3865
+    },
+    {
+      "round": 3,
+      "step": 0.15,
+      "error": 34.3772
+    },
+    {
+      "round": 4,
+      "step": 0.15,
+      "error": 34.3772
+    },
+    {
+      "round": 5,
+      "step": 0.05,
+      "error": 34.344
+    },
+    {
+      "round": 6,
+      "step": 0.05,
+      "error": 34.3435
+    }
+  ],
+  "before": [
+    {
+      "set": "train",
+      "lang": "all",
+      "recordings": 20,
+      "frames": 3909,
+      "f1": 34.59988572127227,
+      "f2": 37.01733572501796,
+      "f3": 33.08643339161431,
+      "mean": 34.90121827930152
+    },
+    {
+      "set": "train",
+      "lang": "en",
+      "recordings": 5,
+      "frames": 806,
+      "f1": 44.18195244823448,
+      "f2": 37.475828025999114,
+      "f3": 35.70830057976405,
+      "mean": 39.12202701799922
+    },
+    {
+      "set": "train",
+      "lang": "ru",
+      "recordings": 5,
+      "frames": 921,
+      "f1": 28.31376841126169,
+      "f2": 35.24792550223138,
+      "f3": 36.23501579977737,
+      "mean": 33.26556990442349
+    },
+    {
+      "set": "train",
+      "lang": "hi",
+      "recordings": 5,
+      "frames": 1248,
+      "f1": 38.3834790248747,
+      "f2": 33.396990265149675,
+      "f3": 30.807517771625488,
+      "mean": 34.195995687216616
+    },
+    {
+      "set": "train",
+      "lang": "zh",
+      "recordings": 5,
+      "frames": 934,
+      "f1": 27.520343000718206,
+      "f2": 41.94859910669165,
+      "f3": 29.59489941529033,
+      "mean": 33.021280507566736
+    },
+    {
+      "set": "held",
+      "lang": "all",
+      "recordings": 4,
+      "frames": 700,
+      "f1": 28.835164553257364,
+      "f2": 28.171460648828152,
+      "f3": 34.74942208239817,
+      "mean": 30.585349094827897
+    },
+    {
+      "set": "held",
+      "lang": "en",
+      "recordings": 1,
+      "frames": 197,
+      "f1": 17.530480388288748,
+      "f2": 25.754430267099025,
+      "f3": 39.56771538036633,
+      "mean": 27.617542011918033
+    },
+    {
+      "set": "held",
+      "lang": "ru",
+      "recordings": 1,
+      "frames": 151,
+      "f1": 25.783914404827843,
+      "f2": 39.98396614996393,
+      "f3": 35.62958925892142,
+      "mean": 33.79915660457107
+    },
+    {
+      "set": "held",
+      "lang": "hi",
+      "recordings": 1,
+      "frames": 178,
+      "f1": 35.63708117635201,
+      "f2": 14.782629742279259,
+      "f3": 30.656273995567712,
+      "mean": 27.025328304732994
+    },
+    {
+      "set": "held",
+      "lang": "zh",
+      "recordings": 1,
+      "frames": 174,
+      "f1": 36.389182243560846,
+      "f2": 32.16481643597039,
+      "f3": 33.144109694737224,
+      "mean": 33.89936945808949
+    }
+  ],
+  "after": [
+    {
+      "set": "train",
+      "lang": "all",
+      "recordings": 20,
+      "frames": 3890,
+      "f1": 33.76770681985746,
+      "f2": 36.59333112105282,
+      "f3": 32.66934752822976,
+      "mean": 34.343461823046674
+    },
+    {
+      "set": "train",
+      "lang": "en",
+      "recordings": 5,
+      "frames": 802,
+      "f1": 43.91567887783615,
+      "f2": 36.606223570079635,
+      "f3": 34.34939708633607,
+      "mean": 38.29043317808395
+    },
+    {
+      "set": "train",
+      "lang": "ru",
+      "recordings": 5,
+      "frames": 918,
+      "f1": 28.06828933241768,
+      "f2": 34.99038588793195,
+      "f3": 36.46706160362832,
+      "mean": 33.17524560799265
+    },
+    {
+      "set": "train",
+      "lang": "hi",
+      "recordings": 5,
+      "frames": 1239,
+      "f1": 37.94458715763287,
+      "f2": 33.1217486064765,
+      "f3": 30.67461094574861,
+      "mean": 33.913648903285996
+    },
+    {
+      "set": "train",
+      "lang": "zh",
+      "recordings": 5,
+      "frames": 931,
+      "f1": 25.142271911543144,
+      "f2": 41.65496641972321,
+      "f3": 29.18632047720604,
+      "mean": 31.99451960282413
+    },
+    {
+      "set": "held",
+      "lang": "all",
+      "recordings": 4,
+      "frames": 697,
+      "f1": 27.018509786500783,
+      "f2": 27.840131618194068,
+      "f3": 34.03133482947458,
+      "mean": 29.629992078056475
+    },
+    {
+      "set": "held",
+      "lang": "en",
+      "recordings": 1,
+      "frames": 197,
+      "f1": 17.33555961698674,
+      "f2": 25.63944349741743,
+      "f3": 39.94995386208481,
+      "mean": 27.641652325496327
+    },
+    {
+      "set": "held",
+      "lang": "ru",
+      "recordings": 1,
+      "frames": 150,
+      "f1": 25.319612118348473,
+      "f2": 39.142205176048094,
+      "f3": 33.323800920823,
+      "mean": 32.59520607173985
+    },
+    {
+      "set": "held",
+      "lang": "hi",
+      "recordings": 1,
+      "frames": 177,
+      "f1": 35.971506825736036,
+      "f2": 16.879921866392536,
+      "f3": 30.445102670654364,
+      "mean": 27.765510454260976
+    },
+    {
+      "set": "held",
+      "lang": "zh",
+      "recordings": 1,
+      "frames": 173,
+      "f1": 29.44736058493187,
+      "f2": 29.698955932918206,
+      "f3": 32.40648186433615,
+      "mean": 30.517599460728746
+    }
+  ],
+  "held": {
+    "before": 30.5853,
+    "after": 29.63,
+    "gain": 0.0312
+  },
+  "accepted": false,
+  "start": {
+    "backness.timeConstant": 0.03,
+    "backness.lead": 0.0504,
+    "height.timeConstant": 0.03,
+    "height.lead": 0.0504,
+    "tongueAmount.timeConstant": 0.012,
+    "tongueAmount.lead": 0.0202,
+    "voicing.timeConstant": 0.008,
+    "voicing.lead": 0.0134,
+    "rounding.timeConstant": 0.02,
+    "rounding.lead": 0.12,
+    "frication.timeConstant": 0.006,
+    "frication.lead": 0.0101,
+    "rhotic.timeConstant": 0.025,
+    "rhotic.lead": 0.042,
+    "sibilance.timeConstant": 0.01,
+    "sibilance.lead": 0.0168,
+    "resistance.high": 1,
+    "resistance.medium": 0.6,
+    "resistance.low": 0.3,
+    "resistance.none": 0
+  },
+  "fitted": {
+    "backness.timeConstant": 0.03,
+    "backness.lead": 0.0504,
+    "height.timeConstant": 0.03,
+    "height.lead": 0.0504,
+    "tongueAmount.timeConstant": 0.0097,
+    "tongueAmount.lead": 0.022,
+    "voicing.timeConstant": 0.008,
+    "voicing.lead": 0.0134,
+    "rounding.timeConstant": 0.02,
+    "rounding.lead": 0.12,
+    "frication.timeConstant": 0.0057,
+    "frication.lead": 0.0096,
+    "rhotic.timeConstant": 0.0331,
+    "rhotic.lead": 0.0258,
+    "sibilance.timeConstant": 0.0115,
+    "sibilance.lead": 0.0143,
+    "resistance.high": 1,
+    "resistance.medium": 0.6,
+    "resistance.low": 0.3,
+    "resistance.none": 0
+  },
+  "reduction": {
+    "shapes": {
+      "own": {
+        "recordings": 24,
+        "frames": 854,
+        "f1": 29.961253804671244,
+        "f2": 29.754697377696328,
+        "f3": 37.498618794036844,
+        "mean": 32.40485665880147
+      },
+      "full": {
+        "recordings": 24,
+        "frames": 852,
+        "f1": 29.602148718761626,
+        "f2": 40.65381378398225,
+        "f3": 32.82420151664834,
+        "mean": 34.36005467313074
+      }
+    },
+    "durations": [
+      {
+        "lang": "en",
+        "reduced": 53,
+        "full": 9,
+        "planned": 0.686,
+        "measured": 0.701
+      },
+      {
+        "lang": "ru",
+        "reduced": 49,
+        "full": 18,
+        "planned": 0.76,
+        "measured": 0.901
+      },
+      {
+        "lang": "hi",
+        "reduced": 38,
+        "full": 71,
+        "planned": 0.427,
+        "measured": 0.488
+      },
+      {
+        "lang": "zh",
+        "reduced": 18,
+        "full": 62,
+        "planned": 1.046,
+        "measured": 0.935
+      }
+    ]
+  }
+}
