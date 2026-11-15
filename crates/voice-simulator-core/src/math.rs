@@ -12,6 +12,12 @@ pub fn sqrt(x: f64) -> f64 {
     libm::sqrt(x)
 }
 
+/// Absolute value; exact, so it is allowed in class A code.
+#[inline]
+pub fn abs(x: f64) -> f64 {
+    libm::fabs(x)
+}
+
 /// Largest integer not above `x`; exact, so it is allowed in class A code.
 #[inline]
 pub fn floor(x: f64) -> f64 {

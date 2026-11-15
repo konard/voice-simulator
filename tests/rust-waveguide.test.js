@@ -15,6 +15,7 @@ import { describe, expect } from 'test-anywhere';
 import { Biquad, createNoise } from '../src/acoustics/filters.js';
 import { Glottis } from '../src/acoustics/glottis.js';
 import { Radiation } from '../src/acoustics/radiation.js';
+import { NoiseSources, OutputStage } from '../src/acoustics/voice.js';
 import { piriformBranch, Waveguide } from '../src/acoustics/waveguide.js';
 import { noseShape } from '../src/articulation/tract-shape.js';
 import { float64View } from '../src/engine/wasm-loader.js';
@@ -59,7 +60,7 @@ function inEngine(engine, values, call) {
   }
 }
 
-describe('Rust waveguide renderer (issue 22)', () => {
+describe('Rust sources (issue 22)', () => {
   it('biquad matches', async () => {
     const engine = await loadRustEngine();
     const noise = createNoise(1);
@@ -146,6 +147,9 @@ describe('Rust waveguide renderer (issue 22)', () => {
     globalThis.console.log(`radiation error ${measured}`);
     expect(measured).toBe(0);
   });
+});
+
+describe('Rust waveguide and output (issue 22)', () => {
   it('waveguide matches', async () => {
     const engine = await loadRustEngine();
     const sections = 22;
@@ -195,4 +199,42 @@ describe('Rust waveguide renderer (issue 22)', () => {
     globalThis.console.log(`waveguide error ${measured}`);
     expect(measured < 1e-9).toBe(true);
   });
+  for (const [label, sampleRate, bandLimit] of [
+    ['wide', 22050, undefined],
+    ['band-limited', 8000, 3400],
+  ]) {
+    it(`noise sources and output stage match (${label})`, async () => {
+      const engine = await loadRustEngine();
+      const rate = (22 * 35000) / 16.5;
+      const frequency = 2500;
+      const noise = createNoise(4);
+      const input = Float64Array.from({ length: 4096 }, () => noise());
+      const sources = new NoiseSources(1);
+      const output = new OutputStage(sampleRate, 1.2, bandLimit);
+      sources.configure(rate);
+      sources.tune(frequency);
+      output.configure(rate);
+      const expected = input.map((value) => {
+        const aspiration = sources.aspiration.process(sources.white());
+        const frication = sources.frication.process(sources.white());
+        return output.finish(output.filter(value + aspiration + frication));
+      });
+      const { result, values } = inEngine(engine, input, (pointer, count) =>
+        engine.exports.vs_stages_run(
+          hashSeed('1:noise'),
+          sampleRate,
+          1.2,
+          bandLimit ?? 0,
+          rate,
+          frequency,
+          pointer,
+          count
+        )
+      );
+      expect(result).toBe(0);
+      const measured = error(values, expected);
+      globalThis.console.log(`stages (${label}) error ${measured}`);
+      expect(measured < 1e-9).toBe(true);
+    });
+  }
 });

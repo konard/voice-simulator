@@ -150,7 +150,7 @@ function noseSections(head, sections) {
   );
 }
 
-class NoiseSources {
+export class NoiseSources {
   constructor(seed) {
     this.white = createNoise(`${seed}:noise`);
     this.aspiration = new Biquad();
@@ -209,7 +209,7 @@ const BUTTERWORTH_8 = [0.5098, 0.6013, 0.9, 2.5629];
  * Nyquist, about 60 dB down at 8 kHz, which the filter at the solver rate
  * (about 7 dB at 1.1 bandLimit) cannot reach.
  */
-class OutputStage {
+export class OutputStage {
   constructor(sampleRate, gain = 1, bandLimit = undefined) {
     this.gain = OUTPUT_GAIN * gain;
     const narrow = bandLimit !== undefined && bandLimit !== null;

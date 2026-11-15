@@ -5,6 +5,7 @@
 use voice_simulator_core::filters::Biquad;
 use voice_simulator_core::glottis::{GlottalControl, Glottis, GlottisOptions};
 use voice_simulator_core::radiation::Radiation;
+use voice_simulator_core::stages::{NoiseSources, OutputStage};
 use voice_simulator_core::waveguide::{PiriformBranch, Waveguide, WaveguideOptions};
 
 use crate::{error, f64_slice};
@@ -196,6 +197,63 @@ pub extern "C" fn vs_waveguide_run(
             } else {
                 error::BAD_ARGUMENT
             }
+        }
+        Err(code) => code,
+    }
+}
+
+/// Runs the noise sources and the output stage of the renderer over
+/// `data`: for each value, `white` → aspiration band-pass and a second
+/// `white` → frication band-pass (tuned to `frequency`) are added to it,
+/// the sum goes through `filter` and `finish`. `seed` is
+/// `hashSeed('<seed>:noise')`, `band_limit` 0 for none; both stages are
+/// configured for the step `rate`.
+pub fn run_stages(
+    seed: u32,
+    sample_rate: f64,
+    gain: f64,
+    band_limit: f64,
+    rate: f64,
+    frequency: f64,
+    data: &mut [f64],
+) {
+    let mut noise = NoiseSources::new(seed);
+    let limit = if band_limit > 0.0 {
+        Some(band_limit)
+    } else {
+        None
+    };
+    let mut output = OutputStage::new(sample_rate, gain, limit);
+    noise.configure(rate);
+    noise.tune(frequency);
+    output.configure(rate);
+    for value in data {
+        let white = noise.white.white();
+        let aspiration = noise.aspiration.process(white);
+        let white = noise.white.white();
+        let frication = noise.frication.process(white);
+        let filtered = output.filter(*value + aspiration + frication);
+        *value = output.finish(filtered);
+    }
+}
+
+/// [`run_stages`] over the `count` `f64` values at `data`. Returns 0 or a
+/// negative code of [`error`].
+#[no_mangle]
+pub extern "C" fn vs_stages_run(
+    seed: u32,
+    sample_rate: f64,
+    gain: f64,
+    band_limit: f64,
+    rate: f64,
+    frequency: f64,
+    data: u32,
+    count: u32,
+) -> i32 {
+    match f64_slice(data, count) {
+        Ok(slice) => {
+            run_stages(seed, sample_rate, gain, band_limit, rate, frequency, slice);
+            error::OK
         }
         Err(code) => code,
     }

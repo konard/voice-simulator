@@ -22,4 +22,5 @@ pub mod radiation;
 pub mod random;
 pub mod resample;
 pub mod solver;
+pub mod stages;
 pub mod waveguide;
