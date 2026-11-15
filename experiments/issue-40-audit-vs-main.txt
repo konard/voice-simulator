@@ -1,0 +1,97 @@
+# diff of node experiments/issue-11-audit.mjs: origin/main 7b073ff (<) against this branch (>)
+18,24c18,24
+< minimal@8000: {"rate":8000,"f0":122,"formants":[510,1460,2340,0]}
+< minimal@11025: {"rate":11025,"f0":122,"formants":[500,1470,2415,3710]}
+< minimal@16000: {"rate":16000,"f0":122,"formants":[505,1465,2420,3615]}
+< head parameters: 44
+< breathiness 0: {"hnr":20.23,"h1h2":0.98}
+< breathiness 0.5: {"hnr":13.95,"h1h2":8.29}
+< breathiness 1: {"hnr":3.19,"h1h2":11.78}
+---
+> minimal@8000: {"rate":8000,"f0":122,"formants":[510,1455,2345,0]}
+> minimal@11025: {"rate":11025,"f0":122,"formants":[505,1470,2415,3705]}
+> minimal@16000: {"rate":16000,"f0":122,"formants":[505,1465,2420,3640]}
+> head parameters: 50
+> breathiness 0: {"hnr":20.86,"h1h2":0.95}
+> breathiness 0.5: {"hnr":14.01,"h1h2":8.18}
+> breathiness 1: {"hnr":3.06,"h1h2":11.61}
+27c27
+< nasal/vowel level high: {"ratio":0.87}
+---
+> nasal/vowel level high: {"ratio":0.99}
+35,36c35,36
+< rtf narrowband: 0.06
+< rtf wideband: 0.08
+---
+> rtf narrowband: 0.07
+> rtf wideband: 0.07
+38c38
+< rtf low: 0.13
+---
+> rtf low: 0.12
+
+# diff of node experiments/issue-11-audit-m2.mjs: origin/main 7b073ff (<) against this branch (>)
+7c7
+< sentence, no jitter/shimmer/vibrato, breathiness 0: {"hnr":22.48,"h1h2":0.97}
+---
+> sentence, no jitter/shimmer/vibrato, breathiness 0: {"hnr":22.7,"h1h2":0.95}
+21,35c21,35
+< ama waveguide 44: {"vowelLips":0.2714,"vowelNose":0.2258,"nasalLips":0.1287,"nasalNose":0.4975,"audioVowel":0.1426,"audioNasal":0.1549,"ratio":1.09}
+< ama fdtd3d dx 1: {"vowelLips":0.349,"vowelNose":0.2226,"nasalLips":0.0991,"nasalNose":0.4623,"audioVowel":0.1641,"audioNasal":0.1436,"ratio":0.87}
+< ama fdtd3d dx 0.6: {"vowelLips":0.2738,"vowelNose":0.179,"nasalLips":0.1288,"nasalNose":0.4897,"audioVowel":0.1294,"audioNasal":0.1542,"ratio":1.19}
+< ama waveguide 44, nasalCoupling 0.25: {"vowelLips":0.2787,"vowelNose":0.2149,"nasalLips":0.1442,"nasalNose":0.5012,"audioVowel":0.1394,"audioNasal":0.1572,"ratio":1.13}
+< ama fdtd3d dx 1, nasalCoupling 0.25: {"vowelLips":0.3495,"vowelNose":0.22,"nasalLips":0.2744,"nasalNose":0.5052,"audioVowel":0.1594,"audioNasal":0.1442,"ratio":0.9}
+< ama waveguide 44, nasalCoupling 0.5: {"vowelLips":0.2741,"vowelNose":0.2222,"nasalLips":0.1317,"nasalNose":0.496,"audioVowel":0.1416,"audioNasal":0.1548,"ratio":1.09}
+< ama fdtd3d dx 1, nasalCoupling 0.5: {"vowelLips":0.3485,"vowelNose":0.224,"nasalLips":0.1451,"nasalNose":0.4649,"audioVowel":0.1633,"audioNasal":0.1432,"ratio":0.88}
+< ama waveguide 44, nasalCoupling 2: {"vowelLips":0.2696,"vowelNose":0.2265,"nasalLips":0.1308,"nasalNose":0.506,"audioVowel":0.143,"audioNasal":0.1575,"ratio":1.1}
+< ama fdtd3d dx 1, nasalCoupling 2: {"vowelLips":0.3482,"vowelNose":0.219,"nasalLips":0.0892,"nasalNose":0.4642,"audioVowel":0.1632,"audioNasal":0.144,"ratio":0.88}
+< ama waveguide 44, wallLoss 0: {"vowelLips":0.2898,"vowelNose":0.2563,"nasalLips":0.1178,"nasalNose":0.5138,"audioVowel":0.156,"audioNasal":0.1588,"ratio":1.02}
+< ama fdtd3d dx 1, wallLoss 0: {"vowelLips":0.6601,"vowelNose":0.5468,"nasalLips":0.1331,"nasalNose":0.5473,"audioVowel":0.2755,"audioNasal":0.1743,"ratio":0.63}
+< ama waveguide 44, wallLoss 3: {"vowelLips":0.2719,"vowelNose":0.2075,"nasalLips":0.0883,"nasalNose":0.4338,"audioVowel":0.1378,"audioNasal":0.133,"ratio":0.97}
+< ama fdtd3d dx 1, wallLoss 3: {"vowelLips":0.301,"vowelNose":0.1432,"nasalLips":0.091,"nasalNose":0.3629,"audioVowel":0.126,"audioNasal":0.1116,"ratio":0.89}
+< ama fdtd3d dx 1, no pouches: {"vowelLips":0.3099,"vowelNose":0.1831,"nasalLips":0.1048,"nasalNose":0.4577,"audioVowel":0.1407,"audioNasal":0.1428,"ratio":1.01}
+< ama fdtd3d dx 1, microphone output: {"vowelLips":89.3506,"vowelNose":47.1925,"nasalLips":46.2152,"nasalNose":157.4577,"audioVowel":0.1679,"audioNasal":0.2032,"ratio":1.21}
+---
+> ama waveguide 44: {"vowelLips":0.2714,"vowelNose":0.2258,"nasalLips":0.1304,"nasalNose":0.4985,"audioVowel":0.1426,"audioNasal":0.1553,"ratio":1.09}
+> ama fdtd3d dx 1: {"vowelLips":0.3049,"vowelNose":0.198,"nasalLips":0.0884,"nasalNose":0.4657,"audioVowel":0.144,"audioNasal":0.1427,"ratio":0.99}
+> ama fdtd3d dx 0.6: {"vowelLips":0.2824,"vowelNose":0.1869,"nasalLips":0.1106,"nasalNose":0.459,"audioVowel":0.1339,"audioNasal":0.144,"ratio":1.08}
+> ama waveguide 44, nasalCoupling 0.25: {"vowelLips":0.2787,"vowelNose":0.2149,"nasalLips":0.1461,"nasalNose":0.5023,"audioVowel":0.1394,"audioNasal":0.1576,"ratio":1.13}
+> ama fdtd3d dx 1, nasalCoupling 0.25: {"vowelLips":0.3011,"vowelNose":0.1803,"nasalLips":0.2401,"nasalNose":0.5047,"audioVowel":0.1334,"audioNasal":0.1445,"ratio":1.08}
+> ama waveguide 44, nasalCoupling 0.5: {"vowelLips":0.2741,"vowelNose":0.2222,"nasalLips":0.1335,"nasalNose":0.497,"audioVowel":0.1416,"audioNasal":0.1552,"ratio":1.1}
+> ama fdtd3d dx 1, nasalCoupling 0.5: {"vowelLips":0.3015,"vowelNose":0.1916,"nasalLips":0.1266,"nasalNose":0.4688,"audioVowel":0.1396,"audioNasal":0.1427,"ratio":1.02}
+> ama waveguide 44, nasalCoupling 2: {"vowelLips":0.2696,"vowelNose":0.2265,"nasalLips":0.1327,"nasalNose":0.5071,"audioVowel":0.143,"audioNasal":0.1579,"ratio":1.1}
+> ama fdtd3d dx 1, nasalCoupling 2: {"vowelLips":0.3084,"vowelNose":0.2017,"nasalLips":0.0817,"nasalNose":0.4662,"audioVowel":0.1469,"audioNasal":0.1428,"ratio":0.97}
+> ama waveguide 44, wallLoss 0: {"vowelLips":0.2898,"vowelNose":0.2563,"nasalLips":0.1201,"nasalNose":0.5168,"audioVowel":0.156,"audioNasal":0.1595,"ratio":1.02}
+> ama fdtd3d dx 1, wallLoss 0: {"vowelLips":0.4861,"vowelNose":0.4292,"nasalLips":0.096,"nasalNose":0.5448,"audioVowel":0.1759,"audioNasal":0.1652,"ratio":0.94}
+> ama waveguide 44, wallLoss 3: {"vowelLips":0.2719,"vowelNose":0.2075,"nasalLips":0.0889,"nasalNose":0.4337,"audioVowel":0.1378,"audioNasal":0.133,"ratio":0.97}
+> ama fdtd3d dx 1, wallLoss 3: {"vowelLips":0.2895,"vowelNose":0.1394,"nasalLips":0.0904,"nasalNose":0.3492,"audioVowel":0.1214,"audioNasal":0.1077,"ratio":0.89}
+> ama fdtd3d dx 1, no pouches: {"vowelLips":0.3185,"vowelNose":0.2071,"nasalLips":0.0916,"nasalNose":0.4548,"audioVowel":0.1501,"audioNasal":0.1401,"ratio":0.93}
+> ama fdtd3d dx 1, microphone output: {"vowelLips":78.7226,"vowelNose":43.5577,"nasalLips":41.5537,"nasalNose":145.6398,"audioVowel":0.1503,"audioNasal":0.19,"ratio":1.26}
+38,41c38,41
+< gain dB fdtd3d dx 1 [a]: {"50":-0.16,"100":0.2,"250":3.06,"500":18.54,"1000":1.65,"2000":4.18}
+< gain dB waveguide 44 [m]: {"50":0.06,"100":-0.24,"250":3.22,"500":7.73,"1000":-3.77,"2000":-9.27}
+< gain dB fdtd3d dx 1 [m]: {"50":-0.01,"100":1,"250":11.54,"500":-3.71,"1000":-6.67,"2000":5.45}
+< [m] lowest resonance, references: {"tube":[380,23.1,28],"waveguide":[404,18.4,56]}
+---
+> gain dB fdtd3d dx 1 [a]: {"50":-0.24,"100":0.13,"250":2.98,"500":18.13,"1000":0.42,"2000":4.15}
+> gain dB waveguide 44 [m]: {"50":0.05,"100":-0.24,"250":3.23,"500":7.67,"1000":-3.99,"2000":-9.24}
+> gain dB fdtd3d dx 1 [m]: {"50":-0.1,"100":0.9,"250":11.2,"500":-3.75,"1000":-9.25,"2000":3.95}
+> [m] lowest resonance, references: {"tube":[380,23.1,28],"waveguide":[402,18.4,56]}
+46,47c46,47
+< fdtd3d dx 1 [m] lowest resonance: [238,13.1,62]
+< fdtd3d dx 1 [a] closed port: {"lips":1.2777,"nostrils":0.3247,"ratio":0.25,"bands":[{"band":"100-400","dB":-22.5},{"band":"400-900","dB":-28},{"band":"900-1500","dB":-49.8},{"band":"1500-3000","dB":-9.2},{"band":"3000-6000","dB":-8.4}]}
+---
+> fdtd3d dx 1 [m] lowest resonance: [238,12.7,62]
+> fdtd3d dx 1 [a] closed port: {"lips":1.1798,"nostrils":0.3071,"ratio":0.26,"bands":[{"band":"100-400","dB":-22.5},{"band":"400-900","dB":-28},{"band":"900-1500","dB":-49.3},{"band":"1500-3000","dB":-9.1},{"band":"3000-6000","dB":-8.1}]}
+52,53c52,53
+< fdtd3d dx 0.6 [m] lowest resonance: [266,14.1,62]
+< fdtd3d dx 0.6 [a] closed port: {"lips":1.0234,"nostrils":0.1491,"ratio":0.15,"bands":[{"band":"100-400","dB":-30.2},{"band":"400-900","dB":-28.8},{"band":"900-1500","dB":-52.3},{"band":"1500-3000","dB":-21.8},{"band":"3000-6000","dB":-11.4}]}
+---
+> fdtd3d dx 0.6 [m] lowest resonance: [266,13.5,66]
+> fdtd3d dx 0.6 [a] closed port: {"lips":0.9002,"nostrils":0.1105,"ratio":0.12,"bands":[{"band":"100-400","dB":-30.2},{"band":"400-900","dB":-28.6},{"band":"900-1500","dB":-51.7},{"band":"1500-3000","dB":-22.4},{"band":"3000-6000","dB":-12.7}]}
+58,59c58,59
+< fdtd3d dx 0.5 [m] lowest resonance: [270,14.1,64]
+< fdtd3d dx 0.5 [a] closed port: {"lips":1.0353,"nostrils":0.12,"ratio":0.12,"bands":[{"band":"100-400","dB":-31.8},{"band":"400-900","dB":-29.4},{"band":"900-1500","dB":-51},{"band":"1500-3000","dB":-31.4},{"band":"3000-6000","dB":-14.4}]}
+---
+> fdtd3d dx 0.5 [m] lowest resonance: [270,13.5,68]
+> fdtd3d dx 0.5 [a] closed port: {"lips":0.9033,"nostrils":0.0925,"ratio":0.1,"bands":[{"band":"100-400","dB":-31.8},{"band":"400-900","dB":-29.2},{"band":"900-1500","dB":-50.7},{"band":"1500-3000","dB":-31.9},{"band":"3000-6000","dB":-15.1}]}

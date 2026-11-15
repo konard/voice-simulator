@@ -1,57 +1,57 @@
 source noise re pulses, breathiness 0.2: {"dB":-40.2}
 source noise re pulses, breathiness 0.5: {"dB":-23.19}
 source noise re pulses, breathiness 1: {"dB":-10.12}
-steady [aː], no jitter/shimmer/vibrato, breathiness 0: {"hnr":27.13,"h1h2":1.94}
-steady [aː], no jitter/shimmer/vibrato, breathiness 0.5: {"hnr":9.54,"h1h2":9.48}
-steady [aː], no jitter/shimmer/vibrato, breathiness 1: {"hnr":-2.92,"h1h2":13.4}
-sentence, no jitter/shimmer/vibrato, breathiness 0: {"hnr":23.27,"h1h2":0.82}
-steady [aː], tenseness 0.2: {"hnr":27.74,"h1h2":12.12}
-steady [aː], tenseness 0.6: {"hnr":27.13,"h1h2":1.94}
-steady [aː], tenseness 0.9: {"hnr":26.66,"h1h2":-2.71}
+steady [aː], no jitter/shimmer/vibrato, breathiness 0: {"hnr":30,"h1h2":1.95}
+steady [aː], no jitter/shimmer/vibrato, breathiness 0.5: {"hnr":9.15,"h1h2":9.48}
+steady [aː], no jitter/shimmer/vibrato, breathiness 1: {"hnr":-3.32,"h1h2":13.54}
+sentence, no jitter/shimmer/vibrato, breathiness 0: {"hnr":22.7,"h1h2":0.95}
+steady [aː], tenseness 0.2: {"hnr":30,"h1h2":12.16}
+steady [aː], tenseness 0.6: {"hnr":30,"h1h2":1.95}
+steady [aː], tenseness 0.9: {"hnr":30,"h1h2":-2.71}
 steady [aː], breathiness 1 and aspirationLevel 3: {"hnr":0,"h1h2":0}
-steady [aː], breathiness 1 and glottalChink 10: {"hnr":-4.64,"h1h2":13.89}
+steady [aː], breathiness 1 and glottalChink 10: {"hnr":-5.52,"h1h2":14.04}
 noise-free harmonic signal, 110.25 Hz: {"hnr":30}
 noise-free harmonic signal, 120 Hz: {"hnr":30}
 noise-free harmonic signal, gliding 126 to 114 Hz: {"hnr":29.98}
-planned f0 of [aː], default prosody: {"from":119.8,"to":98.6,"seconds":0.51}
-planned f0 of [aː], declination 0 and accentStrength 0: {"from":119.8,"to":98.6}
-steady [aː], breathiness 0, declination 0 and accentStrength 0: {"hnr":27.13,"h1h2":1.94}
-steady [aː], pitchRange 0.5, breathiness 0: {"hnr":30,"h1h2":1.84}
-steady [aː], pitchRange 0.5, breathiness 1: {"hnr":-2.2,"h1h2":13.53}
-ama waveguide 44: {"vowelLips":0.2726,"vowelNose":0.2263,"nasalLips":0,"nasalNose":0.5453,"audioVowel":0.1427,"audioNasal":0.1593,"ratio":1.12}
-ama fdtd3d dx 1: {"vowelLips":0.2966,"vowelNose":0.1917,"nasalLips":0,"nasalNose":0.5186,"audioVowel":0.1396,"audioNasal":0.1513,"ratio":1.08}
-ama fdtd3d dx 0.6: {"vowelLips":0.2833,"vowelNose":0.1867,"nasalLips":0,"nasalNose":0.4923,"audioVowel":0.1337,"audioNasal":0.144,"ratio":1.08}
-ama waveguide 44, nasalCoupling 0.25: {"vowelLips":0.2802,"vowelNose":0.2152,"nasalLips":0,"nasalNose":0.5504,"audioVowel":0.1397,"audioNasal":0.1608,"ratio":1.15}
-ama fdtd3d dx 1, nasalCoupling 0.25: {"vowelLips":0.2965,"vowelNose":0.1749,"nasalLips":0,"nasalNose":0.5427,"audioVowel":0.1305,"audioNasal":0.1581,"ratio":1.21}
-ama waveguide 44, nasalCoupling 0.5: {"vowelLips":0.2754,"vowelNose":0.2225,"nasalLips":0,"nasalNose":0.5442,"audioVowel":0.1417,"audioNasal":0.159,"ratio":1.12}
-ama fdtd3d dx 1, nasalCoupling 0.5: {"vowelLips":0.2945,"vowelNose":0.1855,"nasalLips":0,"nasalNose":0.5268,"audioVowel":0.1359,"audioNasal":0.1536,"ratio":1.13}
-ama waveguide 44, nasalCoupling 2: {"vowelLips":0.2708,"vowelNose":0.2273,"nasalLips":0,"nasalNose":0.5553,"audioVowel":0.143,"audioNasal":0.1621,"ratio":1.13}
-ama fdtd3d dx 1, nasalCoupling 2: {"vowelLips":0.2998,"vowelNose":0.1947,"nasalLips":0,"nasalNose":0.5151,"audioVowel":0.1422,"audioNasal":0.1502,"ratio":1.06}
-ama waveguide 44, wallLoss 0: {"vowelLips":0.2902,"vowelNose":0.2559,"nasalLips":0.0001,"nasalNose":0.6008,"audioVowel":0.1554,"audioNasal":0.1749,"ratio":1.13}
-ama fdtd3d dx 1, wallLoss 0: {"vowelLips":0.4934,"vowelNose":0.4342,"nasalLips":0,"nasalNose":0.6709,"audioVowel":0.168,"audioNasal":0.1939,"ratio":1.15}
-ama waveguide 44, wallLoss 3: {"vowelLips":0.2722,"vowelNose":0.2068,"nasalLips":0,"nasalNose":0.4712,"audioVowel":0.1372,"audioNasal":0.1372,"ratio":1}
-ama fdtd3d dx 1, wallLoss 3: {"vowelLips":0.287,"vowelNose":0.1371,"nasalLips":0,"nasalNose":0.3867,"audioVowel":0.1199,"audioNasal":0.1123,"ratio":0.94}
-ama fdtd3d dx 1, no pouches: {"vowelLips":0.3097,"vowelNose":0.1995,"nasalLips":0,"nasalNose":0.5027,"audioVowel":0.1451,"audioNasal":0.1467,"ratio":1.01}
-ama fdtd3d dx 1, microphone output: {"vowelLips":76.3194,"vowelNose":46.0347,"nasalLips":0,"nasalNose":162.9292,"audioVowel":0.1478,"audioNasal":0.1981,"ratio":1.34}
-ama velar port area: {"vowel":0.9025,"nasal":1.5832,"firstNoseSection":0.6}
-gain dB waveguide 44 [a]: {"50":0.84,"100":0.65,"250":2.01,"500":9.73,"1000":4.39,"2000":18.03}
-gain dB fdtd3d dx 1 [a]: {"50":-0.24,"100":0.13,"250":2.98,"500":18.16,"1000":1.37,"2000":4.13}
-gain dB waveguide 44 [m]: {"50":0.05,"100":-0.24,"250":3.23,"500":7.64,"1000":-4.12,"2000":-9.21}
-gain dB fdtd3d dx 1 [m]: {"50":-0.1,"100":0.9,"250":11.19,"500":-3.73,"1000":-9.9,"2000":3.54}
-[m] lowest resonance, references: {"tube":[380,23.1,28],"waveguide":[402,18.3,56]}
-fdtd3d dx 1 velar port and nostrils: {"velumArea":1.583,"velumLinks":17,"portArea":17,"effectivePort":1.583,"firstNoseSection":0.6,"nostrilLinks":6,"effectiveNostrils":0.9,"lastNoseSection":0.9}
+planned f0 of [aː], default prosody: {"from":119.9,"to":98.6,"seconds":0.71}
+planned f0 of [aː], declination 0 and accentStrength 0: {"from":119.9,"to":98.6}
+steady [aː], breathiness 0, declination 0 and accentStrength 0: {"hnr":30,"h1h2":1.95}
+steady [aː], pitchRange 0.5, breathiness 0: {"hnr":30,"h1h2":1.85}
+steady [aː], pitchRange 0.5, breathiness 1: {"hnr":-3.42,"h1h2":13.56}
+ama waveguide 44: {"vowelLips":0.2714,"vowelNose":0.2258,"nasalLips":0.1304,"nasalNose":0.4985,"audioVowel":0.1426,"audioNasal":0.1553,"ratio":1.09}
+ama fdtd3d dx 1: {"vowelLips":0.3049,"vowelNose":0.198,"nasalLips":0.0884,"nasalNose":0.4657,"audioVowel":0.144,"audioNasal":0.1427,"ratio":0.99}
+ama fdtd3d dx 0.6: {"vowelLips":0.2824,"vowelNose":0.1869,"nasalLips":0.1106,"nasalNose":0.459,"audioVowel":0.1339,"audioNasal":0.144,"ratio":1.08}
+ama waveguide 44, nasalCoupling 0.25: {"vowelLips":0.2787,"vowelNose":0.2149,"nasalLips":0.1461,"nasalNose":0.5023,"audioVowel":0.1394,"audioNasal":0.1576,"ratio":1.13}
+ama fdtd3d dx 1, nasalCoupling 0.25: {"vowelLips":0.3011,"vowelNose":0.1803,"nasalLips":0.2401,"nasalNose":0.5047,"audioVowel":0.1334,"audioNasal":0.1445,"ratio":1.08}
+ama waveguide 44, nasalCoupling 0.5: {"vowelLips":0.2741,"vowelNose":0.2222,"nasalLips":0.1335,"nasalNose":0.497,"audioVowel":0.1416,"audioNasal":0.1552,"ratio":1.1}
+ama fdtd3d dx 1, nasalCoupling 0.5: {"vowelLips":0.3015,"vowelNose":0.1916,"nasalLips":0.1266,"nasalNose":0.4688,"audioVowel":0.1396,"audioNasal":0.1427,"ratio":1.02}
+ama waveguide 44, nasalCoupling 2: {"vowelLips":0.2696,"vowelNose":0.2265,"nasalLips":0.1327,"nasalNose":0.5071,"audioVowel":0.143,"audioNasal":0.1579,"ratio":1.1}
+ama fdtd3d dx 1, nasalCoupling 2: {"vowelLips":0.3084,"vowelNose":0.2017,"nasalLips":0.0817,"nasalNose":0.4662,"audioVowel":0.1469,"audioNasal":0.1428,"ratio":0.97}
+ama waveguide 44, wallLoss 0: {"vowelLips":0.2898,"vowelNose":0.2563,"nasalLips":0.1201,"nasalNose":0.5168,"audioVowel":0.156,"audioNasal":0.1595,"ratio":1.02}
+ama fdtd3d dx 1, wallLoss 0: {"vowelLips":0.4861,"vowelNose":0.4292,"nasalLips":0.096,"nasalNose":0.5448,"audioVowel":0.1759,"audioNasal":0.1652,"ratio":0.94}
+ama waveguide 44, wallLoss 3: {"vowelLips":0.2719,"vowelNose":0.2075,"nasalLips":0.0889,"nasalNose":0.4337,"audioVowel":0.1378,"audioNasal":0.133,"ratio":0.97}
+ama fdtd3d dx 1, wallLoss 3: {"vowelLips":0.2895,"vowelNose":0.1394,"nasalLips":0.0904,"nasalNose":0.3492,"audioVowel":0.1214,"audioNasal":0.1077,"ratio":0.89}
+ama fdtd3d dx 1, no pouches: {"vowelLips":0.3185,"vowelNose":0.2071,"nasalLips":0.0916,"nasalNose":0.4548,"audioVowel":0.1501,"audioNasal":0.1401,"ratio":0.93}
+ama fdtd3d dx 1, microphone output: {"vowelLips":78.7226,"vowelNose":43.5577,"nasalLips":41.5537,"nasalNose":145.6398,"audioVowel":0.1503,"audioNasal":0.19,"ratio":1.26}
+ama velar port area: {"vowel":0.8579,"nasal":1.5821,"firstNoseSection":0.6}
+gain dB waveguide 44 [a]: {"50":0.84,"100":0.65,"250":2,"500":9.73,"1000":4.37,"2000":17.98}
+gain dB fdtd3d dx 1 [a]: {"50":-0.24,"100":0.13,"250":2.98,"500":18.13,"1000":0.42,"2000":4.15}
+gain dB waveguide 44 [m]: {"50":0.05,"100":-0.24,"250":3.23,"500":7.67,"1000":-3.99,"2000":-9.24}
+gain dB fdtd3d dx 1 [m]: {"50":-0.1,"100":0.9,"250":11.2,"500":-3.75,"1000":-9.25,"2000":3.95}
+[m] lowest resonance, references: {"tube":[380,23.1,28],"waveguide":[402,18.4,56]}
+fdtd3d dx 1 velar port and nostrils: {"velumArea":1.582,"velumLinks":17,"portArea":17,"effectivePort":1.582,"firstNoseSection":0.6,"nostrilLinks":6,"effectiveNostrils":0.9,"lastNoseSection":0.9}
 fdtd3d dx 1 velar port and nostrils: {"velumArea":0.3,"velumLinks":17,"portArea":17,"effectivePort":0.3,"firstNoseSection":0.6,"nostrilLinks":6,"effectiveNostrils":0.9,"lastNoseSection":0.9}
 fdtd3d dx 1 velar port and nostrils: {"velumArea":0.8,"velumLinks":17,"portArea":17,"effectivePort":0.8,"firstNoseSection":0.6,"nostrilLinks":6,"effectiveNostrils":0.9,"lastNoseSection":0.9}
 fdtd3d dx 1 velar port and nostrils: {"velumArea":1.3,"velumLinks":17,"portArea":17,"effectivePort":1.3,"firstNoseSection":0.6,"nostrilLinks":6,"effectiveNostrils":0.9,"lastNoseSection":0.9}
-fdtd3d dx 1 [m] lowest resonance: [238,12.7,64]
+fdtd3d dx 1 [m] lowest resonance: [238,12.7,62]
 fdtd3d dx 1 [a] closed port: {"lips":1.1798,"nostrils":0.3071,"ratio":0.26,"bands":[{"band":"100-400","dB":-22.5},{"band":"400-900","dB":-28},{"band":"900-1500","dB":-49.3},{"band":"1500-3000","dB":-9.1},{"band":"3000-6000","dB":-8.1}]}
-fdtd3d dx 0.6 velar port and nostrils: {"velumArea":1.583,"velumLinks":24,"portArea":8.64,"effectivePort":1.583,"firstNoseSection":0.6,"nostrilLinks":8,"effectiveNostrils":0.9,"lastNoseSection":0.9}
+fdtd3d dx 0.6 velar port and nostrils: {"velumArea":1.582,"velumLinks":24,"portArea":8.64,"effectivePort":1.582,"firstNoseSection":0.6,"nostrilLinks":8,"effectiveNostrils":0.9,"lastNoseSection":0.9}
 fdtd3d dx 0.6 velar port and nostrils: {"velumArea":0.3,"velumLinks":24,"portArea":8.64,"effectivePort":0.3,"firstNoseSection":0.6,"nostrilLinks":8,"effectiveNostrils":0.9,"lastNoseSection":0.9}
 fdtd3d dx 0.6 velar port and nostrils: {"velumArea":0.8,"velumLinks":24,"portArea":8.64,"effectivePort":0.8,"firstNoseSection":0.6,"nostrilLinks":8,"effectiveNostrils":0.9,"lastNoseSection":0.9}
 fdtd3d dx 0.6 velar port and nostrils: {"velumArea":1.3,"velumLinks":24,"portArea":8.64,"effectivePort":1.3,"firstNoseSection":0.6,"nostrilLinks":8,"effectiveNostrils":0.9,"lastNoseSection":0.9}
 fdtd3d dx 0.6 [m] lowest resonance: [266,13.5,66]
 fdtd3d dx 0.6 [a] closed port: {"lips":0.9002,"nostrils":0.1105,"ratio":0.12,"bands":[{"band":"100-400","dB":-30.2},{"band":"400-900","dB":-28.6},{"band":"900-1500","dB":-51.7},{"band":"1500-3000","dB":-22.4},{"band":"3000-6000","dB":-12.7}]}
-fdtd3d dx 0.5 velar port and nostrils: {"velumArea":1.583,"velumLinks":42,"portArea":10.5,"effectivePort":1.583,"firstNoseSection":0.6,"nostrilLinks":8,"effectiveNostrils":0.9,"lastNoseSection":0.9}
+fdtd3d dx 0.5 velar port and nostrils: {"velumArea":1.582,"velumLinks":42,"portArea":10.5,"effectivePort":1.582,"firstNoseSection":0.6,"nostrilLinks":8,"effectiveNostrils":0.9,"lastNoseSection":0.9}
 fdtd3d dx 0.5 velar port and nostrils: {"velumArea":0.3,"velumLinks":42,"portArea":10.5,"effectivePort":0.3,"firstNoseSection":0.6,"nostrilLinks":8,"effectiveNostrils":0.9,"lastNoseSection":0.9}
 fdtd3d dx 0.5 velar port and nostrils: {"velumArea":0.8,"velumLinks":42,"portArea":10.5,"effectivePort":0.8,"firstNoseSection":0.6,"nostrilLinks":8,"effectiveNostrils":0.9,"lastNoseSection":0.9}
 fdtd3d dx 0.5 velar port and nostrils: {"velumArea":1.3,"velumLinks":42,"portArea":10.5,"effectivePort":1.3,"firstNoseSection":0.6,"nostrilLinks":8,"effectiveNostrils":0.9,"lastNoseSection":0.9}
@@ -59,6 +59,6 @@ fdtd3d dx 0.5 [m] lowest resonance: [270,13.5,68]
 fdtd3d dx 0.5 [a] closed port: {"lips":0.9033,"nostrils":0.0925,"ratio":0.1,"bands":[{"band":"100-400","dB":-31.8},{"band":"400-900","dB":-29.2},{"band":"900-1500","dB":-50.7},{"band":"1500-3000","dB":-31.9},{"band":"3000-6000","dB":-15.1}]}
 formant and bandwidth, waveguide [ɑ]: {"defaultGlottis":[[802,140],[1246,92],[2694,128]],"closedGlottis":[[798,48],[1250,72],[2694,116]],"hawksMiller":[41,44,105],"error":[0.17,0.64,0.1]}
 formant and bandwidth, waveguide [i]: {"defaultGlottis":[[358,48],[2382,92],[3138,124]],"closedGlottis":[[358,36],[2378,52],[3138,84]],"hawksMiller":[44,83,141],"error":[-0.18,-0.37,-0.4]}
-formant and bandwidth, waveguide [u]: {"defaultGlottis":[[394,72],[926,64],[2586,124]],"closedGlottis":[[390,52],[926,60],[2586,52]],"hawksMiller":[40,41,97],"error":[0.3,0.46,-0.46]}
+formant and bandwidth, waveguide [u]: {"defaultGlottis":[[390,72],[922,64],[2586,124]],"closedGlottis":[[390,52],[922,60],[2586,56]],"hawksMiller":[40,41,97],"error":[0.3,0.46,-0.42]}
 subglottal resonances, trachea 10 cm of 2.5 cm², flare 8 cm to 20 cm²: [657,1500,2261]
 subglottal resonances, trachea 10 cm of 1.5 cm², flare 10 cm to 20 cm²: [656,1378,2108]

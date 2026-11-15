@@ -1,12 +1,12 @@
-zh mā: {"ipa":"ma˥","f0":[156,156,156,156,156]}
-zh má: {"ipa":"ma˧˥","f0":[120,122,130,141,152]}
-zh mǎ: {"ipa":"ma˨˩˦","f0":[106,107,97,108,132]}
-zh mà: {"ipa":"ma˥˩","f0":[155,152,137,118,99]}
-zh ma: {"ipa":"ma","f0":[120,119,114,107,101]}
-zh 你好: {"ipa":"ni˧˥ xɑʊ˨˩˦","f0":[121,135,115,94,122]}
-zh 我很好: {"ipa":"wo˨˩ xən˧˥ xɑʊ˨˩˦","f0":[105,97,142,107,122]}
-zh 银行: {"ipa":"in˧˥ xɑŋ˧˥","f0":[125,148,118,136,144]}
-zh 花儿: {"ipa":"xwaɻ˥","f0":[156,156,155,156,156]}
+zh mā: {"ipa":"ma˥","f0":[156,155,156,156,156]}
+zh má: {"ipa":"ma˧˥","f0":[120,124,134,144,154]}
+zh mǎ: {"ipa":"ma˨˩˦","f0":[106,104,93,114,135]}
+zh mà: {"ipa":"ma˥˩","f0":[155,149,131,112,96]}
+zh ma: {"ipa":"ma","f0":[120,118,112,105,100]}
+zh 你好: {"ipa":"ni˧˥ xɑʊ˨˩˦","f0":[121,134,116,94,121]}
+zh 我很好: {"ipa":"wo˨˩ xən˧˥ xɑʊ˨˩˦","f0":[105,98,140,108,121]}
+zh 银行: {"ipa":"in˧˥ xɑŋ˧˥","f0":[125,146,121,138,146]}
+zh 花儿: {"ipa":"xwaɻ˥","f0":[155,156,156,156,156]}
 en: "aɪ ˈɹɛd ðə ˈbʊk ˈjɛstɚˌdeɪ . ˈdɪd ju ɹəˈkɔɹd ðə ˈɹɛkɚd ?"
 en: "aɪ ˈlɪv ˈhiɹ . ə ˈlaɪv ˈʃoʊ . ˈlɛd ˈpaɪp . ðeɪ ˈlid ."
 en: "ðə ˈwɪnd ˈbloʊz . ˈwaɪnd ðə ˈklɑk ."
@@ -15,24 +15,24 @@ ru: "ja ˈvʲiʐʊ ˈstrʲeɫkʲɪ ˈt͡ɕasəf . ˈbʲeɫkʲɪ ˈjedʲɪt ɐˈr
 hi: "nəməst̪eː , aːp kɛːseː ɦɛ̃ː ↘ ?"
 hi: "kjaː t̪ʊm aːoːɡeː ?"
 tiers: ["telephone@8000","narrowband@11025","wideband@16000","minimal@22050","low@32000","medium@48000","high@48000","ultra@48000","studio@48000","reference@48000"]
-minimal@8000: {"rate":8000,"f0":122,"formants":[515,1455,2370,0]}
-minimal@11025: {"rate":11025,"f0":122,"formants":[505,1483,2423,3748]}
-minimal@16000: {"rate":16000,"f0":122,"formants":[505,1475,2425,3730]}
-head parameters: 49
-breathiness 0: {"hnr":21.05,"h1h2":0.81}
-breathiness 0.5: {"hnr":14.77,"h1h2":7.88}
-breathiness 1: {"hnr":3.89,"h1h2":11.26}
+minimal@8000: {"rate":8000,"f0":122,"formants":[510,1455,2345,0]}
+minimal@11025: {"rate":11025,"f0":122,"formants":[505,1470,2415,3705]}
+minimal@16000: {"rate":16000,"f0":122,"formants":[505,1465,2420,3640]}
+head parameters: 50
+breathiness 0: {"hnr":20.86,"h1h2":0.95}
+breathiness 0.5: {"hnr":14.01,"h1h2":8.18}
+breathiness 1: {"hnr":3.06,"h1h2":11.61}
 highlight: [{"text":"I","syllables":["I"]},{"text":"have","syllables":["have"]},{"text":"25","syllables":[null,null,null]},{"text":"apples","syllables":["ap","ples"]},{"text":"on","syllables":["on"]},{"text":"3/4/2024","syllables":[null,null,null,null,null,null,null]}]
-nasal/vowel level medium: {"ratio":1.12}
-nasal/vowel level high: {"ratio":1.08}
-en You are coming.: {"first":120,"last":94,"peakLoudness":1}
-en You are coming?: {"first":120,"last":141,"peakLoudness":1}
-en You are coming!: {"first":131,"last":94,"peakLoudness":1.41}
-en Are you coming?: {"first":120,"last":141,"peakLoudness":1}
+nasal/vowel level medium: {"ratio":1.09}
+nasal/vowel level high: {"ratio":0.99}
+en You are coming.: {"first":120,"last":95,"peakLoudness":1}
+en You are coming?: {"first":120,"last":137,"peakLoudness":1}
+en You are coming!: {"first":131,"last":97,"peakLoudness":1.41}
+en Are you coming?: {"first":120,"last":137,"peakLoudness":1}
 en Where are you going?: {"first":141,"last":96,"peakLoudness":1}
 en Tea or coffee?: {"first":141,"last":143,"peakLoudness":1}
-rtf telephone: 0.09
+rtf telephone: 0.07
 rtf narrowband: 0.07
-rtf wideband: 0.09
+rtf wideband: 0.07
 rtf minimal: 0.07
-rtf low: 0.14
+rtf low: 0.12
