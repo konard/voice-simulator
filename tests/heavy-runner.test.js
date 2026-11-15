@@ -48,11 +48,6 @@ function runHeavy(args, extraEnv = {}, node = 'node') {
     REQUIRE_GPU: '',
     ...extraEnv,
   };
-  for (const key of Object.keys(env)) {
-    if (env[key] === undefined) {
-      delete env[key];
-    }
-  }
   const result = spawnSync(node, [scriptPath, ...args], {
     encoding: 'utf8',
     env,
@@ -84,15 +79,12 @@ const noNodeWithoutDeno =
 
 /** The environment of a runner that finds no Deno on PATH. */
 function withoutDeno(extraEnv = {}) {
-  const env = { ...extraEnv };
-  // Windows names it Path; a second key would make the value ambiguous.
-  for (const key of Object.keys(process.env)) {
-    if (key.toUpperCase() === 'PATH') {
-      env[key] = undefined;
-    }
-  }
-  env.PATH = pathDirs.filter((dir) => !hasDeno(dir)).join(path.delimiter);
-  return env;
+  // Under the name process.env uses (Path on Windows): a second key that
+  // differs only in case would make the value ambiguous.
+  return {
+    ...extraEnv,
+    [PATH_KEY]: pathDirs.filter((dir) => !hasDeno(dir)).join(path.delimiter),
+  };
 }
 
 function summaryRows(out) {
