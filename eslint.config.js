@@ -147,6 +147,9 @@ export default [
       'docs/case-studies/*/data/**',
       // Development log data (API dumps and saved CI logs, kept verbatim)
       'dev/log/**/data/**',
+      // Listening test build output (scripts/listening-test.mjs), never committed
+      'examples/listening-test/config.js',
+      'examples/listening-test/stimuli/**',
     ],
   },
 ];

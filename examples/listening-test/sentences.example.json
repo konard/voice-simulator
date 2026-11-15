@@ -1,0 +1,29 @@
+{
+  "id": "example-en",
+  "title": "Voice quality test (example)",
+  "instructions": "Please use headphones in a quiet room. The test has three short trials and takes about five minutes. Follow the instruction above each trial.",
+  "sentences": [
+    {
+      "id": "en-01",
+      "type": "mushra",
+      "text": "The quick brown fox jumps over the lazy dog.",
+      "lang": "en",
+      "tiers": ["minimal", "low", "medium"]
+    },
+    {
+      "id": "abx-01",
+      "type": "abx",
+      "text": "She sells sea shells by the sea shore.",
+      "lang": "en",
+      "tiers": ["minimal", "medium"]
+    },
+    {
+      "id": "sus-01",
+      "type": "intelligibility",
+      "text": "The money built near the young window.",
+      "lang": "en",
+      "tiers": ["medium"],
+      "maxPlays": 1
+    }
+  ]
+}
