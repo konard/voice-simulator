@@ -74,6 +74,8 @@ export function prepareUtterance(text, options = {}) {
     sections: options.sections ?? tier.sections,
     dx: options.dx ?? tier.dx,
     sampleRate: options.sampleRate ?? tier.sampleRate ?? 48000,
+    blockSize: options.blockSize ?? tier.blockSize,
+    bandLimit: options.bandLimit ?? tier.bandLimit,
     output: options.output,
     model: options.model,
     seed: options.seed ?? 1,
@@ -94,7 +96,7 @@ export function prepareUtterance(text, options = {}) {
  * where and in what space the voice is heard (see VoiceRenderer). `source`
  * picks the voice source: 'lf' (default) or 'folds' (physical vocal folds).
  * @param {string} text
- * @param {{lang?: string, accent?: string, ipa?: boolean, head?: object|'random', seed?: string|number, preset?: string, tier?: string|number, solver?: string, source?: 'lf'|'folds', sections?: number, dx?: number, sampleRate?: number, output?: 'flow'|'microphone', microphone?: {distance?: number, azimuth?: number, elevation?: number, compensate?: boolean}, room?: string|object, enclosure?: {width: number, height: number, depth: number, absorption?: number, center?: number[]}, teeth?: boolean, piriform?: boolean, vallecula?: boolean}} [options]
+ * @param {{lang?: string, accent?: string, ipa?: boolean, head?: object|'random', seed?: string|number, preset?: string, tier?: string|number, solver?: string, source?: 'lf'|'folds', sections?: number, dx?: number, sampleRate?: number, blockSize?: number, bandLimit?: number, output?: 'flow'|'microphone', microphone?: {distance?: number, azimuth?: number, elevation?: number, compensate?: boolean}, room?: string|object, enclosure?: {width: number, height: number, depth: number, absorption?: number, center?: number[]}, teeth?: boolean, piriform?: boolean, vallecula?: boolean}} [options]
  * @returns {{lang: string, accent: string|null, ipa: string, words: object[], head: object, plan: object, timeline: object, sampleRate: number, samples: Float32Array, duration: number}}
  */
 export function synthesize(text, options = {}) {

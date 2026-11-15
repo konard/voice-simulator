@@ -7,6 +7,7 @@
 
 import {
   AUDIO_TIERS,
+  BASE_AUDIO_LEVEL,
   LodGovernor,
   planUtterance,
   sampleState,
@@ -72,12 +73,12 @@ export class VoiceEngine {
     this.player = new AudioPlayer();
     this.governor = new LodGovernor({
       tiers: AUDIO_TIERS,
-      level: 0,
+      level: BASE_AUDIO_LEVEL,
       target: 0.8,
       dwell: 40,
     });
     this.auto = true;
-    this.fixedLevel = 0;
+    this.fixedLevel = BASE_AUDIO_LEVEL;
     // Whether the benchmark may use WebGPU, and whether its choice runs there.
     this.allowGpu = true;
     this.benchmarkGpu = null;
@@ -87,7 +88,7 @@ export class VoiceEngine {
     this.cells = null;
     this.status = {
       phase: 'idle',
-      audioLevel: 0,
+      audioLevel: BASE_AUDIO_LEVEL,
       audioLoad: 0,
       loads: [],
       underruns: 0,

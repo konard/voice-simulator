@@ -12,9 +12,46 @@
 
 /**
  * Audio tiers, cheapest first. `cost` is relative work per second, as
- * measured by experiments/issue-5-tier-costs.mjs (with the wasm kernel).
+ * measured by experiments/issue-5-tier-costs.mjs (with the wasm kernel),
+ * with `minimal` at 1.
+ *
+ * The narrow-band tiers below `minimal` (telephone 8 kHz, narrowband
+ * 11.025 kHz, wideband 16 kHz) also set `blockSize`, the control interval
+ * in output samples (about 1.5 ms), and `bandLimit`, the corner (Hz) of
+ * the eighth-order Butterworth low-pass (at the solver rate and at the
+ * output rate) that keeps the output free of aliasing and band-limited.
  */
 export const AUDIO_TIERS = Object.freeze([
+  Object.freeze({
+    name: 'telephone',
+    solver: 'waveguide',
+    sections: 12,
+    sampleRate: 8000,
+    blockSize: 12,
+    bandLimit: 3400,
+    cost: 0.56,
+  }),
+  Object.freeze({
+    name: 'narrowband',
+    solver: 'waveguide',
+    sections: 16,
+    sampleRate: 11025,
+    blockSize: 16,
+    bandLimit: 4800,
+    cost: 0.76,
+  }),
+  Object.freeze({
+    name: 'wideband',
+    solver: 'waveguide',
+    sections: 22,
+    sampleRate: 16000,
+    blockSize: 24,
+    bandLimit: 7000,
+    // Measured 1.11 (experiments/issue-26-tier-costs.txt): the solver runs
+    // at the rate of `minimal` and only the output rate is lower. Not below
+    // the cost of the next tier, so that cost minus 0.05.
+    cost: 0.95,
+  }),
   Object.freeze({
     name: 'minimal',
     solver: 'waveguide',
@@ -74,6 +111,26 @@ export const AUDIO_TIERS = Object.freeze([
  * ahead when a slower tier is chosen. 'medium' is the real-time waveguide.
  */
 export const DEFAULT_AUDIO_TIER = 'studio';
+
+/**
+ * Index of an audio tier in AUDIO_TIERS.
+ * @param {string} name
+ * @returns {number}
+ */
+export function audioTierIndex(name) {
+  const index = AUDIO_TIERS.findIndex((tier) => tier.name === name);
+  if (index < 0) {
+    throw new Error(`Unknown audio tier: ${name}`);
+  }
+  return index;
+}
+
+/**
+ * Index of `minimal`, the cheapest full-band tier: where automatic quality
+ * starts before the device benchmark has chosen. The narrow-band tiers
+ * below it are reached only by falling back under overload or by choice.
+ */
+export const BASE_AUDIO_LEVEL = audioTierIndex('minimal');
 
 /** Visual tiers: head mesh LOD, tube rings and pressure field points. */
 export const VISUAL_TIERS = Object.freeze([

@@ -127,8 +127,10 @@ export {
 } from './geometry/gltf.js';
 export {
   AUDIO_TIERS,
+  BASE_AUDIO_LEVEL,
   DEFAULT_AUDIO_TIER,
   VISUAL_TIERS,
+  audioTierIndex,
   LodGovernor,
   OverloadDetector,
   chooseTier,

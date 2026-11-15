@@ -2,6 +2,7 @@ import { createElement as h, useEffect, useMemo, useState } from 'react';
 import {
   ACCENTS,
   AUDIO_TIERS,
+  BASE_AUDIO_LEVEL,
   DEFAULT_HEAD,
   LANGUAGES,
   VISUAL_TIERS,
@@ -142,7 +143,7 @@ function renderingNote({ progress, wait }, t) {
 }
 
 function Hud({ status, visual, mode, t }) {
-  const audioTier = AUDIO_TIERS[status.audioLevel ?? 0];
+  const audioTier = AUDIO_TIERS[status.audioLevel ?? BASE_AUDIO_LEVEL];
   const solver = status.solver ?? audioTier.solver;
   const underruns =
     (status.underruns ? ` · ${t.underruns} ${status.underruns}` : '') +

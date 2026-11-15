@@ -475,15 +475,31 @@ The image runs `voice-simulator serve` on port 8080 with a health check on
 
 ### Quality tiers
 
-| Audio tier  | Solver    | Detail        | Sample rate | Relative cost |
-| ----------- | --------- | ------------- | ----------- | ------------- |
-| `minimal`   | waveguide | 22 sections   | 22.05 kHz   | 1             |
-| `low`       | waveguide | 32 sections   | 32 kHz      | 1.6           |
-| `medium`    | waveguide | 44 sections   | 48 kHz      | 2.6           |
-| `high`      | fdtd3d    | 1 cm voxels   | 48 kHz      | 10            |
-| `ultra`     | fdtd3d    | 0.6 cm voxels | 48 kHz      | 65            |
-| `studio`    | fdtd3d    | 0.5 cm voxels | 48 kHz      | 105           |
-| `reference` | fdtd3d    | 0.4 cm voxels | 48 kHz      | 220           |
+| Audio tier   | Solver    | Detail        | Sample rate | Relative cost |
+| ------------ | --------- | ------------- | ----------- | ------------- |
+| `telephone`  | waveguide | 12 sections   | 8 kHz       | 0.56          |
+| `narrowband` | waveguide | 16 sections   | 11.025 kHz  | 0.76          |
+| `wideband`   | waveguide | 22 sections   | 16 kHz      | 0.95          |
+| `minimal`    | waveguide | 22 sections   | 22.05 kHz   | 1             |
+| `low`        | waveguide | 32 sections   | 32 kHz      | 1.6           |
+| `medium`     | waveguide | 44 sections   | 48 kHz      | 2.6           |
+| `high`       | fdtd3d    | 1 cm voxels   | 48 kHz      | 10            |
+| `ultra`      | fdtd3d    | 0.6 cm voxels | 48 kHz      | 65            |
+| `studio`     | fdtd3d    | 0.5 cm voxels | 48 kHz      | 105           |
+| `reference`  | fdtd3d    | 0.4 cm voxels | 48 kHz      | 220           |
+
+The three narrow-band tiers below `minimal` low-pass the voice with an
+eighth-order Butterworth filter at 3.4, 4.8 and 7 kHz (`bandLimit`), once at
+the solver rate so nothing folds back at the low output rate and once at the
+output rate so that the band above 1.1 times the limit is more than 70 dB
+down, and update the tract about every
+1.5 ms (`blockSize` 12, 16 and 24 samples). They keep F1 to F3 of the
+48 kHz render, and `analyzeVoice` measures only F1 to F3 at 8 kHz. The
+server renders them at their own rate when the request names no
+`sampleRate`. `wideband` costs almost the same CPU time as `minimal`; it
+exists for the 16 kHz output rate. Auto in the web app starts at `minimal`
+(`BASE_AUDIO_LEVEL`) and falls back to the narrow-band tiers only when a
+device cannot keep up.
 
 `studio` is the default of the library, the CLI and the server
 (`DEFAULT_AUDIO_TIER`): full 3D acoustics whose 0.5 cm cells resolve the
@@ -520,7 +536,9 @@ machine with WebGPU, the GPU is only tried for the 3D tiers above the CPU's
 choice, so a slow integrated or software adapter never lowers it. The benchmark does not run tiers whose
 load, predicted from the cheaper tier, is far above the target, and it stops
 measuring a tier as soon as it is clearly too slow; the app remembers the
-result per device. In the first 40-300 ms of each utterance an
+result per device. `voice-simulator benchmark` first renders the cheap tiers
+for 0.5 s so the just-in-time compiler is warm, then reports the median of
+`--repeats` (default 5) measurements of `--seconds` (default 0.3) per tier. In the first 40-300 ms of each utterance an
 `OverloadDetector` checks that the tier keeps up with real time and, if not,
 the utterance restarts at once on a cheaper tier before any gap is audible.
 While speaking, `LodGovernor` steps down

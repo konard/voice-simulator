@@ -38,6 +38,18 @@ describe('CLI audio formats', () => {
     expect(decoded.samples.length > 1000).toBe(true);
   });
 
+  itUnless(sandboxed)('renders the telephone tier at 8 kHz', () =>
+    withTempDir(async (dir) => {
+      const out = join(dir, 'telephone.wav');
+      const say = ['say', 'ˈmama', '--ipa', '--tier', 'telephone'];
+      const result = await cli([...say, '-o', out]);
+      expect(result.code).toBe(0);
+      const decoded = decodeAudio(readFileSync(out));
+      expect(decoded.sampleRate).toBe(8000);
+      expect(decoded.samples.length > 2000).toBe(true);
+    })
+  );
+
   it('honours --format, --bit-depth and --float', async () => {
     const au = await cli([...SAY, '-o', '-', '--format', 'au', '-b', '24']);
     expect(au.code).toBe(0);

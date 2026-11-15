@@ -1,0 +1,8 @@
+load average 4.35 3.97 4.32
+cli telephone: below minimal in 18/20 runs, median load / minimal 0.80
+cli narrowband: below minimal in 19/20 runs, median load / minimal 0.77
+cli wideband: below minimal in 9/20 runs, median load / minimal 1.01
+alone telephone: median load 0.0299 (0.51 of minimal)
+alone narrowband: median load 0.0382 (0.65 of minimal)
+alone wideband: median load 0.0572 (0.97 of minimal)
+alone minimal: median load 0.0590 (1.00 of minimal)
