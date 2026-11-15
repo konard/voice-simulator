@@ -312,6 +312,134 @@ export interface ChannelTarget {
   /** 1 = own target, 0 = free (follows the line between own targets). */
   strength: number;
 }
+/** Inherent and minimum duration of a sound in milliseconds. */
+export interface DurationEntry {
+  inherent: number;
+  minimum: number;
+}
+/** Duration table of one language (issue 39). */
+export interface DurationTable {
+  /** Per class: open, mid, close, reduced, diphthong, nasal, … */
+  classes: Readonly<Record<string, DurationEntry>>;
+  /** Per IPA symbol; wins over the class. */
+  symbols: Readonly<Record<string, DurationEntry>>;
+  /** Factors by rule name; null switches a rule off. */
+  rules: Readonly<Record<string, number | null>>;
+  /** Weight of the main vowel of a diphthong against 1 for the others. */
+  diphthongMain: number;
+  /** Factors of the closure and frication of an affricate. */
+  affricate: Readonly<{ closure: number; frication: number }>;
+}
+/** One rule of the duration model of Klatt (1979). */
+export interface DurationRule {
+  name: string;
+  /** Default factor (ms for `scope: 'add'`); null = off by default. */
+  factor: number | null;
+  /** What the factor scales (default 'percent'). */
+  scope?: 'percent' | 'minimum' | 'total' | 'add';
+  /** Power of the factor in a context (e.g. syllables in the word). */
+  exponent?(features: DurationFeatures): number;
+  /** Weighted 0.7 + 0.3 f outside a phrase-final syllable. */
+  postvocalic?: boolean;
+  /** Divided by stressLengthening / 1.35. */
+  stress?: boolean;
+  /** Only the first applying rule of a group counts. */
+  group?: string;
+  applies(token: object, features: DurationFeatures): boolean;
+}
+/** Context of one token for the duration rules. */
+export interface DurationFeatures {
+  stress: 0 | 1 | 2;
+  emphasis: boolean;
+  /** Boundary class after the syllable ('period', 'comma', …) or null. */
+  phraseFinal: string | null;
+  wordFinalSyllable: boolean;
+  wordInitialSyllable: boolean;
+  syllablesInWord: number;
+  wordInitial: boolean;
+  syllableOnset: boolean;
+  syllableCoda: boolean;
+  pretonic: boolean;
+  /** Class of the previous and the next sound in the word, or null. */
+  previous: string | null;
+  next: string | null;
+  /** Tone 1 to 5 (5 = neutral) in tonal languages, 0 otherwise. */
+  tone: number;
+  afterAspirated: boolean;
+  nucleusSize: number;
+  nucleusMain: boolean;
+  /** Symbols of the vowels of the nucleus, e.g. 'aɪ'. */
+  nucleusSymbol: string | null;
+}
+export interface DurationOptions {
+  speechRate?: number;
+  stressLengthening?: number;
+  finalLengthening?: number;
+}
+/** Exponent of the speech rate on the minimum duration (0.5). */
+export declare const RATE_MINIMUM: number;
+/** Exponent of the speech rate on the stretchable part (1.2). */
+export declare const RATE_STRETCH: number;
+/** Exponent of the speech rate on pauses of strength 2 and more (1.5). */
+export declare const RATE_PAUSE: number;
+export declare const DURATION_RULES: readonly DurationRule[];
+/** Tables of en, ru, hi, zh and default (English). */
+export declare const DURATION_TABLES: Readonly<
+  Record<'en' | 'ru' | 'hi' | 'zh' | 'default', DurationTable>
+>;
+/** Table of a language code (`en-US` finds `en`), `default` otherwise. */
+export declare function durationTable(language?: string): DurationTable;
+export declare function durationFeatures(
+  tokens: object[],
+  index: number,
+  options?: { language?: string }
+): DurationFeatures | null;
+/** (minimum + (inherent - minimum) * percent / 100) / rate, in seconds. */
+export declare function durationFormula(values: {
+  inherent: number;
+  minimum: number;
+  percent: number;
+  speechRate?: number;
+}): number;
+export declare function applyingRules(
+  token: object,
+  features: DurationFeatures,
+  table?: DurationTable,
+  options?: DurationOptions
+): { rule: DurationRule; factor: number }[];
+/** Inherent and minimum (ms) of each part of a token. */
+export declare function phonemeDurations(
+  token: object,
+  features: DurationFeatures,
+  table?: DurationTable
+): DurationEntry[];
+/** Seconds per part (one, or closure and frication of an affricate). */
+export declare function segmentParts(
+  token: object,
+  features: DurationFeatures,
+  table?: DurationTable,
+  options?: DurationOptions
+): number[];
+/** Duration of a token in seconds. */
+export declare function segmentDuration(
+  token: object,
+  features: DurationFeatures,
+  table?: DurationTable,
+  options?: DurationOptions
+): number;
+/** Shortest duration of a token at the speech rate, in seconds. */
+export declare function minimumDuration(
+  token: object,
+  features: DurationFeatures,
+  table?: DurationTable,
+  options?: DurationOptions
+): number;
+/** Pause in seconds: strength 2 and more shrink with speechRate ** 1.5. */
+export declare function scalePause(
+  base: number,
+  strength: number,
+  speechRate?: number
+): number;
 export declare const TRACT_SECTIONS: number;
 export declare function planUtterance(
   ipa: string | object[],
@@ -321,6 +449,8 @@ export declare function planUtterance(
     frameRate?: number;
     /** Measured duration of every token in seconds (null keeps the plan's). */
     durations?: (number | null)[];
+    /** Duration table (an entry of DURATION_TABLES) instead of the language's. */
+    durationTable?: DurationTable;
     /** Overrides of ARTICULATORS entries, e.g. { velum: { lead: 0.1 } }. */
     articulators?: Record<string, Partial<Articulator>>;
     /** Values of the levels of COARTICULATION_RESISTANCE. */
@@ -2125,6 +2255,12 @@ export declare function dtw<T = ArrayLike<number> | number>(
     distance?: (x: T, y: T) => number;
     /** Sakoe-Chiba band 0 to 1 on relative positions (default 1). */
     band?: number;
+    /**
+     * Weight of the local distance on a diagonal step (default 1, which
+     * keeps the path near the diagonal; 2 is the symmetric form of Sakoe &
+     * Chiba 1978, which follows the signals).
+     */
+    diagonalWeight?: number;
   }
 ): DtwResult;
 export interface DistortionOptions extends CepstrumOptions {
