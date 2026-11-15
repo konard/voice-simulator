@@ -35,6 +35,8 @@ const MAX_VELUM_AREA = 1.6;
  * 9 %, `node experiments/issue-40-articulators.mjs`).
  */
 export const JAW_AREA = 1;
+/** Start of the mouth region the jaw opens (fraction of the tract). */
+const JAW_START = 0.55;
 /** Length of the lip end of the tract that protrusion stretches (cm). */
 export const LIP_REGION = 1.5;
 /** Length of the glottis end of the tract that the larynx stretches (cm). */
@@ -125,8 +127,12 @@ function tongueArea(state) {
  * Articulated tract in reference proportions (before head warping).
  * @param {Record<string, number>} state
  * @param {Record<string, number[]>} [corrections] See vowelShape.
+ * @param {{scale: number, from: number}} [jaw] Factor on the vowel's areas
+ *   from the reference position `from` to the lips (see jawScale()). The
+ *   tongue and the lips still reach their constrictions, as they do when a
+ *   bite block holds the jaw, so the factor comes before them.
  */
-export function referenceShape(state, corrections) {
+export function referenceShape(state, corrections, jaw) {
   const base = vowelShape(
     {
       height: state.height,
@@ -136,6 +142,12 @@ export function referenceShape(state, corrections) {
     corrections
   );
   const { areas } = base;
+  if (jaw && jaw.scale !== 1) {
+    const last = areas.length - 1;
+    for (let index = 0; index <= last; index++) {
+      areas[index] *= index / last > jaw.from ? jaw.scale : 1;
+    }
+  }
   applySecondary(areas, state);
   applyRhotic(areas, state);
   constrict(
@@ -177,16 +189,12 @@ function sampleLinear(values, position) {
   return values[index] * (1 - fraction) + values[index + 1] * fraction;
 }
 
-function regionScale(x, head, openness, jawScale = 1) {
+function regionScale(x, head, openness) {
   const blend = Math.min(1, Math.max(0, (x - head.pharynxRatio) / 0.08 + 0.5));
   let scale = head.pharynxWidth * (1 - blend) + head.oralWidth * blend;
   if (x > 0.55 && x < 0.95) {
     scale /= head.tongueSize ** 2;
     scale *= 1 + (head.jawRange - 1) * openness * 0.9;
-  }
-  if (x > 0.55) {
-    // The lower lip rides on the jaw: the lip opening follows it too.
-    scale *= jawScale;
   }
   if (x > 0.93) {
     scale *= head.mouthWidth;
@@ -198,18 +206,16 @@ function regionScale(x, head, openness, jawScale = 1) {
  * Warp a reference shape onto a head and resample it.
  * @param {{areas: Float64Array, length: number}} shape
  * @param {Record<string, number>} head Normalised head config.
- * @param {{sections?: number, openness?: number, jawScale?: number}} [options]
- *   `jawScale` multiplies the mouth cross-sections (see jawScale()).
+ * @param {{sections?: number, openness?: number}} [options]
  */
 export function fitToHead(shape, head, options = {}) {
   const sections = options.sections ?? TRACT_SECTIONS;
   const openness = options.openness ?? 0.5;
-  const jaw = options.jawScale ?? 1;
   const areas = new Float64Array(sections);
   for (let index = 0; index < sections; index++) {
     const x = index / (sections - 1);
     const area = sampleLinear(shape.areas, warpPosition(x, head.pharynxRatio));
-    areas[index] = area * regionScale(x, head, openness, jaw);
+    areas[index] = area * regionScale(x, head, openness);
   }
   const lipExtension = 0.5 * (head.lipThickness - 1);
   const length =
@@ -452,12 +458,22 @@ export function articulatorState(state, head) {
 export function tractShape(state, head, options = {}) {
   const free = articulatorState(state, head);
   const full = { ...CHANNEL_DEFAULTS, time: 0, ...state, jaw: free.jaw };
-  const reference = referenceShape(full, options.vowelCorrections);
+  // The mouth from x = 0.55 of the head's tract on; the lower lip rides
+  // on the jaw, so the lip opening follows it too. While the tongue or the
+  // lips make a consonant they compensate for the jaw, as they reach their
+  // target with a bite block, so the jaw acts on the vowel part only.
+  const held = Math.max(
+    engagement(full.tongueAmount),
+    engagement(full.lipAmount)
+  );
+  const reference = referenceShape(full, options.vowelCorrections, {
+    scale: 1 + (jawScale(free.jaw, free.expectedJaw) - 1) * (1 - held),
+    from: warpPosition(JAW_START, head.pharynxRatio),
+  });
   const openness = Math.max(0, Math.min(1, 1 - full.height));
   const fitted = fitToHead(reference, head, {
     sections: options.sections,
     openness,
-    jawScale: jawScale(free.jaw, free.expectedJaw),
   });
   let { areas, length } = fitted;
   const restVelum = Math.round(

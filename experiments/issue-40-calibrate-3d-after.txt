@@ -1,0 +1,12 @@
+# node scripts/calibrate-vowels.mjs --solver fdtd3d --vowels i,ɔ (after the full refit; the source plane follows the length)
+/i/ target 343 2323 3001 | raw 224 1840 2688 | calibrated 358 2322 3114
+/ɪ/ target 429 2034 2687 | raw 314 1590 2436 | calibrated 438 2042 2778
+/e/ target 476 2090 2692 | raw 390 1506 2028 | calibrated 476 2078 2678
+/ɛ/ target 588 1803 2604 | raw 458 1196 1930 | calibrated 586 1782 2606
+/æ/ target 591 1930 2595 | raw 628 1260 2068 | calibrated 600 1946 2712
+/ʌ/ target 621 1181 2548 | raw 446 760 2772 | calibrated 616 1164 2562
+/ɑ/ target 756 1309 2535 | raw 480 820 2798 | calibrated 752 1292 2492
+/ɔ/ target 656 1023 2521 | raw 406 642 2758 | calibrated 600 958 2254
+/o/ target 498 910 2459 | raw 392 708 2098 | calibrated 498 904 2462
+/ʊ/ target 469 1123 2435 | raw 364 774 2006 | calibrated 466 1110 2384
+/u/ target 380 992 2355 | raw 214 690 1884 | calibrated 376 990 2354

@@ -193,9 +193,13 @@ describe('teeth voxels', () => {
     const open = solidCells(solver, vowelState('ɑ'));
     expect(open.length).toBeLessThan(sibilant.length);
     expect(open.length).toBeGreaterThan(0);
-    // Without teeth the slices are ordinary tube again.
+    // Without teeth the slices are ordinary tube again (the only solid
+    // cells left close the larynx extension below the glottis, issue 40).
     solver.setShape(tractShape(vowelState('ɑ'), DEFAULT_HEAD).areas, 0);
-    expect(solver.solid.every((value) => value === 0)).toBe(true);
+    const larynx = new Set(solver.larynxCells);
+    expect(
+      solver.solid.every((value, cell) => value === 0 || larynx.has(cell))
+    ).toBe(true);
   });
 
   it('opens each incisor slice by the slot area at any grid size', () => {

@@ -1,0 +1,8 @@
+dx 1 cm, rest length 16.5 cm
+[u] length 15.84 stretch only : rise 0, step 13.713 us, tube 351/922/2746 Hz, 3D error -11.6/-10.0/-11.1 %
+[u] length 15.84 moving glottis: rise 1, step 14.598 us, tube 351/922/2746 Hz, 3D error -14.5/-13.3/-13.7 %
+[æ] length 14.30 stretch only : rise 0, step 12.379 us, tube 625/2079/2678 Hz, 3D error -10.4/-11.0/-10.0 %
+[æ] length 14.30 moving glottis: rise 2, step 14.086 us, tube 625/2079/2678 Hz, 3D error -10.4/-13.9/-10.8 %
+step [u]/[æ] stretch only: 10.8 %
+step [u]/[æ] moving glottis: 3.6 %
+[æ]->[u] glide 0.3 s, largest step / RMS: waveguide 0.808, fdtd3d 0.301 (0.37 x)

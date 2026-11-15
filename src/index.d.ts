@@ -3,6 +3,17 @@
  */
 
 export type LanguageCode = 'en' | 'ru' | 'hi' | 'zh';
+/**
+ * Head parameters by key (see HEAD_PARAMETERS). The speaker habits of
+ * issue 40 add to the free articulator channels in tractShape:
+ * `jawPosture` (cm of incisor gap, -0.2 to 0.6), `lipPosture` (cm of lip
+ * protrusion, -0.3 to 0.6, negative spreads the lips), `larynxPosture`
+ * (cm, -1 to 1, negative lowers the larynx) and `tongueRootPosture`
+ * (-1 to 1). Two optional couplings, off at 0, shape the pitch:
+ * `intrinsicPitch` (semitones between the closest and the most open
+ * vowel, 0 to 3) and `larynxPitch` (cm the larynx rises per octave above
+ * the speaker pitch, 0 to 1).
+ */
 export type HeadConfig = Record<string, number>;
 export type SolverName = 'waveguide' | 'fdtd2d' | 'fdtd3d';
 /** Voice source: the LF pulse model or the physical vocal folds. */
@@ -351,10 +362,50 @@ export declare function sampleState(
   time: number,
   target?: Record<string, number>
 ): Record<string, number>;
+/**
+ * Free articulator channels of a plan (issue 40). Left out, each takes the
+ * value the other channels imply, which gives the shape of the vowel and
+ * consonant channels alone.
+ */
+export interface ArticulatorChannels {
+  /** Gap between the incisors (cm), 0.1 to 1.8; time constant 0.035 s. */
+  jaw?: number;
+  /**
+   * Lips pushed forward (cm), -0.3 to 1.2, by default LIP_PROTRUSION times
+   * the rounding; time constant 0.02 s.
+   */
+  lipProtrusion?: number;
+  /**
+   * Larynx above its place in the vowel (cm, negative lowered), -1.5 to
+   * 1.5; time constant 0.04 s.
+   */
+  larynxHeight?: number;
+  /**
+   * Tongue root, -1 pulled back (narrower pharynx) to +1 pushed forward;
+   * time constant 0.03 s.
+   */
+  tongueRoot?: number;
+}
+/** Lip protrusion (cm) of a fully rounded vowel. */
+export declare const LIP_PROTRUSION: number;
+/**
+ * Resample sections of unequal `lengths` (cm) into `sections` equal ones,
+ * keeping the volume of every stretch of the tract.
+ */
+export declare function stretchSections(
+  areas: ArrayLike<number>,
+  lengths: ArrayLike<number>,
+  sections?: number
+): { areas: Float64Array; length: number };
 export declare function tractShape(
-  state: Record<string, number>,
+  state: Record<string, number> & ArticulatorChannels,
   head: HeadConfig,
-  options?: { sections?: number; teeth?: boolean }
+  options?: {
+    sections?: number;
+    teeth?: boolean;
+    /** Vowel table in place of the tube model's (see VOWEL_CORRECTIONS). */
+    vowelCorrections?: Record<string, number[]>;
+  }
 ): {
   areas: Float64Array;
   length: number;
@@ -679,23 +730,41 @@ export declare class Fdtd3d implements Solver {
     piriform?: boolean;
     /** `false` leaves out the vallecula. */
     vallecula?: boolean;
+    /**
+     * The source plane goes where the tract is `shape.length / lengthScale`
+     * cm long (default 1; voice.js passes the mean length ratio of the 3D
+     * vowel table, about 0.84).
+     */
+    lengthScale?: number;
   });
   /** The GPU step loop, with a `device`. */
   readonly gpu: FdtdGpu | null;
+  /** Whole cells the source plane sits above the rest glottis. */
+  readonly rise: number;
+  /** Length (cm) from the source plane to the lips. */
+  readonly activeLength: number;
   /** Distance of the receiver from the lips (cm), with a microphone. */
   readonly microphoneDistance?: number;
   /** True when the grid contains the enclosure walls. */
   readonly simulatesEnclosure: boolean;
   /**
    * Seconds per step; with a shape the grid runs slower by its length over
-   * the rest length so the formants follow the tract length.
+   * the active length (under half a cell apart once setShape has placed
+   * the source plane for it).
    */
   stepDuration(shape?: { length?: number }): number;
+  /**
+   * With `shape`, the source plane moves to the whole cell of the voxel
+   * tract (which goes on below the glottis by a quarter of its length)
+   * nearest to its length, with a hysteresis of 0.15 cells, and the areas
+   * map onto the part between the source plane and the lips.
+   */
   setShape(
     areas: ArrayLike<number>,
     velumArea: number,
     velumIndex?: number,
-    teeth?: { gap: number } | null
+    teeth?: { gap: number } | null,
+    shape?: { length?: number }
   ): void;
   setNose(areas: ArrayLike<number>): void;
   step(
@@ -2354,8 +2423,10 @@ export interface FaceRig {
   lipsSealed: number;
   /** Lip opening beyond the incisor gap (cm). */
   lipParting: number;
-  /** Forward push of the lips (cm). */
+  /** Forward push of the lips (cm): the lipProtrusion channel. */
   protrusion: number;
+  /** Larynx above its place in the vowel (cm, negative lowered). */
+  larynxHeight: number;
   rounding: number;
   spread: number;
   bilabial: number;

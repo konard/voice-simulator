@@ -1,0 +1,12 @@
+# node scripts/calibrate-vowels.mjs --solver fdtd3d --check (main, 7f07673)
+/i/ target 343 2323 3001 | raw 218 1842 2626 | calibrated 352 2272 3046
+/ɪ/ target 429 2034 2687 | raw 310 1564 2386 | calibrated 424 2010 2746
+/e/ target 476 2090 2692 | raw 384 1526 2000 | calibrated 476 2076 2682
+/ɛ/ target 588 1803 2604 | raw 450 1196 1880 | calibrated 586 1782 2614
+/æ/ target 591 1930 2595 | raw 620 1268 2096 | calibrated 598 1880 2610
+/ʌ/ target 621 1181 2548 | raw 436 746 2352 | calibrated 626 1174 2500
+/ɑ/ target 756 1309 2535 | raw 480 798 2314 | calibrated 742 1254 2636
+/ɔ/ target 656 1023 2521 | raw 390 620 2180 | calibrated 618 984 2322
+/o/ target 498 910 2459 | raw 378 690 2078 | calibrated 496 906 2462
+/ʊ/ target 469 1123 2435 | raw 354 752 1938 | calibrated 470 1110 2440
+/u/ target 380 992 2355 | raw 206 662 1858 | calibrated 376 988 2356
