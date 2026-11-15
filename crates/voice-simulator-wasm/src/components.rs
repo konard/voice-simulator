@@ -5,6 +5,7 @@
 use voice_simulator_core::filters::Biquad;
 use voice_simulator_core::glottis::{GlottalControl, Glottis, GlottisOptions};
 use voice_simulator_core::radiation::Radiation;
+use voice_simulator_core::waveguide::{PiriformBranch, Waveguide, WaveguideOptions};
 
 use crate::{error, f64_slice};
 
@@ -120,6 +121,81 @@ pub extern "C" fn vs_radiation_run(area: f64, rate: f64, data: u32, count: u32) 
                 *value = radiation.process(*value);
             }
             error::OK
+        }
+        Err(code) => code,
+    }
+}
+
+/// Fixed `f64` parameters of [`vs_waveguide_run`] before the areas.
+pub const WAVEGUIDE_PARAMETERS: usize = 11;
+
+/// Runs a waveguide over `data`, which holds the glottal flow derivative
+/// on entry and the radiated output on return. `parameters` are sections,
+/// noseSections, wallLoss, nasalLoss, glottalChink, vocalTractLength, the
+/// piriform index, area and sections, velumArea and velumIndex, then the
+/// `sections` oral areas and the nose profile (`setNose`; may be empty).
+/// Returns false if the parameters do not fit.
+pub fn run_waveguide(parameters: &[f64], data: &mut [f64]) -> bool {
+    let Some(header) = parameters.get(..WAVEGUIDE_PARAMETERS) else {
+        return false;
+    };
+    let sections = header[0] as usize;
+    let nose_sections = header[1] as usize;
+    let piriform_index = header[6] as usize;
+    let velum_index = header[10];
+    if sections < 3
+        || parameters.len() < WAVEGUIDE_PARAMETERS + sections
+        || piriform_index == 0
+        || piriform_index >= sections
+    {
+        return false;
+    }
+    let options = WaveguideOptions {
+        sections,
+        nose_sections,
+        wall_loss: header[2],
+        nasal_loss: header[3],
+        glottal_chink: header[4],
+        vocal_tract_length: header[5],
+        piriform: PiriformBranch {
+            index: piriform_index,
+            area: header[7],
+            sections: header[8] as usize,
+        },
+    };
+    let mut waveguide = Waveguide::new(&options);
+    let (areas, nose) = parameters[WAVEGUIDE_PARAMETERS..].split_at(sections);
+    if !nose.is_empty() {
+        waveguide.set_nose(nose);
+    }
+    waveguide.set_areas(areas, header[9], velum_index);
+    for value in data {
+        *value = waveguide.advance(*value, 1.0, 0.0, 0.0);
+    }
+    true
+}
+
+/// [`run_waveguide`] with the `parameter_count` `f64` parameters at
+/// `parameters` over the `count` `f64` values at `data`. Returns 0 or a
+/// negative code of [`error`].
+#[no_mangle]
+pub extern "C" fn vs_waveguide_run(
+    parameters: u32,
+    parameter_count: u32,
+    data: u32,
+    count: u32,
+) -> i32 {
+    let values = match f64_slice(parameters, parameter_count) {
+        Ok(slice) => slice.to_vec(),
+        Err(code) => return code,
+    };
+    match f64_slice(data, count) {
+        Ok(slice) => {
+            if run_waveguide(&values, slice) {
+                error::OK
+            } else {
+                error::BAD_ARGUMENT
+            }
         }
         Err(code) => code,
     }

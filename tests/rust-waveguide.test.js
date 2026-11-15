@@ -15,7 +15,10 @@ import { describe, expect } from 'test-anywhere';
 import { Biquad, createNoise } from '../src/acoustics/filters.js';
 import { Glottis } from '../src/acoustics/glottis.js';
 import { Radiation } from '../src/acoustics/radiation.js';
+import { piriformBranch, Waveguide } from '../src/acoustics/waveguide.js';
+import { noseShape } from '../src/articulation/tract-shape.js';
 import { float64View } from '../src/engine/wasm-loader.js';
+import { DEFAULT_HEAD } from '../src/head-config.js';
 import { hashSeed } from '../src/random.js';
 import { loadRustEngine, noRust } from './helpers/rust-engine.js';
 import { itUnless } from './helpers/skip.js';
@@ -142,5 +145,54 @@ describe('Rust waveguide renderer (issue 22)', () => {
     const measured = error(values, expected);
     globalThis.console.log(`radiation error ${measured}`);
     expect(measured).toBe(0);
+  });
+  it('waveguide matches', async () => {
+    const engine = await loadRustEngine();
+    const sections = 22;
+    const noseSections = 14;
+    const head = { ...DEFAULT_HEAD, glottalChink: 2 };
+    const areas = Array.from({ length: sections }, (_, index) =>
+      index >= 14 && index <= 16 ? 0.3 : 3
+    );
+    const nose = noseShape(head).areas;
+    const velumArea = 0.4;
+    const velumIndex = 10;
+    const waveguide = new Waveguide({ sections, noseSections, head });
+    waveguide.setNose(nose);
+    waveguide.setShape(areas, velumArea, velumIndex);
+    const input = new Float64Array(4096);
+    input[0] = 1;
+    const expected = input.map((value) => waveguide.step(value, 1, 0, 0));
+    const branch = piriformBranch(sections, 16.5, head);
+    const parameters = [
+      sections,
+      noseSections,
+      head.wallLoss,
+      head.nasalLoss,
+      head.glottalChink,
+      head.vocalTractLength,
+      branch.index,
+      branch.area,
+      branch.sections,
+      velumArea,
+      velumIndex,
+      ...areas,
+      ...nose,
+    ];
+    const { values } = inEngine(engine, input, (pointer, length) =>
+      inEngine(engine, parameters, (params, count) => {
+        const result = engine.exports.vs_waveguide_run(
+          params,
+          count,
+          pointer,
+          length
+        );
+        expect(result).toBe(0);
+        return result;
+      })
+    );
+    const measured = error(values, expected);
+    globalThis.console.log(`waveguide error ${measured}`);
+    expect(measured < 1e-9).toBe(true);
   });
 });

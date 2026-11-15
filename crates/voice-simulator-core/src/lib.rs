@@ -14,8 +14,12 @@ extern crate alloc;
 
 pub mod aerodynamics;
 pub mod filters;
+pub mod frame;
 pub mod glottis;
 pub mod math;
+pub mod nose_line;
 pub mod radiation;
 pub mod random;
 pub mod resample;
+pub mod solver;
+pub mod waveguide;
