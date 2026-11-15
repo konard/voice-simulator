@@ -50,12 +50,12 @@ export function anticipate(targets, lead, options = {}) {
     const target = targets[index];
     if (!options.limited) {
       starts[index] = target.start - lead;
-    } else if (target.strength >= 1) {
+    } else if ((target.strength ?? 1) >= 1) {
       starts[index] = Math.max(target.start - lead, ownEnd);
     } else {
       starts[index] = target.start;
     }
-    if (target.strength >= 1 && target.limiting !== false) {
+    if ((target.strength ?? 1) >= 1 && target.limiting !== false) {
       ownEnd = target.end;
     }
   }
@@ -67,88 +67,106 @@ export function anticipate(targets, lead, options = {}) {
     starts[index] = Math.max(starts[index], starts[index - 1], first);
   }
   return targets.map((target, index) => ({
-    ...target,
+    value: target.value,
     start: starts[index],
     end: index + 1 < targets.length ? starts[index + 1] : target.end,
+    strength: target.strength,
+    limiting: target.limiting,
   }));
 }
 
-/**
- * Per target, the line through the neighbouring targets of strength 1:
- * `[fromTime, fromValue, toTime, toValue]`.
- */
-function targetLines(targets, fallback) {
-  const lines = new Array(targets.length);
-  let from = null;
-  for (let index = 0; index < targets.length; index++) {
-    lines[index] = [from?.end, from?.value];
-    if (targets[index].strength >= 1) {
-      from = targets[index];
-    }
-  }
-  let to = null;
-  for (let index = targets.length - 1; index >= 0; index--) {
-    const line = lines[index];
-    let [fromTime, fromValue] = line;
-    let toTime = to?.start;
-    let toValue = to?.value;
-    if (fromValue === undefined) {
-      fromValue = toValue ?? fallback;
-      fromTime = toTime ?? 0;
-    }
-    if (toValue === undefined) {
-      toValue = fromValue;
-      toTime = fromTime;
-    }
-    lines[index] = [fromTime, fromValue, toTime, toValue];
-    if (targets[index].strength >= 1) {
-      to = targets[index];
-    }
-  }
-  return lines;
+/** Slope of the line from the end of `from` to the start of `to`. */
+function lineSlope(from, to) {
+  return from && to && to.start > from.end
+    ? (to.value - from.value) / (to.start - from.end)
+    : 0;
 }
 
-function lineValue([fromTime, fromValue, toTime, toValue], time) {
-  if (toTime <= fromTime || time <= fromTime) {
-    return time >= toTime ? toValue : fromValue;
+/** Value at time 0 of that line (it holds a value without both ends). */
+function lineBase(from, to, slope, fallback) {
+  if (from && to) {
+    return slope === 0 && to.start <= from.end
+      ? to.value
+      : from.value - slope * from.end;
   }
-  if (time >= toTime) {
-    return toValue;
+  return from?.value ?? to?.value ?? fallback;
+}
+
+/**
+ * Per target, the input as `a + b * t`. A target of strength 1 is its
+ * value. Any other target lies between the end of the previous target of
+ * strength 1 and the start of the next one, where the line between the two
+ * is straight, so its mix with the value is linear in time too. Before the
+ * first and after the last target of strength 1 the line holds their value
+ * (`fallback` without any).
+ */
+function targetCoefficients(targets, fallback) {
+  const count = targets.length;
+  const a = new Float64Array(count);
+  const b = new Float64Array(count);
+  const previous = new Int32Array(count);
+  let own = -1;
+  for (let index = 0; index < count; index++) {
+    previous[index] = own;
+    if ((targets[index].strength ?? 1) >= 1) {
+      own = index;
+    }
   }
-  return (
-    fromValue +
-    ((toValue - fromValue) * (time - fromTime)) / (toTime - fromTime)
-  );
+  let next = -1;
+  for (let index = count - 1; index >= 0; index--) {
+    const target = targets[index];
+    const strength = target.strength ?? 1;
+    if (strength >= 1) {
+      a[index] = target.value;
+      next = index;
+      continue;
+    }
+    const from = previous[index] < 0 ? null : targets[previous[index]];
+    const to = next < 0 ? null : targets[next];
+    const slope = lineSlope(from, to);
+    const base = lineBase(from, to, slope, fallback);
+    a[index] = strength * target.value + (1 - strength) * base;
+    b[index] = (1 - strength) * slope;
+  }
+  return { a, b };
 }
 
 /**
  * The input of the articulator per frame: the active target (its value
  * mixed with the line by its strength), averaged over each frame so that
- * targets shorter than a frame still count.
+ * targets shorter than a frame still count. Inside one target the input is
+ * linear in time, so a frame that lies in one target takes the value at its
+ * middle, the same as the mean of the sub-samples.
  */
 function sampleInput(targets, frameRate, frameCount, fallback) {
   const input = new Float32Array(frameCount);
   if (targets.length === 0) {
     return input.fill(fallback);
   }
-  const lines = targetLines(targets, fallback);
-  let index = 0;
-  for (let frame = 0; frame < frameCount; frame++) {
-    let sum = 0;
-    for (let sub = 0; sub < SUBSAMPLES; sub++) {
-      const time = (frame + (sub + 0.5) / SUBSAMPLES - 0.5) / frameRate;
-      while (index + 1 < targets.length && time >= targets[index].end) {
-        index++;
-      }
-      const target = targets[index];
-      const strength = target.strength ?? 1;
-      sum +=
-        strength >= 1
-          ? target.value
-          : strength * target.value +
-            (1 - strength) * lineValue(lines[index], time);
+  const { a, b } = targetCoefficients(targets, fallback);
+  const period = 1 / frameRate;
+  const last = targets.length - 1;
+  let frame = 0;
+  for (let index = 0; index <= last && frame < frameCount; index++) {
+    const end = index === last ? Infinity : targets[index].end;
+    // Frames that end inside this target: their middle value.
+    const inside = Math.min(frameCount, Math.floor(end * frameRate + 0.5));
+    for (; frame < inside; frame++) {
+      input[frame] = a[index] + b[index] * frame * period;
     }
-    input[frame] = sum / SUBSAMPLES;
+    // Frames across its end: the mean of the sub-samples.
+    for (; frame < frameCount && (frame - 0.5) * period < end; frame++) {
+      let sum = 0;
+      let sub = index;
+      for (let step = 0; step < SUBSAMPLES; step++) {
+        const time = (frame + (step + 0.5) / SUBSAMPLES - 0.5) * period;
+        while (sub < last && time >= targets[sub].end) {
+          sub++;
+        }
+        sum += a[sub] + b[sub] * time;
+      }
+      input[frame] = sum / SUBSAMPLES;
+    }
   }
   return input;
 }
@@ -184,6 +202,17 @@ export function approachTargets(
     options.fallback ?? 0
   );
   const alpha = 1 - Math.exp(-1 / (timeConstant * frameRate));
+  if (order === 2) {
+    // The usual case, both filters in one pass.
+    let first = values[0];
+    let second = first;
+    for (let frame = 0; frame < frameCount; frame++) {
+      first += alpha * (values[frame] - first);
+      second += alpha * (first - second);
+      values[frame] = second;
+    }
+    return values;
+  }
   for (let pass = 0; pass < order; pass++) {
     let state = values[0];
     for (let frame = 0; frame < frameCount; frame++) {

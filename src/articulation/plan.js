@@ -576,12 +576,19 @@ function segmentTarget(segments, index, name, levels) {
  *   levels of `COARTICULATION_RESISTANCE` that replace the defaults.
  */
 export function channelTargets(segments, name, options = {}) {
-  const levels = { ...COARTICULATION_RESISTANCE.levels, ...options.resistance };
-  return segments.map((segment, index) => ({
-    ...segmentTarget(segments, index, name, levels),
-    start: segment.start,
-    end: segment.end,
-  }));
+  const levels = options.resistance
+    ? { ...COARTICULATION_RESISTANCE.levels, ...options.resistance }
+    : COARTICULATION_RESISTANCE.levels;
+  return segments.map((segment, index) => {
+    const target = segmentTarget(segments, index, name, levels);
+    return {
+      value: target.value,
+      start: segment.start,
+      end: segment.end,
+      strength: target.strength,
+      limiting: target.limiting,
+    };
+  });
 }
 
 /** Zero-phase critically damped smoothing (forward + backward one-pole). */
