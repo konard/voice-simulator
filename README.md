@@ -298,7 +298,13 @@ min(16000 Hz, both rates), the silence at both ends is cut (frames more than
 40 dB below the loudest), both are scaled to an RMS of 0.1 and aligned by
 dynamic time warping (DTW; Sakoe & Chiba 1978) on the mel cepstra c1 to c13.
 Every metric is then taken along the alignment. Frames are 0.025 s long with
-a Hann window, taken every 0.01 s, with a 512-point FFT.
+a Hann window, taken every 0.01 s, with a 512-point FFT. Before a logarithm,
+bin powers and mel filter energies weaker than 60 dB below the strongest one
+of the same recording are raised to that level (`DYNAMIC_RANGE_DB`, option
+`range`), so an empty band costs at most the dynamic range. LSD and MCD skip
+the pairs whose reference frame is silent (40 dB below the loudest reference
+frame): pauses and background noise of a recording are not speech to compare
+with.
 
 | Metric                                       | Field                             | Unit     | Formula                                                                           |
 | -------------------------------------------- | --------------------------------- | -------- | --------------------------------------------------------------------------------- |
@@ -344,8 +350,33 @@ filters, 13 coefficients, 16 kHz). Values are comparable inside this project
 and only roughly with published ones. In particular this cepstrum is taken
 from the natural logarithm of the filter energies (power, not amplitude) with
 an orthonormal DCT, so its values are larger than those of tools that use the
-SPTK mel-generalised cepstrum: two different synthetic voices saying the same
-sentence are 30 to 50 dB apart here.
+SPTK mel-generalised cepstrum: the female and the male preset head saying the
+same sentence on the `minimal` tier are 47 to 52 dB apart here, and two
+renderings with seeds 1 and 2 are 10 to 11 dB apart
+(`node experiments/issue-19-voice-pairs.mjs`).
+
+### Quality
+
+[docs/reports/baseline-quality.md](docs/reports/baseline-quality.md) is the
+first measurement of how far the synthetic voice is from human speech: every
+sentence of the golden set (24 LibriVox recordings in English, Russian, Hindi
+and Chinese) is rendered on every tier and compared with its recording by
+`compareRecordings`, next to two anchors (the recording low-passed at 3.5 kHz,
+and white noise). Three numbers of the
+[run of 15 November 2026](https://github.com/konard/voice-simulator/actions/runs/43705076861)
+sum it up. **MCD** of the best tier (`high`) is 68.0 dB (all tiers 68 to
+73 dB), between 49.2 dB for `lowpass` and 89.7 dB for `noise`: the voice is
+about halfway between a recording and noise. **Pitch** is the largest gap: the
+f0 RMSE is about 630 cents and the gross pitch error about 53 % on every tier,
+partly because every sentence is rendered with the female preset head while
+the manifest does not record the sex of the speaker (`en-02` is more than an
+octave off). **PER** of the
+text front end is 9.0 % in English and 11.4 % in Russian and below 0.5 % in
+Hindi and Chinese (against IPA that nobody has reviewed yet).
+`node scripts/quality-report.mjs [--lang en --limit 2] [--baseline docs/reports/baseline-quality.json]`
+measures again; a pull request that claims an improvement puts that table
+into its description. The baseline itself is regenerated only by the
+`quality` suite of the `Heavy checks` workflow.
 
 ### Listening tests
 
@@ -809,6 +840,7 @@ Configured in `.prettierrc`:
 | `npm run test:heavy`                 | Run the slow tests of `tests/heavy/` (CONTRIBUTING)   |
 | `npm run datasets -- list`           | List, fetch or verify speech datasets (CONTRIBUTING)  |
 | `node scripts/golden.mjs verify`     | Check the golden set of `tests/fixtures/golden/`      |
+| `node scripts/quality-report.mjs`    | Score the tiers against the golden set (Quality)      |
 | `bun run lint`                       | Check code with ESLint                                |
 | `bun run lint:fix`                   | Fix ESLint issues automatically                       |
 | `bun run format`                     | Format code with Prettier                             |

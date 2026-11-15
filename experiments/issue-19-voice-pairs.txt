@@ -1,0 +1,6 @@
+en "Hello.": female/male MCD 51.2 LSD 8.6; seed 1/2 MCD 11.4
+en "The quick brown fox jumps over the dog.": female/male MCD 48.5 LSD 8.2; seed 1/2 MCD 11.4
+en "She sells sea shells by the sea shore.": female/male MCD 47.4 LSD 8.6; seed 1/2 MCD 9.8
+ru "Доброе утро, как дела?": female/male MCD 52.0 LSD 8.0; seed 1/2 MCD 9.9
+hi "आज मौसम बहुत अच्छा है।": female/male MCD 49.4 LSD 8.6; seed 1/2 MCD 10.4
+zh "今天天气很好。": female/male MCD 50.1 LSD 8.2; seed 1/2 MCD 11.0

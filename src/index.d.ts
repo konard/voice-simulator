@@ -1485,8 +1485,18 @@ export declare function matchVoiceSteps(
   options?: VoiceMatchOptions
 ): Generator<VoiceMatchStep, VoiceMatch, void>;
 // Objective speech metrics and recording comparison
-/** Floor added to powers before taking logarithms (1e-10). */
+/** Absolute floor under powers before taking logarithms (1e-10). */
 export declare const EPSILON: number;
+/**
+ * Dynamic range (dB, 60) kept below the strongest bin power or mel filter
+ * energy of a signal before a logarithm; weaker values are raised to it.
+ */
+export declare const DYNAMIC_RANGE_DB: number;
+/** max(EPSILON, 10^(-range / 10) * the largest value of all frames). */
+export declare function powerFloor(
+  frames: ArrayLike<number>[],
+  range?: number
+): number;
 export declare const METRIC_DEFAULTS: Readonly<{
   sampleRate: 16000;
   /** Hann window (s). */
@@ -1498,6 +1508,8 @@ export declare const METRIC_DEFAULTS: Readonly<{
   /** Cepstral coefficients c[1] .. c[13] besides c[0]. */
   coefficients: 13;
   epsilon: number;
+  /** DYNAMIC_RANGE_DB. */
+  dynamicRange: number;
 }>;
 export interface FrameOptions {
   /** Window length in seconds (default 0.025). */
@@ -1512,6 +1524,8 @@ export interface CepstrumOptions extends FrameOptions {
   filters?: number;
   /** Coefficients besides c[0] (default 13). */
   coefficients?: number;
+  /** Dynamic range (dB) below the strongest value (default 60). */
+  range?: number;
 }
 /** In-place radix-2 FFT; the length must be a power of two. */
 export declare function fft(re: Float64Array, im: Float64Array): void;
@@ -1557,14 +1571,20 @@ export interface DistortionOptions extends CepstrumOptions {
   /** Scale both signals to an RMS of 0.1 first (default true). */
   normalize?: boolean;
 }
-/** Log-spectral distance (dB). */
+/**
+ * Log-spectral distance (dB), averaged over the frame pairs whose reference
+ * frame is not silent (40 dB below the loudest reference frame).
+ */
 export declare function logSpectralDistance(
   reference: ArrayLike<number>,
   test: ArrayLike<number>,
   sampleRate: number,
   options?: DistortionOptions
 ): number;
-/** Mel-cepstral distortion (dB) over c[1] .. c[13]. */
+/**
+ * Mel-cepstral distortion (dB) over c[1] .. c[13], averaged over the frame
+ * pairs whose reference frame is not silent.
+ */
 export declare function melCepstralDistortion(
   reference: ArrayLike<number>,
   test: ArrayLike<number>,
@@ -1674,6 +1694,8 @@ export declare function compareRecordings(
     hop?: number;
     /** false skips the formant tracks (default true). */
     formants?: boolean;
+    /** Dynamic range (dB) of the spectral distances (default 60). */
+    range?: number;
   }
 ): RecordingComparison;
 // Linguistics: text normalisation, accents, prosody, syllables, timeline
