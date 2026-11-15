@@ -20,6 +20,7 @@ import {
 import {
   MATCH_TEXT,
   featureDistance,
+  lowerFormantLength,
   matchVoice,
 } from '../src/analysis/voice-match.js';
 import { presetHeadConfig } from '../src/head-config.js';
@@ -66,6 +67,15 @@ describe('voice features', () => {
   it('fits the formant spacing of a uniform tube', () => {
     expect(formantSpacing([500, 1500, 2500, 3500])).toBe(1000);
     expect(formantSpacing([600, 1800, 3000])).toBe(1200);
+  });
+
+  it('reads the tract length of the match from F1 to F3', () => {
+    // 35000 cm/s over twice a spacing of 1000 Hz; F4 is left out.
+    expect(lowerFormantLength({ formants: [500, 1500, 2500, 3900] })).toBe(
+      17.5
+    );
+    expect(lowerFormantLength({ formants: [500, 1500, 0, 0] })).toBe(0);
+    expect(lowerFormantLength({})).toBe(0);
   });
 
   it('measures pitch and range of a voiced recording', () => {
@@ -121,9 +131,16 @@ describe('matchVoice', () => {
     expect(() => matchVoice(new Float64Array(16000), 16000)).toThrow();
   });
 
-  for (const preset of ['female', 'male']) {
-    it(`matches a ${preset} voice back to its pitch and tract length`, () => {
-      const target = presetHeadConfig(preset);
+  // The small female voice read 15.8 cm for 14.3 cm when the match used
+  // the length read with F4 (experiments/issue-40-voice-match.txt).
+  for (const [preset, size] of [
+    ['female', undefined],
+    ['male', undefined],
+    ['female', 0.2],
+  ]) {
+    const name = size === undefined ? preset : `${preset} (size ${size})`;
+    it(`matches a ${name} voice back to its pitch and tract length`, () => {
+      const target = presetHeadConfig(preset, size);
       const { samples, sampleRate } = synthesize(TEXT, {
         head: target,
         solver: 'waveguide',

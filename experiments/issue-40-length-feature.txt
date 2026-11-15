@@ -1,0 +1,52 @@
+# node experiments/issue-40-length-feature.mjs .
+child size 0.00 length 12.6: F1-F4 13.99 F1-F3 14.20
+child size 0.00 length 13.8: F1-F4 14.01 F1-F3 13.86
+child size 0.00 length 15.0: F1-F4 14.86 F1-F3 14.97
+child size 0.25 length 12.6: F1-F4 13.90 F1-F3 13.87
+child size 0.25 length 13.8: F1-F4 13.94 F1-F3 13.79
+child size 0.25 length 15.0: F1-F4 14.60 F1-F3 14.71
+child size 0.50 length 12.6: F1-F4 13.62 F1-F3 13.45
+child size 0.50 length 13.8: F1-F4 14.02 F1-F3 14.00
+child size 0.50 length 15.0: F1-F4 14.49 F1-F3 14.79
+child size 0.75 length 12.6: F1-F4 13.52 F1-F3 13.43
+child size 0.75 length 13.8: F1-F4 13.92 F1-F3 13.83
+child size 0.75 length 15.0: F1-F4 14.52 F1-F3 14.74
+child size 1.00 length 12.6: F1-F4 13.55 F1-F3 13.64
+child size 1.00 length 13.8: F1-F4 13.82 F1-F3 13.55
+child size 1.00 length 15.0: F1-F4 14.67 F1-F3 14.81
+female size 0.00 length 13.6: F1-F4 13.94 F1-F3 13.92
+female size 0.00 length 15.2: F1-F4 14.68 F1-F3 14.92
+female size 0.00 length 16.8: F1-F4 15.89 F1-F3 16.32
+female size 0.25 length 13.6: F1-F4 13.67 F1-F3 13.35
+female size 0.25 length 15.2: F1-F4 14.90 F1-F3 15.03
+female size 0.25 length 16.8: F1-F4 15.68 F1-F3 16.23
+female size 0.50 length 13.6: F1-F4 13.70 F1-F3 13.33
+female size 0.50 length 15.2: F1-F4 14.90 F1-F3 15.15
+female size 0.50 length 16.8: F1-F4 15.63 F1-F3 15.97
+female size 0.75 length 13.6: F1-F4 13.83 F1-F3 13.53
+female size 0.75 length 15.2: F1-F4 14.72 F1-F3 14.99
+female size 0.75 length 16.8: F1-F4 15.68 F1-F3 15.86
+female size 1.00 length 13.6: F1-F4 13.81 F1-F3 13.57
+female size 1.00 length 15.2: F1-F4 14.49 F1-F3 14.79
+female size 1.00 length 16.8: F1-F4 15.59 F1-F3 16.05
+male size 0.00 length 15.4: F1-F4 14.70 F1-F3 15.15
+male size 0.00 length 17.0: F1-F4 15.85 F1-F3 16.45
+male size 0.00 length 18.6: F1-F4 16.25 F1-F3 17.56
+male size 0.25 length 15.4: F1-F4 14.69 F1-F3 14.97
+male size 0.25 length 17.0: F1-F4 16.52 F1-F3 16.70
+male size 0.25 length 18.6: F1-F4 16.84 F1-F3 18.05
+male size 0.50 length 15.4: F1-F4 14.85 F1-F3 14.93
+male size 0.50 length 17.0: F1-F4 15.68 F1-F3 16.15
+male size 0.50 length 18.6: F1-F4 16.86 F1-F3 17.90
+male size 0.75 length 15.4: F1-F4 14.65 F1-F3 14.86
+male size 0.75 length 17.0: F1-F4 15.97 F1-F3 16.19
+male size 0.75 length 18.6: F1-F4 16.22 F1-F3 17.51
+male size 1.00 length 15.4: F1-F4 14.76 F1-F3 14.92
+male size 1.00 length 17.0: F1-F4 15.34 F1-F3 16.17
+male size 1.00 length 18.6: F1-F4 16.65 F1-F3 17.64
+
+# least-squares fit of the reading against the length (offset at 15.5 cm)
+all   F1-F4 offset 14.94 slope 0.523 rms 0.24 -> length rms 0.46 cm
+all   F1-F3 offset 15.23 slope 0.724 rms 0.32 -> length rms 0.44 cm
+adult F1-F4 offset 14.89 slope 0.572 rms 0.23 -> length rms 0.40 cm
+adult F1-F3 offset 15.11 slope 0.827 rms 0.19 -> length rms 0.23 cm
