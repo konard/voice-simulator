@@ -6,8 +6,9 @@
  * radiation load at the lips.
  */
 
-export const SPEED_OF_SOUND = 35000; // cm/s, warm humid air in the tract
-export const AIR_DENSITY = 0.00114; // g/cm³
+import { AIR_DENSITY, SPEED_OF_SOUND } from './constants.js';
+
+export { AIR_DENSITY, SPEED_OF_SOUND };
 
 function complex(re, im = 0) {
   return { re, im };
