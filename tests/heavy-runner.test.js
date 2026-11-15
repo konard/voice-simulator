@@ -308,6 +308,35 @@ describe('heavy test isolation', () => {
     expect(workflow).toContain('npm run test:heavy -- --suite "$SUITE"');
   });
 
+  it('gives suite gpu a software adapter and requires it', () => {
+    const workflow = readWorkflow();
+    const runStep = workflow.indexOf('- name: Run heavy checks');
+    for (const step of [
+      'Install the software OpenGL ES driver',
+      'Setup Deno',
+      'Show the WebGPU adapter',
+    ]) {
+      const index = workflow.indexOf(`- name: ${step}`);
+      expect(index > 0 && index < runStep).toBe(true);
+    }
+    for (const name of [
+      'libegl1',
+      'libgles2',
+      'libegl-mesa0',
+      'libgl1-mesa-dri',
+    ]) {
+      expect(workflow).toContain(name);
+    }
+    expect(workflow).toContain('deno run -A scripts/gpu-adapter.mjs');
+    expect(workflow.slice(runStep)).toContain(
+      "REQUIRE_GPU: ${{ (inputs.suite == 'gpu' || inputs.suite == 'all') && '1' || '' }}"
+    );
+    const release = readFileSync('.github/workflows/release.yml', 'utf8');
+    expect(release).toContain(
+      "REQUIRE_GPU: ${{ matrix.os != 'ubuntu-24.04' && '1' || '' }}"
+    );
+  });
+
   // The step budget owns the deadline (docs/CI-TIMEOUT-BUDGETS.md): it must
   // expire with room for checkout, install and upload before the job cap.
   it('lets the heavy step budget expire before the job backstop', () => {
