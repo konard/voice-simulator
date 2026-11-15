@@ -1,0 +1,5 @@
+---
+'voice-simulator': patch
+---
+
+Add a blind listening test (issue 20). `examples/listening-test/` is a page that runs from disk with no network (`connect-src 'none'`) and stores nothing personal. It runs MUSHRA trials (ITU-R BS.1534-3, with a hidden reference and 3.5 kHz and 7 kHz anchors), ABX trials and intelligibility trials, and the listener downloads `listening-<test id>-<listener>.json` at the end. `scripts/listening-test.mjs build` renders the sentences of a sentences file at every listed tier with seed 1 into 16-bit mono 48 kHz WAV files at an RMS of −26 dBFS and writes `config.js`. Neither is committed. `analyze` drops listeners who rate the hidden reference below 90 in more than 15 % of their MUSHRA trials. It then reports MUSHRA means with 95 % bootstrap intervals and pairwise differences, ABX scores with Wilson intervals and binomial p, and intelligibility WER. `sus` prints semantically unpredictable English sentences. The README and CONTRIBUTING say that a test with at least 8 listeners is required before any claim about naturalness. The package does not ship `examples/` or `scripts/`, so the library itself does not change.
