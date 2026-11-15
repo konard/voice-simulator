@@ -120,10 +120,20 @@ names)` a whole utterance, and `vrmVowelBinds(gltfJson)` reads the morph
   tract and turn the frication jet into a sibilant source; the piriform
   fossae add their side-branch antiresonance in both solvers, the
   vallecula in the 3D solver.
-- **Head and voice editor**: 34 parameters, everything that changes the
+- **Turbulence noise driven by the air flow**: the lung pressure pushes air
+  through the glottis and the narrowest place of the mouth; the mouth
+  pressure that splits it between them sets the flow, and the noise at each
+  orifice grows as dp^1.5 A^0.5 (Stevens 1971) once the jet is turbulent,
+  with its band centred on the Strouhal frequency of the jet. Frication,
+  aspiration and breath noise all come from this model, and the jump of the
+  flow at the release of a stop adds a burst transient, so [s] peaks near
+  7 kHz above [ʃ], aspirated stops get a voice onset time of about 60 ms and
+  a louder lung pressure (`lungPressure`) gives louder noise.
+- **Head and voice editor**: 35 parameters, everything that changes the
   sound (tract length, pharynx, mouth, jaw, nose, pitch, breathiness,
   jitter, shimmer, vibrato, declination, accent strength, lengthening,
-  pauses, wall loss, nasal losses, nasal coupling, frication level, ...). Every page
+  pauses, wall loss, nasal losses, nasal coupling, frication level, lung
+  pressure, ...). Every page
   refresh starts from a new random seed; `?seed=` makes it reproducible.
 - **Male, female and child presets** for random heads (`preset`), with f0
   and formants fitted to the men's, women's and children's means of
