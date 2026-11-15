@@ -84,6 +84,8 @@ Simulation core in Rust (WebAssembly and native), multicore with a single-core f
 
 The workspace, the WebAssembly build, the loader, the CI job `rust` and the parity tests of [#21](https://github.com/konard/voice-simulator/issues/21) are described in [RUST-ENGINE.md](RUST-ENGINE.md); the ports below add their code to that pipeline.
 
+The tiers `telephone` (8 kHz), `narrowband` (11.025 kHz) and `wideband` (16 kHz) of [#26](https://github.com/konard/voice-simulator/issues/26) are in `AUDIO_TIERS` below `minimal`, which stays the start level of automatic quality (`BASE_AUDIO_LEVEL`); the README section "Quality tiers" lists them and `experiments/issue-26-narrow-band.txt` holds their formant, aliasing and band-limit measurements. Their `blockSize` and `bandLimit` are not yet in the Rust port of [#22](https://github.com/konard/voice-simulator/issues/22).
+
 | Issue                                                      | Type    | Title                                                                         | Blocked by                                                                                                             | Requirements  |
 | ---------------------------------------------------------- | ------- | ----------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- | ------------- |
 | [#21](https://github.com/konard/voice-simulator/issues/21) | Feature | Rust workspace and WebAssembly build pipeline                                 | nothing                                                                                                                | R2, R12, R19  |

@@ -23,6 +23,19 @@ describe('default tier', () => {
     expect(INDEX_PAGE).toContain('<option selected>studio</option>');
     expect(INDEX_PAGE).toContain('<option>reference</option>');
   });
+
+  it('renders a narrow-band tier at its own rate unless asked otherwise', () => {
+    const rate = (params) =>
+      synthesisOptions({ text: 'a', ...params }).options.sampleRate;
+    expect(rate({ tier: 'telephone' })).toBe(8000);
+    expect(rate({ tier: 'narrowband' })).toBe(11025);
+    expect(rate({ tier: 'wideband' })).toBe(16000);
+    expect(rate({ tier: 'telephone', sampleRate: '24000' })).toBe(24000);
+    expect(rate({ tier: 'minimal', sampleRate: 11025 })).toBe(11025);
+    expect(rate({ tier: 'minimal' })).toBe(24000);
+    expect(rate({})).toBe(24000);
+    expect(INDEX_PAGE).toContain('<option>telephone</option>');
+  });
 });
 
 describe('voice server', () => {
@@ -37,7 +50,13 @@ describe('voice server', () => {
       const ipa = await fetch(`${base}/api/ipa?${query}`).then((r) => r.json());
       expect(ipa.ipa).toBe('ˈmamə');
       const tiers = await fetch(`${base}/api/tiers`).then((r) => r.json());
-      expect(tiers.audio[0].name).toBe('minimal');
+      expect(tiers.audio.slice(0, 4).map((tier) => tier.name)).toEqual([
+        'telephone',
+        'narrowband',
+        'wideband',
+        'minimal',
+      ]);
+      expect(tiers.audio[0].sampleRate).toBe(8000);
       expect(tiers.default).toBe('studio');
       const page = await fetch(base);
       expect(page.headers.get('access-control-allow-origin')).toBe('*');
@@ -80,6 +99,30 @@ describe('voice server', () => {
       const wav = decodeWav(new Uint8Array(await response.arrayBuffer()));
       expect(wav.sampleRate).toBe(16000);
       expect(wav.samples.length > 4000).toBe(true);
+    });
+  });
+
+  itNet('serves the narrow-band rates', async () => {
+    await withServer(async (base) => {
+      const wav = async (query) => {
+        const response = await fetch(
+          `${base}/api/synthesize?text=%CB%88mama&ipa=true&${query}`
+        );
+        expect(response.status).toBe(200);
+        return decodeWav(new Uint8Array(await response.arrayBuffer()));
+      };
+      const telephone = await wav('tier=telephone');
+      expect(telephone.sampleRate).toBe(8000);
+      expect(telephone.samples.length > 2000).toBe(true);
+      expect((await wav('tier=narrowband&sampleRate=11025')).sampleRate).toBe(
+        11025
+      );
+      expect((await wav('tier=minimal&sampleRate=11025')).sampleRate).toBe(
+        11025
+      );
+      expect((await wav('tier=minimal')).sampleRate).toBe(24000);
+      const bad = await fetch(`${base}/api/synthesize?text=a&sampleRate=12000`);
+      expect(bad.status).toBe(400);
     });
   });
 

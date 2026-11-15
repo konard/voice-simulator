@@ -18,8 +18,8 @@
  * The narrow-band tiers below `minimal` (telephone 8 kHz, narrowband
  * 11.025 kHz, wideband 16 kHz) also set `blockSize`, the control interval
  * in output samples (about 1.5 ms), and `bandLimit`, the corner (Hz) of
- * the eighth-order Butterworth low-pass that keeps the solver output free
- * of aliasing at the low output rate.
+ * the eighth-order Butterworth low-pass (at the solver rate and at the
+ * output rate) that keeps the output free of aliasing and band-limited.
  */
 export const AUDIO_TIERS = Object.freeze([
   Object.freeze({
@@ -29,7 +29,7 @@ export const AUDIO_TIERS = Object.freeze([
     sampleRate: 8000,
     blockSize: 12,
     bandLimit: 3400,
-    cost: 0.62,
+    cost: 0.56,
   }),
   Object.freeze({
     name: 'narrowband',
@@ -38,7 +38,7 @@ export const AUDIO_TIERS = Object.freeze([
     sampleRate: 11025,
     blockSize: 16,
     bandLimit: 4800,
-    cost: 0.78,
+    cost: 0.76,
   }),
   Object.freeze({
     name: 'wideband',
@@ -47,7 +47,7 @@ export const AUDIO_TIERS = Object.freeze([
     sampleRate: 16000,
     blockSize: 24,
     bandLimit: 7000,
-    // Measured 1.01 (experiments/issue-26-tier-costs.txt): the solver runs
+    // Measured 1.11 (experiments/issue-26-tier-costs.txt): the solver runs
     // at the rate of `minimal` and only the output rate is lower. Not below
     // the cost of the next tier, so that cost minus 0.05.
     cost: 0.95,

@@ -132,7 +132,8 @@ export interface AudioTier {
   blockSize?: number;
   /**
    * Corner (Hz) of the eighth-order Butterworth output low-pass of the
-   * narrow-band tiers (telephone, narrowband, wideband).
+   * narrow-band tiers (telephone, narrowband, wideband), applied at the
+   * solver rate and again at the output rate.
    */
   bandLimit?: number;
   cost: number;
@@ -155,7 +156,8 @@ export interface RenderOptions {
   /**
    * With a corner (Hz), the output low-pass is eighth-order Butterworth at
    * min(bandLimit, 0.45 sampleRate) instead of fourth order at
-   * min(0.45 sampleRate, 20000).
+   * min(0.45 sampleRate, 20000), at the solver rate and again at the
+   * output rate.
    */
   bandLimit?: number;
   head?: HeadConfig;
@@ -744,7 +746,10 @@ export declare class OverloadDetector {
   readonly load: number;
   record(busy: number, audio: number): boolean;
 }
-/** Load of a tier; stops early once the load exceeds `limit`. */
+/**
+ * Load of a tier; stops early once the load exceeds `limit`. With
+ * `repeats` (default 1) the median of that many measurements.
+ */
 export declare function measureAudioTier(
   tier: AudioTier,
   options?: {
@@ -752,12 +757,16 @@ export declare function measureAudioTier(
     ipa?: string;
     seconds?: number;
     limit?: number;
+    repeats?: number;
   }
 ): number;
 export declare function benchmarkAudioTiers(options?: {
   target?: number;
   head?: HeadConfig;
   seconds?: number;
+  repeats?: number;
+  /** Seconds spent rendering the cheap tiers before measuring (default 0). */
+  warmUp?: number;
 }): {
   level: number;
   tier: AudioTier;

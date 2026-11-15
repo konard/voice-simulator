@@ -95,9 +95,13 @@ const BUTTERWORTH_8 = [0.5098, 0.6013, 0.9, 2.5629];
 /**
  * Low-pass at the solver rate, DC blocker and soft limiter. Without a
  * `bandLimit` the low-pass is fourth order at 0.45 times the output rate
- * (at most 20 kHz); with one (Hz) it is eighth order at
- * min(bandLimit, 0.45 sampleRate), steep enough that the solver output
- * taken at a low output rate keeps no energy that would fold back.
+ * (at most 20 kHz). With one (Hz) it is eighth order at
+ * min(bandLimit, 0.45 sampleRate), so little energy from above the output
+ * Nyquist frequency folds back when the solver output is taken at the low
+ * output rate. The same eighth-order low-pass then runs once more at the
+ * output rate: there the bilinear transform puts 1.1 bandLimit near
+ * Nyquist, about 60 dB down at 8 kHz, which the filter at the solver rate
+ * (about 7 dB at 1.1 bandLimit) cannot reach.
  */
 class OutputStage {
   constructor(sampleRate, gain = 1, bandLimit = undefined) {
@@ -112,6 +116,11 @@ class OutputStage {
       ? Math.min(bandLimit, 0.45 * sampleRate)
       : Math.min(sampleRate * 0.45, 20000);
     this.rate = 0;
+    this.band = narrow
+      ? BUTTERWORTH_8.map((quality) =>
+          new Biquad().lowpass(this.cutoff, quality, sampleRate)
+        )
+      : null;
   }
 
   configure(rate) {
@@ -132,7 +141,13 @@ class OutputStage {
     return result;
   }
 
-  finish(value) {
+  finish(input) {
+    let value = input;
+    if (this.band) {
+      for (const filter of this.band) {
+        value = filter.process(value);
+      }
+    }
     const output = value - this.dcInput + this.dcCoefficient * this.dcOutput;
     this.dcInput = value;
     this.dcOutput = output;
@@ -154,7 +169,8 @@ export class VoiceRenderer {
    *   piriform fossae (both solvers) and `vallecula: false` the vallecula
    *   (3D only). `blockSize` is the control interval in output samples
    *   (default 32) and `bandLimit` (Hz) switches the output low-pass to
-   *   eighth order at min(bandLimit, 0.45 sampleRate). A WebGPU `device` runs the 3D solver on the GPU; such a
+   *   eighth order at min(bandLimit, 0.45 sampleRate), at the solver rate
+   *   and again at the output rate. A WebGPU `device` runs the 3D solver on the GPU; such a
    *   renderer renders with renderAsync.
    */
   constructor(plan, options = {}) {
