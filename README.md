@@ -347,6 +347,45 @@ an orthonormal DCT, so its values are larger than those of tools that use the
 SPTK mel-generalised cepstrum: two different synthetic voices saying the same
 sentence are 30 to 50 dB apart here.
 
+### Listening tests
+
+Only people can judge whether the voice sounds natural, so a blind listening
+test is required before a claim about naturalness is written anywhere (the
+README, a release note, a pull request or a report). Objective metrics such
+as those of `compare` do not replace it.
+
+[examples/listening-test/](examples/listening-test/README.md) is a page that
+runs from a folder on disk, with no server and no network
+(`Content-Security-Policy: connect-src 'none'`). It has three kinds of
+trial: MUSHRA (ITU-R BS.1534-3: rate versions of a sentence from 0 to 100
+against a reference, with a hidden reference and 3.5 kHz and 7 kHz
+anchors), ABX (is X the same as A or as B?) and intelligibility (type what
+you heard; scored by the word error rate).
+
+```bash
+node scripts/listening-test.mjs build --sentences examples/listening-test/sentences.example.json --out examples/listening-test
+node scripts/listening-test.mjs sus --lang en --count 20 --seed 1    # sentences for intelligibility
+node scripts/listening-test.mjs analyze results/*.json --out docs/reports/listening/<test id>/report.md
+node scripts/listening-test.mjs --help
+```
+
+- At least 8 listeners take part; with fewer the report says that its
+  numbers support no claim.
+- The result files and the report are committed to
+  `docs/reports/listening/<test id>/`.
+- Listeners who rate the hidden reference below 90 in more than 15 % of
+  their MUSHRA trials are dropped (BS.1534-3 post-screening).
+- The result file holds no name, address or browser details. The start
+  screen shows this consent sentence: "Your answers are saved in a file on
+  this computer only. It holds your ratings, the time you spent on each
+  trial, whether you use headphones and, if you give it, your native
+  language; it holds no name, address or browser details. By pressing
+  "Start" you agree that this file may be published as part of the results
+  of the test."
+- Audio of other synthesisers may be a condition, supplied by the tester
+  through `extra` in the sentences file. It is never committed (`stimuli/`
+  is ignored by git) and no code in this repository runs them.
+
 ### HTTP API and streaming
 
 `voice-simulator serve` (or `createVoiceServer` from the separate
@@ -474,8 +513,10 @@ npm run example:desktop:package
 ├── docs/case-studies/     # Research, requirements and plans
 ├── examples/
 │   ├── basic-usage.js     # Library example
+│   ├── listening-test/    # Blind listening test page (MUSHRA, ABX, intelligibility)
 │   └── universal-app/     # Web app (GitHub Pages, Electron, Capacitor)
 ├── experiments/           # Measurement and debugging scripts
+├── scripts/               # Repository tools (listening-test.mjs, golden.mjs, ...)
 ├── src/
 │   ├── g2p/               # Text normalisation, accents, text to IPA
 │   ├── ipa/               # IPA parsing, phone inventory, syllables

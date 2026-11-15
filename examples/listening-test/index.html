@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta http-equiv="Content-Security-Policy" content="connect-src 'none'" />
+    <meta name="referrer" content="no-referrer" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Listening test</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <main id="app">
+      <noscript>This test needs JavaScript.</noscript>
+    </main>
+    <!-- Classic scripts: a page opened from disk cannot load ES modules. -->
+    <script src="config.js"></script>
+    <script src="app.js"></script>
+    <script>
+      ListeningTest.start();
+    </script>
+  </body>
+</html>

@@ -270,6 +270,37 @@ Only a person who listened to a file may set its `review.text` and
 `review.ipa` to `confirmed` and `review.by` to their GitHub name; an
 automatic agent never does.
 
+### Listening tests
+
+A blind listening test with
+[examples/listening-test/](../examples/listening-test/README.md) is required
+before a claim about naturalness is written anywhere: in the README, a
+release note, a pull request or a report. The steps for organising one are
+in that README; in short:
+
+1. Write a sentences file (`sentences.example.json` shows one trial of each
+   kind; `node scripts/listening-test.mjs sus --lang en --count 20 --seed 1`
+   writes sentences for intelligibility trials).
+2. `node scripts/listening-test.mjs build --sentences <file.json> --out examples/listening-test`
+   writes `stimuli/` and `config.js`, which are not committed.
+3. Send the folder to at least 8 listeners. With fewer, the report says that
+   its numbers support no claim, and no claim may be based on it.
+4. `node scripts/listening-test.mjs analyze <result.json>... --out docs/reports/listening/<test id>/report.md`.
+   Commit the result files and the report to
+   `docs/reports/listening/<test id>/`.
+
+The start screen shows this consent sentence, and only results of
+listeners who pressed "Start" after reading it are published: "Your answers
+are saved in a file on this computer only. It holds your ratings, the time
+you spent on each trial, whether you use headphones and, if you give it,
+your native language; it holds no name, address or browser details. By
+pressing "Start" you agree that this file may be published as part of the
+results of the test."
+
+Audio of other synthesisers enters a test only through `extra` in the
+sentences file. It is never committed and no code in this repository runs
+another synthesiser.
+
 ## Version Management with Changesets
 
 This project uses [Changesets](https://github.com/changesets/changesets) to manage versions and changelogs. This eliminates merge conflicts that occur when multiple PRs bump the version in `package.json`.

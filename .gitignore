@@ -150,3 +150,8 @@ __pycache__/
 
 # Speech dataset cache (scripts/datasets.mjs); never committed
 .datasets/
+
+# Listening test (scripts/listening-test.mjs build): rendered sounds and the
+# configuration that points at them; never committed
+examples/listening-test/stimuli/
+examples/listening-test/config.js
