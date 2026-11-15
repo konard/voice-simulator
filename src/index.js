@@ -255,6 +255,7 @@ export {
 } from './analysis/voice-match.js';
 // Objective speech metrics and recording comparison (issue 18)
 export {
+  DYNAMIC_RANGE_DB,
   EPSILON,
   METRIC_DEFAULTS,
   compareRecordings,
@@ -270,6 +271,7 @@ export {
   melFilterbank,
   mfcc,
   pitchTrack,
+  powerFloor,
   powerFrames,
   tokenize,
 } from './metrics/index.js';
