@@ -5,6 +5,8 @@
 export type LanguageCode = 'en' | 'ru' | 'hi' | 'zh';
 export type HeadConfig = Record<string, number>;
 export type SolverName = 'waveguide' | 'fdtd3d';
+/** Voice source: the LF pulse model or the physical vocal folds. */
+export type SourceName = 'lf' | 'folds';
 export type OutputMode = 'flow' | 'microphone';
 
 export interface Language {
@@ -142,6 +144,8 @@ export interface RenderOptions {
   sampleRate?: number;
   sections?: number;
   solver?: SolverName | string;
+  /** Voice source (default `'lf'`); unknown names throw `Unknown source`. */
+  source?: SourceName;
   seed?: string | number;
   blockSize?: number;
   head?: HeadConfig;
@@ -170,6 +174,8 @@ export interface SynthesizeOptions {
   preset?: HeadPresetName;
   tier?: string | number;
   solver?: SolverName;
+  /** Voice source (default `'lf'`): `'folds'` is the two-mass fold model. */
+  source?: SourceName;
   sections?: number;
   dx?: number;
   sampleRate?: number;
@@ -452,6 +458,72 @@ export declare class Glottis {
   constructor(options?: { seed?: string | number; head?: HeadConfig });
   step(dt: number, control: Record<string, number>, noise: number): number;
 }
+export declare const DEFAULT_SOURCE: SourceName;
+/** Controls of one VocalFolds step (pressure in Pa). */
+export interface FoldControl {
+  voicing: number;
+  aspiration: number;
+  closure: number;
+  loudness: number;
+  lungPressure: number;
+  adduction: number;
+  foldTension: number;
+}
+/**
+ * Two-mass model of the vocal folds (Steinecke and Herzel 1995) driven by
+ * the lung pressure; `step` returns the scaled flow derivative.
+ */
+export declare class VocalFolds {
+  constructor(options?: {
+    breathiness?: number;
+    aspirationLevel?: number;
+    foldLength?: number;
+    foldMass?: number;
+    foldStiffness?: number;
+    foldDamping?: number;
+    /** Inner step rate (Hz, default FOLD_RATE). */
+    rate?: number;
+  });
+  step(dt: number, control: FoldControl, noise: number): number;
+  reset(): void;
+  /** Glottal flow after the last step (cm³/s). */
+  readonly flow: number;
+  /** Area between the folds after the last step (cm²). */
+  area: number;
+  intensity: number;
+  noiseModulation: number;
+}
+export declare const FOLD_RATE: number;
+export declare const FOLDS_FLOW_SCALE: number;
+export declare const MIN_FOLD_TENSION: number;
+export declare const MAX_FOLD_TENSION: number;
+/** [adduction, rest area in cm²] pairs. */
+export declare const ADDUCTION_TABLE: ReadonlyArray<readonly [number, number]>;
+/** Rest area of the glottis (cm²) for an adduction from 0 to 1. */
+export declare function restArea(adduction: number): number;
+/** Pitch (Hz) of a flow from its upward crossings of the mean. */
+export declare function flowPitch(
+  flow: ArrayLike<number>,
+  sampleRate: number
+): number;
+/** Simulated pitch (Hz) of the folds at a lung pressure (Pa) and tension. */
+export declare function foldPitch(
+  pressure: number,
+  tension: number,
+  head?: HeadConfig,
+  options?: {
+    duration?: number;
+    window?: number;
+    adduction?: number;
+    rate?: number;
+  }
+): number;
+/** Fold tension Q that gives `f0` (Hz) at a lung pressure (Pa) for a head. */
+export declare function tensionForPitch(
+  f0: number,
+  lungPressure: number,
+  head?: HeadConfig
+): number;
 /** Side branch of a tube: a blind tube, or a Helmholtz resonator with `volume`. */
 export interface TubeBranch {
   /** Section in front of which the branch joins. */

@@ -51,9 +51,8 @@ const SOURCES = new Map([
   ],
   [
     'folds',
-    (head, seed) =>
+    (head) =>
       new VocalFolds({
-        seed,
         breathiness: head.breathiness,
         aspirationLevel: head.aspirationLevel,
         foldLength: head.foldLength,
@@ -167,8 +166,8 @@ export class VoiceRenderer {
    *   piriform fossae (both solvers) and `vallecula: false` the vallecula
    *   (3D only). `source` is the voice source: 'lf' (default, LF pulses
    *   at the planned pitch) or 'folds' (two-mass vocal folds driven by the
-   *   lung pressure, see folds.js). A WebGPU `device` runs the 3D solver on the GPU; such a
-   *   renderer renders with renderAsync.
+   *   lung pressure, see folds.js). A WebGPU `device` runs the 3D solver
+   *   on the GPU; such a renderer renders with renderAsync.
    */
   constructor(plan, options = {}) {
     this.plan = plan;

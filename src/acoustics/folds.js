@@ -121,7 +121,7 @@ function clampTension(value) {
 
 export class VocalFolds {
   /**
-   * @param {{seed?: string|number, breathiness?: number, aspirationLevel?: number, foldLength?: number, foldMass?: number, foldStiffness?: number, foldDamping?: number, rate?: number}} [options]
+   * @param {{breathiness?: number, aspirationLevel?: number, foldLength?: number, foldMass?: number, foldStiffness?: number, foldDamping?: number, rate?: number}} [options]
    *   Head values; `rate` overrides FOLD_RATE (for tests of the step size).
    */
   constructor(options = {}) {
