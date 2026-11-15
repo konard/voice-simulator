@@ -657,6 +657,17 @@ that of LF, and tier `medium` renders it as fast as LF
 [experiments/issue-33-folds-speed.txt](experiments/issue-33-folds-speed.txt)).
 LF stays the default and renders bit for bit as before.
 
+With the folds, the glottal area that drives the turbulence noise (the air
+flow of `src/acoustics/aerodynamics.js`) is the mean area of the folds
+(`VocalFolds.meanArea`, three one-pole stages of 5 ms), so [h] and
+aspiration open the glottis by the adduction of the plan, and the breath
+noise of the folds grows with the source strength of that area. The stages
+keep the cycles of the folds out of the burst transient, so the vowels of
+the folds stay within 0.15 dB of their level before (ˈasa -17.91 dB, was
+-18.03 dB; one stage of 10 ms cost 1.8 dB) while [h] gets 5.9 dB quieter
+([experiments/issue-35-folds-airflow.txt](experiments/issue-35-folds-airflow.txt),
+`node experiments/issue-35-folds-airflow.mjs`).
+
 ### Development
 
 ```bash
