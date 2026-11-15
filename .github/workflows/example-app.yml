@@ -326,6 +326,19 @@ jobs:
             echo "Preview images already current."
           fi
 
+      # The Playwright image ships git but not gh, which the next step needs
+      # for `gh auth setup-git` and for the fallback pull request of
+      # land-via-pull-request.mjs; without it the step died with exit 127
+      # before it could push or explain a missing RELEASE_PR_TOKEN.
+      - name: Install GitHub CLI
+        if: steps.drift.outputs.drift == 'true'
+        run: |
+          if ! command -v gh >/dev/null 2>&1; then
+            apt-get update -qq
+            apt-get install -y -qq --no-install-recommends gh
+          fi
+          gh --version
+
       - name: Commit drift back to main
         id: commit
         if: steps.drift.outputs.drift == 'true'

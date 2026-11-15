@@ -6,7 +6,7 @@
 #
 #   heads          -- branch names of the repository, one per line
 #   tags           -- tag names of the repository, one per line
-#   compare_status -- status printed for `gh api .../compare/<sha>...<branch>`
+#   compare/<head> -- status printed for `gh api .../compare/<sha>...<head>`
 #                     (missing: the compare call fails)
 #   sha            -- SHA printed for `gh api repos/<repo>/commits/<name>`
 
@@ -30,9 +30,10 @@ case "$2" in
     printf 'gh: Not Found (HTTP 404)\n' >&2
     exit 1
     ;;
-  */compare/*)
-    if [ -f "$FIX/compare_status" ]; then
-      cat "$FIX/compare_status"
+  */compare/*...*)
+    head="${2##*...}"
+    if [ -f "$FIX/compare/$head" ]; then
+      cat "$FIX/compare/$head"
       exit 0
     fi
     printf 'gh: Not Found (HTTP 404)\n' >&2

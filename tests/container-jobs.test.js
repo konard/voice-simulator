@@ -56,6 +56,25 @@ describe('container jobs', () => {
       );
     }
   });
+
+  // Container images such as Playwright's have git but not gh, so a step that
+  // calls gh (directly or through the push helpers, which fall back to
+  // `gh pr create`) died with exit 127 on every push to main.
+  it('install gh before a step that calls it', () => {
+    const usesGh =
+      /^ {10}(?:gh |.*node scripts\/(?:push-main-with-rebase-retry|land-via-pull-request)\.mjs)/m;
+    const callers = containerJobs.filter(({ job }) => usesGh.test(job));
+    expect(callers.map(({ name }) => name)).toContain('preview-regen');
+    for (const { file, name, job } of callers) {
+      const where = `${file} ${name}`;
+      const install = job.indexOf('- name: Install GitHub CLI\n');
+      expect(`${where}: ${install}`).not.toBe(`${where}: -1`);
+      expect(install).toBeLessThan(job.search(usesGh));
+      expect(stepScript(job, 'Install GitHub CLI')).toContain(
+        'apt-get install -y -qq --no-install-recommends gh'
+      );
+    }
+  });
 });
 
 describe('preview drift detection', () => {

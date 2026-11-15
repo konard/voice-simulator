@@ -19,7 +19,7 @@ on:
           - gpu
         default: all
       ref:
-        description: Branch or tag of this repository, or a commit on the default branch, to test (empty = the branch chosen above)
+        description: Branch or tag of this repository, or a commit on the default branch or on the branch chosen above, to test (empty = the branch chosen above)
         type: string
         default: ''
       limit:

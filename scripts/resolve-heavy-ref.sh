@@ -9,7 +9,10 @@
 # only as
 #   - empty: FALLBACK_SHA, the commit of the branch chosen in the form;
 #   - the name of a branch or a tag of REPOSITORY;
-#   - a commit SHA (7 to 40 hex digits) already on DEFAULT_BRANCH.
+#   - a commit SHA (7 to 40 hex digits) already on DEFAULT_BRANCH, or already
+#     on the branch chosen in the form (an ancestor of FALLBACK_SHA): that
+#     branch's code runs in this job anyway, and on the default branch the
+#     two rules are the same.
 # Anything else, such as the head commit of a pull request from a fork,
 # fails with exit code 1.
 set -euo pipefail
@@ -39,15 +42,18 @@ elif gh api "repos/${REPOSITORY}/git/ref/tags/${wanted}" >/dev/null 2>&1; then
   name="refs/tags/${wanted}"
 elif [[ "${wanted}" =~ ^[0-9a-f]{7,40}$ ]]; then
   # base...head: "ahead" or "identical" means the commit is an ancestor of
-  # the default branch, so it is already reviewed code of this repository.
-  status="$(gh api "repos/${REPOSITORY}/compare/${wanted}...${DEFAULT_BRANCH}" --jq .status 2>/dev/null || true)"
-  if [ "${status}" = ahead ] || [ "${status}" = identical ]; then
-    name="${wanted}"
-  fi
+  # head, so it is already code of this repository on that branch.
+  for head in "${DEFAULT_BRANCH}" "${FALLBACK_SHA}"; do
+    status="$(gh api "repos/${REPOSITORY}/compare/${wanted}...${head}" --jq .status 2>/dev/null || true)"
+    if [ "${status}" = ahead ] || [ "${status}" = identical ]; then
+      name="${wanted}"
+      break
+    fi
+  done
 fi
 
 if [ -z "${name}" ]; then
-  echo "::error::ref '${wanted}' is neither a branch or tag of ${REPOSITORY} nor a commit on ${DEFAULT_BRANCH}."
+  echo "::error::ref '${wanted}' is neither a branch or tag of ${REPOSITORY} nor a commit on ${DEFAULT_BRANCH} or on the chosen branch (${FALLBACK_SHA})."
   exit 1
 fi
 
