@@ -825,6 +825,29 @@ export class Waveguide {
   }
 
   /**
+   * The vocal tract as the folds see it (issue 34): the wave arriving at
+   * the glottis (pressure / rho c, a derivative as the source) and the
+   * area there. The object is reused.
+   * @returns {{incident: number, area: number}}
+   */
+  glottalLoad() {
+    this.load ??= { incident: 0, area: 0 };
+    this.load.incident = this.left[0];
+    this.load.area = this.areas[0];
+    return this.load;
+  }
+
+  /**
+   * Reflection of the waves arriving at the glottis (glottalReflection of
+   * the head by default). The interactive fold source sets 1: the folds
+   * then take the tract's load themselves (glottalLoad).
+   * @param {number} reflection
+   */
+  setGlottalReflection(reflection) {
+    this.glottalReflection = reflection;
+  }
+
+  /**
    * Acoustic pressure per section (sum of both travelling waves), for
    * visualisation. Arrays are reused between calls.
    * @returns {{pressure: Float64Array, nose: Float64Array}}

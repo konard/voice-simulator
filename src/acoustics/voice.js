@@ -32,7 +32,8 @@ import {
   glottalArea,
   sourceStrength,
 } from './aerodynamics.js';
-import { VocalFolds, restArea } from './folds.js';
+import { IncidentPressure, VocalFolds, restArea } from './folds.js';
+import { Subglottal } from './subglottal.js';
 import { SPEED_OF_SOUND } from './transfer.js';
 import { Waveguide } from './waveguide.js';
 import { Fdtd2d } from './fdtd2d.js';
@@ -78,6 +79,13 @@ export const TRANSIENT_GAIN = 5e-6;
 
 /** Voice source used when none is asked for: the LF pulse model. */
 export const DEFAULT_SOURCE = 'lf';
+
+/**
+ * Source-tract interaction when none is asked for (issue 34). It needs the
+ * fold source and a solver that steps on the CPU; without them the default
+ * leaves it off.
+ */
+export const DEFAULT_INTERACTION = false;
 
 /** Voice sources by name: LF pulses or the two-mass vocal folds. */
 const SOURCES = new Map([
@@ -291,7 +299,7 @@ export class VoiceRenderer {
    * and `enclosure` ({width, height, depth, absorption, center} in cm, a
    * box around the head) choose where and in what space the voice is
    * heard. The output grows by the reverberation tail.
-   * @param {{sampleRate?: number, sections?: number, solver?: string, source?: 'lf' | 'folds', seed?: string|number, blockSize?: number, bandLimit?: number, head?: object, dx?: number, model?: object, output?: string, kernel?: string, device?: object, microphone?: object, room?: string|object, enclosure?: object, teeth?: boolean, piriform?: boolean, vallecula?: boolean}} [options]
+   * @param {{sampleRate?: number, sections?: number, solver?: string, source?: 'lf' | 'folds', interaction?: boolean, subglottal?: boolean, seed?: string|number, blockSize?: number, bandLimit?: number, head?: object, dx?: number, model?: object, output?: string, kernel?: string, device?: object, microphone?: object, room?: string|object, enclosure?: object, teeth?: boolean, piriform?: boolean, vallecula?: boolean}} [options]
    *   `teeth: false` leaves out the incisors, `piriform: false` the
    *   piriform fossae (both solvers) and `vallecula: false` the vallecula
    *   (3D only). `source` is the voice source: 'lf' (default, LF pulses
@@ -301,6 +309,12 @@ export class VoiceRenderer {
    *   low-pass to eighth order at min(bandLimit, 0.45 sampleRate), at the
    *   solver rate and again at the output rate. A WebGPU `device` runs the
    *   3D solver on the GPU; such a renderer renders with renderAsync.
+   *   `interaction` (default DEFAULT_INTERACTION, fold source only) couples
+   *   the folds to the waves of the vocal tract and, with `subglottal`
+   *   (default: as `interaction`), of the trachea (subglottal.js): the
+   *   glottal flow then feels the formants and the subglottal resonances,
+   *   and the oral pressure of a closure slows it (issue 34). Without
+   *   interaction `subglottal` has nothing to couple to and does nothing.
    */
   constructor(plan, options = {}) {
     this.plan = plan;
@@ -335,6 +349,7 @@ export class VoiceRenderer {
       enclosure: options.enclosure,
     });
     this.solver.setNose?.(noseShape(this.head).areas);
+    this.#prepareInteraction(options);
     this.vowelCorrections = VOWEL_TABLES.get(options.solver ?? 'waveguide');
     this.glottis = source(this.head, seed);
     this.noise = new NoiseSources(seed);
@@ -372,6 +387,59 @@ export class VoiceRenderer {
 
   get duration() {
     return this.plan.duration;
+  }
+
+  /**
+   * Source-tract interaction: the solver's glottis reflects fully and the
+   * folds take its load (and that of the trachea) at every step.
+   */
+  #prepareInteraction(options) {
+    const coupled = Boolean(
+      this.solver.glottalLoad && this.solver.setGlottalReflection
+    );
+    const asked = options.interaction;
+    if (asked && this.source !== 'folds') {
+      throw new Error("Interaction needs source: 'folds'");
+    }
+    if (asked && (!coupled || options.device)) {
+      throw new Error('Interaction needs a solver that steps on the CPU');
+    }
+    this.interaction =
+      asked ??
+      (DEFAULT_INTERACTION &&
+        this.source === 'folds' &&
+        coupled &&
+        !options.device);
+    this.subglottal = null;
+    if (!this.interaction) {
+      return;
+    }
+    this.solver.setGlottalReflection(1);
+    if (options.subglottal ?? true) {
+      this.subglottal = new Subglottal(this.head);
+    }
+    this.tractPressure = new IncidentPressure();
+    this.subglottalPressure = new IncidentPressure();
+    this.load = {
+      below: { pressure: 0, area: Infinity },
+      above: { pressure: 0, area: Infinity },
+    };
+  }
+
+  /** Load of the folds for the next step (see #prepareInteraction). */
+  #glottalLoad() {
+    const dt = this.stepDuration;
+    const { below, above } = this.load;
+    const tract = this.solver.glottalLoad();
+    above.pressure = this.tractPressure.step(tract.incident, dt);
+    above.area = tract.area;
+    const { subglottal } = this;
+    if (subglottal) {
+      subglottal.configure(dt);
+      below.pressure = this.subglottalPressure.step(subglottal.incident, dt);
+      below.area = subglottal.area;
+    }
+    return this.load;
   }
 
   get done() {
@@ -432,8 +500,13 @@ export class VoiceRenderer {
       const { obstacle } = frication;
       this.fricationAmplitude *= obstacle + WALL_SOURCE * (1 - obstacle);
     }
-    // The transient ramps from the last block's value to this one's.
-    const target = air.flowDerivative * TRANSIENT_GAIN;
+    // The transient ramps from the last block's value to this one's. With
+    // interaction the folds solve their flow from the lung and the oral
+    // pressure, so the change of the mean flow is already in their source;
+    // a second copy, from the folds' own mean area, closes a loop through
+    // the tract to the folds that runs away in 3D, where the transient is
+    // a pressure jump (issue 34).
+    const target = this.interaction ? 0 : air.flowDerivative * TRANSIENT_GAIN;
     const steps = Math.max(1, blockDuration * rate);
     this.transientStep = (target - this.transient) / steps;
   }
@@ -462,11 +535,16 @@ export class VoiceRenderer {
   #step(queue) {
     const white = this.noise.white();
     const aspiration = this.noise.aspiration.process(white);
-    const source = this.glottis.step(
-      this.stepDuration,
-      this.shape.glottis,
-      aspiration
-    );
+    const source = this.interaction
+      ? this.glottis.step(
+          this.stepDuration,
+          this.shape.glottis,
+          aspiration,
+          this.#glottalLoad()
+        )
+      : this.glottis.step(this.stepDuration, this.shape.glottis, aspiration);
+    // The flow into the tract leaves the trachea.
+    this.subglottal?.step(-source);
     const noise = this.#fricationNoise(this.noise.white());
     let flow = 0;
     if (this.transientStep !== 0 || this.transient !== 0) {
