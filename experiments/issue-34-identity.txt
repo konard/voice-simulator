@@ -1,0 +1,7 @@
+16626977586f0ec3  21001  Hello. {"tier":"minimal"}
+288df79787f4ef9f  84825  Hello, how are you? {"tier":"medium","seed":3}
+b4f26627b05b10bf  45716  Hello. {"tier":"high"}
+1868677e1e6b619e  15601  ˈapa {"ipa":true,"solver":"fdtd2d","sampleRate":24000}
+3c8cbbda5edb7236  45716  Hello. {"tier":"medium","source":"folds"}
+f64da2100c4d63a5  29940  ˈaba {"ipa":true,"tier":"high","source":"folds"}
+61553e8d4a385598  29701  ˈama {"ipa":true,"solver":"fdtd2d","source":"folds"}

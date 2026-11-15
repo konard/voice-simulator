@@ -310,6 +310,7 @@ const PARAMETER_LABELS_RU = {
   foldMass: 'Масса голосовых складок',
   foldStiffness: 'Жёсткость голосовых складок',
   foldDamping: 'Затухание голосовых складок',
+  subglottalLength: 'Длина подсвязочного тракта',
   declination: 'Деклинация',
   accentStrength: 'Сила ударения',
   stressLengthening: 'Удлинение ударных',

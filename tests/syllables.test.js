@@ -88,4 +88,25 @@ describe('syllabifyIpa', () => {
     expect(split.flat()).toEqual(word);
     expect(split.length).toBe(3);
   });
+
+  it('ignores inherited properties for the language (issue 115)', () => {
+    // The language comes from a worker message in the example app; a plain
+    // object lookup returned Object.prototype members and called them
+    // (CodeQL js/unvalidated-dynamic-method-call).
+    const { tokens } = parseIpa(textToIpa('quality', { lang: 'en' }).ipa);
+    const word = tokens.filter((token) => token.kind !== 'pause');
+    const expected = syllabifyTokens(word);
+    Object.defineProperty(Object.prototype, 'xx', {
+      value: 'not a rule',
+      configurable: true,
+    });
+    try {
+      expect(syllabifyTokens(word, { language: 'xx' })).toEqual(expected);
+      expect(syllabifyTokens(word, { language: '__proto__' })).toEqual(
+        expected
+      );
+    } finally {
+      delete Object.prototype.xx;
+    }
+  });
 });

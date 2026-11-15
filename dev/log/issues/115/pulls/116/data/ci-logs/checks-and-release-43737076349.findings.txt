@@ -1,0 +1,11 @@
+Release Preflight	Probe every release credential	  FAIL: npm has no package voice-simulator yet, and npm configures trusted publishing only for published packages. Add an NPM_TOKEN repository secret (a granular token allowed to publish voice-simulator) at https://github.com/konard/voice-simulator/settings/secrets/actions for the first release, then add a trusted publisher for konard/voice-simulator, workflow release.yml, at https://www.npmjs.com/package/voice-simulator/access and delete the secret
+Release Preflight	Probe every release credential	##[error]release-preflight: npm has no package voice-simulator yet, and npm configures trusted publishing only for published packages. Add an NPM_TOKEN repository secret (a granular token allowed to publish voice-simulator) at https://github.com/konard/voice-simulator/settings/secrets/actions for the first release, then add a trusted publisher for konard/voice-simulator, workflow release.yml, at https://www.npmjs.com/package/voice-simulator/access and delete the secret
+Release Preflight	Probe every release credential	##[error]release-preflight: refusing to release with 1 refused credential(s)
+Release Preflight	Probe every release credential	##[error]Process completed with exit code 1.
+Check File Line Limits	Check file line limits	tests/deprecated-packages.test.js: 38 lines
+Lint and Format Check	Run ESLint	  LINT_ALL_WARNINGS: 1
+Lint and Format Check	Run ESLint	##[warning]  157:3  warning  Constructor has a complexity of 16. Maximum allowed is 15  complexity
+Lint and Format Check	Run ESLint	✖ 1 problem (0 errors, 1 warning)
+Lint and Format Check	Run ESLint	##[error]Process completed with exit code 1.
+Pipeline Status	Fail the run when a required job was cancelled or failed	##[error]Failing jobs: lint, release-preflight
+Pipeline Status	Fail the run when a required job was cancelled or failed	##[error]Process completed with exit code 1.

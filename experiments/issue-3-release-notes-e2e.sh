@@ -18,6 +18,8 @@ case "$*" in
 esac
 STUB
 chmod +x "$dir/bin/gh"
+# The backticks and \n are literal Markdown, not shell expansions.
+# shellcheck disable=SC2016
 printf '%s\n' '### Patch Changes' '' '- 68f606a: First change.' '' '  Second paragraph.' '' \
   '  - nested' '' '  ---' '' '  After a rule, with `\n` and a "quote"' '- def5678: Second entry' > "$dir/body.md"
 RN_DIR="$dir" PATH="$dir/bin:$PATH" node scripts/format-release-notes.mjs \

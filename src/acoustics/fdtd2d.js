@@ -106,6 +106,9 @@ export class Fdtd2d {
     this.pending = [];
     this.burstInput = 0;
     this.burstState = 0;
+    /** Last glottal flow and its jump per unit flow (see glottalLoad). */
+    this.lastGlottalFlow = 0;
+    this.sourceGain = 0;
     this.burstLeak = 1 - this.dt / BURST_LEAK_TIME;
     this.noiseColumn = -1;
     this.areaCount = 44;
@@ -508,6 +511,8 @@ export class Fdtd2d {
     this.#stepFaces();
     // The glottal flow enters the first column evenly.
     this.#driveColumn(0, -glottalFlow / Math.max(areas[0], MIN_AREA));
+    this.lastGlottalFlow = glottalFlow;
+    this.sourceGain = this.#sourceGain();
     // Lines: the column feels the flow (P - 2 left) * portArea they take.
     for (const port of this.ports) {
       const { line } = port;
@@ -533,6 +538,53 @@ export class Fdtd2d {
       line.propagate();
     }
     return output + this.nose.output;
+  }
+
+  /**
+   * The vocal tract as the folds see it (issue 34), in the terms of a tube
+   * (Waveguide.glottalLoad): the glottis column answers a glottal flow s
+   * at once with a mean pressure jump of s / area (pressure / rho c, a
+   * derivative as the source), and the rest of its mean pressure p is
+   * what came back from the field, the incident wave (p - s / area) / 2 of
+   * the last step. Taking p / 2 with an infinite area instead would feed
+   * the jump of the last flow back one step late (unstable with a wide
+   * glottis, as in the 3D solver). The object is reused.
+   * @returns {{incident: number, area: number}}
+   */
+  glottalLoad() {
+    this.load ??= { incident: 0, area: Infinity };
+    const gain = this.sourceGain;
+    this.load.incident =
+      (this.#columnMean(0) - gain * this.lastGlottalFlow) / 2;
+    this.load.area = gain > 0 ? 1 / gain : Infinity;
+    return this.load;
+  }
+
+  /**
+   * Mean pressure jump of the glottis column per unit glottal flow in this
+   * step (setShape changes the sheet before the next one): #driveColumn adds h s / A to each cell's divergence, which
+   * the update scales by -gain, and #columnMean weighs the cells by h.
+   */
+  #sourceGain() {
+    const { rows } = this;
+    const { h, areas } = this.sheet;
+    let sum = 0;
+    let weight = 0;
+    for (let index = 0; index < rows; index++) {
+      sum += h[index] * h[index] * this.gain[index];
+      weight += h[index];
+    }
+    return weight > 0 ? sum / (weight * Math.max(areas[0], MIN_AREA)) : 0;
+  }
+
+  /**
+   * Reflection of the glottis termination (glottalReflection of the head
+   * by default); 1 makes it rigid.
+   * @param {number} reflection
+   */
+  setGlottalReflection(reflection) {
+    this.glottisAdmittance = (1 - reflection) / (1 + reflection);
+    this.dirty = true;
   }
 
   /**
@@ -601,6 +653,7 @@ export class Fdtd2d {
     }
     this.burstInput = 0;
     this.burstState = 0;
+    this.lastGlottalFlow = 0;
     this.pending = [];
   }
 }

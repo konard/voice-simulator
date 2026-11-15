@@ -1,0 +1,1 @@
+zizmor	Run zizmorcore/zizmor-action@v0.6.4	  GHA_ZIZMOR_FAIL_ON_NO_INPUTS: true

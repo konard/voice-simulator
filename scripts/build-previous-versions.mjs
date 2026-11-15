@@ -5,8 +5,9 @@
  *
  * Versions are listed in examples/universal-app/previous-versions.json as
  * {path, commit}. Each commit is checked out into a temporary git worktree
- * (fetched first when the clone is shallow), its app dependencies installed
- * with `npm ci` and built with a relative base path, then copied into
+ * (fetched first when the clone is shallow), its web build dependencies
+ * installed with `npm ci` (the desktop packagers are pruned from its
+ * lockfile first) and built with a relative base path, then copied into
  * examples/universal-app/dist/<path>. The current app is built once more
  * with a relative base into the next free path (e.g. /v3/), so every
  * release keeps a permanent URL. Run it after `npm run example:web:build`,
@@ -57,6 +58,47 @@ function hasCommit(commit) {
   }
 }
 
+/**
+ * Packages of an old app that only the desktop packaging needs. `vite build`
+ * never loads them, but `npm ci` installed them (and downloaded Electron) for
+ * every previous version, and their trees held every deprecated package the
+ * Example app log warned about: inflight, glob 7, rimraf 2 and boolean
+ * (issue 115).
+ */
+export const DESKTOP_ONLY_PACKAGES = ['electron', 'electron-builder'];
+
+/**
+ * The desktop-only packages an old app's package.json declares. Removing
+ * them with `npm uninstall --package-lock-only` keeps every other locked
+ * version; the web build is byte-identical
+ * (experiments/issue-115-previous-version-prune.sh).
+ * @param {{dependencies?: object, devDependencies?: object}} manifest
+ * @returns {string[]}
+ */
+export function desktopOnlyPackages(manifest) {
+  return DESKTOP_ONLY_PACKAGES.filter(
+    (name) =>
+      Object.hasOwn(manifest.devDependencies ?? {}, name) ||
+      Object.hasOwn(manifest.dependencies ?? {}, name)
+  );
+}
+
+const NPM_QUIET = ['--no-audit', '--no-fund'];
+
+/** Install the web build dependencies of an old app, from its lockfile. */
+function installWebDependencies(oldApp) {
+  const manifest = JSON.parse(
+    readFileSync(path.join(oldApp, 'package.json'), 'utf8')
+  );
+  const desktop = desktopOnlyPackages(manifest);
+  if (desktop.length) {
+    run('npm', ['uninstall', ...desktop, '--package-lock-only', ...NPM_QUIET], {
+      cwd: oldApp,
+    });
+  }
+  run('npm', ['ci', ...NPM_QUIET], { cwd: oldApp });
+}
+
 export function buildVersion(version, dist) {
   if (!hasCommit(version.commit)) {
     run('git', ['fetch', '--no-tags', '--depth=1', 'origin', version.commit]);
@@ -66,7 +108,7 @@ export function buildVersion(version, dist) {
   run('git', ['worktree', 'add', '--detach', worktree, version.commit]);
   try {
     const oldApp = path.join(worktree, 'examples/universal-app');
-    run('npm', ['ci', '--no-audit', '--no-fund'], { cwd: oldApp });
+    installWebDependencies(oldApp);
     // A relative base works under any sub-path.
     const env = { ...process.env, GITHUB_PAGES: 'false' };
     run('npm', ['run', 'build'], { cwd: oldApp, env });

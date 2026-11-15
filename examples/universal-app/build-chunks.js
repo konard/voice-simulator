@@ -6,23 +6,37 @@ export const CHUNK_SIZE_LIMIT_KB = 500;
 
 // three.js ships as two prebuilt files (three.module.js imports
 // three.core.js), so a single vendor bundle passes the 500 kB warning.
-// Keeping each prebuilt file and React in their own chunks keeps every chunk
-// below the limit without raising chunkSizeWarningLimit.
+// Keeping each prebuilt file, React and the G2P dictionaries in their own
+// chunks keeps every chunk below the limit without raising
+// chunkSizeWarningLimit. The workers use the same rules
+// (worker.rollupOptions in vite.config.js).
 const vendorChunks = [
   [/[\\/]node_modules[\\/]three[\\/]build[\\/]three\.core\.js$/, 'three-core'],
   [/[\\/]node_modules[\\/]three[\\/]build[\\/]/, 'three'],
   [/[\\/]node_modules[\\/]three[\\/]examples[\\/]/, 'three-addons'],
   [/[\\/]node_modules[\\/](react|react-dom|scheduler)[\\/]/, 'react'],
+  // The pronunciation dictionaries (english-dict.js alone is ~250 kB of IPA,
+  // two bytes per symbol) pushed the app entry and both workers past the
+  // limit once the guard measured bytes (issue 115).
+  [/[\\/]src[\\/]g2p[\\/][a-z]+-dict\.js$/, 'g2p-dict'],
 ];
 
 export function vendorChunk(id) {
   return vendorChunks.find(([pattern]) => pattern.test(id))?.[1];
 }
 
+// Size in UTF-8 bytes, as Vite's reporter measures it (Buffer.byteLength).
+// String length counts UTF-16 code units, so a chunk with non-ASCII text
+// (IPA symbols, for one) passed this guard while Vite still warned that it
+// was over the limit (issue 115).
 function outputSize(output) {
-  return output.type === 'chunk'
-    ? output.code.length
-    : (output.source?.length ?? 0);
+  const content = output.type === 'chunk' ? output.code : output.source;
+  if (content === undefined || content === null) {
+    return 0;
+  }
+  return typeof content === 'string'
+    ? Buffer.byteLength(content)
+    : content.byteLength;
 }
 
 // Turns Vite's chunk size warning into a build error, so a regression fails

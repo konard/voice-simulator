@@ -36,6 +36,22 @@ export {
   VELUM_LEAD,
 } from './articulation/plan.js';
 export { approachTargets, DYNAMICS_ORDER } from './articulation/dynamics.js';
+export {
+  DURATION_RULES,
+  DURATION_TABLES,
+  RATE_MINIMUM,
+  RATE_PAUSE,
+  RATE_STRETCH,
+  applyingRules,
+  durationFeatures,
+  durationFormula,
+  durationTable,
+  minimumDuration,
+  phonemeDurations,
+  scalePause,
+  segmentDuration,
+  segmentParts,
+} from './articulation/durations.js';
 export { COARTICULATION_RESISTANCE } from './articulation/phones.js';
 export {
   sampleState,
@@ -56,6 +72,7 @@ export {
 } from './head-config.js';
 export { createRandom, createSeed, hashSeed } from './random.js';
 export {
+  DEFAULT_INTERACTION,
   DEFAULT_SOURCE,
   VoiceRenderer,
   renderPlan,
@@ -136,16 +153,30 @@ export {
   ADDUCTION_TABLE,
   FOLDS_FLOW_SCALE,
   FOLD_RATE,
+  GLOTTAL_PRESSURE_COEFFICIENT,
+  IncidentPressure,
   MEAN_AREA_STAGES,
   MEAN_AREA_TIME,
   MAX_FOLD_TENSION,
   MIN_FOLD_TENSION,
+  PRESSURE_CORNER,
   VocalFolds,
   flowPitch,
   foldPitch,
+  interactiveFlow,
   restArea,
   tensionForPitch,
 } from './acoustics/folds.js';
+export {
+  BRONCHI_AREA,
+  BRONCHI_LENGTH,
+  SUBGLOTTAL_DECIMATION,
+  SUBGLOTTAL_LOSS,
+  Subglottal,
+  TRACHEA_AREA,
+  TRACHEA_LENGTH,
+  subglottalShape,
+} from './acoustics/subglottal.js';
 export { tubeFormants, tubeSpectrum } from './acoustics/transfer.js';
 export {
   LOSS_SHAPE,

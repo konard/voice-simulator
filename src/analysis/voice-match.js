@@ -132,7 +132,11 @@ const SYLLABLE_RATE = {
   toX: Math.log,
   fromX: Math.exp,
   toY: Math.log,
-  slope: 0.5,
+  // d log(syllable rate) / d log(speechRate) of two sentences and both
+  // presets at speechRate 0.7 to 1.8 under the duration rules of issue 39
+  // (experiments/issue-39-rate-slopes.txt). The peak count is noisy: 0.11
+  // between 0.85 and 1.25 only.
+  slope: 0.28,
   maxStep: 0.15,
   scale: 0.1,
 };
@@ -144,7 +148,11 @@ const SPEAKING_TIME = {
   toX: Math.log,
   fromX: Math.exp,
   toY: (value) => -Math.log(value),
-  slope: 0.9,
+  // -d log(speaking time) / d log(speechRate), same renders as above
+  // (experiments/issue-39-rate-slopes.txt): the minimum of every sound
+  // shrinks with speechRate ** 0.5 only, so the time falls slower than
+  // 1 / speechRate.
+  slope: 0.75,
   maxStep: 0.4,
   scale: 0.05,
 };

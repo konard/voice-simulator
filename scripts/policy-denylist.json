@@ -105,5 +105,81 @@
     "BSD-3-Clause",
     "Custom-Attribution"
   ],
-  "exceptions": []
+  "exceptions": [
+    {
+      "rule": "licence",
+      "match": "@resvg/resvg-js",
+      "reason": "MPL-2.0 dev-only dependency of command-stream, which the release scripts load from the lockfile (issue 115); never shipped in the package, the app or the engine"
+    },
+    {
+      "rule": "licence",
+      "match": "@resvg/resvg-js-android-arm-eabi",
+      "reason": "MPL-2.0 dev-only dependency of command-stream, which the release scripts load from the lockfile (issue 115); never shipped in the package, the app or the engine"
+    },
+    {
+      "rule": "licence",
+      "match": "@resvg/resvg-js-android-arm64",
+      "reason": "MPL-2.0 dev-only dependency of command-stream, which the release scripts load from the lockfile (issue 115); never shipped in the package, the app or the engine"
+    },
+    {
+      "rule": "licence",
+      "match": "@resvg/resvg-js-darwin-arm64",
+      "reason": "MPL-2.0 dev-only dependency of command-stream, which the release scripts load from the lockfile (issue 115); never shipped in the package, the app or the engine"
+    },
+    {
+      "rule": "licence",
+      "match": "@resvg/resvg-js-darwin-x64",
+      "reason": "MPL-2.0 dev-only dependency of command-stream, which the release scripts load from the lockfile (issue 115); never shipped in the package, the app or the engine"
+    },
+    {
+      "rule": "licence",
+      "match": "@resvg/resvg-js-linux-arm-gnueabihf",
+      "reason": "MPL-2.0 dev-only dependency of command-stream, which the release scripts load from the lockfile (issue 115); never shipped in the package, the app or the engine"
+    },
+    {
+      "rule": "licence",
+      "match": "@resvg/resvg-js-linux-arm64-gnu",
+      "reason": "MPL-2.0 dev-only dependency of command-stream, which the release scripts load from the lockfile (issue 115); never shipped in the package, the app or the engine"
+    },
+    {
+      "rule": "licence",
+      "match": "@resvg/resvg-js-linux-arm64-musl",
+      "reason": "MPL-2.0 dev-only dependency of command-stream, which the release scripts load from the lockfile (issue 115); never shipped in the package, the app or the engine"
+    },
+    {
+      "rule": "licence",
+      "match": "@resvg/resvg-js-linux-x64-gnu",
+      "reason": "MPL-2.0 dev-only dependency of command-stream, which the release scripts load from the lockfile (issue 115); never shipped in the package, the app or the engine"
+    },
+    {
+      "rule": "licence",
+      "match": "@resvg/resvg-js-linux-x64-musl",
+      "reason": "MPL-2.0 dev-only dependency of command-stream, which the release scripts load from the lockfile (issue 115); never shipped in the package, the app or the engine"
+    },
+    {
+      "rule": "licence",
+      "match": "@resvg/resvg-js-win32-arm64-msvc",
+      "reason": "MPL-2.0 dev-only dependency of command-stream, which the release scripts load from the lockfile (issue 115); never shipped in the package, the app or the engine"
+    },
+    {
+      "rule": "licence",
+      "match": "@resvg/resvg-js-win32-ia32-msvc",
+      "reason": "MPL-2.0 dev-only dependency of command-stream, which the release scripts load from the lockfile (issue 115); never shipped in the package, the app or the engine"
+    },
+    {
+      "rule": "licence",
+      "match": "@resvg/resvg-js-win32-x64-msvc",
+      "reason": "MPL-2.0 dev-only dependency of command-stream, which the release scripts load from the lockfile (issue 115); never shipped in the package, the app or the engine"
+    },
+    {
+      "rule": "licence",
+      "match": "buffers",
+      "reason": "buffers 0.1.1 declares no licence; transitive dependency of @actions/artifact (unzip-stream -> binary) in the CI-only artifact-transport action (issue 115); installed from the registry on the runner, never shipped in the package, the app or the engine"
+    },
+    {
+      "rule": "licence",
+      "match": "chainsaw",
+      "reason": "chainsaw 0.1.0 declares \"MIT/X11\", which is MIT but not an SPDX identifier; transitive dependency of @actions/artifact (unzip-stream -> binary) in the CI-only artifact-transport action (issue 115); installed from the registry on the runner, never shipped in the package, the app or the engine"
+    }
+  ]
 }

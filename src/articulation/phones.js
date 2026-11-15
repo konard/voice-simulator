@@ -38,14 +38,14 @@ export const PLACES = Object.freeze({
 
 /** Minimal cross-section (cm²) and turbulence gain per manner. */
 const MANNERS = {
-  plosive: { area: 0, frication: 0.7, duration: 75 },
-  nasal: { area: 0, frication: 0, duration: 70, velum: 1 },
-  trill: { area: 0.12, frication: 0.04, duration: 85, trill: true },
-  tap: { area: 0, frication: 0.2, duration: 28 },
-  fricative: { area: 0.09, frication: 1, duration: 105 },
-  'lateral-fricative': { area: 0.1, frication: 0.9, duration: 105 },
-  approximant: { area: 0.35, frication: 0, duration: 60 },
-  'lateral-approximant': { area: 0.28, frication: 0, duration: 65 },
+  plosive: { area: 0, frication: 0.7 },
+  nasal: { area: 0, frication: 0, velum: 1 },
+  trill: { area: 0.12, frication: 0.04, trill: true },
+  tap: { area: 0, frication: 0.2 },
+  fricative: { area: 0.09, frication: 1 },
+  'lateral-fricative': { area: 0.1, frication: 0.9 },
+  approximant: { area: 0.35, frication: 0 },
+  'lateral-approximant': { area: 0.28, frication: 0 },
 };
 
 /**
@@ -242,7 +242,6 @@ export function consonantTarget(token) {
     trill: manner.trill ? 1 : 0,
     rhotic: ['ɹ', 'ɻ'].includes(phoneme.symbol) ? 1 : 0,
     lateral: phoneme.manner.startsWith('lateral') ? 1 : 0,
-    duration: manner.duration,
     ...secondaryArticulation(token),
   };
   if (phoneme.velarized) {
@@ -258,7 +257,6 @@ export function consonantTarget(token) {
     target.tongueArea = Math.max(target.tongueArea, 0.25);
     target.lipArea = Math.max(target.lipArea, 0.25);
     target.frication = 0;
-    target.duration = 120;
   }
   return target;
 }

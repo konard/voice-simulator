@@ -387,6 +387,18 @@ export const HEAD_PARAMETERS = Object.freeze([
       'Scales the damping of the folds: higher values need more pressure to start (fold source only).',
   },
   {
+    key: 'subglottalLength',
+    label: 'Subglottal tract length',
+    group: 'source',
+    unit: 'x',
+    min: 0.8,
+    max: 1.25,
+    step: 0.01,
+    default: 1,
+    description:
+      'Scales the length of the trachea and the bronchi below the glottis, on top of the vocal tract length: longer lowers the subglottal resonances (source-tract interaction only).',
+  },
+  {
     key: 'declination',
     label: 'Declination',
     group: 'prosody',

@@ -1,0 +1,9 @@
+ˈɑː: glottal end 0.40 cm², length 15.9 cm
+  reflection 1: F1 797 Hz, bandwidth 45 Hz
+  reflection 0.8: F1 801 Hz, bandwidth 112 Hz
+  reflection 0.6: F1 814 Hz, bandwidth 250 Hz
+  reflection 0.4: F1 854 Hz, bandwidth 287 Hz
+  reflection 0.3: F1 1233 Hz, bandwidth 143 Hz
+  reflection 0.2: F1 1227 Hz, bandwidth 160 Hz
+  reflection 0: F1 1208 Hz, bandwidth 185 Hz
+  reflection -0.2: F1 1184 Hz, bandwidth 180 Hz

@@ -72,17 +72,38 @@ const S_CLUSTER = (onset) =>
 const ENGLISH_BANNED = /^(?:ŋ|[td]l|sɹ|.*ŋ)/u;
 
 /** Whether `onset` (a list of consonant tokens) can start a syllable. */
-const ONSETS = {
-  en: (onset) =>
-    !ENGLISH_BANNED.test(onset.map((token) => token.base).join('')) &&
-    (rising(onset, { plateau: false }) || S_CLUSTER(onset)),
-  ru: (onset) => rising(onset, { plateau: true }),
-  hi: (onset) =>
-    onset.length === 1 || (onset.length === 2 && GLIDES.has(onset[1].base)),
-  zh: (onset) =>
-    onset.length === 1 || (onset.length === 2 && GLIDES.has(onset[1].base)),
-  default: (onset) => rising(onset, { plateau: false }) || S_CLUSTER(onset),
-};
+const DEFAULT_ONSET = (onset) =>
+  rising(onset, { plateau: false }) || S_CLUSTER(onset);
+
+const GLIDE_ONSET = (onset) =>
+  onset.length === 1 || (onset.length === 2 && GLIDES.has(onset[1].base));
+
+const ENGLISH_ONSET = (onset) =>
+  !ENGLISH_BANNED.test(onset.map((token) => token.base).join('')) &&
+  DEFAULT_ONSET(onset);
+
+const RUSSIAN_ONSET = (onset) => rising(onset, { plateau: true });
+
+/**
+ * The onset rule of a language. A switch, not a table lookup: the language
+ * comes from the caller (a worker message in the example app), and
+ * `table[language]` also returned inherited `Object.prototype` members and
+ * called them (CodeQL js/unvalidated-dynamic-method-call, issue 115).
+ * @param {unknown} language
+ */
+function onsetRule(language) {
+  switch (String(language ?? '').slice(0, 2)) {
+    case 'en':
+      return ENGLISH_ONSET;
+    case 'ru':
+      return RUSSIAN_ONSET;
+    case 'hi':
+    case 'zh':
+      return GLIDE_ONSET;
+    default:
+      return DEFAULT_ONSET;
+  }
+}
 
 /** Whether the vowel at `index` joins the nucleus before it. */
 function joinsNucleus(tokens, index, tonal) {
@@ -135,8 +156,7 @@ function onsetStart(tokens, from, to, allowed) {
  */
 export function syllabifyTokens(tokens, options = {}) {
   const tonal = tokens.some((token) => token.tone);
-  const allowed =
-    ONSETS[String(options.language ?? '').slice(0, 2)] ?? ONSETS.default;
+  const allowed = onsetRule(options.language);
   const ranges = nuclei(tokens, tonal);
   if (ranges.length < 2) {
     return tokens.length ? [tokens] : [];

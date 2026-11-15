@@ -1,0 +1,15 @@
+node experiments/issue-39-rate-slopes.mjs
+male   | The north wi | 0.7: rate 3.11 active 4.18 | 0.85: rate 3.07 active 3.58 | 1: rate 3.46 active 3.18 | 1.25: rate 3.31 active 2.72 | 1.5: rate 2.95 active 2.37 | 1.8: rate 3.32 active 2.11
+male   | Please call  | 0.7: rate 2.68 active 4.47 | 0.85: rate 3.15 active 3.81 | 1: rate 2.66 active 3.38 | 1.25: rate 3.16 active 2.85 | 1.5: rate 3.60 active 2.50 | 1.8: rate 4.17 active 2.16
+female | The north wi | 0.7: rate 3.86 active 4.14 | 0.85: rate 3.67 active 3.54 | 1: rate 3.86 active 3.11 | 1.25: rate 3.01 active 2.66 | 1.5: rate 3.91 active 2.30 | 1.8: rate 4.39 active 2.05
+female | Please call  | 0.7: rate 3.24 active 4.32 | 0.85: rate 3.78 active 3.70 | 1: rate 4.62 active 3.25 | 1.25: rate 5.15 active 2.72 | 1.5: rate 5.42 active 2.40 | 1.8: rate 5.71 active 2.10
+SYLLABLE_RATE.slope (d log syllableRate / d log speechRate): 0.28, 0.85 to 1.25: 0.11
+SPEAKING_TIME.slope (d -log activeDuration / d log speechRate): 0.75, 0.85 to 1.25: 0.75
+
+node experiments/issue-39-rate-slopes.mjs <src of main before issue 39>
+male   | The north wi | 0.7: rate 2.87 active 4.87 | 0.85: rate 3.16 active 4.11 | 1: rate 3.36 active 3.57 | 1.25: rate 3.04 active 2.96 | 1.5: rate 3.56 active 2.53 | 1.8: rate 3.64 active 2.20
+male   | Please call  | 0.7: rate 3.07 active 4.88 | 0.85: rate 3.38 active 4.14 | 1: rate 3.61 active 3.60 | 1.25: rate 3.38 active 2.96 | 1.5: rate 3.56 active 2.53 | 1.8: rate 4.07 active 2.21
+female | The north wi | 0.7: rate 3.54 active 4.80 | 0.85: rate 3.22 active 4.04 | 1: rate 3.44 active 3.49 | 1.25: rate 3.86 active 2.85 | 1.5: rate 4.07 active 2.46 | 1.8: rate 4.17 active 2.16
+female | Please call  | 0.7: rate 3.48 active 4.60 | 0.85: rate 3.87 active 3.88 | 1: rate 4.41 active 3.40 | 1.25: rate 5.34 active 2.81 | 1.5: rate 5.86 active 2.39 | 1.8: rate 6.73 active 2.08
+SYLLABLE_RATE.slope (d log syllableRate / d log speechRate): 0.35, 0.85 to 1.25: 0.29
+SPEAKING_TIME.slope (d -log activeDuration / d log speechRate): 0.85, 0.85 to 1.25: 0.87

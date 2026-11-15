@@ -1,62 +1,82 @@
 #!/usr/bin/env bash
-# Check that the repository's Dependency graph is enabled, which
-# actions/dependency-review-action needs to compare two commits.
+# Reports whether the repository's dependency graph is enabled, which
+# actions/dependency-review-action needs. Enabling it is a repository setting
+# that only an administrator can change, so pull requests skip the review
+# with a warning while pushes to main fail with instructions.
 #
-# The setting is a repository switch only a maintainer can flip, so:
-#   DEPENDENCY_GRAPH_MODE=warn    -- pull requests: annotate, write
-#                                    enabled=false and exit 0, so the review
-#                                    step is skipped without blocking the PR.
-#   DEPENDENCY_GRAPH_MODE=require -- default branch: fail with the exact
-#                                    setting to enable until it is on.
-# Any answer other than success or HTTP 403 fails closed in both modes.
+# Only a plain `403 Forbidden` from the dependency review API means the graph
+# is disabled. Rate limits, server errors and network failures are retried
+# and then reported as "unknown" instead of being mistaken for a disabled
+# graph.
+#
+# Usage: check-dependency-graph.sh <base-sha> <head-sha> [--require]
+# Needs GH_TOKEN and REPO; writes `enabled=true|false` and
+# `state=enabled|disabled|unknown` to GITHUB_OUTPUT.
+# Optional: DEPENDENCY_GRAPH_ATTEMPTS (default 3),
+# DEPENDENCY_GRAPH_RETRY_SECONDS (default 10) and DEPENDENCY_GRAPH_DEBUG=1,
+# which prints every raw API answer.
 set -euo pipefail
+BASE="${1:?base commit is required}"
+HEAD="${2:?head commit is required}"
+MODE="${3:-}"
+ATTEMPTS="${DEPENDENCY_GRAPH_ATTEMPTS:-3}"
+RETRY_SECONDS="${DEPENDENCY_GRAPH_RETRY_SECONDS:-10}"
+SETTINGS="https://github.com/${REPO:?REPO is required}/settings/security_analysis"
 
-: "${REPOSITORY:?REPOSITORY is required (owner/name)}"
-: "${HEAD_SHA:?HEAD_SHA is required}"
+debug() {
+  if [ "${DEPENDENCY_GRAPH_DEBUG:-0}" = 1 ]; then echo "[debug] $*"; fi
+}
 
-mode="${DEPENDENCY_GRAPH_MODE:-require}"
-base_sha="${BASE_SHA:-}"
-output="${GITHUB_OUTPUT:-/dev/null}"
-verbose="${DEPENDENCY_GRAPH_VERBOSE:-0}"
-settings_url="https://github.com/${REPOSITORY}/settings/security_analysis"
-instruction="Enable it at ${settings_url} (Settings -> Advanced Security -> Dependency graph -> Enable), then re-run this workflow."
+# Prints enabled, disabled or retry for one answer of `gh api`.
+classify() {
+  local status="$1" response="$2"
+  if [ "$status" = 0 ]; then
+    echo enabled
+  elif printf '%s' "$response" | grep -qi 'rate limit'; then
+    echo retry
+  elif printf '%s' "$response" | grep -q '(HTTP 403)'; then
+    echo disabled
+  else
+    echo retry
+  fi
+}
 
-trace() { [ "${verbose}" = "1" ] && echo "[dependency-graph] $*" >&2 || true; }
+state=unknown
+response=""
+for attempt in $(seq 1 "$ATTEMPTS"); do
+  status=0
+  response="$(gh api "repos/$REPO/dependency-graph/compare/$BASE...$HEAD" 2>&1)" || status=$?
+  verdict="$(classify "$status" "$response")"
+  debug "attempt $attempt/$ATTEMPTS: exit $status, verdict $verdict, answer: $response"
+  if [ "$verdict" != retry ]; then
+    state="$verdict"
+    break
+  fi
+  if [ "$attempt" -lt "$ATTEMPTS" ]; then
+    echo "GitHub did not give a definite answer (attempt $attempt/$ATTEMPTS); retrying in ${RETRY_SECONDS}s."
+    sleep "$RETRY_SECONDS"
+  fi
+done
 
-case "${mode}" in
-  warn | require) ;;
-  *)
-    echo "::error::DEPENDENCY_GRAPH_MODE must be warn or require, got '${mode}'."
-    exit 2
-    ;;
-esac
+enabled=false
+[ "$state" = enabled ] && enabled=true
+{
+  echo "enabled=$enabled"
+  echo "state=$state"
+} >> "${GITHUB_OUTPUT:-/dev/null}"
+[ "$state" = enabled ] && { echo "The dependency graph is enabled."; exit 0; }
 
-if [ -z "${base_sha}" ]; then
-  base_sha="$(gh api "repos/${REPOSITORY}/commits/${HEAD_SHA}" --jq '.parents[0].sha // empty')"
-  # A root commit has no parent; comparing it with itself still needs the graph.
-  base_sha="${base_sha:-${HEAD_SHA}}"
+echo "GitHub answered: ${response:0:300}"
+if [ "$state" = disabled ]; then
+  message="The dependency graph of $REPO is disabled, so dependency review cannot run. \
+A repository administrator has to enable \"Dependency graph\" at $SETTINGS."
+else
+  message="Could not tell whether the dependency graph of $REPO is enabled: \
+the GitHub API gave no definite answer after $ATTEMPTS attempts. Re-run the job; \
+set DEPENDENCY_GRAPH_DEBUG=1 to print every answer."
 fi
-trace "mode=${mode} base=${base_sha} head=${HEAD_SHA}"
-
-stderr_file="$(mktemp)"
-trap 'rm -f "${stderr_file}"' EXIT
-
-if gh api "repos/${REPOSITORY}/dependency-graph/compare/${base_sha}...${HEAD_SHA}" >/dev/null 2>"${stderr_file}"; then
-  echo "Dependency graph is enabled for ${REPOSITORY}."
-  echo "enabled=true" >>"${output}"
-  exit 0
-fi
-
-trace "gh api stderr: $(cat "${stderr_file}")"
-if ! grep -q 'HTTP 403' "${stderr_file}"; then
-  echo "::error::Could not query the dependency graph of ${REPOSITORY}: $(cat "${stderr_file}")"
+if [ "$MODE" = "--require" ]; then
+  echo "::error::$message"
   exit 1
 fi
-
-echo "enabled=false" >>"${output}"
-if [ "${mode}" = "warn" ]; then
-  echo "::warning::Dependency graph is disabled for ${REPOSITORY}, so dependency review is skipped on this pull request. ${instruction}"
-  exit 0
-fi
-echo "::error::Dependency graph is disabled for ${REPOSITORY}, so pull requests skip dependency review. A maintainer must act: ${instruction}"
-exit 1
+echo "::warning::$message Skipping dependency review for this pull request."
