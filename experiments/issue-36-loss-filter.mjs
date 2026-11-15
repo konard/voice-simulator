@@ -59,7 +59,9 @@ function shelf(K, rate, a1) {
   const a = 1 - rho;
   const b = 2 * (c2 - rho * c1);
   const disc = b * b - 4 * a * a;
-  if (disc < 0) return null;
+  if (disc < 0) {
+    return null;
+  }
   const roots = [
     (-b + Math.sqrt(disc)) / (2 * a),
     (-b - Math.sqrt(disc)) / (2 * a),
@@ -74,9 +76,13 @@ for (const rate of [RATE, 90000]) {
     let best = null;
     for (let a1 = -0.999; a1 < 0.999; a1 += 0.0005) {
       const filter = shelf(K, rate, a1);
-      if (!filter) continue;
+      if (!filter) {
+        continue;
+      }
       const worst = Math.max(...errors(filter, K, rate).map(Math.abs));
-      if (!best || worst < best.worst) best = { worst, filter };
+      if (!best || worst < best.worst) {
+        best = { worst, filter };
+      }
     }
     console.log(
       `shelf rate ${rate} K ${K}: a1 ${best.filter.a1.toFixed(4)} b1/b0 ${(best.filter.b1 / best.filter.b0).toFixed(4)} errors`,

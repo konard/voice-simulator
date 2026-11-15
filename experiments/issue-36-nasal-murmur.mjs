@@ -1,6 +1,8 @@
 // RMS level of the [m] murmur in 'ˈama' for nasalLoss 1, 3 (default) and
 // 8, as in tests/head-parameters.test.js. SOURCE=<src dir> measures another
 // checkout. Run: node experiments/issue-36-nasal-murmur.mjs
+import { URL } from 'node:url';
+
 const source = process.env.SOURCE
   ? new URL(`file://${process.env.SOURCE.replace(/\/?$/, '/')}`)
   : new URL('../src/', import.meta.url);

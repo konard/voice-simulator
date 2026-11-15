@@ -41,20 +41,18 @@ function errors(options) {
       solver.glottalReflection = 1;
       const rate = (44 * SPEED_OF_SOUND) / shape.length;
       const response = new Float64Array(Math.round(0.25 * rate));
-      for (let i = 0; i < response.length; i++)
+      for (let i = 0; i < response.length; i++) {
         response[i] = solver.step(i === 0 ? 1 : 0, 0, 0);
+      }
       const peaks = resonances(
         impulseSpectrum(response, rate, { from: 150, to: 3600, step: 4 }),
         { count: 3 }
       );
-      return (
-        `[${ipa}] ` +
-        peaks
-          .map(({ frequency: f, bandwidth: b }) =>
-            `${(100 * (b / publishedBandwidth(f) - 1)).toFixed(0)}`.padStart(4)
-          )
-          .join('')
-      );
+      return `[${ipa}] ${peaks
+        .map(({ frequency: f, bandwidth: b }) =>
+          `${(100 * (b / publishedBandwidth(f) - 1)).toFixed(0)}`.padStart(4)
+        )
+        .join('')}`;
     })
     .join('  ');
 }

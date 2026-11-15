@@ -1,6 +1,6 @@
 // Lowest resonance of a 17 cm tube of 3 cm² closed at both ends, from the
 // pressure in its middle: the yielding walls make it a mass-spring system
-// resonating near 190 Hz (Fant 1972) instead of 0 Hz.
+// resonating near 190 Hz (Fant 1972), where a rigid tube has none.
 // Run: node experiments/issue-36-closed-tube.mjs
 import { impulseSpectrum, resonances } from '../src/acoustics/analysis.js';
 import { Waveguide } from '../src/acoustics/waveguide.js';
@@ -26,7 +26,9 @@ for (const walls of [true, false]) {
   // pressure it leaves so that its step does not hide the resonances.
   const tail = response.subarray(Math.round(0.9 * response.length));
   const rest = tail.reduce((sum, value) => sum + value, 0) / tail.length;
-  for (let i = 0; i < response.length; i++) response[i] -= rest;
+  for (let i = 0; i < response.length; i++) {
+    response[i] -= rest;
+  }
   const spectrum = impulseSpectrum(response, rate, {
     from: 20,
     to: 1500,
@@ -39,13 +41,16 @@ for (const walls of [true, false]) {
     i < spectrum.magnitudes.length && spectrum.frequencies[i] < 600;
     i++
   ) {
-    if (spectrum.magnitudes[i] > spectrum.magnitudes[best]) best = i;
+    if (spectrum.magnitudes[i] > spectrum.magnitudes[best]) {
+      best = i;
+    }
   }
   console.log(
-    `  strongest below 600 Hz: ${spectrum.frequencies[best]} Hz; levels (dB) at 50/100/150/190/250/400/1000: ` +
-      [50, 100, 150, 190, 250, 400, 1000]
-        .map((f) => (20 * Math.log10(spectrum.magnitudes[f - 20])).toFixed(0))
-        .join(' ')
+    `  strongest below 600 Hz: ${spectrum.frequencies[best]} Hz; levels (dB) at 50/100/150/190/250/400/1000: ${[
+      50, 100, 150, 190, 250, 400, 1000,
+    ]
+      .map((f) => (20 * Math.log10(spectrum.magnitudes[f - 20])).toFixed(0))
+      .join(' ')}`
   );
   const tube = tubeSpectrum(
     areas.map((a) => Math.max(a, 1e-4)),

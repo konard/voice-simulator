@@ -3,6 +3,8 @@
  * (tests/fdtd3d.test.js, "3D FDTD vowel table"), to compare commits:
  *   SOURCE=/tmp/main/src node experiments/issue-36-fdtd-table.mjs
  */
+import { URL } from 'node:url';
+
 const source = process.env.SOURCE
   ? new URL(`file://${process.env.SOURCE.replace(/\/?$/, '/')}`)
   : new URL('../src/', import.meta.url);
@@ -12,7 +14,9 @@ const { buildVoxelModel } = await load('acoustics/voxel-model.js');
 const { spectralPeaks } = await load('acoustics/analysis.js');
 const { noseShape, tractShape } = await load('articulation/tract-shape.js');
 const { presetHeadConfig } = await load('head-config.js');
-const { VOWEL_CORRECTIONS_3D } = await load('articulation/vowel-calibration.js');
+const { VOWEL_CORRECTIONS_3D } = await load(
+  'articulation/vowel-calibration.js'
+);
 const { HILLENBRAND } = await load('articulation/vowel-norms.js');
 const { STORY_FEATURES } = await load('articulation/vowel-space.js');
 
@@ -38,5 +42,12 @@ for (const name of ['i', 'ɑ', 'u']) {
   const error = Math.sqrt(
     targets.reduce((sum, t, i) => sum + Math.log(peaks[i] / t) ** 2, 0) / 3
   );
-  console.log(name, peaks.map((p) => p.toFixed(0)).join(' '), 'targets', targets.join(' '), 'error', error.toFixed(4));
+  console.log(
+    name,
+    peaks.map((p) => p.toFixed(0)).join(' '),
+    'targets',
+    targets.join(' '),
+    'error',
+    error.toFixed(4)
+  );
 }

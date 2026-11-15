@@ -5,6 +5,7 @@
  *
  * Run: node experiments/issue-36-dvtd.mjs
  */
+import { URL } from 'node:url';
 import { readFileSync } from 'node:fs';
 import { gunzipSync } from 'node:zlib';
 import { parseStl } from '../src/geometry/stl.js';
@@ -41,5 +42,8 @@ for (const entry of MANIFEST.files) {
   console.log('  default          ', row({}));
   console.log('  rigid walls      ', row({ walls: false }));
   console.log('  no constriction  ', row({ constriction: false }));
-  console.log('  rigid, 2e-5 loss ', row({ walls: false, loss: 2e-5, constriction: false }));
+  console.log(
+    '  rigid, 2e-5 loss ',
+    row({ walls: false, loss: 2e-5, constriction: false })
+  );
 }

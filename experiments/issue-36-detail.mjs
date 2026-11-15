@@ -1,7 +1,7 @@
 // Per-formant bandwidth errors of the waveguide against Hawks & Miller for
 // one setting: node experiments/issue-36-detail.mjs SHAPE BAFFLE STAGES
 import { impulseSpectrum, resonances } from '../src/acoustics/analysis.js';
-import { Waveguide, piriformBranch } from '../src/acoustics/waveguide.js';
+import { Waveguide } from '../src/acoustics/waveguide.js';
 import { SPEED_OF_SOUND } from '../src/acoustics/transfer.js';
 import { publishedBandwidth } from '../src/acoustics/losses.js';
 import { STORY_AREAS, STORY_LENGTHS } from '../src/articulation/vowel-space.js';
@@ -27,8 +27,9 @@ for (const name of Object.keys(STORY_AREAS)) {
   solver.glottalReflection = 1;
   const rate = (areas.length * SPEED_OF_SOUND) / length;
   const response = new Float64Array(Math.round(0.25 * rate));
-  for (let i = 0; i < response.length; i++)
+  for (let i = 0; i < response.length; i++) {
     response[i] = solver.step(i === 0 ? 1 : 0, 0, 0);
+  }
   const peaks = resonances(
     impulseSpectrum(response, rate, { from: 100, to: 4600, step: 2 }),
     { count: 4 }

@@ -21,7 +21,9 @@ for (let a = -0.99; a <= 0.99; a += 0.02) {
   for (let C = -100; C <= 100; C += 1) {
     for (let D = -200; D <= 200; D += 1) {
       const error = worst(a, C, D, RATE);
-      if (error < best.error) best = { error, a, C, D };
+      if (error < best.error) {
+        best = { error, a, C, D };
+      }
     }
   }
 }

@@ -1,6 +1,6 @@
 // Bandwidths of the planned vowel shapes (as in section 6 of
 // experiments/issue-11-audit-m2.mjs, closed glottis) with parts of the loss
-// model switched off, to find what widens a formant.
+// model disabled, to find what widens a formant.
 // Run: node experiments/issue-36-planned.mjs ɑ
 import { impulseSpectrum, resonances } from '../src/acoustics/analysis.js';
 import {
@@ -60,8 +60,9 @@ for (const ipa of process.argv.slice(2)) {
     solver.glottalReflection = 1;
     const rate = (44 * SPEED_OF_SOUND) / shape.length;
     const response = new Float64Array(Math.round(0.25 * rate));
-    for (let i = 0; i < response.length; i++)
+    for (let i = 0; i < response.length; i++) {
       response[i] = solver.step(i === 0 ? 1 : 0, 0, 0);
+    }
     const peaks = resonances(
       impulseSpectrum(response, rate, { from: 100, to: 3600, step: 2 }),
       { count: 3 }

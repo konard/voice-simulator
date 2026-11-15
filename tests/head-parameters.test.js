@@ -123,10 +123,9 @@ describe('head parameters', () => {
       (entry) => entry.key === 'nasalLoss'
     );
     expect(level(parameter.max)).toBeLessThan(0.9 * level(parameter.default));
-    // The boundary-layer loss of the nose grows with sqrt(f) (issue 36) and
-    // is small at the murmur (about 250 Hz), so the low end of nasalLoss
-    // moves it less than the flat loss of earlier versions did (-4 %
-    // instead of -21 %; experiments/issue-36-nasal-murmur.mjs).
+    // The boundary-layer loss of the nose grows with sqrt(f) and is small
+    // at the murmur (about 250 Hz), so the low end of nasalLoss moves the
+    // murmur by only about 4 % (experiments/issue-36-nasal-murmur.mjs).
     expect(level(parameter.default)).toBeLessThan(0.97 * level(parameter.min));
   });
 

@@ -17,6 +17,7 @@
 // SOURCE (a src directory) so that the same script measures older commits:
 //   git worktree add /tmp/main main
 //   SOURCE=/tmp/main/src node experiments/issue-11-bandwidths.mjs
+import { URL } from 'node:url';
 import { impulseSpectrum, resonances } from '../src/acoustics/analysis.js';
 
 const source = process.env.SOURCE
@@ -139,12 +140,13 @@ if (process.argv.includes('--scan')) {
   waveguide.rows.forEach(([name, peaks], index) => {
     const tubePeaks = tube.rows[index][1];
     const list = (items) =>
-      items.map(({ frequency }) => fmt(frequency)).join('') +
-      ' /' +
-      items.map(({ bandwidth }) => fmt(bandwidth, 4)).join('');
+      `${items.map(({ frequency }) => fmt(frequency)).join('')} /${items
+        .map(({ bandwidth }) => fmt(bandwidth, 4))
+        .join('')}`;
     console.log(
-      `[${name}]   ${list(peaks)}   ${list(tubePeaks)}   ` +
-        peaks.map(({ frequency }) => fmt(hawksMiller(frequency), 4)).join('')
+      `[${name}]   ${list(peaks)}   ${list(tubePeaks)}   ${peaks
+        .map(({ frequency }) => fmt(hawksMiller(frequency), 4))
+        .join('')}`
     );
   });
   const percent = (value) => `${(100 * value).toFixed(1)} %`;
