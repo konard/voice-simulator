@@ -2,12 +2,25 @@
  * Frequency-domain analysis of a tube (area function) with the classic
  * chain-matrix (ABCD) method. This is used to validate the time-domain
  * solvers and to show formants in the UI: it is exact for a concatenation
- * of uniform cylinders, with simple viscous/thermal losses and a piston
- * radiation load at the lips.
+ * of uniform cylinders, with viscous/thermal boundary-layer losses, yielding
+ * walls (losses.js) and a piston radiation load at the lips.
  */
 
-export const SPEED_OF_SOUND = 35000; // cm/s, warm humid air in the tract
-export const AIR_DENSITY = 0.00114; // g/cm³
+import { AIR_DENSITY, SPEED_OF_SOUND } from './constants.js';
+import {
+  LOSS_REFERENCE_SECTIONS,
+  LOSS_SHAPE,
+  WALL_MASS,
+  WALL_RESISTANCE,
+  WALL_STIFFNESS,
+  constrictionLoss,
+  viscothermalLoss,
+  wallAdmittance,
+  wallSurface,
+} from './losses.js';
+import { RADIATION_BAFFLE, radiationLoad } from './radiation.js';
+
+export { AIR_DENSITY, SPEED_OF_SOUND };
 
 function complex(re, im = 0) {
   return { re, im };
@@ -46,22 +59,31 @@ function multiplyMatrix(a, b) {
   ];
 }
 
-/** Piston-in-baffle radiation impedance at the lips. */
-function radiationImpedance(frequency, area) {
+/**
+ * Radiation impedance of a piston in a baffle (`baffle` 1) or of a free
+ * pipe end (0, half the resistance and an end correction of 0.61 a).
+ */
+function radiationImpedance(frequency, area, baffle) {
   const radius = Math.sqrt(area / Math.PI);
   const ka = (2 * Math.PI * frequency * radius) / SPEED_OF_SOUND;
   const characteristic = (AIR_DENSITY * SPEED_OF_SOUND) / area;
+  const { endCorrection } = radiationLoad(baffle);
   return complex(
-    (characteristic * ka * ka) / 2,
-    (characteristic * 8 * ka) / (3 * Math.PI)
+    ((characteristic * ka * ka) / 2) * (0.5 + 0.5 * baffle),
+    characteristic * ka * endCorrection
   );
 }
 
-function sectionMatrix(frequency, area, length, loss) {
+/**
+ * Chain matrix of a uniform section; `loss` is the boundary-layer
+ * attenuation of a 1 cm² section at this frequency (nepers per cm), which
+ * grows with perimeter / area, and `extra` a further attenuation (nepers
+ * per cm) that does not depend on the area.
+ */
+function sectionMatrix(frequency, area, length, loss, extra = 0) {
   const omega = 2 * Math.PI * frequency;
   const impedance = (AIR_DENSITY * SPEED_OF_SOUND) / area;
-  // Boundary-layer losses grow with sqrt(f) and with perimeter / area.
-  const alpha = (loss * Math.sqrt(frequency)) / Math.sqrt(area);
+  const alpha = loss / Math.sqrt(area) + extra;
   const { cos, sin } = cosSin(
     (omega / SPEED_OF_SOUND) * length,
     -alpha * length
@@ -75,21 +97,45 @@ function sectionMatrix(frequency, area, length, loss) {
 }
 
 /**
- * Shunt of a blind side tube (closed far end): its admittance at the
- * junction is j (A / rho c) tan(k L). With `volume` (cm³) the tube is the
- * neck of a Helmholtz resonator (a paranasal sinus): the neck, with its
- * wall losses, ends in the compliance V / (rho c²) of the cavity.
+ * Shunt of a blind side tube (closed far end) of `tubes` parallel tubes
+ * sharing the opening `area`: its admittance at the junction is
+ * (A / rho c) tanh((alpha + j k) L), with the boundary-layer and
+ * constriction losses alpha of the tract (`tube`). With `volume` (cm³) the
+ * tube is the neck of a Helmholtz resonator (a paranasal sinus): the neck,
+ * with its wall losses, ends in the compliance V / (rho c²) of the cavity.
  */
-function branchMatrix(frequency, { area, length, volume, loss = 0 }) {
+function branchMatrix(
+  frequency,
+  { area, length, volume, loss = 0, tubes = 1 },
+  tube = {}
+) {
+  // A branch `loss` is the legacy constant of tubeTransfer's `loss`.
   if (!volume) {
-    const admittance =
-      (area / (AIR_DENSITY * SPEED_OF_SOUND)) *
-      Math.tan((2 * Math.PI * frequency * length) / SPEED_OF_SOUND);
-    return [complex(1), complex(0), complex(0, admittance), complex(1)];
+    const each = area / tubes;
+    const alpha =
+      ((tube.loss ?? 0) / Math.sqrt(each) +
+        (tube.reference ? constrictionLoss(each) / tube.reference : 0)) *
+      length;
+    const phase = (2 * Math.PI * frequency * length) / SPEED_OF_SOUND;
+    // tanh(x + j y) = (sinh 2x + j sin 2y) / (cosh 2x + cos 2y)
+    const scale =
+      area /
+      (AIR_DENSITY * SPEED_OF_SOUND) /
+      (Math.cosh(2 * alpha) + Math.cos(2 * phase));
+    const admittance = complex(
+      Math.sinh(2 * alpha) * scale,
+      Math.sin(2 * phase) * scale
+    );
+    return [complex(1), complex(0), admittance, complex(1)];
   }
   const compliance = volume / (AIR_DENSITY * SPEED_OF_SOUND ** 2);
   const cavity = complex(0, -1 / (2 * Math.PI * frequency * compliance));
-  const neck = sectionMatrix(frequency, area, length, loss);
+  const neck = sectionMatrix(
+    frequency,
+    area,
+    length,
+    loss * Math.sqrt(frequency)
+  );
   const impedance = divide(
     add(multiply(neck[0], cavity), neck[1]),
     add(multiply(neck[2], cavity), neck[3])
@@ -99,28 +145,69 @@ function branchMatrix(frequency, { area, length, volume, loss = 0 }) {
 
 /**
  * Chain matrix of sections `from` to `to` of a tube {areas, sectionLength,
- * loss, branches}, with each branch joined in front of its section.
+ * loss, branches, wall, reference}, with each branch joined in front of
+ * its section and, with a `wall`, the yielding wall of each section as a
+ * shunt after it. With a `reference` length (cm) each section also has the
+ * constriction loss of the waveguide (constrictionLoss per `reference` cm).
  */
 function chainOf(frequency, tube, from = 0, to = tube.areas.length) {
-  const { areas, sectionLength, loss, branches } = tube;
+  const { areas, sectionLength, loss, branches, wall, reference } = tube;
   let chain = [complex(1), complex(0), complex(0), complex(1)];
   for (let index = from; index < to; index++) {
     for (const branch of branches) {
       if (branch.index === index) {
-        chain = multiplyMatrix(chain, branchMatrix(frequency, branch));
+        chain = multiplyMatrix(chain, branchMatrix(frequency, branch, tube));
       }
     }
+    const area = Math.max(areas[index], 1e-4);
+    const kinetic = reference ? constrictionLoss(area) / reference : 0;
     chain = multiplyMatrix(
       chain,
-      sectionMatrix(
-        frequency,
-        Math.max(areas[index], 1e-4),
-        sectionLength,
-        loss
-      )
+      sectionMatrix(frequency, area, sectionLength, loss, kinetic)
     );
+    if (wall) {
+      // Times the shunt [1 0; Y 1].
+      const admittance = wallAdmittance(
+        frequency,
+        wallSurface(area, sectionLength),
+        wall
+      );
+      chain[0] = add(chain[0], multiply(chain[1], admittance));
+      chain[2] = add(chain[2], multiply(chain[3], admittance));
+    }
   }
   return chain;
+}
+
+/**
+ * Boundary-layer loss of a 1 cm² section (nepers per cm) and the yielding
+ * wall of the tract for tubeTransfer's options.
+ */
+function tractLosses(frequency, options) {
+  const head = options.head ?? {};
+  const wallLoss = head.wallLoss ?? 1;
+  const loss =
+    options.loss === undefined
+      ? viscothermalLoss(
+          frequency,
+          1,
+          (options.lossShape ?? LOSS_SHAPE) * wallLoss
+        )
+      : options.loss * Math.sqrt(frequency);
+  const wall =
+    options.walls === false
+      ? null
+      : {
+          mass: head.wallMass ?? WALL_MASS,
+          resistance: (head.wallResistance ?? WALL_RESISTANCE) * wallLoss,
+          stiffness: head.wallStiffness ?? WALL_STIFFNESS,
+        };
+  return { loss, wall };
+}
+
+/** Chain from the glottis to section `index` and the pressure there. */
+function probePressure(frequency, tract, index, load) {
+  return drive(chainOf(frequency, tract, index), load).pressure;
 }
 
 /** Flow entering a chain and pressure at its input for unit output flow. */
@@ -137,12 +224,27 @@ function drive(chain, load) {
  * @param {number} length Total length in cm.
  * @param {number} frequency Hz.
  * @param {{
+ *   head?: {wallLoss?: number, wallMass?: number, wallResistance?: number,
+ *     wallStiffness?: number},
+ *   lossShape?: number,
+ *   walls?: boolean,
+ *   baffle?: number,
+ *   constriction?: boolean,
  *   loss?: number,
  *   branches?: {index: number, area: number, length: number}[],
  *   nose?: {areas: ArrayLike<number>, length: number, velumArea: number,
  *     velumIndex: number, loss?: number, branches?: object[]},
- *   output?: 'both' | 'lips' | 'nostrils',
+ *   output?: 'both' | 'lips' | 'nostrils' | 'pressure',
+ *   probe?: number,
  * }} [options]
+ *   The walls lose viscothermalLoss of `lossShape` (LOSS_SHAPE) times a
+ *   round tube, and yield with the wall parameters of `head` unless
+ *   `walls` is false (both scaled by `head.wallLoss`, see losses.js); a
+ *   number `loss` replaces the boundary-layer loss by the constant
+ *   loss sqrt(f / area) of earlier versions. `baffle` sets the radiation
+ *   load (RADIATION_BAFFLE; 0 is a free pipe end). Like the waveguide,
+ *   narrow sections lose constrictionLoss per 1 / 44 of `length` unless
+ *   `constriction` is false.
  *   `branches` are blind side tubes (the piriform fossae) joined in front
  *   of section `index`; a branch with a `volume` is a Helmholtz resonator
  *   (see branchMatrix). `nose` is the nasal tract, joined in front of
@@ -153,17 +255,27 @@ function drive(chain, load) {
  *   (the sinuses) join in front of nose sections.
  */
 export function tubeTransfer(areas, length, frequency, options = {}) {
-  const loss = options.loss ?? 2e-5;
+  const { loss, wall } = tractLosses(frequency, options);
+  const baffle = options.baffle ?? RADIATION_BAFFLE;
   const branches = options.branches ?? [];
   const sectionLength = length / areas.length;
   const nose = options.nose;
-  const lips = radiationImpedance(frequency, Math.max(areas.at(-1), 1e-3));
-  const tract = { areas, sectionLength, loss, branches };
+  const lips = radiationImpedance(
+    frequency,
+    Math.max(areas.at(-1), 1e-3),
+    baffle
+  );
+  // The waveguide loses constrictionLoss per 1 / 44 of the tract length.
+  const reference =
+    options.constriction === false ? 0 : length / LOSS_REFERENCE_SECTIONS;
+  const tract = { areas, sectionLength, loss, branches, wall, reference };
   if (!nose || !(nose.velumArea > 1e-4)) {
-    const result = divide(
-      complex(1),
-      drive(chainOf(frequency, tract), lips).flow
-    );
+    const glottal = drive(chainOf(frequency, tract), lips).flow;
+    const radiated =
+      options.output === 'pressure'
+        ? probePressure(frequency, tract, options.probe ?? 0, lips)
+        : complex(1);
+    const result = divide(radiated, glottal);
     return Math.hypot(result.re, result.im);
   }
   const split = Math.max(0, Math.min(areas.length, nose.velumIndex));
@@ -174,12 +286,15 @@ export function tubeTransfer(areas, length, frequency, options = {}) {
   const noseChain = chainOf(frequency, {
     areas: noseAreas,
     sectionLength: nose.length / noseAreas.length,
-    loss: nose.loss ?? loss,
+    loss: nose.loss === undefined ? loss : nose.loss * Math.sqrt(frequency),
     branches: nose.branches ?? [],
+    wall: null,
+    reference,
   });
   const nostrils = radiationImpedance(
     frequency,
-    Math.max(noseAreas.at(-1), 1e-3)
+    Math.max(noseAreas.at(-1), 1e-3),
+    baffle
   );
   // Unit flow at the lips fixes the pressure at the velar junction; the
   // nose carries the flow that this pressure drives out of the nostrils.
@@ -223,14 +338,18 @@ export function tubeSpectrum(areas, length, options = {}) {
 }
 
 /**
- * Peak frequencies (formants) of a magnitude spectrum.
+ * Peak frequencies (formants) of a magnitude spectrum above `from` Hz:
+ * below 100 Hz the yielding walls only add a bump of a few per cent (the
+ * air in the tract moving on the wall stiffness), which is not a formant.
  * @param {{frequencies: ArrayLike<number>, magnitudes: ArrayLike<number>}} spectrum
  * @param {number} [count]
+ * @param {number} [from]
  */
-export function findPeaks({ frequencies, magnitudes }, count = 4) {
+export function findPeaks({ frequencies, magnitudes }, count = 4, from = 100) {
   const peaks = [];
   for (let index = 1; index < magnitudes.length - 1; index++) {
     if (
+      frequencies[index] >= from &&
       magnitudes[index] > magnitudes[index - 1] &&
       magnitudes[index] >= magnitudes[index + 1]
     ) {

@@ -1,0 +1,8 @@
+# node experiments/issue-36-fdtd-table.mjs (this branch)
+i 350 2270 3050 targets 343 2323 3001 error 0.0200
+ɑ 740 1250 2640 targets 756 1309 2535 error 0.0376
+u 380 990 2360 targets 380 992 2355 error 0.0017
+# SOURCE=<main>/src node experiments/issue-36-fdtd-table.mjs (main at e113bd5)
+i 340 2260 2850 targets 343 2323 3001 error 0.0341
+ɑ 740 1230 2510 targets 756 1309 2535 error 0.0384
+u 380 960 2350 targets 380 992 2355 error 0.0190

@@ -11,33 +11,22 @@
  *
  * The owner couples the port: it reads `left[0]`, the wave arriving at the
  * port, and writes `junctionRight[0]`, the wave leaving it into section 0.
- * The waveguide does that with its three-port velum junction, the 2D sheet
- * (fdtd2d.js) with the pressure of the column the line hangs off. The flow
+ * The 2D sheet (fdtd2d.js) does that with the pressure of the column the
+ * line hangs off. (The waveguide keeps its nose in its own arrays, so that
+ * it scatters it in the same pass as the tract and filters it with the
+ * frequency-dependent losses of losses.js.) The flow
  * into the line is then (junctionRight[0] - left[0]) * areas[0], in the
  * waveguide's normalised units (pressure times area).
  *
  * The walls lose `wallLoss` times (for the nose also `nasalLoss` times)
- * more than lossFactor's smooth round tube, per section of length
- * restLength / LOSS_REFERENCE_SECTIONS raised to `lossExponent`.
+ * more than the smooth round tube of boundaryLossFactor (waveguide.js), per
+ * section of length restLength / LOSS_REFERENCE_SECTIONS raised to
+ * `lossExponent`.
  */
 
 import { Radiation } from './radiation.js';
+import { boundaryLossFactor } from './waveguide.js';
 const MIN_AREA = 1e-4;
-
-/**
- * Attenuation of a reference section (length / LOSS_REFERENCE_SECTIONS):
- * boundary-layer losses grow with perimeter / area, and the flow
- * resistance of narrow constrictions (Bernoulli/kinetic losses) dominates
- * below a few tenths of a cm². The kinetic term matches the resistance
- * rho U / A² of a steady flow U of about 150 cm³/s: a 1.5 cm long 0.15 cm²
- * constriction (/u/) loses U / (2 A c), about 1.5 % of the wave amplitude,
- * so the low formants of rounded and close vowels stay sharp.
- */
-export function lossFactor(area, wall = 1) {
-  const boundary = 0.0004 / Math.sqrt(Math.max(area, 0.05));
-  const constriction = Math.min(0.3, 0.0001 / Math.max(area, 1e-3) ** 2);
-  return 1 - 0.0007 * wall - boundary * wall - constriction;
-}
 
 export class NoseLine {
   /**
@@ -71,7 +60,9 @@ export class NoseLine {
   }
 
   #loss(area) {
-    return Math.max(0, lossFactor(area, this.wallLoss)) ** this.lossExponent;
+    return (
+      Math.max(0, boundaryLossFactor(area, this.wallLoss)) ** this.lossExponent
+    );
   }
 
   /**

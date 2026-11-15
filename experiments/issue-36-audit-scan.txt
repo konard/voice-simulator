@@ -1,0 +1,16 @@
+shape 1 baffle 0.3 stages 2: B1-B3 error % [ɑ]  -10  28  -0  [i]  -37 -55 -56  [u]   26  49 -67
+shape 1 baffle 0.3 stages 5: B1-B3 error % [ɑ]   -2  31  -9  [i]  -34 -50 -52  [u]   10  17 -57
+shape 1 baffle 1 stages 2: B1-B3 error % [ɑ]   -5  64  21  [i]  -38 -50 -46  [u]   24  43 -67
+shape 1 baffle 1 stages 5: B1-B3 error % [ɑ]    2  67  12  [i]  -34 -46 -43  [u]    9  16 -57
+shape 1.2 baffle 0.3 stages 2: B1-B3 error % [ɑ]   -4  33   8  [i]  -34 -50 -52  [u]   35  65 -61
+shape 1.2 baffle 0.3 stages 5: B1-B3 error % [ɑ]    4  37  -2  [i]  -30 -43 -47  [u]   17  28 -51
+shape 1.2 baffle 1 stages 2: B1-B3 error % [ɑ]    0  69  29  [i]  -35 -45 -42  [u]   33  59 -61
+shape 1.2 baffle 1 stages 5: B1-B3 error % [ɑ]    8  74  18  [i]  -31 -39 -37  [u]   15  27 -51
+shape 2 baffle 0.3 stages 2: B1-B3 error % [ɑ]   17  55  43  [i]  -23 -27 -35  [u]   68 127 -41
+shape 2 baffle 0.3 stages 5: B1-B3 error % [ɑ]   32  61  25  [i]  -16 -16 -25  [u]   39  76 -24
+shape 2 baffle 1 stages 2: B1-B3 error % [ɑ]   21  90  65  [i]  -22 -22 -23  [u]   66 116 -41
+shape 2 baffle 1 stages 5: B1-B3 error % [ɑ]   36  97  46  [i]  -16 -11 -15  [u]   37  73 -24
+shape 3 baffle 0.3 stages 2: B1-B3 error % [ɑ]   43  81  88  [i]   -7   2 -13  [u]  107 195 -15
+shape 3 baffle 0.3 stages 5: B1-B3 error % [ɑ]   66  90  59  [i]    2  20   3  [u]   66 137   9
+shape 3 baffle 1 stages 2: B1-B3 error % [ɑ]   47 116 111  [i]   -8   8   0  [u]  103 180 -15
+shape 3 baffle 1 stages 5: B1-B3 error % [ɑ]   70 128  81  [i]    1  25  14  [u]   64 132   9

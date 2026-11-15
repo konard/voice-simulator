@@ -180,17 +180,24 @@ Add `wallMass`, `wallResistance` and `wallStiffness` to the direction test of
 
 ## Acceptance criteria
 
-- [ ] `experiments/issue-11-bandwidths.txt` is committed; the mean absolute
+- [x] `experiments/issue-11-bandwidths.txt` is committed; the mean absolute
       error of the waveguide against `publishedBandwidth()` over 11 vowels and 3
       formants is below 25 %, and the old value (measured before the change) is
-      printed beside it.
+      printed beside it. (23.7 %, before 34.7 %.)
 - [ ] `node experiments/issue-11-audit-m2.mjs` prints bandwidths for `[ɑ]`,
       `[i]`, `[u]` (closed glottis) within 35 % of the Hawks & Miller column.
-- [ ] The sentence of the audit renders at most 8 % slower on tier `medium`.
-- [ ] The vowel formant tests in `tests/acoustics.test.js`,
+      Not met: the audit prints the bandwidths with the Hawks & Miller column
+      and the error, but B2 of `[ɑ]` (+64 %), B2 (−37 %) and B3 (−40 %) of
+      `[i]`, B2 (+46 %) and B3 (−42 %) of `[u]` are outside 35 %. A larger loss widens the narrow
+      formants together with the wide ones, so no `LOSS_SHAPE`,
+      `RADIATION_BAFFLE` or `LOSS_STAGES` fits all of them
+      (`experiments/issue-36-audit-scan.txt`).
+- [x] The sentence of the audit renders at most 8 % slower on tier `medium`.
+      (3.0 %, median of 7 processes; `experiments/issue-36-render-speed.txt`.)
+- [x] The vowel formant tests in `tests/acoustics.test.js`,
       `tests/head-presets.test.js` and `tests/fdtd3d.test.js` pass.
-- [ ] The new tests exist and pass on Node.js, Bun and Deno.
-- [ ] `npm run check` and `npm test` pass; a minor changeset is added.
+- [x] The new tests exist and pass on Node.js, Bun and Deno.
+- [x] `npm run check` and `npm test` pass; a minor changeset is added.
 
 ## Out of scope
 

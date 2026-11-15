@@ -220,10 +220,12 @@ describe('Dresden Vocal Tract Dataset fixtures', () => {
       expect(result.length).toBeLessThan(200);
       const length =
         (result.length / 10) * (SPEED_OF_SOUND / DVTD_SPEED_OF_SOUND);
+      // The FEM model has rigid walls; yielding ones raise F1 of [i] by
+      // 26 % (experiments/issue-36-dvtd.mjs).
       const tube = tubeFormants(
         result.areas.map((area) => area / 100),
         length,
-        { count: 3, maxFrequency: 5000, step: 2 }
+        { count: 3, maxFrequency: 5000, step: 2, walls: false }
       );
       entry.femResonances.forEach((fem, index) => {
         expect(Math.abs(tube[index] - fem) / fem).toBeLessThan(0.12);
@@ -309,7 +311,7 @@ describe('Dresden Vocal Tract Dataset download', () => {
       const tube = tubeFormants(
         result.areas.map((area) => area / 100),
         (result.length / 10) * (SPEED_OF_SOUND / DVTD_SPEED_OF_SOUND),
-        { count: 2, maxFrequency: 5000, step: 2 }
+        { count: 2, maxFrequency: 5000, step: 2, walls: false }
       );
       vvtfPeaks(transfer.toString('utf8'))
         .slice(0, 2)
