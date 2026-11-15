@@ -301,6 +301,7 @@ const PARAMETER_LABELS_RU = {
   vibratoRate: 'Частота вибрато',
   aspirationLevel: 'Шум придыхания',
   glottalChink: 'Глоттальная щель',
+  lungPressure: 'Давление в лёгких',
   declination: 'Деклинация',
   accentStrength: 'Сила ударения',
   stressLengthening: 'Удлинение ударных',

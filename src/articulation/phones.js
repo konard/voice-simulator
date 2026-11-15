@@ -7,8 +7,9 @@
  * - lip rounding and lip constriction
  * - a tongue constriction (location along the tract, area, engagement)
  * - velum opening (nasal coupling)
- * - glottis: voicing, aspiration noise, glottal closure
- * - frication gain (how much turbulence a narrow constriction makes)
+ * - glottis: voicing, aspiration (opening of the glottis), glottal closure
+ * - frication gain (how much turbulence a narrow constriction makes at a
+ *   given air flow, see src/acoustics/aerodynamics.js)
  *
  * Consonants leave the vowel channels free, so the tongue body glides
  * from vowel to vowel through them (vowel-to-vowel coarticulation).
@@ -45,6 +46,19 @@ const MANNERS = {
   'lateral-fricative': { area: 0.1, frication: 0.9, duration: 105 },
   approximant: { area: 0.35, frication: 0, duration: 60 },
   'lateral-approximant': { area: 0.28, frication: 0, duration: 65 },
+};
+
+/**
+ * Opening of the glottis (the `aspiration` channel) of voiceless
+ * obstruents: the folds part so that the air builds up pressure behind the
+ * constriction. Fricatives open it wide (Stevens 1998: about 0.2 to
+ * 0.3 cm²); stops a third of that, which plan.js raises to 1 for
+ * aspirated stops.
+ */
+const VOICELESS_OPENING = {
+  plosive: 0.35,
+  fricative: 1,
+  'lateral-fricative': 1,
 };
 
 /** Neutral vowel used when a phrase starts or ends with consonants. */
@@ -101,6 +115,14 @@ function sibilanceOf(phoneme) {
   return phoneme.sibilant ? 1 : 0;
 }
 
+/** Glottal opening (`aspiration`) of a consonant: voiceless obstruents. */
+function voicelessOpening(phoneme, voiced, glottal) {
+  if (voiced || glottal) {
+    return 0;
+  }
+  return VOICELESS_OPENING[phoneme.manner] ?? 0;
+}
+
 /**
  * Articulatory description of a consonant segment.
  * @param {object} token Segment token from parseIpa.
@@ -114,9 +136,9 @@ export function consonantTarget(token) {
     ...channels,
     velum: manner.velum ?? 0,
     voicing: voiced ? 1 : 0,
-    aspiration: 0,
+    aspiration: voicelessOpening(phoneme, voiced, glottal),
     glottalClosure: 0,
-    frication: glottal ? 0 : manner.frication * (voiced ? 0.7 : 1),
+    frication: glottal ? 0 : manner.frication,
     sibilance: sibilanceOf(phoneme),
     trill: manner.trill ? 1 : 0,
     rhotic: ['ɹ', 'ɻ'].includes(phoneme.symbol) ? 1 : 0,

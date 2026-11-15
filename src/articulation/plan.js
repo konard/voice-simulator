@@ -52,6 +52,7 @@ export const CHANNELS = Object.freeze({
   trill: 0.01,
   lateral: 0.015,
   loudness: 0.018,
+  lungPressure: 0.04,
   f0: 0.03,
 });
 
@@ -167,7 +168,13 @@ function pushConsonant(segments, token, index, context) {
   pushRelease(segments, token, index, context);
 }
 
-/** Voice onset time after an oral stop: a short or aspirated release. */
+/**
+ * Voice onset time after an oral stop: a short or aspirated release. The
+ * constriction keeps its frication gain until the end of the release: the
+ * opening areas and the falling mouth pressure time the burst (see
+ * src/acoustics/aerodynamics.js). Aspirated stops hold the glottis open
+ * (`aspiration` 1) from the closure to the end of the release.
+ */
 function pushRelease(segments, token, index, context) {
   const manner = token.phoneme.manner;
   if (manner !== 'plosive' || token.voiced || token.affricate) {
@@ -177,13 +184,16 @@ function pushRelease(segments, token, index, context) {
     return;
   }
   const aspirated = isAspirated(context.tokens, index, context.language);
+  const closure = segments.at(-1);
+  const aspiration = aspirated ? 1 : closure.target.aspiration;
+  closure.target = { ...closure.target, aspiration };
   segments.push({
     token,
     kind: 'release',
     target: {
       voicing: 0,
-      aspiration: aspirated ? 1 : 0.35,
-      frication: 0,
+      aspiration,
+      frication: closure.target.frication,
     },
     duration: (aspirated ? 0.06 : 0.015) * context.rate,
   });
@@ -309,6 +319,7 @@ const DEFAULTS = {
   trill: 0,
   lateral: 0,
   loudness: 1,
+  lungPressure: 800,
   f0: 120,
 };
 
@@ -520,6 +531,19 @@ function applyRegisterGain(values, segments, frameRate) {
   }
 }
 
+/**
+ * Lung pressure (Pa) from the loudness: the sound level rises about 9 dB
+ * per doubling of the lung pressure (Titze and Sundberg 1992), so the
+ * amplitude goes with the pressure to the power 1.5.
+ */
+function fillLungPressure(channels, head) {
+  const { loudness, lungPressure } = channels;
+  for (let frame = 0; frame < lungPressure.length; frame++) {
+    lungPressure[frame] =
+      head.lungPressure * Math.max(0, loudness[frame]) ** (2 / 3);
+  }
+}
+
 /** Slow periodic pitch modulation (vibrato / natural jitter). */
 function addVibrato(values, head, frameRate) {
   const depth = head.vibrato * 0.004;
@@ -556,6 +580,7 @@ export function planUtterance(ipa, options = {}) {
   fillDefaults(channels, segments, frameRate);
   fillArticulation(channels, segments, frameRate);
   applyRegisterGain(channels.loudness, segments, frameRate);
+  fillLungPressure(channels, head);
   const toneShape = fillPitch(channels.f0, segments, head, frameRate);
   for (const name of CHANNEL_NAMES) {
     const timeConstant = CHANNELS[name] / head.articulationSpeed;

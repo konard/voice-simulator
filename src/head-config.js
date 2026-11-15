@@ -279,6 +279,18 @@ export const HEAD_PARAMETERS = Object.freeze([
       'Posterior gap left open through the glottal cycle, common in women: a darker, softer voice with wider formants.',
   },
   {
+    key: 'lungPressure',
+    label: 'Lung pressure',
+    group: 'source',
+    unit: 'Pa',
+    min: 300,
+    max: 2000,
+    step: 10,
+    default: 800,
+    description:
+      'Air pressure below the glottis in normal speech: drives the air flow and the strength of the noise at constrictions and at the glottis.',
+  },
+  {
     key: 'declination',
     label: 'Declination',
     group: 'prosody',
