@@ -1,0 +1,145 @@
+name: Heavy checks
+
+# Tests too slow for every pull request (tests/heavy/README.md). Started by
+# hand only: Actions tab -> Heavy checks -> Run workflow, or
+#   gh workflow run heavy.yml -f suite=quality -f limit=5
+on:
+  workflow_dispatch:
+    inputs:
+      suite:
+        description: Suite of tests/heavy to run
+        type: choice
+        options:
+          - all
+          - quality
+          - recognition
+          - roundtrip
+          - copy
+          - performance
+          - gpu
+        default: all
+      ref:
+        description: Branch or tag of this repository, or a commit on the default branch, to test (empty = the branch chosen above)
+        type: string
+        default: ''
+      limit:
+        description: Largest number of items each test may process (empty = no limit)
+        type: string
+        default: ''
+
+# Least-privilege default; jobs escalate individually when needed.
+permissions:
+  contents: read
+
+# Provide Git config to actions/checkout itself; checkout runs git init before
+# any workflow step can configure Git.
+env:
+  GIT_CONFIG_COUNT: '1'
+  GIT_CONFIG_KEY_0: init.defaultBranch
+  GIT_CONFIG_VALUE_0: main
+
+jobs:
+  heavy:
+    name: Heavy checks
+    runs-on: ubuntu-24.04
+    # The step budget below (18000s = 300 min) owns the deadline; this cap is
+    # the backstop behind it, below the 360-minute limit of hosted runners,
+    # leaving 30 minutes for checkout, install and the artifact upload. See
+    # docs/CI-TIMEOUT-BUDGETS.md.
+    timeout-minutes: 330
+    concurrency:
+      group: check-${{ github.workflow }}-${{ github.ref }}-${{ inputs.suite }}
+      cancel-in-progress: true
+    permissions:
+      contents: read
+    steps:
+      # The branch chosen in the form: always a branch of this repository.
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      # A run started on the default branch writes to its cache scope, so the
+      # ref input may only name code of this repository; see the script.
+      - name: Resolve the ref to test
+        id: target
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+          FALLBACK_SHA: ${{ github.sha }}
+          WANTED: ${{ inputs.ref }}
+        run: bash scripts/resolve-heavy-ref.sh
+
+      - name: Check out the ref to test
+        if: ${{ steps.target.outputs.revision != github.sha }}
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ steps.target.outputs.revision }}
+          persist-credentials: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: '24.x'
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Run heavy checks
+        shell: bash
+        env:
+          SUITE: ${{ inputs.suite }}
+          LIMIT: ${{ inputs.limit }}
+        run: |
+          LIMIT_FLAG=''
+          if [[ "$LIMIT" =~ ^[0-9]+$ ]]; then
+            LIMIT_FLAG="--limit $LIMIT"
+          fi
+          # LIMIT_FLAG is unquoted on purpose: empty, or a flag and a number.
+          # shellcheck disable=SC2086
+          bash scripts/run-with-budget-warning.sh 18000 "Heavy checks" npm run test:heavy -- --suite "$SUITE" $LIMIT_FLAG
+
+      - name: Upload reports
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: heavy-${{ inputs.suite }}-${{ github.run_id }}
+          path: reports/heavy
+          retention-days: 30
+
+  # Terminal status gate: runs even when the jobs above fail or are
+  # cancelled, and turns a `timeout-minutes` kill (reported as cancelled)
+  # into a red run. needs is derived and checked by the status-gate-coverage
+  # job in workflows.yml.
+  pipeline-status:
+    name: Pipeline Status
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    concurrency:
+      # The suite keeps runs of different suites on one branch from
+      # cancelling each other's gate, as the heavy job's group does.
+      group: check-${{ github.workflow }}-${{ github.ref }}-${{ inputs.suite }}-pipeline-status
+      cancel-in-progress: true
+    # A status function is required: without one the gate inherits the
+    # implicit "every dependency succeeded" condition and is skipped in
+    # exactly the runs it exists to report.
+    if: >-
+      !cancelled()
+    needs:
+      - heavy
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: '24.x'
+
+      - name: Fail the run when a required job was cancelled or failed
+        env:
+          NEEDS_JSON: ${{ toJSON(needs) }}
+          RUN_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          BRANCH_NAME: ${{ github.head_ref || github.ref_name }}
+        run: bash scripts/check-pipeline-status.sh

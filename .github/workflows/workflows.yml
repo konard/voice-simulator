@@ -91,6 +91,7 @@ jobs:
           .github/workflows/security.yml
           .github/workflows/workflows.yml
           .github/workflows/example-app.yml
+          .github/workflows/heavy.yml
 
   zizmor:
     name: zizmor

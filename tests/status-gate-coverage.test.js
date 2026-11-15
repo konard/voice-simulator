@@ -168,6 +168,7 @@ describe('check-status-gate-covers-all-jobs.mjs', () => {
       'security.yml',
       'workflows.yml',
       'example-app.yml',
+      'heavy.yml',
     ]) {
       expect(workflow).toContain(`.github/workflows/${name}`);
     }
@@ -183,6 +184,7 @@ describe('check-status-gate-covers-all-jobs.mjs shipped coverage', () => {
         'security.yml': 'covers all 4 other job(s).',
         'workflows.yml': 'covers all 3 other job(s).',
         'example-app.yml': 'covers all 6 other job(s).',
+        'heavy.yml': 'covers all 1 other job(s).',
       };
 
       for (const [name, message] of Object.entries(expectedJobs)) {

@@ -1,0 +1,48 @@
+#!/usr/bin/env bash
+#
+# Offline `gh` stub for the scripts/resolve-heavy-ref.sh tests.
+# Logs each call to $HEAVY_REF_FIXTURE_DIR/requests and answers from files in
+# the same directory:
+#
+#   heads          -- branch names of the repository, one per line
+#   tags           -- tag names of the repository, one per line
+#   compare_status -- status printed for `gh api .../compare/<sha>...<branch>`
+#                     (missing: the compare call fails)
+#   sha            -- SHA printed for `gh api repos/<repo>/commits/<name>`
+
+set -u
+
+FIX="${HEAVY_REF_FIXTURE_DIR:?HEAVY_REF_FIXTURE_DIR must point at the fixture files}"
+printf '%s\n' "$*" >>"$FIX/requests"
+
+listed() {
+  [ -f "$FIX/$1" ] && grep -qxF -- "$2" "$FIX/$1"
+}
+
+case "$2" in
+  */git/ref/heads/*)
+    listed heads "${2#*/git/ref/heads/}" && exit 0
+    printf 'gh: Not Found (HTTP 404)\n' >&2
+    exit 1
+    ;;
+  */git/ref/tags/*)
+    listed tags "${2#*/git/ref/tags/}" && exit 0
+    printf 'gh: Not Found (HTTP 404)\n' >&2
+    exit 1
+    ;;
+  */compare/*)
+    if [ -f "$FIX/compare_status" ]; then
+      cat "$FIX/compare_status"
+      exit 0
+    fi
+    printf 'gh: Not Found (HTTP 404)\n' >&2
+    exit 1
+    ;;
+  */commits/*)
+    cat "$FIX/sha"
+    ;;
+  *)
+    printf 'unexpected gh call: %s\n' "$*" >&2
+    exit 1
+    ;;
+esac

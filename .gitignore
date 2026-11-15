@@ -139,8 +139,8 @@ dist
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
 
-# jscpd reports
-reports/
+# jscpd and heavy-check reports, only at the root: docs/reports/ is committed
+/reports/
 experiments/out/
 
 # Head model exports (scripts/export-head-model.mjs)
