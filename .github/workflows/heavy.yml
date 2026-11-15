@@ -85,6 +85,16 @@ jobs:
       - name: Install dependencies
         run: npm install
 
+      # Speech datasets fetched by scripts/datasets.mjs (issue 16). The key
+      # changes with the registry, so a changed checksum fetches again.
+      # The cache stays on the runner side: .datasets/ is never uploaded as
+      # an artifact or committed.
+      - name: Restore the speech dataset cache
+        uses: actions/cache@v6
+        with:
+          path: .datasets
+          key: datasets-${{ hashFiles('datasets/registry.json') }}
+
       - name: Run heavy checks
         shell: bash
         env:
