@@ -17,6 +17,7 @@ import {
 } from '../src/index.js';
 import { SPEED_OF_SOUND, tubeFormants } from '../src/acoustics/transfer.js';
 import { Biquad, createNoise } from '../src/acoustics/filters.js';
+import { publishedBandwidth } from '../src/acoustics/losses.js';
 import { LINK_LIPS, LINK_NOSTRILS } from '../src/acoustics/voxel-model.js';
 import {
   closedPortLeak,
@@ -436,10 +437,20 @@ function bandwidths(ipa, reflection) {
   }
   return formants.slice(0, 3);
 }
+// Issue 36 accepts the closed-glottis bandwidths within 35 % of Hawks &
+// Miller (1995) at the same formants (the hawksMiller and error columns).
 for (const ipa of ['ɑ', 'i', 'u']) {
+  const closedGlottis = bandwidths(ipa, 1);
+  const hawksMiller = closedGlottis.map(([frequency]) =>
+    Math.round(publishedBandwidth(frequency))
+  );
   show(`formant and bandwidth, waveguide [${ipa}]`, {
     defaultGlottis: bandwidths(ipa),
-    closedGlottis: bandwidths(ipa, 1),
+    closedGlottis,
+    hawksMiller,
+    error: closedGlottis.map(([, bandwidth], index) =>
+      round(bandwidth / hawksMiller[index] - 1)
+    ),
   });
 }
 
