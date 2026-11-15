@@ -182,7 +182,7 @@ describe('check-status-gate-covers-all-jobs.mjs shipped coverage', () => {
       const expectedJobs = {
         'links.yml': 'covers all 1 other job(s).',
         'security.yml': 'covers all 4 other job(s).',
-        'workflows.yml': 'covers all 5 other job(s).',
+        'workflows.yml': 'covers all 6 other job(s).',
         'example-app.yml': 'covers all 8 other job(s).',
         'heavy.yml': 'covers all 1 other job(s).',
       };

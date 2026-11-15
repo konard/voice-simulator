@@ -101,6 +101,21 @@ describe('complete pipeline requirements', () => {
       ]);
     }
   });
+  // Issue 115: no job read the Python files, so an unused import in a
+  // Blender script went unreported.
+  it('covers the Python files with pinned Ruff', () => {
+    const source = read('.github/workflows/workflows.yml');
+    expect(source).toContain("'**.py'");
+    expect(source).toContain('      - ruff');
+    expect(source).toContain('ruff==0.17.5');
+    expect(source).toContain("git ls-files -z '*.py'");
+    const { 'lint-staged': staged } = JSON.parse(read('package.json'));
+    expect(staged['*.py']).toEqual([
+      'pipx run --no-path-check ruff==0.17.5 format',
+      'pipx run --no-path-check ruff==0.17.5 check',
+    ]);
+    expect(read('ruff.toml')).toContain('line-length = 80');
+  });
   itUnless(sandboxed, noPosixShell)(
     'declares a shell in every tracked script and hook',
     () => {

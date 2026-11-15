@@ -7,6 +7,8 @@ on:
     paths:
       - '.github/**'
       - '**.sh'
+      - '**.py'
+      - 'ruff.toml'
       - '.husky/**'
       - 'scripts/check-ci-workflows.mjs'
       - 'scripts/check-status-gate-covers-all-jobs.mjs'
@@ -21,6 +23,8 @@ on:
     paths:
       - '.github/**'
       - '**.sh'
+      - '**.py'
+      - 'ruff.toml'
       - '.husky/**'
       - 'scripts/check-ci-workflows.mjs'
       - 'scripts/check-status-gate-covers-all-jobs.mjs'
@@ -92,6 +96,28 @@ jobs:
           python3 -m venv "$RUNNER_TEMP/shellcheck-venv"
           "$RUNNER_TEMP/shellcheck-venv/bin/pip" install --quiet --disable-pip-version-check shellcheck-py==0.11.0.1
           git ls-files -z '*.sh' '.husky/*' | xargs -0 "$RUNNER_TEMP/shellcheck-venv/bin/shellcheck"
+
+  # The Python template's lint (ruff check, ruff format --check) for the
+  # Blender scripts and experiments, which no job read before: an unused
+  # import in scripts/blender/head_model.py went unreported (issue 115).
+  # Rules and width come from ruff.toml; the file list is the tracked files.
+  ruff:
+    name: Ruff
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    concurrency:
+      group: check-${{ github.workflow }}-${{ github.ref }}-ruff
+      cancel-in-progress: true
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: Lint and check the formatting of the Python files
+        run: |
+          python3 -m venv "$RUNNER_TEMP/ruff-venv"
+          "$RUNNER_TEMP/ruff-venv/bin/pip" install --quiet --disable-pip-version-check ruff==0.17.5
+          git ls-files -z '*.py' | xargs -0 "$RUNNER_TEMP/ruff-venv/bin/ruff" check --no-cache
+          git ls-files -z '*.py' | xargs -0 "$RUNNER_TEMP/ruff-venv/bin/ruff" format --check --no-cache
 
   # The terminal status job of release.yml keys branch protection; its
   # needs list is hand-maintained, so a job left out of it could fail while
@@ -269,6 +295,7 @@ jobs:
       - status-gate-coverage
       - zizmor
       - shellcheck
+      - ruff
       - artifact-roundtrip
     # actions: read lets the gate list this run's jobs and name the ones
     # GitHub never acquired a runner for.

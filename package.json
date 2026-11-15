@@ -115,6 +115,10 @@
     ],
     ".husky/*": [
       "pipx run --no-path-check --spec shellcheck-py==0.11.0.1 shellcheck"
+    ],
+    "*.py": [
+      "pipx run --no-path-check ruff==0.17.5 format",
+      "pipx run --no-path-check ruff==0.17.5 check"
     ]
   },
   "allowScripts": {
