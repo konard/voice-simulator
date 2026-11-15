@@ -4,10 +4,7 @@
     "sampleRate": 16000,
     "holdOut": 5,
     "screenStep": 0.2,
-    "steps": [
-      0.15,
-      0.05
-    ],
+    "steps": [0.15, 0.05],
     "maxRounds": 6,
     "limit": null,
     "workers": 5,
