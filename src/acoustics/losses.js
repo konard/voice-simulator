@@ -88,6 +88,27 @@ export function viscothermalLoss(frequency, area, shape = 1) {
   );
 }
 
+/**
+ * Sections of a tract whose length is the reference length of
+ * constrictionLoss.
+ */
+export const LOSS_REFERENCE_SECTIONS = 44;
+
+/**
+ * Loss (nepers) of a section of `area` (cm²) and of 1 / 44 of the tract
+ * length to the flow resistance of narrow constrictions (Bernoulli/kinetic
+ * losses), which dominates below a few tenths of a cm². It matches the
+ * resistance rho U / A² of a steady flow U of about 150 cm³/s: a 1.5 cm
+ * long 0.15 cm² constriction (/u/) loses U / (2 A c), about 1.5 % of the
+ * wave amplitude, so the low formants of rounded and close vowels stay
+ * sharp. It does not depend on frequency; the waveguide and the tube
+ * transfer function share it.
+ * @param {number} area
+ */
+export function constrictionLoss(area) {
+  return -Math.log1p(-Math.min(0.3, 0.0001 / Math.max(area, 1e-3) ** 2));
+}
+
 /** Wall area (cm²) of a section of `area` (cm²) and `length` (cm). */
 export function wallSurface(area, length) {
   return 2 * Math.sqrt(Math.PI * Math.max(area, 0)) * length;

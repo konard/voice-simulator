@@ -43,6 +43,8 @@ import {
   WALL_MASS,
   WALL_RESISTANCE,
   WALL_STIFFNESS,
+  LOSS_REFERENCE_SECTIONS,
+  constrictionLoss,
   designLossFilter,
   viscothermalLoss,
   wallSurface,
@@ -50,8 +52,7 @@ import {
 import { DEFAULT_HEAD } from '../head-config.js';
 
 const MIN_AREA = 1e-4;
-/** Sections over which lossFactor gives the attenuation of one section. */
-export const LOSS_REFERENCE_SECTIONS = 44;
+export { LOSS_REFERENCE_SECTIONS };
 /** Piriform fossae: depth (cm), combined opening (cm²), height (cm). */
 export const PIRIFORM_LENGTH = 2;
 export const PIRIFORM_AREA = 0.5;
@@ -60,8 +61,9 @@ export const REST_LENGTH = 16.5;
 
 /**
  * The piriform side branch the waveguide builds: junction section, opening
- * (cm²), number of sections and depth (cm) for a tract of `length` cm, in
- * the form tubeTransfer takes for a branch.
+ * (cm²), number of sections, depth (cm) for a tract of `length` cm and
+ * number of fossae sharing the opening, in the form tubeTransfer takes for
+ * a branch.
  * @param {number} sections
  * @param {number} length Tract length (cm).
  * @param {{vocalTractLength?: number, pharynxWidth?: number}} [head]
@@ -74,21 +76,18 @@ export function piriformBranch(sections, length, head = {}) {
     area: PIRIFORM_AREA * (head.pharynxWidth ?? 1),
     sections: count,
     length: (count * length) / sections,
+    tubes: 2,
   };
 }
 
 /**
  * Attenuation of a reference section (length / LOSS_REFERENCE_SECTIONS)
- * by the flow resistance of narrow constrictions (Bernoulli/kinetic
- * losses), which dominates below a few tenths of a cm². It matches the
- * resistance rho U / A² of a steady flow U of about 150 cm³/s: a 1.5 cm
- * long 0.15 cm² constriction (/u/) loses U / (2 A c), about 1.5 % of the
- * wave amplitude, so the low formants of rounded and close vowels stay
- * sharp. The wall losses are frequency dependent (losses.js).
+ * by the flow resistance of narrow constrictions (constrictionLoss in
+ * losses.js). The wall losses are frequency dependent (losses.js).
  * @param {number} area
  */
 export function lossFactor(area) {
-  return 1 - Math.min(0.3, 0.0001 / Math.max(area, 1e-3) ** 2);
+  return Math.exp(-constrictionLoss(area));
 }
 
 /**
@@ -259,9 +258,13 @@ export class Waveguide {
       }
       this.#setFilter(this.stages, group, K);
       this.wallSurface[group] = surface;
-      // The branch hangs at the junction in front of the last section
-      // (a two-port junction: not the velum or the piriform fossae).
-      let junction = Math.max(1, Math.min(this.n - 1, ends[group]));
+      // The branch hangs at the junction in the middle of the group, where
+      // its pressure is closest to the mean pressure on the wall of the
+      // group (a two-port junction: not the velum or the piriform fossae).
+      let junction = Math.max(
+        1,
+        Math.min(this.n - 1, Math.round((start + ends[group] + 1) / 2))
+      );
       if (junction === this.velumIndex || junction === this.piriform.index) {
         junction = junction > 1 ? junction - 1 : junction + 1;
       }
@@ -297,22 +300,25 @@ export class Waveguide {
   }
 
   /**
-   * The piriform branch is too short for a loss filter: each of its
-   * sections loses the boundary-layer loss of its quarter-wave resonance.
+   * The piriform fossae (two blind tubes of half the opening each) lose
+   * the constriction loss in every section and their boundary-layer loss
+   * of a round trip in one loss filter on the wave reflected at their far
+   * end.
    */
   #configurePiriform() {
     const { piriform } = this;
-    if (!piriform.right.length) {
+    if (!piriform.right.length || !this.rate) {
       return;
     }
     const sectionLength = this.length / this.n;
-    const depth = piriform.right.length * sectionLength;
-    const resonance = SPEED_OF_SOUND / (4 * depth);
-    const shape = this.lossShape * this.wallLoss;
-    // Two fossae of half the opening each.
-    const boundary = viscothermalLoss(resonance, piriform.area / 2, shape);
-    piriform.damping =
-      this.#loss(PIRIFORM_AREA / 2) * Math.exp(-boundary * sectionLength);
+    const area = piriform.area / 2;
+    piriform.damping = this.#loss(area);
+    const K =
+      2 *
+      piriform.right.length *
+      viscothermalLoss(1, area, this.lossShape * this.wallLoss) *
+      sectionLength;
+    Object.assign(piriform.filter, designLossFilter(K, this.rate));
   }
 
   #allocatePiriform(options) {
@@ -324,7 +330,8 @@ export class Waveguide {
       area: branch.area,
       right: new Float64Array(count),
       left: new Float64Array(count),
-      damping: this.#loss(PIRIFORM_AREA / 2),
+      damping: this.#loss(branch.area / 2),
+      filter: { b0: 1, b1: 0, a1: 0, input: 0, output: 0 },
       entering: 0,
     };
   }
@@ -452,14 +459,19 @@ export class Waveguide {
     this.piriform.entering = pressure - fromSide;
   }
 
-  /** Uniform blind tube: plain delay with a rigid (+1) far end. */
+  /** Uniform blind tube: plain delay with a rigid (+1), lossy far end. */
   #propagatePiriform() {
-    const { right, left, damping } = this.piriform;
+    const { right, left, damping, filter } = this.piriform;
     const last = right.length - 1;
     if (last < 0) {
       return;
     }
-    const end = right[last];
+    const end =
+      filter.b0 * right[last] +
+      filter.b1 * filter.input -
+      filter.a1 * filter.output;
+    filter.input = right[last];
+    filter.output = end;
     for (let index = 0; index < last; index++) {
       left[index] = left[index + 1] * damping;
     }
@@ -501,15 +513,20 @@ export class Waveguide {
       const junction = this.wallJunction[group];
       const pressure = impedance * (junctionRight[junction] + left[junction]);
       const surface = this.wallSurface[group];
-      let flow = this.wallFlow[group];
       const volume = this.wallVolume[group];
-      flow +=
-        (step / mass) *
-        (surface * pressure - resistance * flow - stiffness * volume);
+      const area = areas[junction - 1] + areas[junction];
+      // The wall flow U_w lowers the junction pressure by rho c U_w / (a + b)
+      // in the same step, which damps the wall like the resistance does;
+      // both are integrated implicitly so the coupling cannot gain energy.
+      const rate = step / mass;
+      const flow =
+        (this.wallFlow[group] +
+          rate * (surface * pressure - stiffness * volume)) /
+        (1 + rate * (resistance + (surface * impedance) / area));
       this.wallFlow[group] = flow;
       this.wallVolume[group] = volume + step * flow;
       // A flow source -U_w lowers both outgoing waves by U_w / (a + b).
-      const drop = flow / (areas[junction - 1] + areas[junction]);
+      const drop = flow / area;
       junctionRight[junction] -= drop;
       junctionLeft[junction] -= drop;
     }
@@ -624,6 +641,8 @@ export class Waveguide {
       stages.leftOutput.fill(0);
     }
     this.piriform.entering = 0;
+    this.piriform.filter.input = 0;
+    this.piriform.filter.output = 0;
     this.lips.reset();
     this.nostrils.reset();
   }
