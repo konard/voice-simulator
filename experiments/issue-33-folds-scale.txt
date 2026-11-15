@@ -1,0 +1,12 @@
+LF RMS (120 Hz)                 0.32710
+folds raw RMS at 120.3 Hz (cm³/s²) 2.3309e+5
+FOLDS_FLOW_SCALE (current)      0.000001403
+FOLDS_FLOW_SCALE (ideal)        0.0000014033
+
+pitch (Hz)  Q      level against LF (dB)
+      90.2  0.636   -2.22
+     100.4  0.696   -1.33
+     120.3  0.816   -0.00
+     147.5  1.000    1.21
+     200.0  1.387    2.67
+     299.9  2.167    4.20

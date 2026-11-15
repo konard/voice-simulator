@@ -1,0 +1,9 @@
+adduction   200 Pa  300 Pa  400 Pa  500 Pa  600 Pa  800 Pa 1200 Pa
+     0.20      -       -      25ms    20ms    35ms    65ms    30ms
+     0.30      -      20ms    35ms    55ms    45ms    25ms    10ms
+     0.35    180ms    20ms    45ms    45ms    35ms    20ms    10ms
+     0.40     25ms    25ms    45ms    35ms    25ms    15ms     5ms
+     0.45     20ms    40ms    40ms    25ms    20ms    10ms     5ms
+     0.50     20ms    40ms    25ms    20ms    10ms     5ms     0ms
+     0.60     30ms    25ms    15ms     5ms     5ms     0ms     0ms
+     0.80      0ms     0ms     0ms     0ms     0ms     0ms     0ms
