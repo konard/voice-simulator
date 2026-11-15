@@ -28,7 +28,10 @@
  *   and H1*-H2* 3.1 dB (Hanson and Chuang 1999, JASA 106, table X), mostly
  *   through posterior glottal chinks. A 1 mm² chink on the female and child
  *   presets gives 10 dB, the laxer pulse 4-5 dB
- *   (experiments/issue-9-preset-source.mjs); men keep a closed glottis.
+ *   (experiments/issue-9-preset-source.mjs); men keep a closed glottis;
+ * - the membranous vocal folds are about 1.5 cm long in men, 1 cm in women
+ *   and 0.7 cm in children (Titze 1989, JASA 85(4)); foldLength is drawn
+ *   last so that the other values of a seed stay those of earlier versions.
  */
 
 export const HEAD_PRESETS = Object.freeze({
@@ -53,6 +56,7 @@ export const HEAD_PRESETS = Object.freeze({
       breathiness: [0.15, 0.12, 0.06],
       vibrato: [0.25, 0.25, 0.1],
       speechRate: [1, 1, 0.06],
+      foldLength: [1.4, 1.6, 0.05],
     }),
   }),
   female: Object.freeze({
@@ -78,6 +82,7 @@ export const HEAD_PRESETS = Object.freeze({
       speechRate: [1.02, 1.02, 0.06],
       aspirationLevel: [1.3, 1.3, 0.15],
       glottalChink: [1, 1, 0.4],
+      foldLength: [0.9, 1.1, 0.05],
     }),
   }),
   child: Object.freeze({
@@ -103,6 +108,7 @@ export const HEAD_PRESETS = Object.freeze({
       speechRate: [0.92, 0.92, 0.06],
       aspirationLevel: [1.2, 1.2, 0.15],
       glottalChink: [1, 1, 0.4],
+      foldLength: [0.6, 0.8, 0.05],
     }),
   }),
 });

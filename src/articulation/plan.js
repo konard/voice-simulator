@@ -12,6 +12,7 @@
 import { getPhoneme } from '../ipa/inventory.js';
 import { parseIpa } from '../ipa/parse.js';
 import { DEFAULT_HEAD, normalizeHeadConfig } from '../head-config.js';
+import { tensionForPitch } from '../acoustics/folds.js';
 import {
   NEUTRAL_VOWEL,
   consonantTarget,
@@ -53,9 +54,14 @@ export const CHANNELS = Object.freeze({
   lateral: 0.015,
   loudness: 0.018,
   f0: 0.03,
+  lungPressure: 0.04,
+  adduction: 0.015,
+  foldTension: 0.03,
 });
 
 const CHANNEL_NAMES = Object.keys(CHANNELS);
+/** Channels of the fold source, derived from the others in planUtterance. */
+const FOLD_CHANNELS = ['lungPressure', 'adduction', 'foldTension'];
 const VOWEL_CHANNELS = ['height', 'backness', 'rounding', 'rhotic', 'f0'];
 const CONSONANT_SHAPE = [
   'lipArea',
@@ -310,6 +316,9 @@ const DEFAULTS = {
   lateral: 0,
   loudness: 1,
   f0: 120,
+  lungPressure: 800,
+  adduction: 0.5,
+  foldTension: 1,
 };
 
 export { DEFAULTS as CHANNEL_DEFAULTS };
@@ -324,7 +333,11 @@ function fillDefaults(channels, segments, frameRate) {
   for (const segment of segments) {
     const [first, last] = frameRange(segment, frameRate, Infinity);
     for (const name of CHANNEL_NAMES) {
-      if (VOWEL_CHANNELS.includes(name) || CONSONANT_SHAPE.includes(name)) {
+      if (
+        VOWEL_CHANNELS.includes(name) ||
+        CONSONANT_SHAPE.includes(name) ||
+        FOLD_CHANNELS.includes(name)
+      ) {
         continue;
       }
       const value = segment.target?.[name] ?? DEFAULTS[name];
@@ -530,6 +543,41 @@ function addVibrato(values, head, frameRate) {
   }
 }
 
+/**
+ * Lung pressure and adduction of the fold source from the unsmoothed
+ * loudness, voicing, aspiration and glottal closure. The sound level rises
+ * about 9 dB per doubling of the lung pressure (Titze and Sundberg 1992),
+ * so the pressure goes with the amplitude to the power 2/3. The folds close
+ * with voicing and tenseness and open with breathiness, open for aspiration
+ * and press together for a glottal stop.
+ */
+function fillFoldDrive(channels, head) {
+  const { loudness, voicing, aspiration, glottalClosure } = channels;
+  const tense = 0.6 * (head.tenseness - 0.6);
+  const breathy = 0.3 * (head.breathiness - 0.2);
+  const modal = Math.min(1, Math.max(0.25, 0.5 + tense - breathy));
+  for (let frame = 0; frame < loudness.length; frame++) {
+    channels.lungPressure[frame] =
+      head.lungPressure * Math.max(0, loudness[frame]) ** (2 / 3);
+    let adduction = Math.max(0, voicing[frame]) * modal;
+    const open = Math.min(1, Math.max(0, aspiration[frame]));
+    adduction += (Math.min(adduction, 0.2) - adduction) * open;
+    const closed = Math.min(1, Math.max(0, glottalClosure[frame]));
+    channels.adduction[frame] = adduction + (1 - adduction) * closed;
+  }
+}
+
+/**
+ * Fold tension for the final pitch and lung pressure. It follows the f0
+ * channel, which is already smoothed with the same 0.03 s.
+ */
+function fillFoldTension(channels, head) {
+  const { f0, lungPressure, foldTension } = channels;
+  for (let frame = 0; frame < f0.length; frame++) {
+    foldTension[frame] = tensionForPitch(f0[frame], lungPressure[frame], head);
+  }
+}
+
 export { fillArticulation, fillDefaults, fillPitch };
 
 /**
@@ -557,8 +605,12 @@ export function planUtterance(ipa, options = {}) {
   fillArticulation(channels, segments, frameRate);
   applyRegisterGain(channels.loudness, segments, frameRate);
   const toneShape = fillPitch(channels.f0, segments, head, frameRate);
+  fillFoldDrive(channels, head);
   for (const name of CHANNEL_NAMES) {
     const timeConstant = CHANNELS[name] / head.articulationSpeed;
+    if (name === 'foldTension') {
+      continue;
+    }
     if (name === 'f0') {
       smoothPitch(channels.f0, toneShape, timeConstant, frameRate);
     } else {
@@ -566,5 +618,6 @@ export function planUtterance(ipa, options = {}) {
     }
   }
   addVibrato(channels.f0, head, frameRate);
+  fillFoldTension(channels, head);
   return { tokens, segments, head, frameRate, frameCount, duration, channels };
 }

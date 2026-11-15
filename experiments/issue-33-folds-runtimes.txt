@@ -1,0 +1,5 @@
+node v26.13.0, bun 1.4.4, deno 2.9.7 (stable, release, x86_64-unknown-linux-gnu), default tier (studio), 'Hello, world.', seed 1
+/tmp/lf-node.bin vs /tmp/lf-bun.bin: 75558 and 75558 samples, 1999 differ (first 6286), largest difference 1.46e-11
+/tmp/lf-node.bin vs /tmp/lf-deno.bin: 75558 and 75558 samples, 2028 differ (first 66714), largest difference 1.29e-26
+/tmp/folds-node.bin vs /tmp/folds-bun.bin: 75558 and 75558 samples, 3460 differ (first 15539), largest difference 2.24e-8
+/tmp/folds-node.bin vs /tmp/folds-deno.bin: 75558 and 75558 samples, 3756 differ (first 39444), largest difference 2.98e-8
