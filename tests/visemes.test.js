@@ -63,7 +63,8 @@ describe('faceRig', () => {
   it('rounds and narrows the lips for /u/ and spreads them for /i/', () => {
     const u = rigOf('u');
     const i = rigOf('i');
-    expect(u.rounding).toBe(1);
+    // The lips round during the pause before [u] (issue 38): 0.996.
+    expect(u.rounding).toBeGreaterThan(0.99);
     expect(u.protrusion).toBeGreaterThan(0.5);
     expect(u.lipWidth).toBeLessThan(i.lipWidth / 3);
     expect(i.spread).toBeGreaterThan(0.9);

@@ -4,10 +4,14 @@
 
 import { describe, it, expect } from 'test-anywhere';
 import {
+  ARTICULATORS,
+  CHANNEL_DEFAULTS,
+  CONTROL_RATE,
+  channelTargets,
   planUtterance,
   smoothChannel,
-  CONTROL_RATE,
 } from '../src/articulation/plan.js';
+import { approachTargets } from '../src/articulation/dynamics.js';
 import { sampleState, tractShape } from '../src/articulation/tract-shape.js';
 import { vowelTarget } from '../src/articulation/phones.js';
 import { tubeFormants } from '../src/acoustics/transfer.js';
@@ -118,6 +122,171 @@ describe('planUtterance', () => {
     expect(sampleState(plan, plan.segments[1].start + 0.03).velum).toBeLessThan(
       0.3
     );
+  });
+});
+
+/** Time (s) at which `values` first passes `level` (rising or falling). */
+function crossing(values, level, frameRate = CONTROL_RATE, from = 0) {
+  const above = values[from] >= level;
+  for (let index = from + 1; index < values.length; index++) {
+    if (values[index] >= level !== above) {
+      const fraction =
+        (level - values[index - 1]) / (values[index] - values[index - 1]);
+      return (index - 1 + fraction) / frameRate;
+    }
+  }
+  return Number.NaN;
+}
+
+function steps(values) {
+  let time = 0;
+  return values.map(([value, duration]) => {
+    const target = { value, start: time, end: time + duration, strength: 1 };
+    time += duration;
+    return target;
+  });
+}
+
+function consonantOf(plan, symbol) {
+  return plan.segments.find(
+    (segment) => segment.kind === 'consonant' && segment.token.base === symbol
+  );
+}
+
+describe('articulator dynamics', () => {
+  it('approaches a target without overshoot', () => {
+    const values = approachTargets(
+      steps([
+        [0, 0.1],
+        [1, 0.4],
+      ]),
+      0.02,
+      CONTROL_RATE
+    );
+    expect(Math.max(...values)).toBeLessThanOrEqual(1);
+    expect(Math.abs(crossing(values, 0.5) - 0.1 - 0.0336)).toBeLessThan(0.005);
+    expect(Math.abs(crossing(values, 0.9) - 0.1 - 0.078)).toBeLessThan(0.01);
+  });
+
+  it('undershoots a short target', () => {
+    const pulse = steps([
+      [0, 0.1],
+      [1, 0.03],
+      [0, 0.3],
+    ]);
+    expect(
+      Math.max(...approachTargets(pulse, 0.02, CONTROL_RATE))
+    ).toBeLessThan(0.6);
+    expect(
+      Math.max(...approachTargets(pulse, 0.006, CONTROL_RATE))
+    ).toBeGreaterThan(0.8);
+  });
+
+  it('rounds the lips before the vowel', () => {
+    const vowelStart = (plan) =>
+      plan.segments.find((segment) => segment.kind === 'vowel').start;
+    const stu = planUtterance('stu');
+    expect(crossing(stu.channels.rounding, 0.5)).toBeLessThan(
+      vowelStart(stu) - 0.06
+    );
+    const tu = planUtterance('tu');
+    expect(crossing(tu.channels.rounding, 0.5)).toBeGreaterThanOrEqual(
+      consonantOf(tu, 't').start
+    );
+  });
+
+  it('opens the velum before a nasal', () => {
+    const plan = planUtterance('ana');
+    const { velum } = plan.channels;
+    const lead =
+      consonantOf(plan, 'n').start - crossing(velum, Math.max(...velum) / 2);
+    expect(lead).toBeGreaterThanOrEqual(0.03);
+    expect(lead).toBeLessThanOrEqual(0.12);
+  });
+
+  it('lets labials pass and palatals resist', () => {
+    const offset = (ipa, symbol) => {
+      const plan = planUtterance(ipa);
+      const [before, after] = plan.segments.filter(
+        (segment) => segment.kind === 'vowel'
+      );
+      const consonant = consonantOf(plan, symbol);
+      const middle = (consonant.start + consonant.end) / 2;
+      const fraction = (middle - before.end) / (after.start - before.end);
+      const line =
+        before.vowel.height +
+        (after.vowel.height - before.vowel.height) * fraction;
+      return sampleState(plan, middle).height - line;
+    };
+    expect(Math.abs(offset('ipa', 'p'))).toBeLessThan(0.1);
+    expect(offset('iʃa', 'ʃ')).toBeGreaterThanOrEqual(0.2);
+  });
+
+  it('keeps the middle of a transition', () => {
+    const plan = planUtterance('aba');
+    const { frameRate, frameCount, segments } = plan;
+    const middle = Math.round(consonantOf(plan, 'b').end * frameRate);
+    /** Step function of the targets, smoothed with zero phase. */
+    const before = (name, targets) => {
+      const values = new Float32Array(frameCount);
+      for (const { value, start, end } of targets) {
+        values.fill(
+          value,
+          Math.round(start * frameRate),
+          Math.round(end * frameRate)
+        );
+      }
+      return smoothChannel(values, ARTICULATORS[name].timeConstant, frameRate);
+    };
+    const compare = (name, after, targets) => {
+      const old = before(name, targets);
+      const low = Math.min(...old.subarray(0, middle));
+      const high = Math.max(...old.subarray(0, middle));
+      const level = (low + high) / 2;
+      const shift = crossing(after, level) - crossing(old, level);
+      expect(Math.abs(shift)).toBeLessThan(0.01);
+    };
+    // lipArea holds the [b] closure through the vowels (their lips are
+    // free), so its step has the vowels at the open default here.
+    const lipArea = channelTargets(segments, 'lipArea').map((target) => ({
+      ...target,
+      value: target.strength ? target.value : CHANNEL_DEFAULTS.lipArea,
+      strength: 1,
+    }));
+    const { timeConstant, lead } = ARTICULATORS.lipArea;
+    compare(
+      'lipArea',
+      approachTargets(lipArea, timeConstant, frameRate, undefined, {
+        lead,
+        frameCount,
+      }),
+      lipArea
+    );
+    compare(
+      'lipAmount',
+      plan.channels.lipAmount,
+      channelTargets(segments, 'lipAmount')
+    );
+  });
+
+  it('takes measured durations', () => {
+    const tokens = planUtterance('ˈpata .').tokens;
+    const durations = tokens.map((token, index) => 0.05 + 0.02 * index);
+    const plan = planUtterance(tokens, { durations });
+    tokens.forEach((token, index) => {
+      const length = plan.segments
+        .filter((segment) => segment.token === token)
+        .reduce((sum, segment) => sum + segment.end - segment.start, 0);
+      expect(Math.abs(length - durations[index])).toBeLessThan(1e-9);
+    });
+  });
+
+  it('moves the articulators earlier with more coarticulation', () => {
+    const head = (coarticulation) => normalizeHeadConfig({ coarticulation });
+    const start = (plan) => crossing(plan.channels.velum, 0.5);
+    const early = planUtterance('ˈana', { head: head(2) });
+    const late = planUtterance('ˈana', { head: head(0.5) });
+    expect(start(early)).toBeLessThan(start(late) - 0.03);
   });
 });
 

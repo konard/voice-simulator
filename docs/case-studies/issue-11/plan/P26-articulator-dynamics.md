@@ -169,18 +169,24 @@ there only if the value moved by less than 10 %.
 
 ## Acceptance criteria
 
-- [ ] `experiments/issue-11-fit-dynamics.txt` is committed and shows a held-out
+- [x] `experiments/issue-11-fit-dynamics.txt` is committed and shows a held-out
       formant error at least 5 % below the error before the fit, or states that
-      the fit was rejected and why.
-- [ ] `grep -n "CHANNELS\[" src` finds nothing outside `plan.js`, and the README
-      section on articulation names `ARTICULATORS`.
-- [ ] The level and duration of the audit sentence
+      the fit was rejected and why. (Rejected: the held-out error falls from
+      30.59 % to 29.63 %, 3.1 % lower, so `ARTICULATORS` and
+      `COARTICULATION_RESISTANCE` keep their starting values; train error
+      34.90 % to 34.34 % after 6 rounds, 300 evaluations.)
+- [x] `grep -n "CHANNELS\[" src` finds nothing outside `plan.js`, and the README
+      section on articulation names `ARTICULATORS`. (It finds nothing at all;
+      `CHANNELS` stays as a deprecated export of the time constants.)
+- [x] The level and duration of the audit sentence
       (`node experiments/issue-11-audit.mjs`) change by less than 1 dB and less
-      than 3 %.
-- [ ] `planUtterance()` is at most 20 % slower (measure 100 runs of the audit
-      sentence).
-- [ ] The new tests exist and pass on Node.js, Bun and Deno.
-- [ ] `npm run check` and `npm test` pass; a minor changeset is added.
+      than 3 %. (At most 0.57 dB, on tier `low`; duration 3.980 s on both;
+      `experiments/issue-38-audit-compare.txt`.)
+- [x] `planUtterance()` is at most 20 % slower (measure 100 runs of the audit
+      sentence). (5 %: 165.2 ms against 157.0 ms, medians of 30 interleaved
+      rounds of 100 plans; `experiments/issue-38-plan-speed.mjs`.)
+- [x] The new tests exist and pass on Node.js, Bun and Deno.
+- [x] `npm run check` and `npm test` pass; a minor changeset is added.
 
 ## Out of scope
 

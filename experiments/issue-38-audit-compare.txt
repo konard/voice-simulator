@@ -1,0 +1,26 @@
+$ node experiments/issue-38-plan-speed.mjs /tmp/main-wt   # main at 0d5e859
+rounds of 100 plans: 30
+base median: 157.0 ms
+this median: 165.2 ms
+ratio of the medians: 1.052
+median ratio per round: 1.035
+
+$ node experiments/issue-38-audit-compare.mjs /tmp/main-wt   # main at 0d5e859
+root: main
+ipa: ðə ˈkwɪk ˈbɹaʊn ˈfɑks ˈd͡ʒʌmps ˈoʊvɚ ðə ˈleɪzi ˈdɔɡ .
+planUtterance x100: median 162.5 ms of 156 159 163 171 223
+telephone level -17.99 dB  duration 3.980 s
+narrowband level -18.34 dB  duration 3.980 s
+wideband level -18.24 dB  duration 3.980 s
+minimal  level -18.27 dB  duration 3.980 s
+low      level -18.05 dB  duration 3.980 s
+
+$ node experiments/issue-38-audit-compare.mjs .
+root: this branch
+ipa: ðə ˈkwɪk ˈbɹaʊn ˈfɑks ˈd͡ʒʌmps ˈoʊvɚ ðə ˈleɪzi ˈdɔɡ .
+planUtterance x100: median 181.5 ms of 170 170 181 199 244
+telephone level -18.36 dB  duration 3.980 s
+narrowband level -18.70 dB  duration 3.980 s
+wideband level -18.62 dB  duration 3.980 s
+minimal  level -18.67 dB  duration 3.980 s
+low      level -18.62 dB  duration 3.980 s

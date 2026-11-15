@@ -269,12 +269,83 @@ export declare const CONSONANTS: Readonly<Record<string, object>>;
 
 // Articulation
 export declare const CONTROL_RATE: number;
-export declare const CHANNELS: Readonly<Record<string, object>>;
+/** Time constant (s) of every channel of a plan. @deprecated Use ARTICULATORS. */
+export declare const CHANNELS: Readonly<Record<string, number>>;
+/** Dynamics of one articulation channel (seconds). */
+export interface Articulator {
+  /** Time constant of each of the DYNAMICS_ORDER one-pole filters. */
+  timeConstant: number;
+  /** The input at time t is the target active at t + lead. */
+  lead: number;
+  /** Bounds of the time constant for the fit. */
+  min: number;
+  max: number;
+  /** Bounds of the lead for the fit. */
+  leadMin: number;
+  leadMax: number;
+}
+export declare const ARTICULATORS: Readonly<
+  Record<string, Readonly<Articulator>>
+>;
+/** Lead of the lips before a rounded sound, seconds. */
+export declare const ROUNDING_LEAD: number;
+/** Lead of the velum before a nasal sound, seconds. */
+export declare const VELUM_LEAD: number;
+/** Number of cascaded one-pole filters per articulator (2 to 6). */
+export declare const DYNAMICS_ORDER: number;
+/**
+ * How much consonants keep their own tongue-body position against the
+ * line between the neighbouring vowels: `r * own + (1 - r) * line`.
+ */
+export declare const COARTICULATION_RESISTANCE: Readonly<{
+  levels: Readonly<Record<'high' | 'medium' | 'low' | 'none', number>>;
+  phones: Readonly<Record<string, string>>;
+  manners: Readonly<Record<string, string>>;
+  places: Readonly<Record<string, string>>;
+  own: Readonly<Record<string, { height: number; backness: number }>>;
+}>;
+/** One target of an articulation channel; times in seconds. */
+export interface ChannelTarget {
+  value: number;
+  start: number;
+  end: number;
+  /** 1 = own target, 0 = free (follows the line between own targets). */
+  strength: number;
+}
 export declare const TRACT_SECTIONS: number;
 export declare function planUtterance(
   ipa: string | object[],
-  options?: { head?: HeadConfig; language?: string; frameRate?: number }
+  options?: {
+    head?: HeadConfig;
+    language?: string;
+    frameRate?: number;
+    /** Measured duration of every token in seconds (null keeps the plan's). */
+    durations?: (number | null)[];
+    /** Overrides of ARTICULATORS entries, e.g. { velum: { lead: 0.1 } }. */
+    articulators?: Record<string, Partial<Articulator>>;
+    /** Values of the levels of COARTICULATION_RESISTANCE. */
+    resistance?: Partial<Record<'high' | 'medium' | 'low' | 'none', number>>;
+  }
 ): Plan;
+export declare function channelTargets(
+  segments: object[],
+  name: string,
+  options?: {
+    resistance?: Partial<Record<'high' | 'medium' | 'low' | 'none', number>>;
+  }
+): ChannelTarget[];
+export declare function approachTargets(
+  targets: ChannelTarget[],
+  timeConstant: number,
+  frameRate: number,
+  order?: number,
+  options?: {
+    lead?: number;
+    limited?: boolean;
+    frameCount?: number;
+    fallback?: number;
+  }
+): Float32Array;
 export declare function sampleState(
   plan: Plan,
   time: number,
