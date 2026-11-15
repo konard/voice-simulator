@@ -14,7 +14,7 @@ import {
   utteranceTimeline,
 } from '../../../../src/index.js';
 import { exportAudio } from './audio-export.js';
-import { AudioPlayer } from './audio-player.js';
+import { WorkletPlayer } from './worklet-player.js';
 import { readyToPlay, secondsToPlay } from './render-ahead.js';
 
 const TAIL = 0.15;
@@ -69,7 +69,7 @@ export class VoiceEngine {
           type: 'module',
         }));
     this.worker = null;
-    this.player = new AudioPlayer();
+    this.player = new WorkletPlayer();
     this.governor = new LodGovernor({
       tiers: AUDIO_TIERS,
       level: 0,
@@ -210,6 +210,7 @@ export class VoiceEngine {
       return job;
     }
     await this.player.unlock();
+    this.#emit({ audioMode: this.player.mode });
     if (this.job !== job) {
       return job;
     }
@@ -266,6 +267,10 @@ export class VoiceEngine {
       end: () => {
         job.finished = true;
         this.#play(job);
+        if (job.sound) {
+          // The player plays what it still holds, then silence.
+          this.player.end();
+        }
       },
       error: () => {
         this.#emit({ error: message.message });
@@ -406,6 +411,13 @@ export class VoiceEngine {
       // the tab was in the background): continue on a fresh context.
       this.player.recover(job.chunks);
       this.#emit({ audioRecoveries: this.player.recoveries });
+    }
+    if (job.sound && this.player.underruns !== this.status.underruns) {
+      // The worklet counts underruns while it plays, after the last chunk.
+      this.#emit({
+        underruns: this.player.underruns,
+        audioMode: this.player.mode,
+      });
     }
     const time = this.#time(job) ?? 0;
     const clamped = Math.max(0, Math.min(job.plan.duration, time));
