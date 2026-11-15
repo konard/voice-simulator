@@ -19,12 +19,16 @@ import {
   noseShape,
 } from '../articulation/tract-shape.js';
 import { normalizeHeadConfig } from '../head-config.js';
-import { VOWEL_CORRECTIONS_3D } from '../articulation/vowel-calibration.js';
+import {
+  VOWEL_CORRECTIONS_2D,
+  VOWEL_CORRECTIONS_3D,
+} from '../articulation/vowel-calibration.js';
 import { Biquad, createNoise } from './filters.js';
 import { Glottis } from './glottis.js';
 import { VocalFolds } from './folds.js';
 import { SPEED_OF_SOUND } from './transfer.js';
 import { Waveguide } from './waveguide.js';
+import { Fdtd2d } from './fdtd2d.js';
 import { Fdtd3d } from './fdtd3d.js';
 import { createListener } from './microphone.js';
 import { enclosureBounds } from './voxel-model.js';
@@ -63,13 +67,16 @@ const SOURCES = new Map([
   ],
 ]);
 
-/** Solver factories by name: 1D waveguide and 3D FDTD. */
 /**
  * Vowel calibration of each solver (scripts/calibrate-vowels.mjs); the
  * others use the tube-model table.
  */
-const VOWEL_TABLES = new Map([['fdtd3d', VOWEL_CORRECTIONS_3D]]);
+const VOWEL_TABLES = new Map([
+  ['fdtd2d', VOWEL_CORRECTIONS_2D],
+  ['fdtd3d', VOWEL_CORRECTIONS_3D],
+]);
 
+/** Solver factories by name: 1D waveguide, 2D and 3D FDTD. */
 const SOLVERS = new Map([
   [
     'waveguide',
@@ -80,6 +87,7 @@ const SOLVERS = new Map([
       return solver;
     },
   ],
+  ['fdtd2d', (options) => new Fdtd2d(options)],
   ['fdtd3d', (options) => new Fdtd3d(options)],
 ]);
 
@@ -289,7 +297,8 @@ export class VoiceRenderer {
       this.shape.areas,
       this.shape.velumArea,
       this.shape.velumIndex,
-      this.shape.teeth
+      this.shape.teeth,
+      this.shape
     );
     this.solver.setLength?.(this.shape.length);
     this.stepDuration = this.solver.stepDuration(this.shape);

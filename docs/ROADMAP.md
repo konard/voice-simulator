@@ -110,6 +110,8 @@ The AudioWorklet player of [#27](https://github.com/konard/voice-simulator/issue
 
 Physical vocal folds and lungs, noise sources, losses, articulation dynamics, durations and a much larger voice configuration.
 
+The 2D solver of [#37](https://github.com/konard/voice-simulator/issues/37) (`fdtd2d`: `sheet-model.js`, `fdtd2d.js`, the nose and the pouches as 1D lines in `nose-line.js`) is registered and has its own vowel table (`VOWEL_CORRECTIONS_2D`), but no tier uses it: in `experiments/issue-11-fdtd2d-compare.txt` its mean log-spectral distance to `fdtd3d` at 4 to 8 kHz is 13.22 dB against 10.20 dB for the waveguide, although it renders in 0.43 times the time of `high`. Most of the difference comes from the 1D vallecula, whose dip near 5 kHz the 3D voxel pouch hardly shows (`experiments/issue-37-vallecula-zero.mjs`).
+
 The two-mass vocal folds of [#33](https://github.com/konard/voice-simulator/issues/33) are the voice source `source: 'folds'` (`src/acoustics/folds.js`), driven by the plan channels `lungPressure`, `adduction` and `foldTension`; LF stays the default. The measurements are in [experiments/issue-11-folds.txt](../experiments/issue-11-folds.txt) and the section [Voice source](../README.md#voice-source) of the README. The later issues of this roadmap build on these channels and on `VocalFolds`.
 
 | Issue                                                      | Type    | Title                                                                    | Blocked by                                                                                                                                                                         | Requirements     |
