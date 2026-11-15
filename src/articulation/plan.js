@@ -573,10 +573,10 @@ function segmentTarget(segments, index, name, levels) {
  * @param {object[]} segments Segments of a plan (`plan.segments`).
  * @param {string} name Channel name, a key of `ARTICULATORS`.
  * @param {{resistance?: Record<string, number>}} [options] Values of the
- *   levels of `COARTICULATION_RESISTANCE`.
+ *   levels of `COARTICULATION_RESISTANCE` that replace the defaults.
  */
 export function channelTargets(segments, name, options = {}) {
-  const levels = options.resistance ?? COARTICULATION_RESISTANCE.levels;
+  const levels = { ...COARTICULATION_RESISTANCE.levels, ...options.resistance };
   return segments.map((segment, index) => ({
     ...segmentTarget(segments, index, name, levels),
     start: segment.start,
