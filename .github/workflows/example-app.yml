@@ -187,7 +187,7 @@ jobs:
         uses: actions/deploy-pages@v5
 
   desktop-package:
-    name: Package desktop app (${{ matrix.os }})
+    name: Package desktop app
     needs: [wasm-build]
     runs-on: ${{ matrix.os }}
     timeout-minutes: 20

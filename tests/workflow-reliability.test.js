@@ -613,6 +613,7 @@ describe('manual release quality gates', () => {
     releaseMode,
     lintResult = 'success',
     testResult = 'success',
+    rustResult = 'success',
     cancelled = false,
   }) {
     const context = createTestJobContext({
@@ -624,6 +625,7 @@ describe('manual release quality gates', () => {
     context.cancelled = cancelled;
     context.needs.lint.result = lintResult;
     context.needs.test = { result: testResult };
+    context.needs.rust = { result: rustResult };
     return context;
   }
 
@@ -667,6 +669,23 @@ describe('manual release quality gates', () => {
         getManualReleaseContext({
           releaseMode: 'instant',
           testResult: 'failure',
+        })
+      )
+    ).toBe(false);
+  });
+
+  it('blocks an instant manual release when the Rust engine job fails', () => {
+    const workflow = readWorkflow('.github/workflows/release.yml');
+    const instantReleaseJob = getJobBlock(workflow, 'instant-release');
+    const condition = getMultilineIfExpression(instantReleaseJob);
+
+    expect(instantReleaseJob).toContain('        rust,');
+    expect(
+      evaluateWorkflowIf(
+        condition,
+        getManualReleaseContext({
+          releaseMode: 'instant',
+          rustResult: 'failure',
         })
       )
     ).toBe(false);
