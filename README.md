@@ -483,6 +483,11 @@ The image runs `voice-simulator serve` on port 8080 with a health check on
 | `studio`     | fdtd3d    | 0.5 cm voxels | 48 kHz      | 105           |
 | `reference`  | fdtd3d    | 0.4 cm voxels | 48 kHz      | 220           |
 
+The 2D solver `fdtd2d` (`--solver fdtd2d`, `{ solver: 'fdtd2d' }`) is not a
+tier: at 0.6 cm it renders in 0.43 times the time of `high`, but its 4 to
+8 kHz band is further from the 3D solver than the waveguide's (13.22 against
+10.20 dB, `experiments/issue-11-fdtd2d-compare.txt`).
+
 The three narrow-band tiers below `minimal` low-pass the voice with an
 eighth-order Butterworth filter at 3.4, 4.8 and 7 kHz (`bandLimit`), once at
 the solver rate so nothing folds back at the low output rate and once at the
