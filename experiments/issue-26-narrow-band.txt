@@ -1,0 +1,25 @@
+reference aː: [725,1810,2680]
+reference iː: [340,2390,3140]
+reference uː: [370,930,2608]
+telephone aː: [715,1750,2700]
+telephone iː: [355,2400,3025]
+telephone uː: [345,940,2450]
+worst telephone: {"difference":"6.8 %","ipa":"uː","formant":"F1"}
+narrowband aː: [735,1805,2670]
+narrowband iː: [345,2400,3075]
+narrowband uː: [340,870,2590]
+worst narrowband: {"difference":"8.1 %","ipa":"uː","formant":"F1"}
+wideband aː: [725,1785,2665]
+wideband iː: [340,2375,3075]
+wideband uː: [350,905,2585]
+worst wideband: {"difference":"5.4 %","ipa":"uː","formant":"F1"}
+aliasing telephone aː: {"excessDb":0.09,"withoutBandLimitDb":0.08}
+aliasing telephone sː: {"excessDb":-0.98,"withoutBandLimitDb":1.46}
+aliasing telephone ʃː: {"excessDb":-0.71,"withoutBandLimitDb":1.15}
+band limit telephone sː: {"passDb":17.8,"stopDb":-60,"rejectionDb":77.8}
+band limit narrowband sː: {"passDb":18.8,"stopDb":-75.3,"rejectionDb":94.1}
+band limit wideband sː: {"passDb":28.7,"stopDb":-49,"rejectionDb":77.7}
+analysis telephone: {"formants":[510,1488,2665,0],"f0":123.4,"vocalTractLength":16.9903}
+analysis reference: {"formants":[495,1555,2685,4070],"f0":123.5,"vocalTractLength":15.7776}
+analysis reference formantCount 3: {"formants":[495,1555,2685,0],"vocalTractLength":17.1281}
+analysis differences: {"f0":"0.07 %","vocalTractLength":"0.80 %"}

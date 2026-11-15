@@ -24,6 +24,7 @@
 
 import {
   AUDIO_TIERS,
+  BASE_AUDIO_LEVEL,
   OverloadDetector,
   VoiceRenderer,
   benchmarkAudioTiersAsync,
@@ -318,9 +319,13 @@ globalThis.addEventListener('message', (event) => {
   }
   if (message.type === 'benchmark') {
     benchmark(message).catch((error) => {
-      // Stay on the cheapest tier.
+      // Stay on the cheapest full-band tier.
       console.warn('Benchmark failed', error);
-      globalThis.postMessage({ type: 'benchmark', level: 0, loads: [] });
+      globalThis.postMessage({
+        type: 'benchmark',
+        level: BASE_AUDIO_LEVEL,
+        loads: [],
+      });
     });
     return;
   }

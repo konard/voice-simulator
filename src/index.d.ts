@@ -128,6 +128,14 @@ export interface AudioTier {
   sections?: number;
   dx?: number;
   sampleRate: number;
+  /** Control interval in output samples (narrow-band tiers; default 32). */
+  blockSize?: number;
+  /**
+   * Corner (Hz) of the eighth-order Butterworth output low-pass of the
+   * narrow-band tiers (telephone, narrowband, wideband), applied at the
+   * solver rate and again at the output rate.
+   */
+  bandLimit?: number;
   cost: number;
 }
 
@@ -143,7 +151,15 @@ export interface RenderOptions {
   sections?: number;
   solver?: SolverName | string;
   seed?: string | number;
+  /** Output samples between two updates of the tract (default 32). */
   blockSize?: number;
+  /**
+   * With a corner (Hz), the output low-pass is eighth-order Butterworth at
+   * min(bandLimit, 0.45 sampleRate) instead of fourth order at
+   * min(0.45 sampleRate, 20000), at the solver rate and again at the
+   * output rate.
+   */
+  bandLimit?: number;
   head?: HeadConfig;
   dx?: number;
   model?: object;
@@ -173,6 +189,10 @@ export interface SynthesizeOptions {
   sections?: number;
   dx?: number;
   sampleRate?: number;
+  /** Control interval in output samples (default: the tier's, else 32). */
+  blockSize?: number;
+  /** Output band limit (Hz; default: the tier's, else none). */
+  bandLimit?: number;
   output?: OutputMode;
   model?: object;
   /** WebGPU device for the 3D solver (synthesizeAsync, synthesizeStream). */
@@ -653,6 +673,13 @@ export declare function parseGlb(bytes: Uint8Array): {
 export declare const AUDIO_TIERS: readonly AudioTier[];
 /** Name of the tier used when no tier or solver is given ('studio', 3D). */
 export declare const DEFAULT_AUDIO_TIER: string;
+/** Index of a tier in AUDIO_TIERS; throws `Unknown audio tier: <name>`. */
+export declare function audioTierIndex(name: string): number;
+/**
+ * Index of `minimal`: where automatic quality starts. The narrow-band tiers
+ * (telephone, narrowband, wideband) lie below it.
+ */
+export declare const BASE_AUDIO_LEVEL: number;
 export declare const VISUAL_TIERS: readonly VisualTier[];
 export declare class LodGovernor<T extends { cost: number } = AudioTier> {
   constructor(options?: {
@@ -730,7 +757,10 @@ export declare class OverloadDetector {
   readonly load: number;
   record(busy: number, audio: number): boolean;
 }
-/** Load of a tier; stops early once the load exceeds `limit`. */
+/**
+ * Load of a tier; stops early once the load exceeds `limit`. With
+ * `repeats` (default 1) the median of that many measurements.
+ */
 export declare function measureAudioTier(
   tier: AudioTier,
   options?: {
@@ -738,12 +768,16 @@ export declare function measureAudioTier(
     ipa?: string;
     seconds?: number;
     limit?: number;
+    repeats?: number;
   }
 ): number;
 export declare function benchmarkAudioTiers(options?: {
   target?: number;
   head?: HeadConfig;
   seconds?: number;
+  repeats?: number;
+  /** Seconds spent rendering the cheap tiers before measuring (default 0). */
+  warmUp?: number;
 }): {
   level: number;
   tier: AudioTier;
@@ -1434,7 +1468,10 @@ export interface VoiceFeatures {
   f0High: number;
   /** 5-95 % f0 range in semitones. */
   f0Range: number;
-  /** Median F1-F4 (Hz). */
+  /**
+   * Median F1-F4 (Hz). Always four entries; formants beyond `formantCount`
+   * (3 at 8000 Hz) were not measured and are 0.
+   */
   formants: number[];
   formantSpacing: number;
   /** Vocal tract length (cm) from the formant spacing. */
@@ -1452,7 +1489,17 @@ export interface VoiceFeatures {
 export declare function analyzeVoice(
   samples: ArrayLike<number>,
   sampleRate: number,
-  options?: { maxDuration?: number; analysisRate?: number; order?: number }
+  options?: {
+    maxDuration?: number;
+    analysisRate?: number;
+    order?: number;
+    /**
+     * Formants measured and fitted for the formant spacing and the vocal
+     * tract length. Default min(4, floor(0.45 rate / 1000)) where rate is
+     * the rate after resampling: 3 at 8000 Hz, 4 from 11025 Hz.
+     */
+    formantCount?: number;
+  }
 ): VoiceFeatures;
 export interface VoiceMatchOptions {
   /** Restrict the starting person to one preset. */

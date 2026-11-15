@@ -1,0 +1,39 @@
+# Three runs of: node experiments/issue-5-tier-costs.mjs 2
+# with the output-rate band stage of src/acoustics/voice.js.
+# Medians: telephone 0.0255, narrowband 0.0344, wideband 0.0504,
+# minimal 0.0454; relative 0.56, 0.76, 1.11 (wideband not below
+# minimal, so 1 - 0.05 = 0.95). "current" is the cost in lod.js
+# before these runs.
+# run 1 (load average and /proc/loadavg: 3.33 4.64 5.12 6/4062 21315)
+telephone 0.0250 relative cost 0.53 current 0.62
+narrowband 0.0338 relative cost 0.72 current 0.78
+wideband 0.0485 relative cost 1.04 current 0.95
+minimal 0.0468 relative cost 1.00 current 1
+low 0.0761 relative cost 1.63 current 1.6
+medium 0.1277 relative cost 2.73 current 2.6
+high 1.1789 relative cost 25.19 current 10
+ultra 6.2493 relative cost 133.54 current 65
+studio 12.9674 relative cost 277.10 current 105
+reference 30.6310 relative cost 654.54 current 220
+# run 2 (load average and /proc/loadavg: 6.09 4.99 5.19 16/4089 24322)
+telephone 0.0255 relative cost 0.61 current 0.62
+narrowband 0.0344 relative cost 0.83 current 0.78
+wideband 0.0517 relative cost 1.25 current 0.95
+minimal 0.0416 relative cost 1.00 current 1
+low 0.0800 relative cost 1.93 current 1.6
+medium 0.1240 relative cost 2.98 current 2.6
+high 1.1863 relative cost 28.55 current 10
+ultra 7.3994 relative cost 178.07 current 65
+studio 12.7146 relative cost 305.98 current 105
+reference 31.6484 relative cost 761.64 current 220
+# run 3 (load average and /proc/loadavg: 6.08 5.22 5.25 3/4068 28577)
+telephone 0.0278 relative cost 0.61 current 0.62
+narrowband 0.0354 relative cost 0.78 current 0.78
+wideband 0.0504 relative cost 1.11 current 0.95
+minimal 0.0454 relative cost 1.00 current 1
+low 0.0772 relative cost 1.70 current 1.6
+medium 0.1271 relative cost 2.80 current 2.6
+high 1.1549 relative cost 25.45 current 10
+ultra 7.1832 relative cost 158.31 current 65
+studio 12.7021 relative cost 279.94 current 105
+reference 30.8943 relative cost 680.86 current 220
