@@ -6,12 +6,17 @@
 
 import { describe, it, expect } from 'test-anywhere';
 import {
+  constrictionLoss,
   designLossFilter,
   lossFilterGain,
   publishedBandwidth,
   viscothermalLoss,
 } from '../src/acoustics/losses.js';
-import { Waveguide, piriformBranch } from '../src/acoustics/waveguide.js';
+import {
+  Waveguide,
+  lossFactor,
+  piriformBranch,
+} from '../src/acoustics/waveguide.js';
 import { SPEED_OF_SOUND, tubeSpectrum } from '../src/acoustics/transfer.js';
 import { impulseSpectrum, resonances } from '../src/acoustics/analysis.js';
 import { STORY_AREAS, STORY_LENGTHS } from '../src/articulation/vowel-space.js';
@@ -103,6 +108,86 @@ describe('viscothermal loss', () => {
         ]);
       }
     }
+  });
+
+  it('keeps the loss filter finite and passive for any loss', () => {
+    // From a wide tract to a nose so narrow that no zero gives enough
+    // high-frequency loss, at the rates of the narrow-band to high tiers.
+    for (const rate of [8000, 22050, 48000, 110000, 200000]) {
+      for (let exponent = -9; exponent <= 0.5; exponent += 0.25) {
+        const filter = designLossFilter(10 ** exponent, rate);
+        let largest = lossFilterGain(filter, rate / 2, rate);
+        for (let frequency = 1; frequency < rate / 2; frequency *= 1.1) {
+          largest = Math.max(largest, lossFilterGain(filter, frequency, rate));
+        }
+        const finite = Object.values(filter).every(Number.isFinite);
+        expect([rate, exponent, finite, largest <= 1 + 1e-12]).toEqual([
+          rate,
+          exponent,
+          true,
+          true,
+        ]);
+      }
+    }
+  });
+
+  it('gives the waveguide the constriction loss of the tube transfer', () => {
+    for (const area of [1e-4, 0.01, 0.05, 0.15, 0.5, 3]) {
+      expect(
+        Math.abs(lossFactor(area) - Math.exp(-constrictionLoss(area)))
+      ).toBeLessThan(1e-12);
+    }
+  });
+});
+
+describe('silent nose', () => {
+  it('skips a closed, silent nose without changing the sound', () => {
+    const solver = (keepAwake) => {
+      const waveguide = new Waveguide({ sections: 44, head: HEAD });
+      const areas = Array.from({ length: 44 }, (_, i) => 2 + Math.sin(i / 5));
+      waveguide.setShape(areas, 0.3, 20);
+      waveguide.setLength(17);
+      return { waveguide, areas, keepAwake };
+    };
+    const skipping = solver(false);
+    const awake = solver(true);
+    let difference = 0;
+    let peak = 0;
+    let nasalAfterReopening = 0;
+    let silentWhileClosed = [];
+    for (let index = 0; index < 60000; index++) {
+      // Open, closed long enough for the nose to die away, open again.
+      const open = index < 5000 || index >= 50000;
+      const outputs = [skipping, awake].map(
+        ({ waveguide, areas, keepAwake }) => {
+          if (index === 5000 || index === 50000) {
+            waveguide.setShape(areas, open ? 0.3 : 0, 20);
+          }
+          if (keepAwake) {
+            // Never reaches the silence check.
+            waveguide.noseCheck = 0;
+          }
+          return waveguide.step(index % 200 === 0 ? 1 : 0, 0, 0);
+        }
+      );
+      if (index === 49999) {
+        silentWhileClosed = [skipping, awake].map(
+          ({ waveguide }) => waveguide.noseSilent
+        );
+      }
+      difference = Math.max(difference, Math.abs(outputs[0] - outputs[1]));
+      peak = Math.max(peak, Math.abs(outputs[1]));
+      if (index > 50000) {
+        nasalAfterReopening = Math.max(
+          nasalAfterReopening,
+          Math.abs(skipping.waveguide.noseOutput)
+        );
+      }
+    }
+    expect(silentWhileClosed).toEqual([true, false]);
+    expect(skipping.waveguide.noseSilent).toBe(false);
+    expect(difference / peak).toBeLessThan(1e-9);
+    expect(nasalAfterReopening).toBeGreaterThan(1e-4 * peak);
   });
 });
 

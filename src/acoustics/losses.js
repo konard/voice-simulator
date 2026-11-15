@@ -201,12 +201,18 @@ function fitShelf(a, grid, rate) {
 }
 
 const shelves = new Map();
+/** The last rate asked for and its shape (the waveguide asks again and again). */
+let lastRate = NaN;
+let lastShape = null;
 
 /**
  * Pole and loss slopes of the best first-order shelf at a sampling rate,
  * cached per 500 Hz of rate (the waveguide rate follows the tract length).
  */
 function shelfShape(sampleRate) {
+  if (sampleRate === lastRate) {
+    return lastShape;
+  }
   const rate = Math.max(500, Math.round(sampleRate / 500) * 500);
   let shape = shelves.get(rate);
   if (!shape) {
@@ -239,10 +245,29 @@ function shelfShape(sampleRate) {
     // solved exactly at the two ends of the grid (designLossFilter).
     shape.low = Math.cos((2 * Math.PI * grid[0]) / rate);
     shape.high = Math.cos((2 * Math.PI * grid.at(-1)) / rate);
+    // Loss per unit K at both ends, and the loss of the pole there.
+    const h = (c) => (shape.a + c) / (1 + shape.a ** 2 + 2 * shape.a * c);
+    shape.slopeLow = shape.C + shape.D * h(shape.low);
+    shape.slopeHigh = shape.C + shape.D * h(shape.high);
+    shape.poleLow = zeroLoss(shape.a, shape.low);
+    shape.poleHigh = zeroLoss(shape.a, shape.high);
     shelves.set(rate, shape);
   }
+  lastRate = sampleRate;
+  lastShape = shape;
   return shape;
 }
+
+/** Loss (nepers) of a zero at -b at a frequency with cos w = c. */
+function zeroLoss(b, c) {
+  return -0.5 * Math.log(1 + b * b + 2 * b * c);
+}
+
+/**
+ * Largest |zero| of a loss filter: a zero at -1 would remove the Nyquist
+ * frequency, beyond which no first-order shelf adds high-frequency loss.
+ */
+const ZERO_LIMIT = 0.999;
 
 /**
  * First-order filter y = b0 x + b1 x[n-1] - a1 y[n-1] whose gain follows
@@ -255,25 +280,36 @@ function shelfShape(sampleRate) {
  * rate for the smallest largest relative error of the loss (below 12 %,
  * experiments/issue-36-loss-check.mjs), and K only moves its zero and
  * gain, solved so that the loss is exact at both ends of the band.
+ *
+ * With r = exp(-2 (wanted loss difference of the two ends)), a zero at -b
+ * meets both ends when 1 + b² + 2 b c_low = r (1 + b² + 2 b c_high), a
+ * quadratic whose roots multiply to 1: its root inside the unit circle is
+ * the zero. A duct so narrow that no zero up to ZERO_LIMIT gives enough
+ * high-frequency loss (K above about 0.02 at 45 kHz, met only in a closed
+ * nose of a lossy head) keeps the exact low-end loss and a passive,
+ * finite filter with its zero at ZERO_LIMIT.
  * @param {number} K Loss in nepers at 1 Hz (it grows with sqrt(f)).
  * @param {number} sampleRate
  * @returns {{b0: number, b1: number, a1: number}}
  */
 export function designLossFilter(K, sampleRate) {
-  const { a, C, D, low, high } = shelfShape(sampleRate);
-  /** Loss (nepers) of a zero at -b at a frequency with cos w = c. */
-  const zeroLoss = (b, c) => -0.5 * Math.log(1 + b * b + 2 * b * c);
-  const slope = (b, c) => -(b + c) / (1 + b * b + 2 * b * c);
-  const h = (c) => (a + c) / (1 + a * a + 2 * a * c);
+  const { a, low, high, slopeLow, slopeHigh, poleLow, poleHigh } =
+    shelfShape(sampleRate);
   // Loss the fitted model wants at both ends, less that of the pole.
-  const wantLow = K * (C + D * h(low)) + zeroLoss(a, low);
-  const wantHigh = K * (C + D * h(high)) + zeroLoss(a, high);
-  // Newton steps from the small-K zero for the loss difference of the ends.
-  let zero = a - D * K;
-  for (let iteration = 0; iteration < 4; iteration++) {
-    const error =
-      zeroLoss(zero, low) - zeroLoss(zero, high) - wantLow + wantHigh;
-    zero -= error / (slope(zero, low) - slope(zero, high));
+  const wantLow = K * slopeLow + poleLow;
+  const wantHigh = K * slopeHigh + poleHigh;
+  const target = wantLow - wantHigh;
+  // (1 - r) b² + 2 q b + (1 - r) = 0, solved without cancellation (q = 0
+  // only when r = 1 and the two ends are the same frequency).
+  const gap = -Math.expm1(-2 * target);
+  const q = low - (1 - gap) * high;
+  const root = Math.sqrt(q * q - gap * gap);
+  let zero = q * q > gap * gap ? -gap / (q + Math.sign(q) * root) : NaN;
+  if (!(Math.abs(zero) <= ZERO_LIMIT)) {
+    // The loss difference falls as the zero moves from -1 to 1: take the
+    // end of the bracket the wanted difference lies beyond.
+    const error = zeroLoss(ZERO_LIMIT, low) - zeroLoss(ZERO_LIMIT, high);
+    zero = error > target ? ZERO_LIMIT : -ZERO_LIMIT;
   }
   const b0 = Math.exp(zeroLoss(zero, low) - wantLow);
   return { b0, b1: b0 * zero, a1: a };

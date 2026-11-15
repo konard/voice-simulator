@@ -1,0 +1,22 @@
+# SOURCE=<worktree of main e113bd5>/src RUNS=15 node experiments/issue-36-render-speed.mjs, 7 processes
+this checkout: 4.64 s of audio, median render 0.630 s over 15 runs
+main: 4.64 s of audio, median render 0.606 s over 15 runs
+slowdown: 4.0 % (limit 8 %)
+this checkout: 4.64 s of audio, median render 0.705 s over 15 runs
+main: 4.64 s of audio, median render 0.687 s over 15 runs
+slowdown: 2.7 % (limit 8 %)
+this checkout: 4.64 s of audio, median render 0.676 s over 15 runs
+main: 4.64 s of audio, median render 0.657 s over 15 runs
+slowdown: 2.8 % (limit 8 %)
+this checkout: 4.64 s of audio, median render 0.679 s over 15 runs
+main: 4.64 s of audio, median render 0.633 s over 15 runs
+slowdown: 7.2 % (limit 8 %)
+this checkout: 4.64 s of audio, median render 0.741 s over 15 runs
+main: 4.64 s of audio, median render 0.719 s over 15 runs
+slowdown: 3.0 % (limit 8 %)
+this checkout: 4.64 s of audio, median render 0.597 s over 15 runs
+main: 4.64 s of audio, median render 0.576 s over 15 runs
+slowdown: 3.7 % (limit 8 %)
+this checkout: 4.64 s of audio, median render 0.601 s over 15 runs
+main: 4.64 s of audio, median render 0.595 s over 15 runs
+slowdown: 1.1 % (limit 8 %)
