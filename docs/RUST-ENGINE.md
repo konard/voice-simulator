@@ -56,8 +56,8 @@ copies `target/wasm32-unknown-unknown/release/voice_simulator_wasm.wasm` to
 `src/engine/voice-simulator.wasm` and prints its size and SHA-256:
 
 ```text
-src/engine/voice-simulator.wasm: 80451 bytes
-SHA-256: f393631dca612d1e9427f694c33458c539e72ee8ffc046f27ff182967458fa88
+src/engine/voice-simulator.wasm: 80360 bytes
+SHA-256: 112fa0eaf28f858d8d7036bfa1f7fae410407bfe057940b1ed4e810c001d7377
 WASM_SIZE_BUDGET: 81920 bytes
 ```
 

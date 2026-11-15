@@ -26,7 +26,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 /**
  * Largest allowed size of src/engine/voice-simulator.wasm in bytes: the
  * size measured when the budget was last raised, rounded up to the next
- * 16 384 bytes: 80 451 bytes with Rust 1.100.0, once the waveguide voice
+ * 16 384 bytes: 80 360 bytes with Rust 1.100.0, once the waveguide voice
  * renderer of issue 22 joined the resampler of issue 27. Raise it only with
  * the newly measured size in the commit message.
  */

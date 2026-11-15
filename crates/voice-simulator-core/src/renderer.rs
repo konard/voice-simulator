@@ -19,7 +19,7 @@ use crate::config;
 use crate::frame;
 use crate::glottis::{GlottalControl, Glottis, GlottisOptions};
 use crate::listener::Listener;
-use crate::math::max;
+use crate::math::{self, max};
 use crate::solver::Solver;
 use crate::stages::{NoiseSources, OutputStage};
 use crate::waveguide::{PiriformBranch, Waveguide, WaveguideOptions};
@@ -57,11 +57,13 @@ struct Settings {
     frication_level: f64,
 }
 
+/// `value` as a whole number in `low..=high` (`low` is never negative, so
+/// `floor` tests for a whole number).
 fn count(value: f64, low: usize, high: usize) -> Result<usize, RenderError> {
     if value.is_finite()
         && value >= low as f64
         && value <= high as f64
-        && value == libm::trunc(value)
+        && value == math::floor(value)
     {
         Ok(value as usize)
     } else {
