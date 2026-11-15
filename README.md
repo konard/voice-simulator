@@ -12,15 +12,37 @@ a pressure wave travelling through the 3D shape of a parametric low-poly head
 - **Text to IPA** for English, Russian, Hindi and Chinese, with automatic
   language detection per word (`textToIpa`). Numbers, dates, times, money,
   units and abbreviations are read out per language (`normalizeText`).
+  English heteronyms get the reading that fits the sentence (`I will read`
+  ɹid, `I read it yesterday` ɹɛd, `record the record` ɹəˈkɔɹd ˈɹɛkɚd) by
+  written rules on the neighbouring words. Russian prepositions and the
+  particles `не`, `ни`, `же`, `ли`, `бы` are spoken as part of the word they
+  lean on, with a reduced vowel and the voicing of the next sound (`из дома`
+  ɪz ˈdomə, `на работе` nə rɐˈbotʲə, `как же` kaɡ ʐɨ); each stays its own
+  word for highlighting. Mandarin applies tone sandhi and erhua: 花儿 and
+  `huār` are one syllable, `xwaɻ˥`.
+- **English weak forms**: function words are weak and unstressed inside a
+  phrase (`a cup of tea for you` ə ˈkʌp əv ˈti fɚ ju, `the end` ði ˈɛnd,
+  `I have to go` aɪ ˈhæf tə ˈɡoʊ) and keep their strong form alone and at
+  the end of a phrase (`Yes, I can.`). The table is `WEAK_FORMS`;
+  `weakForms: false` (CLI `--strong-forms`) turns them off.
 - **English accents**: General American, Southern British, Australian and
   Indian English (`accent: 'en-GB'`, or `lang: 'en-GB'`).
 - **Punctuation prosody**: commas, semicolons, dashes, parentheses, quotes,
   periods, exclamations, questions and ellipses each have their own pause,
   final pitch movement and lengthening; questions with a question word
-  fall, yes/no questions rise, exclamations are higher and louder.
+  fall, yes/no questions rise, exclamations are higher and louder. Hindi
+  question words fall wherever they stand, and sentence-initial क्या is
+  read as the yes/no particle (`क्या तुम आओगे?` rises) unless the next word
+  makes it mean "what" (`क्या हुआ?` falls).
+- **Lexical tones**: every level of a tone written with Chao tone letters is
+  a pitch target, so the Mandarin third tone `˨˩˦` dips before it rises.
 - **Word and syllable timeline**: `utteranceTimeline` (also in
   `synthesize`) tells when every word and syllable is spoken; the app
   highlights the current word and syllable in the text and the IPA.
+  Numbers, dates, times, money and units stay one word of the text with
+  `spoken` set to what is said (`25` → `twenty five`); their syllables
+  carry the spoken letters, and the part of the token they read
+  (`partStart`/`partEnd`), so `3/4/2024` lights 3, then 4, then 2024.
 - **Smooth articulation**: IPA becomes a time plan of tract shapes with
   coarticulated transitions, glottal source and pitch contour.
 - **Physical acoustics** with two interchangeable solvers:
@@ -98,10 +120,10 @@ names)` a whole utterance, and `vrmVowelBinds(gltfJson)` reads the morph
   tract and turn the frication jet into a sibilant source; the piriform
   fossae add their side-branch antiresonance in both solvers, the
   vallecula in the 3D solver.
-- **Head and voice editor**: 32 parameters, everything that changes the
+- **Head and voice editor**: 34 parameters, everything that changes the
   sound (tract length, pharynx, mouth, jaw, nose, pitch, breathiness,
   jitter, shimmer, vibrato, declination, accent strength, lengthening,
-  pauses, wall loss, nasal coupling, frication level, ...). Every page
+  pauses, wall loss, nasal losses, nasal coupling, frication level, ...). Every page
   refresh starts from a new random seed; `?seed=` makes it reproducible.
 - **Male, female and child presets** for random heads (`preset`), with f0
   and formants fitted to the men's, women's and children's means of
@@ -191,6 +213,9 @@ import {
 
 textToIpa('Привет, мир'); // { lang: 'ru', ipa: 'prʲɪˈvʲet | mʲir', ... }
 textToIpa('water', { lang: 'en', accent: 'en-GB' }).ipa; // 'ˈwɔːtə'
+textToIpa('a cup of tea for you', { lang: 'en' }).ipa; // 'ə ˈkʌp əv ˈti fɚ ju'
+// weakForms: false keeps every English word in its stressed dictionary form.
+textToIpa('I can do it', { lang: 'en', weakForms: false }).ipa; // 'ˈaɪ ˈkæn ˈdu ˈɪt'
 
 const head = randomHeadConfig(42); // a different person for every seed
 const result = synthesize('Hello world', { head, tier: 'medium' });
@@ -385,6 +410,7 @@ npm run example:desktop:package
 ```
 .
 ├── bin/voice-simulator.js # CLI
+├── datasets/              # Speech dataset registry (data is fetched, never committed)
 ├── Dockerfile             # Server image
 ├── docs/case-studies/     # Research, requirements and plans
 ├── examples/
@@ -671,6 +697,7 @@ Configured in `.prettierrc`:
 | `bun test --timeout 30000`           | Run tests with Bun and a 30s per-test cap             |
 | `npm test`                           | Run tests with Node.js and a 30s per-test cap         |
 | `npm run test:heavy`                 | Run the slow tests of `tests/heavy/` (CONTRIBUTING)   |
+| `npm run datasets -- list`           | List, fetch or verify speech datasets (CONTRIBUTING)  |
 | `bun run lint`                       | Check code with ESLint                                |
 | `bun run lint:fix`                   | Fix ESLint issues automatically                       |
 | `bun run format`                     | Format code with Prettier                             |

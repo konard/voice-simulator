@@ -9,6 +9,9 @@ import {
   BOUNDARIES,
   intonationPhrases,
   phraseContour,
+  pitchTargets,
+  TONE_POINT_POSITIONS,
+  tonePitch,
 } from '../src/articulation/prosody.js';
 import { textToIpa } from '../src/g2p/index.js';
 import { normalizeHeadConfig } from '../src/head-config.js';
@@ -80,6 +83,14 @@ describe('punctuation intonation', () => {
     const wh = finalF0(plan('What is red?'));
     expect(wh < yesNo * 0.85).toBe(true);
     expect(Math.abs(wh - statement) / statement < 0.05).toBe(true);
+  });
+
+  it('ends a Hindi particle question high', () => {
+    const utterance = plan('क्या तुम आओगे?', 'hi');
+    const last = vowels(utterance).at(-1);
+    const start = f0At(utterance, last.start + 0.02);
+    const end = f0At(utterance, last.end - 0.02);
+    expect(end >= start * 1.15).toBe(true);
   });
 
   it('keeps the pitch up before a comma', () => {
@@ -157,5 +168,52 @@ describe('punctuation intonation', () => {
   it('keeps Mandarin tones and still reads the punctuation pauses', () => {
     const utterance = plan('你好，世界。', 'zh');
     expect(pauses(utterance)[0].boundary).toBe('comma');
+  });
+});
+
+describe('lexical tones', () => {
+  it('returns one pitch target per tone level', () => {
+    const utterance = planUtterance('ma˨˩˦', { head: HEAD, language: 'zh' });
+    const [target] = pitchTargets(utterance.segments, HEAD);
+    expect(target.points.length).toBe(3);
+    expect(Math.min(...target.points)).toBe(target.points[1]);
+    expect(target.from).toBe(target.points[0]);
+    expect(target.to).toBe(target.points[2]);
+  });
+
+  it('turns every tone level into a pitch around the base', () => {
+    const pitches = tonePitch([2, 1, 4], 100, 2);
+    expect(pitches.map((pitch) => Math.round(pitch * 10) / 10)).toEqual([
+      89.1, 79.4, 112.2,
+    ]);
+  });
+
+  it('keeps a single tone level level', () => {
+    expect(tonePitch([5], 100, 2)).toEqual([
+      100 * 2 ** (4 / 12),
+      100 * 2 ** (4 / 12),
+    ]);
+  });
+
+  it('places the low point of a three-level tone before the middle', () => {
+    expect(TONE_POINT_POSITIONS[3]).toEqual([0, 0.4, 1]);
+  });
+
+  it('keeps two pitch targets for syllables without a tone', () => {
+    const utterance = planUtterance('ˈmama', { head: HEAD, language: 'en' });
+    for (const target of pitchTargets(utterance.segments, HEAD)) {
+      expect(target.points).toEqual([target.from, target.to]);
+    }
+  });
+});
+
+describe('English weak forms in the plan', () => {
+  it('shortens function words', () => {
+    const text = 'a cup of tea for you';
+    const weak = textToIpa(text).ipa;
+    const strong = textToIpa(text, { weakForms: false }).ipa;
+    const duration = (ipa) =>
+      planUtterance(ipa, { head: HEAD, language: 'en' }).duration;
+    expect(duration(weak)).toBeLessThan(0.9 * duration(strong));
   });
 });

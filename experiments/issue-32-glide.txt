@@ -1,0 +1,27 @@
+# node experiments/issue-32-glide.mjs, final analysis (time warp of issue 32, high-pass at 400 Hz, fractional lag, upper quartile):
+150 to 100 Hz in 0.5 s at 16000 Hz: hnr 30.00 dB, f0 124.9 Hz
+100 to 150 Hz in 0.5 s at 16000 Hz: hnr 30.00 dB, f0 125.3 Hz
+126 to 114 Hz in 1 s at 48000 Hz: hnr 30.00 dB, f0 120.0 Hz
+120 to 120 Hz in 1 s at 16000 Hz: hnr 30.00 dB, f0 120.0 Hz
+250 to 180 Hz in 0.5 s at 16000 Hz: hnr 30.00 dB, f0 214.8 Hz
+
+# Earlier measurements, with the time warp but at YIN's integer lag, full band, median over frames:
+150 to 100 Hz in 0.5 s at 16000 Hz: hnr 30.00 dB, f0 124.9 Hz
+100 to 150 Hz in 0.5 s at 16000 Hz: hnr 28.47 dB, f0 125.3 Hz
+126 to 114 Hz in 1 s at 48000 Hz: hnr 30.00 dB, f0 120.0 Hz
+120 to 120 Hz in 1 s at 16000 Hz: hnr 30.00 dB, f0 120.0 Hz
+250 to 180 Hz in 0.5 s at 16000 Hz: hnr 25.61 dB, f0 214.8 Hz
+
+# Same (integer lag) with the sign written in the issue (read t + slope t² / (2 f0)), measured by flipping the sign of 'warp' in straighten():
+150 to 100 Hz in 0.5 s at 16000 Hz: hnr 14.04 dB, f0 124.9 Hz
+100 to 150 Hz in 0.5 s at 16000 Hz: hnr 14.14 dB, f0 125.3 Hz
+126 to 114 Hz in 1 s at 48000 Hz: hnr 28.19 dB, f0 120.0 Hz
+120 to 120 Hz in 1 s at 16000 Hz: hnr 30.00 dB, f0 120.0 Hz
+250 to 180 Hz in 0.5 s at 16000 Hz: hnr 15.31 dB, f0 214.8 Hz
+
+# Same script on the analysis of main (no straightening):
+150 to 100 Hz in 0.5 s at 16000 Hz: hnr 19.35 dB, f0 124.9 Hz
+100 to 150 Hz in 0.5 s at 16000 Hz: hnr 19.27 dB, f0 125.3 Hz
+126 to 114 Hz in 1 s at 48000 Hz: hnr 29.19 dB, f0 120.0 Hz
+120 to 120 Hz in 1 s at 16000 Hz: hnr 30.00 dB, f0 120.0 Hz
+250 to 180 Hz in 0.5 s at 16000 Hz: hnr 19.69 dB, f0 214.8 Hz

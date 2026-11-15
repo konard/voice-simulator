@@ -1,0 +1,15 @@
+{"text":"क्या तुम आओगे?","ipa":"kjaː t̪ʊm aːoːɡeː ?","lastVowelStart":114,"lastVowelEnd":147}
+{"text":"क्या आप ठीक हैं?","ipa":"kjaː aːp ʈʰiːk ɦɛ̃ː ?","lastVowelStart":114,"lastVowelEnd":146}
+{"text":"क्या यह आपकी किताब है?","ipa":"kjaː jəɦ aːpkiː kɪt̪aːb ɦɛː ?","lastVowelStart":113,"lastVowelEnd":145}
+{"text":"क्या वह घर पर है?","ipa":"kjaː ʋəɦ ɡʱəɾ pəɾ ɦɛː ?","lastVowelStart":114,"lastVowelEnd":147}
+{"text":"तुम आओगे?","ipa":"t̪ʊm aːoːɡeː ?","lastVowelStart":116,"lastVowelEnd":148}
+{"text":"तुम क्या खाओगे?","ipa":"t̪ʊm kjaː kʰaːoːɡeː ↘ ?","lastVowelStart":107,"lastVowelEnd":92}
+{"text":"यह क्या है?","ipa":"jəɦ kjaː ɦɛː ↘ ?","lastVowelStart":108,"lastVowelEnd":93}
+{"text":"तुम्हारा नाम क्या है?","ipa":"t̪ʊmɦaːɾaː naːm kjaː ɦɛː ↘ ?","lastVowelStart":107,"lastVowelEnd":91}
+{"text":"क्या हुआ?","ipa":"kjaː ɦʊaː ↘ ?","lastVowelStart":110,"lastVowelEnd":94}
+{"text":"क्या बात है?","ipa":"kjaː baːt̪ ɦɛː ↘ ?","lastVowelStart":108,"lastVowelEnd":93}
+{"text":"आप कहाँ जा रहे हैं?","ipa":"aːp kəɦãː d͡ʒaː ɾəɦeː ɦɛ̃ː ↘ ?","lastVowelStart":106,"lastVowelEnd":91}
+{"text":"आप कल कहाँ जा रहे हैं?","ipa":"aːp kəl kəɦãː d͡ʒaː ɾəɦeː ɦɛ̃ː ↘ ?","lastVowelStart":106,"lastVowelEnd":91}
+{"text":"वह आदमी कौन है?","ipa":"ʋəɦ aːd̪miː kɔːn ɦɛː ↘ ?","lastVowelStart":107,"lastVowelEnd":92}
+{"text":"तुम इतनी देर से क्यों आए?","ipa":"t̪ʊm ɪt̪niː d̪eːɾ seː kjõː aːeː ↘ ?","lastVowelStart":107,"lastVowelEnd":91}
+{"text":"क्या आओगे?","ipa":"kjaː aːoːɡeː ↘ ?","lastVowelStart":109,"lastVowelEnd":93}

@@ -11,35 +11,76 @@ const STRESS_MARKS = /^[ˈˌ]/u;
 
 const painted = new WeakMap();
 
-/** Source ranges of one timeline word: one per syllable when spelled. */
-function wordRanges(word, index) {
-  const spelled =
-    word.syllables.length > 0 &&
-    word.syllables.every((syllable) => syllable.sourceStart !== undefined);
-  if (!spelled) {
-    return [
-      {
-        start: word.sourceStart,
-        end: word.sourceEnd,
-        word: index,
-        syllable: null,
-      },
-    ];
+const every = (word, field) =>
+  word.syllables.length > 0 &&
+  word.syllables.every((syllable) => syllable[field] !== undefined);
+
+/**
+ * Ranges of the parts of a verbalised token (`3`, `4` and `2024` of
+ * `3/4/2024`), each with the first and last syllable that read it. Text
+ * of the token outside every part is lit with the word only.
+ */
+function partRanges(word, index) {
+  const parts = new Map();
+  word.syllables.forEach((syllable, position) => {
+    const key = `${syllable.partStart}:${syllable.partEnd}`;
+    const part = parts.get(key) ?? {
+      start: syllable.partStart,
+      end: syllable.partEnd,
+      word: index,
+      syllable: position,
+    };
+    part.lastSyllable = position;
+    parts.set(key, part);
+  });
+  const ranges = [...parts.values()].sort((a, b) => a.start - b.start);
+  const gap = (start, end) =>
+    start < end ? [{ start, end, word: index, syllable: null }] : [];
+  return [
+    ...gap(word.sourceStart, ranges[0].start),
+    ...ranges,
+    ...gap(ranges.at(-1).end, word.sourceEnd),
+  ];
+}
+
+/**
+ * Source ranges of one timeline word: one per syllable when spelled, one
+ * per part when the token is verbalised by parts (a date, a time, a sum),
+ * else the whole word.
+ * @param {object} word A word of `utteranceTimeline`.
+ * @param {number} index Its index in the timeline.
+ * @returns {{start: number, end: number, word: number, syllable: number|null, lastSyllable?: number}[]}
+ */
+export function wordRanges(word, index) {
+  if (every(word, 'sourceStart')) {
+    return word.syllables.map((syllable, position) => ({
+      start: syllable.sourceStart,
+      end: syllable.sourceEnd,
+      word: index,
+      syllable: position,
+    }));
   }
-  return word.syllables.map((syllable, position) => ({
-    start: syllable.sourceStart,
-    end: syllable.sourceEnd,
-    word: index,
-    syllable: position,
-  }));
+  if (every(word, 'partStart')) {
+    return partRanges(word, index);
+  }
+  return [
+    {
+      start: word.sourceStart,
+      end: word.sourceEnd,
+      word: index,
+      syllable: null,
+    },
+  ];
 }
 
 /**
  * Split `text` into pieces; spoken pieces carry their word and syllable
- * index, everything else (spaces, punctuation) has `word: null`.
+ * index, everything else (spaces, punctuation) has `word: null`. A part
+ * of a verbalised token read by several syllables also carries the index
+ * of its last syllable (`lastSyllable`).
  * @param {string} text The text passed to `textToIpa`.
  * @param {{words: object[]}|null} timeline
- * @returns {{text: string, word: number|null, syllable: number|null}[]}
+ * @returns {{text: string, word: number|null, syllable: number|null, lastSyllable?: number}[]}
  */
 export function textPieces(text, timeline) {
   const ranges = (timeline?.words ?? [])
@@ -51,9 +92,13 @@ export function textPieces(text, timeline) {
     .sort((a, b) => a.start - b.start);
   const pieces = [];
   let cursor = 0;
-  const push = (end, word, syllable) => {
+  const push = (end, word, syllable, lastSyllable) => {
     if (end > cursor) {
-      pieces.push({ text: text.slice(cursor, end), word, syllable });
+      const piece = { text: text.slice(cursor, end), word, syllable };
+      if (lastSyllable !== undefined && lastSyllable !== syllable) {
+        piece.lastSyllable = lastSyllable;
+      }
+      pieces.push(piece);
       cursor = end;
     }
   };
@@ -67,7 +112,7 @@ export function textPieces(text, timeline) {
         ? range.word
         : null;
     push(range.start, inside, null);
-    push(range.end, range.word, range.syllable);
+    push(range.end, range.word, range.syllable, range.lastSyllable);
   }
   push(text.length, null, null);
   return pieces;
@@ -91,6 +136,32 @@ export function ipaPieces(timeline) {
       }
       pieces.push({ text: syllable.ipa, word: index, syllable: position });
     });
+  });
+  return pieces;
+}
+
+/**
+ * What a verbalised word says, syllable by syllable: the `spoken` letters
+ * of each syllable, with a space between spoken words (`twen`, `ty`, ` `,
+ * `five` for 25). Empty for words read as written.
+ * @param {object} word A word of `utteranceTimeline`.
+ * @returns {{text: string, syllable: number|null}[]}
+ */
+export function spokenPieces(word) {
+  if (!word?.spoken) {
+    return [];
+  }
+  const pieces = [];
+  let previous = null;
+  word.syllables.forEach((syllable, position) => {
+    if (!syllable.spoken) {
+      return;
+    }
+    if (previous !== null && syllable.spokenWord !== previous) {
+      pieces.push({ text: ' ', syllable: null });
+    }
+    pieces.push({ text: syllable.spoken, syllable: position });
+    previous = syllable.spokenWord;
   });
   return pieces;
 }
@@ -157,10 +228,13 @@ export function paintHighlight(root, frame) {
   painted.set(root, { current });
   for (const span of root.querySelectorAll('[data-word]')) {
     const word = current !== null && Number(span.dataset.word) === current.word;
+    const first = Number(span.dataset.syllable);
+    const last = Number(span.dataset.syllableLast ?? first);
     const syllable =
       word &&
       span.dataset.syllable !== undefined &&
-      Number(span.dataset.syllable) === current.syllable;
+      current.syllable >= first &&
+      current.syllable <= last;
     span.classList.toggle('word-current', word);
     span.classList.toggle('syllable-current', syllable);
     if (word) {

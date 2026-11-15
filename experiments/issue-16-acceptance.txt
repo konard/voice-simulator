@@ -1,0 +1,38 @@
+null checksums in datasets/registry.json: 0
+
+$ node scripts/datasets.mjs verify
+exit 0
+fleurs-en ok
+fleurs-ru ok
+fleurs-hi ok
+fleurs-zh ok
+aishell3-test-index ok
+librivox-aesop-en-22 ok
+librivox-aesop-ru-01 ok
+
+$ node scripts/datasets.mjs fetch fleurs-ru --limit 3 --cache $TMP/fresh
+exit 0
+fleurs-ru audio/000000.wav downloaded 875578 bytes
+fleurs-ru audio/000001.wav downloaded 476218 bytes
+fleurs-ru audio/000002.wav downloaded 756538 bytes
+
+$ node scripts/datasets.mjs fetch fleurs-ru --limit 3 --cache $TMP/fresh
+exit 0
+fleurs-ru audio/000000.wav cached 875578 bytes
+fleurs-ru audio/000001.wav cached 476218 bytes
+fleurs-ru audio/000002.wav cached 756538 bytes
+
+$ node scripts/datasets.mjs fetch librivox-aesop-en-22 --registry $TMP/wrong-sha.json --cache $TMP/cache
+exit 4
+datasets: https://www.archive.org/download/aesop_fables_volume_one_librivox/fables_01_22_aesop_64kb.mp3: expected 027d586cd3815ddc9bf8b4d97f00e392b5a60b5341472dc8fd8634ad65f020e3, got 227d586cd3815ddc9bf8b4d97f00e392b5a60b5341472dc8fd8634ad65f020e3; the file was deleted
+
+$ node scripts/datasets.mjs verify --registry $TMP/non-commercial.json
+exit 3
+datasets: nc-sample: licence refused: "CC-BY-NC-4.0" is not in allowedDatasetLicences of scripts/policy-denylist.json
+
+datasetFindings for the non-commercial variant:
+datasets/registry.json:151 dataset nc-sample: licence refused: "CC-BY-NC-4.0" is not in allowedDatasetLicences of scripts/policy-denylist.json
+
+$ git status --short .datasets
+exit 0
+

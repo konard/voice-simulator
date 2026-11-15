@@ -22,6 +22,7 @@ import {
   roundHead,
 } from '../head-config.js';
 import { synthesize } from '../synthesize.js';
+import { BREATHINESS_RD, BREATHINESS_REFERENCE } from '../acoustics/glottis.js';
 
 /** Sentence rendered to compare the simulator with the recording. */
 export const MATCH_TEXT =
@@ -30,6 +31,15 @@ export const MATCH_TEXT =
 const MATCH_PRESETS = ['male', 'female', 'child'];
 const SIZES = 11;
 const semitones = (value) => 12 * Math.log2(value);
+
+/**
+ * Change of tenseness that keeps the LF pulse of a head's breathiness the
+ * same as at the reference breathiness (lfParameters: Rd falls by 3 per
+ * unit of tenseness and rises by BREATHINESS_RD per unit of breathiness).
+ */
+function breathinessShift(head) {
+  return (BREATHINESS_RD / 3) * (head.breathiness - BREATHINESS_REFERENCE);
+}
 
 /**
  * Each control moves one head parameter to match one feature. `slope` is
@@ -64,17 +74,27 @@ const CONTROLS = [
     scale: 0.5,
   },
   {
-    key: 'tenseness',
-    feature: 'h1h2',
-    slope: -37,
-    maxStep: 0.15,
+    // HNR falls by 16 to 20 dB per unit of breathiness in the presets
+    // (experiments/issue-32-voice-sensitivity.txt), little below 0.25 where
+    // the breath noise is under the jitter floor and 25 to 30 dB per unit
+    // above it. The wide step reaches 0.8 from a preset in three steps
+    // (experiments/issue-32-recover-breathiness.txt).
+    key: 'breathiness',
+    feature: 'hnr',
+    slope: -18,
+    maxStep: 0.25,
     scale: 3,
   },
   {
-    key: 'breathiness',
-    feature: 'hnr',
-    slope: -2,
-    maxStep: 0.1,
+    // Breathiness lengthens the open phase too, so tenseness is matched as
+    // the tenseness of the same pulse at the reference breathiness; this
+    // entry follows breathiness, whose new value fromX reads.
+    key: 'tenseness',
+    feature: 'h1h2',
+    toX: (value, head) => value - breathinessShift(head),
+    fromX: (value, head) => value + breathinessShift(head),
+    slope: -37,
+    maxStep: 0.15,
     scale: 3,
   },
 ];
@@ -238,7 +258,7 @@ function updateHead(head, target, history, controls) {
     );
     const parameter = getHeadParameter(control.key);
     next[control.key] = clamp(
-      (control.fromX ?? identity)(last.x + step),
+      (control.fromX ?? identity)(last.x + step, next),
       parameter.min,
       parameter.max
     );
@@ -287,7 +307,7 @@ export function* matchVoiceSteps(samples, sampleRate, options = {}) {
     }
     for (const control of controls) {
       history.get(control.key).push({
-        x: (control.toX ?? identity)(head[control.key]),
+        x: (control.toX ?? identity)(head[control.key], head),
         y: featureY(control, rendered),
       });
     }

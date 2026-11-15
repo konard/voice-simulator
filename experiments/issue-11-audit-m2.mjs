@@ -18,6 +18,13 @@ import {
 import { SPEED_OF_SOUND, tubeFormants } from '../src/acoustics/transfer.js';
 import { Biquad, createNoise } from '../src/acoustics/filters.js';
 import { LINK_LIPS, LINK_NOSTRILS } from '../src/acoustics/voxel-model.js';
+import {
+  closedPortLeak,
+  murmurResonance,
+  portAreas,
+  referenceResonances,
+} from './issue-84-port-3d.mjs';
+import { leakSpectrum } from './issue-84-leak-spectrum.mjs';
 
 const show = (label, value) =>
   console.log(`${label}: ${JSON.stringify(value)}`);
@@ -34,15 +41,16 @@ const rootMeanSquare = (values, from = 0, to = values.length) => {
 // --- P20 -----------------------------------------------------------------
 
 // 1. The source alone: level of the breath noise against the pulse train.
-// Two glottises with the same seed get the same pulses; their difference
-// is the noise that `breathiness` adds.
+// Two glottises with the same seed and breathiness get the same pulses (the
+// pulse shape depends on breathiness since issue 32); one gets the noise
+// and the other none, so their difference is the noise that `breathiness`
+// adds.
 const RATE = 48000;
 const control = { f0: 120, voicing: 1, aspiration: 0, closure: 0, loudness: 1 };
 function sourceNoise(breathiness) {
-  const make = (value) =>
-    new Glottis({ seed: 1, tenseness: 0.6, breathiness: value });
-  const clean = make(0);
-  const breathy = make(breathiness);
+  const make = () => new Glottis({ seed: 1, tenseness: 0.6, breathiness });
+  const clean = make();
+  const breathy = make();
   const white = createNoise('m2:noise');
   const band = new Biquad();
   band.bandpass(800, 0.5, RATE);
@@ -50,7 +58,7 @@ function sourceNoise(breathiness) {
   const noise = new Float64Array(RATE);
   for (let index = 0; index < RATE; index++) {
     const sample = band.process(white());
-    pulses[index] = clean.step(1 / RATE, control, sample);
+    pulses[index] = clean.step(1 / RATE, control, 0);
     noise[index] = breathy.step(1 / RATE, control, sample) - pulses[index];
   }
   return decibels(rootMeanSquare(noise) / rootMeanSquare(pulses));
@@ -343,6 +351,32 @@ for (const kind of ['vowel', 'consonant']) {
     kind
   );
   transferGains('fdtd3d dx 1', (head) => new Fdtd3d({ head, dx: 1 }), kind);
+}
+
+// 5b. Issue 84, step 4: the velar port and the nostrils of the 3D solver
+// for a static [m] against the areas they should have (effective area =
+// sum of conductance * dx² over the links), the lowest resonance of [m]
+// (impulse response, 0.25 s: frequency Hz, gain dB, -3 dB bandwidth Hz)
+// against the tube model with the nasal branch and the waveguide, and the
+// nostril flow of [a] with a closed port (RMS of the impulse response, and
+// nostrils minus lips in dB per band).
+show(
+  '[m] lowest resonance, references',
+  referenceResonances(normalizeHeadConfig({}))
+);
+for (const dx of [1, 0.6, 0.5]) {
+  const { solver, shape, result } = portAreas(dx, [0.3, 0.8, 1.3]);
+  for (const row of result) {
+    show(`fdtd3d dx ${dx} velar port and nostrils`, row);
+  }
+  show(`fdtd3d dx ${dx} [m] lowest resonance`, murmurResonance(solver, shape));
+  const leak = closedPortLeak(dx);
+  show(`fdtd3d dx ${dx} [a] closed port`, {
+    lips: round(leak.lips, 4),
+    nostrils: round(leak.nostrils, 4),
+    ratio: round(leak.nostrils / leak.lips),
+    bands: leakSpectrum(dx),
+  });
 }
 
 // --- P24 -----------------------------------------------------------------

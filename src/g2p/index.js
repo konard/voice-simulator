@@ -9,12 +9,21 @@
  * `|` (dash), `(` `)` and `"`, and questions opening with a question word
  * get a falling `↘` contour. Every word keeps `sourceStart`/`sourceEnd`
  * (UTF-16 offsets into the input) and the `original` text it came from.
+ * Words are pronounced one at a time; then Russian clitics join the word
+ * they lean on (see `russian-clitics.js`): a preposition or `не`, `ни`
+ * joins the next word (`из дома` ɪz ˈdomə), the particles `же`, `ли`, `бы`
+ * join the previous one (`как же` kaɡ ʐɨ). Each written word stays one
+ * item of `words`.
+ * English function words (`of`, `to`, `can`, `you`, ...) are weak and
+ * unstressed inside a phrase and keep their strong form alone and at its
+ * end (see `weak-forms.js`).
  */
 
 import { englishWordToIpa } from './english.js';
 import { hindiWordToIpa, normalizeDevanagariDigits } from './hindi.js';
 import { chineseSyllables, chineseWordToIpa, isPinyin } from './chinese.js';
 import { russianWordToIpa } from './russian.js';
+import { joinRussianClitics } from './russian-clitics.js';
 import { VERBALIZERS, normalizeText } from './normalize.js';
 import {
   adaptEnglishWord,
@@ -22,6 +31,7 @@ import {
   isNonRhotic,
   resolveAccent,
 } from './accents.js';
+import { weakenFunctionWords } from './weak-forms.js';
 
 /** Supported languages with display names and sample sentences. */
 export const LANGUAGES = Object.freeze({
@@ -109,14 +119,19 @@ function wordLanguage(word, preferred) {
   return script ?? preferred;
 }
 
-function pronounceWord(word, language) {
-  const result = WORD_PRONOUNCERS[language](word);
+/**
+ * Pronounce one word. The `context` (words around it, see
+ * `wordContexts()`) lets English choose between the readings of a
+ * heteronym; other pronouncers ignore it.
+ */
+function pronounceWord(word, language, context) {
+  const result = WORD_PRONOUNCERS[language](word, context);
   return { text: word, lang: language, ...result };
 }
 
 /** Pronounce a normalised word item in its accent. */
-function pronounceItem(item, source, accent) {
-  return pronounceSource(item, source).map((word) => {
+function pronounceItem(item, source, accent, context) {
+  return pronounceSource(item, source, context).map((word) => {
     if (word.lang !== 'en' || !word.ipa) {
       return word;
     }
@@ -126,10 +141,13 @@ function pronounceItem(item, source, accent) {
 }
 
 /** Pronounce a normalised word item, keeping its source range. */
-function pronounceSource(item, source) {
-  const { sourceStart, sourceEnd, token } = item;
+function pronounceSource(item, source, context) {
+  const { sourceStart, sourceEnd, token, partStart, partEnd } = item;
   const original = source.slice(sourceStart, sourceEnd);
   const range = { sourceStart, sourceEnd, original, token };
+  if (partStart !== undefined && partEnd !== undefined) {
+    Object.assign(range, { partStart, partEnd });
+  }
   if (item.ipa) {
     const extra = item.letter ? { letter: true } : {};
     return [
@@ -145,7 +163,7 @@ function pronounceSource(item, source) {
   }
   return [
     {
-      ...pronounceWord(item.say ?? item.text, item.lang),
+      ...pronounceWord(item.say ?? item.text, item.lang, context),
       text: item.text,
       ...range,
     },
@@ -189,6 +207,54 @@ function splitHanRun(item, range) {
     .filter((word) => word.ipa);
 }
 
+/** Lowercased spelling of a normalised word, as context for its neighbours. */
+function contextWord(item) {
+  return item.text.toLowerCase().replaceAll('’', "'");
+}
+
+/**
+ * The context of every word item of `normalized`: the words before it
+ * (nearest first) and after it in the same clause, and all words of its
+ * sentence. A clause ends at any break; a sentence ends at a break whose
+ * symbol ends in `.`, `!`, `?` or `…`.
+ * @param {object[]} normalized items from `normalizeText()`
+ * @returns {({before: string[], after: string[], sentence: string[]}|undefined)[]}
+ */
+function wordContexts(normalized) {
+  const contexts = [];
+  // Every context of a sentence shares one array, which is complete once
+  // the sentence ends.
+  let sentence = [];
+  let clause = [];
+  const closeClause = () => {
+    clause.forEach(({ index }, position) => {
+      contexts[index] = {
+        before: clause
+          .slice(0, position)
+          .reverse()
+          .map(({ word }) => word),
+        after: clause.slice(position + 1).map(({ word }) => word),
+        sentence,
+      };
+    });
+    clause = [];
+  };
+  normalized.forEach((item, index) => {
+    if (item.kind !== 'break') {
+      const word = contextWord(item);
+      clause.push({ index, word });
+      sentence.push(word);
+      return;
+    }
+    closeClause();
+    if ('.!?…'.includes(item.symbol.at(-1))) {
+      sentence = [];
+    }
+  });
+  closeClause();
+  return contexts;
+}
+
 function addBreak(items, item) {
   const { symbol } = item;
   const last = items.at(-1);
@@ -212,8 +278,12 @@ function addBreak(items, item) {
 }
 
 /**
- * Questions that start with a question word (who, what, ...) fall at the
- * at the end: mark them with `↘` before the `?`.
+ * Mark questions that fall at the end with `↘` before the `?`. Each
+ * language decides through its verbaliser's `questionFalls` hook; without
+ * one, a question falls when a question word (who, what, ...) is among its
+ * first two words, as in English and Russian. Hindi keeps question words in
+ * place (usually just before the verb) and uses क्या both as "what" and as
+ * the yes/no particle, so its hook looks at the whole sentence.
  */
 function markQuestions(items) {
   let sentence = [];
@@ -223,11 +293,12 @@ function markQuestions(items) {
       continue;
     }
     if (item.ipa === '?') {
-      const opening = sentence.slice(0, 2);
-      const wh = opening.some((word) =>
-        VERBALIZERS[word.lang]?.isWhWord(word.text.toLowerCase())
-      );
-      if (wh) {
+      const lang = sentence[0]?.lang;
+      const texts = sentence.map((word) => word.text.toLowerCase());
+      const fall = VERBALIZERS[lang]?.questionFalls
+        ? VERBALIZERS[lang].questionFalls(texts)
+        : texts.slice(0, 2).some((text) => VERBALIZERS[lang]?.isWhWord(text));
+      if (fall) {
         item.ipa = '↘ ?';
       }
     }
@@ -276,10 +347,13 @@ function splitLanguageTag(tag) {
 /**
  * Convert text to IPA.
  * @param {string} text
- * @param {{lang?: string, accent?: string}} [options]
+ * @param {{lang?: string, accent?: string, weakForms?: boolean}} [options]
  *   `lang` is 'auto', 'en', 'ru', 'hi' or 'zh', or a regional tag such as
  *   'en-GB'. `accent` picks an English accent (`en-US`, `en-GB`, `en-AU`,
  *   `en-IN`; see `accents.js`) and wins over the region of `lang`.
+ *   `weakForms` (default `true`) speaks English function words in their
+ *   weak, unstressed form inside a phrase (`a cup of tea for you`
+ *   ə ˈkʌp əv ˈti fɚ ju); `false` keeps every word in its dictionary form.
  * @returns {{lang: string, accent: string|null, ipa: string, words: object[]}}
  */
 export function textToIpa(text, options = {}) {
@@ -295,12 +369,17 @@ export function textToIpa(text, options = {}) {
     lang,
     wordLanguage: (word) => wordLanguage(word, lang),
   });
-  for (const item of normalized) {
+  const contexts = wordContexts(normalized);
+  normalized.forEach((item, index) => {
     if (item.kind === 'break') {
       addBreak(items, item);
     } else {
-      items.push(...pronounceItem(item, source, accent));
+      items.push(...pronounceItem(item, source, accent, contexts[index]));
     }
+  });
+  joinRussianClitics(items);
+  if (options.weakForms !== false) {
+    weakenFunctionWords(items, accent);
   }
   markQuestions(items);
   linkRs(items, accent);

@@ -147,3 +147,6 @@ experiments/out/
 /models/
 __pycache__/
 *.pyc
+
+# Speech dataset cache (scripts/datasets.mjs); never committed
+.datasets/

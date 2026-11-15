@@ -312,6 +312,61 @@ describe('check-policy: files, licences and exceptions', () => {
   });
 });
 
+describe('check-policy: datasets', () => {
+  run('reports dataset registry errors and tracked dataset cache files', () => {
+    const entry = {
+      id: 'nc-corpus',
+      title: 'A non-commercial corpus',
+      languages: ['en'],
+      licence: 'CC-BY-NC-4.0',
+      licenceUrl: 'https://example.org/licence',
+      licenceQuote: 'Non-commercial use only.',
+      licenceChecked: new Date(Date.UTC(2026, 10, 15))
+        .toISOString()
+        .slice(0, 10),
+      redistribution: false,
+      citation: 'Nobody (2026).',
+      source: {
+        kind: 'files',
+        files: [
+          {
+            name: 'a.wav',
+            url: 'https://example.org/a.wav',
+            size: 4,
+            sha256: 'a'.repeat(64),
+          },
+        ],
+      },
+    };
+    withFixture(
+      {
+        'datasets/registry.json': `${JSON.stringify({ schema: 1, datasets: [entry] }, null, 2)}\n`,
+        '.datasets/nc-corpus/a.wav': 'RIFF',
+      },
+      (root) => {
+        const findings = checkPolicy(root, policyList()).findings.filter(
+          (item) => item.rule === 'dataset'
+        );
+        expect(
+          findings.map(({ file, line, name }) => `${file}:${line} ${name}`)
+        ).toEqual([
+          '.datasets/nc-corpus/a.wav:1 .datasets/nc-corpus/a.wav',
+          'datasets/registry.json:5 nc-corpus',
+        ]);
+        expect(findings[1].message).toContain('licence refused');
+      }
+    );
+  });
+
+  run('reports a dataset registry that is not JSON', () => {
+    withFixture({ 'datasets/registry.json': '{ "schema": 1,' }, (root) => {
+      const findings = checkPolicy(root, policyList()).findings;
+      expect(findings.map((item) => item.rule)).toEqual(['dataset']);
+      expect(findings[0].file).toBe('datasets/registry.json');
+    });
+  });
+});
+
 describe('check-policy parsers', () => {
   it('reads Cargo tables with target prefixes and renames', () => {
     const toml = [

@@ -187,17 +187,17 @@ presets (steps 4 and 6), not the tests.
 
 ## Acceptance criteria
 
-- [ ] `node experiments/issue-11-audit.mjs` prints `hnr` values for
+- [x] `node experiments/issue-11-audit.mjs` prints `hnr` values for
       `breathiness` 0, 0.5 and 1 that fall at each step and differ by at least 8
       dB between 0 and 1, and `h1h2` values that rise by at least 4 dB.
-- [ ] `node experiments/issue-11-audit-m2.mjs` prints the source noise at -40 ±
+- [x] `node experiments/issue-11-audit-m2.mjs` prints the source noise at -40 ±
       2 dB for `breathiness` 0.2 and -10 ± 2 dB for 1.
-- [ ] The same script prints an `hnr` of at least 20 dB for the steady `[aː]`
+- [x] The same script prints an `hnr` of at least 20 dB for the steady `[aː]`
       with `breathiness` 0.
-- [ ] Audio rendered with the default head differs from the audio before this
+- [x] Audio rendered with the default head differs from the audio before this
       change by less than 1 dB in RMS level and less than 0.5 dB in `h1h2`.
-- [ ] The new tests exist and pass on Node.js, Bun and Deno.
-- [ ] `npm run check` and `npm test` pass; a patch changeset is added.
+- [x] The new tests exist and pass on Node.js, Bun and Deno.
+- [x] `npm run check` and `npm test` pass; a patch changeset is added.
 
 ## Out of scope
 

@@ -426,6 +426,9 @@ const UNITS = {
   млрд: [['милли+ард', 'милли+арда', 'милли+ардов'], 'm'],
 };
 
+/** English scale keys (`$5m`) read with the Russian scale words. */
+const SCALE_UNITS = { thousand: 'тыс', million: 'млн', billion: 'млрд' };
+
 const FRACTIONS = [
   null,
   ['дес+ятая', 'дес+ятых', 'дес+ятых'],
@@ -580,46 +583,59 @@ export const RUSSIAN = {
     return number.words;
   },
   time(hours, minutes) {
+    const order = ['hour', 'minute'];
     if (minutes === 0) {
-      return [
-        ...russianCardinal(hours),
-        ruPlural(hours, ['ч+ас', 'ч+аса', 'час+ов']),
-      ];
+      const hour = ruPlural(hours, ['ч+ас', 'ч+аса', 'час+ов']);
+      return { order, hour: [...russianCardinal(hours), hour], minute: [] };
     }
-    return [
-      ...russianCardinal(hours),
-      ...(minutes < 10 ? ['ноль'] : []),
-      ...russianCardinal(minutes, 'f'),
-    ];
+    return {
+      order,
+      hour: russianCardinal(hours),
+      minute: [
+        ...(minutes < 10 ? ['ноль'] : []),
+        ...russianCardinal(minutes, 'f'),
+      ],
+    };
   },
   date({ year, month, day }, { prev }) {
-    const words = [...russianOrdinal(day, dayForm(prev)), MONTHS[month - 1]];
-    return year ? [...words, ...russianOrdinal(year, 'm.gen'), 'г+ода'] : words;
+    return {
+      order: ['day', 'month', 'year'],
+      day: russianOrdinal(day, dayForm(prev)),
+      month: [MONTHS[month - 1]],
+      year: year ? [...russianOrdinal(year, 'm.gen'), 'г+ода'] : [],
+    };
   },
+  /** Parts as in English: `amount` or `major` and `minor`, `scale`, `currency`. */
   money(number, code, scale) {
     const [forms, gender, minorForms, minorGender] = CURRENCIES[code] ?? [
       [code, code, code],
       'm',
     ];
     if (scale) {
-      return [...this.unit(number, scale), forms[2]];
+      const { amount, unit } = this.unit(number, SCALE_UNITS[scale] ?? scale);
+      const order = ['amount', 'scale', 'currency'];
+      return { order, amount, scale: unit, currency: [forms[2]] };
     }
     const { integer, fraction } = number;
     if (fraction && fraction.length === 2 && minorForms) {
       const minor = Number(fraction);
-      const words = [
-        ...russianCardinal(integer, gender),
-        ruPlural(integer, forms),
-      ];
-      return minor
-        ? [
-            ...words,
-            ...russianCardinal(minor, minorGender),
-            ruPlural(minor, minorForms),
-          ]
-        : words;
+      return {
+        order: ['major', 'currency', 'minor'],
+        major: russianCardinal(integer, gender),
+        currency: [ruPlural(integer, forms)],
+        minor: minor
+          ? [
+              ...russianCardinal(minor, minorGender),
+              ruPlural(minor, minorForms),
+            ]
+          : [],
+      };
     }
-    return [...countWords(number, gender), countForm(number, forms)];
+    return {
+      order: ['amount', 'currency'],
+      amount: countWords(number, gender),
+      currency: [countForm(number, forms)],
+    };
   },
   unit(number, unit) {
     const entry = UNITS[unit.toLowerCase()];
@@ -627,10 +643,11 @@ export const RUSSIAN = {
       return null;
     }
     const [forms, gender] = entry;
-    return [
-      ...countWords(number, gender),
-      ...countForm(number, forms).split(' '),
-    ];
+    return {
+      order: ['amount', 'unit'],
+      amount: countWords(number, gender),
+      unit: countForm(number, forms).split(' '),
+    };
   },
   hasUnit(unit, number) {
     const key = unit.toLowerCase();

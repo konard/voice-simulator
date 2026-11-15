@@ -308,6 +308,7 @@ const PARAMETER_LABELS_RU = {
   pauseLength: 'Длина пауз',
   articulationSpeed: 'Скорость артикуляции',
   wallLoss: 'Потери в стенках',
+  nasalLoss: 'Потери в носу',
   nasalCoupling: 'Носовая связь',
   fricationLevel: 'Уровень шума фрикативных',
   outputGain: 'Громкость выхода',

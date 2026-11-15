@@ -197,12 +197,12 @@ Add `tests/english-heteronyms.test.js` (`describe('English heteronyms')`):
 
 ## Acceptance criteria
 
-- [ ] `node experiments/issue-11-audit-m3a.mjs` prints the readings marked
+- [x] `node experiments/issue-11-audit-m3a.mjs` prints the readings marked
       `<-` in the block above; the first line keeps `ˈɹɛd`.
-- [ ] The table has at least 60 words and every test sentence above gets
+- [x] The table has at least 60 words and every test sentence above gets
       the expected reading.
-- [ ] No model file, no training step and no new dependency is added.
-- [ ] `npm run check` and `npm test` pass; a patch changeset is added.
+- [x] No model file, no training step and no new dependency is added.
+- [x] `npm run check` and `npm test` pass; a patch changeset is added.
 
 ## Out of scope
 

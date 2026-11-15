@@ -80,6 +80,36 @@ describe('planUtterance', () => {
     expect(early).toBeGreaterThan(late * 1.15);
   });
 
+  /** f0 at fractions of the vowel of a Mandarin syllable. */
+  function vowelPitch(ipa, fractions) {
+    const head = normalizeHeadConfig({ vibrato: 0 });
+    const plan = planUtterance(ipa, { head, language: 'zh' });
+    const vowel = plan.segments.find((segment) => segment.kind === 'vowel');
+    const span = vowel.end - vowel.start;
+    return fractions.map(
+      (fraction) => sampleState(plan, vowel.start + span * fraction).f0
+    );
+  }
+
+  it('dips in the middle of the Mandarin third tone', () => {
+    const [start, middle, end] = vowelPitch('ma˨˩˦', [0.1, 0.45, 0.95]);
+    expect(middle).toBeLessThan(start * 0.97);
+    expect(end).toBeGreaterThan(middle * 1.15);
+  });
+
+  it('keeps the second tone rising all the way', () => {
+    const values = vowelPitch('ma˧˥', [0.25, 0.5, 0.75, 0.95]);
+    for (let index = 1; index < values.length; index++) {
+      expect(values[index]).toBeGreaterThanOrEqual(values[index - 1]);
+    }
+  });
+
+  it('keeps a level first tone', () => {
+    const fractions = Array.from({ length: 21 }, (_, index) => index / 20);
+    const values = vowelPitch('ma˥', fractions);
+    expect(Math.max(...values) / Math.min(...values)).toBeLessThan(1.03);
+  });
+
   it('opens the velum for nasals only', () => {
     const plan = planUtterance('ˈama');
     expect(

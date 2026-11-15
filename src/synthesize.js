@@ -48,7 +48,11 @@ export function prepareUtterance(text, options = {}) {
   const head = resolveHead(options.head, options.seed, options.preset);
   const transcription = options.ipa
     ? { lang: options.lang ?? 'ipa', ipa: String(text), words: [] }
-    : textToIpa(text, { lang: options.lang, accent: options.accent });
+    : textToIpa(text, {
+        lang: options.lang,
+        accent: options.accent,
+        weakForms: options.weakForms,
+      });
   const plan = planUtterance(transcription.ipa, {
     head,
     language: transcription.lang,

@@ -17,7 +17,11 @@ import {
   resample,
   yinPitch,
 } from '../src/analysis/voice-features.js';
-import { featureDistance, matchVoice } from '../src/analysis/voice-match.js';
+import {
+  MATCH_TEXT,
+  featureDistance,
+  matchVoice,
+} from '../src/analysis/voice-match.js';
 import { presetHeadConfig } from '../src/head-config.js';
 
 const TEXT =
@@ -69,6 +73,41 @@ describe('voice features', () => {
     const features = analyzeVoice(pulseTrain(150, 16000, 0.5), 16000);
     expect(featureDistance(features, features)).toBe(0);
   });
+
+  it('reads a noise-free glide as clean', () => {
+    // Ten harmonics of amplitude 1/k gliding from 150 to 100 Hz in 0.5 s:
+    // the pitch movement alone must not read as noise.
+    const sampleRate = 16000;
+    const samples = new Float64Array(sampleRate / 2);
+    let phase = 0;
+    for (let index = 0; index < samples.length; index++) {
+      phase +=
+        (2 * Math.PI * (150 - (50 * index) / samples.length)) / sampleRate;
+      for (let k = 1; k <= 10; k++) {
+        samples[index] += (0.2 * Math.sin(k * phase)) / k;
+      }
+    }
+    expect(analyzeVoice(samples, sampleRate).hnr).toBeGreaterThanOrEqual(25);
+  });
+
+  it('measures breathiness in both features', () => {
+    // A breathier voice has more aspiration noise (lower HNR) and a longer
+    // open phase (higher H1-H2).
+    const features = [0, 0.25, 0.5, 0.75, 1].map((breathiness) => {
+      const { samples, sampleRate } = synthesize(MATCH_TEXT, {
+        tier: 'minimal',
+        seed: 1,
+        head: { breathiness },
+      });
+      return analyzeVoice(samples, sampleRate);
+    });
+    for (let index = 1; index < features.length; index++) {
+      expect(features[index].hnr).toBeLessThan(features[index - 1].hnr);
+      expect(features[index].h1h2).toBeGreaterThan(features[index - 1].h1h2);
+    }
+    expect(features[0].hnr - features[4].hnr).toBeGreaterThanOrEqual(8);
+    expect(features[4].h1h2 - features[0].h1h2).toBeGreaterThanOrEqual(4);
+  });
 });
 
 describe('matchVoice', () => {
@@ -93,6 +132,27 @@ describe('matchVoice', () => {
       expect(
         relativeError(result.head.speechRate, target.speechRate)
       ).toBeLessThan(0.1);
+    });
+  }
+
+  for (const breathiness of [0.1, 0.8]) {
+    it(`recovers breathiness ${breathiness}`, () => {
+      // The renders say the same words as the recording; without a
+      // transcript the speech rate comes from a syllable count, and slow
+      // renders read a cleaner voice
+      // (experiments/issue-32-recover-breathiness.txt).
+      const { samples, sampleRate } = synthesize(MATCH_TEXT, {
+        head: { breathiness },
+        solver: 'waveguide',
+        sampleRate: 16000,
+        seed: 1,
+      });
+      const result = matchVoice(samples, sampleRate, {
+        transcript: MATCH_TEXT,
+      });
+      expect(
+        Math.abs(result.head.breathiness - breathiness)
+      ).toBeLessThanOrEqual(0.2);
     });
   }
 

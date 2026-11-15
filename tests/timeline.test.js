@@ -7,6 +7,7 @@ import { describe, it, expect } from 'test-anywhere';
 import { prepareUtterance } from '../src/synthesize.js';
 import { timelineAt, utteranceTimeline } from '../src/articulation/timeline.js';
 import { hindiAksharas, syllableSpans } from '../src/g2p/orthography.js';
+import { runCli } from '../bin/voice-simulator.js';
 
 const timeline = (text, options) => prepareUtterance(text, options).timeline;
 
@@ -93,6 +94,15 @@ describe('utteranceTimeline', () => {
     ]);
   });
 
+  it('highlights an erhua word as one syllable', () => {
+    const text = '我喜欢花儿';
+    const result = timeline(text, { lang: 'zh' });
+    const word = result.words.find((item) => item.text === '花儿');
+    expect(word.syllables.length).toBe(1);
+    expect(word.syllables[0].text).toBe('花儿');
+    expect(spelled(text, word)).toEqual(['花儿']);
+  });
+
   it('spells Hindi syllables as aksharas', () => {
     const text = 'नमस्ते बनती तरंगों';
     const result = timeline(text, { lang: 'hi' });
@@ -106,23 +116,6 @@ describe('utteranceTimeline', () => {
     const result = timeline(text, { lang: 'ru' });
     expect(spelled(text, result.words[0])).toEqual(['зву', 'ко', 'вых']);
     expect(spelled(text, result.words[1])).toEqual(['го', 'ло', 'вы']);
-  });
-
-  it('keeps verbalised text as one word without syllable spelling', () => {
-    const text = 'On 3/5/2024 the U.S.A. paid';
-    const result = timeline(text, { lang: 'en' });
-    expect(result.words.map((word) => word.text)).toEqual([
-      'On',
-      '3/5/2024',
-      'the',
-      'U.S.A.',
-      'paid',
-    ]);
-    const date = result.words[1];
-    expect([date.sourceStart, date.sourceEnd]).toEqual([3, 11]);
-    expect(date.syllables.length > 4).toBe(true);
-    expect(date.syllables.every((s) => s.text === undefined)).toBe(true);
-    expectOrdered(result);
   });
 
   it('follows the accent of the transcription', () => {
@@ -147,6 +140,106 @@ describe('utteranceTimeline', () => {
     expect(result.words.length).toBe(2);
     expect(result.words[0].sourceStart).toBe(null);
     expectOrdered(result);
+  });
+});
+
+describe('spoken words of verbalised text', () => {
+  it('keeps verbalised text as one word and exposes what is spoken', () => {
+    const text = 'On 3/5/2024 the U.S.A. paid';
+    const result = timeline(text, { lang: 'en' });
+    expect(result.words.map((word) => word.text)).toEqual([
+      'On',
+      '3/5/2024',
+      'the',
+      'U.S.A.',
+      'paid',
+    ]);
+    const date = result.words[1];
+    expect([date.sourceStart, date.sourceEnd]).toEqual([3, 11]);
+    expect(date.spoken).toBe('March fifth twenty twenty four');
+    expect(
+      date.syllables.every(
+        (s) => s.text === undefined && s.sourceStart === undefined
+      )
+    ).toBe(true);
+    expect(date.syllables.map((s) => s.spoken)).toEqual([
+      'March',
+      'fifth',
+      'twen',
+      'ty',
+      'twen',
+      'ty',
+      'four',
+    ]);
+    expect(date.syllables.map((s) => [s.partStart, s.partEnd])).toEqual([
+      [3, 4],
+      [5, 6],
+      ...Array.from({ length: 5 }, () => [7, 11]),
+    ]);
+    expectOrdered(result);
+  });
+
+  it('spells the syllables of a spoken number', () => {
+    const result = timeline('I have 25 apples', { lang: 'en' });
+    const number = result.words[2];
+    expect(number.text).toBe('25');
+    expect(number.spoken).toBe('twenty five');
+    expect(number.syllables.map((s) => s.spoken)).toEqual([
+      'twen',
+      'ty',
+      'five',
+    ]);
+    expect(number.syllables.map((s) => s.spokenWord)).toEqual([0, 0, 1]);
+    expect(number.syllables.some((s) => 'partStart' in s)).toBe(false);
+  });
+
+  it('joins back to the spoken words', () => {
+    const samples = [
+      ['en', '$5 at 3:30'],
+      ['ru', 'У меня 25 яблок'],
+      ['zh', '我有25个苹果'],
+      ['hi', 'मेरे पास 25 सेब हैं'],
+    ];
+    for (const [lang, text] of samples) {
+      const spokenWords = timeline(text, { lang }).words.filter(
+        (word) => word.spoken
+      );
+      expect(spokenWords.length > 0).toBe(true);
+      for (const word of spokenWords) {
+        const joined = [];
+        for (const syllable of word.syllables) {
+          joined[syllable.spokenWord] =
+            (joined[syllable.spokenWord] ?? '') + syllable.spoken;
+        }
+        expect(joined).toEqual(word.spoken.split(' '));
+      }
+    }
+  });
+
+  it('leaves ordinary words alone', () => {
+    const result = timeline('I have 25 apples', { lang: 'en' });
+    const plain = result.words.filter((word) => word.text !== '25');
+    expect(plain.map((word) => word.text)).toEqual(['I', 'have', 'apples']);
+    for (const word of plain) {
+      expect('spoken' in word).toBe(false);
+      expect(word.syllables.every((s) => typeof s.text === 'string')).toBe(
+        true
+      );
+      expect(word.syllables.some((s) => 'spoken' in s)).toBe(false);
+    }
+  });
+
+  it('prints the spoken words in the CLI', async () => {
+    const stdout = [];
+    const code = await runCli(['timeline', '-l', 'en', 'I have 25 apples'], {
+      stderr: () => {},
+      stdout: (line) => stdout.push(line),
+      stdoutBytes: () => {},
+    });
+    expect(code).toBe(0);
+    expect(stdout[2]).toContain('25 (twenty five) /');
+    expect(stdout[2].endsWith(' twen·ty·five')).toBe(true);
+    expect(stdout[3]).toContain('apples /');
   });
 });
 
@@ -182,6 +275,15 @@ describe('syllableSpans', () => {
   it('refuses spellings that cannot hold the syllables', () => {
     expect(syllableSpans('', counts(1))).toBe(null);
     expect(syllableSpans('你', counts(2))).toBe(null);
+  });
+
+  it('gives an erhua word one span', () => {
+    expect(syllableSpans('花儿', counts(1))).toEqual([{ start: 0, end: 2 }]);
+    expect(syllableSpans('女儿', counts(2))).toEqual([
+      { start: 0, end: 1 },
+      { start: 1, end: 2 },
+    ]);
+    expect(syllableSpans('儿', counts(2))).toBe(null);
   });
 
   it('marks deleted Hindi schwas', () => {

@@ -14,17 +14,45 @@ export interface Language {
   sample: string;
 }
 
+/**
+ * Where a word's pronunciation came from. `heteronym`: an English word
+ * spelled one way and spoken two ways (`record`, `read`), read as fits
+ * the words around it.
+ */
+export type WordSource =
+  | 'dictionary'
+  | 'morphology'
+  | 'rules'
+  | 'heteronym'
+  | 'exception'
+  | 'pinyin'
+  | 'unknown';
+
 export interface Word {
   text: string;
   lang: string;
+  /**
+   * The word as spoken in its phrase: a Russian preposition or particle
+   * (`из`, `на`, `не`, `же` ...) has the reduced, assimilated form it takes
+   * next to the word it leans on (`из дома` gives ɪz, then ˈdomə).
+   */
   ipa: string;
-  source?: string;
+  source?: WordSource;
+  /**
+   * For a heteronym: the part of speech that chose its reading (`N` noun,
+   * `A` adjective, `V` verb, `D` past tense or participle), or the tags of
+   * the reading when a neighbouring word or the default chose it.
+   */
+  tag?: string;
   pinyin?: string;
   /** The written text the word was read from (before verbalisation). */
   original?: string;
   sourceStart?: number;
   sourceEnd?: number;
   token?: number;
+  /** Range of the part of the token this word reads (`3` of `3/4/2024`). */
+  partStart?: number;
+  partEnd?: number;
   linkingR?: boolean;
 }
 
@@ -49,10 +77,19 @@ export interface TimelineSyllable {
   text?: string;
   sourceStart?: number;
   sourceEnd?: number;
+  /** Letters of the spoken word for this syllable, in a verbalised word. */
+  spoken?: string;
+  /** Index of the spoken word (into `word.spoken.split(' ')`). */
+  spokenWord?: number;
+  /** Range of the part of the token this spoken word reads (date, time, money, unit). */
+  partStart?: number;
+  partEnd?: number;
 }
 
 export interface TimelineWord {
   text: string;
+  /** Spoken words joined by a space, when the word is not read as written. */
+  spoken?: string;
   lang: string;
   ipa: string;
   start: number;
@@ -123,6 +160,8 @@ export interface SynthesizeOptions {
   lang?: 'auto' | LanguageCode;
   /** English accent (code or region such as "GB"). */
   accent?: AccentCode | string;
+  /** Weak, unstressed English function words inside a phrase (default true). */
+  weakForms?: boolean;
   /** Treat the text as IPA. */
   ipa?: boolean;
   head?: HeadConfig | 'random';
@@ -183,6 +222,11 @@ export declare function textToIpa(
     /** A language, or a regional tag such as 'en-GB' that picks the accent. */
     lang?: 'auto' | LanguageCode | AccentCode | string;
     accent?: AccentCode | string;
+    /**
+     * Speak English function words in their weak, unstressed form inside a
+     * phrase (`a cup of tea for you` ə ˈkʌp əv ˈti fɚ ju). Default true.
+     */
+    weakForms?: boolean;
   }
 ): Transcription;
 export declare function detectLanguage(text: string): LanguageCode;
@@ -397,15 +441,53 @@ export declare class Glottis {
   constructor(options?: { seed?: string | number; head?: HeadConfig });
   step(dt: number, control: Record<string, number>, noise: number): number;
 }
+/** Side branch of a tube: a blind tube, or a Helmholtz resonator with `volume`. */
+export interface TubeBranch {
+  /** Section in front of which the branch joins. */
+  index: number;
+  /** cm² */
+  area: number;
+  /** cm */
+  length: number;
+  /** cm³ of the cavity behind the neck. */
+  volume?: number;
+  loss?: number;
+}
+/** Chain-matrix tube model options (tubeFormants and tubeSpectrum). */
+export interface TubeOptions {
+  /** Boundary-layer loss coefficient (default 2e-5). */
+  loss?: number;
+  branches?: TubeBranch[];
+  /**
+   * Nasal tract joined in front of section `velumIndex` through a port of
+   * `velumArea` cm² that replaces its first section, radiating from the
+   * nostrils.
+   */
+  nose?: {
+    areas: ArrayLike<number>;
+    length: number;
+    velumArea: number;
+    velumIndex: number;
+    loss?: number;
+    branches?: TubeBranch[];
+  };
+  /** Radiated flow with a nose: lips plus nostrils (default) or either. */
+  output?: 'both' | 'lips' | 'nostrils';
+  /** Frequency step (Hz) of the spectrum. */
+  step?: number;
+  maxFrequency?: number;
+  /** Number of formants. */
+  count?: number;
+}
 export declare function tubeFormants(
   areas: ArrayLike<number>,
   length: number,
-  options?: object
+  options?: TubeOptions
 ): number[];
 export declare function tubeSpectrum(
   areas: ArrayLike<number>,
   length: number,
-  options?: object
+  options?: TubeOptions
 ): { frequencies: Float64Array; magnitudes: Float64Array };
 export declare function estimateFormants(
   samples: Float32Array,
@@ -1348,7 +1430,11 @@ export interface VoiceFeatures {
   vocalTractLength: number;
   /** First minus second harmonic level (dB). */
   h1h2: number;
-  /** Harmonics-to-noise ratio (dB). */
+  /**
+   * Harmonics-to-noise ratio (dB, at most 30) above 400 Hz, from the
+   * aperiodicity of pitch-straightened frames at the best fractional lag;
+   * the upper quartile over the voiced frames.
+   */
   hnr: number;
   syllableRate: number;
 }
@@ -1419,6 +1505,17 @@ export declare function adaptEnglishWord(
   accent: AccentCode | string
 ): string;
 export declare function isNonRhotic(accent: AccentCode | string): boolean;
+/** Kind of an English function word in `WEAK_FORMS`. */
+export type FunctionWordKind =
+  | 'article'
+  | 'conjunction'
+  | 'preposition'
+  | 'auxiliary'
+  | 'pronoun';
+/** Weak (General American) form of every English function word. */
+export declare const WEAK_FORMS: Readonly<
+  Record<string, Readonly<{ kind: FunctionWordKind; weak: string }>>
+>;
 export declare const BOUNDARIES: Readonly<Record<string, object>>;
 export declare const CONTOURS: Readonly<Record<string, object>>;
 export declare function boundaryOf(pause: object | null | undefined): string;

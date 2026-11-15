@@ -105,7 +105,8 @@ function weakenPhrase(phrase, accent) {
 }
 
 function speak(text, lang = 'en-US') {
-  const result = textToIpa(text, { lang });
+  // The strong forms: the prototype is the reference of the pass in src/.
+  const result = textToIpa(text, { lang, weakForms: false });
   const accent = resolveAccent('en', lang.split('-')[1]);
   const phrases = [[]];
   result.words.forEach((word, index) => {

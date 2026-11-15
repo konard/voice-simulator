@@ -438,6 +438,23 @@ function collectCells(grid, tubes, field, centres, shape) {
   return { index, cells };
 }
 
+/**
+ * Grid axis closest to the direction in which a tube ends (+z at the lips,
+ * -y at the nostrils): the links of its last cells into the free air
+ * along this axis form the opening.
+ */
+function outwardAxis(tube) {
+  const last = (tube.count - 1) * 3;
+  const tangent = tube.tangents.subarray(last, last + 3);
+  let index = 0;
+  for (let axis = 1; axis < 3; axis++) {
+    if (Math.abs(tangent[axis]) > Math.abs(tangent[index])) {
+      index = axis;
+    }
+  }
+  return { index, sign: Math.sign(tangent[index]) };
+}
+
 /** Link type between two neighbouring cells, or -1 for a wall. */
 function linkKind(a, b, context) {
   const { dx, lengths, velumDistance } = context;
@@ -453,7 +470,11 @@ function linkKind(a, b, context) {
   }
   const [tube, other] = a.kind === CELL_AIR ? [b, a] : [a, b];
   if (other.kind === CELL_AIR) {
-    if (tube.arc < lengths[tube.kind] - reach) {
+    // Only the end face radiates: a link through the side wall of the
+    // last cells would let the field outside drive the tube sideways.
+    const { index, sign } = context.outward[tube.kind];
+    const step = Math.round((other.point[index] - tube.point[index]) / dx);
+    if (tube.arc < lengths[tube.kind] - reach || step !== sign) {
       return -1;
     }
     return tube.kind === CELL_TRACT ? LINK_LIPS : LINK_NOSTRILS;
@@ -786,6 +807,7 @@ export function buildVoxelModel(head, options = {}) {
     dx,
     velumDistance,
     lengths: [tract.length, nasal.length],
+    outward: [outwardAxis(tract), outwardAxis(nasal)],
     entries: tubes.map((tube) => tube.entry ?? 0),
   };
   const links = connect(grid, collected, context);

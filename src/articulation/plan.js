@@ -24,6 +24,7 @@ import {
   finalLengthening,
   pauseDuration,
   pitchTargets,
+  pointPositions,
   registerGains,
 } from './prosody.js';
 
@@ -449,17 +450,64 @@ export function smoothChannel(values, timeConstant, frameRate) {
   return values;
 }
 
-/** Declining phrase pitch with stress accents, tones and final contours. */
+/** Value at `t` of the polyline through `values` placed at `positions`. */
+function piecewiseLinear(values, positions, t) {
+  if (values.length < 2) {
+    return values[0];
+  }
+  let index = 1;
+  while (index < values.length - 1 && t > positions[index]) {
+    index++;
+  }
+  const start = positions[index - 1];
+  const span = positions[index] - start;
+  const fraction = span > 0 ? Math.min(1, Math.max(0, (t - start) / span)) : 1;
+  return values[index - 1] + (values[index] - values[index - 1]) * fraction;
+}
+
+/**
+ * Declining phrase pitch with stress accents, tones and final contours: a
+ * piecewise linear curve through the pitch points of every nucleus.
+ * Returns the tone shape: per frame, the ratio of that curve to the straight
+ * line between the first and the last point of its nucleus. It is 1 outside
+ * nuclei with three or more points (the Mandarin third tone `˨˩˦`).
+ */
 function fillPitch(values, segments, head, frameRate) {
   values.fill(Number.NaN);
-  for (const { segment, from, to } of pitchTargets(segments, head)) {
+  const shape = new Float32Array(values.length).fill(1);
+  for (const { segment, from, to, points } of pitchTargets(segments, head)) {
     const [first, last] = frameRange(segment, frameRate, values.length);
+    const positions = pointPositions(points.length);
     for (let frame = first; frame < last; frame++) {
       const t = last - first > 1 ? (frame - first) / (last - first - 1) : 0;
-      values[frame] = from + (to - from) * t;
+      values[frame] = piecewiseLinear(points, positions, t);
+      if (points.length > 2) {
+        shape[frame] = values[frame] / (from + (to - from) * t);
+      }
     }
   }
-  return interpolateGaps(values, head.pitch);
+  interpolateGaps(values, head.pitch);
+  return shape;
+}
+
+/**
+ * Smooth the pitch movement between syllables but keep the shape of contour
+ * tones inside their nucleus. The f0 time constant (30 ms, zero phase) gives
+ * steps of about 100 ms from 10 % to 90 %; applied to the whole curve it
+ * would leave a 170 ms third tone `ma˨˩˦` a dip of 3 Hz (103.5 Hz at the
+ * vowel start, 100.6 Hz at 30 %), while the plan dips by 13 Hz (105.4 Hz
+ * to 92.5 Hz): `node experiments/issue-42-vowel-f0.mjs`. The pitch is divided by
+ * the tone shape, smoothed and multiplied back.
+ */
+function smoothPitch(values, shape, timeConstant, frameRate) {
+  for (let frame = 0; frame < values.length; frame++) {
+    values[frame] /= shape[frame];
+  }
+  smoothChannel(values, timeConstant, frameRate);
+  for (let frame = 0; frame < values.length; frame++) {
+    values[frame] *= shape[frame];
+  }
+  return values;
 }
 
 /** Louder exclamations, quieter parentheticals. */
@@ -508,13 +556,14 @@ export function planUtterance(ipa, options = {}) {
   fillDefaults(channels, segments, frameRate);
   fillArticulation(channels, segments, frameRate);
   applyRegisterGain(channels.loudness, segments, frameRate);
-  fillPitch(channels.f0, segments, head, frameRate);
+  const toneShape = fillPitch(channels.f0, segments, head, frameRate);
   for (const name of CHANNEL_NAMES) {
-    smoothChannel(
-      channels[name],
-      CHANNELS[name] / head.articulationSpeed,
-      frameRate
-    );
+    const timeConstant = CHANNELS[name] / head.articulationSpeed;
+    if (name === 'f0') {
+      smoothPitch(channels.f0, toneShape, timeConstant, frameRate);
+    } else {
+      smoothChannel(channels[name], timeConstant, frameRate);
+    }
   }
   addVibrato(channels.f0, head, frameRate);
   return { tokens, segments, head, frameRate, frameCount, duration, channels };
