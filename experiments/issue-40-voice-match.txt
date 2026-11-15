@@ -1,6 +1,7 @@
 # node experiments/issue-40-voice-match.mjs <root> [matcher.js]
 # old = matcher before issue 40 (F1-F4 length, slope 0.55); new = F1-F3 length (lowerFormantLength)
 
+# The four sections below are from before the merge of origin/main 7b073ff (durations of issue 39); the last is after it.
 ## main, old matcher
 female default female pitch 0.0000 length 14.8 vs 14.8 0.0000 rate 0.0098
 female 0.2 female pitch 0.0043 length 15.8 vs 14.3 0.1049 rate 0.0098
@@ -36,3 +37,12 @@ male default male pitch 0.0085 length 16.7 vs 17.2 0.0291 rate 0.0000
 male 0.2 male pitch 0.0153 length 16.5 vs 16.6 0.0060 rate 0.0000
 male 0.8 male pitch 0.0093 length 17.8 vs 17.8 0.0000 rate 0.0000
 length error mean 0.0092 max 0.0291
+
+## branch after the merge of origin/main 7b073ff, new matcher
+female default female pitch 0.0046 length 14.9 vs 14.8 0.0068 rate 0.0000
+female 0.2 female pitch 0.0043 length 14.3 vs 14.3 0.0000 rate 0.0000
+female 0.8 female pitch 0.0049 length 15.5 vs 15.3 0.0131 rate 0.0000
+male default male pitch 0.0000 length 16.9 vs 17.2 0.0174 rate 0.0000
+male 0.2 male pitch 0.0153 length 16.5 vs 16.6 0.0060 rate 0.0100
+male 0.8 male pitch 0.0093 length 17.7 vs 17.8 0.0056 rate 0.0100
+length error mean 0.0082 max 0.0174
