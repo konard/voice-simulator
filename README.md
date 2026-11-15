@@ -492,6 +492,7 @@ npm run example:desktop:package
 │   ├── index.js           # Library entry point
 │   └── index.d.ts         # TypeScript definitions
 └── tests/                 # test-anywhere tests (Node, Bun, Deno)
+    └── fixtures/golden/   # 24 public-domain sentences with text and IPA
 ```
 
 ## Design Choices
@@ -758,6 +759,7 @@ Configured in `.prettierrc`:
 | `npm test`                           | Run tests with Node.js and a 30s per-test cap         |
 | `npm run test:heavy`                 | Run the slow tests of `tests/heavy/` (CONTRIBUTING)   |
 | `npm run datasets -- list`           | List, fetch or verify speech datasets (CONTRIBUTING)  |
+| `node scripts/golden.mjs verify`     | Check the golden set of `tests/fixtures/golden/`      |
 | `bun run lint`                       | Check code with ESLint                                |
 | `bun run lint:fix`                   | Fix ESLint issues automatically                       |
 | `bun run format`                     | Format code with Prettier                             |

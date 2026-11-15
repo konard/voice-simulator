@@ -1,0 +1,630 @@
+{
+  "schema": 1,
+  "tool": "ffmpeg 7.0.2",
+  "utterances": [
+    {
+      "id": "en-01",
+      "lang": "en",
+      "file": "en-01.flac",
+      "text": "Persuasion is better than force.",
+      "ipa": "pɚˈsweɪʒən ɪz ˈbɛɾɚ ðən ˈfɔɹs",
+      "speaker": {
+        "id": "librivox-215",
+        "sex": "unknown"
+      },
+      "duration": 3.115,
+      "sha256": "afaa784668da2ccb5377697c4d861515ce616b7a67729eef3d10dfe2aed00144",
+      "source": {
+        "dataset": "librivox-aesop-en-22",
+        "page": "https://librivox.org/aesops-fables-volume-1-fables-1-25/",
+        "licence": "Public-Domain",
+        "start": 72.195,
+        "end": 75.31
+      },
+      "textSource": "V. S. Vernon Jones, Aesop's Fables: a new translation (1912), https://www.gutenberg.org/ebooks/11339",
+      "review": {
+        "text": "unreviewed",
+        "ipa": "unreviewed",
+        "by": null
+      }
+    },
+    {
+      "id": "en-02",
+      "lang": "en",
+      "file": "en-02.flac",
+      "text": "But when they cut it open they found it was just like any other goose.",
+      "ipa": "bət ˈwɛn ðeɪ ˈkʌt ɪt ˈoʊpən ðeɪ ˈfaʊnd ɪt wəz ˈd͡ʒʌst ˈlaɪk ˈɛni ˈʌðɚ ˈɡus",
+      "speaker": {
+        "id": "librivox-201",
+        "sex": "unknown"
+      },
+      "duration": 4.035,
+      "sha256": "5c77439b80606433807ba4ef88f1a3883de804f2127cb3317801916ba2789e6e",
+      "source": {
+        "dataset": "librivox-aesop-en-02",
+        "page": "https://librivox.org/aesops-fables-volume-1-fables-1-25/",
+        "licence": "Public-Domain",
+        "start": 33.835,
+        "end": 37.87
+      },
+      "textSource": "V. S. Vernon Jones, Aesop's Fables: a new translation (1912), https://www.gutenberg.org/ebooks/11339",
+      "review": {
+        "text": "unreviewed",
+        "ipa": "unreviewed",
+        "by": null
+      }
+    },
+    {
+      "id": "en-03",
+      "lang": "en",
+      "file": "en-03.flac",
+      "text": "Look and see which way the wind blows before you commit yourself.",
+      "ipa": "ˈlʊk ənd ˈsi ˈwɪt͡ʃ ˈweɪ ðə ˈwɪnd ˈbloʊz bɪˈfɔɹ ju kəˈmɪt jɚˈsɛlf",
+      "speaker": {
+        "id": "librivox-246",
+        "sex": "unknown"
+      },
+      "duration": 3.645,
+      "sha256": "c472c5022dbb2c1cf1f575b8e053ec2252c7e4a3300fcb7386b8f5ad99da499c",
+      "source": {
+        "dataset": "librivox-aesop-en-07",
+        "page": "https://librivox.org/aesops-fables-volume-1-fables-1-25/",
+        "licence": "Public-Domain",
+        "start": 44.055,
+        "end": 47.7
+      },
+      "textSource": "V. S. Vernon Jones, Aesop's Fables: a new translation (1912), https://www.gutenberg.org/ebooks/11339",
+      "review": {
+        "text": "unreviewed",
+        "ipa": "unreviewed",
+        "by": null
+      }
+    },
+    {
+      "id": "en-04",
+      "lang": "en",
+      "file": "en-04.flac",
+      "text": "A Peacock taunted a Crane with the dullness of her plumage.",
+      "ipa": "ə ˈpikɑk ˈtɔntɪd ə ˈkɹeɪn wɪð ðə ˈdʌlnəs əv hɚ ˈplumɪd͡ʒ",
+      "speaker": {
+        "id": "librivox-246",
+        "sex": "unknown"
+      },
+      "duration": 5.13,
+      "sha256": "49e2ad6d061a7a777929a29ad75afe3671a83cc0152d4f3ed73d670e2ab6a47b",
+      "source": {
+        "dataset": "librivox-aesop-en-12",
+        "page": "https://librivox.org/aesops-fables-volume-1-fables-1-25/",
+        "licence": "Public-Domain",
+        "start": 22.515,
+        "end": 27.645
+      },
+      "textSource": "V. S. Vernon Jones, Aesop's Fables: a new translation (1912), https://www.gutenberg.org/ebooks/11339",
+      "review": {
+        "text": "unreviewed",
+        "ipa": "unreviewed",
+        "by": null
+      }
+    },
+    {
+      "id": "en-05",
+      "lang": "en",
+      "file": "en-05.flac",
+      "text": "Her beauty is without equal, the hue of her plumage exquisite.",
+      "ipa": "hɚ ˈbjuɾi ɪz wɪˈθaʊt ˈikwəl ðə ˈhju əv hɚ ˈplumɪd͡ʒ ˈɛkskwɪzɪt",
+      "speaker": {
+        "id": "librivox-19",
+        "sex": "unknown"
+      },
+      "duration": 5.265,
+      "sha256": "0ea961d9c5affa499134b581ce15abc54965c122ef315bcc80f004bebce14d03",
+      "source": {
+        "dataset": "librivox-aesop-en-09",
+        "page": "https://librivox.org/aesops-fables-volume-1-fables-1-25/",
+        "licence": "Public-Domain",
+        "start": 45.67,
+        "end": 50.935
+      },
+      "textSource": "V. S. Vernon Jones, Aesop's Fables: a new translation (1912), https://www.gutenberg.org/ebooks/11339",
+      "review": {
+        "text": "unreviewed",
+        "ipa": "unreviewed",
+        "by": null
+      }
+    },
+    {
+      "id": "en-06",
+      "lang": "en",
+      "file": "en-06.flac",
+      "text": "Betray a friend, and you'll often find you have ruined yourself.",
+      "ipa": "bɪˈtɹeɪ ə ˈfɹɛnd ənd jul ˈɔfən ˈfaɪnd ju hæv ˈɹuənd jɚˈsɛlf",
+      "speaker": {
+        "id": "librivox-30",
+        "sex": "unknown"
+      },
+      "duration": 5.795,
+      "sha256": "fd58a2b55a04b1bde5c8ba7c3742995186539781344ee639c0d17239cb9b6c69",
+      "source": {
+        "dataset": "librivox-aesop-en-18",
+        "page": "https://librivox.org/aesops-fables-volume-1-fables-1-25/",
+        "licence": "Public-Domain",
+        "start": 104.01,
+        "end": 109.805
+      },
+      "textSource": "V. S. Vernon Jones, Aesop's Fables: a new translation (1912), https://www.gutenberg.org/ebooks/11339",
+      "review": {
+        "text": "unreviewed",
+        "ipa": "unreviewed",
+        "by": null
+      }
+    },
+    {
+      "id": "ru-01",
+      "lang": "ru",
+      "file": "ru-01.flac",
+      "text": "Старый больной лев лежал в пещере.",
+      "ipa": "ˈstarɨj bɐlʲˈnoj lʲef lʲɪˈʐaɫ f pʲɪˈɕːerʲɪ",
+      "speaker": {
+        "id": "librivox-1593",
+        "sex": "unknown"
+      },
+      "duration": 3.16,
+      "sha256": "98b14ea6819691f0b6f7d5b31bbe58b3a2fde876876df54f295bbb6d5b412e96",
+      "source": {
+        "dataset": "librivox-aesop-ru-13",
+        "page": "https://librivox.org/aesops-fables-in-russian/",
+        "licence": "Public-Domain",
+        "start": 31.82,
+        "end": 34.98
+      },
+      "textSource": "Лев Толстой, «Лев, волк и лисица» (1875), https://ru.wikisource.org/wiki/%D0%9B%D0%B5%D0%B2,_%D0%B2%D0%BE%D0%BB%D0%BA_%D0%B8_%D0%BB%D0%B8%D1%81%D0%B8%D1%86%D0%B0_%28%D0%AD%D0%B7%D0%BE%D0%BF;_%D0%9B%D0%B5%D0%B2_%D0%A2%D0%BE%D0%BB%D1%81%D1%82%D0%BE%D0%B9%29",
+      "review": {
+        "text": "unreviewed",
+        "ipa": "unreviewed",
+        "by": null
+      }
+    },
+    {
+      "id": "ru-02",
+      "lang": "ru",
+      "file": "ru-02.flac",
+      "text": "Приходили все звери проведывать царя, только лисица не бывала.",
+      "ipa": "prʲɪxɐˈdʲilʲɪ fsʲe ˈzvʲerʲɪ prɐˈvʲedɨvətʲ t͡sɐˈrʲa ˈtolʲkə lʲɪˈsʲit͡sə nʲɪ bɨˈvaɫə",
+      "speaker": {
+        "id": "librivox-1593",
+        "sex": "unknown"
+      },
+      "duration": 5.14,
+      "sha256": "544ec4083bcd0a18ea96756f0c0f60c921a2d5b433bb1766b776de5b938b1a73",
+      "source": {
+        "dataset": "librivox-aesop-ru-13",
+        "page": "https://librivox.org/aesops-fables-in-russian/",
+        "licence": "Public-Domain",
+        "start": 34.98,
+        "end": 40.12
+      },
+      "textSource": "Лев Толстой, «Лев, волк и лисица» (1875), https://ru.wikisource.org/wiki/%D0%9B%D0%B5%D0%B2,_%D0%B2%D0%BE%D0%BB%D0%BA_%D0%B8_%D0%BB%D0%B8%D1%81%D0%B8%D1%86%D0%B0_%28%D0%AD%D0%B7%D0%BE%D0%BF;_%D0%9B%D0%B5%D0%B2_%D0%A2%D0%BE%D0%BB%D1%81%D1%82%D0%BE%D0%B9%29",
+      "review": {
+        "text": "unreviewed",
+        "ipa": "unreviewed",
+        "by": null
+      }
+    },
+    {
+      "id": "ru-03",
+      "lang": "ru",
+      "file": "ru-03.flac",
+      "text": "Только теперь нашла, вот и прибежала.",
+      "ipa": "ˈtolʲkə tʲɪˈpʲerʲ nɐʂˈɫa vot i prʲɪbʲɪˈʐaɫə",
+      "speaker": {
+        "id": "librivox-1593",
+        "sex": "unknown"
+      },
+      "duration": 3.14,
+      "sha256": "8da2e5ce0efd79cdf0c818eed1ea8811e7987b244d78825a6e2381072ae7fd2f",
+      "source": {
+        "dataset": "librivox-aesop-ru-13",
+        "page": "https://librivox.org/aesops-fables-in-russian/",
+        "licence": "Public-Domain",
+        "start": 80.39,
+        "end": 83.53
+      },
+      "textSource": "Лев Толстой, «Лев, волк и лисица» (1875), https://ru.wikisource.org/wiki/%D0%9B%D0%B5%D0%B2,_%D0%B2%D0%BE%D0%BB%D0%BA_%D0%B8_%D0%BB%D0%B8%D1%81%D0%B8%D1%86%D0%B0_%28%D0%AD%D0%B7%D0%BE%D0%BF;_%D0%9B%D0%B5%D0%B2_%D0%A2%D0%BE%D0%BB%D1%81%D1%82%D0%BE%D0%B9%29",
+      "review": {
+        "text": "unreviewed",
+        "ipa": "unreviewed",
+        "by": null
+      }
+    },
+    {
+      "id": "ru-04",
+      "lang": "ru",
+      "file": "ru-04.flac",
+      "text": "И комар затрубил и стал кусать льва в голые щёки и в нос.",
+      "ipa": "i kɐˈmar zətrʊˈbʲiɫ i staɫ kʊˈsatʲ lʲva v ˈɡolɨjə ˈɕːokʲɪ i v nos",
+      "speaker": {
+        "id": "librivox-2826",
+        "sex": "unknown"
+      },
+      "duration": 5.055,
+      "sha256": "307296e05c2083df24405bac59829b92e5aeeeb82d07b7c3789aef5e4c7c9914",
+      "source": {
+        "dataset": "librivox-aesop-ru-09",
+        "page": "https://librivox.org/aesops-fables-in-russian/",
+        "licence": "Public-Domain",
+        "start": 55.435,
+        "end": 60.49
+      },
+      "textSource": "Лев Толстой, «Комар и лев» (1875), https://ru.wikisource.org/wiki/%D0%9A%D0%BE%D0%BC%D0%B0%D1%80_%D0%B8_%D0%BB%D0%B5%D0%B2_%28%D0%AD%D0%B7%D0%BE%D0%BF;_%D0%9B%D0%B5%D0%B2_%D0%A2%D0%BE%D0%BB%D1%81%D1%82%D0%BE%D0%B9%29",
+      "review": {
+        "text": "unreviewed",
+        "ipa": "unreviewed",
+        "by": null
+      }
+    },
+    {
+      "id": "ru-05",
+      "lang": "ru",
+      "file": "ru-05.flac",
+      "text": "Я ещё не знаю, кто из вас мёд делает.",
+      "ipa": "ja jɪˈɕːo nʲɪ ˈznajʊ kto ɪz vas mʲot ˈdʲeɫəjɪt",
+      "speaker": {
+        "id": "librivox-3056",
+        "sex": "unknown"
+      },
+      "duration": 3.085,
+      "sha256": "a1d75949fc17d06c202cf666d87695d75d44833b37b1f9bce8182b00cf39bb94",
+      "source": {
+        "dataset": "librivox-aesop-ru-26",
+        "page": "https://librivox.org/aesops-fables-in-russian/",
+        "licence": "Public-Domain",
+        "start": 40.505,
+        "end": 43.59
+      },
+      "textSource": "Лев Толстой, «Пчёлы и трутни» (1875), https://ru.wikisource.org/wiki/%D0%9F%D1%87%D1%91%D0%BB%D1%8B_%D0%B8_%D1%82%D1%80%D1%83%D1%82%D0%BD%D0%B8_%28%D0%AD%D0%B7%D0%BE%D0%BF;_%D0%9B%D0%B5%D0%B2_%D0%A2%D0%BE%D0%BB%D1%81%D1%82%D0%BE%D0%B9%29",
+      "review": {
+        "text": "unreviewed",
+        "ipa": "unreviewed",
+        "by": null
+      }
+    },
+    {
+      "id": "ru-06",
+      "lang": "ru",
+      "file": "ru-06.flac",
+      "text": "Вот через неделю я увижу, кто больше и лучше мёду наделает.",
+      "ipa": "vot ˈt͡ɕerʲɪs nʲɪˈdʲelʲʊ ja ʊˈvʲiʐʊ kto ˈbolʲʂɨ i ˈɫutʂːɨ ˈmʲodʊ nɐˈdʲeɫəjɪt",
+      "speaker": {
+        "id": "librivox-3056",
+        "sex": "unknown"
+      },
+      "duration": 4.995,
+      "sha256": "195e8a2aff62aa2f8e5351da67cabff7da6a82b06ae086a63d17d58397a5d169",
+      "source": {
+        "dataset": "librivox-aesop-ru-26",
+        "page": "https://librivox.org/aesops-fables-in-russian/",
+        "licence": "Public-Domain",
+        "start": 48.61,
+        "end": 53.605
+      },
+      "textSource": "Лев Толстой, «Пчёлы и трутни» (1875), https://ru.wikisource.org/wiki/%D0%9F%D1%87%D1%91%D0%BB%D1%8B_%D0%B8_%D1%82%D1%80%D1%83%D1%82%D0%BD%D0%B8_%28%D0%AD%D0%B7%D0%BE%D0%BF;_%D0%9B%D0%B5%D0%B2_%D0%A2%D0%BE%D0%BB%D1%81%D1%82%D0%BE%D0%B9%29",
+      "review": {
+        "text": "unreviewed",
+        "ipa": "unreviewed",
+        "by": null
+      }
+    },
+    {
+      "id": "hi-01",
+      "lang": "hi",
+      "file": "hi-01.flac",
+      "text": "ईश्वर को धन्यवाद देती हूँ कि मेरे पिताजी पुरानी लकीर पीटने वालों में नहीं।",
+      "ipa": "iːʃʋəɾ koː d̪ʱənjəʋaːd̪ d̪eːt̪iː ɦũː kɪ meːɾeː pɪt̪aːd͡ʒiː pʊɾaːniː ləkiːɾ piːʈneː ʋaːlõː mẽː nəɦĩː",
+      "speaker": {
+        "id": "librivox-19651",
+        "sex": "unknown"
+      },
+      "duration": 5.62,
+      "sha256": "b5a1d24bcbc2cf943f19c1534c85dc24fc2023d9ba51dcc71f4def0ca014788d",
+      "source": {
+        "dataset": "librivox-do-sakhiyan-hi-01",
+        "page": "https://librivox.org/do-sakhiyan-by-premchand/",
+        "licence": "Public-Domain",
+        "start": 52.26,
+        "end": 57.88
+      },
+      "textSource": "प्रेमचंद, दो सखियाँ (1926), https://gadyakosh.org/gk/%E0%A4%A6%E0%A5%8B_%E0%A4%B8%E0%A4%96%E0%A4%BF%E0%A4%AF%E0%A4%BE%E0%A4%81_/_%E0%A4%AA%E0%A5%8D%E0%A4%B0%E0%A5%87%E0%A4%AE%E0%A4%9A%E0%A4%82%E0%A4%A6_/_%E0%A4%AA%E0%A5%83%E0%A4%B7%E0%A5%8D%E0%A4%A0_1",
+      "review": {
+        "text": "unreviewed",
+        "ipa": "unreviewed",
+        "by": null
+      }
+    },
+    {
+      "id": "hi-02",
+      "lang": "hi",
+      "file": "hi-02.flac",
+      "text": "यह उन पर न्योछावर होने के लिए विकल हो जाता है।",
+      "ipa": "jəɦ ʊn pəɾ njoːt͡ʃʰaːʋəɾ ɦoːneː keː lɪeː ʋɪkəl ɦoː d͡ʒaːt̪aː ɦɛː",
+      "speaker": {
+        "id": "librivox-19651",
+        "sex": "unknown"
+      },
+      "duration": 4.17,
+      "sha256": "07a829273c4bacdd1e61f334ec60951c354c0e3034c24f1f701fa408ed2e4a57",
+      "source": {
+        "dataset": "librivox-do-sakhiyan-hi-01",
+        "page": "https://librivox.org/do-sakhiyan-by-premchand/",
+        "licence": "Public-Domain",
+        "start": 139.45,
+        "end": 143.62
+      },
+      "textSource": "प्रेमचंद, दो सखियाँ (1926), https://gadyakosh.org/gk/%E0%A4%A6%E0%A5%8B_%E0%A4%B8%E0%A4%96%E0%A4%BF%E0%A4%AF%E0%A4%BE%E0%A4%81_/_%E0%A4%AA%E0%A5%8D%E0%A4%B0%E0%A5%87%E0%A4%AE%E0%A4%9A%E0%A4%82%E0%A4%A6_/_%E0%A4%AA%E0%A5%83%E0%A4%B7%E0%A5%8D%E0%A4%A0_1",
+      "review": {
+        "text": "unreviewed",
+        "ipa": "unreviewed",
+        "by": null
+      }
+    },
+    {
+      "id": "hi-03",
+      "lang": "hi",
+      "file": "hi-03.flac",
+      "text": "अगर माता-पिता अकाल मर जायँ, तो लड़की का विवाह कौन करे।",
+      "ipa": "əɡəɾ maːt̪aːpɪt̪aː əkaːl məɾ d͡ʒaːẽː t̪oː ləɽkiː kaː ʋɪʋaːɦ kɔːn kəɾeː",
+      "speaker": {
+        "id": "librivox-19651",
+        "sex": "unknown"
+      },
+      "duration": 5.075,
+      "sha256": "50b8a976b72166209a372f086ee486fe3fa86636f5dc7deaabbaee890e4d4ab0",
+      "source": {
+        "dataset": "librivox-do-sakhiyan-hi-02",
+        "page": "https://librivox.org/do-sakhiyan-by-premchand/",
+        "licence": "Public-Domain",
+        "start": 136.98,
+        "end": 142.055
+      },
+      "textSource": "प्रेमचंद, दो सखियाँ (1926), https://gadyakosh.org/gk/%E0%A4%A6%E0%A5%8B_%E0%A4%B8%E0%A4%96%E0%A4%BF%E0%A4%AF%E0%A4%BE%E0%A4%81_/_%E0%A4%AA%E0%A5%8D%E0%A4%B0%E0%A5%87%E0%A4%AE%E0%A4%9A%E0%A4%82%E0%A4%A6_/_%E0%A4%AA%E0%A5%83%E0%A4%B7%E0%A5%8D%E0%A4%A0_2",
+      "review": {
+        "text": "unreviewed",
+        "ipa": "unreviewed",
+        "by": null
+      }
+    },
+    {
+      "id": "hi-04",
+      "lang": "hi",
+      "file": "hi-04.flac",
+      "text": "योग्यता का फूल लगा और अधिकार का फल आया।",
+      "ipa": "joːɡjət̪aː kaː pʰuːl ləɡaː ɔːɾ əd̪ʱɪkaːɾ kaː pʰəl aːjaː",
+      "speaker": {
+        "id": "librivox-19651",
+        "sex": "unknown"
+      },
+      "duration": 4.29,
+      "sha256": "4429a627bf619ffcf46181477a73451dd9fee29bcba0b4ca32d27e30ce3783ef",
+      "source": {
+        "dataset": "librivox-do-sakhiyan-hi-06",
+        "page": "https://librivox.org/do-sakhiyan-by-premchand/",
+        "licence": "Public-Domain",
+        "start": 102.41,
+        "end": 106.7
+      },
+      "textSource": "प्रेमचंद, दो सखियाँ (1926), https://gadyakosh.org/gk/%E0%A4%A6%E0%A5%8B_%E0%A4%B8%E0%A4%96%E0%A4%BF%E0%A4%AF%E0%A4%BE%E0%A4%81_/_%E0%A4%AA%E0%A5%8D%E0%A4%B0%E0%A5%87%E0%A4%AE%E0%A4%9A%E0%A4%82%E0%A4%A6_/_%E0%A4%AA%E0%A5%83%E0%A4%B7%E0%A5%8D%E0%A4%A0_6",
+      "review": {
+        "text": "unreviewed",
+        "ipa": "unreviewed",
+        "by": null
+      }
+    },
+    {
+      "id": "hi-05",
+      "lang": "hi",
+      "file": "hi-05.flac",
+      "text": "कभी कोठे पर जाती थी, कभी नीचे आती थी।",
+      "ipa": "kəbʱiː koːʈʰeː pəɾ d͡ʒaːt̪iː t̪ʰiː kəbʱiː niːt͡ʃeː aːt̪iː t̪ʰiː",
+      "speaker": {
+        "id": "librivox-19651",
+        "sex": "unknown"
+      },
+      "duration": 3.475,
+      "sha256": "d8cbb23729e81a3eb3ae290bae704a92ef3e4a79e9671f48202cfd171169b666",
+      "source": {
+        "dataset": "librivox-do-sakhiyan-hi-06",
+        "page": "https://librivox.org/do-sakhiyan-by-premchand/",
+        "licence": "Public-Domain",
+        "start": 129.655,
+        "end": 133.13
+      },
+      "textSource": "प्रेमचंद, दो सखियाँ (1926), https://gadyakosh.org/gk/%E0%A4%A6%E0%A5%8B_%E0%A4%B8%E0%A4%96%E0%A4%BF%E0%A4%AF%E0%A4%BE%E0%A4%81_/_%E0%A4%AA%E0%A5%8D%E0%A4%B0%E0%A5%87%E0%A4%AE%E0%A4%9A%E0%A4%82%E0%A4%A6_/_%E0%A4%AA%E0%A5%83%E0%A4%B7%E0%A5%8D%E0%A4%A0_6",
+      "review": {
+        "text": "unreviewed",
+        "ipa": "unreviewed",
+        "by": null
+      }
+    },
+    {
+      "id": "hi-06",
+      "lang": "hi",
+      "file": "hi-06.flac",
+      "text": "इस विषय में तुम्हें मुझसे उपदेश लेना चाहिए।",
+      "ipa": "ɪs ʋɪʃəj mẽː t̪ʊmɦẽː mʊd͡ʒʱseː ʊpd̪eːʃ leːnaː t͡ʃaːɦɪeː",
+      "speaker": {
+        "id": "librivox-19651",
+        "sex": "unknown"
+      },
+      "duration": 3.71,
+      "sha256": "4255b346a1a13a23059bd5729e244975904dc342dedd9d3fb533ab9f9e086d36",
+      "source": {
+        "dataset": "librivox-do-sakhiyan-hi-06",
+        "page": "https://librivox.org/do-sakhiyan-by-premchand/",
+        "licence": "Public-Domain",
+        "start": 34.785,
+        "end": 38.495
+      },
+      "textSource": "प्रेमचंद, दो सखियाँ (1926), https://gadyakosh.org/gk/%E0%A4%A6%E0%A5%8B_%E0%A4%B8%E0%A4%96%E0%A4%BF%E0%A4%AF%E0%A4%BE%E0%A4%81_/_%E0%A4%AA%E0%A5%8D%E0%A4%B0%E0%A5%87%E0%A4%AE%E0%A4%9A%E0%A4%82%E0%A4%A6_/_%E0%A4%AA%E0%A5%83%E0%A4%B7%E0%A5%8D%E0%A4%A0_6",
+      "review": {
+        "text": "unreviewed",
+        "ipa": "unreviewed",
+        "by": null
+      }
+    },
+    {
+      "id": "zh-01",
+      "lang": "zh",
+      "file": "zh-01.flac",
+      "text": "读书法，有三到，心眼口，信皆要。",
+      "ipa": "tu˧˥ ʂu˥ fa˨˩˦ joʊ˨˩ san˥ tɑʊ˥˩ ɕin˥ jɛn˧˥ kʰoʊ˨˩˦ ɕin˥˩ t͡ɕjɛ˥ jɑʊ˥˩",
+      "speaker": {
+        "id": "librivox-2245",
+        "sex": "unknown"
+      },
+      "duration": 5.43,
+      "sha256": "06396a164ffabc2377d8b643f4755043f05b32a32e2106132b1a27685c7e145b",
+      "source": {
+        "dataset": "librivox-di-zi-gui-zh-03",
+        "page": "https://librivox.org/di-zi-gui-by-li-yuexiu/",
+        "licence": "Public-Domain",
+        "start": 536.6,
+        "end": 542.03
+      },
+      "textSource": "李毓秀《弟子規》(清, 1662-1722), https://www.amtb.tw/pdf/dzg_word.pdf",
+      "review": {
+        "text": "unreviewed",
+        "ipa": "unreviewed",
+        "by": null
+      }
+    },
+    {
+      "id": "zh-02",
+      "lang": "zh",
+      "file": "zh-02.flac",
+      "text": "方读此，勿慕彼，此未终，彼勿起。",
+      "ipa": "fɑŋ˥ tu˧˥ t͡sʰɹ̩˨˩˦ u˥˩ mu˥˩ pi˨˩˦ t͡sʰɹ̩˨˩ weɪ˥˩ ʈ͡ʂʊŋ˥ pi˨˩ u˥˩ t͡ɕʰi˨˩˦",
+      "speaker": {
+        "id": "librivox-2245",
+        "sex": "unknown"
+      },
+      "duration": 5.615,
+      "sha256": "2dbf434f39f533292682fc85b522ccb815627edfd9e6de15f0f17390604670a7",
+      "source": {
+        "dataset": "librivox-di-zi-gui-zh-03",
+        "page": "https://librivox.org/di-zi-gui-by-li-yuexiu/",
+        "licence": "Public-Domain",
+        "start": 542.03,
+        "end": 547.645
+      },
+      "textSource": "李毓秀《弟子規》(清, 1662-1722), https://www.amtb.tw/pdf/dzg_word.pdf",
+      "review": {
+        "text": "unreviewed",
+        "ipa": "unreviewed",
+        "by": null
+      }
+    },
+    {
+      "id": "zh-03",
+      "lang": "zh",
+      "file": "zh-03.flac",
+      "text": "人不闲，勿事搅，人不安，勿话扰。",
+      "ipa": "ʐən˧˥ pu˥˩ ɕjɛn˧˥ u˥˩ ʂɻ̩˥˩ t͡ɕjɑʊ˨˩˦ ʐən˧˥ pu˥˩ an˥ u˥˩ xwa˥˩ ʐɑʊ˨˩˦",
+      "speaker": {
+        "id": "librivox-2245",
+        "sex": "unknown"
+      },
+      "duration": 5.765,
+      "sha256": "7179f5132dbf57d081cb7fbbed05a6f3294fd85e3d7c6cdd6a20f70633b9682b",
+      "source": {
+        "dataset": "librivox-di-zi-gui-zh-03",
+        "page": "https://librivox.org/di-zi-gui-by-li-yuexiu/",
+        "licence": "Public-Domain",
+        "start": 436.085,
+        "end": 441.85
+      },
+      "textSource": "李毓秀《弟子規》(清, 1662-1722), https://www.amtb.tw/pdf/dzg_word.pdf",
+      "review": {
+        "text": "unreviewed",
+        "ipa": "unreviewed",
+        "by": null
+      }
+    },
+    {
+      "id": "zh-04",
+      "lang": "zh",
+      "file": "zh-04.flac",
+      "text": "心有疑，随札记，就人问，求确义。",
+      "ipa": "ɕin˥ joʊ˨˩ i˧˥ sweɪ˧˥ ʈ͡ʂa˧˥ t͡ɕi˥˩ t͡ɕjoʊ˥˩ ʐən˧˥ wən˥˩ t͡ɕʰjoʊ˧˥ t͡ɕʰɥɛ˥˩ i˥˩",
+      "speaker": {
+        "id": "librivox-2245",
+        "sex": "unknown"
+      },
+      "duration": 5.635,
+      "sha256": "8ae7b186b8894e0a45e87f8e3001f1b161db4413e4730e564dae73be6b243f3c",
+      "source": {
+        "dataset": "librivox-di-zi-gui-zh-03",
+        "page": "https://librivox.org/di-zi-gui-by-li-yuexiu/",
+        "licence": "Public-Domain",
+        "start": 553.195,
+        "end": 558.83
+      },
+      "textSource": "李毓秀《弟子規》(清, 1662-1722), https://www.amtb.tw/pdf/dzg_word.pdf",
+      "review": {
+        "text": "unreviewed",
+        "ipa": "unreviewed",
+        "by": null
+      }
+    },
+    {
+      "id": "zh-05",
+      "lang": "zh",
+      "file": "zh-05.flac",
+      "text": "房室清，墙壁净，几案洁，笔砚正。",
+      "ipa": "fɑŋ˧˥ ʂɻ̩˥˩ t͡ɕʰiŋ˥ t͡ɕʰjɑŋ˧˥ pi˥˩ t͡ɕiŋ˥˩ t͡ɕi˥ an˥˩ t͡ɕjɛ˧˥ pi˨˩ jɛn˥˩ ʈ͡ʂəŋ˥˩",
+      "speaker": {
+        "id": "librivox-2245",
+        "sex": "unknown"
+      },
+      "duration": 5.77,
+      "sha256": "f0590b3f6bd20dde1b59ebee7609a55c3f8f2a4f692f1eecd69118db5903921a",
+      "source": {
+        "dataset": "librivox-di-zi-gui-zh-03",
+        "page": "https://librivox.org/di-zi-gui-by-li-yuexiu/",
+        "licence": "Public-Domain",
+        "start": 558.83,
+        "end": 564.6
+      },
+      "textSource": "李毓秀《弟子規》(清, 1662-1722), https://www.amtb.tw/pdf/dzg_word.pdf",
+      "review": {
+        "text": "unreviewed",
+        "ipa": "unreviewed",
+        "by": null
+      }
+    },
+    {
+      "id": "zh-06",
+      "lang": "zh",
+      "file": "zh-06.flac",
+      "text": "勿谄富，勿骄贫，勿厌故，勿喜新。",
+      "ipa": "u˥˩ ʈ͡ʂʰan˨˩ fu˥˩ u˥˩ t͡ɕjɑʊ˥ pʰin˧˥ u˥˩ jɛn˥˩ ku˥˩ u˥˩ ɕi˨˩ ɕin˥",
+      "speaker": {
+        "id": "librivox-2245",
+        "sex": "unknown"
+      },
+      "duration": 5.665,
+      "sha256": "3e42c970199f7babfd74b5a551901a2ed4ae0375484120216b72b9a75648d89d",
+      "source": {
+        "dataset": "librivox-di-zi-gui-zh-03",
+        "page": "https://librivox.org/di-zi-gui-by-li-yuexiu/",
+        "licence": "Public-Domain",
+        "start": 430.42,
+        "end": 436.085
+      },
+      "textSource": "李毓秀《弟子規》(清, 1662-1722), https://www.amtb.tw/pdf/dzg_word.pdf",
+      "review": {
+        "text": "unreviewed",
+        "ipa": "unreviewed",
+        "by": null
+      }
+    }
+  ]
+}

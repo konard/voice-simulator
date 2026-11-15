@@ -248,6 +248,28 @@ why its first URL cannot be reached (or `null` when it can); pass it to
 `itUnless`, then call `fetchDataset(id)` and `readDataset(id)`, which returns
 `{id, text, audioPath, gender}` for every cached recording.
 
+### Golden set
+
+[tests/fixtures/golden/](../tests/fixtures/golden/README.md) holds 24 short
+sentences from public-domain LibriVox recordings, 6 each in English,
+Russian, Hindi and Mandarin, with their text and hand-written IPA. Tests
+read them without the network through `loadGolden({ lang, reviewedOnly })`
+of `tests/helpers/golden.js`. The fixtures README describes how a file is
+made with `node scripts/golden.mjs pauses` and `cut`. After any change,
+`node scripts/golden.mjs verify` must print nothing and exit 0. It checks:
+
+- the manifest;
+- the SHA-256 of every file;
+- the format (16 kHz, mono, 16-bit FLAC);
+- the total size (at most 2 000 000 bytes);
+- that every source is a `redistribution: true` entry of the registry;
+- the rate of speech;
+- the IPA.
+
+Only a person who listened to a file may set its `review.text` and
+`review.ipa` to `confirmed` and `review.by` to their GitHub name; an
+automatic agent never does.
+
 ## Version Management with Changesets
 
 This project uses [Changesets](https://github.com/changesets/changesets) to manage versions and changelogs. This eliminates merge conflicts that occur when multiple PRs bump the version in `package.json`.
