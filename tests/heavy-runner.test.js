@@ -38,16 +38,22 @@ test('b fails', () => {
 });
 `;
 
-function runHeavy(args, extraEnv = {}) {
+function runHeavy(args, extraEnv = {}, node = 'node') {
   // A run inside GitHub Actions must not append to the real step summary;
   // blank values count as unset.
   const env = {
     ...process.env,
     GITHUB_STEP_SUMMARY: '',
     HEAVY_LIMIT: '',
+    REQUIRE_GPU: '',
     ...extraEnv,
   };
-  const result = spawnSync('node', [scriptPath, ...args], {
+  for (const key of Object.keys(env)) {
+    if (env[key] === undefined) {
+      delete env[key];
+    }
+  }
+  const result = spawnSync(node, [scriptPath, ...args], {
     encoding: 'utf8',
     env,
   });
@@ -55,6 +61,38 @@ function runHeavy(args, extraEnv = {}) {
     status: result.status,
     output: `${result.stdout ?? ''}${result.stderr ?? ''}`,
   };
+}
+
+const EXE = process.platform === 'win32' ? '.exe' : '';
+const PATH_KEY =
+  Object.keys(process.env).find((key) => key.toUpperCase() === 'PATH') ??
+  'PATH';
+const pathDirs = (process.env[PATH_KEY] ?? '').split(path.delimiter);
+const hasDeno = (dir) => dir !== '' && existsSync(path.join(dir, `deno${EXE}`));
+// Node.js itself, by absolute path: the PATH given to the runner below has
+// no Deno, and under Deno or Bun process.execPath is not Node.js.
+const nodePath =
+  process.versions.bun || globalThis.Deno
+    ? pathDirs
+        .map((dir) => path.join(dir, `node${EXE}`))
+        .find((file) => file !== `node${EXE}` && existsSync(file))
+    : process.execPath;
+const noNodeWithoutDeno =
+  !nodePath || hasDeno(path.dirname(nodePath))
+    ? 'Node.js is not on PATH apart from Deno'
+    : null;
+
+/** The environment of a runner that finds no Deno on PATH. */
+function withoutDeno(extraEnv = {}) {
+  const env = { ...extraEnv };
+  // Windows names it Path; a second key would make the value ambiguous.
+  for (const key of Object.keys(process.env)) {
+    if (key.toUpperCase() === 'PATH') {
+      env[key] = undefined;
+    }
+  }
+  env.PATH = pathDirs.filter((dir) => !hasDeno(dir)).join(path.delimiter);
+  return env;
 }
 
 function summaryRows(out) {
@@ -170,6 +208,42 @@ describe('run-heavy.mjs', () => {
       expect(stepSummaryText).toContain('## Report of a, limit undefined');
     });
   });
+});
+
+describe('run-heavy.mjs and the gpu suite', () => {
+  itUnless(sandboxed, noNodeWithoutDeno)(
+    'skips the GPU files without Deno unless REQUIRE_GPU=1',
+    () => {
+      withTemporaryDir((root) => {
+        const dir = path.join(root, 'heavy');
+        mkdirSync(dir);
+        writeFileSync(path.join(dir, 'gpu-a.test.js'), FAILING_TEST);
+        writeFileSync(path.join(dir, 'quality-a.test.js'), PASSING_TEST);
+
+        const out = path.join(root, 'out');
+        const args = ['--dir', dir, '--out', out];
+        const skipped = runHeavy(args, withoutDeno(), nodePath);
+
+        expect(skipped.status).toBe(0);
+        const rows = summaryRows(out);
+        expect(rows.length).toBe(2);
+        expect(rows.find((row) => row.includes('gpu-a.test.js'))).toContain(
+          '| gpu-a.test.js | skipped (no Deno) |'
+        );
+        expect(rows.find((row) => row.includes('quality-a.test.js'))).toContain(
+          '| quality-a.test.js | pass |'
+        );
+
+        const required = runHeavy(
+          args,
+          withoutDeno({ REQUIRE_GPU: '1' }),
+          nodePath
+        );
+        expect(required.status).toBe(1);
+        expect(required.output).toContain('suite gpu needs Deno on PATH');
+      });
+    }
+  );
 });
 
 describe('heavy test helpers', () => {
