@@ -49,6 +49,14 @@
       'Listen to the sentence and type the words you heard. ' +
       'The sentence may not make sense; type what you heard anyway.',
     end: 'Send this file to the person who asked you to take the test.',
+    // Never name the file: its name tells which version is playing.
+    notLoaded:
+      'A sound could not be loaded or played. Check that headphones or ' +
+      'speakers are connected and that the folder "stimuli" is next to ' +
+      'index.html, or ask the person who sent you the test.',
+    notPlayed:
+      'A sound could not be played. Press its button again; if it still ' +
+      'stays silent, try another browser.',
   };
 
   const isObject = (value) =>
@@ -729,9 +737,7 @@
         audio.preload = 'auto';
         audio.src = file;
         audio.addEventListener('ended', () => mark(null));
-        audio.addEventListener('error', () =>
-          warn(`The sound ${file} could not be loaded.`)
-        );
+        audio.addEventListener('error', () => warn(TEXT.notLoaded));
         elements.set(file, audio);
       }
       return audio;
@@ -756,7 +762,13 @@
         current = audio;
         mark(source);
         const playing = audio.play();
-        playing?.catch?.(() => warn(`The sound ${file} could not be played.`));
+        // Switching sounds pauses a play() that has not started yet; the
+        // browser then rejects it with an AbortError, which is no failure.
+        playing?.catch?.((error) => {
+          if (error?.name !== 'AbortError') {
+            warn(TEXT.notPlayed);
+          }
+        });
       },
       stop() {
         current?.pause();
