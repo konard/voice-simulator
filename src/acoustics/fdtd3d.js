@@ -281,6 +281,12 @@ export class Fdtd3d {
     /** Mean pressure of the source cells after the last two steps. */
     this.glottisPressure = 0;
     this.previousGlottisPressure = 0;
+    /**
+     * The last glottal flow and the pressure (per unit flow, 1/cm²) it
+     * added to the mean of the source cells (see glottalLoad).
+     */
+    this.lastGlottalFlow = 0;
+    this.sourceGain = 0;
     this.leak = 1 - this.dt / MICROPHONE_LEAK_TIME;
     this.tubeAreas = [null, null];
     this.pending = [];
@@ -605,13 +611,19 @@ export class Fdtd3d {
   }
 
   /**
-   * The vocal tract as the folds see it (issue 34): half the mean pressure
-   * p of the source cells after the last step and an infinite area, since
-   * p already holds the response to the glottal flow. In microphone output
-   * the field holds the integrated source (#sourcePressure); the incident
-   * wave undoes that integration so that it is a derivative as the source
-   * in both outputs. Steps on the GPU are batched, so there is no load
-   * there. The object is reused.
+   * The vocal tract as the folds see it (issue 34), in the terms of a tube
+   * (Waveguide.glottalLoad): the source cells answer a glottal flow s at
+   * once with a pressure jump of s / area (area = air face area of the
+   * source cells / (COURANT * keep)), and the rest of their mean pressure p
+   * is what came back from the field, the incident wave (p - s / area) / 2
+   * of the last step. Handing the folds that area lets them solve the
+   * jump with the flow (interactiveFlow); taking p / 2 with an infinite
+   * area instead feeds the jump of the last flow back one step late,
+   * which is unstable with a wide glottis ([h]). In microphone output the
+   * field holds the integrated source (#sourcePressure); the incident wave
+   * undoes that integration so that it is a derivative as the source in
+   * both outputs. Steps on the GPU are batched, so there is no load there.
+   * The object is reused.
    * @returns {{incident: number, area: number}}
    */
   glottalLoad() {
@@ -625,7 +637,9 @@ export class Fdtd3d {
         (pressure - this.leak * this.previousGlottisPressure) /
         (this.dx * MICROPHONE_GAIN);
     }
-    this.load.incident = pressure / 2;
+    const gain = this.sourceGain;
+    this.load.incident = (pressure - gain * this.lastGlottalFlow) / 2;
+    this.load.area = gain > 0 ? 1 / gain : Infinity;
     return this.load;
   }
 
@@ -974,9 +988,15 @@ export class Fdtd3d {
     // A volume velocity V raises the pressure of the cells it enters by
     // lambda * V / (air face area): sum of phi * dx² over the source cells.
     let area = 0;
+    let keep = 0;
     for (const index of this.sourceCells) {
       area += this.fill[index] * this.dx * this.dx;
+      keep += this.keep[index];
     }
+    this.lastGlottalFlow = glottalFlow;
+    this.sourceGain =
+      (COURANT * keep) /
+      (Math.max(area, 1e-3) * Math.max(1, this.sourceCells.length));
     return (COURANT * flow) / Math.max(area, 1e-3);
   }
 
@@ -1104,6 +1124,7 @@ export class Fdtd3d {
     this.burstState = 0;
     this.glottisPressure = 0;
     this.previousGlottisPressure = 0;
+    this.lastGlottalFlow = 0;
     this.gpu?.reset();
   }
 }

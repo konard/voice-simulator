@@ -17,6 +17,7 @@ import { Waveguide } from '../src/acoustics/waveguide.js';
 import { planUtterance } from '../src/articulation/plan.js';
 import { DEFAULT_HEAD, normalizeHeadConfig } from '../src/head-config.js';
 import { synthesize } from '../src/synthesize.js';
+import { analyzeVoice } from '../src/analysis/voice-features.js';
 import {
   firstFormant,
   flowRipple,
@@ -150,6 +151,29 @@ describe('source-tract interaction in the renderer', () => {
     const difference =
       20 * Math.log10(level(high.samples) / level(medium.samples));
     expect(Math.abs(difference)).toBeLessThan(6);
+  });
+
+  it('keeps the pitch of a sentence in 2D and 3D', () => {
+    // Without the jump of the source cells as the load's area the 2D sheet
+    // ran away to a clipped 500 Hz; and the [h] of "Hello." puts the noise
+    // plane of the 3D grid over its source cells, where a burst transient
+    // from the folds' own mean area ran away and left 0.07 s voiced at
+    // 105 Hz (experiments/issue-34-3d-stability).
+    for (const solver of [{ solver: 'fdtd2d' }, { tier: 'high' }]) {
+      const render = (interaction) => {
+        const { samples, sampleRate } = synthesize('Hello.', {
+          source: 'folds',
+          interaction,
+          ...solver,
+        });
+        expect(samples.every(Number.isFinite)).toBe(true);
+        return analyzeVoice(samples, sampleRate);
+      };
+      const coupled = render(true);
+      const plain = render(false);
+      expect(coupled.voicedDuration).toBeGreaterThanOrEqual(0.2);
+      expect(Math.abs(coupled.f0 / plain.f0 - 1)).toBeLessThan(0.08);
+    }
   });
 
   it('rejects interaction with the LF source', () => {
