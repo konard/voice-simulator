@@ -1,0 +1,16 @@
+# node experiments/issue-40-ama-3d.mjs 1 main-vowel-calibration.mjs   (git show main:src/articulation/vowel-calibration.js, imports pointed at src/articulation)
+# node experiments/issue-40-ama-3d.mjs 0.6
+dx 1
+source plane follows the length: { vowel: 0.1396, nasal: 0.1513, ratio: 1.083, rises: [ 2 ] }
+source plane at rest:             { vowel: 0.1483, nasal: 0.1424, ratio: 0.96, rises: [ 0 ] }
+follows, other table:             { vowel: 0.1368, nasal: 0.1582, ratio: 1.156, rises: [ 2 ] }
+at rest, other table:             { vowel: 0.1569, nasal: 0.1442, ratio: 0.919, rises: [ 0 ] }
+dx 0.6
+source plane follows the length: { vowel: 0.1337, nasal: 0.144, ratio: 1.077, rises: [ 3 ] }
+source plane at rest:             { vowel: 0.1271, nasal: 0.1517, ratio: 1.194, rises: [ 0 ] }
+
+# node experiments/issue-11-audit-m2.mjs, ama ratio (audio nasal / audio vowel)
+#            main   branch
+# waveguide  1.11   1.12
+# dx 1       0.90   1.08   (+20 %)
+# dx 0.6     1.20   1.08   (-10 %)
