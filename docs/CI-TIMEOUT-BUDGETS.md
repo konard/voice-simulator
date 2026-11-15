@@ -118,7 +118,7 @@ neither of which was involved in the original failure.
 
 | Job                              | Backstop | Step budgets                                                                                                                                                       |
 | -------------------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `test`                           | 15 min   | Node.js 300s, Bun 300s, Deno 200s                                                                                                                                  |
+| `test`                           | 15 min   | Node.js 300s, Bun 300s, Deno 300s                                                                                                                                  |
 | `rust`                           | 15 min   | toolchain install 150s, `cargo fmt` 30s, `cargo check` 60s, `cargo clippy` 60s, `cargo doc` 60s, `cargo test` 90s, wasm build 90s, CLI build 60s, parity tests 30s |
 | `docker-build`                   | 30 min   | image build 20 min                                                                                                                                                 |
 | `docker-publish-config`          | 45 min   | npm availability wait 1800s                                                                                                                                        |

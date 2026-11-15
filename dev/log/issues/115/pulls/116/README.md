@@ -53,6 +53,7 @@ All times are UTC on 2026-11-15.
 | 18:49    | The Security run on `f9866be` warns about GHSA-474x-hrwr-fgx4 in the `artifact-transport` lockfile; `77832fa` fixes it, filed as template #302.                                                                      |
 | 19:00    | All five runs on `3de83a4` pass. Checks and release 43749293266 still warns: secretlint's preset is deprecated (F15), Bun used 140s+ of 200s (F16), and the Windows warning line has no annotation (F17).            |
 | 19:25    | `747fe16` (secretlint 14), `18b20f0` (annotation line start, template budget fixes), `09a75f4` (Bun budget); filed as template #303 and #304.                                                                        |
+| 19:35    | All five runs on `729e3ab` pass; the Deno suite on `windows-2025` warns at 140s of 200s (F16), and its budget becomes 300s.                                                                                          |
 
 ## Requirements
 
@@ -250,7 +251,7 @@ with a stack trace into every test run. `44e9e4a` captures and asserts it.
   `tests/workflows-lint.test.js` now fails if the preset package returns.
 - **Template:** same step, #303.
 
-### F16. The Bun suite outgrew its 200s budget (warning, near false positive)
+### F16. The Bun and Deno suites outgrew their 200s budgets (warning, near false positive)
 
 - **Symptom:** `Bun test suite has run for 140s of its 200s budget` on
   `macos-15` and `windows-2025`. The Windows step finished in 194s, 6s
@@ -273,6 +274,15 @@ with a stack trace into every test run. `44e9e4a` captures and asserts it.
   runs in their reports. This suite spawns git and CLI processes in many files, so
   that would trade a slow green step for intermittent red ones. Revisit when
   those issues close.
+- **Deno, too:** after the Bun fix, Checks and release 43752648961 on
+  `729e3ab` warned `Deno test suite has run for 140s of its 200s budget`
+  on `windows-2025`, as 43746539860 and 43752298851 had. The Windows Deno
+  step took 101–127s on the last three `main` runs and 87–150s on this PR,
+  above 140s in three of the last four runs (`data/deno-durations.tsv`);
+  macOS and Ubuntu stayed at 62–120s. Deno runs files in parallel already,
+  but its Windows runner spawns git and shell fixtures slowly. Deno gets
+  the same 300s budget in the next commit, so all three runtimes now share
+  one budget.
 - **Template:** its sample suite is small; not reported.
 
 ### F17. Budget annotations lost after unterminated output (false negative)

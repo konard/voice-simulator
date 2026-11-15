@@ -417,10 +417,11 @@ jobs:
         # (tests/helpers/gpu.js). Ubuntu runners have none (issue 30).
         env:
           REQUIRE_GPU: ${{ matrix.os != 'ubuntu-24.04' && '1' || '' }}
-        # 200s: on windows-2025 the suite took 93-94s on main
-        # after #90 and 101-103s on PR #91, mostly in tests that spawn git
-        # and shell fixtures, so 100s left no room for runner variance.
-        run: bash scripts/run-with-budget-warning.sh 200 "Deno test suite" deno test -A --parallel
+        # 300s, as for Node.js and Bun: on windows-2025 the suite took
+        # 87-150s on main and PR #116 (issue 115), mostly in tests that spawn
+        # git and shell fixtures, and crossed the 70% warning of a 200s budget
+        # in three of four runs. It took 101-103s on PR #91 (100s then).
+        run: bash scripts/run-with-budget-warning.sh 300 "Deno test suite" deno test -A --parallel
 
   # === RUST ENGINE ===
   # Lints and tests the Rust workspace, builds src/engine/voice-simulator.wasm
