@@ -13,6 +13,7 @@ const cases = [
     'ˈasa ˈaʃa ˈafa ˈaθa ˈaxa ˈpʰa ˈtʰa ˈkʰa ˈba',
     { ipa: true, tier: 'medium' },
   ],
+  ['ˈasa ˈaha ˈpʰa', { ipa: true, tier: 'minimal', source: 'folds' }],
 ];
 for (const [text, options] of cases) {
   const { samples } = synthesize(text, { seed: 1, ...options });
@@ -22,5 +23,7 @@ for (const [text, options] of cases) {
     samples.byteLength
   );
   const hash = createHash('sha256').update(bytes).digest('hex').slice(0, 16);
-  console.log(`${options.tier.padEnd(7)} ${hash} ${text}`);
+  console.log(
+    `${options.tier.padEnd(7)} ${hash} ${text}${options.source ? ` (${options.source})` : ''}`
+  );
 }
