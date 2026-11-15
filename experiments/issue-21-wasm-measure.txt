@@ -1,0 +1,15 @@
+build 1: 17443 bytes, SHA-256 9ab913542bf4563adf4e4aa678ca44490ccf236dd2c9243e9cadfea7b7aff556, 0.6 s
+build 2: 17443 bytes, SHA-256 9ab913542bf4563adf4e4aa678ca44490ccf236dd2c9243e9cadfea7b7aff556, 0.5 s
+reproducible: yes
+cli random 1 3: 3fe410fd5e600000 3f66693920000000 3fe0e0d89d600000
+js createRandom(1): 3fe410fd5e600000 3f66693920000000 3fe0e0d89d600000
+cli matches js: yes
+1000000 uniform values: wasm 17.5 ms, js 57.7 ms, sums equal: yes
+
+# The builds above reuse the compiled libm (only the wasm crate is cleaned).
+# A cold build after `rm -rf target/wasm32-unknown-unknown`:
+#   node scripts/build-wasm.mjs --require --check-size
+#   Finished `release` profile [optimized] target(s) in 3.72s
+#   src/engine/voice-simulator.wasm: 17443 bytes
+#   SHA-256: 9ab913542bf4563adf4e4aa678ca44490ccf236dd2c9243e9cadfea7b7aff556
+# Rust 1.100.0, x86_64 Linux, Node.js v26.13.0.

@@ -155,3 +155,9 @@ __pycache__/
 # configuration that points at them; never committed
 examples/listening-test/stimuli/
 examples/listening-test/config.js
+
+# Rust build output (cargo) and the WebAssembly engine built from it by
+# scripts/build-wasm.mjs; CI builds the engine and hands it to the publishing
+# jobs as an artifact, so it is never committed
+/target/
+src/engine/*.wasm

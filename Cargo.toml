@@ -1,0 +1,24 @@
+# Rust engine of the voice simulator (issue #21). The JavaScript code in src/
+# stays the reference; docs/RUST-ENGINE.md describes the crates, the
+# WebAssembly interface and the parity rules.
+[workspace]
+resolver = "2"
+members = [
+    "crates/voice-simulator-core",
+    "crates/voice-simulator-wasm",
+    "crates/voice-simulator-cli",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "Unlicense"
+publish = false
+repository = "https://github.com/konard/voice-simulator"
+
+[profile.release]
+opt-level = 3
+lto = "fat"
+codegen-units = 1
+panic = "abort"
+strip = true

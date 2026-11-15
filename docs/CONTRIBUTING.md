@@ -301,6 +301,26 @@ Audio of other synthesisers enters a test only through `extra` in the
 sentences file. It is never committed and no code in this repository runs
 another synthesiser.
 
+### Rust engine
+
+The Rust workspace in `crates/` reproduces numerical code of `src/` as one
+WebAssembly file. [RUST-ENGINE.md](RUST-ENGINE.md) has the interface rules,
+the determinism rules and the parity classes; read it before porting code.
+In short:
+
+1. `rustup toolchain install` installs the compiler pinned in
+   `rust-toolchain.toml`; `npm run build:wasm` builds
+   `src/engine/voice-simulator.wasm`, which is git-ignored.
+2. Before a pull request, run `cargo fmt --all --check`,
+   `cargo clippy --workspace --all-targets --locked -- -D warnings`,
+   `cargo test --workspace --locked` and
+   `REQUIRE_WASM=1 node --test tests/rust-parity.test.js`.
+3. A new crate is added to `scripts/rust-allowed-crates.json` with its
+   licence in the same pull request; only permissive licences are allowed.
+
+Without `cargo` everything else still works: the build script prints a note
+and the parity tests are skipped with their reason.
+
 ## Version Management with Changesets
 
 This project uses [Changesets](https://github.com/changesets/changesets) to manage versions and changelogs. This eliminates merge conflicts that occur when multiple PRs bump the version in `package.json`.

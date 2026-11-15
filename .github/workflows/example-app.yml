@@ -11,6 +11,11 @@ on:
       - 'scripts/update-preview-images.mjs'
       - 'scripts/check-pages.sh'
       - 'scripts/build-previous-versions.mjs'
+      - 'scripts/build-wasm.mjs'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - 'rust-toolchain.toml'
+      - 'crates/**'
       - '.github/workflows/example-app.yml'
   push:
     branches:
@@ -23,6 +28,11 @@ on:
       - 'scripts/update-preview-images.mjs'
       - 'scripts/check-pages.sh'
       - 'scripts/build-previous-versions.mjs'
+      - 'scripts/build-wasm.mjs'
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - 'rust-toolchain.toml'
+      - 'crates/**'
       - '.github/workflows/example-app.yml'
   workflow_dispatch:
 
@@ -37,8 +47,49 @@ env:
   GIT_CONFIG_VALUE_0: main
 
 jobs:
+  # The Rust engine (docs/RUST-ENGINE.md), built once with the compiler
+  # pinned in rust-toolchain.toml and handed to the app builds below as an
+  # artifact, the same way the rust job of release.yml hands it to the
+  # npm release.
+  wasm-build:
+    name: Build WebAssembly engine
+    runs-on: ubuntu-24.04
+    # Typical run: under 1min (toolchain install and one small release
+    # build). The steps own budgets below; this cap is the backstop.
+    timeout-minutes: 10
+    concurrency:
+      group: check-${{ github.workflow }}-${{ github.ref }}-wasm-build
+      cancel-in-progress: true
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: '24.x'
+
+      # See the rust job of release.yml for why install comes before show.
+      - name: Install the pinned Rust toolchain
+        run: |
+          bash scripts/run-with-budget-warning.sh 150 "Rust toolchain install" rustup toolchain install
+          rustup show
+
+      - name: Build the WebAssembly engine
+        run: bash scripts/run-with-budget-warning.sh 180 "wasm build" node scripts/build-wasm.mjs --require --check-size
+
+      - name: Upload the WebAssembly engine
+        uses: actions/upload-artifact@v7
+        with:
+          name: voice-simulator-wasm
+          path: src/engine/voice-simulator.wasm
+          if-no-files-found: error
+          retention-days: 14
+
   web-build:
     name: Build web app
+    needs: [wasm-build]
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     concurrency:
@@ -74,6 +125,14 @@ jobs:
       - name: Configure GitHub Pages
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         uses: actions/configure-pages@v6
+
+      - name: Download the WebAssembly engine
+        uses: actions/download-artifact@v8
+        env:
+          NODE_OPTIONS: --disable-warning=DEP0005
+        with:
+          name: voice-simulator-wasm
+          path: src/engine
 
       - name: Install app dependencies
         run: npm ci --prefix examples/universal-app --no-audit --no-fund
@@ -128,7 +187,8 @@ jobs:
         uses: actions/deploy-pages@v5
 
   desktop-package:
-    name: Package desktop app (${{ matrix.os }})
+    name: Package desktop app
+    needs: [wasm-build]
     runs-on: ${{ matrix.os }}
     timeout-minutes: 20
     concurrency:
@@ -149,6 +209,14 @@ jobs:
           node-version: '24.x'
           cache: npm
           cache-dependency-path: examples/universal-app/package-lock.json
+
+      - name: Download the WebAssembly engine
+        uses: actions/download-artifact@v8
+        env:
+          NODE_OPTIONS: --disable-warning=DEP0005
+        with:
+          name: voice-simulator-wasm
+          path: src/engine
 
       - name: Install app dependencies
         run: npm ci --prefix examples/universal-app --no-audit --no-fund
@@ -180,6 +248,7 @@ jobs:
 
   android-build:
     name: Build Android app
+    needs: [wasm-build]
     if: github.event_name == 'workflow_dispatch' && vars.EXAMPLE_APP_ENABLE_ANDROID_BUILD == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 30
@@ -207,6 +276,14 @@ jobs:
       - name: Setup Android SDK
         uses: android-actions/setup-android@9fc6c4e9069bf8d3d10b2204b1fb8f6ef7065407 # v3.2.2
 
+      - name: Download the WebAssembly engine
+        uses: actions/download-artifact@v8
+        env:
+          NODE_OPTIONS: --disable-warning=DEP0005
+        with:
+          name: voice-simulator-wasm
+          path: src/engine
+
       - name: Install app dependencies
         run: npm ci --prefix examples/universal-app --no-audit --no-fund
 
@@ -227,6 +304,7 @@ jobs:
 
   ios-build:
     name: Build iOS app
+    needs: [wasm-build]
     if: github.event_name == 'workflow_dispatch' && vars.EXAMPLE_APP_ENABLE_IOS_BUILD == 'true'
     runs-on: macos-15
     timeout-minutes: 30
@@ -244,6 +322,14 @@ jobs:
           node-version: '24.x'
           cache: npm
           cache-dependency-path: examples/universal-app/package-lock.json
+
+      - name: Download the WebAssembly engine
+        uses: actions/download-artifact@v8
+        env:
+          NODE_OPTIONS: --disable-warning=DEP0005
+        with:
+          name: voice-simulator-wasm
+          path: src/engine
 
       - name: Install app dependencies
         run: npm ci --prefix examples/universal-app --no-audit --no-fund
@@ -422,6 +508,7 @@ jobs:
     if: >-
       !cancelled()
     needs:
+      - wasm-build
       - web-build
       - pages-deploy
       - desktop-package

@@ -1,0 +1,8 @@
+# One exact stable release, so that every machine and CI builds the same
+# WebAssembly file. Raise it in its own pull request and record the new
+# size and SHA-256 of src/engine/voice-simulator.wasm there.
+[toolchain]
+channel = "1.100.0"
+components = ["rustfmt", "clippy"]
+targets = ["wasm32-unknown-unknown"]
+profile = "minimal"

@@ -388,6 +388,90 @@ jobs:
         # and shell fixtures, so 100s left no room for runner variance.
         run: bash scripts/run-with-budget-warning.sh 200 "Deno test suite" deno test -A --parallel
 
+  # === RUST ENGINE ===
+  # Lints and tests the Rust workspace, builds src/engine/voice-simulator.wasm
+  # with the compiler pinned in rust-toolchain.toml, checks it against the
+  # JavaScript reference bit for bit and hands it to the publishing jobs as
+  # an artifact (docs/RUST-ENGINE.md). The rustup of the runner image reads
+  # rust-toolchain.toml, so `rustup show` installs the pinned toolchain.
+  rust:
+    name: Rust Engine
+    runs-on: ubuntu-24.04
+    # Typical run: about 1min (toolchain install, then a few seconds per
+    # cargo step for three small crates). Each step owns a budget below;
+    # this cap is only the backstop behind them.
+    timeout-minutes: 15
+    concurrency:
+      group: check-${{ github.workflow }}-${{ github.ref }}-rust
+      cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+    needs: [detect-changes]
+    # The same gate as the test job, so every run that can publish has
+    # built the file the publishing jobs download.
+    if: |
+      !cancelled() &&
+      (
+        needs.detect-changes.outputs.any-code-changed == 'true' ||
+        (
+          github.event_name == 'workflow_dispatch' &&
+          github.event.inputs.release_mode == 'instant'
+        )
+      )
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Simulate fresh merge with base branch (PR only)
+        if: github.event_name == 'pull_request'
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: bash scripts/simulate-fresh-merge.sh
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: '24.x'
+
+      - name: Install dependencies
+        run: npm install
+
+      # `rustup toolchain install` without arguments installs the toolchain
+      # that rust-toolchain.toml selects; `rustup show` would install it too,
+      # but rustup 1.29 warns that this auto-installation is deprecated
+      # (rust-lang/rustup#4836). `rustup show` then logs what is active.
+      - name: Install the pinned Rust toolchain
+        run: |
+          bash scripts/run-with-budget-warning.sh 150 "Rust toolchain install" rustup toolchain install
+          rustup show
+
+      - name: Check Rust formatting
+        run: bash scripts/run-with-budget-warning.sh 30 "cargo fmt" cargo fmt --all --check
+
+      - name: Run Clippy
+        run: bash scripts/run-with-budget-warning.sh 120 "cargo clippy" cargo clippy --workspace --all-targets --locked -- -D warnings
+
+      - name: Run Rust tests
+        run: bash scripts/run-with-budget-warning.sh 120 "cargo test" cargo test --workspace --locked
+
+      - name: Build the WebAssembly engine
+        run: bash scripts/run-with-budget-warning.sh 120 "wasm build" node scripts/build-wasm.mjs --require --check-size
+
+      - name: Run Rust parity tests
+        env:
+          REQUIRE_WASM: '1'
+        run: bash scripts/run-with-budget-warning.sh 60 "Rust parity tests" node --test tests/rust-parity.test.js
+
+      - name: Upload the WebAssembly engine
+        uses: actions/upload-artifact@v7
+        with:
+          name: voice-simulator-wasm
+          path: src/engine/voice-simulator.wasm
+          if-no-files-found: error
+          retention-days: 14
+
   # === DOCKER IMAGE BUILD CHECK (pull requests) ===
   # Builds the Dockerfile without pushing so a broken image fails the pull
   # request instead of surfacing only after publish (issue #106).
@@ -573,6 +657,7 @@ jobs:
         docker-build,
         validate-docs,
         release-preflight,
+        rust,
       ]
     # The 25.5-minute propagation window fits within the publish step budget,
     # with headroom for install/smoke steps under the 70% budget policy.
@@ -590,6 +675,7 @@ jobs:
       needs.release-preflight.result == 'success' &&
       needs.lint.result == 'success' &&
       needs.test.result == 'success' &&
+      needs.rust.result == 'success' &&
       !contains(needs.*.result, 'failure') &&
       !contains(needs.*.result, 'cancelled')
     runs-on: ubuntu-24.04
@@ -664,6 +750,17 @@ jobs:
           RELEASE_METADATA_PATHS: ${{ vars.RELEASE_METADATA_PATHS }}
         run: node scripts/version-and-commit.mjs --mode changeset
 
+      # The file the rust job built and checked; src/engine/*.wasm is
+      # git-ignored, so only this download puts it into the package.
+      - name: Download the WebAssembly engine
+        timeout-minutes: 5
+        uses: actions/download-artifact@v8
+        env:
+          NODE_OPTIONS: --disable-warning=DEP0005
+        with:
+          name: voice-simulator-wasm
+          path: src/engine
+
       - name: Publish to npm
         # Run if version was committed, if a previous attempt already committed (for re-runs),
         # or if check-release-needed detected an unpublished version (self-healing, issue #36)
@@ -724,6 +821,7 @@ jobs:
         docker-build,
         validate-docs,
         release-preflight,
+        rust,
       ]
     if: |
       !cancelled() &&
@@ -732,6 +830,7 @@ jobs:
       needs.release-preflight.result == 'success' &&
       needs.lint.result == 'success' &&
       needs.test.result == 'success' &&
+      needs.rust.result == 'success' &&
       !contains(needs.*.result, 'failure') &&
       !contains(needs.*.result, 'cancelled')
     runs-on: ubuntu-24.04
@@ -786,6 +885,17 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           RELEASE_METADATA_PATHS: ${{ vars.RELEASE_METADATA_PATHS }}
         run: node scripts/version-and-commit.mjs --mode instant --bump-type "$BUMP_TYPE" --description "$RELEASE_DESCRIPTION"
+
+      # The file the rust job built and checked; src/engine/*.wasm is
+      # git-ignored, so only this download puts it into the package.
+      - name: Download the WebAssembly engine
+        timeout-minutes: 5
+        uses: actions/download-artifact@v8
+        env:
+          NODE_OPTIONS: --disable-warning=DEP0005
+        with:
+          name: voice-simulator-wasm
+          path: src/engine
 
       - name: Publish to npm
         # Run if version was committed OR if a previous attempt already committed (for re-runs)
@@ -1103,6 +1213,7 @@ jobs:
       - changeset-check
       - lint
       - test
+      - rust
       - simulation
       - docker-build
       - docker-publish-config

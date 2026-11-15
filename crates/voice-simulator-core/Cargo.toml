@@ -1,0 +1,12 @@
+[package]
+name = "voice-simulator-core"
+description = "Numerical core of the voice simulator: no I/O, no threads, no clock"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+repository.workspace = true
+
+[dependencies]
+# Only src/math.rs may call it; see docs/RUST-ENGINE.md.
+libm = "0.2"
