@@ -4,8 +4,9 @@
  * Policy check: no neural networks, permissive licences only (issue 15).
  *
  * Fails when the repository depends on a neural network library, imports
- * one, contains a neural model file, or depends on a package whose licence
- * is not in the allow list. The lists live in scripts/policy-denylist.json;
+ * one, contains a neural model file, depends on a package whose licence
+ * is not in the allow list, lists a speech dataset that the dataset registry
+ * check refuses, or tracks a file of the dataset cache (issue 16). The lists live in scripts/policy-denylist.json;
  * the boundary itself is described in docs/VISION.md, section "What counts
  * as a neural network".
  *
@@ -24,6 +25,7 @@ import { spawnSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath, URL } from 'node:url';
+import { registryProblems } from './datasets.mjs';
 
 const SCRIPT_DIR = path.dirname(fileURLToPath(import.meta.url));
 export const REPO_ROOT = path.resolve(SCRIPT_DIR, '..');
@@ -90,6 +92,7 @@ export function loadList(root = REPO_ROOT, file) {
     deniedPackages: { npm: [], cargo: [], python: [] },
     deniedFileExtensions: [],
     allowedLicences: [],
+    allowedDatasetLicences: [],
     exceptions: [],
     ...list,
   };
@@ -1057,6 +1060,63 @@ function cargoMetadataFindings(root, list, cargo) {
 }
 
 // ---------------------------------------------------------------------------
+// Speech datasets (issue 16)
+
+export const DATASET_REGISTRY = 'datasets/registry.json';
+export const DATASET_REFUSED = 'datasets/refused.json';
+export const DATASET_CACHE = '.datasets/';
+
+function readJson(root, file) {
+  const full = path.join(root, file);
+  return existsSync(full) ? JSON.parse(readFileSync(full, 'utf8')) : null;
+}
+
+/**
+ * Every error of the dataset registry check, and every tracked file of the
+ * dataset cache, is a finding with rule `dataset`. No exception covers it.
+ *
+ * @param {string} root
+ * @param {object} list
+ * @param {string[]} [files]
+ */
+export function datasetFindings(root, list, files = trackedFiles(root)) {
+  const findings = files
+    .filter((file) => file.startsWith(DATASET_CACHE))
+    .map((file) =>
+      finding(
+        'dataset',
+        file,
+        1,
+        file,
+        'is in the dataset cache; fetched data never enters the repository'
+      )
+    );
+  let registry;
+  try {
+    registry = readJson(root, DATASET_REGISTRY);
+  } catch (error) {
+    findings.push(
+      finding('dataset', DATASET_REGISTRY, 1, DATASET_REGISTRY, error.message)
+    );
+    return findings;
+  }
+  if (registry === null) {
+    return findings;
+  }
+  const lines = readFileSync(path.join(root, DATASET_REGISTRY), 'utf8').split(
+    '\n'
+  );
+  const refused = readJson(root, DATASET_REFUSED) ?? [];
+  for (const { message } of registryProblems(registry, list, refused)) {
+    const name = message.split(':')[0];
+    const line = lineOf(lines, `"id": "${name}"`);
+    const text = message.slice(name.length + 1).trim() || message;
+    findings.push(finding('dataset', DATASET_REGISTRY, line, name, text));
+  }
+  return findings;
+}
+
+// ---------------------------------------------------------------------------
 // Exceptions and the whole check
 
 /**
@@ -1122,6 +1182,9 @@ export function checkPolicy(root = REPO_ROOT, list = loadList(root), options) {
     ...deniedFiles(root, list, files),
     ...licenceFindings(root, list, files, options),
   ];
+  // Kept out of applyExceptions: the dataset licence gate cannot be
+  // switched off.
+  const datasets = datasetFindings(root, list, files);
   const packages = new Set(
     collectDependencies(root, files)
       .filter((entry) => !entry.error)
@@ -1131,7 +1194,7 @@ export function checkPolicy(root = REPO_ROOT, list = loadList(root), options) {
       )
   );
   return {
-    findings: applyExceptions(raw, list.exceptions ?? []),
+    findings: [...applyExceptions(raw, list.exceptions ?? []), ...datasets],
     packages: packages.size,
     files: files.length,
   };

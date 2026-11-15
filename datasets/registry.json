@@ -1,0 +1,151 @@
+{
+  "schema": 1,
+  "datasets": [
+    {
+      "id": "fleurs-en",
+      "title": "FLEURS, English (United States), validation split",
+      "languages": ["en"],
+      "licence": "CC-BY-4.0",
+      "licenceUrl": "https://huggingface.co/datasets/google/fleurs",
+      "licenceQuote": "cc-by-4.0",
+      "licenceChecked": "2026-11-15",
+      "redistribution": false,
+      "citation": "Conneau et al. (2022). FLEURS: Few-shot Learning Evaluation of Universal Representations of Speech. arXiv:2205.12446.",
+      "source": {
+        "kind": "rows",
+        "dataset": "google/fleurs",
+        "config": "en_us",
+        "split": "validation",
+        "length": 100,
+        "textColumn": "raw_transcription",
+        "textSha256": "2d62285ce9acbc6f8d903c52dda24b2b8ffabfda8abaf80ef267252ddfe71741"
+      }
+    },
+    {
+      "id": "fleurs-ru",
+      "title": "FLEURS, Russian, validation split",
+      "languages": ["ru"],
+      "licence": "CC-BY-4.0",
+      "licenceUrl": "https://huggingface.co/datasets/google/fleurs",
+      "licenceQuote": "cc-by-4.0",
+      "licenceChecked": "2026-11-15",
+      "redistribution": false,
+      "citation": "Conneau et al. (2022). FLEURS: Few-shot Learning Evaluation of Universal Representations of Speech. arXiv:2205.12446.",
+      "source": {
+        "kind": "rows",
+        "dataset": "google/fleurs",
+        "config": "ru_ru",
+        "split": "validation",
+        "length": 100,
+        "textColumn": "raw_transcription",
+        "textSha256": "c9efec58e19bda24f3653a771c76c6ba111496b195c7d58afdcde58196f91c00"
+      }
+    },
+    {
+      "id": "fleurs-hi",
+      "title": "FLEURS, Hindi, validation split",
+      "languages": ["hi"],
+      "licence": "CC-BY-4.0",
+      "licenceUrl": "https://huggingface.co/datasets/google/fleurs",
+      "licenceQuote": "cc-by-4.0",
+      "licenceChecked": "2026-11-15",
+      "redistribution": false,
+      "citation": "Conneau et al. (2022). FLEURS: Few-shot Learning Evaluation of Universal Representations of Speech. arXiv:2205.12446.",
+      "source": {
+        "kind": "rows",
+        "dataset": "google/fleurs",
+        "config": "hi_in",
+        "split": "validation",
+        "length": 100,
+        "textColumn": "raw_transcription",
+        "textSha256": "5ebc9c47c54758b2ac80277bc78dcc6e28e47d40decacce096189fbf98ed86dc"
+      }
+    },
+    {
+      "id": "fleurs-zh",
+      "title": "FLEURS, Mandarin Chinese (simplified), validation split",
+      "languages": ["zh"],
+      "licence": "CC-BY-4.0",
+      "licenceUrl": "https://huggingface.co/datasets/google/fleurs",
+      "licenceQuote": "cc-by-4.0",
+      "licenceChecked": "2026-11-15",
+      "redistribution": false,
+      "citation": "Conneau et al. (2022). FLEURS: Few-shot Learning Evaluation of Universal Representations of Speech. arXiv:2205.12446.",
+      "source": {
+        "kind": "rows",
+        "dataset": "google/fleurs",
+        "config": "cmn_hans_cn",
+        "split": "validation",
+        "length": 100,
+        "textColumn": "raw_transcription",
+        "textSha256": "f1c35c73ca97bd5a0e54412a69a92337e4085478e520c71ec6d8b504a762ea7c"
+      }
+    },
+    {
+      "id": "aishell3-test-index",
+      "title": "AISHELL-3, transcript index of the test set (test/content.txt: one line per utterance, the WAV file name, then each Chinese character followed by its pinyin with a tone number)",
+      "languages": ["zh"],
+      "licence": "Apache-2.0",
+      "licenceUrl": "https://huggingface.co/datasets/AISHELL/AISHELL-3",
+      "licenceQuote": "apache-2.0",
+      "licenceChecked": "2026-11-15",
+      "redistribution": false,
+      "citation": "Shi, Bu, Xu, Zhang, Li (2021). AISHELL-3: A Multi-speaker Mandarin TTS Corpus. Proc. Interspeech 2021, 2756-2760. https://www.openslr.org/93/",
+      "source": {
+        "kind": "files",
+        "files": [
+          {
+            "name": "content.txt",
+            "url": "https://huggingface.co/datasets/AISHELL/AISHELL-3/resolve/f20d5db4a31fe779ef07bb1af4ea92da5c786622/test/content.txt",
+            "size": 2740125,
+            "sha256": "3cd4504905becdbe4efb90b530fad0eb38e5ef7a7b2d09cf136d1ee22f53917f"
+          }
+        ]
+      }
+    },
+    {
+      "id": "librivox-aesop-en-22",
+      "title": "LibriVox, Aesop's Fables, Volume 1, section 22: The North Wind and the Sun (English, 64 kbps MP3, 81 s)",
+      "languages": ["en"],
+      "licence": "Public-Domain",
+      "licenceUrl": "https://librivox.org/pages/public-domain/",
+      "licenceQuote": "all our recordings are public domain (definitely in the USA, and maybe in your country as well, see below). This means anyone can use all our recordings however they wish (even to sell them).",
+      "licenceChecked": "2026-11-15",
+      "redistribution": true,
+      "citation": "Aesop's Fables, Volume 1 (Fables 1-25), section 22, LibriVox, https://archive.org/details/aesop_fables_volume_one_librivox",
+      "source": {
+        "kind": "files",
+        "files": [
+          {
+            "name": "fables_01_22_aesop_64kb.mp3",
+            "url": "https://www.archive.org/download/aesop_fables_volume_one_librivox/fables_01_22_aesop_64kb.mp3",
+            "size": 656000,
+            "sha256": "227d586cd3815ddc9bf8b4d97f00e392b5a60b5341472dc8fd8634ad65f020e3"
+          }
+        ]
+      }
+    },
+    {
+      "id": "librivox-aesop-ru-01",
+      "title": "LibriVox, Aesop's fables in Russian, reading 01: Volk i zhuravl (Russian, 64 kbps MP3, 73 s)",
+      "languages": ["ru"],
+      "licence": "Public-Domain",
+      "licenceUrl": "https://librivox.org/pages/public-domain/",
+      "licenceQuote": "all our recordings are public domain (definitely in the USA, and maybe in your country as well, see below). This means anyone can use all our recordings however they wish (even to sell them).",
+      "licenceChecked": "2026-11-15",
+      "redistribution": true,
+      "citation": "Aesop's fables in Russian, reading 01, LibriVox, https://archive.org/details/aesops_fables_russian_0905_librivox",
+      "source": {
+        "kind": "files",
+        "files": [
+          {
+            "name": "basni_01_ezop_64kb.mp3",
+            "url": "https://www.archive.org/download/aesops_fables_russian_0905_librivox/basni_01_ezop_64kb.mp3",
+            "size": 586330,
+            "sha256": "363420ca8f88c4cf3900aae78a63c754d9fa91f8f2847fb684f89086b2761e21"
+          }
+        ]
+      }
+    }
+  ]
+}

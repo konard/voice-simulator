@@ -1,0 +1,38 @@
+[
+  {
+    "title": "TIMIT Acoustic-Phonetic Continuous Speech Corpus (LDC93S1)",
+    "licence": "LDC User Agreement",
+    "reason": "paid licence agreement with the Linguistic Data Consortium",
+    "url": "https://catalog.ldc.upenn.edu/LDC93S1"
+  },
+  {
+    "title": "Common Voice Scripted Speech (Mozilla Data Collective)",
+    "licence": "CC0-1.0 with extra terms",
+    "reason": "the download page says \"It is forbidden to re-host or re-share this dataset\" and the download needs an account",
+    "url": "https://mozilladatacollective.com/datasets"
+  },
+  {
+    "title": "RAVDESS, Ryerson Audio-Visual Database of Emotional Speech and Song",
+    "licence": "CC-BY-NC-SA-4.0",
+    "reason": "non-commercial and share-alike",
+    "url": "https://zenodo.org/records/1188976"
+  },
+  {
+    "title": "ST-CMDS, Free ST Chinese Mandarin Corpus (OpenSLR 38)",
+    "licence": "CC-BY-NC-ND-4.0",
+    "reason": "non-commercial and no derivatives",
+    "url": "https://www.openslr.org/38/"
+  },
+  {
+    "title": "VoxForge",
+    "licence": "GPL",
+    "reason": "\"repository of GPL Transcribed Speech Audio Files\": copyleft, not public domain",
+    "url": "https://voxforge.org/home/about/legal/terms-and-conditions"
+  },
+  {
+    "title": "Buckeye Corpus of Conversational Speech",
+    "licence": "Non-commercial, registration",
+    "reason": "\"The corpus is FREE for noncommercial uses\"; the download needs a login",
+    "url": "https://buckeyecorpus.osu.edu/"
+  }
+]
