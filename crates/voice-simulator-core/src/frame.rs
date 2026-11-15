@@ -3,8 +3,10 @@
 //! lists the same names in `FRAME`; `tests/engine-layout.test.js` compares
 //! the two files as text.
 //!
-//! A frame has `STRIDE + sections` values: the fixed fields below, then
-//! the area of every section (cm²).
+//! A frame has `STRIDE + sections + EXTRA_VALUES` values: the fixed
+//! fields below, the area of every section (cm²), then the extra values:
+//! the incisor gap (cm) of the shape (`shape.teeth.gap`, 0 when TEETH is
+//! 0). The waveguide reads only the areas; the 3D solver also the gap.
 
 /// Tract length (cm).
 pub const LENGTH: usize = 0;
@@ -37,14 +39,33 @@ pub const LOUDNESS: usize = 13;
 /// Lung pressure (Pa): `state.lungPressure ?? head.lungPressure`. The
 /// issue reserves fields 14 and 15; this one carries the respiratory drive.
 pub const LUNG_PRESSURE: usize = 14;
-/// Reserved, zero.
-pub const RESERVED: usize = 15;
+/// Flag: the shape has incisors (`shape.teeth` is not null), so the
+/// extra values hold the gap between them.
+pub const TEETH: usize = 15;
+/// Number of extra values after the areas, always [`EXTRA_VALUES`].
+pub const EXTRA: usize = 16;
 /// First section area.
-pub const AREAS: usize = 16;
+pub const AREAS: usize = 17;
 /// Fixed fields before the areas.
-pub const STRIDE: usize = 16;
+pub const STRIDE: usize = 17;
+/// Values after the areas: the incisor gap (cm).
+pub const EXTRA_VALUES: usize = 1;
 
 /// Values per frame for a tract of `sections` sections.
 pub const fn stride(sections: usize) -> usize {
-    STRIDE + sections
+    STRIDE + sections + EXTRA_VALUES
+}
+
+/// The section areas of a frame.
+pub fn areas(frame: &[f64]) -> &[f64] {
+    &frame[AREAS..frame.len() - EXTRA_VALUES]
+}
+
+/// The incisor gap (cm) of a frame, `None` without incisors.
+pub fn teeth_gap(frame: &[f64]) -> Option<f64> {
+    if frame[TEETH] != 0.0 {
+        Some(frame[frame.len() - EXTRA_VALUES])
+    } else {
+        None
+    }
 }

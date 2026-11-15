@@ -405,8 +405,8 @@ impl<S: Solver> Renderer<S> {
 /// Refuses frames the solver cannot take: fields that are not finite and
 /// tract lengths that are not positive (they would stop the step clock).
 fn check_frame(frame: &[f64]) -> Result<(), RenderError> {
-    let finite = frame[..frame::STRIDE].iter().all(|value| value.is_finite());
-    if finite && frame[frame::LENGTH] > 0.0 {
+    let finite = frame.iter().all(|value| value.is_finite());
+    if finite && frame[frame::LENGTH] > 0.0 && frame[frame::EXTRA] == frame::EXTRA_VALUES as f64 {
         Ok(())
     } else {
         Err(RenderError::Frame)
@@ -473,6 +473,7 @@ mod tests {
         frame[frame::VOICING] = 1.0;
         frame[frame::LOUDNESS] = 1.0;
         frame[frame::LUNG_PRESSURE] = 800.0;
+        frame[frame::EXTRA] = frame::EXTRA_VALUES as f64;
         frame
     }
 

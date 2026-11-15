@@ -864,7 +864,7 @@ impl Waveguide {
 impl Solver for Waveguide {
     fn set_shape(&mut self, frame: &[f64]) {
         self.set_areas(
-            &frame[frame::AREAS..],
+            frame::areas(frame),
             frame[frame::VELUM_AREA],
             frame[frame::VELUM_INDEX],
         );

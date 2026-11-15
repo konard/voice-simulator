@@ -104,6 +104,42 @@ pub fn tanh(x: f64) -> f64 {
     libm::tanh(x)
 }
 
+/// `Math.hypot` of V8 (`MathHypot` in `src/builtins/math.tq`): the
+/// largest magnitude scales the values, whose squares are summed with
+/// Kahan compensation. Not correctly rounded, so `sqrt` of the plain sum
+/// of squares can differ in the last bit, which flips the nearest cell
+/// when two cells are equally far.
+pub fn js_hypot(values: &[f64]) -> f64 {
+    let mut largest = 0.0;
+    let mut nan = false;
+    for &value in values {
+        if value.is_nan() {
+            nan = true;
+        } else if abs(value) > largest {
+            largest = abs(value);
+        }
+    }
+    if largest == f64::INFINITY {
+        return f64::INFINITY;
+    }
+    if nan {
+        return f64::NAN;
+    }
+    if largest == 0.0 {
+        return 0.0;
+    }
+    let mut sum = 0.0;
+    let mut compensation = 0.0;
+    for &value in values {
+        let scaled = abs(value) / largest;
+        let summand = scaled * scaled - compensation;
+        let preliminary = sum + summand;
+        compensation = (preliminary - sum) - summand;
+        sum = preliminary;
+    }
+    sqrt(sum) * largest
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -133,5 +169,15 @@ mod tests {
         assert_eq!(ln(1.0), 0.0);
         assert_eq!(pow(2.0, 10.0), 1024.0);
         assert_eq!(tanh(0.0), 0.0);
+    }
+
+    #[test]
+    fn hypot_follows_v8() {
+        assert_eq!(js_hypot(&[3.0, 4.0]), 5.0);
+        assert_eq!(js_hypot(&[0.0, -0.0]), 0.0);
+        assert_eq!(js_hypot(&[f64::NAN, f64::INFINITY]), f64::INFINITY);
+        assert!(js_hypot(&[f64::NAN, 1.0]).is_nan());
+        // Math.hypot(1, 1, 1) in node is 1.7320508075688772.
+        assert_eq!(js_hypot(&[1.0, 1.0, 1.0]), 1.732_050_807_568_877_2);
     }
 }

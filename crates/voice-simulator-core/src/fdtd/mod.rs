@@ -7,3 +7,5 @@
 pub mod kernel;
 #[cfg(all(target_arch = "wasm32", target_feature = "simd128"))]
 mod kernel_simd;
+pub mod model;
+pub mod solver;

@@ -14,7 +14,7 @@ use alloc::vec::Vec;
 use core::f64::consts::PI;
 
 use crate::glottis::SPEED_OF_SOUND;
-use crate::math::{self, max};
+use crate::math::{self, max, min};
 
 /// Kinematic viscosity (cm²/s).
 const VISCOSITY: f64 = 0.15;
@@ -44,6 +44,17 @@ pub const LOSS_REFERENCE_SECTIONS: f64 = 44.0;
 const ZERO_LIMIT: f64 = 0.999;
 /// Frequencies of the design grid (`designGrid`).
 const GRID_POINTS: usize = 41;
+
+/// Frequency-independent loss per crossed section of `area` cm² with the
+/// wall loss `wall` (`boundaryLossFactor` of `src/acoustics/waveguide.js`,
+/// the waveguide loss before issue 36). The 3D solver damps its links
+/// with it.
+pub fn boundary_loss_factor(area: f64, wall: f64) -> f64 {
+    let boundary = 0.0004 / math::sqrt(max(area, 0.05));
+    let narrow = max(area, 1e-3);
+    let constriction = min(0.3, 0.0001 / (narrow * narrow));
+    1.0 - 0.0007 * wall - boundary * wall - constriction
+}
 
 /// Viscous and thermal attenuation (nepers per cm) of a plane wave at
 /// `frequency` (Hz) in a tube of `area` (cm²), `shape` times a smooth round
