@@ -328,3 +328,48 @@ describe('process group survivor records', () => {
     }
   );
 });
+
+describe('budget boundary regression', () => {
+  itUnless(sandboxed, noPosixShell)(
+    'never kills a command that finishes inside its budget at a second boundary',
+    () => {
+      const align = `
+        const { spawnSync } = require('node:child_process');
+        const delay = (750 - Date.now() % 1000 + 1000) % 1000;
+        setTimeout(() => {
+          const result = spawnSync('bash', [process.argv[1], '2', 'aligned', 'sleep', '1.4'], {
+            encoding: 'utf8', env: { ...process.env, BUDGET_POLL_SECONDS: '0.05' }
+          });
+          process.stdout.write(result.stdout + result.stderr);
+          process.exit(result.status);
+        }, delay);
+      `;
+      const result = spawnSync('node', ['-e', align, scriptPath], {
+        encoding: 'utf8',
+      });
+      expect(result.status).toBe(0);
+    }
+  );
+});
+
+describe('run-with-budget-warning.sh annotations', () => {
+  // GitHub parses a workflow command only at the start of a line. On
+  // windows-2025, a test's `git status -z` output ("M\0src.js\0", no newline)
+  // was still open when the warning was printed, so the annotation was lost.
+  itUnless(sandboxed, noPosixShell)(
+    'starts annotations on a new line after unterminated output',
+    () => {
+      const result = runBudget(
+        ['10', 'open line', 'bash', '-c', "printf 'M\\0src.js\\0'; sleep 2"],
+        // The warning (1s) must follow the relayed output (first poll).
+        { BUDGET_WARN_PERCENT: '10' }
+      );
+
+      expect(result.status).toBe(0);
+      expect(result.output).toContain(
+        'src.js\0\n::warning title=open line is approaching its execution budget::'
+      );
+      expect(result.output).toMatch(/\nopen line finished in \d+s/);
+    }
+  );
+});
