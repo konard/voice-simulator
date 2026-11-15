@@ -15,28 +15,22 @@ import {
   renderPlanAsync,
 } from '../src/acoustics/voice.js';
 import { planUtterance } from '../src/articulation/plan.js';
-import { vowelTarget } from '../src/articulation/phones.js';
-import { noseShape, tractShape } from '../src/articulation/tract-shape.js';
+import { noseShape } from '../src/articulation/tract-shape.js';
 import { DEFAULT_HEAD } from '../src/head-config.js';
 import { AUDIO_TIERS } from '../src/perf/lod.js';
 import { measureAudioTierAsync } from '../src/perf/benchmark.js';
-import { getPhoneme } from '../src/ipa/inventory.js';
 import { synthesize, synthesizeAsync } from '../src/synthesize.js';
 import {
   drive as driveSolver,
   gpuForTests,
   relativeError,
+  vowelShapes,
 } from './helpers/gpu.js';
 import { itUnless } from './helpers/skip.js';
 
 const RATE = 16000;
 const model = buildVoxelModel(DEFAULT_HEAD, { dx: 1 });
-const shapes = ['a', 'i'].map((symbol) =>
-  tractShape(
-    { ...vowelTarget({ phoneme: getPhoneme(symbol) }), rhotic: 0 },
-    DEFAULT_HEAD
-  )
-);
+const shapes = vowelShapes();
 
 // Before any test is registered, like the network probes. With
 // REQUIRE_GPU=1 a runtime without an adapter fails here: no silent skip.
@@ -142,6 +136,35 @@ describe('WebGPU 3D FDTD step loop', () => {
     } finally {
       renderer.solver.gpu.destroy();
     }
+  });
+
+  itUnless(noGpu)('renderPlanAsync frees the GPU buffers it made', async () => {
+    const buffers = [];
+    let destroyed = 0;
+    // The real device, except that the buffers it makes count destroy().
+    const counting = new Proxy(device, {
+      get(target, key) {
+        if (key === 'createBuffer') {
+          return (descriptor) => {
+            const buffer = target.createBuffer(descriptor);
+            const destroy = buffer.destroy.bind(buffer);
+            buffer.destroy = () => {
+              destroyed++;
+              destroy();
+            };
+            buffers.push(buffer);
+            return buffer;
+          };
+        }
+        const value = Reflect.get(target, key, target);
+        return typeof value === 'function' ? value.bind(target) : value;
+      },
+    });
+    const plan = planUtterance('ˈa');
+    const options = { sampleRate: RATE, solver: 'fdtd3d', model };
+    await renderPlanAsync(plan, { ...options, device: counting });
+    expect(buffers.length > 0).toBe(true);
+    expect(destroyed >= buffers.length).toBe(true);
   });
 
   itUnless(noGpu)('measures the load of a 3D tier on the GPU', async () => {

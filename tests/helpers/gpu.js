@@ -14,8 +14,10 @@ import {
   describeGpuDevice,
   requestGpuDevice,
 } from '../../src/acoustics/fdtd-gpu.js';
-import { noseShape } from '../../src/articulation/tract-shape.js';
+import { vowelTarget } from '../../src/articulation/phones.js';
+import { noseShape, tractShape } from '../../src/articulation/tract-shape.js';
 import { DEFAULT_HEAD } from '../../src/head-config.js';
+import { getPhoneme } from '../../src/ipa/inventory.js';
 
 export const NO_GPU = 'no WebGPU adapter in this runtime';
 
@@ -34,6 +36,19 @@ export async function gpuForTests({ gpu, env = process.env } = {}) {
     noGpu: device ? null : NO_GPU,
     info: describeGpuDevice(device),
   };
+}
+
+/**
+ * The tract shapes of the vowels /a/ and /i/ of the default head, the two
+ * shapes `drive` alternates.
+ */
+export function vowelShapes() {
+  return ['a', 'i'].map((symbol) =>
+    tractShape(
+      { ...vowelTarget({ phoneme: getPhoneme(symbol) }), rhotic: 0 },
+      DEFAULT_HEAD
+    )
+  );
 }
 
 /**
