@@ -40,9 +40,8 @@
  * Turbulence noise is a pressure jump across the open faces of the plane
  * at `noisePosition`, as in the waveguide; the burst transient of a stop
  * (issue 35) enters the same plane without its DC, as in the 3D solver.
- * The grid has the head's rest
- * tract length; a longer or shorter tract stretches the time step (see
- * stepDuration).
+ * The grid has the head's rest tract length; a longer or shorter tract
+ * stretches the time step (see stepDuration).
  */
 
 import { glottalReflection } from './glottis.js';
