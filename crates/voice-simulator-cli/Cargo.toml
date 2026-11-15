@@ -1,0 +1,15 @@
+[package]
+name = "voice-simulator-cli"
+description = "Command line tool of the voice simulator engine"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+repository.workspace = true
+
+[[bin]]
+name = "voice-simulator-cli"
+path = "src/main.rs"
+
+[dependencies]
+voice-simulator-core = { path = "../voice-simulator-core" }
