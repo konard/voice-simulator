@@ -231,7 +231,12 @@ describe('3D FDTD resonances', () => {
     it(`/${symbol}/ formants are within 20% of the tube model`, () => {
       const shape = vowelShape(symbol);
       const peaks = impulsePeaks(shape);
-      const [f1, f2] = tubeFormants(shape.areas, shape.length, { count: 2 });
+      // The 3D walls are rigid (losses in 3D are out of scope of issue
+      // 36), so the reference is the tube with rigid walls.
+      const [f1, f2] = tubeFormants(shape.areas, shape.length, {
+        count: 2,
+        walls: false,
+      });
       expect(relativeError(peaks[0], f1)).toBeLessThan(0.2);
       const nearest = peaks.reduce((best, peak) =>
         Math.abs(peak - f2) < Math.abs(best - f2) ? peak : best
@@ -293,7 +298,11 @@ describe('3D FDTD geometry against the waveguide', () => {
     solver.setShape(areas, 0, undefined, null);
     const peaks = responsePeaks(solver, 1 / solver.stepDuration(), 0.08);
     const length = bare.lengths[CELL_TRACT];
-    const reference = waveguidePeaks(areas, length, { piriform: false });
+    // Rigid walls as in 3D: yielding ones raise F1 of the closed tube.
+    const reference = waveguidePeaks(areas, length, {
+      piriform: false,
+      walls: false,
+    });
     for (const target of reference.slice(0, 3)) {
       const nearest = peaks.reduce((best, peak) =>
         Math.abs(peak - target) < Math.abs(best - target) ? peak : best

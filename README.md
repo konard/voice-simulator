@@ -47,7 +47,13 @@ a pressure wave travelling through the 3D shape of a parametric low-poly head
   coarticulated transitions, glottal source and pitch contour.
 - **Physical acoustics** with three interchangeable solvers:
   - `waveguide`: a branched Kelly-Lochbaum tube (tract + nose) that follows
-    the 3D centreline of the head; real time on any device.
+    the 3D centreline of the head; real time on any device. Its losses
+    depend on frequency like the tract's: a viscothermal boundary-layer
+    loss that grows with sqrt(f), yielding walls (mass, resistance and
+    stiffness per area) that widen and raise F1 of close vowels, and a
+    radiation load between a free pipe end and a baffled piston, so the
+    formant bandwidths of Story's vowels come within 24 % of Hawks &
+    Miller (1995) on average (35 % before).
   - `fdtd2d`: a 2D finite-difference time-domain solver on the midsagittal
     sheet of the tract (0.6 cm cells, a depth per cell), with the nose, the
     piriform fossae and the vallecula as 1D lines; about 0.5 times real
@@ -138,11 +144,11 @@ names)` a whole utterance, and `vrmVowelBinds(gltfJson)` reads the morph
   flow at the release of a stop adds a burst transient, so [s] peaks near
   7 kHz above [ʃ], aspirated stops get a voice onset time of about 60 ms and
   a louder lung pressure (`lungPressure`) gives louder noise.
-- **Head and voice editor**: 35 parameters, everything that changes the
+- **Head and voice editor**: 38 parameters, everything that changes the
   sound (tract length, pharynx, mouth, jaw, nose, pitch, breathiness,
   jitter, shimmer, vibrato, declination, accent strength, lengthening,
-  pauses, wall loss, nasal losses, nasal coupling, frication level, lung
-  pressure, ...). Every page
+  pauses, wall loss, wall mass, resistance and stiffness, nasal losses,
+  nasal coupling, frication level, lung pressure, ...). Every page
   refresh starts from a new random seed; `?seed=` makes it reproducible.
 - **Male, female and child presets** for random heads (`preset`), with f0
   and formants fitted to the men's, women's and children's means of

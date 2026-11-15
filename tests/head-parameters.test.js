@@ -6,7 +6,10 @@
 import { describe, it, expect } from 'test-anywhere';
 import { planUtterance } from '../src/articulation/plan.js';
 import { renderPlan } from '../src/acoustics/voice.js';
-import { rms } from '../src/acoustics/analysis.js';
+import { impulseSpectrum, resonances, rms } from '../src/acoustics/analysis.js';
+import { Waveguide } from '../src/acoustics/waveguide.js';
+import { SPEED_OF_SOUND } from '../src/acoustics/transfer.js';
+import { STORY_AREAS, STORY_LENGTHS } from '../src/articulation/vowel-space.js';
 import { HEAD_PARAMETERS, normalizeHeadConfig } from '../src/head-config.js';
 
 const RATE = 16000;
@@ -24,6 +27,9 @@ const NEW_KEYS = [
   'pauseLength',
   'articulationSpeed',
   'wallLoss',
+  'wallMass',
+  'wallResistance',
+  'wallStiffness',
   'nasalCoupling',
   'nasalLoss',
   'fricationLevel',
@@ -34,6 +40,29 @@ function render(overrides = {}) {
   const head = normalizeHeadConfig(overrides);
   const plan = planUtterance(IPA, { head });
   return { plan, samples: renderPlan(plan, { sampleRate: RATE, seed: 3 }) };
+}
+
+/** F1 of [i] in the waveguide (closed glottis) and its peak level. */
+function firstFormant(overrides) {
+  const areas = STORY_AREAS.i;
+  const length = STORY_LENGTHS.i;
+  const head = normalizeHeadConfig(overrides);
+  const solver = new Waveguide({ sections: areas.length, head });
+  solver.setShape(areas, 0, Math.round(areas.length * 0.45));
+  solver.setLength(length);
+  solver.glottalReflection = 1;
+  const rate = (areas.length * SPEED_OF_SOUND) / length;
+  const response = new Float64Array(Math.round(0.25 * rate));
+  for (let index = 0; index < response.length; index++) {
+    response[index] = solver.step(index === 0 ? 1 : 0, 0, 0);
+  }
+  const spectrum = impulseSpectrum(response, rate, {
+    from: 150,
+    to: 600,
+    step: 1,
+  });
+  const [{ frequency }] = resonances(spectrum, { count: 1 });
+  return { frequency, level: Math.max(...spectrum.magnitudes) };
 }
 
 function differs(first, second) {
@@ -94,6 +123,17 @@ describe('head parameters', () => {
       (entry) => entry.key === 'nasalLoss'
     );
     expect(level(parameter.max)).toBeLessThan(0.9 * level(parameter.default));
-    expect(level(parameter.default)).toBeLessThan(0.9 * level(parameter.min));
+    // The boundary-layer loss of the nose grows with sqrt(f) and is small
+    // at the murmur (about 250 Hz), so the low end of nasalLoss moves the
+    // murmur by only about 4 % (experiments/issue-36-nasal-murmur.mjs).
+    expect(level(parameter.default)).toBeLessThan(0.97 * level(parameter.min));
+  });
+
+  it('damps and lowers F1 with lossier and heavier walls', () => {
+    const base = firstFormant({});
+    const resistive = firstFormant({ wallResistance: 2400 });
+    expect(resistive.level).toBeLessThan(base.level);
+    const heavy = firstFormant({ wallMass: 3 });
+    expect(heavy.frequency).toBeLessThan(base.frequency);
   });
 });

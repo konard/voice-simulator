@@ -22,9 +22,9 @@
  * gain_i = lambda / (h_i (1 + lambda Y / 2)):
  *
  * - walls: the two flat sides (2 dx / h per cell) and the faces next to a
- *   wall cell absorb with the waveguide's boundary loss converted to a
- *   wall admittance (WALL_ADMITTANCE); the faces keep the rest of the
- *   waveguide's loss model (lossFactor without its boundary term);
+ *   wall cell absorb with the boundary loss of boundaryLossFactor
+ *   (waveguide.js) converted to a wall admittance (WALL_ADMITTANCE); the
+ *   faces keep the rest of that loss model (its constriction loss);
  * - the glottis: the first column ends in the glottis admittance of the
  *   waveguide's reflection, and the source flow enters it evenly;
  * - the lips: the flow of each cell of the last column crosses the half
@@ -45,10 +45,10 @@
  */
 
 import { glottalReflection } from './glottis.js';
-import { NoseLine, lossFactor } from './nose-line.js';
+import { NoseLine } from './nose-line.js';
 import { RADIATION_RESISTANCE } from './radiation.js';
 import { SPEED_OF_SOUND } from './transfer.js';
-import { LOSS_REFERENCE_SECTIONS } from './waveguide.js';
+import { LOSS_REFERENCE_SECTIONS, boundaryLossFactor } from './waveguide.js';
 import { sideBranches } from './sinuses.js';
 import { buildSheet, sheetColumn, updateSheet } from './sheet-model.js';
 import { noseShape } from '../articulation/tract-shape.js';
@@ -56,11 +56,11 @@ import { DEFAULT_HEAD, normalizeHeadConfig } from '../head-config.js';
 
 /** Courant number c dt / dx (stable below 1 / sqrt(2)). */
 export const COURANT_2D = 0.68;
-/** Waveguide boundary-loss coefficient (see lossFactor). */
+/** Boundary-loss coefficient of boundaryLossFactor. */
 const BOUNDARY_LOSS = 0.0004;
 /** Time constant of the DC blocker of the burst transient (s, as in 3D). */
 const BURST_LEAK_TIME = 0.008;
-/** Smallest column area the losses see (cm², as in lossFactor). */
+/** Smallest column area the losses see (cm², as in boundaryLossFactor). */
 const LOSS_AREA = 0.05;
 const MIN_AREA = 1e-4;
 
@@ -87,10 +87,10 @@ export class Fdtd2d {
     this.nasalLoss = options.head?.nasalLoss ?? DEFAULT_HEAD.nasalLoss;
     const reflection = glottalReflection(options.head);
     this.glottisAdmittance = (1 - reflection) / (1 + reflection);
-    // lossFactor gives the loss of a wave per section of rest / 44 cm. The
-    // faces damp the velocity only, which holds half of the wave's energy,
-    // so they take twice the exponent of the distance a wave travels in
-    // one step.
+    // boundaryLossFactor gives the loss of a wave per section of rest /
+    // 44 cm. The faces damp the velocity only, which holds half of the
+    // wave's energy, so they take twice the exponent of the distance a wave
+    // travels in one step.
     const exponent = (LOSS_REFERENCE_SECTIONS * COURANT_2D) / columns;
     this.faceExponent = 2 * exponent;
     /**
@@ -257,9 +257,9 @@ export class Fdtd2d {
   }
 
   #faceDamping(area) {
-    // The boundary term of lossFactor is the wall admittance here.
+    // The boundary term of boundaryLossFactor is the wall admittance here.
     const smooth =
-      lossFactor(area, this.wallLoss) +
+      boundaryLossFactor(area, this.wallLoss) +
       (BOUNDARY_LOSS * this.wallLoss) / Math.sqrt(Math.max(area, LOSS_AREA));
     return Math.max(0, smooth) ** this.faceExponent;
   }

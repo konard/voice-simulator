@@ -20,7 +20,8 @@ import { itUnless } from './helpers/skip.js';
 const REFERENCE = { solver: 'waveguide', sections: 44, sampleRate: 48000 };
 const NARROW = ['telephone', 'narrowband', 'wideband'];
 
-// The hash below was recorded with V8's Math functions. JavaScriptCore on
+// The hash below was recorded with V8's Math functions (again for the
+// frequency-dependent losses of issue 36, which change every tier). JavaScriptCore on
 // macOS takes Math.sin, Math.exp and friends from the system libm, whose
 // last bits differ, so Bun there renders a different (but unchanged) minimal
 // tier; Bun on Linux and Windows, Node.js and Deno match it.
@@ -161,7 +162,7 @@ describe('narrow-band tiers', () => {
       samples.byteLength
     );
     expect(createHash('sha256').update(bytes).digest('hex')).toBe(
-      'c968718f39c4af8daf71fcda32d80c07b686c34ef2fcb69f2f15fbc568e00195'
+      '8b8a21be8b404e4c058251d4b307effcb7d5cb5fa8fb425bdabca13a6069e3ca'
     );
   });
 });

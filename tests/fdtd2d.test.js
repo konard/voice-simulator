@@ -149,7 +149,9 @@ describe('2D FDTD resonances', () => {
       solver,
       1 / solver.stepDuration({ length: 17.5 })
     );
-    const reference = tubeFormants(areas, 17.5, { count: 3 });
+    // The 2D walls are rigid (losses in 2D are out of scope of issue 36),
+    // so the reference is the tube with rigid walls.
+    const reference = tubeFormants(areas, 17.5, { count: 3, walls: false });
     for (const target of reference) {
       expect(relativeError(nearest(peaks, target), target)).toBeLessThan(0.03);
     }
@@ -205,7 +207,10 @@ describe('2D FDTD resonances', () => {
     it(`follows the area function of /${symbol}/`, () => {
       const shape = vowelShape(symbol);
       const peaks = sheetPeaks(shape, { vallecula: false });
-      const reference = waveguidePeaks(shape.areas, shape.length);
+      // Rigid walls as in 2D: yielding ones raise F1 of close vowels.
+      const reference = waveguidePeaks(shape.areas, shape.length, {
+        walls: false,
+      });
       for (const target of reference.slice(0, 3)) {
         expect(relativeError(nearest(peaks, target), target)).toBeLessThan(
           0.05

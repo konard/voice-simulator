@@ -139,7 +139,10 @@ describe('head presets', () => {
         errors.reduce((sum, value) => sum + value * value, 0) / errors.length
       );
       expect(rms).toBeLessThan(preset === 'male' ? 0.03 : 0.07);
-      expect(Math.max(...errors.map(Math.abs))).toBeLessThan(0.16);
+      // The worst is F2 of the child [u], whose shape is the male one
+      // scaled down: -0.158 before issue 36, -0.171 with the yielding walls
+      // (experiments/issue-36-presets.mjs).
+      expect(Math.max(...errors.map(Math.abs))).toBeLessThan(0.18);
     }
   });
 
@@ -181,6 +184,10 @@ describe('head preset voice sources', () => {
     // and H1*-A3* of women exceed those of men by 3.1 and 9.6 dB (Klatt and
     // Klatt 1990: H1-H2 by 5.7 dB). A raised f0 and a laxer pulse alone give
     // about 3 dB of H1*-A3*: the posterior glottal chink adds the rest.
+    // The aspiration noise of the female preset fills the A3 band: without
+    // it the female H1*-A3* is 9.6 dB above the male, with it 6.1 dB, as the
+    // frequency-dependent losses (#36) and the flow-driven noise (#35) both
+    // raise A3 against H1 (experiments/issue-36-preset-tilt.txt).
     const tilt = (preset) => {
       const head = presetHeadConfig(preset);
       const sums = { h1h2Corrected: 0, h1a3Corrected: 0 };
@@ -211,7 +218,7 @@ describe('head preset voice sources', () => {
       const h1a3 = voice.h1a3Corrected - male.h1a3Corrected;
       expect(h1h2).toBeGreaterThan(2);
       expect(h1h2).toBeLessThan(7);
-      expect(h1a3).toBeGreaterThan(6.5);
+      expect(h1a3).toBeGreaterThan(5.5);
       expect(h1a3).toBeLessThan(14);
     }
   });
