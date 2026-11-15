@@ -11,7 +11,7 @@
  */
 
 import { CHANNEL_DEFAULTS } from './plan.js';
-import { carveTeeth, dentition, teethGap } from './teeth.js';
+import { carveTeeth, dentition, impliedGap } from './teeth.js';
 import { LIP_PROTRUSION, VOWEL_SECTIONS, vowelShape } from './vowel-space.js';
 
 export { LIP_PROTRUSION };
@@ -30,11 +30,13 @@ const MAX_VELUM_AREA = 1.6;
 
 /**
  * Change of the mouth and lip cross-sections per cm of incisor gap away
- * from the gap the vowel and consonant channels ask for. Calibrated so
- * that 0.5 cm more gap raises F1 of [ɛ] by 11 % in the waveguide (0.8 gives
- * 9 %, `node experiments/issue-40-articulators.mjs`).
+ * from the gap the vowel and consonant channels ask for: 0.5 cm more gap
+ * raises F1 of [ɛ] by 9.3 % in the waveguide (8 to 15 % asked; 1 gives
+ * 11.3 %, `node experiments/issue-40-articulators.mjs`). The smaller value
+ * keeps the formants of whole sentences, in which the jaw lags the tongue,
+ * closer to those before the jaw had a channel.
  */
-export const JAW_AREA = 1;
+export const JAW_AREA = 0.8;
 /** Start of the mouth region the jaw opens (fraction of the tract). */
 const JAW_START = 0.55;
 /** Length of the lip end of the tract that protrusion stretches (cm). */
@@ -47,6 +49,8 @@ export const TONGUE_ROOT_AREA = 0.4;
 const TONGUE_ROOT_START = 2;
 /** No section gets shorter than this share of its length. */
 const MIN_STRETCH = 0.3;
+/** Smaller changes of length (cm) leave the sections as they are. */
+const MIN_LENGTH_CHANGE = 1e-5;
 
 /** Nasal cavity cross-sections (cm²) from velum to nostrils. */
 const NOSE_PROFILE = Array.from({ length: NOSE_SECTIONS }, (_, index) => {
@@ -427,10 +431,12 @@ function applyTeeth(areas, state, head, length) {
  * rounding times LIP_PROTRUSION), as the planner writes it.
  * @param {Record<string, number>} state
  * @param {Record<string, number>} head
+ * @param {Record<string, number>|null} [full] The state over
+ *   CHANNEL_DEFAULTS, when the caller has it already.
  */
-export function articulatorState(state, head) {
-  const full = { ...CHANNEL_DEFAULTS, ...state };
-  const expectedJaw = teethGap({ ...full, jaw: undefined }, head);
+export function articulatorState(state, head, full = null) {
+  full ??= { ...CHANNEL_DEFAULTS, ...state };
+  const expectedJaw = impliedGap(full, head);
   const rounding = Math.max(0, Math.min(1, full.rounding));
   const expectedProtrusion = rounding * LIP_PROTRUSION;
   return {
@@ -456,8 +462,9 @@ export function articulatorState(state, head) {
  *   source); `vowelCorrections` overrides the vowel calibration.
  */
 export function tractShape(state, head, options = {}) {
-  const free = articulatorState(state, head);
-  const full = { ...CHANNEL_DEFAULTS, time: 0, ...state, jaw: free.jaw };
+  const full = { ...CHANNEL_DEFAULTS, time: 0, ...state };
+  const free = articulatorState(state, head, full);
+  full.jaw = free.jaw;
   // The mouth from x = 0.55 of the head's tract on; the lower lip rides
   // on the jaw, so the lip opening follows it too. While the tongue or the
   // lips make a consonant they compensate for the jaw, as they reach their
@@ -486,7 +493,12 @@ export function tractShape(state, head, options = {}) {
   const larynx = -free.larynxHeight;
   const lips = free.lipProtrusion - free.expectedProtrusion;
   let place = (index) => index;
-  if (larynx !== 0 || lips !== 0) {
+  // The channels are Float32Array: a protrusion that follows the rounding
+  // differs from rounding * LIP_PROTRUSION by about 1e-8 cm.
+  if (
+    Math.abs(larynx) > MIN_LENGTH_CHANGE ||
+    Math.abs(lips) > MIN_LENGTH_CHANGE
+  ) {
     const lengths = stretchedLengths(areas.length, length, larynx, lips);
     const stretched = stretchSections(areas, lengths, areas.length);
     place = landmarkMap(lengths, length, stretched.length);

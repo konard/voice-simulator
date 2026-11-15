@@ -164,7 +164,7 @@ describe('narrow-band tiers', () => {
       samples.byteLength
     );
     expect(createHash('sha256').update(bytes).digest('hex')).toBe(
-      '9b5b1b51b8d97fac3fcccd96c1c3dcb7dfbf37b4871f94b3e7169dabdc56d7a8'
+      '250f4637ccde9c28ad1f06c2b5a5a2ce2bde0cc46ec38f333db90d41cb9b4c86'
     );
   });
 });

@@ -71,8 +71,9 @@ a pressure wave travelling through the 3D shape of a parametric low-poly head
   negative lowers it) and `tongueRoot` moves the root of the tongue
   (-1 pulled back to +1 pushed forward, 0.03 s). At their defaults the
   tract keeps the shape of the vowel and consonant channels; moved, a
-  wider jaw widens the mouth (`JAW_AREA` = 1 per cm, 0.5 cm more gap
-  raises F1 of `[ɛ]` by 11 %), protrusion lengthens the last
+  wider jaw widens the mouth (`JAW_AREA` = 0.8 per cm, 0.5 cm more gap
+  raises F1 of `[ɛ]` by 9 %; the tongue and the lips make up for the jaw
+  while they form a consonant), protrusion lengthens the last
   `LIP_REGION` = 1.5 cm and a lower larynx the first `LARYNX_REGION` = 3 cm
   of the tract (`stretchSections` keeps the volume, so 1 cm lower lowers
   F1 to F4 of `[ɑ]` by 1 to 9 % as in Lindblom & Sundberg 1971), and the

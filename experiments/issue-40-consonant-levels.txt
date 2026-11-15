@@ -1,4 +1,4 @@
-without []: closure/vowel 0.3499 (test < 0.4 of a ratio), [s]-[z] above 4 kHz 10.63 dB (test 3..12)
+without []: closure/vowel 0.3429 (test < 0.4 of a ratio), [s]-[z] above 4 kHz 10.63 dB (test 3..12)
 without [jaw]: closure/vowel 0.3101 (test < 0.4 of a ratio), [s]-[z] above 4 kHz 9.48 dB (test 3..12)
-without [lipProtrusion]: closure/vowel 0.3499 (test < 0.4 of a ratio), [s]-[z] above 4 kHz 10.63 dB (test 3..12)
+without [lipProtrusion]: closure/vowel 0.3429 (test < 0.4 of a ratio), [s]-[z] above 4 kHz 10.63 dB (test 3..12)
 without [jaw, lipProtrusion]: closure/vowel 0.3101 (test < 0.4 of a ratio), [s]-[z] above 4 kHz 9.48 dB (test 3..12)

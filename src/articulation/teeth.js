@@ -84,6 +84,16 @@ export function teethGap(state, head) {
   if (state.jaw !== undefined && state.jaw !== null) {
     return Math.max(0, state.jaw);
   }
+  return impliedGap(state, head);
+}
+
+/**
+ * The gap (cm) that the vowel and consonant channels of `state` imply,
+ * whatever its `jaw` channel: teethGap() of a state without one.
+ * @param {Record<string, number>} state
+ * @param {Record<string, number>} head
+ */
+export function impliedGap(state, head) {
   const vowelGap = vowelGapOf(state, head);
   // A consonant only ever raises the jaw towards its own gap.
   let raised = 0;
