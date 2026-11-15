@@ -422,7 +422,9 @@ export function fileProblems(manifest, dir = GOLDEN_DIR) {
     if (!existsSync(file)) {
       problems.push(`${label}: ${item.file} does not exist`);
     } else if (sha256(readFileSync(file)) !== item.sha256) {
-      problems.push(`${label}: the SHA-256 of ${item.file} is not sha256`);
+      problems.push(
+        `${label}: the SHA-256 of ${item.file} does not match its sha256 in manifest.json`
+      );
     }
   }
   const present = existsSync(dir) ? readdirSync(dir) : [];
