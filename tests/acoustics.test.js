@@ -375,7 +375,9 @@ describe('waveguide synthesis', () => {
 
 describe('turbulence noise', () => {
   // Tier medium (waveguide, 48 kHz), seed 1; levels over the middle 60 %
-  // of the consonant (experiments/issue-11-turbulence.mjs).
+  // of the consonant (experiments/issue-11-turbulence.mjs). The test names
+  // are those of issue 35: [s] 6 dB above [f], [z] 3 to 12 dB below [s]
+  // above 4 kHz, [s] 7 to 11 dB stronger at 1600 than at 800 Pa.
   const render = (ipa, head = {}) =>
     synthesize(ipa, { ipa: true, tier: 'medium', seed: 1, head });
   const consonantLevel = ({ samples, sampleRate, plan }, filter) => {
@@ -395,13 +397,13 @@ describe('turbulence noise', () => {
     return (sample) => second.process(first.process(sample));
   };
 
-  it('makes [s] at least 6 dB louder than [f]', () => {
+  it('makes sibilants louder than other fricatives', () => {
     const difference =
       consonantLevel(render('ˈasa')) - consonantLevel(render('ˈafa'));
     expect(difference).toBeGreaterThan(6);
   });
 
-  it('keeps the high band of [z] 3 to 12 dB below [s]', () => {
+  it('weakens the noise of voiced fricatives', () => {
     const s = render('ˈasa');
     const z = render('ˈaza');
     const difference =
@@ -411,7 +413,7 @@ describe('turbulence noise', () => {
     expect(difference).toBeLessThan(12);
   });
 
-  it('raises [s] by 7 to 11 dB when the lung pressure doubles', () => {
+  it('lets the lung pressure drive frication', () => {
     const difference =
       consonantLevel(render('ˈasa', { lungPressure: 1600 })) -
       consonantLevel(render('ˈasa', { lungPressure: 800 }));
@@ -419,7 +421,7 @@ describe('turbulence noise', () => {
     expect(difference).toBeLessThan(11);
   });
 
-  it('adds breath noise through a glottal chink', () => {
+  it('adds noise through a glottal chink', () => {
     const hnr = (glottalChink) => {
       const { samples, sampleRate } = render('aː', {
         vibrato: 0,
