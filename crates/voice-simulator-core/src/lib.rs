@@ -14,6 +14,7 @@ extern crate alloc;
 
 pub mod aerodynamics;
 pub mod filters;
+pub mod glottis;
 pub mod math;
 pub mod random;
 pub mod resample;

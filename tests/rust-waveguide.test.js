@@ -13,7 +13,9 @@
 import { describe, expect } from 'test-anywhere';
 
 import { Biquad, createNoise } from '../src/acoustics/filters.js';
+import { Glottis } from '../src/acoustics/glottis.js';
 import { float64View } from '../src/engine/wasm-loader.js';
+import { hashSeed } from '../src/random.js';
 import { loadRustEngine, noRust } from './helpers/rust-engine.js';
 import { itUnless } from './helpers/skip.js';
 
@@ -67,5 +69,60 @@ describe('Rust waveguide renderer (issue 22)', () => {
     const measured = error(values, expected);
     globalThis.console.log(`biquad error ${measured}`);
     expect(measured < 1e-9).toBe(true);
+  });
+
+  it('glottis matches', async () => {
+    const engine = await loadRustEngine();
+    const dt = 1 / 46667;
+    const count = Math.round(0.5 / dt);
+    const control = {
+      f0: 120,
+      voicing: 1,
+      aspiration: 0.1,
+      closure: 0,
+      loudness: 1,
+    };
+    const noise = createNoise(2);
+    const input = Float64Array.from({ length: count }, () => noise());
+    const glottis = new Glottis({ seed: 1 });
+    let periods = 0;
+    const expected = input.map((value) => {
+      const previous = glottis.phase;
+      const sample = glottis.step(dt, control, value);
+      if (glottis.phase < previous) {
+        periods++;
+      }
+      return sample;
+    });
+    const parameters = [
+      glottis.tenseness,
+      glottis.breathiness,
+      100 * glottis.jitterDepth,
+      100 * glottis.shimmerDepth,
+      glottis.aspirationLevel,
+      glottis.chink,
+      glottis.lungPressure,
+      dt,
+      control.f0,
+      control.voicing,
+      control.aspiration,
+      control.closure,
+      control.loudness,
+    ];
+    const { values } = inEngine(engine, input, (pointer, length) =>
+      inEngine(engine, parameters, (params) => {
+        const result = engine.exports.vs_glottis_run(
+          hashSeed('1:glottis'),
+          params,
+          pointer,
+          length
+        );
+        expect(result).toBe(periods);
+        return result;
+      })
+    );
+    const measured = error(values, expected);
+    globalThis.console.log(`glottis error ${measured}, ${periods} periods`);
+    expect(measured < 1e-6).toBe(true);
   });
 });
