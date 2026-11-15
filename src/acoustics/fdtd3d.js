@@ -431,6 +431,22 @@ export class Fdtd3d {
         this.damping[link] = 0;
       }
     }
+    this.#skipClosed();
+  }
+
+  /**
+   * The voxel model lists the links of the cells the glottis may close
+   * first, from the lowest (see orderLarynxLinks in voxel-model.js): the
+   * run of links with a solid end there carries no flow (conductance,
+   * damping and velocity 0), so the step loop starts after it.
+   */
+  #skipClosed() {
+    const { linkA, linkB, solid, linkCount } = this;
+    let from = 0;
+    while (from < linkCount && (solid[linkA[from]] || solid[linkB[from]])) {
+      from++;
+    }
+    this.activeFrom = from;
   }
 
   /** Arc of the source plane from the rest glottis (cm). */
@@ -800,10 +816,11 @@ export class Fdtd3d {
     for (const index of this.tubeCells[kind]) {
       const area = resample(areas, (this.cellArc[index] - start) / length);
       this.cellArea[index] = area;
-      this.fill[index] = Math.max(MIN_FILL, this.#fillAt(index, area));
-      if (this.solid[index]) {
-        this.fill[index] = 1;
-      }
+      // A solid cell (the larynx extension below the source plane, a
+      // closed tooth) keeps fill 1; its links carry no flow.
+      this.fill[index] = this.solid[index]
+        ? 1
+        : Math.max(MIN_FILL, this.#fillAt(index, area));
     }
     if (kind === CELL_TRACT) {
       for (const [index, floor] of this.openingFloors) {
@@ -971,6 +988,7 @@ export class Fdtd3d {
         Math.max(0, boundaryLossFactor(area, wallLoss)) ** exponent;
     }
     this.#scaleOpenings();
+    this.#skipClosed();
     const portArea = this.velumLinks.length * this.dx * this.dx;
     const open = Math.min(1, this.velumArea / Math.max(portArea, 1e-9));
     for (const link of this.velumLinks) {
@@ -1154,7 +1172,7 @@ export class Fdtd3d {
       }
     }
     if (this.kernel) {
-      this.kernel.step();
+      this.kernel.step(this.activeFrom);
     } else {
       this.#stepJs();
     }
@@ -1198,7 +1216,7 @@ export class Fdtd3d {
   #stepJs() {
     const { pressure, velocity, damping, conductance, linkA, linkB } = this;
     const { divergence, keep, gain, linkCount, cellCount } = this;
-    for (let link = 0; link < linkCount; link++) {
+    for (let link = this.activeFrom; link < linkCount; link++) {
       const a = linkA[link];
       const b = linkB[link];
       const u =

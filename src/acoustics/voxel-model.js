@@ -653,6 +653,46 @@ function movePouchOpenings(grid, collected, links, tubes, context) {
   });
 }
 
+/**
+ * Put the links that touch a tract cell the glottis may close (arc below
+ * `below`, see Fdtd3d#placeGlottis) first, by the lowest arc of those
+ * cells: the links a place of the glottis closes are then a run from the
+ * first link, which the step loop skips (Fdtd3d#activeFrom). The other
+ * links keep their order; the pouch openings are renumbered.
+ */
+function orderLarynxLinks(links, openings, cells, below) {
+  const lowest = links.a.map((a, link) => {
+    let arc = Infinity;
+    for (const cell of [a, links.b[link]]) {
+      if (cells[cell].kind === CELL_TRACT && cells[cell].arc < below) {
+        arc = Math.min(arc, cells[cell].arc);
+      }
+    }
+    return arc;
+  });
+  const order = links.a.map((_, link) => link);
+  // Array.prototype.sort is stable: equal arcs keep the grid order.
+  order.sort((first, second) => {
+    const a = lowest[first];
+    const b = lowest[second];
+    return a === b ? 0 : a === Infinity ? 1 : b === Infinity ? -1 : a - b;
+  });
+  const renumber = new Int32Array(order.length);
+  order.forEach((link, position) => {
+    renumber[link] = position;
+  });
+  return {
+    links: {
+      a: order.map((link) => links.a[link]),
+      b: order.map((link) => links.b[link]),
+      kind: order.map((link) => links.kind[link]),
+    },
+    openings: openings.map((places) =>
+      places.map((place) => place.map((link) => renumber[link]))
+    ),
+  };
+}
+
 function neighbourAt(grid, index, i, j, k) {
   const { size } = grid;
   if (i >= size[0] || j >= size[1] || k >= size[2]) {
@@ -971,11 +1011,17 @@ export function buildVoxelModel(head, options = {}) {
     // Places of the glottis: whole cells up and down from the rest glottis.
     places: Math.floor(travel / dx + 1e-9),
   };
-  const links = connect(grid, collected, context);
-  const openings = movePouchOpenings(grid, collected, links, tubes.slice(2), {
+  const unordered = connect(grid, collected, context);
+  const moved = movePouchOpenings(grid, collected, unordered, tubes.slice(2), {
     ...context,
     tract,
   });
+  const { links, openings } = orderLarynxLinks(
+    unordered,
+    moved,
+    collected.cells,
+    (context.places - 0.5) * dx
+  );
   const teeth = teethCells(collected.cells, config, tract.layout, dx);
   const open = openFaces(grid, collected, field, dx);
   return {

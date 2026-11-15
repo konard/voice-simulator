@@ -50,7 +50,7 @@ const LAYOUT = [
  * `linkA`/`linkB` of the kernel hold cell *byte* offsets (index * 8).
  * @param {number} links
  * @param {number} cells
- * @returns {null | {arrays: Record<string, Float64Array|Int32Array>, step: () => void}}
+ * @returns {null | {arrays: Record<string, Float64Array|Int32Array>, step: (from?: number) => void}}
  */
 export function createKernel(links, cells) {
   const module = typeof globalThis.WebAssembly === 'object' ? compile() : null;
@@ -75,15 +75,16 @@ export function createKernel(links, cells) {
   const at = LAYOUT.map(([name]) => arrays[name].byteOffset);
   return {
     arrays,
-    step: () =>
+    // `from`: the links before it carry no flow and are not stepped.
+    step: (from = 0) =>
       step(
-        links,
+        links - from,
         cells,
-        at[0],
-        at[1],
-        at[2],
-        at[3],
-        at[4],
+        at[0] + 4 * from,
+        at[1] + 4 * from,
+        at[2] + 8 * from,
+        at[3] + 8 * from,
+        at[4] + 8 * from,
         at[5],
         at[6],
         at[7],
