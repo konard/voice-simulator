@@ -50,12 +50,13 @@ All times are UTC on 2026-11-15.
 | 18:23    | `4a1c6de`: CodeQL still flagged the Map; the onset rule becomes a `switch`. Security passes on `2ce1c4d`.                                                                                                            |
 | 18:31    | `f28e23d`: previous versions install only their web build dependencies.                                                                                                                                              |
 | 18:44    | `d56f2ff`: the Rust step budgets fit the 15 min backstop again (Checks and release 43746539860 had failed on it). `44e9e4a`: the WebGPU warning is asserted.                                                         |
+| 18:55    | The Security run on `f9866be` warns about GHSA-474x-hrwr-fgx4 in the `artifact-transport` lockfile; `77832fa` fixes it, filed as template #302.                                                                      |
 
 ## Requirements
 
 | #         | Requirement                                                                                               | Where it is handled                |
 | --------- | --------------------------------------------------------------------------------------------------------- | ---------------------------------- |
-| R1        | Find every false positive, false negative, warning and error in CI/CD and fix them all                    | Findings F1–F14                    |
+| R1        | Find every false positive, false negative, warning and error in CI/CD and fix them all                    | Findings F1–F15                    |
 | R2        | Use the best practices of the JS, Rust and Python templates; compare every workflow and CI script         | "Template comparison", F7, F9, F10 |
 | R3        | Report in the templates the issues they share                                                             | "Upstream issues"                  |
 | R4        | Follow hive-mind CI-CD-BEST-PRACTICES.md                                                                  | "Best practices"                   |
@@ -216,6 +217,22 @@ the exceptions. Upstream: command-stream#237.
 The WebGPU fallback test printed `WebGPU synthesis failed, using the CPU`
 with a stack trace into every test run. `44e9e4a` captures and asserts it.
 
+### F15. Low advisory in the `artifact-transport` lockfile (warning)
+
+- **Symptom:** the Security run on `f9866be` (43748518998) warned
+  `GHSA-474x-hrwr-fgx4 [low] fast-xml-parser ... npm audit fix resolves it`.
+  The lockfile came with the template sync (F7).
+- **Root cause:** `@actions/artifact` 6.3.1 → `@azure/storage-blob` →
+  `@azure/core-xml` → `fast-xml-parser` 5.11.2. The ranges allow the fixed
+  release; only the lockfile was stale. No Dependabot configuration covers
+  the action's directory.
+- **Fix:** `77832fa`: `npm audit fix --package-lock-only` moves
+  `fast-xml-parser` to 5.12.1, `fast-xml-builder` to 1.3.2 and `is-unsafe`
+  to 2.0.3 (all MIT).
+- **Everywhere:** `npm audit --package-lock-only` reports 0 vulnerabilities
+  for all three tracked lockfiles (root, example app, `artifact-transport`).
+- **Template:** same lockfile, #302.
+
 ### F14. Not actioned
 
 - `Due to capacity constraints ... macOS arm64` is a GitHub runner notice.
@@ -249,11 +266,12 @@ the changed-lines lint (F1).
 
 ## Upstream issues
 
-| Finding | Issue                                                                                                                                          |
-| ------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
-| F1      | https://github.com/link-foundation/js-ai-driven-development-pipeline-template/issues/301 (`upstream-issues/js-template-lint-changed-lines.md`) |
-| F12     | https://github.com/link-foundation/command-stream/issues/237 (`upstream-issues/command-stream-resvg-dependency.md`)                            |
-| F7      | existing: https://github.com/actions/deploy-pages/issues/413, https://github.com/actions/deploy-pages/issues/434                               |
+| Finding | Issue                                                                                                                                                |
+| ------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| F1      | https://github.com/link-foundation/js-ai-driven-development-pipeline-template/issues/301 (`upstream-issues/js-template-lint-changed-lines.md`)       |
+| F15     | https://github.com/link-foundation/js-ai-driven-development-pipeline-template/issues/302 (`upstream-issues/js-template-fast-xml-parser-advisory.md`) |
+| F12     | https://github.com/link-foundation/command-stream/issues/237 (`upstream-issues/command-stream-resvg-dependency.md`)                                  |
+| F7      | existing: https://github.com/actions/deploy-pages/issues/413, https://github.com/actions/deploy-pages/issues/434                                     |
 
 Each filed issue has a reproduction, a workaround and a suggested fix.
 
