@@ -284,10 +284,12 @@ const brokenGpu = {
 describe('synthesis worker', () => {
   it('restarts an utterance on a cheaper tier as soon as it falls behind', async () => {
     let clock = 0;
-    // Every chunk "takes" 60 ms: far slower than real time on every tier.
+    // Every clock reading "takes" 100 ms, so a 1024-sample chunk takes at
+    // least 100 ms: far slower than real time on every wide-band tier
+    // (46 ms of audio at 22.05 kHz).
     const posted = await speakInWorker(
       { id: 1, ipa: 'ˈa', seed: 1, tier: HIGH, auto: true, gpu: false },
-      { now: () => (clock += 30) }
+      { now: () => (clock += 100) }
     );
     const steps = posted
       .filter((message) => message.type === 'overload')
