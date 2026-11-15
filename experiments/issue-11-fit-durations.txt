@@ -1,0 +1,582 @@
+Segment durations against the golden recordings (issue 39)
+node experiments/issue-11-fit-durations.mjs --reference consensus
+
+Alignment cost per recording against the consensus plan (skipped when more than twice the median of its language):
+  en-01    en cost 11.03
+  en-02    en cost 12.50
+  en-03    en cost 12.33
+  en-04    en cost 10.53
+  en-05    en cost 9.44
+  en-06    en cost 11.73
+  ru-01    ru cost 9.56
+  ru-02    ru cost 9.50
+  ru-03    ru cost 9.76
+  ru-04    ru cost 10.66
+  ru-05    ru cost 11.34
+  ru-06    ru cost 10.16
+  hi-01    hi cost 9.72
+  hi-02    hi cost 9.57
+  hi-03    hi cost 9.20
+  hi-04    hi cost 9.85
+  hi-05    hi cost 8.89
+  hi-06    hi cost 9.30
+  zh-01    zh cost 10.64
+  zh-02    zh cost 9.34
+  zh-03    zh cost 10.81
+  zh-04    zh cost 10.23
+  zh-05    zh cost 9.98
+  zh-06    zh cost 10.84
+
+The alignment pulls the measured durations towards the plan that was rendered.
+MAE (ms per sound) of each model against the durations aligned with each plan:
+  lang  aligned with   today   model
+  en    today           29.0    36.5
+  en    model           33.5    25.7
+  en    uniform         44.2    43.4
+  en    consensus       31.2    31.0
+  ru    today           26.0    30.2
+  ru    model           32.9    23.4
+  ru    uniform         34.8    32.2
+  ru    consensus       28.2    25.7
+  hi    today           34.0    28.1
+  hi    model           35.6    19.9
+  hi    uniform         44.4    32.7
+  hi    consensus       34.2    22.2
+  zh    today           39.7    46.7
+  zh    model           48.1    34.9
+  zh    uniform         56.4    56.6
+  zh    consensus       43.6    43.7
+
+MAE (ms per sound) and correlation against the consensus alignment:
+  lang  sounds   today MAE  r      model MAE  r      refit MAE  r       gain
+  en       236        31.2  0.38        31.0  0.35         31.0  0.35   0.9 %
+  ru       226        28.2  0.34        25.7  0.33         25.7  0.33   8.8 %
+  hi       233        34.2  0.65        22.2  0.68         20.8  0.69   39.1 %
+  zh       173        43.6  0.39        43.7  0.30         43.6  0.30   0.0 %
+
+Two-fold check (fit on odd or even recordings, score the others):
+  lang  today MAE  model MAE  refit MAE
+  en         31.2       31.0        31.3
+  ru         28.2       25.7        25.9
+  hi         34.2       22.2        21.1
+  zh         43.6       43.7        43.7
+
+MAE (ms) per sound class, today / model / refit:
+  en
+    affricate               4    56.5    54.8    54.8
+    close                  13    37.1    24.2    24.2
+    diphthong              24    47.3    35.6    35.6
+    glide                  17    21.3    24.0    24.0
+    h                       5    32.8    27.2    27.2
+    liquid                 16    16.9    17.7    17.7
+    mid                    15    19.9    33.6    33.6
+    nasal                  19    29.8    32.6    32.6
+    open                    2    94.2    66.0    66.0
+    reduced                44    14.3    14.8    14.8
+    tap                     2    14.4    21.5    21.5
+    voicedFricative        17    34.5    40.7    40.7
+    voicedPlosive          16    47.4    48.8    48.8
+    voicelessFricative     17    44.7    42.9    42.9
+    voicelessPlosive       25    36.5    37.4    37.4
+  ru
+    affricate               3     8.6    12.3    12.3
+    close                  16    34.3    20.6    20.6
+    glide                   9    15.7    17.0    17.0
+    liquid                 20     9.9    10.8    10.8
+    mid                    24    26.5    14.8    14.8
+    nasal                  11     7.9     9.0     9.0
+    open                   14    26.9    52.3    52.3
+    reduced                43    18.8    21.4    21.4
+    trill                  11    23.4    28.0    28.0
+    voicedFricative        18    30.6    19.4    19.4
+    voicedPlosive          12    33.2    35.3    35.3
+    voicelessFricative     18    40.5    21.7    21.7
+    voicelessPlosive       27    59.7    55.2    55.2
+  hi
+    affricate               8    33.8    19.9    19.9
+    glide                  15    11.6     8.0     8.0
+    h                       9    36.2    19.4    19.4
+    liquid                 10    12.2    11.6    11.6
+    long                   70    70.1    39.3    34.9
+    nasal                  17    15.6    15.9    15.9
+    reduced                38    11.5     9.5     9.5
+    tap                    13    11.2    10.9    10.9
+    voicedPlosive          10    20.5    22.6    22.6
+    voicelessFricative      5    16.4    16.3    16.3
+    voicelessPlosive       38    27.2    20.0    20.0
+  zh
+    affricate              18    79.9    77.0    77.0
+    close                  33    41.6    38.0    38.0
+    diphthong              24    35.5    33.6    33.6
+    glide                  19    35.6    32.5    32.5
+    mid                     7    11.1    43.1    43.1
+    nasal                  24    36.8    24.3    24.0
+    open                   10    43.7    64.1    64.1
+    reduced                10    10.8     5.7     5.7
+    voicedFricative         4    11.5    32.6    32.6
+    voicelessFricative     15    61.9    67.9    67.9
+    voicelessPlosive        9    80.7    83.9    83.9
+
+Fit log:
+  en
+  pass 1: inherent durations
+    classes.reduced                44 sounds, inherent 107 -> 107
+    classes.voicelessFricative     17 sounds, keeps 115
+    classes.glide                  17 sounds, keeps 70
+    classes.diphthong              24 sounds, inherent 200 -> 200
+    classes.voicedFricative        17 sounds, keeps 70
+    classes.nasal                  19 sounds, keeps 70
+    classes.voicedPlosive          16 sounds, keeps 75
+    classes.mid                    15 sounds, keeps 190
+    classes.tap                     2 sounds, keeps 28
+    classes.liquid                 16 sounds, keeps 80
+    classes.voicelessPlosive       25 sounds, inherent 102 -> 102
+    classes.close                  13 sounds, keeps 150
+    classes.open                    2 sounds, keeps 230
+    classes.h                       5 sounds, keeps 80
+  pass 1: rule factors
+    clauseFinal                    14 sounds, keeps 1.4
+    nonPhraseFinal                    fixed at 0.9
+    nonWordFinal                   24 sounds, factor 0.85 -> 0.85 (MAE 31.0 ms)
+    polysyllabic                   47 sounds, factor 0.8 -> 0.8 (MAE 31.0 ms)
+    nonInitialConsonant            91 sounds, factor 0.85 -> 0.85 (MAE 31.0 ms)
+    unstressedMedial                1 sounds, keeps 0.5
+    unstressedOther                50 sounds, factor 0.7 -> 0.7 (MAE 31.0 ms)
+    unstressedOnset                40 sounds, factor 0.7 -> 0.7 (MAE 31.0 ms)
+    unstressedMinimum             119 sounds, factor 0.5 -> 0.5 (MAE 31.0 ms)
+    emphasis                        0 sounds, keeps 1.4
+    beforeVoicedFricative          13 sounds, keeps 1.6
+    beforeVoicedPlosive             3 sounds, keeps 1.2
+    beforeNasal                    21 sounds, factor 0.85 -> 0.85 (MAE 31.0 ms)
+    beforeVoiceless                27 sounds, factor 0.7 -> 0.7 (MAE 31.0 ms)
+    openFinal                      24 sounds, factor 1.2 -> 1.2 (MAE 31.0 ms)
+    vowelBeforeVowel                1 sounds, keeps 1.2
+    vowelAfterVowel                 1 sounds, keeps 0.7
+    clusterMiddle                   2 sounds, keeps 0.5
+    clusterEdge                    47 sounds, factor 0.7 -> 0.7 (MAE 31.0 ms)
+    longVowel                       0 sounds, keeps 1.7
+    longConsonant                   0 sounds, keeps 1.8
+  pass 2: inherent durations
+    classes.reduced                44 sounds, inherent 107 -> 107
+    classes.voicelessFricative     17 sounds, keeps 115
+    classes.glide                  17 sounds, keeps 70
+    classes.diphthong              24 sounds, inherent 200 -> 200
+    classes.voicedFricative        17 sounds, keeps 70
+    classes.nasal                  19 sounds, keeps 70
+    classes.voicedPlosive          16 sounds, keeps 75
+    classes.mid                    15 sounds, keeps 190
+    classes.tap                     2 sounds, keeps 28
+    classes.liquid                 16 sounds, keeps 80
+    classes.voicelessPlosive       25 sounds, inherent 102 -> 102
+    classes.close                  13 sounds, keeps 150
+    classes.open                    2 sounds, keeps 230
+    classes.h                       5 sounds, keeps 80
+  pass 2: rule factors
+    clauseFinal                    14 sounds, keeps 1.4
+    nonPhraseFinal                    fixed at 0.9
+    nonWordFinal                   24 sounds, factor 0.85 -> 0.85 (MAE 31.0 ms)
+    polysyllabic                   47 sounds, factor 0.8 -> 0.8 (MAE 31.0 ms)
+    nonInitialConsonant            91 sounds, factor 0.85 -> 0.85 (MAE 31.0 ms)
+    unstressedMedial                1 sounds, keeps 0.5
+    unstressedOther                50 sounds, factor 0.7 -> 0.7 (MAE 31.0 ms)
+    unstressedOnset                40 sounds, factor 0.7 -> 0.7 (MAE 31.0 ms)
+    unstressedMinimum             119 sounds, factor 0.5 -> 0.5 (MAE 31.0 ms)
+    emphasis                        0 sounds, keeps 1.4
+    beforeVoicedFricative          13 sounds, keeps 1.6
+    beforeVoicedPlosive             3 sounds, keeps 1.2
+    beforeNasal                    21 sounds, factor 0.85 -> 0.85 (MAE 31.0 ms)
+    beforeVoiceless                27 sounds, factor 0.7 -> 0.7 (MAE 31.0 ms)
+    openFinal                      24 sounds, factor 1.2 -> 1.2 (MAE 31.0 ms)
+    vowelBeforeVowel                1 sounds, keeps 1.2
+    vowelAfterVowel                 1 sounds, keeps 0.7
+    clusterMiddle                   2 sounds, keeps 0.5
+    clusterEdge                    47 sounds, factor 0.7 -> 0.7 (MAE 31.0 ms)
+    longVowel                       0 sounds, keeps 1.7
+    longConsonant                   0 sounds, keeps 1.8
+  ru
+  pass 1: inherent durations
+    classes.voicelessFricative     18 sounds, keeps 115
+    classes.voicelessPlosive       27 sounds, inherent 89 -> 89
+    classes.open                   14 sounds, keeps 230
+    classes.trill                  11 sounds, keeps 85
+    classes.close                  16 sounds, keeps 150
+    classes.glide                   9 sounds, keeps 70
+    classes.voicedPlosive          12 sounds, keeps 75
+    classes.reduced                43 sounds, inherent 187 -> 187
+    classes.liquid                 20 sounds, inherent 80 -> 80
+    classes.nasal                  11 sounds, keeps 70
+    classes.mid                    24 sounds, inherent 159 -> 159
+    classes.voicedFricative        18 sounds, keeps 70
+  pass 1: rule factors
+    clauseFinal                     9 sounds, keeps 1.4
+    nonPhraseFinal                    fixed at 0.9
+    nonWordFinal                   46 sounds, factor 0.85 -> 0.85 (MAE 25.7 ms)
+    polysyllabic                   76 sounds, factor 0.8 -> 0.8 (MAE 25.7 ms)
+    nonInitialConsonant            83 sounds, factor 0.85 -> 0.85 (MAE 25.7 ms)
+    pretonic                       18 sounds, keeps 0.7
+    unstressedMedial                4 sounds, keeps 0.45
+    unstressedOther                45 sounds, factor 0.45 -> 0.45 (MAE 25.7 ms)
+    unstressedOnset                70 sounds, factor 0.7 -> 0.7 (MAE 25.7 ms)
+    unstressedMinimum             155 sounds, factor 0.5 -> 0.5 (MAE 25.7 ms)
+    emphasis                        0 sounds, keeps 1.4
+    beforeNasal                     1 sounds, keeps 0.85
+    beforeVoiceless                22 sounds, factor 0.7 -> 0.7 (MAE 25.7 ms)
+    openFinal                      32 sounds, factor 1.2 -> 1.2 (MAE 25.7 ms)
+    vowelBeforeVowel                0 sounds, keeps 1.2
+    vowelAfterVowel                 0 sounds, keeps 0.7
+    clusterMiddle                   0 sounds, keeps 0.5
+    clusterEdge                    36 sounds, factor 0.7 -> 0.7 (MAE 25.7 ms)
+    longVowel                       0 sounds, keeps 1.7
+    longConsonant                   4 sounds, keeps 1.5
+  pass 2: inherent durations
+    classes.voicelessFricative     18 sounds, keeps 115
+    classes.voicelessPlosive       27 sounds, inherent 89 -> 89
+    classes.open                   14 sounds, keeps 230
+    classes.trill                  11 sounds, keeps 85
+    classes.close                  16 sounds, keeps 150
+    classes.glide                   9 sounds, keeps 70
+    classes.voicedPlosive          12 sounds, keeps 75
+    classes.reduced                43 sounds, inherent 187 -> 187
+    classes.liquid                 20 sounds, inherent 80 -> 80
+    classes.nasal                  11 sounds, keeps 70
+    classes.mid                    24 sounds, inherent 159 -> 159
+    classes.voicedFricative        18 sounds, keeps 70
+  pass 2: rule factors
+    clauseFinal                     9 sounds, keeps 1.4
+    nonPhraseFinal                    fixed at 0.9
+    nonWordFinal                   46 sounds, factor 0.85 -> 0.85 (MAE 25.7 ms)
+    polysyllabic                   76 sounds, factor 0.8 -> 0.8 (MAE 25.7 ms)
+    nonInitialConsonant            83 sounds, factor 0.85 -> 0.85 (MAE 25.7 ms)
+    pretonic                       18 sounds, keeps 0.7
+    unstressedMedial                4 sounds, keeps 0.45
+    unstressedOther                45 sounds, factor 0.45 -> 0.45 (MAE 25.7 ms)
+    unstressedOnset                70 sounds, factor 0.7 -> 0.7 (MAE 25.7 ms)
+    unstressedMinimum             155 sounds, factor 0.5 -> 0.5 (MAE 25.7 ms)
+    emphasis                        0 sounds, keeps 1.4
+    beforeNasal                     1 sounds, keeps 0.85
+    beforeVoiceless                22 sounds, factor 0.7 -> 0.7 (MAE 25.7 ms)
+    openFinal                      32 sounds, factor 1.2 -> 1.2 (MAE 25.7 ms)
+    vowelBeforeVowel                0 sounds, keeps 1.2
+    vowelAfterVowel                 0 sounds, keeps 0.7
+    clusterMiddle                   0 sounds, keeps 0.5
+    clusterEdge                    36 sounds, factor 0.7 -> 0.7 (MAE 25.7 ms)
+    longVowel                       0 sounds, keeps 1.7
+    longConsonant                   4 sounds, keeps 1.5
+  hi
+  pass 1: inherent durations
+    classes.long                   70 sounds, inherent 210 -> 167
+    classes.voicelessFricative      5 sounds, keeps 115
+    classes.glide                  15 sounds, keeps 70
+    symbols.ə                      23 sounds, inherent 114 -> 114
+    classes.tap                    13 sounds, keeps 28
+    classes.voicelessPlosive       38 sounds, inherent 80 -> 80
+    classes.voicedPlosive          10 sounds, keeps 75
+    classes.nasal                  17 sounds, keeps 70
+    classes.h                       9 sounds, keeps 80
+    symbols.ɪ                      10 sounds, keeps 110
+    symbols.ʊ                       5 sounds, keeps 110
+    classes.liquid                 10 sounds, keeps 80
+  pass 1: rule factors
+    clauseFinal                     5 sounds, keeps 1.4
+    nonPhraseFinal                    fixed at 0.9
+    nonWordFinal                   47 sounds, factor 0.85 -> 0.85 (MAE 20.8 ms)
+    polysyllabic                   84 sounds, factor 0.8 -> 0.8 (MAE 20.8 ms)
+    nonInitialConsonant            74 sounds, factor 0.85 -> 0.85 (MAE 20.8 ms)
+    unstressedMedial                9 sounds, keeps 0.9
+    unstressedOther                99 sounds, factor 0.8 -> 0.8 (MAE 20.8 ms)
+    unstressedOnset                99 sounds, factor 0.9 -> 0.9 (MAE 20.8 ms)
+    unstressedMinimum             233 sounds, factor 0.5 -> 0.5 (MAE 20.8 ms)
+    emphasis                        0 sounds, keeps 1.4
+    beforeVoicedFricative           0 sounds, keeps 1.6
+    beforeVoicedPlosive             9 sounds, keeps 1.2
+    beforeNasal                     7 sounds, keeps 0.85
+    beforeVoiceless                26 sounds, factor 0.7 -> 0.7 (MAE 20.8 ms)
+    openFinal                      40 sounds, factor 1.2 -> 1.2 (MAE 20.8 ms)
+    vowelBeforeVowel                3 sounds, keeps 1.2
+    vowelAfterVowel                 3 sounds, keeps 0.7
+    clusterMiddle                   0 sounds, keeps 0.5
+    clusterEdge                    18 sounds, keeps 0.7
+    longConsonant                   0 sounds, keeps 1.8
+  pass 2: inherent durations
+    classes.long                   70 sounds, inherent 167 -> 167
+    classes.voicelessFricative      5 sounds, keeps 115
+    classes.glide                  15 sounds, keeps 70
+    symbols.ə                      23 sounds, inherent 114 -> 114
+    classes.tap                    13 sounds, keeps 28
+    classes.voicelessPlosive       38 sounds, inherent 80 -> 80
+    classes.voicedPlosive          10 sounds, keeps 75
+    classes.nasal                  17 sounds, keeps 70
+    classes.h                       9 sounds, keeps 80
+    symbols.ɪ                      10 sounds, keeps 110
+    symbols.ʊ                       5 sounds, keeps 110
+    classes.liquid                 10 sounds, keeps 80
+  pass 2: rule factors
+    clauseFinal                     5 sounds, keeps 1.4
+    nonPhraseFinal                    fixed at 0.9
+    nonWordFinal                   47 sounds, factor 0.85 -> 0.85 (MAE 20.8 ms)
+    polysyllabic                   84 sounds, factor 0.8 -> 0.8 (MAE 20.8 ms)
+    nonInitialConsonant            74 sounds, factor 0.85 -> 0.85 (MAE 20.8 ms)
+    unstressedMedial                9 sounds, keeps 0.9
+    unstressedOther                99 sounds, factor 0.8 -> 0.8 (MAE 20.8 ms)
+    unstressedOnset                99 sounds, factor 0.9 -> 0.9 (MAE 20.8 ms)
+    unstressedMinimum             233 sounds, factor 0.5 -> 0.5 (MAE 20.8 ms)
+    emphasis                        0 sounds, keeps 1.4
+    beforeVoicedFricative           0 sounds, keeps 1.6
+    beforeVoicedPlosive             9 sounds, keeps 1.2
+    beforeNasal                     7 sounds, keeps 0.85
+    beforeVoiceless                26 sounds, factor 0.7 -> 0.7 (MAE 20.8 ms)
+    openFinal                      40 sounds, factor 1.2 -> 1.2 (MAE 20.8 ms)
+    vowelBeforeVowel                3 sounds, keeps 1.2
+    vowelAfterVowel                 3 sounds, keeps 0.7
+    clusterMiddle                   0 sounds, keeps 0.5
+    clusterEdge                    18 sounds, keeps 0.7
+    longConsonant                   0 sounds, keeps 1.8
+  zh
+  pass 1: inherent durations
+    classes.voicelessPlosive        9 sounds, keeps 80
+    classes.close                  33 sounds, inherent 132 -> 132
+    classes.voicelessFricative     15 sounds, keeps 115
+    classes.open                   10 sounds, keeps 230
+    classes.glide                  19 sounds, keeps 70
+    classes.diphthong              24 sounds, inherent 229 -> 229
+    classes.nasal                  24 sounds, inherent 96 -> 99
+    classes.mid                     7 sounds, keeps 190
+    classes.reduced                10 sounds, keeps 130
+    classes.voicedFricative         4 sounds, keeps 70
+  pass 1: rule factors
+    clauseFinal                    10 sounds, keeps 1.2
+    nonPhraseFinal                    fixed at 0.9
+    nonWordFinal                    0 sounds, keeps 0.85
+    nonInitialConsonant            34 sounds, factor 0.85 -> 0.85 (MAE 43.6 ms)
+    emphasis                        0 sounds, keeps 1.4
+    beforeVoicedFricative           0 sounds, keeps 1.6
+    beforeVoicedPlosive             0 sounds, keeps 1.2
+    beforeNasal                    24 sounds, factor 0.85 -> 0.85 (MAE 43.6 ms)
+    beforeVoiceless                 0 sounds, keeps 0.7
+    openFinal                      60 sounds, factor 1.2 -> 1.2 (MAE 43.6 ms)
+    vowelBeforeVowel                0 sounds, keeps 1.2
+    vowelAfterVowel                 0 sounds, keeps 0.7
+    clusterMiddle                   0 sounds, keeps 0.5
+    clusterEdge                    21 sounds, factor 0.7 -> 0.7 (MAE 43.6 ms)
+    tone1                          13 sounds, keeps 1
+    tone2                          17 sounds, keeps 1.05
+    tone3                          19 sounds, keeps 1.15
+    tone4                          35 sounds, factor 0.9 -> 0.9 (MAE 43.6 ms)
+    tone5                           0 sounds, keeps 0.55
+    longVowel                       0 sounds, keeps 1.7
+    longConsonant                   0 sounds, keeps 1.8
+  pass 2: inherent durations
+    classes.voicelessPlosive        9 sounds, keeps 80
+    classes.close                  33 sounds, inherent 132 -> 132
+    classes.voicelessFricative     15 sounds, keeps 115
+    classes.open                   10 sounds, keeps 230
+    classes.glide                  19 sounds, keeps 70
+    classes.diphthong              24 sounds, inherent 229 -> 229
+    classes.nasal                  24 sounds, inherent 99 -> 99
+    classes.mid                     7 sounds, keeps 190
+    classes.reduced                10 sounds, keeps 130
+    classes.voicedFricative         4 sounds, keeps 70
+  pass 2: rule factors
+    clauseFinal                    10 sounds, keeps 1.2
+    nonPhraseFinal                    fixed at 0.9
+    nonWordFinal                    0 sounds, keeps 0.85
+    nonInitialConsonant            34 sounds, factor 0.85 -> 0.85 (MAE 43.6 ms)
+    emphasis                        0 sounds, keeps 1.4
+    beforeVoicedFricative           0 sounds, keeps 1.6
+    beforeVoicedPlosive             0 sounds, keeps 1.2
+    beforeNasal                    24 sounds, factor 0.85 -> 0.85 (MAE 43.6 ms)
+    beforeVoiceless                 0 sounds, keeps 0.7
+    openFinal                      60 sounds, factor 1.2 -> 1.2 (MAE 43.6 ms)
+    vowelBeforeVowel                0 sounds, keeps 1.2
+    vowelAfterVowel                 0 sounds, keeps 0.7
+    clusterMiddle                   0 sounds, keeps 0.5
+    clusterEdge                    21 sounds, factor 0.7 -> 0.7 (MAE 43.6 ms)
+    tone1                          13 sounds, keeps 1
+    tone2                          17 sounds, keeps 1.05
+    tone3                          19 sounds, keeps 1.15
+    tone4                          35 sounds, factor 0.9 -> 0.9 (MAE 43.6 ms)
+    tone5                           0 sounds, keeps 0.55
+    longVowel                       0 sounds, keeps 1.7
+    longConsonant                   0 sounds, keeps 1.8
+
+Refitted tables (inherent/minimum ms; rule factors):
+  en
+    class open                   230/80
+    class mid                    190/70
+    class close                  150/50
+    class reduced                107/45
+    class diphthong              200/100
+    class voicelessFricative     115/60
+    class voicedFricative        70/40
+    class voicelessPlosive       102/50
+    class voicedPlosive          75/50
+    class nasal                  70/50
+    class liquid                 80/35
+    class glide                  70/40
+    class h                      80/20
+    class tap                    28/20
+    class trill                  85/50
+    rule clauseFinal             1.4
+    rule nonPhraseFinal          0.9
+    rule nonWordFinal            0.85
+    rule polysyllabic            0.8
+    rule nonInitialConsonant     0.85
+    rule pretonic                null
+    rule unstressedMedial        0.5
+    rule unstressedOther         0.7
+    rule unstressedOnset         0.7
+    rule unstressedMinimum       0.5
+    rule emphasis                1.4
+    rule beforeVoicedFricative   1.6
+    rule beforeVoicedPlosive     1.2
+    rule beforeNasal             0.85
+    rule beforeVoiceless         0.7
+    rule openFinal               1.2
+    rule vowelBeforeVowel        1.2
+    rule vowelAfterVowel         0.7
+    rule clusterMiddle           0.5
+    rule clusterEdge             0.7
+    rule aspiration              25
+    rule tone1                   null
+    rule tone2                   null
+    rule tone3                   null
+    rule tone4                   null
+    rule tone5                   null
+    rule longVowel               1.7
+    rule longConsonant           1.8
+  ru
+    class open                   230/80
+    class mid                    159/70
+    class close                  150/50
+    class reduced                187/45
+    class diphthong              250/100
+    class voicelessFricative     115/60
+    class voicedFricative        70/40
+    class voicelessPlosive       89/50
+    class voicedPlosive          75/50
+    class nasal                  70/50
+    class liquid                 80/35
+    class glide                  70/40
+    class h                      80/20
+    class tap                    28/20
+    class trill                  85/50
+    rule clauseFinal             1.4
+    rule nonPhraseFinal          0.9
+    rule nonWordFinal            0.85
+    rule polysyllabic            0.8
+    rule nonInitialConsonant     0.85
+    rule pretonic                0.7
+    rule unstressedMedial        0.45
+    rule unstressedOther         0.45
+    rule unstressedOnset         0.7
+    rule unstressedMinimum       0.5
+    rule emphasis                1.4
+    rule beforeVoicedFricative   null
+    rule beforeVoicedPlosive     null
+    rule beforeNasal             0.85
+    rule beforeVoiceless         0.7
+    rule openFinal               1.2
+    rule vowelBeforeVowel        1.2
+    rule vowelAfterVowel         0.7
+    rule clusterMiddle           0.5
+    rule clusterEdge             0.7
+    rule aspiration              25
+    rule tone1                   null
+    rule tone2                   null
+    rule tone3                   null
+    rule tone4                   null
+    rule tone5                   null
+    rule longVowel               1.7
+    rule longConsonant           1.5
+  hi
+    class open                   230/80
+    class mid                    190/70
+    class close                  150/50
+    class reduced                130/45
+    class diphthong              250/100
+    class voicelessFricative     115/60
+    class voicedFricative        70/40
+    class voicelessPlosive       80/50
+    class voicedPlosive          75/50
+    class nasal                  70/50
+    class liquid                 80/35
+    class glide                  70/40
+    class h                      80/20
+    class tap                    28/20
+    class trill                  85/50
+    class long                   167/90
+    symbol ə                     114/50
+    symbol ɪ                     110/50
+    symbol ʊ                     110/50
+    rule clauseFinal             1.4
+    rule nonPhraseFinal          0.9
+    rule nonWordFinal            0.85
+    rule polysyllabic            0.8
+    rule nonInitialConsonant     0.85
+    rule pretonic                null
+    rule unstressedMedial        0.9
+    rule unstressedOther         0.8
+    rule unstressedOnset         0.9
+    rule unstressedMinimum       0.5
+    rule emphasis                1.4
+    rule beforeVoicedFricative   1.6
+    rule beforeVoicedPlosive     1.2
+    rule beforeNasal             0.85
+    rule beforeVoiceless         0.7
+    rule openFinal               1.2
+    rule vowelBeforeVowel        1.2
+    rule vowelAfterVowel         0.7
+    rule clusterMiddle           0.5
+    rule clusterEdge             0.7
+    rule aspiration              25
+    rule tone1                   null
+    rule tone2                   null
+    rule tone3                   null
+    rule tone4                   null
+    rule tone5                   null
+    rule longVowel               null
+    rule longConsonant           1.8
+  zh
+    class open                   230/80
+    class mid                    190/70
+    class close                  132/50
+    class reduced                130/45
+    class diphthong              229/100
+    class voicelessFricative     115/60
+    class voicedFricative        70/40
+    class voicelessPlosive       80/50
+    class voicedPlosive          75/50
+    class nasal                  99/50
+    class liquid                 80/35
+    class glide                  70/40
+    class h                      80/20
+    class tap                    28/20
+    class trill                  85/50
+    rule clauseFinal             1.2
+    rule nonPhraseFinal          0.9
+    rule nonWordFinal            0.85
+    rule polysyllabic            null
+    rule nonInitialConsonant     0.85
+    rule pretonic                null
+    rule unstressedMedial        null
+    rule unstressedOther         null
+    rule unstressedOnset         null
+    rule unstressedMinimum       null
+    rule emphasis                1.4
+    rule beforeVoicedFricative   1.6
+    rule beforeVoicedPlosive     1.2
+    rule beforeNasal             0.85
+    rule beforeVoiceless         0.7
+    rule openFinal               1.2
+    rule vowelBeforeVowel        1.2
+    rule vowelAfterVowel         0.7
+    rule clusterMiddle           0.5
+    rule clusterEdge             0.7
+    rule aspiration              25
+    rule tone1                   1
+    rule tone2                   1.05
+    rule tone3                   1.15
+    rule tone4                   0.9
+    rule tone5                   0.55
+    rule longVowel               1.7
+    rule longConsonant           1.8

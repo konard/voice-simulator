@@ -595,7 +595,7 @@ const START_CLASSES = Object.freeze({
   trill: entry(85, 50), // issue 39
 });
 
-/** Language table from overrides of the English one. */
+/** Language table from overrides of a base table. */
 function table(base, overrides = {}) {
   return Object.freeze({
     classes: Object.freeze({ ...base.classes, ...overrides.classes }),
@@ -611,7 +611,8 @@ function table(base, overrides = {}) {
   });
 }
 
-const ENGLISH = table({
+// The starting values of issue 39, the base of every language.
+const START = table({
   classes: START_CLASSES,
   symbols: {},
   rules: {
@@ -628,6 +629,14 @@ const ENGLISH = table({
   affricate: { closure: 0.7, frication: 0.7 },
 });
 
+const ENGLISH = table(START, {
+  classes: {
+    reduced: entry(107, 45), // fitted, issue-11-fit-durations (start 130)
+    diphthong: entry(200, 100), // fitted, issue-11-fit-durations (start 250)
+    voicelessPlosive: entry(102, 50), // fitted, issue-11-fit-durations (start 80)
+  },
+});
+
 /**
  * Inherent and minimum durations (ms) per class of sound and per IPA
  * symbol, and the rule factors (null switches a rule off) of each
@@ -635,7 +644,14 @@ const ENGLISH = table({
  */
 export const DURATION_TABLES = Object.freeze({
   en: ENGLISH,
-  ru: table(ENGLISH, {
+  ru: table(START, {
+    classes: {
+      mid: entry(159, 70), // fitted, issue-11-fit-durations (start 190)
+      // Long because the 0.45 and 0.7 of the reduction apply to almost
+      // every one of them; fitted, issue-11-fit-durations (start 130).
+      reduced: entry(187, 45),
+      voicelessPlosive: entry(89, 50), // fitted, issue-11-fit-durations (start 80)
+    },
     rules: {
       // Russian vowel length does not depend on the voicing of the next
       // consonant at the end of a word (final devoicing), issue 39.
@@ -650,21 +666,26 @@ export const DURATION_TABLES = Object.freeze({
       longConsonant: 1.5,
     },
   }),
-  hi: table(ENGLISH, {
+  hi: table(START, {
     classes: {
-      // Long vowels (written with ː): 210/90 ms, issue 39.
+      // Long vowels (written with ː): 210/90 ms, issue 39. The fit asks
+      // for 160 to 170 ms (issue-11-fit-durations), which makes [aː] only
+      // 1.4 times [ə] against the 1.6 to 2.4 of the test of issue 39; the
+      // alignment copies much of the length of the plan it rendered, so
+      // the contrast keeps the starting value.
       long: entry(210, 90),
     },
     symbols: {
-      // Short [ə ɪ ʊ]: 110/50 ms, issue 39.
-      ə: entry(110, 50),
+      // Short [ə ɪ ʊ]: 110/50 ms, issue 39; the inherent duration of [ə]
+      // fitted, issue-11-fit-durations.
+      ə: entry(114, 50),
       ɪ: entry(110, 50),
       ʊ: entry(110, 50),
     },
     rules: {
       // Hindi stress is weak: unstressed sounds lose little, issue 39.
       unstressedMedial: 0.9,
-      unstressedOther: 0.9,
+      unstressedOther: 0.8, // fitted, issue-11-fit-durations (start 0.9)
       unstressedOnset: 0.9,
       // Double consonants: x1.8, issue 39.
       longConsonant: 1.8,
@@ -672,7 +693,12 @@ export const DURATION_TABLES = Object.freeze({
       longVowel: null,
     },
   }),
-  zh: table(ENGLISH, {
+  zh: table(START, {
+    classes: {
+      close: entry(132, 50), // fitted, issue-11-fit-durations (start 150)
+      diphthong: entry(229, 100), // fitted, issue-11-fit-durations (start 250)
+      nasal: entry(96, 50), // fitted, issue-11-fit-durations (start 70)
+    },
     rules: {
       // No lexical stress in the transcriptions: no stress rules and no
       // polysyllabic shortening (issue 39).
