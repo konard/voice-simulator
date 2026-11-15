@@ -318,6 +318,7 @@ describe('listening test statistics', () => {
     expect(report).toContain('Listeners: 10');
     expect(report.match(/, different$/gm).length).toBe(3);
     expect(report).not.toContain('not different');
+    expect(report).not.toContain('Fewer than 8 listeners');
   });
 
   it('scores ABX and intelligibility answers', () => {
@@ -342,6 +343,7 @@ describe('listening test statistics', () => {
     for (const heading of ['## MUSHRA', '## ABX', '## Intelligibility']) {
       expect(report).toContain(heading);
     }
+    expect(report).toContain('Fewer than 8 listeners');
     expect(() => analyzeResults(results)).toThrow();
   });
 

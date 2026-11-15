@@ -54,6 +54,8 @@ export const MAX_CONDITIONS = 12;
 /** Post-screening of BS.1534-3: hidden reference below 90 in > 15 %. */
 export const SCREENING = Object.freeze({ below: 90, share: 0.15 });
 export const Z95 = 1.959964;
+/** Fewest listeners whose results may back a claim (see README.md). */
+export const MIN_LISTENERS = 8;
 export const VOLUME_SECONDS = 2;
 
 const TYPES = ['mushra', 'abx', 'intelligibility'];
@@ -734,6 +736,9 @@ export function formatReport(analysis, options = {}) {
       `- Listeners: ${analysis.listeners}${dropped}`,
       `- Trials: ${total} (MUSHRA ${analysis.mushra.trials}, ABX ${analysis.abx.trials}, intelligibility ${analysis.intelligibility.trials})`,
     ].join('\n'),
+    analysis.listeners < MIN_LISTENERS
+      ? `**Fewer than ${MIN_LISTENERS} listeners: these numbers do not support any claim.**`
+      : null,
     mushraSection(analysis.mushra),
     abxSection(analysis.abx),
     intelligibilitySection(analysis.intelligibility),
