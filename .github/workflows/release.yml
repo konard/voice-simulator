@@ -487,10 +487,10 @@ jobs:
 
       # RUSTFLAGS covers rustc, but Cargo's own manifest warnings still exit 0.
       - name: Fail on Cargo manifest warnings
-        run: bash scripts/run-with-budget-warning.sh 90 "cargo check" bash scripts/check-cargo-warnings.sh --workspace
+        run: bash scripts/run-with-budget-warning.sh 60 "cargo check" bash scripts/check-cargo-warnings.sh --workspace
 
       - name: Run Clippy
-        run: bash scripts/run-with-budget-warning.sh 90 "cargo clippy" cargo clippy --workspace --all-targets --locked -- -D warnings
+        run: bash scripts/run-with-budget-warning.sh 60 "cargo clippy" cargo clippy --workspace --all-targets --locked -- -D warnings
 
       # rustdoc-only lints (broken intra-doc links, for one) are reported by
       # neither Clippy nor the tests: `[h]` in a doc comment of
@@ -498,13 +498,13 @@ jobs:
       - name: Build documentation
         env:
           RUSTDOCFLAGS: -D warnings
-        run: bash scripts/run-with-budget-warning.sh 90 "cargo doc" cargo doc --workspace --no-deps --locked
+        run: bash scripts/run-with-budget-warning.sh 60 "cargo doc" cargo doc --workspace --no-deps --locked
 
       - name: Run Rust tests
-        run: bash scripts/run-with-budget-warning.sh 120 "cargo test" cargo test --workspace --locked
+        run: bash scripts/run-with-budget-warning.sh 90 "cargo test" cargo test --workspace --locked
 
       - name: Build the WebAssembly engine
-        run: bash scripts/run-with-budget-warning.sh 120 "wasm build" node scripts/build-wasm.mjs --require --check-size
+        run: bash scripts/run-with-budget-warning.sh 90 "wasm build" node scripts/build-wasm.mjs --require --check-size
 
       # The native CLI renders the jobs of tests/rust-render-job.test.js,
       # which checks that it prints the SHA-256 of the WebAssembly render.
@@ -515,7 +515,7 @@ jobs:
         env:
           REQUIRE_WASM: '1'
           REQUIRE_CLI: '1'
-        run: bash scripts/run-with-budget-warning.sh 60 "Rust parity tests" node --test tests/rust-parity.test.js tests/rust-waveguide.test.js tests/rust-render-job.test.js tests/engine-layout.test.js
+        run: bash scripts/run-with-budget-warning.sh 30 "Rust parity tests" node --test tests/rust-parity.test.js tests/rust-waveguide.test.js tests/rust-render-job.test.js tests/engine-layout.test.js
 
       - name: Upload the WebAssembly engine
         uses: ./.github/actions/artifact-transport
