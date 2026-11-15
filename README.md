@@ -429,15 +429,29 @@ The image runs `voice-simulator serve` on port 8080 with a health check on
 
 ### Quality tiers
 
-| Audio tier  | Solver    | Detail        | Sample rate | Relative cost |
-| ----------- | --------- | ------------- | ----------- | ------------- |
-| `minimal`   | waveguide | 22 sections   | 22.05 kHz   | 1             |
-| `low`       | waveguide | 32 sections   | 32 kHz      | 1.6           |
-| `medium`    | waveguide | 44 sections   | 48 kHz      | 2.6           |
-| `high`      | fdtd3d    | 1 cm voxels   | 48 kHz      | 10            |
-| `ultra`     | fdtd3d    | 0.6 cm voxels | 48 kHz      | 65            |
-| `studio`    | fdtd3d    | 0.5 cm voxels | 48 kHz      | 105           |
-| `reference` | fdtd3d    | 0.4 cm voxels | 48 kHz      | 220           |
+| Audio tier   | Solver    | Detail        | Sample rate | Relative cost |
+| ------------ | --------- | ------------- | ----------- | ------------- |
+| `telephone`  | waveguide | 12 sections   | 8 kHz       | 0.62          |
+| `narrowband` | waveguide | 16 sections   | 11.025 kHz  | 0.78          |
+| `wideband`   | waveguide | 22 sections   | 16 kHz      | 0.95          |
+| `minimal`    | waveguide | 22 sections   | 22.05 kHz   | 1             |
+| `low`        | waveguide | 32 sections   | 32 kHz      | 1.6           |
+| `medium`     | waveguide | 44 sections   | 48 kHz      | 2.6           |
+| `high`       | fdtd3d    | 1 cm voxels   | 48 kHz      | 10            |
+| `ultra`      | fdtd3d    | 0.6 cm voxels | 48 kHz      | 65            |
+| `studio`     | fdtd3d    | 0.5 cm voxels | 48 kHz      | 105           |
+| `reference`  | fdtd3d    | 0.4 cm voxels | 48 kHz      | 220           |
+
+The three narrow-band tiers below `minimal` low-pass the solver output with
+an eighth-order Butterworth filter at 3.4, 4.8 and 7 kHz (`bandLimit`), so
+nothing folds back at the low output rate, and update the tract about every
+1.5 ms (`blockSize` 12, 16 and 24 samples). They keep F1 to F3 of the
+48 kHz render, and `analyzeVoice` measures only F1 to F3 at 8 kHz. The
+server renders them at their own rate when the request names no
+`sampleRate`. `wideband` costs almost the same CPU time as `minimal`; it
+exists for the 16 kHz output rate. Auto in the web app starts at `minimal`
+(`BASE_AUDIO_LEVEL`) and falls back to the narrow-band tiers only when a
+device cannot keep up.
 
 `studio` is the default of the library, the CLI and the server
 (`DEFAULT_AUDIO_TIER`): full 3D acoustics whose 0.5 cm cells resolve the

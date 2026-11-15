@@ -1,0 +1,33 @@
+# run 1: node experiments/issue-5-tier-costs.mjs 2 (load average: 4.01, 4.30, 4.51)
+telephone 0.0247 relative cost 0.57 current 0.6
+narrowband 0.0345 relative cost 0.80 current 0.7
+wideband 0.0444 relative cost 1.03 current 0.95
+minimal 0.0432 relative cost 1.00 current 1
+low 0.0816 relative cost 1.89 current 1.6
+medium 0.1221 relative cost 2.82 current 2.6
+high 1.4091 relative cost 32.59 current 10
+ultra 6.9715 relative cost 161.23 current 65
+studio 12.6448 relative cost 292.44 current 105
+reference 29.6581 relative cost 685.90 current 220
+# run 2: node experiments/issue-5-tier-costs.mjs 2 (load average: 6.18, 4.75, 4.65)
+telephone 0.0293 relative cost 0.63 current 0.6
+narrowband 0.0403 relative cost 0.86 current 0.7
+wideband 0.0473 relative cost 1.01 current 0.95
+minimal 0.0469 relative cost 1.00 current 1
+low 0.0833 relative cost 1.78 current 1.6
+medium 0.1353 relative cost 2.89 current 2.6
+high 1.3934 relative cost 29.72 current 10
+ultra 7.7531 relative cost 165.35 current 65
+studio 14.3547 relative cost 306.14 current 105
+reference 30.5799 relative cost 652.17 current 220
+# run 3: node experiments/issue-5-tier-costs.mjs 2 (load average: 8.56, 5.87, 5.05)
+telephone 0.0290 relative cost 0.59 current 0.6
+narrowband 0.0366 relative cost 0.75 current 0.7
+wideband 0.0593 relative cost 1.21 current 0.95
+minimal 0.0491 relative cost 1.00 current 1
+low 0.0790 relative cost 1.61 current 1.6
+medium 0.1267 relative cost 2.58 current 2.6
+high 1.4326 relative cost 29.20 current 10
+ultra 7.8380 relative cost 159.73 current 65
+studio 13.9408 relative cost 284.11 current 105
+reference 32.6119 relative cost 664.61 current 220
