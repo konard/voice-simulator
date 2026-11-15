@@ -1,0 +1,20 @@
+$ node experiments/issue-38-vtl-sentences.mjs <main checkout>   # main at 0200c48
+17.27  15.13  The north wind and the sun were disputing which was the stronger.
+15.39  14.06  Please call Stella and ask her to bring these things with her.
+15.01  14.07  When the sunlight strikes raindrops in the air, they act as a prism.
+16.64  14.50  A rainbow is a division of white light into many beautiful colors.
+16.37  14.14  We were away a year ago.
+16.13  14.38  mean (heads 17.2 and 14.8)
+
+$ node experiments/issue-38-vtl-sentences.mjs .
+16.60  15.91  The north wind and the sun were disputing which was the stronger.
+16.24  14.26  Please call Stella and ask her to bring these things with her.
+15.52  14.17  When the sunlight strikes raindrops in the air, they act as a prism.
+16.63  15.09  A rainbow is a division of white light into many beautiful colors.
+16.53  14.16  We were away a year ago.
+16.30  14.72  mean (heads 17.2 and 14.8)
+
+matchVoice(iterations 2) on the test sentence, main:   male 19.5, female 16.8 cm
+matchVoice(iterations 2) on the test sentence, branch: male 18.1, female 18.3 cm
+matchVoice(iterations 2) on the passage, main:         male 19.2, female 16.0 cm
+matchVoice(iterations 2) on the passage, branch:       male 18.5, female 15.8 cm

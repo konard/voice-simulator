@@ -27,6 +27,12 @@ import { presetHeadConfig } from '../src/head-config.js';
 const TEXT =
   'The north wind and the sun were disputing which was the stronger.';
 
+// The vocal tract length read from one short sentence moves by about 1 cm
+// with the sounds it contains (15.0 to 17.3 cm for the male preset over five
+// sentences, experiments/issue-38-vtl-sentences.txt), so the male and
+// female voices are told apart on the longer first sentence of the passage.
+const PASSAGE = `${TEXT.slice(0, -1)}, when a traveler came along wrapped in a warm cloak.`;
+
 function pulseTrain(f0, sampleRate, seconds) {
   const samples = new Float64Array(Math.round(sampleRate * seconds));
   const period = sampleRate / f0;
@@ -158,7 +164,7 @@ describe('matchVoice', () => {
 
   it('tells a male from a female voice without a transcript', () => {
     const [male, female] = ['male', 'female'].map((preset) => {
-      const { samples, sampleRate } = synthesize(TEXT, {
+      const { samples, sampleRate } = synthesize(PASSAGE, {
         head: presetHeadConfig(preset),
         solver: 'waveguide',
         sampleRate: 16000,
