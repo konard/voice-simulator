@@ -56,7 +56,7 @@ All times are UTC on 2026-11-15.
 
 | #         | Requirement                                                                                               | Where it is handled                |
 | --------- | --------------------------------------------------------------------------------------------------------- | ---------------------------------- |
-| R1        | Find every false positive, false negative, warning and error in CI/CD and fix them all                    | Findings F1–F15                    |
+| R1        | Find every false positive, false negative, warning and error in CI/CD and fix them all                    | Findings F1–F14                    |
 | R2        | Use the best practices of the JS, Rust and Python templates; compare every workflow and CI script         | "Template comparison", F7, F9, F10 |
 | R3        | Report in the templates the issues they share                                                             | "Upstream issues"                  |
 | R4        | Follow hive-mind CI-CD-BEST-PRACTICES.md                                                                  | "Best practices"                   |
@@ -217,7 +217,7 @@ the exceptions. Upstream: command-stream#237.
 The WebGPU fallback test printed `WebGPU synthesis failed, using the CPU`
 with a stack trace into every test run. `44e9e4a` captures and asserts it.
 
-### F15. Low advisory in the `artifact-transport` lockfile (warning)
+### F14. Low advisory in the `artifact-transport` lockfile (warning)
 
 - **Symptom:** the Security run on `f9866be` (43748518998) warned
   `GHSA-474x-hrwr-fgx4 [low] fast-xml-parser ... npm audit fix resolves it`.
@@ -233,7 +233,7 @@ with a stack trace into every test run. `44e9e4a` captures and asserts it.
   for all three tracked lockfiles (root, example app, `artifact-transport`).
 - **Template:** same lockfile, #302.
 
-### F14. Not actioned
+### Not actioned
 
 - `Due to capacity constraints ... macOS arm64` is a GitHub runner notice.
 - lychee's `Summary report available` is an intended pointer.
@@ -269,7 +269,7 @@ the changed-lines lint (F1).
 | Finding | Issue                                                                                                                                                |
 | ------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
 | F1      | https://github.com/link-foundation/js-ai-driven-development-pipeline-template/issues/301 (`upstream-issues/js-template-lint-changed-lines.md`)       |
-| F15     | https://github.com/link-foundation/js-ai-driven-development-pipeline-template/issues/302 (`upstream-issues/js-template-fast-xml-parser-advisory.md`) |
+| F14     | https://github.com/link-foundation/js-ai-driven-development-pipeline-template/issues/302 (`upstream-issues/js-template-fast-xml-parser-advisory.md`) |
 | F12     | https://github.com/link-foundation/command-stream/issues/237 (`upstream-issues/command-stream-resvg-dependency.md`)                                  |
 | F7      | existing: https://github.com/actions/deploy-pages/issues/413, https://github.com/actions/deploy-pages/issues/434                                     |
 
