@@ -6,9 +6,9 @@
  * Fails when the repository depends on a neural network library, imports
  * one, contains a neural model file, depends on a package whose licence
  * is not in the allow list, lists a speech dataset that the dataset registry
- * check refuses, or tracks a file of the dataset cache (issue 16). The lists live in scripts/policy-denylist.json;
- * the boundary itself is described in docs/VISION.md, section "What counts
- * as a neural network".
+ * check refuses, or tracks a file of the dataset cache (issue 16). The lists
+ * live in scripts/policy-denylist.json; the boundary itself is described in
+ * docs/VISION.md, section "What counts as a neural network".
  *
  * Usage:
  *   node scripts/check-policy.mjs [--root <dir>] [--list <file>] [--json]
