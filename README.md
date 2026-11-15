@@ -541,7 +541,8 @@ its first sample on the audio clock, against 110.2-150.4 ms for buffer sources
 `npm run build:wasm` builds the Rust engine into
 `src/engine/voice-simulator.wasm`. With it, `RustVoiceRenderer` and
 `renderPlanRust` render the waveguide tiers (`telephone` to `medium`) in
-WebAssembly with the same samples as `VoiceRenderer` and `renderPlan`; the
+WebAssembly with the same samples as `VoiceRenderer` and `renderPlan` (the
+largest difference measured is 1.7e-18); the
 plan and the tract shape of every control block are still computed in
 JavaScript. It is opt-in for now: `synthesize` keeps using JavaScript.
 
@@ -566,7 +567,7 @@ const samples = engine
 Options the engine does not handle (a `solver` other than `'waveguide'`, a
 WebGPU `device`, `source: 'folds'`) throw an Error with
 `code === 'ENGINE_UNSUPPORTED'`. On the pangram of the heavy suite
-`performance` the Rust renderer is 1.5 to 2.4 times faster than JavaScript
+`performance` the Rust renderer is 1.5 to 2.0 times faster than JavaScript
 ([docs/reports/performance-rust-waveguide.md](docs/reports/performance-rust-waveguide.md)).
 `node scripts/write-render-job.mjs <text> <tier> <out>` writes a render job
 and `voice-simulator-cli render-job <out>` (`cargo build --release -p

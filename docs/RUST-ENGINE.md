@@ -56,9 +56,9 @@ copies `target/wasm32-unknown-unknown/release/voice_simulator_wasm.wasm` to
 `src/engine/voice-simulator.wasm` and prints its size and SHA-256:
 
 ```text
-src/engine/voice-simulator.wasm: 80360 bytes
-SHA-256: 112fa0eaf28f858d8d7036bfa1f7fae410407bfe057940b1ed4e810c001d7377
-WASM_SIZE_BUDGET: 81920 bytes
+src/engine/voice-simulator.wasm: 93300 bytes
+SHA-256: 0453c24c9a20e1d5c9e44f85e333ee4080f12b47fb67ad4fef57849be07ebe90
+WASM_SIZE_BUDGET: 98304 bytes
 ```
 
 (Rust 1.100.0 on x86_64 Linux. The build does not depend on the folder or
@@ -153,7 +153,7 @@ The module imports nothing.
 | `vs_renderer_free(handle) -> i32`                                  | Frees the renderer; 0 or `BAD_HANDLE`                                                |
 | `vs_biquad_run(kind, f, q, rate, data, count) -> i32`              | A `Biquad` (0 low-pass, 1 high-pass, 2 band-pass) over `data` in place; 0 or error   |
 | `vs_glottis_run(seed, params, data, count) -> i32`                 | A `Glottis` over the noise at `data` in place (13 parameters); periods or error      |
-| `vs_radiation_run(area, rate, data, count) -> i32`                 | A `Radiation` over the incident waves at `data` in place; 0 or error                 |
+| `vs_radiation_run(area, rate, baffle, data, count) -> i32`         | A `Radiation` over the incident waves at `data` in place; 0 or error                 |
 | `vs_waveguide_run(params, n, data, count) -> i32`                  | A `Waveguide` stepped by the glottal input at `data` in place; 0 or error            |
 | `vs_stages_run(seed, sr, gain, band, rate, f, data, count) -> i32` | `NoiseSources` plus `OutputStage` over `data` in place; 0 or error                   |
 
@@ -226,9 +226,9 @@ per sample:
 | -------------- | -------------------------------------------------------------------- |
 | `filters.rs`   | `filters.js`: `Biquad`, `Noise`                                      |
 | `glottis.rs`   | `glottis.js`: `Glottis`, the LF waveform and the chink               |
-| `radiation.rs` | `radiation.js`: `Radiation`                                          |
-| `waveguide.rs` | `waveguide.js`: `Waveguide`, `piriformBranch`                        |
-| `nose_line.rs` | `nose-line.js`: the radiating `NoseLine`, `lossFactor`               |
+| `radiation.rs` | `radiation.js`: `Radiation`, `radiationLoad`                         |
+| `waveguide.rs` | `waveguide.js`: `Waveguide` with its nose, `piriformBranch`          |
+| `losses.rs`    | `losses.js`: the viscothermal shelf filters and the wall constants   |
 | `stages.rs`    | `voice.js`: `NoiseSources`, `OutputStage`                            |
 | `renderer.rs`  | `voice.js`: `#step`, `#record`, `#finish` of `VoiceRenderer`         |
 | `listener.rs`  | `microphone.js` and `room.js`: `MicrophoneStage`, `Room`, the delays |
@@ -244,7 +244,7 @@ WebGPU `device`, `source: 'folds'` (the two-mass vocal folds of
 ### Configuration
 
 One `Float64Array` per renderer (`RENDERER_CONFIG` of
-`src/engine/layout.js`, the same constants in `config.rs`): 28 header
+`src/engine/layout.js`, the same constants in `config.rs`): 31 header
 values, then `NOSE_AREA_COUNT` nose areas (`noseShape(head).areas`), then
 `LISTENER_LENGTH` listener values.
 
@@ -264,6 +264,9 @@ values, then `NOSE_AREA_COUNT` nose areas (`noseShape(head).areas`), then
 | 11    | `ASPIRATION_LEVEL` | 25    | `PIRIFORM_SECTIONS`   |
 | 12    | `GLOTTAL_CHINK`    | 26    | `NOSE_AREA_COUNT`     |
 | 13    | `LUNG_PRESSURE`    | 27    | `LISTENER_LENGTH`     |
+|       |                    | 28    | `WALL_MASS`           |
+|       |                    | 29    | `WALL_RESISTANCE`     |
+|       |                    | 30    | `WALL_STIFFNESS`      |
 
 There are two seeds, not three: `grep -n "createRandom\|createNoise"
 src/acoustics` finds only `'<seed>:glottis'` (`Glottis`) and
@@ -325,9 +328,9 @@ target/release/voice-simulator-cli render-job /tmp/job.bin
 
 | Tier    | SHA-256 (WebAssembly and native)                                   | Native seconds | Native RTF |
 | ------- | ------------------------------------------------------------------ | -------------- | ---------- |
-| minimal | `0b75cccc61a3652c0e6da112cade71f2cb8281f842c8fb5bb3c8d49da94f284c` | 0.019          | 0.014      |
-| low     | `70742bd101fffd9930d4f2f55a25809e1ce16e61c4dcb8ed917d9dfd865f73c0` | 0.038          | 0.027      |
-| medium  | `0050a7b5e9f6ff278eb8bd6cbe402daf5608374bbc2c8ffc32febe4fd0723706` | 0.057          | 0.042      |
+| minimal | `85ef5dd3eb2c14195160dea7ff9753249df28adb38f86d497adeeee25a0241d0` | 0.029          | 0.021      |
+| low     | `2f2582f751c08e913cd7b2bcc0e12450abc576b833ed43bd465c11c2ca402f13` | 0.069          | 0.050      |
+| medium  | `947a973577d2676381959f9299e673a802a598156ca8b1992ef84d386d6ad0be` | 0.098          | 0.071      |
 
 ### Parity and speed
 
@@ -339,18 +342,24 @@ x86_64 Linux) measured:
 | biquad, relative RMS error              | 1e-9          | 0                        |
 | glottis, relative RMS error             | 1e-6          | 1.5e-17, 59 periods each |
 | radiation, relative RMS error           | 0             | 0                        |
-| waveguide, relative RMS error           | 1e-9          | 0                        |
+| waveguide, relative RMS error           | 1e-9          | 2.0e-15                  |
 | noise sources and output stage          | 1e-9          | 8.5e-17 and 5.3e-17      |
-| render `minimal`, `low`, `medium`       | max diff 1e-4 | 0, 0, 0                  |
+| render `minimal`, `low`, `medium`       | max diff 1e-4 | 0, 0, 1.7e-18            |
 | render, `studio` room, microphone 30 cm | max diff 1e-4 | 0                        |
 | chunks of 1, 37 and 1024 samples        | identical     | identical                |
+
+The waveguide and `medium` differences come from `pow`: the shelf filters
+of `losses.rs` (issue 36) design on a grid `250 * (top / 250) ** (i / 40)`,
+and `libm::pow` (a port of fdlibm) differs from V8's `Math.pow` (glibc's
+`pow` on Linux, 0 differences in 20 000 random pairs) by one ulp for a few
+exponents. The other values are bit-identical.
 
 `npm run build:wasm && npm run test:heavy -- --suite performance` renders
 the pangram of the performance suite (3.5 s of audio) on every waveguide
 tier, three runs each, median; the report is
 [docs/reports/performance-rust-waveguide.md](reports/performance-rust-waveguide.md).
-The Rust renderer is 1.5 to 2.4 times faster than JavaScript (`minimal`
-2.02, `low` 1.54, `medium` 1.71), and 28 % to 60 % of its time is the frame
+The Rust renderer is 1.5 to 2.0 times faster than JavaScript (`minimal`
+2.01, `low` 1.56, `medium` 1.60), and 22 % to 51 % of its time is the frame
 preparation that stays in JavaScript (`sampleState`, `tractShape`), so
 that part, left to issue 82, now bounds the speed-up.
 

@@ -412,7 +412,8 @@ export declare function loadEngineModule(
 ): Promise<EngineModule | null>;
 /**
  * VoiceRenderer with the waveguide solver on the Rust engine (issue 22):
- * the same samples within parity class B (measured: identical). Options
+ * the same samples within parity class B (measured: largest difference
+ * 1.7e-18). Options
  * the engine does not handle (`solver` other than `'waveguide'`, `device`,
  * `source: 'folds'`, `bandLimit <= 0`) throw an Error with
  * `code === 'ENGINE_UNSUPPORTED'`. Call free() when done.
