@@ -252,10 +252,9 @@ function pushPause(segments, token, context) {
 }
 
 /**
- * Split tokens into timed segments.
- * @param {object[]} tokens
- * Durations come from the rules of src/articulation/durations.js with
- * the table of `language` (or `durationTable`).
+ * Split tokens into timed segments. Durations come from the rules of
+ * src/articulation/durations.js with the table of `language` (or
+ * `durationTable`).
  * @param {object[]} tokens
  * @param {{rate: number, language?: string, stressLengthening?: number, finalLengthening?: number, pauseLength?: number, durationTable?: object}} options
  */
