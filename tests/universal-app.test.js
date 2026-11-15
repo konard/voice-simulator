@@ -206,4 +206,30 @@ describe('previous app versions', () => {
     );
     expect(() => readVersions(file)).toThrow();
   });
+
+  it('installs only the web build dependencies of a previous version (issue 115)', async () => {
+    const { desktopOnlyPackages } =
+      await import('../scripts/build-previous-versions.mjs');
+    // The devDependencies of v1 and v2: electron and electron-builder hold
+    // the deprecated inflight, glob 7, rimraf 2 and boolean.
+    const manifest = {
+      dependencies: { react: '^18.3.1', three: '^0.186.1' },
+      devDependencies: {
+        '@vitejs/plugin-react': '^4.7.0',
+        electron: '^43.4.0',
+        'electron-builder': '^26.15.3',
+        vite: '^6.4.1',
+      },
+    };
+    expect(desktopOnlyPackages(manifest)).toEqual([
+      'electron',
+      'electron-builder',
+    ]);
+    expect(desktopOnlyPackages({ dependencies: { vite: '^6' } })).toEqual([]);
+    expect(desktopOnlyPackages({})).toEqual([]);
+    const script = readText('scripts/build-previous-versions.mjs');
+    const prune = script.indexOf("'--package-lock-only'");
+    const install = script.indexOf("run('npm', ['ci'");
+    expect(prune > 0 && install > prune).toBe(true);
+  });
 });
