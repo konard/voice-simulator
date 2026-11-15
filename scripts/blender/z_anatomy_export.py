@@ -61,7 +61,9 @@ TEETH = [
 def parse_args():
     argv = sys.argv[sys.argv.index("--") + 1 :] if "--" in sys.argv else []
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument("--blend", required=True, help="Z-Anatomy Startup.blend")
+    parser.add_argument(
+        "--blend", required=True, help="Z-Anatomy Startup.blend"
+    )
     parser.add_argument("--out", required=True, help="directory for the STLs")
     parser.add_argument(
         "--list", action="store_true", help="only print the matching names"
@@ -123,7 +125,9 @@ def main():
         with bpy.data.libraries.load(args.blend, link=False) as (source, _):
             available = set(source.objects)
         for name in names:
-            print(f"z_anatomy: {'found' if name in available else 'missing'} {name}")
+            print(
+                f"z_anatomy: {'found' if name in available else 'missing'} {name}"
+            )
         return
     objects, missing = append(args.blend, names)
     for name in missing:

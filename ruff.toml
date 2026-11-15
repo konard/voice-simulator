@@ -1,0 +1,4 @@
+# Ruff for the repository's Python: Blender scripts and experiments
+# (workflows.yml, job "Ruff"). The default rule set of the pinned release;
+# 80 columns like Prettier, so the Blender scripts keep their wrapping.
+line-length = 80

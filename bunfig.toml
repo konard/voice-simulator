@@ -1,5 +1,5 @@
-# Bun configuration
-
+# Only maintained tests participate in the runtime matrix.
 [test]
+root = "./tests"
 # The heavy tests run only through `npm run test:heavy` (tests/heavy/README.md).
 pathIgnorePatterns = ["tests/heavy/**"]

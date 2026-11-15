@@ -1,0 +1,2 @@
+Check Links	Check links with lychee	  INPUT_FAIL: false
+Check Links	Check links with lychee	  INPUT_FAILIFEMPTY: true

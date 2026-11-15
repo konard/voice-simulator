@@ -15,7 +15,6 @@ Usage (Blender 4.2 LTS or newer, no GUI needed):
 """
 
 import argparse
-import math
 import sys
 
 import bpy
@@ -136,8 +135,7 @@ def main():
         decimate(objects, args.decimate)
     smooth(objects)
     print(
-        f"head_model: {len(objects)} parts, {before} -> "
-        f"{triangles(objects)} triangles"
+        f"head_model: {len(objects)} parts, {before} -> {triangles(objects)} triangles"
     )
     for obj in sorted(objects, key=lambda item: item.name):
         print(f"head_model: part {obj.name} {triangles([obj])} triangles")

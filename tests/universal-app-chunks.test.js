@@ -47,6 +47,12 @@ describe('universal app chunking', () => {
       expect(vendorChunk([modules, 'scheduler', 'index.js'].join(sep))).toBe(
         'react'
       );
+      expect(
+        vendorChunk(['repo', 'src', 'g2p', 'english-dict.js'].join(sep))
+      ).toBe('g2p-dict');
+      expect(vendorChunk(['repo', 'src', 'g2p', 'english.js'].join(sep))).toBe(
+        undefined
+      );
     }
     expect(vendorChunk('/repo/src/index.js')).toBe(undefined);
     expect(vendorChunk('/repo/node_modules/threejs-extra/index.js')).toBe(
@@ -55,7 +61,8 @@ describe('universal app chunking', () => {
   });
 
   it('wires the chunking and the size guard into the Vite config', () => {
-    expect(viteConfig).toContain('manualChunks: vendorChunk');
+    // Once for the app, once for the workers (worker.rollupOptions).
+    expect(viteConfig.split('manualChunks: vendorChunk').length - 1).toBe(2);
     expect(viteConfig).toContain('chunkSizeGuard()');
     expect(viteConfig).toContain('chunkSizeWarningLimit: CHUNK_SIZE_LIMIT_KB');
     expect(CHUNK_SIZE_LIMIT_KB).toBe(500);
@@ -87,5 +94,18 @@ describe('universal app chunking', () => {
     expect(thrown.message).toContain('index.js (500.00 kB)');
     expect(thrown.message).toContain('worker.js (500.00 kB)');
     expect(thrown.message).toContain('Split them in build-chunks.js');
+  });
+
+  // Vite measures UTF-8 bytes; 'ɑ' is one UTF-16 code unit but two bytes,
+  // so this chunk is 520 kB for Vite while its string length is 260k.
+  it('measures chunks in UTF-8 bytes, as Vite does (issue 115)', () => {
+    const code = 'ɑ'.repeat(260_000);
+    let thrown;
+    try {
+      runGuard({ 'index.js': { type: 'chunk', fileName: 'index.js', code } });
+    } catch (error) {
+      thrown = error;
+    }
+    expect(thrown?.message).toContain('index.js (520.00 kB)');
   });
 });

@@ -3,14 +3,14 @@
 /**
  * Publish to npm using OIDC trusted publishing
  * Usage: node scripts/publish-to-npm.mjs [--should-pull] [--js-root <path>]
- *   should_pull: Optional flag to pull latest changes before publishing (for release job)
+ *   should_pull: Verify the validated release commit landed on main before publishing
  *
  * Configuration:
  * - CLI: --js-root <path> to explicitly set JavaScript root
  * - Environment: JS_ROOT=<path>
  *
  * Uses link-foundation libraries:
- * - use-m: Dynamic package loading without package.json dependencies
+ * - Lockfile-installed command-stream and lino-arguments helpers
  * - command-stream: Modern shell command execution with streaming support
  * - lino-arguments: Unified configuration from CLI args, env vars, and .lenv files
  *
@@ -19,12 +19,18 @@
  */
 
 import { appendFileSync } from 'fs';
+import {
+  checkNpmTarballSize,
+  reportNpmTarballSizeError,
+} from './check-npm-tarball-size.mjs';
 
 import { getJsRoot, needsCd, parseJsRootConfig } from './js-paths.mjs';
 import { isPackageVersionPublished } from './npm-registry.mjs';
 import { readPackageInfo } from './package-info.mjs';
+import { prepareReleasePublication } from './release-publication.mjs';
 import {
-  buildAuthFailureGuidance,
+  buildPublishFailureGuidance,
+  isPayloadTooLargeFailure,
   isNonRetryableFailure,
 } from './publish-failure-classifier.mjs';
 import {
@@ -36,7 +42,7 @@ import { bootstrapDependencies } from './bootstrap-dependencies.mjs';
 import { loadCommandStream, loadLinoArguments } from './use-module.mjs';
 
 // Import link-foundation libraries
-// Loaded through bootstrapDependencies: when the use-m CDN is unreachable,
+// Loaded through bootstrapDependencies: when installed helpers are unavailable,
 // this script reports the failure and writes its outputs, and the process
 // does not die inside module initialisation.
 const [{ $ }, { makeConfig }] = await bootstrapDependencies(
@@ -51,7 +57,7 @@ const config = makeConfig({
       .option('should-pull', {
         type: 'boolean',
         default: getenv('SHOULD_PULL', false),
-        describe: 'Pull latest changes before publishing',
+        describe: 'Verify the validated release commit landed on main',
       })
       .option('js-root', {
         type: 'string',
@@ -77,6 +83,9 @@ const originalCwd = process.cwd();
 // Patterns that indicate publish failure in changeset output
 // Guards against false positives in CI/CD output parsing.
 const FAILURE_PATTERNS = [
+  'e413',
+  'npm error 413',
+  'payload too large',
   'packages failed to publish',
   'error occurred while publishing',
   'npm error code E',
@@ -209,14 +218,20 @@ async function runPublishCommand(shell, jsRoot, originalCwd) {
     analysisError?.message || '',
     result?.stdout || '',
     result?.stderr || '',
+    error?.stdout || '',
+    error?.stderr || '',
   ].join('\n');
 
   if (analysisError) {
-    // Mark authentication / registry-configuration failures as non-retryable so
+    // Mark permanent payload, authentication and registry failures so
     // the retry loop can fail fast with actionable guidance without burning
     // through MAX_RETRIES.
-    if (!isAlreadyPublishedError(output) && isNonRetryableFailure(output)) {
+    if (
+      isPayloadTooLargeFailure(output) ||
+      (!isAlreadyPublishedError(output) && isNonRetryableFailure(output))
+    ) {
       analysisError.nonRetryable = true;
+      analysisError.publishOutput = output;
     }
     return { success: false, error: analysisError, output };
   }
@@ -226,9 +241,8 @@ async function runPublishCommand(shell, jsRoot, originalCwd) {
 
 async function main() {
   try {
-    if (shouldPull) {
-      // Pull the latest changes we just pushed
-      await $`git pull origin main`;
+    if (process.env.GITHUB_SHA || shouldPull) {
+      await prepareReleasePublication({ verifyRemote: shouldPull, jsRoot });
     }
 
     // Get current version
@@ -260,6 +274,13 @@ async function main() {
       `Version ${currentVersion} not found on npm, proceeding with publish...`
     );
 
+    try {
+      checkNpmTarballSize({ cwd: jsRoot || '.' });
+    } catch (error) {
+      reportNpmTarballSizeError(error);
+      throw error;
+    }
+
     // Publish to npm using OIDC trusted publishing with retry logic
     // Multi-layer failure detection guards against a publish command that
     // reports success without actually publishing.
@@ -284,10 +305,14 @@ async function main() {
     }
 
     console.error(`\u274C Publish failed: ${error.message}`);
-    // Authentication / registry-configuration errors will not be fixed by
-    // retrying, so print actionable guidance for the operator.
+    // Permanent refusals need guidance specific to their cause.
     if (error?.nonRetryable && !error?.verificationFailed) {
-      console.error(buildAuthFailureGuidance(packageName));
+      console.error(
+        buildPublishFailureGuidance(
+          packageName,
+          error.publishOutput || error.message
+        )
+      );
     }
     process.exit(1);
   } catch (error) {

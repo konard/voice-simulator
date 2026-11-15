@@ -36,7 +36,11 @@ const repoRoot = fileURLToPath(new URL('..', import.meta.url));
 // Read on first use: a sandboxed Deno run then reports skipped tests, not an
 // import error.
 let cachedList;
-const policyList = () => (cachedList ??= loadList(repoRoot));
+// Fixtures get the repository's rules but not its exceptions: an exception
+// names a package of this repository, so in a fixture it matches nothing and
+// is reported as stale. "passes on this repository" covers the real ones.
+const policyList = () =>
+  (cachedList ??= { ...loadList(repoRoot), exceptions: [] });
 const run = itUnless(sandboxed, noPosixShell);
 
 const ONNX_NODE = 'onnx' + 'runtime-node';

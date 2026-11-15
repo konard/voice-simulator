@@ -3,9 +3,10 @@
 /**
  * Lint entry point used by `npm run lint`.
  *
- * All files are linted for errors. Warnings are reported only on lines that
- * the current branch changes relative to its base, keeping each run focused on
- * actionable findings. Every reported error or warning fails the run. Set
+ * All files are linted for errors. Warnings are reported only in files that
+ * the current branch changes relative to its base, the same files the
+ * pre-commit hook lints, or in every file when the branch changes the lint
+ * configuration. Every reported error or warning fails the run. Set
  * LINT_ALL_WARNINGS=1 to report every warning, as pushes to main do.
  */
 
@@ -13,7 +14,8 @@ import { execFileSync } from 'node:child_process';
 import { ESLint } from 'eslint';
 import {
   parseChangedLines,
-  filterWarningsToChangedLines,
+  changesLintConfig,
+  filterWarningsToChangedFiles,
   lintExitCode,
 } from './lint-changed-lines.mjs';
 
@@ -42,7 +44,7 @@ function resolveBaseRef() {
   return null;
 }
 
-function collectChangedLines() {
+function collectChangedFiles() {
   const base = resolveBaseRef();
 
   if (!base) {
@@ -63,20 +65,39 @@ function collectChangedLines() {
       changed.set(file, true);
     }
 
+    console.log(
+      `Reporting warnings in ${changed.size} file(s) changed since ${base}.`
+    );
     return changed;
   } catch {
     return null;
   }
 }
 
+function warningScope() {
+  if (process.env.LINT_ALL_WARNINGS === '1') {
+    return null;
+  }
+
+  const changed = collectChangedFiles();
+
+  if (changed && changesLintConfig(changed)) {
+    console.log(
+      'The lint configuration or ESLint packages changed: reporting every warning.'
+    );
+    return null;
+  }
+
+  return changed;
+}
+
 async function main() {
   const eslint = new ESLint();
   const results = await eslint.lintFiles(['.']);
-  const changedLines =
-    process.env.LINT_ALL_WARNINGS === '1' ? null : collectChangedLines();
+  const changedFiles = warningScope();
 
-  const reported = changedLines
-    ? filterWarningsToChangedLines(results, changedLines, process.cwd())
+  const reported = changedFiles
+    ? filterWarningsToChangedFiles(results, changedFiles, process.cwd())
     : results;
 
   const formatter = await eslint.loadFormatter('stylish');
@@ -92,7 +113,7 @@ async function main() {
 
   if (hiddenWarnings > 0) {
     console.log(
-      `${hiddenWarnings} warning(s) on unchanged lines were not reported. Run LINT_ALL_WARNINGS=1 npm run lint to see them.`
+      `${hiddenWarnings} warning(s) in unchanged files were not reported. Run LINT_ALL_WARNINGS=1 npm run lint to see them.`
     );
   }
 

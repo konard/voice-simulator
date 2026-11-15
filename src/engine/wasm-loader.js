@@ -32,6 +32,24 @@ function isBufferSource(value) {
 }
 
 /**
+ * `node:fs/promises`, reached without a module specifier a bundler can see.
+ * A dynamic import of that literal string made Vite swap in an empty browser
+ * stub and warn on every build of the example app (issue 115), and webpack
+ * rejects the `node:` scheme; only `file:` URLs get here, which a browser
+ * never loads. `process.getBuiltinModule` exists in Node.js >= 20.16, Bun and
+ * Deno; older Node.js 20 releases take the dynamic import.
+ * @returns {Promise<{readFile: (url: URL) => Promise<Uint8Array>}>}
+ */
+async function nodeFs() {
+  const specifier = 'node:fs/promises';
+  const getBuiltinModule = globalThis.process?.getBuiltinModule;
+  if (typeof getBuiltinModule === 'function') {
+    return getBuiltinModule(specifier);
+  }
+  return await import(/* @vite-ignore */ /* webpackIgnore: true */ specifier);
+}
+
+/**
  * Read the bytes behind a URL, or null when they cannot be read.
  * @param {URL} url
  * @returns {Promise<ArrayBuffer | Uint8Array | null>}
@@ -39,7 +57,7 @@ function isBufferSource(value) {
 async function readUrl(url) {
   try {
     if (url.protocol === 'file:') {
-      const { readFile } = await import('node:fs/promises');
+      const { readFile } = await nodeFs();
       return await readFile(url);
     }
     const response = await fetch(url);

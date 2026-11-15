@@ -33,7 +33,7 @@ pub const RE_CRITICAL: f64 = 1800.0;
 /// Mean glottal area of modal voicing (cm²).
 pub const GLOTTIS_VOICED: f64 = 0.05;
 
-/// Glottal area of an open glottis: [h], voiceless obstruents (cm²).
+/// Glottal area of an open glottis: \[h\], voiceless obstruents (cm²).
 pub const GLOTTIS_OPEN: f64 = 0.25;
 
 /// Extra mean glottal area of a fully breathy voice (cm²).

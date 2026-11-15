@@ -316,10 +316,23 @@ describe('synthesis worker', () => {
   });
 
   it('falls back to the CPU when the GPU fails', async () => {
-    const posted = await speakInWorker(
-      { id: 3, ipa: 'ˈa', seed: 1, tier: HIGH, auto: false },
-      { gpu: brokenGpu }
-    );
+    // The fallback warns. The warning is captured and asserted, so it does
+    // not reach the test log as an unexplained error.
+    const warnings = [];
+    const warn = console.warn;
+    console.warn = (text, error) => warnings.push([text, error?.message]);
+    let posted;
+    try {
+      posted = await speakInWorker(
+        { id: 3, ipa: 'ˈa', seed: 1, tier: HIGH, auto: false },
+        { gpu: brokenGpu }
+      );
+    } finally {
+      console.warn = warn;
+    }
+    expect(warnings).toEqual([
+      ['WebGPU synthesis failed, using the CPU', 'device lost'],
+    ]);
     expect(posted.some((message) => message.type === 'error')).toBe(false);
     const starts = posted.filter((message) => message.type === 'start');
     expect(starts.at(-1).solver).toBe('fdtd3d');

@@ -1,0 +1,7 @@
+# Annotations and warnings of the five runs on 729e3ab (2026-11-15 19:29-19:35 UTC); all five succeeded.
+Dependency Graph Prerequisite | Check dependency graph availability | ##[warning]The dependency graph of konard/voice-simulator is disabled, so dependency review cannot run. A repository administrator has to enable "Dependency graph" at https://github.com/konard/voice-simulator/settings/security_analysis. Skipping dependency review for this pull request.
+Release Preflight | Probe every release credential | ##[warning]release-preflight: npm has no package voice-simulator yet, and npm configures trusted publishing only for published packages. Add an NPM_TOKEN repository secret (a granular token allowed to publish voice-simulator) at https://github.com/konard/voice-simulator/settings/secrets/actions for the first release, then add a trusted publisher for konard/voice-simulator, workflow release.yml, at https://www.npmjs.com/package/voice-simulator/access and delete the secret
+Test (deno, windows-2025) | Run tests (Deno) | ##[warning]Deno test suite has run for 140s of its 200s budget.
+# npm deprecation warnings, DeprecationWarning, DEP0xxx: none
+# Workflow commands not at the start of a line: none
+# Notices: 4x 'Due to capacity constraints, jobs targeting macOS arm64 runners may experience longer queue times.' (GitHub, not actionable)
