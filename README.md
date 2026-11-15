@@ -283,6 +283,11 @@ const { head: copied } = matchVoice(samples, sampleRate, {
 
 // The vocal folds as the voice source (the default is source: 'lf').
 const folds = synthesize('Hello world', { tier: 'medium', source: 'folds' });
+// ... coupled to the vocal tract and the windpipe.
+const coupled = synthesize('Hello world', {
+  source: 'folds',
+  interaction: true,
+});
 
 // When each word and syllable is spoken, in seconds of the audio.
 for (const word of result.timeline.words) {
@@ -332,6 +337,7 @@ npx voice-simulator say "Hello" --preset female --head random -o hi.flac -b 24
 npx voice-simulator say "Hello" --mic-distance 100 --mic-azimuth 45 --room hall -o hall.wav
 npx voice-simulator say "Hello" --tier high --box 30x44x30 -o box.wav  # simulated box
 npx voice-simulator say "Hello" --source folds -o folds.wav  # vocal-fold source
+npx voice-simulator say "Hello" --source folds --interaction -o coupled.wav
 npx voice-simulator convert hello.flac -o hello.aiff --sample-rate 16000
 npx voice-simulator match recording.wav --transcript "What it says" --json
 npx voice-simulator compare recording.wav hello.wav --json   # distances from a reference
@@ -742,6 +748,53 @@ the folds stay within 0.15 dB of their level before (ˈasa -17.91 dB, was
 -18.03 dB; one stage of 10 ms cost 1.8 dB) while [h] gets 5.9 dB quieter
 ([experiments/issue-35-folds-airflow.txt](experiments/issue-35-folds-airflow.txt),
 `node experiments/issue-35-folds-airflow.mjs`).
+
+#### Source-tract interaction
+
+`interaction: true` (CLI `--interaction`, `DEFAULT_INTERACTION = false`;
+folds only, with `source: 'lf'` it throws
+`Interaction needs source: 'folds'`) lets the glottal flow depend on the
+sound pressure above and below the glottis (Titze 2008). The solver
+reports the wave that arrives at the glottis (`glottalLoad()`, the glottal
+end then reflects fully), `IncidentPressure` turns it back into a pressure
+(a leaky integrator with a 20 Hz corner, `PRESSURE_CORNER`), and
+`interactiveFlow(a, A_s, A_e, D)` in `src/acoustics/folds.js` solves the
+flow from both pressures with the pressure coefficient
+`GLOTTAL_PRESSURE_COEFFICIENT = 1.1`; the folds feel the same pressures.
+`subglottal` (default: as `interaction`) adds the windpipe below the
+glottis: `Subglottal` in
+[`src/acoustics/subglottal.js`](src/acoustics/subglottal.js), a
+Kelly-Lochbaum line of 10 cm of 2.5 cm² and 8 cm that widens to 20 cm²
+(`subglottalShape(head)`, both lengths scaled by `vocalTractLength / 16.5`
+and the head parameter `subglottalLength`), stepped every second solver
+step and ending in the radiation of its end area.
+
+On static vowels at 120 Hz
+([experiments/issue-11-interaction.txt](experiments/issue-11-interaction.txt),
+`node experiments/issue-11-interaction.mjs`) the pulse leans to the right
+(skew 0.526 without, 0.659, 0.561 and 0.634 with interaction for [ɑ], [i]
+and [u]), the first resonance leaves a ripple on the flow, and the windpipe
+resonates at 626, 1485 and 2299 Hz with -3 dB bandwidths of about 200 to
+300 Hz (`SUBGLOTTAL_LOSS = 7`). The ripple rings at 1175 Hz for [ɑ], the
+first resonance of the tract with an open, absorbing glottal end (1208 Hz,
+[experiments/issue-34-open-f1.txt](experiments/issue-34-open-f1.txt)),
+not at the F1 of the closed tract (815 Hz). `node bin/voice-simulator.js
+say "Hello." --source folds --interaction` has a pitch of 122 Hz in
+`voice-simulator match`, 126 Hz without `--interaction`. Without
+interaction, every source and solver renders bit for bit as before
+([experiments/issue-34-identity.txt](experiments/issue-34-identity.txt)).
+
+The checklist for making the folds with interaction the default, on tier
+`medium`:
+
+| Check                                                         | Result                                                                                                                                                                                                                                                                               |
+| ------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| tests of #33 and #34 pass                                     | the ripple of [ɑ] is 44 % above the 815 Hz F1 of the closed tract (the test allows 20 %); it passes against the open-glottis F1                                                                                                                                                      |
+| audit sentence at most 35 % slower than LF                    | 1.13 to 1.30 times LF ([issue-34-interaction-speed.txt](experiments/issue-34-interaction-speed.txt))                                                                                                                                                                                 |
+| vowel tests of `tests/head-presets.test.js`                   | pitch and F2 pass; the spectral tilt of the child fails (H1*-H2* -51.7 dB, 2 to 7 asked), as the child preset does not voice with the folds ([issue-34-preset-vowels.txt](experiments/issue-34-preset-vowels.txt), [issue-34-child-probe.txt](experiments/issue-34-child-probe.txt)) |
+| [aba] voices 40 ms into the closure, [apa] stops within 30 ms | 41.2 ms and 4.8 ms ([issue-34-closure-voicing.txt](experiments/issue-34-closure-voicing.txt))                                                                                                                                                                                        |
+
+So `DEFAULT_SOURCE` stays `'lf'` and `DEFAULT_INTERACTION` stays `false`.
 
 ### Development
 

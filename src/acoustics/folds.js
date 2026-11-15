@@ -41,7 +41,7 @@
  *   could not be reached.
  */
 
-import { AIR_DENSITY } from './transfer.js';
+import { AIR_DENSITY, SPEED_OF_SOUND } from './transfer.js';
 import { BREATH_EXPONENT, BREATH_GAIN } from './glottis.js';
 import { lagFactor, openTractStrength } from './aerodynamics.js';
 
@@ -108,6 +108,19 @@ export const ADDUCTION_TABLE = Object.freeze([
 export const MEAN_AREA_TIME = 0.005;
 export const MEAN_AREA_STAGES = 3;
 
+/**
+ * Pressure coefficient k_t of the glottis (1.0-1.4): the transglottal
+ * pressure is k_t rho U² / (2 a²), Bernoulli plus the exit loss (Titze
+ * 2008 uses 1.1).
+ */
+export const GLOTTAL_PRESSURE_COEFFICIENT = 1.1;
+/**
+ * Corner frequency (Hz) of the leaky integrator that turns the incident
+ * waves (flow derivatives, as the source) back into pressures; it keeps a
+ * DC offset from building up.
+ */
+export const PRESSURE_CORNER = 20;
+
 const PASCAL = 10; // dyn/cm² per Pa
 const REFERENCE_PRESSURE = 800 * PASCAL;
 /** Area at which the breath noise is no longer reduced (cm²). */
@@ -129,6 +142,71 @@ export function restArea(adduction) {
   const [x0, y0] = ADDUCTION_TABLE[index - 1];
   const [x1, y1] = ADDUCTION_TABLE[index];
   return y0 + ((y1 - y0) * (value - x0)) / (x1 - x0);
+}
+
+/**
+ * Glottal flow (cm³/s) of the interactive source (Titze 2008): the root of
+ * D - rho c U / (2 A) = k_t rho U² / (4 a²) with the sign of D, where
+ * 1/A = 1/A_s + 1/A_e and D = (P_L - P_o) / 2 + p_s - p_e.
+ *
+ *   U = sign(D) (a c / k_t) (-(a/A) + sqrt((a/A)² + 4 k_t |D| / (rho c²)))
+ *
+ * computed in a form that does not cancel for small D. With infinite
+ * areas it is a sqrt(4 D / (k_t rho)), Bernoulli at the pressure 2 D.
+ * @param {number} a Glottal area (cm²).
+ * @param {number} subglottalArea A_s (cm², Infinity for none).
+ * @param {number} supraglottalArea A_e (cm², Infinity for none).
+ * @param {number} drive D (dyn/cm²).
+ */
+export function interactiveFlow(a, subglottalArea, supraglottalArea, drive) {
+  if (!(a > 0) || drive === 0) {
+    return 0;
+  }
+  const k = GLOTTAL_PRESSURE_COEFFICIENT;
+  const ratio = a * (1 / subglottalArea + 1 / supraglottalArea);
+  const term = (4 * k * Math.abs(drive)) / (AIR_DENSITY * SPEED_OF_SOUND ** 2);
+  // -r + sqrt(r² + t) = t / (r + sqrt(r² + t))
+  const flow =
+    ((a * SPEED_OF_SOUND) / k) *
+    (term / (ratio + Math.sqrt(ratio ** 2 + term)));
+  return drive < 0 ? -flow : flow;
+}
+
+/**
+ * Pressure (dyn/cm²) of the waves that a solver or the subglottal line
+ * sends back to the glottis. The waves are flow derivatives scaled by
+ * FOLDS_FLOW_SCALE (as the source), so they are integrated with a leak
+ * at PRESSURE_CORNER:  y += x dt;  y *= 1 - 2 pi PRESSURE_CORNER dt;
+ * p = y rho c / FOLDS_FLOW_SCALE.
+ */
+export class IncidentPressure {
+  constructor() {
+    this.dt = Number.NaN;
+    this.leak = 1;
+    this.reset();
+  }
+
+  reset() {
+    this.state = 0;
+    this.pressure = 0;
+  }
+
+  /**
+   * @param {number} wave Incident wave (pressure / rho c, derivative).
+   * @param {number} dt Step (s).
+   * @returns {number} Pressure (dyn/cm²).
+   */
+  step(wave, dt) {
+    if (dt !== this.dt) {
+      this.dt = dt;
+      this.leak = 1 - 2 * Math.PI * PRESSURE_CORNER * dt;
+    }
+    this.state += wave * dt;
+    this.state *= this.leak;
+    this.pressure =
+      (this.state * AIR_DENSITY * SPEED_OF_SOUND) / FOLDS_FLOW_SCALE;
+    return this.pressure;
+  }
 }
 
 function clampTension(value) {
@@ -166,6 +244,8 @@ export class VocalFolds {
     this.meanStages = new Float64Array(MEAN_AREA_STAGES);
     this.u = 0;
     this.pressure = 0;
+    this.oralPressure = 0;
+    this.slowFlow = 0;
     this.started = false;
     this.intensity = 0;
     this.noiseModulation = 0;
@@ -222,10 +302,17 @@ export class VocalFolds {
    *   `aspirationStrength` is the relative turbulence strength at the
    *   glottis from the air flow (VoiceRenderer); without it the folds
    *   assume an open tract at the lung pressure and their mean area.
-   *   `oralPressure` (dyn/cm²) is not used yet (#34).
+   *   `oralPressure` (dyn/cm²) is the mean pressure above the glottis,
+   *   used with a `load`.
    * @param {number} noise White noise sample in [-1, 1].
+   * @param {{below: {pressure: number, area: number}, above: {pressure: number, area: number}}} [load]
+   *   Source-tract interaction: the pressures (dyn/cm², IncidentPressure)
+   *   of the waves arriving at the glottis from the trachea (`below`) and
+   *   the vocal tract (`above`) and the areas (cm², Infinity for none) of
+   *   the tubes there. Without it the flow is Bernoulli at the lung
+   *   pressure.
    */
-  step(dt, control, noise) {
+  step(dt, control, noise, load) {
     const closure = control.closure;
     this.#setTension(clampTension(control.foldTension));
     if (control.adduction !== this.adduction) {
@@ -250,6 +337,13 @@ export class VocalFolds {
     const a02 = this.a02;
     const a01 = a02 + REST_CONVERGENCE;
     const twoL = 2 * this.length;
+    if (load) {
+      const oral = Math.max(0, control.oralPressure ?? 0) * (1 - closure);
+      this.oralPressure = this.started
+        ? this.oralPressure + this.follow * (oral - this.oralPressure)
+        : oral;
+      return this.#stepLoaded(dt, control, noise, load, a01, a02);
+    }
     const drive = this.length * FOLD_THICKNESS_1 * pressure;
     const steps = this.steps;
     const h = dt / steps;
@@ -291,7 +385,109 @@ export class VocalFolds {
     const derivative = ((flow - previous) / dt) * FOLDS_FLOW_SCALE;
     this.area = area;
     this.u = flow;
+    return derivative + this.#breath(control, noise, area);
+  }
 
+  /**
+   * step() with source-tract interaction: the flow of every inner step
+   * solves interactiveFlow and the forces use the pressures below and
+   * above the glottis.
+   */
+  #stepLoaded(dt, control, noise, load, a01, a02) {
+    const closure = control.closure;
+    const lung = this.pressure;
+    const oral = this.oralPressure;
+    const { below, above } = load;
+    const subglottalArea = below.area;
+    const supraglottalArea = above.area;
+    const impedance = AIR_DENSITY * SPEED_OF_SOUND;
+    const belowLoad = impedance / subglottalArea;
+    const aboveLoad = impedance / supraglottalArea;
+    // The incident pressures miss what the leaky integrator removed: the
+    // waves returning the slow part of the flow (below PRESSURE_CORNER),
+    // which the open ends of both tubes reflect with the opposite sign.
+    // They would cancel the slow part of the rho c U / A terms, so that
+    // part (slowFlow, low-passed as the integrator high-passes) is left
+    // out of them and the mean flow and pressures follow the lung and the
+    // oral pressure (aerodynamics.js) alone.
+    const slow = this.started ? this.slowFlow : 0;
+    const belowBase = lung + 2 * below.pressure + belowLoad * slow;
+    const aboveBase = oral + 2 * above.pressure - aboveLoad * slow;
+    const transglottal =
+      (lung - oral) / 2 +
+      below.pressure -
+      above.pressure +
+      ((belowLoad + aboveLoad) * slow) / 2;
+    const twoL = 2 * this.length;
+    const lower = this.length * FOLD_THICKNESS_1;
+    const upper = this.length * FOLD_THICKNESS_2;
+    const steps = this.steps;
+    const h = dt / steps;
+    let { x1, x2, v1, v2 } = this;
+    for (let index = 0; index < steps; index++) {
+      const a1 = a01 + twoL * x1;
+      const a2 = a02 + twoL * x2;
+      const minimum = Math.max(0, Math.min(a1, a2));
+      const u = interactiveFlow(
+        minimum,
+        subglottalArea,
+        supraglottalArea,
+        transglottal
+      );
+      const pressureBelow = belowBase - belowLoad * u;
+      const pressureAbove = aboveBase + aboveLoad * u;
+      let f1 = -this.r1 * v1 - this.k1 * x1 - this.kc * (x1 - x2);
+      let f2 =
+        -this.r2 * v2 -
+        this.k2 * x2 -
+        this.kc * (x2 - x1) +
+        upper * pressureAbove;
+      if (a1 > 0) {
+        const ratio = minimum / a1;
+        f1 +=
+          lower *
+          (pressureBelow - (pressureBelow - pressureAbove) * ratio * ratio);
+      } else {
+        f1 += lower * pressureBelow - this.c1 * a1;
+      }
+      if (a2 < 0) {
+        f2 -= this.c2 * a2;
+      }
+      v1 += (h * f1) / this.m1;
+      v2 += (h * f2) / this.m2;
+      x1 += h * v1;
+      x2 += h * v2;
+    }
+    this.x1 = x1;
+    this.x2 = x2;
+    this.v1 = v1;
+    this.v2 = v2;
+    const area = Math.max(0, Math.min(a01 + twoL * x1, a02 + twoL * x2));
+    const flow = interactiveFlow(
+      area,
+      subglottalArea,
+      supraglottalArea,
+      transglottal
+    );
+    const previous = this.started ? this.u : flow;
+    this.#updateMeanArea(
+      area * (1 - closure),
+      Math.max(0, a02) * (1 - closure)
+    );
+    this.slowFlow = this.started
+      ? this.slowFlow + 2 * Math.PI * PRESSURE_CORNER * dt * (flow - slow)
+      : flow;
+    this.started = true;
+    const derivative = ((flow - previous) / dt) * FOLDS_FLOW_SCALE;
+    this.area = area;
+    this.u = flow;
+    return derivative + this.#breath(control, noise, area);
+  }
+
+  /** Breath noise of a step; also sets intensity and noiseModulation. */
+  #breath(control, noise, area) {
+    const closure = control.closure;
+    const pressure = this.pressure;
     const voicing = Math.max(0, control.voicing) * (1 - closure);
     const relative = pressure / REFERENCE_PRESSURE;
     this.intensity = voicing * relative * Math.sqrt(relative);
@@ -303,10 +499,7 @@ export class VocalFolds {
       control.aspirationStrength ?? openTractStrength(pressure, this.meanArea);
     const breath =
       (control.aspiration + this.breathGain * voicing) * (1 - closure);
-    return (
-      derivative +
-      noise * breath * modulation * strength * 0.45 * this.aspirationLevel
-    );
+    return noise * breath * modulation * strength * 0.45 * this.aspirationLevel;
   }
 }
 

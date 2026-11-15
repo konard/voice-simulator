@@ -1,0 +1,15 @@
+Source-tract interaction on static vowels at 120 Hz (issue 34)
+node experiments/issue-11-interaction.mjs
+
+vowel  interaction  pitch Hz  skew   ripple Hz  ripple %  F1 Hz  F1 BW Hz  H1-H2 dB
+  [ɑ]           no     120.2  0.526        425      0.58    857       269       4.8
+  [ɑ]          yes     123.4  0.659       1175      1.84    815       100       5.5
+  [i]           no     120.1  0.526        425      0.58    284       149       1.7
+  [i]          yes     122.8  0.561        575      3.03    372        54      -0.2
+  [u]           no     120.2  0.526        425      0.58    295       168       2.1
+  [u]          yes     120.9  0.634        450      3.33    414        77       1.5
+
+Subglottal resonances (Hz) and -3 dB bandwidths (Hz):
+  [ɑ] step 10.35 us: 626 (196), 1485 (293), 2299 (305)
+  [i] step 9.83 us: 633 (198), 1500 (298), 2325 (310)
+  [u] step 10.29 us: 629 (197), 1493 (291), 2312 (307)
