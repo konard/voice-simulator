@@ -22,6 +22,7 @@ import { normalizeHeadConfig } from '../head-config.js';
 import { VOWEL_CORRECTIONS_3D } from '../articulation/vowel-calibration.js';
 import { Biquad, createNoise } from './filters.js';
 import { Glottis } from './glottis.js';
+import { VocalFolds } from './folds.js';
 import { SPEED_OF_SOUND } from './transfer.js';
 import { Waveguide } from './waveguide.js';
 import { Fdtd3d } from './fdtd3d.js';
@@ -29,6 +30,39 @@ import { createListener } from './microphone.js';
 import { enclosureBounds } from './voxel-model.js';
 
 const OUTPUT_GAIN = 0.3;
+
+/** Voice source used when none is asked for: the LF pulse model. */
+export const DEFAULT_SOURCE = 'lf';
+
+/** Voice sources by name: LF pulses or the two-mass vocal folds. */
+const SOURCES = new Map([
+  [
+    'lf',
+    (head, seed) =>
+      new Glottis({
+        seed,
+        tenseness: head.tenseness,
+        breathiness: head.breathiness,
+        jitter: head.jitter,
+        shimmer: head.shimmer,
+        aspirationLevel: head.aspirationLevel,
+        chink: head.glottalChink,
+      }),
+  ],
+  [
+    'folds',
+    (head, seed) =>
+      new VocalFolds({
+        seed,
+        breathiness: head.breathiness,
+        aspirationLevel: head.aspirationLevel,
+        foldLength: head.foldLength,
+        foldMass: head.foldMass,
+        foldStiffness: head.foldStiffness,
+        foldDamping: head.foldDamping,
+      }),
+  ],
+]);
 
 /** Solver factories by name: 1D waveguide and 3D FDTD. */
 /**
@@ -128,10 +162,12 @@ export class VoiceRenderer {
    * and `enclosure` ({width, height, depth, absorption, center} in cm, a
    * box around the head) choose where and in what space the voice is
    * heard. The output grows by the reverberation tail.
-   * @param {{sampleRate?: number, sections?: number, solver?: string, seed?: string|number, blockSize?: number, head?: object, dx?: number, model?: object, output?: string, kernel?: string, device?: object, microphone?: object, room?: string|object, enclosure?: object, teeth?: boolean, piriform?: boolean, vallecula?: boolean}} [options]
+   * @param {{sampleRate?: number, sections?: number, solver?: string, source?: 'lf' | 'folds', seed?: string|number, blockSize?: number, head?: object, dx?: number, model?: object, output?: string, kernel?: string, device?: object, microphone?: object, room?: string|object, enclosure?: object, teeth?: boolean, piriform?: boolean, vallecula?: boolean}} [options]
    *   `teeth: false` leaves out the incisors, `piriform: false` the
    *   piriform fossae (both solvers) and `vallecula: false` the vallecula
-   *   (3D only). A WebGPU `device` runs the 3D solver on the GPU; such a
+   *   (3D only). `source` is the voice source: 'lf' (default, LF pulses
+   *   at the planned pitch) or 'folds' (two-mass vocal folds driven by the
+   *   lung pressure, see folds.js). A WebGPU `device` runs the 3D solver on the GPU; such a
    *   renderer renders with renderAsync.
    */
   constructor(plan, options = {}) {
@@ -145,6 +181,11 @@ export class VoiceRenderer {
     const factory = SOLVERS.get(options.solver ?? 'waveguide');
     if (!factory) {
       throw new Error(`Unknown solver: ${options.solver}`);
+    }
+    this.source = options.source ?? DEFAULT_SOURCE;
+    const source = SOURCES.get(this.source);
+    if (!source) {
+      throw new Error(`Unknown source: ${options.source}`);
     }
     this.solver = factory({
       sections: this.sections,
@@ -163,15 +204,7 @@ export class VoiceRenderer {
     });
     this.solver.setNose?.(noseShape(this.head).areas);
     this.vowelCorrections = VOWEL_TABLES.get(options.solver ?? 'waveguide');
-    this.glottis = new Glottis({
-      seed,
-      tenseness: this.head.tenseness,
-      breathiness: this.head.breathiness,
-      jitter: this.head.jitter,
-      shimmer: this.head.shimmer,
-      aspirationLevel: this.head.aspirationLevel,
-      chink: this.head.glottalChink,
-    });
+    this.glottis = source(this.head, seed);
     this.noise = new NoiseSources(seed);
     this.output = new OutputStage(this.sampleRate, this.head.outputGain);
     this.state = {};

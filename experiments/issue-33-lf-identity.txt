@@ -1,0 +1,4 @@
+a984b9d530e6a848  21001  Hello. {"tier":"minimal"}
+444e7dc266765e80  84825  Hello, how are you? {"tier":"medium","seed":3}
+8ec468d63185f0f6  51421  Привет, мир. {"tier":"low","head":"random","seed":5}
+f6c8cb4f1fe0ffad  19669  ˈmama ʔa {"tier":"minimal","ipa":true}
