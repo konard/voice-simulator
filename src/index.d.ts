@@ -393,6 +393,67 @@ export declare function renderPlanAsync(
   plan: Plan,
   options?: RenderOptions & { chunkSize?: number }
 ): Promise<Float32Array>;
+/** Interface version of src/engine/voice-simulator.wasm (`vs_abi_version`). */
+export declare const ENGINE_ABI_VERSION: number;
+/** The Rust engine: the exports and the memory of the WebAssembly module. */
+export interface EngineModule {
+  exports: Record<string, (...args: number[]) => number>;
+  memory: WebAssembly.Memory;
+  abiVersion: number;
+}
+/**
+ * Load the Rust engine (`npm run build:wasm` builds it). `source` is a
+ * WebAssembly.Module, the bytes, a URL, or nothing for the file next to the
+ * loader. Resolves to null without WebAssembly, without the file or when it
+ * does not compile; throws when its interface version differs.
+ */
+export declare function loadEngineModule(
+  source?: WebAssembly.Module | BufferSource | URL | string
+): Promise<EngineModule | null>;
+/**
+ * VoiceRenderer with the waveguide solver on the Rust engine (issue 22):
+ * the same samples within parity class B (measured: identical). Options
+ * the engine does not handle (`solver` other than `'waveguide'`, `device`,
+ * `source: 'folds'`, `bandLimit <= 0`) throw an Error with
+ * `code === 'ENGINE_UNSUPPORTED'`. Call free() when done.
+ */
+export declare class RustVoiceRenderer {
+  constructor(module: EngineModule, plan: Plan, options?: RenderOptions);
+  readonly sampleRate: number;
+  readonly sections: number;
+  readonly duration: number;
+  readonly done: boolean;
+  readonly totalSamples: number;
+  position: number;
+  /** Milliseconds spent preparing frames in JavaScript so far. */
+  readonly prepareTime: number;
+  render(target: Float32Array): number;
+  renderAsync(target: Float32Array): Promise<number>;
+  /** Acoustic pressure per oral and nasal section. */
+  field(): { pressure: Float64Array; nose: Float64Array };
+  /** Free the engine memory of this renderer. */
+  free(): void;
+}
+/** renderPlan on the Rust engine. */
+export declare function renderPlanRust(
+  module: EngineModule,
+  plan: Plan,
+  options?: RenderOptions
+): Float32Array;
+/**
+ * A job for `voice-simulator-cli render-job`: little-endian f64 values
+ * `[config length, config..., frame count, frames..., sample count]`.
+ */
+export declare function renderJob(
+  plan: Plan,
+  options?: RenderOptions
+): {
+  config: Float64Array;
+  frames: Float64Array;
+  frameCount: number;
+  samples: number;
+  bytes: Uint8Array;
+};
 /** A WebGPU device for the 3D solver, or null without WebGPU. */
 export declare function requestGpuDevice(options?: {
   gpu?: object;

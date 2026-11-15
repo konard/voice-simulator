@@ -55,6 +55,13 @@ export {
   WALL_SOURCE,
   strouhalFrequency,
 } from './acoustics/voice.js';
+// The waveguide renderer on the Rust engine, opt-in (issue 22)
+export { loadEngineModule, ENGINE_ABI_VERSION } from './engine/wasm-loader.js';
+export {
+  RustVoiceRenderer,
+  renderPlanRust,
+  renderJob,
+} from './engine/rust-renderer.js';
 // Air flow and turbulence noise sources (issue 35)
 export {
   ASPIRATION_REFERENCE,
