@@ -109,4 +109,32 @@ describe('CLI audio formats', () => {
       expect(missing.stderr[0]).toBe('Missing -o <out>');
     })
   );
+
+  itUnless(sandboxed)('compare prints JSON', () =>
+    withTempDir(async (dir) => {
+      const a = join(dir, 'a.wav');
+      const b = join(dir, 'b.wav');
+      const say = ['say', 'Hello.', '-t', 'minimal'];
+      expect((await cli([...say, '-s', '1', '-o', a])).code).toBe(0);
+      expect((await cli([...say, '-s', '2', '-o', b])).code).toBe(0);
+
+      const result = await cli(['compare', a, b, '--json']);
+      expect(result.code).toBe(0);
+      const parsed = JSON.parse(result.stdout.join('\n'));
+      for (const key of ['lsd', 'mcd', 'f0', 'timing']) {
+        expect(key in parsed).toBe(true);
+      }
+      expect(Number.isFinite(parsed.mcd)).toBe(true);
+      expect(Number.isFinite(parsed.f0.rmseCents)).toBe(true);
+      expect(Number.isFinite(parsed.timing.rmsSeconds)).toBe(true);
+
+      const self = await cli(['compare', a, a]);
+      expect(self.code).toBe(0);
+      expect(self.stdout[0]).toBe('LSD 0.00 dB');
+
+      const missing = await cli(['compare', a]);
+      expect(missing.code).toBe(1);
+      expect(missing.stderr[0]).toBe('Missing <reference> <test>');
+    })
+  );
 });

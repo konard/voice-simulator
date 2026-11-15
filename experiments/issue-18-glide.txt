@@ -1,0 +1,6 @@
+raw 0.04 {"median":"1.0000","unvoiced":52,"frames":96,"voicedMedian":"0.0010"}
+raw 0.025 {"median":"0.0027","unvoiced":17,"frames":97,"voicedMedian":"0.0020"}
+smoothed 0.9 0.04 {"median":"0.0013","unvoiced":0,"frames":96,"voicedMedian":"0.0013"}
+smoothed 0.9 0.025 {"median":"0.0016","unvoiced":0,"frames":97,"voicedMedian":"0.0016"}
+smoothed 0.95 0.04 {"median":"0.0012","unvoiced":0,"frames":96,"voicedMedian":"0.0012"}
+smoothed 0.95 0.025 {"median":"0.0015","unvoiced":1,"frames":97,"voicedMedian":"0.0015"}
