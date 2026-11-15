@@ -406,6 +406,18 @@ export const HEAD_PARAMETERS = Object.freeze([
     description: 'How fast articulators move between targets (coarticulation).',
   },
   {
+    key: 'coarticulation',
+    label: 'Coarticulation',
+    group: 'prosody',
+    unit: 'x',
+    min: 0.5,
+    max: 2,
+    step: 0.01,
+    default: 1,
+    description:
+      'How early articulators start moving towards the next sound (factor on all leads).',
+  },
+  {
     key: 'wallLoss',
     label: 'Wall losses',
     group: 'acoustics',

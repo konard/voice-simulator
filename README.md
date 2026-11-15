@@ -144,7 +144,7 @@ names)` a whole utterance, and `vrmVowelBinds(gltfJson)` reads the morph
   flow at the release of a stop adds a burst transient, so [s] peaks near
   7 kHz above [ʃ], aspirated stops get a voice onset time of about 60 ms and
   a louder lung pressure (`lungPressure`) gives louder noise.
-- **Head and voice editor**: 38 parameters, everything that changes the
+- **Head and voice editor**: 43 parameters, everything that changes the
   sound (tract length, pharynx, mouth, jaw, nose, pitch, breathiness,
   jitter, shimmer, vibrato, declination, accent strength, lengthening,
   pauses, wall loss, wall mass, resistance and stiffness, nasal losses,

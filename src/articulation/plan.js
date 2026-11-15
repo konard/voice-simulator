@@ -2,11 +2,17 @@
  * Utterance planning: IPA tokens -> timed segments -> smooth articulator
  * trajectories sampled at a fixed control rate.
  *
- * Targets are step functions per channel; transitions come from zero-phase
- * critically damped smoothing (a first-order low-pass run forward and
- * backward), with one time constant per articulator: lips and tongue tip
- * are fast, tongue body and velum are slower. Vowel channels are linearly
- * interpolated through consonants, which gives natural coarticulation.
+ * Every articulation channel is a list of targets `{value, start, end,
+ * strength}` (`channelTargets()`), which src/articulation/dynamics.js turns
+ * into a trajectory: a critically damped second-order system per
+ * articulator (`ARTICULATORS`: one time constant each; lips and tongue tip
+ * are fast, tongue body and velum slower) that starts moving `lead` seconds
+ * before the sound it belongs to. Sounds without a target of their own for
+ * a channel (vowels for the lips, consonants for the tongue body) let it
+ * glide in a straight line between their neighbours; consonants hold the
+ * tongue body against that line by their coarticulation resistance
+ * (`COARTICULATION_RESISTANCE` in phones.js). Pitch, loudness and the fold
+ * source keep the zero-phase smoothing of `smoothChannel()`.
  */
 
 import { getPhoneme } from '../ipa/inventory.js';
@@ -14,11 +20,14 @@ import { parseIpa } from '../ipa/parse.js';
 import { DEFAULT_HEAD, normalizeHeadConfig } from '../head-config.js';
 import { tensionForPitch } from '../acoustics/folds.js';
 import {
+  COARTICULATION_RESISTANCE,
   NEUTRAL_VOWEL,
   consonantTarget,
+  resistance,
   vowelChannels,
   vowelTarget,
 } from './phones.js';
+import { DYNAMICS_ORDER, approachTargets } from './dynamics.js';
 import {
   BOUNDARIES,
   boundaryOf,
@@ -31,27 +40,64 @@ import {
 
 export const CONTROL_RATE = 200;
 
-/** Articulator channels and their smoothing time constants in seconds. */
-export const CHANNELS = Object.freeze({
-  height: 0.03,
-  backness: 0.03,
-  rounding: 0.02,
-  rhotic: 0.025,
-  palatalization: 0.02,
-  lipAmount: 0.01,
-  lipArea: 0.006,
-  tongueAmount: 0.012,
-  tongueArea: 0.006,
-  tongueLocation: 0.012,
-  tongueWidth: 0.012,
-  velum: 0.022,
-  voicing: 0.008,
-  aspiration: 0.01,
-  glottalClosure: 0.006,
-  frication: 0.006,
-  sibilance: 0.01,
-  trill: 0.01,
-  lateral: 0.015,
+/** Lead of the lips before a rounded sound, seconds (range 0.05 to 0.25). */
+export const ROUNDING_LEAD = 0.12;
+/** Lead of the velum before a nasal sound, seconds (range 0.03 to 0.15). */
+export const VELUM_LEAD = 0.08;
+/**
+ * Lead of a second-order system with time constant `timeConstant`: the time
+ * it needs to cover half of a step, which keeps the middle of a transition
+ * at the boundary between two sounds.
+ */
+const HALF_STEP = 1.68;
+/** Limits of the time constants for the fit (seconds). */
+const TIME_CONSTANT_MIN = 0.005;
+const TIME_CONSTANT_MAX = 0.08;
+
+function articulator(timeConstant, lead, leadRange) {
+  const anticipated = lead ?? HALF_STEP * timeConstant;
+  const [leadMin, leadMax] = leadRange ?? [anticipated / 2, anticipated * 2];
+  return Object.freeze({
+    timeConstant,
+    lead: anticipated,
+    min: TIME_CONSTANT_MIN,
+    max: TIME_CONSTANT_MAX,
+    leadMin,
+    leadMax,
+  });
+}
+
+/**
+ * Articulation channels: time constant of each of the `DYNAMICS_ORDER`
+ * one-pole filters and lead in seconds; `min` and `max` bound the time
+ * constant and `leadMin` and `leadMax` the lead in
+ * experiments/issue-11-fit-dynamics.mjs. `head.articulationSpeed` divides
+ * both, `head.coarticulation` multiplies the lead.
+ */
+export const ARTICULATORS = Object.freeze({
+  height: articulator(0.03),
+  backness: articulator(0.03),
+  rounding: articulator(0.02, ROUNDING_LEAD, [0.05, 0.25]),
+  rhotic: articulator(0.025),
+  palatalization: articulator(0.02),
+  lipAmount: articulator(0.01),
+  lipArea: articulator(0.006),
+  tongueAmount: articulator(0.012),
+  tongueArea: articulator(0.006),
+  tongueLocation: articulator(0.012),
+  tongueWidth: articulator(0.012),
+  velum: articulator(0.022, VELUM_LEAD, [0.03, 0.15]),
+  voicing: articulator(0.008),
+  aspiration: articulator(0.01),
+  glottalClosure: articulator(0.006),
+  frication: articulator(0.006),
+  sibilance: articulator(0.01),
+  trill: articulator(0.01),
+  lateral: articulator(0.015),
+});
+
+/** Zero-phase smoothing time constants of the source channels, seconds. */
+const SOURCE_TIME_CONSTANTS = Object.freeze({
   loudness: 0.018,
   f0: 0.03,
   lungPressure: 0.04,
@@ -59,16 +105,39 @@ export const CHANNELS = Object.freeze({
   foldTension: 0.03,
 });
 
+/**
+ * All channels of a plan with their time constants in seconds.
+ * @deprecated Use `ARTICULATORS` for the articulation channels.
+ */
+export const CHANNELS = Object.freeze({
+  ...Object.fromEntries(
+    Object.entries(ARTICULATORS).map(([name, entry]) => [
+      name,
+      entry.timeConstant,
+    ])
+  ),
+  ...SOURCE_TIME_CONSTANTS,
+});
+
 const CHANNEL_NAMES = Object.keys(CHANNELS);
-/** Channels of the fold source, derived from the others in planUtterance. */
-const FOLD_CHANNELS = ['lungPressure', 'adduction', 'foldTension'];
-const VOWEL_CHANNELS = ['height', 'backness', 'rounding', 'rhotic', 'f0'];
-const CONSONANT_SHAPE = [
+const ARTICULATOR_NAMES = Object.keys(ARTICULATORS);
+/** Channels whose lead stops at the previous sound with its own target. */
+const LIMITED_LEADS = new Set(['rounding', 'velum']);
+/** Glottal channels that the fold drive reads before any smoothing. */
+const GLOTTAL_CHANNELS = ['voicing', 'aspiration', 'glottalClosure'];
+const CONSONANT_SHAPE = new Set([
   'lipArea',
   'tongueArea',
   'tongueLocation',
   'tongueWidth',
-];
+]);
+/** Manners that close the velum: the pressure behind them needs it. */
+const OBSTRUENTS = new Set([
+  'plosive',
+  'fricative',
+  'lateral-fricative',
+  'trill',
+]);
 const REDUCED_VOWELS = new Set(['ə', 'ɐ', 'ɪ', 'ʊ', 'ɨ', 'ɚ']);
 const OFFGLIDES = new Set(['ɪ', 'ʊ', 'i', 'u', 'ə', 'ɚ', 'y', 'ɯ']);
 
@@ -338,17 +407,11 @@ function frameRange(segment, frameRate, frameCount) {
   return [first, Math.max(first + 1, last)];
 }
 
-function fillDefaults(channels, segments, frameRate) {
+/** Step function of a channel from the segment targets (source channels). */
+function fillDefaults(channels, segments, frameRate, names = ['loudness']) {
   for (const segment of segments) {
     const [first, last] = frameRange(segment, frameRate, Infinity);
-    for (const name of CHANNEL_NAMES) {
-      if (
-        VOWEL_CHANNELS.includes(name) ||
-        CONSONANT_SHAPE.includes(name) ||
-        FOLD_CHANNELS.includes(name)
-      ) {
-        continue;
-      }
+    for (const name of names) {
       const value = segment.target?.[name] ?? DEFAULTS[name];
       channels[name].fill(value, first, last);
     }
@@ -383,77 +446,142 @@ export function interpolateGaps(values, fallback) {
   return values;
 }
 
-/** Fill gaps with the value of the nearest known frame. */
-function nearestGaps(values, fallback) {
-  let previous = -1;
-  const next = new Int32Array(values.length).fill(-1);
-  for (let index = values.length - 1, seen = -1; index >= 0; index--) {
-    if (!Number.isNaN(values[index])) {
-      seen = index;
+/** The consonant segment a release segment belongs to. */
+function closureOf(segments, index) {
+  for (let previous = index - 1; previous >= 0; previous--) {
+    if (segments[previous].kind === 'consonant') {
+      return segments[previous];
     }
-    next[index] = seen;
   }
-  for (let index = 0; index < values.length; index++) {
-    if (!Number.isNaN(values[index])) {
-      previous = index;
-      continue;
-    }
-    const after = next[index];
-    const useNext =
-      after >= 0 && (previous < 0 || after - index < index - previous);
-    const source = useNext ? after : previous;
-    values[index] = source >= 0 ? values[source] : fallback;
-  }
-  return values;
+  return null;
 }
 
-function fillArticulation(channels, segments, frameRate) {
-  for (const name of [...VOWEL_CHANNELS, ...CONSONANT_SHAPE]) {
-    channels[name].fill(Number.NaN);
-  }
-  for (const segment of segments) {
-    const [first, last] = frameRange(segment, frameRate, Infinity);
-    if (segment.kind === 'vowel') {
-      channels.height.fill(segment.vowel.height, first, last);
-      channels.backness.fill(segment.vowel.backness, first, last);
-      channels.rounding.fill(
-        Math.max(segment.vowel.rounding, segment.target.rounding),
-        first,
-        last
-      );
-      channels.rhotic.fill(segment.vowel.rhotic ? 1 : 0, first, last);
-    } else if (segment.kind === 'consonant') {
-      for (const name of CONSONANT_SHAPE) {
-        channels[name].fill(segment.target[name], first, last);
-      }
-    }
-  }
-  for (const name of ['height', 'backness', 'rounding', 'rhotic']) {
-    interpolateGaps(channels[name], DEFAULTS[name]);
-  }
-  for (const name of CONSONANT_SHAPE) {
-    nearestGaps(channels[name], DEFAULTS[name]);
-  }
-  for (const segment of segments) {
-    if (segment.kind === 'consonant') {
-      applyConsonantOverlay(channels, segment, frameRate);
-    }
-  }
+/** Tongue-body target of a consonant or release: own position and resistance. */
+function tongueBody(segment, name, levels) {
+  const own = resistance(segment.token, levels);
+  return { value: own[name], strength: own.resistance };
 }
 
-/** Labialized and rhotic consonants raise rounding / rhoticity locally. */
-function applyConsonantOverlay(channels, segment, frameRate) {
-  const [first, last] = frameRange(segment, frameRate, Infinity);
-  const { rounding = 0, rhotic = 0 } = segment.target;
-  const lipRound = segment.target.lipAmount && segment.target.lipArea > 0.2;
-  for (let index = first; index < last; index++) {
-    channels.rounding[index] = Math.max(
-      channels.rounding[index],
-      rounding,
-      lipRound ? 1 : 0
-    );
-    channels.rhotic[index] = Math.max(channels.rhotic[index], rhotic);
+/**
+ * A pause holds the lips spread and the velum raised, but it does not stop
+ * the anticipation: lips and velum can move during the silence before a
+ * sound (`limiting: false` in dynamics.js).
+ */
+const REST = Object.freeze({ value: 0, limiting: false });
+
+/**
+ * Rounding: vowels, rounded and labialized consonants and pauses hold it;
+ * other consonants leave it free.
+ */
+function roundingTarget(segment) {
+  if (segment.kind === 'vowel') {
+    return {
+      value: Math.max(segment.vowel.rounding, segment.target.rounding ?? 0),
+      strength: 1,
+    };
   }
+  if (segment.kind === 'pause') {
+    return { ...REST, strength: segment.strength > 0 ? 1 : 0 };
+  }
+  const target = segment.kind === 'consonant' ? segment.target : {};
+  const lipRound = target.lipAmount && target.lipArea > 0.2 ? 1 : 0;
+  const value = Math.max(target.rounding ?? 0, lipRound);
+  return { value, strength: value > 0 ? 1 : 0 };
+}
+
+/**
+ * Velum: nasals and nasal vowels open it, obstruents and pauses close it,
+ * other sounds leave it free.
+ */
+function velumTarget(segment) {
+  if (segment.kind === 'vowel') {
+    const value = segment.target.velum ?? 0;
+    return { value, strength: value > 0 ? 1 : 0 };
+  }
+  if (segment.kind === 'pause') {
+    return { ...REST, strength: segment.strength > 0 ? 1 : 0 };
+  }
+  if (segment.kind === 'release') {
+    return { value: 0, strength: 1 };
+  }
+  const { phoneme } = segment.token;
+  if (segment.target.velum > 0) {
+    return { value: segment.target.velum, strength: 1 };
+  }
+  const own = OBSTRUENTS.has(phoneme.manner) && phoneme.place !== 'glottal';
+  return { value: 0, strength: own ? 1 : 0 };
+}
+
+function tongueTarget(segments, index, name, levels) {
+  const segment = segments[index];
+  if (segment.kind === 'vowel') {
+    return { value: segment.vowel[name], strength: 1 };
+  }
+  if (segment.kind === 'consonant' || segment.kind === 'release') {
+    return tongueBody(segment, name, levels);
+  }
+  return { value: DEFAULTS[name], strength: 0 };
+}
+
+function rhoticTarget(segment) {
+  if (segment.kind === 'vowel') {
+    return { value: segment.vowel.rhotic ? 1 : 0, strength: 1 };
+  }
+  const value = segment.kind === 'consonant' ? (segment.target.rhotic ?? 0) : 0;
+  return { value, strength: value > 0 ? 1 : 0 };
+}
+
+/** Lip and tongue-tip shape: own in consonants, free elsewhere. */
+function shapeTarget(segments, index, name) {
+  const segment = segments[index];
+  const source =
+    segment.kind === 'consonant'
+      ? segment
+      : segment.kind === 'release'
+        ? closureOf(segments, index)
+        : null;
+  return source
+    ? { value: source.target[name], strength: 1 }
+    : { value: DEFAULTS[name], strength: 0 };
+}
+
+const TARGETS_OF = {
+  height: tongueTarget,
+  backness: tongueTarget,
+  rounding: (segments, index) => roundingTarget(segments[index]),
+  rhotic: (segments, index) => rhoticTarget(segments[index]),
+  velum: (segments, index) => velumTarget(segments[index]),
+};
+
+/** Value and strength of one segment for one articulation channel. */
+function segmentTarget(segments, index, name, levels) {
+  if (TARGETS_OF[name]) {
+    return TARGETS_OF[name](segments, index, name, levels);
+  }
+  if (CONSONANT_SHAPE.has(name)) {
+    return shapeTarget(segments, index, name);
+  }
+  const segment = segments[index];
+  return { value: segment.target?.[name] ?? DEFAULTS[name], strength: 1 };
+}
+
+/**
+ * Targets of one articulation channel: `{value, start, end, strength}` per
+ * segment, times in seconds. Strength 1 is a sound with its own target;
+ * below 1 the input mixes the value with the straight line between the
+ * neighbouring targets of strength 1 (src/articulation/dynamics.js).
+ * @param {object[]} segments Segments of a plan (`plan.segments`).
+ * @param {string} name Channel name, a key of `ARTICULATORS`.
+ * @param {{resistance?: Record<string, number>}} [options] Values of the
+ *   levels of `COARTICULATION_RESISTANCE`.
+ */
+export function channelTargets(segments, name, options = {}) {
+  const levels = options.resistance ?? COARTICULATION_RESISTANCE.levels;
+  return segments.map((segment, index) => ({
+    ...segmentTarget(segments, index, name, levels),
+    start: segment.start,
+    end: segment.end,
+  }));
 }
 
 /** Zero-phase critically damped smoothing (forward + backward one-pole). */
@@ -560,8 +688,8 @@ function addVibrato(values, head, frameRate) {
  * with voicing and tenseness and open with breathiness, open for aspiration
  * and press together for a glottal stop.
  */
-function fillFoldDrive(channels, head) {
-  const { loudness, voicing, aspiration, glottalClosure } = channels;
+function fillFoldDrive(channels, steps, head) {
+  const { loudness, voicing, aspiration, glottalClosure } = steps;
   const tense = 0.6 * (head.tenseness - 0.6);
   const breathy = 0.3 * (head.breathiness - 0.2);
   const modal = Math.min(1, Math.max(0.25, 0.5 + tense - breathy));
@@ -587,12 +715,68 @@ function fillFoldTension(channels, head) {
   }
 }
 
-export { fillArticulation, fillDefaults, fillPitch };
+export { fillDefaults, fillPitch };
+
+/**
+ * Rescale the segments of each token to the measured durations: a token
+ * that makes several segments (closure and release, affricates) keeps
+ * their proportions. Tokens without a segment (a pause merged into the
+ * previous one) and `null` entries are skipped.
+ */
+function applyDurations(segments, tokens, durations) {
+  const byToken = new Map();
+  for (const segment of segments) {
+    if (segment.token) {
+      const list = byToken.get(segment.token) ?? [];
+      list.push(segment);
+      byToken.set(segment.token, list);
+    }
+  }
+  tokens.forEach((token, index) => {
+    const duration = durations[index];
+    const list = byToken.get(token);
+    if (!list || duration === null || duration === undefined) {
+      return;
+    }
+    const total = list.reduce((sum, segment) => sum + segment.duration, 0);
+    for (const segment of list) {
+      segment.duration =
+        total > 0
+          ? (Math.max(0, duration) * segment.duration) / total
+          : Math.max(0, duration) / list.length;
+    }
+  });
+  let time = 0;
+  for (const segment of segments) {
+    segment.start = time;
+    time += segment.duration;
+    segment.end = time;
+  }
+}
+
+/** Time constant and lead of every articulator, with the overrides. */
+function articulatorsFor(head, overrides = {}) {
+  return Object.fromEntries(
+    ARTICULATOR_NAMES.map((name) => {
+      const entry = { ...ARTICULATORS[name], ...overrides[name] };
+      return [
+        name,
+        {
+          timeConstant: entry.timeConstant / head.articulationSpeed,
+          lead: (entry.lead * head.coarticulation) / head.articulationSpeed,
+        },
+      ];
+    })
+  );
+}
 
 /**
  * Plan an utterance from IPA.
  * @param {string|object[]} ipa IPA string or parsed tokens.
- * @param {{head?: object, language?: string, frameRate?: number}} [options]
+ * @param {{head?: object, language?: string, frameRate?: number, durations?: (number|null)[], articulators?: Record<string, {timeConstant?: number, lead?: number}>, resistance?: Record<string, number>}} [options]
+ *   `durations`: seconds per token (measured durations); `articulators`
+ *   and `resistance` override `ARTICULATORS` and the levels of
+ *   `COARTICULATION_RESISTANCE`.
  */
 export function planUtterance(ipa, options = {}) {
   const tokens = typeof ipa === 'string' ? parseIpa(ipa).tokens : ipa;
@@ -605,21 +789,43 @@ export function planUtterance(ipa, options = {}) {
     finalLengthening: head.finalLengthening,
     pauseLength: head.pauseLength,
   });
+  if (options.durations) {
+    applyDurations(segments, tokens, options.durations);
+  }
   const duration = segments.at(-1).end;
   const frameCount = Math.ceil(duration * frameRate) + 1;
-  const channels = Object.fromEntries(
-    CHANNEL_NAMES.map((name) => [name, new Float32Array(frameCount)])
-  );
+  const channels = {};
+  const articulators = articulatorsFor(head, options.articulators);
+  for (const name of ARTICULATOR_NAMES) {
+    const targets = channelTargets(segments, name, options);
+    const { timeConstant, lead } = articulators[name];
+    channels[name] = approachTargets(
+      targets,
+      timeConstant,
+      frameRate,
+      DYNAMICS_ORDER,
+      {
+        lead,
+        limited: LIMITED_LEADS.has(name),
+        frameCount,
+        fallback: DEFAULTS[name],
+      }
+    );
+  }
+  for (const name of Object.keys(SOURCE_TIME_CONSTANTS)) {
+    channels[name] = new Float32Array(frameCount);
+  }
   fillDefaults(channels, segments, frameRate);
-  fillArticulation(channels, segments, frameRate);
   applyRegisterGain(channels.loudness, segments, frameRate);
   const toneShape = fillPitch(channels.f0, segments, head, frameRate);
-  fillFoldDrive(channels, head);
-  for (const name of CHANNEL_NAMES) {
-    const timeConstant = CHANNELS[name] / head.articulationSpeed;
-    if (name === 'foldTension') {
-      continue;
-    }
+  const steps = { loudness: channels.loudness };
+  for (const name of GLOTTAL_CHANNELS) {
+    steps[name] = new Float32Array(frameCount);
+  }
+  fillDefaults(steps, segments, frameRate, GLOTTAL_CHANNELS);
+  fillFoldDrive(channels, steps, head);
+  for (const name of ['loudness', 'f0', 'lungPressure', 'adduction']) {
+    const timeConstant = SOURCE_TIME_CONSTANTS[name] / head.articulationSpeed;
     if (name === 'f0') {
       smoothPitch(channels.f0, toneShape, timeConstant, frameRate);
     } else {
@@ -628,5 +834,16 @@ export function planUtterance(ipa, options = {}) {
   }
   addVibrato(channels.f0, head, frameRate);
   fillFoldTension(channels, head);
-  return { tokens, segments, head, frameRate, frameCount, duration, channels };
+  const ordered = Object.fromEntries(
+    CHANNEL_NAMES.map((name) => [name, channels[name]])
+  );
+  return {
+    tokens,
+    segments,
+    head,
+    frameRate,
+    frameCount,
+    duration,
+    channels: ordered,
+  };
 }
