@@ -1,0 +1,5 @@
+voice-simulator say Hello. --source lf --out lf.wav
+  match: f0 122 Hz, range 4.6 st, formants 490/1008/2840/4315 Hz, H1-H2 3.9 dB, HNR 18.3 dB, 4.1 syllables/s
+voice-simulator say Hello. --source folds --out folds.wav
+  match: f0 125 Hz, range 5.8 st, formants 490/980/3125/4295 Hz, H1-H2 3.2 dB, HNR 15.5 dB, 4.0 syllables/s
+f0 difference 2.5 % (limit 8 %)

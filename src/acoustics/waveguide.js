@@ -100,13 +100,15 @@ export function lossFactor(area) {
 /**
  * Attenuation of a reference section with the constriction loss and a
  * boundary loss that does not depend on frequency, scaled by `wall`: the
- * waveguide loss before issue 36, which the 3D solver keeps.
+ * waveguide loss before issue 36, which the 2D and 3D solvers and their
+ * nose lines (nose-line.js) keep.
  * @param {number} area
  * @param {number} [wall]
  */
 export function boundaryLossFactor(area, wall = 1) {
   const boundary = 0.0004 / Math.sqrt(Math.max(area, 0.05));
-  return lossFactor(area) - 0.0007 * wall - boundary * wall;
+  const constriction = Math.min(0.3, 0.0001 / Math.max(area, 1e-3) ** 2);
+  return 1 - 0.0007 * wall - boundary * wall - constriction;
 }
 
 /**

@@ -41,6 +41,12 @@ desktop packages, and Capacitor mobile projects.
 - Audio and visual quality tiers are chosen automatically from a benchmark
   and a runtime governor that keeps the load under 80%; the HUD shows both
   loads. A fixed tier can be selected too.
+- Audio plays through one `AudioWorkletNode` (`src/engine/worklet-player.js`
+  with the processor of `voice-simulator/playback`): a `SharedArrayBuffer`
+  ring when the page is cross-origin isolated (`worklet-shared`), the
+  node's message port otherwise (`worklet-port`), and one buffer source per
+  chunk where `AudioWorklet` is missing (`buffer`). The HUD shows the mode
+  and the underruns of the utterance; an underrun fades out and in.
 
 ![Voice simulator web app preview](../../docs/screenshots/example-app/example-app.png)
 
@@ -60,6 +66,15 @@ npm install --prefix examples/universal-app
 npm run example:web:dev
 npm run example:web:build
 npm run example:web:preview
+```
+
+`VITE_CROSS_ORIGIN_ISOLATION=1` makes the dev and preview servers send
+`Cross-Origin-Opener-Policy: same-origin` and
+`Cross-Origin-Embedder-Policy: require-corp`, so the page is cross-origin
+isolated and the player uses the shared ring:
+
+```bash
+VITE_CROSS_ORIGIN_ISOLATION=1 npm run example:web:dev
 ```
 
 The Vite config uses `./` as the default asset base so the bundle also works

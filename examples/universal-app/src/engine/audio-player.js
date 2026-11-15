@@ -64,7 +64,11 @@ export class AudioPlayer {
     this.clock = null;
   }
 
-  #replace() {
+  /**
+   * Close the context (unless it is closed already) and make a new one.
+   * @returns {AudioContext} the new context
+   */
+  replaceContext() {
     const old = this.context;
     this.context = this.createContext();
     this.clock = null;
@@ -80,13 +84,13 @@ export class AudioPlayer {
    */
   async unlock() {
     if (!this.context || this.context.state === 'closed') {
-      this.#replace();
+      this.replaceContext();
     }
     if (this.context.state !== 'running') {
       await settles(this.context.resume(), this.resumeTimeout);
     }
     if (this.context.state !== 'running') {
-      this.#replace();
+      this.replaceContext();
       if (this.context.state !== 'running') {
         await settles(this.context.resume(), this.resumeTimeout);
       }
@@ -170,6 +174,14 @@ export class AudioPlayer {
     this.clock ??= { time: context.currentTime, wall: this.now() };
   }
 
+  /** No more chunks come for this utterance (nothing to do here). */
+  end() {}
+
+  /** Whether audio is scheduled that has not been played yet. */
+  hasQueued() {
+    return this.sources.size > 0;
+  }
+
   /** Playback position in seconds of utterance time, or null before start. */
   time() {
     if (!this.context || this.origin === null) {
@@ -185,7 +197,7 @@ export class AudioPlayer {
    */
   stalled() {
     const { context } = this;
-    if (!context || context.state !== 'running' || this.sources.size === 0) {
+    if (!context || context.state !== 'running' || !this.hasQueued()) {
       this.clock = null;
       return false;
     }
@@ -205,7 +217,7 @@ export class AudioPlayer {
   recover(chunks) {
     const resumeAt = Math.max(0, this.time() ?? 0);
     this.stop();
-    const context = this.#replace();
+    const context = this.replaceContext();
     this.recoveries++;
     Promise.resolve(context.resume?.()).catch(() => {});
     this.origin = context.currentTime + LEAD - resumeAt;

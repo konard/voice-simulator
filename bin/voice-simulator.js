@@ -36,6 +36,7 @@ const OPTIONS = {
   out: { type: 'string', short: 'o' },
   tier: { type: 'string', short: 't' },
   solver: { type: 'string' },
+  source: { type: 'string' },
   dx: { type: 'string' },
   seed: { type: 'string', short: 's' },
   head: { type: 'string' },
@@ -97,8 +98,10 @@ function usage() {
     `                        ${AUDIO_TIERS.filter((tier) => tier.bandLimit)
       .map((tier) => `${tier.name} ${tier.sampleRate / 1000}`)
       .join(', ')} kHz: band-limited`,
-    '      --solver <name>   waveguide | fdtd3d (overrides the tier)',
-    '      --dx <cm>         FDTD voxel size',
+    '      --solver <name>   waveguide | fdtd2d | fdtd3d (overrides the tier)',
+    '      --source <name>   lf | folds: voice source (default lf; folds =',
+    '                        vocal folds driven by the lung pressure)',
+    '      --dx <cm>         FDTD cell (2D) or voxel (3D) size',
     '  -s, --seed <seed>     Random seed for the head and the voice',
     '      --head <value>    "random" or an encoded head (key=value&...),',
     '                        e.g. wallMass=2.5&wallResistance=1200 (tract walls)',
@@ -328,6 +331,7 @@ const COMMANDS = {
       head: resolveHead(values),
       tier: values.tier,
       solver: values.solver,
+      source: values.source,
       dx: optionalNumber(values.dx, 'dx'),
       output: values.output,
       sampleRate: optionalNumber(values['sample-rate'], 'sample-rate'),

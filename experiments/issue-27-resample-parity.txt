@@ -1,0 +1,39 @@
+# node v26.13.0
+16000 -> 44100 zc 8: relative RMS 0.00e+0, 0 of 22050 samples differ in bits
+16000 -> 44100 zc 16: relative RMS 0.00e+0, 0 of 22050 samples differ in bits
+16000 -> 48000 zc 8: relative RMS 0.00e+0, 0 of 24000 samples differ in bits
+16000 -> 48000 zc 16: relative RMS 0.00e+0, 0 of 24000 samples differ in bits
+22050 -> 48000 zc 8: relative RMS 0.00e+0, 0 of 24000 samples differ in bits
+22050 -> 48000 zc 16: relative RMS 0.00e+0, 0 of 24000 samples differ in bits
+24000 -> 44100 zc 8: relative RMS 0.00e+0, 0 of 22050 samples differ in bits
+24000 -> 44100 zc 16: relative RMS 0.00e+0, 0 of 22050 samples differ in bits
+48000 -> 44100 zc 8: relative RMS 0.00e+0, 0 of 22050 samples differ in bits
+48000 -> 44100 zc 16: relative RMS 0.00e+0, 0 of 22050 samples differ in bits
+44100 -> 16000 zc 8: relative RMS 0.00e+0, 0 of 8000 samples differ in bits
+44100 -> 16000 zc 16: relative RMS 0.00e+0, 0 of 8000 samples differ in bits
+# bun 1.4.4
+16000 -> 44100 zc 8: relative RMS 0.00e+0, 0 of 22050 samples differ in bits
+16000 -> 44100 zc 16: relative RMS 0.00e+0, 0 of 22050 samples differ in bits
+16000 -> 48000 zc 8: relative RMS 0.00e+0, 0 of 24000 samples differ in bits
+16000 -> 48000 zc 16: relative RMS 0.00e+0, 0 of 24000 samples differ in bits
+22050 -> 48000 zc 8: relative RMS 0.00e+0, 0 of 24000 samples differ in bits
+22050 -> 48000 zc 16: relative RMS 0.00e+0, 0 of 24000 samples differ in bits
+24000 -> 44100 zc 8: relative RMS 0.00e+0, 0 of 22050 samples differ in bits
+24000 -> 44100 zc 16: relative RMS 0.00e+0, 0 of 22050 samples differ in bits
+48000 -> 44100 zc 8: relative RMS 0.00e+0, 0 of 22050 samples differ in bits
+48000 -> 44100 zc 16: relative RMS 0.00e+0, 0 of 22050 samples differ in bits
+44100 -> 16000 zc 8: relative RMS 0.00e+0, 0 of 8000 samples differ in bits
+44100 -> 16000 zc 16: relative RMS 0.00e+0, 0 of 8000 samples differ in bits
+# deno 2.9.7 (stable, release, x86_64-unknown-linux-gnu)
+16000 -> 44100 zc 8: relative RMS 0.00e+0, 0 of 22050 samples differ in bits
+16000 -> 44100 zc 16: relative RMS 0.00e+0, 0 of 22050 samples differ in bits
+16000 -> 48000 zc 8: relative RMS 0.00e+0, 0 of 24000 samples differ in bits
+16000 -> 48000 zc 16: relative RMS 0.00e+0, 0 of 24000 samples differ in bits
+22050 -> 48000 zc 8: relative RMS 0.00e+0, 0 of 24000 samples differ in bits
+22050 -> 48000 zc 16: relative RMS 0.00e+0, 0 of 24000 samples differ in bits
+24000 -> 44100 zc 8: relative RMS 0.00e+0, 0 of 22050 samples differ in bits
+24000 -> 44100 zc 16: relative RMS 0.00e+0, 0 of 22050 samples differ in bits
+48000 -> 44100 zc 8: relative RMS 0.00e+0, 0 of 22050 samples differ in bits
+48000 -> 44100 zc 16: relative RMS 0.00e+0, 0 of 22050 samples differ in bits
+44100 -> 16000 zc 8: relative RMS 0.00e+0, 0 of 8000 samples differ in bits
+44100 -> 16000 zc 16: relative RMS 0.00e+0, 0 of 8000 samples differ in bits

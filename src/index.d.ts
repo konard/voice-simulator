@@ -4,7 +4,9 @@
 
 export type LanguageCode = 'en' | 'ru' | 'hi' | 'zh';
 export type HeadConfig = Record<string, number>;
-export type SolverName = 'waveguide' | 'fdtd3d';
+export type SolverName = 'waveguide' | 'fdtd2d' | 'fdtd3d';
+/** Voice source: the LF pulse model or the physical vocal folds. */
+export type SourceName = 'lf' | 'folds';
 export type OutputMode = 'flow' | 'microphone';
 
 export interface Language {
@@ -150,6 +152,8 @@ export interface RenderOptions {
   sampleRate?: number;
   sections?: number;
   solver?: SolverName | string;
+  /** Voice source (default `'lf'`); unknown names throw `Unknown source`. */
+  source?: SourceName;
   seed?: string | number;
   /** Output samples between two updates of the tract (default 32). */
   blockSize?: number;
@@ -186,6 +190,8 @@ export interface SynthesizeOptions {
   preset?: HeadPresetName;
   tier?: string | number;
   solver?: SolverName;
+  /** Voice source (default `'lf'`): `'folds'` is the two-mass fold model. */
+  source?: SourceName;
   sections?: number;
   dx?: number;
   sampleRate?: number;
@@ -293,6 +299,11 @@ export declare function tractShape(
   glottis: Record<string, number>;
   /** Incisors; null with `teeth: false`. */
   teeth: Teeth | null;
+  /**
+   * Lateral channel (0..1): the tongue blocks the middle of the tract at
+   * the constriction and the air passes beside it (2D solver only).
+   */
+  lateral: number;
 };
 export declare function noseShape(
   head: HeadConfig,
@@ -421,6 +432,71 @@ export declare class Waveguide implements Solver {
   field(): { pressure: Float64Array; nose: Float64Array };
   reset(): void;
 }
+/** Cell size of the 2D sheet (cm). */
+export declare const SHEET_DX: number;
+/** Courant number of the 2D solver. */
+export declare const COURANT_2D: number;
+/** Midsagittal sheet of the tract: cell depths and column areas. */
+export interface Sheet {
+  dx: number;
+  columns: number;
+  rows: number;
+  /** Rest tract length of the grid (cm). */
+  length: number;
+  /** Depth per cell (cm), index column * rows + row; 0 is a wall. */
+  h: Float64Array;
+  /** Cross-sectional area per column (cm²). */
+  areas: Float64Array;
+  lipArea: number;
+  velumColumn: number;
+}
+/** Build the 2D sheet of a head (cell size dx, default SHEET_DX). */
+export declare function buildSheet(
+  head?: HeadConfig,
+  options?: { dx?: number }
+): Sheet;
+/**
+ * 2D FDTD solver on the midsagittal sheet of the tract, with a depth per
+ * cell; the nose, the piriform fossae and the vallecula are 1D lines.
+ */
+export declare class Fdtd2d implements Solver {
+  constructor(options?: {
+    head?: HeadConfig;
+    /** Cell size (cm), default SHEET_DX. */
+    dx?: number;
+    sheet?: Sheet;
+    /** `false` leaves out the piriform fossae. */
+    piriform?: boolean;
+    /** `false` leaves out the vallecula. */
+    vallecula?: boolean;
+  });
+  readonly columns: number;
+  readonly rows: number;
+  readonly sheet: Sheet;
+  /**
+   * Seconds per step; with a shape the grid runs slower by its length over
+   * the rest length so the formants follow the tract length.
+   */
+  stepDuration(shape?: { length?: number }): number;
+  /** Tract length (cm) for the lip and nostril loads. */
+  setLength(length: number): void;
+  setShape(
+    areas: ArrayLike<number>,
+    velumArea: number,
+    velumIndex?: number,
+    teeth?: { gap: number } | null,
+    shape?: object
+  ): void;
+  /** Set the cell depths directly (cm, index column * rows + row). */
+  setDepths(depths: ArrayLike<number>): void;
+  setNose(areas: ArrayLike<number>): void;
+  step(glottalFlow: number, noisePosition: number, noise: number): number;
+  queueStep(glottalFlow: number, noisePosition: number, noise: number): void;
+  flushSteps(): Promise<Float64Array>;
+  /** Pressure per column, per nose section and per cell. */
+  field(): { pressure: Float64Array; nose: Float64Array; cells: Float64Array };
+  reset(): void;
+}
 export declare class Fdtd3d implements Solver {
   constructor(options?: {
     head?: HeadConfig;
@@ -483,6 +559,72 @@ export declare class Glottis {
   constructor(options?: { seed?: string | number; head?: HeadConfig });
   step(dt: number, control: Record<string, number>, noise: number): number;
 }
+export declare const DEFAULT_SOURCE: SourceName;
+/** Controls of one VocalFolds step (pressure in Pa). */
+export interface FoldControl {
+  voicing: number;
+  aspiration: number;
+  closure: number;
+  loudness: number;
+  lungPressure: number;
+  adduction: number;
+  foldTension: number;
+}
+/**
+ * Two-mass model of the vocal folds (Steinecke and Herzel 1995) driven by
+ * the lung pressure; `step` returns the scaled flow derivative.
+ */
+export declare class VocalFolds {
+  constructor(options?: {
+    breathiness?: number;
+    aspirationLevel?: number;
+    foldLength?: number;
+    foldMass?: number;
+    foldStiffness?: number;
+    foldDamping?: number;
+    /** Inner step rate (Hz, default FOLD_RATE). */
+    rate?: number;
+  });
+  step(dt: number, control: FoldControl, noise: number): number;
+  reset(): void;
+  /** Glottal flow after the last step (cm³/s). */
+  readonly flow: number;
+  /** Area between the folds after the last step (cm²). */
+  area: number;
+  intensity: number;
+  noiseModulation: number;
+}
+export declare const FOLD_RATE: number;
+export declare const FOLDS_FLOW_SCALE: number;
+export declare const MIN_FOLD_TENSION: number;
+export declare const MAX_FOLD_TENSION: number;
+/** [adduction, rest area in cm²] pairs. */
+export declare const ADDUCTION_TABLE: ReadonlyArray<readonly [number, number]>;
+/** Rest area of the glottis (cm²) for an adduction from 0 to 1. */
+export declare function restArea(adduction: number): number;
+/** Pitch (Hz) of a flow from its upward crossings of the mean. */
+export declare function flowPitch(
+  flow: ArrayLike<number>,
+  sampleRate: number
+): number;
+/** Simulated pitch (Hz) of the folds at a lung pressure (Pa) and tension. */
+export declare function foldPitch(
+  pressure: number,
+  tension: number,
+  head?: HeadConfig,
+  options?: {
+    duration?: number;
+    window?: number;
+    adduction?: number;
+    rate?: number;
+  }
+): number;
+/** Fold tension Q that gives `f0` (Hz) at a lung pressure (Pa) for a head. */
+export declare function tensionForPitch(
+  f0: number,
+  lungPressure: number,
+  head?: HeadConfig
+): number;
 /** Side branch of a tube: a blind tube, or a Helmholtz resonator with `volume`. */
 export interface TubeBranch {
   /** Section in front of which the branch joins. */
@@ -978,13 +1120,11 @@ export declare function decodeRaw(
   bytes: Uint8Array,
   options?: SampleEncoding & { sampleRate?: number; channels?: number }
 ): DecodedAudio;
-/** Band-limited (windowed-sinc) sample-rate conversion. */
-export declare function resample(
-  samples: ArrayLike<number>,
-  fromRate: number,
-  toRate: number,
-  options?: { zeroCrossings?: number }
-): Float32Array;
+export {
+  createStreamResampler,
+  resample,
+  type StreamResampler,
+} from './audio/resample.js';
 
 // Anatomy (issue 5): teeth, tongue, hard and soft palate, piriform fossae.
 export interface RenderOptions {

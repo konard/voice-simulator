@@ -145,8 +145,15 @@ function renderingNote({ progress, wait }, t) {
 function Hud({ status, visual, mode, t }) {
   const audioTier = AUDIO_TIERS[status.audioLevel ?? BASE_AUDIO_LEVEL];
   const solver = status.solver ?? audioTier.solver;
+  // The player mode (issue 27) and its underrun count, shown once the
+  // player has chosen a mode: "worklet-port · underruns 0".
+  const playback = status.audioMode
+    ? ` · ${status.audioMode} · ${t.underruns} ${status.underruns ?? 0}`
+    : status.underruns
+      ? ` · ${t.underruns} ${status.underruns}`
+      : '';
   const underruns =
-    (status.underruns ? ` · ${t.underruns} ${status.underruns}` : '') +
+    playback +
     (status.overloads ? ` · ${t.overloads} ${status.overloads}` : '');
   return h(
     'div',

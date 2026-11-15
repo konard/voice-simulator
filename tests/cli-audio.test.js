@@ -50,6 +50,21 @@ describe('CLI audio formats', () => {
     })
   );
 
+  it('renders with the 2D solver', async () => {
+    const say = ['say', 'ˈmama', '--ipa', '--solver', 'fdtd2d', '-o', '-'];
+    const result = await cli(say);
+    expect(result.code).toBe(0);
+    const { samples } = decodeAudio(result.bytes);
+    expect(samples.length > 1000).toBe(true);
+    expect(samples.some((value) => value !== 0)).toBe(true);
+    // --dx sets the cell size of the sheet.
+    const coarse = await cli([...say, '--dx', '0.8']);
+    expect(coarse.code).toBe(0);
+    const other = decodeAudio(coarse.bytes).samples;
+    expect(other.length).toBe(samples.length);
+    expect(other.some((value, index) => value !== samples[index])).toBe(true);
+  });
+
   it('honours --format, --bit-depth and --float', async () => {
     const au = await cli([...SAY, '-o', '-', '--format', 'au', '-b', '24']);
     expect(au.code).toBe(0);
@@ -60,6 +75,19 @@ describe('CLI audio formats', () => {
     expect(float.code).toBe(0);
     expect(decodeAudio(float.bytes).float).toBe(true);
     expect(decodeAudio(float.bytes).bitDepth).toBe(32);
+  });
+
+  it('selects the voice source with --source', async () => {
+    const folds = await cli([...SAY, '-o', '-', '--source', 'folds']);
+    expect(folds.code).toBe(0);
+    const decoded = decodeAudio(folds.bytes);
+    expect(decoded.format).toBe('wav');
+    expect(decoded.samples.length > 1000).toBe(true);
+    const lf = await cli([...SAY, '-o', '-', '--source', 'lf']);
+    expect(lf.bytes).toEqual((await cli([...SAY, '-o', '-'])).bytes);
+    const unknown = await cli([...SAY, '-o', '-', '--source', 'x']);
+    expect(unknown.code).not.toBe(0);
+    expect(unknown.stderr[0]).toContain('Unknown source: x');
   });
 
   it('rejects encodings the format cannot store', async () => {
