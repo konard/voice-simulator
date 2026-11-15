@@ -29,9 +29,14 @@ import {
 } from './phones.js';
 import { DYNAMICS_ORDER, approachTargets } from './dynamics.js';
 import {
-  BOUNDARIES,
+  durationFeatures,
+  durationTable,
+  isAspirated,
+  scalePause,
+  segmentParts,
+} from './durations.js';
+import {
   boundaryOf,
-  finalLengthening,
   pauseDuration,
   pitchTargets,
   pointPositions,
@@ -138,83 +143,16 @@ const OBSTRUENTS = new Set([
   'lateral-fricative',
   'trill',
 ]);
-const REDUCED_VOWELS = new Set(['ə', 'ɐ', 'ɪ', 'ʊ', 'ɨ', 'ɚ']);
-const OFFGLIDES = new Set(['ɪ', 'ʊ', 'i', 'u', 'ə', 'ɚ', 'y', 'ɯ']);
-
-function vowelDuration(token, context) {
-  let duration = 0.105;
-  if (token.stress === 1) {
-    duration *= context.stressLengthening;
-  } else if (token.stress === 2) {
-    duration *= 1.15;
-  } else if (REDUCED_VOWELS.has(token.base) && !context.tonal) {
-    duration *= 0.75;
-  }
-  if (token.long) {
-    duration *= 1.7;
-  }
-  if (context.offglide) {
-    duration *= 0.6;
-  }
-  if (context.tonal) {
-    duration *= 1.15;
-  }
-  if (!context.phraseFinal) {
-    return duration;
-  }
-  // The head's factor applies at a full stop; weaker boundaries scale with it.
-  const relative =
-    (context.finalLengthening - 1) / (BOUNDARIES.period.lengthen - 1);
-  return (
-    duration * (1 + (finalLengthening(context.phraseFinal) - 1) * relative)
-  );
-}
-
-/** The boundary class ending the phrase if no nucleus follows, else null. */
-function phraseEnd(tokens, index) {
-  for (let next = index + 1; next < tokens.length; next++) {
-    const token = tokens[next];
-    if (token.kind === 'pause' && token.strength >= 2) {
-      return boundaryOf(token);
-    }
-    if (token.kind === 'vowel' || token.syllabic) {
-      return null;
-    }
-  }
-  return 'period';
-}
-
-function nextVowel(tokens, index) {
-  for (let next = index + 1; next < tokens.length; next++) {
-    if (tokens[next].kind === 'pause') {
-      return null;
-    }
-    if (tokens[next].kind === 'vowel') {
-      return tokens[next];
-    }
-  }
-  return null;
-}
-
-/** English voiceless stops are aspirated before stressed vowels. */
-function isAspirated(tokens, index, language) {
-  const token = tokens[index];
-  if (token.aspirated) {
-    return true;
-  }
-  if (language !== 'en' || token.voiced || token.phoneme.manner !== 'plosive') {
-    return false;
-  }
-  const previous = tokens[index - 1];
-  const wordInitial = !previous || previous.word !== token.word;
-  const vowel = nextVowel(tokens, index);
-  const adjacent = tokens[index + 1]?.kind === 'vowel';
-  return Boolean(vowel && adjacent && (wordInitial || vowel.stress === 1));
+/** The duration of every part of a token from the rules of durations.js. */
+function tokenParts(token, index, context) {
+  const features = durationFeatures(context.tokens, index, {
+    language: context.language,
+  });
+  return segmentParts(token, features, context.table, context.duration);
 }
 
 function pushConsonant(segments, token, index, context) {
-  const phraseFinal = phraseEnd(context.tokens, index);
-  const scale = context.rate * (phraseFinal ? 1.2 : 1) * (token.long ? 1.8 : 1);
+  const parts = tokenParts(token, index, context);
   if (token.affricate) {
     const stop = consonantTarget({
       ...token,
@@ -222,21 +160,24 @@ function pushConsonant(segments, token, index, context) {
     });
     const fricative = consonantTarget(token);
     stop.tongueLocation = fricative.tongueLocation;
-    segments.push({ token, kind: 'consonant', target: stop, duration: 0.05 });
+    segments.push({
+      token,
+      kind: 'consonant',
+      target: stop,
+      duration: parts[0],
+    });
     segments.push({
       token,
       kind: 'consonant',
       target: fricative,
-      duration: 0.07 * scale,
+      duration: parts[1],
     });
   } else {
-    const target = consonantTarget(token);
-    const devoiced = target.voicing ? 1 : 1.15;
     segments.push({
       token,
       kind: 'consonant',
-      target,
-      duration: (target.duration / 1000) * scale * devoiced,
+      target: consonantTarget(token),
+      duration: parts[0],
     });
   }
   pushRelease(segments, token, index, context);
@@ -269,38 +210,27 @@ function pushRelease(segments, token, index, context) {
       aspiration,
       frication: closure.target.frication,
     },
-    duration: (aspirated ? 0.06 : 0.015) * context.rate,
+    duration: (aspirated ? 0.06 : 0.015) / context.duration.speechRate,
   });
 }
 
 function pushVowel(segments, token, index, context) {
-  const previous = context.tokens[index - 1];
-  const offglide =
-    previous?.kind === 'vowel' &&
-    previous.word === token.word &&
-    !token.stress &&
-    !token.long &&
-    !token.tone &&
-    OFFGLIDES.has(token.base);
-  const duration = vowelDuration(token, {
-    offglide,
-    tonal: context.tonal,
-    phraseFinal: phraseEnd(context.tokens, index),
-    stressLengthening: context.stressLengthening,
-    finalLengthening: context.finalLengthening,
-  });
   segments.push({
     token,
     kind: 'vowel',
     vowel: vowelTarget(token),
     target: vowelChannels(token),
-    duration: duration * context.rate,
+    duration: tokenParts(token, index, context)[0],
   });
 }
 
 function pushPause(segments, token, context) {
   const strength = Math.min(3, token.strength);
-  const duration = pauseDuration(token) * context.pauseLength;
+  const duration = scalePause(
+    pauseDuration(token) * context.pauseLength,
+    strength,
+    context.duration.speechRate
+  );
   const previous = segments.at(-1);
   if (!previous || previous.kind === 'pause') {
     if (previous) {
@@ -324,16 +254,21 @@ function pushPause(segments, token, context) {
 /**
  * Split tokens into timed segments.
  * @param {object[]} tokens
- * @param {{rate: number, language?: string, stressLengthening?: number, finalLengthening?: number, pauseLength?: number}} options
+ * Durations come from the rules of src/articulation/durations.js with
+ * the table of `language` (or `durationTable`).
+ * @param {object[]} tokens
+ * @param {{rate: number, language?: string, stressLengthening?: number, finalLengthening?: number, pauseLength?: number, durationTable?: object}} options
  */
 export function buildSegments(tokens, options) {
   const context = {
     tokens,
-    rate: 1 / options.rate,
     language: options.language,
-    tonal: tokens.some((token) => token.tone),
-    stressLengthening: options.stressLengthening ?? 1.35,
-    finalLengthening: options.finalLengthening ?? 1.4,
+    table: options.durationTable ?? durationTable(options.language),
+    duration: {
+      speechRate: options.rate ?? 1,
+      stressLengthening: options.stressLengthening ?? 1.35,
+      finalLengthening: options.finalLengthening ?? 1.4,
+    },
     pauseLength: options.pauseLength ?? 1,
   };
   const segments = [
@@ -780,8 +715,10 @@ function articulatorsFor(head, overrides = {}) {
 /**
  * Plan an utterance from IPA.
  * @param {string|object[]} ipa IPA string or parsed tokens.
- * @param {{head?: object, language?: string, frameRate?: number, durations?: (number|null)[], articulators?: Record<string, {timeConstant?: number, lead?: number}>, resistance?: Record<string, number>}} [options]
- *   `durations`: seconds per token (measured durations); `articulators`
+ * @param {{head?: object, language?: string, frameRate?: number, durations?: (number|null)[], durationTable?: object, articulators?: Record<string, {timeConstant?: number, lead?: number}>, resistance?: Record<string, number>}} [options]
+ *   `durations`: seconds per token (measured durations), which win over
+ *   the rules; `durationTable`: an entry of `DURATION_TABLES` that overrides
+ *   the table of `language`; `articulators`
  *   and `resistance` override `ARTICULATORS` and the levels of
  *   `COARTICULATION_RESISTANCE`.
  */
@@ -795,6 +732,7 @@ export function planUtterance(ipa, options = {}) {
     stressLengthening: head.stressLengthening,
     finalLengthening: head.finalLengthening,
     pauseLength: head.pauseLength,
+    durationTable: options.durationTable,
   });
   if (options.durations) {
     applyDurations(segments, tokens, options.durations);
