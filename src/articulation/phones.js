@@ -115,12 +115,23 @@ function sibilanceOf(phoneme) {
   return phoneme.sibilant ? 1 : 0;
 }
 
-/** Glottal opening (`aspiration`) of a consonant: voiceless obstruents. */
-function voicelessOpening(phoneme, voiced, glottal) {
-  if (voiced || glottal) {
+/**
+ * Opening of the glottis of voiced fricatives: the folds part a little
+ * from their voicing position, so that the air still builds pressure
+ * behind the constriction while they vibrate (Stevens 1998, chapter 8).
+ */
+const VOICED_OPENING = {
+  fricative: 0.1,
+  'lateral-fricative': 0.1,
+};
+
+/** Glottal opening (`aspiration`) of an obstruent. */
+function obstruentOpening(phoneme, voiced, glottal) {
+  if (glottal) {
     return 0;
   }
-  return VOICELESS_OPENING[phoneme.manner] ?? 0;
+  const table = voiced ? VOICED_OPENING : VOICELESS_OPENING;
+  return table[phoneme.manner] ?? 0;
 }
 
 /**
@@ -136,7 +147,7 @@ export function consonantTarget(token) {
     ...channels,
     velum: manner.velum ?? 0,
     voicing: voiced ? 1 : 0,
-    aspiration: voicelessOpening(phoneme, voiced, glottal),
+    aspiration: obstruentOpening(phoneme, voiced, glottal),
     glottalClosure: 0,
     frication: glottal ? 0 : manner.frication,
     sibilance: sibilanceOf(phoneme),

@@ -22,6 +22,13 @@ import { normalizeHeadConfig } from '../head-config.js';
 import { VOWEL_CORRECTIONS_3D } from '../articulation/vowel-calibration.js';
 import { Biquad, createNoise } from './filters.js';
 import { Glottis } from './glottis.js';
+import {
+  Aerodynamics,
+  ASPIRATION_REFERENCE,
+  FRICATION_REFERENCE,
+  glottalArea,
+  sourceStrength,
+} from './aerodynamics.js';
 import { SPEED_OF_SOUND } from './transfer.js';
 import { Waveguide } from './waveguide.js';
 import { Fdtd3d } from './fdtd3d.js';
@@ -29,6 +36,40 @@ import { createListener } from './microphone.js';
 import { enclosureBounds } from './voxel-model.js';
 
 const OUTPUT_GAIN = 0.3;
+
+/**
+ * Amplitude of the frication noise of a default voiceless fricative
+ * (relative source strength 1, see aerodynamics.js). Tuned so that [s]
+ * kept its level within 1 dB when the fixed gains were replaced (issue 35,
+ * experiments/issue-35-frication-tuning.mjs).
+ */
+export const FRICATION_GAIN = 0.592;
+
+/**
+ * Amplitude of the wall source (the jet hitting the walls of the channel)
+ * against the obstacle source (the jet hitting the incisors, Shadle 1985):
+ * -15 dB.
+ */
+export const WALL_SOURCE = 0.18;
+
+/**
+ * Strouhal number of the jet: the turbulence noise peaks near
+ * STROUHAL * velocity / diameter (Stevens 1998). The front cavity of the
+ * tract shapes the rest of the spectrum.
+ */
+export const STROUHAL = 0.2;
+
+/** Frequency range of the noise band-pass (Hz). */
+const STROUHAL_RANGE = [500, 6000];
+
+/**
+ * Gain of the burst transient: the flow derivative (cm³/s²) at the release
+ * of a stop enters the tract as a flow source at the constriction. Tuned
+ * so that the first 3 ms of a plain [t] peak 0 to 6 dB (4.9 dB) above its
+ * frication; the stronger frication of [tʰ] (wide open glottis) leaves its
+ * burst 3.5 dB below it (experiments/issue-11-turbulence.mjs).
+ */
+export const TRANSIENT_GAIN = 5e-6;
 
 /** Solver factories by name: 1D waveguide and 3D FDTD. */
 /**
@@ -71,9 +112,9 @@ class NoiseSources {
   constructor(seed) {
     this.white = createNoise(`${seed}:noise`);
     this.aspiration = new Biquad();
-    this.fricative = new Biquad();
-    this.sibilant = new Biquad();
+    this.frication = new Biquad();
     this.rate = 0;
+    this.frequency = 0;
   }
 
   configure(rate) {
@@ -82,9 +123,32 @@ class NoiseSources {
     }
     this.rate = rate;
     this.aspiration.bandpass(800, 0.5, rate);
-    this.fricative.bandpass(1500, 0.5, rate);
-    this.sibilant.highpass(3200, 0.7, rate);
+    this.frequency = 0;
   }
+
+  /** Centre the frication band-pass on the jet's Strouhal frequency. */
+  tune(frequency) {
+    if (Math.abs(frequency - this.frequency) <= 1e-3 * frequency) {
+      return;
+    }
+    this.frequency = frequency;
+    this.frication.bandpass(frequency, 0.5, this.rate);
+  }
+}
+
+/**
+ * Peak frequency (Hz) of the turbulence noise of a jet of flow `flow`
+ * (cm³/s) through `area` (cm²).
+ * @param {number} flow
+ * @param {number} area
+ */
+export function strouhalFrequency(flow, area) {
+  if (!(area > 0)) {
+    return STROUHAL_RANGE[0];
+  }
+  const frequency =
+    (STROUHAL * (flow / area)) / Math.sqrt((4 * area) / Math.PI);
+  return Math.min(STROUHAL_RANGE[1], Math.max(STROUHAL_RANGE[0], frequency));
 }
 
 /** Q of the biquads of a fourth-order Butterworth low-pass. */
@@ -210,8 +274,15 @@ export class VoiceRenderer {
       shimmer: this.head.shimmer,
       aspirationLevel: this.head.aspirationLevel,
       chink: this.head.glottalChink,
+      lungPressure: this.head.lungPressure,
     });
     this.noise = new NoiseSources(seed);
+    this.aerodynamics = new Aerodynamics();
+    /** Last aerodynamic state (see aerodynamics.js) and source strengths. */
+    this.airflow = null;
+    this.fricationAmplitude = 0;
+    this.transient = 0;
+    this.transientStep = 0;
     this.output = new OutputStage(
       this.sampleRate,
       this.head.outputGain,
@@ -263,36 +334,56 @@ export class VoiceRenderer {
     this.stepDuration = this.solver.stepDuration(this.shape);
     const rate = 1 / this.stepDuration;
     this.noise.configure(rate);
+    this.#updateAirflow(rate);
     // The output filter runs when the solver outputs arrive (see #finish).
     this.rates.push(this.steps, rate);
   }
 
+  /**
+   * Air flow of this control block: mouth pressure, flow, the strength of
+   * the frication and aspiration sources and the burst transient.
+   */
+  #updateAirflow(rate) {
+    const { frication, glottis } = this.shape;
+    const blockDuration = this.blockSize / this.sampleRate;
+    const opening = glottalArea(
+      glottis,
+      this.head.breathiness,
+      this.head.glottalChink
+    );
+    const constriction = frication.area + this.shape.velumArea;
+    const air = this.aerodynamics.step(
+      blockDuration,
+      10 * (this.state.lungPressure ?? this.head.lungPressure),
+      opening,
+      constriction
+    );
+    this.airflow = air;
+    glottis.oralPressure = air.oralPressure;
+    glottis.aspirationStrength =
+      sourceStrength(air.glottalDrop, opening, air.flow) / ASPIRATION_REFERENCE;
+    const strength =
+      sourceStrength(air.constrictionDrop, frication.area, air.flow) /
+      FRICATION_REFERENCE;
+    this.fricationAmplitude =
+      frication.gain * this.head.fricationLevel * strength * FRICATION_GAIN;
+    if (this.fricationAmplitude > 1e-6) {
+      this.noise.tune(strouhalFrequency(air.flow, constriction));
+      const { obstacle } = frication;
+      this.fricationAmplitude *= obstacle + WALL_SOURCE * (1 - obstacle);
+    }
+    // The transient ramps from the last block's value to this one's.
+    const target = air.flowDerivative * TRANSIENT_GAIN;
+    const steps = Math.max(1, blockDuration * rate);
+    this.transientStep = (target - this.transient) / steps;
+  }
+
   #fricationNoise(white) {
-    const { frication } = this.shape;
-    if (frication.gain <= 1e-4) {
+    const amplitude = this.fricationAmplitude;
+    if (amplitude <= 1e-6) {
       return 0;
     }
-    const { noise } = this;
-    const broad = noise.fricative.process(white);
-    const hiss = noise.sibilant.process(white);
-    // A jet hitting the incisors adds a strong high-frequency dipole
-    // source; without that obstacle only the broad wall source remains,
-    // so sibilants come out as the most intense fricatives (Jongman,
-    // Wayland and Wong 2000), here about 8–10 dB below the vowel.
-    const colour =
-      broad * 0.5 * (1 - frication.obstacle) + hiss * 0.17 * frication.obstacle;
-    const voicing = Math.min(1, this.shape.glottis.voicing);
-    const flow =
-      (1 - this.shape.glottis.closure) *
-      (1 - voicing * (0.5 - 0.4 * this.glottis.noiseModulation));
-    return (
-      colour *
-      frication.gain *
-      flow *
-      this.shape.glottis.loudness *
-      2.2 *
-      this.head.fricationLevel
-    );
+    return this.noise.frication.process(white) * amplitude;
   }
 
   /** Queue one solver step with the sources of this instant. */
@@ -305,7 +396,12 @@ export class VoiceRenderer {
       aspiration
     );
     const noise = this.#fricationNoise(this.noise.white());
-    queue(source, this.shape.frication.position, noise);
+    let flow = 0;
+    if (this.transientStep !== 0 || this.transient !== 0) {
+      this.transient += this.transientStep;
+      flow = this.transient;
+    }
+    queue(source, this.shape.frication.position, noise, flow);
     this.steps++;
   }
 

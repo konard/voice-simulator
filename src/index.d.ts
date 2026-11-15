@@ -333,9 +333,23 @@ export interface Solver {
     velumIndex?: number
   ): void;
   setNose(areas: ArrayLike<number>): void;
-  step(glottalFlow: number, noisePosition: number, noise: number): number;
+  /**
+   * `noise` is the turbulence pressure (a dipole source) and `flow` the
+   * burst transient of a stop (a flow source) at `noisePosition`.
+   */
+  step(
+    glottalFlow: number,
+    noisePosition: number,
+    noise: number,
+    flow?: number
+  ): number;
   /** Queue a step; its output comes with the next flushSteps. */
-  queueStep?(glottalFlow: number, noisePosition: number, noise: number): void;
+  queueStep?(
+    glottalFlow: number,
+    noisePosition: number,
+    noise: number,
+    flow?: number
+  ): void;
   flushSteps?(options?: { field?: boolean }): Promise<Float64Array>;
   /** Optional pressure snapshot for visualisation. */
   field?(): object;
@@ -405,7 +419,12 @@ export declare class Waveguide implements Solver {
     velumIndex?: number
   ): void;
   setNose(areas: ArrayLike<number>): void;
-  step(glottalFlow: number, noisePosition: number, noise: number): number;
+  step(
+    glottalFlow: number,
+    noisePosition: number,
+    noise: number,
+    flow?: number
+  ): number;
   /** Pressure per tract and nose section, for visualisation. */
   field(): { pressure: Float64Array; nose: Float64Array };
   reset(): void;
@@ -444,8 +463,18 @@ export declare class Fdtd3d implements Solver {
     teeth?: { gap: number } | null
   ): void;
   setNose(areas: ArrayLike<number>): void;
-  step(glottalFlow: number, noisePosition: number, noise: number): number;
-  queueStep(glottalFlow: number, noisePosition: number, noise: number): void;
+  step(
+    glottalFlow: number,
+    noisePosition: number,
+    noise: number,
+    flow?: number
+  ): number;
+  queueStep(
+    glottalFlow: number,
+    noisePosition: number,
+    noise: number,
+    flow?: number
+  ): void;
   /** With `field` on the GPU, field() holds the RMS over these steps. */
   flushSteps(options?: { field?: boolean }): Promise<Float64Array>;
   /** Pressure field for visualisation. */

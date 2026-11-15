@@ -318,10 +318,12 @@ export class Waveguide {
    * Advance one step.
    * @param {number} glottalFlow Source volume velocity (derivative).
    * @param {number} noisePosition Junction index of the turbulence source.
-   * @param {number} noise Turbulence pressure.
+   * @param {number} noise Turbulence pressure (a dipole source).
+   * @param {number} [flow] Flow source (derivative) at the same junction:
+   *   the burst transient of a stop (a monopole source).
    * @returns {number} Radiated output (lips + nose).
    */
-  step(glottalFlow, noisePosition, noise) {
+  step(glottalFlow, noisePosition, noise, flow = 0) {
     this.junctionRight[0] =
       this.left[0] * this.glottalReflection + glottalFlow / this.areas[0];
     const last = this.n - 1;
@@ -332,10 +334,10 @@ export class Waveguide {
     this.#scatterVelum();
     this.#scatterPiriform();
     this.#scatterNose();
-    if (noise !== 0) {
+    if (noise !== 0 || flow !== 0) {
       const position = Math.min(this.n - 1, Math.max(1, noisePosition));
-      this.junctionRight[position] += noise * 0.5;
-      this.junctionLeft[position] -= noise * 0.5;
+      this.junctionRight[position] += (flow + noise) * 0.5;
+      this.junctionLeft[position] += (flow - noise) * 0.5;
     }
     this.#propagatePiriform();
     this.#propagate();

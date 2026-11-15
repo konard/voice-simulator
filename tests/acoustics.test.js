@@ -27,8 +27,9 @@ import {
   spectralPeaks,
 } from '../src/acoustics/analysis.js';
 import { tubeFormants } from '../src/acoustics/transfer.js';
+import { Biquad } from '../src/acoustics/filters.js';
 import { Waveguide } from '../src/acoustics/waveguide.js';
-import { synthesize } from '../src/index.js';
+import { analyzeVoice, synthesize } from '../src/index.js';
 import { createRandom, randomNormal } from '../src/random.js';
 import { encodeWav, decodeWav, wavHeader } from '../src/audio/wav.js';
 import { DEFAULT_HEAD, normalizeHeadConfig } from '../src/head-config.js';
@@ -370,6 +371,66 @@ describe('waveguide synthesis', () => {
       expect(ratio).toBeLessThan(0.5);
     }
   );
+});
+
+describe('turbulence noise', () => {
+  // Tier medium (waveguide, 48 kHz), seed 1; levels over the middle 60 %
+  // of the consonant (experiments/issue-11-turbulence.mjs).
+  const render = (ipa, head = {}) =>
+    synthesize(ipa, { ipa: true, tier: 'medium', seed: 1, head });
+  const consonantLevel = ({ samples, sampleRate, plan }, filter) => {
+    const segment = plan.segments.find((item) => item.kind === 'consonant');
+    const span = segment.end - segment.start;
+    const start = Math.floor((segment.start + 0.2 * span) * sampleRate);
+    const end = Math.floor((segment.end - 0.2 * span) * sampleRate);
+    const signal = filter ? Float32Array.from(samples, filter) : samples;
+    return 20 * Math.log10(rms(signal, start, end));
+  };
+  /** Fourth-order high-pass at 4 kHz. */
+  const above4k = (sampleRate) => {
+    const first = new Biquad();
+    const second = new Biquad();
+    first.highpass(4000, Math.SQRT1_2, sampleRate);
+    second.highpass(4000, Math.SQRT1_2, sampleRate);
+    return (sample) => second.process(first.process(sample));
+  };
+
+  it('makes [s] at least 6 dB louder than [f]', () => {
+    const difference =
+      consonantLevel(render('ˈasa')) - consonantLevel(render('ˈafa'));
+    expect(difference).toBeGreaterThan(6);
+  });
+
+  it('keeps the high band of [z] 3 to 12 dB below [s]', () => {
+    const s = render('ˈasa');
+    const z = render('ˈaza');
+    const difference =
+      consonantLevel(s, above4k(s.sampleRate)) -
+      consonantLevel(z, above4k(z.sampleRate));
+    expect(difference).toBeGreaterThan(3);
+    expect(difference).toBeLessThan(12);
+  });
+
+  it('raises [s] by 7 to 11 dB when the lung pressure doubles', () => {
+    const difference =
+      consonantLevel(render('ˈasa', { lungPressure: 1600 })) -
+      consonantLevel(render('ˈasa', { lungPressure: 800 }));
+    expect(difference).toBeGreaterThan(7);
+    expect(difference).toBeLessThan(11);
+  });
+
+  it('adds breath noise through a glottal chink', () => {
+    const hnr = (glottalChink) => {
+      const { samples, sampleRate } = render('aː', {
+        vibrato: 0,
+        jitter: 0,
+        shimmer: 0,
+        glottalChink,
+      });
+      return analyzeVoice(samples, sampleRate).hnr;
+    };
+    expect(hnr(0) - hnr(10)).toBeGreaterThan(3);
+  });
 });
 
 describe('spectral peaks', () => {
