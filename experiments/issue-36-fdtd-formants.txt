@@ -1,0 +1,16 @@
+# node experiments/fdtd-formants.mjs (this branch, after the 3D refit)
+i fdtd 355 2305 3010    wave 360 2390 3135    tube 368 2467 3266    f0 120.6 rms fdtd/wave 1.01 x realtime 0.78
+e fdtd 475 2165 2610    wave 485 2215 2685    tube 517 2351 2910    f0 120.6 rms fdtd/wave 1.01 x realtime 0.76
+a fdtd 685 1730 2630    wave 730 1795 2640    tube 777 1916 2675    f0 120.0 rms fdtd/wave 1.03 x realtime 0.74
+ɑ fdtd 740 1210 2960    wave 805 1235 2685    tube 903 1302 2720    f0 120.6 rms fdtd/wave 0.97 x realtime 0.73
+o fdtd 465 825 2490     wave 455 835 2590     tube 552 898 2725     f0 120.6 rms fdtd/wave 1.11 x realtime 0.82
+u fdtd 345 850 2470     wave 345 860 2710     tube 406 941 2755     f0 120.6 rms fdtd/wave 1.24 x realtime 0.86
+ə fdtd 610 1515 2600    wave 680 1500 2420    tube 713 1610 2565    f0 120.6 rms fdtd/wave 1.00 x realtime 0.85
+# the same on main at e113bd5
+i fdtd 360 2345 4180    wave 360 2400 3150    tube 365 2488 3294    f0 120.6 rms fdtd/wave 0.80 x realtime 0.57
+e fdtd 485 2290 3845    wave 490 2215 2710    tube 520 2343 2955    f0 121.2 rms fdtd/wave 0.90 x realtime 0.58
+a fdtd 700 1835 2995    wave 725 1805 2690    tube 769 1918 2717    f0 120.0 rms fdtd/wave 0.94 x realtime 0.62
+ɑ fdtd 745 1195 3320    wave 810 1225 2715    tube 904 1301 2730    f0 120.6 rms fdtd/wave 0.89 x realtime 0.70
+o fdtd 460 830 3270     wave 455 815 2675     tube 550 920 2751     f0 121.2 rms fdtd/wave 0.89 x realtime 0.82
+u fdtd 350 830 2750     wave 350 905 2740     tube 406 949 2816     f0 121.2 rms fdtd/wave 0.95 x realtime 0.67
+ə fdtd 675 1610 3250    wave 695 1520 2485    tube 722 1619 2622    f0 120.0 rms fdtd/wave 0.87 x realtime 0.63
