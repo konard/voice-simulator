@@ -14,6 +14,7 @@ extern crate alloc;
 
 pub mod aerodynamics;
 pub mod config;
+pub mod fdtd;
 pub mod filters;
 pub mod frame;
 pub mod glottis;
