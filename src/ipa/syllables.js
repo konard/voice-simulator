@@ -78,23 +78,32 @@ const DEFAULT_ONSET = (onset) =>
 const GLIDE_ONSET = (onset) =>
   onset.length === 1 || (onset.length === 2 && GLIDES.has(onset[1].base));
 
+const ENGLISH_ONSET = (onset) =>
+  !ENGLISH_BANNED.test(onset.map((token) => token.base).join('')) &&
+  DEFAULT_ONSET(onset);
+
+const RUSSIAN_ONSET = (onset) => rising(onset, { plateau: true });
+
 /**
- * Onset rules per language. A Map, not an object literal: the key comes from
- * the caller (a worker message in the example app), and a property lookup
- * would also return inherited `Object.prototype` members and call them
- * (CodeQL js/unvalidated-dynamic-method-call, issue 115).
+ * The onset rule of a language. A switch, not a table lookup: the language
+ * comes from the caller (a worker message in the example app), and
+ * `table[language]` also returned inherited `Object.prototype` members and
+ * called them (CodeQL js/unvalidated-dynamic-method-call, issue 115).
+ * @param {unknown} language
  */
-const ONSETS = new Map([
-  [
-    'en',
-    (onset) =>
-      !ENGLISH_BANNED.test(onset.map((token) => token.base).join('')) &&
-      DEFAULT_ONSET(onset),
-  ],
-  ['ru', (onset) => rising(onset, { plateau: true })],
-  ['hi', GLIDE_ONSET],
-  ['zh', GLIDE_ONSET],
-]);
+function onsetRule(language) {
+  switch (String(language ?? '').slice(0, 2)) {
+    case 'en':
+      return ENGLISH_ONSET;
+    case 'ru':
+      return RUSSIAN_ONSET;
+    case 'hi':
+    case 'zh':
+      return GLIDE_ONSET;
+    default:
+      return DEFAULT_ONSET;
+  }
+}
 
 /** Whether the vowel at `index` joins the nucleus before it. */
 function joinsNucleus(tokens, index, tonal) {
@@ -147,8 +156,7 @@ function onsetStart(tokens, from, to, allowed) {
  */
 export function syllabifyTokens(tokens, options = {}) {
   const tonal = tokens.some((token) => token.tone);
-  const allowed =
-    ONSETS.get(String(options.language ?? '').slice(0, 2)) ?? DEFAULT_ONSET;
+  const allowed = onsetRule(options.language);
   const ranges = nuclei(tokens, tonal);
   if (ranges.length < 2) {
     return tokens.length ? [tokens] : [];
