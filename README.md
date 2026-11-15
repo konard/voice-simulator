@@ -410,6 +410,7 @@ npm run example:desktop:package
 ```
 .
 ├── bin/voice-simulator.js # CLI
+├── datasets/              # Speech dataset registry (data is fetched, never committed)
 ├── Dockerfile             # Server image
 ├── docs/case-studies/     # Research, requirements and plans
 ├── examples/
@@ -696,6 +697,7 @@ Configured in `.prettierrc`:
 | `bun test --timeout 30000`           | Run tests with Bun and a 30s per-test cap             |
 | `npm test`                           | Run tests with Node.js and a 30s per-test cap         |
 | `npm run test:heavy`                 | Run the slow tests of `tests/heavy/` (CONTRIBUTING)   |
+| `npm run datasets -- list`           | List, fetch or verify speech datasets (CONTRIBUTING)  |
 | `bun run lint`                       | Check code with ESLint                                |
 | `bun run lint:fix`                   | Fix ESLint issues automatically                       |
 | `bun run format`                     | Format code with Prettier                             |
