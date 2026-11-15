@@ -1,0 +1,10 @@
+tier minimal, 6 utterances per language; mean MCD tier / noise per rule
+en both40 74.9/70.5  ref40 74.6/77.5  ref30 76.2/87.7  ref25 76.3/91.5  ref20 77.6/93.5
+ru both40 72.3/73.2  ref40 72.4/87.6  ref30 73.3/94.2  ref25 74.0/96.3  ref20 75.6/98.4
+hi both40 57.9/87.3  ref40 58.1/108.1  ref30 58.1/117.0  ref25 57.9/119.9  ref20 57.7/123.6
+zh both40 76.5/76.0  ref40 76.8/85.8  ref30 80.1/93.5  ref25 82.5/97.5  ref20 86.3/100.4
+tier medium, 6 utterances per language; mean MCD tier / noise per rule
+en both40 76.8/70.5  ref40 76.4/77.5  ref30 78.0/87.7  ref25 78.2/91.5  ref20 79.4/93.5
+ru both40 75.5/73.2  ref40 75.7/87.6  ref30 76.7/94.2  ref25 77.5/96.3  ref20 78.6/98.4
+hi both40 60.1/87.3  ref40 60.3/108.1  ref30 60.6/117.0  ref25 60.6/119.9  ref20 60.5/123.6
+zh both40 79.1/76.0  ref40 79.4/85.8  ref30 83.0/93.5  ref25 85.4/97.5  ref20 89.0/100.4

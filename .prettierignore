@@ -10,3 +10,5 @@ CLAUDE.md
 docs/case-studies/*/data/
 # Development log data (API dumps and saved CI logs, kept verbatim)
 dev/log/**/data/
+# Generated quality reports (scripts/quality-report.mjs, heavy CI artifacts), kept verbatim
+docs/reports/

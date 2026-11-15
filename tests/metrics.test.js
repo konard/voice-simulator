@@ -20,7 +20,9 @@ import {
   melFilterbank,
   mfcc,
   pitchTrack,
+  powerFloor,
   powerFrames,
+  resample,
   synthesize,
   tokenize,
 } from '../src/index.js';
@@ -40,6 +42,7 @@ function near(value, expected, tolerance) {
 
 describe('metrics: spectrum', () => {
   it('has the documented defaults', () => {
+    expect(METRIC_DEFAULTS.dynamicRange).toBe(60);
     expect(METRIC_DEFAULTS.sampleRate).toBe(16000);
     expect(METRIC_DEFAULTS.fftSize).toBe(512);
     expect(METRIC_DEFAULTS.window).toBe(0.025);
@@ -104,6 +107,49 @@ describe('metrics: spectral distances', () => {
       y[n] = x[n] + 0.9 * (n > 0 ? y[n - 1] : 0);
     }
     expect(melCepstralDistortion(x, y, 16000) > 3).toBe(true);
+  });
+});
+
+describe('metrics: floor and silent frames (issue 19)', () => {
+  // experiments/issue-19-regression-probe.mjs prints the values.
+  const random = createRandom(1);
+  const white = (n, level = 1) =>
+    Float64Array.from({ length: n }, () => level * (random() * 2 - 1));
+
+  it('powerFloor keeps 60 dB below the peak', () => {
+    near(powerFloor([[0.5, 1], [0.25]]), 1e-6, 1e-15);
+    near(powerFloor([[1]], 30), 1e-3, 1e-12);
+    expect(powerFloor([[0]])).toBe(1e-10);
+  });
+
+  it('an empty band costs at most the dynamic range', () => {
+    const x = white(16000);
+    const low = resample(resample(x, 16000, 7000), 7000, 16000);
+    const floored = logSpectralDistance(x, low, 16000);
+    const raw = logSpectralDistance(x, low, 16000, { range: 200 });
+    expect(floored < 40).toBe(true);
+    expect(raw > 1.5 * floored).toBe(true);
+    expect(
+      melCepstralDistortion(x, low, 16000) <
+        melCepstralDistortion(x, low, 16000, { range: 200 })
+    ).toBe(true);
+  });
+
+  it('pairs with a silent reference frame are skipped', () => {
+    // Coloured noise, then a pause with faint white noise; the test is white
+    // noise throughout. Scoring the pause (white against white, near 0)
+    // halved the distance before issue 19.
+    const burst = white(8000);
+    for (let n = 1; n < burst.length; n++) {
+      burst[n] += 0.9 * burst[n - 1];
+    }
+    const reference = new Float64Array(16000);
+    reference.set(burst);
+    reference.set(white(8000, 1e-4), 8000);
+    const test = white(16000);
+    const alone = melCepstralDistortion(burst, test.slice(0, 8000), 16000);
+    const withPause = melCepstralDistortion(reference, test, 16000);
+    expect(withPause > 0.9 * alone).toBe(true);
   });
 });
 

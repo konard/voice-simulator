@@ -448,8 +448,14 @@ export async function renderPlanAsync(plan, options = {}) {
   const renderer = new VoiceRenderer(plan, options);
   const samples = new Float32Array(renderer.totalSamples);
   const chunkSize = options.chunkSize ?? 4096;
-  for (let start = 0; start < samples.length; start += chunkSize) {
-    await renderer.renderAsync(samples.subarray(start, start + chunkSize));
+  try {
+    for (let start = 0; start < samples.length; start += chunkSize) {
+      await renderer.renderAsync(samples.subarray(start, start + chunkSize));
+    }
+  } finally {
+    // The renderer is not handed out: free its GPU buffers now, not when
+    // the garbage collector gets to them.
+    renderer.solver.gpu?.destroy();
   }
   return samples;
 }
