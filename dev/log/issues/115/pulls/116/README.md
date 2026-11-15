@@ -50,7 +50,7 @@ All times are UTC on 2026-11-15.
 | 18:23    | `4a1c6de`: CodeQL still flagged the Map; the onset rule becomes a `switch`. Security passes on `2ce1c4d`.                                                                                                            |
 | 18:31    | `f28e23d`: previous versions install only their web build dependencies.                                                                                                                                              |
 | 18:44    | `d56f2ff`: the Rust step budgets fit the 15 min backstop again (Checks and release 43746539860 had failed on it). `44e9e4a`: the WebGPU warning is asserted.                                                         |
-| 18:55    | The Security run on `f9866be` warns about GHSA-474x-hrwr-fgx4 in the `artifact-transport` lockfile; `77832fa` fixes it, filed as template #302.                                                                      |
+| 18:49    | The Security run on `f9866be` warns about GHSA-474x-hrwr-fgx4 in the `artifact-transport` lockfile; `77832fa` fixes it, filed as template #302.                                                                      |
 
 ## Requirements
 
