@@ -1,0 +1,94 @@
+# Output of experiments/issue-27-latency.mjs on one machine (Linux, headless
+# Chromium and Firefox of Playwright 1.64.1, PulseAudio server for both,
+# PULSE_SERVER set). Times in ms. In the first six blocks run 0 warms up
+# and runs 1-5 give the medians.
+
+## --runs 6 --speech-mode sound --browser chromium
+{"run":0,"sampleRate":44100,"baseLatency":11.6,"outputLatency":32,"speakToChunk":536.8,"speakToPush":556.4,"playerDelay":0,"speakToFirstSample":556.4,"speakToOutput":600.1,"crossOriginIsolated":false,"tapError":null,"hud":"Audiominimal · waveguideload 8% · target 80% · worklet-port · underruns 0"}
+{"run":1,"sampleRate":44100,"baseLatency":11.6,"outputLatency":32,"speakToChunk":135.9,"speakToPush":150,"playerDelay":11.7,"speakToFirstSample":161.7,"speakToOutput":205.3,"crossOriginIsolated":false,"tapError":null,"hud":"Audiominimal · waveguideload 9% · target 80% · worklet-port · underruns 1"}
+{"run":2,"sampleRate":44100,"baseLatency":11.6,"outputLatency":32,"speakToChunk":127.1,"speakToPush":140.8,"playerDelay":0,"speakToFirstSample":140.8,"speakToOutput":184.5,"crossOriginIsolated":false,"tapError":null,"hud":"Audiominimal · waveguideload 8% · target 80% · worklet-port · underruns 0"}
+{"run":3,"sampleRate":44100,"baseLatency":11.6,"outputLatency":40,"speakToChunk":137.1,"speakToPush":140,"playerDelay":0,"speakToFirstSample":140,"speakToOutput":191.7,"crossOriginIsolated":false,"tapError":null,"hud":"Audiominimal · waveguideload 9% · target 80% · worklet-port · underruns 0"}
+{"run":4,"sampleRate":44100,"baseLatency":11.6,"outputLatency":32,"speakToChunk":146.1,"speakToPush":157.4,"playerDelay":0,"speakToFirstSample":157.4,"speakToOutput":201.1,"crossOriginIsolated":false,"tapError":null,"hud":"Audiominimal · waveguideload 10% · target 80% · worklet-port · underruns 0"}
+{"run":5,"sampleRate":44100,"baseLatency":11.6,"outputLatency":32,"speakToChunk":229,"speakToPush":265,"playerDelay":11.7,"speakToFirstSample":276.7,"speakToOutput":320.3,"crossOriginIsolated":false,"tapError":null,"hud":"Audiominimal · waveguideload 9% · target 80% · worklet-port · underruns 0"}
+median {"browser":"chromium","isolated":false,"buffer":false,"tier":"0","throttle":0,"mode":"worklet-port","baseLatency":11.6,"outputLatency":32,"speakToChunk":137.1,"speakToPush":150,"playerDelay":0,"speakToFirstSample":157.4,"speakToOutput":201.1,"underruns":[0,1,0,0,0,0]}
+
+## --runs 6 --speech-mode sound --browser chromium --isolated
+{"run":0,"sampleRate":44100,"baseLatency":11.6,"outputLatency":32,"speakToChunk":674.6,"speakToPush":695.4,"playerDelay":0.1,"speakToFirstSample":695.5,"speakToOutput":739.1,"crossOriginIsolated":true,"tapError":null,"hud":"Audiominimal · waveguideload 8% · target 80% · worklet-shared · underruns 0"}
+{"run":1,"sampleRate":44100,"baseLatency":11.6,"outputLatency":32,"speakToChunk":87.9,"speakToPush":106.5,"playerDelay":11.7,"speakToFirstSample":118.2,"speakToOutput":161.8,"crossOriginIsolated":true,"tapError":null,"hud":"Audiominimal · waveguideload 6% · target 80% · worklet-shared · underruns 0"}
+{"run":2,"sampleRate":44100,"baseLatency":11.6,"outputLatency":48,"speakToChunk":112.6,"speakToPush":117.6,"playerDelay":0.1,"speakToFirstSample":117.7,"speakToOutput":177.4,"crossOriginIsolated":true,"tapError":null,"hud":"Audiominimal · waveguideload 6% · target 80% · worklet-shared · underruns 0"}
+{"run":3,"sampleRate":44100,"baseLatency":11.6,"outputLatency":40,"speakToChunk":147.3,"speakToPush":157.5,"playerDelay":11.7,"speakToFirstSample":169.3,"speakToOutput":220.9,"crossOriginIsolated":true,"tapError":null,"hud":"Audiominimal · waveguideload 7% · target 80% · worklet-shared · underruns 0"}
+{"run":4,"sampleRate":44100,"baseLatency":11.6,"outputLatency":32,"speakToChunk":66.4,"speakToPush":72.3,"playerDelay":11.7,"speakToFirstSample":84.1,"speakToOutput":127.7,"crossOriginIsolated":true,"tapError":null,"hud":"Audiominimal · waveguideload 6% · target 80% · worklet-shared · underruns 0"}
+{"run":5,"sampleRate":44100,"baseLatency":11.6,"outputLatency":32,"speakToChunk":79.2,"speakToPush":85.3,"playerDelay":11.7,"speakToFirstSample":97.1,"speakToOutput":140.7,"crossOriginIsolated":true,"tapError":null,"hud":"Audiominimal · waveguideload 5% · target 80% · worklet-shared · underruns 0"}
+median {"browser":"chromium","isolated":true,"buffer":false,"tier":"0","throttle":0,"mode":"worklet-shared","baseLatency":11.6,"outputLatency":32,"speakToChunk":87.9,"speakToPush":106.5,"playerDelay":11.7,"speakToFirstSample":117.7,"speakToOutput":161.8,"underruns":[0,0,0,0,0,0]}
+
+## --runs 6 --speech-mode sound --browser chromium --buffer
+{"run":0,"sampleRate":44100,"baseLatency":11.6,"outputLatency":40,"speakToChunk":272.3,"speakToPush":273.5,"playerDelay":null,"speakToFirstSample":null,"speakToOutput":null,"crossOriginIsolated":false,"tapError":null,"hud":"Audiominimal · waveguideload 14% · target 80% · buffer · underruns 0"}
+{"run":1,"sampleRate":44100,"baseLatency":11.6,"outputLatency":40,"speakToChunk":93.8,"speakToPush":94.7,"playerDelay":150.4,"speakToFirstSample":245.1,"speakToOutput":296.7,"crossOriginIsolated":false,"tapError":null,"hud":"Audiominimal · waveguideload 21% · target 80% · buffer · underruns 0"}
+{"run":2,"sampleRate":44100,"baseLatency":11.6,"outputLatency":32,"speakToChunk":103.1,"speakToPush":103.4,"playerDelay":150.4,"speakToFirstSample":253.8,"speakToOutput":297.4,"crossOriginIsolated":false,"tapError":null,"hud":"Audiominimal · waveguideload 5% · target 80% · buffer · underruns 0"}
+{"run":3,"sampleRate":44100,"baseLatency":11.6,"outputLatency":32,"speakToChunk":147.9,"speakToPush":148.2,"playerDelay":150.4,"speakToFirstSample":298.6,"speakToOutput":342.2,"crossOriginIsolated":false,"tapError":null,"hud":"Audiominimal · waveguideload 14% · target 80% · buffer · underruns 0"}
+{"run":4,"sampleRate":44100,"baseLatency":11.6,"outputLatency":32,"speakToChunk":103,"speakToPush":103.4,"playerDelay":150.4,"speakToFirstSample":253.8,"speakToOutput":297.4,"crossOriginIsolated":false,"tapError":null,"hud":"Audiominimal · waveguideload 6% · target 80% · buffer · underruns 0"}
+{"run":5,"sampleRate":44100,"baseLatency":11.6,"outputLatency":32,"speakToChunk":304.1,"speakToPush":304.2,"playerDelay":150.4,"speakToFirstSample":454.6,"speakToOutput":498.2,"crossOriginIsolated":false,"tapError":null,"hud":"Audiominimal · waveguideload 9% · target 80% · buffer · underruns 0"}
+median {"browser":"chromium","isolated":false,"buffer":true,"tier":"0","throttle":0,"mode":"buffer","baseLatency":11.6,"outputLatency":32,"speakToChunk":103.1,"speakToPush":103.4,"playerDelay":150.4,"speakToFirstSample":253.8,"speakToOutput":297.4,"underruns":[0,0,0,0,0,0]}
+
+## --runs 6 --speech-mode sound --browser firefox
+{"run":0,"sampleRate":48000,"baseLatency":0,"outputLatency":51.2,"speakToChunk":2035,"speakToPush":2058,"playerDelay":0.1,"speakToFirstSample":2058.1,"speakToOutput":2109.3,"crossOriginIsolated":false,"tapError":null,"hud":"Audiominimal · waveguideload 43% · target 80% · worklet-port · underruns 0"}
+{"run":1,"sampleRate":48000,"baseLatency":0,"outputLatency":51.2,"speakToChunk":110,"speakToPush":136,"playerDelay":0.1,"speakToFirstSample":136.1,"speakToOutput":187.3,"crossOriginIsolated":false,"tapError":null,"hud":"Audiominimal · waveguideload 9% · target 80% · worklet-port · underruns 0"}
+{"run":2,"sampleRate":48000,"baseLatency":0,"outputLatency":51.2,"speakToChunk":63,"speakToPush":69,"playerDelay":0.1,"speakToFirstSample":69.1,"speakToOutput":120.3,"crossOriginIsolated":false,"tapError":null,"hud":"Audiominimal · waveguideload 39% · target 80% · worklet-port · underruns 0"}
+{"run":3,"sampleRate":48000,"baseLatency":0,"outputLatency":51.2,"speakToChunk":128,"speakToPush":152,"playerDelay":0.1,"speakToFirstSample":152.1,"speakToOutput":203.3,"crossOriginIsolated":false,"tapError":null,"hud":"Audiominimal · waveguideload 9% · target 80% · worklet-port · underruns 0"}
+{"run":4,"sampleRate":48000,"baseLatency":0,"outputLatency":51.2,"speakToChunk":93,"speakToPush":109,"playerDelay":21.4,"speakToFirstSample":130.4,"speakToOutput":181.6,"crossOriginIsolated":false,"tapError":null,"hud":"Audiominimal · waveguideload 9% · target 80% · worklet-port · underruns 0"}
+{"run":5,"sampleRate":48000,"baseLatency":0,"outputLatency":51.2,"speakToChunk":41,"speakToPush":65,"playerDelay":0.1,"speakToFirstSample":65.1,"speakToOutput":116.3,"crossOriginIsolated":false,"tapError":null,"hud":"Audiominimal · waveguideload 13% · target 80% · worklet-port · underruns 0"}
+median {"browser":"firefox","isolated":false,"buffer":false,"tier":"0","throttle":0,"mode":"worklet-port","baseLatency":0,"outputLatency":51.2,"speakToChunk":93,"speakToPush":109,"playerDelay":0.1,"speakToFirstSample":130.4,"speakToOutput":181.6,"underruns":[0,0,0,0,0,0]}
+
+## --runs 6 --speech-mode sound --browser firefox --isolated
+{"run":0,"sampleRate":48000,"baseLatency":0,"outputLatency":45.2,"speakToChunk":372.2,"speakToPush":437.2,"playerDelay":8.1,"speakToFirstSample":445.3,"speakToOutput":490.5,"crossOriginIsolated":true,"tapError":null,"hud":"Audiominimal · waveguideload 19% · target 80% · worklet-shared · underruns 0"}
+{"run":1,"sampleRate":48000,"baseLatency":0,"outputLatency":45.2,"speakToChunk":112,"speakToPush":121.4,"playerDelay":0.1,"speakToFirstSample":121.5,"speakToOutput":166.7,"crossOriginIsolated":true,"tapError":null,"hud":"Audiominimal · waveguideload 37% · target 80% · worklet-shared · underruns 0"}
+{"run":2,"sampleRate":48000,"baseLatency":0,"outputLatency":45.2,"speakToChunk":66.7,"speakToPush":96.2,"playerDelay":0.1,"speakToFirstSample":96.3,"speakToOutput":141.5,"crossOriginIsolated":true,"tapError":null,"hud":"Audiominimal · waveguideload 23% · target 80% · worklet-shared · underruns 0"}
+{"run":3,"sampleRate":48000,"baseLatency":0,"outputLatency":45.2,"speakToChunk":70.6,"speakToPush":84.2,"playerDelay":0.1,"speakToFirstSample":84.3,"speakToOutput":129.5,"crossOriginIsolated":true,"tapError":null,"hud":"Audiominimal · waveguideload 21% · target 80% · worklet-shared · underruns 0"}
+{"run":4,"sampleRate":48000,"baseLatency":0,"outputLatency":45.2,"speakToChunk":81.5,"speakToPush":88.9,"playerDelay":0.1,"speakToFirstSample":89,"speakToOutput":134.2,"crossOriginIsolated":true,"tapError":null,"hud":"Audiominimal · waveguideload 26% · target 80% · worklet-shared · underruns 0"}
+{"run":5,"sampleRate":48000,"baseLatency":0,"outputLatency":45.2,"speakToChunk":81.1,"speakToPush":109.1,"playerDelay":18.8,"speakToFirstSample":127.9,"speakToOutput":173.1,"crossOriginIsolated":true,"tapError":null,"hud":"Audiominimal · waveguideload 30% · target 80% · worklet-shared · underruns 0"}
+median {"browser":"firefox","isolated":true,"buffer":false,"tier":"0","throttle":0,"mode":"worklet-shared","baseLatency":0,"outputLatency":45.2,"speakToChunk":81.1,"speakToPush":96.2,"playerDelay":0.1,"speakToFirstSample":96.3,"speakToOutput":141.5,"underruns":[0,0,0,0,0,0]}
+
+## --runs 6 --speech-mode sound --browser firefox --buffer
+{"run":0,"sampleRate":48000,"baseLatency":0,"outputLatency":42.9,"speakToChunk":1188,"speakToPush":1222,"playerDelay":131.6,"speakToFirstSample":1353.6,"speakToOutput":1396.5,"crossOriginIsolated":false,"tapError":null,"hud":"Audiominimal · waveguideload 10% · target 80% · buffer · underruns 0"}
+{"run":1,"sampleRate":48000,"baseLatency":0,"outputLatency":42.9,"speakToChunk":174,"speakToPush":246,"playerDelay":128.9,"speakToFirstSample":374.9,"speakToOutput":417.8,"crossOriginIsolated":false,"tapError":null,"hud":"Audiominimal · waveguideload 0% · target 80% · buffer · underruns 0"}
+{"run":2,"sampleRate":48000,"baseLatency":0,"outputLatency":42.9,"speakToChunk":199,"speakToPush":239,"playerDelay":110.2,"speakToFirstSample":349.2,"speakToOutput":392.1,"crossOriginIsolated":false,"tapError":null,"hud":"Audiominimal · waveguideload 0% · target 80% · buffer · underruns 0"}
+{"run":3,"sampleRate":48000,"baseLatency":0,"outputLatency":42.9,"speakToChunk":94,"speakToPush":135,"playerDelay":150.2,"speakToFirstSample":285.2,"speakToOutput":328.1,"crossOriginIsolated":false,"tapError":null,"hud":"Audiominimal · waveguideload 10% · target 80% · buffer · underruns 0"}
+{"run":4,"sampleRate":48000,"baseLatency":0,"outputLatency":42.9,"speakToChunk":50,"speakToPush":78,"playerDelay":131.6,"speakToFirstSample":209.6,"speakToOutput":252.5,"crossOriginIsolated":false,"tapError":null,"hud":"Audiominimal · waveguideload 10% · target 80% · buffer · underruns 0"}
+{"run":5,"sampleRate":48000,"baseLatency":0,"outputLatency":42.9,"speakToChunk":90,"speakToPush":101,"playerDelay":131.6,"speakToFirstSample":232.6,"speakToOutput":275.5,"crossOriginIsolated":false,"tapError":null,"hud":"Audiominimal · waveguideload 10% · target 80% · buffer · underruns 0"}
+median {"browser":"firefox","isolated":false,"buffer":true,"tier":"0","throttle":0,"mode":"buffer","baseLatency":0,"outputLatency":42.9,"speakToChunk":94,"speakToPush":135,"playerDelay":131.6,"speakToFirstSample":285.2,"speakToOutput":328.1,"underruns":[0,0,0,0,0,0]}
+
+## The paragraph of about 40 s (--runs 1 --tier 0 --text <paragraph> --record ...)
+# The morning train left the station a little after seven. Most of the passengers were still half asleep, holding paper cups of coffee and watching the grey fields slide past the windows. A child in the third row counted the cows aloud, and nobody minded. Somewhere behind the hills the sun was trying to break through the clouds, and for a moment the whole valley turned gold. Then the rain came back, soft and steady, and the conductor walked slowly down the aisle, checking tickets and wishing everyone a pleasant journey to the coast.
+
+### --browser chromium --speech-mode sound
+{"run":0,"sampleRate":44100,"baseLatency":11.6,"outputLatency":32,"speakToChunk":965.6,"speakToPush":1148.5,"playerDelay":11.7,"speakToFirstSample":1160.2,"speakToOutput":1203.8,"crossOriginIsolated":false,"tapError":null,"hud":"Audiominimal · waveguideload 7% · target 80% · worklet-port · underruns 0"}
+recording long-chromium.wav {"seconds":40.4625,"signalMaxStep":0.258,"signalPeak":0.7204,"gaps":[]}
+
+### --browser firefox --speech-mode sound
+{"run":0,"sampleRate":48000,"baseLatency":0,"outputLatency":45.9,"speakToChunk":1284,"speakToPush":1334,"playerDelay":18.7,"speakToFirstSample":1352.7,"speakToOutput":1398.6,"crossOriginIsolated":false,"tapError":null,"hud":"Audiominimal · waveguideload 6% · target 80% · worklet-port · underruns 0"}
+recording long-firefoxsound.wav {"seconds":38.1168,"signalMaxStep":0.2506,"signalPeak":0.7678,"gaps":[]}
+
+### --browser chromium --speech-mode both
+{"run":0,"sampleRate":44100,"baseLatency":11.6,"outputLatency":32,"speakToChunk":1610,"speakToPush":1617.7,"playerDelay":11.7,"speakToFirstSample":1629.4,"speakToOutput":1673,"crossOriginIsolated":false,"tapError":null,"hud":"Audiominimal · waveguideload 7% · target 80% · worklet-port · underruns 0Visualsminimalload 1135% · target 80%"}
+recording long-chromiumboth.wav {"seconds":41.9566,"signalMaxStep":0.2715,"signalPeak":0.8716,"gaps":[]}
+
+### --browser firefox --speech-mode both
+{"run":0,"sampleRate":48000,"baseLatency":0,"outputLatency":38.2,"speakToChunk":2132,"speakToPush":2147,"playerDelay":0.1,"speakToFirstSample":2147.1,"speakToOutput":2185.3,"crossOriginIsolated":false,"tapError":null,"hud":"Audiominimal · waveguideload 45% · target 80% · worklet-port · underruns 0Visualsmediumload 0% · target 80%"}
+recording long-firefoxboth.wav {"seconds":37.8065,"signalMaxStep":0.2345,"signalPeak":0.5487,"gaps":[]}
+
+### --browser chromium --speech-mode both --isolated
+{"run":0,"sampleRate":44100,"baseLatency":11.6,"outputLatency":64,"speakToChunk":1228.6,"speakToPush":1236.1,"playerDelay":0.1,"speakToFirstSample":1236.2,"speakToOutput":1311.8,"crossOriginIsolated":true,"tapError":null,"hud":"Audiominimal · waveguideload 12% · target 80% · worklet-shared · underruns 0Visualsminimalload 1348% · target 80%"}
+recording long-chromiumbothisolated.wav {"seconds":42.3497,"signalMaxStep":0.3625,"signalPeak":0.7025,"gaps":[]}
+
+### --browser firefox --speech-mode sound --isolated
+{"run":0,"sampleRate":48000,"baseLatency":0,"outputLatency":43.5,"speakToChunk":516.3,"speakToPush":530.1,"playerDelay":0.1,"speakToFirstSample":530.2,"speakToOutput":573.7,"crossOriginIsolated":true,"tapError":null,"hud":"Audiominimal · waveguideload 8% · target 80% · worklet-shared · underruns 0"}
+recording long-firefoxsoundisolated.wav {"seconds":36.6207,"signalMaxStep":0.2835,"signalPeak":0.6101,"gaps":[]}
+
+## --browser chromium --speech-mode sound --throttle 6 --text "The morning train left the station a little after seven. Most of the passengers were still half asleep."
+# CPU throttling of the page and of the synthesis worker (CDP), worklet player
+{"run":0,"sampleRate":44100,"baseLatency":11.6,"outputLatency":32,"speakToChunk":856.2,"speakToPush":887.8,"playerDelay":0.1,"speakToFirstSample":887.9,"speakToOutput":931.5,"crossOriginIsolated":false,"tapError":null,"hud":"Audiominimal · waveguideload 6% · target 80% · worklet-port · underruns 10"}
+recording docs/recordings/issue-27-chromium-throttle-6x.wav {"seconds":9.4088,"signalMaxStep":0.1223,"signalPeak":0.5343,"gaps":[{"at":4.6062,"ms":95.8277,"edgeBefore":0,"edgeAfter":0,"stepIn":0,"stepOut":0,"levelBefore":0},{"at":5.3057,"ms":69.7052,"edgeBefore":0.0004,"edgeAfter":0.0007,"stepIn":0.0004,"stepOut":0.0014,"levelBefore":0.3877},{"at":5.5612,"ms":232.2449,"edgeBefore":0.0013,"edgeAfter":0.0014,"stepIn":0.0013,"stepOut":0.0014,"levelBefore":0.3548},{"at":6.0256,"ms":58.0952,"edgeBefore":0,"edgeAfter":0,"stepIn":0,"stepOut":0,"levelBefore":0},{"at":6.7338,"ms":58.0952,"edgeBefore":0.003,"edgeAfter":0.0031,"stepIn":0.003,"stepOut":0.004,"levelBefore":0.3665},{"at":7.1633,"ms":81.3152,"edgeBefore":0.0001,"edgeAfter":0.0001,"stepIn":0.0003,"stepOut":0.0002,"levelBefore":0.2489},{"at":7.6626,"ms":46.4853,"edgeBefore":0.001,"edgeAfter":0.0008,"stepIn":0.0012,"stepOut":0.0008,"levelBefore":0.3148},{"at":7.9412,"ms":46.4853,"edgeBefore":0.0024,"edgeAfter":0.0025,"stepIn":0.0024,"stepOut":0.0027,"levelBefore":0.3328},{"at":8.6842,"ms":81.3152,"edgeBefore":0.0003,"edgeAfter":0.0003,"stepIn":0.0003,"stepOut":0.0003,"levelBefore":0.3963},{"at":8.9513,"ms":69.7052,"edgeBefore":0,"edgeAfter":0,"stepIn":0,"stepOut":0,"levelBefore":0.0033}]}
+
+# the same with --buffer
+{"run":0,"sampleRate":44100,"baseLatency":11.6,"outputLatency":32,"speakToChunk":517.7,"speakToPush":534.3,"playerDelay":null,"speakToFirstSample":null,"speakToOutput":null,"crossOriginIsolated":false,"tapError":null,"hud":"Audiominimal · waveguideload 16% · target 80% · buffer · underruns 0"}
+recording throttle-buffer.wav {"seconds":9.065,"signalMaxStep":0.1289,"signalPeak":0.7386,"gaps":[]}

@@ -23,6 +23,10 @@
     "./server": {
       "types": "./src/server/server.d.ts",
       "import": "./src/server/server.js"
+    },
+    "./playback": {
+      "types": "./src/playback/index.d.ts",
+      "import": "./src/playback/index.js"
     }
   },
   "scripts": {

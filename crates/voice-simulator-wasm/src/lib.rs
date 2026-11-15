@@ -11,12 +11,15 @@
 //!
 //! Offsets are only meaningful on `wasm32`, where a pointer is a `u32`
 //! offset into the one linear memory. The safe functions the exports call
-//! ([`fill_uniform`], [`fill_normal`]) are what the host tests exercise.
+//! ([`fill_uniform`], [`fill_normal`], [`run_airflow`], [`resampler_new`]
+//! and the other `resampler_*` functions) are what the host tests exercise.
 
 use std::alloc::{alloc, dealloc, Layout};
+use std::cell::RefCell;
 
 use voice_simulator_core::aerodynamics::{self, Aerodynamics};
 use voice_simulator_core::random::{hash_seed_utf16, Random};
+use voice_simulator_core::resample::{output_length, resample, StreamResampler};
 
 /// Version of the interface; raise it on any breaking change of a `vs_`
 /// export (a removed or renamed function, a changed signature or meaning).
@@ -40,6 +43,9 @@ pub mod error {
     pub const NO_MEMORY: i32 = -4;
     /// The integer handle names no live object.
     pub const BAD_HANDLE: i32 = -5;
+    /// A number argument is out of its range (a sample rate that is not
+    /// positive, an output of the wrong length).
+    pub const BAD_ARGUMENT: i32 = -6;
 }
 
 /// Writes `out.len()` uniform values of `createRandom(seed)` into `out`.
@@ -78,6 +84,111 @@ pub fn run_airflow(dt: f64, compliance: f64, steps: &mut [f64]) {
             state.constriction_drop,
         ]);
     }
+}
+
+/// A stream resampler of [`vs_resampler_new`] and the outputs it has
+/// computed that [`vs_resampler_read`] has not taken yet.
+struct Resampler {
+    stream: StreamResampler,
+    ready: Vec<f32>,
+}
+
+thread_local! {
+    /// The live resamplers; handle `h` is slot `h - 1`.
+    static RESAMPLERS: RefCell<Vec<Option<Resampler>>> = const { RefCell::new(Vec::new()) };
+}
+
+/// Whether `value` is a positive number (NaN is not).
+fn positive(value: f64) -> bool {
+    value > 0.0
+}
+
+/// A new stream resampler; returns its handle (> 0) or [`error::BAD_ARGUMENT`].
+pub fn resampler_new(from_rate: f64, to_rate: f64, zero_crossings: f64) -> i32 {
+    if !positive(zero_crossings) {
+        return error::BAD_ARGUMENT;
+    }
+    let Ok(stream) = StreamResampler::new(from_rate, to_rate, zero_crossings) else {
+        return error::BAD_ARGUMENT;
+    };
+    let resampler = Resampler {
+        stream,
+        ready: Vec::new(),
+    };
+    RESAMPLERS.with_borrow_mut(|slots| {
+        let index = match slots.iter().position(Option::is_none) {
+            Some(index) => {
+                slots[index] = Some(resampler);
+                index
+            }
+            None => {
+                slots.push(Some(resampler));
+                slots.len() - 1
+            }
+        };
+        i32::try_from(index + 1).unwrap_or(error::NO_MEMORY)
+    })
+}
+
+/// Runs `action` on the resampler of `handle`, or returns [`error::BAD_HANDLE`].
+fn with_resampler(handle: i32, action: impl FnOnce(&mut Resampler) -> i32) -> i32 {
+    let Some(index) = usize::try_from(handle).ok().and_then(|h| h.checked_sub(1)) else {
+        return error::BAD_HANDLE;
+    };
+    RESAMPLERS.with_borrow_mut(|slots| match slots.get_mut(index) {
+        Some(Some(resampler)) => action(resampler),
+        _ => error::BAD_HANDLE,
+    })
+}
+
+/// The number of outputs waiting to be read, as an `i32` result.
+fn ready_count(resampler: &Resampler) -> i32 {
+    i32::try_from(resampler.ready.len()).unwrap_or(error::NO_MEMORY)
+}
+
+/// Pushes `chunk`; returns the number of outputs waiting to be read.
+pub fn resampler_push(handle: i32, chunk: &[f32]) -> i32 {
+    with_resampler(handle, |resampler| {
+        let output = resampler.stream.push(chunk);
+        resampler.ready.extend(output);
+        ready_count(resampler)
+    })
+}
+
+/// Flushes the stream; returns the number of outputs waiting to be read.
+pub fn resampler_flush(handle: i32) -> i32 {
+    with_resampler(handle, |resampler| {
+        let output = resampler.stream.flush();
+        resampler.ready.extend(output);
+        ready_count(resampler)
+    })
+}
+
+/// Moves the first `out.len()` waiting outputs (or fewer) into `out`;
+/// returns how many.
+pub fn resampler_read(handle: i32, out: &mut [f32]) -> i32 {
+    with_resampler(handle, |resampler| {
+        let count = out.len().min(resampler.ready.len());
+        out[..count].copy_from_slice(&resampler.ready[..count]);
+        resampler.ready.drain(..count);
+        i32::try_from(count).unwrap_or(error::NO_MEMORY)
+    })
+}
+
+/// Input samples the resampler of `handle` holds.
+pub fn resampler_held(handle: i32) -> i32 {
+    with_resampler(handle, |resampler| {
+        i32::try_from(resampler.stream.held()).unwrap_or(error::NO_MEMORY)
+    })
+}
+
+/// Frees the resampler of `handle`; the handle may be given out again.
+pub fn resampler_free(handle: i32) -> i32 {
+    let code = with_resampler(handle, |_| error::OK);
+    if code == error::OK {
+        RESAMPLERS.with_borrow_mut(|slots| slots[handle as usize - 1] = None);
+    }
+    code
 }
 
 /// Size in bytes of the linear memory right now.
@@ -134,6 +245,22 @@ fn f64_slice<'a>(offset: u32, count: u32) -> Result<&'a mut [f64], i32> {
     // memory (checked above); JavaScript owns the block and does not run
     // while the export holds the slice.
     Ok(unsafe { core::slice::from_raw_parts_mut(offset as usize as *mut f64, count as usize) })
+}
+
+/// A mutable view of `count` `f32` values at `offset`, after [`check_range`].
+fn f32_slice<'a>(offset: u32, count: u32) -> Result<&'a mut [f32], i32> {
+    check_range(offset, count, 4)?;
+    if count == 0 {
+        return Ok(&mut []);
+    }
+    // SAFETY: as in `f64_slice`, with an alignment of 4.
+    Ok(unsafe { core::slice::from_raw_parts_mut(offset as usize as *mut f32, count as usize) })
+}
+
+/// A copy of the `count` `f32` values at `offset`, so the input may overlap
+/// the output of the same call.
+fn f32_input(offset: u32, count: u32) -> Result<Vec<f32>, i32> {
+    f32_slice(offset, count).map(|slice| slice.to_vec())
 }
 
 /// Version of this interface; the loader refuses any other value.
@@ -285,6 +412,103 @@ pub extern "C" fn vs_aero_run(dt: f64, compliance: f64, steps: u32, count: u32) 
     }
 }
 
+/// `Math.round(len * to_rate / from_rate)`: the output length of
+/// [`vs_resample`], or [`error::BAD_ARGUMENT`] for a rate that is not
+/// positive.
+#[no_mangle]
+pub extern "C" fn vs_resample_length(len: u32, from_rate: f64, to_rate: f64) -> i32 {
+    if !positive(from_rate) || !positive(to_rate) {
+        return error::BAD_ARGUMENT;
+    }
+    i32::try_from(output_length(len as usize, from_rate, to_rate)).unwrap_or(error::BAD_ARGUMENT)
+}
+
+/// `resample(input, fromRate, toRate, {zeroCrossings})` of
+/// `src/audio/resample.js`: reads `len` `f32` samples at `input` and writes
+/// the `out_len` `f32` samples of the result at `out` (`out_len` must be
+/// [`vs_resample_length`]). Returns 0 or a negative code of [`error`].
+#[no_mangle]
+pub extern "C" fn vs_resample(
+    input: u32,
+    len: u32,
+    from_rate: f64,
+    to_rate: f64,
+    zero_crossings: f64,
+    out: u32,
+    out_len: u32,
+) -> i32 {
+    let length = vs_resample_length(len, from_rate, to_rate);
+    if length < 0 {
+        return length;
+    }
+    if !positive(zero_crossings) || length as u32 != out_len {
+        return error::BAD_ARGUMENT;
+    }
+    let samples = match f32_input(input, len) {
+        Ok(samples) => samples,
+        Err(code) => return code,
+    };
+    let Ok(result) = resample(&samples, from_rate, to_rate, zero_crossings) else {
+        return error::BAD_ARGUMENT;
+    };
+    match f32_slice(out, out_len) {
+        Ok(slice) => {
+            slice.copy_from_slice(&result);
+            error::OK
+        }
+        Err(code) => code,
+    }
+}
+
+/// `createStreamResampler(fromRate, toRate, {zeroCrossings})`: returns a
+/// handle (> 0) or [`error::BAD_ARGUMENT`]. Free it with
+/// [`vs_resampler_free`].
+#[no_mangle]
+pub extern "C" fn vs_resampler_new(from_rate: f64, to_rate: f64, zero_crossings: f64) -> i32 {
+    resampler_new(from_rate, to_rate, zero_crossings)
+}
+
+/// `push` of the stream resampler for the `len` `f32` samples at `input`.
+/// Returns the number of outputs waiting for [`vs_resampler_read`], or a
+/// negative code of [`error`].
+#[no_mangle]
+pub extern "C" fn vs_resampler_push(handle: i32, input: u32, len: u32) -> i32 {
+    match f32_input(input, len) {
+        Ok(samples) => resampler_push(handle, &samples),
+        Err(code) => code,
+    }
+}
+
+/// `flush` of the stream resampler. Returns the number of outputs waiting
+/// for [`vs_resampler_read`], or a negative code of [`error`].
+#[no_mangle]
+pub extern "C" fn vs_resampler_flush(handle: i32) -> i32 {
+    resampler_flush(handle)
+}
+
+/// Moves up to `count` waiting outputs as `f32` to `out`, oldest first.
+/// Returns how many, or a negative code of [`error`].
+#[no_mangle]
+pub extern "C" fn vs_resampler_read(handle: i32, out: u32, count: u32) -> i32 {
+    match f32_slice(out, count) {
+        Ok(slice) => resampler_read(handle, slice),
+        Err(code) => code,
+    }
+}
+
+/// `held()` of the stream resampler: the input samples it keeps, or a
+/// negative code of [`error`].
+#[no_mangle]
+pub extern "C" fn vs_resampler_held(handle: i32) -> i32 {
+    resampler_held(handle)
+}
+
+/// Frees the resampler of `handle`. Returns 0 or [`error::BAD_HANDLE`].
+#[no_mangle]
+pub extern "C" fn vs_resampler_free(handle: i32) -> i32 {
+    resampler_free(handle)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -340,6 +564,68 @@ mod tests {
         assert_eq!(steps[7], second.oral_pressure);
         assert_eq!(vs_aero_run(0.0, 1e-3, 0, 1), error::NULL);
         assert_eq!(vs_aero_run(0.0, 1e-3, 8, u32::MAX), error::OUT_OF_BOUNDS);
+    }
+
+    #[test]
+    fn resamplers_live_behind_handles() {
+        assert_eq!(resampler_new(0.0, 48_000.0, 8.0), error::BAD_ARGUMENT);
+        assert_eq!(resampler_new(16_000.0, 48_000.0, 0.0), error::BAD_ARGUMENT);
+        let first = resampler_new(16_000.0, 48_000.0, 8.0);
+        let second = resampler_new(48_000.0, 48_000.0, 8.0);
+        assert!(first > 0 && second > first);
+        let input: Vec<f32> = (0..400).map(|index| (index % 7) as f32 / 7.0).collect();
+        let mut joined = Vec::new();
+        for chunk in input.chunks(37) {
+            let ready = resampler_push(first, chunk);
+            assert!(ready >= 0);
+            let mut out = vec![0.0; ready as usize];
+            assert_eq!(resampler_read(first, &mut out), ready);
+            joined.extend(out);
+        }
+        assert!(resampler_held(first) > 0);
+        let ready = resampler_flush(first);
+        let mut out = vec![0.0; ready as usize + 5];
+        assert_eq!(resampler_read(first, &mut out), ready);
+        joined.extend(&out[..ready as usize]);
+        let whole = resample(&input, 16_000.0, 48_000.0, 8.0).unwrap();
+        assert_eq!(joined, whole);
+        // Equal rates copy the chunk through.
+        assert_eq!(resampler_push(second, &[0.5, 0.25]), 2);
+        let mut copy = [0.0; 1];
+        assert_eq!(resampler_read(second, &mut copy), 1);
+        assert_eq!(copy, [0.5]);
+        // A freed handle is dead and its slot is given out again.
+        assert_eq!(resampler_free(first), error::OK);
+        assert_eq!(resampler_free(first), error::BAD_HANDLE);
+        assert_eq!(resampler_flush(first), error::BAD_HANDLE);
+        assert_eq!(resampler_held(0), error::BAD_HANDLE);
+        assert_eq!(resampler_held(-3), error::BAD_HANDLE);
+        assert_eq!(resampler_new(8_000.0, 44_100.0, 8.0), first);
+        assert_eq!(resampler_free(first), error::OK);
+        assert_eq!(resampler_free(second), error::OK);
+    }
+
+    #[test]
+    fn resample_checks_its_arguments() {
+        assert_eq!(vs_resample_length(160, 16_000.0, 44_100.0), 441);
+        assert_eq!(
+            vs_resample_length(160, f64::NAN, 44_100.0),
+            error::BAD_ARGUMENT
+        );
+        assert_eq!(vs_resample(0, 0, 16_000.0, 48_000.0, 16.0, 0, 0), error::OK);
+        assert_eq!(
+            vs_resample(0, 1, 16_000.0, 48_000.0, 16.0, 0, 3),
+            error::NULL
+        );
+        assert_eq!(
+            vs_resample(0, 1, 16_000.0, 48_000.0, 16.0, 0, 2),
+            error::BAD_ARGUMENT
+        );
+        assert_eq!(
+            vs_resample(0, 0, 16_000.0, 48_000.0, -1.0, 0, 0),
+            error::BAD_ARGUMENT
+        );
+        assert_eq!(vs_resampler_push(1_000, 6, 1), error::MISALIGNED);
     }
 
     #[test]

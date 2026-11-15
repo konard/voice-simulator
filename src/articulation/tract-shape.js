@@ -299,6 +299,8 @@ export function tractShape(state, head, options = {}) {
       closure: full.glottalClosure,
       loudness: full.loudness,
       lungPressure: full.lungPressure,
+      adduction: full.adduction,
+      foldTension: full.foldTension,
     },
     lipOpening: areas.at(-1),
     jaw: openness,

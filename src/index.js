@@ -44,6 +44,7 @@ export {
 } from './head-config.js';
 export { createRandom, createSeed, hashSeed } from './random.js';
 export {
+  DEFAULT_SOURCE,
   VoiceRenderer,
   renderPlan,
   renderPlanAsync,
@@ -110,6 +111,19 @@ export {
   CHINK_NOISE,
   Glottis,
 } from './acoustics/glottis.js';
+export {
+  ADDUCTION_TABLE,
+  FOLDS_FLOW_SCALE,
+  FOLD_RATE,
+  MEAN_AREA_TIME,
+  MAX_FOLD_TENSION,
+  MIN_FOLD_TENSION,
+  VocalFolds,
+  flowPitch,
+  foldPitch,
+  restArea,
+  tensionForPitch,
+} from './acoustics/folds.js';
 export { tubeFormants, tubeSpectrum } from './acoustics/transfer.js';
 export {
   estimateFormants,
@@ -180,7 +194,7 @@ export {
   decodeRaw,
   formatFromFileName,
 } from './audio/formats.js';
-export { resample } from './audio/resample.js';
+export { createStreamResampler, resample } from './audio/resample.js';
 
 // Anatomy (issue 5): teeth, tongue, hard and soft palate, piriform fossae.
 export {

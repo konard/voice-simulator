@@ -29,6 +29,7 @@ import {
   glottalArea,
   sourceStrength,
 } from './aerodynamics.js';
+import { VocalFolds, restArea } from './folds.js';
 import { SPEED_OF_SOUND } from './transfer.js';
 import { Waveguide } from './waveguide.js';
 import { Fdtd3d } from './fdtd3d.js';
@@ -70,6 +71,39 @@ const STROUHAL_RANGE = [500, 6000];
  * burst 3.5 dB below it (experiments/issue-11-turbulence.mjs).
  */
 export const TRANSIENT_GAIN = 5e-6;
+
+/** Voice source used when none is asked for: the LF pulse model. */
+export const DEFAULT_SOURCE = 'lf';
+
+/** Voice sources by name: LF pulses or the two-mass vocal folds. */
+const SOURCES = new Map([
+  [
+    'lf',
+    (head, seed) =>
+      new Glottis({
+        seed,
+        tenseness: head.tenseness,
+        breathiness: head.breathiness,
+        jitter: head.jitter,
+        shimmer: head.shimmer,
+        aspirationLevel: head.aspirationLevel,
+        chink: head.glottalChink,
+        lungPressure: head.lungPressure,
+      }),
+  ],
+  [
+    'folds',
+    (head) =>
+      new VocalFolds({
+        breathiness: head.breathiness,
+        aspirationLevel: head.aspirationLevel,
+        foldLength: head.foldLength,
+        foldMass: head.foldMass,
+        foldStiffness: head.foldStiffness,
+        foldDamping: head.foldDamping,
+      }),
+  ],
+]);
 
 /** Solver factories by name: 1D waveguide and 3D FDTD. */
 /**
@@ -228,14 +262,16 @@ export class VoiceRenderer {
    * and `enclosure` ({width, height, depth, absorption, center} in cm, a
    * box around the head) choose where and in what space the voice is
    * heard. The output grows by the reverberation tail.
-   * @param {{sampleRate?: number, sections?: number, solver?: string, seed?: string|number, blockSize?: number, bandLimit?: number, head?: object, dx?: number, model?: object, output?: string, kernel?: string, device?: object, microphone?: object, room?: string|object, enclosure?: object, teeth?: boolean, piriform?: boolean, vallecula?: boolean}} [options]
+   * @param {{sampleRate?: number, sections?: number, solver?: string, source?: 'lf' | 'folds', seed?: string|number, blockSize?: number, bandLimit?: number, head?: object, dx?: number, model?: object, output?: string, kernel?: string, device?: object, microphone?: object, room?: string|object, enclosure?: object, teeth?: boolean, piriform?: boolean, vallecula?: boolean}} [options]
    *   `teeth: false` leaves out the incisors, `piriform: false` the
    *   piriform fossae (both solvers) and `vallecula: false` the vallecula
-   *   (3D only). `blockSize` is the control interval in output samples
-   *   (default 32) and `bandLimit` (Hz) switches the output low-pass to
-   *   eighth order at min(bandLimit, 0.45 sampleRate), at the solver rate
-   *   and again at the output rate. A WebGPU `device` runs the 3D solver on the GPU; such a
-   *   renderer renders with renderAsync.
+   *   (3D only). `source` is the voice source: 'lf' (default, LF pulses
+   *   at the planned pitch) or 'folds' (two-mass vocal folds driven by the
+   *   lung pressure, see folds.js). `blockSize` is the control interval in
+   *   output samples (default 32) and `bandLimit` (Hz) switches the output
+   *   low-pass to eighth order at min(bandLimit, 0.45 sampleRate), at the
+   *   solver rate and again at the output rate. A WebGPU `device` runs the
+   *   3D solver on the GPU; such a renderer renders with renderAsync.
    */
   constructor(plan, options = {}) {
     this.plan = plan;
@@ -248,6 +284,11 @@ export class VoiceRenderer {
     const factory = SOLVERS.get(options.solver ?? 'waveguide');
     if (!factory) {
       throw new Error(`Unknown solver: ${options.solver}`);
+    }
+    this.source = options.source ?? DEFAULT_SOURCE;
+    const source = SOURCES.get(this.source);
+    if (!source) {
+      throw new Error(`Unknown source: ${options.source}`);
     }
     this.solver = factory({
       sections: this.sections,
@@ -266,16 +307,7 @@ export class VoiceRenderer {
     });
     this.solver.setNose?.(noseShape(this.head).areas);
     this.vowelCorrections = VOWEL_TABLES.get(options.solver ?? 'waveguide');
-    this.glottis = new Glottis({
-      seed,
-      tenseness: this.head.tenseness,
-      breathiness: this.head.breathiness,
-      jitter: this.head.jitter,
-      shimmer: this.head.shimmer,
-      aspirationLevel: this.head.aspirationLevel,
-      chink: this.head.glottalChink,
-      lungPressure: this.head.lungPressure,
-    });
+    this.glottis = source(this.head, seed);
     this.noise = new NoiseSources(seed);
     this.aerodynamics = new Aerodynamics();
     /** Last aerodynamic state (see aerodynamics.js) and source strengths. */
@@ -346,11 +378,10 @@ export class VoiceRenderer {
   #updateAirflow(rate) {
     const { frication, glottis } = this.shape;
     const blockDuration = this.blockSize / this.sampleRate;
-    const opening = glottalArea(
-      glottis,
-      this.head.breathiness,
-      this.head.glottalChink
-    );
+    const opening =
+      this.source === 'folds'
+        ? this.#foldArea(glottis)
+        : glottalArea(glottis, this.head.breathiness, this.head.glottalChink);
     const constriction = frication.area + this.shape.velumArea;
     const air = this.aerodynamics.step(
       blockDuration,
@@ -376,6 +407,18 @@ export class VoiceRenderer {
     const target = air.flowDerivative * TRANSIENT_GAIN;
     const steps = Math.max(1, blockDuration * rate);
     this.transientStep = (target - this.transient) / steps;
+  }
+
+  /**
+   * Glottal area (cm²) of the fold source: the mean area of the folds, or
+   * before their first step their rest area.
+   */
+  #foldArea(control) {
+    if (this.glottis.started) {
+      return this.glottis.meanArea;
+    }
+    const closure = Math.min(1, Math.max(0, control.closure));
+    return Math.max(0, restArea(control.adduction)) * (1 - closure);
   }
 
   #fricationNoise(white) {

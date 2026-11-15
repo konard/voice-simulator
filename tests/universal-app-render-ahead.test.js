@@ -83,6 +83,9 @@ function fakePlayer() {
     push(start) {
       this.pushed.push(start);
     },
+    end() {
+      this.ended = true;
+    },
     stop() {},
     time: () => null,
     stalled: () => false,
@@ -139,8 +142,11 @@ describe('voice engine render ahead', () => {
     }
     expect(pushed).toEqual([0, 100, 200, 300, 400, 500, 600, 700, 800, 900]);
     expect(engine.status.rendering).toBe(null);
+    expect(engine.player.ended).toBe(undefined);
     worker.reply({ type: 'end', id: 3 });
     expect(pushed.length).toBe(10);
+    // The player is told that no more chunks come.
+    expect(engine.player.ended).toBe(true);
   });
 
   it('plays real-time chunks as soon as the load is measured', () => {

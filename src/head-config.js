@@ -288,7 +288,55 @@ export const HEAD_PARAMETERS = Object.freeze([
     step: 10,
     default: 800,
     description:
-      'Air pressure below the glottis in normal speech: drives the air flow and the strength of the noise at constrictions and at the glottis.',
+      'Subglottal pressure of normal loudness: drives the air flow, the noise at constrictions and at the glottis and, with the fold source, the vocal folds.',
+  },
+  {
+    key: 'foldLength',
+    label: 'Vocal fold length',
+    group: 'source',
+    unit: 'cm',
+    min: 0.6,
+    max: 1.8,
+    step: 0.01,
+    default: 1.4,
+    description:
+      'Length of the vibrating vocal folds: about 1.5 cm in men, 1 cm in women and 0.7 cm in children (fold source only).',
+  },
+  {
+    key: 'foldMass',
+    label: 'Vocal fold mass',
+    group: 'source',
+    unit: 'x',
+    min: 0.5,
+    max: 2,
+    step: 0.01,
+    default: 1,
+    description:
+      'Scales the vibrating mass of the folds: heavier folds vibrate slower (fold source only).',
+  },
+  {
+    key: 'foldStiffness',
+    label: 'Vocal fold stiffness',
+    group: 'source',
+    unit: 'x',
+    min: 0.5,
+    max: 2,
+    step: 0.01,
+    default: 1,
+    description:
+      'Scales the stiffness and coupling of the fold masses: stiffer folds vibrate faster (fold source only).',
+  },
+  {
+    key: 'foldDamping',
+    label: 'Vocal fold damping',
+    group: 'source',
+    unit: 'x',
+    min: 0.5,
+    max: 3,
+    step: 0.01,
+    default: 1,
+    description:
+      'Scales the damping of the folds: higher values need more pressure to start (fold source only).',
   },
   {
     key: 'declination',
@@ -555,6 +603,8 @@ export function randomHeadConfig(seed, options = {}) {
     breathiness: 0.2 + jitter(0.08),
     vibrato: 0.25 + jitter(0.1),
     speechRate: 1 + jitter(0.06),
+    // Drawn last so that the values above stay those of earlier versions.
+    foldLength: 0.7 + 0.8 * size + jitter(0.05),
   });
 }
 

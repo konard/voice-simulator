@@ -138,3 +138,13 @@ export function float64View(engine, pointer, count) {
 export function uint16View(engine, pointer, count) {
   return new Uint16Array(engine.memory.buffer, pointer, count);
 }
+
+/**
+ * A fresh `Float32Array` over `count` samples at byte offset `pointer`.
+ * @param {{memory: WebAssembly.Memory}} engine
+ * @param {number} pointer
+ * @param {number} count
+ */
+export function float32View(engine, pointer, count) {
+  return new Float32Array(engine.memory.buffer, pointer, count);
+}
