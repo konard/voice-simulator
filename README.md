@@ -559,9 +559,11 @@ its first sample on the audio clock, against 110.2-150.4 ms for buffer sources
 `src/engine/voice-simulator.wasm`. With it, `RustVoiceRenderer` and
 `renderPlanRust` render the waveguide tiers (`telephone` to `medium`) in
 WebAssembly with the same samples as `VoiceRenderer` and `renderPlan` (the
-largest difference measured is 1.7e-18); the
-plan and the tract shape of every control block are still computed in
-JavaScript. It is opt-in for now: `synthesize` keeps using JavaScript.
+largest difference measured is 1.7e-18), and since issue 23 also the 3D
+FDTD tiers (`high` to `reference`, `solver: 'fdtd3d'`; largest difference
+on `'Hello.'` at `high`: 0); the plan, the tract shape of every control
+block and the voxel model are still computed in JavaScript. It is opt-in
+for now: `synthesize` keeps using JavaScript.
 
 ```javascript
 import {
@@ -581,11 +583,21 @@ const samples = engine
   : renderPlan(plan, renderOptions);
 ```
 
-Options the engine does not handle (a `solver` other than `'waveguide'`, a
-WebGPU `device`, `source: 'folds'`) throw an Error with
+`npm run build:wasm` also builds `voice-simulator-simd.wasm` with
+WebAssembly SIMD; `loadEngineModule(undefined, { simd })` picks it with
+`simd: 'auto'` when it is shipped and the runtime compiles it, and falls
+back to the scalar file otherwise (`engine.simd` tells which one loaded).
+It is not shipped for now: it measured only 1.06 times faster than the
+scalar file on `high`, below the 1.15 required to ship it.
+
+Options the engine does not handle (`solver: 'fdtd2d'`, a WebGPU `device`,
+`source: 'folds'`) throw an Error with
 `code === 'ENGINE_UNSUPPORTED'`. On the pangram of the heavy suite
 `performance` the Rust renderer is 1.5 to 2.0 times faster than JavaScript
-([docs/reports/performance-rust-waveguide.md](docs/reports/performance-rust-waveguide.md)).
+on the waveguide tiers
+([docs/reports/performance-rust-waveguide.md](docs/reports/performance-rust-waveguide.md))
+and 1.11 to 1.43 times faster on `high`, `ultra` and `studio`
+([docs/reports/performance-rust-fdtd.md](docs/reports/performance-rust-fdtd.md)).
 `node scripts/write-render-job.mjs <text> <tier> <out>` writes a render job
 and `voice-simulator-cli render-job <out>` (`cargo build --release -p
 voice-simulator-cli`) renders it natively and prints the SHA-256 of the

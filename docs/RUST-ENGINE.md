@@ -16,7 +16,10 @@ issue 35): mouth pressure, flow, turbulence source strength and the peak
 frequency of the frication noise, and the whole waveguide voice renderer
 of `src/acoustics/voice.js` with its glottis, noise sources, radiation,
 output stage, microphone and room (issue 22, see
-[Waveguide renderer](#waveguide-renderer-issue-22)). The random generator
+[Waveguide renderer](#waveguide-renderer-issue-22)), and the 3D
+finite-difference time-domain solver of `src/acoustics/fdtd3d.js` with a
+WebAssembly SIMD build (issue 23, see
+[3D FDTD solver](#3d-fdtd-solver-issue-23)). The random generator
 proved that every link of the chain works: workspace, build, loader, CI job
 and parity tests.
 
@@ -36,6 +39,9 @@ and parity tests.
 | `src/engine/layout.js`         | `RENDERER_CONFIG`, `FRAME` and `LISTENER`: the arrays JavaScript hands to the renderer     |
 | `src/engine/rust-renderer.js`  | `RustVoiceRenderer`, `renderPlanRust` and `renderJob` (issue 22)                           |
 | `tests/rust-waveguide.test.js` | The waveguide renderer and its parts against JavaScript (issue 22)                         |
+| `crates/.../src/fdtd/`         | The 3D FDTD solver: kernel, SIMD kernel, packed model, solver (issue 23)                   |
+| `src/engine/pack-model.js`     | `packVoxelModel`: the voxel model as one buffer for the Rust solver (issue 23)             |
+| `tests/rust-fdtd.test.js`      | The 3D solver against JavaScript, the SIMD build and the loader fallback (issue 23)        |
 
 The core crate may depend on `libm` only, and only `src/math.rs` may call
 it (`sin`, `cos`, `exp`, `ln`, `pow`, `tanh`, `sqrt`, `floor`, `ceil`;
@@ -106,7 +112,8 @@ The module imports nothing.
 
 - Every export starts with `vs_`. Arguments and results are `u32`, `i32` or
   `f64` only: no strings, no structs.
-- `vs_abi_version() -> u32` returns the interface version, now 1. Any
+- `vs_abi_version() -> u32` returns the interface version, now 2 (issue
+  23 changed `vs_renderer_new` and the frame layout). Any
   breaking change of an export (removed, renamed, a different signature or
   meaning) raises it, together with `ENGINE_ABI_VERSION` in the loader.
 - `vs_alloc(bytes: u32) -> u32` returns an offset aligned to 8, or 0 when
@@ -125,7 +132,7 @@ The module imports nothing.
 
 | Export                                                             | Result                                                                               |
 | ------------------------------------------------------------------ | ------------------------------------------------------------------------------------ |
-| `vs_abi_version() -> u32`                                          | 1                                                                                    |
+| `vs_abi_version() -> u32`                                          | 2                                                                                    |
 | `vs_alloc(bytes) -> u32`                                           | Offset of a block aligned to 8, or 0                                                 |
 | `vs_free(ptr, bytes)`                                              | Frees a block of `vs_alloc`                                                          |
 | `vs_hash_seed_utf16(ptr, len) -> u32`                              | `hashSeed` of the `len` UTF-16 code units at `ptr`; traps on a bad range             |
@@ -146,7 +153,7 @@ The module imports nothing.
 | `vs_aero_strouhal_frequency(flow, area) -> f64`                    | `strouhalFrequency` of `voice.js`                                                    |
 | `vs_aero_steady_flow(lung, g, c, out) -> i32`                      | Writes `[oralPressure, flow]` of `steadyFlow` at `out`; 0 or error                   |
 | `vs_aero_run(dt, compliance, steps, count) -> i32`                 | Steps a new `Aerodynamics` in place (below); 0 or error                              |
-| `vs_renderer_new(config, length) -> i32`                           | Handle of a renderer for the `length` `f64` values of `RENDERER_CONFIG` at `config`  |
+| `vs_renderer_new(config, length, model, modelLength) -> i32`       | Handle of a renderer for `RENDERER_CONFIG` at `config` and a packed model (or 0, 0)  |
 | `vs_renderer_render(h, frames, n, out, samples) -> i32`            | Renders `samples` `f32` samples into `out` with the `n` frames at `frames`; how many |
 | `vs_renderer_position(handle) -> i32`                              | Samples rendered so far                                                              |
 | `vs_renderer_field(handle, out, capacity) -> i32`                  | Writes the pressure of the oral, then the nasal sections; how many                   |
@@ -156,6 +163,9 @@ The module imports nothing.
 | `vs_radiation_run(area, rate, baffle, data, count) -> i32`         | A `Radiation` over the incident waves at `data` in place; 0 or error                 |
 | `vs_waveguide_run(params, n, data, count) -> i32`                  | A `Waveguide` stepped by the glottal input at `data` in place; 0 or error            |
 | `vs_stages_run(seed, sr, gain, band, rate, f, data, count) -> i32` | `NoiseSources` plus `OutputStage` over `data` in place; 0 or error                   |
+
+The exports of the 3D solver (`vs_simd`, `vs_fdtd_*`) are listed in
+[Solver exports](#solver-exports).
 
 `vs_aero_run` steps a new `Aerodynamics` of `src/acoustics/aerodynamics.js`
 `count` times by `dt` seconds over the `5 * count` `f64` values at `steps`:
@@ -180,14 +190,23 @@ A length of 0 is always accepted, whatever the offset.
 
 ### Loader
 
-`loadEngineModule(source)` of `src/engine/wasm-loader.js` takes a
+`loadEngineModule(source, {simd})` of `src/engine/wasm-loader.js` takes a
 `WebAssembly.Module`, a `BufferSource`, a URL (or a string resolved against
-the loader), or nothing, which means
-`new URL('./voice-simulator.wasm', import.meta.url)`. A `file:` URL is read
-with `node:fs/promises` (imported only then), any other with `fetch`. It
-resolves to `{ exports, memory, abiVersion }`, or to `null` when
-`WebAssembly` is missing, the file cannot be read or compiling fails. It
-throws only when `vs_abi_version()` differs from `ENGINE_ABI_VERSION`.
+the loader), or nothing, which means the files next to the loader. A
+`file:` URL is read with `node:fs/promises` (imported only then), any other
+with `fetch`. It resolves to `{ exports, memory, abiVersion, simd }`, or to
+`null` when `WebAssembly` is missing, the file cannot be read or compiling
+fails. It throws only when `vs_abi_version()` differs from
+`ENGINE_ABI_VERSION`. `simd` tells whether the file is the SIMD build
+(`vs_simd()`).
+
+Without a source, `simd: 'auto'` (the default) tries
+`voice-simulator-simd.wasm` first and loads `voice-simulator.wasm` when
+that file is missing or `WebAssembly.compile` rejects it; `false` loads only
+the scalar file; `true` only the SIMD file, and gives `null` when it cannot
+be used. With a source, `true` (`false`) gives `null` when the source is
+not (is) a SIMD build. There is no run-time detection inside WebAssembly,
+hence two files.
 There is no top-level `await` and no top-level import of a `node:` module.
 
 ## Waveguide renderer (issue 22)
@@ -363,6 +382,274 @@ The Rust renderer is 1.5 to 2.0 times faster than JavaScript (`minimal`
 preparation that stays in JavaScript (`sampleState`, `tractShape`), so
 that part, left to issue 82, now bounds the speed-up.
 
+## 3D FDTD solver (issue 23)
+
+`RustVoiceRenderer` and `renderPlanRust` also take `solver: 'fdtd3d'`, the
+3D finite-difference time-domain solver of `src/acoustics/fdtd3d.js` that
+the tiers `high`, `ultra`, `studio` and `reference` use:
+
+```js
+const engine = await loadEngineModule();
+const { plan, renderOptions } = prepareUtterance('Hello.', {
+  tier: 'high',
+  seed: 1,
+});
+const samples = renderPlanRust(engine, plan, renderOptions);
+```
+
+JavaScript still builds the voxel model (`options.model`, or
+`buildVoxelModel(head, {dx, microphone, enclosure, piriform, vallecula})`
+as the `Fdtd3d` constructor does), packs it once with `packVoxelModel` of
+`src/engine/pack-model.js` and hands it to `vs_renderer_new`, together with
+what the constructor derives from the listening options (`fdtdListening`:
+the output, the spherical boundary and the point the receiver cell is the
+nearest free-air cell to). A WebGPU `device` still throws
+`ENGINE_UNSUPPORTED`; the GPU path (`queueStep`, `flushSteps`) is not
+ported.
+
+| File                       | What it is                                                                             |
+| -------------------------- | -------------------------------------------------------------------------------------- |
+| `fdtd/kernel.rs`           | `Grid`: `step` (what the solver runs), `step_scatter` (`#stepJs`) and `step_gather`    |
+| `fdtd/kernel_simd.rs`      | `step` and `step_gather` with `f64x2` vectors of `core::arch::wasm32`, `simd128` only  |
+| `fdtd/model.rs`            | The packed voxel model: `Model::unpack`, `Model::pack`, the same layout table as JS    |
+| `fdtd/solver.rs`           | `Fdtd3d`, method by method in snake case, implementing the `Solver` trait of issue 22  |
+| `src/engine/pack-model.js` | `packVoxelModel(model)`, `modelHeader(buffer)` and `fdtdListening(model, options)`     |
+| `tests/rust-fdtd.test.js`  | The kernel, the SIMD build, the model, the solver and whole renders against JavaScript |
+
+### Kernel
+
+`Grid` holds `link_a`, `link_b` (`u32` cell indices, not the byte offsets of
+`fdtd-kernel.js`), `velocity`, `damping`, `conductance`, `flux` (per link),
+`pressure`, `divergence`, `keep`, `gain` (per cell, `f64`) and the incident
+lists `incident_start`, `incident_link`, `incident_sign`. `step_scatter` is
+the loop of `#stepJs` operation by operation. `step_gather` first computes
+`velocity` and `flux` of every link, then for every cell starts with
+`d = 0.0`, adds `sign * flux[l]` for its links in increasing link order and
+sets `pressure = keep * pressure - gain * d`. Every cell sees the same
+additions in the same order as in the scatter form (a sign of ±1 multiplies
+exactly, and `d + -f` equals `d - f`), so the two give the same bits; the
+Rust test `gather_equals_scatter` checks it on a random grid of
+`Random::new(1)` with 500 cells and 1400 links over 200 steps, every array
+bit for bit.
+
+The solver steps with `Grid::step`: the scatter loop without the store to
+`flux`, which nothing in the solver reads (the hand-written kernel of
+`fdtd-kernel.js` keeps no flux either). The test `step_equals_scatter`
+checks on the grids of `Random::new(1)` (500 cells, 1400 links) and
+`Random::new(4)` (499 cells, 1399 links: odd counts for the SIMD tails)
+that `step` leaves `flux` at zero and every other array bit for bit equal
+to `step_scatter` over 200 steps. The plan of the issue had the solver step
+with `step_gather`; measured on `high`, the gather reads every flux twice
+and the incident lists once more, and was the slowest of the three forms
+(see "Speed" below), so the solver takes the scatter form, which gives the
+same bits.
+
+The incident lists are padded: when no cell has more than `MAX_WIDTH` (8)
+links, every list is filled up to the longest one with the extra link
+index `links`, whose `flux` is always `+0.0`. A sum that starts at `+0.0`
+is never `-0.0` and `x + 0.0` is `x`, so the padding changes no bit, and
+the cell loop gets lists of one fixed length that the compiler unrolls.
+A voxel cell has at most 6 neighbours (measured on `high`, `ultra` and
+`studio` with `experiments/issue-23-cell-degrees.mjs`); a grid with a
+longer list keeps the unpadded lists (`padded_gather_equals_scatter` and
+`long_lists_are_not_padded` test both).
+
+The SIMD forms compute two links and two cells per `f64x2` with
+`f64x2_sub` and `f64x2_mul` only: no relaxed SIMD, no fused multiply-add,
+so every lane rounds as the scalar code does. In `step` the two fluxes of a
+vector go into `divergence` one link after the other, as the scalar loop
+adds them; in `step_gather` the sum over the incident links of a cell
+stays scalar and ordered. A scalar tail takes an odd count. The intrinsics
+used are safe functions, so the crate keeps `#![forbid(unsafe_code)]`.
+
+`vs_fdtd_kernel_new(links, cells)` gives a kernel for the parity tests and
+for issue 24; `vs_fdtd_kernel_array(handle, which)` the offset of one of
+its arrays (0 `link_a`, 1 `link_b`, 2 `velocity`, 3 `damping`, 4
+`conductance`, 5 `flux`, 6 `pressure`, 7 `divergence`, 8 `keep`, 9 `gain`;
+asking for 0 or 1 makes the next step build the incident lists again);
+`vs_fdtd_kernel_steps(handle, count, form)` runs `count` steps in form 0
+(`step_scatter`), 1 (`step_gather`) or 2 (`step`); another form gives
+`BAD_ARGUMENT`. `vs_fdtd_kernel_free(handle)` frees it.
+
+### Solver speed-ups that change no bit
+
+- `bin_scale` searches precomputed thresholds (`bin_filled`, one per bin
+  of the opening table, built in `Fdtd3d::new` from the same additions as
+  the JavaScript comparison) instead of adding them up at every search.
+- `update_links` keeps, per link, the last base of the wall damping and
+  its `pow`; a link whose area and loss did not change between two shapes
+  reuses the power instead of calling `math::pow` again (equal bits in,
+  equal bits out).
+- `math::sqrt`, `floor` and `ceil` use the `f64.sqrt`, `f64.floor` and
+  `f64.ceil` instructions of WebAssembly. Stable Rust 1.100 reaches those
+  only through the `f64` methods of `std` (`core::arch::wasm32::f64_sqrt`
+  is unstable), so the core crate has a feature `std` that only links
+  `std` for these three methods; the wasm crate turns it on, the core
+  stays `no_std` without it and the CLI and the host tests use `libm`. Both
+  are correctly rounded (IEEE 754 requires it of `sqrt`, and `floor` and
+  `ceil` are exact), so the bits are the same; the render job check below
+  compares the CLI and the WebAssembly render.
+
+### Model
+
+`packVoxelModel(model)` writes every property of the model that
+`fdtd3d.js` reads (`grep -o "model\.[a-zA-Z]*" src/acoustics/fdtd3d.js |
+sort -u`: `dx`, `opening`, `cells`, `links`, `openFaces`,
+`boundaryAdmittance`, `enclosure`, `lengths`, `sinuses`, `landmarks`,
+`teeth`, plus `openMasks`) into one `ArrayBuffer`: a header of 12 `u32`
+words (magic `VSMD`, version 1, byte length, counts and flags), then one
+section per property, each starting at a multiple of 8 bytes. The layout
+table is at the top of `pack-model.js` and of `fdtd/model.rs`.
+`Model::pack` writes the same bytes back, which `vs_fdtd_model_repack`
+exposes for the test `packs and unpacks a model`. Only the tract cells have
+rows of the opening table (the JavaScript table is zero elsewhere), so the
+model of a 40 cm room stays small.
+
+### Configuration and frames
+
+`RENDERER_CONFIG` gains `SOLVER` (31: 0 the waveguide, 1 the 3D solver,
+`SOLVER_CODES` of `layout.js`), `FDTD_OUTPUT` (32: 0 the flow out of the
+lips and nostrils, 1 the pressure at the receiver cell), `FDTD_SPHERICAL`
+(33) and `MICROPHONE_X`, `_Y`, `_Z` (34 to 36); `HEADER` is 37.
+`vs_renderer_new(config, length, model, modelLength)` takes the packed
+model (0 and 0 for the waveguide).
+
+A frame gains the incisors: field 15 `TEETH` is 1 when the shape has
+`shape.teeth`, field 16 `EXTRA` is the number of values after the areas
+(`FRAME_EXTRA_VALUES`, 1), and after the areas comes `shape.teeth.gap`
+(cm), the only number of `shape.teeth` that `#applyTeeth` and
+`#teethSlot` read. `STRIDE` is 17 and a frame has `17 + sections + 1`
+values.
+
+A render job (`renderJob`, `scripts/write-render-job.mjs`) is
+`[config length, config..., model length in bytes, model..., frame count,
+frames..., sample count]`; the model length is 0 for the waveguide.
+
+### Solver exports
+
+| Export                                                    | Result                                                                                      |
+| --------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
+| `vs_simd() -> u32`                                        | 1 in the SIMD build, 0 in the scalar one                                                    |
+| `vs_fdtd_kernel_new(links, cells) -> i32`                 | Handle of a `Grid`, or `BAD_ARGUMENT` above 2^28 links or cells                             |
+| `vs_fdtd_kernel_array(handle, which) -> u32`              | Offset of array `which` (above), 0 for a bad handle or number                               |
+| `vs_fdtd_kernel_steps(handle, count, form) -> i32`        | `count` steps of form 0, 1 or 2; 0, `BAD_HANDLE`, or `BAD_ARGUMENT` (form, or missing cell) |
+| `vs_fdtd_kernel_free(handle) -> i32`                      | Frees the kernel; 0 or `BAD_HANDLE`                                                         |
+| `vs_fdtd_solver_new(options, model, modelLength) -> i32`  | Handle of an `Fdtd3d` for 9 option values and a packed model                                |
+| `vs_fdtd_solver_set_nose(handle, areas, count) -> i32`    | `setNose(areas)`                                                                            |
+| `vs_fdtd_solver_set_shape(handle, frame, length) -> i32`  | `setShape` from one frame                                                                   |
+| `vs_fdtd_solver_step_duration(handle) -> f64`             | `stepDuration` for the last shape (s), NaN for a bad handle                                 |
+| `vs_fdtd_solver_steps(handle, inputs, count, out) -> i32` | `count` steps with `[flow, noisePosition, noise, transient]` each; the outputs to `out`     |
+| `vs_fdtd_solver_field(handle, out, capacity) -> i32`      | The pressure of every cell; how many                                                        |
+| `vs_fdtd_solver_free(handle) -> i32`                      | Frees the solver; 0 or `BAD_HANDLE`                                                         |
+| `vs_fdtd_model_repack(model, length, out, cap) -> i32`    | Unpacks a packed model and packs it again into `out`; its length, or `BAD_ARGUMENT`         |
+
+The options of `vs_fdtd_solver_new` are the output (0 flow, 1 microphone),
+the spherical boundary (0 or 1), the receiver target x, y and z (cm),
+`wallLoss`, `nasalLoss`, `glottalChink` (mm²) and `vocalTractLength` (cm).
+
+### Deviations from the plan of issue 23
+
+- The frame fields of the incisors are 15 and 16, not 14 and 15: field 14
+  carries the lung pressure since issue 22 (see above).
+- The kernel tests copy the coefficients after `setNose` and `setShape` of
+  `a`. The coefficients that the `Fdtd3d` constructor leaves belong to no
+  shape (a conductance of 1 next to sinus cells of fill 1/12 makes the
+  field grow to Infinity within 2000 steps, so nothing would be compared),
+  and every render calls `setShape` before its first step.
+- The render in a 40 cm enclosure compares the first 2400 samples (50 ms):
+  the room has about 60 000 cells and the whole render takes minutes, and
+  its first samples run every part of the room solver and the listener.
+- The incident lists are padded (above). Reordering cells or links stays
+  out of scope; padding changes no order of additions.
+- The solver steps with `Grid::step` (scatter without `flux`), not
+  `step_gather` (above); the three forms give the same bits.
+- The core crate gained the feature `std` for three correctly rounded
+  instructions (above); without it the crate is `no_std` as before.
+
+### Parity, render jobs and speed
+
+`REQUIRE_WASM=1 node --test tests/rust-fdtd.test.js` (Node.js 26, x86_64
+Linux) measured:
+
+| Test                                        | Limit             | Measured          |
+| ------------------------------------------- | ----------------- | ----------------- |
+| kernel against JavaScript, forms 0, 1, 2    | equal under `===` | equal, 2000 steps |
+| SIMD against scalar                         | equal under `===` | equal, 2000 steps |
+| packs and unpacks a model                   | equal             | equal             |
+| solver, `aː`, relative RMS difference       | 1e-9              | 4.5e-16           |
+| render `'Hello.'`, `high`                   | max diff 1e-4     | 0                 |
+| the same with `teeth: false`                | max diff 1e-4     | 1.1e-19           |
+| the same in a 40 cm enclosure, 2400 samples | max diff 1e-4     | 0                 |
+| loader falls back to scalar                 | `simd === false`  | `simd === false`  |
+
+A render job of the 3D solver renders natively with the same bits:
+
+```sh
+npm run build:wasm
+cargo build --release -p voice-simulator-cli
+node scripts/write-render-job.mjs "Hello world." high /tmp/job-high.bin
+target/release/voice-simulator-cli render-job /tmp/job-high.bin
+```
+
+printed (x86_64 Linux, Node.js 26):
+
+| Renderer                         | SHA-256 of the samples (65 854)                                    | Seconds |
+| -------------------------------- | ------------------------------------------------------------------ | ------- |
+| scalar WebAssembly (the script)  | `7cc54f80e33924edc977b387efb83e0cf82b0fbc01d1af7fe293a9a17772ac1b` | 1.26    |
+| `voice-simulator-cli render-job` | `7cc54f80e33924edc977b387efb83e0cf82b0fbc01d1af7fe293a9a17772ac1b` | 0.89    |
+
+The CLI takes `sqrt`, `floor` and `ceil` from `libm`, the WebAssembly
+build from the instructions (above), and the hashes are equal.
+`tests/rust-render-job.test.js` checks the tiers `minimal` to `high` the
+same way when the CLI is built.
+
+#### Speed
+
+```sh
+npm run build:wasm
+HEAVY=1 REQUIRE_WASM=1 node --test --test-timeout=3600000 tests/heavy/performance-rust-fdtd.test.js
+```
+
+renders the pangram of the heavy suite `performance` three times per
+renderer, interleaved, and writes
+[reports/performance-rust-fdtd.md](reports/performance-rust-fdtd.md) (and
+`.json`). Measured on a shared x86_64 Linux machine (6 cores, load average
+about 5), Node.js 26.13, Rust 1.100.0:
+
+| Tier   | dx (cm) | JavaScript RTF | Rust scalar RTF | Rust SIMD RTF | Speed-up | SIMD ratio | Max abs diff |
+| ------ | ------- | -------------- | --------------- | ------------- | -------- | ---------- | ------------ |
+| high   | 1       | 1.3699         | 0.9582          | 0.9036        | 1.43×    | 1.060×     | 0, 0         |
+| ultra  | 0.6     | 6.9878         | 6.2683          | 5.7286        | 1.11×    | 1.094×     | 0, 0         |
+| studio | 0.5     | 12.5854        | 11.2744         | 10.4155       | 1.12×    | 1.082×     | 0, 0         |
+
+JavaScript is `VoiceRenderer` with its hand-written WebAssembly kernel
+(`kernel: 'wasm'`, the default). The Rust scalar renderer is faster on
+every tier, and the SIMD build is 1.060 times faster than the scalar one on
+`high`: below the 1.15 the issue asks for, so `SHIP_SIMD` in
+`scripts/build-wasm.mjs` stays `false`. `npm run build:wasm` still builds
+and size-checks the SIMD file (192 648 bytes) and the parity tests still
+run it, but it is not copied to `src/engine/`, and `simd: 'auto'` loads the
+scalar file.
+
+How the scalar build got below JavaScript, measured with `TIER=high
+RUNS=5 node experiments/issue-23-render-speed.mjs <builds>` on the same
+pangram (the Rust RTF over the JavaScript RTF of the same run, the least
+RTF of 4 or 5 runs each):
+
+| Build                                                           | Rust / JavaScript |
+| --------------------------------------------------------------- | ----------------- |
+| solver with `step_gather`, `libm` square root                   | 1.16              |
+| plus the `bin_scale` thresholds and the cached damping powers   | 1.11              |
+| plus `Grid::step_scatter` instead of `step_gather`              | 0.96 to 1.01      |
+| plus the `f64.sqrt`, `f64.floor` and `f64.ceil` instructions    | 0.94              |
+| plus `Grid::step` (no store to `flux`), the shipped scalar file | 0.90 to 0.94      |
+| the same, SIMD build                                            | 0.86              |
+
+`experiments/issue-23-kernel-speed.mjs` (`FORM=0`, `1`, `2`) times the
+kernel forms alone and `experiments/issue-23-micro-kernel.mjs` a bare Rust
+loop against the hand-written kernel, which separates the code generation
+of the compiler from the solver around it.
+
 ## Determinism rules
 
 The same input, seed and options give the same samples on every runtime.
@@ -407,6 +694,10 @@ Each ported function has a class, stated by the issue that ports it.
 | `stages.rs` (22)       | B     |
 | `renderer.rs` (22)     | B     |
 | `listener.rs` (22)     | B     |
+| `fdtd/kernel.rs` (23)  | A     |
+| `fdtd/kernel_simd.rs`  | A     |
+| `fdtd/model.rs` (23)   | A     |
+| `fdtd/solver.rs` (23)  | B     |
 
 The lag of the mouth pressure in `Aerodynamics::step` uses `lag_factor`
 (`lagFactor` in JavaScript), a rational form of 1 - exp(-x), instead of
@@ -422,11 +713,11 @@ cargo fmt --all --check
 cargo clippy --workspace --all-targets --locked -- -D warnings
 cargo test --workspace --locked
 npm run build:wasm
-REQUIRE_WASM=1 node --test tests/rust-parity.test.js tests/rust-waveguide.test.js tests/engine-layout.test.js
+REQUIRE_WASM=1 node --test tests/rust-parity.test.js tests/rust-waveguide.test.js tests/rust-fdtd.test.js tests/engine-layout.test.js
 cargo build --release -p voice-simulator-cli
 REQUIRE_WASM=1 REQUIRE_CLI=1 node --test tests/rust-render-job.test.js
-bun test tests/rust-parity.test.js
-deno test -A tests/rust-parity.test.js
+bun test tests/rust-parity.test.js tests/rust-fdtd.test.js
+deno test -A tests/rust-parity.test.js tests/rust-fdtd.test.js
 ```
 
 Without the file, `tests/rust-parity.test.js` reports its tests as skipped
@@ -455,7 +746,8 @@ The job `rust` of `release.yml` runs the commands above (with
 as the artifact `voice-simulator-wasm`; it also builds the native CLI and
 runs the parity tests with `REQUIRE_WASM=1` and `REQUIRE_CLI=1`. The heavy
 workflow builds the file for the suites `performance` and `all`, which run
-`tests/heavy/performance-rust-waveguide.test.js` with `REQUIRE_WASM=1`. `release` and `instant-release`
+`tests/heavy/performance-rust-waveguide.test.js` and
+`tests/heavy/performance-rust-fdtd.test.js` with `REQUIRE_WASM=1`. `release` and `instant-release`
 need it and download the artifact into `src/engine/` before they publish.
 In `example-app.yml` the job `wasm-build` does the same build and upload,
 and `web-build`, `desktop-package`, `android-build` and `ios-build`

@@ -32,10 +32,11 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
  * Largest allowed size of each shipped engine file in bytes: the size
  * measured when the budget was last raised, rounded up to the next 16 384
  * bytes. Raised for issue 23 (the 3D FDTD solver and its kernels) from
- * 98 304 to SIZE_BUDGET_PLACEHOLDER. Raise it only with the newly measured
- * size in the commit message.
+ * 98 304 to 196 608 (scalar file 184 968 bytes, SIMD file 192 648 bytes,
+ * Rust 1.100.0). Raise it only with the newly measured size in the commit
+ * message.
  */
-export const WASM_SIZE_BUDGET = 98304;
+export const WASM_SIZE_BUDGET = 196608;
 
 /**
  * Whether src/engine/voice-simulator-simd.wasm is shipped: only when it
