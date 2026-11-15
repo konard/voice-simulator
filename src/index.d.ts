@@ -4,7 +4,7 @@
 
 export type LanguageCode = 'en' | 'ru' | 'hi' | 'zh';
 export type HeadConfig = Record<string, number>;
-export type SolverName = 'waveguide' | 'fdtd3d';
+export type SolverName = 'waveguide' | 'fdtd2d' | 'fdtd3d';
 export type OutputMode = 'flow' | 'microphone';
 
 export interface Language {
@@ -413,6 +413,71 @@ export declare class Waveguide implements Solver {
   step(glottalFlow: number, noisePosition: number, noise: number): number;
   /** Pressure per tract and nose section, for visualisation. */
   field(): { pressure: Float64Array; nose: Float64Array };
+  reset(): void;
+}
+/** Cell size of the 2D sheet (cm). */
+export declare const SHEET_DX: number;
+/** Courant number of the 2D solver. */
+export declare const COURANT_2D: number;
+/** Midsagittal sheet of the tract: cell depths and column areas. */
+export interface Sheet {
+  dx: number;
+  columns: number;
+  rows: number;
+  /** Rest tract length of the grid (cm). */
+  length: number;
+  /** Depth per cell (cm), index column * rows + row; 0 is a wall. */
+  h: Float64Array;
+  /** Cross-sectional area per column (cm²). */
+  areas: Float64Array;
+  lipArea: number;
+  velumColumn: number;
+}
+/** Build the 2D sheet of a head (cell size dx, default SHEET_DX). */
+export declare function buildSheet(
+  head?: HeadConfig,
+  options?: { dx?: number }
+): Sheet;
+/**
+ * 2D FDTD solver on the midsagittal sheet of the tract, with a depth per
+ * cell; the nose, the piriform fossae and the vallecula are 1D lines.
+ */
+export declare class Fdtd2d implements Solver {
+  constructor(options?: {
+    head?: HeadConfig;
+    /** Cell size (cm), default SHEET_DX. */
+    dx?: number;
+    sheet?: Sheet;
+    /** `false` leaves out the piriform fossae. */
+    piriform?: boolean;
+    /** `false` leaves out the vallecula. */
+    vallecula?: boolean;
+  });
+  readonly columns: number;
+  readonly rows: number;
+  readonly sheet: Sheet;
+  /**
+   * Seconds per step; with a shape the grid runs slower by its length over
+   * the rest length so the formants follow the tract length.
+   */
+  stepDuration(shape?: { length?: number }): number;
+  /** Tract length (cm) for the lip and nostril loads. */
+  setLength(length: number): void;
+  setShape(
+    areas: ArrayLike<number>,
+    velumArea: number,
+    velumIndex?: number,
+    teeth?: { gap: number } | null,
+    shape?: object
+  ): void;
+  /** Set the cell depths directly (cm, index column * rows + row). */
+  setDepths(depths: ArrayLike<number>): void;
+  setNose(areas: ArrayLike<number>): void;
+  step(glottalFlow: number, noisePosition: number, noise: number): number;
+  queueStep(glottalFlow: number, noisePosition: number, noise: number): void;
+  flushSteps(): Promise<Float64Array>;
+  /** Pressure per column, per nose section and per cell. */
+  field(): { pressure: Float64Array; nose: Float64Array; cells: Float64Array };
   reset(): void;
 }
 export declare class Fdtd3d implements Solver {

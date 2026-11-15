@@ -1,0 +1,6 @@
+node bin/voice-simulator.js say "Hello." --solver fdtd2d --out /tmp/e.wav
+node bin/voice-simulator.js say "Hello." --tier medium --out /tmp/m.wav
+node bin/voice-simulator.js match /tmp/e.wav --json; ... match /tmp/m.wav --json
+fdtd2d f0 122.66 Hz, formants 495 1020 2625 3875
+medium f0 122.82 Hz, formants 490 1020 2595 3905
+f0 difference -0.13 %

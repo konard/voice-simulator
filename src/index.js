@@ -51,6 +51,8 @@ export {
 } from './acoustics/voice.js';
 export { Waveguide } from './acoustics/waveguide.js';
 export { Fdtd3d } from './acoustics/fdtd3d.js';
+export { COURANT_2D, Fdtd2d } from './acoustics/fdtd2d.js';
+export { SHEET_DX, buildSheet } from './acoustics/sheet-model.js';
 export {
   FdtdGpu,
   describeGpuDevice,
