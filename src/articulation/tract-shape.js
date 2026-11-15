@@ -29,12 +29,12 @@ const TRILL_RATE = 26;
 const MAX_VELUM_AREA = 1.6;
 
 /**
- * Change of the mouth cross-sections per cm of incisor gap away from the
- * gap the vowel and consonant channels ask for (range 0.3 to 1.5 per cm).
- * 0.5 cm more gap raises F1 of [ɛ] by 11 %
- * (`node experiments/issue-40-articulators.mjs`).
+ * Change of the mouth and lip cross-sections per cm of incisor gap away
+ * from the gap the vowel and consonant channels ask for. Calibrated so
+ * that 0.5 cm more gap raises F1 of [ɛ] by 11 % in the waveguide (0.8 gives
+ * 9 %, `node experiments/issue-40-articulators.mjs`).
  */
-export const JAW_AREA = 0.8;
+export const JAW_AREA = 1;
 /** Length of the lip end of the tract that protrusion stretches (cm). */
 export const LIP_REGION = 1.5;
 /** Length of the glottis end of the tract that the larynx stretches (cm). */
@@ -183,6 +183,9 @@ function regionScale(x, head, openness, jawScale = 1) {
   if (x > 0.55 && x < 0.95) {
     scale /= head.tongueSize ** 2;
     scale *= 1 + (head.jawRange - 1) * openness * 0.9;
+  }
+  if (x > 0.55) {
+    // The lower lip rides on the jaw: the lip opening follows it too.
     scale *= jawScale;
   }
   if (x > 0.93) {
@@ -415,7 +418,7 @@ function applyTeeth(areas, state, head, length) {
  * incisor gap `jaw` (cm), `lipProtrusion` (cm), `larynxHeight` (cm, negative
  * lowered) and `tongueRoot` (-1 back to 1 forward). A missing `jaw` or
  * `lipProtrusion` is the one the other channels imply (`expectedJaw`,
- * LIP_PROTRUSION * rounding), as the planner writes it.
+ * rounding times LIP_PROTRUSION), as the planner writes it.
  * @param {Record<string, number>} state
  * @param {Record<string, number>} head
  */
@@ -423,7 +426,7 @@ export function articulatorState(state, head) {
   const full = { ...CHANNEL_DEFAULTS, ...state };
   const expectedJaw = teethGap({ ...full, jaw: undefined }, head);
   const rounding = Math.max(0, Math.min(1, full.rounding));
-  const expectedProtrusion = LIP_PROTRUSION * rounding;
+  const expectedProtrusion = rounding * LIP_PROTRUSION;
   return {
     jaw: Math.max(0, (state.jaw ?? expectedJaw) + (head.jawPosture ?? 0)),
     expectedJaw,

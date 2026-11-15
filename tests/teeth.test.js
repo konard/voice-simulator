@@ -26,11 +26,20 @@ function vowelState(symbol) {
   return { ...vowelTarget({ phoneme: getPhoneme(symbol) }), rhotic: 0 };
 }
 
-/** Articulator state in the middle of the first consonant of `text`. */
+/**
+ * Articulator state in the middle of the first consonant of `text`. The
+ * planned jaw lags the tongue (issue 40), so the jaw is left out: the gap is
+ * then the one the other channels ask for (teethGap()).
+ */
 function consonantState(text) {
   const plan = planUtterance(text);
   const segment = plan.segments.find((entry) => entry.kind === 'consonant');
-  return sampleState(plan, (segment.start + segment.end) / 2);
+  const { jaw, ...state } = sampleState(
+    plan,
+    (segment.start + segment.end) / 2
+  );
+  expect(jaw).toBeGreaterThan(0);
+  return state;
 }
 
 function highFrequencyLevel(text, options) {

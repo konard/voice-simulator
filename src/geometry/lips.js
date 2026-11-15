@@ -17,6 +17,7 @@ import { DEFAULT_HEAD, normalizeHeadConfig } from '../head-config.js';
 import { headLandmarks, upperNormal } from './centerline.js';
 import { mergeMeshes, loftMesh } from './loft.js';
 import { TRACT_TEMPLATE } from './tract-template.js';
+import { LIP_PROTRUSION } from '../articulation/vowel-space.js';
 
 /** Columns across the mouth and points around each lip section per LOD. */
 export const LIP_LODS = Object.freeze([
@@ -43,8 +44,7 @@ const UPPER_DEPTH = 0.55;
 const LOWER_DEPTH = 0.4;
 /** How far the corners lie behind the midline of the lips (cm). */
 const CORNER_SETBACK = 0.9;
-/** Forward push of fully rounded lips (cm) and their narrowing. */
-const PROTRUSION = 0.6;
+/** Narrowing of the mouth width by fully rounded lips. */
 const NARROWING = 0.4;
 /** Width-to-height ratio of a fully rounded opening. */
 const ROUND_ASPECT = 1.3;
@@ -138,8 +138,10 @@ function lipMesh(frame, lip, lod) {
 /**
  * Upper and lower lip as one mesh with a constant vertex count per LOD.
  * @param {Record<string, number>} head
- * @param {{area?: number, rounding?: number, lod?: number}} [options]
- *   `area` is the lip opening (cm², the last tract section).
+ * @param {{area?: number, rounding?: number, protrusion?: number, lod?: number}} [options]
+ *   `area` is the lip opening (cm², the last tract section); `protrusion`
+ *   the forward push of the lips (cm, the `lipProtrusion` channel, default
+ *   LIP_PROTRUSION times `rounding`).
  * @returns {{positions: Float32Array, indices: Uint32Array}}
  */
 export function lipsMesh(head = DEFAULT_HEAD, options = {}) {
@@ -156,7 +158,7 @@ export function lipsMesh(head = DEFAULT_HEAD, options = {}) {
   const common = {
     width,
     opening,
-    protrusion: PROTRUSION * rounding,
+    protrusion: options.protrusion ?? rounding * LIP_PROTRUSION,
     bulge: BULGE * thickness,
   };
   const upper = lipMesh(

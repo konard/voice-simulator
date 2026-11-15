@@ -62,6 +62,7 @@ export function headModel(head, options = {}) {
       ...lipsMesh(config, {
         area: shape.areas.at(-1),
         rounding: options.state?.rounding ?? 0,
+        protrusion: shape.articulators.lipProtrusion,
         lod,
       }),
     },
