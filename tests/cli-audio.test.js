@@ -50,6 +50,21 @@ describe('CLI audio formats', () => {
     })
   );
 
+  it('renders with the 2D solver', async () => {
+    const say = ['say', 'ˈmama', '--ipa', '--solver', 'fdtd2d', '-o', '-'];
+    const result = await cli(say);
+    expect(result.code).toBe(0);
+    const { samples } = decodeAudio(result.bytes);
+    expect(samples.length > 1000).toBe(true);
+    expect(samples.some((value) => value !== 0)).toBe(true);
+    // --dx sets the cell size of the sheet.
+    const coarse = await cli([...say, '--dx', '0.8']);
+    expect(coarse.code).toBe(0);
+    const other = decodeAudio(coarse.bytes).samples;
+    expect(other.length).toBe(samples.length);
+    expect(other.some((value, index) => value !== samples[index])).toBe(true);
+  });
+
   it('honours --format, --bit-depth and --float', async () => {
     const au = await cli([...SAY, '-o', '-', '--format', 'au', '-b', '24']);
     expect(au.code).toBe(0);
