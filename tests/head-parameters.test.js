@@ -111,7 +111,10 @@ describe('head parameters', () => {
   it('lowers the nasal murmur with higher nasal losses', () => {
     const level = (nasalLoss) => {
       const head = normalizeHeadConfig({ nasalLoss });
-      const plan = planUtterance('ˈama', { head });
+      // A stressed onset: the unstressed [m] of ˈama lasts 52 ms under the
+      // duration rules of issue 39 and is mostly transition
+      // (experiments/issue-39-nasal-spans.mjs).
+      const plan = planUtterance('aˈma', { head });
       const samples = renderPlan(plan, { sampleRate: RATE, seed: 3 });
       const nasal = plan.segments.find((item) => item.kind === 'consonant');
       return rms(
