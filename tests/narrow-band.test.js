@@ -15,9 +15,21 @@ import {
   synthesize,
 } from '../src/index.js';
 import { resample } from '../src/audio/resample.js';
+import { itUnless } from './helpers/skip.js';
 
 const REFERENCE = { solver: 'waveguide', sections: 44, sampleRate: 48000 };
 const NARROW = ['telephone', 'narrowband', 'wideband'];
+
+// The hash below was recorded with V8's Math functions. JavaScriptCore on
+// macOS takes Math.sin, Math.exp and friends from the system libm, whose
+// last bits differ, so Bun there renders a different (but unchanged) minimal
+// tier; Bun on Linux and Windows, Node.js and Deno match it.
+const appleLibm =
+  typeof process !== 'undefined' &&
+  process.versions?.bun &&
+  process.platform === 'darwin'
+    ? "JavaScriptCore uses the macOS libm, not V8's Math"
+    : null;
 const tier = (name) => AUDIO_TIERS[audioTierIndex(name)];
 
 // Copied from section 7 of experiments/issue-11-audit-m1.mjs.
@@ -139,7 +151,7 @@ describe('narrow-band tiers', () => {
     expect(Math.abs(length - 1) <= 0.06).toBe(true);
   });
 
-  it('present tiers are unchanged', () => {
+  itUnless(appleLibm)('present tiers are unchanged', () => {
     const { samples } = synthesize('Hi.', { tier: 'minimal', seed: 1 });
     const bytes = new Uint8Array(
       samples.buffer,
