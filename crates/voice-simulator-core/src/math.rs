@@ -35,6 +35,27 @@ pub fn round_half_up(x: f64) -> f64 {
     }
 }
 
+/// `Math.min(a, b)` of JavaScript for numbers that are not NaN; exact, so
+/// it is allowed in class A code.
+#[inline]
+pub fn min(a: f64, b: f64) -> f64 {
+    if a < b {
+        a
+    } else {
+        b
+    }
+}
+
+/// `Math.max(a, b)` of JavaScript for numbers that are not NaN; exact.
+#[inline]
+pub fn max(a: f64, b: f64) -> f64 {
+    if a > b {
+        a
+    } else {
+        b
+    }
+}
+
 /// Sine of `x` radians.
 #[inline]
 pub fn sin(x: f64) -> f64 {

@@ -21,6 +21,8 @@ use voice_simulator_core::aerodynamics::{self, Aerodynamics};
 use voice_simulator_core::random::{hash_seed_utf16, Random};
 use voice_simulator_core::resample::{output_length, resample, StreamResampler};
 
+pub mod components;
+
 /// Version of the interface; raise it on any breaking change of a `vs_`
 /// export (a removed or renamed function, a changed signature or meaning).
 pub const ABI_VERSION: u32 = 1;
@@ -99,7 +101,7 @@ thread_local! {
 }
 
 /// Whether `value` is a positive number (NaN is not).
-fn positive(value: f64) -> bool {
+pub(crate) fn positive(value: f64) -> bool {
     value > 0.0
 }
 
@@ -205,7 +207,7 @@ fn memory_bytes() -> u64 {
 }
 
 /// Checks that `count` elements of `size` bytes fit at `offset`.
-fn check_range(offset: u32, count: u32, size: u32) -> Result<(), i32> {
+pub(crate) fn check_range(offset: u32, count: u32, size: u32) -> Result<(), i32> {
     if count == 0 {
         return Ok(());
     }
@@ -236,7 +238,7 @@ fn block_layout(bytes: u32) -> Option<Layout> {
 }
 
 /// A mutable view of `count` `f64` values at `offset`, after [`check_range`].
-fn f64_slice<'a>(offset: u32, count: u32) -> Result<&'a mut [f64], i32> {
+pub(crate) fn f64_slice<'a>(offset: u32, count: u32) -> Result<&'a mut [f64], i32> {
     check_range(offset, count, 8)?;
     if count == 0 {
         return Ok(&mut []);
@@ -248,7 +250,7 @@ fn f64_slice<'a>(offset: u32, count: u32) -> Result<&'a mut [f64], i32> {
 }
 
 /// A mutable view of `count` `f32` values at `offset`, after [`check_range`].
-fn f32_slice<'a>(offset: u32, count: u32) -> Result<&'a mut [f32], i32> {
+pub(crate) fn f32_slice<'a>(offset: u32, count: u32) -> Result<&'a mut [f32], i32> {
     check_range(offset, count, 4)?;
     if count == 0 {
         return Ok(&mut []);
