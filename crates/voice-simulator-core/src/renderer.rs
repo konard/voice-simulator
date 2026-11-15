@@ -1,0 +1,521 @@
+//! The waveguide voice renderer: a port of `#step`, `#record` and
+//! `#finish` of `VoiceRenderer` (`src/acoustics/voice.js`).
+//!
+//! The JavaScript side samples the plan and computes the tract shape of
+//! every control block; it hands the renderer one frame per block (see
+//! [`crate::frame`]). The renderer runs the sources, the air flow, the
+//! solver, the output filter, the listener and the limiter. It filters
+//! every solver output as soon as it is computed, at the rate of the block
+//! that computed it, which is what `#finish` does with its list of rates;
+//! so the samples do not depend on how the render is split into calls.
+
+use alloc::vec::Vec;
+
+use crate::aerodynamics::{
+    aspiration_reference, frication_reference, glottal_area, source_strength, strouhal_frequency,
+    Aerodynamics,
+};
+use crate::config;
+use crate::frame;
+use crate::glottis::{GlottalControl, Glottis, GlottisOptions};
+use crate::listener::Listener;
+use crate::math::{self, max};
+use crate::solver::Solver;
+use crate::stages::{NoiseSources, OutputStage};
+use crate::waveguide::{PiriformBranch, Waveguide, WaveguideOptions};
+
+/// Amplitude of the frication noise of a default voiceless fricative.
+pub const FRICATION_GAIN: f64 = 0.592;
+/// Amplitude of the wall source against the obstacle source (-15 dB).
+pub const WALL_SOURCE: f64 = 0.18;
+/// Gain of the burst transient.
+pub const TRANSIENT_GAIN: f64 = 5e-6;
+/// Most sections the renderer accepts (the 3D tiers stay in JavaScript).
+pub const MAX_SECTIONS: usize = 4096;
+
+/// Why a configuration or a render call was refused.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum RenderError {
+    /// The configuration array is malformed.
+    Config,
+    /// Fewer frames than control blocks start in the call.
+    TooFewFrames,
+    /// A frame holds a value the solver cannot take (not finite, or a
+    /// tract length that is not positive).
+    Frame,
+}
+
+/// What the renderer reads from the configuration besides the solver.
+#[derive(Clone, Copy, Debug, PartialEq)]
+struct Settings {
+    sample_rate: f64,
+    sections: usize,
+    block_size: usize,
+    total_samples: usize,
+    breathiness: f64,
+    glottal_chink: f64,
+    frication_level: f64,
+}
+
+/// `value` as a whole number in `low..=high` (`low` is never negative, so
+/// `floor` tests for a whole number).
+fn count(value: f64, low: usize, high: usize) -> Result<usize, RenderError> {
+    if value.is_finite()
+        && value >= low as f64
+        && value <= high as f64
+        && value == math::floor(value)
+    {
+        Ok(value as usize)
+    } else {
+        Err(RenderError::Config)
+    }
+}
+
+fn finite(value: f64) -> Result<f64, RenderError> {
+    if value.is_finite() {
+        Ok(value)
+    } else {
+        Err(RenderError::Config)
+    }
+}
+
+/// The voice renderer with the 1D waveguide.
+#[derive(Clone, Debug)]
+pub struct Renderer<S: Solver = Waveguide> {
+    solver: S,
+    glottis: Glottis,
+    noise: NoiseSources,
+    aerodynamics: Aerodynamics,
+    output: OutputStage,
+    listener: Listener,
+    settings: Settings,
+    aspiration_reference: f64,
+    frication_reference: f64,
+    control: GlottalControl,
+    frication_position: f64,
+    frication_amplitude: f64,
+    transient: f64,
+    transient_step: f64,
+    step_duration: f64,
+    has_shape: bool,
+    time: f64,
+    position: usize,
+    solver_time: f64,
+    previous: f64,
+    current: f64,
+}
+
+impl Renderer<Waveguide> {
+    /// A renderer for the configuration `values` (see [`crate::config`]).
+    pub fn new(values: &[f64]) -> Result<Self, RenderError> {
+        let header = values.get(..config::HEADER).ok_or(RenderError::Config)?;
+        let sections = count(header[config::SECTIONS], 3, MAX_SECTIONS)?;
+        let nose_sections = count(header[config::NOSE_SECTIONS], 1, MAX_SECTIONS)?;
+        let nose_count = count(header[config::NOSE_AREA_COUNT], 0, MAX_SECTIONS)?;
+        let listener_length = count(header[config::LISTENER_LENGTH], 0, usize::MAX >> 8)?;
+        if values.len() != config::HEADER + nose_count + listener_length {
+            return Err(RenderError::Config);
+        }
+        let nose = &values[config::HEADER..config::HEADER + nose_count];
+        let listener_values = &values[config::HEADER + nose_count..];
+        let sample_rate = finite(header[config::SAMPLE_RATE])?;
+        if sample_rate <= 0.0 {
+            return Err(RenderError::Config);
+        }
+        let settings = Settings {
+            sample_rate,
+            sections,
+            block_size: count(header[config::BLOCK_SIZE], 1, 1 << 20)?,
+            total_samples: count(header[config::TOTAL_SAMPLES], 0, u32::MAX as usize)?,
+            breathiness: finite(header[config::BREATHINESS])?,
+            glottal_chink: finite(header[config::GLOTTAL_CHINK])?,
+            frication_level: finite(header[config::FRICATION_LEVEL])?,
+        };
+        let piriform_sections = count(header[config::PIRIFORM_SECTIONS], 0, MAX_SECTIONS)?;
+        let piriform_index = count(header[config::PIRIFORM_INDEX], 0, sections - 1)?;
+        if piriform_sections > 0 && piriform_index == 0 {
+            return Err(RenderError::Config);
+        }
+        let vocal_tract_length = finite(header[config::VOCAL_TRACT_LENGTH])?;
+        if vocal_tract_length <= 0.0 {
+            return Err(RenderError::Config);
+        }
+        let mut solver = Waveguide::new(&WaveguideOptions {
+            sections,
+            nose_sections,
+            wall_loss: finite(header[config::WALL_LOSS])?,
+            nasal_loss: finite(header[config::NASAL_LOSS])?,
+            wall_mass: finite(header[config::WALL_MASS])?,
+            wall_resistance: finite(header[config::WALL_RESISTANCE])?,
+            wall_stiffness: finite(header[config::WALL_STIFFNESS])?,
+            glottal_chink: settings.glottal_chink,
+            vocal_tract_length,
+            piriform: PiriformBranch {
+                index: piriform_index,
+                area: finite(header[config::PIRIFORM_AREA])?,
+                sections: piriform_sections,
+            },
+        });
+        if !nose.is_empty() {
+            solver.set_nose(nose);
+        }
+        let mut glottis_options = GlottisOptions::new(seed(header[config::GLOTTIS_SEED])?);
+        glottis_options.tenseness = finite(header[config::TENSENESS])?;
+        glottis_options.breathiness = settings.breathiness;
+        glottis_options.jitter = finite(header[config::JITTER])?;
+        glottis_options.shimmer = finite(header[config::SHIMMER])?;
+        glottis_options.aspiration_level = finite(header[config::ASPIRATION_LEVEL])?;
+        glottis_options.chink = settings.glottal_chink;
+        glottis_options.lung_pressure = finite(header[config::LUNG_PRESSURE])?;
+        let band_limit = finite(header[config::BAND_LIMIT])?;
+        let output = OutputStage::new(
+            sample_rate,
+            finite(header[config::OUTPUT_GAIN])?,
+            if band_limit > 0.0 {
+                Some(band_limit)
+            } else {
+                None
+            },
+        );
+        let listener = Listener::new(listener_values).ok_or(RenderError::Config)?;
+        Ok(Self::with_solver(
+            solver,
+            Glottis::new(&glottis_options),
+            NoiseSources::new(seed(header[config::NOISE_SEED])?),
+            output,
+            listener,
+            settings,
+        ))
+    }
+}
+
+fn seed(value: f64) -> Result<u32, RenderError> {
+    count(value, 0, u32::MAX as usize).map(|seed| seed as u32)
+}
+
+impl<S: Solver> Renderer<S> {
+    fn with_solver(
+        solver: S,
+        glottis: Glottis,
+        noise: NoiseSources,
+        output: OutputStage,
+        listener: Listener,
+        settings: Settings,
+    ) -> Self {
+        Self {
+            solver,
+            glottis,
+            noise,
+            aerodynamics: Aerodynamics::default(),
+            output,
+            listener,
+            settings,
+            aspiration_reference: aspiration_reference(),
+            frication_reference: frication_reference(),
+            control: GlottalControl {
+                f0: 0.0,
+                voicing: 0.0,
+                aspiration: 0.0,
+                closure: 0.0,
+                loudness: 0.0,
+                lung_pressure: None,
+                aspiration_strength: Some(0.0),
+            },
+            frication_position: 1.0,
+            frication_amplitude: 0.0,
+            transient: 0.0,
+            transient_step: 0.0,
+            step_duration: 0.0,
+            has_shape: false,
+            time: 0.0,
+            position: 0,
+            solver_time: 0.0,
+            previous: 0.0,
+            current: 0.0,
+        }
+    }
+
+    /// Samples rendered so far.
+    pub fn position(&self) -> usize {
+        self.position
+    }
+
+    /// Samples of the whole render.
+    pub fn total_samples(&self) -> usize {
+        self.settings.total_samples
+    }
+
+    /// Values of one frame.
+    pub fn frame_stride(&self) -> usize {
+        frame::stride(self.settings.sections)
+    }
+
+    /// The solver.
+    pub fn solver(&self) -> &S {
+        &self.solver
+    }
+
+    /// Control blocks that start within the next `samples` samples (at
+    /// most up to the end): the number of frames `render` needs.
+    pub fn blocks(&self, samples: usize) -> usize {
+        let block = self.settings.block_size;
+        let count = samples.min(self.settings.total_samples - self.position);
+        if count == 0 {
+            return 0;
+        }
+        let start = self.position;
+        let first = start.div_ceil(block) * block;
+        let end = start + count;
+        let aligned = if first < end {
+            (end - 1 - first) / block + 1
+        } else {
+            0
+        };
+        aligned + usize::from(!self.has_shape && !start.is_multiple_of(block))
+    }
+
+    /// Render the next `out.len()` samples (fewer at the end) with one
+    /// frame per control block that starts in the call; returns the
+    /// number of samples written.
+    pub fn render(&mut self, frames: &[f64], out: &mut [f32]) -> Result<usize, RenderError> {
+        let stride = self.frame_stride();
+        let needed = self.blocks(out.len());
+        if frames.len() < needed * stride {
+            return Err(RenderError::TooFewFrames);
+        }
+        for frame in frames[..needed * stride].chunks_exact(stride) {
+            check_frame(frame)?;
+        }
+        let count = out.len().min(self.settings.total_samples - self.position);
+        let block = self.settings.block_size;
+        let output_step = 1.0 / self.settings.sample_rate;
+        let mut frames = frames.chunks_exact(stride);
+        let mut written = 0;
+        while written < count {
+            let offset = self.position % block;
+            if offset == 0 || !self.has_shape {
+                let frame = frames.next().ok_or(RenderError::TooFewFrames)?;
+                self.update_shape(frame);
+            }
+            let block_end = count.min(written + block - offset);
+            for sample in &mut out[written..block_end] {
+                while self.solver_time <= self.time {
+                    self.previous = self.current;
+                    self.current = self.step();
+                    self.solver_time += self.step_duration;
+                }
+                let fraction = 1.0 - (self.solver_time - self.time) / self.step_duration;
+                let value = self.previous + (self.current - self.previous) * fraction;
+                let heard = self.listener.process(value);
+                *sample = self.output.finish(heard) as f32;
+                self.time += output_step;
+            }
+            self.position += block_end - written;
+            written = block_end;
+        }
+        Ok(written)
+    }
+
+    /// Acoustic pressure of the solver into `out` (see [`Solver::field`]).
+    pub fn field(&self, out: &mut [f64]) -> usize {
+        self.solver.field(out)
+    }
+
+    fn update_shape(&mut self, frame: &[f64]) {
+        self.has_shape = true;
+        self.solver.set_shape(frame);
+        self.step_duration = self.solver.step_duration();
+        let rate = 1.0 / self.step_duration;
+        self.noise.configure(rate);
+        self.control.f0 = frame[frame::F0];
+        self.control.voicing = frame[frame::VOICING];
+        self.control.aspiration = frame[frame::ASPIRATION];
+        self.control.closure = frame[frame::CLOSURE];
+        self.control.loudness = frame[frame::LOUDNESS];
+        self.frication_position = frame[frame::FRICATION_POSITION];
+        self.update_airflow(frame, rate);
+        self.output.configure(rate);
+    }
+
+    /// `#updateAirflow`: mouth pressure, flow, the source strengths and
+    /// the burst transient of this control block.
+    fn update_airflow(&mut self, frame: &[f64], rate: f64) {
+        let settings = self.settings;
+        let block_duration = settings.block_size as f64 / settings.sample_rate;
+        let control = &self.control;
+        let opening = glottal_area(
+            control.voicing,
+            control.aspiration,
+            control.closure,
+            settings.breathiness,
+            settings.glottal_chink,
+        );
+        let frication_area = frame[frame::FRICATION_AREA];
+        let constriction = frication_area + frame[frame::VELUM_AREA];
+        let air = self.aerodynamics.step(
+            block_duration,
+            10.0 * frame[frame::LUNG_PRESSURE],
+            opening,
+            constriction,
+        );
+        self.control.aspiration_strength =
+            Some(source_strength(air.glottal_drop, opening, air.flow) / self.aspiration_reference);
+        let strength = source_strength(air.constriction_drop, frication_area, air.flow)
+            / self.frication_reference;
+        self.frication_amplitude =
+            frame[frame::FRICATION_GAIN] * settings.frication_level * strength * FRICATION_GAIN;
+        if self.frication_amplitude > 1e-6 {
+            self.noise.tune(strouhal_frequency(air.flow, constriction));
+            let obstacle = frame[frame::FRICATION_OBSTACLE];
+            self.frication_amplitude *= obstacle + WALL_SOURCE * (1.0 - obstacle);
+        }
+        let target = air.flow_derivative * TRANSIENT_GAIN;
+        let steps = max(1.0, block_duration * rate);
+        self.transient_step = (target - self.transient) / steps;
+    }
+
+    /// `#step`: one solver step with the sources of this instant, through
+    /// the output low-pass.
+    #[inline]
+    fn step(&mut self) -> f64 {
+        let white = self.noise.white.white();
+        let aspiration = self.noise.aspiration.process(white);
+        let source = self
+            .glottis
+            .step(self.step_duration, &self.control, aspiration);
+        let white = self.noise.white.white();
+        let amplitude = self.frication_amplitude;
+        let noise = if amplitude <= 1e-6 {
+            0.0
+        } else {
+            self.noise.frication.process(white) * amplitude
+        };
+        let mut flow = 0.0;
+        if self.transient_step != 0.0 || self.transient != 0.0 {
+            self.transient += self.transient_step;
+            flow = self.transient;
+        }
+        let output = self
+            .solver
+            .step(source, self.frication_position, noise, flow);
+        self.output.filter(output)
+    }
+}
+
+/// Refuses frames the solver cannot take: fields that are not finite and
+/// tract lengths that are not positive (they would stop the step clock).
+fn check_frame(frame: &[f64]) -> Result<(), RenderError> {
+    let finite = frame[..frame::STRIDE].iter().all(|value| value.is_finite());
+    if finite && frame[frame::LENGTH] > 0.0 {
+        Ok(())
+    } else {
+        Err(RenderError::Frame)
+    }
+}
+
+/// The frames of `blocks` control blocks of a still tract: for tests and
+/// benchmarks of the renderer itself.
+pub fn steady_frames(sections: usize, blocks: usize, frame_values: &[f64]) -> Vec<f64> {
+    let stride = frame::stride(sections);
+    let mut frames = Vec::with_capacity(stride * blocks);
+    for _ in 0..blocks {
+        frames.extend_from_slice(&frame_values[..stride]);
+    }
+    frames
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use alloc::vec;
+
+    fn configuration(total: usize) -> Vec<f64> {
+        let mut values = vec![0.0; config::HEADER];
+        values[config::SAMPLE_RATE] = 22_050.0;
+        values[config::SECTIONS] = 22.0;
+        values[config::NOSE_SECTIONS] = 14.0;
+        values[config::BLOCK_SIZE] = 32.0;
+        values[config::TOTAL_SAMPLES] = total as f64;
+        values[config::GLOTTIS_SEED] = 7.0;
+        values[config::NOISE_SEED] = 8.0;
+        values[config::TENSENESS] = 0.6;
+        values[config::BREATHINESS] = 0.2;
+        values[config::JITTER] = 0.4;
+        values[config::SHIMMER] = 3.0;
+        values[config::ASPIRATION_LEVEL] = 1.0;
+        values[config::LUNG_PRESSURE] = 800.0;
+        values[config::VOCAL_TRACT_LENGTH] = 16.5;
+        values[config::FRICATION_LEVEL] = 1.0;
+        values[config::OUTPUT_GAIN] = 1.0;
+        values[config::WALL_LOSS] = 1.0;
+        values[config::NASAL_LOSS] = 3.0;
+        values[config::PHARYNX_WIDTH] = 1.0;
+        values[config::PIRIFORM] = 1.0;
+        values[config::TEETH] = 1.0;
+        values[config::PIRIFORM_INDEX] = 3.0;
+        values[config::PIRIFORM_AREA] = 0.5;
+        values[config::PIRIFORM_SECTIONS] = 3.0;
+        values[config::WALL_MASS] = crate::losses::WALL_MASS;
+        values[config::WALL_RESISTANCE] = crate::losses::WALL_RESISTANCE;
+        values[config::WALL_STIFFNESS] = crate::losses::WALL_STIFFNESS;
+        values
+    }
+
+    fn vowel() -> Vec<f64> {
+        let mut frame = vec![3.0; frame::stride(22)];
+        frame[..frame::STRIDE].fill(0.0);
+        frame[frame::LENGTH] = 16.5;
+        frame[frame::VELUM_INDEX] = 10.0;
+        frame[frame::FRICATION_INDEX] = 14.0;
+        frame[frame::FRICATION_POSITION] = 15.0;
+        frame[frame::FRICATION_AREA] = 3.0;
+        frame[frame::F0] = 120.0;
+        frame[frame::VOICING] = 1.0;
+        frame[frame::LOUDNESS] = 1.0;
+        frame[frame::LUNG_PRESSURE] = 800.0;
+        frame
+    }
+
+    #[test]
+    fn renders_a_vowel_in_any_chunks() {
+        let total = 3000;
+        let frames = steady_frames(22, 100, &vowel());
+        let mut whole = Renderer::new(&configuration(total)).unwrap();
+        let mut expected = vec![0.0f32; total + 10];
+        assert_eq!(whole.render(&frames, &mut expected), Ok(total));
+        assert!(expected.iter().any(|value| value.abs() > 1e-3));
+        let mut chunked = Renderer::new(&configuration(total)).unwrap();
+        let mut actual = vec![0.0f32; total];
+        let mut start = 0;
+        while start < total {
+            let end = (start + 37).min(total);
+            let blocks = chunked.blocks(end - start);
+            let stride = chunked.frame_stride();
+            let written = chunked
+                .render(&frames[..blocks * stride], &mut actual[start..end])
+                .unwrap();
+            start += written;
+        }
+        assert_eq!(&actual[..], &expected[..total]);
+        assert_eq!(chunked.position(), total);
+        assert_eq!(chunked.blocks(10), 0);
+    }
+
+    #[test]
+    fn refuses_bad_input() {
+        assert_eq!(Renderer::new(&[1.0]).err(), Some(RenderError::Config));
+        let mut values = configuration(100);
+        values[config::SECTIONS] = 2.0;
+        assert_eq!(Renderer::new(&values).err(), Some(RenderError::Config));
+        let mut renderer = Renderer::new(&configuration(100)).unwrap();
+        let mut out = [0.0f32; 64];
+        assert_eq!(
+            renderer.render(&vowel(), &mut out),
+            Err(RenderError::TooFewFrames)
+        );
+        let mut frames = steady_frames(22, 2, &vowel());
+        frames[frame::LENGTH] = 0.0;
+        assert_eq!(renderer.render(&frames, &mut out), Err(RenderError::Frame));
+        assert_eq!(renderer.blocks(64), 2);
+    }
+}

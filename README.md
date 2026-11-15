@@ -536,6 +536,45 @@ its first sample on the audio clock, against 110.2-150.4 ms for buffer sources
 (`node experiments/issue-27-latency.mjs`, results in
 `experiments/issue-27-latency.txt`).
 
+### Rust engine
+
+`npm run build:wasm` builds the Rust engine into
+`src/engine/voice-simulator.wasm`. With it, `RustVoiceRenderer` and
+`renderPlanRust` render the waveguide tiers (`telephone` to `medium`) in
+WebAssembly with the same samples as `VoiceRenderer` and `renderPlan` (the
+largest difference measured is 1.7e-18); the
+plan and the tract shape of every control block are still computed in
+JavaScript. It is opt-in for now: `synthesize` keeps using JavaScript.
+
+```javascript
+import {
+  loadEngineModule,
+  prepareUtterance,
+  renderPlan,
+  renderPlanRust,
+} from 'voice-simulator';
+
+const engine = await loadEngineModule(); // null without the .wasm file
+const { plan, renderOptions } = prepareUtterance('Hello world.', {
+  tier: 'minimal',
+  seed: 1,
+});
+const samples = engine
+  ? renderPlanRust(engine, plan, renderOptions)
+  : renderPlan(plan, renderOptions);
+```
+
+Options the engine does not handle (a `solver` other than `'waveguide'`, a
+WebGPU `device`, `source: 'folds'`) throw an Error with
+`code === 'ENGINE_UNSUPPORTED'`. On the pangram of the heavy suite
+`performance` the Rust renderer is 1.5 to 2.0 times faster than JavaScript
+([docs/reports/performance-rust-waveguide.md](docs/reports/performance-rust-waveguide.md)).
+`node scripts/write-render-job.mjs <text> <tier> <out>` writes a render job
+and `voice-simulator-cli render-job <out>` (`cargo build --release -p
+voice-simulator-cli`) renders it natively and prints the SHA-256 of the
+samples, which equals that of the WebAssembly render. See
+[docs/RUST-ENGINE.md](docs/RUST-ENGINE.md).
+
 ### Docker
 
 ```bash
@@ -748,7 +787,7 @@ npm run example:desktop:package
 │   ├── perf/              # Benchmarks and LOD governor
 │   ├── audio/             # WAV, FLAC, AIFF, AU, raw and resampling
 │   ├── server/            # HTTP API (voice-simulator/server)
-│   ├── engine/            # WebAssembly loader of the Rust engine (the .wasm is built, never committed)
+│   ├── engine/            # Rust engine: loader, layouts, RustVoiceRenderer (the .wasm is built, never committed)
 │   ├── index.js           # Library entry point
 │   └── index.d.ts         # TypeScript definitions
 └── tests/                 # test-anywhere tests (Node, Bun, Deno)
