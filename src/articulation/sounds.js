@@ -681,6 +681,25 @@ function formantsAt(plan, head, time) {
   });
 }
 
+/** The voiced vowels of every sound (by placeholder), in order. */
+function voicedSoundVowels(segments) {
+  const vowels = new Map();
+  for (const segment of segments) {
+    if (
+      segment.soundOf &&
+      segment.kind === 'vowel' &&
+      segment.soundPitch &&
+      !segment.noise &&
+      !(segment.token?.mode?.phonation?.whisper > 0)
+    ) {
+      const list = vowels.get(segment.soundOf) ?? [];
+      list.push(segment);
+      vowels.set(segment.soundOf, list);
+    }
+  }
+  return vowels;
+}
+
 /**
  * Keep the planned level steps of the voiced vowels of a sound (the calls
  * of a laugh) in the sound: each vowel after the first is raised or
@@ -697,21 +716,7 @@ function formantsAt(plan, head, time) {
 export function applySoundHarmonics(channels, segments, head, frameRate) {
   const frameCount = channels.f0.length;
   const plan = { channels, frameRate, frameCount };
-  const vowels = new Map();
-  for (const segment of segments) {
-    if (
-      segment.soundOf &&
-      segment.kind === 'vowel' &&
-      segment.soundPitch &&
-      !segment.noise &&
-      !(segment.token?.mode?.phonation?.whisper > 0)
-    ) {
-      const list = vowels.get(segment.soundOf) ?? [];
-      list.push(segment);
-      vowels.set(segment.soundOf, list);
-    }
-  }
-  for (const list of vowels.values()) {
+  for (const list of voicedSoundVowels(segments).values()) {
     if (list.length < 2) {
       continue;
     }
