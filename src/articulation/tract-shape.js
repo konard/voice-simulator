@@ -547,6 +547,7 @@ export function tractShape(state, head, options = {}) {
       creak: full.creak ?? 0,
       falsetto: full.falsetto ?? 0,
       harsh: full.harsh ?? 0,
+      whisper: full.whisper ?? 0,
     },
     lipOpening: areas.at(-1),
     jaw: openness,
