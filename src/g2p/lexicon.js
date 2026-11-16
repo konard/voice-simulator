@@ -27,7 +27,13 @@ import { EN_LEXICON } from './lexicon/en.js';
 import { HI_LEXICON } from './lexicon/hi.js';
 import { RU_FORMS, RU_STEMS } from './lexicon/ru.js';
 import { ZH_PHRASES } from './lexicon/zh.js';
-import { decodeBlock, blockTables, findBlock, isVslex } from './vslex.js';
+import {
+  decodeBlock,
+  blockTables,
+  findBlock,
+  isVslex,
+  storedWord,
+} from './vslex.js';
 import { pinyinSyllableToIpa } from './pinyin.js';
 import { parseIpa } from '../ipa/parse.js';
 
@@ -67,7 +73,8 @@ function openVslex(data) {
   };
   const lookup = (word) => {
     const key = lexiconKey(word);
-    const index = findBlock(data, key);
+    const stored = storedWord(data, key);
+    const index = stored === null ? -1 : findBlock(data, stored);
     const found = index < 0 ? undefined : block(index).get(key);
     return found ? [...found] : null;
   };

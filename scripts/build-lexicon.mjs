@@ -349,7 +349,8 @@ async function buildRussian() {
   const encode = (map) =>
     encodeVslex(
       'ru',
-      [...map].map(([word, payload]) => [word, [payload]])
+      [...map].map(([word, payload]) => [word, [payload]]),
+      { ascii: true }
     );
   const formLexicon = encode(forms);
   const stemLexicon = encode(stems);
@@ -362,7 +363,7 @@ async function buildRussian() {
       'the first vowel, `b` the second, `z` the last of two or more.',
       `RU_STEMS: ${stemLexicon.count} stems; the value is the stressed vowel of the`,
       'stem (`a` its first vowel) or `+`, stress on the ending.',
-      `RU_GUESS: endings of 2 to 4 letters; element i lists those whose`,
+      `RU_GUESS: endings of 2 to 6 letters; element i lists those whose`,
       'words are stressed on vowel i counted from the end (0 the last).',
       `Counted on ${counted.length} words; ${heldOut.length} more (every fifth) are held out.`,
       '',
