@@ -2,20 +2,16 @@
  * English (General American) grapheme-to-phoneme conversion.
  *
  * Lookup order: user lexicons, heteronyms, the shipped lexicon
- * (`src/g2p/lexicon/en.js`, CMUdict with every variant), simple suffix
- * stripping on top of known stems, then spelling rules. Each word reports its source so
+ * (`src/g2p/lexicon/en.js`, CMUdict with every variant), suffixes on known
+ * stems and compounds of known words (`english-morphology.js`), then
+ * spelling rules. Each word reports its source so
  * the UI can highlight guesses.
  */
 
 import { ENGLISH_HETERONYMS } from './english-heteronyms.js';
 import { selectReading } from './english-context.js';
-import {
-  SIBILANT_FINAL,
-  VOICELESS_FINAL,
-  englishNumberWords,
-  pluralEnding,
-  spellToIpa,
-} from './english-rules.js';
+import { englishNumberWords, spellToIpa } from './english-rules.js';
+import { deriveEnglish } from './english-morphology.js';
 import { lexiconFor, userPronunciation } from './lexicon.js';
 
 /** The user or shipped pronunciation of a word and its source, or null. */
@@ -26,48 +22,6 @@ function lookupWord(word) {
   }
   const shipped = lexiconFor('en').lookup(word);
   return shipped ? { ipa: shipped[0], source: 'dictionary' } : null;
-}
-
-/** Suffix handlers: [suffix, stem candidates, pronounce(stemIpa)]. */
-const SUFFIXES = [
-  ["'s", (word) => [word.slice(0, -2)], (ipa) => `${ipa}${pluralEnding(ipa)}`],
-  ['s', (word) => [word.slice(0, -1)], (ipa) => `${ipa}${pluralEnding(ipa)}`],
-  ['es', (word) => [word.slice(0, -2)], (ipa) => `${ipa}${pluralEnding(ipa)}`],
-  [
-    'ed',
-    (word) => [word.slice(0, -2), word.slice(0, -1), word.slice(0, -3)],
-    (ipa) => `${ipa}${pastEnding(ipa)}`,
-  ],
-  [
-    'ing',
-    (word) => [word.slice(0, -3), `${word.slice(0, -3)}e`, word.slice(0, -4)],
-    (ipa) => `${ipa}ɪŋ`,
-  ],
-  ['ly', (word) => [word.slice(0, -2)], (ipa) => `${ipa}li`],
-  ['er', (word) => [word.slice(0, -2), word.slice(0, -1)], (ipa) => `${ipa}ɚ`],
-  ['ness', (word) => [word.slice(0, -4)], (ipa) => `${ipa}nəs`],
-];
-
-function pastEnding(ipa) {
-  if (/[td]$/.test(ipa)) {
-    return 'ɪd';
-  }
-  return VOICELESS_FINAL.test(ipa) || SIBILANT_FINAL.test(ipa) ? 't' : 'd';
-}
-
-function lookupWithSuffix(word) {
-  for (const [suffix, stems, pronounce] of SUFFIXES) {
-    if (!word.endsWith(suffix) || word.length - suffix.length < 2) {
-      continue;
-    }
-    for (const stem of stems(word)) {
-      const known = lookupWord(stem);
-      if (known) {
-        return pronounce(known.ipa);
-      }
-    }
-  }
-  return null;
 }
 
 /**
@@ -102,7 +56,7 @@ export function englishWordToIpa(word, context) {
   if (known) {
     return known;
   }
-  const derived = lookupWithSuffix(lower);
+  const derived = deriveEnglish(lower, (stem) => lookupWord(stem)?.ipa ?? null);
   if (derived) {
     return { ipa: derived, source: 'morphology' };
   }

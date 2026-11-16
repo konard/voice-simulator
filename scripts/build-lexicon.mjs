@@ -4,15 +4,18 @@
  * Build the pronunciation lexicons shipped in src/g2p/lexicon/ (issue 47).
  *
  *   node scripts/build-lexicon.mjs build <lang> --from <dir> [--words <n>]
- *     [--full --out <file>]
+ *     [--size <n>] [--full --out <file>]
  *   node scripts/build-lexicon.mjs counts <lang> --text <dir> [--limit <n>]
  *   node scripts/build-lexicon.mjs coverage <lang> --text <dir> [--lines <n>]
  *   node scripts/build-lexicon.mjs convert --lang <lang> --in <tsv> --out <json>
  *
  * build en  <dir>/cmudict.dict (CMUdict, BSD-2-Clause): every variant in
  *           file order, converted with `arpabetToIpa()`, equal variants
- *           merged; the first `--words` (default 20 000) words of
- *           data/lexicon/en-counts.txt found in CMUdict, plus all words of
+ *           merged; the first `--words` (default 18 500) words of
+ *           data/lexicon/en-counts.txt found in CMUdict that
+ *           src/g2p/english-morphology.js does not derive from the words
+ *           before them, derived words with the shortest pronunciations up
+ *           to `--size` (default 20 000) words, and all words of
  *           data/lexicon/en-extra.txt, which win over CMUdict. `--full`
  *           writes every word as JSON to `--out` (outside src/) instead.
  * build zh  <dir>/Unihan_Readings.txt or <dir>/Unihan.zip (Unicode-3.0) and
@@ -53,6 +56,7 @@ import {
   unihanReadingsText,
 } from './lexicon-sources.mjs';
 import { handPhrases, minePairs, readingGroups } from './lexicon-zh.mjs';
+import { deriveEnglish } from '../src/g2p/english-morphology.js';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const DATA = join(ROOT, 'data', 'lexicon');
@@ -135,7 +139,78 @@ function writeFull(lang, entries, out) {
   console.log(`${lang}: ${data.count} words written to ${out}`);
 }
 
-/** English: ranked CMUdict words plus en-extra.txt. */
+/** English pronunciations are stored one phoneme per symbol at least. */
+const ENGLISH_PHONEMES = /t͡ʃ|d͡ʒ|aɪ|aʊ|eɪ|oʊ|ɔɪ|./gu;
+const englishUnits = (ipa) => ipa.match(ENGLISH_PHONEMES);
+
+/**
+ * True when the morphology of `english-morphology.js` gives a word its only
+ * pronunciation from the words of `kept`; such a word is left out.
+ */
+function derivable(word, variants, kept) {
+  return (
+    variants.length === 1 &&
+    deriveEnglish(word, (stem) => kept.get(stem)?.[0] ?? null) === variants[0]
+  );
+}
+
+/**
+ * The words of the English module: the first `limit` words of `ranked`
+ * that the morphology cannot derive from the words kept before them,
+ * every word of `extra`, and derived words up to `size` words in all.
+ * Words left out are checked again against the final list (a later word
+ * can change a derivation) and put back until every word left out is
+ * derived as CMUdict says.
+ * @param {string[]} ranked CMUdict words, most frequent first
+ * @param {Map<string, string[]>} cmudict
+ * @param {Map<string, string[]>} extra
+ * @param {number} limit
+ * @param {number} [size] the least number of words
+ * @returns {Map<string, string[]>}
+ */
+export function selectEnglish(ranked, cmudict, extra, limit, size = 0) {
+  const kept = new Map(extra);
+  const left = [];
+  let count = 0;
+  for (const word of ranked) {
+    if (count >= limit) {
+      break;
+    }
+    if (kept.has(word)) {
+      continue;
+    }
+    const variants = cmudict.get(word);
+    if (derivable(word, variants, kept)) {
+      left.push(word);
+    } else {
+      kept.set(word, variants);
+      count++;
+    }
+  }
+  // The derived words with the shortest pronunciations (the cheapest to
+  // store) fill the module up to `size` words.
+  const fillers = left
+    .map((word, rank) => [word, [...cmudict.get(word)[0]].length, rank])
+    .sort((a, b) => a[1] - b[1] || a[2] - b[2]);
+  for (const [word] of fillers) {
+    if (kept.size >= size) {
+      break;
+    }
+    kept.set(word, cmudict.get(word));
+  }
+  for (let changed = true; changed; ) {
+    changed = false;
+    for (const word of left) {
+      if (!kept.has(word) && !derivable(word, cmudict.get(word), kept)) {
+        kept.set(word, cmudict.get(word));
+        changed = true;
+      }
+    }
+  }
+  return kept;
+}
+
+/** English: ranked CMUdict words not derived by morphology, en-extra.txt. */
 async function buildEnglish(options) {
   const from = requireOption(options, 'from');
   const cmudict = readCmudict(join(from, 'cmudict.dict'));
@@ -145,25 +220,25 @@ async function buildEnglish(options) {
     writeFull('en', all, options.out);
     return;
   }
-  const limit = Number(options.words ?? 20000);
-  const selected = new Map();
-  for (const word of readCounts(join(DATA, 'en-counts.txt'))) {
-    if (selected.size >= limit) {
-      break;
-    }
-    if (cmudict.has(word)) {
-      selected.set(word, cmudict.get(word));
-    }
-  }
-  for (const [word, variants] of extra) {
-    selected.set(word, variants);
-  }
-  const lexicon = encodeVslex('en', selected);
+  const limit = Number(options.words ?? 18500);
+  const ranked = readCounts(join(DATA, 'en-counts.txt')).filter((word) =>
+    cmudict.has(word)
+  );
+  const selected = selectEnglish(
+    ranked,
+    cmudict,
+    extra,
+    limit,
+    Number(options.size ?? 20000)
+  );
+  const lexicon = encodeVslex('en', selected, { units: englishUnits });
   const bytes = await writeModule(
     join(OUTPUT, 'en.js'),
     [
       `${lexicon.count} English words in General American IPA, every CMUdict`,
-      'variant in file order (the first is the default).',
+      'variant in file order (the first is the default). Words that',
+      'english-morphology.js derives from the other words as CMUdict reads them',
+      'are left out (`atrocities`, `unhappy`, `pinpoint`).',
       '',
       'Generated by `node scripts/build-lexicon.mjs build en --from <dir>`',
       'from the CMU Pronouncing Dictionary (Copyright (C) 1993-2015 Carnegie',
@@ -405,7 +480,7 @@ function runConvert(options) {
 }
 
 const USAGE = `Usage:
-  node scripts/build-lexicon.mjs build <en|zh|hi|ru> [--from <dir>] [--words <n>] [--full --out <file>]
+  node scripts/build-lexicon.mjs build <en|zh|hi|ru> [--from <dir>] [--words <n>] [--size <n>] [--full --out <file>]
   node scripts/build-lexicon.mjs counts <lang> --text <dir> [--limit <n>] [--out <file>]
   node scripts/build-lexicon.mjs coverage <lang> --text <dir> [--lines <n>]
   node scripts/build-lexicon.mjs convert --lang <lang> --in <tsv> --out <json>`;
