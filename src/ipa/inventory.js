@@ -160,6 +160,13 @@ export const CONSONANTS = Object.freeze(
       consonant('ɭ', 'retroflex', 'lateral-approximant', true),
       consonant('ʎ', 'palatal', 'lateral-approximant', true),
       consonant('ʟ', 'velar', 'lateral-approximant', true),
+      // Clicks (issue 56): a closure at the place, then a burst without
+      // lung air; produced like the `click` sound of
+      // src/articulation/sounds.js at their place.
+      consonant('ǀ', 'dental', 'click', false),
+      consonant('ǃ', 'alveolar', 'click', false),
+      consonant('ǁ', 'alveolar', 'click', false, { lateral: true }),
+      consonant('ʘ', 'bilabial', 'click', false),
     ].map((entry) => [entry.symbol, entry])
   )
 );

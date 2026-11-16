@@ -72,6 +72,7 @@ function consonantClass(token) {
   }
   switch (phoneme.manner) {
     case 'plosive':
+    case 'click':
       return voiced ? 'voicedPlosive' : 'voicelessPlosive';
     case 'fricative':
     case 'lateral-fricative':

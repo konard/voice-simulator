@@ -155,10 +155,14 @@ export const SOUND_NAMES = Object.freeze([
   'cough',
   'throat',
   'filler',
+  'um',
   'click',
 ]);
 
-/** Seconds of a sound without a duration (silence until it is modelled). */
+/**
+ * Seconds of a sound of unknown length. The sounds of `SOUND_NAMES` have
+ * their own lengths (`SOUNDS` of src/articulation/sounds.js).
+ */
 export const SOUND_DURATION = 0.3;
 
 const LIMITS = Object.freeze({

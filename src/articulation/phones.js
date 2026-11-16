@@ -46,6 +46,7 @@ export const PLACES = Object.freeze({
 /** Minimal cross-section (cm²) and turbulence gain per manner. */
 const MANNERS = {
   plosive: { area: 0, frication: 0.7 },
+  click: { area: 0, frication: 0.7 },
   nasal: { area: 0, frication: 0, velum: 1 },
   trill: { area: 0.12, frication: 0.04, trill: true },
   tap: { area: 0, frication: 0.2 },
@@ -64,6 +65,7 @@ const MANNERS = {
  */
 const VOICELESS_OPENING = {
   plosive: 0.35,
+  click: 0.35,
   fricative: 1,
   'lateral-fricative': 1,
 };
@@ -248,7 +250,7 @@ export function consonantTarget(token) {
     sibilance: sibilanceOf(phoneme),
     trill: manner.trill ? 1 : 0,
     rhotic: ['ɹ', 'ɻ'].includes(phoneme.symbol) ? 1 : 0,
-    lateral: phoneme.manner.startsWith('lateral') ? 1 : 0,
+    lateral: phoneme.manner.startsWith('lateral') || phoneme.lateral ? 1 : 0,
     ...secondaryArticulation(token),
   };
   if (phoneme.velarized) {
