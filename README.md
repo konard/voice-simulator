@@ -1009,18 +1009,11 @@ measuring a tier as soon as it is clearly too slow; the app remembers the
 result per device. `voice-simulator benchmark` first renders the cheap tiers
 for 0.5 s so the just-in-time compiler is warm, then reports the median of
 `--repeats` (default 5) measurements of `--seconds` (default 0.3) per tier. While speaking,
-the tier changes in the middle of the utterance without a restart (issue 29):
-`StreamGovernor` steps one or more tiers down as soon as the render load of
-0.1 s of chunks is above 0.8 or the player runs dry, and one tier up after
-3 s of headroom, never back to a tier it left. `AdaptiveStream` renders the
-new tier from the switch time on (`startTime`, with the voice source state
-handed over), resamples every tier to one stream rate and crossfades over
-one pitch period, scaled so the level of the two tiers matches; the worker
-reports each switch with a `tier` message. A switch from `low` to `minimal`
-moved the level of a sustained `aː` by at most 0.2 dB in any 5 ms window and
-kept the pitch in phase (`experiments/issue-29-switch-levels.txt`). Without `maxTier` the worker
-climbs only within the solver it started on, since each 3D tier needs its
-own voxel model and building one stalls the stream for 0.3-0.5 s. Visual tiers
+the tier changes without a restart (issue 29): `StreamGovernor` steps down when
+0.1 s of chunks load the CPU above 0.8 or the player runs dry, and one tier up
+after 3 s of headroom; `AdaptiveStream` starts the new tier at the switch with
+the old voice source state and crossfades over 25 ms at a matched level (`aː`
+within 0.2 dB, `experiments/issue-29-switch-levels.txt`). Visual tiers
 (mesh LOD 0-3, pressure-field points) are governed the same way from the
 measured frame time.
 
