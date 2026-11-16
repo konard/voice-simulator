@@ -99,8 +99,8 @@ export function sameReading(char, ours, theirs) {
 }
 
 /**
- * Our pinyin per character of a transcript line, with an erhua `r` moved
- * back to the 儿 it came from (AISHELL-3 writes 儿 as a syllable).
+ * Our pinyin per character of a transcript line; an erhua `r` is read as
+ * the syllable of its 儿, as AISHELL-3 writes it.
  */
 function readLine(chars) {
   const items = hanziToPinyin(chars.join(''));

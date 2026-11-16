@@ -163,7 +163,9 @@ export function readWordList(path) {
       }
       const match = /^(\S+)\s+(.+)$/u.exec(clean);
       if (!match) {
-        throw new TypeError(`${path}:${index + 1}: expected "word pronunciation"`);
+        throw new TypeError(
+          `${path}:${index + 1}: expected "word pronunciation"`
+        );
       }
       const word = match[1].normalize('NFC');
       const variants = entries.get(word) ?? [];
@@ -256,7 +258,10 @@ export function readZipEntry(zip, name) {
     const entry = zip.toString('utf8', offset + 46, offset + 46 + nameLength);
     if (entry === name) {
       const start =
-        local + 30 + zip.readUInt16LE(local + 26) + zip.readUInt16LE(local + 28);
+        local +
+        30 +
+        zip.readUInt16LE(local + 26) +
+        zip.readUInt16LE(local + 28);
       const data = zip.subarray(start, start + compressed);
       if (method === 0) {
         return data;
