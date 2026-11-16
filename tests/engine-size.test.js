@@ -1,10 +1,11 @@
 /**
  * The size of the shipped engine: every src/engine/*.wasm stays within
- * WASM_SIZE_BUDGET of scripts/build-wasm.mjs, the budget its build checks.
+ * WASM_SIZE_BUDGET of scripts/build-wasm.mjs, the budget its build checks,
+ * and bundlers can find it (the app's build copies it next to its workers).
  */
 
 import { describe, it, expect } from 'test-anywhere';
-import { readdirSync, statSync } from 'node:fs';
+import { readFileSync, readdirSync, statSync } from 'node:fs';
 
 import { WASM_SIZE_BUDGET } from '../scripts/build-wasm.mjs';
 
@@ -25,5 +26,17 @@ describe('engine size', () => {
         `${name}: ok`
       );
     }
+  });
+
+  it('names the engine with a URL that bundlers copy', () => {
+    // Vite, webpack and Rollup emit an asset for the literal
+    // `new URL('./file', import.meta.url)` and not for globalThis.URL.
+    const loader = readFileSync(
+      new globalThis.URL('wasm-loader.js', ENGINE_DIR),
+      'utf8'
+    );
+    expect(loader).toContain(
+      "new URL('./voice-simulator.wasm', import.meta.url)"
+    );
   });
 });

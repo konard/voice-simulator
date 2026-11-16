@@ -17,12 +17,18 @@
  * platform to tolerate.
  */
 
+/* global URL */
+
 /** The `vs_abi_version()` this loader speaks; see docs/RUST-ENGINE.md. */
 export const ENGINE_ABI_VERSION = 2;
 
-/** Where the engine lives next to this file. */
+/**
+ * Where the engine lives next to this file. Written as the literal
+ * `new URL('./file', import.meta.url)` so bundlers (Vite, webpack, Rollup)
+ * see the asset, copy it to their output and rewrite the URL.
+ */
 export function defaultEngineUrl() {
-  return new globalThis.URL('./voice-simulator.wasm', import.meta.url);
+  return new URL('./voice-simulator.wasm', import.meta.url);
 }
 
 /** Where the SIMD build of the engine lives next to this file. */
