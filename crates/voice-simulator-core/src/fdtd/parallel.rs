@@ -55,9 +55,15 @@ pub const THREADS_AVAILABLE: bool =
     cfg!(any(not(target_arch = "wasm32"), target_feature = "atomics"));
 
 /// Fewest links for which a solver steps on more than one thread: below
-/// it the barrier costs more than the threads gain. Measured by
-/// `tests/heavy/performance-threads.test.js` (see `docs/RUST-ENGINE.md`).
-pub const THREAD_MIN_LINKS: usize = 100_000;
+/// it the barrier costs more than the threads gain. The rule of issue 24
+/// sets it to the links of the smallest grid where 2 threads are at least
+/// 1.3 times faster than 1, natively and in WebAssembly, measured by
+/// `tests/heavy/performance-threads.test.js`. No grid of that measurement
+/// paid (`docs/reports/performance-threads.md`), so it is `usize::MAX`:
+/// a team starts only with an explicit smaller minimum (`threadMinLinks`
+/// of the loader, `--thread-min-links` of the CLI). The code stays, so
+/// that a new measurement can lower it (see `docs/RUST-ENGINE.md`).
+pub const THREAD_MIN_LINKS: usize = usize::MAX;
 
 /// The phases of a round.
 const LINKS: u32 = 1;
