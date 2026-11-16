@@ -268,7 +268,7 @@ export class HeadViewer {
       );
       this.group.add(this.anatomy[mesh.name]);
     }
-    this.anatomyState = { gap: REST_GAP, velum: 0 };
+    this.anatomyState = { gap: head.restGap ?? REST_GAP, velum: 0 };
     this.group.add(this.tract, this.nose, this.lips, this.skin, wire);
     colorTube(this.tract.geometry, this.tractMesh.ring, null, 1);
     colorTube(this.nose.geometry, this.noseMesh.ring, null, 1);
@@ -410,7 +410,8 @@ export class HeadViewer {
   #updateMouth(shape, state, animate) {
     const area = animate ? shape.areas.at(-1) : 1.2;
     // The jaw carries the chin and the lower teeth to the acoustic gap.
-    const gap = animate ? (shape.teeth?.gap ?? REST_GAP) : REST_GAP;
+    const rest = this.head.restGap ?? REST_GAP;
+    const gap = animate ? (shape.teeth?.gap ?? rest) : rest;
     const openness = animate ? jawOpenness(gap, this.head) : 0.15;
     this.#updateAnatomy(shape, state, gap);
     const skin = this.skin.geometry.getAttribute('position');

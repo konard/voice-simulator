@@ -327,8 +327,17 @@ function landmarkMap(lengths, length, stretched) {
   };
 }
 
-/** Narrow (tongueRoot < 0) or widen the pharynx from TONGUE_ROOT_START to the velum. */
-function applyTongueRoot(areas, length, velumIndex, amount) {
+/**
+ * Narrow (tongueRoot < 0) or widen the pharynx from TONGUE_ROOT_START to
+ * the velum, by `change` (head.tongueRootArea) per unit of the channel.
+ */
+function applyTongueRoot(
+  areas,
+  length,
+  velumIndex,
+  amount,
+  change = TONGUE_ROOT_AREA
+) {
   if (amount === 0) {
     return;
   }
@@ -338,16 +347,17 @@ function applyTongueRoot(areas, length, velumIndex, amount) {
   for (let index = 0; index < count; index++) {
     const share =
       overlap(index * step, (index + 1) * step, TONGUE_ROOT_START, top) / step;
-    areas[index] *= 1 + TONGUE_ROOT_AREA * amount * share;
+    areas[index] *= 1 + change * amount * share;
   }
 }
 
 /**
  * Factor on the mouth cross-sections of an incisor gap `jaw` (cm) where
- * the vowel and consonant channels ask for `expected` cm.
+ * the vowel and consonant channels ask for `expected` cm, changing by
+ * `change` (head.jawArea) per cm.
  */
-export function jawScale(jaw, expected) {
-  return Math.min(2, Math.max(0.3, 1 + JAW_AREA * (jaw - expected)));
+export function jawScale(jaw, expected, change = JAW_AREA) {
+  return Math.min(2, Math.max(0.3, 1 + change * (jaw - expected)));
 }
 
 /**
@@ -474,7 +484,8 @@ export function tractShape(state, head, options = {}) {
     engagement(full.lipAmount)
   );
   const reference = referenceShape(full, options.vowelCorrections, {
-    scale: 1 + (jawScale(free.jaw, free.expectedJaw) - 1) * (1 - held),
+    scale:
+      1 + (jawScale(free.jaw, free.expectedJaw, head.jawArea) - 1) * (1 - held),
     from: warpPosition(JAW_START, head.pharynxRatio),
   });
   const openness = Math.max(0, Math.min(1, 1 - full.height));
@@ -487,7 +498,13 @@ export function tractShape(state, head, options = {}) {
     ((areas.length - 1) * head.pharynxRatio * VELUM_POSITION) /
       REFERENCE_PHARYNX
   );
-  applyTongueRoot(areas, length, restVelum, free.tongueRoot);
+  applyTongueRoot(
+    areas,
+    length,
+    restVelum,
+    free.tongueRoot,
+    head.tongueRootArea
+  );
   // Each change of length goes to the place of its organ; landmarks keep
   // their distance from the lips.
   const larynx = -free.larynxHeight;

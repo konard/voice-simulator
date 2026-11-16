@@ -21,7 +21,9 @@ export const SIBILANT_GAP = 0.15;
 export const VELAR_GAP = 0.55;
 /**
  * Extra incisor gap of an open vowel and of a high back one (cm, scaled
- * by head.jawRange). With the gaps above they reproduce the jaw openings
+ * by head.jawRange). Every gap here and the thickness are the defaults of
+ * the head keys restGap, sibilantGap, velarGap, openGap, backGap and
+ * incisorThickness. With the gaps above they reproduce the jaw openings
  * G-OBIM matched to MRI of sustained phonemes (Calka et al. 2025, PLOS
  * Comput Biol 21(9): e1013378, Table 3): /t/ 1, /i/ 3, /k/ 5, /u/ 7 and
  * /a/ 11 mm, each 0.5 mm below the gap here, as if measured from edges
@@ -54,19 +56,23 @@ function vowelGapOf(state, head) {
   const height = clamp(state.height ?? 0.5);
   const back = clamp(state.backness ?? 0.5);
   return (
-    REST_GAP +
-    (OPEN_GAP * (1 - height) + BACK_GAP * back * height) * head.jawRange
+    (head.restGap ?? REST_GAP) +
+    ((head.openGap ?? OPEN_GAP) * (1 - height) +
+      (head.backGap ?? BACK_GAP) * back * height) *
+      head.jawRange
   );
 }
 
 /** Gaps (cm) that the consonant channels raise the jaw towards, with weights. */
-function consonantGaps(state) {
+function consonantGaps(state, head) {
+  const sibilant = head.sibilantGap ?? SIBILANT_GAP;
+  const velar = head.velarGap ?? VELAR_GAP;
   const front = smoothstep(0.66, 0.9, state.tongueLocation ?? 0.9);
-  const tongueGap = VELAR_GAP + (SIBILANT_GAP - VELAR_GAP) * front;
+  const tongueGap = velar + (sibilant - velar) * front;
   return [
-    [SIBILANT_GAP, clamp(state.sibilance ?? 0)],
+    [sibilant, clamp(state.sibilance ?? 0)],
     [tongueGap, clamp((state.tongueAmount ?? 0) / 0.85)],
-    [SIBILANT_GAP, clamp((0.4 * (state.lipAmount ?? 0)) / 0.85)],
+    [sibilant, clamp((0.4 * (state.lipAmount ?? 0)) / 0.85)],
   ];
 }
 
@@ -97,7 +103,7 @@ export function impliedGap(state, head) {
   const vowelGap = vowelGapOf(state, head);
   // A consonant only ever raises the jaw towards its own gap.
   let raised = 0;
-  for (const [gap, weight] of consonantGaps(state)) {
+  for (const [gap, weight] of consonantGaps(state, head)) {
     raised = Math.min(raised, gap < vowelGap ? (gap - vowelGap) * weight : 0);
   }
   return vowelGap + raised;
@@ -117,7 +123,7 @@ export function consonantJaw(state, head) {
   const vowelGap = vowelGapOf(state, head);
   let best = { gap: vowelGap, weight: 0 };
   let raised = 0;
-  for (const [gap, weight] of consonantGaps(state)) {
+  for (const [gap, weight] of consonantGaps(state, head)) {
     const change = gap < vowelGap ? (gap - vowelGap) * weight : 0;
     if (change < raised) {
       raised = change;
@@ -140,7 +146,7 @@ export function dentition(state, head, length) {
   return {
     gap,
     area: gap * teethWidth(head),
-    start: Math.max(0, end - INCISOR_THICKNESS),
+    start: Math.max(0, end - (head.incisorThickness ?? INCISOR_THICKNESS)),
     end,
   };
 }

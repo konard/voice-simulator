@@ -67,6 +67,49 @@ export function resolveMicrophone(microphone) {
 }
 
 /**
+ * Options with the microphone and the room of the head's `microphone`
+ * group (micDistance, micAzimuth, micElevation, roomWidth, roomHeight,
+ * roomDepth, roomRt60) where `options` gives none. The default head (3 cm
+ * straight ahead, rt60 0) adds neither, which keeps the reference output.
+ * @param {Record<string, number>} head
+ * @param {{microphone?: object, room?: string|object|null}} options
+ * @returns {object} `options` itself when nothing is added.
+ */
+export function headListening(head, options = {}) {
+  const microphone = options.microphone ?? headMicrophone(head);
+  const room = options.room !== undefined ? options.room : headRoom(head);
+  if (microphone === options.microphone && room === options.room) {
+    return options;
+  }
+  return { ...options, microphone, room };
+}
+
+/** The head's microphone, undefined at the reference point. */
+function headMicrophone(head) {
+  const distance = head.micDistance ?? MICROPHONE_REFERENCE;
+  const azimuth = head.micAzimuth ?? 0;
+  const elevation = head.micElevation ?? 0;
+  if (distance === MICROPHONE_REFERENCE && azimuth === 0 && elevation === 0) {
+    return undefined;
+  }
+  return { distance, azimuth, elevation };
+}
+
+/** The head's room, undefined without reverberation. */
+function headRoom(head) {
+  const rt60 = head.roomRt60 ?? 0;
+  if (!(rt60 > 0)) {
+    return undefined;
+  }
+  return {
+    width: head.roomWidth ?? 4,
+    height: head.roomHeight ?? 2.6,
+    depth: head.roomDepth ?? 3.5,
+    rt60: Math.max(0.03, rt60),
+  };
+}
+
+/**
  * Unit vector from the lips to the microphone in head coordinates
  * (x lateral, y up, z ahead of the face).
  * @param {{azimuth: number, elevation: number}} microphone

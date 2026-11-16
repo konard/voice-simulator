@@ -18,6 +18,7 @@
 import { getPhoneme } from '../ipa/inventory.js';
 import { parseIpa } from '../ipa/parse.js';
 import { DEFAULT_HEAD, normalizeHeadConfig } from '../head-config.js';
+import { suffixKey } from '../parameters/articulation.js';
 import { tensionForPitch } from '../acoustics/folds.js';
 import {
   COARTICULATION_RESISTANCE,
@@ -266,7 +267,8 @@ function pushPause(segments, token, context) {
  * src/articulation/durations.js with the table of `language` (or
  * `durationTable`).
  * @param {object[]} tokens
- * @param {{rate: number, language?: string, stressLengthening?: number, finalLengthening?: number, pauseLength?: number, durationTable?: object}} options
+ * @param {{rate: number, language?: string, stressLengthening?: number, finalLengthening?: number, pauseLength?: number, durationTable?: object, head?: object}} options
+ *   `head` gives the rate exponents and the strengths of the rules.
  */
 export function buildSegments(tokens, options) {
   const context = {
@@ -274,6 +276,7 @@ export function buildSegments(tokens, options) {
     language: options.language,
     table: options.durationTable ?? durationTable(options.language),
     duration: {
+      ...options.head,
       speechRate: options.rate ?? 1,
       stressLengthening: options.stressLengthening ?? 1.35,
       finalLengthening: options.finalLengthening ?? 1.4,
@@ -779,16 +782,41 @@ function applyDurations(segments, tokens, durations) {
   }
 }
 
-/** Time constant and lead of every articulator, with the overrides. */
+/** Head keys of the leads of the channels that have one in the head. */
+const HEAD_LEADS = Object.freeze({
+  rounding: 'roundingLead',
+  lipProtrusion: 'roundingLead',
+  velum: 'velumLead',
+});
+
+/** Head key of the speed of each channel: speedJaw. */
+const SPEED_KEYS = Object.freeze(
+  Object.fromEntries(
+    Object.keys(ARTICULATORS).map((name) => [name, suffixKey('speed', name)])
+  )
+);
+
+/**
+ * Time constant and lead of every articulator, with the overrides: the
+ * head's articulationSpeed and speed<Channel> divide both,
+ * coarticulation multiplies the lead, and roundingLead and velumLead set
+ * the leads of rounding, lipProtrusion and velum.
+ */
 function articulatorsFor(head, overrides = {}) {
   return Object.fromEntries(
     ARTICULATOR_NAMES.map((name) => {
-      const entry = { ...ARTICULATORS[name], ...overrides[name] };
+      const lead = head[HEAD_LEADS[name]];
+      const entry = {
+        ...ARTICULATORS[name],
+        ...(lead === undefined ? {} : { lead }),
+        ...overrides[name],
+      };
+      const speed = head.articulationSpeed * (head[SPEED_KEYS[name]] ?? 1);
       return [
         name,
         {
-          timeConstant: entry.timeConstant / head.articulationSpeed,
-          lead: (entry.lead * head.coarticulation) / head.articulationSpeed,
+          timeConstant: entry.timeConstant / speed,
+          lead: (entry.lead * head.coarticulation) / speed,
         },
       ];
     })
@@ -816,6 +844,7 @@ export function planUtterance(ipa, options = {}) {
     finalLengthening: head.finalLengthening,
     pauseLength: head.pauseLength,
     durationTable: options.durationTable,
+    head,
   });
   if (options.durations) {
     applyDurations(segments, tokens, options.durations);

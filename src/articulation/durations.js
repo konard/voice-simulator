@@ -798,16 +798,33 @@ export function phonemeDurations(token, features, table = ENGLISH) {
 
 /**
  * The plain formula of Klatt (1979) in seconds.
- * @param {{inherent: number, minimum: number, percent: number, speechRate?: number}} values
- *   Durations in milliseconds, `percent` from 0 up.
+ * @param {{inherent: number, minimum: number, percent: number, speechRate?: number, rateMinimum?: number, rateStretch?: number}} values
+ *   Durations in milliseconds, `percent` from 0 up; `rateMinimum` and
+ *   `rateStretch` (the head's, RATE_MINIMUM and RATE_STRETCH by default)
+ *   are the exponents of the rate on the minimum and the stretch.
  */
-export function durationFormula({ inherent, minimum, percent, speechRate }) {
+export function durationFormula({
+  inherent,
+  minimum,
+  percent,
+  speechRate,
+  rateMinimum = RATE_MINIMUM,
+  rateStretch = RATE_STRETCH,
+}) {
   const rate = speechRate ?? 1;
   const ms =
-    minimum / rate ** RATE_MINIMUM +
-    ((inherent - minimum) * percent) / 100 / rate ** RATE_STRETCH;
-  return Math.max(ms, minimum / rate ** RATE_MINIMUM) / 1000;
+    minimum / rate ** rateMinimum +
+    ((inherent - minimum) * percent) / 100 / rate ** rateStretch;
+  return Math.max(ms, minimum / rate ** rateMinimum) / 1000;
 }
+
+/** Head key of the strength of each rule: durationClauseFinal. */
+const RULE_KEYS = new Map(
+  DURATION_RULES.map((rule) => [
+    rule.name,
+    `duration${rule.name[0].toUpperCase()}${rule.name.slice(1)}`,
+  ])
+);
 
 /** Factor of a rule in `table`, null when it is switched off. */
 export function ruleFactor(rule, table) {
@@ -839,6 +856,12 @@ function effectiveFactor(rule, factor, features, options) {
       (BOUNDARIES.period.lengthen - 1);
     value = 1 + (value - 1) * head * boundary;
   }
+  // The head's strength of the rule: a power of a factor, a multiple of
+  // an added duration.
+  const strength = options[RULE_KEYS.get(rule.name)] ?? 1;
+  if (strength !== 1) {
+    value = rule.scope === 'add' ? value * strength : value ** strength;
+  }
   return value;
 }
 
@@ -848,6 +871,7 @@ function effectiveFactor(rule, factor, features, options) {
  * @param {object} features
  * @param {object} [table]
  * @param {{stressLengthening?: number, finalLengthening?: number}} [options]
+ *   Head values: also the strengths `duration<Rule>` of the rules.
  * @returns {{rule: object, factor: number}[]}
  */
 export function applyingRules(token, features, table = ENGLISH, options = {}) {
@@ -878,11 +902,13 @@ export function applyingRules(token, features, table = ENGLISH, options = {}) {
  * @param {object} token
  * @param {object} features From `durationFeatures()`.
  * @param {object} [table] An entry of `DURATION_TABLES`.
- * @param {{speechRate?: number, stressLengthening?: number, finalLengthening?: number}} [options]
+ * @param {{speechRate?: number, stressLengthening?: number, finalLengthening?: number, rateMinimum?: number, rateStretch?: number}} [options]
+ *   Head values, with the strengths `duration<Rule>` of the rules.
  * @returns {number[]}
  */
 export function segmentParts(token, features, table = ENGLISH, options = {}) {
   const rate = options.speechRate ?? 1;
+  const rateMinimum = options.rateMinimum ?? RATE_MINIMUM;
   let percent = 100;
   let minimumFactor = 1;
   let total = 1;
@@ -913,8 +939,10 @@ export function segmentParts(token, features, table = ENGLISH, options = {}) {
       minimum: floor,
       percent,
       speechRate: rate,
+      rateMinimum,
+      rateStretch: options.rateStretch ?? RATE_STRETCH,
     });
-    const extra = (added * share) / 1000 / rate ** RATE_MINIMUM;
+    const extra = (added * share) / 1000 / rate ** rateMinimum;
     return (base + extra) * total;
   });
 }
@@ -943,7 +971,8 @@ export function segmentDuration(
 
 /**
  * The shortest a token can get at `speechRate`: its minimum (halved when
- * unstressed) over `speechRate ** RATE_MINIMUM`, in seconds.
+ * unstressed) over `speechRate ** rateMinimum` (the head's, RATE_MINIMUM by
+ * default), in seconds.
  */
 export function minimumDuration(
   token,
@@ -952,11 +981,12 @@ export function minimumDuration(
   options = {}
 ) {
   const rate = options.speechRate ?? 1;
+  const exponent = options.rateMinimum ?? RATE_MINIMUM;
   const halved = applyingRules(token, features, table, options)
     .filter(({ rule }) => rule.scope === 'minimum')
     .reduce((product, { factor }) => product * factor, 1);
   return phonemeDurations(token, features, table).reduce(
-    (sum, part) => sum + (part.minimum * halved) / rate ** RATE_MINIMUM / 1000,
+    (sum, part) => sum + (part.minimum * halved) / rate ** exponent / 1000,
     0
   );
 }

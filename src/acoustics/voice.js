@@ -39,7 +39,7 @@ import { SPEED_OF_SOUND } from './transfer.js';
 import { Waveguide } from './waveguide.js';
 import { Fdtd2d } from './fdtd2d.js';
 import { Fdtd3d } from './fdtd3d.js';
-import { createListener } from './microphone.js';
+import { createListener, headListening } from './microphone.js';
 import { enclosureBounds } from './voxel-model.js';
 
 const OUTPUT_GAIN = 0.3;
@@ -102,6 +102,7 @@ const SOURCES = new Map([
         aspirationLevel: head.aspirationLevel,
         chink: head.glottalChink,
         lungPressure: head.lungPressure,
+        head,
       }),
   ],
   [
@@ -114,6 +115,10 @@ const SOURCES = new Map([
         foldMass: head.foldMass,
         foldStiffness: head.foldStiffness,
         foldDamping: head.foldDamping,
+        glottalPressureCoefficient: head.glottalPressureCoefficient,
+        breathGain: head.breathGain,
+        breathExponent: head.breathExponent,
+        reCritical: head.reCritical,
       }),
   ],
 ]);
@@ -220,13 +225,14 @@ export class NoiseSources {
  * (cm³/s) through `area` (cm²).
  * @param {number} flow
  * @param {number} area
+ * @param {number} [strouhal] head.strouhal (STROUHAL by default).
  */
-export function strouhalFrequency(flow, area) {
+export function strouhalFrequency(flow, area, strouhal = STROUHAL) {
   if (!(area > 0)) {
     return STROUHAL_RANGE[0];
   }
   const frequency =
-    (STROUHAL * (flow / area)) / Math.sqrt((4 * area) / Math.PI);
+    (strouhal * (flow / area)) / Math.sqrt((4 * area) / Math.PI);
   return Math.min(STROUHAL_RANGE[1], Math.max(STROUHAL_RANGE[0], frequency));
 }
 
@@ -327,6 +333,8 @@ export class VoiceRenderer {
   constructor(plan, options = {}) {
     this.plan = plan;
     this.head = normalizeHeadConfig(options.head ?? plan.head);
+    // The head's microphone and room unless the options give their own.
+    options = headListening(this.head, options);
     this.sampleRate = options.sampleRate ?? 48000;
     this.sections = options.sections ?? 44;
     this.blockSize = options.blockSize ?? 32;
@@ -362,7 +370,9 @@ export class VoiceRenderer {
     this.vowelCorrections = VOWEL_TABLES.get(options.solver ?? 'waveguide');
     this.glottis = source(this.head, seed);
     this.noise = new NoiseSources(seed);
-    this.aerodynamics = new Aerodynamics();
+    this.aerodynamics = new Aerodynamics({
+      compliance: this.head.oralCompliance,
+    });
     /** Last aerodynamic state (see aerodynamics.js) and source strengths. */
     this.airflow = null;
     this.fricationAmplitude = 0;
@@ -487,7 +497,12 @@ export class VoiceRenderer {
     const opening =
       this.source === 'folds'
         ? this.#foldArea(glottis)
-        : glottalArea(glottis, this.head.breathiness, this.head.glottalChink);
+        : glottalArea(
+            glottis,
+            this.head.breathiness,
+            this.head.glottalChink,
+            this.head
+          );
     const constriction = frication.area + this.shape.velumArea;
     const air = this.aerodynamics.step(
       blockDuration,
@@ -497,17 +512,29 @@ export class VoiceRenderer {
     );
     this.airflow = air;
     glottis.oralPressure = air.oralPressure;
+    const { reCritical } = this.head;
     glottis.aspirationStrength =
-      sourceStrength(air.glottalDrop, opening, air.flow) / ASPIRATION_REFERENCE;
+      sourceStrength(air.glottalDrop, opening, air.flow, reCritical) /
+      ASPIRATION_REFERENCE;
     const strength =
-      sourceStrength(air.constrictionDrop, frication.area, air.flow) /
-      FRICATION_REFERENCE;
+      sourceStrength(
+        air.constrictionDrop,
+        frication.area,
+        air.flow,
+        reCritical
+      ) / FRICATION_REFERENCE;
     this.fricationAmplitude =
-      frication.gain * this.head.fricationLevel * strength * FRICATION_GAIN;
+      frication.gain *
+      this.head.fricationLevel *
+      strength *
+      this.head.fricationGain;
     if (this.fricationAmplitude > 1e-6) {
-      this.noise.tune(strouhalFrequency(air.flow, constriction));
+      this.noise.tune(
+        strouhalFrequency(air.flow, constriction, this.head.strouhal)
+      );
       const { obstacle } = frication;
-      this.fricationAmplitude *= obstacle + WALL_SOURCE * (1 - obstacle);
+      this.fricationAmplitude *=
+        obstacle + this.head.wallSource * (1 - obstacle);
     }
     // The transient ramps from the last block's value to this one's. With
     // interaction the folds solve their flow from the lung and the oral
@@ -515,7 +542,9 @@ export class VoiceRenderer {
     // a second copy, from the folds' own mean area, closes a loop through
     // the tract to the folds that runs away in 3D, where the transient is
     // a pressure jump (issue 34).
-    const target = this.interaction ? 0 : air.flowDerivative * TRANSIENT_GAIN;
+    const target = this.interaction
+      ? 0
+      : air.flowDerivative * this.head.transientGain;
     const steps = Math.max(1, blockDuration * rate);
     this.transientStep = (target - this.transient) / steps;
   }

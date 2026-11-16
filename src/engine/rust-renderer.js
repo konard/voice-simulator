@@ -26,7 +26,7 @@ import {
   WALL_RESISTANCE,
   WALL_STIFFNESS,
 } from '../acoustics/losses.js';
-import { createListener } from '../acoustics/microphone.js';
+import { createListener, headListening } from '../acoustics/microphone.js';
 import {
   buildVoxelModel,
   enclosureBounds,
@@ -236,6 +236,8 @@ export class FramePlanner {
     checkSupported(options);
     this.plan = plan;
     this.head = normalizeHeadConfig(options.head ?? plan.head);
+    // The head's microphone and room unless the options give their own.
+    options = headListening(this.head, options);
     this.sampleRate = options.sampleRate ?? 48000;
     this.sections = options.sections ?? 44;
     this.blockSize = options.blockSize ?? 32;

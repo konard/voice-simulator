@@ -149,10 +149,11 @@ function lossStages(sections, stages) {
 export class Waveguide {
   /**
    * `piriform: false` leaves out the piriform fossae side branch.
-   * `lossShape`, `lossStages` and `baffle` replace LOSS_SHAPE,
-   * LOSS_STAGES and RADIATION_BAFFLE (for calibration), and `walls: false`
+   * `lossShape`, `lossStages` and `baffle` replace LOSS_SHAPE (or
+   * head.lossShape), LOSS_STAGES and RADIATION_BAFFLE (or
+   * head.radiationBaffle) for calibration, and `walls: false`
    * makes the walls rigid.
-   * @param {{sections?: number, noseSections?: number, head?: {wallLoss?: number, nasalLoss?: number, wallMass?: number, wallResistance?: number, wallStiffness?: number}, piriform?: boolean, lossShape?: number, lossStages?: number, baffle?: number, walls?: boolean}} [options]
+   * @param {{sections?: number, noseSections?: number, head?: {wallLoss?: number, nasalLoss?: number, wallMass?: number, wallResistance?: number, wallStiffness?: number, lossShape?: number, radiationBaffle?: number}, piriform?: boolean, lossShape?: number, lossStages?: number, baffle?: number, walls?: boolean}} [options]
    */
   constructor(options = {}) {
     const n = options.sections ?? 44;
@@ -161,8 +162,8 @@ export class Waveguide {
     /** Scale of the boundary (wall and viscous) losses. */
     this.wallLoss = head.wallLoss ?? 1;
     /** Boundary-layer loss relative to a smooth round tube. */
-    this.lossShape = options.lossShape ?? LOSS_SHAPE;
-    this.baffle = options.baffle ?? RADIATION_BAFFLE;
+    this.lossShape = options.lossShape ?? head.lossShape ?? LOSS_SHAPE;
+    this.baffle = options.baffle ?? head.radiationBaffle ?? RADIATION_BAFFLE;
     this.stages = lossStages(n, options.lossStages ?? LOSS_STAGES);
     this.noseStages = lossStages(nose, NOSE_LOSS_STAGES);
     this.walls = options.walls !== false;

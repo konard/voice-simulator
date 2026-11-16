@@ -225,7 +225,7 @@ export function faceRig(state, head, options = {}) {
   // The raw state: a missing jaw or protrusion follows the other channels.
   const shape = options.shape ?? tractShape(state, config);
   const free = shape.articulators ?? articulatorState(state, config);
-  const gap = shape.teeth?.gap ?? REST_GAP;
+  const gap = shape.teeth?.gap ?? config.restGap ?? REST_GAP;
   const angle = jawAngle(gap, config);
   const rounding = clamp(full.rounding);
   const [major, minor] = lipOpening(shape.lipOpening, rounding, config);
