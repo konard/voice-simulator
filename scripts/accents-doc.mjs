@@ -216,14 +216,14 @@ measures are in \`tests/helpers/accent-measures.js\` and checked by
 | \`город\` \`ru-x-south\`: quietest 10 ms of the first consonant below the vowel | 79.5 dB (\`ˈɡorət\`) | 7.7 dB (\`ˈɣorət\`) |
 | \`pit\` \`en-x-ru\`: burst to voicing | 60.0 ms (\`ˈpɪt\`) | 12.5 ms (\`ˈp˭it\`) |
 | \`bad\` \`en-x-ru\`: voiced share of the last consonant | 0.14 (\`ˈbæd\`) | 0.00 (\`ˈbɛt\`) |
-| \`是\` and \`四\` \`zh-TW\`: centroid difference (fricative, whole syllable) | 0.4 %, 15.0 % (\`zh-CN\`) | 0.0 %, 0.0 % |
+| \`是\` and \`四\` \`zh-TW\`: centroid difference of the initials | 29.1 % (\`ʂɻ̩˥˩\` 5426 Hz, \`sɹ̩˥˩\` 7654 Hz) | 0.0 % (\`sɹ̩˥˩\` both) |
 | \`The tiger is the biggest animal of the family.\` \`en-x-zh\`: vowel nPVI | 48.1 | 20.9 |
 
-The sibilants s, ʃ and ʂ have nearly the same noise spectrum on this tier
-(their centroids are 7973, 8005 and 8080 Hz in \`ˈasa\`, \`ˈaʃa\`, \`ˈaʂa\`;
-\`node experiments/issue-57-sibilants.mjs\`), so the plain contrast of 是
-and 四 is 15.0 % over the syllable and 0.4 % in the fricative. The
-synthesizer devoices most of a final closure, so even a plain final d has a
+The retroflex place lies behind the postalveolar one (\`PLACES\` in
+\`src/articulation/phones.js\`), which puts the noise of ʂ below that of s:
+5946 against 7973 Hz in \`ˈaʂa\` and \`ˈasa\`
+(\`node experiments/issue-57-sibilants.mjs\`; 8080 Hz before this issue).
+The synthesizer devoices most of a final closure, so even a plain final d has a
 voiced share of 0.14.
 `;
 

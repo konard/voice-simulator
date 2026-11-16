@@ -4,7 +4,11 @@
  */
 
 import { powerFrames } from '../src/metrics/spectrum.js';
-import { consonants, renderAccent } from '../tests/helpers/accent-measures.js';
+import {
+  consonants,
+  renderAccent,
+  segmentCentroid,
+} from '../tests/helpers/accent-measures.js';
 
 for (const text of ['是', '四', 'ˈaʂa', 'ˈasa', 'ˈaɕa', 'ˈaʃa']) {
   const ipa = /^[\p{Script=Han}]/u.test(text) ? null : text;
@@ -41,7 +45,7 @@ for (const text of ['是', '四', 'ˈaʂa', 'ˈasa', 'ˈaɕa', 'ˈaʃa']) {
   }
   const total = energy.reduce((a, b) => a + b, 0);
   console.log(
-    `${text} /${result.ipa}/ ${segment.token?.symbol} ${(span * 1000).toFixed(0)} ms: ${energy
+    `${text} /${result.ipa}/ ${segment.token?.symbol} ${(span * 1000).toFixed(0)} ms, centroid ${segmentCentroid(result, segment).toFixed(0)} Hz: ${energy
       .map(
         (value, index) =>
           `${bands[index] / 1000}k ${(10 * Math.log10(value / total)).toFixed(0)}`

@@ -552,10 +552,18 @@ describe('accent acoustics', () => {
     const whole = (result) => measureVoice(result, 'centroid');
     expect(apart('zh-TW', fricative)).toBeLessThan(0.1);
     expect(apart('zh-TW', whole)).toBeLessThan(0.1);
-    // The plain contrast: 15.0 % over the whole syllable; the fricatives
-    // alone differ by 0.4 % (s, ʃ and ʂ have nearly the same noise
-    // spectrum on this tier, experiments/issue-57-sibilants.mjs).
-    expect(apart('zh-CN', whole)).toBeGreaterThan(0.1);
+    // The plain contrast of the initials: 29.1 % (5426 against 7654 Hz).
+    expect(apart('zh-CN', fricative)).toBeGreaterThan(0.2);
+  });
+
+  it('puts the noise of a retroflex sibilant below that of s', () => {
+    // Before the retroflex place moved behind the postalveolar one, ʂ and s
+    // had the same noise spectrum (7624 against 7654 Hz).
+    const centroid = (text) => {
+      const result = renderAccent(text, 'zh', 'zh-CN');
+      return segmentCentroid(result, consonants(result)[0]);
+    };
+    expect(centroid('沙')).toBeLessThan(0.8 * centroid('三'));
   });
 
   it('evens out the vowel durations in Chinese English', () => {
