@@ -344,7 +344,9 @@ describe('voice engine benchmark', () => {
       expect(JSON.parse(storage.items.get(BENCHMARK_KEY)).level).toBe(6);
     });
   });
+});
 
+describe('voice engine quality settings', () => {
   it('a fixed tier survives a reload', () => {
     withStorage((storage) => {
       const first = benchmarkEngine();
