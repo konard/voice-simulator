@@ -735,6 +735,12 @@ const COMMANDS = {
         throw new Error(`Unknown tier: ${values.tier}`);
       }
       const load = measureAudioTier(tier, { seconds, repeats, engine });
+      if (values.json) {
+        io.stdout(
+          JSON.stringify({ engine: engine.name, tier: tier.name, load })
+        );
+        return;
+      }
       io.stdout(`engine: ${engine.name}`);
       io.stdout(`${tier.name}: load ${load.toFixed(3)}`);
       return;
