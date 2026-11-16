@@ -3,7 +3,14 @@
  * English, Chinese and Hindi, user lexicons and the size budgets.
  */
 
-import { statSync, readdirSync } from 'node:fs';
+import {
+  mkdtempSync,
+  readdirSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from 'node:fs';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, it, expect } from 'test-anywhere';
@@ -21,6 +28,7 @@ import { textToIpa } from '../src/g2p/index.js';
 import { englishDictionarySize, englishWordToIpa } from '../src/g2p/english.js';
 import { chineseWordToIpa } from '../src/g2p/chinese.js';
 import { hindiWordToIpa } from '../src/g2p/hindi.js';
+import { runCli } from '../bin/voice-simulator.js';
 
 const LETTERS = "abcdefghijklmnopqrstuvwxyz'";
 const SOUNDS = ['a', 'i', 'u', 'ˈ', 'ɹ', 'ð', 'ŋ', 't͡ʃ', 'ə', 'k', 's', 'oʊ'];
@@ -183,6 +191,54 @@ describe('pronunciation lexicons', () => {
       count++;
     }
     expect(count).toBe(lexiconFor('hi').size);
+  });
+});
+
+describe('lexicon files and budgets', () => {
+  it('loads --lexicon files in the CLI', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'voice-simulator-lexicon-'));
+    const plain = join(dir, 'en.json');
+    const full = join(dir, 'zh.json');
+    writeFileSync(plain, JSON.stringify({ quinoa: 'kiˈnoʊə' }));
+    writeFileSync(
+      full,
+      JSON.stringify({
+        format: 'lexicon',
+        version: 1,
+        lang: 'zh',
+        count: 1,
+        words: { 重庆: ['zhòng qìng'] },
+      })
+    );
+    const run = async (args) => {
+      const out = [];
+      const err = [];
+      const code = await runCli(args, {
+        stdout: (line) => out.push(line),
+        stderr: (line) => err.push(line),
+      });
+      return { code, out: out.join('\n'), err: err.join('\n') };
+    };
+    try {
+      const english = await run([
+        'ipa',
+        '-l',
+        'en',
+        '--lexicon',
+        plain,
+        'quinoa',
+      ]);
+      expect(english).toEqual({ code: 0, out: 'kiˈnoʊə', err: '' });
+      const chinese = await run(['ipa', '--json', '--lexicon', full, '重庆']);
+      expect(JSON.parse(chinese.out).words[0].pinyin).toBe('zhòng qìng');
+      const noLang = await run(['ipa', '--lexicon', plain, 'quinoa']);
+      expect(noLang.code).toBe(1);
+      expect(noLang.err).toContain('--lang');
+      expect((await run(['--help'])).out).toContain('--lexicon <file>');
+    } finally {
+      clearLexicons();
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 
   it('stays inside the budgets', () => {
