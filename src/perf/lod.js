@@ -391,13 +391,31 @@ export async function chooseTierAsync(measure, options = {}) {
  */
 export async function chooseTierWithGpu(measure, options = {}) {
   const tiers = options.tiers ?? AUDIO_TIERS;
+  const cpu = await chooseTierAsync(
+    (tier, { limit }) => measure(tier, { limit, gpu: false }),
+    { ...options, tiers }
+  );
+  return chooseGpuTier(
+    (tier, { limit }) => measure(tier, { limit, gpu: true }),
+    cpu,
+    options
+  );
+}
+
+/**
+ * The GPU stage of chooseTierWithGpu on its own: given the CPU's result
+ * `cpu` ({level, loads, measured}, e.g. of benchmarkDevice), measures the
+ * accelerated tiers above `cpu.level` with `measure` (on the GPU) and
+ * returns `cpu` with `gpu` and `gpuLoads` (see chooseTierWithGpu). Without
+ * `options.gpu` nothing is measured.
+ * @param {(tier: object, options: {limit: number}) => Promise<number>} measure
+ * @param {{level: number, loads: number[], measured: boolean[]}} cpu
+ * @param {Parameters<typeof chooseTierWithGpu>[1]} [options]
+ */
+export async function chooseGpuTier(measure, cpu, options = {}) {
+  const tiers = options.tiers ?? AUDIO_TIERS;
   const accelerated =
     options.accelerated ?? ((tier) => tier.solver === 'fdtd3d');
-  const on =
-    (gpu) =>
-    (tier, { limit }) =>
-      measure(tier, { limit, gpu });
-  const cpu = await chooseTierAsync(on(false), { ...options, tiers });
   const gpuLoads = tiers.map(() => null);
   const result = { ...cpu, gpu: false, gpuLoads };
   const start = tiers.findIndex(
@@ -406,7 +424,7 @@ export async function chooseTierWithGpu(measure, options = {}) {
   if (!options.gpu || start < 0) {
     return result;
   }
-  const gpu = await chooseTierAsync(on(true), {
+  const gpu = await chooseTierAsync(measure, {
     ...options,
     tiers: tiers.slice(start),
   });

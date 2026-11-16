@@ -30,6 +30,65 @@ function writeProgress(refs, frame) {
   paintHighlight(refs.spoken.current, frame);
 }
 
+/** User input that ends a task of the app's own (VoiceEngine.ownTask). */
+const INPUT_EVENTS = ['pointerdown', 'pointerup', 'pointermove', 'keydown'];
+
+/**
+ * Main-thread tasks over 50 ms between the benchmark request and its answer
+ * (issue 28: the benchmark must not block the page); the HUD shows them with
+ * `?debug`. Tasks during an utterance or that handled user input are the
+ * app's own (VoiceEngine.ownTask): the benchmark is paused while speaking,
+ * and a click's handling is the same with or without a benchmark. The count
+ * reaches React only after the answer (`to`): a re-render of the app inside
+ * the window would be a long task of its own.
+ */
+function useBenchmarkLongTasks(engineRef, answeredAt) {
+  const [longTasks, setLongTasks] = useState(0);
+  const countRef = useRef(0);
+  useEffect(() => {
+    const Observer = globalThis.PerformanceObserver;
+    if (!Observer?.supportedEntryTypes?.includes('longtask')) {
+      return undefined;
+    }
+    const observer = new Observer((list) => {
+      const engine = engineRef.current;
+      const span = engine?.status.benchmark;
+      if (span?.from === null || span?.from === undefined) {
+        return;
+      }
+      countRef.current += list.getEntries().filter((entry) => {
+        const end = entry.startTime + entry.duration;
+        return (
+          end >= span.from &&
+          (span.to === null || entry.startTime <= span.to) &&
+          !engine.ownTask(entry.startTime, end)
+        );
+      }).length;
+      if (span.to !== null) {
+        setLongTasks(countRef.current);
+      }
+    });
+    observer.observe({ type: 'longtask', buffered: true });
+    const input = () => engineRef.current?.noteInput();
+    const options = { capture: true, passive: true };
+    for (const type of INPUT_EVENTS) {
+      globalThis.addEventListener(type, input, options);
+    }
+    return () => {
+      observer.disconnect();
+      for (const type of INPUT_EVENTS) {
+        globalThis.removeEventListener(type, input, options);
+      }
+    };
+  }, [engineRef]);
+  useEffect(() => {
+    if (answeredAt !== null && answeredAt !== undefined) {
+      setLongTasks(countRef.current);
+    }
+  }, [answeredAt]);
+  return longTasks;
+}
+
 /**
  * Owns the voice engine, the 3D viewer and the animation loop. Settings are
  * read through a ref so the loop never restarts while the user edits them.
@@ -62,6 +121,8 @@ export function useSimulator(settings) {
       engineRef.current = null;
     };
   }, []);
+
+  const longTasks = useBenchmarkLongTasks(engineRef, status.benchmark?.to);
 
   useEffect(() => {
     let viewer = null;
@@ -180,7 +241,8 @@ export function useSimulator(settings) {
     spokenRef,
     engineRef,
     frameRef,
-    status,
+    status: { ...status, longTasks },
+    debug: Boolean(settings.debug),
     visual,
     webglError,
   };

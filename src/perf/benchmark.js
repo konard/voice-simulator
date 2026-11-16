@@ -15,18 +15,25 @@ import {
   chooseTierWithGpu,
 } from './lod.js';
 
-const BENCHMARK_IPA = 'ˈhæloʊ ˈwɜːld';
+/** The utterance every benchmark renders. */
+export const BENCHMARK_IPA = 'ˈhæloʊ ˈwɜːld';
 
 /** Samples rendered between checks of the time limit. */
 const BLOCK = 512;
 
-/** Renderer for the first `seconds` of the benchmark utterance. */
-function benchmarkRenderer(tier, options) {
+/**
+ * Renderer for the first `seconds` (default 0.3) of the benchmark utterance
+ * on `options.engine` (an engine name or object, see getEngine), with the
+ * voxel model `options.model` (built here when not given) for the 3D tiers.
+ */
+export function benchmarkRenderer(tier, options) {
   const head = normalizeHeadConfig(options.head ?? DEFAULT_HEAD);
   const plan = planUtterance(options.ipa ?? BENCHMARK_IPA, { head });
   const seconds = Math.min(plan.duration, options.seconds ?? 0.3);
   const model =
-    tier.solver === 'fdtd3d' ? buildVoxelModel(head, { dx: tier.dx }) : null;
+    tier.solver === 'fdtd3d'
+      ? (options.model ?? buildVoxelModel(head, { dx: tier.dx }))
+      : null;
   const renderOptions = { ...tier, head, model, device: options.device };
   return getEngine(options.engine).createRenderer(
     { ...plan, duration: seconds },

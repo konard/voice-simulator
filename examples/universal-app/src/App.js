@@ -6,6 +6,7 @@ import {
   DEFAULT_HEAD,
   LANGUAGES,
   VISUAL_TIERS,
+  audioTierIndex,
   createSeed,
   headModelObj,
   presetHeadConfig,
@@ -17,6 +18,7 @@ import { AcousticsSettings } from './components/AcousticsSettings.js';
 import { CharacterPanel } from './components/CharacterPanel.js';
 import { HeadEditor } from './components/HeadEditor.js';
 import { DEFAULT_ACOUSTICS, listeningSettings } from './engine/listening.js';
+import { readTierSetting } from './engine/benchmark-cache.js';
 import { PresetSelect, initialPreset } from './components/PresetSelect.js';
 import { VoiceMatch } from './components/VoiceMatch.js';
 import { SpokenText } from './components/SpokenText.js';
@@ -33,6 +35,11 @@ const repositoryUrl =
 // Every release stays published next to the current one (see versions.js).
 const VERSIONS = versionLinks(previousVersions);
 const THEMES = ['system', 'light', 'dark'];
+
+/** `?debug` shows the long tasks of the device benchmark in the HUD. */
+function debugMode() {
+  return new URLSearchParams(window.location.search).has('debug');
+}
 
 function initialSeed() {
   const params = new URLSearchParams(window.location.search);
@@ -134,7 +141,7 @@ function renderingNote({ progress, wait }, t) {
   return `${t.rendering} ${percent}%${seconds}`;
 }
 
-function Hud({ status, visual, mode, t }) {
+function Hud({ status, visual, mode, debug, t }) {
   const audioTier = AUDIO_TIERS[status.audioLevel ?? BASE_AUDIO_LEVEL];
   const solver = status.solver ?? audioTier.solver;
   // The player mode (issue 27) and its underrun count, shown once the
@@ -149,7 +156,9 @@ function Hud({ status, visual, mode, t }) {
   const underruns =
     playback +
     (status.switches ? ` · ${t.switches} ${status.switches}` : '') +
-    (status.overloads ? ` · ${t.overloads} ${status.overloads}` : '');
+    (status.overloads ? ` · ${t.overloads} ${status.overloads}` : '') +
+    // Main-thread tasks over 50 ms while the device benchmark ran (issue 28).
+    (debug ? ` · ${t.longTasks} ${status.longTasks ?? 0}` : '');
   return h(
     'div',
     { className: 'hud', 'aria-live': 'polite' },
@@ -170,9 +179,6 @@ function Hud({ status, visual, mode, t }) {
           t,
         })
       : null,
-    status.phase === 'benchmark'
-      ? h('small', { className: 'hud-note' }, t.benchmarking)
-      : null,
     status.rendering && mode !== 'visual'
       ? h(
           'small',
@@ -192,7 +198,13 @@ function Stage({ simulator, mode, t }) {
       ? h('p', { className: 'stage-note' }, t.noWebgl)
       : null,
     h('span', { className: 'phoneme', ref: simulator.phonemeRef }),
-    h(Hud, { status: simulator.status, visual: simulator.visual, mode, t }),
+    h(Hud, {
+      status: simulator.status,
+      visual: simulator.visual,
+      mode,
+      debug: simulator.debug,
+      t,
+    }),
     h('p', { className: 'stage-hint' }, t.viewerHint),
     h(
       'span',
@@ -237,6 +249,34 @@ function AccentSelect({ transcription, onChange, t }) {
     })),
     onChange: (accent) => onChange({ accent }),
   });
+}
+
+/**
+ * "Measured 3 days ago · rust" and a button that measures this device
+ * again (the silent benchmark of issue 28).
+ */
+function MeasuredNote({ benchmark, onMeasure, t }) {
+  const text = benchmark?.time
+    ? `${t.measuredAgo.replace(
+        '{n}',
+        String(Math.floor((Date.now() - benchmark.time) / 86400000))
+      )} · ${benchmark.engine?.name ?? '?'}`
+    : t.notMeasured;
+  return h(
+    'p',
+    { className: 'measured-note' },
+    h('small', null, text),
+    h(
+      'button',
+      {
+        type: 'button',
+        className: 'ghost',
+        disabled: Boolean(benchmark?.measuring),
+        onClick: onMeasure,
+      },
+      t.measureAgain
+    )
+  );
 }
 
 function SpeakPanel({ speech, setSpeech, simulator, onSpeak, onStop, t }) {
@@ -320,8 +360,8 @@ function SpeakPanel({ speech, setSpeech, simulator, onSpeak, onStop, t }) {
         value: speech.tier,
         options: [
           { value: 'auto', label: t.autoQuality },
-          ...AUDIO_TIERS.map((tier, index) => ({
-            value: String(index),
+          ...AUDIO_TIERS.map((tier) => ({
+            value: tier.name,
             label: `${tier.name} · ${tier.solver} · ${tier.sampleRate / 1000} kHz`,
           })),
         ],
@@ -329,6 +369,11 @@ function SpeakPanel({ speech, setSpeech, simulator, onSpeak, onStop, t }) {
       }),
       h(AccentSelect, { transcription, onChange: update, t })
     ),
+    h(MeasuredNote, {
+      benchmark: simulator.status.benchmark,
+      onMeasure: () => simulator.engineRef.current?.measureAgain(),
+      t,
+    }),
     h(
       'div',
       { className: 'row toggles' },
@@ -455,26 +500,29 @@ export function App() {
   const [seed, setSeed] = useState(initialSeed);
   const [preset, setPreset] = useState(initialPreset);
   const [head, setHead] = useState(() => randomHeadConfig(seed, { preset }));
-  const [speech, setSpeech] = useState({
+  const [speech, setSpeech] = useState(() => ({
     text: LANGUAGES[locale].sample,
     lang: 'auto',
     accent: 'en-US',
     mode: 'both',
-    // The most detailed tier this device renders in real time with 20%
-    // headroom, measured on the CPU and on WebGPU.
-    tier: 'auto',
+    // 'auto': the most detailed tier this device renders in real time with
+    // 20% headroom, measured on the CPU and on WebGPU; or a tier name. Kept
+    // for the next visit (VoiceEngine.setTier).
+    tier: readTierSetting(),
     animateMouth: true,
     showField: true,
-  });
+  }));
   const [acoustics, setAcoustics] = useState(() => ({ ...DEFAULT_ACOUSTICS }));
   const listening = useMemo(() => listeningSettings(acoustics), [acoustics]);
+  const debug = useMemo(debugMode, []);
   const simulator = useSimulator({
     listening,
     head,
     mode: speech.mode,
     animateMouth: speech.animateMouth,
     showField: speech.showField,
-    tier: speech.tier === 'auto' ? null : Number(speech.tier),
+    tier: speech.tier === 'auto' ? null : audioTierIndex(speech.tier),
+    debug,
   });
 
   useEffect(() => {

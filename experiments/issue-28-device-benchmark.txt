@@ -1,0 +1,12 @@
+js(js) run 1: wall 0.488 s, cpu 0.452 s, longest slice 206.7 ms, level medium
+  telephone=0.467 narrowband=0.442 wideband=0.265 minimal=0.173 low=0.372 medium=0.420 high=1.616* ultra=10.505* studio=16.969* reference=35.554*  (* predicted)
+js(js) run 2: wall 1.109 s, cpu 1.064 s, longest slice 860.5 ms, level medium
+  telephone=0.209 narrowband=0.113 wideband=0.116 minimal=0.158 low=0.171 medium=0.350 high=3.303 ultra=21.470* studio=34.682* reference=72.668*  (* predicted)
+js(js) run 3: wall 0.171 s, cpu 0.131 s, longest slice 49.3 ms, level minimal
+  telephone=0.116 narrowband=0.141 wideband=0.229 minimal=0.167 low=0.845 medium=1.373* high=5.280* ultra=34.321* studio=55.441* reference=116.162*  (* predicted)
+auto(js) run 1: wall 0.611 s, cpu 0.548 s, longest slice 362.8 ms, level medium
+  telephone=0.157 narrowband=0.074 wideband=0.091 minimal=0.162 low=0.145 medium=0.151 high=2.320 ultra=15.079* studio=24.358* reference=51.036*  (* predicted)
+auto(js) run 2: wall 0.671 s, cpu 0.593 s, longest slice 402.9 ms, level medium
+  telephone=0.053 narrowband=0.232 wideband=0.071 minimal=0.207 low=0.186 medium=0.233 high=1.571 ultra=10.210* studio=16.493* reference=34.556*  (* predicted)
+auto(js) run 3: wall 0.583 s, cpu 0.545 s, longest slice 349.9 ms, level medium
+  telephone=0.025 narrowband=0.035 wideband=0.108 minimal=0.110 low=0.143 medium=0.153 high=1.630 ultra=10.594* studio=17.114* reference=35.858*  (* predicted)
