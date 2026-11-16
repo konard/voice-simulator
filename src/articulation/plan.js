@@ -43,7 +43,12 @@ import {
 } from './modes.js';
 import { approachTargets as approachToneTargets } from './tone-model.js';
 import { consonantJaw, teethGap } from './teeth.js';
-import { EFFORT_RULES, effortJaw, TENSION_PER_DB } from './effort.js';
+import {
+  EFFORT_RULES,
+  effortJaw,
+  foldPitchFactor,
+  TENSION_PER_DB,
+} from './effort.js';
 import { LIP_PROTRUSION } from './vowel-space.js';
 import {
   durationFeatures,
@@ -874,12 +879,15 @@ function fillFoldDrive(channels, steps, head) {
 
 /**
  * Fold tension for the final pitch and lung pressure. It follows the f0
- * channel, which is already smoothed with the same 0.03 s.
+ * channel, which is already smoothed with the same 0.03 s. Under vocal
+ * effort the tension is set for the pitch less the rise the folds give on
+ * their own at the raised pressure (`foldPitchFactor()`, issue 52).
  */
 function fillFoldTension(channels, head) {
-  const { f0, lungPressure, foldTension } = channels;
+  const { f0, lungPressure, foldTension, effort } = channels;
   for (let frame = 0; frame < f0.length; frame++) {
-    foldTension[frame] = tensionForPitch(f0[frame], lungPressure[frame], head);
+    const pitch = f0[frame] * foldPitchFactor(effort[frame]);
+    foldTension[frame] = tensionForPitch(pitch, lungPressure[frame], head);
   }
 }
 

@@ -15,6 +15,7 @@ import {
   effortChanges,
   effortToSpl,
   fastEffortRamps,
+  foldPitchFactor,
   integratedLoudness,
   levelDb,
   maxModeLevel,
@@ -99,6 +100,24 @@ describe('vocal effort', () => {
     const f1 = ipa('ˈa').voice.formants[0];
     near(ipa('{f ˈa f}').voice.formants[0] - f1, 35, 15);
     near(ipa('{ff ˈa ff}').voice.formants[0] - f1, 70, 25);
+  });
+
+  it('keeps the pitch rule on the fold source', () => {
+    // Step 8: the fold tension is set for the pitch less the rise the
+    // folds give on their own, so both sources shift `ˈa` alike.
+    const folds = (text) =>
+      measure(text, { ipa: true, markup: false, source: 'folds' }).voice.f0;
+    const plainFolds = folds('ˈa');
+    const plainLf = ipa('ˈa').voice.f0;
+    for (const text of ['{f ˈa f}', '{ff ˈa ff}']) {
+      near(
+        semitones(folds(text), plainFolds),
+        semitones(ipa(text).voice.f0, plainLf),
+        0.5
+      );
+    }
+    expect(foldPitchFactor(0)).toBe(1);
+    near(foldPitchFactor(20), 2 ** (-1.34 / 12), 1e-12);
   });
 
   it('lengthens vowels, not consonants', () => {

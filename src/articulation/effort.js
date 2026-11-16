@@ -14,7 +14,10 @@
  *   lengthens vowels (src/articulation/plan.js);
  * - the planner raises the lung pressure channel by `2^(E/9)`; the fold
  *   source (`source: 'folds'`) gets its level and tilt from it, so the
- *   level and tilt rules below are for the LF source only;
+ *   level and tilt rules below are for the LF source only; the fold
+ *   tension is set for the pitch less the rise the folds give on their
+ *   own (`foldPitchFactor()`, FOLD_PITCH_RISE), so both sources keep the
+ *   pitch rule;
  * - the LF glottis adds the `tension` channel to its tenseness, multiplies
  *   its voiced part by `effortVoicedGain()` (`10^(E/20)` less LEVEL_TRIM,
  *   the level the pitch, tension, tilt and jaw add) and passes it through
@@ -80,6 +83,31 @@ export const LEVEL_TRIM = Object.freeze([
   [10, 2.5],
   [20, 5.9],
 ]);
+
+/**
+ * Pitch rise (semitones) the fold source (`source: 'folds'`) gives on its
+ * own at an effort of `E` dB, linear between the points ([E, st]): the
+ * fold tension is set for the planned pitch at the planned lung pressure,
+ * yet the folds still sound higher at a raised pressure. Measured on `ˈa`
+ * with `node experiments/issue-52-folds-pitch.mjs` (issue 52, step 8);
+ * the planner takes it from the pitch the fold tension is set for.
+ */
+export const FOLD_PITCH_RISE = Object.freeze([
+  [-10, -0.18],
+  [0, 0],
+  [10, 0.4],
+  [20, 1.34],
+]);
+
+/**
+ * Factor on the pitch the fold tension is set for at an effort of `E` dB,
+ * so that the fold source keeps the pitch rule (FOLD_PITCH_RISE).
+ * @param {number} E Effort in dB.
+ * @returns {number} 1 at normal effort.
+ */
+export function foldPitchFactor(E) {
+  return E === 0 ? 1 : 2 ** (-polyline(FOLD_PITCH_RISE, E) / 12);
+}
 
 /** Corner (Hz) of the second-order high-pass of the tilt shelf. */
 export const TILT_CORNER = 1000;

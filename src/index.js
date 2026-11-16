@@ -51,11 +51,13 @@ export {
   EFFORT_PITCH_LIMITS,
   EFFORT_RAMP_LIMIT,
   EFFORT_RULES,
+  FOLD_PITCH_RISE,
   decibelsToEffort,
   effortChanges,
   effortToDecibels,
   effortToSpl,
   fastEffortRamps,
+  foldPitchFactor,
   maxModeLevel,
   splToEffort,
 } from './articulation/effort.js';

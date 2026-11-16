@@ -463,6 +463,13 @@ export declare const EFFORT_PITCH_LIMITS: Readonly<{
 }>;
 /** Effort ramps faster than this (dB/s) get a warning. */
 export declare const EFFORT_RAMP_LIMIT: number;
+/**
+ * Pitch rise (semitones) the fold source gives on its own at `E` dB,
+ * `[E, st]` points measured on `ˈa` (issue 52, step 8).
+ */
+export declare const FOLD_PITCH_RISE: ReadonlyArray<readonly [number, number]>;
+/** Factor on the pitch the fold tension is set for at `E` dB. */
+export declare function foldPitchFactor(E: number): number;
 /** The value of every rule at `E` dB (pitch in semitones re `head.pitch`). */
 export declare function effortChanges(
   E: number,
