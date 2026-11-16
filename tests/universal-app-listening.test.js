@@ -4,6 +4,7 @@ import {
   DEFAULT_ACOUSTICS,
   boxProblem,
   enclosureCells,
+  engineLabel,
   listeningSettings,
 } from '../examples/universal-app/src/engine/listening.js';
 import { strings } from '../examples/universal-app/src/i18n.js';
@@ -45,6 +46,34 @@ describe('example app listening settings', () => {
     expect(listeningSettings({ ...DEFAULT_ACOUSTICS, gpu: false })).toEqual({
       gpu: false,
     });
+  });
+
+  it('renders with the engine setting, auto by default', () => {
+    expect(DEFAULT_ACOUSTICS.engine).toBe('auto');
+    expect(listeningSettings(DEFAULT_ACOUSTICS).engine).toBe(undefined);
+    expect(listeningSettings({ ...DEFAULT_ACOUSTICS, engine: 'js' })).toEqual({
+      engine: 'js',
+    });
+  });
+
+  it('labels the engine of the worker', () => {
+    const labels = strings('en').acoustics;
+    expect(engineLabel({ name: 'rust', simd: true }, labels)).toBe(
+      'Engine: Rust (SIMD)'
+    );
+    expect(engineLabel({ name: 'rust', simd: false }, labels)).toBe(
+      'Engine: Rust'
+    );
+    expect(engineLabel({ name: 'js', reason: 'no wasm' }, labels)).toBe(
+      'Engine: JavaScript (no wasm)'
+    );
+    expect(engineLabel({ name: 'js', reason: null }, labels)).toBe(
+      'Engine: JavaScript'
+    );
+    expect(engineLabel({ name: null, error: 'x' }, labels)).toBe(
+      'Engine: unavailable (x)'
+    );
+    expect(engineLabel(null, labels)).toBe('Engine: …');
   });
 
   it('accepts the default box on every tier and flags boxes that cannot work', () => {

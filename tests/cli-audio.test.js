@@ -10,6 +10,7 @@ import {
   encodeHeadConfig,
   presetHeadConfig,
 } from '../src/index.js';
+import { noRust } from './helpers/rust-engine.js';
 import { itUnless, sandboxed } from './helpers/skip.js';
 
 const SAY = ['say', 'ˈmama', '--ipa', '--tier', 'minimal'];
@@ -281,5 +282,38 @@ describe('CLI speech markup', () => {
     expect(doctype.code).toBe(1);
     const both = await cli(['ipa', '--markup', '--plain', 'Hi']);
     expect(both.code).toBe(1);
+  });
+});
+
+describe('CLI engines', () => {
+  itUnless(noRust)(
+    '--engine js and --engine rust render the same length',
+    async () => {
+      const js = await cli([...SAY, '-o', '-', '--engine', 'js']);
+      const rust = await cli([...SAY, '-o', '-', '--engine', 'rust']);
+      expect(js.code).toBe(0);
+      expect(rust.code).toBe(0);
+      const jsSamples = decodeAudio(js.bytes).samples;
+      const rustSamples = decodeAudio(rust.bytes).samples;
+      expect(jsSamples.length > 1000).toBe(true);
+      expect(rustSamples.length).toBe(jsSamples.length);
+    }
+  );
+
+  it('rejects an unknown engine', async () => {
+    const result = await cli([...SAY, '-o', '-', '--engine', 'nope']);
+    expect(result.code).toBe(1);
+    expect(result.stderr.join('\n')).toContain(
+      'Unknown engine: nope (auto, rust, js)'
+    );
+  });
+
+  it('prints the engine of a benchmark', async () => {
+    const argv = ['benchmark', '--tier', 'minimal', '--seconds', '0.05'];
+    const result = await cli([...argv, '--engine', 'js']);
+    expect(result.code).toBe(0);
+    expect(result.stdout[0]).toBe('engine: js');
+    const json = await cli([...argv, '--json', '--engine', 'js']);
+    expect(JSON.parse(json.stdout.join('\n')).engine).toBe('js');
   });
 });
