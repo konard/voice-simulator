@@ -5,10 +5,12 @@
  */
 
 import { describe, it, expect } from 'test-anywhere';
+import { runCli } from '../bin/voice-simulator.js';
 import {
   EFFORT_RULES,
   alphaRatio,
   analyzeVoice,
+  decodeAudio,
   decibelsToEffort,
   effortChanges,
   effortToSpl,
@@ -262,5 +264,41 @@ describe('loudness', () => {
       error = caught;
     }
     expect(error?.message ?? '').toMatch(/loudnessTarget/);
+  });
+});
+
+describe('CLI', () => {
+  async function say(...args) {
+    const bytes = [];
+    const stderr = [];
+    const code = await runCli(['say', ...args, '--float', '-o', '-'], {
+      stdout: () => {},
+      stderr: (line) => stderr.push(line),
+      stdoutBytes: (data) => bytes.push(data),
+    });
+    expect(stderr).toEqual([]);
+    expect(code).toBe(0);
+    return decodeAudio(bytes[0]);
+  }
+
+  it('keeps a shout below 0.98', async () => {
+    // The default (3D) tier gives the same headroom; tier low is faster.
+    const { samples } = await say(
+      '--markup',
+      '[shout]Hey![/shout]',
+      '--tier',
+      'low'
+    );
+    expect(Math.max(...samples.map(Math.abs)) < 0.98).toBe(true);
+  });
+
+  it('scales to --loudness', async () => {
+    const { samples, sampleRate } = await say(
+      'Hello there.',
+      '--tier',
+      'low',
+      '--loudness=-23'
+    );
+    near(integratedLoudness(samples, sampleRate), -23, 0.5);
   });
 });
