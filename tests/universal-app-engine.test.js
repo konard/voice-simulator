@@ -279,7 +279,9 @@ describe('voice engine benchmark', () => {
       expect(postedOf(second.worker, 'benchmark').length).toBe(1);
     });
   });
+});
 
+describe('voice engine benchmark cache', () => {
   it('three overloads drop the cache', async () => {
     await withStorage(async (storage) => {
       const first = benchmarkEngine();
