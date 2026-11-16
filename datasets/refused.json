@@ -34,5 +34,23 @@
     "licence": "Non-commercial, registration",
     "reason": "\"The corpus is FREE for noncommercial uses\"; the download needs a login",
     "url": "https://buckeyecorpus.osu.edu/"
+  },
+  {
+    "title": "PTDB-TUG, Pitch Tracking Database from Graz University of Technology",
+    "licence": "ODbL-1.0 and DbCL-1.0",
+    "reason": "\"made available under the Open Database License\": share-alike",
+    "url": "https://www.spsc.tugraz.at/databases-and-tools/ptdb-tug-pitch-tracking-database-from-graz-university-of-technology.html"
+  },
+  {
+    "title": "Keele Pitch Extraction Reference Database",
+    "licence": "Non-commercial",
+    "reason": "\"free for noncommercial use\"; no official licence page or download",
+    "url": "https://zenodo.org/records/3920591"
+  },
+  {
+    "title": "CSTR FDA database for evaluating pitch determination algorithms",
+    "licence": "Unknown",
+    "reason": "no licence; \"all material is copyright © The University of Edinburgh\"",
+    "url": "https://www.cstr.ed.ac.uk/research/projects/fda"
   }
 ]

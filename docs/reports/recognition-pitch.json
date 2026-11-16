@@ -1,0 +1,24 @@
+{
+  "corpora": [],
+  "candidates": [
+    {
+      "name": "PTDB-TUG",
+      "url": "https://www.spsc.tugraz.at/databases-and-tools/ptdb-tug-pitch-tracking-database-from-graz-university-of-technology.html",
+      "licence": "ODbL-1.0 and DbCL-1.0",
+      "reason": "\"made available under the Open Database License\": share-alike"
+    },
+    {
+      "name": "Keele",
+      "url": "https://zenodo.org/records/3920591",
+      "licence": "Non-commercial",
+      "reason": "\"free for noncommercial use\"; no official licence page or download"
+    },
+    {
+      "name": "CSTR FDA",
+      "url": "https://www.cstr.ed.ac.uk/research/projects/fda",
+      "licence": "Unknown",
+      "reason": "no licence; \"all material is copyright © The University of Edinburgh\""
+    }
+  ],
+  "measured": null
+}

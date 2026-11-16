@@ -653,19 +653,13 @@ analyzer.trim(100); // drop the first 100 frames (0.5 s) and their samples
 analyzeFrames(samples, 16000).count; // one call for a whole recording
 ```
 
-Later stages follow one pattern: `createX(frames, options)` returns an object
-with `advance(final = false)`, which processes the frames added since the
-last call, and an output whose arrays have `frames.capacity` rows and a
-field `committed` (rows before it never change; type `FrameStage`). After
-`trim()` a stage is invalid and is created again. `createFft`, `lpcBurg`,
-`lpcAutocorrelation`, `lpcCovariance`, `predictorFromReflection` and
-`lpcLevel` are exported too.
+Later stages follow one pattern: `createX(frames, options)` returns an object with `advance(final = false)`, which processes the frames added since the last call, and an output whose arrays have `frames.capacity` rows and a field `committed` (rows before it never change; type `FrameStage`). After `trim()` a stage is invalid and is created again. `createFft`, `lpcBurg`, `lpcAutocorrelation`, `lpcCovariance`, `predictorFromReflection` and `lpcLevel` are exported too.
 
-Measured with `node experiments/issue-58-rtf.mjs` (10 s of speech, one
-thread): 0.0138 of real time at 16000 Hz, 0.0059 at 8000 Hz and 0.0199 for
-44100 Hz input (the budget is 0.05 and 0.03). The added delay is 12.5 ms
-at 8000 and 16000 Hz and 13.5 ms at 44100 and 48000 Hz
-(`node experiments/issue-58-delay.mjs`; the budget is 20 ms).
+Measured with `node experiments/issue-58-rtf.mjs` (10 s of speech, one thread): 0.0138 of real time at 16000 Hz, 0.0059 at 8000 Hz and 0.0199 for 44100 Hz input (the budget is 0.05 and 0.03). The added delay is 12.5 ms at 8000 and 16000 Hz and 13.5 ms at 44100 and 48000 Hz (`node experiments/issue-58-delay.mjs`; the budget is 20 ms).
+
+### Pitch and voicing tracker
+
+`trackPitch(frames, options)` and the stage `createPitchTracker(frames, options)` find f0 and voicing in every frame of the front end: Boersma (1993) autocorrelation candidates on the sound decimated to about 4 kHz (Hann window of 3 / `minF0`), refined at the working rate, and a Viterbi path through the candidates and "unvoiced". A stream fixes frame t when frame t + `lag` (20, 100 ms plus 25 ms of window) has been scored. The track holds `f0` (0 when unvoiced), `voicing`, `strength`, the period `marks`, `jitter` and `shimmer` (percent, `null` below 20 periods; `jitterToHead` converts them to the head setting) and the `median`, `low` and `high` f0; defaults in `PITCH_DEFAULTS`. `trackPitch(analyzeFrames(samples, 16000)).f0` is f0 per 5 ms. On the six synthetic voices it has no gross errors and a voicing error of at most 0.0078 (`node experiments/issue-59-pitch-set.mjs`), costs 0.034 of real time at 16000 Hz (`node experiments/issue-59-rtf.mjs`), and keeps the frame error at or below 0.0091 in white noise at 10 dB (`tests/recognition-pitch.test.js`).
 
 ### Quality
 

@@ -335,6 +335,13 @@ export {
   createFrameAnalyzer,
   workingRate,
 } from './recognition/frontend.js';
+// Pitch and voicing tracker (issue 59).
+export {
+  PITCH_DEFAULTS,
+  createPitchTracker,
+  jitterToHead,
+  trackPitch,
+} from './recognition/pitch.js';
 export { encodeWav, decodeWav, wavHeader } from './audio/wav.js';
 export {
   headLandmarks,

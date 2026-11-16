@@ -1,0 +1,13 @@
+missing fundamental, order 4 {"gpe":0,"vde":0.0091,"ffe":0.0091}
+missing fundamental, order 8 {"gpe":0.019,"vde":0.0091,"ffe":0.0221}
+noise only @16000 {"frames":400,"voiced":0}
+noise only @8000 {"frames":400,"voiced":0}
+stream male@16000 {"frames":852,"streamFrames":852,"differ":0,"share":0,"rewritten":0}
+stream male@8000 {"frames":852,"streamFrames":852,"differ":0,"share":0,"rewritten":0}
+stream female@16000 {"frames":837,"streamFrames":837,"differ":0,"share":0,"rewritten":0}
+stream female@8000 {"frames":837,"streamFrames":837,"differ":0,"share":0,"rewritten":0}
+stream child@16000 {"frames":921,"streamFrames":921,"differ":0,"share":0,"rewritten":0}
+stream child@8000 {"frames":921,"streamFrames":921,"differ":0,"share":0,"rewritten":0}
+aː jitter 0.2 shimmer 1 {"seconds":2.2601,"marks":233,"jitter":0.3681,"shimmer":1.6574,"jitterHead":0.3262,"shimmerHead":1.4688}
+aː jitter 1 shimmer 4 {"seconds":2.2601,"marks":233,"jitter":0.751,"shimmer":3.5019,"jitterHead":0.6656,"shimmerHead":3.1035}
+aː jitter 2 shimmer 8 {"seconds":2.2601,"marks":233,"jitter":1.4076,"shimmer":6.2407,"jitterHead":1.2474,"shimmerHead":5.5306}
