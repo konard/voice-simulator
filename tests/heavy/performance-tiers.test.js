@@ -11,7 +11,8 @@
  * number of tiers (cheapest first). Without the Rust engine its tests are
  * skipped with a visible reason; REQUIRE_WASM=1 turns that into an error.
  * The speed rules are checked in CI or with PERFORMANCE_COMPARE=1: on a
- * developer machine they say more about what else runs than about the code.
+ * developer machine they say more about what else runs than about the code,
+ * unless PERFORMANCE_BASELINE names a baseline made on that machine.
  * With the threads build (`node scripts/build-wasm.mjs --threads`) the 3D
  * tiers are also measured on every core as rows of engine `rust-mt`.
  */
@@ -36,10 +37,11 @@ import { itUnless } from '../helpers/skip.js';
 import { heavyLimit, writeReport } from './helpers/report.js';
 
 const TEXT = 'The quick brown fox jumps over the dog.';
-const BASELINE = new URL(
-  `../../docs/reports/${FILES.baseline}`,
-  import.meta.url
-);
+// PERFORMANCE_BASELINE compares with another report, such as one of this
+// machine (`node scripts/performance.mjs baseline <report> --dir <folder>`).
+const BASELINE =
+  process.env.PERFORMANCE_BASELINE ||
+  new URL(`../../docs/reports/${FILES.baseline}`, import.meta.url);
 const candidates = AUDIO_TIERS.filter((tier) => tier.name !== 'reference');
 const tiers = candidates.slice(0, heavyLimit(candidates.length));
 const partial = Boolean(process.env.HEAVY_LIMIT);
@@ -151,7 +153,7 @@ describe('performance of the audio tiers (issue 31)', () => {
       );
       lines.push(comparisonMarkdown(comparison));
     } else {
-      lines.push(`No baseline: ${FILES.baseline} does not exist yet.`);
+      lines.push(`No baseline: ${BASELINE} does not exist yet.`);
     }
     writeReport('performance-tiers', lines.join('\n'), report);
   });
@@ -161,7 +163,7 @@ describe('performance of the audio tiers (issue 31)', () => {
     () => {
       if (!comparison) {
         throw new Error(
-          `no baseline to compare with: docs/reports/${FILES.baseline} is missing (node scripts/performance.mjs baseline <report.json>)`
+          `no baseline to compare with: ${BASELINE} is missing (node scripts/performance.mjs baseline <report.json>)`
         );
       }
       expect(comparison.failures).toEqual([]);

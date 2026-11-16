@@ -133,6 +133,17 @@ node scripts/performance.mjs compare reports/heavy/performance-tiers.json
 node scripts/performance.mjs compare new.json --baseline old.json --tolerance 2
 ```
 
+The calibration loop does not follow every machine: a busy developer machine
+renders slower than its calibration says, so a local comparison with the CI
+baseline can fail with no change of code. Compare with a baseline of your own
+machine instead:
+
+```bash
+node scripts/performance.mjs baseline reports/heavy/performance-tiers.json --dir /tmp/mine
+PERFORMANCE_COMPARE=1 PERFORMANCE_BASELINE=/tmp/mine/performance-baseline.json \
+  npm run test:heavy -- --suite performance
+```
+
 The workflow never commits; the files in `docs/reports/` change only in a pull
 request, from the artifact of a green run of suite `performance`:
 
