@@ -497,7 +497,6 @@ npx voice-simulator compare recording.wav hello.wav --json   # distances from a 
 npx voice-simulator mesh --lod 3 -o head.obj
 npx voice-simulator benchmark
 npx voice-simulator benchmark --engine js --json   # {"engine":"js",...}
-npx voice-simulator benchmark --quick   # the app's 1 s load-time benchmark, plus "cpu: 0.95 s"
 npx voice-simulator say "Hello" --engine js -o js.wav   # byte-stable output
 npx voice-simulator serve --port 8080
 npx voice-simulator --help
