@@ -1,0 +1,15 @@
+breathy degree 0.33: h1h2 8.52
+breathy degree 0.67: h1h2 10.50
+breathy degree 1: h1h2 11.72
+{C ˈa C}: duration 0.59 s, pulseF0 64.72 Hz, segments pause:60 vowel:332 pause:200
+ˈma̤ma: v1 pulseH1H2 0.00 pulseF0 134.48; v2 pulseH1H2 5.42 pulseF0 92.77; analyze v1 h1h2 10.82 f0 133.91 v2 h1h2 5.43 f0 92.94
+ˈmama: v1 pulseH1H2 4.55 pulseF0 134.14; v2 pulseH1H2 5.38 pulseF0 92.66; analyze v1 h1h2 4.54 f0 134.33 v2 h1h2 5.34 f0 92.91
+ˈma̰ma: v1 pulseH1H2 0.58 pulseF0 86.09; v2 pulseH1H2 5.37 pulseF0 92.29; analyze v1 h1h2 0.55 f0 86.26 v2 h1h2 5.27 f0 92.45
+hi paː: pause:60.0 consonant:74.5 release:15.0 vowel:266.8 pause:200.0 release voicedShare 0.00 pulseH1H2 0.00 analyze h1h2 0.00; vowel first 80 ms pulseH1H2 5.34 analyze h1h2 5.37
+hi pʰaː: pause:60.0 consonant:74.5 release:60.0 vowel:266.8 pause:200.0 release voicedShare 0.00 pulseH1H2 0.00 analyze h1h2 0.00; vowel first 80 ms pulseH1H2 34.24 analyze h1h2 5.63
+hi baː: pause:60.0 consonant:70.0 vowel:266.8 pause:200.0; vowel first 80 ms pulseH1H2 -55.47 analyze h1h2 5.17
+hi bʱaː: pause:60.0 consonant:70.0 release:80.0 vowel:266.8 pause:200.0 release voicedShare 0.86 pulseH1H2 0.00 analyze h1h2 12.11; vowel first 80 ms pulseH1H2 6.19 analyze h1h2 7.08
+finalCreak 1: first vowel jitter 0.18 %, last vowel jitter 10.09 %, last vowel pulseF0 75.12 Hz, creak max 0.46
+finalCreak 0: first vowel jitter 0.18 %, last vowel jitter 0.00 %, last vowel pulseF0 89.53 Hz, creak max 0.00
+text {V̰ ˈmɑ V̰} vs IPA {V̰ ˈmɑ V̰}: lengths 134 134, equal true, max 0.67 0.67
+text {V̰ ˈmɑ V̰} vs IPA {V̰ ma V̰}: lengths 134 117, equal false, max 0.67 0.67

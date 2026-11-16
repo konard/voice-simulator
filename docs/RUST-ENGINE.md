@@ -152,9 +152,9 @@ The module imports nothing; the threads build imports only its memory
 
 - Every export starts with `vs_`. Arguments and results are `u32`, `i32` or
   `f64` only: no strings, no structs.
-- `vs_abi_version() -> u32` returns the interface version, now 3 (issue
-  23 changed `vs_renderer_new` and the frame layout, issue 52 the frame
-  layout and `vs_glottis_run`). Any
+- `vs_abi_version() -> u32` returns the interface version, now 4 (issue
+  23 changed `vs_renderer_new` and the frame layout, issues 52 and 54 the
+  frame layout and `vs_glottis_run`). Any
   breaking change of an export (removed, renamed, a different signature or
   meaning) raises it, together with `ENGINE_ABI_VERSION` in the loader.
 - `vs_alloc(bytes: u32) -> u32` returns an offset aligned to 8, or 0 when
@@ -173,7 +173,7 @@ The module imports nothing; the threads build imports only its memory
 
 | Export                                                             | Result                                                                               |
 | ------------------------------------------------------------------ | ------------------------------------------------------------------------------------ |
-| `vs_abi_version() -> u32`                                          | 3                                                                                    |
+| `vs_abi_version() -> u32`                                          | 4                                                                                    |
 | `vs_alloc(bytes) -> u32`                                           | Offset of a block aligned to 8, or 0                                                 |
 | `vs_free(ptr, bytes)`                                              | Frees a block of `vs_alloc`                                                          |
 | `vs_hash_seed_utf16(ptr, len) -> u32`                              | `hashSeed` of the `len` UTF-16 code units at `ptr`; traps on a bad range             |
@@ -200,7 +200,7 @@ The module imports nothing; the threads build imports only its memory
 | `vs_renderer_field(handle, out, capacity) -> i32`                  | Writes the pressure of the oral, then the nasal sections; how many                   |
 | `vs_renderer_free(handle) -> i32`                                  | Frees the renderer; 0 or `BAD_HANDLE`                                                |
 | `vs_biquad_run(kind, f, q, rate, data, count) -> i32`              | A `Biquad` (0 low-pass, 1 high-pass, 2 band-pass) over `data` in place; 0 or error   |
-| `vs_glottis_run(seed, params, data, count) -> i32`                 | A `Glottis` over the noise at `data` in place (23 parameters); periods or error      |
+| `vs_glottis_run(seed, params, data, count) -> i32`                 | A `Glottis` over the noise at `data` in place (27 parameters); periods or error      |
 | `vs_radiation_run(area, rate, baffle, data, count) -> i32`         | A `Radiation` over the incident waves at `data` in place; 0 or error                 |
 | `vs_waveguide_run(params, n, data, count) -> i32`                  | A `Waveguide` stepped by the glottal input at `data` in place; 0 or error            |
 | `vs_stages_run(seed, sr, gain, band, rate, f, data, count) -> i32` | `NoiseSources` plus `OutputStage` over `data` in place; 0 or error                   |
@@ -598,6 +598,19 @@ sources by the noise gains (`effortNoiseGain`, `effortTransientGain` of
 `src/articulation/effort.js`). At `E = 0` every gain is 1, so the samples
 of plain speech do not change. `vs_glottis_run` takes the control's effort
 and tension as parameters 21 and 22.
+
+Phonation types (issue 54) add fields 18 `BREATH`, 19 `CREAK`, 20
+`FALSETTO` and 21 `HARSH` (`shape.glottis.breath` and so on, 0 to 1);
+`EXTRA` moves to 22 and `STRIDE` to 23, so a frame has `23 + sections + 1`
+values, and the interface version goes to 4. The glottis lowers f0 by 12
+semitones under creak (not below 25 Hz) with more jitter and double
+pulsing, raises it by 12 semitones under falsetto with -6 dB and a
+one-pole low-pass, adds jitter, shimmer and breath noise under harsh voice,
+and takes `noise_breathiness` (the head breathiness plus 0.6 times breath)
+for the breath noise and the glottal area (`PHONATION_SOURCE`,
+`phonationF0` and `noiseBreathiness` of `src/acoustics/glottis.js`). With
+every channel at 0 the samples do not change. `vs_glottis_run` takes
+breath, creak, falsetto and harsh as parameters 23 to 26.
 
 A render job (`renderJob`, `scripts/write-render-job.mjs`) is
 `[config length, config..., model length in bytes, model..., frame count,

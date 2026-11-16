@@ -1,0 +1,16 @@
+source lf
+  modal     adduction 0.47 foldTension 0.84 lung 781.03 Pa | f0 128.34 (0.00 st) pulseF0 128.64 (0.00 st) h1h2 4.72 hnr 20.41 cpp 28.01 jitter 0.76 % 
+  breathy   adduction 0.14 foldTension 0.84 lung 781.03 Pa | f0 126.58 (-0.24 st) pulseF0 130.20 (0.21 st) h1h2 11.72 hnr 4.74 cpp 15.83 jitter 1.29 % pass
+  lax       adduction 0.36 foldTension 0.84 lung 781.03 Pa | f0 128.25 (-0.01 st) pulseF0 128.65 (0.00 st) h1h2 9.66 hnr 20.04 cpp 24.67 jitter 0.76 % pass
+  pressed   adduction 0.62 foldTension 0.84 lung 781.03 Pa | f0 128.40 (0.01 st) pulseF0 128.45 (-0.03 st) h1h2 -4.55 hnr 19.33 cpp 33.30 jitter 0.94 % pass
+  creaky    adduction 0.60 foldTension 0.48 lung 781.03 Pa | f0 514.37 (24.03 st) pulseF0 62.43 (-12.52 st) h1h2 11.15 hnr 5.66 cpp 16.35 jitter 7.06 % pass
+  falsetto  adduction 0.18 foldTension 1.75 lung 781.03 Pa | f0 253.49 (11.78 st) pulseF0 254.12 (11.79 st) h1h2 13.11 hnr 12.10 cpp 15.68 jitter 2.37 % pass
+  harsh     adduction 0.62 foldTension 0.84 lung 781.03 Pa | f0 128.52 (0.02 st) pulseF0 127.68 (-0.13 st) h1h2 -4.40 hnr 8.02 cpp 27.19 jitter 3.46 % pass
+source folds
+  modal     adduction 0.47 foldTension 0.84 lung 781.03 Pa | f0 128.40 (0.00 st) pulseF0 320.11 (0.00 st) h1h2 3.83 hnr 15.09 cpp 25.77 jitter 0.49 % 
+  breathy   adduction 0.14 foldTension 0.84 lung 781.03 Pa | f0 104.76 (-3.52 st) pulseF0 276.14 (-2.56 st) h1h2 6.93 hnr 4.38 cpp 15.50 jitter 30.93 % FAIL
+  lax       adduction 0.36 foldTension 0.84 lung 781.03 Pa | f0 119.16 (-1.29 st) pulseF0 275.35 (-2.61 st) h1h2 4.98 hnr 9.86 cpp 25.63 jitter 27.12 % FAIL
+  pressed   adduction 0.62 foldTension 0.84 lung 781.03 Pa | f0 134.04 (0.74 st) pulseF0 224.53 (-6.14 st) h1h2 2.78 hnr 20.86 cpp 29.22 jitter 6.11 % FAIL
+  creaky    adduction 0.60 foldTension 0.48 lung 781.03 Pa | f0 63.37 (-12.23 st) pulseF0 306.58 (-0.75 st) h1h2 3.49 hnr 11.66 cpp 25.26 jitter 14.68 % FAIL
+  falsetto  adduction 0.18 foldTension 1.75 lung 781.03 Pa | f0 236.66 (10.59 st) pulseF0 236.94 (-5.21 st) h1h2 8.68 hnr 5.37 cpp 15.41 jitter 5.36 % FAIL
+  harsh     adduction 0.62 foldTension 0.84 lung 781.03 Pa | f0 134.04 (0.74 st) pulseF0 224.53 (-6.14 st) h1h2 2.78 hnr 20.86 cpp 29.22 jitter 6.11 % FAIL

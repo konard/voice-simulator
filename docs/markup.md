@@ -59,19 +59,19 @@ Without markup the IPA and the samples are the same as before.
 
 Every span has all the fields of `MODE_DEFAULTS`:
 
-| Field                 | Default | Meaning                                                                                         | Heard today                                                                 |
-| --------------------- | ------- | ----------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
-| `effort`, `effortEnd` | 0.5     | vocal effort 0 (very soft) … 1 (shout) at the start and end of a span; `(effort - 0.5) * 40` dB | level, pitch, tilt, F1, vowel length, noise ([Vocal effort](#vocal-effort)) |
-| `lombard`             | false   | speech in noise: only vowels with primary stress get longer                                     | vowel length                                                                |
-| `gain`                | 0       | plain level change in dB                                                                        | level                                                                       |
-| `rate`                | 1       | speed factor: 2 halves the durations                                                            | durations                                                                   |
-| `pitch`               | 0       | shift in semitones                                                                              | pitch targets                                                               |
-| `range`               | 1       | factor on pitch movements                                                                       | pitch targets                                                               |
-| `emphasis`            | 0       | -0.5 reduced, 0 none, 0.5 moderate, 1 strong                                                    | focus: pitch, duration, level (#51)                                         |
-| `phonation`           | all 0   | `breathy`, `creaky`, `tension` (-1 lax … 1 pressed), `falsetto`, `harsh`, `whisper`, each 0 … 1 | `whisper`: the source ([Whisper](#whisper)); the others carried (#54)       |
-| `emotion`             | neutral | `name`, `intensity`, `arousal`, `valence`, `dominance`                                          | carried (#55)                                                               |
-| `tune`                | null    | intonation label (`TUNE_LABELS`)                                                                | the tune of the phrase (#51)                                                |
-| `lang`                | null    | language tag of the span                                                                        | transcription and tunes                                                     |
+| Field                 | Default | Meaning                                                                                         | Heard today                                                                                                            |
+| --------------------- | ------- | ----------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| `effort`, `effortEnd` | 0.5     | vocal effort 0 (very soft) … 1 (shout) at the start and end of a span; `(effort - 0.5) * 40` dB | level, pitch, tilt, F1, vowel length, noise ([Vocal effort](#vocal-effort))                                            |
+| `lombard`             | false   | speech in noise: only vowels with primary stress get longer                                     | vowel length                                                                                                           |
+| `gain`                | 0       | plain level change in dB                                                                        | level                                                                                                                  |
+| `rate`                | 1       | speed factor: 2 halves the durations                                                            | durations                                                                                                              |
+| `pitch`               | 0       | shift in semitones                                                                              | pitch targets                                                                                                          |
+| `range`               | 1       | factor on pitch movements                                                                       | pitch targets                                                                                                          |
+| `emphasis`            | 0       | -0.5 reduced, 0 none, 0.5 moderate, 1 strong                                                    | focus: pitch, duration, level (#51)                                                                                    |
+| `phonation`           | all 0   | `breathy`, `creaky`, `tension` (-1 lax … 1 pressed), `falsetto`, `harsh`, `whisper`, each 0 … 1 | breath noise, pitch and pulse shape ([Phonation types](#phonation-types)); `whisper`: the source ([Whisper](#whisper)) |
+| `emotion`             | neutral | `name`, `intensity`, `arousal`, `valence`, `dominance`                                          | carried (#55)                                                                                                          |
+| `tune`                | null    | intonation label (`TUNE_LABELS`)                                                                | the tune of the phrase (#51)                                                                                           |
+| `lang`                | null    | language tag of the span                                                                        | transcription and tunes                                                                                                |
 
 Nested spans compose: `rate` and `range` multiply, `pitch` and `gain` add,
 everything else takes the inner value; named values such as `rate="fast"`
@@ -373,6 +373,99 @@ IPA they are written `{f … f}`, like `[loud]`.
 `levelDb(samples, from, to)` (RMS in dB re full scale) and
 `alphaRatio(samples, sampleRate, from, to)` (level of 1-5 kHz minus level
 of 50 Hz-1 kHz) of src/analysis/mode-features.js measure them.
+
+## Phonation types
+
+A phonation type changes the voice source, not the words (issue 54).
+`PHONATION` and `phonationChannels(mode, token, head)`
+(src/articulation/phonation.js) move the LF shape parameter Rd (Fant 1995)
+from the speaker's own value `rdVoice = 3 (1 - tenseness)` towards the
+target of the type and set the other source channels of the plan:
+`rd = rdVoice + d (target - rdVoice)` at degree `d`, which becomes the
+`tension` channel `(rdVoice - rd) / 3` (added to the tenseness like the
+tension of [Vocal effort](#vocal-effort)). Tension offsets add, every other
+channel takes the maximum. The lowest Rd of a pulse is now 0.3 (it was
+0.5), so pressed voice (Rd 0.4) is not clipped.
+
+| Type     | Rd target | Other channels at `d` = 1  |
+| -------- | --------- | -------------------------- |
+| breathy  | 2.5       | `breath` 1                 |
+| lax      | 1.8       | none                       |
+| pressed  | 0.4       | none                       |
+| creaky   | 0.5       | `creak` 1                  |
+| falsetto | 2.3       | `falsetto` 1, `breath` 0.3 |
+| harsh    | 0.4       | `harsh` 1                  |
+
+The channels `breath`, `creak`, `falsetto` and `harsh` (0 … 1, smoothed with
+τ = 0.03 s) reach the glottis through `shape.glottis`; `PHONATION_SOURCE`
+(src/acoustics/glottis.js) realises them:
+
+- `breath` adds `0.6 breath` to the breathiness of the breath noise and of
+  the mean glottal area (`noiseBreathiness`): breathy voice at 1 has its
+  breath noise 13.6 dB below the pulses at the source (the issue asks for
+  10 to 20 dB; a gain of 1 instead of 0.6 gave 8.9 dB);
+- `creak` lowers f0 by `12 c` semitones (not below 25 Hz; a period may now
+  be as long as 1/20 s instead of 1/30 s), adds `10 c` % jitter and makes
+  every second period weaker (× `1 - 0.5 c`) and longer (× `1 + 0.2 c`;
+  both periods shrink by half of that, so a pair keeps the length of two
+  periods of the lowered f0);
+- `falsetto` raises f0 by `12 f` semitones and lowers the voiced part by
+  `6 f` dB; a one-pole low-pass at `1.5 f0 / f` smooths the pulse of the
+  thin folds that barely close;
+- `harsh` adds `4 h` % jitter, `10 h` % shimmer and the breath noise of
+  breath `0.3 h`.
+
+One phone: `a̤` (U+0324) and `a̰` (U+0330) get the breathy or creaky row at
+`d` = 0.67 for their own duration (the old aspiration 0.4 of `a̤` is gone).
+Hindi breathy-voiced stops `bʱ dʱ ɖʱ ɡʱ dʒʱ` get a voiced release of
+`0.08 · rate` s with voicing 1, breath 1 and Rd 2.5, whose f0 starts 1.5 st
+lower and glides into the vowel (`BREATHY_RELEASE`). The head parameter
+`finalCreak` (0 … 1, default 0) creaks the last syllable before `.` or `‖`
+where the pitch falls below 0.8 of the speaker pitch:
+`creak = finalCreak · min(1, (0.8 pitch - f0) / (0.1 pitch))`
+(`FINAL_CREAK`; the issue proposed 0.2 pitch, but the statements of the
+model end at 0.74 to 0.81 of the pitch, which gave 2.7 % jitter in the
+last vowel of `You are coming.` instead of the 5 % asked; 0.1 gives
+10.1 %). With the default head and no markup the samples do not
+change, except Hindi words with breathy-voiced stops. The fold source
+(`source: 'folds'`) takes the phonation as adduction (breathy apart,
+pressed together), fold tension (creak slack an octave down, falsetto stiff
+an octave up) and lung pressure (creak halves it on the folds); the Rust
+engine realises the same channels.
+
+### How a phonation is written and recognised
+
+Targets against modal voice of the same speaker; measured on "Please call
+Stella." (tier medium, seed 1, LF source) with
+`node experiments/issue-54-measures.mjs` and
+`node experiments/issue-54-scenarios.mjs`. Modal: f0 128.34 Hz, H1-H2
+4.72 dB, HNR 20.41 dB, CPP 28.01 dB, jitter 0.76 %.
+
+| Type     | Inline / `vs:phonation name` | IPA span, segment | Correlates (targets at `d` = 1)       | Measured at `d` = 1                                     |
+| -------- | ---------------------------- | ----------------- | ------------------------------------- | ------------------------------------------------------- |
+| breathy  | `[breathy]`                  | `{V̤ … V̤}`, `a̤`    | H1-H2 ≥ 7 dB; HNR and CPP lower       | H1-H2 11.72 dB, HNR 4.74 dB, CPP 15.83 dB, f0 -0.24 st  |
+| creaky   | `[creaky]`                   | `{V̰ … V̰}`, `a̰`    | f0 -12 st, jitter ≥ 5 %, H1-H2 < 0 dB | pulse f0 -12.52 st, jitter 7.06 %, pulse H1-H2 -1.16 dB |
+| creak    | `degree="1"`                 | `{C … C}`         | f0 below 70 Hz                        | `{C ˈa C}`: pulse f0 64.72 Hz                           |
+| pressed  | `[pressed]`                  | `{V͈ … V͈}`         | H1-H2 < 0 dB, HNR not lower           | H1-H2 -4.55 dB, HNR 19.33 dB                            |
+| lax      | `[lax]`                      | `{V͉ … V͉}`         | H1-H2 + 3 dB                          | H1-H2 9.66 dB (+4.94), HNR 20.04 dB                     |
+| falsetto | `[falsetto]`                 | `{F … F}`         | f0 + 12 st, H1-H2 ≥ 8 dB              | f0 +11.78 st, H1-H2 13.11 dB                            |
+| harsh    | `[harsh]`                    | `{V! … V!}`       | H1-H2 < 0 dB, HNR lower, jitter ≥ 3 % | H1-H2 -4.40 dB, HNR 8.02 dB, jitter 3.46 %              |
+
+Breathy H1-H2 rises with the degree: 8.52, 10.50 and 11.72 dB at 0.33, 0.67
+and 1. In `ˈma̤ma` the first vowel has H1-H2 10.82 dB against 5.43 dB in the
+second; in `ˈma̰ma` its f0 is 86.26 Hz against 134.33 Hz in `ˈmama`. The
+release of Hindi `bʱaː` lasts 80 ms, is voiced for 0.86 of its length and
+has H1-H2 12.11 dB. `You are coming.` with `finalCreak: 1` has 10.09 %
+jitter in its last vowel and 0.18 % in its first.
+
+The creaky pulses fall below the 60 Hz floor of the YIN pitch of
+`analyzeVoice()`, so creak is measured pitch-synchronously: `pulseF0`,
+`pulseH1H2` and `glottalPeriods` find the glottal closures in the LPC
+residual. `cpp(samples, sampleRate)` is the cepstral peak prominence (40 ms
+Hann frames, peak between 1/300 and 1/60 s above the regression line, median
+over voiced frames) and `jitterPercent(samples, sampleRate)` the mean
+absolute difference of neighbouring periods over the mean period
+(src/analysis/mode-features.js).
 
 ## Whisper
 

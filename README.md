@@ -37,9 +37,8 @@ a pressure wave travelling through the 3D shape of a parametric low-poly head
   effort, phonation, emotion and sounds), inline tags such as
   `[whisper]Hello[/whisper]` or `[pause 0.5]` with `markup: true`, and
   ExtIPA/VoQS marks in IPA (`{W həˈloʊ W} ˈwɝld .`, `(.)`, `⸨laugh⸩`, `ˈˈ`).
-  Rate, pitch, range, level, vocal effort, emphasis, tunes, whisper and
-  timed pauses are heard; the rest is carried in `plan.modes`. See
-  [docs/markup.md](docs/markup.md).
+  Rate, pitch, range, level, effort, phonation types, emphasis, tunes and
+  pauses are heard; the rest is carried in `plan.modes` ([docs/markup.md](docs/markup.md)).
 - **Vocal effort**: `[soft]`, `[loud]`, `[shout]`, `[lombard]`,
   `[crescendo]` and `[diminuendo]` (and `<vs:effort>`, `{f … f}`) change
   more than the level: the pitch rises (+5 Hz per dB), the spectrum gets
@@ -49,12 +48,14 @@ a pressure wave travelling through the 3D shape of a parametric low-poly head
   effort to dB SPL (0.5 is 60 dB SPL) and `loudnessTarget` (CLI
   `--loudness`) scales to an integrated loudness in LUFS (ITU-R BS.1770,
   `integratedLoudness()`).
-- **Whisper** (issue 53): `[whisper]`, `{W … W}`, `ạ` and voiceless
-  vowels (`ḁ`) replace the fold vibration by the noise of a half-open
-  glottis (40 mm²): higher formants, 1.3 times as long, 25 dB quieter (30
-  with `[soft]`, 20 with `[loud]`), voiced and voiceless consonants still
-  apart; `{Ṿ … Ṿ}` is a whispery voice. `voicedShare()`, `energyRatio()`
-  and `centreOfGravity()` measure it ([Whisper](docs/markup.md#whisper)).
+- **Phonation types** (issue 54): `[breathy]`, `[creaky]`, `[pressed]`,
+  `[lax]`, `[falsetto]`, `[harsh]`, `a̤` and `a̰` set Rd and the `breath`,
+  `creak`, `falsetto` and `harsh` channels (`PHONATION`): breath noise, an
+  octave down with double pulses, an octave up, or a noisy irregular voice.
+  Hindi `bʱ dʱ ɖʱ ɡʱ dʒʱ` get a breathy release, `finalCreak` creaks the end
+  of a statement, and `cpp()` and `jitterPercent()` measure the result
+  ([docs/markup.md](docs/markup.md#phonation-types)). **Whisper** (issue 53,
+  `[whisper]`, `{W … W}`, `ạ`, `ḁ`): glottal noise, 25 dB quieter, 1.3× as long ([Whisper](docs/markup.md#whisper)).
 - **Intonation per language** (issue 51): statements fall, yes/no
   questions rise, wh-questions fall, `Tea or coffee?` rises on the first
   item and falls on the second (`ˈti ↗ | ˈɔɹ ˈkɑfi ↘ ?`), list items and
@@ -564,8 +565,7 @@ bin powers and mel filter energies weaker than 60 dB below the strongest one
 of the same recording are raised to that level (`DYNAMIC_RANGE_DB`, option
 `range`), so an empty band costs at most the dynamic range. LSD and MCD skip
 the pairs whose reference frame is silent (40 dB below the loudest reference
-frame): pauses and background noise of a recording are not speech to compare
-with.
+frame): pauses and the background noise are not speech to compare with.
 
 | Metric                                       | Field                             | Unit     | Formula                                                                           |
 | -------------------------------------------- | --------------------------------- | -------- | --------------------------------------------------------------------------------- |
