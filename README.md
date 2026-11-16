@@ -751,6 +751,27 @@ back to the scalar file otherwise (`engine.simd` tells which one loaded).
 It is not shipped for now: it measured only 1.06 times faster than the
 scalar file on `high`, below the 1.15 required to ship it.
 
+The 3D solver can run on several threads (issue 24).
+`node scripts/build-wasm.mjs --threads` builds
+`src/engine/voice-simulator-threads.wasm` with a pinned nightly compiler
+(see [docs/RUST-ENGINE.md](docs/RUST-ENGINE.md#the-threads-build-issue-24)),
+and `loadEngineModule(undefined, { threads: 4 })` (or `threads: 'auto'`)
+loads it with a pool of Web Workers or `worker_threads` that share its
+memory. Without that file, without `SharedArrayBuffer` or on a page that is
+not cross-origin isolated it falls back to one thread; `engine.threads`
+tells how many threads it got, `renderer.threads` how many a render uses,
+and `engine.close()` stops the workers. A render uses its threads only when
+the grid has at least `THREAD_MIN_LINKS` links. The heavy test
+`performance-threads` found no grid where 2 threads were 1.3 times faster
+than one ([docs/reports/performance-threads.md](docs/reports/performance-threads.md)),
+so that constant is `usize::MAX` for now and a render stays on one thread
+unless `threadMinLinks` (for example 0, any grid) asks for a team. The
+samples are the same bits on any number of threads. Natively,
+`voice-simulator-cli render-job <job> --threads <n|auto>` (with
+`--thread-min-links <n>`) does the same; `createThreadPool` and `withTeam`
+are the parts underneath.
+One thread stays the default.
+
 Options the engine does not handle (`solver: 'fdtd2d'`, a WebGPU `device`,
 `source: 'folds'`) throw an Error with
 `code === 'ENGINE_UNSUPPORTED'`. On the pangram of the heavy suite

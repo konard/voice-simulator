@@ -19,7 +19,10 @@ output stage, microphone and room (issue 22, see
 [Waveguide renderer](#waveguide-renderer-issue-22)), and the 3D
 finite-difference time-domain solver of `src/acoustics/fdtd3d.js` with a
 WebAssembly SIMD build (issue 23, see
-[3D FDTD solver](#3d-fdtd-solver-issue-23)). The random generator
+[3D FDTD solver](#3d-fdtd-solver-issue-23)), which runs on several threads
+natively and in a threads build of the WebAssembly file (issue 24, see
+[3D solver on several threads](#3d-solver-on-several-threads-issue-24)).
+The random generator
 proved that every link of the chain works: workspace, build, loader, CI job
 and parity tests.
 
@@ -29,7 +32,7 @@ and parity tests.
 | ------------------------------ | ------------------------------------------------------------------------------------------ |
 | `Cargo.toml`, `Cargo.lock`     | The workspace (three members) and its locked dependencies                                  |
 | `rust-toolchain.toml`          | The one exact stable compiler the build uses, with `rustfmt`, `clippy` and the wasm target |
-| `crates/voice-simulator-core`  | The numerical code: `no_std`, no `unsafe`, no I/O, no threads, no clock                    |
+| `crates/voice-simulator-core`  | The numerical code: `no_std`, no I/O, no clock; `unsafe` only in `fdtd/parallel.rs`        |
 | `crates/voice-simulator-wasm`  | The WebAssembly interface: plain `vs_*` exports over the core                              |
 | `crates/voice-simulator-cli`   | The `voice-simulator-cli` binary (`std` only) for running the core from a terminal         |
 | `scripts/build-wasm.mjs`       | `npm run build:wasm`: builds the wasm crate and copies it to `src/engine/`                 |
@@ -42,6 +45,10 @@ and parity tests.
 | `crates/.../src/fdtd/`         | The 3D FDTD solver: kernel, SIMD kernel, packed model, solver (issue 23)                   |
 | `src/engine/pack-model.js`     | `packVoxelModel`: the voxel model as one buffer for the Rust solver (issue 23)             |
 | `tests/rust-fdtd.test.js`      | The 3D solver against JavaScript, the SIMD build and the loader fallback (issue 23)        |
+| `crates/.../fdtd/parallel.rs`  | `Team`: the 3D solver step on several threads, bit-identical with one (issue 24)           |
+| `src/engine/thread-pool.js`    | `createThreadPool`: the helper workers of the threads build (issue 24)                     |
+| `src/engine/thread-worker.js`  | One helper: instantiates the threads build on the shared memory and runs teams (issue 24)  |
+| `tests/rust-threads.test.js`   | The `threads` option, its fallback and bit-identical threaded renders (issue 24)           |
 
 The core crate may depend on `libm` only, and only `src/math.rs` may call
 it (`sin`, `cos`, `exp`, `ln`, `pow`, `tanh`, `sqrt`, `floor`, `ceil`;
@@ -75,9 +82,41 @@ hash.)
 | -------------- | ---------------------------------------------------------------------------------------------- |
 | `--check-size` | Exit with 1 when the file is larger than `WASM_SIZE_BUDGET`                                    |
 | `--require`    | Exit with 1 when `cargo` is not installed; without it that case prints a note and exits with 0 |
+| `--threads`    | Also build `src/engine/voice-simulator-threads.wasm` (below); a failure of that build is fatal |
 
 Without `cargo` the script prints
 `cargo not found: the JavaScript engine will be used`.
+
+### The threads build (issue 24)
+
+`node scripts/build-wasm.mjs --threads` also builds the threads file. It
+needs the nightly compiler `THREADS_TOOLCHAIN` of the script, pinned by
+date, because the standard library has to be rebuilt with atomics, which
+the stable compiler cannot do:
+
+```sh
+rustup toolchain install nightly-2026-11-10 --target wasm32-unknown-unknown --component rust-src
+node scripts/build-wasm.mjs --threads
+```
+
+The script then runs
+
+```sh
+RUSTFLAGS="-C target-feature=+atomics,+bulk-memory,+mutable-globals -C link-arg=--shared-memory -C link-arg=--import-memory -C link-arg=--initial-memory=33554432 -C link-arg=--max-memory=1073741824" \
+  cargo +nightly-2026-11-10 build --release --locked --target wasm32-unknown-unknown \
+  -p voice-simulator-wasm -Z build-std=panic_abort,std --target-dir target/threads
+```
+
+and copies `target/threads/wasm32-unknown-unknown/release/voice_simulator_wasm.wasm`
+to `src/engine/voice-simulator-threads.wasm` (206 670 bytes; the scalar
+file of the same commit is 197 856, `WASM_SIZE_BUDGET` 212 992). The
+memory is imported and shared, 512 pages (32 MiB) at the start and at most
+16 384 (1 GiB): `THREAD_MEMORY` of `src/engine/layout.js`, which the loader
+uses to create it. The linker needs `--shared-memory` and `--import-memory`
+spelled out; without them it stops at the undefined symbols
+`__wasm_init_tls`, `__tls_size` and `__tls_align`. When `SHIP_SIMD` is
+`true`, `+simd128` joins the target features. The flags select no CPU and
+no fast math, so the determinism rules below hold.
 
 The file is git-ignored (`src/engine/*.wasm`) and never committed. It is in
 the npm package only when it was built before `npm pack` or `npm publish`;
@@ -108,7 +147,8 @@ The wasm crate exports plain `#[no_mangle] pub extern "C"` functions. There
 is no wasm-bindgen, no wasm-pack and no `wasm-opt`: no generated glue file,
 no tool whose version has to match a library, one file that loads
 everywhere, and a build whose output depends only on the pinned compiler.
-The module imports nothing.
+The module imports nothing; the threads build imports only its memory
+(`env.memory`, see [3D solver on several threads](#3d-solver-on-several-threads-issue-24)).
 
 - Every export starts with `vs_`. Arguments and results are `u32`, `i32` or
   `f64` only: no strings, no structs.
@@ -165,7 +205,9 @@ The module imports nothing.
 | `vs_stages_run(seed, sr, gain, band, rate, f, data, count) -> i32` | `NoiseSources` plus `OutputStage` over `data` in place; 0 or error                   |
 
 The exports of the 3D solver (`vs_simd`, `vs_fdtd_*`) are listed in
-[Solver exports](#solver-exports).
+[Solver exports](#solver-exports), those of the thread teams (`vs_threads`,
+`vs_team_*`, `vs_thread_*`, `vs_renderer_threads`, `vs_renderer_links`,
+`vs_renderer_kernel_steps`) in [Thread exports](#thread-exports).
 
 `vs_aero_run` steps a new `Aerodynamics` of `src/acoustics/aerodynamics.js`
 `count` times by `dt` seconds over the `5 * count` `f64` values at `steps`:
@@ -207,6 +249,23 @@ the scalar file; `true` only the SIMD file, and gives `null` when it cannot
 be used. With a source, `true` (`false`) gives `null` when the source is
 not (is) a SIMD build. There is no run-time detection inside WebAssembly,
 hence two files.
+
+`loadEngineModule(source, {threads})` (issue 24) asks for the 3D solver on
+several threads: 1 (the default), a positive integer, or `'auto'` (all
+cores but one, at most `AUTO_THREADS_MAX` = 8; `requestedThreads` of the
+loader). Any other value throws. With more than 1 and no source, the
+loader creates a shared memory of `THREAD_MEMORY`, loads
+`voice-simulator-threads.wasm` on it and starts `threads - 1` helper
+workers (`createThreadPool` of `thread-pool.js`). It falls back to the
+files above, on one thread and without an error, when the page is not
+cross-origin isolated (`globalThis.crossOriginIsolated === false`),
+`SharedArrayBuffer` is missing, the shared memory cannot be created, the
+threads file is missing or does not compile, or a worker does not start.
+The engine then also has `threads` (how many threads can step the solver),
+`pool` (the helpers, or `null`) and `close()`, which ends the helpers and
+does nothing on one thread. A source that imports its memory (a threads
+build) gets the shared memory as well, and `{threads: 1}` loads it without
+helpers.
 There is no top-level `await` and no top-level import of a `node:` module.
 
 ## Waveguide renderer (issue 22)
@@ -656,6 +715,230 @@ kernel forms alone and `experiments/issue-23-micro-kernel.mjs` a bare Rust
 loop against the hand-written kernel, which separates the code generation
 of the compiler from the solver around it.
 
+## 3D solver on several threads (issue 24)
+
+The 3D solver can step its grid on several threads, natively and in
+WebAssembly, and gives the same bits as on one thread. One thread stays the
+default everywhere, and every platform that cannot share memory falls back
+to it without an error.
+
+```js
+const engine = await loadEngineModule(undefined, { threads: 4 });
+const renderer = new RustVoiceRenderer(engine, plan, {
+  ...renderOptions,
+  threadMinLinks: 0, // a team for any grid; THREAD_MIN_LINKS by default
+});
+renderer.render(samples); // renderer.threads: the threads that stepped it
+renderer.free();
+engine.close(); // ends the helper workers
+```
+
+```sh
+voice-simulator-cli render-job job.bin --threads 4 --thread-min-links 0
+voice-simulator-cli kernel-steps job.bin 2000 --threads 2
+```
+
+### Design
+
+- **Ranges.** `links_pass(grid, from, to)` and `cells_pass(grid, from, to)`
+  of `fdtd/kernel.rs` (and of `kernel_simd.rs`) are pass 1 (velocity and
+  flux of links) and pass 2 (pressure of cells) of `Grid::step_gather` over
+  an index range; `step_gather` calls both over the whole grid.
+- **Partition.** `fdtd/partition.rs`: `bounds(weights, parts)` cuts an
+  index range into parts of about equal weight (links weigh 1, cells
+  1 + their links).
+- **Team.** `fdtd/parallel.rs`: every step is two rounds, links then
+  cells, that meet at a spin barrier of three `SeqCst` atomics
+  (`generation`, `phase`, `pending`). Pass 1 reads only `pressure` and
+  pass 2 only `flux`, so no part reads what another one writes, and the
+  parts compute the same bits as one pass (parity class A). It is the only
+  file of the core crate with `unsafe`; every block has a `// SAFETY:`
+  comment naming the rule "a part writes only its own index range":
+
+  ```sh
+  grep -rln "unsafe" crates/voice-simulator-core/src   # fdtd/parallel.rs
+  ```
+
+- **Threshold.** A solver starts a team only for more than one thread and
+  a grid of at least `THREAD_MIN_LINKS` links, which the measurement set
+  to `usize::MAX` (see [Measurement](#measurement)); `threadMinLinks` and
+  `--thread-min-links` lower it for one render. On one thread it steps
+  with `Grid::step` as before.
+- **Native.** `voice-simulator-cli render-job <file> --threads <n|auto>`
+  (default 1; `auto` is all cores but one) runs the helpers on
+  `std::thread::scope` threads for the whole render. No new crate.
+  `--thread-min-links <n>` takes the place of `THREAD_MIN_LINKS`.
+- **WebAssembly.** The threads build (see
+  [The threads build](#the-threads-build-issue-24)) imports a shared memory.
+  `createThreadPool(module, memory, count)` of `src/engine/thread-pool.js`
+  starts `count - 1` workers of `thread-worker.js` (`Worker` in browsers,
+  Bun and Deno, `node:worker_threads` in Node.js). Each instantiates the
+  same module on the same memory, calls `vs_thread_init(stackTop, tls)` with
+  its own 64 KiB stack and thread-local block from `vs_alloc`, and sleeps in
+  `Atomics.wait`. For every render call of a `RustVoiceRenderer` (or
+  `renderPlanRust`) the leader starts a team (`vs_team_new`), the pool
+  wakes the helpers, which call `vs_team_work`, the leader renders and
+  ends the team (`vs_team_free`). Between calls the helpers sleep, so a
+  paused render costs no CPU. The main thread of a page never blocks: the
+  leader only spins, and the table of teams is taken with `try_lock`.
+
+### Thread exports
+
+| Export                                                 | Result                                                                                      |
+| ------------------------------------------------------ | ------------------------------------------------------------------------------------------- |
+| `vs_threads() -> u32`                                  | 1 in the threads build, else 0                                                              |
+| `vs_team_new(renderer, threads) -> i32`                | Handle of a team for a grid of at least `THREAD_MIN_LINKS` links; 0 for one thread, or code |
+| `vs_team_new_from(renderer, threads, minLinks) -> i32` | The same with `minLinks` (0: any grid, the tests and the measurement)                       |
+| `vs_team_work(team, index) -> i32`                     | The loop of helper `index` (1 to threads - 1); returns 0 when the leader ends the team      |
+| `vs_team_free(team) -> i32`                            | Ends the team, puts the renderer back on one thread; 0 or `BAD_HANDLE`                      |
+| `vs_thread_init(stackTop, tls)`                        | Stack pointer and thread-local block of a helper instance, before any other call            |
+| `vs_thread_tls_size() -> u32`, `vs_thread_tls_align()` | Size and alignment of the thread-local block                                                |
+| `vs_renderer_threads(renderer) -> i32`                 | Threads that step the solver now: the team size during a render with a team, else 1         |
+| `vs_renderer_links(renderer) -> i32`                   | Links of the 3D grid (0 for the waveguide)                                                  |
+| `vs_renderer_kernel_steps(renderer, count) -> i32`     | `count` bare grid steps (no sources), with the team if any; the measurement                 |
+
+`vs_thread_init`, `vs_thread_tls_size` and `vs_thread_tls_align` are
+WebAssembly assembly and exist only in the threads build. Every build
+exports the others, but only the threads build starts a team: elsewhere
+`vs_team_new` returns 0. The interface version stays 2, since no export
+changed.
+
+### Measurement
+
+`tests/heavy/performance-threads.test.js` (suite `performance` of the heavy
+checks) times 2000 bare kernel steps on five grids on 1, 2, 3 and 4
+threads, natively (`voice-simulator-cli kernel-steps`) and in the threads
+build, median of three runs, and writes the report `performance-threads`
+([docs/reports/performance-threads.md](reports/performance-threads.md)):
+
+```sh
+cargo build --release -p voice-simulator-cli
+node scripts/build-wasm.mjs --threads
+HEAVY=1 node --test --test-timeout=3600000 tests/heavy/performance-threads.test.js
+```
+
+Speed-up of 2 threads over 1 (Node.js 26.13, Linux x64, 6 logical cores
+of a shared machine that was fully loaded by other work during the run:
+no idle time, a load average of 9 to 13):
+
+| Grid              | Links     | Native | WebAssembly |
+| ----------------- | --------- | ------ | ----------- |
+| dx 1              | 1 634     | 0.73×  | 0.31×       |
+| dx 0.5            | 12 270    | 0.49×  | 0.74×       |
+| dx 0.4            | 23 964    | 0.84×  | 0.67×       |
+| dx 1, 40 cm box   | 173 501   | 0.48×  | 1.02×       |
+| dx 0.5, 40 cm box | 1 409 887 | 0.74×  | 1.16×       |
+
+No grid reaches the 1.3 times of the rule on either platform; the best
+are 1.16× (WebAssembly) and 1.17× on 3 threads, both on the largest grid.
+So `THREAD_MIN_LINKS` is `usize::MAX`: `--threads` and the `threads`
+option start no team by themselves, and a render stays on one thread. The
+code stays: `threadMinLinks` of `RustVoiceRenderer` and `withTeam`, and
+`--thread-min-links` of `render-job`, start a team on a smaller grid
+(`0` for any grid), which is how the tests check that threads give the
+same bits. In every run the field after the steps had the same bits on 1
+to 4 threads.
+
+Two causes, both measured with `experiments/issue-24/bench`:
+
+- A team steps with the gather form, which takes about 1.8 times as long
+  per step as the scatter form that one thread runs (`Grid::step`), so 2
+  threads have to win that back before they gain anything.
+- The rounds meet at a spin barrier twice per step. On a machine without
+  idle cores a spinning thread waits for one that the system has paused,
+  so the barrier costs whole time slices; the small grids lose most.
+
+An earlier run on the same machine with less load gave the 40 cm box at
+`dx` 1 natively 1.22× on 2 threads and 1.47× on 3
+(`experiments/issue-24/logs/kernel-steps-native-1.txt`), still below the
+rule on 2 threads. The heavy workflow builds the CLI and the threads file
+for the suite `performance`; the report states whether the rule gives the
+value in `parallel.rs` ("the same" or "DIFFERENT"), so a run on an idle
+machine with more cores shows when the constant should come down.
+
+### Threads in the browser
+
+A page can share memory between threads only when it is cross-origin
+isolated (`crossOriginIsolated === true`), which takes two response headers
+on the page:
+
+```text
+Cross-Origin-Opener-Policy: same-origin
+Cross-Origin-Embedder-Policy: require-corp
+```
+
+Without them `loadEngineModule(undefined, {threads: 4})` loads the
+single-thread file and reports `threads: 1`. GitHub Pages cannot send
+custom headers. For such hosts the example app can ship
+[coi-serviceworker](https://github.com/gzuidhof/coi-serviceworker) (MIT,
+0.1.7) as the separate file `examples/universal-app/public/coi-serviceworker.js`:
+a service worker that adds the headers to every response, at the price of
+one reload of the page on the first visit. The page loads it only when the
+app is built with `VITE_CROSS_ORIGIN_ISOLATION=1` (default off,
+`examples/universal-app/cross-origin-isolation.js`), and the same variable
+makes the Vite dev and preview servers send the two headers:
+
+```sh
+VITE_CROSS_ORIGIN_ISOLATION=1 npm run example:web:dev
+```
+
+The published app is built without the variable and stays on one thread,
+until #25 has shipped the engine to the app and the measurement above
+justifies threads. Every resource of an isolated page must allow being
+embedded (same origin, CORS, or `Cross-Origin-Resource-Policy`); the app
+loads only its own files.
+
+A bundler must emit `src/engine/thread-worker.js` as a file of its own:
+`createThreadPool` finds it with `new URL('./thread-worker.js',
+import.meta.url)` through `globalThis.URL`, a form that Vite does not
+detect. An app that bundles the engine passes the URL of the worker it
+emitted (`createThreadPool(module, memory, count, {url})`) until #25
+wires the engine into the app.
+
+### Deviations from the plan of issue 24
+
+- A team lives for one render call (`vs_team_new` before, `vs_team_free`
+  after), not for the whole render: the helpers then sleep in
+  `Atomics.wait` between calls and spin only while the leader steps.
+  `vs_team_free` is an export the plan does not list.
+- `vs_team_new_from` and the option `threadMinLinks` of
+  `RustVoiceRenderer` override `THREAD_MIN_LINKS`, so the tests can force
+  a team on a small grid. `renderer.threads` (and `samples.threads` of
+  `renderPlanRust`) report the threads of the last render call: the test
+  "small grids stay on one thread" checks `renderer.threads === 1` while
+  `engine.threads === 4`, since the engine can still use 4.
+- `createThreadPool(module, memory, count, options)` takes a fourth
+  argument: `exports` of the leader instance (it allocates the stacks with
+  `vs_alloc`, which a helper cannot call before it has one) and `url` of
+  the worker script.
+- The command line tool has `kernel-steps <file> <count> [--threads]` for
+  the measurement, a team at any grid size, and `render-job` has
+  `--thread-min-links <n>`, the CLI form of `threadMinLinks`, so that the
+  SHA-256 of `--threads 1` and `--threads 4` compares a render with a
+  team now that `THREAD_MIN_LINKS` is `usize::MAX`.
+- `vs_thread_tls_size` and `vs_thread_tls_align` are exported so that the
+  pool can allocate the thread-local block of every helper.
+- One thread steps with `Grid::step` (the scatter form of issue 23), a team
+  with the two passes of the gather form; the forms give the same bits.
+- The rule of step 8 is applied to both platforms: `THREAD_MIN_LINKS` is
+  the larger of the two link counts, and `usize::MAX` when either has no
+  grid that pays.
+- `build-wasm.mjs` without `--threads` leaves an older threads file in
+  `src/engine/` in place.
+
+`experiments/issue-24/bench` (its own Cargo project, not in the workspace)
+times the step forms and the team on the grid of a render job, and
+`owned.rs` there prototypes a threaded scatter step (every part scatters
+into a private window; cells shared by parts gather in link order). It
+gives the same bits too; on the grid of 173 501 links it was about as fast
+as the team on 2 threads and slower on 3 and 4 (the shared cells grow with
+the parts), so the team of the plan stays. The same run shows that the
+gather form alone takes about 1.8 times as long per step as the scatter
+form of one thread, which a team has to win back before it pays.
+`node experiments/issue-24/threads-render.mjs [seconds]` (also with Bun and
+Deno) renders `'Hello.'` in a 40 cm room on 1, 2 and 4 threads and checks
+that the samples are the same bits.
+
 ## Determinism rules
 
 The same input, seed and options give the same samples on every runtime.
@@ -688,22 +971,24 @@ Each ported function has a class, stated by the issue that ports it.
   Node.js 26, Bun 1.4.4 and Deno 2.9.7 the measured error is 0, every sample is
   bit-identical (`node experiments/issue-27-resample-parity.mjs`).
 
-| Module (issue)         | Class |
-| ---------------------- | ----- |
-| `random.rs`            | A     |
-| `resample.rs` (27)     | B     |
-| `aerodynamics.rs` (35) | A     |
-| `filters.rs` (22)      | B     |
-| `glottis.rs` (22)      | B     |
-| `radiation.rs` (22)    | B     |
-| `waveguide.rs` (22)    | B     |
-| `stages.rs` (22)       | B     |
-| `renderer.rs` (22)     | B     |
-| `listener.rs` (22)     | B     |
-| `fdtd/kernel.rs` (23)  | A     |
-| `fdtd/kernel_simd.rs`  | A     |
-| `fdtd/model.rs` (23)   | A     |
-| `fdtd/solver.rs` (23)  | B     |
+| Module (issue)           | Class |
+| ------------------------ | ----- |
+| `random.rs`              | A     |
+| `resample.rs` (27)       | B     |
+| `aerodynamics.rs` (35)   | A     |
+| `filters.rs` (22)        | B     |
+| `glottis.rs` (22)        | B     |
+| `radiation.rs` (22)      | B     |
+| `waveguide.rs` (22)      | B     |
+| `stages.rs` (22)         | B     |
+| `renderer.rs` (22)       | B     |
+| `listener.rs` (22)       | B     |
+| `fdtd/kernel.rs` (23)    | A     |
+| `fdtd/kernel_simd.rs`    | A     |
+| `fdtd/model.rs` (23)     | A     |
+| `fdtd/solver.rs` (23)    | B     |
+| `fdtd/partition.rs` (24) | A     |
+| `fdtd/parallel.rs` (24)  | A     |
 
 The lag of the mouth pressure in `Aerodynamics::step` uses `lag_factor`
 (`lagFactor` in JavaScript), a rational form of 1 - exp(-x), instead of
@@ -724,7 +1009,19 @@ cargo build --release -p voice-simulator-cli
 REQUIRE_WASM=1 REQUIRE_CLI=1 node --test tests/rust-render-job.test.js
 bun test tests/rust-parity.test.js tests/rust-fdtd.test.js
 deno test -A tests/rust-parity.test.js tests/rust-fdtd.test.js
+node scripts/build-wasm.mjs --require --threads
+REQUIRE_THREADS_WASM=1 node --test tests/rust-threads.test.js
+node --test tests/universal-app-isolation.test.js
 ```
+
+`tests/rust-threads.test.js` checks the `threads` option of the loader,
+the fallback to one thread without cross-origin isolation, and renders on
+2 and 4 threads that are the same bits as on one. The tests of the threads
+build are skipped with the reason without
+`src/engine/voice-simulator-threads.wasm`; `REQUIRE_THREADS_WASM=1` turns a
+missing file into an error. `tests/universal-app-isolation.test.js` checks
+that the app sends the two headers and loads the service worker only with
+`VITE_CROSS_ORIGIN_ISOLATION=1`.
 
 Without the file, `tests/rust-parity.test.js` reports its tests as skipped
 with the reason. `REQUIRE_WASM=1` (set in CI after the build) turns a
@@ -750,10 +1047,16 @@ request that adds it to a `Cargo.toml`, and only with a permissive licence.
 The job `rust` of `release.yml` runs the commands above (with
 `node scripts/build-wasm.mjs --require --check-size`) and uploads the file
 as the artifact `voice-simulator-wasm`; it also builds the native CLI and
-runs the parity tests with `REQUIRE_WASM=1` and `REQUIRE_CLI=1`. The heavy
-workflow builds the file for the suites `performance` and `all`, which run
-`tests/heavy/performance-rust-waveguide.test.js` and
-`tests/heavy/performance-rust-fdtd.test.js` with `REQUIRE_WASM=1`. `release` and `instant-release`
+runs the parity tests with `REQUIRE_WASM=1` and `REQUIRE_CLI=1`. It then
+installs the nightly toolchain of `THREADS_TOOLCHAIN`, builds the threads
+file with `--threads` and runs `tests/rust-threads.test.js` with
+`REQUIRE_THREADS_WASM=1`; the threads file is not uploaded and not
+published. The heavy workflow builds the file, the threads file and the
+native CLI for the suites `performance` and `all`, which run
+`tests/heavy/performance-rust-waveguide.test.js`,
+`tests/heavy/performance-rust-fdtd.test.js` and
+`tests/heavy/performance-threads.test.js` with `REQUIRE_WASM=1`,
+`REQUIRE_CLI=1` and `REQUIRE_THREADS_WASM=1`. `release` and `instant-release`
 need it and download the artifact into `src/engine/` before they publish.
 In `example-app.yml` the job `wasm-build` does the same build and upload,
 and `web-build`, `desktop-package`, `android-build` and `ios-build`
