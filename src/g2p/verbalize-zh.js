@@ -87,6 +87,15 @@ function numberText(number) {
 }
 
 /** Mandarin text normalisation rules. */
+/**
+ * Question words that make a Mandarin question a wh-question (no rise at
+ * the end, src/g2p/phrasing.js). Mandarin keeps them where the answer
+ * would stand, so they are looked for anywhere in the sentence.
+ */
+export const ZH_WH_WORDS = Object.freeze(
+  '谁 什么 哪 哪里 怎么 为什么 几 多少'.split(' ')
+);
+
 export const CHINESE = {
   lang: 'zh',
   decimalComma: false,
@@ -137,5 +146,5 @@ export const CHINESE = {
   endsSentence: () => false,
   acronym: () => null,
   spell: () => [],
-  isWhWord: () => false,
+  isWhWord: (word) => ZH_WH_WORDS.includes(word),
 };

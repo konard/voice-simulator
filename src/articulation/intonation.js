@@ -264,7 +264,10 @@ export function phraseTuneName(phrases, index, language = 'en') {
   if (boundary === 'semicolon' || pause.contour === 'fall') {
     return 'statement';
   }
-  if (boundary === 'dash' && pause.contour === 'rise') {
+  if (
+    (boundary === 'dash' || boundary === 'comma') &&
+    pause.contour === 'rise'
+  ) {
     return 'alt-rise';
   }
   const next = phrases[index + 1];

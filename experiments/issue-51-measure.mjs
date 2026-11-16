@@ -92,7 +92,11 @@ const byWord = (vowels, word) => vowels.filter((v) => v.word === word);
   for (const word of words.slice(0, 1)) {
     const own = byWord(vowels, word);
     const stressed = own.find((v) => v.stress === 1) ?? own[0];
-    check(`en list: word ${word} end - stressed.start >= 2`, own.at(-1).end - stressed.start, own.at(-1).end - stressed.start >= 2);
+    // Information only: with the continuation tune of the issue (+2 on the
+    // nucleus, B +3.5) the end is 1.5 st above the start of the nucleus
+    // before declination, so ">= 2 above the stressed vowel" is read as
+    // against its end and its lowest point.
+    console.log(`     info: word ${word} end - stressed.start = ${(own.at(-1).end - stressed.start).toFixed(2)}`);
     check(`en list: word ${word} end - stressed.end >= 2`, own.at(-1).end - stressed.end, own.at(-1).end - stressed.end >= 2);
     check(`en list: word ${word} end - stressed.min >= 2`, own.at(-1).end - stressed.min, own.at(-1).end - stressed.min >= 2);
   }

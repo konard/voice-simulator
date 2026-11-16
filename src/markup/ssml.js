@@ -15,6 +15,7 @@ import {
   EMOTIONS,
   PHONATIONS,
   SOUND_NAMES,
+  TUNE_LABELS,
   emotionOf,
 } from './modes.js';
 
@@ -58,6 +59,7 @@ const CHANGES = new Map([
   ['vs:effort', (parser, element) => parser.effort(element)],
   ['vs:phonation', (parser, element) => parser.phonation(element)],
   ['vs:emotion', (parser, element) => parser.emotion(element)],
+  ['vs:tune', (parser, element) => parser.tune(element)],
 ]);
 
 /** The other known elements: the handler of the opening tag, or null. */
@@ -725,6 +727,16 @@ class SsmlReader {
       this.warn(element, `phonation degree must be 0..1, got ${given}`);
     }
     return PHONATIONS[name](degree ?? DEFAULT_DEGREE);
+  }
+
+  /** `<vs:tune name="IK4">`: the intonation tune of the span. */
+  tune(element) {
+    const name = this.attribute(element.attributes, 'name');
+    if (!TUNE_LABELS.includes(name)) {
+      this.warn(element, `unknown tune ${name ?? '(no name)'}`);
+      return {};
+    }
+    return { tune: name };
   }
 
   emotion(element) {
