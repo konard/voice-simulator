@@ -165,6 +165,7 @@ export const CONSONANTS = Object.freeze(
 /** Combining and modifier marks understood by the parser. */
 export const DIACRITICS = Object.freeze({
   ʰ: 'aspirated',
+  '˭': 'unaspirated',
   ʱ: 'breathy',
   ʲ: 'palatalized',
   ʷ: 'labialized',

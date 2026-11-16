@@ -18,6 +18,7 @@
 import { getPhoneme } from '../ipa/inventory.js';
 import { parseIpa } from '../ipa/parse.js';
 import { DEFAULT_HEAD, normalizeHeadConfig } from '../head-config.js';
+import { accentHead } from '../accent/head.js';
 import { suffixKey } from '../parameters/articulation.js';
 import { tensionForPitch } from '../acoustics/folds.js';
 import {
@@ -926,12 +927,31 @@ function articulatorsFor(head, overrides = {}) {
 }
 
 /**
+ * The head of a plan with the accent's articulation offsets and prosody
+ * factors, and its duration table: `options.durationTable`, else the
+ * table of the accent's `prosody.tunes`.
+ */
+function accentedHead(options) {
+  const head = accentHead(
+    normalizeHeadConfig(options.head ?? DEFAULT_HEAD),
+    options.accent
+  );
+  const tunes = options.accent?.prosody?.tunes;
+  const table =
+    options.durationTable ?? (tunes ? durationTable(tunes) : undefined);
+  return { head, table };
+}
+
+/**
  * Plan an utterance from IPA.
  * @param {string|object[]} ipa IPA string or parsed tokens.
- * @param {{head?: object, language?: string, frameRate?: number, durations?: (number|null)[], durationTable?: object, articulators?: Record<string, {timeConstant?: number, lead?: number}>, resistance?: Record<string, number>, modes?: {from: number, to: number, mode: object}[]}} [options]
+ * @param {{head?: object, language?: string, frameRate?: number, durations?: (number|null)[], durationTable?: object, accent?: {prosody?: {tunes?: string|null, range?: number, rate?: number, stressLengthening?: number}, articulation?: Record<string, number>}, articulators?: Record<string, {timeConstant?: number, lead?: number}>, resistance?: Record<string, number>, modes?: {from: number, to: number, mode: object}[]}} [options]
  *   `durations`: seconds per token (measured durations), which win over
  *   the rules; `durationTable`: an entry of `DURATION_TABLES` that overrides
- *   the table of `language`; `articulators`
+ *   the table of `language`; `accent` (see accentSettings of
+ *   src/accent/index.js): its articulation offsets and prosody factors
+ *   change the head and `prosody.tunes` picks the duration table of that
+ *   language; `articulators`
  *   and `resistance` override `ARTICULATORS` and the levels of
  *   `COARTICULATION_RESISTANCE`; `modes`: mode spans in IPA word indexes
  *   (`textToIpa(...).modes`), else the ExtIPA/VoQS marks of the IPA.
@@ -943,7 +963,7 @@ export function planUtterance(ipa, options = {}) {
   const parsed = typeof ipa === 'string' ? parseIpa(ipa) : null;
   const tokens = parsed ? parsed.tokens : ipa;
   assignTokenModes(tokens, options.modes ?? parsed?.modes ?? []);
-  const head = normalizeHeadConfig(options.head ?? DEFAULT_HEAD);
+  const { head, table } = accentedHead(options);
   const frameRate = options.frameRate ?? CONTROL_RATE;
   const segments = buildSegments(tokens, {
     rate: head.speechRate,
@@ -951,7 +971,7 @@ export function planUtterance(ipa, options = {}) {
     stressLengthening: head.stressLengthening,
     finalLengthening: head.finalLengthening,
     pauseLength: head.pauseLength,
-    durationTable: options.durationTable,
+    durationTable: table,
     head,
   });
   if (options.durations) {

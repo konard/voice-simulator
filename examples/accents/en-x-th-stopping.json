@@ -1,0 +1,36 @@
+{
+  "format": "voice-simulator/accent",
+  "version": 1,
+  "code": "en-x-th-stopping",
+  "name": "English with TH-stopping and a forward lip posture",
+  "language": "en",
+  "base": "en-US",
+  "rules": [
+    { "map": { "θ": "t̪", "ð": "d̪" }, "note": "TH-stopping: dental stops" },
+    {
+      "match": { "kind": "consonant", "manner": "plosive", "voiced": false },
+      "remove": "ʰ",
+      "after": "s",
+      "note": "No aspiration after s (already so in en-US)"
+    },
+    {
+      "map": { "ɹ": "ɾ" },
+      "before": "V",
+      "min": 0.5,
+      "note": "A tapped r before a vowel, from strength 0.5"
+    }
+  ],
+  "phonotactics": {
+    "codas": "any",
+    "maxOnset": 4,
+    "epenthesis": "ə",
+    "prothesis": null
+  },
+  "prosody": {
+    "tunes": "en",
+    "range": 1.2,
+    "rate": 0.9,
+    "stressLengthening": 1
+  },
+  "articulation": { "lipPosture": 0.2, "jawPosture": 0.1 }
+}

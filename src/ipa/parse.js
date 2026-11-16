@@ -80,6 +80,7 @@ function createSegment(symbol, phoneme, wordIndex) {
 /** Feature updates applied by each modifier diacritic. */
 const DIACRITIC_EFFECTS = {
   aspirated: { aspirated: true },
+  unaspirated: { aspirated: false, unaspirated: true },
   breathy: { breathy: true, aspirated: true },
   palatalized: { palatalized: true },
   labialized: { labialized: true },

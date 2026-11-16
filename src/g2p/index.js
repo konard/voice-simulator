@@ -30,14 +30,10 @@ import {
 import { russianWordToIpa } from './russian.js';
 import { joinRussianClitics } from './russian-clitics.js';
 import { VERBALIZERS, normalizeText } from './normalize.js';
-import {
-  adaptEnglishWord,
-  hasLinkingR,
-  isNonRhotic,
-  resolveAccent,
-} from './accents.js';
+import { adaptEnglishWord, hasLinkingR, isNonRhotic } from './accents.js';
 import { weakenFunctionWords } from './weak-forms.js';
 import { withLexicon } from './lexicon.js';
+import { accentSettings, applyAccentSettings } from '../accent/index.js';
 import { isSsml, parseMarkup } from '../markup/index.js';
 import { markupItems, markupModes } from './markup.js';
 
@@ -130,16 +126,22 @@ function wordLanguage(word, preferred) {
 /**
  * Pronounce one word. The `context` (words around it, see
  * `wordContexts()`) lets English choose between the readings of a
- * heteronym; other pronouncers ignore it.
+ * heteronym; Russian and Chinese take the g2p switches of an accent
+ * (`okanye`, `fricativeG`, `erhua`, `lowThird`) with it.
  */
-function pronounceWord(word, language, context) {
-  const result = WORD_PRONOUNCERS[language](word, context);
+function pronounceWord(word, language, context, g2p) {
+  const options = language === 'en' ? context : { ...context, ...g2p };
+  const result = WORD_PRONOUNCERS[language](word, options);
   return { text: word, lang: language, ...result };
 }
 
-/** Pronounce a normalised word item in its accent. */
-function pronounceItem(item, source, accent, context) {
-  return pronounceSource(item, source, context).map((word) => {
+/**
+ * Pronounce a normalised word item in its accent: `accent` is the English
+ * accent of the English pronouncer and `g2p` the switches of the text's
+ * accent for words of `g2pLanguage`.
+ */
+function pronounceItem(item, source, accent, context, switches) {
+  return pronounceSource(item, source, context, switches).map((word) => {
     if (word.lang !== 'en' || !word.ipa) {
       return word;
     }
@@ -149,7 +151,8 @@ function pronounceItem(item, source, accent, context) {
 }
 
 /** Pronounce a normalised word item, keeping its source range. */
-function pronounceSource(item, source, context) {
+function pronounceSource(item, source, context, switches) {
+  const g2p = switches?.language === item.lang ? switches.g2p : {};
   const { sourceStart, sourceEnd, token, partStart, partEnd } = item;
   const original = source.slice(sourceStart, sourceEnd);
   const range = { sourceStart, sourceEnd, original, token };
@@ -167,11 +170,11 @@ function pronounceSource(item, source, context) {
     item.text === original &&
     /\p{Script=Han}/u.test(original)
   ) {
-    return splitHanRun(item, range);
+    return splitHanRun(item, range, g2p);
   }
   return [
     {
-      ...pronounceWord(item.say ?? item.text, item.lang, context),
+      ...pronounceWord(item.say ?? item.text, item.lang, context, g2p),
       text: item.text,
       ...range,
     },
@@ -182,10 +185,10 @@ function pronounceSource(item, source, context) {
  * Split a run of Hanzi into dictionary words, so each can be highlighted
  * on its own; tone sandhi is still applied across the whole run.
  */
-function splitHanRun(item, range) {
+function splitHanRun(item, range, g2p) {
   const groups = new Map();
   let offset = item.sourceStart;
-  for (const syllable of chineseSyllables(item.text)) {
+  for (const syllable of chineseSyllables(item.text, g2p)) {
     const group = groups.get(syllable.group) ?? {
       text: '',
       syllables: [],
@@ -233,12 +236,16 @@ const isChineseWord = (item) =>
  * 不 written `yi1` or `bu4` are not changed, as only Hanzi say which
  * syllable is 一 or 不.
  * @param {object[]} items
+ * @param {{language: string, g2p: object}|null} [switches] the accent
+ *   settings; the `lowThird` switch of a Chinese accent applies to the
+ *   whole run (issue 57).
  */
-function joinChineseRuns(items) {
+function joinChineseRuns(items, switches) {
+  const g2p = switches?.language === 'zh' ? switches.g2p : {};
   let run = [];
   const flush = () => {
     if (run.length >= 2) {
-      const ipa = chineseRunToIpa(run);
+      const ipa = chineseRunToIpa(run, g2p);
       run.forEach((item, index) => {
         if (ipa) {
           item.ipa = ipa[index];
@@ -395,10 +402,50 @@ function splitLanguageTag(tag) {
 }
 
 /**
- * Words and breaks of `source` in `lang`, appended to `items`. `offset`
- * moves their source ranges (a stretch of a longer text).
+ * The accent settings of a text (see accentSettings of
+ * src/accent/index.js) and the English accent of its English words. The
+ * region of a language tag (`en-NZ`) that is no accent code gives the
+ * default accent; an unknown accent code of the language throws a
+ * RangeError.
  */
-function transcribe(items, source, lang, accent, offset = 0) {
+function textAccent(lang, options, region) {
+  const value = options.accent ?? region;
+  const lenient = options.accent === undefined;
+  const settings = accentSettings(lang, value, {
+    level: options.accentLevel,
+    lenient,
+  });
+  const english =
+    lang === 'en'
+      ? settings
+      : accentSettings('en', value, {
+          level: options.accentLevel,
+          lenient: true,
+        });
+  return { settings, english: english.englishAccent };
+}
+
+/** The accent settings of `lang` among those of a text, if any. */
+function settingsOf(all, lang) {
+  return all.find((settings) => settings.language === lang);
+}
+
+/** Apply the rules of an accent to the words of its language. */
+function applyAccentRules(items, all) {
+  for (const item of items) {
+    const settings = settingsOf(all, item.lang);
+    if (!item.break && item.ipa && settings) {
+      item.ipa = applyAccentSettings(item.ipa, settings);
+    }
+  }
+}
+
+/**
+ * Words and breaks of `source` in `lang`, appended to `items`. `offset`
+ * moves their source ranges (a stretch of a longer text); `settings` are
+ * the accent settings of `lang`.
+ */
+function transcribe(items, source, lang, accent, settings, offset = 0) {
   const shift = (item) =>
     offset
       ? {
@@ -419,7 +466,9 @@ function transcribe(items, source, lang, accent, offset = 0) {
       addBreak(items, shift(item));
     } else {
       items.push(
-        ...pronounceItem(item, source, accent, contexts[index]).map(shift)
+        ...pronounceItem(item, source, accent, contexts[index], settings).map(
+          shift
+        )
       );
     }
   });
@@ -427,26 +476,33 @@ function transcribe(items, source, lang, accent, offset = 0) {
 
 /**
  * The passes over all items: Chinese runs, clitics, weak forms, questions,
- * linking r.
+ * linking r and the accent rules. `all` holds the accent settings of the
+ * text, the first one of its main language.
  */
-function finishItems(items, accent, options) {
-  joinChineseRuns(items);
+function finishItems(items, accent, options, all) {
+  joinChineseRuns(items, settingsOf(all, 'zh'));
   joinRussianClitics(items);
-  if (options.weakForms !== false) {
+  if ((options.weakForms ?? all[0].g2p.weakForms) !== false) {
     weakenFunctionWords(items, accent);
   }
   markQuestions(items);
   linkRs(items, accent);
+  applyAccentRules(items, all);
 }
 
-/** The language and accent of a language tag, as `textToIpa()` reads it. */
-function languageOf(tag, source, accent) {
-  const { requested, region } = splitLanguageTag(tag);
+/**
+ * The language, region and accent settings of a language tag, as
+ * `textToIpa()` reads it. `region` stands in for the region of the tag.
+ */
+function languageOf(tag, source, options, region) {
+  const split = splitLanguageTag(tag);
+  const { requested } = split;
   const lang =
     requested === 'auto' || !WORD_PRONOUNCERS[requested]
       ? detectLanguage(source)
       : requested;
-  return { lang, region, accent: resolveAccent('en', accent ?? region) };
+  const own = region ?? split.region;
+  return { lang, region: own, ...textAccent(lang, options, own) };
 }
 
 /** Text to IPA with speech markup (see docs/markup.md). */
@@ -456,21 +512,25 @@ function markupToIpa(parsed, input, options) {
     options.lang && options.lang !== 'auto'
       ? options.lang
       : (parsed.lang ?? options.lang);
-  const base = languageOf(tag, source, options.accent);
+  const base = languageOf(tag, source, options);
+  const all = [base.settings];
   const items = markupItems(parsed, source, input, {
     transcribe: (into, text, lang, offset) => {
-      const local = lang
-        ? languageOf(lang, text, options.accent ?? base.region)
-        : base;
-      transcribe(into, text, local.lang, local.accent, offset);
+      const local = lang ? languageOf(lang, text, options, base.region) : base;
+      if (!settingsOf(all, local.lang)) {
+        all.push(local.settings);
+      }
+      const { settings } = local;
+      transcribe(into, text, local.lang, local.english, settings, offset);
     },
     lang: base.lang,
   });
-  finishItems(items, base.accent, options);
+  finishItems(items, base.english, options, all);
   const { ipa, modes } = markupModes(items, parsed);
   return {
     lang: base.lang,
-    accent: resolveAccent(base.lang, options.accent ?? base.region),
+    accent: base.settings.code,
+    accentLevel: base.settings.level,
     ipa,
     words: items.filter((item) => !item.break),
     modes,
@@ -481,13 +541,16 @@ function markupToIpa(parsed, input, options) {
 /**
  * Convert text to IPA.
  * @param {string} text
- * @param {{lang?: string, accent?: string, weakForms?: boolean, markup?: boolean, head?: {pitch?: number},
+ * @param {{lang?: string, accent?: string|object, accentLevel?: number, weakForms?: boolean, markup?: boolean, head?: {pitch?: number},
  *   lexicon?: Record<string, Record<string, string|string[]>>}} [options]
  *   `lang` is 'auto', 'en', 'ru', 'hi' or 'zh', or a regional tag such as
- *   'en-GB'. `accent` picks an English accent (`en-US`, `en-GB`, `en-AU`,
- *   `en-IN`; see `accents.js`) and wins over the region of `lang`.
- *   `weakForms` (default `true`) speaks English function words in their
- *   weak, unstressed form inside a phrase (`a cup of tea for you`
+ *   'en-GB'. `accent` picks an accent of the language (a code of ACCENTS
+ *   such as `en-GB`, `en-x-ru` or `zh-TW`, `{code, strength}`, or an accent
+ *   definition; see src/accent/) and wins over the region of `lang`; a
+ *   code of another language is ignored. `accentLevel` (0 to 1, default 1)
+ *   is its strength when the option has none. `weakForms` (default `true`
+ *   unless the accent turns them off) speaks English function words in
+ *   their weak, unstressed form inside a phrase (`a cup of tea for you`
  *   ə ˈkʌp əv ˈti fɚ ju); `false` keeps every word in its dictionary form.
  *   `markup`: a text that starts with `<speak` is SSML unless `markup` is
  *   `false`; `true` also reads inline tags (`[whisper]…[/whisper]`). See
@@ -498,7 +561,7 @@ function markupToIpa(parsed, input, options) {
  *   `source: 'user'`. An entry that cannot be read (IPA that `parseIpa`
  *   does not know, pinyin with the wrong number of syllables) throws a
  *   TypeError naming the word.
- * @returns {{lang: string, accent: string|null, ipa: string, words: object[], modes: {from: number, to: number, mode: object}[], warnings: {position: number, message: string}[]}}
+ * @returns {{lang: string, accent: string|null, accentLevel: number, ipa: string, words: object[], modes: {from: number, to: number, mode: object}[], warnings: {position: number, message: string}[]}}
  *   With markup, `ipa` holds the ExtIPA/VoQS marks of the modes that have
  *   one, `modes` are spans in IPA word indexes and every word's
  *   `sourceStart`/`sourceEnd` point into the input. Malformed SSML throws
@@ -514,21 +577,18 @@ function readText(text, options) {
     return markupToIpa(parseMarkup(input, options), input, options);
   }
   const source = normalizeDevanagariDigits(input);
-  const { lang, region, accent } = languageOf(
-    options.lang,
-    source,
-    options.accent
-  );
+  const { lang, settings, english } = languageOf(options.lang, source, options);
   const items = [];
-  transcribe(items, source, lang, accent);
-  finishItems(items, accent, options);
+  transcribe(items, source, lang, english, settings);
+  finishItems(items, english, options, [settings]);
   const ipa = items
     .map((item) => item.ipa)
     .filter(Boolean)
     .join(' ');
   return {
     lang,
-    accent: resolveAccent(lang, options.accent ?? region),
+    accent: settings.code,
+    accentLevel: settings.level,
     ipa,
     words: items.filter((item) => !item.break),
     modes: [],
