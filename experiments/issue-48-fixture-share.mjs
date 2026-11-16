@@ -14,6 +14,7 @@
  */
 
 import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { textToIpa } from '../src/index.js';
 import {
   RUSSIAN_ENCLITICS,
@@ -42,7 +43,7 @@ async function homographSpellings() {
 }
 
 const lines = readFileSync(
-  new URL('../tests/fixtures/russian-stress.txt', import.meta.url),
+  fileURLToPath(import.meta.resolve('../tests/fixtures/russian-stress.txt')),
   'utf8'
 )
   .split('\n')
