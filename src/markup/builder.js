@@ -95,8 +95,9 @@ export class MarkupBuilder {
     this.breaks.push({ at: this.text.length, seconds });
   }
 
+  /** A sound at the end of the text, in the mode open there. */
   addSound(name, duration = null) {
-    this.sounds.push({ at: this.text.length, name, duration });
+    this.sounds.push({ at: this.text.length, name, duration, mode: this.mode });
   }
 
   warn(position, message) {

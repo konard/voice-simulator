@@ -23,10 +23,22 @@ export function callPeaks(result) {
   return peaks;
 }
 
-const shifts = process.argv[2] ? process.argv[2].split(',').map(Number) : [-2, -1, 0, 1, 2];
-for (const shift of shifts) {
-  const text = `<speak>Yes <prosody pitch="${shift >= 0 ? '+' : ''}${shift}st"><vs:sound name="laugh"/></prosody></speak>`;
-  const result = synthesize(text, { tier: 'medium', seed: 1, markup: true });
-  const peaks = callPeaks(result);
-  console.log(shift, peaks.map((p) => p.level.toFixed(1)).join(' '), ' steps', peaks.slice(1).map((p, i) => (peaks[i].level - p.level).toFixed(1)).join(' '));
+if (import.meta.url.endsWith(process.argv[1])) {
+  const shifts = process.argv[2]
+    ? process.argv[2].split(',').map(Number)
+    : [-2, -1, 0, 1, 2];
+  for (const shift of shifts) {
+    const text = `<speak>Yes <prosody pitch="${shift >= 0 ? '+' : ''}${shift}st"><vs:sound name="laugh"/></prosody></speak>`;
+    const result = synthesize(text, { tier: 'medium', seed: 1, markup: true });
+    const peaks = callPeaks(result);
+    console.log(
+      shift,
+      peaks.map((p) => p.level.toFixed(1)).join(' '),
+      ' steps',
+      peaks
+        .slice(1)
+        .map((p, i) => (peaks[i].level - p.level).toFixed(1))
+        .join(' ')
+    );
+  }
 }

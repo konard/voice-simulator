@@ -501,10 +501,17 @@ describe('plan modes', () => {
         segment.sound ?? 'pause',
         Number(segment.duration.toFixed(6)),
       ])
+    ).toEqual([['pause', 1.5]]);
+    // A laugh lasts 0.8 s (4 calls); `[cough 0.5]` has round(0.5 / 0.2)
+    // = 2 calls of 0.225 s (issue 56).
+    expect(
+      plan.sounds.map((sound) => [
+        sound.name,
+        Number((sound.end - sound.start).toFixed(6)),
+      ])
     ).toEqual([
-      ['pause', 1.5],
-      ['laugh', 0.3],
-      ['cough', 0.5],
+      ['laugh', 0.8],
+      ['cough', 0.45],
     ]);
     expect(plan.sounds.map((sound) => sound.name)).toEqual(['laugh', 'cough']);
   });

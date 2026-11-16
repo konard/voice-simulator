@@ -6,21 +6,16 @@
  * the IPA string gets its ExtIPA/VoQS marks. See docs/markup.md.
  */
 
-import { parseIpa } from '../ipa/parse.js';
+import { parseIpa, soundIpa } from '../ipa/parse.js';
+
+export { soundIpa };
 import { wordSpans, writeMarks } from '../ipa/marks.js';
-import { MODE_DEFAULTS } from '../markup/modes.js';
+import { MODE_DEFAULTS, isDefaultMode } from '../markup/modes.js';
 
 /** The IPA of a pause of `seconds`: `(.)`, `(..)`, `(...)` or `(N)`. */
 export function pauseIpa(seconds) {
   const named = { 0.2: '(.)', 0.4: '(..)', 0.8: '(...)' }[seconds];
   return named ?? `(${Number(seconds.toFixed(3))})`;
-}
-
-/** The IPA of a sound: `⸨laugh⸩`, or `⸨laugh 0.5⸩` with a length. */
-export function soundIpa(name, duration) {
-  return duration === null || duration === undefined
-    ? `⸨${name}⸩`
-    : `⸨${name} ${Number(duration.toFixed(3))}⸩`;
 }
 
 /** The span of `spans` (sorted, not overlapping) that holds `index`. */
@@ -61,6 +56,7 @@ function eventsOf(parsed) {
         ipa: soundIpa(item.name, item.duration),
         break: true,
         sound: item.name,
+        mode: item.mode,
       },
     })),
   ];
@@ -170,21 +166,29 @@ export function markupItems(parsed, source, input, context) {
   for (; next < events.length; next++) {
     items.push({ ...events[next].item, sourceStart: events[next].at });
   }
+  // A sound keeps the mode open where it stands (an element with only a
+  // sound has no characters, so no span).
   return items.map((item) => ({
     ...mapSource(item, parsed, input),
-    mode: spanAt(parsed.spans, item.sourceStart)?.mode ?? MODE_DEFAULTS,
+    mode:
+      item.mode ??
+      spanAt(parsed.spans, item.sourceStart)?.mode ??
+      MODE_DEFAULTS,
   }));
 }
 
-/** The number of IPA words in the IPA of one item. */
-function wordCount(ipa) {
+/** The numbers of IPA words and of sounds in the IPA of one item. */
+function counts(ipa) {
   const words = new Set();
+  let sounds = 0;
   for (const token of parseIpa(ipa).tokens) {
-    if (token.kind !== 'pause' && token.word >= 0) {
+    if (token.kind === 'sound') {
+      sounds++;
+    } else if (token.kind !== 'pause' && token.word >= 0) {
       words.add(token.word);
     }
   }
-  return words.size;
+  return { words: words.size, sounds };
 }
 
 /**
@@ -196,15 +200,28 @@ export function markupModes(items) {
   const pieces = [];
   const wordModes = new Map();
   const emphasized = new Set();
+  const soundModes = [];
   let word = 0;
+  let sound = 0;
   for (const item of items) {
     const { mode } = item;
     delete item.mode;
     if (!item.ipa) {
       continue;
     }
-    const count = wordCount(item.ipa);
-    pieces.push({ text: item.ipa, word: count ? word : -1, count });
+    const { words: count, sounds } = counts(item.ipa);
+    for (let index = 0; index < sounds; index++) {
+      if (!isDefaultMode(mode)) {
+        soundModes.push({ sound, mode });
+      }
+      sound++;
+    }
+    pieces.push({
+      text: item.ipa,
+      word: count ? word : -1,
+      count,
+      ...(sounds && !count ? { sound: true } : {}),
+    });
     for (let index = word; index < word + count; index++) {
       wordModes.set(index, mode);
       if (mode.emphasis === 1) {
@@ -213,7 +230,7 @@ export function markupModes(items) {
     }
     word += count;
   }
-  const modes = wordSpans(wordModes, emphasized);
+  const modes = [...wordSpans(wordModes, emphasized), ...soundModes];
   return {
     ipa: writeMarks(pieces, modes).join(' '),
     modes,

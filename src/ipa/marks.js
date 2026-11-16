@@ -217,9 +217,12 @@ function emphasize(text) {
  * Write the marks of `modes` over the pieces of an IPA string. A piece is
  * `{text, word}`: `word` is the IPA word index of its first word and
  * `count` (default 1 for a word, 0 otherwise) the number of words it holds;
- * pauses and sounds have `word` -1. The marks of a span open before its
- * first word and close after its last one; a span with `emphasis` 1 writes
- * `ˈˈ` on each of its words.
+ * pauses and sounds have `word` -1 (a sound piece has `sound` true). The
+ * marks of a span open before its first word and close after its last one;
+ * a span with `emphasis` 1 writes `ˈˈ` on each of its words. A sound entry
+ * `{sound, mode}` (`sound`: the index of the sound piece among the sound
+ * pieces) writes the marks of its mode around the sound when no span of
+ * the same mode around it does.
  * @param {{text: string, word: number, count?: number}[]} pieces
  * @param {{from: number, to: number, mode: object}[]} modes
  * @returns {string[]} the pieces and the mark chunks, in order
@@ -228,11 +231,29 @@ export function writeMarks(pieces, modes = []) {
   const before = new Map();
   const after = new Map();
   const strong = new Set();
+  const wrap = (first, last, mode) => {
+    const labels = modeLabels(mode);
+    before.set(first, [
+      ...(before.get(first) ?? []),
+      ...labels.map((label) => `{${label}`),
+    ]);
+    after.set(last, [
+      ...labels.map(closingChunk).reverse(),
+      ...(after.get(last) ?? []),
+    ]);
+  };
   const located = pieces.map((piece) => {
     const count = piece.count ?? (piece.word >= 0 ? 1 : 0);
     return { ...piece, last: piece.word + count - 1, count };
   });
+  const sounds = located.flatMap((piece, index) =>
+    piece.sound ? [index] : []
+  );
+  const written = [];
   for (const span of modes) {
+    if (span.sound !== undefined) {
+      continue;
+    }
     const first = located.findIndex(
       (piece) => piece.count > 0 && piece.last >= span.from
     );
@@ -242,20 +263,28 @@ export function writeMarks(pieces, modes = []) {
     if (first < 0 || last < first) {
       continue;
     }
-    const labels = modeLabels(span.mode);
-    before.set(first, [
-      ...(before.get(first) ?? []),
-      ...labels.map((label) => `{${label}`),
-    ]);
-    after.set(last, [
-      ...labels.map(closingChunk).reverse(),
-      ...(after.get(last) ?? []),
-    ]);
+    written.push({ first, last, key: modeKey(span.mode) });
+    wrap(first, last, span.mode);
     if (span.mode.emphasis === 1) {
       for (let index = first; index <= last; index++) {
         strong.add(index);
       }
     }
+  }
+  // A sound in a mode of its own (`{sound, mode}`) gets the marks of that
+  // mode unless a span of the same mode around it writes them already.
+  for (const span of modes) {
+    const at = span.sound === undefined ? undefined : sounds[span.sound];
+    const key = at === undefined ? null : modeKey(span.mode);
+    if (
+      at === undefined ||
+      written.some(
+        (item) => item.first < at && at < item.last && item.key === key
+      )
+    ) {
+      continue;
+    }
+    wrap(at, at, span.mode);
   }
   const parts = [];
   located.forEach((piece, index) => {

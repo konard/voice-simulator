@@ -43,6 +43,7 @@ import {
 } from './modes.js';
 import {
   applySoundLevels,
+  applySoundHarmonics,
   applySoundPitch,
   clickSegments,
   expandSounds,
@@ -1361,6 +1362,7 @@ export function planUtterance(ipa, options = {}) {
     { language: tunes, effort, whisper }
   );
   applySoundPitch(channels.f0, segments, head, frameRate, effort);
+  applySoundHarmonics(channels, segments, head, frameRate);
   lowerBreathyReleases(channels.f0, segments, frameRate);
   const steps = {
     loudness: channels.loudness,

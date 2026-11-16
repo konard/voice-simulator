@@ -28,6 +28,9 @@
 import { parseIpa } from '../ipa/parse.js';
 import { consonantTarget, vowelChannels, vowelTarget } from './phones.js';
 import { EFFORT_RULES } from './effort.js';
+import { sampleState, tractShape } from './tract-shape.js';
+import { tubeFormants } from '../acoustics/transfer.js';
+import { piriformBranch } from '../acoustics/waveguide.js';
 
 /**
  * Level (dB) of the glottal noise at an open glottis against a modal vowel
@@ -280,7 +283,7 @@ export function soundCalls(name, seconds) {
 /**
  * Seconds of a sound token at speech rate 1: its `duration`, for a laugh
  * and a cough the length of its calls; else the default of `SOUNDS`.
- * Unknown names last their `duration` or 0.3 s, as before issue 56.
+ * Unknown names last their `duration` or 0.3 s.
  * @param {{name: string, duration?: number}} token
  */
 export function soundSeconds(token) {
@@ -600,6 +603,115 @@ export function applySoundLevels(loudness, segments, frameRate) {
   }
 }
 
+/**
+ * The model of the level of a voiced part against its f0: the harmonics
+ * of a source falling by `slope` (power, per harmonic number) through two
+ * resonances at the first two formants of the tract with the bandwidths
+ * `b1` and `b2` (Hz). Fitted to the waveguide (tier medium) on the laugh
+ * vowel at 141-251 Hz: 0.23 dB rms (experiments/issue-56-resonance-fit.mjs).
+ * A harmonic on F1 makes a vowel up to 5 dB louder than one between two
+ * harmonics, more than the 1.5 dB steps of a laugh.
+ */
+export const HARMONIC_MODEL = Object.freeze({
+  b1: 60,
+  b2: 100,
+  slope: 3,
+  maxFrequency: 4000,
+});
+
+function resonancePower(frequency, formant, bandwidth) {
+  const real = 1 - (frequency / formant) ** 2;
+  const imaginary = (frequency * bandwidth) / (formant * formant);
+  return 1 / (real * real + imaginary * imaginary);
+}
+
+/**
+ * The level (dB, up to a constant) of a voice at `f0` through the
+ * formants `[f1, f2]` (HARMONIC_MODEL).
+ * @param {number} f0 Hz
+ * @param {number[]} formants Hz
+ */
+export function harmonicGain(f0, [f1, f2]) {
+  const { b1, b2, slope, maxFrequency } = HARMONIC_MODEL;
+  let power = 0;
+  for (let harmonic = 1; harmonic * f0 < maxFrequency; harmonic++) {
+    const frequency = harmonic * f0;
+    power +=
+      (resonancePower(frequency, f1, b1) * resonancePower(frequency, f2, b2)) /
+      harmonic ** slope;
+  }
+  return 10 * Math.log10(power);
+}
+
+/**
+ * F1 and F2 of the tract at `time`: the tube model with the piriform
+ * fossae of the waveguide.
+ */
+function formantsAt(plan, head, time) {
+  const { areas, length } = tractShape(sampleState(plan, time), head);
+  return tubeFormants(areas, length, {
+    head,
+    count: 2,
+    maxFrequency: 3000,
+    branches: [piriformBranch(areas.length, length, head)],
+  });
+}
+
+/**
+ * Keep the planned level steps of the voiced vowels of a sound (the calls
+ * of a laugh) in the sound: each vowel after the first is raised or
+ * lowered by the change of `harmonicGain()` between its f0 and the f0 of
+ * the first one, at the formants of the first one (the vowels of a sound
+ * share their phone). Runs after `applySoundPitch()`, on the loudness
+ * steps; a sound with one voiced vowel is left alone.
+ * @param {Record<string, Float32Array>} channels the plan channels (f0,
+ *   loudness and the tract channels filled)
+ * @param {object[]} segments timed segments
+ * @param {object} head
+ * @param {number} frameRate
+ */
+export function applySoundHarmonics(channels, segments, head, frameRate) {
+  const frameCount = channels.f0.length;
+  const plan = { channels, frameRate, frameCount };
+  const vowels = new Map();
+  for (const segment of segments) {
+    if (
+      segment.soundOf &&
+      segment.kind === 'vowel' &&
+      segment.soundPitch &&
+      !(segment.token?.mode?.phonation?.whisper > 0)
+    ) {
+      const list = vowels.get(segment.soundOf) ?? [];
+      list.push(segment);
+      vowels.set(segment.soundOf, list);
+    }
+  }
+  for (const list of vowels.values()) {
+    if (list.length < 2) {
+      continue;
+    }
+    const middle = (segment) =>
+      Math.min(
+        frameCount - 1,
+        Math.round(((segment.start + segment.end) / 2) * frameRate)
+      );
+    const formants = formantsAt(plan, head, middle(list[0]) / frameRate);
+    if (formants.length < 2) {
+      continue;
+    }
+    const reference = harmonicGain(channels.f0[middle(list[0])], formants);
+    for (const segment of list.slice(1)) {
+      const change =
+        harmonicGain(channels.f0[middle(segment)], formants) - reference;
+      const [first, last] = frameSpan(segment, frameRate, frameCount);
+      const gain = dbToGain(-change);
+      for (let frame = first; frame < last; frame++) {
+        channels.loudness[frame] *= gain;
+      }
+    }
+  }
+}
+
 /** The pitch (Hz) at the end of the last vowel of speech before `time`. */
 function pitchBefore(f0, segments, time, frameRate, fallback) {
   let found = null;
@@ -658,6 +770,26 @@ export function applySoundPitch(f0, segments, head, frameRate, effort) {
         value *= 2 ** (EFFORT_RULES.pitch.value(effort[frame], head) / 12);
       }
       f0[frame] = value;
+    }
+  }
+  holdSoundPitch(f0, segments, frameRate);
+}
+
+/**
+ * Hold the last f0 of a sound through the pause after it: the pause is
+ * silent, and the zero-phase smoothing of f0 would otherwise pull the end
+ * of the sound toward the pitch of the pause.
+ */
+function holdSoundPitch(f0, segments, frameRate) {
+  let held = null;
+  for (const segment of segments) {
+    const [first, last] = frameSpan(segment, frameRate, f0.length);
+    if (segment.soundPitch && segment.soundOf) {
+      held = last > first ? f0[last - 1] : held;
+    } else if (segment.kind === 'pause' && held !== null) {
+      f0.fill(held, first, last);
+    } else {
+      held = null;
     }
   }
 }
