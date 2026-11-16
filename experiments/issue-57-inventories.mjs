@@ -31,7 +31,12 @@ function collect(strings) {
 const english = String(ENGLISH_DICTIONARY)
   .split(' ')
   .map((entry) => entry.slice(entry.indexOf('=') + 1));
-console.log('en', collect(english).map(([unit, n]) => `${unit}:${n}`).join(' '));
+console.log(
+  'en',
+  collect(english)
+    .map(([unit, n]) => `${unit}:${n}`)
+    .join(' ')
+);
 console.log(
   'zh finals',
   collect([...Object.values(FINALS), ...Object.values(ERHUA_FINALS)])
