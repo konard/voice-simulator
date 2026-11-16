@@ -28,7 +28,8 @@
     "./playback": {
       "types": "./src/playback/index.d.ts",
       "import": "./src/playback/index.js"
-    }
+    },
+    "./worker": "./src/engine/worker.js"
   },
   "scripts": {
     "test": "node --test --test-timeout=30000 tests/*.test.js",

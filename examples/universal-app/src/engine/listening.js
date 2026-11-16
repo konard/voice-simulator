@@ -25,12 +25,14 @@ export const DEFAULT_ACOUSTICS = Object.freeze({
   boxAbsorption: 0.2,
   // The 3D tiers run on WebGPU where the browser has it.
   gpu: true,
+  // The Rust engine where it loads, else JavaScript (see createEngine).
+  engine: 'auto',
 });
 
 /**
  * synthesize / speak options for the listening settings.
  * @param {typeof DEFAULT_ACOUSTICS} acoustics
- * @returns {{microphone?: object, room?: string, enclosure?: object, gpu?: false}}
+ * @returns {{microphone?: object, room?: string, enclosure?: object, gpu?: false, engine?: 'rust'|'js'}}
  */
 export function listeningSettings(acoustics) {
   const result = {};
@@ -60,6 +62,9 @@ export function listeningSettings(acoustics) {
   }
   if (!acoustics.gpu) {
     result.gpu = false;
+  }
+  if (acoustics.engine && acoustics.engine !== 'auto') {
+    result.engine = acoustics.engine;
   }
   return result;
 }
@@ -96,4 +101,23 @@ export function boxProblem(acoustics, head) {
       enclosureCells(acoustics, tier.dx) > MAX_ENCLOSURE_CELLS
   ).map((tier) => tier.name);
   return tiers.length > 0 ? { tiers } : null;
+}
+
+/**
+ * "Engine: Rust (SIMD)" or "Engine: JavaScript (why not Rust)": the
+ * worker's answer to {type: 'engine'}, null while it is not known.
+ */
+export function engineLabel(engine, strings) {
+  if (!engine) {
+    return `${strings.engine}: …`;
+  }
+  if (!engine.name) {
+    return `${strings.engine}: ${strings.engineFailed} (${engine.error})`;
+  }
+  const name = strings.engines[engine.name];
+  const note =
+    engine.name === 'rust' ? (engine.simd ? 'SIMD' : null) : engine.reason;
+  return note
+    ? `${strings.engine}: ${name} (${note})`
+    : `${strings.engine}: ${name}`;
 }

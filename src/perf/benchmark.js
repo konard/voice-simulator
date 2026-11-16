@@ -3,7 +3,8 @@
  * machine (load = simulation time / audio duration).
  */
 
-import { VoiceRenderer } from '../acoustics/voice.js';
+import { releaseRenderer } from '../acoustics/voice.js';
+import { getEngine } from '../engine/index.js';
 import { buildVoxelModel } from '../acoustics/voxel-model.js';
 import { planUtterance } from '../articulation/plan.js';
 import { DEFAULT_HEAD, normalizeHeadConfig } from '../head-config.js';
@@ -26,9 +27,10 @@ function benchmarkRenderer(tier, options) {
   const seconds = Math.min(plan.duration, options.seconds ?? 0.3);
   const model =
     tier.solver === 'fdtd3d' ? buildVoxelModel(head, { dx: tier.dx }) : null;
-  return new VoiceRenderer(
+  const renderOptions = { ...tier, head, model, device: options.device };
+  return getEngine(options.engine).createRenderer(
     { ...plan, duration: seconds },
-    { ...tier, head, model, device: options.device }
+    renderOptions
   );
 }
 
@@ -55,12 +57,16 @@ function timeRendering(renderer, options, renderBlock) {
 function measureOnce(tier, options) {
   const renderer = benchmarkRenderer(tier, options);
   const block = new Float32Array(BLOCK);
-  return timeRendering(renderer, options, (step, load) => {
-    while (step(renderer.render(block))) {
-      // Render the next block.
-    }
-    return load();
-  });
+  try {
+    return timeRendering(renderer, options, (step, load) => {
+      while (step(renderer.render(block))) {
+        // Render the next block.
+      }
+      return load();
+    });
+  } finally {
+    releaseRenderer(renderer);
+  }
 }
 
 /**
@@ -75,7 +81,9 @@ function measureOnce(tier, options) {
  * varies by about 20 % on a busy machine. The repeats stop at the first
  * load above `limit`.
  * @param {object} tier Entry of AUDIO_TIERS.
- * @param {{head?: object, ipa?: string, seconds?: number, limit?: number, repeats?: number}} [options]
+ * `engine` (default 'auto') is an engine name or an engine object of
+ * createEngine (src/engine/index.js), resolved with getEngine.
+ * @param {{head?: object, ipa?: string, seconds?: number, limit?: number, repeats?: number, engine?: 'auto'|'rust'|'js'|object}} [options]
  */
 export function measureAudioTier(tier, options = {}) {
   const loads = [];
@@ -101,11 +109,10 @@ export async function measureAudioTierAsync(tier, options = {}) {
     ...options,
     device: tier.solver === 'fdtd3d' ? options.device : undefined,
   });
-  const block = new Float32Array(
-    renderer.solver.gpu ? (options.chunk ?? 1024) : BLOCK
-  );
+  const gpu = Boolean(renderer.solver.gpu);
+  const block = new Float32Array(gpu ? (options.chunk ?? 1024) : BLOCK);
   try {
-    if (renderer.solver.gpu) {
+    if (gpu) {
       await renderer.renderAsync(new Float32Array(block.length));
     }
     return await timeRendering(renderer, options, async (step, load) => {
@@ -115,7 +122,7 @@ export async function measureAudioTierAsync(tier, options = {}) {
       return load();
     });
   } finally {
-    renderer.solver.gpu?.destroy();
+    releaseRenderer(renderer);
   }
 }
 
@@ -130,7 +137,11 @@ function warmUp(seconds, options) {
   const end = globalThis.performance.now() + 1000 * seconds;
   for (let index = 0; globalThis.performance.now() < end; index++) {
     const tier = AUDIO_TIERS[index % (BASE_AUDIO_LEVEL + 1)];
-    measureOnce(tier, { head: options.head, seconds: 0.1 });
+    measureOnce(tier, {
+      head: options.head,
+      engine: options.engine,
+      seconds: 0.1,
+    });
   }
 }
 

@@ -155,6 +155,11 @@ const STRINGS = {
       gpu: 'Run the 3D tiers on the GPU (WebGPU)',
       gpuNote:
         'Without WebGPU, or when it fails, the processor simulates them. The audio meter shows “GPU” while the GPU is in use.',
+      engine: 'Engine',
+      engines: { auto: 'Auto', rust: 'Rust', js: 'JavaScript' },
+      engineFailed: 'unavailable',
+      engineNote:
+        'Auto renders with the Rust engine (WebAssembly) where it loads, and with JavaScript where it does not.',
     },
   },
   ru: {
@@ -309,6 +314,11 @@ const STRINGS = {
       gpu: 'Считать 3D-уровни на видеокарте (WebGPU)',
       gpuNote:
         'Без WebGPU или при его сбое их считает процессор. Пока работает видеокарта, индикатор звука показывает «GPU».',
+      engine: 'Движок',
+      engines: { auto: 'Авто', rust: 'Rust', js: 'JavaScript' },
+      engineFailed: 'недоступен',
+      engineNote:
+        'Авто считает на движке Rust (WebAssembly), где он загружается, и на JavaScript, где нет.',
       boxTooLarge: 'В коробке слишком много вокселей для этих уровней',
     },
   },

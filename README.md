@@ -477,6 +477,8 @@ npx voice-simulator match recording.wav --transcript "What it says" --json
 npx voice-simulator compare recording.wav hello.wav --json   # distances from a reference
 npx voice-simulator mesh --lod 3 -o head.obj
 npx voice-simulator benchmark
+npx voice-simulator benchmark --engine js --json   # {"engine":"js",...}
+npx voice-simulator say "Hello" --engine js -o js.wav   # byte-stable output
 npx voice-simulator serve --port 8080
 npx voice-simulator --help
 ```
@@ -595,6 +597,49 @@ SPTK mel-generalised cepstrum: the female and the male preset head saying the
 same sentence on the `minimal` tier are 47 to 52 dB apart here, and two
 renderings with seeds 1 and 2 are 10 to 11 dB apart
 (`node experiments/issue-19-voice-pairs.mjs`).
+
+### Analysis front end
+
+`createFrameAnalyzer(sampleRate, options)` turns sound into analysis frames
+while it arrives; it is the first stage of reverse simulation (Roadmap 4).
+It resamples to a working rate (`workingRate`: the largest of 8000, 11025
+and 16000 Hz not above the input rate; it never up-samples) with
+`createResampler`, which matches `resample()` within 1e-6. Every 5 ms (or
+10 ms) it measures a 25 ms frame: `energy`, `zcr`, `gravity`, `tilt`, six
+Liu (1996) `band` levels, `periodicity` (Boersma 1993), 24 log `mel`
+energies, 13 `cepstrum` coefficients, LPC `lpc`, `reflection` and `gain`
+(Burg, autocorrelation or covariance method), the `noise` floor (minimum
+statistics, Martin 2001) and a `speech` flag with 40 ms hangover. The
+defaults are `FRONTEND_DEFAULTS`. All rows live in one frame set of flat
+`Float32Array`s (`speech` is a `Uint8Array`) with `capacity` rows allocated
+once; nothing is allocated per frame.
+
+```js
+import { analyzeFrames, createFrameAnalyzer } from 'voice-simulator';
+
+const analyzer = createFrameAnalyzer(44100);
+analyzer.push(chunk); // frames added so far
+analyzer.flush(); // the frames that need zeros after the end
+const { frames } = analyzer;
+frames.energy[frames.count - 1]; // dB
+frames.cepstrum.subarray(0, frames.cepstra); // row 0
+analyzer.trim(100); // drop the first 100 frames (0.5 s) and their samples
+analyzeFrames(samples, 16000).count; // one call for a whole recording
+```
+
+Later stages follow one pattern: `createX(frames, options)` returns an object
+with `advance(final = false)`, which processes the frames added since the
+last call, and an output whose arrays have `frames.capacity` rows and a
+field `committed` (rows before it never change; type `FrameStage`). After
+`trim()` a stage is invalid and is created again. `createFft`, `lpcBurg`,
+`lpcAutocorrelation`, `lpcCovariance`, `predictorFromReflection` and
+`lpcLevel` are exported too.
+
+Measured with `node experiments/issue-58-rtf.mjs` (10 s of speech, one
+thread): 0.0138 of real time at 16000 Hz, 0.0059 at 8000 Hz and 0.0199 for
+44100 Hz input (the budget is 0.05 and 0.03). The added delay is 12.5 ms
+at 8000 and 16000 Hz and 13.5 ms at 44100 and 48000 Hz
+(`node experiments/issue-58-delay.mjs`; the budget is 20 ms).
 
 ### Quality
 
@@ -757,8 +802,9 @@ WebAssembly with the same samples as `VoiceRenderer` and `renderPlan` (the
 largest difference measured is 1.7e-18), and since issue 23 also the 3D
 FDTD tiers (`high` to `reference`, `solver: 'fdtd3d'`; largest difference
 on `'Hello.'` at `high`: 0); the plan, the tract shape of every control
-block and the voxel model are still computed in JavaScript. It is opt-in
-for now: `synthesize` keeps using JavaScript.
+block and the voxel model are still computed in JavaScript. Since issue 25
+it is the default engine (see [Engines](#engines)); the functions below
+use it directly.
 
 ```javascript
 import {
@@ -798,6 +844,46 @@ and `voice-simulator-cli render-job <out>` (`cargo build --release -p
 voice-simulator-cli`) renders it natively and prints the SHA-256 of the
 samples, which equals that of the WebAssembly render. See
 [docs/RUST-ENGINE.md](docs/RUST-ENGINE.md).
+
+### Engines
+
+Everything that renders (`synthesize`, `synthesizeAsync`,
+`synthesizeStream`, `renderPlan`, the benchmark, the CLI, the HTTP server
+and the app's worker) takes an `engine` option:
+
+| `engine`           | Renders with                                                                                                                                                                |
+| ------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `'auto'` (default) | the Rust engine (`src/engine/voice-simulator.wasm`) when it loads and supports the options, else JavaScript; `renderer.fallbackReason` and `engine.reason` say why not Rust |
+| `'rust'`           | the Rust engine; an Error with `code === 'ENGINE_UNAVAILABLE'` when it does not load                                                                                        |
+| `'js'`             | JavaScript, without loading WebAssembly: byte-stable output (Rust and JavaScript differ by up to 1e-4 per sample)                                                           |
+
+Options Rust does not render (`solver: 'fdtd2d'`, a WebGPU `device`,
+`source: 'folds'`) render in JavaScript under `'auto'`. `createEngine`
+loads an engine once (cached by `engine|threads|simd`) and every renderer
+it makes says which engine renders:
+
+```javascript
+import { createEngine, prepareUtterance, synthesize } from 'voice-simulator';
+
+const engine = await createEngine(); // {name: 'rust' | 'js', simd, threads, reason}
+const { samples } = synthesize('Hello.', { engine }); // or 'auto' | 'rust' | 'js'
+const { plan, renderOptions } = prepareUtterance('Hello.', { tier: 'minimal' });
+const renderer = engine.createRenderer(plan, renderOptions);
+console.log(renderer.engine, renderer.fallbackReason); // 'rust' null
+renderer.free?.(); // a Rust renderer holds WebAssembly memory
+```
+
+In Node.js, Bun and Deno `synthesize` (synchronous) loads the engine on
+first use; in a browser the engine loads asynchronously, so `'auto'` in
+`synthesize` is JavaScript until `await createEngine()` has run, while
+`synthesizeAsync`, `synthesizeStream` and the worker load it themselves.
+The CLI takes `--engine auto|rust|js` and `--threads <n|auto>` (default 1;
+threads arrive with issue 24), `benchmark` prints the engine first
+(`"engine"` with `--json`), and the server takes `engine=js` per request.
+`voice-simulator/worker` is the synthesis worker the app uses:
+`new Worker(new URL('voice-simulator/worker', import.meta.url), {type:
+'module'})`; its messages are in
+[docs/RUST-ENGINE.md](docs/RUST-ENGINE.md#worker).
 
 ### Docker
 
