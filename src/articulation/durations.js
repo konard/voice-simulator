@@ -162,6 +162,9 @@ export function isAspirated(tokens, index, language) {
   if (token?.aspirated) {
     return true;
   }
+  if (token?.unaspirated) {
+    return false;
+  }
   if (!String(language ?? '').startsWith('en') || !voicelessStop(token)) {
     return false;
   }
