@@ -1015,6 +1015,12 @@ worker of the app asks for one thread, so it needs none.
   grid that pays.
 - `build-wasm.mjs` without `--threads` leaves an older threads file in
   `src/engine/` in place.
+- The core crate denies `unsafe_code` in its `Cargo.toml`
+  (`[lints.rust]`) in place of `#![forbid(unsafe_code)]` in `lib.rs`:
+  `forbid` cannot be lifted for one module, and `fdtd/parallel.rs` allows
+  it. `tests/rust-crates.test.js` checks the lint, that `parallel.rs` is
+  the only file with `unsafe` and that every block has a `// SAFETY:`
+  comment.
 
 `experiments/issue-24/bench` (its own Cargo project, not in the workspace)
 times the step forms and the team on the grid of a render job, and
