@@ -88,14 +88,19 @@ export const BREATH_EXPONENT = 2.114;
  * The pulse is normalised to period 1 and a negative peak of about -1.
  * @param {number} tenseness
  * @param {number} [breathiness]
+ * @param {number} [rdSlope] Change of Rd per unit of breathiness
+ *   (head.breathinessRd, BREATHINESS_RD by default).
  */
-export function lfParameters(tenseness, breathiness = BREATHINESS_REFERENCE) {
+export function lfParameters(
+  tenseness,
+  breathiness = BREATHINESS_REFERENCE,
+  rdSlope = BREATHINESS_RD
+) {
   const rd = Math.min(
     2.7,
     Math.max(
       0.5,
-      3 * (1 - tenseness) +
-        BREATHINESS_RD * (breathiness - BREATHINESS_REFERENCE)
+      3 * (1 - tenseness) + rdSlope * (breathiness - BREATHINESS_REFERENCE)
     )
   );
   const ra = -0.01 + 0.048 * rd;
@@ -136,7 +141,10 @@ export class Glottis {
    * @param {{seed?: string|number, tenseness?: number, breathiness?: number, jitter?: number, shimmer?: number, aspirationLevel?: number, chink?: number, lungPressure?: number}} [options]
    *   `jitter` and `shimmer` are standard deviations in percent, `chink`
    *   the area of the glottal chink in mm², `lungPressure` (Pa) the
-   *   pressure used when the control gives none.
+   *   pressure used when the control gives none. `head` gives the advanced
+   *   source values (breathinessRd, breathGain, breathExponent, chinkNoise,
+   *   glottisVoiced, glottisOpen, glottisBreathy, reCritical); each falls
+   *   back to its constant.
    */
   constructor(options = {}) {
     this.random = createRandom(`${options.seed ?? 1}:glottis`);
@@ -148,6 +156,13 @@ export class Glottis {
     this.chink = Math.max(0, options.chink ?? 0);
     this.chinkTime = chinkTimeConstant(this.chink);
     this.lungPressure = options.lungPressure ?? DEFAULT_LUNG_PRESSURE;
+    const head = options.head ?? {};
+    this.rdSlope = head.breathinessRd ?? BREATHINESS_RD;
+    this.breathGain = head.breathGain ?? BREATH_GAIN;
+    this.breathExponent = head.breathExponent ?? BREATH_EXPONENT;
+    this.chinkNoise = head.chinkNoise ?? CHINK_NOISE;
+    this.reCritical = head.reCritical;
+    this.areas = head;
     this.strengthKey = [NaN, NaN];
     this.strength = 0;
     this.smoothed = 0;
@@ -156,7 +171,7 @@ export class Glottis {
     this.jitter = 1;
     this.shimmer = 1;
     this.intensity = 0;
-    this.pulse = lfParameters(this.tenseness, this.breathiness);
+    this.pulse = lfParameters(this.tenseness, this.breathiness, this.rdSlope);
     this.noiseModulation = 0;
   }
 
@@ -165,7 +180,7 @@ export class Glottis {
     this.jitter = 1 + this.jitterDepth * randomNormal(this.random);
     this.shimmer = 1 + this.shimmerDepth * randomNormal(this.random);
     this.period = 1 / Math.max(30, frequency * this.jitter);
-    this.pulse = lfParameters(tenseness, this.breathiness);
+    this.pulse = lfParameters(tenseness, this.breathiness, this.rdSlope);
   }
 
   /**
@@ -178,11 +193,11 @@ export class Glottis {
       10 *
       (control.lungPressure ??
         this.lungPressure * Math.max(0, control.loudness) ** (2 / 3));
-    const area = glottalArea(control, this.breathiness, this.chink);
+    const area = glottalArea(control, this.breathiness, this.chink, this.areas);
     if (lung !== this.strengthKey[0] || area !== this.strengthKey[1]) {
       this.strengthKey[0] = lung;
       this.strengthKey[1] = area;
-      this.strength = openTractStrength(lung, area);
+      this.strength = openTractStrength(lung, area, this.reCritical);
     }
     return this.strength;
   }
@@ -230,9 +245,9 @@ export class Glottis {
       control.aspirationStrength ?? this.#openTractStrength(control);
     const breath =
       ((control.aspiration +
-        BREATH_GAIN * this.breathiness ** BREATH_EXPONENT * voicing) *
+        this.breathGain * this.breathiness ** this.breathExponent * voicing) *
         (1 - control.closure) +
-        (CHINK_NOISE * this.chink) / 10) *
+        (this.chinkNoise * this.chink) / 10) *
       strength;
     return voiced + noise * breath * modulation * 0.45 * this.aspirationLevel;
   }

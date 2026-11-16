@@ -61,18 +61,20 @@ export function reynolds(flow, area) {
  * Strength (amplitude, arbitrary units) of the turbulence noise made by a
  * pressure drop `dp` (dyn/cm²) across an orifice of area `area` (cm²)
  * carrying the flow `flow` (cm³/s): dp^1.5 A^0.5, gated by the Reynolds
- * number between RE_CRITICAL and twice that.
+ * number between `reCritical` (head.reCritical, RE_CRITICAL by default)
+ * and twice that.
  * @param {number} dp
  * @param {number} area
  * @param {number} flow
+ * @param {number} [reCritical]
  */
-export function sourceStrength(dp, area, flow) {
+export function sourceStrength(dp, area, flow, reCritical = RE_CRITICAL) {
   if (!(dp > 0) || !(area > 0)) {
     return 0;
   }
   const gate = Math.min(
     1,
-    Math.max(0, (reynolds(flow, area) - RE_CRITICAL) / RE_CRITICAL)
+    Math.max(0, (reynolds(flow, area) - reCritical) / reCritical)
   );
   if (gate === 0) {
     return 0;
@@ -125,10 +127,14 @@ export const ASPIRATION_REFERENCE = sourceStrength(
  * open tract: what a glottis without an Aerodynamics state assumes.
  * @param {number} lungPressure dyn/cm².
  * @param {number} glottalArea cm².
+ * @param {number} [reCritical] head.reCritical.
  */
-export function openTractStrength(lungPressure, glottalArea) {
+export function openTractStrength(lungPressure, glottalArea, reCritical) {
   const flow = glottalArea * Math.sqrt((2 * lungPressure) / AIR_DENSITY);
-  return sourceStrength(lungPressure, glottalArea, flow) / ASPIRATION_REFERENCE;
+  return (
+    sourceStrength(lungPressure, glottalArea, flow, reCritical) /
+    ASPIRATION_REFERENCE
+  );
 }
 
 /**
@@ -136,15 +142,18 @@ export function openTractStrength(lungPressure, glottalArea) {
  * @param {{voicing: number, aspiration: number, closure: number}} control
  * @param {number} breathiness Head breathiness (0 to 1).
  * @param {number} chink Glottal chink (mm²).
+ * @param {{glottisVoiced?: number, glottisOpen?: number, glottisBreathy?: number}} [areas]
+ *   The areas of a head (GLOTTIS_VOICED, GLOTTIS_OPEN and GLOTTIS_BREATHY
+ *   by default).
  */
-export function glottalArea(control, breathiness = 0.2, chink = 0) {
+export function glottalArea(control, breathiness = 0.2, chink = 0, areas = {}) {
   const voicing = Math.max(0, control.voicing);
   const aspiration = Math.max(0, control.aspiration);
   const closure = Math.min(1, Math.max(0, control.closure ?? 0));
   return (
-    (GLOTTIS_VOICED * voicing +
-      GLOTTIS_OPEN * aspiration +
-      GLOTTIS_BREATHY * breathiness * voicing) *
+    ((areas.glottisVoiced ?? GLOTTIS_VOICED) * voicing +
+      (areas.glottisOpen ?? GLOTTIS_OPEN) * aspiration +
+      (areas.glottisBreathy ?? GLOTTIS_BREATHY) * breathiness * voicing) *
       (1 - closure) +
     Math.max(0, chink) / 100
   );
@@ -164,7 +173,8 @@ export function lagFactor(x) {
 
 export class Aerodynamics {
   /**
-   * @param {{compliance?: number}} [options]
+   * @param {{compliance?: number}} [options] `compliance` is
+   *   head.oralCompliance (ORAL_COMPLIANCE by default).
    */
   constructor(options = {}) {
     this.compliance = options.compliance ?? ORAL_COMPLIANCE;

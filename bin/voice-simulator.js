@@ -14,15 +14,19 @@ import {
   benchmarkAudioTiers,
   compareRecordings,
   decodeAudio,
+  DEFAULT_HEAD,
   decodeHeadConfig,
   encodeHeadConfig,
   formatFromFileName,
   headModelObj,
+  loadVoice,
   matchVoice,
   measureAudioTier,
   prepareUtterance,
+  presetHeadConfig,
   randomHeadConfig,
   resample,
+  saveVoice,
   synthesize,
   textToIpa,
   visemeTrack,
@@ -41,6 +45,9 @@ const OPTIONS = {
   dx: { type: 'string' },
   seed: { type: 'string', short: 's' },
   head: { type: 'string' },
+  voice: { type: 'string' },
+  'voice-file': { type: 'boolean' },
+  full: { type: 'boolean' },
   preset: { type: 'string' },
   output: { type: 'string' },
   'sample-rate': { type: 'string' },
@@ -80,7 +87,10 @@ function usage() {
     '  convert <in> -o out Convert an audio file (WAV, FLAC, AIFF, AU) to mono',
     '  timeline <text>     Print when each word and syllable is spoken',
     '  visemes <text>      Face animation as JSON (ARKit, VRM or Oculus)',
-    '  head                Print a random head configuration',
+    '  head                Print a random head configuration (or the head',
+    '                      of --head or --voice); --voice-file prints it as',
+    '                      a voice file, --full with every value',
+    '  voice check <file>  Check a voice file (exit code 1 on a problem)',
     '  mesh -o head.obj    Export the low-poly head model as OBJ',
     '  match <file>        Find the head that sounds like a recording',
     '  compare <ref> <test>',
@@ -116,7 +126,11 @@ function usage() {
     '                        larynxPosture=-0.5&lipPosture=0.3 (lower larynx,',
     '                        pushed-out lips); jawPosture, tongueRootPosture,',
     '                        intrinsicPitch=1.5, larynxPitch=0.3',
-    '      --preset <name>   any | male | female | child (random head range)',
+    '      --voice <file>    Voice file (JSON, docs/VOICE-PARAMETERS.md); --head',
+    '                        wins over --voice, which wins over --preset',
+    '      --preset <name>   any | male | female | child | child5 | teenMale |',
+    '                        teenFemale | elderlyMale | elderlyFemale | bass |',
+    '                        baritone | tenor | alto | mezzo | soprano',
     '      --output <mode>   flow | microphone (FDTD only)',
     '      --sample-rate <n> Output sample rate',
     `  -f, --format <name>   ${AUDIO_FORMAT_NAMES.join(' | ')} (default: from -o, else wav)`,
@@ -164,9 +178,22 @@ function optionalNumber(value, label) {
   return parsed;
 }
 
+/** Reads a voice file strictly; the error names the file. */
+function readVoiceFile(file) {
+  try {
+    return loadVoice(readFileSync(file, 'utf8'));
+  } catch (error) {
+    throw new Error(`${file}: ${error.message}`, { cause: error });
+  }
+}
+
+/** The head of --head, else --voice, else --seed and --preset. */
 function resolveHead(values) {
   if (values.head && values.head !== 'random') {
     return decodeHeadConfig(values.head);
+  }
+  if (values.voice !== undefined && values.head !== 'random') {
+    return readVoiceFile(values.voice).head;
   }
   if (
     values.head === 'random' ||
@@ -178,6 +205,27 @@ function resolveHead(values) {
     });
   }
   return undefined;
+}
+
+/**
+ * `head --voice-file`: saveVoice of the head of --head, --voice or
+ * --seed and --preset; without them the mid-size head of --preset (or the
+ * defaults), so `head --preset bass --voice-file` is the bass itself.
+ */
+function headVoiceFile(values) {
+  const options = { full: values.full };
+  if (values.head !== undefined || values.seed !== undefined) {
+    return saveVoice(
+      { preset: values.preset, head: resolveHead(values) },
+      options
+    );
+  }
+  if (values.voice !== undefined) {
+    return saveVoice(readVoiceFile(values.voice), options);
+  }
+  const named = values.preset && values.preset !== 'any';
+  const head = named ? presetHeadConfig(values.preset) : DEFAULT_HEAD;
+  return saveVoice({ preset: values.preset, head }, options);
 }
 
 function boxSize(value, label) {
@@ -444,12 +492,27 @@ const COMMANDS = {
   },
 
   head(values, positionals, io) {
-    const head = randomHeadConfig(values.seed ?? Date.now(), {
-      preset: values.preset,
-    });
+    if (values['voice-file']) {
+      io.stdout(JSON.stringify(headVoiceFile(values), null, 2));
+      return;
+    }
+    const given = values.head !== undefined || values.voice !== undefined;
+    const head =
+      (given && resolveHead(values)) ||
+      randomHeadConfig(values.seed ?? Date.now(), { preset: values.preset });
     io.stdout(
       values.json ? JSON.stringify(head, null, 2) : encodeHeadConfig(head)
     );
+  },
+
+  voice(values, positionals, io) {
+    const [action, file] = positionals;
+    if (action !== 'check' || !file) {
+      throw new Error('Usage: voice-simulator voice check <file.json>');
+    }
+    const voice = readVoiceFile(file);
+    const name = voice.name ? ` "${voice.name}"` : '';
+    io.stdout(`${file}${name}: ok, preset ${voice.preset ?? 'none'}`);
   },
 
   mesh(values, positionals, io) {

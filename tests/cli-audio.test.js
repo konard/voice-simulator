@@ -1,10 +1,15 @@
 import { describe, it, expect } from 'test-anywhere';
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { runCli } from '../bin/voice-simulator.js';
-import { decodeAudio, detectAudioFormat } from '../src/index.js';
+import {
+  decodeAudio,
+  detectAudioFormat,
+  encodeHeadConfig,
+  presetHeadConfig,
+} from '../src/index.js';
 import { itUnless, sandboxed } from './helpers/skip.js';
 
 const SAY = ['say', 'ˈmama', '--ipa', '--tier', 'minimal'];
@@ -175,6 +180,84 @@ describe('CLI audio formats', () => {
       const missing = await cli(['compare', a]);
       expect(missing.code).toBe(1);
       expect(missing.stderr[0]).toBe('Missing <reference> <test>');
+    })
+  );
+});
+
+describe('CLI voice files', () => {
+  itUnless(sandboxed)('renders with a voice file', () =>
+    withTempDir(async (dir) => {
+      const file = join(dir, 'bass.json');
+      const voice = await cli(['head', '--preset', 'bass', '--voice-file']);
+      expect(voice.code).toBe(0);
+      expect(JSON.parse(voice.stdout[0]).preset).toBe('bass');
+      writeFileSync(file, voice.stdout[0]);
+      expect((await cli(['voice', 'check', file])).stdout[0]).toBe(
+        `${file}: ok, preset bass`
+      );
+      // --voice gives the head of the file: the mid-size bass.
+      const bass = encodeHeadConfig(presetHeadConfig('bass'));
+      const rendered = await cli([...SAY, '-o', '-', '--voice', file]);
+      expect(rendered.code).toBe(0);
+      expect(rendered.bytes).toEqual(
+        (await cli([...SAY, '-o', '-', '--head', bass])).bytes
+      );
+      // --head wins over --voice, which wins over --preset.
+      const head = await cli([
+        ...SAY,
+        '-o',
+        '-',
+        '--voice',
+        file,
+        '--head',
+        'pitch=200',
+      ]);
+      expect(head.bytes).toEqual(
+        (await cli([...SAY, '-o', '-', '--head', 'pitch=200'])).bytes
+      );
+      const preset = await cli([
+        ...SAY,
+        '-o',
+        '-',
+        '--voice',
+        file,
+        '--preset',
+        'soprano',
+      ]);
+      expect(preset.bytes).toEqual(rendered.bytes);
+      // head --voice prints the flat head of the file.
+      const flat = await cli(['head', '--voice', file]);
+      expect(flat.stdout[0]).toBe(bass);
+    })
+  );
+
+  itUnless(sandboxed)('rejects a broken voice file', () =>
+    withTempDir(async (dir) => {
+      const file = join(dir, 'broken.json');
+      writeFileSync(
+        file,
+        JSON.stringify({
+          format: 'voice-simulator/voice',
+          version: 1,
+          folds: { pitch: 900, wobble: 1 },
+          breathing: { pitch: 120 },
+        })
+      );
+      const problems = [
+        `${file}: folds.pitch = 900 is outside 60 to 320 Hz`,
+        'unknown key "folds.wobble"',
+        'breathing.pitch belongs to the group folds',
+      ].join('\n');
+      const check = await cli(['voice', 'check', file]);
+      expect(check.code).toBe(1);
+      expect(check.stderr[0]).toBe(problems);
+      const say = await cli([...SAY, '-o', '-', '--voice', file]);
+      expect(say.code).toBe(1);
+      expect(say.stderr[0]).toBe(problems);
+      expect(say.bytes).toBe(undefined);
+      const missing = await cli(['voice', 'check', join(dir, 'none.json')]);
+      expect(missing.code).toBe(1);
+      expect((await cli(['voice', 'list'])).code).toBe(1);
     })
   );
 });

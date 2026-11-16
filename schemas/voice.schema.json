@@ -1,0 +1,1179 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/konard/voice-simulator/blob/main/schemas/voice.schema.json",
+  "title": "voice-simulator voice",
+  "description": "A voice: a preset plus the head values that differ from it, per parameter group (docs/VOICE-PARAMETERS.md).",
+  "type": "object",
+  "required": [
+    "format",
+    "version"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "format": {
+      "const": "voice-simulator/voice"
+    },
+    "version": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 1
+    },
+    "name": {
+      "type": "string"
+    },
+    "description": {
+      "type": "string"
+    },
+    "preset": {
+      "description": "Head preset that supplies the values the file leaves out (size 0.5).",
+      "enum": [
+        "male",
+        "female",
+        "child",
+        "child5",
+        "teenMale",
+        "teenFemale",
+        "elderlyMale",
+        "elderlyFemale",
+        "bass",
+        "baritone",
+        "tenor",
+        "alto",
+        "mezzo",
+        "soprano"
+      ]
+    },
+    "anatomy": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "vocalTractLength": {
+          "type": "number",
+          "title": "Vocal tract length (cm)",
+          "description": "Glottis-to-lips length. Formants scale roughly with 1 / length.",
+          "minimum": 11,
+          "maximum": 20,
+          "default": 16.5
+        },
+        "pharynxRatio": {
+          "type": "number",
+          "title": "Pharynx share",
+          "description": "Fraction of the tract that is the vertical pharynx.",
+          "minimum": 0.35,
+          "maximum": 0.6,
+          "default": 0.46
+        },
+        "pharynxWidth": {
+          "type": "number",
+          "title": "Pharynx width (factor)",
+          "description": "Scales pharyngeal cross-sections.",
+          "minimum": 0.7,
+          "maximum": 1.35,
+          "default": 1
+        },
+        "oralWidth": {
+          "type": "number",
+          "title": "Oral cavity width (factor)",
+          "description": "Scales oral cavity cross-sections.",
+          "minimum": 0.7,
+          "maximum": 1.35,
+          "default": 1
+        },
+        "mouthWidth": {
+          "type": "number",
+          "title": "Mouth width (factor)",
+          "description": "Lip corner distance; widens the lip opening.",
+          "minimum": 0.7,
+          "maximum": 1.4,
+          "default": 1
+        },
+        "lipThickness": {
+          "type": "number",
+          "title": "Lip thickness (factor)",
+          "description": "Length of the lip tube section and visual lip volume.",
+          "minimum": 0.6,
+          "maximum": 1.6,
+          "default": 1
+        },
+        "jawRange": {
+          "type": "number",
+          "title": "Jaw range (factor)",
+          "description": "How far the jaw opens for open vowels.",
+          "minimum": 0.6,
+          "maximum": 1.4,
+          "default": 1
+        },
+        "tongueSize": {
+          "type": "number",
+          "title": "Tongue size (factor)",
+          "description": "Tongue volume; bigger tongues constrict more.",
+          "minimum": 0.8,
+          "maximum": 1.25,
+          "default": 1
+        },
+        "nasalSize": {
+          "type": "number",
+          "title": "Nasal cavity size (factor)",
+          "description": "Scales the nasal tract cross-sections.",
+          "minimum": 0.6,
+          "maximum": 1.4,
+          "default": 1
+        },
+        "headWidth": {
+          "type": "number",
+          "title": "Head width (factor)",
+          "description": "Visual skull width; in the 3D solvers it also moves the face around the mouth.",
+          "minimum": 0.85,
+          "maximum": 1.2,
+          "default": 1
+        },
+        "headHeight": {
+          "type": "number",
+          "title": "Head height (factor)",
+          "description": "Visual skull height; in the 3D solvers it also moves the face around the mouth.",
+          "minimum": 0.85,
+          "maximum": 1.2,
+          "default": 1
+        },
+        "noseLength": {
+          "type": "number",
+          "title": "Nose length (factor)",
+          "description": "Outer nose size; also lengthens the nasal tract slightly.",
+          "minimum": 0.7,
+          "maximum": 1.4,
+          "default": 1
+        },
+        "wallLoss": {
+          "type": "number",
+          "title": "Wall losses (factor)",
+          "description": "Viscous and wall vibration losses of the tract and nose (formant bandwidths): scales the boundary-layer loss and the wall resistance.",
+          "minimum": 0,
+          "maximum": 3,
+          "default": 1
+        },
+        "nasalCoupling": {
+          "type": "number",
+          "title": "Nasal coupling (factor)",
+          "description": "Scales the velar port opening, so the nasality of nasals and nasal vowels.",
+          "minimum": 0,
+          "maximum": 2,
+          "default": 1
+        },
+        "nasalLoss": {
+          "type": "number",
+          "title": "Nasal losses (factor)",
+          "description": "Wall losses of the nasal cavity relative to a smooth round tube of the same area.",
+          "minimum": 1,
+          "maximum": 8,
+          "default": 3
+        },
+        "wallMass": {
+          "type": "number",
+          "title": "Wall mass (g/cm²)",
+          "description": "Mass per area of the yielding tract walls: heavier walls lower the closed-tract resonance and raise F1 of close vowels less.",
+          "minimum": 1,
+          "maximum": 3,
+          "default": 2.1
+        },
+        "wallResistance": {
+          "type": "number",
+          "title": "Wall resistance (g/(cm² s))",
+          "description": "Resistance per area of the yielding tract walls: widens F1 of close vowels.",
+          "minimum": 400,
+          "maximum": 2400,
+          "default": 800
+        },
+        "wallStiffness": {
+          "type": "number",
+          "title": "Wall stiffness (g/(cm² s²))",
+          "description": "Stiffness per area of the yielding tract walls (tense or relaxed tissue).",
+          "minimum": 30000,
+          "maximum": 500000,
+          "default": 84500
+        },
+        "lossShape": {
+          "type": "number",
+          "title": "Boundary loss shape (factor)",
+          "description": "Boundary-layer loss of the tract relative to a smooth round tube of the same area: the perimeter of the real cross-section over that of a circle.",
+          "minimum": 1,
+          "maximum": 3,
+          "default": 1.3
+        },
+        "radiationBaffle": {
+          "type": "number",
+          "title": "Radiation baffle (factor)",
+          "description": "How much of an infinite wall the face is around the mouth (0 = free pipe end, 1 = infinite baffle): more radiates more low frequencies and lowers the formants.",
+          "minimum": 0.3,
+          "maximum": 1,
+          "default": 0.5
+        },
+        "subglottalLength": {
+          "type": "number",
+          "title": "Subglottal tract length (factor)",
+          "description": "Scales the length of the trachea and the bronchi below the glottis, on top of the vocal tract length: longer lowers the subglottal resonances (source-tract interaction only).",
+          "minimum": 0.8,
+          "maximum": 1.25,
+          "default": 1
+        },
+        "subglottalLoss": {
+          "type": "number",
+          "title": "Subglottal wall loss (factor)",
+          "description": "Boundary loss of the trachea and bronchi relative to the vocal tract walls (soft walls and mucus): widens the subglottal resonances (source-tract interaction only).",
+          "minimum": 1,
+          "maximum": 8,
+          "default": 7
+        },
+        "incisorThickness": {
+          "type": "number",
+          "title": "Incisor thickness (cm)",
+          "description": "Thickness of the incisor row along the tract: the length of the narrow channel between the teeth.",
+          "minimum": 0.5,
+          "maximum": 1,
+          "default": 0.7
+        },
+        "restGap": {
+          "type": "number",
+          "title": "Incisor gap at rest (cm)",
+          "description": "Gap between the incisal edges at rest with the jaw raised, the gap of close vowels.",
+          "minimum": 0.1,
+          "maximum": 0.6,
+          "default": 0.35
+        },
+        "sibilantGap": {
+          "type": "number",
+          "title": "Sibilant incisor gap (cm)",
+          "description": "Gap between the incisors in sibilants and alveolar stops, with the jaw fully raised: a narrower gap puts the teeth further into the jet.",
+          "minimum": 0.05,
+          "maximum": 0.3,
+          "default": 0.15
+        },
+        "velarGap": {
+          "type": "number",
+          "title": "Velar incisor gap (cm)",
+          "description": "Gap between the incisors in velar stops (the jaw is lower).",
+          "minimum": 0.3,
+          "maximum": 0.8,
+          "default": 0.55
+        },
+        "openGap": {
+          "type": "number",
+          "title": "Open vowel incisor gap (cm)",
+          "description": "Extra gap between the incisors of an open vowel (scaled by the jaw range).",
+          "minimum": 0.4,
+          "maximum": 1.2,
+          "default": 0.8
+        },
+        "backGap": {
+          "type": "number",
+          "title": "Back vowel incisor gap (cm)",
+          "description": "Extra gap between the incisors of a close back vowel such as [u] (scaled by the jaw range).",
+          "minimum": 0.2,
+          "maximum": 0.6,
+          "default": 0.4
+        }
+      }
+    },
+    "folds": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "pitch": {
+          "type": "number",
+          "title": "Base pitch (Hz)",
+          "description": "Fundamental frequency of the vocal folds at rest.",
+          "minimum": 60,
+          "maximum": 320,
+          "default": 120
+        },
+        "tenseness": {
+          "type": "number",
+          "title": "Vocal fold tenseness",
+          "description": "Pressed (1) versus lax and breathy (0) glottal pulses.",
+          "minimum": 0,
+          "maximum": 1,
+          "default": 0.6
+        },
+        "breathiness": {
+          "type": "number",
+          "title": "Breathiness",
+          "description": "Breathy voice: more aspiration noise at the glottis and a longer open phase.",
+          "minimum": 0,
+          "maximum": 1,
+          "default": 0.2
+        },
+        "jitter": {
+          "type": "number",
+          "title": "Jitter (%)",
+          "description": "Random cycle-to-cycle variation of the glottal period.",
+          "minimum": 0,
+          "maximum": 3,
+          "default": 0.4
+        },
+        "shimmer": {
+          "type": "number",
+          "title": "Shimmer (%)",
+          "description": "Random cycle-to-cycle variation of the glottal pulse amplitude.",
+          "minimum": 0,
+          "maximum": 15,
+          "default": 3
+        },
+        "glottalChink": {
+          "type": "number",
+          "title": "Glottal chink (mm²)",
+          "description": "Posterior gap left open through the glottal cycle, common in women: a darker, softer voice with wider formants.",
+          "minimum": 0,
+          "maximum": 10,
+          "default": 0
+        },
+        "foldLength": {
+          "type": "number",
+          "title": "Vocal fold length (cm)",
+          "description": "Length of the vibrating vocal folds: about 1.5 cm in men, 1 cm in women and 0.7 cm in children (fold source only).",
+          "minimum": 0.6,
+          "maximum": 1.8,
+          "default": 1.4
+        },
+        "foldMass": {
+          "type": "number",
+          "title": "Vocal fold mass (factor)",
+          "description": "Scales the vibrating mass of the folds: heavier folds vibrate slower (fold source only).",
+          "minimum": 0.5,
+          "maximum": 2,
+          "default": 1
+        },
+        "foldStiffness": {
+          "type": "number",
+          "title": "Vocal fold stiffness (factor)",
+          "description": "Scales the stiffness and coupling of the fold masses. The pitch control holds f0, so stiffer folds swing with a smaller amplitude (fold source only).",
+          "minimum": 0.5,
+          "maximum": 2,
+          "default": 1
+        },
+        "foldDamping": {
+          "type": "number",
+          "title": "Vocal fold damping (factor)",
+          "description": "Scales the damping of the folds: higher values need more pressure to start (fold source only).",
+          "minimum": 0.5,
+          "maximum": 3,
+          "default": 1
+        },
+        "glottalPressureCoefficient": {
+          "type": "number",
+          "title": "Glottal pressure coefficient",
+          "description": "Pressure coefficient of the glottis: the transglottal pressure is this times rho U² / (2 a²), Bernoulli plus the exit loss (source-tract interaction only).",
+          "minimum": 1,
+          "maximum": 1.4,
+          "default": 1.1
+        },
+        "breathinessRd": {
+          "type": "number",
+          "title": "Breathiness pulse shape",
+          "description": "Change of the LF shape parameter Rd per unit of breathiness: a breathy voice has a longer open phase and a stronger first harmonic.",
+          "minimum": 0.5,
+          "maximum": 2.5,
+          "default": 1.5
+        },
+        "breathGain": {
+          "type": "number",
+          "title": "Breath noise gain (factor)",
+          "description": "Gain of the breath noise of a breathy voice: the noise is gain × breathiness ^ exponent.",
+          "minimum": 1,
+          "maximum": 4,
+          "default": 3.87
+        },
+        "breathExponent": {
+          "type": "number",
+          "title": "Breath noise exponent",
+          "description": "Exponent of the breathiness in the breath noise: higher values keep a modal voice cleaner and leave a fully breathy voice alone.",
+          "minimum": 1.5,
+          "maximum": 3,
+          "default": 2.114
+        }
+      }
+    },
+    "breathing": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "aspirationLevel": {
+          "type": "number",
+          "title": "Aspiration noise (factor)",
+          "description": "Scales the turbulent noise generated at the glottis.",
+          "minimum": 0,
+          "maximum": 3,
+          "default": 1
+        },
+        "fricationLevel": {
+          "type": "number",
+          "title": "Frication level (factor)",
+          "description": "Scales the turbulence noise at constrictions (fricatives and bursts).",
+          "minimum": 0,
+          "maximum": 3,
+          "default": 1
+        },
+        "lungPressure": {
+          "type": "number",
+          "title": "Lung pressure (Pa)",
+          "description": "Subglottal pressure of normal loudness: drives the air flow, the noise at constrictions and at the glottis and, with the fold source, the vocal folds.",
+          "minimum": 300,
+          "maximum": 2000,
+          "default": 800
+        },
+        "oralCompliance": {
+          "type": "number",
+          "title": "Oral compliance (cm⁵/dyn)",
+          "description": "Compliance of the walls and the air behind a constriction: sets how fast the pressure builds up in a stop (about 11 ms with an open glottis).",
+          "minimum": 0.0005,
+          "maximum": 0.002,
+          "default": 0.001
+        },
+        "glottisVoiced": {
+          "type": "number",
+          "title": "Voiced glottal area (cm²)",
+          "description": "Mean glottal area of modal voicing: more lets more air through and less pressure reach the constrictions.",
+          "minimum": 0.03,
+          "maximum": 0.1,
+          "default": 0.05
+        },
+        "glottisOpen": {
+          "type": "number",
+          "title": "Open glottal area (cm²)",
+          "description": "Glottal area of an open glottis in [h] and voiceless obstruents.",
+          "minimum": 0.15,
+          "maximum": 0.4,
+          "default": 0.25
+        },
+        "glottisBreathy": {
+          "type": "number",
+          "title": "Breathy glottal area (cm²)",
+          "description": "Extra mean glottal area of a fully breathy voice: more makes the breath noise stronger.",
+          "minimum": 0.05,
+          "maximum": 0.2,
+          "default": 0.1
+        },
+        "reCritical": {
+          "type": "number",
+          "title": "Critical Reynolds number",
+          "description": "Reynolds number above which a jet becomes turbulent: higher values give less noise from a weak flow.",
+          "minimum": 1700,
+          "maximum": 2300,
+          "default": 1800
+        },
+        "wallSource": {
+          "type": "number",
+          "title": "Wall noise source (factor)",
+          "description": "Amplitude of the noise of the jet hitting the walls against that of the jet hitting the teeth (-15 dB).",
+          "minimum": 0.1,
+          "maximum": 0.35,
+          "default": 0.18
+        },
+        "strouhal": {
+          "type": "number",
+          "title": "Strouhal number",
+          "description": "Strouhal number of the jet: the turbulence noise peaks near this times the jet velocity over its diameter.",
+          "minimum": 0.15,
+          "maximum": 0.3,
+          "default": 0.2
+        },
+        "chinkNoise": {
+          "type": "number",
+          "title": "Chink noise (factor)",
+          "description": "Breath noise per 10 mm² of glottal chink: the air leaking through a gap that stays open is turbulent too.",
+          "minimum": 0,
+          "maximum": 1.5,
+          "default": 0.5
+        },
+        "fricationGain": {
+          "type": "number",
+          "title": "Frication gain (factor)",
+          "description": "Amplitude of the frication noise of a default voiceless fricative (relative source strength 1).",
+          "minimum": 0.3,
+          "maximum": 1.2,
+          "default": 0.592
+        },
+        "transientGain": {
+          "type": "number",
+          "title": "Burst transient gain (s)",
+          "description": "Gain of the burst transient: the flow derivative at the release of a stop enters the tract as a flow source at the constriction.",
+          "minimum": 0,
+          "maximum": 0.00002,
+          "default": 0.000005
+        }
+      }
+    },
+    "articulation": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "speechRate": {
+          "type": "number",
+          "title": "Speech rate (factor)",
+          "description": "Multiplies phoneme durations (higher is faster).",
+          "minimum": 0.5,
+          "maximum": 1.8,
+          "default": 1
+        },
+        "articulationSpeed": {
+          "type": "number",
+          "title": "Articulation speed (factor)",
+          "description": "How fast articulators move between targets (coarticulation).",
+          "minimum": 0.5,
+          "maximum": 2,
+          "default": 1
+        },
+        "stressLengthening": {
+          "type": "number",
+          "title": "Stress lengthening (factor)",
+          "description": "Duration factor of primary stressed vowels.",
+          "minimum": 1,
+          "maximum": 2,
+          "default": 1.35
+        },
+        "finalLengthening": {
+          "type": "number",
+          "title": "Final lengthening (factor)",
+          "description": "Duration factor of vowels before a full stop; weaker punctuation lengthens less.",
+          "minimum": 1,
+          "maximum": 2,
+          "default": 1.4
+        },
+        "pauseLength": {
+          "type": "number",
+          "title": "Pause length (factor)",
+          "description": "Scales pauses at spaces and punctuation.",
+          "minimum": 0.3,
+          "maximum": 3,
+          "default": 1
+        },
+        "coarticulation": {
+          "type": "number",
+          "title": "Coarticulation (factor)",
+          "description": "How early articulators start moving towards the next sound (factor on all leads).",
+          "minimum": 0.5,
+          "maximum": 2,
+          "default": 1
+        },
+        "roundingLead": {
+          "type": "number",
+          "title": "Rounding lead (s)",
+          "description": "How long before a rounded sound the lips start to round and protrude.",
+          "minimum": 0.05,
+          "maximum": 0.25,
+          "default": 0.12
+        },
+        "velumLead": {
+          "type": "number",
+          "title": "Velum lead (s)",
+          "description": "How long before a nasal sound the velum starts to lower.",
+          "minimum": 0.03,
+          "maximum": 0.15,
+          "default": 0.08
+        },
+        "rateMinimum": {
+          "type": "number",
+          "title": "Rate exponent of the minimum",
+          "description": "Exponent of the speech rate on the minimum duration of a sound: 0 keeps the minimum at any rate.",
+          "minimum": 0,
+          "maximum": 1,
+          "default": 0.5
+        },
+        "rateStretch": {
+          "type": "number",
+          "title": "Rate exponent of the stretch",
+          "description": "Exponent of the speech rate on the stretchable part of a sound (above its minimum).",
+          "minimum": 0.5,
+          "maximum": 2,
+          "default": 1.2
+        },
+        "jawPosture": {
+          "type": "number",
+          "title": "Jaw posture (cm)",
+          "description": "Speaker habit added to the jaw channel: a wider gap between the incisors in every sound (negative: a closer jaw).",
+          "minimum": -0.2,
+          "maximum": 0.6,
+          "default": 0
+        },
+        "lipPosture": {
+          "type": "number",
+          "title": "Lip posture (cm)",
+          "description": "Speaker habit added to the lip protrusion channel: pushed-out lips lengthen the tract, negative values spread the lips (a smile).",
+          "minimum": -0.3,
+          "maximum": 0.6,
+          "default": 0
+        },
+        "larynxPosture": {
+          "type": "number",
+          "title": "Larynx posture (cm)",
+          "description": "Speaker habit added to the larynx height channel: a lowered larynx (negative) lengthens the pharynx and darkens the voice.",
+          "minimum": -1,
+          "maximum": 1,
+          "default": 0
+        },
+        "tongueRootPosture": {
+          "type": "number",
+          "title": "Tongue root posture",
+          "description": "Speaker habit added to the tongue root channel: -1 pulls the root back and narrows the pharynx, +1 pushes it forward.",
+          "minimum": -1,
+          "maximum": 1,
+          "default": 0
+        },
+        "jawArea": {
+          "type": "number",
+          "title": "Jaw area change (1/cm)",
+          "description": "Change of the mouth and lip cross-sections per cm of incisor gap away from the gap the sounds ask for.",
+          "minimum": 0.3,
+          "maximum": 1.5,
+          "default": 0.8
+        },
+        "tongueRootArea": {
+          "type": "number",
+          "title": "Tongue root area change",
+          "description": "Change of the pharynx cross-sections per unit of the tongue root channel.",
+          "minimum": 0.2,
+          "maximum": 0.6,
+          "default": 0.4
+        },
+        "speedHeight": {
+          "type": "number",
+          "title": "Speed of height (factor)",
+          "description": "Speed of the height channel: divides its time constant and its lead, on top of the articulation speed.",
+          "minimum": 0.5,
+          "maximum": 2,
+          "default": 1
+        },
+        "speedBackness": {
+          "type": "number",
+          "title": "Speed of backness (factor)",
+          "description": "Speed of the backness channel: divides its time constant and its lead, on top of the articulation speed.",
+          "minimum": 0.5,
+          "maximum": 2,
+          "default": 1
+        },
+        "speedRounding": {
+          "type": "number",
+          "title": "Speed of rounding (factor)",
+          "description": "Speed of the rounding channel: divides its time constant and its lead, on top of the articulation speed.",
+          "minimum": 0.5,
+          "maximum": 2,
+          "default": 1
+        },
+        "speedRhotic": {
+          "type": "number",
+          "title": "Speed of rhotic (factor)",
+          "description": "Speed of the rhotic channel: divides its time constant and its lead, on top of the articulation speed.",
+          "minimum": 0.5,
+          "maximum": 2,
+          "default": 1
+        },
+        "speedPalatalization": {
+          "type": "number",
+          "title": "Speed of palatalization (factor)",
+          "description": "Speed of the palatalization channel: divides its time constant and its lead, on top of the articulation speed.",
+          "minimum": 0.5,
+          "maximum": 2,
+          "default": 1
+        },
+        "speedLipAmount": {
+          "type": "number",
+          "title": "Speed of lip amount (factor)",
+          "description": "Speed of the lip amount channel: divides its time constant and its lead, on top of the articulation speed.",
+          "minimum": 0.5,
+          "maximum": 2,
+          "default": 1
+        },
+        "speedLipArea": {
+          "type": "number",
+          "title": "Speed of lip area (factor)",
+          "description": "Speed of the lip area channel: divides its time constant and its lead, on top of the articulation speed.",
+          "minimum": 0.5,
+          "maximum": 2,
+          "default": 1
+        },
+        "speedTongueAmount": {
+          "type": "number",
+          "title": "Speed of tongue amount (factor)",
+          "description": "Speed of the tongue amount channel: divides its time constant and its lead, on top of the articulation speed.",
+          "minimum": 0.5,
+          "maximum": 2,
+          "default": 1
+        },
+        "speedTongueArea": {
+          "type": "number",
+          "title": "Speed of tongue area (factor)",
+          "description": "Speed of the tongue area channel: divides its time constant and its lead, on top of the articulation speed.",
+          "minimum": 0.5,
+          "maximum": 2,
+          "default": 1
+        },
+        "speedTongueLocation": {
+          "type": "number",
+          "title": "Speed of tongue location (factor)",
+          "description": "Speed of the tongue location channel: divides its time constant and its lead, on top of the articulation speed.",
+          "minimum": 0.5,
+          "maximum": 2,
+          "default": 1
+        },
+        "speedTongueWidth": {
+          "type": "number",
+          "title": "Speed of tongue width (factor)",
+          "description": "Speed of the tongue width channel: divides its time constant and its lead, on top of the articulation speed.",
+          "minimum": 0.5,
+          "maximum": 2,
+          "default": 1
+        },
+        "speedVelum": {
+          "type": "number",
+          "title": "Speed of velum (factor)",
+          "description": "Speed of the velum channel: divides its time constant and its lead, on top of the articulation speed.",
+          "minimum": 0.5,
+          "maximum": 2,
+          "default": 1
+        },
+        "speedVoicing": {
+          "type": "number",
+          "title": "Speed of voicing (factor)",
+          "description": "Speed of the voicing channel: divides its time constant and its lead, on top of the articulation speed.",
+          "minimum": 0.5,
+          "maximum": 2,
+          "default": 1
+        },
+        "speedAspiration": {
+          "type": "number",
+          "title": "Speed of aspiration (factor)",
+          "description": "Speed of the aspiration channel: divides its time constant and its lead, on top of the articulation speed.",
+          "minimum": 0.5,
+          "maximum": 2,
+          "default": 1
+        },
+        "speedGlottalClosure": {
+          "type": "number",
+          "title": "Speed of glottal closure (factor)",
+          "description": "Speed of the glottal closure channel: divides its time constant and its lead, on top of the articulation speed.",
+          "minimum": 0.5,
+          "maximum": 2,
+          "default": 1
+        },
+        "speedFrication": {
+          "type": "number",
+          "title": "Speed of frication (factor)",
+          "description": "Speed of the frication channel: divides its time constant and its lead, on top of the articulation speed.",
+          "minimum": 0.5,
+          "maximum": 2,
+          "default": 1
+        },
+        "speedSibilance": {
+          "type": "number",
+          "title": "Speed of sibilance (factor)",
+          "description": "Speed of the sibilance channel: divides its time constant and its lead, on top of the articulation speed.",
+          "minimum": 0.5,
+          "maximum": 2,
+          "default": 1
+        },
+        "speedTrill": {
+          "type": "number",
+          "title": "Speed of trill (factor)",
+          "description": "Speed of the trill channel: divides its time constant and its lead, on top of the articulation speed.",
+          "minimum": 0.5,
+          "maximum": 2,
+          "default": 1
+        },
+        "speedLateral": {
+          "type": "number",
+          "title": "Speed of lateral (factor)",
+          "description": "Speed of the lateral channel: divides its time constant and its lead, on top of the articulation speed.",
+          "minimum": 0.5,
+          "maximum": 2,
+          "default": 1
+        },
+        "speedJaw": {
+          "type": "number",
+          "title": "Speed of jaw (factor)",
+          "description": "Speed of the jaw channel: divides its time constant and its lead, on top of the articulation speed.",
+          "minimum": 0.5,
+          "maximum": 2,
+          "default": 1
+        },
+        "speedLipProtrusion": {
+          "type": "number",
+          "title": "Speed of lip protrusion (factor)",
+          "description": "Speed of the lip protrusion channel: divides its time constant and its lead, on top of the articulation speed.",
+          "minimum": 0.5,
+          "maximum": 2,
+          "default": 1
+        },
+        "speedLarynxHeight": {
+          "type": "number",
+          "title": "Speed of larynx height (factor)",
+          "description": "Speed of the larynx height channel: divides its time constant and its lead, on top of the articulation speed.",
+          "minimum": 0.5,
+          "maximum": 2,
+          "default": 1
+        },
+        "speedTongueRoot": {
+          "type": "number",
+          "title": "Speed of tongue root (factor)",
+          "description": "Speed of the tongue root channel: divides its time constant and its lead, on top of the articulation speed.",
+          "minimum": 0.5,
+          "maximum": 2,
+          "default": 1
+        },
+        "durationClauseFinal": {
+          "type": "number",
+          "title": "Duration rule clause final (factor)",
+          "description": "Strength of the duration rule clause final: its factor is raised to this power (an added duration is multiplied by it), so 0.5 halves the rule's effect on a log scale and 2 doubles it.",
+          "minimum": 0.5,
+          "maximum": 2,
+          "default": 1
+        },
+        "durationNonPhraseFinal": {
+          "type": "number",
+          "title": "Duration rule non phrase final (factor)",
+          "description": "Strength of the duration rule non phrase final: its factor is raised to this power (an added duration is multiplied by it), so 0.5 halves the rule's effect on a log scale and 2 doubles it.",
+          "minimum": 0.5,
+          "maximum": 2,
+          "default": 1
+        },
+        "durationNonWordFinal": {
+          "type": "number",
+          "title": "Duration rule non word final (factor)",
+          "description": "Strength of the duration rule non word final: its factor is raised to this power (an added duration is multiplied by it), so 0.5 halves the rule's effect on a log scale and 2 doubles it.",
+          "minimum": 0.5,
+          "maximum": 2,
+          "default": 1
+        },
+        "durationPolysyllabic": {
+          "type": "number",
+          "title": "Duration rule polysyllabic (factor)",
+          "description": "Strength of the duration rule polysyllabic: its factor is raised to this power (an added duration is multiplied by it), so 0.5 halves the rule's effect on a log scale and 2 doubles it.",
+          "minimum": 0.5,
+          "maximum": 2,
+          "default": 1
+        },
+        "durationNonInitialConsonant": {
+          "type": "number",
+          "title": "Duration rule non initial consonant (factor)",
+          "description": "Strength of the duration rule non initial consonant: its factor is raised to this power (an added duration is multiplied by it), so 0.5 halves the rule's effect on a log scale and 2 doubles it.",
+          "minimum": 0.5,
+          "maximum": 2,
+          "default": 1
+        },
+        "durationPretonic": {
+          "type": "number",
+          "title": "Duration rule pretonic (factor)",
+          "description": "Strength of the duration rule pretonic: its factor is raised to this power (an added duration is multiplied by it), so 0.5 halves the rule's effect on a log scale and 2 doubles it.",
+          "minimum": 0.5,
+          "maximum": 2,
+          "default": 1
+        },
+        "durationUnstressedMedial": {
+          "type": "number",
+          "title": "Duration rule unstressed medial (factor)",
+          "description": "Strength of the duration rule unstressed medial: its factor is raised to this power (an added duration is multiplied by it), so 0.5 halves the rule's effect on a log scale and 2 doubles it.",
+          "minimum": 0.5,
+          "maximum": 2,
+          "default": 1
+        },
+        "durationUnstressedOther": {
+          "type": "number",
+          "title": "Duration rule unstressed other (factor)",
+          "description": "Strength of the duration rule unstressed other: its factor is raised to this power (an added duration is multiplied by it), so 0.5 halves the rule's effect on a log scale and 2 doubles it.",
+          "minimum": 0.5,
+          "maximum": 2,
+          "default": 1
+        },
+        "durationUnstressedOnset": {
+          "type": "number",
+          "title": "Duration rule unstressed onset (factor)",
+          "description": "Strength of the duration rule unstressed onset: its factor is raised to this power (an added duration is multiplied by it), so 0.5 halves the rule's effect on a log scale and 2 doubles it.",
+          "minimum": 0.5,
+          "maximum": 2,
+          "default": 1
+        },
+        "durationUnstressedMinimum": {
+          "type": "number",
+          "title": "Duration rule unstressed minimum (factor)",
+          "description": "Strength of the duration rule unstressed minimum: its factor is raised to this power (an added duration is multiplied by it), so 0.5 halves the rule's effect on a log scale and 2 doubles it.",
+          "minimum": 0.5,
+          "maximum": 2,
+          "default": 1
+        },
+        "durationEmphasis": {
+          "type": "number",
+          "title": "Duration rule emphasis (factor)",
+          "description": "Strength of the duration rule emphasis: its factor is raised to this power (an added duration is multiplied by it), so 0.5 halves the rule's effect on a log scale and 2 doubles it.",
+          "minimum": 0.5,
+          "maximum": 2,
+          "default": 1
+        },
+        "durationBeforeVoicedFricative": {
+          "type": "number",
+          "title": "Duration rule before voiced fricative (factor)",
+          "description": "Strength of the duration rule before voiced fricative: its factor is raised to this power (an added duration is multiplied by it), so 0.5 halves the rule's effect on a log scale and 2 doubles it.",
+          "minimum": 0.5,
+          "maximum": 2,
+          "default": 1
+        },
+        "durationBeforeVoicedPlosive": {
+          "type": "number",
+          "title": "Duration rule before voiced plosive (factor)",
+          "description": "Strength of the duration rule before voiced plosive: its factor is raised to this power (an added duration is multiplied by it), so 0.5 halves the rule's effect on a log scale and 2 doubles it.",
+          "minimum": 0.5,
+          "maximum": 2,
+          "default": 1
+        },
+        "durationBeforeNasal": {
+          "type": "number",
+          "title": "Duration rule before nasal (factor)",
+          "description": "Strength of the duration rule before nasal: its factor is raised to this power (an added duration is multiplied by it), so 0.5 halves the rule's effect on a log scale and 2 doubles it.",
+          "minimum": 0.5,
+          "maximum": 2,
+          "default": 1
+        },
+        "durationBeforeVoiceless": {
+          "type": "number",
+          "title": "Duration rule before voiceless (factor)",
+          "description": "Strength of the duration rule before voiceless: its factor is raised to this power (an added duration is multiplied by it), so 0.5 halves the rule's effect on a log scale and 2 doubles it.",
+          "minimum": 0.5,
+          "maximum": 2,
+          "default": 1
+        },
+        "durationOpenFinal": {
+          "type": "number",
+          "title": "Duration rule open final (factor)",
+          "description": "Strength of the duration rule open final: its factor is raised to this power (an added duration is multiplied by it), so 0.5 halves the rule's effect on a log scale and 2 doubles it.",
+          "minimum": 0.5,
+          "maximum": 2,
+          "default": 1
+        },
+        "durationVowelBeforeVowel": {
+          "type": "number",
+          "title": "Duration rule vowel before vowel (factor)",
+          "description": "Strength of the duration rule vowel before vowel: its factor is raised to this power (an added duration is multiplied by it), so 0.5 halves the rule's effect on a log scale and 2 doubles it.",
+          "minimum": 0.5,
+          "maximum": 2,
+          "default": 1
+        },
+        "durationVowelAfterVowel": {
+          "type": "number",
+          "title": "Duration rule vowel after vowel (factor)",
+          "description": "Strength of the duration rule vowel after vowel: its factor is raised to this power (an added duration is multiplied by it), so 0.5 halves the rule's effect on a log scale and 2 doubles it.",
+          "minimum": 0.5,
+          "maximum": 2,
+          "default": 1
+        },
+        "durationClusterMiddle": {
+          "type": "number",
+          "title": "Duration rule cluster middle (factor)",
+          "description": "Strength of the duration rule cluster middle: its factor is raised to this power (an added duration is multiplied by it), so 0.5 halves the rule's effect on a log scale and 2 doubles it.",
+          "minimum": 0.5,
+          "maximum": 2,
+          "default": 1
+        },
+        "durationClusterEdge": {
+          "type": "number",
+          "title": "Duration rule cluster edge (factor)",
+          "description": "Strength of the duration rule cluster edge: its factor is raised to this power (an added duration is multiplied by it), so 0.5 halves the rule's effect on a log scale and 2 doubles it.",
+          "minimum": 0.5,
+          "maximum": 2,
+          "default": 1
+        },
+        "durationAspiration": {
+          "type": "number",
+          "title": "Duration rule aspiration (factor)",
+          "description": "Strength of the duration rule aspiration: its factor is raised to this power (an added duration is multiplied by it), so 0.5 halves the rule's effect on a log scale and 2 doubles it.",
+          "minimum": 0.5,
+          "maximum": 2,
+          "default": 1
+        },
+        "durationTone1": {
+          "type": "number",
+          "title": "Duration rule tone1 (factor)",
+          "description": "Strength of the duration rule tone1: its factor is raised to this power (an added duration is multiplied by it), so 0.5 halves the rule's effect on a log scale and 2 doubles it.",
+          "minimum": 0.5,
+          "maximum": 2,
+          "default": 1
+        },
+        "durationTone2": {
+          "type": "number",
+          "title": "Duration rule tone2 (factor)",
+          "description": "Strength of the duration rule tone2: its factor is raised to this power (an added duration is multiplied by it), so 0.5 halves the rule's effect on a log scale and 2 doubles it.",
+          "minimum": 0.5,
+          "maximum": 2,
+          "default": 1
+        },
+        "durationTone3": {
+          "type": "number",
+          "title": "Duration rule tone3 (factor)",
+          "description": "Strength of the duration rule tone3: its factor is raised to this power (an added duration is multiplied by it), so 0.5 halves the rule's effect on a log scale and 2 doubles it.",
+          "minimum": 0.5,
+          "maximum": 2,
+          "default": 1
+        },
+        "durationTone4": {
+          "type": "number",
+          "title": "Duration rule tone4 (factor)",
+          "description": "Strength of the duration rule tone4: its factor is raised to this power (an added duration is multiplied by it), so 0.5 halves the rule's effect on a log scale and 2 doubles it.",
+          "minimum": 0.5,
+          "maximum": 2,
+          "default": 1
+        },
+        "durationTone5": {
+          "type": "number",
+          "title": "Duration rule tone5 (factor)",
+          "description": "Strength of the duration rule tone5: its factor is raised to this power (an added duration is multiplied by it), so 0.5 halves the rule's effect on a log scale and 2 doubles it.",
+          "minimum": 0.5,
+          "maximum": 2,
+          "default": 1
+        },
+        "durationLongVowel": {
+          "type": "number",
+          "title": "Duration rule long vowel (factor)",
+          "description": "Strength of the duration rule long vowel: its factor is raised to this power (an added duration is multiplied by it), so 0.5 halves the rule's effect on a log scale and 2 doubles it.",
+          "minimum": 0.5,
+          "maximum": 2,
+          "default": 1
+        },
+        "durationLongConsonant": {
+          "type": "number",
+          "title": "Duration rule long consonant (factor)",
+          "description": "Strength of the duration rule long consonant: its factor is raised to this power (an added duration is multiplied by it), so 0.5 halves the rule's effect on a log scale and 2 doubles it.",
+          "minimum": 0.5,
+          "maximum": 2,
+          "default": 1
+        }
+      }
+    },
+    "expression": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "pitchRange": {
+          "type": "number",
+          "title": "Intonation range (st)",
+          "description": "Semitone range used for stress, tones and intonation.",
+          "minimum": 0.5,
+          "maximum": 8,
+          "default": 3
+        },
+        "vibrato": {
+          "type": "number",
+          "title": "Vibrato depth",
+          "description": "Slow periodic pitch wobble that makes the voice less robotic.",
+          "minimum": 0,
+          "maximum": 1,
+          "default": 0.25
+        },
+        "vibratoRate": {
+          "type": "number",
+          "title": "Vibrato rate (Hz)",
+          "description": "Frequency of the slow periodic pitch modulation.",
+          "minimum": 3,
+          "maximum": 8,
+          "default": 5.2
+        },
+        "declination": {
+          "type": "number",
+          "title": "Declination (st)",
+          "description": "Pitch drop from the start to the end of a phrase.",
+          "minimum": 0,
+          "maximum": 6,
+          "default": 2
+        },
+        "accentStrength": {
+          "type": "number",
+          "title": "Accent strength (factor)",
+          "description": "Scales the pitch rise on stressed syllables.",
+          "minimum": 0,
+          "maximum": 2,
+          "default": 1
+        },
+        "intrinsicPitch": {
+          "type": "number",
+          "title": "Intrinsic pitch (st)",
+          "description": "Pitch difference between the closest and the most open vowel (real speakers about 1.5 semitones); 0 turns it off.",
+          "minimum": 0,
+          "maximum": 3,
+          "default": 0
+        },
+        "larynxPitch": {
+          "type": "number",
+          "title": "Larynx pitch coupling (cm/oct)",
+          "description": "How far the larynx rises per octave of pitch above the speaker pitch (and falls below it); 0 turns it off.",
+          "minimum": 0,
+          "maximum": 1,
+          "default": 0
+        }
+      }
+    },
+    "microphone": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "outputGain": {
+          "type": "number",
+          "title": "Output level (factor)",
+          "description": "Gain before the soft limiter; high values saturate like a loud voice.",
+          "minimum": 0.25,
+          "maximum": 4,
+          "default": 1
+        },
+        "micDistance": {
+          "type": "number",
+          "title": "Microphone distance (cm)",
+          "description": "Distance of the microphone from the lips: farther is quieter and, with a room, more reverberant (3 cm keeps the plain lip output).",
+          "minimum": 1,
+          "maximum": 1000,
+          "default": 3
+        },
+        "micAzimuth": {
+          "type": "number",
+          "title": "Microphone azimuth (°)",
+          "description": "Horizontal angle of the microphone from straight ahead: behind the head the high frequencies drop.",
+          "minimum": -180,
+          "maximum": 180,
+          "default": 0
+        },
+        "micElevation": {
+          "type": "number",
+          "title": "Microphone elevation (°)",
+          "description": "Vertical angle of the microphone above the mouth axis.",
+          "minimum": -90,
+          "maximum": 90,
+          "default": 0
+        },
+        "roomWidth": {
+          "type": "number",
+          "title": "Room width (m)",
+          "description": "Width of the room (used when the reverberation time is above 0).",
+          "minimum": 1,
+          "maximum": 40,
+          "default": 4
+        },
+        "roomHeight": {
+          "type": "number",
+          "title": "Room height (m)",
+          "description": "Height of the room (used when the reverberation time is above 0).",
+          "minimum": 2,
+          "maximum": 30,
+          "default": 2.6
+        },
+        "roomDepth": {
+          "type": "number",
+          "title": "Room depth (m)",
+          "description": "Depth of the room (used when the reverberation time is above 0).",
+          "minimum": 1,
+          "maximum": 80,
+          "default": 3.5
+        },
+        "roomRt60": {
+          "type": "number",
+          "title": "Reverberation time (s)",
+          "description": "Time for the reverberation to fall by 60 dB; 0 renders without a room.",
+          "minimum": 0,
+          "maximum": 5,
+          "default": 0
+        }
+      }
+    }
+  }
+}

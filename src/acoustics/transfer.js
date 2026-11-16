@@ -191,7 +191,7 @@ function tractLosses(frequency, options) {
       ? viscothermalLoss(
           frequency,
           1,
-          (options.lossShape ?? LOSS_SHAPE) * wallLoss
+          (options.lossShape ?? head.lossShape ?? LOSS_SHAPE) * wallLoss
         )
       : options.loss * Math.sqrt(frequency);
   const wall =
@@ -256,7 +256,8 @@ function drive(chain, load) {
  */
 export function tubeTransfer(areas, length, frequency, options = {}) {
   const { loss, wall } = tractLosses(frequency, options);
-  const baffle = options.baffle ?? RADIATION_BAFFLE;
+  const baffle =
+    options.baffle ?? options.head?.radiationBaffle ?? RADIATION_BAFFLE;
   const branches = options.branches ?? [];
   const sectionLength = length / areas.length;
   const nose = options.nose;

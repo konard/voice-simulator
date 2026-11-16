@@ -363,36 +363,57 @@ pub extern "C" fn vs_aero_reynolds(flow: f64, area: f64) -> f64 {
     aerodynamics::reynolds(flow, area)
 }
 
-/// `sourceStrength(dp, area, flow)` of `src/acoustics/aerodynamics.js`.
-#[no_mangle]
-pub extern "C" fn vs_aero_source_strength(dp: f64, area: f64, flow: f64) -> f64 {
-    aerodynamics::source_strength(dp, area, flow)
-}
-
-/// `openTractStrength(lungPressure, glottalArea)` of
+/// `sourceStrength(dp, area, flow, reCritical)` of
 /// `src/acoustics/aerodynamics.js`.
 #[no_mangle]
-pub extern "C" fn vs_aero_open_tract_strength(lung_pressure: f64, glottal_area: f64) -> f64 {
-    aerodynamics::open_tract_strength(lung_pressure, glottal_area)
+pub extern "C" fn vs_aero_source_strength(dp: f64, area: f64, flow: f64, re_critical: f64) -> f64 {
+    aerodynamics::source_strength_at(dp, area, flow, re_critical)
 }
 
-/// `glottalArea({voicing, aspiration, closure}, breathiness, chink)` of
+/// `openTractStrength(lungPressure, glottalArea, reCritical)` of
 /// `src/acoustics/aerodynamics.js`.
 #[no_mangle]
+pub extern "C" fn vs_aero_open_tract_strength(
+    lung_pressure: f64,
+    glottal_area: f64,
+    re_critical: f64,
+) -> f64 {
+    aerodynamics::open_tract_strength_at(lung_pressure, glottal_area, re_critical)
+}
+
+/// `glottalArea({voicing, aspiration, closure}, breathiness, chink,
+/// {glottisVoiced, glottisOpen, glottisBreathy})` of
+/// `src/acoustics/aerodynamics.js`.
+#[no_mangle]
+#[allow(clippy::too_many_arguments)]
 pub extern "C" fn vs_aero_glottal_area(
     voicing: f64,
     aspiration: f64,
     closure: f64,
     breathiness: f64,
     chink: f64,
+    voiced: f64,
+    open: f64,
+    breathy: f64,
 ) -> f64 {
-    aerodynamics::glottal_area(voicing, aspiration, closure, breathiness, chink)
+    aerodynamics::glottal_area_of(
+        voicing,
+        aspiration,
+        closure,
+        breathiness,
+        chink,
+        &aerodynamics::GlottalAreas {
+            voiced,
+            open,
+            breathy,
+        },
+    )
 }
 
-/// `strouhalFrequency(flow, area)` of `src/acoustics/voice.js`.
+/// `strouhalFrequency(flow, area, strouhal)` of `src/acoustics/voice.js`.
 #[no_mangle]
-pub extern "C" fn vs_aero_strouhal_frequency(flow: f64, area: f64) -> f64 {
-    aerodynamics::strouhal_frequency(flow, area)
+pub extern "C" fn vs_aero_strouhal_frequency(flow: f64, area: f64, strouhal: f64) -> f64 {
+    aerodynamics::strouhal_frequency_at(flow, area, strouhal)
 }
 
 /// `steadyFlow(lungPressure, glottalArea, constrictionArea)` of

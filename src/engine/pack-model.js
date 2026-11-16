@@ -13,6 +13,7 @@
  * | ------------------ | ------------------------ | ---- | -------------------- |
  * | dx                 | dx                       | f64  | 1                    |
  * | opening (flag)     | binLength, sample        | f64  | 2                    |
+ * |                    | origin                   | f64  | 1                    |
  * |                    | bin starts               | i32  | bins + 1             |
  * |                    | weights                  | f64  | points               |
  * |                    | shares                   | f64  | points               |
@@ -30,7 +31,10 @@
  * | boundaryAdmittance | admittance               | f64  | 1                    |
  * | enclosure          | 1 with an enclosure      | f64  | 1                    |
  * | lengths            | tract, nose              | f64  | 2                    |
+ * | larynxTravel       | travel (cm)              | f64  | 1                    |
  * | sinuses            | tube, area, length       | f64  | 3 * sinuses          |
+ * |                    | opening links per place  | i32  | sinuses * places     |
+ * |                    | opening links            | i32  | pouch links          |
  * | landmarks          | lips xyz, nostrils xyz   | f64  | 6                    |
  * | teeth (flag)       | edge, width              | f64  | 2                    |
  * |                    | cells, groups            | i32  | teeth cells each     |
@@ -41,6 +45,11 @@
  * start at `starts[b] + b`. Only the tract cells have opening rows (the
  * table of the JavaScript model is zero elsewhere), which keeps a model
  * with a large enclosure small.
+ *
+ * `places` (MODEL_HEADER.PLACES) is the number of places of the glottis
+ * (`sinus.openings.length`, the same for every sinus): the counts list,
+ * for each sinus and then each place from the lowest, how many of the
+ * opening links (`sinus.openings[place]`, indices into the links) follow.
  */
 
 import { CELL_AIR } from '../acoustics/voxel-model.js';
@@ -63,12 +72,14 @@ export const MODEL_HEADER = Object.freeze({
   OPENING_POINTS: 9,
   OPENING_ROWS: 10,
   FLAGS: 11,
-  WORDS: 12,
+  PLACES: 12,
+  POUCH_LINKS: 13,
+  WORDS: 14,
 });
 
 /** 'VSMD' as a little-endian u32. */
 export const MODEL_MAGIC = 0x444d5356;
-export const MODEL_VERSION = 1;
+export const MODEL_VERSION = 2;
 /** Bits of MODEL_HEADER.FLAGS. */
 export const MODEL_FLAGS = Object.freeze({ OPENING: 1, TEETH: 2 });
 
@@ -80,16 +91,26 @@ function align(offset) {
 export function modelArrays(model) {
   const { cells, links, opening, teeth } = model;
   const count = cells.length;
+  const sinuses = model.sinuses ?? [];
+  const places = Math.max(0, ...sinuses.map((s) => s.openings?.length ?? 0));
+  const openings = sinuses.flatMap((sinus) =>
+    Array.from({ length: places }, (_, place) =>
+      Array.from(sinus.openings?.[place] ?? [])
+    )
+  );
+  const pouchLinks = openings.flat();
   const arrays = [['f64', [model.dx]]];
   const header = {
     cells: count,
     links: links.a.length,
-    sinuses: model.sinuses?.length ?? 0,
+    sinuses: sinuses.length,
     teethCells: teeth ? teeth.cells.length : 0,
     per: 0,
     bins: 0,
     points: 0,
     rows: 0,
+    places,
+    pouchLinks: pouchLinks.length,
     flags:
       (opening ? MODEL_FLAGS.OPENING : 0) | (teeth ? MODEL_FLAGS.TEETH : 0),
   };
@@ -121,6 +142,7 @@ export function modelArrays(model) {
     });
     arrays.push(
       ['f64', [opening.binLength, opening.sample]],
+      ['f64', [opening.origin ?? 0]],
       ['i32', starts],
       ['f64', flat('weights')],
       ['f64', flat('shares')],
@@ -148,14 +170,10 @@ export function modelArrays(model) {
     ['f64', [model.boundaryAdmittance ?? 1]],
     ['f64', [model.enclosure ? 1 : 0]],
     ['f64', [model.lengths[0], model.lengths[1]]],
-    [
-      'f64',
-      (model.sinuses ?? []).flatMap((sinus) => [
-        sinus.tube,
-        sinus.area,
-        sinus.length,
-      ]),
-    ],
+    ['f64', [model.larynxTravel ?? 0]],
+    ['f64', sinuses.flatMap((sinus) => [sinus.tube, sinus.area, sinus.length])],
+    ['i32', openings.map((links) => links.length)],
+    ['i32', pouchLinks],
     ['f64', [...model.landmarks.lips, ...model.landmarks.nostrils]]
   );
   if (teeth) {
@@ -196,6 +214,8 @@ export function packVoxelModel(model) {
     [H.OPENING_POINTS, header.points],
     [H.OPENING_ROWS, header.rows],
     [H.FLAGS, header.flags],
+    [H.PLACES, header.places],
+    [H.POUCH_LINKS, header.pouchLinks],
   ];
   for (const [index, value] of words) {
     view.setUint32(4 * index, value, true);

@@ -184,7 +184,7 @@ export function tractCenterline(head = DEFAULT_HEAD, options = {}) {
 
 /**
  * Upper incisors on a tract layout: the incisal edge (cm, head frame
- * height) sits REST_GAP/2 above the centreline in the middle of the
+ * height) sits head.restGap/2 above the centreline in the middle of the
  * incisor row, so the rest gap is centred on the airway; the labial face
  * (`front`, z) is where the centreline is `incisorDepth` behind the lips
  * and `plane` is the z of the middle of the row. `centre`, `start` and
@@ -196,14 +196,15 @@ export function tractCenterline(head = DEFAULT_HEAD, options = {}) {
 export function incisorFrame(head, layout) {
   const config = normalizeHeadConfig(head);
   const end = layout.length - incisorDepth(config);
-  const centre = end - INCISOR_THICKNESS / 2;
+  const thickness = config.incisorThickness ?? INCISOR_THICKNESS;
+  const centre = end - thickness / 2;
   const middle = arcPoint(centre, layout).point;
   return {
-    edge: middle[1] + REST_GAP / 2,
+    edge: middle[1] + (config.restGap ?? REST_GAP) / 2,
     front: arcPoint(end, layout).point[2],
     plane: middle[2],
     centre,
-    start: end - INCISOR_THICKNESS,
+    start: end - thickness,
     end,
   };
 }

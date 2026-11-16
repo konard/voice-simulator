@@ -332,7 +332,7 @@ export function anatomyLod(lod) {
 export function jawAngle(gap, head) {
   const config = normalizeHeadConfig(head);
   const { jawPivot, edge, front } = mouthFrame(config);
-  const dy = edge - REST_GAP - jawPivot[1];
+  const dy = edge - (config.restGap ?? REST_GAP) - jawPivot[1];
   const dz = front - OVERJET - jawPivot[2];
   const radius = Math.hypot(dy, dz);
   const target = clamp((edge - gap - jawPivot[1]) / radius, -1, 1);
@@ -379,14 +379,14 @@ export function incisorEdges(gap, head) {
   return {
     upper: [0, edge, front],
     lower: rotateJaw(
-      [0, edge - REST_GAP, front - OVERJET],
+      [0, edge - (config.restGap ?? REST_GAP), front - OVERJET],
       jawPivot,
       jawAngle(gap, config)
     ),
   };
 }
 
-/** Copy of a dental arch at rest (jaw closed to REST_GAP). */
+/** Copy of a dental arch at rest (jaw closed to head.restGap). */
 function restArch(config, lod, lower) {
   const level = anatomyLod(lod);
   const key = `teeth ${lower} ${level} ${JSON.stringify(config)}`;
@@ -399,7 +399,7 @@ function archMesh(config, level, lower) {
   const { edge, front } = mouthFrame(config);
   const arch = jawArch(config, lower ? 'lower' : 'upper');
   const { teeth } = arch;
-  const base = lower ? edge - REST_GAP : edge;
+  const base = lower ? edge - (config.restGap ?? REST_GAP) : edge;
   const direction = lower ? -1 : 1;
   const sections = 2 * lod.arch + 1;
   const notches = lod.arch >= ANATOMY_LODS[2].arch;
@@ -445,7 +445,7 @@ export function upperTeethMesh(head, options = {}) {
 export function lowerTeethMesh(head, options = {}) {
   const config = normalizeHeadConfig(head);
   const mesh = restArch(config, options.lod, true);
-  const angle = jawAngle(options.gap ?? REST_GAP, config);
+  const angle = jawAngle(options.gap ?? config.restGap ?? REST_GAP, config);
   const { jawPivot } = mouthFrame(config);
   const { positions } = mesh;
   for (let index = 0; index < positions.length; index += 3) {
@@ -472,7 +472,7 @@ export function dentalLandmarks(head) {
   const { edge, front } = mouthFrame(config);
   return ['upper', 'lower'].flatMap((jaw) => {
     const arch = jawArch(config, jaw);
-    const base = jaw === 'lower' ? edge - REST_GAP : edge;
+    const base = jaw === 'lower' ? edge - (config.restGap ?? REST_GAP) : edge;
     let start = 0;
     return arch.teeth.flatMap(([width, , thickness], type) => {
       const middle = start + width / 2;
@@ -743,7 +743,7 @@ export function anatomyMeshes(head, options = {}) {
   const state = options.state ?? {};
   const shape = options.shape ?? tractShape(state, config);
   const lod = anatomyLod(options.lod);
-  const gap = shape.teeth?.gap ?? REST_GAP;
+  const gap = shape.teeth?.gap ?? config.restGap ?? REST_GAP;
   return [
     { name: 'upperTeeth', ...upperTeethMesh(config, { lod }) },
     { name: 'lowerTeeth', ...lowerTeethMesh(config, { lod, gap }) },

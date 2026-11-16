@@ -83,13 +83,14 @@ export function subglottalShape(head = {}) {
 
 export class Subglottal {
   /**
-   * @param {{vocalTractLength?: number, subglottalLength?: number, wallLoss?: number}} [head]
+   * @param {{vocalTractLength?: number, subglottalLength?: number, wallLoss?: number, subglottalLoss?: number}} [head]
    * @param {number} [dt] Step of the tract solver (s); the line is laid
    *   out at the first configure (or here) and keeps its sections.
    */
   constructor(head = {}, dt) {
     this.shape = subglottalShape(head);
-    this.wallLoss = (head.wallLoss ?? 1) * SUBGLOTTAL_LOSS;
+    this.wallLoss =
+      (head.wallLoss ?? 1) * (head.subglottalLoss ?? SUBGLOTTAL_LOSS);
     this.far = new Radiation();
     this.dt = Number.NaN;
     this.n = 0;

@@ -20,11 +20,11 @@ use core::mem::swap;
 use crate::frame;
 use crate::glottis::{glottal_reflection, SPEED_OF_SOUND};
 use crate::losses::{
-    viscothermal_loss, wall_surface, ShelfCache, AIR_DENSITY, LOSS_REFERENCE_SECTIONS, LOSS_SHAPE,
-    LOSS_STAGES, NOSE_LOSS_STAGES,
+    viscothermal_loss, wall_surface, ShelfCache, AIR_DENSITY, LOSS_REFERENCE_SECTIONS, LOSS_STAGES,
+    NOSE_LOSS_STAGES,
 };
 use crate::math::{self, max, min};
-use crate::radiation::{Radiation, RADIATION_BAFFLE};
+use crate::radiation::Radiation;
 use crate::solver::Solver;
 
 /// Smallest section area (cm²).
@@ -72,6 +72,12 @@ pub struct WaveguideOptions {
     pub vocal_tract_length: f64,
     /// The piriform branch.
     pub piriform: PiriformBranch,
+    /// Boundary-layer loss relative to a smooth round tube
+    /// (`head.lossShape`, [`crate::losses::LOSS_SHAPE`] by default).
+    pub loss_shape: f64,
+    /// Baffle of the lips and nostrils (`head.radiationBaffle`,
+    /// [`crate::radiation::RADIATION_BAFFLE`] by default).
+    pub baffle: f64,
 }
 
 /// Last section of each of `stages` groups of `sections` (`groupEnds`).
@@ -307,8 +313,8 @@ impl Waveguide {
         let loss_exponent = LOSS_REFERENCE_SECTIONS / n as f64;
         let mut waveguide = Self {
             wall_loss,
-            loss_shape: LOSS_SHAPE,
-            baffle: RADIATION_BAFFLE,
+            loss_shape: options.loss_shape,
+            baffle: options.baffle,
             nasal_loss: options.nasal_loss,
             glottal_reflection: glottal_reflection(
                 options.glottal_chink,
@@ -888,7 +894,8 @@ impl Solver for Waveguide {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::losses::{WALL_MASS, WALL_RESISTANCE, WALL_STIFFNESS};
+    use crate::losses::{LOSS_SHAPE, WALL_MASS, WALL_RESISTANCE, WALL_STIFFNESS};
+    use crate::radiation::RADIATION_BAFFLE;
 
     fn options() -> WaveguideOptions {
         WaveguideOptions {
@@ -906,6 +913,8 @@ mod tests {
                 area: 0.5,
                 sections: 3,
             },
+            loss_shape: LOSS_SHAPE,
+            baffle: RADIATION_BAFFLE,
         }
     }
 

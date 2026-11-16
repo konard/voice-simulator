@@ -141,7 +141,7 @@ function teethPull(point, teeth) {
   const vertical = Math.max(
     0,
     point[1] - teeth.edge,
-    teeth.edge - REST_GAP - point[1]
+    teeth.edge - teeth.restGap - point[1]
   );
   const lateral = Math.max(0, Math.abs(point[0]) - teeth.width / 2);
   return (-TEETH_PULL * taper * (vertical ** 2 + lateral ** 2)) / 0.25;
@@ -902,7 +902,7 @@ function wallAdmittance(absorption) {
  */
 function teethCells(cells, config, layout, dx) {
   const { centre, edge, plane } = incisorFrame(config, layout);
-  const reach = Math.max(dx, INCISOR_THICKNESS) / 2;
+  const reach = Math.max(dx, config.incisorThickness ?? INCISOR_THICKNESS) / 2;
   const members = [];
   const groups = [];
   cells.forEach((cell, index) => {
@@ -922,6 +922,7 @@ function teethCells(cells, config, layout, dx) {
     plane,
     reach,
     edge,
+    restGap: config.restGap ?? REST_GAP,
     width: teethWidth(config),
   };
 }

@@ -13,7 +13,9 @@
  * seeds are `hashSeed` values and BAND_LIMIT is 0 for none. SOLVER is
  * SOLVER_CODES[solver]; the 3D fields (FDTD_OUTPUT to MICROPHONE_Z) come
  * from `fdtdListening` (src/engine/pack-model.js) and are 0 for the
- * waveguide.
+ * waveguide. BREATH_GAIN to RADIATION_BAFFLE are the head's advanced
+ * source and loss values (issue 41). LENGTH_SCALE is the `lengthScale` of
+ * the 3D solver (where a shape's length puts the glottis, issue 40).
  */
 export const RENDERER_CONFIG = Object.freeze({
   SAMPLE_RATE: 0,
@@ -53,7 +55,23 @@ export const RENDERER_CONFIG = Object.freeze({
   MICROPHONE_X: 34,
   MICROPHONE_Y: 35,
   MICROPHONE_Z: 36,
-  HEADER: 37,
+  BREATH_GAIN: 37,
+  BREATH_EXPONENT: 38,
+  BREATHINESS_RD: 39,
+  CHINK_NOISE: 40,
+  ORAL_COMPLIANCE: 41,
+  RE_CRITICAL: 42,
+  GLOTTIS_VOICED: 43,
+  GLOTTIS_OPEN: 44,
+  GLOTTIS_BREATHY: 45,
+  WALL_SOURCE: 46,
+  STROUHAL: 47,
+  FRICATION_GAIN: 48,
+  TRANSIENT_GAIN: 49,
+  LOSS_SHAPE: 50,
+  RADIATION_BAFFLE: 51,
+  LENGTH_SCALE: 52,
+  HEADER: 53,
 });
 
 /** Values of RENDERER_CONFIG.SOLVER and FDTD_OUTPUT. */

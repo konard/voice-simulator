@@ -92,12 +92,18 @@ pub fn reynolds(flow: f64, area: f64) -> f64 {
 /// dp^1.5 A^0.5, gated by the Reynolds number between [`RE_CRITICAL`] and
 /// twice that.
 pub fn source_strength(dp: f64, area: f64, flow: f64) -> f64 {
+    source_strength_at(dp, area, flow, RE_CRITICAL)
+}
+
+/// [`source_strength`] with the critical Reynolds number `re_critical`
+/// (`head.reCritical`).
+pub fn source_strength_at(dp: f64, area: f64, flow: f64, re_critical: f64) -> f64 {
     if !positive(dp) || !positive(area) {
         return 0.0;
     }
     let gate = min(
         1.0,
-        max(0.0, (reynolds(flow, area) - RE_CRITICAL) / RE_CRITICAL),
+        max(0.0, (reynolds(flow, area) - re_critical) / re_critical),
     );
     if gate == 0.0 {
         return 0.0;
@@ -142,8 +148,37 @@ pub fn aspiration_reference() -> f64 {
 /// Relative aspiration strength of a glottis of `glottal_area` (cm²) under
 /// an open tract at `lung_pressure` (dyn/cm²).
 pub fn open_tract_strength(lung_pressure: f64, glottal_area: f64) -> f64 {
+    open_tract_strength_at(lung_pressure, glottal_area, RE_CRITICAL)
+}
+
+/// [`open_tract_strength`] with the critical Reynolds number
+/// `re_critical`.
+pub fn open_tract_strength_at(lung_pressure: f64, glottal_area: f64, re_critical: f64) -> f64 {
     let flow = glottal_area * math::sqrt((2.0 * lung_pressure) / AIR_DENSITY);
-    source_strength(lung_pressure, glottal_area, flow) / aspiration_reference()
+    source_strength_at(lung_pressure, glottal_area, flow, re_critical) / aspiration_reference()
+}
+
+/// The glottal areas of a head (cm²): modal voicing, an open glottis and
+/// the extra area of a breathy voice (`head.glottisVoiced`,
+/// `head.glottisOpen` and `head.glottisBreathy`).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct GlottalAreas {
+    /// Mean glottal area of modal voicing.
+    pub voiced: f64,
+    /// Glottal area of an open glottis.
+    pub open: f64,
+    /// Extra mean glottal area of a fully breathy voice.
+    pub breathy: f64,
+}
+
+impl Default for GlottalAreas {
+    fn default() -> Self {
+        Self {
+            voiced: GLOTTIS_VOICED,
+            open: GLOTTIS_OPEN,
+            breathy: GLOTTIS_BREATHY,
+        }
+    }
 }
 
 /// Mean glottal area (cm²) of the LF source for the control channels
@@ -156,10 +191,29 @@ pub fn glottal_area(
     breathiness: f64,
     chink: f64,
 ) -> f64 {
+    glottal_area_of(
+        voicing,
+        aspiration,
+        closure,
+        breathiness,
+        chink,
+        &GlottalAreas::default(),
+    )
+}
+
+/// [`glottal_area`] with the glottal `areas` of a head.
+pub fn glottal_area_of(
+    voicing: f64,
+    aspiration: f64,
+    closure: f64,
+    breathiness: f64,
+    chink: f64,
+    areas: &GlottalAreas,
+) -> f64 {
     let voicing = max(0.0, voicing);
     let aspiration = max(0.0, aspiration);
     let closure = min(1.0, max(0.0, closure));
-    (GLOTTIS_VOICED * voicing + GLOTTIS_OPEN * aspiration + GLOTTIS_BREATHY * breathiness * voicing)
+    (areas.voiced * voicing + areas.open * aspiration + areas.breathy * breathiness * voicing)
         * (1.0 - closure)
         + max(0.0, chink) / 100.0
 }
@@ -167,10 +221,16 @@ pub fn glottal_area(
 /// Peak frequency (Hz) of the turbulence noise of a jet of `flow` (cm³/s)
 /// through `area` (cm²), clamped to [`STROUHAL_RANGE`].
 pub fn strouhal_frequency(flow: f64, area: f64) -> f64 {
+    strouhal_frequency_at(flow, area, STROUHAL)
+}
+
+/// [`strouhal_frequency`] with the Strouhal number `strouhal`
+/// (`head.strouhal`).
+pub fn strouhal_frequency_at(flow: f64, area: f64, strouhal: f64) -> f64 {
     if !positive(area) {
         return STROUHAL_RANGE[0];
     }
-    let frequency = (STROUHAL * (flow / area)) / math::sqrt((4.0 * area) / core::f64::consts::PI);
+    let frequency = (strouhal * (flow / area)) / math::sqrt((4.0 * area) / core::f64::consts::PI);
     min(STROUHAL_RANGE[1], max(STROUHAL_RANGE[0], frequency))
 }
 

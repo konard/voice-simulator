@@ -495,9 +495,10 @@ asking for 0 or 1 makes the next step build the incident lists again);
 `packVoxelModel(model)` writes every property of the model that
 `fdtd3d.js` reads (`grep -o "model\.[a-zA-Z]*" src/acoustics/fdtd3d.js |
 sort -u`: `dx`, `opening`, `cells`, `links`, `openFaces`,
-`boundaryAdmittance`, `enclosure`, `lengths`, `sinuses`, `landmarks`,
-`teeth`, plus `openMasks`) into one `ArrayBuffer`: a header of 12 `u32`
-words (magic `VSMD`, version 1, byte length, counts and flags), then one
+`boundaryAdmittance`, `enclosure`, `lengths`, `larynxTravel`, `sinuses`,
+`landmarks`, `teeth`, plus `openMasks`) into one `ArrayBuffer`: a header of
+14 `u32` words (magic `VSMD`, version 2, byte length, counts and flags),
+then one
 section per property, each starting at a multiple of 8 bytes. The layout
 table is at the top of `pack-model.js` and of `fdtd/model.rs`.
 `Model::pack` writes the same bytes back, which `vs_fdtd_model_repack`
@@ -534,7 +535,7 @@ frames..., sample count]`; the model length is 0 for the waveguide.
 | `vs_fdtd_kernel_array(handle, which) -> u32`              | Offset of array `which` (above), 0 for a bad handle or number                               |
 | `vs_fdtd_kernel_steps(handle, count, form) -> i32`        | `count` steps of form 0, 1 or 2; 0, `BAD_HANDLE`, or `BAD_ARGUMENT` (form, or missing cell) |
 | `vs_fdtd_kernel_free(handle) -> i32`                      | Frees the kernel; 0 or `BAD_HANDLE`                                                         |
-| `vs_fdtd_solver_new(options, model, modelLength) -> i32`  | Handle of an `Fdtd3d` for 9 option values and a packed model                                |
+| `vs_fdtd_solver_new(options, model, modelLength) -> i32`  | Handle of an `Fdtd3d` for 10 option values and a packed model                               |
 | `vs_fdtd_solver_set_nose(handle, areas, count) -> i32`    | `setNose(areas)`                                                                            |
 | `vs_fdtd_solver_set_shape(handle, frame, length) -> i32`  | `setShape` from one frame                                                                   |
 | `vs_fdtd_solver_step_duration(handle) -> f64`             | `stepDuration` for the last shape (s), NaN for a bad handle                                 |
@@ -545,7 +546,12 @@ frames..., sample count]`; the model length is 0 for the waveguide.
 
 The options of `vs_fdtd_solver_new` are the output (0 flow, 1 microphone),
 the spherical boundary (0 or 1), the receiver target x, y and z (cm),
-`wallLoss`, `nasalLoss`, `glottalChink` (mm²) and `vocalTractLength` (cm).
+`wallLoss`, `nasalLoss`, `glottalChink` (mm²), `vocalTractLength` (cm) and
+`lengthScale` (`RENDERER_CONFIG.LENGTH_SCALE` in a render).
+Version 2 of the model (issue 40) adds the opening `origin`, `larynxTravel`
+and the pouch openings of every place of the glottis
+(`header::PLACES`, `header::POUCH_LINKS`), which the moving source plane
+of `Fdtd3d` uses.
 
 ### Deviations from the plan of issue 23
 

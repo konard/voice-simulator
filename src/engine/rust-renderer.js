@@ -26,13 +26,14 @@ import {
   WALL_RESISTANCE,
   WALL_STIFFNESS,
 } from '../acoustics/losses.js';
-import { createListener } from '../acoustics/microphone.js';
+import { createListener, headListening } from '../acoustics/microphone.js';
 import {
   buildVoxelModel,
   enclosureBounds,
   voxelModelOptions,
 } from '../acoustics/voxel-model.js';
 import { VOWEL_CORRECTIONS_3D } from '../articulation/vowel-calibration.js';
+import { VOWEL_LENGTH_SCALE_3D } from '../articulation/vowel-space.js';
 import {
   FDTD_OUTPUT_CODES,
   RENDERER_CONFIG,
@@ -118,6 +119,25 @@ class Scratch {
   }
 }
 
+/** Slots of RENDERER_CONFIG and the head keys they hold (issue 41). */
+const ADVANCED_CONFIG = [
+  ['BREATH_GAIN', 'breathGain'],
+  ['BREATH_EXPONENT', 'breathExponent'],
+  ['BREATHINESS_RD', 'breathinessRd'],
+  ['CHINK_NOISE', 'chinkNoise'],
+  ['ORAL_COMPLIANCE', 'oralCompliance'],
+  ['RE_CRITICAL', 'reCritical'],
+  ['GLOTTIS_VOICED', 'glottisVoiced'],
+  ['GLOTTIS_OPEN', 'glottisOpen'],
+  ['GLOTTIS_BREATHY', 'glottisBreathy'],
+  ['WALL_SOURCE', 'wallSource'],
+  ['STROUHAL', 'strouhal'],
+  ['FRICATION_GAIN', 'fricationGain'],
+  ['TRANSIENT_GAIN', 'transientGain'],
+  ['LOSS_SHAPE', 'lossShape'],
+  ['RADIATION_BAFFLE', 'radiationBaffle'],
+];
+
 /**
  * The renderer configuration (RENDERER_CONFIG of layout.js).
  * @returns {Float64Array}
@@ -159,6 +179,11 @@ export function rendererConfig(settings) {
   values[C.WALL_MASS] = head.wallMass ?? WALL_MASS;
   values[C.WALL_RESISTANCE] = head.wallResistance ?? WALL_RESISTANCE;
   values[C.WALL_STIFFNESS] = head.wallStiffness ?? WALL_STIFFNESS;
+  // The advanced source and loss values (issue 41); the head is normalized,
+  // so each holds its default when the head leaves it out.
+  for (const [slot, key] of ADVANCED_CONFIG) {
+    values[C[slot]] = head[key];
+  }
   const { listening } = settings;
   values[C.SOLVER] = SOLVER_CODES[settings.solver ?? 'waveguide'];
   if (listening) {
@@ -168,6 +193,7 @@ export function rendererConfig(settings) {
     values[C.MICROPHONE_Y] = listening.target[1];
     values[C.MICROPHONE_Z] = listening.target[2];
   }
+  values[C.LENGTH_SCALE] = settings.lengthScale ?? 1;
   values.set(nose, C.HEADER);
   values.set(listener, C.HEADER + nose.length);
   return values;
@@ -223,6 +249,20 @@ export function rendererModel(head, options = {}) {
 }
 
 /**
+ * The lengthScale VoiceRenderer gives Fdtd3d (lengthScaleOf of voice.js):
+ * the one of the 3D vowel table unless the options give one.
+ * @param {string} solver
+ * @param {object} options
+ * @returns {number|undefined}
+ */
+function lengthScaleOf(solver, options) {
+  return (
+    options.lengthScale ??
+    (solver === 'fdtd3d' ? VOWEL_LENGTH_SCALE_3D : undefined)
+  );
+}
+
+/**
  * The JavaScript half of the Rust renderer: the configuration and the
  * frames, one per control block, computed as VoiceRenderer computes its
  * shapes. Needs no engine, so a job can be written for the CLI.
@@ -236,6 +276,8 @@ export class FramePlanner {
     checkSupported(options);
     this.plan = plan;
     this.head = normalizeHeadConfig(options.head ?? plan.head);
+    // The head's microphone and room unless the options give their own.
+    options = headListening(this.head, options);
     this.sampleRate = options.sampleRate ?? 48000;
     this.sections = options.sections ?? 44;
     this.blockSize = options.blockSize ?? 32;
@@ -277,6 +319,7 @@ export class FramePlanner {
       listener: values,
       solver: this.solver,
       listening,
+      lengthScale: lengthScaleOf(this.solver, options),
     });
     this.frames = new FrameList(this.stride);
     this.state = {};

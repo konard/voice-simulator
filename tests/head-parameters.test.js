@@ -1,6 +1,8 @@
 /**
  * Every voice-affecting constant is a head parameter: its default keeps the
- * old sound, and any other value changes the rendered audio.
+ * old sound, and any other value changes the rendered audio. Every entry
+ * documents its unit, range, source and the direction in which it moves a
+ * measure of the sound (issue 41), and that direction is what renders.
  */
 
 import { describe, it, expect } from 'test-anywhere';
@@ -11,7 +13,17 @@ import { Waveguide } from '../src/acoustics/waveguide.js';
 import { SPEED_OF_SOUND } from '../src/acoustics/transfer.js';
 import { STORY_AREAS, STORY_LENGTHS } from '../src/articulation/vowel-space.js';
 import { sampleState, tractShape } from '../src/articulation/tract-shape.js';
-import { HEAD_PARAMETERS, normalizeHeadConfig } from '../src/head-config.js';
+import {
+  HEAD_GROUPS,
+  HEAD_PARAMETERS,
+  normalizeHeadConfig,
+} from '../src/head-config.js';
+import { readFileSync } from 'node:fs';
+import {
+  DOCS_FILE,
+  voiceParametersMarkdown,
+} from '../scripts/voice-parameters.mjs';
+import { MEASURES, measureEffect } from './helpers/voice-measures.js';
 
 const RATE = 16000;
 const IPA = 'ˈmasa ˈna';
@@ -208,4 +220,63 @@ describe('head parameters', () => {
     const heavy = firstFormant({ wallMass: 3 });
     expect(heavy.frequency).toBeLessThan(base.frequency);
   });
+});
+
+describe('head parameters: documentation (issue 41)', () => {
+  it('documents every parameter', () => {
+    const keys = new Set();
+    for (const parameter of HEAD_PARAMETERS) {
+      const { key, effect } = parameter;
+      expect([key, keys.has(key)]).toEqual([key, false]);
+      keys.add(key);
+      expect([key, typeof parameter.unit, parameter.unit.length > 0]).toEqual([
+        key,
+        'string',
+        true,
+      ]);
+      expect([key, parameter.min < parameter.max]).toEqual([key, true]);
+      expect([
+        key,
+        parameter.default >= parameter.min &&
+          parameter.default <= parameter.max,
+      ]).toEqual([key, true]);
+      expect([key, String(parameter.source ?? '').length >= 10]).toEqual([
+        key,
+        true,
+      ]);
+      expect([key, HEAD_GROUPS.includes(parameter.group)]).toEqual([key, true]);
+      expect([key, MEASURES.includes(effect?.measure)]).toEqual([key, true]);
+      expect([key, [-1, 0, 1].includes(effect.sign)]).toEqual([key, true]);
+      // A value that the model does not use says why.
+      expect([
+        key,
+        effect.sign !== 0 || String(effect.note).length > 10,
+      ]).toEqual([key, true]);
+    }
+    // Git may check the file out with CRLF line endings on Windows.
+    expect(readFileSync(DOCS_FILE, 'utf8').replace(/\r\n/g, '\n')).toBe(
+      voiceParametersMarkdown()
+    );
+  });
+});
+
+// One test per group keeps each under the 30 s test timeout; all groups
+// take about 32 s on Node.js (experiments/issue-41-effects.txt).
+describe('head parameters: moves the sound in the documented direction', () => {
+  for (const group of HEAD_GROUPS) {
+    it(`moves the sound in the documented direction: ${group}`, () => {
+      for (const parameter of HEAD_PARAMETERS) {
+        if (parameter.group !== group) {
+          continue;
+        }
+        const { difference, sign } = measureEffect(parameter);
+        expect([parameter.key, parameter.effect.measure, sign]).toEqual([
+          parameter.key,
+          parameter.effect.measure,
+          parameter.effect.sign,
+        ]);
+        expect(Number.isFinite(difference)).toBe(true);
+      }
+    });
+  }
 });

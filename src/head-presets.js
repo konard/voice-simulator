@@ -34,10 +34,10 @@
  *   last so that the other values of a seed stay those of earlier versions.
  */
 
-export const HEAD_PRESETS = Object.freeze({
-  male: Object.freeze({
+const BASE_PRESETS = {
+  male: {
     label: 'Male adult',
-    ranges: Object.freeze({
+    ranges: {
       vocalTractLength: [16.2, 18.2, 0.4],
       pharynxRatio: [0.47, 0.52, 0.015],
       pharynxWidth: [1.02, 1.15, 0.05],
@@ -57,11 +57,11 @@ export const HEAD_PRESETS = Object.freeze({
       vibrato: [0.25, 0.25, 0.1],
       speechRate: [1, 1, 0.06],
       foldLength: [1.4, 1.6, 0.05],
-    }),
-  }),
-  female: Object.freeze({
+    },
+  },
+  female: {
     label: 'Female adult',
-    ranges: Object.freeze({
+    ranges: {
       vocalTractLength: [14, 15.6, 0.35],
       pharynxRatio: [0.455, 0.485, 0.015],
       pharynxWidth: [0.76, 0.84, 0.04],
@@ -83,11 +83,11 @@ export const HEAD_PRESETS = Object.freeze({
       aspirationLevel: [1.3, 1.3, 0.15],
       glottalChink: [1, 1, 0.4],
       foldLength: [0.9, 1.1, 0.05],
-    }),
-  }),
-  child: Object.freeze({
+    },
+  },
+  child: {
     label: 'Child (about ten years)',
-    ranges: Object.freeze({
+    ranges: {
       vocalTractLength: [13, 14.6, 0.35],
       pharynxRatio: [0.46, 0.5, 0.015],
       pharynxWidth: [0.71, 0.79, 0.04],
@@ -109,8 +109,140 @@ export const HEAD_PRESETS = Object.freeze({
       aspirationLevel: [1.2, 1.2, 0.15],
       glottalChink: [1, 1, 0.4],
       foldLength: [0.6, 0.8, 0.05],
-    }),
-  }),
+    },
+  },
+};
+
+/**
+ * Speaker types derived from a base preset (issue 41): the tract length
+ * (cm) and the pitch (Hz) of the typical (size 0.5) speaker.
+ * - five-year-old children: tract about 11.5 cm (Fitch & Giedd 1999,
+ *   JASA 106(3)), f0 about 260 Hz (Lee, Potamianos & Narayanan 1999,
+ *   JASA 105(3));
+ * - teenagers of about 14 to 15 years: the male tract and f0 are between
+ *   those of children and men after the voice change, the female ones near
+ *   those of women (Fitch & Giedd 1999; Lee et al. 1999);
+ * - elderly speakers: f0 rises in men and falls in women, jitter and
+ *   shimmer grow, the voice gets breathier and speech slower (Linville
+ *   2001, Vocal Aging);
+ * - singers: the tract gets shorter and f0 higher from bass to tenor and
+ *   from alto to soprano (Roers, Mürbe & Sundberg 2009, J Voice 23(4),
+ *   vocal tract and fold lengths of singers per voice type; mean speaking
+ *   f0 per voice type).
+ * The membranous folds are shorter in higher voices (Titze 1989, JASA
+ * 85(4); Roers et al. 2009): foldLength scales with base pitch / pitch.
+ */
+const DERIVED_PRESETS = {
+  child5: {
+    base: 'child',
+    label: 'Child (about five years)',
+    tract: 11.5,
+    pitch: 260,
+  },
+  teenMale: {
+    base: 'male',
+    label: 'Teenage boy',
+    tract: 15.8,
+    pitch: 130,
+  },
+  teenFemale: {
+    base: 'female',
+    label: 'Teenage girl',
+    tract: 14.2,
+    pitch: 220,
+  },
+  elderlyMale: {
+    base: 'male',
+    label: 'Elderly man',
+    tract: 17.2,
+    pitch: 125,
+    elderly: true,
+  },
+  elderlyFemale: {
+    base: 'female',
+    label: 'Elderly woman',
+    tract: 14.8,
+    pitch: 175,
+    elderly: true,
+  },
+  bass: { base: 'male', label: 'Bass', tract: 18.5, pitch: 95 },
+  baritone: { base: 'male', label: 'Baritone', tract: 17.5, pitch: 110 },
+  tenor: { base: 'male', label: 'Tenor', tract: 16.5, pitch: 135 },
+  alto: { base: 'female', label: 'Alto', tract: 15.3, pitch: 185 },
+  mezzo: { base: 'female', label: 'Mezzo-soprano', tract: 14.8, pitch: 210 },
+  soprano: { base: 'female', label: 'Soprano', tract: 14.2, pitch: 240 },
+};
+
+/** Defaults of the values that the elderly presets change (head-config.js). */
+const ADULT_SOURCE = { jitter: 0.4, shimmer: 3, breathiness: 0.2 };
+/** Elderly voices: jitter and shimmer times this (Linville 2001). */
+const ELDERLY_PERTURBATION = 1.5;
+/** Elderly voices: breathiness plus this (Linville 2001). */
+const ELDERLY_BREATHINESS = 0.1;
+/** Elderly voices: speech rate (Linville 2001). */
+const ELDERLY_RATE = 0.9;
+
+/** `[small, large, spread]` scaled so the middle (size 0.5) is `middle`. */
+function centred([small, large, spread], middle, geometric) {
+  const centre = geometric ? Math.sqrt(small * large) : (small + large) / 2;
+  return [(small * middle) / centre, (large * middle) / centre, spread];
+}
+
+function derivePreset({ base, label, tract, pitch, elderly }) {
+  const { ranges } = BASE_PRESETS[base];
+  const basePitch = Math.sqrt(ranges.pitch[0] * ranges.pitch[1]);
+  const [foldSmall, foldLarge] = ranges.foldLength;
+  const fold = (basePitch / pitch) * ((foldSmall + foldLarge) / 2);
+  const result = {
+    ...ranges,
+    vocalTractLength: centred(ranges.vocalTractLength, tract, false),
+    pitch: centred(ranges.pitch, pitch, true),
+    foldLength: centred(ranges.foldLength, fold, false),
+  };
+  if (elderly) {
+    const breathiness = ranges.breathiness ?? [0.2, 0.2, 0.06];
+    Object.assign(result, {
+      jitter: [ADULT_SOURCE.jitter * ELDERLY_PERTURBATION, 0, 0.1],
+      shimmer: [ADULT_SOURCE.shimmer * ELDERLY_PERTURBATION, 0, 0.5],
+      breathiness: [
+        breathiness[0] + ELDERLY_BREATHINESS,
+        breathiness[1] + ELDERLY_BREATHINESS,
+        breathiness[2],
+      ],
+      speechRate: [ELDERLY_RATE, ELDERLY_RATE, ranges.speechRate[2]],
+    });
+    result.jitter[1] = result.jitter[0];
+    result.shimmer[1] = result.shimmer[0];
+  }
+  for (const key of Object.keys(result)) {
+    result[key] = Object.freeze(result[key]);
+  }
+  return Object.freeze({ label, base, ranges: Object.freeze(result) });
+}
+
+export const HEAD_PRESETS = Object.freeze({
+  ...Object.fromEntries(
+    Object.entries(BASE_PRESETS).map(([name, preset]) => [
+      name,
+      Object.freeze({
+        label: preset.label,
+        ranges: Object.freeze(
+          Object.fromEntries(
+            Object.entries(preset.ranges).map(([key, range]) => [
+              key,
+              Object.freeze(range),
+            ])
+          )
+        ),
+      }),
+    ])
+  ),
+  ...Object.fromEntries(
+    Object.entries(DERIVED_PRESETS).map(([name, entry]) => [
+      name,
+      derivePreset(entry),
+    ])
+  ),
 });
 
 /** Preset names accepted by randomHeadConfig ('any' keeps the wide range). */

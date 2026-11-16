@@ -2,6 +2,7 @@
 //! parity tests of `tests/rust-waveguide.test.js`: the biquad, the LF
 //! glottis, the radiation filter and the waveguide (`docs/RUST-ENGINE.md`).
 
+use voice_simulator_core::aerodynamics::GlottalAreas;
 use voice_simulator_core::filters::Biquad;
 use voice_simulator_core::glottis::{GlottalControl, Glottis, GlottisOptions};
 use voice_simulator_core::radiation::Radiation;
@@ -51,13 +52,15 @@ pub extern "C" fn vs_biquad_run(
 }
 
 /// Number of `f64` parameters of [`vs_glottis_run`].
-pub const GLOTTIS_PARAMETERS: usize = 13;
+pub const GLOTTIS_PARAMETERS: usize = 21;
 
 /// Runs a glottis seeded with `seed` (`hashSeed` of `'<seed>:glottis'`)
 /// over `data`, which holds the white noise on entry and the flow
 /// derivative on return. `parameters` are tenseness, breathiness, jitter,
 /// shimmer, aspirationLevel, chink, lungPressure, dt, f0, voicing,
-/// aspiration, closure and loudness; the control has no lung pressure and
+/// aspiration, closure and loudness, then the head's breathinessRd,
+/// breathGain, breathExponent, chinkNoise, reCritical, glottisVoiced,
+/// glottisOpen and glottisBreathy; the control has no lung pressure and
 /// no aspiration strength, so the glottis assumes an open tract. Returns
 /// the number of periods started.
 pub fn run_glottis(seed: u32, parameters: &[f64], data: &mut [f64]) -> usize {
@@ -69,6 +72,16 @@ pub fn run_glottis(seed: u32, parameters: &[f64], data: &mut [f64]) -> usize {
     options.aspiration_level = parameters[4];
     options.chink = parameters[5];
     options.lung_pressure = parameters[6];
+    options.breathiness_rd = parameters[13];
+    options.breath_gain = parameters[14];
+    options.breath_exponent = parameters[15];
+    options.chink_noise = parameters[16];
+    options.re_critical = parameters[17];
+    options.areas = GlottalAreas {
+        voiced: parameters[18],
+        open: parameters[19],
+        breathy: parameters[20],
+    };
     let dt = parameters[7];
     let control = GlottalControl {
         f0: parameters[8],
@@ -91,7 +104,7 @@ pub fn run_glottis(seed: u32, parameters: &[f64], data: &mut [f64]) -> usize {
     periods
 }
 
-/// [`run_glottis`] over the `count` `f64` values at `data` with the 13
+/// [`run_glottis`] over the `count` `f64` values at `data` with the 21
 /// `f64` parameters at `parameters`. Returns the number of periods or a
 /// negative code of [`error`].
 #[no_mangle]
@@ -135,13 +148,13 @@ pub extern "C" fn vs_radiation_run(
 }
 
 /// Fixed `f64` parameters of [`vs_waveguide_run`] before the areas.
-pub const WAVEGUIDE_PARAMETERS: usize = 14;
+pub const WAVEGUIDE_PARAMETERS: usize = 16;
 
 /// Runs a waveguide over `data`, which holds the glottal flow derivative
 /// on entry and the radiated output on return. `parameters` are sections,
 /// noseSections, wallLoss, nasalLoss, glottalChink, vocalTractLength, the
 /// piriform index, area and sections, velumArea, velumIndex, wallMass,
-/// wallResistance and wallStiffness, then the
+/// wallResistance, wallStiffness, lossShape and radiationBaffle, then the
 /// `sections` oral areas and the nose profile (`setNose`; may be empty).
 /// Returns false if the parameters do not fit.
 pub fn run_waveguide(parameters: &[f64], data: &mut [f64]) -> bool {
@@ -174,6 +187,8 @@ pub fn run_waveguide(parameters: &[f64], data: &mut [f64]) -> bool {
             area: header[7],
             sections: header[8] as usize,
         },
+        loss_shape: header[14],
+        baffle: header[15],
     };
     let mut waveguide = Waveguide::new(&options);
     let (areas, nose) = parameters[WAVEGUIDE_PARAMETERS..].split_at(sections);
@@ -303,6 +318,14 @@ mod tests {
             0.0,
             0.0,
             1.0,
+            1.5,
+            3.87,
+            2.114,
+            0.5,
+            1800.0,
+            0.05,
+            0.25,
+            0.1,
         ];
         let mut data = [0.0; 4800];
         let periods = run_glottis(1, &parameters, &mut data);

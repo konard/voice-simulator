@@ -14,13 +14,17 @@ import { describe, expect } from 'test-anywhere';
 import { createRandom, hashSeed, randomNormal } from '../src/random.js';
 import {
   Aerodynamics,
+  GLOTTIS_BREATHY,
+  GLOTTIS_OPEN,
+  GLOTTIS_VOICED,
+  RE_CRITICAL,
   glottalArea,
   openTractStrength,
   reynolds,
   sourceStrength,
   steadyFlow,
 } from '../src/acoustics/aerodynamics.js';
-import { strouhalFrequency } from '../src/acoustics/voice.js';
+import { STROUHAL, strouhalFrequency } from '../src/acoustics/voice.js';
 import { createStreamResampler, resample } from '../src/audio/resample.js';
 import {
   float32View,
@@ -364,24 +368,38 @@ function airflowInputs(count) {
 describe('Rust engine parity: aerodynamics (issue 35)', () => {
   it('turbulence strengths are bit-identical (class A)', async () => {
     const { exports } = await loadRustEngine();
-    for (const [pressure, area, flow] of airflowInputs(5000)) {
+    // Every other row takes the head's own reCritical and strouhal (issue
+    // 41) inside their ranges; the others the defaults.
+    const random = createRandom('turbulence-head');
+    for (const [index, [pressure, area, flow]] of airflowInputs(
+      5000
+    ).entries()) {
+      const custom = index % 2 === 1;
+      const reCritical = custom ? 1700 + 600 * random() : RE_CRITICAL;
+      const strouhal = custom ? 0.15 + 0.15 * random() : STROUHAL;
       expect(exports.vs_aero_reynolds(flow, area)).toBe(reynolds(flow, area));
       expect(
         Object.is(
-          exports.vs_aero_source_strength(pressure, area, flow),
-          sourceStrength(pressure, area, flow)
+          exports.vs_aero_source_strength(pressure, area, flow, reCritical),
+          custom
+            ? sourceStrength(pressure, area, flow, reCritical)
+            : sourceStrength(pressure, area, flow)
         )
       ).toBe(true);
       expect(
         Object.is(
-          exports.vs_aero_open_tract_strength(pressure, area),
-          openTractStrength(pressure, area)
+          exports.vs_aero_open_tract_strength(pressure, area, reCritical),
+          custom
+            ? openTractStrength(pressure, area, reCritical)
+            : openTractStrength(pressure, area)
         )
       ).toBe(true);
       expect(
         Object.is(
-          exports.vs_aero_strouhal_frequency(flow, area),
-          strouhalFrequency(flow, area)
+          exports.vs_aero_strouhal_frequency(flow, area, strouhal),
+          custom
+            ? strouhalFrequency(flow, area, strouhal)
+            : strouhalFrequency(flow, area)
         )
       ).toBe(true);
     }
@@ -398,6 +416,15 @@ describe('Rust engine parity: aerodynamics (issue 35)', () => {
       };
       const breathiness = random();
       const chink = 20 * random() - 1;
+      // Odd rows take a head's own glottal areas (issue 41).
+      const areas =
+        index % 2 === 1
+          ? {
+              glottisVoiced: 0.03 + 0.07 * random(),
+              glottisOpen: 0.15 + 0.25 * random(),
+              glottisBreathy: 0.05 + 0.15 * random(),
+            }
+          : {};
       expect(
         Object.is(
           exports.vs_aero_glottal_area(
@@ -405,9 +432,12 @@ describe('Rust engine parity: aerodynamics (issue 35)', () => {
             control.aspiration,
             control.closure,
             breathiness,
-            chink
+            chink,
+            areas.glottisVoiced ?? GLOTTIS_VOICED,
+            areas.glottisOpen ?? GLOTTIS_OPEN,
+            areas.glottisBreathy ?? GLOTTIS_BREATHY
           ),
-          glottalArea(control, breathiness, chink)
+          glottalArea(control, breathiness, chink, areas)
         )
       ).toBe(true);
     }

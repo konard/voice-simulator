@@ -157,12 +157,19 @@ export function restArea(adduction) {
  * @param {number} subglottalArea A_s (cm², Infinity for none).
  * @param {number} supraglottalArea A_e (cm², Infinity for none).
  * @param {number} drive D (dyn/cm²).
+ * @param {number} [k] k_t (head.glottalPressureCoefficient,
+ *   GLOTTAL_PRESSURE_COEFFICIENT by default).
  */
-export function interactiveFlow(a, subglottalArea, supraglottalArea, drive) {
+export function interactiveFlow(
+  a,
+  subglottalArea,
+  supraglottalArea,
+  drive,
+  k = GLOTTAL_PRESSURE_COEFFICIENT
+) {
   if (!(a > 0) || drive === 0) {
     return 0;
   }
-  const k = GLOTTAL_PRESSURE_COEFFICIENT;
   const ratio = a * (1 / subglottalArea + 1 / supraglottalArea);
   const term = (4 * k * Math.abs(drive)) / (AIR_DENSITY * SPEED_OF_SOUND ** 2);
   // -r + sqrt(r² + t) = t / (r + sqrt(r² + t))
@@ -215,12 +222,17 @@ function clampTension(value) {
 
 export class VocalFolds {
   /**
-   * @param {{breathiness?: number, aspirationLevel?: number, foldLength?: number, foldMass?: number, foldStiffness?: number, foldDamping?: number, rate?: number}} [options]
+   * @param {{breathiness?: number, aspirationLevel?: number, foldLength?: number, foldMass?: number, foldStiffness?: number, foldDamping?: number, glottalPressureCoefficient?: number, breathGain?: number, breathExponent?: number, reCritical?: number, rate?: number}} [options]
    *   Head values; `rate` overrides FOLD_RATE (for tests of the step size).
    */
   constructor(options = {}) {
     this.breathiness = options.breathiness ?? 0.2;
-    this.breathGain = BREATH_GAIN * this.breathiness ** BREATH_EXPONENT;
+    this.breathGain =
+      (options.breathGain ?? BREATH_GAIN) *
+      this.breathiness ** (options.breathExponent ?? BREATH_EXPONENT);
+    this.pressureCoefficient =
+      options.glottalPressureCoefficient ?? GLOTTAL_PRESSURE_COEFFICIENT;
+    this.reCritical = options.reCritical;
     this.aspirationLevel = options.aspirationLevel ?? 1;
     this.length = options.foldLength ?? FOLD_LENGTH;
     this.massFactor = options.foldMass ?? 1;
@@ -432,7 +444,8 @@ export class VocalFolds {
         minimum,
         subglottalArea,
         supraglottalArea,
-        transglottal
+        transglottal,
+        this.pressureCoefficient
       );
       const pressureBelow = belowBase - belowLoad * u;
       const pressureAbove = aboveBase + aboveLoad * u;
@@ -467,7 +480,8 @@ export class VocalFolds {
       area,
       subglottalArea,
       supraglottalArea,
-      transglottal
+      transglottal,
+      this.pressureCoefficient
     );
     const previous = this.started ? this.u : flow;
     this.#updateMeanArea(
@@ -496,7 +510,8 @@ export class VocalFolds {
     const modulation = Math.min(1, area / NOISE_AREA);
     this.noiseModulation = modulation;
     const strength =
-      control.aspirationStrength ?? openTractStrength(pressure, this.meanArea);
+      control.aspirationStrength ??
+      openTractStrength(pressure, this.meanArea, this.reCritical);
     const breath =
       (control.aspiration + this.breathGain * voicing) * (1 - closure);
     return noise * breath * modulation * strength * 0.45 * this.aspirationLevel;

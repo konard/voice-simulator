@@ -48,7 +48,23 @@ function measure(head, vowel) {
 
 describe('head presets', () => {
   it('lists male, female and child next to the unrestricted range', () => {
-    expect(HEAD_PRESET_NAMES).toEqual(['any', 'male', 'female', 'child']);
+    expect(HEAD_PRESET_NAMES).toEqual([
+      'any',
+      'male',
+      'female',
+      'child',
+      'child5',
+      'teenMale',
+      'teenFemale',
+      'elderlyMale',
+      'elderlyFemale',
+      'bass',
+      'baritone',
+      'tenor',
+      'alto',
+      'mezzo',
+      'soprano',
+    ]);
     for (const name of Object.keys(HEAD_PRESETS)) {
       for (const key of Object.keys(HEAD_PRESETS[name].ranges)) {
         expect(HEAD_PARAMETERS.some((entry) => entry.key === key)).toBe(true);
@@ -175,6 +191,104 @@ describe('head presets', () => {
     expect(() =>
       synthesisOptions({ text: 'a', head: 'random', preset: 'robot' })
     ).toThrow();
+  });
+});
+
+/** Equal to within 1e-6 (test-anywhere has no toBeCloseTo). */
+function near(actual, expected) {
+  expect(Math.abs(actual - expected)).toBeLessThan(1e-6);
+}
+
+describe('voice type presets', () => {
+  it('orders the voice types', () => {
+    // Issue 41: tract lengths of Fitch and Giedd (1999) and Lee, Potamianos
+    // and Narayanan (1999); singers' fold lengths and f0 of Titze (1989) and
+    // Roers, Mürbe and Sundberg (2009); the aged voice of Linville (2001).
+    const head = (name) => presetHeadConfig(name);
+    const order = (names, key) => {
+      for (let index = 1; index < names.length; index++) {
+        expect(head(names[index - 1])[key]).toBeGreaterThan(
+          head(names[index])[key]
+        );
+      }
+    };
+    for (const names of [
+      ['bass', 'baritone', 'tenor'],
+      ['alto', 'mezzo', 'soprano'],
+      ['bass', 'tenor', 'alto', 'soprano', 'child5'],
+      ['male', 'teenMale', 'teenFemale', 'child5'],
+    ]) {
+      order(names, 'vocalTractLength');
+      order(names, 'foldLength');
+      order([...names].reverse(), 'pitch');
+    }
+    const expected = {
+      child5: [11.5, 260],
+      teenMale: [15.8, 130],
+      teenFemale: [14.2, 220],
+      elderlyMale: [17.2, 125],
+      elderlyFemale: [14.8, 175],
+      bass: [18.5, 95],
+      baritone: [17.5, 110],
+      tenor: [16.5, 135],
+      alto: [15.3, 185],
+      mezzo: [14.8, 210],
+      soprano: [14.2, 240],
+    };
+    for (const [name, [length, pitch]] of Object.entries(expected)) {
+      near(head(name).vocalTractLength, length);
+      expect(Math.abs(head(name).pitch / pitch - 1)).toBeLessThan(1e-3);
+      const base = /^(child|bass|baritone|tenor|teenMale|elderlyMale)/.test(
+        name
+      )
+        ? name === 'child5'
+          ? 'child'
+          : 'male'
+        : 'female';
+      expect(HEAD_PRESETS[name].base).toBe(base);
+    }
+    for (const [aged, base] of [
+      ['elderlyMale', 'male'],
+      ['elderlyFemale', 'female'],
+    ]) {
+      expect(HEAD_PRESETS[aged].base).toBe(base);
+      near(head(aged).jitter, head(base).jitter * 1.5);
+      near(head(aged).shimmer, head(base).shimmer * 1.5);
+      // The ranges: the head values are rounded to 0.01 steps.
+      const range = (name) => HEAD_PRESETS[name].ranges.breathiness;
+      near(range(aged)[0], range(base)[0] + 0.1);
+      near(range(aged)[1], range(base)[1] + 0.1);
+      near(head(aged).speechRate, 0.9);
+    }
+    // Rendered [a]: pitch and formants fall from soprano to bass, and the
+    // five-year-old has the highest F1 to F3 of all presets
+    // (experiments/issue-41-voice-types.txt). F1 of [a] falls over the whole
+    // series; between soprano and mezzo LPC near f0 = 240 Hz swaps it.
+    const voices = Object.fromEntries(
+      Object.keys(HEAD_PRESETS).map((name) => [name, measure(head(name), 'a')])
+    );
+    const singers = ['soprano', 'mezzo', 'alto', 'tenor', 'baritone', 'bass'];
+    const sum = (voice) => voice.formants.reduce((a, b) => a + b, 0);
+    for (let index = 1; index < singers.length; index++) {
+      const higher = voices[singers[index - 1]];
+      const lower = voices[singers[index]];
+      expect(lower.f0).toBeLessThan(higher.f0);
+      expect(lower.formants[1]).toBeLessThan(higher.formants[1]);
+      expect(lower.formants[2]).toBeLessThan(higher.formants[2]);
+      expect(sum(lower)).toBeLessThan(sum(higher));
+    }
+    expect(voices.bass.formants[0]).toBeLessThan(voices.tenor.formants[0]);
+    expect(voices.tenor.formants[0]).toBeLessThan(voices.soprano.formants[0]);
+    expect(Math.abs(voices.bass.f0 / 95 - 1)).toBeLessThan(0.1);
+    for (const [name, voice] of Object.entries(voices)) {
+      if (name !== 'child5') {
+        for (const index of [0, 1, 2]) {
+          expect(voice.formants[index]).toBeLessThan(
+            voices.child5.formants[index]
+          );
+        }
+      }
+    }
   });
 });
 

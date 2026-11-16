@@ -22,6 +22,7 @@ import { VoiceMatch } from './components/VoiceMatch.js';
 import { SpokenText } from './components/SpokenText.js';
 import { useSimulator } from './engine/use-simulator.js';
 import { detectLocale, strings } from './i18n.js';
+import { download } from './download.js';
 import { versionLinks } from './versions.js';
 import previousVersions from '../previous-versions.json';
 
@@ -65,15 +66,6 @@ function useTheme() {
   const next = () =>
     setTheme(THEMES[(THEMES.indexOf(theme) + 1) % THEMES.length]);
   return [theme, next];
-}
-
-function download(blob, name) {
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement('a');
-  link.href = url;
-  link.download = name;
-  link.click();
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
 function transcribe(text, lang, accent) {
@@ -444,9 +436,11 @@ function EditorPanel({
     ),
     h(HeadEditor, {
       head,
+      preset,
       locale,
       t,
       onChange: (key, value) => onHead({ ...head, [key]: value }),
+      onHead,
     })
   );
 }
