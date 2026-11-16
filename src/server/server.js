@@ -13,12 +13,16 @@
  *   GET|POST /api/stream          -> WAV, AU or raw streamed while simulated
  *
  * Synthesis parameters come from the query string or a JSON body:
- * text, lang, accent (en-US, en-GB, en-AU, en-IN), ipa (boolean), seed,
+ * text, lang, accent (en-US, en-GB, en-AU, en-IN), ipa (boolean), markup
+ * (boolean: true reads inline tags, false none; SSML that starts with
+ * `<speak` is read unless it is false; see docs/markup.md), seed,
  * head (object or "random"), preset, tier, solver, sampleRate, micDistance
  * (cm), micAzimuth and micElevation (degrees), micCompensate (boolean) and
  * room (a preset name, or a {width, height, depth, rt60} object in a JSON
  * body), and the encoding: format (wav | flac | aiff | au | raw), bitDepth,
- * float (boolean). sampleRate is one of 8000, 11025, 16000, 22050, 24000,
+ * float (boolean). The text that is read may hold 2000 characters, a
+ * marked-up input 8000; markup that cannot be read is a 400 error.
+ * sampleRate is one of 8000, 11025, 16000, 22050, 24000,
  * 32000, 44100, 48000; without it the narrow-band tiers (telephone,
  * narrowband, wideband) render at their own rate and the others at 24000.
  */
@@ -31,6 +35,7 @@ import {
   audioStreamEncoder,
 } from '../audio/formats.js';
 import { LANGUAGES, textToIpa } from '../g2p/index.js';
+import { MarkupError, isSsml, parseMarkup } from '../markup/index.js';
 import { headModelObj } from '../geometry/model.js';
 import { visemeTrack } from '../animation/visemes.js';
 import {
@@ -109,6 +114,44 @@ function parseHead(value, seed, preset) {
   return value ?? DEFAULT_HEAD;
 }
 
+/** The `markup` parameter: true, false or undefined (SSML only). */
+function markupParam(value) {
+  if (value === true || value === 'true') {
+    return true;
+  }
+  return value === false || value === 'false' ? false : undefined;
+}
+
+/**
+ * The text limits: `MAX_TEXT` characters of the text that is read and
+ * `4 * MAX_TEXT` of the marked-up input; markup that cannot be read is a
+ * 400 error.
+ */
+function checkTextLength(text, markup) {
+  const marked = markup === true || (markup !== false && isSsml(text));
+  if (!marked) {
+    if (text.length > MAX_TEXT) {
+      throw new HttpError(413, `Text longer than ${MAX_TEXT} characters`);
+    }
+    return;
+  }
+  if (text.length > 4 * MAX_TEXT) {
+    throw new HttpError(
+      413,
+      `Marked-up text longer than ${4 * MAX_TEXT} characters`
+    );
+  }
+  let parsed;
+  try {
+    parsed = parseMarkup(text, { markup });
+  } catch (error) {
+    throw new HttpError(400, error.message);
+  }
+  if (parsed.text.trim().length > MAX_TEXT) {
+    throw new HttpError(413, `Text longer than ${MAX_TEXT} characters`);
+  }
+}
+
 /**
  * Validate synthesis parameters from a query or JSON body.
  * @param {Record<string, unknown>} params
@@ -118,9 +161,9 @@ export function synthesisOptions(params) {
   if (!text) {
     throw new HttpError(400, 'Missing "text"');
   }
-  if (text.length > MAX_TEXT) {
-    throw new HttpError(413, `Text longer than ${MAX_TEXT} characters`);
-  }
+  const ipa = params.ipa === true || params.ipa === 'true';
+  const markup = ipa ? false : markupParam(params.markup);
+  checkTextLength(text, markup);
   const tier = params.tier ?? DEFAULT_AUDIO_TIER;
   const entry = AUDIO_TIERS.find((candidate) => candidate.name === tier);
   if (!entry) {
@@ -141,7 +184,8 @@ export function synthesisOptions(params) {
     options: {
       lang: params.lang ?? 'auto',
       accent: params.accent,
-      ipa: params.ipa === true || params.ipa === 'true',
+      ipa,
+      markup,
       seed,
       head: parseHead(params.head, seed, parsePreset(params.preset)),
       tier,
@@ -243,12 +287,27 @@ function createRoutes(version) {
     }),
     'GET /api/ipa': (params) => {
       const { text, options } = synthesisOptions(params);
-      return textToIpa(text, { lang: options.lang, accent: options.accent });
+      return textToIpa(text, {
+        lang: options.lang,
+        accent: options.accent,
+        markup: options.markup,
+      });
     },
     'GET /api/timeline': (params) => {
       const { text, options } = synthesisOptions(params);
-      const { lang, accent, ipa, timeline } = prepareUtterance(text, options);
-      return { lang, accent: accent ?? null, ipa, timeline };
+      const { lang, accent, ipa, timeline, plan, warnings } = prepareUtterance(
+        text,
+        options
+      );
+      return {
+        lang,
+        accent: accent ?? null,
+        ipa,
+        modes: plan.modes,
+        sounds: plan.sounds,
+        warnings,
+        timeline,
+      };
     },
     'GET /api/visemes': (params) => {
       const { text, options } = synthesisOptions(params);
@@ -339,7 +398,8 @@ export function createVoiceServer(options = {}) {
         response.destroy(error);
         return;
       }
-      sendJson(response, error.status ?? 500, { error: error.message });
+      const status = error.status ?? (error instanceof MarkupError ? 400 : 500);
+      sendJson(response, status, { error: error.message });
     }
   });
 }
