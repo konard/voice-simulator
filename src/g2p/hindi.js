@@ -120,10 +120,15 @@ function addVowelMark(units, mark, final) {
   }
 }
 
-/** Transliterate into consonant / vowel units with inherent schwas. */
+/**
+ * Transliterate into consonant / vowel units with inherent schwas. The
+ * conjunct ज्ञ is said ɡj in Hindi (ज्ञान ɡjaːn), not d͡ʒɲ as spelled.
+ */
 function toUnits(word) {
   const units = [];
-  const chars = [...word.normalize('NFD')];
+  const chars = [
+    ...word.normalize('NFC').replaceAll('ज्ञ', 'ग्य').normalize('NFD'),
+  ];
   chars.forEach((char, index) => {
     const last = units.at(-1);
     if (CONSONANTS[char]) {
@@ -153,7 +158,10 @@ function resolveAnusvara(units) {
     }
     const next = units[index + 1];
     const previous = units[index - 1];
-    if (next?.type === 'consonant' && !/^[jɾlʋʃsɦ]/.test(next.ipa)) {
+    // Before a stop the anusvara is a nasal of its place; before a
+    // semivowel, a sibilant, h or a nasal (मैंने mɛ̃ːneː) it nasalises
+    // the vowel.
+    if (next?.type === 'consonant' && !/^[jɾlʋʃsɦmnɳ]/.test(next.ipa)) {
       if (previous?.inherent) {
         previous.inherent = false;
       }
