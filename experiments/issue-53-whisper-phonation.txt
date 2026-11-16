@@ -1,0 +1,7 @@
+[whisper]              voiced 0.000 level -25.8 dB re plain
+[whisper][breathy]     voiced 0.000 level -25.8 dB re plain
+[whisper][creaky]      voiced 0.000 level -25.8 dB re plain
+[whisper][falsetto]    voiced 0.000 level -25.8 dB re plain
+[whisper][harsh]       voiced 0.000 level -25.8 dB re plain
+[whisper][pressed]     voiced 0.000 level -25.8 dB re plain
+[whisper][lax]         voiced 0.000 level -25.8 dB re plain

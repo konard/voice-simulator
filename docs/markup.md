@@ -557,6 +557,10 @@ More, from the same commands:
   0.91);
 - `voice-simulator say --markup "[whisper]Hello.[/whisper]" --out w.wav`
   (the default tier) has a voiced share of 0.000.
+- `node experiments/issue-53-whisper-phonation.mjs`: a phonation type
+  inside a whisper (`[whisper][creaky]…`, breathy, falsetto, harsh,
+  pressed, lax) changes nothing, as the folds do not vibrate: voiced 0 and
+  -25.8 dB in every case.
 
 Plain text renders the same samples as before the whisper
 (`node experiments/issue-53-plain-identity.mjs <checkout of main>`,

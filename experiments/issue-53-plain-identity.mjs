@@ -20,6 +20,15 @@ const cases = [
   ['Please call Stella.', { tier: 'medium', source: 'folds' }],
   ['Hello world.', { tier: 'medium', markup: true }],
   ['[soft]Hello[/soft] [loud]world[/loud].', { tier: 'medium', markup: true }],
+  [
+    '[breathy]Hello[/breathy] [creaky]world[/creaky].',
+    { tier: 'medium', markup: true },
+  ],
+  [
+    '[falsetto]Hi[/falsetto] [harsh]there[/harsh], [pressed]you[/pressed].',
+    { tier: 'medium', markup: true },
+  ],
+  ['ˈma̤ma ˈma̰ma', { tier: 'medium', ipa: true }],
   ['ˈapa ˈaza ˈhi', { tier: 'medium', ipa: true }],
   ['Привет, мир.', { tier: 'low', lang: 'ru' }],
   ['你好。', { tier: 'low', lang: 'zh' }],
