@@ -36,10 +36,10 @@ export const RATE_STRETCH = 1.2;
  */
 export const RATE_PAUSE = 1.5;
 /**
- * Default factor of the neutral tone on the whole vowel (issue 49): a
- * syllable without tone and without stress mark in tonal text is about
- * half as long as a full-tone one (Lin and Yan 1980). The zh table uses
- * its own 0.55 from issue 39.
+ * Default factor of the neutral tone on the whole vowel: a syllable
+ * without tone and without stress mark in tonal text is about half as
+ * long as a full-tone one (Lin and Yan 1980). The zh table sets its own
+ * factor, 0.55 (after Xu 1997 and Lin and Yan 1980).
  */
 export const NEUTRAL_DURATION = 0.6;
 
