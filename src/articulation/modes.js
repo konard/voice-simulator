@@ -18,8 +18,9 @@
  *   vowel of a span, and lengthens vowels;
  *   the planner and the source turn it into level, pitch, tilt, F1 and
  *   noise (src/articulation/effort.js);
- * - a timed pause lasts exactly its `seconds`; a sound is silence of its
- *   length (`SOUND_DURATION`, 0.3 s, unless one is written).
+ * - a timed pause lasts exactly its `seconds`; a sound lasts its
+ *   `duration` or the length of its recipe (`SOUNDS`, ./sounds.js) divided
+ *   by the rate, and obeys the mode like speech (issue 56).
  *
  * `phonation` (with `whisper`) is realised by src/articulation/phonation.js
  * and src/articulation/whisper.js, and `emotion` by
@@ -27,28 +28,39 @@
  * span before this file reads them.
  */
 
-import {
-  MODE_DEFAULTS,
-  SOUND_DURATION,
-  createMode,
-  modeKey,
-} from '../markup/modes.js';
+import { MODE_DEFAULTS, createMode, modeKey } from '../markup/modes.js';
 import { EFFORT_RULES, spanEffort } from './effort.js';
+import { soundLength } from './sounds.js';
+
+export { planSounds } from './sounds.js';
 
 /**
  * Set `token.mode` on every token from spans in IPA word indexes: a
- * phone takes the span of its word, a pause or a sound the mode of the
- * token before it (a pause belongs to the span before it).
+ * phone takes the span of its word, a pause the mode of the token before
+ * it (a pause belongs to the span before it) and the k-th sound the mode
+ * of the entry `{sound: k, mode}` (the default mode without one).
  * @param {object[]} tokens
- * @param {{from: number, to: number, mode: object}[]} spans
+ * @param {({from: number, to: number, mode: object}|{sound: number, mode: object})[]} spans
  */
 export function assignTokenModes(tokens, spans = []) {
-  const full = spans.map((span) => ({ ...span, mode: createMode(span.mode) }));
+  const full = spans
+    .filter((span) => span.sound === undefined)
+    .map((span) => ({ ...span, mode: createMode(span.mode) }));
+  const sounds = new Map(
+    spans
+      .filter((span) => span.sound !== undefined)
+      .map((span) => [span.sound, createMode(span.mode)])
+  );
   let previous = MODE_DEFAULTS;
   let span = null;
+  let sound = 0;
   for (const token of tokens) {
     const word = token.word ?? -1;
-    if (token.kind === 'pause' || token.kind === 'sound' || word < 0) {
+    if (token.kind === 'sound') {
+      token.mode = sounds.get(sound++) ?? MODE_DEFAULTS;
+      continue;
+    }
+    if (token.kind === 'pause' || word < 0) {
       token.mode = previous;
       continue;
     }
@@ -64,7 +76,7 @@ export function assignTokenModes(tokens, spans = []) {
 /** The length of a timed pause or a sound token, or null. */
 export function timedLength(token) {
   if (token?.kind === 'sound') {
-    return token.duration ?? SOUND_DURATION;
+    return soundLength(token);
   }
   return token?.kind === 'pause' && token.seconds !== undefined
     ? token.seconds
@@ -113,13 +125,6 @@ export function planModes(segments) {
     end,
     ...createMode(spanMode),
   }));
-}
-
-/** The sounds of a plan: `{name, start, end}` in seconds. */
-export function planSounds(segments) {
-  return segments
-    .filter((segment) => segment.sound)
-    .map(({ sound, start, end }) => ({ name: sound, start, end }));
 }
 
 /**

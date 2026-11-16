@@ -30,6 +30,7 @@ const GLIDES = new Set(['j', 'w', 'ɥ', 'ɰ', 'ʋ']);
 
 const MANNER_SONORITY = {
   plosive: 1,
+  click: 1,
   fricative: 2,
   'lateral-fricative': 2,
   nasal: 3,

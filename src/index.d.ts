@@ -159,12 +159,13 @@ export interface Mode {
   lang: string | null;
 }
 
-/** A mode over IPA words `from` … `to` (exclusive). */
-export interface ModeSpan {
-  from: number;
-  to: number;
-  mode: Mode;
-}
+/**
+ * A mode over IPA words `from` … `to` (exclusive), or over the sound
+ * `sound` (its index among the `⸨…⸩` of the IPA).
+ */
+export type ModeSpan =
+  | { from: number; to: number; mode: Mode }
+  | { sound: number; mode: Mode };
 
 /** A mode of a plan from `start` to `end` seconds. */
 export type PlanMode = Mode & { start: number; end: number };
@@ -220,6 +221,62 @@ export declare const SOUND_NAMES: readonly string[];
 /** Tune labels of the markup (issue 51): `{IK4 … IK4}`, `[tune IK4]`, `<vs:tune name="IK4">`. */
 export declare const TUNE_LABELS: readonly string[];
 export declare const SOUND_DURATION: number;
+
+// Paralinguistic sounds (issue 56)
+/** A part of a sound recipe. */
+export interface SoundPart {
+  /** IPA phone that gives the tract shape. */
+  phone: string;
+  seconds: number;
+  /** Glottal noise instead of voice. */
+  noise?: boolean;
+  /** Level in dB re a vowel at the start and the end of the part. */
+  level?: [number, number];
+  /** Pitch in semitones re the voice (or the syllable before). */
+  pitch?: [number, number];
+  phonation?: Partial<Phonation>;
+}
+export interface SoundRecipe {
+  /** Default length in seconds. */
+  seconds: number;
+  description: string;
+  /** Calls of a laugh or a cough: `duration` sets their number. */
+  calls?: { seconds: number; count: number; min: number; max: number };
+  /** `'before'`: the pitch is re the syllable before. */
+  reference?: 'voice' | 'before';
+  parts(context: { calls?: number; language?: string | null }): SoundPart[];
+}
+/** The recipes of the sounds (docs/markup.md). */
+export declare const SOUNDS: Readonly<Record<string, SoundRecipe>>;
+/** IPA of `filler` and `um` per language. */
+export declare const FILLERS: Readonly<
+  Record<'filler' | 'um', Readonly<Record<'en' | 'ru' | 'hi' | 'zh', string>>>
+>;
+/** Constants of the `breaths` option. */
+export declare const BREATHS: Readonly<{
+  minPause: number;
+  base: number;
+  perSyllable: number;
+  max: number;
+  gap: number;
+  before: number;
+}>;
+export declare function isSound(name: string): boolean;
+/** Calls of a laugh or cough of `seconds`: round(seconds / 0.2…), 1 to 12. */
+export declare function soundCalls(
+  name: string,
+  seconds?: number | null
+): number | null;
+/** Seconds of a sound token at rate 1. */
+export declare function soundSeconds(token: {
+  name: string;
+  duration?: number;
+}): number;
+/** Plan segments of a sound token. */
+export declare function soundSegments(
+  token: { name: string; duration?: number; mode?: object },
+  context?: { seconds?: number; language?: string | null }
+): object[];
 export declare const EMOTIONS: Readonly<
   Record<string, readonly [number, number, number]>
 >;
@@ -267,6 +324,8 @@ export interface TimelineSyllable {
 
 export interface TimelineWord {
   text: string;
+  /** The sound a written filler or laughter is read as (`um`, `laugh`). */
+  sound?: string;
   /** Spoken words joined by a space, when the word is not read as written. */
   spoken?: string;
   lang: string;
@@ -281,7 +340,10 @@ export interface TimelineWord {
 
 export interface Timeline {
   duration: number;
+  /** Words; a written filler or laughter (`um`, `hahaha`) is a word with `sound`. */
   words: TimelineWord[];
+  /** Sounds of the utterance (markup, written and breaths); not words. */
+  sounds: PlanSound[];
 }
 
 export interface Plan {
@@ -298,7 +360,10 @@ export interface Plan {
   channels: Record<string, Float32Array>;
   /** Mode spans in seconds: sorted, not overlapping, covering the plan. */
   modes: PlanMode[];
-  /** Sounds of the markup (`⸨laugh⸩`, `[laugh]`). */
+  /**
+   * Sounds (`⸨laugh⸩`, `[laugh]`, `hahaha`, `um` and the breaths of the
+   * `breaths` option), in seconds.
+   */
   sounds: PlanSound[];
 }
 
@@ -402,6 +467,13 @@ export interface SynthesizeOptions {
    * SSML unless `markup` is false; `true` also reads inline tags.
    */
   markup?: boolean;
+  /**
+   * Breathe in between sentences (default false): an inhale in every pause
+   * of 0.3 s or more after `. ? ! ‖` (not at the start),
+   * `min(0.7, 0.3 + 0.03 n)` seconds before n syllables, ending 0.05 s
+   * before the next word.
+   */
+  breaths?: boolean;
   head?: HeadConfig | 'random';
   seed?: string | number;
   /** Speaker group for `head: 'random'`. */

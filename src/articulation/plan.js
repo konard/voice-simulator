@@ -39,9 +39,18 @@ import {
   assignTokenModes,
   fillEffort,
   planModes,
-  planSounds,
   timedLength,
 } from './modes.js';
+import {
+  applySoundLevels,
+  applySoundHarmonics,
+  applySoundPitch,
+  clickSegments,
+  expandSounds,
+  insertBreaths,
+  planSounds,
+  speechSegments,
+} from './sounds.js';
 import { approachTargets as approachToneTargets } from './tone-model.js';
 import {
   applyWhisperDurations,
@@ -197,6 +206,7 @@ const CONSONANT_SHAPE = new Set([
 /** Manners that close the velum: the pressure behind them needs it. */
 const OBSTRUENTS = new Set([
   'plosive',
+  'click',
   'fricative',
   'lateral-fricative',
   'trill',
@@ -351,7 +361,7 @@ function pushPause(segments, token, context) {
     context.duration.speechRate
   );
   const previous = segments.at(-1);
-  if (!previous || previous.kind === 'pause') {
+  if (!previous || (previous.kind === 'pause' && !previous.sound)) {
     if (previous) {
       if (!previous.timed) {
         previous.duration = Math.max(previous.duration, duration);
@@ -377,10 +387,12 @@ function pushPause(segments, token, context) {
  * src/articulation/durations.js with the table of `language` (or
  * `durationTable`).
  * @param {object[]} tokens
- * @param {{rate: number, language?: string, tunes?: string|null, stressLengthening?: number, finalLengthening?: number, pauseLength?: number, durationTable?: object, head?: object}} options
+ * @param {{rate: number, language?: string, tunes?: string|null, stressLengthening?: number, finalLengthening?: number, pauseLength?: number, durationTable?: object, head?: object, breaths?: boolean}} options
  *   `head` gives the rate exponents and the strengths of the rules;
  *   `tunes` the intonation language (focus and tune tempo, intonation.js),
- *   else `language`.
+ *   else `language`; `breaths` puts an inhale between sentences
+ *   (`insertBreaths()`). A sound is timed as a silence of its length and
+ *   then replaced by its segments (`expandSounds()`, ./sounds.js).
  */
 export function buildSegments(tokens, options) {
   const context = {
@@ -395,7 +407,7 @@ export function buildSegments(tokens, options) {
     },
     pauseLength: options.pauseLength ?? 1,
   };
-  const segments = [
+  let segments = [
     {
       kind: 'pause',
       strength: 3,
@@ -408,6 +420,8 @@ export function buildSegments(tokens, options) {
       pushPause(segments, token, context);
     } else if (token.kind === 'vowel') {
       pushVowel(segments, token, index, context);
+    } else if (token.phoneme?.manner === 'click') {
+      segments.push(...clickSegments(token));
     } else if (token.phoneme) {
       pushConsonant(segments, token, index, context);
     }
@@ -417,6 +431,10 @@ export function buildSegments(tokens, options) {
   applyEffortDurations(segments);
   applyEmotionSegments(segments);
   applyWhisperDurations(segments);
+  if (options.breaths) {
+    segments = insertBreaths(segments);
+  }
+  segments = expandSounds(segments, { language: options.language });
   whisperVoiceless(segments);
   if (segments.at(-1).kind === 'pause' && !segments.at(-1).sound) {
     segments.at(-1).strength = 3;
@@ -572,6 +590,10 @@ function roundingTarget(segment) {
  * other sounds leave it free.
  */
 function velumTarget(segment) {
+  if (segment.soundOf) {
+    // A sound holds its velum: a laugh before `n` is not nasal.
+    return { value: segment.target.velum ?? 0, strength: 1 };
+  }
   if (segment.kind === 'vowel') {
     const value = segment.target.velum ?? 0;
     return { value, strength: value > 0 ? 1 : 0 };
@@ -609,11 +631,15 @@ function rhoticTarget(segment) {
   return { value, strength: value > 0 ? 1 : 0 };
 }
 
-/** Lip and tongue-tip shape: own in consonants, free elsewhere. */
+/**
+ * Lip and tongue-tip shape: own in consonants and in the noise parts of a
+ * sound (src/articulation/sounds.js, issue 56: the place of `h`, so that
+ * the noise does not depend on the consonant before), free elsewhere.
+ */
 function shapeTarget(segments, index, name) {
   const segment = segments[index];
   const source =
-    segment.kind === 'consonant'
+    segment.kind === 'consonant' || segment.noise
       ? segment
       : segment.kind === 'release'
         ? closureOf(segments, index)
@@ -1025,12 +1051,15 @@ function segmentPhonation(segment, head) {
     return breathyReleaseChannels(head);
   }
   const { token } = segment;
+  // A sound part has a phonation of its own (./sounds.js).
+  const mode = segment.phonation
+    ? {
+        ...token.mode,
+        phonation: { ...token.mode?.phonation, ...segment.phonation },
+      }
+    : token.mode;
   // A breathy stop is breathy in its release, not in its closure.
-  return phonationChannels(
-    token.mode,
-    isBreathyStop(token) ? null : token,
-    head
-  );
+  return phonationChannels(mode, isBreathyStop(token) ? null : token, head);
 }
 
 /**
@@ -1297,6 +1326,7 @@ export function planUtterance(ipa, options = {}) {
     durationTable: table,
     head,
     tunes,
+    breaths: options.breaths,
   });
   if (options.durations) {
     applyDurations(segments, tokens, options.durations);
@@ -1304,11 +1334,13 @@ export function planUtterance(ipa, options = {}) {
   const duration = segments.at(-1).end;
   const frameCount = Math.ceil(duration * frameRate) + 1;
   const modes = planModes(segments);
+  // The prosody sees each sound as the silence it replaces (./sounds.js).
+  const speech = speechSegments(segments);
   const effort = fillEffort(
     new Float32Array(frameCount),
     modes,
     frameRate,
-    segments
+    speech
   );
   markSegmentEffort(segments, effort, frameRate);
   const channels = {};
@@ -1333,7 +1365,8 @@ export function planUtterance(ipa, options = {}) {
     channels[name] = new Float32Array(frameCount);
   }
   fillDefaults(channels, segments, frameRate);
-  applyRegisterGain(channels.loudness, segments, frameRate, tunes);
+  applySoundLevels(channels.loudness, segments, frameRate);
+  applyRegisterGain(channels.loudness, speech, frameRate, tunes);
   applyModeGains(channels.loudness, modes, frameRate);
   channels.effort.set(effort);
   const whisper = fillWhisper(channels.whisper, segments, frameRate);
@@ -1343,13 +1376,15 @@ export function planUtterance(ipa, options = {}) {
   const phonationTension = fillPhonation(channels, segments, head, frameRate);
   const pitchShape = fillPitch(
     channels.f0,
-    segments,
+    speech,
     head,
     frameRate,
     channels.height,
     { language: tunes, effort, whisper }
   );
   addEmotionPitch(channels.f0, segments, frameRate, head, pitchShape.shape);
+  applySoundPitch(channels.f0, segments, head, frameRate, effort);
+  applySoundHarmonics(channels, segments, head, frameRate);
   lowerBreathyReleases(channels.f0, segments, frameRate);
   const steps = {
     loudness: channels.loudness,
@@ -1362,7 +1397,7 @@ export function planUtterance(ipa, options = {}) {
   }
   fillDefaults(steps, segments, frameRate, GLOTTAL_CHANNELS);
   fillFoldDrive(channels, steps, head);
-  smoothSource(channels, pitchShape, segments, head, frameRate);
+  smoothSource(channels, pitchShape, speech, head, frameRate);
   addLarynxPitch(channels.larynxHeight, channels.f0, head);
   fillFoldTension(channels, head);
   const ordered = Object.fromEntries(

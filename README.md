@@ -39,7 +39,7 @@ a pressure wave travelling through the 3D shape of a parametric low-poly head
   `[whisper]Hello[/whisper]` or `[pause 0.5]` with `markup: true`, and
   ExtIPA/VoQS marks in IPA (`{W həˈloʊ W} ˈwɝld .`, `(.)`, `⸨laugh⸩`, `ˈˈ`).
   Rate, pitch, range, level, effort, phonation types, whisper, emotions,
-  emphasis, tunes and pauses are heard; sounds wait for issue 56 ([docs/markup.md](docs/markup.md)).
+  emphasis, tunes, pauses and sounds are heard ([docs/markup.md](docs/markup.md)). **Paralinguistic sounds** (issue 56): `[laugh]`, `[inhale]`, `[exhale]`, `[sigh]`, `[cough]`, `[throat]`, `[filler]`, `[um]` and `[click]` (also `<vs:sound name="laugh" duration="1.2s"/>`, `⸨laugh:1.2⸩`, `ǀ ǃ ǁ ʘ`) are made by the glottis and the tract from rules (`SOUNDS`, `FILLERS`), with no recordings; written fillers and laughter are read as sounds and stay words of the timeline (`textToIpa('Well [laugh] um, hahaha.', { markup: true }).ipa` is `ˈwɛl ⸨laugh⸩ ⸨um⸩ , ⸨laugh:0.6⸩ .`); the option `breaths` (`--breaths`) breathes in between sentences; `timeline.sounds` lists the sounds ([Sounds](docs/markup.md#sounds)).
 - **Vocal effort**: `[soft]`, `[loud]`, `[shout]`, `[lombard]`,
   `[crescendo]` and `[diminuendo]` (and `<vs:effort>`, `{f … f}`) change
   more than the level: the pitch rises (+5 Hz per dB), the spectrum gets

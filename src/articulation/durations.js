@@ -56,6 +56,9 @@ export function isNucleus(token) {
   return token?.kind === 'vowel' || Boolean(token?.syllabic);
 }
 
+/** Manners timed as another one: clicks as plosives. */
+const MANNER_CLASS = { click: 'plosive', 'lateral-fricative': 'fricative' };
+
 /**
  * Class of a consonant for the tables and for the neighbour features.
  * @param {object} token
@@ -70,11 +73,10 @@ function consonantClass(token) {
   if (phoneme.place === 'glottal' && phoneme.manner !== 'plosive') {
     return 'h';
   }
-  switch (phoneme.manner) {
+  switch (MANNER_CLASS[phoneme.manner] ?? phoneme.manner) {
     case 'plosive':
       return voiced ? 'voicedPlosive' : 'voicelessPlosive';
     case 'fricative':
-    case 'lateral-fricative':
       return voiced ? 'voicedFricative' : 'voicelessFricative';
     case 'nasal':
       return 'nasal';

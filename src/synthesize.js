@@ -155,6 +155,7 @@ export function prepareUtterance(text, options = {}) {
     language: transcription.lang,
     accent: accent ?? undefined,
     modes: transcription.modes,
+    breaths: Boolean(options.breaths),
   });
   const timeline = utteranceTimeline(plan, {
     words: transcription.words,
@@ -214,9 +215,11 @@ export function prepareUtterance(text, options = {}) {
  * `headroom` (dB) sets that offset to `-headroom` instead: with the same
  * headroom, renderings of different modes have comparable levels.
  * `loudnessTarget` (LUFS, ITU-R BS.1770) scales the result to that
- * integrated loudness, with the peak at most 0.98.
+ * integrated loudness, with the peak at most 0.98. `breaths` (default
+ * false) puts an inhale into every pause of 0.3 s or more after `.`, `?`,
+ * `!` or `‖` (issue 56, `insertBreaths()` of src/articulation/sounds.js).
  * @param {string} text
- * @param {{lang?: string, accent?: string|object, accentLevel?: number, ipa?: boolean, markup?: boolean, headroom?: number, loudnessTarget?: number, head?: object|'random', seed?: string|number, preset?: string, tier?: string|number, solver?: string, source?: 'lf'|'folds', interaction?: boolean, subglottal?: boolean, sections?: number, dx?: number, sampleRate?: number, blockSize?: number, bandLimit?: number, output?: 'flow'|'microphone', microphone?: {distance?: number, azimuth?: number, elevation?: number, compensate?: boolean}, room?: string|object, enclosure?: {width: number, height: number, depth: number, absorption?: number, center?: number[]}, teeth?: boolean, piriform?: boolean, vallecula?: boolean, engine?: 'auto'|'rust'|'js'|object, threads?: number|'auto', simd?: 'auto'|boolean}} [options]
+ * @param {{lang?: string, breaths?: boolean, accent?: string|object, accentLevel?: number, ipa?: boolean, markup?: boolean, headroom?: number, loudnessTarget?: number, head?: object|'random', seed?: string|number, preset?: string, tier?: string|number, solver?: string, source?: 'lf'|'folds', interaction?: boolean, subglottal?: boolean, sections?: number, dx?: number, sampleRate?: number, blockSize?: number, bandLimit?: number, output?: 'flow'|'microphone', microphone?: {distance?: number, azimuth?: number, elevation?: number, compensate?: boolean}, room?: string|object, enclosure?: {width: number, height: number, depth: number, absorption?: number, center?: number[]}, teeth?: boolean, piriform?: boolean, vallecula?: boolean, engine?: 'auto'|'rust'|'js'|object, threads?: number|'auto', simd?: 'auto'|boolean}} [options]
  * @returns {{lang: string, accent: string|null, accentLevel: number|null, ipa: string, words: object[], modes: {from: number, to: number, mode: object}[], warnings: {position: number, message: string}[], head: object, plan: object, timeline: object, sampleRate: number, samples: Float32Array, duration: number, levelOffsetDb: number, loudness?: number}}
  */
 export function synthesize(text, options = {}) {

@@ -144,7 +144,7 @@ function pronounceWord(word, language, context, g2p) {
  */
 function pronounceItem(item, source, accent, context, switches) {
   return pronounceSource(item, source, context, switches).map((word) => {
-    if (word.lang !== 'en' || !word.ipa) {
+    if (word.lang !== 'en' || !word.ipa || word.sound) {
       return word;
     }
     const ipa = adaptEnglishWord(word.ipa, word.text, accent);
@@ -163,6 +163,9 @@ function pronounceSource(item, source, context, switches) {
   }
   if (item.ipa) {
     const extra = item.letter ? { letter: true } : {};
+    if (item.sound) {
+      extra.sound = item.sound;
+    }
     return [
       { text: item.text, lang: item.lang, ipa: item.ipa, ...extra, ...range },
     ];
@@ -452,6 +455,12 @@ function transcribe(items, source, lang, accent, settings, offset = 0) {
  * one of its main language.
  */
 function finishItems(items, accent, options, all) {
+  // A written sound (`um`, `hahaha`) is no word for these passes: it
+  // stands between phrases like a break and keeps its IPA.
+  const sounds = items.filter((item) => item.sound && !item.break);
+  for (const item of sounds) {
+    item.break = true;
+  }
   joinChineseRuns(items, settingsOf(all, 'zh'));
   joinRussianClitics(items);
   markPhrasing(items);
@@ -460,6 +469,28 @@ function finishItems(items, accent, options, all) {
   }
   linkRs(items, accent);
   applyAccentRules(items, all);
+  for (const item of sounds) {
+    delete item.break;
+  }
+  numberSounds(items);
+}
+
+/**
+ * Number the sounds of the IPA (markup sounds and written ones) in
+ * order: a written sound gets `soundIndex`, so that the timeline finds
+ * its time (src/articulation/timeline.js).
+ */
+function numberSounds(items) {
+  let sound = 0;
+  for (const item of items) {
+    if (!item.sound) {
+      continue;
+    }
+    if (!item.break) {
+      item.soundIndex = sound;
+    }
+    sound++;
+  }
 }
 
 /**

@@ -181,9 +181,21 @@ export function questionFalls(words) {
   return false;
 }
 
+/**
+ * Written hesitations and laughter of Hindi (issue 56): the spellings of
+ * the sounds `filler` and `um`, and the syllables of laughter, read as
+ * `⸨laugh⸩` when two or more stand in a row (with or without hyphens).
+ */
+export const FILLER_WORDS = Object.freeze({
+  filler: Object.freeze(['अ…']),
+  um: Object.freeze(['अं']),
+  laugh: Object.freeze(['हा']),
+});
+
 /** Hindi text normalisation rules. */
 export const HINDI = {
   lang: 'hi',
+  fillerWords: FILLER_WORDS,
   decimalComma: false,
   cardinal: hindiCardinal,
   digits,

@@ -28,7 +28,7 @@ import {
   getPhoneme,
 } from './inventory.js';
 import { MARKUP_LIMITS } from '../markup/builder.js';
-import { SOUND_NAMES } from '../markup/modes.js';
+import { SOUND_NAMES, isDefaultMode } from '../markup/modes.js';
 import { ModeStack, wordSpans, writeMarks } from './marks.js';
 
 const SUPERSCRIPT_TONES = { '¹': 1, '²': 2, '³': 3, '⁴': 4, '⁵': 5 };
@@ -322,10 +322,16 @@ function addTimedPause(state, symbol, written) {
   });
 }
 
-/** A sound `⸨laugh⸩`, or `⸨laugh 0.5⸩` with its length in seconds. */
+/**
+ * A sound `⸨laugh⸩`, or `⸨laugh:0.5⸩` with its length in seconds (also
+ * read: `⸨laugh 0.5⸩`). A sound inside brace marks keeps their mode: it is
+ * listed in the mode spans as `{sound, mode}` (`sound` is its index among
+ * the sounds of the string).
+ */
 function addSound(state, symbol, written) {
   const [, name, seconds] =
-    /^\s*(\S+?)(?:\s+(\d+(?:\.\d+)?))?\s*$/u.exec(written) ?? [];
+    /^\s*([^\s:]+?)(?:(?:\s*:\s*|\s+)(\d+(?:\.\d+)?))?\s*$/u.exec(written) ??
+    [];
   if (!SOUND_NAMES.includes(name)) {
     state.unknown.push(symbol);
     return;
@@ -334,6 +340,10 @@ function addSound(state, symbol, written) {
   if (seconds !== undefined) {
     token.duration = Math.min(MARKUP_LIMITS.maxPauseSeconds, Number(seconds));
   }
+  if (!isDefaultMode(state.modes.mode)) {
+    state.soundModes.push({ sound: state.sounds, mode: state.modes.mode });
+  }
+  state.sounds++;
   pushTimed(state, token);
 }
 
@@ -341,6 +351,13 @@ function consumeText(state, text) {
   for (const char of expandLigatures(text)) {
     consumeChar(state, char);
   }
+}
+
+/** The IPA of a sound: `⸨laugh⸩`, or `⸨laugh:0.5⸩` with a length. */
+export function soundIpa(name, duration) {
+  return duration === null || duration === undefined
+    ? `⸨${name}⸩`
+    : `⸨${name}:${Number(duration.toFixed(3))}⸩`;
 }
 
 /** Read a chunk between spaces that is not a brace mark. */
@@ -383,6 +400,8 @@ export function parseIpa(text) {
     modes: new ModeStack(),
     wordModes: new Map(),
     emphasized: new Set(),
+    sounds: 0,
+    soundModes: [],
   };
   for (const [chunk] of normalizeText(text).matchAll(CHUNKS)) {
     if (/^\s/u.test(chunk)) {
@@ -404,14 +423,17 @@ export function parseIpa(text) {
   return {
     tokens: state.tokens,
     unknown: state.unknown,
-    modes: wordSpans(state.wordModes, state.emphasized),
+    modes: [
+      ...wordSpans(state.wordModes, state.emphasized),
+      ...state.soundModes,
+    ],
   };
 }
 
 /** The written form of one token. */
 function tokenText(token) {
   if (token.kind === 'sound') {
-    return ` ${token.symbol} `;
+    return ` ${soundIpa(token.name, token.duration)} `;
   }
   if (token.kind === 'pause') {
     if (token.seconds !== undefined) {
@@ -439,6 +461,7 @@ function tokenText(token) {
  * Stress is stored on the syllable nucleus, so the mark is written right
  * before the vowel. With `modes` (spans in word indexes, as `parseIpa()`
  * returns them) the brace marks and `ˈˈ` of each span are written too.
+ * Sounds are written `⸨name⸩` or `⸨name:seconds⸩`.
  * @param {object[]} tokens
  * @param {{from: number, to: number, mode: object}[]} [modes]
  */
@@ -450,7 +473,11 @@ export function formatIpa(tokens, modes = []) {
     if (word >= 0 && last?.word === word) {
       last.text += tokenText(token);
     } else {
-      pieces.push({ text: tokenText(token), word });
+      pieces.push({
+        text: tokenText(token),
+        word,
+        ...(token.kind === 'sound' ? { sound: true } : {}),
+      });
     }
   }
   return writeMarks(pieces, modes)

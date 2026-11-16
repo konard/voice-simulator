@@ -551,9 +551,21 @@ function spell(letters) {
     .map((letter) => ({ text: letter, say: LETTERS[letter], letter: true }));
 }
 
+/**
+ * Written hesitations and laughter of Russian (issue 56): the spellings of
+ * the sounds `filler` and `um`, and the syllables of laughter, read as
+ * `⸨laugh⸩` when two or more stand in a row (with or without hyphens).
+ */
+export const FILLER_WORDS = Object.freeze({
+  filler: Object.freeze(['э-э', 'э']),
+  um: Object.freeze(['эм', 'гм']),
+  laugh: Object.freeze(['ха', 'хе']),
+});
+
 /** Russian text normalisation rules. */
 export const RUSSIAN = {
   lang: 'ru',
+  fillerWords: FILLER_WORDS,
   decimalComma: true,
   spaceGrouping: true,
   cardinal: (value) => russianCardinal(value),

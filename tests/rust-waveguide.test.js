@@ -524,3 +524,26 @@ describe('Rust renderer options (issue 22)', () => {
     });
   }
 });
+
+describe('Rust renderer: paralinguistic sounds (issue 56)', () => {
+  it('renders paralinguistic sounds like VoiceRenderer (issue 56)', async () => {
+    const engine = await loadRustEngine();
+    const { plan, renderOptions, timeline } = prepareUtterance(
+      '[inhale] Well, um, haha [sigh] ok [cough] [click].',
+      { tier: 'minimal', seed: 1, markup: true }
+    );
+    expect(timeline.sounds.map((sound) => sound.name)).toEqual([
+      'inhale',
+      'um',
+      'laugh',
+      'sigh',
+      'cough',
+      'click',
+    ]);
+    const expected = renderPlan(plan, { ...renderOptions, engine: 'js' });
+    const actual = renderPlanRust(engine, plan, renderOptions);
+    const measured = maxDifference(actual, expected);
+    globalThis.console.log(`render (sounds) max abs diff ${measured}`);
+    expect(measured < 1e-4).toBe(true);
+  });
+});
