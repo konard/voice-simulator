@@ -27,3 +27,13 @@ export declare function createStreamResampler(
   toRate: number,
   options?: { zeroCrossings?: number }
 ): StreamResampler;
+/**
+ * Issue 58: the stream resampler with the defaults of `resample`
+ * (`zeroCrossings` 16), so the joined outputs of `push` and `flush` equal
+ * `resample(all, fromRate, toRate, options)` of the joined input.
+ */
+export declare function createResampler(
+  fromRate: number,
+  toRate: number,
+  options?: { zeroCrossings?: number }
+): StreamResampler;
