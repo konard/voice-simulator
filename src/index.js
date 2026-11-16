@@ -119,13 +119,21 @@ export {
   WALL_SOURCE,
   strouhalFrequency,
 } from './acoustics/voice.js';
-// The waveguide renderer on the Rust engine, opt-in (issue 22)
+// The waveguide renderer on the Rust engine (issue 22)
 export {
   loadEngineModule,
+  loadEngineModuleSync,
   ENGINE_ABI_VERSION,
   AUTO_THREADS_MAX,
   requestedThreads,
 } from './engine/wasm-loader.js';
+// The engine choice: Rust by default, JavaScript as the fallback (issue 25)
+export {
+  createEngine,
+  getEngine,
+  Engine,
+  ENGINE_NAMES,
+} from './engine/index.js';
 export {
   RustVoiceRenderer,
   renderPlanRust,

@@ -59,8 +59,13 @@ export function unsupported(message) {
   return error;
 }
 
-/** Throws an `unsupported` error for options the Rust renderer lacks. */
-function checkSupported(options) {
+/**
+ * Throws an `unsupported` error for options the Rust renderer lacks (the
+ * solver, a WebGPU device, the folds source or a bandLimit not above 0).
+ * The microphone and the room are checked when a renderer is built.
+ * @param {object} options as for RustVoiceRenderer
+ */
+export function checkSupported(options) {
   const solver = options.solver ?? 'waveguide';
   if (!Object.hasOwn(SOLVER_CODES, solver)) {
     throw unsupported(`solver '${solver}' (only 'waveguide' and 'fdtd3d')`);
@@ -385,7 +390,7 @@ export class RustVoiceRenderer {
    */
   constructor(module, plan, options = {}) {
     this.planner = new FramePlanner(plan, options);
-    this.engine = module;
+    this.module = module;
     this.plan = plan;
     const { sampleRate, sections, totalSamples, head, config, model } =
       this.planner;
@@ -437,7 +442,7 @@ export class RustVoiceRenderer {
     if (this.handle === undefined) {
       throw new Error('Rust renderer: used after free()');
     }
-    const { engine, planner } = this;
+    const { module: engine, planner } = this;
     const started = globalThis.performance.now();
     const blocks = planner.prepare(count);
     this.prepareTime += globalThis.performance.now() - started;
@@ -488,19 +493,19 @@ export class RustVoiceRenderer {
     if (this.solver === 'fdtd3d') {
       const pointer = this.fieldValues.reserve(this.cells);
       const written = check(
-        this.engine.exports.vs_renderer_field(this.handle, pointer, this.cells),
+        this.module.exports.vs_renderer_field(this.handle, pointer, this.cells),
         'vs_renderer_field'
       );
-      return { pressure: float64View(this.engine, pointer, written).slice() };
+      return { pressure: float64View(this.module, pointer, written).slice() };
     }
     const noseCount = noseSections(this.head, this.sections);
     const total = this.sections + noseCount;
     const pointer = this.fieldValues.reserve(total);
     const written = check(
-      this.engine.exports.vs_renderer_field(this.handle, pointer, total),
+      this.module.exports.vs_renderer_field(this.handle, pointer, total),
       'vs_renderer_field'
     );
-    const values = float64View(this.engine, pointer, written).slice();
+    const values = float64View(this.module, pointer, written).slice();
     return {
       pressure: values.subarray(0, this.sections),
       nose: values.subarray(this.sections),
@@ -510,7 +515,7 @@ export class RustVoiceRenderer {
   /** Free the engine memory of this renderer. */
   free() {
     if (this.handle !== undefined) {
-      this.engine.exports.vs_renderer_free(this.handle);
+      this.module.exports.vs_renderer_free(this.handle);
       this.handle = undefined;
     }
     this.frames.free();

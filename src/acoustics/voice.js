@@ -41,6 +41,8 @@ import { Fdtd2d } from './fdtd2d.js';
 import { Fdtd3d } from './fdtd3d.js';
 import { createListener, headListening } from './microphone.js';
 import { enclosureBounds } from './voxel-model.js';
+// A cycle (the engine makes VoiceRenderers), used at call time only.
+import { createEngine, getEngine } from '../engine/index.js';
 
 const OUTPUT_GAIN = 0.3;
 
@@ -709,37 +711,66 @@ export class VoiceRenderer {
 }
 
 /**
- * Render a whole plan offline.
+ * Free what a renderer holds outside the garbage collector: the engine
+ * memory of a Rust renderer and the GPU buffers of the 3D solver.
+ */
+export function releaseRenderer(renderer) {
+  renderer.free?.();
+  renderer.solver?.gpu?.destroy();
+}
+
+/**
+ * Render a whole plan offline. `engine` (default `'auto'`) is an engine
+ * name or an engine object of createEngine; the name is resolved with
+ * getEngine (src/engine/index.js), so it is the Rust engine when it loads.
  * @param {object} plan
- * @param {ConstructorParameters<typeof VoiceRenderer>[1]} [options]
+ * @param {ConstructorParameters<typeof VoiceRenderer>[1] & {engine?: 'auto'|'rust'|'js'|object, threads?: number|'auto', simd?: 'auto'|boolean}} [options]
  * @returns {Float32Array}
  */
 export function renderPlan(plan, options = {}) {
-  const renderer = new VoiceRenderer(plan, options);
-  const samples = new Float32Array(renderer.totalSamples);
-  renderer.render(samples);
-  return samples;
+  const renderer = getEngine(engineOptions(options)).createRenderer(
+    plan,
+    options
+  );
+  try {
+    const samples = new Float32Array(renderer.totalSamples);
+    renderer.render(samples);
+    return samples;
+  } finally {
+    releaseRenderer(renderer);
+  }
+}
+
+/** The options of createEngine in render options. */
+export function engineOptions(options) {
+  return {
+    engine: options.engine,
+    threads: options.threads,
+    simd: options.simd,
+  };
 }
 
 /**
  * Render a whole plan offline with renderAsync, `chunkSize` samples at a
- * time (needed for the GPU solver).
+ * time (needed for the GPU solver). `engine` as for renderPlan, resolved
+ * with `await createEngine`.
  * @param {object} plan
- * @param {ConstructorParameters<typeof VoiceRenderer>[1] & {chunkSize?: number}} [options]
+ * @param {Parameters<typeof renderPlan>[1] & {chunkSize?: number}} [options]
  * @returns {Promise<Float32Array>}
  */
 export async function renderPlanAsync(plan, options = {}) {
-  const renderer = new VoiceRenderer(plan, options);
-  const samples = new Float32Array(renderer.totalSamples);
-  const chunkSize = options.chunkSize ?? 4096;
+  const engine = await createEngine(engineOptions(options));
+  const renderer = engine.createRenderer(plan, options);
   try {
+    const samples = new Float32Array(renderer.totalSamples);
+    const chunkSize = options.chunkSize ?? 4096;
     for (let start = 0; start < samples.length; start += chunkSize) {
       await renderer.renderAsync(samples.subarray(start, start + chunkSize));
     }
+    return samples;
   } finally {
-    // The renderer is not handed out: free its GPU buffers now, not when
-    // the garbage collector gets to them.
-    renderer.solver.gpu?.destroy();
+    // The renderer is not handed out: free its engine memory and GPU
+    // buffers now, not when the garbage collector gets to them.
+    releaseRenderer(renderer);
   }
-  return samples;
 }

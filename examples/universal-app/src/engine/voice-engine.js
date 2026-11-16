@@ -26,32 +26,33 @@ const BENCHMARK_KEY = 'voice-simulator:benchmark';
  * Identifies the device, build and backends (whether WebGPU may be used)
  * a cached benchmark belongs to.
  */
-function deviceKey(allowGpu) {
+function deviceKey(allowGpu, engine) {
   const navigator = globalThis.navigator ?? {};
   return [
     navigator.userAgent ?? '',
     navigator.hardwareConcurrency ?? 0,
     AUDIO_TIERS.map((tier) => `${tier.name}:${tier.cost}`).join(','),
     allowGpu ? 'gpu' : 'cpu',
+    engine,
   ].join('|');
 }
 
-function readCachedBenchmark(allowGpu) {
+function readCachedBenchmark(allowGpu, engine) {
   try {
     const cached = JSON.parse(
       globalThis.localStorage?.getItem(BENCHMARK_KEY) ?? 'null'
     );
-    return cached?.device === deviceKey(allowGpu) ? cached : null;
+    return cached?.device === deviceKey(allowGpu, engine) ? cached : null;
   } catch {
     return null;
   }
 }
 
-function writeCachedBenchmark({ level, loads, gpu }, allowGpu) {
+function writeCachedBenchmark({ level, loads, gpu }, allowGpu, engine) {
   try {
     globalThis.localStorage?.setItem(
       BENCHMARK_KEY,
-      JSON.stringify({ device: deviceKey(allowGpu), level, loads, gpu })
+      JSON.stringify({ device: deviceKey(allowGpu, engine), level, loads, gpu })
     );
   } catch {
     // Storage may be unavailable (private mode); the cache is optional.
@@ -86,6 +87,8 @@ export class VoiceEngine {
     // Whether the benchmark may use WebGPU, and whether its choice runs there.
     this.allowGpu = true;
     this.benchmarkGpu = null;
+    // The engine setting ('auto', 'rust' or 'js') the worker renders with.
+    this.engineName = 'auto';
     this.nextId = 1;
     this.job = null;
     this.state = {};
@@ -97,6 +100,8 @@ export class VoiceEngine {
       loads: [],
       underruns: 0,
       error: null,
+      // The worker's answer to {type: 'engine'}: {name, simd, reason}.
+      engine: null,
     };
   }
 
@@ -114,8 +119,30 @@ export class VoiceEngine {
       this.worker.addEventListener('error', (event) => {
         this.#emit({ phase: 'idle', error: event.message ?? 'Worker error' });
       });
+      this.#askEngine();
     }
     return this.worker;
+  }
+
+  /** Ask the worker which engine renders (the reply sets status.engine). */
+  #askEngine() {
+    this.worker.postMessage({ type: 'engine', engine: this.engineName });
+  }
+
+  /**
+   * Render with another engine: 'auto' (Rust where it loads, else
+   * JavaScript), 'rust' or 'js'.
+   * @param {'auto'|'rust'|'js'} name
+   */
+  setEngine(name) {
+    if (name === this.engineName) {
+      return;
+    }
+    this.engineName = name;
+    this.#emit({ engine: null });
+    if (this.worker) {
+      this.#askEngine();
+    }
   }
 
   /**
@@ -124,11 +151,13 @@ export class VoiceEngine {
    * visit on the same device applies at once, and the fresh measurement
    * replaces it when it arrives.
    * @param {object} head
-   * @param {{gpu?: boolean}} [options]
+   * `engine` is the engine setting (see setEngine).
+   * @param {{gpu?: boolean, engine?: 'auto'|'rust'|'js'}} [options]
    */
   benchmark(head, options = {}) {
     this.allowGpu = options.gpu !== false;
-    const cached = readCachedBenchmark(this.allowGpu);
+    this.setEngine(options.engine ?? this.engineName);
+    const cached = readCachedBenchmark(this.allowGpu, this.engineName);
     this.benchmarkGpu = cached ? Boolean(cached.gpu) : null;
     if (cached) {
       this.governor.level = Math.min(cached.level, AUDIO_TIERS.length - 1);
@@ -144,6 +173,7 @@ export class VoiceEngine {
       type: 'benchmark',
       head,
       gpu: this.allowGpu,
+      engine: this.engineName,
     });
   }
 
@@ -162,7 +192,7 @@ export class VoiceEngine {
 
   /**
    * Speak text.
-   * @param {{text: string, lang: string, accent?: string, head: object, seed: string, mode: 'both'|'sound'|'visual', ipa?: boolean, microphone?: object, room?: string, enclosure?: object, gpu?: boolean}} request
+   * @param {{text: string, lang: string, accent?: string, head: object, seed: string, mode: 'both'|'sound'|'visual', ipa?: boolean, microphone?: object, room?: string, enclosure?: object, gpu?: boolean, engine?: 'auto'|'rust'|'js'}} request
    *   `microphone`, `room` and `enclosure` are the listening settings
    *   (see synthesize).
    */
@@ -232,6 +262,7 @@ export class VoiceEngine {
       room: request.room,
       enclosure: request.enclosure,
       gpu: this.#gpu(request),
+      engine: request.engine ?? this.engineName,
     });
     return job;
   }
@@ -262,8 +293,13 @@ export class VoiceEngine {
   }
 
   #handle(message) {
+    if (message.type === 'engine') {
+      const { name, simd, reason, error } = message;
+      this.#emit({ engine: { name, simd, reason, error: error ?? null } });
+      return;
+    }
     if (message.type === 'benchmark') {
-      writeCachedBenchmark(message, this.allowGpu);
+      writeCachedBenchmark(message, this.allowGpu, this.engineName);
       this.benchmarkGpu = Boolean(message.gpu);
       this.governor.level = message.level;
       this.#emit({

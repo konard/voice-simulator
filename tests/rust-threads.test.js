@@ -20,6 +20,7 @@ import { existsSync } from 'node:fs';
 
 import { describe, expect } from 'test-anywhere';
 
+import { createEngine, getEngine } from '../src/engine/index.js';
 import { RustVoiceRenderer } from '../src/engine/rust-renderer.js';
 import {
   AUTO_THREADS_MAX,
@@ -185,6 +186,44 @@ describe('the 3D solver on several threads (issue 24)', () => {
       }
     );
   }
+
+  itThreads('createEngine passes threads and simd on', async () => {
+    const loaded = await loadEngineModule(undefined, { threads: 2 });
+    const { simd } = loaded;
+    loaded.close();
+    const engine = await createEngine({ engine: 'rust', threads: 2, simd });
+    try {
+      expect(engine.name).toBe('rust');
+      expect(engine.threads).toBe(2);
+      expect(engine.simd).toBe(simd);
+      expect(engine.module.pool.size).toBe(2);
+      const { plan, renderOptions } = prepareUtterance('Hello.', {
+        tier: 'high',
+        seed: 1,
+      });
+      const renderer = engine.createRenderer(plan, {
+        ...renderOptions,
+        threadMinLinks: 0,
+      });
+      try {
+        expect(renderer.engine).toBe('rust');
+        const samples = new Float32Array(480);
+        expect(renderer.render(samples)).toBe(samples.length);
+        expect(renderer.threads).toBe(2);
+      } finally {
+        renderer.free();
+      }
+    } finally {
+      engine.close();
+    }
+    expect(engine.module).toBe(null);
+    // The synchronous load has no helpers, so it is not cached for 2.
+    const sync = getEngine({ engine: 'rust', threads: 2, simd });
+    expect(sync.threads).toBe(1);
+    expect(getEngine({ engine: 'rust', threads: 2, simd }) === sync).toBe(
+      false
+    );
+  });
 
   itThreads('small grids stay on one thread', async () => {
     // THREAD_MIN_LINKS of the engine: the grid of tier `high` without a

@@ -462,6 +462,8 @@ npx voice-simulator match recording.wav --transcript "What it says" --json
 npx voice-simulator compare recording.wav hello.wav --json   # distances from a reference
 npx voice-simulator mesh --lod 3 -o head.obj
 npx voice-simulator benchmark
+npx voice-simulator benchmark --engine js --json   # {"engine":"js",...}
+npx voice-simulator say "Hello" --engine js -o js.wav   # byte-stable output
 npx voice-simulator serve --port 8080
 npx voice-simulator --help
 ```
@@ -785,8 +787,9 @@ WebAssembly with the same samples as `VoiceRenderer` and `renderPlan` (the
 largest difference measured is 1.7e-18), and since issue 23 also the 3D
 FDTD tiers (`high` to `reference`, `solver: 'fdtd3d'`; largest difference
 on `'Hello.'` at `high`: 0); the plan, the tract shape of every control
-block and the voxel model are still computed in JavaScript. It is opt-in
-for now: `synthesize` keeps using JavaScript.
+block and the voxel model are still computed in JavaScript. Since issue 25
+it is the default engine (see [Engines](#engines)); the functions below
+use it directly.
 
 ```javascript
 import {
@@ -847,6 +850,47 @@ and `voice-simulator-cli render-job <out>` (`cargo build --release -p
 voice-simulator-cli`) renders it natively and prints the SHA-256 of the
 samples, which equals that of the WebAssembly render. See
 [docs/RUST-ENGINE.md](docs/RUST-ENGINE.md).
+
+### Engines
+
+Everything that renders (`synthesize`, `synthesizeAsync`,
+`synthesizeStream`, `renderPlan`, the benchmark, the CLI, the HTTP server
+and the app's worker) takes an `engine` option:
+
+| `engine`           | Renders with                                                                                                                                                                |
+| ------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `'auto'` (default) | the Rust engine (`src/engine/voice-simulator.wasm`) when it loads and supports the options, else JavaScript; `renderer.fallbackReason` and `engine.reason` say why not Rust |
+| `'rust'`           | the Rust engine; an Error with `code === 'ENGINE_UNAVAILABLE'` when it does not load                                                                                        |
+| `'js'`             | JavaScript, without loading WebAssembly: byte-stable output (Rust and JavaScript differ by up to 1e-4 per sample)                                                           |
+
+Options Rust does not render (`solver: 'fdtd2d'`, a WebGPU `device`,
+`source: 'folds'`) render in JavaScript under `'auto'`. `createEngine`
+loads an engine once (cached by `engine|threads|simd`) and every renderer
+it makes says which engine renders:
+
+```javascript
+import { createEngine, prepareUtterance, synthesize } from 'voice-simulator';
+
+const engine = await createEngine(); // {name: 'rust' | 'js', simd, threads, reason}
+const { samples } = synthesize('Hello.', { engine }); // or 'auto' | 'rust' | 'js'
+const { plan, renderOptions } = prepareUtterance('Hello.', { tier: 'minimal' });
+const renderer = engine.createRenderer(plan, renderOptions);
+console.log(renderer.engine, renderer.fallbackReason); // 'rust' null
+renderer.free?.(); // a Rust renderer holds WebAssembly memory
+```
+
+In Node.js, Bun and Deno `synthesize` (synchronous) loads the engine on
+first use; in a browser the engine loads asynchronously, so `'auto'` in
+`synthesize` is JavaScript until `await createEngine()` has run, while
+`synthesizeAsync`, `synthesizeStream` and the worker load it themselves.
+The CLI takes `--engine auto|rust|js` and `--threads <n|auto>` (default 1;
+above 1 it loads the threads build when it is there, see the 3D solver on
+several threads above), `benchmark` prints the engine first
+(`"engine"` with `--json`), and the server takes `engine=js` per request.
+`voice-simulator/worker` is the synthesis worker the app uses:
+`new Worker(new URL('voice-simulator/worker', import.meta.url), {type:
+'module'})`; its messages are in
+[docs/RUST-ENGINE.md](docs/RUST-ENGINE.md#worker).
 
 ### Docker
 
