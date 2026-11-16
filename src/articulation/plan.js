@@ -18,6 +18,7 @@
 import { getPhoneme } from '../ipa/inventory.js';
 import { parseIpa } from '../ipa/parse.js';
 import { DEFAULT_HEAD, normalizeHeadConfig } from '../head-config.js';
+import { accentHead } from '../accent/head.js';
 import { suffixKey } from '../parameters/articulation.js';
 import { tensionForPitch } from '../acoustics/folds.js';
 import {
@@ -826,16 +827,23 @@ function articulatorsFor(head, overrides = {}) {
 /**
  * Plan an utterance from IPA.
  * @param {string|object[]} ipa IPA string or parsed tokens.
- * @param {{head?: object, language?: string, frameRate?: number, durations?: (number|null)[], durationTable?: object, articulators?: Record<string, {timeConstant?: number, lead?: number}>, resistance?: Record<string, number>}} [options]
+ * @param {{head?: object, language?: string, frameRate?: number, durations?: (number|null)[], durationTable?: object, accent?: {prosody?: {tunes?: string|null, range?: number, rate?: number, stressLengthening?: number}, articulation?: Record<string, number>}, articulators?: Record<string, {timeConstant?: number, lead?: number}>, resistance?: Record<string, number>}} [options]
  *   `durations`: seconds per token (measured durations), which win over
  *   the rules; `durationTable`: an entry of `DURATION_TABLES` that overrides
- *   the table of `language`; `articulators`
+ *   the table of `language`; `accent` (see accentSettings of
+ *   src/accent/index.js): its articulation offsets and prosody factors
+ *   change the head and `prosody.tunes` picks the duration table of that
+ *   language; `articulators`
  *   and `resistance` override `ARTICULATORS` and the levels of
  *   `COARTICULATION_RESISTANCE`.
  */
 export function planUtterance(ipa, options = {}) {
   const tokens = typeof ipa === 'string' ? parseIpa(ipa).tokens : ipa;
-  const head = normalizeHeadConfig(options.head ?? DEFAULT_HEAD);
+  const head = accentHead(
+    normalizeHeadConfig(options.head ?? DEFAULT_HEAD),
+    options.accent
+  );
+  const tunes = options.accent?.prosody?.tunes;
   const frameRate = options.frameRate ?? CONTROL_RATE;
   const segments = buildSegments(tokens, {
     rate: head.speechRate,
@@ -843,7 +851,8 @@ export function planUtterance(ipa, options = {}) {
     stressLengthening: head.stressLengthening,
     finalLengthening: head.finalLengthening,
     pauseLength: head.pauseLength,
-    durationTable: options.durationTable,
+    durationTable:
+      options.durationTable ?? (tunes ? durationTable(tunes) : undefined),
     head,
   });
   if (options.durations) {
