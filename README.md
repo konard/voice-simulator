@@ -877,6 +877,16 @@ voice-simulator-cli`) renders it natively and prints the SHA-256 of the
 samples, which equals that of the WebAssembly render. See
 [docs/RUST-ENGINE.md](docs/RUST-ENGINE.md).
 
+The real-time factor of every tier (render seconds / audio seconds, one core)
+is tracked over time in
+[docs/reports/performance.md](docs/reports/performance.md). The heavy test
+`performance-tiers` compares each CI run with
+[docs/reports/performance-baseline.json](docs/reports/performance-baseline.json)
+and fails when a tier gets slower than the tolerance allows, when Rust is
+slower than JavaScript, or when a waveguide tier needs more than half of real
+time; `node scripts/performance.mjs compare|baseline|trend` does the same by
+hand (see [docs/CONTRIBUTING.md](docs/CONTRIBUTING.md#performance-tracking)).
+
 ### Engines
 
 Everything that renders (`synthesize`, `synthesizeAsync`,
