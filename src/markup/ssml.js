@@ -550,7 +550,7 @@ class SsmlReader {
   /** Act on an opening tag. */
   start(element) {
     const change = CHANGES.get(element.local);
-    if (change) {
+    if (typeof change === 'function') {
       this.push(element, change(this, element));
       return;
     }
@@ -559,7 +559,7 @@ class SsmlReader {
       return;
     }
     const handler = STARTS.get(element.local);
-    if (handler) {
+    if (typeof handler === 'function') {
       handler(this, element);
     }
   }
@@ -759,7 +759,7 @@ class SsmlReader {
   close(element, position) {
     this.elements.pop();
     const handler = CLOSES.get(element.local);
-    if (handler) {
+    if (typeof handler === 'function') {
       handler(this, element, position);
     }
     if (element.pushed) {

@@ -271,7 +271,7 @@ class InlineReader {
       return tag.end;
     }
     const reader = SPAN_TAGS.get(tag.name);
-    if (!reader) {
+    if (typeof reader !== 'function') {
       return keep(`unknown tag [${tag.name}]`);
     }
     const change = reader(value);
