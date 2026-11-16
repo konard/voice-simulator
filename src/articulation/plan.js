@@ -50,6 +50,11 @@ import {
 } from './whisper.js';
 import { applyIntonationTiming } from './intonation.js';
 import {
+  addEmotionPitch,
+  applyEmotionSegments,
+  realiseEmotions,
+} from './emotion-plan.js';
+import {
   BREATHY_RELEASE,
   PHONATION_CHANNELS,
   breathyReleaseChannels,
@@ -410,6 +415,7 @@ export function buildSegments(tokens, options) {
   applyRates(segments);
   applyIntonationTiming(segments, options.tunes ?? options.language);
   applyEffortDurations(segments);
+  applyEmotionSegments(segments);
   applyWhisperDurations(segments);
   whisperVoiceless(segments);
   if (segments.at(-1).kind === 'pause' && !segments.at(-1).sound) {
@@ -658,9 +664,19 @@ function jawTarget(segments, index, levels, head) {
   return { value: gap, strength: weight };
 }
 
-/** Lip protrusion: LIP_PROTRUSION times the rounding target. */
+/**
+ * Lip protrusion: LIP_PROTRUSION times the rounding target, less the
+ * retraction of the spread lips of a smiling vowel (`segment.lipSpread`,
+ * cm, emotion-plan.js).
+ */
 function protrusionTarget(segment) {
   const target = roundingTarget(segment);
+  if (segment.lipSpread > 0) {
+    return {
+      value: LIP_PROTRUSION * target.value - segment.lipSpread,
+      strength: 1,
+    };
+  }
   return { ...target, value: LIP_PROTRUSION * target.value };
 }
 
@@ -1269,6 +1285,7 @@ export function planUtterance(ipa, options = {}) {
   const parsed = typeof ipa === 'string' ? parseIpa(ipa) : null;
   const tokens = parsed ? parsed.tokens : ipa;
   assignTokenModes(tokens, options.modes ?? parsed?.modes ?? []);
+  realiseEmotions(tokens);
   const { head, table, tunes } = accentedHead(options);
   const frameRate = options.frameRate ?? CONTROL_RATE;
   const segments = buildSegments(tokens, {
@@ -1332,6 +1349,7 @@ export function planUtterance(ipa, options = {}) {
     channels.height,
     { language: tunes, effort, whisper }
   );
+  addEmotionPitch(channels.f0, segments, frameRate, head, pitchShape.shape);
   lowerBreathyReleases(channels.f0, segments, frameRate);
   const steps = {
     loudness: channels.loudness,
