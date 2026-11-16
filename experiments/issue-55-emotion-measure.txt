@@ -1,0 +1,13 @@
+plain 123.0 6.54 2.085 4.48 -38.6
+loud       f0 6.07 range× 1.02 dur× 1.03 stress× 1.10 h1h2Δ -4.54 levelΔ 9.4 lastRise -1.99 F2 1575
+angry      f0 14.13 range× 2.85 dur× 0.80 stress× 0.85 h1h2Δ -7.39 levelΔ 9.4 lastRise -7.46 F2 1595
+happy      f0 9.79 range× 3.48 dur× 0.79 stress× 0.80 h1h2Δ -2.84 levelΔ 7.7 lastRise -4.83 F2 1715
+sad        f0 -3.85 range× 0.84 dur× 1.83 stress× 1.67 h1h2Δ 6.32 levelΔ -7.5 lastRise -0.47 F2 1905
+afraid     f0 22.08 range× 1.29 dur× 0.80 stress× 0.77 h1h2Δ 17.28 levelΔ 7.6 lastRise 2.83 F2 1538
+bored      f0 -3.64 range× 0.52 dur× 1.34 stress× 1.75 h1h2Δ 3.88 levelΔ -5.1 lastRise -0.69 F2 1850
+surprised  f0 10.76 range× 4.26 dur× 1.10 stress× 1.12 h1h2Δ -3.73 levelΔ 8.7 lastRise 2.87 F2 1590
+disgusted  f0 -2.40 range× 1.37 dur× 1.54 stress× 1.79 h1h2Δ -1.97 levelΔ -1.2 lastRise -1.11 F2 1840
+tender     f0 -1.99 range× 0.83 dur× 1.17 stress× 1.18 h1h2Δ 5.50 levelΔ -8.4 lastRise -1.16 F2 1900
+sarcastic  f0 -1.91 range× 0.75 dur× 1.32 stress× 1.63 h1h2Δ 0.23 levelΔ -0.6 lastRise -0.71 F2 1880
+confident  f0 1.71 range× 1.22 dur× 0.97 stress× 1.04 h1h2Δ -2.78 levelΔ 4.3 lastRise -2.31 F2 1580
+hesitant   f0 1.95 range× 0.77 dur× 1.44 stress× 1.18 h1h2Δ -0.16 levelΔ -3.4 lastRise 1.49 F2 1695
