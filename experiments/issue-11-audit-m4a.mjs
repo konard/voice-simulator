@@ -13,6 +13,8 @@ import {
   yinPitch,
 } from '../src/analysis/voice-features.js';
 import { presetHeadConfig } from '../src/head-config.js';
+import { analyzeFrames } from '../src/recognition/frontend.js';
+import { trackPitch } from '../src/recognition/pitch.js';
 
 const show = (label, value) =>
   console.log(`${label}: ${JSON.stringify(value)}`);
@@ -129,6 +131,59 @@ for (const preset of ['male', 'female', 'child']) {
       }
     }
     show(`pitch ${preset}@${sampleRate}`, {
+      frames,
+      grossPitchErrorPercent: Number(((100 * gross) / voiced).toFixed(1)),
+      voicingDecisionErrorPercent: Number(
+        ((100 * voicingErrors) / frames).toFixed(1)
+      ),
+      fineErrorCents: Number((fine / Math.max(1, voiced - gross)).toFixed(1)),
+    });
+  }
+}
+
+// 2b. Pitch and voicing per 10 ms frame from the tracker of the recognizer
+//     (trackPitch, issue 59) over the same frame times and the same truth.
+for (const preset of ['male', 'female', 'child']) {
+  for (const sampleRate of [16000, 8000]) {
+    const out = synthesize(TEXT, {
+      head: presetHeadConfig(preset),
+      solver: 'waveguide',
+      sampleRate,
+      seed: 1,
+    });
+    const frameSet = analyzeFrames(out.samples, out.sampleRate, { hop: 0.01 });
+    const track = trackPitch(frameSet);
+    // The frame times of block 2: 0.02 s on, while 0.08 s of sound remain.
+    const duration = out.samples.length / out.sampleRate;
+    let voiced = 0;
+    let gross = 0;
+    let voicingErrors = 0;
+    let frames = 0;
+    let fine = 0;
+    for (let t = 0; t < track.count; t++) {
+      const time = track.startTime + t * track.hop;
+      if (time < 0.02 - 1e-9 || time + 0.06 > duration) {
+        continue;
+      }
+      const state = sampleState(out.plan, time);
+      const truthVoiced = state.voicing > 0.5 && state.loudness > 0.3;
+      const f0 = track.f0[t];
+      const estimateVoiced = f0 > 0;
+      frames += 1;
+      if (truthVoiced !== estimateVoiced) {
+        voicingErrors += 1;
+      }
+      if (truthVoiced && estimateVoiced) {
+        voiced += 1;
+        const error = Math.abs(f0 - state.f0) / state.f0;
+        if (error > 0.2) {
+          gross += 1;
+        } else {
+          fine += Math.abs(1200 * Math.log2(f0 / state.f0));
+        }
+      }
+    }
+    show(`trackPitch ${preset}@${sampleRate}`, {
       frames,
       grossPitchErrorPercent: Number(((100 * gross) / voiced).toFixed(1)),
       voicingDecisionErrorPercent: Number(
