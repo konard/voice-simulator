@@ -23,7 +23,15 @@ const FRAME = 0.03;
 const FRAME_HOP = 0.01;
 
 /** Frames below this level against the loud frames have no signal (-20 dB). */
-const SIGNAL_SHARE = 0.1;
+export const SIGNAL_SHARE = 0.1;
+
+/**
+ * Frames that voicedShare judges: within -10 dB of the loud frames. The
+ * weaker frames of a voice are its onsets and offsets, voiced closures and
+ * fricatives, half noise or too short for YIN, and would count as
+ * unvoiced; a whisper has none of either.
+ */
+export const VOICED_SHARE_SIGNAL = 0.3;
 
 /** A frame with a YIN aperiodicity below this is voiced. */
 export const VOICED_SHARE_APERIODICITY = 0.2;
@@ -115,14 +123,15 @@ export function alphaRatio(samples, sampleRate, from, to) {
 
 /**
  * YIN aperiodicity (`yinPitch()`) of the frames with signal: 30 ms frames
- * every 10 ms of the samples at 11025 Hz, those with an RMS above a tenth
- * (-20 dB) of the 95th percentile of the frame levels. Near 0 for a
- * periodic frame, near 1 for noise.
+ * every 10 ms of the samples at 11025 Hz, those with an RMS above `share`
+ * (SIGNAL_SHARE, a tenth or -20 dB, by default) of the 95th percentile of
+ * the frame levels. Near 0 for a periodic frame, near 1 for noise.
  * @param {ArrayLike<number>} samples
  * @param {number} sampleRate
+ * @param {number} [share]
  * @returns {number[]}
  */
-export function frameAperiodicities(samples, sampleRate) {
+export function frameAperiodicities(samples, sampleRate, share = SIGNAL_SHARE) {
   const { samples: signal, sampleRate: rate } = resample(
     samples,
     sampleRate,
@@ -138,7 +147,7 @@ export function frameAperiodicities(samples, sampleRate) {
     }
     levels.push(Math.sqrt(sum / length));
   }
-  const threshold = Math.max(1e-7, SIGNAL_SHARE * percentile(levels, 0.95));
+  const threshold = Math.max(1e-7, share * percentile(levels, 0.95));
   const result = [];
   levels.forEach((level, index) => {
     if (level > threshold) {
@@ -149,14 +158,14 @@ export function frameAperiodicities(samples, sampleRate) {
 }
 
 /**
- * Share (0..1) of the frames with signal that are voiced: whose YIN
- * aperiodicity is below VOICED_SHARE_APERIODICITY (see
- * frameAperiodicities). 0 without signal.
+ * Share (0..1) of the loud frames (VOICED_SHARE_SIGNAL, see
+ * frameAperiodicities) that are voiced: whose YIN aperiodicity is below
+ * VOICED_SHARE_APERIODICITY. 0 without signal.
  * @param {ArrayLike<number>} samples
  * @param {number} sampleRate
  */
 export function voicedShare(samples, sampleRate) {
-  const values = frameAperiodicities(samples, sampleRate);
+  const values = frameAperiodicities(samples, sampleRate, VOICED_SHARE_SIGNAL);
   if (values.length === 0) {
     return 0;
   }

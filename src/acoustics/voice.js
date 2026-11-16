@@ -105,6 +105,14 @@ export const DEFAULT_INTERACTION = false;
 /** Steps per unit of whisper of the glottal reflection (#updateWhisper). */
 const WHISPER_STEPS = 20;
 
+/**
+ * Q of the low-pass of the whisper noise (NoiseSources). Tuned with
+ * experiments/issue-53-periodic-frames.mjs and issue-53-whisper-tuning.mjs:
+ * a higher Q leaves a narrow low band that YIN takes for a pitch, a lower
+ * one tilts the noise down and hides the raised F1 of a whispered [i].
+ */
+const WHISPER_NOISE_Q = 0.4;
+
 /** Voice sources by name: LF pulses or the two-mass vocal folds. */
 const SOURCES = new Map([
   [
@@ -214,7 +222,12 @@ export class NoiseSources {
     this.white = createNoise(`${seed}:noise`);
     this.aspiration = new Biquad();
     this.frication = new Biquad();
-    /** Band-pass of the whisper noise (issue 53), at the glottal jet. */
+    /**
+     * Low-pass of the whisper noise (issue 53) at the Strouhal frequency
+     * of the glottal jet: the turbulence spectrum is broad up to there and
+     * falls above it. Q WHISPER_NOISE_Q, below the 0.71 of a flat pass
+     * band: a peak of the noise at the jet would stand out as a formant.
+     */
     this.whisper = new Biquad();
     this.rate = 0;
     this.frequency = 0;
@@ -231,13 +244,13 @@ export class NoiseSources {
     this.whisperFrequency = 0;
   }
 
-  /** Centre the whisper band-pass on the glottal jet's Strouhal frequency. */
+  /** Set the whisper low-pass to the glottal jet's Strouhal frequency. */
   tuneWhisper(frequency) {
     if (Math.abs(frequency - this.whisperFrequency) <= 1e-3 * frequency) {
       return;
     }
     this.whisperFrequency = frequency;
-    this.whisper.bandpass(frequency, 0.5, this.rate);
+    this.whisper.lowpass(frequency, WHISPER_NOISE_Q, this.rate);
   }
 
   /** Centre the frication band-pass on the jet's Strouhal frequency. */
@@ -623,7 +636,8 @@ export class VoiceRenderer {
    * the whisper noise in a voiced stop, and the reflection of the glottis,
    * lowered by the half-open glottis (whisperReflection). The reflection is
    * set in steps of 1/WHISPER_STEPS of whisper, and not with source-tract
-   * interaction, where the folds take the load of the tract.
+   * interaction, where the folds take the load of the tract, nor on a GPU
+   * solver, whose cells keep the decay they were uploaded with.
    */
   #updateWhisper(glottis, constriction) {
     const whisper = Math.min(1, Math.max(0, glottis.whisper ?? 0));
@@ -631,7 +645,11 @@ export class VoiceRenderer {
       1,
       Math.max(0, 1 - constriction / WHISPER_CLOSED_AREA)
     );
-    if (this.interaction || !this.solver.setGlottalReflection) {
+    if (
+      this.interaction ||
+      !this.solver.setGlottalReflection ||
+      this.solver.gpu
+    ) {
       return;
     }
     const level = Math.round(whisper * WHISPER_STEPS) / WHISPER_STEPS;
@@ -667,9 +685,7 @@ export class VoiceRenderer {
       control.aspirationStrength ?? 0,
       this.head.pitch
     );
-    return (
-      source * (1 - whisper) + noise * 0.45 * this.glottis.aspirationLevel
-    );
+    return source * (1 - whisper) + noise * 0.45 * this.glottis.aspirationLevel;
   }
 
   #fricationNoise(white) {

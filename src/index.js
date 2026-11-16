@@ -67,8 +67,10 @@ export {
   energyRatio,
   frameAperiodicities,
   levelDb,
+  SIGNAL_SHARE,
   voicedShare,
   VOICED_SHARE_APERIODICITY,
+  VOICED_SHARE_SIGNAL,
 } from './analysis/mode-features.js';
 export {
   integratedLoudness,

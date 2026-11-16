@@ -246,6 +246,14 @@ function nearestAirCell(cells, point) {
   return best;
 }
 
+/**
+ * Least reflection of the glottis termination (setGlottalReflection): at
+ * -0.5 the source cells of the default grid keep about 0.15 of their
+ * pressure in a step; much lower, the keep turns negative and the cells
+ * ring at the Nyquist frequency.
+ */
+export const MIN_GLOTTAL_REFLECTION = -0.5;
+
 export class Fdtd3d {
   /**
    * `kernel` selects the step loop: 'wasm' (default when WebAssembly is
@@ -279,6 +287,10 @@ export class Fdtd3d {
     /** Glottis termination admittance (the waveguide's reflection). */
     const reflection = glottalReflection(options.head);
     this.glottisAdmittance = (1 - reflection) / (1 + reflection);
+    /** The head's glottis admittance, the calibration of the source. */
+    this.headAdmittance = this.glottisAdmittance;
+    /** Factor on the source for a glottis more open than the head's. */
+    this.sourceScale = 1;
     this.#prepareGrid(model, options);
     this.#placeMicrophone(model, resolveMicrophone(options.microphone));
     this.noiseArc = -1;
@@ -513,6 +525,7 @@ export class Fdtd3d {
     this.rise = rise;
     this.sourceCells = place.sourceCells;
     this.#shareGlottis();
+    this.#scaleSource();
     for (const index of this.larynxCells) {
       const closed = this.cellArc[index] < place.arc - dx / 2 ? 1 : 0;
       if (closed !== this.solid[index]) {
@@ -779,12 +792,54 @@ export class Fdtd3d {
   /**
    * Reflection of the glottis termination (glottalReflection of the head
    * by default); 1 makes it rigid. Recomputes the glottis admittance.
+   * Below MIN_GLOTTAL_REFLECTION (an open glottis, issue 53) the source
+   * cells would lose more than they keep in a step; it is limited there.
    * @param {number} reflection
    */
   setGlottalReflection(reflection) {
-    this.glottisAdmittance = (1 - reflection) / (1 + reflection);
+    const limited = Math.max(MIN_GLOTTAL_REFLECTION, reflection);
+    this.glottisAdmittance = (1 - limited) / (1 + limited);
     this.#shareGlottis();
     this.#updateCellCoefficients(this.sourceCells);
+    this.#scaleSource();
+  }
+
+  /**
+   * The source adds the glottal flow to its cells times their keep,
+   * (1 - h) / (1 + h) with h = COURANT * admittance / 2, which is part of
+   * the calibration of the source at the head's glottis. A glottis that is
+   * more open (a whisper lowers the reflection, issue 53) widens the
+   * formants through the faster decay of the cells, but the flow through
+   * it is the same: `sourceScale` (keep at the head's admittance / keep,
+   * on average over the source cells) adds the same pressure per step as
+   * the head's glottis. It is 1 (the plain source) at the head's
+   * admittance and below it (the rigid glottis of source-tract
+   * interaction).
+   */
+  #scaleSource() {
+    this.sourceScale = 1;
+    if (!(this.glottisAdmittance > this.headAdmittance)) {
+      return;
+    }
+    let slices = 0;
+    let open = 0;
+    let head = 0;
+    for (const index of this.sourceCells) {
+      slices += (this.dx * this.dx) / this.envelope[index];
+    }
+    const keep = (admittance) => {
+      const half = (COURANT * admittance) / 2;
+      return (1 - half) / (1 + half);
+    };
+    for (const index of this.sourceCells) {
+      const base = this.baseAdmittance[index];
+      const share = Math.max(1, slices);
+      open += keep(base + this.glottisAdmittance / share);
+      head += keep(base + this.headAdmittance / share);
+    }
+    if (open > 0) {
+      this.sourceScale = head / open;
+    }
   }
 
   /**
@@ -1193,9 +1248,10 @@ export class Fdtd3d {
     }
     this.lastGlottalFlow = glottalFlow;
     this.sourceGain =
-      (COURANT * keep) /
+      (COURANT * keep * this.sourceScale) /
       (Math.max(area, 1e-3) * Math.max(1, this.sourceCells.length));
-    return (COURANT * flow) / Math.max(area, 1e-3);
+    const pressure = (COURANT * flow) / Math.max(area, 1e-3);
+    return this.sourceScale === 1 ? pressure : pressure * this.sourceScale;
   }
 
   #measure() {

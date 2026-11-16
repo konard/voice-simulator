@@ -39,9 +39,7 @@ export function isVoicelessSonorant(token) {
   if (!token || token.voiced !== false) {
     return false;
   }
-  return (
-    token.kind === 'vowel' || SONORANTS.has(token.phoneme?.manner ?? '')
-  );
+  return token.kind === 'vowel' || SONORANTS.has(token.phoneme?.manner ?? '');
 }
 
 /**
@@ -88,8 +86,51 @@ export function applyWhisperDurations(segments) {
 }
 
 /**
+ * Whether a segment has no voicing target (a pause, a voiceless consonant
+ * or its release): the whisper does not drive it.
+ * @param {{target?: {voicing?: number}}} segment
+ */
+function isUnvoiced(segment) {
+  return !((segment.target?.voicing ?? 0) > 0);
+}
+
+/**
+ * The whisper of each segment: `segmentWhisper()`, and for a run of
+ * unvoiced segments (pauses, voiceless consonants) the larger whisper of
+ * the voiced segments on either side. The glottis of a whisperer stays
+ * open through them; it changes nothing there (the drive is whisper times
+ * voicing), but it lets the smoothed channel reach the whisper of a short
+ * whispered vowel instead of ramping across it (`ˈhḁ`, `{W ˈi W}`), so
+ * that no pulses are left in it.
+ * @param {object[]} segments timed segments
+ * @returns {number[]}
+ */
+export function segmentWhispers(segments) {
+  const own = segments.map(segmentWhisper);
+  const result = own.slice();
+  let index = 0;
+  while (index < segments.length) {
+    if (!isUnvoiced(segments[index])) {
+      index++;
+      continue;
+    }
+    let end = index;
+    while (end < segments.length && isUnvoiced(segments[end])) {
+      end++;
+    }
+    const before = index > 0 ? own[index - 1] : 0;
+    const after = end < segments.length ? own[end] : 0;
+    for (let at = index; at < end; at++) {
+      result[at] = Math.max(own[at], before, after);
+    }
+    index = end;
+  }
+  return result;
+}
+
+/**
  * Fill the whisper channel with the whisper of each segment
- * (`segmentWhisper()`), a step function that the planner smooths.
+ * (`segmentWhispers()`), a step function that the planner smooths.
  * @param {Float32Array} values
  * @param {object[]} segments timed segments
  * @param {number} frameRate
@@ -98,16 +139,17 @@ export function applyWhisperDurations(segments) {
 export function fillWhisper(values, segments, frameRate) {
   values.fill(0);
   let any = false;
-  for (const segment of segments) {
-    const whisper = segmentWhisper(segment);
+  const whispers = segmentWhispers(segments);
+  segments.forEach((segment, index) => {
+    const whisper = whispers[index];
     if (whisper === 0) {
-      continue;
+      return;
     }
     any = true;
     const first = Math.round(segment.start * frameRate);
     const last = Math.min(values.length, Math.round(segment.end * frameRate));
     values.fill(whisper, first, Math.max(first + 1, last));
-  }
+  });
   return any;
 }
 

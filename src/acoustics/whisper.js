@@ -15,10 +15,10 @@
  *   stage whisper; the air flow (src/acoustics/aerodynamics.js) and the
  *   turbulence strength of issue 35 follow that area and the lung pressure
  *   of the effort;
- * - the noise is white noise through a band-pass at the Strouhal frequency
- *   of the glottal jet (`strouhalFrequency()` in voice.js), not the 800 Hz
- *   band of the aspiration of the voice: the formants come from the tract;
- *   it is not modulated by the pulses;
+ * - the noise is white noise through a low-pass at the Strouhal frequency
+ *   of the glottal jet (`strouhalFrequency()` and NoiseSources in
+ *   voice.js), not the 800 Hz band of the aspiration of the voice: the
+ *   formants come from the tract; it is not modulated by the pulses;
  * - the whole whisper is quiet: the noise sources (the whisper noise, the
  *   frication, the aspiration and the transient of the consonants) are
  *   WHISPER_CONSONANT_LEVEL dB down and follow the effort by
@@ -33,8 +33,17 @@
  * - an open glottis reflects less of the tract's waves, which raises and
  *   widens the first formant: the reflection of the glottal end is
  *   `reflection * (1 - WHISPER_OPENING * whisper)` (`whisperReflection()`).
+ *   Past a whisper of 1 / WHISPER_OPENING (0.61) it turns negative: the glottis is then an
+ *   open end towards the trachea, and the tract is on its way from a
+ *   closed-open tube to an open-open one, whose resonances are higher. The
+ *   coupling of issue 34 (source-tract interaction) gives the folds the
+ *   load of the tract and of the trachea, but only for the fold source
+ *   with interaction, which leaves the reflection at 1; every other source
+ *   (the LF pulses by default) has only this reflection to show the open
+ *   glottis, so WHISPER_OPENING stays for them.
  *
- * Values between 0 and 1 give a whispery voice: pulses and noise. The
+ * Values between 0 and 1 give a whispery voice: pulses and noise, the noise
+ * WHISPERY_BOOST dB louder at whisper 0.5 (`whisperyGain()`). The
  * constants are tuned with `node experiments/issue-53-whisper-tuning.mjs`.
  */
 
@@ -51,10 +60,14 @@ export const STAGE_WHISPER_EFFORT = 10;
 
 /**
  * Change of the glottal reflection per unit of whisper: the reflection is
- * `reflection * (1 - WHISPER_OPENING * whisper)`. Tuned so that F1 of
- * [a], [i] and [u] rises by 255 ± 90 Hz on average at tier `high`.
+ * `reflection * (1 - WHISPER_OPENING * whisper)`, -0.49 at whisper 1 with
+ * the default head. Tuned from 0.6 so that F1 of [a], [i] and [u] rises
+ * by 255 ± 90 Hz on average at tier `high`, the target of issue 53
+ * (Jovičić 1998: whispered vowels have higher formants, F1 most):
+ * +265, +120 and +190 Hz, mean 192 Hz, with
+ * `node experiments/issue-53-whisper-tuning.mjs`.
  */
-export const WHISPER_OPENING = 0.6;
+export const WHISPER_OPENING = 1.65;
 
 /** Drive of the whisper noise inside the closure of a voiced stop. */
 export const WHISPER_STOP_DRIVE = 0.5;
@@ -87,8 +100,23 @@ export const WHISPER_GAIN = 0.28;
  */
 export const WHISPER_CONSONANT_LEVEL = -10;
 
-/** dB of whisper level per dB of effort: -30, -25, -20 dB at E -10, 0, +10. */
-export const WHISPER_EFFORT_SLOPE = 0.5;
+/**
+ * dB of whisper noise per dB of effort. With the brighter noise of the
+ * narrower glottis of a stage whisper the level of `Please call Stella.`
+ * is -5.3 dB at soft and +6.1 dB at loud against the whisper at normal
+ * effort, for -30, -25 and -20 dB against the voice
+ * (`node experiments/issue-53-quick.mjs`).
+ */
+export const WHISPER_EFFORT_SLOPE = 0.42;
+
+/**
+ * Extra level (dB) of the whisper noise of a whispery voice, at whisper 0.5
+ * (`whisperyGain()`): with pulses the noise is not a quiet register but the
+ * turbulence of a leaky glottis next to the voice, loud enough to bring
+ * the harmonics-to-noise ratio below 10 dB (Laver 1980: whispery voice is
+ * "audible friction" at the glottis with vibration).
+ */
+export const WHISPERY_BOOST = 18;
 
 /** dB of whisper noise per semitone of intended pitch above head.pitch. */
 export const WHISPER_PITCH_GAIN = 0.7;
@@ -122,7 +150,9 @@ export function whisperDrive(control) {
   const voicing = Math.min(1, Math.max(0, control.voicing));
   const closure = Math.min(1, Math.max(0, control.closure ?? 0));
   const stop = Math.min(1, Math.max(0, control.stopClosure ?? 0));
-  return whisper * voicing * (1 - closure) * (1 - (1 - WHISPER_STOP_DRIVE) * stop);
+  return (
+    whisper * voicing * (1 - closure) * (1 - (1 - WHISPER_STOP_DRIVE) * stop)
+  );
 }
 
 /**
@@ -157,16 +187,29 @@ export function whisperPitchGain(f0, pitch) {
   }
   const decibels = Math.min(
     WHISPER_PITCH_LIMIT,
-    Math.max(-WHISPER_PITCH_LIMIT, WHISPER_PITCH_GAIN * 12 * Math.log2(f0 / pitch))
+    Math.max(
+      -WHISPER_PITCH_LIMIT,
+      WHISPER_PITCH_GAIN * 12 * Math.log2(f0 / pitch)
+    )
   );
   return 10 ** (decibels / 20);
 }
 
 /**
+ * Factor on the whisper noise of a whispery voice: WHISPERY_BOOST dB times
+ * `4 * whisper * (1 - whisper)`, so 1 for a modal voice and for a whisper.
+ * @param {number} whisper 0..1
+ */
+export function whisperyGain(whisper) {
+  const share = Math.min(1, Math.max(0, whisper));
+  return 10 ** ((WHISPERY_BOOST * 4 * share * (1 - share)) / 20);
+}
+
+/**
  * The whisper noise sample (before the source's aspiration level and the
  * 0.45 of the breath noise): `noise` times the drive, the turbulence
- * strength at the glottis (with whisperQuiet), WHISPER_GAIN and the area
- * and pitch gains.
+ * strength at the glottis (with whisperQuiet), WHISPER_GAIN and the area,
+ * pitch and whispery gains.
  * @param {{whisper?: number, voicing: number, closure: number, stopClosure?: number, effort?: number, f0: number}} control
  * @param {number} noise Band-passed white noise.
  * @param {number} strength Relative turbulence strength at the glottis.
@@ -179,7 +222,8 @@ export function whisperNoise(control, noise, strength, pitch) {
     strength *
     WHISPER_GAIN *
     whisperAreaGain(control.effort ?? 0) *
-    whisperPitchGain(control.f0, pitch)
+    whisperPitchGain(control.f0, pitch) *
+    whisperyGain(control.whisper ?? 0)
   );
 }
 
