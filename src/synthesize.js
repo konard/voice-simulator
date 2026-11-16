@@ -4,10 +4,12 @@
  */
 
 import {
+  engineOptions,
+  releaseRenderer,
   renderPlan,
   renderPlanAsync,
-  VoiceRenderer,
 } from './acoustics/voice.js';
+import { createEngine } from './engine/index.js';
 import { planUtterance } from './articulation/plan.js';
 import { utteranceTimeline } from './articulation/timeline.js';
 import { textToIpa } from './g2p/index.js';
@@ -139,6 +141,9 @@ export function prepareUtterance(text, options = {}) {
     piriform: options.piriform,
     vallecula: options.vallecula,
     device: options.device,
+    engine: options.engine,
+    threads: options.threads,
+    simd: options.simd,
   };
   return { ...transcription, head, plan, timeline, renderOptions };
 }
@@ -152,9 +157,11 @@ export function prepareUtterance(text, options = {}) {
  * (docs/markup.md): a text that starts with `<speak` is SSML unless
  * `markup` is false, and `true` also reads inline tags; the result has the
  * mode spans (`modes`, IPA word indexes; `plan.modes` in seconds) and the
- * markup `warnings`. Malformed SSML throws `MarkupError`.
+ * markup `warnings`. Malformed SSML throws `MarkupError`. `engine`
+ * (default 'auto': Rust when it loads) picks the engine that renders, see
+ * createEngine of src/engine/index.js; `threads` and `simd` go to it.
  * @param {string} text
- * @param {{lang?: string, accent?: string|object, accentLevel?: number, ipa?: boolean, markup?: boolean, head?: object|'random', seed?: string|number, preset?: string, tier?: string|number, solver?: string, source?: 'lf'|'folds', interaction?: boolean, subglottal?: boolean, sections?: number, dx?: number, sampleRate?: number, blockSize?: number, bandLimit?: number, output?: 'flow'|'microphone', microphone?: {distance?: number, azimuth?: number, elevation?: number, compensate?: boolean}, room?: string|object, enclosure?: {width: number, height: number, depth: number, absorption?: number, center?: number[]}, teeth?: boolean, piriform?: boolean, vallecula?: boolean}} [options]
+ * @param {{lang?: string, accent?: string|object, accentLevel?: number, ipa?: boolean, markup?: boolean, head?: object|'random', seed?: string|number, preset?: string, tier?: string|number, solver?: string, source?: 'lf'|'folds', interaction?: boolean, subglottal?: boolean, sections?: number, dx?: number, sampleRate?: number, blockSize?: number, bandLimit?: number, output?: 'flow'|'microphone', microphone?: {distance?: number, azimuth?: number, elevation?: number, compensate?: boolean}, room?: string|object, enclosure?: {width: number, height: number, depth: number, absorption?: number, center?: number[]}, teeth?: boolean, piriform?: boolean, vallecula?: boolean, engine?: 'auto'|'rust'|'js'|object, threads?: number|'auto', simd?: 'auto'|boolean}} [options]
  * @returns {{lang: string, accent: string|null, accentLevel: number|null, ipa: string, words: object[], modes: {from: number, to: number, mode: object}[], warnings: {position: number, message: string}[], head: object, plan: object, timeline: object, sampleRate: number, samples: Float32Array, duration: number}}
  */
 export function synthesize(text, options = {}) {
@@ -206,16 +213,22 @@ function result(prepared, samples) {
  */
 export async function* synthesizeStream(text, options = {}) {
   const prepared = prepareUtterance(text, options);
-  const renderer = new VoiceRenderer(prepared.plan, prepared.renderOptions);
+  const engine = await createEngine(engineOptions(prepared.renderOptions));
+  const renderer = engine.createRenderer(prepared.plan, prepared.renderOptions);
   const chunkSize = options.chunkSize ?? 4096;
-  while (!renderer.done) {
-    const chunk = new Float32Array(chunkSize);
-    const written = await renderer.renderAsync(chunk);
-    if (written === 0) {
-      break;
+  try {
+    while (!renderer.done) {
+      const chunk = new Float32Array(chunkSize);
+      const written = await renderer.renderAsync(chunk);
+      if (written === 0) {
+        break;
+      }
+      yield chunk.subarray(0, written);
+      // Let the event loop deliver the chunk before simulating the next one.
+      await new Promise((resolve) => globalThis.setTimeout(resolve, 0));
     }
-    yield chunk.subarray(0, written);
-    // Let the event loop deliver the chunk before simulating the next one.
-    await new Promise((resolve) => globalThis.setTimeout(resolve, 0));
+  } finally {
+    // Also when the consumer stops early (return() of the generator).
+    releaseRenderer(renderer);
   }
 }
