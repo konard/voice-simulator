@@ -6,6 +6,7 @@
 import { describe, it, expect } from 'test-anywhere';
 import { VoiceEngine } from '../examples/universal-app/src/engine/voice-engine.js';
 import { AUDIO_TIERS, BASE_AUDIO_LEVEL, audioTierIndex } from '../src/index.js';
+import { createWorkerHandler } from '../src/engine/worker-protocol.js';
 
 const HIGH = audioTierIndex('high');
 
@@ -29,6 +30,11 @@ function fakeWorker() {
     terminate() {},
   };
   return worker;
+}
+
+/** The messages of one type the engine posted to its worker. */
+function postedOf(worker, type) {
+  return worker.posted.filter((message) => message.type === type);
 }
 
 function withStorage(run) {
@@ -71,7 +77,11 @@ describe('voice engine benchmark', () => {
       const first = new VoiceEngine({ createWorker: () => worker });
       first.benchmark({});
       expect(first.status.phase).toBe('benchmark');
-      expect(worker.posted[0].type).toBe('benchmark');
+      // The worker is asked which engine renders as soon as it starts.
+      expect(worker.posted.map((message) => message.type)).toEqual([
+        'engine',
+        'benchmark',
+      ]);
       worker.reply({ type: 'benchmark', level: 2, loads: [0.1, 0.2, 0.3] });
       expect(first.audioLevel).toBe(2);
 
@@ -88,11 +98,11 @@ describe('voice engine benchmark', () => {
       const worker = fakeWorker();
       const engine = new VoiceEngine({ createWorker: () => worker });
       engine.benchmark({}, { gpu: false });
-      expect(worker.posted[0].gpu).toBe(false);
+      expect(postedOf(worker, 'benchmark')[0].gpu).toBe(false);
       worker.reply({ type: 'benchmark', level: 3, loads: [], gpu: false });
       engine.benchmark({});
       expect(engine.status.phase).toBe('benchmark');
-      expect(worker.posted[1].gpu).toBe(true);
+      expect(postedOf(worker, 'benchmark')[1].gpu).toBe(true);
     });
     const worker = fakeWorker();
     const engine = new VoiceEngine({ createWorker: () => worker });
@@ -114,6 +124,55 @@ describe('voice engine benchmark', () => {
     worker.reply({ type: 'benchmark', level: 3, loads: [], gpu: false });
     await engine.speak({ ...request, mode: 'sound' });
     expect(worker.posted.at(-1).gpu).toBe(undefined);
+  });
+
+  it('renders with the engine setting and shows the engine', async () => {
+    await withStorage(async () => {
+      const worker = fakeWorker();
+      const engine = new VoiceEngine({ createWorker: () => worker });
+      engine.benchmark({});
+      expect(postedOf(worker, 'engine')).toEqual([
+        { type: 'engine', engine: 'auto' },
+      ]);
+      expect(engine.status.engine).toBe(null);
+      worker.reply({
+        type: 'engine',
+        name: 'rust',
+        simd: false,
+        threads: 1,
+        reason: null,
+      });
+      expect(engine.status.engine).toEqual({
+        name: 'rust',
+        simd: false,
+        reason: null,
+        error: null,
+      });
+      worker.reply({ type: 'benchmark', level: 3, loads: [0.1] });
+      // Another engine: asked again, and measured again (its own cache).
+      engine.benchmark({}, { engine: 'js' });
+      expect(engine.status.engine).toBe(null);
+      expect(postedOf(worker, 'engine').at(-1).engine).toBe('js');
+      expect(postedOf(worker, 'benchmark').at(-1).engine).toBe('js');
+      expect(engine.status.phase).toBe('benchmark');
+      engine.player = {
+        unlock: async () => {},
+        stalled: () => false,
+        begin() {},
+        stop() {},
+      };
+      const request = {
+        text: 'ˈa',
+        ipa: true,
+        lang: 'en',
+        head: {},
+        seed: '1',
+      };
+      await engine.speak({ ...request, mode: 'sound' });
+      expect(worker.posted.at(-1).engine).toBe('js');
+      await engine.speak({ ...request, mode: 'sound', engine: 'rust' });
+      expect(worker.posted.at(-1).engine).toBe('rust');
+    });
   });
 
   it('follows the worker when it steps down early', () => {
@@ -191,23 +250,22 @@ describe('voice engine modes', () => {
 /** Replies after which the worker is done with a message. */
 const FINAL = new Set(['end', 'error', 'benchmark']);
 
-/** The worker's message handler, from a single import of the module. */
+/** The worker's message handler, shared by the tests. */
 let workerHandler = null;
 
 /**
- * Message handler of a worker; `fresh` loads a separate instance of the
- * module, whose WebGPU device has not been requested yet.
+ * Message handler of a worker (createWorkerHandler, the module the app's
+ * synth-worker.js runs); `fresh` makes a separate one, whose WebGPU device
+ * has not been requested yet.
  */
 async function workerInstance(fresh) {
   if (workerHandler && !fresh) {
     return workerHandler;
   }
-  let handler = null;
-  globalThis.addEventListener = (type, listener) => {
-    handler = listener;
-  };
-  const url = '../examples/universal-app/src/engine/synth-worker.js';
-  await import(fresh ? `${url}?fresh=${fresh}` : url);
+  const handle = createWorkerHandler((data, transfer) =>
+    globalThis.postMessage(data, transfer)
+  );
+  const handler = (event) => handle(event.data);
   if (!fresh) {
     workerHandler = handler;
   }

@@ -1,6 +1,10 @@
 import { createElement as h } from 'react';
 import { MAX_ENCLOSURE_CELLS, ROOM_PRESETS } from '../../../../src/index.js';
-import { DEFAULT_ACOUSTICS, boxProblem } from '../engine/listening.js';
+import {
+  DEFAULT_ACOUSTICS,
+  boxProblem,
+  engineLabel,
+} from '../engine/listening.js';
 
 const MICROPHONE_SLIDERS = [
   { key: 'micDistance', min: 1, max: 200, step: 1, unit: 'cm' },
@@ -54,11 +58,14 @@ function Check({ id, label, checked, onChange }) {
   );
 }
 
+const ENGINES = ['auto', 'rust', 'js'];
+
 /**
  * Microphone position, room reverberation and the box of air around the
- * head (see listeningSettings for how they reach the simulation).
+ * head (see listeningSettings for how they reach the simulation), and the
+ * engine that simulates (`engine`: status.engine of VoiceEngine).
  */
-export function AcousticsSettings({ acoustics, head, t, onChange }) {
+export function AcousticsSettings({ acoustics, head, engine, t, onChange }) {
   const strings = t.acoustics;
   const update = (key, value) => onChange({ ...acoustics, [key]: value });
   const slider = (entry, disabled = false) =>
@@ -152,7 +159,29 @@ export function AcousticsSettings({ acoustics, head, t, onChange }) {
           checked: acoustics.gpu,
           onChange: (value) => update('gpu', value),
         }),
-        h('small', null, strings.gpuNote)
+        h('small', null, strings.gpuNote),
+        h(
+          'label',
+          { className: 'field', htmlFor: 'acoustics-engine' },
+          h('span', null, strings.engine),
+          h(
+            'select',
+            {
+              id: 'acoustics-engine',
+              value: acoustics.engine ?? 'auto',
+              onChange: (event) => update('engine', event.target.value),
+            },
+            ENGINES.map((name) =>
+              h('option', { key: name, value: name }, strings.engines[name])
+            )
+          )
+        ),
+        h(
+          'p',
+          { className: 'engine-status', role: 'status' },
+          engineLabel(engine, strings)
+        ),
+        h('small', null, strings.engineNote)
       )
     )
   );
