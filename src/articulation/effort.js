@@ -89,14 +89,15 @@ export const LEVEL_TRIM = Object.freeze([
  * own at an effort of `E` dB, linear between the points ([E, st]): the
  * fold tension is set for the planned pitch at the planned lung pressure,
  * yet the folds still sound higher at a raised pressure. Measured on `ˈa`
- * with `node experiments/issue-52-folds-pitch.mjs` (issue 52, step 8);
- * the planner takes it from the pitch the fold tension is set for.
+ * with `node experiments/issue-52-folds-pitch.mjs` (issue 52, step 8;
+ * measured again on the statement tune of issue 51, which changed the
+ * contour of `ˈa`); the planner takes it from the pitch the fold tension is set for.
  */
 export const FOLD_PITCH_RISE = Object.freeze([
-  [-10, -0.18],
+  [-10, -0.39],
   [0, 0],
-  [10, 0.4],
-  [20, 1.34],
+  [10, 0],
+  [20, 0.74],
 ]);
 
 /**

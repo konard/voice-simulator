@@ -289,9 +289,10 @@ bursts by the noise rule. The fold source (`source: 'folds'`) takes its
 level and tilt from the raised lung pressure itself; its fold tension is
 set for the pitch less the rise the folds give on their own
 (`FOLD_PITCH_RISE`, measured on `ˈa` with
-`node experiments/issue-52-folds-pitch.mjs`: -0.18, +0.40 and +1.34 st at
--10, +10 and +20 dB), so both sources keep the pitch rule. The Rust engine
-realises the same gains (`crates/voice-simulator-core/src/effort.rs`).
+`node experiments/issue-52-folds-pitch.mjs`: -0.39, 0 and +0.74 st at -10,
++10 and +20 dB on the statement tune of #51), so both sources keep the
+pitch rule. The Rust engine realises the same gains
+(`crates/voice-simulator-core/src/effort.rs`).
 
 Measured with `node experiments/issue-52-effort-tuning.mjs` ("Please call
 Stella.", tier medium, seed 1, LF source; F1 on `ˈa`), against plain
@@ -299,13 +300,26 @@ speech:
 
 | Span        | Level     | Pitch     | Alpha ratio | H1-H2    | F1 of `ˈa` | Vowels  | Consonants |
 | ----------- | --------- | --------- | ----------- | -------- | ---------- | ------- | ---------- |
-| `[soft]`    | -10.46 dB | -4.03 st  | -1.97 dB    | +2.30 dB | -25 Hz     | × 1.000 | × 1.000    |
-| `[loud]`    | +10.86 dB | +5.99 st  | +2.00 dB    | -4.01 dB | +35 Hz     | × 1.100 | × 1.000    |
-| `[shout]`   | +19.94 dB | +10.47 st | +4.52 dB    | -7.83 dB | +60 Hz     | × 1.300 | × 1.000    |
-| `[lombard]` | +10.85 dB |           |             |          |            | × 1.084 |            |
+| `[soft]`    | -10.60 dB | -4.00 st  | -1.84 dB    | +2.34 dB | -20 Hz     | × 1.000 | × 1.000    |
+| `[loud]`    | +11.25 dB | +6.05 st  | +0.31 dB    | -3.67 dB | +35 Hz     | × 1.100 | × 1.000    |
+| `[shout]`   | +21.55 dB | +10.50 st | -0.45 dB    | -7.41 dB | +40 Hz     | × 1.300 | × 1.000    |
+| `[lombard]` | +11.25 dB | +6.04 st  | +0.23 dB    | -3.74 dB |            | × 1.084 | × 1.000    |
 
-`<prosody vs:gain="-6dB">` is a plain gain: -5.93 dB and +0.16 dB of
+`<prosody vs:gain="-6dB">` is a plain gain: -5.95 dB and +0.18 dB of
 alpha ratio.
+
+The alpha ratio and F1 of one rendering depend on where the harmonics
+fall: F2 of [ɔ] in "call" lies near the 1 kHz edge of the alpha ratio and
+the F1 estimate follows the nearest harmonic, so half a semitone of
+speaker pitch moves the alpha ratio of `[shout]` from -1.84 to +1.95 dB
+(+1.03 to +6.34 dB before the tunes of #51). The alpha ratio is defined on
+a long-term average spectrum, so `tests/effort.test.js` pools the spectra
+of seven renderings with the speaker pitch 120 Hz × 2^(s/12), s = -3 … 3,
+and averages the F1 shifts over the same pitches: `[soft]`, `[loud]` and
+`[shout]` measure -2.80, +2.98 and +3.16 dB of alpha ratio, `{f ˈa f}` and
+`{ff ˈa ff}` +46.8 and +61.4 Hz of F1
+(`node experiments/issue-51-effort-alpha.mjs`; the same pooling gives
+-1.74, +3.29, +3.75 dB and +45.4, +67.5 Hz before #51).
 
 ### Level convention
 

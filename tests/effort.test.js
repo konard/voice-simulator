@@ -26,6 +26,7 @@ import {
   synthesizeStream,
   textToIpa,
 } from '../src/index.js';
+import { averageSpectrum } from '../src/analysis/mode-features.js';
 
 const TEXT = 'Please call Stella.';
 const BASE = { tier: 'medium', seed: 1, markup: true, headroom: 20 };
@@ -76,6 +77,56 @@ const plain = () => measure(TEXT);
 const tagged = (tag) => measure(`[${tag}]${TEXT}[/${tag}]`);
 const ipa = (text) => measure(text, { ipa: true, markup: false });
 
+/*
+ * The alpha ratio and F1 of one rendering depend on where the harmonics
+ * fall: F2 of [ɔ] lies near the 1 kHz edge of the alpha ratio, and the F1
+ * estimate follows the nearest harmonic, so half a semitone of speaker
+ * pitch moves them by several dB and tens of Hz (issue 51 changed the pitch
+ * contour and showed it; experiments/issue-51-effort-alpha.mjs). Both are
+ * therefore measured over the speaker pitches 120 Hz × 2^(s/12), s = -3 …
+ * 3: the alpha ratio on the long-term average spectrum of the seven
+ * renderings, F1 as the mean of the seven shifts.
+ */
+const PITCH_SHIFTS = [-3, -2, -1, 0, 1, 2, 3];
+const speaker = (shift) => ({ head: { pitch: 120 * 2 ** (shift / 12) } });
+
+const bandPower = ({ power, binWidth }, low, high) => {
+  let sum = 0;
+  const last = Math.min(power.length, Math.ceil(high / binWidth));
+  for (let k = Math.ceil(low / binWidth); k < last; k++) {
+    sum += power[k];
+  }
+  return sum;
+};
+
+/** Alpha ratio (dB) of the long-term average over the speaker pitches. */
+function pooledAlpha(input) {
+  let high = 0;
+  let low = 0;
+  for (const shift of PITCH_SHIFTS) {
+    const { samples, sampleRate } = synthesize(input, {
+      ...BASE,
+      ...speaker(shift),
+    });
+    const spectrum = averageSpectrum(samples, sampleRate, 0, samples.length);
+    high += bandPower(spectrum, 1000, 5000);
+    low += bandPower(spectrum, 50, 1000);
+  }
+  return 10 * Math.log10(high / low);
+}
+
+/** Mean F1 shift (Hz) of an IPA text against `ˈa` over the speaker pitches. */
+function pooledF1Shift(text) {
+  let sum = 0;
+  for (const shift of PITCH_SHIFTS) {
+    const options = { ipa: true, markup: false, ...speaker(shift) };
+    sum +=
+      measure(text, options).voice.formants[0] -
+      measure('ˈa', options).voice.formants[0];
+  }
+  return sum / PITCH_SHIFTS.length;
+}
+
 describe('vocal effort', () => {
   it('changes the level by the effort', () => {
     near(tagged('soft').level - plain().level, -10, 1.5);
@@ -91,16 +142,17 @@ describe('vocal effort', () => {
   });
 
   it('flattens the spectrum with effort', () => {
-    near(tagged('soft').alpha - plain().alpha, -2, 1);
-    near(tagged('loud').alpha - plain().alpha, 2, 1);
-    near(tagged('shout').alpha - plain().alpha, 4, 1.5);
+    const alpha = pooledAlpha(TEXT);
+    const tag = (name) => pooledAlpha(`[${name}]${TEXT}[/${name}]`) - alpha;
+    near(tag('soft'), -2, 1);
+    near(tag('loud'), 2, 1);
+    near(tag('shout'), 4, 1.5);
     expect(tagged('shout').voice.h1h2 <= plain().voice.h1h2 - 3).toBe(true);
   });
 
   it('raises the first formant', () => {
-    const f1 = ipa('ˈa').voice.formants[0];
-    near(ipa('{f ˈa f}').voice.formants[0] - f1, 35, 15);
-    near(ipa('{ff ˈa ff}').voice.formants[0] - f1, 70, 25);
+    near(pooledF1Shift('{f ˈa f}'), 35, 15);
+    near(pooledF1Shift('{ff ˈa ff}'), 70, 25);
   });
 
   it('keeps the pitch rule on the fold source', () => {
@@ -118,7 +170,7 @@ describe('vocal effort', () => {
       );
     }
     expect(foldPitchFactor(0)).toBe(1);
-    near(foldPitchFactor(20), 2 ** (-1.34 / 12), 1e-12);
+    near(foldPitchFactor(20), 2 ** (-0.74 / 12), 1e-12);
   });
 
   it('lengthens vowels, not consonants', () => {
