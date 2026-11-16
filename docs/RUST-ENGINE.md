@@ -656,6 +656,93 @@ kernel forms alone and `experiments/issue-23-micro-kernel.mjs` a bare Rust
 loop against the hand-written kernel, which separates the code generation
 of the compiler from the solver around it.
 
+## Choosing an engine (issue 25)
+
+`createEngine(options)` of `src/engine/index.js` loads the engine that
+renders, and every renderer, `synthesize`, `synthesizeAsync`,
+`synthesizeStream`, `renderPlan`, `renderPlanAsync`, `measureAudioTier`,
+`benchmarkAudioTiers`, the CLI (`--engine`, `--threads`), the HTTP server
+(`createVoiceServer({engine})`, `engine=js` per request) and the worker
+take the same `engine` option:
+
+- `'auto'` (the default): the Rust engine when `voice-simulator.wasm`
+  loads, else JavaScript with `engine.reason` saying why ("this runtime has
+  no WebAssembly", "the Rust engine (voice-simulator.wasm) is missing or
+  does not compile"). A render the engine does not support (`solver:
+'fdtd2d'` or another registered solver, a WebGPU `device`, `source:
+'folds'`, `bandLimit <= 0`) runs in JavaScript too, with the reason in
+  `renderer.fallbackReason`.
+- `'rust'`: the Rust engine, or an Error with
+  `code === 'ENGINE_UNAVAILABLE'` when it does not load. Renders it does not
+  support still fall back to JavaScript, with `fallbackReason`.
+- `'js'`: the JavaScript renderer; no WebAssembly is read or compiled.
+
+The engine object is `{name: 'rust' | 'js', requested, simd, threads,
+reason}` with `createRenderer(plan, renderOptions)`, `supports(options)`,
+`features()` and `close()`; an engine object can be passed wherever an
+`engine` name can. Engines from the default files are cached by
+`engine|threads|simd`, so the file is read and compiled once; one from a
+`source` is not cached. `threads` (default 1, a positive integer or
+`'auto'`) is accepted and checked but the engine renders on one thread
+until issue 24; `simd` (default `'auto'`) goes to the loader.
+
+`getEngine(options)` is createEngine without a promise. In Node.js, Bun
+and Deno (where `process.getBuiltinModule` exists) it reads and compiles
+the file synchronously (`loadEngineModuleSync`), so the synchronous
+`synthesize` and `renderPlan` use Rust under `'auto'`. In a browser
+WebAssembly of this size has to load asynchronously: `getEngine('auto')`
+gives the cached engine of an earlier `await createEngine()`, else
+JavaScript (not cached, so a later createEngine still loads Rust), and
+`getEngine('rust')` throws `ENGINE_UNAVAILABLE`. The asynchronous
+functions and the worker call createEngine themselves.
+
+Rust and JavaScript compute in the same order (see
+[Determinism rules](#determinism-rules)), and the parity tests allow a
+difference of up to 1e-4 per sample (parity class B): an output that has to
+stay byte-stable across machines and versions (golden files, hashes) uses
+`engine: 'js'`. On the CLI `--engine js` gives the same bytes as before
+issue 25; `benchmark` prints the engine first (`engine: rust`, or
+`"engine":"rust"` with `--json`).
+
+### Worker
+
+`voice-simulator/worker` (`src/engine/worker.js`) is a module worker that
+renders off the main thread; its logic is `createWorkerHandler(post)` of
+`src/engine/worker-protocol.js`, which the tests drive without a worker.
+The example app's `synth-worker.js` is one line,
+`import '../../../../src/engine/worker.js';`.
+
+```javascript
+const worker = new Worker(new URL('voice-simulator/worker', import.meta.url), {
+  type: 'module',
+});
+worker.postMessage({ type: 'engine' }); // -> {type: 'engine', name: 'rust', simd, threads, reason}
+```
+
+| Message in                                                                                                                          | Answer                                                                                                                                 |
+| ----------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| `{type: 'engine', engine?, threads?, simd?}`                                                                                        | `{type: 'engine', name, simd, threads, reason}`; `{type: 'engine', name: null, error}` when `'rust'` cannot load                       |
+| `{type: 'benchmark', head, gpu?, engine?, threads?, simd?}`                                                                         | `{type: 'benchmark', level, loads, measured, gpu, gpuLoads}`                                                                           |
+| `{type: 'speak', id, ipa, lang, head, seed, tier, auto, chunkSize, microphone?, room?, enclosure?, gpu?, engine?, threads?, simd?}` | `{type: 'start', id, sampleRate, solver, gpu, totalSamples, model?, engine, fallbackReason}`, then `chunk`s and `end` (or `overload`s) |
+| `{type: 'cancel', id}`                                                                                                              | the utterance stops; no `end`                                                                                                          |
+
+Out per utterance: `{type: 'overload', id, from, level, load}` (auto mode:
+the tier could not keep up and the utterance restarts on `level`),
+`{type: 'chunk', id, start, samples, field, load}` (the samples and the RMS
+pressure field of the chunk), `{type: 'end', id, load}` and
+`{type: 'error', id, message}`. `engine` in `start` is the engine that
+renders this utterance (`'js'` on WebGPU, for example, with the reason in
+`fallbackReason`).
+
+The loader names the file with the literal
+`new URL('./voice-simulator.wasm', import.meta.url)`, so Vite, webpack and
+Rollup copy it next to the worker bundle and rewrite the URL; the app's
+`npm run example:web:build` emits `assets/voice-simulator-<hash>.wasm`.
+Where the request fails (blocked, offline, an old browser) the worker
+renders in JavaScript and says why. The app's settings panel shows
+"Engine: Rust", "Engine: Rust (SIMD)" or "Engine: JavaScript (<reason>)"
+and has the setting Engine: Auto, Rust or JavaScript.
+
 ## Determinism rules
 
 The same input, seed and options give the same samples on every runtime.
