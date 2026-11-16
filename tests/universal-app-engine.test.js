@@ -90,6 +90,7 @@ function withStorage(run) {
 
 /** The worker's answer to {type: 'engine'} for the Rust engine. */
 const RUST = { name: 'rust', simd: true, threads: 1 };
+const JS = { name: 'js', simd: false, threads: 1 };
 
 /** A complete benchmark answer of the worker (benchmarkDevice). */
 function answer(level, fields = {}) {
@@ -201,6 +202,21 @@ describe('voice engine benchmark', () => {
       expect(cached.version).toBe(BENCHMARK_VERSION);
       expect(cached.level).toBe(2);
       expect(cached.engine).toEqual(RUST);
+    });
+  });
+
+  it('waits for the engine to load before the idle moment', () => {
+    withStorage(() => {
+      const { worker, runs, idle, reply, start } = benchmarkEngine({
+        engine: null,
+      });
+      start();
+      // Its answer re-renders the app: not inside the benchmark window.
+      expect(runs.length).toBe(0);
+      reply({ type: 'engine', ...RUST, reason: null });
+      expect(runs.length).toBe(1);
+      idle();
+      expect(postedOf(worker, 'benchmark').length).toBe(1);
     });
   });
 
@@ -493,7 +509,12 @@ describe('voice engine quality settings', () => {
       engine.benchmark({}, { engine: 'js' });
       expect(engine.status.engine).toBe(null);
       expect(postedOf(worker, 'engine').at(-1).engine).toBe('js');
+      // The benchmark waits for the engine to load in the worker.
       idle();
+      expect(postedOf(worker, 'benchmark').length).toBe(1);
+      reply({ type: 'engine', ...JS, reason: null });
+      idle();
+      expect(postedOf(worker, 'benchmark').length).toBe(2);
       expect(postedOf(worker, 'benchmark').at(-1).engine).toBe('js');
       expect(engine.status.phase).toBe('idle');
       await speakSound(engine);

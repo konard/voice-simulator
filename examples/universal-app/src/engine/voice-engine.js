@@ -76,6 +76,8 @@ export class VoiceEngine {
     this.cached = null;
     this.benchmarkHead = undefined;
     this.cancelIdle = () => {};
+    // Set while the benchmark waits for the answer to {type: 'engine'}.
+    this.whenEngine = null;
     // Times (performance.now) from each speak() to the end of its
     // utterance; the benchmark is paused then, so the long tasks of the app
     // in them are not the benchmark's (use-simulator, `?debug`).
@@ -222,14 +224,30 @@ export class VoiceEngine {
     }
   }
 
-  /** Start at the start level and measure at the next idle moment. */
+  /**
+   * Start at the start level and measure at the next idle moment after the
+   * worker has answered {type: 'engine'}: the benchmark needs the loaded
+   * engine anyway, and the app's render of that answer would otherwise be
+   * a long task inside the benchmark window.
+   */
   #measureLater() {
     this.cached = null;
     this.benchmarkGpu = null;
     this.#setAutoLevel(startLevel(globalThis.navigator ?? {}));
     this.#emit({ audioLevel: this.audioLevel, benchmark: null });
     this.cancelIdle();
-    this.cancelIdle = this.idle(() => this.#postBenchmark());
+    let cancel = () => {};
+    this.whenEngine = () => {
+      this.whenEngine = null;
+      cancel = this.idle(() => this.#postBenchmark());
+    };
+    this.cancelIdle = () => {
+      this.whenEngine = null;
+      cancel();
+    };
+    if (this.status.engine) {
+      this.whenEngine();
+    }
   }
 
   /**
@@ -476,6 +494,7 @@ export class VoiceEngine {
         engine: { name, simd, threads, reason, error: error ?? null },
       });
       this.#checkCachedEngine();
+      this.whenEngine?.();
       return;
     }
     if (message.type === 'benchmark') {

@@ -57,7 +57,7 @@ function serve() {
 }
 
 function instrument() {
-  window.issue28 = { benchmarkAt: null, answerAt: null };
+  window.issue28 = { benchmarkAt: null, answerAt: null, messages: [] };
   const post = Worker.prototype.postMessage;
   Worker.prototype.postMessage = function (message, ...rest) {
     if (message?.type === 'benchmark') {
@@ -69,6 +69,10 @@ function instrument() {
   Worker.prototype.addEventListener = function (type, listener, ...rest) {
     if (type === 'message') {
       add.call(this, 'message', (event) => {
+        window.issue28.messages.push([
+          Math.round(performance.now()),
+          event.data?.type,
+        ]);
         if (event.data?.type === 'benchmark' && !event.data.gpuPending) {
           window.issue28.answerAt = performance.now();
         }
@@ -178,6 +182,7 @@ try {
           benchmarkAt: Math.round(times.benchmarkAt),
           answerAt: Math.round(times.answerAt),
           hud: /long tasks \d+/.exec(hud)?.[0],
+          messages: times.messages,
           tasks: summarize(trace, times.benchmarkAt, times.answerAt),
         },
         null,
