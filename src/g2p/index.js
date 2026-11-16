@@ -231,12 +231,16 @@ const isChineseWord = (item) =>
  * 不 written `yi1` or `bu4` are not changed, as only Hanzi say which
  * syllable is 一 or 不.
  * @param {object[]} items
+ * @param {{language: string, g2p: object}|null} [switches] the accent
+ *   settings; the `lowThird` switch of a Chinese accent applies to the
+ *   whole run (issue 57).
  */
-function joinChineseRuns(items) {
+function joinChineseRuns(items, switches) {
+  const g2p = switches?.language === 'zh' ? switches.g2p : {};
   let run = [];
   const flush = () => {
     if (run.length >= 2) {
-      const ipa = chineseRunToIpa(run);
+      const ipa = chineseRunToIpa(run, g2p);
       run.forEach((item, index) => {
         if (ipa) {
           item.ipa = ipa[index];
@@ -463,7 +467,7 @@ export function textToIpa(text, options = {}) {
       );
     }
   });
-  joinChineseRuns(items);
+  joinChineseRuns(items, settings);
   joinRussianClitics(items);
   if ((options.weakForms ?? settings.g2p.weakForms) !== false) {
     weakenFunctionWords(items, accent);

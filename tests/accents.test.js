@@ -294,6 +294,9 @@ describe('regional accents', () => {
     expect(say('ज़रा फ़ोन शहर', 'hi', 'hi-x-east')).toBe('d͡ʒəɾaː pʰoːn səɦəɾ');
     expect(say('是', 'zh', 'zh-TW')).toBe('sɹ̩˥˩');
     expect(say('一点儿', 'zh', 'zh-TW')).toBe('i˥˩ tjɛn˨˩');
+    // Across the spaces between words too (the phrase runs of issue 49).
+    expect(say('我 很 好', 'zh', 'zh-TW')).toBe('wo˨˩ xən˧˥ xɑʊ˨˩');
+    expect(say('我 很 好', 'zh')).toBe('wo˨˩ xən˧˥ xɑʊ˨˩˦');
     expect(say('女儿', 'zh', 'zh-TW')).toContain('ɚ');
     expect(say('南', 'zh', 'zh-x-south')).toBe('lan˧˥');
     expect(say('price about', 'en', 'en-CA')).toBe('ˈpɹʌɪs əˈbʌʊt');

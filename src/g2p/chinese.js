@@ -298,10 +298,11 @@ export function chineseSyllables(text, options = {}) {
  * (a typed pinyin word keeps its typed tones, an erhua word has no
  * characters).
  * @param {{text: string, pinyin: string}[]} words
+ * @param {{lowThird?: boolean}} [options] as in chineseWordToIpa.
  * @returns {string[]|null} IPA per word, or `null` when a syllable can not
  *   be read.
  */
-export function chineseRunToIpa(words) {
+export function chineseRunToIpa(words, options = {}) {
   const items = [];
   const counts = [];
   for (const { text, pinyin } of words) {
@@ -316,7 +317,7 @@ export function chineseRunToIpa(words) {
     );
     counts.push(syllables.length);
   }
-  const ipa = syllablesToIpa(items);
+  const ipa = syllablesToIpa(items, options);
   if (ipa.length < items.length) {
     return null;
   }
