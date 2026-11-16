@@ -1,29 +1,42 @@
 #!/usr/bin/env node
 /**
- * Issue 47: bytes of the English vslex module under different encoder
- * options (pronunciation units, block size), for the words of the current
- * src/g2p/lexicon/en.js. Prints the JSON size plus the line overhead that
- * Prettier adds (one line per array item).
+ * Issue 47: raw and gzip bytes of the English vslex module under different
+ * encoder options (pronunciation units, symbol merges), for the words of
+ * the current src/g2p/lexicon/en.js. The package budget counts gzip bytes
+ * (`npm pack`), the en.js budget raw bytes. Raw size is the JSON size plus
+ * the line overhead Prettier adds (one line per array item).
  *
  *   node experiments/issue-47-en-encoding.mjs
  */
+import { gzipSync } from 'node:zlib';
 import { encodeVslex } from '../src/g2p/vslex.js';
 import { lexiconFor, pronunciations } from '../src/g2p/lexicon.js';
 
 const PHONEMES = /t͡ʃ|d͡ʒ|aɪ|aʊ|eɪ|oʊ|ɔɪ|./gu;
+const phonemes = (text) => text.match(PHONEMES);
 const entries = new Map();
 for (const word of lexiconFor('en').words()) {
   entries.set(word, pronunciations('en', word));
 }
-const size = (data) =>
-  JSON.stringify(data).length +
-  6 * (data.first.length + data.blocks.length + data.values.length);
+function sizes(data) {
+  const text = [
+    ...Object.entries(data)
+      .filter(([, value]) => !Array.isArray(value))
+      .map(([key, value]) => `  ${key}: ${JSON.stringify(value)},`),
+    ...['values', 'first', 'blocks'].flatMap((key) => [
+      `  ${key}: [`,
+      ...data[key].map((item) => `    ${JSON.stringify(item)},`),
+      '  ],',
+    ]),
+  ].join('\n');
+  return `${Buffer.byteLength(text)} raw, ${gzipSync(text, { level: 9 }).length} gzip`;
+}
 for (const [name, options] of [
-  ['code points, 64', {}],
-  ['phonemes, 64', { units: (text) => text.match(PHONEMES) }],
-  ['code points, 128', { blockSize: 128 }],
-  ['phonemes, 128', { units: (text) => text.match(PHONEMES), blockSize: 128 }],
+  ['code points, merges', {}],
+  ['code points, no merges', { merge: false }],
+  ['phonemes, merges', { units: phonemes }],
+  ['phonemes, no merges', { units: phonemes, merge: false }],
 ]) {
   const data = encodeVslex('en', entries, options);
-  console.log(`${name}: ${size(data)} bytes, ${data.values.length} values`);
+  console.log(`${name}: ${sizes(data)}, ${data.values.length} values`);
 }
