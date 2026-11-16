@@ -37,8 +37,9 @@ a pressure wave travelling through the 3D shape of a parametric low-poly head
   effort, phonation, emotion and sounds), inline tags such as
   `[whisper]Hello[/whisper]` or `[pause 0.5]` with `markup: true`, and
   ExtIPA/VoQS marks in IPA (`{W həˈloʊ W} ˈwɝld .`, `(.)`, `⸨laugh⸩`, `ˈˈ`).
-  Rate, pitch, range, level, vocal effort, emphasis, tunes and timed pauses
-  are heard; the other qualities are carried in `plan.modes`. See
+  Rate, pitch, range, level, vocal effort, phonation types, emphasis, tunes
+  and timed pauses are heard; the other qualities are carried in
+  `plan.modes`. See
   [docs/markup.md](docs/markup.md).
 - **Vocal effort**: `[soft]`, `[loud]`, `[shout]`, `[lombard]`,
   `[crescendo]` and `[diminuendo]` (and `<vs:effort>`, `{f … f}`) change
@@ -49,6 +50,17 @@ a pressure wave travelling through the 3D shape of a parametric low-poly head
   effort to dB SPL (0.5 is 60 dB SPL) and `loudnessTarget` (CLI
   `--loudness`) scales to an integrated loudness in LUFS (ITU-R BS.1770,
   `integratedLoudness()`).
+- **Phonation types** (issue 54): `[breathy]`, `[creaky]`, `[pressed]`,
+  `[lax]`, `[falsetto]` and `[harsh]` (and `<vs:phonation>`, `{V̤ … V̤}`,
+  `{V̰ … V̰}`, `{C … C}`, `{F … F}`, `{V! … V!}`, `a̤`, `a̰`) move the LF
+  shape parameter Rd and drive the source channels `breath`, `creak`,
+  `falsetto` and `harsh` (`PHONATION`, `phonationChannels()`): breath
+  noise, an octave down with jitter and double pulses, an octave up with a
+  smooth pulse, or jitter, shimmer and noise. Hindi `bʱ dʱ ɖʱ ɡʱ dʒʱ` get a
+  breathy voiced release, the head parameter `finalCreak` creaks the end of
+  a statement, and `cpp()`, `jitterPercent()`, `pulseF0()` and
+  `pulseH1H2()` measure the result (see
+  [docs/markup.md](docs/markup.md#phonation-types)).
 - **Intonation per language** (issue 51): statements fall, yes/no
   questions rise, wh-questions fall, `Tea or coffee?` rises on the first
   item and falls on the second (`ˈti ↗ | ˈɔɹ ˈkɑfi ↘ ?`), list items and
