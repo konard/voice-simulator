@@ -278,7 +278,8 @@ export function vowelChannels(token) {
     tongueAmount: 0,
     velum: token.nasalized ? 0.6 : 0,
     voicing: token.voiced === false ? 0 : 1,
-    aspiration: token.breathy ? 0.4 : 0,
+    // Breathy voice (a̤) is a phonation, src/articulation/phonation.js.
+    aspiration: 0,
     glottalClosure: 0,
     frication: 0,
     sibilance: 0,

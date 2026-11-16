@@ -46,12 +46,20 @@ pub const TEETH: usize = 15;
 pub const EFFORT: usize = 16;
 /// Offset on the tenseness (issue 52): `shape.glottis.tension`.
 pub const TENSION: usize = 17;
+/// Breath noise of the phonation (0..1, issue 54): `shape.glottis.breath`.
+pub const BREATH: usize = 18;
+/// Creak (0..1): `shape.glottis.creak`.
+pub const CREAK: usize = 19;
+/// Falsetto (0..1): `shape.glottis.falsetto`.
+pub const FALSETTO: usize = 20;
+/// Harsh voice (0..1): `shape.glottis.harsh`.
+pub const HARSH: usize = 21;
 /// Number of extra values after the areas, always [`EXTRA_VALUES`].
-pub const EXTRA: usize = 18;
+pub const EXTRA: usize = 22;
 /// First section area.
-pub const AREAS: usize = 19;
+pub const AREAS: usize = 23;
 /// Fixed fields before the areas.
-pub const STRIDE: usize = 19;
+pub const STRIDE: usize = 23;
 /// Values after the areas: the incisor gap (cm).
 pub const EXTRA_VALUES: usize = 1;
 

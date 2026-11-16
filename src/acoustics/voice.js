@@ -29,7 +29,7 @@ import {
   effortTransientGain,
 } from '../articulation/effort.js';
 import { Biquad, createNoise } from './filters.js';
-import { Glottis } from './glottis.js';
+import { Glottis, noiseBreathiness } from './glottis.js';
 import {
   Aerodynamics,
   ASPIRATION_REFERENCE,
@@ -551,7 +551,7 @@ export class VoiceRenderer {
         ? this.#foldArea(glottis)
         : glottalArea(
             glottis,
-            this.head.breathiness,
+            noiseBreathiness(this.head.breathiness, glottis.breath ?? 0),
             this.head.glottalChink,
             this.head
           );

@@ -1,0 +1,17 @@
+pause  60.0 
+consonant p 74.5 
+release p 15.0  voicedShare 0.00 h1h2 0.00
+vowel a 170.9 
+pause  12.0 
+consonant p 74.5 
+release p 60.0  voicedShare 0.00 h1h2 0.00
+vowel a 170.9 
+pause  12.0 
+consonant b 70.0 
+vowel a 170.9 
+pause  12.0 
+consonant b 70.0 
+release b 80.0  voicedShare 0.88 h1h2 12.39
+vowel a 266.8 
+pause  200.0 
+[ 'token', 'kind', 'target', 'duration', 'start', 'end' ]

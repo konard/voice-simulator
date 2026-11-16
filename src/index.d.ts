@@ -533,6 +533,42 @@ export declare function alphaRatio(
   from?: number,
   to?: number
 ): number;
+/**
+ * Cepstral peak prominence (dB) of the voiced 40 ms Hann frames: the
+ * cepstral peak between 1/300 and 1/60 s above the regression line, the
+ * median over the frames (issue 54).
+ */
+export declare function cpp(
+  samples: ArrayLike<number>,
+  sampleRate: number
+): number;
+/** Settings of cpp() and the glottal pulse measures. */
+export declare const PHONATION_ANALYSIS: Readonly<Record<string, number>>;
+/** Runs of glottal periods (s) of the voiced stretches; `start` in s. */
+export declare function glottalPeriods(
+  samples: ArrayLike<number>,
+  sampleRate: number
+): { start: number; periods: number[] }[];
+/**
+ * Jitter (%): mean absolute difference of neighbouring periods over the
+ * mean period, of the periods that start within `span` (s).
+ */
+export declare function jitterPercent(
+  samples: ArrayLike<number>,
+  sampleRate: number,
+  span?: { start?: number; end?: number }
+): number;
+/** Median f0 (Hz) of the glottal periods within `span` (s); 0 for none. */
+export declare function pulseF0(
+  samples: ArrayLike<number>,
+  sampleRate: number,
+  span?: { start?: number; end?: number }
+): number;
+/** Median pitch-synchronous H1-H2 (dB) over windows of 4 periods. */
+export declare function pulseH1H2(
+  samples: ArrayLike<number>,
+  sampleRate: number
+): number;
 /** The two K-weighting biquads `[b0, b1, b2, a1, a2]` of BS.1770. */
 export declare function kWeighting(sampleRate: number): number[][];
 /** Integrated loudness (LUFS) after ITU-R BS.1770; -Infinity when silent. */
@@ -1746,12 +1782,102 @@ export interface GlottisControl {
   aspirationStrength?: number;
   /** Pressure in the mouth (dyn/cm²); the LF source does not use it. */
   oralPressure?: number;
+  /** Vocal effort (dB). */
+  effort?: number;
+  /** Offset of the LF tenseness (positive pressed, negative lax). */
+  tension?: number;
+  /** Phonation channels 0 … 1 (issue 54). */
+  breath?: number;
+  creak?: number;
+  falsetto?: number;
+  harsh?: number;
 }
 /** Breath noise per 10 mm² of glottal chink. */
 export declare const CHINK_NOISE: number;
 /** Breath noise: BREATH_GAIN * breathiness ** BREATH_EXPONENT. */
 export declare const BREATH_GAIN: number;
 export declare const BREATH_EXPONENT: number;
+/** Lowest f0 (Hz) of a glottal period (20). */
+export declare const MIN_F0: number;
+/** Source constants of the phonation channels (issue 54). */
+export declare const PHONATION_SOURCE: Readonly<{
+  creakSemitones: number;
+  creakFloor: number;
+  creakJitter: number;
+  creakPulseGain: number;
+  creakPulseLength: number;
+  falsettoSemitones: number;
+  falsettoDecibels: number;
+  falsettoCorner: number;
+  harshJitter: number;
+  harshShimmer: number;
+  harshBreath: number;
+  breathNoise: number;
+}>;
+/** f0 shifted by -12 st of creak (not below 25 Hz) and +12 st of falsetto. */
+export declare function phonationF0(
+  f0: number,
+  creak: number,
+  falsetto: number
+): number;
+/** Breathiness of the noise: head value plus 0.6 (breath + 0.3 harsh). */
+export declare function noiseBreathiness(
+  breathiness: number,
+  breath?: number,
+  harsh?: number
+): number;
+export type PhonationType =
+  | 'breathy'
+  | 'lax'
+  | 'pressed'
+  | 'creaky'
+  | 'falsetto'
+  | 'harsh';
+/** Source channels of a phonation type at degree 1. */
+export interface PhonationTarget {
+  rd: number;
+  breath?: number;
+  creak?: number;
+  falsetto?: number;
+  harsh?: number;
+}
+/** Rd and channels of each phonation type at degree 1 (issue 54). */
+export declare const PHONATION: Readonly<
+  Record<PhonationType, Readonly<PhonationTarget>>
+>;
+/** 'breath', 'creak', 'falsetto', 'harsh'. */
+export declare const PHONATION_CHANNELS: readonly string[];
+/** Degree of a segment written with a̤ or a̰ (0.67). */
+export declare const SEGMENT_DEGREE: number;
+/** Rd of the speaker's own voice (3 (1 - tenseness) plus the breathiness). */
+export declare function voiceRd(head?: HeadConfig): number;
+/** Source channels of a mode (and token) for a head. */
+export declare function phonationChannels(
+  mode: Mode | null | undefined,
+  token: object | null | undefined,
+  head?: HeadConfig
+): {
+  tension: number;
+  breath: number;
+  creak: number;
+  falsetto: number;
+  harsh: number;
+};
+/** Release of a breathy-voiced stop (bʱ dʱ ɖʱ ɡʱ dʒʱ). */
+export declare const BREATHY_RELEASE: Readonly<{
+  duration: number;
+  rd: number;
+  breath: number;
+  pitch: number;
+}>;
+/** Onset (0.8) and width (0.1) of the phrase-final creak, times the pitch. */
+export declare const FINAL_CREAK: Readonly<{ onset: number; width: number }>;
+/** Creak of `finalCreak` at f0 (Hz) for a speaker pitch (Hz). */
+export declare function finalCreakAmount(
+  f0: number,
+  pitch: number,
+  finalCreak: number
+): number;
 export declare class Glottis {
   constructor(options?: GlottisOptions);
   step(dt: number, control: GlottisControl, noise: number): number;
