@@ -828,6 +828,19 @@ describe('synthesis worker', () => {
     expect(answer.at - end.at).toBeGreaterThanOrEqual(450);
   });
 
+  it('a newer benchmark message replaces the one running', async () => {
+    const posted = [];
+    const handle = createWorkerHandler((data) => posted.push(data));
+    const first = handle({ type: 'benchmark', gpu: false, engine: 'js' });
+    await new Promise((resolve) => globalThis.setTimeout(resolve, 5));
+    const second = handle({ type: 'benchmark', gpu: false, engine: 'js' });
+    await Promise.all([first, second]);
+    const replies = posted.filter((message) => message.type === 'benchmark');
+    expect(replies.length).toBe(1);
+    expect(replies[0].partial).toBe(false);
+    expect(replies[0].loads[0] > 0).toBe(true);
+  });
+
   it('benchmarks the CPU alone when the GPU fails', async () => {
     const warnings = [];
     const warn = console.warn;

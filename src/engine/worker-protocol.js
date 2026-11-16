@@ -343,7 +343,9 @@ async function benchmark(state, message) {
  * Run or continue the pending benchmark: benchmarkDevice with `paused`
  * true while an utterance is being rendered. A partial result is kept and
  * continued BENCHMARK_RESUME_DELAY ms after the utterance (see speakNow);
- * a complete one is posted, then the WebGPU tiers are measured.
+ * a complete one is posted, then the WebGPU tiers are measured. A newer
+ * `benchmark` message replaces the run: the old one stops at its next
+ * pause and posts nothing.
  */
 async function runBenchmark(state) {
   const job = state.benchmark;
@@ -358,7 +360,7 @@ async function runBenchmark(state) {
       engine: await createEngine(engineOptions(message)),
       head: message.head,
       resume: job.partial,
-      paused: () => state.speaking > 0,
+      paused: () => state.speaking > 0 || state.benchmark !== job,
       measure: (tier, info) =>
         benchmarkRenderer(tier, {
           ...info,
@@ -370,6 +372,9 @@ async function runBenchmark(state) {
     });
   } finally {
     job.running = false;
+  }
+  if (state.benchmark !== job) {
+    return;
   }
   if (result.partial) {
     job.partial = result;
