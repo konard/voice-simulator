@@ -19,7 +19,7 @@ use super::model::{
     Model, Opening, CELL_AIR, CELL_NOSE, CELL_SINUS, CELL_TRACT, LINK_INNER, LINK_LIPS,
     LINK_NOSTRILS, LINK_RADIATION, LINK_SINUS, LINK_VELUM,
 };
-use super::parallel::{Team, THREAD_MIN_LINKS};
+use super::parallel::{Team, THREADS_AVAILABLE, THREAD_MIN_LINKS};
 use crate::frame;
 use crate::glottis::{glottal_reflection, SPEED_OF_SOUND};
 use crate::losses::{boundary_loss_factor, LOSS_REFERENCE_SECTIONS};
@@ -354,6 +354,13 @@ pub struct Fdtd3d {
     team: Option<Arc<Team>>,
 }
 
+/// `team`, if any; always `None` in a build without threads
+/// ([`THREADS_AVAILABLE`]), which lets the compiler drop the code of
+/// [`Team`] from it.
+fn active(team: &Option<Arc<Team>>) -> Option<&Arc<Team>> {
+    team.as_ref().filter(|_| THREADS_AVAILABLE)
+}
+
 impl Fdtd3d {
     /// The solver of a model (the constructor of `Fdtd3d`). `None` when
     /// the model has no free-air cell for the receiver.
@@ -486,7 +493,7 @@ impl Fdtd3d {
     /// [`THREAD_MIN_LINKS`]: 0 gives a team for any grid, which is what
     /// the measurement of that constant needs.
     pub fn new_team_from(&self, threads: usize, min_links: usize) -> Option<Arc<Team>> {
-        (threads > 1 && self.grid.links() >= min_links)
+        (THREADS_AVAILABLE && threads > 1 && self.grid.links() >= min_links)
             .then(|| Arc::new(Team::new(&self.grid, threads)))
     }
 
@@ -498,7 +505,7 @@ impl Fdtd3d {
 
     /// Threads that step the grid: those of the team, else 1.
     pub fn threads(&self) -> usize {
-        self.team.as_ref().map_or(1, |team| team.threads())
+        active(&self.team).map_or(1, |team| team.threads())
     }
 
     /// `count` bare steps of the grid, with the team if there is one: no
@@ -506,7 +513,7 @@ impl Fdtd3d {
     /// 24 times (`tests/heavy/performance-threads.test.js`).
     pub fn kernel_steps(&mut self, count: usize) {
         for _ in 0..count {
-            match &self.team {
+            match active(&self.team) {
                 Some(team) => team.step(&mut self.grid, self.active_from),
                 None => self.grid.step(self.active_from),
             }
@@ -1321,7 +1328,7 @@ impl Solver for Fdtd3d {
                 self.grid.velocity[link] += force * sign;
             }
         }
-        match &self.team {
+        match active(&self.team) {
             Some(team) => team.step(&mut self.grid, self.active_from),
             None => self.grid.step(self.active_from),
         }

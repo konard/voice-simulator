@@ -160,3 +160,18 @@ export function writeFrame(target, offset, shape, lungPressure) {
   target.set(shape.areas, offset + FRAME.AREAS);
   target[offset + FRAME.AREAS + shape.areas.length] = shape.teeth?.gap ?? 0;
 }
+
+/**
+ * The shared memory of the threads build of the engine
+ * (`src/engine/voice-simulator-threads.wasm`), in WebAssembly
+ * pages of 64 KiB: INITIAL pages (32 MiB) at the start and at most MAXIMUM
+ * (1 GiB). The file imports this memory and exports none, so
+ * that every helper instance of `src/engine/thread-pool.js` shares it;
+ * `scripts/build-wasm.mjs --threads` links the file with these sizes and
+ * `loadEngineModule` creates the memory with them.
+ */
+export const THREAD_MEMORY = Object.freeze({
+  INITIAL: 512,
+  MAXIMUM: 16384,
+  PAGE_BYTES: 65536,
+});

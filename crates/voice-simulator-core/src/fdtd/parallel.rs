@@ -47,6 +47,13 @@ use core::sync::atomic::{AtomicBool, AtomicU32, Ordering::SeqCst};
 use super::kernel::{cells_slab, links_slab, CellSlab, Grid, LinkSlab};
 use super::partition;
 
+/// Whether this build can have helper threads: every native build, and
+/// WebAssembly only with `+atomics` (the threads build of the engine).
+/// Elsewhere a solver never starts a team, so the compiler drops the code
+/// of [`Team`] from the build.
+pub const THREADS_AVAILABLE: bool =
+    cfg!(any(not(target_arch = "wasm32"), target_feature = "atomics"));
+
 /// Fewest links for which a solver steps on more than one thread: below
 /// it the barrier costs more than the threads gain. Measured by
 /// `tests/heavy/performance-threads.test.js` (see `docs/RUST-ENGINE.md`).
