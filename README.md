@@ -489,6 +489,7 @@ npx voice-simulator compare recording.wav hello.wav --json   # distances from a 
 npx voice-simulator mesh --lod 3 -o head.obj
 npx voice-simulator benchmark
 npx voice-simulator benchmark --engine js --json   # {"engine":"js",...}
+npx voice-simulator benchmark --quick   # the app's 1 s load-time benchmark, plus "cpu: 0.95 s"
 npx voice-simulator say "Hello" --engine js -o js.wav   # byte-stable output
 npx voice-simulator serve --port 8080
 npx voice-simulator --help
@@ -972,7 +973,17 @@ above 5 kHz. It renders about 12 times slower than real time on a desktop
 CPU. The web app starts in Auto: it benchmarks the tiers on the CPU, then
 the 3D tiers above the CPU's choice on WebGPU, and uses the most detailed
 tier whose load stays under 80%, so a fast GPU gets the 3D tiers and a
-laptop or phone the real-time waveguide. Every tier stays in the menu;
+laptop or phone the real-time waveguide. The benchmark is silent
+(`benchmarkDevice`, issue 28): it runs in the worker at the first idle
+moment after load, in slices of 20 ms and within 1 s of CPU time, stops
+while an utterance waits or renders and resumes 500 ms after it, and
+shows no note. Until it answers, Auto uses `minimal` (`narrowband` on a
+device with at most 2 cores or 2 GB, `startLevel`); on a battery below
+20% that is not charging, Auto stays at or below `medium`. The result is
+kept in `localStorage` for 30 days per benchmark version, device and
+engine, so a later visit measures nothing; three overloads in a row at the
+cached tier, or "Measure again" under the quality menu, measure again. A
+quality chosen in the menu is kept too (`voice-simulator:tier`). Every tier stays in the menu;
 when a slower one is chosen, the app renders ahead: it shows the progress
 and starts playback as soon as the rest of the utterance is predicted to be
 ready before the player reaches it, so the voice never breaks up. Choose
@@ -1000,7 +1011,9 @@ machine with WebGPU, the GPU is only tried for the 3D tiers above the CPU's
 choice, so a slow integrated or software adapter never lowers it. The benchmark does not run tiers whose
 load, predicted from the cheaper tier, is far above the target, and it stops
 measuring a tier as soon as it is clearly too slow; the app remembers the
-result per device. `voice-simulator benchmark` first renders the cheap tiers
+result per device. `voice-simulator benchmark --quick` runs the app's
+silent benchmark (`benchmarkDevice`) and prints its CPU time too
+(`--json` prints its result). `voice-simulator benchmark` first renders the cheap tiers
 for 0.5 s so the just-in-time compiler is warm, then reports the median of
 `--repeats` (default 5) measurements of `--seconds` (default 0.3) per tier. In the first 40-300 ms of each utterance an
 `OverloadDetector` checks that the tier keeps up with real time and, if not,

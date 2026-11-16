@@ -1,0 +1,5 @@
+---
+'voice-simulator': minor
+---
+
+Add a silent load-time device benchmark (issue 28). New exports `benchmarkDevice` (measures the audio tiers within 1 s of CPU time in 20 ms slices, can be interrupted by speech and resumed, and returns `version`, `engine`, `level`, `loads`, `measured`, `cpuSeconds`, `longestSlice` and `partial`), `BENCHMARK_VERSION`, `chooseLevel`, `startLevel` (the level automatic quality starts at from `hardwareConcurrency` and `deviceMemory`) and `batteryLevelCap`. The worker's `benchmark` message runs it, pauses while an utterance waits or renders and resumes 500 ms later, and posts the WebGPU tiers in a second message. The example app measures at the first idle moment without a note, caches the result for 30 days per benchmark version, device and engine, measures again after three overloads in a row or with "Measure again", keeps the chosen quality by tier name, caps Auto at `medium` on a low battery and shows the long tasks of the benchmark with `?debug`. `voice-simulator benchmark --quick` runs the same benchmark and prints its CPU time (`--json`: the result object).
