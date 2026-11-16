@@ -116,6 +116,16 @@ function clickParts(phone) {
 }
 
 /**
+ * Creak of the throat clearing: the glottis lowers the planned f0 by
+ * `12 · creak` semitones and adds `10 · creak` % jitter (glottis.js), so
+ * that -8 st at creak 0.25 is about 64 Hz for a voice of 120 Hz, still
+ * periodic enough to be heard (and tracked) as voice. Creak 1 would halve
+ * the f0 below 60 Hz and leave no periodicity
+ * (`node experiments/issue-56-throat.mjs`).
+ */
+const THROAT_CREAK = 0.25;
+
+/**
  * The sounds: default `seconds`, what a stretched sound keeps (`stretch`:
  * all parts in proportion; `calls`: the number of calls), the reference of
  * the `pitch` of the parts (`voice` or `before`, the syllable before) and
@@ -135,14 +145,25 @@ export const SOUNDS = Object.freeze({
   sigh: Object.freeze({
     seconds: 1.1,
     description: 'inhale 0.4 s, breathy ɐ 0.7 s, f0 -6 st, level -12 dB',
+    // Breath 0.7, not 1: a fully breathy vowel has too little periodicity
+    // left for its pitch to be heard (or tracked) as a fall
+    // (`node experiments/issue-56-sigh.mjs`).
     parts: () => [
-      { phone: 'ə', seconds: 0.4, noise: true, level: [-40, -30] },
+      // The pitch of the breathy ɐ already in the inhale (unvoiced), so
+      // that the smoothing of f0 does not start the fall lower.
+      {
+        phone: 'ə',
+        seconds: 0.4,
+        noise: true,
+        level: [-40, -30],
+        pitch: [2, 2],
+      },
       {
         phone: 'ɐ',
         seconds: 0.7,
         level: [-2, -14],
         pitch: [2, -4],
-        phonation: { breathy: 1 },
+        phonation: { breathy: 0.7 },
       },
     ],
   }),
@@ -181,8 +202,8 @@ export const SOUNDS = Object.freeze({
         phone: 'ə',
         seconds: 0.18,
         level: [-6, -10],
-        pitch: [-7, -8],
-        phonation: { creaky: 1 },
+        pitch: [-8, -9],
+        phonation: { creaky: THROAT_CREAK },
       },
       { phone: 'ʔ', seconds: 0.02, level: [-10, -10] },
       {
@@ -190,7 +211,7 @@ export const SOUNDS = Object.freeze({
         seconds: 0.18,
         level: [-10, -14],
         pitch: [-8, -9],
-        phonation: { creaky: 1 },
+        phonation: { creaky: THROAT_CREAK },
       },
     ],
   }),
@@ -371,6 +392,9 @@ function partSegment(part, duration, mode) {
   segment.duration = duration;
   if (envelope !== 0) {
     segment.envelope = envelope;
+  }
+  if (part.noise) {
+    segment.noise = true;
   }
   if (part.pitch) {
     segment.soundPitch = part.pitch;
@@ -679,6 +703,7 @@ export function applySoundHarmonics(channels, segments, head, frameRate) {
       segment.soundOf &&
       segment.kind === 'vowel' &&
       segment.soundPitch &&
+      !segment.noise &&
       !(segment.token?.mode?.phonation?.whisper > 0)
     ) {
       const list = vowels.get(segment.soundOf) ?? [];
