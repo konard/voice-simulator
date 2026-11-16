@@ -279,22 +279,83 @@ function erhuaSyllable({ letters, tone }) {
 }
 
 /**
+ * Words in which 一 keeps its first tone yī (issue 49): ordinal and
+ * calendar uses that are not counted.
+ */
+export const YI_FIRST_TONE_WORDS = Object.freeze([
+  '一月',
+  '一号',
+  '一楼',
+  '一班',
+  '一等',
+  '一级',
+  '一流',
+  '一年级',
+]);
+
+/** Characters before 一 that make it an ordinal or a digit: 第一, 十一. */
+const YI_ORDINAL_BEFORE = new Set('第十初〇零二三四五六七八九');
+/** Digits after 一: a number read digit by digit (一九九一). */
+const YI_DIGIT_AFTER = new Set('〇零一二三四五六七八九');
+
+/** Whether the 一 at `index` keeps its first tone. */
+function keepsFirstTone(syllables, index) {
+  const previous = syllables[index - 1];
+  const next = syllables[index + 1];
+  if (YI_ORDINAL_BEFORE.has(previous?.char) || YI_DIGIT_AFTER.has(next?.char)) {
+    return true;
+  }
+  const text = syllables
+    .slice(index)
+    .map((syllable) => syllable.char ?? '')
+    .join('');
+  return YI_FIRST_TONE_WORDS.some((word) => text.startsWith(word));
+}
+
+/**
+ * Tone of the 一 or 不 at `index` (not the last syllable) by its
+ * neighbours, or `undefined` when it keeps its tone.
+ */
+function yiBuTone(syllables, index) {
+  const current = syllables[index];
+  const yi = current.char === '一';
+  if (!yi && current.char !== '不') {
+    return undefined;
+  }
+  const previous = syllables[index - 1];
+  const next = syllables[index + 1];
+  if (next.char && previous?.char === next.char) {
+    return 5;
+  }
+  if (!yi) {
+    return next.tone === 4 ? 2 : undefined;
+  }
+  if (keepsFirstTone(syllables, index)) {
+    return undefined;
+  }
+  if (next.tone === 4) {
+    return 2;
+  }
+  return next.tone === 5 ? undefined : 4;
+}
+
+/**
  * Apply Mandarin tone sandhi to a phrase of syllables in place.
- * - 3 3 -> 2 3
+ * - 一 and 不 between two equal characters are neutral: 看一看, 是不是
+ * - 一 keeps yī after 第, 十, 初 or a digit, before a digit and in the
+ *   words of `YI_FIRST_TONE_WORDS`: 第一名, 十一月, 一九九一, 一月
  * - 不 bù before a 4th tone -> bú
  * - 一 yī -> yí before 4th tone, yì before 1st/2nd/3rd (not phrase-final)
+ * - 3 3 -> 2 3
+ * The rules of 一 and 不 need the source character (`char`): typed pinyin
+ * (`bu4`, `yi1`) has none and keeps the tone that was typed.
  * @param {{tone: number, base: string, char?: string}[]} syllables
  */
 export function applyToneSandhi(syllables) {
   for (let index = 0; index < syllables.length - 1; index++) {
-    const current = syllables[index];
-    const next = syllables[index + 1];
-    if (current.char === '不' && next.tone === 4) {
-      current.tone = 2;
-    } else if (current.char === '一' && next.tone === 4) {
-      current.tone = 2;
-    } else if (current.char === '一' && next.tone !== 5) {
-      current.tone = 4;
+    const tone = yiBuTone(syllables, index);
+    if (tone !== undefined) {
+      syllables[index].tone = tone;
     }
   }
   for (let index = syllables.length - 2; index >= 0; index--) {

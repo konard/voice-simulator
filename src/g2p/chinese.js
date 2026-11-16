@@ -68,6 +68,10 @@ const PHRASES = {
   姐姐: 'jiě jie',
   弟弟: 'dì di',
   妹妹: 'mèi mei',
+  爷爷: 'yé ye',
+  奶奶: 'nǎi nai',
+  叔叔: 'shū shu',
+  看看: 'kàn kan',
   什么: 'shén me',
   怎么: 'zěn me',
   这么: 'zhè me',
@@ -283,6 +287,45 @@ export function chineseSyllables(text, options = {}) {
   const ipa = syllablesToIpa(known, options);
   const byItem = new Map(known.map((item, index) => [item, ipa[index]]));
   return items.map((item) => ({ ...item, ipa: byItem.get(item) ?? null }));
+}
+
+/**
+ * Pronounce neighbouring Chinese words as one phrase, so that tone sandhi
+ * works across the spaces between them (issue 49): `我 很 好` sounds like
+ * `我很好`. Each word's `pinyin` (space separated syllables, as returned by
+ * `chineseWordToIpa`) is read again; a syllable gets its source character
+ * only when the word's `text` is all Hanzi with one character per syllable
+ * (a typed pinyin word keeps its typed tones, an erhua word has no
+ * characters).
+ * @param {{text: string, pinyin: string}[]} words
+ * @returns {string[]|null} IPA per word, or `null` when a syllable can not
+ *   be read.
+ */
+export function chineseRunToIpa(words) {
+  const items = [];
+  const counts = [];
+  for (const { text, pinyin } of words) {
+    const syllables = pinyin.split(' ').filter(Boolean);
+    const chars = [...text];
+    const hanzi =
+      chars.length === syllables.length && chars.every((char) => isHanzi(char));
+    syllables.forEach((syllable, index) =>
+      items.push(
+        hanzi ? { char: chars[index], pinyin: syllable } : { pinyin: syllable }
+      )
+    );
+    counts.push(syllables.length);
+  }
+  const ipa = syllablesToIpa(items);
+  if (ipa.length < items.length) {
+    return null;
+  }
+  let offset = 0;
+  return counts.map((count) => {
+    const part = ipa.slice(offset, offset + count).join(' ');
+    offset += count;
+    return part;
+  });
 }
 
 /** True when the Latin text is valid pinyin (tone marks or numbers). */

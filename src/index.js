@@ -37,8 +37,17 @@ export {
 } from './articulation/plan.js';
 export { approachTargets, DYNAMICS_ORDER } from './articulation/dynamics.js';
 export {
+  approachTargets as approachToneTargets,
+  NEUTRAL_LEVELS,
+  TONE_RATES,
+  neutralLevel,
+  toneCurve,
+  toneIntervals,
+} from './articulation/tone-model.js';
+export {
   DURATION_RULES,
   DURATION_TABLES,
+  NEUTRAL_DURATION,
   RATE_MINIMUM,
   RATE_PAUSE,
   RATE_STRETCH,

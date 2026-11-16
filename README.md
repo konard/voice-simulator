@@ -19,7 +19,10 @@ a pressure wave travelling through the 3D shape of a parametric low-poly head
   lean on, with a reduced vowel and the voicing of the next sound (`из дома`
   ɪz ˈdomə, `на работе` nə rɐˈbotʲə, `как же` kaɡ ʐɨ); each stays its own
   word for highlighting. Mandarin applies tone sandhi and erhua: 花儿 and
-  `huār` are one syllable, `xwaɻ˥`.
+  `huār` are one syllable, `xwaɻ˥`. 一 and 不 follow their neighbours
+  (看一看 `kʰan˥˩ i kʰan˥˩`, 是不是 `ʂɻ̩˥˩ pu ʂɻ̩˥˩`, 第一名 `ti˥˩ i˥ miŋ˧˥`),
+  and words separated by spaces get sandhi as one phrase (`我 很 好` and
+  `wǒ hěn hǎo` read like `我很好`); typed `bu4` and `yi1` keep their tone.
 - **English weak forms**: function words are weak and unstressed inside a
   phrase (`a cup of tea for you` ə ˈkʌp əv ˈti fɚ ju, `the end` ði ˈɛnd,
   `I have to go` aɪ ˈhæf tə ˈɡoʊ) and keep their strong form alone and at
@@ -58,7 +61,16 @@ table)` gives one sound from `durationFeatures(tokens, index)`, and
   shorter than its minimum. The inherent durations are fitted to the
   golden recordings in `experiments/issue-11-fit-durations.txt`.
 - **Lexical tones**: every level of a tone written with Chao tone letters is
-  a pitch target, so the Mandarin third tone `˨˩˦` dips before it rises.
+  a pitch target that the voice approaches as a critically damped
+  third-order system (the quantitative target approximation of Prom-on, Xu
+  and Thipakorn 2009, `approachToneTargets`, `TONE_RATES`), starting from
+  where the syllable before it ended: the Mandarin third tone `˨˩˦` dips
+  before it rises, and `ma˥` after `ma˥˩` starts 2.8 st lower than after
+  `ma˥`. A syllable without a tone takes its level from the tone before it
+  (`NEUTRAL_LEVELS`: 妈妈 falls to 101 Hz, 爸爸 to 86 Hz) and lasts
+  `NEUTRAL_DURATION` = 0.6 of a full one (0.55 in the zh table). The same
+  model drives Cantonese, Thai and Vietnamese tones; speech without tone
+  letters keeps its intonation.
 - **Word and syllable timeline**: `utteranceTimeline` (also in
   `synthesize`) tells when every word and syllable is spoken; the app
   highlights the current word and syllable in the text and the IPA.
