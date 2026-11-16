@@ -394,6 +394,8 @@ export interface DurationFeatures {
   next: string | null;
   /** Tone 1 to 5 (5 = neutral) in tonal languages, 0 otherwise. */
   tone: number;
+  /** Tone 5 without stress mark: the neutral tone (issue 49). */
+  neutral: boolean;
   afterAspirated: boolean;
   nucleusSize: number;
   nucleusMain: boolean;
@@ -411,6 +413,8 @@ export declare const RATE_MINIMUM: number;
 export declare const RATE_STRETCH: number;
 /** Exponent of the speech rate on pauses of strength 2 and more (1.5). */
 export declare const RATE_PAUSE: number;
+/** Default factor of the neutral tone on the whole vowel (0.6, issue 49). */
+export declare const NEUTRAL_DURATION: number;
 export declare const DURATION_RULES: readonly DurationRule[];
 /** Tables of en, ru, hi, zh and default (English). */
 export declare const DURATION_TABLES: Readonly<
@@ -505,6 +509,69 @@ export declare function approachTargets(
     fallback?: number;
   }
 ): Float32Array;
+/** One pitch target of the tone model in semitones (issue 49). */
+export interface ToneInterval {
+  /** Seconds. */
+  duration: number;
+  /** Target line from `from` to `to` over the interval. */
+  from: number;
+  to: number;
+  /** Rate λ of the approach per second. */
+  rate: number;
+}
+/** Value (st), velocity (st/s) and acceleration (st/s²) of the pitch. */
+export interface ToneState {
+  value: number;
+  velocity: number;
+  acceleration: number;
+}
+/** λ per second of the tone model by kind of target (issue 49). */
+export declare const TONE_RATES: Readonly<{
+  level: number;
+  rise: number;
+  fall: number;
+  low: number;
+  neutral: number;
+}>;
+/** Chao level of the neutral tone by the kind of tone before it. */
+export declare const NEUTRAL_LEVELS: Readonly<{
+  high: number;
+  rise: number;
+  low: number;
+  fall: number;
+  none: number;
+}>;
+/**
+ * Quantitative target approximation (Prom-on, Xu and Thipakorn 2009):
+ * approach the targets one after the other from `state` (null: the first
+ * `from` at rest). One value per frame and the end state.
+ */
+export declare function approachToneTargets(
+  intervals: ToneInterval[],
+  state: ToneState | null,
+  frameRate: number
+): { values: Float64Array; state: ToneState };
+/** Pitch targets of one Chao tone in level units over `duration` seconds. */
+export declare function toneIntervals(
+  tone: number[],
+  duration: number
+): ToneInterval[];
+/** Chao level of a neutral syllable after `previousTone` (none: 2). */
+export declare function neutralLevel(previousTone?: number[] | null): number;
+/**
+ * Pitch curve of one syllable in semitones around level 3 (`count` values
+ * from start to end); an empty or missing tone is neutral (issue 70).
+ */
+export declare function toneCurve(
+  tone: number[] | null | undefined,
+  options?: {
+    start?: number;
+    scale?: number;
+    duration?: number;
+    count?: number;
+    previous?: number[] | null;
+  }
+): number[];
 export declare function sampleState(
   plan: Plan,
   time: number,
