@@ -1181,6 +1181,14 @@
           "minimum": 0,
           "maximum": 1,
           "default": 0
+        },
+        "finalCreak": {
+          "type": "number",
+          "title": "Phrase-final creak",
+          "description": "Creak in the last syllable before a full stop or a major break where the pitch falls below 0.8 of the speaker pitch (full creak at 0.7); 0 turns it off.",
+          "minimum": 0,
+          "maximum": 1,
+          "default": 0
         }
       }
     },

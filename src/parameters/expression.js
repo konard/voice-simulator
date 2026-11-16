@@ -113,4 +113,18 @@ export const EXPRESSION_PARAMETERS = [
     source: 'Honda et al. 1999 (larynx height and F0); issue 40',
     effect: { measure: 'f2', sign: 1 },
   },
+  {
+    key: 'finalCreak',
+    label: 'Phrase-final creak',
+    unit: '1',
+    min: 0,
+    max: 1,
+    step: 0.01,
+    default: 0,
+    description:
+      'Creak in the last syllable before a full stop or a major break where the pitch falls below 0.8 of the speaker pitch (full creak at 0.7); 0 turns it off.',
+    source:
+      'Redi & Shattuck-Hufnagel 2001, J Phonetics 29 (phrase-final glottalization); issue 54',
+    effect: { measure: 'hnr', sign: -1, ipa: 'ˈmama ˈsasa .' },
+  },
 ];
