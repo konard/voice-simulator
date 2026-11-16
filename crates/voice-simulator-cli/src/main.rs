@@ -24,7 +24,7 @@ Commands:
                           (with an optional minus sign) is a number, reduced
                           to 32 bits like `seed >>> 0`; any other seed is a
                           string, hashed like hashSeed(string).
-  render-job <file> [--threads <n|auto>]
+  render-job <file> [--threads <n|auto>] [--thread-min-links <n>]
                           Render a job of scripts/write-render-job.mjs
                           (little-endian f64 values: config length, config,
                           model length in bytes, packed voxel model, frame
@@ -37,9 +37,10 @@ Commands:
                           the threads that stepped the solver. --threads
                           (default 1) steps the 3D solver on <n> threads,
                           or with auto on all cores but one; grids with
-                          fewer links than THREAD_MIN_LINKS stay on one
-                          thread. The samples are the same bits with any
-                          number of threads.
+                          fewer links than THREAD_MIN_LINKS (or
+                          --thread-min-links; 0 gives every grid a team)
+                          stay on one thread. The samples are the same
+                          bits with any number of threads.
   kernel-steps <file> <count> [--threads <n|auto>]
                           Render the first 480 samples of a render job of
                           the 3D solver, then time <count> bare steps of
@@ -117,7 +118,8 @@ fn run(args: &[&str], out: &mut impl Write) -> Result<(), Failure> {
             let bytes = std::fs::read(file)?;
             let job = render_job::parse(&bytes).map_err(Failure::Job)?;
             let started = Instant::now();
-            let rendered = render_job::render(&job, threads).map_err(Failure::Job)?;
+            let rendered =
+                render_job::render(&job, threads.count, threads.min_links).map_err(Failure::Job)?;
             let seconds = started.elapsed().as_secs_f64();
             let samples = rendered.samples;
             let duration = samples.len() as f64 / job.config.first().copied().unwrap_or(1.0);
@@ -130,6 +132,12 @@ fn run(args: &[&str], out: &mut impl Write) -> Result<(), Failure> {
         }
         ["kernel-steps", rest @ ..] => {
             let (words, threads) = parse_threads_option(rest)?;
+            if threads.min_links.is_some() {
+                return Err(Failure::Usage(
+                    "kernel-steps starts a team at any grid size; it takes no --thread-min-links"
+                        .into(),
+                ));
+            }
             let [file, count] = words[..] else {
                 return Err(Failure::Usage(
                     "kernel-steps needs <file> and <count>".into(),
@@ -142,7 +150,7 @@ fn run(args: &[&str], out: &mut impl Write) -> Result<(), Failure> {
             })?;
             let bytes = std::fs::read(file)?;
             let job = render_job::parse(&bytes).map_err(Failure::Job)?;
-            let run = render_job::kernel_steps(&job, count, threads).map_err(Failure::Job)?;
+            let run = render_job::kernel_steps(&job, count, threads.count).map_err(Failure::Job)?;
             writeln!(out, "seconds {:.6}", run.seconds)?;
             writeln!(out, "steps_per_second {:.3}", count as f64 / run.seconds)?;
             writeln!(out, "threads {}", run.threads)?;
@@ -158,7 +166,7 @@ fn run(args: &[&str], out: &mut impl Write) -> Result<(), Failure> {
 
 /// The file and the thread count of `render-job <file> [--threads <n|auto>]`
 /// (the option may come first).
-fn parse_render_job<'a>(args: &[&'a str]) -> Result<(&'a str, usize), Failure> {
+fn parse_render_job<'a>(args: &[&'a str]) -> Result<(&'a str, Threads), Failure> {
     let (words, threads) = parse_threads_option(args)?;
     match words[..] {
         [file] => Ok((file, threads)),
@@ -167,23 +175,54 @@ fn parse_render_job<'a>(args: &[&'a str]) -> Result<(&'a str, usize), Failure> {
     }
 }
 
-/// The words of `args` and the value of its `--threads <n|auto>` (or
-/// `--threads=<n|auto>`) option, 1 without one.
-fn parse_threads_option<'a>(args: &[&'a str]) -> Result<(Vec<&'a str>, usize), Failure> {
+/// The thread options of a command: `--threads` (1 without it) and
+/// `--thread-min-links` (`None` without it: THREAD_MIN_LINKS).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct Threads {
+    count: usize,
+    min_links: Option<usize>,
+}
+
+/// The value of option `name` at `word` (`name <value>` or
+/// `name=<value>`), `None` when `word` is another word.
+fn option_value<'a>(
+    word: &'a str,
+    name: &str,
+    rest: &mut std::slice::Iter<'_, &'a str>,
+    usage: &str,
+) -> Result<Option<&'a str>, Failure> {
+    let Some(value) = word.strip_prefix(name) else {
+        return Ok(None);
+    };
+    match value.strip_prefix('=') {
+        Some(value) => Ok(Some(value)),
+        None if value.is_empty() => rest
+            .next()
+            .copied()
+            .map(Some)
+            .ok_or_else(|| Failure::Usage(format!("{name} needs {usage}"))),
+        None => Ok(None),
+    }
+}
+
+/// The words of `args` and the values of its `--threads <n|auto>` and
+/// `--thread-min-links <n>` options (also as `--option=<value>`).
+fn parse_threads_option<'a>(args: &[&'a str]) -> Result<(Vec<&'a str>, Threads), Failure> {
     let mut words = Vec::new();
-    let mut threads = 1;
+    let mut threads = Threads {
+        count: 1,
+        min_links: None,
+    };
     let mut rest = args.iter();
     while let Some(&word) = rest.next() {
-        if let Some(value) = word.strip_prefix("--threads") {
-            let value = match value.strip_prefix('=') {
-                Some(value) => value,
-                None if value.is_empty() => rest
-                    .next()
-                    .copied()
-                    .ok_or_else(|| Failure::Usage("--threads needs <n|auto>".into()))?,
-                None => return Err(Failure::Usage(format!("unknown option {word:?}"))),
-            };
-            threads = parse_threads(value)?;
+        if let Some(value) = option_value(word, "--threads", &mut rest, "<n|auto>")? {
+            threads.count = parse_threads(value)?;
+        } else if let Some(value) = option_value(word, "--thread-min-links", &mut rest, "<n>")? {
+            threads.min_links = Some(value.parse().map_err(|_| {
+                Failure::Usage(format!(
+                    "--thread-min-links must be a non-negative integer, got {value:?}"
+                ))
+            })?);
         } else if word.starts_with("--") {
             return Err(Failure::Usage(format!("unknown option {word:?}")));
         } else {
@@ -261,11 +300,26 @@ mod tests {
             Ok(parsed) => parsed,
             Err(error) => panic!("{args:?}: {error:?}"),
         };
-        assert_eq!(parse(&["job.bin"]), ("job.bin", 1));
-        assert_eq!(parse(&["job.bin", "--threads", "4"]), ("job.bin", 4));
-        assert_eq!(parse(&["--threads=3", "job.bin"]), ("job.bin", 3));
+        let threads = |count, min_links| Threads { count, min_links };
+        assert_eq!(parse(&["job.bin"]), ("job.bin", threads(1, None)));
+        assert_eq!(
+            parse(&["job.bin", "--threads", "4"]),
+            ("job.bin", threads(4, None))
+        );
+        assert_eq!(
+            parse(&["--threads=3", "job.bin"]),
+            ("job.bin", threads(3, None))
+        );
+        assert_eq!(
+            parse(&["job.bin", "--threads", "4", "--thread-min-links", "0"]),
+            ("job.bin", threads(4, Some(0)))
+        );
+        assert_eq!(
+            parse(&["--thread-min-links=5000", "job.bin"]),
+            ("job.bin", threads(1, Some(5000)))
+        );
         let (_, auto) = parse(&["job.bin", "--threads", "auto"]);
-        assert!(auto >= 1);
+        assert!(auto.count >= 1);
     }
 
     #[test]
@@ -291,6 +345,10 @@ mod tests {
             &["render-job", "job.bin", "--threads", "0"],
             &["render-job", "job.bin", "--threads", "many"],
             &["render-job", "job.bin", "--fast"],
+            &["render-job", "job.bin", "--threadsx"],
+            &["render-job", "job.bin", "--thread-min-links"],
+            &["render-job", "job.bin", "--thread-min-links", "-1"],
+            &["kernel-steps", "job.bin", "10", "--thread-min-links", "0"],
             &["render-job", "a.bin", "b.bin"],
         ] {
             assert!(

@@ -83,8 +83,10 @@ pub fn parse(bytes: &[u8]) -> Result<Job, String> {
     })
 }
 
-/// Renders a job: the samples, or a message.
-pub fn render(job: &Job, threads: usize) -> Result<Rendered, String> {
+/// Renders a job on `threads` (a team when the grid has `min_links` links,
+/// by default THREAD_MIN_LINKS; see [`with_team`]): the samples, or a
+/// message.
+pub fn render(job: &Job, threads: usize, min_links: Option<usize>) -> Result<Rendered, String> {
     let describe = |error: RenderError| format!("the renderer refused the job: {error:?}");
     let mut renderer = AnyRenderer::new(&job.config, &job.model).map_err(describe)?;
     if job.frames.len() != job.frame_count * renderer.frame_stride() {
@@ -96,7 +98,7 @@ pub fn render(job: &Job, threads: usize) -> Result<Rendered, String> {
         ));
     }
     let mut out = vec![0.0f32; job.samples];
-    let (written, threads) = with_team(&mut renderer, threads, None, |renderer| {
+    let (written, threads) = with_team(&mut renderer, threads, min_links, |renderer| {
         renderer.render(&job.frames, &mut out)
     });
     let written = written.map_err(describe)?;
@@ -266,7 +268,7 @@ mod tests {
             frames: Vec::new(),
             samples: 4,
         };
-        assert!(render(&job, 1).is_err());
+        assert!(render(&job, 1, None).is_err());
     }
 
     #[test]
