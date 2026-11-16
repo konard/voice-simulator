@@ -889,7 +889,7 @@ and 1.11 to 1.43 times faster on `high`, `ultra` and `studio`
 and `voice-simulator-cli render-job <out>` (`cargo build --release -p
 voice-simulator-cli`) renders it natively and prints the SHA-256 of the
 samples, which equals that of the WebAssembly render. See
-[docs/RUST-ENGINE.md](docs/RUST-ENGINE.md).
+[docs/RUST-ENGINE.md](docs/RUST-ENGINE.md). The RTF of every tier per commit: [docs/reports/performance.md](docs/reports/performance.md).
 
 ### Engines
 
