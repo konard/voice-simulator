@@ -115,6 +115,18 @@ describe('planUtterance', () => {
     expect(Math.max(...values) / Math.min(...values)).toBeLessThan(1.03);
   });
 
+  it('opens the velum for nasals only', () => {
+    const plan = planUtterance('ˈama');
+    expect(
+      sampleState(plan, segmentMiddle(plan, 'consonant')).velum
+    ).toBeGreaterThan(0.6);
+    expect(sampleState(plan, plan.segments[1].start + 0.03).velum).toBeLessThan(
+      0.3
+    );
+  });
+});
+
+describe('tones in the plan', () => {
   /** Plan of tonal speech without vibrato. */
   const tonalPlan = (ipa) =>
     planUtterance(ipa, {
@@ -199,16 +211,6 @@ describe('planUtterance', () => {
       expect(Math.abs(value - snapshot.f0[frame])).toBeLessThanOrEqual(
         value * 2 ** -23
       )
-    );
-  });
-
-  it('opens the velum for nasals only', () => {
-    const plan = planUtterance('ˈama');
-    expect(
-      sampleState(plan, segmentMiddle(plan, 'consonant')).velum
-    ).toBeGreaterThan(0.6);
-    expect(sampleState(plan, plan.segments[1].start + 0.03).velum).toBeLessThan(
-      0.3
     );
   });
 });
