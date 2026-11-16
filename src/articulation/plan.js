@@ -43,7 +43,7 @@ import {
 } from './modes.js';
 import { approachTargets as approachToneTargets } from './tone-model.js';
 import { consonantJaw, teethGap } from './teeth.js';
-import { EFFORT_RULES, JAW_PER_DB, TENSION_PER_DB } from './effort.js';
+import { EFFORT_RULES, effortJaw, TENSION_PER_DB } from './effort.js';
 import { LIP_PROTRUSION } from './vowel-space.js';
 import {
   durationFeatures,
@@ -585,7 +585,7 @@ function jawTarget(segments, index, levels, head) {
     const effort = segment.effort ?? 0;
     const gap = teethGap(state, head);
     return {
-      value: effort === 0 ? gap : Math.max(0, gap + JAW_PER_DB * effort),
+      value: effort === 0 ? gap : Math.max(0, gap + effortJaw(effort)),
       strength: 1,
     };
   }

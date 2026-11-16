@@ -16,7 +16,12 @@
 import { randomNormal, createRandom } from '../random.js';
 import { SPEED_OF_SOUND } from './transfer.js';
 import { glottalArea, openTractStrength } from './aerodynamics.js';
-import { effortNoiseGain } from '../articulation/effort.js';
+import {
+  effortNoiseGain,
+  effortTiltGain,
+  effortVoicedGain,
+  TILT_CORNER,
+} from '../articulation/effort.js';
 
 /**
  * Breath noise per 10 mm² of glottal chink (issue 35): the air leaking
@@ -176,15 +181,45 @@ export class Glottis {
     this.noiseModulation = 0;
     this.effortKey = 0;
     this.effortGain = 1;
+    this.tiltGain = 1;
+    this.tiltStep = 0;
+    this.tiltPole = 0;
+    this.tiltInput = 0;
+    this.tiltMiddle = 0;
+    this.tiltOutput = 0;
   }
 
-  /** Gain of the voiced part at `effort` dB, `10^(E/20)` (cached). */
-  #effortGain(effort) {
+  /**
+   * Gains of the voiced part at `effort` dB (cached): the level
+   * (`effortVoicedGain()`) and the tilt shelf above TILT_CORNER.
+   */
+  #effortGains(effort) {
     if (effort !== this.effortKey) {
       this.effortKey = effort;
-      this.effortGain = 10 ** (effort / 20);
+      this.effortGain = effortVoicedGain(effort);
+      this.tiltGain = effortTiltGain(effort);
     }
-    return this.effortGain;
+  }
+
+  /**
+   * The voiced sample through the tilt shelf: plus `tiltGain - 1` times its
+   * second-order high-pass at TILT_CORNER (two first-order sections).
+   * Without effort the high-pass still runs, so that a ramp starts without
+   * a step.
+   */
+  #tilt(voiced, dt, effort) {
+    if (dt !== this.tiltStep) {
+      this.tiltStep = dt;
+      this.tiltPole = 1 / (1 + 2 * Math.PI * TILT_CORNER * dt);
+    }
+    const pole = this.tiltPole;
+    const middle = pole * (this.tiltMiddle + voiced - this.tiltInput);
+    this.tiltOutput = pole * (this.tiltOutput + middle - this.tiltMiddle);
+    this.tiltInput = voiced;
+    this.tiltMiddle = middle;
+    return effort === 0
+      ? voiced
+      : voiced + (this.tiltGain - 1) * this.tiltOutput;
   }
 
   /**
@@ -260,7 +295,8 @@ export class Glottis {
     this.intensity = voicing * loudness * this.shimmer;
     const effort = control.effort ?? 0;
     if (effort !== 0) {
-      this.intensity *= this.#effortGain(effort);
+      this.#effortGains(effort);
+      this.intensity *= this.effortGain;
     }
     let voiced =
       lfWaveform(this.pulse, t) * this.intensity * (0.7 + 0.3 * tenseness);
@@ -269,6 +305,7 @@ export class Glottis {
         (1 - Math.exp(-dt / this.chinkTime)) * (voiced - this.smoothed);
       voiced = this.smoothed;
     }
+    voiced = this.#tilt(voiced, dt, effort);
     // Aspiration is strongest while the folds are open.
     const opening = Math.max(0, Math.sin(2 * Math.PI * t));
     const modulation =

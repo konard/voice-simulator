@@ -15,12 +15,20 @@
  * - the planner raises the lung pressure channel by `2^(E/9)`; the fold
  *   source (`source: 'folds'`) gets its level and tilt from it, so the
  *   level and tilt rules below are for the LF source only;
- * - the LF glottis multiplies its voiced part by `10^(E/20)` and adds the
- *   `tension` channel to its tenseness (src/acoustics/glottis.js);
+ * - the LF glottis adds the `tension` channel to its tenseness, multiplies
+ *   its voiced part by `effortVoicedGain()` (`10^(E/20)` less LEVEL_TRIM,
+ *   the level the pitch, tension, tilt and jaw add) and passes it through
+ *   a shelf above TILT_CORNER (`effortTiltGain()`, TILT_SHELF), so that the
+ *   level and the alpha ratio of an utterance follow the level and tilt
+ *   rules (src/acoustics/glottis.js);
  * - the renderer scales the aspiration, frication and burst sources of
  *   both sources by `effortNoiseGain()` and `effortTransientGain()`, which
  *   take away the part of their growth with the lung pressure beyond the
- *   noise rule, `0.5 E` dB (src/acoustics/voice.js).
+ *   noise rule (src/acoustics/voice.js).
+ *
+ * The tuned values (TENSION_PER_DB, JAW_PER_DB, TILT_SHELF, LEVEL_TRIM and
+ * the noise below normal effort) come from
+ * `node experiments/issue-52-effort-tuning.mjs`.
  */
 
 import { effortDecibels } from '../markup/modes.js';
@@ -29,18 +37,52 @@ import { effortDecibels } from '../markup/modes.js';
 export const EFFORT_PITCH_LIMITS = Object.freeze({ min: -4, max: 12 });
 
 /**
- * Offset on `head.tenseness` per dB of effort (LF source). Tuned with
- * `node experiments/issue-52-effort-tuning.mjs` so that the alpha ratio
- * (1-5 kHz over 50 Hz-1 kHz) moves by about 0.2 dB per dB.
+ * Offset on `head.tenseness` per dB of effort (LF source): a louder voice
+ * is more pressed (lower H1-H2), a softer one more breathy. Tuned with
+ * `node experiments/issue-52-effort-tuning.mjs` together with TILT_SHELF.
  */
-export const TENSION_PER_DB = 0.012;
+export const TENSION_PER_DB = 0.006;
 
 /**
- * Jaw opening of vowels in cm per dB of effort. Tuned with
+ * Jaw opening of vowels in cm per dB of effort, above and below normal
+ * effort ([below, above]). Tuned with
  * `node experiments/issue-52-effort-tuning.mjs` so that F1 of `ˈa` moves by
  * about 3.5 Hz per dB.
  */
-export const JAW_PER_DB = 0.02;
+export const JAW_PER_DB = Object.freeze([0.02, 0.035]);
+
+/**
+ * Gain (dB) of the tilt shelf of the voiced part (LF source) at an effort
+ * of `E` dB, linear between the points ([E, dB]). Together with the tension
+ * and the effort's own pitch rise it moves the alpha ratio of an utterance
+ * (src/analysis/mode-features.js) by the tilt rule, `0.2 E` dB. Tuned with
+ * `node experiments/issue-52-effort-tuning.mjs`.
+ */
+export const TILT_SHELF = Object.freeze([
+  [-20, -6],
+  [-10, -3],
+  [0, 0],
+  [10, 5.8],
+  [20, 1],
+]);
+
+/**
+ * Decibels taken from `E` in the gain of the voiced part (LF source) at an
+ * effort of `E` dB, linear between the points ([E, dB]): the level the
+ * pitch rise, the tension, the tilt shelf and the wider jaw add, so that
+ * the level of an utterance follows the level rule. Tuned with
+ * `node experiments/issue-52-effort-tuning.mjs`.
+ */
+export const LEVEL_TRIM = Object.freeze([
+  [-20, -2],
+  [-10, -1],
+  [0, 0],
+  [10, 4.4],
+  [20, 6.8],
+]);
+
+/** Corner (Hz) of the second-order high-pass of the tilt shelf. */
+export const TILT_CORNER = 1000;
 
 /** The fastest effort ramp a span asks for without a warning, dB/s. */
 export const EFFORT_RAMP_LIMIT = 40;
@@ -121,8 +163,9 @@ export const EFFORT_RULES = Object.freeze({
   }),
   noise: Object.freeze({
     unit: 'dB',
-    value: (E) => 0.5 * E,
-    source: 'project choice',
+    value: (E) => (E < 0 ? 1.25 * E : 0.5 * E),
+    source:
+      'project choice: 0.5 E above normal effort; 1.25 E below it, where the airflow (and with it the turbulence) falls with the lung pressure',
   }),
 });
 
@@ -150,7 +193,7 @@ export function effortChanges(E, head = {}) {
  * effort of `E` dB. The lung pressure rises by `2^(E/9)` and a turbulence
  * source grows with the pressure drop to the power 1.5 (aerodynamics.js),
  * which alone would raise the noise by about E dB; this factor brings it to
- * the noise rule, `0.5 E` dB.
+ * the noise rule (`0.5 E` dB above normal effort, `1.25 E` below).
  * @param {number} E
  */
 export function effortNoiseGain(E) {
@@ -166,7 +209,7 @@ export function effortNoiseGain(E) {
 /**
  * Factor on the burst transient at an effort of `E` dB: the flow grows
  * with the square root of the pressure, so the transient gets
- * `10^(0.5 E/20) / 2^(E/18)`.
+ * `10^(noise(E)/20) / 2^(E/18)`.
  * @param {number} E
  */
 export function effortTransientGain(E) {
@@ -177,6 +220,28 @@ export function effortTransientGain(E) {
     10 ** (EFFORT_RULES.noise.value(E) / 20) /
     EFFORT_RULES.lungPressure.value(E) ** 0.5
   );
+}
+
+/**
+ * Gain on the voiced part of the LF source at an effort of `E` dB:
+ * `10^((E - trim)/20)` with the trim of LEVEL_TRIM.
+ * @param {number} E
+ */
+export function effortVoicedGain(E) {
+  if (E === 0) {
+    return 1;
+  }
+  return 10 ** ((EFFORT_RULES.level.value(E) - polyline(LEVEL_TRIM, E)) / 20);
+}
+
+/** The jaw opening of vowels (cm) at an effort of `E` dB (JAW_PER_DB). */
+export function effortJaw(E) {
+  return E * JAW_PER_DB[E < 0 ? 0 : 1];
+}
+
+/** Factor of the tilt shelf above TILT_CORNER at `E` dB (TILT_SHELF). */
+export function effortTiltGain(E) {
+  return E === 0 ? 1 : 10 ** (polyline(TILT_SHELF, E) / 20);
 }
 
 /** Effort in dB of an effort value (0..1). */
