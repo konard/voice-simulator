@@ -166,6 +166,18 @@ describe('planUtterance', () => {
     expect(length(last)).toBeLessThan(length(full));
   });
 
+  it('moves smoothly between tones of any language', () => {
+    // Thai has no tone table: only the Chao letters give the targets.
+    const { f0 } = planUtterance('pʰaː˧ maː˥˩ kʰaː˩˩˦', {
+      language: 'th',
+    }).channels;
+    for (let frame = 1; frame < f0.length; frame++) {
+      expect(
+        Math.abs(semitonesBetween(f0[frame], f0[frame - 1]))
+      ).toBeLessThanOrEqual(0.6);
+    }
+  });
+
   it('leaves non-tonal speech alone', () => {
     const snapshot = JSON.parse(
       readFileSync(
