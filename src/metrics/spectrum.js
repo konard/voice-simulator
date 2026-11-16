@@ -5,6 +5,8 @@
  * numbers, so every runtime gives the same values.
  */
 
+import { createFft } from '../recognition/fft.js';
+
 /** Absolute floor under powers and filter energies before a logarithm. */
 export const EPSILON = 1e-10;
 
@@ -62,36 +64,13 @@ export function powerFloor(frames, range = DYNAMIC_RANGE_DB) {
   return Math.max(EPSILON, peak * 10 ** (-range / 10));
 }
 
-/** Twiddle factors and bit-reversal table per transform size. */
-const FFT_TABLES = new Map();
-
-function fftTables(size) {
-  let tables = FFT_TABLES.get(size);
-  if (!tables) {
-    const cos = new Float64Array(size / 2);
-    const sin = new Float64Array(size / 2);
-    for (let k = 0; k < size / 2; k++) {
-      cos[k] = Math.cos((2 * Math.PI * k) / size);
-      sin[k] = Math.sin((2 * Math.PI * k) / size);
-    }
-    const reversed = new Uint32Array(size);
-    const bits = Math.log2(size);
-    for (let index = 0; index < size; index++) {
-      let value = 0;
-      for (let bit = 0; bit < bits; bit++) {
-        value |= ((index >> bit) & 1) << (bits - 1 - bit);
-      }
-      reversed[index] = value;
-    }
-    tables = { cos, sin, reversed };
-    FFT_TABLES.set(size, tables);
-  }
-  return tables;
-}
+/** One transform plan per size (`createFft` of src/recognition/fft.js). */
+const FFT_PLANS = new Map();
 
 /**
  * In-place forward discrete Fourier transform X[k] = sum x[n] e^{-2 pi i k n / N}
- * (iterative radix-2 Cooley-Tukey).
+ * (iterative radix-2 Cooley-Tukey, `createFft`; a length of 1 is left as it
+ * is).
  * @param {Float64Array} re Real parts; replaced by the real parts of X.
  * @param {Float64Array} im Imaginary parts; replaced by those of X.
  */
@@ -103,35 +82,15 @@ export function fft(re, im) {
   if (size < 1 || (size & (size - 1)) !== 0) {
     throw new RangeError(`fft: length ${size} is not a power of two`);
   }
-  const { cos, sin, reversed } = fftTables(size);
-  for (let index = 0; index < size; index++) {
-    const other = reversed[index];
-    if (other > index) {
-      let swap = re[index];
-      re[index] = re[other];
-      re[other] = swap;
-      swap = im[index];
-      im[index] = im[other];
-      im[other] = swap;
-    }
+  if (size === 1) {
+    return;
   }
-  for (let half = 1; half < size; half *= 2) {
-    const step = size / (2 * half);
-    for (let start = 0; start < size; start += 2 * half) {
-      for (let k = 0; k < half; k++) {
-        const wr = cos[k * step];
-        const wi = -sin[k * step];
-        const a = start + k;
-        const b = a + half;
-        const tr = re[b] * wr - im[b] * wi;
-        const ti = re[b] * wi + im[b] * wr;
-        re[b] = re[a] - tr;
-        im[b] = im[a] - ti;
-        re[a] += tr;
-        im[a] += ti;
-      }
-    }
+  let plan = FFT_PLANS.get(size);
+  if (!plan) {
+    plan = createFft(size);
+    FFT_PLANS.set(size, plan);
   }
+  plan.forward(re, im);
 }
 
 /**
