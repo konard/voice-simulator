@@ -80,7 +80,81 @@ describe('textToIpa', () => {
 
   it('converts Chinese characters and numbered pinyin with tones', () => {
     expect(textToIpa('你好世界').ipa).toBe('ni˧˥ xɑʊ˨˩ ʂɻ̩˥˩ t͡ɕjɛ˥˩');
-    expect(textToIpa('ni3 hao3', { lang: 'zh' }).ipa).toBe('ni˨˩˦ xɑʊ˨˩˦');
+    // Typed pinyin gets the third-tone sandhi across the space (issue 49).
+    expect(textToIpa('ni3 hao3', { lang: 'zh' }).ipa).toBe('ni˧˥ xɑʊ˨˩˦');
+  });
+});
+
+describe('一 and 不', () => {
+  const zh = (text) => textToIpa(text, { lang: 'zh' }).ipa;
+
+  it('reads 一 and 不 by their neighbours', () => {
+    expect(zh('第一名')).toBe('ti˥˩ i˥ miŋ˧˥');
+    expect(zh('十一月')).toBe('ʂɻ̩˧˥ i˥ ɥɛ˥˩');
+    expect(zh('一九九一')).toBe('i˥ t͡ɕjoʊ˧˥ t͡ɕjoʊ˨˩ i˥');
+    expect(zh('看一看')).toBe('kʰan˥˩ i kʰan˥˩');
+    expect(zh('是不是')).toBe('ʂɻ̩˥˩ pu ʂɻ̩˥˩');
+  });
+
+  it('reads reduplicated kinship terms with the neutral tone', () => {
+    expect(zh('爷爷')).toBe('jɛ˧˥ jɛ');
+    expect(zh('奶奶')).toBe('naɪ˨˩ naɪ');
+  });
+
+  it('keeps the old sandhi of 一 and 不', () => {
+    expect(zh('一个')).toBe('i˧˥ kɤ˥˩');
+    expect(zh('一天')).toBe('i˥˩ tʰjɛn˥');
+    expect(zh('不是')).toBe('pu˧˥ ʂɻ̩˥˩');
+    expect(zh('第一')).toBe('ti˥˩ i˥');
+  });
+});
+
+describe('sandhi across spaces', () => {
+  const zh = (text) => textToIpa(text, { lang: 'zh' });
+
+  it('joins Hanzi words', () => {
+    expect(zh('我 很 好').ipa).toBe(zh('我很好').ipa);
+    expect(zh('你 好 吗').ipa).toBe(zh('你好吗').ipa);
+    expect(zh('不 对').ipa).toBe(zh('不对').ipa);
+    expect(zh('一 个').ipa).toBe(zh('一个').ipa);
+  });
+
+  it('joins typed pinyin', () => {
+    expect(zh('wǒ hěn hǎo').ipa).toBe(zh('wo3hen3hao3').ipa);
+    expect(zh('wo3 hen3 hao3').ipa).toBe(zh('wo3hen3hao3').ipa);
+    expect(zh('nǐ hǎo').ipa).toBe(zh('ni3hao3').ipa);
+  });
+
+  it('keeps typed tones of bu and yi', () => {
+    expect(zh('bu4 dui4').ipa).toBe('pu˥˩ tweɪ˥˩');
+  });
+
+  it('stops at a break', () => {
+    expect(zh('我很好，你好').ipa).toBe('wo˨˩ xən˧˥ xɑʊ˨˩˦ , ni˧˥ xɑʊ˨˩˦');
+  });
+
+  it('stops at another language', () => {
+    const { words } = zh('很 好 OK 你 好');
+    const ipa = (list) => list.map((word) => word.ipa).join(' ');
+    // `OK` is read letter by letter: its items sit between the two pairs.
+    expect(words.length).toBeGreaterThan(4);
+    expect(ipa(words.slice(0, 2))).toBe(zh('很好').ipa);
+    expect(ipa(words.slice(-2))).toBe(zh('你好').ipa);
+  });
+
+  it('keeps the word items', () => {
+    const { words } = zh('我 很 好');
+    expect(
+      words.map(({ text, sourceStart, sourceEnd }) => [
+        text,
+        sourceStart,
+        sourceEnd,
+      ])
+    ).toEqual([
+      ['我', 0, 1],
+      ['很', 2, 3],
+      ['好', 4, 5],
+    ]);
   });
 });
 

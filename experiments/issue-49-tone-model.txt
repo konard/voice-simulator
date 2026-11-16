@@ -1,0 +1,29 @@
+ODE residual / λ³ (max, st): 5.96e-6
+ramp 10 st/s, λ 50: y(0.5 s) = 4.400 st (line 5, lag 3/λ → 4.4)
+
+largest f0 step between frames (st), whole utterance:
+  th pʰaː˧ maː˥˩ kʰaː˩˩˦: 0.231
+  zh ma˥˩ ma˥ ma˨˩˦ ma˧˥: 0.416
+  zh wo˨˩ xən˧˥ xɑʊ˨˩˦ , ni˧˥ xɑʊ˨˩ ma ?: 0.405
+  yue si˥ si˧˥ si˧ si˨˩ si˩˧ si˨: 0.230
+
+vowels: duration (ms) and f0 (Hz) at 10, 50, 90 %:
+  妈妈 ma˥ ma: 223 ms 156/156/156 | 127 ms 118/107/101
+  爸爸 pa˥˩ pa: 209 ms 156/142/117 | 127 ms 90/87/86
+  哥哥 kɤ˥ kɤ: 184 ms 156/156/156 | 104 ms 120/108/103
+  奶奶 naɪ˨˩ naɪ: 97 ms 105/105/104 | 145 ms 103/100/97 | 50 ms 109/113/116 | 76 ms 118/121/123
+  爷爷 jɛ˧˥ jɛ: 190 ms 120/125/137 | 104 ms 132/123/117
+  好吗？ xɑʊ˨˩ ma ?: 97 ms 105/105/104 | 145 ms 103/100/97 | 127 ms 115/130/142
+  ma˥ ma: 223 ms 156/156/156 | 127 ms 118/107/101
+  ma˥˩ ma: 209 ms 156/142/117 | 127 ms 90/87/86
+  ma˨˩ ma: 245 ms 105/102/98 | 127 ms 111/118/122
+  ma˧˥ ma: 230 ms 120/126/140 | 127 ms 126/117/113
+  ma˥ ma ma˥: 223 ms 156/156/156 | 118 ms 121/111/105 | 296 ms 129/142/144
+
+planner tests (second vowel):
+  ma˥ ma˥ − ma˥˩ ma˥ at 10 %: 2.759 st (≥ 2), at 95 %: 0.009 st (< 1)
+  mean ma˥ ma − mean ma˥˩ ma: 3.722 st (≥ 3)
+  ma˨˩ ma, 90 % − 10 %: 1.687 st (≥ 1)
+  ma˥ ma ma˥, second / first vowel: 0.530 (≤ 0.65)
+
+TONE_RATES {"level":25,"rise":40,"fall":40,"low":35,"neutral":25}

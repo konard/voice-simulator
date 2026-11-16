@@ -394,6 +394,8 @@ export interface DurationFeatures {
   next: string | null;
   /** Tone 1 to 5 (5 = neutral) in tonal languages, 0 otherwise. */
   tone: number;
+  /** Tone 5 without stress mark: the neutral tone. */
+  neutral: boolean;
   afterAspirated: boolean;
   nucleusSize: number;
   nucleusMain: boolean;
@@ -411,6 +413,8 @@ export declare const RATE_MINIMUM: number;
 export declare const RATE_STRETCH: number;
 /** Exponent of the speech rate on pauses of strength 2 and more (1.5). */
 export declare const RATE_PAUSE: number;
+/** Default factor of the neutral tone on the whole vowel (0.6). */
+export declare const NEUTRAL_DURATION: number;
 export declare const DURATION_RULES: readonly DurationRule[];
 /** Tables of en, ru, hi, zh and default (English). */
 export declare const DURATION_TABLES: Readonly<
@@ -505,6 +509,15 @@ export declare function approachTargets(
     fallback?: number;
   }
 ): Float32Array;
+export {
+  approachTargets as approachToneTargets,
+  NEUTRAL_LEVELS,
+  TONE_RATES,
+  neutralLevel,
+  toneCurve,
+  toneIntervals,
+} from './articulation/tone-model.js';
+export type { ToneInterval, ToneState } from './articulation/tone-model.js';
 export declare function sampleState(
   plan: Plan,
   time: number,
