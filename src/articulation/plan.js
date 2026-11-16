@@ -12,7 +12,8 @@
  * glide in a straight line between their neighbours; consonants hold the
  * tongue body against that line by their coarticulation resistance
  * (`COARTICULATION_RESISTANCE` in phones.js). Pitch, loudness, the vocal
- * effort (`effort` in dB and `tension`, src/articulation/effort.js) and the
+ * effort (`effort` in dB and `tension`, src/articulation/effort.js), the
+ * whisper (src/articulation/whisper.js) and the
  * fold source keep the zero-phase smoothing of `smoothChannel()`.
  */
 
@@ -42,6 +43,11 @@ import {
   timedLength,
 } from './modes.js';
 import { approachTargets as approachToneTargets } from './tone-model.js';
+import {
+  applyWhisperDurations,
+  fillWhisper,
+  whisperVoiceless,
+} from './whisper.js';
 import { applyIntonationTiming } from './intonation.js';
 import { consonantJaw, teethGap } from './teeth.js';
 import {
@@ -141,6 +147,7 @@ const SOURCE_TIME_CONSTANTS = Object.freeze({
   foldTension: 0.03,
   effort: 0.05,
   tension: 0.03,
+  whisper: 0.03,
 });
 
 /**
@@ -362,6 +369,8 @@ export function buildSegments(tokens, options) {
   applyRates(segments);
   applyIntonationTiming(segments, options.tunes ?? options.language);
   applyEffortDurations(segments);
+  applyWhisperDurations(segments);
+  whisperVoiceless(segments);
   if (segments.at(-1).kind === 'pause' && !segments.at(-1).sound) {
     segments.at(-1).strength = 3;
     segments.at(-1).target = { voicing: 0, loudness: 0 };
@@ -414,6 +423,7 @@ const DEFAULTS = {
   foldTension: 1,
   effort: 0,
   tension: 0,
+  whisper: 0,
 };
 
 export { DEFAULTS as CHANNEL_DEFAULTS };
@@ -709,7 +719,8 @@ function piecewiseLinear(values, positions, t) {
  * With the `height` channel and `head.intrinsicPitch` (semitones between the
  * closest and the most open vowel), close vowels get a higher pitch
  * (Whalen & Levitt 1995). `pitch.language` picks the tunes of
- * intonation.js and `pitch.effort` (the effort channel) raises the pitch.
+ * intonation.js and `pitch.effort` (the effort channel) raises the pitch,
+ * less where `pitch.whisper` (the unsmoothed whisper channel) whispers.
  */
 function fillPitch(values, segments, head, frameRate, height, pitch = {}) {
   const { language, effort } = pitch;
@@ -746,19 +757,25 @@ function fillPitch(values, segments, head, frameRate, height, pitch = {}) {
     }
   }
   if (effort) {
-    addEffortPitch(values, effort, head);
+    addEffortPitch(values, effort, head, pitch.whisper);
   }
   return { shape, tonal };
 }
 
 /**
  * Raise the pitch by the effort rule (`pitch` of `EFFORT_RULES`: +5 Hz per
- * dB of effort re the speaker's pitch, -4 to +12 semitones).
+ * dB of effort re the speaker's pitch, -4 to +12 semitones). A whisper
+ * has no pitch for the effort to raise: the shift is scaled by
+ * `1 - whisper` (issue 53), so the pitch cue of the whisper noise
+ * (src/acoustics/whisper.js) follows the intended pitch alone.
  */
-function addEffortPitch(values, effort, head) {
+function addEffortPitch(values, effort, head, whisper) {
   for (let frame = 0; frame < values.length; frame++) {
     if (effort[frame] !== 0) {
-      const shift = EFFORT_RULES.pitch.value(effort[frame], head);
+      let shift = EFFORT_RULES.pitch.value(effort[frame], head);
+      if (whisper && whisper[frame] !== 0) {
+        shift *= 1 - Math.min(1, whisper[frame]);
+      }
       values[frame] *= 2 ** (shift / 12);
     }
   }
@@ -1079,6 +1096,7 @@ export function planUtterance(ipa, options = {}) {
   applyRegisterGain(channels.loudness, segments, frameRate, tunes);
   applyModeGains(channels.loudness, modes, frameRate);
   channels.effort.set(effort);
+  const whispers = fillWhisper(channels.whisper, segments, frameRate);
   for (let frame = 0; frame < frameCount; frame++) {
     channels.tension[frame] = TENSION_PER_DB * effort[frame];
   }
@@ -1088,7 +1106,7 @@ export function planUtterance(ipa, options = {}) {
     head,
     frameRate,
     channels.height,
-    { language: tunes, effort }
+    { language: tunes, effort, whisper: whispers ? channels.whisper : null }
   );
   const steps = { loudness: channels.loudness, effort };
   for (const name of GLOTTAL_CHANNELS) {
@@ -1103,6 +1121,7 @@ export function planUtterance(ipa, options = {}) {
     'adduction',
     'effort',
     'tension',
+    'whisper',
   ]) {
     const timeConstant = SOURCE_TIME_CONSTANTS[name] / head.articulationSpeed;
     if (name === 'f0') {

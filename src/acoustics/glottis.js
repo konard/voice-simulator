@@ -22,6 +22,7 @@ import {
   effortVoicedGain,
   TILT_CORNER,
 } from '../articulation/effort.js';
+import { whisperNoise, whisperQuiet } from './whisper.js';
 
 /**
  * Breath noise per 10 mm² of glottal chink (issue 35): the air leaking
@@ -169,6 +170,8 @@ export class Glottis {
     this.chinkNoise = head.chinkNoise ?? CHINK_NOISE;
     this.reCritical = head.reCritical;
     this.areas = head;
+    /** The speaker's pitch (Hz): the whisper noise follows f0 against it. */
+    this.pitch = head.pitch ?? 120;
     this.strengthKey = [NaN, NaN];
     this.strength = 0;
     this.smoothed = 0;
@@ -274,10 +277,16 @@ export class Glottis {
    *   times loudness^(2/3)). `oralPressure` (dyn/cm²) is the pressure in
    *   the mouth; the LF source does not use it. `effort` (dB, default 0)
    *   multiplies the voiced part by `10^(E/20)` and `tension` is added to
-   *   the tenseness (src/articulation/effort.js).
+   *   the tenseness (src/articulation/effort.js). `whisper` (0..1, issue
+   *   53) multiplies the voiced part by `1 - whisper` (the pulse phase
+   *   stands still at 1) and adds the whisper noise of
+   *   src/acoustics/whisper.js: `whisperNoise` is its noise sample (else
+   *   `noise`) and `stopClosure` (0..1) the closure of the mouth.
    * @param {number} noise White noise sample in [-1, 1].
    */
   step(dt, control, noise) {
+    const whisper = Math.min(1, Math.max(0, control.whisper ?? 0));
+    const voicedShare = 1 - whisper;
     const voicing = Math.max(0, control.voicing) * (1 - control.closure);
     const loudness = Math.max(0, control.loudness);
     const tension = control.tension ?? 0;
@@ -286,13 +295,18 @@ export class Glottis {
         ? this.tenseness
         : Math.min(1, Math.max(0, this.tenseness + tension));
     const tenseness = Math.max(0, base - 0.5 * control.aspiration * voicing);
-    this.phase += dt;
-    if (this.phase >= this.period) {
-      this.phase -= this.period;
-      this.#startPeriod(control.f0, tenseness);
+    if (voicedShare > 0) {
+      this.phase += dt;
+      if (this.phase >= this.period) {
+        this.phase -= this.period;
+        this.#startPeriod(control.f0, tenseness);
+      }
     }
     const t = this.phase / this.period;
     this.intensity = voicing * loudness * this.shimmer;
+    if (whisper > 0) {
+      this.intensity *= voicedShare;
+    }
     const effort = control.effort ?? 0;
     if (effort !== 0) {
       this.#effortGains(effort);
@@ -308,20 +322,43 @@ export class Glottis {
     voiced = this.#tilt(voiced, dt, effort);
     // Aspiration is strongest while the folds are open.
     const opening = Math.max(0, Math.sin(2 * Math.PI * t));
-    const modulation =
+    let modulation =
       voicing > 0.1 ? 0.3 + 0.7 * opening * Math.min(1, voicing) : 1;
+    if (whisper > 0) {
+      modulation = modulation * voicedShare + whisper;
+    }
     this.noiseModulation = modulation;
     // The lung pressure carries the loudness: the strength grows as the
     // pressure drop to the power 1.5, and the pressure as loudness^(2/3).
-    const strength =
+    let strength =
       control.aspirationStrength ??
       this.#openTractStrength(control) * this.#noiseGain(control);
+    if (whisper > 0 && control.aspirationStrength === undefined) {
+      strength *= whisperQuiet(whisper, control.effort ?? 0);
+    }
     const breath =
       ((control.aspiration +
-        this.breathGain * this.breathiness ** this.breathExponent * voicing) *
+        this.breathGain *
+          this.breathiness ** this.breathExponent *
+          voicing *
+          voicedShare) *
         (1 - control.closure) +
         (this.chinkNoise * this.chink) / 10) *
       strength;
+    if (whisper > 0) {
+      // The whisper noise: turbulence at the half-open glottis, not
+      // modulated by pulses (src/acoustics/whisper.js).
+      const whispered = whisperNoise(
+        control,
+        control.whisperNoise ?? noise,
+        strength,
+        this.pitch
+      );
+      return (
+        voiced +
+        (noise * breath * modulation + whispered) * 0.45 * this.aspirationLevel
+      );
+    }
     return voiced + noise * breath * modulation * 0.45 * this.aspirationLevel;
   }
 }

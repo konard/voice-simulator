@@ -61,7 +61,15 @@ export {
   maxModeLevel,
   splToEffort,
 } from './articulation/effort.js';
-export { alphaRatio, levelDb } from './analysis/mode-features.js';
+export {
+  alphaRatio,
+  centreOfGravity,
+  energyRatio,
+  frameAperiodicities,
+  levelDb,
+  voicedShare,
+  VOICED_SHARE_APERIODICITY,
+} from './analysis/mode-features.js';
 export {
   integratedLoudness,
   kWeighting,

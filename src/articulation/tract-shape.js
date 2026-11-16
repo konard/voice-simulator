@@ -543,6 +543,7 @@ export function tractShape(state, head, options = {}) {
       foldTension: full.foldTension,
       effort: full.effort ?? 0,
       tension: full.tension ?? 0,
+      whisper: full.whisper ?? 0,
     },
     lipOpening: areas.at(-1),
     jaw: openness,
