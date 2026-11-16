@@ -154,13 +154,15 @@ async function speakSound(engine) {
 
 describe('voice engine benchmark', () => {
   it('starts automatic quality at minimal, above the narrow-band tiers', () => {
-    const engine = new VoiceEngine({ createWorker: fakeWorker });
-    expect(engine.auto).toBe(true);
-    expect(engine.audioLevel).toBe(BASE_AUDIO_LEVEL);
-    expect(engine.status.audioLevel).toBe(BASE_AUDIO_LEVEL);
-    expect(AUDIO_TIERS[engine.audioLevel].name).toBe('minimal');
-    engine.setTier(audioTierIndex('telephone'));
-    expect(AUDIO_TIERS[engine.audioLevel].name).toBe('telephone');
+    withStorage(() => {
+      const engine = new VoiceEngine({ createWorker: fakeWorker });
+      expect(engine.auto).toBe(true);
+      expect(engine.audioLevel).toBe(BASE_AUDIO_LEVEL);
+      expect(engine.status.audioLevel).toBe(BASE_AUDIO_LEVEL);
+      expect(AUDIO_TIERS[engine.audioLevel].name).toBe('minimal');
+      engine.setTier(audioTierIndex('telephone'));
+      expect(AUDIO_TIERS[engine.audioLevel].name).toBe('telephone');
+    });
   });
 
   it('measures at an idle moment, silently, and caches the result', () => {
@@ -392,28 +394,30 @@ describe('voice engine benchmark cache', () => {
 
 describe('voice engine debug', () => {
   it('keeps the utterance times the debug long tasks leave out', async () => {
-    const { engine } = benchmarkEngine();
-    const before = globalThis.performance.now();
-    expect(engine.duringSpeech(before - 10, before - 5)).toBe(false);
-    const speaking = engine.speak({
-      text: 'ˈa',
-      ipa: true,
-      lang: 'en',
-      head: {},
-      seed: '1',
-      mode: 'visual',
+    await withStorage(async () => {
+      const { engine } = benchmarkEngine();
+      const before = globalThis.performance.now();
+      expect(engine.duringSpeech(before - 10, before - 5)).toBe(false);
+      const speaking = engine.speak({
+        text: 'ˈa',
+        ipa: true,
+        lang: 'en',
+        head: {},
+        seed: '1',
+        mode: 'visual',
+      });
+      expect(engine.duringSpeech(before + 1e6, before + 1e6 + 1)).toBe(true);
+      await speaking;
+      engine.stop();
+      const after = globalThis.performance.now();
+      expect(engine.speechSpans.length).toBe(1);
+      expect(engine.duringSpeech(before, after)).toBe(true);
+      expect(engine.duringSpeech(after + 1, after + 2)).toBe(false);
+      // A failed utterance ends its span too.
+      const failed = await engine.speak(null).catch((error) => error);
+      expect(failed instanceof TypeError).toBe(true);
+      expect(engine.speechFrom).toBe(null);
     });
-    expect(engine.duringSpeech(before + 1e6, before + 1e6 + 1)).toBe(true);
-    await speaking;
-    engine.stop();
-    const after = globalThis.performance.now();
-    expect(engine.speechSpans.length).toBe(1);
-    expect(engine.duringSpeech(before, after)).toBe(true);
-    expect(engine.duringSpeech(after + 1, after + 2)).toBe(false);
-    // A failed utterance ends its span too.
-    const failed = await engine.speak(null).catch((error) => error);
-    expect(failed instanceof TypeError).toBe(true);
-    expect(engine.speechFrom).toBe(null);
   });
 });
 
@@ -473,12 +477,14 @@ describe('voice engine quality settings', () => {
       writable: true,
     });
     try {
-      const { engine, idle, reply, start } = benchmarkEngine();
-      await Promise.resolve();
-      start();
-      idle();
-      reply(answer(HIGH));
-      expect(engine.audioLevel).toBe(audioTierIndex('medium'));
+      await withStorage(async () => {
+        const { engine, idle, reply, start } = benchmarkEngine();
+        await Promise.resolve();
+        start();
+        idle();
+        reply(answer(HIGH));
+        expect(engine.audioLevel).toBe(audioTierIndex('medium'));
+      });
     } finally {
       if (saved) {
         Object.defineProperty(globalThis, 'navigator', saved);
@@ -489,23 +495,25 @@ describe('voice engine quality settings', () => {
   });
 
   it('keeps the 3D tiers on the CPU when the benchmark found it faster', async () => {
-    const { worker, engine, idle, reply, start } = benchmarkEngine();
-    start({}, { gpu: false });
-    idle();
-    expect(postedOf(worker, 'benchmark')[0].gpu).toBe(false);
-    start({});
-    idle();
-    expect(postedOf(worker, 'benchmark')[1].gpu).toBe(true);
-    reply(answer(3, { gpu: false }));
-    await speakSound(engine);
-    expect(worker.posted.at(-1).gpu).toBe(false);
-    reply(answer(5, { gpu: true }));
-    await speakSound(engine);
-    expect(worker.posted.at(-1).gpu).toBe(undefined);
-    engine.setTier(5);
-    reply(answer(3, { gpu: false }));
-    await speakSound(engine);
-    expect(worker.posted.at(-1).gpu).toBe(undefined);
+    await withStorage(async () => {
+      const { worker, engine, idle, reply, start } = benchmarkEngine();
+      start({}, { gpu: false });
+      idle();
+      expect(postedOf(worker, 'benchmark')[0].gpu).toBe(false);
+      start({});
+      idle();
+      expect(postedOf(worker, 'benchmark')[1].gpu).toBe(true);
+      reply(answer(3, { gpu: false }));
+      await speakSound(engine);
+      expect(worker.posted.at(-1).gpu).toBe(false);
+      reply(answer(5, { gpu: true }));
+      await speakSound(engine);
+      expect(worker.posted.at(-1).gpu).toBe(undefined);
+      engine.setTier(5);
+      reply(answer(3, { gpu: false }));
+      await speakSound(engine);
+      expect(worker.posted.at(-1).gpu).toBe(undefined);
+    });
   });
 
   it('renders with the engine setting and shows the engine', async () => {
@@ -552,15 +560,17 @@ describe('voice engine quality settings', () => {
   });
 
   it('follows the worker when it steps down early', () => {
-    const { engine, idle, reply, start } = benchmarkEngine();
-    start();
-    idle();
-    reply(answer(4));
-    engine.job = { id: 7, chunks: [{}], fields: [{}], fieldIndex: 1 };
-    reply({ type: 'overload', id: 7, from: 4, level: 3, load: 1.5 });
-    expect(engine.audioLevel).toBe(3);
-    expect(engine.status.overloads).toBe(1);
-    expect(engine.job.chunks).toEqual([]);
+    withStorage(() => {
+      const { engine, idle, reply, start } = benchmarkEngine();
+      start();
+      idle();
+      reply(answer(4));
+      engine.job = { id: 7, chunks: [{}], fields: [{}], fieldIndex: 1 };
+      reply({ type: 'overload', id: 7, from: 4, level: 3, load: 1.5 });
+      expect(engine.audioLevel).toBe(3);
+      expect(engine.status.overloads).toBe(1);
+      expect(engine.job.chunks).toEqual([]);
+    });
   });
 });
 
