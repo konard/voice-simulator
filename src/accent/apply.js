@@ -34,7 +34,7 @@ import { getPhoneme } from '../ipa/inventory.js';
 import { ipaUnits, isVowelUnit } from '../g2p/spelling.js';
 
 const STRESS_MARK = /^[ˈˌ]$/u;
-const TONE_LETTERS = /[˥˦˧˨˩]+$/u;
+const TONE_LETTERS = new Set(['˥', '˦', '˧', '˨', '˩']);
 /** Marks that change the voicing of the sound they follow. */
 const VOICELESS_MARKS = /[̥̊]/u;
 const VOICED_MARK = /̬/u;
@@ -51,8 +51,12 @@ const OBSTRUENT_MANNERS = new Set([
 
 /** A unit without its tone letters, and the tone letters. */
 export function splitTones(unit) {
-  const tones = TONE_LETTERS.exec(unit)?.[0] ?? '';
-  return [unit.slice(0, unit.length - tones.length), tones];
+  // A backward scan, linear in the length (a /[˥-˩]+$/ search is not).
+  let end = unit.length;
+  while (end > 0 && TONE_LETTERS.has(unit[end - 1])) {
+    end--;
+  }
+  return [unit.slice(0, end), unit.slice(end)];
 }
 
 /** The base symbols of a unit: its letters without diacritics and ties. */

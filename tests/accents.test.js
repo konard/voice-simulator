@@ -18,6 +18,7 @@ import {
   resolveAccent,
 } from '../src/g2p/accents.js';
 import { parseIpa } from '../src/ipa/parse.js';
+import { splitTones } from '../src/accent/apply.js';
 import { prepareUtterance } from '../src/synthesize.js';
 import { runCli } from '../bin/voice-simulator.js';
 import {
@@ -378,6 +379,22 @@ describe('explainAccent', () => {
   it('ranks the accents by how many differences they explain', () => {
     const [best] = explainAccent('ˈɡorət', 'ˈɣorət', 'ru');
     expect(best).toEqual({ code: 'ru-x-south', explained: 1, total: 1 });
+  });
+});
+
+describe('splitTones', () => {
+  it('splits the tone letters off a unit', () => {
+    expect(splitTones('a˨˩˦')).toEqual(['a', '˨˩˦']);
+    expect(splitTones('t͡ɕ')).toEqual(['t͡ɕ', '']);
+    expect(splitTones('˥˩')).toEqual(['', '˥˩']);
+  });
+
+  it('stays linear on a long run of tone letters', () => {
+    // The /[˥-˩]+$/ search it replaced took 14 s on 100 000 letters.
+    const unit = `${'˥'.repeat(100000)}x`;
+    const start = globalThis.performance.now();
+    expect(splitTones(unit)).toEqual([unit, '']);
+    expect(globalThis.performance.now() - start).toBeLessThan(500);
   });
 });
 
