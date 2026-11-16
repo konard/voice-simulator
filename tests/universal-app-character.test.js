@@ -69,4 +69,23 @@ describe('example app talking character', () => {
     expect(viewer).toContain('vrmVowelBinds(gltf.parser.json)');
     expect(viewer).toContain('.vrm');
   });
+
+  it('draws only when the face, the camera or the size changed', () => {
+    // An idle page that draws every frame is busy all the time: with the
+    // CPU throttled 4x and software WebGL those frames are long tasks
+    // (issue 28).
+    const viewer = readText(`${root}/viewer/character-viewer.js`);
+    const render = viewer.slice(viewer.indexOf('  render() {'));
+    expect(render.indexOf('if (!this.dirty)')).toBeGreaterThan(-1);
+    expect(render.indexOf('if (!this.dirty)')).toBeLessThan(
+      render.indexOf('this.renderer.render(')
+    );
+    for (const method of ['resize() {', 'setModel(', 'update(state, head) {']) {
+      const body = viewer.slice(viewer.indexOf(`  ${method}`));
+      expect(body.slice(0, body.indexOf('\n  }\n'))).toContain(
+        'this.dirty = true'
+      );
+    }
+    expect(viewer).toContain("this.controls.addEventListener('change'");
+  });
 });
