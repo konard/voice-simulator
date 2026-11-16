@@ -33,11 +33,17 @@
  * Tonal languages keep their lexical tones and only get the declination
  * and register shifts. Every Chao level of a tone is a pitch target, so a
  * contour tone such as the Mandarin third tone `˨˩˦` falls to its lowest
- * level before it rises. The targets sit at the fractions of the nucleus
+ * level before it rises. The targets sit at the fractions of the syllable
  * in `TONE_POINT_POSITIONS`: the ends for two levels, `0, 0.4, 1` for
  * three (the low point comes before the middle of the vowel, Xu 1997,
  * figure 3) and evenly spaced for more. A single-level tone is level.
+ * In a phrase with tones the voice approaches the targets of one syllable
+ * after the other from where the last syllable ended (the tone model of
+ * issue 49 in tone-model.js); a syllable without tone and stress mark is
+ * the neutral tone, whose level depends on the tone before it.
  */
+
+import { TONE_RATES, neutralLevel, toneIntervals } from './tone-model.js';
 
 /** Pause length (s), final contour and final-syllable lengthening. */
 export const BOUNDARIES = Object.freeze({
@@ -245,6 +251,33 @@ export function tonePitch(tone, base, scale) {
 }
 
 /**
+ * Pitch shift of a nucleus in semitones from `head.pitch` (register shift
+ * minus declination), its accent range and its tone scale (semitones per
+ * Chao level).
+ * @param {object} segment
+ * @param {object} head
+ * @param {object} phrase
+ */
+export function pitchShift(segment, head, phrase) {
+  const { nuclei } = phrase;
+  const phraseStart = nuclei[0].start;
+  const span = Math.max(0.2, nuclei.at(-1).end - phraseStart);
+  const progress = (segment.start - phraseStart) / span;
+  const register = segmentRegister(segment, phrase);
+  // The head's declination replaces the 2-semitone default and scales the
+  // step between phrases with it.
+  const declination = head.declination ?? DECLINATION.phrase;
+  return {
+    shift:
+      register.shift -
+      declination * progress -
+      (DECLINATION.step * phrase.step * declination) / DECLINATION.phrase,
+    range: head.pitchRange * register.range,
+    scale: (1.2 + 0.35 * head.pitchRange) * register.range,
+  };
+}
+
+/**
  * Pitch targets (Hz) of a syllable nucleus: start and end, or one per
  * level of a lexical tone.
  * @param {object} segment
@@ -252,24 +285,10 @@ export function tonePitch(tone, base, scale) {
  */
 export function syllablePitch(segment, context) {
   const { head, phrase } = context;
-  const { nuclei } = phrase;
-  const phraseStart = nuclei[0].start;
-  const span = Math.max(0.2, nuclei.at(-1).end - phraseStart);
-  const progress = (segment.start - phraseStart) / span;
-  const register = segmentRegister(segment, phrase);
-  const range = head.pitchRange * register.range;
-  // The head's declination replaces the 2-semitone default and scales the
-  // step between phrases with it.
-  const declination = head.declination ?? DECLINATION.phrase;
-  const base = semitones(
-    head.pitch,
-    register.shift -
-      declination * progress -
-      (DECLINATION.step * phrase.step * declination) / DECLINATION.phrase
-  );
+  const { shift, range, scale } = pitchShift(segment, head, phrase);
+  const base = semitones(head.pitch, shift);
   const tone = segment.token.tone;
   if (tone) {
-    const scale = (1.2 + 0.35 * head.pitchRange) * register.range;
     return tonePitch(tone, base, scale);
   }
   const accent =
@@ -282,17 +301,135 @@ export function syllablePitch(segment, context) {
   return [accented, semitones(base, perRange * range + offset)];
 }
 
+/** Whether a phrase carries a lexical tone. */
+export function isTonalPhrase(phrase) {
+  return phrase.nuclei.some((segment) => segment.token?.tone?.length);
+}
+
+/**
+ * Syllables of a tonal phrase as lists of nuclei: neighbouring nuclei of
+ * one word (no other segment between them) belong to one syllable unless
+ * the first of them carries a tone (`naɪ˨˩` is one syllable, `a˥a˥` two).
+ */
+function phraseSyllables(phrase, positions) {
+  const syllables = [];
+  for (const segment of phrase.nuclei) {
+    const current = syllables.at(-1);
+    const last = current?.at(-1);
+    if (
+      last &&
+      positions.get(segment) === positions.get(last) + 1 &&
+      segment.token?.word === last.token?.word &&
+      !last.token?.tone?.length
+    ) {
+      current.push(segment);
+    } else {
+      syllables.push([segment]);
+    }
+  }
+  return syllables;
+}
+
+const toSemitones = (pitch, reference) => 12 * Math.log2(pitch / reference);
+
+/**
+ * Pitch targets of the syllables of a phrase with tones (issue 49): one
+ * target per syllable, in semitones from `head.pitch`. A Chao level
+ * becomes `shift + (level − 3) × scale`. A syllable without tone and
+ * without stress mark is neutral: one level target at `neutralLevel()` of
+ * the tone before it, approached slowly (`TONE_RATES.neutral`), raised at
+ * the end of a rising phrase. A stressed syllable without tone keeps the
+ * start and end of `syllablePitch()`.
+ */
+function tonalTargets(segments, positions, phrase, head) {
+  const syllables = phraseSyllables(phrase, positions);
+  const contour = phraseContour(phrase.pause);
+  const targets = [];
+  let previousTone = null;
+  // Issue 49: the interval of syllable k runs from the end of nucleus
+  // k − 1 to the end of nucleus k; the first one starts with its own
+  // nucleus (its first voiced frame).
+  let start = syllables[0][0].start;
+  syllables.forEach((nuclei, index) => {
+    const carrier = nuclei.findLast((item) => item.token?.tone?.length);
+    const segment = carrier ?? nuclei.at(-1);
+    const end = nuclei.at(-1).end;
+    const duration = Math.max(1e-6, end - start);
+    const last = index === syllables.length - 1;
+    const { shift, range, scale } = pitchShift(nuclei[0], head, phrase);
+    const level = (value) => shift + (value - 3) * scale;
+    const stressed = nuclei.some((item) => item.token?.stress > 0);
+    let intervals;
+    if (carrier) {
+      intervals = toneIntervals(carrier.token.tone, duration).map(
+        (interval) => ({
+          ...interval,
+          from: level(interval.from),
+          to: level(interval.to),
+        })
+      );
+    } else if (stressed) {
+      const points = syllablePitch(nuclei[0], { head, phrase, last });
+      const [from, to] = [points[0], points.at(-1)].map((pitch) =>
+        toSemitones(pitch, head.pitch)
+      );
+      intervals = [{ duration, from, to, rate: TONE_RATES.level }];
+    } else {
+      const value = level(neutralLevel(previousTone));
+      const raise =
+        last && contour === 'rise'
+          ? CONTOURS.rise[0] * range + CONTOURS.rise[1]
+          : 0;
+      intervals = [
+        { duration, from: value, to: value + raise, rate: TONE_RATES.neutral },
+      ];
+    }
+    const points = carrier
+      ? tonePitch(carrier.token.tone, semitones(head.pitch, shift), scale)
+      : [intervals[0].from, intervals.at(-1).to].map((value) =>
+          semitones(head.pitch, value)
+        );
+    targets.push({
+      segment,
+      nuclei,
+      phrase,
+      start,
+      end,
+      neutral: !carrier && !stressed,
+      from: points[0],
+      to: points.at(-1),
+      points,
+      intervals,
+    });
+    previousTone = carrier?.token.tone ?? null;
+    start = end;
+  });
+  return targets;
+}
+
 /**
  * Pitch targets of every syllable nucleus in the utterance: `points` has
- * one pitch per target (two, or one per tone level) and `from` and `to`
- * are its first and last value.
+ * one pitch (Hz) per target (two, or one per tone level) and `from` and
+ * `to` are its first and last value. In a phrase with lexical tones there
+ * is one entry per syllable (`segment` is its tone carrier, `nuclei` all
+ * its nuclei) with `intervals`, the pitch targets of the tone model in
+ * semitones from `head.pitch` (`approachTargets()` in tone-model.js), the
+ * `start` and `end` of the syllable's interval in seconds (from the end of
+ * the syllable before it, or the start of the first nucleus, to the
+ * end of its last nucleus), its `phrase` and whether it is `neutral`.
  * @param {object[]} segments
  * @param {object} head
- * @returns {{segment: object, from: number, to: number, points: number[]}[]}
+ * @returns {{segment: object, from: number, to: number, points: number[], intervals?: object[]}[]}
  */
 export function pitchTargets(segments, head) {
   const targets = [];
+  let positions = null;
   for (const phrase of intonationPhrases(segments)) {
+    if (isTonalPhrase(phrase)) {
+      positions ??= new Map(segments.map((segment, index) => [segment, index]));
+      targets.push(...tonalTargets(segments, positions, phrase, head));
+      continue;
+    }
     phrase.nuclei.forEach((segment, index) => {
       const points = syllablePitch(segment, {
         head,

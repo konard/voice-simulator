@@ -23,6 +23,7 @@ import {
   presetHeadConfig,
 } from '../src/head-config.js';
 import { getPhoneme } from '../src/ipa/inventory.js';
+import { readFileSync } from 'node:fs';
 
 function vowelFormants(symbol, head = DEFAULT_HEAD, branches = () => []) {
   const target = vowelTarget({ phoneme: getPhoneme(symbol) });
@@ -112,6 +113,81 @@ describe('planUtterance', () => {
     const fractions = Array.from({ length: 21 }, (_, index) => index / 20);
     const values = vowelPitch('ma˥', fractions);
     expect(Math.max(...values) / Math.min(...values)).toBeLessThan(1.03);
+  });
+
+  /** Plan of tonal speech without vibrato. */
+  const tonalPlan = (ipa) =>
+    planUtterance(ipa, {
+      head: normalizeHeadConfig({ vibrato: 0 }),
+      language: 'zh',
+    });
+  const vowelsOf = (plan) =>
+    plan.segments.filter((segment) => segment.kind === 'vowel');
+  /** f0 at a fraction of the vowel `index` (the second by default). */
+  const f0At = (plan, fraction, index = 1) => {
+    const vowel = vowelsOf(plan)[index];
+    return sampleState(plan, vowel.start + (vowel.end - vowel.start) * fraction)
+      .f0;
+  };
+  const semitonesBetween = (a, b) => 12 * Math.log2(a / b);
+
+  it('starts a tone where the last one ended', () => {
+    const afterFall = tonalPlan('ma˥˩ ma˥');
+    const afterLevel = tonalPlan('ma˥ ma˥');
+    expect(
+      semitonesBetween(f0At(afterLevel, 0.1), f0At(afterFall, 0.1))
+    ).toBeGreaterThanOrEqual(2);
+    expect(
+      Math.abs(semitonesBetween(f0At(afterLevel, 0.95), f0At(afterFall, 0.95)))
+    ).toBeLessThan(1);
+  });
+
+  it('sets the neutral tone by the tone before it', () => {
+    const mean = (plan) => {
+      const values = Array.from({ length: 11 }, (_, index) =>
+        f0At(plan, index / 10)
+      );
+      return values.reduce((sum, value) => sum + value, 0) / values.length;
+    };
+    expect(
+      semitonesBetween(mean(tonalPlan('ma˥ ma')), mean(tonalPlan('ma˥˩ ma')))
+    ).toBeGreaterThanOrEqual(3);
+    const afterLow = tonalPlan('ma˨˩ ma');
+    expect(
+      semitonesBetween(f0At(afterLow, 0.9), f0At(afterLow, 0.1))
+    ).toBeGreaterThanOrEqual(1);
+  });
+
+  it('shortens the neutral tone', () => {
+    const length = (vowel) => vowel.end - vowel.start;
+    const [first, neutral] = vowelsOf(tonalPlan('ma˥ ma ma˥'));
+    expect(length(neutral)).toBeLessThanOrEqual(0.65 * length(first));
+    const [full, last] = vowelsOf(tonalPlan('ma˥ ma'));
+    expect(length(last)).toBeLessThan(length(full));
+  });
+
+  it('leaves non-tonal speech alone', () => {
+    const snapshot = JSON.parse(
+      readFileSync(
+        new globalThis.URL(
+          './fixtures/issue-49/hello-world-f0.json',
+          import.meta.url
+        ),
+        'utf8'
+      )
+    );
+    const plan = planUtterance(snapshot.ipa, {
+      head: normalizeHeadConfig(snapshot.head),
+      language: snapshot.language,
+    });
+    expect(plan.channels.f0.length).toBe(snapshot.f0.length);
+    // Equal frame by frame (exact in Node); the tolerance of one step of a
+    // 32-bit float only allows for the libm of another runtime (Bun).
+    plan.channels.f0.forEach((value, frame) =>
+      expect(Math.abs(value - snapshot.f0[frame])).toBeLessThanOrEqual(
+        value * 2 ** -23
+      )
+    );
   });
 
   it('opens the velum for nasals only', () => {
