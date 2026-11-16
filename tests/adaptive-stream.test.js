@@ -33,45 +33,88 @@ const RATE = 48000;
 const at = (seconds) => Math.round(seconds * RATE);
 const level = (name) => tierIndex(name);
 
-// SHA-256 of synthesize('Hello world.', {seed: 1, tier, engine}) recorded
-// on main before this change (experiments/issue-29-offline-hashes.mjs, same
-// hashes on this branch). The renders take Math.sin, Math.exp and friends
-// from the runtime, whose last bits differ: V8 of Node.js, the newer V8 of
-// Deno and the libm of JavaScriptCore each give their own (unchanged)
-// samples. Bun was recorded on Linux only.
+// SHA-256 of synthesize('Hello world.', {seed: 1, tier, engine}) on main
+// before this change, per runtime and platform (Linux:
+// experiments/issue-29-offline-hashes.mjs; macOS and Windows: a probe that
+// rendered origin/main and this branch side by side in CI, same hashes).
+// The renders take Math.sin, Math.exp and friends from the runtime, whose
+// last bits differ between runtimes and between platforms: each gives its
+// own (unchanged) samples. The Rust engine is tested on Linux only.
 const MINIMAL =
   '74690b09105eb6439c5eb11e8d968d32a0408e4a07700c6136f26b0f36597efc';
 const BUN_MINIMAL =
   '3cad28ba5847765636a3b8c0aa64fb53c513a8db1c02eca2fef02573eed24e0f';
 const OFFLINE = {
   node: {
-    js: {
-      minimal: MINIMAL,
-      high: '5041ace3cb3650b4df956bacc66d94bd00150b4c70f7ee401726a878570d6263',
+    linux: {
+      js: {
+        minimal: MINIMAL,
+        high: '5041ace3cb3650b4df956bacc66d94bd00150b4c70f7ee401726a878570d6263',
+      },
+      rust: {
+        minimal: MINIMAL,
+        high: '18bf65f4bf8e4851fb851974746bca011c384cc7461ede359a9d384c7cd151f5',
+      },
     },
-    rust: {
-      minimal: MINIMAL,
-      high: '18bf65f4bf8e4851fb851974746bca011c384cc7461ede359a9d384c7cd151f5',
+    darwin: {
+      js: {
+        minimal: MINIMAL,
+        high: 'efc7c53bcecbac271c84d431d2e02aeca2ac2d9aa77fc0f4556ab4e8592f5b32',
+      },
+    },
+    win32: {
+      js: {
+        minimal: MINIMAL,
+        high: '092c50975db10f530ffad7c2519e28a838c77c1e998456d168f1243cc345ec1e',
+      },
     },
   },
   deno: {
-    js: {
-      minimal: MINIMAL,
-      high: 'e91447839743bac48759c3fb1c14ab64daf74943df5860352b04a979c737741a',
+    linux: {
+      js: {
+        minimal: MINIMAL,
+        high: 'e91447839743bac48759c3fb1c14ab64daf74943df5860352b04a979c737741a',
+      },
+      rust: {
+        minimal: MINIMAL,
+        high: '84ba157b39f9be75e91a2a2927da57a0ac32955f8dda487370296e2bf5d4fce1',
+      },
     },
-    rust: {
-      minimal: MINIMAL,
-      high: '84ba157b39f9be75e91a2a2927da57a0ac32955f8dda487370296e2bf5d4fce1',
+    darwin: {
+      js: {
+        minimal: MINIMAL,
+        high: '53165b6887b5a5593a55b311a47a9a69b126a859e71b9b00cc1b7d1b19ee954f',
+      },
+    },
+    win32: {
+      js: {
+        minimal: MINIMAL,
+        high: 'c26f7fede8b1cdecdaf1610eeda2acc1cfd17c84665db00118ece5d311087d57',
+      },
     },
   },
   bun: {
-    js: {
-      minimal: BUN_MINIMAL,
-      high: 'f1a15f28df2ce6e75f8483a91b3f00804c6ec387fb43d5c7f95ca2b28c16ce30',
+    linux: {
+      js: {
+        minimal: BUN_MINIMAL,
+        high: 'f1a15f28df2ce6e75f8483a91b3f00804c6ec387fb43d5c7f95ca2b28c16ce30',
+      },
+      rust: {
+        minimal: BUN_MINIMAL,
+        high: '120f1d2edd688798a4d432610e744ef9224f497dccc35d0f0ddc233072439065',
+      },
     },
-    rust: {
-      minimal: BUN_MINIMAL,
-      high: '120f1d2edd688798a4d432610e744ef9224f497dccc35d0f0ddc233072439065',
+    darwin: {
+      js: {
+        minimal: MINIMAL,
+        high: '34ff80ff62f26793e13c8a970e78286dca857c78c6a3388f82c476d6bc96a4a1',
+      },
+    },
+    win32: {
+      js: {
+        minimal: BUN_MINIMAL,
+        high: '42f8780763a3964ad9e385f424b3acbe9ac09ba42bfd16d5bc432cd783efa441',
+      },
     },
   },
 };
@@ -80,10 +123,12 @@ const runtime = globalThis.Deno
   : globalThis.process?.versions?.bun
     ? 'bun'
     : 'node';
-const unrecorded =
-  runtime === 'bun' && globalThis.process?.platform !== 'linux'
-    ? 'the hashes of Bun were recorded on Linux'
-    : null;
+const platform = globalThis.process?.platform;
+const offline = (engine) => OFFLINE[runtime][platform]?.[engine];
+const unrecorded = (engine) =>
+  offline(engine)
+    ? null
+    : `the hashes of ${runtime} with the ${engine} engine were not recorded on ${platform}`;
 
 function sha256(samples) {
   return createHash('sha256')
@@ -249,14 +294,14 @@ function streamTests(name, skip, { engine, vowel }) {
       stream.close();
     });
 
-    itUnless(skip, unrecorded)('offline output is unchanged', () => {
+    itUnless(skip, unrecorded(name))('offline output is unchanged', () => {
       for (const tier of ['minimal', 'high']) {
         const { samples } = synthesize('Hello world.', {
           seed: 1,
           tier,
           engine: name,
         });
-        expect(sha256(samples)).toBe(OFFLINE[runtime][name][tier]);
+        expect(sha256(samples)).toBe(offline(name)[tier]);
       }
     });
   });
