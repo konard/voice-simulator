@@ -1,0 +1,11 @@
+# node experiments/issue-50-plain-identity.mjs /tmp/vs-main (main at cdec329)
+same ipa, same 62908 samples: Hello world. -> həˈloʊ ˈwɝld .
+same ipa, same 159181 samples: Hello [world] and *stars* and a < b > c. -> həˈloʊ ( ˈwɝld ) ənd ˈstɑɹz ənd ə ˈbi ˈsi .
+same ipa, same 84586 samples: Literal [1] and *. -> ˈlɪɾɚəl ( ˈwʌn ) ənd .
+same ipa, same 122723 samples: Привет, мир! Как дела? -> prʲɪˈvʲet , mʲir ! kak ˈdʲeɫə ↘ ?
+same ipa, same 73939 samples: नमस्ते दुनिया। -> nəməst̪eː d̪ʊnɪjaː .
+same ipa, same 83312 samples: 你好世界。 -> ni˧˥ xɑʊ˨˩ ʂɻ̩˥˩ t͡ɕjɛ˥˩ .
+same ipa, same 282671 samples: On 3/4/2024 at 10:30 it cost $5. -> ɑn ˈmɑɹt͡ʃ ˈfɔɹθ ˈtwɛnti ˈtwɛnti ˈfɔɹ ət ˈtɛn ˈθɝˌdi ɪt ˈkɑst ˈfaɪv ˈdɑlɚz .
+same ipa, same 174068 samples: I read the record (twice), then read it again. -> aɪ ˈɹid ðə ˈɹɛkɚd ( ˈtwaɪs ) , ˈðɛn ˈɹid ɪt əˈɡɛn .
+same ipa, same 157268 samples: speak <speak> without being SSML -> ˈspik ˈspik wɪˈθaʊt ˈbiɪŋ ˈɛs ˈɛs ˈɛm ˈɛl
+all texts identical

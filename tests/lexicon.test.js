@@ -113,6 +113,18 @@ describe('pronunciation lexicons', () => {
     expect(() =>
       textToIpa('x', { lang: 'en', lexicon: { en: { x: '' } } })
     ).toThrow('"x"');
+    // Speech markup reads its words with the same lexicon.
+    const lexicon = { en: { quinoa: 'kiˈnoʊə' } };
+    const marked = textToIpa('[whisper]quinoa[/whisper]', {
+      lang: 'en',
+      markup: true,
+      lexicon,
+    });
+    expect(marked.ipa).toBe('{W kiˈnoʊə W}');
+    expect(
+      textToIpa('<speak>quinoa</speak>', { lang: 'en', lexicon }).words[0]
+        .source
+    ).toBe('user');
   });
 
   it('adds and clears user lexicons', () => {

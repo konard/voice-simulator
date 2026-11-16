@@ -38,6 +38,8 @@ import {
 } from './accents.js';
 import { weakenFunctionWords } from './weak-forms.js';
 import { withLexicon } from './lexicon.js';
+import { isSsml, parseMarkup } from '../markup/index.js';
+import { markupItems, markupModes } from './markup.js';
 
 /** Supported languages with display names and sample sentences. */
 export const LANGUAGES = Object.freeze({
@@ -393,37 +395,20 @@ function splitLanguageTag(tag) {
 }
 
 /**
- * Convert text to IPA.
- * @param {string} text
- * @param {{lang?: string, accent?: string, weakForms?: boolean,
- *   lexicon?: Record<string, Record<string, string|string[]>>}} [options]
- *   `lang` is 'auto', 'en', 'ru', 'hi' or 'zh', or a regional tag such as
- *   'en-GB'. `accent` picks an English accent (`en-US`, `en-GB`, `en-AU`,
- *   `en-IN`; see `accents.js`) and wins over the region of `lang`.
- *   `weakForms` (default `true`) speaks English function words in their
- *   weak, unstressed form inside a phrase (`a cup of tea for you`
- *   ə ˈkʌp əv ˈti fɚ ju); `false` keeps every word in its dictionary form.
- *   `lexicon` gives pronunciations for this call only, per language
- *   (`{en: {quinoa: 'kiˈnoʊə'}, zh: {重庆: 'chóng qìng'}}`); they win over
- *   `addLexicon()` and the shipped lexicons and are reported with
- *   `source: 'user'`. An entry that cannot be read (IPA that `parseIpa`
- *   does not know, pinyin with the wrong number of syllables) throws a
- *   TypeError naming the word.
- * @returns {{lang: string, accent: string|null, ipa: string, words: object[]}}
+ * Words and breaks of `source` in `lang`, appended to `items`. `offset`
+ * moves their source ranges (a stretch of a longer text).
  */
-export function textToIpa(text, options = {}) {
-  return withLexicon(options.lexicon, () => transcribe(text, options));
-}
-
-function transcribe(text, options) {
-  const source = normalizeDevanagariDigits(String(text ?? ''));
-  const { requested, region } = splitLanguageTag(options.lang);
-  const lang =
-    requested === 'auto' || !WORD_PRONOUNCERS[requested]
-      ? detectLanguage(source)
-      : requested;
-  const items = [];
-  const accent = resolveAccent('en', options.accent ?? region);
+function transcribe(items, source, lang, accent, offset = 0) {
+  const shift = (item) =>
+    offset
+      ? {
+          ...item,
+          sourceStart: item.sourceStart + offset,
+          ...(item.sourceEnd === undefined
+            ? {}
+            : { sourceEnd: item.sourceEnd + offset }),
+        }
+      : item;
   const normalized = normalizeText(source, {
     lang,
     wordLanguage: (word) => wordLanguage(word, lang),
@@ -431,11 +416,20 @@ function transcribe(text, options) {
   const contexts = wordContexts(normalized);
   normalized.forEach((item, index) => {
     if (item.kind === 'break') {
-      addBreak(items, item);
+      addBreak(items, shift(item));
     } else {
-      items.push(...pronounceItem(item, source, accent, contexts[index]));
+      items.push(
+        ...pronounceItem(item, source, accent, contexts[index]).map(shift)
+      );
     }
   });
+}
+
+/**
+ * The passes over all items: Chinese runs, clitics, weak forms, questions,
+ * linking r.
+ */
+function finishItems(items, accent, options) {
   joinChineseRuns(items);
   joinRussianClitics(items);
   if (options.weakForms !== false) {
@@ -443,6 +437,91 @@ function transcribe(text, options) {
   }
   markQuestions(items);
   linkRs(items, accent);
+}
+
+/** The language and accent of a language tag, as `textToIpa()` reads it. */
+function languageOf(tag, source, accent) {
+  const { requested, region } = splitLanguageTag(tag);
+  const lang =
+    requested === 'auto' || !WORD_PRONOUNCERS[requested]
+      ? detectLanguage(source)
+      : requested;
+  return { lang, region, accent: resolveAccent('en', accent ?? region) };
+}
+
+/** Text to IPA with speech markup (see docs/markup.md). */
+function markupToIpa(parsed, input, options) {
+  const source = normalizeDevanagariDigits(parsed.text);
+  const tag =
+    options.lang && options.lang !== 'auto'
+      ? options.lang
+      : (parsed.lang ?? options.lang);
+  const base = languageOf(tag, source, options.accent);
+  const items = markupItems(parsed, source, input, {
+    transcribe: (into, text, lang, offset) => {
+      const local = lang
+        ? languageOf(lang, text, options.accent ?? base.region)
+        : base;
+      transcribe(into, text, local.lang, local.accent, offset);
+    },
+    lang: base.lang,
+  });
+  finishItems(items, base.accent, options);
+  const { ipa, modes } = markupModes(items, parsed);
+  return {
+    lang: base.lang,
+    accent: resolveAccent(base.lang, options.accent ?? base.region),
+    ipa,
+    words: items.filter((item) => !item.break),
+    modes,
+    warnings: parsed.warnings,
+  };
+}
+
+/**
+ * Convert text to IPA.
+ * @param {string} text
+ * @param {{lang?: string, accent?: string, weakForms?: boolean, markup?: boolean, head?: {pitch?: number},
+ *   lexicon?: Record<string, Record<string, string|string[]>>}} [options]
+ *   `lang` is 'auto', 'en', 'ru', 'hi' or 'zh', or a regional tag such as
+ *   'en-GB'. `accent` picks an English accent (`en-US`, `en-GB`, `en-AU`,
+ *   `en-IN`; see `accents.js`) and wins over the region of `lang`.
+ *   `weakForms` (default `true`) speaks English function words in their
+ *   weak, unstressed form inside a phrase (`a cup of tea for you`
+ *   ə ˈkʌp əv ˈti fɚ ju); `false` keeps every word in its dictionary form.
+ *   `markup`: a text that starts with `<speak` is SSML unless `markup` is
+ *   `false`; `true` also reads inline tags (`[whisper]…[/whisper]`). See
+ *   docs/markup.md.
+ *   `lexicon` gives pronunciations for this call only, per language
+ *   (`{en: {quinoa: 'kiˈnoʊə'}, zh: {重庆: 'chóng qìng'}}`); they win over
+ *   `addLexicon()` and the shipped lexicons and are reported with
+ *   `source: 'user'`. An entry that cannot be read (IPA that `parseIpa`
+ *   does not know, pinyin with the wrong number of syllables) throws a
+ *   TypeError naming the word.
+ * @returns {{lang: string, accent: string|null, ipa: string, words: object[], modes: {from: number, to: number, mode: object}[], warnings: {position: number, message: string}[]}}
+ *   With markup, `ipa` holds the ExtIPA/VoQS marks of the modes that have
+ *   one, `modes` are spans in IPA word indexes and every word's
+ *   `sourceStart`/`sourceEnd` point into the input. Malformed SSML throws
+ *   `MarkupError`.
+ */
+export function textToIpa(text, options = {}) {
+  return withLexicon(options.lexicon, () => readText(text, options));
+}
+
+function readText(text, options) {
+  const input = String(text ?? '');
+  if (options.markup === true || (options.markup !== false && isSsml(input))) {
+    return markupToIpa(parseMarkup(input, options), input, options);
+  }
+  const source = normalizeDevanagariDigits(input);
+  const { lang, region, accent } = languageOf(
+    options.lang,
+    source,
+    options.accent
+  );
+  const items = [];
+  transcribe(items, source, lang, accent);
+  finishItems(items, accent, options);
   const ipa = items
     .map((item) => item.ipa)
     .filter(Boolean)
@@ -452,5 +531,7 @@ function transcribe(text, options) {
     accent: resolveAccent(lang, options.accent ?? region),
     ipa,
     words: items.filter((item) => !item.break),
+    modes: [],
+    warnings: [],
   };
 }

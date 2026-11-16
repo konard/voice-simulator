@@ -1,43 +1,43 @@
-markup <speak>Hello <emphasis>world</emphasis>.</speak>: "ˈspik həˈloʊ ˈɛmfəsəs ˈwɝld ˈɛmfəsəs . ˈspik"
+markup <speak>Hello <emphasis>world</emphasis>.</speak>: "həˈloʊ ˈˈwɝld ."
 markup [whisper]Hello[/whisper] world.: "( ˈwɪspɚ ) həˈloʊ ( ˈwɪspɚ ) ˈwɝld ."
 markup This is *really* good.: "ˈðɪs ˈɪz ˈɹɪli ˈɡʊd ."
-ipa a̤: {"segments":1,"unknown":["̤"]}
-ipa a̰: {"segments":1,"unknown":["̰"]}
-ipa ạ: {"segments":1,"unknown":["̣"]}
-ipa {W ma W}: {"segments":2,"unknown":["{","W","W","}"]}
-ipa {𝆑 ma 𝆑}: {"segments":2,"unknown":["{","𝆑","𝆑","}"]}
-ipa ⸨cough⸩ ma: {"segments":7,"unknown":["⸨","⸩"]}
+ipa a̤: {"segments":1,"unknown":[]}
+ipa a̰: {"segments":1,"unknown":[]}
+ipa ạ: {"segments":1,"unknown":[]}
+ipa {W ma W}: {"segments":2,"unknown":[]}
+ipa {𝆑 ma 𝆑}: {"segments":2,"unknown":[]}
+ipa ⸨cough⸩ ma: {"segments":3,"unknown":[]}
 ipa ˈˈma: {"segments":2,"unknown":[]}
 ipa ma (.) ma: {"segments":4,"unknown":[]}
-en You are coming, aren't you?: {"ipa":"ˈju ˈɑɹ ˈkʌmɪŋ , ˈɑɹɛnt ˈju ?","first":141,"last":141,"mean":129,"peakLoudness":1}
-en Apples, pears and plums.: {"ipa":"ˈæpəlz , ˈpɛɹz ənd ˈplʌms .","first":141,"last":90,"mean":120,"peakLoudness":1}
-en Come here!: {"ipa":"ˈkʌm ˈhiɹ !","first":161,"last":97,"mean":136,"peakLoudness":1.41}
-en Come here.: {"ipa":"ˈkʌm ˈhiɹ .","first":141,"last":97,"mean":123,"peakLoudness":1}
-ru Ты придёшь.: {"ipa":"tɨ prʲɪˈdʲoʂ .","first":120,"last":96,"mean":114,"peakLoudness":1}
-ru Ты придёшь?: {"ipa":"tɨ prʲɪˈdʲoʂ ?","first":120,"last":150,"mean":131,"peakLoudness":1}
-ru Кто пришёл?: {"ipa":"kto prʲɪˈʂoɫ ↘ ?","first":120,"last":96,"mean":114,"peakLoudness":1}
+en You are coming, aren't you?: {"ipa":"ju ɚ ˈkʌmɪŋ , ˈɑɹɛnt ju ?","first":120,"last":137,"mean":123,"peakLoudness":1}
+en Apples, pears and plums.: {"ipa":"ˈæpəlz , ˈpɛɹz ənd ˈplʌms .","first":141,"last":90,"mean":121,"peakLoudness":1}
+en Come here!: {"ipa":"ˈkʌm ˈhiɹ !","first":162,"last":97,"mean":139,"peakLoudness":1.41}
+en Come here.: {"ipa":"ˈkʌm ˈhiɹ .","first":141,"last":97,"mean":125,"peakLoudness":1}
+ru Ты придёшь.: {"ipa":"tɨ prʲɪˈdʲoʂ .","first":120,"last":98,"mean":114,"peakLoudness":1}
+ru Ты придёшь?: {"ipa":"tɨ prʲɪˈdʲoʂ ?","first":120,"last":148,"mean":128,"peakLoudness":1}
+ru Кто пришёл?: {"ipa":"kto prʲɪˈʂoɫ ↘ ?","first":120,"last":97,"mean":114,"peakLoudness":1}
 hi तुम आओगे।: {"ipa":"t̪ʊm aːoːɡeː .","first":120,"last":93,"mean":111,"peakLoudness":1}
-hi तुम आओगे?: {"ipa":"t̪ʊm aːoːɡeː ?","first":120,"last":148,"mean":122,"peakLoudness":1}
-hi क्या तुम आओगे?: {"ipa":"kjaː t̪ʊm aːoːɡeː ?","first":120,"last":147,"mean":120,"peakLoudness":1}
-zh 你来。: {"ipa":"ni˨˩ laɪ˧˥ .","first":102,"last":140,"mean":116,"peakLoudness":1}
-zh 你来？: {"ipa":"ni˨˩ laɪ˧˥ ?","first":102,"last":140,"mean":116,"peakLoudness":1}
-zh 你来吗？: {"ipa":"ni˨˩ laɪ˧˥ ma ?","first":102,"last":145,"mean":120,"peakLoudness":1}
-hi baː: {"segments":["consonant:75ms","vowel:250ms"],"peakAspiration":0}
-hi bʱaː: {"segments":["consonant:75ms","vowel:250ms"],"peakAspiration":0}
-hi pʰaː: {"segments":["consonant:86ms","release:60ms","vowel:250ms"],"peakAspiration":0.95}
-hi paː: {"segments":["consonant:86ms","release:15ms","vowel:250ms"],"peakAspiration":0.19}
-tenseness 0: {"levelDb":-14.4,"f0":127,"f1":435,"h1h2":13.18,"hnr":20.39,"voicedShare":0.89}
-tenseness 0.3: {"levelDb":-14,"f0":127,"f1":405,"h1h2":10.46,"hnr":20.97,"voicedShare":0.89}
-tenseness 0.6: {"levelDb":-13.6,"f0":127,"f1":420,"h1h2":3.84,"hnr":21.35,"voicedShare":0.89}
-tenseness 0.9: {"levelDb":-13.1,"f0":127,"f1":455,"h1h2":-4.31,"hnr":21.24,"voicedShare":0.86}
-tenseness 1: {"levelDb":-12.9,"f0":127,"f1":455,"h1h2":-4.29,"hnr":21.58,"voicedShare":0.88}
-outputGain 0.5: {"levelDb":-18.8,"f0":127,"f1":420,"h1h2":3.82,"hnr":21.29,"voicedShare":0.9}
-outputGain 1: {"levelDb":-13.6,"f0":127,"f1":420,"h1h2":3.84,"hnr":21.35,"voicedShare":0.89}
-outputGain 2: {"levelDb":-9.3,"f0":127,"f1":430,"h1h2":3.92,"hnr":21.5,"voicedShare":0.88}
-jitter 0.4: {"levelDb":-13.6,"f0":127,"f1":420,"h1h2":3.84,"hnr":21.35,"voicedShare":0.89}
-jitter 3: {"levelDb":-13.7,"f0":127,"f1":420,"h1h2":3.79,"hnr":10.93,"voicedShare":0.89}
-pitch 60: {"levelDb":-15.9,"f0":64,"f1":428,"h1h2":5.1,"hnr":16.66,"voicedShare":0.74}
-breathiness 1 aspirationLevel 3 chink 10: {"levelDb":-10.7,"f0":124,"f1":1025,"h1h2":12.64,"hnr":-3.32,"voicedShare":0.21}
+hi तुम आओगे?: {"ipa":"t̪ʊm aːoːɡeː ?","first":120,"last":147,"mean":122,"peakLoudness":1}
+hi क्या तुम आओगे?: {"ipa":"kjaː t̪ʊm aːoːɡeː ?","first":120,"last":145,"mean":120,"peakLoudness":1}
+zh 你来。: {"ipa":"ni˨˩ laɪ˧˥ .","first":105,"last":139,"mean":119,"peakLoudness":1}
+zh 你来？: {"ipa":"ni˨˩ laɪ˧˥ ?","first":105,"last":139,"mean":119,"peakLoudness":1}
+zh 你来吗？: {"ipa":"ni˨˩ laɪ˧˥ ma ?","first":105,"last":129,"mean":121,"peakLoudness":1}
+hi baː: {"segments":["consonant:70ms","vowel:267ms"],"peakAspiration":0}
+hi bʱaː: {"segments":["consonant:70ms","vowel:267ms"],"peakAspiration":0}
+hi pʰaː: {"segments":["consonant:75ms","release:60ms","vowel:267ms"],"peakAspiration":1}
+hi paː: {"segments":["consonant:75ms","release:15ms","vowel:267ms"],"peakAspiration":0.35}
+tenseness 0: {"levelDb":-20.2,"f0":126,"f1":510,"h1h2":13.46,"hnr":19.97,"voicedShare":0.85}
+tenseness 0.3: {"levelDb":-19.5,"f0":126,"f1":505,"h1h2":11.11,"hnr":20.43,"voicedShare":0.84}
+tenseness 0.6: {"levelDb":-18.5,"f0":126,"f1":490,"h1h2":4.41,"hnr":20.91,"voicedShare":0.85}
+tenseness 0.9: {"levelDb":-16.5,"f0":126,"f1":505,"h1h2":-3.66,"hnr":20.55,"voicedShare":0.83}
+tenseness 1: {"levelDb":-16.3,"f0":126,"f1":510,"h1h2":-3.66,"hnr":20.29,"voicedShare":0.89}
+outputGain 0.5: {"levelDb":-24.3,"f0":126,"f1":490,"h1h2":4.4,"hnr":20.84,"voicedShare":0.85}
+outputGain 1: {"levelDb":-18.5,"f0":126,"f1":490,"h1h2":4.41,"hnr":20.91,"voicedShare":0.85}
+outputGain 2: {"levelDb":-12.9,"f0":126,"f1":485,"h1h2":4.48,"hnr":21.18,"voicedShare":0.85}
+jitter 0.4: {"levelDb":-18.5,"f0":126,"f1":490,"h1h2":4.41,"hnr":20.91,"voicedShare":0.85}
+jitter 3: {"levelDb":-18.5,"f0":126,"f1":485,"h1h2":4.49,"hnr":10.87,"voicedShare":0.84}
+pitch 60: {"levelDb":-21.7,"f0":64,"f1":550,"h1h2":5.54,"hnr":16.06,"voicedShare":0.69}
+breathiness 1 aspirationLevel 3 chink 10: {"levelDb":-12,"f0":123,"f1":350,"h1h2":11.48,"hnr":0.14,"voicedShare":0.1}
 filler en um: "ˈʌm"
 filler en uh: "ˈʌ"
 filler en haha: "ˈhæhæ"
@@ -49,15 +49,15 @@ filler zh 呃: "ɤ˥˩"
 filler hi अं: "ə̃"
 accent languages: ["en"]
 accent en en-GB water: {"ipa":"ˈwɔːtə","accent":"en-GB"}
-accent en en-IN think of the water: {"ipa":"ˈt̪ʰɪŋk ˈəʋ d̪ə ˈʋɔʈəɾ","accent":"en-IN"}
+accent en en-IN think of the water: {"ipa":"ˈt̪ʰɪŋk əʋ d̪ə ˈʋɔʈəɾ","accent":"en-IN"}
 accent ru ru-south город молоко: {"ipa":"ˈɡorət mɐˈɫokə","accent":null}
-accent zh zh-TW 是不是: {"ipa":"ʂɻ̩˥˩ pu˧˥ ʂɻ̩˥˩","accent":null}
+accent zh zh-TW 是不是: {"ipa":"ʂɻ̩˥˩ pu ʂɻ̩˥˩","accent":null}
 accent hi hi-east ज़रा फिर: {"ipa":"zəɾaː pʰɪɾ","accent":null}
-accent en ru think of the water: {"ipa":"ˈθɪŋk ˈʌv ðə ˈwɔɾɚ","accent":"en-US"}
-vowels ru Это мама.: {"ipa":"ˈɛtə ˈmamə .","f0":[[141,132],[117,118],[130,123],[107,93]]}
-vowels ru Это мама?: {"ipa":"ˈɛtə ˈmamə ?","f0":[[141,132],[117,118],[130,124],[119,143]]}
-vowels en Tea or coffee?: {"ipa":"ˈti ˈɔɹ ˈkɑfi ?","f0":[[141,136],[137,132],[132,125],[116,144]]}
-vowels en I said Anna, not Maria.: {"ipa":"ˈaɪ ˈsɛd ˈænə , ˈnɑt mɚˈiə .","f0":[[141,129],[124,122],[134,129],[131,123],[115,129],[133,125],[108,113],[118,109],[102,90]]}
-voiceless ˈama: {"levelDb":-16.2}
+accent en ru think of the water: {"ipa":"ˈθɪŋk əv ðə ˈwɔɾɚ","accent":"en-US"}
+vowels ru Это мама.: {"ipa":"ˈɛtə ˈmamə .","f0":[[141,132],[119,119],[131,123],[108,93]]}
+vowels ru Это мама?: {"ipa":"ˈɛtə ˈmamə ?","f0":[[141,132],[119,119],[131,124],[119,144]]}
+vowels en Tea or coffee?: {"ipa":"ˈti ɔɹ ˈkɑfi ?","f0":[[142,129],[122,118],[132,123],[117,144]]}
+vowels en I said Anna, not Maria.: {"ipa":"aɪ ˈsɛd ˈænə , ˈnɑt mɚˈiə .","f0":[[120,120],[119,121],[135,130],[131,122],[116,128],[134,125],[108,112],[115,109],[102,89]]}
+voiceless ˈama: {"levelDb":-19.3}
 voiceless ˈḁm̥ḁ: {"levelDb":-120}
-voiceless ˈhḁ: {"levelDb":-31.6}
+voiceless ˈhḁ: {"levelDb":-43}

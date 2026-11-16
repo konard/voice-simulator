@@ -261,3 +261,25 @@ describe('CLI voice files', () => {
     })
   );
 });
+
+describe('CLI speech markup', () => {
+  it('reads markup with --markup and plain text with --plain', async () => {
+    const help = await cli(['--help']);
+    expect(help.stdout.join('\n')).toContain('--markup');
+    expect(help.stdout.join('\n')).toContain('--plain');
+    const marked = await cli([
+      'ipa',
+      '--markup',
+      '[whisper]Hello[/whisper] world.',
+    ]);
+    expect(marked.code).toBe(0);
+    expect(marked.stdout.join('\n')).toBe('{W həˈloʊ W} ˈwɝld .');
+    const unknown = await cli(['ipa', '--markup', '[zzz]Hi[/zzz]']);
+    expect(unknown.code).toBe(0);
+    expect(unknown.stderr.join('\n')).toContain('markup:');
+    const doctype = await cli(['ipa', '<!DOCTYPE x><speak>Hi</speak>']);
+    expect(doctype.code).toBe(1);
+    const both = await cli(['ipa', '--markup', '--plain', 'Hi']);
+    expect(both.code).toBe(1);
+  });
+});
