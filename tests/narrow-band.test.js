@@ -154,8 +154,9 @@ describe('narrow-band tiers', () => {
 
   // The hash of the flow-driven noise of issue 35, the articulator
   // dynamics of issue 38, the segment durations of issue 39 and the jaw
-  // of issue 40 (it lags the tongue); a change of the physics or of the
-  // plan updates it, a narrow-band change must not.
+  // of issue 40 (it lags the tongue) and the statement tune of issue 51
+  // (only f0 changed, experiments/issue-51-hi-plan.mjs); a change of the
+  // physics or of the plan updates it, a narrow-band change must not.
   itUnless(appleLibm)('present tiers are unchanged', () => {
     const { samples } = synthesize('Hi.', { tier: 'minimal', seed: 1 });
     const bytes = new Uint8Array(
@@ -164,7 +165,7 @@ describe('narrow-band tiers', () => {
       samples.byteLength
     );
     expect(createHash('sha256').update(bytes).digest('hex')).toBe(
-      '4810b1f04e675e6ae07e00b02380ceee878386f538912f6869d7b71dbf5e7588'
+      'fd0b2c137c16de783b29c1c36254ab141f62f76a5f8535c43b8f009ffa0d522e'
     );
   });
 });

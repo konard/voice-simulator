@@ -40,6 +40,34 @@ const EMOTION_DEFAULTS = Object.freeze({
   dominance: 0,
 });
 
+/**
+ * Names of the intonation tunes (src/articulation/intonation.js) that a
+ * span can set as `mode.tune`: the generic English tunes and the Russian
+ * constructions IK1 to IK7. Written as `{IK4 … IK4}` in IPA,
+ * `[tune IK4]…[/tune]` inline and `<vs:tune name="IK4">` in SSML.
+ */
+export const TUNE_LABELS = Object.freeze([
+  'statement',
+  'wh',
+  'yesno',
+  'echo',
+  'continuation',
+  'alt-rise',
+  'tag-ask',
+  'tag-confirm',
+  'exclamation',
+  'command',
+  'parenthesis',
+  'call',
+  'IK1',
+  'IK2',
+  'IK3',
+  'IK4',
+  'IK5',
+  'IK6',
+  'IK7',
+]);
+
 /** The neutral mode: every span starts from it. */
 export const MODE_DEFAULTS = Object.freeze({
   effort: 0.5, // 0 very soft, 0.25 soft, 0.5 normal, 0.75 loud, 1 shout

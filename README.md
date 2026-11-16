@@ -37,8 +37,9 @@ a pressure wave travelling through the 3D shape of a parametric low-poly head
   effort, phonation, emotion and sounds), inline tags such as
   `[whisper]Hello[/whisper]` or `[pause 0.5]` with `markup: true`, and
   ExtIPA/VoQS marks in IPA (`{W həˈloʊ W} ˈwɝld .`, `(.)`, `⸨laugh⸩`, `ˈˈ`).
-  Rate, pitch, range, level, vocal effort and timed pauses are heard; the
-  other qualities are carried in `plan.modes`. See [docs/markup.md](docs/markup.md).
+  Rate, pitch, range, level, vocal effort, emphasis, tunes and timed pauses
+  are heard; the other qualities are carried in `plan.modes`. See
+  [docs/markup.md](docs/markup.md).
 - **Vocal effort**: `[soft]`, `[loud]`, `[shout]`, `[lombard]`,
   `[crescendo]` and `[diminuendo]` (and `<vs:effort>`, `{f … f}`) change
   more than the level: the pitch rises (+5 Hz per dB), the spectrum gets
@@ -48,6 +49,16 @@ a pressure wave travelling through the 3D shape of a parametric low-poly head
   effort to dB SPL (0.5 is 60 dB SPL) and `loudnessTarget` (CLI
   `--loudness`) scales to an integrated loudness in LUFS (ITU-R BS.1770,
   `integratedLoudness()`).
+- **Intonation per language** (issue 51): statements fall, yes/no
+  questions rise, wh-questions fall, `Tea or coffee?` rises on the first
+  item and falls on the second (`ˈti ↗ | ˈɔɹ ˈkɑfi ↘ ?`), list items and
+  phrases before a comma or `|` rise, and question tags rise or fall.
+  Russian uses the intonation constructions IK1 to IK7 (`Это мама?` rises
+  on the stressed vowel of мама and falls after it), Hindi accent phrases,
+  and Mandarin raises a question without breaking its tones. Focus
+  (`*word*`) moves the nucleus; a tune can be named (`[tune IK4]…[/tune]`,
+  `<vs:tune name="echo">`, `{IK3 … IK3}`). See
+  [docs/markup.md](docs/markup.md#intonation).
 - **English weak forms**: function words are weak and unstressed inside a
   phrase (`a cup of tea for you` ə ˈkʌp əv ˈti fɚ ju, `the end` ði ˈɛnd,
   `I have to go` aɪ ˈhæf tə ˈɡoʊ) and keep their strong form alone and at
@@ -370,6 +381,9 @@ textToIpa('I can do it', { lang: 'en', weakForms: false }).ipa; // 'ˈaɪ ˈkæn
 // Speech markup (docs/markup.md): SSML is read by itself, inline tags on request.
 textToIpa('<speak>Hello <emphasis>world</emphasis>.</speak>').ipa; // 'həˈloʊ ˈˈwɝld .'
 textToIpa('[whisper]Hello[/whisper] world.', { markup: true }).ipa; // '{W həˈloʊ W} ˈwɝld .'
+// The sentence type is written into the IPA (issue 51).
+textToIpa('Tea or coffee?', { lang: 'en' }).ipa; // 'ˈti ↗ | ˈɔɹ ˈkɑfi ↘ ?'
+textToIpa('А ты?', { lang: 'ru' }).ipa; // '{IK4 a tɨ IK4} ?'
 
 // Your own pronunciations win over the shipped lexicons.
 textToIpa('quinoa', { lang: 'en' }).ipa; // 'ˈkinwɑ'
@@ -453,6 +467,7 @@ npx voice-simulator ipa --lang en --accent en-x-ru --accent-level 0.5 "the thing
 npx voice-simulator say "the three red rivers" --accent examples/accents/en-x-th-stopping.json -o th.wav
 npx voice-simulator ipa "quinoa" --lang en --lexicon my-words.json  # {"quinoa": "kiˈnoʊə"}
 npx voice-simulator ipa --markup "[whisper]Hello[/whisper] world."  # {W həˈloʊ W} ˈwɝld .
+npx voice-simulator ipa "Where are you going?"   # ˈwɛɹ ɚ ju ˈɡoʊɪŋ ↘ ?
 npx voice-simulator say "<speak>Wait<break time=\"1s\"/>now.</speak>" -o wait.wav
 npx voice-simulator say --markup "[shout]Hey![/shout] [soft]Quiet.[/soft]" -o hey.wav
 npx voice-simulator say "Hello world." --loudness=-23 -o broadcast.wav  # EBU R 128

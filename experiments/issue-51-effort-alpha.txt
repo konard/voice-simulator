@@ -1,0 +1,11 @@
+checkout /tmp/gh-issue-solver-1794812777040
+default speaker, one render: alpha soft -1.84  loud 0.31  shout -0.45 dB; F1 {f ˈa f} 35.0  {ff ˈa ff} 40.0 Hz
+speaker 120 Hz × 2^(-0.5/12), one render: alpha soft -2.64  loud -0.49  shout -1.84 dB; F1 {f ˈa f} 10.0  {ff ˈa ff} 35.0 Hz
+speaker 120 Hz × 2^(+0.5/12), one render: alpha soft -2.10  loud 1.55  shout 1.95 dB; F1 {f ˈa f} 47.5  {ff ˈa ff} 35.0 Hz
+pooled over s = -3 -2 -1 0 1 2 3 (the test): alpha soft -2.80  loud 2.98  shout 3.16 dB; F1 {f ˈa f} 46.8  {ff ˈa ff} 61.4 Hz
+
+checkout /tmp/vs-main
+default speaker, one render: alpha soft -1.97  loud 2.00  shout 4.52 dB; F1 {f ˈa f} 35.0  {ff ˈa ff} 60.0 Hz
+speaker 120 Hz × 2^(-0.5/12), one render: alpha soft -2.56  loud 0.46  shout 1.03 dB; F1 {f ˈa f} 35.0  {ff ˈa ff} 60.0 Hz
+speaker 120 Hz × 2^(+0.5/12), one render: alpha soft -1.51  loud 3.17  shout 6.34 dB; F1 {f ˈa f} 30.0  {ff ˈa ff} 55.0 Hz
+pooled over s = -3 -2 -1 0 1 2 3 (the test): alpha soft -1.74  loud 3.29  shout 3.75 dB; F1 {f ˈa f} 45.4  {ff ˈa ff} 67.5 Hz

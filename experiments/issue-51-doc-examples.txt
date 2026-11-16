@@ -1,0 +1,18 @@
+You are coming. [en] → ju ɚ ˈkʌmɪŋ .
+Are you coming? [en] → ɚ ju ˈkʌmɪŋ ?
+Where are you going? [en] → ˈwɛɹ ɚ ju ˈɡoʊɪŋ ↘ ?
+Really? [en] → ˈɹɪli ↗ ?
+Tea or coffee? [en] → ˈti ↗ | ˈɔɹ ˈkɑfi ↘ ?
+You are coming, aren't you? [en] → ju ɚ ˈkʌmɪŋ , ˈɑɹənt ju ↗ ?
+Apples, pears and plums. [en] → ˈæpəlz , ˈpɛɹz ənd ˈplʌmz .
+The old man who lived next to the station walked slowly to the market and bought some bread. [en] → ði ˈoʊld ˈmæn ˈhu ˈlɪvd ˈnɛkst tə ðə ˈsteɪʃən ˈwɔkt ˈsloʊli tə ðə ˈmɑɹkət | ənd ˈbɑt ˈsʌm ˈbɹɛd .
+Это мама? [ru] → ˈɛtə ˈmamə ?
+А ты? [ru] → {IK4 a tɨ IK4} ?; IK4 words 0-2
+Какой сегодня день! [ru] → {IK5 kəkɐj sʲɪˈvodʲnʲə dʲenʲ IK5} !; IK5 words 0-3
+Чай или кофе? [ru] → t͡ɕaj ↗ | ˈilʲɪ ˈkofʲə ↘ ?
+你来？ [zh] → ni˨˩ laɪ˧˥ ?
+你去哪儿？ [zh] → ni˨˩ t͡ɕʰy˥˩ naɻ˨˩˦ ↘ ?
+तुम कहाँ जा रहे हो? [hi] → t̪ʊm kəɦãː d͡ʒaː ɾəɦeː ɦoː ↘ ?
+[tune call]John![/tune] [en] → {call ˈd͡ʒɑn call} !; call words 0-1
+*Anna* came with Manny. [en] → ˈˈænə ˈkeɪm wɪð ˈmæni .
+<speak><vs:tune name="IK6">Какой голос!</vs:tune></speak> [ru] → {IK6 kəkɐj ˈɡoɫəs IK6} !; IK6 words 0-2

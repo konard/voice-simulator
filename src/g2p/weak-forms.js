@@ -112,7 +112,7 @@ function weakenPhrase(phrase, accent) {
   const strong = phrase.map(({ ipa, linkingR }) => ({ ipa, linkingR }));
   const changed = [];
   phrase.forEach((item, index) => {
-    if (item.lang !== 'en' || item.letter) {
+    if (item.lang !== 'en' || item.letter || item.strong) {
       return;
     }
     const form = phraseForm(

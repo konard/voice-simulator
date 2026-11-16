@@ -20,6 +20,7 @@ export {
   PHONATIONS,
   SOUND_NAMES,
   SOUND_DURATION,
+  TUNE_LABELS,
   composeMode,
   createMode,
   effortDecibels,

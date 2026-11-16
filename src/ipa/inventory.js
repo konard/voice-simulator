@@ -11,6 +11,8 @@
  * backness 0 = front, 1 = back.
  */
 
+import { TUNE_LABELS } from '../markup/modes.js';
+
 /** Height values of the IPA vowel chart rows. */
 const H = {
   close: 1,
@@ -292,7 +294,8 @@ const phonationLabel =
  * Labels of the ExtIPA/VoQS brace spans `{label … label}` and the change
  * of mode (src/markup/modes.js) each makes at a degree: the degree digit
  * 1, 2 (or none) and 3 before the label gives 0.33, 0.67 and 1
- * (`{3V̤ … V̤}`). `digit` is the digit written, or null.
+ * (`{3V̤ … V̤}`). `digit` is the digit written, or null. The tune names
+ * (`{IK4 … IK4}`, `{command … command}`) set `mode.tune`.
  */
 export const MODE_LABELS = Object.freeze({
   pp: effortLabel(0),
@@ -332,6 +335,7 @@ export const MODE_LABELS = Object.freeze({
       whisper: 0,
     },
   }),
+  ...Object.fromEntries(TUNE_LABELS.map((tune) => [tune, () => ({ tune })])),
 });
 
 /** The change of a mode label with an optional degree digit, or null. */

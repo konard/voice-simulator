@@ -139,7 +139,9 @@ describe('punctuation breaks', () => {
   });
 
   it('merges adjacent breaks to the strongest', () => {
-    expect(textToIpa('Really?!', { lang: 'en' }).ipa).toBe('ˈɹɪli ?');
+    // A question without a question word or auxiliary is an echo
+    // question, which rises (issue 51).
+    expect(textToIpa('Really?!', { lang: 'en' }).ipa).toBe('ˈɹɪli ↗ ?');
     expect(textToIpa('Wait,.', { lang: 'en' }).ipa).toBe('ˈweɪt .');
   });
 

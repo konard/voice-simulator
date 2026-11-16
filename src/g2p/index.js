@@ -29,12 +29,14 @@ import {
 } from './chinese.js';
 import { russianWordToIpa } from './russian.js';
 import { joinRussianClitics } from './russian-clitics.js';
-import { VERBALIZERS, normalizeText } from './normalize.js';
+import { normalizeText } from './normalize.js';
 import { adaptEnglishWord, hasLinkingR, isNonRhotic } from './accents.js';
 import { weakenFunctionWords } from './weak-forms.js';
+import { markPhrasing } from './phrasing.js';
 import { withLexicon } from './lexicon.js';
 import { accentSettings, applyAccentSettings } from '../accent/index.js';
 import { isSsml, parseMarkup } from '../markup/index.js';
+import { MODE_DEFAULTS, composeMode } from '../markup/modes.js';
 import { markupItems, markupModes } from './markup.js';
 
 /** Supported languages with display names and sample sentences. */
@@ -335,37 +337,6 @@ function addBreak(items, item) {
 }
 
 /**
- * Mark questions that fall at the end with `↘` before the `?`. Each
- * language decides through its verbaliser's `questionFalls` hook; without
- * one, a question falls when a question word (who, what, ...) is among its
- * first two words, as in English and Russian. Hindi keeps question words in
- * place (usually just before the verb) and uses क्या both as "what" and as
- * the yes/no particle, so its hook looks at the whole sentence.
- */
-function markQuestions(items) {
-  let sentence = [];
-  for (const item of items) {
-    if (!item.break) {
-      sentence.push(item);
-      continue;
-    }
-    if (item.ipa === '?') {
-      const lang = sentence[0]?.lang;
-      const texts = sentence.map((word) => word.text.toLowerCase());
-      const fall = VERBALIZERS[lang]?.questionFalls
-        ? VERBALIZERS[lang].questionFalls(texts)
-        : texts.slice(0, 2).some((text) => VERBALIZERS[lang]?.isWhWord(text));
-      if (fall) {
-        item.ipa = '↘ ?';
-      }
-    }
-    if ('.!?…'.includes(item.ipa.at(-1))) {
-      sentence = [];
-    }
-  }
-}
-
-/**
  * Non-rhotic accents pronounce a final r before a vowel: `far away`
  * fɑːɹ əˈweɪ.
  */
@@ -475,17 +446,18 @@ function transcribe(items, source, lang, accent, settings, offset = 0) {
 }
 
 /**
- * The passes over all items: Chinese runs, clitics, weak forms, questions,
- * linking r and the accent rules. `all` holds the accent settings of the
- * text, the first one of its main language.
+ * The passes over all items: Chinese runs, clitics, phrasing (sentence
+ * types and phrase breaks, ./phrasing.js), weak forms, linking r and the
+ * accent rules. `all` holds the accent settings of the text, the first
+ * one of its main language.
  */
 function finishItems(items, accent, options, all) {
   joinChineseRuns(items, settingsOf(all, 'zh'));
   joinRussianClitics(items);
+  markPhrasing(items);
   if ((options.weakForms ?? all[0].g2p.weakForms) !== false) {
     weakenFunctionWords(items, accent);
   }
-  markQuestions(items);
   linkRs(items, accent);
   applyAccentRules(items, all);
 }
@@ -526,6 +498,12 @@ function markupToIpa(parsed, input, options) {
     lang: base.lang,
   });
   finishItems(items, base.english, options, all);
+  for (const item of items) {
+    // A tune from the phrasing (IK4, IK5) yields to one from the markup.
+    if (item.tune && item.mode && !item.mode.tune) {
+      item.mode = composeMode(item.mode, { tune: item.tune });
+    }
+  }
   const { ipa, modes } = markupModes(items, parsed);
   return {
     lang: base.lang,
@@ -581,17 +559,31 @@ function readText(text, options) {
   const items = [];
   transcribe(items, source, lang, english, settings);
   finishItems(items, english, options, [settings]);
-  const ipa = items
-    .map((item) => item.ipa)
-    .filter(Boolean)
-    .join(' ');
+  const tuned = items.some((item) => item.tune);
+  if (tuned) {
+    // IK4 and IK5 from the phrasing are written as mode spans `{IK4 … IK4}`.
+    for (const item of items) {
+      item.mode = item.tune
+        ? composeMode(MODE_DEFAULTS, { tune: item.tune })
+        : MODE_DEFAULTS;
+    }
+  }
+  const { ipa, modes } = tuned
+    ? markupModes(items)
+    : {
+        ipa: items
+          .map((item) => item.ipa)
+          .filter(Boolean)
+          .join(' '),
+        modes: [],
+      };
   return {
     lang,
     accent: settings.code,
     accentLevel: settings.level,
     ipa,
     words: items.filter((item) => !item.break),
-    modes: [],
+    modes,
     warnings: [],
   };
 }

@@ -105,9 +105,11 @@ export const FOLDS_PARAMETERS = [
     step: 0.01,
     default: 1,
     description:
-      'Scales the vibrating mass of the folds: heavier folds vibrate slower (fold source only).',
+      'Scales the vibrating mass of the folds. Heavier folds vibrate slower; the pitch control holds f0 with more tension, so they swing with a stronger first harmonic (fold source only).',
     source: 'Ishizaka & Flanagan 1972; Steinecke & Herzel 1995 (issue 33)',
-    effect: { measure: 'f0', sign: -1, ...FOLD_SOURCE },
+    // f0 stays within 1 % and moves either way with the contour; H1-H2
+    // rises on every carrier (experiments/issue-51-fold-mass.mjs).
+    effect: { measure: 'h1h2', sign: 1, ...FOLD_SOURCE },
   },
   {
     key: 'foldStiffness',

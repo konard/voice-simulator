@@ -61,12 +61,13 @@ function velumFromLips(shape) {
   return shape.length * (1 - (shape.velumIndex + 0.5) / shape.areas.length);
 }
 
-function meanVowelF0(ipa, head) {
+function meanVowelF0(ipa, head, part = 1) {
   const plan = planUtterance(ipa, { head });
   const segment = plan.segments.find((entry) => entry.kind === 'vowel');
   let sum = 0;
   let count = 0;
-  const end = segment.end * plan.frameRate;
+  const end =
+    (segment.start + (segment.end - segment.start) * part) * plan.frameRate;
   for (let frame = Math.ceil(segment.start * plan.frameRate); frame < end; ) {
     sum += plan.channels.f0[frame++];
     count++;
@@ -183,11 +184,20 @@ describe('free articulators', () => {
   });
 
   it('raises the pitch of close vowels with intrinsicPitch', () => {
-    const semitones = (head) =>
-      12 * Math.log2(meanVowelF0('ˈmi', head) / meanVowelF0('ˈma', head));
-    const intrinsic = semitones(normalizeHeadConfig({ intrinsicPitch: 2 }));
+    const semitones = (head, part) =>
+      12 *
+      Math.log2(
+        meanVowelF0('ˈmi', head, part) / meanVowelF0('ˈma', head, part)
+      );
+    // The statement fall of the nucleus (issue 51) undershoots its low
+    // target in the shorter /i/, so over the whole vowel the two differ
+    // by their durations; the vowel quality alone is compared before
+    // the fall and as the change that intrinsicPitch adds.
+    const head = normalizeHeadConfig({ intrinsicPitch: 2 });
+    const intrinsic = semitones(head, 1) - semitones(DEFAULT_HEAD, 1);
     expect(intrinsic).toBeGreaterThan(1.5);
     expect(intrinsic).toBeLessThan(2.5);
-    expect(Math.abs(semitones(DEFAULT_HEAD))).toBeLessThan(0.1);
+    expect(semitones(head, 0.5)).toBeGreaterThan(1.5);
+    expect(Math.abs(semitones(DEFAULT_HEAD, 0.5))).toBeLessThan(0.1);
   });
 });

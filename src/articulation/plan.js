@@ -42,6 +42,7 @@ import {
   timedLength,
 } from './modes.js';
 import { approachTargets as approachToneTargets } from './tone-model.js';
+import { applyIntonationTiming } from './intonation.js';
 import { consonantJaw, teethGap } from './teeth.js';
 import {
   EFFORT_RULES,
@@ -323,8 +324,10 @@ function pushPause(segments, token, context) {
  * src/articulation/durations.js with the table of `language` (or
  * `durationTable`).
  * @param {object[]} tokens
- * @param {{rate: number, language?: string, stressLengthening?: number, finalLengthening?: number, pauseLength?: number, durationTable?: object, head?: object}} options
- *   `head` gives the rate exponents and the strengths of the rules.
+ * @param {{rate: number, language?: string, tunes?: string|null, stressLengthening?: number, finalLengthening?: number, pauseLength?: number, durationTable?: object, head?: object}} options
+ *   `head` gives the rate exponents and the strengths of the rules;
+ *   `tunes` the intonation language (focus and tune tempo, intonation.js),
+ *   else `language`.
  */
 export function buildSegments(tokens, options) {
   const context = {
@@ -357,6 +360,7 @@ export function buildSegments(tokens, options) {
     }
   });
   applyRates(segments);
+  applyIntonationTiming(segments, options.tunes ?? options.language);
   applyEffortDurations(segments);
   if (segments.at(-1).kind === 'pause' && !segments.at(-1).sound) {
     segments.at(-1).strength = 3;
@@ -704,14 +708,16 @@ function piecewiseLinear(values, positions, t) {
  * outside nuclei with three or more points.
  * With the `height` channel and `head.intrinsicPitch` (semitones between the
  * closest and the most open vowel), close vowels get a higher pitch
- * (Whalen & Levitt 1995).
+ * (Whalen & Levitt 1995). `pitch.language` picks the tunes of
+ * intonation.js and `pitch.effort` (the effort channel) raises the pitch.
  */
-function fillPitch(values, segments, head, frameRate, height, effort) {
+function fillPitch(values, segments, head, frameRate, height, pitch = {}) {
+  const { language, effort } = pitch;
   values.fill(Number.NaN);
   const shape = new Float32Array(values.length).fill(1);
   const tonal = new Uint8Array(values.length);
   const phrases = new Map();
-  for (const target of pitchTargets(segments, head)) {
+  for (const target of pitchTargets(segments, head, language)) {
     if (target.intervals) {
       const list = phrases.get(target.phrase) ?? [];
       list.push(target);
@@ -828,8 +834,8 @@ function smoothPitch(values, { shape, tonal }, timeConstant, frameRate) {
 }
 
 /** Louder exclamations, quieter parentheticals. */
-function applyRegisterGain(values, segments, frameRate) {
-  for (const { segment, gain } of registerGains(segments)) {
+function applyRegisterGain(values, segments, frameRate, language) {
+  for (const { segment, gain } of registerGains(segments, language)) {
     const [first, last] = frameRange(segment, frameRate, values.length);
     for (let frame = first; frame < last; frame++) {
       values[frame] *= gain;
@@ -999,7 +1005,7 @@ function accentedHead(options) {
   const tunes = options.accent?.prosody?.tunes;
   const table =
     options.durationTable ?? (tunes ? durationTable(tunes) : undefined);
-  return { head, table };
+  return { head, table, tunes: tunes ?? options.language };
 }
 
 /**
@@ -1023,7 +1029,7 @@ export function planUtterance(ipa, options = {}) {
   const parsed = typeof ipa === 'string' ? parseIpa(ipa) : null;
   const tokens = parsed ? parsed.tokens : ipa;
   assignTokenModes(tokens, options.modes ?? parsed?.modes ?? []);
-  const { head, table } = accentedHead(options);
+  const { head, table, tunes } = accentedHead(options);
   const frameRate = options.frameRate ?? CONTROL_RATE;
   const segments = buildSegments(tokens, {
     rate: head.speechRate,
@@ -1033,6 +1039,7 @@ export function planUtterance(ipa, options = {}) {
     pauseLength: head.pauseLength,
     durationTable: table,
     head,
+    tunes,
   });
   if (options.durations) {
     applyDurations(segments, tokens, options.durations);
@@ -1069,7 +1076,7 @@ export function planUtterance(ipa, options = {}) {
     channels[name] = new Float32Array(frameCount);
   }
   fillDefaults(channels, segments, frameRate);
-  applyRegisterGain(channels.loudness, segments, frameRate);
+  applyRegisterGain(channels.loudness, segments, frameRate, tunes);
   applyModeGains(channels.loudness, modes, frameRate);
   channels.effort.set(effort);
   for (let frame = 0; frame < frameCount; frame++) {
@@ -1081,7 +1088,7 @@ export function planUtterance(ipa, options = {}) {
     head,
     frameRate,
     channels.height,
-    effort
+    { language: tunes, effort }
   );
   const steps = { loudness: channels.loudness, effort };
   for (const name of GLOTTAL_CHANNELS) {

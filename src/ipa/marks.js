@@ -178,7 +178,7 @@ function phonationLabels(phonation, labels) {
 
 /**
  * The brace labels that write a mode, outermost first: effort, a
- * crescendo or diminuendo, tempo and phonation. Fields without an
+ * crescendo or diminuendo, tempo, phonation and the tune (`{IK4`). Fields without an
  * ExtIPA/VoQS symbol (pitch, range, gain, emotion, lang, emphasis other
  * than 1) and values between the degrees are not written.
  * @param {object} mode
@@ -193,6 +193,9 @@ export function modeLabels(mode) {
     labels.push('lento');
   }
   phonationLabels(mode.phonation ?? MODE_DEFAULTS.phonation, labels);
+  if (mode.tune) {
+    labels.push(mode.tune);
+  }
   return labels;
 }
 

@@ -1,0 +1,27 @@
+PASS en statement: first.start - last.end >= 5: 5.13
+PASS en yes/no: last.end - nucleus.start >= 5: 7.71
+PASS en wh: first.start - last.end >= 5: 6.26
+     ipa ˈti ↗ | ˈɔɹ ˈkɑfi ↘ ?
+PASS en alternative: tea rises >= 3: 5.83
+PASS en alternative: tea.end - last.end >= 4: 10.99
+PASS en tag: last.end - before-comma.end >= 4: 8.63
+     info: word 0 end - stressed.start = -0.01
+PASS en list: word 0 end - stressed.end >= 2: 2.44
+PASS en list: word 0 end - stressed.min >= 2: 2.33
+PASS en list: first.start - last.end >= 4: 7.49
+PASS ru IK3: мама first vowel rise >= 6: 8.82
+PASS ru IK3: last.end < first(это).start: -3.62
+PASS ru IK1: no vowel rises > 1: 0.00
+PASS ru focus: ты rises >= 6: 8.96
+PASS ru focus: after stays below ты end: -10.86
+PASS ru wh: first.start - last.end >= 4: 6.50
+     ipa a tɨ ˈˈkudə ɪˈdʲoʂ ↘ ?
+PASS hi accent phrase: लड़का last - first >= 2: 3.71
+PASS hi question: ends >= 4 above statement: 9.41
+PASS hi wh: ends below start: 5.13
+PASS zh question: last mean >= 2 above statement: 2.59
+PASS zh question: 去 still falls >= 3: 4.46
+PASS zh particle: 来 raised < 1.5: 0.53
+PASS en focus: first peak +2.5: 3.10
+PASS en focus: Manny lower by 1.5: 6.08
+23/23 pass

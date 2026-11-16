@@ -20,7 +20,7 @@
 import { formatIpa, parseIpa } from './parse.js';
 
 /** Vowel pairs written as two tokens that form one nucleus. */
-const DIPHTHONGS = new Set(
+export const DIPHTHONGS = new Set(
   ['eɪ aɪ oʊ aʊ ɔɪ əʊ əʉ æɪ ɑe æɔ ɑɪ ɑʊ', 'ɪə ɛə ʊə eə ɔə', 'ai ei au ou oi']
     .join(' ')
     .split(' ')

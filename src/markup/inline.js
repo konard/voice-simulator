@@ -15,6 +15,7 @@ import {
   PHONATIONS,
   RATE_LEVELS,
   SOUND_NAMES,
+  TUNE_LABELS,
   emotionOf,
 } from './modes.js';
 
@@ -91,6 +92,7 @@ const SPAN_TAGS = new Map(
         },
       ])
     ),
+    tune: (value) => (TUNE_LABELS.includes(value) ? { tune: value } : null),
     lang: (value) =>
       /^[A-Za-z]{2,3}(?:[-_][A-Za-z\d]{2,8})*$/u.test(value ?? '')
         ? { lang: value }
