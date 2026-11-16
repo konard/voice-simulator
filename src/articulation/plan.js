@@ -625,11 +625,15 @@ function rhoticTarget(segment) {
   return { value, strength: value > 0 ? 1 : 0 };
 }
 
-/** Lip and tongue-tip shape: own in consonants, free elsewhere. */
+/**
+ * Lip and tongue-tip shape: own in consonants and in the noise parts of a
+ * sound (src/articulation/sounds.js, issue 56: the place of `h`, so that
+ * the noise does not depend on the consonant before), free elsewhere.
+ */
 function shapeTarget(segments, index, name) {
   const segment = segments[index];
   const source =
-    segment.kind === 'consonant'
+    segment.kind === 'consonant' || segment.noise
       ? segment
       : segment.kind === 'release'
         ? closureOf(segments, index)

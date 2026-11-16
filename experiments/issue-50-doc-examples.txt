@@ -88,7 +88,7 @@ A [ipa təˈmɑːtəʊ] please.
 Wait [pause 0.3] now.
   ipa: ˈweɪt (0.3) ˈnaʊ .
 Hello [laugh] there [cough 0.5] ok.
-  ipa: həˈloʊ ⸨laugh⸩ ˈðɛɹ ⸨cough 0.5⸩ ˈoʊˈkeɪ .
+  ipa: həˈloʊ ⸨laugh⸩ ˈðɛɹ ⸨cough:0.5⸩ ˈoʊˈkeɪ .
 Hello *world*.
   ipa: həˈloʊ ˈˈwɝld .
   words 1-2: emphasis 1

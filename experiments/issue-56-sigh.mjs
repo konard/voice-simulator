@@ -17,17 +17,28 @@ const median = (values) => {
   const sorted = values.filter((v) => v > 0).sort((a, b) => a - b);
   return sorted[Math.floor(sorted.length / 2)];
 };
-const first = median(track.slice(0, 15));
-const last = median(track.slice(-15));
+// The least-squares line of the voiced frames (10 ms apart) in semitones,
+// without octave errors (more than 6 st from the median), over the vowel.
+const centre = 12 * Math.log2(median(track));
+const points = track.flatMap((f0, index) => {
+  const y = f0 > 0 ? 12 * Math.log2(f0) : NaN;
+  return Math.abs(y - centre) <= 6 ? [{ x: index * 0.01, y }] : [];
+});
+const meanX = points.reduce((sum, p) => sum + p.x, 0) / points.length;
+const meanY = points.reduce((sum, p) => sum + p.y, 0) / points.length;
+const slope =
+  points.reduce((sum, p) => sum + (p.x - meanX) * (p.y - meanY), 0) /
+  points.reduce((sum, p) => sum + (p.x - meanX) ** 2, 0);
+const seconds = vowel.end - vowel.start;
 console.log(
   'breathy',
-  (vowel.end - vowel.start).toFixed(2),
+  seconds.toFixed(2),
   's, f0',
-  first.toFixed(0),
+  track.find((v) => v > 0).toFixed(0),
   '->',
-  last.toFixed(0),
-  'Hz, fall',
-  (12 * Math.log2(first / last)).toFixed(2),
+  track.findLast((v) => v > 0).toFixed(0),
+  'Hz, fitted fall',
+  (-slope * seconds).toFixed(2),
   'st'
 );
 console.log(track.map((v) => v.toFixed(0)).join(' '));

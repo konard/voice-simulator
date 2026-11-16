@@ -27,7 +27,12 @@
 
 import { parseIpa } from '../ipa/parse.js';
 import { syllabifyTokens } from '../ipa/syllables.js';
-import { consonantTarget, vowelChannels, vowelTarget } from './phones.js';
+import {
+  consonantTarget,
+  PLACES,
+  vowelChannels,
+  vowelTarget,
+} from './phones.js';
 import { EFFORT_RULES } from './effort.js';
 import { sampleState, tractShape } from './tract-shape.js';
 import { tubeFormants } from '../acoustics/transfer.js';
@@ -38,9 +43,10 @@ import { piriformBranch } from '../acoustics/waveguide.js';
  * at the same `loudness` (the two grow alike with the lung pressure): the
  * loudness of a noise part is raised by its inverse, so that `level` is the
  * level re a vowel of the voice. Measured with
- * `node experiments/issue-56-calibrate.mjs`.
+ * `node experiments/issue-56-noise-level.mjs -4`: a flat noise at `level`
+ * L from 0 to −30 dB comes out within 2 dB of L below the vowel of `Yes`.
  */
-export const NOISE_LEVEL = -16;
+export const NOISE_LEVEL = -4;
 
 /** Length of a laugh call: `h` and the vowel `ə`, 0.1 s each. */
 export const LAUGH_CALL = 0.2;
@@ -57,7 +63,25 @@ export const CALLS = Object.freeze({
   cough: Object.freeze({ seconds: COUGH_CALL, count: 2, min: 1, max: 12 }),
 });
 
-const NOISE = Object.freeze({ voicing: 0, aspiration: 1, glottalClosure: 0 });
+/**
+ * The channels of a noise part: an open glottis without voicing, and an
+ * open tract (no constriction) with the tongue tip location in the mouth.
+ * The renderer takes the air flow through the tract at the narrowest place
+ * near `tongueLocation` (src/acoustics/aerodynamics.js); left alone it would
+ * be the place of the consonant before, and the noise after an `s` about
+ * 7 dB louder than after a `ʔ`. At the glottal place of `h` the tongue would
+ * sweep the pharynx to and from the next consonant and puff out a burst
+ * 30 dB above the noise (`node experiments/issue-56-noise-level.mjs`).
+ */
+const NOISE = Object.freeze({
+  voicing: 0,
+  aspiration: 1,
+  glottalClosure: 0,
+  lipArea: 2,
+  tongueArea: 2,
+  tongueLocation: PLACES.alveolar.location,
+  tongueWidth: PLACES.alveolar.width,
+});
 
 const laughPitch = 12 * Math.log2(LAUGH_PITCH);
 
@@ -559,9 +583,21 @@ export function insertBreaths(segments) {
 }
 
 /**
+ * Unvoice the gap between a word and a sound: a pause without a voicing
+ * target lets the voicing of the word run on into the sound, a voiced
+ * blip as loud as the word in front of a breath.
+ */
+function unvoiceGap(segment) {
+  if (segment?.kind === 'pause' && segment.target?.voicing === undefined) {
+    segment.target = { ...segment.target, voicing: 0 };
+  }
+}
+
+/**
  * Replace every sound silence of `buildSegments()` (a segment with
  * `sound`) by the segments of `soundSegments()`, before the segments get
- * their times. Each part keeps the silence in `soundOf`.
+ * their times. Each part keeps the silence in `soundOf`. The pauses next
+ * to a sound are unvoiced (`unvoiceGap()`).
  * @param {object[]} segments
  * @param {{language?: string|null}} [context]
  * @returns {object[]}
@@ -570,9 +606,13 @@ export function expandSounds(segments, context = {}) {
   const result = [];
   for (const segment of segments) {
     if (!segment.sound || segment.soundOf) {
+      if (result.at(-1)?.soundOf) {
+        unvoiceGap(segment);
+      }
       result.push(segment);
       continue;
     }
+    unvoiceGap(result.at(-1));
     const parts = soundSegments(segment.token, {
       ...context,
       seconds: segment.duration,

@@ -94,6 +94,30 @@ const f0Track = (result, from, to) =>
 
 const semitones = (from, to) => 12 * Math.log2(from / to);
 
+/**
+ * Slope in semitones per second of the least-squares line through the
+ * voiced frames (10 ms apart) of an f0 track, without octave errors (a
+ * frame more than 6 st from the median).
+ */
+function pitchSlope(track) {
+  const centre = 12 * Math.log2(median(track));
+  const points = track.flatMap((f0, index) => {
+    const y = f0 > 0 ? 12 * Math.log2(f0) : NaN;
+    return Math.abs(y - centre) <= 6 ? [{ x: index * 0.01, y }] : [];
+  });
+  const mean = (key) =>
+    points.reduce((sum, point) => sum + point[key], 0) / points.length;
+  const x = mean('x');
+  const y = mean('y');
+  let xy = 0;
+  let xx = 0;
+  for (const point of points) {
+    xy += (point.x - x) * (point.y - y);
+    xx += (point.x - x) ** 2;
+  }
+  return xy / xx;
+}
+
 /** The segments of the parts of the sound `name` of a plan. */
 const parts = (plan, name) =>
   plan.segments.filter((segment) => segment.soundOf?.sound === name);
@@ -154,8 +178,9 @@ describe('laughter', () => {
       result.sampleRate
     );
     expect(share).toBeLessThan(0.05);
+    const spoken = speak('Yes [laugh]');
     expect(
-      voicedShare(slice(speak('Yes [laugh]'), sound.start, sound.end), 24000)
+      voicedShare(slice(spoken, sound.start, sound.end), spoken.sampleRate)
     ).toBeGreaterThan(0.2);
   });
 
@@ -294,10 +319,7 @@ describe('sighs, coughs, throat clearing and clicks', () => {
     const [, vowel] = parts(result.plan, 'sigh');
     expect(vowel.end - vowel.start).toBeGreaterThanOrEqual(0.6);
     const track = f0Track(result, vowel.start, vowel.end);
-    const fall = semitones(
-      median(track.slice(0, 15)),
-      median(track.slice(-15))
-    );
+    const fall = -pitchSlope(track) * (vowel.end - vowel.start);
     expect(Math.abs(fall - 6)).toBeLessThanOrEqual(1.5);
   });
 
