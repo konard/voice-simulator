@@ -1,0 +1,58 @@
+# Issue 29: the built app in Chromium (Playwright 1.64.1, headless), automatic quality,
+# main thread and synthesis worker throttled 6x, 22.8 s of speech. Produced by:
+#   npm run example:web:build
+#   PLAYWRIGHT=$(npm root -g)/playwright/index.mjs node experiments/issue-27-latency.mjs \
+#     --runs 1 --tier auto --speech-mode sound --throttle 6 --benchmark-first \
+#     --text "$(cat text.txt)" --record docs/screenshots/issue-29/chromium-throttle-6x.wav \
+#     --screenshot docs/screenshots/issue-29/chromium-throttle-6x-hud.png
+#   node experiments/issue-29-spectrogram.mjs docs/screenshots/issue-29/chromium-throttle-6x.wav 2.63 \
+#     docs/screenshots/issue-29/chromium-throttle-6x-switch-spectrogram.png --max-frequency 22050 --span 1.2
+# text.txt: The river runs past the old mill and into the valley, where the farmers bring their grain each autumn. In the morning the fog lies low over the water, and the bells of the village church can be heard from far away. Children walk along the bank to school, and the miller waves to them from his door. In the evening the lamps are lit one by one along the road.
+# hud/worker t: ms after the click on Speak.
+
+benchmark Audiomedium · waveguideload 20% · target 80%
+{"run":0,"sampleRate":44100,"baseLatency":10,"outputLatency":32,"speakToChunk":2743.2,"speakToPush":2743.9,"playerDelay":60.8,"speakToFirstSample":2804.7,"speakToOutput":2846.7,"crossOriginIsolated":false,"tapError":null,"hud":"Audiominimal · waveguideload 18% · target 80% · worklet-port · underruns 1 · tier switches 2"}
+worker {"t":2743,"type":"start","solver":"waveguide","sampleRate":44100}
+worker {"t":3452,"type":"tier","at":1.01,"from":5,"level":4,"reason":"underrun","gainDb":0.06616828223464072,"solver":"waveguide"}
+worker {"t":4523,"type":"tier","at":2.34,"from":4,"level":3,"reason":"load","gainDb":-0.0020437178238084334,"solver":"waveguide"}
+worker {"t":14560,"type":"end","level":3,"load":0.28272886072214487}
+hud {"t":-1461,"text":"Audiomedium · waveguideload 20% · target 80%"}
+hud {"t":2944,"text":"Audiomedium · waveguideload 20% · target 80% · worklet-port · underruns 0"}
+hud {"t":3175,"text":"Audiomedium · waveguideload 28% · target 80% · worklet-port · underruns 1"}
+hud {"t":3696,"text":"Audiomedium · waveguideload 78% · target 80% · worklet-port · underruns 1"}
+hud {"t":4015,"text":"Audiomedium · waveguideload 35% · target 80% · worklet-port · underruns 1 · tier switches 1"}
+hud {"t":4456,"text":"Audiomedium · waveguideload 39% · target 80% · worklet-port · underruns 1 · tier switches 1"}
+hud {"t":4912,"text":"Audiolow · waveguideload 98% · target 80% · worklet-port · underruns 1 · tier switches 1"}
+hud {"t":5282,"text":"Audiolow · waveguideload 22% · target 80% · worklet-port · underruns 1 · tier switches 2"}
+hud {"t":5630,"text":"Audiominimal · waveguideload 60% · target 80% · worklet-port · underruns 1 · tier switches 2"}
+hud {"t":5944,"text":"Audiominimal · waveguideload 26% · target 80% · worklet-port · underruns 1 · tier switches 2"}
+hud {"t":6334,"text":"Audiominimal · waveguideload 18% · target 80% · worklet-port · underruns 1 · tier switches 2"}
+hud {"t":6823,"text":"Audiominimal · waveguideload 21% · target 80% · worklet-port · underruns 1 · tier switches 2"}
+hud {"t":7184,"text":"Audiominimal · waveguideload 16% · target 80% · worklet-port · underruns 1 · tier switches 2"}
+hud {"t":7829,"text":"Audiominimal · waveguideload 10% · target 80% · worklet-port · underruns 1 · tier switches 2"}
+hud {"t":8113,"text":"Audiominimal · waveguideload 13% · target 80% · worklet-port · underruns 1 · tier switches 2"}
+hud {"t":8416,"text":"Audiominimal · waveguideload 17% · target 80% · worklet-port · underruns 1 · tier switches 2"}
+hud {"t":8725,"text":"Audiominimal · waveguideload 18% · target 80% · worklet-port · underruns 1 · tier switches 2"}
+hud {"t":9175,"text":"Audiominimal · waveguideload 15% · target 80% · worklet-port · underruns 1 · tier switches 2"}
+hud {"t":9535,"text":"Audiominimal · waveguideload 14% · target 80% · worklet-port · underruns 1 · tier switches 2"}
+hud {"t":9747,"text":"Audiominimal · waveguideload 39% · target 80% · worklet-port · underruns 1 · tier switches 2"}
+hud {"t":9958,"text":"Audiominimal · waveguideload 17% · target 80% · worklet-port · underruns 1 · tier switches 2"}
+hud {"t":10231,"text":"Audiominimal · waveguideload 11% · target 80% · worklet-port · underruns 1 · tier switches 2"}
+hud {"t":10446,"text":"Audiominimal · waveguideload 43% · target 80% · worklet-port · underruns 1 · tier switches 2"}
+hud {"t":10917,"text":"Audiominimal · waveguideload 24% · target 80% · worklet-port · underruns 1 · tier switches 2"}
+hud {"t":11188,"text":"Audiominimal · waveguideload 33% · target 80% · worklet-port · underruns 1 · tier switches 2"}
+hud {"t":11592,"text":"Audiominimal · waveguideload 13% · target 80% · worklet-port · underruns 1 · tier switches 2"}
+hud {"t":12257,"text":"Audiominimal · waveguideload 33% · target 80% · worklet-port · underruns 1 · tier switches 2"}
+hud {"t":12507,"text":"Audiominimal · waveguideload 34% · target 80% · worklet-port · underruns 1 · tier switches 2"}
+hud {"t":12677,"text":"Audiominimal · waveguideload 19% · target 80% · worklet-port · underruns 1 · tier switches 2"}
+hud {"t":12923,"text":"Audiominimal · waveguideload 23% · target 80% · worklet-port · underruns 1 · tier switches 2"}
+hud {"t":13319,"text":"Audiominimal · waveguideload 20% · target 80% · worklet-port · underruns 1 · tier switches 2"}
+hud {"t":14025,"text":"Audiominimal · waveguideload 33% · target 80% · worklet-port · underruns 1 · tier switches 2"}
+hud {"t":14281,"text":"Audiominimal · waveguideload 31% · target 80% · worklet-port · underruns 1 · tier switches 2"}
+hud {"t":14561,"text":"Audiominimal · waveguideload 18% · target 80% · worklet-port · underruns 1 · tier switches 2"}
+tiers {"starts":1,"overloads":0,"switches":2,"shown":["medium","low","minimal"],"firstShownChange":4912,"underrunsAfterFirstSwitch":0}
+switches [{"t":3452,"type":"tier","at":1.01,"from":5,"level":4,"reason":"underrun","gainDb":0.06616828223464072,"solver":"waveguide","wav":1.3},{"t":4523,"type":"tier","at":2.34,"from":4,"level":3,"reason":"load","gainDb":-0.0020437178238084334,"solver":"waveguide","wav":2.63}]
+recording /tmp/i29/run2.wav {"seconds":23.1984,"signalMaxStep":0.1272,"signalPeak":0.859,"gaps":[{"at":0.4121,"ms":58.0952,"edgeBefore":0.0001,"edgeAfter":0.0002,"stepIn":0.0001,"stepOut":0.0006,"levelBefore":0.2688}]}
+median {"browser":"chromium","isolated":false,"buffer":false,"tier":"auto","throttle":6,"mode":"worklet-port","baseLatency":10,"outputLatency":32,"speakToChunk":2743.2,"speakToPush":2743.9,"playerDelay":60.8,"speakToFirstSample":2804.7,"speakToOutput":2846.7,"underruns":[1]}
+
+{"output":"docs/screenshots/issue-29/chromium-throttle-6x-switch-spectrogram.png","rate":44100,"width":826,"height":1024,"seconds":[2.03,3.229],"maxFrequency":22050,"rmsBeforeDb":-15.51,"rmsFadeDb":-14.73,"rmsAfterDb":-14.2}
