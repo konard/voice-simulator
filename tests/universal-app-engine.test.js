@@ -355,7 +355,7 @@ describe('voice engine benchmark cache', () => {
   });
 });
 
-describe('voice engine quality settings', () => {
+describe('voice engine debug', () => {
   it('keeps the utterance times the debug long tasks leave out', async () => {
     const { engine } = benchmarkEngine();
     const before = globalThis.performance.now();
@@ -380,7 +380,9 @@ describe('voice engine quality settings', () => {
     expect(failed instanceof TypeError).toBe(true);
     expect(engine.speechFrom).toBe(null);
   });
+});
 
+describe('voice engine quality settings', () => {
   it('a fixed tier survives a reload', () => {
     withStorage((storage) => {
       const first = benchmarkEngine();
