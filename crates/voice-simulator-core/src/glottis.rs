@@ -11,6 +11,7 @@ use crate::aerodynamics::{glottal_area_of, open_tract_strength_at, GlottalAreas,
 use crate::effort::{self, TILT_CORNER};
 use crate::math::{self, max, min};
 use crate::random::Random;
+use crate::source_state;
 
 /// Breath noise per 10 mm² of glottal chink (`CHINK_NOISE`).
 pub const CHINK_NOISE: f64 = 0.5;
@@ -224,6 +225,8 @@ pub struct Glottis {
     /// Amplitude of the current pulse.
     pub intensity: f64,
     pulse: LfPulse,
+    // The tenseness `pulse` was built with.
+    pulse_tenseness: f64,
     /// Modulation of the aspiration noise of the last step.
     pub noise_modulation: f64,
     // `breathiness ** breathExponent`, the same value on every step.
@@ -276,6 +279,7 @@ impl Glottis {
                 options.breathiness,
                 options.breathiness_rd,
             ),
+            pulse_tenseness: options.tenseness,
             noise_modulation: 0.0,
             breath_power: math::pow(options.breathiness, options.breath_exponent),
             rd_slope: options.breathiness_rd,
@@ -343,7 +347,41 @@ impl Glottis {
         self.jitter = 1.0 + self.jitter_depth * self.random.normal();
         self.shimmer = 1.0 + self.shimmer_depth * self.random.normal();
         self.period = 1.0 / max(30.0, frequency * self.jitter);
+        self.pulse_tenseness = tenseness;
         self.pulse = lf_parameters_at(tenseness, self.breathiness, self.rd_slope);
+    }
+
+    /// `saveState()`: the cycle state in the order of
+    /// [`crate::source_state`] (issue 29).
+    pub fn save_state(&self) -> [f64; source_state::LENGTH] {
+        let mut state = [0.0; source_state::LENGTH];
+        state[source_state::PHASE] = self.phase;
+        state[source_state::PERIOD] = self.period;
+        state[source_state::JITTER] = self.jitter;
+        state[source_state::SHIMMER] = self.shimmer;
+        state[source_state::SMOOTHED] = self.smoothed;
+        state[source_state::INTENSITY] = self.intensity;
+        state[source_state::NOISE_MODULATION] = self.noise_modulation;
+        state[source_state::PULSE_TENSENESS] = self.pulse_tenseness;
+        state[source_state::RANDOM] = f64::from(self.random.state());
+        state
+    }
+
+    /// `restoreState(state)`: set what [`Glottis::save_state`] returned
+    /// and rebuild the pulse from the saved tenseness.
+    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+    pub fn restore_state(&mut self, state: &[f64; source_state::LENGTH]) {
+        self.phase = state[source_state::PHASE];
+        self.period = state[source_state::PERIOD];
+        self.jitter = state[source_state::JITTER];
+        self.shimmer = state[source_state::SHIMMER];
+        self.smoothed = state[source_state::SMOOTHED];
+        self.intensity = state[source_state::INTENSITY];
+        self.noise_modulation = state[source_state::NOISE_MODULATION];
+        self.pulse_tenseness = state[source_state::PULSE_TENSENESS];
+        // `saved >>> 0` of `random.restore`; the saved value is a u32.
+        self.random.set_state(state[source_state::RANDOM] as u32);
+        self.pulse = lf_parameters_at(self.pulse_tenseness, self.breathiness, self.rd_slope);
     }
 
     fn open_tract_strength(&mut self, control: &GlottalControl) -> f64 {

@@ -27,6 +27,7 @@ use crate::glottis::{GlottalControl, Glottis, GlottisOptions};
 use crate::listener::Listener;
 use crate::math::{self, max};
 use crate::solver::Solver;
+use crate::source_state;
 use crate::stages::{NoiseSources, OutputStage};
 use crate::waveguide::{PiriformBranch, Waveguide, WaveguideOptions};
 
@@ -344,6 +345,21 @@ impl AnyRenderer {
         dispatch!(self, renderer => renderer.total_samples())
     }
 
+    /// [`Renderer::seek`].
+    pub fn seek(&mut self, seconds: f64) -> Result<(), RenderError> {
+        dispatch!(self, renderer => renderer.seek(seconds))
+    }
+
+    /// [`Renderer::sources_save`].
+    pub fn sources_save(&self) -> [f64; source_state::LENGTH] {
+        dispatch!(self, renderer => renderer.sources_save())
+    }
+
+    /// [`Renderer::sources_restore`].
+    pub fn sources_restore(&mut self, state: &[f64; source_state::LENGTH]) {
+        dispatch!(self, renderer => renderer.sources_restore(state));
+    }
+
     /// [`Renderer::frame_stride`].
     pub fn frame_stride(&self) -> usize {
         dispatch!(self, renderer => renderer.frame_stride())
@@ -482,6 +498,44 @@ impl<S: Solver> Renderer<S> {
     /// Samples of the whole render.
     pub fn total_samples(&self) -> usize {
         self.settings.total_samples
+    }
+
+    /// Start at `seconds` into the utterance (`startTime` of the
+    /// JavaScript renderers, issue 29): the position becomes the nearest
+    /// sample (`Math.round`), the clock and the solver clock its time, and
+    /// the next render takes a frame for the block it starts in. The
+    /// solver and the listener keep their state, which is silence for a
+    /// renderer that has not rendered yet. [`RenderError::Config`] for a
+    /// time that is negative, not finite or past the end.
+    #[allow(
+        clippy::cast_possible_truncation,
+        clippy::cast_sign_loss,
+        clippy::cast_precision_loss
+    )]
+    pub fn seek(&mut self, seconds: f64) -> Result<(), RenderError> {
+        let rate = self.settings.sample_rate;
+        let position = math::round_half_up(seconds * rate);
+        if !position.is_finite() || position < 0.0 || position > self.settings.total_samples as f64
+        {
+            return Err(RenderError::Config);
+        }
+        self.position = position as usize;
+        self.time = position / rate;
+        self.solver_time = self.time;
+        self.has_shape = false;
+        Ok(())
+    }
+
+    /// `saveSources()`: the glottis state in the order of
+    /// [`crate::source_state`]. The noise sources are not part of it.
+    pub fn sources_save(&self) -> [f64; source_state::LENGTH] {
+        self.glottis.save_state()
+    }
+
+    /// `restoreSources(state)`: take over the glottis state that
+    /// [`Renderer::sources_save`] of another renderer returned.
+    pub fn sources_restore(&mut self, state: &[f64; source_state::LENGTH]) {
+        self.glottis.restore_state(state);
     }
 
     /// Values of one frame.
@@ -779,6 +833,38 @@ mod tests {
         assert_eq!(&actual[..], &expected[..total]);
         assert_eq!(chunked.position(), total);
         assert_eq!(chunked.blocks(10), 0);
+    }
+
+    #[test]
+    fn seek_starts_mid_utterance_with_the_saved_source() {
+        let total = 3000;
+        let frames = steady_frames(22, 100, &vowel());
+        let mut first = Renderer::new(&configuration(total)).unwrap();
+        let mut head = vec![0.0f32; 1000];
+        let blocks = first.blocks(1000);
+        first
+            .render(&frames[..blocks * first.frame_stride()], &mut head)
+            .unwrap();
+        let state = first.sources_save();
+        let mut second = Renderer::new(&configuration(total)).unwrap();
+        assert_eq!(second.seek(-1.0), Err(RenderError::Config));
+        second.seek(1000.0 / 22_050.0).unwrap();
+        assert_eq!(second.position(), 1000);
+        second.sources_restore(&state);
+        assert_eq!(second.sources_save(), state);
+        // A start inside a block takes one frame for it.
+        let mut odd = Renderer::new(&configuration(total)).unwrap();
+        odd.seek(1001.0 / 22_050.0).unwrap();
+        assert_eq!(odd.blocks(23), 1);
+        assert_eq!(odd.blocks(24), 2);
+        let mut rest = vec![0.0f32; total - 1000];
+        let blocks = second.blocks(rest.len());
+        let written = second
+            .render(&frames[..blocks * second.frame_stride()], &mut rest)
+            .unwrap();
+        assert_eq!(written, total - 1000);
+        assert!(rest.iter().all(|value| value.is_finite()));
+        assert!(rest[1000..].iter().any(|value| value.abs() > 1e-3));
     }
 
     #[test]

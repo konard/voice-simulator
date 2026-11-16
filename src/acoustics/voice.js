@@ -329,7 +329,7 @@ export class VoiceRenderer {
    * and `enclosure` ({width, height, depth, absorption, center} in cm, a
    * box around the head) choose where and in what space the voice is
    * heard. The output grows by the reverberation tail.
-   * @param {{sampleRate?: number, sections?: number, solver?: string, source?: 'lf' | 'folds', interaction?: boolean, subglottal?: boolean, seed?: string|number, blockSize?: number, bandLimit?: number, head?: object, dx?: number, model?: object, output?: string, kernel?: string, device?: object, microphone?: object, room?: string|object, enclosure?: object, teeth?: boolean, piriform?: boolean, vallecula?: boolean}} [options]
+   * @param {{sampleRate?: number, sections?: number, solver?: string, source?: 'lf' | 'folds', interaction?: boolean, subglottal?: boolean, seed?: string|number, blockSize?: number, bandLimit?: number, head?: object, dx?: number, model?: object, output?: string, kernel?: string, device?: object, microphone?: object, room?: string|object, enclosure?: object, teeth?: boolean, piriform?: boolean, vallecula?: boolean, startTime?: number}} [options]
    *   `teeth: false` leaves out the incisors, `piriform: false` the
    *   piriform fossae (both solvers) and `vallecula: false` the vallecula
    *   (3D only). `source` is the voice source: 'lf' (default, LF pulses
@@ -345,6 +345,10 @@ export class VoiceRenderer {
    *   glottal flow then feels the formants and the subglottal resonances,
    *   and the oral pressure of a closure slows it (issue 34). Without
    *   interaction `subglottal` has nothing to couple to and does nothing.
+   *   `startTime` (s, default 0) starts the renderer at sample
+   *   `Math.round(startTime * sampleRate)` of the utterance, with a silent
+   *   solver and listener (issue 29); `restoreSources` then gives it the
+   *   source state of the renderer it continues.
    */
   constructor(plan, options = {}) {
     this.plan = plan;
@@ -400,8 +404,7 @@ export class VoiceRenderer {
       options.bandLimit
     );
     this.state = {};
-    this.time = 0;
-    this.position = 0;
+    this.#seek(options.startTime);
     this.listener = createListener({
       microphone: options.microphone,
       room: options.room,
@@ -412,7 +415,7 @@ export class VoiceRenderer {
     this.totalSamples = Math.ceil(
       (plan.duration + (this.listener?.tail ?? 0)) * this.sampleRate
     );
-    this.solverTime = 0;
+    this.solverTime = this.time;
     this.previous = 0;
     this.current = 0;
     this.shape = null;
@@ -422,6 +425,39 @@ export class VoiceRenderer {
 
   get duration() {
     return this.plan.duration;
+  }
+
+  /**
+   * `startTime` (s, issue 29): start mid-utterance at the nearest sample;
+   * the solver and the listener start silent.
+   * @param {number} [seconds]
+   */
+  #seek(seconds) {
+    this.position = Math.round((seconds ?? 0) * this.sampleRate);
+    this.time = this.position / this.sampleRate;
+  }
+
+  /**
+   * The state of the voice source that a renderer started at this one's
+   * position takes over (issue 29): `Glottis.saveState()` in the order of
+   * SOURCE_STATE (src/engine/layout.js), or an empty array for a source
+   * without one (the two-mass folds). The noise generators are not part
+   * of it.
+   * @returns {Float64Array}
+   */
+  saveSources() {
+    return this.glottis.saveState?.() ?? new Float64Array(0);
+  }
+
+  /**
+   * Take over the source state that `saveSources()` of another renderer
+   * of the same utterance returned. An empty array changes nothing.
+   * @param {ArrayLike<number>} state
+   */
+  restoreSources(state) {
+    if (state.length > 0) {
+      this.glottis.restoreState?.(state);
+    }
   }
 
   /**

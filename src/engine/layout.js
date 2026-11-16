@@ -2,7 +2,8 @@
  * Layouts of the arrays the JavaScript side hands to the Rust renderer
  * (issue 22, docs/RUST-ENGINE.md). The same names and numbers are
  * constants in `crates/voice-simulator-core/src/config.rs`
- * (RENDERER_CONFIG), `frame.rs` (FRAME) and `listener.rs` (LISTENER);
+ * (RENDERER_CONFIG), `frame.rs` (FRAME), `listener.rs` (LISTENER) and
+ * `source_state.rs` (SOURCE_STATE);
  * tests/engine-layout.test.js compares the files as text.
  */
 
@@ -126,6 +127,25 @@ export const LISTENER = Object.freeze({
   MICROPHONE_VALUES: 9,
   ROOM_VALUES: 29,
   LINES: 8,
+});
+
+/**
+ * The source state a renderer started mid-utterance takes over (issue 29):
+ * `Glottis.saveState()` returns LENGTH values in this order, the last one
+ * the state of its random generator (`random.save()`). The same names and
+ * numbers are constants in `crates/voice-simulator-core/src/source_state.rs`.
+ */
+export const SOURCE_STATE = Object.freeze({
+  PHASE: 0,
+  PERIOD: 1,
+  JITTER: 2,
+  SHIMMER: 3,
+  SMOOTHED: 4,
+  INTENSITY: 5,
+  NOISE_MODULATION: 6,
+  PULSE_TENSENESS: 7,
+  RANDOM: 8,
+  LENGTH: 9,
 });
 
 /** Values of one frame for a tract of `sections` sections. */

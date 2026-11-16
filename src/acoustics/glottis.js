@@ -177,6 +177,7 @@ export class Glottis {
     this.jitter = 1;
     this.shimmer = 1;
     this.intensity = 0;
+    this.pulseTenseness = this.tenseness;
     this.pulse = lfParameters(this.tenseness, this.breathiness, this.rdSlope);
     this.noiseModulation = 0;
     this.effortKey = 0;
@@ -242,7 +243,51 @@ export class Glottis {
     this.jitter = 1 + this.jitterDepth * randomNormal(this.random);
     this.shimmer = 1 + this.shimmerDepth * randomNormal(this.random);
     this.period = 1 / Math.max(30, frequency * this.jitter);
+    this.pulseTenseness = tenseness;
     this.pulse = lfParameters(tenseness, this.breathiness, this.rdSlope);
+  }
+
+  /**
+   * The cycle state that a renderer started mid-utterance takes over
+   * (issue 29), in the order of SOURCE_STATE (src/engine/layout.js):
+   * phase, period, jitter, shimmer, smoothed, intensity, noiseModulation,
+   * pulseTenseness and the state of the random generator.
+   * @returns {Float64Array}
+   */
+  saveState() {
+    return Float64Array.of(
+      this.phase,
+      this.period,
+      this.jitter,
+      this.shimmer,
+      this.smoothed,
+      this.intensity,
+      this.noiseModulation,
+      this.pulseTenseness,
+      this.random.save()
+    );
+  }
+
+  /**
+   * Set the state that `saveState` returned; the pulse shape is rebuilt
+   * from the saved tenseness.
+   * @param {ArrayLike<number>} state
+   */
+  restoreState(state) {
+    this.phase = state[0];
+    this.period = state[1];
+    this.jitter = state[2];
+    this.shimmer = state[3];
+    this.smoothed = state[4];
+    this.intensity = state[5];
+    this.noiseModulation = state[6];
+    this.pulseTenseness = state[7];
+    this.random.restore(state[8]);
+    this.pulse = lfParameters(
+      this.pulseTenseness,
+      this.breathiness,
+      this.rdSlope
+    );
   }
 
   /**

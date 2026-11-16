@@ -1051,7 +1051,13 @@ export declare function randomHeadConfig(
 export declare function encodeHeadConfig(config: HeadConfig): string;
 export declare function decodeHeadConfig(text: string): HeadConfig;
 export declare function getHeadParameter(key: string): HeadParameter;
-export declare function createRandom(seed?: string | number): () => number;
+/** A seeded mulberry32 generator; save/restore read and set its 32-bit state. */
+export interface Random {
+  (): number;
+  save(): number;
+  restore(state: number): void;
+}
+export declare function createRandom(seed?: string | number): Random;
 export declare function createSeed(): string;
 export declare function hashSeed(value: string | number): number;
 
