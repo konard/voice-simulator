@@ -1,0 +1,5 @@
+---
+'voice-simulator': minor
+---
+
+Emotions and attitudes: `[angry]`, `[sad 0.5]`, `<vs:emotion name="happy" intensity="0.8">` and `<vs:emotion arousal="…" valence="…" dominance="…">` are heard. `EMOTION_PRESETS` has twelve presets (neutral, angry, happy, sad, afraid and bored after Burkhardt & Sendlmeier 2000, `verified: true`; surprised, disgusted, tender, sarcastic, confident and hesitant, `verified: false`) that set pitch, range, rate, effort, phonation, pauses, the length of stressed vowels, a glide, a final rise, vowel precision and a smile, scaled by an intensity from 0 to 1; the three dimensions follow Schröder et al. 2001 (`emotionChanges()`). An emotion composes as an outer span, so `[angry][soft]…` stays soft (`realiseEmotion()`). The listening-test harness gets choice trials, a confusion matrix and `binomialTailP()`, and `examples/listening-test/emotions.sentences.json` builds 48 trials in English, Russian, Hindi and Chinese. Text without an emotion renders the same samples.
