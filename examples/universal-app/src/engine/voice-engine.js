@@ -37,6 +37,8 @@ import { readyToPlay, secondsToPlay } from './render-ahead.js';
 const TAIL = 0.15;
 /** Speech spans kept for duringSpeech. */
 const SPEECH_SPANS = 16;
+/** User input times kept for ownTask. */
+const INPUT_TIMES = 64;
 
 export class VoiceEngine {
   /**
@@ -85,6 +87,10 @@ export class VoiceEngine {
     // in them are not the benchmark's (use-simulator, `?debug`).
     this.speechSpans = [];
     this.speechFrom = null;
+    // Times (performance.now) of user input while the benchmark runs
+    // (noteInput): a task that handled one is the app's, not the
+    // benchmark's.
+    this.inputTimes = [];
     // The engine setting ('auto', 'rust' or 'js') the worker renders with.
     this.engineName = 'auto';
     this.nextId = 1;
@@ -391,6 +397,32 @@ export class VoiceEngine {
       this.speechFrom === null ? [] : [{ from: this.speechFrom, to: Infinity }];
     return [...this.speechSpans, ...open].some(
       (span) => start <= span.to && end >= span.from
+    );
+  }
+
+  /**
+   * Note user input (a pointer or key event) at `time` (performance.now),
+   * while the benchmark is being measured; see ownTask.
+   */
+  noteInput(time = globalThis.performance.now()) {
+    const span = this.status.benchmark;
+    if (span?.from === null || span?.from === undefined || span.to !== null) {
+      return;
+    }
+    this.inputTimes.push(time);
+    this.inputTimes.splice(0, this.inputTimes.length - INPUT_TIMES);
+  }
+
+  /**
+   * Whether a main-thread task from `start` to `end` (performance.now) is
+   * the app's own work, not the benchmark's: it overlaps an utterance
+   * (duringSpeech) or handled user input (noteInput). The `?debug` long
+   * tasks leave these out (use-simulator).
+   */
+  ownTask(start, end) {
+    return (
+      this.duringSpeech(start, end) ||
+      this.inputTimes.some((time) => time >= start && time <= end)
     );
   }
 

@@ -30,12 +30,17 @@ function writeProgress(refs, frame) {
   paintHighlight(refs.spoken.current, frame);
 }
 
+/** User input that ends a task of the app's own (VoiceEngine.ownTask). */
+const INPUT_EVENTS = ['pointerdown', 'pointerup', 'pointermove', 'keydown'];
+
 /**
  * Main-thread tasks over 50 ms between the benchmark request and its answer
  * (issue 28: the benchmark must not block the page); the HUD shows them with
- * `?debug`. Tasks during an utterance are the app's own: the benchmark is
- * paused then. The count reaches React only after the answer (`to`): a
- * re-render of the app inside the window would be a long task of its own.
+ * `?debug`. Tasks during an utterance or that handled user input are the
+ * app's own (VoiceEngine.ownTask): the benchmark is paused while speaking,
+ * and a click's handling is the same with or without a benchmark. The count
+ * reaches React only after the answer (`to`): a re-render of the app inside
+ * the window would be a long task of its own.
  */
 function useBenchmarkLongTasks(engineRef, answeredAt) {
   const [longTasks, setLongTasks] = useState(0);
@@ -56,7 +61,7 @@ function useBenchmarkLongTasks(engineRef, answeredAt) {
         return (
           end >= span.from &&
           (span.to === null || entry.startTime <= span.to) &&
-          !engine.duringSpeech(entry.startTime, end)
+          !engine.ownTask(entry.startTime, end)
         );
       }).length;
       if (span.to !== null) {
@@ -64,7 +69,17 @@ function useBenchmarkLongTasks(engineRef, answeredAt) {
       }
     });
     observer.observe({ type: 'longtask', buffered: true });
-    return () => observer.disconnect();
+    const input = () => engineRef.current?.noteInput();
+    const options = { capture: true, passive: true };
+    for (const type of INPUT_EVENTS) {
+      globalThis.addEventListener(type, input, options);
+    }
+    return () => {
+      observer.disconnect();
+      for (const type of INPUT_EVENTS) {
+        globalThis.removeEventListener(type, input, options);
+      }
+    };
   }, [engineRef]);
   useEffect(() => {
     if (answeredAt !== null && answeredAt !== undefined) {
