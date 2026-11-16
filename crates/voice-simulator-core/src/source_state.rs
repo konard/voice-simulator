@@ -29,5 +29,11 @@ pub const PARITY: usize = 9;
 pub const PULSE_GAIN: usize = 10;
 /// Output of the falsetto low-pass.
 pub const FALSETTO_SMOOTHED: usize = 11;
+/// Last input of the spectral tilt filter of the effort.
+pub const TILT_INPUT: usize = 12;
+/// Output of the first high-pass of the tilt filter.
+pub const TILT_MIDDLE: usize = 13;
+/// Output of the tilt filter.
+pub const TILT_OUTPUT: usize = 14;
 /// Number of values.
-pub const LENGTH: usize = 12;
+pub const LENGTH: usize = 15;

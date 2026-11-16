@@ -460,6 +460,9 @@ impl Glottis {
         state[source_state::PARITY] = f64::from(self.parity);
         state[source_state::PULSE_GAIN] = self.pulse_gain;
         state[source_state::FALSETTO_SMOOTHED] = self.falsetto_smoothed;
+        state[source_state::TILT_INPUT] = self.tilt_input;
+        state[source_state::TILT_MIDDLE] = self.tilt_middle;
+        state[source_state::TILT_OUTPUT] = self.tilt_output;
         state
     }
 
@@ -480,6 +483,9 @@ impl Glottis {
         self.parity = state[source_state::PARITY] as u8;
         self.pulse_gain = state[source_state::PULSE_GAIN];
         self.falsetto_smoothed = state[source_state::FALSETTO_SMOOTHED];
+        self.tilt_input = state[source_state::TILT_INPUT];
+        self.tilt_middle = state[source_state::TILT_MIDDLE];
+        self.tilt_output = state[source_state::TILT_OUTPUT];
         self.pulse = lf_parameters_at(self.pulse_tenseness, self.breathiness, self.rd_slope);
     }
 
@@ -636,8 +642,9 @@ mod tests {
     #[test]
     fn restored_state_continues_creak_and_falsetto() {
         // Issue 29: a glottis that restores the state of another goes on
-        // with the same samples, through the double pulsing of a creak and
-        // the falsetto low-pass (issue 54).
+        // with the same samples, through the double pulsing of a creak,
+        // the falsetto low-pass (issue 54) and the tilt filter of a raised
+        // or lowered effort (issue 35).
         let dt = 1.0 / 48_000.0;
         let at = |n: usize| {
             let mut phonated = control();
@@ -649,6 +656,7 @@ mod tests {
                 0.0
             };
             phonated.falsetto = if n < 6000 { 0.0 } else { 0.6 };
+            phonated.effort = if n < 4500 { 6.0 } else { -4.0 };
             phonated
         };
         for split in [3001, 7003, 9500] {

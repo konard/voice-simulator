@@ -136,9 +136,12 @@ export const LISTENER = Object.freeze({
 
 /**
  * The source state a renderer started mid-utterance takes over (issue 29):
- * `Glottis.saveState()` returns LENGTH values in this order, the last one
- * the state of its random generator (`random.save()`). The same names and
- * numbers are constants in `crates/voice-simulator-core/src/source_state.rs`.
+ * `Glottis.saveState()` returns LENGTH values in this order: RANDOM is the
+ * state of its random generator (`random.save()`), PARITY and PULSE_GAIN
+ * the double pulsing of a creak, FALSETTO_SMOOTHED the falsetto low-pass
+ * and the TILT_ values the memory of the effort tilt filter. The same
+ * names and numbers are constants in
+ * `crates/voice-simulator-core/src/source_state.rs`.
  */
 export const SOURCE_STATE = Object.freeze({
   PHASE: 0,
@@ -153,7 +156,10 @@ export const SOURCE_STATE = Object.freeze({
   PARITY: 9,
   PULSE_GAIN: 10,
   FALSETTO_SMOOTHED: 11,
-  LENGTH: 12,
+  TILT_INPUT: 12,
+  TILT_MIDDLE: 13,
+  TILT_OUTPUT: 14,
+  LENGTH: 15,
 });
 
 /** Values of one frame for a tract of `sections` sections. */

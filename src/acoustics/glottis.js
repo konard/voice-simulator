@@ -360,8 +360,8 @@ export class Glottis {
    * (issue 29), in the order of SOURCE_STATE (src/engine/layout.js):
    * phase, period, jitter, shimmer, smoothed, intensity, noiseModulation,
    * pulseTenseness, the state of the random generator, then the parity
-   * and the gain of the creak pulse and the output of the falsetto
-   * low-pass.
+   * and the gain of the creak pulse, the output of the falsetto low-pass
+   * and the three values of the effort tilt filter.
    * @returns {Float64Array}
    */
   saveState() {
@@ -377,7 +377,10 @@ export class Glottis {
       this.random.save(),
       this.parity,
       this.pulseGain,
-      this.falsettoSmoothed
+      this.falsettoSmoothed,
+      this.tiltInput,
+      this.tiltMiddle,
+      this.tiltOutput
     );
   }
 
@@ -399,6 +402,9 @@ export class Glottis {
     this.parity = state[9];
     this.pulseGain = state[10];
     this.falsettoSmoothed = state[11];
+    this.tiltInput = state[12];
+    this.tiltMiddle = state[13];
+    this.tiltOutput = state[14];
     this.pulse = lfParameters(
       this.pulseTenseness,
       this.breathiness,

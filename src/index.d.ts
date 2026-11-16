@@ -1275,7 +1275,8 @@ export declare function createThreadPool(
 /**
  * Indices of the glottis state `saveSources()` returns (issue 29); RANDOM
  * is the state of its random generator, PARITY and PULSE_GAIN the double
- * pulsing of a creak and FALSETTO_SMOOTHED the falsetto low-pass.
+ * pulsing of a creak, FALSETTO_SMOOTHED the falsetto low-pass and the
+ * TILT_ values the memory of the spectral tilt filter of the effort.
  */
 export declare const SOURCE_STATE: Readonly<{
   PHASE: 0;
@@ -1290,7 +1291,10 @@ export declare const SOURCE_STATE: Readonly<{
   PARITY: 9;
   PULSE_GAIN: 10;
   FALSETTO_SMOOTHED: 11;
-  LENGTH: 12;
+  TILT_INPUT: 12;
+  TILT_MIDDLE: 13;
+  TILT_OUTPUT: 14;
+  LENGTH: 15;
 }>;
 /** Greatest common divisor of three sample rates (issue 29). */
 export declare function switchGrid(a: number, b: number, c: number): number;

@@ -2,7 +2,8 @@
  * The source state a renderer started in the middle of an utterance takes
  * over (issue 29): a Glottis that restores what another one saved goes on
  * sample for sample like the one that saved it, also in creaky voice
- * (double pulsing, issue 54) and in falsetto (its low-pass).
+ * (double pulsing, issue 54), in falsetto (its low-pass) and with a raised
+ * or lowered effort (the tilt filter, issue 35).
  */
 
 import { describe, expect, it } from 'test-anywhere';
@@ -14,7 +15,10 @@ const RATE = 48000;
 const DT = 1 / RATE;
 const OPTIONS = { seed: 7, chink: 2 };
 
-/** Control at sample `n`: creak, then creak and falsetto, then falsetto. */
+/**
+ * Control at sample `n`: creak, then creak and falsetto, then falsetto;
+ * 6 dB of effort, then -4 dB.
+ */
 function control(n) {
   return {
     f0: 110 + 20 * Math.sin(n / 4000),
@@ -24,6 +28,7 @@ function control(n) {
     loudness: 1,
     creak: n < 6000 ? 0.8 : n < 9000 ? 0.5 : 0,
     falsetto: n < 6000 ? 0 : 0.6,
+    effort: n < 4500 ? 6 : -4,
   };
 }
 
