@@ -20,6 +20,13 @@ a pressure wave travelling through the 3D shape of a parametric low-poly head
   ɪz ˈdomə, `на работе` nə rɐˈbotʲə, `как же` kaɡ ʐɨ); each stays its own
   word for highlighting. Mandarin applies tone sandhi and erhua: 花儿 and
   `huār` are one syllable, `xwaɻ˥`.
+- **Speech markup**: an SSML subset (`<speak>`, `break`, `prosody`,
+  `emphasis`, `say-as`, `phoneme`, `lang`, `sub` and `vs:` elements for
+  effort, phonation, emotion and sounds), inline tags such as
+  `[whisper]Hello[/whisper]` or `[pause 0.5]` with `markup: true`, and
+  ExtIPA/VoQS marks in IPA (`{W həˈloʊ W} ˈwɝld .`, `(.)`, `⸨laugh⸩`, `ˈˈ`).
+  Rate, pitch, range, level and timed pauses are heard; the other qualities
+  are carried in `plan.modes`. See [docs/markup.md](docs/markup.md).
 - **English weak forms**: function words are weak and unstressed inside a
   phrase (`a cup of tea for you` ə ˈkʌp əv ˈti fɚ ju, `the end` ði ˈɛnd,
   `I have to go` aɪ ˈhæf tə ˈɡoʊ) and keep their strong form alone and at
@@ -311,6 +318,9 @@ textToIpa('water', { lang: 'en', accent: 'en-GB' }).ipa; // 'ˈwɔːtə'
 textToIpa('a cup of tea for you', { lang: 'en' }).ipa; // 'ə ˈkʌp əv ˈti fɚ ju'
 // weakForms: false keeps every English word in its stressed dictionary form.
 textToIpa('I can do it', { lang: 'en', weakForms: false }).ipa; // 'ˈaɪ ˈkæn ˈdu ˈɪt'
+// Speech markup (docs/markup.md): SSML is read by itself, inline tags on request.
+textToIpa('<speak>Hello <emphasis>world</emphasis>.</speak>').ipa; // 'həˈloʊ ˈˈwɝld .'
+textToIpa('[whisper]Hello[/whisper] world.', { markup: true }).ipa; // '{W həˈloʊ W} ˈwɝld .'
 
 const head = randomHeadConfig(42); // a different person for every seed
 const result = synthesize('Hello world', { head, tier: 'medium' });
@@ -382,6 +392,8 @@ Lower-level building blocks are exported too: `planUtterance`,
 ```bash
 npx voice-simulator ipa "你好世界"
 npx voice-simulator ipa "Water, please." --accent en-GB
+npx voice-simulator ipa --markup "[whisper]Hello[/whisper] world."  # {W həˈloʊ W} ˈwɝld .
+npx voice-simulator say "<speak>Wait<break time=\"1s\"/>now.</speak>" -o wait.wav
 npx voice-simulator timeline "Hello world, how are you?"   # word and syllable times
 npx voice-simulator visemes "Hello world" -f vrm --fps 30 -o hello.json  # face animation
 npx voice-simulator say "Hello world" -o hello.wav --seed 7
@@ -557,6 +569,10 @@ Synthesis also accepts `accent` (`en-US`, `en-GB`, `en-AU`, `en-IN`),
 preset name, or a `{width, height, depth, rt60}` object in a JSON body), and
 the encoding: `format` (`wav`, `flac`, `aiff`, `au`, `raw`; `/api/stream`
 streams `wav`, `au` and `raw`), `bitDepth` and `float`.
+Every text route takes `markup` (`true` reads inline tags, `false` reads
+`<speak>` as plain text; see [docs/markup.md](docs/markup.md)); the
+marked-up input may be 8000 characters and markup that cannot be read is a
+400 error.
 
 ```bash
 curl -o hello.wav "http://127.0.0.1:8080/api/stream?text=Hello&tier=medium"
