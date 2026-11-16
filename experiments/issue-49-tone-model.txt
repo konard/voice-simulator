@@ -20,4 +20,10 @@ vowels: duration (ms) and f0 (Hz) at 10, 50, 90 %:
   ma˧˥ ma: 230 ms 120/126/140 | 127 ms 126/117/113
   ma˥ ma ma˥: 223 ms 156/156/156 | 118 ms 121/111/105 | 296 ms 129/142/144
 
+planner tests (second vowel):
+  ma˥ ma˥ − ma˥˩ ma˥ at 10 %: 2.759 st (≥ 2), at 95 %: 0.009 st (< 1)
+  mean ma˥ ma − mean ma˥˩ ma: 3.722 st (≥ 3)
+  ma˨˩ ma, 90 % − 10 %: 1.687 st (≥ 1)
+  ma˥ ma ma˥, second / first vowel: 0.530 (≤ 0.65)
+
 TONE_RATES {"level":25,"rise":40,"fall":40,"low":35,"neutral":25}

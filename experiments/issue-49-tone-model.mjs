@@ -8,6 +8,7 @@
 // 3. Neutral tones: f0 and durations of the second syllable.
 import { approachTargets, TONE_RATES } from '../src/articulation/tone-model.js';
 import { planUtterance } from '../src/articulation/plan.js';
+import { sampleState } from '../src/articulation/tract-shape.js';
 import { normalizeHeadConfig } from '../src/head-config.js';
 import { textToIpa } from '../src/g2p/index.js';
 
@@ -107,4 +108,38 @@ for (const ipa of ['ma˥ ma', 'ma˥˩ ma', 'ma˨˩ ma', 'ma˧˥ ma', 'ma˥ ma ma
     .join(' | ');
   console.log(`  ${ipa}: ${line}`);
 }
+
+// 4. The numbers of the planner tests in tests/articulation.test.js.
+const tonal = (ipa) => planUtterance(ipa, { head, language: 'zh' });
+const vowelOf = (plan, index) =>
+  plan.segments.filter((segment) => segment.kind === 'vowel')[index];
+const f0At = (plan, fraction, index = 1) => {
+  const vowel = vowelOf(plan, index);
+  return sampleState(plan, vowel.start + (vowel.end - vowel.start) * fraction)
+    .f0;
+};
+const mean = (plan) =>
+  Array.from({ length: 11 }, (_, k) => f0At(plan, k / 10)).reduce(
+    (sum, value) => sum + value,
+    0
+  ) / 11;
+const span = (vowel) => vowel.end - vowel.start;
+const afterFall = tonal('ma˥˩ ma˥');
+const afterLevel = tonal('ma˥ ma˥');
+const afterLow = tonal('ma˨˩ ma');
+const neutral = tonal('ma˥ ma ma˥');
+console.log('\nplanner tests (second vowel):');
+console.log(
+  `  ma˥ ma˥ − ma˥˩ ma˥ at 10 %: ${st(f0At(afterLevel, 0.1) / f0At(afterFall, 0.1)).toFixed(3)} st (≥ 2), at 95 %: ${st(f0At(afterLevel, 0.95) / f0At(afterFall, 0.95)).toFixed(3)} st (< 1)`
+);
+console.log(
+  `  mean ma˥ ma − mean ma˥˩ ma: ${st(mean(tonal('ma˥ ma')) / mean(tonal('ma˥˩ ma'))).toFixed(3)} st (≥ 3)`
+);
+console.log(
+  `  ma˨˩ ma, 90 % − 10 %: ${st(f0At(afterLow, 0.9) / f0At(afterLow, 0.1)).toFixed(3)} st (≥ 1)`
+);
+console.log(
+  `  ma˥ ma ma˥, second / first vowel: ${(span(vowelOf(neutral, 1)) / span(vowelOf(neutral, 0))).toFixed(3)} (≤ 0.65)`
+);
+
 console.log(`\nTONE_RATES ${JSON.stringify(TONE_RATES)}`);
