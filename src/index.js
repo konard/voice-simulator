@@ -62,6 +62,7 @@ export {
   TRACT_SECTIONS,
 } from './articulation/tract-shape.js';
 export {
+  HEAD_GROUPS,
   HEAD_PARAMETERS,
   DEFAULT_HEAD,
   normalizeHeadConfig,
@@ -359,6 +360,15 @@ export {
   HEAD_PRESET_NAMES,
   presetHeadConfig,
 } from './head-config.js';
+// Voice files (issue 41)
+export {
+  RENAMED_KEYS,
+  VOICE_FORMAT,
+  VOICE_VERSION,
+  loadVoice,
+  saveVoice,
+  voiceSchema,
+} from './voice-file.js';
 export { analyzeVoice } from './analysis/voice-features.js';
 export {
   MATCH_TEXT,

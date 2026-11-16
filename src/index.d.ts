@@ -581,17 +581,61 @@ export declare function noseShape(
 ): { areas: Float64Array; length: number };
 
 // Head configuration
+/** The parameter groups, in the order of the editor and of voice files. */
+export type HeadGroup =
+  | 'anatomy'
+  | 'folds'
+  | 'breathing'
+  | 'articulation'
+  | 'expression'
+  | 'microphone';
+/** Measures of tests/helpers/voice-measures.js (docs/VOICE-PARAMETERS.md). */
+export type VoiceMeasure =
+  | 'duration'
+  | 'rms'
+  | 'f0'
+  | 'f0Range'
+  | 'hnr'
+  | 'h1h2'
+  | 'centroid'
+  | 'f1'
+  | 'f2'
+  | 'f3'
+  | 'bandwidth1'
+  | 'noiseLevel'
+  | 'nasalLevel'
+  | 'reverb';
+export interface HeadParameterEffect {
+  /** The measure of the sound that moves from `min` to `max`. */
+  measure: VoiceMeasure;
+  /** 1: it rises, -1: it falls. */
+  sign: 1 | -1;
+  /** Utterance, tier, options and head values of the check, if not the default. */
+  ipa?: string;
+  tier?: string;
+  options?: Record<string, unknown>;
+  head?: HeadConfig;
+  /** The two values compared, if not `min` and `max`. */
+  values?: readonly [number, number];
+}
 export interface HeadParameter {
   key: string;
   label: string;
-  group: string;
+  group: HeadGroup;
   min: number;
   max: number;
   step: number;
   default: number;
-  unit?: string;
-  description?: string;
+  /** '1' for a plain number, 'x' for a factor. */
+  unit: string;
+  description: string;
+  /** Citation of the default and the range, or `fitted: <experiment>`. */
+  source: string;
+  effect: Readonly<HeadParameterEffect>;
+  /** Shown only with "Show all parameters" in the editor. */
+  advanced: boolean;
 }
+export declare const HEAD_GROUPS: readonly HeadGroup[];
 export declare const HEAD_PARAMETERS: readonly HeadParameter[];
 export declare const DEFAULT_HEAD: Readonly<HeadConfig>;
 export declare function normalizeHeadConfig(config?: HeadConfig): HeadConfig;
@@ -2271,9 +2315,26 @@ export declare function createListener(options: {
 }): { process(value: number): number; tail: number } | null;
 
 // Voice presets and matching (issue 5)
-export type HeadPresetName = 'any' | 'male' | 'female' | 'child';
+export type HeadPresetName =
+  | 'any'
+  | 'male'
+  | 'female'
+  | 'child'
+  | 'child5'
+  | 'teenMale'
+  | 'teenFemale'
+  | 'elderlyMale'
+  | 'elderlyFemale'
+  | 'bass'
+  | 'baritone'
+  | 'tenor'
+  | 'alto'
+  | 'mezzo'
+  | 'soprano';
 export interface HeadPreset {
   label: string;
+  /** The preset a derived speaker type starts from (issue 41). */
+  base?: 'male' | 'female' | 'child';
   /** `[small, large, spread]` per parameter (pitch spread in semitones). */
   ranges: Readonly<Record<string, readonly [number, number, number]>>;
 }
@@ -2286,6 +2347,55 @@ export declare function presetHeadConfig(
   name: Exclude<HeadPresetName, 'any'>,
   size?: number
 ): HeadConfig;
+
+// Voice files (issue 41)
+/** A voice file: a preset plus the head values that differ from it. */
+export interface VoiceFile {
+  format: 'voice-simulator/voice';
+  version: number;
+  name?: string;
+  description?: string;
+  preset?: Exclude<HeadPresetName, 'any'>;
+  anatomy?: HeadConfig;
+  folds?: HeadConfig;
+  breathing?: HeadConfig;
+  articulation?: HeadConfig;
+  expression?: HeadConfig;
+  microphone?: HeadConfig;
+}
+export interface Voice {
+  name: string | null;
+  description: string | null;
+  preset: Exclude<HeadPresetName, 'any'> | null;
+  /** Complete: the values the file leaves out come from the preset or the defaults. */
+  head: HeadConfig;
+  /** The problems clamped or skipped by a lenient load. */
+  warnings: string[];
+}
+export declare const VOICE_FORMAT: 'voice-simulator/voice';
+export declare const VOICE_VERSION: number;
+/** Old parameter names and the names that replaced them. */
+export declare const RENAMED_KEYS: Readonly<Record<string, string>>;
+/**
+ * Read a voice file (object or JSON text), a flat head object or a
+ * `key=value&...` fragment. Strict (default) throws one Error with one
+ * line per problem (also in `error.problems`).
+ */
+export declare function loadVoice(
+  input: VoiceFile | HeadConfig | string,
+  options?: { strict?: boolean }
+): Voice;
+/** A voice file object: only the values that differ from the preset, or all with `full`. */
+export declare function saveVoice(
+  voice:
+    | (Partial<Pick<Voice, 'name' | 'description' | 'preset'>> & {
+        head: HeadConfig;
+      })
+    | HeadConfig,
+  options?: { full?: boolean }
+): VoiceFile;
+/** JSON Schema (draft 2020-12) of a voice file (schemas/voice.schema.json). */
+export declare function voiceSchema(): Record<string, unknown>;
 export interface VoiceFeatures {
   duration: number;
   /** Seconds above the silence threshold. */

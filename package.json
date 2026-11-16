@@ -10,6 +10,7 @@
   },
   "files": [
     "bin/",
+    "schemas/",
     "src/",
     "CHANGELOG.md",
     "LICENSE",
