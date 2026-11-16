@@ -434,8 +434,9 @@ jobs:
     runs-on: ubuntu-24.04
     # Typical run: about 1min (toolchain install, then a few seconds per
     # cargo step for three small crates). Each step owns a budget below;
-    # this cap is only the backstop behind them.
-    timeout-minutes: 15
+    # this cap is only the backstop behind them (17min: 70 % of it covers
+    # the budgets, the package check included).
+    timeout-minutes: 17
     concurrency:
       group: check-${{ github.workflow }}-${{ github.ref }}-rust
       cancel-in-progress: true
@@ -526,7 +527,11 @@ jobs:
         # tests/rust-fdtd.test.js renders 'Hello.' on the 3D tier `high`
         # three times and the first 50 ms in a 40 cm room (about 17s on a
         # developer machine, issue 23), hence the larger budget.
-        run: bash scripts/run-with-budget-warning.sh 90 "Rust parity tests" node --test tests/rust-parity.test.js tests/rust-waveguide.test.js tests/rust-fdtd.test.js tests/rust-render-job.test.js tests/engine-layout.test.js
+        run: bash scripts/run-with-budget-warning.sh 90 "Rust parity tests" node --test tests/rust-parity.test.js tests/rust-waveguide.test.js tests/rust-fdtd.test.js tests/rust-render-job.test.js tests/engine-layout.test.js tests/engine.test.js tests/engine-worker.test.js tests/engine-size.test.js
+
+      # The publishing jobs run the same check after they download the file.
+      - name: Check the package lists the engine
+        run: bash scripts/run-with-budget-warning.sh 30 "package file check" node scripts/check-package-files.mjs
 
       - name: Upload the WebAssembly engine
         uses: ./.github/actions/artifact-transport
@@ -823,6 +828,11 @@ jobs:
           pattern: voice-simulator-wasm
           path: src/engine
 
+      # `npm pack --dry-run` lists src/engine/voice-simulator.wasm, or the
+      # release stops before it publishes a package without the engine.
+      - name: Check the package lists the engine
+        run: bash scripts/run-with-budget-warning.sh 60 "package file check" node scripts/check-package-files.mjs
+
       - name: Publish to npm
         # Run if version was committed, if a previous attempt already committed (for re-runs),
         # or if check-release-needed detected an unpublished version (self-healing, issue #36)
@@ -959,6 +969,11 @@ jobs:
           mode: download
           pattern: voice-simulator-wasm
           path: src/engine
+
+      # `npm pack --dry-run` lists src/engine/voice-simulator.wasm, or the
+      # release stops before it publishes a package without the engine.
+      - name: Check the package lists the engine
+        run: bash scripts/run-with-budget-warning.sh 60 "package file check" node scripts/check-package-files.mjs
 
       - name: Publish to npm
         # Run if version was committed OR if a previous attempt already committed (for re-runs)

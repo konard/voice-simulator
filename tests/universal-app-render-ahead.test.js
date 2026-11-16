@@ -178,7 +178,8 @@ describe('app defaults', () => {
       'examples/universal-app/src/engine/use-simulator.js',
       'utf8'
     );
-    expect(simulator).toContain('{ gpu: allowGpu }');
+    expect(simulator).toContain('gpu: allowGpu,');
+    expect(simulator).toContain('engine: engineName,');
     expect(app).toContain('renderingNote(status.rendering, t)');
   });
 });

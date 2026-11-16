@@ -140,8 +140,19 @@ export {
   WALL_SOURCE,
   strouhalFrequency,
 } from './acoustics/voice.js';
-// The waveguide renderer on the Rust engine, opt-in (issue 22)
-export { loadEngineModule, ENGINE_ABI_VERSION } from './engine/wasm-loader.js';
+// The waveguide renderer on the Rust engine (issue 22)
+export {
+  loadEngineModule,
+  loadEngineModuleSync,
+  ENGINE_ABI_VERSION,
+} from './engine/wasm-loader.js';
+// The engine choice: Rust by default, JavaScript as the fallback (issue 25)
+export {
+  createEngine,
+  getEngine,
+  Engine,
+  ENGINE_NAMES,
+} from './engine/index.js';
 export {
   RustVoiceRenderer,
   renderPlanRust,
@@ -249,6 +260,21 @@ export {
   rms,
   spectralPeaks,
 } from './acoustics/analysis.js';
+// Recognition front end (issue 58): analysis frames of a stream.
+export { createFft } from './recognition/fft.js';
+export {
+  lpcAutocorrelation,
+  lpcBurg,
+  lpcCovariance,
+  lpcLevel,
+  predictorFromReflection,
+} from './recognition/lpc.js';
+export {
+  FRONTEND_DEFAULTS,
+  analyzeFrames,
+  createFrameAnalyzer,
+  workingRate,
+} from './recognition/frontend.js';
 export { encodeWav, decodeWav, wavHeader } from './audio/wav.js';
 export {
   headLandmarks,
@@ -312,7 +338,11 @@ export {
   decodeRaw,
   formatFromFileName,
 } from './audio/formats.js';
-export { createStreamResampler, resample } from './audio/resample.js';
+export {
+  createResampler,
+  createStreamResampler,
+  resample,
+} from './audio/resample.js';
 
 // Anatomy (issue 5): teeth, tongue, hard and soft palate, piriform fossae.
 export {

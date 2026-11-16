@@ -17,12 +17,18 @@
  * platform to tolerate.
  */
 
+/* global URL */
+
 /** The `vs_abi_version()` this loader speaks; see docs/RUST-ENGINE.md. */
 export const ENGINE_ABI_VERSION = 3;
 
-/** Where the engine lives next to this file. */
+/**
+ * Where the engine lives next to this file. Written as the literal
+ * `new URL('./file', import.meta.url)` so bundlers (Vite, webpack, Rollup)
+ * see the asset, copy it to their output and rewrite the URL.
+ */
 export function defaultEngineUrl() {
-  return new globalThis.URL('./voice-simulator.wasm', import.meta.url);
+  return new URL('./voice-simulator.wasm', import.meta.url);
 }
 
 /** Where the SIMD build of the engine lives next to this file. */
@@ -162,6 +168,11 @@ async function loadOne(source) {
   } catch {
     return null;
   }
+  return engineOf(instance);
+}
+
+/** The engine of an instance; throws on another interface version. */
+function engineOf(instance) {
   const { exports } = instance;
   const abiVersion =
     typeof exports.vs_abi_version === 'function'
@@ -176,6 +187,68 @@ async function loadOne(source) {
   // An engine without `vs_simd` (older or minimal builds) is scalar.
   const simd = typeof exports.vs_simd === 'function' && exports.vs_simd() === 1;
   return { exports, memory: exports.memory, abiVersion, simd };
+}
+
+/**
+ * loadEngineModule without a promise, for `getEngine` of ./index.js: it
+ * reads a `file:` URL with `readFileSync` and compiles with
+ * `new WebAssembly.Module`. Only where `process.getBuiltinModule` exists
+ * (Node.js, Bun, Deno); elsewhere (browsers) it returns undefined, which
+ * means "cannot tell without awaiting", unlike null ("no engine").
+ * @param {Parameters<typeof loadEngineModule>[0]} [source]
+ * @param {Parameters<typeof loadEngineModule>[1]} [options]
+ * @returns {Awaited<ReturnType<typeof loadEngineModule>> | undefined}
+ */
+export function loadEngineModuleSync(source, options = {}) {
+  const getBuiltinModule = globalThis.process?.getBuiltinModule;
+  if (typeof getBuiltinModule !== 'function') {
+    return undefined;
+  }
+  const simd = simdOption(options);
+  const one = (from) => loadOneSync(from, getBuiltinModule('node:fs'));
+  if (source !== undefined && source !== null) {
+    return matching(one(source), simd);
+  }
+  if (simd !== false) {
+    const engine = matching(one(defaultSimdEngineUrl()), true);
+    if (engine || simd === true) {
+      return engine;
+    }
+  }
+  return matching(one(defaultEngineUrl()), false);
+}
+
+/** loadOne without a promise; only `file:` URLs are read. */
+function loadOneSync(source, fs) {
+  const wasm = globalThis.WebAssembly;
+  if (typeof wasm !== 'object' || wasm === null) {
+    return null;
+  }
+  let module;
+  try {
+    if (source instanceof wasm.Module) {
+      module = source;
+    } else {
+      let bytes = source;
+      if (!isBufferSource(source)) {
+        const url = new globalThis.URL(String(source), import.meta.url);
+        if (url.protocol !== 'file:') {
+          return null;
+        }
+        bytes = fs.readFileSync(url);
+      }
+      module = new wasm.Module(bytes);
+    }
+  } catch {
+    return null;
+  }
+  let instance;
+  try {
+    instance = new wasm.Instance(module, {});
+  } catch {
+    return null;
+  }
+  return engineOf(instance);
 }
 
 /**

@@ -573,7 +573,13 @@ export function App() {
         changeSeed(seed || createSeed(), next);
       },
     }),
-    h(AcousticsSettings, { acoustics, head, t, onChange: setAcoustics }),
+    h(AcousticsSettings, {
+      acoustics,
+      head,
+      engine: simulator.status.engine,
+      t,
+      onChange: setAcoustics,
+    }),
     h(VoiceMatch, { text: speech.text, lang: speech.lang, t, onHead: editHead })
   );
 }

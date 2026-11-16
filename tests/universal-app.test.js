@@ -49,6 +49,7 @@ describe('universal React example app', () => {
     const appSource = readText(appSourcePath);
     const engineSource = readText(`${exampleRoot}/src/engine/voice-engine.js`);
     const workerSource = readText(`${exampleRoot}/src/engine/synth-worker.js`);
+    const protocolSource = readText('src/engine/worker-protocol.js');
     const viewerSource = readText(`${exampleRoot}/src/viewer/head-viewer.js`);
 
     expect(appSource).toContain("from '../../../src/index.js'");
@@ -57,8 +58,10 @@ describe('universal React example app', () => {
     expect(appSource).toContain('textToIpa(text, { lang, accent })');
     expect(appSource).toContain('randomHeadConfig(');
     expect(engineSource).toContain('LodGovernor');
-    expect(workerSource).toContain('VoiceRenderer');
-    expect(workerSource).toContain('prepareUtterance');
+    // The app runs the library's synthesis worker (voice-simulator/worker).
+    expect(workerSource).toBe("import '../../../../src/engine/worker.js';\n");
+    expect(protocolSource).toContain('createRenderer');
+    expect(protocolSource).toContain('prepareUtterance');
     expect(viewerSource).toContain("from 'three'");
     expect(viewerSource).toContain('tractShape(state, this.head)');
   });
