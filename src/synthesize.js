@@ -13,6 +13,8 @@ import { utteranceTimeline } from './articulation/timeline.js';
 import { textToIpa } from './g2p/index.js';
 import { parseIpa } from './ipa/parse.js';
 import { normalizeHeadConfig, randomHeadConfig } from './head-config.js';
+import { accentSettings } from './accent/index.js';
+import { offsetHead } from './accent/head.js';
 import { AUDIO_TIERS, DEFAULT_AUDIO_TIER } from './perf/lod.js';
 
 /**
@@ -41,12 +43,28 @@ function resolveHead(head, seed, preset) {
 }
 
 /**
- * Prepare everything needed to render: IPA, plan and renderer options.
- * @param {string} text Text (or IPA when `options.ipa` is true).
- * @param {object} [options]
+ * The prosody and articulation of the accent of a transcription (null for
+ * IPA input of no known language). The accent option of IPA input only
+ * changes the head and the timing: its words are not rewritten.
  */
-export function prepareUtterance(text, options = {}) {
-  const head = resolveHead(options.head, options.seed, options.preset);
+function transcriptionAccent(transcription, options) {
+  const settings = accentSettings(
+    transcription.lang,
+    options.accent ?? transcription.accent ?? undefined,
+    { level: options.accentLevel, lenient: options.ipa !== true }
+  );
+  return settings
+    ? {
+        code: settings.code,
+        level: settings.level,
+        prosody: settings.prosody,
+        articulation: settings.articulation,
+      }
+    : null;
+}
+
+/** The transcription of a text (or IPA) and its accent. */
+function transcribe(text, options) {
   const transcription = options.ipa
     ? {
         lang: options.lang ?? 'ipa',
@@ -58,13 +76,35 @@ export function prepareUtterance(text, options = {}) {
     : textToIpa(text, {
         lang: options.lang,
         accent: options.accent,
+        accentLevel: options.accentLevel,
         weakForms: options.weakForms,
         lexicon: options.lexicon,
         markup: options.markup,
       });
+  const accent = transcriptionAccent(transcription, options);
+  if (accent && options.ipa) {
+    Object.assign(transcription, {
+      accent: accent.code,
+      accentLevel: accent.level,
+    });
+  }
+  return { transcription, accent };
+}
+
+/**
+ * Prepare everything needed to render: IPA, plan and renderer options.
+ * @param {string} text Text (or IPA when `options.ipa` is true).
+ * @param {object} [options] `accent` and `accentLevel` as in textToIpa;
+ *   the accent's articulation offsets are added to the head.
+ */
+export function prepareUtterance(text, options = {}) {
+  const baseHead = resolveHead(options.head, options.seed, options.preset);
+  const { transcription, accent } = transcribe(text, options);
+  const head = offsetHead(baseHead, accent?.articulation);
   const plan = planUtterance(transcription.ipa, {
-    head,
+    head: baseHead,
     language: transcription.lang,
+    accent: accent ?? undefined,
     modes: transcription.modes,
   });
   const timeline = utteranceTimeline(plan, {
@@ -114,8 +154,8 @@ export function prepareUtterance(text, options = {}) {
  * mode spans (`modes`, IPA word indexes; `plan.modes` in seconds) and the
  * markup `warnings`. Malformed SSML throws `MarkupError`.
  * @param {string} text
- * @param {{lang?: string, accent?: string, ipa?: boolean, markup?: boolean, head?: object|'random', seed?: string|number, preset?: string, tier?: string|number, solver?: string, source?: 'lf'|'folds', interaction?: boolean, subglottal?: boolean, sections?: number, dx?: number, sampleRate?: number, blockSize?: number, bandLimit?: number, output?: 'flow'|'microphone', microphone?: {distance?: number, azimuth?: number, elevation?: number, compensate?: boolean}, room?: string|object, enclosure?: {width: number, height: number, depth: number, absorption?: number, center?: number[]}, teeth?: boolean, piriform?: boolean, vallecula?: boolean}} [options]
- * @returns {{lang: string, accent: string|null, ipa: string, words: object[], modes: {from: number, to: number, mode: object}[], warnings: {position: number, message: string}[], head: object, plan: object, timeline: object, sampleRate: number, samples: Float32Array, duration: number}}
+ * @param {{lang?: string, accent?: string|object, accentLevel?: number, ipa?: boolean, markup?: boolean, head?: object|'random', seed?: string|number, preset?: string, tier?: string|number, solver?: string, source?: 'lf'|'folds', interaction?: boolean, subglottal?: boolean, sections?: number, dx?: number, sampleRate?: number, blockSize?: number, bandLimit?: number, output?: 'flow'|'microphone', microphone?: {distance?: number, azimuth?: number, elevation?: number, compensate?: boolean}, room?: string|object, enclosure?: {width: number, height: number, depth: number, absorption?: number, center?: number[]}, teeth?: boolean, piriform?: boolean, vallecula?: boolean}} [options]
+ * @returns {{lang: string, accent: string|null, accentLevel: number|null, ipa: string, words: object[], modes: {from: number, to: number, mode: object}[], warnings: {position: number, message: string}[], head: object, plan: object, timeline: object, sampleRate: number, samples: Float32Array, duration: number}}
  */
 export function synthesize(text, options = {}) {
   const prepared = prepareUtterance(text, options);
@@ -143,6 +183,7 @@ function result(prepared, samples) {
   return {
     lang: prepared.lang,
     accent: prepared.accent ?? null,
+    accentLevel: prepared.accentLevel ?? null,
     ipa: prepared.ipa,
     words: prepared.words,
     modes: prepared.modes,

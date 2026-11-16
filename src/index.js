@@ -441,6 +441,18 @@ export {
   isNonRhotic,
 } from './g2p/accents.js';
 export {
+  ACCENT_FORMAT,
+  ACCENT_VERSION,
+  MAX_ACCENT_RULES,
+  accentSettings,
+  applyAccent,
+  explainAccent,
+  foreignAccent,
+  getAccent,
+  loadAccent,
+} from './accent/index.js';
+export { PROFILES as ACCENT_PROFILES } from './accent/foreign.js';
+export {
   BOUNDARIES,
   CONTOURS,
   boundaryOf,
