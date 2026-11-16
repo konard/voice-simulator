@@ -70,7 +70,7 @@ Tests that need more than about 10 seconds or a download do not belong in
 Slow tests (full 3D renders, quality reports against recordings, recognition
 of datasets, round trips, voice copying) live in `tests/heavy/` and are named
 `<suite>-<topic>.test.js`, where the suite is `quality`, `recognition`,
-`roundtrip`, `copy`, `performance` or `gpu`. `npm test`, `bun test` and
+`roundtrip`, `copy`, `performance`, `gpu` or `lexicon`. `npm test`, `bun test` and
 `deno test` never run them; [tests/heavy/README.md](../tests/heavy/README.md)
 describes the folder and its helpers.
 

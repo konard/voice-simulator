@@ -7,7 +7,7 @@
  *   node scripts/run-heavy.mjs [--suite <name>] [--limit <n>] [--out <dir>] [--dir <dir>]
  *
  *   --suite  all (default), quality, recognition, roundtrip, copy,
- *            performance or gpu; selects <dir>/<suite>-*.test.js.
+ *            performance, gpu or lexicon; selects <dir>/<suite>-*.test.js.
  *   --limit  positive integer: the largest number of items (utterances,
  *            files) each test may process; passed on as HEAVY_LIMIT.
  *   --out    folder for reports, default reports/heavy; passed on as
@@ -50,6 +50,7 @@ export const SUITES = Object.freeze([
   'copy',
   'performance',
   'gpu',
+  'lexicon',
 ]);
 
 /** One hour per test: the heavy tests render and recognise whole datasets. */

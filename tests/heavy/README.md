@@ -29,6 +29,7 @@ Files are named `<suite>-<topic>.test.js`, for example
 | `copy`        | copy a voice from recordings                                  |
 | `performance` | measure render time and the real-time factor                  |
 | `gpu`         | run the WebGPU solver                                         |
+| `lexicon`     | measure how much of real text the pronunciation lexicons read |
 
 `--suite all` (the default) runs every `*.test.js` file of this folder.
 
@@ -69,3 +70,4 @@ be kept is copied to `docs/reports/` by the issue that owns it.
 | `quality-baseline.test.js`           | scores every tier against the golden set with `scripts/quality-report.mjs` (one test per tier) and writes `baseline-quality.md` / `.json`, copied to `docs/reports/` by issue 19                                                                                                                                                                                           |
 | `quality-dynamics-fit.test.js`       | fits the time constants, leads and coarticulation resistance of the articulators to the golden set with `experiments/issue-11-fit-dynamics.mjs` and writes `dynamics-fit.md` / `.json`; the committed result is `experiments/issue-11-fit-dynamics.txt` (issue 38)                                                                                                         |
 | `gpu-solver.test.js`                 | compares the WebGPU 3D solver with the CPU kernel over 20 000 steps and the word `həˈloʊ` at tiers `high` and `ultra`, and writes `gpu-solver.md` / `.json` with the adapter, copied to `docs/reports/` by issue 30                                                                                                                                                        |
+| `lexicon-coverage.test.js`           | measures the share of running words of `fleurs-en` and `fleurs-hi` read from the lexicons (source not `rules`) and the share of syllables of every tenth AISHELL-3 line (`aishell3-train-index`, not mined) read as written, against lower bounds, and writes `lexicon-coverage.md` / `.json` (issue 47); a text that is not fetched is skipped                            |
