@@ -108,10 +108,10 @@ pub fn kernel_array(handle: i32, which: u32) -> u32 {
 /// Returns 0, [`error::BAD_HANDLE`], or [`error::BAD_ARGUMENT`] for another
 /// form or when a link names a missing cell.
 pub fn kernel_steps(handle: i32, count: u32, form: u32) -> i32 {
-    let step = match form {
+    let step: fn(&mut Grid) = match form {
         0 => Grid::step_scatter,
         1 => Grid::step_gather,
-        2 => Grid::step,
+        2 => |grid| grid.step(0),
         _ => return error::BAD_ARGUMENT,
     };
     with_kernel(handle, error::BAD_HANDLE, |kernel| {
@@ -176,9 +176,10 @@ thread_local! {
 
 /// Values of the options array of [`vs_fdtd_solver_new`]: output (0 flow,
 /// 1 microphone), spherical boundary (0 or 1), the receiver target x, y
-/// and z (cm), `wallLoss`, `nasalLoss`, `glottalChink` (mm²) and
-/// `vocalTractLength` (cm).
-pub const SOLVER_OPTIONS: usize = 9;
+/// and z (cm), `wallLoss`, `nasalLoss`, `glottalChink` (mm²),
+/// `vocalTractLength` (cm) and `lengthScale` (the `lengthScale` option of
+/// `Fdtd3d`).
+pub const SOLVER_OPTIONS: usize = 10;
 
 /// Values per step of [`solver_steps`]: the arguments of [`Solver::step`].
 pub const SOLVER_STEP_INPUTS: usize = 4;
@@ -204,6 +205,7 @@ pub fn solver_new(values: &[f64], model: &[u8]) -> i32 {
         nasal_loss: values[6],
         glottal_chink: values[7],
         vocal_tract_length: values[8],
+        length_scale: values[9],
     };
     let Ok(model) = Model::unpack(model) else {
         return error::BAD_ARGUMENT;

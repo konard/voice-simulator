@@ -178,7 +178,7 @@ impl Grid {
     /// One step in the scatter form of `#stepJs`, storing the flux of
     /// every link in `flux` as the gather form does.
     pub fn step_scatter(&mut self) {
-        self.scatter::<true>();
+        self.scatter::<true>(0);
     }
 
     /// The step of the solver: the scatter form of `#stepJs` without
@@ -187,20 +187,23 @@ impl Grid {
     /// The `simd128` build runs the same loop with two links and two cells
     /// per vector (`kernel_simd.rs`). The solver uses it rather than
     /// [`Grid::step_gather`], which takes more time (see "Kernel" in
-    /// `docs/RUST-ENGINE.md`).
-    pub fn step(&mut self) {
+    /// `docs/RUST-ENGINE.md`). The links before `from` are not stepped
+    /// (`kernel.step(from)` of `src/acoustics/fdtd-kernel.js`): the solver
+    /// passes the run of closed links at the start, which carry no flow.
+    pub fn step(&mut self, from: usize) {
         #[cfg(all(target_arch = "wasm32", target_feature = "simd128"))]
         {
-            super::kernel_simd::step_scatter(self);
+            super::kernel_simd::step_scatter(self, from);
         }
         #[cfg(not(all(target_arch = "wasm32", target_feature = "simd128")))]
         {
-            self.scatter::<false>();
+            self.scatter::<false>(from);
         }
     }
 
-    /// The scatter loop; `FLUX` stores the flux of every link.
-    fn scatter<const FLUX: bool>(&mut self) {
+    /// The scatter loop from link `from` on; `FLUX` stores the flux of
+    /// every link.
+    fn scatter<const FLUX: bool>(&mut self, from: usize) {
         let Self {
             link_a,
             link_b,
@@ -216,14 +219,16 @@ impl Grid {
         // two cell indices of a link, as `#stepJs` reads them.
         let cells = pressure.len();
         let divergence = &mut divergence[..cells];
-        let links = link_a
+        let from = from.min(link_a.len());
+        let links = link_a[from..]
             .iter()
-            .zip(link_b.iter())
-            .zip(velocity.iter_mut())
-            .zip(damping.iter())
-            .zip(conductance.iter())
+            .zip(link_b[from..].iter())
+            .zip(velocity[from..].iter_mut())
+            .zip(damping[from..].iter())
+            .zip(conductance[from..].iter())
             .enumerate();
-        for (link, ((((&a, &b), v), &k), &c)) in links {
+        for (offset, ((((&a, &b), v), &k), &c)) in links {
+            let link = from + offset;
             let a = a as usize;
             let b = b as usize;
             let u = k * (*v - COURANT * (pressure[b] - pressure[a]));
@@ -515,7 +520,7 @@ mod tests {
             let mut step = scatter.clone();
             for _ in 0..200 {
                 scatter.step_scatter();
-                step.step();
+                step.step(0);
             }
             assert!(scatter.pressure.iter().any(|&value| value != 0.0));
             assert!(step.flux.iter().all(|&value| value == 0.0));

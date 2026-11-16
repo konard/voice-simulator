@@ -14,7 +14,8 @@
  * SOLVER_CODES[solver]; the 3D fields (FDTD_OUTPUT to MICROPHONE_Z) come
  * from `fdtdListening` (src/engine/pack-model.js) and are 0 for the
  * waveguide. BREATH_GAIN to RADIATION_BAFFLE are the head's advanced
- * source and loss values (issue 41).
+ * source and loss values (issue 41). LENGTH_SCALE is the `lengthScale` of
+ * the 3D solver (where a shape's length puts the glottis, issue 40).
  */
 export const RENDERER_CONFIG = Object.freeze({
   SAMPLE_RATE: 0,
@@ -69,7 +70,8 @@ export const RENDERER_CONFIG = Object.freeze({
   TRANSIENT_GAIN: 49,
   LOSS_SHAPE: 50,
   RADIATION_BAFFLE: 51,
-  HEADER: 52,
+  LENGTH_SCALE: 52,
+  HEADER: 53,
 });
 
 /** Values of RENDERER_CONFIG.SOLVER and FDTD_OUTPUT. */

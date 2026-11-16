@@ -39,6 +39,7 @@ import { vowelTarget } from '../src/articulation/phones.js';
 import { noseShape, tractShape } from '../src/articulation/tract-shape.js';
 import { frameStride, writeFrame } from '../src/engine/layout.js';
 import {
+  MODEL_HEADER,
   fdtdListening,
   modelArrays,
   modelHeader,
@@ -74,7 +75,7 @@ const KERNEL = Object.freeze({
 /** Samples of the render in a room: 50 ms at 48 kHz. */
 const ENCLOSURE_SAMPLES = 2400;
 /** Values of the options of vs_fdtd_solver_new. */
-const SOLVER_OPTIONS = 9;
+const SOLVER_OPTIONS = 10;
 
 /** Why the SIMD test cannot run, or null; decided before registering it. */
 async function simdProblem() {
@@ -196,7 +197,7 @@ function release(engine, ...blocks) {
 function sectionEnds(buffer, arrays) {
   const view = new DataView(buffer);
   const align = (offset) => Math.ceil(offset / 8) * 8;
-  let offset = align(4 * 12);
+  let offset = align(4 * MODEL_HEADER.WORDS);
   return arrays.map(([type, values]) => {
     const size = type === 'f64' ? 8 : 4;
     const read = (index) =>
@@ -250,6 +251,8 @@ function checkRepack(engine, model) {
     expect(counts.TEETH_CELLS).toBe(header.teethCells);
     expect(counts.OPENING_ROWS).toBe(header.rows);
     expect(counts.FLAGS).toBe(header.flags);
+    expect(counts.PLACES).toBe(header.places);
+    expect(counts.POUCH_LINKS).toBe(header.pouchLinks);
     const ends = sectionEnds(repacked, arrays);
     arrays.forEach(([, values], index) => {
       const expected =
@@ -279,6 +282,8 @@ function rustSolverOutputs(engine, model, shape, nose) {
     DEFAULT_HEAD.nasalLoss,
     DEFAULT_HEAD.glottalChink,
     DEFAULT_HEAD.vocalTractLength,
+    // lengthScale: the Fdtd3d of 'solver matches' has the default.
+    1,
   ]);
   const frame = new Float64Array(frameStride(shape.areas.length));
   writeFrame(frame, 0, shape, DEFAULT_HEAD.lungPressure);
@@ -416,7 +421,14 @@ describe('the 3D FDTD solver in Rust (issue 23)', () => {
     const nose = noseShape(DEFAULT_HEAD).areas;
     const js = new Fdtd3d({ model, head: DEFAULT_HEAD });
     js.setNose(nose);
-    js.setShape(shape.areas, shape.velumArea, shape.velumIndex, shape.teeth);
+    // With the shape, so its length places the glottis as the frame's does.
+    js.setShape(
+      shape.areas,
+      shape.velumArea,
+      shape.velumIndex,
+      shape.teeth,
+      shape
+    );
     const expected = new Float64Array(STEPS);
     for (let step = 0; step < STEPS; step++) {
       expected[step] = js.step(step === 0 ? 1 : 0, 0, 0);

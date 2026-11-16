@@ -36,6 +36,9 @@ pub const NOISE_GAIN: f64 = 1.5;
 pub const SPHERICAL_MICROPHONE_GAIN: f64 = 4.2;
 /// Section count of the noise position before the first shape.
 const DEFAULT_SECTIONS: f64 = 44.0;
+/// Cells past the middle between two places of the glottis that the
+/// target place must move before the source plane follows it.
+pub const GLOTTIS_HYSTERESIS: f64 = 0.15;
 
 /// `OPEN_FACE_NORMALS` of voxel-model.js, by bit of the open mask (the
 /// signs of the zeros as JavaScript computes them).
@@ -75,14 +78,40 @@ pub struct FdtdOptions {
     pub glottal_chink: f64,
     /// `head.vocalTractLength` (cm).
     pub vocal_tract_length: f64,
+    /// The `lengthScale` option: the tract length of a shape over this is
+    /// the length the source plane leaves (`VOWEL_LENGTH_SCALE_3D` of
+    /// `src/articulation/vowel-space.js` in a render).
+    pub length_scale: f64,
 }
 
-/// Section span of every tube link for the area counts `counts`.
+/// Section span of every tube link for the area counts `counts` and the
+/// place `rise` of the glottis.
 #[derive(Clone, Debug, PartialEq)]
 struct Spans {
     counts: [usize; 2],
+    rise: i64,
     from: Vec<i64>,
     to: Vec<i64>,
+}
+
+/// One place of the source plane (`glottisPlaces[i]`).
+#[derive(Clone, Debug, PartialEq)]
+struct GlottisPlace {
+    /// Arc from the rest glottis (cm).
+    arc: f64,
+    /// Tract cells of the glottis termination there.
+    source_cells: Vec<usize>,
+}
+
+/// The pouch openings at one place of the glottis (`pouchPlaces[i]`).
+#[derive(Clone, Debug, PartialEq)]
+struct PouchPlace {
+    /// Opening links that carry flow there (`links` of the JavaScript
+    /// place, a `Set`; a link may repeat here).
+    links: Vec<usize>,
+    /// The tract cells at those openings and the least fill they hold,
+    /// in the order of the JavaScript `Map`.
+    floors: Vec<(usize, f64)>,
 }
 
 /// The grid arrays of the model: with the spherical boundary, one more
@@ -259,6 +288,7 @@ pub struct Fdtd3d {
     wall_loss: f64,
     nasal_loss: f64,
     glottis_admittance: f64,
+    length_scale: f64,
     cell_kind: Vec<u8>,
     cell_arc: Vec<f64>,
     fill: Vec<f64>,
@@ -276,9 +306,26 @@ pub struct Fdtd3d {
     output_links: Vec<usize>,
     output_signs: Vec<f64>,
     velum_links: Vec<usize>,
-    source_cells: Vec<usize>,
-    opening_floors: Vec<(usize, f64)>,
+    /// Whole cells the glottis may move up or down from its rest place.
+    glottis_travel: i64,
+    /// Places of the source plane, from `-glottis_travel` cells; the one
+    /// of [`Self::place`] holds the source cells (`sourceCells`).
+    glottis_places: Vec<GlottisPlace>,
+    /// Tract cells that a place of the glottis may close.
+    larynx_cells: Vec<usize>,
+    /// Place of the source plane in cells from the rest glottis.
+    rise: i64,
+    /// Whether a shape length has placed the glottis yet.
+    placed: bool,
+    sinus_openings: Vec<usize>,
+    shut: Vec<bool>,
+    /// Pouch openings of every place; the one of [`Self::place`] holds the
+    /// floors (`openingFloors`).
+    pouch_places: Vec<PouchPlace>,
+    /// First link of the step loop: the links before it are closed.
+    active_from: usize,
     admittance: Vec<f64>,
+    base_admittance: Vec<f64>,
     microphone: usize,
     microphone_gain: f64,
     noise_arc: f64,
@@ -297,9 +344,10 @@ pub struct Fdtd3d {
     /// the opening table, the threshold that the search of `#binScale`
     /// computes again and again; the same operations, so the same bits.
     bin_filled: Vec<f64>,
-    /// The last base and result of the damping `pow` of every link: the
-    /// exponent is fixed, so the same base gives the same bits.
+    /// The last base and result of the damping `pow` of every link for
+    /// the exponent `damping_exponent`: the same base gives the same bits.
     damping_cache: Vec<(f64, f64)>,
+    damping_exponent: f64,
 }
 
 impl Fdtd3d {
@@ -348,6 +396,7 @@ impl Fdtd3d {
             wall_loss: options.wall_loss,
             nasal_loss: options.nasal_loss,
             glottis_admittance: (1.0 - reflection) / (1.0 + reflection),
+            length_scale: options.length_scale,
             fill: vec![1.0; cell_count],
             cell_area: vec![0.0; cell_count],
             effective: envelope.clone(),
@@ -363,9 +412,17 @@ impl Fdtd3d {
             output_links: Vec::new(),
             output_signs: Vec::new(),
             velum_links: Vec::new(),
-            source_cells: Vec::new(),
-            opening_floors: Vec::new(),
+            glottis_travel: 0,
+            glottis_places: Vec::new(),
+            larynx_cells: Vec::new(),
+            rise: 0,
+            placed: false,
+            sinus_openings: Vec::new(),
+            shut: vec![false; link_count],
+            pouch_places: Vec::new(),
+            active_from: 0,
             admittance: vec![0.0; cell_count],
+            base_admittance: Vec::new(),
             microphone,
             microphone_gain: 1.0,
             noise_arc: -1.0,
@@ -382,6 +439,7 @@ impl Fdtd3d {
             length: 0.0,
             bin_filled: Vec::new(),
             damping_cache: vec![(f64::NAN, f64::NAN); link_count],
+            damping_exponent: f64::NAN,
             cell_kind: grid_model.kind.clone(),
             cell_arc: grid_model.arc.clone(),
             grid,
@@ -422,7 +480,7 @@ impl Fdtd3d {
     }
 
     /// The rest of `#allocate` after the arrays: link and cell lists, the
-    /// source cells and the sinus fills.
+    /// places of the glottis and of the pouch openings, the closed links.
     fn allocate(&mut self) {
         self.index_links();
         for link in 0..self.link_kind.len() {
@@ -444,17 +502,160 @@ impl Fdtd3d {
                 }
             })
             .collect();
-        for index in 0..self.model.cells() {
-            if self.model.kind[index] == CELL_TRACT && self.model.arc[index] <= 0.75 * self.dx {
-                self.source_cells.push(index);
-            }
-        }
-        self.fill_sinuses();
+        self.place_glottis();
+        self.place_pouches();
+        self.close_links();
     }
 
-    /// `#fillSinuses`.
-    fn fill_sinuses(&mut self) {
+    /// `#placeGlottis`: the source cells of every whole-cell place of the
+    /// source plane, from as low as the larynx extension reaches to as far
+    /// above, and the cells a place may close. The plane starts at rest.
+    fn place_glottis(&mut self) {
+        let dx = self.dx;
+        let travel = max(0.0, floor(self.model.larynx_travel / dx + 1e-9));
+        let arcs = &self.cell_arc;
+        let tract: Vec<usize> = (0..self.model.cells())
+            .filter(|&index| self.model.kind[index] == CELL_TRACT)
+            .collect();
+        self.glottis_travel = travel as i64;
+        self.glottis_places = (-self.glottis_travel..=self.glottis_travel)
+            .map(|rise| {
+                let arc = rise as f64 * dx;
+                // At rise 0 the source cells reach down to the rest
+                // glottis cells.
+                let source_cells = tract
+                    .iter()
+                    .copied()
+                    .filter(|&index| {
+                        arcs[index] >= arc - dx / 2.0 && arcs[index] <= arc + 0.75 * dx
+                    })
+                    .collect();
+                GlottisPlace { arc, source_cells }
+            })
+            .collect();
+        self.larynx_cells = tract
+            .into_iter()
+            .filter(|&index| arcs[index] < (travel - 0.5) * dx)
+            .collect();
+        self.rise = 0;
+        self.placed = false;
+        for &index in &self.larynx_cells {
+            self.solid[index] = self.cell_arc[index] < -dx / 2.0;
+        }
+    }
+
+    /// `#closeLinks`: links with a solid end or shut carry no flow until
+    /// [`Self::update_links`].
+    fn close_links(&mut self) {
+        for link in 0..self.link_kind.len() {
+            let a = self.grid.link_a[link] as usize;
+            let b = self.grid.link_b[link] as usize;
+            if self.shut[link] || self.solid[a] || self.solid[b] {
+                self.grid.conductance[link] = 0.0;
+                self.grid.damping[link] = 0.0;
+            }
+        }
+        self.skip_closed();
+    }
+
+    /// `#skipClosed`: the voxel model lists the links of the cells the
+    /// glottis may close first, from the lowest (`orderLarynxLinks` of
+    /// voxel-model.js); the run of links with a solid end there carries no
+    /// flow, so the step loop starts after it.
+    fn skip_closed(&mut self) {
+        let links = self.link_kind.len();
+        let mut from = 0;
+        while from < links
+            && (self.solid[self.grid.link_a[from] as usize]
+                || self.solid[self.grid.link_b[from] as usize])
+        {
+            from += 1;
+        }
+        self.active_from = from;
+    }
+
+    /// Arc of the source plane from the rest glottis (cm, `glottisArc`).
+    fn glottis_arc(&self) -> f64 {
+        self.rise as f64 * self.dx
+    }
+
+    /// Length (cm) from the source plane to the lips (`activeLength`).
+    fn active_length(&self) -> f64 {
+        self.model.lengths[0] - self.glottis_arc()
+    }
+
+    /// `#riseFor`: the whole-cell place of the source plane for a tract of
+    /// `length` cm (over `length_scale`): the nearest, kept until the
+    /// target moves [`GLOTTIS_HYSTERESIS`] cells past the middle between
+    /// two places.
+    fn rise_for(&mut self, length: f64) -> i64 {
+        // NaN is not > 0, as in `!(length > 0)`.
+        if length.partial_cmp(&0.0) != Some(core::cmp::Ordering::Greater) {
+            return self.rise;
+        }
+        let target = (self.model.lengths[0] - length / self.length_scale) / self.dx;
+        let travel = self.glottis_travel as f64;
+        let nearest = max(-travel, min(travel, math::round_half_up(target)));
+        if !self.placed || abs(target - self.rise as f64) > 0.5 + GLOTTIS_HYSTERESIS {
+            self.placed = true;
+            return nearest as i64;
+        }
+        self.rise
+    }
+
+    /// `#setGlottis`: move the source plane to a place; the larynx cells
+    /// below it close and those above open, from rest. False when the
+    /// place did not change.
+    fn set_glottis(&mut self, rise: i64) -> bool {
+        if rise == self.rise {
+            return false;
+        }
+        let dx = self.dx;
+        for &index in &self.glottis_places[self.place()].source_cells {
+            self.admittance[index] = self.base_admittance[index];
+        }
+        self.rise = rise;
+        let place = self.place();
+        self.share_glottis();
+        let arc = self.glottis_places[place].arc;
+        for &index in &self.larynx_cells {
+            let closed = self.cell_arc[index] < arc - dx / 2.0;
+            if closed != self.solid[index] {
+                self.grid.pressure[index] = 0.0;
+                self.solid[index] = closed;
+            }
+        }
+        self.set_pouches();
+        true
+    }
+
+    /// Index of the place of the source plane in `glottis_places` and
+    /// `pouch_places`.
+    fn place(&self) -> usize {
+        (self.rise + self.glottis_travel) as usize
+    }
+
+    /// `#shareGlottis`: the glottis admittance shared between the slices
+    /// of the source cells, so the total matches.
+    fn share_glottis(&mut self) {
+        let cells = &self.glottis_places[(self.rise + self.glottis_travel) as usize].source_cells;
+        let mut slices = 0.0;
+        for &index in cells {
+            slices += (self.dx * self.dx) / self.envelope[index];
+        }
+        for &index in cells {
+            self.admittance[index] =
+                self.base_admittance[index] + self.glottis_admittance / max(1.0, slices);
+        }
+    }
+
+    /// `#placePouches`: the pouch fills (anatomical volume spread over
+    /// their cells), and for every place of the glottis the opening links
+    /// that carry flow and the least fill of the tract cells at them.
+    fn place_pouches(&mut self) {
         let cubic = math::pow(self.dx, 3.0);
+        // The fill of every pouch tube, the last for a tube (a `Map`).
+        let mut fills: Vec<(i32, f64)> = Vec::new();
         for sinus in &self.model.sinuses {
             let cells: Vec<usize> = (0..self.model.cells())
                 .filter(|&index| {
@@ -471,26 +672,53 @@ impl Fdtd3d {
             for index in cells {
                 self.fill[index] = fill;
             }
-        }
-        let mut floors: Vec<(usize, f64)> = Vec::new();
-        for link in 0..self.link_kind.len() {
-            if self.link_kind[link] != LINK_SINUS {
-                continue;
-            }
-            let a = self.grid.link_a[link] as usize;
-            let b = self.grid.link_b[link] as usize;
-            let (tract, sinus) = if self.cell_kind[a] == CELL_SINUS {
-                (b, a)
-            } else {
-                (a, b)
-            };
-            let fill = self.fill[sinus];
-            match floors.iter_mut().find(|(cell, _)| *cell == tract) {
-                Some(entry) => entry.1 = max(entry.1, fill),
-                None => floors.push((tract, max(0.0, fill))),
+            match fills.iter_mut().find(|(tube, _)| *tube == sinus.tube) {
+                Some(entry) => entry.1 = fill,
+                None => fills.push((sinus.tube, fill)),
             }
         }
-        self.opening_floors = floors;
+        self.sinus_openings = (0..self.link_kind.len())
+            .filter(|&link| self.link_kind[link] == LINK_SINUS)
+            .collect();
+        self.pouch_places = (0..self.glottis_places.len())
+            .map(|place| {
+                let mut links = Vec::new();
+                let mut floors: Vec<(usize, f64)> = Vec::new();
+                for (number, sinus) in self.model.sinuses.iter().enumerate() {
+                    let fill = fills
+                        .iter()
+                        .find(|(tube, _)| *tube == sinus.tube)
+                        .map_or(f64::NAN, |entry| entry.1);
+                    for &link in self.model.openings(number, place) {
+                        links.push(link);
+                        let a = self.grid.link_a[link] as usize;
+                        let tract = if self.cell_kind[a] == CELL_SINUS {
+                            self.grid.link_b[link] as usize
+                        } else {
+                            a
+                        };
+                        match floors.iter_mut().find(|(cell, _)| *cell == tract) {
+                            Some(entry) => entry.1 = max(entry.1, fill),
+                            None => floors.push((tract, max(0.0, fill))),
+                        }
+                    }
+                }
+                PouchPlace { links, floors }
+            })
+            .collect();
+        self.set_pouches();
+    }
+
+    /// `#setPouches`: open the pouches into the tract at the place of the
+    /// glottis.
+    fn set_pouches(&mut self) {
+        let place = &self.pouch_places[(self.rise + self.glottis_travel) as usize];
+        for &link in &self.sinus_openings {
+            self.shut[link] = true;
+        }
+        for &link in &place.links {
+            self.shut[link] = false;
+        }
     }
 
     /// `#ranked`.
@@ -546,7 +774,10 @@ impl Fdtd3d {
             return 0.0;
         };
         let last = (opening.bins() - 1) as f64;
-        let at = min(last, max(0.0, arc / opening.bin_length - 0.5));
+        let at = min(
+            last,
+            max(0.0, (arc - opening.origin) / opening.bin_length - 0.5),
+        );
         let lower = floor(at);
         let upper = min(last, lower + 1.0);
         let low = self.bin_scale(lower as usize, area);
@@ -612,13 +843,8 @@ impl Fdtd3d {
         for (index, faces) in grid.open_faces.iter().enumerate() {
             self.admittance[index] = faces * wall;
         }
-        let mut slices = 0.0;
-        for &index in &self.source_cells {
-            slices += (self.dx * self.dx) / self.envelope[index];
-        }
-        for &index in &self.source_cells {
-            self.admittance[index] = self.glottis_admittance / max(1.0, slices);
-        }
+        self.base_admittance.clone_from(&self.admittance);
+        self.share_glottis();
         for index in 0..self.cell_kind.len() {
             self.update_cell(index);
         }
@@ -644,18 +870,23 @@ impl Fdtd3d {
             return false;
         }
         self.tube_areas[kind] = Some(areas.to_vec());
-        let length = self.model.lengths[kind];
+        // The tract's area function maps onto its active part.
+        let (start, length) = self.tube_span(kind);
         for position in 0..self.tube_cells[kind].len() {
             let index = self.tube_cells[kind][position];
-            let area = resample(areas, self.cell_arc[index] / length);
+            let area = resample(areas, (self.cell_arc[index] - start) / length);
             self.cell_area[index] = area;
-            self.fill[index] = max(MIN_FILL, self.fill_at(index, area));
-            if self.solid[index] {
-                self.fill[index] = 1.0;
-            }
+            // A solid cell (the larynx extension below the source plane, a
+            // closed tooth) keeps fill 1; its links carry no flow.
+            self.fill[index] = if self.solid[index] {
+                1.0
+            } else {
+                max(MIN_FILL, self.fill_at(index, area))
+            };
         }
         if kind == CELL_TRACT as usize {
-            for &(index, floor) in &self.opening_floors {
+            let place = (self.rise + self.glottis_travel) as usize;
+            for &(index, floor) in &self.pouch_places[place].floors {
                 self.fill[index] = max(self.fill[index], floor);
             }
         }
@@ -735,13 +966,25 @@ impl Fdtd3d {
         Some(open)
     }
 
-    /// `#linkSpans`: the cached spans for the current area counts.
+    /// Arc where the area function of a tube starts and its length (cm):
+    /// the tract's maps onto its active part, from the source plane.
+    fn tube_span(&self, kind: usize) -> (f64, f64) {
+        if kind == CELL_TRACT as usize {
+            (self.glottis_arc(), self.active_length())
+        } else {
+            (0.0, self.model.lengths[kind])
+        }
+    }
+
+    /// `#linkSpans`: the cached spans for the current area counts and
+    /// place of the glottis.
     fn link_spans(&mut self) {
         let counts = [0, 1].map(|kind| self.tube_areas[kind].as_ref().map_or(0, Vec::len));
+        let rise = self.rise;
         if self
             .spans
             .as_ref()
-            .is_some_and(|spans| spans.counts == counts)
+            .is_some_and(|spans| spans.rise == rise && spans.counts == counts)
         {
             return;
         }
@@ -756,22 +999,34 @@ impl Fdtd3d {
             if self.link_kind[link] != LINK_INNER || count == 0 {
                 continue;
             }
-            let scale = count as f64 / self.model.lengths[kind];
+            let (start, length) = self.tube_span(kind);
+            let scale = count as f64 / length;
             let last = (count - 1) as f64;
+            let section = |arc: f64| min(last, max(0.0, floor((arc - start) * scale))) as i64;
             let arc_a = self.cell_arc[a];
             let arc_b = self.cell_arc[b];
-            from[link] = min(last, floor(min(arc_a, arc_b) * scale)) as i64;
-            to[link] = min(last, floor(max(arc_a, arc_b) * scale)) as i64;
+            from[link] = section(min(arc_a, arc_b));
+            to[link] = section(max(arc_a, arc_b));
         }
-        self.spans = Some(Spans { counts, from, to });
+        self.spans = Some(Spans {
+            counts,
+            rise,
+            from,
+            to,
+        });
     }
 
     /// `#updateLinks`.
     fn update_links(&mut self) {
-        let exponent = (SPEED_OF_SOUND * self.dt * LOSS_REFERENCE_SECTIONS) / self.model.lengths[0];
+        let exponent = (SPEED_OF_SOUND * self.dt * LOSS_REFERENCE_SECTIONS) / self.active_length();
+        if exponent.to_bits() != self.damping_exponent.to_bits() {
+            self.damping_exponent = exponent;
+            self.damping_cache.fill((f64::NAN, f64::NAN));
+        }
         self.link_spans();
         let spans = self.spans.take().unwrap_or(Spans {
             counts: [0, 0],
+            rise: 0,
             from: Vec::new(),
             to: Vec::new(),
         });
@@ -779,7 +1034,7 @@ impl Fdtd3d {
             let link = self.tube_links[position];
             let a = self.grid.link_a[link] as usize;
             let b = self.grid.link_b[link] as usize;
-            if self.solid[a] || self.solid[b] {
+            if self.solid[a] || self.solid[b] || self.shut[link] {
                 self.grid.conductance[link] = 0.0;
                 self.grid.damping[link] = 0.0;
                 self.grid.velocity[link] = 0.0;
@@ -826,6 +1081,7 @@ impl Fdtd3d {
         }
         self.spans = Some(spans);
         self.scale_openings();
+        self.skip_closed();
         let port_area = self.velum_links.len() as f64 * self.dx * self.dx;
         let open = min(1.0, self.velum_area / max(port_area, 1e-9));
         for &link in &self.velum_links {
@@ -869,13 +1125,17 @@ impl Fdtd3d {
         }
     }
 
-    /// Oral tract areas, velopharyngeal port and incisor gap (`setShape`).
-    pub fn set_areas(&mut self, areas: &[f64], velum_area: f64, teeth: Option<f64>) {
+    /// Oral tract areas, velopharyngeal port, incisor gap and tract length
+    /// (`setShape`): the length places the source plane on the whole cell
+    /// nearest to it (with [`GLOTTIS_HYSTERESIS`]); 0 or NaN keeps it.
+    pub fn set_areas(&mut self, areas: &[f64], velum_area: f64, teeth: Option<f64>, length: f64) {
         if areas.is_empty() {
             return;
         }
         let velum = max(0.0, velum_area);
-        let moved = self.apply_teeth(teeth);
+        let rise = self.rise_for(length);
+        let raised = self.set_glottis(rise);
+        let moved = self.apply_teeth(teeth) || raised;
         let changed = self.set_tube(0, areas, moved) || moved;
         if !changed && velum == self.velum_area {
             return;
@@ -925,7 +1185,7 @@ impl Fdtd3d {
         let sections = self
             .area_count
             .map_or(DEFAULT_SECTIONS, |count| count as f64);
-        let arc = (position / sections) * self.model.lengths[0];
+        let arc = self.glottis_arc() + (position / sections) * self.active_length();
         self.select_noise_links(arc);
         COURANT * NOISE_GAIN * force
     }
@@ -945,7 +1205,7 @@ impl Fdtd3d {
             flow = self.source_state * self.dx * MICROPHONE_GAIN;
         }
         let mut area = 0.0;
-        for &index in &self.source_cells {
+        for &index in &self.glottis_places[self.place()].source_cells {
             area += self.fill[index] * self.dx * self.dx;
         }
         (COURANT * flow) / max(area, 1e-3)
@@ -969,7 +1229,7 @@ impl Fdtd3d {
         if length.partial_cmp(&0.0) != Some(core::cmp::Ordering::Greater) {
             return self.dt;
         }
-        (self.dt * length) / self.model.lengths[0]
+        (self.dt * length) / self.active_length()
     }
 
     /// Forget the field and the source states (`reset`).
@@ -1001,6 +1261,7 @@ impl Solver for Fdtd3d {
             frame::areas(frame),
             frame[frame::VELUM_AREA],
             frame::teeth_gap(frame),
+            self.length,
         );
     }
 
@@ -1016,9 +1277,10 @@ impl Solver for Fdtd3d {
                 self.grid.velocity[link] += force * sign;
             }
         }
-        self.grid.step();
+        self.grid.step(self.active_from);
         let pressure = self.source_pressure(flow);
-        for &index in &self.source_cells {
+        let place = self.place();
+        for &index in &self.glottis_places[place].source_cells {
             self.grid.pressure[index] += pressure * self.grid.keep[index];
         }
         self.measure()

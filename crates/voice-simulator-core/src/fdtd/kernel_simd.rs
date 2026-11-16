@@ -19,9 +19,11 @@ use core::arch::wasm32::{f64x2, f64x2_extract_lane, f64x2_mul, f64x2_splat, f64x
 /// [`Grid::step`] with two lanes; bit-identical with the scalar loop.
 /// The velocities of a pair depend only on `pressure`, which the link pass
 /// does not change, so computing two at once changes no number, and the
-/// fluxes go into `divergence` in link order.
-pub(super) fn step_scatter(grid: &mut Grid) {
-    let pairs = grid.links() / 2;
+/// fluxes go into `divergence` in link order. The links before `from` are
+/// not stepped, as in [`Grid::step`].
+pub(super) fn step_scatter(grid: &mut Grid, from: usize) {
+    let from = from.min(grid.links());
+    let pairs = (grid.links() - from) / 2;
     {
         let Grid {
             link_a,
@@ -36,14 +38,14 @@ pub(super) fn step_scatter(grid: &mut Grid) {
         let cells = pressure.len();
         let divergence = &mut divergence[..cells];
         let courant = f64x2_splat(COURANT);
-        let links = link_a
+        let links = link_a[from..]
             .as_chunks::<2>()
             .0
             .iter()
-            .zip(link_b.as_chunks::<2>().0)
-            .zip(velocity.as_chunks_mut::<2>().0)
-            .zip(damping.as_chunks::<2>().0)
-            .zip(conductance.as_chunks::<2>().0);
+            .zip(link_b[from..].as_chunks::<2>().0)
+            .zip(velocity[from..].as_chunks_mut::<2>().0)
+            .zip(damping[from..].as_chunks::<2>().0)
+            .zip(conductance[from..].as_chunks::<2>().0);
         for ((((&[a0, a1], &[b0, b1]), v), &[k0, k1]), &[c0, c1]) in links {
             let (a0, a1, b0, b1) = (a0 as usize, a1 as usize, b0 as usize, b1 as usize);
             let pa = f64x2(pressure[a0], pressure[a1]);
@@ -61,7 +63,7 @@ pub(super) fn step_scatter(grid: &mut Grid) {
             divergence[a1] += second;
             divergence[b1] -= second;
         }
-        for link in 2 * pairs..link_a.len() {
+        for link in from + 2 * pairs..link_a.len() {
             let (a, b) = (link_a[link] as usize, link_b[link] as usize);
             let u = damping[link] * (velocity[link] - COURANT * (pressure[b] - pressure[a]));
             velocity[link] = u;

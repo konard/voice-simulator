@@ -9,6 +9,7 @@
 //! | ------------------ | ------------------------ | ---- | -------------------- |
 //! | dx                 | dx                       | f64  | 1                    |
 //! | opening (flag)     | binLength, sample        | f64  | 2                    |
+//! |                    | origin                   | f64  | 1                    |
 //! |                    | bin starts               | i32  | bins + 1             |
 //! |                    | weights                  | f64  | points               |
 //! |                    | shares                   | f64  | points               |
@@ -26,7 +27,10 @@
 //! | boundaryAdmittance | admittance               | f64  | 1                    |
 //! | enclosure          | 1 with an enclosure      | f64  | 1                    |
 //! | lengths            | tract, nose              | f64  | 2                    |
+//! | larynxTravel       | travel (cm)              | f64  | 1                    |
 //! | sinuses            | tube, area, length       | f64  | 3 * sinuses          |
+//! |                    | opening links per place  | i32  | sinuses * places     |
+//! |                    | opening links            | i32  | pouch links          |
 //! | landmarks          | lips xyz, nostrils xyz   | f64  | 6                    |
 //! | teeth (flag)       | edge, width              | f64  | 2                    |
 //! |                    | cells, groups            | i32  | teeth cells each     |
@@ -35,6 +39,12 @@
 //! Bin `b` of the opening table holds the points `starts[b]..starts[b+1]`
 //! of weights and shares, and its heads and tails (one more value each)
 //! start at `starts[b] + b`. Only the tract cells have opening rows.
+//!
+//! `places` ([`header::PLACES`]) is the number of places of the glottis
+//! (`sinus.openings.length`, the same for every sinus): the counts list,
+//! for each sinus and then each place from the lowest, how many of the
+//! opening links (`sinus.openings[place]`, indices into the links) follow.
+//! [`Model`] keeps both lists as they are; [`Model::openings`] reads them.
 
 use alloc::vec::Vec;
 
@@ -64,8 +74,12 @@ pub mod header {
     pub const OPENING_ROWS: usize = 10;
     /// [`super::flags`] bits.
     pub const FLAGS: usize = 11;
+    /// Places of the glottis of every sinus (`sinus.openings.length`).
+    pub const PLACES: usize = 12;
+    /// Opening links of all sinuses and places.
+    pub const POUCH_LINKS: usize = 13;
     /// Header words.
-    pub const WORDS: usize = 12;
+    pub const WORDS: usize = 14;
 }
 
 /// Bits of [`header::FLAGS`].
@@ -79,7 +93,7 @@ pub mod flags {
 /// 'VSMD' as a little-endian u32.
 pub const MAGIC: u32 = 0x444d_5356;
 /// Layout version.
-pub const VERSION: u32 = 1;
+pub const VERSION: u32 = 2;
 
 /// Cell kinds (`CELL_*` of voxel-model.js).
 pub const CELL_TRACT: u8 = 0;
@@ -122,6 +136,9 @@ pub struct Opening {
     pub bin_length: f64,
     /// Area of one sub-cell (cm²).
     pub sample: f64,
+    /// Arc of the start of the first bin (cm): 0, or below the rest
+    /// glottis on a tract that extends into the larynx.
+    pub origin: f64,
     /// First point of every bin, and the end.
     pub starts: Vec<usize>,
     /// Weights of the points.
@@ -202,8 +219,17 @@ pub struct Model {
     pub enclosure: bool,
     /// Lengths of the tract and the nose (cm).
     pub lengths: [f64; 2],
+    /// How far the glottis may move from its rest place (cm).
+    pub larynx_travel: f64,
     /// Side branches.
     pub sinuses: Vec<Sinus>,
+    /// Places of the glottis that the pouch openings list.
+    pub places: usize,
+    /// For each sinus and then each place from the lowest, how many of
+    /// [`Self::pouch_links`] open the pouch into the tract there.
+    pub pouch_counts: Vec<usize>,
+    /// The opening links (`sinus.openings[place]`) in that order.
+    pub pouch_links: Vec<usize>,
     /// Centre of the lips (cm).
     pub lips: [f64; 3],
     /// Centre of the nostrils (cm).
@@ -323,6 +349,7 @@ fn read_opening(reader: &mut Reader, bytes: &[u8], cells: usize) -> Result<Openi
         return Err(ModelError::Range);
     }
     let pair = reader.f64s(2)?;
+    let origin = reader.f64s(1)?[0];
     let starts = reader.indices(bins + 1, points + 1)?;
     if starts[0] != 0 || starts[bins] != points || starts.windows(2).any(|w| w[0] > w[1]) {
         return Err(ModelError::Range);
@@ -347,6 +374,7 @@ fn read_opening(reader: &mut Reader, bytes: &[u8], cells: usize) -> Result<Openi
     Ok(Opening {
         bin_length: pair[0],
         sample: pair[1],
+        origin,
         starts,
         weights,
         shares,
@@ -416,6 +444,7 @@ impl Model {
         let boundary_admittance = reader.f64s(1)?[0];
         let enclosure = reader.f64s(1)?[0] != 0.0;
         let lengths = reader.f64s(2)?;
+        let larynx_travel = reader.f64s(1)?[0];
         let sinuses = reader
             .f64s(3 * sinuses)?
             .as_chunks::<3>()
@@ -426,7 +455,14 @@ impl Model {
                 area: *area,
                 length: *length,
             })
-            .collect();
+            .collect::<Vec<_>>();
+        let places = word(bytes, header::PLACES)?;
+        let pouch_links = word(bytes, header::POUCH_LINKS)?;
+        let pouch_counts = reader.indices(sinuses.len() * places, pouch_links + 1)?;
+        if pouch_counts.iter().sum::<usize>() != pouch_links {
+            return Err(ModelError::Range);
+        }
+        let pouch_links = reader.indices(pouch_links, links)?;
         let landmarks = reader.f64s(6)?;
         let teeth = if model_flags & flags::TEETH != 0 {
             let size = reader.f64s(2)?;
@@ -470,7 +506,11 @@ impl Model {
             boundary_admittance,
             enclosure,
             lengths: [lengths[0], lengths[1]],
+            larynx_travel,
             sinuses,
+            places,
+            pouch_counts,
+            pouch_links,
             lips: triple(&landmarks[..3]),
             nostrils: triple(&landmarks[3..]),
             teeth,
@@ -494,6 +534,7 @@ impl Model {
             words[header::OPENING_POINTS] = opening.starts[bins] as u32;
             words[header::OPENING_ROWS] = (opening.cell_weights.len() / opening.per) as u32;
             writer.f64s(&[opening.bin_length, opening.sample]);
+            writer.f64s(&[opening.origin]);
             writer.indices(&opening.starts);
             writer.f64s(&opening.weights);
             writer.f64s(&opening.shares);
@@ -522,12 +563,17 @@ impl Model {
         writer.f64s(&[self.boundary_admittance]);
         writer.f64s(&[if self.enclosure { 1.0 } else { 0.0 }]);
         writer.f64s(&self.lengths);
+        writer.f64s(&[self.larynx_travel]);
         let sinuses: Vec<f64> = self
             .sinuses
             .iter()
             .flat_map(|sinus| [f64::from(sinus.tube), sinus.area, sinus.length])
             .collect();
         writer.f64s(&sinuses);
+        writer.indices(&self.pouch_counts);
+        writer.indices(&self.pouch_links);
+        words[header::PLACES] = self.places as u32;
+        words[header::POUCH_LINKS] = self.pouch_links.len() as u32;
         writer.f64s(&self.lips);
         writer.f64s(&self.nostrils);
         if let Some(teeth) = &self.teeth {
@@ -560,6 +606,17 @@ impl Model {
     pub fn links(&self) -> usize {
         self.link_a.len()
     }
+
+    /// The links that open sinus `sinus` into the tract at place `place`
+    /// of the glottis (`sinus.openings[place] ?? []`).
+    pub fn openings(&self, sinus: usize, place: usize) -> &[usize] {
+        if place >= self.places {
+            return &[];
+        }
+        let row = sinus * self.places + place;
+        let start: usize = self.pouch_counts[..row].iter().sum();
+        &self.pouch_links[start..start + self.pouch_counts[row]]
+    }
 }
 
 #[cfg(test)]
@@ -574,6 +631,9 @@ mod tests {
         words[header::VERSION] = VERSION;
         words[header::CELLS] = 2;
         words[header::LINKS] = 1;
+        words[header::SINUSES] = 1;
+        words[header::PLACES] = 2;
+        words[header::POUCH_LINKS] = 1;
         let mut bytes: Vec<u8> = words.iter().flat_map(|w| w.to_le_bytes()).collect();
         let f64s = |bytes: &mut Vec<u8>, values: &[f64]| {
             bytes.extend(values.iter().flat_map(|v| v.to_le_bytes()));
@@ -595,7 +655,10 @@ mod tests {
         f64s(&mut bytes, &[1.0]);
         f64s(&mut bytes, &[0.0]);
         f64s(&mut bytes, &[16.0, 10.0]);
-        f64s(&mut bytes, &[]);
+        f64s(&mut bytes, &[0.5]);
+        f64s(&mut bytes, &[3.0, 0.25, 2.0]);
+        i32s(&mut bytes, &[0, 1]);
+        i32s(&mut bytes, &[0]);
         f64s(&mut bytes, &[1.0, 2.0, 3.0, 4.0, 5.0, 6.0]);
         i32s(&mut bytes, &[0, 3]);
         let length = bytes.len() as u32;
@@ -612,6 +675,10 @@ mod tests {
         assert_eq!(model.point[1], [1.0, 0.0, 0.0]);
         assert_eq!(model.link_kind, vec![LINK_NOSTRILS]);
         assert_eq!(model.lengths, [16.0, 10.0]);
+        assert_eq!(model.larynx_travel, 0.5);
+        assert_eq!(model.openings(0, 0), &[] as &[usize]);
+        assert_eq!(model.openings(0, 1), &[0]);
+        assert_eq!(model.openings(0, 2), &[] as &[usize]);
         assert_eq!(model.nostrils, [4.0, 5.0, 6.0]);
         assert_eq!(model.open_masks, vec![0, 3]);
         assert!(model.opening.is_none() && model.teeth.is_none());
@@ -627,8 +694,13 @@ mod tests {
         assert_eq!(Model::unpack(&longer), Err(ModelError::Header));
         let mut link = bytes.clone();
         // The first link points past the cells.
-        let at = 48 + 8 + 8 + 8 + 16 + 48;
+        let at = 56 + 8 + 8 + 8 + 16 + 48;
         link[at..at + 4].copy_from_slice(&7_i32.to_le_bytes());
         assert_eq!(Model::unpack(&link), Err(ModelError::Range));
+        let mut opening = bytes.clone();
+        // The opening link of the sinus is not a link.
+        let at = bytes.len() - 8 - 48 - 8;
+        opening[at..at + 4].copy_from_slice(&1_i32.to_le_bytes());
+        assert_eq!(Model::unpack(&opening), Err(ModelError::Range));
     }
 }

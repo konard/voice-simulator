@@ -6,7 +6,8 @@
 //! The array has `HEADER` fixed fields, then `NOSE_AREA_COUNT` nose areas
 //! (`noseShape(head).areas`), then `LISTENER_LENGTH` listener values (see
 //! [`crate::listener`]). Flags are 0 or 1; seeds are `hashSeed` values.
-//! The waveguide ignores the 3D fields (`FDTD_OUTPUT` to `MICROPHONE_Z`).
+//! The waveguide ignores the 3D fields (`FDTD_OUTPUT` to `MICROPHONE_Z`
+//! and `LENGTH_SCALE`).
 
 /// Output sample rate (Hz).
 pub const SAMPLE_RATE: usize = 0;
@@ -114,8 +115,12 @@ pub const TRANSIENT_GAIN: usize = 49;
 pub const LOSS_SHAPE: usize = 50;
 /// Baffle of the lips and nostrils (`head.radiationBaffle`).
 pub const RADIATION_BAFFLE: usize = 51;
+/// Tract length scale of the vowel table: the 3D solver puts the source
+/// plane where a shape's length over it leaves (`lengthScale` of Fdtd3d,
+/// `VOWEL_LENGTH_SCALE_3D` unless the options give one).
+pub const LENGTH_SCALE: usize = 52;
 /// Fixed fields before the nose areas.
-pub const HEADER: usize = 52;
+pub const HEADER: usize = 53;
 
 /// Values of [`SOLVER`].
 pub const SOLVER_WAVEGUIDE: f64 = 0.0;

@@ -284,6 +284,7 @@ impl Renderer<Fdtd3d> {
             nasal_loss: finite(header[config::NASAL_LOSS])?,
             glottal_chink: common.settings.glottal_chink,
             vocal_tract_length: common.vocal_tract_length,
+            length_scale: finite(header[config::LENGTH_SCALE])?,
         };
         let model = Model::unpack(model).map_err(|_| RenderError::Model)?;
         let mut solver = Fdtd3d::new(model, &options).ok_or(RenderError::Model)?;
@@ -656,6 +657,7 @@ mod tests {
         values[config::TRANSIENT_GAIN] = TRANSIENT_GAIN;
         values[config::LOSS_SHAPE] = crate::losses::LOSS_SHAPE;
         values[config::RADIATION_BAFFLE] = crate::radiation::RADIATION_BAFFLE;
+        values[config::LENGTH_SCALE] = 1.0;
         values
     }
 

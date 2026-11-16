@@ -33,6 +33,7 @@ import {
   voxelModelOptions,
 } from '../acoustics/voxel-model.js';
 import { VOWEL_CORRECTIONS_3D } from '../articulation/vowel-calibration.js';
+import { VOWEL_LENGTH_SCALE_3D } from '../articulation/vowel-space.js';
 import {
   FDTD_OUTPUT_CODES,
   RENDERER_CONFIG,
@@ -192,6 +193,7 @@ export function rendererConfig(settings) {
     values[C.MICROPHONE_Y] = listening.target[1];
     values[C.MICROPHONE_Z] = listening.target[2];
   }
+  values[C.LENGTH_SCALE] = settings.lengthScale ?? 1;
   values.set(nose, C.HEADER);
   values.set(listener, C.HEADER + nose.length);
   return values;
@@ -244,6 +246,20 @@ export function rendererModel(head, options = {}) {
     ...modelOptions,
     ...voxelModelOptions(modelOptions),
   });
+}
+
+/**
+ * The lengthScale VoiceRenderer gives Fdtd3d (lengthScaleOf of voice.js):
+ * the one of the 3D vowel table unless the options give one.
+ * @param {string} solver
+ * @param {object} options
+ * @returns {number|undefined}
+ */
+function lengthScaleOf(solver, options) {
+  return (
+    options.lengthScale ??
+    (solver === 'fdtd3d' ? VOWEL_LENGTH_SCALE_3D : undefined)
+  );
 }
 
 /**
@@ -303,6 +319,7 @@ export class FramePlanner {
       listener: values,
       solver: this.solver,
       listening,
+      lengthScale: lengthScaleOf(this.solver, options),
     });
     this.frames = new FrameList(this.stride);
     this.state = {};
