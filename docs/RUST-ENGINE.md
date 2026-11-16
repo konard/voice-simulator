@@ -322,7 +322,12 @@ per sample:
 The constructor throws an Error with `code = 'ENGINE_UNSUPPORTED'` for
 options the engine does not handle: a `solver` other than `'waveguide'`, a
 WebGPU `device`, `source: 'folds'` (the two-mass vocal folds of
-`folds.js`, not ported) and a `bandLimit` that is not above 0.
+`folds.js`, not ported), a `bandLimit` that is not above 0, and a plan that
+whispers (`planWhispers(plan)`: a `whisper` channel above 0, issue 53), as
+the engine has no whisper source yet
+([#82](https://github.com/konard/voice-simulator/issues/82)); with
+`engine: 'auto'` (the default) such a plan is rendered in JavaScript, and
+plain text renders the same samples on the engine as before.
 
 ### Configuration
 

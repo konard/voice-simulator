@@ -63,13 +63,20 @@ export {
 } from './articulation/effort.js';
 export {
   alphaRatio,
+  centreOfGravity,
   cpp,
+  energyRatio,
+  frameAperiodicities,
   glottalPeriods,
   jitterPercent,
   levelDb,
   PHONATION_ANALYSIS,
   pulseF0,
   pulseH1H2,
+  SIGNAL_SHARE,
+  voicedShare,
+  VOICED_SHARE_APERIODICITY,
+  VOICED_SHARE_SIGNAL,
 } from './analysis/mode-features.js';
 export {
   BREATHY_RELEASE,

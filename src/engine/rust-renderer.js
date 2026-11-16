@@ -13,6 +13,7 @@
  */
 
 import { hashSeed } from '../random.js';
+import { planWhispers } from '../articulation/whisper.js';
 import { normalizeHeadConfig } from '../head-config.js';
 import { noseShape } from '../articulation/tract-shape.js';
 import {
@@ -407,6 +408,11 @@ export class RustVoiceRenderer {
    *   measurements).
    */
   constructor(module, plan, options = {}) {
+    if (planWhispers(plan)) {
+      // The Rust engine has no whisper source yet (issue 82): the
+      // JavaScript renderer renders plans that whisper.
+      throw unsupported('whisper is rendered in JavaScript (issue 82)');
+    }
     this.planner = new FramePlanner(plan, options);
     this.module = module;
     this.plan = plan;

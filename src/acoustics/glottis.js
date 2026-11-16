@@ -22,6 +22,7 @@ import {
   effortVoicedGain,
   TILT_CORNER,
 } from '../articulation/effort.js';
+import { whisperNoise, whisperQuiet } from './whisper.js';
 
 /**
  * Breath noise per 10 mm² of glottal chink (issue 35): the air leaking
@@ -252,6 +253,8 @@ export class Glottis {
     this.chinkNoise = head.chinkNoise ?? CHINK_NOISE;
     this.reCritical = head.reCritical;
     this.areas = head;
+    /** The speaker's pitch (Hz): the whisper noise follows f0 against it. */
+    this.pitch = head.pitch;
     this.strengthKey = [NaN, NaN];
     this.strength = 0;
     this.smoothed = 0;
@@ -428,54 +431,55 @@ export class Glottis {
   }
 
   /**
-   * Advance by dt seconds and return the flow derivative sample.
-   * @param {number} dt
-   * @param {{f0: number, voicing: number, aspiration: number, closure: number, loudness: number, lungPressure?: number, aspirationStrength?: number, oralPressure?: number, effort?: number, tension?: number, breath?: number, creak?: number, falsetto?: number, harsh?: number}} control
-   *   `aspirationStrength` is the relative turbulence strength at the
-   *   glottis from the air flow (VoiceRenderer); without it the glottis
-   *   assumes an open tract at `lungPressure` (Pa, default the head value
-   *   times loudness^(2/3)). `oralPressure` (dyn/cm²) is the pressure in
-   *   the mouth; the LF source does not use it. `effort` (dB, default 0)
-   *   multiplies the voiced part by `10^(E/20)` and `tension` is added to
-   *   the tenseness (src/articulation/effort.js). The phonation channels
-   *   (0..1, default 0; src/articulation/phonation.js) change the source
-   *   as PHONATION_SOURCE describes: `breath` (and `harsh`) add breath
-   *   noise and glottal area, `creak` and `falsetto` shift f0.
-   * @param {number} noise White noise sample in [-1, 1].
+   * Turbulence strength at the glottis from the open tract and the lung
+   * pressure, times whisperQuiet() in a whisper (src/acoustics/whisper.js).
    */
-  step(dt, control, noise) {
-    const voicing = Math.max(0, control.voicing) * (1 - control.closure);
-    const loudness = Math.max(0, control.loudness);
-    const tension = control.tension ?? 0;
-    const base =
-      tension === 0
-        ? this.tenseness
-        : Math.min(1, Math.max(0, this.tenseness + tension));
-    const tenseness = Math.max(0, base - 0.5 * control.aspiration * voicing);
-    const creak = control.creak ?? 0;
-    const falsetto = control.falsetto ?? 0;
-    const harsh = control.harsh ?? 0;
+  #tractStrength(control, whisper) {
+    const strength =
+      this.#openTractStrength(control) * this.#noiseGain(control);
+    return whisper > 0
+      ? strength * whisperQuiet(whisper, control.effort ?? 0)
+      : strength;
+  }
+
+  /**
+   * Advance the pulse phase by `dt`, and start the next period (at the f0
+   * of the phonation channels) when it passes the end of this one.
+   */
+  #advance(dt, f0, tenseness, creak, falsetto, harsh) {
     this.phase += dt;
     if (this.phase >= this.period) {
       this.phase -= this.period;
       this.#startPeriod(
-        phonationF0(control.f0, creak, falsetto),
+        phonationF0(f0, creak, falsetto),
         tenseness,
         creak,
         harsh
       );
     }
-    const t = this.phase / this.period;
-    this.intensity = voicing * loudness * this.shimmer * this.pulseGain;
+  }
+
+  /**
+   * The intensity of the pulses with the falsetto level and the voiced
+   * gain of the effort (`effort` dB).
+   */
+  #intensityGain(intensity, falsetto, effort) {
+    let gained = intensity;
     if (falsetto !== 0) {
-      this.intensity *=
-        10 ** ((PHONATION_SOURCE.falsettoDecibels * falsetto) / 20);
+      gained *= 10 ** ((PHONATION_SOURCE.falsettoDecibels * falsetto) / 20);
     }
-    const effort = control.effort ?? 0;
     if (effort !== 0) {
       this.#effortGains(effort);
-      this.intensity *= this.effortGain;
+      gained *= this.effortGain;
     }
+    return gained;
+  }
+
+  /**
+   * The LF pulse at phase `t` times the intensity, smoothed by the chink
+   * and, in falsetto, by the thin folds (before the effort tilt).
+   */
+  #voicedSample(t, tenseness, dt, falsetto) {
     let voiced =
       lfWaveform(this.pulse, t) * this.intensity * (0.7 + 0.3 * tenseness);
     if (this.chinkTime > 0) {
@@ -490,21 +494,73 @@ export class Glottis {
       this.falsettoSmoothed +=
         (1 - Math.exp(-2 * Math.PI * corner * dt)) *
         (voiced - this.falsettoSmoothed);
-      voiced = this.falsettoSmoothed;
-    } else {
-      this.falsettoSmoothed = voiced;
+      return this.falsettoSmoothed;
     }
-    voiced = this.#tilt(voiced, dt, effort);
+    this.falsettoSmoothed = voiced;
+    return voiced;
+  }
+
+  /**
+   * Advance by dt seconds and return the flow derivative sample.
+   * @param {number} dt
+   * @param {{f0: number, voicing: number, aspiration: number, closure: number, loudness: number, lungPressure?: number, aspirationStrength?: number, oralPressure?: number, effort?: number, tension?: number, breath?: number, creak?: number, falsetto?: number, harsh?: number}} control
+   *   `aspirationStrength` is the relative turbulence strength at the
+   *   glottis from the air flow (VoiceRenderer); without it the glottis
+   *   assumes an open tract at `lungPressure` (Pa, default the head value
+   *   times loudness^(2/3)). `oralPressure` (dyn/cm²) is the pressure in
+   *   the mouth; the LF source does not use it. `effort` (dB, default 0)
+   *   multiplies the voiced part by `10^(E/20)` and `tension` is added to
+   *   the tenseness (src/articulation/effort.js). The phonation channels
+   *   (0..1, default 0; src/articulation/phonation.js) change the source
+   *   as PHONATION_SOURCE describes: `breath` (and `harsh`) add breath
+   *   noise and glottal area, `creak` and `falsetto` shift f0. `whisper`
+   *   (0..1, issue 53) multiplies the voiced part by `1 - whisper` (the
+   *   pulse phase stands still at 1) and adds the whisper noise of
+   *   src/acoustics/whisper.js: `whisperNoise` is its noise sample (else
+   *   `noise`), `stopClosure` (0..1) the closure of the mouth and
+   *   `fricative` (0..1) its frication.
+   * @param {number} noise White noise sample in [-1, 1].
+   */
+  step(dt, control, noise) {
+    const whisper = Math.min(1, Math.max(0, control.whisper ?? 0));
+    const voicedShare = 1 - whisper;
+    const voicing = Math.max(0, control.voicing) * (1 - control.closure);
+    const loudness = Math.max(0, control.loudness);
+    const tension = control.tension ?? 0;
+    const base =
+      tension === 0
+        ? this.tenseness
+        : Math.min(1, Math.max(0, this.tenseness + tension));
+    const tenseness = Math.max(0, base - 0.5 * control.aspiration * voicing);
+    const creak = control.creak ?? 0;
+    const falsetto = control.falsetto ?? 0;
+    const harsh = control.harsh ?? 0;
+    if (voicedShare > 0) {
+      this.#advance(dt, control.f0, tenseness, creak, falsetto, harsh);
+    }
+    const t = this.phase / this.period;
+    const effort = control.effort ?? 0;
+    this.intensity = this.#intensityGain(
+      voicing * loudness * this.shimmer * this.pulseGain * voicedShare,
+      falsetto,
+      effort
+    );
+    const voiced = this.#tilt(
+      this.#voicedSample(t, tenseness, dt, falsetto),
+      dt,
+      effort
+    );
     // Aspiration is strongest while the folds are open.
     const opening = Math.max(0, Math.sin(2 * Math.PI * t));
     const modulation =
-      voicing > 0.1 ? 0.3 + 0.7 * opening * Math.min(1, voicing) : 1;
+      (voicing > 0.1 ? 0.3 + 0.7 * opening * Math.min(1, voicing) : 1) *
+        voicedShare +
+      whisper;
     this.noiseModulation = modulation;
     // The lung pressure carries the loudness: the strength grows as the
     // pressure drop to the power 1.5, and the pressure as loudness^(2/3).
     const strength =
-      control.aspirationStrength ??
-      this.#openTractStrength(control) * this.#noiseGain(control);
+      control.aspirationStrength ?? this.#tractStrength(control, whisper);
     const breathiness = noiseBreathiness(
       this.breathiness,
       control.breath ?? 0,
@@ -512,10 +568,27 @@ export class Glottis {
     );
     const breath =
       ((control.aspiration +
-        this.breathGain * breathiness ** this.breathExponent * voicing) *
+        this.breathGain *
+          breathiness ** this.breathExponent *
+          voicing *
+          voicedShare) *
         (1 - control.closure) +
         (this.chinkNoise * this.chink) / 10) *
       strength;
+    if (whisper > 0) {
+      // The whisper noise: turbulence at the half-open glottis, not
+      // modulated by pulses (src/acoustics/whisper.js).
+      const whispered = whisperNoise(
+        control,
+        control.whisperNoise ?? noise,
+        strength,
+        this.pitch
+      );
+      return (
+        voiced +
+        (noise * breath * modulation + whispered) * 0.45 * this.aspirationLevel
+      );
+    }
     return voiced + noise * breath * modulation * 0.45 * this.aspirationLevel;
   }
 }
