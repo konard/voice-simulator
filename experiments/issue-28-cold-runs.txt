@@ -1,0 +1,12 @@
+js cpu 0.544 s wall 0.590 s longest 275 ms level medium measured telephone,narrowband,wideband,minimal,low,medium
+js cpu 0.583 s wall 0.620 s longest 312 ms level minimal measured telephone,narrowband,wideband,minimal,low
+js cpu 0.386 s wall 0.400 s longest 222 ms level telephone measured telephone,narrowband
+js cpu 0.391 s wall 0.405 s longest 224 ms level telephone measured telephone,narrowband
+js cpu 0.549 s wall 0.593 s longest 195 ms level low measured telephone,narrowband,wideband,minimal,low,medium
+js cpu 0.573 s wall 0.627 s longest 264 ms level low measured telephone,narrowband,wideband,minimal,low,medium
+js cpu 0.562 s wall 0.604 s longest 244 ms level medium measured telephone,narrowband,wideband,minimal,low,medium
+js cpu 0.438 s wall 0.458 s longest 247 ms level telephone measured telephone,narrowband
+js cpu 0.505 s wall 0.541 s longest 269 ms level medium measured telephone,narrowband,wideband,minimal,low,medium
+js cpu 0.843 s wall 0.878 s longest 374 ms level medium measured telephone,narrowband,wideband,minimal,low,medium,high
+js cpu 0.954 s wall 0.988 s longest 462 ms level medium measured telephone,narrowband,wideband,minimal,low,medium,high
+js cpu 0.437 s wall 0.463 s longest 203 ms level medium measured telephone,narrowband,wideband,minimal,low,medium

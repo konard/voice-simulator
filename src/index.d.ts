@@ -2199,6 +2199,18 @@ export declare function chooseTierWithGpu<T>(
     accelerated?: (tier: T) => boolean;
   }
 ): Promise<GpuTierChoice>;
+/**
+ * The GPU stage of chooseTierWithGpu on its own: the accelerated tiers
+ * above `cpu.level` measured with `measure`; nothing without `gpu`.
+ */
+export declare function chooseGpuTier<T>(
+  measure: (tier: T, options: { limit: number }) => Promise<number> | number,
+  cpu: TierChoice,
+  options?: ChooseTierOptions<T> & {
+    gpu?: boolean;
+    accelerated?: (tier: T) => boolean;
+  }
+): Promise<GpuTierChoice>;
 export interface GpuTierChoice extends TierChoice {
   /** Whether the chosen tier runs on the GPU. */
   gpu: boolean;
@@ -2287,6 +2299,116 @@ export declare function benchmarkAudioTiersAsync(options?: {
   device?: GPUDeviceLike | null;
   engine?: EngineName | Engine;
 }): Promise<GpuTierChoice & { tier: AudioTier }>;
+/** The utterance every benchmark renders. */
+export declare const BENCHMARK_IPA: string;
+/**
+ * Renderer for the first `seconds` (default 0.3) of the benchmark
+ * utterance, with the voxel model `model` (built when not given) for the
+ * 3D tiers.
+ */
+export declare function benchmarkRenderer(
+  tier: AudioTier,
+  options?: {
+    head?: HeadConfig;
+    ipa?: string;
+    seconds?: number;
+    device?: GPUDeviceLike | null;
+    engine?: EngineName | Engine;
+    model?: object | null;
+  }
+): EngineRenderer;
+
+// Silent device benchmark (issue 28)
+/** Version of the benchmarkDevice procedure; cached results of another are measured again. */
+export declare const BENCHMARK_VERSION: number;
+/** The renderer a fake `measure` of benchmarkDevice returns (tests). */
+export interface BenchmarkProbeRenderer {
+  sampleRate: number;
+  /** Renders into `block`, returns the samples written. */
+  render(block: Float32Array): number;
+  done?: boolean;
+  free?(): void;
+}
+export interface BenchmarkDeviceOptions {
+  /** Default `'auto'`; see createEngine. */
+  engine?: EngineName | Engine;
+  head?: HeadConfig;
+  /** Largest load of a chosen tier (default 0.8). */
+  target?: number;
+  /** CPU seconds the benchmark may spend (default 1). */
+  budget?: number;
+  /** Seconds of work between pauses (default 0.02). */
+  slice?: number;
+  /** Seconds of audio per tier (default 0.06). */
+  probe?: number;
+  /** Last tier to consider (default the last one). */
+  maxLevel?: number;
+  /** A partial result to continue. */
+  resume?: DeviceBenchmark | null;
+  /** True when speech is waiting: the benchmark returns a partial result. */
+  paused?: () => boolean;
+  /** Clock in ms (default performance.now). */
+  now?: () => number;
+  /** Called between slices (default: setTimeout 0). */
+  pause?: () => Promise<void>;
+  /** Makes the renderer of a probe (tests). */
+  measure?: (
+    tier: AudioTier,
+    info: {
+      warmup: boolean;
+      index: number;
+      seconds: number;
+      head?: HeadConfig;
+      engine: Engine;
+    }
+  ) => BenchmarkProbeRenderer;
+  /** Default AUDIO_TIERS. */
+  tiers?: readonly AudioTier[];
+}
+export interface DeviceBenchmark {
+  version: number;
+  engine: { name: string; simd: boolean; threads: number };
+  /** The chosen level (index in AUDIO_TIERS). */
+  level: number;
+  tier: AudioTier;
+  /** Load of every tier up to maxLevel; predicted where not measured. */
+  loads: number[];
+  measured: boolean[];
+  /** CPU seconds spent, summed over the slices. */
+  cpuSeconds: number;
+  /** Seconds of the longest slice. */
+  longestSlice: number;
+  /** Stopped by `paused()`; pass it as `resume` to continue. */
+  partial: boolean;
+}
+/**
+ * Measure, in slices and within a CPU budget, how fast this device renders
+ * each audio tier and choose the most precise one with 20 % headroom.
+ */
+export declare function benchmarkDevice(
+  options?: BenchmarkDeviceOptions
+): Promise<DeviceBenchmark>;
+/**
+ * The highest level whose load is at most `target` (measured) or
+ * 0.7 × `target` (predicted), every lower level passing too; 0 if none.
+ */
+export declare function chooseLevel(
+  loads: readonly number[],
+  measured: readonly boolean[],
+  target?: number
+): number;
+/**
+ * The level automatic quality starts at before the benchmark answers:
+ * `narrowband` with at most 2 cores or 2 GB of memory, else `minimal`.
+ */
+export declare function startLevel(hints?: {
+  hardwareConcurrency?: number;
+  deviceMemory?: number;
+}): number;
+/** `medium` when the battery is not charging and below 20 %, else the last level. */
+export declare function batteryLevelCap(
+  battery?: { charging?: boolean; level?: number } | null
+): number;
 
 // Audio formats (issue 5)
 /** One channel, or a list of equally long channels (interleaved on write). */
