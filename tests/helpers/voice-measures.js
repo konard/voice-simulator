@@ -36,6 +36,7 @@ export const MEASURES = [
   'rms',
   'f0',
   'f0Range',
+  'f0Rate',
   'hnr',
   'h1h2',
   'centroid',
@@ -140,6 +141,72 @@ function f0Track(result) {
     .map((frame) => frame.f0);
 }
 
+/** Frequencies (Hz) that `f0Rate` compares: 2 to 12 Hz in 0.1 Hz steps. */
+const MODULATION_RATES = Array.from({ length: 101 }, (_, at) => 2 + at / 10);
+
+/**
+ * The strongest periodic component of the f0 (Hz): the f0 track of each
+ * vowel (YIN, 10 ms steps, in semitones) less its straight-line trend,
+ * summed power over MODULATION_RATES (experiments/issue-51-f0-rate.mjs).
+ */
+function f0Rate(result) {
+  const { samples, sampleRate } = decimate(
+    result.samples,
+    result.sampleRate,
+    11025
+  );
+  const length = Math.round(0.04 * sampleRate);
+  const power = new Float64Array(MODULATION_RATES.length);
+  for (const segment of vowels(result)) {
+    const track = [];
+    for (
+      let time = segment.start + 0.01;
+      time + 0.04 <= segment.end - 0.01;
+      time += 0.01
+    ) {
+      const frame = yinPitch(
+        samples,
+        index(time, sampleRate),
+        length,
+        sampleRate
+      );
+      if (frame.aperiodicity < 0.3) {
+        track.push(12 * Math.log2(frame.f0));
+      }
+    }
+    if (track.length < 8) {
+      continue;
+    }
+    const middle = (track.length - 1) / 2;
+    const mean = track.reduce((sum, value) => sum + value, 0) / track.length;
+    let product = 0;
+    let square = 0;
+    track.forEach((value, at) => {
+      product += (at - middle) * (value - mean);
+      square += (at - middle) ** 2;
+    });
+    const slope = product / square;
+    MODULATION_RATES.forEach((rate, slot) => {
+      let real = 0;
+      let imaginary = 0;
+      track.forEach((value, at) => {
+        const rest = value - mean - slope * (at - middle);
+        const phase = 2 * Math.PI * rate * at * 0.01;
+        real += rest * Math.cos(phase);
+        imaginary += rest * Math.sin(phase);
+      });
+      power[slot] += real * real + imaginary * imaginary;
+    });
+  }
+  let best = 0;
+  for (let slot = 1; slot < power.length; slot++) {
+    if (power[slot] > power[best]) {
+      best = slot;
+    }
+  }
+  return power[best] > 0 ? MODULATION_RATES[best] : 0;
+}
+
 /** F1-F3 (Hz) and the -3 dB bandwidth of F1 of each vowel (LPC 14). */
 function formantTrack(result) {
   return vowelWindows(result).map((window) => ({
@@ -231,6 +298,8 @@ const MEASURE_FUNCTIONS = {
     const track = f0Track(result);
     return 12 * Math.log2(percentile(track, 0.95) / percentile(track, 0.05));
   },
+  /** Rate of the strongest f0 modulation from 2 to 12 Hz (Hz). */
+  f0Rate,
   /** Harmonics-to-noise ratio from the YIN aperiodicity (dB). */
   hnr: (result) => {
     const aperiodicity = median(

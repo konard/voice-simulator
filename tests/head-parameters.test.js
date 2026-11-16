@@ -189,19 +189,27 @@ describe('head parameters', () => {
   });
 
   it('lowers the nasal murmur with higher nasal losses', () => {
+    // The losses damp the harmonics near the murmur, so how much they
+    // lower it depends on where the harmonics fall: at one head pitch the
+    // level falls by 3 to 15 % (experiments/issue-51-nasal-pitch.mjs).
+    // The levels are summed over four pitches.
     const level = (nasalLoss) => {
-      const head = normalizeHeadConfig({ nasalLoss });
-      // A stressed onset: the unstressed [m] of ˈama lasts 52 ms under the
-      // duration rules of issue 39 and is mostly transition
-      // (experiments/issue-39-nasal-spans.mjs).
-      const plan = planUtterance('aˈma', { head });
-      const samples = renderPlan(plan, { sampleRate: RATE, seed: 3 });
-      const nasal = plan.segments.find((item) => item.kind === 'consonant');
-      return rms(
-        samples,
-        Math.floor(nasal.start * RATE),
-        Math.floor(nasal.end * RATE)
-      );
+      let sum = 0;
+      for (const pitch of [100, 115, 130, 145]) {
+        const head = normalizeHeadConfig({ nasalLoss, pitch });
+        // A stressed onset: the unstressed [m] of ˈama lasts 52 ms under
+        // the duration rules of issue 39 and is mostly transition
+        // (experiments/issue-39-nasal-spans.mjs).
+        const plan = planUtterance('aˈma', { head });
+        const samples = renderPlan(plan, { sampleRate: RATE, seed: 3 });
+        const nasal = plan.segments.find((item) => item.kind === 'consonant');
+        sum += rms(
+          samples,
+          Math.floor(nasal.start * RATE),
+          Math.floor(nasal.end * RATE)
+        );
+      }
+      return sum;
     };
     const parameter = HEAD_PARAMETERS.find(
       (entry) => entry.key === 'nasalLoss'

@@ -415,7 +415,7 @@
         "foldMass": {
           "type": "number",
           "title": "Vocal fold mass (factor)",
-          "description": "Scales the vibrating mass of the folds: heavier folds vibrate slower (fold source only).",
+          "description": "Scales the vibrating mass of the folds. Heavier folds vibrate slower; the pitch control holds f0 with more tension, so they swing with a stronger first harmonic (fold source only).",
           "minimum": 0.5,
           "maximum": 2,
           "default": 1

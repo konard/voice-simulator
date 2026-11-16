@@ -126,7 +126,18 @@ export function estimateFormants(samples, sampleRate, options = {}) {
 }
 
 /**
- * Autocorrelation pitch estimate (Hz), or 0 when unvoiced.
+ * Share of the best autocorrelation score that a lag of a whole fraction
+ * of the best lag needs to be taken instead (`estimatePitch()`). A steady
+ * period between two whole lags fits a multiple of it better than either
+ * neighbour: 199.5 Hz at 16 kHz is 80.2 samples, lags 80 and 81 score
+ * 0.993 and lag 161 0.998 (experiments/issue-51-alto-acf.mjs).
+ */
+export const SUBHARMONIC_TOLERANCE = 0.98;
+
+/**
+ * Autocorrelation pitch estimate (Hz), or 0 when unvoiced. The shortest
+ * whole fraction of the best lag that scores within
+ * `SUBHARMONIC_TOLERANCE` of it wins, which avoids octave errors.
  * @param {ArrayLike<number>} samples
  * @param {number} sampleRate
  * @param {{start?: number, duration?: number, min?: number, max?: number}} [options]
@@ -140,6 +151,7 @@ export function estimatePitch(samples, sampleRate, options = {}) {
   for (let index = start; index < start + length; index++) {
     energy += samples[index] ** 2;
   }
+  const scores = new Float64Array(maxLag + 1);
   let bestLag = 0;
   let best = 0;
   for (let lag = minLag; lag <= maxLag; lag++) {
@@ -148,12 +160,28 @@ export function estimatePitch(samples, sampleRate, options = {}) {
       sum += samples[index] * (samples[index + lag] ?? 0);
     }
     const score = sum / (energy || 1);
+    scores[lag] = score;
     if (score > best) {
       best = score;
       bestLag = lag;
     }
   }
-  return best > 0.3 ? sampleRate / bestLag : 0;
+  if (best <= 0.3) {
+    return 0;
+  }
+  for (let divisor = Math.floor(bestLag / minLag); divisor >= 2; divisor--) {
+    const centre = Math.round(bestLag / divisor);
+    let lag = 0;
+    for (let near = centre - 1; near <= centre + 1; near++) {
+      if (near >= minLag && (lag === 0 || scores[near] > scores[lag])) {
+        lag = near;
+      }
+    }
+    if (lag && scores[lag] >= best * SUBHARMONIC_TOLERANCE) {
+      return sampleRate / lag;
+    }
+  }
+  return sampleRate / bestLag;
 }
 
 /** Root mean square level of a range. */

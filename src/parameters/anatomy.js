@@ -282,10 +282,13 @@ export const ANATOMY_PARAMETERS = [
     description:
       'Scales the length of the trachea and the bronchi below the glottis, on top of the vocal tract length: longer lowers the subglottal resonances (source-tract interaction only).',
     source: 'Ishizaka, Matsudaira & Kaneko 1976; Lulich 2010 (issue 34)',
+    // A level tone: the centroid falls by 0.4 % and 1.6 % from 0.8 to 1
+    // and 1.25, while the fall of a stressed [a] moves it by as much
+    // either way (experiments/issue-51-fold-effects.mjs).
     effect: {
       measure: 'centroid',
       sign: -1,
-      ipa: 'ˈa',
+      ipa: 'a˥',
       options: { source: 'folds', interaction: true },
     },
   },
@@ -383,6 +386,10 @@ export const ANATOMY_PARAMETERS = [
     description:
       'Extra gap between the incisors of a close back vowel such as [u] (scaled by the jaw range).',
     source: TEETH,
-    effect: { measure: 'f1', sign: -1, ipa: 'ˈmumu ˈsusu' },
+    // The tube model of [u] keeps F1 (405.0 to 405.7 Hz from 0.2 to 0.6)
+    // and lowers F2 (942.5 to 939.5 Hz); rendered, F2 falls from 1062.5 to
+    // 1055 Hz (experiments/issue-51-back-gap-tube.mjs and
+    // issue-51-back-gap.mjs, issue 51).
+    effect: { measure: 'f2', sign: -1, ipa: 'ˈmumu ˈsusu' },
   },
 ];

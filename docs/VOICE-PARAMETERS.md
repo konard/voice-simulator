@@ -53,14 +53,14 @@ Anatomy: the tract, the mouth, the face, the teeth and the walls.
 | `wallStiffness`<br>Wall stiffness | g/(cm² s²) | 30000 to 500000 | 84500 | rms falls | Ishizaka, French & Flanagan 1975 (issue 36) |
 | `lossShape`<br>Boundary loss shape | × (factor) | 1 to 3 | 1.3 | bandwidth1 rises | Hawks & Miller 1995; fitted: experiments/issue-11-bandwidths.mjs (issue 36) |
 | `radiationBaffle`<br>Radiation baffle | × (factor) | 0.3 to 1 | 0.5 | f1 falls | Flanagan 1972 (piston in a sphere); fitted: experiments/issue-11-bandwidths.mjs (issue 36) |
-| `subglottalLength`<br>Subglottal tract length | × (factor) | 0.8 to 1.25 | 1 | centroid falls (`ˈa`, source folds, interaction true) | Ishizaka, Matsudaira & Kaneko 1976; Lulich 2010 (issue 34) |
+| `subglottalLength`<br>Subglottal tract length | × (factor) | 0.8 to 1.25 | 1 | centroid falls (`a˥`, source folds, interaction true) | Ishizaka, Matsudaira & Kaneko 1976; Lulich 2010 (issue 34) |
 | `subglottalLoss`<br>Subglottal wall loss | × (factor) | 1 to 8 | 7 | rms falls (`ˈa`, source folds, interaction true) | Ishizaka et al. 1976 (bandwidths 150-350 Hz); fitted: experiments/issue-34-subglottal-probe.mjs |
 | `incisorThickness`<br>Incisor thickness | cm | 0.5 to 1 | 0.7 | f3 falls (`ˈa`, tier high) | Calka et al. 2025, PLOS Comput Biol 21(9) e1013378, Table 3 (jaw openings from MRI); Shadle 1985 |
 | `restGap`<br>Incisor gap at rest | cm | 0.1 to 0.6 | 0.35 | noiseLevel falls | Calka et al. 2025, PLOS Comput Biol 21(9) e1013378, Table 3 (jaw openings from MRI); Shadle 1985 |
 | `sibilantGap`<br>Sibilant incisor gap | cm | 0.05 to 0.3 | 0.15 | noiseLevel falls | Calka et al. 2025, PLOS Comput Biol 21(9) e1013378, Table 3 (jaw openings from MRI); Shadle 1985 |
 | `velarGap`<br>Velar incisor gap | cm | 0.3 to 0.8 | 0.55 | f1 rises (`ˈkaka ˈgaga`) | Calka et al. 2025, PLOS Comput Biol 21(9) e1013378, Table 3 (jaw openings from MRI); Shadle 1985 |
 | `openGap`<br>Open vowel incisor gap | cm | 0.4 to 1.2 | 0.8 | f1 rises | Calka et al. 2025, PLOS Comput Biol 21(9) e1013378, Table 3 (jaw openings from MRI); Shadle 1985 |
-| `backGap`<br>Back vowel incisor gap | cm | 0.2 to 0.6 | 0.4 | f1 falls (`ˈmumu ˈsusu`) | Calka et al. 2025, PLOS Comput Biol 21(9) e1013378, Table 3 (jaw openings from MRI); Shadle 1985 |
+| `backGap`<br>Back vowel incisor gap | cm | 0.2 to 0.6 | 0.4 | f2 falls (`ˈmumu ˈsusu`) | Calka et al. 2025, PLOS Comput Biol 21(9) e1013378, Table 3 (jaw openings from MRI); Shadle 1985 |
 
 ## folds
 
@@ -75,7 +75,7 @@ Folds: the vocal folds and their pulses.
 | `shimmer` ★<br>Shimmer | % | 0 to 15 | 3 | hnr falls | Baken & Orlikoff 2000, Clinical Measurement of Speech and Voice |
 | `glottalChink` ★<br>Glottal chink | mm² | 0 to 10 | 0 | hnr falls | Södersten & Lindestad 1990; Hanson & Chuang 1999, JASA 106, Table X |
 | `foldLength`<br>Vocal fold length | cm | 0.6 to 1.8 | 1.4 | rms rises (`ˈa`, source folds) | Titze 1989, JASA 85(4) (issue 33) |
-| `foldMass`<br>Vocal fold mass | × (factor) | 0.5 to 2 | 1 | f0 falls (`ˈa`, source folds) | Ishizaka & Flanagan 1972; Steinecke & Herzel 1995 (issue 33) |
+| `foldMass`<br>Vocal fold mass | × (factor) | 0.5 to 2 | 1 | h1h2 rises (`ˈa`, source folds) | Ishizaka & Flanagan 1972; Steinecke & Herzel 1995 (issue 33) |
 | `foldStiffness`<br>Vocal fold stiffness | × (factor) | 0.5 to 2 | 1 | rms falls (`ˈa`, source folds) | Ishizaka & Flanagan 1972; Steinecke & Herzel 1995 (issue 33) |
 | `foldDamping`<br>Vocal fold damping | × (factor) | 0.5 to 3 | 1 | rms falls (`ˈa`, source folds) | Ishizaka & Flanagan 1972; Titze 1988 (issue 33) |
 | `glottalPressureCoefficient`<br>Glottal pressure coefficient | – | 1 to 1.4 | 1.1 | rms falls (`ˈa`, source folds, interaction true) | Titze 2008 (k_t = 1.1); issue 34 |
@@ -184,8 +184,8 @@ Expression: intonation, rhythm and level.
 | Key | Unit | Range | Default | Effect | Source |
 | --- | --- | --- | --- | --- | --- |
 | `pitchRange` ★<br>Intonation range | st | 0.5 to 8 | 3 | f0Range rises | 't Hart, Collier & Cohen 1990, A Perceptual Study of Intonation |
-| `vibrato` ★<br>Vibrato depth | – | 0 to 1 | 0.25 | f0Range rises (`ˈaː \|`, pitchRange 0.5, declination 0, accentStrength 0) | Sundberg 1987, The Science of the Singing Voice (vibrato extent) |
-| `vibratoRate` ★<br>Vibrato rate | Hz | 3 to 8 | 5.2 | f0Range falls (`ˈaː \|`, vibrato 1, pitchRange 0.5, declination 0, accentStrength 0) | Sundberg 1987, The Science of the Singing Voice (vibrato rate) |
+| `vibrato` ★<br>Vibrato depth | – | 0 to 1 | 0.25 | f0Range rises (`aː˥ \|`, pitchRange 0.5, declination 0, accentStrength 0) | Sundberg 1987, The Science of the Singing Voice (vibrato extent) |
+| `vibratoRate` ★<br>Vibrato rate | Hz | 3 to 8 | 5.2 | f0Rate rises (`aː˥ \|`, vibrato 1, pitchRange 0.5, declination 0, accentStrength 0) | Sundberg 1987, The Science of the Singing Voice (vibrato rate) |
 | `declination` ★<br>Declination | st | 0 to 6 | 2 | f0Range rises | 't Hart, Collier & Cohen 1990 (declination of 2 to 6 semitones) |
 | `accentStrength` ★<br>Accent strength | × (factor) | 0 to 2 | 1 | f0Range rises | Pierrehumbert 1980, The Phonology and Phonetics of English Intonation |
 | `intrinsicPitch`<br>Intrinsic pitch | st | 0 to 3 | 0 | f0 falls | Whalen & Levitt 1995, J Phonetics 23 (intrinsic F0 of vowels) |

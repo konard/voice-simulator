@@ -875,6 +875,7 @@ export type VoiceMeasure =
   | 'rms'
   | 'f0'
   | 'f0Range'
+  | 'f0Rate'
   | 'hnr'
   | 'h1h2'
   | 'centroid'
