@@ -7,18 +7,26 @@ const inputs = args.filter((arg) => arg !== '--markup');
 for (const input of inputs) {
   try {
     const result = parseMarkup(input, { markup });
-    const { offsets, spans, ...rest } = result;
+    const { spans, ...rest } = result;
+    delete rest.offsets;
     console.log(JSON.stringify(input));
     console.log(' ', JSON.stringify(rest));
     for (const span of spans) {
-      const changed = Object.fromEntries(
-        Object.entries(span.mode).filter(([key, value]) =>
-          JSON.stringify(value) !== JSON.stringify(parseMarkup('').spans[0]?.mode?.[key] ?? null)
-        )
+      console.log(
+        '  span',
+        span.start,
+        span.end,
+        JSON.stringify(result.text.slice(span.start, span.end)),
+        JSON.stringify(span.mode)
       );
-      console.log('  span', span.start, span.end, JSON.stringify(result.text.slice(span.start, span.end)), JSON.stringify(span.mode));
     }
   } catch (error) {
-    console.log(JSON.stringify(input), '->', error.name, error.message, error.position);
+    console.log(
+      JSON.stringify(input),
+      '->',
+      error.name,
+      error.message,
+      error.position
+    );
   }
 }
