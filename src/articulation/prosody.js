@@ -257,19 +257,24 @@ export function syllablePitch(segment, context) {
   const span = Math.max(0.2, nuclei.at(-1).end - phraseStart);
   const progress = (segment.start - phraseStart) / span;
   const register = segmentRegister(segment, phrase);
-  const range = head.pitchRange * register.range;
+  // The speech mode (docs/markup.md): `pitch` in semitones, `range` a
+  // factor of the accent range and of the tone scale.
+  const mode = segment.token.mode;
+  const modeRange = mode?.range ?? 1;
+  const range = head.pitchRange * register.range * modeRange;
   // The head's declination replaces the 2-semitone default and scales the
   // step between phrases with it.
   const declination = head.declination ?? DECLINATION.phrase;
   const base = semitones(
     head.pitch,
-    register.shift -
+    register.shift +
+      (mode?.pitch ?? 0) -
       declination * progress -
       (DECLINATION.step * phrase.step * declination) / DECLINATION.phrase
   );
   const tone = segment.token.tone;
   if (tone) {
-    const scale = (1.2 + 0.35 * head.pitchRange) * register.range;
+    const scale = (1.2 + 0.35 * head.pitchRange) * register.range * modeRange;
     return tonePitch(tone, base, scale);
   }
   const accent =
