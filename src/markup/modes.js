@@ -15,7 +15,8 @@
  *   replace instead (labels such as `rate="fast"` or `pitch="200Hz"`);
  * - `effort` sets both `effort` and `effortEnd` (unless `effortEnd` is
  *   given too); `effortBy` moves both by an amount; `effortRamp` sets
- *   `effortEnd` to `effort + effortRamp` (crescendo, diminuendo).
+ *   `effortEnd` to `effort + effortRamp` (crescendo, diminuendo); a
+ *   change that sets `effort` also sets `lombard` (false unless given).
  *
  * The values are clamped after composing: rate 0.25 to 4, pitch -24 to 24
  * semitones, range 0 to 4, gain -120 to 12 dB, effort 0 to 1.
@@ -71,6 +72,7 @@ export const TUNE_LABELS = Object.freeze([
 export const MODE_DEFAULTS = Object.freeze({
   effort: 0.5, // 0 very soft, 0.25 soft, 0.5 normal, 0.75 loud, 1 shout
   effortEnd: 0.5, // effort at the end of the span (ramps)
+  lombard: false, // speech in noise: only stressed vowels get longer
   gain: 0, // plain level change in dB, no change of voice quality
   rate: 1, // speed factor: 2 means half the durations
   pitch: 0, // shift in semitones
@@ -92,6 +94,9 @@ export const EFFORT_LEVELS = Object.freeze({
   loud: 0.75,
   shout: 1,
 });
+
+/** Effort of the Lombard preset (`[lombard]`, `level="lombard"`). */
+export const LOMBARD_EFFORT = EFFORT_LEVELS.loud;
 
 /** Speech rate of the tempo names. */
 export const RATE_LEVELS = Object.freeze({ fast: 1.3, slow: 0.75 });
@@ -208,6 +213,7 @@ function composeEffort(mode, change) {
   if (change.effort !== undefined) {
     mode.effort = change.effort;
     mode.effortEnd = change.effortEnd ?? change.effort;
+    mode.lombard = change.lombard ?? false;
   } else if (change.effortBy !== undefined) {
     mode.effort += change.effortBy;
     mode.effortEnd += change.effortBy;

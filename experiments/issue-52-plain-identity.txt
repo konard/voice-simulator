@@ -1,0 +1,9 @@
+"Please call Stella." {"tier":"medium","engine":"js"} 90802 90802 different samples: 0
+"Is it ready? Yes, it is!" {"tier":"low","engine":"js"} 84894 84894 different samples: 0
+"Please call Stella." {"tier":"medium","source":"folds","engine":"js"} 90802 90802 different samples: 0
+"Hello world." {"tier":"medium","markup":true,"engine":"js"} 62908 62908 different samples: 0
+"Please call Stella." {"tier":"medium","engine":"rust"} 90802 90802 different samples: 0
+"Is it ready? Yes, it is!" {"tier":"low","engine":"rust"} 84894 84894 different samples: 0
+"Please call Stella." {"tier":"medium","source":"folds","engine":"rust"} 90802 90802 different samples: 0
+"Hello world." {"tier":"medium","markup":true,"engine":"rust"} 62908 62908 different samples: 0
+identical

@@ -351,7 +351,8 @@ function renderDifference(engine, options, count) {
   const settings = { ...renderOptions, ...options };
   let expected;
   if (count === undefined) {
-    expected = renderPlan(plan, settings);
+    // engine 'js': the default engine is Rust since issue 25.
+    expected = renderPlan(plan, { ...settings, engine: 'js' });
   } else {
     expected = new Float32Array(count);
     expect(new VoiceRenderer(plan, settings).render(expected)).toBe(count);

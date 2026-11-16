@@ -18,6 +18,12 @@ import { normalizeHeadConfig, randomHeadConfig } from './head-config.js';
 import { accentSettings } from './accent/index.js';
 import { offsetHead } from './accent/head.js';
 import { AUDIO_TIERS, DEFAULT_AUDIO_TIER } from './perf/lod.js';
+import {
+  EFFORT_RAMP_LIMIT,
+  fastEffortRamps,
+  maxModeLevel,
+} from './articulation/effort.js';
+import { normalizeLoudness } from './analysis/loudness.js';
 
 /**
  * Find an audio tier by name or index.
@@ -94,6 +100,47 @@ function transcribe(text, options) {
 }
 
 /**
+ * The level offset (dB) of the output: minus the loudest level of the mode
+ * spans (`E + gain`, at least 0), or minus `headroom` when one is given, so
+ * that loud modes do not clip and plain speech keeps its samples.
+ */
+function levelOffset(plan, headroom) {
+  const level =
+    headroom === undefined || headroom === null
+      ? maxModeLevel(plan.modes)
+      : Number(headroom);
+  if (!Number.isFinite(level)) {
+    throw new RangeError(`headroom must be a number of dB: ${headroom}`);
+  }
+  return level === 0 ? 0 : -level;
+}
+
+/** Warnings for effort ramps faster than EFFORT_RAMP_LIMIT dB/s. */
+function rampWarnings(plan, timeline) {
+  return fastEffortRamps(plan.modes).map((ramp) => {
+    const word = timeline.words.find((item) => item.end > ramp.start);
+    return {
+      position: word?.sourceStart ?? 0,
+      message:
+        `effort changes by ${ramp.rate.toFixed(0)} dB/s, faster than ` +
+        `${EFFORT_RAMP_LIMIT} dB/s`,
+    };
+  });
+}
+
+/**
+ * The audio tier of the options: without a tier or a solver the default
+ * (3D) tier applies; a solver alone keeps its own defaults.
+ */
+function resolveTier(options) {
+  return (
+    getAudioTier(
+      options.tier ?? (options.solver ? undefined : DEFAULT_AUDIO_TIER)
+    ) ?? {}
+  );
+}
+
+/**
  * Prepare everything needed to render: IPA, plan and renderer options.
  * @param {string} text Text (or IPA when `options.ipa` is true).
  * @param {object} [options] `accent` and `accentLevel` as in textToIpa;
@@ -114,12 +161,7 @@ export function prepareUtterance(text, options = {}) {
     ipa: transcription.ipa,
     language: transcription.lang,
   });
-  // Without a tier or a solver the default (3D) tier applies; a solver
-  // alone keeps its own defaults.
-  const tier =
-    getAudioTier(
-      options.tier ?? (options.solver ? undefined : DEFAULT_AUDIO_TIER)
-    ) ?? {};
+  const tier = resolveTier(options);
   const renderOptions = {
     solver: options.solver ?? tier.solver,
     source: options.source,
@@ -141,11 +183,16 @@ export function prepareUtterance(text, options = {}) {
     piriform: options.piriform,
     vallecula: options.vallecula,
     device: options.device,
+    levelOffsetDb: levelOffset(plan, options.headroom),
     engine: options.engine,
     threads: options.threads,
     simd: options.simd,
   };
-  return { ...transcription, head, plan, timeline, renderOptions };
+  const warnings = [
+    ...(transcription.warnings ?? []),
+    ...rampWarnings(plan, timeline),
+  ];
+  return { ...transcription, warnings, head, plan, timeline, renderOptions };
 }
 
 /**
@@ -160,13 +207,25 @@ export function prepareUtterance(text, options = {}) {
  * markup `warnings`. Malformed SSML throws `MarkupError`. `engine`
  * (default 'auto': Rust when it loads) picks the engine that renders, see
  * createEngine of src/engine/index.js; `threads` and `simd` go to it.
+ *
+ * Loud speech modes (issue 52) raise the level of the voice by their effort
+ * and gain; the output is lowered by the loudest of them, `levelOffsetDb`
+ * of the result (0 for plain speech), so that a shout does not clip.
+ * `headroom` (dB) sets that offset to `-headroom` instead: with the same
+ * headroom, renderings of different modes have comparable levels.
+ * `loudnessTarget` (LUFS, ITU-R BS.1770) scales the result to that
+ * integrated loudness, with the peak at most 0.98.
  * @param {string} text
- * @param {{lang?: string, accent?: string|object, accentLevel?: number, ipa?: boolean, markup?: boolean, head?: object|'random', seed?: string|number, preset?: string, tier?: string|number, solver?: string, source?: 'lf'|'folds', interaction?: boolean, subglottal?: boolean, sections?: number, dx?: number, sampleRate?: number, blockSize?: number, bandLimit?: number, output?: 'flow'|'microphone', microphone?: {distance?: number, azimuth?: number, elevation?: number, compensate?: boolean}, room?: string|object, enclosure?: {width: number, height: number, depth: number, absorption?: number, center?: number[]}, teeth?: boolean, piriform?: boolean, vallecula?: boolean, engine?: 'auto'|'rust'|'js'|object, threads?: number|'auto', simd?: 'auto'|boolean}} [options]
- * @returns {{lang: string, accent: string|null, accentLevel: number|null, ipa: string, words: object[], modes: {from: number, to: number, mode: object}[], warnings: {position: number, message: string}[], head: object, plan: object, timeline: object, sampleRate: number, samples: Float32Array, duration: number}}
+ * @param {{lang?: string, accent?: string|object, accentLevel?: number, ipa?: boolean, markup?: boolean, headroom?: number, loudnessTarget?: number, head?: object|'random', seed?: string|number, preset?: string, tier?: string|number, solver?: string, source?: 'lf'|'folds', interaction?: boolean, subglottal?: boolean, sections?: number, dx?: number, sampleRate?: number, blockSize?: number, bandLimit?: number, output?: 'flow'|'microphone', microphone?: {distance?: number, azimuth?: number, elevation?: number, compensate?: boolean}, room?: string|object, enclosure?: {width: number, height: number, depth: number, absorption?: number, center?: number[]}, teeth?: boolean, piriform?: boolean, vallecula?: boolean, engine?: 'auto'|'rust'|'js'|object, threads?: number|'auto', simd?: 'auto'|boolean}} [options]
+ * @returns {{lang: string, accent: string|null, accentLevel: number|null, ipa: string, words: object[], modes: {from: number, to: number, mode: object}[], warnings: {position: number, message: string}[], head: object, plan: object, timeline: object, sampleRate: number, samples: Float32Array, duration: number, levelOffsetDb: number, loudness?: number}}
  */
 export function synthesize(text, options = {}) {
   const prepared = prepareUtterance(text, options);
-  return result(prepared, renderPlan(prepared.plan, prepared.renderOptions));
+  return result(
+    prepared,
+    renderPlan(prepared.plan, prepared.renderOptions),
+    options
+  );
 }
 
 /**
@@ -182,11 +241,24 @@ export async function synthesizeAsync(text, options = {}) {
     ...prepared.renderOptions,
     chunkSize: options.chunkSize,
   });
-  return result(prepared, samples);
+  return result(prepared, samples, options);
 }
 
-function result(prepared, samples) {
-  const { sampleRate } = prepared.renderOptions;
+function result(prepared, rendered, options) {
+  const { sampleRate, levelOffsetDb } = prepared.renderOptions;
+  let samples = rendered;
+  let offset = levelOffsetDb;
+  let loudness;
+  if (options.loudnessTarget !== undefined && options.loudnessTarget !== null) {
+    const normalized = normalizeLoudness(
+      rendered,
+      sampleRate,
+      Number(options.loudnessTarget)
+    );
+    samples = normalized.samples;
+    offset += normalized.gainDb;
+    loudness = normalized.loudness;
+  }
   return {
     lang: prepared.lang,
     accent: prepared.accent ?? null,
@@ -201,17 +273,26 @@ function result(prepared, samples) {
     sampleRate,
     samples,
     duration: samples.length / sampleRate,
+    levelOffsetDb: offset,
+    ...(loudness === undefined ? {} : { loudness }),
   };
 }
 
 /**
  * Synthesize speech incrementally. Chunks are produced as they are
  * simulated, so playback or network streaming can start immediately.
+ * `loudnessTarget` needs the whole signal and throws here; the headroom of
+ * loud modes applies as in synthesize().
  * @param {string} text
  * @param {Parameters<typeof synthesize>[1] & {chunkSize?: number}} [options]
  * @returns {AsyncGenerator<Float32Array>}
  */
 export async function* synthesizeStream(text, options = {}) {
+  if (options.loudnessTarget !== undefined && options.loudnessTarget !== null) {
+    throw new Error(
+      'loudnessTarget needs the whole signal: use synthesize() or synthesizeAsync()'
+    );
+  }
   const prepared = prepareUtterance(text, options);
   const engine = await createEngine(engineOptions(prepared.renderOptions));
   const renderer = engine.createRenderer(prepared.plan, prepared.renderOptions);

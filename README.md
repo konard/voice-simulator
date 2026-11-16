@@ -37,9 +37,18 @@ a pressure wave travelling through the 3D shape of a parametric low-poly head
   effort, phonation, emotion and sounds), inline tags such as
   `[whisper]Hello[/whisper]` or `[pause 0.5]` with `markup: true`, and
   ExtIPA/VoQS marks in IPA (`{W həˈloʊ W} ˈwɝld .`, `(.)`, `⸨laugh⸩`, `ˈˈ`).
-  Rate, pitch, range, level, emphasis, tunes and timed pauses are heard;
-  the other qualities are carried in `plan.modes`. See
+  Rate, pitch, range, level, vocal effort, emphasis, tunes and timed pauses
+  are heard; the other qualities are carried in `plan.modes`. See
   [docs/markup.md](docs/markup.md).
+- **Vocal effort**: `[soft]`, `[loud]`, `[shout]`, `[lombard]`,
+  `[crescendo]` and `[diminuendo]` (and `<vs:effort>`, `{f … f}`) change
+  more than the level: the pitch rises (+5 Hz per dB), the spectrum gets
+  flatter, F1 rises and vowels get longer (`EFFORT_RULES`,
+  `effortChanges()`). The output is lowered by the loudest effort so a
+  shout does not clip (`headroom`, `levelOffsetDb`); `effortToSpl()` maps
+  effort to dB SPL (0.5 is 60 dB SPL) and `loudnessTarget` (CLI
+  `--loudness`) scales to an integrated loudness in LUFS (ITU-R BS.1770,
+  `integratedLoudness()`).
 - **Intonation per language** (issue 51): statements fall, yes/no
   questions rise, wh-questions fall, `Tea or coffee?` rises on the first
   item and falls on the second (`ˈti ↗ | ˈɔɹ ˈkɑfi ↘ ?`), list items and
@@ -460,6 +469,8 @@ npx voice-simulator ipa "quinoa" --lang en --lexicon my-words.json  # {"quinoa":
 npx voice-simulator ipa --markup "[whisper]Hello[/whisper] world."  # {W həˈloʊ W} ˈwɝld .
 npx voice-simulator ipa "Where are you going?"   # ˈwɛɹ ɚ ju ˈɡoʊɪŋ ↘ ?
 npx voice-simulator say "<speak>Wait<break time=\"1s\"/>now.</speak>" -o wait.wav
+npx voice-simulator say --markup "[shout]Hey![/shout] [soft]Quiet.[/soft]" -o hey.wav
+npx voice-simulator say "Hello world." --loudness=-23 -o broadcast.wav  # EBU R 128
 npx voice-simulator timeline "Hello world, how are you?"   # word and syllable times
 npx voice-simulator visemes "Hello world" -f vrm --fps 30 -o hello.json  # face animation
 npx voice-simulator say "Hello world" -o hello.wav --seed 7

@@ -18,6 +18,7 @@ import { noseShape } from '../articulation/tract-shape.js';
 import {
   blockShape,
   DEFAULT_SOURCE,
+  levelFactor,
   noseSections,
 } from '../acoustics/voice.js';
 import { piriformBranch } from '../acoustics/waveguide.js';
@@ -169,7 +170,7 @@ export function rendererConfig(settings) {
   values[C.LUNG_PRESSURE] = head.lungPressure;
   values[C.VOCAL_TRACT_LENGTH] = head.vocalTractLength;
   values[C.FRICATION_LEVEL] = head.fricationLevel;
-  values[C.OUTPUT_GAIN] = head.outputGain;
+  values[C.OUTPUT_GAIN] = head.outputGain * levelFactor(settings.levelOffsetDb);
   values[C.WALL_LOSS] = head.wallLoss;
   values[C.NASAL_LOSS] = head.nasalLoss;
   values[C.PHARYNX_WIDTH] = head.pharynxWidth ?? 1;
@@ -325,6 +326,7 @@ export class FramePlanner {
       solver: this.solver,
       listening,
       lengthScale: lengthScaleOf(this.solver, options),
+      levelOffsetDb: options.levelOffsetDb,
     });
     this.frames = new FrameList(this.stride);
     this.state = {};

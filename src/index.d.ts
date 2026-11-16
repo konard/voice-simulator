@@ -421,6 +421,18 @@ export interface SynthesizeOptions {
   /** WebGPU device for the 3D solver (synthesizeAsync, synthesizeStream). */
   device?: GPUDeviceLike;
   /**
+   * Headroom in dB for loud spans (default: the largest `E + gain` of the
+   * plan, at least 0): the output is lowered by it for the whole utterance.
+   * A fixed number keeps several utterances comparable.
+   */
+  headroom?: number;
+  /**
+   * Loudness target in LUFS (BS.1770; for example -23 as in EBU R 128): the
+   * finished samples are scaled to it, but never above a peak of 0.98. Not
+   * available for `synthesizeStream`.
+   */
+  loudnessTarget?: number;
+  /**
    * The engine that renders (default `'auto'`: Rust when it loads, else
    * JavaScript); see createEngine. Rust and JavaScript differ by up to 1e-4
    * per sample, so `'js'` gives byte-stable output.
@@ -439,7 +451,96 @@ export interface SynthesisResult extends Transcription {
   sampleRate: number;
   samples: Float32Array;
   duration: number;
+  /** Level change of the headroom, `-headroom` dB (0 without loud spans). */
+  levelOffsetDb: number;
+  /** Integrated loudness in LUFS when `loudnessTarget` was given. */
+  loudness?: number;
 }
+
+// Vocal effort (docs/markup.md): `E = (effort - 0.5) * 40` dB.
+export interface EffortRule {
+  unit: 'dB' | 'factor' | 'st' | 'Hz';
+  value: (E: number, head?: { pitch?: number }) => number;
+  source: string;
+}
+export type EffortQuantity =
+  | 'level'
+  | 'lungPressure'
+  | 'pitch'
+  | 'f1'
+  | 'f2'
+  | 'f3'
+  | 'tilt'
+  | 'vowelDuration'
+  | 'consonantDuration'
+  | 'noise';
+export declare const EFFORT_RULES: Readonly<
+  Record<EffortQuantity, Readonly<EffortRule>>
+>;
+/** Limits of the pitch rule in semitones: `{min: -4, max: 12}`. */
+export declare const EFFORT_PITCH_LIMITS: Readonly<{
+  min: number;
+  max: number;
+}>;
+/** Effort ramps faster than this (dB/s) get a warning. */
+export declare const EFFORT_RAMP_LIMIT: number;
+/**
+ * Pitch rise (semitones) the fold source gives on its own at `E` dB,
+ * `[E, st]` points measured on `ˈa` (issue 52, step 8).
+ */
+export declare const FOLD_PITCH_RISE: ReadonlyArray<readonly [number, number]>;
+/** Factor on the pitch the fold tension is set for at `E` dB. */
+export declare function foldPitchFactor(E: number): number;
+/** The value of every rule at `E` dB (pitch in semitones re `head.pitch`). */
+export declare function effortChanges(
+  E: number,
+  head?: { pitch?: number }
+): Record<EffortQuantity, number>;
+/** `(effort - 0.5) * 40`. */
+export declare function effortToDecibels(effort: number): number;
+/** `0.5 + decibels / 40`. */
+export declare function decibelsToEffort(decibels: number): number;
+/** dB SPL at 1 m: `60 + E` (effort 0.5 is conversational speech). */
+export declare function effortToSpl(effort: number): number;
+export declare function splToEffort(spl: number): number;
+/** Mode spans whose effort changes faster than `limit` dB/s. */
+export declare function fastEffortRamps(
+  modes: { start: number; end: number; effort: number; effortEnd: number }[],
+  limit?: number
+): { start: number; end: number; rate: number }[];
+/** The largest `E + gain` (dB) of the mode spans, at least 0. */
+export declare function maxModeLevel(
+  modes: { effort: number; effortEnd: number; gain?: number }[]
+): number;
+
+// Level and loudness measures.
+/** RMS in dB re full scale of `samples[from..to)`; -200 for silence. */
+export declare function levelDb(
+  samples: ArrayLike<number>,
+  from?: number,
+  to?: number
+): number;
+/** Level of 1-5 kHz minus level of 50 Hz-1 kHz (dB). */
+export declare function alphaRatio(
+  samples: ArrayLike<number>,
+  sampleRate: number,
+  from?: number,
+  to?: number
+): number;
+/** The two K-weighting biquads `[b0, b1, b2, a1, a2]` of BS.1770. */
+export declare function kWeighting(sampleRate: number): number[][];
+/** Integrated loudness (LUFS) after ITU-R BS.1770; -Infinity when silent. */
+export declare function integratedLoudness(
+  samples: ArrayLike<number>,
+  sampleRate: number
+): number;
+/** Scale to a loudness target (LUFS), never above a peak (default 0.98). */
+export declare function normalizeLoudness(
+  samples: Float32Array,
+  sampleRate: number,
+  target: number,
+  options?: { peak?: number }
+): { samples: Float32Array; gainDb: number; loudness: number };
 
 // High-level API
 export declare function synthesize(

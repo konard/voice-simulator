@@ -59,18 +59,19 @@ Without markup the IPA and the samples are the same as before.
 
 Every span has all the fields of `MODE_DEFAULTS`:
 
-| Field                 | Default | Meaning                                                                                         | Heard today                               |
-| --------------------- | ------- | ----------------------------------------------------------------------------------------------- | ----------------------------------------- |
-| `effort`, `effortEnd` | 0.5     | vocal effort 0 (very soft) … 1 (shout) at the start and end of a span; `(effort - 0.5) * 40` dB | level, limited to -20 … +6 dB (until #52) |
-| `gain`                | 0       | plain level change in dB                                                                        | level                                     |
-| `rate`                | 1       | speed factor: 2 halves the durations                                                            | durations                                 |
-| `pitch`               | 0       | shift in semitones                                                                              | pitch targets                             |
-| `range`               | 1       | factor on pitch movements                                                                       | pitch targets                             |
-| `emphasis`            | 0       | -0.5 reduced, 0 none, 0.5 moderate, 1 strong                                                    | focus: pitch, duration, level (#51)       |
-| `phonation`           | all 0   | `breathy`, `creaky`, `tension` (-1 lax … 1 pressed), `falsetto`, `harsh`, `whisper`, each 0 … 1 | carried (#53, #54)                        |
-| `emotion`             | neutral | `name`, `intensity`, `arousal`, `valence`, `dominance`                                          | carried (#55)                             |
-| `tune`                | null    | intonation label (`TUNE_LABELS`)                                                                | the tune of the phrase (#51)              |
-| `lang`                | null    | language tag of the span                                                                        | transcription and tunes                   |
+| Field                 | Default | Meaning                                                                                         | Heard today                                                                 |
+| --------------------- | ------- | ----------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
+| `effort`, `effortEnd` | 0.5     | vocal effort 0 (very soft) … 1 (shout) at the start and end of a span; `(effort - 0.5) * 40` dB | level, pitch, tilt, F1, vowel length, noise ([Vocal effort](#vocal-effort)) |
+| `lombard`             | false   | speech in noise: only vowels with primary stress get longer                                     | vowel length                                                                |
+| `gain`                | 0       | plain level change in dB                                                                        | level                                                                       |
+| `rate`                | 1       | speed factor: 2 halves the durations                                                            | durations                                                                   |
+| `pitch`               | 0       | shift in semitones                                                                              | pitch targets                                                               |
+| `range`               | 1       | factor on pitch movements                                                                       | pitch targets                                                               |
+| `emphasis`            | 0       | -0.5 reduced, 0 none, 0.5 moderate, 1 strong                                                    | focus: pitch, duration, level (#51)                                         |
+| `phonation`           | all 0   | `breathy`, `creaky`, `tension` (-1 lax … 1 pressed), `falsetto`, `harsh`, `whisper`, each 0 … 1 | carried (#53, #54)                                                          |
+| `emotion`             | neutral | `name`, `intensity`, `arousal`, `valence`, `dominance`                                          | carried (#55)                                                               |
+| `tune`                | null    | intonation label (`TUNE_LABELS`)                                                                | the tune of the phrase (#51)                                                |
+| `lang`                | null    | language tag of the span                                                                        | transcription and tunes                                                     |
 
 Nested spans compose: `rate` and `range` multiply, `pitch` and `gain` add,
 everything else takes the inner value; named values such as `rate="fast"`
@@ -96,14 +97,14 @@ kept.
 | `break`                  | `time="300ms"` or `"1.5s"`; `strength`: `none` 0 s, `x-weak` 0.05 s, `weak` 0.2 s, `medium` 0.4 s (default), `strong` 0.8 s, `x-strong` 1.2 s                                                                                                                            | `Wait<break time="300ms"/>now<break strength="strong"/>go.`        | `ˈweɪt (0.3) ˈnaʊ (...) ˈɡoʊ .`                                          |
 | `prosody`                | `rate`: `x-slow` 0.5, `slow` 0.75, `medium` 1, `fast` 1.3, `x-fast` 1.6, `N%` or a factor such as `1.2`; `pitch`: `x-low` -6, `low` -3, `medium` 0, `high` +3, `x-high` +6 st, `+Nst`, `-Nst`, `+N%`, `-N%`, `NHz` (against the head's pitch, 120 Hz by default), `+NHz` | `<prosody rate="fast" pitch="+2st">Hello there</prosody> friend.`  | `{allegro həˈloʊ ˈðɛɹ allegro} ˈfɹɛnd .`; rate 1.3, pitch 2              |
 |                          | `range`: `x-low` 0.25, `low` 0.5, `medium` 1, `high` 1.5, `x-high` 2, `+N%`, `-N%`                                                                                                                                                                                       | `<prosody pitch="200Hz" range="x-high">Hello</prosody> there.`     | `həˈloʊ ˈðɛɹ .`; pitch 8.84 (120 Hz head), range 2                       |
-|                          | `volume`: `x-soft` -12, `soft` -6, `medium` 0, `loud` +6, `x-loud` +12 dB, `+NdB`, `-NdB` change the effort by dB/40; `silent` sets `gain` -120                                                                                                                          | `<prosody volume="x-soft">Hello</prosody> there.`                  | `həˈloʊ ˈðɛɹ .`; effort 0.2                                              |
+|                          | `volume`: `x-soft` -20, `soft` -10, `medium` 0, `loud` +10, `x-loud` +20 dB (the effort of `{pp}`, `{p}`, normal, `{f}`, `{ff}`), `+NdB`, `-NdB` change the effort by dB/40; `silent` sets `gain` -120                                                                   | `<prosody volume="x-soft">Hello</prosody> there.`                  | `{pp həˈloʊ pp} ˈðɛɹ .`; effort 0                                        |
 | `vs:gain` (on `prosody`) | `vs:gain="-6dB"`: plain gain                                                                                                                                                                                                                                             | `<prosody vs:gain="-6dB">Hello</prosody> there.`                   | `həˈloʊ ˈðɛɹ .`; gain -6                                                 |
 | `emphasis`               | `level`: `strong` 1 (default), `moderate` 0.5, `none` 0, `reduced` -0.5                                                                                                                                                                                                  | `Hello <emphasis>world</emphasis>.`                                | `həˈloʊ ˈˈwɝld .`; emphasis 1                                            |
 | `say-as`                 | `interpret-as`: `characters` (or `spell-out`), `cardinal` (or `number`), `ordinal`, `digits`; other values read the content as plain text with a warning                                                                                                                 | `<say-as interpret-as="characters">abc</say-as>.`                  | `ˈeɪ ˈbi ˈsi .`                                                          |
 | `phoneme`                | `alphabet="ipa"` and `ph`: the words inside are spoken as `ph`                                                                                                                                                                                                           | `A <phoneme alphabet="ipa" ph="təˈmɑːtəʊ">tomato</phoneme>.`       | `ə təˈmɑːtəʊ .`                                                          |
 | `lang`                   | `xml:lang`: language of the content                                                                                                                                                                                                                                      | `Say <lang xml:lang="ru">привет</lang>.`                           | `ˈseɪ prʲɪˈvʲet .`; lang ru                                              |
 | `sub`                    | `alias`: spoken instead of the content                                                                                                                                                                                                                                   | `<sub alias="World Wide Web">WWW</sub>.`                           | `ˈwɝld ˈwaɪd ˈwɛb .`                                                     |
-| `vs:effort`              | `level`: `whisper` (whisper 1), `soft`, `normal`, `loud`, `shout`, or `value="0.75"`; `to` sets `effortEnd`                                                                                                                                                              | `<vs:effort level="whisper">Hello</vs:effort> there.`              | `{W həˈloʊ W} ˈðɛɹ .`; whisper 1                                         |
+| `vs:effort`              | `level`: `whisper` (whisper 1), `soft`, `normal`, `loud`, `lombard`, `shout`, or `value="0.75"`; `to` sets `effortEnd`                                                                                                                                                   | `<vs:effort level="whisper">Hello</vs:effort> there.`              | `{W həˈloʊ W} ˈðɛɹ .`; whisper 1                                         |
 |                          |                                                                                                                                                                                                                                                                          | `<vs:effort value="0.5" to="0.75">Hello there</vs:effort>.`        | `{crescendo həˈloʊ ˈðɛɹ } .`; effortEnd 0.75                             |
 | `vs:phonation`           | `name`: `modal`, `breathy`, `creaky`, `pressed`, `lax`, `falsetto`, `harsh`, `whisper`, `whispery`; `degree` 0 … 1 (default 0.67)                                                                                                                                        | `<vs:phonation name="breathy">Hello</vs:phonation> there.`         | `{V̤ həˈloʊ V̤} ˈðɛɹ .`; breathy 0.67                                      |
 | `vs:emotion`             | `name` (`neutral happy sad angry afraid surprised disgusted tender bored sarcastic confident hesitant`), `intensity` 0 … 1 (default 0.67), or `arousal`, `valence`, `dominance` (-1 … 1)                                                                                 | `<vs:emotion name="sad" intensity="0.8">Hello</vs:emotion> there.` | `həˈloʊ ˈðɛɹ .`; sad 0.8 (arousal -0.32, valence -0.48, dominance -0.24) |
@@ -146,6 +147,8 @@ end of the input with a warning. Inline parsing never throws.
 | `[whisper]`                                                                         | whisper 1                                                                                                                 | `[whisper]Hello[/whisper] there.`                             | `{W həˈloʊ W} ˈðɛɹ .`                                                        |
 | `[soft]`, `[loud]`, `[shout]`                                                       | effort 0.25, 0.75, 1                                                                                                      | `[soft]Hello[/soft] [loud]there[/loud] [shout]now[/shout].`   | `{p həˈloʊ p} {f ˈðɛɹ f} {ff ˈnaʊ ff} .`                                     |
 | `[effort N]`                                                                        | effort N (0 … 1)                                                                                                          | `[effort 0.75]Hello[/effort] there.`                          | `{f həˈloʊ f} ˈðɛɹ .`                                                        |
+| `[lombard]`                                                                         | effort 0.75, only primary-stressed vowels get longer                                                                      | `[lombard]Hello[/lombard] there.`                             | `{f həˈloʊ f} ˈðɛɹ .`; lombard true                                          |
+| `[crescendo]`, `[diminuendo]`                                                       | `effortEnd` = effort + 0.25, effort - 0.25                                                                                | `[crescendo]Hello there[/crescendo] now.`                     | `{crescendo həˈloʊ ˈðɛɹ } ˈnaʊ .`; effortEnd 0.75                            |
 | `[fast]`, `[slow]`, `[rate N]`                                                      | rate 1.3, 0.75, N                                                                                                         | `[fast]Hello[/fast] [slow]there[/slow] [rate 1.5]now[/rate].` | `{allegro həˈloʊ allegro} {lento ˈðɛɹ lento} ˈnaʊ .`; the last word rate 1.5 |
 | `[high]`, `[low]`, `[pitch N]`                                                      | pitch +3, -3, N semitones                                                                                                 | `[high]Hello[/high] [low]there[/low] [pitch -2]now[/pitch].`  | `həˈloʊ ˈðɛɹ ˈnaʊ .`; pitch 3, -3, -2                                        |
 | `[breathy]`, `[creaky]` (with a degree: `[creaky 1]`)                               | breathy, creaky 0.67 or the degree                                                                                        | `[breathy]Hello[/breathy] [creaky 1]there[/creaky].`          | `{V̤ həˈloʊ V̤} {3V̰ ˈðɛɹ V̰} .`                                                 |
@@ -248,8 +251,110 @@ sound takes the mode of the word before it). The plan gets:
   `MODE_DEFAULTS`; `modeAt(plan, time)` finds the span at a time;
 - `plan.sounds`: `[{ name, start, end }]`.
 
+- `plan.channels.effort` (dB) and `plan.channels.tension` (offset on
+  `head.tenseness`), see [Vocal effort](#vocal-effort).
+
 Measured with `node experiments/issue-50-realise.mjs` ("Hello there, my
 good friend" against the plain text): `[fast]` gives 0.769 of the plain
-duration of its words, `[pitch +12]` a mean f0 ratio of 2.0000, `[soft]` a
-peak loudness ratio of 0.3162 (-10 dB); `[pause 1.5]`, `[laugh]` and
-`[cough 0.5]` last 1.500, 0.300 and 0.500 s.
+duration of its words, `[pitch +12]` a mean f0 ratio of 2.0000; `[pause
+1.5]`, `[laugh]` and `[cough 0.5]` last 1.500, 0.300 and 0.500 s.
+
+## Vocal effort
+
+Effort is more than a level: a louder voice also has a higher pitch, a
+flatter spectrum, a higher first formant and longer vowels (issue 52). The
+effort of a span is written in decibels, `E = (effort - 0.5) * 40`, from
+-20 dB (`effort` 0) to +20 dB (`effort` 1). `EFFORT_RULES` and
+`effortChanges(E, head)` (src/articulation/effort.js) give the rules:
+
+| Quantity           | Rule                                    | -10 dB (`[soft]`) | +10 dB (`[loud]`) | +20 dB (`[shout]`) | Source                                                                  |
+| ------------------ | --------------------------------------- | ----------------- | ----------------- | ------------------ | ----------------------------------------------------------------------- |
+| level              | `E` dB                                  | -10 dB            | +10 dB            | +20 dB             | definition                                                              |
+| lung pressure      | × `2^(E/9)`                             | × 0.463           | × 2.16            | × 4.67             | Titze & Sundberg 1992: 8-9 dB per doubling of the pressure              |
+| pitch              | +5 Hz per dB, -4 … +12 st               | -4 st             | +6.03 st          | +10.49 st          | Liénard & Di Benedetto 1999 (120 Hz speaker)                            |
+| F1                 | +3.5 Hz per dB                          | -35 Hz            | +35 Hz            | +70 Hz             | Liénard & Di Benedetto 1999                                             |
+| F2, F3             | unchanged                               | 0                 | 0                 | 0                  |                                                                         |
+| tilt (above 1 kHz) | +0.2 dB per dB                          | -2 dB             | +2 dB             | +4 dB              | Liénard & Di Benedetto 1999: F3 gains 2 dB over F1 per 10 dB of effort  |
+| vowel duration     | × 1, 1.1, 1.3 at 0, +10, +20 dB         | × 1               | × 1.1             | × 1.3              | research notes (proposal)                                               |
+| consonant duration | unchanged                               | × 1               | × 1               | × 1                | research notes (proposal)                                               |
+| noise              | `0.5 E` dB above normal, `1.25 E` below | -12.5 dB          | +5 dB             | +10 dB             | project choice: below normal effort the airflow falls with the pressure |
+
+Where they are realised: the planner fills the `effort` and `tension`
+channels, shifts the pitch, opens the jaw of open vowels (F1), lengthens
+vowels and raises the lung pressure channel. The LF source (the default)
+adds the tension to its tenseness, scales its voiced part and passes it
+through a shelf above 1 kHz so that the level and the alpha ratio follow
+the level and tilt rules; the renderer scales aspiration, frication and
+bursts by the noise rule. The fold source (`source: 'folds'`) takes its
+level and tilt from the raised lung pressure itself; its fold tension is
+set for the pitch less the rise the folds give on their own
+(`FOLD_PITCH_RISE`, measured on `ˈa` with
+`node experiments/issue-52-folds-pitch.mjs`: -0.18, +0.40 and +1.34 st at
+-10, +10 and +20 dB), so both sources keep the pitch rule. The Rust engine
+realises the same gains (`crates/voice-simulator-core/src/effort.rs`).
+
+Measured with `node experiments/issue-52-effort-tuning.mjs` ("Please call
+Stella.", tier medium, seed 1, LF source; F1 on `ˈa`), against plain
+speech:
+
+| Span        | Level     | Pitch     | Alpha ratio | H1-H2    | F1 of `ˈa` | Vowels  | Consonants |
+| ----------- | --------- | --------- | ----------- | -------- | ---------- | ------- | ---------- |
+| `[soft]`    | -10.46 dB | -4.03 st  | -1.97 dB    | +2.30 dB | -25 Hz     | × 1.000 | × 1.000    |
+| `[loud]`    | +10.86 dB | +5.99 st  | +2.00 dB    | -4.01 dB | +35 Hz     | × 1.100 | × 1.000    |
+| `[shout]`   | +19.94 dB | +10.47 st | +4.52 dB    | -7.83 dB | +60 Hz     | × 1.300 | × 1.000    |
+| `[lombard]` | +10.85 dB |           |             |          |            | × 1.084 |            |
+
+`<prosody vs:gain="-6dB">` is a plain gain: -5.93 dB and +0.16 dB of
+alpha ratio.
+
+### Level convention
+
+Effort 0.5 is conversational speech at 60 dB SPL at 1 m:
+`effortToSpl(effort) = 60 + E` and `splToEffort(spl)` is its inverse, so
+`[loud]` is 70 dB SPL and `[shout]` 80 dB SPL. `effortToDecibels()` and
+`decibelsToEffort()` convert between effort and `E`.
+
+The output is lowered by the loudest span, `maxModeLevel(plan.modes)`
+(`E + gain`, at least 0), so that a shout does not clip: the result carries
+it as `levelOffsetDb` (-20 for a whole shout, 0 for plain text). With
+`headroom` (`--headroom`) the offset is `-headroom` instead, so renderings
+of different modes keep comparable levels. `loudnessTarget` (`--loudness`,
+LUFS) measures the integrated loudness of ITU-R BS.1770
+(`integratedLoudness()`, K-weighting and gating) and scales the result to
+it, never above a peak of 0.98; `result.loudness` is the loudness reached
+and `levelOffsetDb` includes the gain. Streams have no loudness target.
+
+```sh
+voice-simulator say --markup "[shout]Hey![/shout]" --out hey.wav   # peak below 0.98
+voice-simulator say --loudness=-23 "Hello there." --out hello.wav    # -23 LUFS
+```
+
+### Ramps and Lombard speech
+
+A span from `effort` to `effortEnd` (`[crescendo]`, `[diminuendo]`,
+`{crescendo …}`, `<vs:effort value="0.25" to="0.75">`) ramps linearly in dB
+from the end of its first vowel to the start of its last, so the first
+vowel keeps the start value and the last has the end value. Natural ramps
+are 5 to 10 dB/s; a span that asks for more than `EFFORT_RAMP_LIMIT` (40
+dB/s) gets a warning in `result.warnings` (`fastEffortRamps()`). Measured
+with `node experiments/issue-52-crescendo.mjs`:
+`[crescendo]la la la la la la[/crescendo]` rises by 9.14 dB from the first
+to the last vowel, a diminuendo falls by 10.30 dB.
+
+`[lombard]` and `<vs:effort level="lombard">` (speech in noise) are effort
+0.75 with one difference: only vowels with primary stress get longer. In
+IPA they are written `{f … f}`, like `[loud]`.
+
+### How a mode is written and recognised
+
+| Text / SSML                                       | IPA           | Correlates that can be measured (#71)         |
+| ------------------------------------------------- | ------------- | --------------------------------------------- |
+| `[soft]`, `<prosody volume="soft">`               | `{p … p}`     | alpha ratio -2 dB, pitch -4 st re the speaker |
+| `[loud]`, `[lombard]`, `<vs:effort level="loud">` | `{f … f}`     | alpha ratio +2 dB, pitch +6 st, F1 +35 Hz     |
+| `[shout]`                                         | `{ff … ff}`   | alpha ratio +4 dB, pitch +10 st, F1 +70 Hz    |
+| `[crescendo]`, `to="…"`                           | `{crescendo}` | the same measures rising inside the span      |
+| `vs:gain="-6dB"` on `prosody`                     | not written   | level only; not recognisable                  |
+
+`levelDb(samples, from, to)` (RMS in dB re full scale) and
+`alphaRatio(samples, sampleRate, from, to)` (level of 1-5 kHz minus level
+of 50 Hz-1 kHz) of src/analysis/mode-features.js measure them.
