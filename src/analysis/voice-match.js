@@ -320,6 +320,7 @@ function renderFeatures(head, options) {
     sampleRate: 16000,
     solver: 'waveguide',
     seed: 1,
+    engine: options.engine,
   });
   return analyzeVoice(samples, sampleRate);
 }
@@ -330,7 +331,7 @@ function renderFeatures(head, options) {
  * `{step, total, head, distance}`; returns the same result as matchVoice.
  * @param {ArrayLike<number>} samples Mono recording.
  * @param {number} sampleRate
- * @param {{preset?: string, iterations?: number, transcript?: string, lang?: string, maxDuration?: number}} [options]
+ * @param {{preset?: string, iterations?: number, transcript?: string, lang?: string, maxDuration?: number, engine?: 'auto'|'rust'|'js'|object}} [options]
  *   transcript is what the recording says (in `lang`, detected when
  *   omitted); the renders then say the same words, which makes pitch and
  *   rate exact.

@@ -14,6 +14,8 @@ import {
   ROOM_PRESETS,
   benchmarkAudioTiers,
   compareRecordings,
+  createEngine,
+  ENGINE_NAMES,
   decodeAudio,
   DEFAULT_HEAD,
   decodeHeadConfig,
@@ -79,6 +81,8 @@ const OPTIONS = {
   iterations: { type: 'string' },
   fps: { type: 'string' },
   json: { type: 'boolean' },
+  engine: { type: 'string' },
+  threads: { type: 'string' },
   help: { type: 'boolean', short: 'h' },
   version: { type: 'boolean', short: 'v' },
 };
@@ -176,10 +180,35 @@ function usage() {
                         -f ${Object.keys(VISEME_FORMATS).join(' | ')} (default arkit)`,
     '  -p, --port <port>     Server port (default 8080, env PORT)',
     '      --host <host>     Server host (default 127.0.0.1, env HOST)',
+    '      --engine <name>   auto | rust | js: the engine that renders',
+    '                        (default auto: Rust when voice-simulator.wasm',
+    '                        loads, else JavaScript; js is byte-stable)',
+    '      --threads <n|auto> Threads of the Rust engine (default 1)',
     '      --json            Machine-readable output',
     '  -h, --help            Show this help',
     '  -v, --version         Show package version',
   ].join('\n');
+}
+
+/**
+ * The options of createEngine from --engine and --threads.
+ * @param {Record<string, string|boolean|undefined>} values Parsed flags.
+ * @returns {{engine: 'auto'|'rust'|'js', threads?: number|'auto'}}
+ */
+export function engineFlags(values) {
+  const engine = values.engine ?? 'auto';
+  if (!ENGINE_NAMES.includes(engine)) {
+    throw new Error(`Unknown engine: ${engine} (${ENGINE_NAMES.join(', ')})`);
+  }
+  const { threads } = values;
+  if (threads === undefined || threads === 'auto') {
+    return { engine, threads };
+  }
+  const count = Number(threads);
+  if (!Number.isInteger(count) || count < 1) {
+    throw new Error(`threads must be a positive integer or auto: ${threads}`);
+  }
+  return { engine, threads: count };
 }
 
 function readVersion() {
@@ -480,9 +509,10 @@ const COMMANDS = {
     io.stdout(values.json ? JSON.stringify(result) : result.ipa);
   },
 
-  say(values, positionals, io) {
+  say(values, positionals, io, engine) {
     const output = audioOutput(values, 'voice');
     const result = synthesize(requireText(positionals), {
+      engine,
       lang: values.lang,
       ...accentOptions(values),
       weakForms: values['strong-forms'] ? false : undefined,
@@ -639,7 +669,7 @@ const COMMANDS = {
     writeOutput(values.out ?? 'head.obj', obj, io);
   },
 
-  match(values, positionals, io) {
+  match(values, positionals, io, engine) {
     const [file] = positionals;
     if (!file) {
       throw new Error('Missing <file>');
@@ -650,6 +680,7 @@ const COMMANDS = {
       transcript: values.transcript,
       lang: values.lang,
       iterations: optionalNumber(values.iterations, 'iterations'),
+      engine,
     });
     if (values.json) {
       io.stdout(
@@ -695,7 +726,7 @@ const COMMANDS = {
     }
   },
 
-  benchmark(values, positionals, io) {
+  benchmark(values, positionals, io, engine) {
     const seconds = optionalNumber(values.seconds, 'seconds') ?? 0.3;
     const repeats = optionalNumber(values.repeats, 'repeats') ?? 5;
     if (values.tier) {
@@ -703,15 +734,22 @@ const COMMANDS = {
       if (!tier) {
         throw new Error(`Unknown tier: ${values.tier}`);
       }
-      const load = measureAudioTier(tier, { seconds, repeats });
+      const load = measureAudioTier(tier, { seconds, repeats, engine });
+      io.stdout(`engine: ${engine.name}`);
       io.stdout(`${tier.name}: load ${load.toFixed(3)}`);
       return;
     }
-    const result = benchmarkAudioTiers({ seconds, repeats, warmUp: 0.5 });
+    const result = benchmarkAudioTiers({
+      seconds,
+      repeats,
+      warmUp: 0.5,
+      engine,
+    });
     if (values.json) {
-      io.stdout(JSON.stringify(result));
+      io.stdout(JSON.stringify({ engine: engine.name, ...result }));
       return;
     }
+    io.stdout(`engine: ${engine.name}`);
     result.loads.forEach((load, index) => {
       const note = result.measured[index] ? '' : ' (predicted, not run)';
       io.stdout(`${AUDIO_TIERS[index].name}: load ${load.toFixed(3)}${note}`);
@@ -719,13 +757,14 @@ const COMMANDS = {
     io.stdout(`selected: ${result.tier.name}`);
   },
 
-  serve(values, positionals, io) {
+  serve(values, positionals, io, engine) {
     const port =
       optionalNumber(values.port ?? process.env.PORT, 'port') ?? 8080;
     const host = values.host ?? process.env.HOST ?? '127.0.0.1';
     const server = createVoiceServer({
       version: readVersion(),
       index: INDEX_PAGE,
+      engine,
     });
     return new Promise((resolve, reject) => {
       server.once('error', reject);
@@ -776,7 +815,9 @@ export async function runCli(argv, io = {}) {
       return 1;
     }
     loadLexiconFiles(values.lexicon, values.lang);
-    await handler(values, rest, streams);
+    // Loaded once, before the command: every render of it uses this engine.
+    const engine = await createEngine(engineFlags(values));
+    await handler(values, rest, streams, engine);
     return 0;
   } catch (error) {
     streams.stderr(error.message);

@@ -3,7 +3,7 @@
  */
 
 import type { Server } from 'node:http';
-import type { SynthesizeOptions } from '../index.d.ts';
+import type { Engine, EngineName, SynthesizeOptions } from '../index.d.ts';
 
 export declare class HttpError extends Error {
   constructor(status: number, message: string);
@@ -15,6 +15,11 @@ export declare function createVoiceServer(options?: {
   version?: string;
   /** HTML served at "/". */
   index?: string;
+  /**
+   * The engine of every request (default 'auto'), created once; a request
+   * with `engine=js` renders with the JavaScript engine.
+   */
+  engine?: EngineName | Engine;
 }): Server;
 
 /** Validate synthesis parameters from a query string or JSON body. */

@@ -3,7 +3,8 @@
  *
  *   GET  /api/health              -> {status, version}
  *   GET  /api/languages           -> supported languages with samples
- *   GET  /api/tiers               -> audio and visual LOD tiers, default tier
+ *   GET  /api/tiers               -> audio and visual LOD tiers, default
+ *                                    tier and the engine in use
  *   GET  /api/ipa?text=&lang=&accent= -> {lang, accent, ipa, words}
  *   GET|POST /api/timeline        -> {lang, accent, ipa, modes, sounds,
  *                                    warnings, timeline}: when each word
@@ -23,7 +24,9 @@
  * (cm), micAzimuth and micElevation (degrees), micCompensate (boolean) and
  * room (a preset name, or a {width, height, depth, rt60} object in a JSON
  * body), and the encoding: format (wav | flac | aiff | au | raw), bitDepth,
- * float (boolean). The text that is read may hold 2000 characters, a
+ * float (boolean), and engine=js, which renders that request with the
+ * JavaScript engine, not the server's (any other value is a 400
+ * error). The text that is read may hold 2000 characters, a
  * marked-up input 8000; markup that cannot be read is a 400 error.
  * sampleRate is one of 8000, 11025, 16000, 22050, 24000,
  * 32000, 44100, 48000; without it the narrow-band tiers (telephone,
@@ -56,6 +59,7 @@ import {
   synthesize,
   synthesizeStream,
 } from '../synthesize.js';
+import { createEngine } from '../engine/index.js';
 
 export { INDEX_PAGE } from './index-page.js';
 
@@ -340,14 +344,34 @@ async function streamAudio(response, text, options, encoder) {
   response.end();
 }
 
-function createRoutes(version) {
+/**
+ * The engine of a request: the server's, or the JavaScript engine for
+ * `engine=js`.
+ * @param {Record<string, unknown>} params
+ * @param {Promise<object>} engine the server's engine
+ */
+function requestEngine(params, engine) {
+  if (params.engine === undefined) {
+    return engine;
+  }
+  if (params.engine !== 'js') {
+    throw new HttpError(
+      400,
+      `engine must be js (or left out for the server's), not ${params.engine}`
+    );
+  }
+  return createEngine('js');
+}
+
+function createRoutes(version, engine) {
   return {
     'GET /api/health': () => ({ status: 'ok', version }),
     'GET /api/languages': () => Object.values(LANGUAGES),
-    'GET /api/tiers': () => ({
+    'GET /api/tiers': async () => ({
       audio: AUDIO_TIERS,
       visual: VISUAL_TIERS,
       default: DEFAULT_AUDIO_TIER,
+      engine: (await engine).name,
     }),
     'GET /api/ipa': (params) => {
       const { text, options } = synthesisOptions(params);
@@ -399,9 +423,10 @@ function createRoutes(version) {
       response.writeHead(200, { 'content-type': 'model/obj' });
       response.end(headModelObj(head, { lod: Number(params.lod ?? 1) }));
     },
-    'GET /api/synthesize': (params, response) => {
+    'GET /api/synthesize': async (params, response) => {
       const { text, options } = synthesisOptions(params);
       const { format, ...encoding } = encodingOptions(params);
+      options.engine = await requestEngine(params, engine);
       const result = synthesize(text, options);
       const audio = AUDIO_FORMATS[format];
       response.writeHead(200, {
@@ -412,9 +437,10 @@ function createRoutes(version) {
       });
       response.end(audio.encode(result.samples, result.sampleRate, encoding));
     },
-    'GET /api/stream': (params, response) => {
+    'GET /api/stream': async (params, response) => {
       const { text, options } = synthesisOptions(params);
       const encoder = streamEncoder(params, options.sampleRate);
+      options.engine = await requestEngine(params, engine);
       return streamAudio(response, text, options, encoder);
     },
   };
@@ -422,10 +448,15 @@ function createRoutes(version) {
 
 /**
  * Create the HTTP server (call `.listen(port)` to start it).
- * @param {{version?: string, index?: string}} [options] `index` is HTML served at "/".
+ * @param {{version?: string, index?: string, engine?: 'auto'|'rust'|'js'|object}} [options]
+ *   `index` is HTML served at "/". `engine` (default 'auto') is created
+ *   once, here, and renders every request (see createEngine).
  */
 export function createVoiceServer(options = {}) {
-  const routes = createRoutes(options.version ?? '0.0.0');
+  const engine = createEngine(options.engine ?? 'auto');
+  // A failed load is reported by the requests that need the engine.
+  engine.catch(() => {});
+  const routes = createRoutes(options.version ?? '0.0.0', engine);
   return createServer(async (request, response) => {
     response.setHeader('access-control-allow-origin', '*');
     response.setHeader('access-control-allow-headers', 'content-type');
