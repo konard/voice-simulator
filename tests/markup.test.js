@@ -10,7 +10,12 @@ import {
   isSsml,
   parseMarkup,
 } from '../src/markup/index.js';
-import { MODE_DEFAULTS, composeMode, createMode } from '../src/markup/modes.js';
+import {
+  MODE_DEFAULTS,
+  composeMode,
+  createMode,
+  emotionOf,
+} from '../src/markup/modes.js';
 import { formatIpa, parseIpa } from '../src/ipa/parse.js';
 import { textToIpa } from '../src/g2p/index.js';
 import { modeAt, planUtterance } from '../src/articulation/plan.js';
@@ -236,6 +241,32 @@ describe('parseMarkup: inline tags and limits', () => {
     expect(unclosed.warnings.length).toBe(1);
     expect(unclosed.warnings[0].message).toContain('whisper');
     expect(inline('a [/fast] b').warnings.length).toBe(1);
+  });
+
+  it('reads names such as constructor as unknown, not as Object members', () => {
+    const tag = inline('[constructor]a[/constructor]');
+    expect(tag.text).toBe('[constructor]a[/constructor]');
+    expect(tag.spans).toEqual([]);
+    expect(tag.warnings[0]).toEqual({
+      position: 0,
+      message: 'unknown tag [constructor]',
+    });
+    expect(inline('a [hasownproperty] b').warnings).toEqual([
+      { position: 2, message: 'unknown tag [hasownproperty]' },
+    ]);
+    const parsed = ssml(
+      'a<break strength="constructor"/>b ' +
+        '<emphasis level="constructor">c</emphasis> ' +
+        '<vs:emotion name="constructor">d</vs:emotion>'
+    );
+    expect(parsed.breaks.map((item) => item.seconds)).toEqual([0.4]);
+    expect(parsed.spans[0].mode.emphasis).toBe(1);
+    expect(parsed.warnings.map((item) => item.message)).toEqual([
+      'unknown break strength constructor',
+      'unknown emphasis level constructor',
+      'unknown emotion constructor',
+    ]);
+    expect(emotionOf({ name: 'constructor' }).arousal).toBe(0);
   });
 
   it('rejects entities and doctypes', () => {

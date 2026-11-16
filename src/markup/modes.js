@@ -162,7 +162,9 @@ export function emotionOf(spec) {
   const name = spec.name ?? 'neutral';
   const intensity =
     spec.intensity ?? (spec.name && name !== 'neutral' ? DEFAULT_DEGREE : 0);
-  const [arousal, valence, dominance] = EMOTIONS[name] ?? EMOTIONS.neutral;
+  const [arousal, valence, dominance] = Object.hasOwn(EMOTIONS, name)
+    ? EMOTIONS[name]
+    : EMOTIONS.neutral;
   const value = (given, base) =>
     clamp(given ?? Math.round(base * intensity * 1000) / 1000, [-1, 1]);
   return {

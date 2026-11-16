@@ -35,56 +35,61 @@ const degreeOf = (value) =>
 
 /**
  * Span tags: name -> (value) => change, or null when the value cannot be
- * read. `value` is the text after the name (undefined without one).
+ * read. `value` is the text after the name (undefined without one). A Map,
+ * so that names such as `constructor` are unknown tags.
  */
-const SPAN_TAGS = {
-  whisper: () => ({ phonation: { whisper: 1 } }),
-  ...Object.fromEntries(
-    Object.entries(EFFORT_LEVELS)
-      .filter(([name]) => name !== 'normal')
-      .map(([name, effort]) => [name, () => ({ effort })])
-  ),
-  effort: (value) => {
-    const effort = inUnit(value);
-    return effort === null ? null : { effort };
-  },
-  fast: () => ({ rate: RATE_LEVELS.fast, absolute: ['rate'] }),
-  slow: () => ({ rate: RATE_LEVELS.slow, absolute: ['rate'] }),
-  rate: (value) => {
-    const rate = number(value);
-    return rate !== null && rate > 0 ? { rate } : null;
-  },
-  high: () => ({ pitch: PITCH_STEP }),
-  low: () => ({ pitch: -PITCH_STEP }),
-  pitch: (value) => {
-    const pitch = number(value);
-    return pitch === null ? null : { pitch };
-  },
-  ...Object.fromEntries(
-    ['breathy', 'creaky', 'pressed', 'lax', 'falsetto', 'harsh'].map((name) => [
-      name,
-      (value) => {
-        const degree = degreeOf(value);
-        return degree === null ? null : PHONATIONS[name](degree);
-      },
-    ])
-  ),
-  ...Object.fromEntries(
-    Object.keys(EMOTIONS).map((name) => [
-      name,
-      (value) => {
-        const intensity = value === undefined ? undefined : inUnit(value);
-        return intensity === null
-          ? null
-          : { emotion: emotionOf({ name, intensity }) };
-      },
-    ])
-  ),
-  lang: (value) =>
-    /^[A-Za-z]{2,3}(?:[-_][A-Za-z\d]{2,8})*$/u.test(value ?? '')
-      ? { lang: value }
-      : null,
-};
+const SPAN_TAGS = new Map(
+  Object.entries({
+    whisper: () => ({ phonation: { whisper: 1 } }),
+    ...Object.fromEntries(
+      Object.entries(EFFORT_LEVELS)
+        .filter(([name]) => name !== 'normal')
+        .map(([name, effort]) => [name, () => ({ effort })])
+    ),
+    effort: (value) => {
+      const effort = inUnit(value);
+      return effort === null ? null : { effort };
+    },
+    fast: () => ({ rate: RATE_LEVELS.fast, absolute: ['rate'] }),
+    slow: () => ({ rate: RATE_LEVELS.slow, absolute: ['rate'] }),
+    rate: (value) => {
+      const rate = number(value);
+      return rate !== null && rate > 0 ? { rate } : null;
+    },
+    high: () => ({ pitch: PITCH_STEP }),
+    low: () => ({ pitch: -PITCH_STEP }),
+    pitch: (value) => {
+      const pitch = number(value);
+      return pitch === null ? null : { pitch };
+    },
+    ...Object.fromEntries(
+      ['breathy', 'creaky', 'pressed', 'lax', 'falsetto', 'harsh'].map(
+        (name) => [
+          name,
+          (value) => {
+            const degree = degreeOf(value);
+            return degree === null ? null : PHONATIONS[name](degree);
+          },
+        ]
+      )
+    ),
+    ...Object.fromEntries(
+      Object.keys(EMOTIONS).map((name) => [
+        name,
+        (value) => {
+          const intensity = value === undefined ? undefined : inUnit(value);
+          return intensity === null
+            ? null
+            : { emotion: emotionOf({ name, intensity }) };
+        },
+      ])
+    ),
+    lang: (value) =>
+      /^[A-Za-z]{2,3}(?:[-_][A-Za-z\d]{2,8})*$/u.test(value ?? '')
+        ? { lang: value }
+        : null,
+  })
+);
 
 /** A tag `[...]` at `index`: its name, value and end, or null. */
 function readTag(text, index) {
@@ -265,7 +270,7 @@ class InlineReader {
       this.begin({ name: 'ipa', position: index, ipa: value });
       return tag.end;
     }
-    const reader = SPAN_TAGS[tag.name];
+    const reader = SPAN_TAGS.get(tag.name);
     if (!reader) {
       return keep(`unknown tag [${tag.name}]`);
     }

@@ -51,38 +51,53 @@ const ENTITIES = { lt: '<', gt: '>', amp: '&', quot: '"', apos: "'" };
 /** Elements that never have content. */
 const EMPTY_ELEMENTS = new Set(['break', 'vs:sound']);
 
-/** Elements that change the mode: the method that reads the change. */
+/** Elements that change the mode: (parser, element) => change. */
 const CHANGES = new Map([
-  ['prosody', 'prosody'],
-  ['emphasis', 'emphasis'],
-  ['vs:effort', 'effort'],
-  ['vs:phonation', 'phonation'],
-  ['vs:emotion', 'emotion'],
+  ['prosody', (parser, element) => parser.prosody(element)],
+  ['emphasis', (parser, element) => parser.emphasis(element)],
+  ['vs:effort', (parser, element) => parser.effort(element)],
+  ['vs:phonation', (parser, element) => parser.phonation(element)],
+  ['vs:emotion', (parser, element) => parser.emotion(element)],
 ]);
 
-/** The other known elements: the method for the opening tag, or null. */
+/** The other known elements: the handler of the opening tag, or null. */
 const STARTS = new Map([
-  ['speak', 'startSpeak'],
-  ['p', 'startParagraph'],
-  ['s', 'startParagraph'],
-  ['lang', 'startLang'],
-  ['break', 'startBreak'],
-  ['vs:sound', 'startSound'],
-  ['phoneme', 'startPhoneme'],
+  ['speak', (parser, element) => parser.startSpeak(element)],
+  ['p', (parser, element) => parser.startParagraph(element)],
+  ['s', (parser, element) => parser.startParagraph(element)],
+  ['lang', (parser, element) => parser.startLang(element)],
+  ['break', (parser, element) => parser.startBreak(element)],
+  ['vs:sound', (parser, element) => parser.startSound(element)],
+  ['phoneme', (parser, element) => parser.startPhoneme(element)],
   ['say-as', null],
   ['sub', null],
 ]);
 
-/** The method for the closing tag of an element. */
+/** The handler of the closing tag of an element. */
 const CLOSES = new Map([
-  ['speak', 'closeRoot'],
-  ['p', 'closeParagraph'],
-  ['s', 'closeParagraph'],
-  ['break', 'closeEmpty'],
-  ['vs:sound', 'closeEmpty'],
-  ['phoneme', 'closePhoneme'],
-  ['say-as', 'replace'],
-  ['sub', 'replace'],
+  ['speak', (parser, element, position) => parser.closeRoot(element, position)],
+  [
+    'p',
+    (parser, element, position) => parser.closeParagraph(element, position),
+  ],
+  [
+    's',
+    (parser, element, position) => parser.closeParagraph(element, position),
+  ],
+  [
+    'break',
+    (parser, element, position) => parser.closeEmpty(element, position),
+  ],
+  [
+    'vs:sound',
+    (parser, element, position) => parser.closeEmpty(element, position),
+  ],
+  [
+    'phoneme',
+    (parser, element, position) => parser.closePhoneme(element, position),
+  ],
+  ['say-as', (parser, element, position) => parser.replace(element, position)],
+  ['sub', (parser, element, position) => parser.replace(element, position)],
 ]);
 
 /** Final punctuation: a `p` or `s` that ends without one gets a `.`. */
@@ -404,7 +419,7 @@ class SsmlReader {
     const position = this.index;
     const name = this.name(position + 1);
     let at = position + 1 + name.length;
-    const attributes = {};
+    const attributes = Object.create(null);
     for (;;) {
       const next = this.skipSpace(at);
       const char = this.input[next];
@@ -536,7 +551,7 @@ class SsmlReader {
   start(element) {
     const change = CHANGES.get(element.local);
     if (change) {
-      this.push(element, this[change](element));
+      this.push(element, change(this, element));
       return;
     }
     if (!STARTS.has(element.local)) {
@@ -545,7 +560,7 @@ class SsmlReader {
     }
     const handler = STARTS.get(element.local);
     if (handler) {
-      this[handler](element);
+      handler(this, element);
     }
   }
 
@@ -583,8 +598,9 @@ class SsmlReader {
     const level = element.attributes.level ?? 'strong';
     if (!Object.hasOwn(EMPHASIS, level)) {
       this.warn(element, `unknown emphasis level ${level}`);
+      return { emphasis: 1 };
     }
-    return { emphasis: EMPHASIS[level] ?? 1 };
+    return { emphasis: EMPHASIS[level] };
   }
 
   startBreak(element) {
@@ -597,10 +613,10 @@ class SsmlReader {
         seconds = BREAK_STRENGTHS.medium;
       }
     } else if (attributes.strength !== undefined) {
-      seconds = BREAK_STRENGTHS[attributes.strength];
-      if (seconds === undefined) {
+      if (Object.hasOwn(BREAK_STRENGTHS, attributes.strength)) {
+        seconds = BREAK_STRENGTHS[attributes.strength];
+      } else {
         this.warn(element, `unknown break strength ${attributes.strength}`);
-        seconds = BREAK_STRENGTHS.medium;
       }
     }
     if (seconds > this.limits.maxPauseSeconds) {
@@ -744,7 +760,7 @@ class SsmlReader {
     this.elements.pop();
     const handler = CLOSES.get(element.local);
     if (handler) {
-      this[handler](element, position);
+      handler(this, element, position);
     }
     if (element.pushed) {
       this.builder.pop();
