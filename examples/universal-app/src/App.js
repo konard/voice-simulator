@@ -497,7 +497,7 @@ export function App() {
   const [seed, setSeed] = useState(initialSeed);
   const [preset, setPreset] = useState(initialPreset);
   const [head, setHead] = useState(() => randomHeadConfig(seed, { preset }));
-  const [speech, setSpeech] = useState({
+  const [speech, setSpeech] = useState(() => ({
     text: LANGUAGES[locale].sample,
     lang: 'auto',
     accent: 'en-US',
@@ -508,7 +508,7 @@ export function App() {
     tier: readTierSetting(),
     animateMouth: true,
     showField: true,
-  });
+  }));
   const [acoustics, setAcoustics] = useState(() => ({ ...DEFAULT_ACOUSTICS }));
   const listening = useMemo(() => listeningSettings(acoustics), [acoustics]);
   const debug = useMemo(debugMode, []);

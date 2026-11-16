@@ -9,6 +9,7 @@ import {
   BENCHMARK_KEY,
   BENCHMARK_MAX_AGE,
   TIER_KEY,
+  readTierSetting,
 } from '../examples/universal-app/src/engine/benchmark-cache.js';
 import {
   AUDIO_TIERS,
@@ -367,6 +368,12 @@ describe('voice engine quality settings', () => {
       second.engine.setTier(null);
       expect(storage.items.get(TIER_KEY)).toBe('auto');
       expect(second.engine.audioLevel).toBe(2);
+
+      // A stored 'auto' or an unknown name reads as 'auto'.
+      expect(readTierSetting()).toBe('auto');
+      expect(benchmarkEngine().engine.auto).toBe(true);
+      storage.items.set(TIER_KEY, 'no-such-tier');
+      expect(readTierSetting()).toBe('auto');
     });
   });
 

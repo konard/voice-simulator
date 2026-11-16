@@ -4,11 +4,7 @@
  * device and engine for 30 days, so a later visit measures nothing.
  */
 
-import {
-  AUDIO_TIERS,
-  BENCHMARK_VERSION,
-  audioTierIndex,
-} from '../../../../src/index.js';
+import { AUDIO_TIERS, BENCHMARK_VERSION } from '../../../../src/index.js';
 
 export const BENCHMARK_KEY = 'voice-simulator:benchmark';
 /** Overloads in a row at the cached level (see VoiceEngine). */
@@ -128,7 +124,7 @@ export function writeOverloads(count) {
 /** The stored quality setting: 'auto' or the name of a tier. */
 export function readTierSetting() {
   const value = read(TIER_KEY);
-  return value && audioTierIndex(value) >= 0 ? value : 'auto';
+  return AUDIO_TIERS.some((tier) => tier.name === value) ? value : 'auto';
 }
 
 /** Store the quality setting: 'auto' or the name of a tier. */
