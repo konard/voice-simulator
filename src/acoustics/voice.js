@@ -246,6 +246,16 @@ const BUTTERWORTH_4 = [0.54, 1.31];
 const BUTTERWORTH_8 = [0.5098, 0.6013, 0.9, 2.5629];
 
 /**
+ * Factor on the output gain of a level offset in dB (`levelOffsetDb` of
+ * the render options): the headroom of loud speech modes (issue 52). It is
+ * apart from `head.outputGain`, whose range is limited.
+ * @param {number} [levelOffsetDb]
+ */
+export function levelFactor(levelOffsetDb = 0) {
+  return levelOffsetDb ? 10 ** (levelOffsetDb / 20) : 1;
+}
+
+/**
  * Low-pass at the solver rate, DC blocker and soft limiter. Without a
  * `bandLimit` the low-pass is fourth order at 0.45 times the output rate
  * (at most 20 kHz). With one (Hz) it is eighth order at
@@ -256,16 +266,6 @@ const BUTTERWORTH_8 = [0.5098, 0.6013, 0.9, 2.5629];
  * Nyquist, about 60 dB down at 8 kHz, which the filter at the solver rate
  * (about 7 dB at 1.1 bandLimit) cannot reach.
  */
-/**
- * Factor on the output gain of a level offset in dB (`levelOffsetDb` of
- * the render options): the headroom of loud speech modes (issue 52). It is
- * apart from `head.outputGain`, whose range is limited.
- * @param {number} [levelOffsetDb]
- */
-export function levelFactor(levelOffsetDb = 0) {
-  return levelOffsetDb ? 10 ** (levelOffsetDb / 20) : 1;
-}
-
 export class OutputStage {
   constructor(sampleRate, gain = 1, bandLimit = undefined) {
     this.gain = OUTPUT_GAIN * gain;

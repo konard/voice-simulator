@@ -102,16 +102,19 @@ describe('Rust sources (issue 22)', () => {
     glottisOpen: 0.3,
     glottisBreathy: 0.17,
   };
-  for (const [label, head] of [
+  for (const [label, head, effort] of [
     ['default', undefined],
     ['head values', SOURCE_HEAD],
+    // Vocal effort (issue 52): gain, tilt shelf, tension and noise rule.
+    ['effort', undefined, { effort: 12, tension: 0.072 }],
+    ['soft effort', undefined, { effort: -10, tension: -0.06 }],
   ]) {
     it(`glottis matches (${label})`, async () => {
-      await glottisMatches(head);
+      await glottisMatches(head, effort);
     });
   }
 
-  async function glottisMatches(head) {
+  async function glottisMatches(head, effort = { effort: 0, tension: 0 }) {
     const engine = await loadRustEngine();
     const dt = 1 / 46667;
     const count = Math.round(0.5 / dt);
@@ -121,6 +124,7 @@ describe('Rust sources (issue 22)', () => {
       aspiration: 0.1,
       closure: 0,
       loudness: 1,
+      ...effort,
     };
     const noise = createNoise(2);
     const input = Float64Array.from({ length: count }, () => noise());
@@ -156,6 +160,8 @@ describe('Rust sources (issue 22)', () => {
       head?.glottisVoiced ?? GLOTTIS_VOICED,
       head?.glottisOpen ?? GLOTTIS_OPEN,
       head?.glottisBreathy ?? GLOTTIS_BREATHY,
+      control.effort,
+      control.tension,
     ];
     const { values } = inEngine(engine, input, (pointer, length) =>
       inEngine(engine, parameters, (params) => {
@@ -317,6 +323,21 @@ describe('Rust renderer (issue 22)', () => {
       expect(measured < 1e-4).toBe(true);
     });
   }
+
+  it('renders vocal effort like VoiceRenderer (issue 52)', async () => {
+    const engine = await loadRustEngine();
+    const { plan, renderOptions } = prepareUtterance(
+      '[soft]Hello[/soft] [crescendo]there, my[/crescendo] [shout]friend![/shout]',
+      { tier: 'minimal', seed: 1, markup: true }
+    );
+    expect(Math.max(...plan.channels.effort)).toBe(20);
+    expect(renderOptions.levelOffsetDb).toBe(-20);
+    const expected = renderPlan(plan, renderOptions);
+    const actual = renderPlanRust(engine, plan, renderOptions);
+    const measured = maxDifference(actual, expected);
+    globalThis.console.log(`render (effort) max abs diff ${measured}`);
+    expect(measured < 1e-4).toBe(true);
+  });
 
   it('renders a microphone in a room like VoiceRenderer', async () => {
     const engine = await loadRustEngine();

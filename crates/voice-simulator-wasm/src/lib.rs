@@ -27,7 +27,7 @@ pub mod renderer;
 
 /// Version of the interface; raise it on any breaking change of a `vs_`
 /// export (a removed or renamed function, a changed signature or meaning).
-pub const ABI_VERSION: u32 = 2;
+pub const ABI_VERSION: u32 = 3;
 
 /// Alignment of every block that [`vs_alloc`] returns.
 pub const ALLOC_ALIGN: usize = 8;
@@ -556,8 +556,8 @@ mod tests {
     use super::*;
 
     #[test]
-    fn abi_version_is_two() {
-        assert_eq!(vs_abi_version(), 2);
+    fn abi_version_is_three() {
+        assert_eq!(vs_abi_version(), 3);
     }
 
     #[test]
