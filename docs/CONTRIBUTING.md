@@ -123,8 +123,9 @@ writes `performance-tiers.json`. In CI, or locally with
 `PERFORMANCE_COMPARE=1`, its test `speed rules hold` compares the run with
 [docs/reports/performance-baseline.json](reports/performance-baseline.json)
 through [scripts/performance.mjs](../scripts/performance.mjs): a row more than
-the tolerance slower than its baseline row (scaled by a calibration loop, so
-a slower runner is forgiven), a missing row, a Rust row slower than its
+the tolerance (2.0, from the spread of five CI runs) slower than its baseline
+row (scaled by a calibration loop, so a slower runner is forgiven), a missing
+row, a Rust row slower than its
 JavaScript row, or a waveguide tier above half of real time fails the run. The
 same script compares any two reports by hand:
 

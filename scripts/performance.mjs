@@ -46,8 +46,14 @@ export const SCHEMA = 1;
 /**
  * Largest ratio of a row's RTF to its baseline RTF (times the machine
  * scale) that passes, and its inverse the smallest that is not `faster`.
+ *
+ * The issue starts from 1.5. Five runs of suite `performance` on one commit
+ * (issue 31, `experiments/issue-31-spread.txt`) landed on four CPU models,
+ * and the calibration loop did not follow them closely: the worst spread
+ * of `rtf / calibration` was 1.64 (`js/low`), so the tolerance is
+ * 1.64 x 1.2 = 2.0, rounded to one decimal.
  */
-export const DEFAULT_TOLERANCE = 1.5;
+export const DEFAULT_TOLERANCE = 2;
 
 /** Rust may be this much slower than JavaScript before it fails. */
 export const ENGINE_SLACK = 1.1;

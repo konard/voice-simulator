@@ -1,0 +1,28 @@
+| Row | Runs | Spread (max / min of RTF / calibration) |
+| --- | --- | --- |
+| synthesis/js/telephone | 5 | 1.635 |
+| synthesis/rust/telephone | 5 | 1.440 |
+| synthesis/js/narrowband | 5 | 1.535 |
+| synthesis/rust/narrowband | 5 | 1.419 |
+| synthesis/js/wideband | 5 | 1.579 |
+| synthesis/rust/wideband | 5 | 1.410 |
+| synthesis/js/minimal | 5 | 1.606 |
+| synthesis/rust/minimal | 5 | 1.399 |
+| synthesis/js/low | 5 | 1.641 |
+| synthesis/rust/low | 5 | 1.416 |
+| synthesis/js/medium | 5 | 1.610 |
+| synthesis/rust/medium | 5 | 1.356 |
+| synthesis/js/high | 5 | 1.382 |
+| synthesis/rust/high | 5 | 1.380 |
+| synthesis/rust-mt/high | 5 | 1.387 |
+| synthesis/js/ultra | 5 | 1.283 |
+| synthesis/rust/ultra | 5 | 1.379 |
+| synthesis/rust-mt/ultra | 5 | 1.386 |
+| synthesis/js/studio | 5 | 1.307 |
+| synthesis/rust/studio | 5 | 1.385 |
+| synthesis/rust-mt/studio | 5 | 1.395 |
+
+Calibrations (ms): 8.20, 11.89, 9.37, 8.21, 9.43; spread 1.450
+Worst spread: 1.641 at synthesis/js/low
+Default tolerance: 2
+Median run: /tmp/ci-runs/five/43855403193/heavy-performance-43855403193/performance-tiers.json

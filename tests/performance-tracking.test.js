@@ -224,11 +224,21 @@ describe('trend (issue 31)', () => {
       writeFileSync(baseline, JSON.stringify(makeReport()));
       writeFileSync(file, JSON.stringify(makeReport()));
       expect(main(['compare', file, '--baseline', baseline], io)).toBe(0);
+      // Twice as slow fails with the tolerance of the issue, 1.5; the
+      // default tolerance of 2 (DEFAULT_TOLERANCE) needs a bit more.
       const slow = makeReport();
-      rowOf(slow, 'rust', 'high').rtf *= 2;
+      rowOf(slow, 'js', 'high').rtf *= 2;
+      writeFileSync(file, JSON.stringify(slow));
+      const tolerance = ['--tolerance', '1.5'];
+      expect(
+        main(['compare', file, '--baseline', baseline, ...tolerance], io)
+      ).toBe(1);
+      expect(lines.join('\n')).toContain('synthesis/js/high is slower');
+      lines.length = 0;
+      rowOf(slow, 'js', 'high').rtf *= 1.25;
       writeFileSync(file, JSON.stringify(slow));
       expect(main(['compare', file, '--baseline', baseline], io)).toBe(1);
-      expect(lines.join('\n')).toContain('synthesis/rust/high is slower');
+      expect(lines.join('\n')).toContain('synthesis/js/high is slower');
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
