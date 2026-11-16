@@ -65,10 +65,25 @@ npx voice-simulator say --lang ru --accent ru-x-south --accent-level 0.5 "гор
       "after": "s",
       "note": "No aspiration after s (already so in en-US)"
     },
-    { "map": { "ɹ": "ɾ" }, "before": "V", "min": 0.5, "note": "A tapped r before a vowel, from strength 0.5" }
+    {
+      "map": { "ɹ": "ɾ" },
+      "before": "V",
+      "min": 0.5,
+      "note": "A tapped r before a vowel, from strength 0.5"
+    }
   ],
-  "phonotactics": { "codas": "any", "maxOnset": 4, "epenthesis": "ə", "prothesis": null },
-  "prosody": { "tunes": "en", "range": 1.2, "rate": 0.9, "stressLengthening": 1 },
+  "phonotactics": {
+    "codas": "any",
+    "maxOnset": 4,
+    "epenthesis": "ə",
+    "prothesis": null
+  },
+  "prosody": {
+    "tunes": "en",
+    "range": 1.2,
+    "rate": 0.9,
+    "stressLengthening": 1
+  },
   "articulation": { "lipPosture": 0.2, "jawPosture": 0.1 }
 }
 ```
