@@ -23,5 +23,11 @@ pub const NOISE_MODULATION: usize = 6;
 pub const PULSE_TENSENESS: usize = 7;
 /// State of the glottis random generator (a `u32` as a float).
 pub const RANDOM: usize = 8;
+/// Parity of the period: every second period of a creak is the long one.
+pub const PARITY: usize = 9;
+/// Gain of the current pulse (below 1 in the long period of a creak).
+pub const PULSE_GAIN: usize = 10;
+/// Output of the falsetto low-pass.
+pub const FALSETTO_SMOOTHED: usize = 11;
 /// Number of values.
-pub const LENGTH: usize = 9;
+pub const LENGTH: usize = 12;

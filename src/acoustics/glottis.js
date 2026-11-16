@@ -356,7 +356,9 @@ export class Glottis {
    * The cycle state that a renderer started mid-utterance takes over
    * (issue 29), in the order of SOURCE_STATE (src/engine/layout.js):
    * phase, period, jitter, shimmer, smoothed, intensity, noiseModulation,
-   * pulseTenseness and the state of the random generator.
+   * pulseTenseness, the state of the random generator, then the parity
+   * and the gain of the creak pulse and the output of the falsetto
+   * low-pass.
    * @returns {Float64Array}
    */
   saveState() {
@@ -369,7 +371,10 @@ export class Glottis {
       this.intensity,
       this.noiseModulation,
       this.pulseTenseness,
-      this.random.save()
+      this.random.save(),
+      this.parity,
+      this.pulseGain,
+      this.falsettoSmoothed
     );
   }
 
@@ -388,6 +393,9 @@ export class Glottis {
     this.noiseModulation = state[6];
     this.pulseTenseness = state[7];
     this.random.restore(state[8]);
+    this.parity = state[9];
+    this.pulseGain = state[10];
+    this.falsettoSmoothed = state[11];
     this.pulse = lfParameters(
       this.pulseTenseness,
       this.breathiness,

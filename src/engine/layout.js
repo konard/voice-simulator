@@ -150,7 +150,10 @@ export const SOURCE_STATE = Object.freeze({
   NOISE_MODULATION: 6,
   PULSE_TENSENESS: 7,
   RANDOM: 8,
-  LENGTH: 9,
+  PARITY: 9,
+  PULSE_GAIN: 10,
+  FALSETTO_SMOOTHED: 11,
+  LENGTH: 12,
 });
 
 /** Values of one frame for a tract of `sections` sections. */

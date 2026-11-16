@@ -192,7 +192,7 @@ describe('tier switches in the package entry (issue 29)', () => {
     expect(new StreamGovernor({ level: BASE_AUDIO_LEVEL }).level).toBe(
       BASE_AUDIO_LEVEL
     );
-    expect(SOURCE_STATE.LENGTH).toBe(9);
+    expect(SOURCE_STATE.LENGTH).toBe(12);
   });
 });
 

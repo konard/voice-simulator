@@ -1235,7 +1235,8 @@ export declare function createThreadPool(
 ): Promise<ThreadPool>;
 /**
  * Indices of the glottis state `saveSources()` returns (issue 29); RANDOM
- * is the state of its random generator.
+ * is the state of its random generator, PARITY and PULSE_GAIN the double
+ * pulsing of a creak and FALSETTO_SMOOTHED the falsetto low-pass.
  */
 export declare const SOURCE_STATE: Readonly<{
   PHASE: 0;
@@ -1247,7 +1248,10 @@ export declare const SOURCE_STATE: Readonly<{
   NOISE_MODULATION: 6;
   PULSE_TENSENESS: 7;
   RANDOM: 8;
-  LENGTH: 9;
+  PARITY: 9;
+  PULSE_GAIN: 10;
+  FALSETTO_SMOOTHED: 11;
+  LENGTH: 12;
 }>;
 /** Greatest common divisor of three sample rates (issue 29). */
 export declare function switchGrid(a: number, b: number, c: number): number;

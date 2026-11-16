@@ -457,6 +457,9 @@ impl Glottis {
         state[source_state::NOISE_MODULATION] = self.noise_modulation;
         state[source_state::PULSE_TENSENESS] = self.pulse_tenseness;
         state[source_state::RANDOM] = f64::from(self.random.state());
+        state[source_state::PARITY] = f64::from(self.parity);
+        state[source_state::PULSE_GAIN] = self.pulse_gain;
+        state[source_state::FALSETTO_SMOOTHED] = self.falsetto_smoothed;
         state
     }
 
@@ -474,6 +477,9 @@ impl Glottis {
         self.pulse_tenseness = state[source_state::PULSE_TENSENESS];
         // `saved >>> 0` of `random.restore`; the saved value is a u32.
         self.random.set_state(state[source_state::RANDOM] as u32);
+        self.parity = state[source_state::PARITY] as u8;
+        self.pulse_gain = state[source_state::PULSE_GAIN];
+        self.falsetto_smoothed = state[source_state::FALSETTO_SMOOTHED];
         self.pulse = lf_parameters_at(self.pulse_tenseness, self.breathiness, self.rd_slope);
     }
 
@@ -625,6 +631,42 @@ mod tests {
         assert_eq!(noise_breathiness(0.2, 0.0, 0.0), 0.2);
         assert!((noise_breathiness(0.2, 1.0, 0.0) - 0.8).abs() < 1e-12);
         assert_eq!(lf_parameters(1.0, 0.2).rd, 0.3);
+    }
+
+    #[test]
+    fn restored_state_continues_creak_and_falsetto() {
+        // Issue 29: a glottis that restores the state of another goes on
+        // with the same samples, through the double pulsing of a creak and
+        // the falsetto low-pass (issue 54).
+        let dt = 1.0 / 48_000.0;
+        let at = |n: usize| {
+            let mut phonated = control();
+            phonated.creak = if n < 6000 {
+                0.8
+            } else if n < 9000 {
+                0.5
+            } else {
+                0.0
+            };
+            phonated.falsetto = if n < 6000 { 0.0 } else { 0.6 };
+            phonated
+        };
+        for split in [3001, 7003, 9500] {
+            let mut whole = Glottis::new(&GlottisOptions::new(7));
+            for n in 0..split {
+                whole.step(dt, &at(n), 0.0);
+            }
+            let mut second = Glottis::new(&GlottisOptions::new(99));
+            second.restore_state(&whole.save_state());
+            assert_eq!(second.save_state(), whole.save_state());
+            for n in split..12_000 {
+                assert_eq!(
+                    second.step(dt, &at(n), 0.0),
+                    whole.step(dt, &at(n), 0.0),
+                    "sample {n} after a hand-over at {split}"
+                );
+            }
+        }
     }
 
     #[test]
