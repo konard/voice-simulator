@@ -111,7 +111,137 @@ export interface Transcription {
   accentLevel?: number | null;
   ipa: string;
   words: Word[];
+  /** Mode spans of the speech markup, in IPA word indexes. */
+  modes?: ModeSpan[];
+  /** Warnings of the markup parser (unknown or unclosed tags). */
+  warnings?: MarkupWarning[];
 }
+
+// Speech markup (docs/markup.md)
+export interface Phonation {
+  breathy: number;
+  creaky: number;
+  /** Positive pressed, negative lax. */
+  tension: number;
+  falsetto: number;
+  harsh: number;
+  whisper: number;
+}
+
+export interface Emotion {
+  /** A name of EMOTIONS, e.g. 'angry'; 'neutral' by default. */
+  name: string;
+  /** 0 … 1. */
+  intensity: number;
+  arousal: number;
+  valence: number;
+  dominance: number;
+}
+
+/** A speech mode: how a stretch of speech is spoken. */
+export interface Mode {
+  /** Vocal effort 0 … 1 (0.5 normal) at the start and the end of a span. */
+  effort: number;
+  effortEnd: number;
+  /** Level change in dB. */
+  gain: number;
+  /** Speech rate factor (1.3 is 30% faster). */
+  rate: number;
+  /** Pitch shift in semitones. */
+  pitch: number;
+  /** Factor of the pitch range. */
+  range: number;
+  /** -0.5 reduced, 0 none, 0.5 moderate, 1 strong. */
+  emphasis: number;
+  phonation: Phonation;
+  emotion: Emotion;
+  tune: string | null;
+  lang: string | null;
+}
+
+/** A mode over IPA words `from` … `to` (exclusive). */
+export interface ModeSpan {
+  from: number;
+  to: number;
+  mode: Mode;
+}
+
+/** A mode of a plan from `start` to `end` seconds. */
+export type PlanMode = Mode & { start: number; end: number };
+
+export interface PlanSound {
+  name: string;
+  start: number;
+  end: number;
+}
+
+export interface MarkupWarning {
+  position: number;
+  message: string;
+}
+
+export interface ParsedMarkup {
+  markup: 'ssml' | 'inline' | null;
+  /** The text without the markup. */
+  text: string;
+  /** Input offset of every character of `text`. */
+  offsets: number[];
+  /** Mode spans in `text` offsets (`end` exclusive). */
+  spans: { start: number; end: number; mode: Mode }[];
+  breaks: { at: number; seconds: number }[];
+  sounds: { at: number; name: string; duration: number | null }[];
+  /** Words given in IPA (`phoneme`, `[ipa …]`). */
+  overrides: { start: number; end: number; ipa: string }[];
+  /** Ranges of `sub` and `say-as` in the input. */
+  sources: {
+    start: number;
+    end: number;
+    sourceStart: number;
+    sourceEnd: number;
+    original: string;
+  }[];
+  warnings: MarkupWarning[];
+  lang: string | null;
+}
+
+export declare class MarkupError extends Error {
+  /** Offset in the input. */
+  position: number;
+}
+export declare const MARKUP_LIMITS: Readonly<{
+  maxLength: number;
+  maxDepth: number;
+  maxElements: number;
+  maxPauseSeconds: number;
+}>;
+export declare const MARKUP_NAMESPACE: string;
+export declare const MODE_DEFAULTS: Readonly<Mode>;
+export declare const SOUND_NAMES: readonly string[];
+export declare const SOUND_DURATION: number;
+export declare const EMOTIONS: Readonly<
+  Record<string, readonly [number, number, number]>
+>;
+/**
+ * Parse speech markup: SSML when the text starts with `<speak` (unless
+ * `markup` is false), inline tags with `markup: true`, otherwise plain.
+ * Malformed SSML throws `MarkupError`; inline parsing never throws.
+ */
+export declare function parseMarkup(
+  text: string,
+  options?: {
+    markup?: boolean;
+    head?: { pitch?: number };
+    limits?: Partial<typeof MARKUP_LIMITS>;
+  }
+): ParsedMarkup;
+export declare function isSsml(text: string): boolean;
+export declare function createMode(fields?: Partial<Mode>): Mode;
+export declare function composeMode(outer: Mode, change?: object): Mode;
+/** The mode of `plan.modes` at `time` seconds. */
+export declare function modeAt(
+  plan: { modes: PlanMode[] },
+  time: number
+): PlanMode;
 
 export interface TimelineSyllable {
   ipa: string;
@@ -160,6 +290,10 @@ export interface Plan {
   frameCount: number;
   duration: number;
   channels: Record<string, Float32Array>;
+  /** Mode spans in seconds: sorted, not overlapping, covering the plan. */
+  modes: PlanMode[];
+  /** Sounds of the markup (`⸨laugh⸩`, `[laugh]`). */
+  sounds: PlanSound[];
 }
 
 export interface Mesh {
@@ -240,6 +374,11 @@ export interface SynthesizeOptions {
   weakForms?: boolean;
   /** Treat the text as IPA. */
   ipa?: boolean;
+  /**
+   * Speech markup (docs/markup.md): a text that starts with `<speak` is
+   * SSML unless `markup` is false; `true` also reads inline tags.
+   */
+  markup?: boolean;
   head?: HeadConfig | 'random';
   seed?: string | number;
   /** Speaker group for `head: 'random'`. */
@@ -325,6 +464,8 @@ export declare function textToIpa(
      * phrase (`a cup of tea for you` ə ˈkʌp əv ˈti fɚ ju). Default true.
      */
     weakForms?: boolean;
+    /** Speech markup: SSML is read unless false; true reads inline tags. */
+    markup?: boolean;
   }
 ): Transcription;
 export declare function detectLanguage(text: string): LanguageCode;
@@ -332,8 +473,10 @@ export declare function scriptLanguage(text: string): LanguageCode | null;
 export declare function parseIpa(text: string): {
   tokens: object[];
   unknown: string[];
+  /** Mode spans of the ExtIPA/VoQS marks and `ˈˈ`. */
+  modes: ModeSpan[];
 };
-export declare function formatIpa(tokens: object[]): string;
+export declare function formatIpa(tokens: object[], modes?: ModeSpan[]): string;
 export declare function getPhoneme(symbol: string): object | undefined;
 export declare function listSymbols(): string[];
 export declare const VOWELS: Readonly<Record<string, object>>;
@@ -533,6 +676,8 @@ export declare function planUtterance(
     articulators?: Record<string, Partial<Articulator>>;
     /** Values of the levels of COARTICULATION_RESISTANCE. */
     resistance?: Partial<Record<'high' | 'medium' | 'low' | 'none', number>>;
+    /** Mode spans (IPA word indexes) instead of those of the IPA marks. */
+    modes?: ModeSpan[];
   }
 ): Plan;
 export declare function channelTargets(

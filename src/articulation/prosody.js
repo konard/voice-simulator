@@ -252,8 +252,9 @@ export function tonePitch(tone, base, scale) {
 
 /**
  * Pitch shift of a nucleus in semitones from `head.pitch` (register shift
- * minus declination), its accent range and its tone scale (semitones per
- * Chao level).
+ * and the `pitch` of its speech mode minus declination), its accent range
+ * and its tone scale (semitones per Chao level), both times the `range` of
+ * its mode.
  * @param {object} segment
  * @param {object} head
  * @param {object} phrase
@@ -267,13 +268,18 @@ export function pitchShift(segment, head, phrase) {
   // The head's declination replaces the 2-semitone default and scales the
   // step between phrases with it.
   const declination = head.declination ?? DECLINATION.phrase;
+  // The speech mode (docs/markup.md): `pitch` in semitones, `range` a
+  // factor of the accent range and of the tone scale.
+  const mode = segment.token?.mode;
+  const modeRange = mode?.range ?? 1;
   return {
     shift:
-      register.shift -
+      register.shift +
+      (mode?.pitch ?? 0) -
       declination * progress -
       (DECLINATION.step * phrase.step * declination) / DECLINATION.phrase,
-    range: head.pitchRange * register.range,
-    scale: (1.2 + 0.35 * head.pitchRange) * register.range,
+    range: head.pitchRange * register.range * modeRange,
+    scale: (1.2 + 0.35 * head.pitchRange) * register.range * modeRange,
   };
 }
 

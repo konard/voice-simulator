@@ -1,0 +1,3 @@
+# node experiments/issue-50-timing.mjs
+SSML: 19980 characters, 363 spans, 121 breaks, 0 warnings, median 19.35 ms (limit 50 ms): ok
+inline: 19975 characters, 705 spans, 235 breaks, 0 warnings, median 28.79 ms (limit 50 ms): ok

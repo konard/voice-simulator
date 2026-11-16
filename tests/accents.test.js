@@ -310,6 +310,38 @@ describe('regional accents', () => {
   });
 });
 
+describe('accents with speech markup (issue 50)', () => {
+  const marked = (text, options) => {
+    const result = textToIpa(text, { markup: true, ...options });
+    return [result.ipa, result.accent, result.accentLevel];
+  };
+
+  it('give marked-up text the IPA of the plain text', () => {
+    const options = { lang: 'en', accent: 'en-x-ru' };
+    expect(marked('<speak>the thing</speak>', options)[0]).toBe(
+      say('the thing', 'en', 'en-x-ru')
+    );
+    expect(marked('[whisper]the thing[/whisper]', options)[0]).toBe(
+      '{W zə ˈsʲink W}'
+    );
+    expect(
+      marked('<speak>一点儿</speak>', { lang: 'zh', accent: 'zh-TW' })
+    ).toEqual(['i˥˩ tjɛn˨˩', 'zh-TW', 1]);
+  });
+
+  it('apply the accent of each language span', () => {
+    const text = '<speak>the thing <lang xml:lang="ru">город</lang></speak>';
+    expect(marked(text, { lang: 'en', accent: 'en-x-ru' })[0]).toBe(
+      'zə ˈsʲink ˈɡorət'
+    );
+    expect(marked(text, { lang: 'en', accent: 'ru-x-south' })).toEqual([
+      'ðə ˈθɪŋ ˈɣorət',
+      'en-US',
+      1,
+    ]);
+  });
+});
+
 describe('accent files', () => {
   it('load from a file and apply their rules from their minimum strength', () => {
     const definition = loadAccent(readFileSync(EXAMPLE, 'utf8'));

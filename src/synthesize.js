@@ -11,6 +11,7 @@ import {
 import { planUtterance } from './articulation/plan.js';
 import { utteranceTimeline } from './articulation/timeline.js';
 import { textToIpa } from './g2p/index.js';
+import { parseIpa } from './ipa/parse.js';
 import { normalizeHeadConfig, randomHeadConfig } from './head-config.js';
 import { accentSettings } from './accent/index.js';
 import { offsetHead } from './accent/head.js';
@@ -65,12 +66,19 @@ function transcriptionAccent(transcription, options) {
 /** The transcription of a text (or IPA) and its accent. */
 function transcribe(text, options) {
   const transcription = options.ipa
-    ? { lang: options.lang ?? 'ipa', ipa: String(text), words: [] }
+    ? {
+        lang: options.lang ?? 'ipa',
+        ipa: String(text),
+        words: [],
+        modes: parseIpa(String(text)).modes,
+        warnings: [],
+      }
     : textToIpa(text, {
         lang: options.lang,
         accent: options.accent,
         accentLevel: options.accentLevel,
         weakForms: options.weakForms,
+        markup: options.markup,
       });
   const accent = transcriptionAccent(transcription, options);
   if (accent && options.ipa) {
@@ -96,6 +104,7 @@ export function prepareUtterance(text, options = {}) {
     head: baseHead,
     language: transcription.lang,
     accent: accent ?? undefined,
+    modes: transcription.modes,
   });
   const timeline = utteranceTimeline(plan, {
     words: transcription.words,
@@ -138,10 +147,14 @@ export function prepareUtterance(text, options = {}) {
  * where and in what space the voice is heard (see VoiceRenderer). `source`
  * picks the voice source: 'lf' (default) or 'folds' (physical vocal folds);
  * `interaction` couples the folds to the vocal tract and the trachea
- * (source-tract interaction, folds only).
+ * (source-tract interaction, folds only). `markup` reads speech markup
+ * (docs/markup.md): a text that starts with `<speak` is SSML unless
+ * `markup` is false, and `true` also reads inline tags; the result has the
+ * mode spans (`modes`, IPA word indexes; `plan.modes` in seconds) and the
+ * markup `warnings`. Malformed SSML throws `MarkupError`.
  * @param {string} text
- * @param {{lang?: string, accent?: string|object, accentLevel?: number, ipa?: boolean, head?: object|'random', seed?: string|number, preset?: string, tier?: string|number, solver?: string, source?: 'lf'|'folds', interaction?: boolean, subglottal?: boolean, sections?: number, dx?: number, sampleRate?: number, blockSize?: number, bandLimit?: number, output?: 'flow'|'microphone', microphone?: {distance?: number, azimuth?: number, elevation?: number, compensate?: boolean}, room?: string|object, enclosure?: {width: number, height: number, depth: number, absorption?: number, center?: number[]}, teeth?: boolean, piriform?: boolean, vallecula?: boolean}} [options]
- * @returns {{lang: string, accent: string|null, accentLevel: number|null, ipa: string, words: object[], head: object, plan: object, timeline: object, sampleRate: number, samples: Float32Array, duration: number}}
+ * @param {{lang?: string, accent?: string|object, accentLevel?: number, ipa?: boolean, markup?: boolean, head?: object|'random', seed?: string|number, preset?: string, tier?: string|number, solver?: string, source?: 'lf'|'folds', interaction?: boolean, subglottal?: boolean, sections?: number, dx?: number, sampleRate?: number, blockSize?: number, bandLimit?: number, output?: 'flow'|'microphone', microphone?: {distance?: number, azimuth?: number, elevation?: number, compensate?: boolean}, room?: string|object, enclosure?: {width: number, height: number, depth: number, absorption?: number, center?: number[]}, teeth?: boolean, piriform?: boolean, vallecula?: boolean}} [options]
+ * @returns {{lang: string, accent: string|null, accentLevel: number|null, ipa: string, words: object[], modes: {from: number, to: number, mode: object}[], warnings: {position: number, message: string}[], head: object, plan: object, timeline: object, sampleRate: number, samples: Float32Array, duration: number}}
  */
 export function synthesize(text, options = {}) {
   const prepared = prepareUtterance(text, options);
@@ -172,6 +185,8 @@ function result(prepared, samples) {
     accentLevel: prepared.accentLevel ?? null,
     ipa: prepared.ipa,
     words: prepared.words,
+    modes: prepared.modes,
+    warnings: prepared.warnings,
     head: prepared.head,
     plan: prepared.plan,
     timeline: prepared.timeline,

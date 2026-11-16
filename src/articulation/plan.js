@@ -30,6 +30,14 @@ import {
   vowelTarget,
 } from './phones.js';
 import { DYNAMICS_ORDER, approachTargets } from './dynamics.js';
+import {
+  applyModeGains,
+  applyRates,
+  assignTokenModes,
+  planModes,
+  planSounds,
+  timedLength,
+} from './modes.js';
 import { approachTargets as approachToneTargets } from './tone-model.js';
 import { consonantJaw, teethGap } from './teeth.js';
 import { LIP_PROTRUSION } from './vowel-space.js';
@@ -237,7 +245,40 @@ function pushVowel(segments, token, index, context) {
   });
 }
 
+/**
+ * A timed pause or a sound: silence of exactly its length. A timed pause
+ * takes the place of the plain pause before it; a sound is a segment of
+ * its own.
+ */
+function pushTimed(segments, token, seconds) {
+  const strength = Math.min(3, token.strength ?? 1);
+  const previous = segments.at(-1);
+  if (token.kind === 'pause' && previous?.kind === 'pause' && !previous.sound) {
+    previous.duration = seconds;
+    previous.timed = true;
+    previous.strength = Math.max(previous.strength, strength);
+    previous.target = { voicing: 0, loudness: 0 };
+    return;
+  }
+  segments.push({
+    token,
+    kind: 'pause',
+    strength,
+    boundary: boundaryOf(token),
+    question: false,
+    target: { voicing: 0, loudness: 0 },
+    duration: seconds,
+    timed: true,
+    ...(token.kind === 'sound' ? { sound: token.name } : {}),
+  });
+}
+
 function pushPause(segments, token, context) {
+  const seconds = timedLength(token);
+  if (seconds !== null) {
+    pushTimed(segments, token, seconds);
+    return;
+  }
   const strength = Math.min(3, token.strength);
   const duration = scalePause(
     pauseDuration(token) * context.pauseLength,
@@ -247,7 +288,9 @@ function pushPause(segments, token, context) {
   const previous = segments.at(-1);
   if (!previous || previous.kind === 'pause') {
     if (previous) {
-      previous.duration = Math.max(previous.duration, duration);
+      if (!previous.timed) {
+        previous.duration = Math.max(previous.duration, duration);
+      }
       previous.question ||= token.question;
     }
     return;
@@ -294,7 +337,7 @@ export function buildSegments(tokens, options) {
     },
   ];
   tokens.forEach((token, index) => {
-    if (token.kind === 'pause') {
+    if (token.kind === 'pause' || token.kind === 'sound') {
       pushPause(segments, token, context);
     } else if (token.kind === 'vowel') {
       pushVowel(segments, token, index, context);
@@ -302,10 +345,13 @@ export function buildSegments(tokens, options) {
       pushConsonant(segments, token, index, context);
     }
   });
-  if (segments.at(-1).kind === 'pause') {
+  applyRates(segments);
+  if (segments.at(-1).kind === 'pause' && !segments.at(-1).sound) {
     segments.at(-1).strength = 3;
     segments.at(-1).target = { voicing: 0, loudness: 0 };
-    segments.at(-1).duration = Math.max(segments.at(-1).duration, 0.2);
+    if (!segments.at(-1).timed) {
+      segments.at(-1).duration = Math.max(segments.at(-1).duration, 0.2);
+    }
   } else {
     segments.push({
       kind: 'pause',
@@ -800,6 +846,7 @@ function fillFoldTension(channels, head) {
 }
 
 export { fillDefaults, fillPitch };
+export { modeAt } from './modes.js';
 
 /**
  * Rescale the segments of each token to the measured durations: a token
@@ -880,9 +927,25 @@ function articulatorsFor(head, overrides = {}) {
 }
 
 /**
+ * The head of a plan with the accent's articulation offsets and prosody
+ * factors, and its duration table: `options.durationTable`, else the
+ * table of the accent's `prosody.tunes`.
+ */
+function accentedHead(options) {
+  const head = accentHead(
+    normalizeHeadConfig(options.head ?? DEFAULT_HEAD),
+    options.accent
+  );
+  const tunes = options.accent?.prosody?.tunes;
+  const table =
+    options.durationTable ?? (tunes ? durationTable(tunes) : undefined);
+  return { head, table };
+}
+
+/**
  * Plan an utterance from IPA.
  * @param {string|object[]} ipa IPA string or parsed tokens.
- * @param {{head?: object, language?: string, frameRate?: number, durations?: (number|null)[], durationTable?: object, accent?: {prosody?: {tunes?: string|null, range?: number, rate?: number, stressLengthening?: number}, articulation?: Record<string, number>}, articulators?: Record<string, {timeConstant?: number, lead?: number}>, resistance?: Record<string, number>}} [options]
+ * @param {{head?: object, language?: string, frameRate?: number, durations?: (number|null)[], durationTable?: object, accent?: {prosody?: {tunes?: string|null, range?: number, rate?: number, stressLengthening?: number}, articulation?: Record<string, number>}, articulators?: Record<string, {timeConstant?: number, lead?: number}>, resistance?: Record<string, number>, modes?: {from: number, to: number, mode: object}[]}} [options]
  *   `durations`: seconds per token (measured durations), which win over
  *   the rules; `durationTable`: an entry of `DURATION_TABLES` that overrides
  *   the table of `language`; `accent` (see accentSettings of
@@ -890,15 +953,17 @@ function articulatorsFor(head, overrides = {}) {
  *   change the head and `prosody.tunes` picks the duration table of that
  *   language; `articulators`
  *   and `resistance` override `ARTICULATORS` and the levels of
- *   `COARTICULATION_RESISTANCE`.
+ *   `COARTICULATION_RESISTANCE`; `modes`: mode spans in IPA word indexes
+ *   (`textToIpa(...).modes`), else the ExtIPA/VoQS marks of the IPA.
+ * @returns the plan; `modes` are its mode spans in seconds (sorted, not
+ *   overlapping, from 0 to `duration`) and `sounds` the `{name, start, end}`
+ *   of its sounds. Every token gets its `mode` (see ./modes.js).
  */
 export function planUtterance(ipa, options = {}) {
-  const tokens = typeof ipa === 'string' ? parseIpa(ipa).tokens : ipa;
-  const head = accentHead(
-    normalizeHeadConfig(options.head ?? DEFAULT_HEAD),
-    options.accent
-  );
-  const tunes = options.accent?.prosody?.tunes;
+  const parsed = typeof ipa === 'string' ? parseIpa(ipa) : null;
+  const tokens = parsed ? parsed.tokens : ipa;
+  assignTokenModes(tokens, options.modes ?? parsed?.modes ?? []);
+  const { head, table } = accentedHead(options);
   const frameRate = options.frameRate ?? CONTROL_RATE;
   const segments = buildSegments(tokens, {
     rate: head.speechRate,
@@ -906,8 +971,7 @@ export function planUtterance(ipa, options = {}) {
     stressLengthening: head.stressLengthening,
     finalLengthening: head.finalLengthening,
     pauseLength: head.pauseLength,
-    durationTable:
-      options.durationTable ?? (tunes ? durationTable(tunes) : undefined),
+    durationTable: table,
     head,
   });
   if (options.durations) {
@@ -938,6 +1002,8 @@ export function planUtterance(ipa, options = {}) {
   }
   fillDefaults(channels, segments, frameRate);
   applyRegisterGain(channels.loudness, segments, frameRate);
+  const modes = planModes(segments);
+  applyModeGains(channels.loudness, modes, frameRate);
   const pitchShape = fillPitch(
     channels.f0,
     segments,
@@ -973,5 +1039,7 @@ export function planUtterance(ipa, options = {}) {
     frameCount,
     duration,
     channels: ordered,
+    modes,
+    sounds: planSounds(segments),
   };
 }

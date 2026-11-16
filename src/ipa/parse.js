@@ -9,6 +9,12 @@
  * Pauses carry a prosodic boundary class (comma, question, paren, ...);
  * `(` ... `)` mark the segments between them as parenthetical, and the
  * arrows `↗`/`↘` set a rising or falling contour on the next phrase end.
+ *
+ * Speech markup (see docs/markup.md): the brace spans of ExtIPA/VoQS
+ * (`{W … W}`, `{3V̤ … V̤}`, `{f … f}`, see `MODE_LABELS` in inventory.js)
+ * change the mode of the words between them; `(.)`, `(..)`, `(...)` and
+ * `(1.2)` are timed pauses, `⸨laugh⸩` is a non-speech sound and `ˈˈ` is a
+ * primary stress with strong emphasis. A brace chunk is not a word.
  */
 
 import {
@@ -21,6 +27,9 @@ import {
   TONE_LETTERS,
   getPhoneme,
 } from './inventory.js';
+import { MARKUP_LIMITS } from '../markup/builder.js';
+import { SOUND_NAMES } from '../markup/modes.js';
+import { ModeStack, wordSpans, writeMarks } from './marks.js';
 
 const SUPERSCRIPT_TONES = { '¹': 1, '²': 2, '³': 3, '⁴': 4, '⁵': 5 };
 
@@ -84,6 +93,10 @@ const DIACRITIC_EFFECTS = {
   syllabic: { syllabic: true },
   nonSyllabic: { syllabic: false },
   rhotic: { rhotic: true },
+  // VoQS voice quality of one phone; carried, not yet heard (#52).
+  breathyVoice: { breathy: true },
+  creaky: { creaky: true },
+  whispered: { whispered: true },
 };
 
 function applyDiacritic(segment, mark, char) {
@@ -94,7 +107,10 @@ function applyDiacritic(segment, mark, char) {
 function lastVowel(tokens) {
   for (let index = tokens.length - 1; index >= 0; index--) {
     const token = tokens[index];
-    if (token.kind === 'pause' && token.strength > 0) {
+    if (
+      (token.kind === 'pause' && token.strength > 0) ||
+      token.kind === 'sound'
+    ) {
       return null;
     }
     if (
@@ -107,9 +123,10 @@ function lastVowel(tokens) {
   return null;
 }
 
-function expandLigatures(text) {
+/** Characters of normalised text with aliases and ligatures expanded. */
+function expandLigatures(normalized) {
   const chars = [];
-  for (const raw of normalizeText(text)) {
+  for (const raw of normalized) {
     const char = ALIASES[raw] ?? raw;
     chars.push(char);
     if (LIGATURE_TAILS[raw]) {
@@ -157,10 +174,17 @@ function addPause(state, char) {
     return;
   }
   let pause = previous;
-  if (previous.kind === 'pause') {
+  const timed = previous.seconds !== undefined || previous.kind === 'sound';
+  if (timed && strength === 0) {
+    // The space after a timed pause or a sound adds nothing.
+    return;
+  }
+  if (previous.kind === 'pause' && !timed) {
     mergePause(previous, char, strength);
   } else {
-    state.word++;
+    if (!timed) {
+      state.word++;
+    }
     pause = {
       kind: 'pause',
       symbol: char,
@@ -209,6 +233,14 @@ function addSegment(state, char, phoneme) {
   if (phoneme.kind === 'vowel' && state.pendingStress) {
     segment.stress = state.pendingStress;
     state.pendingStress = 0;
+    if (state.pendingEmphasis) {
+      segment.emphasis = 1;
+      state.emphasized.add(state.word);
+      state.pendingEmphasis = false;
+    }
+  }
+  if (!state.wordModes.has(state.word)) {
+    state.wordModes.set(state.word, state.modes.mode);
   }
   state.tokens.push(segment);
 }
@@ -217,7 +249,7 @@ function addModifier(state, char, mark) {
   const previous = state.tokens.at(-1);
   if (mark === 'tie') {
     state.pendingTie = true;
-  } else if (previous && previous.kind !== 'pause') {
+  } else if (isSegment(previous)) {
     applyDiacritic(previous, mark, char);
   }
 }
@@ -243,10 +275,99 @@ function consumeChar(state, char) {
   }
 }
 
+/** Seconds of the written timed pauses. */
+const TIMED_PAUSES = { '.': 0.2, '..': 0.4, '...': 0.8 };
+
+/** Whitespace, or a chunk between spaces (a sound `⸨…⸩` may hold any). */
+const CHUNKS = /(?:⸨[^⸩]*⸩|[^\s⸨]+|⸨)+|\s+/gu;
+
+/** Marks inside a chunk: a sound, a timed pause, the emphasis `ˈˈ`. */
+const INNER_MARKS = /⸨([^⸩]*)⸩|\((\.{1,3}|\d+(?:\.\d+)?)\)|ˈˈ/gu;
+
+const isSegment = (token) =>
+  token !== undefined && token.kind !== 'pause' && token.kind !== 'sound';
+
+/** A timed pause or a sound after a word starts the next word. */
+function pushTimed(state, token) {
+  const previous = state.tokens.at(-1);
+  if (isSegment(previous)) {
+    state.word++;
+  }
+  if (
+    token.kind === 'pause' &&
+    previous?.kind === 'pause' &&
+    previous.strength === 0 &&
+    previous.seconds === undefined
+  ) {
+    // `ma (.) ma`: the timed pause takes the place of the space.
+    state.tokens[state.tokens.length - 1] = token;
+    return;
+  }
+  state.tokens.push(token);
+}
+
+function addTimedPause(state, symbol, written) {
+  const seconds = Math.min(
+    MARKUP_LIMITS.maxPauseSeconds,
+    TIMED_PAUSES[written] ?? Number(written)
+  );
+  pushTimed(state, {
+    kind: 'pause',
+    symbol,
+    strength: 1,
+    boundary: 'quote',
+    question: false,
+    word: -1,
+    seconds,
+  });
+}
+
+/** A sound `⸨laugh⸩`, or `⸨laugh 0.5⸩` with its length in seconds. */
+function addSound(state, symbol, written) {
+  const [, name, seconds] =
+    /^\s*(\S+?)(?:\s+(\d+(?:\.\d+)?))?\s*$/u.exec(written) ?? [];
+  if (!SOUND_NAMES.includes(name)) {
+    state.unknown.push(symbol);
+    return;
+  }
+  const token = { kind: 'sound', symbol, name, word: -1 };
+  if (seconds !== undefined) {
+    token.duration = Math.min(MARKUP_LIMITS.maxPauseSeconds, Number(seconds));
+  }
+  pushTimed(state, token);
+}
+
+function consumeText(state, text) {
+  for (const char of expandLigatures(text)) {
+    consumeChar(state, char);
+  }
+}
+
+/** Read a chunk between spaces that is not a brace mark. */
+function consumeChunk(state, chunk) {
+  let index = 0;
+  for (const found of chunk.matchAll(INNER_MARKS)) {
+    consumeText(state, chunk.slice(index, found.index));
+    index = found.index + found[0].length;
+    if (found[1] !== undefined) {
+      addSound(state, found[0], found[1]);
+    } else if (found[2] !== undefined) {
+      addTimedPause(state, found[0], found[2]);
+    } else {
+      state.pendingStress = 1;
+      state.pendingSyllable = true;
+      state.pendingEmphasis = true;
+    }
+  }
+  consumeText(state, chunk.slice(index));
+}
+
 /**
  * Parse an IPA string.
  * @param {string} text
- * @returns {{tokens: object[], unknown: string[]}}
+ * @returns {{tokens: object[], unknown: string[], modes: {from: number, to: number, mode: object}[]}}
+ *   `modes` are the spans of the brace marks and `ˈˈ` in IPA word indexes
+ *   (`token.word`; `to` is exclusive).
  */
 export function parseIpa(text) {
   const state = {
@@ -255,12 +376,24 @@ export function parseIpa(text) {
     word: 0,
     pendingStress: 0,
     pendingSyllable: false,
+    pendingEmphasis: false,
     pendingContour: null,
     parenDepth: 0,
     pendingTie: false,
+    modes: new ModeStack(),
+    wordModes: new Map(),
+    emphasized: new Set(),
   };
-  for (const char of expandLigatures(text)) {
-    consumeChar(state, char);
+  for (const [chunk] of normalizeText(text).matchAll(CHUNKS)) {
+    if (/^\s/u.test(chunk)) {
+      consumeText(state, chunk);
+    } else if (chunk.startsWith('{') || chunk.endsWith('}')) {
+      if (!state.modes.read(chunk)) {
+        state.unknown.push(chunk);
+      }
+    } else {
+      consumeChunk(state, chunk);
+    }
   }
   while (
     state.tokens.at(-1)?.kind === 'pause' &&
@@ -268,33 +401,61 @@ export function parseIpa(text) {
   ) {
     state.tokens.pop();
   }
-  return { tokens: state.tokens, unknown: state.unknown };
+  return {
+    tokens: state.tokens,
+    unknown: state.unknown,
+    modes: wordSpans(state.wordModes, state.emphasized),
+  };
+}
+
+/** The written form of one token. */
+function tokenText(token) {
+  if (token.kind === 'sound') {
+    return ` ${token.symbol} `;
+  }
+  if (token.kind === 'pause') {
+    if (token.seconds !== undefined) {
+      return ` ${token.symbol} `;
+    }
+    return token.strength === 0 ? ' ' : `${token.symbol} `;
+  }
+  let text = '';
+  if (token.stress === 1) {
+    text += token.emphasis === 1 ? 'ˈˈ' : 'ˈ';
+  } else if (token.stress === 2) {
+    text += 'ˌ';
+  }
+  text += token.symbol;
+  if (token.tone) {
+    text += token.tone
+      .map((level) => Object.keys(TONE_LETTERS)[5 - level])
+      .join('');
+  }
+  return text;
 }
 
 /**
  * Render tokens back to an IPA string (useful for round-trip tests and UIs).
  * Stress is stored on the syllable nucleus, so the mark is written right
- * before the vowel.
+ * before the vowel. With `modes` (spans in word indexes, as `parseIpa()`
+ * returns them) the brace marks and `ˈˈ` of each span are written too.
  * @param {object[]} tokens
+ * @param {{from: number, to: number, mode: object}[]} [modes]
  */
-export function formatIpa(tokens) {
-  let text = '';
+export function formatIpa(tokens, modes = []) {
+  const pieces = [];
   for (const token of tokens) {
-    if (token.kind === 'pause') {
-      text += token.strength === 0 ? ' ' : `${token.symbol} `;
-      continue;
-    }
-    if (token.stress === 1) {
-      text += 'ˈ';
-    } else if (token.stress === 2) {
-      text += 'ˌ';
-    }
-    text += token.symbol;
-    if (token.tone) {
-      text += token.tone
-        .map((level) => Object.keys(TONE_LETTERS)[5 - level])
-        .join('');
+    const word = isSegment(token) ? token.word : -1;
+    const last = pieces.at(-1);
+    if (word >= 0 && last?.word === word) {
+      last.text += tokenText(token);
+    } else {
+      pieces.push({ text: tokenText(token), word });
     }
   }
-  return text.replace(/\s+/g, ' ').trim();
+  return writeMarks(pieces, modes)
+    .map((part) => (/^\{|\}$/u.test(part) ? ` ${part} ` : part))
+    .join('')
+    .replace(/\s+/g, ' ')
+    .trim();
 }

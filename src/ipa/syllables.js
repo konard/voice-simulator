@@ -198,7 +198,7 @@ const TONE_CARRIER = { kind: 'vowel', symbol: '', stress: 0 };
 export function syllabifyIpa(ipa, options = {}) {
   const words = new Map();
   for (const token of parseIpa(ipa).tokens) {
-    if (token.kind !== 'pause') {
+    if (token.kind !== 'pause' && token.kind !== 'sound') {
       words.set(token.word, [...(words.get(token.word) ?? []), token]);
     }
   }
