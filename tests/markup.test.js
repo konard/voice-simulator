@@ -91,7 +91,7 @@ describe('parseMarkup: SSML', () => {
     near(levels.rate, 0.8);
     expect(levels.pitch).toBe(-6);
     expect(levels.range).toBe(1.5);
-    near(levels.effort, 0.65);
+    near(levels.effort, 0.75);
     near(only(ssml('<prosody pitch="+50%">a</prosody>')).pitch, 7.02, 0.01);
     near(
       only(

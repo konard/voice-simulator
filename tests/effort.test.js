@@ -24,6 +24,7 @@ import {
   splToEffort,
   synthesize,
   synthesizeStream,
+  textToIpa,
 } from '../src/index.js';
 
 const TEXT = 'Please call Stella.';
@@ -181,6 +182,20 @@ describe('vocal effort', () => {
       Array.from(fromText.plan.channels.effort)
     );
     near(Math.max(...fromText.plan.channels.effort), 20, 1e-5);
+    // The table "How a mode is written and recognised" of docs/markup.md.
+    const written = {
+      '[soft]please[/soft]': '{p ˈpliz p}',
+      '<speak><prosody volume="soft">please</prosody></speak>': '{p ˈpliz p}',
+      '[loud]please[/loud]': '{f ˈpliz f}',
+      '[lombard]please[/lombard]': '{f ˈpliz f}',
+      '<speak><vs:effort level="loud">please</vs:effort></speak>':
+        '{f ˈpliz f}',
+      '[shout]please[/shout]': '{ff ˈpliz ff}',
+      '<speak><prosody vs:gain="-6dB">please</prosody></speak>': 'ˈpliz',
+    };
+    for (const [text, ipaText] of Object.entries(written)) {
+      expect(textToIpa(text, { markup: true }).ipa).toBe(ipaText);
+    }
   });
 
   it('warns about a fast effort ramp', () => {

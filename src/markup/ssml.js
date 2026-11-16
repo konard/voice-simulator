@@ -41,7 +41,11 @@ const RATES = {
 };
 const PITCHES = { 'x-low': -6, low: -3, medium: 0, high: 3, 'x-high': 6 };
 const RANGES = { 'x-low': 0.25, low: 0.5, medium: 1, high: 1.5, 'x-high': 2 };
-const VOLUMES = { 'x-soft': -12, soft: -6, medium: 0, loud: 6, 'x-loud': 12 };
+/**
+ * Named volumes in dB of effort: the steps of the dynamics marks, so that
+ * `soft` is written `{p … p}` and `x-loud` `{ff … ff}` (issue 52).
+ */
+const VOLUMES = { 'x-soft': -20, soft: -10, medium: 0, loud: 10, 'x-loud': 20 };
 const EMPHASIS = { strong: 1, moderate: 0.5, none: 0, reduced: -0.5 };
 
 /** Pitch of the default voice when no head is given (DEFAULT_HEAD). */

@@ -12,8 +12,8 @@
   ipa: həˈloʊ ˈðɛɹ .
   words 0-1: pitch 8.843587, range 2
 <speak><prosody volume="x-soft">Hello</prosody> there.</speak>
-  ipa: həˈloʊ ˈðɛɹ .
-  words 0-1: effort 0.2, effortEnd 0.2
+  ipa: {pp həˈloʊ pp} ˈðɛɹ .
+  words 0-1: effort 0, effortEnd 0
 <speak><prosody vs:gain="-6dB">Hello</prosody> there.</speak>
   ipa: həˈloʊ ˈðɛɹ .
   words 0-1: gain -6
