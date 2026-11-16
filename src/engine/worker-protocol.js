@@ -10,10 +10,14 @@
  *   {type: 'engine', engine?, threads?, simd?}  -> {type: 'engine', name,
  *     simd, threads, reason}: the engine those options give (createEngine)
  *   {type: 'benchmark', head, gpu?, engine?, threads?, simd?}
- *     -> {type: 'benchmark', level, loads, measured, gpu, gpuLoads}  (the
- *     3D tiers above the CPU's choice are measured on WebGPU too unless
- *     `gpu: false`; `gpu` in the reply tells whether the chosen tier runs
- *     there)
+ *     -> {type: 'benchmark', ...result of benchmarkDevice, gpu, gpuLoads,
+ *     gpuPending}: the silent device benchmark (issue 28,
+ *     src/perf/device-benchmark.js). It pauses every 20 ms of work and
+ *     stops while an utterance is waiting or being rendered; the rest is
+ *     measured 500 ms after the last utterance ended. With `gpuPending`
+ *     a second `benchmark` message follows: the 3D tiers above the CPU's
+ *     choice measured on WebGPU (unless `gpu: false`; at most 2 s), with
+ *     `gpu` telling whether the chosen tier runs there
  *   {type: 'speak', id, ipa, lang, head, seed, tier, auto, chunkSize,
  *    microphone?, room?, enclosure?, gpu?, engine?, threads?, simd?}
  *   (`gpu: false` keeps the 3D tiers on the CPU; otherwise they run on
@@ -37,17 +41,24 @@ import {
 } from '../acoustics/voxel-model.js';
 import { requestGpuDevice } from '../acoustics/fdtd-gpu.js';
 import { encodeHeadConfig } from '../head-config.js';
-import { benchmarkAudioTiersAsync } from '../perf/benchmark.js';
+import { benchmarkRenderer, measureAudioTierAsync } from '../perf/benchmark.js';
+import { benchmarkDevice } from '../perf/device-benchmark.js';
 import {
   AUDIO_TIERS,
   BASE_AUDIO_LEVEL,
   OverloadDetector,
+  chooseGpuTier,
   fallbackLevel,
 } from '../perf/lod.js';
 import { prepareUtterance } from '../synthesize.js';
 import { createEngine } from './index.js';
 
+/** Seconds of audio per tier of the WebGPU benchmark. */
 const BENCHMARK_SECONDS = 0.08;
+/** Wall-clock limit of the WebGPU benchmark in ms. */
+const GPU_BENCHMARK_LIMIT = 2000;
+/** Wait in ms after an utterance before a stopped benchmark continues. */
+const BENCHMARK_RESUME_DELAY = 500;
 /** Samples between field measurements. */
 const FIELD_BLOCK = 128;
 
@@ -318,37 +329,136 @@ async function stream(state, message, renderer, progress) {
   return 'done';
 }
 
+/**
+ * Start the device benchmark of a `benchmark` message (see
+ * runBenchmark).
+ */
 async function benchmark(state, message) {
-  const device = message.gpu === false ? null : await gpu(state);
-  const engine = await createEngine(engineOptions(message));
-  const measure = (target) =>
-    benchmarkAudioTiersAsync({
-      head: message.head,
-      seconds: BENCHMARK_SECONDS,
-      target: 0.8,
-      device: target ?? undefined,
-      engine,
-    });
+  globalThis.clearTimeout(state.resumeTimer);
+  state.benchmark = { message, partial: null, running: false };
+  await runBenchmark(state);
+}
+
+/**
+ * Run or continue the pending benchmark: benchmarkDevice with `paused`
+ * true while an utterance is being rendered. A partial result is kept and
+ * continued BENCHMARK_RESUME_DELAY ms after the utterance (see speakNow);
+ * a complete one is posted, then the WebGPU tiers are measured.
+ */
+async function runBenchmark(state) {
+  const job = state.benchmark;
+  if (!job || job.running || state.speaking > 0) {
+    return;
+  }
+  job.running = true;
+  const { message } = job;
   let result;
   try {
-    result = await measure(device);
-  } catch (error) {
-    if (!device) {
-      throw error;
-    }
-    console.warn('WebGPU benchmark failed, measuring the CPU', error);
-    state.gpuDevice = Promise.resolve(null);
-    result = await measure(null);
+    result = await benchmarkDevice({
+      engine: await createEngine(engineOptions(message)),
+      head: message.head,
+      resume: job.partial,
+      paused: () => state.speaking > 0,
+      measure: (tier, info) =>
+        benchmarkRenderer(tier, {
+          ...info,
+          model:
+            tier.solver === 'fdtd3d'
+              ? voxelModel(state, message.head, { dx: tier.dx })
+              : undefined,
+        }),
+    });
+  } finally {
+    job.running = false;
   }
-  const { level, loads, measured, gpuLoads } = result;
-  state.post({
+  if (result.partial) {
+    job.partial = result;
+    return;
+  }
+  state.benchmark = null;
+  const gpuPending =
+    message.gpu !== false &&
+    AUDIO_TIERS.some(
+      (tier, index) => index > result.level && tier.solver === 'fdtd3d'
+    );
+  const cpu = {
     type: 'benchmark',
-    level,
-    loads,
-    measured,
-    gpuLoads,
-    gpu: result.gpu,
-  });
+    ...result,
+    gpu: false,
+    gpuLoads: AUDIO_TIERS.map(() => null),
+  };
+  state.post({ ...cpu, gpuPending });
+  if (gpuPending) {
+    const gpuResult = await benchmarkGpu(state, message, result).catch(
+      (error) => {
+        console.warn('WebGPU benchmark failed', error);
+        state.gpuDevice = Promise.resolve(null);
+        return null;
+      }
+    );
+    state.post({
+      ...cpu,
+      ...(gpuResult && {
+        level: gpuResult.level,
+        tier: AUDIO_TIERS[gpuResult.level],
+        gpu: gpuResult.gpu,
+        gpuLoads: gpuResult.gpuLoads,
+      }),
+      gpuPending: false,
+    });
+  }
+}
+
+/**
+ * The 3D tiers above the CPU's choice on WebGPU (chooseGpuTier), for at
+ * most GPU_BENCHMARK_LIMIT ms: a tier that would start later counts as too
+ * slow. Null without WebGPU.
+ */
+async function benchmarkGpu(state, message, cpu) {
+  const device = await gpu(state);
+  if (!device) {
+    return null;
+  }
+  const engine = await createEngine(engineOptions(message));
+  const deadline = globalThis.performance.now() + GPU_BENCHMARK_LIMIT;
+  const measure = (tier, { limit }) =>
+    globalThis.performance.now() > deadline
+      ? Infinity
+      : measureAudioTierAsync(tier, {
+          head: message.head,
+          seconds: BENCHMARK_SECONDS,
+          limit,
+          device,
+          engine,
+        });
+  return chooseGpuTier(measure, cpu, { tiers: AUDIO_TIERS, gpu: true });
+}
+
+/** Post the fallback answer of a failed benchmark. */
+function benchmarkFailed(state, error) {
+  // Stay on the cheapest full-band tier.
+  console.warn('Benchmark failed', error);
+  state.benchmark = null;
+  state.post({ type: 'benchmark', level: BASE_AUDIO_LEVEL, loads: [] });
+}
+
+/**
+ * Speak, with the benchmark stopped meanwhile and continued
+ * BENCHMARK_RESUME_DELAY ms after the last utterance.
+ */
+async function speakNow(state, message) {
+  state.speaking++;
+  globalThis.clearTimeout(state.resumeTimer);
+  try {
+    await speak(state, message);
+  } finally {
+    state.speaking--;
+    if (state.speaking === 0 && state.benchmark) {
+      state.resumeTimer = globalThis.setTimeout(() => {
+        runBenchmark(state).catch((error) => benchmarkFailed(state, error));
+      }, BENCHMARK_RESUME_DELAY);
+    }
+  }
 }
 
 async function describeEngine(state, message) {
@@ -380,6 +490,11 @@ export function createWorkerHandler(post, options = {}) {
     /** The id of the utterance being spoken; 0 after a cancel. */
     current: 0,
     gpuDevice: undefined,
+    /** Utterances being rendered: the benchmark stops while above 0. */
+    speaking: 0,
+    /** The benchmark asked for and not finished: {message, partial}. */
+    benchmark: null,
+    resumeTimer: undefined,
   };
   return async function handle(message) {
     if (message.type === 'cancel') {
@@ -393,16 +508,14 @@ export function createWorkerHandler(post, options = {}) {
       return;
     }
     if (message.type === 'benchmark') {
-      await benchmark(state, message).catch((error) => {
-        // Stay on the cheapest full-band tier.
-        console.warn('Benchmark failed', error);
-        post({ type: 'benchmark', level: BASE_AUDIO_LEVEL, loads: [] });
-      });
+      await benchmark(state, message).catch((error) =>
+        benchmarkFailed(state, error)
+      );
       return;
     }
     if (message.type === 'speak') {
       state.current = message.id;
-      await speak(state, message).catch((error) => {
+      await speakNow(state, message).catch((error) => {
         post({ type: 'error', id: message.id, message: error.message });
       });
     }

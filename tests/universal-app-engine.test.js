@@ -277,7 +277,10 @@ async function workerInstance(fresh) {
  * `navigator.gpu` and `performance.now` replaced while it runs; returns
  * what it posted.
  */
-async function speakInWorker(message, { gpu, now, fresh } = {}) {
+async function speakInWorker(
+  message,
+  { gpu, now, fresh, until = (data) => FINAL.has(data.type) } = {}
+) {
   const posted = [];
   const saved = {
     postMessage: globalThis.postMessage,
@@ -302,7 +305,7 @@ async function speakInWorker(message, { gpu, now, fresh } = {}) {
       data: { type: 'speak', lang: 'en', head: {}, ...message },
     });
     for (let wait = 0; wait < 400; wait++) {
-      if (posted.some((data) => FINAL.has(data.type))) {
+      if (posted.some(until)) {
         break;
       }
       await new Promise((resolve) => globalThis.setTimeout(resolve, 20));
@@ -422,16 +425,27 @@ describe('synthesis worker', () => {
     let posted;
     try {
       posted = await speakInWorker(
-        { type: 'benchmark' },
-        { gpu: brokenGpu, fresh: 'benchmark' }
+        // A low CPU level, so the 3D tiers are left to the GPU.
+        { type: 'benchmark', engine: 'js' },
+        {
+          gpu: brokenGpu,
+          fresh: 'benchmark',
+          until: (data) => data.type === 'benchmark' && !data.gpuPending,
+        }
       );
     } finally {
       console.warn = warn;
     }
-    expect(warnings).toEqual(['WebGPU benchmark failed, measuring the CPU']);
-    const reply = posted.find((message) => message.type === 'benchmark');
-    expect(reply.gpu).toBe(false);
-    expect(reply.loads[0] > 0).toBe(true);
+    const replies = posted.filter((message) => message.type === 'benchmark');
+    // The CPU answer comes first; the 3D tiers on WebGPU follow it.
+    expect(replies.length).toBe(2);
+    expect(replies[0].gpuPending).toBe(true);
+    expect(replies[0].gpu).toBe(false);
+    expect(replies[0].loads[0] > 0).toBe(true);
+    expect(warnings).toEqual(['WebGPU benchmark failed']);
+    expect(replies[1].gpuPending).toBe(false);
+    expect(replies[1].gpu).toBe(false);
+    expect(replies[1].level).toBe(replies[0].level);
     expect(posted.some((message) => message.type === 'error')).toBe(false);
   });
 });
