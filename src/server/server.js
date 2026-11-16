@@ -19,7 +19,8 @@
  * {code, strength} object or an accent definition in a JSON body; never a
  * file path, see docs/accents.md), accentLevel (0..1), ipa (boolean),
  * markup (boolean: true reads inline tags, false none; SSML that starts
- * with `<speak` is read unless it is false; see docs/markup.md), seed,
+ * with `<speak` is read unless it is false; see docs/markup.md), breaths
+ * (boolean: an inhale between sentences, default false), seed,
  * head (object or "random"), preset, tier, solver, sampleRate, micDistance
  * (cm), micAzimuth and micElevation (degrees), micCompensate (boolean) and
  * room (a preset name, or a {width, height, depth, rt60} object in a JSON
@@ -189,6 +190,11 @@ function markupParam(value) {
   return value === false || value === 'false' ? false : undefined;
 }
 
+/** The `breaths` parameter: `{breaths: true}` for true, else nothing. */
+function breathsParam(value) {
+  return value === true || value === 'true' ? { breaths: true } : {};
+}
+
 /**
  * The text limits: `MAX_TEXT` characters of the text that is read and
  * `4 * MAX_TEXT` of the marked-up input; markup that cannot be read is a
@@ -254,6 +260,7 @@ export function synthesisOptions(params) {
       ...accentParams(params, lang),
       ipa,
       markup,
+      ...breathsParam(params.breaths),
       seed,
       head: parseHead(params.head, seed, parsePreset(params.preset)),
       tier,

@@ -70,6 +70,7 @@ const OPTIONS = {
   'box-absorption': { type: 'string' },
   ipa: { type: 'boolean' },
   markup: { type: 'boolean' },
+  breaths: { type: 'boolean' },
   plain: { type: 'boolean' },
   loudness: { type: 'string' },
   headroom: { type: 'string' },
@@ -131,7 +132,12 @@ function usage() {
     '                        [creaky], [pressed], [lax], [falsetto], [harsh]',
     '                        (docs/markup.md); SSML (<speak>…) is read without',
     '                        it. A whisper has no voicing, is 25 dB quieter',
-    '                        and 1.3x as long',
+    '                        and 1.3x as long. Sounds: [inhale], [exhale],',
+    '                        [sigh], [laugh], [laugh 1.2], [filler], [um],',
+    '                        [cough], [throat], [click]; written um, uh,',
+    '                        hahaha are read as sounds without --markup',
+    '      --breaths         Breathe in between sentences: an inhale in each',
+    '                        pause of 0.3 s or more after . ? ! (docs/markup.md)',
     '      --plain           Read the text as it is, without any markup',
     '      --loudness <LUFS> Scale the audio to this integrated loudness',
     '                        (ITU-R BS.1770), e.g. --loudness=-23; the peak',
@@ -509,6 +515,37 @@ export function loadLexiconFiles(files, lang) {
   return words;
 }
 
+/**
+ * The lines of `timeline` without --json: a word per line, and a sound
+ * that is not a written word (`[laugh]`, a breath) as `⸨name⸩`, by start.
+ */
+function timelineLines(timeline) {
+  const lines = timeline.words.map((word) => {
+    const syllables = word.syllables
+      .map((syllable) => syllable.text ?? syllable.spoken ?? syllable.ipa)
+      .join('·');
+    const said = word.spoken ? ` (${word.spoken})` : '';
+    return {
+      start: word.start,
+      text: `${word.start.toFixed(3)} ${word.end.toFixed(3)} ${word.text}${said} /${word.syllables.map((syllable) => syllable.ipa).join('.')}/ ${syllables}`,
+    };
+  });
+  for (const sound of timeline.sounds ?? []) {
+    const written = timeline.words.some(
+      (word) => word.sound && word.start <= sound.end && sound.start <= word.end
+    );
+    if (!written) {
+      lines.push({
+        start: sound.start,
+        text: `${sound.start.toFixed(3)} ${sound.end.toFixed(3)} ⸨${sound.name}⸩`,
+      });
+    }
+  }
+  return lines
+    .sort((left, right) => left.start - right.start)
+    .map((line) => line.text);
+}
+
 const COMMANDS = {
   ipa(values, positionals, io) {
     const result = textToIpa(requireText(positionals), {
@@ -530,6 +567,7 @@ const COMMANDS = {
       weakForms: values['strong-forms'] ? false : undefined,
       ipa: values.ipa,
       markup: markupOption(values),
+      breaths: values.breaths || undefined,
       seed: values.seed,
       head: resolveHead(values),
       tier: values.tier,
@@ -598,6 +636,7 @@ const COMMANDS = {
       weakForms: values['strong-forms'] ? false : undefined,
       ipa: values.ipa,
       markup: markupOption(values),
+      breaths: values.breaths || undefined,
     });
     reportWarnings(prepared, io);
     const { lang, accent, ipa, timeline, plan } = prepared;
@@ -614,14 +653,8 @@ const COMMANDS = {
       );
       return;
     }
-    for (const word of timeline.words) {
-      const syllables = word.syllables
-        .map((syllable) => syllable.text ?? syllable.spoken ?? syllable.ipa)
-        .join('·');
-      const said = word.spoken ? ` (${word.spoken})` : '';
-      io.stdout(
-        `${word.start.toFixed(3)} ${word.end.toFixed(3)} ${word.text}${said} /${word.syllables.map((syllable) => syllable.ipa).join('.')}/ ${syllables}`
-      );
+    for (const line of timelineLines(timeline)) {
+      io.stdout(line);
     }
   },
 
@@ -635,6 +668,7 @@ const COMMANDS = {
         weakForms: values['strong-forms'] ? false : undefined,
         ipa: values.ipa,
         markup: markupOption(values),
+        breaths: values.breaths || undefined,
         head,
       }
     );

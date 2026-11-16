@@ -46,6 +46,16 @@ export {
   VELUM_LEAD,
 } from './articulation/plan.js';
 export { modeAt } from './articulation/modes.js';
+// Paralinguistic sounds: breaths, laughter, sighs, fillers (issue 56)
+export {
+  SOUNDS,
+  FILLERS,
+  BREATHS,
+  isSound,
+  soundCalls,
+  soundSeconds,
+  soundSegments,
+} from './articulation/sounds.js';
 // Vocal effort, level convention and loudness (issue 52)
 export {
   EFFORT_PITCH_LIMITS,
