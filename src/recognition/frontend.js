@@ -119,47 +119,60 @@ export function workingRate(sampleRate, rate = null) {
   return rate;
 }
 
-/** Settings and constant tables of an analyzer. */
+/** Throw a RangeError with `message` unless `ok`. */
+function check(ok, message) {
+  if (!ok) {
+    throw new RangeError(message);
+  }
+}
+
+/** Window length (samples) of `window` seconds; it must hold a hop. */
+function windowLength(window, rate, hopSamples) {
+  const length = Math.round(window * rate);
+  check(
+    length >= 4 && length <= 65536 && hopSamples <= length,
+    `window ${window} s must hold 4 to 65536 samples and a hop`
+  );
+  return length;
+}
+
+/** Integer option of at least `min`. */
+function integerOption(name, value, min, max = Infinity) {
+  check(
+    Number.isInteger(value) && value >= min && value <= max,
+    `${name} must be an integer from ${min} to ${max}, got ${value}`
+  );
+  return value;
+}
+
+/** Settings of an analyzer: merged options, lengths and capacities. */
 function frontendSettings(sampleRate, options) {
   const merged = { ...FRONTEND_DEFAULTS, ...options };
   const rate = workingRate(sampleRate, merged.rate);
   const hop = merged.hop;
-  if (!HOPS.includes(hop)) {
-    throw new RangeError(`hop must be one of ${HOPS.join(', ')} s, got ${hop}`);
-  }
-  const method = LPC_METHODS[merged.lpc];
-  if (!method || !Object.hasOwn(LPC_METHODS, merged.lpc)) {
-    throw new RangeError(
-      `lpc must be one of ${Object.keys(LPC_METHODS).join(', ')}, got ${merged.lpc}`
-    );
-  }
-  const length = Math.round(merged.window * rate);
+  check(HOPS.includes(hop), `hop must be one of ${HOPS.join(', ')} s`);
+  check(
+    Object.hasOwn(LPC_METHODS, merged.lpc),
+    `lpc must be one of ${Object.keys(LPC_METHODS).join(', ')}`
+  );
   const hopSamples = hop * rate;
-  if (!(length >= 4) || length > 65536 || !(hopSamples <= length)) {
-    throw new RangeError(
-      `window ${merged.window} s must hold 4 to 65536 samples and a hop`
-    );
-  }
-  const order = merged.order ?? Math.round(rate / 1000) + 2;
-  if (!Number.isInteger(order) || order < 1 || order >= length) {
-    throw new RangeError(`LPC order ${order} must be from 1 to the window`);
-  }
-  const integer = (name, value, min) => {
-    if (!Number.isInteger(value) || value < min) {
-      throw new RangeError(`${name} must be an integer of at least ${min}`);
-    }
-    return value;
-  };
-  const melBands = integer('melBands', merged.melBands, 1);
-  const cepstra = integer('cepstra', merged.cepstra, 1);
+  const length = windowLength(merged.window, rate, hopSamples);
+  const order = integerOption(
+    'order',
+    merged.order ?? Math.round(rate / 1000) + 2,
+    1,
+    length - 1
+  );
   const preEmphasis = merged.preEmphasis;
-  if (!(preEmphasis >= 0 && preEmphasis < 1)) {
-    throw new RangeError(`preEmphasis must be in [0, 1), got ${preEmphasis}`);
-  }
+  check(
+    preEmphasis >= 0 && preEmphasis < 1,
+    `preEmphasis must be in [0, 1), got ${preEmphasis}`
+  );
   const maxSeconds = merged.maxSeconds;
-  if (!(maxSeconds >= 0) || !Number.isFinite(maxSeconds)) {
-    throw new RangeError(`maxSeconds must be finite and >= 0`);
-  }
+  check(
+    maxSeconds >= 0 && Number.isFinite(maxSeconds),
+    'maxSeconds must be finite and >= 0'
+  );
   let size = 2;
   while (size < length) {
     size *= 2;
@@ -173,10 +186,10 @@ function frontendSettings(sampleRate, options) {
     hopSamples,
     size,
     order,
-    melBands,
-    cepstra,
+    melBands: integerOption('melBands', merged.melBands, 1),
+    cepstra: integerOption('cepstra', merged.cepstra, 1),
     preEmphasis,
-    method,
+    method: LPC_METHODS[merged.lpc],
     maxSeconds,
     capacity: Math.ceil(maxSeconds / hop),
     sampleCapacity: Math.ceil(maxSeconds * rate),
@@ -190,8 +203,7 @@ function binRange(low, high, rate, size) {
     return null;
   }
   const first = Math.max(0, Math.ceil((low * size) / rate));
-  const last =
-    high >= nyquist ? size / 2 : Math.ceil((high * size) / rate) - 1;
+  const last = high >= nyquist ? size / 2 : Math.ceil((high * size) / rate) - 1;
   return [first, last];
 }
 
@@ -416,6 +428,147 @@ function createNoiseTracker(hop) {
   };
 }
 
+/** Scratch memory and tables of the per-frame analysis. */
+function createKernel(settings, tables, frames) {
+  const { length, size, order, melBands } = settings;
+  return {
+    settings,
+    tables,
+    frames,
+    raw: new Float64Array(length),
+    emphasised: new Float64Array(length),
+    re: new Float64Array(size),
+    im: new Float64Array(size),
+    power: new Float64Array(size / 2 + 1),
+    a: new Float64Array(order),
+    k: new Float64Array(order),
+    logMel: new Float64Array(melBands),
+  };
+}
+
+/**
+ * Energy and zero crossings of the raw frame at `buffer[start]`; fills the
+ * windowed frame for the transform and the pre-emphasised windowed frame
+ * for LPC. Returns the mean power (plus EPSILON).
+ */
+function measureWaveform(kernel, row, buffer, start) {
+  const { raw, emphasised, re, im, frames } = kernel;
+  const { length, preEmphasis } = kernel.settings;
+  const hann = kernel.tables.hann;
+  let sum = 0;
+  let crossings = 0;
+  let previous = buffer[start - 1];
+  for (let n = 0; n < length; n++) {
+    const value = buffer[start + n];
+    raw[n] = value;
+    sum += value * value;
+    if (n > 0 && value >= 0 !== raw[n - 1] >= 0) {
+      crossings++;
+    }
+    emphasised[n] = (value - preEmphasis * previous) * hann[n];
+    previous = value;
+    re[n] = value * hann[n];
+    im[n] = 0;
+  }
+  re.fill(0, length);
+  im.fill(0, length);
+  const meanPower = sum / length + EPSILON;
+  frames.energy[row] = 10 * Math.log10(meanPower);
+  frames.zcr[row] = crossings / (length - 1);
+  return meanPower;
+}
+
+/** Power spectrum, centre of gravity, tilt and the six bands. */
+function measureSpectrum(kernel, row) {
+  const { re, im, power, frames, tables } = kernel;
+  const { size, rate } = kernel.settings;
+  tables.fft.forward(re, im);
+  let total = 0;
+  let moment = 0;
+  for (let bin = 0; bin <= size / 2; bin++) {
+    const value = re[bin] * re[bin] + im[bin] * im[bin];
+    power[bin] = value;
+    total += bin > 0 ? value : 0;
+    moment += ((bin * rate) / size) * value;
+  }
+  frames.gravity[row] = total > 0 ? moment / total : 0;
+  frames.tilt[row] =
+    10 *
+    Math.log10(
+      (rangePower(power, tables.tiltLow) + EPSILON) /
+        (rangePower(power, tables.tiltHigh) + EPSILON)
+    );
+  const bands = tables.bands;
+  for (let band = 0; band < bands.length; band++) {
+    frames.band[row * bands.length + band] = bands[band]
+      ? 10 * Math.log10(rangePower(power, bands[band]) + EPSILON)
+      : EMPTY_BAND;
+  }
+}
+
+/**
+ * Periodicity (Boersma 1993): the autocorrelation r is the inverse
+ * transform of the power spectrum; the largest r[l] / (r[0] w[l]) over the
+ * pitch lags, limited to 0 .. 1.
+ */
+function measurePeriodicity(kernel, row) {
+  const { re, im, power, frames } = kernel;
+  const { lagMin, lagMax, windowCorrelation, fft } = kernel.tables;
+  const size = kernel.settings.size;
+  for (let bin = 0; bin < size; bin++) {
+    re[bin] = power[bin <= size / 2 ? bin : size - bin];
+    im[bin] = 0;
+  }
+  fft.inverse(re, im);
+  let periodicity = 0;
+  if (re[0] > 0) {
+    for (let lag = lagMin; lag <= lagMax; lag++) {
+      periodicity = Math.max(
+        periodicity,
+        re[lag] / (re[0] * windowCorrelation[lag])
+      );
+    }
+  }
+  periodicity = Math.min(1, periodicity);
+  frames.periodicity[row] = periodicity;
+  return periodicity;
+}
+
+/** Mel energies of the pre-emphasised spectrum and their cepstrum. */
+function measureMel(kernel, row) {
+  const { power, logMel, frames } = kernel;
+  const { melFirst, melLast, melWeights, dct } = kernel.tables;
+  const { melBands, cepstra } = kernel.settings;
+  let weight = 0;
+  for (let m = 0; m < melBands; m++) {
+    let sum = 0;
+    for (let bin = melFirst[m]; bin <= melLast[m]; bin++, weight++) {
+      sum += melWeights[weight] * power[bin];
+    }
+    logMel[m] = Math.log(Math.max(sum, EPSILON));
+    frames.mel[row * melBands + m] = logMel[m];
+  }
+  for (let n = 0; n < cepstra; n++) {
+    let value = 0;
+    for (let m = 0; m < melBands; m++) {
+      value += dct[n * melBands + m] * logMel[m];
+    }
+    frames.cepstrum[row * cepstra + n] = value;
+  }
+}
+
+/** Linear prediction of the pre-emphasised windowed frame. */
+function measureLpc(kernel, row) {
+  const { emphasised, a, k, frames } = kernel;
+  const { order, method } = kernel.settings;
+  const residual = method(emphasised, order, a, k);
+  for (let i = 0; i < order; i++) {
+    frames.lpc[row * order + i] = a[i];
+    frames.reflection[row * order + i] = k[i];
+  }
+  frames.gain[row] = 10 * Math.log10(residual + EPSILON);
+}
+
 /**
  * Streaming analyzer: sound in, analysis frames out.
  *
@@ -436,10 +589,7 @@ function createNoiseTracker(hop) {
 export function createFrameAnalyzer(sampleRate, options = {}) {
   const settings = frontendSettings(sampleRate, options);
   const tables = frontendTables(settings);
-  const { rate, length, half, hopSamples, size, order, melBands } = settings;
-  const { cepstra, preEmphasis, method, capacity, sampleCapacity } = settings;
-  const { hann, fft, lagMin, lagMax, windowCorrelation } = tables;
-  const { melFirst, melLast, melWeights, dct } = tables;
+  const { rate, length, half, hopSamples, capacity, sampleCapacity } = settings;
   // The buffer holds `margin` samples before `samples[0]` (zeros before the
   // signal, the trimmed past after `trim`) and `length` zeros after the
   // last place a sample can go.
@@ -451,14 +601,7 @@ export function createFrameAnalyzer(sampleRate, options = {}) {
   );
   const columns = frameColumns(frames);
   const noiseTracker = createNoiseTracker(settings.hop);
-  const raw = new Float64Array(length);
-  const emphasised = new Float64Array(length);
-  const re = new Float64Array(size);
-  const im = new Float64Array(size);
-  const power = new Float64Array(size / 2 + 1);
-  const a = new Float64Array(order);
-  const k = new Float64Array(order);
-  const logMel = new Float64Array(melBands);
+  const kernel = createKernel(settings, tables, frames);
   const ratio = rate / sampleRate;
   let resampler = null;
   // Absolute positions since the last reset: `offset` frames and `base`
@@ -503,106 +646,21 @@ export function createFrameAnalyzer(sampleRate, options = {}) {
   /** Analyse frame `row` (relative to the trimmed start) into its rows. */
   function analyse(row) {
     const start = margin + centre(offset + row) - half - base;
-    let sum = 0;
-    let crossings = 0;
-    let previous = buffer[start - 1];
-    for (let n = 0; n < length; n++) {
-      const value = buffer[start + n];
-      raw[n] = value;
-      sum += value * value;
-      if (n > 0 && value >= 0 !== raw[n - 1] >= 0) {
-        crossings++;
-      }
-      emphasised[n] = (value - preEmphasis * previous) * hann[n];
-      previous = value;
-      re[n] = value * hann[n];
-      im[n] = 0;
-    }
-    re.fill(0, length);
-    im.fill(0, length);
-    const meanPower = sum / length + EPSILON;
-    const energy = 10 * Math.log10(meanPower);
-    frames.energy[row] = energy;
-    frames.zcr[row] = length > 1 ? crossings / (length - 1) : 0;
-
-    fft.forward(re, im);
-    let total = 0;
-    let moment = 0;
-    for (let bin = 0; bin <= size / 2; bin++) {
-      const value = re[bin] * re[bin] + im[bin] * im[bin];
-      power[bin] = value;
-      if (bin > 0) {
-        total += value;
-        moment += ((bin * rate) / size) * value;
-      }
-    }
-    frames.gravity[row] = total > 0 ? moment / total : 0;
-    frames.tilt[row] =
-      10 *
-      Math.log10(
-        (rangePower(power, tables.tiltLow) + EPSILON) /
-          (rangePower(power, tables.tiltHigh) + EPSILON)
-      );
-    for (let band = 0; band < tables.bands.length; band++) {
-      const range = tables.bands[band];
-      frames.band[row * tables.bands.length + band] = range
-        ? 10 * Math.log10(rangePower(power, range) + EPSILON)
-        : EMPTY_BAND;
-    }
-
-    // Autocorrelation = inverse transform of the power spectrum (Boersma).
-    for (let bin = 0; bin <= size / 2; bin++) {
-      re[bin] = power[bin];
-      im[bin] = 0;
-    }
-    for (let bin = size / 2 + 1; bin < size; bin++) {
-      re[bin] = power[size - bin];
-      im[bin] = 0;
-    }
-    fft.inverse(re, im);
-    let periodicity = 0;
-    if (re[0] > 0) {
-      for (let lag = lagMin; lag <= lagMax; lag++) {
-        const value = re[lag] / (re[0] * windowCorrelation[lag]);
-        if (value > periodicity) {
-          periodicity = value;
-        }
-      }
-    }
-    periodicity = Math.min(1, periodicity);
-    frames.periodicity[row] = periodicity;
-
-    let weight = 0;
-    for (let m = 0; m < melBands; m++) {
-      let energySum = 0;
-      for (let bin = melFirst[m]; bin <= melLast[m]; bin++, weight++) {
-        energySum += melWeights[weight] * power[bin];
-      }
-      const value = Math.log(Math.max(energySum, EPSILON));
-      logMel[m] = value;
-      frames.mel[row * melBands + m] = value;
-    }
-    for (let n = 0; n < cepstra; n++) {
-      let value = 0;
-      for (let m = 0; m < melBands; m++) {
-        value += dct[n * melBands + m] * logMel[m];
-      }
-      frames.cepstrum[row * cepstra + n] = value;
-    }
-
-    const residual = method(emphasised, order, a, k);
-    for (let i = 0; i < order; i++) {
-      frames.lpc[row * order + i] = a[i];
-      frames.reflection[row * order + i] = k[i];
-    }
-    frames.gain[row] = 10 * Math.log10(residual + EPSILON);
-
+    const meanPower = measureWaveform(kernel, row, buffer, start);
+    measureSpectrum(kernel, row);
+    measureMel(kernel, row);
+    const periodicity = measurePeriodicity(kernel, row);
+    measureLpc(kernel, row);
     const noise = noiseTracker.noiseFloor(meanPower);
     frames.noise[row] = noise;
-    frames.speech[row] = noiseTracker.speech(energy, noise, periodicity);
+    frames.speech[row] = noiseTracker.speech(
+      frames.energy[row],
+      noise,
+      periodicity
+    );
   }
 
-  /** Add every frame whose last sample is below `limit` (absolute). */
+  /** Add the frames before absolute frame `lastFrame`. */
   function addFrames(lastFrame) {
     let added = 0;
     while (offset + frames.count < lastFrame) {

@@ -12,19 +12,30 @@ function speech(seconds, tier, sampleRate) {
   const length = Math.round(seconds * voice.sampleRate);
   const samples = new Float32Array(length);
   for (let n = 0; n < length; n += voice.samples.length) {
-    samples.set(voice.samples.subarray(0, Math.min(voice.samples.length, length - n)), n);
+    samples.set(
+      voice.samples.subarray(0, Math.min(voice.samples.length, length - n)),
+      n
+    );
   }
   return { samples, sampleRate: voice.sampleRate };
 }
 
-for (const [tier, sampleRate] of [['wideband', 16000], ['telephone', 8000], ['wideband', 44100]]) {
+for (const [tier, sampleRate] of [
+  ['wideband', 16000],
+  ['telephone', 8000],
+  ['wideband', 44100],
+]) {
   const { samples, sampleRate: rate } = speech(10, tier, sampleRate);
   analyzeFrames(samples.subarray(0, rate), rate); // warm up
   const runs = [];
   for (let run = 0; run < 3; run++) {
-    const started = performance.now();
+    const started = globalThis.performance.now();
     analyzeFrames(samples, rate);
-    runs.push((performance.now() - started) / 1000 / (samples.length / rate));
+    runs.push(
+      (globalThis.performance.now() - started) / 1000 / (samples.length / rate)
+    );
   }
-  console.log(`input ${rate} Hz: frontend rtf ${Math.min(...runs).toFixed(4)} (runs ${runs.map((v) => v.toFixed(4)).join(' ')})`);
+  console.log(
+    `input ${rate} Hz: frontend rtf ${Math.min(...runs).toFixed(4)} (runs ${runs.map((v) => v.toFixed(4)).join(' ')})`
+  );
 }

@@ -1654,6 +1654,29 @@ export declare function spectralPeaks(
   options?: { from?: number; to?: number; step?: number; floor?: number }
 ): number[];
 
+// Recognition front end (issue 58): analysis frames of a recording or a
+// stream; see src/recognition/frontend.d.ts.
+export { createFft, type Fft } from './recognition/fft.js';
+export {
+  lpcAutocorrelation,
+  lpcBurg,
+  lpcCovariance,
+  lpcLevel,
+  predictorFromReflection,
+  type LpcArray,
+  type LpcMethod,
+} from './recognition/lpc.js';
+export {
+  FRONTEND_DEFAULTS,
+  analyzeFrames,
+  createFrameAnalyzer,
+  workingRate,
+  type FrameAnalyzer,
+  type FrameSet,
+  type FrameStage,
+  type FrontendOptions,
+} from './recognition/frontend.js';
+
 // Audio files
 export declare function encodeWav(
   samples: AudioSamples,
@@ -2029,6 +2052,7 @@ export declare function decodeRaw(
   options?: SampleEncoding & { sampleRate?: number; channels?: number }
 ): DecodedAudio;
 export {
+  createResampler,
   createStreamResampler,
   resample,
   type StreamResampler,

@@ -80,13 +80,10 @@ function expectedCount(frames) {
 function whiteNoise(length, level, seed) {
   const random = createRandom(seed);
   const amplitude = 10 ** (level / 20) * Math.sqrt(3);
-  return Float32Array.from(
-    { length },
-    () => (random() * 2 - 1) * amplitude
-  );
+  return Float32Array.from({ length }, () => (random() * 2 - 1) * amplitude);
 }
 
-describe('recognition front end (issue 58)', () => {
+describe('recognition front end: transforms', () => {
   it('transforms like a direct sum', () => {
     const random = createRandom('issue-58-fft');
     const size = 64;
@@ -174,7 +171,9 @@ describe('recognition front end (issue 58)', () => {
       expect(largest <= 1e-6).toBe(true);
     }
   });
+});
 
+describe('recognition front end: frames', () => {
   it('measures a sine', () => {
     const rate = 16000;
     const sine = Float32Array.from({ length: rate }, (_, n) =>
@@ -276,7 +275,11 @@ describe('recognition front end (issue 58)', () => {
         continue;
       }
       const start = 0.5 + segment.start;
-      for (let t = Math.ceil(start / hop); t * hop < start + segment.duration; t++) {
+      for (
+        let t = Math.ceil(start / hop);
+        t * hop < start + segment.duration;
+        t++
+      ) {
         total++;
         hits += frames.speech[t];
       }
@@ -300,7 +303,9 @@ describe('recognition front end (issue 58)', () => {
       expect(frames.speech[t]).toBe(0);
     }
   });
+});
 
+describe('recognition front end: streaming', () => {
   it('keeps frames after trim', () => {
     const voice = synthesize('Hello world.', { tier: 'wideband' });
     const rate = voice.sampleRate;
@@ -355,9 +360,7 @@ describe('recognition front end (issue 58)', () => {
     expect(() => analyzer.push(new Float32Array(1))).toThrow(RangeError);
     analyzer.flush();
     expect(analyzer.frames.count).toBe(20);
-    expect(() => createFrameAnalyzer(16000, { hop: 0.02 })).toThrow(
-      RangeError
-    );
+    expect(() => createFrameAnalyzer(16000, { hop: 0.02 })).toThrow(RangeError);
     expect(() => createFrameAnalyzer(16000, { lpc: 'magic' })).toThrow(
       RangeError
     );
@@ -386,9 +389,12 @@ describe('recognition front end (issue 58)', () => {
       analyzeFrames(samples.subarray(0, sampleRate), sampleRate);
       let best = Infinity;
       for (let run = 0; run < 3; run++) {
-        const started = performance.now();
+        const started = globalThis.performance.now();
         analyzeFrames(samples, sampleRate);
-        best = Math.min(best, (performance.now() - started) / 1000 / 10);
+        best = Math.min(
+          best,
+          (globalThis.performance.now() - started) / 1000 / 10
+        );
       }
       console.log(`frontend rtf ${best.toFixed(4)} at ${sampleRate} Hz`);
       expect(best <= 0.2).toBe(true);

@@ -30,7 +30,8 @@ export declare function createStreamResampler(
 /**
  * Issue 58: the stream resampler with the defaults of `resample`
  * (`zeroCrossings` 16), so the joined outputs of `push` and `flush` equal
- * `resample(all, fromRate, toRate, options)` of the joined input.
+ * `resample(all, fromRate, toRate, options)` of the joined input within
+ * 1e-6. With integer rates the kernel values come from a table per phase.
  */
 export declare function createResampler(
   fromRate: number,

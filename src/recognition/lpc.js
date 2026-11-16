@@ -1,5 +1,5 @@
 /**
- * Linear prediction of one analysis frame (issue 58): Burg's method, the
+ * Linear prediction of one analysis frame: Burg's method, the
  * autocorrelation method (Levinson-Durbin) and the covariance method
  * (Cholesky), after Makhoul (1975) and Markel and Gray (1976).
  *
@@ -8,7 +8,7 @@
  * A(z) = 1 + sum_i a_i z^-i (a_i in `a[i - 1]`) and `k` the reflection
  * coefficients k_1 .. k_p (k_m in `k[m - 1]`). They return the residual
  * power E, the mean squared prediction error. Scratch memory is kept between
- * calls, so a frame loop allocates nothing once the largest frame was seen.
+ * calls: a frame loop allocates only for a frame longer than all before it.
  */
 
 let scratchA = new Float64Array(64);
@@ -168,28 +168,13 @@ export function lpcAutocorrelation(x, order, a, k) {
 }
 
 /**
- * Covariance method: solve sum_j a_j phi(i, j) = -phi(i, 0), i = 1 .. p,
- * with phi(i, j) = sum_{n=p}^{N-1} x[n-i] x[n-j], by Cholesky after adding
- * 1e-9 phi(0, 0) to the diagonal; the reflection coefficients come from the
- * step-down recursion. When Cholesky fails or some |k_m| >= 1 (an unstable
- * predictor), the result of `lpcBurg` is returned instead.
- * @param {ArrayLike<number>} x
- * @param {number} order
- * @param {Float64Array|Float32Array|number[]} a
- * @param {Float64Array|Float32Array|number[]} k
- * @returns {number} Residual power E (mean over the N - p predicted samples).
+ * phi(i, j) = sum_{n=p}^{N-1} x[n-i] x[n-j] for i, j = 0 .. p into `phi`
+ * (row-major, width p + 1): phi(0, j) directly, then phi(i, j) =
+ * phi(i-1, j-1) + x[p-i] x[p-j] - x[N-i] x[N-j] (Markel and Gray 1976,
+ * eq. 3.43).
  */
-export function lpcCovariance(x, order, a, k) {
-  const length = checkOrder(x, order, a, k);
-  const p = order;
-  if (length <= p) {
-    return lpcBurg(x, order, a, k);
-  }
+function covarianceMatrix(x, p, length, phi) {
   const width = p + 1;
-  scratch(width * width + width);
-  const phi = scratchA;
-  // phi(0, j) directly, then phi(i, j) = phi(i-1, j-1) + x[p-i] x[p-j]
-  // - x[N-i] x[N-j] (Markel and Gray 1976, eq. 3.43).
   for (let j = 0; j <= p; j++) {
     let sum = 0;
     for (let n = p; n < length; n++) {
@@ -208,31 +193,32 @@ export function lpcCovariance(x, order, a, k) {
       phi[j * width + i] = value;
     }
   }
-  const total = phi[0];
-  if (!(total > 0)) {
-    return lpcBurg(x, order, a, k);
-  }
-  // Cholesky L L^T of phi(1..p, 1..p) + 1e-9 phi(0, 0) I, L in scratchB.
-  const lower = scratchB;
-  const solution = scratchC;
-  const diagonal = 1e-9 * total;
+}
+
+/**
+ * Cholesky L L^T of phi(1..p, 1..p) + diagonal I into `lower` (p by p,
+ * row-major). Returns false when the matrix is not positive definite.
+ */
+function cholesky(phi, p, diagonal, lower) {
+  const width = p + 1;
   for (let i = 0; i < p; i++) {
     for (let j = 0; j <= i; j++) {
       let sum = phi[(i + 1) * width + j + 1] + (i === j ? diagonal : 0);
       for (let m = 0; m < j; m++) {
         sum -= lower[i * p + m] * lower[j * p + m];
       }
-      if (i === j) {
-        if (!(sum > 0)) {
-          return lpcBurg(x, order, a, k);
-        }
-        lower[i * p + i] = Math.sqrt(sum);
-      } else {
-        lower[i * p + j] = sum / lower[j * p + j];
+      if (i === j && !(sum > 0)) {
+        return false;
       }
+      lower[i * p + j] = i === j ? Math.sqrt(sum) : sum / lower[j * p + j];
     }
   }
-  // L y = -phi(i, 0), then L^T a = y.
+  return true;
+}
+
+/** Solve L L^T a = -phi(1..p, 0) into `solution`. */
+function choleskySolve(phi, p, lower, solution) {
+  const width = p + 1;
   for (let i = 0; i < p; i++) {
     let sum = -phi[(i + 1) * width];
     for (let m = 0; m < i; m++) {
@@ -247,19 +233,18 @@ export function lpcCovariance(x, order, a, k) {
     }
     solution[i] = sum / lower[i * p + i];
   }
-  let error = total;
-  for (let j = 0; j < p; j++) {
-    error += solution[j] * phi[j + 1];
-  }
-  // Step-down: k_m = a_m^(m), a_i^(m-1) = (a_i - k_m a_{m-i}) / (1 - k_m^2).
-  const work = scratchB;
-  for (let i = 0; i < p; i++) {
-    work[i] = solution[i];
-  }
+}
+
+/**
+ * Step-down recursion of a_1 .. a_p in `work` (overwritten):
+ * k_m = a_m^(m), a_i^(m-1) = (a_i - k_m a_{m-i}) / (1 - k_m^2). Returns
+ * false when some |k_m| >= 1.
+ */
+function stepDown(work, p, k) {
   for (let m = p; m >= 1; m--) {
     const reflection = work[m - 1];
     if (!(Math.abs(reflection) < 1)) {
-      return lpcBurg(x, order, a, k);
+      return false;
     }
     k[m - 1] = reflection;
     const scale = 1 / (1 - reflection * reflection);
@@ -271,6 +256,47 @@ export function lpcCovariance(x, order, a, k) {
         work[j - 1] = (aj - reflection * ai) * scale;
       }
     }
+  }
+  return true;
+}
+
+/**
+ * Covariance method: solve sum_j a_j phi(i, j) = -phi(i, 0), i = 1 .. p,
+ * with phi(i, j) = sum_{n=p}^{N-1} x[n-i] x[n-j], by Cholesky after adding
+ * 1e-9 phi(0, 0) to the diagonal; the reflection coefficients come from the
+ * step-down recursion. When Cholesky fails or some |k_m| >= 1 (an unstable
+ * predictor), the result of `lpcBurg` is returned.
+ * @param {ArrayLike<number>} x
+ * @param {number} order
+ * @param {Float64Array|Float32Array|number[]} a
+ * @param {Float64Array|Float32Array|number[]} k
+ * @returns {number} Residual power E (mean over the N - p predicted samples).
+ */
+export function lpcCovariance(x, order, a, k) {
+  const length = checkOrder(x, order, a, k);
+  const p = order;
+  if (length <= p) {
+    return lpcBurg(x, order, a, k);
+  }
+  scratch((p + 1) * (p + 1) + p + 1);
+  const phi = scratchA;
+  covarianceMatrix(x, p, length, phi);
+  const total = phi[0];
+  const lower = scratchB;
+  const solution = scratchC;
+  if (!(total > 0) || !cholesky(phi, p, 1e-9 * total, lower)) {
+    return lpcBurg(x, order, a, k);
+  }
+  choleskySolve(phi, p, lower, solution);
+  let error = total;
+  for (let j = 0; j < p; j++) {
+    error += solution[j] * phi[j + 1];
+  }
+  // The step-down works on a copy in scratchB (L is no longer needed).
+  const work = scratchB;
+  work.set(solution.subarray(0, p));
+  if (!stepDown(work, p, k)) {
+    return lpcBurg(x, order, a, k);
   }
   for (let i = 0; i < p; i++) {
     a[i] = solution[i];

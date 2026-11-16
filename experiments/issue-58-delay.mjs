@@ -15,5 +15,7 @@ for (const sampleRate of [8000, 11025, 16000, 44100, 48000]) {
       worst = Math.max(worst, n / sampleRate - t * frames.hop);
     }
   }
-  console.log(`input ${sampleRate} Hz (working ${frames.rate} Hz): largest delay ${(worst * 1000).toFixed(2)} ms`);
+  console.log(
+    `input ${sampleRate} Hz (working ${frames.rate} Hz): largest delay ${(worst * 1000).toFixed(2)} ms`
+  );
 }

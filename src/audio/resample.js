@@ -243,7 +243,10 @@ function streamResampler(fromRate, toRate, zeroCrossings, tabulated) {
  * Chunk-by-chunk `resample` (issue 58): the kernel and the default
  * `zeroCrossings` (16) of `resample`, so the joined outputs of `push(chunk)`
  * and `flush()` equal `resample(all, fromRate, toRate, options)` of the
- * joined input. It keeps about `zeroCrossings / min(1, toRate / fromRate)`
+ * joined input within 1e-6 (with integer rates the kernel values come from
+ * a table per output phase, built once, which differs from the direct
+ * values only by rounding: 3e-8 for 44100 to 16000 Hz in
+ * experiments/issue-58-resampler.mjs). It keeps about `zeroCrossings / min(1, toRate / fromRate)`
  * input samples, the half-length of the filter.
  * @param {number} fromRate
  * @param {number} toRate
