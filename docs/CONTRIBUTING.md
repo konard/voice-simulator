@@ -115,6 +115,49 @@ Reports go to `reports/heavy/` (`--out` changes the folder): every test writes
 is never committed. A report that should be kept is copied to `docs/reports/`
 by the issue that owns it.
 
+#### Performance tracking
+
+`tests/heavy/performance-tiers.test.js` (issue 31) times every audio tier
+except `reference` on the JavaScript and the Rust engine, on one core, and
+writes `performance-tiers.json`. In CI, or locally with
+`PERFORMANCE_COMPARE=1`, its test `speed rules hold` compares the run with
+[docs/reports/performance-baseline.json](reports/performance-baseline.json)
+through [scripts/performance.mjs](../scripts/performance.mjs): a row more than
+the tolerance (2.0, from the spread of five CI runs) slower than its baseline
+row (scaled by a calibration loop, so a slower runner is forgiven), a missing
+row, a Rust row slower than its
+JavaScript row, or a waveguide tier above half of real time fails the run. The
+same script compares any two reports by hand:
+
+```bash
+node scripts/performance.mjs compare reports/heavy/performance-tiers.json
+node scripts/performance.mjs compare new.json --baseline old.json --tolerance 2
+```
+
+The calibration loop does not follow every machine: a busy developer machine
+renders slower than its calibration says, so a local comparison with the CI
+baseline can fail with no change of code. Compare with a baseline of your own
+machine instead:
+
+```bash
+node scripts/performance.mjs baseline reports/heavy/performance-tiers.json --dir /tmp/mine
+PERFORMANCE_COMPARE=1 PERFORMANCE_BASELINE=/tmp/mine/performance-baseline.json \
+  npm run test:heavy -- --suite performance
+```
+
+The workflow never commits; the files in `docs/reports/` change only in a pull
+request, from the artifact of a green run of suite `performance`:
+
+- **Trend.** Every pull request that changes `src/acoustics/`, `src/engine/`
+  or `crates/`, and every minor release, adds its row to
+  [docs/reports/performance.md](reports/performance.md):
+  `node scripts/performance.mjs trend performance-tiers.json` (a second run of
+  the same commit replaces the first).
+- **Baseline.** Replace the baseline only for a wanted change of speed, and
+  give the reason in the pull request:
+  `node scripts/performance.mjs baseline performance-tiers.json`. A row with
+  the status `faster` is the hint that the baseline is out of date.
+
 #### Suite `gpu`
 
 The files `gpu-*.test.js` run the WebGPU 3D solver, which Node.js and Bun
