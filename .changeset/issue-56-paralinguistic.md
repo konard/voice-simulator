@@ -1,0 +1,5 @@
+---
+'voice-simulator': minor
+---
+
+Paralinguistic sounds (issue 56): breaths, laughter, sighs, fillers, coughs, throat clearing and clicks are now made by the simulated voice itself, with no recorded samples. Each `⸨name⸩` sound (from `[laugh]`, `<vs:sound name="…"/>` or the IPA mark) expands into short recipes of noise, breathy and creaky parts from the new `SOUNDS` table, follows the voice and its mode (a whispered laugh has no voicing) and can be stretched with `⸨name:seconds⸩`. The new `um` filler and the per-language `FILLERS` table give hesitations with a low flat pitch; written fillers (`um`, `uh`, `嗯`, `э-э`…) and laughter (`haha`, `хаха`, `哈哈`) are read as sounds in markup mode; the IPA click letters `ǀ ǃ ǁ ʘ` are made with the same click recipe. The new `breaths` option (CLI `--breaths`, server field `breaths`) inserts an inhale before each sentence after a long pause, sized by the `BREATHS` rules. The timeline gains `timeline.sounds`, and `SOUNDS`, `FILLERS`, `BREATHS`, `isSound`, `soundCalls` and `soundSegments` are exported. Plain text without sounds gives the same samples as before.
