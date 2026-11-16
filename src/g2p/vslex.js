@@ -21,9 +21,9 @@
  * in `alphabet` therefore starts the pronunciation.
  *
  * Optional `letters` (issue 48): when present, word characters are stored
- * as the ASCII characters of `alphabet` (one byte each in UTF-8 instead of
- * two for Cyrillic), `alphabet[i]` standing for `letters[i]`; `first` and
- * the blocks hold the stored words. The mapping keeps the code point order,
+ * as the ASCII characters of `alphabet` (one byte each in UTF-8, where a
+ * Cyrillic letter takes two), `alphabet[i]` standing for `letters[i]`;
+ * `first` and the blocks hold the stored words. The mapping keeps the code point order,
  * so the stored words are sorted too.
  *
  * A lookup does a binary search in `first` and decodes one block, which

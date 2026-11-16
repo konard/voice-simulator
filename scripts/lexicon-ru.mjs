@@ -152,6 +152,26 @@ export function splitGuessWords(words) {
 }
 
 /**
+ * The endings that at least `minWords` words share and whose most common
+ * stress (counted from the end) at least the share `agree` of them has.
+ * @param {Map<string, Map<number, number>>} counts ending → stress → words
+ * @returns {Map<string, number>} ending → stress from the end
+ */
+function keptEndings(counts, minWords, agree) {
+  const kept = new Map();
+  for (const [ending, row] of counts) {
+    const total = [...row.values()].reduce((sum, count) => sum + count, 0);
+    const [best, count] = [...row].sort(
+      (a, b) => b[1] - a[1] || a[0] - b[0]
+    )[0];
+    if (total >= minWords && count >= agree * total) {
+      kept.set(ending, best);
+    }
+  }
+  return kept;
+}
+
+/**
  * The guess table: for every word ending of 2 to `longest` (6) letters shared by at
  * least `minWords` words, the stress counted from the end (0 the last
  * vowel), kept when at least `agree` of the words have it. Endings whose
@@ -174,16 +194,7 @@ export function russianGuessTable(
       counts.set(ending, row);
     }
   }
-  const kept = new Map();
-  for (const [ending, row] of counts) {
-    const total = [...row.values()].reduce((sum, count) => sum + count, 0);
-    const [best, count] = [...row].sort(
-      (a, b) => b[1] - a[1] || a[0] - b[0]
-    )[0];
-    if (total >= minWords && count >= agree * total) {
-      kept.set(ending, best);
-    }
-  }
+  const kept = keptEndings(counts, minWords, agree);
   const inherited = (ending) => {
     for (let length = ending.length - 1; length >= 2; length--) {
       if (kept.has(ending.slice(-length))) {

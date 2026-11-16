@@ -235,9 +235,10 @@ function stemStress(letters) {
     // A stem that ends in a vowel takes a real ending (`встреч+а|ть` does
     // not read `встреча`).
     const vowelStem = !ending && VOWEL_LETTERS.includes(letters[cut - 1]);
-    const letter = ENDINGS.has(ending) && !vowelStem
-      ? stems.lookup(letters.slice(0, cut))?.[0]
-      : undefined;
+    const letter =
+      ENDINGS.has(ending) && !vowelStem
+        ? stems.lookup(letters.slice(0, cut))?.[0]
+        : undefined;
     if (letter) {
       const before = countVowels(letters.slice(0, cut));
       if (letter !== '+') {
@@ -359,6 +360,29 @@ function homographStress(marked) {
 }
 
 /**
+ * The stress of a word from the lexicon: a whole form first, then the same
+ * form with ё (`живет` → `живёт`, before the stem `жив` with the ending
+ * `ет`), then the longer of the stems with and without ё; on a tie the ё
+ * wins when it is in the stem (`зеленый`: `зелён|ый`, not `з+елен|ь`;
+ * `борьбе`: not `борьб|ё`). Undefined when the lexicon does not know it.
+ */
+function knownStress(letters, vowels) {
+  const yo = letters.includes('е');
+  const stem = lexiconStress(letters, vowels);
+  const yoStem = yo ? restoreYo(letters, vowels) : undefined;
+  const yoWins =
+    yoStem &&
+    (!stem ||
+      yoStem.stem > stem.stem ||
+      (yoStem.stem === stem.stem && yoStem.yo < yoStem.stem));
+  return (
+    lexiconStress(letters, vowels, true) ??
+    (yo ? restoreYo(letters, vowels, true) : undefined) ??
+    (yoWins ? yoStem : stem)
+  );
+}
+
+/**
  * Split a raw word into letters and the index (among vowels) of the
  * stress. In this order: a mark typed by the user (`+` before a vowel or
  * U+0301 after it), a typed `ё`, a homograph chosen by `context`
@@ -395,22 +419,7 @@ export function findRussianStress(rawWord, context = {}) {
     const chosen = homographStress(homograph);
     return result(chosen.letters, chosen.stress, 'dictionary');
   }
-  // A whole form first, then the same form with ё (`живет` → `живёт`,
-  // before the stem `жив` with the ending `ет`), then the longer of the
-  // stems with and without ё; on a tie the ё wins when it is in the stem
-  // (`зеленый`: `зелён|ый`, not `з+елен|ь`; `борьбе`: not `борьб|ё`).
-  const yo = letters.includes('е');
-  const stem = lexiconStress(letters, vowels);
-  const yoStem = yo ? restoreYo(letters, vowels) : undefined;
-  const yoWins =
-    yoStem &&
-    (!stem ||
-      yoStem.stem > stem.stem ||
-      (yoStem.stem === stem.stem && yoStem.yo < yoStem.stem));
-  const known =
-    lexiconStress(letters, vowels, true) ??
-    (yo ? restoreYo(letters, vowels, true) : undefined) ??
-    (yoWins ? yoStem : stem);
+  const known = knownStress(letters, vowels);
   if (known) {
     return result(known.letters ?? letters, known.stress, known.source);
   }
