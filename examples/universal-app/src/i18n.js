@@ -367,6 +367,7 @@ const PARAMETER_LABELS_RU = {
   coarticulation: 'Коартикуляция',
   intrinsicPitch: 'Собственная высота гласных',
   larynxPitch: 'Связь гортани с тоном',
+  finalCreak: 'Скрип в конце фразы',
   wallLoss: 'Потери в стенках',
   wallMass: 'Масса стенок',
   wallResistance: 'Сопротивление стенок',

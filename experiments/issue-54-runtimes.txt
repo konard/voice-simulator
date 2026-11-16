@@ -1,0 +1,30 @@
+== node
+2e16202963adff17 Please call Stella.
+0e2e15a7cc29a531 <speak><vs:phonation name="breathy" degree="1">Ple
+deba29ac72aea7e9 <speak><vs:phonation name="lax" degree="1">Please 
+541a3798c93d3ed5 <speak><vs:phonation name="pressed" degree="1">Ple
+d83bb3da1f627c50 <speak><vs:phonation name="creaky" degree="1">Plea
+211c196430ec8763 <speak><vs:phonation name="falsetto" degree="1">Pl
+564f8ad4263d6bf9 <speak><vs:phonation name="harsh" degree="1">Pleas
+3fa6dcce995eecc9 You are coming.
+8473c49b25c4ef8c paː pʰaː baː bʱaː
+== deno run -A
+2e16202963adff17 Please call Stella.
+0e2e15a7cc29a531 <speak><vs:phonation name="breathy" degree="1">Ple
+deba29ac72aea7e9 <speak><vs:phonation name="lax" degree="1">Please 
+541a3798c93d3ed5 <speak><vs:phonation name="pressed" degree="1">Ple
+d83bb3da1f627c50 <speak><vs:phonation name="creaky" degree="1">Plea
+211c196430ec8763 <speak><vs:phonation name="falsetto" degree="1">Pl
+564f8ad4263d6bf9 <speak><vs:phonation name="harsh" degree="1">Pleas
+3fa6dcce995eecc9 You are coming.
+8473c49b25c4ef8c paː pʰaː baː bʱaː
+== bun
+39553f0e0c21adf1 Please call Stella.
+cd176afce8956007 <speak><vs:phonation name="breathy" degree="1">Ple
+75821ec93538197b <speak><vs:phonation name="lax" degree="1">Please 
+00f9d9a2b7944028 <speak><vs:phonation name="pressed" degree="1">Ple
+610e2e0bc73486f2 <speak><vs:phonation name="creaky" degree="1">Plea
+ff910c5c9ec28b7b <speak><vs:phonation name="falsetto" degree="1">Pl
+730b142c5d1cb77e <speak><vs:phonation name="harsh" degree="1">Pleas
+c4eb6d7e9989e224 You are coming.
+8473c49b25c4ef8c paː pʰaː baː bʱaː
