@@ -25,4 +25,37 @@
 Calibrations (ms): 8.20, 11.89, 9.37, 8.21, 9.43; spread 1.450
 Worst spread: 1.641 at synthesis/js/low
 Default tolerance: 2
-Median run: /tmp/ci-runs/five/43855403193/heavy-performance-43855403193/performance-tiers.json
+Median run: 43855403193/heavy-performance-43855403193/performance-tiers.json
+
+Five runs on cc59c10 (provisional baseline, tolerance 1.5): 43855403193 success, 43857443310 success, 43859780552 failure (js waveguide rows up to 1.08x over the 1.5 limit on AMD EPYC 7763), 43862049801 success, 43864037795 success. The table above is these five runs; 43855403193 is the median run, taken as the baseline.
+
+Five confirmation runs on 78e2d21 (baseline of 43855403193, tolerance 2.0): 43868183736, 43870545521, 43872467416, 43875186299, 43876814363, all success; largest ratio to the baseline 1.28 (js/narrowband on AMD EPYC 7763).
+
+| Row | Runs | Spread (max / min of RTF / calibration) |
+| --- | --- | --- |
+| synthesis/js/telephone | 5 | 1.512 |
+| synthesis/rust/telephone | 5 | 1.415 |
+| synthesis/js/narrowband | 5 | 1.656 |
+| synthesis/rust/narrowband | 5 | 1.404 |
+| synthesis/js/wideband | 5 | 1.633 |
+| synthesis/rust/wideband | 5 | 1.405 |
+| synthesis/js/minimal | 5 | 1.675 |
+| synthesis/rust/minimal | 5 | 1.401 |
+| synthesis/js/low | 5 | 1.675 |
+| synthesis/rust/low | 5 | 1.402 |
+| synthesis/js/medium | 5 | 1.621 |
+| synthesis/rust/medium | 5 | 1.368 |
+| synthesis/js/high | 5 | 1.364 |
+| synthesis/rust/high | 5 | 1.401 |
+| synthesis/rust-mt/high | 5 | 1.390 |
+| synthesis/js/ultra | 5 | 1.296 |
+| synthesis/rust/ultra | 5 | 1.388 |
+| synthesis/rust-mt/ultra | 5 | 1.382 |
+| synthesis/js/studio | 5 | 1.315 |
+| synthesis/rust/studio | 5 | 1.392 |
+| synthesis/rust-mt/studio | 5 | 1.382 |
+
+Calibrations (ms): 9.38, 9.39, 10.57, 5.46, 8.21; spread 1.937
+Worst spread: 1.675 at synthesis/js/low
+Default tolerance: 2
+Median run: 43872467416/heavy-performance-43872467416/performance-tiers.json
