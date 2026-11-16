@@ -152,6 +152,18 @@ export function findRussianStress(rawWord) {
   return { letters, stress: vowels <= 1 ? 0 : stress, vowels };
 }
 
+/**
+ * Northern okanye (issue 57): an unstressed о after a hard consonant keeps
+ * its quality; it is not reduced to ɐ or ə.
+ */
+function vowelQuality(letter, context) {
+  const { stressed, soft, initial, okanye } = context;
+  if (okanye && !stressed && letter === 'о' && !soft && !initial) {
+    return 'o';
+  }
+  return reduceVowel(letter, context);
+}
+
 function reduceVowel(letter, { stressed, pretonic, soft, initial, final }) {
   if (stressed) {
     return STRESSED_VOWELS[letter];
@@ -208,12 +220,13 @@ function vowelPhones(letter, context) {
     (SOFT_VOWELS.includes(letter) &&
       !['ʐ', 'ʂ', 't͡s'].includes(previousPhone)) ||
     ['t͡ɕ', 'ɕː', 'j'].includes(previousPhone);
-  const quality = reduceVowel(letter === 'и' && !soft ? 'ы' : letter, {
+  const quality = vowelQuality(letter === 'и' && !soft ? 'ы' : letter, {
     stressed: vowelIndex === stress,
     pretonic: vowelIndex === stress - 1,
     soft: soft && letter !== 'и' ? true : soft,
     initial: !previousPhone,
     final: context.final,
+    okanye: context.okanye && !context.afterVowel,
   });
   return iotated ? ['j', quality] : [quality];
 }
@@ -238,7 +251,7 @@ function markStress(phones, afterVowel) {
   phones.splice(phones.length - onset, 0, 'ˈ');
 }
 
-function lettersToPhones(letters, stress, vowels) {
+function lettersToPhones(letters, stress, vowels, okanye = false) {
   const phones = [];
   let vowelIndex = 0;
   let afterVowel = false;
@@ -257,6 +270,7 @@ function lettersToPhones(letters, stress, vowels) {
           stress,
           vowels,
           final: index === letters.length - 1,
+          okanye,
         })
       );
       vowelIndex++;
@@ -279,15 +293,19 @@ function splitPalatal(phone) {
   return phone.endsWith('ʲ') ? [phone.slice(0, -1), 'ʲ'] : [phone, ''];
 }
 
-function setVoicing(phone, voiced) {
+/** Voicing pairs with the southern fricative ɣ ~ x (issue 57). */
+const FRICATIVE_G_DEVOICE = { ...DEVOICE, ɣ: 'x' };
+const FRICATIVE_G_VOICE = { ...VOICE, x: 'ɣ' };
+
+function setVoicing(phone, voiced, tables) {
   const [base, mark] = splitPalatal(phone);
-  const table = voiced ? VOICE : DEVOICE;
+  const table = voiced ? tables.voice : tables.devoice;
   return table[base] ? `${table[base]}${mark}` : phone;
 }
 
-function isObstruent(phone) {
+function isObstruent(phone, tables) {
   const [base] = splitPalatal(phone);
-  return base in DEVOICE || base in VOICE;
+  return base in tables.devoice || base in tables.voice;
 }
 
 /**
@@ -295,37 +313,67 @@ function isObstruent(phone) {
  * inside one word. Voicing across a clitic boundary (`из дома` ɪz ˈdomə,
  * `как же` kaɡ ʐɨ) is done in `russian-clitics.js`.
  */
-function assimilateVoicing(phones) {
+function assimilateVoicing(
+  phones,
+  tables = { devoice: DEVOICE, voice: VOICE }
+) {
   const result = [...phones];
   for (let index = result.length - 1; index >= 0; index--) {
-    if (!isObstruent(result[index])) {
+    if (!isObstruent(result[index], tables)) {
       continue;
     }
     const next = result[index + 1];
     if (next === undefined) {
-      result[index] = setVoicing(result[index], false);
-    } else if (isObstruent(next) && !/^v/.test(next)) {
+      result[index] = setVoicing(result[index], false, tables);
+    } else if (isObstruent(next, tables) && !/^v/.test(next)) {
       const [nextBase] = splitPalatal(next);
-      result[index] = setVoicing(result[index], nextBase in DEVOICE);
+      result[index] = setVoicing(
+        result[index],
+        nextBase in tables.devoice,
+        tables
+      );
     }
   }
   return result;
 }
 
+/** Southern fricative г (issue 57): ɡ → ɣ before voicing assimilation. */
+function fricativeG(phones) {
+  return phones.map((phone) =>
+    phone === 'ɡ' || phone === 'ɡʲ' ? phone.replace('ɡ', 'ɣ') : phone
+  );
+}
+
 /**
  * Pronounce one Russian word.
  * @param {string} word
+ * @param {{okanye?: boolean, fricativeG?: boolean}} [options] Switches of
+ *   regional accents (issue 57): okanye keeps an unstressed о after a hard
+ *   consonant (northern, хорошо xoroˈʂo); fricativeG makes г the fricative
+ *   ɣ, devoiced to x (southern, город ˈɣorət, снег snʲex).
  * @returns {{ipa: string, source: 'exception'|'dictionary'|'rules'}}
  */
-export function russianWordToIpa(word) {
+export function russianWordToIpa(
+  word,
+  { okanye = false, fricativeG: fricative = false } = {}
+) {
   const { letters, stress, vowels } = findRussianStress(word);
   if (RUSSIAN_EXCEPTIONS[letters] && !/\+|\u0301/.test(word.normalize('NFD'))) {
     return { ipa: RUSSIAN_EXCEPTIONS[letters], source: 'exception' };
   }
   const prepared = prepareLetters(letters);
-  const phones = assimilateVoicing(
-    lettersToPhones(prepared, stress, countVowels(prepared))
+  const plain = lettersToPhones(
+    prepared,
+    stress,
+    countVowels(prepared),
+    okanye
   );
+  const phones = fricative
+    ? assimilateVoicing(fricativeG(plain), {
+        devoice: FRICATIVE_G_DEVOICE,
+        voice: FRICATIVE_G_VOICE,
+      })
+    : assimilateVoicing(plain);
   const known = getStressDictionary().has(letters) || letters.includes('ё');
   return {
     ipa: phones.join(''),

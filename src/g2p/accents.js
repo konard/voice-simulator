@@ -16,40 +16,110 @@
  *   dental TH stops, ʋ for v/w, monophthong FACE eː and GOAT oː,
  *   STRUT ə, no flapping.
  *
- * Russian, Hindi and Mandarin have a single accent each.
+ * Regional and foreign accents of every language (`en-CA`, `ru-x-south`,
+ * `en-x-ru`, ...) are in src/accent/ (issue 57).
  */
 
 import { alignVowels, ipaUnits, isVowelUnit } from './spelling.js';
 
-/** Accents per language, the first one is the default. */
+/**
+ * One entry of ACCENTS: `kind` is `standard` (the default of a language,
+ * and the other standard Englishes), `regional` or `foreign` (the language
+ * spoken with the sounds of a first language, `<target>-x-<first>`).
+ */
+function entry(code, name, native, kind) {
+  return Object.freeze({ code, name, native, kind });
+}
+
+/**
+ * Accents per language, the first one is the default. The rules of every
+ * accent but the four English standards are in src/accent/ (issue 57).
+ */
 export const ACCENTS = Object.freeze({
   en: Object.freeze([
-    Object.freeze({ code: 'en-US', name: 'American', native: 'American' }),
-    Object.freeze({ code: 'en-GB', name: 'British', native: 'British' }),
-    Object.freeze({ code: 'en-AU', name: 'Australian', native: 'Australian' }),
-    Object.freeze({ code: 'en-IN', name: 'Indian', native: 'Indian' }),
+    entry('en-US', 'American', 'American', 'standard'),
+    entry('en-GB', 'British', 'British', 'standard'),
+    entry('en-AU', 'Australian', 'Australian', 'standard'),
+    entry('en-IN', 'Indian', 'Indian', 'standard'),
+    entry('en-CA', 'Canadian', 'Canadian', 'regional'),
+    entry('en-x-ru', 'Russian accent', 'Russian accent', 'foreign'),
+    entry('en-x-hi', 'Hindi accent', 'Hindi accent', 'foreign'),
+    entry('en-x-zh', 'Chinese accent', 'Chinese accent', 'foreign'),
+  ]),
+  ru: Object.freeze([
+    entry('ru-RU', 'Standard', 'Литературный', 'standard'),
+    entry('ru-x-north', 'Northern', 'Северный (оканье)', 'regional'),
+    entry('ru-x-south', 'Southern', 'Южный (фрикативное г)', 'regional'),
+    entry('ru-x-en', 'English accent', 'Английский акцент', 'foreign'),
+    entry('ru-x-hi', 'Hindi accent', 'Акцент хинди', 'foreign'),
+    entry('ru-x-zh', 'Chinese accent', 'Китайский акцент', 'foreign'),
+  ]),
+  hi: Object.freeze([
+    entry('hi-IN', 'Standard', 'मानक', 'standard'),
+    entry('hi-x-east', 'Eastern', 'पूर्वी', 'regional'),
+    entry('hi-x-en', 'English accent', 'अंग्रेज़ी लहजा', 'foreign'),
+    entry('hi-x-ru', 'Russian accent', 'रूसी लहजा', 'foreign'),
+    entry('hi-x-zh', 'Chinese accent', 'चीनी लहजा', 'foreign'),
+  ]),
+  zh: Object.freeze([
+    entry('zh-CN', 'Standard (Putonghua)', '普通话', 'standard'),
+    entry('zh-TW', 'Taiwan', '台湾国语', 'regional'),
+    entry('zh-x-south', 'Southern', '南方口音', 'regional'),
+    entry('zh-x-en', 'English accent', '英语口音', 'foreign'),
+    entry('zh-x-ru', 'Russian accent', '俄语口音', 'foreign'),
+    entry('zh-x-hi', 'Hindi accent', '印地语口音', 'foreign'),
   ]),
 });
 
 /**
- * Resolve an accent option for a language: an accent code (`en-GB`), a
- * region (`GB`), or nothing for the default.
+ * The ACCENTS entry of an accent code (`en-GB`) or region (`GB`) of a
+ * language, or null.
  * @param {string} lang
  * @param {string} [accent]
- * @returns {string|null}
+ */
+export function findAccent(lang, accent) {
+  const list = ACCENTS[lang];
+  if (!list || accent === undefined || accent === null) {
+    return null;
+  }
+  const wanted = String(accent).toLowerCase();
+  return (
+    list.find(
+      ({ code }) =>
+        code.toLowerCase() === wanted ||
+        code.slice(lang.length + 1).toLowerCase() === wanted
+    ) ?? null
+  );
+}
+
+/**
+ * Resolve an accent option for a language: an accent code (`en-GB`), a
+ * region (`GB`), or nothing for the default. An unknown code of the
+ * language itself (`ru-south`) throws a RangeError; anything else that is
+ * unknown, such as a code of another language, gives the default.
+ * @param {string} lang
+ * @param {string} [accent]
+ * @returns {string|null} null for a language without accents.
  */
 export function resolveAccent(lang, accent) {
   const list = ACCENTS[lang];
   if (!list) {
     return null;
   }
-  const wanted = String(accent ?? '').toLowerCase();
-  const found = list.find(
-    ({ code }) =>
-      code.toLowerCase() === wanted ||
-      code.slice(lang.length + 1).toLowerCase() === wanted
-  );
-  return (found ?? list[0]).code;
+  const found = findAccent(lang, accent);
+  if (found) {
+    return found.code;
+  }
+  if (
+    String(accent ?? '')
+      .toLowerCase()
+      .startsWith(`${lang}-`)
+  ) {
+    throw new RangeError(
+      `Unknown accent "${accent}" for ${lang} (use ${list.map(({ code }) => code).join(', ')})`
+    );
+  }
+  return list[0].code;
 }
 
 /** Words with an æ that is ɑː in southern England (BATH). */
@@ -285,7 +355,8 @@ function australianUnits(units, spelling) {
   );
 }
 
-const INDIAN_UNITS = {
+/** Indian English sounds of the American units (idempotent). */
+export const INDIAN_UNITS = Object.freeze({
   t: 'ʈ',
   d: 'ɖ',
   θ: 't̪ʰ',
@@ -300,7 +371,7 @@ const INDIAN_UNITS = {
   ɚ: 'əɾ',
   ɑ: 'ɑ',
   ɔ: 'ɔ',
-};
+});
 
 function indianUnits(units) {
   return units.map((unit) => INDIAN_UNITS[unit] ?? unit);

@@ -14,7 +14,8 @@ import { parseIpa } from '../src/ipa/parse.js';
 import { prepareUtterance } from '../src/synthesize.js';
 import { runCli } from '../bin/voice-simulator.js';
 
-const say = (text, accent) => textToIpa(text, { lang: 'en', accent }).ipa;
+const say = (text, lang = 'en', accent = undefined) =>
+  textToIpa(text, { lang, accent }).ipa;
 
 describe('resolveAccent', () => {
   it('accepts codes and regions and defaults to General American', () => {
@@ -25,9 +26,11 @@ describe('resolveAccent', () => {
     expect(resolveAccent('en', 'xx')).toBe('en-US');
   });
 
-  it('has no accents for the other languages', () => {
-    expect(resolveAccent('ru', 'en-GB')).toBe(null);
-    expect(resolveAccent('zh')).toBe(null);
+  it('defaults the other languages to their standard accent', () => {
+    expect(resolveAccent('ru', 'en-GB')).toBe('ru-RU');
+    expect(resolveAccent('zh')).toBe('zh-CN');
+    expect(resolveAccent('hi')).toBe('hi-IN');
+    expect(resolveAccent('xx')).toBe(null);
   });
 
   it('lists the default accent first', () => {
@@ -45,51 +48,51 @@ describe('General American', () => {
   });
 
   it('keeps t before a stressed vowel', () => {
-    expect(say('attack')).toBe(say('attack', 'en-US'));
+    expect(say('attack')).toBe(say('attack', 'en', 'en-US'));
     expect(say('attack').includes('ɾ')).toBe(false);
   });
 });
 
 describe('Southern British', () => {
   it('drops a final r and lengthens START', () => {
-    expect(say('car', 'en-GB')).toBe('ˈkɑː');
-    expect(say('start', 'en-GB')).toBe('ˈstɑːt');
+    expect(say('car', 'en', 'en-GB')).toBe('ˈkɑː');
+    expect(say('start', 'en', 'en-GB')).toBe('ˈstɑːt');
   });
 
   it('uses the BATH vowel and a rounded LOT', () => {
-    expect(say('bath', 'en-GB')).toBe('ˈbɑːθ');
-    expect(say('dance', 'en-GB')).toBe('ˈdɑːns');
-    expect(say('cat', 'en-GB')).toBe('ˈkæt');
-    expect(say('lot', 'en-GB')).toBe('ˈlɒt');
-    expect(say('want', 'en-GB')).toBe('ˈwɒnt');
-    expect(say('father', 'en-GB')).toBe('ˈfɑːðə');
+    expect(say('bath', 'en', 'en-GB')).toBe('ˈbɑːθ');
+    expect(say('dance', 'en', 'en-GB')).toBe('ˈdɑːns');
+    expect(say('cat', 'en', 'en-GB')).toBe('ˈkæt');
+    expect(say('lot', 'en', 'en-GB')).toBe('ˈlɒt');
+    expect(say('want', 'en', 'en-GB')).toBe('ˈwɒnt');
+    expect(say('father', 'en', 'en-GB')).toBe('ˈfɑːðə');
   });
 
   it('keeps t unflapped and THOUGHT long', () => {
-    expect(say('water', 'en-GB')).toBe('ˈwɔːtə');
-    expect(say('better', 'en-GB')).toBe('ˈbɛtə');
-    expect(say('thought', 'en-GB')).toBe('ˈθɔːt');
+    expect(say('water', 'en', 'en-GB')).toBe('ˈwɔːtə');
+    expect(say('better', 'en', 'en-GB')).toBe('ˈbɛtə');
+    expect(say('thought', 'en', 'en-GB')).toBe('ˈθɔːt');
   });
 
   it('has its own GOAT, NURSE, NEAR, SQUARE and CURE vowels', () => {
-    expect(say('go', 'en-GB')).toBe('ˈɡəʊ');
-    expect(say('nurse', 'en-GB')).toBe('ˈnɜːs');
-    expect(say('near', 'en-GB')).toBe('ˈnɪə');
-    expect(say('square', 'en-GB')).toBe('ˈskwɛə');
-    expect(say('pure', 'en-GB')).toBe('ˈpjʊə');
-    expect(say('hurry', 'en-GB')).toBe('ˈhʌɹi');
-    expect(say('sorry', 'en-GB')).toBe('ˈsɒɹi');
+    expect(say('go', 'en', 'en-GB')).toBe('ˈɡəʊ');
+    expect(say('nurse', 'en', 'en-GB')).toBe('ˈnɜːs');
+    expect(say('near', 'en', 'en-GB')).toBe('ˈnɪə');
+    expect(say('square', 'en', 'en-GB')).toBe('ˈskwɛə');
+    expect(say('pure', 'en', 'en-GB')).toBe('ˈpjʊə');
+    expect(say('hurry', 'en', 'en-GB')).toBe('ˈhʌɹi');
+    expect(say('sorry', 'en', 'en-GB')).toBe('ˈsɒɹi');
   });
 
   it('keeps a yod after t, d and n', () => {
-    expect(say('tune', 'en-GB')).toBe('ˈtjuːn');
+    expect(say('tune', 'en', 'en-GB')).toBe('ˈtjuːn');
     expect(say('tune')).toBe('ˈtun');
   });
 
   it('links a final r to a following vowel only', () => {
-    expect(say('far away', 'en-GB')).toBe('ˈfɑːɹ əˈweɪ');
-    expect(say('far gone', 'en-GB').startsWith('ˈfɑː ')).toBe(true);
-    expect(say('four. Apples', 'en-GB').startsWith('ˈfɔː .')).toBe(true);
+    expect(say('far away', 'en', 'en-GB')).toBe('ˈfɑːɹ əˈweɪ');
+    expect(say('far gone', 'en', 'en-GB').startsWith('ˈfɑː ')).toBe(true);
+    expect(say('four. Apples', 'en', 'en-GB').startsWith('ˈfɔː .')).toBe(true);
   });
 
   it('reports the accent it used', () => {
@@ -100,22 +103,22 @@ describe('Southern British', () => {
 
 describe('other English accents', () => {
   it('derives General Australian vowels', () => {
-    expect(say('car', 'en-AU')).toBe('ˈkɐː');
-    expect(say('go', 'en-AU')).toBe('ˈɡəʉ');
-    expect(say('dance', 'en-AU')).toBe('ˈdæns');
-    expect(say('water', 'en-AU')).toBe('ˈwoːɾə');
+    expect(say('car', 'en', 'en-AU')).toBe('ˈkɐː');
+    expect(say('go', 'en', 'en-AU')).toBe('ˈɡəʉ');
+    expect(say('dance', 'en', 'en-AU')).toBe('ˈdæns');
+    expect(say('water', 'en', 'en-AU')).toBe('ˈwoːɾə');
   });
 
   it('derives Indian English consonants', () => {
-    expect(say('water', 'en-IN')).toBe('ˈʋɔʈəɾ');
-    expect(say('thought', 'en-IN')).toBe('ˈt̪ʰɔʈ');
-    expect(say('go', 'en-IN')).toBe('ˈɡoː');
+    expect(say('water', 'en', 'en-IN')).toBe('ˈʋɔʈəɾ');
+    expect(say('thought', 'en', 'en-IN')).toBe('ˈt̪ʰɔʈ');
+    expect(say('go', 'en', 'en-IN')).toBe('ˈɡoː');
   });
 
   it('only produces symbols the parser knows', () => {
     const text = 'The quick brown fox, thirty cars: water, tune, square!';
     for (const { code } of ACCENTS.en) {
-      expect(parseIpa(say(text, code)).unknown).toEqual([]);
+      expect(parseIpa(say(text, 'en', code)).unknown).toEqual([]);
     }
   });
 
@@ -123,7 +126,7 @@ describe('other English accents', () => {
     const russian = textToIpa('Привет, мир', { lang: 'ru' });
     const british = textToIpa('Привет, мир', { lang: 'ru', accent: 'en-GB' });
     expect(british.ipa).toBe(russian.ipa);
-    expect(british.accent).toBe(null);
+    expect(british.accent).toBe('ru-RU');
   });
 
   it('passes unknown accents through unchanged', () => {
