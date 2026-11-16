@@ -10,6 +10,9 @@
  *   (cd examples/universal-app && npm run build)
  *   CHROMIUM=<chrome> CHROME_ARGS="--disable-3d-apis" \
  *     node experiments/issue-28-trace-long-tasks.mjs <playwright dir> [runs]
+ *
+ * SPEAK=1 presses "Speak" as soon as it is enabled; the benchmark then
+ * starts after the utterance.
  */
 
 /* global URL, window, Worker, performance, document -- the page functions run in the browser */
@@ -148,7 +151,10 @@ const browser = await chromium.launch({
 });
 try {
   for (let run = 0; run < RUNS; run++) {
-    const context = await browser.newContext({ locale: 'en-US' });
+    const context = await browser.newContext({
+      locale: 'en-US',
+      viewport: { width: 1280, height: 1000 },
+    });
     await context.addInitScript(instrument);
     const page = await context.newPage();
     const cdp = await context.newCDPSession(page);
@@ -165,8 +171,18 @@ try {
       ],
     });
     await page.goto(url);
+    if (process.env.SPEAK) {
+      const submit = page.locator('button[type="submit"].primary');
+      await page.waitForFunction(
+        () =>
+          document.querySelector('button[type="submit"].primary')?.disabled ===
+          false
+      );
+      const box = await submit.boundingBox();
+      await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
+    }
     await page.waitForFunction(() => window.issue28.answerAt !== null, null, {
-      timeout: 30000,
+      timeout: 120000,
     });
     await page.waitForTimeout(500);
     const times = await page.evaluate(() => window.issue28);

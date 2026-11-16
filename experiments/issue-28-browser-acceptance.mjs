@@ -145,7 +145,13 @@ function instrument() {
   }).observe(document, { childList: true, subtree: true });
 }
 
-async function visit(page, url, speak = true) {
+/**
+ * One visit: load, press "Speak" as soon as it is enabled (`speak`), wait
+ * for the end of the utterance (the benchmark waits for it) and, when
+ * `measures`, for the final benchmark answer (a reload before it caches
+ * nothing); otherwise long enough for one (idle callbacks wait 2 s at most).
+ */
+async function visit(page, url, { speak, measures }) {
   await page.goto(url);
   const submit = page.locator('button[type="submit"].primary');
   await submit.waitFor({ state: 'visible' });
@@ -161,16 +167,17 @@ async function visit(page, url, speak = true) {
     await page.waitForFunction(() => window.issue28.sound !== null, null, {
       timeout: 60000,
     });
+    // "Speak" comes back at the end of the utterance.
+    await submit.waitFor({ state: 'visible', timeout: 120000 });
   }
-  // Let the idle-time benchmark start, then wait for its final answer (the
-  // HUD shows the long tasks after it; a reload before it caches nothing).
-  await page.waitForTimeout(6000);
-  await page.waitForFunction(
-    () => window.issue28.benchmarks.length === 0 || window.issue28.answers > 0,
-    null,
-    { timeout: 120000 }
-  );
-  await page.waitForTimeout(1000);
+  if (measures) {
+    await page.waitForFunction(() => window.issue28.answers > 0, null, {
+      timeout: 120000,
+    });
+    await page.waitForTimeout(1000);
+  } else {
+    await page.waitForTimeout(6000);
+  }
   return page.evaluate(() => {
     const probe = window.issue28;
     const hud = document.querySelector('.hud')?.textContent ?? '';
@@ -217,10 +224,16 @@ try {
     const page = await context.newPage();
     const cdp = await context.newCDPSession(page);
     await cdp.send('Emulation.setCPUThrottlingRate', { rate: 4 });
-    const empty = await visit(page, url, SPEAK);
-    const cached = await visit(page, url, SPEAK);
+    const empty = await visit(page, url, { speak: SPEAK, measures: true });
+    const cached = await visit(page, url, {
+      speak: SPEAK,
+      measures: false,
+    });
     await page.evaluate(() => localStorage.clear());
-    const cleared = await visit(page, url, SPEAK);
+    const cleared = await visit(page, url, {
+      speak: SPEAK,
+      measures: true,
+    });
     results.push({ run, empty, cached, cleared });
     console.log(JSON.stringify({ run, empty, cached, cleared }));
     await context.close();
