@@ -40,6 +40,7 @@ import {
   vowelNpvi,
 } from './helpers/accent-measures.js';
 import { measureVoice } from './helpers/voice-measures.js';
+import { ACCENTS_DOC_FILE, accentsMarkdown } from '../scripts/accents-doc.mjs';
 
 const say = (text, lang = 'en', accent = undefined) =>
   textToIpa(text, { lang, accent }).ipa;
@@ -356,6 +357,17 @@ describe('accent files', () => {
       'ru-RU'
     );
     expect(getAccent('ru-south')).toBe(null);
+  });
+});
+
+describe('docs/accents.md', () => {
+  it('is current and lists every code', () => {
+    // Git may check the file out with CRLF line endings on Windows.
+    const text = readFileSync(ACCENTS_DOC_FILE, 'utf8').replace(/\r\n/g, '\n');
+    expect(text).toBe(accentsMarkdown());
+    for (const entry of Object.values(ACCENTS).flat()) {
+      expect(text).toContain(`### \`${entry.code}\``);
+    }
   });
 });
 

@@ -278,7 +278,7 @@ export function foreignAccent(target, first) {
     format: 'voice-simulator/accent',
     version: 1,
     code: `${target}-x-${first}`,
-    name: `${PROFILES[target].name} with a ${profile.name} accent`,
+    name: `${PROFILES[target].name} with ${/^[AEIOU]/u.test(profile.name) ? 'an' : 'a'} ${profile.name} accent`,
     language: target,
     base: special.base ?? ACCENTS[target][0].code,
     // A learner says every word in its full (strong) form.
