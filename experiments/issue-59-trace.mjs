@@ -6,7 +6,8 @@ import { analyzeFrames } from '../src/recognition/frontend.js';
 import { trackPitch } from '../src/recognition/pitch.js';
 import { sampleState } from '../src/articulation/tract-shape.js';
 
-const TEXT = 'The north wind and the sun were disputing which was the stronger.';
+const TEXT =
+  'The north wind and the sun were disputing which was the stronger.';
 const [preset, rateText, from, to] = process.argv.slice(2);
 const out = synthesize(TEXT, {
   head: presetHeadConfig(preset),

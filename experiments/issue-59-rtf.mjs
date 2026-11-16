@@ -7,7 +7,8 @@ import { presetHeadConfig } from '../src/head-config.js';
 import { analyzeFrames } from '../src/recognition/frontend.js';
 import { trackPitch } from '../src/recognition/pitch.js';
 
-const TEXT = 'The north wind and the sun were disputing which was the stronger.';
+const TEXT =
+  'The north wind and the sun were disputing which was the stronger.';
 for (const sampleRate of [16000, 8000]) {
   const out = synthesize(TEXT, {
     head: presetHeadConfig('male'),

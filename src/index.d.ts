@@ -2481,6 +2481,16 @@ export {
   type FrameStage,
   type FrontendOptions,
 } from './recognition/frontend.js';
+// Pitch and voicing tracker (issue 59); see src/recognition/pitch.d.ts.
+export {
+  PITCH_DEFAULTS,
+  createPitchTracker,
+  jitterToHead,
+  trackPitch,
+  type PitchOptions,
+  type PitchTrack,
+  type PitchTracker,
+} from './recognition/pitch.js';
 
 // Audio files
 export declare function encodeWav(

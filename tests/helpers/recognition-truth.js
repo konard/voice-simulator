@@ -1,7 +1,8 @@
 /**
  * Truth that the simulator knows about its own output, per analysis frame
  * of the recognizer (issue 59). Used by tests/recognition-pitch.test.js and
- * the issue-59 experiments.
+ * the issue-59 experiments, and the high-pass filter and speech level of
+ * those tests.
  */
 
 import { sampleState } from '../../src/articulation/tract-shape.js';
@@ -61,4 +62,64 @@ export function maskedPair(reference, test, mask) {
     }
   }
   return [r, t];
+}
+
+/**
+ * `samples` through `order / 2` Butterworth high-pass sections (bilinear
+ * transform) at `cutoff` Hz; `order` is even.
+ * @param {ArrayLike<number>} samples
+ * @param {number} sampleRate
+ * @param {number} cutoff
+ * @param {number} [order]
+ */
+export function highPass(samples, sampleRate, cutoff, order = 8) {
+  let x = Float64Array.from(samples);
+  const k = Math.tan((Math.PI * cutoff) / sampleRate);
+  for (let section = 0; section < order / 2; section++) {
+    const q = 1 / (2 * Math.sin((Math.PI * (2 * section + 1)) / (2 * order)));
+    const norm = 1 / (1 + k / q + k * k);
+    const b0 = norm;
+    const a1 = 2 * (k * k - 1) * norm;
+    const a2 = (1 - k / q + k * k) * norm;
+    const y = new Float64Array(x.length);
+    let x1 = 0;
+    let x2 = 0;
+    let y1 = 0;
+    let y2 = 0;
+    for (let n = 0; n < x.length; n++) {
+      y[n] = b0 * (x[n] - 2 * x1 + x2) - a1 * y1 - a2 * y2;
+      x2 = x1;
+      x1 = x[n];
+      y2 = y1;
+      y1 = y[n];
+    }
+    x = y;
+  }
+  return Float32Array.from(x);
+}
+
+/**
+ * Mean square of `samples` over the 25 ms frames (hop `hop`) where `f0` is
+ * above 0: the speech level that noise is measured against.
+ * @param {ArrayLike<number>} samples
+ * @param {number} sampleRate
+ * @param {ArrayLike<number>} f0 Planned f0 per frame.
+ * @param {number} hop
+ */
+export function speechLevel(samples, sampleRate, f0, hop) {
+  const half = Math.round(0.0125 * sampleRate);
+  let power = 0;
+  let count = 0;
+  for (let t = 0; t < f0.length; t++) {
+    if (f0[t] > 0) {
+      const centre = Math.round(t * hop * sampleRate);
+      for (let n = centre - half; n < centre + half; n++) {
+        if (n >= 0 && n < samples.length) {
+          power += samples[n] * samples[n];
+          count++;
+        }
+      }
+    }
+  }
+  return count > 0 ? power / count : 0;
 }

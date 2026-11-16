@@ -2,14 +2,19 @@
 // at 16000 and 8000 Hz) against the planned f0, frames within 15 ms of a
 // voicing change left out.
 // Run: node experiments/issue-59-pitch-set.mjs
+import { performance } from 'node:perf_hooks';
 import { synthesize } from '../src/synthesize.js';
 import { presetHeadConfig } from '../src/head-config.js';
 import { analyzeFrames } from '../src/recognition/frontend.js';
 import { trackPitch } from '../src/recognition/pitch.js';
 import { f0Errors } from '../src/metrics/pitch.js';
-import { plannedPitch, maskedPair } from '../tests/helpers/recognition-truth.js';
+import {
+  plannedPitch,
+  maskedPair,
+} from '../tests/helpers/recognition-truth.js';
 
-const TEXT = 'The north wind and the sun were disputing which was the stronger.';
+const TEXT =
+  'The north wind and the sun were disputing which was the stronger.';
 const options = Object.fromEntries(
   process.argv.slice(2).map((arg) => {
     const [key, value] = arg.split('=');
@@ -29,7 +34,11 @@ for (const preset of ['male', 'female', 'child']) {
     const track = trackPitch(frames, options);
     const elapsed = (performance.now() - started) / 1000;
     const truth = plannedPitch(out.plan, frames.hop, track.count);
-    const [r, t] = maskedPair(truth.f0, track.f0.subarray(0, track.count), truth.mask);
+    const [r, t] = maskedPair(
+      truth.f0,
+      track.f0.subarray(0, track.count),
+      truth.mask
+    );
     const e = f0Errors(r, t);
     let fine = 0;
     let fineCount = 0;

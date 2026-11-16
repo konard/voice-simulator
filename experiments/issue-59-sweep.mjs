@@ -11,20 +11,35 @@ const samples = new Float32Array(seconds * rate);
 let phase = 0;
 for (let n = 0; n < samples.length; n++) {
   let value = 0;
-  for (let k = 1; k <= 5; k++) value += Math.sin(k * phase) / k;
+  for (let k = 1; k <= 5; k++) {
+    value += Math.sin(k * phase) / k;
+  }
   samples[n] = 0.3 * value;
   phase += (2 * Math.PI * f0At(n / rate)) / rate;
 }
 const frames = analyzeFrames(samples, rate);
 const track = trackPitch(frames);
-let worst = 0, sum = 0, n = 0, unvoiced = 0;
+let worst = 0,
+  sum = 0,
+  n = 0,
+  unvoiced = 0;
 for (let t = 0; t < track.count; t++) {
   const time = t * frames.hop;
-  if (time < 0.025 || time > seconds - 0.025) continue;
-  if (track.f0[t] === 0) { unvoiced++; continue; }
+  if (time < 0.025 || time > seconds - 0.025) {
+    continue;
+  }
+  if (track.f0[t] === 0) {
+    unvoiced++;
+    continue;
+  }
   const error = Math.abs(track.f0[t] / f0At(time) - 1);
   worst = Math.max(worst, error);
   sum += Math.abs(1200 * Math.log2(track.f0[t] / f0At(time)));
   n++;
 }
-console.log({ frames: n, unvoiced, worstPercent: +(100 * worst).toFixed(3), meanCents: +(sum / n).toFixed(2) });
+console.log({
+  frames: n,
+  unvoiced,
+  worstPercent: +(100 * worst).toFixed(3),
+  meanCents: +(sum / n).toFixed(2),
+});

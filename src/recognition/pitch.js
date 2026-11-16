@@ -13,7 +13,7 @@
  * Stage pattern of issue 58: `createPitchTracker(frames, options)` reads
  * `frames.samples`, `frames.rate`, `frames.hop`, `frames.energy` and
  * `frames.noise`; `advance(final)` scores the frames whose window has
- * arrived and commits frame t once frame t + lag is scored (all frames with
+ * arrived and commits frame t when frame t + lag has been scored (all frames with
  * `final`). Rows of the track before `committed` never change.
  */
 
@@ -250,159 +250,157 @@ function createTrack(frames, settings) {
   };
 }
 
+/** Working sample `index` of `frames`, 0 outside the received samples. */
+function sampleAt(frames, index) {
+  return index >= 0 && index < frames.sampleCount ? frames.samples[index] : 0;
+}
+
 /**
- * Candidate finder: the coarse signal, the windowed autocorrelation and the
- * refinement at the full rate. `score(t, centre, peak)` writes the voiced
- * candidates of frame t (frequency, height, strength), their number and the
- * strength of the unvoiced candidate.
+ * Extra unvoiced strength of frame `t` from the front end's energies: a
+ * frame far below the loudest frame of the last 200 ms (and the next 10 ms)
+ * is the decaying tail of a vowel or a quiet consonant whose 50 ms window
+ * still holds the periodic neighbour; a frame near the noise floor is noise.
  */
-function createCandidateFinder(frames, settings, store) {
-  const {
-    factor,
-    coarseLength,
-    fullLength,
-    size,
-    lagMin,
-    lagMax,
-    rate,
-    minF0,
-    maxF0,
-    octaveCost,
-    voicingThreshold,
-    silence,
-  } = settings;
-  const capacity = settings.candidates;
-  const samples = frames.samples;
-  const { kernel, half: kernelHalf } = coarseKernel(factor);
-  const coarseWindow = hannWindow(coarseLength);
-  const fullWindow = hannWindow(fullLength);
-  const fft = createFft(size);
-  const fullMaxLag = factor * (lagMax + 1) + factor + 1;
-  const coarseCorrelation = windowCorrelation(coarseWindow, lagMax + 1);
-  const fullCorrelation = windowCorrelation(
-    fullWindow,
-    Math.min(fullLength - 1, fullMaxLag)
+function quietness(frames, settings, t) {
+  const { energy, noise } = frames;
+  let top = -Infinity;
+  const last = Math.min(frames.count - 1, t + settings.energyAhead);
+  for (let k = Math.max(0, t - settings.energySpan); k <= last; k++) {
+    top = Math.max(top, energy[k]);
+  }
+  const below = top - energy[t] - ENERGY_FREE;
+  const above = energy[t] - noise[t];
+  return (
+    ENERGY_COST * Math.max(0, below) +
+    NOISE_COST * Math.max(0, NOISE_FREE - above)
   );
+}
+
+/**
+ * The coarse signal (low-passed, every `factor`-th sample, computed as the
+ * samples arrive) and the normalised autocorrelation of its Hann-windowed
+ * frames by the transform.
+ */
+function createCoarseCorrelator(frames, settings) {
+  const { factor, coarseLength, size, lagMax } = settings;
+  const samples = frames.samples;
+  const { kernel, half } = coarseKernel(factor);
+  const window = hannWindow(coarseLength);
+  const correlation = windowCorrelation(window, lagMax + 1);
+  const fft = createFft(size);
   const re = new Float64Array(size);
   const im = new Float64Array(size);
-  const full = new Float64Array(fullLength);
-  const q = new Float64Array(lagMax + 2);
-  // Local maxima of the coarse search: lag, height, coarse strength.
-  const maxima = 2 * capacity + 2;
-  const peakLag = new Float64Array(lagMax);
-  const peakHeight = new Float64Array(lagMax);
-  const order = new Int32Array(lagMax);
-  const trial = new Float64Array(maxima);
-  const coarseHalf = Math.floor(coarseLength / 2);
-  const fullHalf = Math.floor(fullLength / 2);
-  const coarseMargin = coarseHalf + 2;
+  const frameHalf = Math.floor(coarseLength / 2);
+  const margin = frameHalf + 2;
   const coarse = new Float64Array(
-    coarseMargin + Math.ceil((samples.length + fullLength) / factor) + 4
+    margin + Math.ceil((samples.length + settings.fullLength) / factor) + 4
   );
-  let coarseDone = -coarseMargin;
-
-  /** Working sample `index`, 0 outside the received samples. */
-  function sample(index) {
-    return index >= 0 && index < frames.sampleCount ? samples[index] : 0;
-  }
+  let done = -margin;
 
   /** Fill the coarse signal up to index `last` (inclusive). */
-  function fillCoarse(last) {
-    for (let m = coarseDone; m <= last; m++) {
+  function fill(last) {
+    for (let m = done; m <= last; m++) {
       const centre = m * factor;
       let sum = 0;
-      if (centre - kernelHalf >= 0 && centre + kernelHalf < frames.sampleCount) {
-        for (let k = -kernelHalf; k <= kernelHalf; k++) {
-          sum += kernel[k + kernelHalf] * samples[centre + k];
+      if (centre - half >= 0 && centre + half < frames.sampleCount) {
+        for (let k = -half; k <= half; k++) {
+          sum += kernel[k + half] * samples[centre + k];
         }
       } else {
-        for (let k = -kernelHalf; k <= kernelHalf; k++) {
-          sum += kernel[k + kernelHalf] * sample(centre + k);
+        for (let k = -half; k <= half; k++) {
+          sum += kernel[k + half] * sampleAt(frames, centre + k);
         }
       }
-      coarse[m + coarseMargin] = sum;
+      coarse[m + margin] = sum;
     }
-    coarseDone = Math.max(coarseDone, last + 1);
+    done = Math.max(done, last + 1);
   }
 
-  /**
-   * Extra unvoiced strength of frame `t` from the front end's energies: a
-   * frame far below the loudest frame of the last 200 ms (and the next
-   * 10 ms) is the decaying tail of a vowel or a quiet consonant whose 50 ms
-   * window still holds the periodic neighbour; a frame near the noise
-   * floor is noise.
-   */
-  function quietness(t) {
-    const { energy, noise } = frames;
-    let top = -Infinity;
-    const last = Math.min(frames.count - 1, t + settings.energyAhead);
-    for (let k = Math.max(0, t - settings.energySpan); k <= last; k++) {
-      top = Math.max(top, energy[k]);
-    }
-    const below = top - energy[t] - ENERGY_FREE;
-    const above = energy[t] - noise[t];
-    return (
-      ENERGY_COST * Math.max(0, below) +
-      NOISE_COST * Math.max(0, NOISE_FREE - above)
-    );
-  }
+  return {
+    /** Last working sample the coarse frame at `centre` reads. */
+    lastSample(centre) {
+      return (
+        (Math.round(centre / factor) - frameHalf + coarseLength - 1) * factor +
+        half
+      );
+    },
+    /**
+     * Normalised autocorrelation of the coarse frame at working sample
+     * `centre` into `q` (lags lagMin - 1 .. lagMax + 1); false when the
+     * frame is silent.
+     */
+    correlate(centre, q) {
+      const start = Math.round(centre / factor) - frameHalf;
+      fill(start + coarseLength - 1);
+      let mean = 0;
+      for (let n = 0; n < coarseLength; n++) {
+        mean += coarse[start + n + margin];
+      }
+      mean /= coarseLength;
+      for (let n = 0; n < coarseLength; n++) {
+        re[n] = (coarse[start + n + margin] - mean) * window[n];
+      }
+      re.fill(0, coarseLength);
+      im.fill(0);
+      fft.forward(re, im);
+      for (let k = 0; k < size; k++) {
+        re[k] = re[k] * re[k] + im[k] * im[k];
+        im[k] = 0;
+      }
+      fft.inverse(re, im);
+      if (!(re[0] > 0)) {
+        return false;
+      }
+      for (let lag = settings.lagMin - 1; lag <= lagMax + 1; lag++) {
+        q[lag] = re[lag] / (re[0] * correlation[lag]);
+      }
+      return true;
+    },
+  };
+}
 
-  /** Last working sample that frame centre `centre` reads. */
-  function lastSample(centre) {
-    const coarseEnd =
-      (Math.round(centre / factor) - coarseHalf + coarseLength - 1) * factor +
-      kernelHalf;
-    return Math.max(centre - fullHalf + fullLength - 1, coarseEnd);
-  }
+/**
+ * The Hann-windowed full-rate frame without its mean, and the refinement
+ * of a coarse lag on it.
+ */
+function createFullFrame(frames, settings) {
+  const { factor, fullLength, lagMax } = settings;
+  const window = hannWindow(fullLength);
+  const maxLag = factor * (lagMax + 1) + factor + 1;
+  const correlation = windowCorrelation(
+    window,
+    Math.min(fullLength - 1, maxLag)
+  );
+  const full = new Float64Array(fullLength);
+  const half = Math.floor(fullLength / 2);
+  const frame = { energy: 0, largest: 0 };
 
-  /** Normalised autocorrelation of the full-rate frame at `lag`. */
-  function fullAt(lag, energy) {
-    if (lag < 1 || lag >= fullCorrelation.length) {
+  /** Normalised autocorrelation of the frame at `lag`. */
+  function at(lag) {
+    if (lag < 1 || lag >= correlation.length) {
       return -1;
     }
     let sum = 0;
     for (let n = 0; n + lag < fullLength; n++) {
       sum += full[n] * full[n + lag];
     }
-    return sum / (energy * fullCorrelation[lag]);
-  }
-
-  /** Refine a coarse lag at the full rate: [lag, height] or null. */
-  function refine(coarseLag, energy) {
-    const centre = Math.round(coarseLag * factor);
-    let best = -Infinity;
-    let bestLag = -1;
-    for (let lag = centre - factor; lag <= centre + factor; lag++) {
-      const value = fullAt(lag, energy);
-      if (value > best) {
-        best = value;
-        bestLag = lag;
-      }
-    }
-    if (bestLag < 2) {
-      return null;
-    }
-    const [offset, top] = parabola(
-      fullAt(bestLag - 1, energy),
-      best,
-      fullAt(bestLag + 1, energy)
-    );
-    return [bestLag + offset, Math.min(1, top)];
+    return sum / (frame.energy * correlation[lag]);
   }
 
   return {
-    lastSample,
-    /**
-     * Candidates of frame `t` centred on working sample `centre`; `peak` is
-     * the largest absolute sample so far.
-     */
-    score(t, centre, peak) {
-      // Full-rate frame without its mean, windowed; its largest |sample|.
-      const fullStart = centre - fullHalf;
+    frame,
+    /** Last working sample the frame at `centre` reads. */
+    lastSample(centre) {
+      return centre - half + fullLength - 1;
+    },
+    /** Load the frame at working sample `centre`: its energy after the
+     * window and its largest |sample| before. */
+    load(centre) {
+      const start = centre - half;
       let mean = 0;
       let largest = 0;
       for (let n = 0; n < fullLength; n++) {
-        const value = sample(fullStart + n);
+        const value = sampleAt(frames, start + n);
         full[n] = value;
         mean += value;
         largest = Math.max(largest, Math.abs(value));
@@ -410,94 +408,198 @@ function createCandidateFinder(frames, settings, store) {
       mean /= fullLength;
       let energy = 0;
       for (let n = 0; n < fullLength; n++) {
-        full[n] = (full[n] - mean) * fullWindow[n];
+        full[n] = (full[n] - mean) * window[n];
         energy += full[n] * full[n];
       }
+      frame.energy = energy;
+      frame.largest = largest;
+    },
+    /** Refine a coarse lag: [full-rate lag, height] or null. */
+    refine(coarseLag) {
+      const centre = Math.round(coarseLag * factor);
+      let best = -Infinity;
+      let bestLag = -1;
+      for (let lag = centre - factor; lag <= centre + factor; lag++) {
+        const value = at(lag);
+        if (value > best) {
+          best = value;
+          bestLag = lag;
+        }
+      }
+      if (bestLag < 2) {
+        return null;
+      }
+      const [offset, top] = parabola(at(bestLag - 1), best, at(bestLag + 1));
+      return [bestLag + offset, Math.min(1, top)];
+    },
+  };
+}
+
+/**
+ * Insert a candidate into the `kept` (sorted by strength) of the row of
+ * `capacity` that starts at `row`; returns the new count.
+ */
+function insertCandidate(store, row, kept, capacity, candidate) {
+  let slot = Math.min(kept, capacity);
+  while (slot > 0 && store.strength[row + slot - 1] < candidate.strength) {
+    if (slot < capacity) {
+      store.frequency[row + slot] = store.frequency[row + slot - 1];
+      store.height[row + slot] = store.height[row + slot - 1];
+      store.strength[row + slot] = store.strength[row + slot - 1];
+    }
+    slot--;
+  }
+  if (slot < capacity) {
+    store.frequency[row + slot] = candidate.frequency;
+    store.height[row + slot] = candidate.height;
+    store.strength[row + slot] = candidate.strength;
+  }
+  return Math.min(capacity, kept + 1);
+}
+
+/**
+ * Candidate finder: the coarse autocorrelation and the refinement at the
+ * full rate. `score(t, centre, peak)` writes the voiced candidates of frame
+ * t (frequency, height, strength), their number and the strength of the
+ * unvoiced candidate.
+ */
+function createCandidateFinder(frames, settings, store) {
+  const { lagMin, lagMax, rate, minF0, maxF0, octaveCost } = settings;
+  const capacity = settings.candidates;
+  const coarse = createCoarseCorrelator(frames, settings);
+  const full = createFullFrame(frames, settings);
+  const q = new Float64Array(lagMax + 2);
+  // Local maxima of the coarse search: lag and height; the strongest
+  // `tried` of them are refined.
+  const tried = 2 * capacity + 2;
+  const peakLag = new Float64Array(lagMax);
+  const peakHeight = new Float64Array(lagMax);
+  const order = [];
+  const candidate = { frequency: 0, height: 0, strength: 0 };
+  const strengthOf = (height, frequency) =>
+    height - octaveCost * Math.log2(maxF0 / frequency);
+
+  /** Local maxima of q, refined by a parabola, in `order` strongest
+   * first. */
+  function findMaxima() {
+    order.length = 0;
+    for (let lag = lagMin; lag <= lagMax; lag++) {
+      if (q[lag] > q[lag - 1] && q[lag] >= q[lag + 1] && q[lag] > 0) {
+        const [offset, top] = parabola(q[lag - 1], q[lag], q[lag + 1]);
+        const exact = lag + offset;
+        peakLag[order.length] = exact;
+        peakHeight[order.length] = strengthOf(
+          Math.min(1, top),
+          settings.coarseRate / exact
+        );
+        order.push(order.length);
+      }
+    }
+    order.sort((a, b) => peakHeight[b] - peakHeight[a] || a - b);
+  }
+
+  return {
+    lastSample(centre) {
+      return Math.max(full.lastSample(centre), coarse.lastSample(centre));
+    },
+    /**
+     * Candidates of frame `t` centred on working sample `centre`; `peak` is
+     * the largest absolute sample so far.
+     */
+    score(t, centre, peak) {
+      full.load(centre);
+      const { energy, largest } = full.frame;
       const ratio = peak > 0 ? largest / peak : 0;
-      store.unvoiced[t] = voicingThreshold + Math.max(0, 2 - ratio / silence);
-      store.unvoiced[t] += quietness(t);
+      store.unvoiced[t] =
+        settings.voicingThreshold +
+        Math.max(0, 2 - ratio / settings.silence) +
+        quietness(frames, settings, t);
       store.count[t] = 0;
-      // Coarse frame: autocorrelation by the transform.
-      const coarseStart = Math.round(centre / factor) - coarseHalf;
-      fillCoarse(coarseStart + coarseLength - 1);
-      let coarseMean = 0;
-      for (let n = 0; n < coarseLength; n++) {
-        coarseMean += coarse[coarseStart + n + coarseMargin];
-      }
-      coarseMean /= coarseLength;
-      for (let n = 0; n < coarseLength; n++) {
-        re[n] =
-          (coarse[coarseStart + n + coarseMargin] - coarseMean) *
-          coarseWindow[n];
-        im[n] = 0;
-      }
-      re.fill(0, coarseLength);
-      im.fill(0, coarseLength);
-      fft.forward(re, im);
-      for (let k = 0; k < size; k++) {
-        re[k] = re[k] * re[k] + im[k] * im[k];
-        im[k] = 0;
-      }
-      fft.inverse(re, im);
-      if (!(re[0] > 0) || !(energy > 0)) {
+      if (!coarse.correlate(centre, q) || !(energy > 0)) {
         return;
       }
-      for (let lag = lagMin - 1; lag <= lagMax + 1; lag++) {
-        q[lag] = re[lag] / (re[0] * coarseCorrelation[lag]);
-      }
-      // Local maxima, refined by a parabola, strongest first.
-      let found = 0;
-      for (let lag = lagMin; lag <= lagMax; lag++) {
-        if (q[lag] > q[lag - 1] && q[lag] >= q[lag + 1] && q[lag] > 0) {
-          const [offset, top] = parabola(q[lag - 1], q[lag], q[lag + 1]);
-          const exact = lag + offset;
-          const frequency = settings.coarseRate / exact;
-          peakLag[found] = exact;
-          peakHeight[found] =
-            Math.min(1, top) - octaveCost * Math.log2(maxF0 / frequency);
-          order[found] = found;
-          found++;
-        }
-      }
-      const sorted = Array.prototype.slice
-        .call(order, 0, found)
-        .sort((a, b) => peakHeight[b] - peakHeight[a] || a - b);
-      // Refine the strongest maxima at the full rate and keep the best.
+      findMaxima();
       let kept = 0;
-      const tried = Math.min(found, maxima);
-      for (let index = 0; index < tried; index++) {
-        const refined = refine(peakLag[sorted[index]], energy);
-        if (refined === null) {
-          continue;
+      const count = Math.min(order.length, tried);
+      for (let index = 0; index < count; index++) {
+        const refined = full.refine(peakLag[order[index]]);
+        const frequency = refined === null ? 0 : rate / refined[0];
+        if (frequency >= minF0 && frequency <= maxF0) {
+          candidate.frequency = frequency;
+          candidate.height = refined[1];
+          candidate.strength = strengthOf(refined[1], frequency);
+          kept = insertCandidate(
+            store,
+            t * capacity,
+            kept,
+            capacity,
+            candidate
+          );
         }
-        const frequency = rate / refined[0];
-        if (frequency < minF0 || frequency > maxF0) {
-          continue;
-        }
-        trial[kept] = index;
-        const row = t * capacity;
-        const strength =
-          refined[1] - octaveCost * Math.log2(maxF0 / frequency);
-        // Insert by strength into the rows of frame t.
-        let slot = Math.min(kept, capacity);
-        while (slot > 0 && store.strength[row + slot - 1] < strength) {
-          if (slot < capacity) {
-            store.frequency[row + slot] = store.frequency[row + slot - 1];
-            store.height[row + slot] = store.height[row + slot - 1];
-            store.strength[row + slot] = store.strength[row + slot - 1];
-          }
-          slot--;
-        }
-        if (slot < capacity) {
-          store.frequency[row + slot] = frequency;
-          store.height[row + slot] = refined[1];
-          store.strength[row + slot] = strength;
-        }
-        kept = Math.min(capacity, kept + 1);
       }
       store.count[t] = kept;
     },
   };
+}
+
+/** Normalised cross-correlation of x[a ..] and x[b ..], `n` samples. */
+function crossCorrelation(frames, a, b, n) {
+  let ab = 0;
+  let aa = 0;
+  let bb = 0;
+  for (let i = 0; i < n; i++) {
+    const x = sampleAt(frames, a + i);
+    const y = sampleAt(frames, b + i);
+    ab += x * y;
+    aa += x * x;
+    bb += y * y;
+  }
+  return aa > 0 && bb > 0 ? ab / Math.sqrt(aa * bb) : -1;
+}
+
+/** Peak-to-peak amplitude of x over [a, b). */
+function peakToPeak(frames, a, b) {
+  let low = Infinity;
+  let high = -Infinity;
+  for (let n = Math.round(a); n < Math.round(b); n++) {
+    const value = sampleAt(frames, n);
+    low = Math.min(low, value);
+    high = Math.max(high, value);
+  }
+  return high > low ? high - low : 0;
+}
+
+/** Add the periods between `marks` (working samples) of one run to the
+ * sums of jitter and shimmer. */
+function addPeriods(frames, sums, marks) {
+  for (let i = 0; i + 1 < marks.length; i++) {
+    const period = marks[i + 1] - marks[i];
+    const height = peakToPeak(frames, marks[i], marks[i + 1]);
+    sums.periods++;
+    sums.period += period;
+    sums.amplitude += height;
+    if (i + 2 < marks.length) {
+      sums.pairs++;
+      sums.periodDiff += Math.abs(period - (marks[i + 2] - marks[i + 1]));
+      sums.amplitudeDiff += Math.abs(
+        height - peakToPeak(frames, marks[i + 1], marks[i + 2])
+      );
+    }
+  }
+}
+
+/** Jitter and shimmer (percent) of the sums, from MIN_PERIODS periods. */
+function setPerturbation(track, sums) {
+  if (sums.periods < MIN_PERIODS || sums.pairs === 0) {
+    return;
+  }
+  const meanPeriod = sums.period / sums.periods;
+  const meanAmplitude = sums.amplitude / sums.periods;
+  track.jitter = (100 * sums.periodDiff) / sums.pairs / meanPeriod;
+  track.shimmer =
+    meanAmplitude > 0
+      ? (100 * sums.amplitudeDiff) / sums.pairs / meanAmplitude
+      : null;
 }
 
 /**
@@ -505,17 +607,17 @@ function createCandidateFinder(frames, settings, store) {
  */
 function createMarker(frames, track, settings) {
   const { rate, hopSamples } = settings;
-  const samples = frames.samples;
   const runFrames = Math.ceil(MARK_RUN / settings.hop - 1e-9);
   let storage = new Float64Array(256);
   let length = 0;
-  const sums = { periods: 0, period: 0, periodDiff: 0, pairs: 0 };
-  sums.amplitude = 0;
-  sums.amplitudeDiff = 0;
-
-  function sample(index) {
-    return index >= 0 && index < frames.sampleCount ? samples[index] : 0;
-  }
+  const sums = {
+    periods: 0,
+    period: 0,
+    amplitude: 0,
+    pairs: 0,
+    periodDiff: 0,
+    amplitudeDiff: 0,
+  };
 
   function push(time) {
     if (length === storage.length) {
@@ -524,21 +626,6 @@ function createMarker(frames, track, settings) {
       storage = grown;
     }
     storage[length++] = time;
-  }
-
-  /** Normalised cross-correlation of x[a ..] and x[b ..], `n` samples. */
-  function correlation(a, b, n) {
-    let ab = 0;
-    let aa = 0;
-    let bb = 0;
-    for (let i = 0; i < n; i++) {
-      const x = sample(a + i);
-      const y = sample(b + i);
-      ab += x * y;
-      aa += x * x;
-      bb += y * y;
-    }
-    return aa > 0 && bb > 0 ? ab / Math.sqrt(aa * bb) : -1;
   }
 
   /** Next mark from `last` in `direction` (+1 or -1), or null. */
@@ -555,16 +642,16 @@ function createMarker(frames, track, settings) {
     let best = -Infinity;
     let place = -1;
     for (let p = lo; p <= hi; p++) {
-      const value = correlation(anchor, p, span);
+      const value = crossCorrelation(frames, anchor, p, span);
       if (value > best) {
         best = value;
         place = p;
       }
     }
     const [offset] = parabola(
-      correlation(anchor, place - 1, span),
+      crossCorrelation(frames, anchor, place - 1, span),
       best,
-      correlation(anchor, place + 1, span)
+      crossCorrelation(frames, anchor, place + 1, span)
     );
     return place + Math.max(-0.5, Math.min(0.5, offset));
   }
@@ -586,7 +673,7 @@ function createMarker(frames, track, settings) {
       n <= Math.min(end - 1, Math.floor(middle + reach));
       n++
     ) {
-      const value = Math.abs(sample(n));
+      const value = Math.abs(sampleAt(frames, n));
       if (value > largest) {
         largest = value;
         start = n;
@@ -618,18 +705,6 @@ function createMarker(frames, track, settings) {
     return marks;
   }
 
-  /** Peak-to-peak amplitude of x over [a, b). */
-  function amplitude(a, b) {
-    let low = Infinity;
-    let high = -Infinity;
-    for (let n = Math.round(a); n < Math.round(b); n++) {
-      const value = sample(n);
-      low = Math.min(low, value);
-      high = Math.max(high, value);
-    }
-    return high > low ? high - low : 0;
-  }
-
   return {
     /** Mark the run of committed voiced frames a .. b (inclusive). */
     run(a, b) {
@@ -640,31 +715,9 @@ function createMarker(frames, track, settings) {
       for (const mark of marks) {
         push(frames.startTime + mark / rate);
       }
-      for (let i = 0; i + 1 < marks.length; i++) {
-        const period = marks[i + 1] - marks[i];
-        const height = amplitude(marks[i], marks[i + 1]);
-        sums.periods++;
-        sums.period += period;
-        sums.amplitude += height;
-        if (i + 2 < marks.length) {
-          sums.pairs++;
-          sums.periodDiff += Math.abs(period - (marks[i + 2] - marks[i + 1]));
-          sums.amplitudeDiff += Math.abs(
-            height - amplitude(marks[i + 1], marks[i + 2])
-          );
-        }
-      }
+      addPeriods(frames, sums, marks);
       track.marks = storage.subarray(0, length);
-      if (sums.periods >= MIN_PERIODS && sums.pairs > 0) {
-        const mean = (sum) => sum / sums.pairs;
-        track.jitter =
-          (100 * mean(sums.periodDiff)) / (sums.period / sums.periods);
-        track.shimmer =
-          sums.amplitude > 0
-            ? (100 * mean(sums.amplitudeDiff)) /
-              (sums.amplitude / sums.periods)
-            : null;
-      }
+      setPerturbation(track, sums);
     },
   };
 }
@@ -707,11 +760,139 @@ function createDistribution(capacity) {
 }
 
 /**
+ * Viterbi search over the candidates of `store`: states 0 .. capacity - 1
+ * are the voiced candidates of a frame, state `capacity` is unvoiced.
+ * `step(t)` adds frame t; `trace(path, first)` writes the best path to the
+ * newest frame into `path` from that frame back to `first`.
+ */
+function createViterbi(store, settings, rows) {
+  const capacity = settings.candidates;
+  const states = capacity + 1;
+  const { voicedUnvoicedCost, octaveJumpCost } = settings;
+  const back = new Int8Array(rows * states);
+  let previous = new Float64Array(states);
+  let current = new Float64Array(states);
+  let newest = -1;
+
+  /** Cost of the transition from state p of frame t - 1 to state s of t. */
+  function cost(t, s, p) {
+    const voiced = s < capacity;
+    const wasVoiced = p < capacity;
+    if (voiced && wasVoiced) {
+      const ratio =
+        store.frequency[t * capacity + s] /
+        store.frequency[(t - 1) * capacity + p];
+      return octaveJumpCost * Math.abs(Math.log2(ratio));
+    }
+    return voiced === wasVoiced ? 0 : voicedUnvoicedCost;
+  }
+
+  /** Best score into state s of frame t > 0: [score, from]. */
+  function best(t, s) {
+    const previousCount = store.count[t - 1];
+    let score = -Infinity;
+    let from = capacity;
+    for (let p = 0; p < states; p++) {
+      if (p < capacity && p >= previousCount) {
+        continue;
+      }
+      const value = previous[p] - cost(t, s, p);
+      if (value > score) {
+        score = value;
+        from = p;
+      }
+    }
+    back[t * states + s] = from;
+    return score;
+  }
+
+  return {
+    /** Add frame t (frames in order from 0). */
+    step(t) {
+      const count = store.count[t];
+      let top = -Infinity;
+      for (let s = 0; s < states; s++) {
+        const voiced = s < capacity;
+        current[s] = -Infinity;
+        if (voiced && s >= count) {
+          continue;
+        }
+        const gain = voiced
+          ? store.strength[t * capacity + s]
+          : store.unvoiced[t];
+        current[s] = (t === 0 ? 0 : best(t, s)) + gain;
+        top = Math.max(top, current[s]);
+      }
+      // Keep the numbers small: the best path scores 0.
+      for (let s = 0; s < states; s++) {
+        current[s] -= top;
+      }
+      [previous, current] = [current, previous];
+      newest = t;
+    },
+    trace(path, first) {
+      let state = capacity;
+      let top = -Infinity;
+      for (let s = 0; s < states; s++) {
+        if (previous[s] > top) {
+          top = previous[s];
+          state = s;
+        }
+      }
+      for (let t = newest; t >= first; t--) {
+        path[t] = state;
+        state = back[t * states + state];
+      }
+    },
+  };
+}
+
+/**
+ * f0 of the period that starts at frame `t`, from the path frequencies
+ * `frequencyAt(k)` (0 when unvoiced) up to frame `newest`: the window
+ * centred on the frame measures the period centred there, which starts
+ * half a period earlier, so take the path's frequency half a period later,
+ * interpolated in log frequency between voiced frames. This is the
+ * convention of the glottis, whose period is fixed when it starts, and of
+ * YIN.
+ */
+function onsetFrequency(frequencyAt, hop, t, newest) {
+  const own = frequencyAt(t);
+  const position = 0.5 / (own * hop);
+  const whole = Math.floor(position);
+  const fraction = position - whole;
+  let from = own;
+  for (let k = 1; k <= whole && t + k <= newest; k++) {
+    const next = frequencyAt(t + k);
+    if (!(next > 0)) {
+      return from;
+    }
+    from = next;
+  }
+  const after = t + whole + 1 <= newest ? frequencyAt(t + whole + 1) : 0;
+  return after > 0 ? from * (after / from) ** fraction : from;
+}
+
+/** Strength and voicing of frame t whose path state is `chosen` (the
+ * best candidate's height when unvoiced). */
+function frameScores(track, store, capacity, t, chosen) {
+  const row = t * capacity;
+  if (store.count[t] === 0) {
+    track.strength[t] = 0;
+    track.voicing[t] = 0;
+    return;
+  }
+  track.strength[t] = store.height[row + (chosen < capacity ? chosen : 0)];
+  const margin = store.strength[row] - store.unvoiced[t];
+  track.voicing[t] = Math.min(1, Math.max(0, 0.5 + margin / VOICING_SPREAD));
+}
+
+/**
  * Streaming pitch tracker over a frame set of the front end.
  *
  * `advance(final = false)` scores every frame whose 50 ms window (and the
- * low-pass tail) has arrived in `frames.samples`, then commits frame t once
- * frame t + lag is scored by tracing back the best path from the newest
+ * low-pass tail) has arrived in `frames.samples`, then commits frame t when
+ * frame t + lag has been scored, by tracing back the best path from the newest
  * frame; `advance(true)` scores all `frames.count` frames (zeros after the
  * end) and commits them all. The delay in a stream is `lag * hop` plus half
  * the window: 125 ms with the defaults.
@@ -720,10 +901,8 @@ function createDistribution(capacity) {
  */
 export function createPitchTracker(frames, options = {}) {
   const settings = pitchSettings(frames, options);
-  const { hop, hopSamples, lag, voicedUnvoicedCost, octaveJumpCost } =
-    settings;
+  const { hop, hopSamples, lag } = settings;
   const capacity = settings.candidates;
-  const states = capacity + 1; // voiced 0 .. capacity-1, unvoiced last
   const rows = frames.capacity;
   const store = {
     frequency: new Float32Array(rows * capacity),
@@ -732,10 +911,8 @@ export function createPitchTracker(frames, options = {}) {
     count: new Uint8Array(rows),
     unvoiced: new Float32Array(rows),
   };
-  const back = new Int8Array(rows * states);
   const path = new Int8Array(rows);
-  let previous = new Float64Array(states);
-  let current = new Float64Array(states);
+  const viterbi = createViterbi(store, settings, rows);
   const finder = createCandidateFinder(frames, settings, store);
   const track = createTrack(frames, settings);
   const marker = createMarker(frames, track, settings);
@@ -743,139 +920,24 @@ export function createPitchTracker(frames, options = {}) {
   const offset = Math.round(frames.startTime / settings.hop);
   const base = Math.round(offset * hopSamples);
   const centre = (t) => Math.round((offset + t) * hopSamples) - base;
+  /** Frequency of the path at frame `t` (Hz), 0 when unvoiced. */
+  const pathFrequency = (t) =>
+    path[t] < capacity ? store.frequency[t * capacity + path[t]] : 0;
   let peak = 0;
   let peakScanned = 0;
   let runStart = -1;
 
-  /** Viterbi step into frame t (t > 0) or the start (t = 0). */
-  function step(t) {
-    const count = store.count[t];
-    const row = t * capacity;
-    const unvoiced = store.unvoiced[t];
-    let top = -Infinity;
-    for (let s = 0; s < states; s++) {
-      current[s] = -Infinity;
-    }
-    const previousCount = t > 0 ? store.count[t - 1] : 0;
-    const previousRow = (t - 1) * capacity;
-    for (let s = 0; s < states; s++) {
-      const voiced = s < capacity;
-      if (voiced && s >= count) {
-        continue;
-      }
-      const gain = voiced ? store.strength[row + s] : unvoiced;
-      if (t === 0) {
-        current[s] = gain;
-        back[s] = -1;
-      } else {
-        let best = -Infinity;
-        let from = capacity;
-        for (let p = 0; p < states; p++) {
-          const wasVoiced = p < capacity;
-          if (wasVoiced && p >= previousCount) {
-            continue;
-          }
-          let cost = 0;
-          if (voiced && wasVoiced) {
-            cost =
-              octaveJumpCost *
-              Math.abs(
-                Math.log2(
-                  store.frequency[row + s] / store.frequency[previousRow + p]
-                )
-              );
-          } else if (voiced !== wasVoiced) {
-            cost = voicedUnvoicedCost;
-          }
-          const value = previous[p] - cost;
-          if (value > best) {
-            best = value;
-            from = p;
-          }
-        }
-        current[s] = best + gain;
-        back[t * states + s] = from;
-      }
-      top = Math.max(top, current[s]);
-    }
-    // Keep the numbers small: the best path scores 0.
-    for (let s = 0; s < states; s++) {
-      current[s] -= top;
-    }
-    [previous, current] = [current, previous];
-  }
-
   /** Commit frames track.committed .. last - 1 along the best path. */
-  /** Frequency of the path at frame `t` (Hz), 0 when unvoiced. */
-  function pathFrequency(t) {
-    const chosen = path[t];
-    return chosen < capacity ? store.frequency[t * capacity + chosen] : 0;
-  }
-
-  /**
-   * f0 of the period that starts at frame `t`: the window centred on the
-   * frame measures the period centred there, which starts half a period
-   * earlier, so take the path's frequency half a period later
-   * (interpolated in log frequency between the voiced frames up to
-   * `newest`). This is the convention of the glottis, whose period is
-   * fixed when it starts, and of YIN.
-   */
-  function onsetFrequency(t, newest) {
-    const own = pathFrequency(t);
-    const position = 0.5 / (own * hop);
-    const whole = Math.floor(position);
-    const step = position - whole;
-    let from = own;
-    for (let k = 1; k <= whole && t + k <= newest; k++) {
-      const next = pathFrequency(t + k);
-      if (!(next > 0)) {
-        return from;
-      }
-      from = next;
-    }
-    const after = t + whole + 1 <= newest ? pathFrequency(t + whole + 1) : 0;
-    return after > 0 ? from * (after / from) ** step : from;
-  }
-
   function commit(last) {
     if (last <= track.committed) {
       return;
     }
     const newest = track.count - 1;
-    let state = capacity;
-    let best = -Infinity;
-    for (let s = 0; s < states; s++) {
-      if (previous[s] > best) {
-        best = previous[s];
-        state = s;
-      }
-    }
-    for (let t = newest; t >= track.committed; t--) {
-      path[t] = state;
-      state = back[t * states + state];
-    }
+    viterbi.trace(path, track.committed);
     for (let t = track.committed; t < last; t++) {
-      const chosen = path[t];
-      const row = t * capacity;
-      const count = store.count[t];
-      const voiced = chosen < capacity;
-      const bestVoiced = count > 0 ? store.strength[row] : -Infinity;
-      track.f0[t] = voiced ? onsetFrequency(t, newest) : 0;
-      track.strength[t] = voiced
-        ? store.height[row + chosen]
-        : count > 0
-          ? store.height[row]
-          : 0;
-      track.voicing[t] =
-        count > 0
-          ? Math.min(
-              1,
-              Math.max(
-                0,
-                0.5 + (bestVoiced - store.unvoiced[t]) / VOICING_SPREAD
-              )
-            )
-          : 0;
+      const voiced = path[t] < capacity;
+      track.f0[t] = voiced ? onsetFrequency(pathFrequency, hop, t, newest) : 0;
+      frameScores(track, store, capacity, t, path[t]);
       if (voiced) {
         distribution.add(track.f0[t]);
         if (runStart < 0) {
@@ -914,7 +976,7 @@ export function createPitchTracker(frames, options = {}) {
           break;
         }
         finder.score(t, middle, peak);
-        step(t);
+        viterbi.step(t);
         track.count++;
       }
       commit(final ? track.count : Math.max(0, track.count - lag));
