@@ -219,6 +219,94 @@ export function fallbackLevel(tiers, level, load, target = 0.8) {
 }
 
 /**
+ * Chooses the audio tier while one utterance streams (issue 29): down
+ * within `downAfter` seconds of audio when the smoothed load is above the
+ * target, up one level after `upAfter` seconds when the next tier is
+ * predicted to fit with `margin`, and never back up to a level it left
+ * (step down fast, up slowly). The caller switches the stream and then
+ * calls switched(); record() and underrun() only propose a level.
+ */
+export class StreamGovernor {
+  /**
+   * @param {{tiers?: readonly {cost: number}[], level?: number, maxLevel?: number, target?: number, smoothing?: number, downAfter?: number, upAfter?: number, margin?: number}} [options]
+   */
+  constructor(options = {}) {
+    this.tiers = options.tiers ?? AUDIO_TIERS;
+    this.target = options.target ?? 0.8;
+    this.smoothing = options.smoothing ?? 0.3;
+    this.downAfter = options.downAfter ?? 0.1;
+    this.upAfter = options.upAfter ?? 3;
+    this.margin = options.margin ?? 0.7;
+    this.maxLevel = options.maxLevel ?? this.tiers.length - 1;
+    this.level = Math.max(0, Math.min(this.maxLevel, options.level ?? 0));
+    /** Highest level allowed again: below every level left downwards. */
+    this.ceiling = this.maxLevel;
+    /** Smoothed busy / audio; null before the first record. */
+    this.load = null;
+    /** Seconds of audio recorded since the start or the last switch. */
+    this.since = 0;
+  }
+
+  #leave(level) {
+    this.ceiling = Math.min(this.ceiling, level - 1);
+  }
+
+  /**
+   * Report one rendered chunk.
+   * @param {number} busy Seconds spent rendering it.
+   * @param {number} audio Seconds of audio in it.
+   * @returns {number|null} The level to switch to, or null to stay.
+   */
+  record(busy, audio) {
+    const load = busy / Math.max(audio, 1e-9);
+    this.load =
+      this.load === null
+        ? load
+        : this.load + (load - this.load) * this.smoothing;
+    this.since += audio;
+    const { level, tiers } = this;
+    if (this.since >= this.downAfter && this.load > this.target && level > 0) {
+      this.#leave(level);
+      return fallbackLevel(tiers, level, this.load, this.target);
+    }
+    if (
+      this.since >= this.upAfter &&
+      level < Math.min(this.maxLevel, this.ceiling) &&
+      (this.load * tiers[level + 1].cost) / tiers[level].cost <
+        this.target * this.margin
+    ) {
+      return level + 1;
+    }
+    return null;
+  }
+
+  /**
+   * The player ran dry: one level down without waiting.
+   * @returns {number|null} The level to switch to, or null at level 0.
+   */
+  underrun() {
+    if (this.level === 0) {
+      return null;
+    }
+    this.#leave(this.level);
+    return this.level - 1;
+  }
+
+  /**
+   * The stream now runs at `level`: the load is predicted for it by cost
+   * ratio and the time since the last switch starts again.
+   * @param {number} level
+   */
+  switched(level) {
+    if (this.load !== null) {
+      this.load *= this.tiers[level].cost / this.tiers[this.level].cost;
+    }
+    this.level = level;
+    this.since = 0;
+  }
+}
+
+/**
  * The steps of chooseTier: yields `{tier, limit}` for each tier to measure
  * and takes its load back through next(load).
  */
