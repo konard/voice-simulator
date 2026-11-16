@@ -97,6 +97,10 @@ jobs:
       # runner image installs the toolchain of rust-toolchain.toml.
       # performance-threads.test.js (issue 24) times the native CLI and the
       # threads file, which needs the nightly toolchain of THREADS_TOOLCHAIN.
+      # performance-tiers.test.js (issue 31) times every tier on JavaScript
+      # and Rust, on one core and (3D tiers) with the threads file, and
+      # compares them with docs/reports/performance-baseline.json; the run
+      # never commits, see "Heavy checks" in docs/CONTRIBUTING.md.
       - name: Build the WebAssembly engine
         if: inputs.suite == 'performance' || inputs.suite == 'all'
         run: |
