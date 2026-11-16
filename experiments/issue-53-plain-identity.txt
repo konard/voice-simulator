@@ -1,0 +1,25 @@
+"Please call Stella." {"tier":"medium","engine":"js"} 90802 90802 different samples: 0
+"Is it ready? Yes, it is!" {"tier":"low","engine":"js"} 84894 84894 different samples: 0
+"Please call Stella." {"tier":"medium","source":"folds","engine":"js"} 90802 90802 different samples: 0
+"Hello world." {"tier":"medium","markup":true,"engine":"js"} 62908 62908 different samples: 0
+"[soft]Hello[/soft] [loud]world[/loud]." {"tier":"medium","markup":true,"engine":"js"} 64051 64051 different samples: 0
+"[breathy]Hello[/breathy] [creaky]world[/creaky]." {"tier":"medium","markup":true,"engine":"js"} 62908 62908 different samples: 0
+"[falsetto]Hi[/falsetto] [harsh]there[/harsh], [pressed]you[/pressed]." {"tier":"medium","markup":true,"engine":"js"} 78534 78534 different samples: 0
+"ˈma̤ma ˈma̰ma" {"tier":"medium","ipa":true,"engine":"js"} 58135 58135 different samples: 0
+"ˈapa ˈaza ˈhi" {"tier":"medium","ipa":true,"engine":"js"} 64918 64918 different samples: 0
+"Привет, мир." {"tier":"low","lang":"ru","engine":"js"} 46700 46700 different samples: 0
+"你好。" {"tier":"low","lang":"zh","engine":"js"} 36761 36761 different samples: 0
+"नमस्ते।" {"tier":"low","lang":"hi","engine":"js"} 34603 34603 different samples: 0
+"Please call Stella." {"tier":"medium","engine":"rust"} 90802 90802 different samples: 0
+"Is it ready? Yes, it is!" {"tier":"low","engine":"rust"} 84894 84894 different samples: 0
+"Please call Stella." {"tier":"medium","source":"folds","engine":"rust"} 90802 90802 different samples: 0
+"Hello world." {"tier":"medium","markup":true,"engine":"rust"} 62908 62908 different samples: 0
+"[soft]Hello[/soft] [loud]world[/loud]." {"tier":"medium","markup":true,"engine":"rust"} 64051 64051 different samples: 0
+"[breathy]Hello[/breathy] [creaky]world[/creaky]." {"tier":"medium","markup":true,"engine":"rust"} 62908 62908 different samples: 0
+"[falsetto]Hi[/falsetto] [harsh]there[/harsh], [pressed]you[/pressed]." {"tier":"medium","markup":true,"engine":"rust"} 78534 78534 different samples: 0
+"ˈma̤ma ˈma̰ma" {"tier":"medium","ipa":true,"engine":"rust"} 58135 58135 different samples: 0
+"ˈapa ˈaza ˈhi" {"tier":"medium","ipa":true,"engine":"rust"} 64918 64918 different samples: 0
+"Привет, мир." {"tier":"low","lang":"ru","engine":"rust"} 46700 46700 different samples: 0
+"你好。" {"tier":"low","lang":"zh","engine":"rust"} 36761 36761 different samples: 0
+"नमस्ते।" {"tier":"low","lang":"hi","engine":"rust"} 34603 34603 different samples: 0
+identical
