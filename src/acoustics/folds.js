@@ -88,6 +88,15 @@ export const FOLDS_FLOW_SCALE = 1.403e-6;
  */
 export const FOLD_CONTROL_TIME = 0.003;
 
+/**
+ * Share of the lung pressure that creak (`control.creak`, issue 54) takes
+ * away from the folds at 1: creaky voice is thick slack folds at low
+ * subglottal pressure (Titze 1994, chapter 10; Keating, Garellek and
+ * Kreiman 2015). The plan lowers the fold tension and raises the
+ * adduction for it (src/articulation/plan.js, FOLD_PHONATION).
+ */
+export const FOLD_CREAK_PRESSURE = 0.5;
+
 /** Rest area (cm²) by adduction: open, breathy, modal and pressed. */
 export const ADDUCTION_TABLE = Object.freeze([
   Object.freeze([0, 0.3]),
@@ -310,12 +319,14 @@ export class VocalFolds {
   /**
    * Advance by dt seconds and return the flow derivative sample.
    * @param {number} dt
-   * @param {{voicing: number, aspiration: number, closure: number, loudness: number, lungPressure: number, adduction: number, foldTension: number, aspirationStrength?: number, oralPressure?: number}} control
+   * @param {{voicing: number, aspiration: number, closure: number, loudness: number, lungPressure: number, adduction: number, foldTension: number, aspirationStrength?: number, oralPressure?: number, creak?: number}} control
    *   `aspirationStrength` is the relative turbulence strength at the
    *   glottis from the air flow (VoiceRenderer); without it the folds
    *   assume an open tract at the lung pressure and their mean area.
    *   `oralPressure` (dyn/cm²) is the mean pressure above the glottis,
-   *   used with a `load`.
+   *   used with a `load`. `creak` (0..1) lowers the pressure on the folds
+   *   (FOLD_CREAK_PRESSURE); the other phonations reach them through
+   *   `adduction` and `foldTension`.
    * @param {number} noise White noise sample in [-1, 1].
    * @param {{below: {pressure: number, area: number}, above: {pressure: number, area: number}}} [load]
    *   Source-tract interaction: the pressures (dyn/cm², IncidentPressure)
@@ -337,7 +348,12 @@ export class VocalFolds {
       this.follow = 1 - Math.exp(-dt / FOLD_CONTROL_TIME);
       this.meanFollow = lagFactor(dt / MEAN_AREA_TIME);
     }
-    const target = Math.max(0, control.lungPressure) * PASCAL * (1 - closure);
+    const creak = control.creak ?? 0;
+    const target =
+      Math.max(0, control.lungPressure) *
+      PASCAL *
+      (1 - closure) *
+      (creak === 0 ? 1 : 1 - FOLD_CREAK_PRESSURE * Math.min(1, creak));
     if (this.started) {
       this.pressure += this.follow * (target - this.pressure);
       this.a02 += this.follow * (this.targetArea - this.a02);

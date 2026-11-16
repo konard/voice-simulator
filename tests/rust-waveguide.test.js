@@ -108,6 +108,15 @@ describe('Rust sources (issue 22)', () => {
     // Vocal effort (issue 52): gain, tilt shelf, tension and noise rule.
     ['effort', undefined, { effort: 12, tension: 0.072 }],
     ['soft effort', undefined, { effort: -10, tension: -0.06 }],
+    // Phonation types (issue 54): breath noise, creak, falsetto, harsh.
+    ['breathy', undefined, { effort: 0, tension: -0.23, breath: 1 }],
+    ['creaky', undefined, { effort: 0, tension: 0.33, creak: 1 }],
+    [
+      'falsetto',
+      undefined,
+      { effort: 0, tension: -0.17, falsetto: 1, breath: 0.3 },
+    ],
+    ['harsh', undefined, { effort: 0, tension: 0.33, harsh: 1 }],
   ]) {
     it(`glottis matches (${label})`, async () => {
       await glottisMatches(head, effort);
@@ -162,6 +171,10 @@ describe('Rust sources (issue 22)', () => {
       head?.glottisBreathy ?? GLOTTIS_BREATHY,
       control.effort,
       control.tension,
+      control.breath ?? 0,
+      control.creak ?? 0,
+      control.falsetto ?? 0,
+      control.harsh ?? 0,
     ];
     const { values } = inEngine(engine, input, (pointer, length) =>
       inEngine(engine, parameters, (params) => {
@@ -339,6 +352,22 @@ describe('Rust renderer (issue 22)', () => {
     const actual = renderPlanRust(engine, plan, renderOptions);
     const measured = maxDifference(actual, expected);
     globalThis.console.log(`render (effort) max abs diff ${measured}`);
+    expect(measured < 1e-4).toBe(true);
+  });
+
+  it('renders phonation types like VoiceRenderer (issue 54)', async () => {
+    const engine = await loadRustEngine();
+    const { plan, renderOptions } = prepareUtterance(
+      '[breathy]Hello[/breathy] [creaky]there,[/creaky] [falsetto]my[/falsetto] [harsh]friend.[/harsh]',
+      { tier: 'minimal', seed: 1, markup: true }
+    );
+    for (const channel of ['breath', 'creak', 'falsetto', 'harsh']) {
+      expect(Math.max(...plan.channels[channel]) > 0.5).toBe(true);
+    }
+    const expected = renderPlan(plan, { ...renderOptions, engine: 'js' });
+    const actual = renderPlanRust(engine, plan, renderOptions);
+    const measured = maxDifference(actual, expected);
+    globalThis.console.log(`render (phonation) max abs diff ${measured}`);
     expect(measured < 1e-4).toBe(true);
   });
 

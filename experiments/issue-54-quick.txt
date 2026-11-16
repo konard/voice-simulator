@@ -1,0 +1,7 @@
+modal     f0 128.3 st 0.00 h1h2 4.72 hnr 20.41 1.9s
+breathy   f0 130.9 st 0.34 h1h2 11.40 hnr 2.36 0.6s
+lax       f0 128.2 st -0.01 h1h2 9.66 hnr 20.04 0.5s
+pressed   f0 128.4 st 0.01 h1h2 -4.55 hnr 19.33 0.6s
+creaky    f0 605.2 st 26.85 h1h2 26.01 hnr 6.05 0.5s
+falsetto  f0 253.9 st 11.81 h1h2 8.25 hnr 9.52 0.5s
+harsh     f0 128.6 st 0.03 h1h2 -4.38 hnr 7.88 0.4s

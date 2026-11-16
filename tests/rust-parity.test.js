@@ -193,9 +193,9 @@ function join(parts) {
 }
 
 describe('Rust engine parity', () => {
-  it('reports interface version 3', async () => {
+  it('reports interface version 4', async () => {
     const engine = await loadRustEngine();
-    expect(engine.abiVersion).toBe(3);
+    expect(engine.abiVersion).toBe(4);
     expect(engine.memory instanceof globalThis.WebAssembly.Memory).toBe(true);
   });
 
