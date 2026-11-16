@@ -33,10 +33,11 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
  * measured when the budget was last raised, rounded up to the next 16 384
  * bytes. Raised for issue 23 (the 3D FDTD solver and its kernels) from
  * 98 304 to 196 608 (scalar file 184 968 bytes, SIMD file 192 648 bytes,
- * Rust 1.100.0). Raise it only with the newly measured size in the commit
- * message.
+ * Rust 1.100.0), and for issue 52 (vocal effort in the glottis and the
+ * renderer) to 212 992 (scalar file 196 952 bytes). Raise it only with the
+ * newly measured size in the commit message.
  */
-export const WASM_SIZE_BUDGET = 196608;
+export const WASM_SIZE_BUDGET = 212992;
 
 /**
  * Whether src/engine/voice-simulator-simd.wasm is shipped: only when it
