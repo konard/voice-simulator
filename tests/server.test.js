@@ -241,3 +241,55 @@ describe('voice server audio formats', () => {
     });
   });
 });
+
+describe('voice server markup', () => {
+  it('passes markup on and limits the text that is read', () => {
+    const options = (params) => synthesisOptions({ text: 'a', ...params });
+    expect(options({ markup: true }).options.markup).toBe(true);
+    expect(options({ markup: 'true' }).options.markup).toBe(true);
+    expect(options({ markup: 'false' }).options.markup).toBe(false);
+    expect(options({}).options.markup).toBe(undefined);
+    expect(options({ markup: true, ipa: true }).options.markup).toBe(false);
+    const tags = '<break time="1ms"/>'.repeat(300);
+    const ssml = `<speak>${'a '.repeat(500)}${tags}</speak>`;
+    expect(ssml.length > 2000).toBe(true);
+    expect(synthesisOptions({ text: ssml }).text).toBe(ssml);
+    const status = (params) => {
+      try {
+        synthesisOptions(params);
+        return 200;
+      } catch (error) {
+        return error.status;
+      }
+    };
+    expect(status({ text: `<speak>${'a'.repeat(2001)}</speak>` })).toBe(413);
+    expect(status({ text: `<speak>${'a '.repeat(4001)}</speak>` })).toBe(413);
+    expect(status({ text: '<!DOCTYPE x><speak>a</speak>' })).toBe(400);
+    expect(status({ text: '<speak>a</speak>', markup: false })).toBe(200);
+  });
+
+  itNet('answers 400 on markup it cannot read', async () => {
+    await withServer(async (base) => {
+      const post = (body) =>
+        fetch(`${base}/api/ipa`, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify(body),
+        });
+      const marked = await post({
+        text: '[whisper]Hello[/whisper] world.',
+        lang: 'en',
+        markup: true,
+      });
+      expect(marked.status).toBe(200);
+      const result = await marked.json();
+      expect(result.ipa).toBe('{W həˈloʊ W} ˈwɝld .');
+      expect(result.modes.length).toBe(1);
+      const doctype = await post({
+        text: '<!DOCTYPE speak [<!ENTITY x "y">]><speak>&x;</speak>',
+      });
+      expect(doctype.status).toBe(400);
+      expect((await doctype.json()).error).toContain('document type');
+    });
+  });
+});

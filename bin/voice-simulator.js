@@ -63,6 +63,8 @@ const OPTIONS = {
   box: { type: 'string' },
   'box-absorption': { type: 'string' },
   ipa: { type: 'boolean' },
+  markup: { type: 'boolean' },
+  plain: { type: 'boolean' },
   'strong-forms': { type: 'boolean' },
   lod: { type: 'string' },
   seconds: { type: 'string' },
@@ -103,6 +105,10 @@ function usage() {
     '  -l, --lang <code>     auto | en | ru | hi | zh (default auto)',
     '      --accent <code>   English accent: en-US | en-GB | en-AU | en-IN',
     '      --strong-forms    Keep English function words strong (no weak forms)',
+    '      --markup          Read inline tags: [whisper]…[/whisper], [pause 0.5],',
+    '                        [laugh], *word* (docs/markup.md); SSML (<speak>…)',
+    '                        is read without it',
+    '      --plain           Read the text as it is, without any markup',
     '  -o, --out <file>      Output file ("-" for stdout)',
     `  -t, --tier <name>     ${AUDIO_TIERS.map((tier) => tier.name).join(' | ')}`,
     `                        (default ${DEFAULT_AUDIO_TIER}: 3D; medium: real-time waveguide)`,
@@ -283,6 +289,27 @@ export function listeningOptions(values) {
   return result;
 }
 
+/**
+ * The `markup` option of --markup and --plain: true, false or undefined
+ * (SSML only, when the text starts with `<speak`).
+ */
+function markupOption(values) {
+  if (values.markup && values.plain) {
+    throw new Error('--markup and --plain cannot be used together');
+  }
+  if (values.plain) {
+    return false;
+  }
+  return values.markup ? true : undefined;
+}
+
+/** Print the markup warnings on stderr. */
+function reportWarnings(result, io) {
+  for (const warning of result.warnings ?? []) {
+    io.stderr(`markup: ${warning.message} at ${warning.position}`);
+  }
+}
+
 function requireText(positionals) {
   const text = positionals.join(' ').trim();
   if (!text) {
@@ -375,7 +402,9 @@ const COMMANDS = {
       lang: values.lang,
       accent: values.accent,
       weakForms: !values['strong-forms'],
+      markup: markupOption(values),
     });
+    reportWarnings(result, io);
     io.stdout(values.json ? JSON.stringify(result) : result.ipa);
   },
 
@@ -386,6 +415,7 @@ const COMMANDS = {
       accent: values.accent,
       weakForms: !values['strong-forms'],
       ipa: values.ipa,
+      markup: markupOption(values),
       seed: values.seed,
       head: resolveHead(values),
       tier: values.tier,
@@ -397,6 +427,7 @@ const COMMANDS = {
       sampleRate: optionalNumber(values['sample-rate'], 'sample-rate'),
       ...listeningOptions(values),
     });
+    reportWarnings(result, io);
     const { out } = output;
     writeOutput(out, output.encode(result.samples, result.sampleRate), io);
     if (out !== '-' && values.json) {
@@ -407,6 +438,8 @@ const COMMANDS = {
           ipa: result.ipa,
           duration: result.duration,
           out,
+          modes: result.plan.modes,
+          sounds: result.plan.sounds,
           timeline: result.timeline,
         })
       );
@@ -445,11 +478,20 @@ const COMMANDS = {
       accent: values.accent,
       weakForms: !values['strong-forms'],
       ipa: values.ipa,
+      markup: markupOption(values),
     });
-    const { lang, accent, ipa, timeline } = prepared;
+    reportWarnings(prepared, io);
+    const { lang, accent, ipa, timeline, plan } = prepared;
     if (values.json) {
       io.stdout(
-        JSON.stringify({ lang, accent: accent ?? null, ipa, timeline })
+        JSON.stringify({
+          lang,
+          accent: accent ?? null,
+          ipa,
+          modes: plan.modes,
+          sounds: plan.sounds,
+          timeline,
+        })
       );
       return;
     }
@@ -473,6 +515,7 @@ const COMMANDS = {
         accent: values.accent,
         weakForms: !values['strong-forms'],
         ipa: values.ipa,
+        markup: markupOption(values),
         head,
       }
     );

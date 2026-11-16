@@ -189,6 +189,10 @@ export const DIACRITICS = Object.freeze({
   '˞': 'rhotic',
   '͡': 'tie',
   '͜': 'tie',
+  // Voice quality of a single phone (VoQS): breathy, creaky, whispered.
+  '\u0324': 'breathyVoice',
+  '\u0330': 'creaky',
+  '\u0323': 'whispered',
 });
 
 /** Chao tone letters, 5 = highest pitch. */
@@ -271,4 +275,71 @@ export function getPhoneme(symbol) {
 /** All base symbols the simulator can articulate. */
 export function listSymbols() {
   return [...Object.keys(VOWELS), ...Object.keys(CONSONANTS)];
+}
+
+/** Degree of the ExtIPA/VoQS degree digits 1, 2 (or none) and 3. */
+const LABEL_DEGREES = Object.freeze({ 1: 0.33, 2: 0.67, 3: 1 });
+
+const effortLabel = (effort) => () => ({ effort });
+const phonationLabel =
+  (name, sign = 1) =>
+  (degree) => ({
+    phonation: { [name]: sign * degree },
+  });
+
+/**
+ * Labels of the ExtIPA/VoQS brace spans `{label … label}` and the change
+ * of mode (src/markup/modes.js) each makes at a degree: the degree digit
+ * 1, 2 (or none) and 3 before the label gives 0.33, 0.67 and 1
+ * (`{3V̤ … V̤}`). `digit` is the digit written, or null.
+ */
+export const MODE_LABELS = Object.freeze({
+  pp: effortLabel(0),
+  '𝆏𝆏': effortLabel(0),
+  p: effortLabel(0.25),
+  '𝆏': effortLabel(0.25),
+  f: effortLabel(0.75),
+  '𝆑': effortLabel(0.75),
+  ff: effortLabel(1),
+  '𝆑𝆑': effortLabel(1),
+  crescendo: () => ({ effortRamp: 0.25 }),
+  diminuendo: () => ({ effortRamp: -0.25 }),
+  allegro: () => ({ rate: 1.3, absolute: ['rate'] }),
+  lento: () => ({ rate: 0.75, absolute: ['rate'] }),
+  'V\u0324': phonationLabel('breathy'),
+  'V\u0330': phonationLabel('creaky'),
+  C: () => ({ phonation: { creaky: 1 } }),
+  'V\u0348': phonationLabel('tension'),
+  'V\u0349': phonationLabel('tension', -1),
+  F: phonationLabel('falsetto'),
+  'V!': phonationLabel('harsh'),
+  W: (degree, digit) => ({
+    phonation: { whisper: 1 },
+    ...(digit === '1' ? { effort: 0.25 } : {}),
+    ...(digit === '3' ? { effort: 0.75 } : {}),
+  }),
+  '\u1e7e': (degree) => ({
+    phonation: { whisper: { 0.33: 0.25, 0.67: 0.5, 1: 0.75 }[degree] },
+  }),
+  V: () => ({
+    phonation: {
+      breathy: 0,
+      creaky: 0,
+      tension: 0,
+      falsetto: 0,
+      harsh: 0,
+      whisper: 0,
+    },
+  }),
+});
+
+/** The change of a mode label with an optional degree digit, or null. */
+export function modeLabelChange(label, digit = null) {
+  const key = Object.keys(MODE_LABELS).find(
+    (name) => name.normalize('NFD') === label.normalize('NFD')
+  );
+  if (!key) {
+    return null;
+  }
+  return MODE_LABELS[key](LABEL_DEGREES[digit ?? 2], digit);
 }
