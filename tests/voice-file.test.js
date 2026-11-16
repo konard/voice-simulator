@@ -188,7 +188,10 @@ describe('voice files', () => {
 
 describe('voice schema', () => {
   it('keeps schemas/voice.schema.json current', () => {
-    expect(readFileSync(SCHEMA_FILE, 'utf8')).toBe(voiceSchemaText());
+    // Git may check the file out with CRLF line endings on Windows.
+    expect(readFileSync(SCHEMA_FILE, 'utf8').replace(/\r\n/g, '\n')).toBe(
+      voiceSchemaText()
+    );
     const schema = voiceSchema();
     expect(schema.required).toEqual(['format', 'version']);
     let count = 0;

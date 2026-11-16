@@ -253,7 +253,10 @@ describe('head parameters: documentation (issue 41)', () => {
         effect.sign !== 0 || String(effect.note).length > 10,
       ]).toEqual([key, true]);
     }
-    expect(readFileSync(DOCS_FILE, 'utf8')).toBe(voiceParametersMarkdown());
+    // Git may check the file out with CRLF line endings on Windows.
+    expect(readFileSync(DOCS_FILE, 'utf8').replace(/\r\n/g, '\n')).toBe(
+      voiceParametersMarkdown()
+    );
   });
 });
 
