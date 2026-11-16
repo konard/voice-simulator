@@ -120,12 +120,21 @@ export {
   strouhalFrequency,
 } from './acoustics/voice.js';
 // The waveguide renderer on the Rust engine, opt-in (issue 22)
-export { loadEngineModule, ENGINE_ABI_VERSION } from './engine/wasm-loader.js';
+export {
+  loadEngineModule,
+  ENGINE_ABI_VERSION,
+  AUTO_THREADS_MAX,
+  requestedThreads,
+} from './engine/wasm-loader.js';
 export {
   RustVoiceRenderer,
   renderPlanRust,
   renderJob,
+  withTeam,
 } from './engine/rust-renderer.js';
+// The 3D solver on several threads in WebAssembly (issue 24)
+export { createThreadPool } from './engine/thread-pool.js';
+export { THREAD_MEMORY } from './engine/layout.js';
 // Air flow and turbulence noise sources (issue 35)
 export {
   ASPIRATION_REFERENCE,

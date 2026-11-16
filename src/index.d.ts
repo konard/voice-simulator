@@ -970,7 +970,68 @@ export interface EngineModule {
   abiVersion: number;
   /** Built with WebAssembly SIMD (`voice-simulator-simd.wasm`, issue 23). */
   simd: boolean;
+  /**
+   * Threads that step the 3D solver, the caller included: above 1 only for
+   * the threads build (`voice-simulator-threads.wasm`, issue 24) with its
+   * helper workers running.
+   */
+  threads: number;
+  /** The helper workers of the threads build, else null. */
+  pool: ThreadPool | null;
+  /** End the helper workers (a no-op on one thread). Not during a render. */
+  close(): void;
 }
+/** Helper workers of the threads build (issue 24). */
+export interface ThreadPool {
+  /** Threads in total, the caller included. */
+  readonly size: number;
+  /** Wake every helper into `vs_team_work(team, index)`. */
+  run(team: number): void;
+  /** End the workers and free their stacks. Not during a render. */
+  close(): void;
+}
+/**
+ * Start `count - 1` helper workers of the threads build on `memory`: a
+ * module `Worker` in browsers, Bun and Deno, `node:worker_threads` in
+ * Node.js. Each instantiates `module`, gets a 64 KiB stack from
+ * `options.exports.vs_alloc` (the caller's instance) and sleeps in
+ * `Atomics.wait` until `run(team)`. Rejects when a worker cannot start.
+ * `loadEngineModule` with `threads` calls it.
+ */
+export declare function createThreadPool(
+  module: WebAssembly.Module,
+  memory: WebAssembly.Memory,
+  count: number,
+  options: {
+    exports: Record<string, (...args: number[]) => number>;
+    url?: URL | string;
+  }
+): Promise<ThreadPool>;
+/** Pages (64 KiB) of the shared memory of the threads build. */
+export declare const THREAD_MEMORY: Readonly<{
+  INITIAL: 512;
+  MAXIMUM: 16384;
+  PAGE_BYTES: 65536;
+}>;
+/** The most threads `threads: 'auto'` asks for. */
+export declare const AUTO_THREADS_MAX: number;
+/**
+ * The thread count of the `threads` option: 1 by default, a positive
+ * integer as given, `'auto'` = max(1, cores - 1), at most
+ * AUTO_THREADS_MAX. Throws an Error for anything else.
+ */
+export declare function requestedThreads(threads?: number | 'auto'): number;
+/**
+ * Run `action` (a render call of renderer `handle`) with a thread team of
+ * the engine's pool when there is one and the grid has at least
+ * `minLinks` links (default THREAD_MIN_LINKS of the engine).
+ */
+export declare function withTeam<T>(
+  module: EngineModule,
+  handle: number,
+  action: () => T,
+  minLinks?: number
+): { result: T; threads: number };
 /**
  * Load the Rust engine (`npm run build:wasm` builds it). `source` is a
  * WebAssembly.Module, the bytes, a URL, or nothing for the files next to
@@ -981,10 +1042,19 @@ export interface EngineModule {
  * it is not (is) a SIMD build. Resolves to null without WebAssembly,
  * without the file or when it does not compile; throws when its interface
  * version differs.
+ *
+ * `threads` (default 1; a positive integer, or `'auto'` for all cores but
+ * one, at most AUTO_THREADS_MAX) asks for the threads build
+ * `voice-simulator-threads.wasm` (issue 24) with `threads - 1` helper
+ * workers. A request that cannot be met is never an error: without the
+ * file, without cross-origin isolation (`crossOriginIsolated` false), without
+ * SharedArrayBuffer, or when a worker cannot start, the engine loads as
+ * without `threads` and `threads` of the result is 1. Call `close()` on the
+ * result to end the workers.
  */
 export declare function loadEngineModule(
   source?: WebAssembly.Module | BufferSource | URL | string | null,
-  options?: { simd?: 'auto' | boolean }
+  options?: { simd?: 'auto' | boolean; threads?: number | 'auto' }
 ): Promise<EngineModule | null>;
 /**
  * VoiceRenderer with the waveguide (issue 22) or the 3D FDTD solver (issue
@@ -997,7 +1067,14 @@ export declare function loadEngineModule(
  * done.
  */
 export declare class RustVoiceRenderer {
-  constructor(module: EngineModule, plan: Plan, options?: RenderOptions);
+  constructor(
+    module: EngineModule,
+    plan: Plan,
+    options?: RenderOptions & {
+      /** Overrides THREAD_MIN_LINKS (0: a team for any grid). */
+      threadMinLinks?: number;
+    }
+  );
   readonly sampleRate: number;
   readonly sections: number;
   readonly duration: number;
@@ -1006,6 +1083,12 @@ export declare class RustVoiceRenderer {
   position: number;
   /** Milliseconds spent preparing frames in JavaScript so far. */
   readonly prepareTime: number;
+  /**
+   * Threads that stepped the solver in the last render() call: above 1 only
+   * on an engine of `threads` above 1 with a grid of at least
+   * THREAD_MIN_LINKS links (or `threadMinLinks`).
+   */
+  readonly threads: number;
   render(target: Float32Array): number;
   renderAsync(target: Float32Array): Promise<number>;
   /**
