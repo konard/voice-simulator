@@ -129,9 +129,9 @@ export interface Phonation {
 }
 
 export interface Emotion {
-  /** A name of EMOTIONS, e.g. 'angry'; 'neutral' by default. */
+  /** A name of EMOTION_PRESETS, e.g. 'angry'; 'neutral' by default. */
   name: string;
-  /** 0 … 1. */
+  /** 0 … 1; 1 when a named emotion is written without one. */
   intensity: number;
   arousal: number;
   valence: number;
@@ -1872,6 +1872,93 @@ export declare function phonationChannels(
   falsetto: number;
   harsh: number;
 };
+// Emotions and attitudes (issue 55, docs/markup.md#emotions-and-attitudes)
+/** A row of EMOTION_PRESETS: the changes at intensity 1. */
+export interface EmotionPreset {
+  /** Pitch shift in semitones. */
+  pitch: number;
+  /** Factor on the pitch movements. */
+  range: number;
+  /** Speech rate factor. */
+  rate: number;
+  /** Vocal effort 0 … 1 (0.5 normal). */
+  effort: number;
+  /** Degrees of the phonation types; `tension` -1 (lax) … 1 (pressed). */
+  phonation: Readonly<Partial<Phonation>>;
+  /** Factor on every pause inside the span. */
+  pauses: number;
+  /** Vowels away from [ə] (> 0) or towards it (< 0). */
+  precision: number;
+  /** Lip spreading 0 … 1. */
+  smile: number;
+  /** Pitch movement (st/s) inside each primary-stressed vowel. */
+  glide: number;
+  /** Pitch movement (st/s) on the last vowel of the span. */
+  finalRise: number;
+  /** Factor on the primary-stressed vowels. */
+  stressLength: number;
+  /** Extra jitter in percent (realised as harsh voice). */
+  jitter: number;
+  arousal: number;
+  valence: number;
+  dominance: number;
+  /** Where arousal, valence and dominance come from. */
+  coordinates: string;
+  /** Where the row comes from, e.g. 'Burkhardt & Sendlmeier 2000'. */
+  source: string;
+  /** Whether listeners recognised the row in a published study. */
+  verified: boolean;
+}
+/** The changes of an emotion (`emotionChanges`). */
+export type EmotionChanges = Omit<
+  EmotionPreset,
+  'arousal' | 'valence' | 'dominance' | 'coordinates' | 'source' | 'verified'
+> & { phonation: Partial<Phonation> };
+/**
+ * The twelve presets: neutral, angry, happy, sad, afraid, bored,
+ * surprised, disgusted, tender, sarcastic, confident, hesitant.
+ */
+export declare const EMOTION_PRESETS: Readonly<
+  Record<string, Readonly<EmotionPreset>>
+>;
+/** Limit of a glide or final rise in semitones (3). */
+export declare const GLIDE_LIMIT: number;
+/** Vowel spreading per unit of precision above (0.3) and below (0.2) 0. */
+export declare const PRECISION: Readonly<{ up: number; down: number }>;
+/** Lip changes of smile 1: rounding -0.3 and retraction 1.2 cm. */
+export declare const SMILE: Readonly<{ rounding: number; retraction: number }>;
+/** Time a pitch rise of d st needs: base + perSemitone · d seconds. */
+export declare const RISE_TIME: Readonly<{ base: number; perSemitone: number }>;
+/**
+ * What an emotion changes: a named preset at its intensity (1 when not
+ * given), or the rules of arousal, valence and dominance for 'neutral'.
+ */
+export declare function emotionChanges(
+  emotion?: string | Partial<Emotion>
+): EmotionChanges;
+/** Whether an emotion changes nothing (neutral at the origin, or intensity 0). */
+export declare function isNeutralEmotion(
+  emotion: Partial<Emotion> | null | undefined
+): boolean;
+/**
+ * The mode with its emotion realised as an outer span; the same object
+ * when the emotion changes nothing.
+ */
+export declare function realiseEmotion<T extends Mode | null | undefined>(
+  mode: T
+): T extends Mode
+  ? Mode & {
+      emotionPitch?: number;
+      emotionRange?: number;
+      emotionEffort?: number;
+      pauses?: number;
+      stressLength?: number;
+      glide?: number;
+      finalRise?: number;
+      precision?: number;
+      smile?: number;
+    }
+  : T;
 /** Release of a breathy-voiced stop (bʱ dʱ ɖʱ ɡʱ dʒʱ). */
 export declare const BREATHY_RELEASE: Readonly<{
   duration: number;
@@ -2448,6 +2535,18 @@ export declare function chooseTierWithGpu<T>(
     accelerated?: (tier: T) => boolean;
   }
 ): Promise<GpuTierChoice>;
+/**
+ * The GPU stage of chooseTierWithGpu on its own: the accelerated tiers
+ * above `cpu.level` measured with `measure`; nothing without `gpu`.
+ */
+export declare function chooseGpuTier<T>(
+  measure: (tier: T, options: { limit: number }) => Promise<number> | number,
+  cpu: TierChoice,
+  options?: ChooseTierOptions<T> & {
+    gpu?: boolean;
+    accelerated?: (tier: T) => boolean;
+  }
+): Promise<GpuTierChoice>;
 export interface GpuTierChoice extends TierChoice {
   /** Whether the chosen tier runs on the GPU. */
   gpu: boolean;
@@ -2536,6 +2635,116 @@ export declare function benchmarkAudioTiersAsync(options?: {
   device?: GPUDeviceLike | null;
   engine?: EngineName | Engine;
 }): Promise<GpuTierChoice & { tier: AudioTier }>;
+/** The utterance every benchmark renders. */
+export declare const BENCHMARK_IPA: string;
+/**
+ * Renderer for the first `seconds` (default 0.3) of the benchmark
+ * utterance, with the voxel model `model` (built when not given) for the
+ * 3D tiers.
+ */
+export declare function benchmarkRenderer(
+  tier: AudioTier,
+  options?: {
+    head?: HeadConfig;
+    ipa?: string;
+    seconds?: number;
+    device?: GPUDeviceLike | null;
+    engine?: EngineName | Engine;
+    model?: object | null;
+  }
+): EngineRenderer;
+
+// Silent device benchmark (issue 28)
+/** Version of the benchmarkDevice procedure; cached results of another are measured again. */
+export declare const BENCHMARK_VERSION: number;
+/** The renderer a fake `measure` of benchmarkDevice returns (tests). */
+export interface BenchmarkProbeRenderer {
+  sampleRate: number;
+  /** Renders into `block`, returns the samples written. */
+  render(block: Float32Array): number;
+  done?: boolean;
+  free?(): void;
+}
+export interface BenchmarkDeviceOptions {
+  /** Default `'auto'`; see createEngine. */
+  engine?: EngineName | Engine;
+  head?: HeadConfig;
+  /** Largest load of a chosen tier (default 0.8). */
+  target?: number;
+  /** CPU seconds the benchmark may spend (default 1). */
+  budget?: number;
+  /** Seconds of work between pauses (default 0.02). */
+  slice?: number;
+  /** Seconds of audio per tier (default 0.06). */
+  probe?: number;
+  /** Last tier to consider (default the last one). */
+  maxLevel?: number;
+  /** A partial result to continue. */
+  resume?: DeviceBenchmark | null;
+  /** True when speech is waiting: the benchmark returns a partial result. */
+  paused?: () => boolean;
+  /** Clock in ms (default performance.now). */
+  now?: () => number;
+  /** Called between slices (default: setTimeout 0). */
+  pause?: () => Promise<void>;
+  /** Makes the renderer of a probe (tests). */
+  measure?: (
+    tier: AudioTier,
+    info: {
+      warmup: boolean;
+      index: number;
+      seconds: number;
+      head?: HeadConfig;
+      engine: Engine;
+    }
+  ) => BenchmarkProbeRenderer;
+  /** Default AUDIO_TIERS. */
+  tiers?: readonly AudioTier[];
+}
+export interface DeviceBenchmark {
+  version: number;
+  engine: { name: string; simd: boolean; threads: number };
+  /** The chosen level (index in AUDIO_TIERS). */
+  level: number;
+  tier: AudioTier;
+  /** Load of every tier up to maxLevel; predicted where not measured. */
+  loads: number[];
+  measured: boolean[];
+  /** CPU seconds spent, summed over the slices. */
+  cpuSeconds: number;
+  /** Seconds of the longest slice. */
+  longestSlice: number;
+  /** Stopped by `paused()`; pass it as `resume` to continue. */
+  partial: boolean;
+}
+/**
+ * Measure, in slices and within a CPU budget, how fast this device renders
+ * each audio tier and choose the most precise one with 20 % headroom.
+ */
+export declare function benchmarkDevice(
+  options?: BenchmarkDeviceOptions
+): Promise<DeviceBenchmark>;
+/**
+ * The highest level whose load is at most `target` (measured) or
+ * 0.7 × `target` (predicted), every lower level passing too; 0 if none.
+ */
+export declare function chooseLevel(
+  loads: readonly number[],
+  measured: readonly boolean[],
+  target?: number
+): number;
+/**
+ * The level automatic quality starts at before the benchmark answers:
+ * `narrowband` with at most 2 cores or 2 GB of memory, else `minimal`.
+ */
+export declare function startLevel(hints?: {
+  hardwareConcurrency?: number;
+  deviceMemory?: number;
+}): number;
+/** `medium` when the battery is not charging and below 20 %, else the last level. */
+export declare function batteryLevelCap(
+  battery?: { charging?: boolean; level?: number } | null
+): number;
 
 // Audio formats (issue 5)
 /** One channel, or a list of equally long channels (interleaved on write). */

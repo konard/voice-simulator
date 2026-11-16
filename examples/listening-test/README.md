@@ -1,7 +1,7 @@
 # Listening test
 
 A blind listening test that runs in a web browser from a folder on disk: no
-server, no network, no account. It has three kinds of trial:
+server, no network, no account. It has four kinds of trial:
 
 - **MUSHRA** (ITU-R BS.1534-3): the listener rates several versions of a
   sentence from 0 to 100 against a reference. One of the versions is the
@@ -12,6 +12,9 @@ server, no network, no account. It has three kinds of trial:
 - **Intelligibility**: the listener types the words of a sentence heard once
   (or `maxPlays` times); the word error rate (WER) measures how
   understandable the voice is.
+- **Choice**: the listener hears a sentence (at most `maxPlays` times, 2
+  by default) and picks one of several names, for example the emotion it
+  is spoken with (issue 55). The answers give a confusion matrix.
 
 The page keeps everything in the browser. At the end the listener presses
 **Download results**, which saves `listening-<test id>-<listener>.json`, and
@@ -23,8 +26,9 @@ details; `listener` is 8 random hexadecimal characters.
 ## Run a test (for the person who organises it)
 
 1. **Write the sentences.** Copy `sentences.example.json` and edit it. Each
-   entry is `{id, text, lang, tiers, type?, reference?, extra?, maxPlays?}`:
-   - `type` is `mushra` (the default), `abx` or `intelligibility`;
+   entry is `{id, text, lang, tiers, type?, reference?, extra?, maxPlays?}`
+   (and `emotions`, `choices`, `intensity` for a choice entry):
+   - `type` is `mushra` (the default), `abx`, `intelligibility` or `choice`;
    - `tiers` are quality tiers of the simulator (`minimal`, `low`,
      `medium`, `high`, `ultra`, `studio`), each rendered with seed 1;
    - `reference` is an optional recording of a real voice (WAV, FLAC, AIFF
@@ -40,7 +44,12 @@ details; `listener` is 8 random hexadecimal characters.
    ABX entry needs exactly two sounds (reference, tiers and extra together),
    which become A and B. An intelligibility entry gives one trial per tier
    or extra; give each its own sentence (one tier per entry) so that no one
-   hears a sentence twice.
+   hears a sentence twice. A choice entry has one tier (`medium` when none
+   is given), no reference and no extra, and gives one trial per name of
+   `emotions` (emotion presets of `EMOTION_PRESETS`): the text is spoken as
+   `[name intensity]text[/name]` (`intensity` 0 … 1, 1 by default), and
+   the listener picks among `choices` (by default the emotions; it must
+   hold each of them).
 
    For intelligibility, use semantically unpredictable sentences, which a
    listener cannot guess from context:
@@ -59,7 +68,10 @@ details; `listener` is 8 random hexadecimal characters.
 
    This writes `stimuli/` (16-bit mono WAV at 48000 Hz, every file at an RMS
    of −26 dBFS, plus `stimuli/volume.wav`, 2 s of pink noise for the volume
-   check) and `config.js`. Both are listed in `.gitignore`, so the build
+   check) and `config.js`. The renderings of one choice entry share one
+   gain instead (rendered with a headroom of 20 dB, the first emotion at
+   −26 dBFS unless a peak would pass 0.98), so that a loud or a soft
+   emotion keeps its level. Both are listed in `.gitignore`, so the build
    leaves `git status` clean. The example takes about 8 s.
 
 3. **Try it yourself.** Open `index.html` in a browser (double-click it).
@@ -68,6 +80,17 @@ details; `listener` is 8 random hexadecimal characters.
 4. **Send the test.** Zip the folder (`index.html`, `app.js`, `styles.css`,
    `config.js` and `stimuli/`) and send it to at least 8 listeners, with the
    steps below.
+
+   The emotion study of issue 55 builds 48 choice trials (two sentences in
+   each of `en`, `ru`, `hi` and `zh`, each in six emotions, about 25 s):
+
+   ```sh
+   node scripts/listening-test.mjs build \
+     --sentences examples/listening-test/emotions.sentences.json \
+     --out examples/listening-test
+   ```
+
+   See [docs/listening-tests/emotions.md](../../docs/listening-tests/emotions.md).
 
 5. **Analyse the answers.**
 
@@ -91,7 +114,8 @@ details; `listener` is 8 random hexadecimal characters.
    it as it is.
 5. Press **Start** and follow the instruction above each trial. **Next**
    becomes available once the trial is complete: in a MUSHRA trial you have
-   played every version and rated one of them 100.
+   played every version and rated one of them 100; in a choice trial you
+   have played the sentence and picked an answer.
 6. At the end press **Download results** and send the downloaded file to the
    person who asked you to take the test.
 
@@ -110,21 +134,30 @@ details; `listener` is 8 random hexadecimal characters.
 - **Intelligibility**: the WER of each answer against the text (the same
   `errorRate` as `voice-simulator compare`), per trial and as a mean over
   listeners with a bootstrap interval.
+- **Choice**: per answer (e.g. per emotion) and per language the share of
+  correct answers with its Wilson 95 % interval and p, the chance of at
+  least as many correct answers by guessing among the choices
+  (`binomialTailP(correct, total, p)`, p = 1 / number of choices), the mean
+  over answers, and the confusion matrix (rows: the answer, columns: what
+  the listeners picked). Like the intelligibility trials, it reads the
+  trials from `config.js` (`--config`, default
+  `examples/listening-test/config.js`).
 
 With fewer than 8 listeners the report says that its numbers support no
 claim.
 
 ## Files
 
-| File                     | What it is                                                     |
-| ------------------------ | -------------------------------------------------------------- |
-| `index.html`             | The page; loads `config.js` and `app.js` with plain `<script>` |
-| `app.js`                 | The test (a classic script; functions on `ListeningTest`)      |
-| `styles.css`             | Layout, light and dark                                         |
-| `config.example.js`      | A hand-written configuration showing every field               |
-| `sentences.example.json` | Input of `build`: one trial of each kind                       |
-| `sus.en.json`            | Frames and word lists of `sus` (CC0)                           |
-| `config.js`, `stimuli/`  | Written by `build`; not committed                              |
+| File                      | What it is                                                     |
+| ------------------------- | -------------------------------------------------------------- |
+| `index.html`              | The page; loads `config.js` and `app.js` with plain `<script>` |
+| `app.js`                  | The test (a classic script; functions on `ListeningTest`)      |
+| `styles.css`              | Layout, light and dark                                         |
+| `config.example.js`       | A hand-written configuration showing every field               |
+| `sentences.example.json`  | Input of `build`: one trial of each kind                       |
+| `emotions.sentences.json` | Input of `build`: the emotion study of issue 55 (48 trials)    |
+| `sus.en.json`             | Frames and word lists of `sus` (CC0)                           |
+| `config.js`, `stimuli/`   | Written by `build`; not committed                              |
 
 The page sets `Content-Security-Policy: connect-src 'none'`, so it cannot
 send anything even by mistake, and `app.js` has no network code. Its random

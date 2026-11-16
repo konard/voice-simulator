@@ -316,4 +316,25 @@ describe('CLI engines', () => {
     const json = await cli([...argv, '--json', '--engine', 'js']);
     expect(JSON.parse(json.stdout.join('\n')).engine).toBe('js');
   });
+
+  it('benchmark --quick --json', async () => {
+    // The silent load-time benchmark of the app (issue 28).
+    const json = await cli([
+      'benchmark',
+      '--quick',
+      '--json',
+      '--engine',
+      'js',
+    ]);
+    expect(json.code).toBe(0);
+    const result = JSON.parse(json.stdout.join('\n'));
+    expect(Number.isInteger(result.level)).toBe(true);
+    expect(result.cpuSeconds).toBeLessThanOrEqual(1.3);
+    expect(result.engine.name).toBe('js');
+    const text = await cli(['benchmark', '--quick', '--engine', 'js']);
+    expect(text.code).toBe(0);
+    expect(text.stdout[0]).toBe('engine: js');
+    expect(text.stdout.at(-2)).toMatch(/^selected: /);
+    expect(text.stdout.at(-1)).toMatch(/^cpu: \d+\.\d\d s$/);
+  });
 });

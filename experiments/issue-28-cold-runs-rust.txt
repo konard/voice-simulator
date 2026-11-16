@@ -1,0 +1,6 @@
+rust cpu 0.859 s wall 0.895 s longest 542 ms level medium measured telephone,narrowband,wideband,minimal,low,medium,high
+rust cpu 0.874 s wall 0.916 s longest 537 ms level medium measured telephone,narrowband,wideband,minimal,low,medium,high
+rust cpu 0.831 s wall 0.882 s longest 520 ms level medium measured telephone,narrowband,wideband,minimal,low,medium,high
+rust cpu 0.930 s wall 0.966 s longest 557 ms level medium measured telephone,narrowband,wideband,minimal,low,medium,high
+rust cpu 0.963 s wall 1.010 s longest 604 ms level medium measured telephone,narrowband,wideband,minimal,low,medium,high
+rust cpu 0.917 s wall 1.000 s longest 544 ms level medium measured telephone,narrowband,wideband,minimal,low,medium,high

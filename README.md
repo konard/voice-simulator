@@ -37,8 +37,8 @@ a pressure wave travelling through the 3D shape of a parametric low-poly head
   effort, phonation, emotion and sounds), inline tags such as
   `[whisper]Hello[/whisper]` or `[pause 0.5]` with `markup: true`, and
   ExtIPA/VoQS marks in IPA (`{W həˈloʊ W} ˈwɝld .`, `(.)`, `⸨laugh⸩`, `ˈˈ`).
-  Rate, pitch, range, level, effort, phonation types, emphasis, tunes,
-  pauses and sounds are heard; the rest is carried in `plan.modes` ([docs/markup.md](docs/markup.md)).
+  Rate, pitch, range, level, effort, phonation types, whisper, emotions,
+  emphasis, tunes, pauses and sounds are heard ([docs/markup.md](docs/markup.md)).
 - **Paralinguistic sounds** (issue 56): `[laugh]`, `[inhale]`, `[exhale]`,
   `[sigh]`, `[cough]`, `[throat]`, `[filler]`, `[um]` and `[click]` (also
   `<vs:sound name="laugh" duration="1.2s"/>`, `⸨laugh:1.2⸩`, `ǀ ǃ ǁ ʘ`) are
@@ -64,6 +64,10 @@ a pressure wave travelling through the 3D shape of a parametric low-poly head
   of a statement, and `cpp()` and `jitterPercent()` measure the result
   ([docs/markup.md](docs/markup.md#phonation-types)). **Whisper** (issue 53,
   `[whisper]`, `{W … W}`, `ạ`, `ḁ`): glottal noise, 25 dB quieter, 1.3× as long ([Whisper](docs/markup.md#whisper)).
+- **Emotions and attitudes** (issue 55): `[angry]`, `[happy 0.5]`, `[sad]`, `[afraid]`, `[bored]`, `[surprised]`, `[disgusted]`, `[tender]`, `[sarcastic]`, `[confident]`, `[hesitant]` and `<vs:emotion arousal="0.5" valence="-0.3">`
+  set pitch, range, rate, effort, phonation, pauses, vowel precision, a glide, a final rise and a smile (`EMOTION_PRESETS`, `emotionChanges()`).
+  The six rows from Burkhardt and Sendlmeier (2000) are `verified`; an inner tag wins (`[angry][soft]…` stays soft). Rule-based emotion is
+  recognisable but less clear than an actor (50–80 % against 72–91 %; [Emotions](docs/markup.md#emotions-and-attitudes)).
 - **Intonation per language** (issue 51): statements fall, yes/no
   questions rise, wh-questions fall, `Tea or coffee?` rises on the first
   item and falls on the second (`ˈti ↗ | ˈɔɹ ˈkɑfi ↘ ?`), list items and
@@ -371,6 +375,7 @@ import {
   addLexicon,
   decodeAudio,
   encodeAudio,
+  emotionChanges,
   encodeWav,
   englishDictionarySize,
   matchVoice,
@@ -396,6 +401,7 @@ textToIpa('I can do it', { lang: 'en', weakForms: false }).ipa; // 'ˈaɪ ˈkæn
 // Speech markup (docs/markup.md): SSML is read by itself, inline tags on request.
 textToIpa('<speak>Hello <emphasis>world</emphasis>.</speak>').ipa; // 'həˈloʊ ˈˈwɝld .'
 textToIpa('[whisper]Hello[/whisper] world.', { markup: true }).ipa; // '{W həˈloʊ W} ˈwɝld .'
+emotionChanges({ name: 'angry', intensity: 0.5 }).pitch; // 3.5 semitones; emotions change the voice, not the IPA
 // Sounds (issue 56): written fillers and laughter are read as sounds.
 textToIpa('Well [laugh] um, hahaha.', { markup: true }).ipa; // 'ˈwɛl ⸨laugh⸩ ⸨um⸩ , ⸨laugh:0.6⸩ .'
 synthesize('One. Two three.', { breaths: true }).timeline.sounds; // [{ name: 'inhale', start, end }]
@@ -490,6 +496,7 @@ npx voice-simulator ipa "Where are you going?"   # ˈwɛɹ ɚ ju ˈɡoʊɪŋ ↘
 npx voice-simulator say "<speak>Wait<break time=\"1s\"/>now.</speak>" -o wait.wav
 npx voice-simulator say --markup "[shout]Hey![/shout] [soft]Quiet.[/soft]" -o hey.wav
 npx voice-simulator say --markup "[whisper]Hello.[/whisper]" --out w.wav
+npx voice-simulator say --markup "[sad]I will see you on Monday.[/sad]" -o sad.wav
 npx voice-simulator say "Hello world." --loudness=-23 -o broadcast.wav  # EBU R 128
 npx voice-simulator timeline "Hello world, how are you?"   # word and syllable times
 npx voice-simulator visemes "Hello world" -f vrm --fps 30 -o hello.json  # face animation
@@ -703,11 +710,11 @@ as those of `compare` do not replace it.
 
 [examples/listening-test/](examples/listening-test/README.md) is a page that
 runs from a folder on disk, with no server and no network
-(`Content-Security-Policy: connect-src 'none'`). It has three kinds of
+(`Content-Security-Policy: connect-src 'none'`). It has four kinds of
 trial: MUSHRA (ITU-R BS.1534-3: rate versions of a sentence from 0 to 100
 against a reference, with a hidden reference and 3.5 kHz and 7 kHz
-anchors), ABX (is X the same as A or as B?) and intelligibility (type what
-you heard; scored by the word error rate).
+anchors), ABX (is X the same as A or as B?), intelligibility (type what
+you heard; scored by the word error rate) and choice (name the emotion you hear, issue 55; [emotions](docs/listening-tests/emotions.md)).
 
 ```bash
 node scripts/listening-test.mjs build --sentences examples/listening-test/sentences.example.json --out examples/listening-test
@@ -990,8 +997,8 @@ incisors, the piriform fossae, the vallecula and transverse modes well
 above 5 kHz. It renders about 12 times slower than real time on a desktop
 CPU. The web app starts in Auto: it benchmarks the tiers on the CPU, then
 the 3D tiers above the CPU's choice on WebGPU, and uses the most detailed
-tier whose load stays under 80%, so a fast GPU gets the 3D tiers and a
-laptop or phone the real-time waveguide. Every tier stays in the menu;
+tier whose load stays under 80%, so a fast GPU gets the 3D tiers and a laptop or phone the real-time waveguide.
+The benchmark is silent, takes at most 1 s of CPU time in the worker and is cached per device ([docs/device-benchmark.md](docs/device-benchmark.md)). Every tier stays in the menu;
 when a slower one is chosen, the app renders ahead: it shows the progress
 and starts playback as soon as the rest of the utterance is predicted to be
 ready before the player reaches it, so the voice never breaks up. Choose
@@ -1013,13 +1020,12 @@ comparison and the word `həˈloʊ` at tiers `high` and `ultra` on Linux through
 Mesa's software adapter. The last report is
 [docs/reports/gpu-solver.md](docs/reports/gpu-solver.md).
 
-The web app (`benchmarkAudioTiersAsync`) and `voice-simulator benchmark`
+The web app (`benchmarkDevice`) and `voice-simulator benchmark`
 pick the most detailed tier whose measured load stays under 80%. On a
 machine with WebGPU, the GPU is only tried for the 3D tiers above the CPU's
 choice, so a slow integrated or software adapter never lowers it. The benchmark does not run tiers whose
 load, predicted from the cheaper tier, is far above the target, and it stops
-measuring a tier as soon as it is clearly too slow; the app remembers the
-result per device. `voice-simulator benchmark` first renders the cheap tiers
+measuring a tier as soon as it is clearly too slow; the app remembers the result per device. `--quick` runs the app's benchmark and prints its CPU time. `voice-simulator benchmark` first renders the cheap tiers
 for 0.5 s so the just-in-time compiler is warm, then reports the median of
 `--repeats` (default 5) measurements of `--seconds` (default 0.3) per tier. In the first 40-300 ms of each utterance an
 `OverloadDetector` checks that the tier keeps up with real time and, if not,
@@ -1452,14 +1458,7 @@ Customize ESLint in `eslint.config.js`. Current configuration:
 
 ### Prettier Options
 
-Configured in `.prettierrc`:
-
-- Single quotes
-- Semicolons
-- 2-space indentation
-- 80-character line width
-- ES5 trailing commas
-- LF line endings
+Configured in `.prettierrc`: single quotes, semicolons, 2-space indentation, 80-character line width, ES5 trailing commas and LF line endings.
 
 ## Scripts Reference
 

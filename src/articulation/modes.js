@@ -22,7 +22,10 @@
  *   `duration` or the length of its recipe (`SOUNDS`, ./sounds.js) divided
  *   by the rate, and obeys the mode like speech (issue 56).
  *
- * `emotion` is carried in the plan and not yet heard.
+ * `phonation` (with `whisper`) is realised by src/articulation/phonation.js
+ * and src/articulation/whisper.js, and `emotion` by
+ * src/articulation/emotion-plan.js, which changes the other fields of the
+ * span before this file reads them.
  */
 
 import { MODE_DEFAULTS, createMode, modeKey } from '../markup/modes.js';

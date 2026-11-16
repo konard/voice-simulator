@@ -118,6 +118,16 @@ export {
   isSsml,
   parseMarkup,
 } from './markup/index.js';
+// Emotions and attitudes (issue 55)
+export {
+  EMOTIONS as EMOTION_PRESETS,
+  GLIDE_LIMIT,
+  PRECISION,
+  SMILE,
+  emotionChanges,
+  isNeutralEmotion,
+} from './articulation/emotion.js';
+export { RISE_TIME, realiseEmotion } from './articulation/emotion-plan.js';
 export { approachTargets, DYNAMICS_ORDER } from './articulation/dynamics.js';
 export {
   approachTargets as approachToneTargets,
@@ -360,14 +370,25 @@ export {
   chooseTier,
   chooseTierAsync,
   chooseTierWithGpu,
+  chooseGpuTier,
   fallbackLevel,
 } from './perf/lod.js';
 export {
+  BENCHMARK_IPA,
+  benchmarkRenderer,
   measureAudioTier,
   measureAudioTierAsync,
   benchmarkAudioTiers,
   benchmarkAudioTiersAsync,
 } from './perf/benchmark.js';
+// Silent device benchmark (issue 28)
+export {
+  BENCHMARK_VERSION,
+  batteryLevelCap,
+  benchmarkDevice,
+  chooseLevel,
+  startLevel,
+} from './perf/device-benchmark.js';
 
 // Audio formats (issue 5)
 export { encodeAiff, decodeAiff } from './audio/aiff.js';

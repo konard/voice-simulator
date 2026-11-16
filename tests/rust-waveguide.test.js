@@ -339,7 +339,9 @@ describe('Rust renderer (issue 22)', () => {
       expect(measured < 1e-4).toBe(true);
     });
   }
+});
 
+describe('Rust renderer with markup (issues 52, 54 and 55)', () => {
   it('renders vocal effort like VoiceRenderer (issue 52)', async () => {
     const engine = await loadRustEngine();
     const { plan, renderOptions } = prepareUtterance(
@@ -371,6 +373,26 @@ describe('Rust renderer (issue 22)', () => {
     expect(measured < 1e-4).toBe(true);
   });
 
+  it('renders emotions like VoiceRenderer (issue 55)', async () => {
+    const engine = await loadRustEngine();
+    const { plan, renderOptions } = prepareUtterance(
+      '[angry]Hello[/angry] [sad]there,[/sad] [afraid]my[/afraid] [happy]friend.[/happy]',
+      { tier: 'minimal', seed: 1, markup: true, headroom: 20 }
+    );
+    for (const channel of ['tension', 'breath', 'falsetto', 'harsh']) {
+      expect(Math.max(...plan.channels[channel].map(Math.abs)) > 0.2).toBe(
+        true
+      );
+    }
+    const expected = renderPlan(plan, { ...renderOptions, engine: 'js' });
+    const actual = renderPlanRust(engine, plan, renderOptions);
+    const measured = maxDifference(actual, expected);
+    globalThis.console.log(`render (emotion) max abs diff ${measured}`);
+    expect(measured < 1e-4).toBe(true);
+  });
+});
+
+describe('Rust renderer in a room and with a head (issue 22)', () => {
   it('renders a microphone in a room like VoiceRenderer', async () => {
     const engine = await loadRustEngine();
     const { plan, renderOptions } = prepareUtterance('Hello world.', {

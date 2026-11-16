@@ -23,6 +23,7 @@ const cases = [
   ['Hello world.', { tier: 'medium', markup: true }],
   ['[soft]Hello[/soft] [loud]world[/loud].', { tier: 'medium', markup: true }],
   ['[whisper]Hello[/whisper] world.', { tier: 'medium', markup: true }],
+  ['[sad]The train leaves at seven.[/sad]', { tier: 'medium', markup: true }],
   ['ˈma̤ma ˈma̰ma', { tier: 'medium', ipa: true }],
   ['ˈapa ˈaza ˈhi', { tier: 'medium', ipa: true }],
   ['Привет, мир. Это хорошо.', { tier: 'low', lang: 'ru' }],

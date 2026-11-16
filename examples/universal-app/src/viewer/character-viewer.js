@@ -89,6 +89,12 @@ export class CharacterViewer {
     this.camera = new PerspectiveCamera(30, 1, 0.01, 1000);
     this.controls = new OrbitControls(this.camera, this.renderer.domElement);
     this.controls.enableDamping = true;
+    // Draw only when something changed (like HeadViewer): an idle page that
+    // draws every frame keeps the main thread and the GPU busy.
+    this.dirty = true;
+    this.controls.addEventListener('change', () => {
+      this.dirty = true;
+    });
     this.scene.add(new AmbientLight(0xffffff, 0.45));
     this.scene.add(new HemisphereLight(0xfff4e6, 0x334455, 1.1));
     const key = new DirectionalLight(0xffffff, 1.7);
@@ -110,6 +116,7 @@ export class CharacterViewer {
     this.renderer.setSize(clientWidth, clientHeight, false);
     this.camera.aspect = clientWidth / clientHeight;
     this.camera.updateProjectionMatrix();
+    this.dirty = true;
   }
 
   /**
@@ -132,6 +139,7 @@ export class CharacterViewer {
     this.vrm = vrm;
     this.binding = bindRig(names);
     this.frame(root);
+    this.dirty = true;
     this.info = {
       name,
       format: vrm ? 'vrm' : this.binding.format,
@@ -189,6 +197,7 @@ export class CharacterViewer {
    * @param {object} head Head configuration.
    */
   update(state, head) {
+    this.dirty = true;
     const rig = faceRig(state, head);
     for (const mesh of this.meshes) {
       mesh.morphTargetInfluences.fill(0);
@@ -215,9 +224,15 @@ export class CharacterViewer {
     }
   }
 
+  /** Render if anything changed; returns whether a frame was drawn. */
   render() {
     this.controls.update();
+    if (!this.dirty) {
+      return false;
+    }
+    this.dirty = false;
     this.renderer.render(this.scene, this.camera);
+    return true;
   }
 
   dispose() {

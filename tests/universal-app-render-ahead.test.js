@@ -173,7 +173,12 @@ describe('voice engine render ahead', () => {
 describe('app defaults', () => {
   it('picks the tier for the device and shows the render-ahead wait', () => {
     const app = readFileSync('examples/universal-app/src/App.js', 'utf8');
-    expect(app).toContain("tier: 'auto',");
+    // 'auto' unless a tier name is stored (issue 28).
+    expect(app).toContain('tier: readTierSetting(),');
+    expect(app).toContain('audioTierIndex(speech.tier)');
+    expect(app).toContain('measureAgain()');
+    // The benchmark runs silently: no HUD note while it measures.
+    expect(app).not.toContain('benchmarking');
     const simulator = readFileSync(
       'examples/universal-app/src/engine/use-simulator.js',
       'utf8'

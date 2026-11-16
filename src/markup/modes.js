@@ -22,6 +22,8 @@
  * semitones, range 0 to 4, gain -120 to 12 dB, effort 0 to 1.
  */
 
+import { EMOTIONS as EMOTION_PRESETS } from '../articulation/emotion.js';
+
 /** Phonation values: 0..1, `tension` -1 (lax) .. 1 (pressed). */
 const PHONATION_DEFAULTS = Object.freeze({
   breathy: 0,
@@ -101,28 +103,23 @@ export const LOMBARD_EFFORT = EFFORT_LEVELS.loud;
 /** Speech rate of the tempo names. */
 export const RATE_LEVELS = Object.freeze({ fast: 1.3, slow: 0.75 });
 
-/** Default degree of a phonation or emotion without one. */
+/** Default degree of a phonation without one. */
 export const DEFAULT_DEGREE = 0.67;
 
 /**
  * Emotion names with their place in arousal, valence and dominance
- * (-1..1) at full intensity: rounded positions from the PAD studies of
- * Russell and Mehrabian (1977), table 3, and Mehrabian (1996).
+ * (-1..1) at full intensity: the coordinates of the presets of
+ * src/articulation/emotion.js (Schröder et al. 2001 for happy, angry,
+ * afraid and sad; own choices for the others).
  */
-export const EMOTIONS = Object.freeze({
-  neutral: Object.freeze([0, 0, 0]),
-  happy: Object.freeze([0.5, 0.8, 0.4]),
-  sad: Object.freeze([-0.4, -0.6, -0.3]),
-  angry: Object.freeze([0.6, -0.5, 0.3]),
-  afraid: Object.freeze([0.6, -0.6, -0.4]),
-  surprised: Object.freeze([0.7, 0.4, -0.1]),
-  disgusted: Object.freeze([0.3, -0.6, 0.3]),
-  tender: Object.freeze([-0.2, 0.6, -0.1]),
-  bored: Object.freeze([-0.6, -0.4, -0.2]),
-  sarcastic: Object.freeze([0.2, -0.3, 0.4]),
-  confident: Object.freeze([0.2, 0.5, 0.6]),
-  hesitant: Object.freeze([-0.2, -0.1, -0.5]),
-});
+export const EMOTIONS = Object.freeze(
+  Object.fromEntries(
+    Object.entries(EMOTION_PRESETS).map(([name, row]) => [
+      name,
+      Object.freeze([row.arousal, row.valence, row.dominance]),
+    ])
+  )
+);
 
 /** Degrees of the IPA degree digits 1, 2 (or none) and 3. */
 export const DEGREES = Object.freeze([0.33, 0.67, 1]);
@@ -191,14 +188,13 @@ export function createMode(fields = {}) {
 }
 
 /**
- * The emotion of a name at an intensity, or of explicit arousal, valence
- * and dominance.
+ * The emotion of a name at an intensity (1 when not given), or of explicit
+ * arousal, valence and dominance.
  * @param {{name?: string, intensity?: number, arousal?: number, valence?: number, dominance?: number}} spec
  */
 export function emotionOf(spec) {
   const name = spec.name ?? 'neutral';
-  const intensity =
-    spec.intensity ?? (spec.name && name !== 'neutral' ? DEFAULT_DEGREE : 0);
+  const intensity = spec.intensity ?? (spec.name && name !== 'neutral' ? 1 : 0);
   const [arousal, valence, dominance] = Object.hasOwn(EMOTIONS, name)
     ? EMOTIONS[name]
     : EMOTIONS.neutral;
