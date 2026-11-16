@@ -152,7 +152,7 @@ export function splitGuessWords(words) {
 }
 
 /**
- * The guess table: for every word ending of 2 to 4 letters shared by at
+ * The guess table: for every word ending of 2 to `longest` (6) letters shared by at
  * least `minWords` words, the stress counted from the end (0 the last
  * vowel), kept when at least `agree` of the words have it. Endings whose
  * guess equals the guess of their longest shorter ending (or of the
@@ -160,11 +160,14 @@ export function splitGuessWords(words) {
  * @param {[string, number][]} words word and stressed vowel
  * @returns {string[]} element i lists the endings with stress i from the end
  */
-export function russianGuessTable(words, { minWords = 10, agree = 0.75 } = {}) {
+export function russianGuessTable(
+  words,
+  { minWords = 5, agree = 0.6, longest = 6 } = {}
+) {
   const counts = new Map();
   for (const [word, stress] of words) {
     const fromEnd = vowelCount(word) - 1 - stress;
-    for (let length = 2; length <= 4 && length < word.length; length++) {
+    for (let length = 2; length <= longest && length < word.length; length++) {
       const ending = word.slice(-length);
       const row = counts.get(ending) ?? new Map();
       row.set(fromEnd, (row.get(fromEnd) ?? 0) + 1);

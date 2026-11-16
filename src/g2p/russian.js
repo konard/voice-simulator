@@ -225,53 +225,61 @@ function formStress(letters, vowels) {
 /**
  * The stressed vowel from the longest stem of `RU_STEMS` followed by an
  * ending of `RUSSIAN_ENDINGS`: a vowel of the stem, or the first vowel of
- * the ending (the last of the stem when the ending has none).
+ * the ending (the last of the stem when the ending has none); with the
+ * length of the stem as `{stress, stem}`.
  */
 function stemStress(letters) {
   const stems = lexiconFor('ru', 'stems');
   for (let cut = letters.length; cut > 0; cut--) {
     const ending = letters.slice(cut);
-    const letter = ENDINGS.has(ending)
+    // A stem that ends in a vowel takes a real ending (`встреч+а|ть` does
+    // not read `встреча`).
+    const vowelStem = !ending && VOWEL_LETTERS.includes(letters[cut - 1]);
+    const letter = ENDINGS.has(ending) && !vowelStem
       ? stems.lookup(letters.slice(0, cut))?.[0]
       : undefined;
     if (letter) {
       const before = countVowels(letters.slice(0, cut));
       if (letter !== '+') {
-        return letter.charCodeAt(0) - 97;
+        return { stress: letter.charCodeAt(0) - 97, stem: cut };
       }
-      return countVowels(ending) > 0 ? before : before - 1;
+      return {
+        stress: countVowels(ending) > 0 ? before : before - 1,
+        stem: cut,
+      };
     }
   }
   return undefined;
 }
 
-/** Stress from the lexicon: `{stress, source}` or undefined. */
-function lexiconStress(letters, vowels) {
+/**
+ * Stress from the lexicon: `{stress, source}` or undefined; with
+ * `formsOnly`, from the whole forms alone.
+ */
+function lexiconStress(letters, vowels, formsOnly = false) {
   const form = formStress(letters, vowels);
   if (form !== undefined) {
     return { stress: form, source: 'dictionary' };
   }
-  const stem = stemStress(letters);
-  return stem === undefined
-    ? undefined
-    : { stress: stem, source: 'morphology' };
+  const stem = formsOnly ? undefined : stemStress(letters);
+  return stem === undefined ? undefined : { ...stem, source: 'morphology' };
 }
 
 /**
  * A word written with `е` for `ё`: the one spelling with a `ё` that the
  * lexicon stresses on that `ё` (`еще` → `ещё`), or undefined when there
- * is none or more than one.
+ * is none or more than one. With `formsOnly`, only whole forms count.
  */
-function restoreYo(letters, vowels) {
+function restoreYo(letters, vowels, formsOnly = false) {
   const found = [];
   [...letters].forEach((letter, index) => {
     if (letter !== 'е') {
       return;
     }
     const candidate = `${letters.slice(0, index)}ё${letters.slice(index + 1)}`;
-    const known = lexiconStress(candidate, vowels);
+    const known = lexiconStress(candidate, vowels, formsOnly);
     if (known?.stress === countVowels(letters.slice(0, index))) {
-      found.push({ letters: candidate, ...known });
+      found.push({ letters: candidate, yo: index, ...known });
     }
   });
   return found.length === 1 ? found[0] : undefined;
@@ -298,7 +306,7 @@ function guessEndings() {
 
 /**
  * Guess the stressed vowel of an unknown word from the table `RU_GUESS`
- * that the build derives from the lexicon (endings of 2 to 4 letters, the
+ * that the build derives from the lexicon (endings of 2 to 6 letters, the
  * longest wins); without a match, the vowel before the last.
  * @param {string} word lower case
  * @param {number} [vowels] the number of vowels of `word`
@@ -306,7 +314,7 @@ function guessEndings() {
  */
 export function guessRussianStress(word, vowels = countVowels(word)) {
   const table = guessEndings();
-  for (let length = Math.min(4, word.length - 1); length >= 2; length--) {
+  for (let length = Math.min(6, word.length - 1); length >= 2; length--) {
     const fromEnd = table.get(word.slice(-length));
     if (fromEnd !== undefined && fromEnd < vowels) {
       return vowels - 1 - fromEnd;
@@ -332,7 +340,9 @@ function readMarks(rawWord) {
       letters += char;
       vowels += VOWEL_LETTERS.includes(char) ? 1 : 0;
     } else {
+      // NFD splits й into и and a breve: the и was counted as a vowel.
       letters = `${letters.slice(0, -1)}й`;
+      vowels--;
     }
   }
   return { letters, stress, vowels };
@@ -385,9 +395,22 @@ export function findRussianStress(rawWord, context = {}) {
     const chosen = homographStress(homograph);
     return result(chosen.letters, chosen.stress, 'dictionary');
   }
+  // A whole form first, then the same form with ё (`живет` → `живёт`,
+  // before the stem `жив` with the ending `ет`), then the longer of the
+  // stems with and without ё; on a tie the ё wins when it is in the stem
+  // (`зеленый`: `зелён|ый`, not `з+елен|ь`; `борьбе`: not `борьб|ё`).
+  const yo = letters.includes('е');
+  const stem = lexiconStress(letters, vowels);
+  const yoStem = yo ? restoreYo(letters, vowels) : undefined;
+  const yoWins =
+    yoStem &&
+    (!stem ||
+      yoStem.stem > stem.stem ||
+      (yoStem.stem === stem.stem && yoStem.yo < yoStem.stem));
   const known =
-    lexiconStress(letters, vowels) ??
-    (letters.includes('е') ? restoreYo(letters, vowels) : undefined);
+    lexiconStress(letters, vowels, true) ??
+    (yo ? restoreYo(letters, vowels, true) : undefined) ??
+    (yoWins ? yoStem : stem);
   if (known) {
     return result(known.letters ?? letters, known.stress, known.source);
   }
