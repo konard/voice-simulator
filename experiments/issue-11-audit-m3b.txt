@@ -47,13 +47,16 @@ filler ru ха-ха: "xa xa"
 filler zh 嗯: ""
 filler zh 呃: "ɤ˥˩"
 filler hi अं: "ə̃"
-accent languages: ["en"]
+accent languages: ["en","ru","hi","zh"]
 accent en en-GB water: {"ipa":"ˈwɔːtə","accent":"en-GB"}
 accent en en-IN think of the water: {"ipa":"ˈt̪ʰɪŋk əʋ d̪ə ˈʋɔʈəɾ","accent":"en-IN"}
-accent ru ru-south город молоко: {"ipa":"ˈɡorət mɐˈɫokə","accent":null}
-accent zh zh-TW 是不是: {"ipa":"ʂɻ̩˥˩ pu ʂɻ̩˥˩","accent":null}
-accent hi hi-east ज़रा फिर: {"ipa":"zəɾaː pʰɪɾ","accent":null}
+accent ru ru-south город молоко: "RangeError: Unknown accent \"ru-south\" for ru (use ru-RU, ru-x-north, ru-x-south, ru-x-en, ru-x-hi, ru-x-zh)"
+accent zh zh-TW 是不是: {"ipa":"sɹ̩˥˩ pu sɹ̩˥˩","accent":"zh-TW"}
+accent hi hi-east ज़रा फिर: "RangeError: Unknown accent \"hi-east\" for hi (use hi-IN, hi-x-east, hi-x-en, hi-x-ru, hi-x-zh)"
 accent en ru think of the water: {"ipa":"ˈθɪŋk əv ðə ˈwɔɾɚ","accent":"en-US"}
+accent ru ru-x-south город молоко: {"ipa":"ˈɣorət mɐˈɫokə","accent":"ru-x-south"}
+accent hi hi-x-east ज़रा फिर: {"ipa":"d͡ʒəɾaː pʰɪɾ","accent":"hi-x-east"}
+accent en en-x-ru think of the water: {"ipa":"ˈsʲinɡk ˈaf zə ˈvorər","accent":"en-x-ru"}
 vowels ru Это мама.: {"ipa":"ˈɛtə ˈmamə .","f0":[[141,132],[119,119],[131,123],[108,93]]}
 vowels ru Это мама?: {"ipa":"ˈɛtə ˈmamə ?","f0":[[141,132],[119,119],[131,124],[119,144]]}
 vowels en Tea or coffee?: {"ipa":"ˈti ɔɹ ˈkɑfi ?","f0":[[142,129],[122,118],[132,123],[117,144]]}
