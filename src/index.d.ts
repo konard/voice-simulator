@@ -3684,9 +3684,10 @@ export interface RussianStressContext {
  * The stress of a Russian word (issue 48), in this order: a typed mark
  * (`+` before the vowel or U+0301 after it), a typed `ё`, a homograph chosen
  * by the context (`RUSSIAN_HOMOGRAPHS`), a whole form (lexicon part
- * `forms`), a stem (part `stems`) with an ending of `RUSSIAN_ENDINGS`, the
- * same with one `е` read as `ё` when exactly one such spelling is known,
- * and the guess of `guessRussianStress()`. `letters` has the restored `ё`;
+ * `forms`, also with one `е` read as `ё` when exactly one such spelling is
+ * known), the longer of a stem (part `stems`) with an ending of
+ * `RUSSIAN_ENDINGS` and such a stem with `ё`, and the guess of
+ * `guessRussianStress()`. `letters` has the restored `ё`;
  * `stress` is the index of the stressed vowel.
  */
 export declare function findRussianStress(

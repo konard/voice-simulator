@@ -40,17 +40,17 @@ highlight en: [{"text":"It","ipa":"ɪt","syllables":["It"]},{"text":"costs","ipa
 highlight ru: [{"text":"У","ipa":"ʊ","syllables":["У"]},{"text":"меня","ipa":"mʲɪˈnʲa","syllables":["ме","ня"]},{"text":"25","spoken":"двадцать пять","ipa":"ˈdvat͡sətʲ pʲatʲ","syllables":["два","дцать","пять"]},{"text":"яблок","ipa":"ˈjabɫək","syllables":["я","блок"]}]
 highlight zh: [{"text":"我","ipa":"wo˧˥","syllables":["我"]},{"text":"有","ipa":"joʊ˨˩","syllables":["有"]},{"text":"25","spoken":"二十五","ipa":"ɚ˥˩ ʂɻ̩˧˥ u˨˩","syllables":["二","十","五"]},{"text":"个","ipa":"kɤ˥˩","syllables":["个"]}]
 highlight hi: [{"text":"मेरे","ipa":"meːɾeː","syllables":["मे","रे"]},{"text":"पास","ipa":"paːs","syllables":["पास"]},{"text":"25","spoken":"पच्चीस","ipa":"pət͡ʃt͡ʃiːs","syllables":["प","च्चीस"]},{"text":"सेब","ipa":"seːb","syllables":["सेब"]},{"text":"हैं","ipa":"ɦɛ̃ː","syllables":["हैं"]}]
-lexicon sizes: {"englishWords":20042,"englishVariants":3233,"russianStressForms":3691,"russianStressStems":6638,"hindiWords":230,"chineseCharacters":8105,"chinesePolyphones":623,"chinesePhrases":2000}
+lexicon sizes: {"englishWords":20042,"englishVariants":3233,"russianStressForms":3691,"russianStressStems":6639,"hindiWords":230,"chineseCharacters":8105,"chinesePolyphones":623,"chinesePhrases":2000}
 en: ["onomatopoeia=ˌɑnəˌmɑɾəˈpiə(dictionary)","quinoa=ˈkinwɑ(dictionary)","colonel=ˈkɝnəl(dictionary)","choir=ˈkwaɪɚ(dictionary)","yacht=ˈjɑt(dictionary)","Worcester=ˈwʊstɚ(dictionary)","segue=ˈsɛɡweɪ(dictionary)"]
 zh: ["重庆=ʈ͡ʂʰʊŋ˧˥ t͡ɕʰiŋ˥˩(dictionary)","还钱=xwan˧˥ t͡ɕʰjɛn˧˥(dictionary)","得到=tɤ˧˥ tɑʊ˥˩(dictionary)","首都=ʂoʊ˨˩ tu˥(dictionary)","行为=ɕiŋ˧˥ weɪ˧˥(dictionary)","教书=t͡ɕjɑʊ˥ ʂu˥(dictionary)","干净=kan˥ t͡ɕiŋ˥˩(dictionary)","少年=ʂɑʊ˥˩ njɛn˧˥(dictionary)","大夫=taɪ˥˩ fu(dictionary)","数=ʂu˥˩(dictionary)","数=ʂu˥˩(dictionary)","照相=ʈ͡ʂɑʊ˥˩ ɕjɑŋ˥˩(dictionary)","有空=joʊ˨˩ kʰʊŋ˥˩(dictionary)","着急=ʈ͡ʂɑʊ˧˥ t͡ɕi˧˥(dictionary)"]
 zh: ["种子=ʈ͡ʂʊŋ˨˩ t͡sɹ̩(dictionary)","种树=ʈ͡ʂʊŋ˥˩ ʂu˥˩(dictionary)","慢=man˥˩(dictionary)","慢=man˥˩(dictionary)","地=ti˥˩(dictionary)","漂亮=pʰjɑʊ˥˩ ljɑŋ(dictionary)","木头=mu˥˩ tʰoʊ(dictionary)","喜欢=ɕi˨˩ xwan(dictionary)","明白=miŋ˧˥ paɪ(dictionary)","看看=kʰan˥˩ kʰan(dictionary)","银行=in˧˥ xɑŋ˧˥(dictionary)","长大=ʈ͡ʂɑŋ˨˩ ta˥˩(dictionary)","觉得=t͡ɕɥɛ˧˥ tɤ(dictionary)"]
 hi: ["समझना=səməd͡ʒʱnaː(rules)","समझा=səmd͡ʒʱaː(rules)","धड़कने=d̪ʱəɽəkneː(rules)","धड़कनें=d̪ʱəɽkənẽː(dictionary)","लोकसभा=loːksəbʱaː(dictionary)","ज्ञान=ɡjaːn(dictionary)","यह=jəɦ(rules)","वह=ʋəɦ(rules)","बहन=bəɦən(rules)"]
-ru: ["замок=ˈzamək(dictionary)","замке=ˈzamkʲə(dictionary)","часов=t͡ɕɪˈsof(dictionary)","города=ɡərɐˈda(dictionary)","голова=ɡəɫɐˈva(dictionary)","головы=ɡəɫɐˈvɨ(dictionary)","молоко=mɐˈɫokə(dictionary)","хорошо=xərɐˈʂo(dictionary)","говорит=ɡəvɐˈrʲit(dictionary)","карандаш=kərɐnˈdaʂ(morphology)","телефон=tʲɪlʲɪˈfon(morphology)","магазин=məɡɐˈzʲin(morphology)","учительница=ʊt͡ɕɪtʲɪlʲˈnʲit͡sə(rules)","красивая=krɐˈsʲivəjə(morphology)","понимаю=pənʲɪˈmajʊ(morphology)","стоит=stɐˈit(dictionary)","стоит=stɐˈit(dictionary)","белки=ˈbʲeɫkʲɪ(dictionary)","большая=bɐlʲˈʂajə(dictionary)","большая=bɐlʲˈʂajə(dictionary)"]
+ru: ["замок=ˈzamək(dictionary)","замке=ˈzamkʲə(dictionary)","часов=t͡ɕɪˈsof(dictionary)","города=ɡərɐˈda(dictionary)","голова=ɡəɫɐˈva(dictionary)","головы=ɡəɫɐˈvɨ(dictionary)","молоко=mɐˈɫokə(dictionary)","хорошо=xərɐˈʂo(dictionary)","говорит=ɡəvɐˈrʲit(dictionary)","карандаш=kərɐnˈdaʂ(morphology)","телефон=tʲɪlʲɪˈfon(morphology)","магазин=məɡɐˈzʲin(morphology)","учительница=ʊˈt͡ɕitʲɪlʲnʲɪt͡sə(morphology)","красивая=krɐˈsʲivəjə(morphology)","понимаю=pənʲɪˈmajʊ(morphology)","стоит=stɐˈit(dictionary)","стоит=stɐˈit(dictionary)","белки=ˈbʲeɫkʲɪ(dictionary)","большая=bɐlʲˈʂajə(dictionary)","большая=bɐlʲˈʂajə(dictionary)"]
 ru marked: "zɐˈmok ˈzamək t͡ɕɪˈsof ɡərɐˈda"
 ru yo: "jɪˈɕːo jɪˈɕːo fsʲe fsʲo ˈjoɫkə ˈjoɫkə"
 ru Ключ от замка. Старый замок на горе.: "klʲut͡ɕ ɐd zɐmˈka . ˈstarɨj ˈzamək nə ɡɐˈrʲe ."
 ru Это стоит дорого. Он стоит там.: "ˈɛtə ˈstoɪt ˈdorəɡə . on stɐˈit tam ."
-ru 5 часов. 3 часа. Встреча в 17:00.: "pʲatʲ t͡ɕɪˈsof . trʲi t͡ɕɪˈsa . fstrʲɪˈt͡ɕa f sʲɪmˈnat͡sətʲ t͡ɕɪˈsof ."
+ru 5 часов. 3 часа. Встреча в 17:00.: "pʲatʲ t͡ɕɪˈsof . trʲi t͡ɕɪˈsa . ˈfstrʲet͡ɕə f sʲɪmˈnat͡sətʲ t͡ɕɪˈsof ."
 ru Мы пошли в лес. Они увидели дерево. Сегодня хорошая погода.: "mɨ pɐˈʂlʲi v lʲes . ɐˈnʲi ʊˈvʲidʲɪlʲɪ ˈdʲerʲɪvə . sʲɪˈvodʲnʲə xɐˈroʂəjə pɐˈɡodə ."
 ru Я купил телефон в магазине.: "ja kʊˈpʲiɫ tʲɪlʲɪˈfon v məɡɐˈzʲinʲə ."
 ru еще ее елка зеленый идет пришел: "jɪˈɕːo jɪˈjo ˈjoɫkə zʲɪˈlʲonɨj ɪˈdʲot prʲɪˈʂoɫ"
@@ -82,5 +82,5 @@ zh f0 奶奶: [[105,104],[103,97],[112,113],[119,122]]
 zh duration 奶奶: [97,145,50,76]
 zh f0 爸爸: [[155,117],[90,86]]
 zh duration 爸爸: [209,127]
-lexicon container: {"en":{"bytes":245667,"gzip":134885},"zh":{"bytes":58590,"gzip":38324},"hi":{"bytes":6268,"gzip":2880},"ru":{"bytes":59003,"gzip":30686}}
+lexicon container: {"en":{"bytes":245667,"gzip":134885},"zh":{"bytes":58590,"gzip":38324},"hi":{"bytes":6268,"gzip":2880},"ru":{"bytes":58979,"gzip":30696}}
 lexicon container start: ["ˈiðɚ","ˈaɪðɚ"]

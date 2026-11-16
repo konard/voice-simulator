@@ -27,11 +27,12 @@ a pressure wave travelling through the 3D shape of a parametric low-poly head
   English words from CMUdict (BSD-2-Clause) with every variant
   (`pronunciations('en', 'either')` is `ˈiðɚ`, `ˈaɪðɚ`), Chinese readings
   of 8 105 characters from Unihan (Unicode-3.0) and 2 000 words mined from
-  AISHELL-3 (Apache-2.0) or written by hand, and hand-written Hindi and
-  Russian exceptions. English words built from known words are read by
-  morphology (`congresswoman` ˈkɑŋɡɹəsˌwʊmən, source `morphology`). Your
-  own words win over the shipped ones (`lexicon` option, `addLexicon`,
-  CLI `--lexicon`); see [Pronunciation lexicons](#pronunciation-lexicons).
+  AISHELL-3 (Apache-2.0) or written by hand, Hindi exceptions and the
+  stress of 6 639 Russian stems and 3 691 forms with 67 homographs read by
+  context, ё restored and other words guessed by ending (issue 48). Words
+  built from known English words are read by morphology (`congresswoman`
+  ˈkɑŋɡɹəsˌwʊmən). Your own words win over the shipped ones (`lexicon`,
+  `addLexicon`, CLI `--lexicon`); see [lexicons](#pronunciation-lexicons).
 - **Speech markup**: an SSML subset (`<speak>`, `break`, `prosody`,
   `emphasis`, `say-as`, `phoneme`, `lang`, `sub` and `vs:` elements for
   effort, phonation, emotion and sounds), inline tags such as
@@ -518,7 +519,7 @@ whose licence allows use, change and redistribution are taken
 | English  | 20 042 words, every variant                     | CMUdict (BSD-2-Clause), Common Voice word counts (CC0-1.0), `en-extra.txt` |
 | Chinese  | 8 105 characters with all readings, 2 000 words | Unihan (Unicode-3.0), AISHELL-3 (Apache-2.0), `zh-phrases.txt`             |
 | Hindi    | 230 words the schwa rules read wrongly          | `hi-words.txt` (written for this project)                                  |
-| Russian  | 304 words with their stress                     | `ru-stress.txt` (written for this project)                                 |
+| Russian  | 6 639 stems and 3 691 forms with their stress   | `ru-stress.txt` (written for this project), Common Voice counts (CC0-1.0)  |
 
 English words that the morphology of
 [`src/g2p/english-morphology.js`](src/g2p/english-morphology.js) derives
