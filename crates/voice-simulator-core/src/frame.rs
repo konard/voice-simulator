@@ -42,12 +42,16 @@ pub const LUNG_PRESSURE: usize = 14;
 /// Flag: the shape has incisors (`shape.teeth` is not null), so the
 /// extra values hold the gap between them.
 pub const TEETH: usize = 15;
+/// Vocal effort `E` (dB, 0 normal; issue 52): `shape.glottis.effort`.
+pub const EFFORT: usize = 16;
+/// Offset on the tenseness (issue 52): `shape.glottis.tension`.
+pub const TENSION: usize = 17;
 /// Number of extra values after the areas, always [`EXTRA_VALUES`].
-pub const EXTRA: usize = 16;
+pub const EXTRA: usize = 18;
 /// First section area.
-pub const AREAS: usize = 17;
+pub const AREAS: usize = 19;
 /// Fixed fields before the areas.
-pub const STRIDE: usize = 17;
+pub const STRIDE: usize = 19;
 /// Values after the areas: the incisor gap (cm).
 pub const EXTRA_VALUES: usize = 1;
 
