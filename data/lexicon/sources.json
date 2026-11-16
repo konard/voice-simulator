@@ -1,0 +1,135 @@
+{
+  "schema": 1,
+  "sources": [
+    {
+      "id": "cmudict",
+      "title": "The CMU Pronouncing Dictionary (cmudict.dict)",
+      "url": "https://github.com/cmusphinx/cmudict/tree/74790861f652b15e4ac49015a90074ad62a27690",
+      "licence": "BSD-2-Clause",
+      "licenceUrl": "https://raw.githubusercontent.com/cmusphinx/cmudict/74790861f652b15e4ac49015a90074ad62a27690/LICENSE",
+      "licenceQuote": "Redistribution and use in source and binary forms, with or without modification, are permitted provided that the following conditions are met: 1. Redistributions of source code must retain the above copyright notice, this list of conditions and the following disclaimer.",
+      "licenceChecked": "2026-11-16",
+      "copyright": "Copyright (C) 1993-2015 Carnegie Mellon University. All rights reserved.",
+      "shipped": true,
+      "usedFor": [
+        "src/g2p/lexicon/en.js",
+        "lexicons/en-full.json (build en --full, not committed)"
+      ],
+      "files": [
+        {
+          "name": "cmudict.dict",
+          "url": "https://raw.githubusercontent.com/cmusphinx/cmudict/74790861f652b15e4ac49015a90074ad62a27690/cmudict.dict",
+          "size": 3618488,
+          "sha256": "81917843c7f44ce2b094ac63873c2c7a4cf802040792c455ba3ca406891c3d22"
+        }
+      ]
+    },
+    {
+      "id": "unihan",
+      "title": "Unicode Han Database (Unihan) 17.0.0, Unihan_Readings.txt: kMandarin and kTGHZ2013",
+      "url": "https://www.unicode.org/Public/17.0.0/ucd/Unihan.zip",
+      "licence": "Unicode-3.0",
+      "licenceUrl": "https://www.unicode.org/license.txt",
+      "licenceQuote": "Permission is hereby granted, free of charge, to any person obtaining a copy of data files and any associated documentation (the \"Data Files\") or software and any associated documentation (the \"Software\") to deal in the Data Files or Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, and/or sell copies of the Data Files or Software",
+      "licenceChecked": "2026-11-16",
+      "copyright": "Copyright © 1991-2026 Unicode, Inc.",
+      "shipped": true,
+      "usedFor": ["src/g2p/lexicon/zh.js (ZH_READINGS)"],
+      "files": [
+        {
+          "name": "Unihan.zip",
+          "url": "https://www.unicode.org/Public/17.0.0/ucd/Unihan.zip",
+          "size": 8518517,
+          "sha256": "f7a48b2b545acfaa77b2d607ae28747404ce02baefee16396c5d2d7a8ef34b5e"
+        }
+      ]
+    },
+    {
+      "id": "aishell3-train-transcript",
+      "title": "AISHELL-3, transcript of the training set (train/content.txt): character pairs with one reading in at least 90 % of 3 or more cases",
+      "url": "https://huggingface.co/datasets/AISHELL/AISHELL-3",
+      "licence": "Apache-2.0",
+      "licenceUrl": "https://huggingface.co/datasets/AISHELL/AISHELL-3",
+      "licenceQuote": "license: apache-2.0",
+      "licenceChecked": "2026-11-16",
+      "copyright": "AISHELL-3 by Beijing Shell Shell Technology Co., Ltd. (Shi, Bu, Xu, Zhang, Li, 2021), Apache License 2.0",
+      "shipped": true,
+      "usedFor": [
+        "src/g2p/lexicon/zh.js (ZH_PHRASES, mined words)",
+        "tests/heavy/lexicon-coverage.test.js (every tenth line, not mined)"
+      ],
+      "files": [
+        {
+          "name": "content.txt",
+          "url": "https://huggingface.co/datasets/AISHELL/AISHELL-3/resolve/f20d5db4a31fe779ef07bb1af4ea92da5c786622/train/content.txt",
+          "size": 7665999,
+          "sha256": "ed70f67d5558124ee22e609260177eaf20aa63391dd9df8df0a7e22b9213aca0"
+        }
+      ]
+    },
+    {
+      "id": "common-voice-en-text",
+      "title": "Common Voice sentence text, English (server/data/en): word counts that choose the 20 000 shipped English words",
+      "url": "https://github.com/common-voice/common-voice/tree/8ad2d862a1bf55ef77f8e86c1858296a7fae6ec7/server/data/en",
+      "licence": "CC0-1.0",
+      "licenceUrl": "https://raw.githubusercontent.com/common-voice/common-voice/8ad2d862a1bf55ef77f8e86c1858296a7fae6ec7/server/data/en/LICENSE",
+      "licenceQuote": "CC0 1.0 Universal",
+      "licenceChecked": "2026-11-16",
+      "copyright": "Common Voice contributors, dedicated to the public domain (CC0 1.0)",
+      "shipped": true,
+      "usedFor": ["data/lexicon/en-counts.txt"],
+      "files": [
+        {
+          "name": "sentence-collector.txt",
+          "url": "https://raw.githubusercontent.com/common-voice/common-voice/8ad2d862a1bf55ef77f8e86c1858296a7fae6ec7/server/data/en/sentence-collector.txt",
+          "size": 2803252,
+          "sha256": "31ac8e200449ebd7aee4a8c6bd16d4dafd076cf11f7c3efe1035f0283712d136"
+        },
+        {
+          "name": "wiki.en.txt",
+          "url": "https://raw.githubusercontent.com/common-voice/common-voice/8ad2d862a1bf55ef77f8e86c1858296a7fae6ec7/server/data/en/wiki.en.txt",
+          "size": 85658274,
+          "sha256": "438e55e8bc91dfa6cbe098a7233702c6b177c5ae07137a01d66b9c75c9789ae5"
+        }
+      ]
+    },
+    {
+      "id": "common-voice-hi-text",
+      "title": "Common Voice sentence text, Hindi (server/data/hi): word counts that chose the hand-checked Hindi words",
+      "url": "https://github.com/common-voice/common-voice/tree/8ad2d862a1bf55ef77f8e86c1858296a7fae6ec7/server/data/hi",
+      "licence": "CC0-1.0",
+      "licenceUrl": "https://github.com/common-voice/common-voice/blob/8ad2d862a1bf55ef77f8e86c1858296a7fae6ec7/README.md#licensing-and-content-source",
+      "licenceQuote": "The majority of our sentence text in `/server/data` comes directly from user submissions in our Sentence Collector or they are scraped from Wikipedia using our extractor tool, and are released under a CC0 public domain Creative Commons license.",
+      "licenceChecked": "2026-11-16",
+      "copyright": "Common Voice contributors, dedicated to the public domain (CC0 1.0)",
+      "shipped": true,
+      "usedFor": ["data/lexicon/hi-counts.txt"],
+      "files": [
+        {
+          "name": "sentence-collector.txt",
+          "url": "https://raw.githubusercontent.com/common-voice/common-voice/8ad2d862a1bf55ef77f8e86c1858296a7fae6ec7/server/data/hi/sentence-collector.txt",
+          "size": 4038286,
+          "sha256": "0de9bc2283188445d3a564974a688083fe6d9c29f11c3c31b4e01dc25af1885c"
+        }
+      ]
+    },
+    {
+      "id": "hand-written",
+      "title": "Hand-written lists of this repository: data/lexicon/en-extra.txt, zh-phrases.txt, hi-words.txt, ru-stress.txt",
+      "url": "https://github.com/konard/voice-simulator/tree/main/data/lexicon",
+      "licence": "Unlicense",
+      "licenceUrl": "https://github.com/konard/voice-simulator/blob/main/LICENSE",
+      "licenceQuote": "This is free and unencumbered software released into the public domain.",
+      "licenceChecked": "2026-11-16",
+      "copyright": "voice-simulator contributors, released into the public domain (Unlicense)",
+      "shipped": true,
+      "usedFor": [
+        "src/g2p/lexicon/en.js",
+        "src/g2p/lexicon/zh.js",
+        "src/g2p/lexicon/hi.js",
+        "src/g2p/lexicon/ru.js"
+      ],
+      "files": []
+    }
+  ]
+}

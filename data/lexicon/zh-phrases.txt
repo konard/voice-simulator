@@ -1,0 +1,1648 @@
+银行 yín háng
+行业 háng yè
+长大 zhǎng dà
+校长 xiào zhǎng
+还是 hái shì
+觉得 jué de
+音乐 yīn yuè
+快乐 kuài lè
+睡觉 shuì jiào
+了解 liǎo jiě
+为了 wèi le
+因为 yīn wèi
+地方 dì fang
+东西 dōng xi
+朋友 péng you
+谢谢 xiè xie
+先生 xiān sheng
+时候 shí hou
+孩子 hái zi
+桌子 zhuō zi
+妈妈 mā ma
+爸爸 bà ba
+哥哥 gē ge
+姐姐 jiě jie
+弟弟 dì di
+妹妹 mèi mei
+什么 shén me
+怎么 zěn me
+这么 zhè me
+那么 nà me
+多少 duō shao
+知道 zhī dao
+意思 yì si
+一样 yī yàng
+重要 zhòng yào
+重新 chóng xīn
+中国 zhōng guó
+声音 shēng yīn
+说话 shuō huà
+模型 mó xíng
+头发 tóu fa
+发现 fā xiàn
+会计 kuài jì
+数学 shù xué
+学生 xué sheng
+便宜 pián yi
+方便 fāng biàn
+处理 chǔ lǐ
+空气 kōng qì
+重庆 chóng qìng
+还钱 huán qián
+首都 shǒu dū
+行为 xíng wéi
+教书 jiāo shū
+干净 gān jìng
+少年 shào nián
+大夫 dài fu
+着急 zháo jí
+有空 yǒu kòng
+种树 zhòng shù
+
+# Neutral tone: kinship and people
+爷爷 yé ye
+奶奶 nǎi nai
+叔叔 shū shu
+舅舅 jiù jiu
+伯伯 bó bo
+姥姥 lǎo lao
+姑姑 gū gu
+宝宝 bǎo bao
+娃娃 wá wa
+太太 tài tai
+星星 xīng xing
+姑娘 gū niang
+媳妇 xí fu
+丈夫 zhàng fu
+师傅 shī fu
+师父 shī fu
+大爷 dà ye
+少爷 shào ye
+老爷 lǎo ye
+王爷 wáng ye
+皇上 huáng shang
+娘娘 niáng niang
+公公 gōng gong
+婆婆 pó po
+丈人 zhàng ren
+女婿 nǚ xu
+闺女 guī nü
+老婆 lǎo po
+外甥 wài sheng
+侄子 zhí zi
+嫂子 sǎo zi
+亲戚 qīn qi
+伙计 huǒ ji
+街坊 jiē fang
+冤家 yuān jia
+对头 duì tou
+亲家 qìng jia
+庄稼 zhuāng jia
+秀才 xiù cai
+棺材 guān cai
+木匠 mù jiang
+铁匠 tiě jiang
+裁缝 cái feng
+和尚 hé shang
+道士 dào shi
+菩萨 pú sa
+阎王 yán wang
+喇嘛 lǎ ma
+奴才 nú cai
+护士 hù shi
+小伙子 xiǎo huǒ zi
+# Neutral tone: things
+衣服 yī fu
+衣裳 yī shang
+豆腐 dòu fu
+窗户 chuāng hu
+葡萄 pú tao
+眼睛 yǎn jing
+耳朵 ěr duo
+眉毛 méi mao
+胳膊 gē bo
+胳臂 gē bei
+指甲 zhǐ jia
+屁股 pì gu
+狐狸 hú li
+骆驼 luò tuo
+蘑菇 mó gu
+萝卜 luó bo
+芝麻 zhī ma
+黄瓜 huáng gua
+核桃 hé tao
+石榴 shí liu
+甘蔗 gān zhe
+荸荠 bí qi
+畜生 chù sheng
+牲口 shēng kou
+口袋 kǒu dai
+脑袋 nǎo dai
+尾巴 wěi ba
+嘴巴 zuǐ ba
+哑巴 yǎ ba
+结巴 jiē ba
+下巴 xià ba
+泥巴 ní ba
+篱笆 lí ba
+喇叭 lǎ ba
+琵琶 pí pa
+枇杷 pí pa
+巴掌 bā zhang
+算盘 suàn pan
+扫帚 sào zhou
+笤帚 tiáo zhou
+苍蝇 cāng ying
+蛤蟆 há ma
+刺猬 cì wei
+哈欠 hā qian
+咳嗽 ké sou
+疙瘩 gē da
+风筝 fēng zheng
+灯笼 dēng long
+包袱 bāo fu
+钥匙 yào shi
+胭脂 yān zhi
+玻璃 bō li
+铺盖 pū gai
+行李 xíng li
+月亮 yuè liang
+名字 míng zi
+簸箕 bò ji
+石头 shí tou
+木头 mù tou
+舌头 shé tou
+骨头 gǔ tou
+馒头 mán tou
+枕头 zhěn tou
+念头 niàn tou
+外头 wài tou
+里头 lǐ tou
+前头 qián tou
+后头 hòu tou
+甜头 tián tou
+苦头 kǔ tou
+码头 mǎ tou
+跟头 gēn tou
+拳头 quán tou
+指头 zhǐ tou
+锄头 chú tou
+罐头 guàn tou
+丫头 yā tou
+奔头 bèn tou
+# Neutral tone: 子
+妻子 qī zi
+儿子 ér zi
+椅子 yǐ zi
+房子 fáng zi
+日子 rì zi
+鼻子 bí zi
+包子 bāo zi
+饺子 jiǎo zi
+帽子 mào zi
+本子 běn zi
+杯子 bēi zi
+被子 bèi zi
+裤子 kù zi
+鞋子 xié zi
+盘子 pán zi
+筷子 kuài zi
+瓶子 píng zi
+箱子 xiāng zi
+句子 jù zi
+例子 lì zi
+样子 yàng zi
+个子 gè zi
+脑子 nǎo zi
+肚子 dù zi
+嗓子 sǎng zi
+叶子 yè zi
+院子 yuàn zi
+村子 cūn zi
+车子 chē zi
+孙子 sūn zi
+胖子 pàng zi
+傻子 shǎ zi
+骗子 piàn zi
+影子 yǐng zi
+镜子 jìng zi
+袜子 wà zi
+裙子 qún zi
+狮子 shī zi
+兔子 tù zi
+猴子 hóu zi
+虫子 chóng zi
+蚊子 wén zi
+种子 zhǒng zi
+橘子 jú zi
+桃子 táo zi
+柿子 shì zi
+竹子 zhú zi
+小子 xiǎo zi
+曲子 qǔ zi
+调子 diào zi
+担子 dàn zi
+铺子 pù zi
+模子 mú zi
+帖子 tiě zi
+卡子 qiǎ zi
+爪子 zhuǎ zi
+呢子 ní zi
+空子 kòng zi
+色子 shǎi zi
+络子 lào zi
+把子 bà zi
+# Neutral tone: words
+看看 kàn kan
+告诉 gào su
+事情 shì qing
+喜欢 xǐ huan
+漂亮 piào liang
+明白 míng bai
+关系 guān xi
+舒服 shū fu
+麻烦 má fan
+清楚 qīng chu
+生意 shēng yi
+消息 xiāo xi
+休息 xiū xi
+认识 rèn shi
+知识 zhī shi
+商量 shāng liang
+打扮 dǎ ban
+打听 dǎ ting
+打算 dǎ suan
+打量 dǎ liang
+打发 dǎ fa
+收拾 shōu shi
+拾掇 shí duo
+琢磨 zuó mo
+折腾 zhē teng
+暖和 nuǎn huo
+热闹 rè nao
+凉快 liáng kuai
+痛快 tòng kuai
+客气 kè qi
+力气 lì qi
+脾气 pí qi
+福气 fú qi
+运气 yùn qi
+小气 xiǎo qi
+和气 hé qi
+阔气 kuò qi
+厚道 hòu dao
+味道 wèi dao
+道理 dào li
+规矩 guī ju
+模糊 mó hu
+糊涂 hú tu
+马虎 mǎ hu
+窝囊 wō nang
+别扭 biè niu
+啰嗦 luō suo
+哆嗦 duō suo
+吩咐 fēn fu
+嘱咐 zhǔ fu
+招呼 zhāo hu
+称呼 chēng hu
+糊弄 hù nong
+摆弄 bǎi nong
+拨弄 bō nong
+嘀咕 dí gu
+念叨 niàn dao
+唠叨 láo dao
+磨蹭 mó ceng
+扎实 zhā shi
+结实 jiē shi
+踏实 tā shi
+老实 lǎo shi
+在乎 zài hu
+记得 jì de
+认得 rèn de
+晓得 xiǎo de
+舍得 shě de
+懂得 dǒng de
+免得 miǎn de
+省得 shěng de
+使得 shǐ de
+显得 xiǎn de
+变得 biàn de
+晚上 wǎn shang
+早上 zǎo shang
+早晨 zǎo chen
+时辰 shí chen
+晌午 shǎng wu
+聪明 cōng ming
+心思 xīn si
+主意 zhǔ yi
+学问 xué wen
+本事 běn shi
+故事 gù shi
+笑话 xiào hua
+算计 suàn ji
+冤枉 yuān wang
+委屈 wěi qu
+吓唬 xià hu
+张罗 zhāng luo
+凑合 còu he
+将就 jiāng jiu
+讲究 jiǎng jiu
+合同 hé tong
+动静 dòng jing
+动弹 dòng tan
+冒失 mào shi
+机灵 jī ling
+便当 biàn dang
+利索 lì suo
+利落 lì luo
+难为 nán wei
+提防 dī fang
+提溜 dī liu
+伺候 cì hou
+相声 xiàng sheng
+答应 dā ying
+答理 dā li
+应付 yìng fu
+应酬 yìng chou
+照应 zhào ying
+妥当 tuǒ dang
+稳当 wěn dang
+停当 tíng dang
+勾当 gòu dang
+思量 sī liang
+掂量 diān liang
+吆喝 yāo he
+比划 bǐ hua
+亏空 kuī kong
+骨朵 gū duo
+骨碌 gū lu
+蹊跷 qī qiao
+嚷嚷 rāng rang
+晃悠 huàng you
+转悠 zhuàn you
+恶心 ě xin
+扁担 biǎn dan
+数落 shǔ luo
+福分 fú fen
+辈分 bèi fen
+部分 bù fen
+作坊 zuō fang
+困难 kùn nan
+多么 duō me
+要么 yào me
+怎么样 zěn me yàng
+怎么办 zěn me bàn
+为什么 wèi shén me
+干什么 gàn shén me
+没关系 méi guān xi
+对不起 duì bu qǐ
+看不起 kàn bu qǐ
+了不起 liǎo bu qǐ
+来不及 lái bu jí
+差不多 chà bu duō
+用不着 yòng bu zháo
+犯不着 fàn bu zháo
+睡不着 shuì bu zháo
+找不着 zhǎo bu zháo
+怪不得 guài bu de
+舍不得 shě bu de
+巴不得 bā bu de
+恨不得 hèn bu de
+顾不得 gù bu de
+说不定 shuō bu dìng
+受不了 shòu bu liǎo
+忘不了 wàng bu liǎo
+少不了 shǎo bu liǎo
+免不了 miǎn bu liǎo
+大不了 dà bu liǎo
+了不得 liǎo bu dé
+接着 jiē zhe
+随着 suí zhe
+跟着 gēn zhe
+本着 běn zhe
+朝着 cháo zhe
+向着 xiàng zhe
+顺着 shùn zhe
+沿着 yán zhe
+照着 zhào zhe
+冲着 chòng zhe
+似的 shì de
+# 行 háng
+内行 nèi háng
+外行 wài háng
+排行 pái háng
+行情 háng qíng
+商行 shāng háng
+各行各业 gè háng gè yè
+# 长 zhǎng
+成长 chéng zhǎng
+增长 zēng zhǎng
+生长 shēng zhǎng
+部长 bù zhǎng
+市长 shì zhǎng
+省长 shěng zhǎng
+县长 xiàn zhǎng
+局长 jú zhǎng
+科长 kē zhǎng
+院长 yuàn zhǎng
+董事长 dǒng shì zhǎng
+班长 bān zhǎng
+队长 duì zhǎng
+船长 chuán zhǎng
+家长 jiā zhǎng
+首长 shǒu zhǎng
+厂长 chǎng zhǎng
+村长 cūn zhǎng
+社长 shè zhǎng
+组长 zǔ zhǎng
+酋长 qiú zhǎng
+师长 shī zhǎng
+兄长 xiōng zhǎng
+长辈 zhǎng bèi
+长老 zhǎng lǎo
+长官 zhǎng guān
+长子 zhǎng zǐ
+助长 zhù zhǎng
+滋长 zī zhǎng
+长相 zhǎng xiàng
+# 重 chóng
+重复 chóng fù
+重叠 chóng dié
+重建 chóng jiàn
+重逢 chóng féng
+重申 chóng shēn
+重来 chóng lái
+重播 chóng bō
+重启 chóng qǐ
+重组 chóng zǔ
+重阳 chóng yáng
+重演 chóng yǎn
+重温 chóng wēn
+重写 chóng xiě
+重修 chóng xiū
+重围 chóng wéi
+双重 shuāng chóng
+# 还 huán
+归还 guī huán
+偿还 cháng huán
+还原 huán yuán
+返还 fǎn huán
+还款 huán kuǎn
+还债 huán zhài
+交还 jiāo huán
+送还 sòng huán
+生还 shēng huán
+还击 huán jī
+奉还 fèng huán
+讨价还价 tǎo jià huán jià
+# 都 dū
+都市 dū shì
+成都 chéng dū
+京都 jīng dū
+古都 gǔ dū
+建都 jiàn dū
+都城 dū chéng
+迁都 qiān dū
+# 为 wéi
+作为 zuò wéi
+认为 rèn wéi
+成为 chéng wéi
+以为 yǐ wéi
+称为 chēng wéi
+视为 shì wéi
+为止 wéi zhǐ
+为主 wéi zhǔ
+极为 jí wéi
+较为 jiào wéi
+更为 gèng wéi
+尤为 yóu wéi
+甚为 shèn wéi
+颇为 pō wéi
+最为 zuì wéi
+广为 guǎng wéi
+无为 wú wéi
+为难 wéi nán
+为期 wéi qī
+分为 fēn wéi
+化为 huà wéi
+变为 biàn wéi
+改为 gǎi wéi
+定为 dìng wéi
+选为 xuǎn wéi
+列为 liè wéi
+为首 wéi shǒu
+为所欲为 wéi suǒ yù wéi
+无能为力 wú néng wéi lì
+鲜为人知 xiǎn wéi rén zhī
+为何 wèi hé
+# 得 dé
+获得 huò dé
+取得 qǔ dé
+得到 dé dào
+赢得 yíng dé
+得分 dé fēn
+得知 dé zhī
+所得 suǒ dé
+心得 xīn dé
+难得 nán dé
+得以 dé yǐ
+得罪 dé zuì
+得意 dé yì
+得失 dé shī
+得益 dé yì
+得票 dé piào
+博得 bó dé
+求得 qiú dé
+夺得 duó dé
+只得 zhǐ dé
+不得不 bù dé bù
+不得了 bù dé liǎo
+# 着 zháo, zhuó
+睡着 shuì zháo
+着火 zháo huǒ
+着迷 zháo mí
+着装 zhuó zhuāng
+着陆 zhuó lù
+着实 zhuó shí
+着想 zhuó xiǎng
+衣着 yī zhuó
+执着 zhí zhuó
+沉着 chén zhuó
+附着 fù zhuó
+着落 zháo luò
+着力 zhuó lì
+着色 zhuó sè
+# 和 hè, huo, huó
+附和 fù hè
+搅和 jiǎo huo
+掺和 chān huo
+软和 ruǎn huo
+和面 huó miàn
+# 只 zhī
+两只 liǎng zhī
+三只 sān zhī
+几只 jǐ zhī
+船只 chuán zhī
+只身 zhī shēn
+# 种 zhòng
+种植 zhòng zhí
+种地 zhòng dì
+种田 zhòng tián
+耕种 gēng zhòng
+栽种 zāi zhòng
+种菜 zhòng cài
+种花 zhòng huā
+接种 jiē zhòng
+# 少 shào
+少女 shào nǚ
+青少年 qīng shào nián
+少将 shào jiàng
+少校 shào xiào
+少妇 shào fù
+老少 lǎo shào
+少林 shào lín
+少先队 shào xiān duì
+少尉 shào wèi
+# 教 jiāo, 觉 jiào
+教课 jiāo kè
+午觉 wǔ jiào
+# 干 gān
+干燥 gān zào
+干杯 gān bēi
+饼干 bǐng gān
+干旱 gān hàn
+干涉 gān shè
+干扰 gān rǎo
+若干 ruò gān
+干脆 gān cuì
+干枯 gān kū
+干涸 gān hé
+干预 gān yù
+晒干 shài gān
+烘干 hōng gān
+相干 xiāng gān
+干货 gān huò
+干粮 gān liáng
+干果 gān guǒ
+干洗 gān xǐ
+干冰 gān bīng
+天干 tiān gān
+干戈 gān gē
+干瘪 gān biě
+干涩 gān sè
+吹干 chuī gān
+擦干 cā gān
+风干 fēng gān
+葡萄干 pú tao gān
+# 空 kòng
+空闲 kòng xián
+空白 kòng bái
+填空 tián kòng
+空隙 kòng xì
+抽空 chōu kòng
+没空 méi kòng
+空缺 kòng quē
+空当 kòng dāng
+# 好 hào
+爱好 ài hào
+好奇 hào qí
+喜好 xǐ hào
+好客 hào kè
+嗜好 shì hào
+癖好 pǐ hào
+好胜 hào shèng
+偏好 piān hào
+好战 hào zhàn
+爱好者 ài hào zhě
+好恶 hào wù
+# 乐 yuè
+乐器 yuè qì
+乐队 yuè duì
+乐曲 yuè qǔ
+乐团 yuè tuán
+声乐 shēng yuè
+器乐 qì yuè
+乐章 yuè zhāng
+乐谱 yuè pǔ
+乐师 yuè shī
+民乐 mín yuè
+管乐 guǎn yuè
+乐坛 yuè tán
+乐理 yuè lǐ
+交响乐 jiāo xiǎng yuè
+音乐会 yīn yuè huì
+摇滚乐 yáo gǔn yuè
+爵士乐 jué shì yuè
+打击乐 dǎ jī yuè
+乐府 yuè fǔ
+礼乐 lǐ yuè
+# 发 fà
+理发 lǐ fà
+白发 bái fà
+发型 fà xíng
+毛发 máo fà
+发廊 fà láng
+假发 jiǎ fà
+黑发 hēi fà
+理发师 lǐ fà shī
+金发 jīn fà
+短发 duǎn fà
+长发 cháng fà
+卷发 juǎn fà
+染发 rǎn fà
+洗发水 xǐ fà shuǐ
+发丝 fà sī
+削发 xuē fà
+# 降 xiáng
+投降 tóu xiáng
+降服 xiáng fú
+劝降 quàn xiáng
+# 调 diào
+调查 diào chá
+声调 shēng diào
+音调 yīn diào
+语调 yǔ diào
+调动 diào dòng
+调研 diào yán
+曲调 qǔ diào
+格调 gé diào
+基调 jī diào
+强调 qiáng diào
+单调 dān diào
+低调 dī diào
+高调 gāo diào
+论调 lùn diào
+腔调 qiāng diào
+步调 bù diào
+调度 diào dù
+调用 diào yòng
+调任 diào rèn
+调换 diào huàn
+色调 sè diào
+情调 qíng diào
+# 调 tiáo
+调整 tiáo zhěng
+空调 kōng tiáo
+协调 xié tiáo
+调节 tiáo jié
+调解 tiáo jiě
+调控 tiáo kòng
+调和 tiáo hé
+调皮 tiáo pí
+调味 tiáo wèi
+调剂 tiáo jì
+调料 tiáo liào
+调试 tiáo shì
+调制 tiáo zhì
+调侃 tiáo kǎn
+失调 shī tiáo
+微调 wēi tiáo
+调理 tiáo lǐ
+调教 tiáo jiào
+烹调 pēng tiáo
+调戏 tiáo xì
+# 传 zhuàn
+传记 zhuàn jì
+自传 zì zhuàn
+列传 liè zhuàn
+水浒传 shuǐ hǔ zhuàn
+正传 zhèng zhuàn
+# 弹 dàn
+子弹 zǐ dàn
+炸弹 zhà dàn
+导弹 dǎo dàn
+弹药 dàn yào
+炮弹 pào dàn
+弹头 dàn tóu
+弹道 dàn dào
+枪弹 qiāng dàn
+核弹 hé dàn
+原子弹 yuán zǐ dàn
+手榴弹 shǒu liú dàn
+弹弓 dàn gōng
+弹丸 dàn wán
+中弹 zhòng dàn
+氢弹 qīng dàn
+# 处 chǔ
+处于 chǔ yú
+处境 chǔ jìng
+处分 chǔ fèn
+处罚 chǔ fá
+处置 chǔ zhì
+相处 xiāng chǔ
+处方 chǔ fāng
+处事 chǔ shì
+处决 chǔ jué
+处女 chǔ nǚ
+处世 chǔ shì
+判处 pàn chǔ
+共处 gòng chǔ
+惩处 chéng chǔ
+# 处 chù
+到处 dào chù
+好处 hǎo chù
+处处 chù chù
+用处 yòng chù
+坏处 huài chù
+益处 yì chù
+难处 nán chù
+深处 shēn chù
+远处 yuǎn chù
+住处 zhù chù
+办事处 bàn shì chù
+何处 hé chù
+各处 gè chù
+此处 cǐ chù
+长处 cháng chù
+短处 duǎn chù
+# 差 chā, chāi, cī
+差别 chā bié
+差距 chā jù
+差异 chā yì
+误差 wù chā
+偏差 piān chā
+差额 chā é
+时差 shí chā
+温差 wēn chā
+落差 luò chā
+反差 fǎn chā
+差价 chā jià
+逆差 nì chā
+顺差 shùn chā
+相差 xiāng chà
+差错 chā cuò
+出差 chū chāi
+差事 chāi shi
+差遣 chāi qiǎn
+邮差 yóu chāi
+钦差 qīn chāi
+参差 cēn cī
+# 将 jiàng
+大将 dà jiàng
+名将 míng jiàng
+猛将 měng jiàng
+将士 jiàng shì
+武将 wǔ jiàng
+将帅 jiàng shuài
+麻将 má jiàng
+老将 lǎo jiàng
+# 相 xiàng
+照相 zhào xiàng
+相机 xiàng jī
+首相 shǒu xiàng
+真相 zhēn xiàng
+宰相 zǎi xiàng
+相貌 xiàng mào
+面相 miàn xiàng
+丞相 chéng xiàng
+照相机 zhào xiàng jī
+亮相 liàng xiàng
+变相 biàn xiàng
+相片 xiàng piàn
+相册 xiàng cè
+看相 kàn xiàng
+手相 shǒu xiàng
+扮相 bàn xiàng
+相位 xiàng wèi
+# 当 dàng
+当作 dàng zuò
+上当 shàng dàng
+恰当 qià dàng
+适当 shì dàng
+当铺 dàng pù
+当真 dàng zhēn
+典当 diǎn dàng
+当成 dàng chéng
+# 应 yìng
+反应 fǎn yìng
+应用 yìng yòng
+适应 shì yìng
+回应 huí yìng
+响应 xiǎng yìng
+对应 duì yìng
+供应 gōng yìng
+应对 yìng duì
+效应 xiào yìng
+应聘 yìng pìn
+感应 gǎn yìng
+相应 xiāng yìng
+呼应 hū yìng
+应急 yìng jí
+应邀 yìng yāo
+报应 bào yìng
+应战 yìng zhàn
+应变 yìng biàn
+应征 yìng zhēng
+应试 yìng shì
+应答 yìng dá
+# 中 zhòng
+中奖 zhòng jiǎng
+打中 dǎ zhòng
+中毒 zhòng dú
+击中 jī zhòng
+中标 zhòng biāo
+中暑 zhòng shǔ
+猜中 cāi zhòng
+一语中的 yī yǔ zhòng dì
+# 间 jiàn
+间接 jiàn jiē
+间谍 jiàn dié
+离间 lí jiàn
+间歇 jiàn xiē
+间隙 jiàn xì
+间或 jiàn huò
+反间 fǎn jiàn
+# 分 fèn
+成分 chéng fèn
+过分 guò fèn
+充分 chōng fèn
+本分 běn fèn
+水分 shuǐ fèn
+养分 yǎng fèn
+分量 fèn liàng
+缘分 yuán fèn
+情分 qíng fèn
+天分 tiān fèn
+安分 ān fèn
+分外 fèn wài
+分内 fèn nèi
+职分 zhí fèn
+盐分 yán fèn
+糖分 táng fèn
+# 正 zhēng
+正月 zhēng yuè
+# 曲 qǔ
+歌曲 gē qǔ
+作曲 zuò qǔ
+戏曲 xì qǔ
+曲目 qǔ mù
+舞曲 wǔ qǔ
+小曲 xiǎo qǔ
+名曲 míng qǔ
+序曲 xù qǔ
+插曲 chā qǔ
+主题曲 zhǔ tí qǔ
+曲艺 qǔ yì
+元曲 yuán qǔ
+进行曲 jìn xíng qǔ
+奏鸣曲 zòu míng qǔ
+圆舞曲 yuán wǔ qǔ
+摇篮曲 yáo lán qǔ
+曲库 qǔ kù
+单曲 dān qǔ
+新曲 xīn qǔ
+金曲 jīn qǔ
+曲风 qǔ fēng
+词曲 cí qǔ
+神曲 shén qǔ
+三部曲 sān bù qǔ
+# 角 jué
+角色 jué sè
+主角 zhǔ jué
+配角 pèi jué
+角逐 jué zhú
+名角 míng jué
+丑角 chǒu jué
+角斗 jué dòu
+旦角 dàn jué
+女主角 nǚ zhǔ jué
+男主角 nán zhǔ jué
+# 济 jǐ
+济南 jǐ nán
+济宁 jǐ níng
+济济 jǐ jǐ
+# 薄
+薄荷 bò he
+单薄 dān bó
+薄弱 bó ruò
+微薄 wēi bó
+刻薄 kè bó
+淡薄 dàn bó
+稀薄 xī bó
+浅薄 qiǎn bó
+薄饼 báo bǐng
+薄情 bó qíng
+# 背 bēi
+背包 bēi bāo
+背负 bēi fù
+# 称 chèn
+对称 duì chèn
+相称 xiāng chèn
+匀称 yún chèn
+称心 chèn xīn
+称职 chèn zhí
+# 散 sǎn
+散文 sǎn wén
+松散 sōng sǎn
+散装 sǎn zhuāng
+零散 líng sǎn
+懒散 lǎn sǎn
+散漫 sǎn màn
+散光 sǎn guāng
+闲散 xián sǎn
+# 丧 sāng
+丧事 sāng shì
+丧礼 sāng lǐ
+丧葬 sāng zàng
+奔丧 bēn sāng
+治丧 zhì sāng
+丧服 sāng fú
+# 塞 sài, sè
+边塞 biān sài
+要塞 yào sài
+塞外 sài wài
+堵塞 dǔ sè
+闭塞 bì sè
+阻塞 zǔ sè
+搪塞 táng sè
+茅塞顿开 máo sè dùn kāi
+塞翁失马 sài wēng shī mǎ
+# 扇, 舍, 省, 识
+扇动 shān dòng
+宿舍 sù shè
+校舍 xiào shè
+寒舍 hán shè
+农舍 nóng shè
+房舍 fáng shè
+反省 fǎn xǐng
+省悟 xǐng wù
+不省人事 bù xǐng rén shì
+内省 nèi xǐng
+省亲 xǐng qīn
+自省 zì xǐng
+标识 biāo zhì
+# 率 lǜ
+效率 xiào lǜ
+频率 pín lǜ
+概率 gài lǜ
+比率 bǐ lǜ
+利率 lì lǜ
+汇率 huì lǜ
+速率 sù lǜ
+功率 gōng lǜ
+税率 shuì lǜ
+增长率 zēng zhǎng lǜ
+失业率 shī yè lǜ
+出生率 chū shēng lǜ
+成功率 chéng gōng lǜ
+收视率 shōu shì lǜ
+覆盖率 fù gài lǜ
+准确率 zhǔn què lǜ
+投票率 tóu piào lǜ
+死亡率 sǐ wáng lǜ
+发病率 fā bìng lǜ
+曝光率 bào guāng lǜ
+回报率 huí bào lǜ
+利用率 lì yòng lǜ
+圆周率 yuán zhōu lǜ
+升学率 shēng xué lǜ
+就业率 jiù yè lǜ
+合格率 hé gé lǜ
+占有率 zhàn yǒu lǜ
+犯罪率 fàn zuì lǜ
+# 说 shuì
+游说 yóu shuì
+说客 shuì kè
+# 禁 jīn
+不禁 bù jīn
+禁不住 jīn bu zhù
+弱不禁风 ruò bù jīn fēng
+情不自禁 qíng bù zì jīn
+禁受 jīn shòu
+忍俊不禁 rěn jùn bù jīn
+# 劲 jìng
+强劲 qiáng jìng
+劲敌 jìng dí
+劲旅 jìng lǚ
+刚劲 gāng jìng
+苍劲 cāng jìng
+# 卷 juàn
+试卷 shì juàn
+答卷 dá juàn
+考卷 kǎo juàn
+问卷 wèn juàn
+画卷 huà juàn
+书卷 shū juàn
+卷宗 juàn zōng
+开卷 kāi juàn
+交卷 jiāo juàn
+案卷 àn juàn
+# 看 kān
+看守 kān shǒu
+看护 kān hù
+看管 kān guǎn
+看门 kān mén
+# 壳 qiào
+地壳 dì qiào
+甲壳 jiǎ qiào
+躯壳 qū qiào
+金蝉脱壳 jīn chán tuō qiào
+# 累 lěi
+积累 jī lěi
+累计 lěi jì
+累积 lěi jī
+牵累 qiān lěi
+拖累 tuō lěi
+日积月累 rì jī yuè lěi
+累赘 léi zhui
+# 量 liáng
+测量 cè liáng
+衡量 héng liáng
+丈量 zhàng liáng
+量具 liáng jù
+量杯 liáng bēi
+酌量 zhuó liáng
+# 露 lòu
+露面 lòu miàn
+露馅 lòu xiàn
+露脸 lòu liǎn
+露底 lòu dǐ
+露怯 lòu qiè
+露一手 lòu yī shǒu
+# 落 là, lào
+丢三落四 diū sān là sì
+落枕 lào zhěn
+# 没 mò
+淹没 yān mò
+沉没 chén mò
+埋没 mái mò
+出没 chū mò
+吞没 tūn mò
+覆没 fù mò
+没收 mò shōu
+没落 mò luò
+隐没 yǐn mò
+湮没 yān mò
+辱没 rǔ mò
+没齿难忘 mò chǐ nán wàng
+全军覆没 quán jūn fù mò
+# 模 mú, 磨 mò
+模样 mú yàng
+模具 mú jù
+模板 mú bǎn
+一模一样 yī mú yī yàng
+磨坊 mò fáng
+石磨 shí mò
+推磨 tuī mò
+磨盘 mò pán
+# 难 nàn
+灾难 zāi nàn
+苦难 kǔ nàn
+遇难 yù nàn
+难民 nàn mín
+患难 huàn nàn
+遭难 zāo nàn
+落难 luò nàn
+避难 bì nàn
+罹难 lí nàn
+空难 kōng nàn
+海难 hǎi nàn
+磨难 mó nàn
+劫难 jié nàn
+殉难 xùn nàn
+发难 fā nàn
+责难 zé nàn
+非难 fēi nàn
+刁难 diāo nàn
+大难 dà nàn
+国难 guó nàn
+蒙难 méng nàn
+# 宁 nìng
+宁可 nìng kě
+宁愿 nìng yuàn
+宁肯 nìng kěn
+宁死不屈 nìng sǐ bù qū
+毋宁 wú nìng
+# 漂 piǎo, 铺 pù
+漂白 piǎo bái
+漂洗 piǎo xǐ
+店铺 diàn pù
+床铺 chuáng pù
+卧铺 wò pù
+商铺 shāng pù
+饭铺 fàn pù
+药铺 yào pù
+上铺 shàng pù
+下铺 xià pù
+铺位 pù wèi
+肉铺 ròu pù
+杂货铺 zá huò pù
+# 奇 jī, 强 qiǎng, jiàng
+奇数 jī shù
+奇偶 jī ǒu
+勉强 miǎn qiǎng
+强迫 qiǎng pò
+牵强 qiān qiǎng
+强求 qiǎng qiú
+强词夺理 qiǎng cí duó lǐ
+强人所难 qiǎng rén suǒ nán
+强颜欢笑 qiǎng yán huān xiào
+倔强 jué jiàng
+# 切 qiè
+一切 yī qiè
+亲切 qīn qiè
+密切 mì qiè
+迫切 pò qiè
+急切 jí qiè
+确切 què qiè
+切实 qiè shí
+关切 guān qiè
+真切 zhēn qiè
+恳切 kěn qiè
+贴切 tiē qiè
+深切 shēn qiè
+切记 qiè jì
+切忌 qiè jì
+殷切 yīn qiè
+热切 rè qiè
+切身 qiè shēn
+切合 qiè hé
+切勿 qiè wù
+# 圈 juàn, 色 shǎi, 刹 chà
+猪圈 zhū juàn
+羊圈 yáng juàn
+掉色 diào shǎi
+刹那 chà nà
+古刹 gǔ chà
+# 晃, 混, 哄, 横, 号, 喝, 吓
+摇晃 yáo huàng
+晃动 huàng dòng
+哄骗 hǒng piàn
+起哄 qǐ hòng
+哄堂大笑 hōng táng dà xiào
+哄抢 hōng qiǎng
+哄笑 hōng xiào
+蛮横 mán hèng
+横财 hèng cái
+横祸 hèng huò
+专横 zhuān hèng
+骄横 jiāo hèng
+号叫 háo jiào
+号啕 háo táo
+哀号 āi háo
+号哭 háo kū
+喝彩 hè cǎi
+喝令 hè lìng
+喝止 hè zhǐ
+当头棒喝 dāng tóu bàng hè
+恐吓 kǒng hè
+恫吓 dòng hè
+# 会 kuài, 系 jì, 鲜 xiǎn
+财会 cái kuài
+会稽 kuài jī
+系鞋带 jì xié dài
+鲜见 xiǎn jiàn
+# 兴 xìng
+高兴 gāo xìng
+兴趣 xìng qù
+兴致 xìng zhì
+尽兴 jìn xìng
+扫兴 sǎo xìng
+即兴 jí xìng
+助兴 zhù xìng
+兴高采烈 xìng gāo cǎi liè
+败兴 bài xìng
+雅兴 yǎ xìng
+兴冲冲 xìng chōng chōng
+感兴趣 gǎn xìng qù
+游兴 yóu xìng
+兴味 xìng wèi
+# 削 xuē, 血 xiě, 咽 yàn, yè
+剥削 bō xuē
+削弱 xuē ruò
+削减 xuē jiǎn
+血淋淋 xiě lín lín
+一针见血 yī zhēn jiàn xiě
+咽下 yàn xià
+狼吞虎咽 láng tūn hǔ yàn
+哽咽 gěng yè
+呜咽 wū yè
+咽气 yàn qì
+# 要 yāo, 吁 yù, 与 yù, 晕 yùn
+要求 yāo qiú
+要挟 yāo xié
+呼吁 hū yù
+参与 cān yù
+与会 yù huì
+晕车 yùn chē
+晕船 yùn chuán
+红晕 hóng yùn
+光晕 guāng yùn
+晕机 yùn jī
+# 载 zǎi
+记载 jì zǎi
+转载 zhuǎn zǎi
+刊载 kān zǎi
+登载 dēng zǎi
+千载难逢 qiān zǎi nán féng
+一年半载 yī nián bàn zǎi
+连载 lián zǎi
+# 扎, 炸, 粘, 涨, 折, 症
+包扎 bāo zā
+挣扎 zhēng zhá
+炸鸡 zhá jī
+炸酱面 zhá jiàng miàn
+油炸 yóu zhá
+炸薯条 zhá shǔ tiáo
+炸鱼 zhá yú
+粘贴 zhān tiē
+涨红 zhàng hóng
+头昏脑涨 tóu hūn nǎo zhàng
+折本 shé běn
+症结 zhēng jié
+骨殖 gǔ shi
+# 转 zhuàn
+转动 zhuàn dòng
+转圈 zhuàn quān
+转速 zhuàn sù
+自转 zì zhuàn
+公转 gōng zhuàn
+团团转 tuán tuán zhuàn
+打转 dǎ zhuàn
+转盘 zhuàn pán
+转轴 zhuàn zhóu
+# 作 zuō, 参 shēn, 藏 zàng
+作揖 zuō yī
+人参 rén shēn
+海参 hǎi shēn
+党参 dǎng shēn
+西洋参 xī yáng shēn
+西藏 xī zàng
+宝藏 bǎo zàng
+藏族 zàng zú
+藏青 zàng qīng
+藏语 zàng yǔ
+大藏经 dà zàng jīng
+藏文 zàng wén
+藏獒 zàng áo
+藏区 zàng qū
+藏红花 zàng hóng huā
+青藏 qīng zàng
+# 曾 zēng, 朝 zhāo
+曾孙 zēng sūn
+曾祖父 zēng zǔ fù
+曾祖 zēng zǔ
+曾国藩 zēng guó fān
+朝气 zhāo qì
+朝夕 zhāo xī
+今朝 jīn zhāo
+朝霞 zhāo xiá
+朝三暮四 zhāo sān mù sì
+朝气蓬勃 zhāo qì péng bó
+一朝一夕 yī zhāo yī xī
+朝思暮想 zhāo sī mù xiǎng
+朝不保夕 zhāo bù bǎo xī
+朝令夕改 zhāo lìng xī gǎi
+朝鲜 cháo xiǎn
+# 臭 xiù, 畜 xù, 答 dā, 担 dàn
+乳臭未干 rǔ xiù wèi gān
+铜臭 tóng xiù
+畜牧 xù mù
+畜牧业 xù mù yè
+畜产品 xù chǎn pǐn
+答腔 dā qiāng
+羞答答 xiū dā dā
+重担 zhòng dàn
+担担面 dàn dan miàn
+挑担 tiāo dàn
+# 倒 dào
+倒水 dào shuǐ
+倒退 dào tuì
+倒影 dào yǐng
+倒是 dào shì
+倒立 dào lì
+倒数 dào shǔ
+倒计时 dào jì shí
+倒挂 dào guà
+倒叙 dào xù
+倒置 dào zhì
+倒贴 dào tiē
+反倒 fǎn dào
+倒映 dào yìng
+倒茶 dào chá
+# 度 duó, 恶 wù, 坊 fáng, 佛 fú
+揣度 chuǎi duó
+忖度 cǔn duó
+审时度势 shěn shí duó shì
+厌恶 yàn wù
+可恶 kě wù
+憎恶 zēng wù
+深恶痛绝 shēn wù tòng jué
+染坊 rǎn fáng
+油坊 yóu fáng
+仿佛 fǎng fú
+# 给 jǐ
+供给 gōng jǐ
+给予 jǐ yǔ
+自给自足 zì jǐ zì zú
+补给 bǔ jǐ
+配给 pèi jǐ
+给养 jǐ yǎng
+自给 zì jǐ
+# 更 gēng
+更新 gēng xīn
+更换 gēng huàn
+变更 biàn gēng
+更改 gēng gǎi
+更正 gēng zhèng
+三更 sān gēng
+更衣 gēng yī
+更替 gēng tì
+打更 dǎ gēng
+更迭 gēng dié
+更年期 gēng nián qī
+半夜三更 bàn yè sān gēng
+自力更生 zì lì gēng shēng
+五更 wǔ gēng
+更名 gēng míng
+更衣室 gēng yī shì
+# 供 gòng
+供奉 gòng fèng
+供述 gòng shù
+上供 shàng gòng
+招供 zhāo gòng
+翻供 fān gòng
+供词 gòng cí
+供桌 gòng zhuō
+# 冠 guàn, 哈 hǎ, 汗 hán, 吭 háng, 华 huà
+冠军 guàn jūn
+夺冠 duó guàn
+冠名 guàn míng
+哈达 hǎ dá
+哈巴狗 hǎ ba gǒu
+可汗 kè hán
+成吉思汗 chéng jí sī hán
+引吭高歌 yǐn háng gāo gē
+华山 huà shān
+华佗 huà tuó
+# 划 huà
+计划 jì huà
+规划 guī huà
+策划 cè huà
+划分 huà fēn
+筹划 chóu huà
+谋划 móu huà
+划拨 huà bō
+划定 huà dìng
+划清 huà qīng
+划归 huà guī
+区划 qū huà
+企划 qǐ huà
+# 几 jī, 假 jià
+几乎 jī hū
+茶几 chá jī
+几率 jī lǜ
+假期 jià qī
+放假 fàng jià
+请假 qǐng jià
+暑假 shǔ jià
+寒假 hán jià
+休假 xiū jià
+度假 dù jià
+假日 jià rì
+病假 bìng jià
+年假 nián jià
+婚假 hūn jià
+产假 chǎn jià
+事假 shì jià
+长假 cháng jià
+假条 jià tiáo
+节假日 jié jià rì
+度假村 dù jià cūn
+寒暑假 hán shǔ jià
+# 监 jiàn, 校 jiào, 节 jiē, 尽 jǐn
+太监 tài jiàn
+国子监 guó zǐ jiàn
+校订 jiào dìng
+校准 jiào zhǔn
+校验 jiào yàn
+校勘 jiào kān
+节骨眼 jiē gu yǎn
+尽管 jǐn guǎn
+尽量 jǐn liàng
+尽快 jǐn kuài
+尽早 jǐn zǎo
+尽可能 jǐn kě néng
+# 卡 qiǎ, 擂 lèi, 笼 lǒng, 绿 lù, 抹 mā
+关卡 guān qiǎ
+卡壳 qiǎ ké
+哨卡 shào qiǎ
+擂台 lèi tái
+打擂 dǎ lèi
+笼罩 lǒng zhào
+笼统 lǒng tǒng
+笼络 lǒng luò
+绿林 lù lín
+鸭绿江 yā lù jiāng
+抹布 mā bù
+拐弯抹角 guǎi wān mò jiǎo
+# 埋, 闷, 蒙, 秘, 呢, 泥, 弄
+埋怨 mán yuàn
+闷热 mēn rè
+闷声 mēn shēng
+闷头 mēn tóu
+蒙古 měng gǔ
+内蒙古 nèi měng gǔ
+蒙骗 mēng piàn
+蒙族 měng zú
+秘鲁 bì lǔ
+毛呢 máo ní
+呢绒 ní róng
+呢喃 ní nán
+拘泥 jū nì
+弄堂 lòng táng
+里弄 lǐ lòng
+# 胖, 刨, 炮, 喷, 屏, 迫, 仆, 曝
+心广体胖 xīn guǎng tǐ pán
+刨根问底 páo gēn wèn dǐ
+炮制 páo zhì
+如法炮制 rú fǎ páo zhì
+喷香 pèn xiāng
+屏住 bǐng zhù
+屏息 bǐng xī
+屏气 bǐng qì
+屏除 bǐng chú
+迫击炮 pǎi jī pào
+前仆后继 qián pū hòu jì
+曝光 bào guāng
+# 茄, 翘, 若, 厦, 杉, 稍, 遂, 拓, 苔
+雪茄 xuě jiā
+厦门 xià mén
+杉木 shā mù
+稍息 shào xī
+半身不遂 bàn shēn bù suí
+拓片 tà piàn
+拓本 tà běn
+舌苔 shé tāi
+# 帖, 同, 吐, 纤, 旋, 殷, 佣
+请帖 qǐng tiě
+字帖 zì tiè
+碑帖 bēi tiè
+发帖 fā tiě
+回帖 huí tiě
+跟帖 gēn tiě
+喜帖 xǐ tiě
+胡同 hú tòng
+呕吐 ǒu tù
+吐血 tù xiě
+上吐下泻 shàng tù xià xiè
+纤夫 qiàn fū
+拉纤 lā qiàn
+旋风 xuàn fēng
+殷红 yān hóng
+佣金 yòng jīn
+# 择, 占, 轴, 钻
+择菜 zhái cài
+占卜 zhān bǔ
+占卦 zhān guà
+占星 zhān xīng
+压轴 yā zhòu
+钻石 zuàn shí
+钻戒 zuàn jiè
+电钻 diàn zuàn
+钻头 zuàn tóu
+# 了 liǎo
+一目了然 yī mù liǎo rán
+了如指掌 liǎo rú zhǐ zhǎng
+未了 wèi liǎo
+末了 mò liǎo
+终了 zhōng liǎo
+私了 sī liǎo
+了断 liǎo duàn
+# 的 dí, dì
+的确 dí què
+目的 mù dì
+的士 dí shì
+有的放矢 yǒu dì fàng shǐ
+众矢之的 zhòng shǐ zhī dì
+# More
+挑战 tiǎo zhàn
+挑衅 tiǎo xìn
+挑拨 tiǎo bō
+挑逗 tiǎo dòu
+挑起 tiǎo qǐ
+挑明 tiǎo míng
+挑唆 tiǎo suō
+挑战者 tiǎo zhàn zhě
+扒手 pá shǒu
+扒窃 pá qiè
+剥皮 bāo pí
+投奔 tóu bèn
+湖泊 hú pō
+血泊 xuè pō
+梁山泊 liáng shān pō
+开辟 kāi pì
+精辟 jīng pì
+辟谣 pì yáo
+禅让 shàn ràng
+场院 cháng yuàn
+冲劲 chòng jìn
+冲床 chòng chuáng
+创伤 chuāng shāng
+重创 zhòng chuāng
+创口 chuāng kǒu
+积攒 jī zǎn
+攒钱 zǎn qián
+单于 chán yú
+叨扰 tāo rǎo
+缝隙 fèng xì
+裂缝 liè fèng
+门缝 mén fèng
+无缝 wú fèng
+夹缝 jiā fèng
+见缝插针 jiàn fèng chā zhēn
+天衣无缝 tiān yī wú fèng
+胸脯 xiōng pú
+枪杆 qiāng gǎn
+笔杆 bǐ gǎn
+杠杆 gàng gǎn
+诸葛 zhū gě
+诸葛亮 zhū gě liàng
+脖颈 bó gěng
+道观 dào guàn
+寺观 sì guàn
+秦桧 qín huì
+豁达 huò dá
+豁然开朗 huò rán kāi lǎng
+豁免 huò miǎn
+咀嚼 jǔ jué
+芥蓝 gài lán
+芥菜 gài cài
+拮据 jié jū
+高句丽 gāo gōu lí
+力能扛鼎 lì néng gāng dǐng
+溃脓 huì nóng
+炮烙 páo luò
+潦草 liáo cǎo
+潦倒 liáo dǎo
+脉脉 mò mò
+含情脉脉 hán qíng mò mò
+流氓 liú máng
+南无 nā mó
+婀娜 ē nuó
+荨麻疹 xún má zhěn
+悄然 qiǎo rán
+悄声 qiǎo shēng
+撒播 sǎ bō
+刷白 shuà bái
+瓦刀 wà dāo
+压根 yà gēn
+燕京 yān jīng
+燕山 yān shān
+熨帖 yù tiē
+蚌埠 bèng bù
+丽水 lí shuǐ
+番禺 pān yú
+东莞 dōng guǎn
+铅山 yán shān
+台州 tāi zhōu
+天台 tiān tāi
+荥阳 xíng yáng
+亳州 bó zhōu
+柏林 bó lín
+吗啡 mǎ fēi
+刀把 dāo bà
+解数 xiè shù
+押解 yā jiè
+一沓 yī dá
+妥帖 tuǒ tiē

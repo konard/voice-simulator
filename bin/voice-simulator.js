@@ -6,6 +6,7 @@ import { fileURLToPath, URL } from 'node:url';
 import { parseArgs } from 'node:util';
 
 import {
+  addLexicon,
   AUDIO_FORMAT_NAMES,
   AUDIO_TIERS,
   DEFAULT_AUDIO_TIER,
@@ -37,6 +38,7 @@ import { INDEX_PAGE, createVoiceServer } from '../src/server/server.js';
 const OPTIONS = {
   lang: { type: 'string', short: 'l' },
   accent: { type: 'string' },
+  lexicon: { type: 'string', multiple: true },
   out: { type: 'string', short: 'o' },
   tier: { type: 'string', short: 't' },
   solver: { type: 'string' },
@@ -105,6 +107,10 @@ function usage() {
     '  -l, --lang <code>     auto | en | ru | hi | zh (default auto)',
     '      --accent <code>   English accent: en-US | en-GB | en-AU | en-IN',
     '      --strong-forms    Keep English function words strong (no weak forms)',
+    '      --lexicon <file>  Pronunciation lexicon (JSON): {"word": "ipa"} for',
+    '                        --lang, or a file of build-lexicon.mjs (--full',
+    '                        or vslex); zh takes toned pinyin. Repeat',
+    '                        it for more files; the last one wins',
     '      --markup          Read inline tags: [whisper]…[/whisper], [pause 0.5],',
     '                        [laugh], *word* (docs/markup.md); SSML (<speak>…)',
     '                        is read without it',
@@ -394,6 +400,36 @@ export function formatComparison(result) {
     `DTW cost ${fixed(result.dtw.normalizedCost, 3)} per step at ${result.sampleRate} Hz`
   );
   return lines;
+}
+
+/**
+ * Add the lexicons of `--lexicon` (JSON files) with `addLexicon`. A file
+ * with a `format` (`lexicon` or `vslex`) is for its `lang`; a plain
+ * `{word: ipa}` file is for `--lang`.
+ * @returns {number} the number of words added
+ */
+export function loadLexiconFiles(files, lang) {
+  let words = 0;
+  for (const file of files ?? []) {
+    let data;
+    try {
+      data = JSON.parse(readFileSync(file, 'utf8'));
+    } catch (error) {
+      throw new Error(`--lexicon ${file}: ${error.message}`, { cause: error });
+    }
+    const target = typeof data?.format === 'string' ? data.lang : lang;
+    if (!target || target === 'auto') {
+      throw new Error(
+        `--lexicon ${file}: the file has no "lang"; give --lang en, ru, hi or zh`
+      );
+    }
+    try {
+      words += addLexicon(target, data);
+    } catch (error) {
+      throw new Error(`--lexicon ${file}: ${error.message}`, { cause: error });
+    }
+  }
+  return words;
 }
 
 const COMMANDS = {
@@ -700,6 +736,7 @@ export async function runCli(argv, io = {}) {
       streams.stderr(usage());
       return 1;
     }
+    loadLexiconFiles(values.lexicon, values.lang);
     await handler(values, rest, streams);
     return 0;
   } catch (error) {

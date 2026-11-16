@@ -1,0 +1,60 @@
+# Hand-written English pronunciations (General American IPA, Unlicense).
+# They win over CMUdict in `node scripts/build-lexicon.mjs build en`.
+# One `word ipa` per line; more lines of a word add variants, first is the default.
+
+# Words missing from CMUdict or read wrongly there.
+quinoa ˈkinwɑ
+quinoa ˌkiˈnoʊə
+segue ˈsɛɡweɪ
+onomatopoeia ˌɑnəˌmɑtəˈpiə
+
+# Number words and the words the text normaliser writes (units, currencies).
+thirteen θɝˈtin
+fourteen fɔɹˈtin
+sixteen sɪkˈstin
+seventeen ˌsɛvənˈtin
+eighteen eɪˈtin
+nineteen naɪnˈtin
+seventy ˈsɛvənti
+eighty ˈeɪti
+ninety ˈnaɪnti
+o'clock əˈklɑk
+cetera ˈsɛtəɹə
+missus ˈmɪsɪz
+miz ˈmɪz
+euro ˈjʊɹoʊ
+euros ˈjʊɹoʊz
+rupee ɹuˈpi
+rupees ɹuˈpiz
+ruble ˈɹubəl
+rubles ˈɹubəlz
+kopeck ˈkoʊpɛk
+kopecks ˈkoʊpɛks
+paisa ˈpaɪsɑ
+paise ˈpaɪseɪ
+yuan juˈɑn
+fen ˈfɛn
+celsius ˈsɛlsiəs
+fahrenheit ˈfɛɹənˌhaɪt
+kilogram ˈkɪləˌɡɹæm
+kilograms ˈkɪləˌɡɹæmz
+kilometer kɪˈlɑmətɚ
+kilometers kɪˈlɑmətɚz
+centimeter ˈsɛntəˌmitɚ
+centimeters ˈsɛntəˌmitɚz
+millimeter ˈmɪləˌmitɚ
+millimeters ˈmɪləˌmitɚz
+milligram ˈmɪləˌɡɹæm
+milligrams ˈmɪləˌɡɹæmz
+liter ˈlitɚ
+liters ˈlitɚz
+milliliter ˈmɪləˌlitɚ
+milliliters ˈmɪləˌlitɚz
+millisecond ˈmɪləˌsɛkənd
+milliseconds ˈmɪləˌsɛkəndz
+hertz ˈhɝts
+kilohertz ˈkɪləˌhɝts
+megabyte ˈmɛɡəˌbaɪt
+megabytes ˈmɛɡəˌbaɪts
+gigabyte ˈɡɪɡəˌbaɪt
+gigabytes ˈɡɪɡəˌbaɪts

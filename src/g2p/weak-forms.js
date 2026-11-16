@@ -5,7 +5,7 @@
  * prepositions, auxiliaries and pronouns) lose their stress and most of
  * them their full vowel: `a cup of tea for you` is ə ˈkʌp əv ˈti fɚ ju.
  * The forms are General American, written with the symbols of
- * `english-dict.js`; `adaptEnglishWord()` turns them into the other
+ * the English lexicon (`lexicon/en.js`); `adaptEnglishWord()` turns them into the other
  * accents. Sources: Roach (2009) chapter 12, Cruttenden (2014) section
  * 11.3 and the entries of Wells (2008).
  */

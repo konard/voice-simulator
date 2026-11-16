@@ -77,6 +77,13 @@ isolated and the player uses the shared ring:
 VITE_CROSS_ORIGIN_ISOLATION=1 npm run example:web:dev
 ```
 
+A full pronunciation lexicon, too large to ship, can be put next to the
+page as `lexicons/<lang>-full.json` (`en`, `ru`, `hi` or `zh`), made with
+`node scripts/build-lexicon.mjs build <lang> --from <dir> --full --out
+lexicons/<lang>-full.json`. The app adds it with `addLexicon` before it reads
+the first text of that language; without the file it uses the shipped
+lexicon.
+
 The Vite config uses `./` as the default asset base so the bundle also works
 when loaded by Electron or copied into Capacitor. In GitHub Pages CI,
 `GITHUB_PAGES=true` switches the base path to `/<repository>/`.

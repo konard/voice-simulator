@@ -1,0 +1,38 @@
+[
+  {
+    "title": "CC-CEDICT",
+    "licence": "CC-BY-SA-4.0",
+    "reason": "share-alike: data derived from it would have to be CC BY-SA",
+    "url": "https://www.mdbg.net/chinese/dictionary?page=cc-cedict"
+  },
+  {
+    "title": "OpenRussian.org word lists",
+    "licence": "CC-BY-SA-4.0",
+    "reason": "share-alike: the data repository says \"Creative Commons Attribution Share Alike 4.0\"",
+    "url": "https://github.com/Badestrand/russian-dictionary"
+  },
+  {
+    "title": "Wiktionary and its extracts (Wiktextract, kaikki.org)",
+    "licence": "CC-BY-SA-4.0 and GFDL",
+    "reason": "share-alike: Wiktionary text is CC BY-SA 4.0 (https://en.wiktionary.org/wiki/Wiktionary:Copyrights)",
+    "url": "https://kaikki.org/"
+  },
+  {
+    "title": "Stress lists made from Zaliznyak's Grammatical Dictionary of Russian",
+    "licence": "CC-BY-NC",
+    "reason": "non-commercial: gramdict/zalizniak-2010 says the data is published under CC BY-NC; other lists made from the dictionary state no licence",
+    "url": "https://github.com/gramdict/zalizniak-2010"
+  },
+  {
+    "title": "google-10000-english",
+    "licence": "not recorded",
+    "reason": "the list is derived from the Google Web Trillion Word Corpus (LDC2006T13) and has no licence that passes; word counts come from Common Voice text",
+    "url": "https://github.com/first20hours/google-10000-english"
+  },
+  {
+    "title": "count_1w.txt (Peter Norvig, Natural Language Corpus Data)",
+    "licence": "not recorded",
+    "reason": "derived from the Google Web Trillion Word Corpus (LDC2006T13); no licence that passes is stated for the counts",
+    "url": "https://norvig.com/ngrams/"
+  }
+]

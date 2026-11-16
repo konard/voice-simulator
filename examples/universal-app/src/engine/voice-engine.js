@@ -15,6 +15,7 @@ import {
   utteranceTimeline,
 } from '../../../../src/index.js';
 import { exportAudio } from './audio-export.js';
+import { fullLexiconLoader } from './full-lexicons.js';
 import { WorkletPlayer } from './worklet-player.js';
 import { readyToPlay, secondsToPlay } from './render-ahead.js';
 
@@ -59,10 +60,13 @@ function writeCachedBenchmark({ level, loads, gpu }, allowGpu) {
 
 export class VoiceEngine {
   /**
-   * @param {{onChange?: (status: object) => void, createWorker?: () => Worker}} [options]
+   * @param {{onChange?: (status: object) => void, createWorker?: () => Worker, loadLexicon?: (lang: string) => Promise<object|null>}} [options]
+   *   `loadLexicon` gives the full lexicon of a language (default: the
+   *   file `lexicons/<lang>-full.json` next to the page, when it exists)
    */
   constructor(options = {}) {
     this.onChange = options.onChange ?? (() => {});
+    this.addFullLexicons = fullLexiconLoader(options.loadLexicon);
     this.createWorker =
       options.createWorker ??
       (() =>
@@ -166,7 +170,7 @@ export class VoiceEngine {
     this.stop();
     const transcription = request.ipa
       ? { lang: request.lang, ipa: request.text, words: [] }
-      : textToIpa(request.text, { lang: request.lang, accent: request.accent });
+      : await this.#transcribe(request);
     const plan = planUtterance(transcription.ipa, {
       head: request.head,
       language: transcription.lang,
@@ -230,6 +234,19 @@ export class VoiceEngine {
       gpu: this.#gpu(request),
     });
     return job;
+  }
+
+  /**
+   * Text to IPA with the full lexicons of the languages in the text: a
+   * lexicon found for the first time means the text is read again.
+   */
+  async #transcribe(request) {
+    const read = () =>
+      textToIpa(request.text, { lang: request.lang, accent: request.accent });
+    const first = read();
+    const langs = [first.lang, ...first.words.map((word) => word.lang)];
+    const added = await this.addFullLexicons(langs);
+    return added.length > 0 ? read() : first;
   }
 
   /**

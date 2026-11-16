@@ -70,7 +70,7 @@ Tests that need more than about 10 seconds or a download do not belong in
 Slow tests (full 3D renders, quality reports against recordings, recognition
 of datasets, round trips, voice copying) live in `tests/heavy/` and are named
 `<suite>-<topic>.test.js`, where the suite is `quality`, `recognition`,
-`roundtrip`, `copy`, `performance` or `gpu`. `npm test`, `bun test` and
+`roundtrip`, `copy`, `performance`, `gpu` or `lexicon`. `npm test`, `bun test` and
 `deno test` never run them; [tests/heavy/README.md](../tests/heavy/README.md)
 describes the folder and its helpers.
 
@@ -181,6 +181,14 @@ What is checked, in every file that `git ls-files` lists:
   [Datasets](#datasets)), including a licence that is not in
   `allowedDatasetLicences`, and every tracked file under `.datasets/`. These
   findings cannot be excepted.
+- **Lexicon sources** (`lexicon`): `lexiconSources(root, list)` reports every
+  entry of `data/lexicon/sources.json` (the sources of the shipped
+  pronunciation lexicons) whose `licence` does not pass `allowedLicences`,
+  whose `licenceQuote` is empty, that has no `licenceChecked` date or whose
+  `url` or file URL lies under a URL of `data/lexicon/refused.json`
+  (CC-CEDICT, OpenRussian, Wiktionary and other share-alike, non-commercial
+  or unclear sources). These findings cannot be excepted either; add a
+  source's licence text and copyright line to `src/g2p/lexicon/NOTICE.md`.
 
 Words are not checked: `docs/`, `dev/log/`, `CHANGELOG.md`, `.changeset/`,
 the list itself and its test are skipped, and "neural" may be written
@@ -236,7 +244,8 @@ Every dataset belongs to one of three classes:
    to the repository by the issue that needs it, never the whole cache.
 2. **Fetch only**: any other licence of `allowedDatasetLicences` in
    `scripts/policy-denylist.json` (`CC-BY-4.0`, `CC-BY-3.0`, `Apache-2.0`,
-   `MIT`, `BSD-2-Clause`, `BSD-3-Clause`, `Custom-Attribution`); the entry has
+   `MIT`, `BSD-2-Clause`, `BSD-3-Clause`, `Unicode-3.0`,
+   `Custom-Attribution`); the entry has
    `"redistribution": false`. Tests download it at run time.
 3. **Refused**: everything else (non-commercial, no-derivatives, share-alike,
    GPL, paid, behind a login, re-hosting forbidden, unknown). Well-known

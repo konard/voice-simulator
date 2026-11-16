@@ -17,6 +17,7 @@ on:
           - copy
           - performance
           - gpu
+          - lexicon
         default: all
       ref:
         description: Branch or tag of this repository, or a commit on the default branch or on the branch chosen above, to test (empty = the branch chosen above)

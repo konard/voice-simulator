@@ -23,6 +23,15 @@ a pressure wave travelling through the 3D shape of a parametric low-poly head
   (看一看 `kʰan˥˩ i kʰan˥˩`, 是不是 `ʂɻ̩˥˩ pu ʂɻ̩˥˩`, 第一名 `ti˥˩ i˥ miŋ˧˥`),
   and words separated by spaces get sandhi as one phrase (`我 很 好` and
   `wǒ hěn hǎo` read like `我很好`); typed `bu4` and `yi1` keep their tone.
+- **Pronunciation lexicons** from permissive sources (issue 47): 20 042
+  English words from CMUdict (BSD-2-Clause) with every variant
+  (`pronunciations('en', 'either')` is `ˈiðɚ`, `ˈaɪðɚ`), Chinese readings
+  of 8 105 characters from Unihan (Unicode-3.0) and 2 000 words mined from
+  AISHELL-3 (Apache-2.0) or written by hand, and hand-written Hindi and
+  Russian exceptions. English words built from known words are read by
+  morphology (`congresswoman` ˈkɑŋɡɹəsˌwʊmən, source `morphology`). Your
+  own words win over the shipped ones (`lexicon` option, `addLexicon`,
+  CLI `--lexicon`); see [Pronunciation lexicons](#pronunciation-lexicons).
 - **Speech markup**: an SSML subset (`<speak>`, `break`, `prosody`,
   `emphasis`, `say-as`, `phoneme`, `lang`, `sub` and `vs:` elements for
   effort, phonation, emotion and sounds), inline tags such as
@@ -315,11 +324,15 @@ npm install voice-simulator
 
 ```js
 import {
+  addLexicon,
   decodeAudio,
   encodeAudio,
   encodeWav,
+  englishDictionarySize,
   matchVoice,
+  pronunciations,
   randomHeadConfig,
+  spellingsOf,
   synthesize,
   synthesizeStream,
   textToIpa,
@@ -333,6 +346,14 @@ textToIpa('I can do it', { lang: 'en', weakForms: false }).ipa; // 'ˈaɪ ˈkæn
 // Speech markup (docs/markup.md): SSML is read by itself, inline tags on request.
 textToIpa('<speak>Hello <emphasis>world</emphasis>.</speak>').ipa; // 'həˈloʊ ˈˈwɝld .'
 textToIpa('[whisper]Hello[/whisper] world.', { markup: true }).ipa; // '{W həˈloʊ W} ˈwɝld .'
+
+// Your own pronunciations win over the shipped lexicons.
+textToIpa('quinoa', { lang: 'en' }).ipa; // 'ˈkinwɑ'
+textToIpa('quinoa', { lang: 'en', lexicon: { en: { quinoa: 'kiˈnoʊə' } } });
+addLexicon('en', { quinoa: 'kiˈnoʊə' }); // for every later call
+pronunciations('en', 'either'); // ['ˈiðɚ', 'ˈaɪðɚ']
+spellingsOf('en', 'ˈðɛɹ'); // ['their', 'there', "they're"]
+englishDictionarySize(); // 20042
 
 const head = randomHeadConfig(42); // a different person for every seed
 const result = synthesize('Hello world', { head, tier: 'medium' });
@@ -404,6 +425,7 @@ Lower-level building blocks are exported too: `planUtterance`,
 ```bash
 npx voice-simulator ipa "你好世界"
 npx voice-simulator ipa "Water, please." --accent en-GB
+npx voice-simulator ipa "quinoa" --lang en --lexicon my-words.json  # {"quinoa": "kiˈnoʊə"}
 npx voice-simulator ipa --markup "[whisper]Hello[/whisper] world."  # {W həˈloʊ W} ˈwɝld .
 npx voice-simulator say "<speak>Wait<break time=\"1s\"/>now.</speak>" -o wait.wav
 npx voice-simulator timeline "Hello world, how are you?"   # word and syllable times
@@ -426,6 +448,55 @@ npx voice-simulator benchmark
 npx voice-simulator serve --port 8080
 npx voice-simulator --help
 ```
+
+### Pronunciation lexicons
+
+Every word is looked up in this order: the lexicons you add, the shipped
+lexicon, English morphology, and the letter rules. `textToIpa` reports
+where each word came from (`source`: `user`, `dictionary`, `morphology` or
+`rules`). The shipped lexicons are in `src/g2p/lexicon/` and their sources
+and licences in [`src/g2p/lexicon/NOTICE.md`](src/g2p/lexicon/NOTICE.md)
+and [`data/lexicon/sources.json`](data/lexicon/sources.json); only sources
+whose licence allows use, change and redistribution are taken
+(`node scripts/check-policy.mjs` fails on any other, such as CC-BY-SA-4.0).
+
+| Language | Shipped                                         | Source                                                                     |
+| -------- | ----------------------------------------------- | -------------------------------------------------------------------------- |
+| English  | 20 042 words, every variant                     | CMUdict (BSD-2-Clause), Common Voice word counts (CC0-1.0), `en-extra.txt` |
+| Chinese  | 8 105 characters with all readings, 2 000 words | Unihan (Unicode-3.0), AISHELL-3 (Apache-2.0), `zh-phrases.txt`             |
+| Hindi    | 230 words the schwa rules read wrongly          | `hi-words.txt` (written for this project)                                  |
+| Russian  | 304 words with their stress                     | `ru-stress.txt` (written for this project)                                 |
+
+English words that the morphology of
+[`src/g2p/english-morphology.js`](src/g2p/english-morphology.js) derives
+from the words before them (a suffix on a known stem, `atrocities`,
+`conditioners`; a prefix, `unhappiness`; or two known words,
+`congresswoman`) are left out of the shipped lexicon and read by
+morphology instead. They are therefore not returned by
+`pronunciations()`, `lexiconWords()` and `spellingsOf()`
+(`pronunciations('en', 'conditioners')` is `[]`), while
+`textToIpa('conditioners')` reads them as CMUdict does.
+
+Your own lexicons are plain JSON, `{"word": "ipa"}` (toned pinyin such as
+`chóng qìng` for Chinese), given per call (`lexicon: { en: {...} }`), for
+the whole program (`addLexicon(lang, entries)`), or on the command line
+(`--lexicon file.json`, repeatable; the last one wins). The build script
+rebuilds the shipped lexicons from the downloaded sources and writes the
+full ones, which are too large to ship:
+
+```bash
+node scripts/build-lexicon.mjs build en --from <dir with cmudict.dict>
+node scripts/build-lexicon.mjs build en --from <dir> --full --out en-full.json
+node scripts/build-lexicon.mjs build zh --from <dir with Unihan.zip> --aishell <content.txt>
+node scripts/build-lexicon.mjs counts en --text <dir of .txt files>
+node scripts/build-lexicon.mjs coverage en --text <dir of .txt files>
+node scripts/build-lexicon.mjs convert --lang en --in words.tsv --out words.json
+```
+
+`build` with the default options writes the same files as are committed.
+The web app reads `lexicons/<lang>-full.json` next to its page when a
+server provides one. `npm run test:heavy -- --suite lexicon` measures how
+much of the FLEURS and held-out AISHELL-3 text the lexicons read.
 
 ### Comparing recordings
 
