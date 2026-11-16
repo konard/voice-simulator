@@ -72,6 +72,54 @@ export function resample(samples, fromRate, toRate, options = {}) {
  * @returns {{push: (chunk: ArrayLike<number>) => Float32Array, flush: () => Float32Array}}
  */
 export function createStreamResampler(fromRate, toRate, options = {}) {
+  return streamResampler(fromRate, toRate, options.zeroCrossings ?? 8, false);
+}
+
+/** Greatest common divisor of two positive integers. */
+function gcd(a, b) {
+  while (b) {
+    [a, b] = [b, a % b];
+  }
+  return a;
+}
+
+/** Largest kernel table (values) that `createResampler` builds. */
+const MAX_TABLE = 1 << 20;
+
+/**
+ * Kernel values by phase when both rates are integers: output `index` sits
+ * at input position q + p / L (L = toRate / gcd, p = index fromRate mod L),
+ * so its weights depend on p only. Returns null when the table would be too
+ * large.
+ */
+function kernelTable(fromRate, toRate, cutoff, halfWidth) {
+  if (!Number.isInteger(fromRate) || !Number.isInteger(toRate)) {
+    return null;
+  }
+  const divisor = gcd(fromRate, toRate);
+  const phases = toRate / divisor;
+  const step = fromRate / divisor;
+  const width = 2 * Math.ceil(halfWidth) + 2;
+  if (phases * width > MAX_TABLE) {
+    return null;
+  }
+  const first = new Int32Array(phases);
+  const last = new Int32Array(phases);
+  const weights = new Float64Array(phases * width);
+  for (let phase = 0; phase < phases; phase++) {
+    const fraction = phase / phases;
+    first[phase] = Math.ceil(fraction - halfWidth);
+    last[phase] = Math.floor(fraction + halfWidth);
+    for (let offset = first[phase]; offset <= last[phase]; offset++) {
+      const distance = fraction - offset;
+      weights[phase * width + offset - first[phase]] =
+        cutoff * sinc(cutoff * distance) * blackman(distance / halfWidth);
+    }
+  }
+  return { phases, step, width, first, last, weights };
+}
+
+function streamResampler(fromRate, toRate, zeroCrossings, tabulated) {
   if (!(fromRate > 0) || !(toRate > 0)) {
     throw new Error('Sample rates must be positive');
   }
@@ -84,7 +132,10 @@ export function createStreamResampler(fromRate, toRate, options = {}) {
   }
   const ratio = toRate / fromRate;
   const cutoff = Math.min(1, ratio) * 0.97;
-  const halfWidth = (options.zeroCrossings ?? 8) / cutoff;
+  const halfWidth = zeroCrossings / cutoff;
+  const table = tabulated
+    ? kernelTable(fromRate, toRate, cutoff, halfWidth)
+    : null;
   // Kept input: samples `base` .. `base + count - 1` of the whole stream.
   let kept = new Float64Array(64);
   let base = 0;
@@ -110,6 +161,9 @@ export function createStreamResampler(fromRate, toRate, options = {}) {
 
   /** Output `index` from the input up to `limit` (exclusive). */
   function output(index, limit) {
+    if (table) {
+      return tabulatedOutput(index, limit);
+    }
     const center = index / ratio;
     const first = Math.max(0, Math.ceil(center - halfWidth));
     const last = Math.min(limit - 1, Math.floor(center + halfWidth));
@@ -121,6 +175,24 @@ export function createStreamResampler(fromRate, toRate, options = {}) {
         cutoff *
         sinc(cutoff * distance) *
         blackman(distance / halfWidth);
+    }
+    return sum;
+  }
+
+  /** `output` with the weights of `table`. */
+  function tabulatedOutput(index, limit) {
+    const { phases, step, width, first, last, weights } = table;
+    const position = index * step;
+    const phase = position % phases;
+    const whole = (position - phase) / phases;
+    const start = whole + first[phase];
+    const from = Math.max(0, start);
+    const to = Math.min(limit - 1, whole + last[phase]);
+    // Weight of input `source` is weights[row + source].
+    const row = phase * width - start;
+    let sum = 0;
+    for (let source = from; source <= to; source++) {
+      sum += kept[source - base] * weights[row + source];
     }
     return sum;
   }
@@ -165,4 +237,22 @@ export function createStreamResampler(fromRate, toRate, options = {}) {
     /** Input samples held for the outputs still to come. */
     held: () => count,
   };
+}
+
+/**
+ * Chunk-by-chunk `resample` (issue 58): the kernel and the default
+ * `zeroCrossings` (16) of `resample`, so the joined outputs of `push(chunk)`
+ * and `flush()` equal `resample(all, fromRate, toRate, options)` of the
+ * joined input within 1e-6 (with integer rates the kernel values come from
+ * a table per output phase, built once, which differs from the direct
+ * values only by rounding: 3e-8 for 44100 to 16000 Hz in
+ * experiments/issue-58-resampler.mjs). It keeps about `zeroCrossings / min(1, toRate / fromRate)`
+ * input samples, the half-length of the filter.
+ * @param {number} fromRate
+ * @param {number} toRate
+ * @param {{zeroCrossings?: number}} [options]
+ * @returns {{push: (chunk: ArrayLike<number>) => Float32Array, flush: () => Float32Array, held: () => number}}
+ */
+export function createResampler(fromRate, toRate, options = {}) {
+  return streamResampler(fromRate, toRate, options.zeroCrossings ?? 16, true);
 }

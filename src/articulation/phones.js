@@ -18,6 +18,13 @@
 /**
  * Constriction location along the tract (0 = glottis, 1 = lips) and the
  * Gaussian half-width of the constricting articulator, per place.
+ *
+ * Retroflex lies behind postalveolar: the longer front cavity stands in
+ * for the cavity under the curled tongue tip and puts the noise of [ʂ]
+ * well below that of [s], the main cue between Mandarin 是 and 四 (issue
+ * 57). At 0.875 the two had the same noise centroid (7624 and 7654 Hz,
+ * tier medium); at 0.82 it is 5426 against 7654 Hz
+ * (node experiments/issue-57-acoustics.mjs).
  */
 export const PLACES = Object.freeze({
   bilabial: { lips: true, location: 1, width: 0.035 },
@@ -25,7 +32,7 @@ export const PLACES = Object.freeze({
   dental: { location: 0.94, width: 0.03 },
   alveolar: { location: 0.905, width: 0.03 },
   postalveolar: { location: 0.87, width: 0.035 },
-  retroflex: { location: 0.875, width: 0.03 },
+  retroflex: { location: 0.82, width: 0.03 },
   alveolopalatal: { location: 0.85, width: 0.045 },
   palatal: { location: 0.8, width: 0.055 },
   velar: { location: 0.66, width: 0.055 },

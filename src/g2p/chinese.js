@@ -88,13 +88,16 @@ function isErhua(chars, index, previous) {
 /**
  * Convert a run of Hanzi to toned pinyin syllables.
  * @param {string} text
+ * @param {{erhua?: boolean}} [options] erhua false (Taiwan, issue 57): an
+ *   erhua 儿 is dropped, it does not r-colour the syllable before it
+ *   (一点儿 yī diǎn); a syllabic 儿 (女儿, 婴儿) stays.
  * @returns {{char: string, pinyin: string|null, group: number, erhua?: true}[]}
  *   `group` is the index of the first character of the dictionary phrase
  *   the character belongs to (the character itself when not in a phrase).
  *   An erhua 儿 has no pinyin of its own, the group of the character before
  *   it and `erhua: true`; that character's pinyin gets the `r` (`huār`).
  */
-export function hanziToPinyin(text) {
+export function hanziToPinyin(text, { erhua = true } = {}) {
   const chars = [...text];
   const longest = Math.max(MAX_PHRASE, longestUserWord('zh'));
   const result = [];
@@ -113,7 +116,9 @@ export function hanziToPinyin(text) {
       );
       index += word.syllables.length;
     } else if (isErhua(chars, index, previous)) {
-      previous.pinyin += 'r';
+      if (erhua) {
+        previous.pinyin += 'r';
+      }
       result.push({
         char: chars[index],
         pinyin: null,
@@ -170,25 +175,29 @@ function parseSyllable({ char, pinyin, user }) {
  * Convert syllables (with optional source characters) to an IPA phrase.
  * @param {{char?: string, pinyin: string|null}[]} items
  */
-function syllablesToIpa(items) {
+function syllablesToIpa(items, { lowThird = false } = {}) {
   const syllables = items.map(parseSyllable).filter(Boolean);
   applyToneSandhi(syllables);
   return syllables.map((syllable, index) =>
-    syllableWithTone(syllable, index === syllables.length - 1)
+    syllableWithTone(syllable, !lowThird && index === syllables.length - 1)
   );
 }
 
 /**
  * Pronounce a Chinese word: a run of Hanzi or pinyin syllables.
  * @param {string} word
+ * @param {{erhua?: boolean, lowThird?: boolean}} [options] Switches of
+ *   regional accents (issue 57): erhua false drops an erhua 儿 (see
+ *   hanziToPinyin); lowThird true keeps the third tone low (˨˩) at the end
+ *   of a phrase too, as in Taiwan Mandarin.
  * @returns {{ipa: string, pinyin: string,
  *   source: 'user'|'dictionary'|'pinyin'|'unknown'}}
  *   `user` when a user lexicon gave the reading of a character.
  */
-export function chineseWordToIpa(word) {
+export function chineseWordToIpa(word, options = {}) {
   const hanzi = [...word].some(isHanzi);
   const items = hanzi
-    ? hanziToPinyin(word)
+    ? hanziToPinyin(word, options)
     : (segmentPinyin(word) ?? []).map((pinyin) => ({ pinyin }));
   const known = items.filter((item) => item.pinyin);
   let source = known.length ? 'pinyin' : 'unknown';
@@ -196,7 +205,7 @@ export function chineseWordToIpa(word) {
     source = items.some((item) => item.user) ? 'user' : 'dictionary';
   }
   return {
-    ipa: syllablesToIpa(known).join(' '),
+    ipa: syllablesToIpa(known, options).join(' '),
     pinyin: known.map((item) => item.pinyin).join(' '),
     source,
   };
@@ -229,12 +238,13 @@ registerShippedSpeaker('zh', (word, pinyin) => {
  * Pronounce a run of Hanzi character by character, with tone sandhi
  * applied across the whole run as in `chineseWordToIpa`.
  * @param {string} text
+ * @param {{erhua?: boolean, lowThird?: boolean}} [options] as in chineseWordToIpa.
  * @returns {{char: string, pinyin: string|null, group: number, ipa: string|null}[]}
  */
-export function chineseSyllables(text) {
-  const items = hanziToPinyin(text);
+export function chineseSyllables(text, options = {}) {
+  const items = hanziToPinyin(text, options);
   const known = items.filter((item) => parseSyllable(item));
-  const ipa = syllablesToIpa(known);
+  const ipa = syllablesToIpa(known, options);
   const byItem = new Map(known.map((item, index) => [item, ipa[index]]));
   return items.map((item) => ({ ...item, ipa: byItem.get(item) ?? null }));
 }
@@ -248,10 +258,11 @@ export function chineseSyllables(text) {
  * (a typed pinyin word keeps its typed tones, an erhua word has no
  * characters).
  * @param {{text: string, pinyin: string}[]} words
+ * @param {{lowThird?: boolean}} [options] as in chineseWordToIpa.
  * @returns {string[]|null} IPA per word, or `null` when a syllable can not
  *   be read.
  */
-export function chineseRunToIpa(words) {
+export function chineseRunToIpa(words, options = {}) {
   const items = [];
   const counts = [];
   for (const { text, pinyin } of words) {
@@ -266,7 +277,7 @@ export function chineseRunToIpa(words) {
     );
     counts.push(syllables.length);
   }
-  const ipa = syllablesToIpa(items);
+  const ipa = syllablesToIpa(items, options);
   if (ipa.length < items.length) {
     return null;
   }

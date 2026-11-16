@@ -237,6 +237,21 @@ export {
   rms,
   spectralPeaks,
 } from './acoustics/analysis.js';
+// Recognition front end (issue 58): analysis frames of a stream.
+export { createFft } from './recognition/fft.js';
+export {
+  lpcAutocorrelation,
+  lpcBurg,
+  lpcCovariance,
+  lpcLevel,
+  predictorFromReflection,
+} from './recognition/lpc.js';
+export {
+  FRONTEND_DEFAULTS,
+  analyzeFrames,
+  createFrameAnalyzer,
+  workingRate,
+} from './recognition/frontend.js';
 export { encodeWav, decodeWav, wavHeader } from './audio/wav.js';
 export {
   headLandmarks,
@@ -300,7 +315,11 @@ export {
   decodeRaw,
   formatFromFileName,
 } from './audio/formats.js';
-export { createStreamResampler, resample } from './audio/resample.js';
+export {
+  createResampler,
+  createStreamResampler,
+  resample,
+} from './audio/resample.js';
 
 // Anatomy (issue 5): teeth, tongue, hard and soft palate, piriform fossae.
 export {
@@ -449,6 +468,18 @@ export {
   adaptEnglishWord,
   isNonRhotic,
 } from './g2p/accents.js';
+export {
+  ACCENT_FORMAT,
+  ACCENT_VERSION,
+  MAX_ACCENT_RULES,
+  accentSettings,
+  applyAccent,
+  explainAccent,
+  foreignAccent,
+  getAccent,
+  loadAccent,
+} from './accent/index.js';
+export { PROFILES as ACCENT_PROFILES } from './accent/foreign.js';
 export {
   BOUNDARIES,
   CONTOURS,

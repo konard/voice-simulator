@@ -46,6 +46,15 @@ a pressure wave travelling through the 3D shape of a parametric low-poly head
   `weakForms: false` (CLI `--strong-forms`) turns them off.
 - **English accents**: General American, Southern British, Australian and
   Indian English (`accent: 'en-GB'`, or `lang: 'en-GB'`).
+- **Regional and foreign accents**: Canadian English, northern (okanye)
+  and southern (fricative г) Russian, eastern Hindi, Taiwan and southern
+  Mandarin, and every pair of English, Russian, Hindi and Mandarin spoken
+  with the sounds of another (`en-x-ru` is English with a Russian accent:
+  `the thing` zə ˈsʲink). An accent is a code or an accent file of IPA
+  rules, phonotactics, prosody and articulation (`loadAccent`), with a
+  strength from 0 to 1 (`accentLevel`); `explainAccent` tells which accent
+  explains a heard pronunciation. Every code, its rules and the file format
+  are in [docs/accents.md](docs/accents.md).
 - **Punctuation prosody**: commas, semicolons, dashes, parentheses, quotes,
   periods, exclamations, questions and ellipses each have their own pause,
   final pitch movement and lengthening; questions with a question word
@@ -244,8 +253,8 @@ names)` a whole utterance, and `vrmVowelBinds(gltfJson)` reads the morph
   a new random seed; `?seed=` makes it reproducible.
 - **Voice files**: a voice is a JSON file with one object per group
   (`loadVoice`, `saveVoice`, `schemas/voice.schema.json`); it names a
-  preset and keeps only the values that differ from it. A broken file
-  reports every problem at once.
+  preset and keeps only the values that differ from it; it may name an
+  `accent` too. A broken file reports every problem at once.
 - **Speaker presets**: `male`, `female`, `child`, `child5`, `teenMale`,
   `teenFemale`, `elderlyMale`, `elderlyFemale` and the singing voices
   `bass`, `baritone`, `tenor`, `alto`, `mezzo` and `soprano`, with f0 and
@@ -340,6 +349,12 @@ import {
 
 textToIpa('Привет, мир'); // { lang: 'ru', ipa: 'prʲɪˈvʲet | mʲir', ... }
 textToIpa('water', { lang: 'en', accent: 'en-GB' }).ipa; // 'ˈwɔːtə'
+textToIpa('город', { lang: 'ru', accent: 'ru-x-south' }).ipa; // 'ˈɣorət'
+// A foreign accent at half strength (accentLevel: 0.5 does the same).
+textToIpa('the thing', {
+  lang: 'en',
+  accent: { code: 'en-x-ru', strength: 0.5 },
+}).ipa; // 'zə ˈsink'
 textToIpa('a cup of tea for you', { lang: 'en' }).ipa; // 'ə ˈkʌp əv ˈti fɚ ju'
 // weakForms: false keeps every English word in its stressed dictionary form.
 textToIpa('I can do it', { lang: 'en', weakForms: false }).ipa; // 'ˈaɪ ˈkæn ˈdu ˈɪt'
@@ -425,6 +440,8 @@ Lower-level building blocks are exported too: `planUtterance`,
 ```bash
 npx voice-simulator ipa "你好世界"
 npx voice-simulator ipa "Water, please." --accent en-GB
+npx voice-simulator ipa --lang en --accent en-x-ru --accent-level 0.5 "the thing"
+npx voice-simulator say "the three red rivers" --accent examples/accents/en-x-th-stopping.json -o th.wav
 npx voice-simulator ipa "quinoa" --lang en --lexicon my-words.json  # {"quinoa": "kiˈnoʊə"}
 npx voice-simulator ipa --markup "[whisper]Hello[/whisper] world."  # {W həˈloʊ W} ˈwɝld .
 npx voice-simulator say "<speak>Wait<break time=\"1s\"/>now.</speak>" -o wait.wav
@@ -564,6 +581,49 @@ same sentence on the `minimal` tier are 47 to 52 dB apart here, and two
 renderings with seeds 1 and 2 are 10 to 11 dB apart
 (`node experiments/issue-19-voice-pairs.mjs`).
 
+### Analysis front end
+
+`createFrameAnalyzer(sampleRate, options)` turns sound into analysis frames
+while it arrives; it is the first stage of reverse simulation (Roadmap 4).
+It resamples to a working rate (`workingRate`: the largest of 8000, 11025
+and 16000 Hz not above the input rate; it never up-samples) with
+`createResampler`, which matches `resample()` within 1e-6. Every 5 ms (or
+10 ms) it measures a 25 ms frame: `energy`, `zcr`, `gravity`, `tilt`, six
+Liu (1996) `band` levels, `periodicity` (Boersma 1993), 24 log `mel`
+energies, 13 `cepstrum` coefficients, LPC `lpc`, `reflection` and `gain`
+(Burg, autocorrelation or covariance method), the `noise` floor (minimum
+statistics, Martin 2001) and a `speech` flag with 40 ms hangover. The
+defaults are `FRONTEND_DEFAULTS`. All rows live in one frame set of flat
+`Float32Array`s (`speech` is a `Uint8Array`) with `capacity` rows allocated
+once; nothing is allocated per frame.
+
+```js
+import { analyzeFrames, createFrameAnalyzer } from 'voice-simulator';
+
+const analyzer = createFrameAnalyzer(44100);
+analyzer.push(chunk); // frames added so far
+analyzer.flush(); // the frames that need zeros after the end
+const { frames } = analyzer;
+frames.energy[frames.count - 1]; // dB
+frames.cepstrum.subarray(0, frames.cepstra); // row 0
+analyzer.trim(100); // drop the first 100 frames (0.5 s) and their samples
+analyzeFrames(samples, 16000).count; // one call for a whole recording
+```
+
+Later stages follow one pattern: `createX(frames, options)` returns an object
+with `advance(final = false)`, which processes the frames added since the
+last call, and an output whose arrays have `frames.capacity` rows and a
+field `committed` (rows before it never change; type `FrameStage`). After
+`trim()` a stage is invalid and is created again. `createFft`, `lpcBurg`,
+`lpcAutocorrelation`, `lpcCovariance`, `predictorFromReflection` and
+`lpcLevel` are exported too.
+
+Measured with `node experiments/issue-58-rtf.mjs` (10 s of speech, one
+thread): 0.0138 of real time at 16000 Hz, 0.0059 at 8000 Hz and 0.0199 for
+44100 Hz input (the budget is 0.05 and 0.03). The added delay is 12.5 ms
+at 8000 and 16000 Hz and 13.5 ms at 44100 and 48000 Hz
+(`node experiments/issue-58-delay.mjs`; the budget is 20 ms).
+
 ### Quality
 
 [docs/reports/baseline-quality.md](docs/reports/baseline-quality.md) is the
@@ -646,7 +706,9 @@ be passed as a query string or as a JSON `POST` body.
 | `GET /api/synthesize`  | `text`, `lang`, `tier`, `seed`, `head`, `sampleRate` → WAV    |
 | `GET /api/stream`      | Same parameters → chunked WAV that starts playing right away  |
 
-Synthesis also accepts `accent` (`en-US`, `en-GB`, `en-AU`, `en-IN`),
+Synthesis also accepts `accent` (a code such as `en-GB` or `ru-x-south`,
+`{code, strength}`, or an accent object in a JSON body; never a file path)
+and `accentLevel` (0 to 1),
 `preset` (`male`, `female`, `child`, used with `head=random`), `micDistance`
 (cm), `micAzimuth` and `micElevation` (degrees), `micCompensate`, `room` (a
 preset name, or a `{width, height, depth, rt60}` object in a JSON body), and
@@ -1034,6 +1096,7 @@ npm run example:desktop:package
 ├── scripts/               # Repository tools (listening-test.mjs, golden.mjs, ...)
 ├── src/
 │   ├── g2p/               # Text normalisation, accents, text to IPA
+│   ├── accent/            # Accent files, rules, regional and foreign accents
 │   ├── ipa/               # IPA parsing, phone inventory, syllables
 │   ├── articulation/      # Plan, prosody, timeline and tract shapes
 │   ├── geometry/          # Head model, centrelines and meshes

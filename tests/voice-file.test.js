@@ -171,7 +171,7 @@ describe('voice files', () => {
       'folds.foldMass = "loud" is not a finite number',
       'unknown key "folds.wobble"',
       'breathing.pitch belongs to the group folds',
-      `unknown group "colour" (use ${HEAD_GROUPS.join(', ')}, or format, version, name, description, preset)`,
+      `unknown group "colour" (use ${HEAD_GROUPS.join(', ')}, or format, version, name, description, preset, accent)`,
       `unknown preset "robot" (use ${Object.keys(HEAD_PRESETS).join(', ')})`,
     ]);
     expect(error.message).toBe(error.problems.join('\n'));

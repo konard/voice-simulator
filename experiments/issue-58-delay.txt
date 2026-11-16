@@ -1,0 +1,5 @@
+input 8000 Hz (working 8000 Hz): largest delay 12.50 ms
+input 11025 Hz (working 11025 Hz): largest delay 12.56 ms
+input 16000 Hz (working 16000 Hz): largest delay 12.50 ms
+input 44100 Hz (working 16000 Hz): largest delay 13.48 ms
+input 48000 Hz (working 16000 Hz): largest delay 13.48 ms

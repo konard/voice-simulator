@@ -156,12 +156,20 @@ for (const [lang, accent, text] of [
   ['zh', 'zh-TW', '是不是'],
   ['hi', 'hi-east', 'ज़रा फिर'],
   ['en', 'ru', 'think of the water'],
+  // The codes of issue 57; an unknown code of the language (ru-south,
+  // hi-east above) throws a RangeError since then.
+  ['ru', 'ru-x-south', 'город молоко'],
+  ['hi', 'hi-x-east', 'ज़रा फिर'],
+  ['en', 'en-x-ru', 'think of the water'],
 ]) {
-  const out = textToIpa(text, { lang, accent });
-  show(`accent ${lang} ${accent} ${text}`, {
-    ipa: out.ipa,
-    accent: out.accent ?? null,
-  });
+  let value;
+  try {
+    const out = textToIpa(text, { lang, accent });
+    value = { ipa: out.ipa, accent: out.accent ?? null };
+  } catch (error) {
+    value = `${error.name}: ${error.message}`;
+  }
+  show(`accent ${lang} ${accent} ${text}`, value);
 }
 
 // 8. Where does the pitch move? Start and end pitch (Hz) of every vowel.
