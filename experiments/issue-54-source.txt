@@ -1,0 +1,7 @@
+modal     Rd 1.20 noise re pulses -40.2 dB, pulses 0.0 dB re modal, 120 periods in 1 s
+breathy   Rd 2.50 noise re pulses -13.6 dB, pulses 1.5 dB re modal, 120 periods in 1 s
+lax       Rd 1.80 noise re pulses -41.3 dB, pulses 1.1 dB re modal, 120 periods in 1 s
+pressed   Rd 0.40 noise re pulses -36.1 dB, pulses -4.1 dB re modal, 120 periods in 1 s
+creaky    Rd 0.50 noise re pulses -34.6 dB, pulses -5.4 dB re modal, 59 periods in 1 s
+falsetto  Rd 2.30 noise re pulses -21.0 dB, pulses -6.3 dB re modal, 239 periods in 1 s
+harsh     Rd 0.40 noise re pulses -24.3 dB, pulses -4.0 dB re modal, 120 periods in 1 s

@@ -1,0 +1,66 @@
+markup <speak>Hello <emphasis>world</emphasis>.</speak>: "həˈloʊ ˈˈwɝld ."
+markup [whisper]Hello[/whisper] world.: "( ˈwɪspɚ ) həˈloʊ ( ˈwɪspɚ ) ˈwɝld ."
+markup This is *really* good.: "ˈðɪs ˈɪz ˈɹɪli ˈɡʊd ."
+ipa a̤: {"segments":1,"unknown":[]}
+ipa a̰: {"segments":1,"unknown":[]}
+ipa ạ: {"segments":1,"unknown":[]}
+ipa {W ma W}: {"segments":2,"unknown":[]}
+ipa {𝆑 ma 𝆑}: {"segments":2,"unknown":[]}
+ipa ⸨cough⸩ ma: {"segments":3,"unknown":[]}
+ipa ˈˈma: {"segments":2,"unknown":[]}
+ipa ma (.) ma: {"segments":4,"unknown":[]}
+en You are coming, aren't you?: {"ipa":"ju ɚ ˈkʌmɪŋ , ˈɑɹənt ju ↗ ?","first":120,"last":147,"mean":121,"peakLoudness":1}
+en Apples, pears and plums.: {"ipa":"ˈæpəlz , ˈpɛɹz ənd ˈplʌmz .","first":135,"last":89,"mean":121,"peakLoudness":1}
+en Come here!: {"ipa":"ˈkʌm ˈhiɹ !","first":150,"last":100,"mean":134,"peakLoudness":1.41}
+en Come here.: {"ipa":"ˈkʌm ˈhiɹ .","first":133,"last":97,"mean":125,"peakLoudness":1}
+ru Ты придёшь.: {"ipa":"tɨ prʲɪˈdʲoʂ .","first":120,"last":94,"mean":112,"peakLoudness":1}
+ru Ты придёшь?: {"ipa":"tɨ prʲɪˈdʲoʂ ?","first":120,"last":171,"mean":127,"peakLoudness":1}
+ru Кто пришёл?: {"ipa":"ˈˈkto prʲɪˈʂoɫ ↘ ?","first":127,"last":87,"mean":103,"peakLoudness":1.41}
+hi तुम आओगे।: {"ipa":"t̪ʊm aːoːɡeː .","first":120,"last":91,"mean":106,"peakLoudness":1}
+hi तुम आओगे?: {"ipa":"t̪ʊm aːoːɡeː ?","first":120,"last":155,"mean":122,"peakLoudness":1}
+hi क्या तुम आओगे?: {"ipa":"kjaː t̪ʊm aːoːɡeː ?","first":120,"last":154,"mean":120,"peakLoudness":1}
+zh 你来。: {"ipa":"ni˨˩ laɪ˧˥ .","first":105,"last":139,"mean":119,"peakLoudness":1}
+zh 你来？: {"ipa":"ni˨˩ laɪ˧˥ ?","first":105,"last":174,"mean":135,"peakLoudness":1}
+zh 你来吗？: {"ipa":"ni˨˩ laɪ˧˥ ma ?","first":105,"last":118,"mean":121,"peakLoudness":1}
+hi baː: {"segments":["consonant:70ms","vowel:267ms"],"peakAspiration":0}
+hi bʱaː: {"segments":["consonant:70ms","release:80ms","vowel:267ms"],"peakAspiration":0}
+hi pʰaː: {"segments":["consonant:75ms","release:60ms","vowel:267ms"],"peakAspiration":1}
+hi paː: {"segments":["consonant:75ms","release:15ms","vowel:267ms"],"peakAspiration":0.35}
+tenseness 0: {"levelDb":-20.4,"f0":122,"f1":490,"h1h2":13.53,"hnr":19.96,"voicedShare":0.85}
+tenseness 0.3: {"levelDb":-19.7,"f0":122,"f1":490,"h1h2":10.88,"hnr":20.27,"voicedShare":0.85}
+tenseness 0.6: {"levelDb":-18.6,"f0":122,"f1":485,"h1h2":4.47,"hnr":20.94,"voicedShare":0.84}
+tenseness 0.9: {"levelDb":-17,"f0":126,"f1":503,"h1h2":-5.54,"hnr":18.38,"voicedShare":0.77}
+tenseness 1: {"levelDb":-16.9,"f0":126,"f1":508,"h1h2":-5.61,"hnr":18.25,"voicedShare":0.86}
+outputGain 0.5: {"levelDb":-24.5,"f0":122,"f1":485,"h1h2":4.45,"hnr":20.87,"voicedShare":0.84}
+outputGain 1: {"levelDb":-18.6,"f0":122,"f1":485,"h1h2":4.47,"hnr":20.94,"voicedShare":0.84}
+outputGain 2: {"levelDb":-13,"f0":123,"f1":475,"h1h2":4.49,"hnr":21.11,"voicedShare":0.84}
+jitter 0.4: {"levelDb":-18.6,"f0":122,"f1":485,"h1h2":4.47,"hnr":20.94,"voicedShare":0.84}
+jitter 3: {"levelDb":-18.6,"f0":124,"f1":480,"h1h2":4.41,"hnr":11.38,"voicedShare":0.83}
+pitch 60: {"levelDb":-21.9,"f0":63,"f1":505,"h1h2":5.63,"hnr":15.3,"voicedShare":0.69}
+breathiness 1 aspirationLevel 3 chink 10: {"levelDb":-12.1,"f0":126,"f1":350,"h1h2":12.05,"hnr":0.52,"voicedShare":0.12}
+filler en um: "ˈʌm"
+filler en uh: "ˈʌh"
+filler en haha: "ˈhæhæ"
+filler en hmm: "hmm"
+filler ru э-э: "ɛ ɛ"
+filler ru ха-ха: "xa xa"
+filler zh 嗯: ""
+filler zh 呃: "ɤ˥˩"
+filler hi अं: "ə̃"
+accent languages: ["en","ru","hi","zh"]
+accent en en-GB water: {"ipa":"ˈwɔːtə","accent":"en-GB"}
+accent en en-IN think of the water: {"ipa":"ˈt̪ʰɪŋk əʋ d̪ə ˈʋɔʈəɾ","accent":"en-IN"}
+accent ru ru-south город молоко: "RangeError: Unknown accent \"ru-south\" for ru (use ru-RU, ru-x-north, ru-x-south, ru-x-en, ru-x-hi, ru-x-zh)"
+accent zh zh-TW 是不是: {"ipa":"sɹ̩˥˩ pu sɹ̩˥˩","accent":"zh-TW"}
+accent hi hi-east ज़रा फिर: "RangeError: Unknown accent \"hi-east\" for hi (use hi-IN, hi-x-east, hi-x-en, hi-x-ru, hi-x-zh)"
+accent en ru think of the water: {"ipa":"ˈθɪŋk əv ðə ˈwɔɾɚ","accent":"en-US"}
+accent ru ru-x-south город молоко: {"ipa":"ˈɣorət mɐˈɫokə","accent":"ru-x-south"}
+accent hi hi-x-east ज़रा फिर: {"ipa":"d͡ʒəɾaː pʰɪɾ","accent":"hi-x-east"}
+accent en en-x-ru think of the water: {"ipa":"ˈsʲinɡk ˈaf zə ˈvorər","accent":"en-x-ru"}
+vowels ru Это мама.: {"ipa":"ˈɛtə ˈmamə .","f0":[[120,120],[117,116],[113,89],[83,82]]}
+vowels ru Это мама?: {"ipa":"ˈɛtə ˈmamə ?","f0":[[120,120],[117,116],[108,179],[114,97]]}
+vowels en Tea or coffee?: {"ipa":"ˈti ↗ | ˈɔɹ ˈkɑfi ↘ ?","f0":[[113,159],[135,135],[120,114],[87,84]]}
+vowels en I said Anna, not Maria.: {"ipa":"aɪ ˈsɛd ˈænə , ˈnɑt mɚˈiə .","f0":[[120,120],[120,120],[128,128],[126,108],[124,132],[126,126],[105,105],[106,113],[111,90]]}
+voiceless ˈama: {"levelDb":-19.5}
+voiceless ˈḁm̥ḁ: {"levelDb":-120}
+voiceless ˈhḁ: {"levelDb":-43}

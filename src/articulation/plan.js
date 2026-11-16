@@ -43,6 +43,14 @@ import {
 } from './modes.js';
 import { approachTargets as approachToneTargets } from './tone-model.js';
 import { applyIntonationTiming } from './intonation.js';
+import {
+  BREATHY_RELEASE,
+  PHONATION_CHANNELS,
+  breathyReleaseChannels,
+  finalCreakAmount,
+  isModal,
+  phonationChannels,
+} from './phonation.js';
 import { consonantJaw, teethGap } from './teeth.js';
 import {
   EFFORT_RULES,
@@ -141,6 +149,11 @@ const SOURCE_TIME_CONSTANTS = Object.freeze({
   foldTension: 0.03,
   effort: 0.05,
   tension: 0.03,
+  // Phonation types (issue 54, ./phonation.js).
+  breath: 0.03,
+  creak: 0.03,
+  falsetto: 0.03,
+  harsh: 0.03,
 });
 
 /**
@@ -225,6 +238,10 @@ function pushConsonant(segments, token, index, context) {
  */
 function pushRelease(segments, token, index, context) {
   const manner = token.phoneme.manner;
+  if (isBreathyStop(token)) {
+    pushBreathyRelease(segments, token, context);
+    return;
+  }
   if (manner !== 'plosive' || token.voiced || token.affricate) {
     return;
   }
@@ -244,6 +261,30 @@ function pushRelease(segments, token, index, context) {
       frication: closure.target.frication,
     },
     duration: (aspirated ? 0.06 : 0.015) / context.duration.speechRate,
+  });
+}
+
+/** A breathy-voiced plosive or affricate: bʱ dʱ ɖʱ ɡʱ d͡ʒʱ. */
+function isBreathyStop(token) {
+  return (
+    Boolean(token.voiced && token.breathy) &&
+    (token.phoneme?.manner === 'plosive' || Boolean(token.affricate))
+  );
+}
+
+/**
+ * Breathy-voiced release of bʱ dʱ ɖʱ ɡʱ dʒʱ (issue 54): voiced, with the
+ * breath of a breathy voice and its Rd (`BREATHY_RELEASE`, 80 ms at speech
+ * rate 1) and a pitch 1.5 semitones lower that glides into the vowel
+ * (`fillPhonation()`). The closure stays that of a plain voiced stop.
+ */
+function pushBreathyRelease(segments, token, context) {
+  segments.push({
+    token,
+    kind: 'release',
+    breathyRelease: true,
+    target: { voicing: 1, aspiration: 0, frication: 0 },
+    duration: BREATHY_RELEASE.duration / context.duration.speechRate,
   });
 }
 
@@ -414,6 +455,10 @@ const DEFAULTS = {
   foldTension: 1,
   effort: 0,
   tension: 0,
+  breath: 0,
+  creak: 0,
+  falsetto: 0,
+  harsh: 0,
 };
 
 export { DEFAULTS as CHANNEL_DEFAULTS };
@@ -864,6 +909,7 @@ function addVibrato(values, head, frameRate) {
  */
 function fillFoldDrive(channels, steps, head) {
   const { loudness, voicing, aspiration, glottalClosure, effort } = steps;
+  const { phonationTension, breath } = steps;
   const tense = 0.6 * (head.tenseness - 0.6);
   const breathy = 0.3 * (head.breathiness - 0.2);
   const modal = Math.min(1, Math.max(0.25, 0.5 + tense - breathy));
@@ -875,7 +921,10 @@ function fillFoldDrive(channels, steps, head) {
         effort[frame]
       );
     }
-    let adduction = Math.max(0, voicing[frame]) * modal;
+    const rest = phonationTension
+      ? phonationAdduction(modal, phonationTension[frame], breath[frame])
+      : modal;
+    let adduction = Math.max(0, voicing[frame]) * rest;
     const open = Math.min(1, Math.max(0, aspiration[frame]));
     adduction += (Math.min(adduction, 0.2) - adduction) * open;
     const closed = Math.min(1, Math.max(0, glottalClosure[frame]));
@@ -884,17 +933,157 @@ function fillFoldDrive(channels, steps, head) {
 }
 
 /**
+ * Adduction of the fold source under a phonation (issue 54): the tension
+ * of the phonation moves it as the head tenseness does (0.6 per unit),
+ * its breath as the head breathiness (-0.3 per unit), down to
+ * `FOLD_PHONATION.minAdduction`: a breathy voice holds the folds further
+ * apart, a pressed one presses them together, falsetto (lax, a little
+ * breath) leaves them barely touching.
+ */
+function phonationAdduction(modal, tension, breath) {
+  if (tension === 0 && breath === 0) {
+    return modal;
+  }
+  return Math.min(
+    1,
+    Math.max(
+      FOLD_PHONATION.minAdduction,
+      modal + FOLD_PHONATION.tension * tension - FOLD_PHONATION.breath * breath
+    )
+  );
+}
+
+/**
+ * How the phonation channels drive the fold source (issue 54): the
+ * adduction per unit of phonation tension and breath and its lower
+ * limit, and the pitch the folds are tuned for, `f0 * 2^(falsetto -
+ * creak)` (thin stiff folds an octave up, thick slack ones an octave
+ * down, not below `creakFloor` Hz). Creak also lowers the lung pressure
+ * of the folds by `creakPressure` (src/acoustics/folds.js).
+ */
+export const FOLD_PHONATION = Object.freeze({
+  tension: 0.6,
+  breath: 0.3,
+  minAdduction: 0.15,
+  creakFloor: 25,
+});
+
+/**
  * Fold tension for the final pitch and lung pressure. It follows the f0
  * channel, which is already smoothed with the same 0.03 s. Under vocal
  * effort the tension is set for the pitch less the rise the folds give on
  * their own at the raised pressure (`foldPitchFactor()`, issue 52).
  */
 function fillFoldTension(channels, head) {
-  const { f0, lungPressure, foldTension, effort } = channels;
+  const { f0, lungPressure, foldTension, effort, creak, falsetto } = channels;
   for (let frame = 0; frame < f0.length; frame++) {
-    const pitch = f0[frame] * foldPitchFactor(effort[frame]);
+    let pitch = f0[frame] * foldPitchFactor(effort[frame]);
+    if (creak[frame] !== 0 || falsetto[frame] !== 0) {
+      const floor = Math.min(pitch, FOLD_PHONATION.creakFloor);
+      pitch = Math.max(floor, pitch * 2 ** (falsetto[frame] - creak[frame]));
+    }
     foldTension[frame] = tensionForPitch(pitch, lungPressure[frame], head);
   }
+}
+
+/** The phonation channels of a segment (./phonation.js). */
+function segmentPhonation(segment, head) {
+  if (segment.breathyRelease) {
+    return breathyReleaseChannels(head);
+  }
+  const { token } = segment;
+  // A breathy stop is breathy in its release, not in its closure.
+  return phonationChannels(
+    token.mode,
+    isBreathyStop(token) ? null : token,
+    head
+  );
+}
+
+/**
+ * Fill the phonation channels (`breath`, `creak`, `falsetto`, `harsh`)
+ * as steps from the segments and add the Rd change of each phonation to
+ * the `tension` channel (issue 54). Returns the tension of the phonation
+ * alone (the fold drive reads it), or null when every segment is modal.
+ */
+function fillPhonation(channels, segments, head, frameRate) {
+  let phonationTension = null;
+  const frameCount = channels.tension.length;
+  const cache = new Map();
+  for (const segment of segments) {
+    if (!segment.token) {
+      continue;
+    }
+    const key = segment.breathyRelease ? 'release' : segment.token;
+    if (!cache.has(key)) {
+      cache.set(key, segmentPhonation(segment, head));
+    }
+    const values = cache.get(key);
+    if (isModal(values)) {
+      continue;
+    }
+    phonationTension ??= new Float32Array(frameCount);
+    const [first, last] = frameRange(segment, frameRate, frameCount);
+    for (let frame = first; frame < last; frame++) {
+      channels.tension[frame] += values.tension;
+      phonationTension[frame] = values.tension;
+    }
+    for (const name of PHONATION_CHANNELS) {
+      channels[name].fill(values[name], first, last);
+    }
+  }
+  return phonationTension;
+}
+
+/**
+ * Lower the pitch of breathy-voiced releases by `BREATHY_RELEASE.pitch`
+ * semitones; the smoothing of f0 glides it into the vowel.
+ */
+function lowerBreathyReleases(f0, segments, frameRate) {
+  const factor = 2 ** (BREATHY_RELEASE.pitch / 12);
+  for (const segment of segments) {
+    if (segment.breathyRelease) {
+      const [first, last] = frameRange(segment, frameRate, f0.length);
+      for (let frame = first; frame < last; frame++) {
+        f0[frame] *= factor;
+      }
+    }
+  }
+}
+
+/** Pauses that end a phrase with phrase-final creak: `.` and `‖`. */
+const CREAK_PAUSES = new Set(['.', '‖']);
+
+/**
+ * Phrase-final creak (`head.finalCreak`, issue 54): over the last vowel
+ * before `.` or `‖` and what follows it up to the pause, the creak of
+ * `finalCreakAmount()` at the final (smoothed) f0 where it is larger.
+ */
+function fillFinalCreak(creak, f0, segments, head, frameRate) {
+  if (!(head.finalCreak > 0)) {
+    return;
+  }
+  segments.forEach((segment, index) => {
+    if (segment.kind !== 'pause' || !CREAK_PAUSES.has(segment.token?.symbol)) {
+      return;
+    }
+    let vowel = index - 1;
+    while (vowel >= 0 && segments[vowel].kind !== 'vowel') {
+      if (segments[vowel].kind === 'pause') {
+        return;
+      }
+      vowel--;
+    }
+    if (vowel < 0) {
+      return;
+    }
+    const first = Math.round(segments[vowel].start * frameRate);
+    const last = Math.min(f0.length, Math.round(segment.start * frameRate));
+    for (let frame = first; frame < last; frame++) {
+      const amount = finalCreakAmount(f0[frame], head.pitch, head.finalCreak);
+      creak[frame] = Math.max(creak[frame], amount);
+    }
+  });
 }
 
 /**
@@ -1009,6 +1198,39 @@ function accentedHead(options) {
 }
 
 /**
+ * Smooth the source channels with their SOURCE_TIME_CONSTANTS (f0 along
+ * its pitch shape), add the vibrato, then the phrase-final creak (which
+ * follows the smoothed f0) and smooth the phonation channels.
+ */
+function smoothSource(channels, pitchShape, segments, head, frameRate) {
+  const speed = head.articulationSpeed;
+  for (const name of [
+    'loudness',
+    'f0',
+    'lungPressure',
+    'adduction',
+    'effort',
+    'tension',
+  ]) {
+    const timeConstant = SOURCE_TIME_CONSTANTS[name] / speed;
+    if (name === 'f0') {
+      smoothPitch(channels.f0, pitchShape, timeConstant, frameRate);
+    } else {
+      smoothChannel(channels[name], timeConstant, frameRate);
+    }
+  }
+  addVibrato(channels.f0, head, frameRate);
+  fillFinalCreak(channels.creak, channels.f0, segments, head, frameRate);
+  for (const name of PHONATION_CHANNELS) {
+    smoothChannel(
+      channels[name],
+      SOURCE_TIME_CONSTANTS[name] / speed,
+      frameRate
+    );
+  }
+}
+
+/**
  * Plan an utterance from IPA.
  * @param {string|object[]} ipa IPA string or parsed tokens.
  * @param {{head?: object, language?: string, frameRate?: number, durations?: (number|null)[], durationTable?: object, accent?: {prosody?: {tunes?: string|null, range?: number, rate?: number, stressLengthening?: number}, articulation?: Record<string, number>}, articulators?: Record<string, {timeConstant?: number, lead?: number}>, resistance?: Record<string, number>, modes?: {from: number, to: number, mode: object}[]}} [options]
@@ -1082,6 +1304,7 @@ export function planUtterance(ipa, options = {}) {
   for (let frame = 0; frame < frameCount; frame++) {
     channels.tension[frame] = TENSION_PER_DB * effort[frame];
   }
+  const phonationTension = fillPhonation(channels, segments, head, frameRate);
   const pitchShape = fillPitch(
     channels.f0,
     segments,
@@ -1090,28 +1313,19 @@ export function planUtterance(ipa, options = {}) {
     channels.height,
     { language: tunes, effort }
   );
-  const steps = { loudness: channels.loudness, effort };
+  lowerBreathyReleases(channels.f0, segments, frameRate);
+  const steps = {
+    loudness: channels.loudness,
+    effort,
+    phonationTension,
+    breath: channels.breath,
+  };
   for (const name of GLOTTAL_CHANNELS) {
     steps[name] = new Float32Array(frameCount);
   }
   fillDefaults(steps, segments, frameRate, GLOTTAL_CHANNELS);
   fillFoldDrive(channels, steps, head);
-  for (const name of [
-    'loudness',
-    'f0',
-    'lungPressure',
-    'adduction',
-    'effort',
-    'tension',
-  ]) {
-    const timeConstant = SOURCE_TIME_CONSTANTS[name] / head.articulationSpeed;
-    if (name === 'f0') {
-      smoothPitch(channels.f0, pitchShape, timeConstant, frameRate);
-    } else {
-      smoothChannel(channels[name], timeConstant, frameRate);
-    }
-  }
-  addVibrato(channels.f0, head, frameRate);
+  smoothSource(channels, pitchShape, segments, head, frameRate);
   addLarynxPitch(channels.larynxHeight, channels.f0, head);
   fillFoldTension(channels, head);
   const ordered = Object.fromEntries(

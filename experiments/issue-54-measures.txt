@@ -1,0 +1,7 @@
+modal     f0 128.34 (0.00 st) pulseF0 128.64 (0.00 st) h1h2 4.72 pulseH1H2 4.25 hnr 20.41 cpp 28.01 jitter 0.76 %
+breathy   f0 126.58 (-0.24 st) pulseF0 130.20 (0.21 st) h1h2 11.72 pulseH1H2 9.54 hnr 4.74 cpp 15.83 jitter 1.29 %
+lax       f0 128.25 (-0.01 st) pulseF0 128.65 (0.00 st) h1h2 9.66 pulseH1H2 9.93 hnr 20.04 cpp 24.67 jitter 0.76 %
+pressed   f0 128.40 (0.01 st) pulseF0 128.45 (-0.03 st) h1h2 -4.55 pulseH1H2 -4.45 hnr 19.33 cpp 33.30 jitter 0.94 %
+creaky    f0 514.37 (24.03 st) pulseF0 62.43 (-12.52 st) h1h2 11.15 pulseH1H2 -1.16 hnr 5.66 cpp 16.35 jitter 7.06 %
+falsetto  f0 253.49 (11.78 st) pulseF0 254.12 (11.79 st) h1h2 13.11 pulseH1H2 13.61 hnr 12.10 cpp 15.68 jitter 2.37 %
+harsh     f0 128.52 (0.02 st) pulseF0 127.68 (-0.13 st) h1h2 -4.40 pulseH1H2 -4.68 hnr 8.02 cpp 27.19 jitter 3.46 %
