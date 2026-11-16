@@ -6,8 +6,9 @@
 //! is compiled with `+atomics`, its memory is imported and shared, and
 //! every helper is a Web Worker (or a Node.js worker thread) with its own
 //! instance of the same module on that memory. A helper instance first
-//! gets its own stack and thread-local block ([`vs_thread_init`]), then
-//! waits in JavaScript until the pool hands it a team, and calls
+//! gets its own stack and thread-local block (`vs_thread_init`, written in
+//! WebAssembly assembly and only in the threads build), then waits in
+//! JavaScript until the pool hands it a team, and calls
 //! [`vs_team_work`], which returns when the leader ends the team.
 //!
 //! The leader is the thread that owns the renderer (the renderers are
