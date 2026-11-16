@@ -105,8 +105,10 @@ describe('performance of the audio tiers (issue 31)', () => {
       itUnless(
         noRust,
         threads > 1 ? null : 'the threads build of the engine is not loaded'
-      )(`measures tier ${tier.name} on rust-mt (${threads} threads)`, () =>
-        measure(tier, { name: 'rust-mt', engine: multicore, threads: 'auto' })
+      )(
+        `measures tier ${tier.name} on rust-mt${threads > 1 ? ` (${threads} threads)` : ''}`,
+        () =>
+          measure(tier, { name: 'rust-mt', engine: multicore, threads: 'auto' })
       );
     }
   }
