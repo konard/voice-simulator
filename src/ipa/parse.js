@@ -321,12 +321,19 @@ function addTimedPause(state, symbol, written) {
   });
 }
 
-function addSound(state, symbol, name) {
+/** A sound `⸨laugh⸩`, or `⸨laugh 0.5⸩` with its length in seconds. */
+function addSound(state, symbol, written) {
+  const [, name, seconds] =
+    /^\s*(\S+?)(?:\s+(\d+(?:\.\d+)?))?\s*$/u.exec(written) ?? [];
   if (!SOUND_NAMES.includes(name)) {
     state.unknown.push(symbol);
     return;
   }
-  pushTimed(state, { kind: 'sound', symbol, name, word: -1 });
+  const token = { kind: 'sound', symbol, name, word: -1 };
+  if (seconds !== undefined) {
+    token.duration = Math.min(MARKUP_LIMITS.maxPauseSeconds, Number(seconds));
+  }
+  pushTimed(state, token);
 }
 
 function consumeText(state, text) {
