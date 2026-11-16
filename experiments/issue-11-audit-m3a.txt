@@ -10,77 +10,77 @@ zh 女儿: "ny˨˩ ɚ˧˥"
 zh 儿童: "ɚ˧˥ tʰʊŋ˧˥"
 zh huār: "xwaɻ˥"
 zh yìdiǎnr: "i˥˩ tjaɻ˨˩˦"
-en: "ˈaɪ ˈɹɛd ðə ˈbʊk ˈjɛstɚˌdeɪ ."
-en: "ˈaɪ ˈwɪl ˈɹid ðə ˈbʊk ."
-en: "ˈdɪd ˈju ɹəˈkɔɹd ðə ˈɹɛkɚd ?"
-en: "ˈaɪ ˈlɪv ˈhiɹ . ə ˈlaɪv ˈʃoʊ ."
-en: "ə ˈlɛd ˈpaɪp . ˈðeɪ ˈlid ðə ˈtim ."
+en: "aɪ ˈɹɛd ðə ˈbʊk ˈjɛstɚˌdeɪ ."
+en: "aɪ wəl ˈɹid ðə ˈbʊk ."
+en: "ˈdɪd ju ɹəˈkɔɹd ðə ˈɹɛkɚd ?"
+en: "aɪ ˈlɪv ˈhiɹ . ə ˈlaɪv ˈʃoʊ ."
+en: "ə ˈlɛd ˈpaɪp . ðeɪ ˈlid ðə ˈtim ."
 en: "ðə ˈwɪnd ˈbloʊz . ˈwaɪnd ðə ˈklɑk ."
-en: "ə ˈtɪɹ ɪn ˈhɝ ˈaɪ . ˈdu ˈnɑt ˈtɛɹ ðə ˈpeɪd͡ʒ ."
+en: "ə ˈtɪɹ ɪn hɚ ˈaɪ . ˈdu ˈnɑt ˈtɛɹ ðə ˈpeɪd͡ʒ ."
 en: "ˈteɪk ə ˈbaʊ . ə ˈboʊ ənd ˈæɹoʊ ."
-en: "ˈkloʊz ðə ˈdɔɹ . ˈsteɪ ˈkloʊs ˈtu ˈmi ."
-en: "ˈaɪ ˈjuz ˈɪt . ˈɪt ˈɪz ˈʌv ˈnoʊ ˈjus ."
-en: "ə ˈpɹɛzənt ˈfɔɹ ˈju . ˈðeɪ pɹɪˈzɛnt ðə ˈplæn ."
-en: "ðə ˈɑbd͡ʒɛkt ˈɪz ˈɹɛd . ˈaɪ əbˈd͡ʒɛkt ˈtu ˈðæt ."
-en: "ðə ˈdʌv ˈflu . ˈhi ˈdoʊv ɪn ."
+en: "ˈkloʊz ðə ˈdɔɹ . ˈsteɪ ˈkloʊs tə mi ."
+en: "aɪ ˈjuz ɪt . ɪt ɪz əv ˈnoʊ ˈjus ."
+en: "ə ˈpɹɛzənt fɚ ju . ðeɪ pɹɪˈzɛnt ðə ˈplæn ."
+en: "ði ˈɑbd͡ʒɛkt ɪz ˈɹɛd . aɪ əbˈd͡ʒɛkt tə ˈðæt ."
+en: "ðə ˈdʌv ˈflu . hi ˈdoʊv ɪn ."
 en: "ə ˈmɪnət əˈɡoʊ . ə maɪˈnut dɪˈteɪl ."
 en: "ðə ˈbeɪs ɡɪˈtɑɹ . ə ˈbæs ˈswæm ˈbaɪ ."
-hi क्या तुम आओगे?: {"ipa":"kjaː t̪ʊm aːoːɡeː ?","lastVowelStart":114,"lastVowelEnd":147}
-hi तुम आओगे?: {"ipa":"t̪ʊm aːoːɡeː ?","lastVowelStart":116,"lastVowelEnd":148}
+hi क्या तुम आओगे?: {"ipa":"kjaː t̪ʊm aːoːɡeː ?","lastVowelStart":116,"lastVowelEnd":145}
+hi तुम आओगे?: {"ipa":"t̪ʊm aːoːɡeː ?","lastVowelStart":117,"lastVowelEnd":147}
 hi तुम क्या खाओगे?: {"ipa":"t̪ʊm kjaː kʰaːoːɡeː ↘ ?","lastVowelStart":107,"lastVowelEnd":92}
-hi यह क्या है?: {"ipa":"jəɦ kjaː ɦɛː ↘ ?","lastVowelStart":108,"lastVowelEnd":93}
-hi क्या हुआ?: {"ipa":"kjaː ɦʊaː ↘ ?","lastVowelStart":110,"lastVowelEnd":94}
-hi क्या बात है?: {"ipa":"kjaː baːt̪ ɦɛː ↘ ?","lastVowelStart":108,"lastVowelEnd":93}
-hi क्या आप ठीक हैं?: {"ipa":"kjaː aːp ʈʰiːk ɦɛ̃ː ?","lastVowelStart":114,"lastVowelEnd":146}
-hi आप कहाँ जा रहे हैं?: {"ipa":"aːp kəɦãː d͡ʒaː ɾəɦeː ɦɛ̃ː ↘ ?","lastVowelStart":106,"lastVowelEnd":91}
-hi आप कल कहाँ जा रहे हैं?: {"ipa":"aːp kəl kəɦãː d͡ʒaː ɾəɦeː ɦɛ̃ː ↘ ?","lastVowelStart":106,"lastVowelEnd":91}
-hi तुम्हारा नाम क्या है?: {"ipa":"t̪ʊmɦaːɾaː naːm kjaː ɦɛː ↘ ?","lastVowelStart":107,"lastVowelEnd":91}
-highlight en: [{"text":"I","ipa":"ˈaɪ","syllables":["I"]},{"text":"have","ipa":"ˈhæv","syllables":["have"]},{"text":"25","spoken":"twenty five","ipa":"ˈtwɛnti ˈfaɪv","syllables":["twen","ty","five"]},{"text":"apples","ipa":"ˈæpəlz","syllables":["ap","ples"]},{"text":"on","ipa":"ˈɑn","syllables":["on"]},{"text":"3/4/2024","spoken":"March fourth twenty twenty four","ipa":"ˈmɑɹt͡ʃ ˈfɔɹθ ˈtwɛnti ˈtwɛnti ˈfɔɹ","syllables":["March","fourth","twen","ty","twen","ty","four"]}]
-highlight en: [{"text":"It","ipa":"ˈɪt","syllables":["It"]},{"text":"costs","ipa":"ˈkɑsts","syllables":["costs"]},{"text":"$5","spoken":"five dollars","ipa":"ˈfaɪv ˈdɑlɚz","syllables":["five","dol","lars"]},{"text":"at","ipa":"ˈæt","syllables":["at"]},{"text":"3:30","spoken":"three thirty","ipa":"ˈθɹi ˈθɝˌdi","syllables":["three","thi","rty"]}]
-highlight ru: [{"text":"У","ipa":"u","syllables":["У"]},{"text":"меня","ipa":"mʲɪˈnʲa","syllables":["ме","ня"]},{"text":"25","spoken":"двадцать пять","ipa":"ˈdvat͡sətʲ pʲatʲ","syllables":["два","дцать","пять"]},{"text":"яблок","ipa":"ˈjabɫək","syllables":["я","блок"]}]
-highlight zh: [{"text":"我","ipa":"wo˧˥","syllables":["我"]},{"text":"有","ipa":"joʊ˨˩˦","syllables":["有"]},{"text":"25","spoken":"二十五","ipa":"ɚ˥˩ ʂɻ̩˧˥ u˨˩˦","syllables":["二","十","五"]},{"text":"个","ipa":"kɤ˥˩","syllables":["个"]}]
+hi यह क्या है?: {"ipa":"jəɦ kjaː ɦɛː ↘ ?","lastVowelStart":109,"lastVowelEnd":93}
+hi क्या हुआ?: {"ipa":"kjaː ɦʊaː ↘ ?","lastVowelStart":108,"lastVowelEnd":94}
+hi क्या बात है?: {"ipa":"kjaː baːt̪ ɦɛː ↘ ?","lastVowelStart":109,"lastVowelEnd":93}
+hi क्या आप ठीक हैं?: {"ipa":"kjaː aːp ʈʰiːk ɦɛ̃ː ?","lastVowelStart":114,"lastVowelEnd":147}
+hi आप कहाँ जा रहे हैं?: {"ipa":"aːp kəɦãː d͡ʒaː ɾəɦeː ɦɛ̃ː ↘ ?","lastVowelStart":107,"lastVowelEnd":91}
+hi आप कल कहाँ जा रहे हैं?: {"ipa":"aːp kəl kəɦãː d͡ʒaː ɾəɦeː ɦɛ̃ː ↘ ?","lastVowelStart":107,"lastVowelEnd":91}
+hi तुम्हारा नाम क्या है?: {"ipa":"t̪ʊmɦaːɾaː naːm kjaː ɦɛː ↘ ?","lastVowelStart":107,"lastVowelEnd":92}
+highlight en: [{"text":"I","ipa":"aɪ","syllables":["I"]},{"text":"have","ipa":"hæv","syllables":["have"]},{"text":"25","spoken":"twenty five","ipa":"ˈtwɛnti ˈfaɪv","syllables":["twen","ty","five"]},{"text":"apples","ipa":"ˈæpəlz","syllables":["ap","ples"]},{"text":"on","ipa":"ɑn","syllables":["on"]},{"text":"3/4/2024","spoken":"March fourth twenty twenty four","ipa":"ˈmɑɹt͡ʃ ˈfɔɹθ ˈtwɛnti ˈtwɛnti ˈfɔɹ","syllables":["March","fourth","twen","ty","twen","ty","four"]}]
+highlight en: [{"text":"It","ipa":"ɪt","syllables":["It"]},{"text":"costs","ipa":"ˈkɑsts","syllables":["costs"]},{"text":"$5","spoken":"five dollars","ipa":"ˈfaɪv ˈdɑlɚz","syllables":["five","dol","lars"]},{"text":"at","ipa":"ət","syllables":["at"]},{"text":"3:30","spoken":"three thirty","ipa":"ˈθɹi ˈθɝˌdi","syllables":["three","thi","rty"]}]
+highlight ru: [{"text":"У","ipa":"ʊ","syllables":["У"]},{"text":"меня","ipa":"mʲɪˈnʲa","syllables":["ме","ня"]},{"text":"25","spoken":"двадцать пять","ipa":"ˈdvat͡sətʲ pʲatʲ","syllables":["два","дцать","пять"]},{"text":"яблок","ipa":"ˈjabɫək","syllables":["я","блок"]}]
+highlight zh: [{"text":"我","ipa":"wo˧˥","syllables":["我"]},{"text":"有","ipa":"joʊ˨˩","syllables":["有"]},{"text":"25","spoken":"二十五","ipa":"ɚ˥˩ ʂɻ̩˧˥ u˨˩","syllables":["二","十","五"]},{"text":"个","ipa":"kɤ˥˩","syllables":["个"]}]
 highlight hi: [{"text":"मेरे","ipa":"meːɾeː","syllables":["मे","रे"]},{"text":"पास","ipa":"paːs","syllables":["पास"]},{"text":"25","spoken":"पच्चीस","ipa":"pət͡ʃt͡ʃiːs","syllables":["प","च्चीस"]},{"text":"सेब","ipa":"seːb","syllables":["सेब"]},{"text":"हैं","ipa":"ɦɛ̃ː","syllables":["हैं"]}]
 lexicon sizes: {"englishWords":12046,"russianStressWords":304,"chineseSyllables":1230,"chineseCharacters":8301}
 en: ["onomatopoeia=ˈɑnɑmæɾɑpɑeɪæ(rules)","quinoa=ˈkwɪnoʊ(rules)","colonel=ˈkɝnəl(dictionary)","choir=ˈkwaɪɚ(dictionary)","yacht=ˈjɑt(dictionary)","Worcester=ˈwʊstɚ(dictionary)","segue=ˈsɛɡʌ(rules)"]
 zh: ["重=ʈ͡ʂʊŋ˥˩(dictionary)","庆=t͡ɕʰiŋ˥˩(dictionary)","还=xaɪ˧˥(dictionary)","钱=t͡ɕʰjɛn˧˥(dictionary)","得=tɤ(dictionary)","到=tɑʊ˥˩(dictionary)","首=ʂoʊ˨˩(dictionary)","都=toʊ˥(dictionary)","行=ɕiŋ˧˥(dictionary)","为=weɪ˥˩(dictionary)","教=t͡ɕjɑʊ˥˩(dictionary)","书=ʂu˥(dictionary)","干=kan˥˩(dictionary)","净=t͡ɕiŋ˥˩(dictionary)","少=ʂɑʊ˨˩(dictionary)","年=njɛn˧˥(dictionary)","大=ta˥˩(dictionary)","夫=fu˥(dictionary)","数=ʂu˥˩(dictionary)","数=ʂu˥˩(dictionary)","照=ʈ͡ʂɑʊ˥˩(dictionary)","相=ɕjɑŋ˥(dictionary)","有=joʊ˨˩(dictionary)","空=kʰʊŋ˥(dictionary)","着=ʈ͡ʂɤ(dictionary)","急=t͡ɕi˧˥(dictionary)"]
-zh: ["种=ʈ͡ʂʊŋ˧˥(dictionary)","子=t͡sɹ̩˨˩˦(dictionary)","种=ʈ͡ʂʊŋ˨˩(dictionary)","树=ʂu˥˩(dictionary)","慢=man˥˩(dictionary)","慢=man˥˩(dictionary)","地=ti˥˩(dictionary)","漂=pʰjɑʊ˥˩(dictionary)","亮=ljɑŋ˥˩(dictionary)","木=mu˥˩(dictionary)","头=tʰoʊ˧˥(dictionary)","喜=ɕi˨˩(dictionary)","欢=xwan˥(dictionary)","明=miŋ˧˥(dictionary)","白=paɪ˧˥(dictionary)","看=kʰan˥˩(dictionary)","看=kʰan˥˩(dictionary)","银行=in˧˥ xɑŋ˧˥(dictionary)","长大=ʈ͡ʂɑŋ˨˩ ta˥˩(dictionary)","觉得=t͡ɕɥɛ˧˥ tɤ(dictionary)"]
+zh: ["种=ʈ͡ʂʊŋ˨˩(dictionary)","子=t͡sɹ̩˧˥(dictionary)","种=ʈ͡ʂʊŋ˨˩(dictionary)","树=ʂu˥˩(dictionary)","慢=man˥˩(dictionary)","慢=man˥˩(dictionary)","地=ti˥˩(dictionary)","漂=pʰjɑʊ˥˩(dictionary)","亮=ljɑŋ˥˩(dictionary)","木=mu˥˩(dictionary)","头=tʰoʊ˧˥(dictionary)","喜=ɕi˨˩(dictionary)","欢=xwan˥(dictionary)","明=miŋ˧˥(dictionary)","白=paɪ˧˥(dictionary)","看看=kʰan˥˩ kʰan(dictionary)","银行=in˧˥ xɑŋ˧˥(dictionary)","长大=ʈ͡ʂɑŋ˨˩ ta˥˩(dictionary)","觉得=t͡ɕɥɛ˧˥ tɤ(dictionary)"]
 hi: ["समझना=səməd͡ʒʱnaː(rules)","समझा=səmd͡ʒʱaː(rules)","धड़कने=d̪ʱəɽəkneː(rules)","धड़कनें=d̪ʱəɽəknẽː(rules)","लोकसभा=loːkəsbʱaː(rules)","ज्ञान=d͡ʒɲaːn(rules)","यह=jəɦ(rules)","वह=ʋəɦ(rules)","बहन=bəɦən(rules)"]
 ru: ["замок=ˈzamək(rules)","замке=ˈzamkʲə(rules)","часов=ˈt͡ɕasəf(rules)","города=ɡɐˈrodə(rules)","голова=ɡəɫɐˈva(dictionary)","головы=ɡɐˈɫovɨ(dictionary)","молоко=mɐˈɫokə(dictionary)","хорошо=xərɐˈʂo(dictionary)","говорит=ɡəvɐˈrʲit(dictionary)","карандаш=kɐˈrandəʂ(rules)","телефон=tʲɪˈlʲefən(rules)","магазин=mɐˈɡazʲɪn(rules)","учительница=ʊt͡ɕɪtʲɪlʲˈnʲit͡sə(rules)","красивая=krəsʲɪˈvajə(rules)","понимаю=pənʲɪˈmajʊ(rules)","стоит=ˈstoɪt(rules)","стоит=ˈstoɪt(rules)","белки=ˈbʲeɫkʲɪ(rules)","большая=bɐlʲˈʂajə(rules)","большая=bɐlʲˈʂajə(rules)"]
 ru marked: "zɐˈmok ˈzamək t͡ɕɪˈsof ɡərɐˈda"
 ru yo: "jɪˈɕːo ˈjeɕːə fsʲe fsʲo ˈjoɫkə ˈjeɫkə"
-ru Ключ от замка. Старый замок на горе.: "klʲut͡ɕ ot ˈzamkə . ˈstarɨj ˈzamək na ˈɡorʲə ."
+ru Ключ от замка. Старый замок на горе.: "klʲut͡ɕ ɐd ˈzamkə . ˈstarɨj ˈzamək nɐ ˈɡorʲə ."
 ru Это стоит дорого. Он стоит там.: "ˈɛtə ˈstoɪt dɐˈroɡə . on ˈstoɪt tam ."
 ru 5 часов. 3 часа. Встреча в 17:00.: "pʲatʲ ˈt͡ɕasəf . trʲi ˈt͡ɕasə . ˈfstrʲet͡ɕə f sʲɪmˈnat͡sətʲ t͡ɕɪˈsof ."
-ru Мы пошли в лес. Они увидели дерево. Сегодня хорошая погода.: "mɨ ˈpoʂlʲɪ f lʲes . ɐˈnʲi ʊvʲɪˈdʲelʲɪ ˈdʲerʲɪvə . sʲɪˈvodʲnʲə xərɐˈʂajə pɐˈɡodə ."
-ru Я купил телефон в магазине.: "ja ˈkupʲɪɫ tʲɪˈlʲefən f məɡɐˈzʲinʲə ."
+ru Мы пошли в лес. Они увидели дерево. Сегодня хорошая погода.: "mɨ ˈpoʂlʲɪ v lʲes . ɐˈnʲi ʊvʲɪˈdʲelʲɪ ˈdʲerʲɪvə . sʲɪˈvodʲnʲə xərɐˈʂajə pɐˈɡodə ."
+ru Я купил телефон в магазине.: "ja ˈkupʲɪɫ tʲɪˈlʲefən v məɡɐˈzʲinʲə ."
 ru еще ее елка зеленый идет пришел: "ˈjeɕːə ˈjejə ˈjeɫkə zʲɪlʲɪˈnɨj ˈidʲɪt ˈprʲiʂɨɫ"
 zh 不是: "pu˧˥ ʂɻ̩˥˩"
 zh 不好: "pu˥˩ xɑʊ˨˩˦"
-zh 是不是: "ʂɻ̩˥˩ pu˧˥ ʂɻ̩˥˩"
+zh 是不是: "ʂɻ̩˥˩ pu ʂɻ̩˥˩"
 zh 一个: "i˧˥ kɤ˥˩"
 zh 一天: "i˥˩ tʰjɛn˥"
 zh 一起: "i˥˩ t͡ɕʰi˨˩˦"
 zh 第一: "ti˥˩ i˥"
-zh 第一名: "ti˥˩ i˥˩ miŋ˧˥"
-zh 十一月: "ʂɻ̩˧˥ i˧˥ ɥɛ˥˩"
-zh 一九九一: "i˥˩ t͡ɕjoʊ˧˥ t͡ɕjoʊ˨˩ i˥"
-zh 看一看: "kʰan˥˩ i˧˥ kʰan˥˩"
+zh 第一名: "ti˥˩ i˥ miŋ˧˥"
+zh 十一月: "ʂɻ̩˧˥ i˥ ɥɛ˥˩"
+zh 一九九一: "i˥ t͡ɕjoʊ˧˥ t͡ɕjoʊ˨˩ i˥"
+zh 看一看: "kʰan˥˩ i kʰan˥˩"
 zh 我很好: "wo˨˩ xən˧˥ xɑʊ˨˩˦"
 zh 我也很好: "wo˧˥ jɛ˨˩ xən˧˥ xɑʊ˨˩˦"
 zh 小老虎: "ɕjɑʊ˨˩ lɑʊ˧˥ xu˨˩˦"
 zh 妈妈: "ma˥ ma"
-zh 爷爷: "jɛ˧˥ jɛ˧˥"
-zh 奶奶: "naɪ˧˥ naɪ˨˩˦"
+zh 爷爷: "jɛ˧˥ jɛ"
+zh 奶奶: "naɪ˨˩ naɪ"
 zh 爸爸: "pa˥˩ pa"
 zh 我的: "wo˨˩ tɤ"
 zh 好吗: "xɑʊ˨˩ ma"
-zh f0 妈妈: [[155,152],[113,96]]
-zh duration 妈妈: [121,169]
-zh f0 爷爷: [[128,144],[122,141]]
-zh duration 爷爷: [121,169]
-zh f0 奶奶: [[120,122],[126,141],[116,110],[98,118]]
-zh duration 奶奶: [121,121,121,169]
-zh f0 爸爸: [[141,107],[108,95]]
-zh duration 爸爸: [121,169]
+zh f0 妈妈: [[156,156],[117,102]]
+zh duration 妈妈: [223,127]
+zh f0 爷爷: [[120,137],[131,119]]
+zh duration 爷爷: [190,104]
+zh f0 奶奶: [[105,104],[103,97],[112,113],[119,122]]
+zh duration 奶奶: [97,145,50,76]
+zh f0 爸爸: [[155,117],[90,86]]
+zh duration 爸爸: [209,127]
 lexicon container: {"words":12000,"symbols":43,"bytes":128650,"bytesPerWord":10.72,"gzip":67236,"textBytes":245158,"textGzip":81580}
 lexicon container start: "0aA1aaBCDEFAGHI2ronGJDAK1bGLM2andonedAGMLKNAKN2beyGLMO3revia"

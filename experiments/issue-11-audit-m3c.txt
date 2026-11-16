@@ -65,7 +65,7 @@ ru н+а гору: "na ˈɡorʊ"
 ru в office: "f ˈɔfɪs"
 # 3. Latin input in Chinese mode
 zh ni3hao3: "ni˧˥ xɑʊ˨˩˦"
-zh nǐ hǎo: "ni˨˩˦ xɑʊ˨˩˦"
+zh nǐ hǎo: "ni˧˥ xɑʊ˨˩˦"
 zh nihao: "ni xɑʊ"
 zh beijing: "peɪ t͡ɕiŋ"
 zh Zhōngguó: "ʈ͡ʂʊŋ˥ kwo˧˥"
@@ -77,7 +77,7 @@ zh lve4: "lɥɛ˥˩"
 zh xi'an: "ɕi an"
 zh Xī'ān: "ɕi˥ an˥"
 zh xian1: "ɕjɛn˥"
-zh ni3 hao5: "ni˨˩˦ xɑʊ"
+zh ni3 hao5: "ni˨˩ xɑʊ"
 zh ma: "ma"
 zh ma0: "ma"
 zh iPhone: "ˈɪfoʊn"
@@ -85,22 +85,22 @@ zh zhongg: "ˈzhɑŋd͡ʒ"
 zh shanghai ren: "ʂɑŋ xaɪ ʐən"
 # 4. Tone sandhi across spaces
 zh 你好: "ni˧˥ xɑʊ˨˩˦"
-zh 你 好: "ni˨˩˦ xɑʊ˨˩˦"
+zh 你 好: "ni˧˥ xɑʊ˨˩˦"
 zh 我很好: "wo˨˩ xən˧˥ xɑʊ˨˩˦"
-zh 我 很 好: "wo˨˩˦ xən˨˩˦ xɑʊ˨˩˦"
+zh 我 很 好: "wo˨˩ xən˧˥ xɑʊ˨˩˦"
 zh wo3hen3hao3: "wo˨˩ xən˧˥ xɑʊ˨˩˦"
-zh wo3 hen3 hao3: "wo˨˩˦ xən˨˩˦ xɑʊ˨˩˦"
-zh wǒ hěn hǎo: "wo˨˩˦ xən˨˩˦ xɑʊ˨˩˦"
-zh nǐ hǎo ma: "ni˨˩˦ xɑʊ˨˩˦ ma"
+zh wo3 hen3 hao3: "wo˨˩ xən˧˥ xɑʊ˨˩˦"
+zh wǒ hěn hǎo: "wo˨˩ xən˧˥ xɑʊ˨˩˦"
+zh nǐ hǎo ma: "ni˧˥ xɑʊ˨˩ ma"
 zh 你好吗: "ni˧˥ xɑʊ˨˩ ma"
-zh 你 好 吗: "ni˨˩˦ xɑʊ˨˩˦ ma"
+zh 你 好 吗: "ni˧˥ xɑʊ˨˩ ma"
 zh 不对: "pu˧˥ tweɪ˥˩"
-zh 不 对: "pu˥˩ tweɪ˥˩"
+zh 不 对: "pu˧˥ tweɪ˥˩"
 zh 一个: "i˧˥ kɤ˥˩"
-zh 一 个: "i˥ kɤ˥˩"
+zh 一 个: "i˧˥ kɤ˥˩"
 zh bu4 dui4: "pu˥˩ tweɪ˥˩"
 # 5. Planned vowel durations (ms) with strong and weak forms
-ə ˈkʌp ˈʌv ˈti ˈfɔɹ ˈju: 1.904 s, vowels 79 142 142 142 142 198
-ə ˈkʌp əv ˈti fɚ ju: 1.666 s, vowels 79 142 79 142 79 147
-ˈaɪ ˈkæn ˈdu ˈɪt: 1.377 s, vowels 142 47 142 142 198
-aɪ kən ˈdu ɪt: 1.189 s, vowels 105 47 79 142 110
+ə ˈkʌp ˈʌv ˈti ˈfɔɹ ˈju: 2.113 s, vowels 79 193 197 170 178 218
+ə ˈkʌp əv ˈti fɚ ju: 1.739 s, vowels 79 193 85 170 79 172
+ˈaɪ ˈkæn ˈdu ˈɪt: 1.407 s, vowels 117 78 234 145 106
+aɪ kən ˈdu ɪt: 1.154 s, vowels 90 60 73 145 80
