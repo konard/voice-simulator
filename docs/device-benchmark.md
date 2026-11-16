@@ -44,7 +44,8 @@ below 20 % that is not charging. Neither hint changes a measured load.
   while a `speak` message waits or renders, and continues 500 ms after the
   utterance ends. The CPU result is posted first. The 3D tiers above the
   CPU's choice are then tried on WebGPU, within 2 s of wall time, and
-  posted in a second message.
+  posted in a second message. This stage waits in the same way while
+  utterances are rendered, and the wait does not count toward the 2 s.
 - **Scheduling.** The app sends the message only after the worker has said
   which engine it runs. It waits for an idle moment
   (`requestIdleCallback`, 2 s timeout) on a visible page. An utterance in
@@ -58,8 +59,10 @@ below 20 % that is not charging. Neither hint changes a measured load.
   (`voice-simulator:tier`). With a fixed tier the benchmark still runs, for
   the meter, but never changes the level.
 - **Debug.** With `?debug` in the address, the audio meter shows the main
-  thread's tasks over 50 ms between the request and the answer, leaving out
-  utterances, during which the benchmark is paused.
+  thread's tasks over 50 ms between the request and the answer. It leaves
+  out the app's own tasks (`ownTask`): those during utterances, when the
+  benchmark is paused, and those that handled a pointer or key event, such
+  as pressing "Speak".
 
 ## Command line
 

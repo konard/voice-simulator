@@ -393,6 +393,28 @@ describe('voice engine benchmark cache', () => {
 });
 
 describe('voice engine debug', () => {
+  it('leaves the tasks that handled user input out of the debug long tasks', () => {
+    withStorage(() => {
+      const { engine, idle, reply, start } = benchmarkEngine();
+      start();
+      // Before the request: not the benchmark's window.
+      engine.noteInput(10);
+      expect(engine.ownTask(5, 15)).toBe(false);
+      idle();
+      const time = globalThis.performance.now();
+      engine.noteInput(time);
+      // A task that dispatched the input (a hover or press of "Speak") is
+      // the app's; one before or after it is not.
+      expect(engine.ownTask(time - 60, time + 30)).toBe(true);
+      expect(engine.ownTask(time - 90, time - 20)).toBe(false);
+      expect(engine.ownTask(time + 1, time + 60)).toBe(false);
+      reply(answer(2));
+      // After the answer nothing more is noted.
+      engine.noteInput(time + 100);
+      expect(engine.ownTask(time + 90, time + 110)).toBe(false);
+    });
+  });
+
   it('keeps the utterance times the debug long tasks leave out', async () => {
     await withStorage(async () => {
       const { engine } = benchmarkEngine();
@@ -803,7 +825,9 @@ describe('synthesis worker', () => {
     expect(reply.loads[0] > 0).toBe(true);
     expect(reply.level >= 0).toBe(true);
   });
+});
 
+describe('synthesis worker benchmark', () => {
   it('stops the benchmark while speaking and continues after', async () => {
     const posted = [];
     const handle = createWorkerHandler((data) =>
@@ -836,6 +860,55 @@ describe('synthesis worker', () => {
     const answer = posted.find((message) => message.type === 'benchmark');
     // The rest is measured 500 ms after the utterance.
     expect(answer.at - end.at).toBeGreaterThanOrEqual(450);
+  });
+
+  it('waits with the WebGPU tiers until speech has ended', async () => {
+    const posted = [];
+    let deviceAt = null;
+    let handle = null;
+    const speak = {
+      type: 'speak',
+      id: 1,
+      ipa: 'ˈa',
+      lang: 'en',
+      head: {},
+      seed: 1,
+      tier: 0,
+      auto: false,
+      gpu: false,
+      engine: 'js',
+    };
+    let spoken = null;
+    handle = createWorkerHandler(
+      (data) => {
+        posted.push({ ...data, at: globalThis.performance.now() });
+        // An utterance starts as soon as the CPU answer is out.
+        if (data.type === 'benchmark' && data.gpuPending && !spoken) {
+          spoken = handle(speak);
+        }
+      },
+      {
+        requestGpuDevice: async () => {
+          deviceAt = globalThis.performance.now();
+          return null;
+        },
+      }
+    );
+    // tier 0 at most: the 3D tiers are left to WebGPU.
+    await handle({ type: 'benchmark', engine: 'js', head: {} });
+    expect(spoken !== null).toBe(true);
+    await spoken;
+    for (let wait = 0; wait < 100 && deviceAt === null; wait++) {
+      await new Promise((resolve) => globalThis.setTimeout(resolve, 20));
+    }
+    const end = posted.find((message) => message.type === 'end');
+    const replies = posted.filter((message) => message.type === 'benchmark');
+    expect(end !== undefined).toBe(true);
+    // The device is asked for only 500 ms after the utterance.
+    expect(deviceAt - end.at).toBeGreaterThanOrEqual(450);
+    expect(replies.length).toBe(2);
+    expect(replies[1].gpuPending).toBe(false);
+    expect(replies[1].at >= deviceAt).toBe(true);
   });
 
   it('a newer benchmark message replaces the one running', async () => {
