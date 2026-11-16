@@ -394,7 +394,10 @@ jobs:
         # warning of a 200s budget. `--parallel` ran 2.7x faster locally, but
         # Bun's workers can still lose a child's exit (oven-sh/bun#45483,
         # #41024, #39987), which would hang this subprocess-heavy suite.
-        run: bash scripts/run-with-budget-warning.sh 300 "Bun test suite" bun test --timeout 30000
+        # 420s since issue 31: on windows-2025 the suite took 298s on main
+        # after the whisper tests (#53) and passed 300s with the
+        # performance tests of issue 31.
+        run: bash scripts/run-with-budget-warning.sh 420 "Bun test suite" bun test --timeout 30000
 
       - name: Setup Deno
         if: matrix.runtime == 'deno'
