@@ -118,6 +118,10 @@ function readAccentParam(value) {
     return undefined;
   }
   if (typeof value === 'string') {
+    // The server never reads files: a code is letters, digits and dashes.
+    if (!/^[\w-]+$/u.test(value)) {
+      throw new HttpError(400, `accent "${value}" is not an accent code`);
+    }
     return value;
   }
   if (typeof value !== 'object' || Array.isArray(value)) {
