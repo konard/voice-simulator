@@ -1,0 +1,9 @@
+soft  level -10.60 dB, alpha -1.84 dB, f0 -4.00 st, h1h2 2.34 dB
+loud  level 11.25 dB, alpha 0.31 dB, f0 6.05 st, h1h2 -3.67 dB
+shout level 21.55 dB, alpha -0.45 dB, f0 10.50 st, h1h2 -7.41 dB
+lf    ˈa         f0 130.3 Hz (0.00 st), F1 725 Hz (0)
+lf    {f ˈa f}   f0 185.0 Hz (6.07 st), F1 760 Hz (35)
+lf    {ff ˈa ff} f0 237.8 Hz (10.42 st), F1 765 Hz (40)
+folds ˈa         f0 129.2 Hz (0.00 st), F1 690 Hz (0)
+folds {f ˈa f}   f0 183.5 Hz (6.08 st), F1 798 Hz (108)
+folds {ff ˈa ff} f0 235.7 Hz (10.41 st), F1 730 Hz (40)
