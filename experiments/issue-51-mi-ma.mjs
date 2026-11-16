@@ -21,7 +21,8 @@ for (const part of [1, 0.5]) {
     ['default', DEFAULT_HEAD],
     ['intrinsic 2', normalizeHeadConfig({ intrinsicPitch: 2 })],
   ]) {
-    const st = 12 * Math.log2(mean('ˈmi', head, part) / mean('ˈma', head, part));
+    const st =
+      12 * Math.log2(mean('ˈmi', head, part) / mean('ˈma', head, part));
     console.log(`part ${part} ${name}: mi - ma = ${st.toFixed(3)} st`);
   }
 }

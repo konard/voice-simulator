@@ -16,6 +16,8 @@ for (const name of ['soprano', 'mezzo', 'alto', 'tenor', 'baritone', 'bass']) {
   const start = (v.start + v.end) / 2 - 0.03;
   const f0 = estimatePitch(samples, RATE, { start, duration: 0.06 });
   const planned = [];
-  for (let t = start; t <= start + 0.06; t += 0.02) planned.push(plan.channels.f0[Math.round(t * plan.frameRate)].toFixed(1));
+  for (let t = start; t <= start + 0.06; t += 0.02) {
+    planned.push(plan.channels.f0[Math.round(t * plan.frameRate)].toFixed(1));
+  }
   console.log(name, head.pitch, f0.toFixed(2), planned.join(' '));
 }

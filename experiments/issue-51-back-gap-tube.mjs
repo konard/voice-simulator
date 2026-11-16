@@ -11,5 +11,14 @@ for (const backGap of [0.2, 0.4, 0.6]) {
   const head = normalizeHeadConfig({ backGap });
   const shape = tractShape({ height, backness, rounding, rhotic: 0 }, head);
   const formants = tubeFormants(shape.areas, shape.length, { count: 3 });
-  console.log('backGap', backGap, 'jaw', shape.jaw?.toFixed?.(3) ?? '', 'formants', formants.map((f) => (f.frequency ?? f).toFixed?.(1) ?? JSON.stringify(f)).join(' '));
+  console.log(
+    'backGap',
+    backGap,
+    'jaw',
+    shape.jaw?.toFixed?.(3) ?? '',
+    'formants',
+    formants
+      .map((f) => (f.frequency ?? f).toFixed?.(1) ?? JSON.stringify(f))
+      .join(' ')
+  );
 }

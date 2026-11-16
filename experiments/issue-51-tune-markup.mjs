@@ -7,6 +7,12 @@ for (const [text, opts] of [
   ['<speak><vs:tune name="nope">John!</vs:tune></speak>', { lang: 'en' }],
 ]) {
   const r = textToIpa(text, opts);
-  console.log(text, '→', r.ipa, JSON.stringify(r.modes.map((m) => [m.from, m.to, m.mode.tune])), r.warnings.map((w) => w.message));
+  console.log(
+    text,
+    '→',
+    r.ipa,
+    JSON.stringify(r.modes.map((m) => [m.from, m.to, m.mode.tune])),
+    r.warnings.map((w) => w.message)
+  );
 }
 console.log(JSON.stringify(parseIpa('{IK4 a ˈtɨ ? IK4}').modes));

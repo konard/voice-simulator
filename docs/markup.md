@@ -66,11 +66,11 @@ Every span has all the fields of `MODE_DEFAULTS`:
 | `rate`                | 1       | speed factor: 2 halves the durations                                                            | durations                                 |
 | `pitch`               | 0       | shift in semitones                                                                              | pitch targets                             |
 | `range`               | 1       | factor on pitch movements                                                                       | pitch targets                             |
-| `emphasis`            | 0       | -0.5 reduced, 0 none, 0.5 moderate, 1 strong                                                    | carried (#51)                             |
+| `emphasis`            | 0       | -0.5 reduced, 0 none, 0.5 moderate, 1 strong                                                    | focus: pitch, duration, level (#51)       |
 | `phonation`           | all 0   | `breathy`, `creaky`, `tension` (-1 lax … 1 pressed), `falsetto`, `harsh`, `whisper`, each 0 … 1 | carried (#53, #54)                        |
 | `emotion`             | neutral | `name`, `intensity`, `arousal`, `valence`, `dominance`                                          | carried (#55)                             |
-| `tune`                | null    | intonation label                                                                                | carried (#51)                             |
-| `lang`                | null    | language tag of the span                                                                        | the words are transcribed in it           |
+| `tune`                | null    | intonation label (`TUNE_LABELS`)                                                                | the tune of the phrase (#51)              |
+| `lang`                | null    | language tag of the span                                                                        | transcription and tunes                   |
 
 Nested spans compose: `rate` and `range` multiply, `pitch` and `gain` add,
 everything else takes the inner value; named values such as `rate="fast"`
@@ -107,6 +107,7 @@ kept.
 |                          |                                                                                                                                                                                                                                                                          | `<vs:effort value="0.5" to="0.75">Hello there</vs:effort>.`        | `{crescendo həˈloʊ ˈðɛɹ } .`; effortEnd 0.75                             |
 | `vs:phonation`           | `name`: `modal`, `breathy`, `creaky`, `pressed`, `lax`, `falsetto`, `harsh`, `whisper`, `whispery`; `degree` 0 … 1 (default 0.67)                                                                                                                                        | `<vs:phonation name="breathy">Hello</vs:phonation> there.`         | `{V̤ həˈloʊ V̤} ˈðɛɹ .`; breathy 0.67                                      |
 | `vs:emotion`             | `name` (`neutral happy sad angry afraid surprised disgusted tender bored sarcastic confident hesitant`), `intensity` 0 … 1 (default 0.67), or `arousal`, `valence`, `dominance` (-1 … 1)                                                                                 | `<vs:emotion name="sad" intensity="0.8">Hello</vs:emotion> there.` | `həˈloʊ ˈðɛɹ .`; sad 0.8 (arousal -0.32, valence -0.48, dominance -0.24) |
+| `vs:tune`                | `name`: a tune label (see [Intonation](#intonation)); an unknown name is a warning                                                                                                                                                                                       | `<speak><vs:tune name="IK6">Какой голос!</vs:tune></speak>`        | `{IK6 kəkɐj ˈɡoɫəs IK6} !`; tune IK6                                     |
 | `vs:sound` (empty)       | `name`: `laugh`, `inhale`, `exhale`, `sigh`, `cough`, `throat`, `filler`, `click`; optional `duration="0.5s"`                                                                                                                                                            | `Hello <vs:sound name="laugh"/> there.`                            | `həˈloʊ ⸨laugh⸩ ˈðɛɹ .`                                                  |
 
 The words of a `sub` or `say-as` share the range of the whole element in
@@ -155,6 +156,7 @@ end of the input with a warning. Inline parsing never throws.
 | `[ipa X]`                                                                           | a word spoken as X; with `[/ipa]` the words inside are spoken as X                                                        | `A [ipa təˈmɑːtəʊ] please.`                                   | `ə təˈmɑːtəʊ ˈpliz .`                                                        |
 | `[pause N]`                                                                         | a pause of N seconds                                                                                                      | `Wait [pause 0.3] now.`                                       | `ˈweɪt (0.3) ˈnaʊ .`                                                         |
 | `[laugh] [inhale] [exhale] [sigh] [cough] [throat] [filler] [click]`, `[cough 0.5]` | a sound (0.3 s or N s)                                                                                                    | `Hello [laugh] there [cough 0.5] ok.`                         | `həˈloʊ ⸨laugh⸩ ˈðɛɹ ⸨cough 0.5⸩ ˈoʊˈkeɪ .`                                  |
+| `[tune name]`                                                                       | the tune of the phrase (a tune label)                                                                                     | `[tune call]John![/tune]`                                     | `{call ˈd͡ʒɑn call} !`; tune call                                             |
 | `*word*`                                                                            | emphasis 1: the opening star stands before a non-space and after a space or the start, the closing star after a non-space | `Hello *world*.`                                              | `həˈloʊ ˈˈwɝld .`                                                            |
 
 ## IPA marks
@@ -183,12 +185,57 @@ and travel only in the `modes` list (`planUtterance(ipa, { modes })`).
 | `{V … V}` modal                           | all phonation values 0                                           | `{V̤ həˈloʊ {V ˈwɝld V} V̤}`                   | breathy 0.67 on the first word only  |
 | `(.)`, `(..)`, `(...)`, `(1.2)`           | a pause of 0.2, 0.4, 0.8 s or N s that does not end the sentence | `həˈloʊ (.) ˈwɝld (1.2) ˈbaɪ`                | pauses 0.2 s and 1.2 s               |
 | `⸨name⸩`, `⸨name 0.5⸩`                    | a sound                                                          | `⸨laugh⸩ həˈloʊ ⸨cough 0.5⸩`                 | laugh 0.3 s, cough 0.5 s             |
+| `{IK4 … IK4}`, `{yesno … yesno}`, …       | the tune of the phrase (a tune label)                            | `{IK4 a tɨ IK4} ?`                           | tune IK4                             |
 | `ˈˈ`                                      | emphasis 1 on the word                                           | `həˈloʊ ˈˈwɝld`                              | emphasis 1                           |
 | U+0324, U+0330, U+0323 on a phone         | `token.breathy`, `token.creaky`, `token.whispered`               | `a̤ a̰ ạ`                                      | (on the phones)                      |
 
 `formatIpa(tokens, modes)` writes the marks back: for every row,
 `parseIpa(formatIpa(tokens, modes)).modes` equals `modes`
 (tests/markup.test.js).
+
+## Intonation
+
+Every phrase gets a tune from its sentence type (issue 51, the tables in
+`src/articulation/intonation.js`). The text front end writes the type in
+the IPA before the punctuation mark (`src/g2p/phrasing.js`), so a text and
+its IPA give the same plan. Examples from
+`node experiments/issue-51-doc-examples.mjs` (saved in
+`experiments/issue-51-doc-examples.txt`):
+
+| Sentence type        | Written                                                                       | Example                       | IPA                                   |
+| -------------------- | ----------------------------------------------------------------------------- | ----------------------------- | ------------------------------------- |
+| statement            | `.`                                                                           | `You are coming.`             | `ju ɚ ˈkʌmɪŋ .`                       |
+| yes/no question      | `?`                                                                           | `Are you coming?`             | `ɚ ju ˈkʌmɪŋ ?`                       |
+| wh-question          | `↘ ?`: the first word is a question word (`ZH_WH_WORDS` anywhere in Mandarin) | `Where are you going?`        | `ˈwɛɹ ɚ ju ˈɡoʊɪŋ ↘ ?`                |
+| echo question        | `↗ ?`: no question word and no auxiliary first (English)                      | `Really?`                     | `ˈɹɪli ↗ ?`                           |
+| alternative question | `↗ \|` before `or`, `или`, `या`, `还是`, then `↘ ?`                           | `Tea or coffee?`              | `ˈti ↗ \| ˈɔɹ ˈkɑfi ↘ ?`              |
+| tag question         | `, … ↗ ?` asks, `, … ↘ ?` confirms                                            | `You are coming, aren't you?` | `ju ɚ ˈkʌmɪŋ , ˈɑɹənt ju ↗ ?`         |
+| list                 | `,` items rise (continuation), the last one falls                             | `Apples, pears and plums.`    | `ˈæpəlz , ˈpɛɹz ənd ˈplʌmz .`         |
+| Russian IK4          | `{IK4 … IK4}`: an а-question of at most 3 words                               | `А ты?`                       | `{IK4 a tɨ IK4} ?`                    |
+| Russian IK5          | `{IK5 … IK5}`: `!` after какой, как, сколько, …                               | `Какой сегодня день!`         | `{IK5 kəkɐj sʲɪˈvodʲnʲə dʲenʲ IK5} !` |
+
+A stretch of more than 14 syllables between two punctuation marks gets a
+phrase break `|` before the conjunction nearest to its middle when both
+sides keep at least 4 syllables (`PHRASE_CONJUNCTIONS`); the phrase before
+`|` gets the continuation tune (Russian: IK3 at 0.7):
+
+```
+The old man who lived next to the station walked slowly to the market and bought some bread.
+ði ˈoʊld ˈmæn ˈhu ˈlɪvd ˈnɛkst tə ðə ˈsteɪʃən ˈwɔkt ˈsloʊli tə ðə ˈmɑɹkət | ənd ˈbɑt ˈsʌm ˈbɹɛd .
+```
+
+Each language maps the type onto its tunes: English nuclear tones,
+the Russian intonation constructions IK1 to IK7 (statement IK1,
+wh-question IK2, yes/no question and continuation IK3), Hindi accent
+phrases, and in Mandarin the tones stay and a question without a particle
+or question word raises the pitch towards its end. The tune labels
+(`TUNE_LABELS`) are `statement wh yesno echo continuation alt-rise tag-ask
+tag-confirm exclamation command parenthesis call IK1 IK2 IK3 IK4 IK5 IK6
+IK7`; a label (`{IK3 … IK3}`, `[tune yesno]…[/tune]`, `<vs:tune
+name="echo">`) wins over the punctuation, and a generic label in Russian
+picks its IK. Focus (`*word*`, `<emphasis>`, `ˈˈ`) moves the nucleus to the
+word: in English it is 2.9 semitones higher, 1.2 times longer and 3 dB
+louder and the accents after it are compressed (`FOCUS`).
 
 ## The plan
 

@@ -245,29 +245,16 @@ export function phraseTuneName(phrases, index, language = 'en') {
     return 'parenthesis';
   }
   const boundary = boundaryOf(pause);
-  if (!pause || boundary === 'period' || boundary === 'ellipsis') {
-    return 'statement';
-  }
   if (boundary === 'question') {
-    const tag = isTag(phrases, index, language);
-    if (pause.contour === 'fall') {
-      return tag ? 'tag-confirm' : 'wh';
-    }
-    if (pause.contour === 'rise') {
-      return tag ? 'tag-ask' : 'echo';
-    }
-    return 'yesno';
+    return questionTune(pause, isTag(phrases, index, language));
   }
   if (boundary === 'exclamation') {
     return 'exclamation';
   }
-  if (boundary === 'semicolon' || pause.contour === 'fall') {
+  if (!pause || FALLING_BOUNDARIES.has(boundary) || pause.contour === 'fall') {
     return 'statement';
   }
-  if (
-    (boundary === 'dash' || boundary === 'comma') &&
-    pause.contour === 'rise'
-  ) {
+  if (pause.contour === 'rise' && RISING_BOUNDARIES.has(boundary)) {
     return 'alt-rise';
   }
   const next = phrases[index + 1];
@@ -275,6 +262,22 @@ export function phraseTuneName(phrases, index, language = 'en') {
     return 'statement';
   }
   return 'continuation';
+}
+
+/** Boundaries whose phrase falls like a statement. */
+const FALLING_BOUNDARIES = new Set(['period', 'ellipsis', 'semicolon']);
+/** Boundaries where `↗` marks the first half of an alternative question. */
+const RISING_BOUNDARIES = new Set(['comma', 'dash']);
+
+/** The tune of a question: `↘ ?` wh or confirming tag, `↗ ?` echo or asking tag. */
+function questionTune(pause, tag) {
+  if (pause.contour === 'fall') {
+    return tag ? 'tag-confirm' : 'wh';
+  }
+  if (pause.contour === 'rise') {
+    return tag ? 'tag-ask' : 'echo';
+  }
+  return 'yesno';
 }
 
 /**
@@ -338,28 +341,37 @@ export function phraseSyllables(phrase, positions) {
   const syllables = [];
   for (const segment of phrase.nuclei) {
     const current = syllables.at(-1);
-    const last = current?.at(-1);
-    const adjacent =
-      last &&
-      positions.get(segment) === positions.get(last) + 1 &&
-      segment.token?.word === last.token?.word;
-    let joins = false;
-    if (adjacent && tonal) {
-      joins = !last.token?.tone?.length;
-    } else if (adjacent) {
-      joins =
-        current.length === 1 &&
-        !last.token?.long &&
-        !segment.token?.stress &&
-        DIPHTHONGS.has(`${last.token?.base}${segment.token?.base}`);
-    }
-    if (joins) {
+    if (current && joinsSyllable(current, segment, positions, tonal)) {
       current.push(segment);
     } else {
       syllables.push([segment]);
     }
   }
   return syllables;
+}
+
+/**
+ * Whether `segment` is the next vowel of the syllable `current`: right
+ * after it in the same word, and (with tones) the vowel before has no
+ * tone, or (without) the two make a diphthong of an unstressed glide.
+ */
+function joinsSyllable(current, segment, positions, tonal) {
+  const last = current.at(-1);
+  const adjacent =
+    positions.get(segment) === positions.get(last) + 1 &&
+    segment.token?.word === last.token?.word;
+  if (!adjacent) {
+    return false;
+  }
+  if (tonal) {
+    return !last.token?.tone?.length;
+  }
+  return (
+    current.length === 1 &&
+    !last.token?.long &&
+    !segment.token?.stress &&
+    DIPHTHONGS.has(`${last.token?.base}${segment.token?.base}`)
+  );
 }
 
 const stressOf = (syllable) =>
@@ -377,7 +389,10 @@ function phraseFocus(syllables) {
       ...syllables[index].map((segment) => emphasisOf(segment.token))
     );
     if (strength >= 0.5) {
-      return { word: wordOf(syllables[index]), strength: Math.min(1, strength) };
+      return {
+        word: wordOf(syllables[index]),
+        strength: Math.min(1, strength),
+      };
     }
   }
   return null;
@@ -449,60 +464,15 @@ function tuneValues(phrase) {
   const { syllables, nucleus, tune, focus } = phrase;
   const scale = phrase.tuneScale;
   const values = syllables.map(() => ({ steps: [[0, 0]], accent: false }));
+  preNucleusValues(phrase, values);
   const [from, to] = tune.nucleus.map((value) => value * scale);
   const end = tune.end * scale;
-  const firstWord = wordOf(syllables[0]);
-  const firstStressed = syllables.findIndex(
-    (syllable, index) => index < nucleus && stressOf(syllable) === 1
-  );
-  for (let index = 0; index < nucleus; index++) {
-    const syllable = syllables[index];
-    if (deaccented(syllable)) {
-      continue;
-    }
-    if (tune.plateau !== undefined && firstStressed >= 0) {
-      if (index === firstStressed) {
-        values[index].steps = [
-          [0, 0],
-          [0.5, tune.plateau * scale],
-        ];
-      } else if (index > firstStressed) {
-        values[index].steps = [[0, tune.plateau * scale]];
-      }
-      continue;
-    }
-    if (stressOf(syllable) !== 1) {
-      continue;
-    }
-    const first =
-      tune.first !== undefined &&
-      wordOf(syllable) === firstWord &&
-      wordOf(syllables[nucleus]) !== firstWord;
-    values[index] = {
-      steps: [[0, (first ? tune.first : tune.accent) * scale]],
-      accent: true,
-    };
-  }
   const tail = syllables.length - 1 - nucleus;
   const at = tune.at ?? 0.5;
   if (tail === 0) {
     values[nucleus].steps = lastNucleusSteps(tune, from, to, end, at, scale);
   } else {
-    values[nucleus].steps =
-      from === to
-        ? [[0, from]]
-        : [
-            [0, from],
-            [at, to],
-          ];
-    if (tune.tail === 'dip' && tail === 1) {
-      // A fall-rise falls on its nucleus and rises on the tail.
-      values[nucleus].steps = [
-        [0, from],
-        [0.25, to],
-        [0.55, tune.dip * scale],
-      ];
-    }
+    values[nucleus].steps = nucleusSteps(tune, from, to, at, tail, scale);
     for (let offset = 1; offset <= tail; offset++) {
       values[nucleus + offset].steps = tailSteps(
         tune,
@@ -523,6 +493,71 @@ function tuneValues(phrase) {
     }
   }
   return values;
+}
+
+/**
+ * Values of the syllables before the nucleus: the accents of the stressed
+ * ones (`first` on the first word), or the plateau of IK5 from its first
+ * centre on.
+ */
+function preNucleusValues(phrase, values) {
+  const { syllables, nucleus, tune } = phrase;
+  const scale = phrase.tuneScale;
+  const firstWord = wordOf(syllables[0]);
+  const firstStressed = syllables.findIndex(
+    (syllable, index) => index < nucleus && stressOf(syllable) === 1
+  );
+  const plateau = tune.plateau !== undefined && firstStressed >= 0;
+  for (let index = 0; index < nucleus; index++) {
+    const syllable = syllables[index];
+    if (deaccented(syllable)) {
+      continue;
+    }
+    if (plateau) {
+      values[index].steps = plateauSteps(index, firstStressed, tune, scale);
+    } else if (stressOf(syllable) === 1) {
+      const first =
+        tune.first !== undefined &&
+        wordOf(syllable) === firstWord &&
+        wordOf(syllables[nucleus]) !== firstWord;
+      values[index] = {
+        steps: [[0, (first ? tune.first : tune.accent) * scale]],
+        accent: true,
+      };
+    }
+  }
+}
+
+/** Steps of IK5 before its second centre: it rises on the first one and holds. */
+function plateauSteps(index, firstStressed, tune, scale) {
+  if (index < firstStressed) {
+    return [[0, 0]];
+  }
+  if (index === firstStressed) {
+    return [
+      [0, 0],
+      [0.5, tune.plateau * scale],
+    ];
+  }
+  return [[0, tune.plateau * scale]];
+}
+
+/** Steps of a nucleus with a tail after it. */
+function nucleusSteps(tune, from, to, at, tail, scale) {
+  if (tune.tail === 'dip' && tail === 1) {
+    // A fall-rise falls on its nucleus and rises on the tail.
+    return [
+      [0, from],
+      [0.25, to],
+      [0.55, tune.dip * scale],
+    ];
+  }
+  return from === to
+    ? [[0, from]]
+    : [
+        [0, from],
+        [at, to],
+      ];
 }
 
 /** Steps of a nucleus that is the last syllable of its phrase. */
@@ -601,7 +636,9 @@ function hindiValues(phrase) {
             [0.4, end],
           ]);
         } else {
-          values.push([[0, -downstep + ((end + downstep) * index) / (count - 1)]]);
+          values.push([
+            [0, -downstep + ((end + downstep) * index) / (count - 1)],
+          ]);
         }
       });
       return;
@@ -612,7 +649,9 @@ function hindiValues(phrase) {
     }
     const { first, last: high } = HI.accent;
     entry.syllables.forEach((_, index) => {
-      values.push([[0, first + ((high - first) * index) / (count - 1) - downstep]]);
+      values.push([
+        [0, first + ((high - first) * index) / (count - 1) - downstep],
+      ]);
     });
     downstep += HI.accent.downstep;
   });
@@ -644,8 +683,7 @@ export function intonationTargets(phrase, head) {
   const values = phrase.hindi ? hindiValues(phrase) : tuneValues(phrase);
   const { syllables, focus, nucleus } = phrase;
   const english = !phrase.hindi && phrase.language !== 'ru';
-  const strengthOf = (value) =>
-    value.accent ? (head.accentStrength ?? 1) : 1;
+  const strengthOf = (value) => (value.accent ? (head.accentStrength ?? 1) : 1);
   const targets = [];
   let start = syllables[0][0].start;
   let afterFocus = false;

@@ -7,11 +7,25 @@ import { planUtterance } from '../src/articulation/plan.js';
 import { normalizeHeadConfig } from '../src/head-config.js';
 
 const { ipa } = textToIpa('Hi.', { lang: 'en' });
-const plan = planUtterance(ipa, { head: normalizeHeadConfig({}), language: 'en' });
+const plan = planUtterance(ipa, {
+  head: normalizeHeadConfig({}),
+  language: 'en',
+});
 console.log(`ipa ${ipa}`);
-console.log(plan.segments.map((s) => `${s.kind}:${s.token?.symbol ?? ''} ${s.start.toFixed(3)}-${s.end.toFixed(3)}`).join(' | '));
+console.log(
+  plan.segments
+    .map(
+      (s) =>
+        `${s.kind}:${s.token?.symbol ?? ''} ${s.start.toFixed(3)}-${s.end.toFixed(3)}`
+    )
+    .join(' | ')
+);
 const f0 = [];
-for (let frame = 0; frame < plan.frameCount; frame += Math.round(plan.frameRate * 0.05)) {
+for (
+  let frame = 0;
+  frame < plan.frameCount;
+  frame += Math.round(plan.frameRate * 0.05)
+) {
   f0.push(plan.channels.f0[frame].toFixed(1));
 }
 console.log(`f0 ${f0.join(' ')}`);

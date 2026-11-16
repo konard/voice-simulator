@@ -335,9 +335,7 @@ export const MODE_LABELS = Object.freeze({
       whisper: 0,
     },
   }),
-  ...Object.fromEntries(
-    TUNE_LABELS.map((tune) => [tune, () => ({ tune })])
-  ),
+  ...Object.fromEntries(TUNE_LABELS.map((tune) => [tune, () => ({ tune })])),
 });
 
 /** The change of a mode label with an optional degree digit, or null. */

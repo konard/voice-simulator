@@ -7,7 +7,10 @@ import { readFileSync, writeFileSync } from 'node:fs';
 import { planUtterance } from '../src/articulation/plan.js';
 import { normalizeHeadConfig } from '../src/head-config.js';
 
-const url = new URL('../tests/fixtures/issue-49/hello-world-f0.json', import.meta.url);
+const url = new globalThis.URL(
+  '../tests/fixtures/issue-49/hello-world-f0.json',
+  import.meta.url
+);
 const snapshot = JSON.parse(readFileSync(url, 'utf8'));
 const plan = planUtterance(snapshot.ipa, {
   head: normalizeHeadConfig(snapshot.head),

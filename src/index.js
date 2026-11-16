@@ -55,6 +55,7 @@ export {
   MarkupError,
   SOUND_DURATION,
   SOUND_NAMES,
+  TUNE_LABELS,
   composeMode,
   createMode,
   isSsml,
@@ -223,6 +224,7 @@ export { RADIATION_BAFFLE } from './acoustics/radiation.js';
 export {
   estimateFormants,
   estimatePitch,
+  SUBHARMONIC_TOLERANCE,
   impulseSpectrum,
   resonances,
   rms,
@@ -459,6 +461,25 @@ export {
   pauseDuration,
   intonationPhrases,
 } from './articulation/prosody.js';
+export {
+  FOCUS,
+  INTONATION_RATE,
+  TUNES,
+  TUNE_NAMES,
+  analyzeIntonation,
+  intonationLanguage,
+  phraseTuneName,
+} from './articulation/intonation.js';
+export {
+  ALTERNATIVE_CONJUNCTIONS,
+  ENGLISH_AUXILIARIES,
+  MAX_PHRASE_SYLLABLES,
+  MIN_PHRASE_SYLLABLES,
+  PHRASE_CONJUNCTIONS,
+  englishAuxiliary,
+  markPhrasing,
+} from './g2p/phrasing.js';
+export { ZH_WH_WORDS } from './g2p/verbalize-zh.js';
 export {
   sonority,
   syllabifyIpa,

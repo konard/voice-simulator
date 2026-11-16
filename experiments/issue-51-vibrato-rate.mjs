@@ -9,10 +9,21 @@ for (const ipa of ['ˈaː |', 'aː˥ |', 'aː˥']) {
   for (const speechRate of [1, 0.7, 0.5]) {
     const row = [3, 4, 5, 6, 7, 8].map((vibratoRate) =>
       measureVoice(
-        synthesize(ipa, { ipa: true, tier: 'minimal', seed: 41, head: { ...base, speechRate, vibratoRate } }),
+        synthesize(ipa, {
+          ipa: true,
+          tier: 'minimal',
+          seed: 41,
+          head: { ...base, speechRate, vibratoRate },
+        }),
         'f0Range'
       ).toFixed(3)
     );
-    console.log(JSON.stringify(ipa), 'speechRate', speechRate, 'rates 3..8:', row.join(' '));
+    console.log(
+      JSON.stringify(ipa),
+      'speechRate',
+      speechRate,
+      'rates 3..8:',
+      row.join(' ')
+    );
   }
 }

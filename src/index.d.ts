@@ -217,6 +217,8 @@ export declare const MARKUP_LIMITS: Readonly<{
 export declare const MARKUP_NAMESPACE: string;
 export declare const MODE_DEFAULTS: Readonly<Mode>;
 export declare const SOUND_NAMES: readonly string[];
+/** Tune labels of the markup (issue 51): `{IK4 … IK4}`, `[tune IK4]`, `<vs:tune name="IK4">`. */
+export declare const TUNE_LABELS: readonly string[];
 export declare const SOUND_DURATION: number;
 export declare const EMOTIONS: Readonly<
   Record<string, readonly [number, number, number]>
@@ -1688,6 +1690,8 @@ export declare function estimatePitch(
   sampleRate: number,
   options?: object
 ): number;
+/** A shorter lag that scores at least this share of the best one is the period. */
+export declare const SUBHARMONIC_TOLERANCE: number;
 export declare function rms(
   samples: ArrayLike<number>,
   start?: number,
@@ -3050,6 +3054,75 @@ export declare const CONTOURS: Readonly<Record<string, object>>;
 export declare function boundaryOf(pause: object | null | undefined): string;
 export declare function pauseDuration(pause: object): number;
 export declare function intonationPhrases(segments: object[]): object[];
+/** Name of a tune: the generic names and the Russian IK1 to IK7. */
+export type TuneName =
+  | 'statement'
+  | 'wh'
+  | 'yesno'
+  | 'echo'
+  | 'continuation'
+  | 'alt-rise'
+  | 'tag-ask'
+  | 'tag-confirm'
+  | 'exclamation'
+  | 'command'
+  | 'parenthesis'
+  | 'call'
+  | 'IK1'
+  | 'IK2'
+  | 'IK3'
+  | 'IK4'
+  | 'IK5'
+  | 'IK6'
+  | 'IK7';
+/** Intonation tunes per language (issue 51), in semitones at `pitchRange` 3. */
+export declare const TUNES: Readonly<{
+  en: Readonly<Record<string, Readonly<Record<string, unknown>>>>;
+  ru: Readonly<Record<string, Readonly<Record<string, unknown>>>>;
+  hi: Readonly<Record<string, Readonly<Record<string, unknown>>>>;
+  zh: Readonly<Record<string, Readonly<Record<string, number>>>>;
+}>;
+/** Focus per language: pitch, duration and gain of the focus, compression after it. */
+export declare const FOCUS: Readonly<
+  Record<'en' | 'ru' | 'hi' | 'zh', Readonly<Record<string, number | boolean>>>
+>;
+/** Approach rate (per second) of the intonation targets. */
+export declare const INTONATION_RATE: number;
+/** Every tune name of `TUNES.en` and `TUNES.ru`. */
+export declare const TUNE_NAMES: readonly TuneName[];
+/** The intonation language of a language tag: 'en', 'ru', 'hi' or 'zh'. */
+export declare function intonationLanguage(
+  language?: string | null
+): 'en' | 'ru' | 'hi' | 'zh';
+/** The generic tune name of phrase `index` from its punctuation. */
+export declare function phraseTuneName(
+  phrases: object[],
+  index: number,
+  language?: string
+): TuneName;
+/** Intonation phrases with tune, focus, syllables and nucleus. */
+export declare function analyzeIntonation(
+  segments: object[],
+  language?: string
+): object[];
+/** Conjunctions before which a long stretch is broken with `|`. */
+export declare const PHRASE_CONJUNCTIONS: Readonly<
+  Record<string, readonly string[]>
+>;
+/** Conjunction of alternative questions per language (`or`, `или`, `या`, `还是`). */
+export declare const ALTERNATIVE_CONJUNCTIONS: Readonly<Record<string, string>>;
+/** English auxiliaries that open a yes/no question. */
+export declare const ENGLISH_AUXILIARIES: readonly string[];
+/** A stretch longer than this many syllables gets a `|` break. */
+export declare const MAX_PHRASE_SYLLABLES: number;
+/** Each side of a `|` break keeps at least this many syllables. */
+export declare const MIN_PHRASE_SYLLABLES: number;
+/** The auxiliary of an English word (`aren't` gives `are`), or null. */
+export declare function englishAuxiliary(word: string): string | null;
+/** Marks sentence types, tunes and phrase breaks on g2p items (in place). */
+export declare function markPhrasing(items: object[]): void;
+/** Mandarin question words: a question with one of them falls. */
+export declare const ZH_WH_WORDS: readonly string[];
 export declare function sonority(token: object): number;
 export declare function syllabifyTokens(
   tokens: object[],

@@ -169,19 +169,28 @@ export function estimatePitch(samples, sampleRate, options = {}) {
   if (best <= 0.3) {
     return 0;
   }
+  return sampleRate / periodLag(scores, bestLag, minLag);
+}
+
+/**
+ * The shortest whole fraction of `bestLag` (best of the three nearest
+ * lags) that scores at least `SUBHARMONIC_TOLERANCE` of it, else `bestLag`.
+ */
+function periodLag(scores, bestLag, minLag) {
+  const best = scores[bestLag];
   for (let divisor = Math.floor(bestLag / minLag); divisor >= 2; divisor--) {
     const centre = Math.round(bestLag / divisor);
     let lag = 0;
-    for (let near = centre - 1; near <= centre + 1; near++) {
-      if (near >= minLag && (lag === 0 || scores[near] > scores[lag])) {
+    for (let near = Math.max(minLag, centre - 1); near <= centre + 1; near++) {
+      if (lag === 0 || scores[near] > scores[lag]) {
         lag = near;
       }
     }
-    if (lag && scores[lag] >= best * SUBHARMONIC_TOLERANCE) {
-      return sampleRate / lag;
+    if (scores[lag] >= best * SUBHARMONIC_TOLERANCE) {
+      return lag;
     }
   }
-  return sampleRate / bestLag;
+  return bestLag;
 }
 
 /** Root mean square level of a range. */

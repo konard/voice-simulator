@@ -67,9 +67,7 @@ const NEGATED = { "won't": 'will', "can't": 'can', "shan't": 'shall' };
 const TAG_PRONOUNS = new Set(
   'i you he she it we they there one this that'.split(' ')
 );
-const IK5_OPENERS = new Set(
-  'какой какая какое какие как сколько'.split(' ')
-);
+const IK5_OPENERS = new Set('какой какая какое какие как сколько'.split(' '));
 
 const lower = (item) =>
   String(item.text ?? '')
@@ -272,8 +270,7 @@ function markQuestion(sentence, lang) {
     return [];
   }
   const comma = parts.findIndex((item) => item.break && item !== end);
-  const firstClause =
-    comma < 0 ? words.length : parts.slice(0, comma).length;
+  const firstClause = comma < 0 ? words.length : parts.slice(0, comma).length;
   const wh = whWord(words, lang, firstClause);
   if (wh) {
     end.ipa = '↘ ?';

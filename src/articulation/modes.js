@@ -5,16 +5,20 @@
  *
  * - `rate` divides the durations of the segments of a token (timed pauses
  *   and sounds keep their length);
- * - `pitch` (semitones) and `range` (a factor of the accent range) move
- *   the pitch targets in `syllablePitch()` (src/articulation/prosody.js);
+ * - `pitch` (semitones) and `range` (a factor of the tune's range) move
+ *   the pitch targets of intonation.js and, in phrases with tones, of
+ *   `syllablePitch()` (src/articulation/prosody.js);
+ * - `emphasis` is focus: the nucleus moves to the word, its pitch and
+ *   duration grow and what follows is compressed (`FOCUS`, issue 51);
+ * - `tune` names the tune of the phrase (`TUNE_NAMES`) and `lang` picks
+ *   the tunes of the language (`intonationLanguage()`), intonation.js;
  * - `gain` (dB) and the effort (`effortDecibels()`, limited to -20 … +6 dB)
  *   scale the loudness channel; the effort moves from `effort` to
  *   `effortEnd` over a span;
  * - a timed pause lasts exactly its `seconds`; a sound is silence of its
  *   length (`SOUND_DURATION`, 0.3 s, unless one is written).
  *
- * `phonation`, `emotion`, `emphasis`, `tune` and `lang` are carried in the
- * plan and not yet heard.
+ * `phonation` and `emotion` are carried in the plan and not yet heard.
  */
 
 import {

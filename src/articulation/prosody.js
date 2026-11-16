@@ -1,46 +1,59 @@
 /**
- * Punctuation prosody: how long each pause lasts, how the pitch moves at
- * the end of a phrase, how pitch declines through a sentence, and how
- * exclamations and parentheticals shift the voice register.
+ * Punctuation prosody: how long each pause lasts, which tune ends a
+ * phrase, how pitch declines through a sentence, and how exclamations and
+ * parentheticals shift the voice register.
  *
  * The parser tags every pause with a boundary class (see
  * `BOUNDARY_CLASSES` in `src/ipa/inventory.js`). Defaults per class:
  *
- * | boundary    | written as   | pause  | final contour        | final lengthening |
- * | ----------- | ------------ | ------ | -------------------- | ----------------- |
- * | word        | space        | 12 ms  | none                 | none              |
- * | quote       | `"`          | 60 ms  | none                 | none              |
- * | paren       | `(` `)`      | 180 ms | level                | x1.2              |
- * | comma       | `,`          | 200 ms | continuation rise    | x1.3              |
- * | dash        | `\|` (—)     | 220 ms | level                | x1.3              |
- * | semicolon   | `;` `:`      | 300 ms | half fall            | x1.35             |
- * | period      | `.` `‖`      | 420 ms | fall                 | x1.4              |
- * | exclamation | `!`          | 420 ms | emphatic fall        | x1.4              |
- * | question    | `?`          | 420 ms | rise (yes/no)        | x1.4              |
- * | ellipsis    | `…`          | 650 ms | trailing, slight fall| x1.8              |
+ * | boundary    | written as   | pause  | tune (intonation.js)  | final lengthening |
+ * | ----------- | ------------ | ------ | --------------------- | ----------------- |
+ * | word        | space        | 12 ms  | none                  | none              |
+ * | quote       | `"`          | 60 ms  | none                  | none              |
+ * | paren       | `(` `)`      | 180 ms | parenthesis           | x1.2              |
+ * | comma       | `,`          | 200 ms | continuation          | x1.3              |
+ * | dash        | `\|` (—)     | 220 ms | continuation          | x1.3              |
+ * | semicolon   | `;` `:`      | 300 ms | statement             | x1.35             |
+ * | period      | `.` `‖`      | 420 ms | statement             | x1.4              |
+ * | exclamation | `!`          | 420 ms | exclamation           | x1.4              |
+ * | question    | `?`          | 420 ms | yes/no question       | x1.4              |
+ * | ellipsis    | `…`          | 650 ms | statement             | x1.8              |
  *
- * A question that starts with a question word is written `↘ ?` by the
- * text front end and falls; `↗` forces a rise on the next phrase end.
- * Final contours are in semitones, `perRange * pitchRange + offset`. The
- * head's `pauseLength` scales every pause and its `finalLengthening` is the
- * factor at a period; the other boundaries scale with it.
+ * The tunes are in intonation.js (issue 51): every language maps the
+ * sentence type onto its own tunes (English nuclear tones, the Russian
+ * intonation constructions IK1 to IK7, Hindi accent phrases, a Mandarin
+ * question raise). The text front end writes the sentence type before the
+ * mark (src/g2p/phrasing.js): `↘ ?` for a question with a question word
+ * (it falls), `↗ ?` for an echo question or an asking tag, `↗ |` before the
+ * `or` of an alternative question, `{IK4 … IK4}` and `{IK5 … IK5}` for
+ * Russian а-questions and как-exclamations, and `|` before the conjunction
+ * nearest to the middle of a stretch of more than 14 syllables; the phrase
+ * before `|` gets the continuation tune (Russian: IK3 at 0.7). A tune label
+ * (`{IK3 … IK3}`, `[tune yesno]`, `<vs:tune name="echo">`) overrides the
+ * punctuation. The head's `pauseLength` scales every pause and its
+ * `finalLengthening` is the factor at a period; the other boundaries
+ * scale with it.
  *
  * Declination: pitch falls 2 semitones (the head's `declination`) across
  * each intonation phrase and each later phrase of the same sentence starts
- * half that lower (at most 3 steps); sentence ends (`.`, `!`, `?`, `…`) reset it. Exclamation sentences
- * are 1.5 semitones higher with a 1.3x accent range and +3 dB; segments
- * inside parentheses are 2 semitones lower with a 0.7x range and -3 dB.
- * Tonal languages keep their lexical tones and only get the declination
- * and register shifts. Every Chao level of a tone is a pitch target, so a
- * contour tone such as the Mandarin third tone `˨˩˦` falls to its lowest
- * level before it rises. The targets sit at the fractions of the syllable
- * in `TONE_POINT_POSITIONS`: the ends for two levels, `0, 0.4, 1` for
- * three (the low point comes before the middle of the vowel, Xu 1997,
- * figure 3) and evenly spaced for more. A single-level tone is level.
- * In a phrase with tones the voice approaches the targets of one syllable
- * after the other from where the last syllable ended (the tone model of
- * issue 49 in tone-model.js); a syllable without tone and stress mark is
- * the neutral tone, whose level depends on the tone before it.
+ * half that lower (at most 3 steps); sentence ends (`.`, `!`, `?`, `…`)
+ * reset it. Exclamation sentences are 1.5 semitones higher with a 1.3x
+ * accent range and +3 dB; segments inside parentheses are 2 semitones
+ * lower with a 0.7x range and -3 dB.
+ *
+ * Tonal languages keep their lexical tones and only get the declination,
+ * the register shifts and the Mandarin question raise (`TUNES.zh`). Every
+ * Chao level of a tone is a pitch target, so a contour tone such as the
+ * Mandarin third tone `˨˩˦` falls to its lowest level before it rises. The
+ * targets sit at the fractions of the syllable in `TONE_POINT_POSITIONS`:
+ * the ends for two levels, `0, 0.4, 1` for three (the low point comes
+ * before the middle of the vowel, Xu 1997, figure 3) and evenly spaced for
+ * more. A single-level tone is level. In a phrase with tones the voice
+ * approaches the targets of one syllable after the other from where the
+ * last syllable ended (the tone model of issue 49 in tone-model.js); a
+ * syllable without tone and stress mark is the neutral tone, whose level
+ * depends on the tone before it, and a stressed syllable without tone gets
+ * the final contour of `CONTOURS` (`phraseContour()`, `syllablePitch()`).
  */
 
 import {
@@ -61,7 +74,11 @@ export const BOUNDARIES = Object.freeze({
     contour: 'continuation',
     lengthen: 1.3,
   }),
-  dash: Object.freeze({ pause: 0.22, contour: 'level', lengthen: 1.3 }),
+  dash: Object.freeze({
+    pause: 0.22,
+    contour: 'continuation',
+    lengthen: 1.3,
+  }),
   semicolon: Object.freeze({
     pause: 0.3,
     contour: 'halfFall',
@@ -323,6 +340,49 @@ export function isTonalPhrase(phrase) {
 const toSemitones = (pitch, reference) => 12 * Math.log2(pitch / reference);
 
 /**
+ * Tone range factor and lowering (semitones) of a syllable in a phrase
+ * with a focus (`FOCUS.zh`): wider on the focus, narrower and lower after.
+ */
+function focusShape(focus, focused, afterFocus) {
+  if (focused) {
+    return { factor: 1 + (FOCUS.zh.scale - 1) * focus.strength, lower: 0 };
+  }
+  if (afterFocus) {
+    return {
+      factor: 1 - (1 - FOCUS.zh.after) * focus.strength,
+      lower: FOCUS.zh.level * focus.strength,
+    };
+  }
+  return { factor: 1, lower: 0 };
+}
+
+/**
+ * Tone-model intervals of one syllable: the levels of its tone, the start
+ * and end of `syllablePitch()` for a stressed syllable without tone, or
+ * the neutral level after `previousTone`.
+ */
+function syllableIntervals(syllable) {
+  const { carrier, stressed, level, duration, lower, context } = syllable;
+  if (carrier) {
+    return toneIntervals(carrier.token.tone, duration).map((interval) => ({
+      ...interval,
+      from: level(interval.from),
+      to: level(interval.to),
+    }));
+  }
+  if (stressed) {
+    const { head, segment } = context;
+    const points = syllablePitch(segment, context);
+    const [from, to] = [points[0], points.at(-1)].map(
+      (pitch) => toSemitones(pitch, head.pitch) + lower
+    );
+    return [{ duration, from, to, rate: TONE_RATES.level }];
+  }
+  const value = level(neutralLevel(syllable.previousTone));
+  return [{ duration, from: value, to: value, rate: TONE_RATES.neutral }];
+}
+
+/**
  * Pitch targets of the syllables of a phrase with tones (issue 49): one
  * target per syllable, in semitones from `head.pitch`. A Chao level
  * becomes `shift + (level − 3) × scale`. A syllable without tone and
@@ -356,39 +416,20 @@ function tonalTargets(phrase, head) {
     const { shift, scale: baseScale } = pitchShift(nuclei[0], head, phrase, {
       declination: zh?.declination ?? 1,
     });
-    let scale = baseScale * (last ? (zh?.lastScale ?? 1) : 1);
-    let lower = 0;
-    const focused = focus && nuclei[0].token?.word === focus.word;
-    if (focused) {
-      scale *= 1 + (FOCUS.zh.scale - 1) * focus.strength;
-    } else if (afterFocus) {
-      scale *= 1 - (1 - FOCUS.zh.after) * focus.strength;
-      lower = FOCUS.zh.level * focus.strength;
-    }
-    afterFocus ||= Boolean(focused);
-    const level = (value) => shift + lower + (value - 3) * scale;
+    const focused = Boolean(focus) && nuclei[0].token?.word === focus.word;
+    const { factor, lower } = focusShape(focus, focused, afterFocus);
+    const scale = baseScale * (last ? (zh?.lastScale ?? 1) : 1) * factor;
+    afterFocus ||= focused;
     const stressed = nuclei.some((item) => item.token?.stress > 0);
-    let intervals;
-    if (carrier) {
-      intervals = toneIntervals(carrier.token.tone, duration).map(
-        (interval) => ({
-          ...interval,
-          from: level(interval.from),
-          to: level(interval.to),
-        })
-      );
-    } else if (stressed) {
-      const points = syllablePitch(nuclei[0], { head, phrase, last });
-      const [from, to] = [points[0], points.at(-1)].map(
-        (pitch) => toSemitones(pitch, head.pitch) + lower
-      );
-      intervals = [{ duration, from, to, rate: TONE_RATES.level }];
-    } else {
-      const value = level(neutralLevel(previousTone));
-      intervals = [
-        { duration, from: value, to: value, rate: TONE_RATES.neutral },
-      ];
-    }
+    let intervals = syllableIntervals({
+      carrier,
+      stressed,
+      level: (value) => shift + lower + (value - 3) * scale,
+      duration,
+      lower,
+      previousTone,
+      context: { head, phrase, last, segment: nuclei[0] },
+    });
     // The question raise at the start and end of every interval.
     let time = start;
     intervals = intervals.map((interval) => {
