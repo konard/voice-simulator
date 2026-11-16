@@ -96,27 +96,90 @@ pub fn render(job: &Job, threads: usize) -> Result<Rendered, String> {
         ));
     }
     let mut out = vec![0.0f32; job.samples];
-    let written = match renderer.start_team(threads) {
-        None => renderer.render(&job.frames, &mut out),
-        Some(team) => std::thread::scope(|scope| {
-            for index in 1..team.threads() {
-                let team = Arc::clone(&team);
-                scope.spawn(move || team.work(index));
-            }
-            // Ends the helpers even when the render panics, so that the
-            // scope, which waits for them, ends too.
-            let _finish = Finish(&team);
-            renderer.render(&job.frames, &mut out)
-        }),
-    }
-    .map_err(describe)?;
-    let threads = renderer.threads();
-    renderer.stop_team();
+    let (written, threads) = with_team(&mut renderer, threads, |renderer| {
+        renderer.render(&job.frames, &mut out)
+    });
+    let written = written.map_err(describe)?;
     out.truncate(written);
     Ok(Rendered {
         samples: out,
         threads,
     })
+}
+
+/// Runs `action` with the renderer stepped by a team of `threads` (when
+/// its grid is large enough, see [`AnyRenderer::start_team`]), the helpers
+/// on scoped threads; returns its result and the threads that stepped.
+pub fn with_team<R>(
+    renderer: &mut AnyRenderer,
+    threads: usize,
+    action: impl FnOnce(&mut AnyRenderer) -> R,
+) -> (R, usize) {
+    let result = match renderer.start_team(threads) {
+        None => action(renderer),
+        Some(team) => std::thread::scope(|scope| {
+            for index in 1..team.threads() {
+                let team = Arc::clone(&team);
+                scope.spawn(move || team.work(index));
+            }
+            // Ends the helpers even when `action` panics, so that the
+            // scope, which waits for them, ends too.
+            let _finish = Finish(&team);
+            action(renderer)
+        }),
+    };
+    let threads = renderer.threads();
+    renderer.stop_team();
+    (result, threads)
+}
+
+/// Samples [`kernel_steps`] renders before it times the kernel.
+pub const KERNEL_WARM_SAMPLES: usize = 2400;
+
+/// `count` bare kernel steps of the 3D solver of `job` (no sources) after
+/// its first [`KERNEL_WARM_SAMPLES`] samples:
+/// the seconds they took, the threads, the size of the grid and the
+/// SHA-256 of the bits of the pressure field after them.
+pub fn kernel_steps(job: &Job, count: usize, threads: usize) -> Result<KernelRun, String> {
+    let describe = |error: RenderError| format!("the renderer refused the job: {error:?}");
+    let mut renderer = AnyRenderer::new(&job.config, &job.model).map_err(describe)?;
+    let (links, cells) = renderer.grid_size();
+    if links == 0 {
+        return Err("kernel-steps needs a job of the 3D solver".into());
+    }
+    // The first samples of the job, so that the field is not all zeros.
+    let mut start = vec![0.0f32; job.samples.min(KERNEL_WARM_SAMPLES)];
+    let frames = renderer.blocks(start.len()) * renderer.frame_stride();
+    renderer
+        .render(&job.frames[..frames.min(job.frames.len())], &mut start)
+        .map_err(describe)?;
+    let (seconds, threads) = with_team(&mut renderer, threads, |renderer| {
+        let started = std::time::Instant::now();
+        renderer.kernel_steps(count);
+        started.elapsed().as_secs_f64()
+    });
+    let mut field = vec![0.0; cells];
+    let written = renderer.field(&mut field);
+    let bytes: Vec<u8> = field[..written]
+        .iter()
+        .flat_map(|value| value.to_le_bytes())
+        .collect();
+    Ok(KernelRun {
+        seconds,
+        threads,
+        links,
+        cells,
+        field_sha256: hex(&sha256(&bytes)),
+    })
+}
+
+/// What [`kernel_steps`] measured.
+pub struct KernelRun {
+    pub seconds: f64,
+    pub threads: usize,
+    pub links: usize,
+    pub cells: usize,
+    pub field_sha256: String,
 }
 
 /// The samples of a job and the threads that stepped its solver.

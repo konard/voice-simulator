@@ -1,8 +1,8 @@
 //! `voice-simulator-cli`: the command line tool of the Rust engine.
 //!
 //! Arguments are parsed by hand (no dependencies besides the core). The
-//! commands are `version`, `random` and `render-job` (issue 22, with
-//! `--threads` of issue 24).
+//! commands are `version`, `random`, `render-job` (issue 22, with
+//! `--threads` of issue 24) and `kernel-steps` (issue 24).
 
 mod render_job;
 mod sha256;
@@ -40,6 +40,15 @@ Commands:
                           fewer links than THREAD_MIN_LINKS stay on one
                           thread. The samples are the same bits with any
                           number of threads.
+  kernel-steps <file> <count> [--threads <n|auto>]
+                          Render the first 2400 samples of a render job of
+                          the 3D solver, then time <count> bare steps of
+                          its grid (no sources), the kernel of
+                          tests/heavy/performance-threads.test.js. Prints
+                          the seconds, the steps per second, the threads,
+                          the links and cells of the grid and the SHA-256
+                          of the bits of the pressure field after the steps
+                          (the same with any number of threads).
   help                    Print this help
 ";
 
@@ -118,6 +127,29 @@ fn run(args: &[&str], out: &mut impl Write) -> Result<(), Failure> {
             writeln!(out, "threads {}", rendered.threads)?;
             Ok(())
         }
+        ["kernel-steps", rest @ ..] => {
+            let (words, threads) = parse_threads_option(rest)?;
+            let [file, count] = words[..] else {
+                return Err(Failure::Usage(
+                    "kernel-steps needs <file> and <count>".into(),
+                ));
+            };
+            let count: usize = count.parse().map_err(|_| {
+                Failure::Usage(format!(
+                    "count must be a non-negative integer, got {count:?}"
+                ))
+            })?;
+            let bytes = std::fs::read(file)?;
+            let job = render_job::parse(&bytes).map_err(Failure::Job)?;
+            let run = render_job::kernel_steps(&job, count, threads).map_err(Failure::Job)?;
+            writeln!(out, "seconds {:.6}", run.seconds)?;
+            writeln!(out, "steps_per_second {:.3}", count as f64 / run.seconds)?;
+            writeln!(out, "threads {}", run.threads)?;
+            writeln!(out, "links {}", run.links)?;
+            writeln!(out, "cells {}", run.cells)?;
+            writeln!(out, "field_sha256 {}", run.field_sha256)?;
+            Ok(())
+        }
         [] => Err(Failure::Usage("no command given".into())),
         [command, ..] => Err(Failure::Usage(format!("unknown command {command:?}"))),
     }
@@ -126,7 +158,18 @@ fn run(args: &[&str], out: &mut impl Write) -> Result<(), Failure> {
 /// The file and the thread count of `render-job <file> [--threads <n|auto>]`
 /// (the option may come first).
 fn parse_render_job<'a>(args: &[&'a str]) -> Result<(&'a str, usize), Failure> {
-    let mut file = None;
+    let (words, threads) = parse_threads_option(args)?;
+    match words[..] {
+        [file] => Ok((file, threads)),
+        [] => Err(Failure::Usage("render-job needs <file>".into())),
+        _ => Err(Failure::Usage("render-job takes one <file>".into())),
+    }
+}
+
+/// The words of `args` and the value of its `--threads <n|auto>` (or
+/// `--threads=<n|auto>`) option, 1 without one.
+fn parse_threads_option<'a>(args: &[&'a str]) -> Result<(Vec<&'a str>, usize), Failure> {
+    let mut words = Vec::new();
     let mut threads = 1;
     let mut rest = args.iter();
     while let Some(&word) = rest.next() {
@@ -142,12 +185,11 @@ fn parse_render_job<'a>(args: &[&'a str]) -> Result<(&'a str, usize), Failure> {
             threads = parse_threads(value)?;
         } else if word.starts_with("--") {
             return Err(Failure::Usage(format!("unknown option {word:?}")));
-        } else if file.replace(word).is_some() {
-            return Err(Failure::Usage("render-job takes one <file>".into()));
+        } else {
+            words.push(word);
         }
     }
-    let file = file.ok_or_else(|| Failure::Usage("render-job needs <file>".into()))?;
-    Ok((file, threads))
+    Ok((words, threads))
 }
 
 /// `--threads`: a positive integer, or `auto` for all cores but one.

@@ -385,6 +385,30 @@ impl AnyRenderer {
         }
     }
 
+    /// [`Fdtd3d::kernel_steps`] of the 3D solver; `false` for the
+    /// waveguide, which has no grid.
+    pub fn kernel_steps(&mut self, count: usize) -> bool {
+        match self {
+            Self::Waveguide(_) => false,
+            Self::Fdtd3d(renderer) => {
+                renderer.solver_mut().kernel_steps(count);
+                true
+            }
+        }
+    }
+
+    /// Links and cells of the grid of the 3D solver, `(0, 0)` for the
+    /// waveguide.
+    pub fn grid_size(&self) -> (usize, usize) {
+        match self {
+            Self::Waveguide(_) => (0, 0),
+            Self::Fdtd3d(renderer) => {
+                let grid = renderer.solver().grid();
+                (grid.links(), grid.cells())
+            }
+        }
+    }
+
     /// Threads that step the solver: 1 but with a team.
     pub fn threads(&self) -> usize {
         match self {

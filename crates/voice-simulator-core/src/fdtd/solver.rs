@@ -495,6 +495,18 @@ impl Fdtd3d {
         self.team.as_ref().map_or(1, |team| team.threads())
     }
 
+    /// `count` bare steps of the grid, with the team if there is one: no
+    /// source, no noise, no receiver. What the performance test of issue
+    /// 24 times (`tests/heavy/performance-threads.test.js`).
+    pub fn kernel_steps(&mut self, count: usize) {
+        for _ in 0..count {
+            match &self.team {
+                Some(team) => team.step(&mut self.grid, self.active_from),
+                None => self.grid.step(self.active_from),
+            }
+        }
+    }
+
     /// The receiver cell.
     pub fn microphone(&self) -> usize {
         self.microphone
