@@ -1,7 +1,8 @@
 //! `voice-simulator-cli`: the command line tool of the Rust engine.
 //!
 //! Arguments are parsed by hand (no dependencies besides the core). The
-//! commands are `version`, `random` and `render-job` (issue 22).
+//! commands are `version`, `random` and `render-job` (issue 22, with
+//! `--threads` of issue 24).
 
 mod render_job;
 mod sha256;
@@ -23,7 +24,8 @@ Commands:
                           (with an optional minus sign) is a number, reduced
                           to 32 bits like `seed >>> 0`; any other seed is a
                           string, hashed like hashSeed(string).
-  render-job <file>       Render a job of scripts/write-render-job.mjs
+  render-job <file> [--threads <n|auto>]
+                          Render a job of scripts/write-render-job.mjs
                           (little-endian f64 values: config length, config,
                           model length in bytes, packed voxel model, frame
                           count, frames, sample count) with the renderer of
@@ -31,7 +33,13 @@ Commands:
                           with its model), natively, in one call. Prints
                           the SHA-256 of the samples (their f32
                           little-endian bytes), the number of samples, the
-                          seconds the render took and its real-time factor.
+                          seconds the render took, its real-time factor and
+                          the threads that stepped the solver. --threads
+                          (default 1) steps the 3D solver on <n> threads,
+                          or with auto on all cores but one; grids with
+                          fewer links than THREAD_MIN_LINKS stay on one
+                          thread. The samples are the same bits with any
+                          number of threads.
   help                    Print this help
 ";
 
@@ -94,22 +102,64 @@ fn run(args: &[&str], out: &mut impl Write) -> Result<(), Failure> {
             Ok(())
         }
         ["random", ..] => Err(Failure::Usage("random needs <seed> and <count>".into())),
-        ["render-job", file] => {
+        ["render-job", rest @ ..] => {
+            let (file, threads) = parse_render_job(rest)?;
             let bytes = std::fs::read(file)?;
             let job = render_job::parse(&bytes).map_err(Failure::Job)?;
             let started = Instant::now();
-            let samples = render_job::render(&job).map_err(Failure::Job)?;
+            let rendered = render_job::render(&job, threads).map_err(Failure::Job)?;
             let seconds = started.elapsed().as_secs_f64();
+            let samples = rendered.samples;
             let duration = samples.len() as f64 / job.config.first().copied().unwrap_or(1.0);
             writeln!(out, "sha256 {}", render_job::fingerprint(&samples))?;
             writeln!(out, "samples {}", samples.len())?;
             writeln!(out, "seconds {seconds:.6}")?;
             writeln!(out, "rtf {:.6}", seconds / duration)?;
+            writeln!(out, "threads {}", rendered.threads)?;
             Ok(())
         }
-        ["render-job", ..] => Err(Failure::Usage("render-job needs <file>".into())),
         [] => Err(Failure::Usage("no command given".into())),
         [command, ..] => Err(Failure::Usage(format!("unknown command {command:?}"))),
+    }
+}
+
+/// The file and the thread count of `render-job <file> [--threads <n|auto>]`
+/// (the option may come first).
+fn parse_render_job<'a>(args: &[&'a str]) -> Result<(&'a str, usize), Failure> {
+    let mut file = None;
+    let mut threads = 1;
+    let mut rest = args.iter();
+    while let Some(&word) = rest.next() {
+        if let Some(value) = word.strip_prefix("--threads") {
+            let value = match value.strip_prefix('=') {
+                Some(value) => value,
+                None if value.is_empty() => rest
+                    .next()
+                    .copied()
+                    .ok_or_else(|| Failure::Usage("--threads needs <n|auto>".into()))?,
+                None => return Err(Failure::Usage(format!("unknown option {word:?}"))),
+            };
+            threads = parse_threads(value)?;
+        } else if word.starts_with("--") {
+            return Err(Failure::Usage(format!("unknown option {word:?}")));
+        } else if file.replace(word).is_some() {
+            return Err(Failure::Usage("render-job takes one <file>".into()));
+        }
+    }
+    let file = file.ok_or_else(|| Failure::Usage("render-job needs <file>".into()))?;
+    Ok((file, threads))
+}
+
+/// `--threads`: a positive integer, or `auto` for all cores but one.
+fn parse_threads(value: &str) -> Result<usize, Failure> {
+    if value == "auto" {
+        return Ok(render_job::auto_threads());
+    }
+    match value.parse::<usize>() {
+        Ok(threads) if threads > 0 => Ok(threads),
+        _ => Err(Failure::Usage(format!(
+            "--threads must be a positive integer or auto, got {value:?}"
+        ))),
     }
 }
 
@@ -163,6 +213,19 @@ mod tests {
     }
 
     #[test]
+    fn threads_are_parsed() {
+        let parse = |args: &[&'static str]| match parse_render_job(args) {
+            Ok(parsed) => parsed,
+            Err(error) => panic!("{args:?}: {error:?}"),
+        };
+        assert_eq!(parse(&["job.bin"]), ("job.bin", 1));
+        assert_eq!(parse(&["job.bin", "--threads", "4"]), ("job.bin", 4));
+        assert_eq!(parse(&["--threads=3", "job.bin"]), ("job.bin", 3));
+        let (_, auto) = parse(&["job.bin", "--threads", "auto"]);
+        assert!(auto >= 1);
+    }
+
+    #[test]
     fn version_names_the_tool() {
         assert!(output(&["version"]).starts_with("voice-simulator-cli "));
     }
@@ -179,6 +242,19 @@ mod tests {
             Err(Failure::Usage(_))
         ));
         assert!(matches!(run(&["nope"], &mut sink), Err(Failure::Usage(_))));
+        for args in [
+            &["render-job"][..],
+            &["render-job", "job.bin", "--threads"],
+            &["render-job", "job.bin", "--threads", "0"],
+            &["render-job", "job.bin", "--threads", "many"],
+            &["render-job", "job.bin", "--fast"],
+            &["render-job", "a.bin", "b.bin"],
+        ] {
+            assert!(
+                matches!(run(args, &mut sink), Err(Failure::Usage(_))),
+                "{args:?}"
+            );
+        }
         assert!(matches!(run(&[], &mut sink), Err(Failure::Usage(_))));
     }
 }

@@ -4,14 +4,16 @@
 //! module here ports one JavaScript module and must give the same numbers
 //! under the parity class stated in `docs/RUST-ENGINE.md`.
 //!
-//! The crate has no I/O, no threads and no clock, so the same code runs in
-//! the WebAssembly engine, the command line tool and the unit tests.
+//! The crate has no I/O, no clock and starts no thread, so the same code
+//! runs in the WebAssembly engine, the command line tool and the unit
+//! tests. The thread team of `fdtd::parallel` (issue 24) runs on threads
+//! that its caller starts; that file is the only one that writes through
+//! raw pointers, and the lints of `Cargo.toml` deny it everywhere else.
 
 #![no_std]
-#![forbid(unsafe_code)]
 
 extern crate alloc;
-#[cfg(feature = "std")]
+#[cfg(any(test, feature = "std"))]
 extern crate std;
 
 pub mod aerodynamics;

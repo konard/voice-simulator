@@ -13,9 +13,13 @@
  *
  * Usage:
  *   node scripts/write-render-job.mjs <text> <tier> <out> [--seed <seed>]
+ *     [--enclosure <cm>]
  *
  * <tier> is an audio tier: one with the waveguide (minimal, low, medium)
- * or with the 3D solver (high, ultra, studio); the seed is 1 by default. When src/engine/voice-simulator.wasm
+ * or with the 3D solver (high, ultra, studio); the seed is 1 by default.
+ * `--enclosure <cm>` puts the head of the 3D solver in a closed cube of
+ * that edge (the `enclosure` option of synthesize; issue 24 uses 40 cm,
+ * a grid large enough for `voice-simulator-cli render-job --threads`). When src/engine/voice-simulator.wasm
  * has been built (npm run build:wasm), the script also renders the job
  * with it and prints the SHA-256 of the samples, which
  * `voice-simulator-cli render-job <out>` must print too.
@@ -34,15 +38,22 @@ import {
 import { prepareUtterance } from '../src/synthesize.js';
 
 const USAGE =
-  'Usage: node scripts/write-render-job.mjs <text> <tier> <out> [--seed <seed>]';
+  'Usage: node scripts/write-render-job.mjs <text> <tier> <out> [--seed <seed>] [--enclosure <cm>]';
 
 /** The arguments, or null for wrong usage. */
 function parseArguments(args) {
   const positional = [];
   let seed = 1;
+  let enclosure;
   for (let index = 0; index < args.length; index++) {
     if (args[index] === '--seed' && index + 1 < args.length) {
       seed = args[++index];
+    } else if (args[index] === '--enclosure' && index + 1 < args.length) {
+      const edge = Number(args[++index]);
+      if (!(edge > 0)) {
+        return null;
+      }
+      enclosure = { width: edge, height: edge, depth: edge };
     } else if (args[index].startsWith('--')) {
       return null;
     } else {
@@ -53,7 +64,13 @@ function parseArguments(args) {
     return null;
   }
   const [text, tier, out] = positional;
-  return { text, tier, out, seed: /^\d+$/.test(seed) ? Number(seed) : seed };
+  return {
+    text,
+    tier,
+    out,
+    seed: /^\d+$/.test(seed) ? Number(seed) : seed,
+    enclosure,
+  };
 }
 
 /** SHA-256 of the bytes of `samples` (little-endian f32). */
@@ -71,10 +88,14 @@ async function main() {
     globalThis.console.error(USAGE);
     return 2;
   }
-  const { text, tier, out, seed } = parsed;
+  const { text, tier, out, seed, enclosure } = parsed;
   let job;
   try {
-    const { plan, renderOptions } = prepareUtterance(text, { tier, seed });
+    const { plan, renderOptions } = prepareUtterance(text, {
+      tier,
+      seed,
+      enclosure,
+    });
     job = renderJob(plan, renderOptions);
   } catch (error) {
     globalThis.console.error(`write-render-job: ${error.message}`);

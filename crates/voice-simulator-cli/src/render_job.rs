@@ -12,7 +12,14 @@
 //! `src/engine/rust-renderer.js`). The samples are rendered in one call
 //! and fingerprinted as the SHA-256 of their `f32` little-endian bytes,
 //! the bytes of the `Float32Array` the WebAssembly renderer returns.
+//!
+//! `--threads` (issue 24) steps the 3D solver with a thread team of
+//! `voice_simulator_core::fdtd::parallel`, its helpers on scoped threads;
+//! the samples are the same bits with any number of threads.
 
+use std::sync::Arc;
+
+use voice_simulator_core::fdtd::parallel::Team;
 use voice_simulator_core::renderer::{AnyRenderer, RenderError};
 
 use crate::sha256::{hex, sha256};
@@ -77,7 +84,7 @@ pub fn parse(bytes: &[u8]) -> Result<Job, String> {
 }
 
 /// Renders a job: the samples, or a message.
-pub fn render(job: &Job) -> Result<Vec<f32>, String> {
+pub fn render(job: &Job, threads: usize) -> Result<Rendered, String> {
     let describe = |error: RenderError| format!("the renderer refused the job: {error:?}");
     let mut renderer = AnyRenderer::new(&job.config, &job.model).map_err(describe)?;
     if job.frames.len() != job.frame_count * renderer.frame_stride() {
@@ -89,9 +96,50 @@ pub fn render(job: &Job) -> Result<Vec<f32>, String> {
         ));
     }
     let mut out = vec![0.0f32; job.samples];
-    let written = renderer.render(&job.frames, &mut out).map_err(describe)?;
+    let written = match renderer.start_team(threads) {
+        None => renderer.render(&job.frames, &mut out),
+        Some(team) => std::thread::scope(|scope| {
+            for index in 1..team.threads() {
+                let team = Arc::clone(&team);
+                scope.spawn(move || team.work(index));
+            }
+            // Ends the helpers even when the render panics, so that the
+            // scope, which waits for them, ends too.
+            let _finish = Finish(&team);
+            renderer.render(&job.frames, &mut out)
+        }),
+    }
+    .map_err(describe)?;
+    let threads = renderer.threads();
+    renderer.stop_team();
     out.truncate(written);
-    Ok(out)
+    Ok(Rendered {
+        samples: out,
+        threads,
+    })
+}
+
+/// The samples of a job and the threads that stepped its solver.
+pub struct Rendered {
+    pub samples: Vec<f32>,
+    pub threads: usize,
+}
+
+/// Calls [`Team::finish`] when dropped.
+struct Finish<'a>(&'a Team);
+
+impl Drop for Finish<'_> {
+    fn drop(&mut self) {
+        self.0.finish();
+    }
+}
+
+/// Helper threads for `--threads auto`: all cores but the one of the
+/// leader, at least 1 in total.
+pub fn auto_threads() -> usize {
+    std::thread::available_parallelism()
+        .map_or(1, |cores| cores.get().saturating_sub(1))
+        .max(1)
 }
 
 /// The SHA-256 of the little-endian bytes of `samples`, in hexadecimal.
@@ -146,7 +194,7 @@ mod tests {
             frames: Vec::new(),
             samples: 4,
         };
-        assert!(render(&job).is_err());
+        assert!(render(&job, 1).is_err());
     }
 
     #[test]

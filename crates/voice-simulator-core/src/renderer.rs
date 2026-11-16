@@ -10,6 +10,7 @@
 //! so the samples do not depend on how the render is split into calls.
 
 use alloc::boxed::Box;
+use alloc::sync::Arc;
 use alloc::vec::Vec;
 
 use crate::aerodynamics::{
@@ -18,6 +19,7 @@ use crate::aerodynamics::{
 };
 use crate::config;
 use crate::fdtd::model::Model;
+use crate::fdtd::parallel::Team;
 use crate::fdtd::solver::{Fdtd3d, FdtdOptions, Output};
 use crate::frame;
 use crate::glottis::{GlottalControl, Glottis, GlottisOptions};
@@ -360,6 +362,36 @@ impl AnyRenderer {
     pub fn field(&self, out: &mut [f64]) -> usize {
         dispatch!(self, renderer => renderer.field(out))
     }
+
+    /// Steps the 3D solver with a new thread team of `threads` and returns
+    /// it, or returns `None` and leaves the renderer on one thread: the
+    /// waveguide, one thread, or a grid below
+    /// [`crate::fdtd::parallel::THREAD_MIN_LINKS`] links (see
+    /// [`Fdtd3d::new_team`]). The caller runs the helpers of the team and
+    /// calls [`Team::finish`] after the last render with it.
+    pub fn start_team(&mut self, threads: usize) -> Option<Arc<Team>> {
+        let Self::Fdtd3d(renderer) = self else {
+            return None;
+        };
+        let team = renderer.solver().new_team(threads)?;
+        renderer.solver_mut().set_team(Some(Arc::clone(&team)));
+        Some(team)
+    }
+
+    /// Back to one thread (after [`Team::finish`] of the team, if any).
+    pub fn stop_team(&mut self) {
+        if let Self::Fdtd3d(renderer) = self {
+            renderer.solver_mut().set_team(None);
+        }
+    }
+
+    /// Threads that step the solver: 1 but with a team.
+    pub fn threads(&self) -> usize {
+        match self {
+            Self::Waveguide(_) => 1,
+            Self::Fdtd3d(renderer) => renderer.solver().threads(),
+        }
+    }
 }
 
 fn seed(value: f64) -> Result<u32, RenderError> {
@@ -426,6 +458,12 @@ impl<S: Solver> Renderer<S> {
     /// The solver.
     pub fn solver(&self) -> &S {
         &self.solver
+    }
+
+    /// The solver, to change how it runs (its thread team), not what it
+    /// computes.
+    pub fn solver_mut(&mut self) -> &mut S {
+        &mut self.solver
     }
 
     /// Control blocks that start within the next `samples` samples (at

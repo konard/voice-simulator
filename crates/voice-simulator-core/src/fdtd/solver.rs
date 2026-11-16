@@ -10,6 +10,7 @@
 //! `fdtdListening` of `src/engine/pack-model.js` computes.
 
 use alloc::collections::BTreeMap;
+use alloc::sync::Arc;
 use alloc::vec;
 use alloc::vec::Vec;
 
@@ -18,6 +19,7 @@ use super::model::{
     Model, Opening, CELL_AIR, CELL_NOSE, CELL_SINUS, CELL_TRACT, LINK_INNER, LINK_LIPS,
     LINK_NOSTRILS, LINK_RADIATION, LINK_SINUS, LINK_VELUM,
 };
+use super::parallel::{Team, THREAD_MIN_LINKS};
 use crate::frame;
 use crate::glottis::{glottal_reflection, SPEED_OF_SOUND};
 use crate::losses::{boundary_loss_factor, LOSS_REFERENCE_SECTIONS};
@@ -348,6 +350,8 @@ pub struct Fdtd3d {
     /// the exponent `damping_exponent`: the same base gives the same bits.
     damping_cache: Vec<(f64, f64)>,
     damping_exponent: f64,
+    /// The thread team that steps the grid (issue 24), if any.
+    team: Option<Arc<Team>>,
 }
 
 impl Fdtd3d {
@@ -440,6 +444,7 @@ impl Fdtd3d {
             bin_filled: Vec::new(),
             damping_cache: vec![(f64::NAN, f64::NAN); link_count],
             damping_exponent: f64::NAN,
+            team: None,
             cell_kind: grid_model.kind.clone(),
             cell_arc: grid_model.arc.clone(),
             grid,
@@ -467,6 +472,27 @@ impl Fdtd3d {
     /// The step loop arrays.
     pub fn grid(&self) -> &Grid {
         &self.grid
+    }
+
+    /// A thread team of `threads` for the grid of this solver, or `None`
+    /// when one thread is asked for or the grid has fewer than
+    /// [`THREAD_MIN_LINKS`] links. The caller runs [`Team::work`] on
+    /// `threads - 1` helpers, installs it with [`Self::set_team`] and calls
+    /// [`Team::finish`] when done.
+    pub fn new_team(&self, threads: usize) -> Option<Arc<Team>> {
+        (threads > 1 && self.grid.links() >= THREAD_MIN_LINKS)
+            .then(|| Arc::new(Team::new(&self.grid, threads)))
+    }
+
+    /// Steps the grid with `team` from now on, or on this thread alone
+    /// with `None`; the numbers are the same bits either way.
+    pub fn set_team(&mut self, team: Option<Arc<Team>>) {
+        self.team = team;
+    }
+
+    /// Threads that step the grid: those of the team, else 1.
+    pub fn threads(&self) -> usize {
+        self.team.as_ref().map_or(1, |team| team.threads())
     }
 
     /// The receiver cell.
@@ -1277,7 +1303,10 @@ impl Solver for Fdtd3d {
                 self.grid.velocity[link] += force * sign;
             }
         }
-        self.grid.step(self.active_from);
+        match &self.team {
+            Some(team) => team.step(&mut self.grid, self.active_from),
+            None => self.grid.step(self.active_from),
+        }
         let pressure = self.source_pressure(flow);
         let place = self.place();
         for &index in &self.glottis_places[place].source_cells {
