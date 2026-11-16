@@ -38,8 +38,7 @@ a pressure wave travelling through the 3D shape of a parametric low-poly head
   `[whisper]Hello[/whisper]` or `[pause 0.5]` with `markup: true`, and
   ExtIPA/VoQS marks in IPA (`{W həˈloʊ W} ˈwɝld .`, `(.)`, `⸨laugh⸩`, `ˈˈ`).
   Rate, pitch, range, level, vocal effort, emphasis, tunes, whisper and
-  timed pauses are heard; the other qualities are carried in `plan.modes`.
-  See
+  timed pauses are heard; the rest is carried in `plan.modes`. See
   [docs/markup.md](docs/markup.md).
 - **Vocal effort**: `[soft]`, `[loud]`, `[shout]`, `[lombard]`,
   `[crescendo]` and `[diminuendo]` (and `<vs:effort>`, `{f … f}`) change
@@ -50,14 +49,12 @@ a pressure wave travelling through the 3D shape of a parametric low-poly head
   effort to dB SPL (0.5 is 60 dB SPL) and `loudnessTarget` (CLI
   `--loudness`) scales to an integrated loudness in LUFS (ITU-R BS.1770,
   `integratedLoudness()`).
-- **Whisper** (issue 53): `[whisper]`, `{W … W}`,
-  `<vs:phonation name="whisper">`, `ạ` and voiceless vowels such as `ḁ`
-  replace the fold vibration by the turbulent noise of a half-open glottis
-  (40 mm²): higher formants, 1.3 times as long, 25 dB quieter (30 dB with
-  `[soft]`, 20 dB for a stage whisper with `[loud]`), with the voiced and
-  voiceless consonants still apart; `{Ṿ … Ṿ}` gives a whispery voice.
-  `voicedShare()`, `energyRatio()` and `centreOfGravity()` measure it; see
-  [Whisper](docs/markup.md#whisper).
+- **Whisper** (issue 53): `[whisper]`, `{W … W}`, `ạ` and voiceless
+  vowels (`ḁ`) replace the fold vibration by the noise of a half-open
+  glottis (40 mm²): higher formants, 1.3 times as long, 25 dB quieter (30
+  with `[soft]`, 20 with `[loud]`), voiced and voiceless consonants still
+  apart; `{Ṿ … Ṿ}` is a whispery voice. `voicedShare()`, `energyRatio()`
+  and `centreOfGravity()` measure it ([Whisper](docs/markup.md#whisper)).
 - **Intonation per language** (issue 51): statements fall, yes/no
   questions rise, wh-questions fall, `Tea or coffee?` rises on the first
   item and falls on the second (`ˈti ↗ | ˈɔɹ ˈkɑfi ↘ ?`), list items and
