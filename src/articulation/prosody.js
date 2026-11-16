@@ -43,6 +43,12 @@
  * the neutral tone, whose level depends on the tone before it.
  */
 
+import {
+  analyzeIntonation,
+  FOCUS,
+  intonationGains,
+  intonationTargets,
+} from './intonation.js';
 import { TONE_RATES, neutralLevel, toneIntervals } from './tone-model.js';
 
 /** Pause length (s), final contour and final-syllable lengthening. */
@@ -254,12 +260,14 @@ export function tonePitch(tone, base, scale) {
  * Pitch shift of a nucleus in semitones from `head.pitch` (register shift
  * and the `pitch` of its speech mode minus declination), its accent range
  * and its tone scale (semitones per Chao level), both times the `range` of
- * its mode.
+ * its mode. `options.declination` scales the declination within the
+ * phrase (a Mandarin question halves it).
  * @param {object} segment
  * @param {object} head
  * @param {object} phrase
+ * @param {{declination?: number}} [options]
  */
-export function pitchShift(segment, head, phrase) {
+export function pitchShift(segment, head, phrase, options = {}) {
   const { nuclei } = phrase;
   const phraseStart = nuclei[0].start;
   const span = Math.max(0.2, nuclei.at(-1).end - phraseStart);
@@ -276,7 +284,7 @@ export function pitchShift(segment, head, phrase) {
     shift:
       register.shift +
       (mode?.pitch ?? 0) -
-      declination * progress -
+      declination * (options.declination ?? 1) * progress -
       (DECLINATION.step * phrase.step * declination) / DECLINATION.phrase,
     range: head.pitchRange * register.range * modeRange,
     scale: (1.2 + 0.35 * head.pitchRange) * register.range * modeRange,
@@ -312,30 +320,6 @@ export function isTonalPhrase(phrase) {
   return phrase.nuclei.some((segment) => segment.token?.tone?.length);
 }
 
-/**
- * Syllables of a tonal phrase as lists of nuclei: neighbouring nuclei of
- * one word (no other segment between them) belong to one syllable unless
- * the first of them carries a tone (`naɪ˨˩` is one syllable, `a˥a˥` two).
- */
-function phraseSyllables(phrase, positions) {
-  const syllables = [];
-  for (const segment of phrase.nuclei) {
-    const current = syllables.at(-1);
-    const last = current?.at(-1);
-    if (
-      last &&
-      positions.get(segment) === positions.get(last) + 1 &&
-      segment.token?.word === last.token?.word &&
-      !last.token?.tone?.length
-    ) {
-      current.push(segment);
-    } else {
-      syllables.push([segment]);
-    }
-  }
-  return syllables;
-}
-
 const toSemitones = (pitch, reference) => 12 * Math.log2(pitch / reference);
 
 /**
@@ -343,27 +327,46 @@ const toSemitones = (pitch, reference) => 12 * Math.log2(pitch / reference);
  * target per syllable, in semitones from `head.pitch`. A Chao level
  * becomes `shift + (level − 3) × scale`. A syllable without tone and
  * without stress mark is neutral: one level target at `neutralLevel()` of
- * the tone before it, approached slowly (`TONE_RATES.neutral`), raised at
- * the end of a rising phrase. A stressed syllable without tone keeps the
- * start and end of `syllablePitch()`.
+ * the tone before it, approached slowly (`TONE_RATES.neutral`). A stressed
+ * syllable without tone keeps the start and end of `syllablePitch()`.
+ * Tones are never replaced (issue 51, `TUNES.zh` in intonation.js): a
+ * question adds a raise that grows linearly over the phrase (`phrase.zh`),
+ * may soften the declination and widen the last tone; a focus widens the
+ * tones of its word and narrows and lowers those after it (`FOCUS.zh`).
  */
-function tonalTargets(segments, positions, phrase, head) {
-  const syllables = phraseSyllables(phrase, positions);
-  const contour = phraseContour(phrase.pause);
+function tonalTargets(phrase, head) {
+  const { syllables, zh, focus } = phrase;
   const targets = [];
   let previousTone = null;
+  const phraseStart = syllables[0][0].start;
+  const span = Math.max(0.2, phrase.nuclei.at(-1).end - phraseStart);
+  const raiseAt = (time) =>
+    zh ? zh.raise * Math.min(1, Math.max(0, (time - phraseStart) / span)) : 0;
+  let afterFocus = false;
   // Issue 49: the interval of syllable k runs from the end of nucleus
   // k − 1 to the end of nucleus k; the first one starts with its own
   // nucleus (its first voiced frame).
-  let start = syllables[0][0].start;
+  let start = phraseStart;
   syllables.forEach((nuclei, index) => {
     const carrier = nuclei.findLast((item) => item.token?.tone?.length);
     const segment = carrier ?? nuclei.at(-1);
     const end = nuclei.at(-1).end;
     const duration = Math.max(1e-6, end - start);
     const last = index === syllables.length - 1;
-    const { shift, range, scale } = pitchShift(nuclei[0], head, phrase);
-    const level = (value) => shift + (value - 3) * scale;
+    const { shift, scale: baseScale } = pitchShift(nuclei[0], head, phrase, {
+      declination: zh?.declination ?? 1,
+    });
+    let scale = baseScale * (last ? (zh?.lastScale ?? 1) : 1);
+    let lower = 0;
+    const focused = focus && nuclei[0].token?.word === focus.word;
+    if (focused) {
+      scale *= 1 + (FOCUS.zh.scale - 1) * focus.strength;
+    } else if (afterFocus) {
+      scale *= 1 - (1 - FOCUS.zh.after) * focus.strength;
+      lower = FOCUS.zh.level * focus.strength;
+    }
+    afterFocus ||= Boolean(focused);
+    const level = (value) => shift + lower + (value - 3) * scale;
     const stressed = nuclei.some((item) => item.token?.stress > 0);
     let intervals;
     if (carrier) {
@@ -376,22 +379,29 @@ function tonalTargets(segments, positions, phrase, head) {
       );
     } else if (stressed) {
       const points = syllablePitch(nuclei[0], { head, phrase, last });
-      const [from, to] = [points[0], points.at(-1)].map((pitch) =>
-        toSemitones(pitch, head.pitch)
+      const [from, to] = [points[0], points.at(-1)].map(
+        (pitch) => toSemitones(pitch, head.pitch) + lower
       );
       intervals = [{ duration, from, to, rate: TONE_RATES.level }];
     } else {
       const value = level(neutralLevel(previousTone));
-      const raise =
-        last && contour === 'rise'
-          ? CONTOURS.rise[0] * range + CONTOURS.rise[1]
-          : 0;
       intervals = [
-        { duration, from: value, to: value + raise, rate: TONE_RATES.neutral },
+        { duration, from: value, to: value, rate: TONE_RATES.neutral },
       ];
     }
+    // The question raise at the start and end of every interval.
+    let time = start;
+    intervals = intervals.map((interval) => {
+      const from = interval.from + raiseAt(time);
+      time += interval.duration;
+      return { ...interval, from, to: interval.to + raiseAt(time) };
+    });
     const points = carrier
-      ? tonePitch(carrier.token.tone, semitones(head.pitch, shift), scale)
+      ? tonePitch(
+          carrier.token.tone,
+          semitones(head.pitch, shift + lower + raiseAt(end)),
+          scale
+        )
       : [intervals[0].from, intervals.at(-1).to].map((value) =>
           semitones(head.pitch, value)
         );
@@ -414,49 +424,45 @@ function tonalTargets(segments, positions, phrase, head) {
 }
 
 /**
- * Pitch targets of every syllable nucleus in the utterance: `points` has
- * one pitch (Hz) per target (two, or one per tone level) and `from` and
- * `to` are its first and last value. In a phrase with lexical tones there
- * is one entry per syllable (`segment` is its tone carrier, `nuclei` all
- * its nuclei) with `intervals`, the pitch targets of the tone model in
- * semitones from `head.pitch` (`approachTargets()` in tone-model.js), the
- * `start` and `end` of the syllable's interval in seconds (from the end of
- * the syllable before it, or the start of the first nucleus, to the
- * end of its last nucleus), its `phrase` and whether it is `neutral`.
+ * Pitch targets of every syllable in the utterance, one entry per
+ * syllable: `segment` is its stressed nucleus or tone carrier, `nuclei`
+ * all its nuclei, `points` has one pitch (Hz) per target (two, or one per
+ * tone level) and `from` and `to` are its first and last value.
+ * `intervals` are the pitch targets of the tone model in semitones from
+ * `head.pitch` (`approachTargets()` in tone-model.js), `start` and `end`
+ * the syllable's interval in seconds (from the end of the syllable before
+ * it, or the start of the first nucleus, to the end of its last nucleus),
+ * with its `phrase` and whether it is `neutral`. Phrases with tones follow
+ * `tonalTargets()`, the others the tunes of intonation.js.
  * @param {object[]} segments
  * @param {object} head
+ * @param {string} [language] language of the utterance (tunes)
  * @returns {{segment: object, from: number, to: number, points: number[], intervals?: object[]}[]}
  */
-export function pitchTargets(segments, head) {
+export function pitchTargets(segments, head, language) {
   const targets = [];
-  let positions = null;
-  for (const phrase of intonationPhrases(segments)) {
-    if (isTonalPhrase(phrase)) {
-      positions ??= new Map(segments.map((segment, index) => [segment, index]));
-      targets.push(...tonalTargets(segments, positions, phrase, head));
-      continue;
-    }
-    phrase.nuclei.forEach((segment, index) => {
-      const points = syllablePitch(segment, {
-        head,
-        phrase,
-        last: index === phrase.nuclei.length - 1,
-      });
-      targets.push({ segment, from: points[0], to: points.at(-1), points });
-    });
+  for (const phrase of analyzeIntonation(segments, language).phrases) {
+    targets.push(
+      ...(isTonalPhrase(phrase)
+        ? tonalTargets(phrase, head)
+        : intonationTargets(phrase, head))
+    );
   }
   return targets;
 }
 
 /**
- * Loudness gain of each voiced segment from its register.
+ * Loudness gain of each voiced segment from its register and intonation
+ * (an English focus, the centre of IK2).
  * @param {object[]} segments
+ * @param {string} [language]
  * @returns {{segment: object, gain: number}[]}
  */
-export function registerGains(segments) {
+export function registerGains(segments, language) {
   const gains = [];
   let phraseIndex = 0;
   const phrases = intonationPhrases(segments);
+  const tunes = intonationGains(segments, language);
   for (const segment of segments) {
     if (segment.kind === 'pause') {
       if (segment.strength >= 2 && phrases[phraseIndex]?.pause === segment) {
@@ -464,7 +470,9 @@ export function registerGains(segments) {
       }
       continue;
     }
-    const { gain } = segmentRegister(segment, phrases[phraseIndex]);
+    const gain =
+      segmentRegister(segment, phrases[phraseIndex]).gain *
+      (tunes.get(segment) ?? 1);
     if (gain !== 1) {
       gains.push({ segment, gain });
     }
