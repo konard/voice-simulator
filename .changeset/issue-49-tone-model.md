@@ -1,0 +1,5 @@
+---
+'voice-simulator': minor
+---
+
+Add a tone model with pitch targets, the neutral tone and tone coarticulation (issue 49). Every tone written with Chao tone letters is a pitch target that the voice approaches as a critically damped third-order system (quantitative target approximation), once per tonal phrase, so each syllable starts where the one before it ended: new `approachToneTargets()`, `toneIntervals()`, `toneCurve()`, `neutralLevel()`, `TONE_RATES` and `NEUTRAL_LEVELS`. `pitchTargets()` returns the targets of a tonal syllable as intervals in semitones. A syllable without a tone takes its level from the tone before it and lasts `NEUTRAL_DURATION` = 0.6 of a full one (`durationFeatures()` gives `neutral`). 一 and 不 between two equal characters take the neutral tone (看一看, 是不是), 一 keeps its first tone in ordinals, numbers and fixed words (第一名, 十一月, 一九九一), 爷爷, 奶奶, 叔叔 and 看看 have their neutral second syllable, and Chinese words separated by spaces get sandhi as one run (`我 很 好` and `wǒ hěn hǎo` read like `我很好`; typed `bu4` and `yi1` keep their tone). Speech without tone letters is unchanged.

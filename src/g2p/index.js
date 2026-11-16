@@ -21,7 +21,12 @@
 
 import { englishWordToIpa } from './english.js';
 import { hindiWordToIpa, normalizeDevanagariDigits } from './hindi.js';
-import { chineseSyllables, chineseWordToIpa, isPinyin } from './chinese.js';
+import {
+  chineseRunToIpa,
+  chineseSyllables,
+  chineseWordToIpa,
+  isPinyin,
+} from './chinese.js';
 import { russianWordToIpa } from './russian.js';
 import { joinRussianClitics } from './russian-clitics.js';
 import { VERBALIZERS, normalizeText } from './normalize.js';
@@ -210,6 +215,46 @@ function splitHanRun(item, range) {
     .filter((word) => word.ipa);
 }
 
+/** Whether an item is a Chinese word with known syllables. */
+const isChineseWord = (item) =>
+  item.lang === 'zh' &&
+  typeof item.pinyin === 'string' &&
+  item.pinyin.trim() !== '';
+
+/**
+ * Apply tone sandhi across the spaces between Chinese words (issue 49):
+ * every run of two or more neighbouring Chinese words with pinyin is read
+ * as one phrase (`我 很 好` like `我很好`, `wǒ hěn hǎo` like
+ * `wo3hen3hao3`). A break, a word of another language or a word without
+ * pinyin ends a run. The items keep their text and source range; only
+ * their `ipa` changes. Typed pinyin keeps the tone that was typed: 一 and
+ * 不 written `yi1` or `bu4` are not changed, as only Hanzi say which
+ * syllable is 一 or 不.
+ * @param {object[]} items
+ */
+function joinChineseRuns(items) {
+  let run = [];
+  const flush = () => {
+    if (run.length >= 2) {
+      const ipa = chineseRunToIpa(run);
+      run.forEach((item, index) => {
+        if (ipa) {
+          item.ipa = ipa[index];
+        }
+      });
+    }
+    run = [];
+  };
+  for (const item of items) {
+    if (!item.break && isChineseWord(item)) {
+      run.push(item);
+    } else {
+      flush();
+    }
+  }
+  flush();
+}
+
 /** Lowercased spelling of a normalised word, as context for its neighbours. */
 function contextWord(item) {
   return item.text.toLowerCase().replaceAll('’', "'");
@@ -391,6 +436,7 @@ function transcribe(text, options) {
       items.push(...pronounceItem(item, source, accent, contexts[index]));
     }
   });
+  joinChineseRuns(items);
   joinRussianClitics(items);
   if (options.weakForms !== false) {
     weakenFunctionWords(items, accent);

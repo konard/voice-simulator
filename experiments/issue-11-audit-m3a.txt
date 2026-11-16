@@ -38,12 +38,12 @@ hi तुम्हारा नाम क्या है?: {"ipa":"t̪ʊmɦaː�
 highlight en: [{"text":"I","ipa":"aɪ","syllables":["I"]},{"text":"have","ipa":"hæv","syllables":["have"]},{"text":"25","spoken":"twenty five","ipa":"ˈtwɛnti ˈfaɪv","syllables":["twen","ty","five"]},{"text":"apples","ipa":"ˈæpəlz","syllables":["ap","ples"]},{"text":"on","ipa":"ɑn","syllables":["on"]},{"text":"3/4/2024","spoken":"March fourth twenty twenty four","ipa":"ˈmɑɹt͡ʃ ˈfɔɹθ ˈtwɛnti ˈtwɛnti ˈfɔɹ","syllables":["March","fourth","twen","ty","twen","ty","four"]}]
 highlight en: [{"text":"It","ipa":"ɪt","syllables":["It"]},{"text":"costs","ipa":"ˈkɑsts","syllables":["costs"]},{"text":"$5","spoken":"five dollars","ipa":"ˈfaɪv ˈdɑlɚz","syllables":["five","dol","lars"]},{"text":"at","ipa":"ət","syllables":["at"]},{"text":"3:30","spoken":"three thirty","ipa":"ˈθɹi ˈθɝˌdi","syllables":["three","thi","rty"]}]
 highlight ru: [{"text":"У","ipa":"ʊ","syllables":["У"]},{"text":"меня","ipa":"mʲɪˈnʲa","syllables":["ме","ня"]},{"text":"25","spoken":"двадцать пять","ipa":"ˈdvat͡sətʲ pʲatʲ","syllables":["два","дцать","пять"]},{"text":"яблок","ipa":"ˈjabɫək","syllables":["я","блок"]}]
-highlight zh: [{"text":"我","ipa":"wo˧˥","syllables":["我"]},{"text":"有","ipa":"joʊ˨˩˦","syllables":["有"]},{"text":"25","spoken":"二十五","ipa":"ɚ˥˩ ʂɻ̩˧˥ u˨˩˦","syllables":["二","十","五"]},{"text":"个","ipa":"kɤ˥˩","syllables":["个"]}]
+highlight zh: [{"text":"我","ipa":"wo˧˥","syllables":["我"]},{"text":"有","ipa":"joʊ˨˩","syllables":["有"]},{"text":"25","spoken":"二十五","ipa":"ɚ˥˩ ʂɻ̩˧˥ u˨˩","syllables":["二","十","五"]},{"text":"个","ipa":"kɤ˥˩","syllables":["个"]}]
 highlight hi: [{"text":"मेरे","ipa":"meːɾeː","syllables":["मे","रे"]},{"text":"पास","ipa":"paːs","syllables":["पास"]},{"text":"25","spoken":"पच्चीस","ipa":"pət͡ʃt͡ʃiːs","syllables":["प","च्चीस"]},{"text":"सेब","ipa":"seːb","syllables":["सेब"]},{"text":"हैं","ipa":"ɦɛ̃ː","syllables":["हैं"]}]
-lexicon sizes: {"englishWords":20037,"englishVariants":2866,"russianStressWords":304,"hindiWords":230,"chineseCharacters":8105,"chinesePolyphones":623,"chinesePhrases":1999}
+lexicon sizes: {"englishWords":20042,"englishVariants":3233,"russianStressWords":304,"hindiWords":230,"chineseCharacters":8105,"chinesePolyphones":623,"chinesePhrases":2000}
 en: ["onomatopoeia=ˌɑnəˌmɑɾəˈpiə(dictionary)","quinoa=ˈkinwɑ(dictionary)","colonel=ˈkɝnəl(dictionary)","choir=ˈkwaɪɚ(dictionary)","yacht=ˈjɑt(dictionary)","Worcester=ˈwʊstɚ(dictionary)","segue=ˈsɛɡweɪ(dictionary)"]
 zh: ["重庆=ʈ͡ʂʰʊŋ˧˥ t͡ɕʰiŋ˥˩(dictionary)","还钱=xwan˧˥ t͡ɕʰjɛn˧˥(dictionary)","得到=tɤ˧˥ tɑʊ˥˩(dictionary)","首都=ʂoʊ˨˩ tu˥(dictionary)","行为=ɕiŋ˧˥ weɪ˧˥(dictionary)","教书=t͡ɕjɑʊ˥ ʂu˥(dictionary)","干净=kan˥ t͡ɕiŋ˥˩(dictionary)","少年=ʂɑʊ˥˩ njɛn˧˥(dictionary)","大夫=taɪ˥˩ fu(dictionary)","数=ʂu˥˩(dictionary)","数=ʂu˥˩(dictionary)","照相=ʈ͡ʂɑʊ˥˩ ɕjɑŋ˥˩(dictionary)","有空=joʊ˨˩ kʰʊŋ˥˩(dictionary)","着急=ʈ͡ʂɑʊ˧˥ t͡ɕi˧˥(dictionary)"]
-zh: ["种子=ʈ͡ʂʊŋ˨˩ t͡sɹ̩(dictionary)","种树=ʈ͡ʂʊŋ˥˩ ʂu˥˩(dictionary)","慢=man˥˩(dictionary)","慢=man˥˩(dictionary)","地=ti˥˩(dictionary)","漂亮=pʰjɑʊ˥˩ ljɑŋ(dictionary)","木头=mu˥˩ tʰoʊ(dictionary)","喜欢=ɕi˨˩ xwan(dictionary)","明白=miŋ˧˥ paɪ(dictionary)","看=kʰan˥˩(dictionary)","看=kʰan˥˩(dictionary)","银行=in˧˥ xɑŋ˧˥(dictionary)","长大=ʈ͡ʂɑŋ˨˩ ta˥˩(dictionary)","觉得=t͡ɕɥɛ˧˥ tɤ(dictionary)"]
+zh: ["种子=ʈ͡ʂʊŋ˨˩ t͡sɹ̩(dictionary)","种树=ʈ͡ʂʊŋ˥˩ ʂu˥˩(dictionary)","慢=man˥˩(dictionary)","慢=man˥˩(dictionary)","地=ti˥˩(dictionary)","漂亮=pʰjɑʊ˥˩ ljɑŋ(dictionary)","木头=mu˥˩ tʰoʊ(dictionary)","喜欢=ɕi˨˩ xwan(dictionary)","明白=miŋ˧˥ paɪ(dictionary)","看看=kʰan˥˩ kʰan(dictionary)","银行=in˧˥ xɑŋ˧˥(dictionary)","长大=ʈ͡ʂɑŋ˨˩ ta˥˩(dictionary)","觉得=t͡ɕɥɛ˧˥ tɤ(dictionary)"]
 hi: ["समझना=səməd͡ʒʱnaː(rules)","समझा=səmd͡ʒʱaː(rules)","धड़कने=d̪ʱəɽəkneː(rules)","धड़कनें=d̪ʱəɽkənẽː(dictionary)","लोकसभा=loːksəbʱaː(dictionary)","ज्ञान=ɡjaːn(dictionary)","यह=jəɦ(rules)","वह=ʋəɦ(rules)","बहन=bəɦən(rules)"]
 ru: ["замок=ˈzamək(rules)","замке=ˈzamkʲə(rules)","часов=ˈt͡ɕasəf(rules)","города=ɡɐˈrodə(rules)","голова=ɡəɫɐˈva(dictionary)","головы=ɡɐˈɫovɨ(dictionary)","молоко=mɐˈɫokə(dictionary)","хорошо=xərɐˈʂo(dictionary)","говорит=ɡəvɐˈrʲit(dictionary)","карандаш=kɐˈrandəʂ(rules)","телефон=tʲɪˈlʲefən(rules)","магазин=mɐˈɡazʲɪn(rules)","учительница=ʊt͡ɕɪtʲɪlʲˈnʲit͡sə(rules)","красивая=krəsʲɪˈvajə(rules)","понимаю=pənʲɪˈmajʊ(rules)","стоит=ˈstoɪt(rules)","стоит=ˈstoɪt(rules)","белки=ˈbʲeɫkʲɪ(rules)","большая=bɐlʲˈʂajə(rules)","большая=bɐlʲˈʂajə(rules)"]
 ru marked: "zɐˈmok ˈzamək t͡ɕɪˈsof ɡərɐˈda"
@@ -56,15 +56,15 @@ ru Я купил телефон в магазине.: "ja ˈkupʲɪɫ tʲɪˈlʲ
 ru еще ее елка зеленый идет пришел: "ˈjeɕːə ˈjejə ˈjeɫkə zʲɪlʲɪˈnɨj ˈidʲɪt ˈprʲiʂɨɫ"
 zh 不是: "pu˧˥ ʂɻ̩˥˩"
 zh 不好: "pu˥˩ xɑʊ˨˩˦"
-zh 是不是: "ʂɻ̩˥˩ pu˧˥ ʂɻ̩˥˩"
+zh 是不是: "ʂɻ̩˥˩ pu ʂɻ̩˥˩"
 zh 一个: "i˧˥ kɤ˥˩"
 zh 一天: "i˥˩ tʰjɛn˥"
 zh 一起: "i˥˩ t͡ɕʰi˨˩˦"
 zh 第一: "ti˥˩ i˥"
-zh 第一名: "ti˥˩ i˥˩ miŋ˧˥"
-zh 十一月: "ʂɻ̩˧˥ i˧˥ ɥɛ˥˩"
-zh 一九九一: "i˥˩ t͡ɕjoʊ˧˥ t͡ɕjoʊ˨˩ i˥"
-zh 看一看: "kʰan˥˩ i˧˥ kʰan˥˩"
+zh 第一名: "ti˥˩ i˥ miŋ˧˥"
+zh 十一月: "ʂɻ̩˧˥ i˥ ɥɛ˥˩"
+zh 一九九一: "i˥ t͡ɕjoʊ˧˥ t͡ɕjoʊ˨˩ i˥"
+zh 看一看: "kʰan˥˩ i kʰan˥˩"
 zh 我很好: "wo˨˩ xən˧˥ xɑʊ˨˩˦"
 zh 我也很好: "wo˧˥ jɛ˨˩ xən˧˥ xɑʊ˨˩˦"
 zh 小老虎: "ɕjɑʊ˨˩ lɑʊ˧˥ xu˨˩˦"
@@ -74,13 +74,13 @@ zh 奶奶: "naɪ˨˩ naɪ"
 zh 爸爸: "pa˥˩ pa"
 zh 我的: "wo˨˩ tɤ"
 zh 好吗: "xɑʊ˨˩ ma"
-zh f0 妈妈: [[156,152],[109,95]]
+zh f0 妈妈: [[156,156],[117,102]]
 zh duration 妈妈: [223,127]
-zh f0 爷爷: [[125,146],[109,96]]
+zh f0 爷爷: [[120,137],[131,119]]
 zh duration 爷爷: [190,104]
-zh f0 奶奶: [[119,115],[105,94],[107,107],[102,96]]
+zh f0 奶奶: [[105,104],[103,97],[112,113],[119,122]]
 zh duration 奶奶: [97,145,50,76]
-zh f0 爸爸: [[147,101],[105,95]]
+zh f0 爸爸: [[155,117],[90,86]]
 zh duration 爸爸: [209,127]
-lexicon container: {"en":{"bytes":245899,"gzip":128370},"zh":{"bytes":58582,"gzip":38323},"hi":{"bytes":6268,"gzip":2880},"ru":{"bytes":3541,"gzip":1797}}
+lexicon container: {"en":{"bytes":245667,"gzip":134885},"zh":{"bytes":58590,"gzip":38324},"hi":{"bytes":6268,"gzip":2880},"ru":{"bytes":3541,"gzip":1797}}
 lexicon container start: ["ˈiðɚ","ˈaɪðɚ"]

@@ -253,6 +253,7 @@
 络子 lào zi
 把子 bà zi
 # Neutral tone: words
+看看 kàn kan
 告诉 gào su
 事情 shì qing
 喜欢 xǐ huan

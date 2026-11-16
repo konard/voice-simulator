@@ -35,6 +35,13 @@ export const RATE_STRETCH = 1.2;
  * and more): fast speech drops pauses first (issue 39).
  */
 export const RATE_PAUSE = 1.5;
+/**
+ * Default factor of the neutral tone on the whole vowel: a syllable
+ * without tone and without stress mark in tonal text is about half as
+ * long as a full-tone one (Lin and Yan 1980). The zh table sets its own
+ * factor, 0.55 (after Xu 1997 and Lin and Yan 1980).
+ */
+export const NEUTRAL_DURATION = 0.6;
 
 const GLIDES = new Set(['j', 'w', 'ɥ', 'ɰ', 'ʋ']);
 /** Lax and reduced vowels (the class `reduced`). */
@@ -268,7 +275,8 @@ function analyse(tokens, language) {
  *   `syllablesInWord`,
  *   `wordInitial`, `syllableOnset`, `syllableCoda`, `pretonic`,
  *   `previous` and `next` (class of the neighbouring sound inside the
- *   word, outside the nucleus for vowels), `tone` (0 to 5),
+ *   word, outside the nucleus for vowels), `tone` (0 to 5), `neutral`
+ *   (tone 5 without stress mark: the neutral tone, issue 49),
  *   `afterAspirated`, `nucleusSize` and `nucleusMain` (whether the token
  *   carries the nucleus of a diphthong).
  */
@@ -283,6 +291,7 @@ export function durationFeatures(tokens, index, options = {}) {
   const { previousIndex, nextIndex } = neighbours(entry, index, nucleus);
   const syllableOnset =
     !nucleus && syllable.nuclei.length > 0 && index < syllable.nuclei[0];
+  const tone = toneNumber(syllable.tone, entry.tonal);
   return {
     stress: syllable.stress,
     emphasis: Boolean(token.emphasis),
@@ -296,7 +305,8 @@ export function durationFeatures(tokens, index, options = {}) {
     pretonic: entry.pretonic,
     previous: neighbourClass(tokens[previousIndex]),
     next: neighbourClass(tokens[nextIndex]),
-    tone: toneNumber(syllable.tone, entry.tonal),
+    tone,
+    neutral: tone === 5 && syllable.stress === 0,
     afterAspirated:
       nucleus &&
       previousIndex >= 0 &&
@@ -546,8 +556,13 @@ export const DURATION_RULES = Object.freeze(
     { name: 'tone4', factor: null, applies: toneRule(4) },
     // The neutral tone shortens the whole vowel, minimum included: its
     // syllables are about half as long as full-tone ones (Lin and Yan
-    // 1980).
-    { name: 'tone5', factor: null, scope: 'total', applies: toneRule(5) },
+    // 1980). On by default for every tonal text (issue 49).
+    {
+      name: 'tone5',
+      factor: NEUTRAL_DURATION,
+      scope: 'total',
+      applies: (token, features) => vowel(token) && features.neutral,
+    },
     {
       // Long vowels written with `ː` that have no class of their own: 1.7,
       // the factor of the plan before issue 39.
