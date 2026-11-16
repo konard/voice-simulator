@@ -35,8 +35,9 @@ const level = (name) => tierIndex(name);
 
 // SHA-256 of synthesize('Hello world.', {seed: 1, tier, engine}) on main
 // before this change, per runtime and platform (Linux:
-// experiments/issue-29-offline-hashes.mjs; macOS and Windows: a probe that
-// rendered origin/main and this branch side by side in CI, same hashes).
+// experiments/issue-29-offline-hashes.mjs; macOS and Windows:
+// experiments/issue-29-main-probe.mjs on CI, which rendered origin/main and
+// this branch side by side with the same hashes).
 // The renders take Math.sin, Math.exp and friends from the runtime, whose
 // last bits differ between runtimes and between platforms: each gives its
 // own (unchanged) samples. The Rust engine is tested on Linux only.
