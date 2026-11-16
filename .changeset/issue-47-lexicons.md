@@ -1,0 +1,5 @@
+---
+'voice-simulator': minor
+---
+
+Add pronunciation lexicons at scale from permissive sources (issue 47): 20 042 English words of CMUdict with every variant, Chinese readings of 8 105 characters from Unihan and 2 000 words from AISHELL-3 and a hand-written list, 230 Hindi words that schwa deletion reads wrongly and the Russian stress words, all in the compact `vslex` container. English words built from known words (`conditioners`, `congresswoman`) are read by morphology (source `morphology`). User lexicons win over the shipped ones: the `lexicon` option of `textToIpa` and `synthesize`, `addLexicon()`, and the CLI option `--lexicon <file>`. New functions `pronunciations()`, `lexiconWords()`, `spellingsOf()`, `openLexicon()`, `lexiconFor()` and `clearLexicons()`; `englishDictionarySize()` is 20 042. `scripts/build-lexicon.mjs` rebuilds the lexicons and writes full ones with `--full`, `scripts/check-policy.mjs` checks the licence of every source, and the heavy suite `lexicon` measures coverage on FLEURS and held-out AISHELL-3 text.

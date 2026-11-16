@@ -344,13 +344,17 @@ export declare function addLexicon(
   entries: LexiconData
 ): number;
 export declare function clearLexicons(): void;
-/** Every known pronunciation (IPA), user lexicons first. */
+/**
+ * Every known pronunciation (IPA), user lexicons first. English words that
+ * the morphology derives from known words are not in the shipped lexicon
+ * and give [] here (`conditioners`), though `textToIpa` reads them.
+ */
 export declare function pronunciations(
   lang: LexiconLanguage,
   word: string
 ): string[];
 export declare function lexiconWords(lang: LexiconLanguage): Generator<string>;
-/** Every word with exactly this IPA. */
+/** Every lexicon word with exactly this IPA (derived words are not listed). */
 export declare function spellingsOf(
   lang: LexiconLanguage,
   ipa: string
