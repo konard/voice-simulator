@@ -13,7 +13,8 @@
  *    start of a block> <the rest of the word> <pronunciation>
  *   [/ <pronunciation of a further variant>]...
  *
- * Word characters are listed in `alphabet`. A pronunciation is written in
+ * Word characters are listed in `alphabet` (anything but digits, `/` and
+ * the space; `don't` keeps its apostrophe). A pronunciation is written in
  * `symbols`, printable ASCII characters that are neither digits, `/`,
  * quotes, the backslash nor characters of `alphabet`; symbol i stands for
  * the string `values[i]`. The first character after the word that is not
@@ -24,7 +25,10 @@
  */
 
 const DIGITS = '0123456789';
+/** Characters that are never symbols. */
 const RESERVED = new Set([...DIGITS, '/', '"', "'", '`', '\\', ' ']);
+/** Characters a word may not contain (they delimit entries). */
+const NOT_IN_WORDS = new Set([...DIGITS, '/', ' ']);
 const MAX_PREFIX = 9;
 
 /** Printable ASCII characters that may be symbols next to `alphabet`. */
@@ -140,7 +144,7 @@ export function encodeVslex(lang, entries, options = {}) {
       throw new TypeError(`vslex: "${word}" appears twice`);
     }
     for (const char of word) {
-      if (RESERVED.has(char)) {
+      if (NOT_IN_WORDS.has(char)) {
         throw new TypeError(`vslex: "${word}" contains "${char}"`);
       }
       alphabetSet.add(char);
