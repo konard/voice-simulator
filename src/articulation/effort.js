@@ -10,7 +10,7 @@
  *
  * - the planner fills the `effort` channel (dB) from `plan.modes` and the
  *   `tension` channel (offset on `head.tenseness`, `TENSION_PER_DB * E`),
- *   shifts the pitch, opens the jaw of vowels (`JAW_PER_DB * E` cm) and
+ *   shifts the pitch, opens the jaw of open vowels (`effortJaw()`) and
  *   lengthens vowels (src/articulation/plan.js);
  * - the planner raises the lung pressure channel by `2^(E/9)`; the fold
  *   source (`source: 'folds'`) gets its level and tilt from it, so the
@@ -62,7 +62,7 @@ export const TILT_SHELF = Object.freeze([
   [-20, -6],
   [-10, -3],
   [0, 0],
-  [10, 5.8],
+  [10, 4.5],
   [20, 1],
 ]);
 
@@ -77,8 +77,8 @@ export const LEVEL_TRIM = Object.freeze([
   [-20, -2],
   [-10, -1],
   [0, 0],
-  [10, 4.4],
-  [20, 6.8],
+  [10, 2.5],
+  [20, 5.9],
 ]);
 
 /** Corner (Hz) of the second-order high-pass of the tilt shelf. */
@@ -234,9 +234,15 @@ export function effortVoicedGain(E) {
   return 10 ** ((EFFORT_RULES.level.value(E) - polyline(LEVEL_TRIM, E)) / 20);
 }
 
-/** The jaw opening of vowels (cm) at an effort of `E` dB (JAW_PER_DB). */
-export function effortJaw(E) {
-  return E * JAW_PER_DB[E < 0 ? 0 : 1];
+/**
+ * The jaw opening of a vowel (cm) at an effort of `E` dB: `JAW_PER_DB * E`
+ * for an open vowel, less for closer ones, none for a close vowel (height
+ * 1), whose level would otherwise rise far more than that of an open one.
+ * @param {number} E
+ * @param {number} [height] vowel height, 0 (open) to 1 (close)
+ */
+export function effortJaw(E, height = 0) {
+  return E * JAW_PER_DB[E < 0 ? 0 : 1] * (1 - Math.min(1, Math.max(0, height)));
 }
 
 /** Factor of the tilt shelf above TILT_CORNER at `E` dB (TILT_SHELF). */

@@ -9,7 +9,8 @@
  *   the pitch targets in `syllablePitch()` (src/articulation/prosody.js);
  * - `gain` (dB) scales the loudness channel;
  * - the effort (`E = (effort - 0.5) * 40` dB) fills the `effort` channel,
- *   moving from `effort` to `effortEnd` over a span, and lengthens vowels;
+ *   moving from `effort` to `effortEnd` between the first and the last
+ *   vowel of a span, and lengthens vowels;
  *   the planner and the source turn it into level, pitch, tilt, F1 and
  *   noise (src/articulation/effort.js);
  * - a timed pause lasts exactly its `seconds`; a sound is silence of its
@@ -179,22 +180,58 @@ export function applyModeGains(loudness, modes, frameRate) {
 }
 
 /**
+ * The time range (seconds) over which the effort of a span moves from
+ * `effort` to `effortEnd`: from the end of its first vowel to the start of
+ * its last, so that the first vowel keeps the start value and the last has
+ * the end value (a span also holds the silence after its last word); the
+ * whole span with fewer than two vowels.
+ * @param {{start: number, end: number}} span
+ * @param {object[]} [segments] timed segments of `buildSegments()`
+ */
+export function effortRampRange(span, segments = []) {
+  const vowels = segments.filter((segment) => {
+    const middle = (segment.start + segment.end) / 2;
+    return (
+      segment.kind === 'vowel' && middle >= span.start && middle < span.end
+    );
+  });
+  const start = vowels[0]?.end;
+  const end = vowels.at(-1)?.start;
+  return vowels.length > 1 && end > start
+    ? { start, end }
+    : { start: span.start, end: span.end };
+}
+
+/**
  * Fill the effort channel (dB, `E = (effort - 0.5) * 40`) from the spans of
- * `plan.modes`: linear in dB from `effort` to `effortEnd` over a span, 0
+ * `plan.modes`: linear in dB from `effort` to `effortEnd` over the ramp
+ * range of a span (`effortRampRange()`), held before and after it, and 0
  * outside spans with an effort.
  * @param {Float32Array} effort
  * @param {object[]} modes spans of `planModes()`
  * @param {number} frameRate
+ * @param {object[]} [segments] timed segments, for the ramp ranges
  */
-export function fillEffort(effort, modes, frameRate) {
+export function fillEffort(effort, modes, frameRate, segments = []) {
   effort.fill(0);
+  const ranges = new Map();
   forEachSpanFrame(
     modes,
     effort.length,
     frameRate,
     (span) => span.effort === 0.5 && span.effortEnd === 0.5,
-    (span, frame, fraction) => {
-      effort[frame] = spanEffort(span, fraction);
+    (span, frame) => {
+      if (span.effort === span.effortEnd) {
+        effort[frame] = spanEffort(span, 0);
+        return;
+      }
+      if (!ranges.has(span)) {
+        ranges.set(span, effortRampRange(span, segments));
+      }
+      const range = ranges.get(span);
+      const fraction =
+        (frame / frameRate - range.start) / (range.end - range.start);
+      effort[frame] = spanEffort(span, Math.min(1, Math.max(0, fraction)));
     }
   );
   return effort;

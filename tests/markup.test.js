@@ -486,8 +486,9 @@ describe('plan modes', () => {
     near(f0 / mean(Array.from(plain.channels.f0)), 2, 0.06);
 
     const soft = marked(`[soft]${words}.[/soft]`);
-    const peak = (plan) => Math.max(...plan.channels.loudness);
-    near(peak(soft.plan) / peak(plain), 0.32, 0.02);
+    const effort = Array.from(soft.plan.channels.effort);
+    near(effort[Math.floor(effort.length / 2)], -10, 1e-3);
+    expect(Math.max(...plain.channels.effort)).toBe(0);
   });
 
   it('times pauses and sounds exactly', () => {

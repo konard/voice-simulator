@@ -585,7 +585,8 @@ function jawTarget(segments, index, levels, head) {
     const effort = segment.effort ?? 0;
     const gap = teethGap(state, head);
     return {
-      value: effort === 0 ? gap : Math.max(0, gap + effortJaw(effort)),
+      value:
+        effort === 0 ? gap : Math.max(0, gap + effortJaw(effort, state.height)),
       strength: 1,
     };
   }
@@ -1031,7 +1032,12 @@ export function planUtterance(ipa, options = {}) {
   const duration = segments.at(-1).end;
   const frameCount = Math.ceil(duration * frameRate) + 1;
   const modes = planModes(segments);
-  const effort = fillEffort(new Float32Array(frameCount), modes, frameRate);
+  const effort = fillEffort(
+    new Float32Array(frameCount),
+    modes,
+    frameRate,
+    segments
+  );
   markSegmentEffort(segments, effort, frameRate);
   const channels = {};
   const articulators = articulatorsFor(head, options.articulators);
