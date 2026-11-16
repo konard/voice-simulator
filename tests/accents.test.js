@@ -342,6 +342,24 @@ describe('accents with speech markup (issue 50)', () => {
   });
 });
 
+describe('accents with user lexicons (issue 47)', () => {
+  const lexicon = { en: { quinoa: 'kiˈnoʊə' } };
+
+  it('give a user word the accent of its language', () => {
+    const plain = textToIpa('the quinoa', { lang: 'en', lexicon });
+    const accented = textToIpa('the quinoa', {
+      lang: 'en',
+      accent: 'en-x-ru',
+      lexicon,
+    });
+    expect([plain.ipa, plain.words[1].source]).toEqual(['ðə kiˈnoʊə', 'user']);
+    expect([accented.ipa, accented.words[1].source]).toEqual([
+      'zə k˭iˈnoə',
+      'user',
+    ]);
+  });
+});
+
 describe('accent files', () => {
   it('load from a file and apply their rules from their minimum strength', () => {
     const definition = loadAccent(readFileSync(EXAMPLE, 'utf8'));
