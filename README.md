@@ -978,8 +978,8 @@ incisors, the piriform fossae, the vallecula and transverse modes well
 above 5 kHz. It renders about 12 times slower than real time on a desktop
 CPU. The web app starts in Auto: it benchmarks the tiers on the CPU, then
 the 3D tiers above the CPU's choice on WebGPU, and uses the most detailed
-tier whose load stays under 80%, so a fast GPU gets the 3D tiers and a
-laptop or phone the real-time waveguide. Every tier stays in the menu;
+tier whose load stays under 80%, so a fast GPU gets the 3D tiers and a laptop or phone the real-time waveguide.
+The benchmark is silent, takes at most 1 s of CPU time in the worker and is cached per device ([docs/device-benchmark.md](docs/device-benchmark.md)). Every tier stays in the menu;
 when a slower one is chosen, the app renders ahead: it shows the progress
 and starts playback as soon as the rest of the utterance is predicted to be
 ready before the player reaches it, so the voice never breaks up. Choose
@@ -1001,13 +1001,12 @@ comparison and the word `həˈloʊ` at tiers `high` and `ultra` on Linux through
 Mesa's software adapter. The last report is
 [docs/reports/gpu-solver.md](docs/reports/gpu-solver.md).
 
-The web app (`benchmarkAudioTiersAsync`) and `voice-simulator benchmark`
+The web app (`benchmarkDevice`) and `voice-simulator benchmark`
 pick the most detailed tier whose measured load stays under 80%. On a
 machine with WebGPU, the GPU is only tried for the 3D tiers above the CPU's
 choice, so a slow integrated or software adapter never lowers it. The benchmark does not run tiers whose
 load, predicted from the cheaper tier, is far above the target, and it stops
-measuring a tier as soon as it is clearly too slow; the app remembers the
-result per device. `voice-simulator benchmark` first renders the cheap tiers
+measuring a tier as soon as it is clearly too slow; the app remembers the result per device. `--quick` runs the app's benchmark and prints its CPU time. `voice-simulator benchmark` first renders the cheap tiers
 for 0.5 s so the just-in-time compiler is warm, then reports the median of
 `--repeats` (default 5) measurements of `--seconds` (default 0.3) per tier. In the first 40-300 ms of each utterance an
 `OverloadDetector` checks that the tier keeps up with real time and, if not,
