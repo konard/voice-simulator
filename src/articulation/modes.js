@@ -21,7 +21,10 @@
  * - a timed pause lasts exactly its `seconds`; a sound is silence of its
  *   length (`SOUND_DURATION`, 0.3 s, unless one is written).
  *
- * `phonation` and `emotion` are carried in the plan and not yet heard.
+ * `phonation` (with `whisper`) is realised by src/articulation/phonation.js
+ * and src/articulation/whisper.js, and `emotion` by
+ * src/articulation/emotion-plan.js, which changes the other fields of the
+ * span before this file reads them.
  */
 
 import {
