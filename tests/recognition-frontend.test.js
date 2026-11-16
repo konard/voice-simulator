@@ -245,12 +245,9 @@ describe('recognition front end: frames', () => {
     const voice = synthesize('Hello world.', { tier: 'wideband' });
     const rate = voice.sampleRate;
     const pad = Math.round(0.5 * rate);
-    // -50 dB noise under the whole recording, 0.5 s of it alone before and
-    // after the sentence.
+    // 0.5 s of -50 dB noise before and after the sentence.
     const samples = whiteNoise(voice.samples.length + 2 * pad, -50, 58);
-    for (let n = 0; n < voice.samples.length; n++) {
-      samples[pad + n] += voice.samples[n];
-    }
+    samples.set(voice.samples, pad);
     const frames = analyzeFrames(samples, rate);
     const hop = frames.hop;
     const ratio = (from, to, value) => {
