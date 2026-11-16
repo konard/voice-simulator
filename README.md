@@ -581,6 +581,49 @@ same sentence on the `minimal` tier are 47 to 52 dB apart here, and two
 renderings with seeds 1 and 2 are 10 to 11 dB apart
 (`node experiments/issue-19-voice-pairs.mjs`).
 
+### Analysis front end
+
+`createFrameAnalyzer(sampleRate, options)` turns sound into analysis frames
+while it arrives; it is the first stage of reverse simulation (Roadmap 4).
+It resamples to a working rate (`workingRate`: the largest of 8000, 11025
+and 16000 Hz not above the input rate; it never up-samples) with
+`createResampler`, which matches `resample()` within 1e-6. Every 5 ms (or
+10 ms) it measures a 25 ms frame: `energy`, `zcr`, `gravity`, `tilt`, six
+Liu (1996) `band` levels, `periodicity` (Boersma 1993), 24 log `mel`
+energies, 13 `cepstrum` coefficients, LPC `lpc`, `reflection` and `gain`
+(Burg, autocorrelation or covariance method), the `noise` floor (minimum
+statistics, Martin 2001) and a `speech` flag with 40 ms hangover. The
+defaults are `FRONTEND_DEFAULTS`. All rows live in one frame set of flat
+`Float32Array`s (`speech` is a `Uint8Array`) with `capacity` rows allocated
+once; nothing is allocated per frame.
+
+```js
+import { analyzeFrames, createFrameAnalyzer } from 'voice-simulator';
+
+const analyzer = createFrameAnalyzer(44100);
+analyzer.push(chunk); // frames added so far
+analyzer.flush(); // the frames that need zeros after the end
+const { frames } = analyzer;
+frames.energy[frames.count - 1]; // dB
+frames.cepstrum.subarray(0, frames.cepstra); // row 0
+analyzer.trim(100); // drop the first 100 frames (0.5 s) and their samples
+analyzeFrames(samples, 16000).count; // one call for a whole recording
+```
+
+Later stages follow one pattern: `createX(frames, options)` returns an object
+with `advance(final = false)`, which processes the frames added since the
+last call, and an output whose arrays have `frames.capacity` rows and a
+field `committed` (rows before it never change; type `FrameStage`). After
+`trim()` a stage is invalid and is created again. `createFft`, `lpcBurg`,
+`lpcAutocorrelation`, `lpcCovariance`, `predictorFromReflection` and
+`lpcLevel` are exported too.
+
+Measured with `node experiments/issue-58-rtf.mjs` (10 s of speech, one
+thread): 0.0138 of real time at 16000 Hz, 0.0059 at 8000 Hz and 0.0199 for
+44100 Hz input (the budget is 0.05 and 0.03). The added delay is 12.5 ms
+at 8000 and 16000 Hz and 13.5 ms at 44100 and 48000 Hz
+(`node experiments/issue-58-delay.mjs`; the budget is 20 ms).
+
 ### Quality
 
 [docs/reports/baseline-quality.md](docs/reports/baseline-quality.md) is the

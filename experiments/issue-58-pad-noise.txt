@@ -1,0 +1,2 @@
+noise only in the pads: leading noise flagged 0/38, vowel frames flagged 95/95, trailing noise frames flagged speech 0/88, noise floor near the end of the sentence -52.3 dB
+noise under the whole recording: leading noise flagged 0/38, vowel frames flagged 95/95, trailing noise frames flagged speech 0/88, noise floor near the end of the sentence -48.5 dB
