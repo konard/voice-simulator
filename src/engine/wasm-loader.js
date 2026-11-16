@@ -22,8 +22,23 @@
 
 /* global URL */
 
-import { THREAD_MEMORY } from './layout.js';
-import { createThreadPool } from './thread-pool.js';
+/**
+ * The shared memory of the threads build of the engine
+ * (`src/engine/voice-simulator-threads.wasm`), in WebAssembly
+ * pages of 64 KiB: INITIAL pages (32 MiB) at the start and at most MAXIMUM
+ * (1 GiB). The file imports this memory and exports none, so
+ * that every helper instance of `src/engine/thread-pool.js` shares it;
+ * `scripts/build-wasm.mjs --threads` links the file with these sizes and
+ * `loadEngineModule` creates the memory with them. It is defined here,
+ * not in layout.js, so that this file imports nothing: the pool of
+ * `thread-pool.js` is imported only when more than one thread is asked
+ * for.
+ */
+export const THREAD_MEMORY = Object.freeze({
+  INITIAL: 512,
+  MAXIMUM: 16384,
+  PAGE_BYTES: 65536,
+});
 
 /** The `vs_abi_version()` this loader speaks; see docs/RUST-ENGINE.md. */
 export const ENGINE_ABI_VERSION = 2;
@@ -202,7 +217,7 @@ async function compileSource(wasm, source) {
  *   error. A `source` that is a threads build gets the shared memory too.
  * @returns {Promise<{exports: Record<string, Function | WebAssembly.Memory>,
  *   memory: WebAssembly.Memory, abiVersion: number, simd: boolean,
- *   threads: number, pool: Awaited<ReturnType<typeof createThreadPool>> |
+ *   threads: number, pool: Awaited<ReturnType<typeof import('./thread-pool.js').createThreadPool>> |
  *   null, close: () => void} | null>}
  *   `simd` tells whether the engine was built with WebAssembly SIMD
  *   (`vs_simd()`, false when it is not exported); `threads` how many
@@ -340,6 +355,7 @@ async function startPool(module, memory, threads, exports) {
     return null;
   }
   try {
+    const { createThreadPool } = await import('./thread-pool.js');
     return await createThreadPool(module, memory, threads, { exports });
   } catch {
     return null;
