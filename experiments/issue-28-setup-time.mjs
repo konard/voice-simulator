@@ -11,12 +11,12 @@ const engine = await createEngine(process.argv[2] ?? 'js');
 const tier = AUDIO_TIERS[audioTierIndex('high')];
 const head = normalizeHeadConfig(DEFAULT_HEAD);
 for (let run = 1; run <= 3; run++) {
-  let t = performance.now();
+  let t = globalThis.performance.now();
   buildVoxelModel(head, { dx: tier.dx });
-  const model = performance.now() - t;
-  t = performance.now();
+  const model = globalThis.performance.now() - t;
+  t = globalThis.performance.now();
   const renderer = benchmarkRenderer(tier, { seconds: 0.06, engine });
-  const create = performance.now() - t;
+  const create = globalThis.performance.now() - t;
   renderer.free?.();
   console.log(
     `${engine.name} run ${run}: voxel model ${model.toFixed(1)} ms, model + renderer ${create.toFixed(1)} ms`

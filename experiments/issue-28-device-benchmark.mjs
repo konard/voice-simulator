@@ -7,9 +7,9 @@ import { AUDIO_TIERS } from '../src/perf/lod.js';
 const runs = Number(process.argv[2] ?? 3);
 for (const engine of ['js', 'auto']) {
   for (let run = 1; run <= runs; run++) {
-    const began = performance.now();
+    const began = globalThis.performance.now();
     const result = await benchmarkDevice({ engine });
-    const wall = (performance.now() - began) / 1000;
+    const wall = (globalThis.performance.now() - began) / 1000;
     const loads = result.loads
       .map(
         (load, i) =>

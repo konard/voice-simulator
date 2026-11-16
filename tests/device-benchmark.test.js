@@ -141,7 +141,7 @@ describe('benchmarkDevice', () => {
       if (info.warmup || info.index !== 1) {
         return renderer;
       }
-      // Speech arrives once the second tier is rendered.
+      // Speech waits from the first block of the second tier on.
       return {
         ...renderer,
         render(block) {
