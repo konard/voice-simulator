@@ -13,6 +13,7 @@ import {
   audioEncoding,
   ROOM_PRESETS,
   benchmarkAudioTiers,
+  benchmarkDevice,
   compareRecordings,
   createEngine,
   ENGINE_NAMES,
@@ -77,6 +78,7 @@ const OPTIONS = {
   lod: { type: 'string' },
   seconds: { type: 'string' },
   repeats: { type: 'string' },
+  quick: { type: 'boolean' },
   port: { type: 'string', short: 'p' },
   host: { type: 'string' },
   transcript: { type: 'string' },
@@ -189,6 +191,8 @@ function usage() {
     '      --iterations <n>  Renders while matching (default 4, max 12)',
     '      --seconds <s>     Audio per benchmark measurement (default 0.3)',
     '      --repeats <n>     Benchmark measurements per tier, median (default 5)',
+    '      --quick           Benchmark like the app on load: about 1 s of CPU',
+    '                        in 20 ms slices, then print the CPU time',
     '      --lod <0-3>      Mesh level of detail',
     `      --fps <n>         Visemes per second (default 60); visemes take
                         -f ${Object.keys(VISEME_FORMATS).join(' | ')} (default arkit)`,
@@ -511,6 +515,30 @@ export function loadLexiconFiles(files, lang) {
   return words;
 }
 
+/** The lines of `benchmark`: the engine, the load of each tier, the choice. */
+function printTierLoads(result, io, engine) {
+  io.stdout(`engine: ${engine.name}`);
+  result.loads.forEach((load, index) => {
+    const note = result.measured[index] ? '' : ' (predicted, not run)';
+    io.stdout(`${AUDIO_TIERS[index].name}: load ${load.toFixed(3)}${note}`);
+  });
+  io.stdout(`selected: ${result.tier.name}`);
+}
+
+/**
+ * `benchmark --quick`: the silent load-time benchmark of the app
+ * (benchmarkDevice, issue 28) and the CPU time it took.
+ */
+async function quickBenchmark(values, io, engine) {
+  const result = await benchmarkDevice({ engine });
+  if (values.json) {
+    io.stdout(JSON.stringify(result));
+    return;
+  }
+  printTierLoads(result, io, engine);
+  io.stdout(`cpu: ${result.cpuSeconds.toFixed(2)} s`);
+}
+
 const COMMANDS = {
   ipa(values, positionals, io) {
     const result = textToIpa(requireText(positionals), {
@@ -745,6 +773,9 @@ const COMMANDS = {
   },
 
   benchmark(values, positionals, io, engine) {
+    if (values.quick) {
+      return quickBenchmark(values, io, engine);
+    }
     const seconds = optionalNumber(values.seconds, 'seconds') ?? 0.3;
     const repeats = optionalNumber(values.repeats, 'repeats') ?? 5;
     if (values.tier) {
@@ -773,12 +804,7 @@ const COMMANDS = {
       io.stdout(JSON.stringify({ engine: engine.name, ...result }));
       return;
     }
-    io.stdout(`engine: ${engine.name}`);
-    result.loads.forEach((load, index) => {
-      const note = result.measured[index] ? '' : ' (predicted, not run)';
-      io.stdout(`${AUDIO_TIERS[index].name}: load ${load.toFixed(3)}${note}`);
-    });
-    io.stdout(`selected: ${result.tier.name}`);
+    printTierLoads(result, io, engine);
   },
 
   serve(values, positionals, io, engine) {
