@@ -6,9 +6,12 @@
  *
  *   node experiments/issue-48-fixture-share.mjs [--wrong]
  *
- * `--wrong` lists the words that differ. The share before issue 48,
- * experiments/issue-48/fixture-share-before.txt, was measured by the first
- * version of this script (commit 951587d), which read the fixture itself.
+ * `--wrong` lists the words that differ. The share after issue 48 is in
+ * experiments/issue-48/fixture-share-after.txt; the share before,
+ * experiments/issue-48/fixture-share-before.txt, was measured on main
+ * (ca455fa) with this fixture and src/g2p/russian-homographs.js copied in,
+ * by the first version of this script (commit 951587d), which reads the
+ * fixture itself.
  */
 
 import { measureRussianFixture } from '../tests/helpers/russian-stress-fixture.js';

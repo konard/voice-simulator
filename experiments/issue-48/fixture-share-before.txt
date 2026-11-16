@@ -1,8 +1,10 @@
 sentences: 222
-all words: 605/1163 (52.0 %)
+all words: 612/1163 (52.6 %)
+homograph words: 9/25 (36.0 %)
 Никол+аевской nʲɪkɐˈɫajɪfskəj got nʲɪkəɫəjɪfsˈkoj
 жел+езной ʐɨˈlʲeznəj got ʐɨlʲɪˈznoj
 встр+етились ˈfstrʲetʲɪlʲɪsʲ got fstrʲɪˈtʲilʲɪsʲ
+при+ятеля prʲɪˈjatʲɪlʲə got prʲɪjɪˈtʲelʲə
 т+олстый ˈtoɫstɨj got tɐɫsˈtɨj
 друг+ой drʊˈɡoj got drʊɡɐj
 т+онкий ˈtonkʲɪj got tɐnˈkʲij
@@ -28,9 +30,9 @@ all words: 605/1163 (52.0 %)
 т+онкого ˈtonkəvə got tɐnˈkovə
 Б+атюшки ˈbatʲʊʂkʲɪ got bɐˈtʲuʂkʲɪ
 т+онкий ˈtonkʲɪj got tɐnˈkʲij
+При+ятели prʲɪˈjatʲɪlʲɪ got prʲɪjɪˈtʲelʲɪ
 глаз+а ɡɫɐˈza got ˈɡɫazə
 п+олные ˈpoɫnɨjə got pɐɫˈnɨjə
-пр+иятно ˈprʲijɪtnə got prʲɪˈjatnə
 ошеломлен+ы ɐʂɨɫəmlʲɪˈnɨ got ɐʂɨɫɐmˈlʲenɨ
 М+илый ˈmʲiɫɨj got mʲɪˈɫɨj
 т+онкий ˈtonkʲɪj got tɐnˈkʲij
@@ -48,6 +50,7 @@ all words: 605/1163 (52.0 %)
 Ванценб+ах vənt͡sɨnˈbax got vɐnˈt͡senbəx
 Нафана+ил nəfənɐˈiɫ got nəfɐˈnaɪɫ
 учен+ик ʊt͡ɕɪˈnʲik got ʊˈt͡ɕenʲɪk
+моег+о məjɪˈvo got mɐˈjevə
 гимн+азии ɡʲɪmˈnazʲɪɪ got ɡʲɪmnɐˈzʲiɪ
 Нафана+ил nəfənɐˈiɫ got nəfɐˈnaɪɫ
 гимн+азии ɡʲɪmˈnazʲɪɪ got ɡʲɪmnɐˈzʲiɪ
@@ -114,8 +117,8 @@ all words: 605/1163 (52.0 %)
 в+ытянулся ˈvɨtʲɪnʊɫsʲə got vɨtʲɪˈnuɫsʲə
 застегн+ул zəstʲɪˈɡnuɫ got zɐsˈtʲeɡnʊɫ
 п+уговки ˈpuɡəfkʲɪ got pʊˈɡofkʲɪ
+своег+о svəjɪˈvo got svɐˈjevə
 превосход+ительство prʲɪvəsxɐˈdʲitʲɪlʲstvə got prʲɪvəsxədʲɪˈtʲelʲstvə
-пр+иятно ˈprʲijɪtnə got prʲɪˈjatnə
 пом+орщился pɐˈmorɕːɪɫsʲə got pəmɐrˈɕːiɫsʲə
 т+олстый ˈtoɫstɨj got tɐɫsˈtɨj
 чем+у t͡ɕɪˈmu got ˈt͡ɕemʊ
@@ -150,7 +153,6 @@ all words: 605/1163 (52.0 %)
 Жен+а ʐɨˈna got ˈʐenə
 Нафана+ил nəfənɐˈiɫ got nəfɐˈnaɪɫ
 урон+ил ʊrɐˈnʲiɫ got ʊˈronʲɪɫ
-пр+иятно ˈprʲijɪtnə got prʲɪˈjatnə
 ошеломлен+ы ɐʂɨɫəmlʲɪˈnɨ got ɐʂɨɫɐmˈlʲenɨ
 прекр+асный prʲɪˈkrasnɨj got prʲɪkrɐˈsnɨj
 м+енее ˈmʲenʲɪjə got mʲɪˈnʲejə
@@ -194,7 +196,6 @@ all words: 605/1163 (52.0 %)
 в+ежливый ˈvʲeʐlʲɪvɨj got vʲɪʐlʲɪˈvɨj
 погляд+ел pəɡlʲɪˈdʲeɫ got pɐˈɡlʲadʲɪɫ
 вокр+уг vɐˈkruk got ˈvokrʊk
-обесп+окоил ɐbʲɪsˈpokəɪɫ got ɐbʲɪspɐˈkoɪɫ
 ког+о kɐˈvo got ˈkovə
 сво+им svɐˈim got ˈsvoɪm
 пришл+ось prʲɪˈʂɫosʲ got ˈprʲiʂɫəsʲ
@@ -225,8 +226,6 @@ all words: 605/1163 (52.0 %)
 впер+ед fpʲɪˈrʲet got ˈfpʲerʲɪt
 зашепт+ал zəʂɨpˈtaɫ got zɐˈʂeptəɫ
 неч+аянно nʲɪˈt͡ɕajɪnnə got nʲɪt͡ɕɪˈjannə
-Нич+его nʲɪˈt͡ɕevə got nʲɪt͡ɕɪˈvo
-нич+его nʲɪˈt͡ɕevə got nʲɪt͡ɕɪˈvo
 жел+ал ʐɨˈɫaɫ got ˈʐeɫəɫ
 Д+айте ˈdajtʲə got dɐjˈtʲe
 Червяк+ов t͡ɕɪrvʲɪˈkof got t͡ɕɪrˈvʲakəf
@@ -268,7 +267,6 @@ all words: 605/1163 (52.0 %)
 легком+ысленно lʲɪkkɐˈmɨslʲɪnnə got lʲɪkkəmɨˈslʲennə
 отнесл+ась ɐtnʲɪˈsɫasʲ got ɐˈtnʲesɫəsʲ
 происш+едшему prəɪsˈʂetʂɨmʊ got prəɪsʂɨdˈʂemʊ
-исп+угалась ɪsˈpuɡəɫəsʲ got ɪspʊˈɡaɫəsʲ
 успок+оилась ʊspɐˈkoɪɫəsʲ got ʊspəkɐˈiɫəsʲ
 сход+и sxɐˈdʲi got ˈsxodʲɪ
 извин+ись ɪzvʲɪˈnʲisʲ got ɪˈzvʲinʲɪsʲ
@@ -329,6 +327,7 @@ all words: 605/1163 (52.0 %)
 махн+ул mɐˈxnuɫ got ˈmaxnʊɫ
 милостисд+арь mʲɪɫəstʲɪsˈdarʲ got mʲɪɫɐsˈtʲizdərʲ
 Червяк+ов t͡ɕɪrvʲɪˈkof got t͡ɕɪrˈvʲakəf
+никак+их nʲɪkɐˈkʲix got nʲɪˈkakʲɪx
 Генер+ал ɡʲɪnʲɪˈraɫ got ɡʲɪˈnʲerəɫ
 Напиш+у nəpʲɪˈʂu got nɐˈpʲiʂʊ
 письм+о pʲɪˈsʲmo got ˈpʲisʲmə
@@ -353,7 +352,6 @@ all words: 605/1163 (52.0 %)
 изв+олили ɪˈzvolʲɪlʲɪ got ɪzvɐˈlʲilʲɪ
 Сме+ю smʲɪˈju got ˈsmʲejʊ
 +Ежели ˈjeʐɨlʲɪ got jɪˈʐelʲɪ
-ник+акого nʲɪˈkakəvə got nʲɪkɐˈkovə
 уваж+ения ʊvɐˈʐenʲɪjə got ʊvəʐɨˈnʲijə
 Пош+ел pɐˈʂeɫ got ˈpoʂɨɫ
 посин+евший pəsʲɪˈnʲefʂɨj got pəsʲɪnʲɪvˈʂɨj
@@ -366,8 +364,6 @@ all words: 605/1163 (52.0 %)
 повтор+ил pəftɐˈrʲiɫ got pɐvˈtorʲɪɫ
 генер+ал ɡʲɪnʲɪˈraɫ got ɡʲɪˈnʲerəɫ
 живот+е ʐɨvɐˈtʲe got ʐɨˈvotʲə
-Нич+его nʲɪˈt͡ɕevə got nʲɪt͡ɕɪˈvo
-нич+его nʲɪˈt͡ɕevə got nʲɪt͡ɕɪˈvo
 поп+ятился pɐˈpʲatʲɪɫsʲə got pəpʲɪˈtʲiɫsʲə
 +улицу ˈulʲɪt͡sʊ got ʊˈlʲit͡sʊ
 Прид+я prʲɪˈdʲa got ˈprʲidʲə
@@ -545,8 +541,6 @@ all words: 605/1163 (52.0 %)
 +ежели ˈjeʐɨlʲɪ got jɪˈʐelʲɪ
 с+овести ˈsovʲɪstʲɪ got sɐˈvʲestʲɪ
 +ежели ˈjeʐɨlʲɪ got jɪˈʐelʲɪ
-мир+овой mʲɪˈrovəj got mʲɪrɐˈvoj
-рассуд+ит rəssʊˈdʲit got rɐsˈsudʲɪt
 нег+о nʲɪˈvo got ˈnʲevə
 ск+азано ˈskazənə got skɐˈzanə
 равн+ы rɐvˈnɨ got ˈravnɨ
