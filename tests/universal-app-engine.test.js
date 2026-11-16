@@ -334,6 +334,12 @@ describe('voice engine benchmark cache', () => {
       await overload(true);
       await overload(false);
       expect(second.engine.status.benchmark).toBe(null);
+      // The next idle moment after the utterance measures again.
+      second.idle();
+      expect(postedOf(second.worker, 'benchmark')).toEqual([]);
+      second.engine.stop();
+      second.idle();
+      expect(postedOf(second.worker, 'benchmark').length).toBe(1);
 
       const third = benchmarkEngine();
       third.start();

@@ -239,6 +239,14 @@ export class VoiceEngine {
     this.benchmarkGpu = null;
     this.#setAutoLevel(startLevel(globalThis.navigator ?? {}));
     this.#emit({ audioLevel: this.audioLevel, benchmark: null });
+    this.#scheduleBenchmark();
+  }
+
+  /**
+   * Post the benchmark at the next idle moment after the engine answer and
+   * after the utterance in progress, if any.
+   */
+  #scheduleBenchmark() {
     this.cancelIdle();
     let cancel = () => {};
     // An utterance is the user's: post after it, at the next idle moment.
@@ -556,8 +564,9 @@ export class VoiceEngine {
 
   /**
    * Overloads in a row of utterances started at the cached level: the
-   * third drops the cache, so the next visit measures again. An utterance
-   * at that level without one starts the count again.
+   * third drops the cache and measures again at the next idle moment after
+   * the utterance. An utterance at that level without one starts the count
+   * again.
    */
   #countOverloads(job, overloaded) {
     if (!job.auto || !this.cached || job.level !== this.cached.level) {
@@ -581,6 +590,7 @@ export class VoiceEngine {
     clearCachedBenchmark();
     this.cached = null;
     this.#emit({ benchmark: null });
+    this.#scheduleBenchmark();
   }
 
   /** The worker restarts the utterance on a cheaper tier. */
