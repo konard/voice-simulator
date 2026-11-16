@@ -541,6 +541,8 @@ export function tractShape(state, head, options = {}) {
       lungPressure: full.lungPressure,
       adduction: full.adduction,
       foldTension: full.foldTension,
+      effort: full.effort ?? 0,
+      tension: full.tension ?? 0,
     },
     lipOpening: areas.at(-1),
     jaw: openness,

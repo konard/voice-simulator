@@ -52,7 +52,7 @@ pub extern "C" fn vs_biquad_run(
 }
 
 /// Number of `f64` parameters of [`vs_glottis_run`].
-pub const GLOTTIS_PARAMETERS: usize = 21;
+pub const GLOTTIS_PARAMETERS: usize = 23;
 
 /// Runs a glottis seeded with `seed` (`hashSeed` of `'<seed>:glottis'`)
 /// over `data`, which holds the white noise on entry and the flow
@@ -60,9 +60,10 @@ pub const GLOTTIS_PARAMETERS: usize = 21;
 /// shimmer, aspirationLevel, chink, lungPressure, dt, f0, voicing,
 /// aspiration, closure and loudness, then the head's breathinessRd,
 /// breathGain, breathExponent, chinkNoise, reCritical, glottisVoiced,
-/// glottisOpen and glottisBreathy; the control has no lung pressure and
-/// no aspiration strength, so the glottis assumes an open tract. Returns
-/// the number of periods started.
+/// glottisOpen and glottisBreathy, then the control's effort (dB) and
+/// tension (issue 52); the control has no lung pressure and no aspiration
+/// strength, so the glottis assumes an open tract. Returns the number of
+/// periods started.
 pub fn run_glottis(seed: u32, parameters: &[f64], data: &mut [f64]) -> usize {
     let mut options = GlottisOptions::new(seed);
     options.tenseness = parameters[0];
@@ -91,6 +92,8 @@ pub fn run_glottis(seed: u32, parameters: &[f64], data: &mut [f64]) -> usize {
         loudness: parameters[12],
         lung_pressure: None,
         aspiration_strength: None,
+        effort: parameters[21],
+        tension: parameters[22],
     };
     let mut glottis = Glottis::new(&options);
     let mut periods = 0;
@@ -104,7 +107,7 @@ pub fn run_glottis(seed: u32, parameters: &[f64], data: &mut [f64]) -> usize {
     periods
 }
 
-/// [`run_glottis`] over the `count` `f64` values at `data` with the 21
+/// [`run_glottis`] over the `count` `f64` values at `data` with the 23
 /// `f64` parameters at `parameters`. Returns the number of periods or a
 /// negative code of [`error`].
 #[no_mangle]
@@ -326,6 +329,8 @@ mod tests {
             0.05,
             0.25,
             0.1,
+            0.0,
+            0.0,
         ];
         let mut data = [0.0; 4800];
         let periods = run_glottis(1, &parameters, &mut data);

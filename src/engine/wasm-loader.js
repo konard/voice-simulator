@@ -41,7 +41,7 @@ export const THREAD_MEMORY = Object.freeze({
 });
 
 /** The `vs_abi_version()` this loader speaks; see docs/RUST-ENGINE.md. */
-export const ENGINE_ABI_VERSION = 2;
+export const ENGINE_ABI_VERSION = 3;
 
 /**
  * Where the engine lives next to this file. Written as the literal

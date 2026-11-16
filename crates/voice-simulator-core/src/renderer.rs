@@ -18,6 +18,7 @@ use crate::aerodynamics::{
     strouhal_frequency_at, Aerodynamics, GlottalAreas,
 };
 use crate::config;
+use crate::effort;
 use crate::fdtd::model::Model;
 use crate::fdtd::parallel::Team;
 use crate::fdtd::solver::{Fdtd3d, FdtdOptions, Output};
@@ -456,6 +457,8 @@ impl<S: Solver> Renderer<S> {
                 loudness: 0.0,
                 lung_pressure: None,
                 aspiration_strength: Some(0.0),
+                effort: 0.0,
+                tension: 0.0,
             },
             frication_position: 1.0,
             frication_amplitude: 0.0,
@@ -574,6 +577,8 @@ impl<S: Solver> Renderer<S> {
         self.control.aspiration = frame[frame::ASPIRATION];
         self.control.closure = frame[frame::CLOSURE];
         self.control.loudness = frame[frame::LOUDNESS];
+        self.control.effort = frame[frame::EFFORT];
+        self.control.tension = frame[frame::TENSION];
         self.frication_position = frame[frame::FRICATION_POSITION];
         self.update_airflow(frame, rate);
         self.output.configure(rate);
@@ -602,9 +607,13 @@ impl<S: Solver> Renderer<S> {
             constriction,
         );
         let re_critical = settings.re_critical;
+        // The effort raises the lung pressure; the noise follows its own rule.
+        let effort = frame[frame::EFFORT];
+        let noise_gain = effort::noise_gain(effort);
         self.control.aspiration_strength = Some(
-            source_strength_at(air.glottal_drop, opening, air.flow, re_critical)
-                / self.aspiration_reference,
+            (source_strength_at(air.glottal_drop, opening, air.flow, re_critical)
+                / self.aspiration_reference)
+                * noise_gain,
         );
         let strength =
             source_strength_at(air.constriction_drop, frication_area, air.flow, re_critical)
@@ -612,7 +621,8 @@ impl<S: Solver> Renderer<S> {
         self.frication_amplitude = frame[frame::FRICATION_GAIN]
             * settings.frication_level
             * strength
-            * settings.frication_gain;
+            * settings.frication_gain
+            * noise_gain;
         if self.frication_amplitude > 1e-6 {
             self.noise.tune(strouhal_frequency_at(
                 air.flow,
@@ -622,7 +632,7 @@ impl<S: Solver> Renderer<S> {
             let obstacle = frame[frame::FRICATION_OBSTACLE];
             self.frication_amplitude *= obstacle + settings.wall_source * (1.0 - obstacle);
         }
-        let target = air.flow_derivative * settings.transient_gain;
+        let target = air.flow_derivative * settings.transient_gain * effort::transient_gain(effort);
         let steps = max(1.0, block_duration * rate);
         self.transient_step = (target - self.transient) / steps;
     }

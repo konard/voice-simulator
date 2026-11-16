@@ -152,8 +152,9 @@ The module imports nothing; the threads build imports only its memory
 
 - Every export starts with `vs_`. Arguments and results are `u32`, `i32` or
   `f64` only: no strings, no structs.
-- `vs_abi_version() -> u32` returns the interface version, now 2 (issue
-  23 changed `vs_renderer_new` and the frame layout). Any
+- `vs_abi_version() -> u32` returns the interface version, now 3 (issue
+  23 changed `vs_renderer_new` and the frame layout, issue 52 the frame
+  layout and `vs_glottis_run`). Any
   breaking change of an export (removed, renamed, a different signature or
   meaning) raises it, together with `ENGINE_ABI_VERSION` in the loader.
 - `vs_alloc(bytes: u32) -> u32` returns an offset aligned to 8, or 0 when
@@ -172,7 +173,7 @@ The module imports nothing; the threads build imports only its memory
 
 | Export                                                             | Result                                                                               |
 | ------------------------------------------------------------------ | ------------------------------------------------------------------------------------ |
-| `vs_abi_version() -> u32`                                          | 2                                                                                    |
+| `vs_abi_version() -> u32`                                          | 3                                                                                    |
 | `vs_alloc(bytes) -> u32`                                           | Offset of a block aligned to 8, or 0                                                 |
 | `vs_free(ptr, bytes)`                                              | Frees a block of `vs_alloc`                                                          |
 | `vs_hash_seed_utf16(ptr, len) -> u32`                              | `hashSeed` of the `len` UTF-16 code units at `ptr`; traps on a bad range             |
@@ -199,7 +200,7 @@ The module imports nothing; the threads build imports only its memory
 | `vs_renderer_field(handle, out, capacity) -> i32`                  | Writes the pressure of the oral, then the nasal sections; how many                   |
 | `vs_renderer_free(handle) -> i32`                                  | Frees the renderer; 0 or `BAD_HANDLE`                                                |
 | `vs_biquad_run(kind, f, q, rate, data, count) -> i32`              | A `Biquad` (0 low-pass, 1 high-pass, 2 band-pass) over `data` in place; 0 or error   |
-| `vs_glottis_run(seed, params, data, count) -> i32`                 | A `Glottis` over the noise at `data` in place (13 parameters); periods or error      |
+| `vs_glottis_run(seed, params, data, count) -> i32`                 | A `Glottis` over the noise at `data` in place (23 parameters); periods or error      |
 | `vs_radiation_run(area, rate, baffle, data, count) -> i32`         | A `Radiation` over the incident waves at `data` in place; 0 or error                 |
 | `vs_waveguide_run(params, n, data, count) -> i32`                  | A `Waveguide` stepped by the glottal input at `data` in place; 0 or error            |
 | `vs_stages_run(seed, sr, gain, band, rate, f, data, count) -> i32` | `NoiseSources` plus `OutputStage` over `data` in place; 0 or error                   |
@@ -304,6 +305,7 @@ per sample:
 | -------------- | -------------------------------------------------------------------- |
 | `filters.rs`   | `filters.js`: `Biquad`, `Noise`                                      |
 | `glottis.rs`   | `glottis.js`: `Glottis`, the LF waveform and the chink               |
+| `effort.rs`    | `effort.js`: the gains of vocal effort (issue 52)                    |
 | `radiation.rs` | `radiation.js`: `Radiation`, `radiationLoad`                         |
 | `waveguide.rs` | `waveguide.js`: `Waveguide` with its nose, `piriformBranch`          |
 | `losses.rs`    | `losses.js`: the viscothermal shelf filters and the wall constants   |
@@ -580,6 +582,17 @@ A frame gains the incisors: field 15 `TEETH` is 1 when the shape has
 (cm), the only number of `shape.teeth` that `#applyTeeth` and
 `#teethSlot` read. `STRIDE` is 17 and a frame has `17 + sections + 1`
 values.
+
+Vocal effort (issue 52) adds field 16 `EFFORT`, the effort `E` in dB
+(`shape.glottis.effort`, 0 for normal effort), and field 17 `TENSION`, the
+offset on the tenseness (`shape.glottis.tension`); `EXTRA` moves to 18 and
+`STRIDE` to 19, so a frame has `19 + sections + 1` values. The glottis
+multiplies its voiced part by the gain of `effort.rs` and passes it through
+the tilt shelf; the renderer scales the aspiration, frication and burst
+sources by the noise gains (`effortNoiseGain`, `effortTransientGain` of
+`src/articulation/effort.js`). At `E = 0` every gain is 1, so the samples
+of plain speech do not change. `vs_glottis_run` takes the control's effort
+and tension as parameters 21 and 22.
 
 A render job (`renderJob`, `scripts/write-render-job.mjs`) is
 `[config length, config..., model length in bytes, model..., frame count,
@@ -1074,6 +1087,7 @@ Each ported function has a class, stated by the issue that ports it.
 | `aerodynamics.rs` (35)   | A     |
 | `filters.rs` (22)        | B     |
 | `glottis.rs` (22)        | B     |
+| `effort.rs` (52)         | B     |
 | `radiation.rs` (22)      | B     |
 | `waveguide.rs` (22)      | B     |
 | `stages.rs` (22)         | B     |

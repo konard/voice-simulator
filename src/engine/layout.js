@@ -84,7 +84,8 @@ export const FDTD_OUTPUT_CODES = Object.freeze({ flow: 0, microphone: 1 });
  * more values, so a frame has STRIDE + sections + FRAME_EXTRA_VALUES
  * values. LUNG_PRESSURE (Pa) is `state.lungPressure ?? head.lungPressure`.
  * TEETH is 1 when the shape has incisors (`shape.teeth`), and the first
- * extra value is then their gap (cm), else 0.
+ * extra value is then their gap (cm), else 0. EFFORT (dB) and TENSION are
+ * `shape.glottis.effort` and `.tension` (issue 52).
  */
 export const FRAME = Object.freeze({
   LENGTH: 0,
@@ -103,9 +104,11 @@ export const FRAME = Object.freeze({
   LOUDNESS: 13,
   LUNG_PRESSURE: 14,
   TEETH: 15,
-  EXTRA: 16,
-  AREAS: 17,
-  STRIDE: 17,
+  EFFORT: 16,
+  TENSION: 17,
+  EXTRA: 18,
+  AREAS: 19,
+  STRIDE: 19,
 });
 
 /** Values after the areas of a frame: the incisor gap. */
@@ -156,6 +159,8 @@ export function writeFrame(target, offset, shape, lungPressure) {
   target[offset + FRAME.LOUDNESS] = glottis.loudness;
   target[offset + FRAME.LUNG_PRESSURE] = lungPressure;
   target[offset + FRAME.TEETH] = shape.teeth ? 1 : 0;
+  target[offset + FRAME.EFFORT] = glottis.effort ?? 0;
+  target[offset + FRAME.TENSION] = glottis.tension ?? 0;
   target[offset + FRAME.EXTRA] = FRAME_EXTRA_VALUES;
   target.set(shape.areas, offset + FRAME.AREAS);
   target[offset + FRAME.AREAS + shape.areas.length] = shape.teeth?.gap ?? 0;

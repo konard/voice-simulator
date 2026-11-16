@@ -8,6 +8,7 @@
 use core::f64::consts::PI;
 
 use crate::aerodynamics::{glottal_area_of, open_tract_strength_at, GlottalAreas, RE_CRITICAL};
+use crate::effort::{self, TILT_CORNER};
 use crate::math::{self, max, min};
 use crate::random::Random;
 
@@ -130,6 +131,11 @@ pub struct GlottalControl {
     pub lung_pressure: Option<f64>,
     /// Relative turbulence strength at the glottis from the air flow.
     pub aspiration_strength: Option<f64>,
+    /// Vocal effort `E` (dB, 0 normal; issue 52): the gain of the voiced
+    /// part and its tilt shelf ([`crate::effort`]).
+    pub effort: f64,
+    /// Offset on the tenseness (issue 52).
+    pub tension: f64,
 }
 
 /// The options of `new Glottis(options)`, with the defaults of the
@@ -230,6 +236,17 @@ pub struct Glottis {
     // `1 - exp(-dt / chinkTime)` for the `dt` of the last step.
     chink_dt: f64,
     chink_factor: f64,
+    // The voiced gain and the tilt shelf factor of `effort_key` dB.
+    effort_key: f64,
+    effort_gain: f64,
+    tilt_gain: f64,
+    // The second-order high-pass of the tilt shelf and its pole for the
+    // `dt` of `tilt_step`.
+    tilt_step: f64,
+    tilt_pole: f64,
+    tilt_input: f64,
+    tilt_middle: f64,
+    tilt_output: f64,
 }
 
 impl Glottis {
@@ -268,6 +285,57 @@ impl Glottis {
             areas: options.areas,
             chink_dt: f64::NAN,
             chink_factor: 0.0,
+            effort_key: 0.0,
+            effort_gain: 1.0,
+            tilt_gain: 1.0,
+            tilt_step: 0.0,
+            tilt_pole: 0.0,
+            tilt_input: 0.0,
+            tilt_middle: 0.0,
+            tilt_output: 0.0,
+        }
+    }
+
+    /// `#effortGains`: the voiced gain and the tilt shelf factor of
+    /// `effort` dB, cached.
+    fn effort_gains(&mut self, effort: f64) {
+        if effort != self.effort_key {
+            self.effort_key = effort;
+            self.effort_gain = effort::voiced_gain(effort);
+            self.tilt_gain = effort::tilt_gain(effort);
+        }
+    }
+
+    /// `#tilt`: the voiced sample plus `tilt_gain - 1` times its
+    /// second-order high-pass at [`TILT_CORNER`]. The high-pass runs at
+    /// normal effort too, so that a ramp starts without a step.
+    fn tilt(&mut self, voiced: f64, dt: f64, effort: f64) -> f64 {
+        if dt != self.tilt_step {
+            self.tilt_step = dt;
+            self.tilt_pole = 1.0 / (1.0 + 2.0 * PI * TILT_CORNER * dt);
+        }
+        let pole = self.tilt_pole;
+        let middle = pole * (self.tilt_middle + voiced - self.tilt_input);
+        self.tilt_output = pole * (self.tilt_output + middle - self.tilt_middle);
+        self.tilt_input = voiced;
+        self.tilt_middle = middle;
+        if effort == 0.0 {
+            voiced
+        } else {
+            voiced + (self.tilt_gain - 1.0) * self.tilt_output
+        }
+    }
+
+    /// `#noiseGain`: the factor that brings the aspiration of an open
+    /// tract to the noise rule of the effort.
+    fn noise_gain(control: &GlottalControl) -> f64 {
+        let effort = control.effort;
+        if effort == 0.0 {
+            return 1.0;
+        }
+        match control.lung_pressure {
+            None => math::pow(10.0, effort / 40.0),
+            Some(_) => effort::noise_gain(effort),
         }
     }
 
@@ -304,7 +372,13 @@ impl Glottis {
     pub fn step(&mut self, dt: f64, control: &GlottalControl, noise: f64) -> f64 {
         let voicing = max(0.0, control.voicing) * (1.0 - control.closure);
         let loudness = max(0.0, control.loudness);
-        let tenseness = max(0.0, self.tenseness - 0.5 * control.aspiration * voicing);
+        let tension = control.tension;
+        let base = if tension == 0.0 {
+            self.tenseness
+        } else {
+            min(1.0, max(0.0, self.tenseness + tension))
+        };
+        let tenseness = max(0.0, base - 0.5 * control.aspiration * voicing);
         self.phase += dt;
         if self.phase >= self.period {
             self.phase -= self.period;
@@ -312,6 +386,11 @@ impl Glottis {
         }
         let t = self.phase / self.period;
         self.intensity = voicing * loudness * self.shimmer;
+        let effort = control.effort;
+        if effort != 0.0 {
+            self.effort_gains(effort);
+            self.intensity *= self.effort_gain;
+        }
         let mut voiced = lf_waveform(&self.pulse, t) * self.intensity * (0.7 + 0.3 * tenseness);
         if self.chink_time > 0.0 {
             if dt != self.chink_dt {
@@ -321,6 +400,7 @@ impl Glottis {
             self.smoothed += self.chink_factor * (voiced - self.smoothed);
             voiced = self.smoothed;
         }
+        voiced = self.tilt(voiced, dt, effort);
         let opening = max(0.0, math::sin(2.0 * PI * t));
         let modulation = if voicing > 0.1 {
             0.3 + 0.7 * opening * min(1.0, voicing)
@@ -330,7 +410,7 @@ impl Glottis {
         self.noise_modulation = modulation;
         let strength = match control.aspiration_strength {
             Some(strength) => strength,
-            None => self.open_tract_strength(control),
+            None => self.open_tract_strength(control) * Self::noise_gain(control),
         };
         let breath = ((control.aspiration + self.breath_gain * self.breath_power * voicing)
             * (1.0 - control.closure)
@@ -353,6 +433,8 @@ mod tests {
             loudness: 1.0,
             lung_pressure: None,
             aspiration_strength: None,
+            effort: 0.0,
+            tension: 0.0,
         }
     }
 
@@ -390,5 +472,24 @@ mod tests {
         let mut glottis = Glottis::new(&options);
         let value = glottis.step(1.0 / 48_000.0, &control(), 0.0);
         assert!(value.is_finite());
+    }
+
+    #[test]
+    fn effort_raises_the_level() {
+        let dt = 1.0 / 48_000.0;
+        let energy = |effort: f64| {
+            let mut glottis = Glottis::new(&GlottisOptions::new(1));
+            let mut loud = control();
+            loud.effort = effort;
+            loud.tension = 0.006 * effort;
+            (0..24_000)
+                .map(|_| {
+                    let value = glottis.step(dt, &loud, 0.0);
+                    value * value
+                })
+                .sum::<f64>()
+        };
+        let gain = 10.0 * math::ln(energy(10.0) / energy(0.0)) / math::ln(10.0);
+        assert!(gain > 5.0 && gain < 15.0, "{gain} dB");
     }
 }
