@@ -1,0 +1,21 @@
+▶ performance of the 3D solver on several threads (issue 24)
+  ✔ dx 1: native (12285.66714ms)
+  ✔ dx 1: WebAssembly (3457.646928ms)
+  ✔ dx 0.5: native (5625.114423ms)
+  ✔ dx 0.5: WebAssembly (3791.698169ms)
+  ✔ dx 0.4: native (7734.432824ms)
+  ✔ dx 0.4: WebAssembly (8804.568302ms)
+  ✔ dx 1, 40 cm box: native (55733.262547ms)
+  ✔ dx 1, 40 cm box: WebAssembly (32244.29744ms)
+  ✔ dx 0.5, 40 cm box: native (376526.951729ms)
+  ✔ dx 0.5, 40 cm box: WebAssembly (357579.658563ms)
+  ✔ writes the report (220.052854ms)
+✔ performance of the 3D solver on several threads (issue 24) (864022.29361ms)
+ℹ tests 11
+ℹ suites 1
+ℹ pass 11
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 864915.903179
