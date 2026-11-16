@@ -34,10 +34,12 @@ function writeProgress(refs, frame) {
  * Main-thread tasks over 50 ms between the benchmark request and its answer
  * (issue 28: the benchmark must not block the page); the HUD shows them with
  * `?debug`. Tasks during an utterance are the app's own: the benchmark is
- * paused then.
+ * paused then. The count reaches React only after the answer (`to`): a
+ * re-render of the app inside the window would be a long task of its own.
  */
-function useBenchmarkLongTasks(engineRef) {
+function useBenchmarkLongTasks(engineRef, answeredAt) {
   const [longTasks, setLongTasks] = useState(0);
+  const countRef = useRef(0);
   useEffect(() => {
     const Observer = globalThis.PerformanceObserver;
     if (!Observer?.supportedEntryTypes?.includes('longtask')) {
@@ -49,7 +51,7 @@ function useBenchmarkLongTasks(engineRef) {
       if (span?.from === null || span?.from === undefined) {
         return;
       }
-      const count = list.getEntries().filter((entry) => {
+      countRef.current += list.getEntries().filter((entry) => {
         const end = entry.startTime + entry.duration;
         return (
           end >= span.from &&
@@ -57,13 +59,18 @@ function useBenchmarkLongTasks(engineRef) {
           !engine.duringSpeech(entry.startTime, end)
         );
       }).length;
-      if (count > 0) {
-        setLongTasks((total) => total + count);
+      if (span.to !== null) {
+        setLongTasks(countRef.current);
       }
     });
     observer.observe({ type: 'longtask', buffered: true });
     return () => observer.disconnect();
   }, [engineRef]);
+  useEffect(() => {
+    if (answeredAt !== null && answeredAt !== undefined) {
+      setLongTasks(countRef.current);
+    }
+  }, [answeredAt]);
   return longTasks;
 }
 
@@ -100,7 +107,7 @@ export function useSimulator(settings) {
     };
   }, []);
 
-  const longTasks = useBenchmarkLongTasks(engineRef);
+  const longTasks = useBenchmarkLongTasks(engineRef, status.benchmark?.to);
 
   useEffect(() => {
     let viewer = null;

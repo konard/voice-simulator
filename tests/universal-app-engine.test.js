@@ -170,11 +170,17 @@ describe('voice engine benchmark', () => {
       // benchmark waits for an idle moment.
       expect(worker.posted.map((message) => message.type)).toEqual(['engine']);
       expect(engine.audioLevel).toBe(startLevel(globalThis.navigator ?? {}));
+      const changes = [];
+      engine.onChange = (status) => changes.push(status);
       idle();
       expect(postedOf(worker, 'benchmark').length).toBe(1);
       expect(engine.status.benchmark.measuring).toBe(true);
       expect(engine.status.phase).toBe('idle');
+      // No re-render of the app until the answer (a render is a long task
+      // at 4x CPU throttling).
+      expect(changes.length).toBe(0);
       reply(answer(2));
+      expect(changes.length).toBe(1);
       expect(engine.audioLevel).toBe(2);
       expect(engine.status.phase).toBe('idle');
       expect(engine.status.benchmark.measuring).toBe(false);
@@ -408,9 +414,13 @@ describe('voice engine quality settings', () => {
       first.start();
       first.idle();
       first.reply(answer(2));
+      const changes = [];
+      first.engine.onChange = (status) => changes.push(status);
       first.engine.measureAgain();
       expect(storage.items.has(BENCHMARK_KEY)).toBe(false);
       expect(postedOf(first.worker, 'benchmark').length).toBe(2);
+      // The button shows the measurement at once.
+      expect(changes.at(-1).benchmark.measuring).toBe(true);
       first.reply(answer(3));
       expect(JSON.parse(storage.items.get(BENCHMARK_KEY)).level).toBe(3);
     });

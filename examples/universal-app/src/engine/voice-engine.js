@@ -189,7 +189,7 @@ export class VoiceEngine {
     clearCachedBenchmark();
     this.cancelIdle();
     this.cached = null;
-    this.#postBenchmark();
+    this.#postBenchmark(true);
   }
 
   #useCache(cached) {
@@ -232,18 +232,27 @@ export class VoiceEngine {
     this.cancelIdle = this.idle(() => this.#postBenchmark());
   }
 
-  #postBenchmark() {
+  /**
+   * Post the benchmark to the worker. `notify`: re-render the app now (the
+   * "Measure again" button); the silent load-time run does not, since a
+   * render of the app at 4x CPU throttling is a long task of its own; its
+   * answer renders.
+   */
+  #postBenchmark(notify = false) {
     this.cancelIdle = () => {};
-    this.#emit({
-      benchmark: {
-        measuring: true,
-        from: globalThis.performance.now(),
-        to: null,
-        time: null,
-        engine: null,
-        cached: false,
-      },
-    });
+    const benchmark = {
+      measuring: true,
+      from: globalThis.performance.now(),
+      to: null,
+      time: null,
+      engine: null,
+      cached: false,
+    };
+    if (notify) {
+      this.#emit({ benchmark });
+    } else {
+      this.status = { ...this.status, benchmark };
+    }
     this.#ensureWorker().postMessage({
       type: 'benchmark',
       head: this.benchmarkHead,
