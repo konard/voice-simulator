@@ -15,10 +15,12 @@ const vendorChunks = [
   [/[\\/]node_modules[\\/]three[\\/]build[\\/]/, 'three'],
   [/[\\/]node_modules[\\/]three[\\/]examples[\\/]/, 'three-addons'],
   [/[\\/]node_modules[\\/](react|react-dom|scheduler)[\\/]/, 'react'],
-  // The pronunciation dictionaries (english-dict.js alone is ~250 kB of IPA,
+  // The pronunciation dictionaries (the English one alone is ~250 kB of IPA,
   // two bytes per symbol) pushed the app entry and both workers past the
-  // limit once the guard measured bytes (issue 115).
+  // limit once the guard measured bytes (issue 115). They live in
+  // src/g2p/lexicon/ since issue 47.
   [/[\\/]src[\\/]g2p[\\/][a-z]+-dict\.js$/, 'g2p-dict'],
+  [/[\\/]src[\\/]g2p[\\/]lexicon[\\/][a-z]+\.js$/, 'g2p-dict'],
 ];
 
 export function vendorChunk(id) {

@@ -8,7 +8,12 @@
  * simplifications.
  */
 
-import { RUSSIAN_EXCEPTIONS, RUSSIAN_STRESS } from './russian-stress.js';
+import { RUSSIAN_EXCEPTIONS } from './russian-stress.js';
+import {
+  lexiconFor,
+  registerShippedSpeaker,
+  userPronunciation,
+} from './lexicon.js';
 
 const VOWEL_LETTERS = 'аоуыэяёюие';
 const SOFT_VOWELS = 'яёюие';
@@ -82,18 +87,16 @@ const GENITIVE_EXCEPTIONS = new Set([
   'ого',
 ]);
 
-let stressDictionary = null;
-
-function getStressDictionary() {
-  if (!stressDictionary) {
-    stressDictionary = new Map(
-      RUSSIAN_STRESS.split(' ').map((entry) => [
-        entry.replace('+', ''),
-        countVowels(entry.slice(0, entry.indexOf('+'))),
-      ])
-    );
+/**
+ * The stressed vowel of a word from `RU_STRESS` (`a` the first vowel, `z`
+ * the last), or undefined.
+ */
+function shippedStress(letters, vowels) {
+  const letter = lexiconFor('ru', 'stress').lookup(letters)?.[0];
+  if (!letter) {
+    return undefined;
   }
-  return stressDictionary;
+  return letter === 'z' ? vowels - 1 : letter.charCodeAt(0) - 97;
 }
 
 function countVowels(text) {
@@ -147,7 +150,7 @@ export function findRussianStress(rawWord) {
     stress = countVowels(letters.slice(0, letters.indexOf('ё')));
   }
   if (stress < 0) {
-    stress = getStressDictionary().get(letters) ?? guessStress(letters, vowels);
+    stress = shippedStress(letters, vowels) ?? guessStress(letters, vowels);
   }
   return { letters, stress: vowels <= 1 ? 0 : stress, vowels };
 }
@@ -351,13 +354,17 @@ function fricativeG(phones) {
  *   regional accents (issue 57): okanye keeps an unstressed о after a hard
  *   consonant (northern, хорошо xoroˈʂo); fricativeG makes г the fricative
  *   ɣ, devoiced to x (southern, город ˈɣorət, снег snʲex).
- * @returns {{ipa: string, source: 'exception'|'dictionary'|'rules'}}
+ * @returns {{ipa: string, source: 'user'|'exception'|'dictionary'|'rules'}}
  */
 export function russianWordToIpa(
   word,
   { okanye = false, fricativeG: fricative = false } = {}
 ) {
   const { letters, stress, vowels } = findRussianStress(word);
+  const user = userPronunciation('ru', letters);
+  if (user) {
+    return { ipa: user, source: 'user' };
+  }
   if (RUSSIAN_EXCEPTIONS[letters] && !/\+|\u0301/.test(word.normalize('NFD'))) {
     return { ipa: RUSSIAN_EXCEPTIONS[letters], source: 'exception' };
   }
@@ -374,7 +381,8 @@ export function russianWordToIpa(
         voice: FRICATIVE_G_VOICE,
       })
     : assimilateVoicing(plain);
-  const known = getStressDictionary().has(letters) || letters.includes('ё');
+  const known =
+    lexiconFor('ru', 'stress').has(letters) || letters.includes('ё');
   return {
     ipa: phones.join(''),
     source: known || vowels <= 1 ? 'dictionary' : 'rules',
@@ -477,3 +485,5 @@ export function russianNumberWords(value) {
     ...(rest ? russianBelowThousand(rest, false) : []),
   ];
 }
+
+registerShippedSpeaker('ru', (word) => russianWordToIpa(word).ipa);

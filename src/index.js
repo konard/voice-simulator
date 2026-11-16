@@ -19,6 +19,16 @@ export {
   scriptLanguage,
   LANGUAGES,
 } from './g2p/index.js';
+export {
+  addLexicon,
+  clearLexicons,
+  lexiconFor,
+  lexiconWords,
+  openLexicon,
+  pronunciations,
+  spellingsOf,
+} from './g2p/lexicon.js';
+export { englishDictionarySize } from './g2p/english.js';
 export { parseIpa, formatIpa } from './ipa/parse.js';
 export {
   getPhoneme,

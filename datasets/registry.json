@@ -410,6 +410,122 @@
           }
         ]
       }
+    },
+    {
+      "id": "cmudict",
+      "title": "The CMU Pronouncing Dictionary (cmudict.dict): the input of the English lexicon (scripts/build-lexicon.mjs build en)",
+      "languages": ["en"],
+      "licence": "BSD-2-Clause",
+      "licenceUrl": "https://raw.githubusercontent.com/cmusphinx/cmudict/74790861f652b15e4ac49015a90074ad62a27690/LICENSE",
+      "licenceQuote": "Redistribution and use in source and binary forms, with or without modification, are permitted provided that the following conditions are met: 1. Redistributions of source code must retain the above copyright notice, this list of conditions and the following disclaimer.",
+      "licenceChecked": "2026-11-16",
+      "redistribution": false,
+      "citation": "Carnegie Mellon University (1993-2015). The CMU Pronouncing Dictionary. https://github.com/cmusphinx/cmudict",
+      "source": {
+        "kind": "files",
+        "files": [
+          {
+            "name": "cmudict.dict",
+            "url": "https://raw.githubusercontent.com/cmusphinx/cmudict/74790861f652b15e4ac49015a90074ad62a27690/cmudict.dict",
+            "size": 3618488,
+            "sha256": "81917843c7f44ce2b094ac63873c2c7a4cf802040792c455ba3ca406891c3d22"
+          }
+        ]
+      }
+    },
+    {
+      "id": "unihan",
+      "title": "Unicode Han Database 17.0.0 (Unihan.zip; kMandarin and kTGHZ2013 of Unihan_Readings.txt): the character readings of the Chinese lexicon",
+      "languages": ["zh"],
+      "licence": "Unicode-3.0",
+      "licenceUrl": "https://www.unicode.org/license.txt",
+      "licenceQuote": "Permission is hereby granted, free of charge, to any person obtaining a copy of data files and any associated documentation (the \"Data Files\") or software and any associated documentation (the \"Software\") to deal in the Data Files or Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, and/or sell copies of the Data Files or Software",
+      "licenceChecked": "2026-11-16",
+      "redistribution": false,
+      "citation": "The Unicode Consortium (2025). Unicode Han Database (Unihan), Unicode 17.0.0. https://www.unicode.org/reports/tr38/",
+      "source": {
+        "kind": "files",
+        "files": [
+          {
+            "name": "Unihan.zip",
+            "url": "https://www.unicode.org/Public/17.0.0/ucd/Unihan.zip",
+            "size": 8518517,
+            "sha256": "f7a48b2b545acfaa77b2d607ae28747404ce02baefee16396c5d2d7a8ef34b5e"
+          }
+        ]
+      }
+    },
+    {
+      "id": "aishell3-train-index",
+      "title": "AISHELL-3, transcript index of the train set (train/content.txt): the words of the Chinese lexicon are mined from nine lines in ten; every tenth line measures it",
+      "languages": ["zh"],
+      "licence": "Apache-2.0",
+      "licenceUrl": "https://huggingface.co/datasets/AISHELL/AISHELL-3",
+      "licenceQuote": "license: apache-2.0",
+      "licenceChecked": "2026-11-16",
+      "redistribution": false,
+      "citation": "Shi, Bu, Xu, Zhang, Li (2021). AISHELL-3: A Multi-speaker Mandarin TTS Corpus. Proc. Interspeech 2021, 2756-2760. https://www.openslr.org/93/",
+      "source": {
+        "kind": "files",
+        "files": [
+          {
+            "name": "content.txt",
+            "url": "https://huggingface.co/datasets/AISHELL/AISHELL-3/resolve/f20d5db4a31fe779ef07bb1af4ea92da5c786622/train/content.txt",
+            "size": 7665999,
+            "sha256": "ed70f67d5558124ee22e609260177eaf20aa63391dd9df8df0a7e22b9213aca0"
+          }
+        ]
+      }
+    },
+    {
+      "id": "common-voice-text-en",
+      "title": "Common Voice English sentence text (sentence-collector.txt and wiki.en.txt): word counts that choose the words of the English lexicon",
+      "languages": ["en"],
+      "licence": "CC0-1.0",
+      "licenceUrl": "https://raw.githubusercontent.com/common-voice/common-voice/8ad2d862a1bf55ef77f8e86c1858296a7fae6ec7/server/data/en/LICENSE",
+      "licenceQuote": "CC0 1.0 Universal",
+      "licenceChecked": "2026-11-16",
+      "redistribution": false,
+      "citation": "Mozilla Common Voice contributors. Common Voice text corpus. https://github.com/common-voice/common-voice",
+      "source": {
+        "kind": "files",
+        "files": [
+          {
+            "name": "sentence-collector.txt",
+            "url": "https://raw.githubusercontent.com/common-voice/common-voice/8ad2d862a1bf55ef77f8e86c1858296a7fae6ec7/server/data/en/sentence-collector.txt",
+            "size": 2803252,
+            "sha256": "31ac8e200449ebd7aee4a8c6bd16d4dafd076cf11f7c3efe1035f0283712d136"
+          },
+          {
+            "name": "wiki.en.txt",
+            "url": "https://raw.githubusercontent.com/common-voice/common-voice/8ad2d862a1bf55ef77f8e86c1858296a7fae6ec7/server/data/en/wiki.en.txt",
+            "size": 85658274,
+            "sha256": "438e55e8bc91dfa6cbe098a7233702c6b177c5ae07137a01d66b9c75c9789ae5"
+          }
+        ]
+      }
+    },
+    {
+      "id": "common-voice-text-hi",
+      "title": "Common Voice Hindi sentence text (sentence-collector.txt): word counts that choose the words of the Hindi lexicon",
+      "languages": ["hi"],
+      "licence": "CC0-1.0",
+      "licenceUrl": "https://github.com/common-voice/common-voice/blob/8ad2d862a1bf55ef77f8e86c1858296a7fae6ec7/README.md#licensing-and-content-source",
+      "licenceQuote": "The majority of our sentence text in `/server/data` comes directly from user submissions in our Sentence Collector or they are scraped from Wikipedia using our extractor tool, and are released under a CC0 public domain Creative Commons license.",
+      "licenceChecked": "2026-11-16",
+      "redistribution": false,
+      "citation": "Mozilla Common Voice contributors. Common Voice text corpus. https://github.com/common-voice/common-voice",
+      "source": {
+        "kind": "files",
+        "files": [
+          {
+            "name": "sentence-collector.txt",
+            "url": "https://raw.githubusercontent.com/common-voice/common-voice/8ad2d862a1bf55ef77f8e86c1858296a7fae6ec7/server/data/hi/sentence-collector.txt",
+            "size": 4038286,
+            "sha256": "0de9bc2283188445d3a564974a688083fe6d9c29f11c3c31b4e01dc25af1885c"
+          }
+        ]
+      }
     }
   ]
 }

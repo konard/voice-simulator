@@ -1,15 +1,14 @@
 /**
  * Mandarin Chinese grapheme-to-phoneme conversion.
  *
- * Hanzi are converted to pinyin with the generated Unihan reading table,
- * corrected by a small list of frequent polyphonic words (greedy longest
- * match), then tone sandhi is applied per phrase and syllables are rendered
+ * Hanzi are converted to pinyin word by word (greedy longest match over
+ * the user lexicons and `ZH_PHRASES`, see `lexicon.js`), other characters
+ * with their usual reading (`chinese-readings.js`), then tone sandhi is applied per phrase and syllables are rendered
  * as IPA with Chao tone letters. A 儿 after a syllable is the erhua suffix
  * of that syllable (花儿 huār) unless it starts or ends a word in which it
  * is a syllable of its own (儿子, 女儿).
  */
 
-import { CHINESE_READINGS } from './chinese-dict.js';
 import {
   applyToneSandhi,
   pinyinSyllableToIpa,
@@ -17,85 +16,16 @@ import {
   splitTone,
   syllableWithTone,
 } from './pinyin.js';
+import { defaultReading, payloadToPinyin } from './chinese-readings.js';
+import {
+  lexiconFor,
+  longestUserWord,
+  registerShippedSpeaker,
+  userPronunciation,
+} from './lexicon.js';
 
-/** Characters whose most frequent reading differs from Unihan kMandarin. */
-const CHARACTER_OVERRIDES = {
-  长: 'cháng',
-  还: 'hái',
-  都: 'dōu',
-  着: 'zhe',
-  得: 'de',
-  地: 'dì',
-  和: 'hé',
-  只: 'zhǐ',
-  了: 'le',
-  么: 'me',
-  们: 'men',
-  个: 'gè',
-  子: 'zǐ',
-  的: 'de',
-  吗: 'ma',
-  呢: 'ne',
-  吧: 'ba',
-  啊: 'a',
-};
-
-/** Frequent words with context-dependent readings (space separated). */
-const PHRASES = {
-  银行: 'yín háng',
-  行业: 'háng yè',
-  长大: 'zhǎng dà',
-  校长: 'xiào zhǎng',
-  还是: 'hái shì',
-  觉得: 'jué de',
-  音乐: 'yīn yuè',
-  快乐: 'kuài lè',
-  睡觉: 'shuì jiào',
-  了解: 'liǎo jiě',
-  为了: 'wèi le',
-  因为: 'yīn wèi',
-  地方: 'dì fang',
-  东西: 'dōng xi',
-  朋友: 'péng you',
-  谢谢: 'xiè xie',
-  先生: 'xiān sheng',
-  时候: 'shí hou',
-  孩子: 'hái zi',
-  桌子: 'zhuō zi',
-  妈妈: 'mā ma',
-  爸爸: 'bà ba',
-  哥哥: 'gē ge',
-  姐姐: 'jiě jie',
-  弟弟: 'dì di',
-  妹妹: 'mèi mei',
-  爷爷: 'yé ye',
-  奶奶: 'nǎi nai',
-  叔叔: 'shū shu',
-  看看: 'kàn kan',
-  什么: 'shén me',
-  怎么: 'zěn me',
-  这么: 'zhè me',
-  那么: 'nà me',
-  多少: 'duō shao',
-  知道: 'zhī dao',
-  意思: 'yì si',
-  一样: 'yí yàng',
-  重要: 'zhòng yào',
-  重新: 'chóng xīn',
-  中国: 'zhōng guó',
-  声音: 'shēng yīn',
-  说话: 'shuō huà',
-  模型: 'mó xíng',
-  头发: 'tóu fa',
-  发现: 'fā xiàn',
-  会计: 'kuài jì',
-  数学: 'shù xué',
-  学生: 'xué sheng',
-  便宜: 'pián yi',
-  方便: 'fāng biàn',
-  处理: 'chǔ lǐ',
-  空气: 'kōng qì',
-};
+/** The longest word of `ZH_PHRASES`, in characters. */
+const MAX_PHRASE = 4;
 
 /** Words that start with a syllabic 儿 ér: 他儿子 is not erhua. */
 export const SYLLABIC_ER_BEFORE = new Set([
@@ -128,26 +58,6 @@ export const SYLLABIC_ER_AFTER = new Set([
   '新生儿',
   '托儿',
 ]);
-
-const MAX_PHRASE = Math.max(...Object.keys(PHRASES).map((key) => key.length));
-
-let readings = null;
-
-function getReadings() {
-  if (!readings) {
-    readings = new Map();
-    for (const group of CHINESE_READINGS.split(' ')) {
-      const [syllable, chars] = group.split('=');
-      for (const char of chars) {
-        readings.set(char, syllable);
-      }
-    }
-    for (const [char, syllable] of Object.entries(CHARACTER_OVERRIDES)) {
-      readings.set(char, syllable);
-    }
-  }
-  return readings;
-}
 
 /** True for CJK unified ideographs (basic block and extension A). */
 export function isHanzi(char) {
@@ -189,30 +99,23 @@ function isErhua(chars, index, previous) {
  */
 export function hanziToPinyin(text, { erhua = true } = {}) {
   const chars = [...text];
+  const longest = Math.max(MAX_PHRASE, longestUserWord('zh'));
   const result = [];
   let index = 0;
   while (index < chars.length) {
-    let matched = false;
-    for (
-      let length = Math.min(MAX_PHRASE, chars.length - index);
-      length > 1;
-      length--
-    ) {
-      const phrase = chars.slice(index, index + length).join('');
-      if (PHRASES[phrase]) {
-        const group = index;
-        PHRASES[phrase]
-          .split(' ')
-          .forEach((pinyin, offset) =>
-            result.push({ char: chars[index + offset], pinyin, group })
-          );
-        index += length;
-        matched = true;
-        break;
-      }
-    }
+    const word = matchWord(chars, index, longest);
     const previous = result.at(-1);
-    if (!matched && isErhua(chars, index, previous)) {
+    if (word) {
+      word.syllables.forEach((pinyin, offset) =>
+        result.push({
+          char: chars[index + offset],
+          pinyin,
+          group: index,
+          ...(word.user ? { user: true } : {}),
+        })
+      );
+      index += word.syllables.length;
+    } else if (isErhua(chars, index, previous)) {
       if (erhua) {
         previous.pinyin += 'r';
       }
@@ -223,10 +126,10 @@ export function hanziToPinyin(text, { erhua = true } = {}) {
         erhua: true,
       });
       index++;
-    } else if (!matched) {
+    } else {
       result.push({
         char: chars[index],
-        pinyin: getReadings().get(chars[index]) ?? null,
+        pinyin: defaultReading(chars[index]),
         group: index,
       });
       index++;
@@ -235,9 +138,37 @@ export function hanziToPinyin(text, { erhua = true } = {}) {
   return result;
 }
 
-function parseSyllable({ char, pinyin }) {
+/**
+ * The longest word starting at `index`: a user word (of any length) or a
+ * word of `ZH_PHRASES` (2 to 4 characters), or null.
+ * @returns {{syllables: string[], user: boolean}|null}
+ */
+function matchWord(chars, index, longest) {
+  for (
+    let length = Math.min(longest, chars.length - index);
+    length > 0;
+    length--
+  ) {
+    const word = chars.slice(index, index + length).join('');
+    const user = userPronunciation('zh', word);
+    if (user) {
+      return { syllables: user.trim().split(/\s+/), user: true };
+    }
+    const payload =
+      length > 1 && length <= MAX_PHRASE
+        ? lexiconFor('zh', 'phrases').lookup(word)?.[0]
+        : null;
+    const syllables = payload ? payloadToPinyin(word, payload) : null;
+    if (syllables) {
+      return { syllables, user: false };
+    }
+  }
+  return null;
+}
+
+function parseSyllable({ char, pinyin, user }) {
   const parsed = pinyin ? pinyinSyllableToIpa(pinyin) : null;
-  return parsed ? { ...parsed, char, pinyin } : null;
+  return parsed ? { ...parsed, char, pinyin, ...(user ? { user } : {}) } : null;
 }
 
 /**
@@ -259,7 +190,9 @@ function syllablesToIpa(items, { lowThird = false } = {}) {
  *   regional accents (issue 57): erhua false drops an erhua 儿 (see
  *   hanziToPinyin); lowThird true keeps the third tone low (˨˩) at the end
  *   of a phrase too, as in Taiwan Mandarin.
- * @returns {{ipa: string, pinyin: string, source: 'dictionary'|'pinyin'|'unknown'}}
+ * @returns {{ipa: string, pinyin: string,
+ *   source: 'user'|'dictionary'|'pinyin'|'unknown'}}
+ *   `user` when a user lexicon gave the reading of a character.
  */
 export function chineseWordToIpa(word, options = {}) {
   const hanzi = [...word].some(isHanzi);
@@ -267,12 +200,39 @@ export function chineseWordToIpa(word, options = {}) {
     ? hanziToPinyin(word, options)
     : (segmentPinyin(word) ?? []).map((pinyin) => ({ pinyin }));
   const known = items.filter((item) => item.pinyin);
+  let source = known.length ? 'pinyin' : 'unknown';
+  if (hanzi) {
+    source = items.some((item) => item.user) ? 'user' : 'dictionary';
+  }
   return {
     ipa: syllablesToIpa(known, options).join(' '),
     pinyin: known.map((item) => item.pinyin).join(' '),
-    source: hanzi ? 'dictionary' : known.length ? 'pinyin' : 'unknown',
+    source,
   };
 }
+
+/**
+ * IPA of a word read with the given pinyin syllables (sandhi applied).
+ * @param {string} word
+ * @param {string} pinyin space-separated syllables, one per character
+ */
+function wordWithPinyin(word, pinyin) {
+  const chars = [...word];
+  const items = pinyin
+    .trim()
+    .split(/\s+/)
+    .map((syllable, index) => ({ char: chars[index], pinyin: syllable }));
+  return syllablesToIpa(items).join(' ');
+}
+
+registerShippedSpeaker('zh', (word, pinyin) => {
+  if (pinyin) {
+    return wordWithPinyin(word, pinyin);
+  }
+  const payload = lexiconFor('zh', 'phrases').lookup(word)?.[0];
+  const syllables = payload ? payloadToPinyin(word, payload) : null;
+  return syllables ? wordWithPinyin(word, syllables.join(' ')) : null;
+});
 
 /**
  * Pronounce a run of Hanzi character by character, with tone sandhi

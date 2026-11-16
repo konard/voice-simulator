@@ -50,6 +50,12 @@ describe('universal app chunking', () => {
       expect(
         vendorChunk(['repo', 'src', 'g2p', 'english-dict.js'].join(sep))
       ).toBe('g2p-dict');
+      expect(
+        vendorChunk(['repo', 'src', 'g2p', 'lexicon', 'en.js'].join(sep))
+      ).toBe('g2p-dict');
+      expect(vendorChunk(['repo', 'src', 'g2p', 'lexicon.js'].join(sep))).toBe(
+        undefined
+      );
       expect(vendorChunk(['repo', 'src', 'g2p', 'english.js'].join(sep))).toBe(
         undefined
       );

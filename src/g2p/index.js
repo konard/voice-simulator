@@ -32,6 +32,7 @@ import { joinRussianClitics } from './russian-clitics.js';
 import { VERBALIZERS, normalizeText } from './normalize.js';
 import { adaptEnglishWord, hasLinkingR, isNonRhotic } from './accents.js';
 import { weakenFunctionWords } from './weak-forms.js';
+import { withLexicon } from './lexicon.js';
 import { accentSettings, applyAccentSettings } from '../accent/index.js';
 import { isSsml, parseMarkup } from '../markup/index.js';
 import { markupItems, markupModes } from './markup.js';
@@ -207,7 +208,9 @@ function splitHanRun(item, range, g2p) {
         lang: 'zh',
         ipa: known.map((syllable) => syllable.ipa).join(' '),
         pinyin: known.map((syllable) => syllable.pinyin).join(' '),
-        source: 'dictionary',
+        source: group.syllables.some((syllable) => syllable.user)
+          ? 'user'
+          : 'dictionary',
         ...range,
         sourceStart: group.sourceStart,
         sourceEnd: group.sourceEnd,
@@ -538,7 +541,8 @@ function markupToIpa(parsed, input, options) {
 /**
  * Convert text to IPA.
  * @param {string} text
- * @param {{lang?: string, accent?: string|object, accentLevel?: number, weakForms?: boolean, markup?: boolean, head?: {pitch?: number}}} [options]
+ * @param {{lang?: string, accent?: string|object, accentLevel?: number, weakForms?: boolean, markup?: boolean, head?: {pitch?: number},
+ *   lexicon?: Record<string, Record<string, string|string[]>>}} [options]
  *   `lang` is 'auto', 'en', 'ru', 'hi' or 'zh', or a regional tag such as
  *   'en-GB'. `accent` picks an accent of the language (a code of ACCENTS
  *   such as `en-GB`, `en-x-ru` or `zh-TW`, `{code, strength}`, or an accent
@@ -551,6 +555,12 @@ function markupToIpa(parsed, input, options) {
  *   `markup`: a text that starts with `<speak` is SSML unless `markup` is
  *   `false`; `true` also reads inline tags (`[whisper]…[/whisper]`). See
  *   docs/markup.md.
+ *   `lexicon` gives pronunciations for this call only, per language
+ *   (`{en: {quinoa: 'kiˈnoʊə'}, zh: {重庆: 'chóng qìng'}}`); they win over
+ *   `addLexicon()` and the shipped lexicons and are reported with
+ *   `source: 'user'`. An entry that cannot be read (IPA that `parseIpa`
+ *   does not know, pinyin with the wrong number of syllables) throws a
+ *   TypeError naming the word.
  * @returns {{lang: string, accent: string|null, accentLevel: number, ipa: string, words: object[], modes: {from: number, to: number, mode: object}[], warnings: {position: number, message: string}[]}}
  *   With markup, `ipa` holds the ExtIPA/VoQS marks of the modes that have
  *   one, `modes` are spans in IPA word indexes and every word's
@@ -558,6 +568,10 @@ function markupToIpa(parsed, input, options) {
  *   `MarkupError`.
  */
 export function textToIpa(text, options = {}) {
+  return withLexicon(options.lexicon, () => readText(text, options));
+}
+
+function readText(text, options) {
   const input = String(text ?? '');
   if (options.markup === true || (options.markup !== false && isSsml(input))) {
     return markupToIpa(parseMarkup(input, options), input, options);

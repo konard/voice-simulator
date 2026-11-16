@@ -5,8 +5,12 @@
  * schwa that vowel signs (matras) replace and the virama removes. Spoken
  * Hindi drops many inherent schwas, so after transliteration we apply the
  * standard schwa-deletion rule (word-final, then medial V C _ C V scanning
- * right to left without creating three-consonant clusters).
+ * right to left without creating three-consonant clusters). Words where
+ * the rules fail (compounds such as लोकसभा, plurals such as धड़कनें) are
+ * looked up first: user lexicons, then the shipped `HI_LEXICON`.
  */
+
+import { lexiconFor, userPronunciation } from './lexicon.js';
 
 const CONSONANTS = {
   क: 'k',
@@ -120,10 +124,15 @@ function addVowelMark(units, mark, final) {
   }
 }
 
-/** Transliterate into consonant / vowel units with inherent schwas. */
+/**
+ * Transliterate into consonant / vowel units with inherent schwas. The
+ * conjunct ज्ञ is said ɡj in Hindi (ज्ञान ɡjaːn), not d͡ʒɲ as spelled.
+ */
 function toUnits(word) {
   const units = [];
-  const chars = [...word.normalize('NFD')];
+  const chars = [
+    ...word.normalize('NFC').replaceAll('ज्ञ', 'ग्य').normalize('NFD'),
+  ];
   chars.forEach((char, index) => {
     const last = units.at(-1);
     if (CONSONANTS[char]) {
@@ -153,7 +162,10 @@ function resolveAnusvara(units) {
     }
     const next = units[index + 1];
     const previous = units[index - 1];
-    if (next?.type === 'consonant' && !/^[jɾlʋʃsɦ]/.test(next.ipa)) {
+    // Before a stop the anusvara is a nasal of its place; before a
+    // semivowel, a sibilant, h or a nasal (मैंने mɛ̃ːneː) it nasalises
+    // the vowel.
+    if (next?.type === 'consonant' && !/^[jɾlʋʃsɦmnɳ]/.test(next.ipa)) {
       if (previous?.inherent) {
         previous.inherent = false;
       }
@@ -202,9 +214,17 @@ export function deleteSchwas(units) {
 /**
  * Pronounce one Hindi word written in Devanagari.
  * @param {string} word
- * @returns {{ipa: string, source: 'rules'}}
+ * @returns {{ipa: string, source: 'user'|'dictionary'|'rules'}}
  */
 export function hindiWordToIpa(word) {
+  const user = userPronunciation('hi', word);
+  if (user) {
+    return { ipa: user, source: 'user' };
+  }
+  const known = lexiconFor('hi').lookup(word);
+  if (known) {
+    return { ipa: known[0], source: 'dictionary' };
+  }
   const units = deleteSchwas(toUnits(word));
   const ipa = units
     .map((unit) =>

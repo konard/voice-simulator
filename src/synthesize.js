@@ -78,6 +78,7 @@ function transcribe(text, options) {
         accent: options.accent,
         accentLevel: options.accentLevel,
         weakForms: options.weakForms,
+        lexicon: options.lexicon,
         markup: options.markup,
       });
   const accent = transcriptionAccent(transcription, options);
