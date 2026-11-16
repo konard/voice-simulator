@@ -8,7 +8,9 @@
  * disk. `build` renders every sentence with the simulator, adds the
  * reference and the two low-pass anchors of ITU-R BS.1534-3 (MUSHRA) and
  * writes the sound files and config.js. `analyze` reads the result files
- * that the listeners send back and prints a Markdown report. `sus` prints
+ * that the listeners send back and prints a Markdown report. Choice trials
+ * (issue 55) play one sentence in one emotion and ask which emotion it was.
+ * `sus` prints
  * English semantically unpredictable sentences (Benoît et al. 1996) for the
  * intelligibility trials.
  *
@@ -33,6 +35,7 @@ import { resample } from '../src/audio/resample.js';
 import { encodeWav } from '../src/audio/wav.js';
 import { errorRate } from '../src/metrics/text.js';
 import { AUDIO_TIERS } from '../src/perf/lod.js';
+import { EMOTIONS } from '../src/articulation/emotion.js';
 import { createRandom } from '../src/random.js';
 import { synthesize } from '../src/synthesize.js';
 
@@ -54,11 +57,17 @@ export const MAX_CONDITIONS = 12;
 /** Post-screening of BS.1534-3: hidden reference below 90 in > 15 %. */
 export const SCREENING = Object.freeze({ below: 90, share: 0.15 });
 export const Z95 = 1.959964;
+/** Headroom (dB) of every choice sound, as in tests/emotion.test.js. */
+const CHOICE_HEADROOM = 20;
+/** Highest peak of a choice sound after the shared gain. */
+const CHOICE_PEAK = 0.98;
 /** Fewest listeners whose results may back a claim (see README.md). */
 export const MIN_LISTENERS = 8;
 export const VOLUME_SECONDS = 2;
 
-const TYPES = ['mushra', 'abx', 'intelligibility'];
+const TYPES = ['mushra', 'abx', 'intelligibility', 'choice'];
+/** The tier of a choice sentence when it gives none. */
+const CHOICE_TIER = 'medium';
 const RESERVED = ['reference', ...Object.keys(ANCHORS)];
 const NAME = /^[A-Za-z0-9][A-Za-z0-9_-]*$/;
 const EXIT = { ok: 0, usage: 2 };
@@ -70,8 +79,8 @@ export const USAGE = `Usage:
   node scripts/listening-test.mjs analyze <result.json>... [--json]
       [--out <report.md>] [--config <config.js>]
       Print a Markdown report (or JSON) of the downloaded result files. The
-      intelligibility trials need the config.js of the test (default
-      examples/listening-test/config.js).
+      intelligibility and choice trials need the config.js of the test
+      (default examples/listening-test/config.js).
   node scripts/listening-test.mjs sus [--lang en] [--count 20] [--seed 1]
       Print semantically unpredictable sentences (English only).`;
 
@@ -193,7 +202,50 @@ function entryProblems(entry, index, seen) {
     problems.push(`unknown type "${entry.type}"`);
   }
   problems.push(...soundProblems(entry));
+  if (entry.type === 'choice') {
+    problems.push(...choiceProblems(entry));
+  }
   return problems.map((problem) => `${name}: ${problem}`);
+}
+
+const isEmotion = (name) => Object.hasOwn(EMOTIONS, name);
+
+/**
+ * A choice sentence: `emotions` (the sounds, each a preset of
+ * src/articulation/emotion.js), `intensity` (0..1, default 1), `choices`
+ * (the answers offered, default the emotions) and at most one tier.
+ */
+function choiceProblems(entry) {
+  const { emotions, choices = emotions, intensity = 1 } = entry;
+  if (!Array.isArray(emotions) || emotions.length === 0) {
+    return ['a choice sentence needs a list of emotions'];
+  }
+  const problems = emotions
+    .filter((emotion) => !isEmotion(emotion))
+    .map((emotion) => `unknown emotion "${emotion}"`);
+  if (new Set(emotions).size !== emotions.length) {
+    problems.push('duplicate emotion');
+  }
+  if (!Array.isArray(choices) || choices.length < 2) {
+    problems.push('choices must be a list of at least two answers');
+  } else {
+    problems.push(
+      ...emotions
+        .filter((emotion) => !choices.includes(emotion))
+        .map((emotion) => `emotion "${emotion}" is not among the choices`)
+    );
+  }
+  const unit = typeof intensity === 'number' && intensity >= 0;
+  if (!(unit && intensity <= 1)) {
+    problems.push('intensity must be a number from 0 to 1');
+  }
+  if ((entry.tiers ?? []).length > 1) {
+    problems.push('a choice sentence has at most one tier');
+  }
+  if (entry.reference !== undefined || entry.extra !== undefined) {
+    problems.push('a choice sentence has no reference and no extra files');
+  }
+  return problems;
 }
 
 /**
@@ -221,11 +273,16 @@ function readRecording(file) {
   return resample(decoded.samples, decoded.sampleRate, STIMULUS.sampleRate);
 }
 
-function render(entry, tier) {
-  const result = synthesize(entry.text, {
+function render(entry, tier, emotion) {
+  const text = emotion
+    ? `[${emotion} ${entry.intensity ?? 1}]${entry.text}[/${emotion}]`
+    : entry.text;
+  const result = synthesize(text, {
     lang: entry.lang,
     tier,
     seed: 1,
+    // One headroom for every emotion keeps the effort audible as level.
+    ...(emotion ? { markup: true, headroom: CHOICE_HEADROOM } : {}),
   });
   return resample(result.samples, result.sampleRate, STIMULUS.sampleRate);
 }
@@ -288,11 +345,14 @@ function mushraSounds(entry, dir) {
   return all.map((sound) => ({ name: sound.name, samples: () => get(sound) }));
 }
 
-function writeStimulus(out, id, name, samples) {
+function writeStimulus(out, id, name, samples, gain) {
   const relative = `stimuli/${id}/${name}.wav`;
   const file = path.join(out, relative);
   mkdirSync(path.dirname(file), { recursive: true });
-  const scaled = scaleToRms(samples);
+  const scaled =
+    gain === undefined
+      ? scaleToRms(samples)
+      : Float32Array.from(samples, (value) => value * gain);
   let peak = 0;
   for (const value of scaled) {
     peak = Math.max(peak, Math.abs(value));
@@ -304,8 +364,42 @@ function writeStimulus(out, id, name, samples) {
   return { relative, file, peak };
 }
 
+const peakOf = (samples) =>
+  samples.reduce((peak, value) => Math.max(peak, Math.abs(value)), 0);
+
+/**
+ * The sounds of a choice sentence share one gain, so the loudness of an
+ * emotion stays a cue: the gain that brings the first emotion (neutral in
+ * the example) to the RMS of STIMULUS, lowered when a sound would clip.
+ */
+function buildChoice(entry, out) {
+  const tier = entry.tiers?.[0] ?? CHOICE_TIER;
+  const sounds = entry.emotions.map((emotion) => ({
+    emotion,
+    samples: render(entry, tier, emotion),
+  }));
+  const level = rmsDbfs(sounds[0].samples);
+  const peak = Math.max(...sounds.map((sound) => peakOf(sound.samples)));
+  const gain = Math.min(
+    10 ** ((STIMULUS.rmsDbfs - level) / 20),
+    CHOICE_PEAK / Math.max(peak, 1e-10)
+  );
+  return sounds.map(({ emotion, samples }) => ({
+    type: 'choice',
+    id: `${entry.id}-${emotion}`,
+    audio: writeStimulus(out, entry.id, emotion, samples, gain).relative,
+    choices: [...(entry.choices ?? entry.emotions)],
+    answer: emotion,
+    ...(entry.lang ? { lang: entry.lang } : {}),
+    maxPlays: entry.maxPlays ?? 2,
+  }));
+}
+
 function buildEntry(entry, dir, out, log) {
   const type = entry.type ?? 'mushra';
+  if (type === 'choice') {
+    return buildChoice(entry, out);
+  }
   const sounds =
     type === 'mushra' ? mushraSounds(entry, dir) : entrySounds(entry, dir);
   const files = {};
@@ -462,23 +556,40 @@ function logChoose(n, k) {
 }
 
 /**
- * Chance of at least `correct` right answers out of `total` by guessing:
- * sum over k >= correct of C(n, k) / 2^n (one-sided binomial test).
+ * Chance of at least `correct` right answers out of `total` by guessing
+ * with a chance `p` per answer: sum over k >= correct of
+ * C(n, k) p^k (1 - p)^(n - k) (one-sided binomial test).
+ * @param {number} correct
+ * @param {number} total
+ * @param {number} p chance level, e.g. 1/6 for six choices
  */
-export function binomialTail(correct, total) {
+export function binomialTailP(correct, total, p) {
   if (correct <= 0) {
     return 1;
   }
-  if (correct > total) {
+  if (correct > total || p <= 0) {
     return 0;
+  }
+  if (p >= 1) {
+    return 1;
   }
   const terms = [];
   for (let k = correct; k <= total; k++) {
-    terms.push(logChoose(total, k) - total * Math.LN2);
+    terms.push(
+      logChoose(total, k) + k * Math.log(p) + (total - k) * Math.log1p(-p)
+    );
   }
   const top = Math.max(...terms);
   const sum = terms.reduce((acc, term) => acc + Math.exp(term - top), 0);
   return Math.min(1, Math.exp(top) * sum);
+}
+
+/**
+ * Chance of at least `correct` right answers out of `total` by guessing
+ * between two answers: `binomialTailP(correct, total, 0.5)`.
+ */
+export function binomialTail(correct, total) {
+  return binomialTailP(correct, total, 0.5);
 }
 
 // ---------------------------------------------------------------------------
@@ -622,12 +733,109 @@ function analyzeIntelligibility(results, config) {
   };
 }
 
+/** A row of the choice table: answers, correct, Wilson interval, p. */
+function choiceRow(id, records, chance) {
+  const total = records.length;
+  const correct = records.filter((record) => record.correct).length;
+  const [low, high] = wilsonInterval(correct, total);
+  return {
+    id,
+    total,
+    correct,
+    proportion: total > 0 ? correct / total : NaN,
+    low,
+    high,
+    p: binomialTailP(correct, total, chance),
+  };
+}
+
+/**
+ * Choice trials (issue 55): for every right answer (the emotion that was
+ * played) the share of correct answers with its Wilson interval and the
+ * one-sided binomial test against the chance level 1 / number of choices,
+ * the same per language, and the confusion matrix (rows: answer, columns:
+ * chosen; counts).
+ */
+function analyzeChoice(results, config) {
+  const trials = new Map(
+    (config?.trials ?? [])
+      .filter((trial) => trial.type === 'choice')
+      .map((trial) => [trial.id, trial])
+  );
+  const records = [];
+  for (const result of results) {
+    for (const record of recordsOf(result, 'choice')) {
+      const trial = trials.get(record.id);
+      if (!trial) {
+        throw new UsageError(
+          `choice trial "${record.id}" is not in the configuration; pass --config <config.js> of the test`
+        );
+      }
+      records.push({
+        id: record.id,
+        answer: trial.answer,
+        chosen: record.chosen ?? '',
+        correct: record.chosen === trial.answer,
+        lang: trial.lang ?? '',
+        chance: 1 / trial.choices.length,
+      });
+    }
+  }
+  const answers = [...new Set([...trials.values()].map((t) => t.answer))];
+  const labels = [
+    ...new Set([...trials.values()].flatMap((trial) => trial.choices)),
+  ];
+  const chance =
+    records.length > 0 ? average(records.map((record) => record.chance)) : NaN;
+  const of = (filter) => records.filter(filter);
+  const rows = answers.map((answer) =>
+    choiceRow(
+      answer,
+      of((record) => record.answer === answer),
+      chance
+    )
+  );
+  const languages = [...new Set(records.map((record) => record.lang))];
+  const byLanguage = languages.flatMap((lang) =>
+    answers.map((answer) => ({
+      lang,
+      ...choiceRow(
+        answer,
+        of((record) => record.lang === lang && record.answer === answer),
+        chance
+      ),
+    }))
+  );
+  const matrix = answers.map((answer) =>
+    labels.map(
+      (label) =>
+        of((record) => record.answer === answer && record.chosen === label)
+          .length
+    )
+  );
+  const shares = rows.filter((row) => row.total > 0);
+  return {
+    trials: records.length,
+    chance,
+    rows,
+    byLanguage,
+    labels,
+    answers,
+    matrix,
+    mean:
+      shares.length > 0 ? average(shares.map((row) => row.proportion)) : NaN,
+    all: choiceRow('all', records, chance),
+  };
+}
+
 /**
  * Analyse result files: post-screening, MUSHRA means and pairs, ABX
- * proportions and intelligibility word error rates.
+ * proportions, intelligibility word error rates and the confusion matrix
+ * of the choice trials.
  * @param {object[]} results
  * @param {{config?: object}} [options] the configuration of the test,
- *   needed for the reference text of the intelligibility trials
+ *   needed for the reference text of the intelligibility trials and the
+ *   answer and choices of the choice trials
  */
 export function analyzeResults(results, options = {}) {
   const { kept, dropped } = screenListeners(results);
@@ -639,6 +847,7 @@ export function analyzeResults(results, options = {}) {
     mushra: analyzeMushra(kept),
     abx: analyzeAbx(kept),
     intelligibility: analyzeIntelligibility(kept, options.config),
+    choice: analyzeChoice(kept, options.config),
   };
 }
 
@@ -716,6 +925,49 @@ function intelligibilitySection({ trials, rows, all }) {
   ].join('\n\n');
 }
 
+function choiceSection(choice) {
+  if (choice.trials === 0) {
+    return '## Choice\n\nNo choice trial.';
+  }
+  const line = (row) => [
+    row.id,
+    row.total,
+    row.correct,
+    fixed(row.proportion, 3),
+    interval(row, 3),
+    probability(row.p),
+  ];
+  const languages = choice.byLanguage
+    .filter((row) => row.total > 0)
+    .map((row) => [row.lang || '–', ...line(row)]);
+  return [
+    '## Choice',
+    `${choice.trials} answers; chance level ${fixed(100 * choice.chance)} %. Wilson 95 % interval of the share of correct answers; p is the chance of at least as many correct answers by guessing (one-sided binomial test with the chance level). Mean share over the answers: ${fixed(100 * choice.mean)} %.`,
+    table(
+      ['Answer', 'Trials', 'Correct', 'Share', '95 % interval', 'p'],
+      [...choice.rows.map(line), line(choice.all)]
+    ),
+    'Per language:',
+    table(
+      [
+        'Language',
+        'Answer',
+        'Trials',
+        'Correct',
+        'Share',
+        '95 % interval',
+        'p',
+      ],
+      languages
+    ),
+    'Confusion matrix (rows: the emotion played, columns: the answer chosen; counts):',
+    table(
+      ['Played \\ chosen', ...choice.labels],
+      choice.answers.map((answer, index) => [answer, ...choice.matrix[index]])
+    ),
+  ].join('\n\n');
+}
+
 /**
  * The Markdown report of an analysis.
  * @param {ReturnType<typeof analyzeResults>} analysis
@@ -727,14 +979,15 @@ export function formatReport(analysis, options = {}) {
       ? ` (${analysis.dropped.length} dropped by the post-screening of BS.1534-3: ${analysis.dropped.join(', ')})`
       : ' (0 dropped by the post-screening of BS.1534-3)';
   const trials = analysis.mushra.trials + analysis.abx.trials;
-  const total = trials + analysis.intelligibility.trials;
+  const total =
+    trials + analysis.intelligibility.trials + analysis.choice.trials;
   return `${[
     `# Listening test: ${analysis.tests.join(', ') || 'no result'}`,
     options.command ? `Command: \`${options.command}\`` : null,
     [
       `- Result files: ${analysis.files}`,
       `- Listeners: ${analysis.listeners}${dropped}`,
-      `- Trials: ${total} (MUSHRA ${analysis.mushra.trials}, ABX ${analysis.abx.trials}, intelligibility ${analysis.intelligibility.trials})`,
+      `- Trials: ${total} (MUSHRA ${analysis.mushra.trials}, ABX ${analysis.abx.trials}, intelligibility ${analysis.intelligibility.trials}, choice ${analysis.choice.trials})`,
     ].join('\n'),
     analysis.listeners < MIN_LISTENERS
       ? `**Fewer than ${MIN_LISTENERS} listeners: these numbers do not support any claim.**`
@@ -742,6 +995,7 @@ export function formatReport(analysis, options = {}) {
     mushraSection(analysis.mushra),
     abxSection(analysis.abx),
     intelligibilitySection(analysis.intelligibility),
+    choiceSection(analysis.choice),
   ]
     .filter(Boolean)
     .join('\n\n')}\n`;
@@ -873,14 +1127,16 @@ function analyzeCommand(options, argv, out) {
   const results = options.files.map(readResult);
   const configFile = options.config ?? DEFAULT_CONFIG;
   const needsConfig = results.some(
-    (result) => recordsOf(result, 'intelligibility').length > 0
+    (result) =>
+      recordsOf(result, 'intelligibility').length > 0 ||
+      recordsOf(result, 'choice').length > 0
   );
   let config;
   if (existsSync(configFile)) {
     config = loadConfig(configFile);
   } else if (needsConfig) {
     throw new UsageError(
-      `${configFile} not found; the intelligibility trials need --config <config.js>`
+      `${configFile} not found; the intelligibility and choice trials need --config <config.js>`
     );
   }
   for (const result of results) {

@@ -18,7 +18,7 @@ import {
 import { planUtterance } from '../src/articulation/plan.js';
 import { sampleState, tractShape } from '../src/articulation/tract-shape.js';
 import { tubeFormants } from '../src/acoustics/transfer.js';
-import { composeMode, createMode } from '../src/markup/modes.js';
+import { composeMode, createMode, emotionOf } from '../src/markup/modes.js';
 import { DEFAULT_HEAD } from '../src/head-config.js';
 import { binomialTailP } from '../scripts/listening-test.mjs';
 
@@ -91,7 +91,9 @@ function stressedF2(ipa, emotion) {
         {
           from: 0,
           to: 1,
-          mode: composeMode(createMode(), { emotion: { name: emotion } }),
+          mode: composeMode(createMode(), {
+            emotion: emotionOf({ name: emotion }),
+          }),
         },
       ]
     : [];
@@ -277,8 +279,9 @@ describe('emotion dimensions and composition', () => {
       markup: true,
       seed: 1,
     });
-    expect(plan.modes.map((span) => span.mode.effort)).toEqual([0.25]);
-    expect(plan.modes[0].mode.rate).toBe(1.3);
+    const angry = plan.modes.filter((span) => span.emotion.name === 'angry');
+    expect(angry.map((span) => span.effort)).toEqual([0.25]);
+    expect(angry[0].rate).toBe(1.3);
   });
 
   it('judges 12 of 20 right with 6 choices as above chance', () => {
