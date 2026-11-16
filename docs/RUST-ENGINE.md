@@ -806,7 +806,8 @@ cargo fmt --all --check
 cargo clippy --workspace --all-targets --locked -- -D warnings
 cargo test --workspace --locked
 npm run build:wasm
-REQUIRE_WASM=1 node --test tests/rust-parity.test.js tests/rust-waveguide.test.js tests/rust-fdtd.test.js tests/engine-layout.test.js
+REQUIRE_WASM=1 node --test tests/rust-parity.test.js tests/rust-waveguide.test.js tests/rust-fdtd.test.js tests/engine-layout.test.js tests/engine.test.js tests/engine-worker.test.js tests/engine-size.test.js
+node scripts/check-package-files.mjs
 cargo build --release -p voice-simulator-cli
 REQUIRE_WASM=1 REQUIRE_CLI=1 node --test tests/rust-render-job.test.js
 bun test tests/rust-parity.test.js tests/rust-fdtd.test.js
@@ -841,7 +842,10 @@ runs the parity tests with `REQUIRE_WASM=1` and `REQUIRE_CLI=1`. The heavy
 workflow builds the file for the suites `performance` and `all`, which run
 `tests/heavy/performance-rust-waveguide.test.js` and
 `tests/heavy/performance-rust-fdtd.test.js` with `REQUIRE_WASM=1`. `release` and `instant-release`
-need it and download the artifact into `src/engine/` before they publish.
+need it and download the artifact into `src/engine/` before they publish;
+`node scripts/check-package-files.mjs` then checks that
+`npm pack --dry-run` lists `src/engine/voice-simulator.wasm` and the worker,
+and the rust job runs the same check after its build.
 In `example-app.yml` the job `wasm-build` does the same build and upload,
 and `web-build`, `desktop-package`, `android-build` and `ios-build`
 download the file before they build. Both jobs use the `rustup` of the
