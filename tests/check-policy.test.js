@@ -22,6 +22,7 @@ import {
   dependencyEntries,
   deniedImports,
   evaluateLicence,
+  lexiconSources,
   licenceFindings,
   loadList,
   pyprojectDependencies,
@@ -367,6 +368,60 @@ describe('check-policy: datasets', () => {
       const findings = checkPolicy(root, policyList()).findings;
       expect(findings.map((item) => item.rule)).toEqual(['dataset']);
       expect(findings[0].file).toBe('datasets/registry.json');
+    });
+  });
+});
+
+describe('check-policy: lexicon sources', () => {
+  const source = (fields) => ({
+    id: 'words',
+    title: 'A word list',
+    url: 'https://example.org/words/',
+    licence: 'BSD-2-Clause',
+    licenceUrl: 'https://example.org/words/LICENSE',
+    licenceQuote: 'Redistribution and use are permitted.',
+    licenceChecked: new Date(Date.UTC(2026, 10, 16)).toISOString().slice(0, 10),
+    files: [{ name: 'words.txt', url: 'https://example.org/words/words.txt' }],
+    ...fields,
+  });
+  const sources = (...list) =>
+    `${JSON.stringify({ schema: 1, sources: list }, null, 2)}\n`;
+
+  run('passes on this repository and fails on a share-alike source', () => {
+    expect(lexiconSources(repoRoot, policyList())).toEqual([]);
+    withFixture(
+      {
+        'data/lexicon/sources.json': sources(
+          source({}),
+          source({ id: 'sa', licence: 'CC-BY-SA-4.0' }),
+          source({ id: 'quiet', licenceQuote: ' ', licenceChecked: undefined }),
+          source({ id: 'cedict', url: 'https://example.org/cedict/x' })
+        ),
+        'data/lexicon/refused.json': JSON.stringify([
+          { title: 'CEDICT', url: 'https://example.org/cedict/' },
+        ]),
+      },
+      (root) => {
+        const findings = checkPolicy(root, policyList()).findings;
+        expect(findings.every((item) => item.rule === 'lexicon')).toBe(true);
+        expect(
+          findings.map(
+            ({ line, name, message }) => `${line} ${name} ${message}`
+          )
+        ).toEqual([
+          '20 sa licence CC-BY-SA-4.0: licence "CC-BY-SA-4.0" is not permissive',
+          '35 quiet has an empty licenceQuote',
+          '35 quiet has no licenceChecked date (YYYY-MM-DD)',
+          '49 cedict comes from a refused source: CEDICT',
+        ]);
+      }
+    );
+  });
+
+  run('reports a sources file that is not JSON', () => {
+    withFixture({ 'data/lexicon/sources.json': '{' }, (root) => {
+      const findings = lexiconSources(root, policyList());
+      expect(findings.map((item) => item.rule)).toEqual(['lexicon']);
     });
   });
 });

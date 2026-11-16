@@ -1117,6 +1117,88 @@ export function datasetFindings(root, list, files = trackedFiles(root)) {
 }
 
 // ---------------------------------------------------------------------------
+// Pronunciation lexicon sources (issue 47)
+
+export const LEXICON_SOURCES = 'data/lexicon/sources.json';
+export const LEXICON_REFUSED = 'data/lexicon/refused.json';
+
+const DATE = /^\d{4}-\d{2}-\d{2}$/;
+
+function lexiconSourceProblems(source, list, refused) {
+  const problems = [];
+  const verdict = evaluateLicence(source.licence, list.allowedLicences ?? []);
+  if (!verdict.ok) {
+    problems.push(`licence ${source.licence ?? '(none)'}: ${verdict.reason}`);
+  }
+  if (typeof source.licenceQuote !== 'string' || !source.licenceQuote.trim()) {
+    problems.push('has an empty licenceQuote');
+  }
+  if (
+    typeof source.licenceChecked !== 'string' ||
+    !DATE.test(source.licenceChecked)
+  ) {
+    problems.push('has no licenceChecked date (YYYY-MM-DD)');
+  }
+  const urls = [
+    source.url,
+    ...(source.files ?? []).map((file) => file?.url),
+  ].filter((url) => typeof url === 'string');
+  for (const item of refused) {
+    if (urls.some((url) => item?.url && url.startsWith(item.url))) {
+      problems.push(`comes from a refused source: ${item.title}`);
+    }
+  }
+  return problems;
+}
+
+/**
+ * Every source of a shipped pronunciation lexicon whose licence is not in
+ * `allowedLicences`, whose `licenceQuote` is empty, that has no
+ * `licenceChecked` date or whose URL is on the refused list is a finding
+ * with rule `lexicon`. No exception covers it.
+ *
+ * @param {string} root
+ * @param {object} list
+ */
+export function lexiconSources(root, list) {
+  let data;
+  try {
+    data = readJson(root, LEXICON_SOURCES);
+  } catch (error) {
+    return [
+      finding('lexicon', LEXICON_SOURCES, 1, LEXICON_SOURCES, error.message),
+    ];
+  }
+  if (data === null) {
+    return [];
+  }
+  if (!Array.isArray(data.sources)) {
+    return [
+      finding(
+        'lexicon',
+        LEXICON_SOURCES,
+        1,
+        LEXICON_SOURCES,
+        'has no "sources" array'
+      ),
+    ];
+  }
+  const lines = readFileSync(path.join(root, LEXICON_SOURCES), 'utf8').split(
+    '\n'
+  );
+  const refused = readJson(root, LEXICON_REFUSED) ?? [];
+  const findings = [];
+  data.sources.forEach((source, index) => {
+    const name = String(source?.id ?? `#${index + 1}`);
+    const line = lineOf(lines, `"id": "${name}"`);
+    for (const message of lexiconSourceProblems(source ?? {}, list, refused)) {
+      findings.push(finding('lexicon', LEXICON_SOURCES, line, name, message));
+    }
+  });
+  return findings;
+}
+
+// ---------------------------------------------------------------------------
 // Exceptions and the whole check
 
 /**
@@ -1184,7 +1266,10 @@ export function checkPolicy(root = REPO_ROOT, list = loadList(root), options) {
   ];
   // Kept out of applyExceptions: the dataset licence gate cannot be
   // switched off.
-  const datasets = datasetFindings(root, list, files);
+  const datasets = [
+    ...datasetFindings(root, list, files),
+    ...lexiconSources(root, list),
+  ];
   const packages = new Set(
     collectDependencies(root, files)
       .filter((entry) => !entry.error)
