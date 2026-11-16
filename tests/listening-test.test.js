@@ -15,11 +15,13 @@ await import('../examples/listening-test/app.js');
 import {
   analyzeResults,
   binomialTail,
+  binomialTailP,
   bootstrapInterval,
   buildStimuli,
   formatReport,
   loadConfig,
   main,
+  readSentences,
   rmsDbfs,
   screenListeners,
   susSentences,
@@ -426,6 +428,224 @@ describe('listening test stimuli', () => {
       );
       expect(ListeningTest.validateConfig(config)).toEqual([]);
       expect(loadConfig(path.join(out, 'config.js'))).toEqual(config);
+    } finally {
+      rmSync(out, { recursive: true, force: true });
+    }
+  });
+});
+
+const EMOTIONS = ['neutral', 'happy', 'sad', 'angry', 'afraid', 'bored'];
+
+/** A configuration of choice trials (issue 55). */
+const CHOICE = {
+  id: 'emotions-unit',
+  trials: ['en', 'ru'].flatMap((lang) =>
+    EMOTIONS.map((answer) => ({
+      type: 'choice',
+      id: `${lang}-${answer}`,
+      audio: `stimuli/${lang}/${answer}.wav`,
+      choices: EMOTIONS,
+      answer,
+      lang,
+    }))
+  ),
+};
+
+describe('listening test: choice trials', () => {
+  it('validates and plans a choice trial', () => {
+    expect(ListeningTest.validateConfig(CHOICE)).toEqual([]);
+    const errors = (trial) =>
+      ListeningTest.validateConfig({ ...CHOICE, trials: [trial] }).join('\n');
+    const trial = CHOICE.trials[0];
+    expect(errors({ ...trial, answer: undefined })).toContain(
+      'choice trial without "answer"'
+    );
+    expect(errors({ ...trial, audio: undefined })).toContain(
+      'choice trial without "audio"'
+    );
+    expect(errors({ ...trial, answer: 'calm' })).toContain(
+      'the answer is not among the choices'
+    );
+    expect(errors({ ...trial, choices: ['neutral'] })).toContain(
+      'choices must be two or more different names'
+    );
+    const orders = new Set();
+    for (let seed = 1; seed <= 20; seed++) {
+      const plan = ListeningTest.planSession(CHOICE, seed);
+      for (const planned of plan.trials) {
+        expect([...planned.choices].sort()).toEqual([...EMOTIONS].sort());
+        expect(planned.maxPlays).toBe(2);
+        orders.add(planned.choices.join());
+      }
+    }
+    expect(orders.size > 10).toBe(true);
+  });
+
+  it('keeps only the keys of a choice record', () => {
+    const result = ListeningTest.buildResult({
+      test: 'emotions-unit',
+      seed: 1,
+      trials: [
+        {
+          id: 'en-sad',
+          type: 'choice',
+          chosen: 'bored',
+          correct: false,
+          plays: 2,
+          seconds: 4.2,
+          answer: 'sad',
+        },
+      ],
+    });
+    expect(Object.keys(result.trials[0]).sort()).toEqual(
+      ['id', 'type', 'chosen', 'correct', 'plays', 'seconds'].sort()
+    );
+  });
+
+  it('computes the binomial tail with a chance level', () => {
+    expect(binomialTailP(12, 20, 1 / 6) < 0.001).toBe(true);
+    expect(binomialTailP(8, 20, 1 / 6) < 0.02).toBe(true);
+    near(binomialTailP(15, 20, 0.5), binomialTail(15, 20), 1e-15);
+    near(binomialTailP(1, 1, 1 / 6), 1 / 6, 1e-15);
+    expect(binomialTailP(0, 5, 0.2)).toBe(1);
+    expect(binomialTailP(6, 5, 0.2)).toBe(0);
+  });
+
+  it('analyses choice answers into a confusion matrix', () => {
+    // Listener 1 is always right; listener 2 hears sad as bored and
+    // everything else right.
+    const results = ['00000001', '00000002'].map((listener, index) => ({
+      schema: 1,
+      test: 'emotions-unit',
+      listener,
+      trials: CHOICE.trials.map((trial) => {
+        const chosen =
+          index === 1 && trial.answer === 'sad' ? 'bored' : trial.answer;
+        return {
+          id: trial.id,
+          type: 'choice',
+          chosen,
+          correct: chosen === trial.answer,
+          plays: 1,
+          seconds: 3,
+        };
+      }),
+    }));
+    const { choice } = analyzeResults(results, { config: CHOICE });
+    expect(choice.trials).toBe(24);
+    near(choice.chance, 1 / 6, 1e-12);
+    expect(choice.labels).toEqual(EMOTIONS);
+    expect(choice.answers).toEqual(EMOTIONS);
+    const sad = EMOTIONS.indexOf('sad');
+    const bored = EMOTIONS.indexOf('bored');
+    expect(choice.matrix[sad][sad]).toBe(2);
+    expect(choice.matrix[sad][bored]).toBe(2);
+    expect(choice.matrix[bored][bored]).toBe(4);
+    const row = choice.rows.find((r) => r.id === 'sad');
+    expect([row.total, row.correct]).toEqual([4, 2]);
+    near(row.p, binomialTailP(2, 4, 1 / 6), 1e-15);
+    near(choice.mean, (5 + 0.5) / 6, 1e-12);
+    expect(choice.byLanguage.length).toBe(12);
+    const report = formatReport(analyzeResults(results, { config: CHOICE }));
+    expect(report).toContain('## Choice');
+    expect(report).toContain('choice 24');
+    expect(report).toContain('| sad | 0 | 0 | 2 | 0 | 0 | 2 |');
+    expect(() => analyzeResults(results)).toThrow();
+  });
+});
+
+describe('listening test: emotion study', () => {
+  it('describes 48 emotion trials in four languages', () => {
+    const study = readSentences(path.join(TEST_DIR, 'emotions.sentences.json'));
+    expect(study.sentences.length).toBe(8);
+    const langs = study.sentences.map((entry) => entry.lang);
+    for (const lang of ['en', 'ru', 'hi', 'zh']) {
+      expect(langs.filter((l) => l === lang).length).toBe(2);
+    }
+    expect(
+      study.sentences
+        .filter((entry) => entry.lang === 'en')
+        .map((entry) => entry.text)
+    ).toEqual(['The train leaves at seven.', 'I will see you on Monday.']);
+    let trials = 0;
+    for (const entry of study.sentences) {
+      expect(entry.type).toBe('choice');
+      expect(entry.emotions).toEqual(EMOTIONS);
+      expect(entry.choices).toEqual(EMOTIONS);
+      expect(entry.intensity).toBe(1);
+      trials += entry.emotions.length;
+    }
+    expect(trials).toBe(48);
+  });
+});
+
+describe('listening test: choice stimuli', () => {
+  itUnless(sandboxed)('builds choice stimuli with one shared gain', () => {
+    const out = mkdtempSync(path.join(tmpdir(), 'listening-choice-'));
+    try {
+      const config = buildStimuli(
+        {
+          id: 'emotions-unit',
+          sentences: [
+            {
+              id: 'c1',
+              type: 'choice',
+              text: 'Hello there.',
+              lang: 'en',
+              tiers: ['minimal'],
+              emotions: ['neutral', 'sad'],
+              choices: ['neutral', 'sad', 'angry'],
+            },
+          ],
+        },
+        out
+      );
+      expect(config.trials).toEqual([
+        {
+          type: 'choice',
+          id: 'c1-neutral',
+          audio: 'stimuli/c1/neutral.wav',
+          choices: ['neutral', 'sad', 'angry'],
+          answer: 'neutral',
+          lang: 'en',
+          maxPlays: 2,
+        },
+        {
+          type: 'choice',
+          id: 'c1-sad',
+          audio: 'stimuli/c1/sad.wav',
+          choices: ['neutral', 'sad', 'angry'],
+          answer: 'sad',
+          lang: 'en',
+          maxPlays: 2,
+        },
+      ]);
+      const level = (name) =>
+        rmsDbfs(
+          decodeAudio(readFileSync(path.join(out, 'stimuli', 'c1', name)))
+            .samples
+        );
+      near(level('neutral.wav'), -26, 0.2);
+      // The soft voice of sad stays softer than neutral.
+      expect(level('sad.wav') < -29).toBe(true);
+      expect(ListeningTest.validateConfig(config)).toEqual([]);
+      expect(() =>
+        buildStimuli(
+          {
+            id: 'bad',
+            sentences: [
+              {
+                id: 'c2',
+                type: 'choice',
+                text: 'x',
+                emotions: ['calm'],
+                choices: ['neutral'],
+              },
+            ],
+          },
+          out
+        )
+      ).toThrow();
     } finally {
       rmSync(out, { recursive: true, force: true });
     }

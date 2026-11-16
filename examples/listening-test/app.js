@@ -1,5 +1,6 @@
 /**
- * Blind listening test page (issue 20): MUSHRA, ABX and intelligibility.
+ * Blind listening test page (issue 20): MUSHRA, ABX and intelligibility;
+ * choice trials (issue 55) ask which emotion a sentence was spoken in.
  *
  * This is a classic script, not an ES module. A browser refuses to load
  * modules and to fetch files from a page opened from disk (file://), so
@@ -18,7 +19,7 @@
 ((root) => {
   'use strict';
 
-  const TYPES = ['mushra', 'abx', 'intelligibility'];
+  const TYPES = ['mushra', 'abx', 'intelligibility', 'choice'];
   const MAX_CONDITIONS = 12;
   const RESULT_SCHEMA = 1;
 
@@ -48,6 +49,9 @@
     intelligibility:
       'Listen to the sentence and type the words you heard. ' +
       'The sentence may not make sense; type what you heard anyway.',
+    choice:
+      'Listen to the sentence and choose the emotion of the voice. The ' +
+      'words do not tell it, and you do not need to understand them.',
     end: 'Send this file to the person who asked you to take the test.',
     // Never name the file: its name tells which version is playing.
     notLoaded:
@@ -121,42 +125,67 @@
   // -------------------------------------------------------------------------
   // Configuration
 
-  function trialErrors(trial, name) {
+  function mushraErrors(trial, name) {
     const errors = [];
-    if (trial.type === 'mushra') {
-      const conditions = isObject(trial.conditions) ? trial.conditions : {};
-      if (!isText(conditions.reference)) {
-        errors.push(`${name}: MUSHRA trial without a condition "reference"`);
-      }
-      const count = Object.keys(conditions).length;
-      if (count > MAX_CONDITIONS) {
-        errors.push(
-          `${name}: MUSHRA trial with ${count} conditions, more than ${MAX_CONDITIONS}`
-        );
-      }
-    } else if (trial.type === 'abx') {
-      for (const key of ['a', 'b']) {
-        if (!isText(trial[key])) {
-          errors.push(`${name}: ABX trial without "${key}"`);
-        }
-      }
-    } else if (trial.type === 'intelligibility') {
-      for (const key of ['audio', 'text']) {
-        if (!isText(trial[key])) {
-          errors.push(`${name}: intelligibility trial without "${key}"`);
-        }
-      }
-      const { maxPlays } = trial;
-      if (
-        maxPlays !== undefined &&
-        !(Number.isInteger(maxPlays) && maxPlays > 0)
-      ) {
-        errors.push(`${name}: maxPlays must be a positive integer`);
-      }
-    } else {
-      errors.push(`${name}: unknown type "${trial.type}"`);
+    const conditions = isObject(trial.conditions) ? trial.conditions : {};
+    if (!isText(conditions.reference)) {
+      errors.push(`${name}: MUSHRA trial without a condition "reference"`);
+    }
+    const count = Object.keys(conditions).length;
+    if (count > MAX_CONDITIONS) {
+      errors.push(
+        `${name}: MUSHRA trial with ${count} conditions, more than ${MAX_CONDITIONS}`
+      );
     }
     return errors;
+  }
+
+  /** Errors of the keys that a trial type needs and of its maxPlays. */
+  function playedErrors(trial, name, keys, label = trial.type) {
+    const errors = keys
+      .filter((key) => !isText(trial[key]))
+      .map((key) => `${name}: ${label} trial without "${key}"`);
+    const { maxPlays } = trial;
+    if (
+      maxPlays !== undefined &&
+      !(Number.isInteger(maxPlays) && maxPlays > 0)
+    ) {
+      errors.push(`${name}: maxPlays must be a positive integer`);
+    }
+    return errors;
+  }
+
+  function choiceErrors(trial, name) {
+    const errors = playedErrors(trial, name, ['audio', 'answer']);
+    const { choices } = trial;
+    const valid =
+      Array.isArray(choices) &&
+      choices.length >= 2 &&
+      choices.every(isText) &&
+      new Set(choices).size === choices.length;
+    if (!valid) {
+      errors.push(`${name}: choices must be two or more different names`);
+    } else if (!choices.includes(trial.answer)) {
+      errors.push(`${name}: the answer is not among the choices`);
+    }
+    return errors;
+  }
+
+  function trialErrors(trial, name) {
+    switch (trial.type) {
+      case 'mushra':
+        return mushraErrors(trial, name);
+      case 'abx':
+        return ['a', 'b']
+          .filter((key) => !isText(trial[key]))
+          .map((key) => `${name}: ABX trial without "${key}"`);
+      case 'intelligibility':
+        return playedErrors(trial, name, ['audio', 'text']);
+      case 'choice':
+        return choiceErrors(trial, name);
+      default:
+        return [`${name}: unknown type "${trial.type}"`];
+    }
   }
 
   /**
@@ -221,6 +250,16 @@
         x: random() < 0.5 ? 'a' : 'b',
       };
     }
+    if (trial.type === 'choice') {
+      return {
+        type: 'choice',
+        id: trial.id,
+        audio: trial.audio,
+        choices: shuffle(trial.choices, random),
+        answer: trial.answer,
+        maxPlays: trial.maxPlays ?? 2,
+      };
+    }
     return {
       type: 'intelligibility',
       id: trial.id,
@@ -232,7 +271,8 @@
 
   /**
    * Put the trials in a random order (Fisher-Yates), shuffle the conditions
-   * of each MUSHRA trial (shown as A, B, ...) and draw X of each ABX trial.
+   * of each MUSHRA trial (shown as A, B, ...), draw X of each ABX trial and
+   * shuffle the answers of each choice trial.
    * @param {{trials: object[]}} config a valid configuration
    * @param {number} [seed] 32-bit seed; drawn once with
    *   crypto.getRandomValues when absent
@@ -256,6 +296,7 @@
     mushra: ['id', 'type', 'order', 'ratings', 'plays', 'seconds'],
     abx: ['id', 'type', 'x', 'answer', 'correct', 'plays', 'seconds'],
     intelligibility: ['id', 'type', 'typed', 'plays', 'seconds'],
+    choice: ['id', 'type', 'chosen', 'correct', 'plays', 'seconds'],
   };
 
   function cleanRecord(record) {
@@ -578,6 +619,71 @@
     );
   }
 
+  /** "angry" → "Angry": the label of an answer. */
+  const labelOf = (name) => name.charAt(0).toUpperCase() + name.slice(1);
+
+  /** Choice screen (issue 55); `done(record)` when Next is pressed. */
+  function showChoice(ui, trial, progress, done) {
+    const shown = Date.now();
+    let plays = 0;
+    let chosen = null;
+    const label = () => `Play (${trial.maxPlays - plays} left)`;
+    const next = ui.nextButton(() =>
+      done({
+        id: trial.id,
+        type: 'choice',
+        chosen,
+        correct: chosen === trial.answer,
+        plays,
+        seconds: elapsed(shown, Date.now()),
+      })
+    );
+    const update = () => {
+      next.disabled = !(plays > 0 && chosen !== null);
+    };
+    const play = ui.el('button', {
+      type: 'button',
+      class: 'play',
+      text: label(),
+      onclick: () => {
+        if (plays >= trial.maxPlays) {
+          return;
+        }
+        plays++;
+        ui.player.play(trial.audio, play);
+        play.textContent = label();
+        play.disabled = plays >= trial.maxPlays;
+        update();
+      },
+    });
+    const choices = trial.choices.map((name) =>
+      ui.el('label', { class: 'choice' }, [
+        ui.el('input', {
+          type: 'radio',
+          name: 'choice',
+          value: name,
+          onchange: () => {
+            chosen = name;
+            update();
+          },
+        }),
+        ` ${labelOf(name)}`,
+      ])
+    );
+    ui.show(
+      progress,
+      ui.el('h2', { text: 'Which emotion do you hear?' }),
+      ui.el('p', { class: 'instruction', text: TEXT.choice }),
+      ui.el('div', { class: 'controls' }, [play]),
+      ui.el('fieldset', { class: 'answers' }, [
+        ui.el('legend', { text: 'Your answer' }),
+        ...choices,
+      ]),
+      ui.warning,
+      next
+    );
+  }
+
   /** Save the result with a Blob and <a download>; nothing is sent. */
   function download(ui, result) {
     const blob = new root.Blob([`${JSON.stringify(result, null, 2)}\n`], {
@@ -664,6 +770,7 @@
     mushra: showMushra,
     abx: showAbx,
     intelligibility: showIntelligibility,
+    choice: showChoice,
   };
 
   /**
