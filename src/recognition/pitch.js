@@ -46,6 +46,19 @@ const COARSE_RATE = 4000;
 /** Low-pass of the coarse signal: cutoff 0.45 rc, 8 zero crossings. */
 const COARSE_CUTOFF = 0.45;
 const COARSE_ZERO_CROSSINGS = 8;
+/**
+ * Quiet frames: a frame more than ENERGY_FREE dB below the loudest frame
+ * from ENERGY_SPAN seconds before to ENERGY_AHEAD after it gets
+ * ENERGY_COST per dB more unvoiced strength.
+ */
+const ENERGY_SPAN = 0.2;
+const ENERGY_AHEAD = 0.01;
+const ENERGY_FREE = 15;
+const ENERGY_COST = 0.1;
+/** A frame less than NOISE_FREE dB above the noise floor gets NOISE_COST
+ * per dB more unvoiced strength. */
+const NOISE_FREE = 3;
+const NOISE_COST = 0.1;
 /** Width (voicing units) of the soft voicing score. */
 const VOICING_SPREAD = 0.4;
 /** Period marks: shortest run (s), search span of the first mark (s) and
@@ -142,6 +155,12 @@ function pitchSettings(frames, options) {
     size *= 2;
   }
   const costScale = COST_HOP / hop;
+  // Energy frames ahead whose window ends inside this frame's window, so
+  // that a stream has them when the frame is scored.
+  const frameSamples = Math.round(frames.window * rate);
+  const inside = Math.floor(
+    (Math.floor(fullLength / 2) - Math.ceil(frameSamples / 2)) / (hop * rate)
+  );
   return {
     ...merged,
     rate,
@@ -155,6 +174,8 @@ function pitchSettings(frames, options) {
     octaveJumpCost: merged.octaveJumpCost * costScale,
     voicedUnvoicedCost: merged.voicedUnvoicedCost * costScale,
     silence: silenceThreshold / (1 + voicingThreshold),
+    energySpan: Math.round(ENERGY_SPAN / hop),
+    energyAhead: Math.max(0, Math.min(Math.round(ENERGY_AHEAD / hop), inside)),
     // Coarse lags of the search; the full-rate refinement needs D more.
     lagMin: Math.max(2, Math.floor(coarseRate / maxF0)),
     lagMax: Math.min(
@@ -304,6 +325,28 @@ function createCandidateFinder(frames, settings, store) {
     coarseDone = Math.max(coarseDone, last + 1);
   }
 
+  /**
+   * Extra unvoiced strength of frame `t` from the front end's energies: a
+   * frame far below the loudest frame of the last 200 ms (and the next
+   * 10 ms) is the decaying tail of a vowel or a quiet consonant whose 50 ms
+   * window still holds the periodic neighbour; a frame near the noise
+   * floor is noise.
+   */
+  function quietness(t) {
+    const { energy, noise } = frames;
+    let top = -Infinity;
+    const last = Math.min(frames.count - 1, t + settings.energyAhead);
+    for (let k = Math.max(0, t - settings.energySpan); k <= last; k++) {
+      top = Math.max(top, energy[k]);
+    }
+    const below = top - energy[t] - ENERGY_FREE;
+    const above = energy[t] - noise[t];
+    return (
+      ENERGY_COST * Math.max(0, below) +
+      NOISE_COST * Math.max(0, NOISE_FREE - above)
+    );
+  }
+
   /** Last working sample that frame centre `centre` reads. */
   function lastSample(centre) {
     const coarseEnd =
@@ -372,6 +415,7 @@ function createCandidateFinder(frames, settings, store) {
       }
       const ratio = peak > 0 ? largest / peak : 0;
       store.unvoiced[t] = voicingThreshold + Math.max(0, 2 - ratio / silence);
+      store.unvoiced[t] += quietness(t);
       store.count[t] = 0;
       // Coarse frame: autocorrelation by the transform.
       const coarseStart = Math.round(centre / factor) - coarseHalf;
@@ -676,7 +720,8 @@ function createDistribution(capacity) {
  */
 export function createPitchTracker(frames, options = {}) {
   const settings = pitchSettings(frames, options);
-  const { hopSamples, lag, voicedUnvoicedCost, octaveJumpCost } = settings;
+  const { hop, hopSamples, lag, voicedUnvoicedCost, octaveJumpCost } =
+    settings;
   const capacity = settings.candidates;
   const states = capacity + 1; // voiced 0 .. capacity-1, unvoiced last
   const rows = frames.capacity;
@@ -761,6 +806,37 @@ export function createPitchTracker(frames, options = {}) {
   }
 
   /** Commit frames track.committed .. last - 1 along the best path. */
+  /** Frequency of the path at frame `t` (Hz), 0 when unvoiced. */
+  function pathFrequency(t) {
+    const chosen = path[t];
+    return chosen < capacity ? store.frequency[t * capacity + chosen] : 0;
+  }
+
+  /**
+   * f0 of the period that starts at frame `t`: the window centred on the
+   * frame measures the period centred there, which starts half a period
+   * earlier, so take the path's frequency half a period later
+   * (interpolated in log frequency between the voiced frames up to
+   * `newest`). This is the convention of the glottis, whose period is
+   * fixed when it starts, and of YIN.
+   */
+  function onsetFrequency(t, newest) {
+    const own = pathFrequency(t);
+    const position = 0.5 / (own * hop);
+    const whole = Math.floor(position);
+    const step = position - whole;
+    let from = own;
+    for (let k = 1; k <= whole && t + k <= newest; k++) {
+      const next = pathFrequency(t + k);
+      if (!(next > 0)) {
+        return from;
+      }
+      from = next;
+    }
+    const after = t + whole + 1 <= newest ? pathFrequency(t + whole + 1) : 0;
+    return after > 0 ? from * (after / from) ** step : from;
+  }
+
   function commit(last) {
     if (last <= track.committed) {
       return;
@@ -784,7 +860,7 @@ export function createPitchTracker(frames, options = {}) {
       const count = store.count[t];
       const voiced = chosen < capacity;
       const bestVoiced = count > 0 ? store.strength[row] : -Infinity;
-      track.f0[t] = voiced ? store.frequency[row + chosen] : 0;
+      track.f0[t] = voiced ? onsetFrequency(t, newest) : 0;
       track.strength[t] = voiced
         ? store.height[row + chosen]
         : count > 0
@@ -830,7 +906,11 @@ export function createPitchTracker(frames, options = {}) {
       while (track.count < frames.count) {
         const t = track.count;
         const middle = centre(t);
-        if (!final && finder.lastSample(middle) >= frames.sampleCount) {
+        if (
+          !final &&
+          (finder.lastSample(middle) >= frames.sampleCount ||
+            t + settings.energyAhead >= frames.count)
+        ) {
           break;
         }
         finder.score(t, middle, peak);
