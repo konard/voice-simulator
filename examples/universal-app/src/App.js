@@ -144,8 +144,11 @@ function Hud({ status, visual, mode, t }) {
     : status.underruns
       ? ` · ${t.underruns} ${status.underruns}`
       : '';
+  // Tier switches of the running utterance (issue 29): the tier shown
+  // above changes when playback reaches each one.
   const underruns =
     playback +
+    (status.switches ? ` · ${t.switches} ${status.switches}` : '') +
     (status.overloads ? ` · ${t.overloads} ${status.overloads}` : '');
   return h(
     'div',
