@@ -298,6 +298,9 @@ describe('Rust waveguide and output (issue 22)', () => {
   }
 });
 
+// The references below render with `engine: 'js'`: since issue 25 the
+// default engine is Rust, so without it a test would compare Rust with Rust.
+
 /** Largest absolute difference of two equally long arrays. */
 function maxDifference(actual, expected) {
   expect(actual.length).toBe(expected.length);
@@ -316,7 +319,7 @@ describe('Rust renderer (issue 22)', () => {
         tier,
         seed: 1,
       });
-      const expected = renderPlan(plan, renderOptions);
+      const expected = renderPlan(plan, { ...renderOptions, engine: 'js' });
       const actual = renderPlanRust(engine, plan, renderOptions);
       const measured = maxDifference(actual, expected);
       globalThis.console.log(`render (${tier}) max abs diff ${measured}`);
@@ -332,7 +335,7 @@ describe('Rust renderer (issue 22)', () => {
     );
     expect(Math.max(...plan.channels.effort)).toBe(20);
     expect(renderOptions.levelOffsetDb).toBe(-20);
-    const expected = renderPlan(plan, renderOptions);
+    const expected = renderPlan(plan, { ...renderOptions, engine: 'js' });
     const actual = renderPlanRust(engine, plan, renderOptions);
     const measured = maxDifference(actual, expected);
     globalThis.console.log(`render (effort) max abs diff ${measured}`);
@@ -350,7 +353,7 @@ describe('Rust renderer (issue 22)', () => {
       room: 'studio',
       microphone: { distance: 30 },
     };
-    const expected = renderPlan(plan, options);
+    const expected = renderPlan(plan, { ...options, engine: 'js' });
     const actual = renderPlanRust(engine, plan, options);
     const measured = maxDifference(actual, expected);
     globalThis.console.log(`render (room) max abs diff ${measured}`);
@@ -389,7 +392,7 @@ describe('Rust renderer (issue 22)', () => {
       seed: 1,
       head,
     });
-    const expected = renderPlan(plan, renderOptions);
+    const expected = renderPlan(plan, { ...renderOptions, engine: 'js' });
     const actual = renderPlanRust(engine, plan, renderOptions);
     const measured = maxDifference(actual, expected);
     globalThis.console.log(`render (head) max abs diff ${measured}`);
