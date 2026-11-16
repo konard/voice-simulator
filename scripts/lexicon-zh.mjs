@@ -100,11 +100,15 @@ export function handPhrases(words, readings) {
       continue;
     }
     if (syllables.length !== chars.length) {
-      problems.push(`${word}: ${syllables.length} syllables for ${chars.length} characters`);
+      problems.push(
+        `${word}: ${syllables.length} syllables for ${chars.length} characters`
+      );
       continue;
     }
     const letters = chars.map((char, index) =>
-      readings.has(char) ? readingLetter(readings.get(char), syllables[index]) : null
+      readings.has(char)
+        ? readingLetter(readings.get(char), syllables[index])
+        : null
     );
     const bad = letters.findIndex((letter) => !letter);
     if (bad >= 0) {
@@ -122,6 +126,41 @@ export function handPhrases(words, readings) {
   return result;
 }
 
+/** Count the payloads of the adjacent character pairs of one line. */
+function countLinePairs(pairs, parsed, readings) {
+  const letters = parsed.chars.map((char, index) =>
+    readings.has(char)
+      ? aishellLetter(char, readings.get(char), parsed.pinyin[index])
+      : undefined
+  );
+  for (let index = 0; index + 1 < parsed.chars.length; index++) {
+    const [left, right] = [parsed.chars[index], parsed.chars[index + 1]];
+    const [a, b] = [letters[index], letters[index + 1]];
+    if (a === undefined || b === undefined || left === '儿' || right === '儿') {
+      continue;
+    }
+    const seen = pairs.get(left + right) ?? new Map();
+    const payload = a && b ? a + b : '?';
+    seen.set(payload, (seen.get(payload) ?? 0) + 1);
+    pairs.set(left + right, seen);
+  }
+}
+
+/** The most frequent payload other than `?`, its count and the total. */
+function bestPayload(seen) {
+  let total = 0;
+  let best = null;
+  let bestCount = 0;
+  for (const [payload, count] of seen) {
+    total += count;
+    if (payload !== '?' && count > bestCount) {
+      best = payload;
+      bestCount = count;
+    }
+  }
+  return { best, bestCount, total };
+}
+
 /**
  * Character pairs of AISHELL-3 lines seen at least `minCount` times with
  * one reading in at least `minShare` of them, whose reading is not what
@@ -136,48 +175,14 @@ export function minePairs(lines, readings, options = {}) {
   const pairs = new Map();
   for (const line of lines) {
     const parsed = parseAishellLine(line);
-    if (!parsed) {
-      continue;
-    }
-    const letters = parsed.chars.map((char, index) =>
-      readings.has(char)
-        ? aishellLetter(char, readings.get(char), parsed.pinyin[index])
-        : undefined
-    );
-    for (let index = 0; index + 1 < parsed.chars.length; index++) {
-      const [left, right] = [parsed.chars[index], parsed.chars[index + 1]];
-      if (
-        letters[index] === undefined ||
-        letters[index + 1] === undefined ||
-        left === '儿' ||
-        right === '儿'
-      ) {
-        continue;
-      }
-      const pair = left + right;
-      const seen = pairs.get(pair) ?? new Map();
-      const payload =
-        letters[index] && letters[index + 1]
-          ? letters[index] + letters[index + 1]
-          : '?';
-      seen.set(payload, (seen.get(payload) ?? 0) + 1);
-      pairs.set(pair, seen);
+    if (parsed) {
+      countLinePairs(pairs, parsed, readings);
     }
   }
   const mined = new Map();
-  for (const [pair, seen] of [...pairs].sort(([a], [b]) =>
-    compareCodePoints(a, b)
-  )) {
-    let total = 0;
-    let best = null;
-    let bestCount = 0;
-    for (const [payload, count] of seen) {
-      total += count;
-      if (payload !== '?' && count > bestCount) {
-        best = payload;
-        bestCount = count;
-      }
-    }
+  const sorted = [...pairs].sort(([a], [b]) => compareCodePoints(a, b));
+  for (const [pair, seen] of sorted) {
+    const { best, bestCount, total } = bestPayload(seen);
     if (!best || total < minCount || bestCount < minShare * total) {
       continue;
     }
@@ -190,4 +195,38 @@ export function minePairs(lines, readings, options = {}) {
     }
   }
   return mined;
+}
+
+/**
+ * `ZH_READINGS`: the characters grouped by their list of readings, one
+ * `reading,reading=characters` group per distinct list, sorted by code
+ * point and cut into strings of at most `width` characters.
+ * @param {Map<string, string[]>} readings
+ * @param {number} [width]
+ */
+export function readingGroups(readings, width = 2000) {
+  const groups = new Map();
+  for (const [char, list] of readings) {
+    const key = list.join(',');
+    groups.set(key, [...(groups.get(key) ?? []), char]);
+  }
+  const lines = [];
+  let line = '';
+  for (const key of [...groups.keys()].sort(compareCodePoints)) {
+    const group = `${key}=${groups.get(key).sort(compareCodePoints).join('')}`;
+    if (line && line.length + 1 + group.length > width) {
+      lines.push(line);
+      line = '';
+    }
+    line = line ? `${line} ${group}` : group;
+  }
+  if (line) {
+    lines.push(line);
+  }
+  return {
+    format: 'zh-readings',
+    version: 1,
+    count: readings.size,
+    groups: lines,
+  };
 }
