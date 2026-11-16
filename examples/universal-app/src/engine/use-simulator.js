@@ -31,6 +31,40 @@ function writeProgress(refs, frame) {
 }
 
 /**
+ * Main-thread tasks over 50 ms between the benchmark request and its answer
+ * (issue 28: the benchmark must not block the page); the HUD shows them with
+ * `?debug`.
+ */
+function useBenchmarkLongTasks(engineRef) {
+  const [longTasks, setLongTasks] = useState(0);
+  useEffect(() => {
+    const Observer = globalThis.PerformanceObserver;
+    if (!Observer?.supportedEntryTypes?.includes('longtask')) {
+      return undefined;
+    }
+    const observer = new Observer((list) => {
+      const span = engineRef.current?.status.benchmark;
+      if (span?.from === null || span?.from === undefined) {
+        return;
+      }
+      const count = list
+        .getEntries()
+        .filter(
+          (entry) =>
+            entry.startTime + entry.duration >= span.from &&
+            (span.to === null || entry.startTime <= span.to)
+        ).length;
+      if (count > 0) {
+        setLongTasks((total) => total + count);
+      }
+    });
+    observer.observe({ type: 'longtask', buffered: true });
+    return () => observer.disconnect();
+  }, [engineRef]);
+  return longTasks;
+}
+
+/**
  * Owns the voice engine, the 3D viewer and the animation loop. Settings are
  * read through a ref so the loop never restarts while the user edits them.
  */
@@ -62,6 +96,8 @@ export function useSimulator(settings) {
       engineRef.current = null;
     };
   }, []);
+
+  const longTasks = useBenchmarkLongTasks(engineRef);
 
   useEffect(() => {
     let viewer = null;
@@ -180,7 +216,8 @@ export function useSimulator(settings) {
     spokenRef,
     engineRef,
     frameRef,
-    status,
+    status: { ...status, longTasks },
+    debug: Boolean(settings.debug),
     visual,
     webglError,
   };

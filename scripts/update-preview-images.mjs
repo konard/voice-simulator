@@ -59,16 +59,21 @@ const LOCALES = [
 ];
 const THEMES = ['light', 'dark'];
 
-// What the synthesis worker would answer to `{type: 'benchmark'}` (see
-// chooseTier in src/perf/lod.js): the chosen audio tier and the measured
-// load of each tier tried. A fixed answer keeps the HUD out of the drift.
 // Largest per-channel difference that is still rounding noise, not drift.
 const PIXEL_TOLERANCE = 2;
 
+// What the synthesis worker would answer to `{type: 'benchmark'}` (see
+// benchmarkDevice in src/perf/device-benchmark.js): the chosen audio tier,
+// the load of each tier and the engine. A fixed answer keeps the HUD and the
+// "Measured 0 days ago · rust" note out of the drift.
 const PREVIEW_BENCHMARK = Object.freeze({
+  version: 1,
+  engine: { name: 'rust', simd: true, threads: 1 },
   level: 2,
   loads: [0.14, 0.21, 0.35, 0.9],
   measured: [true, true, true, true],
+  gpu: false,
+  gpuPending: false,
 });
 
 const contentTypes = new Map([
@@ -312,8 +317,9 @@ async function captureTile({ browser, locale, theme, contextLocale, url }) {
     }
   }, theme);
 
-  // The app measures this device on load and shows the result in the HUD.
-  // Answer it with PREVIEW_BENCHMARK so the HUD is the same on every run.
+  // The app measures this device at the first idle moment after load (issue
+  // 28) and shows the result in the HUD. Answer it with PREVIEW_BENCHMARK so
+  // the HUD is the same on every run.
   await context.addInitScript((result) => {
     const postMessage = Worker.prototype.postMessage;
     Worker.prototype.postMessage = function (message, ...rest) {
@@ -323,6 +329,7 @@ async function captureTile({ browser, locale, theme, contextLocale, url }) {
       setTimeout(() => {
         const data = { type: 'benchmark', ...result };
         this.dispatchEvent(new MessageEvent('message', { data }));
+        window.previewBenchmarkAnswered = true;
       });
       return undefined;
     };
@@ -360,10 +367,12 @@ async function captureTile({ browser, locale, theme, contextLocale, url }) {
       timeout: 10000,
     });
     await page.waitForLoadState('networkidle');
-    // The HUD shows a note until the benchmark answer arrives.
+    // Wait for the HUD, for the idle-time benchmark answer and for any HUD
+    // note (a rendering notice) to go away.
     await page.waitForFunction(
       () =>
         Boolean(document.querySelector('.hud')) &&
+        window.previewBenchmarkAnswered === true &&
         !document.querySelector('.hud .hud-note'),
       null,
       { timeout: 10000 }

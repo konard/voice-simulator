@@ -375,6 +375,15 @@ h2 {
   gap: 12px;
 }
 
+.measured-note {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  margin: 0;
+  color: var(--muted);
+}
+
 .toggles {
   grid-template-columns: 1fr;
   gap: 6px;
