@@ -68,7 +68,7 @@ Every span has all the fields of `MODE_DEFAULTS`:
 | `pitch`               | 0       | shift in semitones                                                                              | pitch targets                                                               |
 | `range`               | 1       | factor on pitch movements                                                                       | pitch targets                                                               |
 | `emphasis`            | 0       | -0.5 reduced, 0 none, 0.5 moderate, 1 strong                                                    | focus: pitch, duration, level (#51)                                         |
-| `phonation`           | all 0   | `breathy`, `creaky`, `tension` (-1 lax … 1 pressed), `falsetto`, `harsh`, `whisper`, each 0 … 1 | carried (#53, #54)                                                          |
+| `phonation`           | all 0   | `breathy`, `creaky`, `tension` (-1 lax … 1 pressed), `falsetto`, `harsh`, `whisper`, each 0 … 1 | `whisper`: the source ([Whisper](#whisper)); the others carried (#54)       |
 | `emotion`             | neutral | `name`, `intensity`, `arousal`, `valence`, `dominance`                                          | carried (#55)                                                               |
 | `tune`                | null    | intonation label (`TUNE_LABELS`)                                                                | the tune of the phrase (#51)                                                |
 | `lang`                | null    | language tag of the span                                                                        | transcription and tunes                                                     |
@@ -253,6 +253,7 @@ sound takes the mode of the word before it). The plan gets:
 
 - `plan.channels.effort` (dB) and `plan.channels.tension` (offset on
   `head.tenseness`), see [Vocal effort](#vocal-effort).
+- `plan.channels.whisper` (0 … 1), see [Whisper](#whisper).
 
 Measured with `node experiments/issue-50-realise.mjs` ("Hello there, my
 good friend" against the plain text): `[fast]` gives 0.769 of the plain
@@ -372,3 +373,116 @@ IPA they are written `{f … f}`, like `[loud]`.
 `levelDb(samples, from, to)` (RMS in dB re full scale) and
 `alphaRatio(samples, sampleRate, from, to)` (level of 1-5 kHz minus level
 of 50 Hz-1 kHz) of src/analysis/mode-features.js measure them.
+
+## Whisper
+
+A whisper (issue 53) has no fold vibration: the glottis is held half open
+(40 ± 30 mm² against about 5 mm² in a modal voice, Solomon et al. 1989)
+and the air passing it is turbulent. The formants come from the tract as
+in a voice, but they are higher, the speech is longer and much quieter, and
+the voiced and voiceless consonants stay apart by their closures, bursts
+and frication.
+
+### How it is written
+
+`[whisper]`, `<vs:phonation name="whisper">`, `<vs:effort level="whisper">`
+and `{W … W}` set `mode.phonation.whisper` to 1; `{1W … 1W}` and
+`{3W … 3W}` (`[whisper][soft]`, `[whisper][loud]`) add effort 0.25 and 0.75;
+`{Ṿ … Ṿ}` and `<vs:phonation name="whispery">` give a whispery voice
+(whisper 0.25 … 0.75). A phone with U+0323 (`ạ`) is whispered, and a
+vowel or sonorant written voiceless with U+0325 (`ḁ`, `l̥`) gets the same
+source. Every form gives the same `plan.channels.whisper`
+(tests/whisper.test.js).
+
+### What the plan and the source do
+
+- **Plan** (src/articulation/whisper.js): the channel `whisper` (0 … 1,
+  smoothed with a time constant of 0.03 s) is the whisper of the mode of
+  each segment, and 1 for `ạ`, `ḁ` and `l̥`, whose voicing target becomes 1
+  (the drive of the source). Every segment of a whisper span (timed
+  pauses and sounds excepted) is `1 + 0.3 · whisper` times as long
+  (`WHISPER_DURATION`). Effort does not change the pitch of a whisper.
+- **Source** (src/acoustics/glottis.js, src/acoustics/whisper.js): the
+  voiced part is multiplied by `1 - whisper`; at 1 there is no pulse and
+  the pulse phase stands still. The whisper noise has the drive
+  `whisper · voicing · (1 - closure)`, × 0.5 in the closure of a voiced
+  stop (`WHISPER_STOP_DRIVE`) and × 0.25 in a voiced fricative. It is the
+  turbulence of issue 35 at a glottis of 40 mm² (`WHISPER_AREA`) with the
+  lung pressure of the effort, not modulated by pulses and without the
+  800 Hz band of the aspiration: white noise through a low-pass at the
+  Strouhal frequency of the glottal jet. Values between 0 and 1 give a
+  whispery voice: pulses and noise, the noise 6 dB louder at 0.5
+  (`WHISPERY_BOOST`).
+- **Reflection**: the glottal end of the tract reflects
+  `GLOTTAL_REFLECTION · (1 - WHISPER_OPENING · whisper)`, with
+  `WHISPER_OPENING` 1.65 (-0.49 at whisper 1): an open glottis raises and
+  widens F1. Source-tract interaction (issue 34) gives the fold source the
+  load of the tract and the trachea, but only for the folds with
+  interaction; the LF source (the default) and the folds without it have
+  only this reflection to show an open glottis, so `WHISPER_OPENING` stays
+  for them.
+- **Level**: the whisper and the noise of the consonants are 25 dB below
+  the voice at effort 0.5, 30 dB at 0.25, and 20 dB at 0.75 and above,
+  where the glottis of a stage whisper narrows to 20 mm²
+  (`STAGE_WHISPER_AREA`).
+- **Pitch**: the whisper noise follows the intended pitch by +0.7 dB per
+  semitone of the f0 channel above the speaker's pitch, at most ±6 dB
+  (`WHISPER_PITCH_GAIN`, `WHISPER_PITCH_LIMIT`; Higashikawa et al. 1996).
+- **Consonants**: they keep their cues. A voiceless stop has the longer
+  closure and the stronger burst, a voiceless fricative is longer and
+  stronger than a voiced one.
+
+### Measured
+
+`voicedShare()`, `frameAperiodicities()`, `energyRatio()` (level above
+2.5 kHz minus 50 Hz-1 kHz) and `centreOfGravity()` of
+src/analysis/mode-features.js measure a whisper. "Please call Stella.",
+tier medium, seed 1, headroom 20, against plain speech; measured with
+`node experiments/issue-53-quick.mjs` and the commands below (IPA forms
+against the plain IPA):
+
+| Markup                                                  | Expected                | Measured                                                                                                         |
+| ------------------------------------------------------- | ----------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| `[whisper]`, `<vs:phonation name="whisper">`, `{W … W}` | voiced < 0.05, ER +6 dB | voiced 0 (plain 0.83), ER +15.8 dB (`{W}` +16.5 dB), level -25.8 dB (`{W}` -27.4 dB), CoG 1214 Hz (plain 416 Hz) |
+| soft `[whisper][soft]`, `{1W … 1W}`                     | -30 dB                  | -31.8 dB (-5.9 dB re `[whisper]`), `{1W}` -34.0 dB                                                               |
+| stage `[whisper][loud]`, `{3W … 3W}`                    | -20 dB                  | -20.8 dB (+5.1 dB re `[whisper]`), `{3W}` -21.6 dB                                                               |
+| whispery `{Ṿ … Ṿ}`                                      | voiced, HNR < 10 dB     | voiced 0.94, HNR 8.9 dB (`ˈama` 21.9 dB)                                                                         |
+| `ạ`, `ḁ`                                                | no periodicity          | voiced 0, YIN aperiodicity ≥ 0.66 in every frame                                                                 |
+
+More, from the same commands:
+
+- the whispered sentence is 1.290 times as long; 98.7 % of its frames have
+  a YIN aperiodicity above 0.4 and its HNR is 0.0 dB (plain 20.4 dB);
+- `node experiments/issue-53-contrasts.mjs`: closure of `{W ˈapa W}` 92 ms
+  against 71 ms of `{W ˈaba W}`, burst -41.9 against -45.7 dB; `s` 105 ms
+  and -64.2 dB, `z` 65 ms and -68.7 dB;
+- `node experiments/issue-53-whisper-tuning.mjs high` (tier high, one LPC
+  fit over the middle 60 % of the vowel): F1 of whispered [a], [i], [u]
+  +265, +120, +140 Hz, mean +175 Hz (target 255 ± 90); F2 of [i] 2225 Hz;
+- `node experiments/issue-53-languages.mjs`: the voiced share of a whisper
+  is 0 in English, Russian, Hindi and Mandarin (plain 0.83, 0.64, 0.87,
+  0.91);
+- `voice-simulator say --markup "[whisper]Hello.[/whisper]" --out w.wav`
+  (the default tier) has a voiced share of 0.000.
+
+Plain text renders the same samples as before the whisper
+(`node experiments/issue-53-plain-identity.mjs <checkout of main>`,
+experiments/issue-53-plain-identity.txt).
+
+### Limits
+
+- Every tier has a vocal tract, so there is no tract-less tier to whisper
+  through a filter.
+- At tier high (the 3D solver) the glottal reflection stops at
+  `MIN_GLOTTAL_REFLECTION` (-0.5), and a whispered `{W ˈa W}` is about
+  6 dB quieter than at tier medium (-68.2 against -62.1 dB with headroom
+  20; `node experiments/issue-53-whisper-level-tiers.mjs`).
+- The WebGPU solver keeps the decay of the cells it was uploaded with, so
+  it does not lower the glottal reflection, nor does source-tract
+  interaction; both still get the whisper source.
+- The Rust engine has no whisper source yet
+  ([#82](https://github.com/konard/voice-simulator/issues/82)): a plan that
+  whispers is rendered by the JavaScript renderer (see
+  [RUST-ENGINE.md](RUST-ENGINE.md)).
+- Recognising whispered speech is issue 71 and 72; Mandarin tones in a
+  whisper are not modelled beyond the level cue of the pitch.
