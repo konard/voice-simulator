@@ -9,61 +9,40 @@ import {
   AUDIO_TIERS,
   BASE_AUDIO_LEVEL,
   LodGovernor,
+  audioTierIndex,
+  batteryLevelCap,
   planUtterance,
   sampleState,
+  startLevel,
   textToIpa,
   utteranceTimeline,
 } from '../../../../src/index.js';
 import { exportAudio } from './audio-export.js';
+import {
+  OVERLOADS_TO_MEASURE,
+  clearCachedBenchmark,
+  readCachedBenchmark,
+  readOverloads,
+  readTierSetting,
+  sameEngine,
+  whenIdle,
+  writeCachedBenchmark,
+  writeOverloads,
+  writeTierSetting,
+} from './benchmark-cache.js';
 import { fullLexiconLoader } from './full-lexicons.js';
 import { WorkletPlayer } from './worklet-player.js';
 import { readyToPlay, secondsToPlay } from './render-ahead.js';
 
 const TAIL = 0.15;
-const BENCHMARK_KEY = 'voice-simulator:benchmark';
-
-/**
- * Identifies the device, build and backends (whether WebGPU may be used)
- * a cached benchmark belongs to.
- */
-function deviceKey(allowGpu, engine) {
-  const navigator = globalThis.navigator ?? {};
-  return [
-    navigator.userAgent ?? '',
-    navigator.hardwareConcurrency ?? 0,
-    AUDIO_TIERS.map((tier) => `${tier.name}:${tier.cost}`).join(','),
-    allowGpu ? 'gpu' : 'cpu',
-    engine,
-  ].join('|');
-}
-
-function readCachedBenchmark(allowGpu, engine) {
-  try {
-    const cached = JSON.parse(
-      globalThis.localStorage?.getItem(BENCHMARK_KEY) ?? 'null'
-    );
-    return cached?.device === deviceKey(allowGpu, engine) ? cached : null;
-  } catch {
-    return null;
-  }
-}
-
-function writeCachedBenchmark({ level, loads, gpu }, allowGpu, engine) {
-  try {
-    globalThis.localStorage?.setItem(
-      BENCHMARK_KEY,
-      JSON.stringify({ device: deviceKey(allowGpu, engine), level, loads, gpu })
-    );
-  } catch {
-    // Storage may be unavailable (private mode); the cache is optional.
-  }
-}
 
 export class VoiceEngine {
   /**
-   * @param {{onChange?: (status: object) => void, createWorker?: () => Worker, loadLexicon?: (lang: string) => Promise<object|null>}} [options]
+   * @param {{onChange?: (status: object) => void, createWorker?: () => Worker, loadLexicon?: (lang: string) => Promise<object|null>, idle?: (run: () => void) => () => void}} [options]
    *   `loadLexicon` gives the full lexicon of a language (default: the
-   *   file `lexicons/<lang>-full.json` next to the page, when it exists)
+   *   file `lexicons/<lang>-full.json` next to the page, when it exists);
+   *   `idle` runs the device benchmark at an idle moment of a visible page
+   *   and returns a cancel function (default whenIdle)
    */
   constructor(options = {}) {
     this.onChange = options.onChange ?? (() => {});
@@ -82,11 +61,19 @@ export class VoiceEngine {
       target: 0.8,
       dwell: 40,
     });
-    this.auto = true;
-    this.fixedLevel = BASE_AUDIO_LEVEL;
+    // The quality setting of an earlier visit: 'auto' or a tier name.
+    const tier = readTierSetting();
+    this.auto = tier === 'auto';
+    this.fixedLevel = this.auto ? BASE_AUDIO_LEVEL : audioTierIndex(tier);
     // Whether the benchmark may use WebGPU, and whether its choice runs there.
     this.allowGpu = true;
     this.benchmarkGpu = null;
+    // The device benchmark (issue 28): the cached result in use, the head
+    // to measure with and the cancel function of a scheduled measurement.
+    this.idle = options.idle ?? whenIdle;
+    this.cached = null;
+    this.benchmarkHead = undefined;
+    this.cancelIdle = () => {};
     // The engine setting ('auto', 'rust' or 'js') the worker renders with.
     this.engineName = 'auto';
     this.nextId = 1;
@@ -100,9 +87,15 @@ export class VoiceEngine {
       loads: [],
       underruns: 0,
       error: null,
-      // The worker's answer to {type: 'engine'}: {name, simd, reason}.
+      // The worker's answer to {type: 'engine'}: {name, simd, threads,
+      // reason, error}.
       engine: null,
+      // The device benchmark: {measuring, from, to, time, engine, cached}
+      // (`from`/`to`: performance.now() of the request and of its answer;
+      // `time`: Date.now() of the measurement), null before one.
+      benchmark: null,
     };
+    this.#watchBattery();
   }
 
   #emit(patch) {
@@ -146,10 +139,12 @@ export class VoiceEngine {
   }
 
   /**
-   * Measure the audio tiers on this device (runs in the worker), the 3D
-   * ones on WebGPU too unless `gpu` is false. A result cached by an earlier
-   * visit on the same device applies at once, and the fresh measurement
-   * replaces it when it arrives.
+   * Choose the automatic audio tier for this device: the result of an
+   * earlier visit when it is valid (same benchmark version, device, engine
+   * setting and engine, younger than 30 days; see benchmark-cache.js),
+   * else the start level (startLevel) now and the silent device benchmark
+   * of the worker at the next idle moment of a visible page. The 3D tiers
+   * are measured on WebGPU too unless `gpu` is false.
    * @param {object} head
    * `engine` is the engine setting (see setEngine).
    * @param {{gpu?: boolean, engine?: 'auto'|'rust'|'js'}} [options]
@@ -157,24 +152,146 @@ export class VoiceEngine {
   benchmark(head, options = {}) {
     this.allowGpu = options.gpu !== false;
     this.setEngine(options.engine ?? this.engineName);
+    this.benchmarkHead = head;
+    this.cancelIdle();
+    this.#ensureWorker();
     const cached = readCachedBenchmark(this.allowGpu, this.engineName);
-    this.benchmarkGpu = cached ? Boolean(cached.gpu) : null;
     if (cached) {
-      this.governor.level = Math.min(cached.level, AUDIO_TIERS.length - 1);
-      this.#emit({
-        loads: cached.loads,
-        audioLevel: this.audioLevel,
-        cachedBenchmark: true,
-      });
+      this.#useCache(cached);
     } else {
-      this.#emit({ phase: 'benchmark' });
+      this.#measureLater();
     }
+  }
+
+  /** Forget the cached benchmark and measure this device now. */
+  measureAgain() {
+    clearCachedBenchmark();
+    this.cancelIdle();
+    this.cached = null;
+    this.#postBenchmark();
+  }
+
+  #useCache(cached) {
+    this.cached = cached;
+    this.benchmarkGpu = Boolean(cached.gpu);
+    this.#setAutoLevel(cached.level);
+    this.#emit({
+      loads: cached.loads,
+      audioLevel: this.audioLevel,
+      benchmark: {
+        measuring: false,
+        from: null,
+        to: null,
+        time: cached.time,
+        engine: cached.engine,
+        cached: true,
+      },
+    });
+    this.#checkCachedEngine();
+  }
+
+  /**
+   * A cached benchmark of another engine than the one the worker renders
+   * with (another build, SIMD or threads) is measured again.
+   */
+  #checkCachedEngine() {
+    const answer = this.status.engine;
+    if (this.cached && answer && !sameEngine(this.cached.engine, answer)) {
+      this.#measureLater();
+    }
+  }
+
+  /** Start at the start level and measure at the next idle moment. */
+  #measureLater() {
+    this.cached = null;
+    this.benchmarkGpu = null;
+    this.#setAutoLevel(startLevel(globalThis.navigator ?? {}));
+    this.#emit({ audioLevel: this.audioLevel, benchmark: null });
+    this.cancelIdle();
+    this.cancelIdle = this.idle(() => this.#postBenchmark());
+  }
+
+  #postBenchmark() {
+    this.cancelIdle = () => {};
+    this.#emit({
+      benchmark: {
+        measuring: true,
+        from: globalThis.performance.now(),
+        to: null,
+        time: null,
+        engine: null,
+        cached: false,
+      },
+    });
     this.#ensureWorker().postMessage({
       type: 'benchmark',
-      head,
+      head: this.benchmarkHead,
       gpu: this.allowGpu,
       engine: this.engineName,
     });
+  }
+
+  /**
+   * The worker's benchmark: the CPU answer, then (with `gpuPending`) the
+   * one with the 3D tiers on WebGPU. The last one is cached.
+   */
+  #benchmarkAnswer(message) {
+    this.benchmarkGpu = Boolean(message.gpu);
+    this.#setAutoLevel(message.level);
+    const final = !message.gpuPending;
+    if (final && message.version !== undefined) {
+      this.cached = writeCachedBenchmark(
+        message,
+        this.allowGpu,
+        this.engineName
+      );
+    }
+    const previous = this.status.benchmark;
+    this.#emit({
+      loads: message.loads,
+      audioLevel: this.audioLevel,
+      audioLoad: message.loads[message.level] ?? 0,
+      benchmark: {
+        measuring: !final,
+        from: previous?.from ?? null,
+        to: previous?.to ?? globalThis.performance.now(),
+        time: final && message.version !== undefined ? Date.now() : null,
+        engine: message.engine ?? null,
+        cached: false,
+      },
+    });
+  }
+
+  /** The automatic level, at most the battery's cap. */
+  #setAutoLevel(level) {
+    this.governor.level = Math.max(
+      0,
+      Math.min(level, this.governor.maxLevel, AUDIO_TIERS.length - 1)
+    );
+  }
+
+  /**
+   * A battery that is not charging and below 20 % caps automatic quality
+   * at `medium` (batteryLevelCap).
+   */
+  #watchBattery() {
+    const navigator = globalThis.navigator;
+    if (typeof navigator?.getBattery !== 'function') {
+      return;
+    }
+    navigator
+      .getBattery()
+      .then((battery) => {
+        const update = () => {
+          this.governor.maxLevel = batteryLevelCap(battery);
+          this.#setAutoLevel(this.governor.level);
+          this.#emit({ audioLevel: this.audioLevel });
+        };
+        update();
+        battery.addEventListener?.('levelchange', update);
+        battery.addEventListener?.('chargingchange', update);
+      })
+      .catch(() => {});
   }
 
   /** Use a fixed audio tier (index) or `null` for automatic selection. */
@@ -183,6 +300,9 @@ export class VoiceEngine {
     if (!this.auto) {
       this.fixedLevel = level;
     }
+    // Kept for the next visit; the benchmark still runs, but only the
+    // automatic level follows it.
+    writeTierSetting(this.auto ? 'auto' : AUDIO_TIERS[level].name);
     this.#emit({ audioLevel: this.audioLevel });
   }
 
@@ -213,6 +333,9 @@ export class VoiceEngine {
     const id = this.nextId++;
     const job = {
       id,
+      level: this.audioLevel,
+      auto: this.auto,
+      overloaded: false,
       plan,
       timeline,
       sound: request.mode !== 'visual',
@@ -294,20 +417,15 @@ export class VoiceEngine {
 
   #handle(message) {
     if (message.type === 'engine') {
-      const { name, simd, reason, error } = message;
-      this.#emit({ engine: { name, simd, reason, error: error ?? null } });
+      const { name, simd, threads, reason, error } = message;
+      this.#emit({
+        engine: { name, simd, threads, reason, error: error ?? null },
+      });
+      this.#checkCachedEngine();
       return;
     }
     if (message.type === 'benchmark') {
-      writeCachedBenchmark(message, this.allowGpu, this.engineName);
-      this.benchmarkGpu = Boolean(message.gpu);
-      this.governor.level = message.level;
-      this.#emit({
-        phase: this.job ? 'speaking' : 'idle',
-        loads: message.loads,
-        audioLevel: this.audioLevel,
-        audioLoad: message.loads[message.level] ?? 0,
-      });
+      this.#benchmarkAnswer(message);
       return;
     }
     const job = this.job;
@@ -320,6 +438,7 @@ export class VoiceEngine {
       overload: () => this.#overload(job, message),
       end: () => {
         job.finished = true;
+        this.#countOverloads(job, false);
         this.#play(job);
         if (job.sound) {
           // The player plays what it still holds, then silence.
@@ -346,8 +465,40 @@ export class VoiceEngine {
     });
   }
 
+  /**
+   * Overloads in a row of utterances started at the cached level: the
+   * third drops the cache, so the next visit measures again. An utterance
+   * at that level without one starts the count again.
+   */
+  #countOverloads(job, overloaded) {
+    if (!job.auto || !this.cached || job.level !== this.cached.level) {
+      return;
+    }
+    if (!overloaded) {
+      if (!job.overloaded) {
+        writeOverloads(0);
+      }
+      return;
+    }
+    if (job.overloaded) {
+      return;
+    }
+    job.overloaded = true;
+    const count = readOverloads() + 1;
+    if (count < OVERLOADS_TO_MEASURE) {
+      writeOverloads(count);
+      return;
+    }
+    clearCachedBenchmark();
+    this.cached = null;
+    this.#emit({ benchmark: null });
+  }
+
   /** The worker restarts the utterance on a cheaper tier. */
   #overload(job, message) {
+    if (message.from === job.level) {
+      this.#countOverloads(job, true);
+    }
     this.governor.level = message.level;
     this.governor.load = 0;
     this.governor.samples = 0;
@@ -545,6 +696,7 @@ export class VoiceEngine {
   }
 
   dispose() {
+    this.cancelIdle();
     this.stop();
     this.worker?.terminate();
     this.worker = null;
