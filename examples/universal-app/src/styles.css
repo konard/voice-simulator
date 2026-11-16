@@ -577,19 +577,52 @@ h2 {
 }
 
 .editor-group {
-  display: grid;
-  align-content: start;
-  gap: 10px;
+  align-self: start;
   margin: 0;
   padding: 12px 14px;
   border: 1px solid var(--line);
   border-radius: 8px;
 }
 
-.editor-group legend {
-  padding: 0 6px;
+.editor-group summary {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
   color: var(--accent);
   font-weight: 800;
+  cursor: pointer;
+}
+
+.editor-group[open] summary {
+  margin-bottom: 10px;
+}
+
+.editor-sliders {
+  display: grid;
+  gap: 10px;
+}
+
+.editor-count {
+  color: var(--muted);
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+}
+
+.head-editor {
+  display: grid;
+  gap: 12px;
+}
+
+.voice-file {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+}
+
+.voice-file-error {
+  flex-basis: 100%;
+  white-space: pre-line;
 }
 
 .slider {
