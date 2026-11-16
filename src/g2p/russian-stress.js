@@ -1,6 +1,6 @@
 /**
  * Whole-word Russian pronunciations. The stress of other words is in
- * `RU_STRESS` (src/g2p/lexicon/ru.js), built from
+ * `RU_FORMS`, `RU_STEMS` and `RU_GUESS` (src/g2p/lexicon/ru.js), built from
  * data/lexicon/ru-stress.txt by scripts/build-lexicon.mjs.
  */
 
