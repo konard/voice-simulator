@@ -78,8 +78,9 @@ everything else takes the inner value; named values such as `rate="fast"`
 replace. After composing, `rate` is kept in 0.25 … 4, `pitch` in -24 … 24,
 `range` in 0 … 4, `gain` in -120 … 12 and `effort` in 0 … 1.
 
-A timed pause lasts exactly its length; a sound is silence of its length
-(0.3 s unless one is written) until #56.
+A timed pause lasts exactly its length. A sound is made by the glottis and
+the tract like speech (see [Sounds](#sounds)); it lasts its default length,
+or the length that is written.
 
 ## SSML
 
@@ -109,7 +110,7 @@ kept.
 | `vs:phonation`           | `name`: `modal`, `breathy`, `creaky`, `pressed`, `lax`, `falsetto`, `harsh`, `whisper`, `whispery`; `degree` 0 … 1 (default 0.67)                                                                                                                                        | `<vs:phonation name="breathy">Hello</vs:phonation> there.`         | `{V̤ həˈloʊ V̤} ˈðɛɹ .`; breathy 0.67                                      |
 | `vs:emotion`             | `name` (`neutral happy sad angry afraid surprised disgusted tender bored sarcastic confident hesitant`), `intensity` 0 … 1 (default 0.67), or `arousal`, `valence`, `dominance` (-1 … 1)                                                                                 | `<vs:emotion name="sad" intensity="0.8">Hello</vs:emotion> there.` | `həˈloʊ ˈðɛɹ .`; sad 0.8 (arousal -0.32, valence -0.48, dominance -0.24) |
 | `vs:tune`                | `name`: a tune label (see [Intonation](#intonation)); an unknown name is a warning                                                                                                                                                                                       | `<speak><vs:tune name="IK6">Какой голос!</vs:tune></speak>`        | `{IK6 kəkɐj ˈɡoɫəs IK6} !`; tune IK6                                     |
-| `vs:sound` (empty)       | `name`: `laugh`, `inhale`, `exhale`, `sigh`, `cough`, `throat`, `filler`, `click`; optional `duration="0.5s"`                                                                                                                                                            | `Hello <vs:sound name="laugh"/> there.`                            | `həˈloʊ ⸨laugh⸩ ˈðɛɹ .`                                                  |
+| `vs:sound` (empty)       | `name`: `laugh`, `inhale`, `exhale`, `sigh`, `cough`, `throat`, `filler`, `um`, `click`; optional `duration="0.5s"` ([Sounds](#sounds))                                                                                                                                  | `Hello <vs:sound name="laugh"/> there.`                            | `həˈloʊ ⸨laugh⸩ ˈðɛɹ .`                                                  |
 
 The words of a `sub` or `say-as` share the range of the whole element in
 the input, and every other word points at its characters in the input, so
@@ -142,25 +143,25 @@ space. `\[`, `\]`, `\*` and `\\` are literal characters. An unknown tag
 stays in the text with a warning; a tag that is never closed runs to the
 end of the input with a warning. Inline parsing never throws.
 
-| Tag                                                                                 | Change                                                                                                                    | Example                                                       | IPA and mode                                                                 |
-| ----------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------- | ---------------------------------------------------------------------------- |
-| `[whisper]`                                                                         | whisper 1                                                                                                                 | `[whisper]Hello[/whisper] there.`                             | `{W həˈloʊ W} ˈðɛɹ .`                                                        |
-| `[soft]`, `[loud]`, `[shout]`                                                       | effort 0.25, 0.75, 1                                                                                                      | `[soft]Hello[/soft] [loud]there[/loud] [shout]now[/shout].`   | `{p həˈloʊ p} {f ˈðɛɹ f} {ff ˈnaʊ ff} .`                                     |
-| `[effort N]`                                                                        | effort N (0 … 1)                                                                                                          | `[effort 0.75]Hello[/effort] there.`                          | `{f həˈloʊ f} ˈðɛɹ .`                                                        |
-| `[lombard]`                                                                         | effort 0.75, only primary-stressed vowels get longer                                                                      | `[lombard]Hello[/lombard] there.`                             | `{f həˈloʊ f} ˈðɛɹ .`; lombard true                                          |
-| `[crescendo]`, `[diminuendo]`                                                       | `effortEnd` = effort + 0.25, effort - 0.25                                                                                | `[crescendo]Hello there[/crescendo] now.`                     | `{crescendo həˈloʊ ˈðɛɹ } ˈnaʊ .`; effortEnd 0.75                            |
-| `[fast]`, `[slow]`, `[rate N]`                                                      | rate 1.3, 0.75, N                                                                                                         | `[fast]Hello[/fast] [slow]there[/slow] [rate 1.5]now[/rate].` | `{allegro həˈloʊ allegro} {lento ˈðɛɹ lento} ˈnaʊ .`; the last word rate 1.5 |
-| `[high]`, `[low]`, `[pitch N]`                                                      | pitch +3, -3, N semitones                                                                                                 | `[high]Hello[/high] [low]there[/low] [pitch -2]now[/pitch].`  | `həˈloʊ ˈðɛɹ ˈnaʊ .`; pitch 3, -3, -2                                        |
-| `[breathy]`, `[creaky]` (with a degree: `[creaky 1]`)                               | breathy, creaky 0.67 or the degree                                                                                        | `[breathy]Hello[/breathy] [creaky 1]there[/creaky].`          | `{V̤ həˈloʊ V̤} {3V̰ ˈðɛɹ V̰} .`                                                 |
-| `[pressed]`, `[lax]`                                                                | tension +0.67, -0.67                                                                                                      | `[pressed]Hello[/pressed] [lax]there[/lax].`                  | `{V͈ həˈloʊ V͈} {V͉ ˈðɛɹ V͉} .`                                                  |
-| `[falsetto]`, `[harsh]`                                                             | falsetto, harsh 0.67                                                                                                      | `[falsetto]Hello[/falsetto] [harsh]there[/harsh].`            | `{F həˈloʊ F} {V! ˈðɛɹ V!} .`                                                |
-| every emotion name, `[angry 0.8]`                                                   | emotion with intensity 0.67 or N                                                                                          | `[angry 0.8]Hello[/angry] there.`                             | `həˈloʊ ˈðɛɹ .`; angry 0.8                                                   |
-| `[lang ru]`                                                                         | language of the words                                                                                                     | `Say [lang ru]привет[/lang].`                                 | `ˈseɪ prʲɪˈvʲet .`                                                           |
-| `[ipa X]`                                                                           | a word spoken as X; with `[/ipa]` the words inside are spoken as X                                                        | `A [ipa təˈmɑːtəʊ] please.`                                   | `ə təˈmɑːtəʊ ˈpliz .`                                                        |
-| `[pause N]`                                                                         | a pause of N seconds                                                                                                      | `Wait [pause 0.3] now.`                                       | `ˈweɪt (0.3) ˈnaʊ .`                                                         |
-| `[laugh] [inhale] [exhale] [sigh] [cough] [throat] [filler] [click]`, `[cough 0.5]` | a sound (0.3 s or N s)                                                                                                    | `Hello [laugh] there [cough 0.5] ok.`                         | `həˈloʊ ⸨laugh⸩ ˈðɛɹ ⸨cough 0.5⸩ ˈoʊˈkeɪ .`                                  |
-| `[tune name]`                                                                       | the tune of the phrase (a tune label)                                                                                     | `[tune call]John![/tune]`                                     | `{call ˈd͡ʒɑn call} !`; tune call                                             |
-| `*word*`                                                                            | emphasis 1: the opening star stands before a non-space and after a space or the start, the closing star after a non-space | `Hello *world*.`                                              | `həˈloʊ ˈˈwɝld .`                                                            |
+| Tag                                                                                      | Change                                                                                                                    | Example                                                       | IPA and mode                                                                 |
+| ---------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------- | ---------------------------------------------------------------------------- |
+| `[whisper]`                                                                              | whisper 1                                                                                                                 | `[whisper]Hello[/whisper] there.`                             | `{W həˈloʊ W} ˈðɛɹ .`                                                        |
+| `[soft]`, `[loud]`, `[shout]`                                                            | effort 0.25, 0.75, 1                                                                                                      | `[soft]Hello[/soft] [loud]there[/loud] [shout]now[/shout].`   | `{p həˈloʊ p} {f ˈðɛɹ f} {ff ˈnaʊ ff} .`                                     |
+| `[effort N]`                                                                             | effort N (0 … 1)                                                                                                          | `[effort 0.75]Hello[/effort] there.`                          | `{f həˈloʊ f} ˈðɛɹ .`                                                        |
+| `[lombard]`                                                                              | effort 0.75, only primary-stressed vowels get longer                                                                      | `[lombard]Hello[/lombard] there.`                             | `{f həˈloʊ f} ˈðɛɹ .`; lombard true                                          |
+| `[crescendo]`, `[diminuendo]`                                                            | `effortEnd` = effort + 0.25, effort - 0.25                                                                                | `[crescendo]Hello there[/crescendo] now.`                     | `{crescendo həˈloʊ ˈðɛɹ } ˈnaʊ .`; effortEnd 0.75                            |
+| `[fast]`, `[slow]`, `[rate N]`                                                           | rate 1.3, 0.75, N                                                                                                         | `[fast]Hello[/fast] [slow]there[/slow] [rate 1.5]now[/rate].` | `{allegro həˈloʊ allegro} {lento ˈðɛɹ lento} ˈnaʊ .`; the last word rate 1.5 |
+| `[high]`, `[low]`, `[pitch N]`                                                           | pitch +3, -3, N semitones                                                                                                 | `[high]Hello[/high] [low]there[/low] [pitch -2]now[/pitch].`  | `həˈloʊ ˈðɛɹ ˈnaʊ .`; pitch 3, -3, -2                                        |
+| `[breathy]`, `[creaky]` (with a degree: `[creaky 1]`)                                    | breathy, creaky 0.67 or the degree                                                                                        | `[breathy]Hello[/breathy] [creaky 1]there[/creaky].`          | `{V̤ həˈloʊ V̤} {3V̰ ˈðɛɹ V̰} .`                                                 |
+| `[pressed]`, `[lax]`                                                                     | tension +0.67, -0.67                                                                                                      | `[pressed]Hello[/pressed] [lax]there[/lax].`                  | `{V͈ həˈloʊ V͈} {V͉ ˈðɛɹ V͉} .`                                                  |
+| `[falsetto]`, `[harsh]`                                                                  | falsetto, harsh 0.67                                                                                                      | `[falsetto]Hello[/falsetto] [harsh]there[/harsh].`            | `{F həˈloʊ F} {V! ˈðɛɹ V!} .`                                                |
+| every emotion name, `[angry 0.8]`                                                        | emotion with intensity 0.67 or N                                                                                          | `[angry 0.8]Hello[/angry] there.`                             | `həˈloʊ ˈðɛɹ .`; angry 0.8                                                   |
+| `[lang ru]`                                                                              | language of the words                                                                                                     | `Say [lang ru]привет[/lang].`                                 | `ˈseɪ prʲɪˈvʲet .`                                                           |
+| `[ipa X]`                                                                                | a word spoken as X; with `[/ipa]` the words inside are spoken as X                                                        | `A [ipa təˈmɑːtəʊ] please.`                                   | `ə təˈmɑːtəʊ ˈpliz .`                                                        |
+| `[pause N]`                                                                              | a pause of N seconds                                                                                                      | `Wait [pause 0.3] now.`                                       | `ˈweɪt (0.3) ˈnaʊ .`                                                         |
+| `[laugh] [inhale] [exhale] [sigh] [cough] [throat] [filler] [um] [click]`, `[cough 0.5]` | a sound ([Sounds](#sounds)); N s stretches it, or sets the calls of a laugh or a cough                                    | `Hello [laugh] there [cough 0.5] ok.`                         | `həˈloʊ ⸨laugh⸩ ˈðɛɹ ⸨cough:0.5⸩ ˈoʊˈkeɪ .`                                  |
+| `[tune name]`                                                                            | the tune of the phrase (a tune label)                                                                                     | `[tune call]John![/tune]`                                     | `{call ˈd͡ʒɑn call} !`; tune call                                             |
+| `*word*`                                                                                 | emphasis 1: the opening star stands before a non-space and after a space or the start, the closing star after a non-space | `Hello *world*.`                                              | `həˈloʊ ˈˈwɝld .`                                                            |
 
 ## IPA marks
 
@@ -173,24 +174,25 @@ labels go to `unknown` and change nothing. `pitch`, `range`, `gain`,
 `emotion` and `lang` have no ExtIPA symbol: they are never written in IPA
 and travel only in the `modes` list (`planUtterance(ipa, { modes })`).
 
-| IPA span                                  | Change                                                           | Example                                      | Mode                                 |
-| ----------------------------------------- | ---------------------------------------------------------------- | -------------------------------------------- | ------------------------------------ |
-| `{pp … pp}`, `{p … p}` (also `𝆏𝆏`, `𝆏`)   | effort 0, 0.25                                                   | `{pp həˈloʊ pp} ˈwɝld`, `{𝆏 həˈloʊ 𝆏} ˈwɝld` | effort 0; effort 0.25                |
-| `{f … f}`, `{ff … ff}` (also `𝆑`, `𝆑𝆑`)   | effort 0.75, 1                                                   | `{ff həˈloʊ ff} ˈwɝld`                       | effort 1                             |
-| `{crescendo …}`, `{diminuendo …}`         | `effortEnd` = effort + 0.25, effort - 0.25                       | `{crescendo həˈloʊ ˈwɝld }`                  | effortEnd 0.75 over both words       |
-| `{allegro … allegro}`, `{lento … lento}`  | rate 1.3, 0.75                                                   | `{lento həˈloʊ lento} ˈwɝld`                 | rate 0.75                            |
-| `{V̤ … V̤}` breathy, `{V̰ … V̰}` creaky voice | breathy or creaky 0.33, 0.67, 1                                  | `{3V̤ həˈloʊ V̤} ˈwɝld`                        | breathy 1                            |
-| `{C … C}` creak                           | creaky 1                                                         | `{C həˈloʊ C} ˈwɝld`                         | creaky 1                             |
-| `{V͈ … V͈}` pressed, `{V͉ … V͉}` lax          | tension +0.33, +0.67, +1 or negative                             | `{V͈ həˈloʊ V͈} {1V͉ ˈwɝld V͉}`                  | tension 0.67; tension -0.33          |
-| `{F … F}` falsetto, `{V! … V!}` harsh     | falsetto or harsh 0.33, 0.67, 1                                  | `{F həˈloʊ F} {V! ˈwɝld V!}`                 | falsetto 0.67; harsh 0.67            |
-| `{W … W}` whisper                         | whisper 1; the degree sets effort 0.25, unchanged, 0.75          | `{W həˈloʊ W} {1W ˈwɝld W}`                  | whisper 1; whisper 1 and effort 0.25 |
-| `{Ṿ … Ṿ}` whispery voice                  | whisper 0.25, 0.5, 0.75                                          | `{Ṿ həˈloʊ Ṿ} ˈwɝld`                         | whisper 0.5                          |
-| `{V … V}` modal                           | all phonation values 0                                           | `{V̤ həˈloʊ {V ˈwɝld V} V̤}`                   | breathy 0.67 on the first word only  |
-| `(.)`, `(..)`, `(...)`, `(1.2)`           | a pause of 0.2, 0.4, 0.8 s or N s that does not end the sentence | `həˈloʊ (.) ˈwɝld (1.2) ˈbaɪ`                | pauses 0.2 s and 1.2 s               |
-| `⸨name⸩`, `⸨name 0.5⸩`                    | a sound                                                          | `⸨laugh⸩ həˈloʊ ⸨cough 0.5⸩`                 | laugh 0.3 s, cough 0.5 s             |
-| `{IK4 … IK4}`, `{yesno … yesno}`, …       | the tune of the phrase (a tune label)                            | `{IK4 a tɨ IK4} ?`                           | tune IK4                             |
-| `ˈˈ`                                      | emphasis 1 on the word                                           | `həˈloʊ ˈˈwɝld`                              | emphasis 1                           |
-| U+0324, U+0330, U+0323 on a phone         | `token.breathy`, `token.creaky`, `token.whispered`               | `a̤ a̰ ạ`                                      | (on the phones)                      |
+| IPA span                                   | Change                                                           | Example                                      | Mode                                 |
+| ------------------------------------------ | ---------------------------------------------------------------- | -------------------------------------------- | ------------------------------------ |
+| `{pp … pp}`, `{p … p}` (also `𝆏𝆏`, `𝆏`)    | effort 0, 0.25                                                   | `{pp həˈloʊ pp} ˈwɝld`, `{𝆏 həˈloʊ 𝆏} ˈwɝld` | effort 0; effort 0.25                |
+| `{f … f}`, `{ff … ff}` (also `𝆑`, `𝆑𝆑`)    | effort 0.75, 1                                                   | `{ff həˈloʊ ff} ˈwɝld`                       | effort 1                             |
+| `{crescendo …}`, `{diminuendo …}`          | `effortEnd` = effort + 0.25, effort - 0.25                       | `{crescendo həˈloʊ ˈwɝld }`                  | effortEnd 0.75 over both words       |
+| `{allegro … allegro}`, `{lento … lento}`   | rate 1.3, 0.75                                                   | `{lento həˈloʊ lento} ˈwɝld`                 | rate 0.75                            |
+| `{V̤ … V̤}` breathy, `{V̰ … V̰}` creaky voice  | breathy or creaky 0.33, 0.67, 1                                  | `{3V̤ həˈloʊ V̤} ˈwɝld`                        | breathy 1                            |
+| `{C … C}` creak                            | creaky 1                                                         | `{C həˈloʊ C} ˈwɝld`                         | creaky 1                             |
+| `{V͈ … V͈}` pressed, `{V͉ … V͉}` lax           | tension +0.33, +0.67, +1 or negative                             | `{V͈ həˈloʊ V͈} {1V͉ ˈwɝld V͉}`                  | tension 0.67; tension -0.33          |
+| `{F … F}` falsetto, `{V! … V!}` harsh      | falsetto or harsh 0.33, 0.67, 1                                  | `{F həˈloʊ F} {V! ˈwɝld V!}`                 | falsetto 0.67; harsh 0.67            |
+| `{W … W}` whisper                          | whisper 1; the degree sets effort 0.25, unchanged, 0.75          | `{W həˈloʊ W} {1W ˈwɝld W}`                  | whisper 1; whisper 1 and effort 0.25 |
+| `{Ṿ … Ṿ}` whispery voice                   | whisper 0.25, 0.5, 0.75                                          | `{Ṿ həˈloʊ Ṿ} ˈwɝld`                         | whisper 0.5                          |
+| `{V … V}` modal                            | all phonation values 0                                           | `{V̤ həˈloʊ {V ˈwɝld V} V̤}`                   | breathy 0.67 on the first word only  |
+| `(.)`, `(..)`, `(...)`, `(1.2)`            | a pause of 0.2, 0.4, 0.8 s or N s that does not end the sentence | `həˈloʊ (.) ˈwɝld (1.2) ˈbaɪ`                | pauses 0.2 s and 1.2 s               |
+| `⸨name⸩`, `⸨name:0.5⸩` (also `⸨name 0.5⸩`) | a sound ([Sounds](#sounds))                                      | `⸨laugh⸩ həˈloʊ ⸨cough:0.5⸩`                 | laugh 0.8 s, cough 0.45 s (2 calls)  |
+| `ǀ`, `ǃ`, `ǁ`, `ʘ`                         | a click consonant (dental, alveolar, lateral, bilabial)          | `ǀ həˈloʊ`                                   | (a consonant, `manner: 'click'`)     |
+| `{IK4 … IK4}`, `{yesno … yesno}`, …        | the tune of the phrase (a tune label)                            | `{IK4 a tɨ IK4} ?`                           | tune IK4                             |
+| `ˈˈ`                                       | emphasis 1 on the word                                           | `həˈloʊ ˈˈwɝld`                              | emphasis 1                           |
+| U+0324, U+0330, U+0323 on a phone          | `token.breathy`, `token.creaky`, `token.whispered`               | `a̤ a̰ ạ`                                      | (on the phones)                      |
 
 `formatIpa(tokens, modes)` writes the marks back: for every row,
 `parseIpa(formatIpa(tokens, modes)).modes` equals `modes`
@@ -243,13 +245,15 @@ louder and the accents after it are compressed (`FOCUS`).
 ## The plan
 
 `planUtterance(ipa, { modes })` uses `options.modes` when given, else the
-spans of the IPA marks, and sets `token.mode` on every token (a pause or a
-sound takes the mode of the word before it). The plan gets:
+spans of the IPA marks, and sets `token.mode` on every token (a pause
+takes the mode of the word before it, a sound the mode of the span it is
+written in). The plan gets:
 
 - `plan.modes`: spans in seconds, sorted, not overlapping, from 0 to
   `plan.duration`, each `{ start, end, ...mode }` with every field of
   `MODE_DEFAULTS`; `modeAt(plan, time)` finds the span at a time;
-- `plan.sounds`: `[{ name, start, end }]`.
+- `plan.sounds`: `[{ name, start, end }]`, the times of the sounds as
+  they are spoken (see [Sounds](#sounds)).
 
 - `plan.channels.effort` (dB) and `plan.channels.tension` (offset on
   `head.tenseness`), see [Vocal effort](#vocal-effort).
@@ -258,7 +262,8 @@ sound takes the mode of the word before it). The plan gets:
 Measured with `node experiments/issue-50-realise.mjs` ("Hello there, my
 good friend" against the plain text): `[fast]` gives 0.769 of the plain
 duration of its words, `[pitch +12]` a mean f0 ratio of 2.0000; `[pause
-1.5]`, `[laugh]` and `[cough 0.5]` last 1.500, 0.300 and 0.500 s.
+1.5]`, `[laugh]` and `[cough 0.5]` last 1.500, 0.800 and 0.450 s (a cough of
+0.5 s is round(0.5 / 0.225) = 2 coughs).
 
 ## Vocal effort
 
@@ -583,3 +588,153 @@ experiments/issue-53-plain-identity.txt).
   [RUST-ENGINE.md](RUST-ENGINE.md)).
 - Recognising whispered speech is issue 71 and 72; Mandarin tones in a
   whisper are not modelled beyond the level cue of the pitch.
+
+## Sounds
+
+The sounds a speaker makes between words (issue 56) are made by the same
+glottis and tract as speech, from the rules below; nothing is recorded.
+They are written `[laugh]`, `<vs:sound name="laugh"/>` or `⸨laugh⸩`, and
+`⸨laugh:1.2⸩` keeps a written length in IPA. `SOUNDS`, `FILLERS`,
+`soundSegments(token, context)` and `BREATHS` are exported from
+src/articulation/sounds.js and the package.
+
+`buildSegments()` first puts a timed silence of the sound's length where the
+sound is, so the rates, the tunes and the durations of the words see a
+pause; then `expandSounds()` puts the parts of the sound in its place. A
+part is an ordinary plan segment with the tract of a phone, its level in dB
+re a vowel of the voice and, when voiced, its pitch in semitones re the
+voice (`head.pitch`) or, for the fillers, re the syllable before. A noise
+part has an open glottis and no voicing: the glottal noise of issue 35.
+
+| Name     | Recipe                                                                                                                                      | Default length           |
+| -------- | ------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------ |
+| `inhale` | glottal noise at an open glottis, no voicing, tract of `ə`, level rising from -40 to -30 dB                                                 | 0.4 s                    |
+| `exhale` | the same, level falling from -30 to -40 dB                                                                                                  | 0.4 s                    |
+| `sigh`   | `inhale` 0.4 s, then breathy `ɐ` (breath 0.7) 0.7 s, f0 from +2 to -4 st (a fall of 6 st), level from -2 to -14 dB                          | 1.1 s                    |
+| `laugh`  | calls of `h` 0.1 s + breathy `ə` (breath 0.5) 0.1 s, 5 calls per second; the first at `1.66 * head.pitch`, each later 1 st and 1.5 dB lower | 0.8 s (4 calls)          |
+| `filler` | a long steady vowel of the language (`FILLERS`), 2 st below the syllable before, falling 1 st                                               | 0.35 s                   |
+| `um`     | the vowel and `m` of the language (`FILLERS`), pitch as `filler`                                                                            | 0.45 s                   |
+| `cough`  | glottal closure `ʔ` 0.06 s, then a burst of glottal noise 0.15 s on the tract of `ɐ` (0 to -12 dB), 2 times                                 | 0.45 s (2 coughs)        |
+| `throat` | `ʔ` + creaky `ə` 0.18 s, then `ʔ` + creaky `m` 0.18 s (creak 0.25, about -8 st)                                                             | 0.4 s                    |
+| `click`  | dental closure 0.04 s, then a burst of 0.06 s of the air the closure held: the glottis closes, no lung air, no voicing                      | 0.1 s (the burst 0.06 s) |
+
+A written length (`duration="1.2s"`, `[laugh 1.2]`, `⸨laugh:1.2⸩`) stretches
+every part in proportion; for `laugh` and `cough` it sets the number of
+calls instead: `round(duration / 0.2)` laughs and
+`round(duration / 0.225)` coughs, 1 to 12. Without a written length a sound
+is divided by the `rate` of its span like speech. A sound takes the mode of
+the span it is written in: in `[whisper][laugh][/whisper]` the laugh has no
+voicing, `[soft]` makes it quieter, `[high]` raises it.
+
+The level of `inhale` and `exhale` is 30 dB below the vowels of the voice
+(own choice) and `cough` is as loud as a vowel. A noise part is louder than
+its `loudness` by the glottal noise at an open glottis, so its loudness is
+lowered by `NOISE_LEVEL` (-4 dB) to make its `level` a level re the vowel.
+The air flow of the renderer goes through the narrowest place of the tract
+near the tongue tip, so a noise part keeps an open tract with the tongue tip
+in the mouth; left to the consonant before, the noise after an `s` is
+about 7 dB louder than after a `ʔ`.
+
+### Fillers
+
+| Name     | `en`  | `ru`  | `hi` | `zh` | Written in text                     |
+| -------- | ----- | ----- | ---- | ---- | ----------------------------------- |
+| `filler` | `əː`  | `ɛː`  | `əː` | `ɤː` | `uh`, `er`; `э-э`, `э`; `अ…`; `呃`  |
+| `um`     | `əːm` | `ɛːm` | `ə̃ː` | `ŋ̍ː` | `um`, `erm`; `эм`, `гм`; `अं`; `嗯` |
+
+A filler has no stress and, in Mandarin, no tone. Another language uses the
+English row.
+
+### Written fillers and laughter
+
+`textToIpa()` reads the written forms above (`FILLER_WORDS` of each
+verbalizer, src/g2p/verbalize-\*.js) as the sounds `⸨filler⸩` and `⸨um⸩`,
+also in plain text, as they are a pronunciation and not markup. Two or more
+of `ha`, `he`, `ха`, `хе`, `हा`, `哈` in a row (with or without hyphens)
+are a laugh of 0.2 s per written syllable: `hahaha` is `⸨laugh:0.6⸩`, `ha`
+alone stays a word. The written word stays in the timeline with its text.
+
+```js
+textToIpa('um').ipa; // '⸨um⸩'
+textToIpa('э-э', { lang: 'ru' }).ipa; // '⸨filler⸩'
+textToIpa('嗯', { lang: 'zh' }).ipa; // '⸨um⸩'
+textToIpa('hahaha').ipa; // '⸨laugh:0.6⸩'
+```
+
+### Breaths
+
+`synthesize(text, { breaths: true })` (CLI `--breaths`, server field
+`breaths`; `false` by default) puts an `inhale` into every pause of 0.3 s or
+more after `.`, `?`, `!` or `‖`, except at the very start. It lasts
+`min(0.7, 0.3 + 0.03 * n)` s, where `n` is the number of syllables up to the
+next such pause; the pause is made longer if needed, and the breath ends
+0.05 s before the next word (`BREATHS`).
+
+### Timeline
+
+`timeline.sounds` lists `[{ name, start, end }]` as `plan.sounds` does. A
+sound is not a word and not a syllable: in `Yes [laugh] no` the words are
+`Yes` and `no` with their own times, and the laugh is between them. A
+written filler or laugh is a word of the timeline with its written text and
+also a sound.
+
+### How a sound is written and recognised
+
+| Sound    | Text, SSML                      | IPA        | What a detector can measure                    |
+| -------- | ------------------------------- | ---------- | ---------------------------------------------- |
+| `laugh`  | `[laugh]`, `haha`               | `⸨laugh⸩`  | level rhythm of 4-6 Hz for 3 or more cycles    |
+| `filler` | `[filler]`, `[um]`, `uh`, `um`  | `⸨filler⸩` | steady central vowel > 0.2 s, flat low pitch   |
+| `inhale` | `[inhale]`, `--breaths`         | `⸨inhale⸩` | noise ≥ 0.25 s inside a pause, no voicing      |
+| `sigh`   | `[sigh]`                        | `⸨sigh⸩`   | inhale, then breathy fall of ≥ 4 st            |
+| `cough`  | `[cough]`                       | `⸨cough⸩`  | level jump ≥ 20 dB in 20 ms, noise, no voicing |
+| `throat` | `[throat]`                      | `⸨throat⸩` | two creaky voiced parts, f0 below 70 Hz        |
+| `click`  | `[click]`, `<vs:sound name=…/>` | `ǀ`        | burst under 20 ms with silence on both sides   |
+
+The click letters `ǀ` (dental), `ǃ` (alveolar), `ǁ` (lateral) and `ʘ`
+(bilabial) are consonants with `manner: 'click'` in src/ipa/inventory.js,
+made like `click` at their place; `formatIpa()` writes sounds back as
+`⸨name⸩` or `⸨name:seconds⸩`.
+
+### Measured
+
+Tier medium, seed 1, head of 120 Hz:
+
+- Laugh (`Yes [laugh]`, `node experiments/issue-56-measure.mjs`): calls at
+  198, 187, 176 and 168 Hz, the first 1.647 times the head's pitch; the
+  peaks of the 10 ms level curve 1.5, 2.0 and 1.5 dB apart
+  (`node experiments/issue-56-laugh-peaks.mjs`, -15.7, -17.1, -19.1,
+  -20.5 dBFS). In a whisper the laugh is voiced 0.000 of the time.
+- Inhale (`[inhale] Yes`, same command): 0.400 s, voiced 0.000,
+  -42.7 dBFS, 25.4 dB below the vowel of `Yes`. A flat noise at `level` L
+  comes out at -1.8, -11.4, -20.8 and -29.4 dB re the vowel for L = 0,
+  -10, -20 and -30 (`node experiments/issue-56-noise-level.mjs -4`); the
+  whole inhale is louder than its -40 … -30 dB ramp because of the
+  aspiration where it meets the `j` of `Yes`.
+- Cough (`node experiments/issue-56-cough.mjs`): bursts rise by 42.1 and
+  37.9 dB within 20 ms, voiced 0.000; the bursts are -3.1 and -3.9 dB re
+  the vowel of `Yes` (`issue-56-noise-level.mjs`).
+- Sigh (`node experiments/issue-56-sigh.mjs`): breathy part 0.70 s, f0 from
+  132 to 98 Hz, a fitted fall of 5.89 st.
+- Fillers (`node experiments/issue-56-fillers.mjs`): `[filler]` in `en`,
+  `ru`, `hi` and `zh` lasts 0.35 s, voiced 1.00, F1 changes by 2.3, 0.8,
+  2.3 and 1.6 % from its first to its last third, and f0 falls by 1.36 to
+  1.46 st.
+- Throat (`node experiments/issue-56-throat.mjs`): median f0 65 and 63 Hz.
+- Click (`node experiments/issue-56-click.mjs`): `[click]` and `ǀ` give
+  equal plans and samples; the burst lasts 13 ms.
+- Breaths (`node experiments/issue-56-breath-length.mjs`): 0.51 s before
+  `Two three four five six seven.`, 0.33 s before `Two.`, 0.70 s before
+  14 syllables; each ends 0.05 s before the next word.
+- Plain text without sounds, fillers or `breaths` gives the same samples as
+  main (`node experiments/issue-56-plain-identity.mjs <checkout of main>`).
+- The Rust engine renders the sounds with a largest difference of 4.4e-16
+  (tests/rust-waveguide.test.js).
+
+### Limits
+
+- The rows marked own in issue 56 (the levels of breaths, the sigh and the
+  cough) have no measured source yet.
+- The pitch tracker of `issue-56-fillers.mjs` takes a harmonic for the
+  Mandarin `um` (`ŋ̍ː`, 532 Hz); its planned f0 falls from 107 to 98 Hz.
+- No speech-laugh, crying, yawning or sneezing, and nothing decides from
+  the text where to hesitate or laugh; recognising the sounds is issue 71.
