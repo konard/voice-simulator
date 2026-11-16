@@ -200,6 +200,21 @@ describe('parseMarkup: inline tags and limits', () => {
     );
     expect(inline('[lang ru]да[/lang]').spans[0].mode.lang).toBe('ru');
     expect(inline('[ipa həˈloʊ]').overrides[0].ipa).toBe('həˈloʊ');
+    // `[ipa X]` alone is one word; with `[/ipa]` it covers the words.
+    const word = textToIpa('A [ipa təˈmɑːtəʊ] please.', {
+      lang: 'en',
+      markup: true,
+    });
+    expect(word.ipa).toBe('ə təˈmɑːtəʊ ˈpliz .');
+    expect([word.words[1].sourceStart, word.words[1].sourceEnd]).toEqual([
+      2, 17,
+    ]);
+    expect(
+      textToIpa('A [ipa təˈmɑːtəʊ]tomato[/ipa] please.', {
+        lang: 'en',
+        markup: true,
+      }).ipa
+    ).toBe('ə təˈmɑːtəʊ ˈpliz .');
     expect(inline('2 * 3 * 4').text).toBe('2 * 3 * 4');
   });
 
@@ -237,6 +252,16 @@ describe('parseMarkup: inline tags and limits', () => {
     expect(long.length).toBe(20001);
     throwsMarkup(() => parseMarkup(long));
     throwsMarkup(() => parseMarkup('<speak><p>a</speak>'));
+    for (const input of [
+      '<speak><![CDATA[x]]></speak>',
+      '<speak><?pi x?>a</speak>',
+      '<?xml version="1.0"?><speak>a</speak>',
+      '<speak>&nbsp;</speak>',
+      `<speak>${'<s/>'.repeat(MARKUP_LIMITS.maxElements + 1)}</speak>`,
+      '<speak>a<break time="11s"/></speak>',
+    ]) {
+      throwsMarkup(() => parseMarkup(input));
+    }
     // Inline parsing never throws.
     expect(inline('[[[ ]]] [/x] [pause zz').text.length > 0).toBe(true);
   });

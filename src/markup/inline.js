@@ -61,15 +61,13 @@ const SPAN_TAGS = {
     return pitch === null ? null : { pitch };
   },
   ...Object.fromEntries(
-    ['breathy', 'creaky', 'pressed', 'lax', 'falsetto', 'harsh'].map(
-      (name) => [
-        name,
-        (value) => {
-          const degree = degreeOf(value);
-          return degree === null ? null : PHONATIONS[name](degree);
-        },
-      ]
-    )
+    ['breathy', 'creaky', 'pressed', 'lax', 'falsetto', 'harsh'].map((name) => [
+      name,
+      (value) => {
+        const degree = degreeOf(value);
+        return degree === null ? null : PHONATIONS[name](degree);
+      },
+    ])
   ),
   ...Object.fromEntries(
     Object.keys(EMOTIONS).map((name) => [
@@ -130,6 +128,22 @@ class InlineReader {
     this.limits = { ...MARKUP_LIMITS, ...options.limits };
     this.builder = new MarkupBuilder('inline');
     this.open = [];
+    // `[ipa X]` is a span when `[/ipa]` follows before the next `[ipa`,
+    // otherwise one word spoken as X.
+    this.ipaTags = [...input.matchAll(/\[(\/?)ipa[\s\]]/gu)].map((found) => ({
+      at: found.index,
+      closing: found[1] === '/',
+    }));
+    this.ipaNext = 0;
+  }
+
+  /** Whether the `[ipa` tag at `index` is closed before the next one. */
+  ipaClosed(index) {
+    const tags = this.ipaTags;
+    while (this.ipaNext < tags.length && tags[this.ipaNext].at <= index) {
+      this.ipaNext++;
+    }
+    return tags[this.ipaNext]?.closing === true;
   }
 
   read() {
@@ -245,6 +259,9 @@ class InlineReader {
       if (!value) {
         return keep('[ipa] needs the IPA of the words');
       }
+      if (!this.ipaClosed(index)) {
+        return this.ipaWord(tag, value, index);
+      }
       this.begin({ name: 'ipa', position: index, ipa: value });
       return tag.end;
     }
@@ -257,6 +274,24 @@ class InlineReader {
       return keep(`cannot read [${tag.name} ${value ?? ''}]`);
     }
     this.begin({ name: tag.name, position: index }, change);
+    return tag.end;
+  }
+
+  /** `[ipa X]` alone: a word spoken as X, written as X in the text. */
+  ipaWord(tag, value, index) {
+    const { builder } = this;
+    builder.separate(index);
+    const start = builder.text.length;
+    builder.append(value, index, 0);
+    builder.overrides.push({ start, end: builder.text.length, ipa: value });
+    builder.sources.push({
+      start,
+      end: builder.text.length,
+      sourceStart: index,
+      sourceEnd: tag.end,
+      original: this.input.slice(index, tag.end),
+    });
+    builder.separate(tag.end - 1);
     return tag.end;
   }
 
