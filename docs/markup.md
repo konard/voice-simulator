@@ -69,7 +69,7 @@ Every span has all the fields of `MODE_DEFAULTS`:
 | `range`               | 1       | factor on pitch movements                                                                       | pitch targets                                                                                                          |
 | `emphasis`            | 0       | -0.5 reduced, 0 none, 0.5 moderate, 1 strong                                                    | focus: pitch, duration, level (#51)                                                                                    |
 | `phonation`           | all 0   | `breathy`, `creaky`, `tension` (-1 lax … 1 pressed), `falsetto`, `harsh`, `whisper`, each 0 … 1 | breath noise, pitch and pulse shape ([Phonation types](#phonation-types)); `whisper`: the source ([Whisper](#whisper)) |
-| `emotion`             | neutral | `name`, `intensity`, `arousal`, `valence`, `dominance`                                          | carried (#55)                                                                                                          |
+| `emotion`             | neutral | `name`, `intensity`, `arousal`, `valence`, `dominance`                                          | pitch, range, rate, effort, phonation, pauses, vowels and lips ([Emotions and attitudes](#emotions-and-attitudes))     |
 | `tune`                | null    | intonation label (`TUNE_LABELS`)                                                                | the tune of the phrase (#51)                                                                                           |
 | `lang`                | null    | language tag of the span                                                                        | transcription and tunes                                                                                                |
 
@@ -90,26 +90,26 @@ attributes, text, comments, the five entities `&lt; &gt; &amp; &quot;
 required. Unknown elements are skipped with a warning and their text is
 kept.
 
-| Element                  | Attributes and meaning                                                                                                                                                                                                                                                   | Example                                                            | IPA and mode                                                             |
-| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------ | ------------------------------------------------------------------------ |
-| `speak`                  | root; `xml:lang` sets the language                                                                                                                                                                                                                                       | `<speak xml:lang="en-GB">Hello.</speak>`                           | `həˈləʊ .`                                                               |
-| `p`, `s`                 | end with a sentence break if the text has no final punctuation                                                                                                                                                                                                           | `<speak><p>Hello there</p><p>Goodbye</p></speak>`                  | `həˈloʊ ˈðɛɹ . ˌɡʊdˈbaɪ .`                                               |
-| `break`                  | `time="300ms"` or `"1.5s"`; `strength`: `none` 0 s, `x-weak` 0.05 s, `weak` 0.2 s, `medium` 0.4 s (default), `strong` 0.8 s, `x-strong` 1.2 s                                                                                                                            | `Wait<break time="300ms"/>now<break strength="strong"/>go.`        | `ˈweɪt (0.3) ˈnaʊ (...) ˈɡoʊ .`                                          |
-| `prosody`                | `rate`: `x-slow` 0.5, `slow` 0.75, `medium` 1, `fast` 1.3, `x-fast` 1.6, `N%` or a factor such as `1.2`; `pitch`: `x-low` -6, `low` -3, `medium` 0, `high` +3, `x-high` +6 st, `+Nst`, `-Nst`, `+N%`, `-N%`, `NHz` (against the head's pitch, 120 Hz by default), `+NHz` | `<prosody rate="fast" pitch="+2st">Hello there</prosody> friend.`  | `{allegro həˈloʊ ˈðɛɹ allegro} ˈfɹɛnd .`; rate 1.3, pitch 2              |
-|                          | `range`: `x-low` 0.25, `low` 0.5, `medium` 1, `high` 1.5, `x-high` 2, `+N%`, `-N%`                                                                                                                                                                                       | `<prosody pitch="200Hz" range="x-high">Hello</prosody> there.`     | `həˈloʊ ˈðɛɹ .`; pitch 8.84 (120 Hz head), range 2                       |
-|                          | `volume`: `x-soft` -20, `soft` -10, `medium` 0, `loud` +10, `x-loud` +20 dB (the effort of `{pp}`, `{p}`, normal, `{f}`, `{ff}`), `+NdB`, `-NdB` change the effort by dB/40; `silent` sets `gain` -120                                                                   | `<prosody volume="x-soft">Hello</prosody> there.`                  | `{pp həˈloʊ pp} ˈðɛɹ .`; effort 0                                        |
-| `vs:gain` (on `prosody`) | `vs:gain="-6dB"`: plain gain                                                                                                                                                                                                                                             | `<prosody vs:gain="-6dB">Hello</prosody> there.`                   | `həˈloʊ ˈðɛɹ .`; gain -6                                                 |
-| `emphasis`               | `level`: `strong` 1 (default), `moderate` 0.5, `none` 0, `reduced` -0.5                                                                                                                                                                                                  | `Hello <emphasis>world</emphasis>.`                                | `həˈloʊ ˈˈwɝld .`; emphasis 1                                            |
-| `say-as`                 | `interpret-as`: `characters` (or `spell-out`), `cardinal` (or `number`), `ordinal`, `digits`; other values read the content as plain text with a warning                                                                                                                 | `<say-as interpret-as="characters">abc</say-as>.`                  | `ˈeɪ ˈbi ˈsi .`                                                          |
-| `phoneme`                | `alphabet="ipa"` and `ph`: the words inside are spoken as `ph`                                                                                                                                                                                                           | `A <phoneme alphabet="ipa" ph="təˈmɑːtəʊ">tomato</phoneme>.`       | `ə təˈmɑːtəʊ .`                                                          |
-| `lang`                   | `xml:lang`: language of the content                                                                                                                                                                                                                                      | `Say <lang xml:lang="ru">привет</lang>.`                           | `ˈseɪ prʲɪˈvʲet .`; lang ru                                              |
-| `sub`                    | `alias`: spoken instead of the content                                                                                                                                                                                                                                   | `<sub alias="World Wide Web">WWW</sub>.`                           | `ˈwɝld ˈwaɪd ˈwɛb .`                                                     |
-| `vs:effort`              | `level`: `whisper` (whisper 1), `soft`, `normal`, `loud`, `lombard`, `shout`, or `value="0.75"`; `to` sets `effortEnd`                                                                                                                                                   | `<vs:effort level="whisper">Hello</vs:effort> there.`              | `{W həˈloʊ W} ˈðɛɹ .`; whisper 1                                         |
-|                          |                                                                                                                                                                                                                                                                          | `<vs:effort value="0.5" to="0.75">Hello there</vs:effort>.`        | `{crescendo həˈloʊ ˈðɛɹ } .`; effortEnd 0.75                             |
-| `vs:phonation`           | `name`: `modal`, `breathy`, `creaky`, `pressed`, `lax`, `falsetto`, `harsh`, `whisper`, `whispery`; `degree` 0 … 1 (default 0.67)                                                                                                                                        | `<vs:phonation name="breathy">Hello</vs:phonation> there.`         | `{V̤ həˈloʊ V̤} ˈðɛɹ .`; breathy 0.67                                      |
-| `vs:emotion`             | `name` (`neutral happy sad angry afraid surprised disgusted tender bored sarcastic confident hesitant`), `intensity` 0 … 1 (default 0.67), or `arousal`, `valence`, `dominance` (-1 … 1)                                                                                 | `<vs:emotion name="sad" intensity="0.8">Hello</vs:emotion> there.` | `həˈloʊ ˈðɛɹ .`; sad 0.8 (arousal -0.32, valence -0.48, dominance -0.24) |
-| `vs:tune`                | `name`: a tune label (see [Intonation](#intonation)); an unknown name is a warning                                                                                                                                                                                       | `<speak><vs:tune name="IK6">Какой голос!</vs:tune></speak>`        | `{IK6 kəkɐj ˈɡoɫəs IK6} !`; tune IK6                                     |
-| `vs:sound` (empty)       | `name`: `laugh`, `inhale`, `exhale`, `sigh`, `cough`, `throat`, `filler`, `click`; optional `duration="0.5s"`                                                                                                                                                            | `Hello <vs:sound name="laugh"/> there.`                            | `həˈloʊ ⸨laugh⸩ ˈðɛɹ .`                                                  |
+| Element                  | Attributes and meaning                                                                                                                                                                                                                                                   | Example                                                            | IPA and mode                                                               |
+| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------ | -------------------------------------------------------------------------- |
+| `speak`                  | root; `xml:lang` sets the language                                                                                                                                                                                                                                       | `<speak xml:lang="en-GB">Hello.</speak>`                           | `həˈləʊ .`                                                                 |
+| `p`, `s`                 | end with a sentence break if the text has no final punctuation                                                                                                                                                                                                           | `<speak><p>Hello there</p><p>Goodbye</p></speak>`                  | `həˈloʊ ˈðɛɹ . ˌɡʊdˈbaɪ .`                                                 |
+| `break`                  | `time="300ms"` or `"1.5s"`; `strength`: `none` 0 s, `x-weak` 0.05 s, `weak` 0.2 s, `medium` 0.4 s (default), `strong` 0.8 s, `x-strong` 1.2 s                                                                                                                            | `Wait<break time="300ms"/>now<break strength="strong"/>go.`        | `ˈweɪt (0.3) ˈnaʊ (...) ˈɡoʊ .`                                            |
+| `prosody`                | `rate`: `x-slow` 0.5, `slow` 0.75, `medium` 1, `fast` 1.3, `x-fast` 1.6, `N%` or a factor such as `1.2`; `pitch`: `x-low` -6, `low` -3, `medium` 0, `high` +3, `x-high` +6 st, `+Nst`, `-Nst`, `+N%`, `-N%`, `NHz` (against the head's pitch, 120 Hz by default), `+NHz` | `<prosody rate="fast" pitch="+2st">Hello there</prosody> friend.`  | `{allegro həˈloʊ ˈðɛɹ allegro} ˈfɹɛnd .`; rate 1.3, pitch 2                |
+|                          | `range`: `x-low` 0.25, `low` 0.5, `medium` 1, `high` 1.5, `x-high` 2, `+N%`, `-N%`                                                                                                                                                                                       | `<prosody pitch="200Hz" range="x-high">Hello</prosody> there.`     | `həˈloʊ ˈðɛɹ .`; pitch 8.84 (120 Hz head), range 2                         |
+|                          | `volume`: `x-soft` -20, `soft` -10, `medium` 0, `loud` +10, `x-loud` +20 dB (the effort of `{pp}`, `{p}`, normal, `{f}`, `{ff}`), `+NdB`, `-NdB` change the effort by dB/40; `silent` sets `gain` -120                                                                   | `<prosody volume="x-soft">Hello</prosody> there.`                  | `{pp həˈloʊ pp} ˈðɛɹ .`; effort 0                                          |
+| `vs:gain` (on `prosody`) | `vs:gain="-6dB"`: plain gain                                                                                                                                                                                                                                             | `<prosody vs:gain="-6dB">Hello</prosody> there.`                   | `həˈloʊ ˈðɛɹ .`; gain -6                                                   |
+| `emphasis`               | `level`: `strong` 1 (default), `moderate` 0.5, `none` 0, `reduced` -0.5                                                                                                                                                                                                  | `Hello <emphasis>world</emphasis>.`                                | `həˈloʊ ˈˈwɝld .`; emphasis 1                                              |
+| `say-as`                 | `interpret-as`: `characters` (or `spell-out`), `cardinal` (or `number`), `ordinal`, `digits`; other values read the content as plain text with a warning                                                                                                                 | `<say-as interpret-as="characters">abc</say-as>.`                  | `ˈeɪ ˈbi ˈsi .`                                                            |
+| `phoneme`                | `alphabet="ipa"` and `ph`: the words inside are spoken as `ph`                                                                                                                                                                                                           | `A <phoneme alphabet="ipa" ph="təˈmɑːtəʊ">tomato</phoneme>.`       | `ə təˈmɑːtəʊ .`                                                            |
+| `lang`                   | `xml:lang`: language of the content                                                                                                                                                                                                                                      | `Say <lang xml:lang="ru">привет</lang>.`                           | `ˈseɪ prʲɪˈvʲet .`; lang ru                                                |
+| `sub`                    | `alias`: spoken instead of the content                                                                                                                                                                                                                                   | `<sub alias="World Wide Web">WWW</sub>.`                           | `ˈwɝld ˈwaɪd ˈwɛb .`                                                       |
+| `vs:effort`              | `level`: `whisper` (whisper 1), `soft`, `normal`, `loud`, `lombard`, `shout`, or `value="0.75"`; `to` sets `effortEnd`                                                                                                                                                   | `<vs:effort level="whisper">Hello</vs:effort> there.`              | `{W həˈloʊ W} ˈðɛɹ .`; whisper 1                                           |
+|                          |                                                                                                                                                                                                                                                                          | `<vs:effort value="0.5" to="0.75">Hello there</vs:effort>.`        | `{crescendo həˈloʊ ˈðɛɹ } .`; effortEnd 0.75                               |
+| `vs:phonation`           | `name`: `modal`, `breathy`, `creaky`, `pressed`, `lax`, `falsetto`, `harsh`, `whisper`, `whispery`; `degree` 0 … 1 (default 0.67)                                                                                                                                        | `<vs:phonation name="breathy">Hello</vs:phonation> there.`         | `{V̤ həˈloʊ V̤} ˈðɛɹ .`; breathy 0.67                                        |
+| `vs:emotion`             | `name` (`neutral happy sad angry afraid surprised disgusted tender bored sarcastic confident hesitant`), `intensity` 0 … 1 (default 1), or `arousal`, `valence`, `dominance` (-1 … 1)                                                                                    | `<vs:emotion name="sad" intensity="0.8">Hello</vs:emotion> there.` | `həˈloʊ ˈðɛɹ .`; sad 0.8 (arousal -0.072, valence -0.344, dominance -0.44) |
+| `vs:tune`                | `name`: a tune label (see [Intonation](#intonation)); an unknown name is a warning                                                                                                                                                                                       | `<speak><vs:tune name="IK6">Какой голос!</vs:tune></speak>`        | `{IK6 kəkɐj ˈɡoɫəs IK6} !`; tune IK6                                       |
+| `vs:sound` (empty)       | `name`: `laugh`, `inhale`, `exhale`, `sigh`, `cough`, `throat`, `filler`, `click`; optional `duration="0.5s"`                                                                                                                                                            | `Hello <vs:sound name="laugh"/> there.`                            | `həˈloʊ ⸨laugh⸩ ˈðɛɹ .`                                                    |
 
 The words of a `sub` or `say-as` share the range of the whole element in
 the input, and every other word points at its characters in the input, so
@@ -154,7 +154,7 @@ end of the input with a warning. Inline parsing never throws.
 | `[breathy]`, `[creaky]` (with a degree: `[creaky 1]`)                               | breathy, creaky 0.67 or the degree                                                                                        | `[breathy]Hello[/breathy] [creaky 1]there[/creaky].`          | `{V̤ həˈloʊ V̤} {3V̰ ˈðɛɹ V̰} .`                                                 |
 | `[pressed]`, `[lax]`                                                                | tension +0.67, -0.67                                                                                                      | `[pressed]Hello[/pressed] [lax]there[/lax].`                  | `{V͈ həˈloʊ V͈} {V͉ ˈðɛɹ V͉} .`                                                  |
 | `[falsetto]`, `[harsh]`                                                             | falsetto, harsh 0.67                                                                                                      | `[falsetto]Hello[/falsetto] [harsh]there[/harsh].`            | `{F həˈloʊ F} {V! ˈðɛɹ V!} .`                                                |
-| every emotion name, `[angry 0.8]`                                                   | emotion with intensity 0.67 or N                                                                                          | `[angry 0.8]Hello[/angry] there.`                             | `həˈloʊ ˈðɛɹ .`; angry 0.8                                                   |
+| every emotion name, `[angry 0.8]`                                                   | emotion with intensity 1 or N                                                                                             | `[angry 0.8]Hello[/angry] there.`                             | `həˈloʊ ˈðɛɹ .`; angry 0.8                                                   |
 | `[lang ru]`                                                                         | language of the words                                                                                                     | `Say [lang ru]привет[/lang].`                                 | `ˈseɪ prʲɪˈvʲet .`                                                           |
 | `[ipa X]`                                                                           | a word spoken as X; with `[/ipa]` the words inside are spoken as X                                                        | `A [ipa təˈmɑːtəʊ] please.`                                   | `ə təˈmɑːtəʊ ˈpliz .`                                                        |
 | `[pause N]`                                                                         | a pause of N seconds                                                                                                      | `Wait [pause 0.3] now.`                                       | `ˈweɪt (0.3) ˈnaʊ .`                                                         |
@@ -583,3 +583,154 @@ experiments/issue-53-plain-identity.txt).
   [RUST-ENGINE.md](RUST-ENGINE.md)).
 - Recognising whispered speech is issue 71 and 72; Mandarin tones in a
   whisper are not modelled beyond the level cue of the pitch.
+
+## Emotions and attitudes
+
+An emotion is not a sound source of its own: it is a row of rules that
+sets the pitch level, pitch range, pitch movement, rate, pauses, effort
+([Vocal effort](#vocal-effort)), phonation ([Phonation types](#phonation-types))
+and the precision of the vowels (issue 55). `EMOTION_PRESETS` and
+`emotionChanges(emotion)` of src/articulation/emotion.js give the changes;
+the planner (`realiseEmotion(mode)`, src/articulation/emotion-plan.js)
+composes them with every span as if the emotion were an outer span, so the
+span's own markup wins: `[angry][soft]…[/soft][/angry]` stays soft
+(effort 0.25) while rate and range multiply and pitch adds.
+
+What to expect: listeners name the emotion of human actors in 72 to 91 % of
+the cases (Pell et al. 2009); rule-based formant synthesis reaches 50 to
+80 % (Schröder 2001). Rule-based emotion is recognisable but less clear
+than an actor. The listening test of
+[listening-tests/emotions.md](listening-tests/emotions.md) has not been run
+yet.
+
+### The presets
+
+Values at intensity 1. "B&S" rows are the settings Burkhardt and
+Sendlmeier (2000) found best recognised with a formant synthesiser (f0
++50 % is +7.0 st, -20 % is -3.9 st, +150 % is +15.9 st; range +200 % is
+× 3; rate -40 % is × 0.6): they are `verified: true`. "Pell" rows take the
+rate and the order of pitch level and range from Pell et al. (2009); the
+rest of those rows and every "own" row are choices of this project, as no
+verified table was found for disgust voice quality, tenderness, irony or
+the attitudes: they are `verified: false`.
+
+| Name        | Pitch st | Range × | Rate × | Effort | Phonation      | Other                                | A, V, D               | Source    | `verified` |
+| ----------- | -------- | ------- | ------ | ------ | -------------- | ------------------------------------ | --------------------- | --------- | ---------- |
+| `neutral`   | 0        | 1       | 1      | 0.5    | none           | none                                 | 0, 0, 0               |           | true       |
+| `angry`     | +7.0     | 3       | 1.3    | 0.75   | `tension` 0.5  | `glide` -30 st/s, `precision` +1     | 0.35, -0.35, -0.34 ¹  | B&S       | true       |
+| `happy`     | +7.0     | 2       | 1.3    | 0.6    | none           | `glide` +50 st/s, `smile` 1          | 0.29, 0.40, 0.13 ¹    | B&S       | true       |
+| `sad`       | -3.9     | 0.8     | 0.6    | 0.35   | `breathy` 0.5  | `pauses` 1.5                         | -0.09, -0.43, -0.55 ¹ | B&S       | true       |
+| `afraid`    | +15.9    | 1.2     | 1.3    | 0.5    | `falsetto` 0.5 | `finalRise` 30 st/s, `jitter` +2 %   | 0.31, -0.27, -0.79 ¹  | B&S       | true       |
+| `bored`     | -3.9     | 0.5     | 0.8    | 0.4    | `tension` -0.5 | `stressLength` 1.4, `precision` -1   | -0.35, -0.2, -0.1     | B&S       | true       |
+| `surprised` | +8       | 2.5     | 0.93   | 0.6    | none           | `finalRise` 30 st/s                  | 0.4, 0.15, -0.1       | Pell, own | false      |
+| `disgusted` | +1       | 1.3     | 0.67   | 0.5    | `creaky` 0.3   | `stressLength` 1.2                   | 0.15, -0.4, 0.2       | Pell, own | false      |
+| `tender`    | -2       | 0.8     | 0.85   | 0.3    | `breathy` 0.4  | none                                 | -0.2, 0.4, -0.05      | own       | false      |
+| `sarcastic` | -2       | 0.6     | 0.8    | 0.5    | none           | `stressLength` 1.3, `glide` -15 st/s | 0.05, -0.25, 0.3      | own       | false      |
+| `confident` | -1       | 1.2     | 1      | 0.6    | `tension` 0.2  | `pauses` 0.8, `precision` +0.5       | 0.1, 0.25, 0.45       | own       | false      |
+| `hesitant`  | +2       | 0.8     | 0.85   | 0.4    | none           | `pauses` 2, `finalRise` 15 st/s      | -0.1, -0.1, -0.4      | own       | false      |
+
+¹ Arousal, valence and dominance from Schröder et al. (2001), whose scale
+of -100 … +100 is -1 … 1 here; the other coordinates are own choices.
+The issue proposed 0 st for `hesitant`; +2 st is an own choice so that it
+differs from `neutral` in pitch, range and duration, not only in its
+pauses and its final rise (the separation test of tests/emotion.test.js).
+
+The fields of "Other":
+
+- `pauses`: factor on every pause inside the span;
+- `stressLength`: factor on the vowels with primary stress;
+- `glide`: a straight pitch movement in st/s inside every vowel with
+  primary stress, around its middle, at most ±3 st in total
+  (`GLIDE_LIMIT`); `finalRise`: the same on the last vowel of the span,
+  which is lengthened, if needed, to the time a rise of that size takes
+  (`RISE_TIME`, Xu and Sun 2002);
+- `precision` p: the `height` and `backness` targets of the vowels move
+  away from those of [ə] by the factor 1 + 0.3 p (p > 0) or towards them
+  by 1 + 0.2 p (p < 0) (`PRECISION`);
+- `smile` s: lip rounding -0.3 s and the lips drawn back by 1.2 s cm
+  (`SMILE`), which shortens the tract at the lips;
+- `jitter`: extra jitter in percent, realised as harsh voice
+  (`harsh` = jitter / 4, with the shimmer and breath noise of harsh
+  voice).
+
+Intensity `i` (0 … 1, 1 when not written): semitones, degrees and slopes
+× `i`; factors `f^i`; effort `0.5 + (e - 0.5) * i`. `[angry 0]` gives the
+samples of plain speech.
+
+The pitch of a preset is the change of the median f0 that the profiles
+measured. A raised effort (angry, happy) raises the pitch on top of it, as
+any raised effort does; the fall of a lowered effort (sad, bored, tender)
+is part of the measured fall and is not added again.
+
+### The dimensions
+
+`<vs:emotion arousal="…" valence="…" dominance="…">` without a name (or
+with `name="neutral"`) uses these rules, with arousal A, valence V and
+dominance D each -1 … 1. A named preset keeps its row; its coordinates
+scaled by the intensity are only carried in `mode.emotion` (for issue 71).
+
+| Quantity  | Rule                                                  | Basis                                                                   |
+| --------- | ----------------------------------------------------- | ----------------------------------------------------------------------- |
+| pitch     | `12 * log2(1 + 0.32 * A) - 2 * D` st                  | Schröder et al. 2001: 140.3 Hz + 0.452 Hz per unit A; the D term is own |
+| range     | × `max(0.3, 1 + 1.15 * A)`                            | same: 21.6 Hz + 0.248 Hz per unit A                                     |
+| effort    | `0.5 + 0.25 * A`                                      | same: spectral slope flatter with A; the size is own                    |
+| rate      | × `1 + 0.2 * A`                                       | direction from Schröder et al.; the size is own                         |
+| pauses    | × `1 - 0.3 * A`                                       | same                                                                    |
+| `smile`   | `max(0, V)`                                           | own (lip spreading of joy, B&S)                                         |
+| `glide`   | `30 * V` st/s                                         | own (B&S: rises for joy, falls for anger)                               |
+| phonation | `tension` = `0.4 * D`; `breathy` = `max(0, -0.4 * D)` | own                                                                     |
+
+### How an emotion is written and recognised
+
+| Text / SSML                                 | IPA                                 | Correlates that can be measured (#71)                                                                 |
+| ------------------------------------------- | ----------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| `[angry]`, `[angry 0.8]`                    | not written (the `modes` list only) | pitch level, range and rate against the speaker's neutral; H1-H2; alpha ratio of #52; share of pauses |
+| `<vs:emotion name="sad" intensity="0.5">`   | not written (the `modes` list only) | the same                                                                                              |
+| `<vs:emotion arousal="0.5" valence="-0.3">` | not written (the `modes` list only) | the same                                                                                              |
+
+### Measured
+
+"The train leaves at seven." (tier medium, seed 1, markup, headroom 20)
+against plain speech (median f0 123.0 Hz, f0 range 6.54 st, 2.085 s, H1-H2
+4.48 dB, level -38.6 dBFS), measured with `analyzeVoice()` and `levelDb()`
+by `node experiments/issue-55-emotion-measure.mjs`
+(experiments/issue-55-emotion-measure.txt). "Last vowel" is the planned f0
+movement of the last vowel; `[loud]` is effort 0.75 alone.
+
+| Tag           | Median f0 st | Range × | Duration × | Stressed vowels × | H1-H2 dB | Level dB | Last vowel st |
+| ------------- | ------------ | ------- | ---------- | ----------------- | -------- | -------- | ------------- |
+| `[loud]`      | +6.07        | 1.02    | 1.03       | 1.10              | -4.54    | +9.4     | -1.99         |
+| `[angry]`     | +14.13       | 2.85    | 0.80       | 0.85              | -7.39    | +9.4     | -7.46         |
+| `[happy]`     | +9.79        | 3.48    | 0.79       | 0.80              | -2.84    | +7.7     | -4.83         |
+| `[sad]`       | -3.85        | 0.84    | 1.83       | 1.67              | +6.32    | -7.5     | -0.47         |
+| `[afraid]`    | +22.08       | 1.29    | 0.80       | 0.77              | +17.28   | +7.6     | +2.83         |
+| `[bored]`     | -3.64        | 0.52    | 1.34       | 1.75              | +3.88    | -5.1     | -0.69         |
+| `[surprised]` | +10.76       | 4.26    | 1.10       | 1.12              | -3.73    | +8.7     | +2.87         |
+| `[disgusted]` | -2.40        | 1.37    | 1.54       | 1.79              | -1.97    | -1.2     | -1.11         |
+| `[tender]`    | -1.99        | 0.83    | 1.17       | 1.18              | +5.50    | -8.4     | -1.16         |
+| `[sarcastic]` | -1.91        | 0.75    | 1.32       | 1.63              | +0.23    | -0.6     | -0.71         |
+| `[confident]` | +1.71        | 1.22    | 0.97       | 1.04              | -2.78    | +4.3     | -2.31         |
+| `[hesitant]`  | +1.95        | 0.77    | 1.44       | 1.18              | -0.16    | -3.4     | +1.49         |
+
+`[angry]` is 7 st above plain plus the 6.07 st of its effort; `[afraid]`
+adds the falsetto of its phonation. F2 of a stressed [a] in `ˈpapa` rises
+from 1917 to 2028 Hz (× 1.058) with `[happy]` (`tubeFormants` of the
+planned tract; `node experiments/issue-55-smile.mjs`). tests/emotion.test.js
+checks the thresholds of issue 55 and that every pair of the twelve presets
+is at least 1.0 apart over (median f0 st, range ×, duration ×, H1-H2 dB /
+3). Text without an emotion renders the same samples as main
+(`node experiments/issue-55-plain-identity.mjs <checkout>`,
+experiments/issue-55-plain-identity.txt).
+
+### Limits
+
+- The rows marked `verified: false` are not taken from a verified source;
+  improve them when a source is read.
+- No listener has judged the presets yet: the recognition rate of this
+  simulator is not known ([listening-tests/emotions.md](listening-tests/emotions.md)).
+- Laughing or sobbing while speaking are sounds (issue 56); recognising an
+  emotion from audio is issue 71; the emotion is never chosen from the
+  meaning of the text.
+- Like every value of a span, a field that an inner span sets back to its
+  default (`[normal]`, `[modal]`) inside an emotion cannot be told from no
+  value: the emotion's value applies.

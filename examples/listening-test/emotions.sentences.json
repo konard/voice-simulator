@@ -1,0 +1,95 @@
+{
+  "id": "emotions",
+  "title": "Emotions in a synthetic voice",
+  "instructions": "Please use headphones in a quiet room. Each trial plays one short sentence spoken in one emotion; the words never carry the emotion. Choose the emotion you hear. The test has 48 trials and takes about fifteen minutes. You do not need to understand the language.",
+  "sentences": [
+    {
+      "id": "emotion-en-1",
+      "type": "choice",
+      "text": "The train leaves at seven.",
+      "lang": "en",
+      "tiers": ["medium"],
+      "emotions": ["neutral", "happy", "sad", "angry", "afraid", "bored"],
+      "intensity": 1,
+      "choices": ["neutral", "happy", "sad", "angry", "afraid", "bored"],
+      "maxPlays": 2
+    },
+    {
+      "id": "emotion-en-2",
+      "type": "choice",
+      "text": "I will see you on Monday.",
+      "lang": "en",
+      "tiers": ["medium"],
+      "emotions": ["neutral", "happy", "sad", "angry", "afraid", "bored"],
+      "intensity": 1,
+      "choices": ["neutral", "happy", "sad", "angry", "afraid", "bored"],
+      "maxPlays": 2
+    },
+    {
+      "id": "emotion-ru-1",
+      "type": "choice",
+      "text": "Поезд отправляется в семь.",
+      "lang": "ru",
+      "tiers": ["medium"],
+      "emotions": ["neutral", "happy", "sad", "angry", "afraid", "bored"],
+      "intensity": 1,
+      "choices": ["neutral", "happy", "sad", "angry", "afraid", "bored"],
+      "maxPlays": 2
+    },
+    {
+      "id": "emotion-ru-2",
+      "type": "choice",
+      "text": "Увидимся в понедельник.",
+      "lang": "ru",
+      "tiers": ["medium"],
+      "emotions": ["neutral", "happy", "sad", "angry", "afraid", "bored"],
+      "intensity": 1,
+      "choices": ["neutral", "happy", "sad", "angry", "afraid", "bored"],
+      "maxPlays": 2
+    },
+    {
+      "id": "emotion-hi-1",
+      "type": "choice",
+      "text": "ट्रेन सात बजे छूटती है।",
+      "lang": "hi",
+      "tiers": ["medium"],
+      "emotions": ["neutral", "happy", "sad", "angry", "afraid", "bored"],
+      "intensity": 1,
+      "choices": ["neutral", "happy", "sad", "angry", "afraid", "bored"],
+      "maxPlays": 2
+    },
+    {
+      "id": "emotion-hi-2",
+      "type": "choice",
+      "text": "मैं तुमसे सोमवार को मिलूँगा।",
+      "lang": "hi",
+      "tiers": ["medium"],
+      "emotions": ["neutral", "happy", "sad", "angry", "afraid", "bored"],
+      "intensity": 1,
+      "choices": ["neutral", "happy", "sad", "angry", "afraid", "bored"],
+      "maxPlays": 2
+    },
+    {
+      "id": "emotion-zh-1",
+      "type": "choice",
+      "text": "火车七点出发。",
+      "lang": "zh",
+      "tiers": ["medium"],
+      "emotions": ["neutral", "happy", "sad", "angry", "afraid", "bored"],
+      "intensity": 1,
+      "choices": ["neutral", "happy", "sad", "angry", "afraid", "bored"],
+      "maxPlays": 2
+    },
+    {
+      "id": "emotion-zh-2",
+      "type": "choice",
+      "text": "我们星期一见。",
+      "lang": "zh",
+      "tiers": ["medium"],
+      "emotions": ["neutral", "happy", "sad", "angry", "afraid", "bored"],
+      "intensity": 1,
+      "choices": ["neutral", "happy", "sad", "angry", "afraid", "bored"],
+      "maxPlays": 2
+    }
+  ]
+}

@@ -1,0 +1,7 @@
+e7ddfcf5ee5b9c05 100086 "The train leaves at seven." {"tier":"medium"}
+11c6aca8cad1d7e2 100086 "The train leaves at seven." {"tier":"medium","markup":true,"headroom":20}
+8a6b24b4e8a72ee8 63790 "I will see you on Monday?" {"tier":"low"}
+74e0729c7a6c485d 105134 "Поезд отправляется в семь." {"lang":"ru","tier":"medium"}
+9aa63aae3d79adda 82592 "火车七点出发。" {"lang":"zh","tier":"low"}
+856a0809b7490acd 72104 "[loud]Hello[/loud] there, [whisper]friend[/whisper]." {"tier":"low","markup":true}
+51f28fcad328a28d 62302 "[breathy]Slowly now[/breathy]." {"tier":"medium","markup":true}

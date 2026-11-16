@@ -38,8 +38,8 @@ a pressure wave travelling through the 3D shape of a parametric low-poly head
   effort, phonation, emotion and sounds), inline tags such as
   `[whisper]Hello[/whisper]` or `[pause 0.5]` with `markup: true`, and
   ExtIPA/VoQS marks in IPA (`{W həˈloʊ W} ˈwɝld .`, `(.)`, `⸨laugh⸩`, `ˈˈ`).
-  Rate, pitch, range, level, effort, phonation types, emphasis, tunes and
-  pauses are heard; the rest is carried in `plan.modes` ([docs/markup.md](docs/markup.md)).
+  Rate, pitch, range, level, effort, phonation types, whisper, emotions,
+  emphasis, tunes and pauses are heard; sounds wait for issue 56 ([docs/markup.md](docs/markup.md)).
 - **Vocal effort**: `[soft]`, `[loud]`, `[shout]`, `[lombard]`,
   `[crescendo]` and `[diminuendo]` (and `<vs:effort>`, `{f … f}`) change
   more than the level: the pitch rises (+5 Hz per dB), the spectrum gets
@@ -57,6 +57,10 @@ a pressure wave travelling through the 3D shape of a parametric low-poly head
   of a statement, and `cpp()` and `jitterPercent()` measure the result
   ([docs/markup.md](docs/markup.md#phonation-types)). **Whisper** (issue 53,
   `[whisper]`, `{W … W}`, `ạ`, `ḁ`): glottal noise, 25 dB quieter, 1.3× as long ([Whisper](docs/markup.md#whisper)).
+- **Emotions and attitudes** (issue 55): `[angry]`, `[happy 0.5]`, `[sad]`, `[afraid]`, `[bored]`, `[surprised]`, `[disgusted]`, `[tender]`, `[sarcastic]`, `[confident]`, `[hesitant]` and `<vs:emotion arousal="0.5" valence="-0.3">`
+  set pitch, range, rate, effort, phonation, pauses, vowel precision, a glide, a final rise and a smile (`EMOTION_PRESETS`, `emotionChanges()`).
+  The six rows from Burkhardt and Sendlmeier (2000) are `verified`; an inner tag wins (`[angry][soft]…` stays soft). Rule-based emotion is
+  recognisable but less clear than an actor (50–80 % against 72–91 %; [Emotions](docs/markup.md#emotions-and-attitudes)).
 - **Intonation per language** (issue 51): statements fall, yes/no
   questions rise, wh-questions fall, `Tea or coffee?` rises on the first
   item and falls on the second (`ˈti ↗ | ˈɔɹ ˈkɑfi ↘ ?`), list items and
@@ -364,6 +368,7 @@ import {
   addLexicon,
   decodeAudio,
   encodeAudio,
+  emotionChanges,
   encodeWav,
   englishDictionarySize,
   matchVoice,
@@ -389,6 +394,7 @@ textToIpa('I can do it', { lang: 'en', weakForms: false }).ipa; // 'ˈaɪ ˈkæn
 // Speech markup (docs/markup.md): SSML is read by itself, inline tags on request.
 textToIpa('<speak>Hello <emphasis>world</emphasis>.</speak>').ipa; // 'həˈloʊ ˈˈwɝld .'
 textToIpa('[whisper]Hello[/whisper] world.', { markup: true }).ipa; // '{W həˈloʊ W} ˈwɝld .'
+emotionChanges({ name: 'angry', intensity: 0.5 }).pitch; // 3.5 semitones; emotions change the voice, not the IPA
 // The sentence type is written into the IPA (issue 51).
 textToIpa('Tea or coffee?', { lang: 'en' }).ipa; // 'ˈti ↗ | ˈɔɹ ˈkɑfi ↘ ?'
 textToIpa('А ты?', { lang: 'ru' }).ipa; // '{IK4 a tɨ IK4} ?'
@@ -479,6 +485,7 @@ npx voice-simulator ipa "Where are you going?"   # ˈwɛɹ ɚ ju ˈɡoʊɪŋ ↘
 npx voice-simulator say "<speak>Wait<break time=\"1s\"/>now.</speak>" -o wait.wav
 npx voice-simulator say --markup "[shout]Hey![/shout] [soft]Quiet.[/soft]" -o hey.wav
 npx voice-simulator say --markup "[whisper]Hello.[/whisper]" --out w.wav
+npx voice-simulator say --markup "[sad]I will see you on Monday.[/sad]" -o sad.wav
 npx voice-simulator say "Hello world." --loudness=-23 -o broadcast.wav  # EBU R 128
 npx voice-simulator timeline "Hello world, how are you?"   # word and syllable times
 npx voice-simulator visemes "Hello world" -f vrm --fps 30 -o hello.json  # face animation
@@ -692,11 +699,11 @@ as those of `compare` do not replace it.
 
 [examples/listening-test/](examples/listening-test/README.md) is a page that
 runs from a folder on disk, with no server and no network
-(`Content-Security-Policy: connect-src 'none'`). It has three kinds of
+(`Content-Security-Policy: connect-src 'none'`). It has four kinds of
 trial: MUSHRA (ITU-R BS.1534-3: rate versions of a sentence from 0 to 100
 against a reference, with a hidden reference and 3.5 kHz and 7 kHz
-anchors), ABX (is X the same as A or as B?) and intelligibility (type what
-you heard; scored by the word error rate).
+anchors), ABX (is X the same as A or as B?), intelligibility (type what
+you heard; scored by the word error rate) and choice (name the emotion you hear, issue 55; [emotions](docs/listening-tests/emotions.md)).
 
 ```bash
 node scripts/listening-test.mjs build --sentences examples/listening-test/sentences.example.json --out examples/listening-test
@@ -1440,14 +1447,7 @@ Customize ESLint in `eslint.config.js`. Current configuration:
 
 ### Prettier Options
 
-Configured in `.prettierrc`:
-
-- Single quotes
-- Semicolons
-- 2-space indentation
-- 80-character line width
-- ES5 trailing commas
-- LF line endings
+Configured in `.prettierrc`: single quotes, semicolons, 2-space indentation, 80-character line width, ES5 trailing commas and LF line endings.
 
 ## Scripts Reference
 

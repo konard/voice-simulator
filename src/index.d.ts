@@ -129,9 +129,9 @@ export interface Phonation {
 }
 
 export interface Emotion {
-  /** A name of EMOTIONS, e.g. 'angry'; 'neutral' by default. */
+  /** A name of EMOTION_PRESETS, e.g. 'angry'; 'neutral' by default. */
   name: string;
-  /** 0 … 1. */
+  /** 0 … 1; 1 when a named emotion is written without one. */
   intensity: number;
   arousal: number;
   valence: number;
@@ -1801,6 +1801,93 @@ export declare function phonationChannels(
   falsetto: number;
   harsh: number;
 };
+// Emotions and attitudes (issue 55, docs/markup.md#emotions-and-attitudes)
+/** A row of EMOTION_PRESETS: the changes at intensity 1. */
+export interface EmotionPreset {
+  /** Pitch shift in semitones. */
+  pitch: number;
+  /** Factor on the pitch movements. */
+  range: number;
+  /** Speech rate factor. */
+  rate: number;
+  /** Vocal effort 0 … 1 (0.5 normal). */
+  effort: number;
+  /** Degrees of the phonation types; `tension` -1 (lax) … 1 (pressed). */
+  phonation: Readonly<Partial<Phonation>>;
+  /** Factor on every pause inside the span. */
+  pauses: number;
+  /** Vowels away from [ə] (> 0) or towards it (< 0). */
+  precision: number;
+  /** Lip spreading 0 … 1. */
+  smile: number;
+  /** Pitch movement (st/s) inside each primary-stressed vowel. */
+  glide: number;
+  /** Pitch movement (st/s) on the last vowel of the span. */
+  finalRise: number;
+  /** Factor on the primary-stressed vowels. */
+  stressLength: number;
+  /** Extra jitter in percent (realised as harsh voice). */
+  jitter: number;
+  arousal: number;
+  valence: number;
+  dominance: number;
+  /** Where arousal, valence and dominance come from. */
+  coordinates: string;
+  /** Where the row comes from, e.g. 'Burkhardt & Sendlmeier 2000'. */
+  source: string;
+  /** Whether listeners recognised the row in a published study. */
+  verified: boolean;
+}
+/** The changes of an emotion (`emotionChanges`). */
+export type EmotionChanges = Omit<
+  EmotionPreset,
+  'arousal' | 'valence' | 'dominance' | 'coordinates' | 'source' | 'verified'
+> & { phonation: Partial<Phonation> };
+/**
+ * The twelve presets: neutral, angry, happy, sad, afraid, bored,
+ * surprised, disgusted, tender, sarcastic, confident, hesitant.
+ */
+export declare const EMOTION_PRESETS: Readonly<
+  Record<string, Readonly<EmotionPreset>>
+>;
+/** Limit of a glide or final rise in semitones (3). */
+export declare const GLIDE_LIMIT: number;
+/** Vowel spreading per unit of precision above (0.3) and below (0.2) 0. */
+export declare const PRECISION: Readonly<{ up: number; down: number }>;
+/** Lip changes of smile 1: rounding -0.3 and retraction 1.2 cm. */
+export declare const SMILE: Readonly<{ rounding: number; retraction: number }>;
+/** Time a pitch rise of d st needs: base + perSemitone · d seconds. */
+export declare const RISE_TIME: Readonly<{ base: number; perSemitone: number }>;
+/**
+ * What an emotion changes: a named preset at its intensity (1 when not
+ * given), or the rules of arousal, valence and dominance for 'neutral'.
+ */
+export declare function emotionChanges(
+  emotion?: string | Partial<Emotion>
+): EmotionChanges;
+/** Whether an emotion changes nothing (neutral at the origin, or intensity 0). */
+export declare function isNeutralEmotion(
+  emotion: Partial<Emotion> | null | undefined
+): boolean;
+/**
+ * The mode with its emotion realised as an outer span; the same object
+ * when the emotion changes nothing.
+ */
+export declare function realiseEmotion<T extends Mode | null | undefined>(
+  mode: T
+): T extends Mode
+  ? Mode & {
+      emotionPitch?: number;
+      emotionRange?: number;
+      emotionEffort?: number;
+      pauses?: number;
+      stressLength?: number;
+      glide?: number;
+      finalRise?: number;
+      precision?: number;
+      smile?: number;
+    }
+  : T;
 /** Release of a breathy-voiced stop (bʱ dʱ ɖʱ ɡʱ dʒʱ). */
 export declare const BREATHY_RELEASE: Readonly<{
   duration: number;

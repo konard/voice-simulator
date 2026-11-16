@@ -108,6 +108,16 @@ export {
   isSsml,
   parseMarkup,
 } from './markup/index.js';
+// Emotions and attitudes (issue 55)
+export {
+  EMOTIONS as EMOTION_PRESETS,
+  GLIDE_LIMIT,
+  PRECISION,
+  SMILE,
+  emotionChanges,
+  isNeutralEmotion,
+} from './articulation/emotion.js';
+export { RISE_TIME, realiseEmotion } from './articulation/emotion-plan.js';
 export { approachTargets, DYNAMICS_ORDER } from './articulation/dynamics.js';
 export {
   approachTargets as approachToneTargets,

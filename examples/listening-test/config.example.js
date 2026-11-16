@@ -37,5 +37,14 @@ globalThis.LISTENING_TEST_CONFIG = {
       text: 'The reference words.',
       maxPlays: 2,
     },
+    {
+      type: 'choice',
+      id: 'emotion-en-1-sad',
+      audio: 'stimuli/emotion-en-1/sad.wav',
+      choices: ['neutral', 'happy', 'sad', 'angry', 'afraid', 'bored'],
+      answer: 'sad',
+      lang: 'en',
+      maxPlays: 2,
+    },
   ],
 };
