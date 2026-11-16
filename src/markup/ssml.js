@@ -31,7 +31,13 @@ const BREAK_STRENGTHS = Object.freeze({
   'x-strong': 1.2,
 });
 
-const RATES = { 'x-slow': 0.5, slow: 0.75, medium: 1, fast: 1.3, 'x-fast': 1.6 };
+const RATES = {
+  'x-slow': 0.5,
+  slow: 0.75,
+  medium: 1,
+  fast: 1.3,
+  'x-fast': 1.6,
+};
 const PITCHES = { 'x-low': -6, low: -3, medium: 0, high: 3, 'x-high': 6 };
 const RANGES = { 'x-low': 0.25, low: 0.5, medium: 1, high: 1.5, 'x-high': 2 };
 const VOLUMES = { 'x-soft': -12, soft: -6, medium: 0, loud: 6, 'x-loud': 12 };
@@ -44,6 +50,40 @@ const ENTITIES = { lt: '<', gt: '>', amp: '&', quot: '"', apos: "'" };
 
 /** Elements that never have content. */
 const EMPTY_ELEMENTS = new Set(['break', 'vs:sound']);
+
+/** Elements that change the mode: the method that reads the change. */
+const CHANGES = new Map([
+  ['prosody', 'prosody'],
+  ['emphasis', 'emphasis'],
+  ['vs:effort', 'effort'],
+  ['vs:phonation', 'phonation'],
+  ['vs:emotion', 'emotion'],
+]);
+
+/** The other known elements: the method for the opening tag, or null. */
+const STARTS = new Map([
+  ['speak', 'startSpeak'],
+  ['p', 'startParagraph'],
+  ['s', 'startParagraph'],
+  ['lang', 'startLang'],
+  ['break', 'startBreak'],
+  ['vs:sound', 'startSound'],
+  ['phoneme', 'startPhoneme'],
+  ['say-as', null],
+  ['sub', null],
+]);
+
+/** The method for the closing tag of an element. */
+const CLOSES = new Map([
+  ['speak', 'closeRoot'],
+  ['p', 'closeParagraph'],
+  ['s', 'closeParagraph'],
+  ['break', 'closeEmpty'],
+  ['vs:sound', 'closeEmpty'],
+  ['phoneme', 'closePhoneme'],
+  ['say-as', 'replace'],
+  ['sub', 'replace'],
+]);
 
 /** Final punctuation: a `p` or `s` that ends without one gets a `.`. */
 const FINAL_PUNCTUATION = /[.!?…。！？।]["'”’»)\]]*\s*$/u;
@@ -70,7 +110,9 @@ function quantity(value, units) {
   const found = new RegExp(`^(${NUMBER})\\s*(${units})$`, 'iu').exec(
     String(value).trim()
   );
-  return found ? { value: Number(found[1]), unit: found[2].toLowerCase() } : null;
+  return found
+    ? { value: Number(found[1]), unit: found[2].toLowerCase() }
+    : null;
 }
 
 /** The change of a `rate` attribute, or null if it cannot be read. */
@@ -149,7 +191,9 @@ function bounded(value, low, high) {
 
 /** English, Russian, Hindi and Chinese ordinal forms the normalizer reads. */
 function ordinalText(digits, lang) {
-  const base = String(lang ?? 'en').toLowerCase().split(/[-_]/u)[0];
+  const base = String(lang ?? 'en')
+    .toLowerCase()
+    .split(/[-_]/u)[0];
   if (base === 'ru') {
     return `${digits}-й`;
   }
@@ -162,7 +206,7 @@ function ordinalText(digits, lang) {
   const tens = Number(digits.slice(-2));
   const last = Number(digits.slice(-1));
   const suffix =
-    tens >= 11 && tens <= 13 ? 'th' : ['th', 'st', 'nd', 'rd'][last] ?? 'th';
+    tens >= 11 && tens <= 13 ? 'th' : (['th', 'st', 'nd', 'rd'][last] ?? 'th');
   return `${digits}${suffix}`;
 }
 
@@ -277,7 +321,10 @@ class SsmlReader {
         body[1] === 'x' || body[1] === 'X'
           ? Number.parseInt(body.slice(2), 16)
           : Number.parseInt(body.slice(1), 10);
-      if (!(code > 0 && code <= 0x10ffff) || (code >= 0xd800 && code < 0xe000)) {
+      if (
+        !(code > 0 && code <= 0x10ffff) ||
+        (code >= 0xd800 && code < 0xe000)
+      ) {
         this.fail(`invalid character reference &${body};`, index);
       }
       return [String.fromCodePoint(code), end + 1];
@@ -449,7 +496,10 @@ class SsmlReader {
       this.fail(`more than ${this.limits.maxElements} elements`, position);
     }
     if (this.elements.length + 1 > this.limits.maxDepth) {
-      this.fail(`elements nested deeper than ${this.limits.maxDepth}`, position);
+      this.fail(
+        `elements nested deeper than ${this.limits.maxDepth}`,
+        position
+      );
     }
     const element = {
       name: rawName,
@@ -484,59 +534,57 @@ class SsmlReader {
 
   /** Act on an opening tag. */
   start(element) {
-    const { attributes, local } = element;
-    const builder = this.builder;
-    const lang = attributes['xml:lang'];
-    switch (local) {
-      case 'speak':
-        this.lang = lang ?? null;
-        return;
-      case 'p':
-      case 's':
-        builder.separate(element.position);
-        if (lang) {
-          this.push(element, { lang });
-        }
-        return;
-      case 'lang':
-        if (lang) {
-          this.push(element, { lang });
-        } else {
-          this.warn(element, '<lang> without xml:lang');
-        }
-        return;
-      case 'break':
-        return this.startBreak(element);
-      case 'vs:sound':
-        return this.startSound(element);
-      case 'prosody':
-        return this.push(element, this.prosody(element));
-      case 'emphasis': {
-        const level = attributes.level ?? 'strong';
-        if (!Object.hasOwn(EMPHASIS, level)) {
-          this.warn(element, `unknown emphasis level ${level}`);
-        }
-        return this.push(element, { emphasis: EMPHASIS[level] ?? 1 });
-      }
-      case 'say-as':
-      case 'sub':
-        return;
-      case 'phoneme':
-        if (attributes.alphabet && attributes.alphabet !== 'ipa') {
-          this.warn(element, `alphabet ${attributes.alphabet} is not ipa`);
-        } else if (!attributes.ph) {
-          this.warn(element, '<phoneme> without ph');
-        }
-        return;
-      case 'vs:effort':
-        return this.push(element, this.effort(element));
-      case 'vs:phonation':
-        return this.push(element, this.phonation(element));
-      case 'vs:emotion':
-        return this.push(element, this.emotion(element));
-      default:
-        this.warn(element, `unknown element <${element.name}>`);
+    const change = CHANGES.get(element.local);
+    if (change) {
+      this.push(element, this[change](element));
+      return;
     }
+    if (!STARTS.has(element.local)) {
+      this.warn(element, `unknown element <${element.name}>`);
+      return;
+    }
+    const handler = STARTS.get(element.local);
+    if (handler) {
+      this[handler](element);
+    }
+  }
+
+  startSpeak(element) {
+    this.lang = element.attributes['xml:lang'] ?? null;
+  }
+
+  startParagraph(element) {
+    this.builder.separate(element.position);
+    const lang = element.attributes['xml:lang'];
+    if (lang) {
+      this.push(element, { lang });
+    }
+  }
+
+  startLang(element) {
+    const lang = element.attributes['xml:lang'];
+    if (lang) {
+      this.push(element, { lang });
+    } else {
+      this.warn(element, '<lang> without xml:lang');
+    }
+  }
+
+  startPhoneme(element) {
+    const { alphabet, ph } = element.attributes;
+    if (alphabet && alphabet !== 'ipa') {
+      this.warn(element, `alphabet ${alphabet} is not ipa`);
+    } else if (!ph) {
+      this.warn(element, '<phoneme> without ph');
+    }
+  }
+
+  emphasis(element) {
+    const level = element.attributes.level ?? 'strong';
+    if (!Object.hasOwn(EMPHASIS, level)) {
+      this.warn(element, `unknown emphasis level ${level}`);
+    }
+    return { emphasis: EMPHASIS[level] ?? 1 };
   }
 
   startBreak(element) {
@@ -694,50 +742,49 @@ class SsmlReader {
   /** Act on a closing tag at `position` (or the end of an empty tag). */
   close(element, position) {
     this.elements.pop();
-    const builder = this.builder;
-    const { attributes, local, textStart } = element;
-    switch (local) {
-      case 'speak':
-        this.closedRoot = true;
-        break;
-      case 'p':
-      case 's':
-        if (
-          builder.text.slice(textStart).trim() &&
-          !FINAL_PUNCTUATION.test(builder.text)
-        ) {
-          const trailing = builder.text.length - builder.text.trimEnd().length;
-          builder.text = builder.text.trimEnd();
-          builder.offsets.length -= trailing;
-          builder.modes.length -= trailing;
-          builder.append('.', position, 0);
-        }
-        break;
-      case 'break':
-      case 'vs:sound':
-        builder.separate(position);
-        break;
-      case 'phoneme':
-        if (attributes.ph && (attributes.alphabet ?? 'ipa') === 'ipa') {
-          builder.overrides.push({
-            start: textStart,
-            end: builder.text.length,
-            ipa: attributes.ph.trim(),
-          });
-        }
-        break;
-      case 'say-as':
-      case 'sub':
-        this.replace(element, position);
-        break;
-      default:
-        break;
+    const handler = CLOSES.get(element.local);
+    if (handler) {
+      this[handler](element, position);
     }
     if (element.pushed) {
-      builder.pop();
+      this.builder.pop();
     }
-    if (local === 'p' || local === 's') {
-      builder.separate(position);
+    if (element.local === 'p' || element.local === 's') {
+      this.builder.separate(position);
+    }
+  }
+
+  closeRoot() {
+    this.closedRoot = true;
+  }
+
+  /** A `p` or `s` with text and no final punctuation ends with `.`. */
+  closeParagraph(element, position) {
+    const builder = this.builder;
+    if (
+      builder.text.slice(element.textStart).trim() &&
+      !FINAL_PUNCTUATION.test(builder.text)
+    ) {
+      const trailing = builder.text.length - builder.text.trimEnd().length;
+      builder.text = builder.text.trimEnd();
+      builder.offsets.length -= trailing;
+      builder.modes.length -= trailing;
+      builder.append('.', position, 0);
+    }
+  }
+
+  closeEmpty(element, position) {
+    this.builder.separate(position);
+  }
+
+  closePhoneme(element) {
+    const { attributes, textStart } = element;
+    if (attributes.ph && (attributes.alphabet ?? 'ipa') === 'ipa') {
+      this.builder.overrides.push({
+        start: textStart,
+        end: this.builder.text.length,
+        ipa: attributes.ph.trim(),
+      });
     }
   }
 

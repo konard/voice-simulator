@@ -31,7 +31,7 @@ export {
 /**
  * Whether a text is SSML: its trimmed form starts with `<speak`. A text
  * that starts with an XML declaration or a document type is read as SSML
- * too, so it is refused (`MarkupError`) instead of being read aloud.
+ * too, so that `parseMarkup()` refuses it with `MarkupError`.
  */
 export function isSsml(text) {
   return /^(?:<speak[\s>/]|<\?xml[\s?]|<!DOCTYPE[\s>])/iu.test(

@@ -5,8 +5,9 @@
  *   GET  /api/languages           -> supported languages with samples
  *   GET  /api/tiers               -> audio and visual LOD tiers, default tier
  *   GET  /api/ipa?text=&lang=&accent= -> {lang, accent, ipa, words}
- *   GET|POST /api/timeline        -> {lang, accent, ipa, timeline}: when
- *                                    each word and syllable is spoken
+ *   GET|POST /api/timeline        -> {lang, accent, ipa, modes, sounds,
+ *                                    warnings, timeline}: when each word
+ *                                    and syllable is spoken
  *   GET  /api/head/random?seed=   -> random head configuration
  *   GET  /api/mesh.obj?seed=&lod= -> low-poly head model (Wavefront OBJ)
  *   GET|POST /api/synthesize      -> complete audio file (WAV by default)
