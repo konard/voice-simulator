@@ -61,7 +61,26 @@ export {
   maxModeLevel,
   splToEffort,
 } from './articulation/effort.js';
-export { alphaRatio, levelDb } from './analysis/mode-features.js';
+export {
+  alphaRatio,
+  cpp,
+  glottalPeriods,
+  jitterPercent,
+  levelDb,
+  PHONATION_ANALYSIS,
+  pulseF0,
+  pulseH1H2,
+} from './analysis/mode-features.js';
+export {
+  BREATHY_RELEASE,
+  FINAL_CREAK,
+  finalCreakAmount,
+  PHONATION,
+  PHONATION_CHANNELS,
+  phonationChannels,
+  SEGMENT_DEGREE,
+  voiceRd,
+} from './articulation/phonation.js';
 export {
   integratedLoudness,
   kWeighting,
@@ -222,6 +241,10 @@ export {
   BREATH_GAIN,
   CHINK_NOISE,
   Glottis,
+  MIN_F0,
+  noiseBreathiness,
+  PHONATION_SOURCE,
+  phonationF0,
 } from './acoustics/glottis.js';
 export {
   ADDUCTION_TABLE,

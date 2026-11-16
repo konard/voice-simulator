@@ -23,7 +23,7 @@ use crate::fdtd::model::Model;
 use crate::fdtd::parallel::Team;
 use crate::fdtd::solver::{Fdtd3d, FdtdOptions, Output};
 use crate::frame;
-use crate::glottis::{GlottalControl, Glottis, GlottisOptions};
+use crate::glottis::{noise_breathiness, GlottalControl, Glottis, GlottisOptions};
 use crate::listener::Listener;
 use crate::math::{self, max};
 use crate::solver::Solver;
@@ -459,6 +459,10 @@ impl<S: Solver> Renderer<S> {
                 aspiration_strength: Some(0.0),
                 effort: 0.0,
                 tension: 0.0,
+                breath: 0.0,
+                creak: 0.0,
+                falsetto: 0.0,
+                harsh: 0.0,
             },
             frication_position: 1.0,
             frication_amplitude: 0.0,
@@ -579,6 +583,10 @@ impl<S: Solver> Renderer<S> {
         self.control.loudness = frame[frame::LOUDNESS];
         self.control.effort = frame[frame::EFFORT];
         self.control.tension = frame[frame::TENSION];
+        self.control.breath = frame[frame::BREATH];
+        self.control.creak = frame[frame::CREAK];
+        self.control.falsetto = frame[frame::FALSETTO];
+        self.control.harsh = frame[frame::HARSH];
         self.frication_position = frame[frame::FRICATION_POSITION];
         self.update_airflow(frame, rate);
         self.output.configure(rate);
@@ -594,7 +602,7 @@ impl<S: Solver> Renderer<S> {
             control.voicing,
             control.aspiration,
             control.closure,
-            settings.breathiness,
+            noise_breathiness(settings.breathiness, control.breath, 0.0),
             settings.glottal_chink,
             &settings.areas,
         );
