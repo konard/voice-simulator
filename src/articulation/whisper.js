@@ -1,7 +1,7 @@
 /**
  * Whisper in the plan (issue 53). The `whisper` channel (0..1) says how
- * much of the voice source is the noise of a half-open glottis instead of
- * fold vibration: 0 is a modal voice, 1 a whisper, values between a
+ * much of the voice source is the noise of a half-open glottis and how
+ * little is fold vibration: 0 is a modal voice, 1 a whisper, values between a
  * whispery voice (pulses and noise). It comes from
  *
  * - `mode.phonation.whisper` of a span (`[whisper]`, `{W … W}`,
@@ -100,8 +100,8 @@ function isUnvoiced(segment) {
  * the voiced segments on either side. The glottis of a whisperer stays
  * open through them; it changes nothing there (the drive is whisper times
  * voicing), but it lets the smoothed channel reach the whisper of a short
- * whispered vowel instead of ramping across it (`ˈhḁ`, `{W ˈi W}`), so
- * that no pulses are left in it.
+ * whispered vowel before the vowel starts (`ˈhḁ`, `{W ˈi W}`), so that no
+ * pulses are left in it.
  * @param {object[]} segments timed segments
  * @returns {number[]}
  */
@@ -134,7 +134,7 @@ export function segmentWhispers(segments) {
  * @param {Float32Array} values
  * @param {object[]} segments timed segments
  * @param {number} frameRate
- * @returns whether any frame whispers
+ * @returns {Float32Array|null} `values` when any frame whispers, else null
  */
 export function fillWhisper(values, segments, frameRate) {
   values.fill(0);
@@ -150,7 +150,7 @@ export function fillWhisper(values, segments, frameRate) {
     const last = Math.min(values.length, Math.round(segment.end * frameRate));
     values.fill(whisper, first, Math.max(first + 1, last));
   });
-  return any;
+  return any ? values : null;
 }
 
 /**

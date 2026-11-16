@@ -1,5 +1,6 @@
 // Quick measures of plain vs whispered speech (issue 53). Usage:
 //   node experiments/issue-53-quick.mjs [tier]
+import { performance } from 'node:perf_hooks';
 import {
   synthesize,
   levelDb,

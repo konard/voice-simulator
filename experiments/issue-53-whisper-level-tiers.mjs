@@ -8,7 +8,9 @@ import { WHISPER_OPENING } from '../src/acoustics/whisper.js';
 const text = process.argv[2] ?? '{W ˈa W}';
 const level = (samples) => {
   let sum = 0;
-  for (const value of samples) sum += value * value;
+  for (const value of samples) {
+    sum += value * value;
+  }
   return 10 * Math.log10(sum / samples.length + 1e-30);
 };
 const row = [`opening ${WHISPER_OPENING}`];

@@ -151,6 +151,9 @@ export const STAGE_WHISPER_SLOPE = -0.1;
  */
 export const WHISPERY_BOOST = 6;
 
+/** The pitch (Hz) of a head that gives none (as src/articulation/effort.js). */
+const DEFAULT_PITCH = 120;
+
 /** dB of whisper noise per semitone of intended pitch above head.pitch. */
 export const WHISPER_PITCH_GAIN = 0.7;
 
@@ -272,7 +275,7 @@ export function whisperyGain(whisper) {
  * @param {{whisper?: number, voicing: number, closure: number, stopClosure?: number, fricative?: number, effort?: number, f0: number}} control
  * @param {number} noise Band-passed white noise.
  * @param {number} strength Relative turbulence strength at the glottis.
- * @param {number} pitch head.pitch (Hz).
+ * @param {number} [pitch] head.pitch (Hz, default DEFAULT_PITCH).
  */
 export function whisperNoise(control, noise, strength, pitch) {
   return (
@@ -280,7 +283,7 @@ export function whisperNoise(control, noise, strength, pitch) {
     whisperDrive(control) *
     strength *
     WHISPER_GAIN *
-    whisperPitchGain(control.f0, pitch) *
+    whisperPitchGain(control.f0, pitch ?? DEFAULT_PITCH) *
     whisperyGain(control.whisper ?? 0)
   );
 }

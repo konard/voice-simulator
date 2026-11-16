@@ -17,7 +17,9 @@ const to =
   Math.round((vowel.end - 0.2 * (vowel.end - vowel.start)) * sampleRate) -
   length;
 const frequencies = [];
-for (let f = 100; f <= 1200; f += 5) frequencies.push(f);
+for (let f = 100; f <= 1200; f += 5) {
+  frequencies.push(f);
+}
 const power = new Float64Array(frequencies.length);
 let frames = 0;
 for (let start = from; start <= to; start += length / 4) {
@@ -36,17 +38,24 @@ for (let start = from; start <= to; start += length / 4) {
 }
 let peak = 0;
 power.forEach((p, k) => {
-  if (p > power[peak]) peak = k;
+  if (p > power[peak]) {
+    peak = k;
+  }
 });
 let low = peak;
-while (low > 0 && power[low] > power[peak] / 2) low--;
+while (low > 0 && power[low] > power[peak] / 2) {
+  low--;
+}
 let high = peak;
-while (high < power.length - 1 && power[high] > power[peak] / 2) high++;
-for (let k = 0; k < power.length; k += 4)
+while (high < power.length - 1 && power[high] > power[peak] / 2) {
+  high++;
+}
+for (let k = 0; k < power.length; k += 4) {
   console.log(
     frequencies[k],
     (10 * Math.log10(power[k] / power[peak])).toFixed(1)
   );
+}
 console.log(
   text,
   tier,

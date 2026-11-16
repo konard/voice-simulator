@@ -1096,7 +1096,7 @@ export function planUtterance(ipa, options = {}) {
   applyRegisterGain(channels.loudness, segments, frameRate, tunes);
   applyModeGains(channels.loudness, modes, frameRate);
   channels.effort.set(effort);
-  const whispers = fillWhisper(channels.whisper, segments, frameRate);
+  const whisper = fillWhisper(channels.whisper, segments, frameRate);
   for (let frame = 0; frame < frameCount; frame++) {
     channels.tension[frame] = TENSION_PER_DB * effort[frame];
   }
@@ -1106,7 +1106,7 @@ export function planUtterance(ipa, options = {}) {
     head,
     frameRate,
     channels.height,
-    { language: tunes, effort, whisper: whispers ? channels.whisper : null }
+    { language: tunes, effort, whisper }
   );
   const steps = { loudness: channels.loudness, effort };
   for (const name of GLOTTAL_CHANNELS) {

@@ -23,7 +23,9 @@ const hop = Math.round(0.01 * rate);
 const frames = [];
 for (let start = 0; start + length <= signal.length; start += hop) {
   let sum = 0;
-  for (let i = start; i < start + length; i++) sum += signal[i] ** 2;
+  for (let i = start; i < start + length; i++) {
+    sum += signal[i] ** 2;
+  }
   frames.push({
     time: start / rate,
     level: Math.sqrt(sum / length),

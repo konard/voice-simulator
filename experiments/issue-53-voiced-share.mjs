@@ -27,7 +27,9 @@ for (const [name, text] of [
   const frames = [];
   for (let start = 0; start + length <= signal.length; start += hop) {
     let sum = 0;
-    for (let i = start; i < start + length; i++) sum += signal[i] ** 2;
+    for (let i = start; i < start + length; i++) {
+      sum += signal[i] ** 2;
+    }
     frames.push({
       level: Math.sqrt(sum / length),
       ap: yinPitch(signal, start, length, rate).aperiodicity,

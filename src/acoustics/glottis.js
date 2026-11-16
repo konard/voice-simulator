@@ -171,7 +171,7 @@ export class Glottis {
     this.reCritical = head.reCritical;
     this.areas = head;
     /** The speaker's pitch (Hz): the whisper noise follows f0 against it. */
-    this.pitch = head.pitch ?? 120;
+    this.pitch = head.pitch;
     this.strengthKey = [NaN, NaN];
     this.strength = 0;
     this.smoothed = 0;
@@ -268,6 +268,18 @@ export class Glottis {
   }
 
   /**
+   * Turbulence strength at the glottis from the open tract and the lung
+   * pressure, times whisperQuiet() in a whisper (src/acoustics/whisper.js).
+   */
+  #tractStrength(control, whisper) {
+    const strength =
+      this.#openTractStrength(control) * this.#noiseGain(control);
+    return whisper > 0
+      ? strength * whisperQuiet(whisper, control.effort ?? 0)
+      : strength;
+  }
+
+  /**
    * Advance by dt seconds and return the flow derivative sample.
    * @param {number} dt
    * @param {{f0: number, voicing: number, aspiration: number, closure: number, loudness: number, lungPressure?: number, aspirationStrength?: number, oralPressure?: number, effort?: number, tension?: number}} control
@@ -304,10 +316,7 @@ export class Glottis {
       }
     }
     const t = this.phase / this.period;
-    this.intensity = voicing * loudness * this.shimmer;
-    if (whisper > 0) {
-      this.intensity *= voicedShare;
-    }
+    this.intensity = voicing * loudness * this.shimmer * voicedShare;
     const effort = control.effort ?? 0;
     if (effort !== 0) {
       this.#effortGains(effort);
@@ -323,20 +332,15 @@ export class Glottis {
     voiced = this.#tilt(voiced, dt, effort);
     // Aspiration is strongest while the folds are open.
     const opening = Math.max(0, Math.sin(2 * Math.PI * t));
-    let modulation =
-      voicing > 0.1 ? 0.3 + 0.7 * opening * Math.min(1, voicing) : 1;
-    if (whisper > 0) {
-      modulation = modulation * voicedShare + whisper;
-    }
+    const modulation =
+      (voicing > 0.1 ? 0.3 + 0.7 * opening * Math.min(1, voicing) : 1) *
+        voicedShare +
+      whisper;
     this.noiseModulation = modulation;
     // The lung pressure carries the loudness: the strength grows as the
     // pressure drop to the power 1.5, and the pressure as loudness^(2/3).
-    let strength =
-      control.aspirationStrength ??
-      this.#openTractStrength(control) * this.#noiseGain(control);
-    if (whisper > 0 && control.aspirationStrength === undefined) {
-      strength *= whisperQuiet(whisper, control.effort ?? 0);
-    }
+    const strength =
+      control.aspirationStrength ?? this.#tractStrength(control, whisper);
     const breath =
       ((control.aspiration +
         this.breathGain *

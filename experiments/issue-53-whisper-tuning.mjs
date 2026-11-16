@@ -2,6 +2,7 @@
 // and [u] against the voiced vowels (WHISPER_OPENING), at a tier (default
 // high). Usage:
 //   node experiments/issue-53-whisper-tuning.mjs [tier]
+import { performance } from 'node:perf_hooks';
 import { synthesize, estimateFormants } from '../src/index.js';
 import { WHISPER_OPENING } from '../src/acoustics/whisper.js';
 

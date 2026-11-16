@@ -13,7 +13,9 @@ const at = (result, time) => Math.round(time * result.sampleRate);
 
 const peakDb = (samples, from, to) => {
   let peak = 0;
-  for (let i = from; i < to; i++) peak = Math.max(peak, Math.abs(samples[i]));
+  for (let i = from; i < to; i++) {
+    peak = Math.max(peak, Math.abs(samples[i]));
+  }
   return 20 * Math.log10(peak);
 };
 
@@ -35,10 +37,13 @@ function burstPeak(result) {
     i += ms
   ) {
     const level = peakDb(result.samples, i, i + ms);
-    if (level < quiet) [quiet, release] = [level, i];
+    if (level < quiet) {
+      [quiet, release] = [level, i];
+    }
   }
-  while (peakDb(result.samples, release, release + ms) < top - 50)
+  while (peakDb(result.samples, release, release + ms) < top - 50) {
     release += ms;
+  }
   return peakDb(result.samples, release, release + at(result, 0.015));
 }
 
