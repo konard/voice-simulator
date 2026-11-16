@@ -267,94 +267,25 @@ impl Grid {
 
     /// One step in the gather form; bit-identical with
     /// [`Grid::step_scatter`] (`divergence` stays 0). Needs
-    /// [`Grid::index`] after the last change of `link_a`/`link_b`.
+    /// [`Grid::index`] after the last change of `link_a`/`link_b`. It is
+    /// [`links_pass`] over every link, then [`cells_pass`] over every
+    /// cell; the thread team of `parallel.rs` (issue 24) runs the same two
+    /// passes over slabs of links and cells.
     pub fn step_gather(&mut self) {
-        #[cfg(all(target_arch = "wasm32", target_feature = "simd128"))]
-        {
-            super::kernel_simd::step_gather(self);
-        }
-        #[cfg(not(all(target_arch = "wasm32", target_feature = "simd128")))]
-        {
-            self.step_gather_scalar();
-        }
+        let (links, cells) = (self.links(), self.cells());
+        links_pass(self, 0, links);
+        cells_pass(self, 0, cells);
     }
 
     /// The scalar gather form, also the reference of `kernel_simd.rs`.
     pub fn step_gather_scalar(&mut self) {
-        self.links_pass(0);
-        match self.incident_width {
-            1 => self.cells_padded::<1>(),
-            2 => self.cells_padded::<2>(),
-            3 => self.cells_padded::<3>(),
-            4 => self.cells_padded::<4>(),
-            5 => self.cells_padded::<5>(),
-            6 => self.cells_padded::<6>(),
-            7 => self.cells_padded::<7>(),
-            8 => self.cells_padded::<8>(),
-            _ => self.cells_listed(),
-        }
+        let (links, cells) = (self.links(), self.cells());
+        links_slab_scalar(self.link_slab(0, links));
+        cells_slab_scalar(self.cell_slab(0, cells));
     }
 
-    /// Pass 2 of the gather form with lists of `W` links each.
-    fn cells_padded<const W: usize>(&mut self) {
-        let Self {
-            pressure,
-            keep,
-            gain,
-            flux,
-            incident_link,
-            incident_sign,
-            ..
-        } = self;
-        let lists = incident_link
-            .as_chunks::<W>()
-            .0
-            .iter()
-            .zip(incident_sign.as_chunks::<W>().0);
-        let cells = pressure
-            .iter_mut()
-            .zip(keep.iter())
-            .zip(gain.iter())
-            .zip(lists);
-        for (((p, &k), &g), (links, signs)) in cells {
-            let d = padded_sum(flux, links, signs);
-            *p = k * *p - g * d;
-        }
-    }
-
-    /// Pass 2 of the gather form with lists of any length.
-    fn cells_listed(&mut self) {
-        let Self {
-            pressure,
-            keep,
-            gain,
-            flux,
-            incident_start,
-            incident_link,
-            incident_sign,
-            ..
-        } = self;
-        let cells = pressure
-            .iter_mut()
-            .zip(keep.iter())
-            .zip(gain.iter())
-            .zip(incident_start.windows(2));
-        for (((p, &k), &g), range) in cells {
-            let d = incident_sum(
-                flux,
-                incident_link,
-                incident_sign,
-                range[0] as usize,
-                range[1] as usize,
-            );
-            *p = k * *p - g * d;
-        }
-    }
-
-    /// Pass 1 of the gather form for the links from `from` on: new velocity
-    /// and flux of every link.
-    #[inline]
-    pub(super) fn links_pass(&mut self, from: usize) {
+    /// The arrays of pass 1 for the links `from..to`.
+    pub(crate) fn link_slab(&mut self, from: usize, to: usize) -> LinkSlab<'_> {
         let Self {
             link_a,
             link_b,
@@ -365,18 +296,198 @@ impl Grid {
             pressure,
             ..
         } = self;
-        let links = link_a[from..]
-            .iter()
-            .zip(&link_b[from..])
-            .zip(&mut velocity[from..])
-            .zip(&damping[from..])
-            .zip(&conductance[from..])
-            .zip(&mut flux[from..]);
-        for (((((&a, &b), v), &k), &c), f) in links {
-            let u = k * (*v - COURANT * (pressure[b as usize] - pressure[a as usize]));
-            *v = u;
-            *f = c * u;
+        LinkSlab {
+            link_a: &link_a[from..to],
+            link_b: &link_b[from..to],
+            damping: &damping[from..to],
+            conductance: &conductance[from..to],
+            pressure,
+            velocity: &mut velocity[from..to],
+            flux: &mut flux[from..to],
         }
+    }
+
+    /// The arrays of pass 2 for the cells `from..to`.
+    pub(crate) fn cell_slab(&mut self, from: usize, to: usize) -> CellSlab<'_> {
+        let Self {
+            pressure,
+            keep,
+            gain,
+            flux,
+            incident_start,
+            incident_link,
+            incident_sign,
+            incident_width,
+            ..
+        } = self;
+        CellSlab {
+            first: from,
+            pressure: &mut pressure[from..to],
+            keep: &keep[from..to],
+            gain: &gain[from..to],
+            flux,
+            incident_start,
+            incident_link,
+            incident_sign,
+            width: *incident_width,
+        }
+    }
+}
+
+/// Pass 1 of the gather form for the links `from..to` of `grid`: the new
+/// velocity and flux of every one of them, from `pressure`, which the pass
+/// does not change. A link writes only its own `velocity` and `flux`, so
+/// any split of `0..links` into ranges, run in any order or at the same
+/// time, gives the bits of one pass over all links. The `simd128` build
+/// runs it two links per vector; `from` may be odd.
+pub fn links_pass(grid: &mut Grid, from: usize, to: usize) {
+    links_slab(grid.link_slab(from, to));
+}
+
+/// Pass 2 of the gather form for the cells `from..to` of `grid`: the new
+/// pressure of every one of them from the fluxes of its incident links,
+/// which the pass does not change. A cell writes only its own `pressure`,
+/// so, as for [`links_pass`], ranges may run in any order or at the same
+/// time. The `simd128` build runs it two cells per vector; `from` may be
+/// odd.
+pub fn cells_pass(grid: &mut Grid, from: usize, to: usize) {
+    cells_slab(grid.cell_slab(from, to));
+}
+
+/// The arrays pass 1 reads and writes for one range of links: every slice
+/// but `pressure` (all cells) covers the same links.
+pub(crate) struct LinkSlab<'a> {
+    pub link_a: &'a [u32],
+    pub link_b: &'a [u32],
+    pub damping: &'a [f64],
+    pub conductance: &'a [f64],
+    pub pressure: &'a [f64],
+    pub velocity: &'a mut [f64],
+    pub flux: &'a mut [f64],
+}
+
+/// The arrays pass 2 reads and writes for the cells `first..first +
+/// pressure.len()`: `pressure`, `keep` and `gain` cover those cells, the
+/// others are whole.
+pub(crate) struct CellSlab<'a> {
+    pub first: usize,
+    pub pressure: &'a mut [f64],
+    pub keep: &'a [f64],
+    pub gain: &'a [f64],
+    pub flux: &'a [f64],
+    pub incident_start: &'a [u32],
+    pub incident_link: &'a [u32],
+    pub incident_sign: &'a [f64],
+    /// `incident_width` of the grid.
+    pub width: usize,
+}
+
+/// Pass 1 over one slab, in the SIMD form when the build has it.
+#[inline]
+pub(crate) fn links_slab(slab: LinkSlab<'_>) {
+    #[cfg(all(target_arch = "wasm32", target_feature = "simd128"))]
+    {
+        super::kernel_simd::links_slab(slab);
+    }
+    #[cfg(not(all(target_arch = "wasm32", target_feature = "simd128")))]
+    {
+        links_slab_scalar(slab);
+    }
+}
+
+/// Pass 2 over one slab, in the SIMD form when the build has it.
+#[inline]
+pub(crate) fn cells_slab(slab: CellSlab<'_>) {
+    #[cfg(all(target_arch = "wasm32", target_feature = "simd128"))]
+    {
+        super::kernel_simd::cells_slab(slab);
+    }
+    #[cfg(not(all(target_arch = "wasm32", target_feature = "simd128")))]
+    {
+        cells_slab_scalar(slab);
+    }
+}
+
+/// Pass 1 over one slab, one link at a time.
+pub(super) fn links_slab_scalar(slab: LinkSlab<'_>) {
+    let LinkSlab {
+        link_a,
+        link_b,
+        damping,
+        conductance,
+        pressure,
+        velocity,
+        flux,
+    } = slab;
+    let links = link_a
+        .iter()
+        .zip(link_b)
+        .zip(velocity.iter_mut())
+        .zip(damping)
+        .zip(conductance)
+        .zip(flux.iter_mut());
+    for (((((&a, &b), v), &k), &c), f) in links {
+        let u = k * (*v - COURANT * (pressure[b as usize] - pressure[a as usize]));
+        *v = u;
+        *f = c * u;
+    }
+}
+
+/// Pass 2 over one slab, one cell at a time.
+pub(super) fn cells_slab_scalar(slab: CellSlab<'_>) {
+    match slab.width {
+        1 => cells_padded::<1>(slab),
+        2 => cells_padded::<2>(slab),
+        3 => cells_padded::<3>(slab),
+        4 => cells_padded::<4>(slab),
+        5 => cells_padded::<5>(slab),
+        6 => cells_padded::<6>(slab),
+        7 => cells_padded::<7>(slab),
+        8 => cells_padded::<8>(slab),
+        _ => cells_listed(slab),
+    }
+}
+
+/// Pass 2 with lists of `W` links each.
+fn cells_padded<const W: usize>(slab: CellSlab<'_>) {
+    let count = slab.pressure.len();
+    let span = slab.first * W..(slab.first + count) * W;
+    let lists = slab.incident_link[span.clone()]
+        .as_chunks::<W>()
+        .0
+        .iter()
+        .zip(slab.incident_sign[span].as_chunks::<W>().0);
+    let cells = slab
+        .pressure
+        .iter_mut()
+        .zip(slab.keep)
+        .zip(slab.gain)
+        .zip(lists);
+    for (((p, &k), &g), (links, signs)) in cells {
+        let d = padded_sum(slab.flux, links, signs);
+        *p = k * *p - g * d;
+    }
+}
+
+/// Pass 2 with lists of any length.
+fn cells_listed(slab: CellSlab<'_>) {
+    let count = slab.pressure.len();
+    let starts = &slab.incident_start[slab.first..=slab.first + count];
+    let cells = slab
+        .pressure
+        .iter_mut()
+        .zip(slab.keep)
+        .zip(slab.gain)
+        .zip(starts.windows(2));
+    for (((p, &k), &g), range) in cells {
+        let d = incident_sum(
+            slab.flux,
+            slab.incident_link,
+            slab.incident_sign,
+            range[0] as usize,
+            range[1] as usize,
+        );
+        *p = k * *p - g * d;
     }
 }
 
@@ -410,7 +521,7 @@ pub(super) fn padded_sum<const W: usize>(flux: &[f64], links: &[u32; W], signs: 
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
     use crate::random::Random;
 
@@ -494,6 +605,28 @@ mod tests {
         assert!(scatter.pressure.iter().all(|value| value.is_finite()));
         assert!(scatter.pressure.iter().any(|&value| value != 0.0));
         assert_bit_equal(&scatter, &gather);
+    }
+
+    #[test]
+    fn ranges_equal_the_whole() {
+        for reference in [random_grid(1, 500, 1400), random_lattice(3, 500, 1400)] {
+            let mut whole = reference.clone();
+            let mut ranges = reference.clone();
+            let link_bounds = [0, 467, 933, 1400];
+            let cell_bounds = [0, 167, 333, 500];
+            for _ in 0..200 {
+                whole.step_gather();
+                for part in (0..3).rev() {
+                    links_pass(&mut ranges, link_bounds[part], link_bounds[part + 1]);
+                }
+                for part in [1, 0, 2] {
+                    cells_pass(&mut ranges, cell_bounds[part], cell_bounds[part + 1]);
+                }
+            }
+            assert_eq!(bits(&ranges.pressure), bits(&whole.pressure));
+            assert_eq!(bits(&ranges.velocity), bits(&whole.velocity));
+            assert_eq!(bits(&ranges.flux), bits(&whole.flux));
+        }
     }
 
     #[test]

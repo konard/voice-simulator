@@ -2,8 +2,8 @@
  * Rules for the Rust workspace (docs/RUST-ENGINE.md): every crate in
  * Cargo.lock is one of ours or is listed with its licence in
  * scripts/rust-allowed-crates.json, the toolchain is an exact stable
- * version, and the core crate keeps its no_std, no-unsafe, libm-in-math.rs
- * shape. These read files only, so they run without a Rust toolchain.
+ * version, and the core crate keeps its no_std, libm-in-math.rs shape with
+ * unsafe code only in fdtd/parallel.rs, the thread team of issue 24. These read files only, so they run without a Rust toolchain.
  */
 
 import { readdirSync, readFileSync } from 'node:fs';
@@ -19,6 +19,19 @@ const WORKSPACE_CRATES = [
   'voice-simulator-core',
   'voice-simulator-wasm',
 ];
+
+/** Paths of the .rs files under `dir` (relative to it, with `/`). */
+function rustFiles(dir, prefix = '') {
+  return readdirSync(path.join(root, dir, prefix), {
+    withFileTypes: true,
+  }).flatMap((entry) => {
+    const file = prefix ? `${prefix}/${entry.name}` : entry.name;
+    if (entry.isDirectory()) {
+      return rustFiles(dir, file);
+    }
+    return file.endsWith('.rs') ? [file] : [];
+  });
+}
 
 /** `[[package]]` entries of a Cargo.lock as {name, source}. */
 function lockPackages(text) {
@@ -73,14 +86,31 @@ describe('Rust workspace', () => {
     expect(toolchain.includes('wasm32-unknown-unknown')).toBe(true);
   });
 
-  it('keeps the core crate no_std, without unsafe code, with libm only in math.rs', () => {
+  it('keeps the core crate no_std, with libm only in math.rs', () => {
     const lib = read('crates/voice-simulator-core/src/lib.rs');
     expect(lib.includes('#![no_std]')).toBe(true);
-    expect(lib.includes('#![forbid(unsafe_code)]')).toBe(true);
     const dir = 'crates/voice-simulator-core/src';
     const usesLibm = readdirSync(path.join(root, dir))
       .filter((file) => file.endsWith('.rs'))
       .filter((file) => /\blibm::/.test(read(path.join(dir, file))));
     expect(usesLibm).toEqual(['math.rs']);
+  });
+
+  it('denies unsafe code in the core crate except in fdtd/parallel.rs', () => {
+    const manifest = read('crates/voice-simulator-core/Cargo.toml');
+    expect(/^\[lints\.rust\]\r?\nunsafe_code = "deny"$/m.test(manifest)).toBe(
+      true
+    );
+    const dir = 'crates/voice-simulator-core/src';
+    const files = rustFiles(dir);
+    const unsafeFiles = files.filter((file) =>
+      /\bunsafe\b/.test(read(path.join(dir, file)))
+    );
+    expect(unsafeFiles).toEqual(['fdtd/parallel.rs']);
+    const parallel = read(path.join(dir, 'fdtd/parallel.rs'));
+    const blocks = parallel.match(/\bunsafe\s*\{/g) ?? [];
+    const reasons = parallel.match(/\/\/ SAFETY:/g) ?? [];
+    expect(blocks.length > 0).toBe(true);
+    expect(reasons.length >= blocks.length).toBe(true);
   });
 });

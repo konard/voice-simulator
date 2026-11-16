@@ -152,6 +152,8 @@ export default [
       // Listening test build output (scripts/listening-test.mjs), never committed
       'examples/listening-test/config.js',
       'examples/listening-test/stimuli/**',
+      // coi-serviceworker (MIT), vendored and kept verbatim
+      'examples/universal-app/public/coi-serviceworker.js',
     ],
   },
 ];

@@ -5,9 +5,16 @@
 
 import { describe, it, expect } from 'test-anywhere';
 
+import { THREAD_MEMORY } from '../src/engine/layout.js';
+
 import {
   NO_CARGO_MESSAGE,
+  BUILDS,
+  THREADS_BUILD,
+  THREADS_RUSTFLAGS,
+  THREADS_TOOLCHAIN,
   WASM_SIZE_BUDGET,
+  buildsFor,
   describeWasm,
   main,
   parseArgs,
@@ -28,11 +35,16 @@ function runWithoutCargo(argv) {
 }
 
 describe('build-wasm script', () => {
-  it('parses its two switches and rejects anything else', () => {
-    expect(parseArgs([])).toEqual({ checkSize: false, require: false });
-    expect(parseArgs(['--check-size', '--require'])).toEqual({
+  it('parses its three switches and rejects anything else', () => {
+    expect(parseArgs([])).toEqual({
+      checkSize: false,
+      require: false,
+      threads: false,
+    });
+    expect(parseArgs(['--check-size', '--require', '--threads'])).toEqual({
       checkSize: true,
       require: true,
+      threads: true,
     });
     expect(() => parseArgs(['--release'])).toThrow();
     expect(runWithoutCargo(['--fast']).code).toBe(2);
@@ -59,5 +71,30 @@ describe('build-wasm script', () => {
     );
     expect(sizeProblem(WASM_SIZE_BUDGET)).toBe(null);
     expect(sizeProblem(WASM_SIZE_BUDGET + 1).includes('over')).toBe(true);
+  });
+
+  it('builds the threads file only with --threads', () => {
+    expect(buildsFor({ threads: false })).toEqual(BUILDS);
+    expect(buildsFor({ threads: true })).toEqual([...BUILDS, THREADS_BUILD]);
+    expect(THREADS_BUILD.engine).toBe(
+      'src/engine/voice-simulator-threads.wasm'
+    );
+    expect(THREADS_TOOLCHAIN).toMatch(/^nightly-\d{4}-\d{2}-\d{2}$/);
+    expect(THREADS_BUILD.args[0]).toBe(`+${THREADS_TOOLCHAIN}`);
+    expect(THREADS_BUILD.args.join(' ')).toContain(
+      '-Z build-std=panic_abort,std --target-dir target/threads'
+    );
+    expect(THREADS_RUSTFLAGS).toContain(
+      '-C target-feature=+atomics,+bulk-memory,+mutable-globals'
+    );
+    // The linked memory is the one the loader creates (64 KiB pages).
+    expect(THREADS_RUSTFLAGS).toContain(
+      `--initial-memory=${THREAD_MEMORY.INITIAL * 65536}`
+    );
+    expect(THREADS_RUSTFLAGS).toContain(
+      `--max-memory=${THREAD_MEMORY.MAXIMUM * 65536}`
+    );
+    expect(THREAD_MEMORY.INITIAL).toBe(512);
+    expect(THREAD_MEMORY.MAXIMUM).toBe(16384);
   });
 });

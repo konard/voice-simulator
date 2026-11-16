@@ -77,6 +77,14 @@ isolated and the player uses the shared ring:
 VITE_CROSS_ORIGIN_ISOLATION=1 npm run example:web:dev
 ```
 
+The same variable makes the built page load `public/coi-serviceworker.js`
+([coi-serviceworker](https://github.com/gzuidhof/coi-serviceworker) 0.1.7,
+MIT), a service worker that adds the two headers on hosts that cannot send
+them, such as GitHub Pages, at the price of one reload on the first visit
+(see `cross-origin-isolation.js`). Without the variable no page loads it, so
+the published app stays on one thread; see "Threads in the browser" in
+[docs/RUST-ENGINE.md](../../docs/RUST-ENGINE.md).
+
 A full pronunciation lexicon, too large to ship, can be put next to the
 page as `lexicons/<lang>-full.json` (`en`, `ru`, `hi` or `zh`), made with
 `node scripts/build-lexicon.mjs build <lang> --from <dir> --full --out

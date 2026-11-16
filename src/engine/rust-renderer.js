@@ -386,7 +386,9 @@ export class RustVoiceRenderer {
    *   above 0 throw an Error with `code = 'ENGINE_UNSUPPORTED'`. With
    *   'fdtd3d' the voxel model is `options.model`, or the one Fdtd3d
    *   builds from `dx`, `microphone`, `enclosure`, `piriform` and
-   *   `vallecula`.
+   *   `vallecula`. `threadMinLinks` overrides THREAD_MIN_LINKS of the
+   *   engine for this renderer (0: a thread team for any grid; tests and
+   *   measurements).
    */
   constructor(module, plan, options = {}) {
     this.planner = new FramePlanner(plan, options);
@@ -408,6 +410,13 @@ export class RustVoiceRenderer {
     this.position = 0;
     /** Milliseconds spent preparing frames in JavaScript. */
     this.prepareTime = 0;
+    this.threadMinLinks = options.threadMinLinks;
+    /**
+     * Threads that stepped the solver in the last render() call: above 1
+     * only with an engine of `threads` above 1 and a grid of at least
+     * THREAD_MIN_LINKS links.
+     */
+    this.threads = 1;
   }
 
   get duration() {
@@ -445,16 +454,23 @@ export class RustVoiceRenderer {
     float64View(engine, framePointer, frameValues).set(
       planner.frames.values.subarray(0, frameValues)
     );
-    const written = check(
-      engine.exports.vs_renderer_render(
-        this.handle,
-        framePointer,
-        blocks,
-        outPointer,
-        count
-      ),
-      'vs_renderer_render'
+    const { result: written, threads } = withTeam(
+      engine,
+      this.handle,
+      () =>
+        check(
+          engine.exports.vs_renderer_render(
+            this.handle,
+            framePointer,
+            blocks,
+            outPointer,
+            count
+          ),
+          'vs_renderer_render'
+        ),
+      this.threadMinLinks
     );
+    this.threads = threads;
     target.set(float32View(engine, outPointer, written));
     this.position += written;
     return written;
@@ -507,6 +523,43 @@ export class RustVoiceRenderer {
     this.frames.free();
     this.out.free();
     this.fieldValues.free();
+  }
+}
+
+/**
+ * Run `action` (a render call of the renderer `handle`) with the 3D solver
+ * stepped by a thread team of the engine's pool, when the engine has one
+ * (`loadEngineModule` with `threads` above 1) and the grid has at least
+ * `minLinks` links (by default THREAD_MIN_LINKS of the engine): start the
+ * team, wake the helpers, run `action`, end the team. The samples are the
+ * same bits with any number of threads.
+ * @returns {{result: unknown, threads: number}} what `action` returned and
+ *   the threads that stepped the solver
+ */
+export function withTeam(module, handle, action, minLinks) {
+  const { pool } = module;
+  if (!pool || pool.size <= 1) {
+    return { result: action(), threads: 1 };
+  }
+  const { exports } = module;
+  const team = check(
+    minLinks === undefined
+      ? exports.vs_team_new(handle, pool.size)
+      : exports.vs_team_new_from(handle, pool.size, minLinks),
+    'vs_team_new'
+  );
+  if (team === 0) {
+    return { result: action(), threads: 1 };
+  }
+  pool.run(team);
+  try {
+    const threads = check(
+      exports.vs_renderer_threads(handle),
+      'vs_renderer_threads'
+    );
+    return { result: action(), threads };
+  } finally {
+    check(exports.vs_team_free(team), 'vs_team_free');
   }
 }
 
@@ -586,9 +639,12 @@ export function renderJob(plan, options = {}) {
  * Render a job of renderJob in one call of the engine, as the CLI does.
  * @param {ConstructorParameters<typeof RustVoiceRenderer>[0]} module
  * @param {ReturnType<typeof renderJob>} job
- * @returns {Float32Array}
+ * @param {{threadMinLinks?: number}} [options] `threadMinLinks` as for
+ *   RustVoiceRenderer
+ * @returns {Float32Array} the samples; its `threads` property holds the
+ *   threads that stepped the solver
  */
-export function renderJobRust(module, job) {
+export function renderJobRust(module, job, options = {}) {
   const handle = createRenderer(module, job.config, job.model);
   const frames = new Scratch(module, 8);
   const out = new Scratch(module, 4);
@@ -596,17 +652,25 @@ export function renderJobRust(module, job) {
     const framePointer = frames.reserve(Math.max(1, job.frames.length));
     const outPointer = out.reserve(Math.max(1, job.samples));
     float64View(module, framePointer, job.frames.length).set(job.frames);
-    const written = check(
-      module.exports.vs_renderer_render(
-        handle,
-        framePointer,
-        job.frameCount,
-        outPointer,
-        job.samples
-      ),
-      'vs_renderer_render'
+    const { result: written, threads } = withTeam(
+      module,
+      handle,
+      () =>
+        check(
+          module.exports.vs_renderer_render(
+            handle,
+            framePointer,
+            job.frameCount,
+            outPointer,
+            job.samples
+          ),
+          'vs_renderer_render'
+        ),
+      options.threadMinLinks
     );
-    return float32View(module, outPointer, written).slice();
+    const samples = float32View(module, outPointer, written).slice();
+    samples.threads = threads;
+    return samples;
   } finally {
     module.exports.vs_renderer_free(handle);
     frames.free();

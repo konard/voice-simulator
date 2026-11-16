@@ -1,12 +1,15 @@
 /**
  * Loader of the Rust engine (`src/engine/voice-simulator.wasm`, built by
- * `npm run build:wasm`; see docs/RUST-ENGINE.md), and of its build with
+ * `npm run build:wasm`; see docs/RUST-ENGINE.md), of its build with
  * WebAssembly SIMD (`voice-simulator-simd.wasm`, issue 23) when that file
- * is shipped and the runtime compiles it.
+ * is shipped and the runtime compiles it, and of its threads build
+ * (`voice-simulator-threads.wasm`) when more than one thread is
+ * asked for and the platform has shared memory.
  *
- * Hand-written on purpose: the module imports nothing and exports plain
- * `vs_*` functions, so this file is the whole glue, and the same code loads
- * the engine in a page, a worker, an AudioWorklet, Node.js, Bun and Deno.
+ * Hand-written on purpose: the module imports nothing (the threads build:
+ * only its shared memory) and exports plain `vs_*` functions, so this file
+ * and `thread-pool.js` are the whole glue, and the same code loads the
+ * engine in a page, a worker, an AudioWorklet, Node.js, Bun and Deno.
  * No top-level `await` and no top-level import of `node:` modules, so the
  * file can be bundled for a browser.
  *
@@ -18,6 +21,24 @@
  */
 
 /* global URL */
+
+/**
+ * The shared memory of the threads build of the engine
+ * (`src/engine/voice-simulator-threads.wasm`), in WebAssembly
+ * pages of 64 KiB: INITIAL pages (32 MiB) at the start and at most MAXIMUM
+ * (1 GiB). The file imports this memory and exports none, so
+ * that every helper instance of `src/engine/thread-pool.js` shares it;
+ * `scripts/build-wasm.mjs --threads` links the file with these sizes and
+ * `loadEngineModule` creates the memory with them. It is defined here,
+ * not in layout.js, so that this file imports nothing: the pool of
+ * `thread-pool.js` is imported only when more than one thread is asked
+ * for.
+ */
+export const THREAD_MEMORY = Object.freeze({
+  INITIAL: 512,
+  MAXIMUM: 16384,
+  PAGE_BYTES: 65536,
+});
 
 /** The `vs_abi_version()` this loader speaks; see docs/RUST-ENGINE.md. */
 export const ENGINE_ABI_VERSION = 3;
@@ -34,6 +55,75 @@ export function defaultEngineUrl() {
 /** Where the SIMD build of the engine lives next to this file. */
 export function defaultSimdEngineUrl() {
   return new globalThis.URL('./voice-simulator-simd.wasm', import.meta.url);
+}
+
+/** Where the threads build of the engine lives next to this file. */
+export function defaultThreadsEngineUrl() {
+  return new globalThis.URL('./voice-simulator-threads.wasm', import.meta.url);
+}
+
+/** Most threads that `threads: 'auto'` asks for. */
+export const AUTO_THREADS_MAX = 8;
+
+/**
+ * Cores of this machine: `navigator.hardwareConcurrency`, else
+ * `os.availableParallelism()` of Node.js, else 1.
+ * @returns {number}
+ */
+export function cores() {
+  const hardware = globalThis.navigator?.hardwareConcurrency;
+  if (Number.isInteger(hardware) && hardware > 0) {
+    return hardware;
+  }
+  const os = globalThis.process?.getBuiltinModule?.('node:os');
+  const parallelism = os?.availableParallelism?.();
+  return Number.isInteger(parallelism) && parallelism > 0 ? parallelism : 1;
+}
+
+/**
+ * The threads that the `threads` option asks for: 1 (the default), a
+ * positive integer, or `'auto'`: all cores but one, at least 1 and at most
+ * AUTO_THREADS_MAX.
+ * @param {'auto' | number} [threads]
+ * @returns {number}
+ */
+export function requestedThreads(threads = 1) {
+  if (threads === 'auto') {
+    return Math.min(AUTO_THREADS_MAX, Math.max(1, cores() - 1));
+  }
+  if (Number.isInteger(threads) && threads >= 1) {
+    return threads;
+  }
+  throw new Error(
+    `loadEngineModule: threads must be 'auto' or a positive integer`
+  );
+}
+
+/**
+ * A new shared memory of THREAD_MEMORY for the threads build, or null
+ * when this platform cannot share memory between threads: a page that is
+ * not cross-origin isolated (`crossOriginIsolated === false`), no
+ * `SharedArrayBuffer`, or a runtime that refuses shared memory.
+ * @param {typeof WebAssembly} wasm
+ * @returns {WebAssembly.Memory | null}
+ */
+export function createSharedMemory(wasm = globalThis.WebAssembly) {
+  if (
+    globalThis.crossOriginIsolated === false ||
+    typeof globalThis.SharedArrayBuffer !== 'function' ||
+    typeof wasm?.Memory !== 'function'
+  ) {
+    return null;
+  }
+  try {
+    return new wasm.Memory({
+      initial: THREAD_MEMORY.INITIAL,
+      maximum: THREAD_MEMORY.MAXIMUM,
+      shared: true,
+    });
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -109,25 +199,49 @@ async function compileSource(wasm, source) {
  * @param {WebAssembly.Module | ArrayBuffer | ArrayBufferView | URL | string}
  *   [source] a compiled module, the bytes of a file, or its URL; nothing
  *   means the files next to this file (read with `node:fs/promises` for a
- *   `file:` URL and with `fetch` otherwise): `./voice-simulator-simd.wasm`
- *   or `./voice-simulator.wasm` as `simd` says
- * @param {{simd?: 'auto' | boolean}} [options] `simd`: with no `source`,
+ *   `file:` URL and with `fetch` otherwise): `./voice-simulator-threads.wasm`
+ *   when `threads` allows, else `./voice-simulator-simd.wasm` or
+ *   `./voice-simulator.wasm` as `simd` says
+ * @param {{simd?: 'auto' | boolean, threads?: 'auto' | number}} [options]
+ *   `simd`: with no `source`,
  *   `'auto'` (the default) tries the SIMD file first and loads the scalar
  *   file when it is missing or does not compile, `false` loads only the
  *   scalar file and `true` only the SIMD file. With a `source`, the source
  *   is loaded and `true` (`false`) gives null when it is not (is) a SIMD
- *   build.
+ *   build. `threads`: 1 (the default), a positive integer or `'auto'`
+ *   (all cores but one, at most AUTO_THREADS_MAX). With more than 1, the
+ *   threads file is loaded and its helper workers started when the file
+ *   exists, `globalThis.crossOriginIsolated !== false`, `SharedArrayBuffer`
+ *   exists and the shared memory can be created; otherwise, or when a
+ *   worker cannot start, the engine runs on one thread, which is never an
+ *   error. A `source` that is a threads build gets the shared memory too.
  * @returns {Promise<{exports: Record<string, Function | WebAssembly.Memory>,
- *   memory: WebAssembly.Memory, abiVersion: number, simd: boolean} | null>}
+ *   memory: WebAssembly.Memory, abiVersion: number, simd: boolean,
+ *   threads: number, pool: Awaited<ReturnType<typeof import('./thread-pool.js').createThreadPool>> |
+ *   null, close: () => void} | null>}
  *   `simd` tells whether the engine was built with WebAssembly SIMD
- *   (`vs_simd()`, false when it is not exported); null when WebAssembly
- *   is missing, the file is missing or it does not compile
- * @throws {Error} when the engine reports another `vs_abi_version()`
+ *   (`vs_simd()`, false when it is not exported); `threads` how many
+ *   threads can step the 3D solver (1 without a pool of helpers); `close()`
+ *   ends the helpers (a no-op on one thread). Null when WebAssembly is
+ *   missing, the file is missing or it does not compile
+ * @throws {Error} when the engine reports another `vs_abi_version()`, or
+ *   for an option that is not one of the values above
  */
 export async function loadEngineModule(source, options = {}) {
   const simd = simdOption(options);
+  const threads = requestedThreads(options.threads);
   if (source !== undefined && source !== null) {
-    return matching(await loadOne(source), simd);
+    return matching(await loadOne(source, threads), simd);
+  }
+  if (threads > 1 && createSharedMemory()) {
+    const engine = matching(
+      await loadOne(defaultThreadsEngineUrl(), threads),
+      simd
+    );
+    if (engine && engine.threads > 1) {
+      return engine;
+    }
+    engine?.close();
   }
   if (simd !== false) {
     const engine = matching(await loadOne(defaultSimdEngineUrl()), true);
@@ -147,33 +261,35 @@ function simdOption(options) {
   return simd;
 }
 
-/** `engine` when its `simd` agrees with the wanted one, else null. */
+/**
+ * `engine` when its `simd` agrees with the wanted one, else null (its
+ * helpers ended).
+ */
 function matching(engine, simd) {
-  return engine && (simd === 'auto' || engine.simd === simd) ? engine : null;
+  if (engine && simd !== 'auto' && engine.simd !== simd) {
+    engine.close();
+    return null;
+  }
+  return engine;
 }
 
-/** One engine file, or null when it cannot be loaded. */
-async function loadOne(source) {
-  const wasm = globalThis.WebAssembly;
-  if (typeof wasm !== 'object' || wasm === null) {
-    return null;
-  }
-  const module = await compileSource(wasm, source);
-  if (!module) {
-    return null;
-  }
-  let instance;
+/** Whether `module` imports its memory: the threads build. */
+function importsMemory(wasm, module) {
+  return wasm.Module.imports(module).some((entry) => entry.kind === 'memory');
+}
+
+/** An instance of `module`, on `memory` when it imports one; or null. */
+async function instantiate(wasm, module, memory) {
   try {
-    instance = await wasm.instantiate(module, {});
+    const imports = memory ? { env: { memory } } : {};
+    return (await wasm.instantiate(module, imports)).exports;
   } catch {
     return null;
   }
-  return engineOf(instance);
 }
 
-/** The engine of an instance; throws on another interface version. */
-function engineOf(instance) {
-  const { exports } = instance;
+/** `vs_abi_version()` of `exports`, checked against ENGINE_ABI_VERSION. */
+function abiVersionOf(exports) {
   const abiVersion =
     typeof exports.vs_abi_version === 'function'
       ? exports.vs_abi_version()
@@ -184,9 +300,66 @@ function engineOf(instance) {
         `this loader speaks ${ENGINE_ABI_VERSION}; rebuild it with npm run build:wasm`
     );
   }
-  // An engine without `vs_simd` (older or minimal builds) is scalar.
-  const simd = typeof exports.vs_simd === 'function' && exports.vs_simd() === 1;
-  return { exports, memory: exports.memory, abiVersion, simd };
+  return abiVersion;
+}
+
+/**
+ * One engine file, or null when it cannot be loaded. A threads build gets
+ * a new shared memory and, for `threads` above 1, a pool of helpers; it
+ * stays on one thread when the pool cannot start.
+ */
+async function loadOne(source, threads = 1) {
+  const wasm = globalThis.WebAssembly;
+  if (typeof wasm !== 'object' || wasm === null) {
+    return null;
+  }
+  const module = await compileSource(wasm, source);
+  if (!module) {
+    return null;
+  }
+  const shared = importsMemory(wasm, module);
+  const memory = shared ? createSharedMemory(wasm) : null;
+  if (shared && !memory) {
+    return null;
+  }
+  const exports = await instantiate(wasm, module, memory);
+  if (!exports) {
+    return null;
+  }
+  const abiVersion = abiVersionOf(exports);
+  const pool = shared
+    ? await startPool(module, memory, threads, exports)
+    : null;
+  return engineOf(exports, abiVersion, memory, pool);
+}
+
+/** The engine of an instance with its memory and pool of helpers. */
+function engineOf(exports, abiVersion, memory = null, pool = null) {
+  return {
+    exports,
+    memory: memory ?? exports.memory,
+    abiVersion,
+    // An engine without `vs_simd` (older or minimal builds) is scalar.
+    simd: typeof exports.vs_simd === 'function' && exports.vs_simd() === 1,
+    threads: pool?.size ?? 1,
+    pool,
+    close() {
+      pool?.close();
+    },
+  };
+}
+
+/** The helpers of a threads build, or null for one thread or a failure. */
+async function startPool(module, memory, threads, exports) {
+  if (threads <= 1 || exports.vs_threads?.() !== 1) {
+    return null;
+  }
+  try {
+    const { createThreadPool } = await import('./thread-pool.js');
+    return await createThreadPool(module, memory, threads, { exports });
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -194,7 +367,10 @@ function engineOf(instance) {
  * reads a `file:` URL with `readFileSync` and compiles with
  * `new WebAssembly.Module`. Only where `process.getBuiltinModule` exists
  * (Node.js, Bun, Deno); elsewhere (browsers) it returns undefined, which
- * means "cannot tell without awaiting", unlike null ("no engine").
+ * means "cannot tell without awaiting", unlike null ("no engine"). It
+ * loads only the files without threads (an instance on a shared memory
+ * needs its helpers started, which awaits), so its engine has
+ * `threads: 1`.
  * @param {Parameters<typeof loadEngineModule>[0]} [source]
  * @param {Parameters<typeof loadEngineModule>[1]} [options]
  * @returns {Awaited<ReturnType<typeof loadEngineModule>> | undefined}
@@ -248,7 +424,7 @@ function loadOneSync(source, fs) {
   } catch {
     return null;
   }
-  return engineOf(instance);
+  return engineOf(instance.exports, abiVersionOf(instance.exports));
 }
 
 /**

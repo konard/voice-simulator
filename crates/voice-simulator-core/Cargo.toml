@@ -1,6 +1,6 @@
 [package]
 name = "voice-simulator-core"
-description = "Numerical core of the voice simulator: no I/O, no threads, no clock"
+description = "Numerical core of the voice simulator: no I/O, no clock, starts no thread"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -17,3 +17,7 @@ libm = "0.2"
 # `f64.sqrt`, `f64.floor` and `f64.ceil` (libm computes them in software
 # there on stable Rust). The WebAssembly crate turns it on.
 std = []
+
+# Only src/fdtd/parallel.rs allows it, for the thread team of issue 24.
+[lints.rust]
+unsafe_code = "deny"

@@ -3,7 +3,7 @@
 /**
  * Build the Rust engine into its WebAssembly files.
  *
- *   node scripts/build-wasm.mjs [--check-size] [--require]
+ *   node scripts/build-wasm.mjs [--check-size] [--require] [--threads]
  *
  * Runs `cargo build --release --locked --target wasm32-unknown-unknown
  * -p voice-simulator-wasm`, copies the result to
@@ -15,11 +15,22 @@
  * it. The output depends only on the compiler pinned in
  * rust-toolchain.toml, so two builds print the same hashes.
  *
+ * With --threads it then builds the threads file
+ * src/engine/voice-simulator-threads.wasm (issue 24): WebAssembly atomics
+ * and an imported shared memory of THREAD_MEMORY pages
+ * (src/engine/layout.js), compiled with the nightly compiler
+ * THREADS_TOOLCHAIN because the standard library has to be rebuilt with
+ * atomics (`-Z build-std`; `rustup toolchain install THREADS_TOOLCHAIN
+ * --target wasm32-unknown-unknown --component rust-src`). The loader picks
+ * it for `threads` above 1 when the platform can share memory.
+ *
  * --check-size  exit with 1 when a shipped file is larger than
  *               WASM_SIZE_BUDGET
  * --require     exit with 1 when cargo is not installed (CI); without it a
  *               missing cargo is not an error, because the package falls
  *               back to its JavaScript engine
+ * --threads     also build the threads file; a failure of that build is
+ *               an error
  */
 
 import { spawnSync } from 'node:child_process';
@@ -28,14 +39,19 @@ import { copyFileSync, mkdirSync, readFileSync, rmSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
+import { THREAD_MEMORY } from '../src/engine/layout.js';
+
 /**
  * Largest allowed size of each shipped engine file in bytes: the size
  * measured when the budget was last raised, rounded up to the next 16 384
  * bytes. Raised for issue 23 (the 3D FDTD solver and its kernels) from
  * 98 304 to 196 608 (scalar file 184 968 bytes, SIMD file 192 648 bytes,
- * Rust 1.100.0), and for issue 52 (vocal effort in the glottis and the
- * renderer) to 212 992 (scalar file 196 952 bytes). Raise it only with the
- * newly measured size in the commit message.
+ * Rust 1.100.0), to 212 992 for issue 24 (the split kernel passes and the
+ * thread team; scalar file 197 856 bytes, threads file 206 670 bytes with
+ * THREADS_TOOLCHAIN) and for issue 52 (vocal effort in the glottis and the
+ * renderer; scalar file 196 952 bytes); with both, the scalar file is
+ * 199 852 bytes, the SIMD file 206 225 and the threads file 208 664. Raise
+ * it only with the newly measured size in the commit message.
  */
 export const WASM_SIZE_BUDGET = 212992;
 
@@ -70,6 +86,54 @@ export const SIMD_BUILT_WASM = `${SIMD_TARGET_DIR}/wasm32-unknown-unknown/releas
 export const SIMD_ENGINE_WASM = 'src/engine/voice-simulator-simd.wasm';
 
 /**
+ * The nightly compiler of the threads build, pinned by date so that the
+ * file is reproducible: the stable compiler cannot rebuild the standard
+ * library with atomics.
+ */
+// eslint-disable-next-line local/no-changelog-comments -- a toolchain name
+export const THREADS_TOOLCHAIN = 'nightly-2026-11-10';
+
+/** The threads build: its own target directory, as the SIMD build. */
+export const THREADS_TARGET_DIR = 'target/threads';
+export const THREADS_CARGO_ARGS = [
+  `+${THREADS_TOOLCHAIN}`,
+  ...CARGO_ARGS,
+  '-Z',
+  'build-std=panic_abort,std',
+  '--target-dir',
+  THREADS_TARGET_DIR,
+];
+
+/**
+ * RUSTFLAGS of the threads build: atomics (with the bulk memory and
+ * mutable globals they need, and SIMD when the SIMD file is shipped), and
+ * a memory that is imported and shared, of THREAD_MEMORY.INITIAL pages at
+ * the start and at most THREAD_MEMORY.MAXIMUM. The linker needs
+ * `--shared-memory` and `--import-memory` spelled out: without them it
+ * stops at the undefined symbols `__wasm_init_tls`, `__tls_size` and
+ * `__tls_align`.
+ */
+export const THREADS_RUSTFLAGS = [
+  `-C target-feature=+atomics,+bulk-memory,+mutable-globals${SHIP_SIMD ? ',+simd128' : ''}`,
+  '-C link-arg=--shared-memory',
+  '-C link-arg=--import-memory',
+  `-C link-arg=--initial-memory=${THREAD_MEMORY.INITIAL * THREAD_MEMORY.PAGE_BYTES}`,
+  `-C link-arg=--max-memory=${THREAD_MEMORY.MAXIMUM * THREAD_MEMORY.PAGE_BYTES}`,
+].join(' ');
+export const THREADS_BUILT_WASM = `${THREADS_TARGET_DIR}/wasm32-unknown-unknown/release/voice_simulator_wasm.wasm`;
+export const THREADS_ENGINE_WASM = 'src/engine/voice-simulator-threads.wasm';
+
+/** The build of --threads, after BUILDS. */
+export const THREADS_BUILD = Object.freeze({
+  name: 'threads',
+  args: THREADS_CARGO_ARGS,
+  rustflags: THREADS_RUSTFLAGS,
+  built: THREADS_BUILT_WASM,
+  engine: THREADS_ENGINE_WASM,
+  ship: true,
+});
+
+/**
  * The builds, in order: cargo arguments, extra RUSTFLAGS, the built file,
  * the shipped file and whether it is shipped.
  * @type {{name: string, args: string[], rustflags: string, built: string,
@@ -99,22 +163,29 @@ export const NO_CARGO_MESSAGE =
 
 /**
  * @param {string[]} argv
- * @returns {{checkSize: boolean, require: boolean}}
+ * @returns {{checkSize: boolean, require: boolean, threads: boolean}}
  */
 export function parseArgs(argv) {
-  const options = { checkSize: false, require: false };
+  const options = { checkSize: false, require: false, threads: false };
+  const switches = {
+    '--check-size': 'checkSize',
+    '--require': 'require',
+    '--threads': 'threads',
+  };
   for (const arg of argv) {
-    if (arg === '--check-size') {
-      options.checkSize = true;
-    } else if (arg === '--require') {
-      options.require = true;
-    } else {
+    if (!Object.hasOwn(switches, arg)) {
       throw new Error(
-        `Unknown argument ${arg}; usage: build-wasm.mjs [--check-size] [--require]`
+        `Unknown argument ${arg}; usage: build-wasm.mjs [--check-size] [--require] [--threads]`
       );
     }
+    options[switches[arg]] = true;
   }
   return options;
+}
+
+/** The builds that `options` asks for: BUILDS, and THREADS_BUILD. */
+export function buildsFor(options) {
+  return options.threads ? [...BUILDS, THREADS_BUILD] : BUILDS;
 }
 
 /**
@@ -188,7 +259,7 @@ export function main({
 /** Run every build of BUILDS; returns the exit code. */
 function buildAndReport({ options, root, env, log, error }) {
   log(`WASM_SIZE_BUDGET: ${WASM_SIZE_BUDGET} bytes`);
-  for (const build of BUILDS) {
+  for (const build of buildsFor(options)) {
     const code = runBuild({ build, options, root, env, log, error });
     if (code !== 0) {
       return code;

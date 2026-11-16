@@ -165,3 +165,6 @@ export function writeFrame(target, offset, shape, lungPressure) {
   target.set(shape.areas, offset + FRAME.AREAS);
   target[offset + FRAME.AREAS + shape.areas.length] = shape.teeth?.gap ?? 0;
 }
+
+/** The shared memory of the threads build; see wasm-loader.js. */
+export { THREAD_MEMORY } from './wasm-loader.js';

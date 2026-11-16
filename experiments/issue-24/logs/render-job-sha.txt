@@ -1,0 +1,24 @@
+# node scripts/write-render-job.mjs 'Hi.' high /tmp/job-box.bin --enclosure 40, then render-job with the flags below (load average 9-15 on 6 cores)
+build 0
+samples 42055
+wasm sha256 3a31848c607a35c934f2a6a15070a7b9dddfc97bf40e4f717e20ddea96ec5bab
+wasm seconds 70.226031
+== --threads 1
+sha256 3a31848c607a35c934f2a6a15070a7b9dddfc97bf40e4f717e20ddea96ec5bab
+samples 42055
+seconds 49.562094
+rtf 56.568315
+threads 1
+== --threads 4 --thread-min-links 0
+sha256 3a31848c607a35c934f2a6a15070a7b9dddfc97bf40e4f717e20ddea96ec5bab
+samples 42055
+seconds 229.763070
+rtf 262.242952
+threads 4
+== --threads 4
+sha256 3a31848c607a35c934f2a6a15070a7b9dddfc97bf40e4f717e20ddea96ec5bab
+samples 42055
+seconds 53.963612
+rtf 61.592043
+threads 1
+

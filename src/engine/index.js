@@ -14,7 +14,11 @@
 
 import { VoiceRenderer } from '../acoustics/voice.js';
 import { RustVoiceRenderer, checkSupported } from './rust-renderer.js';
-import { loadEngineModule, loadEngineModuleSync } from './wasm-loader.js';
+import {
+  loadEngineModule,
+  loadEngineModuleSync,
+  requestedThreads,
+} from './wasm-loader.js';
 
 /** The values of the `engine` option. */
 export const ENGINE_NAMES = Object.freeze(['auto', 'rust', 'js']);
@@ -95,8 +99,11 @@ export class Engine {
     this.requested = requested;
     /** Whether the Rust engine was built with WebAssembly SIMD. */
     this.simd = Boolean(module?.simd);
-    /** Threads the engine renders with (1: no threads yet, issue 24). */
-    this.threads = 1;
+    /**
+     * Threads that can step the 3D solver: the helpers of the threads
+     * build plus the leader (see loadEngineModule), else 1.
+     */
+    this.threads = module?.threads ?? 1;
     /** Why the engine is JavaScript under `'auto'`, else null. */
     this.reason = reason;
     this.module = module;
@@ -163,11 +170,15 @@ export class Engine {
     return tagged(new VoiceRenderer(plan, renderOptions), 'js', reason);
   }
 
-  /** Drop the engine (and its cache entry): the next load starts afresh. */
+  /**
+   * Drop the engine (and its cache entry) and end its helper threads: the
+   * next load starts afresh.
+   */
   close() {
     if (this.key !== null && engines.get(this.key) === this) {
       engines.delete(this.key);
     }
+    this.module?.close?.();
     this.module = null;
   }
 }
@@ -248,7 +259,8 @@ export async function createEngine(options = {}) {
 /**
  * createEngine without a promise. Gives the cached engine; else, where
  * `process.getBuiltinModule` exists (Node.js, Bun, Deno), it loads the
- * engine synchronously. Elsewhere (browsers) `'auto'` gives the JavaScript
+ * engine synchronously, on one thread (helper threads start only with
+ * createEngine). Elsewhere (browsers) `'auto'` gives the JavaScript
  * engine and `'rust'` throws `ENGINE_UNAVAILABLE`: call
  * `await createEngine()` first there.
  * @param {Parameters<typeof createEngine>[0]} [options]
@@ -272,7 +284,10 @@ export function getEngine(options = {}) {
   const { source, threads, simd } = settings;
   const module = loadEngineModuleSync(source, { threads, simd });
   if (module !== undefined) {
-    return finish(settings, module);
+    // The synchronous load has no helper threads, so an engine with fewer
+    // threads than asked for is not cached: createEngine can start them.
+    const fewer = module && module.threads < requestedThreads(threads);
+    return finish(fewer ? { ...settings, key: null } : settings, module);
   }
   const reason =
     'the Rust engine loads asynchronously here; call await createEngine() first';
