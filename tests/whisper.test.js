@@ -6,6 +6,7 @@
  * its default tier are in tests/heavy/quality-whisper.test.js.
  */
 
+import { createHash } from 'node:crypto';
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -39,10 +40,20 @@ import {
 } from '../src/acoustics/whisper.js';
 import { WHISPER_DURATION, planWhispers } from '../src/articulation/whisper.js';
 import { RustVoiceRenderer } from '../src/engine/rust-renderer.js';
+import { itUnless } from './helpers/skip.js';
 
 const TEXT = 'Please call Stella.';
 const BASE = { tier: 'medium', seed: 1, markup: true, headroom: 20 };
 const IPA = { ipa: true, markup: false };
+
+// Bun on macOS takes Math.sin and Math.exp from the system libm, whose last
+// bits differ (see tests/narrow-band.test.js).
+const appleLibm =
+  typeof process !== 'undefined' &&
+  process.versions?.bun &&
+  process.platform === 'darwin'
+    ? "JavaScriptCore uses the macOS libm, not V8's Math"
+    : null;
 
 const cache = new Map();
 
@@ -194,6 +205,24 @@ describe('whisper', () => {
     expect(whispery.voiced > 0.5).toBe(true);
     expect(modal.hnr - whispery.hnr >= 4).toBe(true);
     expect(whispery.hnr < 10).toBe(true);
+  });
+
+  // Node.js, Bun and Deno render the same samples: the noise comes from
+  // src/random.js alone.
+  itUnless(appleLibm)('renders the same samples on every runtime', () => {
+    const { samples } = synthesize('[whisper]Hi.[/whisper]', {
+      tier: 'minimal',
+      seed: 1,
+      markup: true,
+    });
+    const bytes = new Uint8Array(
+      samples.buffer,
+      samples.byteOffset,
+      samples.byteLength
+    );
+    expect(createHash('sha256').update(bytes).digest('hex')).toBe(
+      '38cb62ceafdc4a6ab20f94c9b288bdf782a3b3aa539cb521ceef7f822490387a'
+    );
   });
 
   it('is rendered by the CLI', async () => {
