@@ -12,7 +12,10 @@ see `tests/helpers/voice-measures.js`) that rises or falls when the value
 goes from its minimum to its maximum, checked by
 `tests/head-parameters.test.js` ("moves the sound in the documented
 direction"). Conditions in parentheses replace that utterance, tier,
-options or head values. A source `fitted: <file>` names the experiment
+options or head values; `from a to b` replaces the minimum and maximum
+where both ends sound alike. "Unchanged" marks a value that the model
+does not use yet on any utterance, with the reason. A source
+`fitted: <file>` names the experiment
 that fitted the value.
 
 | Group | Parameters |
@@ -31,33 +34,33 @@ Anatomy: the tract, the mouth, the face, the teeth and the walls.
 | Key | Unit | Range | Default | Effect | Source |
 | --- | --- | --- | --- | --- | --- |
 | `vocalTractLength` ★<br>Vocal tract length | cm | 11 to 20 | 16.5 | f2 falls | Fitch & Giedd 1999, JASA 106(3); Vorperian et al. 2009 |
-| `pharynxRatio` ★<br>Pharynx share | – | 0.35 to 0.6 | 0.46 | f2 falls | Fant 1966; Vorperian et al. 2009 (the male pharynx grows more) |
-| `pharynxWidth` ★<br>Pharynx width | × (factor) | 0.7 to 1.35 | 1 | f2 falls | Story 2008 (MRI area functions); fitted: experiments/issue-9-preset-fit.mjs |
-| `oralWidth` ★<br>Oral cavity width | × (factor) | 0.7 to 1.35 | 1 | f2 rises | Story 2008 (MRI area functions); fitted: experiments/issue-9-preset-fit.mjs |
+| `pharynxRatio` ★<br>Pharynx share | – | 0.35 to 0.6 | 0.46 | f2 rises | Fant 1966; Vorperian et al. 2009 (the male pharynx grows more) |
+| `pharynxWidth` ★<br>Pharynx width | × (factor) | 0.7 to 1.35 | 1 | f2 rises | Story 2008 (MRI area functions); fitted: experiments/issue-9-preset-fit.mjs |
+| `oralWidth` ★<br>Oral cavity width | × (factor) | 0.7 to 1.35 | 1 | f2 falls | Story 2008 (MRI area functions); fitted: experiments/issue-9-preset-fit.mjs |
 | `mouthWidth` ★<br>Mouth width | × (factor) | 0.7 to 1.4 | 1 | f1 rises | Fant 1960 (lip opening area); Story 2008 |
 | `lipThickness` ★<br>Lip thickness | × (factor) | 0.6 to 1.6 | 1 | f2 falls | Fant 1960 (lip tube length); Story 2008 |
 | `jawRange` ★<br>Jaw range | × (factor) | 0.6 to 1.4 | 1 | f1 rises | Calka et al. 2025, PLOS Comput Biol 21(9) e1013378, Table 3 (jaw openings from MRI); Shadle 1985 |
 | `tongueSize` ★<br>Tongue size | × (factor) | 0.8 to 1.25 | 1 | f1 falls | Story 2008 (MRI area functions); fitted: experiments/issue-9-preset-fit.mjs |
 | `nasalSize` ★<br>Nasal cavity size | × (factor) | 0.6 to 1.4 | 1 | nasalLevel rises | Dang, Honda & Suzuki 1994, JASA 96(4) (MRI of the nasal cavity) |
-| `headWidth` ★<br>Head width | × (factor) | 0.85 to 1.2 | 1 | f1 rises (ˈa, tier high) | Farkas 1994, Anthropometry of the Head and Face (head breadth) |
-| `headHeight` ★<br>Head height | × (factor) | 0.85 to 1.2 | 1 | f1 rises (ˈa, tier high) | Farkas 1994, Anthropometry of the Head and Face (head height) |
-| `noseLength` ★<br>Nose length | × (factor) | 0.7 to 1.4 | 1 | f1 rises (ˈa, tier high) | Farkas 1994, Anthropometry of the Head and Face (nose length) |
+| `headWidth` ★<br>Head width | × (factor) | 0.85 to 1.2 | 1 | rms falls (`ˈa`, tier high) | Farkas 1994, Anthropometry of the Head and Face (head breadth) |
+| `headHeight` ★<br>Head height | × (factor) | 0.85 to 1.2 | 1 | centroid rises (`ˈa`, tier high) | Farkas 1994, Anthropometry of the Head and Face (head height) |
+| `noseLength` ★<br>Nose length | × (factor) | 0.7 to 1.4 | 1 | centroid falls (`ˈa`, tier high) | Farkas 1994, Anthropometry of the Head and Face (nose length) |
 | `wallLoss` ★<br>Wall losses | × (factor) | 0 to 3 | 1 | bandwidth1 rises | Ishizaka, French & Flanagan 1975; Hawks & Miller 1995 |
 | `nasalCoupling` ★<br>Nasal coupling | × (factor) | 0 to 2 | 1 | nasalLevel rises | Maeda 1982 (velopharyngeal port areas); Dang & Honda 1997 |
 | `nasalLoss`<br>Nasal losses | × (factor) | 1 to 8 | 3 | nasalLevel falls | Dang, Honda & Suzuki 1994; fitted: experiments/issue-36-nasal-murmur.mjs (issue 84) |
 | `wallMass`<br>Wall mass | g/cm² | 1 to 3 | 2.1 | f1 falls | Ishizaka, French & Flanagan 1975 (issue 36) |
 | `wallResistance`<br>Wall resistance | g/(cm² s) | 400 to 2400 | 800 | bandwidth1 rises | Ishizaka, French & Flanagan 1975 (issue 36) |
-| `wallStiffness`<br>Wall stiffness | g/(cm² s²) | 30000 to 500000 | 84500 | f1 rises | Ishizaka, French & Flanagan 1975 (issue 36) |
+| `wallStiffness`<br>Wall stiffness | g/(cm² s²) | 30000 to 500000 | 84500 | rms falls | Ishizaka, French & Flanagan 1975 (issue 36) |
 | `lossShape`<br>Boundary loss shape | × (factor) | 1 to 3 | 1.3 | bandwidth1 rises | Hawks & Miller 1995; fitted: experiments/issue-11-bandwidths.mjs (issue 36) |
 | `radiationBaffle`<br>Radiation baffle | × (factor) | 0.3 to 1 | 0.5 | f1 falls | Flanagan 1972 (piston in a sphere); fitted: experiments/issue-11-bandwidths.mjs (issue 36) |
-| `subglottalLength`<br>Subglottal tract length | × (factor) | 0.8 to 1.25 | 1 | centroid falls (ˈa, source folds, interaction true) | Ishizaka, Matsudaira & Kaneko 1976; Lulich 2010 (issue 34) |
-| `subglottalLoss`<br>Subglottal wall loss | × (factor) | 1 to 8 | 7 | rms falls (ˈa, source folds, interaction true) | Ishizaka et al. 1976 (bandwidths 150-350 Hz); fitted: experiments/issue-34-subglottal-probe.mjs |
-| `incisorThickness`<br>Incisor thickness | cm | 0.5 to 1 | 0.7 | noiseLevel falls | Calka et al. 2025, PLOS Comput Biol 21(9) e1013378, Table 3 (jaw openings from MRI); Shadle 1985 |
-| `restGap`<br>Incisor gap at rest | cm | 0.1 to 0.6 | 0.35 | f1 rises | Calka et al. 2025, PLOS Comput Biol 21(9) e1013378, Table 3 (jaw openings from MRI); Shadle 1985 |
+| `subglottalLength`<br>Subglottal tract length | × (factor) | 0.8 to 1.25 | 1 | centroid falls (`ˈa`, source folds, interaction true) | Ishizaka, Matsudaira & Kaneko 1976; Lulich 2010 (issue 34) |
+| `subglottalLoss`<br>Subglottal wall loss | × (factor) | 1 to 8 | 7 | rms falls (`ˈa`, source folds, interaction true) | Ishizaka et al. 1976 (bandwidths 150-350 Hz); fitted: experiments/issue-34-subglottal-probe.mjs |
+| `incisorThickness`<br>Incisor thickness | cm | 0.5 to 1 | 0.7 | f3 falls (`ˈa`, tier high) | Calka et al. 2025, PLOS Comput Biol 21(9) e1013378, Table 3 (jaw openings from MRI); Shadle 1985 |
+| `restGap`<br>Incisor gap at rest | cm | 0.1 to 0.6 | 0.35 | noiseLevel falls | Calka et al. 2025, PLOS Comput Biol 21(9) e1013378, Table 3 (jaw openings from MRI); Shadle 1985 |
 | `sibilantGap`<br>Sibilant incisor gap | cm | 0.05 to 0.3 | 0.15 | noiseLevel falls | Calka et al. 2025, PLOS Comput Biol 21(9) e1013378, Table 3 (jaw openings from MRI); Shadle 1985 |
-| `velarGap`<br>Velar incisor gap | cm | 0.3 to 0.8 | 0.55 | f1 rises (ˈkaka ˈgaga) | Calka et al. 2025, PLOS Comput Biol 21(9) e1013378, Table 3 (jaw openings from MRI); Shadle 1985 |
+| `velarGap`<br>Velar incisor gap | cm | 0.3 to 0.8 | 0.55 | f1 rises (`ˈkaka ˈgaga`) | Calka et al. 2025, PLOS Comput Biol 21(9) e1013378, Table 3 (jaw openings from MRI); Shadle 1985 |
 | `openGap`<br>Open vowel incisor gap | cm | 0.4 to 1.2 | 0.8 | f1 rises | Calka et al. 2025, PLOS Comput Biol 21(9) e1013378, Table 3 (jaw openings from MRI); Shadle 1985 |
-| `backGap`<br>Back vowel incisor gap | cm | 0.2 to 0.6 | 0.4 | f1 rises (ˈmumu ˈsusu) | Calka et al. 2025, PLOS Comput Biol 21(9) e1013378, Table 3 (jaw openings from MRI); Shadle 1985 |
+| `backGap`<br>Back vowel incisor gap | cm | 0.2 to 0.6 | 0.4 | f1 falls (`ˈmumu ˈsusu`) | Calka et al. 2025, PLOS Comput Biol 21(9) e1013378, Table 3 (jaw openings from MRI); Shadle 1985 |
 
 ## folds
 
@@ -71,11 +74,11 @@ Folds: the vocal folds and their pulses.
 | `jitter` ★<br>Jitter | % | 0 to 3 | 0.4 | hnr falls | Baken & Orlikoff 2000, Clinical Measurement of Speech and Voice |
 | `shimmer` ★<br>Shimmer | % | 0 to 15 | 3 | hnr falls | Baken & Orlikoff 2000, Clinical Measurement of Speech and Voice |
 | `glottalChink` ★<br>Glottal chink | mm² | 0 to 10 | 0 | hnr falls | Södersten & Lindestad 1990; Hanson & Chuang 1999, JASA 106, Table X |
-| `foldLength`<br>Vocal fold length | cm | 0.6 to 1.8 | 1.4 | rms rises (ˈa, source folds) | Titze 1989, JASA 85(4) (issue 33) |
-| `foldMass`<br>Vocal fold mass | × (factor) | 0.5 to 2 | 1 | f0 falls (ˈa, source folds) | Ishizaka & Flanagan 1972; Steinecke & Herzel 1995 (issue 33) |
-| `foldStiffness`<br>Vocal fold stiffness | × (factor) | 0.5 to 2 | 1 | f0 rises (ˈa, source folds) | Ishizaka & Flanagan 1972; Steinecke & Herzel 1995 (issue 33) |
-| `foldDamping`<br>Vocal fold damping | × (factor) | 0.5 to 3 | 1 | rms falls (ˈa, source folds) | Ishizaka & Flanagan 1972; Titze 1988 (issue 33) |
-| `glottalPressureCoefficient`<br>Glottal pressure coefficient | – | 1 to 1.4 | 1.1 | rms falls (ˈa, source folds, interaction true) | Titze 2008 (k_t = 1.1); issue 34 |
+| `foldLength`<br>Vocal fold length | cm | 0.6 to 1.8 | 1.4 | rms rises (`ˈa`, source folds) | Titze 1989, JASA 85(4) (issue 33) |
+| `foldMass`<br>Vocal fold mass | × (factor) | 0.5 to 2 | 1 | f0 falls (`ˈa`, source folds) | Ishizaka & Flanagan 1972; Steinecke & Herzel 1995 (issue 33) |
+| `foldStiffness`<br>Vocal fold stiffness | × (factor) | 0.5 to 2 | 1 | rms falls (`ˈa`, source folds) | Ishizaka & Flanagan 1972; Steinecke & Herzel 1995 (issue 33) |
+| `foldDamping`<br>Vocal fold damping | × (factor) | 0.5 to 3 | 1 | rms falls (`ˈa`, source folds) | Ishizaka & Flanagan 1972; Titze 1988 (issue 33) |
+| `glottalPressureCoefficient`<br>Glottal pressure coefficient | – | 1 to 1.4 | 1.1 | rms falls (`ˈa`, source folds, interaction true) | Titze 2008 (k_t = 1.1); issue 34 |
 | `breathinessRd`<br>Breathiness pulse shape | – | 0.5 to 2.5 | 1.5 | h1h2 rises (breathiness 0.8) | Klatt & Klatt 1990; Hanson 1997 (H1-H2 of breathy voices; issue 32) |
 | `breathGain`<br>Breath noise gain | × (factor) | 1 to 4 | 3.87 | hnr falls | Klatt & Klatt 1990; fitted: experiments/issue-35-breath-tuning.mjs (issue 32) |
 | `breathExponent`<br>Breath noise exponent | – | 1.5 to 3 | 2.114 | hnr rises | Klatt & Klatt 1990; fitted: experiments/issue-35-breath-tuning.mjs (issue 32) |
@@ -89,16 +92,16 @@ Breathing: lungs, airflow and noise sources.
 | `aspirationLevel` ★<br>Aspiration noise | × (factor) | 0 to 3 | 1 | hnr falls | Klatt & Klatt 1990, JASA 87(2) (aspiration noise levels) |
 | `fricationLevel` ★<br>Frication level | × (factor) | 0 to 3 | 1 | noiseLevel rises | Shadle 1985; Stevens 1998 (frication noise sources) |
 | `lungPressure`<br>Lung pressure | Pa | 300 to 2000 | 800 | noiseLevel rises | Titze 1994, Principles of Voice Production (issue 33) |
-| `oralCompliance`<br>Oral compliance | cm⁵/dyn | 0.0005 to 0.002 | 0.001 | noiseLevel falls (ˈapa ˈtata) | Stevens 1998, Acoustic Phonetics, ch. 2 (issue 35) |
-| `glottisVoiced`<br>Voiced glottal area | cm² | 0.03 to 0.1 | 0.05 | noiseLevel falls (ˈaza ˈzaza) | Stevens 1998, Acoustic Phonetics, ch. 2 (issue 35) |
+| `oralCompliance`<br>Oral compliance | cm⁵/dyn | 0.0005 to 0.002 | 0.001 | noiseLevel rises (`ˈapa ˈtata`) | Stevens 1998, Acoustic Phonetics, ch. 2 (issue 35) |
+| `glottisVoiced`<br>Voiced glottal area | cm² | 0.03 to 0.1 | 0.05 | noiseLevel rises (`ˈaza ˈzaza`) | Stevens 1998, Acoustic Phonetics, ch. 2 (issue 35) |
 | `glottisOpen`<br>Open glottal area | cm² | 0.15 to 0.4 | 0.25 | noiseLevel rises | Stevens 1998, Acoustic Phonetics, ch. 2 (issue 35) |
 | `glottisBreathy`<br>Breathy glottal area | cm² | 0.05 to 0.2 | 0.1 | hnr falls (breathiness 0.8) | Stevens 1998, Acoustic Phonetics, ch. 2 (issue 35) |
 | `reCritical`<br>Critical Reynolds number | – | 1700 to 2300 | 1800 | noiseLevel falls | Stevens 1998; Sinder 1999 (issue 35) |
-| `wallSource`<br>Wall noise source | × (factor) | 0.1 to 0.35 | 0.18 | noiseLevel rises (ˈafa ˈfafa) | Shadle 1985 (obstacle and wall sources; issue 35) |
+| `wallSource`<br>Wall noise source | × (factor) | 0.1 to 0.35 | 0.18 | noiseLevel rises (`ˈafa ˈfafa`) | Shadle 1985 (obstacle and wall sources; issue 35) |
 | `strouhal`<br>Strouhal number | – | 0.15 to 0.3 | 0.2 | centroid rises | Stevens 1998 (issue 35) |
 | `chinkNoise`<br>Chink noise | × (factor) | 0 to 1.5 | 0.5 | hnr falls (glottalChink 5) | Södersten & Lindestad 1990; starting value of issue 35 (experiments/issue-11-audit-m2.mjs) |
 | `fricationGain`<br>Frication gain | × (factor) | 0.3 to 1.2 | 0.592 | noiseLevel rises | fitted: experiments/issue-35-frication-tuning.mjs |
-| `transientGain`<br>Burst transient gain | s | 0 to 0.00002 | 0.000005 | rms rises (ˈata ˈtata) | fitted: experiments/issue-11-turbulence.mjs (issue 35) |
+| `transientGain`<br>Burst transient gain | s | 0 to 0.00002 | 0.000005 | rms rises (`ˈata ˈtata`) | fitted: experiments/issue-11-turbulence.mjs (issue 35) |
 
 ## articulation
 
@@ -108,71 +111,71 @@ Articulation: timing, speeds and duration rules.
 | --- | --- | --- | --- | --- | --- |
 | `speechRate` ★<br>Speech rate | × (factor) | 0.5 to 1.8 | 1 | duration falls | Klatt 1979; Gay 1981 (rate changes the long sounds most) |
 | `articulationSpeed` ★<br>Articulation speed | × (factor) | 0.5 to 2 | 1 | f2 falls | Saltzman & Munhall 1989; Birkholz et al. 2011; fitted: experiments/issue-11-fit-dynamics.mjs (issue 38) |
-| `stressLengthening` ★<br>Stress lengthening | × (factor) | 1 to 2 | 1.35 | duration rises | Klatt 1979 (rule 6); Lehiste 1972 |
-| `finalLengthening` ★<br>Final lengthening | × (factor) | 1 to 2 | 1.4 | duration rises (ˈmama ˈsasa.) | Klatt 1979 (rule 2); Lehiste 1972 |
-| `pauseLength` ★<br>Pause length | × (factor) | 0.3 to 3 | 1 | duration rises (ˈmama, ˈsasa.) | Klatt 1979; Goldman-Eisler 1968 (pause durations) |
-| `coarticulation`<br>Coarticulation | × (factor) | 0.5 to 2 | 1 | f2 rises | Saltzman & Munhall 1989; Birkholz et al. 2011; fitted: experiments/issue-11-fit-dynamics.mjs (issue 38) |
-| `roundingLead`<br>Rounding lead | s | 0.05 to 0.25 | 0.12 | f2 falls (ˈmasa ˈsu) | Benguerel & Cowan 1974 (anticipatory rounding); issue 38 |
+| `stressLengthening` ★<br>Stress lengthening | × (factor) | 1 to 2 | 1.35 | duration falls | Klatt 1979 (rule 6); Lehiste 1972 |
+| `finalLengthening` ★<br>Final lengthening | × (factor) | 1 to 2 | 1.4 | duration rises (`ˈmama ˈsasa.`) | Klatt 1979 (rule 2); Lehiste 1972 |
+| `pauseLength` ★<br>Pause length | × (factor) | 0.3 to 3 | 1 | duration rises (`ˈmama, ˈsasa.`) | Klatt 1979; Goldman-Eisler 1968 (pause durations) |
+| `coarticulation`<br>Coarticulation | × (factor) | 0.5 to 2 | 1 | f2 falls | Saltzman & Munhall 1989; Birkholz et al. 2011; fitted: experiments/issue-11-fit-dynamics.mjs (issue 38) |
+| `roundingLead`<br>Rounding lead | s | 0.05 to 0.25 | 0.12 | centroid falls (`ˈmasa ˈsu`) | Benguerel & Cowan 1974 (anticipatory rounding); issue 38 |
 | `velumLead`<br>Velum lead | s | 0.03 to 0.15 | 0.08 | nasalLevel rises | Bell-Berti & Krakow 1991 (anticipatory nasalization); issue 38 |
 | `rateMinimum`<br>Rate exponent of the minimum | – | 0 to 1 | 0.5 | duration falls (speechRate 1.5) | Gay 1981; starting value of issue 39 |
 | `rateStretch`<br>Rate exponent of the stretch | – | 0.5 to 2 | 1.2 | duration falls (speechRate 1.5) | Gay 1981; starting value of issue 39 |
 | `jawPosture`<br>Jaw posture | cm | -0.2 to 0.6 | 0 | f1 rises | Laver 1980, The Phonetic Description of Voice Quality; fitted: experiments/issue-40-articulators.mjs |
 | `lipPosture`<br>Lip posture | cm | -0.3 to 0.6 | 0 | f2 falls | Laver 1980, The Phonetic Description of Voice Quality; fitted: experiments/issue-40-articulators.mjs |
 | `larynxPosture`<br>Larynx posture | cm | -1 to 1 | 0 | f2 rises | Laver 1980, The Phonetic Description of Voice Quality; fitted: experiments/issue-40-articulators.mjs |
-| `tongueRootPosture`<br>Tongue root posture | – | -1 to 1 | 0 | f1 rises | Laver 1980, The Phonetic Description of Voice Quality; fitted: experiments/issue-40-articulators.mjs |
+| `tongueRootPosture`<br>Tongue root posture | – | -1 to 1 | 0 | f1 falls | Laver 1980, The Phonetic Description of Voice Quality; fitted: experiments/issue-40-articulators.mjs |
 | `jawArea`<br>Jaw area change | 1/cm | 0.3 to 1.5 | 0.8 | f1 rises (jawPosture 0.4) | fitted: experiments/issue-40-articulators.mjs |
-| `tongueRootArea`<br>Tongue root area change | – | 0.2 to 0.6 | 0.4 | f1 rises (tongueRootPosture 1) | fitted: experiments/issue-40-articulators.mjs |
-| `speedHeight`<br>Speed of height | × (factor) | 0.5 to 2 | 1 | f2 falls | Saltzman & Munhall 1989; Birkholz et al. 2011; fitted: experiments/issue-11-fit-dynamics.mjs (issue 38) |
-| `speedBackness`<br>Speed of backness | × (factor) | 0.5 to 2 | 1 | f2 falls | Saltzman & Munhall 1989; Birkholz et al. 2011; fitted: experiments/issue-11-fit-dynamics.mjs (issue 38) |
-| `speedRounding`<br>Speed of rounding | × (factor) | 0.5 to 2 | 1 | f2 falls | Saltzman & Munhall 1989; Birkholz et al. 2011; fitted: experiments/issue-11-fit-dynamics.mjs (issue 38) |
-| `speedRhotic`<br>Speed of rhotic | × (factor) | 0.5 to 2 | 1 | f2 falls | Saltzman & Munhall 1989; Birkholz et al. 2011; fitted: experiments/issue-11-fit-dynamics.mjs (issue 38) |
-| `speedPalatalization`<br>Speed of palatalization | × (factor) | 0.5 to 2 | 1 | f2 falls | Saltzman & Munhall 1989; Birkholz et al. 2011; fitted: experiments/issue-11-fit-dynamics.mjs (issue 38) |
-| `speedLipAmount`<br>Speed of lip amount | × (factor) | 0.5 to 2 | 1 | f2 falls | Saltzman & Munhall 1989; Birkholz et al. 2011; fitted: experiments/issue-11-fit-dynamics.mjs (issue 38) |
-| `speedLipArea`<br>Speed of lip area | × (factor) | 0.5 to 2 | 1 | f2 falls | Saltzman & Munhall 1989; Birkholz et al. 2011; fitted: experiments/issue-11-fit-dynamics.mjs (issue 38) |
-| `speedTongueAmount`<br>Speed of tongue amount | × (factor) | 0.5 to 2 | 1 | f2 falls | Saltzman & Munhall 1989; Birkholz et al. 2011; fitted: experiments/issue-11-fit-dynamics.mjs (issue 38) |
-| `speedTongueArea`<br>Speed of tongue area | × (factor) | 0.5 to 2 | 1 | f2 falls | Saltzman & Munhall 1989; Birkholz et al. 2011; fitted: experiments/issue-11-fit-dynamics.mjs (issue 38) |
-| `speedTongueLocation`<br>Speed of tongue location | × (factor) | 0.5 to 2 | 1 | f2 falls | Saltzman & Munhall 1989; Birkholz et al. 2011; fitted: experiments/issue-11-fit-dynamics.mjs (issue 38) |
-| `speedTongueWidth`<br>Speed of tongue width | × (factor) | 0.5 to 2 | 1 | f2 falls | Saltzman & Munhall 1989; Birkholz et al. 2011; fitted: experiments/issue-11-fit-dynamics.mjs (issue 38) |
-| `speedVelum`<br>Speed of velum | × (factor) | 0.5 to 2 | 1 | f2 falls | Saltzman & Munhall 1989; Birkholz et al. 2011; fitted: experiments/issue-11-fit-dynamics.mjs (issue 38) |
-| `speedVoicing`<br>Speed of voicing | × (factor) | 0.5 to 2 | 1 | f2 falls | Saltzman & Munhall 1989; Birkholz et al. 2011; fitted: experiments/issue-11-fit-dynamics.mjs (issue 38) |
-| `speedAspiration`<br>Speed of aspiration | × (factor) | 0.5 to 2 | 1 | f2 falls | Saltzman & Munhall 1989; Birkholz et al. 2011; fitted: experiments/issue-11-fit-dynamics.mjs (issue 38) |
-| `speedGlottalClosure`<br>Speed of glottal closure | × (factor) | 0.5 to 2 | 1 | f2 falls | Saltzman & Munhall 1989; Birkholz et al. 2011; fitted: experiments/issue-11-fit-dynamics.mjs (issue 38) |
-| `speedFrication`<br>Speed of frication | × (factor) | 0.5 to 2 | 1 | f2 falls | Saltzman & Munhall 1989; Birkholz et al. 2011; fitted: experiments/issue-11-fit-dynamics.mjs (issue 38) |
-| `speedSibilance`<br>Speed of sibilance | × (factor) | 0.5 to 2 | 1 | f2 falls | Saltzman & Munhall 1989; Birkholz et al. 2011; fitted: experiments/issue-11-fit-dynamics.mjs (issue 38) |
-| `speedTrill`<br>Speed of trill | × (factor) | 0.5 to 2 | 1 | f2 falls | Saltzman & Munhall 1989; Birkholz et al. 2011; fitted: experiments/issue-11-fit-dynamics.mjs (issue 38) |
-| `speedLateral`<br>Speed of lateral | × (factor) | 0.5 to 2 | 1 | f2 falls | Saltzman & Munhall 1989; Birkholz et al. 2011; fitted: experiments/issue-11-fit-dynamics.mjs (issue 38) |
-| `speedJaw`<br>Speed of jaw | × (factor) | 0.5 to 2 | 1 | f2 falls | Saltzman & Munhall 1989; Birkholz et al. 2011; fitted: experiments/issue-11-fit-dynamics.mjs (issue 38) |
-| `speedLipProtrusion`<br>Speed of lip protrusion | × (factor) | 0.5 to 2 | 1 | f2 falls | Saltzman & Munhall 1989; Birkholz et al. 2011; fitted: experiments/issue-11-fit-dynamics.mjs (issue 38) |
-| `speedLarynxHeight`<br>Speed of larynx height | × (factor) | 0.5 to 2 | 1 | f2 falls | Saltzman & Munhall 1989; Birkholz et al. 2011; fitted: experiments/issue-11-fit-dynamics.mjs (issue 38) |
-| `speedTongueRoot`<br>Speed of tongue root | × (factor) | 0.5 to 2 | 1 | f2 falls | Saltzman & Munhall 1989; Birkholz et al. 2011; fitted: experiments/issue-11-fit-dynamics.mjs (issue 38) |
-| `durationClauseFinal`<br>Duration rule clause final | × (factor) | 0.5 to 2 | 1 | duration falls | Klatt 1979; Hunnicutt & Klatt 1987; DURATION_RULES of src/articulation/durations.js (issue 39) |
+| `tongueRootArea`<br>Tongue root area change | – | 0.2 to 0.6 | 0.4 | f1 falls (tongueRootPosture 1) | fitted: experiments/issue-40-articulators.mjs |
+| `speedHeight`<br>Speed of height | × (factor) | 0.5 to 2 | 1 | centroid falls | Saltzman & Munhall 1989; Birkholz et al. 2011; fitted: experiments/issue-11-fit-dynamics.mjs (issue 38) |
+| `speedBackness`<br>Speed of backness | × (factor) | 0.5 to 2 | 1 | centroid rises | Saltzman & Munhall 1989; Birkholz et al. 2011; fitted: experiments/issue-11-fit-dynamics.mjs (issue 38) |
+| `speedRounding`<br>Speed of rounding | × (factor) | 0.5 to 2 | 1 | f2 falls (`ˈiuiu`) | Saltzman & Munhall 1989; Birkholz et al. 2011; fitted: experiments/issue-11-fit-dynamics.mjs (issue 38) |
+| `speedRhotic`<br>Speed of rhotic | × (factor) | 0.5 to 2 | 1 | f3 falls (`ˈɹaɹa`) | Saltzman & Munhall 1989; Birkholz et al. 2011; fitted: experiments/issue-11-fit-dynamics.mjs (issue 38) |
+| `speedPalatalization`<br>Speed of palatalization | × (factor) | 0.5 to 2 | 1 | f2 falls (`ˈmʲamʲa`, lang ru) | Saltzman & Munhall 1989; Birkholz et al. 2011; fitted: experiments/issue-11-fit-dynamics.mjs (issue 38) |
+| `speedLipAmount`<br>Speed of lip amount | × (factor) | 0.5 to 2 | 1 | nasalLevel rises | Saltzman & Munhall 1989; Birkholz et al. 2011; fitted: experiments/issue-11-fit-dynamics.mjs (issue 38) |
+| `speedLipArea`<br>Speed of lip area | × (factor) | 0.5 to 2 | 1 | noiseLevel rises (`ˈamfa`) | Saltzman & Munhall 1989; Birkholz et al. 2011; fitted: experiments/issue-11-fit-dynamics.mjs (issue 38) |
+| `speedTongueAmount`<br>Speed of tongue amount | × (factor) | 0.5 to 2 | 1 | noiseLevel rises | Saltzman & Munhall 1989; Birkholz et al. 2011; fitted: experiments/issue-11-fit-dynamics.mjs (issue 38) |
+| `speedTongueArea`<br>Speed of tongue area | × (factor) | 0.5 to 2 | 1 | centroid falls (`ˈatsa`) | Saltzman & Munhall 1989; Birkholz et al. 2011; fitted: experiments/issue-11-fit-dynamics.mjs (issue 38) |
+| `speedTongueLocation`<br>Speed of tongue location | × (factor) | 0.5 to 2 | 1 | noiseLevel falls (`ˈakata`) | Saltzman & Munhall 1989; Birkholz et al. 2011; fitted: experiments/issue-11-fit-dynamics.mjs (issue 38) |
+| `speedTongueWidth`<br>Speed of tongue width | × (factor) | 0.5 to 2 | 1 | noiseLevel rises (`ˈaʃsa`) | Saltzman & Munhall 1989; Birkholz et al. 2011; fitted: experiments/issue-11-fit-dynamics.mjs (issue 38) |
+| `speedVelum`<br>Speed of velum | × (factor) | 0.5 to 2 | 1 | centroid rises | Saltzman & Munhall 1989; Birkholz et al. 2011; fitted: experiments/issue-11-fit-dynamics.mjs (issue 38) |
+| `speedVoicing`<br>Speed of voicing | × (factor) | 0.5 to 2 | 1 | rms rises (`ˈata`) | Saltzman & Munhall 1989; Birkholz et al. 2011; fitted: experiments/issue-11-fit-dynamics.mjs (issue 38) |
+| `speedAspiration`<br>Speed of aspiration | × (factor) | 0.5 to 2 | 1 | noiseLevel rises | Saltzman & Munhall 1989; Birkholz et al. 2011; fitted: experiments/issue-11-fit-dynamics.mjs (issue 38) |
+| `speedGlottalClosure`<br>Speed of glottal closure | × (factor) | 0.5 to 2 | 1 | noiseLevel falls (`ˈaʔa`) | Saltzman & Munhall 1989; Birkholz et al. 2011; fitted: experiments/issue-11-fit-dynamics.mjs (issue 38) |
+| `speedFrication`<br>Speed of frication | × (factor) | 0.5 to 2 | 1 | noiseLevel rises (`ˈaxa`) | Saltzman & Munhall 1989; Birkholz et al. 2011; fitted: experiments/issue-11-fit-dynamics.mjs (issue 38) |
+| `speedSibilance`<br>Speed of sibilance | × (factor) | 0.5 to 2 | 1 | noiseLevel rises (`ˈaʃa`) | Saltzman & Munhall 1989; Birkholz et al. 2011; fitted: experiments/issue-11-fit-dynamics.mjs (issue 38) |
+| `speedTrill`<br>Speed of trill | × (factor) | 0.5 to 2 | 1 | centroid rises (`ˈara`) | Saltzman & Munhall 1989; Birkholz et al. 2011; fitted: experiments/issue-11-fit-dynamics.mjs (issue 38) |
+| `speedLateral`<br>Speed of lateral | × (factor) | 0.5 to 2 | 1 | centroid rises (`ˈalila`, solver fdtd2d) | Saltzman & Munhall 1989; Birkholz et al. 2011; fitted: experiments/issue-11-fit-dynamics.mjs (issue 38) |
+| `speedJaw`<br>Speed of jaw | × (factor) | 0.5 to 2 | 1 | noiseLevel rises | Saltzman & Munhall 1989; Birkholz et al. 2011; fitted: experiments/issue-11-fit-dynamics.mjs (issue 38) |
+| `speedLipProtrusion`<br>Speed of lip protrusion | × (factor) | 0.5 to 2 | 1 | f2 falls (`ˈuʃu`) | Saltzman & Munhall 1989; Birkholz et al. 2011; fitted: experiments/issue-11-fit-dynamics.mjs (issue 38) |
+| `speedLarynxHeight`<br>Speed of larynx height | × (factor) | 0.5 to 2 | 1 | f1 unchanged: no sound sets a target for this channel yet: the larynx posture and the pitch coupling are added after the smoothing | Saltzman & Munhall 1989; Birkholz et al. 2011; fitted: experiments/issue-11-fit-dynamics.mjs (issue 38) |
+| `speedTongueRoot`<br>Speed of tongue root | × (factor) | 0.5 to 2 | 1 | f1 unchanged: no sound sets a target for this channel yet: the tongue root posture is added after the smoothing | Saltzman & Munhall 1989; Birkholz et al. 2011; fitted: experiments/issue-11-fit-dynamics.mjs (issue 38) |
+| `durationClauseFinal`<br>Duration rule clause final | × (factor) | 0.5 to 2 | 1 | duration rises | Klatt 1979; Hunnicutt & Klatt 1987; DURATION_RULES of src/articulation/durations.js (issue 39) |
 | `durationNonPhraseFinal`<br>Duration rule non phrase final | × (factor) | 0.5 to 2 | 1 | duration falls | Klatt 1979; Hunnicutt & Klatt 1987; DURATION_RULES of src/articulation/durations.js (issue 39) |
 | `durationNonWordFinal`<br>Duration rule non word final | × (factor) | 0.5 to 2 | 1 | duration falls | Klatt 1979; Hunnicutt & Klatt 1987; DURATION_RULES of src/articulation/durations.js (issue 39) |
 | `durationPolysyllabic`<br>Duration rule polysyllabic | × (factor) | 0.5 to 2 | 1 | duration falls | Klatt 1979; Hunnicutt & Klatt 1987; DURATION_RULES of src/articulation/durations.js (issue 39) |
 | `durationNonInitialConsonant`<br>Duration rule non initial consonant | × (factor) | 0.5 to 2 | 1 | duration falls | Klatt 1979; Hunnicutt & Klatt 1987; DURATION_RULES of src/articulation/durations.js (issue 39) |
-| `durationPretonic`<br>Duration rule pretonic | × (factor) | 0.5 to 2 | 1 | duration falls | Klatt 1979; Hunnicutt & Klatt 1987; DURATION_RULES of src/articulation/durations.js (issue 39) |
-| `durationUnstressedMedial`<br>Duration rule unstressed medial | × (factor) | 0.5 to 2 | 1 | duration falls | Klatt 1979; Hunnicutt & Klatt 1987; DURATION_RULES of src/articulation/durations.js (issue 39) |
+| `durationPretonic`<br>Duration rule pretonic | × (factor) | 0.5 to 2 | 1 | duration falls (`mɐˈɫokə`, lang ru) | Klatt 1979; Hunnicutt & Klatt 1987; DURATION_RULES of src/articulation/durations.js (issue 39) |
+| `durationUnstressedMedial`<br>Duration rule unstressed medial | × (factor) | 0.5 to 2 | 1 | duration falls (`ˈmamama`) | Klatt 1979; Hunnicutt & Klatt 1987; DURATION_RULES of src/articulation/durations.js (issue 39) |
 | `durationUnstressedOther`<br>Duration rule unstressed other | × (factor) | 0.5 to 2 | 1 | duration falls | Klatt 1979; Hunnicutt & Klatt 1987; DURATION_RULES of src/articulation/durations.js (issue 39) |
 | `durationUnstressedOnset`<br>Duration rule unstressed onset | × (factor) | 0.5 to 2 | 1 | duration falls | Klatt 1979; Hunnicutt & Klatt 1987; DURATION_RULES of src/articulation/durations.js (issue 39) |
 | `durationUnstressedMinimum`<br>Duration rule unstressed minimum | × (factor) | 0.5 to 2 | 1 | duration falls | Klatt 1979; Hunnicutt & Klatt 1987; DURATION_RULES of src/articulation/durations.js (issue 39) |
-| `durationEmphasis`<br>Duration rule emphasis | × (factor) | 0.5 to 2 | 1 | duration falls | Klatt 1979; Hunnicutt & Klatt 1987; DURATION_RULES of src/articulation/durations.js (issue 39) |
-| `durationBeforeVoicedFricative`<br>Duration rule before voiced fricative | × (factor) | 0.5 to 2 | 1 | duration falls | Klatt 1979; Hunnicutt & Klatt 1987; DURATION_RULES of src/articulation/durations.js (issue 39) |
-| `durationBeforeVoicedPlosive`<br>Duration rule before voiced plosive | × (factor) | 0.5 to 2 | 1 | duration falls | Klatt 1979; Hunnicutt & Klatt 1987; DURATION_RULES of src/articulation/durations.js (issue 39) |
+| `durationEmphasis`<br>Duration rule emphasis | × (factor) | 0.5 to 2 | 1 | duration unchanged: no input marks emphasis yet (the token flag `emphasis`) | Klatt 1979; Hunnicutt & Klatt 1987; DURATION_RULES of src/articulation/durations.js (issue 39) |
+| `durationBeforeVoicedFricative`<br>Duration rule before voiced fricative | × (factor) | 0.5 to 2 | 1 | duration rises (`ˈmaz`) | Klatt 1979; Hunnicutt & Klatt 1987; DURATION_RULES of src/articulation/durations.js (issue 39) |
+| `durationBeforeVoicedPlosive`<br>Duration rule before voiced plosive | × (factor) | 0.5 to 2 | 1 | duration rises (`ˈmad`) | Klatt 1979; Hunnicutt & Klatt 1987; DURATION_RULES of src/articulation/durations.js (issue 39) |
 | `durationBeforeNasal`<br>Duration rule before nasal | × (factor) | 0.5 to 2 | 1 | duration falls | Klatt 1979; Hunnicutt & Klatt 1987; DURATION_RULES of src/articulation/durations.js (issue 39) |
 | `durationBeforeVoiceless`<br>Duration rule before voiceless | × (factor) | 0.5 to 2 | 1 | duration falls | Klatt 1979; Hunnicutt & Klatt 1987; DURATION_RULES of src/articulation/durations.js (issue 39) |
-| `durationOpenFinal`<br>Duration rule open final | × (factor) | 0.5 to 2 | 1 | duration falls | Klatt 1979; Hunnicutt & Klatt 1987; DURATION_RULES of src/articulation/durations.js (issue 39) |
-| `durationVowelBeforeVowel`<br>Duration rule vowel before vowel | × (factor) | 0.5 to 2 | 1 | duration falls | Klatt 1979; Hunnicutt & Klatt 1987; DURATION_RULES of src/articulation/durations.js (issue 39) |
-| `durationVowelAfterVowel`<br>Duration rule vowel after vowel | × (factor) | 0.5 to 2 | 1 | duration falls | Klatt 1979; Hunnicutt & Klatt 1987; DURATION_RULES of src/articulation/durations.js (issue 39) |
-| `durationClusterMiddle`<br>Duration rule cluster middle | × (factor) | 0.5 to 2 | 1 | duration falls | Klatt 1979; Hunnicutt & Klatt 1987; DURATION_RULES of src/articulation/durations.js (issue 39) |
-| `durationClusterEdge`<br>Duration rule cluster edge | × (factor) | 0.5 to 2 | 1 | duration falls | Klatt 1979; Hunnicutt & Klatt 1987; DURATION_RULES of src/articulation/durations.js (issue 39) |
-| `durationAspiration`<br>Duration rule aspiration | × (factor) | 0.5 to 2 | 1 | duration falls | Klatt 1979; Hunnicutt & Klatt 1987; DURATION_RULES of src/articulation/durations.js (issue 39) |
-| `durationTone1`<br>Duration rule tone1 | × (factor) | 0.5 to 2 | 1 | duration falls | Klatt 1979; Hunnicutt & Klatt 1987; DURATION_RULES of src/articulation/durations.js (issue 39) |
-| `durationTone2`<br>Duration rule tone2 | × (factor) | 0.5 to 2 | 1 | duration falls | Klatt 1979; Hunnicutt & Klatt 1987; DURATION_RULES of src/articulation/durations.js (issue 39) |
-| `durationTone3`<br>Duration rule tone3 | × (factor) | 0.5 to 2 | 1 | duration falls | Klatt 1979; Hunnicutt & Klatt 1987; DURATION_RULES of src/articulation/durations.js (issue 39) |
-| `durationTone4`<br>Duration rule tone4 | × (factor) | 0.5 to 2 | 1 | duration falls | Klatt 1979; Hunnicutt & Klatt 1987; DURATION_RULES of src/articulation/durations.js (issue 39) |
-| `durationTone5`<br>Duration rule tone5 | × (factor) | 0.5 to 2 | 1 | duration falls | Klatt 1979; Hunnicutt & Klatt 1987; DURATION_RULES of src/articulation/durations.js (issue 39) |
-| `durationLongVowel`<br>Duration rule long vowel | × (factor) | 0.5 to 2 | 1 | duration falls | Klatt 1979; Hunnicutt & Klatt 1987; DURATION_RULES of src/articulation/durations.js (issue 39) |
-| `durationLongConsonant`<br>Duration rule long consonant | × (factor) | 0.5 to 2 | 1 | duration falls | Klatt 1979; Hunnicutt & Klatt 1987; DURATION_RULES of src/articulation/durations.js (issue 39) |
+| `durationOpenFinal`<br>Duration rule open final | × (factor) | 0.5 to 2 | 1 | duration rises | Klatt 1979; Hunnicutt & Klatt 1987; DURATION_RULES of src/articulation/durations.js (issue 39) |
+| `durationVowelBeforeVowel`<br>Duration rule vowel before vowel | × (factor) | 0.5 to 2 | 1 | duration rises (`ˈmaia`) | Klatt 1979; Hunnicutt & Klatt 1987; DURATION_RULES of src/articulation/durations.js (issue 39) |
+| `durationVowelAfterVowel`<br>Duration rule vowel after vowel | × (factor) | 0.5 to 2 | 1 | duration falls (`ˈmaia`) | Klatt 1979; Hunnicutt & Klatt 1987; DURATION_RULES of src/articulation/durations.js (issue 39) |
+| `durationClusterMiddle`<br>Duration rule cluster middle | × (factor) | 0.5 to 2 | 1 | duration falls (`ˈɛkstɹə`) | Klatt 1979; Hunnicutt & Klatt 1987; DURATION_RULES of src/articulation/durations.js (issue 39) |
+| `durationClusterEdge`<br>Duration rule cluster edge | × (factor) | 0.5 to 2 | 1 | duration falls (`ˈmasta`) | Klatt 1979; Hunnicutt & Klatt 1987; DURATION_RULES of src/articulation/durations.js (issue 39) |
+| `durationAspiration`<br>Duration rule aspiration | × (factor) | 0.5 to 2 | 1 | duration rises (`ˈpʰama`) | Klatt 1979; Hunnicutt & Klatt 1987; DURATION_RULES of src/articulation/durations.js (issue 39) |
+| `durationTone1`<br>Duration rule tone1 | × (factor) | 0.5 to 2 | 1 | duration unchanged (`ma˥ ma`, lang zh): the factor of tone 1 in the zh table is 1, and a power of 1 is 1 | Klatt 1979; Hunnicutt & Klatt 1987; DURATION_RULES of src/articulation/durations.js (issue 39) |
+| `durationTone2`<br>Duration rule tone2 | × (factor) | 0.5 to 2 | 1 | duration rises (`ma˧˥ ma`, lang zh) | Klatt 1979; Hunnicutt & Klatt 1987; DURATION_RULES of src/articulation/durations.js (issue 39) |
+| `durationTone3`<br>Duration rule tone3 | × (factor) | 0.5 to 2 | 1 | duration rises (`ma˨˩ ma`, lang zh) | Klatt 1979; Hunnicutt & Klatt 1987; DURATION_RULES of src/articulation/durations.js (issue 39) |
+| `durationTone4`<br>Duration rule tone4 | × (factor) | 0.5 to 2 | 1 | duration falls (`ma˥˩ ma`, lang zh) | Klatt 1979; Hunnicutt & Klatt 1987; DURATION_RULES of src/articulation/durations.js (issue 39) |
+| `durationTone5`<br>Duration rule tone5 | × (factor) | 0.5 to 2 | 1 | duration falls (`ma˥ ma`, lang zh) | Klatt 1979; Hunnicutt & Klatt 1987; DURATION_RULES of src/articulation/durations.js (issue 39) |
+| `durationLongVowel`<br>Duration rule long vowel | × (factor) | 0.5 to 2 | 1 | duration rises (`ˈmaːma`) | Klatt 1979; Hunnicutt & Klatt 1987; DURATION_RULES of src/articulation/durations.js (issue 39) |
+| `durationLongConsonant`<br>Duration rule long consonant | × (factor) | 0.5 to 2 | 1 | duration rises (`ˈmamːa`) | Klatt 1979; Hunnicutt & Klatt 1987; DURATION_RULES of src/articulation/durations.js (issue 39) |
 
 ## expression
 
@@ -181,8 +184,8 @@ Expression: intonation, rhythm and level.
 | Key | Unit | Range | Default | Effect | Source |
 | --- | --- | --- | --- | --- | --- |
 | `pitchRange` ★<br>Intonation range | st | 0.5 to 8 | 3 | f0Range rises | 't Hart, Collier & Cohen 1990, A Perceptual Study of Intonation |
-| `vibrato` ★<br>Vibrato depth | – | 0 to 1 | 0.25 | f0Range rises | Sundberg 1987, The Science of the Singing Voice (vibrato extent) |
-| `vibratoRate` ★<br>Vibrato rate | Hz | 3 to 8 | 5.2 | f0Range rises (vibrato 1) | Sundberg 1987, The Science of the Singing Voice (vibrato rate) |
+| `vibrato` ★<br>Vibrato depth | – | 0 to 1 | 0.25 | f0Range rises (`ˈaː \|`, pitchRange 0.5, declination 0, accentStrength 0) | Sundberg 1987, The Science of the Singing Voice (vibrato extent) |
+| `vibratoRate` ★<br>Vibrato rate | Hz | 3 to 8 | 5.2 | f0Range falls (`ˈaː \|`, vibrato 1, pitchRange 0.5, declination 0, accentStrength 0) | Sundberg 1987, The Science of the Singing Voice (vibrato rate) |
 | `declination` ★<br>Declination | st | 0 to 6 | 2 | f0Range rises | 't Hart, Collier & Cohen 1990 (declination of 2 to 6 semitones) |
 | `accentStrength` ★<br>Accent strength | × (factor) | 0 to 2 | 1 | f0Range rises | Pierrehumbert 1980, The Phonology and Phonetics of English Intonation |
 | `intrinsicPitch`<br>Intrinsic pitch | st | 0 to 3 | 0 | f0 falls | Whalen & Levitt 1995, J Phonetics 23 (intrinsic F0 of vowels) |
@@ -196,9 +199,9 @@ Microphone: where the listener is and the room.
 | --- | --- | --- | --- | --- | --- |
 | `outputGain` ★<br>Output level | × (factor) | 0.25 to 4 | 1 | rms rises | Fant 1960 (output level is linear in the source); tanh limiter |
 | `micDistance`<br>Microphone distance | cm | 1 to 1000 | 3 | rms falls | Monson et al. 2012, Front Psychol 3:400 (directivity of speech); Chu & Warnock 2002 (speech directivity) |
-| `micAzimuth`<br>Microphone azimuth | ° | -180 to 180 | 0 | centroid falls | Monson et al. 2012, Front Psychol 3:400 (directivity of speech); Chu & Warnock 2002 (speech directivity) |
-| `micElevation`<br>Microphone elevation | ° | -90 to 90 | 0 | centroid falls | Monson et al. 2012, Front Psychol 3:400 (directivity of speech); Chu & Warnock 2002 (speech directivity) |
-| `roomWidth`<br>Room width | m | 1 to 40 | 4 | reverb rises (roomRt60 0.8) | Allen & Berkley 1979, JASA 65(4) (image method); Jot & Chaigne 1991 (feedback delay network) |
-| `roomHeight`<br>Room height | m | 2 to 30 | 2.6 | reverb rises (roomRt60 0.8) | Allen & Berkley 1979, JASA 65(4) (image method); Jot & Chaigne 1991 (feedback delay network) |
-| `roomDepth`<br>Room depth | m | 1 to 80 | 3.5 | reverb rises (roomRt60 0.8) | Allen & Berkley 1979, JASA 65(4) (image method); Jot & Chaigne 1991 (feedback delay network) |
+| `micAzimuth`<br>Microphone azimuth | ° | -180 to 180 | 0 | centroid falls (from 0 to 180) | Monson et al. 2012, Front Psychol 3:400 (directivity of speech); Chu & Warnock 2002 (speech directivity) |
+| `micElevation`<br>Microphone elevation | ° | -90 to 90 | 0 | centroid falls (from 0 to 90) | Monson et al. 2012, Front Psychol 3:400 (directivity of speech); Chu & Warnock 2002 (speech directivity) |
+| `roomWidth`<br>Room width | m | 1 to 40 | 4 | reverb falls (roomRt60 0.8) | Allen & Berkley 1979, JASA 65(4) (image method); Jot & Chaigne 1991 (feedback delay network) |
+| `roomHeight`<br>Room height | m | 2 to 30 | 2.6 | reverb falls (roomRt60 0.8) | Allen & Berkley 1979, JASA 65(4) (image method); Jot & Chaigne 1991 (feedback delay network) |
+| `roomDepth`<br>Room depth | m | 1 to 80 | 3.5 | reverb falls (roomRt60 0.8) | Allen & Berkley 1979, JASA 65(4) (image method); Jot & Chaigne 1991 (feedback delay network) |
 | `roomRt60`<br>Reverberation time | s | 0 to 5 | 0 | reverb rises | Sabine 1922; Allen & Berkley 1979 (image method) |

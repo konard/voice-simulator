@@ -56,7 +56,7 @@ export const BREATHING_PARAMETERS = [
     description:
       'Compliance of the walls and the air behind a constriction: sets how fast the pressure builds up in a stop (about 11 ms with an open glottis).',
     source: AERODYNAMICS,
-    effect: { measure: 'noiseLevel', sign: -1, ipa: 'ˈapa ˈtata' },
+    effect: { measure: 'noiseLevel', sign: 1, ipa: 'ˈapa ˈtata' },
   },
   {
     key: 'glottisVoiced',
@@ -69,7 +69,7 @@ export const BREATHING_PARAMETERS = [
     description:
       'Mean glottal area of modal voicing: more lets more air through and less pressure reach the constrictions.',
     source: AERODYNAMICS,
-    effect: { measure: 'noiseLevel', sign: -1, ipa: 'ˈaza ˈzaza' },
+    effect: { measure: 'noiseLevel', sign: 1, ipa: 'ˈaza ˈzaza' },
   },
   {
     key: 'glottisOpen',

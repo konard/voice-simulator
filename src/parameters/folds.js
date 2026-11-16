@@ -118,9 +118,9 @@ export const FOLDS_PARAMETERS = [
     step: 0.01,
     default: 1,
     description:
-      'Scales the stiffness and coupling of the fold masses: stiffer folds vibrate faster (fold source only).',
+      'Scales the stiffness and coupling of the fold masses. The pitch control holds f0, so stiffer folds swing with a smaller amplitude (fold source only).',
     source: 'Ishizaka & Flanagan 1972; Steinecke & Herzel 1995 (issue 33)',
-    effect: { measure: 'f0', sign: 1, ...FOLD_SOURCE },
+    effect: { measure: 'rms', sign: -1, ...FOLD_SOURCE },
   },
   {
     key: 'foldDamping',

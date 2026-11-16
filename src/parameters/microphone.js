@@ -9,7 +9,9 @@ const MICROPHONE =
   'Monson et al. 2012, Front Psychol 3:400 (directivity of speech); Chu & Warnock 2002 (speech directivity)';
 const ROOM =
   'Allen & Berkley 1979, JASA 65(4) (image method); Jot & Chaigne 1991 (feedback delay network)';
-const ROOM_EFFECT = { measure: 'reverb', sign: 1, head: { roomRt60: 0.8 } };
+// At a fixed reverberation time a larger room holds the same sound energy
+// in a larger volume, so the tail after the utterance is quieter.
+const ROOM_EFFECT = { measure: 'reverb', sign: -1, head: { roomRt60: 0.8 } };
 
 export const MICROPHONE_PARAMETERS = [
   {
@@ -49,7 +51,7 @@ export const MICROPHONE_PARAMETERS = [
     description:
       'Horizontal angle of the microphone from straight ahead: behind the head the high frequencies drop.',
     source: MICROPHONE,
-    effect: { measure: 'centroid', sign: 0 },
+    effect: { measure: 'centroid', sign: -1, values: [0, 180] },
   },
   {
     key: 'micElevation',
@@ -61,7 +63,7 @@ export const MICROPHONE_PARAMETERS = [
     default: 0,
     description: 'Vertical angle of the microphone above the mouth axis.',
     source: MICROPHONE,
-    effect: { measure: 'centroid', sign: 0 },
+    effect: { measure: 'centroid', sign: -1, values: [0, 90] },
   },
   {
     key: 'roomWidth',

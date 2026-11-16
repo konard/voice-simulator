@@ -87,11 +87,121 @@ function words(name) {
 
 /**
  * Measured effect of each generated entry on its test phrase
- * (experiments/issue-41-effects.mjs). The phrase is `ˈmama ˈsasa` unless
- * `ipa` says otherwise.
+ * (experiments/issue-41-effects.txt). The phrase is `ˈmama ˈsasa` unless
+ * `ipa` says otherwise; the phrases were found with
+ * experiments/issue-41-effect-phrases.mjs. A channel that only moves
+ * between two consonants with their own target (the consonant shape)
+ * needs a cluster.
  */
-const SPEED_EFFECTS = {};
-const DURATION_EFFECTS = {};
+const SPEED_EFFECTS = {
+  height: { measure: 'centroid', sign: -1 },
+  backness: { measure: 'centroid', sign: 1 },
+  rounding: { measure: 'f2', sign: -1, ipa: 'ˈiuiu' },
+  rhotic: { measure: 'f3', sign: -1, ipa: 'ˈɹaɹa' },
+  palatalization: {
+    measure: 'f2',
+    sign: -1,
+    ipa: 'ˈmʲamʲa',
+    options: { lang: 'ru' },
+  },
+  lipAmount: { measure: 'nasalLevel', sign: 1 },
+  lipArea: { measure: 'noiseLevel', sign: 1, ipa: 'ˈamfa' },
+  tongueAmount: { measure: 'noiseLevel', sign: 1 },
+  tongueArea: { measure: 'centroid', sign: -1, ipa: 'ˈatsa' },
+  tongueLocation: { measure: 'noiseLevel', sign: -1, ipa: 'ˈakata' },
+  tongueWidth: { measure: 'noiseLevel', sign: 1, ipa: 'ˈaʃsa' },
+  velum: { measure: 'centroid', sign: 1 },
+  voicing: { measure: 'rms', sign: 1, ipa: 'ˈata' },
+  aspiration: { measure: 'noiseLevel', sign: 1 },
+  glottalClosure: { measure: 'noiseLevel', sign: -1, ipa: 'ˈaʔa' },
+  frication: { measure: 'noiseLevel', sign: 1, ipa: 'ˈaxa' },
+  sibilance: { measure: 'noiseLevel', sign: 1, ipa: 'ˈaʃa' },
+  trill: { measure: 'centroid', sign: 1, ipa: 'ˈara' },
+  // Only the 2D solver reads the lateral channel (src/acoustics/fdtd2d.js).
+  lateral: {
+    measure: 'centroid',
+    sign: 1,
+    ipa: 'ˈalila',
+    options: { solver: 'fdtd2d' },
+  },
+  jaw: { measure: 'noiseLevel', sign: 1 },
+  lipProtrusion: { measure: 'f2', sign: -1, ipa: 'ˈuʃu' },
+  larynxHeight: {
+    measure: 'f1',
+    sign: 0,
+    note: 'no sound sets a target for this channel yet: the larynx posture and the pitch coupling are added after the smoothing',
+  },
+  tongueRoot: {
+    measure: 'f1',
+    sign: 0,
+    note: 'no sound sets a target for this channel yet: the tongue root posture is added after the smoothing',
+  },
+};
+const DURATION_EFFECTS = {
+  clauseFinal: { measure: 'duration', sign: 1 },
+  nonPhraseFinal: { measure: 'duration', sign: -1 },
+  nonWordFinal: { measure: 'duration', sign: -1 },
+  polysyllabic: { measure: 'duration', sign: -1 },
+  nonInitialConsonant: { measure: 'duration', sign: -1 },
+  pretonic: {
+    measure: 'duration',
+    sign: -1,
+    ipa: 'mɐˈɫokə',
+    options: { lang: 'ru' },
+  },
+  unstressedMedial: { measure: 'duration', sign: -1, ipa: 'ˈmamama' },
+  unstressedOther: { measure: 'duration', sign: -1 },
+  unstressedOnset: { measure: 'duration', sign: -1 },
+  unstressedMinimum: { measure: 'duration', sign: -1 },
+  emphasis: {
+    measure: 'duration',
+    sign: 0,
+    note: 'no input marks emphasis yet (the token flag `emphasis`)',
+  },
+  beforeVoicedFricative: { measure: 'duration', sign: 1, ipa: 'ˈmaz' },
+  beforeVoicedPlosive: { measure: 'duration', sign: 1, ipa: 'ˈmad' },
+  beforeNasal: { measure: 'duration', sign: -1 },
+  beforeVoiceless: { measure: 'duration', sign: -1 },
+  openFinal: { measure: 'duration', sign: 1 },
+  vowelBeforeVowel: { measure: 'duration', sign: 1, ipa: 'ˈmaia' },
+  vowelAfterVowel: { measure: 'duration', sign: -1, ipa: 'ˈmaia' },
+  clusterMiddle: { measure: 'duration', sign: -1, ipa: 'ˈɛkstɹə' },
+  clusterEdge: { measure: 'duration', sign: -1, ipa: 'ˈmasta' },
+  aspiration: { measure: 'duration', sign: 1, ipa: 'ˈpʰama' },
+  tone1: {
+    measure: 'duration',
+    sign: 0,
+    ipa: 'ma˥ ma',
+    options: { lang: 'zh' },
+    note: 'the factor of tone 1 in the zh table is 1, and a power of 1 is 1',
+  },
+  tone2: {
+    measure: 'duration',
+    sign: 1,
+    ipa: 'ma˧˥ ma',
+    options: { lang: 'zh' },
+  },
+  tone3: {
+    measure: 'duration',
+    sign: 1,
+    ipa: 'ma˨˩ ma',
+    options: { lang: 'zh' },
+  },
+  tone4: {
+    measure: 'duration',
+    sign: -1,
+    ipa: 'ma˥˩ ma',
+    options: { lang: 'zh' },
+  },
+  tone5: {
+    measure: 'duration',
+    sign: -1,
+    ipa: 'ma˥ ma',
+    options: { lang: 'zh' },
+  },
+  longVowel: { measure: 'duration', sign: 1, ipa: 'ˈmaːma' },
+  longConsonant: { measure: 'duration', sign: 1, ipa: 'ˈmamːa' },
+};
 
 const BASE = [
   {
@@ -128,7 +238,7 @@ const BASE = [
     default: 1.35,
     description: 'Duration factor of primary stressed vowels.',
     source: 'Klatt 1979 (rule 6); Lehiste 1972',
-    effect: { measure: 'duration', sign: 1 },
+    effect: { measure: 'duration', sign: -1 },
   },
   {
     key: 'finalLengthening',
@@ -166,7 +276,7 @@ const BASE = [
     description:
       'How early articulators start moving towards the next sound (factor on all leads).',
     source: DYNAMICS,
-    effect: { measure: 'f2', sign: 1 },
+    effect: { measure: 'f2', sign: -1 },
   },
   {
     key: 'roundingLead',
@@ -179,7 +289,7 @@ const BASE = [
     description:
       'How long before a rounded sound the lips start to round and protrude.',
     source: 'Benguerel & Cowan 1974 (anticipatory rounding); issue 38',
-    effect: { measure: 'f2', sign: -1, ipa: 'ˈmasa ˈsu' },
+    effect: { measure: 'centroid', sign: -1, ipa: 'ˈmasa ˈsu' },
   },
   {
     key: 'velumLead',
@@ -269,7 +379,7 @@ const BASE = [
     description:
       'Speaker habit added to the tongue root channel: -1 pulls the root back and narrows the pharynx, +1 pushes it forward.',
     source: POSTURES,
-    effect: { measure: 'f1', sign: 1 },
+    effect: { measure: 'f1', sign: -1 },
   },
   {
     key: 'jawArea',
@@ -295,7 +405,7 @@ const BASE = [
     description:
       'Change of the pharynx cross-sections per unit of the tongue root channel.',
     source: 'fitted: experiments/issue-40-articulators.mjs',
-    effect: { measure: 'f1', sign: 1, head: { tongueRootPosture: 1 } },
+    effect: { measure: 'f1', sign: -1, head: { tongueRootPosture: 1 } },
   },
 ];
 

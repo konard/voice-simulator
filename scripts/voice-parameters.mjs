@@ -44,13 +44,14 @@ function unitText(unit) {
 }
 
 function effectText(effect) {
-  const direction = effect.sign > 0 ? 'rises' : 'falls';
+  const direction =
+    effect.sign > 0 ? 'rises' : effect.sign < 0 ? 'falls' : 'unchanged';
   const conditions = [];
   if (effect.values) {
     conditions.push(`from ${effect.values[0]} to ${effect.values[1]}`);
   }
   if (effect.ipa) {
-    conditions.push(effect.ipa);
+    conditions.push(`\`${effect.ipa}\``);
   }
   if (effect.tier) {
     conditions.push(`tier ${effect.tier}`);
@@ -62,7 +63,8 @@ function effectText(effect) {
     conditions.push(`${key} ${value}`);
   }
   const condition = conditions.length > 0 ? ` (${conditions.join(', ')})` : '';
-  return `${effect.measure} ${direction}${condition}`;
+  const note = effect.note ? `: ${effect.note}` : '';
+  return `${effect.measure} ${direction}${condition}${note}`;
 }
 
 function parameterRow(parameter) {
@@ -96,7 +98,10 @@ export function voiceParametersMarkdown() {
     'goes from its minimum to its maximum, checked by',
     '`tests/head-parameters.test.js` ("moves the sound in the documented',
     'direction"). Conditions in parentheses replace that utterance, tier,',
-    'options or head values. A source `fitted: <file>` names the experiment',
+    'options or head values; `from a to b` replaces the minimum and maximum',
+    'where both ends sound alike. "Unchanged" marks a value that the model',
+    'does not use yet on any utterance, with the reason. A source',
+    '`fitted: <file>` names the experiment',
     'that fitted the value.',
     '',
     '| Group | Parameters |',

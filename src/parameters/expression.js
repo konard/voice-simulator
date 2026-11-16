@@ -28,7 +28,14 @@ export const EXPRESSION_PARAMETERS = [
     description:
       'Slow periodic pitch wobble that makes the voice less robotic.',
     source: 'Sundberg 1987, The Science of the Singing Voice (vibrato extent)',
-    effect: { measure: 'f0Range', sign: 1 },
+    // A level contour (`|`) with a flat intonation: the wobble of at most
+    // 0.4% is smaller than the fall of a statement.
+    effect: {
+      measure: 'f0Range',
+      sign: 1,
+      ipa: 'ˈaː |',
+      head: { pitchRange: 0.5, declination: 0, accentStrength: 0 },
+    },
   },
   {
     key: 'vibratoRate',
@@ -40,7 +47,19 @@ export const EXPRESSION_PARAMETERS = [
     default: 5.2,
     description: 'Frequency of the slow periodic pitch modulation.',
     source: 'Sundberg 1987, The Science of the Singing Voice (vibrato rate)',
-    effect: { measure: 'f0Range', sign: 1, head: { vibrato: 1 } },
+    // The extent stays; the 40 ms pitch frames of the measure average a
+    // faster wobble, so the measured range narrows.
+    effect: {
+      measure: 'f0Range',
+      sign: -1,
+      ipa: 'ˈaː |',
+      head: {
+        vibrato: 1,
+        pitchRange: 0.5,
+        declination: 0,
+        accentStrength: 0,
+      },
+    },
   },
   {
     key: 'declination',

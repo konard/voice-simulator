@@ -37,7 +37,7 @@ export const ANATOMY_PARAMETERS = [
     default: 0.46,
     description: 'Fraction of the tract that is the vertical pharynx.',
     source: 'Fant 1966; Vorperian et al. 2009 (the male pharynx grows more)',
-    effect: { measure: 'f2', sign: -1 },
+    effect: { measure: 'f2', sign: 1 },
   },
   {
     key: 'pharynxWidth',
@@ -50,7 +50,7 @@ export const ANATOMY_PARAMETERS = [
     description: 'Scales pharyngeal cross-sections.',
     source:
       'Story 2008 (MRI area functions); fitted: experiments/issue-9-preset-fit.mjs',
-    effect: { measure: 'f2', sign: -1 },
+    effect: { measure: 'f2', sign: 1 },
   },
   {
     key: 'oralWidth',
@@ -63,7 +63,7 @@ export const ANATOMY_PARAMETERS = [
     description: 'Scales oral cavity cross-sections.',
     source:
       'Story 2008 (MRI area functions); fitted: experiments/issue-9-preset-fit.mjs',
-    effect: { measure: 'f2', sign: 1 },
+    effect: { measure: 'f2', sign: -1 },
   },
   {
     key: 'mouthWidth',
@@ -137,7 +137,7 @@ export const ANATOMY_PARAMETERS = [
     description:
       'Visual skull width; in the 3D solvers it also moves the face around the mouth.',
     source: 'Farkas 1994, Anthropometry of the Head and Face (head breadth)',
-    effect: { measure: 'f1', sign: 1, ipa: 'ˈa', tier: 'high' },
+    effect: { measure: 'rms', sign: -1, ipa: 'ˈa', tier: 'high' },
   },
   {
     key: 'headHeight',
@@ -150,7 +150,7 @@ export const ANATOMY_PARAMETERS = [
     description:
       'Visual skull height; in the 3D solvers it also moves the face around the mouth.',
     source: 'Farkas 1994, Anthropometry of the Head and Face (head height)',
-    effect: { measure: 'f1', sign: 1, ipa: 'ˈa', tier: 'high' },
+    effect: { measure: 'centroid', sign: 1, ipa: 'ˈa', tier: 'high' },
   },
   {
     key: 'noseLength',
@@ -162,7 +162,7 @@ export const ANATOMY_PARAMETERS = [
     default: 1,
     description: 'Outer nose size; also lengthens the nasal tract slightly.',
     source: 'Farkas 1994, Anthropometry of the Head and Face (nose length)',
-    effect: { measure: 'f1', sign: 1, ipa: 'ˈa', tier: 'high' },
+    effect: { measure: 'centroid', sign: -1, ipa: 'ˈa', tier: 'high' },
   },
   {
     key: 'wallLoss',
@@ -241,7 +241,7 @@ export const ANATOMY_PARAMETERS = [
     description:
       'Stiffness per area of the yielding tract walls (tense or relaxed tissue).',
     source: 'Ishizaka, French & Flanagan 1975 (issue 36)',
-    effect: { measure: 'f1', sign: 1 },
+    effect: { measure: 'rms', sign: -1 },
   },
   {
     key: 'lossShape',
@@ -319,7 +319,7 @@ export const ANATOMY_PARAMETERS = [
     description:
       'Thickness of the incisor row along the tract: the length of the narrow channel between the teeth.',
     source: TEETH,
-    effect: { measure: 'noiseLevel', sign: -1 },
+    effect: { measure: 'f3', sign: -1, ipa: 'ˈa', tier: 'high' },
   },
   {
     key: 'restGap',
@@ -332,7 +332,7 @@ export const ANATOMY_PARAMETERS = [
     description:
       'Gap between the incisal edges at rest with the jaw raised, the gap of close vowels.',
     source: TEETH,
-    effect: { measure: 'f1', sign: 1 },
+    effect: { measure: 'noiseLevel', sign: -1 },
   },
   {
     key: 'sibilantGap',
@@ -383,6 +383,6 @@ export const ANATOMY_PARAMETERS = [
     description:
       'Extra gap between the incisors of a close back vowel such as [u] (scaled by the jaw range).',
     source: TEETH,
-    effect: { measure: 'f1', sign: 1, ipa: 'ˈmumu ˈsusu' },
+    effect: { measure: 'f1', sign: -1, ipa: 'ˈmumu ˈsusu' },
   },
 ];
