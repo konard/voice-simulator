@@ -105,7 +105,8 @@ show('lexicon sizes', {
   englishVariants: [...lexiconFor('en').words()].filter(
     (word) => lexiconFor('en').lookup(word).length > 1
   ).length,
-  russianStressWords: lexiconFor('ru', 'stress').size,
+  russianStressForms: lexiconFor('ru', 'forms').size,
+  russianStressStems: lexiconFor('ru', 'stems').size,
   hindiWords: lexiconFor('hi').size,
   chineseCharacters: ZH_READINGS.count,
   chinesePolyphones: [...characterReadings().values()].filter(

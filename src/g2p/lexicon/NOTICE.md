@@ -12,7 +12,7 @@ not permissive. Sources refused for their licence are listed in
 | `en.js` | The CMU Pronouncing Dictionary; word choice by counts of Common Voice English text; hand-written words    |
 | `zh.js` | Unihan 17.0.0 (`ZH_READINGS`); words of the AISHELL-3 train transcript (`ZH_PHRASES`); hand-written words |
 | `hi.js` | Hand-written words; word choice by counts of Common Voice Hindi text                                      |
-| `ru.js` | Hand-written words                                                                                        |
+| `ru.js` | Hand-written words; word choice by counts of Common Voice Russian text                                    |
 
 ## The CMU Pronouncing Dictionary
 
@@ -297,11 +297,12 @@ END OF TERMS AND CONDITIONS
 
 Source: https://github.com/common-voice/common-voice, commit
 8ad2d862a1bf55ef77f8e86c1858296a7fae6ec7, files
-`server/data/en/sentence-collector.txt`, `server/data/en/wiki.en.txt` and
-`server/data/hi/sentence-collector.txt`. The sentences are dedicated to the
+`server/data/en/sentence-collector.txt`, `server/data/en/wiki.en.txt`,
+`server/data/hi/sentence-collector.txt` and
+`server/data/ru/sentence-collector.txt`. The sentences are dedicated to the
 public domain by Common Voice contributors under CC0 1.0. Only word counts
-(`data/lexicon/en-counts.txt`, `data/lexicon/hi-counts.txt`) are kept; they
-choose which words are shipped.
+(`data/lexicon/en-counts.txt`, `data/lexicon/hi-counts.txt`,
+`data/lexicon/ru-counts.txt`) are kept; they choose which words are shipped.
 
 ```text
 Creative Commons Legal Code

@@ -596,6 +596,18 @@ export {
 } from './ipa/syllables.js';
 export { syllableSpans, hindiAksharas } from './g2p/orthography.js';
 export { WEAK_FORMS } from './g2p/weak-forms.js';
+export {
+  findRussianStress,
+  guessRussianStress,
+  RUSSIAN_ENDINGS,
+} from './g2p/russian.js';
+export {
+  GENITIVE_BEFORE,
+  PLURAL_BEFORE,
+  RUSSIAN_HOMOGRAPHS,
+  isRussianHomograph,
+  russianHomograph,
+} from './g2p/russian-homographs.js';
 export { utteranceTimeline, timelineAt } from './articulation/timeline.js';
 // Face animation: ARKit blendshapes, VRM expressions and Oculus visemes
 export {

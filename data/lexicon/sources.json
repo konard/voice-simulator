@@ -114,6 +114,26 @@
       ]
     },
     {
+      "id": "common-voice-ru-text",
+      "title": "Common Voice sentence text, Russian (server/data/ru): word counts that chose the hand-written Russian stress items",
+      "url": "https://github.com/common-voice/common-voice/tree/8ad2d862a1bf55ef77f8e86c1858296a7fae6ec7/server/data/ru",
+      "licence": "CC0-1.0",
+      "licenceUrl": "https://github.com/common-voice/common-voice/blob/8ad2d862a1bf55ef77f8e86c1858296a7fae6ec7/README.md#licensing-and-content-source",
+      "licenceQuote": "The majority of our sentence text in `/server/data` comes directly from user submissions in our Sentence Collector or they are scraped from Wikipedia using our extractor tool, and are released under a CC0 public domain Creative Commons license.",
+      "licenceChecked": "2026-11-16",
+      "copyright": "Common Voice contributors, dedicated to the public domain (CC0 1.0)",
+      "shipped": true,
+      "usedFor": ["data/lexicon/ru-counts.txt"],
+      "files": [
+        {
+          "name": "sentence-collector.txt",
+          "url": "https://raw.githubusercontent.com/common-voice/common-voice/8ad2d862a1bf55ef77f8e86c1858296a7fae6ec7/server/data/ru/sentence-collector.txt",
+          "size": 5251568,
+          "sha256": "e0869a008310c452f63fd02e4d52f8abc58df2de73e558c486719161e3ad1b87"
+        }
+      ]
+    },
+    {
       "id": "hand-written",
       "title": "Hand-written lists of this repository: data/lexicon/en-extra.txt, zh-phrases.txt, hi-words.txt, ru-stress.txt",
       "url": "https://github.com/konard/voice-simulator/tree/main/data/lexicon",

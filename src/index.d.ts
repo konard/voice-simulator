@@ -712,8 +712,9 @@ export interface Lexicon {
 }
 export declare function openLexicon(data: LexiconData): Lexicon;
 /**
- * The shipped lexicon: part `words` (en, hi), `stress` (ru) or `phrases`
- * (zh); null for an unknown language or part.
+ * The shipped lexicon: part `words` (en, hi), `forms` and `stems` (ru:
+ * the stressed vowel of whole forms and of stems, issue 48; `stress` is
+ * `forms`) or `phrases` (zh); null for an unknown language or part.
  */
 export declare function lexiconFor(
   lang: LexiconLanguage | string,
@@ -3755,6 +3756,67 @@ export type FunctionWordKind =
 export declare const WEAK_FORMS: Readonly<
   Record<string, Readonly<{ kind: FunctionWordKind; weak: string }>>
 >;
+/** Where the stress of a Russian word comes from. */
+export type RussianStressSource =
+  | 'user'
+  | 'dictionary'
+  | 'morphology'
+  | 'rules';
+/** The words around a word in its clause, lower case, `before` nearest first. */
+export interface RussianStressContext {
+  before?: string[];
+  after?: string[];
+}
+/**
+ * The stress of a Russian word (issue 48), in this order: a typed mark
+ * (`+` before the vowel or U+0301 after it), a typed `ё`, a homograph chosen
+ * by the context (`RUSSIAN_HOMOGRAPHS`), a whole form (lexicon part
+ * `forms`, also with one `е` read as `ё` when exactly one such spelling is
+ * known), the longer of a stem (part `stems`) with an ending of
+ * `RUSSIAN_ENDINGS` and such a stem with `ё`, and the guess of
+ * `guessRussianStress()`. `letters` has the restored `ё`;
+ * `stress` is the index of the stressed vowel.
+ */
+export declare function findRussianStress(
+  word: string,
+  context?: RussianStressContext
+): {
+  letters: string;
+  stress: number;
+  vowels: number;
+  source: RussianStressSource;
+};
+/**
+ * Guess the stressed vowel (index) of a lower-case Russian word from the
+ * word endings of the lexicon; without a match the vowel before the last.
+ */
+export declare function guessRussianStress(
+  word: string,
+  vowels?: number
+): number;
+/** The endings split off a Russian word to find its stem. */
+export declare const RUSSIAN_ENDINGS: readonly string[];
+/** Words before a homograph that make it genitive singular. */
+export declare const GENITIVE_BEFORE: string;
+/** Words before a homograph that make it nominative plural. */
+export declare const PLURAL_BEFORE: string;
+/**
+ * Russian homographs: rows `[forms, kind, cues]`, `forms` the
+ * `default/other` pairs (`з+амок/зам+ок`), `kind` how `cues` choose the
+ * other form.
+ */
+export declare const RUSSIAN_HOMOGRAPHS: readonly (readonly [
+  readonly string[],
+  'near' | 'before' | 'after' | 'infinitive' | 'case',
+  string,
+])[];
+/** Whether a lower-case spelling (`е` for `ё`) is a Russian homograph. */
+export declare function isRussianHomograph(spelling: string): boolean;
+/** The marked form of a homograph in its context, or undefined. */
+export declare function russianHomograph(
+  spelling: string,
+  context?: RussianStressContext
+): string | undefined;
 export declare const BOUNDARIES: Readonly<Record<string, object>>;
 export declare const CONTOURS: Readonly<Record<string, object>>;
 export declare function boundaryOf(pause: object | null | undefined): string;

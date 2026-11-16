@@ -15,17 +15,25 @@
  * such a plain object, the JSON written by `build-lexicon.mjs --full`
  * (`{format: 'lexicon', words: {...}}`) or a `vslex` container.
  *
- * The shipped parts are `en`/`words`, `hi`/`words` (IPA), `ru`/`stress`
- * (the stressed vowel: `a` first, `z` last) and `zh`/`phrases` (one
+ * The shipped parts are `en`/`words`, `hi`/`words` (IPA), `ru`/`forms`
+ * (the stressed vowel of a whole form: `a` first, `z` last; also named
+ * `stress`), `ru`/`stems` (the stressed vowel of a stem or `+`, the
+ * ending; see `findRussianStress()`) and `zh`/`phrases` (one
  * reading letter per character, see `chinese-readings.js`). Nothing is
  * decoded before the first lookup.
  */
 
 import { EN_LEXICON } from './lexicon/en.js';
 import { HI_LEXICON } from './lexicon/hi.js';
-import { RU_STRESS } from './lexicon/ru.js';
+import { RU_FORMS, RU_STEMS } from './lexicon/ru.js';
 import { ZH_PHRASES } from './lexicon/zh.js';
-import { decodeBlock, blockTables, findBlock, isVslex } from './vslex.js';
+import {
+  decodeBlock,
+  blockTables,
+  findBlock,
+  isVslex,
+  storedWord,
+} from './vslex.js';
 import { pinyinSyllableToIpa } from './pinyin.js';
 import { parseIpa } from '../ipa/parse.js';
 
@@ -35,7 +43,8 @@ const LANGS = ['en', 'ru', 'hi', 'zh'];
 const SHIPPED_DATA = {
   en: { words: EN_LEXICON },
   hi: { words: HI_LEXICON },
-  ru: { stress: RU_STRESS },
+  // `stress` is the name of `forms` before issue 48.
+  ru: { forms: RU_FORMS, stems: RU_STEMS, stress: RU_FORMS },
   zh: { phrases: ZH_PHRASES },
 };
 
@@ -64,7 +73,8 @@ function openVslex(data) {
   };
   const lookup = (word) => {
     const key = lexiconKey(word);
-    const index = findBlock(data, key);
+    const stored = storedWord(data, key);
+    const index = stored === null ? -1 : findBlock(data, stored);
     const found = index < 0 ? undefined : block(index).get(key);
     return found ? [...found] : null;
   };
@@ -142,7 +152,8 @@ function checkLang(lang) {
 /**
  * The shipped lexicon of a language, opened on first use, or null.
  * @param {string} lang `en`, `hi`, `ru` or `zh`
- * @param {string} [part] `words` (en, hi), `stress` (ru) or `phrases` (zh);
+ * @param {string} [part] `words` (en, hi), `forms`, `stems` or `stress`
+ *   (ru) or `phrases` (zh);
  *   the first part of the language by default
  */
 export function lexiconFor(lang, part) {
@@ -152,11 +163,10 @@ export function lexiconFor(lang, part) {
   if (!data) {
     return null;
   }
-  const key = `${lang}/${name}`;
-  if (!opened.has(key)) {
-    opened.set(key, openVslex(data));
+  if (!opened.has(data)) {
+    opened.set(data, openVslex(data));
   }
-  return opened.get(key);
+  return opened.get(data);
 }
 
 /** Why a pronunciation of `lang` cannot be used, or null when it can. */

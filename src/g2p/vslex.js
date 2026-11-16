@@ -20,6 +20,12 @@
  * the string `values[i]`. The first character after the word that is not
  * in `alphabet` therefore starts the pronunciation.
  *
+ * Optional `letters` (issue 48): when present, word characters are stored
+ * as the ASCII characters of `alphabet` (one byte each in UTF-8, where a
+ * Cyrillic letter takes two), `alphabet[i]` standing for `letters[i]`;
+ * `first` and the blocks hold the stored words. The mapping keeps the code point order,
+ * so the stored words are sorted too.
+ *
  * A lookup does a binary search in `first` and decodes one block, which
  * is cached.
  */
@@ -30,6 +36,8 @@ const RESERVED = new Set([...DIGITS, '/', '"', "'", '`', '\\', ' ']);
 /** Characters a word may not contain (they delimit entries). */
 const NOT_IN_WORDS = new Set([...DIGITS, '/', ' ']);
 const MAX_PREFIX = 9;
+/** The stored characters of `letters`, in code point order. */
+const ASCII_LETTERS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz';
 
 /** Printable ASCII characters that may be symbols next to `alphabet`. */
 export function symbolCandidates(alphabet) {
@@ -125,13 +133,19 @@ function mergeUnits(sequences, spare) {
  * @param {Map<string, string[]>|Array<[string, string[]]>} entries word ->
  *   pronunciations (variants in order)
  * @param {{units?: (text: string) => string[], merge?: boolean,
- *   blockSize?: number}} [options] `units` splits a pronunciation into the
- *   strings that get one symbol each (default: code points); `merge` uses
- *   the symbols left over for frequent pairs of units
+ *   blockSize?: number, ascii?: boolean}} [options] `units` splits a
+ *   pronunciation into the strings that get one symbol each (default: code
+ *   points); `merge` uses the symbols left over for frequent pairs of
+ *   units; `ascii` stores the word characters as ASCII letters (`letters`)
  * @returns {object}
  */
 export function encodeVslex(lang, entries, options = {}) {
-  const { units = (text) => [...text], merge = true, blockSize = 64 } = options;
+  const {
+    units = (text) => [...text],
+    merge = true,
+    blockSize = 64,
+    ascii = false,
+  } = options;
   const sorted = [...entries]
     .map(([word, variants]) => [word, [...new Set(variants)]])
     .sort(([left], [right]) => compareCodePoints(left, right));
@@ -150,7 +164,14 @@ export function encodeVslex(lang, entries, options = {}) {
       alphabetSet.add(char);
     }
   });
-  const alphabet = [...alphabetSet].sort(compareCodePoints).join('');
+  const letters = [...alphabetSet].sort(compareCodePoints).join('');
+  if (ascii && letters.length > ASCII_LETTERS.length) {
+    throw new RangeError(`vslex: ${letters.length} letters for ascii`);
+  }
+  const alphabet = ascii ? ASCII_LETTERS.slice(0, letters.length) : letters;
+  const store = ascii
+    ? (word) => storedWord({ alphabet, letters }, word)
+    : (word) => word;
   const candidates = symbolCandidates(alphabet);
   const split = sorted.map(([, variants]) => variants.map(units));
   const flat = split.flat();
@@ -174,21 +195,21 @@ export function encodeVslex(lang, entries, options = {}) {
   let block = '';
   let previous = [];
   sorted.forEach(([word], index) => {
-    const letters = [...word];
+    const chars = [...store(word)];
     const atStart = index % blockSize === 0;
     if (atStart && index > 0) {
       blocks.push(block);
       block = '';
     }
     if (atStart) {
-      first.push(word);
+      first.push(chars.join(''));
     }
-    const shared = atStart ? 0 : sharedPrefix(previous, letters);
+    const shared = atStart ? 0 : sharedPrefix(previous, chars);
     const pronunciations = split[index].map(() =>
       sequences[cursor++].map((unit) => symbolOf.get(unit)).join('')
     );
-    block += `${shared}${letters.slice(shared).join('')}${pronunciations.join('/')}`;
-    previous = letters;
+    block += `${shared}${chars.slice(shared).join('')}${pronunciations.join('/')}`;
+    previous = chars;
   });
   if (sorted.length > 0) {
     blocks.push(block);
@@ -200,6 +221,7 @@ export function encodeVslex(lang, entries, options = {}) {
     count: sorted.length,
     blockSize,
     alphabet,
+    ...(ascii ? { letters } : {}),
     symbols,
     values,
     first,
@@ -223,7 +245,7 @@ export function isVslex(data) {
  * @param {number} index block number
  */
 export function decodeBlock(data, index, tables = blockTables(data)) {
-  const { letters, valueOf } = tables;
+  const { letters, valueOf, letterOf } = tables;
   const entries = [];
   let previous = [];
   let word = null;
@@ -232,7 +254,10 @@ export function decodeBlock(data, index, tables = blockTables(data)) {
   const finish = () => {
     if (word !== null) {
       variants.push(pronunciation);
-      entries.push([word.join(''), variants]);
+      entries.push([
+        word.map((char) => letterOf?.get(char) ?? char).join(''),
+        variants,
+      ]);
     }
   };
   let inWord = false;
@@ -265,10 +290,39 @@ export function decodeBlock(data, index, tables = blockTables(data)) {
   return entries;
 }
 
-/** The lookup tables of a container (alphabet set and symbol values). */
+/**
+ * The stored form of a word: itself, or with `letters` its characters as
+ * the ASCII characters of `alphabet`; null when a character is not one of
+ * `letters`.
+ * @param {object} data a vslex container
+ * @param {string} word
+ * @returns {string|null}
+ */
+export function storedWord(data, word) {
+  if (!data.letters) {
+    return word;
+  }
+  let stored = '';
+  for (const char of word) {
+    const index = data.letters.indexOf(char);
+    if (index < 0) {
+      return null;
+    }
+    stored += data.alphabet[index];
+  }
+  return stored;
+}
+
+/**
+ * The lookup tables of a container (alphabet set, symbol values and, with
+ * `letters`, the letter of each stored character).
+ */
 export function blockTables(data) {
   return {
     letters: new Set(data.alphabet),
+    letterOf: data.letters
+      ? new Map([...data.alphabet].map((char, i) => [char, data.letters[i]]))
+      : undefined,
     valueOf: new Map(
       [...data.symbols].map((symbol, i) => [symbol, data.values[i]])
     ),
