@@ -1,0 +1,5 @@
+---
+'voice-simulator': minor
+---
+
+Add the pitch and voicing tracker of reverse simulation (issue 59). `trackPitch(frames, options)` and the stage `createPitchTracker(frames, options)` read the frame set of the analysis front end and give f0 and voicing per frame: up to `candidates` autocorrelation peaks per frame (Boersma 1993) on the sound decimated to about 4 kHz with a Hann window of 3 / `minF0`, refined at the working rate, and a Viterbi path through them and "unvoiced" with octave, octave-jump and voicing-change costs. In a stream `advance()` fixes frame t when frame t + `lag` has been scored (20 frames, 125 ms of delay with the window). The track also holds the voicing strength, period marks, jitter and shimmer (percent, `null` below 20 periods; `jitterToHead` converts them to the head setting) and the median and 5th and 95th percentile f0. The defaults are `PITCH_DEFAULTS`; everything is typed. On the six synthetic voices of `node experiments/issue-59-pitch-set.mjs` the gross pitch error is 0, the voicing error at most 0.0078 and the fine error at most 14.3 cents; `node experiments/issue-59-rtf.mjs` gives 0.034 of real time at 16000 Hz.
