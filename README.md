@@ -39,14 +39,7 @@ a pressure wave travelling through the 3D shape of a parametric low-poly head
   ExtIPA/VoQS marks in IPA (`{W həˈloʊ W} ˈwɝld .`, `(.)`, `⸨laugh⸩`, `ˈˈ`).
   Rate, pitch, range, level, effort, phonation types, whisper, emotions,
   emphasis, tunes, pauses and sounds are heard ([docs/markup.md](docs/markup.md)).
-- **Paralinguistic sounds** (issue 56): `[laugh]`, `[inhale]`, `[exhale]`,
-  `[sigh]`, `[cough]`, `[throat]`, `[filler]`, `[um]` and `[click]` (also
-  `<vs:sound name="laugh" duration="1.2s"/>`, `⸨laugh:1.2⸩`, `ǀ ǃ ǁ ʘ`) are
-  made by the glottis and the tract from rules (`SOUNDS`, `FILLERS`), with
-  no recordings. Written fillers and laughter (`um`, `uh`, `э-э`, `嗯`,
-  `hahaha`) are read as sounds and stay words of the timeline; the option
-  `breaths` (`--breaths`) breathes in between sentences; `timeline.sounds`
-  lists the sounds ([Sounds](docs/markup.md#sounds)).
+- **Paralinguistic sounds** (issue 56): `[laugh]`, `[inhale]`, `[exhale]`, `[sigh]`, `[cough]`, `[throat]`, `[filler]`, `[um]` and `[click]` (also `<vs:sound name="laugh" duration="1.2s"/>`, `⸨laugh:1.2⸩`, `ǀ ǃ ǁ ʘ`) are made by the glottis and the tract from rules (`SOUNDS`, `FILLERS`), with no recordings; written fillers and laughter are read as sounds and stay words of the timeline (`textToIpa('Well [laugh] um, hahaha.', { markup: true }).ipa` is `ˈwɛl ⸨laugh⸩ ⸨um⸩ , ⸨laugh:0.6⸩ .`); the option `breaths` (`--breaths`) breathes in between sentences; `timeline.sounds` lists the sounds ([Sounds](docs/markup.md#sounds)).
 - **Vocal effort**: `[soft]`, `[loud]`, `[shout]`, `[lombard]`,
   `[crescendo]` and `[diminuendo]` (and `<vs:effort>`, `{f … f}`) change
   more than the level: the pitch rises (+5 Hz per dB), the spectrum gets
@@ -402,9 +395,6 @@ textToIpa('I can do it', { lang: 'en', weakForms: false }).ipa; // 'ˈaɪ ˈkæn
 textToIpa('<speak>Hello <emphasis>world</emphasis>.</speak>').ipa; // 'həˈloʊ ˈˈwɝld .'
 textToIpa('[whisper]Hello[/whisper] world.', { markup: true }).ipa; // '{W həˈloʊ W} ˈwɝld .'
 emotionChanges({ name: 'angry', intensity: 0.5 }).pitch; // 3.5 semitones; emotions change the voice, not the IPA
-// Sounds (issue 56): written fillers and laughter are read as sounds.
-textToIpa('Well [laugh] um, hahaha.', { markup: true }).ipa; // 'ˈwɛl ⸨laugh⸩ ⸨um⸩ , ⸨laugh:0.6⸩ .'
-synthesize('One. Two three.', { breaths: true }).timeline.sounds; // [{ name: 'inhale', start, end }]
 // The sentence type is written into the IPA (issue 51).
 textToIpa('Tea or coffee?', { lang: 'en' }).ipa; // 'ˈti ↗ | ˈɔɹ ˈkɑfi ↘ ?'
 textToIpa('А ты?', { lang: 'ru' }).ipa; // '{IK4 a tɨ IK4} ?'
@@ -491,7 +481,6 @@ npx voice-simulator ipa --lang en --accent en-x-ru --accent-level 0.5 "the thing
 npx voice-simulator say "the three red rivers" --accent examples/accents/en-x-th-stopping.json -o th.wav
 npx voice-simulator ipa "quinoa" --lang en --lexicon my-words.json  # {"quinoa": "kiˈnoʊə"}
 npx voice-simulator ipa --markup "[whisper]Hello[/whisper] world."  # {W həˈloʊ W} ˈwɝld .
-npx voice-simulator say --breaths --markup "Well [laugh] um. Yes [sigh] ok." -o sounds.wav
 npx voice-simulator ipa "Where are you going?"   # ˈwɛɹ ɚ ju ˈɡoʊɪŋ ↘ ?
 npx voice-simulator say "<speak>Wait<break time=\"1s\"/>now.</speak>" -o wait.wav
 npx voice-simulator say --markup "[shout]Hey![/shout] [soft]Quiet.[/soft]" -o hey.wav
