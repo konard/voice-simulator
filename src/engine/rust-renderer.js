@@ -118,6 +118,25 @@ class Scratch {
   }
 }
 
+/** Slots of RENDERER_CONFIG and the head keys they hold (issue 41). */
+const ADVANCED_CONFIG = [
+  ['BREATH_GAIN', 'breathGain'],
+  ['BREATH_EXPONENT', 'breathExponent'],
+  ['BREATHINESS_RD', 'breathinessRd'],
+  ['CHINK_NOISE', 'chinkNoise'],
+  ['ORAL_COMPLIANCE', 'oralCompliance'],
+  ['RE_CRITICAL', 'reCritical'],
+  ['GLOTTIS_VOICED', 'glottisVoiced'],
+  ['GLOTTIS_OPEN', 'glottisOpen'],
+  ['GLOTTIS_BREATHY', 'glottisBreathy'],
+  ['WALL_SOURCE', 'wallSource'],
+  ['STROUHAL', 'strouhal'],
+  ['FRICATION_GAIN', 'fricationGain'],
+  ['TRANSIENT_GAIN', 'transientGain'],
+  ['LOSS_SHAPE', 'lossShape'],
+  ['RADIATION_BAFFLE', 'radiationBaffle'],
+];
+
 /**
  * The renderer configuration (RENDERER_CONFIG of layout.js).
  * @returns {Float64Array}
@@ -159,6 +178,11 @@ export function rendererConfig(settings) {
   values[C.WALL_MASS] = head.wallMass ?? WALL_MASS;
   values[C.WALL_RESISTANCE] = head.wallResistance ?? WALL_RESISTANCE;
   values[C.WALL_STIFFNESS] = head.wallStiffness ?? WALL_STIFFNESS;
+  // The advanced source and loss values (issue 41); the head is normalized,
+  // so each holds its default when the head leaves it out.
+  for (const [slot, key] of ADVANCED_CONFIG) {
+    values[C[slot]] = head[key];
+  }
   const { listening } = settings;
   values[C.SOLVER] = SOLVER_CODES[settings.solver ?? 'waveguide'];
   if (listening) {

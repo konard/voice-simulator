@@ -7,7 +7,7 @@
 
 use core::f64::consts::PI;
 
-use crate::aerodynamics::{glottal_area, open_tract_strength};
+use crate::aerodynamics::{glottal_area_of, open_tract_strength_at, GlottalAreas, RE_CRITICAL};
 use crate::math::{self, max, min};
 use crate::random::Random;
 
@@ -64,11 +64,17 @@ pub struct LfPulse {
 
 /// LF pulse parameters for a `tenseness` and a `breathiness` (`lfParameters`).
 pub fn lf_parameters(tenseness: f64, breathiness: f64) -> LfPulse {
+    lf_parameters_at(tenseness, breathiness, BREATHINESS_RD)
+}
+
+/// [`lf_parameters`] with the change of Rd per unit of breathiness
+/// `rd_slope` (`head.breathinessRd`).
+pub fn lf_parameters_at(tenseness: f64, breathiness: f64, rd_slope: f64) -> LfPulse {
     let rd = min(
         2.7,
         max(
             0.5,
-            3.0 * (1.0 - tenseness) + BREATHINESS_RD * (breathiness - BREATHINESS_REFERENCE),
+            3.0 * (1.0 - tenseness) + rd_slope * (breathiness - BREATHINESS_REFERENCE),
         ),
     );
     let ra = -0.01 + 0.048 * rd;
@@ -146,6 +152,19 @@ pub struct GlottisOptions {
     pub chink: f64,
     /// Lung pressure (Pa) when the control gives none.
     pub lung_pressure: f64,
+    /// Change of Rd per unit of breathiness (`head.breathinessRd`).
+    pub breathiness_rd: f64,
+    /// Gain of the breath noise (`head.breathGain`).
+    pub breath_gain: f64,
+    /// Exponent of the breathiness in the breath noise
+    /// (`head.breathExponent`).
+    pub breath_exponent: f64,
+    /// Noise of the glottal chink (`head.chinkNoise`).
+    pub chink_noise: f64,
+    /// Critical Reynolds number (`head.reCritical`).
+    pub re_critical: f64,
+    /// Glottal areas of the head.
+    pub areas: GlottalAreas,
 }
 
 impl GlottisOptions {
@@ -160,6 +179,12 @@ impl GlottisOptions {
             aspiration_level: 1.0,
             chink: 0.0,
             lung_pressure: DEFAULT_LUNG_PRESSURE,
+            breathiness_rd: BREATHINESS_RD,
+            breath_gain: BREATH_GAIN,
+            breath_exponent: BREATH_EXPONENT,
+            chink_noise: CHINK_NOISE,
+            re_critical: RE_CRITICAL,
+            areas: GlottalAreas::default(),
         }
     }
 }
@@ -195,8 +220,13 @@ pub struct Glottis {
     pulse: LfPulse,
     /// Modulation of the aspiration noise of the last step.
     pub noise_modulation: f64,
-    // `breathiness ** BREATH_EXPONENT`, the same value on every step.
+    // `breathiness ** breathExponent`, the same value on every step.
     breath_power: f64,
+    rd_slope: f64,
+    breath_gain: f64,
+    chink_noise: f64,
+    re_critical: f64,
+    areas: GlottalAreas,
     // `1 - exp(-dt / chinkTime)` for the `dt` of the last step.
     chink_dt: f64,
     chink_factor: f64,
@@ -224,9 +254,18 @@ impl Glottis {
             jitter: 1.0,
             shimmer: 1.0,
             intensity: 0.0,
-            pulse: lf_parameters(options.tenseness, options.breathiness),
+            pulse: lf_parameters_at(
+                options.tenseness,
+                options.breathiness,
+                options.breathiness_rd,
+            ),
             noise_modulation: 0.0,
-            breath_power: math::pow(options.breathiness, BREATH_EXPONENT),
+            breath_power: math::pow(options.breathiness, options.breath_exponent),
+            rd_slope: options.breathiness_rd,
+            breath_gain: options.breath_gain,
+            chink_noise: options.chink_noise,
+            re_critical: options.re_critical,
+            areas: options.areas,
             chink_dt: f64::NAN,
             chink_factor: 0.0,
         }
@@ -236,7 +275,7 @@ impl Glottis {
         self.jitter = 1.0 + self.jitter_depth * self.random.normal();
         self.shimmer = 1.0 + self.shimmer_depth * self.random.normal();
         self.period = 1.0 / max(30.0, frequency * self.jitter);
-        self.pulse = lf_parameters(tenseness, self.breathiness);
+        self.pulse = lf_parameters_at(tenseness, self.breathiness, self.rd_slope);
     }
 
     fn open_tract_strength(&mut self, control: &GlottalControl) -> f64 {
@@ -245,16 +284,17 @@ impl Glottis {
                 Some(pressure) => pressure,
                 None => self.lung_pressure * math::pow(max(0.0, control.loudness), 2.0 / 3.0),
             };
-        let area = glottal_area(
+        let area = glottal_area_of(
             control.voicing,
             control.aspiration,
             control.closure,
             self.breathiness,
             self.chink,
+            &self.areas,
         );
         if lung != self.strength_key[0] || area != self.strength_key[1] {
             self.strength_key = [lung, area];
-            self.strength = open_tract_strength(lung, area);
+            self.strength = open_tract_strength_at(lung, area, self.re_critical);
         }
         self.strength
     }
@@ -292,9 +332,9 @@ impl Glottis {
             Some(strength) => strength,
             None => self.open_tract_strength(control),
         };
-        let breath = ((control.aspiration + BREATH_GAIN * self.breath_power * voicing)
+        let breath = ((control.aspiration + self.breath_gain * self.breath_power * voicing)
             * (1.0 - control.closure)
-            + (CHINK_NOISE * self.chink) / 10.0)
+            + (self.chink_noise * self.chink) / 10.0)
             * strength;
         voiced + noise * breath * modulation * 0.45 * self.aspiration_level
     }

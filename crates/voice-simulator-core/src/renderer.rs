@@ -13,8 +13,8 @@ use alloc::boxed::Box;
 use alloc::vec::Vec;
 
 use crate::aerodynamics::{
-    aspiration_reference, frication_reference, glottal_area, source_strength, strouhal_frequency,
-    Aerodynamics,
+    aspiration_reference, frication_reference, glottal_area_of, source_strength_at,
+    strouhal_frequency_at, Aerodynamics, GlottalAreas,
 };
 use crate::config;
 use crate::fdtd::model::Model;
@@ -61,6 +61,14 @@ struct Settings {
     breathiness: f64,
     glottal_chink: f64,
     frication_level: f64,
+    // The advanced source values of the head (issue 41).
+    oral_compliance: f64,
+    re_critical: f64,
+    areas: GlottalAreas,
+    wall_source: f64,
+    strouhal: f64,
+    frication_gain: f64,
+    transient_gain: f64,
 }
 
 /// `value` as a whole number in `low..=high` (`low` is never negative, so
@@ -148,6 +156,17 @@ impl<'a> Common<'a> {
             breathiness: finite(header[config::BREATHINESS])?,
             glottal_chink: finite(header[config::GLOTTAL_CHINK])?,
             frication_level: finite(header[config::FRICATION_LEVEL])?,
+            oral_compliance: finite(header[config::ORAL_COMPLIANCE])?,
+            re_critical: finite(header[config::RE_CRITICAL])?,
+            areas: GlottalAreas {
+                voiced: finite(header[config::GLOTTIS_VOICED])?,
+                open: finite(header[config::GLOTTIS_OPEN])?,
+                breathy: finite(header[config::GLOTTIS_BREATHY])?,
+            },
+            wall_source: finite(header[config::WALL_SOURCE])?,
+            strouhal: finite(header[config::STROUHAL])?,
+            frication_gain: finite(header[config::FRICATION_GAIN])?,
+            transient_gain: finite(header[config::TRANSIENT_GAIN])?,
         };
         let vocal_tract_length = finite(header[config::VOCAL_TRACT_LENGTH])?;
         if vocal_tract_length <= 0.0 {
@@ -161,6 +180,12 @@ impl<'a> Common<'a> {
         glottis_options.aspiration_level = finite(header[config::ASPIRATION_LEVEL])?;
         glottis_options.chink = settings.glottal_chink;
         glottis_options.lung_pressure = finite(header[config::LUNG_PRESSURE])?;
+        glottis_options.breathiness_rd = finite(header[config::BREATHINESS_RD])?;
+        glottis_options.breath_gain = finite(header[config::BREATH_GAIN])?;
+        glottis_options.breath_exponent = finite(header[config::BREATH_EXPONENT])?;
+        glottis_options.chink_noise = finite(header[config::CHINK_NOISE])?;
+        glottis_options.re_critical = settings.re_critical;
+        glottis_options.areas = settings.areas;
         let band_limit = finite(header[config::BAND_LIMIT])?;
         let output = OutputStage::new(
             sample_rate,
@@ -216,6 +241,8 @@ impl Renderer<Waveguide> {
             wall_stiffness: finite(header[config::WALL_STIFFNESS])?,
             glottal_chink: common.settings.glottal_chink,
             vocal_tract_length: common.vocal_tract_length,
+            loss_shape: finite(header[config::LOSS_SHAPE])?,
+            baffle: finite(header[config::RADIATION_BAFFLE])?,
             piriform: PiriformBranch {
                 index: piriform_index,
                 area: finite(header[config::PIRIFORM_AREA])?,
@@ -351,7 +378,7 @@ impl<S: Solver> Renderer<S> {
             solver,
             glottis,
             noise,
-            aerodynamics: Aerodynamics::default(),
+            aerodynamics: Aerodynamics::new(settings.oral_compliance),
             output,
             listener,
             settings,
@@ -488,12 +515,13 @@ impl<S: Solver> Renderer<S> {
         let settings = self.settings;
         let block_duration = settings.block_size as f64 / settings.sample_rate;
         let control = &self.control;
-        let opening = glottal_area(
+        let opening = glottal_area_of(
             control.voicing,
             control.aspiration,
             control.closure,
             settings.breathiness,
             settings.glottal_chink,
+            &settings.areas,
         );
         let frication_area = frame[frame::FRICATION_AREA];
         let constriction = frication_area + frame[frame::VELUM_AREA];
@@ -503,18 +531,28 @@ impl<S: Solver> Renderer<S> {
             opening,
             constriction,
         );
-        self.control.aspiration_strength =
-            Some(source_strength(air.glottal_drop, opening, air.flow) / self.aspiration_reference);
-        let strength = source_strength(air.constriction_drop, frication_area, air.flow)
-            / self.frication_reference;
-        self.frication_amplitude =
-            frame[frame::FRICATION_GAIN] * settings.frication_level * strength * FRICATION_GAIN;
+        let re_critical = settings.re_critical;
+        self.control.aspiration_strength = Some(
+            source_strength_at(air.glottal_drop, opening, air.flow, re_critical)
+                / self.aspiration_reference,
+        );
+        let strength =
+            source_strength_at(air.constriction_drop, frication_area, air.flow, re_critical)
+                / self.frication_reference;
+        self.frication_amplitude = frame[frame::FRICATION_GAIN]
+            * settings.frication_level
+            * strength
+            * settings.frication_gain;
         if self.frication_amplitude > 1e-6 {
-            self.noise.tune(strouhal_frequency(air.flow, constriction));
+            self.noise.tune(strouhal_frequency_at(
+                air.flow,
+                constriction,
+                settings.strouhal,
+            ));
             let obstacle = frame[frame::FRICATION_OBSTACLE];
-            self.frication_amplitude *= obstacle + WALL_SOURCE * (1.0 - obstacle);
+            self.frication_amplitude *= obstacle + settings.wall_source * (1.0 - obstacle);
         }
-        let target = air.flow_derivative * TRANSIENT_GAIN;
+        let target = air.flow_derivative * settings.transient_gain;
         let steps = max(1.0, block_duration * rate);
         self.transient_step = (target - self.transient) / steps;
     }
@@ -603,6 +641,21 @@ mod tests {
         values[config::WALL_MASS] = crate::losses::WALL_MASS;
         values[config::WALL_RESISTANCE] = crate::losses::WALL_RESISTANCE;
         values[config::WALL_STIFFNESS] = crate::losses::WALL_STIFFNESS;
+        values[config::BREATH_GAIN] = crate::glottis::BREATH_GAIN;
+        values[config::BREATH_EXPONENT] = crate::glottis::BREATH_EXPONENT;
+        values[config::BREATHINESS_RD] = crate::glottis::BREATHINESS_RD;
+        values[config::CHINK_NOISE] = crate::glottis::CHINK_NOISE;
+        values[config::ORAL_COMPLIANCE] = crate::aerodynamics::ORAL_COMPLIANCE;
+        values[config::RE_CRITICAL] = crate::aerodynamics::RE_CRITICAL;
+        values[config::GLOTTIS_VOICED] = crate::aerodynamics::GLOTTIS_VOICED;
+        values[config::GLOTTIS_OPEN] = crate::aerodynamics::GLOTTIS_OPEN;
+        values[config::GLOTTIS_BREATHY] = crate::aerodynamics::GLOTTIS_BREATHY;
+        values[config::WALL_SOURCE] = WALL_SOURCE;
+        values[config::STROUHAL] = crate::aerodynamics::STROUHAL;
+        values[config::FRICATION_GAIN] = FRICATION_GAIN;
+        values[config::TRANSIENT_GAIN] = TRANSIENT_GAIN;
+        values[config::LOSS_SHAPE] = crate::losses::LOSS_SHAPE;
+        values[config::RADIATION_BAFFLE] = crate::radiation::RADIATION_BAFFLE;
         values
     }
 

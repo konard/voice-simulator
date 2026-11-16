@@ -13,6 +13,12 @@
 import { describe, expect, it as alwaysIt } from 'test-anywhere';
 
 import { Biquad, createNoise } from '../src/acoustics/filters.js';
+import {
+  GLOTTIS_BREATHY,
+  GLOTTIS_OPEN,
+  GLOTTIS_VOICED,
+  RE_CRITICAL,
+} from '../src/acoustics/aerodynamics.js';
 import { Glottis } from '../src/acoustics/glottis.js';
 import { Radiation, RADIATION_BAFFLE } from '../src/acoustics/radiation.js';
 import {
@@ -85,7 +91,27 @@ describe('Rust sources (issue 22)', () => {
     expect(measured < 1e-9).toBe(true);
   });
 
-  it('glottis matches', async () => {
+  /** Advanced source values of a head away from their defaults (issue 41). */
+  const SOURCE_HEAD = {
+    breathinessRd: 2.1,
+    breathGain: 2.2,
+    breathExponent: 1.7,
+    chinkNoise: 1.2,
+    reCritical: 1750,
+    glottisVoiced: 0.08,
+    glottisOpen: 0.3,
+    glottisBreathy: 0.17,
+  };
+  for (const [label, head] of [
+    ['default', undefined],
+    ['head values', SOURCE_HEAD],
+  ]) {
+    it(`glottis matches (${label})`, async () => {
+      await glottisMatches(head);
+    });
+  }
+
+  async function glottisMatches(head) {
     const engine = await loadRustEngine();
     const dt = 1 / 46667;
     const count = Math.round(0.5 / dt);
@@ -98,7 +124,7 @@ describe('Rust sources (issue 22)', () => {
     };
     const noise = createNoise(2);
     const input = Float64Array.from({ length: count }, () => noise());
-    const glottis = new Glottis({ seed: 1 });
+    const glottis = new Glottis({ seed: 1, breathiness: 0.5, chink: 3, head });
     let periods = 0;
     const expected = input.map((value) => {
       const previous = glottis.phase;
@@ -122,6 +148,14 @@ describe('Rust sources (issue 22)', () => {
       control.aspiration,
       control.closure,
       control.loudness,
+      glottis.rdSlope,
+      glottis.breathGain,
+      glottis.breathExponent,
+      glottis.chinkNoise,
+      head?.reCritical ?? RE_CRITICAL,
+      head?.glottisVoiced ?? GLOTTIS_VOICED,
+      head?.glottisOpen ?? GLOTTIS_OPEN,
+      head?.glottisBreathy ?? GLOTTIS_BREATHY,
     ];
     const { values } = inEngine(engine, input, (pointer, length) =>
       inEngine(engine, parameters, (params) => {
@@ -138,7 +172,7 @@ describe('Rust sources (issue 22)', () => {
     const measured = error(values, expected);
     globalThis.console.log(`glottis error ${measured}, ${periods} periods`);
     expect(measured < 1e-6).toBe(true);
-  });
+  }
 
   it('radiation matches', async () => {
     const engine = await loadRustEngine();
@@ -163,7 +197,12 @@ describe('Rust waveguide and output (issue 22)', () => {
     const engine = await loadRustEngine();
     const sections = 22;
     const noseSections = 14;
-    const head = { ...DEFAULT_HEAD, glottalChink: 2 };
+    const head = {
+      ...DEFAULT_HEAD,
+      glottalChink: 2,
+      lossShape: 1.8,
+      radiationBaffle: 0.7,
+    };
     const areas = Array.from({ length: sections }, (_, index) =>
       index >= 14 && index <= 16 ? 0.3 : 3
     );
@@ -192,6 +231,8 @@ describe('Rust waveguide and output (issue 22)', () => {
       head.wallMass,
       head.wallResistance,
       head.wallStiffness,
+      head.lossShape,
+      head.radiationBaffle,
       ...areas,
       ...nose,
     ];
@@ -293,6 +334,58 @@ describe('Rust renderer (issue 22)', () => {
     const measured = maxDifference(actual, expected);
     globalThis.console.log(`render (room) max abs diff ${measured}`);
     expect(measured < 1e-4).toBe(true);
+  });
+
+  it('renders a non-default head like VoiceRenderer (issue 41)', async () => {
+    const engine = await loadRustEngine();
+    // Every advanced value the Rust core reads, away from its default, and
+    // the head's own microphone and room.
+    const head = {
+      ...DEFAULT_HEAD,
+      breathiness: 0.4,
+      glottalChink: 2,
+      breathinessRd: 2,
+      breathGain: 2.5,
+      breathExponent: 1.8,
+      chinkNoise: 1,
+      oralCompliance: 0.0015,
+      reCritical: 1750,
+      glottisVoiced: 0.07,
+      glottisOpen: 0.3,
+      glottisBreathy: 0.15,
+      wallSource: 0.3,
+      strouhal: 0.25,
+      fricationGain: 0.8,
+      transientGain: 1e-5,
+      lossShape: 1.8,
+      radiationBaffle: 0.7,
+      micDistance: 30,
+      micAzimuth: 30,
+      roomRt60: 0.3,
+    };
+    const { plan, renderOptions } = prepareUtterance('Sister, push it.', {
+      tier: 'minimal',
+      seed: 1,
+      head,
+    });
+    const expected = renderPlan(plan, renderOptions);
+    const actual = renderPlanRust(engine, plan, renderOptions);
+    const measured = maxDifference(actual, expected);
+    globalThis.console.log(`render (head) max abs diff ${measured}`);
+    expect(measured < 1e-4).toBe(true);
+    // The head values reach the render: the default head sounds different.
+    const plain = prepareUtterance('Sister, push it.', {
+      tier: 'minimal',
+      seed: 1,
+    });
+    const reference = renderPlanRust(engine, plain.plan, plain.renderOptions);
+    // The room adds a tail: compare the common part.
+    const common = Math.min(reference.length, actual.length);
+    const changed = maxDifference(
+      reference.subarray(0, common),
+      actual.subarray(0, common)
+    );
+    expect(changed > 1e-3).toBe(true);
   });
 
   it('gives the same samples for any chunking', async () => {
