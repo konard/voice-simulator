@@ -52,6 +52,7 @@ export function prepareUtterance(text, options = {}) {
         lang: options.lang,
         accent: options.accent,
         weakForms: options.weakForms,
+        lexicon: options.lexicon,
       });
   const plan = planUtterance(transcription.ipa, {
     head,

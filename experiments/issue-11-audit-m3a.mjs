@@ -3,9 +3,10 @@
 import { gzipSync } from 'node:zlib';
 import { textToIpa, planUtterance, prepareUtterance } from '../src/index.js';
 import { englishDictionarySize } from '../src/g2p/english.js';
-import { RUSSIAN_STRESS } from '../src/g2p/russian-stress.js';
-import { CHINESE_READINGS } from '../src/g2p/chinese-dict.js';
-import { ENGLISH_DICTIONARY } from '../src/g2p/english-dict.js';
+import { readFileSync } from 'node:fs';
+import { lexiconFor } from '../src/g2p/lexicon.js';
+import { ZH_READINGS } from '../src/g2p/lexicon/zh.js';
+import { characterReadings } from '../src/g2p/chinese-readings.js';
 
 const show = (label, value) =>
   console.log(`${label}: ${JSON.stringify(value)}`);
@@ -101,9 +102,16 @@ for (const [lang, text] of [
 // 5. Size of the built-in lexicons (P35).
 show('lexicon sizes', {
   englishWords: englishDictionarySize(),
-  russianStressWords: RUSSIAN_STRESS.split(' ').length,
-  chineseSyllables: CHINESE_READINGS.split(' ').length,
-  chineseCharacters: CHINESE_READINGS.replace(/[^\p{Script=Han}]/gu, '').length,
+  englishVariants: [...lexiconFor('en').words()].filter(
+    (word) => lexiconFor('en').lookup(word).length > 1
+  ).length,
+  russianStressWords: lexiconFor('ru', 'stress').size,
+  hindiWords: lexiconFor('hi').size,
+  chineseCharacters: ZH_READINGS.count,
+  chinesePolyphones: [...characterReadings().values()].filter(
+    (list) => list.length > 1
+  ).length,
+  chinesePhrases: lexiconFor('zh', 'phrases').size,
 });
 for (const [lang, words] of [
   ['en', 'onomatopoeia quinoa colonel choir yacht Worcester segue'],
@@ -183,62 +191,14 @@ for (const text of ['妈妈', '爷爷', '奶奶', '爸爸']) {
   );
 }
 
-// 8. Prototype of the compact lexicon container (P35): the English
-// dictionary of today, front coded in blocks of 64 words, one character per
-// phoneme. Prints the size next to the size of the `word=ipa` text.
+// 8. The compact lexicon container (P35, built in issue 47): bytes of the
+// shipped modules, raw and with gzip.
 {
-  const text = Array.isArray(ENGLISH_DICTIONARY)
-    ? ENGLISH_DICTIONARY.join(' ')
-    : ENGLISH_DICTIONARY;
-  const pairs = text
-    .split(/\s+/)
-    .filter(Boolean)
-    .map((entry) => {
-      const index = entry.indexOf('=');
-      return [entry.slice(0, index), entry.slice(index + 1)];
-    })
-    .sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0));
-  const UNITS = ['t͡ʃ', 'd͡ʒ', 'aɪ', 'aʊ', 'eɪ', 'oʊ', 'ɔɪ'];
-  const CODE = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ!#$%&()*+,:;<=>?@[]^_{}|~';
-  const symbols = new Map();
-  const encode = (value) => {
-    let out = '';
-    for (let i = 0; i < value.length; ) {
-      const unit = UNITS.find((u) => value.startsWith(u, i)) ?? value[i];
-      if (!symbols.has(unit)) {
-        symbols.set(unit, CODE[symbols.size] ?? '?');
-      }
-      out += symbols.get(unit);
-      i += unit.length;
-    }
-    return out;
-  };
-  let body = '';
-  let previous = '';
-  pairs.forEach(([word, value], index) => {
-    let shared = 0;
-    if (index % 64 !== 0) {
-      while (
-        shared < 9 &&
-        shared < previous.length &&
-        shared < word.length &&
-        previous[shared] === word[shared]
-      ) {
-        shared++;
-      }
-    }
-    body += shared + word.slice(shared) + encode(value);
-    previous = word;
-  });
-  const bytes = Buffer.byteLength(body);
-  show('lexicon container', {
-    words: pairs.length,
-    symbols: symbols.size,
-    bytes,
-    bytesPerWord: Number((bytes / pairs.length).toFixed(2)),
-    gzip: gzipSync(Buffer.from(body)).length,
-    textBytes: Buffer.byteLength(text),
-    textGzip: gzipSync(Buffer.from(text)).length,
-  });
-  show('lexicon container start', body.slice(0, 60));
+  const sizes = {};
+  for (const lang of ['en', 'zh', 'hi', 'ru']) {
+    const bytes = readFileSync(`src/g2p/lexicon/${lang}.js`);
+    sizes[lang] = { bytes: bytes.length, gzip: gzipSync(bytes).length };
+  }
+  show('lexicon container', sizes);
+  show('lexicon container start', lexiconFor('en').lookup('either'));
 }

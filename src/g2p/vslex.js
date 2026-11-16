@@ -165,7 +165,9 @@ export function encodeVslex(lang, entries, options = {}) {
     : { merges: [], sequences: flat };
   const values = [...base, ...merges];
   const symbols = candidates.slice(0, values.length).join('');
-  const symbolOf = new Map(values.map((value, index) => [value, symbols[index]]));
+  const symbolOf = new Map(
+    values.map((value, index) => [value, symbols[index]])
+  );
   let cursor = 0;
   const first = [];
   const blocks = [];
@@ -267,7 +269,9 @@ export function decodeBlock(data, index, tables = blockTables(data)) {
 export function blockTables(data) {
   return {
     letters: new Set(data.alphabet),
-    valueOf: new Map([...data.symbols].map((symbol, i) => [symbol, data.values[i]])),
+    valueOf: new Map(
+      [...data.symbols].map((symbol, i) => [symbol, data.values[i]])
+    ),
   };
 }
 

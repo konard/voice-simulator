@@ -1,12 +1,12 @@
 /**
  * English (General American) grapheme-to-phoneme conversion.
  *
- * Lookup order: generated CMUdict subset, simple suffix stripping on top of
- * dictionary stems, then spelling rules. Each word reports its source so
+ * Lookup order: user lexicons, heteronyms, the shipped lexicon
+ * (`src/g2p/lexicon/en.js`, CMUdict with every variant), simple suffix
+ * stripping on top of known stems, then spelling rules. Each word reports its source so
  * the UI can highlight guesses.
  */
 
-import { ENGLISH_DICTIONARY } from './english-dict.js';
 import { ENGLISH_HETERONYMS } from './english-heteronyms.js';
 import { selectReading } from './english-context.js';
 import {
@@ -16,26 +16,16 @@ import {
   pluralEnding,
   spellToIpa,
 } from './english-rules.js';
+import { lexiconFor, userPronunciation } from './lexicon.js';
 
-let dictionary = null;
-
-/**
- * Hand-written entries missing from the generated subset: number words
- * and the words the text normaliser generates (units, currencies).
- */
-const SUPPLEMENT =
-  "thirteen=θɝˈtin fourteen=fɔɹˈtin sixteen=sɪkˈstin seventeen=ˌsɛvənˈtin eighteen=eɪˈtin nineteen=naɪnˈtin seventy=ˈsɛvənti eighty=ˈeɪti ninety=ˈnaɪnti o'clock=əˈklɑk cetera=ˈsɛtəɹə missus=ˈmɪsɪz miz=ˈmɪz euro=ˈjʊɹoʊ euros=ˈjʊɹoʊz rupee=ɹuˈpi rupees=ɹuˈpiz ruble=ˈɹubəl rubles=ˈɹubəlz kopeck=ˈkoʊpɛk kopecks=ˈkoʊpɛks paisa=ˈpaɪsɑ paise=ˈpaɪseɪ yuan=juˈɑn fen=ˈfɛn celsius=ˈsɛlsiəs fahrenheit=ˈfɛɹənˌhaɪt kilogram=ˈkɪləˌɡɹæm kilograms=ˈkɪləˌɡɹæmz kilometer=kɪˈlɑmətɚ kilometers=kɪˈlɑmətɚz centimeter=ˈsɛntəˌmitɚ centimeters=ˈsɛntəˌmitɚz millimeter=ˈmɪləˌmitɚ millimeters=ˈmɪləˌmitɚz milligram=ˈmɪləˌɡɹæm milligrams=ˈmɪləˌɡɹæmz liter=ˈlitɚ liters=ˈlitɚz milliliter=ˈmɪləˌlitɚ milliliters=ˈmɪləˌlitɚz millisecond=ˈmɪləˌsɛkənd milliseconds=ˈmɪləˌsɛkəndz hertz=ˈhɝts kilohertz=ˈkɪləˌhɝts megabyte=ˈmɛɡəˌbaɪt megabytes=ˈmɛɡəˌbaɪts gigabyte=ˈɡɪɡəˌbaɪt gigabytes=ˈɡɪɡəˌbaɪts";
-
-function getDictionary() {
-  if (!dictionary) {
-    dictionary = new Map(
-      `${ENGLISH_DICTIONARY} ${SUPPLEMENT}`.split(' ').map((entry) => {
-        const split = entry.indexOf('=');
-        return [entry.slice(0, split), entry.slice(split + 1)];
-      })
-    );
+/** The user or shipped pronunciation of a word and its source, or null. */
+function lookupWord(word) {
+  const user = userPronunciation('en', word);
+  if (user) {
+    return { ipa: user, source: 'user' };
   }
-  return dictionary;
+  const shipped = lexiconFor('en').lookup(word);
+  return shipped ? { ipa: shipped[0], source: 'dictionary' } : null;
 }
 
 /** Suffix handlers: [suffix, stem candidates, pronounce(stemIpa)]. */
@@ -66,14 +56,15 @@ function pastEnding(ipa) {
 }
 
 function lookupWithSuffix(word) {
-  const words = getDictionary();
   for (const [suffix, stems, pronounce] of SUFFIXES) {
     if (!word.endsWith(suffix) || word.length - suffix.length < 2) {
       continue;
     }
-    const stem = stems(word).find((candidate) => words.has(candidate));
-    if (stem) {
-      return pronounce(words.get(stem));
+    for (const stem of stems(word)) {
+      const known = lookupWord(stem);
+      if (known) {
+        return pronounce(known.ipa);
+      }
     }
   }
   return null;
@@ -90,11 +81,16 @@ function lookupWithSuffix(word) {
  * @param {{before?: string[], after?: string[], sentence?: string[]}} [context]
  *   lowercased words before the word (nearest first) and after it in the
  *   same clause, and all words of the sentence
- * @returns {{ipa: string, source: 'heteronym'|'dictionary'|'morphology'|'rules',
+ * @returns {{ipa: string,
+ *   source: 'user'|'heteronym'|'dictionary'|'morphology'|'rules',
  *   tag?: string}}
  */
 export function englishWordToIpa(word, context) {
   const lower = word.toLowerCase().replaceAll('’', "'");
+  const user = userPronunciation('en', lower);
+  if (user) {
+    return { ipa: user, source: 'user' };
+  }
   if (Object.hasOwn(ENGLISH_HETERONYMS, lower)) {
     const readings = ENGLISH_HETERONYMS[lower];
     const { reading, tag } = context
@@ -102,9 +98,9 @@ export function englishWordToIpa(word, context) {
       : { reading: readings[0], tag: readings[0].tags };
     return { ipa: reading.ipa, source: 'heteronym', tag };
   }
-  const known = getDictionary().get(lower);
+  const known = lookupWord(lower);
   if (known) {
-    return { ipa: known, source: 'dictionary' };
+    return known;
   }
   const derived = lookupWithSuffix(lower);
   if (derived) {
@@ -122,7 +118,7 @@ export function expandEnglishNumber(token) {
   return englishNumberWords(Number(token));
 }
 
-/** Number of words in the bundled dictionary. */
+/** Number of words in the shipped English lexicon. */
 export function englishDictionarySize() {
-  return getDictionary().size;
+  return lexiconFor('en').size;
 }

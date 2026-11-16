@@ -202,6 +202,8 @@ export interface SynthesizeOptions {
   accent?: AccentCode | string;
   /** Weak, unstressed English function words inside a phrase (default true). */
   weakForms?: boolean;
+  /** Pronunciations for this call only (see `textToIpa`). */
+  lexicon?: CallLexicon;
   /** Treat the text as IPA. */
   ipa?: boolean;
   head?: HeadConfig | 'random';
@@ -282,8 +284,79 @@ export declare function textToIpa(
      * phrase (`a cup of tea for you` ə ˈkʌp əv ˈti fɚ ju). Default true.
      */
     weakForms?: boolean;
+    /**
+     * Pronunciations for this call only, per language: IPA for en, ru and
+     * hi, toned pinyin (one syllable per character) for zh. They win over
+     * `addLexicon` and the shipped lexicons (`source: 'user'`). An entry
+     * that cannot be read throws a TypeError naming the word.
+     */
+    lexicon?: CallLexicon;
   }
 ): Transcription;
+
+// Pronunciation lexicons
+/** Languages with a lexicon. */
+export type LexiconLanguage = 'en' | 'ru' | 'hi' | 'zh';
+/** Plain user entries: a pronunciation, or variants with the default first. */
+export type LexiconEntries = Record<string, string | string[]>;
+/** A front-coded lexicon container (see src/g2p/vslex.js). */
+export interface VslexContainer {
+  format: 'vslex';
+  version: 1;
+  lang: string;
+  count: number;
+  blockSize: number;
+  alphabet: string;
+  symbols: string;
+  values: string[];
+  first: string[];
+  blocks: string[];
+}
+/** The JSON written by `build-lexicon.mjs --full` and `convert`. */
+export interface FullLexicon {
+  format: 'lexicon';
+  version: 1;
+  lang: string;
+  count: number;
+  words: Record<string, string[]>;
+}
+export type LexiconData = VslexContainer | FullLexicon | LexiconEntries;
+export type CallLexicon = Partial<Record<LexiconLanguage, LexiconData>>;
+export interface Lexicon {
+  size: number;
+  has(word: string): boolean;
+  /** Every pronunciation of the word, the default first, or null. */
+  lookup(word: string): string[] | null;
+  words(): Iterator<string>;
+}
+export declare function openLexicon(data: LexiconData): Lexicon;
+/**
+ * The shipped lexicon: part `words` (en, hi), `stress` (ru) or `phrases`
+ * (zh); null for an unknown language or part.
+ */
+export declare function lexiconFor(
+  lang: LexiconLanguage | string,
+  part?: string
+): Lexicon | null;
+/** Add a user lexicon; returns the number of words added. */
+export declare function addLexicon(
+  lang: LexiconLanguage,
+  entries: LexiconData
+): number;
+export declare function clearLexicons(): void;
+/** Every known pronunciation (IPA), user lexicons first. */
+export declare function pronunciations(
+  lang: LexiconLanguage,
+  word: string
+): string[];
+export declare function lexiconWords(lang: LexiconLanguage): Generator<string>;
+/** Every word with exactly this IPA. */
+export declare function spellingsOf(
+  lang: LexiconLanguage,
+  ipa: string
+): string[];
+/** Number of words in the shipped English lexicon. */
+export declare function englishDictionarySize(): number;
 export declare function detectLanguage(text: string): LanguageCode;
 export declare function scriptLanguage(text: string): LanguageCode | null;
 export declare function parseIpa(text: string): {
