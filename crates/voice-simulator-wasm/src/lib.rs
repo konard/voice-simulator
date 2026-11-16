@@ -14,6 +14,14 @@
 //! ([`fill_uniform`], [`fill_normal`], [`run_airflow`], [`resampler_new`]
 //! and the other `resampler_*` functions) are what the host tests exercise.
 
+// The assembly of `vs_thread_init` (threads.rs) needs the nightly
+// compiler of the threads build (`THREADS_TOOLCHAIN` of
+// `scripts/build-wasm.mjs`); every other build is on stable Rust.
+#![cfg_attr(
+    all(target_arch = "wasm32", target_feature = "atomics"),
+    feature(asm_experimental_arch)
+)]
+
 use std::alloc::{alloc, dealloc, Layout};
 use std::cell::RefCell;
 
@@ -24,6 +32,7 @@ use voice_simulator_core::resample::{output_length, resample, StreamResampler};
 pub mod components;
 pub mod fdtd;
 pub mod renderer;
+pub mod threads;
 
 /// Version of the interface; raise it on any breaking change of a `vs_`
 /// export (a removed or renamed function, a changed signature or meaning).

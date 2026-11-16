@@ -95,11 +95,16 @@ jobs:
       # (issues 22 and 23; the second also with the SIMD build, which
       # build-wasm.mjs leaves in target/simd when it is not shipped). The rustup of the
       # runner image installs the toolchain of rust-toolchain.toml.
+      # performance-threads.test.js (issue 24) times the native CLI and the
+      # threads file, which needs the nightly toolchain of THREADS_TOOLCHAIN.
       - name: Build the WebAssembly engine
         if: inputs.suite == 'performance' || inputs.suite == 'all'
         run: |
           bash scripts/run-with-budget-warning.sh 150 "Rust toolchain install" rustup toolchain install
-          bash scripts/run-with-budget-warning.sh 120 "wasm build" node scripts/build-wasm.mjs --require
+          THREADS_TOOLCHAIN=$(node --input-type=module -e "import { THREADS_TOOLCHAIN } from './scripts/build-wasm.mjs'; console.log(THREADS_TOOLCHAIN)")
+          bash scripts/run-with-budget-warning.sh 150 "nightly toolchain install" rustup toolchain install "$THREADS_TOOLCHAIN" --profile minimal --target wasm32-unknown-unknown --component rust-src
+          bash scripts/run-with-budget-warning.sh 360 "wasm build" node scripts/build-wasm.mjs --require --threads
+          bash scripts/run-with-budget-warning.sh 120 "CLI build" cargo build --release --locked -p voice-simulator-cli
 
       - name: Restore the speech dataset cache
         uses: actions/cache@v6
@@ -134,6 +139,8 @@ jobs:
           LIMIT: ${{ inputs.limit }}
           REQUIRE_GPU: ${{ (inputs.suite == 'gpu' || inputs.suite == 'all') && '1' || '' }}
           REQUIRE_WASM: ${{ (inputs.suite == 'performance' || inputs.suite == 'all') && '1' || '' }}
+          REQUIRE_CLI: ${{ (inputs.suite == 'performance' || inputs.suite == 'all') && '1' || '' }}
+          REQUIRE_THREADS_WASM: ${{ (inputs.suite == 'performance' || inputs.suite == 'all') && '1' || '' }}
         run: |
           LIMIT_FLAG=''
           if [[ "$LIMIT" =~ ^[0-9]+$ ]]; then

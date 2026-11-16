@@ -1,0 +1,23 @@
+high steps_per_second 253018.255 threads 1 links 1634 
+high steps_per_second 169822.939 threads 2 links 1634 
+high steps_per_second 99496.389 threads 3 links 1634 
+high steps_per_second 84171.970 threads 4 links 1634 
+studio steps_per_second 29905.885 threads 1 links 12270 
+studio steps_per_second 30199.630 threads 2 links 12270 
+studio steps_per_second 16983.324 threads 3 links 12270 
+studio steps_per_second 19485.965 threads 4 links 12270 
+reference steps_per_second 20046.716 threads 1 links 23964 
+reference steps_per_second 9561.511 threads 2 links 23964 
+reference steps_per_second 10395.425 threads 3 links 23964 
+reference steps_per_second 9941.613 threads 4 links 23964 
+high-enc40 steps_per_second 1739.650 threads 1 links 173501 
+high-enc40 steps_per_second 2114.800 threads 2 links 173501 
+high-enc40 steps_per_second 2550.803 threads 3 links 173501 
+high-enc40 steps_per_second 2540.629 threads 4 links 173501 
+studio-enc40 
+studio-enc40 
+studio-enc40 
+studio-enc40 
+studio-enc40 steps_per_second 169.339 threads 2 links 1409887 field_sha256 31626b979ca27284bda242d8de570bd55463fc5622076c84b3a1b8a21bbd07e2 
+studio-enc40 steps_per_second 184.431 threads 3 links 1409887 field_sha256 31626b979ca27284bda242d8de570bd55463fc5622076c84b3a1b8a21bbd07e2 
+studio-enc40 steps_per_second 210.037 threads 4 links 1409887 field_sha256 31626b979ca27284bda242d8de570bd55463fc5622076c84b3a1b8a21bbd07e2 

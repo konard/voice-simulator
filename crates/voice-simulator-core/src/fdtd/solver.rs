@@ -10,6 +10,7 @@
 //! `fdtdListening` of `src/engine/pack-model.js` computes.
 
 use alloc::collections::BTreeMap;
+use alloc::sync::Arc;
 use alloc::vec;
 use alloc::vec::Vec;
 
@@ -18,6 +19,7 @@ use super::model::{
     Model, Opening, CELL_AIR, CELL_NOSE, CELL_SINUS, CELL_TRACT, LINK_INNER, LINK_LIPS,
     LINK_NOSTRILS, LINK_RADIATION, LINK_SINUS, LINK_VELUM,
 };
+use super::parallel::{Team, THREADS_AVAILABLE, THREAD_MIN_LINKS};
 use crate::frame;
 use crate::glottis::{glottal_reflection, SPEED_OF_SOUND};
 use crate::losses::{boundary_loss_factor, LOSS_REFERENCE_SECTIONS};
@@ -348,6 +350,15 @@ pub struct Fdtd3d {
     /// the exponent `damping_exponent`: the same base gives the same bits.
     damping_cache: Vec<(f64, f64)>,
     damping_exponent: f64,
+    /// The thread team that steps the grid (issue 24), if any.
+    team: Option<Arc<Team>>,
+}
+
+/// `team`, if any; always `None` in a build without threads
+/// ([`THREADS_AVAILABLE`]), which lets the compiler drop the code of
+/// [`Team`] from it.
+fn active(team: &Option<Arc<Team>>) -> Option<&Arc<Team>> {
+    team.as_ref().filter(|_| THREADS_AVAILABLE)
 }
 
 impl Fdtd3d {
@@ -440,6 +451,7 @@ impl Fdtd3d {
             bin_filled: Vec::new(),
             damping_cache: vec![(f64::NAN, f64::NAN); link_count],
             damping_exponent: f64::NAN,
+            team: None,
             cell_kind: grid_model.kind.clone(),
             cell_arc: grid_model.arc.clone(),
             grid,
@@ -467,6 +479,45 @@ impl Fdtd3d {
     /// The step loop arrays.
     pub fn grid(&self) -> &Grid {
         &self.grid
+    }
+
+    /// A thread team of `threads` for the grid of this solver, or `None`
+    /// when one thread is asked for or the grid has fewer than
+    /// [`THREAD_MIN_LINKS`] links. The caller runs [`Team::work`] on
+    /// helper threads and passes the team to [`Fdtd3d::set_team`].
+    pub fn new_team(&self, threads: usize) -> Option<Arc<Team>> {
+        self.new_team_from(threads, THREAD_MIN_LINKS)
+    }
+
+    /// [`Fdtd3d::new_team`] with `min_links` in place of
+    /// [`THREAD_MIN_LINKS`]: 0 gives a team for any grid, which is what
+    /// the measurement of that constant needs.
+    pub fn new_team_from(&self, threads: usize, min_links: usize) -> Option<Arc<Team>> {
+        (THREADS_AVAILABLE && threads > 1 && self.grid.links() >= min_links)
+            .then(|| Arc::new(Team::new(&self.grid, threads)))
+    }
+
+    /// Steps the grid with `team` from now on, or on this thread alone
+    /// with `None`; the numbers are the same bits either way.
+    pub fn set_team(&mut self, team: Option<Arc<Team>>) {
+        self.team = team;
+    }
+
+    /// Threads that step the grid: those of the team, else 1.
+    pub fn threads(&self) -> usize {
+        active(&self.team).map_or(1, |team| team.threads())
+    }
+
+    /// `count` bare steps of the grid, with the team if there is one: no
+    /// source, no noise, no receiver. What the performance test of issue
+    /// 24 times (`tests/heavy/performance-threads.test.js`).
+    pub fn kernel_steps(&mut self, count: usize) {
+        for _ in 0..count {
+            match active(&self.team) {
+                Some(team) => team.step(&mut self.grid, self.active_from),
+                None => self.grid.step(self.active_from),
+            }
+        }
     }
 
     /// The receiver cell.
@@ -1277,7 +1328,10 @@ impl Solver for Fdtd3d {
                 self.grid.velocity[link] += force * sign;
             }
         }
-        self.grid.step(self.active_from);
+        match active(&self.team) {
+            Some(team) => team.step(&mut self.grid, self.active_from),
+            None => self.grid.step(self.active_from),
+        }
         let pressure = self.source_pressure(flow);
         let place = self.place();
         for &index in &self.glottis_places[place].source_cells {

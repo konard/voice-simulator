@@ -145,6 +145,8 @@ export {
   loadEngineModule,
   loadEngineModuleSync,
   ENGINE_ABI_VERSION,
+  AUTO_THREADS_MAX,
+  requestedThreads,
 } from './engine/wasm-loader.js';
 // The engine choice: Rust by default, JavaScript as the fallback (issue 25)
 export {
@@ -157,7 +159,11 @@ export {
   RustVoiceRenderer,
   renderPlanRust,
   renderJob,
+  withTeam,
 } from './engine/rust-renderer.js';
+// The 3D solver on several threads in WebAssembly (issue 24)
+export { createThreadPool } from './engine/thread-pool.js';
+export { THREAD_MEMORY } from './engine/layout.js';
 // Air flow and turbulence noise sources (issue 35)
 export {
   ASPIRATION_REFERENCE,

@@ -1,4 +1,6 @@
-//! WebAssembly SIMD forms of [`Grid::step_gather`] and [`Grid::step`],
+//! WebAssembly SIMD forms of the two passes of [`Grid::step_gather`]
+//! (`links_slab`, `cells_slab`, over any range of links or cells, so the
+//! thread team of `parallel.rs` runs them too) and of [`Grid::step`],
 //! compiled only into the `simd128` build of the engine
 //! (`src/engine/voice-simulator-simd.wasm`, see `scripts/build-wasm.mjs`).
 //!
@@ -9,11 +11,11 @@
 //! form stay scalar and ordered (they are what keeps it bit-identical with
 //! the scatter form), the scatter form adds the two fluxes of a vector to
 //! `divergence` one link after the other, as the scalar loop does, and an
-//! odd link or cell is done by the scalar tail. The `core::arch::wasm32` functions used here are
-//! safe, so the file needs no `unsafe` and the crate keeps
-//! `#![forbid(unsafe_code)]`.
+//! odd link or cell is done by the scalar tail. The `core::arch::wasm32`
+//! functions used here are safe functions, so the file has no raw
+//! pointers.
 
-use super::kernel::{incident_sum, padded_sum, Grid, COURANT};
+use super::kernel::{incident_sum, padded_sum, CellSlab, Grid, LinkSlab, COURANT};
 use core::arch::wasm32::{f64x2, f64x2_extract_lane, f64x2_mul, f64x2_splat, f64x2_sub};
 
 /// [`Grid::step`] with two lanes; bit-identical with the scalar loop.
@@ -102,91 +104,103 @@ pub(super) fn step_scatter(grid: &mut Grid, from: usize) {
     }
 }
 
-/// [`Grid::step_gather_scalar`] with two lanes; bit-identical with it.
-pub(super) fn step_gather(grid: &mut Grid) {
-    let pairs = grid.links() / 2;
-    {
-        let Grid {
-            link_a,
-            link_b,
-            velocity,
-            damping,
-            conductance,
-            flux,
-            pressure,
-            ..
-        } = &mut *grid;
-        let courant = f64x2_splat(COURANT);
-        let p = |cell: u32| pressure[cell as usize];
-        let links = link_a
-            .as_chunks::<2>()
-            .0
-            .iter()
-            .zip(link_b.as_chunks::<2>().0)
-            .zip(velocity.as_chunks_mut::<2>().0)
-            .zip(damping.as_chunks::<2>().0)
-            .zip(conductance.as_chunks::<2>().0)
-            .zip(flux.as_chunks_mut::<2>().0);
-        for (((((&[a0, a1], &[b0, b1]), v), &[k0, k1]), &[c0, c1]), f) in links {
-            let pa = f64x2(p(a0), p(a1));
-            let pb = f64x2(p(b0), p(b1));
-            let u = f64x2_mul(
-                f64x2(k0, k1),
-                f64x2_sub(f64x2(v[0], v[1]), f64x2_mul(courant, f64x2_sub(pb, pa))),
-            );
-            let out = f64x2_mul(f64x2(c0, c1), u);
-            *v = [f64x2_extract_lane::<0>(u), f64x2_extract_lane::<1>(u)];
-            *f = [f64x2_extract_lane::<0>(out), f64x2_extract_lane::<1>(out)];
-        }
+/// Pass 1 of [`Grid::step_gather_scalar`] with two lanes over one slab of
+/// links; bit-identical with it. The pairs start at the first link of the
+/// slab, which may be odd, and an odd last link is done by the scalar
+/// tail.
+pub(super) fn links_slab(slab: LinkSlab<'_>) {
+    let LinkSlab {
+        link_a,
+        link_b,
+        damping,
+        conductance,
+        pressure,
+        velocity,
+        flux,
+    } = slab;
+    let courant = f64x2_splat(COURANT);
+    let p = |cell: u32| pressure[cell as usize];
+    let links = link_a
+        .as_chunks::<2>()
+        .0
+        .iter()
+        .zip(link_b.as_chunks::<2>().0)
+        .zip(velocity.as_chunks_mut::<2>().0)
+        .zip(damping.as_chunks::<2>().0)
+        .zip(conductance.as_chunks::<2>().0)
+        .zip(flux.as_chunks_mut::<2>().0);
+    for (((((&[a0, a1], &[b0, b1]), v), &[k0, k1]), &[c0, c1]), f) in links {
+        let pa = f64x2(p(a0), p(a1));
+        let pb = f64x2(p(b0), p(b1));
+        let u = f64x2_mul(
+            f64x2(k0, k1),
+            f64x2_sub(f64x2(v[0], v[1]), f64x2_mul(courant, f64x2_sub(pb, pa))),
+        );
+        let out = f64x2_mul(f64x2(c0, c1), u);
+        *v = [f64x2_extract_lane::<0>(u), f64x2_extract_lane::<1>(u)];
+        *f = [f64x2_extract_lane::<0>(out), f64x2_extract_lane::<1>(out)];
     }
-    grid.links_pass(2 * pairs);
-    match grid.incident_width {
-        1 => cells_pass(grid, padded::<1>),
-        2 => cells_pass(grid, padded::<2>),
-        3 => cells_pass(grid, padded::<3>),
-        4 => cells_pass(grid, padded::<4>),
-        5 => cells_pass(grid, padded::<5>),
-        6 => cells_pass(grid, padded::<6>),
-        7 => cells_pass(grid, padded::<7>),
-        8 => cells_pass(grid, padded::<8>),
-        _ => cells_pass(grid, listed),
+    let last = link_a.len();
+    if last % 2 == 1 {
+        let link = last - 1;
+        let (a, b) = (link_a[link], link_b[link]);
+        let u = damping[link] * (velocity[link] - COURANT * (p(b) - p(a)));
+        velocity[link] = u;
+        flux[link] = conductance[link] * u;
+    }
+}
+
+/// Pass 2 of [`Grid::step_gather_scalar`] with two cells per vector over
+/// one slab of cells; bit-identical with it.
+pub(super) fn cells_slab(slab: CellSlab<'_>) {
+    match slab.width {
+        1 => cells(slab, padded::<1>),
+        2 => cells(slab, padded::<2>),
+        3 => cells(slab, padded::<3>),
+        4 => cells(slab, padded::<4>),
+        5 => cells(slab, padded::<5>),
+        6 => cells(slab, padded::<6>),
+        7 => cells(slab, padded::<7>),
+        8 => cells(slab, padded::<8>),
+        _ => cells(slab, listed),
     }
 }
 
 /// The incident sum of `cell` from padded lists of `W` links.
 #[inline(always)]
-fn padded<const W: usize>(grid: &Grid, cell: usize) -> f64 {
+fn padded<const W: usize>(slab: &CellSlab<'_>, cell: usize) -> f64 {
     let at = cell * W;
-    let links = grid.incident_link[at..at + W].as_array::<W>();
-    let signs = grid.incident_sign[at..at + W].as_array::<W>();
-    padded_sum(&grid.flux, links.unwrap(), signs.unwrap())
+    let links = slab.incident_link[at..at + W].as_array::<W>();
+    let signs = slab.incident_sign[at..at + W].as_array::<W>();
+    padded_sum(slab.flux, links.unwrap(), signs.unwrap())
 }
 
 /// The incident sum of `cell` from lists of any length.
 #[inline(always)]
-fn listed(grid: &Grid, cell: usize) -> f64 {
+fn listed(slab: &CellSlab<'_>, cell: usize) -> f64 {
     incident_sum(
-        &grid.flux,
-        &grid.incident_link,
-        &grid.incident_sign,
-        grid.incident_start[cell] as usize,
-        grid.incident_start[cell + 1] as usize,
+        slab.flux,
+        slab.incident_link,
+        slab.incident_sign,
+        slab.incident_start[cell] as usize,
+        slab.incident_start[cell + 1] as usize,
     )
 }
 
-/// Pass 2, two cells per vector, with the incident sums of `sum`.
+/// Pass 2, two cells per vector, with the incident sums of `sum`; `cell`
+/// counts from the first cell of the slab, `sum` takes grid indices.
 #[inline(always)]
-fn cells_pass(grid: &mut Grid, sum: impl Fn(&Grid, usize) -> f64) {
-    let cells = grid.cells();
+fn cells(mut slab: CellSlab<'_>, sum: impl Fn(&CellSlab<'_>, usize) -> f64) {
+    let (first, count) = (slab.first, slab.pressure.len());
     let mut cell = 0;
-    while cell + 2 <= cells {
-        let d = f64x2(sum(grid, cell), sum(grid, cell + 1));
-        let Grid {
+    while cell + 2 <= count {
+        let d = f64x2(sum(&slab, first + cell), sum(&slab, first + cell + 1));
+        let CellSlab {
             pressure,
             keep,
             gain,
             ..
-        } = &mut *grid;
+        } = &mut slab;
         let p = f64x2(pressure[cell], pressure[cell + 1]);
         let next = f64x2_sub(
             f64x2_mul(f64x2(keep[cell], keep[cell + 1]), p),
@@ -196,14 +210,14 @@ fn cells_pass(grid: &mut Grid, sum: impl Fn(&Grid, usize) -> f64) {
         pressure[cell + 1] = f64x2_extract_lane::<1>(next);
         cell += 2;
     }
-    if cell < cells {
-        let d = sum(grid, cell);
-        let Grid {
+    if cell < count {
+        let d = sum(&slab, first + cell);
+        let CellSlab {
             pressure,
             keep,
             gain,
             ..
-        } = grid;
+        } = &mut slab;
         pressure[cell] = keep[cell] * pressure[cell] - gain[cell] * d;
     }
 }
