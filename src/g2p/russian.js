@@ -9,6 +9,8 @@
  */
 
 import { RUSSIAN_EXCEPTIONS } from './russian-stress.js';
+import { russianHomograph } from './russian-homographs.js';
+import { RU_GUESS } from './lexicon/ru.js';
 import {
   lexiconFor,
   registerShippedSpeaker,
@@ -87,47 +89,243 @@ const GENITIVE_EXCEPTIONS = new Set([
   'ого',
 ]);
 
+const VERB_ENDINGS =
+  'ть ти чь ать ять еть ить уть ыть оть у ю ешь ет ем ете ут ют ёшь ёт ём ' +
+  'ёте ишь ит им ите ат ят аю аешь ает аем аете ают яю яешь яет яем яете ' +
+  'яют ею еешь еет еем еете еют ую уешь ует уем уете уют л ла ло ли ал ала ' +
+  'ало али ял яла яло яли ил ила ило или ел ела ело ели ул ула уло ули ыл ' +
+  'ыла ыло ыли й йте и ь ьте ай айте яй яйте ей ейте уй уйте я а в вши ав ' +
+  'ив ев яв ая ия ши ув';
+const PARTICIPLE_ENDINGS = [
+  'щ',
+  'ющ',
+  'ущ',
+  'ящ',
+  'ащ',
+  'вш',
+  'ш',
+  'нн',
+  'енн',
+  'ённ',
+  'анн',
+  'янн',
+  'т',
+  'ем',
+  'им',
+  'ом',
+].flatMap((stem) =>
+  'ий ая ее ие его ей ему им их ими ую ем'
+    .split(' ')
+    .map((ending) => stem + ending)
+);
+const BASE_ENDINGS = [
+  // Nouns.
+  '',
+  'а',
+  'я',
+  'о',
+  'е',
+  'ё',
+  'ы',
+  'и',
+  'у',
+  'ю',
+  'ь',
+  'ой',
+  'ей',
+  'ёй',
+  'ою',
+  'ею',
+  'ью',
+  'ом',
+  'ем',
+  'ём',
+  'ам',
+  'ям',
+  'ами',
+  'ями',
+  'ах',
+  'ях',
+  'ов',
+  'ев',
+  'ёв',
+  'ия',
+  'ии',
+  'ию',
+  'ие',
+  'ий',
+  'ией',
+  'ием',
+  'иям',
+  'иями',
+  'иях',
+  'ья',
+  'ье',
+  'ьи',
+  'ью',
+  'ьям',
+  'ьями',
+  'ьях',
+  'ьев',
+  'ьё',
+  'ьём',
+  // Adjectives and short forms.
+  'ый',
+  'ий',
+  'ая',
+  'яя',
+  'ое',
+  'ее',
+  'ые',
+  'ие',
+  'ого',
+  'его',
+  'ому',
+  'ему',
+  'ым',
+  'им',
+  'ую',
+  'юю',
+  'ых',
+  'их',
+  'ыми',
+  'ими',
+  'ен',
+  'ён',
+  'ейш',
+  'айш',
+  // Verbs, gerunds and participles.
+  ...VERB_ENDINGS.split(' '),
+  ...PARTICIPLE_ENDINGS,
+];
+
 /**
- * The stressed vowel of a word from `RU_STRESS` (`a` the first vowel, `z`
- * the last), or undefined.
+ * The endings `findRussianStress()` splits off a word to find its stem in
+ * `RU_STEMS`: case, number and gender endings of nouns and adjectives,
+ * tense, person, imperative, gerund and participle endings of verbs, each
+ * also with `ся` and `сь`. The empty ending is allowed.
+ * @type {readonly string[]}
  */
-function shippedStress(letters, vowels) {
-  const letter = lexiconFor('ru', 'stress').lookup(letters)?.[0];
+export const RUSSIAN_ENDINGS = Object.freeze([
+  ...new Set(
+    BASE_ENDINGS.flatMap((ending) => [ending, `${ending}ся`, `${ending}сь`])
+  ),
+]);
+const ENDINGS = new Set(RUSSIAN_ENDINGS);
+
+/** The stressed vowel of a whole form (`a` the first vowel, `z` the last). */
+function formStress(letters, vowels) {
+  const letter = lexiconFor('ru', 'forms').lookup(letters)?.[0];
   if (!letter) {
     return undefined;
   }
   return letter === 'z' ? vowels - 1 : letter.charCodeAt(0) - 97;
 }
 
+/**
+ * The stressed vowel from the longest stem of `RU_STEMS` followed by an
+ * ending of `RUSSIAN_ENDINGS`: a vowel of the stem, or the first vowel of
+ * the ending (the last of the stem when the ending has none); with the
+ * length of the stem as `{stress, stem}`.
+ */
+function stemStress(letters) {
+  const stems = lexiconFor('ru', 'stems');
+  for (let cut = letters.length; cut > 0; cut--) {
+    const ending = letters.slice(cut);
+    // A stem that ends in a vowel takes a real ending (`встреч+а|ть` does
+    // not read `встреча`).
+    const vowelStem = !ending && VOWEL_LETTERS.includes(letters[cut - 1]);
+    const letter =
+      ENDINGS.has(ending) && !vowelStem
+        ? stems.lookup(letters.slice(0, cut))?.[0]
+        : undefined;
+    if (letter) {
+      const before = countVowels(letters.slice(0, cut));
+      if (letter !== '+') {
+        return { stress: letter.charCodeAt(0) - 97, stem: cut };
+      }
+      return {
+        stress: countVowels(ending) > 0 ? before : before - 1,
+        stem: cut,
+      };
+    }
+  }
+  return undefined;
+}
+
+/**
+ * Stress from the lexicon: `{stress, source}` or undefined; with
+ * `formsOnly`, from the whole forms alone.
+ */
+function lexiconStress(letters, vowels, formsOnly = false) {
+  const form = formStress(letters, vowels);
+  if (form !== undefined) {
+    return { stress: form, source: 'dictionary' };
+  }
+  const stem = formsOnly ? undefined : stemStress(letters);
+  return stem === undefined ? undefined : { ...stem, source: 'morphology' };
+}
+
+/**
+ * A word written with `е` for `ё`: the one spelling with a `ё` that the
+ * lexicon stresses on that `ё` (`еще` → `ещё`), or undefined when there
+ * is none or more than one. With `formsOnly`, only whole forms count.
+ */
+function restoreYo(letters, vowels, formsOnly = false) {
+  const found = [];
+  [...letters].forEach((letter, index) => {
+    if (letter !== 'е') {
+      return;
+    }
+    const candidate = `${letters.slice(0, index)}ё${letters.slice(index + 1)}`;
+    const known = lexiconStress(candidate, vowels, formsOnly);
+    if (known?.stress === countVowels(letters.slice(0, index))) {
+      found.push({ letters: candidate, yo: index, ...known });
+    }
+  });
+  return found.length === 1 ? found[0] : undefined;
+}
+
 function countVowels(text) {
   return [...text].filter((letter) => VOWEL_LETTERS.includes(letter)).length;
 }
 
-/** Guess stress for unknown words from common suffixes, else penultimate. */
-function guessStress(word, vowelCount) {
-  const suffixes = [
-    ['ация', 0],
-    ['ировать', 0],
-    ['ание', 0],
-    ['ение', 0],
-    ['тель', 1],
-    ['ист', 0],
-    ['изм', 0],
-  ];
-  for (const [suffix, offset] of suffixes) {
-    if (word.endsWith(suffix) && word.length > suffix.length) {
-      const before = countVowels(word.slice(0, -suffix.length));
-      return Math.max(0, before - offset);
-    }
-  }
-  return Math.max(0, vowelCount - 2);
+let guessTable;
+
+/** Ending → stressed vowel counted from the end, from `RU_GUESS`. */
+function guessEndings() {
+  guessTable ??= new Map(
+    RU_GUESS.flatMap((endings, fromEnd) =>
+      endings
+        .split(' ')
+        .filter(Boolean)
+        .map((ending) => [ending, fromEnd])
+    )
+  );
+  return guessTable;
 }
 
 /**
- * Split a raw word into letters and the index (among vowels) of the stress.
- * Accepts `+` before a vowel or U+0301 after it.
+ * Guess the stressed vowel of an unknown word from the table `RU_GUESS`
+ * that the build derives from the lexicon (endings of 2 to 6 letters, the
+ * longest wins); without a match, the vowel before the last.
+ * @param {string} word lower case
+ * @param {number} [vowels] the number of vowels of `word`
+ * @returns {number}
  */
-export function findRussianStress(rawWord) {
+export function guessRussianStress(word, vowels = countVowels(word)) {
+  const table = guessEndings();
+  for (let length = Math.min(6, word.length - 1); length >= 2; length--) {
+    const fromEnd = table.get(word.slice(-length));
+    if (fromEnd !== undefined && fromEnd < vowels) {
+      return vowels - 1 - fromEnd;
+    }
+  }
+  return Math.max(0, vowels - 2);
+}
+
+/** Letters of a word with its stress marks read: `+`, U+0301, ё, й. */
+function readMarks(rawWord) {
   const marked = rawWord.toLowerCase().normalize('NFD');
   let letters = '';
   let stress = -1;
@@ -143,16 +341,89 @@ export function findRussianStress(rawWord) {
       letters += char;
       vowels += VOWEL_LETTERS.includes(char) ? 1 : 0;
     } else {
+      // NFD splits й into и and a breve: the и was counted as a vowel.
       letters = `${letters.slice(0, -1)}й`;
+      vowels--;
     }
   }
-  if (stress < 0 && letters.includes('ё')) {
-    stress = countVowels(letters.slice(0, letters.indexOf('ё')));
+  return { letters, stress, vowels };
+}
+
+/** The stress of a marked form (`зам+ок`, `всё`) of a homograph. */
+function homographStress(marked) {
+  const { letters, stress } = readMarks(marked);
+  const yo = letters.indexOf('ё');
+  return {
+    letters,
+    stress: stress >= 0 ? stress : countVowels(letters.slice(0, yo)),
+  };
+}
+
+/**
+ * The stress of a word from the lexicon: a whole form first, then the same
+ * form with ё (`живет` → `живёт`, before the stem `жив` with the ending
+ * `ет`), then the longer of the stems with and without ё; on a tie the ё
+ * wins when it is in the stem (`зеленый`: `зелён|ый`, not `з+елен|ь`;
+ * `борьбе`: not `борьб|ё`). Undefined when the lexicon does not know it.
+ */
+function knownStress(letters, vowels) {
+  const yo = letters.includes('е');
+  const stem = lexiconStress(letters, vowels);
+  const yoStem = yo ? restoreYo(letters, vowels) : undefined;
+  const yoWins =
+    yoStem &&
+    (!stem ||
+      yoStem.stem > stem.stem ||
+      (yoStem.stem === stem.stem && yoStem.yo < yoStem.stem));
+  return (
+    lexiconStress(letters, vowels, true) ??
+    (yo ? restoreYo(letters, vowels, true) : undefined) ??
+    (yoWins ? yoStem : stem)
+  );
+}
+
+/**
+ * Split a raw word into letters and the index (among vowels) of the
+ * stress. In this order: a mark typed by the user (`+` before a vowel or
+ * U+0301 after it), a typed `ё`, a homograph chosen by `context`
+ * (`RUSSIAN_HOMOGRAPHS`), a whole form (`RU_FORMS`), a stem and an ending
+ * (`RU_STEMS`, `RUSSIAN_ENDINGS`), the same with one `е` read as `ё` when
+ * exactly one such spelling is known (`еще` → `ещё`), and the guess of
+ * `guessRussianStress()`.
+ * @param {string} rawWord
+ * @param {{before?: string[], after?: string[]}} [context] the words around
+ *   the word (see `wordContexts()` in src/g2p/index.js)
+ * @returns {{letters: string, stress: number, vowels: number,
+ *   source: 'user'|'dictionary'|'morphology'|'rules'}} `letters` with a
+ *   restored `ё`
+ */
+export function findRussianStress(rawWord, context = {}) {
+  const read = readMarks(rawWord);
+  const { vowels } = read;
+  const result = (letters, stress, source) => ({
+    letters,
+    stress: vowels <= 1 ? 0 : stress,
+    vowels,
+    source: vowels <= 1 && source === 'rules' ? 'dictionary' : source,
+  });
+  if (read.stress >= 0) {
+    return result(read.letters, read.stress, 'user');
   }
-  if (stress < 0) {
-    stress = shippedStress(letters, vowels) ?? guessStress(letters, vowels);
+  const { letters } = read;
+  if (letters.includes('ё')) {
+    const stress = countVowels(letters.slice(0, letters.indexOf('ё')));
+    return result(letters, stress, 'dictionary');
   }
-  return { letters, stress: vowels <= 1 ? 0 : stress, vowels };
+  const homograph = russianHomograph(letters, context);
+  if (homograph) {
+    const chosen = homographStress(homograph);
+    return result(chosen.letters, chosen.stress, 'dictionary');
+  }
+  const known = knownStress(letters, vowels);
+  if (known) {
+    return result(known.letters ?? letters, known.stress, known.source);
+  }
+  return result(letters, guessRussianStress(letters, vowels), 'rules');
 }
 
 /**
@@ -350,22 +621,25 @@ function fricativeG(phones) {
 /**
  * Pronounce one Russian word.
  * @param {string} word
- * @param {{okanye?: boolean, fricativeG?: boolean}} [options] Switches of
- *   regional accents (issue 57): okanye keeps an unstressed о after a hard
- *   consonant (northern, хорошо xoroˈʂo); fricativeG makes г the fricative
- *   ɣ, devoiced to x (southern, город ˈɣorət, снег snʲex).
- * @returns {{ipa: string, source: 'user'|'exception'|'dictionary'|'rules'}}
+ * @param {{okanye?: boolean, fricativeG?: boolean, before?: string[],
+ *   after?: string[], sentence?: string[]}} [options] Switches of regional
+ *   accents (issue 57): okanye keeps an unstressed о after a hard consonant
+ *   (northern, хорошо xoroˈʂo); fricativeG makes г the fricative ɣ,
+ *   devoiced to x (southern, город ˈɣorət, снег snʲex). `before`, `after`
+ *   and `sentence` are the words around the word, which choose the stress
+ *   of a homograph (issue 48, `findRussianStress()`).
+ * @returns {{ipa: string,
+ *   source: 'user'|'exception'|'dictionary'|'morphology'|'rules'}} `user`
+ *   for a user lexicon or a typed stress mark
  */
-export function russianWordToIpa(
-  word,
-  { okanye = false, fricativeG: fricative = false } = {}
-) {
-  const { letters, stress, vowels } = findRussianStress(word);
+export function russianWordToIpa(word, options = {}) {
+  const { okanye = false, fricativeG: fricative = false } = options;
+  const { letters, stress, source } = findRussianStress(word, options);
   const user = userPronunciation('ru', letters);
   if (user) {
     return { ipa: user, source: 'user' };
   }
-  if (RUSSIAN_EXCEPTIONS[letters] && !/\+|\u0301/.test(word.normalize('NFD'))) {
+  if (RUSSIAN_EXCEPTIONS[letters] && source !== 'user') {
     return { ipa: RUSSIAN_EXCEPTIONS[letters], source: 'exception' };
   }
   const prepared = prepareLetters(letters);
@@ -381,12 +655,7 @@ export function russianWordToIpa(
         voice: FRICATIVE_G_VOICE,
       })
     : assimilateVoicing(plain);
-  const known =
-    lexiconFor('ru', 'stress').has(letters) || letters.includes('ё');
-  return {
-    ipa: phones.join(''),
-    source: known || vowels <= 1 ? 'dictionary' : 'rules',
-  };
+  return { ipa: phones.join(''), source };
 }
 
 const RU_ONES = [

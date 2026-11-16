@@ -27,19 +27,19 @@ a pressure wave travelling through the 3D shape of a parametric low-poly head
   English words from CMUdict (BSD-2-Clause) with every variant
   (`pronunciations('en', 'either')` is `ˈiðɚ`, `ˈaɪðɚ`), Chinese readings
   of 8 105 characters from Unihan (Unicode-3.0) and 2 000 words mined from
-  AISHELL-3 (Apache-2.0) or written by hand, and hand-written Hindi and
-  Russian exceptions. English words built from known words are read by
-  morphology (`congresswoman` ˈkɑŋɡɹəsˌwʊmən, source `morphology`). Your
-  own words win over the shipped ones (`lexicon` option, `addLexicon`,
-  CLI `--lexicon`); see [Pronunciation lexicons](#pronunciation-lexicons).
+  AISHELL-3 (Apache-2.0) or written by hand, Hindi exceptions and the
+  stress of 6 639 Russian stems and 3 691 forms with 67 homographs read by
+  context, ё restored and other words guessed by ending (issue 48). Words
+  built from known English words are read by morphology (`congresswoman`
+  ˈkɑŋɡɹəsˌwʊmən). Your own words win over the shipped ones (`lexicon`,
+  `addLexicon`, CLI `--lexicon`); see [lexicons](#pronunciation-lexicons).
 - **Speech markup**: an SSML subset (`<speak>`, `break`, `prosody`,
   `emphasis`, `say-as`, `phoneme`, `lang`, `sub` and `vs:` elements for
   effort, phonation, emotion and sounds), inline tags such as
   `[whisper]Hello[/whisper]` or `[pause 0.5]` with `markup: true`, and
   ExtIPA/VoQS marks in IPA (`{W həˈloʊ W} ˈwɝld .`, `(.)`, `⸨laugh⸩`, `ˈˈ`).
   Rate, pitch, range, level, effort, phonation types, whisper, emotions,
-  emphasis, tunes, pauses and sounds are heard ([docs/markup.md](docs/markup.md)).
-- **Paralinguistic sounds** (issue 56): `[laugh]`, `[inhale]`, `[exhale]`, `[sigh]`, `[cough]`, `[throat]`, `[filler]`, `[um]` and `[click]` (also `<vs:sound name="laugh" duration="1.2s"/>`, `⸨laugh:1.2⸩`, `ǀ ǃ ǁ ʘ`) are made by the glottis and the tract from rules (`SOUNDS`, `FILLERS`), with no recordings; written fillers and laughter are read as sounds and stay words of the timeline (`textToIpa('Well [laugh] um, hahaha.', { markup: true }).ipa` is `ˈwɛl ⸨laugh⸩ ⸨um⸩ , ⸨laugh:0.6⸩ .`); the option `breaths` (`--breaths`) breathes in between sentences; `timeline.sounds` lists the sounds ([Sounds](docs/markup.md#sounds)).
+  emphasis, tunes, pauses and sounds are heard ([docs/markup.md](docs/markup.md)). **Paralinguistic sounds** (issue 56): `[laugh]`, `[inhale]`, `[exhale]`, `[sigh]`, `[cough]`, `[throat]`, `[filler]`, `[um]` and `[click]` (also `<vs:sound name="laugh" duration="1.2s"/>`, `⸨laugh:1.2⸩`, `ǀ ǃ ǁ ʘ`) are made by the glottis and the tract from rules (`SOUNDS`, `FILLERS`), with no recordings; written fillers and laughter are read as sounds and stay words of the timeline (`textToIpa('Well [laugh] um, hahaha.', { markup: true }).ipa` is `ˈwɛl ⸨laugh⸩ ⸨um⸩ , ⸨laugh:0.6⸩ .`); the option `breaths` (`--breaths`) breathes in between sentences; `timeline.sounds` lists the sounds ([Sounds](docs/markup.md#sounds)).
 - **Vocal effort**: `[soft]`, `[loud]`, `[shout]`, `[lombard]`,
   `[crescendo]` and `[diminuendo]` (and `<vs:effort>`, `{f … f}`) change
   more than the level: the pitch rises (+5 Hz per dB), the spectrum gets
@@ -467,7 +467,7 @@ console.log(describeGpuDevice(device));
 Lower-level building blocks are exported too: `planUtterance`,
 `sampleState`, `tractShape`, `Waveguide`, `Fdtd2d`, `buildSheet`, `Fdtd3d`,
 `buildVoxelModel`, `VoiceRenderer`, `headMesh`, `tubeMesh`, `headModelObj`,
-`LodGovernor`, `chooseTier`, `chooseTierWithGpu`, `measureAudioTier`,
+`LodGovernor`, `StreamGovernor`, `AdaptiveStream`, `chooseTier`, `chooseTierWithGpu`, `measureAudioTier`,
 `benchmarkAudioTiersAsync` and more; see
 [`src/index.d.ts`](src/index.d.ts). A runnable example is in
 [`examples/basic-usage.js`](examples/basic-usage.js).
@@ -526,7 +526,7 @@ whose licence allows use, change and redistribution are taken
 | English  | 20 042 words, every variant                     | CMUdict (BSD-2-Clause), Common Voice word counts (CC0-1.0), `en-extra.txt` |
 | Chinese  | 8 105 characters with all readings, 2 000 words | Unihan (Unicode-3.0), AISHELL-3 (Apache-2.0), `zh-phrases.txt`             |
 | Hindi    | 230 words the schwa rules read wrongly          | `hi-words.txt` (written for this project)                                  |
-| Russian  | 304 words with their stress                     | `ru-stress.txt` (written for this project)                                 |
+| Russian  | 6 639 stems and 3 691 forms with their stress   | `ru-stress.txt` (written for this project), Common Voice counts (CC0-1.0)  |
 
 English words that the morphology of
 [`src/g2p/english-morphology.js`](src/g2p/english-morphology.js) derives
@@ -1016,12 +1016,12 @@ choice, so a slow integrated or software adapter never lowers it. The benchmark 
 load, predicted from the cheaper tier, is far above the target, and it stops
 measuring a tier as soon as it is clearly too slow; the app remembers the result per device. `--quick` runs the app's benchmark and prints its CPU time. `voice-simulator benchmark` first renders the cheap tiers
 for 0.5 s so the just-in-time compiler is warm, then reports the median of
-`--repeats` (default 5) measurements of `--seconds` (default 0.3) per tier. In the first 40-300 ms of each utterance an
-`OverloadDetector` checks that the tier keeps up with real time and, if not,
-the utterance restarts at once on a cheaper tier before any gap is audible.
-While speaking, `LodGovernor` steps down
-immediately when the load exceeds the target and steps up only after a dwell
-period when the next tier is predicted to fit with margin. Visual tiers
+`--repeats` (default 5) measurements of `--seconds` (default 0.3) per tier. While speaking,
+the tier changes without a restart (issue 29): `StreamGovernor` steps down when
+0.1 s of chunks load the CPU above 0.8 or the player runs dry, and one tier up
+after 3 s of headroom; `AdaptiveStream` starts the new tier at the switch with
+the old voice source state and crossfades over 25 ms at a matched level (`aː`
+within 0.2 dB, `experiments/issue-29-switch-levels.txt`). Visual tiers
 (mesh LOD 0-3, pressure-field points) are governed the same way from the
 measured frame time.
 

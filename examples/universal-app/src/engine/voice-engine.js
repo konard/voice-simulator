@@ -3,6 +3,12 @@
  * here (it is cheap) so the 3D view can animate in sync with the audio,
  * while the acoustic simulation runs in a worker. The animation clock
  * follows the audio output when sound is on and the wall clock otherwise.
+ *
+ * In automatic quality the worker changes the audio tier of a running
+ * utterance (issue 29): a `tier` message says from which time on the
+ * utterance is heard at another tier, and the HUD and the 3D view follow
+ * when playback reaches that time. When the player runs dry the engine
+ * tells the worker (`underrun`), which steps down without waiting.
  */
 
 import {
@@ -39,6 +45,11 @@ const TAIL = 0.15;
 const SPEECH_SPANS = 16;
 /** User input times kept for ownTask. */
 const INPUT_TIMES = 64;
+/**
+ * A step down for load before this many seconds of the utterance counts as
+ * an overload of the cached benchmark (issue 29, step 7).
+ */
+const OVERLOAD_SECONDS = 0.5;
 
 export class VoiceEngine {
   /**
@@ -470,6 +481,9 @@ export class VoiceEngine {
       startedAt: null,
       fields: [],
       fieldIndex: 0,
+      // Tier switches not yet reached by playback, and underruns reported.
+      tiers: [],
+      underruns: 0,
       chunks: [],
       sampleRate: 0,
       totalSamples: 0,
@@ -489,6 +503,7 @@ export class VoiceEngine {
       timeline,
       utterance: id,
       underruns: 0,
+      switches: 0,
       rendering: null,
     });
     if (!job.sound) {
@@ -509,6 +524,7 @@ export class VoiceEngine {
       seed: request.seed,
       tier: this.audioLevel,
       auto: this.auto,
+      streamRate: this.player.context?.sampleRate,
       microphone: request.microphone,
       room: request.room,
       enclosure: request.enclosure,
@@ -565,7 +581,11 @@ export class VoiceEngine {
       start: () => this.#start(job, message),
       chunk: () => this.#chunk(job, message),
       overload: () => this.#overload(job, message),
+      tier: () => this.#tier(job, message),
       end: () => {
+        if (this.auto && message.level !== undefined) {
+          this.governor.level = message.level;
+        }
         job.finished = true;
         this.#countOverloads(job, false);
         this.#play(job);
@@ -592,6 +612,49 @@ export class VoiceEngine {
       solver: message.gpu ? `${message.solver} · GPU` : message.solver,
       cells: Boolean(message.model),
     });
+  }
+
+  /**
+   * The worker switched the tier of the running utterance from `at`
+   * seconds on: the next utterance starts there, and the HUD and the 3D
+   * view follow when playback reaches `at` (see #reach).
+   */
+  #tier(job, message) {
+    if (this.auto) {
+      this.governor.level = message.level;
+    }
+    job.tiers.push(message);
+    if (message.reason === 'load' && message.at < OVERLOAD_SECONDS) {
+      // Too slow from the start: an overload of the cached tier (issue 28).
+      this.#countOverloads(job, true);
+    }
+    this.#emit({ switches: (this.status.switches ?? 0) + 1 });
+  }
+
+  /** Apply the tier switches playback has reached. */
+  #reach(job, time) {
+    while (job.tiers.length > 0 && job.tiers[0].at <= time) {
+      const { level, solver, gpu, model } = job.tiers.shift();
+      job.solver = solver;
+      this.cells = model ?? null;
+      this.#emit({
+        audioLevel: level,
+        solver: gpu ? `${solver} · GPU` : solver,
+        cells: Boolean(model),
+      });
+    }
+  }
+
+  /**
+   * Tell the worker when the player ran dry while the utterance is still
+   * rendering: in automatic quality it steps down without waiting.
+   */
+  #underruns(job) {
+    const count = this.player.underruns ?? 0;
+    if (count > job.underruns && this.auto && !job.finished) {
+      this.worker?.postMessage({ type: 'underrun', id: job.id });
+    }
+    job.underruns = Math.max(job.underruns, count);
   }
 
   /**
@@ -625,7 +688,7 @@ export class VoiceEngine {
     this.#scheduleBenchmark();
   }
 
-  /** The worker restarts the utterance on a cheaper tier. */
+  /** WebGPU failed: the worker restarts the utterance on the CPU. */
   #overload(job, message) {
     if (message.from === job.level) {
       this.#countOverloads(job, true);
@@ -638,6 +701,7 @@ export class VoiceEngine {
     job.fieldIndex = 0;
     job.rendered = 0;
     job.busy = 0;
+    job.tiers = [];
     this.#emit({
       audioLevel: this.audioLevel,
       audioLoad: message.load,
@@ -680,14 +744,8 @@ export class VoiceEngine {
         field,
       });
     }
-    if (this.auto) {
-      // Governor changes apply to the next utterance.
-      this.governor.record(load, 1);
-    }
-    this.#emit({
-      audioLoad: this.auto ? this.governor.load : load,
-      underruns: this.player.underruns,
-    });
+    this.#underruns(job);
+    this.#emit({ audioLoad: load, underruns: this.player.underruns });
   }
 
   /**
@@ -748,6 +806,9 @@ export class VoiceEngine {
       this.player.recover(job.chunks);
       this.#emit({ audioRecoveries: this.player.recoveries });
     }
+    if (job.sound) {
+      this.#underruns(job);
+    }
     if (job.sound && this.player.underruns !== this.status.underruns) {
       // The worklet counts underruns while it plays, after the last chunk.
       this.#emit({
@@ -756,6 +817,7 @@ export class VoiceEngine {
       });
     }
     const time = this.#time(job) ?? 0;
+    this.#reach(job, time);
     const clamped = Math.max(0, Math.min(job.plan.duration, time));
     sampleState(job.plan, clamped, this.state);
     const field = this.#field(job, clamped);

@@ -6,6 +6,7 @@
 use std::cell::RefCell;
 
 use voice_simulator_core::renderer::{AnyRenderer, RenderError};
+use voice_simulator_core::source_state;
 
 use crate::{check_range, error, f32_slice, f64_slice, u8_slice};
 
@@ -135,6 +136,53 @@ pub extern "C" fn vs_renderer_render(
 pub extern "C" fn vs_renderer_position(handle: i32) -> i32 {
     with_renderer(handle, |renderer| {
         i32::try_from(renderer.position()).unwrap_or(error::NO_MEMORY)
+    })
+}
+
+/// Starts the renderer of `handle` at `seconds` into the utterance (issue
+/// 29, `startTime` of `src/engine/rust-renderer.js`): position
+/// `Math.round(seconds * sampleRate)`, with the clocks at its time. Returns
+/// 0, or [`error::BAD_ARGUMENT`] for a time that is negative, not finite
+/// or past the end.
+#[no_mangle]
+pub extern "C" fn vs_renderer_seek(handle: i32, seconds: f64) -> i32 {
+    with_renderer(handle, |renderer| match renderer.seek(seconds) {
+        Ok(()) => error::OK,
+        Err(error) => code(error),
+    })
+}
+
+/// Writes the source state of the renderer of `handle` (`SOURCE_STATE` of
+/// `src/engine/layout.js`, [`source_state::LENGTH`] `f64` values) at
+/// `out`. Returns the number written or a negative code of [`error`].
+#[no_mangle]
+pub extern "C" fn vs_renderer_sources_save(handle: i32, out: u32) -> i32 {
+    with_renderer(handle, |renderer| {
+        match f64_slice(out, source_state::LENGTH as u32) {
+            Ok(slice) => {
+                slice.copy_from_slice(&renderer.sources_save());
+                source_state::LENGTH as i32
+            }
+            Err(code) => code,
+        }
+    })
+}
+
+/// Sets the source state of the renderer of `handle` from the
+/// [`source_state::LENGTH`] `f64` values at `pointer`, as
+/// [`vs_renderer_sources_save`] wrote them. Returns 0 or a negative code.
+#[no_mangle]
+pub extern "C" fn vs_renderer_sources_restore(handle: i32, pointer: u32) -> i32 {
+    with_renderer(handle, |renderer| {
+        match f64_slice(pointer, source_state::LENGTH as u32) {
+            Ok(slice) => {
+                let mut state = [0.0; source_state::LENGTH];
+                state.copy_from_slice(slice);
+                renderer.sources_restore(&state);
+                error::OK
+            }
+            Err(code) => code,
+        }
     })
 }
 

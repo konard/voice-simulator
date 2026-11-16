@@ -431,6 +431,12 @@ export interface RenderOptions {
   /** WebGPU device for the 3D solver (render with renderAsync). */
   device?: GPUDeviceLike;
   /**
+   * Start at sample `Math.round(startTime * sampleRate)` of the utterance
+   * (s, default 0) with a silent solver and listener (issue 29); see
+   * `restoreSources`.
+   */
+  startTime?: number;
+  /**
    * The engine of renderPlan and renderPlanAsync (default `'auto'`: Rust
    * when it loads, else JavaScript); see createEngine.
    */
@@ -784,8 +790,9 @@ export interface Lexicon {
 }
 export declare function openLexicon(data: LexiconData): Lexicon;
 /**
- * The shipped lexicon: part `words` (en, hi), `stress` (ru) or `phrases`
- * (zh); null for an unknown language or part.
+ * The shipped lexicon: part `words` (en, hi), `forms` and `stems` (ru:
+ * the stressed vowel of whole forms and of stems, issue 48; `stress` is
+ * `forms`) or `phrases` (zh); null for an unknown language or part.
  */
 export declare function lexiconFor(
   lang: LexiconLanguage | string,
@@ -1198,7 +1205,13 @@ export declare function randomHeadConfig(
 export declare function encodeHeadConfig(config: HeadConfig): string;
 export declare function decodeHeadConfig(text: string): HeadConfig;
 export declare function getHeadParameter(key: string): HeadParameter;
-export declare function createRandom(seed?: string | number): () => number;
+/** A seeded mulberry32 generator; save/restore read and set its 32-bit state. */
+export interface Random {
+  (): number;
+  save(): number;
+  restore(state: number): void;
+}
+export declare function createRandom(seed?: string | number): Random;
 export declare function createSeed(): string;
 export declare function hashSeed(value: string | number): number;
 
@@ -1267,6 +1280,16 @@ export declare class VoiceRenderer {
     target: Float32Array,
     options?: { field?: boolean }
   ): Promise<number>;
+  /**
+   * The glottis state (SOURCE_STATE.LENGTH values with the 'lf' source,
+   * empty with the folds). The noise generators are not part of it.
+   */
+  saveSources(): Float64Array;
+  /**
+   * Take over the state `saveSources()` of another renderer of the same
+   * utterance returned (issue 29). An empty array changes nothing.
+   */
+  restoreSources(state: ArrayLike<number>): void;
 }
 export declare function renderPlan(
   plan: Plan,
@@ -1322,6 +1345,102 @@ export declare function createThreadPool(
     url?: URL | string;
   }
 ): Promise<ThreadPool>;
+/**
+ * Indices of the glottis state `saveSources()` returns (issue 29); RANDOM
+ * is the state of its random generator, PARITY and PULSE_GAIN the double
+ * pulsing of a creak, FALSETTO_SMOOTHED the falsetto low-pass and the
+ * TILT_ values the memory of the spectral tilt filter of the effort.
+ */
+export declare const SOURCE_STATE: Readonly<{
+  PHASE: 0;
+  PERIOD: 1;
+  JITTER: 2;
+  SHIMMER: 3;
+  SMOOTHED: 4;
+  INTENSITY: 5;
+  NOISE_MODULATION: 6;
+  PULSE_TENSENESS: 7;
+  RANDOM: 8;
+  PARITY: 9;
+  PULSE_GAIN: 10;
+  FALSETTO_SMOOTHED: 11;
+  TILT_INPUT: 12;
+  TILT_MIDDLE: 13;
+  TILT_OUTPUT: 14;
+  LENGTH: 15;
+}>;
+/** Greatest common divisor of three sample rates (issue 29). */
+export declare function switchGrid(a: number, b: number, c: number): number;
+/** One tier switch of an AdaptiveStream. */
+export interface StreamSwitch {
+  /** Stream time (s) where the old tier stops: on the common grid. */
+  at: number;
+  from: number;
+  level: number;
+  /** 20 log10 of the gain matched over the crossfade. */
+  gainDb: number;
+  /** Correlation of the two tiers over the crossfade, 0 to 1. */
+  r: number;
+}
+/** A renderer an AdaptiveStream drives. */
+export interface StreamRenderer {
+  readonly sampleRate: number;
+  readonly totalSamples: number;
+  readonly duration: number;
+  readonly done: boolean;
+  renderAsync(target: Float32Array, options?: object): Promise<number>;
+  saveSources(): Float64Array;
+  restoreSources(state: ArrayLike<number>): void;
+}
+export interface AdaptiveStreamOptions<R extends StreamRenderer> {
+  /** A renderer of tier `level` with `extra` merged into its options. */
+  createRenderer(level: number, extra: { startTime?: number }): R | Promise<R>;
+  level: number;
+  /** Output rate (Hz) whatever the tier. */
+  streamRate: number;
+  tiers?: readonly { sampleRate: number }[];
+  /** Seconds the new tier renders before it is heard (default 0.03). */
+  preroll?: number;
+  /** Seconds of the crossfade (default 0.025). */
+  overlap?: number;
+  /** A room or an enclosure: longer preroll, the level only goes down. */
+  room?: boolean;
+  /** Options of every renderAsync call. */
+  renderOptions?: object;
+  /** Called after every piece (at most 256 samples) a renderer gives. */
+  onRender?: (renderer: R) => void;
+}
+/**
+ * One utterance at a fixed output rate whose audio tier can change while
+ * it renders (issue 29): the new tier starts at a time on the common grid
+ * of the three rates with the source state of the old one and takes over
+ * after a level-matched crossfade. The length never changes.
+ */
+export declare class AdaptiveStream<R extends StreamRenderer = EngineRenderer> {
+  static create<R extends StreamRenderer>(
+    options: AdaptiveStreamOptions<R>
+  ): Promise<AdaptiveStream<R>>;
+  constructor(options: AdaptiveStreamOptions<R>);
+  readonly ready: Promise<void>;
+  readonly level: number;
+  readonly streamRate: number;
+  /** Stream samples written so far. */
+  readonly position: number;
+  readonly totalSamples: number;
+  readonly done: boolean;
+  /** The renderer that is heard. */
+  readonly renderer: R;
+  readonly switches: StreamSwitch[];
+  /**
+   * Ask for another tier; false (and nothing changes) during a switch, at
+   * the same level, when the grid of the rates is below 20 Hz, or upwards
+   * with `room`. A request too close to the end is dropped later.
+   */
+  setLevel(level: number): boolean;
+  /** Fill `target` from `position` on; resolves to the samples written. */
+  render(target: Float32Array): Promise<number>;
+  close(): void;
+}
 /** Pages (64 KiB) of the shared memory of the threads build. */
 export declare const THREAD_MEMORY: Readonly<{
   INITIAL: 512;
@@ -1493,6 +1612,10 @@ export declare class RustVoiceRenderer {
   readonly threads: number;
   render(target: Float32Array): number;
   renderAsync(target: Float32Array): Promise<number>;
+  /** As VoiceRenderer.saveSources (`vs_renderer_sources_save`). */
+  saveSources(): Float64Array;
+  /** As VoiceRenderer.restoreSources (`vs_renderer_sources_restore`). */
+  restoreSources(state: ArrayLike<number>): void;
   /**
    * Acoustic pressure per oral and nasal section; with `solver: 'fdtd3d'`,
    * `pressure` holds the pressure of every cell of the voxel model.
@@ -1977,6 +2100,12 @@ export declare function finalCreakAmount(
 export declare class Glottis {
   constructor(options?: GlottisOptions);
   step(dt: number, control: GlottisControl, noise: number): number;
+  /** Tenseness of the running period. */
+  pulseTenseness: number;
+  /** The SOURCE_STATE.LENGTH values in the order of SOURCE_STATE. */
+  saveState(): Float64Array;
+  /** Set what saveState returned and rebuild the pulse shape. */
+  restoreState(state: ArrayLike<number>): void;
 }
 /** One step of Aerodynamics (cgs: cm², cm³/s, dyn/cm²). */
 export interface AirflowState {
@@ -2570,6 +2699,37 @@ export declare function fallbackLevel(
   load: number,
   target?: number
 ): number;
+/**
+ * The tier of a running utterance (issue 29): down within `downAfter`
+ * (0.1 s) of a load above `target`, up one level after `upAfter` (3 s) of
+ * headroom, never back to a level it left.
+ */
+export declare class StreamGovernor<T extends { cost: number } = AudioTier> {
+  constructor(options?: {
+    tiers?: readonly T[];
+    level?: number;
+    maxLevel?: number;
+    target?: number;
+    smoothing?: number;
+    downAfter?: number;
+    upAfter?: number;
+    margin?: number;
+  });
+  level: number;
+  readonly maxLevel: number;
+  /** The highest level it may go up to: below every level it left. */
+  readonly ceiling: number;
+  /** Smoothed busy / audio, null before the first record. */
+  readonly load: number | null;
+  /** Seconds of audio since the last switch. */
+  readonly since: number;
+  /** A level to switch to, or null. */
+  record(busy: number, audio: number): number | null;
+  /** The player ran dry: one level down, or null at level 0. */
+  underrun(): number | null;
+  /** The stream switched to `level`: the load is predicted for it. */
+  switched(level: number): void;
+}
 /** Detects in the first moments of an utterance that a tier is too slow. */
 export declare class OverloadDetector {
   constructor(options?: {
@@ -3827,6 +3987,67 @@ export type FunctionWordKind =
 export declare const WEAK_FORMS: Readonly<
   Record<string, Readonly<{ kind: FunctionWordKind; weak: string }>>
 >;
+/** Where the stress of a Russian word comes from. */
+export type RussianStressSource =
+  | 'user'
+  | 'dictionary'
+  | 'morphology'
+  | 'rules';
+/** The words around a word in its clause, lower case, `before` nearest first. */
+export interface RussianStressContext {
+  before?: string[];
+  after?: string[];
+}
+/**
+ * The stress of a Russian word (issue 48), in this order: a typed mark
+ * (`+` before the vowel or U+0301 after it), a typed `ё`, a homograph chosen
+ * by the context (`RUSSIAN_HOMOGRAPHS`), a whole form (lexicon part
+ * `forms`, also with one `е` read as `ё` when exactly one such spelling is
+ * known), the longer of a stem (part `stems`) with an ending of
+ * `RUSSIAN_ENDINGS` and such a stem with `ё`, and the guess of
+ * `guessRussianStress()`. `letters` has the restored `ё`;
+ * `stress` is the index of the stressed vowel.
+ */
+export declare function findRussianStress(
+  word: string,
+  context?: RussianStressContext
+): {
+  letters: string;
+  stress: number;
+  vowels: number;
+  source: RussianStressSource;
+};
+/**
+ * Guess the stressed vowel (index) of a lower-case Russian word from the
+ * word endings of the lexicon; without a match the vowel before the last.
+ */
+export declare function guessRussianStress(
+  word: string,
+  vowels?: number
+): number;
+/** The endings split off a Russian word to find its stem. */
+export declare const RUSSIAN_ENDINGS: readonly string[];
+/** Words before a homograph that make it genitive singular. */
+export declare const GENITIVE_BEFORE: string;
+/** Words before a homograph that make it nominative plural. */
+export declare const PLURAL_BEFORE: string;
+/**
+ * Russian homographs: rows `[forms, kind, cues]`, `forms` the
+ * `default/other` pairs (`з+амок/зам+ок`), `kind` how `cues` choose the
+ * other form.
+ */
+export declare const RUSSIAN_HOMOGRAPHS: readonly (readonly [
+  readonly string[],
+  'near' | 'before' | 'after' | 'infinitive' | 'case',
+  string,
+])[];
+/** Whether a lower-case spelling (`е` for `ё`) is a Russian homograph. */
+export declare function isRussianHomograph(spelling: string): boolean;
+/** The marked form of a homograph in its context, or undefined. */
+export declare function russianHomograph(
+  spelling: string,
+  context?: RussianStressContext
+): string | undefined;
 export declare const BOUNDARIES: Readonly<Record<string, object>>;
 export declare const CONTOURS: Readonly<Record<string, object>>;
 export declare function boundaryOf(pause: object | null | undefined): string;

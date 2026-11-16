@@ -206,6 +206,31 @@ describe('pronunciation lexicons', () => {
   });
 });
 
+describe('vslex letters', () => {
+  it('stores the letters of a word as ASCII when asked', () => {
+    const entries = new Map([
+      ['стол', ['+']],
+      ['столик', ['a']],
+      ['ёлк', ['a']],
+      ['зелён', ['b']],
+    ]);
+    const plain = encodeVslex('ru', entries);
+    const data = JSON.parse(
+      JSON.stringify(encodeVslex('ru', entries, { ascii: true }))
+    );
+    expect(data.letters).toBe([...new Set('столикёлкзелён')].sort().join(''));
+    expect(/^[A-Za-z]*$/u.test(data.alphabet)).toBe(true);
+    expect(plain.letters).toBe(undefined);
+    const lexicon = openLexicon(data);
+    for (const [word, variants] of entries) {
+      expect(lexicon.lookup(word)).toEqual(variants);
+    }
+    expect(lexicon.lookup('стул')).toBe(null);
+    expect(lexicon.lookup('stol')).toBe(null);
+    expect([...lexicon.words()].sort()).toEqual([...entries.keys()].sort());
+  });
+});
+
 describe('lexicon files and budgets', () => {
   it('loads --lexicon files in the CLI', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'voice-simulator-lexicon-'));

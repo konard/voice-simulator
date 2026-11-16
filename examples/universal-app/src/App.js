@@ -151,8 +151,11 @@ function Hud({ status, visual, mode, debug, t }) {
     : status.underruns
       ? ` · ${t.underruns} ${status.underruns}`
       : '';
+  // Tier switches of the running utterance (issue 29): the tier shown
+  // above changes when playback reaches each one.
   const underruns =
     playback +
+    (status.switches ? ` · ${t.switches} ${status.switches}` : '') +
     (status.overloads ? ` · ${t.overloads} ${status.overloads}` : '') +
     // Main-thread tasks over 50 ms while the device benchmark ran (issue 28).
     (debug ? ` · ${t.longTasks} ${status.longTasks ?? 0}` : '');

@@ -377,7 +377,7 @@ describe('Russian clitics', () => {
 
   it('does not voice an affricate, ч or х before же and бы', () => {
     check([
-      ['отец бы', 'ˈotʲɪt͡s bɨ'],
+      ['отец бы', 'ɐˈtʲet͡s bɨ'],
       ['врач бы', 'vrat͡ɕ bɨ'],
       ['смех же', 'smʲex ʐɨ'],
     ]);

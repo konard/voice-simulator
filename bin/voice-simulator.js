@@ -98,6 +98,8 @@ function usage() {
     '',
     'Commands:',
     '  ipa <text>          Print the IPA transcription (en, ru, hi, zh)',
+    '                      (Russian: + before a vowel or U+0301 after it sets',
+    '                      the stress, з+амок; ё is restored from е)',
     '  say <text> -o f.wav Simulate speech and write an audio file',
     '  convert <in> -o out Convert an audio file (WAV, FLAC, AIFF, AU) to mono',
     '  timeline <text>     Print when each word and syllable is spoken',

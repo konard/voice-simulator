@@ -31,5 +31,6 @@ pub mod random;
 pub mod renderer;
 pub mod resample;
 pub mod solver;
+pub mod source_state;
 pub mod stages;
 pub mod waveguide;

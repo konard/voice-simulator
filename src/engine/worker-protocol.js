@@ -20,19 +20,36 @@
  *     like the CPU stage while utterances are rendered), with `gpu`
  *     telling whether the chosen tier runs there
  *   {type: 'speak', id, ipa, lang, head, seed, tier, auto, chunkSize,
- *    microphone?, room?, enclosure?, gpu?, engine?, threads?, simd?}
+ *    streamRate?, maxTier?, microphone?, room?, enclosure?, gpu?, engine?,
+ *    threads?, simd?}
  *   (`gpu: false` keeps the 3D tiers on the CPU; otherwise they run on
  *   WebGPU where the browser has it, and on the CPU where it does not)
+ *   {type: 'underrun', id}  (the player ran dry: in automatic mode the
+ *     tier steps down without waiting)
  *   {type: 'cancel', id}
  * Messages out (per utterance):
  *   {type: 'start', id, sampleRate, solver, gpu, totalSamples, model?,
  *     engine, fallbackReason}  (`engine`: 'rust' or 'js', the engine that
  *     renders this utterance; `fallbackReason`: why it is not Rust, or null)
- *   {type: 'overload', id, from, level, load}  (auto mode: the tier could
- *     not keep up, the utterance restarts on the cheaper `level`)
+ *   {type: 'tier', id, at, from, level, reason, gainDb, solver, gpu, model}
+ *     (automatic mode: from `at` seconds on the utterance is heard at tier
+ *     `level`; `reason` is 'load', 'headroom' or 'underrun')
+ *   {type: 'overload', id, from, level, load}  (WebGPU failed: the
+ *     utterance restarts on the CPU)
  *   {type: 'chunk', id, start, samples, field, load}
- *   {type: 'end', id, load}
+ *   {type: 'end', id, load, level}
  *   {type: 'error', id, message}
+ *
+ * With `auto: true` the utterance streams at `streamRate` (default 48000
+ * Hz; `start.sampleRate` is that rate) through an AdaptiveStream
+ * (./adaptive-stream.js) and a StreamGovernor (../perf/lod.js) changes its
+ * tier between chunks: down when the render load is above 0.8 or the
+ * player ran dry, up one level after 3 s of headroom, up to `maxTier`.
+ * Without `maxTier` it climbs within the solver of `tier`: up to the last
+ * waveguide tier from a waveguide tier and not at all from a 3D tier
+ * (each 3D tier needs its own voxel model, and building one stalls the
+ * stream for 0.3 to 0.5 s: experiments/issue-29-voxel-time.mjs). With
+ * `auto: false` the utterance streams at the rate of its tier.
  */
 
 import { releaseRenderer } from '../acoustics/voice.js';
@@ -47,11 +64,11 @@ import { benchmarkDevice } from '../perf/device-benchmark.js';
 import {
   AUDIO_TIERS,
   BASE_AUDIO_LEVEL,
-  OverloadDetector,
+  StreamGovernor,
   chooseGpuTier,
-  fallbackLevel,
 } from '../perf/lod.js';
 import { prepareUtterance } from '../synthesize.js';
+import { AdaptiveStream } from './adaptive-stream.js';
 import { createEngine } from './index.js';
 
 /** Seconds of audio per tier of the WebGPU benchmark. */
@@ -183,16 +200,26 @@ function voxelModel(state, head, settings) {
   return models.get(key);
 }
 
+/** The WebGPU device for a tier of a message, or null (CPU). */
+function tierDevice(state, message, level) {
+  return AUDIO_TIERS[level].solver === 'fdtd3d' && message.gpu !== false
+    ? gpu(state)
+    : null;
+}
+
 async function speak(state, message) {
-  const tier = AUDIO_TIERS[message.tier];
-  const device =
-    tier.solver === 'fdtd3d' && message.gpu !== false ? await gpu(state) : null;
-  const progress = { busy: 0, chunks: 0 };
-  let outcome;
+  const device = message.auto
+    ? null
+    : await tierDevice(state, message, message.tier);
+  const progress = { busy: 0, chunks: 0, gpu: Boolean(device) };
   try {
-    outcome = await run(state, message, device, progress);
+    if (message.auto) {
+      await runAdaptive(state, message, progress);
+    } else {
+      await run(state, message, device, progress);
+    }
   } catch (error) {
-    if (!device) {
+    if (!progress.gpu) {
       throw error;
     }
     // A lost or failing GPU: start the utterance again on the CPU.
@@ -207,18 +234,16 @@ async function speak(state, message) {
         load: 0,
       });
     }
-    outcome = message.tier;
-  }
-  if (typeof outcome === 'number') {
-    await speak(state, { ...message, tier: outcome });
+    await speak(state, message);
   }
 }
 
-/** Set up the renderer and stream the utterance (see stream). */
-async function run(state, message, device, progress) {
-  const { id } = message;
-  const tier = AUDIO_TIERS[message.tier];
-  const engine = await createEngine(engineOptions(message));
+/**
+ * The plan and render options of an utterance at tier `level`, and the
+ * voxel model of a 3D tier.
+ */
+function prepareTier(state, message, level, device) {
+  const tier = AUDIO_TIERS[level];
   const model =
     tier.solver === 'fdtd3d'
       ? voxelModel(state, message.head, {
@@ -232,13 +257,23 @@ async function run(state, message, device, progress) {
     lang: message.lang,
     head: message.head,
     seed: message.seed,
-    tier: message.tier,
+    tier: level,
     microphone: message.microphone,
     room: message.room,
     enclosure: message.enclosure,
     device: device ?? undefined,
     model,
   });
+  return { ...prepared, model };
+}
+
+/** Set up the renderer and stream the utterance at a fixed tier. */
+async function run(state, message, device, progress) {
+  const { id } = message;
+  const tier = AUDIO_TIERS[message.tier];
+  const engine = await createEngine(engineOptions(message));
+  const prepared = prepareTier(state, message, message.tier, device);
+  const { model } = prepared;
   const renderer = engine.createRenderer(prepared.plan, prepared.renderOptions);
   try {
     state.post({
@@ -258,9 +293,9 @@ async function run(state, message, device, progress) {
         type: 'end',
         id,
         load: progress.busy / prepared.plan.duration,
+        level: message.tier,
       });
     }
-    return outcome;
   } finally {
     releaseRenderer(renderer);
   }
@@ -287,15 +322,13 @@ function chunkMessage(id, start, samples, written, field, load) {
 }
 
 /**
- * Render and post the chunks of an utterance.
- * @returns {Promise<'done'|'cancelled'|number>} the cheaper tier to
- *   restart on when this one could not keep up
+ * Render and post the chunks of an utterance at a fixed tier.
+ * @returns {Promise<'done'|'cancelled'>}
  */
 async function stream(state, message, renderer, progress) {
   const { id } = message;
   const chunkSize = message.chunkSize ?? 1024;
   const meter = new FieldMeter();
-  const detector = new OverloadDetector();
   while (!renderer.done) {
     if (state.current !== id) {
       return 'cancelled';
@@ -306,20 +339,6 @@ async function stream(state, message, renderer, progress) {
     const written = await renderChunk(renderer, samples, meter);
     const busy = (globalThis.performance.now() - began) / 1000;
     progress.busy += busy;
-    const overloaded = detector.record(busy, written / renderer.sampleRate);
-    if (overloaded && message.auto && message.tier > 0) {
-      // Detected within the first chunks, while the audio is still in
-      // the player's lead: restart on a tier predicted to keep up.
-      const level = fallbackLevel(AUDIO_TIERS, message.tier, detector.load);
-      state.post({
-        type: 'overload',
-        id,
-        from: message.tier,
-        level,
-        load: detector.load,
-      });
-      return level;
-    }
     const load = busy / (written / renderer.sampleRate);
     state.post(
       ...chunkMessage(id, start, samples, written, meter.take(), load)
@@ -328,6 +347,195 @@ async function stream(state, message, renderer, progress) {
     await yieldToMessages();
   }
   return 'done';
+}
+
+/**
+ * The highest tier the stream of a message may climb to (see the top of
+ * this file).
+ */
+function maxTier(message) {
+  if (message.maxTier !== undefined) {
+    return Math.min(AUDIO_TIERS.length - 1, message.maxTier);
+  }
+  const { solver } = AUDIO_TIERS[message.tier];
+  if (solver !== 'waveguide') {
+    return message.tier;
+  }
+  return AUDIO_TIERS.findLastIndex((tier) => tier.solver === solver);
+}
+
+/**
+ * The AdaptiveStream of an automatic utterance. Renderers get their voxel
+ * model and GPU device per tier; `info` maps each to `{model, gpu}`.
+ * Pieces of the heard renderer go to `fields.meter`, a fresh one after
+ * every switch.
+ */
+async function openAdaptive(state, message, progress) {
+  const engine = await createEngine(engineOptions(message));
+  const info = new Map();
+  const fields = { meter: new FieldMeter(), source: null, stream: null };
+  const createRenderer = async (level, extra) => {
+    const device = await tierDevice(state, message, level);
+    progress.gpu ||= Boolean(device);
+    const prepared = prepareTier(state, message, level, device);
+    const renderer = engine.createRenderer(prepared.plan, {
+      ...prepared.renderOptions,
+      ...extra,
+    });
+    info.set(renderer, { model: prepared.model, gpu: Boolean(device) });
+    return renderer;
+  };
+  fields.stream = await AdaptiveStream.create({
+    createRenderer,
+    level: message.tier,
+    streamRate: message.streamRate ?? 48000,
+    room: Boolean(message.room || message.enclosure),
+    renderOptions: { field: true },
+    onRender: (renderer) => {
+      if (renderer !== fields.stream?.renderer) {
+        return;
+      }
+      if (renderer !== fields.source) {
+        fields.meter = new FieldMeter();
+        fields.source = renderer;
+      }
+      fields.meter.add(fieldSource(renderer));
+    },
+  });
+  return { adaptive: fields.stream, info, fields };
+}
+
+/**
+ * The level the governor proposes after a chunk, with its reason, or
+ * null: one step down after an underrun, else what record() gives.
+ */
+function propose(state, id, governor, busy, audio) {
+  if (state.underrun === id) {
+    state.underrun = 0;
+    const level = governor.underrun();
+    return level === null ? null : { level, reason: 'underrun' };
+  }
+  const level = governor.record(busy, audio);
+  if (level === null) {
+    return null;
+  }
+  return { level, reason: level < governor.level ? 'load' : 'headroom' };
+}
+
+/** Let the governor change the tier of the stream between chunks. */
+function govern(state, id, run, busy, audio) {
+  const { adaptive, governor } = run;
+  if (adaptive.switching) {
+    return;
+  }
+  if (adaptive.level !== governor.level) {
+    // The stream dropped the request: too close to the end.
+    governor.switched(adaptive.level);
+  }
+  const proposal = propose(state, id, governor, busy, audio);
+  if (proposal && adaptive.setLevel(proposal.level)) {
+    governor.switched(proposal.level);
+    run.reason = proposal.reason;
+  }
+}
+
+/** Post a tier message for every switch the stream finished. */
+function postSwitches(state, id, run) {
+  const { adaptive, info } = run;
+  while (run.posted < adaptive.switches.length) {
+    const { at, from, level, gainDb } = adaptive.switches[run.posted++];
+    const heard = info.get(adaptive.renderer) ?? {};
+    state.post({
+      type: 'tier',
+      id,
+      at,
+      from,
+      level,
+      reason: run.reason,
+      gainDb,
+      solver: AUDIO_TIERS[level].solver,
+      gpu: Boolean(heard.gpu),
+      model: modelPayload(heard.model),
+    });
+  }
+}
+
+/**
+ * Stream an utterance in automatic mode (see the top of this file).
+ * @returns {Promise<'done'|'cancelled'>}
+ */
+async function runAdaptive(state, message, progress) {
+  const { id } = message;
+  const { adaptive, info, fields } = await openAdaptive(
+    state,
+    message,
+    progress
+  );
+  const run = {
+    adaptive,
+    info,
+    governor: new StreamGovernor({
+      level: message.tier,
+      maxLevel: maxTier(message),
+    }),
+    posted: 0,
+    reason: null,
+  };
+  try {
+    const first = adaptive.renderer;
+    const heard = info.get(first);
+    state.post({
+      type: 'start',
+      id,
+      sampleRate: adaptive.streamRate,
+      solver: AUDIO_TIERS[message.tier].solver,
+      gpu: heard.gpu,
+      totalSamples: adaptive.totalSamples,
+      model: modelPayload(heard.model),
+      engine: first.engine,
+      fallbackReason: first.fallbackReason,
+    });
+    const chunkSize = message.chunkSize ?? 1024;
+    while (!adaptive.done) {
+      if (state.current !== id) {
+        return 'cancelled';
+      }
+      const start = adaptive.position;
+      const { level } = adaptive;
+      const samples = new Float32Array(
+        Math.min(chunkSize, adaptive.totalSamples - start)
+      );
+      const began = globalThis.performance.now();
+      await adaptive.render(samples);
+      const measured = (globalThis.performance.now() - began) / 1000;
+      const audio = samples.length / adaptive.streamRate;
+      const busy = state.busy(level, audio, measured);
+      progress.busy += busy;
+      postSwitches(state, id, run);
+      state.post(
+        ...chunkMessage(
+          id,
+          start,
+          samples,
+          samples.length,
+          fields.meter.take(),
+          busy / audio
+        )
+      );
+      progress.chunks++;
+      govern(state, id, run, busy, audio);
+      await yieldToMessages();
+    }
+    state.post({
+      type: 'end',
+      id,
+      load: progress.busy / adaptive.duration,
+      level: adaptive.level,
+    });
+    return 'done';
+  } finally {
+    adaptive.close();
+  }
 }
 
 /**
@@ -520,9 +728,11 @@ async function describeEngine(state, message) {
  * The message handler of the synthesis worker.
  * @param {(message: object, transfer?: Transferable[]) => void} post
  *   posts a message out (`self.postMessage` in a worker)
- * @param {{requestGpuDevice?: () => Promise<object|null>}} [options]
+ * @param {{requestGpuDevice?: () => Promise<object|null>, busy?: (level: number, audio: number, measured: number) => number}} [options]
  *   `requestGpuDevice` gives the WebGPU device (default: requestGpuDevice
- *   of src/acoustics/fdtd-gpu.js)
+ *   of src/acoustics/fdtd-gpu.js); `busy` gives the seconds a chunk of
+ *   `audio` seconds at tier `level` counts as busy for the governor of
+ *   automatic mode (default: `measured`, the seconds it took)
  * @returns {(message: object) => Promise<void>} handles one message in;
  *   the promise settles when the message is answered (errors are posted)
  */
@@ -533,6 +743,9 @@ export function createWorkerHandler(post, options = {}) {
     models: new Map(),
     /** The id of the utterance being spoken; 0 after a cancel. */
     current: 0,
+    /** The id of the utterance whose player ran dry, until handled. */
+    underrun: 0,
+    busy: options.busy ?? ((level, audio, measured) => measured),
     gpuDevice: undefined,
     /** Utterances being rendered: the benchmark stops while above 0. */
     speaking: 0,
@@ -550,6 +763,12 @@ export function createWorkerHandler(post, options = {}) {
       state.current = 0;
       return;
     }
+    if (message.type === 'underrun') {
+      if (message.id === state.current) {
+        state.underrun = message.id;
+      }
+      return;
+    }
     if (message.type === 'engine') {
       await describeEngine(state, message).catch((error) => {
         post({ type: 'engine', name: null, error: error.message });
@@ -564,6 +783,7 @@ export function createWorkerHandler(post, options = {}) {
     }
     if (message.type === 'speak') {
       state.current = message.id;
+      state.underrun = 0;
       await speakNow(state, message).catch((error) => {
         post({ type: 'error', id: message.id, message: error.message });
       });

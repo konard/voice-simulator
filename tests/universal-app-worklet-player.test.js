@@ -91,7 +91,12 @@ function createNode(context, name, options) {
     },
     port: {
       onmessage: null,
-      postMessage: (message) => processor.port.receive(message),
+      // Like a MessagePort: transferred buffers are detached here (a
+      // typed array over one has length 0 afterwards).
+      postMessage: (message, transfer = []) =>
+        processor.port.receive(
+          globalThis.structuredClone(message, { transfer })
+        ),
     },
   };
   processor.port.postMessage = (message) =>

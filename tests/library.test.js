@@ -5,6 +5,7 @@
 import { describe, it, expect } from 'test-anywhere';
 import {
   AUDIO_TIERS,
+  AdaptiveStream,
   BASE_AUDIO_LEVEL,
   DEFAULT_AUDIO_TIER,
   LodGovernor,
@@ -14,6 +15,8 @@ import {
   chooseTierWithGpu,
   fallbackLevel,
   OverloadDetector,
+  SOURCE_STATE,
+  StreamGovernor,
   decodeWav,
   encodeWav,
   getAudioTier,
@@ -25,6 +28,7 @@ import {
   randomHeadConfig,
   synthesize,
   synthesizeStream,
+  switchGrid,
 } from '../src/index.js';
 import { runCli } from '../bin/voice-simulator.js';
 
@@ -178,6 +182,17 @@ describe('LodGovernor', () => {
       governor.record(0.01, 1);
     }
     expect(governor.level).toBe(1);
+  });
+});
+
+describe('tier switches in the package entry (issue 29)', () => {
+  it('exports AdaptiveStream, switchGrid, StreamGovernor and SOURCE_STATE', () => {
+    expect(typeof AdaptiveStream).toBe('function');
+    expect(switchGrid(48000, 22050, 32000)).toBe(50);
+    expect(new StreamGovernor({ level: BASE_AUDIO_LEVEL }).level).toBe(
+      BASE_AUDIO_LEVEL
+    );
+    expect(SOURCE_STATE.LENGTH).toBe(15);
   });
 });
 

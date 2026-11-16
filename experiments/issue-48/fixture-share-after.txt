@@ -1,0 +1,28 @@
+sentences: 222
+all words: 1138/1163 (97.9 %)
+homograph words: 24/25 (96.0 %)
+Никол+аевской nʲɪkɐˈɫajɪfskəj got nʲɪkəɫəjɪfsˈkoj
+Бризж+алова brʲɪzˈʐaɫəvə got brʲɪzʐɐˈɫovə
+Бризж+алову brʲɪzˈʐaɫəvʊ got brʲɪzʐəɫɐˈvu
+побор+овши pəbɐˈrofʂɨ got pəbərɐvˈʂɨ
+Бризж+алов brʲɪzˈʐaɫəf got brʲɪzʐɐˈɫof
+Бризж+алову brʲɪzˈʐaɫəvʊ got brʲɪzʐəɫɐˈvu
+Письм+а pʲɪˈsʲma got ˈpʲisʲmə
+Очум+елов ɐt͡ɕʊˈmʲeɫəf got ɐt͡ɕʊmʲɪˈɫof
+п+асти ˈpastʲɪ got pɐsˈtʲi
+Очум+елов ɐt͡ɕʊˈmʲeɫəf got ɐt͡ɕʊmʲɪˈɫof
+Очум+елов ɐt͡ɕʊˈmʲeɫəf got ɐt͡ɕʊmʲɪˈɫof
+Пич+угина pʲɪˈt͡ɕuɡʲɪnə got pʲɪt͡ɕʊˈɡʲinə
+Очум+елов ɐt͡ɕʊˈmʲeɫəf got ɐt͡ɕʊmʲɪˈɫof
+вышеп+исанный vɨʂɨˈpʲisənnɨj got vɨʂɨpʲɪˈsannɨj
+Очум+елов ɐt͡ɕʊˈmʲeɫəf got ɐt͡ɕʊmʲɪˈɫof
+узна+ет ʊznɐˈjet got ʊˈznajɪt
+Хр+юкина ˈxrʲukʲɪnə got xrʲʊˈkʲinə
+Очум+елов ɐt͡ɕʊˈmʲeɫəf got ɐt͡ɕʊmʲɪˈɫof
+М+итричем ˈmʲitrʲɪt͡ɕɪm got mʲɪˈtrʲit͡ɕɪm
+Очум+елов ɐt͡ɕʊˈmʲeɫəf got ɐt͡ɕʊmʲɪˈɫof
+К+узькину ˈkusʲkʲɪnʊ got kʊzʲˈkʲinʊ
+Жиг+алова ʐɨˈɡaɫəvə got ʐɨɡɐˈɫovə
+Жиг+алова ʐɨˈɡaɫəvə got ʐɨɡɐˈɫovə
+Очум+елов ɐt͡ɕʊˈmʲeɫəf got ɐt͡ɕʊmʲɪˈɫof
+Хр+юкину ˈxrʲukʲɪnʊ got xrʲʊˈkʲinʊ

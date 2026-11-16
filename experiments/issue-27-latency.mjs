@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-/* global document, window, performance, AudioNode, AudioDestinationNode, AudioBufferSourceNode, MessagePort, Blob, URL */
+/* global document, window, performance, setInterval, AudioNode, AudioDestinationNode, AudioBufferSourceNode, MessagePort, Blob, URL */
 
 /**
  * Issue 27: measures the streaming player of the example app in a real
@@ -26,6 +26,14 @@
  *       [--isolated] [--buffer] [--tier 0] [--text "..."] [--runs 3]
  *       [--warmup 1] [--speech-mode both|sound] [--throttle 6]
  *       [--record out.wav] [--screenshot out.png] [--headed]
+ *
+ * Issue 29: the `start`, `tier`, `overload` and `end` messages of the
+ * synthesis worker and every change of the HUD text are logged per run with
+ * their page time; with --record the line `switches` gives the place of
+ * each `tier` switch in the WAV (seconds from its start) for
+ * experiments/issue-29-spectrogram.mjs, and `underrunsAfterFirstSwitch`
+ * counts the underruns the HUD showed after it first showed a new tier.
+ * --benchmark-first waits for the start-up benchmark before throttling.
  *
  * --isolated serves the app with VITE_CROSS_ORIGIN_ISOLATION=1 (COOP/COEP);
  * --buffer blocks the processor module so the player falls back to buffer
@@ -70,6 +78,7 @@ const throttle = Number(option('throttle', 0));
 const record = option('record', null);
 const screenshot = option('screenshot', null);
 const headed = Boolean(option('headed', false));
+const benchmarkFirst = Boolean(option('benchmark-first', false));
 const text = option('text', 'Hello, this is a short test of the player.');
 const port = 4300 + Math.floor(Math.random() * 500);
 
@@ -129,6 +138,8 @@ function instrument({ buffer }) {
     tapError: null,
     recorded: [],
     recordRate: 0,
+    messages: [],
+    hud: [],
   };
   window.__i27 = probe;
   const pushed = () => {
@@ -254,9 +265,11 @@ function instrument({ buffer }) {
     constructor(...args) {
       super(...args);
       this.addEventListener('message', (event) => {
-        if (event.data?.type === 'chunk' && probe.firstChunk === null) {
+        const data = event.data;
+        if (data?.type === 'chunk' && probe.firstChunk === null) {
           probe.firstChunk = performance.now();
         }
+        probe.onMessage?.(data);
       });
     }
   };
@@ -270,6 +283,34 @@ function instrument({ buffer }) {
     },
     true
   );
+}
+
+/**
+ * Issue 29: keep the `start`, `tier`, `overload` and `end` messages of the
+ * synthesis worker and the HUD text of the page whenever it changes.
+ */
+function watchTiers() {
+  const probe = window.__i27;
+  probe.onMessage = (data) => {
+    if (['start', 'tier', 'overload', 'end'].includes(data?.type)) {
+      const keys = ['type', 'at', 'from', 'level', 'reason', 'gainDb'];
+      const pick = [...keys, 'solver', 'load', 'sampleRate'];
+      const entries = pick.map((key) => [key, data[key]]);
+      probe.messages.push({
+        t: performance.now(),
+        ...Object.fromEntries(entries),
+      });
+    }
+  };
+  setInterval(() => {
+    const text = document
+      .querySelector('.hud')
+      ?.textContent.replace(/\s+/g, ' ')
+      .trim();
+    if (text && text !== probe.hud.at(-1)?.text) {
+      probe.hud.push({ t: performance.now(), text });
+    }
+  }, 50);
 }
 
 /** Timings of the last utterance, from the probe of the page. */
@@ -439,11 +480,23 @@ try {
     }
   });
   await page.addInitScript(instrument, { buffer });
+  await page.addInitScript(watchTiers);
   await page.goto(`http://127.0.0.1:${port}/`);
   await page.waitForSelector('#speech-text');
   await page.fill('#speech-text', text);
   await page.selectOption('#speech-tier', tier);
   await page.selectOption('#speech-mode', speechMode);
+  if (benchmarkFirst) {
+    await page.waitForFunction(
+      () =>
+        ![...document.querySelectorAll('.hud small.hud-note')].some(
+          (note) => note.getAttribute('role') !== 'status'
+        ),
+      null,
+      { timeout: 120000 }
+    );
+    console.log('benchmark', (await page.textContent('.hud')).trim());
+  }
   if (throttle > 1) {
     await throttleCpu(page, throttle);
   }
@@ -456,6 +509,8 @@ try {
         firstPush: null,
         mark: null,
         recorded: [],
+        messages: [],
+        hud: [],
       });
     });
     await page.click('button[type="submit"]');
@@ -470,6 +525,48 @@ try {
     const result = await page.evaluate(measure);
     results.push({ run, ...result, hud: hud.replace(/\s+/g, ' ').trim() });
     console.log(JSON.stringify(results.at(-1)));
+    const log = await page.evaluate(() => {
+      const probe = window.__i27;
+      const speak = probe.clicks.at(-1);
+      const time = (item) => ({
+        ...item,
+        t: Math.round(item.t - speak),
+      });
+      return {
+        messages: probe.messages.map(time),
+        hud: probe.hud.map(time),
+      };
+    });
+    for (const message of log.messages) {
+      console.log('worker', JSON.stringify(message));
+    }
+    for (const item of log.hud) {
+      console.log('hud', JSON.stringify(item));
+    }
+    const underrunsOf = (text) => Number(text.match(/underruns (\d+)/)?.[1]);
+    const tierOf = (text) => text.match(/Audio\s*(\w+)/)?.[1];
+    const firstTier = log.hud.find((item) => tierOf(item.text));
+    const shown = log.hud.find(
+      (item) =>
+        tierOf(item.text) && tierOf(item.text) !== tierOf(firstTier.text)
+    );
+    console.log(
+      'tiers',
+      JSON.stringify({
+        starts: log.messages.filter((item) => item.type === 'start').length,
+        overloads: log.messages.filter((item) => item.type === 'overload')
+          .length,
+        switches: log.messages.filter((item) => item.type === 'tier').length,
+        shown: [...new Set(log.hud.map((item) => tierOf(item.text)))].filter(
+          Boolean
+        ),
+        firstShownChange: shown?.t ?? null,
+        underrunsAfterFirstSwitch: shown
+          ? underrunsOf(log.hud.at(-1).text) -
+            underrunsOf(log.hud.filter((item) => item.t <= shown.t).at(-1).text)
+          : null,
+      })
+    );
     if (run === runs - 1 && record) {
       const recorded = await page.evaluate(() => {
         const probe = window.__i27;
@@ -486,6 +583,18 @@ try {
         return { rate: probe.recordRate, samples: Array.from(all) };
       });
       fs.writeFileSync(record, wav(recorded.samples, recorded.rate));
+      const lead = recorded.samples.findIndex((value) => value !== 0);
+      console.log(
+        'switches',
+        JSON.stringify(
+          log.messages
+            .filter((item) => item.type === 'tier')
+            .map((item) => ({
+              ...item,
+              wav: Math.round((lead / recorded.rate + item.at) * 1000) / 1000,
+            }))
+        )
+      );
       console.log(
         'recording',
         record,

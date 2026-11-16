@@ -40,6 +40,7 @@ import {
   FDTD_OUTPUT_CODES,
   RENDERER_CONFIG,
   SOLVER_CODES,
+  SOURCE_STATE,
   frameStride,
   writeFrame,
 } from './layout.js';
@@ -310,6 +311,8 @@ export class FramePlanner {
     if (!values) {
       throw unsupported('this microphone or room');
     }
+    /** The listener, for its `tail` (s). */
+    this.listener = listener;
     this.totalSamples = Math.ceil(
       (plan.duration + (listener?.tail ?? 0)) * this.sampleRate
     );
@@ -338,6 +341,19 @@ export class FramePlanner {
     /** Time of the next sample, summed as VoiceRenderer sums it. */
     this.time = 0;
     this.position = 0;
+    this.hasShape = false;
+    this.seek(options.startTime ?? 0);
+  }
+
+  /**
+   * Start at `seconds` into the utterance, as VoiceRenderer does with
+   * `startTime` (issue 29): the nearest sample, a frame for the block it
+   * starts in.
+   * @param {number} seconds
+   */
+  seek(seconds) {
+    this.position = Math.round(seconds * this.sampleRate);
+    this.time = this.position / this.sampleRate;
     this.hasShape = false;
   }
 
@@ -409,11 +425,18 @@ export class RustVoiceRenderer {
     this.totalSamples = totalSamples;
     /** Cells of the voxel model (the 3D solver), for field(). */
     this.cells = model.length > 0 ? modelCells(model) : 0;
+    this.listener = this.planner.listener;
     this.handle = createRenderer(module, config, model);
     this.frames = new Scratch(module, 8);
     this.out = new Scratch(module, 4);
     this.fieldValues = new Scratch(module, 8);
-    this.position = 0;
+    this.position = this.planner.position;
+    if (this.position !== 0) {
+      check(
+        module.exports.vs_renderer_seek(this.handle, options.startTime),
+        'vs_renderer_seek'
+      );
+    }
     /** Milliseconds spent preparing frames in JavaScript. */
     this.prepareTime = 0;
     this.threadMinLinks = options.threadMinLinks;
@@ -518,6 +541,43 @@ export class RustVoiceRenderer {
       pressure: values.subarray(0, this.sections),
       nose: values.subarray(this.sections),
     };
+  }
+
+  /**
+   * The glottis state, as `saveSources()` of VoiceRenderer gives it
+   * (SOURCE_STATE of layout.js, issue 29).
+   * @returns {Float64Array}
+   */
+  saveSources() {
+    const pointer = this.fieldValues.reserve(SOURCE_STATE.LENGTH);
+    const written = check(
+      this.module.exports.vs_renderer_sources_save(this.handle, pointer),
+      'vs_renderer_sources_save'
+    );
+    return float64View(this.module, pointer, written).slice();
+  }
+
+  /**
+   * Take over the source state of another renderer of the same utterance
+   * (`saveSources()` of this class or of VoiceRenderer with the 'lf'
+   * source). An empty array changes nothing.
+   * @param {ArrayLike<number>} state
+   */
+  restoreSources(state) {
+    if (state.length === 0) {
+      return;
+    }
+    if (state.length !== SOURCE_STATE.LENGTH) {
+      throw new Error(
+        `Rust renderer: a source state has ${SOURCE_STATE.LENGTH} values, not ${state.length}`
+      );
+    }
+    const pointer = this.fieldValues.reserve(SOURCE_STATE.LENGTH);
+    float64View(this.module, pointer, SOURCE_STATE.LENGTH).set(state);
+    check(
+      this.module.exports.vs_renderer_sources_restore(this.handle, pointer),
+      'vs_renderer_sources_restore'
+    );
   }
 
   /** Free the engine memory of this renderer. */
