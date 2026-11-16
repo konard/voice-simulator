@@ -20,6 +20,7 @@
  */
 
 import { AIR_DENSITY } from './transfer.js';
+import { whisperPosture } from './whisper.js';
 
 /** Compliance of the walls and the air behind a constriction (cm⁵/dyn). */
 export const ORAL_COMPLIANCE = 1e-3;
@@ -138,8 +139,10 @@ export function openTractStrength(lungPressure, glottalArea, reCritical) {
 }
 
 /**
- * Mean glottal area (cm²) of the LF source.
- * @param {{voicing: number, aspiration: number, closure: number}} control
+ * Mean glottal area (cm²) of the LF source. A whisper (`control.whisper`,
+ * issue 53) takes the voiced opening away by `1 - whisper` and adds the
+ * half-open glottis of the whisper (`whisperPosture()` of whisper.js).
+ * @param {{voicing: number, aspiration: number, closure: number, whisper?: number, stopClosure?: number, fricative?: number, effort?: number}} control
  * @param {number} breathiness Head breathiness (0 to 1).
  * @param {number} chink Glottal chink (mm²).
  * @param {{glottisVoiced?: number, glottisOpen?: number, glottisBreathy?: number}} [areas]
@@ -150,6 +153,18 @@ export function glottalArea(control, breathiness = 0.2, chink = 0, areas = {}) {
   const voicing = Math.max(0, control.voicing);
   const aspiration = Math.max(0, control.aspiration);
   const closure = Math.min(1, Math.max(0, control.closure ?? 0));
+  const whisper = control.whisper ?? 0;
+  if (whisper > 0) {
+    const voiced = voicing * (1 - Math.min(1, whisper));
+    return (
+      ((areas.glottisVoiced ?? GLOTTIS_VOICED) * voiced +
+        (areas.glottisOpen ?? GLOTTIS_OPEN) * aspiration +
+        (areas.glottisBreathy ?? GLOTTIS_BREATHY) * breathiness * voiced) *
+        (1 - closure) +
+      whisperPosture(control) +
+      Math.max(0, chink) / 100
+    );
+  }
   return (
     ((areas.glottisVoiced ?? GLOTTIS_VOICED) * voicing +
       (areas.glottisOpen ?? GLOTTIS_OPEN) * aspiration +

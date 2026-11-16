@@ -29,7 +29,7 @@ import {
   effortTransientGain,
 } from '../articulation/effort.js';
 import { Biquad, createNoise } from './filters.js';
-import { Glottis, noiseBreathiness } from './glottis.js';
+import { Glottis, glottalReflection, noiseBreathiness } from './glottis.js';
 import {
   Aerodynamics,
   ASPIRATION_REFERENCE,
@@ -38,6 +38,16 @@ import {
   sourceStrength,
 } from './aerodynamics.js';
 import { IncidentPressure, VocalFolds, restArea } from './folds.js';
+import {
+  WHISPER_CLOSED_AREA,
+  WHISPER_RELEASE_TIME,
+  whisperConstriction,
+  whisperNoise,
+  whisperQuiet,
+  whisperTransient,
+  whisperPosture,
+  whisperReflection,
+} from './whisper.js';
 import { Subglottal } from './subglottal.js';
 import { SPEED_OF_SOUND } from './transfer.js';
 import { Waveguide } from './waveguide.js';
@@ -93,6 +103,17 @@ export const DEFAULT_SOURCE = 'lf';
  * leaves it off.
  */
 export const DEFAULT_INTERACTION = false;
+
+/** Steps per unit of whisper of the glottal reflection (#updateWhisper). */
+const WHISPER_STEPS = 20;
+
+/**
+ * Q of the low-pass of the whisper noise (NoiseSources). Tuned with
+ * experiments/issue-53-periodic-frames.mjs and issue-53-whisper-tuning.mjs:
+ * a higher Q leaves a narrow low band that YIN takes for a pitch, a lower
+ * one tilts the noise down and hides the raised F1 of a whispered [i].
+ */
+const WHISPER_NOISE_Q = 0.4;
 
 /** Voice sources by name: LF pulses or the two-mass vocal folds. */
 const SOURCES = new Map([
@@ -203,8 +224,16 @@ export class NoiseSources {
     this.white = createNoise(`${seed}:noise`);
     this.aspiration = new Biquad();
     this.frication = new Biquad();
+    /**
+     * Low-pass of the whisper noise (issue 53) at the Strouhal frequency
+     * of the glottal jet: the turbulence spectrum is broad up to there and
+     * falls above it. Q WHISPER_NOISE_Q, below the 0.71 of a flat pass
+     * band: a peak of the noise at the jet would stand out as a formant.
+     */
+    this.whisper = new Biquad();
     this.rate = 0;
     this.frequency = 0;
+    this.whisperFrequency = 0;
   }
 
   configure(rate) {
@@ -214,6 +243,16 @@ export class NoiseSources {
     this.rate = rate;
     this.aspiration.bandpass(800, 0.5, rate);
     this.frequency = 0;
+    this.whisperFrequency = 0;
+  }
+
+  /** Set the whisper low-pass to the glottal jet's Strouhal frequency. */
+  tuneWhisper(frequency) {
+    if (Math.abs(frequency - this.whisperFrequency) <= 1e-3 * frequency) {
+      return;
+    }
+    this.whisperFrequency = frequency;
+    this.whisper.lowpass(frequency, WHISPER_NOISE_Q, this.rate);
   }
 
   /** Centre the frication band-pass on the jet's Strouhal frequency. */
@@ -418,6 +457,10 @@ export class VoiceRenderer {
     this.shape = null;
     this.rates = [];
     this.steps = 0;
+    /** Whisper of the glottal reflection now set (see #updateWhisper). */
+    this.whisperLevel = 0;
+    /** 1 at a closure of the mouth, decaying after it (whisperTransient). */
+    this.whisperRelease = 0;
   }
 
   get duration() {
@@ -510,7 +553,15 @@ export class VoiceRenderer {
   #updateAirflow(rate) {
     const { frication, glottis } = this.shape;
     const blockDuration = this.blockSize / this.sampleRate;
-    const opening =
+    const whispers = glottis.whisper > 0;
+    // A whisper takes the narrowest oral area (whisperConstriction).
+    const constriction = whispers
+      ? whisperConstriction(this.shape)
+      : frication.area + this.shape.velumArea;
+    if (whispers || this.whisperLevel !== 0) {
+      this.#updateWhisper(glottis, constriction, blockDuration);
+    }
+    let opening =
       this.source === 'folds'
         ? this.#foldArea(glottis)
         : glottalArea(
@@ -519,7 +570,9 @@ export class VoiceRenderer {
             this.head.glottalChink,
             this.head
           );
-    const constriction = frication.area + this.shape.velumArea;
+    if (whispers && this.source === 'folds') {
+      opening += whisperPosture(glottis);
+    }
     const air = this.aerodynamics.step(
       blockDuration,
       10 * (this.state.lungPressure ?? this.head.lungPressure),
@@ -556,19 +609,70 @@ export class VoiceRenderer {
       this.fricationAmplitude *=
         obstacle + this.head.wallSource * (1 - obstacle);
     }
+    if (whispers) {
+      // A whisper is quiet: its consonants too (whisperQuiet).
+      const quiet = whisperQuiet(glottis.whisper, glottis.effort);
+      glottis.aspirationStrength *= quiet;
+      this.fricationAmplitude *= quiet;
+      this.noise.tuneWhisper(
+        strouhalFrequency(air.flow, opening, this.head.strouhal)
+      );
+    }
     // The transient ramps from the last block's value to this one's. With
     // interaction the folds solve their flow from the lung and the oral
     // pressure, so the change of the mean flow is already in their source;
     // a second copy, from the folds' own mean area, closes a loop through
     // the tract to the folds that runs away in 3D, where the transient is
     // a pressure jump (issue 34).
-    const target = this.interaction
+    let target = this.interaction
       ? 0
       : air.flowDerivative *
         this.head.transientGain *
         effortTransientGain(glottis.effort ?? 0);
+    if (whispers) {
+      target *=
+        whisperTransient(glottis.whisper, this.whisperRelease) *
+        whisperQuiet(glottis.whisper, glottis.effort);
+    }
     const steps = Math.max(1, blockDuration * rate);
     this.transientStep = (target - this.transient) / steps;
+  }
+
+  /**
+   * Whisper of this block (issue 53): the closure of the mouth and the
+   * frication that narrow the whisper glottis of a voiced obstruent
+   * (whisperDrive), the release after a closure that keeps the burst
+   * (whisperTransient), and the reflection of the glottis,
+   * lowered by the half-open glottis (whisperReflection). The reflection is
+   * set in steps of 1/WHISPER_STEPS of whisper, and not with source-tract
+   * interaction, where the folds take the load of the tract, nor on a GPU
+   * solver, whose cells keep the decay they were uploaded with.
+   */
+  #updateWhisper(glottis, constriction, blockDuration) {
+    const whisper = Math.min(1, Math.max(0, glottis.whisper ?? 0));
+    glottis.stopClosure = Math.min(
+      1,
+      Math.max(0, 1 - constriction / WHISPER_CLOSED_AREA)
+    );
+    this.whisperRelease =
+      glottis.stopClosure >= 1
+        ? 1
+        : this.whisperRelease * Math.exp(-blockDuration / WHISPER_RELEASE_TIME);
+    glottis.fricative = Math.min(1, Math.max(0, this.shape.frication.gain));
+    if (
+      this.interaction ||
+      !this.solver.setGlottalReflection ||
+      this.solver.gpu
+    ) {
+      return;
+    }
+    const level = Math.round(whisper * WHISPER_STEPS) / WHISPER_STEPS;
+    if (level !== this.whisperLevel) {
+      this.whisperLevel = level;
+      this.solver.setGlottalReflection(
+        whisperReflection(glottalReflection(this.head), level)
+      );
+    }
   }
 
   /**
@@ -583,6 +687,21 @@ export class VoiceRenderer {
     return Math.max(0, restArea(control.adduction)) * (1 - closure);
   }
 
+  /**
+   * The fold source in a whisper: its sample times `1 - whisper` plus the
+   * whisper noise (the folds have no whisper of their own).
+   */
+  #whisperFolds(source, control) {
+    const whisper = Math.min(1, control.whisper);
+    const noise = whisperNoise(
+      control,
+      control.whisperNoise,
+      control.aspirationStrength ?? 0,
+      this.head.pitch
+    );
+    return source * (1 - whisper) + noise * 0.45 * this.glottis.aspirationLevel;
+  }
+
   #fricationNoise(white) {
     const amplitude = this.fricationAmplitude;
     if (amplitude <= 1e-6) {
@@ -595,7 +714,11 @@ export class VoiceRenderer {
   #step(queue) {
     const white = this.noise.white();
     const aspiration = this.noise.aspiration.process(white);
-    const source = this.interaction
+    const control = this.shape.glottis;
+    if (control.whisper > 0) {
+      control.whisperNoise = this.noise.whisper.process(white);
+    }
+    let source = this.interaction
       ? this.glottis.step(
           this.stepDuration,
           this.shape.glottis,
@@ -603,6 +726,9 @@ export class VoiceRenderer {
           this.#glottalLoad()
         )
       : this.glottis.step(this.stepDuration, this.shape.glottis, aspiration);
+    if (control.whisper > 0 && this.source === 'folds') {
+      source = this.#whisperFolds(source, control);
+    }
     // The flow into the tract leaves the trachea.
     this.subglottal?.step(-source);
     const noise = this.#fricationNoise(this.noise.white());

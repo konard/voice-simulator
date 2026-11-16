@@ -54,7 +54,8 @@ a pressure wave travelling through the 3D shape of a parametric low-poly head
   octave down with double pulses, an octave up, or a noisy irregular voice.
   Hindi `bʱ dʱ ɖʱ ɡʱ dʒʱ` get a breathy release, `finalCreak` creaks the end
   of a statement, and `cpp()` and `jitterPercent()` measure the result
-  ([docs/markup.md](docs/markup.md#phonation-types)).
+  ([docs/markup.md](docs/markup.md#phonation-types)). **Whisper** (issue 53,
+  `[whisper]`, `{W … W}`, `ạ`, `ḁ`): glottal noise, 25 dB quieter, 1.3× as long ([Whisper](docs/markup.md#whisper)).
 - **Intonation per language** (issue 51): statements fall, yes/no
   questions rise, wh-questions fall, `Tea or coffee?` rises on the first
   item and falls on the second (`ˈti ↗ | ˈɔɹ ˈkɑfi ↘ ?`), list items and
@@ -476,6 +477,7 @@ npx voice-simulator ipa --markup "[whisper]Hello[/whisper] world."  # {W həˈlo
 npx voice-simulator ipa "Where are you going?"   # ˈwɛɹ ɚ ju ˈɡoʊɪŋ ↘ ?
 npx voice-simulator say "<speak>Wait<break time=\"1s\"/>now.</speak>" -o wait.wav
 npx voice-simulator say --markup "[shout]Hey![/shout] [soft]Quiet.[/soft]" -o hey.wav
+npx voice-simulator say --markup "[whisper]Hello.[/whisper]" --out w.wav
 npx voice-simulator say "Hello world." --loudness=-23 -o broadcast.wav  # EBU R 128
 npx voice-simulator timeline "Hello world, how are you?"   # word and syllable times
 npx voice-simulator visemes "Hello world" -f vrm --fps 30 -o hello.json  # face animation
@@ -564,8 +566,7 @@ bin powers and mel filter energies weaker than 60 dB below the strongest one
 of the same recording are raised to that level (`DYNAMIC_RANGE_DB`, option
 `range`), so an empty band costs at most the dynamic range. LSD and MCD skip
 the pairs whose reference frame is silent (40 dB below the loudest reference
-frame): pauses and background noise of a recording are not speech to compare
-with.
+frame): pauses and the background noise are not speech to compare with.
 
 | Metric                                       | Field                             | Unit     | Formula                                                                           |
 | -------------------------------------------- | --------------------------------- | -------- | --------------------------------------------------------------------------------- |

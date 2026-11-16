@@ -291,6 +291,10 @@ export interface Plan {
   frameRate: number;
   frameCount: number;
   duration: number;
+  /**
+   * Control channels at `frameRate`, among them `whisper` (0 … 1, issue
+   * 53): 1 in a whisper and in voiceless or whispered vowels and sonorants.
+   */
   channels: Record<string, Float32Array>;
   /** Mode spans in seconds: sorted, not overlapping, covering the plan. */
   modes: PlanMode[];
@@ -522,6 +526,41 @@ export declare function levelDb(
 ): number;
 /** Level of 1-5 kHz minus level of 50 Hz-1 kHz (dB). */
 export declare function alphaRatio(
+  samples: ArrayLike<number>,
+  sampleRate: number,
+  from?: number,
+  to?: number
+): number;
+/** Frames below this share of the loud frames' level have no signal. */
+export declare const SIGNAL_SHARE: number;
+/** Share of the loud frames' level that voicedShare judges (0.3). */
+export declare const VOICED_SHARE_SIGNAL: number;
+/** A frame with a YIN aperiodicity below this (0.2) is voiced. */
+export declare const VOICED_SHARE_APERIODICITY: number;
+/**
+ * YIN aperiodicity of the 30 ms frames (hop 10 ms) with signal: those
+ * above `share` (default SIGNAL_SHARE) of the 95th percentile of the frame
+ * levels. Near 0 periodic, near 1 noise.
+ */
+export declare function frameAperiodicities(
+  samples: ArrayLike<number>,
+  sampleRate: number,
+  share?: number
+): number[];
+/** Share 0 … 1 of the loud frames that are voiced; 0 without signal. */
+export declare function voicedShare(
+  samples: ArrayLike<number>,
+  sampleRate: number
+): number;
+/** Level above 2.5 kHz minus level of 50 Hz-1 kHz (dB). */
+export declare function energyRatio(
+  samples: ArrayLike<number>,
+  sampleRate: number,
+  from?: number,
+  to?: number
+): number;
+/** Power-weighted mean frequency (Hz) above 50 Hz; 0 for silence. */
+export declare function centreOfGravity(
   samples: ArrayLike<number>,
   sampleRate: number,
   from?: number,
@@ -1677,6 +1716,18 @@ export interface GlottisControl {
   creak?: number;
   falsetto?: number;
   harsh?: number;
+  /**
+   * Whisper 0 … 1 (the plan channel `whisper`, issue 53): the voiced part
+   * is multiplied by `1 - whisper` (at 1 no pulses, the phase stands
+   * still) and the noise of a half-open glottis is added.
+   */
+  whisper?: number;
+  /** Noise sample of the whisper source; default the `noise` argument. */
+  whisperNoise?: number;
+  /** Closure of the mouth 0 … 1: a voiced stop closure halves the whisper. */
+  stopClosure?: number;
+  /** Frication of the mouth 0 … 1: weakens the whisper of a fricative. */
+  fricative?: number;
 }
 /** Breath noise per 10 mm² of glottal chink. */
 export declare const CHINK_NOISE: number;
