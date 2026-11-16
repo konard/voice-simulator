@@ -433,9 +433,10 @@ jobs:
     name: Rust Engine
     runs-on: ubuntu-24.04
     # Typical run: about 1min (toolchain install, then a few seconds per
-    # cargo step for three small crates). Each step owns a budget below;
-    # this cap is only the backstop behind them.
-    timeout-minutes: 15
+    # cargo step for three small crates), plus several minutes for the threads
+    # build and its tests (issue 24). Each step owns a budget below; this
+    # cap is only the backstop behind them.
+    timeout-minutes: 35
     concurrency:
       group: check-${{ github.workflow }}-${{ github.ref }}-rust
       cancel-in-progress: true
@@ -527,6 +528,25 @@ jobs:
         # three times and the first 50 ms in a 40 cm room (about 17s on a
         # developer machine, issue 23), hence the larger budget.
         run: bash scripts/run-with-budget-warning.sh 90 "Rust parity tests" node --test tests/rust-parity.test.js tests/rust-waveguide.test.js tests/rust-fdtd.test.js tests/rust-render-job.test.js tests/engine-layout.test.js
+
+      # The threads build (issue 24) needs the nightly compiler that
+      # THREADS_TOOLCHAIN of build-wasm.mjs pins, with the standard library
+      # sources: it rebuilds std with atomics. The file is tested here and
+      # neither uploaded nor published (the app stays on one thread, #25).
+      - name: Install the nightly toolchain of the threads build
+        run: |
+          THREADS_TOOLCHAIN=$(node --input-type=module -e "import { THREADS_TOOLCHAIN } from './scripts/build-wasm.mjs'; console.log(THREADS_TOOLCHAIN)")
+          bash scripts/run-with-budget-warning.sh 120 "nightly toolchain install" rustup toolchain install "$THREADS_TOOLCHAIN" --profile minimal --target wasm32-unknown-unknown --component rust-src
+
+      - name: Build the threads engine
+        run: bash scripts/run-with-budget-warning.sh 240 "threads wasm build" node scripts/build-wasm.mjs --require --threads
+
+      # Renders 'Hello.' for 0.2 s in a 40 cm room on 1, 2 and 4 threads and
+      # compares the bits (about 2 min on a developer machine).
+      - name: Run the threads tests
+        env:
+          REQUIRE_THREADS_WASM: '1'
+        run: bash scripts/run-with-budget-warning.sh 300 "threads tests" node --test --test-timeout=240000 tests/rust-threads.test.js
 
       - name: Upload the WebAssembly engine
         uses: ./.github/actions/artifact-transport
