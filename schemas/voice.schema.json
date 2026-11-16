@@ -43,6 +43,85 @@
         "soprano"
       ]
     },
+    "accent": {
+      "description": "Accent the voice speaks with (docs/accents.md): a code, or a code with a strength from 0 to 1.",
+      "oneOf": [
+        {
+          "type": "string",
+          "enum": [
+            "en-US",
+            "en-GB",
+            "en-AU",
+            "en-IN",
+            "en-CA",
+            "en-x-ru",
+            "en-x-hi",
+            "en-x-zh",
+            "ru-RU",
+            "ru-x-north",
+            "ru-x-south",
+            "ru-x-en",
+            "ru-x-hi",
+            "ru-x-zh",
+            "hi-IN",
+            "hi-x-east",
+            "hi-x-en",
+            "hi-x-ru",
+            "hi-x-zh",
+            "zh-CN",
+            "zh-TW",
+            "zh-x-south",
+            "zh-x-en",
+            "zh-x-ru",
+            "zh-x-hi"
+          ]
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "code"
+          ],
+          "properties": {
+            "code": {
+              "type": "string",
+              "enum": [
+                "en-US",
+                "en-GB",
+                "en-AU",
+                "en-IN",
+                "en-CA",
+                "en-x-ru",
+                "en-x-hi",
+                "en-x-zh",
+                "ru-RU",
+                "ru-x-north",
+                "ru-x-south",
+                "ru-x-en",
+                "ru-x-hi",
+                "ru-x-zh",
+                "hi-IN",
+                "hi-x-east",
+                "hi-x-en",
+                "hi-x-ru",
+                "hi-x-zh",
+                "zh-CN",
+                "zh-TW",
+                "zh-x-south",
+                "zh-x-en",
+                "zh-x-ru",
+                "zh-x-hi"
+              ]
+            },
+            "strength": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            }
+          }
+        }
+      ]
+    },
     "anatomy": {
       "type": "object",
       "additionalProperties": false,

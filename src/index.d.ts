@@ -69,12 +69,103 @@ export interface Word {
   linkingR?: boolean;
 }
 
-export type AccentCode = 'en-US' | 'en-GB' | 'en-AU' | 'en-IN';
+/** Accent codes of ACCENTS (docs/accents.md). */
+export type AccentCode =
+  | 'en-US'
+  | 'en-GB'
+  | 'en-AU'
+  | 'en-IN'
+  | 'en-CA'
+  | 'en-x-ru'
+  | 'en-x-hi'
+  | 'en-x-zh'
+  | 'ru-RU'
+  | 'ru-x-north'
+  | 'ru-x-south'
+  | 'ru-x-en'
+  | 'ru-x-hi'
+  | 'ru-x-zh'
+  | 'hi-IN'
+  | 'hi-x-east'
+  | 'hi-x-en'
+  | 'hi-x-ru'
+  | 'hi-x-zh'
+  | 'zh-CN'
+  | 'zh-TW'
+  | 'zh-x-south'
+  | 'zh-x-en'
+  | 'zh-x-ru'
+  | 'zh-x-hi';
+
+/** A rule of an accent (src/accent/apply.js). */
+export interface AccentRule {
+  /** Replace units: `{"θ": "s"}`. */
+  map?: Record<string, string>;
+  /** Select units by phoneme fields; `add` or `remove` a diacritic. */
+  match?: Partial<
+    Record<
+      | 'kind'
+      | 'place'
+      | 'manner'
+      | 'voiced'
+      | 'height'
+      | 'backness'
+      | 'rounded',
+      string | number | boolean | (string | number | boolean)[]
+    >
+  >;
+  add?: string;
+  remove?: string;
+  /** A unit or a class: `#`, `V`, `C`, `voiceless`, `front`. */
+  before?: string;
+  after?: string;
+  stress?: 'stressed' | 'unstressed';
+  /** The rule runs when the strength is at least `min` (default 0). */
+  min?: number;
+  note?: string;
+}
+
+/** An accent file (format voice-simulator/accent, version 1). */
+export interface AccentDefinition {
+  format: 'voice-simulator/accent';
+  version: 1;
+  code: string;
+  name?: string;
+  language: LanguageCode;
+  /** The accent applied first. */
+  base?: string | null;
+  /** Switches of the language's pronouncer (okanye, fricativeG, erhua, lowThird, weakForms). */
+  g2p?: Record<string, boolean>;
+  rules?: AccentRule[];
+  phonotactics?: {
+    codas?: 'any' | string[];
+    maxOnset?: number;
+    epenthesis?: string | null;
+    prothesis?: string | null;
+  } | null;
+  prosody?: {
+    tunes?: LanguageCode | null;
+    range?: number;
+    rate?: number;
+    stressLengthening?: number;
+  };
+  /** Offsets added to head values. */
+  articulation?: Partial<HeadConfig>;
+}
+
+/** An accent option: a code, a code with a strength (0 to 1) or a definition. */
+export type AccentOption =
+  | AccentCode
+  | string
+  | { code: AccentCode | string; strength?: number }
+  | AccentDefinition;
 
 export interface Transcription {
   lang: string;
-  /** English accent; null for other languages. */
-  accent?: AccentCode | null;
+  /** Accent code of the language (en-US, en-x-ru, zh-TW, ...). */
+  accent?: AccentCode | string | null;
+  /** Strength of the accent, 0 to 1. */
+  accentLevel?: number | null;
   ipa: string;
   words: Word[];
 }
@@ -198,8 +289,10 @@ export type GPUDeviceLike = object;
 
 export interface SynthesizeOptions {
   lang?: 'auto' | LanguageCode;
-  /** English accent (code or region such as "GB"). */
-  accent?: AccentCode | string;
+  /** Accent of the language (code, region such as "GB", {code, strength} or definition). */
+  accent?: AccentOption;
+  /** Strength of the accent when the option has none, 0 to 1 (default 1). */
+  accentLevel?: number;
   /** Weak, unstressed English function words inside a phrase (default true). */
   weakForms?: boolean;
   /** Treat the text as IPA. */
@@ -276,7 +369,14 @@ export declare function textToIpa(
   options?: {
     /** A language, or a regional tag such as 'en-GB' that picks the accent. */
     lang?: 'auto' | LanguageCode | AccentCode | string;
-    accent?: AccentCode | string;
+    /**
+     * Accent of the language: a code of ACCENTS, {code, strength} or a
+     * definition. An unknown code of the language throws a RangeError; a
+     * code of another language is ignored.
+     */
+    accent?: AccentOption;
+    /** Strength of the accent when the option has none, 0 to 1 (default 1). */
+    accentLevel?: number;
     /**
      * Speak English function words in their weak, unstressed form inside a
      * phrase (`a cup of tea for you` ə ˈkʌp əv ˈti fɚ ju). Default true.
@@ -480,6 +580,8 @@ export declare function planUtterance(
     durations?: (number | null)[];
     /** Duration table (an entry of DURATION_TABLES) instead of the language's. */
     durationTable?: DurationTable;
+    /** Prosody factors, duration language (`tunes`) and head offsets of an accent. */
+    accent?: Pick<AccentSettings, 'prosody' | 'articulation'>;
     /** Overrides of ARTICULATORS entries, e.g. { velum: { lead: 0.1 } }. */
     articulators?: Record<string, Partial<Articulator>>;
     /** Values of the levels of COARTICULATION_RESISTANCE. */
@@ -2358,6 +2460,8 @@ export interface VoiceFile {
   name?: string;
   description?: string;
   preset?: Exclude<HeadPresetName, 'any'>;
+  /** Accent the voice speaks with; an accent option wins over it. */
+  accent?: AccentCode | { code: AccentCode; strength?: number };
   anatomy?: HeadConfig;
   folds?: HeadConfig;
   breathing?: HeadConfig;
@@ -2369,6 +2473,7 @@ export interface Voice {
   name: string | null;
   description: string | null;
   preset: Exclude<HeadPresetName, 'any'> | null;
+  accent: AccentCode | { code: AccentCode; strength: number } | null;
   /** Complete: the values the file leaves out come from the preset or the defaults. */
   head: HeadConfig;
   /** The problems clamped or skipped by a lenient load. */
@@ -2390,7 +2495,7 @@ export declare function loadVoice(
 /** A voice file object: only the values that differ from the preset, or all with `full`. */
 export declare function saveVoice(
   voice:
-    | (Partial<Pick<Voice, 'name' | 'description' | 'preset'>> & {
+    | (Partial<Pick<Voice, 'name' | 'description' | 'preset' | 'accent'>> & {
         head: HeadConfig;
       })
     | HeadConfig,
@@ -2709,9 +2814,65 @@ export declare function normalizeText(
   text: string,
   options: { lang: string; wordLanguage: (word: string) => string }
 ): object[];
-export declare const ACCENTS: Readonly<{
-  en: readonly { code: AccentCode; name: string; native: string }[];
-}>;
+export interface AccentEntry {
+  code: AccentCode;
+  name: string;
+  native: string;
+  kind: 'standard' | 'regional' | 'foreign';
+}
+/** The accents of every language, the default first. */
+export declare const ACCENTS: Readonly<
+  Record<LanguageCode, readonly AccentEntry[]>
+>;
+export declare const ACCENT_FORMAT: 'voice-simulator/accent';
+export declare const ACCENT_VERSION: 1;
+export declare const MAX_ACCENT_RULES: 500;
+/** The first-language profiles of the foreign accents. */
+export declare const ACCENT_PROFILES: Readonly<Record<LanguageCode, object>>;
+export interface AccentSettings {
+  code: string;
+  level: number;
+  language: LanguageCode;
+  chain: AccentDefinition[];
+  g2p: Record<string, boolean>;
+  englishAccent: 'en-US' | 'en-GB' | 'en-AU' | 'en-IN';
+  prosody: {
+    tunes: LanguageCode | null;
+    range: number;
+    rate: number;
+    stressLengthening: number;
+  };
+  articulation: Partial<HeadConfig>;
+}
+/** The definition of an accent code (a copy), or null for an unknown one. */
+export declare function getAccent(code: string): AccentDefinition | null;
+/** Apply an accent (with its bases) to the IPA of one word. */
+export declare function applyAccent(
+  wordIpa: string,
+  definition: AccentDefinition | AccentCode | string,
+  strength?: number
+): string;
+/** Which accents explain how `heardIpa` differs from `expectedIpa`, best first. */
+export declare function explainAccent(
+  expectedIpa: string,
+  heardIpa: string,
+  lang: LanguageCode
+): { code: AccentCode; explained: number; total: number }[];
+/** Check an accent file; throws a TypeError naming the wrong field. */
+export declare function loadAccent(
+  json: AccentDefinition | string
+): AccentDefinition;
+/** The definition of `<target>-x-<first>`: `target` with the sounds of `first`. */
+export declare function foreignAccent(
+  target: LanguageCode,
+  first: LanguageCode
+): AccentDefinition;
+/** What an accent option means for a language (null for an unknown language). */
+export declare function accentSettings(
+  lang: string,
+  value?: AccentOption,
+  options?: { level?: number; lenient?: boolean }
+): AccentSettings | null;
 /** The accent code for a language, or null when it has no accents. */
 export declare function resolveAccent(
   lang: string,

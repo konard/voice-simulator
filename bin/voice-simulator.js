@@ -19,6 +19,7 @@ import {
   encodeHeadConfig,
   formatFromFileName,
   headModelObj,
+  loadAccent,
   loadVoice,
   matchVoice,
   measureAudioTier,
@@ -37,6 +38,7 @@ import { INDEX_PAGE, createVoiceServer } from '../src/server/server.js';
 const OPTIONS = {
   lang: { type: 'string', short: 'l' },
   accent: { type: 'string' },
+  'accent-level': { type: 'string' },
   out: { type: 'string', short: 'o' },
   tier: { type: 'string', short: 't' },
   solver: { type: 'string' },
@@ -101,7 +103,14 @@ function usage() {
     '',
     'Options:',
     '  -l, --lang <code>     auto | en | ru | hi | zh (default auto)',
-    '      --accent <code>   English accent: en-US | en-GB | en-AU | en-IN',
+    '      --accent <code|file.json>',
+    '                        Accent of the language (docs/accents.md): en-US |',
+    '                        en-GB | en-AU | en-IN | en-CA | ru-x-north |',
+    '                        ru-x-south | hi-x-east | zh-TW | zh-x-south, or',
+    '                        foreign: <lang>-x-<first language>, e.g. en-x-ru,',
+    '                        zh-x-en; or an accent file (JSON)',
+    '      --accent-level <0..1>',
+    '                        Strength of the accent (default 1; 0 = none)',
     '      --strong-forms    Keep English function words strong (no weak forms)',
     '  -o, --out <file>      Output file ("-" for stdout)',
     `  -t, --tier <name>     ${AUDIO_TIERS.map((tier) => tier.name).join(' | ')}`,
@@ -185,6 +194,33 @@ function readVoiceFile(file) {
   } catch (error) {
     throw new Error(`${file}: ${error.message}`, { cause: error });
   }
+}
+
+/** Reads an accent file; the error names the file. */
+function readAccentFile(file) {
+  try {
+    return loadAccent(readFileSync(file, 'utf8'));
+  } catch (error) {
+    throw new Error(`${file}: ${error.message}`, { cause: error });
+  }
+}
+
+/**
+ * The accent options of --accent (a code or a JSON file), --accent-level
+ * and the accent of the --voice file (which --accent wins over).
+ */
+function accentOptions(values) {
+  const level = optionalNumber(values['accent-level'], 'accent-level');
+  if (level !== undefined && (level < 0 || level > 1)) {
+    throw new Error('accent-level must be a number from 0 to 1');
+  }
+  let accent = values.accent;
+  if (accent !== undefined && /\.json$/iu.test(accent)) {
+    accent = readAccentFile(accent);
+  } else if (accent === undefined && values.voice !== undefined) {
+    accent = readVoiceFile(values.voice).accent ?? undefined;
+  }
+  return { accent, accentLevel: level };
 }
 
 /** The head of --head, else --voice, else --seed and --preset. */
@@ -373,8 +409,8 @@ const COMMANDS = {
   ipa(values, positionals, io) {
     const result = textToIpa(requireText(positionals), {
       lang: values.lang,
-      accent: values.accent,
-      weakForms: !values['strong-forms'],
+      ...accentOptions(values),
+      weakForms: values['strong-forms'] ? false : undefined,
     });
     io.stdout(values.json ? JSON.stringify(result) : result.ipa);
   },
@@ -383,8 +419,8 @@ const COMMANDS = {
     const output = audioOutput(values, 'voice');
     const result = synthesize(requireText(positionals), {
       lang: values.lang,
-      accent: values.accent,
-      weakForms: !values['strong-forms'],
+      ...accentOptions(values),
+      weakForms: values['strong-forms'] ? false : undefined,
       ipa: values.ipa,
       seed: values.seed,
       head: resolveHead(values),
@@ -404,6 +440,7 @@ const COMMANDS = {
         JSON.stringify({
           lang: result.lang,
           accent: result.accent,
+          accentLevel: result.accentLevel,
           ipa: result.ipa,
           duration: result.duration,
           out,
@@ -442,8 +479,8 @@ const COMMANDS = {
   timeline(values, positionals, io) {
     const prepared = prepareUtterance(requireText(positionals), {
       lang: values.lang,
-      accent: values.accent,
-      weakForms: !values['strong-forms'],
+      ...accentOptions(values),
+      weakForms: values['strong-forms'] ? false : undefined,
       ipa: values.ipa,
     });
     const { lang, accent, ipa, timeline } = prepared;
@@ -470,8 +507,8 @@ const COMMANDS = {
       requireText(positionals),
       {
         lang: values.lang,
-        accent: values.accent,
-        weakForms: !values['strong-forms'],
+        ...accentOptions(values),
+        weakForms: values['strong-forms'] ? false : undefined,
         ipa: values.ipa,
         head,
       }
@@ -512,7 +549,9 @@ const COMMANDS = {
     }
     const voice = readVoiceFile(file);
     const name = voice.name ? ` "${voice.name}"` : '';
-    io.stdout(`${file}${name}: ok, preset ${voice.preset ?? 'none'}`);
+    const accent = voice.accent?.code ?? voice.accent;
+    const spoken = accent ? `, accent ${accent}` : '';
+    io.stdout(`${file}${name}: ok, preset ${voice.preset ?? 'none'}${spoken}`);
   },
 
   mesh(values, positionals, io) {

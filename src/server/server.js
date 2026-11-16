@@ -13,7 +13,9 @@
  *   GET|POST /api/stream          -> WAV, AU or raw streamed while simulated
  *
  * Synthesis parameters come from the query string or a JSON body:
- * text, lang, accent (en-US, en-GB, en-AU, en-IN), ipa (boolean), seed,
+ * text, lang, accent (a code such as en-GB, ru-x-south or en-x-ru, a
+ * {code, strength} object or an accent definition in a JSON body; never a
+ * file path, see docs/accents.md), accentLevel (0..1), ipa (boolean), seed,
  * head (object or "random"), preset, tier, solver, sampleRate, micDistance
  * (cm), micAzimuth and micElevation (degrees), micCompensate (boolean) and
  * room (a preset name, or a {width, height, depth, rt60} object in a JSON
@@ -31,6 +33,7 @@ import {
   audioStreamEncoder,
 } from '../audio/formats.js';
 import { LANGUAGES, textToIpa } from '../g2p/index.js';
+import { accentSettings, loadAccent } from '../accent/index.js';
 import { headModelObj } from '../geometry/model.js';
 import { visemeTrack } from '../animation/visemes.js';
 import {
@@ -109,6 +112,61 @@ function parseHead(value, seed, preset) {
   return value ?? DEFAULT_HEAD;
 }
 
+/** The accent option of a request: a code, {code, strength} or a definition. */
+function readAccentParam(value) {
+  if (value === undefined || value === null || value === '') {
+    return undefined;
+  }
+  if (typeof value === 'string') {
+    return value;
+  }
+  if (typeof value !== 'object' || Array.isArray(value)) {
+    throw new HttpError(400, 'accent must be a code or an object');
+  }
+  if (value.format !== undefined || value.rules !== undefined) {
+    return loadAccent(value);
+  }
+  if (typeof value.code !== 'string') {
+    throw new HttpError(400, 'accent.code must be an accent code');
+  }
+  return { code: value.code, strength: value.strength };
+}
+
+function readAccentLevel(value) {
+  if (value === undefined || value === '') {
+    return undefined;
+  }
+  const level = Number(value);
+  if (!(level >= 0 && level <= 1)) {
+    throw new HttpError(400, 'accentLevel must be a number from 0 to 1');
+  }
+  return level;
+}
+
+/**
+ * The accent and accentLevel of a request, checked against the language
+ * (or the language of the accent code when lang is "auto"): an unknown
+ * code or a bad level is a 400 error.
+ */
+function accentParams(params, lang) {
+  try {
+    const accent = readAccentParam(params.accent);
+    const level = readAccentLevel(params.accentLevel);
+    const code = accent?.language ?? accent?.code ?? accent;
+    const language = Object.hasOwn(LANGUAGES, lang)
+      ? lang
+      : String(code ?? '').split('-')[0];
+    if (accent !== undefined && Object.hasOwn(LANGUAGES, language)) {
+      accentSettings(language, accent, { level });
+    }
+    return { accent, accentLevel: level };
+  } catch (error) {
+    throw error instanceof HttpError
+      ? error
+      : new HttpError(400, error.message);
+  }
+}
+
 /**
  * Validate synthesis parameters from a query or JSON body.
  * @param {Record<string, unknown>} params
@@ -136,11 +194,12 @@ export function synthesisOptions(params) {
     throw new HttpError(400, `Unsupported sampleRate ${params.sampleRate}`);
   }
   const seed = params.seed ?? 1;
+  const lang = params.lang ?? 'auto';
   return {
     text,
     options: {
-      lang: params.lang ?? 'auto',
-      accent: params.accent,
+      lang,
+      ...accentParams(params, lang),
       ipa: params.ipa === true || params.ipa === 'true',
       seed,
       head: parseHead(params.head, seed, parsePreset(params.preset)),
@@ -243,7 +302,8 @@ function createRoutes(version) {
     }),
     'GET /api/ipa': (params) => {
       const { text, options } = synthesisOptions(params);
-      return textToIpa(text, { lang: options.lang, accent: options.accent });
+      const { lang, accent, accentLevel } = options;
+      return textToIpa(text, { lang, accent, accentLevel });
     },
     'GET /api/timeline': (params) => {
       const { text, options } = synthesisOptions(params);

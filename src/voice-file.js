@@ -5,6 +5,10 @@
  *   {"format": "voice-simulator/voice", "version": 1, "name": "Anna",
  *    "preset": "female", "folds": {"pitch": 205}}
  *
+ * `accent` (optional) is the accent the voice speaks with: an accent code
+ * (`"en-x-ru"`, see src/accent/) or `{"code": "en-x-ru", "strength": 0.5}`;
+ * an accent option of synthesize wins over it.
+ *
  * loadVoice also reads the older forms, a flat head object
  * (`{"pitch": 205}`) and the `key=value&...` fragment of encodeHeadConfig,
  * and reports every problem of a file at once: a wrong format, a newer
@@ -26,6 +30,8 @@ import {
   normalizeHeadConfig,
   presetHeadConfig,
 } from './head-config.js';
+import { getAccent } from './accent/index.js';
+import { ACCENTS } from './g2p/accents.js';
 
 /** Value of the `format` field of a voice file. */
 export const VOICE_FORMAT = 'voice-simulator/voice';
@@ -37,7 +43,14 @@ export const VOICE_VERSION = 1;
 export const RENAMED_KEYS = Object.freeze({});
 
 /** Top-level fields of a voice file other than the groups. */
-const META_KEYS = ['format', 'version', 'name', 'description', 'preset'];
+const META_KEYS = [
+  'format',
+  'version',
+  'name',
+  'description',
+  'preset',
+  'accent',
+];
 
 /** Units that are not written after a number ('1' plain, 'x' factor). */
 const SILENT_UNITS = new Set(['1', 'x']);
@@ -145,6 +158,44 @@ function readPreset(preset, report) {
   return null;
 }
 
+/**
+ * The accent of a voice (a code, or `{code, strength}`), or null; reports
+ * an unknown code or a strength outside 0 to 1.
+ */
+function readAccent(accent, report) {
+  if (accent === undefined || accent === null) {
+    return null;
+  }
+  const object = isPlainObject(accent);
+  const code = object ? accent.code : accent;
+  if (typeof code !== 'string' || getAccent(code) === null) {
+    report(
+      `unknown accent ${JSON.stringify(code)} (use a code of docs/accents.md)`
+    );
+    return null;
+  }
+  if (!object) {
+    return getAccent(code).code;
+  }
+  const extra = Object.keys(accent).filter(
+    (key) => key !== 'code' && key !== 'strength'
+  );
+  if (extra.length > 0) {
+    report(`unknown accent field "${extra[0]}" (use code, strength)`);
+  }
+  const { strength } = accent;
+  if (
+    strength !== undefined &&
+    !(typeof strength === 'number' && strength >= 0 && strength <= 1)
+  ) {
+    report('accent.strength must be a number from 0 to 1');
+    return null;
+  }
+  return strength === undefined
+    ? getAccent(code).code
+    : { code: getAccent(code).code, strength };
+}
+
 function readText(voice, field, report) {
   const value = voice[field];
   if (value === undefined || value === null) {
@@ -173,6 +224,7 @@ function readVoiceObject(voice, values, report) {
     name: readText(voice, 'name', report),
     description: readText(voice, 'description', report),
     preset: readPreset(voice.preset, report),
+    accent: readAccent(voice.accent, report),
   };
 }
 
@@ -199,7 +251,12 @@ function readQuery(text, values, report) {
     }
   }
   readFlat(entries, values, report);
-  return { name: null, description: null, preset: readPreset(preset, report) };
+  return {
+    name: null,
+    description: null,
+    preset: readPreset(preset, report),
+    accent: null,
+  };
 }
 
 /** Parses JSON text; reports a syntax error. */
@@ -214,7 +271,7 @@ function parseJson(text, report) {
 
 /** Reads any input form into `values`; returns the name, description and preset. */
 function readInput(input, values, report) {
-  const empty = { name: null, description: null, preset: null };
+  const empty = { name: null, description: null, preset: null, accent: null };
   let object = input;
   if (typeof input === 'string') {
     const text = input.trim();
@@ -247,6 +304,7 @@ function readInput(input, values, report) {
  *   Error with one line per problem; false: clamp out-of-range values,
  *   skip the others and return the lines as `warnings`.
  * @returns {{name: string|null, description: string|null, preset: string|null,
+ *   accent: string|{code: string, strength: number}|null,
  *   head: Record<string, number>, warnings: string[]}} `head` is complete:
  *   the values the voice leaves out come from its preset (presetHeadConfig
  *   at size 0.5) or the defaults.
@@ -271,7 +329,8 @@ export function loadVoice(input, { strict = true } = {}) {
 /**
  * Write a voice file object (JSON.stringify it to save it).
  * @param {{head?: Record<string, number>, preset?: string|null,
- *   name?: string|null, description?: string|null}|Record<string, number>} voice
+ *   name?: string|null, description?: string|null,
+ *   accent?: string|{code: string, strength?: number}|null}|Record<string, number>} voice
  *   A voice as loadVoice returns it, or a flat head object.
  * @param {{full?: boolean}} [options] full: write every value; by default
  *   only the values that differ from the preset (or the defaults) are written.
@@ -288,6 +347,10 @@ export function saveVoice(voice, { full = false } = {}) {
   }
   if (preset) {
     file.preset = preset;
+  }
+  const accent = hasHead ? readAccent(voice.accent, () => {}) : null;
+  if (accent) {
+    file.accent = accent;
   }
   return Object.assign(file, groupValues(head, preset, full));
 }
@@ -327,6 +390,11 @@ function parameterSchema(parameter) {
   };
 }
 
+/** Every accent code of ACCENTS. */
+function accentCodes() {
+  return Object.values(ACCENTS).flatMap((list) => list.map(({ code }) => code));
+}
+
 /**
  * JSON Schema (draft 2020-12) of a voice file; schemas/voice.schema.json
  * holds its output.
@@ -341,6 +409,22 @@ export function voiceSchema() {
       description:
         'Head preset that supplies the values the file leaves out (size 0.5).',
       enum: Object.keys(HEAD_PRESETS),
+    },
+    accent: {
+      description:
+        'Accent the voice speaks with (docs/accents.md): a code, or a code with a strength from 0 to 1.',
+      oneOf: [
+        { type: 'string', enum: accentCodes() },
+        {
+          type: 'object',
+          additionalProperties: false,
+          required: ['code'],
+          properties: {
+            code: { type: 'string', enum: accentCodes() },
+            strength: { type: 'number', minimum: 0, maximum: 1 },
+          },
+        },
+      ],
     },
   };
   for (const group of HEAD_GROUPS) {
