@@ -12,6 +12,7 @@ import {
   voicedShare,
   vowelNpvi,
 } from '../tests/helpers/accent-measures.js';
+import { measureVoice } from '../tests/helpers/voice-measures.js';
 
 const fixed = (value, digits = 1) => value.toFixed(digits);
 const first = (result) => consonants(result)[0];
@@ -47,8 +48,11 @@ for (const accent of ['zh-CN', 'zh-TW']) {
   const si = renderAccent('四', 'zh', accent);
   const a = segmentCentroid(shi, first(shi));
   const b = segmentCentroid(si, first(si));
+  const apart = (x, y) => fixed((100 * Math.abs(x - y)) / Math.max(x, y));
+  const c = measureVoice(shi, 'centroid');
+  const d = measureVoice(si, 'centroid');
   console.log(
-    `(d) 是 /${shi.ipa}/ ${fixed(a, 0)} Hz, 四 /${si.ipa}/ ${fixed(b, 0)} Hz (${accent}): ${fixed((100 * Math.abs(a - b)) / Math.max(a, b))} %`
+    `(d) 是 /${shi.ipa}/ ${fixed(a, 0)} Hz, 四 /${si.ipa}/ ${fixed(b, 0)} Hz (${accent}): fricative ${apart(a, b)} %, whole syllable ${fixed(c, 0)} vs ${fixed(d, 0)} Hz ${apart(c, d)} %`
   );
 }
 

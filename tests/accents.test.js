@@ -552,7 +552,7 @@ describe('accent acoustics', () => {
     const whole = (result) => measureVoice(result, 'centroid');
     expect(apart('zh-TW', fricative)).toBeLessThan(0.1);
     expect(apart('zh-TW', whole)).toBeLessThan(0.1);
-    // The plain contrast: 14.7 % over the whole syllable; the fricatives
+    // The plain contrast: 15.0 % over the whole syllable; the fricatives
     // alone differ by 0.4 % (s, ʃ and ʂ have nearly the same noise
     // spectrum on this tier, experiments/issue-57-sibilants.mjs).
     expect(apart('zh-CN', whole)).toBeGreaterThan(0.1);
