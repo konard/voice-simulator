@@ -11,7 +11,7 @@
 
 import { createHash } from 'node:crypto';
 
-import { describe, expect, it as alwaysIt } from 'test-anywhere';
+import { describe, expect } from 'test-anywhere';
 
 import { resample } from '../src/audio/resample.js';
 import { AdaptiveStream, switchGrid } from '../src/engine/adaptive-stream.js';
@@ -34,17 +34,56 @@ const at = (seconds) => Math.round(seconds * RATE);
 const level = (name) => tierIndex(name);
 
 // SHA-256 of synthesize('Hello world.', {seed: 1, tier, engine}) recorded
-// on main before this change (experiments/issue-29-offline-hashes.mjs).
+// on main before this change (experiments/issue-29-offline-hashes.mjs, same
+// hashes on this branch). The renders take Math.sin, Math.exp and friends
+// from the runtime, whose last bits differ: V8 of Node.js, the newer V8 of
+// Deno and the libm of JavaScriptCore each give their own (unchanged)
+// samples. Bun was recorded on Linux only.
+const MINIMAL =
+  '74690b09105eb6439c5eb11e8d968d32a0408e4a07700c6136f26b0f36597efc';
+const BUN_MINIMAL =
+  '3cad28ba5847765636a3b8c0aa64fb53c513a8db1c02eca2fef02573eed24e0f';
 const OFFLINE = {
-  js: {
-    minimal: '74690b09105eb6439c5eb11e8d968d32a0408e4a07700c6136f26b0f36597efc',
-    high: '5041ace3cb3650b4df956bacc66d94bd00150b4c70f7ee401726a878570d6263',
+  node: {
+    js: {
+      minimal: MINIMAL,
+      high: '5041ace3cb3650b4df956bacc66d94bd00150b4c70f7ee401726a878570d6263',
+    },
+    rust: {
+      minimal: MINIMAL,
+      high: '18bf65f4bf8e4851fb851974746bca011c384cc7461ede359a9d384c7cd151f5',
+    },
   },
-  rust: {
-    minimal: '74690b09105eb6439c5eb11e8d968d32a0408e4a07700c6136f26b0f36597efc',
-    high: '18bf65f4bf8e4851fb851974746bca011c384cc7461ede359a9d384c7cd151f5',
+  deno: {
+    js: {
+      minimal: MINIMAL,
+      high: 'e91447839743bac48759c3fb1c14ab64daf74943df5860352b04a979c737741a',
+    },
+    rust: {
+      minimal: MINIMAL,
+      high: '84ba157b39f9be75e91a2a2927da57a0ac32955f8dda487370296e2bf5d4fce1',
+    },
+  },
+  bun: {
+    js: {
+      minimal: BUN_MINIMAL,
+      high: 'f1a15f28df2ce6e75f8483a91b3f00804c6ec387fb43d5c7f95ca2b28c16ce30',
+    },
+    rust: {
+      minimal: BUN_MINIMAL,
+      high: '120f1d2edd688798a4d432610e744ef9224f497dccc35d0f0ddc233072439065',
+    },
   },
 };
+const runtime = globalThis.Deno
+  ? 'deno'
+  : globalThis.process?.versions?.bun
+    ? 'bun'
+    : 'node';
+const unrecorded =
+  runtime === 'bun' && globalThis.process?.platform !== 'linux'
+    ? 'the hashes of Bun were recorded on Linux'
+    : null;
 
 function sha256(samples) {
   return createHash('sha256')
@@ -94,7 +133,8 @@ function setup(name) {
   return { engine, vowel, noise, plain, switchOf };
 }
 
-function streamTests(name, it, { engine, vowel }) {
+function streamTests(name, skip, { engine, vowel }) {
+  const it = itUnless(skip);
   describe(`adaptive stream (${name} engine)`, () => {
     it('no switch is the plain render', async () => {
       const options = { ipa: true, tier: 'minimal', seed: 1, engine: name };
@@ -209,14 +249,14 @@ function streamTests(name, it, { engine, vowel }) {
       stream.close();
     });
 
-    it('offline output is unchanged', () => {
+    itUnless(skip, unrecorded)('offline output is unchanged', () => {
       for (const tier of ['minimal', 'high']) {
         const { samples } = synthesize('Hello world.', {
           seed: 1,
           tier,
           engine: name,
         });
-        expect(sha256(samples)).toBe(OFFLINE[name][tier]);
+        expect(sha256(samples)).toBe(OFFLINE[runtime][name][tier]);
       }
     });
   });
@@ -301,11 +341,11 @@ function levelTests(name, it, { vowel, noise, plain, switchOf }) {
   });
 }
 
-for (const [name, it] of [
-  ['js', alwaysIt],
-  ['rust', itUnless(noRust)],
+for (const [name, skip] of [
+  ['js', null],
+  ['rust', noRust],
 ]) {
   const context = setup(name);
-  streamTests(name, it, context);
-  levelTests(name, it, context);
+  streamTests(name, skip, context);
+  levelTests(name, itUnless(skip), context);
 }

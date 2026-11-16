@@ -76,11 +76,13 @@ function clamp(value, low, high) {
  * One renderer resampled to the stream rate. `start` is the stream sample
  * of its first output; `next` the stream sample of the first sample still
  * held. After the renderer is done the resampler is flushed and the lane
- * gives zeros.
+ * gives zeros. `hooks.renderOptions` goes to renderAsync and
+ * `hooks.onRender(renderer)` is called after each piece.
  */
 class Lane {
-  constructor(renderer, streamRate, start) {
+  constructor(renderer, streamRate, start, hooks = {}) {
     this.renderer = renderer;
+    this.hooks = hooks;
     this.resampler = createStreamResampler(renderer.sampleRate, streamRate);
     this.start = start;
     this.next = start;
@@ -102,8 +104,11 @@ class Lane {
   async #renderPiece(size) {
     const { renderer } = this;
     const piece = this.piece.subarray(0, Math.min(PIECE, size));
-    const written = renderer.done ? 0 : await renderer.renderAsync(piece);
+    const written = renderer.done
+      ? 0
+      : await renderer.renderAsync(piece, this.hooks.renderOptions);
     if (written > 0) {
+      this.hooks.onRender?.(renderer);
       this.#push(this.resampler.push(piece.subarray(0, written)));
     }
     if (written === 0 || renderer.done) {
@@ -196,12 +201,17 @@ export class AdaptiveStream {
    *   preroll?: number,
    *   overlap?: number,
    *   room?: boolean,
+   *   renderOptions?: object,
+   *   onRender?: (renderer: any) => void,
    * }} options `createRenderer(level, extra)` returns a renderer of tier
    *   `level` (it may return a promise) with `extra` merged into its
    *   options. `preroll` (default 0.03 s) is how long the new lane renders
    *   before it is heard, `overlap` (default 0.025 s) the crossfade. With
    *   `room` (a room or an enclosure) the preroll grows by the
    *   reverberation tail, at most 0.25 s, and the level only goes down.
+   *   `renderOptions` are passed to every renderAsync call (e.g. `{field:
+   *   true}` for the 3D solver on the GPU) and `onRender(renderer)` is
+   *   called after every piece a renderer gives (at most 256 samples).
    * @returns {Promise<AdaptiveStream>}
    */
   static async create(options) {
@@ -223,6 +233,10 @@ export class AdaptiveStream {
     this.preroll = options.preroll ?? 0.03;
     this.overlap = options.overlap ?? 0.025;
     this.room = Boolean(options.room);
+    this.hooks = {
+      renderOptions: options.renderOptions,
+      onRender: options.onRender,
+    };
     this.position = 0;
     this.totalSamples = 0;
     this.duration = 0;
@@ -242,7 +256,7 @@ export class AdaptiveStream {
 
   /** The first lane; the length of the stream never changes after it. */
   #open(renderer) {
-    this.lane = new Lane(renderer, this.streamRate, 0);
+    this.lane = new Lane(renderer, this.streamRate, 0, this.hooks);
     this.duration = renderer.duration;
     this.totalSamples = Math.round(
       (renderer.totalSamples * this.streamRate) / renderer.sampleRate
@@ -320,7 +334,7 @@ export class AdaptiveStream {
     renderer.restoreSources(old.renderer.saveSources());
     const start = Math.round(at * this.streamRate);
     this.pending = {
-      lane: new Lane(renderer, this.streamRate, start),
+      lane: new Lane(renderer, this.streamRate, start, this.hooks),
       from: this.level,
       level,
       at,
