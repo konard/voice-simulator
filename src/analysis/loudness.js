@@ -101,6 +101,9 @@ export function integratedLoudness(samples, sampleRate) {
   return loudness(mean(gated));
 }
 
+/** Margin (dB) below the peak limit of `normalizeLoudness()`. */
+const PEAK_MARGIN_DB = 0.001;
+
 /**
  * Scale samples to a loudness target (LUFS), but never above a peak of
  * `peak` (default 0.98): a new Float32Array, the gain in dB and the
@@ -127,7 +130,8 @@ export function normalizeLoudness(samples, sampleRate, target, options = {}) {
   let gainDb = target - measured;
   const limit = options.peak ?? 0.98;
   if (peak > 0 && peak * 10 ** (gainDb / 20) > limit) {
-    gainDb = 20 * Math.log10(limit / peak);
+    // 0.001 dB below the limit, so that Float32 rounding stays under it.
+    gainDb = 20 * Math.log10(limit / peak) - PEAK_MARGIN_DB;
   }
   const gain = 10 ** (gainDb / 20);
   const scaled = samples.map((value) => value * gain);

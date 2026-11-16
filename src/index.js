@@ -46,6 +46,25 @@ export {
   VELUM_LEAD,
 } from './articulation/plan.js';
 export { modeAt } from './articulation/modes.js';
+// Vocal effort, level convention and loudness (issue 52)
+export {
+  EFFORT_PITCH_LIMITS,
+  EFFORT_RAMP_LIMIT,
+  EFFORT_RULES,
+  decibelsToEffort,
+  effortChanges,
+  effortToDecibels,
+  effortToSpl,
+  fastEffortRamps,
+  maxModeLevel,
+  splToEffort,
+} from './articulation/effort.js';
+export { alphaRatio, levelDb } from './analysis/mode-features.js';
+export {
+  integratedLoudness,
+  kWeighting,
+  normalizeLoudness,
+} from './analysis/loudness.js';
 // Speech markup: SSML subset, inline tags and modes (docs/markup.md)
 export {
   EMOTIONS,
