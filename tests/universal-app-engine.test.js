@@ -358,6 +358,19 @@ describe('voice engine benchmark cache', () => {
     });
   });
 
+  it('posts the benchmark after an utterance in progress', async () => {
+    await withStorage(async () => {
+      const { worker, engine, idle, start } = benchmarkEngine();
+      start();
+      await speakSound(engine);
+      idle();
+      expect(postedOf(worker, 'benchmark')).toEqual([]);
+      engine.stop();
+      idle();
+      expect(postedOf(worker, 'benchmark').length).toBe(1);
+    });
+  });
+
   it('caches the answer with the WebGPU tiers, not the CPU one', () => {
     withStorage((storage) => {
       const { idle, reply, start } = benchmarkEngine();

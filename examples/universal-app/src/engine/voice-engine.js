@@ -78,6 +78,8 @@ export class VoiceEngine {
     this.cancelIdle = () => {};
     // Set while the benchmark waits for the answer to {type: 'engine'}.
     this.whenEngine = null;
+    // Set while the benchmark waits for the end of an utterance.
+    this.afterSpeech = null;
     // Times (performance.now) from each speak() to the end of its
     // utterance; the benchmark is paused then, so the long tasks of the app
     // in them are not the benchmark's (use-simulator, `?debug`).
@@ -115,6 +117,7 @@ export class VoiceEngine {
       });
       this.speechSpans.splice(0, this.speechSpans.length - SPEECH_SPANS);
       this.speechFrom = null;
+      this.afterSpeech?.();
     }
   }
 
@@ -228,7 +231,8 @@ export class VoiceEngine {
    * Start at the start level and measure at the next idle moment after the
    * worker has answered {type: 'engine'}: the benchmark needs the loaded
    * engine anyway, and the app's render of that answer would otherwise be
-   * a long task inside the benchmark window.
+   * a long task inside the benchmark window. An utterance in progress
+   * (its planning is on this thread) moves it to after the utterance.
    */
   #measureLater() {
     this.cached = null;
@@ -237,12 +241,24 @@ export class VoiceEngine {
     this.#emit({ audioLevel: this.audioLevel, benchmark: null });
     this.cancelIdle();
     let cancel = () => {};
+    // An utterance is the user's: post after it, at the next idle moment.
+    const post = () => {
+      if (this.speechFrom === null) {
+        this.#postBenchmark();
+        return;
+      }
+      this.afterSpeech = () => {
+        this.afterSpeech = null;
+        cancel = this.idle(post);
+      };
+    };
     this.whenEngine = () => {
       this.whenEngine = null;
-      cancel = this.idle(() => this.#postBenchmark());
+      cancel = this.idle(post);
     };
     this.cancelIdle = () => {
       this.whenEngine = null;
+      this.afterSpeech = null;
       cancel();
     };
     if (this.status.engine) {
