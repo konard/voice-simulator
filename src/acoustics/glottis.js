@@ -281,7 +281,8 @@ export class Glottis {
    *   53) multiplies the voiced part by `1 - whisper` (the pulse phase
    *   stands still at 1) and adds the whisper noise of
    *   src/acoustics/whisper.js: `whisperNoise` is its noise sample (else
-   *   `noise`) and `stopClosure` (0..1) the closure of the mouth.
+   *   `noise`), `stopClosure` (0..1) the closure of the mouth and
+   *   `fricative` (0..1) its frication.
    * @param {number} noise White noise sample in [-1, 1].
    */
   step(dt, control, noise) {

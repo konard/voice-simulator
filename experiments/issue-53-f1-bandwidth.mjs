@@ -10,8 +10,12 @@ const result = synthesize(text, { tier, seed: 1, ipa: true, headroom: 20 });
 const { samples, sampleRate } = result;
 const vowel = result.plan.segments.find((s) => s.kind === 'vowel');
 const length = Math.round(0.08 * sampleRate);
-const from = Math.round((vowel.start + 0.2 * (vowel.end - vowel.start)) * sampleRate);
-const to = Math.round((vowel.end - 0.2 * (vowel.end - vowel.start)) * sampleRate) - length;
+const from = Math.round(
+  (vowel.start + 0.2 * (vowel.end - vowel.start)) * sampleRate
+);
+const to =
+  Math.round((vowel.end - 0.2 * (vowel.end - vowel.start)) * sampleRate) -
+  length;
 const frequencies = [];
 for (let f = 100; f <= 1200; f += 5) frequencies.push(f);
 const power = new Float64Array(frequencies.length);
@@ -31,10 +35,26 @@ for (let start = from; start <= to; start += length / 4) {
   });
 }
 let peak = 0;
-power.forEach((p, k) => { if (p > power[peak]) peak = k; });
+power.forEach((p, k) => {
+  if (p > power[peak]) peak = k;
+});
 let low = peak;
 while (low > 0 && power[low] > power[peak] / 2) low--;
 let high = peak;
 while (high < power.length - 1 && power[high] > power[peak] / 2) high++;
-for (let k = 0; k < power.length; k += 4) console.log(frequencies[k], (10 * Math.log10(power[k] / power[peak])).toFixed(1));
-console.log(text, tier, 'frames', frames, 'peak', frequencies[peak], 'Hz, -3 dB width', frequencies[high] - frequencies[low], 'Hz');
+for (let k = 0; k < power.length; k += 4)
+  console.log(
+    frequencies[k],
+    (10 * Math.log10(power[k] / power[peak])).toFixed(1)
+  );
+console.log(
+  text,
+  tier,
+  'frames',
+  frames,
+  'peak',
+  frequencies[peak],
+  'Hz, -3 dB width',
+  frequencies[high] - frequencies[low],
+  'Hz'
+);

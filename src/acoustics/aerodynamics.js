@@ -142,7 +142,7 @@ export function openTractStrength(lungPressure, glottalArea, reCritical) {
  * Mean glottal area (cm²) of the LF source. A whisper (`control.whisper`,
  * issue 53) takes the voiced opening away by `1 - whisper` and adds the
  * half-open glottis of the whisper (`whisperPosture()` of whisper.js).
- * @param {{voicing: number, aspiration: number, closure: number, whisper?: number, stopClosure?: number, effort?: number}} control
+ * @param {{voicing: number, aspiration: number, closure: number, whisper?: number, stopClosure?: number, fricative?: number, effort?: number}} control
  * @param {number} breathiness Head breathiness (0 to 1).
  * @param {number} chink Glottal chink (mm²).
  * @param {{glottisVoiced?: number, glottisOpen?: number, glottisBreathy?: number}} [areas]

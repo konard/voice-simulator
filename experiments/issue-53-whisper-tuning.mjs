@@ -14,17 +14,27 @@ const median = (values) => {
 };
 
 /**
- * Median F1..F3 of 40 ms frames (hop 10 ms) over the middle 60 % of the
- * vowel of a one-vowel utterance: one LPC fit of a noise-excited vowel
- * misses formants now and then, the median of many does not.
+ * F1..F3 of one LPC fit over the middle 60 % of the vowel of a one-vowel
+ * utterance (`whole`, the measure of the tuning), and the median of
+ * 40 ms frames (hop 10 ms) over the same part (`frames`): a 40 ms frame
+ * of a noise-excited [i] misses its weak F1 about half the time, and the
+ * median then reports F2 as F1; the long window does not.
  */
 function vowelFormants(text) {
   const result = synthesize(text, OPTIONS);
   const vowel = result.plan.segments.find((s) => s.kind === 'vowel');
   const length = vowel.end - vowel.start;
   const tracks = [[], [], []];
-  for (let start = vowel.start + 0.2 * length; start + 0.04 <= vowel.end - 0.2 * length; start += 0.01) {
-    const found = estimateFormants(result.samples, result.sampleRate, { start, duration: 0.04, count: 3 });
+  for (
+    let start = vowel.start + 0.2 * length;
+    start + 0.04 <= vowel.end - 0.2 * length;
+    start += 0.01
+  ) {
+    const found = estimateFormants(result.samples, result.sampleRate, {
+      start,
+      duration: 0.04,
+      count: 3,
+    });
     found.forEach((value, at) => tracks[at].push(value));
   }
   const whole = estimateFormants(result.samples, result.sampleRate, {
@@ -32,7 +42,7 @@ function vowelFormants(text) {
     duration: 0.6 * length,
     count: 3,
   });
-  return { formants: tracks.map(median), whole, engine: result.engine };
+  return { frames: tracks.map(median), formants: whole, engine: result.engine };
 }
 
 console.log(`WHISPER_OPENING ${WHISPER_OPENING}, tier ${tier}`);
@@ -41,7 +51,9 @@ for (const vowel of ['a', 'i', 'u']) {
   const started = performance.now();
   const voiced = vowelFormants(`ˈ${vowel}`);
   const whispered = vowelFormants(`{W ˈ${vowel} W}`);
-  const delta = whispered.formants.map((value, at) => value - voiced.formants[at]);
+  const delta = whispered.formants.map(
+    (value, at) => value - voiced.formants[at]
+  );
   rise += delta[0] / 3;
   console.log(
     vowel,
@@ -51,9 +63,9 @@ for (const vowel of ['a', 'i', 'u']) {
     whispered.formants.map(Math.round),
     'rise',
     delta.map(Math.round),
-    'one window',
-    voiced.whole.map(Math.round),
-    whispered.whole.map(Math.round),
+    '40 ms frames',
+    voiced.frames.map(Math.round),
+    whispered.frames.map(Math.round),
     `${((performance.now() - started) / 1000).toFixed(1)}s`
   );
 }

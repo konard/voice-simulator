@@ -40,6 +40,8 @@ import {
 import { IncidentPressure, VocalFolds, restArea } from './folds.js';
 import {
   WHISPER_CLOSED_AREA,
+  WHISPER_RELEASE_TIME,
+  whisperConstriction,
   whisperNoise,
   whisperQuiet,
   whisperTransient,
@@ -457,6 +459,8 @@ export class VoiceRenderer {
     this.steps = 0;
     /** Whisper of the glottal reflection now set (see #updateWhisper). */
     this.whisperLevel = 0;
+    /** 1 at a closure of the mouth, decaying after it (whisperTransient). */
+    this.whisperRelease = 0;
   }
 
   get duration() {
@@ -549,10 +553,13 @@ export class VoiceRenderer {
   #updateAirflow(rate) {
     const { frication, glottis } = this.shape;
     const blockDuration = this.blockSize / this.sampleRate;
-    const constriction = frication.area + this.shape.velumArea;
     const whispers = glottis.whisper > 0;
+    // A whisper takes the narrowest oral area (whisperConstriction).
+    const constriction = whispers
+      ? whisperConstriction(this.shape)
+      : frication.area + this.shape.velumArea;
     if (whispers || this.whisperLevel !== 0) {
-      this.#updateWhisper(glottis, constriction);
+      this.#updateWhisper(glottis, constriction, blockDuration);
     }
     let opening =
       this.source === 'folds'
@@ -624,7 +631,7 @@ export class VoiceRenderer {
         effortTransientGain(glottis.effort ?? 0);
     if (whispers) {
       target *=
-        whisperTransient(glottis.whisper, constriction) *
+        whisperTransient(glottis.whisper, this.whisperRelease) *
         whisperQuiet(glottis.whisper, glottis.effort);
     }
     const steps = Math.max(1, blockDuration * rate);
@@ -632,19 +639,26 @@ export class VoiceRenderer {
   }
 
   /**
-   * Whisper of this block (issue 53): the closure of the mouth that halves
-   * the whisper noise in a voiced stop, and the reflection of the glottis,
+   * Whisper of this block (issue 53): the closure of the mouth and the
+   * frication that narrow the whisper glottis of a voiced obstruent
+   * (whisperDrive), the release after a closure that keeps the burst
+   * (whisperTransient), and the reflection of the glottis,
    * lowered by the half-open glottis (whisperReflection). The reflection is
    * set in steps of 1/WHISPER_STEPS of whisper, and not with source-tract
    * interaction, where the folds take the load of the tract, nor on a GPU
    * solver, whose cells keep the decay they were uploaded with.
    */
-  #updateWhisper(glottis, constriction) {
+  #updateWhisper(glottis, constriction, blockDuration) {
     const whisper = Math.min(1, Math.max(0, glottis.whisper ?? 0));
     glottis.stopClosure = Math.min(
       1,
       Math.max(0, 1 - constriction / WHISPER_CLOSED_AREA)
     );
+    this.whisperRelease =
+      glottis.stopClosure >= 1
+        ? 1
+        : this.whisperRelease * Math.exp(-blockDuration / WHISPER_RELEASE_TIME);
+    glottis.fricative = Math.min(1, Math.max(0, this.shape.frication.gain));
     if (
       this.interaction ||
       !this.solver.setGlottalReflection ||
