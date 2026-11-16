@@ -1,0 +1,12 @@
+soprano        vtl 14.2 f0 242 F 750/2080/3115
+mezzo          vtl 14.8 f0 213 F 790/2005/3020
+alto           vtl 15.3 f0 188 F 750/1950/2905
+tenor          vtl 16.5 f0 136 F 695/1780/2745
+baritone       vtl 17.5 f0 110 F 650/1685/2610
+bass           vtl 18.5 f0 95 F 580/1555/2425
+child5         vtl 11.5 f0 267 F 945/2555/3785
+child          vtl 13.8 f0 246 F 765/2165/3225
+teenFemale     vtl 14.2 f0 222 F 825/2095/3115
+teenMale       vtl 15.8 f0 130 F 740/1850/2860
+elderlyFemale  vtl 14.8 f0 178 F 735/2015/3030
+elderlyMale    vtl 17.2 f0 125 F 665/1710/2645

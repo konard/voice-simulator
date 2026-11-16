@@ -54,10 +54,21 @@ describe('voice files', () => {
     expect(saveVoice(loaded)).toEqual(JSON.parse(text));
     // Every key also survives the URL fragment of the app.
     expect(decodeHeadConfig(encodeHeadConfig(head))).toEqual(head);
-    for (const seed of [1, 'abc']) {
-      const random = randomHeadConfig(seed);
-      expect(loadVoice(saveVoice(random)).head).toEqual(random);
-      expect(loadVoice(saveVoice(random, { full: true })).head).toEqual(random);
+    // The default, each preset and three random heads (issue 41).
+    const voices = [
+      { head: DEFAULT_HEAD },
+      ...Object.keys(HEAD_PRESETS).map((preset) => ({
+        preset,
+        head: presetHeadConfig(preset),
+      })),
+      ...[1, 'abc', 41].map((seed) => ({ head: randomHeadConfig(seed) })),
+    ];
+    for (const entry of voices) {
+      expect(loadVoice(saveVoice(entry)).head).toEqual(entry.head);
+      expect(loadVoice(saveVoice(entry, { full: true })).head).toEqual(
+        entry.head
+      );
+      expect(loadVoice(saveVoice(entry.head)).head).toEqual(entry.head);
     }
   });
 
@@ -110,6 +121,33 @@ describe('voice files', () => {
     expect(Object.isFrozen(RENAMED_KEYS)).toBe(true);
   });
 
+  it('reports every problem: an unknown key, a range and a group', () => {
+    const file = {
+      format: VOICE_FORMAT,
+      version: VOICE_VERSION,
+      folds: { pitch: 900, wobble: 1 },
+      breathing: { tenseness: 0.5 },
+    };
+    const lines = [
+      'folds.pitch = 900 is outside 60 to 320 Hz',
+      'unknown key "folds.wobble"',
+      'breathing.tenseness belongs to the group folds',
+    ];
+    expect(() => loadVoice(file)).toThrow();
+    try {
+      loadVoice(file);
+    } catch (error) {
+      expect(error.message.split('\n')).toEqual(lines);
+    }
+    const lenient = loadVoice(file, { strict: false });
+    expect(lenient.warnings).toEqual(lines);
+    expect(lenient.head.pitch).toBe(320);
+    expect(lenient.head.tenseness).toBe(0.5);
+    expect(() =>
+      loadVoice({ format: VOICE_FORMAT, version: 2, folds: { pitch: 120 } })
+    ).toThrow();
+  });
+
   it('reports every problem of a file at once', () => {
     const broken = {
       format: 'voice-simulator/head',
@@ -146,7 +184,9 @@ describe('voice files', () => {
     expect(() => loadVoice('{"format": ')).toThrow();
     expect(() => loadVoice([1, 2])).toThrow();
   });
+});
 
+describe('voice schema', () => {
   it('keeps schemas/voice.schema.json current', () => {
     expect(readFileSync(SCHEMA_FILE, 'utf8')).toBe(voiceSchemaText());
     const schema = voiceSchema();

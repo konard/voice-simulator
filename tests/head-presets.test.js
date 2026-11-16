@@ -260,12 +260,35 @@ describe('voice type presets', () => {
       near(range(aged)[1], range(base)[1] + 0.1);
       near(head(aged).speechRate, 0.9);
     }
-    // The rendered pitch follows: bass below tenor below soprano.
-    const f0 = ['bass', 'tenor', 'soprano'].map(
-      (name) => measure(head(name), 'ə').f0
+    // Rendered [a]: pitch and formants fall from soprano to bass, and the
+    // five-year-old has the highest F1 to F3 of all presets
+    // (experiments/issue-41-voice-types.txt). F1 of [a] falls over the whole
+    // series; between soprano and mezzo LPC near f0 = 240 Hz swaps it.
+    const voices = Object.fromEntries(
+      Object.keys(HEAD_PRESETS).map((name) => [name, measure(head(name), 'a')])
     );
-    expect(Math.abs(f0[0] / 95 - 1)).toBeLessThan(0.1);
-    expect(f0[0] < f0[1] && f0[1] < f0[2]).toBe(true);
+    const singers = ['soprano', 'mezzo', 'alto', 'tenor', 'baritone', 'bass'];
+    const sum = (voice) => voice.formants.reduce((a, b) => a + b, 0);
+    for (let index = 1; index < singers.length; index++) {
+      const higher = voices[singers[index - 1]];
+      const lower = voices[singers[index]];
+      expect(lower.f0).toBeLessThan(higher.f0);
+      expect(lower.formants[1]).toBeLessThan(higher.formants[1]);
+      expect(lower.formants[2]).toBeLessThan(higher.formants[2]);
+      expect(sum(lower)).toBeLessThan(sum(higher));
+    }
+    expect(voices.bass.formants[0]).toBeLessThan(voices.tenor.formants[0]);
+    expect(voices.tenor.formants[0]).toBeLessThan(voices.soprano.formants[0]);
+    expect(Math.abs(voices.bass.f0 / 95 - 1)).toBeLessThan(0.1);
+    for (const [name, voice] of Object.entries(voices)) {
+      if (name !== 'child5') {
+        for (const index of [0, 1, 2]) {
+          expect(voice.formants[index]).toBeLessThan(
+            voices.child5.formants[index]
+          );
+        }
+      }
+    }
   });
 });
 
