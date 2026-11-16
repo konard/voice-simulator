@@ -19,6 +19,7 @@ import { CHINESE } from './verbalize-zh.js';
 import { ENGLISH } from './verbalize-en.js';
 import { HINDI } from './verbalize-hi.js';
 import { RUSSIAN } from './verbalize-ru.js';
+import { soundIpa } from '../ipa/parse.js';
 
 /** Verbalisers per language. */
 export const VERBALIZERS = Object.freeze({
@@ -114,6 +115,113 @@ const SENTENCE_BREAKS = new Set(['.', '!', '?', '…']);
 function match(pattern, text, index) {
   pattern.lastIndex = index;
   return pattern.exec(text);
+}
+
+/** Seconds of laughter per written syllable (`hahaha`: 0.6 s). */
+const LAUGH_SYLLABLE_SECONDS = 0.2;
+const HAN_CHAR = /\p{Script=Han}/u;
+const LETTER_OR_MARK = /[\p{L}\p{M}]/u;
+const HYPHENATED_WORD = /[\p{L}\p{M}]+(?:-[\p{L}\p{M}]+)*/uy;
+const ELLIPSIS = /…|\.\.\./y;
+
+const escapeRegExp = (text) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+/**
+ * Laughter of each verbaliser: two or more of its laugh syllables in a
+ * row, with or without hyphens, not followed by a letter (Hanzi: any).
+ */
+const LAUGHTER = Object.values(VERBALIZERS).map((verbalizer) => {
+  const syllables = verbalizer.fillerWords.laugh;
+  const one = `(?:${syllables.map(escapeRegExp).join('|')})`;
+  const han = syllables.every((syllable) => HAN_CHAR.test(syllable));
+  const tail = han ? '' : '(?![\\p{L}\\p{M}])';
+  return {
+    lang: verbalizer.lang,
+    pattern: new RegExp(`${one}(?:-?${one})+${tail}`, 'iuy'),
+    syllable: new RegExp(one, 'giu'),
+  };
+});
+
+/**
+ * The sound (`filler` or `um`) of a written word in `fillers` (the
+ * `FILLER_WORDS` of a verbaliser), or null. A repeated form (`э-э-э`)
+ * is its part; `ellipsis` tells whether `…` follows (Hindi `अ…`).
+ */
+function fillerName(fillers, word, ellipsis) {
+  const parts = word.split('-');
+  const forms = parts.every((part) => part === parts[0])
+    ? [word, parts[0]]
+    : [word];
+  for (const name of ['filler', 'um']) {
+    const spellings = fillers[name];
+    if (
+      forms.some(
+        (form) =>
+          spellings.includes(form) ||
+          (ellipsis && spellings.includes(`${form}…`))
+      )
+    ) {
+      return name;
+    }
+  }
+  return null;
+}
+
+/** Written laughter at `index`: `{text, name, seconds, lang}` or null. */
+function writtenLaughter(text, index) {
+  for (const { lang, pattern, syllable } of LAUGHTER) {
+    const found = match(pattern, text, index);
+    if (found) {
+      const count = found[0].match(syllable).length;
+      return {
+        text: found[0],
+        name: 'laugh',
+        seconds: count * LAUGH_SYLLABLE_SECONDS,
+        lang,
+      };
+    }
+  }
+  return null;
+}
+
+/**
+ * A written hesitation or laughter at `index` (issue 56): `{text, name,
+ * seconds?, lang}`, or null. A Hanzi is read alone (嗯 in 嗯好); other
+ * scripts need a whole word. The ellipsis of a spelling such as `अ…`
+ * stays in the text as a break.
+ */
+function writtenSound(text, index, wordLanguage) {
+  const char = String.fromCodePoint(text.codePointAt(index));
+  const han = HAN_CHAR.test(char);
+  if (!han && LETTER_OR_MARK.test(text[index - 1] ?? '')) {
+    return null;
+  }
+  const laughter = writtenLaughter(text, index);
+  if (laughter) {
+    return laughter;
+  }
+  const word = han ? char : match(HYPHENATED_WORD, text, index)?.[0];
+  if (!word) {
+    return null;
+  }
+  const lang = wordLanguage(word);
+  const fillers = VERBALIZERS[lang]?.fillerWords;
+  const ellipsis = Boolean(match(ELLIPSIS, text, index + word.length));
+  const name = fillers && fillerName(fillers, word.toLowerCase(), ellipsis);
+  return name ? { text: word, name, lang } : null;
+}
+
+/**
+ * Where a run of Hanzi is cut before a written sound (嗯, 呃, 哈哈) that
+ * does not start it: its index, or the length of the run.
+ */
+function hanSoundCut(run) {
+  for (let index = 1; index < run.length; index++) {
+    if (writtenSound(run, index, () => 'zh')) {
+      return index;
+    }
+  }
+  return run.length;
 }
 
 function numberPatterns(verbalizer) {
@@ -310,6 +418,7 @@ class Normalizer {
       this.time,
       this.currencyFirst,
       this.number,
+      this.sound,
       this.abbreviation,
       this.word,
       this.punctuation,
@@ -594,13 +703,33 @@ class Normalizer {
     return end;
   }
 
-  word() {
-    const found =
-      match(HAN, this.text, this.index) ?? match(WORD, this.text, this.index);
+  /**
+   * A written hesitation (`um`, `э-э`, `嗯`) or laughter (`hahaha`,
+   * `ха-ха`, `哈哈`): a word whose IPA is the sound (`⸨um⸩`,
+   * `⸨laugh:0.6⸩`, LAUGH_SYLLABLE_SECONDS per syllable), see FILLER_WORDS
+   * of the verbalisers.
+   */
+  sound() {
+    const found = writtenSound(this.text, this.index, this.wordLanguage);
     if (!found) {
       return null;
     }
-    const word = found[0];
+    const end = this.index + found.text.length;
+    this.current = found.lang;
+    const ipa = soundIpa(found.name, found.seconds);
+    const entry = { text: found.text, ipa, sound: found.name };
+    this.emitWords([entry], this.index, end, found.lang);
+    this.history.push(found.text.toLowerCase());
+    return end;
+  }
+
+  word() {
+    const han = match(HAN, this.text, this.index);
+    const found = han ?? match(WORD, this.text, this.index);
+    if (!found) {
+      return null;
+    }
+    const word = han ? han[0].slice(0, hanSoundCut(han[0])) : found[0];
     const end = this.index + word.length;
     this.current = this.wordLanguage(word);
     const verbalizer = this.verbalizer;

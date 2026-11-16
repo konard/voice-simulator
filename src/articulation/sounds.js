@@ -26,6 +26,7 @@
  */
 
 import { parseIpa } from '../ipa/parse.js';
+import { syllabifyTokens } from '../ipa/syllables.js';
 import { consonantTarget, vowelChannels, vowelTarget } from './phones.js';
 import { EFFORT_RULES } from './effort.js';
 import { sampleState, tractShape } from './tract-shape.js';
@@ -459,6 +460,29 @@ export const BREATHS = Object.freeze({
 const isSyllable = (segment) =>
   segment.kind === 'vowel' || Boolean(segment.token?.syllabic);
 
+/**
+ * The number of syllables after the segment `index` up to the next pause
+ * that ends a sentence (a diphthong is one syllable).
+ */
+function syllablesAfter(segments, index) {
+  const words = new Map();
+  for (let next = index + 1; next < segments.length; next++) {
+    const segment = segments[next];
+    if (endsSentence(segment)) {
+      break;
+    }
+    const token = segment.token;
+    if (segment.kind !== 'pause' && !segment.sound && token?.word >= 0) {
+      words.set(token.word, (words.get(token.word) ?? new Set()).add(token));
+    }
+  }
+  let count = 0;
+  for (const tokens of words.values()) {
+    count += syllabifyTokens([...tokens]).length;
+  }
+  return count;
+}
+
 /** Whether a pause ends a sentence (`.`, `?`, `!`, `‖`). */
 function endsSentence(segment) {
   const token = segment.token;
@@ -494,15 +518,7 @@ export function insertBreaths(segments) {
     if (segment.duration < BREATHS.minPause) {
       return;
     }
-    let syllables = 0;
-    for (let next = index + 1; next < segments.length; next++) {
-      if (endsSentence(segments[next])) {
-        break;
-      }
-      if (isSyllable(segments[next]) && !segments[next].sound) {
-        syllables++;
-      }
-    }
+    const syllables = syllablesAfter(segments, index);
     if (syllables === 0) {
       return;
     }

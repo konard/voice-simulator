@@ -86,6 +86,17 @@ function numberText(number) {
     : chineseNumber(number.integer);
 }
 
+/**
+ * Written hesitations and laughter of Mandarin (issue 56): the spellings of
+ * the sounds `filler` and `um`, and the syllables of laughter, read as
+ * `⸨laugh⸩` when two or more stand in a row (with or without hyphens).
+ */
+export const FILLER_WORDS = Object.freeze({
+  filler: Object.freeze(['呃']),
+  um: Object.freeze(['嗯']),
+  laugh: Object.freeze(['哈']),
+});
+
 /** Mandarin text normalisation rules. */
 /**
  * Question words that make a Mandarin question a wh-question (no rise at
@@ -98,6 +109,7 @@ export const ZH_WH_WORDS = Object.freeze(
 
 export const CHINESE = {
   lang: 'zh',
+  fillerWords: FILLER_WORDS,
   decimalComma: false,
   cardinal,
   digits,

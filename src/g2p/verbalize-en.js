@@ -244,9 +244,21 @@ function spell(letters) {
     .map((letter) => ({ text: letter, ipa: LETTER_IPA[letter], letter: true }));
 }
 
+/**
+ * Written hesitations and laughter of English (issue 56): the spellings of
+ * the sounds `filler` and `um`, and the syllables of laughter, read as
+ * `⸨laugh⸩` when two or more stand in a row (with or without hyphens).
+ */
+export const FILLER_WORDS = Object.freeze({
+  filler: Object.freeze(['uh', 'er']),
+  um: Object.freeze(['um', 'erm']),
+  laugh: Object.freeze(['ha', 'he']),
+});
+
 /** English text normalisation rules. */
 export const ENGLISH = {
   lang: 'en',
+  fillerWords: FILLER_WORDS,
   decimalComma: false,
   cardinal,
   digits,

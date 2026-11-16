@@ -12,6 +12,11 @@
  * written text and range, and tells what is spoken instead: `spoken` on
  * the word and `spoken`, `spokenWord`, `partStart`, `partEnd` on each
  * syllable (see `speakSyllables`).
+ *
+ * Sounds (`⸨laugh⸩`, issue 56) are no words: they are listed in `sounds`
+ * with their times. A written sound (`um`, `hahaha`, a word of
+ * `textToIpa()` with `sound` and `soundIndex`) is also a word, timed by
+ * its sound, with one syllable that holds the whole word.
  */
 
 import { syllableSpans } from '../g2p/orthography.js';
@@ -247,13 +252,67 @@ function timelineWord(group, times, language) {
 }
 
 /**
+ * The time range of every sound of the IPA (`plan.tokens` of kind
+ * `sound`, in order): the union of the segments of its parts.
+ */
+function soundTimes(plan) {
+  const times = new Map();
+  for (const segment of plan.segments) {
+    const token = (segment.soundOf ?? segment).token;
+    if (token?.kind !== 'sound') {
+      continue;
+    }
+    const time = times.get(token);
+    if (time) {
+      time.end = Math.max(time.end, segment.end);
+    } else {
+      times.set(token, { start: segment.start, end: segment.end });
+    }
+  }
+  return plan.tokens
+    .filter((token) => token.kind === 'sound')
+    .map((token) => times.get(token) ?? null);
+}
+
+/** The timeline words of the written sounds of `words`. */
+function soundWords(plan, words, language) {
+  const times = soundTimes(plan);
+  return words.flatMap((word) => {
+    const time = word.sound ? times[word.soundIndex] : null;
+    if (!time || !(time.start < time.end)) {
+      return [];
+    }
+    const text = word.original ?? word.text;
+    const source = {
+      sourceStart: word.sourceStart ?? null,
+      sourceEnd: word.sourceEnd ?? null,
+    };
+    const { start, end } = time;
+    return [
+      {
+        text,
+        lang: word.lang ?? language,
+        ipa: word.ipa,
+        sound: word.sound,
+        start,
+        end,
+        ...source,
+        syllables: [{ ipa: word.ipa, stress: 0, start, end, text, ...source }],
+      },
+    ];
+  });
+}
+
+/**
  * Words and syllables of a planned utterance with their times.
  * @param {{tokens: object[], segments: object[], duration: number}} plan
  *   The result of `planUtterance`.
  * @param {{words?: object[], ipa?: string, language?: string}} [options]
  *   `words` from `textToIpa` map the timeline to the source text; with
  *   no words, the whitespace-separated chunks of `ipa` are the source.
- * @returns {{duration: number, words: {text: string, lang: string, ipa: string, start: number, end: number, sourceStart: number|null, sourceEnd: number|null, spoken?: string, syllables: {ipa: string, stress: number, start: number, end: number, text?: string, sourceStart?: number, sourceEnd?: number, spoken?: string, spokenWord?: number, partStart?: number, partEnd?: number}[]}[]}}
+ *   `sounds` are the `{name, start, end}` of the sounds (`plan.sounds`,
+ *   with the breaths); a word that is a written sound has `sound`.
+ * @returns {{duration: number, words: {text: string, lang: string, ipa: string, start: number, end: number, sourceStart: number|null, sourceEnd: number|null, spoken?: string, sound?: string, syllables: {ipa: string, stress: number, start: number, end: number, text?: string, sourceStart?: number, sourceEnd?: number, spoken?: string, spokenWord?: number, partStart?: number, partEnd?: number}[]}[], sounds: {name: string, start: number, end: number}[]}}
  */
 export function utteranceTimeline(plan, options = {}) {
   const times = tokenTimes(plan.segments);
@@ -263,11 +322,20 @@ export function utteranceTimeline(plan, options = {}) {
     : ipaSourceWords(options.ipa, options.language);
   const sources = sourceOfEachWord(words, groups.length);
   const language = options.language ?? '';
+  const spoken = groupWords(groups, sources)
+    .map((group) => timelineWord(group, times, language))
+    .filter(Boolean);
+  const written = soundWords(plan, words, language);
   return {
     duration: plan.duration,
-    words: groupWords(groups, sources)
-      .map((group) => timelineWord(group, times, language))
-      .filter(Boolean),
+    words: written.length
+      ? [...spoken, ...written].sort((a, b) => a.start - b.start)
+      : spoken,
+    sounds: (plan.sounds ?? []).map(({ name, start, end }) => ({
+      name,
+      start,
+      end,
+    })),
   };
 }
 
