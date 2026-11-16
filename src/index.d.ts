@@ -362,6 +362,12 @@ export interface RenderOptions {
   /** WebGPU device for the 3D solver (render with renderAsync). */
   device?: GPUDeviceLike;
   /**
+   * Start at sample `Math.round(startTime * sampleRate)` of the utterance
+   * (s, default 0) with a silent solver and listener (issue 29); see
+   * `restoreSources`.
+   */
+  startTime?: number;
+  /**
    * The engine of renderPlan and renderPlanAsync (default `'auto'`: Rust
    * when it loads, else JavaScript); see createEngine.
    */
@@ -1126,6 +1132,16 @@ export declare class VoiceRenderer {
     target: Float32Array,
     options?: { field?: boolean }
   ): Promise<number>;
+  /**
+   * The glottis state (SOURCE_STATE.LENGTH values with the 'lf' source,
+   * empty with the folds). The noise generators are not part of it.
+   */
+  saveSources(): Float64Array;
+  /**
+   * Take over the state `saveSources()` of another renderer of the same
+   * utterance returned (issue 29). An empty array changes nothing.
+   */
+  restoreSources(state: ArrayLike<number>): void;
 }
 export declare function renderPlan(
   plan: Plan,
@@ -1181,6 +1197,94 @@ export declare function createThreadPool(
     url?: URL | string;
   }
 ): Promise<ThreadPool>;
+/**
+ * Indices of the glottis state `saveSources()` returns (issue 29); RANDOM
+ * is the state of its random generator.
+ */
+export declare const SOURCE_STATE: Readonly<{
+  PHASE: 0;
+  PERIOD: 1;
+  JITTER: 2;
+  SHIMMER: 3;
+  SMOOTHED: 4;
+  INTENSITY: 5;
+  NOISE_MODULATION: 6;
+  PULSE_TENSENESS: 7;
+  RANDOM: 8;
+  LENGTH: 9;
+}>;
+/** Greatest common divisor of three sample rates (issue 29). */
+export declare function switchGrid(a: number, b: number, c: number): number;
+/** One tier switch of an AdaptiveStream. */
+export interface StreamSwitch {
+  /** Stream time (s) where the old tier stops: on the common grid. */
+  at: number;
+  from: number;
+  level: number;
+  /** 20 log10 of the gain matched over the crossfade. */
+  gainDb: number;
+  /** Correlation of the two tiers over the crossfade, 0 to 1. */
+  r: number;
+}
+/** A renderer an AdaptiveStream drives. */
+export interface StreamRenderer {
+  readonly sampleRate: number;
+  readonly totalSamples: number;
+  readonly duration: number;
+  readonly done: boolean;
+  renderAsync(target: Float32Array, options?: object): Promise<number>;
+  saveSources(): Float64Array;
+  restoreSources(state: ArrayLike<number>): void;
+}
+export interface AdaptiveStreamOptions<R extends StreamRenderer> {
+  /** A renderer of tier `level` with `extra` merged into its options. */
+  createRenderer(level: number, extra: { startTime?: number }): R | Promise<R>;
+  level: number;
+  /** Output rate (Hz) whatever the tier. */
+  streamRate: number;
+  tiers?: readonly { sampleRate: number }[];
+  /** Seconds the new tier renders before it is heard (default 0.03). */
+  preroll?: number;
+  /** Seconds of the crossfade (default 0.025). */
+  overlap?: number;
+  /** A room or an enclosure: longer preroll, the level only goes down. */
+  room?: boolean;
+  /** Options of every renderAsync call. */
+  renderOptions?: object;
+  /** Called after every piece (at most 256 samples) a renderer gives. */
+  onRender?: (renderer: R) => void;
+}
+/**
+ * One utterance at a fixed output rate whose audio tier can change while
+ * it renders (issue 29): the new tier starts at a time on the common grid
+ * of the three rates with the source state of the old one and takes over
+ * after a level-matched crossfade. The length never changes.
+ */
+export declare class AdaptiveStream<R extends StreamRenderer = EngineRenderer> {
+  static create<R extends StreamRenderer>(
+    options: AdaptiveStreamOptions<R>
+  ): Promise<AdaptiveStream<R>>;
+  constructor(options: AdaptiveStreamOptions<R>);
+  readonly ready: Promise<void>;
+  readonly level: number;
+  readonly streamRate: number;
+  /** Stream samples written so far. */
+  readonly position: number;
+  readonly totalSamples: number;
+  readonly done: boolean;
+  /** The renderer that is heard. */
+  readonly renderer: R;
+  readonly switches: StreamSwitch[];
+  /**
+   * Ask for another tier; false (and nothing changes) during a switch, at
+   * the same level, when the grid of the rates is below 20 Hz, or upwards
+   * with `room`. A request too close to the end is dropped later.
+   */
+  setLevel(level: number): boolean;
+  /** Fill `target` from `position` on; resolves to the samples written. */
+  render(target: Float32Array): Promise<number>;
+  close(): void;
+}
 /** Pages (64 KiB) of the shared memory of the threads build. */
 export declare const THREAD_MEMORY: Readonly<{
   INITIAL: 512;
@@ -1352,6 +1456,10 @@ export declare class RustVoiceRenderer {
   readonly threads: number;
   render(target: Float32Array): number;
   renderAsync(target: Float32Array): Promise<number>;
+  /** As VoiceRenderer.saveSources (`vs_renderer_sources_save`). */
+  saveSources(): Float64Array;
+  /** As VoiceRenderer.restoreSources (`vs_renderer_sources_restore`). */
+  restoreSources(state: ArrayLike<number>): void;
   /**
    * Acoustic pressure per oral and nasal section; with `solver: 'fdtd3d'`,
    * `pressure` holds the pressure of every cell of the voxel model.
@@ -1647,6 +1755,12 @@ export declare const BREATH_EXPONENT: number;
 export declare class Glottis {
   constructor(options?: GlottisOptions);
   step(dt: number, control: GlottisControl, noise: number): number;
+  /** Tenseness of the running period. */
+  pulseTenseness: number;
+  /** The SOURCE_STATE.LENGTH values in the order of SOURCE_STATE. */
+  saveState(): Float64Array;
+  /** Set what saveState returned and rebuild the pulse shape. */
+  restoreState(state: ArrayLike<number>): void;
 }
 /** One step of Aerodynamics (cgs: cm², cm³/s, dyn/cm²). */
 export interface AirflowState {
@@ -2228,6 +2342,37 @@ export declare function fallbackLevel(
   load: number,
   target?: number
 ): number;
+/**
+ * The tier of a running utterance (issue 29): down within `downAfter`
+ * (0.1 s) of a load above `target`, up one level after `upAfter` (3 s) of
+ * headroom, never back to a level it left.
+ */
+export declare class StreamGovernor<T extends { cost: number } = AudioTier> {
+  constructor(options?: {
+    tiers?: readonly T[];
+    level?: number;
+    maxLevel?: number;
+    target?: number;
+    smoothing?: number;
+    downAfter?: number;
+    upAfter?: number;
+    margin?: number;
+  });
+  level: number;
+  readonly maxLevel: number;
+  /** The highest level it may go up to: below every level it left. */
+  readonly ceiling: number;
+  /** Smoothed busy / audio, null before the first record. */
+  readonly load: number | null;
+  /** Seconds of audio since the last switch. */
+  readonly since: number;
+  /** A level to switch to, or null. */
+  record(busy: number, audio: number): number | null;
+  /** The player ran dry: one level down, or null at level 0. */
+  underrun(): number | null;
+  /** The stream switched to `level`: the load is predicted for it. */
+  switched(level: number): void;
+}
 /** Detects in the first moments of an utterance that a tier is too slow. */
 export declare class OverloadDetector {
   constructor(options?: {

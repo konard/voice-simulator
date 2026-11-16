@@ -40,6 +40,10 @@ async function pair(ipa, from, to) {
     rms(switched.samples, fadeStart, fadeStart + at(0.025)) /
       rms(switched.samples, fadeStart - at(0.025), fadeStart)
   );
+  const plainOverlap = db(
+    rms(plain.samples, fadeStart, fadeStart + at(0.025)) /
+      rms(plain.samples, fadeStart - at(0.025), fadeStart)
+  );
   const step =
     largestStep(switched.samples, at(0.25), at(0.45)) /
     largestStep(plain.samples, at(0.25), at(0.45));
@@ -56,7 +60,7 @@ async function pair(ipa, from, to) {
   );
   console.log(
     `${ipa} ${from}->${to}: at=${s.at} r=${s.r.toFixed(4)} gainDb=${s.gainDb.toFixed(3)} ` +
-      `worst5ms=${worst.toFixed(3)} dB overlapVsBefore=${overlap.toFixed(3)} dB ` +
+      `worst5ms=${worst.toFixed(3)} dB overlapVsBefore=${overlap.toFixed(3)} dB (plain ${plainOverlap.toFixed(3)}) ` +
       `stepRatio=${step.toFixed(3)} pitchCorr=${pitch.correlation.toFixed(4)} lag=${pitch.lag} ` +
       `level0.4-0.6=${level.toFixed(3)} dB (${ms.toFixed(0)} ms)`
   );
@@ -65,5 +69,6 @@ async function pair(ipa, from, to) {
 console.log(`engine ${engine.name ?? process.argv[2] ?? 'js'}`);
 await pair('aː', 'low', 'minimal');
 await pair('aː', 'medium', 'high');
+await pair('sː', 'medium', 'low');
 await pair('sː', 'low', 'minimal');
 await pair('sː', 'medium', 'high');

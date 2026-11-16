@@ -453,7 +453,7 @@ console.log(describeGpuDevice(device));
 Lower-level building blocks are exported too: `planUtterance`,
 `sampleState`, `tractShape`, `Waveguide`, `Fdtd2d`, `buildSheet`, `Fdtd3d`,
 `buildVoxelModel`, `VoiceRenderer`, `headMesh`, `tubeMesh`, `headModelObj`,
-`LodGovernor`, `chooseTier`, `chooseTierWithGpu`, `measureAudioTier`,
+`LodGovernor`, `StreamGovernor`, `AdaptiveStream`, `chooseTier`, `chooseTierWithGpu`, `measureAudioTier`,
 `benchmarkAudioTiersAsync` and more; see
 [`src/index.d.ts`](src/index.d.ts). A runnable example is in
 [`examples/basic-usage.js`](examples/basic-usage.js).
@@ -1002,12 +1002,19 @@ load, predicted from the cheaper tier, is far above the target, and it stops
 measuring a tier as soon as it is clearly too slow; the app remembers the
 result per device. `voice-simulator benchmark` first renders the cheap tiers
 for 0.5 s so the just-in-time compiler is warm, then reports the median of
-`--repeats` (default 5) measurements of `--seconds` (default 0.3) per tier. In the first 40-300 ms of each utterance an
-`OverloadDetector` checks that the tier keeps up with real time and, if not,
-the utterance restarts at once on a cheaper tier before any gap is audible.
-While speaking, `LodGovernor` steps down
-immediately when the load exceeds the target and steps up only after a dwell
-period when the next tier is predicted to fit with margin. Visual tiers
+`--repeats` (default 5) measurements of `--seconds` (default 0.3) per tier. While speaking,
+the tier changes in the middle of the utterance without a restart (issue 29):
+`StreamGovernor` steps one or more tiers down as soon as the render load of
+0.1 s of chunks is above 0.8 or the player runs dry, and one tier up after
+3 s of headroom, never back to a tier it left. `AdaptiveStream` renders the
+new tier from the switch time on (`startTime`, with the voice source state
+handed over), resamples every tier to one stream rate and crossfades over
+one pitch period, scaled so the level of the two tiers matches; the worker
+reports each switch with a `tier` message. A switch from `low` to `minimal`
+moved the level of a sustained `aː` by at most 0.2 dB in any 5 ms window and
+kept the pitch in phase (`experiments/issue-29-switch-levels.txt`). Without `maxTier` the worker
+climbs only within the solver it started on, since each 3D tier needs its
+own voxel model and building one stalls the stream for 0.3-0.5 s. Visual tiers
 (mesh LOD 0-3, pressure-field points) are governed the same way from the
 measured frame time.
 

@@ -198,6 +198,9 @@ The module imports nothing; the threads build imports only its memory
 | `vs_renderer_render(h, frames, n, out, samples) -> i32`            | Renders `samples` `f32` samples into `out` with the `n` frames at `frames`; how many |
 | `vs_renderer_position(handle) -> i32`                              | Samples rendered so far                                                              |
 | `vs_renderer_field(handle, out, capacity) -> i32`                  | Writes the pressure of the oral, then the nasal sections; how many                   |
+| `vs_renderer_seek(handle, seconds) -> i32`                         | Starts the renderer at `seconds` into the utterance (issue 29); 0 or `BAD_ARGUMENT`  |
+| `vs_renderer_sources_save(handle, out) -> i32`                     | Writes the `SOURCE_STATE.LENGTH` glottis values (`f64`) at `out`; how many           |
+| `vs_renderer_sources_restore(handle, ptr) -> i32`                  | Sets the source state from the values `vs_renderer_sources_save` wrote; 0 or error   |
 | `vs_renderer_free(handle) -> i32`                                  | Frees the renderer; 0 or `BAD_HANDLE`                                                |
 | `vs_biquad_run(kind, f, q, rate, data, count) -> i32`              | A `Biquad` (0 low-pass, 1 high-pass, 2 band-pass) over `data` in place; 0 or error   |
 | `vs_glottis_run(seed, params, data, count) -> i32`                 | A `Glottis` over the noise at `data` in place (23 parameters); periods or error      |
@@ -795,18 +798,27 @@ const worker = new Worker(new URL('voice-simulator/worker', import.meta.url), {
 worker.postMessage({ type: 'engine' }); // -> {type: 'engine', name: 'rust', simd, threads, reason}
 ```
 
-| Message in                                                                                                                          | Answer                                                                                                                                 |
-| ----------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
-| `{type: 'engine', engine?, threads?, simd?}`                                                                                        | `{type: 'engine', name, simd, threads, reason}`; `{type: 'engine', name: null, error}` when `'rust'` cannot load                       |
-| `{type: 'benchmark', head, gpu?, engine?, threads?, simd?}`                                                                         | `{type: 'benchmark', level, loads, measured, gpu, gpuLoads}`                                                                           |
-| `{type: 'speak', id, ipa, lang, head, seed, tier, auto, chunkSize, microphone?, room?, enclosure?, gpu?, engine?, threads?, simd?}` | `{type: 'start', id, sampleRate, solver, gpu, totalSamples, model?, engine, fallbackReason}`, then `chunk`s and `end` (or `overload`s) |
-| `{type: 'cancel', id}`                                                                                                              | the utterance stops; no `end`                                                                                                          |
+| Message in                                                                                                                                                 | Answer                                                                                                                                                              |
+| ---------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `{type: 'engine', engine?, threads?, simd?}`                                                                                                               | `{type: 'engine', name, simd, threads, reason}`; `{type: 'engine', name: null, error}` when `'rust'` cannot load                                                    |
+| `{type: 'benchmark', head, gpu?, engine?, threads?, simd?}`                                                                                                | `{type: 'benchmark', level, loads, measured, gpu, gpuLoads}`                                                                                                        |
+| `{type: 'speak', id, ipa, lang, head, seed, tier, auto, chunkSize, streamRate?, maxTier?, microphone?, room?, enclosure?, gpu?, engine?, threads?, simd?}` | `{type: 'start', id, sampleRate, solver, gpu, totalSamples, model?, engine, fallbackReason}`, then `chunk`s (with `tier`s between them in automatic mode) and `end` |
+| `{type: 'underrun', id}`                                                                                                                                   | automatic mode: the player ran dry, the next chunk is one tier lower                                                                                                |
+| `{type: 'cancel', id}`                                                                                                                                     | the utterance stops; no `end`                                                                                                                                       |
 
-Out per utterance: `{type: 'overload', id, from, level, load}` (auto mode:
-the tier could not keep up and the utterance restarts on `level`),
+Out per utterance: `{type: 'tier', id, at, from, level, reason, gainDb,
+solver, gpu, model}` (automatic mode, issue 29: from `at` seconds on the
+utterance is heard at tier `level`; `reason` is `'load'`, `'headroom'` or
+`'underrun'`, `gainDb` the level match of the crossfade),
+`{type: 'overload', id, from, level, load}` (WebGPU failed and the
+utterance restarts on the CPU),
 `{type: 'chunk', id, start, samples, field, load}` (the samples and the RMS
-pressure field of the chunk), `{type: 'end', id, load}` and
-`{type: 'error', id, message}`. `engine` in `start` is the engine that
+pressure field of the chunk), `{type: 'end', id, load, level}` (`level`:
+the tier the utterance ended on) and `{type: 'error', id, message}`.
+In automatic mode the utterance streams at `streamRate` (default 48000 Hz,
+the rate of the player) whatever its tier, so a switch never changes the
+rate of the stream; without `maxTier` it climbs only within the solver it
+started on, because each 3D tier needs its own voxel model. `engine` in `start` is the engine that
 renders this utterance (`'js'` on WebGPU, for example, with the reason in
 `fallbackReason`).
 

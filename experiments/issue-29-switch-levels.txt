@@ -1,0 +1,12 @@
+engine rust
+aː low->minimal: at=0.32 r=0.9887 gainDb=-0.055 worst5ms=0.202 dB overlapVsBefore=-0.546 dB (plain -0.551) stepRatio=0.984 pitchCorr=0.9994 lag=-1 level0.4-0.6=-0.021 dB (213 ms)
+aː medium->high: at=0.304 r=0.6443 gainDb=-0.309 worst5ms=1.117 dB overlapVsBefore=-0.690 dB (plain -0.691) stepRatio=1.000 pitchCorr=0.9997 lag=-1 level0.4-0.6=0.342 dB (1800 ms)
+sː medium->low: at=0.304 r=0.0000 gainDb=-2.748 worst5ms=2.395 dB overlapVsBefore=0.455 dB (plain 0.541) stepRatio=0.885 pitchCorr=0.0865 lag=-24 level0.4-0.6=0.212 dB (233 ms)
+sː low->minimal: at=0.32 r=0.0000 gainDb=-1.029 worst5ms=-1.781 dB overlapVsBefore=-1.141 dB (plain -0.923) stepRatio=0.949 pitchCorr=0.0776 lag=-12 level0.4-0.6=-0.249 dB (162 ms)
+sː medium->high: at=0.304 r=0.0304 gainDb=-0.895 worst5ms=-3.735 dB overlapVsBefore=0.437 dB (plain 0.541) stepRatio=0.885 pitchCorr=0.0722 lag=-19 level0.4-0.6=-0.434 dB (1337 ms)
+engine js
+aː low->minimal: at=0.32 r=0.9887 gainDb=-0.055 worst5ms=0.202 dB overlapVsBefore=-0.546 dB (plain -0.551) stepRatio=0.984 pitchCorr=0.9994 lag=-1 level0.4-0.6=-0.021 dB (495 ms)
+aː medium->high: at=0.304 r=0.6443 gainDb=-0.309 worst5ms=1.117 dB overlapVsBefore=-0.690 dB (plain -0.691) stepRatio=1.000 pitchCorr=0.9997 lag=-1 level0.4-0.6=0.342 dB (1621 ms)
+sː medium->low: at=0.304 r=0.0000 gainDb=-2.748 worst5ms=2.395 dB overlapVsBefore=0.455 dB (plain 0.541) stepRatio=0.885 pitchCorr=0.0865 lag=-24 level0.4-0.6=0.212 dB (287 ms)
+sː low->minimal: at=0.32 r=0.0000 gainDb=-1.029 worst5ms=-1.781 dB overlapVsBefore=-1.141 dB (plain -0.923) stepRatio=0.949 pitchCorr=0.0776 lag=-12 level0.4-0.6=-0.249 dB (244 ms)
+sː medium->high: at=0.304 r=0.0304 gainDb=-0.895 worst5ms=-3.735 dB overlapVsBefore=0.437 dB (plain 0.541) stepRatio=0.885 pitchCorr=0.0722 lag=-19 level0.4-0.6=-0.434 dB (1542 ms)
