@@ -19,9 +19,18 @@ function entries(data) {
   return data.first.flatMap((_, index) => decodeBlock(data, index));
 }
 
-for (const [name, data] of Object.entries({ EN_LEXICON, ZH_READINGS, ZH_PHRASES })) {
+for (const [name, data] of Object.entries({
+  EN_LEXICON,
+  ZH_READINGS,
+  ZH_PHRASES,
+})) {
   sizes(name, data);
-  sizes(`${name} without merges`, encodeVslex(data.lang, entries(data), { merge: false }));
+  sizes(
+    `${name} without merges`,
+    encodeVslex(data.lang, entries(data), { merge: false })
+  );
 }
-const multi = entries(ZH_READINGS).filter(([, variants]) => variants.length > 1);
+const multi = entries(ZH_READINGS).filter(
+  ([, variants]) => variants.length > 1
+);
 console.log(`characters with more than one reading: ${multi.length}`);

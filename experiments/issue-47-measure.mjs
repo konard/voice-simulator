@@ -36,15 +36,21 @@ for (const [lang, id] of [
   console.log(
     `${id}: ${lines.length} lines, ${result.words} words, ${(100 * result.share).toFixed(2)} % not from rules`
   );
-  console.log(`  missing: ${result.missing.map(([w, n]) => `${w} ${n}`).join(', ')}`);
+  console.log(
+    `  missing: ${result.missing.map(([w, n]) => `${w} ${n}`).join(', ')}`
+  );
 }
 if (existsSync(aishell)) {
-  const lines = heldOut(readFileSync(aishell, 'utf8').split('\n').filter(Boolean));
+  const lines = heldOut(
+    readFileSync(aishell, 'utf8').split('\n').filter(Boolean)
+  );
   const result = aishellAccuracy(lines, { errors: 40 });
   console.log(
     `aishell held-out: ${lines.length} lines, ${result.syllables} syllables, ${result.errors} errors, ${(100 * result.share).toFixed(2)} % read as written`
   );
-  console.log(`  misread: ${result.misread.map(([w, n]) => `${w} ${n}`).join(', ')}`);
+  console.log(
+    `  misread: ${result.misread.map(([w, n]) => `${w} ${n}`).join(', ')}`
+  );
 } else {
   console.log(`${aishell}: not found`);
 }
