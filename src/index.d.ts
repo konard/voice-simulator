@@ -359,6 +359,15 @@ export interface RenderOptions {
   kernel?: 'wasm' | 'js';
   /** WebGPU device for the 3D solver (render with renderAsync). */
   device?: GPUDeviceLike;
+  /**
+   * The engine of renderPlan and renderPlanAsync (default `'auto'`: Rust
+   * when it loads, else JavaScript); see createEngine.
+   */
+  engine?: EngineName | Engine;
+  /** Threads of the engine (default 1); see createEngine. */
+  threads?: number | 'auto';
+  /** WebAssembly SIMD build of the Rust engine (default `'auto'`). */
+  simd?: 'auto' | boolean;
 }
 
 /** A WebGPU GPUDevice (typed loosely so the package needs no WebGPU types). */
@@ -409,6 +418,16 @@ export interface SynthesizeOptions {
   model?: object;
   /** WebGPU device for the 3D solver (synthesizeAsync, synthesizeStream). */
   device?: GPUDeviceLike;
+  /**
+   * The engine that renders (default `'auto'`: Rust when it loads, else
+   * JavaScript); see createEngine. Rust and JavaScript differ by up to 1e-4
+   * per sample, so `'js'` gives byte-stable output.
+   */
+  engine?: EngineName | Engine;
+  /** Threads of the engine (default 1); see createEngine. */
+  threads?: number | 'auto';
+  /** WebAssembly SIMD build of the Rust engine (default `'auto'`). */
+  simd?: 'auto' | boolean;
 }
 
 export interface SynthesisResult extends Transcription {
@@ -1031,6 +1050,89 @@ export declare function loadEngineModule(
   source?: WebAssembly.Module | BufferSource | URL | string | null,
   options?: { simd?: 'auto' | boolean }
 ): Promise<EngineModule | null>;
+/**
+ * loadEngineModule without a promise: reads and compiles synchronously
+ * where `process.getBuiltinModule` exists (Node.js, Bun, Deno); elsewhere
+ * (browsers) it returns undefined ("cannot tell without awaiting").
+ */
+export declare function loadEngineModuleSync(
+  source?: WebAssembly.Module | BufferSource | URL | string | null,
+  options?: { simd?: 'auto' | boolean }
+): EngineModule | null | undefined;
+
+// The engine choice: Rust by default, JavaScript as the fallback (issue 25)
+/**
+ * `'auto'` (Rust when it loads, else JavaScript), `'rust'` (an error when
+ * it does not load) or `'js'` (never loads WebAssembly).
+ */
+export type EngineName = 'auto' | 'rust' | 'js';
+/** The values of the `engine` option. */
+export declare const ENGINE_NAMES: readonly EngineName[];
+/** Options of createEngine and getEngine. */
+export interface EngineOptions {
+  engine?: EngineName | Engine;
+  /** A positive integer or `'auto'` (default 1). */
+  threads?: number | 'auto';
+  /** Default `'auto'`. */
+  simd?: 'auto' | boolean;
+  /** As for loadEngineModule; an engine from a source is not cached. */
+  source?: WebAssembly.Module | BufferSource | URL | string | null;
+}
+/** A renderer of an engine: it says which engine renders and why. */
+export type EngineRenderer = (VoiceRenderer | RustVoiceRenderer) & {
+  /** The engine that renders this renderer. */
+  engine: 'rust' | 'js';
+  /** Why it is not Rust (null when it is, or when `'js'` was asked for). */
+  fallbackReason: string | null;
+};
+/** A rendering engine: the Rust engine or the JavaScript renderer. */
+export declare class Engine {
+  constructor(settings: {
+    name: 'rust' | 'js';
+    requested: EngineName;
+    module?: EngineModule | null;
+    reason?: string | null;
+    key?: string | null;
+  });
+  /** The engine that renders. */
+  readonly name: 'rust' | 'js';
+  /** The `engine` option it was created for. */
+  readonly requested: EngineName;
+  /** Whether the Rust engine was built with WebAssembly SIMD. */
+  readonly simd: boolean;
+  /** Threads the engine renders with (1 until threads land, issue 24). */
+  readonly threads: number;
+  /** Why the engine is JavaScript under `'auto'`, else null. */
+  readonly reason: string | null;
+  readonly module: EngineModule | null;
+  /** Optional engine features in use. */
+  features(): string[];
+  /** Why this engine renders the options in JavaScript, or null. */
+  supports(renderOptions?: RenderOptions): string | null;
+  /**
+   * A RustVoiceRenderer when this is the Rust engine and it supports the
+   * options, else a VoiceRenderer. Free a Rust renderer with `free()`.
+   */
+  createRenderer(plan: Plan, renderOptions?: RenderOptions): EngineRenderer;
+  /** Drop the engine and its cache entry. */
+  close(): void;
+}
+/**
+ * Load an engine, cached by `engine|threads|simd`. `'rust'` rejects with
+ * an Error whose `code` is `'ENGINE_UNAVAILABLE'` when it does not load. An
+ * engine object is returned as it is.
+ */
+export declare function createEngine(
+  options?: EngineName | Engine | EngineOptions
+): Promise<Engine>;
+/**
+ * createEngine without a promise: the cached engine, else a synchronous
+ * load where the runtime allows it (Node.js, Bun, Deno). In browsers
+ * `'auto'` gives JavaScript until `await createEngine()` has run.
+ */
+export declare function getEngine(
+  options?: EngineName | Engine | EngineOptions
+): Engine;
 /**
  * VoiceRenderer with the waveguide (issue 22) or the 3D FDTD solver (issue
  * 23) on the Rust engine: the same samples within parity class B. Options
@@ -1926,6 +2028,8 @@ export declare function measureAudioTier(
     seconds?: number;
     limit?: number;
     repeats?: number;
+    /** Default `'auto'`; see createEngine. */
+    engine?: EngineName | Engine;
   }
 ): number;
 export declare function benchmarkAudioTiers(options?: {
@@ -1935,6 +2039,8 @@ export declare function benchmarkAudioTiers(options?: {
   repeats?: number;
   /** Seconds spent rendering the cheap tiers before measuring (default 0). */
   warmUp?: number;
+  /** Default `'auto'`; see createEngine. */
+  engine?: EngineName | Engine;
 }): {
   level: number;
   tier: AudioTier;
@@ -1954,6 +2060,7 @@ export declare function measureAudioTierAsync(
     limit?: number;
     device?: GPUDeviceLike | null;
     chunk?: number;
+    engine?: EngineName | Engine;
   }
 ): Promise<number>;
 /** benchmarkAudioTiers with the 3D tiers on a WebGPU `device` when given. */
@@ -1962,6 +2069,7 @@ export declare function benchmarkAudioTiersAsync(options?: {
   head?: HeadConfig;
   seconds?: number;
   device?: GPUDeviceLike | null;
+  engine?: EngineName | Engine;
 }): Promise<GpuTierChoice & { tier: AudioTier }>;
 
 // Audio formats (issue 5)
