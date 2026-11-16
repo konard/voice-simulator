@@ -265,10 +265,12 @@ export class WorkletPlayer extends AudioPlayer {
       this.#fillRing();
     } else {
       for (const samples of this.pending) {
+        // Count before posting: the transfer detaches the buffer, and the
+        // length of `samples` is 0 afterwards.
+        this.pushed += samples.length;
         this.node.port.postMessage({ type: 'chunk', samples }, [
           samples.buffer,
         ]);
-        this.pushed += samples.length;
       }
       this.pending = [];
     }
