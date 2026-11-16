@@ -10,6 +10,7 @@
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { describe, it, expect } from 'test-anywhere';
 import { LANGUAGES, textToIpa } from '../src/g2p/index.js';
 import {
@@ -441,7 +442,12 @@ describe('accent wiring', () => {
     expect(russian.code).toBe(0);
     expect(russian.stdout).toEqual(['ˈsʲink']);
     expect(russian.stdout).not.toEqual(plain.stdout);
-    const file = await cli(['ipa', '--accent', EXAMPLE.pathname, 'three']);
+    const file = await cli([
+      'ipa',
+      '--accent',
+      fileURLToPath(EXAMPLE),
+      'three',
+    ]);
     expect(file.stdout).toEqual(['ˈt̪ɾi']);
     const level = await cli([
       'ipa',
@@ -505,7 +511,8 @@ describe('accent wiring', () => {
     expect(options({ accentLevel: '0.5' }).accentLevel).toBe(0.5);
     expect(thrown(() => options({ accent: 'ru-south' })).status).toBe(400);
     expect(
-      thrown(() => options({ lang: 'en', accent: EXAMPLE.pathname })).status
+      thrown(() => options({ lang: 'en', accent: fileURLToPath(EXAMPLE) }))
+        .status
     ).toBe(400);
     expect(thrown(() => options({ accentLevel: '2' })).status).toBe(400);
     expect(thrown(() => options({ accent: { format: 'x' } })).status).toBe(400);
