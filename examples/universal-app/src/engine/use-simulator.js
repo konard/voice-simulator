@@ -33,7 +33,8 @@ function writeProgress(refs, frame) {
 /**
  * Main-thread tasks over 50 ms between the benchmark request and its answer
  * (issue 28: the benchmark must not block the page); the HUD shows them with
- * `?debug`.
+ * `?debug`. Tasks during an utterance are the app's own: the benchmark is
+ * paused then.
  */
 function useBenchmarkLongTasks(engineRef) {
   const [longTasks, setLongTasks] = useState(0);
@@ -43,17 +44,19 @@ function useBenchmarkLongTasks(engineRef) {
       return undefined;
     }
     const observer = new Observer((list) => {
-      const span = engineRef.current?.status.benchmark;
+      const engine = engineRef.current;
+      const span = engine?.status.benchmark;
       if (span?.from === null || span?.from === undefined) {
         return;
       }
-      const count = list
-        .getEntries()
-        .filter(
-          (entry) =>
-            entry.startTime + entry.duration >= span.from &&
-            (span.to === null || entry.startTime <= span.to)
-        ).length;
+      const count = list.getEntries().filter((entry) => {
+        const end = entry.startTime + entry.duration;
+        return (
+          end >= span.from &&
+          (span.to === null || entry.startTime <= span.to) &&
+          !engine.duringSpeech(entry.startTime, end)
+        );
+      }).length;
       if (count > 0) {
         setLongTasks((total) => total + count);
       }

@@ -350,6 +350,31 @@ describe('voice engine benchmark cache', () => {
 });
 
 describe('voice engine quality settings', () => {
+  it('keeps the utterance times the debug long tasks leave out', async () => {
+    const { engine } = benchmarkEngine();
+    const before = globalThis.performance.now();
+    expect(engine.duringSpeech(before - 10, before - 5)).toBe(false);
+    const speaking = engine.speak({
+      text: 'ˈa',
+      ipa: true,
+      lang: 'en',
+      head: {},
+      seed: '1',
+      mode: 'visual',
+    });
+    expect(engine.duringSpeech(before + 1e6, before + 1e6 + 1)).toBe(true);
+    await speaking;
+    engine.stop();
+    const after = globalThis.performance.now();
+    expect(engine.speechSpans.length).toBe(1);
+    expect(engine.duringSpeech(before, after)).toBe(true);
+    expect(engine.duringSpeech(after + 1, after + 2)).toBe(false);
+    // A failed utterance ends its span too.
+    const failed = await engine.speak(null).catch((error) => error);
+    expect(failed instanceof TypeError).toBe(true);
+    expect(engine.speechFrom).toBe(null);
+  });
+
   it('a fixed tier survives a reload', () => {
     withStorage((storage) => {
       const first = benchmarkEngine();

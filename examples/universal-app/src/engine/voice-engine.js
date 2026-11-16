@@ -35,6 +35,8 @@ import { WorkletPlayer } from './worklet-player.js';
 import { readyToPlay, secondsToPlay } from './render-ahead.js';
 
 const TAIL = 0.15;
+/** Speech spans kept for duringSpeech. */
+const SPEECH_SPANS = 16;
 
 export class VoiceEngine {
   /**
@@ -74,6 +76,11 @@ export class VoiceEngine {
     this.cached = null;
     this.benchmarkHead = undefined;
     this.cancelIdle = () => {};
+    // Times (performance.now) from each speak() to the end of its
+    // utterance; the benchmark is paused then, so the long tasks of the app
+    // in them are not the benchmark's (use-simulator, `?debug`).
+    this.speechSpans = [];
+    this.speechFrom = null;
     // The engine setting ('auto', 'rust' or 'js') the worker renders with.
     this.engineName = 'auto';
     this.nextId = 1;
@@ -98,7 +105,21 @@ export class VoiceEngine {
     this.#watchBattery();
   }
 
+  #endSpeech() {
+    if (this.speechFrom !== null) {
+      this.speechSpans.push({
+        from: this.speechFrom,
+        to: globalThis.performance.now(),
+      });
+      this.speechSpans.splice(0, this.speechSpans.length - SPEECH_SPANS);
+      this.speechFrom = null;
+    }
+  }
+
   #emit(patch) {
+    if (patch.phase === 'idle') {
+      this.#endSpeech();
+    }
     this.status = { ...this.status, ...patch };
     this.onChange(this.status);
   }
@@ -311,6 +332,18 @@ export class VoiceEngine {
   }
 
   /**
+   * Whether the time from `start` to `end` (performance.now) overlaps an
+   * utterance: from speak() to its end, or still speaking.
+   */
+  duringSpeech(start, end) {
+    const open =
+      this.speechFrom === null ? [] : [{ from: this.speechFrom, to: Infinity }];
+    return [...this.speechSpans, ...open].some(
+      (span) => start <= span.to && end >= span.from
+    );
+  }
+
+  /**
    * Speak text.
    * @param {{text: string, lang: string, accent?: string, head: object, seed: string, mode: 'both'|'sound'|'visual', ipa?: boolean, microphone?: object, room?: string, enclosure?: object, gpu?: boolean, engine?: 'auto'|'rust'|'js'}} request
    *   `microphone`, `room` and `enclosure` are the listening settings
@@ -318,6 +351,18 @@ export class VoiceEngine {
    */
   async speak(request) {
     this.stop();
+    this.speechFrom ??= globalThis.performance.now();
+    try {
+      return await this.#speak(request);
+    } catch (error) {
+      if (this.status.phase !== 'speaking') {
+        this.#endSpeech();
+      }
+      throw error;
+    }
+  }
+
+  async #speak(request) {
     const transcription = request.ipa
       ? { lang: request.lang, ipa: request.text, words: [] }
       : await this.#transcribe(request);
