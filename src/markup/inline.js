@@ -11,11 +11,15 @@ import {
   DEFAULT_DEGREE,
   EFFORT_LEVELS,
   EMOTIONS,
+  LOMBARD_EFFORT,
   PHONATIONS,
   RATE_LEVELS,
   SOUND_NAMES,
   emotionOf,
 } from './modes.js';
+
+/** Effort change of `[crescendo]` and `[diminuendo]` (as `{crescendo …}`). */
+const EFFORT_RAMP = 0.25;
 
 /** Semitones of `[high]` and `[low]` (the SSML `high` and `low`). */
 const PITCH_STEP = 3;
@@ -50,6 +54,9 @@ const SPAN_TAGS = new Map(
       const effort = inUnit(value);
       return effort === null ? null : { effort };
     },
+    lombard: () => ({ effort: LOMBARD_EFFORT, lombard: true }),
+    crescendo: () => ({ effortRamp: EFFORT_RAMP }),
+    diminuendo: () => ({ effortRamp: -EFFORT_RAMP }),
     fast: () => ({ rate: RATE_LEVELS.fast, absolute: ['rate'] }),
     slow: () => ({ rate: RATE_LEVELS.slow, absolute: ['rate'] }),
     rate: (value) => {

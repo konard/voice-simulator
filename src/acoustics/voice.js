@@ -24,6 +24,10 @@ import {
   VOWEL_CORRECTIONS_3D,
 } from '../articulation/vowel-calibration.js';
 import { VOWEL_LENGTH_SCALE_3D } from '../articulation/vowel-space.js';
+import {
+  effortNoiseGain,
+  effortTransientGain,
+} from '../articulation/effort.js';
 import { Biquad, createNoise } from './filters.js';
 import { Glottis } from './glottis.js';
 import {
@@ -252,6 +256,16 @@ const BUTTERWORTH_8 = [0.5098, 0.6013, 0.9, 2.5629];
  * Nyquist, about 60 dB down at 8 kHz, which the filter at the solver rate
  * (about 7 dB at 1.1 bandLimit) cannot reach.
  */
+/**
+ * Factor on the output gain of a level offset in dB (`levelOffsetDb` of
+ * the render options): the headroom of loud speech modes (issue 52). It is
+ * apart from `head.outputGain`, whose range is limited.
+ * @param {number} [levelOffsetDb]
+ */
+export function levelFactor(levelOffsetDb = 0) {
+  return levelOffsetDb ? 10 ** (levelOffsetDb / 20) : 1;
+}
+
 export class OutputStage {
   constructor(sampleRate, gain = 1, bandLimit = undefined) {
     this.gain = OUTPUT_GAIN * gain;
@@ -380,7 +394,7 @@ export class VoiceRenderer {
     this.transientStep = 0;
     this.output = new OutputStage(
       this.sampleRate,
-      this.head.outputGain,
+      this.head.outputGain * levelFactor(options.levelOffsetDb),
       options.bandLimit
     );
     this.state = {};
@@ -513,9 +527,12 @@ export class VoiceRenderer {
     this.airflow = air;
     glottis.oralPressure = air.oralPressure;
     const { reCritical } = this.head;
+    // The effort raises the lung pressure; the noise follows its own rule.
+    const noiseGain = effortNoiseGain(glottis.effort ?? 0);
     glottis.aspirationStrength =
-      sourceStrength(air.glottalDrop, opening, air.flow, reCritical) /
-      ASPIRATION_REFERENCE;
+      (sourceStrength(air.glottalDrop, opening, air.flow, reCritical) /
+        ASPIRATION_REFERENCE) *
+      noiseGain;
     const strength =
       sourceStrength(
         air.constrictionDrop,
@@ -527,7 +544,8 @@ export class VoiceRenderer {
       frication.gain *
       this.head.fricationLevel *
       strength *
-      this.head.fricationGain;
+      this.head.fricationGain *
+      noiseGain;
     if (this.fricationAmplitude > 1e-6) {
       this.noise.tune(
         strouhalFrequency(air.flow, constriction, this.head.strouhal)
@@ -544,7 +562,9 @@ export class VoiceRenderer {
     // a pressure jump (issue 34).
     const target = this.interaction
       ? 0
-      : air.flowDerivative * this.head.transientGain;
+      : air.flowDerivative *
+        this.head.transientGain *
+        effortTransientGain(glottis.effort ?? 0);
     const steps = Math.max(1, blockDuration * rate);
     this.transientStep = (target - this.transient) / steps;
   }

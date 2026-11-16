@@ -7,9 +7,11 @@
  *   and sounds keep their length);
  * - `pitch` (semitones) and `range` (a factor of the accent range) move
  *   the pitch targets in `syllablePitch()` (src/articulation/prosody.js);
- * - `gain` (dB) and the effort (`effortDecibels()`, limited to -20 … +6 dB)
- *   scale the loudness channel; the effort moves from `effort` to
- *   `effortEnd` over a span;
+ * - `gain` (dB) scales the loudness channel;
+ * - the effort (`E = (effort - 0.5) * 40` dB) fills the `effort` channel,
+ *   moving from `effort` to `effortEnd` over a span, and lengthens vowels;
+ *   the planner and the source turn it into level, pitch, tilt, F1 and
+ *   noise (src/articulation/effort.js);
  * - a timed pause lasts exactly its `seconds`; a sound is silence of its
  *   length (`SOUND_DURATION`, 0.3 s, unless one is written).
  *
@@ -21,12 +23,9 @@ import {
   MODE_DEFAULTS,
   SOUND_DURATION,
   createMode,
-  effortDecibels,
   modeKey,
 } from '../markup/modes.js';
-
-/** Limits of the effort level until the source models a voice effort. */
-export const EFFORT_DECIBELS = Object.freeze({ min: -20, max: 6 });
+import { EFFORT_RULES, spanEffort } from './effort.js';
 
 /**
  * Set `token.mode` on every token from spans in IPA word indexes: a
@@ -136,37 +135,87 @@ export function modeAt(plan, time) {
   return modes[low] ?? { start: 0, end: 0, ...createMode() };
 }
 
-/** Level change in dB of a mode at a fraction of its span. */
-export function modeDecibels(mode, fraction = 0) {
-  const effort = mode.effort + (mode.effortEnd - mode.effort) * fraction;
-  const level = Math.min(
-    EFFORT_DECIBELS.max,
-    Math.max(EFFORT_DECIBELS.min, effortDecibels(effort))
-  );
-  return mode.gain + level;
-}
-
 /**
- * Scale the loudness channel by the gain and the effort of each span of
- * `plan.modes` (`10^(dB/20)`).
- * @param {Float32Array} loudness
- * @param {object[]} modes spans of `planModes()`
- * @param {number} frameRate
+ * Call `visit(span, frame, fraction)` for every frame of every span of
+ * `plan.modes` that `skip(span)` does not exclude; `fraction` runs from 0
+ * at the first frame of a span to 1 at its last. The last span runs to
+ * the end of the channel.
  */
-export function applyModeGains(loudness, modes, frameRate) {
+function forEachSpanFrame(modes, frameCount, frameRate, skip, visit) {
   for (const span of modes) {
-    if (span.gain === 0 && span.effort === 0.5 && span.effortEnd === 0.5) {
+    if (skip(span)) {
       continue;
     }
     const first = Math.max(0, Math.round(span.start * frameRate));
     const last =
       span === modes.at(-1)
-        ? loudness.length
-        : Math.min(loudness.length, Math.round(span.end * frameRate));
+        ? frameCount
+        : Math.min(frameCount, Math.round(span.end * frameRate));
     const length = Math.max(1, last - first - 1);
     for (let frame = first; frame < last; frame++) {
-      const decibels = modeDecibels(span, (frame - first) / length);
-      loudness[frame] *= 10 ** (decibels / 20);
+      visit(span, frame, (frame - first) / length);
     }
+  }
+}
+
+/**
+ * Scale the loudness channel by the plain gain (`gain`, dB) of each span of
+ * `plan.modes`, `10^(gain/20)`. The effort is not a gain: it fills its own
+ * channel (`fillEffort()`), which the source realises (src/articulation/effort.js).
+ * @param {Float32Array} loudness
+ * @param {object[]} modes spans of `planModes()`
+ * @param {number} frameRate
+ */
+export function applyModeGains(loudness, modes, frameRate) {
+  forEachSpanFrame(
+    modes,
+    loudness.length,
+    frameRate,
+    (span) => span.gain === 0,
+    (span, frame) => {
+      loudness[frame] *= 10 ** (span.gain / 20);
+    }
+  );
+}
+
+/**
+ * Fill the effort channel (dB, `E = (effort - 0.5) * 40`) from the spans of
+ * `plan.modes`: linear in dB from `effort` to `effortEnd` over a span, 0
+ * outside spans with an effort.
+ * @param {Float32Array} effort
+ * @param {object[]} modes spans of `planModes()`
+ * @param {number} frameRate
+ */
+export function fillEffort(effort, modes, frameRate) {
+  effort.fill(0);
+  forEachSpanFrame(
+    modes,
+    effort.length,
+    frameRate,
+    (span) => span.effort === 0.5 && span.effortEnd === 0.5,
+    (span, frame, fraction) => {
+      effort[frame] = spanEffort(span, fraction);
+    }
+  );
+  return effort;
+}
+
+/**
+ * Multiply the duration of vowels by the effort rule (`vowelDuration` of
+ * `EFFORT_RULES`) at the effort their token starts with. A Lombard span
+ * lengthens only the vowels with primary stress; consonants keep their
+ * length.
+ * @param {object[]} segments segments of `buildSegments()`, before timing
+ */
+export function applyEffortDurations(segments) {
+  for (const segment of segments) {
+    const mode = segment.token?.mode;
+    if (segment.kind !== 'vowel' || !mode || mode.effort <= 0.5) {
+      continue;
+    }
+    if (mode.lombard && segment.token.stress !== 1) {
+      continue;
+    }
+    segment.duration *= EFFORT_RULES.vowelDuration.value(spanEffort(mode, 0));
   }
 }

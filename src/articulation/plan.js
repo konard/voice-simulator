@@ -11,8 +11,9 @@
  * a channel (vowels for the lips, consonants for the tongue body) let it
  * glide in a straight line between their neighbours; consonants hold the
  * tongue body against that line by their coarticulation resistance
- * (`COARTICULATION_RESISTANCE` in phones.js). Pitch, loudness and the fold
- * source keep the zero-phase smoothing of `smoothChannel()`.
+ * (`COARTICULATION_RESISTANCE` in phones.js). Pitch, loudness, the vocal
+ * effort (`effort` in dB and `tension`, src/articulation/effort.js) and the
+ * fold source keep the zero-phase smoothing of `smoothChannel()`.
  */
 
 import { getPhoneme } from '../ipa/inventory.js';
@@ -31,15 +32,18 @@ import {
 } from './phones.js';
 import { DYNAMICS_ORDER, approachTargets } from './dynamics.js';
 import {
+  applyEffortDurations,
   applyModeGains,
   applyRates,
   assignTokenModes,
+  fillEffort,
   planModes,
   planSounds,
   timedLength,
 } from './modes.js';
 import { approachTargets as approachToneTargets } from './tone-model.js';
 import { consonantJaw, teethGap } from './teeth.js';
+import { EFFORT_RULES, JAW_PER_DB, TENSION_PER_DB } from './effort.js';
 import { LIP_PROTRUSION } from './vowel-space.js';
 import {
   durationFeatures,
@@ -129,6 +133,8 @@ const SOURCE_TIME_CONSTANTS = Object.freeze({
   lungPressure: 0.04,
   adduction: 0.015,
   foldTension: 0.03,
+  effort: 0.05,
+  tension: 0.03,
 });
 
 /**
@@ -346,6 +352,7 @@ export function buildSegments(tokens, options) {
     }
   });
   applyRates(segments);
+  applyEffortDurations(segments);
   if (segments.at(-1).kind === 'pause' && !segments.at(-1).sound) {
     segments.at(-1).strength = 3;
     segments.at(-1).target = { voicing: 0, loudness: 0 };
@@ -396,6 +403,8 @@ const DEFAULTS = {
   lungPressure: 800,
   adduction: 0.5,
   foldTension: 1,
+  effort: 0,
+  tension: 0,
 };
 
 export { DEFAULTS as CHANNEL_DEFAULTS };
@@ -572,7 +581,13 @@ function jawTarget(segments, index, levels, head) {
     state[name] = segmentTarget(segments, index, name, levels).value;
   }
   if (segment.kind === 'vowel') {
-    return { value: teethGap(state, head), strength: 1 };
+    // Effort opens the jaw of vowels (F1 rises; src/articulation/effort.js).
+    const effort = segment.effort ?? 0;
+    const gap = teethGap(state, head);
+    return {
+      value: effort === 0 ? gap : Math.max(0, gap + JAW_PER_DB * effort),
+      strength: 1,
+    };
   }
   const { gap, weight } = consonantJaw(state, head);
   return { value: gap, strength: weight };
@@ -685,7 +700,7 @@ function piecewiseLinear(values, positions, t) {
  * closest and the most open vowel), close vowels get a higher pitch
  * (Whalen & Levitt 1995).
  */
-function fillPitch(values, segments, head, frameRate, height) {
+function fillPitch(values, segments, head, frameRate, height, effort) {
   values.fill(Number.NaN);
   const shape = new Float32Array(values.length).fill(1);
   const tonal = new Uint8Array(values.length);
@@ -718,7 +733,23 @@ function fillPitch(values, segments, head, frameRate, height) {
       values[frame] *= 2 ** ((intrinsic * (height[frame] - 0.5)) / 12);
     }
   }
+  if (effort) {
+    addEffortPitch(values, effort, head);
+  }
   return { shape, tonal };
+}
+
+/**
+ * Raise the pitch by the effort rule (`pitch` of `EFFORT_RULES`: +5 Hz per
+ * dB of effort re the speaker's pitch, -4 to +12 semitones).
+ */
+function addEffortPitch(values, effort, head) {
+  for (let frame = 0; frame < values.length; frame++) {
+    if (effort[frame] !== 0) {
+      const shift = EFFORT_RULES.pitch.value(effort[frame], head);
+      values[frame] *= 2 ** (shift / 12);
+    }
+  }
 }
 
 /**
@@ -816,16 +847,22 @@ function addVibrato(values, head, frameRate) {
  * about 9 dB per doubling of the lung pressure (Titze and Sundberg 1992),
  * so the pressure goes with the amplitude to the power 2/3. The folds close
  * with voicing and tenseness and open with breathiness, open for aspiration
- * and press together for a glottal stop.
+ * and press together for a glottal stop. Vocal effort raises the pressure
+ * by `2^(E/9)` (`lungPressure` of `EFFORT_RULES`).
  */
 function fillFoldDrive(channels, steps, head) {
-  const { loudness, voicing, aspiration, glottalClosure } = steps;
+  const { loudness, voicing, aspiration, glottalClosure, effort } = steps;
   const tense = 0.6 * (head.tenseness - 0.6);
   const breathy = 0.3 * (head.breathiness - 0.2);
   const modal = Math.min(1, Math.max(0.25, 0.5 + tense - breathy));
   for (let frame = 0; frame < loudness.length; frame++) {
     channels.lungPressure[frame] =
       head.lungPressure * Math.max(0, loudness[frame]) ** (2 / 3);
+    if (effort[frame] !== 0) {
+      channels.lungPressure[frame] *= EFFORT_RULES.lungPressure.value(
+        effort[frame]
+      );
+    }
     let adduction = Math.max(0, voicing[frame]) * modal;
     const open = Math.min(1, Math.max(0, aspiration[frame]));
     adduction += (Math.min(adduction, 0.2) - adduction) * open;
@@ -842,6 +879,20 @@ function fillFoldTension(channels, head) {
   const { f0, lungPressure, foldTension } = channels;
   for (let frame = 0; frame < f0.length; frame++) {
     foldTension[frame] = tensionForPitch(f0[frame], lungPressure[frame], head);
+  }
+}
+
+/**
+ * Set `segment.effort` (dB) of the segments whose middle lies where the
+ * effort channel is not 0; the jaw target of a vowel opens with it.
+ */
+function markSegmentEffort(segments, effort, frameRate) {
+  for (const segment of segments) {
+    const middle = Math.round(((segment.start + segment.end) / 2) * frameRate);
+    const value = effort[Math.min(effort.length - 1, Math.max(0, middle))];
+    if (value !== 0) {
+      segment.effort = value;
+    }
   }
 }
 
@@ -979,6 +1030,9 @@ export function planUtterance(ipa, options = {}) {
   }
   const duration = segments.at(-1).end;
   const frameCount = Math.ceil(duration * frameRate) + 1;
+  const modes = planModes(segments);
+  const effort = fillEffort(new Float32Array(frameCount), modes, frameRate);
+  markSegmentEffort(segments, effort, frameRate);
   const channels = {};
   const articulators = articulatorsFor(head, options.articulators);
   for (const name of ARTICULATOR_NAMES) {
@@ -1002,22 +1056,33 @@ export function planUtterance(ipa, options = {}) {
   }
   fillDefaults(channels, segments, frameRate);
   applyRegisterGain(channels.loudness, segments, frameRate);
-  const modes = planModes(segments);
   applyModeGains(channels.loudness, modes, frameRate);
+  channels.effort.set(effort);
+  for (let frame = 0; frame < frameCount; frame++) {
+    channels.tension[frame] = TENSION_PER_DB * effort[frame];
+  }
   const pitchShape = fillPitch(
     channels.f0,
     segments,
     head,
     frameRate,
-    channels.height
+    channels.height,
+    effort
   );
-  const steps = { loudness: channels.loudness };
+  const steps = { loudness: channels.loudness, effort };
   for (const name of GLOTTAL_CHANNELS) {
     steps[name] = new Float32Array(frameCount);
   }
   fillDefaults(steps, segments, frameRate, GLOTTAL_CHANNELS);
   fillFoldDrive(channels, steps, head);
-  for (const name of ['loudness', 'f0', 'lungPressure', 'adduction']) {
+  for (const name of [
+    'loudness',
+    'f0',
+    'lungPressure',
+    'adduction',
+    'effort',
+    'tension',
+  ]) {
     const timeConstant = SOURCE_TIME_CONSTANTS[name] / head.articulationSpeed;
     if (name === 'f0') {
       smoothPitch(channels.f0, pitchShape, timeConstant, frameRate);

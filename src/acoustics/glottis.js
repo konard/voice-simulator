@@ -16,6 +16,7 @@
 import { randomNormal, createRandom } from '../random.js';
 import { SPEED_OF_SOUND } from './transfer.js';
 import { glottalArea, openTractStrength } from './aerodynamics.js';
+import { effortNoiseGain } from '../articulation/effort.js';
 
 /**
  * Breath noise per 10 mm² of glottal chink (issue 35): the air leaking
@@ -173,6 +174,32 @@ export class Glottis {
     this.intensity = 0;
     this.pulse = lfParameters(this.tenseness, this.breathiness, this.rdSlope);
     this.noiseModulation = 0;
+    this.effortKey = 0;
+    this.effortGain = 1;
+  }
+
+  /** Gain of the voiced part at `effort` dB, `10^(E/20)` (cached). */
+  #effortGain(effort) {
+    if (effort !== this.effortKey) {
+      this.effortKey = effort;
+      this.effortGain = 10 ** (effort / 20);
+    }
+    return this.effortGain;
+  }
+
+  /**
+   * Factor that brings the aspiration of an open tract to the noise rule of
+   * the effort, `10^(0.5 E/20)`: the given lung pressure already carries
+   * the effort (`2^(E/9)`), the pressure from the loudness does not.
+   */
+  #noiseGain(control) {
+    const effort = control.effort ?? 0;
+    if (effort === 0) {
+      return 1;
+    }
+    return control.lungPressure === undefined
+      ? 10 ** (effort / 40)
+      : effortNoiseGain(effort);
   }
 
   #startPeriod(frequency, tenseness) {
@@ -205,21 +232,25 @@ export class Glottis {
   /**
    * Advance by dt seconds and return the flow derivative sample.
    * @param {number} dt
-   * @param {{f0: number, voicing: number, aspiration: number, closure: number, loudness: number, lungPressure?: number, aspirationStrength?: number, oralPressure?: number}} control
+   * @param {{f0: number, voicing: number, aspiration: number, closure: number, loudness: number, lungPressure?: number, aspirationStrength?: number, oralPressure?: number, effort?: number, tension?: number}} control
    *   `aspirationStrength` is the relative turbulence strength at the
    *   glottis from the air flow (VoiceRenderer); without it the glottis
    *   assumes an open tract at `lungPressure` (Pa, default the head value
    *   times loudness^(2/3)). `oralPressure` (dyn/cm²) is the pressure in
-   *   the mouth; the LF source does not use it.
+   *   the mouth; the LF source does not use it. `effort` (dB, default 0)
+   *   multiplies the voiced part by `10^(E/20)` and `tension` is added to
+   *   the tenseness (src/articulation/effort.js).
    * @param {number} noise White noise sample in [-1, 1].
    */
   step(dt, control, noise) {
     const voicing = Math.max(0, control.voicing) * (1 - control.closure);
     const loudness = Math.max(0, control.loudness);
-    const tenseness = Math.max(
-      0,
-      this.tenseness - 0.5 * control.aspiration * voicing
-    );
+    const tension = control.tension ?? 0;
+    const base =
+      tension === 0
+        ? this.tenseness
+        : Math.min(1, Math.max(0, this.tenseness + tension));
+    const tenseness = Math.max(0, base - 0.5 * control.aspiration * voicing);
     this.phase += dt;
     if (this.phase >= this.period) {
       this.phase -= this.period;
@@ -227,6 +258,10 @@ export class Glottis {
     }
     const t = this.phase / this.period;
     this.intensity = voicing * loudness * this.shimmer;
+    const effort = control.effort ?? 0;
+    if (effort !== 0) {
+      this.intensity *= this.#effortGain(effort);
+    }
     let voiced =
       lfWaveform(this.pulse, t) * this.intensity * (0.7 + 0.3 * tenseness);
     if (this.chinkTime > 0) {
@@ -242,7 +277,8 @@ export class Glottis {
     // The lung pressure carries the loudness: the strength grows as the
     // pressure drop to the power 1.5, and the pressure as loudness^(2/3).
     const strength =
-      control.aspirationStrength ?? this.#openTractStrength(control);
+      control.aspirationStrength ??
+      this.#openTractStrength(control) * this.#noiseGain(control);
     const breath =
       ((control.aspiration +
         this.breathGain * this.breathiness ** this.breathExponent * voicing) *

@@ -12,6 +12,7 @@ import { MarkupBuilder, MarkupError, MARKUP_LIMITS } from './builder.js';
 import {
   DEFAULT_DEGREE,
   EFFORT_LEVELS,
+  LOMBARD_EFFORT,
   EMOTIONS,
   PHONATIONS,
   SOUND_NAMES,
@@ -689,6 +690,8 @@ class SsmlReader {
     const change = {};
     if (level === 'whisper') {
       change.phonation = { whisper: 1 };
+    } else if (level === 'lombard') {
+      Object.assign(change, { effort: LOMBARD_EFFORT, lombard: true });
     } else if (Object.hasOwn(EFFORT_LEVELS, level ?? '')) {
       change.effort = EFFORT_LEVELS[level];
     } else if (level !== undefined) {
