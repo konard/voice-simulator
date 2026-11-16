@@ -5,6 +5,11 @@ import {
   chunkSizeGuard,
   vendorChunk,
 } from './build-chunks.js';
+import {
+  crossOriginIsolation,
+  isolationHeaders,
+  isolationWorker,
+} from './cross-origin-isolation.js';
 
 function resolveBasePath() {
   if (process.env.GITHUB_PAGES !== 'true') {
@@ -15,23 +20,15 @@ function resolveBasePath() {
   return repository ? `/${repository}/` : './';
 }
 
-/**
- * With VITE_CROSS_ORIGIN_ISOLATION=1 the dev and preview servers send the
- * COOP/COEP headers that make the page cross-origin isolated, so the audio
- * player shares a SharedArrayBuffer ring with its AudioWorklet
- * ('worklet-shared'); without them it posts the samples ('worklet-port').
- */
-const isolationHeaders =
-  process.env.VITE_CROSS_ORIGIN_ISOLATION === '1'
-    ? {
-        'Cross-Origin-Opener-Policy': 'same-origin',
-        'Cross-Origin-Embedder-Policy': 'require-corp',
-      }
-    : undefined;
+// With VITE_CROSS_ORIGIN_ISOLATION=1 the dev and preview servers send the
+// COOP/COEP headers and the page loads public/coi-serviceworker.js (see
+// cross-origin-isolation.js); without it neither.
+const isolated = crossOriginIsolation();
+const headers = isolationHeaders(isolated);
 
 export default defineConfig({
   base: resolveBasePath(),
-  plugins: [react(), chunkSizeGuard()],
+  plugins: [react(), chunkSizeGuard(), isolationWorker(isolated)],
   worker: {
     format: 'es',
     rollupOptions: {
@@ -54,9 +51,9 @@ export default defineConfig({
     fs: {
       allow: ['../..'],
     },
-    headers: isolationHeaders,
+    headers,
   },
   preview: {
-    headers: isolationHeaders,
+    headers,
   },
 });
