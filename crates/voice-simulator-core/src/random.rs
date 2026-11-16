@@ -39,6 +39,16 @@ impl Random {
         Self { state }
     }
 
+    /// The 32-bit state (`random.save()` of `src/random.js`).
+    pub fn state(&self) -> u32 {
+        self.state
+    }
+
+    /// Set the state that [`Random::state`] returned (`random.restore`).
+    pub fn set_state(&mut self, state: u32) {
+        self.state = state;
+    }
+
     /// The next value in [0, 1).
     #[allow(clippy::should_implement_trait)]
     pub fn next(&mut self) -> f64 {
@@ -91,6 +101,17 @@ mod tests {
         assert_eq!(hash_seed_utf16(&utf16("")), 2_166_136_261);
         assert_eq!(hash_seed_utf16(&utf16("voice")), 2_140_916_217);
         assert_eq!(hash_seed_utf16(&utf16("héllo")), 0xf1e5_b55f);
+    }
+
+    #[test]
+    fn saved_state_continues_the_sequence() {
+        let mut random = Random::new(1);
+        random.next();
+        let state = random.state();
+        let expected = random.next();
+        let mut other = Random::new(7);
+        other.set_state(state);
+        assert_eq!(other.next().to_bits(), expected.to_bits());
     }
 
     #[test]

@@ -16,6 +16,7 @@ import {
   FRAME_EXTRA_VALUES,
   LISTENER,
   RENDERER_CONFIG,
+  SOURCE_STATE,
   frameStride,
   writeFrame,
 } from '../src/engine/layout.js';
@@ -52,10 +53,18 @@ describe('engine layouts (issue 22)', () => {
     expect(rust).toEqual({ ...LISTENER });
   });
 
+  it('SOURCE_STATE matches source_state.rs (issue 29)', () => {
+    const rust = rustConstants(
+      'crates/voice-simulator-core/src/source_state.rs'
+    );
+    expect(rust).toEqual({ ...SOURCE_STATE });
+  });
+
   it('indices are distinct and the headers come last', () => {
     for (const [layout, header] of [
       [RENDERER_CONFIG, 'HEADER'],
       [FRAME, 'STRIDE'],
+      [SOURCE_STATE, 'LENGTH'],
     ]) {
       const fields = Object.entries(layout).filter(
         ([name]) => name !== header && name !== 'AREAS'

@@ -266,6 +266,7 @@ export class Glottis {
     this.pulseGain = 1;
     this.falsettoSmoothed = 0;
     this.intensity = 0;
+    this.pulseTenseness = this.tenseness;
     this.pulse = lfParameters(this.tenseness, this.breathiness, this.rdSlope);
     this.noiseModulation = 0;
     this.effortKey = 0;
@@ -337,6 +338,7 @@ export class Glottis {
     this.jitter = 1 + jitterDepth * randomNormal(this.random);
     this.shimmer = 1 + shimmerDepth * randomNormal(this.random);
     this.period = 1 / Math.max(MIN_F0, frequency * this.jitter);
+    this.pulseTenseness = tenseness;
     // Double pulsing: every second period of a creak is longer and weaker.
     // Both periods shrink by half the lengthening, so that a pair lasts two
     // periods of the lowered f0.
@@ -351,6 +353,63 @@ export class Glottis {
       }
     }
     this.pulse = lfParameters(tenseness, this.breathiness, this.rdSlope);
+  }
+
+  /**
+   * The cycle state that a renderer started mid-utterance takes over
+   * (issue 29), in the order of SOURCE_STATE (src/engine/layout.js):
+   * phase, period, jitter, shimmer, smoothed, intensity, noiseModulation,
+   * pulseTenseness, the state of the random generator, then the parity
+   * and the gain of the creak pulse, the output of the falsetto low-pass
+   * and the three values of the effort tilt filter.
+   * @returns {Float64Array}
+   */
+  saveState() {
+    return Float64Array.of(
+      this.phase,
+      this.period,
+      this.jitter,
+      this.shimmer,
+      this.smoothed,
+      this.intensity,
+      this.noiseModulation,
+      this.pulseTenseness,
+      this.random.save(),
+      this.parity,
+      this.pulseGain,
+      this.falsettoSmoothed,
+      this.tiltInput,
+      this.tiltMiddle,
+      this.tiltOutput
+    );
+  }
+
+  /**
+   * Set the state that `saveState` returned; the pulse shape is rebuilt
+   * from the saved tenseness.
+   * @param {ArrayLike<number>} state
+   */
+  restoreState(state) {
+    this.phase = state[0];
+    this.period = state[1];
+    this.jitter = state[2];
+    this.shimmer = state[3];
+    this.smoothed = state[4];
+    this.intensity = state[5];
+    this.noiseModulation = state[6];
+    this.pulseTenseness = state[7];
+    this.random.restore(state[8]);
+    this.parity = state[9];
+    this.pulseGain = state[10];
+    this.falsettoSmoothed = state[11];
+    this.tiltInput = state[12];
+    this.tiltMiddle = state[13];
+    this.tiltOutput = state[14];
+    this.pulse = lfParameters(
+      this.pulseTenseness,
+      this.breathiness,
+      this.rdSlope
+    );
   }
 
   /**

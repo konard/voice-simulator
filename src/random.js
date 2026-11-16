@@ -25,19 +25,32 @@ export function hashSeed(value) {
 }
 
 /**
+ * @typedef {(() => number) & {save: () => number, restore: (state: number) => void}} Random
+ */
+
+/**
  * Create a mulberry32 generator returning floats in [0, 1).
+ *
+ * `random.save()` returns the 32-bit state and `random.restore(state)` sets
+ * it back (issue 29: a renderer started mid-utterance continues the
+ * sequence of the one it replaces). Neither changes the numbers drawn.
  * @param {string|number} seed
- * @returns {() => number}
+ * @returns {Random}
  */
 export function createRandom(seed = 1) {
   let state = hashSeed(seed) || 0x9e3779b9;
-  return () => {
+  const random = () => {
     state = (state + 0x6d2b79f5) >>> 0;
     let value = state;
     value = Math.imul(value ^ (value >>> 15), value | 1);
     value ^= value + Math.imul(value ^ (value >>> 7), value | 61);
     return ((value ^ (value >>> 14)) >>> 0) / 4294967296;
   };
+  random.save = () => state;
+  random.restore = (saved) => {
+    state = saved >>> 0;
+  };
+  return random;
 }
 
 /**

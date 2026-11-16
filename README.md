@@ -467,7 +467,7 @@ console.log(describeGpuDevice(device));
 Lower-level building blocks are exported too: `planUtterance`,
 `sampleState`, `tractShape`, `Waveguide`, `Fdtd2d`, `buildSheet`, `Fdtd3d`,
 `buildVoxelModel`, `VoiceRenderer`, `headMesh`, `tubeMesh`, `headModelObj`,
-`LodGovernor`, `chooseTier`, `chooseTierWithGpu`, `measureAudioTier`,
+`LodGovernor`, `StreamGovernor`, `AdaptiveStream`, `chooseTier`, `chooseTierWithGpu`, `measureAudioTier`,
 `benchmarkAudioTiersAsync` and more; see
 [`src/index.d.ts`](src/index.d.ts). A runnable example is in
 [`examples/basic-usage.js`](examples/basic-usage.js).
@@ -1016,12 +1016,12 @@ choice, so a slow integrated or software adapter never lowers it. The benchmark 
 load, predicted from the cheaper tier, is far above the target, and it stops
 measuring a tier as soon as it is clearly too slow; the app remembers the result per device. `--quick` runs the app's benchmark and prints its CPU time. `voice-simulator benchmark` first renders the cheap tiers
 for 0.5 s so the just-in-time compiler is warm, then reports the median of
-`--repeats` (default 5) measurements of `--seconds` (default 0.3) per tier. In the first 40-300 ms of each utterance an
-`OverloadDetector` checks that the tier keeps up with real time and, if not,
-the utterance restarts at once on a cheaper tier before any gap is audible.
-While speaking, `LodGovernor` steps down
-immediately when the load exceeds the target and steps up only after a dwell
-period when the next tier is predicted to fit with margin. Visual tiers
+`--repeats` (default 5) measurements of `--seconds` (default 0.3) per tier. While speaking,
+the tier changes without a restart (issue 29): `StreamGovernor` steps down when
+0.1 s of chunks load the CPU above 0.8 or the player runs dry, and one tier up
+after 3 s of headroom; `AdaptiveStream` starts the new tier at the switch with
+the old voice source state and crossfades over 25 ms at a matched level (`aː`
+within 0.2 dB, `experiments/issue-29-switch-levels.txt`). Visual tiers
 (mesh LOD 0-3, pressure-field points) are governed the same way from the
 measured frame time.
 

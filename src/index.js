@@ -200,7 +200,9 @@ export {
 } from './engine/rust-renderer.js';
 // The 3D solver on several threads in WebAssembly (issue 24)
 export { createThreadPool } from './engine/thread-pool.js';
-export { THREAD_MEMORY } from './engine/layout.js';
+export { THREAD_MEMORY, SOURCE_STATE } from './engine/layout.js';
+// The audio tier of a running utterance (issue 29)
+export { AdaptiveStream, switchGrid } from './engine/adaptive-stream.js';
 // Air flow and turbulence noise sources (issue 35)
 export {
   ASPIRATION_REFERENCE,
@@ -357,6 +359,7 @@ export {
   audioTierIndex,
   LodGovernor,
   OverloadDetector,
+  StreamGovernor,
   chooseTier,
   chooseTierAsync,
   chooseTierWithGpu,

@@ -1,0 +1,60 @@
+# Issue 29 after merging #28 (silent device benchmark), commit 7cc7727: the same
+# run as experiments/issue-29-app-switches.txt (Chromium headless, automatic quality, 6x throttle):
+#   npm run example:web:build
+#   PLAYWRIGHT=$(npm root -g)/playwright/index.mjs node experiments/issue-27-latency.mjs \
+#     --runs 1 --tier auto --speech-mode sound --throttle 6 --benchmark-first \
+#     --text "$(cat text.txt)" --record /tmp/throttle.wav --screenshot /tmp/hud.png
+# text.txt as in experiments/issue-29-app-switches.txt. The benchmark of #28 is silent, so
+# --benchmark-first no longer waits for it; the utterance started at medium (5).
+# Levels: 1 narrowband, 2 wideband, 3 minimal, 4 low, 5 medium.
+
+benchmark Audiominimal · waveguideload 0% · target 80%
+throttled worker http://127.0.0.1:4772/assets/synth-worker-BBTJ04JJ.js
+{"run":0,"sampleRate":44100,"baseLatency":10,"outputLatency":32,"speakToChunk":2310,"speakToPush":2315.1,"playerDelay":60.8,"speakToFirstSample":2375.9,"speakToOutput":2417.9,"crossOriginIsolated":false,"tapError":null,"hud":"Audiowideband · waveguideload 67% · target 80% · worklet-port · underruns 0 · tier switches 4"}
+worker {"t":2300,"type":"start","solver":"waveguide","sampleRate":44100}
+worker {"t":4436,"type":"tier","at":3.03,"from":5,"level":4,"reason":"load","gainDb":0.1580435714675071,"solver":"waveguide"}
+worker {"t":5896,"type":"tier","at":5.12,"from":4,"level":3,"reason":"load","gainDb":0.03147539060557472,"solver":"waveguide"}
+worker {"t":8985,"type":"tier","at":10.716009070294785,"from":3,"level":1,"reason":"load","gainDb":0.10601852796523914,"solver":"waveguide"}
+worker {"t":10810,"type":"tier","at":13.76,"from":1,"level":2,"reason":"headroom","gainDb":-0.9697458586217482,"solver":"waveguide"}
+worker {"t":14360,"type":"end","level":2,"load":0.3164936099061059}
+hud {"t":-224,"text":"Audiominimal · waveguideload 0% · target 80%"}
+hud {"t":1637,"text":"Audiomedium · waveguideload 35% · target 80%"}
+hud {"t":2500,"text":"Audiomedium · waveguideload 35% · target 80% · worklet-port · underruns 0"}
+hud {"t":2889,"text":"Audiomedium · waveguideload 22% · target 80% · worklet-port · underruns 0"}
+hud {"t":3132,"text":"Audiomedium · waveguideload 28% · target 80% · worklet-port · underruns 0"}
+hud {"t":3426,"text":"Audiomedium · waveguideload 50% · target 80% · worklet-port · underruns 0"}
+hud {"t":3810,"text":"Audiomedium · waveguideload 38% · target 80% · worklet-port · underruns 0"}
+hud {"t":4171,"text":"Audiomedium · waveguideload 34% · target 80% · worklet-port · underruns 0"}
+hud {"t":4485,"text":"Audiomedium · waveguideload 224% · target 80% · worklet-port · underruns 0 · tier switches 1"}
+hud {"t":4703,"text":"Audiomedium · waveguideload 19% · target 80% · worklet-port · underruns 0 · tier switches 1"}
+hud {"t":4984,"text":"Audiomedium · waveguideload 43% · target 80% · worklet-port · underruns 0 · tier switches 1"}
+hud {"t":5883,"text":"Audiomedium · waveguideload 44% · target 80% · worklet-port · underruns 0 · tier switches 1"}
+hud {"t":7012,"text":"Audiolow · waveguideload 49% · target 80% · worklet-port · underruns 0 · tier switches 2"}
+hud {"t":7277,"text":"Audiolow · waveguideload 112% · target 80% · worklet-port · underruns 0 · tier switches 2"}
+hud {"t":7489,"text":"Audiolow · waveguideload 42% · target 80% · worklet-port · underruns 0 · tier switches 2"}
+hud {"t":7779,"text":"Audiominimal · waveguideload 19% · target 80% · worklet-port · underruns 0 · tier switches 2"}
+hud {"t":8218,"text":"Audiominimal · waveguideload 34% · target 80% · worklet-port · underruns 0 · tier switches 2"}
+hud {"t":8543,"text":"Audiominimal · waveguideload 13% · target 80% · worklet-port · underruns 0 · tier switches 2"}
+hud {"t":8975,"text":"Audiominimal · waveguideload 91% · target 80% · worklet-port · underruns 0 · tier switches 2"}
+hud {"t":9700,"text":"Audiominimal · waveguideload 10% · target 80% · worklet-port · underruns 0 · tier switches 3"}
+hud {"t":10091,"text":"Audiominimal · waveguideload 22% · target 80% · worklet-port · underruns 0 · tier switches 3"}
+hud {"t":10547,"text":"Audiominimal · waveguideload 14% · target 80% · worklet-port · underruns 0 · tier switches 3"}
+hud {"t":10869,"text":"Audiominimal · waveguideload 27% · target 80% · worklet-port · underruns 0 · tier switches 3"}
+hud {"t":11621,"text":"Audiominimal · waveguideload 10% · target 80% · worklet-port · underruns 0 · tier switches 4"}
+hud {"t":11976,"text":"Audiominimal · waveguideload 9% · target 80% · worklet-port · underruns 0 · tier switches 4"}
+hud {"t":12252,"text":"Audiominimal · waveguideload 15% · target 80% · worklet-port · underruns 0 · tier switches 4"}
+hud {"t":12517,"text":"Audiominimal · waveguideload 45% · target 80% · worklet-port · underruns 0 · tier switches 4"}
+hud {"t":12729,"text":"Audiominimal · waveguideload 9% · target 80% · worklet-port · underruns 0 · tier switches 4"}
+hud {"t":12930,"text":"Audiominimal · waveguideload 36% · target 80% · worklet-port · underruns 0 · tier switches 4"}
+hud {"t":13172,"text":"Audiominimal · waveguideload 26% · target 80% · worklet-port · underruns 0 · tier switches 4"}
+hud {"t":13342,"text":"Audionarrowband · waveguideload 22% · target 80% · worklet-port · underruns 0 · tier switches 4"}
+hud {"t":13638,"text":"Audionarrowband · waveguideload 16% · target 80% · worklet-port · underruns 0 · tier switches 4"}
+hud {"t":13864,"text":"Audionarrowband · waveguideload 49% · target 80% · worklet-port · underruns 0 · tier switches 4"}
+hud {"t":14083,"text":"Audionarrowband · waveguideload 9% · target 80% · worklet-port · underruns 0 · tier switches 4"}
+hud {"t":14300,"text":"Audionarrowband · waveguideload 8% · target 80% · worklet-port · underruns 0 · tier switches 4"}
+hud {"t":14583,"text":"Audionarrowband · waveguideload 67% · target 80% · worklet-port · underruns 0 · tier switches 4"}
+hud {"t":16397,"text":"Audiowideband · waveguideload 67% · target 80% · worklet-port · underruns 0 · tier switches 4"}
+tiers {"starts":1,"overloads":0,"switches":4,"shown":["minimal","medium","low","narrowband","wideband"],"firstShownChange":1637,"underrunsAfterFirstSwitch":null}
+switches [{"t":4436,"type":"tier","at":3.03,"from":5,"level":4,"reason":"load","gainDb":0.1580435714675071,"solver":"waveguide","wav":3.378},{"t":5896,"type":"tier","at":5.12,"from":4,"level":3,"reason":"load","gainDb":0.03147539060557472,"solver":"waveguide","wav":5.468},{"t":8985,"type":"tier","at":10.716009070294785,"from":3,"level":1,"reason":"load","gainDb":0.10601852796523914,"solver":"waveguide","wav":11.064},{"t":10810,"type":"tier","at":13.76,"from":1,"level":2,"reason":"headroom","gainDb":-0.9697458586217482,"solver":"waveguide","wav":14.108}]
+recording /tmp/throttle.wav {"seconds":22.3227,"signalMaxStep":0.1383,"signalPeak":1.0297,"gaps":[]}
+median {"browser":"chromium","isolated":false,"buffer":false,"tier":"auto","throttle":6,"mode":"worklet-port","baseLatency":10,"outputLatency":32,"speakToChunk":2310,"speakToPush":2315.1,"playerDelay":60.8,"speakToFirstSample":2375.9,"speakToOutput":2417.9,"underruns":[0]}

@@ -1,6 +1,7 @@
 /**
  * The app's voice engine and synthesis worker outside the browser: the
- * cached device benchmark and the early overload step-down.
+ * cached device benchmark, the tier switches of a running utterance
+ * (issue 29) and the restart on the CPU when WebGPU fails.
  */
 
 import { describe, it, expect } from 'test-anywhere';
@@ -350,6 +351,45 @@ describe('voice engine benchmark cache', () => {
     });
   });
 
+  it('three early step-downs for load drop the cache (issue 29)', async () => {
+    await withStorage(async (storage) => {
+      const first = benchmarkEngine();
+      first.start();
+      first.idle();
+      first.reply(answer(4));
+
+      const second = benchmarkEngine();
+      second.start();
+      const utterance = async (switches) => {
+        second.engine.governor.level = 4;
+        const id = await speakSound(second.engine);
+        for (const [at, from, level, reason] of switches) {
+          second.reply({ type: 'tier', id, at, from, level, reason });
+        }
+        second.reply({ type: 'end', id, level: 4 });
+      };
+      await utterance([[0.2, 4, 3, 'load']]);
+      // A second step-down of the same utterance does not count.
+      await utterance([
+        [0.1, 4, 3, 'load'],
+        [0.3, 3, 2, 'load'],
+      ]);
+      // A late step, an underrun or a climb is no overload: the count
+      // starts again.
+      await utterance([
+        [0.6, 4, 3, 'load'],
+        [0.1, 3, 2, 'underrun'],
+        [0.2, 2, 3, 'headroom'],
+      ]);
+      await utterance([[0.2, 4, 3, 'load']]);
+      await utterance([[0.4, 4, 3, 'load']]);
+      expect(storage.items.has(BENCHMARK_KEY)).toBe(true);
+      await utterance([[0.49, 4, 3, 'load']]);
+      expect(storage.items.has(BENCHMARK_KEY)).toBe(false);
+      expect(second.engine.status.benchmark).toBe(null);
+    });
+  });
+
   it('speech before the answer starts at the start level', async () => {
     await withStorage(async () => {
       const { worker, engine, idle, reply, start } = benchmarkEngine();
@@ -581,7 +621,7 @@ describe('voice engine quality settings', () => {
     });
   });
 
-  it('follows the worker when it steps down early', () => {
+  it('restarts on the CPU when WebGPU fails', () => {
     withStorage(() => {
       const { engine, idle, reply, start } = benchmarkEngine();
       start();
@@ -593,6 +633,80 @@ describe('voice engine quality settings', () => {
       expect(engine.status.overloads).toBe(1);
       expect(engine.job.chunks).toEqual([]);
     });
+  });
+});
+
+describe('voice engine tier switches', () => {
+  it('follows the tier switches of a running utterance', async () => {
+    const worker = fakeWorker();
+    const engine = new VoiceEngine({ createWorker: () => worker });
+    let underruns = 0;
+    let time = 0;
+    engine.player = {
+      context: { sampleRate: 44100 },
+      unlock: async () => {},
+      stalled: () => false,
+      begin() {},
+      push() {},
+      end() {},
+      stop() {},
+      time: () => time,
+      get underruns() {
+        return underruns;
+      },
+    };
+    const job = await engine.speak({
+      text: 'ˈmama',
+      ipa: true,
+      lang: 'en',
+      head: {},
+      seed: '1',
+      mode: 'sound',
+    });
+    const speak = postedOf(worker, 'speak')[0];
+    expect(speak.streamRate).toBe(44100);
+    expect(speak.auto).toBe(true);
+    const { id } = job;
+    worker.reply({
+      type: 'start',
+      id,
+      sampleRate: 44100,
+      solver: 'waveguide',
+      totalSamples: 44100,
+    });
+    worker.reply({
+      type: 'tier',
+      id,
+      at: 0.3,
+      from: BASE_AUDIO_LEVEL,
+      level: BASE_AUDIO_LEVEL + 1,
+      reason: 'headroom',
+      gainDb: 0.3,
+      solver: 'waveguide',
+      gpu: false,
+      model: null,
+    });
+    // The next utterance starts at the new tier; the HUD waits for playback.
+    expect(engine.audioLevel).toBe(BASE_AUDIO_LEVEL + 1);
+    expect(engine.status.switches).toBe(1);
+    expect(engine.status.audioLevel).toBe(BASE_AUDIO_LEVEL);
+    time = 0.2;
+    engine.frame();
+    expect(engine.status.audioLevel).toBe(BASE_AUDIO_LEVEL);
+    time = 0.31;
+    engine.frame();
+    expect(engine.status.audioLevel).toBe(BASE_AUDIO_LEVEL + 1);
+    // The player ran dry: the worker hears it once per underrun.
+    underruns = 1;
+    engine.frame();
+    engine.frame();
+    expect(postedOf(worker, 'underrun')).toEqual([{ type: 'underrun', id }]);
+    worker.reply({ type: 'end', id, load: 0.1, level: BASE_AUDIO_LEVEL });
+    expect(engine.audioLevel).toBe(BASE_AUDIO_LEVEL);
+    // After the end the player plays out what it holds: nothing to report.
+    underruns = 2;
+    engine.frame();
+    expect(postedOf(worker, 'underrun').length).toBe(1);
   });
 });
 
@@ -751,25 +865,31 @@ const brokenGpu = {
 };
 
 describe('synthesis worker', () => {
-  it('restarts an utterance on a cheaper tier as soon as it falls behind', async () => {
+  it('steps a running utterance down as soon as it falls behind', async () => {
     let clock = 0;
     // Every clock reading "takes" 100 ms, so a 1024-sample chunk takes at
-    // least 100 ms: far slower than real time on every wide-band tier
-    // (46 ms of audio at 22.05 kHz).
+    // least 100 ms: far slower than real time on every tier (21 ms of
+    // audio at 48 kHz).
     const posted = await speakInWorker(
       { id: 1, ipa: 'ˈa', seed: 1, tier: HIGH, auto: true, gpu: false },
       { now: () => (clock += 100) }
     );
-    const steps = posted
-      .filter((message) => message.type === 'overload')
-      .map((message) => [message.from, message.level]);
-    expect(steps.length > 0).toBe(true);
-    expect(steps[0][0]).toBe(HIGH);
-    // An overloaded device may go down to the narrow-band tiers.
-    expect(steps.at(-1)[1]).toBe(audioTierIndex('telephone'));
     const starts = posted.filter((message) => message.type === 'start');
-    expect(starts.at(-1).solver).toBe('waveguide');
+    expect(starts.length).toBe(1);
+    expect(starts[0].solver).toBe('fdtd3d');
+    expect(posted.some((message) => message.type === 'overload')).toBe(false);
+    const tiers = posted.filter((message) => message.type === 'tier');
+    expect(tiers.length > 0).toBe(true);
+    expect(tiers[0].from).toBe(HIGH);
+    expect(tiers[0].reason).toBe('load');
+    expect(tiers.at(-1).solver).toBe('waveguide');
+    expect(tiers.every((tier) => tier.level < tier.from)).toBe(true);
+    const samples = posted
+      .filter((message) => message.type === 'chunk')
+      .reduce((sum, message) => sum + message.samples.length, 0);
+    expect(samples).toBe(starts[0].totalSamples);
     expect(posted.at(-1).type).toBe('end');
+    expect(posted.at(-1).level).toBe(tiers.at(-1).level);
   });
 
   it('keeps the 3D tiers on the CPU when the GPU is turned off', async () => {
