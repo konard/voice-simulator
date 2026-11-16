@@ -203,14 +203,25 @@ names)` a whole utterance, and `vrmVowelBinds(gltfJson)` reads the morph
   flow at the release of a stop adds a burst transient, so [s] peaks near
   7 kHz above [ʃ], aspirated stops get a voice onset time of about 60 ms and
   a louder lung pressure (`lungPressure`) gives louder noise.
-- **Head and voice editor**: 43 parameters, everything that changes the
-  sound (tract length, pharynx, mouth, jaw, nose, pitch, breathiness,
-  jitter, shimmer, vibrato, declination, accent strength, lengthening,
-  pauses, wall loss, wall mass, resistance and stiffness, nasal losses,
-  nasal coupling, frication level, lung pressure, ...). Every page
-  refresh starts from a new random seed; `?seed=` makes it reproducible.
-- **Male, female and child presets** for random heads (`preset`), with f0
-  and formants fitted to the men's, women's and children's means of
+- **Head and voice editor**: 137 parameters in six groups (`anatomy`,
+  `folds`, `breathing`, `articulation`, `expression`, `microphone`),
+  everything that changes the sound: tract length, pharynx, mouth, teeth,
+  nose, fold mass and stiffness, lung pressure, glottal areas, the speed of
+  every articulator, the strength of every duration rule, intonation,
+  vibrato, microphone and room. Each one has a unit, a range, a source and
+  a measured effect on the sound in
+  [docs/VOICE-PARAMETERS.md](docs/VOICE-PARAMETERS.md). The app shows the
+  basic ones, "Show all parameters" shows the rest, and "Import voice" and
+  "Export voice" read and write voice files. Every page refresh starts from
+  a new random seed; `?seed=` makes it reproducible.
+- **Voice files**: a voice is a JSON file with one object per group
+  (`loadVoice`, `saveVoice`, `schemas/voice.schema.json`); it names a
+  preset and keeps only the values that differ from it. A broken file
+  reports every problem at once.
+- **Speaker presets**: `male`, `female`, `child`, `child5`, `teenMale`,
+  `teenFemale`, `elderlyMale`, `elderlyFemale` and the singing voices
+  `bass`, `baritone`, `tenor`, `alto`, `mezzo` and `soprano`, with f0 and
+  formants fitted to the men's, women's and children's means of
   Hillenbrand et al. (1995), and a posterior glottal chink (`glottalChink`)
   that gives women and children their measured spectral tilt.
 - **Copy a voice**: `matchVoice` analyses a recording (f0, formants,
@@ -376,6 +387,9 @@ npx voice-simulator visemes "Hello world" -f vrm --fps 30 -o hello.json  # face 
 npx voice-simulator say "Hello world" -o hello.wav --seed 7
 npx voice-simulator say "Привет" --tier high -o fdtd.wav   # 3D FDTD solver
 npx voice-simulator say "Hello" --preset female --head random -o hi.flac -b 24
+npx voice-simulator head --preset bass --voice-file > bass.json   # a voice file
+npx voice-simulator say "Hello" --voice bass.json -o bass.wav
+npx voice-simulator voice check bass.json
 npx voice-simulator say "Hello" --mic-distance 100 --mic-azimuth 45 --room hall -o hall.wav
 npx voice-simulator say "Hello" --tier high --box 30x44x30 -o box.wav  # simulated box
 npx voice-simulator say "Hello" --source folds -o folds.wav  # vocal-fold source

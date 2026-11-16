@@ -608,8 +608,10 @@ export type VoiceMeasure =
 export interface HeadParameterEffect {
   /** The measure of the sound that moves from `min` to `max`. */
   measure: VoiceMeasure;
-  /** 1: it rises, -1: it falls. */
-  sign: 1 | -1;
+  /** 1: it rises, -1: it falls, 0: the model does not use the value yet. */
+  sign: 1 | 0 | -1;
+  /** Why a value with sign 0 does not move the sound. */
+  note?: string;
   /** Utterance, tier, options and head values of the check, if not the default. */
   ipa?: string;
   tier?: string;
