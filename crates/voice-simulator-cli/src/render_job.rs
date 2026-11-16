@@ -96,7 +96,7 @@ pub fn render(job: &Job, threads: usize) -> Result<Rendered, String> {
         ));
     }
     let mut out = vec![0.0f32; job.samples];
-    let (written, threads) = with_team(&mut renderer, threads, |renderer| {
+    let (written, threads) = with_team(&mut renderer, threads, None, |renderer| {
         renderer.render(&job.frames, &mut out)
     });
     let written = written.map_err(describe)?;
@@ -108,14 +108,21 @@ pub fn render(job: &Job, threads: usize) -> Result<Rendered, String> {
 }
 
 /// Runs `action` with the renderer stepped by a team of `threads` (when
-/// its grid is large enough, see [`AnyRenderer::start_team`]), the helpers
-/// on scoped threads; returns its result and the threads that stepped.
+/// its grid has `min_links` links, by default
+/// [`voice_simulator_core::fdtd::parallel::THREAD_MIN_LINKS`]; see
+/// [`AnyRenderer::start_team`]), the helpers on scoped threads; returns
+/// its result and the threads that stepped.
 pub fn with_team<R>(
     renderer: &mut AnyRenderer,
     threads: usize,
+    min_links: Option<usize>,
     action: impl FnOnce(&mut AnyRenderer) -> R,
 ) -> (R, usize) {
-    let result = match renderer.start_team(threads) {
+    let team = match min_links {
+        None => renderer.start_team(threads),
+        Some(min_links) => renderer.start_team_from(threads, min_links),
+    };
+    let result = match team {
         None => action(renderer),
         Some(team) => std::thread::scope(|scope| {
             for index in 1..team.threads() {
@@ -134,7 +141,7 @@ pub fn with_team<R>(
 }
 
 /// Samples [`kernel_steps`] renders before it times the kernel.
-pub const KERNEL_WARM_SAMPLES: usize = 2400;
+pub const KERNEL_WARM_SAMPLES: usize = 480;
 
 /// `count` bare kernel steps of the 3D solver of `job` (no sources) after
 /// its first [`KERNEL_WARM_SAMPLES`] samples:
@@ -153,7 +160,9 @@ pub fn kernel_steps(job: &Job, count: usize, threads: usize) -> Result<KernelRun
     renderer
         .render(&job.frames[..frames.min(job.frames.len())], &mut start)
         .map_err(describe)?;
-    let (seconds, threads) = with_team(&mut renderer, threads, |renderer| {
+    // A team for every grid size: this is the measurement of
+    // THREAD_MIN_LINKS.
+    let (seconds, threads) = with_team(&mut renderer, threads, Some(0), |renderer| {
         let started = std::time::Instant::now();
         renderer.kernel_steps(count);
         started.elapsed().as_secs_f64()

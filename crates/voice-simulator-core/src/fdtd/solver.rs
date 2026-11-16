@@ -477,10 +477,16 @@ impl Fdtd3d {
     /// A thread team of `threads` for the grid of this solver, or `None`
     /// when one thread is asked for or the grid has fewer than
     /// [`THREAD_MIN_LINKS`] links. The caller runs [`Team::work`] on
-    /// `threads - 1` helpers, installs it with [`Self::set_team`] and calls
-    /// [`Team::finish`] when done.
+    /// helper threads and passes the team to [`Fdtd3d::set_team`].
     pub fn new_team(&self, threads: usize) -> Option<Arc<Team>> {
-        (threads > 1 && self.grid.links() >= THREAD_MIN_LINKS)
+        self.new_team_from(threads, THREAD_MIN_LINKS)
+    }
+
+    /// [`Fdtd3d::new_team`] with `min_links` in place of
+    /// [`THREAD_MIN_LINKS`]: 0 gives a team for any grid, which is what
+    /// the measurement of that constant needs.
+    pub fn new_team_from(&self, threads: usize, min_links: usize) -> Option<Arc<Team>> {
+        (threads > 1 && self.grid.links() >= min_links)
             .then(|| Arc::new(Team::new(&self.grid, threads)))
     }
 

@@ -41,9 +41,10 @@ Commands:
                           thread. The samples are the same bits with any
                           number of threads.
   kernel-steps <file> <count> [--threads <n|auto>]
-                          Render the first 2400 samples of a render job of
+                          Render the first 480 samples of a render job of
                           the 3D solver, then time <count> bare steps of
-                          its grid (no sources), the kernel of
+                          its grid (no sources) with a team of <n>
+                          threads at any grid size, the kernel of
                           tests/heavy/performance-threads.test.js. Prints
                           the seconds, the steps per second, the threads,
                           the links and cells of the grid and the SHA-256

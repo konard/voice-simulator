@@ -1,0 +1,18 @@
+# Experiment of issue 24: time the scatter step, the gather step and the
+# thread team on the grid of a render job. Not part of the workspace.
+# cargo run --release --manifest-path experiments/issue-24/bench/Cargo.toml -- /tmp/job-high-enc40.bin 2000
+[package]
+name = "issue-24-bench"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+[workspace]
+
+[dependencies]
+voice-simulator-core = { path = "../../../crates/voice-simulator-core", features = ["std"] }
+
+[profile.release]
+opt-level = 3
+lto = "fat"
+codegen-units = 1

@@ -370,10 +370,17 @@ impl AnyRenderer {
     /// [`Fdtd3d::new_team`]). The caller runs the helpers of the team and
     /// calls [`Team::finish`] after the last render with it.
     pub fn start_team(&mut self, threads: usize) -> Option<Arc<Team>> {
+        self.start_team_from(threads, crate::fdtd::parallel::THREAD_MIN_LINKS)
+    }
+
+    /// [`AnyRenderer::start_team`] with `min_links` in place of
+    /// [`crate::fdtd::parallel::THREAD_MIN_LINKS`] (see
+    /// [`Fdtd3d::new_team_from`]).
+    pub fn start_team_from(&mut self, threads: usize, min_links: usize) -> Option<Arc<Team>> {
         let Self::Fdtd3d(renderer) = self else {
             return None;
         };
-        let team = renderer.solver().new_team(threads)?;
+        let team = renderer.solver().new_team_from(threads, min_links)?;
         renderer.solver_mut().set_team(Some(Arc::clone(&team)));
         Some(team)
     }
