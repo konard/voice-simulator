@@ -76,8 +76,17 @@ function instrument() {
     sound: null,
     notes: [],
     answerAt: null,
+    firstAnswerAt: null,
     tasks: [],
   };
+  // The moment the button gets the click.
+  document.addEventListener(
+    'click',
+    () => {
+      probe.click ??= performance.now();
+    },
+    true
+  );
   new PerformanceObserver((list) => {
     for (const entry of list.getEntries()) {
       probe.tasks.push([
@@ -98,6 +107,9 @@ function instrument() {
   Worker.prototype.addEventListener = function (type, listener, ...rest) {
     if (type === 'message') {
       addEventListener.call(this, 'message', (event) => {
+        if (event.data?.type === 'benchmark') {
+          probe.firstAnswerAt ??= performance.now();
+        }
         if (event.data?.type === 'benchmark' && !event.data.gpuPending) {
           probe.answers++;
           probe.answerAt = performance.now();
@@ -141,16 +153,24 @@ async function visit(page, url, speak = true) {
     () => !document.querySelector('button[type="submit"].primary')?.disabled
   );
   if (speak) {
-    await page.evaluate(() => {
-      window.issue28.click = performance.now();
-    });
-    await submit.click();
+    // A plain mouse click at the button (Input.dispatchMouseEvent):
+    // locator.click() runs its actionability checks as script in the page,
+    // main-thread tasks of the test inside the benchmark window.
+    const box = await submit.boundingBox();
+    await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
     await page.waitForFunction(() => window.issue28.sound !== null, null, {
       timeout: 60000,
     });
   }
-  // Let the idle-time benchmark run and answer.
+  // Let the idle-time benchmark start, then wait for its final answer (the
+  // HUD shows the long tasks after it; a reload before it caches nothing).
   await page.waitForTimeout(6000);
+  await page.waitForFunction(
+    () => window.issue28.benchmarks.length === 0 || window.issue28.answers > 0,
+    null,
+    { timeout: 120000 }
+  );
+  await page.waitForTimeout(1000);
   return page.evaluate(() => {
     const probe = window.issue28;
     const hud = document.querySelector('.hud')?.textContent ?? '';
@@ -162,6 +182,8 @@ async function visit(page, url, speak = true) {
       benchmarkAt: probe.benchmarks.map(Math.round),
       answers: probe.answers,
       answerAt: probe.answerAt === null ? null : Math.round(probe.answerAt),
+      firstAnswerAt:
+        probe.firstAnswerAt === null ? null : Math.round(probe.firstAnswerAt),
       tasks: probe.tasks,
       longTasks: longTasks === undefined ? null : Number(longTasks),
       notes: probe.notes,
@@ -186,7 +208,11 @@ const browser = await chromium.launch({
 const results = [];
 try {
   for (let run = 0; run < RUNS; run++) {
-    const context = await browser.newContext({ locale: 'en-US' });
+    // Tall enough for the "Speak" button without scrolling.
+    const context = await browser.newContext({
+      locale: 'en-US',
+      viewport: { width: 1280, height: 1000 },
+    });
     await context.addInitScript(instrument);
     const page = await context.newPage();
     const cdp = await context.newCDPSession(page);
