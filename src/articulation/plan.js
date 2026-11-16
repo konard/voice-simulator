@@ -37,6 +37,7 @@ import {
   planSounds,
   timedLength,
 } from './modes.js';
+import { approachTargets as approachToneTargets } from './tone-model.js';
 import { consonantJaw, teethGap } from './teeth.js';
 import { LIP_PROTRUSION } from './vowel-space.js';
 import {
@@ -667,11 +668,18 @@ function piecewiseLinear(values, positions, t) {
 }
 
 /**
- * Declining phrase pitch with stress accents, tones and final contours: a
- * piecewise linear curve through the pitch points of every nucleus.
- * Returns the tone shape: per frame, the ratio of that curve to the straight
- * line between the first and the last point of its nucleus. It is 1 outside
- * nuclei with three or more points (the Mandarin third tone `˨˩˦`).
+ * Declining phrase pitch with stress accents, tones and final contours.
+ * Phrases without tones: a piecewise linear curve through the pitch points
+ * of every nucleus. Phrases with tones (issue 49): the voice approaches
+ * the targets of one syllable after the other (`approachTargets()` of
+ * tone-model.js, once per phrase from rest); the interval of a syllable
+ * lasts from the end of the nucleus before it (the first: the start of its
+ * own nucleus) to the end of its nucleus, so a tone starts where the one
+ * before it ended. Pauses between phrases are interpolated.
+ * Returns the tone shape and the frames of tonal phrases (`tonal`, 1
+ * inside): the shape is, per frame, the ratio of the curve to the straight
+ * line between the first and the last point of its nucleus; it is 1
+ * outside nuclei with three or more points.
  * With the `height` channel and `head.intrinsicPitch` (semitones between the
  * closest and the most open vowel), close vowels get a higher pitch
  * (Whalen & Levitt 1995).
@@ -679,7 +687,16 @@ function piecewiseLinear(values, positions, t) {
 function fillPitch(values, segments, head, frameRate, height) {
   values.fill(Number.NaN);
   const shape = new Float32Array(values.length).fill(1);
-  for (const { segment, from, to, points } of pitchTargets(segments, head)) {
+  const tonal = new Uint8Array(values.length);
+  const phrases = new Map();
+  for (const target of pitchTargets(segments, head)) {
+    if (target.intervals) {
+      const list = phrases.get(target.phrase) ?? [];
+      list.push(target);
+      phrases.set(target.phrase, list);
+      continue;
+    }
+    const { segment, from, to, points } = target;
     const [first, last] = frameRange(segment, frameRate, values.length);
     const positions = pointPositions(points.length);
     for (let frame = first; frame < last; frame++) {
@@ -690,6 +707,9 @@ function fillPitch(values, segments, head, frameRate, height) {
       }
     }
   }
+  for (const targets of phrases.values()) {
+    fillTonalPhrase(values, tonal, targets, head, frameRate);
+  }
   interpolateGaps(values, head.pitch);
   const intrinsic = head.intrinsicPitch ?? 0;
   if (intrinsic !== 0 && height) {
@@ -697,7 +717,39 @@ function fillPitch(values, segments, head, frameRate, height) {
       values[frame] *= 2 ** ((intrinsic * (height[frame] - 0.5)) / 12);
     }
   }
-  return shape;
+  return { shape, tonal };
+}
+
+/**
+ * Pitch of one tonal phrase from the targets of its syllables: every
+ * syllable gets whole frames and its targets are scaled to them.
+ */
+function fillTonalPhrase(values, tonal, targets, head, frameRate) {
+  const first = Math.round(targets[0].start * frameRate);
+  if (first >= values.length) {
+    return;
+  }
+  const intervals = [];
+  let frame = first;
+  for (const target of targets) {
+    const end = Math.max(frame + 1, Math.round(target.end * frameRate));
+    const seconds = (end - frame) / frameRate;
+    const total = target.intervals.reduce(
+      (sum, item) => sum + item.duration,
+      0
+    );
+    for (const interval of target.intervals) {
+      const share = total > 0 ? interval.duration / total : 1;
+      intervals.push({ ...interval, duration: seconds * share });
+    }
+    frame = end;
+  }
+  const { values: steps } = approachToneTargets(intervals, null, frameRate);
+  const count = Math.min(steps.length, values.length - first);
+  for (let index = 0; index < count; index++) {
+    values[first + index] = head.pitch * 2 ** (steps[index] / 12);
+    tonal[first + index] = 1;
+  }
 }
 
 /**
@@ -721,15 +773,18 @@ function addLarynxPitch(larynxHeight, f0, head) {
  * would leave a 170 ms third tone `ma˨˩˦` a dip of 3 Hz (103.5 Hz at the
  * vowel start, 100.6 Hz at 30 %), while the plan dips by 13 Hz (105.4 Hz
  * to 92.5 Hz): `node experiments/issue-42-vowel-f0.mjs`. The pitch is divided by
- * the tone shape, smoothed and multiplied back.
+ * the tone shape, smoothed and multiplied back. The frames of tonal
+ * phrases (`tonal`) keep the curve of the tone model, which is already
+ * smooth: it is continuous with its first and second derivative.
  */
-function smoothPitch(values, shape, timeConstant, frameRate) {
+function smoothPitch(values, { shape, tonal }, timeConstant, frameRate) {
+  const raw = Float32Array.from(values);
   for (let frame = 0; frame < values.length; frame++) {
     values[frame] /= shape[frame];
   }
   smoothChannel(values, timeConstant, frameRate);
   for (let frame = 0; frame < values.length; frame++) {
-    values[frame] *= shape[frame];
+    values[frame] = tonal[frame] ? raw[frame] : values[frame] * shape[frame];
   }
   return values;
 }
@@ -929,7 +984,7 @@ export function planUtterance(ipa, options = {}) {
   applyRegisterGain(channels.loudness, segments, frameRate);
   const modes = planModes(segments);
   applyModeGains(channels.loudness, modes, frameRate);
-  const toneShape = fillPitch(
+  const pitchShape = fillPitch(
     channels.f0,
     segments,
     head,
@@ -945,7 +1000,7 @@ export function planUtterance(ipa, options = {}) {
   for (const name of ['loudness', 'f0', 'lungPressure', 'adduction']) {
     const timeConstant = SOURCE_TIME_CONSTANTS[name] / head.articulationSpeed;
     if (name === 'f0') {
-      smoothPitch(channels.f0, toneShape, timeConstant, frameRate);
+      smoothPitch(channels.f0, pitchShape, timeConstant, frameRate);
     } else {
       smoothChannel(channels[name], timeConstant, frameRate);
     }
