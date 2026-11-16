@@ -55,9 +55,9 @@ below 20 % that is not charging. Neither hint changes a measured load.
   device and engine. A later visit sends no `benchmark` message. Three
   overloads in a row at the cached tier, or "Measure again" next to
   "Measured <n> days ago · <engine>", measure again. An utterance is
-  overloaded when the worker steps it below the tier it started at for
-  load or an underrun (a `tier` message, issue 29) or restarts it on the
-  CPU after WebGPU failed (`overload`).
+  overloaded when the worker steps it down for load in its first 0.5 s (a
+  `tier` message with reason `load` and `at` below 0.5, issue 29) or
+  restarts it on the CPU after WebGPU failed (`overload`).
 - **Fixed tier.** A quality chosen in the menu is kept as a tier name
   (`voice-simulator:tier`). With a fixed tier the benchmark still runs, for
   the meter, but never changes the level.

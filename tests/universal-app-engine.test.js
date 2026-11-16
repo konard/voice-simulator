@@ -351,7 +351,7 @@ describe('voice engine benchmark cache', () => {
     });
   });
 
-  it('three step-downs while speaking drop the cache (issue 29)', async () => {
+  it('three early step-downs for load drop the cache (issue 29)', async () => {
     await withStorage(async (storage) => {
       const first = benchmarkEngine();
       first.start();
@@ -360,28 +360,31 @@ describe('voice engine benchmark cache', () => {
 
       const second = benchmarkEngine();
       second.start();
-      const tier = (id, from, level, reason) =>
-        second.reply({ type: 'tier', id, at: 0.2, from, level, reason });
       const utterance = async (switches) => {
         second.engine.governor.level = 4;
         const id = await speakSound(second.engine);
-        for (const [from, level, reason] of switches) {
-          tier(id, from, level, reason);
+        for (const [at, from, level, reason] of switches) {
+          second.reply({ type: 'tier', id, at, from, level, reason });
         }
         second.reply({ type: 'end', id, level: 4 });
       };
-      // Climbing, and coming back to the cached tier, are no overloads.
+      await utterance([[0.2, 4, 3, 'load']]);
+      // A second step-down of the same utterance does not count.
       await utterance([
-        [4, 5, 'headroom'],
-        [5, 4, 'load'],
+        [0.1, 4, 3, 'load'],
+        [0.3, 3, 2, 'load'],
       ]);
-      await utterance([[4, 3, 'load']]);
-      await utterance([[4, 3, 'underrun']]);
+      // A late step, an underrun or a climb is no overload: the count
+      // starts again.
+      await utterance([
+        [0.6, 4, 3, 'load'],
+        [0.1, 3, 2, 'underrun'],
+        [0.2, 2, 3, 'headroom'],
+      ]);
+      await utterance([[0.2, 4, 3, 'load']]);
+      await utterance([[0.4, 4, 3, 'load']]);
       expect(storage.items.has(BENCHMARK_KEY)).toBe(true);
-      await utterance([
-        [4, 3, 'load'],
-        [3, 2, 'load'],
-      ]);
+      await utterance([[0.49, 4, 3, 'load']]);
       expect(storage.items.has(BENCHMARK_KEY)).toBe(false);
       expect(second.engine.status.benchmark).toBe(null);
     });

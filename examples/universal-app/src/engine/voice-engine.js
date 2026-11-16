@@ -45,6 +45,11 @@ const TAIL = 0.15;
 const SPEECH_SPANS = 16;
 /** User input times kept for ownTask. */
 const INPUT_TIMES = 64;
+/**
+ * A step down for load before this many seconds of the utterance counts as
+ * an overload of the cached benchmark (issue 29, step 7).
+ */
+const OVERLOAD_SECONDS = 0.5;
 
 export class VoiceEngine {
   /**
@@ -619,8 +624,8 @@ export class VoiceEngine {
       this.governor.level = message.level;
     }
     job.tiers.push(message);
-    if (message.reason !== 'headroom' && message.level < job.level) {
-      // Too slow for the tier it started at: an overload (issue 28).
+    if (message.reason === 'load' && message.at < OVERLOAD_SECONDS) {
+      // Too slow from the start: an overload of the cached tier (issue 28).
       this.#countOverloads(job, true);
     }
     this.#emit({ switches: (this.status.switches ?? 0) + 1 });
