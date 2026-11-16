@@ -35,6 +35,21 @@ export {
   ROUNDING_LEAD,
   VELUM_LEAD,
 } from './articulation/plan.js';
+export { modeAt } from './articulation/modes.js';
+// Speech markup: SSML subset, inline tags and modes (docs/markup.md)
+export {
+  EMOTIONS,
+  MARKUP_LIMITS,
+  MARKUP_NAMESPACE,
+  MODE_DEFAULTS,
+  MarkupError,
+  SOUND_DURATION,
+  SOUND_NAMES,
+  composeMode,
+  createMode,
+  isSsml,
+  parseMarkup,
+} from './markup/index.js';
 export { approachTargets, DYNAMICS_ORDER } from './articulation/dynamics.js';
 export {
   DURATION_RULES,
