@@ -1,0 +1,19 @@
+{
+  "description": "Experimental fixed-rule detector regression limits, revised following PR 142 comment 6947242499; original goals remain reported.",
+  "authority": "https://github.com/konard/voice-simulator/pull/142#issuecomment-6947242499",
+  "nuclei": {
+    "minimumRecall": 0.6,
+    "maximumExtrasPerTruth": 0.35,
+    "targetRecall": 0.9,
+    "targetExtrasPerTruth": 0.1
+  },
+  "classes": {
+    "16000": { "minimumAccuracy": 0.46, "targetAccuracy": 0.85 },
+    "8000": { "minimumAccuracy": 0.45, "targetAccuracy": 0.8 }
+  },
+  "landmarks": {
+    "toleranceSeconds": 0.02,
+    "minimumFound": { "apa": 2, "asa": 2, "ama": 0, "aba": 2 },
+    "targetFound": 10
+  }
+}

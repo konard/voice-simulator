@@ -45,7 +45,11 @@ import {
   referenceParts,
   sortedReferenceTeeth,
 } from '../src/geometry/reference-anatomy.js';
-import { fetchMember, listMembers } from './fetch-dvtd.mjs';
+import {
+  ArchiveNetworkError,
+  fetchMember,
+  listMembers,
+} from './fetch-dvtd.mjs';
 
 export { HRA, fetchHra, hraSource };
 
@@ -216,23 +220,31 @@ export function loadAtlasSource(source, directory) {
   throw new Error(`no atlas source ${source}`);
 }
 
-async function remoteSize(url) {
-  const response = await fetch(url, { method: 'HEAD' });
+async function remoteSize(url, signal) {
+  let response;
+  try {
+    response = await fetch(url, {
+      method: 'HEAD',
+      signal,
+    });
+  } catch (error) {
+    throw new ArchiveNetworkError(url, error);
+  }
   if (!response.ok) {
     throw new Error(`${url}: HEAD answered ${response.status}`);
   }
   return Number(response.headers.get('content-length'));
 }
 
-async function fetchMembers(url, size, wanted, output) {
-  const members = (await listMembers(url, size)).filter((member) =>
+async function fetchMembers(url, size, wanted, output, options) {
+  const members = (await listMembers(url, size, options)).filter((member) =>
     wanted(member.name)
   );
   mkdirSync(output, { recursive: true });
   for (const member of members) {
     writeFileSync(
       join(output, basename(member.name)),
-      await fetchMember(member, url)
+      await fetchMember(member, url, options)
     );
   }
   return members.map((member) => basename(member.name));
@@ -242,9 +254,10 @@ async function fetchMembers(url, size, wanted, output) {
  * Download the teeth and organs (for Z-Anatomy, the atlas file) of a source.
  * @param {'bodyparts3d'|'open-full-jaw'|'z-anatomy'|'hra'} source
  * @param {string} output
- * @param {{patients?: number[], sex?: 'male'|'female', files?: string[]}}
+ * @param {{patients?: number[], sex?: 'male'|'female', files?: string[],
+ *   signal?: AbortSignal}}
  *   [options] `files`: the BodyParts3D files to read (default: all of
- *   BODYPARTS3D_FILES).
+ *   BODYPARTS3D_FILES); `signal` cancels remote ZIP downloads.
  * @returns {Promise<string[]>} Files written.
  */
 export async function fetchAnatomy(source, output, options = {}) {
@@ -256,7 +269,8 @@ export async function fetchAnatomy(source, output, options = {}) {
       BODYPARTS3D.url,
       BODYPARTS3D.size,
       (name) => files.has(basename(name, '.obj')),
-      output
+      output,
+      { signal: options.signal }
     );
   }
   if (source === 'open-full-jaw') {
@@ -268,10 +282,11 @@ export async function fetchAnatomy(source, output, options = {}) {
       const url = OPEN_FULL_JAW.url(patient);
       const files = await fetchMembers(
         url,
-        await remoteSize(url),
+        await remoteSize(url, options.signal),
         (name) =>
           /\/input\/(maxilla|mandible)\/teeth\/tooth_\d+\.stl$/.test(name),
-        join(output, `Patient_${patient}`)
+        join(output, `Patient_${patient}`),
+        { signal: options.signal }
       );
       written.push(...files.map((file) => join(`Patient_${patient}`, file)));
     }
@@ -293,7 +308,8 @@ export async function fetchAnatomy(source, output, options = {}) {
       Z_ANATOMY.url,
       Z_ANATOMY.size,
       (name) => name === Z_ANATOMY.member,
-      output
+      output,
+      { signal: options.signal }
     );
   }
   throw new Error(`unknown anatomy source ${source}`);

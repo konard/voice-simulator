@@ -34,6 +34,7 @@ pub mod components;
 pub mod fdtd;
 pub mod formants;
 pub mod inverse_filter;
+pub mod landmarks;
 pub mod language_id;
 pub mod recognition;
 pub mod renderer;
