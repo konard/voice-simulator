@@ -144,7 +144,18 @@ logarithmic total costs have absolute error below `1e-10` (parity class B).
 Malformed packets are rejected before allocation from their claimed counts.
 With the merged source-analysis, codebook and formant cores, the engine measures
 332,646 scalar and 338,849 SIMD bytes with Rust 1.100.0; the size budget
-is 344,064 bytes (336 KiB).
+was 344,064 bytes (336 KiB). Language identification and joint recognition
+now measure 384,428 scalar and 390,690 SIMD bytes, with a 393,216-byte
+(384 KiB) budget rounded to the next 16,384 bytes.
+
+`language_id.rs` derives weighted phone statistics, scores syllables, finds
+and smooths language paths, and computes confidence and duration shares.
+`mixed_recognition.rs` searches language-labelled word candidates with span
+and switch costs and resets bigram context at language changes. The bounded
+`vs_language_run` and `vs_recognition_mixed` packets are documented in
+`crates/voice-simulator-wasm/src/language_id.rs`. Their parity tests use
+small deterministic lexicons, compare scores and costs within `1e-10`,
+and reject malformed packets before allocating from claimed sizes.
 
 The command line tool:
 

@@ -512,6 +512,8 @@ npx voice-simulator --help
 
 `ipaToText(ipa, { language: 'en', beam: 32, nbest: 1 })` reverses pronunciation with public-domain counts in `en`, `ru`, `hi` or `zh`. It returns `{ text, ipa, words }`, including timing, confidence and syllables. Timed input accepts `{ ipa, start, end, confidence }` sounds. Use `boundaries: 'search'` to recover words without spaces; pauses always separate words. See [IPA recognition](docs/ipa-to-text.md) for spelling fallbacks, data sources and measurements.
 
+`identifyLanguage(ipa)` finds `en`, `ru`, `hi` and `zh` spans from sounds, with confidence, sound offsets and optional times. Pass its `spans` to `ipaToText` for mixed speech; `languageShares(result.words)` computes shares from the final transcription. The command `voice-simulator language '<ipa>'` prints one line per span. See [language identification](docs/language-id.md) for options, calibration and measurements.
+
 Every word is looked up in this order: the lexicons you add, the shipped
 lexicon, English morphology, and the letter rules. `textToIpa` reports
 where each word came from (`source`: `user`, `dictionary`, `morphology` or

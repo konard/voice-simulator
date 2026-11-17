@@ -49,9 +49,16 @@ export function recognitionWord(candidate, tokens, language) {
 }
 
 export function resultFromPath(path, tokens, language) {
-  const words = path.map((c) => recognitionWord(c, tokens, language));
+  const words = path.map((c) =>
+    recognitionWord(c, tokens, c.language ?? language)
+  );
   return {
-    text: words.map((w) => w.text).join(language === 'zh' ? '' : ' '),
+    text: words
+      .map(
+        (w, i) =>
+          `${i && !(w.language === 'zh' && words[i - 1].language === 'zh') ? ' ' : ''}${w.text}`
+      )
+      .join(''),
     ipa: words.map((w) => w.ipa).join(' '),
     words,
   };

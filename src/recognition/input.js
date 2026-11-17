@@ -59,5 +59,10 @@ export function recognitionInput(ipa, boundaries) {
   }
   hard.add(tokens.length);
   given.add(tokens.length);
-  return { tokens, boundaries: boundaries === 'given' ? given : hard, timed };
+  return {
+    tokens,
+    boundaries: boundaries === 'given' ? given : hard,
+    pauses: hard,
+    timed,
+  };
 }
