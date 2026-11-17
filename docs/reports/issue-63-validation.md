@@ -272,6 +272,12 @@ The bounded source probes did not resolve the accuracy gates:
   11025 and 16000 Hz on both heads. Head A's prescribed pitch SD remains
   5.959401, 5.948061 and 5.948061 Hz, respectively. Changing the working
   rate does not satisfy its uncertainty gate.
+- `hnr-cycle.mjs` measures seven recordings with weighted cycle-pair
+  correlation, separate amplitude normalization, cubic interpolation and
+  an optional nine-lag search spanning 2% either side of the tracked period.
+  Each variant has its own five-point default-head calibration. Stable
+  subsets still infer B breathiness at least 0.306325 versus 0.2; the best
+  all-frame result is 0.386895. This does not establish a production fix.
 
 The focused failing acceptance selection was re-run after the refactor:
 
@@ -285,3 +291,35 @@ unchanged ten-evaluation budget. The archived full heavy report remains
 explicitly tied to its measured implementation revision; no new passing
 heavy-suite result is claimed. The original acceptance criteria and tests
 remain unchanged, and the PR must remain a draft while they fail.
+
+### Fresh CI for the performance changes
+
+[Run 44084995292](https://github.com/konard/voice-simulator/actions/runs/44084995292)
+at full SHA `f525c91a21760027bf2131fe7d51457d7edd2b19` completed with failure.
+Lint/format, types, documentation, changeset, simulation, Rust and Docker
+checks pass. Separate app, security, workflows and link workflows pass.
+The Deno/macOS job was cancelled without acquiring a runner, so the full-run
+log command fails with `log not found: 134046098186`. Completed test-job logs
+were downloaded individually instead; the missing runner log is not a test
+result.
+
+| Runtime / OS | Result | Saved log evidence |
+| --- | --- | --- |
+| Node / Ubuntu | 2,957 pass, five fail; 273 s, within 300 s | `test-node-ubuntu-134046098243.log`: summary 4663–4673; errors 4676–4737 |
+| Node / Windows | 2,834 pass, five fail; 231 s, within 300 s | `test-node-windows-134046098229.log`: summary 4658–4665; errors 4670–4734 |
+| Deno / Ubuntu | 2,956 pass, five fail; 259 s, within 300 s | `test-deno-ubuntu-134046098496.log`: errors 4210–4253; summary 4257 |
+| Bun / Ubuntu | 2,957 pass, six fail; 433 s, within 500 s | `test-bun-ubuntu-134046098453.log`: failures and summary 4681–4695 |
+| Node / macOS | Two failures; matching file unfinished at 300 s | `test-node-macos-134046098560.log`: summary 4642–4648; failures 4653–4680 |
+| Deno / Windows | Five accuracy failures before the 300 s budget | `test-deno-windows-134046098441.log`: failures 4164, 4167, 4174, 4176, 4177; budget 4179 |
+| Bun / macOS | Accuracy failures and per-test timeouts before 500 s | `test-bun-macos-134046098464.log`: legacy errors/timeouts 3948–3988; budget 3989 |
+| Bun / Windows | Accuracy failures and per-test timeouts before 500 s | `test-bun-windows-134046098207.log`: legacy errors/timeouts 4327–4367; budget 4368 |
+
+The five common failures are transcript recovery at
+`tests/voice-fit.test.js:52`, uncertainty at line 93, female speech-rate
+error 0.119755, male pitch error 0.156910 and small-female speech-rate error
+0.138217. The latter three exceed the unchanged 0.1 legacy thresholds at
+`tests/voice-match.test.js:151` and line 157. Bun/Ubuntu additionally times
+out the 0.8-breathiness test after 32,829 ms against its 30,000 ms limit.
+These errors remain unresolved; no secret, access grant or other manual
+credential action explains them. The measured local performance passes
+and narrower CI passes are not substitutes for the unmet accuracy gates.

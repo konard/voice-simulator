@@ -4,7 +4,8 @@ Objective: implement and verify the complete scope of issue 63 in PR 146.
 Prerequisites 59, 60, 61, 17 and 32 are closed. Issues 33 and 41 are
 merged; include optional fold-source refinement and saveVoice compatibility.
 Issue 62 is open and landmarks.js is absent: use envelope syllable nuclei.
-The issue and PR have no comments, inline comments or reviews at start.
+The issue has no comments. The PR has three automation conversation comments
+and no inline comments or reviews at the latest November 17 review.
 
 ## Requirements and verification
 
@@ -141,7 +142,10 @@ No required criteria are complete until backed by measured evidence below.
 - [x] Preserve fresh complete logs for run 44077893432 at head 75cd6c7.
 - [x] Identify the five accuracy failures and suite-budget overruns.
 - [x] Profile one bounded fit and eliminate redundant analysis work.
-- [ ] Verify focused regressions across Node, Bun and Deno, then current CI.
+- [x] Verify focused regressions across Node, Bun and Deno.
+- [x] Read current implementation CI, including completed job logs when the
+      full-run download cannot include an unacquired runner's missing log.
+- [ ] Make every accuracy assertion and runtime budget pass in current CI.
 - [ ] Reconcile every remaining acceptance gate with measured evidence;
       update the validation report and PR without concealing unmet gates.
 
@@ -161,3 +165,13 @@ No required criteria are complete until backed by measured evidence below.
   Working-rate changes leave A pitch SD above 5 Hz at all three rates.
 - After the refactor the two failing acceptance tests still reproduce,
   including B pitch 126 Hz and A uncertainty. No gate has been relaxed.
+- Cycle-pair correlation with separate amplitude normalization and fractional
+  lag search still infers B breathiness at least 0.306325 versus 0.2 on a
+  stable subset. The seven-recording probe remains experimental.
+- Run 44084995292 at f525c91 completed with failure. Node/Ubuntu finishes in
+  273 s, Node/Windows in 231 s and Deno/Ubuntu in 259 s, each with the same
+  five accuracy failures. Bun/Ubuntu finishes in 433 s with those five plus
+  a 30 s breathiness-test timeout. Node/macOS and Deno/Windows still reach
+  300 s; Bun/macOS and Bun/Windows reach 500 s. Deno/macOS never acquired a
+  runner and was cancelled. Infrastructure, app, security, workflow and
+  link checks pass. These results do not complete the issue.
