@@ -8,8 +8,8 @@
 - [x] Add 12 fixed mixed fixtures (three per requested language pair) and regression/acceptance tests, including seeded noise, confusion matrix, timed input, validation and warmed performance.
 - [x] Measure and tune without changing the requested thresholds. Keep scripts in experiments/; no recognition data changes or new dependencies.
 - [x] Focused local tests and npm check/test; use sequential low-memory Rust checks and CI for full builds/runtime/platform coverage.
-- [ ] Review complete PR diff, merge current main, commit/push only issue-69-747cdfb224e7, update PR title/body with measured evidence, wait for all current-commit CI checks, mark PR 147 ready.
+- [x] Review the complete PR diff, merge current main, commit/push only issue-69-747cdfb224e7 and update PR title/body with measured evidence. Current CI results and final review readiness are recorded in PR 147.
 
 - [x] Tighten mixed transcription verification to exact word boundaries in every language. Reproduce 63/75 (84%) with mismatch cost 2, tune only that cost to 1 and verify 64/75 (85.33%), plus 76/79 (96.20%) syllable-aligned units. Mirror the final cost in Rust.
 - [x] Preserve the existing unknown-source CLI diagnostic on the Rust path; the existing regression test now passes with built wasm.
-- [ ] Import the unlimited green heavy performance artifact into the trend and engine parity report; finalize current-commit CI and PR metadata.
+- [x] Import the unlimited green heavy performance artifact (run 44061935584, 75/75 tests) into the trend and engine parity report. The final CI and PR status are tracked at https://github.com/konard/voice-simulator/pull/147.

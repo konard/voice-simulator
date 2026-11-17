@@ -181,7 +181,6 @@ describe('IPA language identification', () => {
     );
     expect(correct / total >= 0.9).toBe(true);
     expect(exactWords / total >= 0.85).toBe(true);
-    expect(exactWords / total >= 0.85).toBe(true);
     expect(recovered / decodedTotal >= 0.85).toBe(true);
   });
 
