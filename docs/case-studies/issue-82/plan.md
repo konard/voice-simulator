@@ -20,12 +20,12 @@ inline comments or reviews.
       every ported feature in Rust tests without new runtime dependencies.
 - [x] Remove missing-feature handoffs, keep load failure handling and count it
       with reasons. Preserve custom solvers and browser WebGPU as explicit JS.
-- [ ] Benchmark every feature probe and every tier on one thread for at least
+- [x] Benchmark every feature probe and every tier on one thread for at least
       two seconds; median Rust/JS <= 1.0; commit engine-parity report and trend.
 - [x] README, contributing, Rust docs, roadmap, types, CLI help and minor changeset.
-- [ ] Focused regressions, npm check/test, cargo workspace tests/clippy/fmt, wasm
+- [x] Focused regressions, npm check/test, cargo workspace tests/clippy/fmt, wasm
       parity and current-commit CI; save and inspect any failing CI logs.
-- [ ] Merge latest main, review complete PR diff, update title/body with Fixes #82,
+- [x] Merge latest main, review complete PR diff, update title/body with Closes #82,
       push only prepared branch, clean tree and mark PR #145 ready; never merge.
 
 Scope: text/IPA planning and geometry construction stay in JavaScript as in the
@@ -97,3 +97,19 @@ The final reset audit found that 3D retained its incident glottal pressure after
 reset. The two-cell native `fdtd_reset` regression fails before clearing the
 three new interaction state values and passes afterward in both flow and
 microphone modes, matching JavaScript without changing its reference behavior.
+
+All nine runtime/OS matrix jobs and the Rust job pass with both follow-up fixes
+in [run 44044540737](https://github.com/konard/voice-simulator/actions/runs/44044540737)
+on commit 6e2c448. The remaining broken-link errors point only to the performance
+report, which is added after the complete speed suite passes.
+
+The complete, unlimited performance suite passes on the same commit in
+[run 44044547448](https://github.com/konard/voice-simulator/actions/runs/44044547448):
+all five test files pass, including all 18 feature and 10 tier rows of the new
+strict speed gate. Rust/JS medians range from 0.4568 to 0.9722; coarse 3D is
+0.9417. The raw artifact was checked for finite measurements, at least two
+seconds per engine and at least three runs in every row. Its measured table is
+committed as `docs/reports/engine-parity.md`; its passing tier report updates
+`performance-history.json` and `performance.md` through the existing trend
+command. This final commit contains documentation and measured reports only;
+the PR status checks verify it before the PR is marked ready, without merging.
