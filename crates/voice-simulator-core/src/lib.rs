@@ -22,6 +22,7 @@ pub mod config;
 pub mod effort;
 pub mod fdtd;
 pub mod filters;
+pub mod formants;
 pub mod frame;
 pub mod glottis;
 pub mod landmarks;

@@ -15,6 +15,9 @@ import {
 import { presetHeadConfig } from '../src/head-config.js';
 import { analyzeFrames } from '../src/recognition/frontend.js';
 import { trackPitch } from '../src/recognition/pitch.js';
+import { trackFormants } from '../src/recognition/formants.js';
+import { planUtterance } from '../src/articulation/plan.js';
+import { renderPlan } from '../src/acoustics/voice.js';
 
 const show = (label, value) =>
   console.log(`${label}: ${JSON.stringify(value)}`);
@@ -23,13 +26,61 @@ const round = (value) => Math.round(value);
 // 1. Formants of steady vowels: LPC envelope peaks (estimateFormants) against
 //    the resonances of the same area function (tubeFormants).
 const VOWELS = ['i', 'e', 'ɛ', 'a', 'ɑ', 'ɔ', 'o', 'u', 'ə', 'y'];
+/** Prints the line `label preset@rate` of block 1 from `items`: per vowel
+ * the f0, the truth (tubeFormants) and the measured F1 .. F3 (0 or NaN for
+ * a missing one). */
+function showVowels(label, items) {
+  const errors = [[], [], []];
+  let missing = 0;
+  const worst = { vowel: '', error: 0 };
+  for (const { vowel, truth, measured } of items) {
+    truth.forEach((expected, index) => {
+      if (!(measured[index] > 0)) {
+        missing += 1;
+        return;
+      }
+      const error = Math.abs(measured[index] - expected) / expected;
+      errors[index].push(error);
+      if (error > worst.error) {
+        Object.assign(worst, {
+          vowel,
+          formant: index + 1,
+          truth: round(expected),
+          measured: round(measured[index]),
+          error: Number(error.toFixed(2)),
+        });
+      }
+    });
+  }
+  const mean = (list) =>
+    Number(
+      (
+        (100 * list.reduce((sum, value) => sum + value, 0)) /
+        Math.max(1, list.length)
+      ).toFixed(1)
+    );
+  show(label, {
+    f0: items.at(-1).f0,
+    meanErrorPercent: errors.map(mean),
+    over10Percent: errors.map(
+      (list) => list.filter((value) => value > 0.1).length
+    ),
+    missing,
+    worst,
+  });
+}
+/** Truth and f0 at time `centre` of `plan`. */
+function plannedVowel(plan, head, centre) {
+  const state = sampleState(plan, centre);
+  const shape = tractShape(state, head);
+  return {
+    truth: tubeFormants(shape.areas, shape.length, { count: 3 }),
+    f0: round(state.f0),
+  };
+}
 for (const preset of ['male', 'female', 'child']) {
   for (const sampleRate of [16000, 8000]) {
-    const errors = [[], [], []];
-    let missing = 0;
-    const worst = { vowel: '', error: 0 };
-    let f0 = 0;
-    for (const vowel of VOWELS) {
+    const items = VOWELS.map((vowel) => {
       const out = synthesize(`${vowel}ː`, {
         ipa: true,
         head: presetHeadConfig(preset),
@@ -39,10 +90,6 @@ for (const preset of ['male', 'female', 'child']) {
       });
       const segment = out.plan.segments.find((item) => item.kind === 'vowel');
       const centre = (segment.start + segment.end) / 2;
-      const state = sampleState(out.plan, centre);
-      const shape = tractShape(state, out.head);
-      const truth = tubeFormants(shape.areas, shape.length, { count: 3 });
-      f0 = round(state.f0);
       // Same call as analyzeVoice(): resample to at most 11025 Hz, 30 ms
       // frame, order = rate / 1000 + 1.
       const analysed = resample(out.samples, out.sampleRate);
@@ -53,39 +100,99 @@ for (const preset of ['male', 'female', 'child']) {
         analysisRate: analysed.sampleRate,
         order: Math.round(analysed.sampleRate / 1000) + 1,
       });
-      truth.forEach((expected, index) => {
-        if (!(measured[index] > 0)) {
-          missing += 1;
-          return;
+      return { vowel, measured, ...plannedVowel(out.plan, out.head, centre) };
+    });
+    showVowels(`formants ${preset}@${sampleRate}`, items);
+  }
+}
+
+// 1b. The same vowels through the formant tracker of the recognizer
+//     (trackFormants, issue 60, tract length estimated), as one utterance
+//     of 0.5 s per vowel so that the tract length is estimated from all of
+//     them (as in tests/recognition-formants.test.js; a lone vowel can
+//     settle on a wrong length, see experiments/issue-60-vowels.txt): the
+//     row of the frame nearest to the centre of each vowel.
+for (const preset of ['male', 'female', 'child']) {
+  for (const sampleRate of [16000, 8000]) {
+    const head = presetHeadConfig(preset);
+    const plan = planUtterance(VOWELS.map((vowel) => `${vowel}ː`).join(''), {
+      head,
+      durations: VOWELS.map(() => 0.5),
+    });
+    const samples = renderPlan(plan, {
+      head,
+      solver: 'waveguide',
+      sampleRate,
+      seed: 1,
+    });
+    const track = trackFormants(analyzeFrames(samples, sampleRate));
+    const segments = plan.segments.filter((item) => item.kind === 'vowel');
+    const items = segments.map((segment, index) => {
+      const centre = (segment.start + segment.end) / 2;
+      const t = Math.round((centre - track.startTime) / track.hop);
+      const measured = [0, 1, 2].map((k) =>
+        track.valid[t * 4 + k] ? track.frequency[t * 4 + k] : 0
+      );
+      return {
+        vowel: VOWELS[index],
+        measured,
+        ...plannedVowel(plan, head, centre),
+      };
+    });
+    showVowels(`trackFormants ${preset}@${sampleRate}`, items);
+  }
+}
+
+// 1c. How far the rendered vowels sit from tubeFormants: each vowel 2 s at
+//     head.pitch 70 Hz (harmonics 70 Hz apart barely bias the poles),
+//     trackFormants with the tract length of the head, the median per
+//     formant over the frames of the vowel against tubeFormants of the
+//     planned area function, in % (signed per vowel, mean of |%|).
+for (const preset of ['male', 'female', 'child']) {
+  for (const sampleRate of [16000, 8000]) {
+    const head = { ...presetHeadConfig(preset), pitch: 70 };
+    const difference = {};
+    const sums = [0, 0, 0];
+    for (const vowel of VOWELS) {
+      const plan = planUtterance(`${vowel}ː`, { head, durations: [2] });
+      const samples = renderPlan(plan, {
+        head,
+        solver: 'waveguide',
+        sampleRate,
+        seed: 1,
+      });
+      const track = trackFormants(analyzeFrames(samples, sampleRate), {
+        vocalTractLength: head.vocalTractLength,
+      });
+      const segment = plan.segments.find((item) => item.kind === 'vowel');
+      const centre = (segment.start + segment.end) / 2;
+      const shape = tractShape(sampleState(plan, centre), head);
+      const truth = tubeFormants(shape.areas, shape.length, { count: 3 });
+      difference[vowel] = truth.map((expected, k) => {
+        const values = [];
+        for (let t = 0; t < track.count; t++) {
+          const time = track.startTime + t * track.hop;
+          if (
+            time >= segment.start &&
+            time < segment.end &&
+            track.valid[t * 4 + k]
+          ) {
+            values.push(track.frequency[t * 4 + k]);
+          }
         }
-        const error = Math.abs(measured[index] - expected) / expected;
-        errors[index].push(error);
-        if (error > worst.error) {
-          Object.assign(worst, {
-            vowel,
-            formant: index + 1,
-            truth: round(expected),
-            measured: round(measured[index]),
-            error: Number(error.toFixed(2)),
-          });
-        }
+        values.sort((a, b) => a - b);
+        const median = values[values.length >> 1];
+        const percent = Number((100 * (median / expected - 1)).toFixed(1));
+        sums[k] += Math.abs(percent);
+        return percent;
       });
     }
-    const mean = (list) =>
-      Number(
-        (
-          (100 * list.reduce((sum, value) => sum + value, 0)) /
-          Math.max(1, list.length)
-        ).toFixed(1)
-      );
-    show(`formants ${preset}@${sampleRate}`, {
-      f0,
-      meanErrorPercent: errors.map(mean),
-      over10Percent: errors.map(
-        (list) => list.filter((value) => value > 0.1).length
+    show(`renderer formants ${preset}@${sampleRate}`, {
+      pitch: 70,
+      meanDifferencePercent: sums.map((sum) =>
+        Number((sum / VOWELS.length).toFixed(1))
       ),
-      missing,
-      worst,
+      differencePercent: difference,
     });
   }
 }

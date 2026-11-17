@@ -2491,6 +2491,19 @@ export {
   type PitchTrack,
   type PitchTracker,
 } from './recognition/pitch.js';
+// Formant tracker (issue 60); see src/recognition/formants.d.ts.
+export {
+  FORMANT_DEFAULTS,
+  NASAL_BAND_DROP,
+  NASAL_HIGH_DROP,
+  NASAL_RATIO,
+  createFormantTracker,
+  tractLengthFromFormants,
+  trackFormants,
+  type FormantOptions,
+  type FormantTrack,
+  type FormantTracker,
+} from './recognition/formants.js';
 
 // Audio files
 export declare function encodeWav(
