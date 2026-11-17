@@ -1,0 +1,4 @@
+en: The train leaves at seven.
+ru: Мама мыла раму.
+hi: नमस्ते दुनिया।
+zh: 你好世界。

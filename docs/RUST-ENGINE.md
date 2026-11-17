@@ -972,7 +972,7 @@ voice-simulator-cli kernel-steps job.bin 2000 --threads 2
   comment naming the rule "a part writes only its own index range":
 
   ```sh
-  rg -l '\bunsafe\b' crates/voice-simulator-core/src # parallel.rs, solver.rs
+  rg -l '\bunsafe\b' crates/voice-simulator-core/src # parallel.rs, solver.rs, kernel.rs
   ```
 
 - **Threshold.** A solver starts a team only for more than one thread and
@@ -1144,13 +1144,17 @@ worker of the app asks for one thread, so it needs none.
   (`[lints.rust]`) in place of `#![forbid(unsafe_code)]` in `lib.rs`:
   `forbid` cannot be lifted for one module. `fdtd/parallel.rs` allows it
   for the thread team. Issue 82 also allows it only in the private
-  `Fdtd3d::step_grid` method: the scalar wasm scatter loop advances pointers
+  `Fdtd3d::step_grid` method and its private `kernel::step_validated` helper:
+  the scalar wasm scatter loop advances pointers
   through arrays whose lengths and endpoints are validated at construction.
   The grid stays private, exposes only a shared reference and never changes
   endpoints or array lengths. Divergence updates remain sequential even when
-  both endpoints coincide. Native and SIMD steps retain `Grid::step`, and
+  both endpoints coincide. Four links per iteration reduce loop bookkeeping;
+  remainder links keep their original order. A small native unit test compares
+  every bit for empty grids, all skipped prefixes, chunk remainders and shared
+  endpoints. Native and SIMD steps retain `Grid::step`, and
   the public grid kernel remains checked. `tests/rust-crates.test.js` checks
-  both exceptions, the method's scope and a `// SAFETY:` comment per block;
+  these exceptions, the functions' scope and a `// SAFETY:` comment per block;
   `fdtd_reset` tests reject invalid endpoints and mismatched link arrays.
 
 `experiments/issue-24/bench` (its own Cargo project, not in the workspace)
@@ -1307,14 +1311,28 @@ weighted feature objective, prior penalty and bounded Nelder–Mead search.
 distance and simplex exports against JavaScript (class B, relative limit
 1e-6). The JavaScript fitter orchestrates the shared recognition stages.
 
-With the landmark detector from main `a5b3c51`, the combined scalar engine
-is 496779 bytes (SHA-256
-`42ff9dc1c2c04e5e9647476aea329fb4ba59886bf381eea3cb99e415e107026f`).
-SIMD is 502680 bytes and remains unshipped. Both fit the next 16 KiB
-boundary, 507904 bytes. Measured with Rust 1.100.0 and
+With the landmark detector and acoustic mode recognition from main
+`ab54493`, the combined scalar engine is 502658 bytes (SHA-256
+`68b261b3632a31ffa89144ad497a7bbf45faeadfd2c9b2b364265423a28b049f`).
+SIMD is 507788 bytes and remains unshipped. Both fit the existing
+507904-byte budget. Measured with Rust 1.100.0 and
 `CARGO_BUILD_JOBS=1 cargo build --release --locked --target wasm32-unknown-unknown -p voice-simulator-wasm`,
 then the same command with `RUSTFLAGS='-C target-feature=+simd128'` and
 `--target-dir target/simd`.
+
+### Acoustic mode recognition (issue 71)
+
+Acoustic mode recognition exports `vs_mode_rules(input, has_f1, known, out)`.
+Input is two 11-double feature rows (word and baseline): alpha, pitch, F1
+difference, voiced share, source H1-H2, HNR, CPP, jitter, rate, energy ratio,
+pitch span. Output is six word decisions (E, effort, confidence, quality id,
+degree, tempo) followed by the six-component phrase vector. The export
+validates flags, pointers and finite input and permits overlapping buffers.
+The numerical core is `modes.rs`; class B parity tolerance is 1e-10.
+`vs_mode_emotion(input, count, out)` reads the phrase vector followed by
+2–12 six-double reference vectors and writes activation, winning index,
+nearest/next distances, intensity and name confidence. Its six-double output
+may overlap input. Names and span construction remain with the caller.
 
 ## Landmark detector (issue 62)
 

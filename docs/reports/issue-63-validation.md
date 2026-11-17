@@ -500,3 +500,25 @@ outside the requested tolerance. Tuning the HNR table to force a particular
 vertex would not demonstrate a general correction. The source, rate,
 uncertainty, landmark, legacy, heavy and runtime criteria remain unfinished.
 No thresholds, tests, objective weights or timeouts were relaxed or skipped.
+
+## Speech-mode merge verification
+
+Main advanced to `ab5449363a21042644aa9357e07b441f05dd0167` during the
+second restart. Its acoustic-mode exports and declarations, Rust mode
+parity suite and two-process Bun runner are preserved alongside voice
+fitting and landmark parity. All four merge conflicts were resolved.
+
+```sh
+CARGO_BUILD_JOBS=1 node scripts/build-wasm.mjs --require --check-size
+REQUIRE_WASM=1 node --test tests/voice-fit-rust-parity.test.js tests/rust-modes.test.js tests/rust-landmarks.test.js tests/engine-size.test.js tests/bun-shards.test.js tests/recognition-mode-integration.test.js
+npm run check
+```
+
+The scalar engine measures 502658 bytes, SHA-256
+`68b261b3632a31ffa89144ad497a7bbf45faeadfd2c9b2b364265423a28b049f`;
+SIMD measures 507788 bytes and remains unshipped. Both fit the unchanged
+507904-byte budget. The six focused suites pass all 26 tests with no
+skips; repository checks pass (699 packages, 1635 files). Logs are saved as
+`ci-logs/merge-ab54493-wasm.log`, `ci-logs/merged-modes-fit-parity.log` and
+`ci-logs/merged-check.log`. These merge checks do not establish recovery
+accuracy or a passing full runtime matrix.

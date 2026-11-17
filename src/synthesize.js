@@ -14,6 +14,7 @@ import { planUtterance } from './articulation/plan.js';
 import { utteranceTimeline } from './articulation/timeline.js';
 import { textToIpa } from './g2p/index.js';
 import { parseIpa } from './ipa/parse.js';
+import { createMode } from './markup/modes.js';
 import { normalizeHeadConfig, randomHeadConfig } from './head-config.js';
 import { accentSettings } from './accent/index.js';
 import { offsetHead } from './accent/head.js';
@@ -89,6 +90,12 @@ function transcribe(text, options) {
         lexicon: options.lexicon,
         markup: options.markup,
       });
+  if (options.modes !== undefined) {
+    transcription.modes = options.modes.map((span) => ({
+      ...span,
+      mode: createMode(span.mode),
+    }));
+  }
   const accent = transcriptionAccent(transcription, options);
   if (accent && options.ipa) {
     Object.assign(transcription, {

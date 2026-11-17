@@ -696,3 +696,4 @@ export {
   fitVoiceSteps,
   createVoiceFitter,
 } from './analysis/voice-fit.js';
+export { recognizeModes, toPlanModes } from './recognition/modes.js';

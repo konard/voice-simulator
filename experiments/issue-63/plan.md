@@ -28,7 +28,7 @@ merged; include optional fold-source refinement and saveVoice compatibility.
 Issue 62 merged during this follow-up, in main a5b3c51. Its detector is now
 present; integrating its nuclei without breaking rate and continuation is
 an additional unmet requirement (see the merge follow-up below).
-The issue has no comments. The PR has three automation conversation comments
+The issue has no comments. The PR has seven automation conversation comments
 and no inline comments or reviews at the latest November 17 review.
 
 ## Requirements and verification
@@ -235,3 +235,17 @@ The ten-second performance probe measures Stage A 2.017063 s (RTF 0.201706),
 fit 47.356523 s, 39 renders and RSS 237608960 bytes. The final distance is
 unchanged at 0.3580763979634746. Both local budgets pass; accuracy remains
 unresolved.
+
+## Speech-mode merge follow-up
+
+- [x] Fetch latest main `ab54493` and resolve all four merge conflicts.
+- [x] Preserve speech-mode and voice-fit exports, declarations and Rust parity
+      selections, together with the main-branch Bun sharding fix.
+- [x] Build combined scalar/SIMD engines sequentially: 502658/507788 bytes;
+      both remain within the existing 507904-byte budget.
+- [x] Run the six focused merge suites with required WASM: 26 pass.
+- [x] Run `npm run check`: passes (699 packages, 1635 files).
+- [ ] Push the merge and inspect all fresh current-head CI outcomes.
+
+No numerical recovery correction was established in this investigation.
+The acceptance failures and heavy gates above remain unfinished.

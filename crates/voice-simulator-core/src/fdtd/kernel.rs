@@ -334,6 +334,76 @@ impl Grid {
     }
 }
 
+/// Scalar step for the solver's validated, private grid. Four links per
+/// iteration amortize loop bookkeeping without changing the update order.
+///
+/// # Safety
+/// All link arrays must have the same length, all cell arrays must have the
+/// same length, endpoints must name existing cells, and `from <= grid.links()`.
+#[cfg(any(test, all(target_arch = "wasm32", not(target_feature = "simd128"))))]
+#[allow(unsafe_code)]
+#[inline(never)]
+pub(super) unsafe fn step_validated(grid: &mut Grid, from: usize) {
+    let Grid {
+        link_a,
+        link_b,
+        velocity,
+        damping,
+        conductance,
+        pressure,
+        divergence,
+        ..
+    } = grid;
+    // SAFETY: the caller guarantees matching arrays, valid endpoints and from.
+    // Pointers stay within their allocations; even shared endpoints receive
+    // sequential divergence updates in the checked kernel's exact order.
+    unsafe {
+        let mut a = link_a.as_ptr().add(from);
+        let mut b = link_b.as_ptr().add(from);
+        let mut v = velocity.as_mut_ptr().add(from);
+        let end = velocity.as_ptr().add(velocity.len());
+        let mut k = damping.as_ptr().add(from);
+        let mut c = conductance.as_ptr().add(from);
+        let p = pressure.as_ptr();
+        let d = divergence.as_mut_ptr();
+        let update = |a: *const u32, b: *const u32, v: *mut f64, k: *const f64, c: *const f64| {
+            let (i, j) = (*a as usize, *b as usize);
+            let u = *k * (*v - COURANT * (*p.add(j) - *p.add(i)));
+            *v = u;
+            let value = *c * u;
+            *d.add(i) += value;
+            *d.add(j) -= value;
+        };
+        let chunk_end = end.sub((velocity.len() - from) % 4);
+        while v.cast_const() != chunk_end {
+            for offset in 0..4 {
+                update(
+                    a.add(offset),
+                    b.add(offset),
+                    v.add(offset),
+                    k.add(offset),
+                    c.add(offset),
+                );
+            }
+            a = a.add(4);
+            b = b.add(4);
+            v = v.add(4);
+            k = k.add(4);
+            c = c.add(4);
+        }
+        for offset in 0..(velocity.len() - from) % 4 {
+            update(
+                a.add(offset),
+                b.add(offset),
+                v.add(offset),
+                k.add(offset),
+                c.add(offset),
+            );
+        }
+    }
+    grid.pressure_pass();
+}
+
 /// Pass 1 of the gather form for the links `from..to` of `grid`: the new
 /// velocity and flux of every one of them, from `pressure`, which the pass
 /// does not change. A link writes only its own `velocity` and `flux`, so
@@ -592,6 +662,34 @@ pub(crate) mod tests {
         ] {
             assert_eq!(bits(x), bits(y), "{name} differs");
         }
+    }
+
+    #[test]
+    #[allow(unsafe_code)]
+    fn validated_batches_preserve_every_bit() {
+        for links in 0..18 {
+            for from in 0..=links {
+                let mut reference = random_grid(71, 7, links);
+                if links > 0 {
+                    // Include equal endpoints and successive writes to the
+                    // same cell, including at chunk and remainder boundaries.
+                    reference.link_a.fill(0);
+                    reference.link_b[0] = 0;
+                    assert!(reference.index());
+                }
+                let mut batched = reference.clone();
+                for _ in 0..5 {
+                    reference.step(from);
+                    // SAFETY: random_grid/index validate endpoints and all
+                    // arrays have their constructor lengths; from <= links.
+                    unsafe { step_validated(&mut batched, from) };
+                    assert_bit_equal(&reference, &batched);
+                }
+            }
+        }
+        let mut empty = Grid::new(0, 0);
+        // SAFETY: there are no links or cells and from is zero.
+        unsafe { step_validated(&mut empty, 0) };
     }
 
     #[test]

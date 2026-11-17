@@ -72,7 +72,7 @@ import { THREAD_MEMORY } from '../src/engine/layout.js';
  * Including landmarks too, scalar is 467 028 and SIMD 473 723 bytes,
  * rounded up to 475 136 (Rust 1.100.0).
  */
-// Voice-fit exports plus landmarks: scalar 496779 and SIMD 502680 bytes
+// Voice-fit exports, landmarks and modes: scalar 502658 and SIMD 507788 bytes
 // (Rust 1.100.0), rounded up to the next 16384-byte boundary.
 export const WASM_SIZE_BUDGET = 507904;
 

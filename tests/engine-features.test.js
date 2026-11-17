@@ -48,10 +48,13 @@ describe('engine feature inventory', () => {
       expect(plan.duration <= 1).toBe(true);
       const renderer = getEngine('js').createRenderer(plan, renderOptions);
       const samples = new Float32Array(renderer.totalSamples);
-      const started = process.cpuUsage();
+      // Deno --parallel runs other test workers in this process. Count this
+      // probe's thread; concurrent suites have separate CPU budgets.
+      const cpuUsage = process.threadCpuUsage ?? process.cpuUsage;
+      const started = cpuUsage();
       renderer.render(samples);
       expect(samples.length > 0 && samples.every(Number.isFinite)).toBe(true);
-      const cpu = process.cpuUsage(started);
+      const cpu = cpuUsage(started);
       expect((cpu.user + cpu.system) / 1000 < 1000).toBe(true);
     });
   }

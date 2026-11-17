@@ -320,16 +320,9 @@ and child voices, WebGPU) in
 
 ### Vision and roadmap
 
-Where the project is going is written in [docs/VISION.md](docs/VISION.md): one
-physical model that both speaks (text → IPA → audio) and listens (audio → IPA
-→ language → text), copies voices, uses no neural networks and stays in the
-public domain. Today the simulator speaks; listening and voice copying from
-real recordings are planned, not delivered.
+Where the project is going is written in [docs/VISION.md](docs/VISION.md): one physical model that both speaks (text → IPA → audio) and listens (audio → IPA → language → text), copies voices, uses no neural networks and stays in the public domain. Today the simulator speaks; listening and voice copying from real recordings are planned, not delivered.
 
-The plan is [docs/ROADMAP.md](docs/ROADMAP.md): GitHub issues marked as bugs
-and features, grouped in six milestones, with the blockers between them. The
-analysis, the survey of similar projects and the research behind the plan are
-in [docs/case-studies/issue-11](docs/case-studies/issue-11/README.md).
+The plan is [docs/ROADMAP.md](docs/ROADMAP.md): GitHub issues marked as bugs and features, grouped in six milestones, with the blockers between them. The analysis, the survey of similar projects and the research behind the plan are in [docs/case-studies/issue-11](docs/case-studies/issue-11/README.md).
 
 ## Quick Start
 
@@ -658,6 +651,11 @@ Measured with `node experiments/issue-58-rtf.mjs` (10 s of speech, one thread): 
 `trackFormants(frames, options)` and the stage `createFormantTracker(frames, options)` follow F1 to F4 (F1 to F3 at 8000 Hz) in every frame of the front end: the roots of the LPC models of orders p, p - 2 and p - 4 (Aberth-Ehrlich iteration) are the candidates, a dynamic programming search numbers them F1 .. F4 against the resonances (2k - 1) c / (4 L) of a uniform tube of length L (Talkin 1987), and a Kalman filter with a Rauch-Tung-Striebel smoother per formant gives continuous tracks with a variance. L is the option `vocalTractLength` or is estimated from the vowel-like frames (`tractLengthFromFormants`); a stream fixes frame t when frame t + `lag` (10, 50 ms) has been scored. The track holds `frequency`, `bandwidth`, `variance` and `level` (4 columns per frame), `valid`, the `nasal` flag of nasal murmurs and `vocalTractLength`; defaults in `FORMANT_DEFAULTS`, and `trackFormants(frames, { pitch: trackPitch(frames) })` widens the variance under a high f0. In `tests/recognition-formants.test.js` it estimates 13, 16.5 and 19 cm tracts as 13.82, 17.24 and 19.43 cm, flags 72 % of the frames of the nasals of `ama` and `ini` and 4 % of their vowel frames, gives a stream within 30 Hz of the batch in 99.6 % of the frames, and costs about 0.03 of real time at 16000 Hz (`formants rtf`). On the golden set 99.6 % of the voiced frames have F1, F2 and F3 and 0.4 % of the F2 steps jump by more than 300 Hz ([docs/reports/recognition-formants.md](docs/reports/recognition-formants.md)). The root finder and `tractLengthFromFormants` are also in the Rust core (`vs_formant_candidates`, `vs_formant_tract_length`, [RUST-ENGINE.md](docs/RUST-ENGINE.md)) with the same candidates; the tracker itself runs in JavaScript.
 
 `inverseFilter(frames, { pitch: trackPitch(frames) })` estimates vocal-fold flow, closure times, Rd/OQ/NAQ, H1-H2, HNR and CPP on finished speech. See the [batch source-analysis API and limits](docs/INVERSE-FILTER.md).
+
+### Speech-mode recognition
+
+`recognizeModes(samples, sampleRate, result, { voice })` adds manner of speech to timed IPA words. A span is `{ start, end, from, to, effort: 0.75, notation: 'f', confidence: 0.8 }`: seconds, end-exclusive word indexes and only the decided mode fields. Phonation and tempo use synthesis brace marks; emotions use `notation: null`; sounds have `sound` instead of word indexes.
+`toPlanModes(result.modes)` supplies word spans, including emotions, to `planUtterance(result.ipa, { modes })`. It retains activation already covered by physical modes as an observation (`emotion.realized: true`) to avoid applying it twice. See [the API and acoustic rules](docs/RECOGNITION-MODES.md) for baseline, abstention, diagnostics and limits. The text-recognition CLI awaits #73.
 
 ### Articulatory codebook
 
