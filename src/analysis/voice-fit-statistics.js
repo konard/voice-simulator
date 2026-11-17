@@ -239,7 +239,7 @@ export function accumulate(state, samples, sampleRate, options = {}) {
     pitch,
     formants,
     source,
-    options.formantCount ?? 4
+    options.formantCount ?? Math.min(4, Math.floor((0.45 * frames.rate) / 1000))
   );
   if (pitch.perturbation) {
     for (const key of Object.keys(state.perturbation)) {
