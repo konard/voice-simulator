@@ -29,6 +29,7 @@ use voice_simulator_core::aerodynamics::{self, Aerodynamics};
 use voice_simulator_core::random::{hash_seed_utf16, Random};
 use voice_simulator_core::resample::{output_length, resample, StreamResampler};
 
+pub mod codebook;
 pub mod components;
 pub mod fdtd;
 pub mod renderer;
