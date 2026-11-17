@@ -256,6 +256,7 @@ describe('inverse filter integration', () => {
       { step: 0 },
       { tractOrder: 0 },
       { minF0: 0 },
+      { minF0: 1000, maxF0: 2000 },
       { maxF0: Infinity },
       { pitch: { ...v.pitch, startTime: 1 } },
     ]) {

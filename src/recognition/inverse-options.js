@@ -64,7 +64,11 @@ export function settings(frames, options) {
   o.glottisOrder ??= 2 * Math.round(rate / 4000);
   range(o.minF0, 20, rate / 4, 'minF0');
   range(o.maxF0, o.minF0, rate / 4, 'maxF0');
-  if (o.maxF0 === o.minF0 || o.maxF0 === rate / 4) {
+  if (
+    o.maxF0 === o.minF0 ||
+    o.maxF0 === rate / 4 ||
+    Math.floor(rate / o.minF0) <= Math.ceil(0.001 * rate)
+  ) {
     throw new RangeError('invalid pitch range');
   }
   integer(o.tractOrder, 1, 128, 'tract order');

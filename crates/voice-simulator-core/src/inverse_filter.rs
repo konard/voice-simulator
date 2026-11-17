@@ -451,19 +451,21 @@ pub fn inverse_filter(
     mut o: Options<'_>,
 ) -> core::result::Result<Result, &'static str> {
     let rate = frames.rate;
+    if !rate.is_finite() || !(8000.0..=48000.0).contains(&rate) {
+        return Err("invalid working rate");
+    }
     if o.tract_order == 0 {
         o.tract_order = 2 * round(rate / 2000.0) + 4;
     }
     if o.glottis_order == 0 {
         o.glottis_order = 2 * round(rate / 4000.0);
     }
-    if !rate.is_finite()
-        || !(8000.0..=48000.0).contains(&rate)
-        || !o.min_f0.is_finite()
+    if !o.min_f0.is_finite()
         || o.min_f0 < 20.0
         || !o.max_f0.is_finite()
         || o.max_f0 <= o.min_f0
         || o.max_f0 >= rate / 4.0
+        || math::floor(rate / o.min_f0) <= math::ceil(0.001 * rate)
         || !(1..=128).contains(&o.tract_order)
         || !(1..=128).contains(&o.glottis_order)
         || !o.leak.is_finite()
@@ -594,7 +596,7 @@ mod tests {
     #[test]
     fn silence_and_defaults() {
         let samples = vec![0.0; 800];
-        let frames = Frames {
+        let mut frames = Frames {
             rate: 8000.0,
             hop: 0.005,
             window: 0.025,
@@ -613,5 +615,18 @@ mod tests {
         assert!(r.summary[1].median.is_none());
         assert_eq!(rd_to_tenseness(1.5), 0.5);
         assert!(lf_harmonics(0.5).iter().all(|v| v.is_finite()));
+        assert!(inverse_filter(
+            &frames,
+            Options {
+                min_f0: 1000.0,
+                max_f0: 1500.0,
+                ..Options::default()
+            }
+        )
+        .is_err());
+        for rate in [f64::NAN, f64::INFINITY, 1e100, 0.0] {
+            frames.rate = rate;
+            assert!(inverse_filter(&frames, Options::default()).is_err());
+        }
     }
 }

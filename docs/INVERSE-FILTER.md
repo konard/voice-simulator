@@ -46,6 +46,8 @@ The sample rate must be 8000..48000 Hz; LPC orders are integers 1..128;
 between 20 Hz and rate / 4; zero or non-finite pitches are unvoiced. Invalid
 frame layouts, non-finite input samples or invalid options throw. No randomness
 or external state is used.
+The cepstral baseline needs at least two bins:
+`floor(rate / minF0) > ceil(0.001 * rate)`.
 
 ## Result and interpretation
 
