@@ -290,6 +290,12 @@ pub struct Fdtd3d {
     wall_loss: f64,
     nasal_loss: f64,
     glottis_admittance: f64,
+    head_admittance: f64,
+    source_scale: f64,
+    source_gain: f64,
+    last_glottal_flow: f64,
+    glottis_pressure: f64,
+    previous_glottis_pressure: f64,
     length_scale: f64,
     cell_kind: Vec<u8>,
     cell_arc: Vec<f64>,
@@ -407,6 +413,12 @@ impl Fdtd3d {
             wall_loss: options.wall_loss,
             nasal_loss: options.nasal_loss,
             glottis_admittance: (1.0 - reflection) / (1.0 + reflection),
+            head_admittance: (1.0 - reflection) / (1.0 + reflection),
+            source_scale: 1.0,
+            source_gain: 0.0,
+            last_glottal_flow: 0.0,
+            glottis_pressure: 0.0,
+            previous_glottis_pressure: 0.0,
             length_scale: options.length_scale,
             fill: vec![1.0; cell_count],
             cell_area: vec![0.0; cell_count],
@@ -1256,10 +1268,21 @@ impl Fdtd3d {
             flow = self.source_state * self.dx * MICROPHONE_GAIN;
         }
         let mut area = 0.0;
-        for &index in &self.glottis_places[self.place()].source_cells {
+        let mut keep = 0.0;
+        let cells = &self.glottis_places[self.place()].source_cells;
+        for &index in cells {
             area += self.fill[index] * self.dx * self.dx;
+            keep += self.grid.keep[index];
         }
-        (COURANT * flow) / max(area, 1e-3)
+        self.last_glottal_flow = glottal_flow;
+        self.source_gain =
+            (COURANT * keep * self.source_scale) / (max(area, 1e-3) * max(1.0, cells.len() as f64));
+        let pressure = (COURANT * flow) / max(area, 1e-3);
+        if self.source_scale == 1.0 {
+            pressure
+        } else {
+            pressure * self.source_scale
+        }
     }
 
     /// `#measure`.
@@ -1306,6 +1329,52 @@ fn js_sign(value: f64) -> f64 {
 }
 
 impl Solver for Fdtd3d {
+    fn glottal_load(&self) -> (f64, f64) {
+        let pressure = if self.output == Output::Microphone {
+            (self.glottis_pressure - self.leak * self.previous_glottis_pressure)
+                / (self.dx * MICROPHONE_GAIN)
+        } else {
+            self.glottis_pressure
+        };
+        (
+            (pressure - self.source_gain * self.last_glottal_flow) / 2.0,
+            if self.source_gain > 0.0 {
+                1.0 / self.source_gain
+            } else {
+                f64::INFINITY
+            },
+        )
+    }
+    fn set_glottal_reflection(&mut self, reflection: f64) {
+        let limited = max(-0.5, reflection);
+        self.glottis_admittance = (1.0 - limited) / (1.0 + limited);
+        self.share_glottis();
+        let place = self.place();
+        for n in 0..self.glottis_places[place].source_cells.len() {
+            self.update_cell(self.glottis_places[place].source_cells[n]);
+        }
+        self.source_scale = 1.0;
+        if self.glottis_admittance > self.head_admittance {
+            let mut slices = 0.0;
+            let mut open = 0.0;
+            let mut head = 0.0;
+            for &i in &self.glottis_places[place].source_cells {
+                slices += (self.dx * self.dx) / self.envelope[i];
+            }
+            let keep = |admittance: f64| {
+                let half = (COURANT * admittance) / 2.0;
+                (1.0 - half) / (1.0 + half)
+            };
+            for &i in &self.glottis_places[place].source_cells {
+                open += keep(self.base_admittance[i] + self.glottis_admittance / max(1.0, slices));
+                head += keep(self.base_admittance[i] + self.head_admittance / max(1.0, slices));
+            }
+            if open > 0.0 {
+                self.source_scale = head / open;
+            }
+        }
+    }
+
     fn set_shape(&mut self, frame: &[f64]) {
         self.length = frame[frame::LENGTH];
         self.set_areas(
@@ -1334,9 +1403,14 @@ impl Solver for Fdtd3d {
         }
         let pressure = self.source_pressure(flow);
         let place = self.place();
+        let mut sum = 0.0;
         for &index in &self.glottis_places[place].source_cells {
             self.grid.pressure[index] += pressure * self.grid.keep[index];
+            sum += self.grid.pressure[index];
         }
+        self.previous_glottis_pressure = self.glottis_pressure;
+        self.glottis_pressure =
+            sum / max(1.0, self.glottis_places[place].source_cells.len() as f64);
         self.measure()
     }
 
