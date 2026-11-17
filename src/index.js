@@ -651,3 +651,10 @@ export {
   rigFrame,
   vrmVowelBinds,
 } from './animation/rig-bridge.js';
+
+export {
+  inverseFilter,
+  INVERSE_FILTER_DEFAULTS,
+  rdToTenseness,
+  lfHarmonics,
+} from './recognition/inverse-filter.js';

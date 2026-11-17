@@ -31,6 +31,7 @@ use voice_simulator_core::resample::{output_length, resample, StreamResampler};
 
 pub mod components;
 pub mod fdtd;
+pub mod inverse_filter;
 pub mod renderer;
 pub mod threads;
 

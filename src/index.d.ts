@@ -4340,3 +4340,14 @@ export declare function parseObj(text: string): {
   positions: Float64Array;
   indices: Uint32Array;
 };
+
+export {
+  inverseFilter,
+  INVERSE_FILTER_DEFAULTS,
+  rdToTenseness,
+  lfHarmonics,
+  type InverseFilterOptions,
+  type InverseFilterResult,
+  type SourceMeasure,
+  type SourceSummary,
+} from './recognition/inverse-filter.js';

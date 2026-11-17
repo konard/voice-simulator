@@ -661,6 +661,10 @@ Measured with `node experiments/issue-58-rtf.mjs` (10 s of speech, one thread): 
 
 `trackPitch(frames, options)` and the stage `createPitchTracker(frames, options)` find f0 and voicing in every frame of the front end: Boersma (1993) autocorrelation candidates on the sound decimated to about 4 kHz (Hann window of 3 / `minF0`), refined at the working rate, and a Viterbi path through the candidates and "unvoiced". A stream fixes frame t when frame t + `lag` (20, 100 ms plus 25 ms of window) has been scored. The track holds `f0` (0 when unvoiced), `voicing`, `strength`, the period `marks`, `jitter` and `shimmer` (percent, `null` below 20 periods; `jitterToHead` converts them to the head setting) and the `median`, `low` and `high` f0; defaults in `PITCH_DEFAULTS`. `trackPitch(analyzeFrames(samples, 16000)).f0` is f0 per 5 ms. On the six synthetic voices it has no gross errors and a voicing error of at most 0.0078 (`node experiments/issue-59-pitch-set.mjs`), costs 0.034 of real time at 16000 Hz (`node experiments/issue-59-rtf.mjs`), and keeps the frame error at or below 0.0091 in white noise at 10 dB (`tests/recognition-pitch.test.js`).
 
+`inverseFilter(frames, { pitch: trackPitch(frames) })` estimates vocal-fold flow,
+closure times, Rd/OQ/NAQ, H1-H2, HNR and CPP on finished speech. See the
+[batch source-analysis API and limits](docs/INVERSE-FILTER.md).
+
 ### Quality
 
 [docs/reports/baseline-quality.md](docs/reports/baseline-quality.md) is the
