@@ -121,6 +121,8 @@ pub struct LfPulse {
     pub delta: f64,
     /// Phase of the main excitation.
     pub te: f64,
+    /// Return-phase time constant (for the open quotient).
+    pub ta: f64,
     /// Angular frequency of the open phase.
     pub omega: f64,
 }
@@ -164,6 +166,7 @@ pub fn lf_parameters_at(tenseness: f64, breathiness: f64, rd_slope: f64) -> LfPu
         shift,
         delta,
         te,
+        ta,
         omega,
     }
 }

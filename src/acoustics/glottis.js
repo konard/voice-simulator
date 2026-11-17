@@ -211,7 +211,7 @@ export function lfParameters(
   const y = (-Math.PI * sine * upperIntegral) / (tp * 2);
   const alpha = Math.log(y) / (tp / 2 - te);
   const e0 = -1 / (sine * Math.exp(alpha * te));
-  return { rd, alpha, e0, epsilon, shift, delta, te, omega };
+  return { rd, alpha, e0, epsilon, shift, delta, te, ta, omega };
 }
 
 /**

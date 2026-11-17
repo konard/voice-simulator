@@ -20,8 +20,11 @@ minimal@11025: {"rate":11025,"f0":125,"formants":[505,1470,2410,3775]}
 minimal@16000: {"rate":16000,"f0":125,"formants":[500,1465,2420,3685]}
 head parameters: 137
 breathiness 0: {"hnr":20.85,"h1h2":1.12}
+inverse breathiness 0: {"hnr":15.964155197143555,"cpp":3.3428072929382324}
 breathiness 0.5: {"hnr":13.63,"h1h2":8.39}
+inverse breathiness 0.5: {"hnr":15.28678035736084,"cpp":1.1605851650238037}
 breathiness 1: {"hnr":3.35,"h1h2":11.84}
+inverse breathiness 1: {"hnr":7.360009431838989,"cpp":0.8008425831794739}
 highlight: [{"text":"I","syllables":["I"]},{"text":"have","syllables":["have"]},{"text":"25","syllables":[null,null,null]},{"text":"apples","syllables":["ap","ples"]},{"text":"on","syllables":["on"]},{"text":"3/4/2024","syllables":[null,null,null,null,null,null,null]}]
 nasal/vowel level medium: {"ratio":1.06}
 nasal/vowel level high: {"ratio":0.98}

@@ -20,8 +20,8 @@ const PITCH_CORPORA = Object.freeze([]);
 /** Corpora named by issue 59, by the URL of their refused.json entry. */
 const CANDIDATES = Object.freeze([
   [
-    'PTDB-TUG',
-    'https://www.spsc.tugraz.at/databases-and-tools/ptdb-tug-pitch-tracking-database-from-graz-university-of-technology.html',
+    'PTDB-TUG (archived)',
+    'https://web.archive.org/web/20261005152841/https://www.spsc.tugraz.at/databases-and-tools/ptdb-tug-pitch-tracking-database-from-graz-university-of-technology.html',
   ],
   ['Keele', 'https://zenodo.org/records/3920591'],
   ['CSTR FDA', 'https://www.cstr.ed.ac.uk/research/projects/fda'],
