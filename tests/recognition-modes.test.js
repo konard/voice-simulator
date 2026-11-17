@@ -47,6 +47,9 @@ const counts = {
 };
 const telephone = { whisper: 0, correct: 0, total: 0 };
 const emotions = { correct: 0, total: 0, sign: 0, signs: 0 };
+// Replay starts from the same deterministic observations measured above.
+// Retain only results, not audio; isolated replay runs still render afresh.
+const recognizedLabels = new Map();
 
 function emotionClasses(refs) {
   // Connected components of references <1 apart count as one class.
@@ -120,6 +123,7 @@ describe('mode recognition', () => {
       it(`hears ${label}: ${lang}`, () => {
         const audio = render(lang, label);
         const result = recognize(audio, lang);
+        recognizedLabels.set(`${lang}:${label}`, result);
         const actual = dominant(
           result.modes,
           ['allegro', 'lento'].includes(label) ? 'tempo' : 'quality'
@@ -244,8 +248,9 @@ describe('mode recognition', () => {
   for (const lang of LANGUAGES) {
     for (const label of LABELS) {
       it(`speaks ${label} ${lang} again on the same words`, () => {
-        const audio = render(lang, label);
-        const first = recognize(audio, lang);
+        const first =
+          recognizedLabels.get(`${lang}:${label}`) ??
+          recognize(render(lang, label), lang);
         const modes = toPlanModes(first.modes);
         const plan = planUtterance(first.ipa, { head: HEAD, lang, modes });
         expect(

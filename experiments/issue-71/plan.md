@@ -168,3 +168,10 @@ both landmark and mode APIs/tests are retained. Combined scalar WASM is
 609daed8d0b2ca8a6fef1fdda4bf07b8820dceb97f0c4cd5a7f3027dae0facee.
 `cargo fmt --all --check` and the combined mode/landmark/size tests pass (7/7).
 The PR is draft again until the merged revision's CI passes.
+
+The successful Windows suites used 490/500 s (Bun) and 295/300 s (Deno).
+Replay now reuses each first recognition already measured by the label gate,
+avoiding 60 duplicate first-pass analyses and their source renders. Only
+small recognition results are retained, not samples. The replay audio and
+second recognition remain fresh, all 60 cases retain their exact-span checks,
+and running an individual replay still generates its original fixture.
