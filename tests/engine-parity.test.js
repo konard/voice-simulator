@@ -1,7 +1,7 @@
 /** One direct, seeded render comparison for every declared capability. */
 import { describe, expect } from 'test-anywhere';
 import { ENGINE_FEATURES, createEngine } from '../src/engine/index.js';
-import { renderPlan } from '../src/acoustics/voice.js';
+import { VoiceRenderer, renderPlan } from '../src/acoustics/voice.js';
 import { prepareUtterance } from '../src/synthesize.js';
 import { noRust } from './helpers/rust-engine.js';
 import { itUnless } from './helpers/skip.js';
@@ -39,6 +39,47 @@ describe('engine numerical parity', () => {
     it(`parity: ${feature.id}`, () =>
       compare(prepareProbe(feature), feature.tolerance.maxError));
   }
+  it('never falls back', async () => {
+    // createEngine caches this instance; all preceding probes used it.
+    const engine = await createEngine({
+      engine: 'rust',
+      threads: 1,
+      simd: false,
+    });
+    expect(engine.fallbacks).toBe(0);
+    expect(engine.fallbackReasons).toEqual([]);
+  });
+  it('preserves the 2D field across render chunks', async () => {
+    const feature = ENGINE_FEATURES.find(({ id }) => id === 'solver.fdtd2d');
+    const { plan, renderOptions } = prepareProbe(feature);
+    const engine = await createEngine({
+      engine: 'rust',
+      threads: 1,
+      simd: false,
+    });
+    const js = new VoiceRenderer(plan, renderOptions);
+    const rust = engine.createRenderer(plan, renderOptions);
+    try {
+      for (const size of [4096, 101]) {
+        const expected = new Float32Array(size);
+        const actual = new Float32Array(size);
+        expect(rust.render(actual)).toBe(js.render(expected));
+        expect(maxError(actual, expected) <= feature.tolerance.maxError).toBe(
+          true
+        );
+        const expectedField = js.solver.field();
+        const actualField = rust.field();
+        for (const key of ['pressure', 'nose', 'cells']) {
+          expect(expectedField[key].length > 0).toBe(true);
+          expect(maxError(actualField[key], expectedField[key]) <= 1e-4).toBe(
+            true
+          );
+        }
+      }
+    } finally {
+      rust.free();
+    }
+  });
   for (const solver of ['waveguide', 'fdtd2d', 'fdtd3d']) {
     for (const interaction of [false, true]) {
       it(`folds with ${solver}, whisper and interaction=${interaction}`, () =>

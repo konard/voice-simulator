@@ -1639,10 +1639,15 @@ export declare class RustVoiceRenderer {
   /** As VoiceRenderer.restoreSources (`vs_renderer_sources_restore`). */
   restoreSources(state: ArrayLike<number>): void;
   /**
-   * Acoustic pressure per oral and nasal section; with `solver: 'fdtd3d'`,
+   * Acoustic pressure per oral and nasal section; `cells` holds the 2D sheet
+   * pressures. With `solver: 'fdtd3d'`,
    * `pressure` holds the pressure of every cell of the voxel model.
    */
-  field(): { pressure: Float64Array; nose?: Float64Array };
+  field(): {
+    pressure: Float64Array;
+    nose?: Float64Array;
+    cells?: Float64Array;
+  };
   /** Free the engine memory of this renderer. */
   free(): void;
 }

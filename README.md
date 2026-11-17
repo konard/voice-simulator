@@ -817,14 +817,10 @@ its first sample on the audio clock, against 110.2-150.4 ms for buffer sources
 
 `npm run build:wasm` builds the Rust engine into
 `src/engine/voice-simulator.wasm`. With it, `RustVoiceRenderer` and
-`renderPlanRust` render the waveguide tiers (`telephone` to `medium`) in
-WebAssembly with the same samples as `VoiceRenderer` and `renderPlan` (the
-largest difference measured is 1.7e-18), and since issue 23 also the 3D
-FDTD tiers (`high` to `reference`, `solver: 'fdtd3d'`; largest difference
-on `'Hello.'` at `high`: 0); the plan, the tract shape of every control
-block and the voxel model are still computed in JavaScript. Since issue 25
-it is the default engine (see [Engines](#engines)); the functions below
-use it directly.
+`renderPlanRust` render every CPU tier in WebAssembly, including the 2D and
+3D solvers, folds and whisper. Samples match `VoiceRenderer` and `renderPlan`
+within 1e-4; planning and geometry construction stay in JavaScript.
+Rust is the default engine (see [Engines](#engines)); the functions below use it directly.
 
 ```javascript
 import {
@@ -872,14 +868,11 @@ samples are the same bits on any number of threads. Natively,
 are the parts underneath.
 One thread stays the default.
 
-Options the engine does not handle (`solver: 'fdtd2d'`, a WebGPU `device`,
-`source: 'folds'`) throw an Error with
-`code === 'ENGINE_UNSUPPORTED'`. On the pangram of the heavy suite
-`performance` the Rust renderer is 1.5 to 2.0 times faster than JavaScript
-on the waveguide tiers
-([docs/reports/performance-rust-waveguide.md](docs/reports/performance-rust-waveguide.md))
-and 1.11 to 1.43 times faster on `high`, `ultra` and `studio`
-([docs/reports/performance-rust-fdtd.md](docs/reports/performance-rust-fdtd.md)).
+Custom solvers and WebGPU devices use `engine: 'js'`; passing them directly
+to Rust throws `ENGINE_UNSUPPORTED`. Historical pangram measurements are in
+the [waveguide](docs/reports/performance-rust-waveguide.md) and
+[3D](docs/reports/performance-rust-fdtd.md) reports; the current gate covers
+[every feature and tier](docs/reports/engine-parity.md).
 `node scripts/write-render-job.mjs <text> <tier> <out>` writes a render job
 and `voice-simulator-cli render-job <out>` (`cargo build --release -p
 voice-simulator-cli`) renders it natively and prints the SHA-256 of the

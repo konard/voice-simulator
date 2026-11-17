@@ -1,6 +1,6 @@
 /**
- * The voice renderer on the Rust engine, with the 1D waveguide (issue 22)
- * or the 3D FDTD solver (issue 23); see docs/RUST-ENGINE.md.
+ * The voice renderer on the Rust engine, with the waveguide, 2D or 3D
+ * solver, LF or physical folds and whisper; see docs/RUST-ENGINE.md.
  *
  * JavaScript keeps what runs once per control block: it samples the plan,
  * shapes the tract (`blockShape` of src/acoustics/voice.js, the same
@@ -427,7 +427,7 @@ export class FramePlanner {
 }
 
 /**
- * VoiceRenderer with the waveguide or the 3D FDTD solver, on the Rust
+ * VoiceRenderer with the waveguide, 2D or 3D solver, on the Rust
  * engine. Free its engine memory with free() when done.
  */
 export class RustVoiceRenderer {
@@ -436,8 +436,7 @@ export class RustVoiceRenderer {
    *   the engine of loadEngineModule (src/engine/wasm-loader.js)
    * @param {object} plan Result of planUtterance.
    * @param {ConstructorParameters<typeof import('../acoustics/voice.js').VoiceRenderer>[1]} [options]
-   *   as for VoiceRenderer; a `solver` other than 'waveguide' and
-   *   'fdtd3d', `device` and a `bandLimit` that is not
+   *   as for VoiceRenderer; custom solvers, a WebGPU `device` and a `bandLimit` that is not
    *   above 0 throw an Error with `code = 'ENGINE_UNSUPPORTED'`. With
    *   'fdtd3d' the voxel model is `options.model`, or the one Fdtd3d
    *   builds from `dx`, `microphone`, `enclosure`, `piriform` and
@@ -554,10 +553,11 @@ export class RustVoiceRenderer {
   }
 
   /**
-   * Acoustic pressure per section, as Waveguide.field() gives it; with the
+   * Acoustic pressure per section, as Waveguide.field() gives it; the 2D
+   * solver also returns `cells`, the pressure at each sheet cell. With the
    * 3D solver, `{pressure}` holds the pressure of every cell of the model,
    * as the `pressure` array of Fdtd3d.
-   * @returns {{pressure: Float64Array, nose?: Float64Array}}
+   * @returns {{pressure: Float64Array, nose?: Float64Array, cells?: Float64Array}}
    */
   field() {
     if (this.solver === 'fdtd3d') {
