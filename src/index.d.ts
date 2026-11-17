@@ -9,6 +9,14 @@ import type {
 } from './accent/index.js';
 
 export type LanguageCode = 'en' | 'ru' | 'hi' | 'zh';
+export {
+  ipaToText,
+  type IpaToTextOptions,
+  type IpaToTextResult,
+  type RecognitionSound,
+  type RecognitionWord,
+  type RecognitionSyllable,
+} from './recognition/ipa-to-text.js';
 /**
  * Head parameters by key (see HEAD_PARAMETERS). The speaker habits of
  * issue 40 add to the free articulator channels in tractShape:

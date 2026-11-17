@@ -19,7 +19,7 @@
  * its sound, with one syllable that holds the whole word.
  */
 
-import { syllableSpans } from '../g2p/orthography.js';
+import { phoneCounts, syllableSpans } from '../g2p/orthography.js';
 import { parseIpa } from '../ipa/parse.js';
 import { syllabifyTokens, syllableIpa } from '../ipa/syllables.js';
 
@@ -111,17 +111,6 @@ function groupWords(groups, sources) {
     }
   });
   return merged;
-}
-
-/** Phone counts of a syllable for the orthographic mapping. */
-function phoneCounts(tokens) {
-  const first = tokens.findIndex((token) => token.syllabic);
-  const last = tokens.findLastIndex((token) => token.syllabic);
-  return {
-    onset: Math.max(first, 0),
-    coda: last < 0 ? 0 : tokens.length - 1 - last,
-    size: tokens.length,
-  };
 }
 
 /** Whether a source word is read as written (not verbalised). */

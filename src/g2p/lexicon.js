@@ -52,6 +52,12 @@ const opened = new Map();
 const added = new Map();
 const callStack = [];
 let spellingIndex = new Map();
+let revision = 0;
+
+/** Internal cache generation for consumers of the current forward rules. */
+export function lexiconRevision() {
+  return revision;
+}
 
 /**
  * The lookup key of a word: NFC, lower case, typographic apostrophe as
@@ -233,6 +239,7 @@ function openUser(lang, entries) {
 export function addLexicon(lang, entries) {
   const lexicon = openUser(lang, entries);
   added.set(lang, [lexicon, ...(added.get(lang) ?? [])]);
+  revision++;
   spellingIndex = new Map();
   return lexicon.size;
 }
@@ -240,6 +247,7 @@ export function addLexicon(lang, entries) {
 /** Remove every lexicon added with `addLexicon()`. */
 export function clearLexicons() {
   added.clear();
+  revision++;
   spellingIndex = new Map();
 }
 

@@ -471,6 +471,29 @@ tests, including the actual patient-14 fixture comparison, pass with no skips.
 The existing Dresden integration also recognises the new transport error
 without swallowing malformed archive failures.
 
+## Concurrent IPA recognition merge (2026-11-17)
+
+[Run 44053013302](https://github.com/konard/voice-simulator/actions/runs/44053013302)
+started at 09:09:48 UTC on `3735491`. Main advanced to `0b6c090` at
+09:11:13 UTC, after that push. All nine runtime jobs failed the fresh-merge
+simulation before reaching tests. The preserved log
+`ci-logs/checks-44053013302.log` records the first conflicts at lines
+10402–10418: the workflow parity list, WASM module declarations, size budget
+and its regression. This run is not evidence about the anatomy fix.
+
+The merge retains both stages and their parity suites, with no history
+rewrite. The combined scalar WASM now measures **364154 bytes**, SHA-256
+`11502e09c717db6714589dc74faab13fabe0935755e10d961d9b9100c7735814`.
+The next 16 KiB budget is **376832 bytes**. SIMD builds at 369754 bytes and
+remains unshipped. The command is
+`CARGO_BUILD_JOBS=1 node scripts/build-wasm.mjs --require --check-size`.
+
+With `REQUIRE_WASM=1`, the landmark, IPA recognition and inverse-filter
+parity, engine-size and streaming checks pass all 17 tests without skips.
+The separate formant parity check also passes. The nucleus candidate ceiling
+is still 98/120, and the landmark suite still has exactly the same three
+quality failures; the merged orthography helpers do not alter those renders.
+
 ## Remaining work
 
 Resolve the contradictory timing contract and the unreachable nucleus target

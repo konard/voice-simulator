@@ -60,3 +60,11 @@ before test registration with a 20-second total budget and explicit transport
 skip diagnostics; corrupt archives and programming errors remain failures.
 Seven focused regressions pass on Node/Bun/Deno; two fail on the old downloader.
 All ten Node dental tests, including the live reference comparison, pass.
+
+Main advanced to 0b6c090 during run 44053013302; all nine runtime jobs
+stopped at merge conflicts before tests. Merge both IPA recognition and
+landmark modules/parity suites. Combined scalar: 364154 bytes, budget
+376832; SIMD: 369754, unshipped. Seventeen focused checks and separate
+formant parity pass with REQUIRE_WASM=1. The quality measurements and
+98/120 candidate ceiling are unchanged. Preserve and inspect the next
+current-commit CI run before reporting completion or blockers.

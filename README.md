@@ -1,9 +1,6 @@
 # voice-simulator
 
-A physical 3D voice simulator. There are no recordings and no samples: text is
-transcribed to IPA, turned into a smooth articulation plan, and every sound is
-a pressure wave travelling through the 3D shape of a parametric low-poly head
-(vocal tract, nasal cavity, lips and the air in front of the mouth).
+A physical 3D voice simulator. There are no recordings and no samples: text is transcribed to IPA, turned into a smooth articulation plan, and every sound is a pressure wave travelling through the 3D shape of a parametric low-poly head (vocal tract, nasal cavity, lips and the air in front of the mouth).
 
 ![Voice simulator web UI while speaking](docs/screenshots/web-app-speaking.png)
 
@@ -476,6 +473,7 @@ Lower-level building blocks are exported too: `planUtterance`,
 
 ```bash
 npx voice-simulator ipa "你好世界"
+npx voice-simulator text "həˈloʊ ˈwɝld" --lang en  # hello world
 npx voice-simulator ipa "Water, please." --accent en-GB
 npx voice-simulator ipa --lang en --accent en-x-ru --accent-level 0.5 "the thing"
 npx voice-simulator say "the three red rivers" --accent examples/accents/en-x-th-stopping.json -o th.wav
@@ -511,6 +509,8 @@ npx voice-simulator --help
 ```
 
 ### Pronunciation lexicons
+
+`ipaToText(ipa, { language: 'en', beam: 32, nbest: 1 })` reverses pronunciation with public-domain counts in `en`, `ru`, `hi` or `zh`. It returns `{ text, ipa, words }`, including timing, confidence and syllables. Timed input accepts `{ ipa, start, end, confidence }` sounds. Use `boundaries: 'search'` to recover words without spaces; pauses always separate words. See [IPA recognition](docs/ipa-to-text.md) for spelling fallbacks, data sources and measurements.
 
 Every word is looked up in this order: the lexicons you add, the shipped
 lexicon, English morphology, and the letter rules. `textToIpa` reports

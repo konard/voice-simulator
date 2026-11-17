@@ -59,8 +59,12 @@ import { THREAD_MEMORY } from '../src/engine/layout.js';
  * the scalar file is 310 436 bytes, rounded up to 311 296 (Rust 1.100.0).
  * With the merged formant tracker, scalar is 316 669 bytes, rounded up to
  * 327 680 (Rust 1.100.0).
+ * IPA recognition on main measures 332 646 scalar and 338 849 SIMD bytes,
+ * rounded up to 344 064 bytes (Rust 1.100.0).
+ * With both IPA recognition and landmarks, scalar is 364 154 bytes,
+ * rounded up to 376 832 (Rust 1.100.0).
  */
-export const WASM_SIZE_BUDGET = 327680;
+export const WASM_SIZE_BUDGET = 376832;
 
 /**
  * Whether src/engine/voice-simulator-simd.wasm is shipped: only when it
