@@ -31,20 +31,35 @@ fn model() -> Model {
     }
 }
 
+fn options(output: Output) -> FdtdOptions {
+    FdtdOptions {
+        output,
+        spherical: false,
+        target: [1.0, 0.0, 0.0],
+        wall_loss: 1.0,
+        nasal_loss: 1.0,
+        glottal_chink: 0.0,
+        vocal_tract_length: 1.0,
+        length_scale: 1.0,
+    }
+}
+
+#[test]
+fn rejects_invalid_endpoints_before_the_private_grid_can_step() {
+    let mut bad_models = vec![model(); 4];
+    bad_models[0].link_a[0] = 2;
+    bad_models[1].link_b[0] = u32::MAX;
+    bad_models[2].link_b.clear();
+    bad_models[3].link_b.push(0);
+    for model in bad_models {
+        assert!(Fdtd3d::new(model, &options(Output::Flow)).is_none());
+    }
+}
+
 #[test]
 fn reset_forgets_glottal_load_in_both_output_modes() {
     for output in [Output::Flow, Output::Microphone] {
-        let options = FdtdOptions {
-            output,
-            spherical: false,
-            target: [1.0, 0.0, 0.0],
-            wall_loss: 1.0,
-            nasal_loss: 1.0,
-            glottal_chink: 0.0,
-            vocal_tract_length: 1.0,
-            length_scale: 1.0,
-        };
-        let mut solver = Fdtd3d::new(model(), &options).unwrap();
+        let mut solver = Fdtd3d::new(model(), &options(output)).unwrap();
         solver.set_areas(&[1.0], 0.0, None, 1.0);
         for _ in 0..8 {
             solver.step(1.0, 0.0, 0.0, 0.0);

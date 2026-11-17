@@ -246,7 +246,7 @@ impl Grid {
     /// The pressure update of the scatter form, which also zeroes
     /// `divergence`.
     #[inline]
-    fn pressure_pass(&mut self) {
+    pub(super) fn pressure_pass(&mut self) {
         let Self {
             pressure,
             divergence,

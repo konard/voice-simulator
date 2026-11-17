@@ -31,27 +31,27 @@ and parity tests.
 
 ## Layout
 
-| Path                           | What it is                                                                                 |
-| ------------------------------ | ------------------------------------------------------------------------------------------ |
-| `Cargo.toml`, `Cargo.lock`     | The workspace (three members) and its locked dependencies                                  |
-| `rust-toolchain.toml`          | The one exact stable compiler the build uses, with `rustfmt`, `clippy` and the wasm target |
-| `crates/voice-simulator-core`  | The numerical code: `no_std`, no I/O, no clock; `unsafe` only in `fdtd/parallel.rs`        |
-| `crates/voice-simulator-wasm`  | The WebAssembly interface: plain `vs_*` exports over the core                              |
-| `crates/voice-simulator-cli`   | The `voice-simulator-cli` binary (`std` only) for running the core from a terminal         |
-| `scripts/build-wasm.mjs`       | `npm run build:wasm`: builds the wasm crate and copies it to `src/engine/`                 |
-| `src/engine/wasm-loader.js`    | `loadEngineModule(source)`: loads the file in a page, a worker, Node.js, Bun and Deno      |
-| `tests/rust-parity.test.js`    | Rust against JavaScript, value by value                                                    |
-| `tests/rust-crates.test.js`    | The crate licence gate and the shape of the workspace                                      |
-| `src/engine/layout.js`         | `RENDERER_CONFIG`, `FRAME` and `LISTENER`: the arrays JavaScript hands to the renderer     |
-| `src/engine/rust-renderer.js`  | `RustVoiceRenderer`, `renderPlanRust` and `renderJob` (issue 22)                           |
-| `tests/rust-waveguide.test.js` | The waveguide renderer and its parts against JavaScript (issue 22)                         |
-| `crates/.../src/fdtd/`         | The 3D FDTD solver: kernel, SIMD kernel, packed model, solver (issue 23)                   |
-| `src/engine/pack-model.js`     | `packVoxelModel`: the voxel model as one buffer for the Rust solver (issue 23)             |
-| `tests/rust-fdtd.test.js`      | The 3D solver against JavaScript, the SIMD build and the loader fallback (issue 23)        |
-| `crates/.../fdtd/parallel.rs`  | `Team`: the 3D solver step on several threads, bit-identical with one (issue 24)           |
-| `src/engine/thread-pool.js`    | `createThreadPool`: the helper workers of the threads build (issue 24)                     |
-| `src/engine/thread-worker.js`  | One helper: instantiates the threads build on the shared memory and runs teams (issue 24)  |
-| `tests/rust-threads.test.js`   | The `threads` option, its fallback and bit-identical threaded renders (issue 24)           |
+| Path                           | What it is                                                                                                       |
+| ------------------------------ | ---------------------------------------------------------------------------------------------------------------- |
+| `Cargo.toml`, `Cargo.lock`     | The workspace (three members) and its locked dependencies                                                        |
+| `rust-toolchain.toml`          | The one exact stable compiler the build uses, with `rustfmt`, `clippy` and the wasm target                       |
+| `crates/voice-simulator-core`  | The numerical code: `no_std`, no I/O, no clock; audited `unsafe` in the thread team and private scalar grid step |
+| `crates/voice-simulator-wasm`  | The WebAssembly interface: plain `vs_*` exports over the core                                                    |
+| `crates/voice-simulator-cli`   | The `voice-simulator-cli` binary (`std` only) for running the core from a terminal                               |
+| `scripts/build-wasm.mjs`       | `npm run build:wasm`: builds the wasm crate and copies it to `src/engine/`                                       |
+| `src/engine/wasm-loader.js`    | `loadEngineModule(source)`: loads the file in a page, a worker, Node.js, Bun and Deno                            |
+| `tests/rust-parity.test.js`    | Rust against JavaScript, value by value                                                                          |
+| `tests/rust-crates.test.js`    | The crate licence gate and the shape of the workspace                                                            |
+| `src/engine/layout.js`         | `RENDERER_CONFIG`, `FRAME` and `LISTENER`: the arrays JavaScript hands to the renderer                           |
+| `src/engine/rust-renderer.js`  | `RustVoiceRenderer`, `renderPlanRust` and `renderJob` (issue 22)                                                 |
+| `tests/rust-waveguide.test.js` | The waveguide renderer and its parts against JavaScript (issue 22)                                               |
+| `crates/.../src/fdtd/`         | The 3D FDTD solver: kernel, SIMD kernel, packed model, solver (issue 23)                                         |
+| `src/engine/pack-model.js`     | `packVoxelModel`: the voxel model as one buffer for the Rust solver (issue 23)                                   |
+| `tests/rust-fdtd.test.js`      | The 3D solver against JavaScript, the SIMD build and the loader fallback (issue 23)                              |
+| `crates/.../fdtd/parallel.rs`  | `Team`: the 3D solver step on several threads, bit-identical with one (issue 24)                                 |
+| `src/engine/thread-pool.js`    | `createThreadPool`: the helper workers of the threads build (issue 24)                                           |
+| `src/engine/thread-worker.js`  | One helper: instantiates the threads build on the shared memory and runs teams (issue 24)                        |
+| `tests/rust-threads.test.js`   | The `threads` option, its fallback and bit-identical threaded renders (issue 24)                                 |
 
 The core crate may depend on `libm` only, and only `src/math.rs` may call
 it (`sin`, `cos`, `asin`, `exp`, `ln`, `pow`, `tanh`, `sqrt`, `floor`, `ceil`;
@@ -936,12 +936,12 @@ voice-simulator-cli kernel-steps job.bin 2000 --threads 2
   cells, that meet at a spin barrier of three `SeqCst` atomics
   (`generation`, `phase`, `pending`). Pass 1 reads only `pressure` and
   pass 2 only `flux`, so no part reads what another one writes, and the
-  parts compute the same bits as one pass (parity class A). It is the only
-  file of the core crate with `unsafe`; every block has a `// SAFETY:`
+  parts compute the same bits as one pass (parity class A). Every `unsafe`
+  block has a `// SAFETY:`
   comment naming the rule "a part writes only its own index range":
 
   ```sh
-  grep -rln "unsafe" crates/voice-simulator-core/src   # fdtd/parallel.rs
+  rg -l '\bunsafe\b' crates/voice-simulator-core/src # parallel.rs, solver.rs
   ```
 
 - **Threshold.** A solver starts a team only for more than one thread and
@@ -1111,10 +1111,16 @@ worker of the app asks for one thread, so it needs none.
   `src/engine/` in place.
 - The core crate denies `unsafe_code` in its `Cargo.toml`
   (`[lints.rust]`) in place of `#![forbid(unsafe_code)]` in `lib.rs`:
-  `forbid` cannot be lifted for one module, and `fdtd/parallel.rs` allows
-  it. `tests/rust-crates.test.js` checks the lint, that `parallel.rs` is
-  the only file with `unsafe` and that every block has a `// SAFETY:`
-  comment.
+  `forbid` cannot be lifted for one module. `fdtd/parallel.rs` allows it
+  for the thread team. Issue 82 also allows it only in the private
+  `Fdtd3d::step_grid` method: the scalar wasm scatter loop advances pointers
+  through arrays whose lengths and endpoints are validated at construction.
+  The grid stays private, exposes only a shared reference and never changes
+  endpoints or array lengths. Divergence updates remain sequential even when
+  both endpoints coincide. Native and SIMD steps retain `Grid::step`, and
+  the public grid kernel remains checked. `tests/rust-crates.test.js` checks
+  both exceptions, the method's scope and a `// SAFETY:` comment per block;
+  `fdtd_reset` tests reject invalid endpoints and mismatched link arrays.
 
 `experiments/issue-24/bench` (its own Cargo project, not in the workspace)
 times the step forms and the team on the grid of a render job, and

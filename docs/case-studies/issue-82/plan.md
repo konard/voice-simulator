@@ -133,3 +133,22 @@ the model header reader ignored the input's offset within wasm memory, causing
 before the fix (`Expected 0 to be 695`) and passes afterward, comparing finite
 cell pressures with JavaScript within 1e-4. Header reads now accept the model
 offset without copying the packed model.
+
+Bounded scalar-kernel comparisons did not find a reliable gain from checked
+loop unrolling, alternate optimization levels or bounds proofs; these variants
+were reverted. The wasm disassembly showed repeated index checks and address
+calculations. `Fdtd3d::step_grid` now advances pointers through its private,
+validated arrays, preserving the exact scatter order and keeping the public
+`Grid::step` checked. Construction also rejects mismatched endpoint lengths.
+The unsafe exception is confined to that method, documented and enforced by
+the existing architecture test; native and SIMD steps retain their old path.
+
+Command: `node --max-old-space-size=256 --stack-size=512 experiments/issue-82-validated-grid.mjs before.wasm after.wasm`.
+On the fixed studio grid (4,690 cells), two interleaved five-run comparisons
+measured median times of 661.65 vs 572.32 ms and 579.75 vs 537.29 ms per 10,000
+steps after 100,000 warm-up steps. The pressure fields match bit for bit.
+The native `fdtd_reset` target passes both the reset test and rejection of
+out-of-range endpoints and mismatched arrays. All 50 focused wasm parity,
+3D solver/field, size and architecture checks pass without skips. The builds
+measure 336,038 bytes scalar and 344,435 bytes SIMD within the existing budget.
+The complete CI speed gate remains required before finalizing the implementation.
