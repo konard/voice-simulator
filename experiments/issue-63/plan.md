@@ -195,3 +195,21 @@ No required criteria are complete until backed by measured evidence below.
 
 These additional measurements are recorded in the validation report. No
 acceptance gate has been relaxed, and the PR remains unfinished.
+
+## Peak-only legacy pitch follow-up
+
+- [x] Add a failing regression for rate measurements that defer unused pitch.
+- [x] Retain exact peak voicing decisions and cache each computed YIN frame.
+- [x] Verify complete legacy diagnostics and fits against the saved baseline.
+- [x] Run focused regressions on Node, Bun and Deno, then repository checks.
+- [ ] Read fresh CI logs and update the PR with current-head results.
+
+The objective needs only the legacy envelope rate during each candidate
+evaluation. The prepared analysis can measure YIN at those peaks first,
+then fill the other active frames only for diagnostics. This retains the
+syllable counter, calibration, objective and accuracy thresholds.
+
+The ten-second performance probe measures Stage A 2.017063 s (RTF 0.201706),
+fit 47.356523 s, 39 renders and RSS 237608960 bytes. The final distance is
+unchanged at 0.3580763979634746. Both local budgets pass; accuracy remains
+unresolved.

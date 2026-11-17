@@ -32,6 +32,33 @@ const consume = (g) => {
   return next.value;
 };
 describe('voice fitting numerics', () => {
+  it('measures syllable rate using only peak frames before completing legacy pitch', () => {
+    const rate = 8000;
+    const samples = Float32Array.from(
+      { length: 4000 },
+      (_, n) =>
+        Math.sin((2 * Math.PI * 160 * n) / rate) *
+        (0.6 + 0.4 * Math.cos((2 * Math.PI * 4 * n) / rate))
+    );
+    const events = [];
+    const analysis = prepareLegacyVoice(samples, rate, {
+      diagnosticsOnly: true,
+      trace: (event) => events.push(event),
+    });
+    const partial = analysis.rateFeatures;
+    expect(partial.activeDuration > 0).toBe(true);
+    expect(partial.syllableRate > 0).toBe(true);
+    const initial = events.at(-1);
+    expect(initial.stage).toBe('legacy-voice-pitch');
+    expect(initial.evaluated < initial.activeFrames).toBe(true);
+    const completed = analysis.complete();
+    expect(completed.activeDuration).toBe(partial.activeDuration);
+    expect(completed.syllableRate).toBe(partial.syllableRate);
+    expect(completed).toEqual(
+      analyzeLegacyVoice(samples, rate, { diagnosticsOnly: true })
+    );
+    expect(events.at(-1).evaluated).toBe(initial.activeFrames);
+  });
   it('completes deferred source diagnostics without changing the measured features', () => {
     const rate = 8000;
     const samples = Float32Array.from({ length: 2000 }, (_, n) =>

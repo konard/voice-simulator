@@ -348,9 +348,9 @@ function countSyllables(levels, voiced) {
   for (let index = 1; index < decibels.length - 1; index++) {
     valley = Math.min(valley, decibels[index]);
     const isPeak =
-      voiced[index] &&
       decibels[index] >= decibels[index - 1] &&
-      decibels[index] > decibels[index + 1];
+      decibels[index] > decibels[index + 1] &&
+      voiced(index);
     if (isPeak && decibels[index] - valley > 2 && index - last >= 6) {
       count++;
       last = index;
@@ -396,49 +396,76 @@ export function prepareLegacyVoice(samples, sampleRate, options = {}) {
   }
   const loud = percentile(levels, 0.95);
   const active = levels.map((level) => level > Math.max(1e-4, 0.1 * loud));
-  const frames = levels.map((level, index) => {
-    if (!active[index]) {
-      return { voiced: false };
+  const frames = active.map((value) => (value ? null : { voiced: false }));
+  let evaluated = 0;
+  function frameAt(index) {
+    if (frames[index] === null) {
+      const pitch = yinPitch(signal, index * hop, length, rate);
+      frames[index] = {
+        ...pitch,
+        voiced: pitch.aperiodicity < VOICED_APERIODICITY,
+      };
+      evaluated++;
     }
-    const pitch = yinPitch(signal, index * hop, length, rate);
-    return { ...pitch, voiced: pitch.aperiodicity < VOICED_APERIODICITY };
-  });
-  const voicedIndices = [];
-  frames.forEach((frame, index) => {
-    if (frame.voiced) {
-      voicedIndices.push(index);
-    }
-  });
-  const f0s = voicedIndices.map((index) => frames[index].f0);
-  const f0 = median(f0s);
-  const f0Low = percentile(f0s, 0.05);
-  const f0High = percentile(f0s, 0.95);
+    return frames[index];
+  }
   const activeSeconds = active.filter(Boolean).length * HOP;
-  const features = {
+  const rateFeatures = {
     duration: samples.length / sampleRate,
     activeDuration: activeSeconds,
-    voicedDuration: voicedIndices.length * HOP,
-    f0,
-    f0Low,
-    f0High,
-    f0Range: f0Low > 0 ? 12 * Math.log2(f0High / f0Low) : 0,
-    formants: [0, 0, 0, 0],
-    formantSpacing: 0,
-    vocalTractLength: 0,
-    h1h2: 0,
-    hnr: 0,
     syllableRate:
       activeSeconds > 0
-        ? countSyllables(
-            levels,
-            frames.map((frame) => frame.voiced)
-          ) / activeSeconds
+        ? countSyllables(levels, (index) => frameAt(index).voiced) /
+          activeSeconds
         : 0,
   };
+  const tracePitch = (phase) =>
+    options.trace?.({
+      stage: 'legacy-voice-pitch',
+      phase,
+      evaluated,
+      activeFrames: active.filter(Boolean).length,
+    });
+  tracePitch('rate');
+  const voicedIndices = [];
+  let features = null;
+  function pitchFeatures() {
+    if (!features) {
+      for (let index = 0; index < frames.length; index++) {
+        if (frameAt(index).voiced) {
+          voicedIndices.push(index);
+        }
+      }
+      const f0s = voicedIndices.map((index) => frames[index].f0);
+      const f0Low = percentile(f0s, 0.05);
+      const f0High = percentile(f0s, 0.95);
+      features = {
+        duration: rateFeatures.duration,
+        activeDuration: activeSeconds,
+        voicedDuration: voicedIndices.length * HOP,
+        f0: median(f0s),
+        f0Low,
+        f0High,
+        f0Range: f0Low > 0 ? 12 * Math.log2(f0High / f0Low) : 0,
+        formants: [0, 0, 0, 0],
+        formantSpacing: 0,
+        vocalTractLength: 0,
+        h1h2: 0,
+        hnr: 0,
+        syllableRate: rateFeatures.syllableRate,
+      };
+      tracePitch('features');
+    }
+    return features;
+  }
   let completed = false;
   return {
-    features,
+    rateFeatures,
+    get features() {
+      return pitchFeatures();
+    },
     complete() {
+      pitchFeatures();
       if (!completed) {
         Object.assign(
           features,

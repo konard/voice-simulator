@@ -383,3 +383,59 @@ best-vertex reuse. All 39 actual renders are distinct, with no further
 exact repeated heads. Extending the cache would not save work in this case.
 These negative probes do not fix the remaining accuracy or CI timeout
 failures, and are retained so they need not be repeated without new evidence.
+
+## Peak-only legacy pitch evaluation
+
+Each refinement candidate previously ran legacy YIN over every active frame,
+although its envelope rate only consults voicing at local peaks. The prepared
+analysis now caches those peak decisions and completes the other active
+frames only when full features or diagnostics are requested. The counter,
+calibration, objective and all acceptance thresholds are unchanged. Optional
+`legacy-voice-pitch` trace events expose the evaluated and active frame counts;
+tracing remains disabled by default.
+
+The regression `measures syllable rate using only peak frames before completing
+legacy pitch` fails before this change (`lazy-yin-before.log`: undefined
+`rateFeatures`) and passes afterward. The four focused deferred-analysis,
+vertex-reuse and determinism regressions pass on Node, Bun and Deno.
+
+```sh
+node --test --test-name-pattern='measures syllable rate|deferred source|reuses an identical|is deterministic' tests/voice-fit-numerics.test.js tests/voice-fit.test.js
+node experiments/issue-63/legacy-diagnostics.mjs
+```
+
+The baseline comparison against `75cd6c7` confirms identical complete features
+and fits for both required heads, with and without the diagnostic-only option.
+Before completion, A computes 10 peak YIN frames instead of all 138 active
+frames; B computes 14 instead of 166 (`lazy-yin-legacy-counts.log`). The winning
+render still receives the exact full diagnostics. This is a work reduction,
+not evidence that any outstanding acoustic criterion has been fixed.
+
+The bounded ten-second performance probe on Node v26.13.0 / AMD EPYC
+measures Stage A at 2.017063 s (RTF 0.201706), refinement at 47.356523 s
+with 39 actual renders and RSS 237608960 bytes. Its final distance is
+0.3580763979634746, identical to the previous probe. Both local budgets
+pass; these timings are not a controlled before/after comparison.
+`npm run check` passes (699 packages, 1596 files).
+
+Merged-head CI run 44090743237, created 2026-11-17 at 13:14:27 UTC for SHA
+`3611634a383126d0ef97e46db37dcba8b1edd2fb`, finished with failure before this
+additional optimization. All nine runtime jobs fail; infrastructure, Rust,
+app, security, workflow and link checks pass. The complete run log and
+individual completed-job logs are preserved under ignored `ci-logs/`.
+
+| Runtime / OS | Result | Saved log evidence |
+| --- | --- | --- |
+| Node / Ubuntu | 3005 pass, five accuracy failures; 249 s / 300 s | `merged-node-ubuntu-134065703624.log`: errors 4772–4824, duration 4833 |
+| Deno / Ubuntu | 3004 pass, same five failures; 225 s / 300 s | `merged-deno-ubuntu-134065703568.log`: errors 4295–4329, summary 4344–4347 |
+| Bun / Ubuntu | 3005 pass, six fail; 429 s / 500 s | `merged-bun-ubuntu-134065703652.log`: summary 4775–4796; female and breathiness tests exceed 30 s |
+| Node / Windows | Two acceptance failures and unfinished matching file at 300 s | `merged-node-windows-134065703623.log`: budget 4541, errors 4745, 4759 |
+| Deno / Windows | Unfinished matching file at 300 s | `merged-deno-windows-134065703801.log`: budget 4288 |
+| Bun / Windows | Legacy errors and 30 s timeouts; suite reaches 500 s | `merged-bun-windows-134065703533.log`: 4426–4467 |
+| Node / macOS | Two acceptance failures and unfinished matching file at 300 s | `merged-node-macos-134065703714.log`: summary 4736–4743, errors 4750, 4764 |
+| Deno / macOS | Legacy accuracy failures; suite reaches 300 s | `merged-deno-macos-134065703622.log`: 4243–4250 |
+| Bun / macOS | Legacy errors and 30 s timeouts; suite reaches 500 s | `merged-bun-macos-134065703689.log`: 4047–4090 |
+
+The Pipeline Status job correctly fails because `test` failed
+(`merged-pipeline-134073738337.log`: 266–268). This evidence predates the
+peak-only optimization and is not its current-head verification.

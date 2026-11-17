@@ -196,6 +196,13 @@ function collectFrames(state, frames, pitch, formants, source, formantCount) {
     }
   }
 }
+function collectDiagnostics(state, legacy) {
+  const weight = legacy.voicedDuration / 0.01;
+  state.diagnostics.frames += weight;
+  for (const key of ['hnr', 'h1h2']) {
+    state.diagnostics[key] += legacy[key] * weight;
+  }
+}
 export function accumulate(
   state,
   samples,
@@ -228,7 +235,7 @@ export function accumulate(
     ...options,
     diagnosticsOnly: true,
   });
-  const legacy = diagnostics ? analysis.complete() : analysis.features;
+  const legacy = diagnostics ? analysis.complete() : analysis.rateFeatures;
   captureDiagnostics?.(analysis.complete);
   state.duration += input.length / sampleRate;
   // A 40 ms sliding window represents its 10 ms hop plus 30 ms at
@@ -238,10 +245,8 @@ export function accumulate(
       ? Math.min(input.length / sampleRate, legacy.activeDuration + 0.03)
       : 0;
   state.speechSeconds += speech;
-  const weight = legacy.voicedDuration / 0.01;
-  state.diagnostics.frames += weight;
-  for (const key of ['hnr', 'h1h2']) {
-    state.diagnostics[key] += legacy[key] * weight;
+  if (diagnostics) {
+    collectDiagnostics(state, legacy);
   }
   state.nuclei += Math.round(legacy.syllableRate * legacy.activeDuration);
   collectFrames(

@@ -48,12 +48,19 @@ try {
       engine: 'js',
     });
     for (const diagnosticsOnly of [false, true]) {
-      const options = { diagnosticsOnly };
+      const events = [];
+      const options = {
+        diagnosticsOnly,
+        trace: (event) => events.push(event),
+      };
       const deferred = prepareLegacyVoice(
         audio.samples,
         audio.sampleRate,
         options
       );
+      const partial = { ...deferred.rateFeatures };
+      const peakFrames = events.at(-1).evaluated;
+      const activeFrames = events.at(-1).activeFrames;
       deepStrictEqual(
         deferred.features,
         baseline.analyzeLegacyVoice(audio.samples, audio.sampleRate, {
@@ -66,12 +73,26 @@ try {
         audio.sampleRate,
         options
       );
+      deepStrictEqual(
+        partial,
+        Object.fromEntries(
+          Object.keys(partial).map((key) => [key, expected[key]])
+        )
+      );
       deepStrictEqual(deferred.complete(), expected);
       deepStrictEqual(
         analyzeLegacyVoice(audio.samples, audio.sampleRate, options),
         expected
       );
-      console.log(JSON.stringify({ head, diagnosticsOnly, equal: true }));
+      console.log(
+        JSON.stringify({
+          head,
+          diagnosticsOnly,
+          peakFrames,
+          activeFrames,
+          equal: true,
+        })
+      );
     }
     const options = {
       transcript: 'The north wind and the sun.',
