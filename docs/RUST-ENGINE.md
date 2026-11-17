@@ -147,7 +147,19 @@ logarithmic total costs have absolute error below `1e-10` (parity class B).
 Malformed packets are rejected before allocation from their claimed counts.
 With the merged source-analysis, codebook and formant cores, the engine measures
 332,646 scalar and 338,849 SIMD bytes with Rust 1.100.0; the size budget
-is 344,064 bytes (336 KiB).
+was 344,064 bytes (336 KiB). Before landmarks were added, language
+identification and joint recognition with the acoustics cores measured
+435,525 scalar and 442,832 SIMD bytes, with a 458,752-byte (448 KiB) budget
+rounded to the next 16,384 bytes.
+
+`language_id.rs` derives weighted phone statistics, scores syllables, finds
+and smooths language paths, and computes confidence and duration shares.
+`mixed_recognition.rs` searches language-labelled word candidates with span
+and switch costs and resets bigram context at language changes. The bounded
+`vs_language_run` and `vs_recognition_mixed` packets are documented in
+`crates/voice-simulator-wasm/src/language_id.rs`. Their parity tests use
+small deterministic lexicons, compare scores and costs within `1e-10`,
+and reject malformed packets before allocating from claimed sizes.
 
 The command line tool:
 
@@ -1304,9 +1316,9 @@ and the complete output with class B relative RMS at most 1e-6, on all
 three rates and both hops, male and female. This numerical parity does not
 resolve the acceptance blockers documented in the issue 62 investigation.
 
-With complete acoustics parity from main `80b9c3d`, the combined scalar
-engine is 415183 bytes (SHA-256
-`2dbbe7000be641dfd1f5eac02202aee47975af406038c2b06d562267ffd4fef2`).
-The next 16 KiB size budget is 425984 bytes. SIMD builds at 421828 bytes
+With complete acoustics parity, language identification and joint
+recognition from main `eeb2869`, the combined scalar engine is 467028 bytes
+(SHA-256 `dedd72fab32a042aeed066d322c6b3ec0b98fe3c5437f9801a5f490b35e0b4ee`).
+The next 16 KiB size budget is 475136 bytes. SIMD builds at 473723 bytes
 and remains unshipped. Measured with
 `CARGO_BUILD_JOBS=1 node scripts/build-wasm.mjs --require` (Rust 1.100.0).

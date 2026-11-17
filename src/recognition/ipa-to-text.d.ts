@@ -1,4 +1,5 @@
 import type { LanguageCode } from '../index.js';
+import type { LanguageSpan } from './language-id.js';
 
 /** One heard sound or pause, with times in seconds. */
 export interface RecognitionSound {
@@ -31,6 +32,8 @@ export interface RecognitionWord {
 
 export interface IpaToTextOptions {
   language?: LanguageCode;
+  /** Language-ID spans covering all sounds. One language behaves as language. */
+  spans?: LanguageSpan[];
   /** Number of distinct texts, including the best. Default 1. */
   nbest?: number;
   /** Partial paths retained at each position. Default 32. */

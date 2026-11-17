@@ -1,0 +1,14 @@
+[
+  { "language": "en", "text": "I said привет to my friend" },
+  { "language": "ru", "text": "она сказала thank you и ушла" },
+  { "language": "en", "text": "we can see the moon сегодня" },
+  { "language": "hi", "text": "मैं कल office जाऊँगा" },
+  { "language": "en", "text": "my friend has a new किताब" },
+  { "language": "hi", "text": "उसने मुझे एक new book दी" },
+  { "language": "zh", "text": "我喜欢 this book 因为它很好" },
+  { "language": "en", "text": "please put the 水 on the table" },
+  { "language": "zh", "text": "今天 my friend 来到 学校" },
+  { "language": "ru", "text": "она сказала 你好 и ушла" },
+  { "language": "zh", "text": "我 喜欢 新书 спасибо 朋友" },
+  { "language": "ru", "text": "мы пошли в 学校 утром" }
+]

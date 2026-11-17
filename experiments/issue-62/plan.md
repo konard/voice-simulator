@@ -128,3 +128,17 @@ current-commit CI run before reporting completion or blockers.
       fine-peak placement and causal commitment contradictions. Class
       accuracy also remains unresolved; do not waive its gate.
 - [ ] Mark ready only after every requirement and all checks pass.
+
+### New main during the fifth-restart CI
+
+- [x] Wait for every 855b325 workflow, preserve full run 44067794069 and
+      inspect all nine runtime error blocks. Only the same three quality
+      assertions fail; all other applicable checks pass.
+- [x] Fetch newly advanced main eeb2869 and resolve both WASM modules and
+      the measured size-budget conflicts, retaining all APIs and suites.
+      Combined scalar is 467028 bytes, SIMD 473723 (unshipped), next
+      16 KiB budget 475136. Build with CARGO_BUILD_JOBS=1.
+- [x] Verify the merged build with focused parity, check the unchanged
+      quality failures and feasibility probes, and run formatting/lint.
+- [ ] Commit and push the merge, review its diff, inspect all resulting
+      CI and update the PR with final measurements and blockers.

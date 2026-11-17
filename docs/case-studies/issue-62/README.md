@@ -142,7 +142,7 @@ acceptance of the issue as a whole.
       assertions retain the requested 90%, 10%, 85%/80% and 20 ms gates.
 - [ ] Synthetic quality gates pass on Node.js, Bun and Deno.
 - [x] Noise-only, streaming timing/immutability, affricate truth regression,
-      and CPU tests; the latest nine CI runtimes measure RTF 0.000115–0.001084.
+      and CPU tests; every measured CI RTF is below the 0.02 target.
 - [x] Golden report on all 24 utterances, syllabifyIpa truth, counts and MARE.
 - [x] Rust numerical core and WASM bridge; parity on 12 rate/voice/hop cases.
 - [x] README, CLI command/help, roadmap, Rust documentation, minor changeset.
@@ -665,6 +665,46 @@ The freshly downloaded default-branch log
 npm bootstrap action described above. PR preflight already skips only the
 credential-dependent operation with an explanation; main fails explicitly
 with the exact secret and trusted-publisher setup instructions.
+
+### Fresh evidence CI and the language-identification merge
+
+[Run 44067794069](https://github.com/konard/voice-simulator/actions/runs/44067794069)
+ran from 10:45:41 to 10:59:39 UTC on `855b325`, after its 10:45:04 UTC
+commit. Every workflow finished. All nine runtime jobs fail exactly the
+same three quality assertions, with unchanged measurements and no
+additional failure or timeout. Node/Ubuntu has 2953 passes, 131 skips and
+three failures. Its measurements are at lines 13073–13081 and assertion
+errors at 15077, 15089 and 15103 of the preserved full log
+`ci-logs/checks-44067794069.log`. RTF is 0.000137–0.000560 across the nine
+jobs. All other applicable checks pass. In particular, the final Bun/macOS
+job finishes in 331 seconds of its existing 500-second budget.
+
+While that run was active, main advanced to `eeb2869` (PR 147), adding
+language identification and mixed-language recognition. The subsequent
+merge preserves both WASM modules, all exports/types and CLI commands,
+the acoustic feature inventory, and the language and landmark parity
+suites. Resolving its size-budget conflict uses a new measured build:
+
+```sh
+CARGO_BUILD_JOBS=1 node scripts/build-wasm.mjs --require
+```
+
+The combined scalar engine is **467028 bytes**, SHA-256
+`dedd72fab32a042aeed066d322c6b3ec0b98fe3c5437f9801a5f490b35e0b4ee`.
+SIMD is 473723 bytes and remains unshipped. The build and size regression
+use the next 16 KiB budget, **475136 bytes**. This is a measured capacity
+update for the combined features; no numerical or quality gate changes.
+The build log is `ci-logs/restart-5-main-eeb2869-build.log`.
+
+The merged focused engine check above now passes **73 tests without skips**,
+including the new language-identification and mixed-decoding parity cases.
+`cargo fmt --all -- --check` and `npm run check` pass. The quality suite has
+nine passes and the same three failures, with unchanged recall, class
+accuracies and missing edges. Both the edge-feasibility probe and public
+PCM cleanup/commitment counterexample give byte-identical output on
+Node.js, Bun and Deno after the merge. Local logs use the
+`ci-logs/restart-5-main-eeb2869-` prefix. Final CI results for the merge
+are recorded in the PR description after all workflows finish.
 
 ## Remaining work
 
