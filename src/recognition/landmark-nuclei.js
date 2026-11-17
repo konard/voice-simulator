@@ -41,8 +41,7 @@ export function createNucleusScanner(frames, output, T) {
   function eligiblePeak(t) {
     let isPeak =
       s[t] >= frames.noise[t] + T.nucleusAboveNoise &&
-      frames.periodicity[t] >= 0.45 &&
-      frames.speech[t] !== 0;
+      frames.periodicity[t] >= 0.45;
     for (
       let j = Math.max(0, t - radius);
       isPeak && j <= Math.min(frames.count - 1, t + radius);

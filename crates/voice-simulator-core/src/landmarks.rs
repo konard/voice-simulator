@@ -353,9 +353,7 @@ pub fn nuclei(f: &Frames<'_>, s: &[f32], thresholds: &Thresholds) -> Vec<Nucleus
                 prev.strength = (s[last] as f64) - math::min(s[prev.start] as f64, s[t] as f64);
             }
         }
-        let mut is_peak = (s[t] as f64) >= f.get(t, 1) + thresholds.0[7]
-            && f.get(t, 3) >= 0.45
-            && f.get(t, 2) != 0.0;
+        let mut is_peak = (s[t] as f64) >= f.get(t, 1) + thresholds.0[7] && f.get(t, 3) >= 0.45;
         if is_peak {
             for j in t.saturating_sub(radius)..=(t + radius).min(f.count - 1) {
                 if s[j] > s[t] || (j < t && s[j] == s[t]) {
@@ -461,6 +459,27 @@ pub fn find_landmarks(f: &Frames<'_>, thresholds: &Thresholds) -> Output {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn nucleus_does_not_require_speech_flag() {
+        let count = 80;
+        let mut rows = vec![0.0; count * 14];
+        for t in 0..count {
+            rows[t * 14 + 1] = -80.0;
+            rows[t * 14 + 3] = 0.9;
+        }
+        let frames = Frames {
+            rows: &rows,
+            count,
+            mel_bands: 1,
+            rate: 8000.0,
+            hop: 0.005,
+        };
+        let s: Vec<f32> = (0..count).map(|t| 20.0 - t.abs_diff(40) as f32).collect();
+        let thresholds = Thresholds([7.0, 0.75, 0.225, 800.0, 18.0, 0.6, 1.0, 10.0, 2.0, 9.0]);
+        let result = nuclei(&frames, &s, &thresholds);
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0].frame, 40);
+    }
     #[test]
     fn silence_and_bounded_closure() {
         let mut raw = vec![1; 100];

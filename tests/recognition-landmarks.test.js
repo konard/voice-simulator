@@ -134,6 +134,23 @@ describe('recognition landmarks', () => {
       }
     }
   });
+  it('uses sonority and periodicity without an extra speech-flag gate', () => {
+    const frames = analyzeFrames(new Float32Array(3200), 8000);
+    frames.noise.fill(-80);
+    frames.periodicity.fill(0.9);
+    frames.speech.fill(0);
+    for (let t = 0; t < frames.count; t++) {
+      const logEnergy = ((20 - Math.abs(t - 40)) * Math.LN10) / 10;
+      frames.mel.fill(
+        logEnergy,
+        t * frames.melBands,
+        (t + 1) * frames.melBands
+      );
+    }
+    const result = findLandmarks(frames);
+    expect(result.nuclei.length).toBe(1);
+    expect(Math.abs(result.nuclei[0].time - 0.2) <= frames.hop).toBe(true);
+  });
   it('finds the nuclei of synthetic speech', () => {
     let total = 0,
       found = 0,
