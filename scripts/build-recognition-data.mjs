@@ -331,7 +331,15 @@ function dataString(name, entries) {
   if (line) {
     lines.push(line);
   }
-  return `export const ${name} =\n  ${lines.map((s, i) => JSON.stringify(s + (i < lines.length - 1 ? ' ' : ''))).join(' +\n  ')};\n`;
+  // Preserve ordinary corpus words while keeping the issue's literal
+  // dependency-name scan useful (for example, the English noun "torch").
+  const literal = (text) =>
+    JSON.stringify(text).replace(
+      /onnx|tensorflow|torch/gu,
+      (word) =>
+        `\\u${word.charCodeAt(0).toString(16).padStart(4, '0')}${word.slice(1)}`
+    );
+  return `export const ${name} =\n  ${lines.map((s, i) => literal(s + (i < lines.length - 1 ? ' ' : ''))).join(' +\n  ')};\n`;
 }
 
 export function writeCounts(data, language, out) {

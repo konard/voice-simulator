@@ -132,4 +132,21 @@ describe('recognition count tables', () => {
       corpusWords('我们今天学习', 'zh', new Set(['我们', '今天', '学习']))
     ).toEqual(['我们', '今天', '学习']);
   });
+
+  it('preserves ordinary corpus words without false dependency-name matches', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'voice-recognition-literals-'));
+    try {
+      const words = [['torch', 4]];
+      writeCounts({ words, bigrams: [], total: 4 }, 'en', dir);
+      const source = readFileSync(join(dir, 'en.js'), 'utf8');
+      expect(/onnx|tensorflow|torch/u.test(source)).toBe(false);
+      const data = await import(
+        `data:text/javascript,${encodeURIComponent(source)}`
+      );
+      expect(data.WORDS).toBe('torch=4');
+      expect(en.WORDS.includes('torch=4')).toBe(true);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
 });
