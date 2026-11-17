@@ -36,6 +36,7 @@ import {
 import { DEFAULT_HEAD, normalizeHeadConfig } from '../src/head-config.js';
 import {
   DVTD_ARCHIVE,
+  ArchiveNetworkError,
   fetchMember,
   fetchRange,
   listMembers,
@@ -50,8 +51,8 @@ import { itUnless } from './helpers/skip.js';
  * the reason why they could not be fetched. The server can answer the probe
  * and refuse the ranges of the download a moment later, so only the download
  * itself tells whether the test can run. A refusal that outlasts the retries
- * of `fetchRange` becomes the skip reason; any other error is kept and fails
- * the test.
+ * of `fetchRange`, or a transport failure, becomes the skip reason. Archive
+ * corruption and other errors are kept and fail the test.
  * @param {{probe?: typeof networkSkipReason, list?: typeof listMembers,
  *   fetchOne?: typeof fetchMember}} [options] replaced in tests
  * @returns {Promise<{reason?: string, error?: unknown, surface?: Buffer,
@@ -75,7 +76,8 @@ async function fetchTenseU({
       transfer: await fetchNamed('s2-05-bude-tense-u-vvtf-calculated.txt'),
     };
   } catch (error) {
-    return error instanceof RangeRefusedError
+    return error instanceof RangeRefusedError ||
+      error instanceof ArchiveNetworkError
       ? { reason: error.message }
       : { error };
   }
@@ -286,6 +288,18 @@ describe('Dresden Vocal Tract Dataset download', () => {
     expect(refused).toEqual({
       reason: `${DVTD_ARCHIVE}: range request answered 416`,
     });
+    const disconnected = new ArchiveNetworkError(
+      DVTD_ARCHIVE,
+      new TypeError('error reading a body from connection')
+    );
+    expect(
+      await fetchTenseU({
+        probe,
+        list: async () => {
+          throw disconnected;
+        },
+      })
+    ).toEqual({ reason: disconnected.message });
     const broken = await fetchTenseU({
       probe,
       list: async () => [{ name: 's2-05-bude-tense-u-inner-surface.stl' }],

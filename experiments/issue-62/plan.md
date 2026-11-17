@@ -17,9 +17,12 @@ and verify every CI check without weakening the requested quality gates.
       rebuild only the merged scalar/SIMD WASM needed for size/parity checks.
 - [ ] Verify full npm test and workspace checks through existing CI rather
       than duplicating the runtime matrix locally.
-- [ ] Commit atomic changes, push only issue-62-c339234ca063, review the PR
+- [x] Commit atomic changes, push only issue-62-c339234ca063, review the PR
       diff and update its title/body with implementation and validation.
-- [ ] Wait for all current-commit checks; investigate any fresh failure logs.
+- [x] Wait for all 52a62a5 checks; investigate every fresh failure log.
+- [x] Fix the newly exposed anatomy download cancellation race, with
+      bounded failing-before/passing-after tests across all runtimes.
+- [ ] Verify the final pushed commit through all CI workflows.
 - [ ] Mark PR ready only after every required acceptance criterion passes.
 
 Acceptance requirements remain those in the complete inventory at
@@ -47,3 +50,13 @@ confirmation.mjs proves the early irrevocable confirmation/80 ms higher
 peak replacement conflict. Neither requirement is silently waived. The
 default branch additionally requires the npm bootstrap account action
 described in the case study and PR.
+
+Fresh run 44049699561 finished at 08:54:31 UTC on 52a62a5. It confirms all
+nine streaming regressions pass and the three quality failures remain.
+Deno/Windows additionally loses an anatomy archive response body; Bun/macOS
+hits a 30-second anatomy test deadline. Optional cancellation now propagates
+through ZIP download requests, bodies and retry backoff. Preparation runs
+before test registration with a 20-second total budget and explicit transport
+skip diagnostics; corrupt archives and programming errors remain failures.
+Seven focused regressions pass on Node/Bun/Deno; two fail on the old downloader.
+All ten Node dental tests, including the live reference comparison, pass.

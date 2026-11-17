@@ -439,6 +439,38 @@ action. Its log is `ci-logs/main-checks-44046913741.log`, lines 152–160.
 The existing PR preflight skips that credential-dependent operation and
 explains why; `main` reports the exact maintainer action described above.
 
+## Fresh CI download failure found after the third restart
+
+Run [44049699561](https://github.com/konard/voice-simulator/actions/runs/44049699561)
+on `52a62a5` started at 08:47:11 UTC and finished at 08:54:31 UTC, after the
+08:46:56 UTC commit. All nine runtime jobs still fail the same three quality
+gates. Node/Ubuntu has 2876 passing tests, 92 skipped and three failures;
+its new streaming regression passes, as it does on every runtime/OS pair.
+The Rust workspace, WASM/parity and all non-aggregate non-test jobs pass.
+
+Reading every completed job uncovered two additional failures, preserved in
+`ci-logs/checks-44049699561.log`: Deno/Windows loses the anatomy archive body
+at lines 23333–23349, and Bun/macOS times out its anatomy integration at
+30362–30363. The HEAD probe succeeds, but subsequent range downloads have
+no cancellation signal. The body can stall beyond the test deadline or
+close after several minutes. Increasing the timeout would retain this race.
+
+The anatomy integration now prepares its reference before test registration,
+with a 20-second signal covering the requests, response bodies and retry
+backoff. ZIP helpers propagate caller cancellation and distinguish transport
+errors from invalid ZIP/CRC/mesh data. Failed transport or a refused range
+registers an explicit skip with its reason, matching the existing network
+integration policy; corruption and programming errors still fail. Temporary
+files are removed on every preparation result. Other downloader callers
+retain their existing defaults and can supply a cancellation signal.
+
+`tests/archive-download.test.js` reproduces ignored cancellation and repeated
+requests during retry backoff: two tests fail on the previous downloader and
+all seven pass after the fix on Node.js, Bun and Deno. The ten Node dental
+tests, including the actual patient-14 fixture comparison, pass with no skips.
+The existing Dresden integration also recognises the new transport error
+without swallowing malformed archive failures.
+
 ## Remaining work
 
 Resolve the contradictory timing contract and the unreachable nucleus target

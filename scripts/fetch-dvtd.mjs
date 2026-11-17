@@ -11,6 +11,7 @@
 //   With --list, only print the matching members and their sizes.
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { basename, join } from 'node:path';
+import { setTimeout as wait } from 'node:timers/promises';
 import { fileURLToPath } from 'node:url';
 import { crc32, inflateRawSync } from 'node:zlib';
 
@@ -22,7 +23,13 @@ const RANGE_ATTEMPTS = 4;
 /** Wait before the next try (ms), multiplied by the number of tries so far. */
 const RANGE_RETRY_DELAY = 2000;
 
-const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+/** A transport failure, distinct from malformed archives and failed CRCs. */
+export class ArchiveNetworkError extends Error {
+  constructor(url, cause) {
+    super(`${url}: download failed (${cause.message})`, { cause });
+    this.name = 'ArchiveNetworkError';
+  }
+}
 
 /** The server answered a range request with something other than the range. */
 export class RangeRefusedError extends Error {
@@ -37,14 +44,25 @@ export class RangeRefusedError extends Error {
   }
 }
 
-async function rangeOnce(url, start, end, fetcher) {
-  const response = await fetcher(url, {
-    headers: { Range: `bytes=${start}-${end - 1}` },
-  });
+async function rangeOnce(url, start, end, fetcher, signal) {
+  let response;
+  try {
+    response = await fetcher(url, {
+      headers: { Range: `bytes=${start}-${end - 1}` },
+      signal,
+    });
+  } catch (error) {
+    throw new ArchiveNetworkError(url, error);
+  }
   if (response.status !== 206) {
+    await response.body?.cancel?.();
     throw new RangeRefusedError(url, response.status);
   }
-  return Buffer.from(await response.arrayBuffer());
+  try {
+    return Buffer.from(await response.arrayBuffer());
+  } catch (error) {
+    throw new ArchiveNetworkError(url, error);
+  }
 }
 
 /**
@@ -53,7 +71,8 @@ async function rangeOnce(url, start, end, fetcher) {
  * @param {string} url
  * @param {number} start
  * @param {number} end
- * @param {{attempts?: number, delay?: number, fetcher?: typeof fetch}} [options]
+ * @param {{attempts?: number, delay?: number, fetcher?: typeof fetch,
+ *   signal?: AbortSignal}} [options] signal bounds requests, bodies and retries
  * @returns {Promise<Buffer>}
  */
 export async function fetchRange(
@@ -64,21 +83,21 @@ export async function fetchRange(
     attempts = RANGE_ATTEMPTS,
     delay = RANGE_RETRY_DELAY,
     fetcher = globalThis.fetch,
+    signal,
   } = {}
 ) {
   for (let attempt = 1; ; attempt++) {
     try {
-      return await rangeOnce(url, start, end, fetcher);
+      signal?.throwIfAborted();
+      return await rangeOnce(url, start, end, fetcher, signal);
     } catch (error) {
-      if (attempt >= attempts) {
+      if (attempt >= attempts || signal?.aborted) {
         throw error;
       }
-      await wait(delay * attempt);
+      await wait(delay * attempt, undefined, { signal });
     }
   }
 }
-
-const range = (url, start, end) => fetchRange(url, start, end);
 
 /** End of central directory: offset and size of the directory. */
 function directoryLocation(tail, tailStart) {
@@ -123,20 +142,23 @@ function zip64Values(extra, entry) {
  * Members of a remote zip archive.
  * @param {string} [url]
  * @param {number} [archiveSize]
+ * @param {Parameters<typeof fetchRange>[3]} [options]
  * @returns {Promise<{name: string, method: number, crc: number,
  *   compressedSize: number, size: number, offset: number}[]>}
  */
 export async function listMembers(
   url = DVTD_ARCHIVE,
-  archiveSize = DVTD_ARCHIVE_SIZE
+  archiveSize = DVTD_ARCHIVE_SIZE,
+  options
 ) {
   const tailStart = archiveSize - 65536;
-  const tail = await range(url, tailStart, archiveSize);
+  const tail = await fetchRange(url, tailStart, archiveSize, options);
   const location = directoryLocation(tail, tailStart);
-  const directory = await range(
+  const directory = await fetchRange(
     url,
     location.offset,
-    location.offset + location.size
+    location.offset + location.size,
+    options
   );
   const members = [];
   let at = 0;
@@ -172,12 +194,23 @@ export async function listMembers(
  * @param {{name: string, method: number, crc: number, compressedSize: number,
  *   size: number, offset: number}} member
  * @param {string} [url]
+ * @param {Parameters<typeof fetchRange>[3]} [options]
  */
-export async function fetchMember(member, url = DVTD_ARCHIVE) {
-  const header = await range(url, member.offset, member.offset + 30);
+export async function fetchMember(member, url = DVTD_ARCHIVE, options) {
+  const header = await fetchRange(
+    url,
+    member.offset,
+    member.offset + 30,
+    options
+  );
   const start =
     member.offset + 30 + header.readUInt16LE(26) + header.readUInt16LE(28);
-  const packed = await range(url, start, start + member.compressedSize);
+  const packed = await fetchRange(
+    url,
+    start,
+    start + member.compressedSize,
+    options
+  );
   const data = member.method === 8 ? inflateRawSync(packed) : packed;
   if (data.length !== member.size || crc32(data) !== member.crc) {
     throw new Error(`${member.name}: size or CRC-32 mismatch`);

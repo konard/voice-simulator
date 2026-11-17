@@ -6,9 +6,7 @@
  * scripts/fetch-anatomy.mjs).
  */
 
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { readFileSync } from 'node:fs';
 import { describe, it, expect } from 'test-anywhere';
 import { dentalLandmarks } from '../src/geometry/anatomy.js';
 import {
@@ -17,21 +15,15 @@ import {
   toothLandmarks,
 } from '../src/geometry/dental.js';
 import { DEFAULT_HEAD, presetHeadConfig } from '../src/head-config.js';
-import { measureSource } from '../scripts/build-dental-reference.mjs';
-import {
-  OPEN_FULL_JAW,
-  fetchAnatomy,
-  objPositions,
-  universalTooth,
-} from '../scripts/fetch-anatomy.mjs';
-import { networkSkipReason } from './helpers/network.js';
+import { objPositions, universalTooth } from '../scripts/fetch-anatomy.mjs';
+import { fetchJawReference } from './helpers/remote-anatomy.js';
 import { itUnless } from './helpers/skip.js';
 
 /** Smallest download of the Open-Full-Jaw scans (both arches segmented). */
 const PATIENT = 14;
 
 // Before any test is registered, so CPU-bound tests do not stall the probe.
-const offline = await networkSkipReason({ url: OPEN_FULL_JAW.url(PATIENT) });
+const remote = await fetchJawReference({ patient: PATIENT });
 
 const FIXTURE = JSON.parse(
   readFileSync(
@@ -226,24 +218,15 @@ describe('procedural teeth against segmented anatomy', () => {
     }
   });
 
-  itUnless(offline)(
+  itUnless(remote.reason)(
     `measures Open-Full-Jaw patient ${PATIENT} as the fixture records`,
-    async () => {
-      const directory = mkdtempSync(join(tmpdir(), 'open-full-jaw-'));
-      try {
-        await fetchAnatomy('open-full-jaw', directory, {
-          patients: [PATIENT],
-        });
-        const measured = measureSource(
-          'open-full-jaw',
-          join(directory, `Patient_${PATIENT}`)
-        );
-        expect(measured).toEqual(
-          FIXTURE.sources['open-full-jaw'].patients[PATIENT]
-        );
-      } finally {
-        rmSync(directory, { recursive: true, force: true });
+    () => {
+      if (remote.error) {
+        throw remote.error;
       }
+      expect(remote.measured).toEqual(
+        FIXTURE.sources['open-full-jaw'].patients[PATIENT]
+      );
     }
   );
 });
