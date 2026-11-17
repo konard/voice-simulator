@@ -658,3 +658,13 @@ export {
   createLandmarkDetector,
   BROAD_CLASSES,
 } from './recognition/landmarks.js';
+// Simulator-generated articulatory codebook (issue 64).
+export {
+  buildCodebook,
+  serializeCodebook,
+  parseCodebook,
+  frameEnvelope,
+  CODEBOOK_CHANNELS,
+  GRID,
+  tractResponse,
+} from './recognition/codebook.js';
