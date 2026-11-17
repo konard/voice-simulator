@@ -8,6 +8,7 @@ import {
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { createHash } from 'node:crypto';
 import {
   corpusWords,
@@ -136,13 +137,12 @@ describe('recognition count tables', () => {
   it('preserves ordinary corpus words without false dependency-name matches', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'voice-recognition-literals-'));
     try {
+      writeFileSync(join(dir, 'package.json'), '{"type":"module"}');
       const words = [['torch', 4]];
       writeCounts({ words, bigrams: [], total: 4 }, 'en', dir);
       const source = readFileSync(join(dir, 'en.js'), 'utf8');
       expect(/onnx|tensorflow|torch/u.test(source)).toBe(false);
-      const data = await import(
-        `data:text/javascript,${encodeURIComponent(source)}`
-      );
+      const data = await import(pathToFileURL(join(dir, 'en.js')).href);
       expect(data.WORDS).toBe('torch=4');
       expect(en.WORDS.includes('torch=4')).toBe(true);
     } finally {

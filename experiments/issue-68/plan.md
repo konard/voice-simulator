@@ -84,3 +84,13 @@ For CI investigation:
 The first partial-code run (44034203224) failed because its changeset had
 not yet been committed: `ci-logs/release-44034203224.log`, lines 3498–3499.
 The minor changeset is present; subsequent changeset checks pass.
+
+The first full platform run after the final main merge (44048579286) found
+one new test portability error on Bun: importing its generated source through
+an encoded data URL yielded no named export. The log is
+`ci-logs/bun-linux-44048579286.log`, lines 3022–3027. The regression test now
+imports the generated file in an explicit ES-module fixture; the same eight
+count-table checks pass on Bun and Node. Decoder and corpus data are unchanged.
+The earlier performance run (44048070854) was deliberately cancelled when
+main advanced; its preserved job log records cancellation at line 341.
+The replacement performance run 44048569212 tests the merged implementation.
