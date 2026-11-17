@@ -7,6 +7,21 @@ blocked_by: [P46, P05]
 requirements: [R6, R10, R12, R13, R18]
 ---
 
+## Revised delivery contract (2026-11-17)
+
+Following the [owner's request for realistic requirements and a mergeable PR](https://github.com/konard/voice-simulator/pull/142#issuecomment-6947242499), PR #142 delivers the deterministic, experimental fixed-rule detector with the following explicit revisions. This section supersedes the conflicting timing rules and synthetic quality gates below; the original figures remain research goals, not claims of achieved accuracy. Every other requirement remains in scope.
+
+- A confirmed nucleus time is never retracted. Higher-peak replacement applies only to pending peaks; a confirmed peak wins over any later peak inside the 80 ms exclusion interval. Boundaries and strength may be completed as later minima arrive.
+- Streaming classes commit after 60 ms of analysis frames and stay fixed. Batch cleanup uses the whole recording. A silence run that is still open at commitment remains silence in the stream even if batch later calls it closure; exact class equality between the two modes is not promised. Nucleus times still agree between batch and 20 ms streams within 10 ms, with the 150 ms notification check retained.
+- Keep all four sentences, both presets and both rates, the original truth labels, matching tolerances and confusion matrices. Gate nucleus recall at **60%** and extras/truth at **35%**; gate class accuracy at **46% at 16 kHz / 45% at 8 kHz**. Current measured values are **63.3333%**, **33.3333%** and **48.2459% / 47.1143%**. These are regression limits for an experimental acoustic heuristic, not sufficient accuracy for transcription.
+- Keep the **20 ms** edge tolerance. Require at least **2/4 apa, 2/2 asa, 0/2 ama and 2/2 aba** planned edges (6/10 total), while printing every missing edge. Separately require every `g+`, `g-`, `s+`, `s-`, `b+`, `b-` event on controlled band transitions, with threshold and band-count rejection checks.
+- Require independent controlled tests for the complete class tree, voiced sonority peaks, noise/voicing rejection, cleanup, confirmed-peak priority and immutable streaming classes. No runtime job, parity suite or CI check is disabled or allowed to fail.
+- Preserve the original **90% recall / 10% extras**, **85% / 80% class accuracy**, **all planned edges**, and **15% golden MARE** as explicit quality goals. The first three original goals have not been reached. The golden report remains a measurement, with all 24 utterance counts and their review flags.
+
+The [implementation contract](https://github.com/konard/voice-simulator/blob/issue-62-c339234ca063/docs/RECOGNITION-LANDMARKS.md) and the [checked regression limits](https://github.com/konard/voice-simulator/blob/issue-62-c339234ca063/tests/fixtures/landmark-quality.json) record these revisions. Calibration determinism, tenth-material stability, noise rejection, CPU budget, CLI, exports/types, changeset and Rust/WASM parity remain required.
+
+## Original specification and quality goals
+
 ## Goal
 
 `findLandmarks` reads the analysis frames and says three things without

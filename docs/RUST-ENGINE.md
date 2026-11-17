@@ -147,9 +147,10 @@ logarithmic total costs have absolute error below `1e-10` (parity class B).
 Malformed packets are rejected before allocation from their claimed counts.
 With the merged source-analysis, codebook and formant cores, the engine measures
 332,646 scalar and 338,849 SIMD bytes with Rust 1.100.0; the size budget
-was 344,064 bytes (336 KiB). Language identification and joint recognition
-with the current acoustics cores measure 435,525 scalar and 442,832 SIMD
-bytes, with a 458,752-byte (448 KiB) budget rounded to the next 16,384 bytes.
+was 344,064 bytes (336 KiB). Before landmarks were added, language
+identification and joint recognition with the acoustics cores measured
+435,525 scalar and 442,832 SIMD bytes, with a 458,752-byte (448 KiB) budget
+rounded to the next 16,384 bytes.
 
 `language_id.rs` derives weighted phone statistics, scores syllables, finds
 and smooths language paths, and computes confidence and duration shares.
@@ -1199,6 +1200,7 @@ Each ported function has a class, stated by the issue that ports it.
 
 | Module (issue)           | Class |
 | ------------------------ | ----- |
+| `landmarks.rs` (62)      | B     |
 | `random.rs`              | A     |
 | `resample.rs` (27)       | B     |
 | `aerodynamics.rs` (35)   | A     |
@@ -1296,3 +1298,28 @@ runner image: `rustup toolchain install` without arguments installs the
 toolchain of `rust-toolchain.toml` (rustup 1.29 warns that the automatic
 install of `rustup show` is deprecated), and `rustup show` then prints the
 active versions into the log.
+
+## Landmark detector (issue 62)
+
+`crates/voice-simulator-core/src/landmarks.rs` ports the numerical batch
+stage of `src/recognition/landmarks.js`. `vs_landmarks` takes packed frame
+rows (13 + melBands doubles: energy, noise, speech, periodicity, zcr,
+gravity, tilt, six bands, mel), rate, hop and ten thresholds in the order
+of `landmark-thresholds.js`. It writes twelve doubles per frame: class,
+sonority, nucleus flag, nucleus start/end indices (-1 for an unknown end),
+nucleus strength, and landmark strengths in b+, b-, g+, g-, s+, s- order.
+The core result retains all detections. The plain parity export uses the
+same caller-owned allocation and error conventions as other components.
+
+`tests/rust-landmarks.test.js` checks classes and presence flags exactly
+and the complete output with class B relative RMS at most 1e-6, on all
+three rates and both hops, male and female. This numerical parity does not
+measure recognition accuracy. The [experimental quality limits and causal
+streaming contract](RECOGNITION-LANDMARKS.md) apply to both implementations.
+
+With complete acoustics parity, language identification and joint
+recognition from main `eeb2869`, the combined scalar engine is 467028 bytes
+(SHA-256 `dedd72fab32a042aeed066d322c6b3ec0b98fe3c5437f9801a5f490b35e0b4ee`).
+The next 16 KiB size budget is 475136 bytes. SIMD builds at 473723 bytes
+and remains unshipped. Measured with
+`CARGO_BUILD_JOBS=1 node scripts/build-wasm.mjs --require` (Rust 1.100.0).

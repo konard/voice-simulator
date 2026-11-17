@@ -4398,6 +4398,19 @@ export declare function parseObj(text: string): {
 };
 
 export {
+  findLandmarks,
+  createLandmarkDetector,
+  BROAD_CLASSES,
+  type BroadClass,
+  type LandmarkThresholds,
+  type LandmarkOptions,
+  type Nucleus,
+  type Landmark,
+  type LandmarkResult,
+  type LandmarkDetector,
+} from './recognition/landmarks.js';
+
+export {
   inverseFilter,
   INVERSE_FILTER_DEFAULTS,
   rdToTenseness,

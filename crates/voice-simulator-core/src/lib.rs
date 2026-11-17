@@ -28,6 +28,8 @@ pub mod folds;
 pub mod formants;
 pub mod frame;
 pub mod glottis;
+pub mod landmarks;
+
 mod inverse_dsp;
 pub mod inverse_filter;
 mod inverse_refinement;

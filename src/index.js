@@ -666,6 +666,13 @@ export {
   vrmVowelBinds,
 } from './animation/rig-bridge.js';
 
+// Syllable nuclei, acoustic landmarks and broad sound classes (issue 62).
+export {
+  findLandmarks,
+  createLandmarkDetector,
+  BROAD_CLASSES,
+} from './recognition/landmarks.js';
+
 export {
   inverseFilter,
   INVERSE_FILTER_DEFAULTS,
