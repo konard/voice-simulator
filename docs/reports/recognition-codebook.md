@@ -28,6 +28,11 @@ All nine jobs printed the same 2000-row serialized SHA-256:
 Each reported 200/200 agreement with exhaustive search. The Rust Engine job
 built WebAssembly and passed the transfer-response and key parity tests.
 
+The [full performance suite](https://github.com/konard/voice-simulator/actions/runs/44034571807)
+also passed without an item limit: Rust waveguide/FDTD, native/WebAssembly
+threading and all nine audio tiers. Its artifact supplies the new row in
+[the performance trend](performance.md); the baseline is unchanged.
+
 Accepted row counts are neutral 1, oral vowels 30, nasal vowels 31,
 consonants 172, mixtures 4271, perturbed seeds 9810 and random vowels 5685.
 One oral vowel duplicates neutral and is removed by the specified duplicate
