@@ -20,12 +20,13 @@ the first table below when you create a new folder;
 
 ## Case studies of this repository
 
-| Issue                                                      | Title                                                  | Main document                            |
-| ---------------------------------------------------------- | ------------------------------------------------------ | ---------------------------------------- |
-| [#1](https://github.com/konard/voice-simulator/issues/1)   | Initial prototype                                      | [issue-1/README.md](issue-1/README.md)   |
-| [#5](https://github.com/konard/voice-simulator/issues/5)   | Increase precision where possible                      | [issue-5/README.md](issue-5/README.md)   |
-| [#9](https://github.com/konard/voice-simulator/issues/9)   | We need to improve quality                             | [issue-9/README.md](issue-9/README.md)   |
-| [#11](https://github.com/konard/voice-simulator/issues/11) | We need to make quality of the system state of the art | [issue-11/README.md](issue-11/README.md) |
+| Issue                                                      | Title                                                             | Main document                            |
+| ---------------------------------------------------------- | ----------------------------------------------------------------- | ---------------------------------------- |
+| [#1](https://github.com/konard/voice-simulator/issues/1)   | Initial prototype                                                 | [issue-1/README.md](issue-1/README.md)   |
+| [#5](https://github.com/konard/voice-simulator/issues/5)   | Increase precision where possible                                 | [issue-5/README.md](issue-5/README.md)   |
+| [#9](https://github.com/konard/voice-simulator/issues/9)   | We need to improve quality                                        | [issue-9/README.md](issue-9/README.md)   |
+| [#11](https://github.com/konard/voice-simulator/issues/11) | We need to make quality of the system state of the art            | [issue-11/README.md](issue-11/README.md) |
+| [#62](https://github.com/konard/voice-simulator/issues/62) | Syllable nuclei, landmarks and broad classes: acceptance blockers | [issue-62/README.md](issue-62/README.md) |
 
 ## Case studies inherited from the template
 

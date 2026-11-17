@@ -41,6 +41,12 @@ upper bound, not detector recall. Threshold calibration can only remove
 candidates from this superset; it cannot meet 90% with the current signals,
 required voicing gate, local-maximum rule and truth tolerance.
 
+`node experiments/issue-62/nucleus-ceiling.mjs --smoothing-sensitivity`
+also checks other common interpretations of the moving mean: a centred
+nine-frame window recovers at most 94/120 (78.33%), a trailing eight-frame
+window 93/120 (77.50%), and a leading eight-frame window 96/120 (80.00%).
+None of these reaches 90%; the draft uses the centred eight-frame window.
+
 | Language | Male, each rate | Female, each rate |
 | -------- | --------------: | ----------------: |
 | English  |           12/15 |             12/15 |
@@ -106,17 +112,20 @@ acceptance of the issue as a whole.
       × clean/noisy = 3780 recordings, with seeded noise 20 dB below speech;
       excludes frames within 10 ms of segment boundaries; three rounds of
       21-point coordinate search; generated recall comments.
-- [ ] Final formatted calibration repeatability and tenth-material stability
-      verification (recorded below when complete).
+- [x] Final formatted calibration repeatability: two byte-identical runs;
+      tenth-material stability within one search step for every threshold.
 - [x] Four-language synthetic tests, both voices and both sample rates;
       assertions retain the requested 90%, 10%, 85%/80% and 20 ms gates.
 - [ ] Synthetic quality gates pass on Node.js, Bun and Deno.
-- [x] Noise-only, streaming timing/immutability, and CPU tests.
+- [x] Noise-only, streaming timing/immutability, affricate truth regression,
+      and CPU tests; all nine CI runtimes measure RTF below 0.001.
 - [x] Golden report on all 24 utterances, syllabifyIpa truth, counts and MARE.
 - [x] Rust numerical core and WASM bridge; parity on 12 rate/voice/hop cases.
 - [x] README, CLI command/help, roadmap, Rust documentation, minor changeset.
-- [ ] All repository checks and current-commit CI pass.
-- [ ] Final clean working tree, main included, final PR review and readiness.
+- [x] `npm run check`, Rust tests/clippy, and documentation checks pass.
+- [ ] All current-commit CI tests pass (quality gates remain failing).
+- [x] Latest main is included; the full PR diff was reviewed for regressions.
+- [ ] PR readiness: blocked by the unmet acceptance criteria.
 
 ## Measurements
 
@@ -127,9 +136,9 @@ reference machine, so the CPU figure is not a claim about CI.
 
 | Command                                                                                        | Measured result                                                                                                                    |
 | ---------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
-| `node --test tests/recognition-landmarks.test.js tests/rust-landmarks.test.js`                 | 8 pass, 3 fail; nucleus recall 63.3333%, extras/truth 33.3333%; class accuracy 48.2837% at 16 kHz, 47.1520% at 8 kHz; RTF 0.000396 |
-| `bun test tests/recognition-landmarks.test.js`                                                 | Same three quality failures and identical counts/accuracy; RTF 0.000307                                                            |
-| `deno test -A tests/recognition-landmarks.test.js`                                             | Same three quality failures and identical counts/accuracy; RTF 0.000665                                                            |
+| `node --test tests/recognition-landmarks.test.js tests/rust-landmarks.test.js`                 | 9 pass, 3 fail; nucleus recall 63.3333%, extras/truth 33.3333%; class accuracy 48.2459% at 16 kHz, 47.1143% at 8 kHz; RTF 0.000595 |
+| `bun test tests/recognition-landmarks.test.js`                                                 | Same three quality failures and identical counts/accuracy; RTF 0.000331                                                            |
+| `deno test -A tests/recognition-landmarks.test.js`                                             | Same three quality failures and identical counts/accuracy; RTF 0.000700                                                            |
 | `node --test --test-name-pattern='prints landmark' tests/cli-audio.test.js`                    | Pass: JSON stdout, saved JSON, missing-file validation                                                                             |
 | `CARGO_BUILD_JOBS=1 npm run build:wasm`                                                        | Scalar and SIMD compile; scalar 235515 bytes, Rust 1.100.0; budget raised to next 16 KiB boundary, 245760                          |
 | `node --test tests/rust-landmarks.test.js` (included above)                                    | All 12 combinations agree; maximum relative RMS 6.77e-17, classes and nucleus presence exact                                       |
@@ -137,9 +146,32 @@ reference machine, so the CPU figure is not a claim about CI.
 | `CARGO_BUILD_JOBS=1 cargo clippy --workspace -- -D warnings`                                   | Pass                                                                                                                               |
 | `node --test --test-name-pattern='counts syllables' tests/heavy/recognition-landmarks.test.js` | Pass; all 24 utterances, MARE 19.32% (15% is not a gate)                                                                           |
 
+The final two full calibrations produced SHA-256
+`01e01bce0d21594143f2fef34dcda058430a1cac740526f2e7f9fb45356b1203`
+for the generated file, byte for byte. The command
+`node --test --test-name-pattern='thresholds are up to date' tests/heavy/recognition-landmarks.test.js`
+passed: the tenth material selected silence 8 versus full-material 7 (one
+step); all other thresholds were identical. The affricate truth correction
+does not change calibration: the inventory contains no affricate tokens.
+
+The affricate regression failed before the label correction (`Expected 6 to
+be 5`) and passes afterward for voiced and voiceless frication. Both phases
+share a token in the plan; only the first is closure. The sentence accuracy
+above uses the corrected labels.
+
 The missing landmark expectations are `apa` g− at 0.174 s and g+ at
 0.260 s, and `ama` s− at 0.178 s and s+ at 0.230 s. The log prints all
 candidates, missing edges and per-rate class confusion matrices.
+
+`node experiments/issue-62/landmark-candidates.mjs` also examines the
+draft's candidates without the rise threshold. For `apa`, the closest g−
+is 0.200 s (25.93 ms late), and no g+ is available near the release. For
+`ama`, the closest s− at 0.180 s has only 6.93 dB strength, below the
+calibrated 9 dB gate. The nearest s+ is 0.205 s, 24.51 ms early, at
+6.03 dB. Simply reducing the rise threshold cannot fix all these edges
+under this candidate construction. This experiment describes the draft's
+interpretation of crossing and simultaneous peaks; it does not establish
+that every possible interpretation of the prose landmark rules fails.
 
 The golden report is generated at `reports/heavy/recognition-landmarks.md`
 and `.json`; a reviewable snapshot is in [golden-report.md](golden-report.md).
@@ -152,6 +184,27 @@ Full-material calibration reaches mean per-class recall **35.2732%** over
 recall at the expense of vowel frame accuracy; it is not the requested
 synthetic sentence accuracy. The numerical result is retained even though it
 is poor. The nucleus and class gates have not been lowered or skipped.
+
+## CI investigation
+
+Release run [44033456322](https://github.com/konard/voice-simulator/actions/runs/44033456322)
+started at 2026-11-17 06:44:30 UTC, after commit `349d325` (06:42:54 UTC),
+with matching head SHA. Its full log is preserved locally in
+`ci-logs/release-44033456322.log` (48265 lines). Node/Ubuntu reports four
+failures at lines 43991–44050: the missing case-study index entry and the
+three quality gates. The index entry is corrected in the follow-up commit;
+the quality assertions remain unchanged. All nine OS/runtime jobs reproduce
+the same quality failures. Their RTF measurements range from 0.000124 to
+0.000865, below the 0.02 target. Rust Engine, compilation, lint, documentation,
+line limits, simulation checks and Docker build checks all pass.
+
+Links run [44033456196](https://github.com/konard/voice-simulator/actions/runs/44033456196)
+failed on the existing PTDB-TUG citation in the pitch report: the server timed
+out after retries (local `ci-logs/links-44033456196.log`, lines 225–255).
+Its archive diagnostic supplies the 2026-10-05 snapshot (lines 310–327).
+The report and its generator now cite that snapshot while preserving the
+original registry URL. The existing report-generation check passes. No link
+checks or quality gates are disabled.
 
 ## Remaining work
 
