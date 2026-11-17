@@ -50,12 +50,13 @@ import { THREAD_MEMORY } from '../src/engine/layout.js';
  * thread team; scalar file 197 856 bytes, threads file 206 670 bytes with
  * THREADS_TOOLCHAIN) and for issue 52 (vocal effort in the glottis and the
  * renderer; scalar file 196 952 bytes); with both, the scalar file is
- * 199 852 bytes, the SIMD file 206 225 and the threads file 208 664; to
- * 229 376 for issue 60 (the formant root finder; scalar file 215 256
- * bytes, 209 024 before it). Raise it only with the newly measured size in
- * the commit message.
+ * 199 852 bytes, the SIMD file 206 225 and the threads file 208 664. Raise
+ * it only with the newly measured size in the commit message. Issue 61 adds
+ * batch source analysis, including the merged codebook: scalar 278 782
+ * bytes, SIMD 286 142, rounded up to 294 912 (Rust 1.100.0). Issue 60 adds
+ * the formant root finder within it: scalar 285 013 bytes, SIMD 292 364.
  */
-export const WASM_SIZE_BUDGET = 229376;
+export const WASM_SIZE_BUDGET = 294912;
 
 /**
  * Whether src/engine/voice-simulator-simd.wasm is shipped: only when it

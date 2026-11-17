@@ -663,6 +663,8 @@ Measured with `node experiments/issue-58-rtf.mjs` (10 s of speech, one thread): 
 
 `trackFormants(frames, options)` and the stage `createFormantTracker(frames, options)` follow F1 to F4 (F1 to F3 at 8000 Hz) in every frame of the front end: the roots of the LPC models of orders p, p - 2 and p - 4 (Aberth-Ehrlich iteration) are the candidates, a dynamic programming search numbers them F1 .. F4 against the resonances (2k - 1) c / (4 L) of a uniform tube of length L (Talkin 1987), and a Kalman filter with a Rauch-Tung-Striebel smoother per formant gives continuous tracks with a variance. L is the option `vocalTractLength` or is estimated from the vowel-like frames (`tractLengthFromFormants`); a stream fixes frame t when frame t + `lag` (10, 50 ms) has been scored. The track holds `frequency`, `bandwidth`, `variance` and `level` (4 columns per frame), `valid`, the `nasal` flag of nasal murmurs and `vocalTractLength`; defaults in `FORMANT_DEFAULTS`, and `trackFormants(frames, { pitch: trackPitch(frames) })` widens the variance under a high f0. In `tests/recognition-formants.test.js` it estimates 13, 16.5 and 19 cm tracts as 13.82, 17.24 and 19.43 cm, flags 72 % of the frames of the nasals of `ama` and `ini` and 4 % of their vowel frames, gives a stream within 30 Hz of the batch in 99.6 % of the frames, and costs about 0.03 of real time at 16000 Hz (`formants rtf`). On the golden set 99.6 % of the voiced frames have F1, F2 and F3 and 0.4 % of the F2 steps jump by more than 300 Hz ([docs/reports/recognition-formants.md](docs/reports/recognition-formants.md)). The root finder and `tractLengthFromFormants` are also in the Rust core (`vs_formant_candidates`, `vs_formant_tract_length`, [RUST-ENGINE.md](docs/RUST-ENGINE.md)) with the same candidates; the tracker itself runs in JavaScript.
 
+`inverseFilter(frames, { pitch: trackPitch(frames) })` estimates vocal-fold flow, closure times, Rd/OQ/NAQ, H1-H2, HNR and CPP on finished speech. See the [batch source-analysis API and limits](docs/INVERSE-FILTER.md).
+
 ### Articulatory codebook
 
 `buildCodebook(head, { size: 20000, seed: 1, cache })` builds a deterministic simulator-generated table of tract positions, formants and spectral envelopes. `frameEnvelope(frames, t, table, out)` reads an analysis frame; `table.query(envelope, 16, out)` returns candidate rows and envelope costs without allocating. `CODEBOOK_CHANNELS` defines the twelve tract controls; `serializeCodebook` and `parseCodebook` support a caller-owned binary cache. Tables use 0.5 cm length buckets and are generated on demand. See [API, layout, source limits and verification](docs/CODEBOOK.md).
@@ -674,16 +676,14 @@ first measurement of how far the synthetic voice is from human speech: every
 sentence of the golden set (24 LibriVox recordings in English, Russian, Hindi
 and Chinese) is rendered on every tier and compared with its recording by
 `compareRecordings`, next to two anchors (the recording low-passed at 3.5 kHz,
-and white noise). Three numbers of the
-[run of 15 November 2026](https://github.com/konard/voice-simulator/actions/runs/43705076861)
+and white noise). Three numbers of the [run of 15 November 2026](https://github.com/konard/voice-simulator/actions/runs/43705076861)
 sum it up. **MCD** of the best tier (`high`) is 68.0 dB (all tiers 68 to
 73 dB), between 49.2 dB for `lowpass` and 89.7 dB for `noise`: the voice is
 about halfway between a recording and noise. **Pitch** is the largest gap: the
 f0 RMSE is about 630 cents and the gross pitch error about 53 % on every tier,
 partly because every sentence is rendered with the female preset head while
 the manifest does not record the sex of the speaker (`en-02` is more than an
-octave off). **PER** of the
-text front end is 9.0 % in English and 11.4 % in Russian and below 0.5 % in
+octave off). **PER** of the text front end is 9.0 % in English and 11.4 % in Russian and below 0.5 % in
 Hindi and Chinese (against IPA that nobody has reviewed yet).
 `node scripts/quality-report.mjs [--lang en --limit 2] [--baseline docs/reports/baseline-quality.json]`
 measures again; a pull request that claims an improvement puts that table

@@ -33,6 +33,7 @@ pub mod codebook;
 pub mod components;
 pub mod fdtd;
 pub mod formants;
+pub mod inverse_filter;
 pub mod renderer;
 pub mod threads;
 
