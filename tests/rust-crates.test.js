@@ -3,7 +3,8 @@
  * Cargo.lock is one of ours or is listed with its licence in
  * scripts/rust-allowed-crates.json, the toolchain is an exact stable
  * version, and the core crate keeps its no_std, libm-in-math.rs shape with
- * unsafe code only in fdtd/parallel.rs, the thread team of issue 24. These read files only, so they run without a Rust toolchain.
+ * unsafe code only in the thread team and private validated grid step.
+ * These read files only, so they run without a Rust toolchain.
  */
 
 import { readdirSync, readFileSync } from 'node:fs';
@@ -106,7 +107,7 @@ describe('Rust workspace', () => {
     const unsafeFiles = files.filter((file) =>
       /\bunsafe\b/.test(read(path.join(dir, file)))
     );
-    expect(unsafeFiles).toEqual(['fdtd/parallel.rs', 'fdtd/solver.rs']);
+    expect(unsafeFiles.sort()).toEqual(['fdtd/parallel.rs', 'fdtd/solver.rs']);
     for (const file of unsafeFiles) {
       const source = read(path.join(dir, file));
       const blocks = source.match(/\bunsafe\s*\{/g) ?? [];

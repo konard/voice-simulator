@@ -164,3 +164,11 @@ scalar and 390,932 bytes SIMD, giving a 393,216-byte (384 KiB) budget by the
 existing rounding rule. The speed rerun measures this combined binary.
 The field regression also renders 2,400 samples and asserts nonzero pressure,
 so it checks numerical parity after the initial silence as well as dimensions.
+
+The final matrix run on bf9fe3c exposed filesystem ordering in the architecture
+test: Bun on macOS returns the two unsafe modules in the opposite order
+(`ci-logs/checks-44056173173-failed.log:1201`). The allow-list comparison now
+sorts the discovered paths while retaining all scope and safety checks. The
+same job also timed out downloading the pre-existing Open-Full-Jaw dental
+fixture (`:2046`); the fresh matrix run checks whether that network failure
+recurs, without increasing its timeout or changing the anatomy checks.
