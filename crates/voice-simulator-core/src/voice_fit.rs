@@ -246,6 +246,9 @@ pub fn simplex<F: FnMut(&[f64]) -> f64>(initial: &[f64], budget: usize, mut f: F
                         vertices[i] = evaluate(x, budget, &mut used, &mut f).unwrap();
                     }
                 }
+            } else if outside {
+                // No budget for contraction: retain the measured improvement.
+                vertices[n] = reflected;
             }
         }
     }
@@ -255,6 +258,18 @@ pub fn simplex<F: FnMut(&[f64]) -> f64>(initial: &[f64], budget: usize, mut f: F
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn retains_reflection_at_budget_limit() {
+        let mut calls = 0;
+        let vertices = simplex(&[0.2], 3, |x| {
+            calls += 1;
+            100.0 * (x[0] - 0.32) * (x[0] - 0.32)
+        });
+        assert_eq!(calls, 3);
+        assert_eq!(vertices.len(), 2);
+        assert!((vertices[0].x[0] - 0.3).abs() < 1e-12);
+        assert!((vertices[1].x[0] - 0.4).abs() < 1e-12);
+    }
     #[test]
     fn bounded_budget_and_convergence() {
         let mut calls = 0;

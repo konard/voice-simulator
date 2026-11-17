@@ -61,7 +61,14 @@ function* contract(vertices, reflected, worst, point, run, available) {
   const n = vertices.length - 1;
   const outside = reflected.cost < worst.cost;
   const contracted = yield* run(point(outside ? 0.5 : -0.5));
-  if (contracted && contracted.cost < (outside ? reflected.cost : worst.cost)) {
+  if (!contracted && outside) {
+    // A render limit may prevent the contraction. Keep the improvement
+    // already measured so the returned simplex reflects that evaluation.
+    vertices[n] = reflected;
+  } else if (
+    contracted &&
+    contracted.cost < (outside ? reflected.cost : worst.cost)
+  ) {
     vertices[n] = contracted;
   } else if (contracted) {
     for (let i = 1; i < vertices.length && available(); i++) {

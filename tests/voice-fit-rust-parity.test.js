@@ -90,26 +90,35 @@ describe('Rust voice fitting primitives', () => {
       pointer = e.vs_alloc(32),
       out = e.vs_alloc(72);
     try {
-      float64View(engine, pointer, 4).set([0.9, 0.1, 0.2, 0.7]);
-      const cost = (x) => ({
-        cost: x.reduce(
-          (sum, v, i) => sum + 100 * (v - [0.2, 0.7][i]) * (v - [0.2, 0.7][i]),
-          0
-        ),
-      });
-      for (const budget of [0, 1, 2, 3, 10, 80]) {
-        const search = simplex([0.9, 0.1], cost, budget);
-        let next = search.next();
-        while (!next.done) {
-          next = search.next();
-        }
-        const count = e.vs_voice_fit_simplex(pointer, 2, budget, out);
-        expect(count).toBe(next.value.length);
-        const values = float64View(engine, out, 9);
-        next.value.forEach((v, i) => {
-          near(values[i * 3], v.cost);
-          v.x.forEach((x, j) => near(values[i * 3 + j + 1], x));
+      for (const [initial, target] of [
+        [
+          [0.9, 0.1],
+          [0.2, 0.7],
+        ],
+        [[0.2], [0.32]],
+      ]) {
+        const n = initial.length;
+        float64View(engine, pointer, 2 * n).set([...initial, ...target]);
+        const cost = (x) => ({
+          cost: x.reduce(
+            (sum, v, i) => sum + 100 * (v - target[i]) * (v - target[i]),
+            0
+          ),
         });
+        for (const budget of [0, 1, 2, 3, 4, 10, 80]) {
+          const search = simplex(initial, cost, budget);
+          let next = search.next();
+          while (!next.done) {
+            next = search.next();
+          }
+          const count = e.vs_voice_fit_simplex(pointer, n, budget, out);
+          expect(count).toBe(next.value.length);
+          const values = float64View(engine, out, (n + 1) ** 2);
+          next.value.forEach((v, i) => {
+            near(values[i * (n + 1)], v.cost);
+            v.x.forEach((x, j) => near(values[i * (n + 1) + j + 1], x));
+          });
+        }
       }
     } finally {
       e.vs_free(pointer, 32);

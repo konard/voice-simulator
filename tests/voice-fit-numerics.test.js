@@ -31,6 +31,25 @@ const consume = (g) => {
   }
   return next.value;
 };
+describe('voice fitting evaluation budget', () => {
+  it('retains an improved reflection when the budget prevents contraction', () => {
+    const calls = [];
+    const vertices = consume(
+      simplex(
+        [0.2],
+        (x) => {
+          calls.push(x);
+          return { cost: 100 * (x[0] - 0.32) ** 2 };
+        },
+        3
+      )
+    );
+    expect(calls.length).toBe(3);
+    expect(vertices.length).toBe(2);
+    expect(Math.abs(vertices[0].x[0] - 0.3) < 1e-12).toBe(true);
+    expect(Math.abs(vertices[1].x[0] - 0.4) < 1e-12).toBe(true);
+  });
+});
 describe('voice fitting numerics', () => {
   it('measures syllable rate using only peak frames before completing legacy pitch', () => {
     const rate = 8000;
