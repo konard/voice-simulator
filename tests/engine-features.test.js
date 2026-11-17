@@ -30,7 +30,7 @@ describe('engine feature inventory', () => {
         'crates/voice-simulator-core/src/features.rs',
         'utf8'
       );
-      writeFileSync(file, original.replace('    "source.lf",\n', ''));
+      writeFileSync(file, original.replace(/^[ \t]*"source\.lf",\r?\n/m, ''));
       const result = spawnSync(
         process.execPath,
         ['scripts/check-engine-parity.mjs', '--json', '--rust-file', file],

@@ -24,7 +24,7 @@ natively and in a threads build of the WebAssembly file (issue 24, see
 [3D solver on several threads](#3d-solver-on-several-threads-issue-24)).
 Issue 82 adds the two-mass folds, source-tract and subglottal coupling,
 whisper and the 2D sheet, with an executable inventory and parity gates
-(see [Complete feature parity](#complete-feature-parity-issue-82)).
+(see [Complete acoustics parity](#complete-acoustics-parity-issue-82)).
 The random generator
 proved that every link of the chain works: workspace, build, loader, CI job
 and parity tests.

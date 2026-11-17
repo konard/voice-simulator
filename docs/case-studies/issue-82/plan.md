@@ -1,6 +1,8 @@
 # Issue 82: engine parity
 
-Objective: implement and verify every requirement of issue #82 in PR #145.
+Objective: implement and verify every requirement of
+[issue #82](https://github.com/konard/voice-simulator/issues/82) in
+[PR #145](https://github.com/konard/voice-simulator/pull/145).
 All seven prerequisite issues (#25, #33, #34, #35, #36, #53, #54) are closed.
 Issue #82 has no comments or sub-issues; PR #145 initially has no conversation,
 inline comments or reviews.
@@ -43,3 +45,8 @@ Current-commit CI and the full performance run remain required before completion
 The next CI merge included four README lines from newly merged main (issue 64),
 so `line-limits-44037755178.log:327` reported 1502 lines. Merged main explicitly
 and condensed the thread guide while retaining its API and benchmark links.
+
+The runtime matrix then caught two case-study conventions: the plan must link
+to its repository issue and appear in the case-study index. Both are now covered
+by the existing `tests/case-study-folders.test.js` checks; the original failures
+are preserved in `ci-logs/deno-ubuntu-44038066963.log:3887` and `:3895`.
