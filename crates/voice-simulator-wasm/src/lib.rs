@@ -32,6 +32,7 @@ use voice_simulator_core::resample::{output_length, resample, StreamResampler};
 pub mod codebook;
 pub mod components;
 pub mod fdtd;
+pub mod formants;
 pub mod renderer;
 pub mod threads;
 

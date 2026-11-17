@@ -97,3 +97,21 @@ export declare function trackFormants(
   frames: FrameSet,
   options?: FormantOptions
 ): FormantTrack;
+/** Raw formant candidates per frame (the roots of the LPC orders p, p - 2
+ * and p - 4 that pass the filters), `width` slots per frame; the numbers
+ * the Rust core reproduces. Not re-exported by src/index.js. */
+export interface FormantCandidates {
+  readonly width: number;
+  /** Candidates per frame. */
+  readonly count: Uint8Array;
+  /** Hz, `width` per frame. */
+  readonly frequency: Float32Array;
+  /** Hz, `width` per frame. */
+  readonly bandwidth: Float32Array;
+  /** 0 for order p, 1 for p - 2, 2 for p - 4. */
+  readonly rank: Uint8Array;
+}
+export declare function formantCandidates(
+  frames: FrameSet,
+  options?: FormantOptions
+): FormantCandidates;

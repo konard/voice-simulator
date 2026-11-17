@@ -819,6 +819,40 @@ function createSmoother(frames, store, settings, track, rows) {
 }
 
 /**
+ * Raw candidates of the frames `0 .. frames.count - 1`, the first step of
+ * the tracker: per frame the roots of the orders p, p - 2 and p - 4 that
+ * pass the filters of `createRootFinder`, with their order rank. The Rust
+ * core computes the same numbers (`RootFinder` of
+ * crates/voice-simulator-core/src/formants.rs, export
+ * `vs_formant_candidates`); tests/rust-parity.test.js compares them.
+ * @param {import('./frontend.js').FrameSet} frames
+ * @param {Partial<typeof FORMANT_DEFAULTS>} [options]
+ */
+export function formantCandidates(frames, options = {}) {
+  const settings = formantSettings(frames, options);
+  const rows = frames.count;
+  const width = Math.ceil(settings.orders.reduce((sum, m) => sum + m / 2, 0));
+  const store = {
+    rawWidth: width,
+    rawFrequency: new Float32Array(rows * width),
+    rawBandwidth: new Float32Array(rows * width),
+    rawRank: new Uint8Array(rows * width),
+    rawCount: new Uint8Array(rows),
+  };
+  const finder = createRootFinder(frames, settings, store);
+  for (let t = 0; t < rows; t++) {
+    finder.find(t);
+  }
+  return {
+    width,
+    count: store.rawCount,
+    frequency: store.rawFrequency,
+    bandwidth: store.rawBandwidth,
+    rank: store.rawRank,
+  };
+}
+
+/**
  * Tracker over a frame set; `batch` (used by `trackFormants`) estimates the
  * tract length from the whole path before anything is committed.
  */
