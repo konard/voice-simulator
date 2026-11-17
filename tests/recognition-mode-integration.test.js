@@ -9,7 +9,10 @@ import {
 } from '../src/index.js';
 import { voiceBaseline } from '../src/recognition/mode-baseline.js';
 import { effortRamps } from '../src/recognition/mode-spans.js';
-import { phraseSummary } from '../src/recognition/mode-features.js';
+import {
+  phraseSummary,
+  measureWords,
+} from '../src/recognition/mode-features.js';
 import { HEAD } from './helpers/recognition-modes.js';
 
 describe('speech-mode integration', () => {
@@ -161,7 +164,7 @@ describe('speech-mode integration', () => {
 });
 
 describe('recognized activation replay', () => {
-  it('realizes standalone activation while retaining overlapping observations', () => {
+  it('retains a phrase activation observation across gaps in physical labels', () => {
     const observations = [
       { from: 0, to: 3, emotion: { arousal: 0.7 }, notation: null },
       { from: 0, to: 2, effort: 0.75 },
@@ -175,10 +178,29 @@ describe('recognized activation replay', () => {
       )
     ).toBe(true);
     expect(
-      plan.modes.some(
-        (s) =>
-          s.emotion.arousal === 0.7 && !s.emotion.realized && s.emotionPitch > 0
-      )
-    ).toBe(true);
+      plan.modes.some((s) => s.emotion.arousal === 0.7 && !s.emotion.realized)
+    ).toBe(false);
+    const standalone = planUtterance('wʌn tu θri', {
+      head: HEAD,
+      modes: toPlanModes([observations[0]]),
+    });
+    expect(standalone.modes.some((s) => s.emotionPitch > 0)).toBe(true);
+  });
+});
+
+describe('syllabic mode features', () => {
+  it('counts syllabic consonants with estimated and supplied phone timing', () => {
+    const samples = Float32Array.from({ length: 3200 }, (_, i) =>
+      Math.sin((2 * Math.PI * 120 * i) / 8000)
+    );
+    const word = { ipa: 'ɻ̩', start: 0, end: 0.4 };
+    for (const phonemes of [undefined, [word]]) {
+      const [features] = measureWords(samples, 8000, {
+        words: [word],
+        phonemes,
+      });
+      expect(features.vowels).toBe(1);
+      expect(features.pitch).toBeGreaterThan(100);
+    }
   });
 });

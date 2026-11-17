@@ -41,8 +41,9 @@ For audio replay, pass the same spans to
 Explicit spans replace modes parsed from IPA, preserving emotions and
 partial phonation settings that have no label in the output string.
 When unnamed activation overlaps effort, rate or phonation, the adapter
-retains it with `emotion.realized: true`: those fields already account for
-its acoustic evidence. The planner preserves this observation without
+retains it with `emotion.realized: true` across its entire phrase, including
+gaps in physical labels: those fields already account for its aggregate
+acoustic evidence. The planner preserves this observation without
 applying another emotional pitch, rate or effort change. A standalone
 activation span and named emotions retain their synthesis effects.
 
@@ -54,12 +55,18 @@ holds at most eight entries. A separate cache holds sixteen neutral phone
 contexts, without retaining samples. These contexts cancel vowel identity,
 lexical stress and lexical tone before applying the rules. Timed phones,
 when supplied as `phonemes`, select vowel frames directly; otherwise the
-neutral phone durations are fitted to each observed word interval.
+neutral phone durations are fitted to each observed word interval. Syllabic
+consonants count as nuclei too. Weak pitch fallback requires harmonic
+support across the nucleus, so isolated noise peaks do not imply falsetto.
 
 The feature extractor uses alpha ratio, pitch, matched-vowel F1,
 formant-corrected source H1-H2, HNR, CPP, jitter, voicing and neighbouring
 syllable rate. The analytical effort inverse and confidence follow issue 71. The positive effort decision additionally checks the independent
 5 Hz/dB cue because rising LF pitch itself changes the measured tilt.
+Word effort decisions require confidence of at least 0.5 and a pitch
+displacement of at least 12.5 Hz; the analytical estimate is retained.
+For known voices, creak degree uses the source model's 12-semitone shift
+at full degree rather than noisy short-word jitter alone.
 Ordered phonation thresholds are calibrated against the minimal-tier
 synthesizer; they are initial rules, not a general speaker classifier.
 Short phrases with fewer than three vowels abstain from effort, phonation
@@ -72,7 +79,11 @@ is left undecided; absolute whisper, creak and falsetto cues remain usable.
 Phrase pitch span uses the 95th minus 5th percentile across all its vowel
 frames, including intonation between words. Emotion activation uses the
 first four scaled prosodic components; names
-require both Euclidean margins against twelve synthesized references.
+require both Euclidean margins against twelve synthesized emotion references.
+Fifteen cached physical-mode references compete as unnamed alternatives:
+creak, pressed voice or tempo alone must not command an emotion preset
+whose extra effects would change the replay. These references use the
+same acoustic vectors and never emit emotion names.
 A named emotion removes redundant effects of its own preset before replay.
 Nonverbal pause sounds are conservative acoustic hypotheses.
 

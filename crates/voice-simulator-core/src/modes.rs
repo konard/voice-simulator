@@ -58,17 +58,13 @@ pub fn classify(w: &Features, b: &Features, has_f1: bool, known: bool) -> [f64; 
         } else if w[4] < 0.0 && dn <= -3.0 && abs(dp) < 4.0 && (w[7] >= 1.0 || dc <= -1.0) {
             (4.0, 0.67)
         } else if (w[7] >= 3.0 && (w[4] < 0.0 || dp <= -8.0))
-            || (w[1] > 0.0 && dp <= -6.0 && w[7] >= 2.0)
+            || (w[1] > 0.0 && dp <= -3.0 && w[7] >= 2.0)
         {
             (
                 5.0,
-                if w[7] > 0.0 {
-                    degree(clamp(w[7] / 7.0, 0.0, 1.0))
-                } else {
-                    0.67
-                },
+                degree(clamp(if known { -dp / 12.0 } else { w[7] / 7.0 }, 0.0, 1.0)),
             )
-        } else if dh <= -3.0 && dn >= -2.0 {
+        } else if dh <= -3.0 && dn >= -3.0 {
             (6.0, 0.67)
         } else if dh >= 4.0 && (dc <= -1.5 || dn <= -5.0) {
             (7.0, degree(clamp(dh / 3.2, 0.0, 1.0)))
@@ -78,7 +74,7 @@ pub fn classify(w: &Features, b: &Features, has_f1: bool, known: bool) -> [f64; 
             (8.0, 0.5)
         } else if (3.0..=8.0).contains(&dh) && dn >= -2.0 && dc > -1.0 {
             (9.0, -0.67)
-        } else if known && level != 0.5 {
+        } else if known && level != 0.5 && abs(w[1] - b[1]) >= 12.5 && confidence >= 0.5 {
             (10.0, level)
         } else {
             (0.0, 0.0)

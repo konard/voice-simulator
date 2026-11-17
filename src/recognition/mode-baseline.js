@@ -68,9 +68,11 @@ export function voiceBaseline(voice, sampleRate, language, trace) {
   const vowels = vowelReferences(words);
   const value = {
     head,
+    ipa: neutral.ipa,
     features,
     vowels,
     references: null,
+    physical: null,
     options,
     language: lang,
   };
@@ -91,20 +93,56 @@ export function emotionReferences(baseline, trace) {
       `[${name}]${BASELINE_TEXT[baseline.language]}[/${name}]`,
       { ...baseline.options, markup: true }
     );
-    const words = measureWords(
-      rendered.samples,
-      rendered.sampleRate,
-      { words: rendered.timeline.words },
-      baseline.head
-    );
-    words.forEach((w) => {
-      w.f1 = relativeF1(w, baseline.vowels);
-    });
-    const features = phraseSummary(words);
-    return { name, vector: emotionVector(features, baseline.features) };
+    return { name, vector: referenceVector(baseline, rendered) };
   });
   trace?.({ stage: 'emotion-references', references: baseline.references });
   return baseline.references;
+}
+
+function referenceVector(baseline, rendered) {
+  const words = measureWords(
+    rendered.samples,
+    rendered.sampleRate,
+    { words: rendered.timeline.words },
+    baseline.head
+  );
+  words.forEach((w) => {
+    w.f1 = relativeF1(w, baseline.vowels);
+  });
+  return emotionVector(phraseSummary(words), baseline.features);
+}
+
+/** A physical mode can explain prosody without an emotion. These competing
+ * hypotheses prevent e.g. creak alone from commanding a disgusted preset
+ * (which would also slow the replay). They never emit an emotion name. */
+export function physicalReferences(baseline) {
+  baseline.physical ??= [
+    'pp',
+    'p',
+    'f',
+    'ff',
+    'W',
+    'V̤',
+    'V̰',
+    'C',
+    'V͈',
+    'V͉',
+    'F',
+    'V!',
+    'Ṿ',
+    'allegro',
+    'lento',
+  ].map((label) => ({
+    name: 'neutral',
+    vector: referenceVector(
+      baseline,
+      synthesize(`{${label} ${baseline.ipa} ${label}}`, {
+        ...baseline.options,
+        ipa: true,
+      })
+    ),
+  }));
+  return baseline.physical;
 }
 
 /** A neutral rendering of the known phones removes vowel identity, lexical

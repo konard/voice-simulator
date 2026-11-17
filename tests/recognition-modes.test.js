@@ -11,6 +11,7 @@ import {
 } from '../src/index.js';
 import {
   classifyEmotion,
+  classifyWord,
   estimateEffort,
   distance,
 } from '../src/recognition/mode-rules.js';
@@ -90,6 +91,13 @@ describe('mode recognition', () => {
     expect(
       estimateEffort({ alpha: -18, pitch: 170, f1: null }, baseline).E
     ).toBe(10);
+    expect(
+      classifyWord(
+        { ...baseline, alpha: -18, f1: 0, jitter: 0 },
+        baseline,
+        true
+      ).quality
+    ).toBe(null);
     expect(classifyEmotion([0, 0, 0, 0, 0, 0], [])).toBe(null);
     const found = classifyEmotion(
       [2, 2, 2, 2, 0, 0],
@@ -233,32 +241,35 @@ describe('mode recognition', () => {
       recognize(audio, 'en').modes.some((s) => s.notation === 'crescendo')
     ).toBe(true);
   });
-  for (const label of LABELS) {
-    it(`speaks ${label} again on the same words`, () => {
-      const audio = render('en', label);
-      const first = recognize(audio, 'en');
-      const modes = toPlanModes(first.modes);
-      const plan = planUtterance(first.ipa, { head: HEAD, modes });
-      expect(
-        plan.modes.some(
-          (s) => s.emotion.arousal === (modes[0].mode.emotion?.arousal ?? 0)
-        )
-      ).toBe(true);
-      const replay = synthesize(first.ipa, {
-        ipa: true,
-        head: HEAD,
-        tier: 'minimal',
-        seed: 1,
-        engine: 'js',
-        modes,
+  for (const lang of LANGUAGES) {
+    for (const label of LABELS) {
+      it(`speaks ${label} ${lang} again on the same words`, () => {
+        const audio = render(lang, label);
+        const first = recognize(audio, lang);
+        const modes = toPlanModes(first.modes);
+        const plan = planUtterance(first.ipa, { head: HEAD, lang, modes });
+        expect(
+          plan.modes.some(
+            (s) => s.emotion.arousal === (modes[0].mode.emotion?.arousal ?? 0)
+          )
+        ).toBe(true);
+        const replay = synthesize(first.ipa, {
+          ipa: true,
+          lang,
+          head: HEAD,
+          tier: 'minimal',
+          seed: 1,
+          engine: 'js',
+          modes,
+        });
+        const second = recognize(replay, lang);
+        const selected = (r) =>
+          r.modes
+            .filter((s) => s.notation && !s.sound)
+            .map(({ from, to, notation }) => ({ from, to, notation }));
+        expect(selected(second)).toEqual(selected(first));
       });
-      const second = recognize(replay, 'en');
-      const selected = (r) =>
-        r.modes
-          .filter((s) => s.notation && !s.sound)
-          .map(({ from, to, notation }) => ({ from, to, notation }));
-      expect(selected(second)).toEqual(selected(first));
-    });
+    }
   }
   it('retains fields, copies results, abstains on short phrases and honors modes:false', () => {
     const audio = render('en', 'f', 'Yes.');

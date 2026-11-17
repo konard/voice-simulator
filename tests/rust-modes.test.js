@@ -93,6 +93,8 @@ describe('Rust acoustic mode rules', () => {
         { rate: 5.2 },
         { rate: 3 },
         { alpha: -22, pitch: 70, f1: -35 },
+        { pitch: 95, jitter: 2.2, hnr: 8 },
+        { alpha: -24, pitch: 120 },
       ];
       for (const hasF1 of [false, true]) {
         for (const known of [false, true]) {

@@ -18,6 +18,7 @@ import {
 import {
   voiceBaseline,
   emotionReferences,
+  physicalReferences,
   neutralContext,
 } from './mode-baseline.js';
 import {
@@ -28,14 +29,25 @@ import {
 } from './mode-spans.js';
 import { recognizeSounds } from './mode-sounds.js';
 
-function retainActivationObservation(mode) {
+function retainActivationObservation(mode, selected, words) {
   // Activation describes the same acoustic evidence as physical labels.
   // Keep it without commanding another pitch, effort and rate change.
   // Named emotions remain synthesis presets.
   if (
     mode.emotion?.arousal !== undefined &&
     !mode.emotion.name &&
-    (mode.effort !== undefined || mode.rate !== undefined || mode.phonation)
+    selected.some(
+      (span) =>
+        span.emotion?.arousal !== undefined &&
+        words.some(
+          (physical) =>
+            (physical.effort !== undefined ||
+              physical.rate !== undefined ||
+              physical.phonation) &&
+            physical.from < span.to &&
+            physical.to > span.from
+        )
+    )
   ) {
     mode.emotion.realized = true;
   }
@@ -76,7 +88,7 @@ export function toPlanModes(modes) {
           span.effort + (change * (to - span.from)) / (span.to - span.from);
       }
     }
-    retainActivationObservation(mode);
+    retainActivationObservation(mode, selected, words);
     result.push({ from, to, mode });
   }
   return result;
@@ -359,7 +371,10 @@ export function recognizeModes(samples, sampleRate, result, options = {}) {
     ? effortRamps(result.words, labels, initialSpans)
     : initialSpans;
   const references = reference
-    ? emotionReferences(reference, options.trace)
+    ? [
+        ...emotionReferences(reference, options.trace),
+        ...physicalReferences(reference),
+      ]
     : [];
   for (const group of groups) {
     const heard = features.slice(group.from, group.to);

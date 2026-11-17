@@ -77,14 +77,16 @@ export function classifyWord(word, base, knownVoice) {
     quality = set('V!', 'harsh', 0.67);
   } else if (
     (word.jitter >= 3 && (word.h1h2 < 0 || dpitch <= -8)) ||
-    (word.pitch > 0 && dpitch <= -6 && word.jitter >= 2)
+    (word.pitch > 0 && dpitch <= -3 && word.jitter >= 2)
   ) {
+    // Creak lowers the modeled source by 12 st at full degree. Pitch
+    // displacement is steadier than short-word jitter for a known voice.
     quality = set(
       'V̰',
       'creaky',
-      word.jitter > 0 ? degree(clamp(word.jitter / 7)) : 0.67
+      degree(clamp(knownVoice ? -dpitch / 12 : word.jitter / 7))
     );
-  } else if (dh1h2 <= -3 && dhnr >= -2) {
+  } else if (dh1h2 <= -3 && dhnr >= -3) {
     quality = set('V͈', 'tension', 0.67);
   } else if (dh1h2 >= 4 && (dcpp <= -1.5 || dhnr <= -5)) {
     quality = set('V̤', 'breathy', degree(clamp(dh1h2 / 3.2)));
@@ -96,7 +98,12 @@ export function classifyWord(word, base, knownVoice) {
     quality = set('Ṿ', 'whisper', 0.5);
   } else if (dh1h2 >= 3 && dh1h2 <= 8 && dhnr >= -2 && dcpp > -1) {
     quality = set('V͉', 'tension', -0.67);
-  } else if (knownVoice && estimated.effort !== 0.5) {
+  } else if (
+    knownVoice &&
+    estimated.effort !== 0.5 &&
+    Math.abs(word.pitch - base.pitch) >= 12.5 &&
+    estimated.confidence >= 0.5
+  ) {
     quality = {
       notation: ['pp', 'p', null, 'f', 'ff'][estimated.effort * 4],
       ...estimated,

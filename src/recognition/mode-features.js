@@ -39,7 +39,7 @@ function nuclei(word, phones, head) {
           p.start >= word.start &&
           p.end <= word.end &&
           parseIpa(p.ipa ?? p.symbol ?? '').tokens.some(
-            (t) => t.kind === 'vowel'
+            (t) => t.kind === 'vowel' || t.syllabic
           )
       )
       .map((p) => ({ ...p, vowel: p.ipa ?? p.symbol }));
@@ -55,7 +55,7 @@ function nuclei(word, phones, head) {
   const start = speech[0].start;
   const scale = (word.end - word.start) / (speech.at(-1).end - start);
   return speech
-    .filter((s) => s.kind === 'vowel')
+    .filter((s) => s.kind === 'vowel' || s.token?.syllabic)
     .map((s) => ({
       start: word.start + (s.start - start) * scale,
       end: word.start + (s.end - start) * scale,
@@ -151,8 +151,10 @@ export function measureWords(samples, sampleRate, result, head) {
       }
     }
     const pulsePitch = periods.length ? 1 / quantile(periods) : 0;
+    // A weak periodicity peak in noise is not a usable pitch. Require
+    // harmonic support across the nucleus before falling back to it.
     const trackedPitch = quantile(
-      f0.length ? f0 : values('hnr').some((v) => v > 3) ? rawF0 : []
+      f0.length ? f0 : quantile(values('hnr')) > 10 ? rawF0 : []
     );
     const vowelSignal = Float32Array.from(
       vowels.flatMap((v) =>
