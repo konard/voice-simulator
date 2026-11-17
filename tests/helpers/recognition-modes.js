@@ -1,6 +1,7 @@
 /** Small deterministic fixtures shared by acceptance tests. Unlicense. */
 import {
   synthesize,
+  prepareUtterance,
   presetHeadConfig,
   recognizeModes,
 } from '../../src/index.js';
@@ -34,10 +35,13 @@ export function render(lang, label = null, text = BASELINE_TEXT[lang]) {
     engine: 'js',
     markup: true,
   };
-  const plain = synthesize(text, options);
-  return label
-    ? synthesize(`{${label} ${plain.ipa} ${label}}`, { ...options, ipa: true })
-    : plain;
+  if (!label) {
+    return synthesize(text, options);
+  }
+  // Only the neutral transcription is needed to wrap a labelled fixture.
+  // Every labelled recording still gets a fresh physical render.
+  const { ipa } = prepareUtterance(text, options);
+  return synthesize(`{${label} ${ipa} ${label}}`, { ...options, ipa: true });
 }
 export function recognize(audio, lang, options = {}) {
   return recognizeModes(

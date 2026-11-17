@@ -175,3 +175,38 @@ avoiding 60 duplicate first-pass analyses and their source renders. Only
 small recognition results are retained, not samples. The replay audio and
 second recognition remain fresh, all 60 cases retain their exact-span checks,
 and running an individual replay still generates its original fixture.
+
+On merged revision 137b8ab, focused recognition/integration passes 200/200
+in 174.9 seconds locally, including every acceptance gate and 60 replays.
+The isolated `--test-name-pattern='speaks W en again'` run passes too,
+verifying the fallback without a previously measured first recognition.
+Full heavy recognition run 44088072637 passes all five files, including
+main's landmark detector (16 pass, one existing laryngograph-data skip).
+All 100 RESD rows and 24 golden sentences reproduce 55% activation,
+10% names and 1/24 alarms, with unchanged gates. Logs and artifacts are
+preserved under ci-logs; no local dataset audio is committed.
+
+Merged source CI 44087732909 was created at 12:55:47 UTC after commit
+137b8ab (12:55:41 UTC). Eight runtime legs pass, plus Rust/WASM and all
+other checks, but Bun/macOS reaches its existing 500-second suite deadline.
+The downloaded job log checks-44087732909-bun-macos.log records all 186 mode
+tests passing at line 1407, followed by the deadline error at line 4536;
+tests were still progressing and no assertion failed. Saved full logs and
+the fresh workflow run list distinguish this failure from earlier green runs.
+The bounded ci-timings.mjs comparison shows aggregate CPU work: the older
+successful suite took 436 seconds, while head-parameter tests alone grew
+from 22.4 to 39.4 seconds on this runner. Increasing the deadline would not
+address this sensitivity.
+
+Fixture setup now prepares neutral IPA without rendering unused neutral
+audio. The finite fixture-render.mjs experiment compares every sample,
+IPA string and word timeline: all 60 fixtures are byte-exact, with local
+setup time reduced from 16.125 to 8.207 seconds. Bun CI runs two native
+file shards as ordinary processes, sequential within each process, under
+the unchanged 500-second outer deadline and 30-second per-test deadline.
+This avoids the documented Bun --parallel worker issues and keeps every
+test, including full discovery and heavy-suite exclusions. Focused mock
+tests prove concurrent starts, failure propagation from either shard, and
+waiting for both children. All 16 runner/budget tests pass under Node and
+the actual Bun sharding CLI (3 plus 13 tests in complementary shards).
+All nine current-head CI legs remain required before marking ready.

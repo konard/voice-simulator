@@ -19,9 +19,10 @@ without a fitted speaker voice. These alignment and voice limitations apply
 to the reported figures; they are not an end-to-end recognition benchmark.
 
 Per-recording decisions are in the JSON artifact of [Heavy checks run
-44084694372](https://github.com/konard/voice-simulator/actions/runs/44084694372),
-commit `2f0aa44dce9a0a3c30082716c3c93a44b6423b68`. All four recognition files passed;
-the suite has 14 passing tests and one existing laryngograph-data skip.
+44088072637](https://github.com/konard/voice-simulator/actions/runs/44088072637),
+commit `137b8ab5f8ac2969e39f4e981aaadc837bb2aaed`, including main's landmark
+detector. All five recognition files passed; the suite has 16 passing tests
+and one existing laryngograph-data skip.
 All three speech-mode tests passed, with no item limit.
 
 ## Synthetic acceptance matrix
