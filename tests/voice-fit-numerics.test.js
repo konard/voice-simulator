@@ -37,6 +37,9 @@ describe('voice fitting numerics', () => {
     const clone = copyState(s);
     clone.histograms.dF[0]++;
     expect(s.histograms.dF[0]).toBe(0);
+    // A bright spectrum can have more high-band energy and negative tilt.
+    clone.tilt = -12;
+    expect(copyState(JSON.parse(JSON.stringify(clone))).tilt).toBe(-12);
     const even = emptyState();
     for (const x of [600, 900, 1000, 1000]) {
       addValue(even, 'dF', x);

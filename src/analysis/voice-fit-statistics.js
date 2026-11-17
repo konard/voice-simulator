@@ -65,7 +65,7 @@ export function copyState(state) {
         copy.histograms[key].some((n) => !Number.isFinite(n) || n < 0)
     ) ||
     Object.keys(expected)
-      .filter((key) => typeof expected[key] === 'number')
+      .filter((key) => typeof expected[key] === 'number' && key !== 'tilt')
       .some((key) => !Number.isFinite(copy[key]) || copy[key] < 0) ||
     copy.mel?.length !== 24 ||
     copy.mel.some((v) => !Number.isFinite(v)) ||
