@@ -106,6 +106,12 @@ two, the breathiness vertex moves from 0.659490 to 0.559490 and lowers J
 to 8.310783 while retaining 126 Hz. This is evidence that source error dominates the
 compensating pitch step, not proof that the remaining optimizer is sufficient.
 
+The default-head constants were rechecked with
+`node experiments/issue-63/calibrate.mjs` after merging current main.
+The five HNR entries reproduce to their stored precision; default
+f0 range is 7.146042 semitones and pooled syllable rate is 3.058104/s,
+matching the committed range factor and `10 / 3.27` rate constant.
+
 Bounded attempts kept as reproducible experiments:
 
 - `hnr-interpolation.mjs`: seven rendered heads; cubic fractional-lag
@@ -130,24 +136,31 @@ Bounded attempts kept as reproducible experiments:
 ## Full heavy measurements
 
 The archived [Markdown](copy-voice-fit.md) and [JSON](copy-voice-fit.json)
-identify measured SHA 4d0737d and [run 44062254770](https://github.com/konard/voice-simulator/actions/runs/44062254770).
-All 40 synthetic fits and 48 golden fits completed. These are measurements
-of that revision, before later fixes and the mel-unit correction.
+identify measured SHA 3487780 and [run 44072776328](https://github.com/konard/voice-simulator/actions/runs/44072776328).
+All 40 synthetic fits and 48 golden fits completed in 1,739 s. These
+measurements include the mel-unit, deferred-diagnostic and fixed-prior
+corrections. Both heavy tests still fail. The synthetic assertion lists
+all seven failing gates at line 697 of `heavy-44072776328.log`; the
+golden assertion is at line 711.
 
 | Metric | With transcript | Without transcript | Required |
 | --- | --- | --- | --- |
-| Median tract error | 0.848% | 8.918% | 4% / 6% |
-| Maximum tract error | 3.083% | 13.604% | 10% |
-| Median pitch error | 4.191% | 2.771% | 2% |
-| Median rate error | 18.745% | 12.706% | 8% |
-| Median tenseness absolute error | 0.07167 | 0.07227 | 0.15 |
-| Median breathiness absolute error | 0.08404 | 0.09988 | 0.2 |
-| Tract 3 SD coverage | 20/20 | 0/20 | At least 16/20 |
+| Median tract error | 0.857% | 6.753% | 4% / 6% |
+| Maximum tract error | 2.793% | 10.178% | 10% |
+| Median pitch error | 4.061% | 2.487% | 2% |
+| Median rate error | 16.141% | 13.588% | 8% |
+| Median tenseness absolute error | 0.05993 | 0.04997 | 0.15 |
+| Median breathiness absolute error | 0.07587 | 0.08140 | 0.2 |
+| Tract 3 SD coverage | 20/20 | 7/20 | At least 16/20 |
 
-Golden distance passes 47/48 comparisons. `hi-02` with text gives 17.561212
-versus preset 17.515151. The ungated half-preset-distance target is met by
-11/48 fits (22.92%); MCD improves by at least 0.5 dB for 37/48 (77.08%).
+Golden distance passes 47/48 comparisons. `hi-02` with text gives 18.010081
+versus preset 17.397847. The ungated half-preset-distance target is met by
+3/48 fits (6.25%); MCD improves by at least 0.5 dB for 37/48 (77.08%).
 The manifest says `unknown` for speaker sex; the report preserves that value.
+All 12,144 parameter records in the archived JSON have finite values and
+nonnegative finite SDs. The earlier complete run 44062254770 remains
+available in Actions; it predates the corrections and is not the current
+measurement.
 
 ## Performance and CI evidence
 

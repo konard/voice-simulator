@@ -114,13 +114,14 @@ No required criteria are complete until backed by measured evidence below.
 - A separate signal probe (`hnr-signal.mjs`) compares calibrated HNR on
   raw speech, speech high-passed at 400 Hz, and the IAIF derivative. B
   still reads breathiness 0.661, 0.525 and 0.954, respectively, versus 0.2.
-- Full heavy workflow 44062254770 completed all 20 heads and 24 golden
-  recordings in both modes at implementation SHA 4d0737d. Both tests fail.
-  With text: median pitch 4.19% and rate 18.75%. Without: tract 8.92%,
-  pitch 2.77%, rate 12.71%, maximum tract 13.60%, coverage 0/20.
-  Golden hi-02 with text has distance 17.5612 versus preset 17.5152.
+- Full heavy workflow 44072776328 completed all 20 heads and 24 golden
+  recordings in both modes at implementation SHA 3487780. Both tests fail.
+  With text: median pitch 4.06% and rate 16.14%. Without: tract 6.75%,
+  pitch 2.49%, rate 13.59%, maximum tract 10.18%, coverage 7/20.
+  Golden hi-02 with text has distance 18.0101 versus preset 17.3978.
   Archive: docs/reports/copy-voice-fit.md and .json; details and commands:
-  docs/reports/issue-63-validation.md. This predates the mel correction.
+  docs/reports/issue-63-validation.md. All seven failing synthetic gates
+  and the single golden failure are retained; no thresholds were relaxed.
 
 ## CI investigation protocol
 
