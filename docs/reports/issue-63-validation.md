@@ -522,3 +522,59 @@ skips; repository checks pass (699 packages, 1635 files). Logs are saved as
 `ci-logs/merge-ab54493-wasm.log`, `ci-logs/merged-modes-fit-parity.log` and
 `ci-logs/merged-check.log`. These merge checks do not establish recovery
 accuracy or a passing full runtime matrix.
+
+## Fresh merged-head failures and runtime scheduling
+
+Run [44104176844](https://github.com/konard/voice-simulator/actions/runs/44104176844)
+was created November 17 at 14:32:12 UTC for
+`c96a9bd9926acadfe77b304793e1d2b4275241ba` and completed with failure.
+All nine runtime jobs fail. The downloaded full log is
+`ci-logs/ci-44104176844.log`; individual jobs use the prefix
+`ci-logs/modes-merge-`. All infrastructure and the four other workflows pass.
+
+| Runtime | Ubuntu | macOS | Windows |
+| --- | --- | --- | --- |
+| Node | 300 s deadline | 300 s deadline | 300 s deadline |
+| Deno | 3223 pass, 5 fail, 301 s reported | 300 s deadline | 3103 pass, 5 fail, 299 s |
+| Bun | 3226 pass, 5 fail, 222 s | 3214 pass, 7 fail, 369 s | 3103 pass, 6 fail, 372 s |
+
+The five numerical errors are unchanged. Bun Ubuntu job 134112763531
+records legacy rate/pitch/rate errors at lines 3261, 3372 and 3507;
+transcript recovery and uncertainty fail at lines 4860 and 4878.
+Node Ubuntu job 134112763651 reaches its deadline at line 4956 and
+cancels the matching file at line 5198. Node macOS job 134112763607
+reaches its deadline at line 4940; the matching file has run for only
+85044 ms when cancelled (line 5183). Node Windows job 134112763993
+reaches its deadline at line 4950. Deno macOS job 134112763649 reports
+all five assertion failures before its deadline at line 4921.
+Bun macOS job 134112763767 also times out female matching, breathiness
+0.8 and the no-transcript preset comparison (lines 3248, 4018 and 4869);
+female matching already fails accuracy. Bun Windows job 134112763565
+times out female matching and breathiness 0.8 (lines 2971 and 3483).
+Pipeline Status job 134122971628 says `Failing jobs: test` at line 269.
+
+The new shared launcher changes scheduling while keeping the same test
+files, native test runtimes and deadlines. Node and Deno start the expensive
+matching file alongside the bulk queue; Bun runs matching alone before the
+two native bulk shards, avoiding competing DSP work during its 30 s tests.
+Both peers are reaped even after any preceding failure. The existing Bun
+entry point and ordinary `npm test` command remain available.
+
+```sh
+node --test tests/bun-shards.test.js tests/ci-timeouts.test.js
+bun test tests/bun-shards.test.js tests/ci-timeouts.test.js
+deno test -A tests/bun-shards.test.js tests/ci-timeouts.test.js
+node experiments/issue-63/test-order.mjs
+```
+
+All 23 fixture/budget checks pass on each runtime. Fixtures verify full
+file selection, the required phase ordering, overlap, completion and
+failure propagation for every phase. The finite native probe confirms
+Node's alphabetic CLI discovery and that Bun's two shards select disjoint
+files even with explicit paths: three files in the full selection, two in
+shard one and one in shard two, without missing or duplicate files.
+The bounded ordering regression also runs against the previous main-branch
+launcher and this draft in disposable fixtures: the previous launcher exits
+1 and the draft exits 0. `npm run check` passes (699 packages, 1629 files).
+Actual runner timing still needs CI verification. Scheduling does not
+correct the five accuracy assertions or the landmark/heavy requirements.

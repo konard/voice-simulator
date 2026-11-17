@@ -373,7 +373,10 @@ jobs:
       - name: Run tests (Node.js)
         if: matrix.runtime == 'node'
         shell: bash
-        run: bash scripts/run-with-budget-warning.sh 300 "Node.js test suite" npm test
+        # Node sorts CLI file paths before scheduling. Start the expensive
+        # matching file in its own process so it overlaps the entire suite,
+        # rather than starting after most of the 300s budget has elapsed.
+        run: bash scripts/run-with-budget-warning.sh 300 "Node.js test suite" bash scripts/run-runtime-tests.sh node
 
       - name: Verify inverse-filter CPU target
         if: matrix.runtime == 'node' && matrix.os == 'ubuntu-24.04'
@@ -402,6 +405,8 @@ jobs:
         # The 222-file sequential suite exceeded 500s on macOS in issue 71
         # while making progress, after all mode assertions passed. Keep
         # every test and the existing 500s deadline (warning at 350s).
+        # Run matching before those shards, so DSP tests retain their 30s
+        # per-test budget without competing with another Bun process.
         run: bash scripts/run-with-budget-warning.sh 500 "Bun test suite" bash scripts/run-bun-tests.sh
 
       - name: Setup Deno
@@ -429,7 +434,8 @@ jobs:
         # 87-150s on main and PR #116 (issue 115), mostly in tests that spawn
         # git and shell fixtures, and crossed the 70% warning of a 200s budget
         # in three of four runs. It took 101-103s on PR #91 (100s then).
-        run: bash scripts/run-with-budget-warning.sh 300 "Deno test suite" deno test -A --parallel
+        # Start matching immediately, as for Node, to avoid a long tail.
+        run: bash scripts/run-with-budget-warning.sh 300 "Deno test suite" bash scripts/run-runtime-tests.sh deno
 
   # === RUST ENGINE ===
   # Lints and tests the Rust workspace, builds src/engine/voice-simulator.wasm

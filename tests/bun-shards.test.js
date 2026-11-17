@@ -1,8 +1,8 @@
+/** Bounded scheduling fixtures: full coverage, ordering and failure propagation. */
 import { describe, expect } from 'test-anywhere';
-import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { fileURLToPath, URL } from 'node:url';
 import {
   HANG_GUARD_MS,
   removeFixture,
@@ -10,78 +10,121 @@ import {
 } from './helpers/bounded-run.js';
 import { itUnless, noPosixShell, sandboxed } from './helpers/skip.js';
 
-const script = fileURLToPath(
-  new URL('../scripts/run-bun-tests.sh', import.meta.url)
-);
-
-// Each child waits for its peer: a sequential launcher cannot pass. Keep
-// the fixture finite even if an implementation forgets the second child.
+// Bun matching completes before its two bulk shards overlap each other.
+// Node/Deno matching overlaps the bulk run.
 const fixture = `#!/usr/bin/env bash
 set -eu
-root="$1"
-failing="$2"
-shift 2
-case "$4" in
-  --shard=1/2) shard=1 ;;
-  --shard=2/2) shard=2 ;;
-  *) exit 98 ;;
-esac
-printf '%s\\n' "$@" > "$root/$shard.args"
-touch "$root/$shard.started"
-other=$((3 - shard))
-for ((attempt=0; attempt<500; attempt++)); do
-  if [ -f "$root/$other.started" ]; then
-    touch "$root/$shard.finished"
-    if [ "$failing" = "$shard" ]; then exit 7; fi
+runtime="$1"
+root="$2"
+failure="$3"
+shift 3
+role=bulk
+for argument in "$@"; do
+  case "$argument" in
+    tests/voice-match.test.js) role=matching ;;
+    --shard=1/2) role=first ;;
+    --shard=2/2) role=second ;;
+  esac
+done
+printf '%s\\n' "$@" > "$root/$role.args"
+touch "$root/$role.started"
+for ((poll=0; poll<500; poll++)); do
+  ready=false
+  if [ "$runtime" = bun ]; then
+    if [ "$role" = matching ]; then
+      [ ! -f "$root/first.started" ] && [ ! -f "$root/second.started" ] || exit 98
+      ready=true
+    elif [ -f "$root/matching.finished" ] && [ -f "$root/first.started" ] && [ -f "$root/second.started" ]; then
+      ready=true
+    fi
+  elif [ -f "$root/matching.started" ] && [ -f "$root/bulk.started" ]; then
+    ready=true
+  fi
+  if [ "$ready" = true ]; then
+    touch "$root/$role.finished"
+    if [ "$failure" = "$role" ]; then exit 7; fi
     exit 0
   fi
-  sleep 0.02
+  sleep 0.01
 done
 exit 99
 `;
 
-describe('Bun suite shards', () => {
-  for (const failing of [0, 1, 2]) {
-    itUnless(sandboxed, noPosixShell)(
-      failing === 0
-        ? 'runs both shards concurrently and waits for both'
-        : `propagates failure from shard ${failing} and still reaps both`,
-      async () => {
-        const root = mkdtempSync(path.join(tmpdir(), 'bun-shards-'));
-        let failure;
-        try {
-          const command = path.join(root, 'fixture.sh');
-          writeFileSync(command, fixture);
-          let result;
+describe('Runtime suite scheduling', () => {
+  for (const runtime of ['node', 'deno', 'bun']) {
+    const roles =
+      runtime === 'bun'
+        ? ['matching', 'first', 'second']
+        : ['matching', 'bulk'];
+    const flags =
+      runtime === 'node'
+        ? ['--test', '--test-timeout=30000']
+        : runtime === 'deno'
+          ? ['test', '-A', '--parallel']
+          : ['test', '--timeout', '30000'];
+    for (const failing of ['none', ...roles]) {
+      itUnless(sandboxed, noPosixShell)(
+        `${runtime}: retains every file and reaps all phases (${failing} fails)`,
+        async () => {
+          const root = mkdtempSync(path.join(tmpdir(), 'runtime-shards-'));
+          let failure;
           try {
-            await runBounded(
-              'bash',
-              [script, 'bash', command, root, String(failing)],
-              { timeout: HANG_GUARD_MS }
-            );
-            result = 0;
-          } catch (error) {
-            if (error.timedOut || !Number.isInteger(error.code)) {
-              throw error;
+            const command = path.join(root, 'fixture.sh');
+            writeFileSync(command, fixture);
+            const launcher =
+              runtime === 'bun'
+                ? ['scripts/run-bun-tests.sh']
+                : ['scripts/run-runtime-tests.sh', runtime];
+            let result = 0;
+            try {
+              await runBounded(
+                'bash',
+                [...launcher, 'bash', command, runtime, root, failing],
+                { timeout: HANG_GUARD_MS }
+              );
+            } catch (error) {
+              if (error.timedOut || !Number.isInteger(error.code)) {
+                throw error;
+              }
+              result = error.code;
             }
-            result = error.code;
+            expect(result).toBe(failing === 'none' ? 0 : 7);
+            const remaining = readdirSync('tests')
+              .filter(
+                (file) =>
+                  file.endsWith('.test.js') && file !== 'voice-match.test.js'
+              )
+              .map((file) => `tests/${file}`)
+              .sort();
+            for (const role of roles) {
+              const args = readFileSync(path.join(root, `${role}.args`), 'utf8')
+                .trim()
+                .split('\n');
+              const shard =
+                role === 'first'
+                  ? ['--shard=1/2']
+                  : role === 'second'
+                    ? ['--shard=2/2']
+                    : [];
+              expect(args.splice(0, flags.length + shard.length)).toEqual([
+                ...flags,
+                ...shard,
+              ]);
+              expect(args.sort()).toEqual(
+                role === 'matching' ? ['tests/voice-match.test.js'] : remaining
+              );
+              expect(
+                readFileSync(path.join(root, `${role}.finished`), 'utf8')
+              ).toBe('');
+            }
+          } catch (error) {
+            failure = error;
+            throw error;
+          } finally {
+            removeFixture(root, failure);
           }
-          expect(result).toBe(failing ? 7 : 0);
-          for (const shard of [1, 2]) {
-            expect(readFileSync(path.join(root, `${shard}.args`), 'utf8')).toBe(
-              `test\n--timeout\n30000\n--shard=${shard}/2\n`
-            );
-            expect(
-              readFileSync(path.join(root, `${shard}.finished`), 'utf8')
-            ).toBe('');
-          }
-        } catch (error) {
-          failure = error;
-          throw error;
-        } finally {
-          removeFixture(root, failure);
         }
-      }
-    );
+      );
+    }
   }
 });

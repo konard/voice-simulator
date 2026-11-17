@@ -245,7 +245,23 @@ unresolved.
       both remain within the existing 507904-byte budget.
 - [x] Run the six focused merge suites with required WASM: 26 pass.
 - [x] Run `npm run check`: passes (699 packages, 1635 files).
-- [ ] Push the merge and inspect all fresh current-head CI outcomes.
+- [x] Push the merge and inspect all fresh current-head CI outcomes.
 
 No numerical recovery correction was established in this investigation.
 The acceptance failures and heavy gates above remain unfinished.
+
+## Runtime scheduling repair
+
+- [x] Download all nine runtime job logs and Pipeline Status for run 44104176844
+      at c96a9bd; verify the SHA and distinguish assertion failures from deadlines.
+- [x] Confirm Node sorts explicit CLI file paths rather than retaining their order.
+- [x] Draft a shared launcher: Node/Deno matching starts alongside the bulk
+      queue; Bun matching runs alone before its two ordinary native shards.
+- [x] Verify every file remains selected, both peers overlap, every child is
+      reaped and a failure in any phase propagates: 23 focused checks pass on
+      each of Node, Bun and Deno. Native Bun selection is checked separately.
+- [ ] Check current-head CI to establish the effect on actual runtime budgets.
+
+No acoustic objective, uncertainty formula, acceptance threshold or deadline
+changes with this scheduling repair. The five numerical failures and the
+landmark/heavy requirements remain unfinished.
