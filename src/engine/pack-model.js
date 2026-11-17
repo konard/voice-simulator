@@ -276,10 +276,11 @@ export function writeVoxelModel(model, allocate) {
 /**
  * The header words of a packed model, by MODEL_HEADER name.
  * @param {ArrayBuffer} buffer
+ * @param {number} [byteOffset] Start of a model packed into a larger buffer.
  * @returns {Record<string, number>}
  */
-export function modelHeader(buffer) {
-  const view = new DataView(buffer);
+export function modelHeader(buffer, byteOffset = 0) {
+  const view = new DataView(buffer, byteOffset);
   const header = {};
   for (const [name, index] of Object.entries(MODEL_HEADER)) {
     if (name !== 'WORDS') {

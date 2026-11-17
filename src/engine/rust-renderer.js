@@ -737,7 +737,7 @@ export function withTeam(module, handle, action, minLinks) {
 
 /** Cells of a packed voxel model (MODEL_HEADER.CELLS). */
 function modelCells(model) {
-  return modelHeader(model.buffer).CELLS;
+  return modelHeader(model.buffer, model.byteOffset).CELLS;
 }
 
 /** A growable Float64Array of frames. */

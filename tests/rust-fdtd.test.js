@@ -377,6 +377,30 @@ function renderDifference(engine, options, count) {
 }
 
 describe('the 3D FDTD solver in Rust (issue 23)', () => {
+  it('returns the complete field after packing into wasm memory', async () => {
+    const engine = await loadRustEngine();
+    const { plan, renderOptions } = prepareUtterance('A short test.', {
+      tier: 'high',
+      seed: 82,
+    });
+    const reference = new VoiceRenderer(plan, renderOptions);
+    const rust = new RustVoiceRenderer(engine, plan, renderOptions);
+    try {
+      reference.render(new Float32Array(480));
+      rust.render(new Float32Array(480));
+      const expected = reference.solver.pressure;
+      const actual = rust.field().pressure;
+      expect(expected.length > 0).toBe(true);
+      expect(actual.length).toBe(expected.length);
+      expect(actual.every(Number.isFinite)).toBe(true);
+      expect(
+        actual.every((value, index) => Math.abs(value - expected[index]) < 1e-4)
+      ).toBe(true);
+    } finally {
+      rust.free();
+    }
+  });
+
   it('kernel is bit-identical with JavaScript', async () => {
     const engine = await loadRustEngine();
     const solver = javascriptSolver();

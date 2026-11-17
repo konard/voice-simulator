@@ -25,7 +25,7 @@ inline comments or reviews.
 - [x] README, contributing, Rust docs, roadmap, types, CLI help and minor changeset.
 - [x] Focused regressions, npm check/test, cargo workspace tests/clippy/fmt, wasm
       parity and current-commit CI; save and inspect any failing CI logs.
-- [x] Merge latest main, review complete PR diff, update title/body with Closes #82,
+- [ ] Merge latest main, review complete PR diff, update title/body with Closes #82,
       push only prepared branch, clean tree and mark PR #145 ready; never merge.
 
 Scope: text/IPA planning and geometry construction stay in JavaScript as in the
@@ -119,3 +119,17 @@ new core module alongside folds and measured the combined wasm again: scalar
 335,481 bytes, SIMD 344,421. The existing rounding rule gives 360,448 bytes
 (352 KiB). The synthesis sources are unchanged by this upstream merge; the full
 performance suite is rerun to verify the combined binary before finalization.
+
+That rerun, [44047874277](https://github.com/konard/voice-simulator/actions/runs/44047874277),
+passes all four existing performance files and 27 new rows, but the reference
+tier measures 1.02295 Rust/JS on AMD EPYC 7763 (`ci-logs/heavy-44047874277.log:437`).
+The strict limit remains 1.0; the earlier passing report is retained while the
+scalar kernel is investigated with bounded, interleaved experiments.
+
+The field comparison in that investigation caught a direct-packing regression:
+the model header reader ignored the input's offset within wasm memory, causing
+`RustVoiceRenderer.field()` to return an empty pressure array. The new
+`returns the complete field after packing into wasm memory` regression fails
+before the fix (`Expected 0 to be 695`) and passes afterward, comparing finite
+cell pressures with JavaScript within 1e-4. Header reads now accept the model
+offset without copying the packed model.
