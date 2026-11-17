@@ -30,6 +30,7 @@ export {
 } from './g2p/lexicon.js';
 export { englishDictionarySize } from './g2p/english.js';
 export { ipaToText } from './recognition/ipa-to-text.js';
+export { identifyLanguage, languageShares } from './recognition/language-id.js';
 export { parseIpa, formatIpa } from './ipa/parse.js';
 export {
   getPhoneme,
