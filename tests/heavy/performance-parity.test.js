@@ -12,10 +12,12 @@ const it = itUnless(noRust);
 const MINIMUM_MS = 2000;
 const cases = [
   ...ENGINE_FEATURES.map((feature) => ({
+    kind: 'feature',
     name: feature.id,
     prepare: () => prepareProbe(feature),
   })),
   ...AUDIO_TIERS.map((tier) => ({
+    kind: 'tier',
     name: `tier.${tier.name}`,
     prepare: () =>
       prepareUtterance('A short test.', { tier: tier.name, seed: 82 }),
@@ -57,7 +59,7 @@ function medianRender(engine, plan, options) {
 
 describe('engine parity performance', () => {
   for (const probe of cases) {
-    it(`speed: ${probe.name}`, async () => {
+    it(`speed: ${probe.kind} ${probe.name}`, async () => {
       const js = await createEngine('js');
       const rust = await createEngine({
         engine: 'rust',
@@ -69,6 +71,7 @@ describe('engine parity performance', () => {
       const compiled = medianRender(rust, plan, renderOptions);
       const ratio = compiled.seconds / reference.seconds;
       rows.push({
+        kind: probe.kind,
         name: probe.name,
         duration: plan.duration,
         js: reference,
@@ -87,11 +90,11 @@ describe('engine parity performance', () => {
       '',
       `Node ${process.version}, ${process.platform} ${process.arch}; seed 82; scalar wasm, one thread. Includes renderer construction, frame preparation and samples. Each engine warms once, then renders for at least 2 seconds and at least 3 runs; times are medians. ${process.env.HEAVY_LIMIT ? 'Partial developer run.' : 'Every feature and every tier.'}`,
       '',
-      '| Feature or tier | Audio (s) | JS (s) | Rust (s) | Rust / JS | Runs JS / Rust |',
-      '| --- | ---: | ---: | ---: | ---: | ---: |',
+      '| Kind | Feature or tier | Audio (s) | JS (s) | Rust (s) | Rust / JS | Runs JS / Rust |',
+      '| --- | --- | ---: | ---: | ---: | ---: | ---: |',
       ...rows.map(
         (r) =>
-          `| ${r.name} | ${r.duration.toFixed(3)} | ${r.js.seconds.toFixed(6)} | ${r.rust.seconds.toFixed(6)} | ${r.ratio.toFixed(4)} | ${r.js.runs.length} / ${r.rust.runs.length} |`
+          `| ${r.kind} | ${r.name} | ${r.duration.toFixed(3)} | ${r.js.seconds.toFixed(6)} | ${r.rust.seconds.toFixed(6)} | ${r.ratio.toFixed(4)} | ${r.js.runs.length} / ${r.rust.runs.length} |`
       ),
       '',
       'Command: `npm run test:heavy -- --suite performance` (built wasm required).',

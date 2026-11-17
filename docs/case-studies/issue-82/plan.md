@@ -50,3 +50,21 @@ The runtime matrix then caught two case-study conventions: the plan must link
 to its repository issue and appear in the case-study index. Both are now covered
 by the existing `tests/case-study-folders.test.js` checks; the original failures
 are preserved in `ci-logs/deno-ubuntu-44038066963.log:3887` and `:3895`.
+
+The complete performance suite in
+[run 44036883016](https://github.com/konard/voice-simulator/actions/runs/44036883016)
+passed all existing performance checks and 27 of the 28 new rows, but the
+coarse 3D feature probe took 1.5132 times JS (`heavy-44036883016.log:437`).
+The bounded `experiments/issue-82-fdtd-performance.mjs --profile` traced the
+extra cost to boxing and copying the large subcell opening table. Packing now
+copies its typed-array views directly into the final little-endian buffer.
+A 10,262,656-byte coarse model has the same SHA-256 before and after
+(`eb10f9bc83c3d087c83302693560443e192e20ce91bc4a2beab6d641b61ef9e0`);
+local packing fell from 170–255 ms to 11–17 ms. The existing Rust byte-for-byte
+repack test passes. A focused Node 24 performance run (`HEAVY_LIMIT=2` with
+`tests/heavy/performance-parity.test.js`) passes at 0.8684 Rust/JS for this probe;
+the complete CI performance suite must still pass before its report is copied.
+
+All nine Node/Bun/Deno by Linux/macOS/Windows test jobs and the Rust job passed
+on commit 6962734 in
+[run 44038929770](https://github.com/konard/voice-simulator/actions/runs/44038929770).
