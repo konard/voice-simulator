@@ -275,8 +275,11 @@ function voicedFrames(signal, rate) {
   const levels = new Float64Array(count);
   const lows = new Float64Array(count);
   for (let frame = 0; frame < count; frame++) {
-    const start = Math.max(0, frame * hop - hop / 2);
-    const end = Math.min(signal.length, frame * hop + (3 * hop) / 2);
+    const start = Math.max(0, Math.round(frame * hop - hop / 2));
+    const end = Math.min(
+      signal.length,
+      Math.round(frame * hop + (3 * hop) / 2)
+    );
     let sum = 0;
     let lowSum = 0;
     for (let index = start; index < end; index++) {
@@ -369,7 +372,7 @@ export function cpp(samples, sampleRate) {
   const window = hann(length);
   const values = [];
   voiced.forEach((isVoiced, frame) => {
-    const start = frame * hop + hop / 2 - length / 2;
+    const start = Math.round(frame * hop + hop / 2 - length / 2);
     if (isVoiced && start >= 0 && start + length <= signal.length) {
       values.push(frameCpp(signal, start, length, rate, window, size));
     }
