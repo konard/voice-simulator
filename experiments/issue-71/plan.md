@@ -38,7 +38,7 @@ languages. Boundary, crescendo, unknown-voice and replay checks pass.
 
 Heavy first 100 RESD rows: activation 55%, names 11%; golden false alarms
 1/24. Initial ratchets 50%, 6%, <=1/24. Report in docs/reports.
-Pause sounds and partial-mode planner integration: 10/10 passing. Dataset
+Pause sounds and partial-mode planner integration: 11/11 passing. Dataset
 registry/download checks: 17/17 passing. Focused Rust core test passes.
 `npm run check` passes. Rust WASM parity, Node/Bun/Deno and full matrix
 verification are assigned to current-head CI before finalization.
@@ -49,7 +49,7 @@ The complete draft includes its minor changeset. Logs retained in ci-logs.
 
 Review regressions: preserve cached head snapshots, ramp continuity through
 overlapping modes, and short-phrase abstention during ramp fitting. Phrase
-pitch range includes intonation between words. Ten integration checks pass.
+pitch range includes intonation between words. Eleven integration checks pass.
 Merged-CI failures 44066292401: README line limit (log 8047) and Rust
 Clippy fixed-size chunks (log 2678), both corrected; local Clippy passes.
 
@@ -67,3 +67,13 @@ after it. Integration suite 10/10 and focused whisper replay pass.
 Performance CI 44066289770: 74/75 passing, strict engine parity gate fails
 at ultra/studio/reference (Rust/JS 1.044/1.061/1.057). Logs and artifacts
 retained in ci-logs; investigate without relaxing the gate.
+
+Final review: existing sound tokens plus a detected pause sound crashed at
+`words[token.word].start`; a regression fails before the fix and passes
+after preserving the original token and inserting only new detections.
+Integration 11/11 passing. Deno Linux CI 44068609204 failed only its
+per-probe CPU budget (log 4683, engine-features line 55); the probe took
+304 ms wall time but process CPU included other parallel Deno workers.
+Thread CPU accounting retains the 1 s limit; focused Deno 20/20 passing.
+Merged main eeb2869 including language recognition without removing either
+API. Local bounded ultra benchmark: Rust/JS 0.977, three interleaved runs.

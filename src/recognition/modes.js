@@ -151,9 +151,17 @@ function writeIpa(words, spans, sourceIpa) {
   }
   const withSounds = [];
   const sounds = spans.filter((s) => s.sound).sort((a, b) => a.start - b.start);
+  // Existing text-stage sound tokens already represent these detections.
+  // Retain their positions and insert only additional acoustic hypotheses.
+  for (const token of tokens.filter((t) => t.kind === 'sound')) {
+    const index = sounds.findIndex((s) => s.sound === token.name);
+    if (index >= 0) {
+      sounds.splice(index, 1);
+    }
+  }
   let next = 0;
   for (const token of tokens) {
-    if (token.kind !== 'pause') {
+    if (token.kind !== 'pause' && token.kind !== 'sound') {
       while (
         next < sounds.length &&
         sounds[next].start < words[token.word].start
@@ -261,7 +269,7 @@ export function recognizeModes(samples, sampleRate, result, options = {}) {
       ...(result.modes ?? []),
       ...recognizeSounds(samples, sampleRate, []),
     ];
-    return { ...result, modes, ipa: writeIpa([], modes) };
+    return { ...result, modes, ipa: writeIpa([], modes, result.ipa) };
   }
   const language =
     result.language ??

@@ -13,6 +13,21 @@ import { phraseSummary } from '../src/recognition/mode-features.js';
 import { HEAD } from './helpers/recognition-modes.js';
 
 describe('speech-mode integration', () => {
+  it('preserves an existing sound token without duplicating its detection', () => {
+    const audio = synthesize('⸨inhale⸩ a', {
+      ipa: true,
+      head: HEAD,
+      tier: 'minimal',
+      seed: 1,
+      engine: 'js',
+    });
+    const heard = recognizeModes(audio.samples, audio.sampleRate, {
+      words: audio.timeline.words,
+      ipa: '⸨inhale⸩ a',
+    });
+    expect(heard.ipa).toBe('⸨inhale⸩ a');
+    expect(heard.modes.some((s) => s.sound === 'inhale')).toBe(true);
+  });
   it('replays unlabelled emotion spans through the high-level synthesizer', () => {
     const modes = toPlanModes([
       { from: 0, to: 3, emotion: { name: 'angry', intensity: 1 } },
