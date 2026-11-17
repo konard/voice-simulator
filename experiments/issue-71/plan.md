@@ -19,7 +19,7 @@ inline comments and reviews empty; no sub-issues. Blockers 61, 52, 53, 54,
       preserving existing result fields and spans; short-phrase abstention.
 - [x] Public exports/types, README, CLI help, roadmap and minor changeset.
 - [x] Rust numerical core and JavaScript/Rust parity checks.
-- [ ] Fast tests on Node, Bun, Deno: neutral speech, 15 labels, boundaries,
+- [x] Fast tests on Node, Bun, Deno: neutral speech, 15 labels, boundaries,
       ramps, activation, all emotion classes, baseline-free, 8 kHz, replay.
 - [x] RESD registry/license/checksums, heavy first-100 evaluation, 24 golden
       false alarms, measured report and initial measured-minus-5-point gates.
@@ -86,3 +86,22 @@ retains overlapping anonymous activation with `emotion.realized: true`;
 named presets and standalone activation still produce their effects. Node
 focused recognition/integration: 153/153 passing. Heavy recognition run
 44071583815 passes all four files, including RESD and golden gates.
+
+All regular checks at f03f151 pass across Node/Bun/Deno on all three OSes.
+Performance run 44071578193 again passes 74/75; strict parity fails only
+studio/reference (1.01477/1.00558, log line 442) on AMD EPYC 7763.
+The earlier main green run used Intel Xeon 6975P-C. A bounded byte-offset
+cache experiment gave negligible improvement and was reverted; investigate
+scalar loop code generation without weakening the existing gate.
+
+Scalar FDTD investigation: the LLVM-generated link loop performs its branch
+and pointer bookkeeping once per link. Four ordered updates per iteration
+reduce that cost without adding allocations or changing any floating-point
+operation; two and eight updates were also compared with the same bounded
+`TIER=ultra RUNS=3 TEXT=a node --max-old-space-size=384
+experiments/issue-23-render-speed.mjs <before.wasm> <after.wasm>` probe.
+Short studio timings vary between comparisons, so the full CI performance
+suite remains the acceptance evidence. Native bitwise regression (all prefix
+lengths and remainders, shared endpoints and empty grids) passes; WASM solver
+and default/teeth/enclosure render parity pass, with zero sample differences.
+Clippy passes and the scalar WASM is 441308 bytes (458752-byte budget).

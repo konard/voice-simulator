@@ -971,7 +971,7 @@ voice-simulator-cli kernel-steps job.bin 2000 --threads 2
   comment naming the rule "a part writes only its own index range":
 
   ```sh
-  rg -l '\bunsafe\b' crates/voice-simulator-core/src # parallel.rs, solver.rs
+  rg -l '\bunsafe\b' crates/voice-simulator-core/src # parallel.rs, solver.rs, kernel.rs
   ```
 
 - **Threshold.** A solver starts a team only for more than one thread and
@@ -1143,13 +1143,17 @@ worker of the app asks for one thread, so it needs none.
   (`[lints.rust]`) in place of `#![forbid(unsafe_code)]` in `lib.rs`:
   `forbid` cannot be lifted for one module. `fdtd/parallel.rs` allows it
   for the thread team. Issue 82 also allows it only in the private
-  `Fdtd3d::step_grid` method: the scalar wasm scatter loop advances pointers
+  `Fdtd3d::step_grid` method and its private `kernel::step_validated` helper:
+  the scalar wasm scatter loop advances pointers
   through arrays whose lengths and endpoints are validated at construction.
   The grid stays private, exposes only a shared reference and never changes
   endpoints or array lengths. Divergence updates remain sequential even when
-  both endpoints coincide. Native and SIMD steps retain `Grid::step`, and
+  both endpoints coincide. Four links per iteration reduce loop bookkeeping;
+  remainder links keep their original order. A small native unit test compares
+  every bit for empty grids, all skipped prefixes, chunk remainders and shared
+  endpoints. Native and SIMD steps retain `Grid::step`, and
   the public grid kernel remains checked. `tests/rust-crates.test.js` checks
-  both exceptions, the method's scope and a `// SAFETY:` comment per block;
+  these exceptions, the functions' scope and a `// SAFETY:` comment per block;
   `fdtd_reset` tests reject invalid endpoints and mismatched link arrays.
 
 `experiments/issue-24/bench` (its own Cargo project, not in the workspace)

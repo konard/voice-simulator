@@ -107,7 +107,11 @@ describe('Rust workspace', () => {
     const unsafeFiles = files.filter((file) =>
       /\bunsafe\b/.test(read(path.join(dir, file)))
     );
-    expect(unsafeFiles.sort()).toEqual(['fdtd/parallel.rs', 'fdtd/solver.rs']);
+    expect(unsafeFiles.sort()).toEqual([
+      'fdtd/kernel.rs',
+      'fdtd/parallel.rs',
+      'fdtd/solver.rs',
+    ]);
     for (const file of unsafeFiles) {
       const source = read(path.join(dir, file));
       const blocks = source.match(/\bunsafe\s*\{/g) ?? [];
@@ -121,5 +125,18 @@ describe('Rust workspace', () => {
       true
     );
     expect(solver.match(/\bunsafe\s*\{/g)?.length).toBe(1);
+    const kernel = read(path.join(dir, 'fdtd/kernel.rs'));
+    expect(kernel.match(/#\[allow\(unsafe_code\)\]/g)?.length).toBe(2);
+    expect(
+      /#\[allow\(unsafe_code\)\]\s+#\[inline\(never\)\]\s+pub\(super\) unsafe fn step_validated\(/.test(
+        kernel
+      )
+    ).toBe(true);
+    expect(
+      /#\[test\]\s+#\[allow\(unsafe_code\)\]\s+fn validated_batches_preserve_every_bit\(/.test(
+        kernel
+      )
+    ).toBe(true);
+    expect(kernel.match(/\bunsafe\s*\{/g)?.length).toBe(3);
   });
 });
