@@ -195,6 +195,13 @@ describe('Rust inverse filter parity', () => {
     for (const n of [0, 1, 400]) {
       await parity(analyzeFrames(new Float32Array(n), 8000));
     }
+    const frames = analyzeFrames(new Float32Array(800), 8000);
+    await parity(frames, {
+      count: frames.count,
+      hop: frames.hop,
+      startTime: frames.startTime,
+      f0: new Float32Array(frames.count).fill(2000),
+    });
     const e = (await loadRustEngine()).exports;
     expect(e.vs_inverse_filter(0, 0, 0, 0)).toBe(-6);
     expect(e.vs_inverse_filter(1, 14, 0, 0)).toBe(-2);

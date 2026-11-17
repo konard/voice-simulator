@@ -250,6 +250,10 @@ describe('inverse filter integration', () => {
       expect(result.reliable.every((v) => v === 0)).toBe(true);
       expect(result.summary.hnr.median).toBe(null);
     }
+    const high = known(new Float32Array(800), 8000, 2000);
+    const boundary = inverseFilter(high.frames, { pitch: high.pitch });
+    expect(boundary.h1h2Source.every(Number.isNaN)).toBe(true);
+    expect(boundary.reliable.every((v) => v === 0)).toBe(true);
     const v = vowel();
     for (const options of [
       { leak: 1 },

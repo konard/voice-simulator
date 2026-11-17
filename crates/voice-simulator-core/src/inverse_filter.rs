@@ -548,7 +548,7 @@ pub fn inverse_filter(
         measures[1][t] = rd as f32;
         measures[2][t] = fit as f32;
         measures[3][t] = oq as f32;
-        measures[6][t] = (h[0] - h[1]) as f32;
+        measures[6][t] = h.get(1).map_or(f32::NAN, |h2| (h[0] - h2) as f32);
         let speech = harmonics(&block(&raw, centre, length), rate, f0, 2);
         measures[5][t] = (speech[0] - speech[1]) as f32;
         let flow = block(&g, centre, length);
@@ -628,5 +628,17 @@ mod tests {
             frames.rate = rate;
             assert!(inverse_filter(&frames, Options::default()).is_err());
         }
+        frames.rate = 8000.0;
+        let pitch = [2000.0; 20];
+        let r = inverse_filter(
+            &frames,
+            Options {
+                pitch: Some(&pitch),
+                ..Options::default()
+            },
+        )
+        .unwrap();
+        assert!(r.measures[6].iter().all(|v| v.is_nan()));
+        assert!(r.reliable.iter().all(|v| *v == 0));
     }
 }

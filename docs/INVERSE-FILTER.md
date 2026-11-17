@@ -74,6 +74,7 @@ fit. Summaries ignore non-finite or unreliable values, interpolate the 25th,
 50th and 75th percentiles, and return null percentiles with zero frames when
 empty. Flow has relative amplitude, not calibrated physical units. Unvoiced
 samples have zero flow. H1-H2 on speech includes formant effects.
+Source H1-H2 is NaN if fewer than two analysed harmonics are available.
 
 ## Numerical method and limits
 
