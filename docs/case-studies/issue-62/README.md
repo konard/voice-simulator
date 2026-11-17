@@ -6,8 +6,9 @@ Pull request: <https://github.com/konard/voice-simulator/pull/142>.
 ## Status: unfinished
 
 The implementation is an experimental draft. The requested quality gates
-remain failing. Two requirements also conflict with the prescribed algorithm
-or its available input. These are not waived by passing the mechanical tests.
+remain failing. Required timing rules conflict with each other, and the
+prescribed peak candidates cannot reach the recall target on the current
+signals. These are not waived by passing the mechanical tests.
 The pull request must remain a draft and must not be merged as a completed
 implementation of issue 62.
 
@@ -90,6 +91,29 @@ keeps the previous value on ties, so these remain at the specified initial
 10 dB and 2 dB. A separate nucleus objective would be needed to learn them.
 The issue gives no allowed numeric search ranges; the draft declares its
 inclusive ranges in `SEARCH_RANGES` and uses 21 evenly spaced values.
+
+### Irrevocable early confirmation conflicts with later peak replacement
+
+Run:
+
+```sh
+node --max-old-space-size=64 experiments/issue-62/confirmation.mjs
+```
+
+The two already-smoothed sonority inputs are identical through 0.140 s.
+Both have a peak at 0.100 s followed by a 6 dB dip, and both pass the
+noise and periodicity gates. After its 40 ms maximum window, the issue
+requires this peak to be confirmed irreversibly. One continuation stays
+low; the other has a higher peak at 0.160 s, 60 ms after the first peak.
+The latter must replace the first peak under the 80 ms spacing rule.
+
+These requirements cannot both hold for a causal detector: the decision
+at 0.140 s is identical for both inputs, but one later requires retracting
+that decision. The finite experiment asserts the identical prefixes,
+the early confirmation and the subsequent spacing conflict. The draft
+keeps the first peak in both cases to preserve irreversible confirmation.
+Resolving this needs a later confirmation deadline, provisional events,
+or a replacement rule that exempts already confirmed peaks.
 
 ## Requirement inventory
 
@@ -298,6 +322,71 @@ after merging `main` and correcting the nucleus gate. No CI quality assertion
 has been weakened, skipped or converted to an allowed failure. The PR remains
 unfinished; the specification conflicts need resolution before every requested
 acceptance criterion can pass.
+
+## Second CI restart and inverse-filter merge (2026-11-17)
+
+The latest supplied failure,
+[44040092585](https://github.com/konard/voice-simulator/actions/runs/44040092585),
+started at 07:37:04 UTC after commit `9d409e0` at 07:36:54 UTC. All nine
+runtime jobs fail the same three quality assertions. Its preserved log is
+`ci-logs/checks-44040092585.log`: Node/Ubuntu's assertions are at lines
+44124 (nuclei), 44136 (classes) and 44150 (landmarks); measurements are at
+42173–42181. Pipeline Status reports the failed test matrix at line 48363.
+This is fresh evidence, not a failure from a commit preceding the changes.
+
+Merge `93ad6d9` incorporates `main` at `722373a`, preserving both the
+inverse-filter and landmark APIs, their declarations, Rust/WASM modules,
+both parity suites in CI, and the archived pitch citation. The prior
+codebook implementation is retained. No existing feature was removed.
+
+A newly isolated defect left nucleus strength stale when a later peak
+revealed a deeper boundary minimum. The three public-API regressions in
+`tests/recognition-landmark-boundaries.test.js` failed before the fix:
+`31.375` was returned instead of `39.44318199157715`. Both implementations
+now recompute strength whenever a completed boundary changes. Batch,
+trailing-nonspeech and streamed cases pass on Node.js, Bun and Deno;
+a focused Rust unit test and two additional WASM parity cases cover the
+same correction.
+
+Validation after the merge and boundary correction:
+
+| Command                                                                                                                                                             | Result                                                                                                                       |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| `npm run check`                                                                                                                                                     | Pass: lint, formatting, duplication budget and dependency policy                                                             |
+| `node --test --test-timeout=30000 tests/recognition-landmarks.test.js`                                                                                              | 9 pass, the same 3 quality failures; recall 63.3333%, extras 33.3333%, classes 48.2459% / 47.1143%, RTF 0.000696             |
+| `node --test tests/recognition-landmark-boundaries.test.js`                                                                                                         | All 3 regressions pass; Bun and Deno also pass all 3                                                                         |
+| `CARGO_BUILD_JOBS=1 cargo test --locked -p voice-simulator-core landmarks::tests`                                                                                   | All 3 focused unit tests pass                                                                                                |
+| `CARGO_BUILD_JOBS=1 node scripts/build-wasm.mjs --require --check-size`                                                                                             | Scalar 310436 bytes, below the 311296-byte budget; SIMD 317184 bytes builds but is not shipped                               |
+| `REQUIRE_WASM=1 node --test tests/rust-landmarks.test.js tests/rust-inverse-filter.test.js tests/engine-size.test.js tests/recognition-landmark-boundaries.test.js` | All 13 tests pass, no skips; original 12 landmark parity cases plus both new boundary cases; inverse-filter parity preserved |
+
+The merged scalar WASM exceeded `main`'s 294912-byte budget by 15524 bytes.
+The new budget is the next 16 KiB boundary, 311296 bytes (304 KiB), for the
+measured combined implementation. The byte count is checked during builds
+and in the engine-size regression. The scalar SHA-256 is
+`c85d4f5d355540f8c518cb46e22c68b39c969ced18f2ea0288aa1e2d919cb78a`.
+No accuracy assertion was changed. Full runtime suites and workspace checks
+remain assigned to CI rather than duplicating those builds locally.
+
+The candidate-superset experiment still recovers only 98/120 centres after
+the merge. The closure experiment still requires two different final labels
+for identical input prefixes at the commitment deadline. The new finite
+confirmation experiment above isolates a second incompatible timing pair;
+it does not turn an unmet requirement into a passing test.
+
+Latest default-branch run
+[44041583200](https://github.com/konard/voice-simulator/actions/runs/44041583200)
+on `722373a` passes the runtime tests and fails only Release Preflight and
+its aggregate Pipeline Status. Its log, preserved as
+`ci-logs/main-checks-44041583200.log`, explains the npm bootstrap at lines
+147–160. The existing workflow already passes this credential-dependent
+preflight on pull requests and fails explicitly on `main`.
+
+A maintainer must add repository Actions secret `NPM_TOKEN` containing a
+granular token allowed to publish `voice-simulator`, then rerun the release.
+After first publication, configure the npm trusted publisher for repository
+`konard/voice-simulator`, workflow `release.yml`, then delete that bootstrap
+secret. This external account action is separate from the three quality
+failures on this PR.
 
 ## Remaining work
 

@@ -33,11 +33,17 @@ stage after trimming or resetting the analyzer. The command
 `voice-simulator landmarks recording.wav` writes the same result as JSON;
 `-o landmarks.json` saves it to a file.
 
+When a following peak reveals a deeper boundary minimum, both `end` and
+`strength` are updated. Strength remains the peak sonority minus the lower
+sonority at the two reported boundaries.
+
 These APIs are experimental. The prescribed voiced local maxima cover only
 98 of 120 synthetic reference centres (81.67%, before any detection filters),
 below issue 62's 90% requirement. Also, deciding whether a silence run is
 shorter than 150 ms requires more future sound than the requested 60 ms
-commitment deadline. Batch clean-up relabels such bounded runs as closure;
+commitment deadline. Irrevocable early nucleus confirmation also conflicts
+with replacing a lower peak when a higher one follows within 80 ms.
+Batch clean-up relabels such bounded runs as closure;
 a stream preserves committed labels. Reproductions and remaining acceptance
 criteria are in [the issue 62 investigation](case-studies/issue-62/README.md).
 Run `node scripts/calibrate-landmarks.mjs` to regenerate thresholds and
