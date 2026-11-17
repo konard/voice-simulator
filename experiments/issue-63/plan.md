@@ -1,6 +1,28 @@
 # Issue 63: voice configuration fit
 
 Objective: implement and verify the complete scope of issue 63 in PR 146.
+
+## Second CI repair investigation
+
+- [x] Read the full issue and every PR comment type again; fetch main.
+- [x] Verify run 44094741268 belongs to current dc376f5; preserve its logs.
+- [x] Read fresh Node failures at full-log lines 15388–15458; distinguish
+      five accuracy assertions from slower-runner timeouts.
+- [x] Test source stationarity, landmark boundary behavior and timing
+      independently, without loosening the objective, SD formula or gates.
+- [ ] Implement demonstrated corrections with failing regression tests.
+- [ ] Re-run focused acceptance tests, then all current-head CI and heavy gates.
+- [ ] Review the final PR diff, update evidence and description, commit every
+      requested change and mark ready only after every requirement passes.
+
+The stationary-source prototype again fixes B's pitch but fails its rate
+and all three legacy preset cases; it was discarded. The new eight-evaluation
+`rate-source-coupling.mjs` probe shows that even true breathiness alone still
+leaves the objective favoring B's incorrect faster rate. Pitch smoothing at
+five finite radii leaves A's prescribed SD unchanged. Detailed measurements
+and remaining criteria are in `docs/reports/issue-63-validation.md`; these
+negative probes are evidence, not completed acceptance criteria.
+
 Prerequisites 59, 60, 61, 17 and 32 are closed. Issues 33 and 41 are
 merged; include optional fold-source refinement and saveVoice compatibility.
 Issue 62 merged during this follow-up, in main a5b3c51. Its detector is now

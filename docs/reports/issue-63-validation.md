@@ -439,3 +439,64 @@ individual completed-job logs are preserved under ignored `ci-logs/`.
 The Pipeline Status job correctly fails because `test` failed
 (`merged-pipeline-134073738337.log`: 266–268). This evidence predates the
 peak-only optimization and is not its current-head verification.
+
+## Second restart: source and rate compensation
+
+The complete issue, all seven current PR conversation comments, inline
+comments and reviews were read again. There are still no issue comments,
+inline PR comments or reviews. Fresh run
+[44094741268](https://github.com/konard/voice-simulator/actions/runs/44094741268)
+belongs to `dc376f55abf391f2f96878dcf7b5aa7fef0e8d29`, created November 17,
+2026 at 13:38:24 UTC. Its full log is preserved as
+`ci-logs/ci-44094741268.log`. Node/Ubuntu lines 15388–15458 show the same
+five accuracy failures after the previous optimization. These are genuine
+assertion failures, independent of the additional slower-runner timeouts.
+There is no missing credential or access grant that can explain them.
+
+```sh
+node --max-old-space-size=384 experiments/issue-63/reliability-boundaries.mjs
+node --max-old-space-size=384 experiments/issue-63/rate-source-coupling.mjs
+```
+
+The first bounded probe renders nine recordings: five default-head source
+calibrations, the two required heads and two legacy presets. It measures
+source stationarity, pitch smoothing and landmark dip thresholds separately.
+Median pitch filtering over radii 0, 2, 5, 10 and 20 frames leaves A's
+histogram SD at 5.948061 Hz in every case. Raising the landmark dip from
+2 to 3 dB decreases A's nucleus count from five to four and B's from seven
+to six; this does not establish a consistent rate counter. Neither the
+observations nor the uncertainty formula was changed in production.
+Fresh executions of `experiments/issue-63/pitch-truth.mjs` on Node, Bun
+and Deno produce identical JSON: tracked SD 5.948061 Hz, known f0 at the
+tracked voiced frames 5.077536 Hz, and known f0 at planned voiced frames
+5.218326 Hz. Removing histogram quantisation also leaves each above 5 Hz.
+
+A temporary stationary-source initializer was also tested against all six
+affected recovery cases. It used a separately measured five-point HNR
+calibration and retained source frames with a relative pitch slope below
+0.005 across adjacent frames. B's pitch improved to 100 Hz, but its rate
+became 1.097456 instead of 0.9. All three legacy preset cases still failed;
+only the two breathiness cases passed. The focused log
+`ci-logs/stable-source-focused.log` records four failures and two passes.
+This prototype was discarded; these source changes are not part of the PR.
+
+The second probe isolates why a source-only change is insufficient. It
+holds B's other Stage A estimates fixed and compares the initial rate
+0.967456 with the permitted simplex vertex at 1.097456. These are eight
+explicit evaluations, not a fit or an altered objective. Distances omit
+the prior, as required for the public result:
+
+| Supplied breathiness | Initial-rate distance | Faster-rate distance |
+| --- | --- | --- |
+| 0.20 (the known true value) | 4.987658 | 4.906348 |
+| 0.25 | 3.991928 | 3.990987 |
+| 0.30 | 3.636871 | 3.648031 |
+| 0.35 | 4.108116 | 4.081722 |
+
+Even supplying the true breathiness does not correct the other source
+estimates: the distance improvement of 0.081311 at the faster vertex
+exceeds its 0.008 prior penalty. The objective still prefers a rate
+outside the requested tolerance. Tuning the HNR table to force a particular
+vertex would not demonstrate a general correction. The source, rate,
+uncertainty, landmark, legacy, heavy and runtime criteria remain unfinished.
+No thresholds, tests, objective weights or timeouts were relaxed or skipped.
