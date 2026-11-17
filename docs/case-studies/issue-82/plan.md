@@ -81,3 +81,14 @@ workflow, build budget and size assertion (`ci-logs/checks-44041210533.log:10611
 `:10615`, `:10623`). Merged main 722373a, retained both sets of Rust parity
 tests and measured the combined wasm: scalar 329,242 bytes, SIMD 338,207.
 The size budget follows the existing rounding rule at 344,064 bytes (336 KiB).
+
+The second complete performance run,
+[44040834671](https://github.com/konard/voice-simulator/actions/runs/44040834671),
+passed the existing performance files and 27 new rows. Coarse 3D still narrowly
+failed at 1.0155 Rust/JS (`ci-logs/heavy-44040834671.log:437`). Packing the model
+directly into its temporary wasm input allocation removes the remaining large
+host copy, without excluding initialization from the benchmark. Byte-layout
+tests cover reused aligned and unaligned buffers, including zero padding and
+untouched surrounding bytes. All 33 wasm feature/API parity checks and eight
+layout checks pass; the focused Node 24 benchmark passes at 0.9068 for coarse
+3D. The full performance suite must still pass before publishing its report.

@@ -48,7 +48,12 @@ import {
   frameStride,
   writeFrame,
 } from './layout.js';
-import { fdtdListening, modelHeader, packVoxelModel } from './pack-model.js';
+import {
+  fdtdListening,
+  modelHeader,
+  packVoxelModel,
+  writeVoxelModel,
+} from './pack-model.js';
 import { listenerValues } from './listener-layout.js';
 import { float32View, float64View } from './wasm-loader.js';
 
@@ -233,26 +238,38 @@ export function rendererConfig(settings) {
  * A renderer of the engine for `config` and the packed voxel model
  * `model` (bytes; empty for the waveguide); returns its handle.
  */
-function createRenderer(module, config, model = new Uint8Array(0)) {
+function createRenderer(
+  module,
+  config,
+  model = new Uint8Array(0),
+  borrowed = null
+) {
   const scratch = new Scratch(module, 8);
-  const modelScratch = new Scratch(module, 1);
+  const modelScratch = borrowed ?? new Scratch(module, 1);
+  const modelLength = model.length;
   try {
     const pointer = scratch.reserve(config.length);
-    const modelPointer = modelScratch.reserve(model.length);
-    new Uint8Array(module.memory.buffer, modelPointer, model.length).set(model);
+    const modelPointer = modelScratch.reserve(modelLength);
+    if (!borrowed) {
+      new Uint8Array(module.memory.buffer, modelPointer, modelLength).set(
+        model
+      );
+    }
     float64View(module, pointer, config.length).set(config);
     return check(
       module.exports.vs_renderer_new(
         pointer,
         config.length,
         modelPointer,
-        model.length
+        modelLength
       ),
       'vs_renderer_new'
     );
   } finally {
     scratch.free();
-    modelScratch.free();
+    if (!borrowed) {
+      modelScratch.free();
+    }
   }
 }
 
@@ -303,6 +320,20 @@ function vowelCorrections(solver) {
   return undefined;
 }
 
+function packedGeometry(head, options, solver, packModel) {
+  if (solver === 'fdtd3d') {
+    const model = rendererModel(head, options);
+    return {
+      model: packModel(model),
+      listening: fdtdListening(model, options),
+    };
+  }
+  return {
+    model: solver === 'fdtd2d' ? packSheet(head, options) : new Uint8Array(0),
+    listening: null,
+  };
+}
+
 /**
  * The JavaScript half of the Rust renderer: the configuration and the
  * frames, one per control block, computed as VoiceRenderer computes its
@@ -313,7 +344,11 @@ export class FramePlanner {
    * @param {object} plan Result of planUtterance.
    * @param {object} [options] as for RustVoiceRenderer
    */
-  constructor(plan, options = {}) {
+  constructor(
+    plan,
+    options = {},
+    packModel = (model) => new Uint8Array(packVoxelModel(model))
+  ) {
     checkSupported(options);
     this.plan = plan;
     this.head = normalizeHeadConfig(options.head ?? plan.head);
@@ -326,16 +361,9 @@ export class FramePlanner {
     this.stride = frameStride(this.sections);
     this.solver = options.solver ?? 'waveguide';
     /** Packed geometry of the 2D/3D solver; empty for the waveguide. */
-    this.model = new Uint8Array(0);
-    let listening = null;
-    if (this.solver === 'fdtd3d') {
-      const model = rendererModel(this.head, options);
-      listening = fdtdListening(model, options);
-      this.model = new Uint8Array(packVoxelModel(model));
-    }
-    if (this.solver === 'fdtd2d') {
-      this.model = packSheet(this.head, options);
-    }
+    const geometry = packedGeometry(this.head, options, this.solver, packModel);
+    this.model = geometry.model;
+    const { listening } = geometry;
     const listener = createListener({
       microphone: options.microphone,
       room: options.room,
@@ -425,6 +453,38 @@ export class FramePlanner {
   }
 }
 
+/** Pack large geometry into its temporary wasm input allocation without a host copy. */
+function prepareRenderer(module, plan, options) {
+  const input = new Scratch(module, 1);
+  try {
+    const planner = new FramePlanner(plan, options, (model) =>
+      writeVoxelModel(model, (bytes) => {
+        const pointer = input.reserve(bytes);
+        return new Uint8Array(module.memory.buffer, pointer, bytes);
+      })
+    );
+    const { model, config, solver } = planner;
+    const cells = solver === 'fdtd3d' ? modelCells(model) : 0;
+    const sheet =
+      solver === 'fdtd2d'
+        ? new Float64Array(model.buffer, model.byteOffset, 5).slice()
+        : null;
+    const handle = createRenderer(
+      module,
+      config,
+      model,
+      input.bytes ? input : null
+    );
+    if (input.bytes) {
+      // The Rust model owns its data now; do not retain a view of freed memory.
+      planner.model = new Uint8Array(0);
+    }
+    return { planner, handle, cells, sheet };
+  } finally {
+    input.free();
+  }
+}
+
 /**
  * VoiceRenderer with the waveguide, 2D or 3D solver, on the Rust
  * engine. Free its engine memory with free() when done.
@@ -444,11 +504,11 @@ export class RustVoiceRenderer {
    *   measurements).
    */
   constructor(module, plan, options = {}) {
-    this.planner = new FramePlanner(plan, options);
+    const prepared = prepareRenderer(module, plan, options);
+    this.planner = prepared.planner;
     this.module = module;
     this.plan = plan;
-    const { sampleRate, sections, totalSamples, head, config, model } =
-      this.planner;
+    const { sampleRate, sections, totalSamples, head } = this.planner;
     this.head = head;
     this.sampleRate = sampleRate;
     this.sections = sections;
@@ -456,15 +516,15 @@ export class RustVoiceRenderer {
     this.source = options.source ?? DEFAULT_SOURCE;
     this.totalSamples = totalSamples;
     /** Cells of the voxel model (the 3D solver), for field(). */
-    this.cells = this.solver === 'fdtd3d' ? modelCells(model) : 0;
+    this.cells = prepared.cells;
     if (this.solver === 'fdtd2d') {
-      const header = new Float64Array(model.buffer, model.byteOffset, 5);
+      const header = prepared.sheet;
       this.sheetRows = header[1];
       this.sheetColumns = header[2];
       this.sheetNose = header[3];
     }
     this.listener = this.planner.listener;
-    this.handle = createRenderer(module, config, model);
+    this.handle = prepared.handle;
     this.frames = new Scratch(module, 8);
     this.out = new Scratch(module, 4);
     this.fieldValues = new Scratch(module, 8);

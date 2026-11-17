@@ -213,13 +213,18 @@ export function modelArrays(model, join = flatten) {
  * @returns {ArrayBuffer}
  */
 export function packVoxelModel(model) {
+  return writeVoxelModel(model, (bytes) => new Uint8Array(bytes)).buffer;
+}
+
+/** Write the same wire format directly into an allocated byte view. */
+export function writeVoxelModel(model, allocate) {
   const { header, arrays } = modelArrays(model, chunks);
   let bytes = align(4 * MODEL_HEADER.WORDS);
   for (const [type, values] of arrays) {
     bytes = align(bytes + (type === 'f64' ? 8 : 4) * values.length);
   }
-  const buffer = new ArrayBuffer(bytes);
-  const view = new DataView(buffer);
+  const target = allocate(bytes);
+  const view = new DataView(target.buffer, target.byteOffset, bytes);
   const H = MODEL_HEADER;
   const words = [
     [H.MAGIC, MODEL_MAGIC],
@@ -244,9 +249,11 @@ export function packVoxelModel(model) {
   for (const [type, values] of arrays) {
     const size = type === 'f64' ? 8 : 4;
     for (const part of values.parts ?? [values]) {
-      if (LITTLE_ENDIAN) {
+      if (LITTLE_ENDIAN && (target.byteOffset + offset) % size === 0) {
         const Type = type === 'f64' ? Float64Array : Int32Array;
-        new Type(buffer, offset, part.length).set(part);
+        new Type(target.buffer, target.byteOffset + offset, part.length).set(
+          part
+        );
       } else {
         for (let index = 0; index < part.length; index++) {
           if (type === 'f64') {
@@ -258,9 +265,12 @@ export function packVoxelModel(model) {
       }
       offset += size * part.length;
     }
+    if (offset % 8 !== 0) {
+      view.setUint32(offset, 0, true);
+    }
     offset = align(offset);
   }
-  return buffer;
+  return target;
 }
 
 /**
