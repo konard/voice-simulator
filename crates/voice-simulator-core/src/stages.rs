@@ -27,6 +27,9 @@ pub struct NoiseSources {
     pub aspiration: Biquad,
     /// Band-pass of the frication noise at the Strouhal frequency.
     pub frication: Biquad,
+    /// Low-pass of the whisper noise.
+    pub whisper: Biquad,
+    whisper_frequency: f64,
     /// Step rate the filters are designed for.
     pub rate: f64,
     /// Centre of the frication band-pass (Hz).
@@ -41,6 +44,8 @@ impl NoiseSources {
             white: Noise::new(seed),
             aspiration: Biquad::new(),
             frication: Biquad::new(),
+            whisper: Biquad::new(),
+            whisper_frequency: 0.0,
             rate: 0.0,
             frequency: 0.0,
         }
@@ -55,6 +60,16 @@ impl NoiseSources {
         self.rate = rate;
         self.aspiration.bandpass(800.0, 0.5, rate);
         self.frequency = 0.0;
+        self.whisper_frequency = 0.0;
+    }
+
+    /// Tune the whisper low-pass to the glottal jet.
+    pub fn tune_whisper(&mut self, frequency: f64) {
+        if math::abs(frequency - self.whisper_frequency) <= 1e-3 * frequency {
+            return;
+        }
+        self.whisper_frequency = frequency;
+        self.whisper.lowpass(frequency, 0.4, self.rate);
     }
 
     /// Centre the frication band-pass on the jet's Strouhal frequency.

@@ -27,6 +27,8 @@ the first table below when you create a new folder;
 | [#9](https://github.com/konard/voice-simulator/issues/9)   | We need to improve quality                             | [issue-9/README.md](issue-9/README.md)   |
 | [#11](https://github.com/konard/voice-simulator/issues/11) | We need to make quality of the system state of the art | [issue-11/README.md](issue-11/README.md) |
 
+| [#82](https://github.com/konard/voice-simulator/issues/82) | Complete Rust engine parity | [issue-82/plan.md](issue-82/plan.md) |
+
 ## Case studies inherited from the template
 
 | Template issue | First heading                                                                                   | Main document                                                                                  |

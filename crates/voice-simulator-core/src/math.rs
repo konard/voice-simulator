@@ -175,6 +175,12 @@ pub fn js_hypot(values: &[f64]) -> f64 {
     sqrt(sum) * largest
 }
 
+/// Inverse sine for the integral of an elliptical sheet cell.
+#[inline]
+pub fn asin(x: f64) -> f64 {
+    libm::asin(x)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

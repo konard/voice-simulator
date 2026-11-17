@@ -17,6 +17,7 @@ const USAGE: &str = "\
 Usage: voice-simulator-cli <command> [arguments]
 
 Commands:
+  features                Print compiled engine feature ids as JSON
   version                 Print the version
   random <seed> <count>   Print <count> values of createRandom(<seed>) of
                           src/random.js, one per line, as the 16 hexadecimal
@@ -29,7 +30,7 @@ Commands:
                           (little-endian f64 values: config length, config,
                           model length in bytes, packed voxel model, frame
                           count, frames, sample count) with the renderer of
-                          the job (the waveguide, or the 3D FDTD solver
+                          the job (waveguide, 2D sheet or 3D FDTD solver
                           with its model), natively, in one call. Prints
                           the SHA-256 of the samples (their f32
                           little-endian bytes), the number of samples, the
@@ -90,6 +91,18 @@ impl From<io::Error> for Failure {
 
 fn run(args: &[&str], out: &mut impl Write) -> Result<(), Failure> {
     match args {
+        ["features"] => {
+            let ids = voice_simulator_core::features::features();
+            writeln!(
+                out,
+                "[{}]",
+                ids.iter()
+                    .map(|id| format!("\"{id}\""))
+                    .collect::<Vec<_>>()
+                    .join(",")
+            )?;
+            Ok(())
+        }
         ["version"] | ["--version"] | ["-V"] => {
             writeln!(out, "voice-simulator-cli {}", env!("CARGO_PKG_VERSION"))?;
             Ok(())

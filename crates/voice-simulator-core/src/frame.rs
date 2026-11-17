@@ -54,12 +54,20 @@ pub const CREAK: usize = 19;
 pub const FALSETTO: usize = 20;
 /// Harsh voice (0..1): `shape.glottis.harsh`.
 pub const HARSH: usize = 21;
+/// Whisper share.
+pub const WHISPER: usize = 22;
+/// Fold adduction.
+pub const ADDUCTION: usize = 23;
+/// Fold tension factor.
+pub const FOLD_TENSION: usize = 24;
+/// Lateral tongue channel.
+pub const LATERAL: usize = 25;
 /// Number of extra values after the areas, always [`EXTRA_VALUES`].
-pub const EXTRA: usize = 22;
+pub const EXTRA: usize = 26;
 /// First section area.
-pub const AREAS: usize = 23;
+pub const AREAS: usize = 27;
 /// Fixed fields before the areas.
-pub const STRIDE: usize = 23;
+pub const STRIDE: usize = 27;
 /// Values after the areas: the incisor gap (cm).
 pub const EXTRA_VALUES: usize = 1;
 
