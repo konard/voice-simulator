@@ -3,13 +3,15 @@
 Objective: implement and verify the complete scope of issue 63 in PR 146.
 Prerequisites 59, 60, 61, 17 and 32 are closed. Issues 33 and 41 are
 merged; include optional fold-source refinement and saveVoice compatibility.
-Issue 62 is open and landmarks.js is absent: use envelope syllable nuclei.
+Issue 62 merged during this follow-up, in main a5b3c51. Its detector is now
+present; integrating its nuclei without breaking rate and continuation is
+an additional unmet requirement (see the merge follow-up below).
 The issue has no comments. The PR has three automation conversation comments
 and no inline comments or reviews at the latest November 17 review.
 
 ## Requirements and verification
 
-- [x] Stage A: shared frame/pitch/formant/source analysis; fixed JSON
+- [ ] Stage A: shared frame/pitch/formant/source/landmark analysis; fixed JSON
       histograms, counts, mel and perturbation sums; 20-frame rejection.
 - [x] Part selection, default parameters, bounded estimates and MAD SDs;
       committed reproducible calibration of pitch range, breathiness and rate.
@@ -138,7 +140,7 @@ No required criteria are complete until backed by measured evidence below.
 ## CI repair follow-up
 
 - [x] Re-read issue 63 and all PR conversation, inline and review comments.
-- [x] Fetch the default branch and verify it is already an ancestor of HEAD.
+- [x] Fetch and merge the latest default branch, including new landmarks.
 - [x] Preserve fresh complete logs for run 44077893432 at head 75cd6c7.
 - [x] Identify the five accuracy failures and suite-budget overruns.
 - [x] Profile one bounded fit and eliminate redundant analysis work.
@@ -175,3 +177,21 @@ No required criteria are complete until backed by measured evidence below.
   300 s; Bun/macOS and Bun/Windows reach 500 s. Deno/macOS never acquired a
   runner and was cancelled. Infrastructure, app, security, workflow and
   link checks pass. These results do not complete the issue.
+
+## Newly merged landmark requirement
+
+- [x] Fetch and merge main a5b3c51 in merge commit 38df1c0.
+- [x] Preserve both Rust parity selections; measure combined scalar/SIMD
+      engines at 496779/502680 bytes, and set the next 16 KiB budget (507904).
+- [x] Run combined WASM parity/size tests: seven pass. `npm run check` passes.
+- [x] Probe direct landmark integration with a regression: the count test
+      fails before and passes afterward, but rate and continuation regress.
+- [ ] Integrate landmarks while retaining rate accuracy and split agreement.
+      The direct prototype is reverted: A gives 0.724734 versus true 1.15;
+      its whole count is five and its two half-counts sum to seven.
+- [x] Probe actual tracker window/voicing settings: all fifteen SDs exceed 5 Hz.
+- [x] Inspect duplicate evaluation opportunity: all 39 actual heads in a
+      forty-evaluation B fit are distinct after best-vertex reuse.
+
+These additional measurements are recorded in the validation report. No
+acceptance gate has been relaxed, and the PR remains unfinished.

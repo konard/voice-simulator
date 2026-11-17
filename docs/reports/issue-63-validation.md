@@ -10,12 +10,16 @@ The complete issue and all PR comment types were read. The issue has no
 comments; the PR has three automation conversation comments and no inline
 comments or reviews as of November 17, 2026. Required prerequisites
 59, 60, 61, 17 and 32 are closed.
-Optional fold source 33 and voice files 41 are merged. Landmark issue 62 is
-open and its module is absent, so the specified envelope fallback is used.
+Optional fold source 33 and voice files 41 are merged. Landmark issue 62
+merged during the CI repair follow-up. Its module is now present on this
+branch, but the fitter still uses the envelope counter: the attempted
+landmark integration introduces rate and continuation failures, as measured
+below. This requirement is now explicitly unfinished.
 
 | Requirement | Implementation and verification | Status |
 | --- | --- | --- |
 | Shared frame, pitch, formant and inverse-filter analysis | `voice-fit-statistics.js`; fixed-bin numerical tests | Implemented |
+| Landmark nuclei after issue 62 merges | New module merged; `landmark-rate.mjs` compares counts and split behavior | Unfinished; direct integration breaks rate and continuation |
 | Fixed JSON state, 20 voiced-frame minimum, defaults and parts | `copyState`, `statisticsResult`; silence, malformed-state and selection tests | Implemented |
 | Median estimates, calibrated source/range/rate, MAD SDs | Committed calibration and `calibrate.mjs`; numerical tests | Implemented; recovery/uncertainty gates fail |
 | Scaled acoustic objective, aligned transcript MCD and prior | `voice-fit-objective.js`; cached MCD compared with public metric after identical alignment | Implemented |
@@ -323,3 +327,59 @@ out the 0.8-breathiness test after 32,829 ms against its 30,000 ms limit.
 These errors remain unresolved; no secret, access grant or other manual
 credential action explains them. The measured local performance passes
 and narrower CI passes are not substitutes for the unmet accuracy gates.
+
+## Default-branch landmark merge follow-up
+
+Main advanced to `a5b3c51` (landmark PR 142) during this investigation.
+Merge commit `38df1c0` retains both numerical implementations and runs both
+WASM parity suites in CI. The combined scalar engine is 496779 bytes
+(SHA-256 `42ff9dc1c2c04e5e9647476aea329fb4ba59886bf381eea3cb99e415e107026f`);
+SIMD is 502680 bytes. Rust 1.100.0 builds with one Cargo job complete in
+21.82 s and 21.17 s. The shared size budget and its assertion now use the
+next 16 KiB boundary, 507904 bytes. See the exact build commands in
+`docs/RUST-ENGINE.md`.
+
+```sh
+REQUIRE_WASM=1 node --test tests/voice-fit-rust-parity.test.js tests/rust-landmarks.test.js tests/engine-size.test.js
+node experiments/issue-63/landmark-rate.mjs
+node experiments/issue-63/pitch-settings.mjs
+node experiments/issue-63/evaluation-cache.mjs
+```
+
+The seven combined parity/size tests pass. `npm run check` also passes on
+the merged implementation (699 packages, 1,593 files). The bounded probes
+use Node with `--max-old-space-size=384` and retain no additional audio.
+
+The landmark probe measures these counts and existing speech-window durations:
+
+| Input | Whole nuclei | First-half nuclei | Second-half nuclei | Whole speech seconds |
+| --- | --- | --- | --- | --- |
+| Default head, MATCH_TEXT | 16 | 8 | 8 | 3.27 |
+| Head A, short acceptance sentence | 5 | 3 | 4 | 1.41 |
+| Head B, short acceptance sentence | 7 | 4 | 3 | 1.69 |
+
+A temporary regression comparing fitter nuclei with `findLandmarks` fails
+before integration: B has five legacy nuclei versus seven landmarks.
+Substituting landmark counts and recalibrating the default rate to
+`16 / 3.27` makes that regression pass, but head A's ten-render rate becomes
+0.724734 instead of its true 1.15. The two-half continuation test also fails:
+A's pooled count is seven, while its whole-recording count is five.
+Saved logs `landmark-rate-before.log` and `landmark-integration-node.log`
+record these outcomes. That prototype was reverted; no new passing
+landmark-based rate or continuation result is claimed. Both the previous
+legacy regressions and this newly applicable requirement remain unfinished.
+The calibration experiment now reports landmark measurements alongside the
+unchanged production envelope calibration.
+
+The pitch-settings probe varies the actual tracker's minimum pitch across
+40, 50, 60, 75 and 90 Hz, and its Viterbi voicing threshold across 0.45,
+0.6 and 0.75. All fifteen cases retain median 208.854756 Hz; the prescribed
+histogram SD ranges from 5.936785 to 6.040643 Hz. None meets the <5 Hz gate.
+This is separate from filtering the already computed soft voicing scores.
+No tracker defaults or observations were changed in production.
+
+The cache probe executes a full 40-evaluation head B fit after the earlier
+best-vertex reuse. All 39 actual renders are distinct, with no further
+exact repeated heads. Extending the cache would not save work in this case.
+These negative probes do not fix the remaining accuracy or CI timeout
+failures, and are retained so they need not be repeated without new evidence.
