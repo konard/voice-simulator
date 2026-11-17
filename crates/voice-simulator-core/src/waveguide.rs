@@ -868,6 +868,12 @@ impl Waveguide {
 }
 
 impl Solver for Waveguide {
+    fn glottal_load(&self) -> (f64, f64) {
+        (self.left[0], self.areas[0])
+    }
+    fn set_glottal_reflection(&mut self, reflection: f64) {
+        self.glottal_reflection = reflection;
+    }
     fn set_shape(&mut self, frame: &[f64]) {
         self.set_areas(
             frame::areas(frame),

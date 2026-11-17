@@ -3,6 +3,10 @@
 
 /// What the renderer needs from a solver.
 pub trait Solver {
+    /// Incident wave (source units) and effective glottal tube area (cm²).
+    fn glottal_load(&self) -> (f64, f64);
+    /// Reflection of the glottal termination; one for an interactive source.
+    fn set_glottal_reflection(&mut self, reflection: f64);
     /// Set the tract of one control block from a frame (see
     /// [`crate::frame`]).
     fn set_shape(&mut self, frame: &[f64]);

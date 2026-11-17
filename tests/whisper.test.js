@@ -39,7 +39,7 @@ import {
   whisperTransient,
 } from '../src/acoustics/whisper.js';
 import { WHISPER_DURATION, planWhispers } from '../src/articulation/whisper.js';
-import { RustVoiceRenderer } from '../src/engine/rust-renderer.js';
+import { FramePlanner } from '../src/engine/rust-renderer.js';
 import { itUnless } from './helpers/skip.js';
 
 const TEXT = 'Please call Stella.';
@@ -304,17 +304,12 @@ describe('whisper in the plan', () => {
     expect(plainLoud[0] - normal[0]).toBeGreaterThan(30);
   });
 
-  it('is rendered in JavaScript, not by the Rust engine', () => {
-    const { plan } = prepareUtterance('[whisper]ma[/whisper]', {
+  it('can prepare Rust frames for a whisper', () => {
+    const { plan, renderOptions } = prepareUtterance('[whisper]ma[/whisper]', {
       markup: true,
     });
-    let error;
-    try {
-      new RustVoiceRenderer(null, plan, {});
-    } catch (caught) {
-      error = caught;
-    }
-    expect(error?.code).toBe('ENGINE_UNSUPPORTED');
+    const planner = new FramePlanner(plan, renderOptions);
+    expect(planner.prepare(2048) > 0).toBe(true);
   });
 });
 

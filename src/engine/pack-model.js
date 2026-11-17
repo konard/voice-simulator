@@ -87,8 +87,27 @@ function align(offset) {
   return Math.ceil(offset / 8) * 8;
 }
 
+const LITTLE_ENDIAN = new Uint8Array(new Uint16Array([1]).buffer)[0] === 1;
+
+/** Keep large opening tables as views until their final copy to the wire. */
+function chunks(parts) {
+  return { parts, length: parts.reduce((sum, part) => sum + part.length, 0) };
+}
+
+/** Materialize the array form used by model inspection and layout tests. */
+function flatten(parts) {
+  const { length } = chunks(parts);
+  const values = new Float64Array(length);
+  let offset = 0;
+  for (const part of parts) {
+    values.set(part, offset);
+    offset += part.length;
+  }
+  return values;
+}
+
 /** The arrays of a model in layout order, as [type, values] pairs. */
-export function modelArrays(model) {
+export function modelArrays(model, join = flatten) {
   const { cells, links, opening, teeth } = model;
   const count = cells.length;
   const sinuses = model.sinuses ?? [];
@@ -121,36 +140,37 @@ export function modelArrays(model) {
       starts.push(starts.at(-1) + bin.weights.length);
     }
     const points = starts.at(-1);
-    const flat = (name) => bins.flatMap((bin) => Array.from(bin[name]));
     const rows = new Int32Array(count).fill(-1);
     const weights = [];
     const tails = [];
+    let row = 0;
     cells.forEach((cell, index) => {
       if (cell.kind === 0) {
-        rows[index] = weights.length / per;
+        rows[index] = row;
         const start = index * per;
-        weights.push(...opening.cellWeights.subarray(start, start + per));
+        weights.push(opening.cellWeights.subarray(start, start + per));
         const tail = index * (per + 1);
-        tails.push(...opening.cellTails.subarray(tail, tail + per + 1));
+        tails.push(opening.cellTails.subarray(tail, tail + per + 1));
+        row++;
       }
     });
     Object.assign(header, {
       per,
       bins: bins.length,
       points,
-      rows: weights.length / per,
+      rows: row,
     });
     arrays.push(
       ['f64', [opening.binLength, opening.sample]],
       ['f64', [opening.origin ?? 0]],
       ['i32', starts],
-      ['f64', flat('weights')],
-      ['f64', flat('shares')],
-      ['f64', flat('heads')],
-      ['f64', flat('tails')],
+      ['f64', join(bins.map((bin) => bin.weights))],
+      ['f64', join(bins.map((bin) => bin.shares))],
+      ['f64', join(bins.map((bin) => bin.heads))],
+      ['f64', join(bins.map((bin) => bin.tails))],
       ['i32', rows],
-      ['f64', weights],
-      ['f64', tails]
+      ['f64', join(weights)],
+      ['f64', join(tails)]
     );
   }
   arrays.push(
@@ -193,13 +213,18 @@ export function modelArrays(model) {
  * @returns {ArrayBuffer}
  */
 export function packVoxelModel(model) {
-  const { header, arrays } = modelArrays(model);
+  return writeVoxelModel(model, (bytes) => new Uint8Array(bytes)).buffer;
+}
+
+/** Write the same wire format directly into an allocated byte view. */
+export function writeVoxelModel(model, allocate) {
+  const { header, arrays } = modelArrays(model, chunks);
   let bytes = align(4 * MODEL_HEADER.WORDS);
   for (const [type, values] of arrays) {
     bytes = align(bytes + (type === 'f64' ? 8 : 4) * values.length);
   }
-  const buffer = new ArrayBuffer(bytes);
-  const view = new DataView(buffer);
+  const target = allocate(bytes);
+  const view = new DataView(target.buffer, target.byteOffset, bytes);
   const H = MODEL_HEADER;
   const words = [
     [H.MAGIC, MODEL_MAGIC],
@@ -222,25 +247,40 @@ export function packVoxelModel(model) {
   }
   let offset = align(4 * MODEL_HEADER.WORDS);
   for (const [type, values] of arrays) {
-    for (let index = 0; index < values.length; index++) {
-      if (type === 'f64') {
-        view.setFloat64(offset + 8 * index, values[index], true);
+    const size = type === 'f64' ? 8 : 4;
+    for (const part of values.parts ?? [values]) {
+      if (LITTLE_ENDIAN && (target.byteOffset + offset) % size === 0) {
+        const Type = type === 'f64' ? Float64Array : Int32Array;
+        new Type(target.buffer, target.byteOffset + offset, part.length).set(
+          part
+        );
       } else {
-        view.setInt32(offset + 4 * index, values[index], true);
+        for (let index = 0; index < part.length; index++) {
+          if (type === 'f64') {
+            view.setFloat64(offset + 8 * index, part[index], true);
+          } else {
+            view.setInt32(offset + 4 * index, part[index], true);
+          }
+        }
       }
+      offset += size * part.length;
     }
-    offset = align(offset + (type === 'f64' ? 8 : 4) * values.length);
+    if (offset % 8 !== 0) {
+      view.setUint32(offset, 0, true);
+    }
+    offset = align(offset);
   }
-  return buffer;
+  return target;
 }
 
 /**
  * The header words of a packed model, by MODEL_HEADER name.
  * @param {ArrayBuffer} buffer
+ * @param {number} [byteOffset] Start of a model packed into a larger buffer.
  * @returns {Record<string, number>}
  */
-export function modelHeader(buffer) {
-  const view = new DataView(buffer);
+export function modelHeader(buffer, byteOffset = 0) {
+  const view = new DataView(buffer, byteOffset);
   const header = {};
   for (const [name, index] of Object.entries(MODEL_HEADER)) {
     if (name !== 'WORDS') {

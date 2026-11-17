@@ -508,10 +508,10 @@ describe('Rust renderer in a room and with a head (issue 22)', () => {
 describe('Rust renderer options (issue 22)', () => {
   const { plan } = prepareUtterance('a', { tier: 'minimal' });
   for (const options of [
-    { solver: 'fdtd2d' },
+    { solver: 'custom' },
     { device: {} },
     { solver: 'fdtd3d', device: {} },
-    { source: 'folds' },
+    { source: 'custom' },
     { bandLimit: 0 },
   ]) {
     alwaysIt(`refuses ${JSON.stringify(options)}`, () => {

@@ -25,3 +25,6 @@ docs/accents.md
 schemas/voice.schema.json
 # coi-serviceworker (MIT), vendored and kept verbatim
 examples/universal-app/public/coi-serviceworker.js
+
+# Numeric JS reference vectors: four arrays, one per line for the Rust reader.
+crates/voice-simulator-core/tests/vectors/*.json
