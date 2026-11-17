@@ -34,7 +34,7 @@ Mandarin); the detector receives only audio, timed IPA words and the voice.
 | Other labels | 39/40 (97.5%) | 85% |
 | Full whisper at 8000 Hz | 4/4 (100%) | 100% |
 | Other labels at 8000 Hz | 53/56 (94.6%) | 70% |
-| Emotion names/classes | 45/48 (93.75%) | 75% |
+| Emotion names/classes | 46/48 (95.83%) | 75% |
 | Activation signs | 28/28 (100%) | 95% |
 
 All twelve reference names remain separate classes (no pair is closer than

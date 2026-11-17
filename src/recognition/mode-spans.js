@@ -68,7 +68,7 @@ export function effortRamps(words, labels, spans) {
   let from = 0;
   const ramps = [];
   while (from < labels.length) {
-    if (labels[from].quality?.phonation) {
+    if (labels[from].quality?.phonation || labels[from].abstain) {
       from++;
       continue;
     }
@@ -76,6 +76,7 @@ export function effortRamps(words, labels, spans) {
     while (
       to < labels.length &&
       !labels[to].quality?.phonation &&
+      !labels[to].abstain &&
       words[to].start - words[to - 1].end < 0.2
     ) {
       to++;

@@ -59,7 +59,9 @@ linear crescendo/diminuendo detection.
 
 Without a voice, utterance medians provide the baseline. Constant effort
 is left undecided; absolute whisper, creak and falsetto cues remain usable.
-Emotion activation uses the first four scaled prosodic components; names
+Phrase pitch span uses the 95th minus 5th percentile across all its vowel
+frames, including intonation between words. Emotion activation uses the
+first four scaled prosodic components; names
 require both Euclidean margins against twelve synthesized references.
 A named emotion removes redundant effects of its own preset before replay.
 Nonverbal pause sounds are conservative acoustic hypotheses.

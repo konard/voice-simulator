@@ -11,6 +11,7 @@ import {
 import {
   measureWords,
   summarize,
+  phraseSummary,
   relativeF1,
   quantile,
 } from './mode-features.js';
@@ -53,6 +54,13 @@ export function toPlanModes(modes) {
             mode.effortEnd = span.effort;
           }
         }
+      }
+      if (span.effort !== undefined && span.effortEnd !== undefined) {
+        const change = span.effortEnd - span.effort;
+        mode.effort =
+          span.effort + (change * (from - span.from)) / (span.to - span.from);
+        mode.effortEnd =
+          span.effort + (change * (to - span.from)) / (span.to - span.from);
       }
     }
     result.push({ from, to, mode });
@@ -265,7 +273,10 @@ export function recognizeModes(samples, sampleRate, result, options = {}) {
     ? voiceBaseline(options.voice, sampleRate, language, options.trace)
     : null;
   const features = measureWords(samples, sampleRate, result, reference?.head);
-  const base = reference?.features ?? summarize(features);
+  const base = reference?.features ?? {
+    ...summarize(features),
+    pitchSpan: phraseSummary(features).pitchSpan,
+  };
   features.forEach((w) => {
     w.f1 = reference ? relativeF1(w, reference.vowels) : null;
   });
@@ -314,6 +325,7 @@ export function recognizeModes(samples, sampleRate, result, options = {}) {
     ) {
       for (let i = group.from; i < group.to; i++) {
         labels[i].quality = null;
+        labels[i].abstain = true;
       }
     }
   }
@@ -329,12 +341,11 @@ export function recognizeModes(samples, sampleRate, result, options = {}) {
     : [];
   for (const group of groups) {
     const heard = features.slice(group.from, group.to);
-    const summary = {
-      ...summarize(heard),
-      f1: heard.some((w) => w.f1 !== null)
-        ? heard.reduce((n, w) => n + (w.f1 ?? 0), 0) / heard.length
-        : null,
-    };
+    const summary = phraseSummary(
+      heard,
+      context?.slice(group.from, group.to),
+      base
+    );
     const vector = emotionVector(summary, base);
     const simpleEffort =
       coherent &&

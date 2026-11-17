@@ -2,11 +2,11 @@
  * Unlicense. Texts are mirrored in tests/fixtures/recognition/baseline.txt. */
 import { synthesize } from '../synthesize.js';
 import { loadVoice } from '../voice-file.js';
-import { presetHeadConfig } from '../head-config.js';
+import { presetHeadConfig, normalizeHeadConfig } from '../head-config.js';
 import {
   measureWords,
   relativeF1,
-  summarize,
+  phraseSummary,
   vowelReferences,
 } from './mode-features.js';
 import { emotionVector } from './mode-rules.js';
@@ -29,7 +29,7 @@ export function baselineHead(voice) {
   ) {
     return presetHeadConfig(voice);
   }
-  return voice.head ?? loadVoice(voice).head;
+  return normalizeHeadConfig(voice.head ?? loadVoice(voice).head);
 }
 export function voiceBaseline(voice, sampleRate, language, trace) {
   const head = baselineHead(voice);
@@ -64,7 +64,7 @@ export function voiceBaseline(voice, sampleRate, language, trace) {
     { words: neutral.timeline.words },
     head
   );
-  const features = summarize(words);
+  const features = phraseSummary(words);
   const vowels = vowelReferences(words);
   const value = {
     head,
@@ -100,12 +100,7 @@ export function emotionReferences(baseline, trace) {
     words.forEach((w) => {
       w.f1 = relativeF1(w, baseline.vowels);
     });
-    const features = {
-      ...summarize(words),
-      f1: words.some((w) => w.f1 !== null)
-        ? words.reduce((n, w) => n + (w.f1 ?? 0), 0) / words.length
-        : null,
-    };
+    const features = phraseSummary(words);
     return { name, vector: emotionVector(features, baseline.features) };
   });
   trace?.({ stage: 'emotion-references', references: baseline.references });

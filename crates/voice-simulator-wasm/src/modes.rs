@@ -42,14 +42,11 @@ pub extern "C" fn vs_mode_emotion(input: u32, count: u32, out: u32) -> i32 {
         return error::BAD_ARGUMENT;
     }
     let vector = values[..6].try_into().expect("fixed vector width");
-    let references: Vec<[f64; 6]> = values[6..]
-        .chunks_exact(6)
-        .map(|r| r.try_into().expect("fixed reference width"))
-        .collect();
+    let references = values[6..].as_chunks::<6>().0;
     let output = match f64_slice(out, 6) {
         Ok(s) => s,
         Err(code) => return code,
     };
-    output.copy_from_slice(&emotion(vector, &references));
+    output.copy_from_slice(&emotion(vector, references));
     error::OK
 }

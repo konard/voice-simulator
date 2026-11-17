@@ -32,13 +32,13 @@ or in CI within the 2.92 GiB container budget.
 
 Measured locally: focused Node matrix 127/127 passing, eight plain sentences
 empty; effort 14/16 exact, 16/16 within one step; whisper 4/4; other
-labels 39/40; telephone whisper 4/4, others 53/56; emotion names 45/48,
+labels 39/40; telephone whisper 4/4, others 53/56; emotion names 46/48,
 activation signs 28/28. All twelve reference classes separate in all four
 languages. Boundary, crescendo, unknown-voice and replay checks pass.
 
 Heavy first 100 RESD rows: activation 63%, names 18%; golden false alarms
 1/24. Initial ratchets 58%, 13%, <=1/24. Report in docs/reports.
-Pause sounds and partial-mode planner integration: 5/5 passing. Dataset
+Pause sounds and partial-mode planner integration: 9/9 passing. Dataset
 registry/download checks: 17/17 passing. Focused Rust core test passes.
 `npm run check` passes. Rust WASM parity, Node/Bun/Deno and full matrix
 verification are assigned to current-head CI before finalization.
@@ -46,3 +46,9 @@ verification are assigned to current-head CI before finalization.
 CI investigation: initial atomic sampling-fix run 44063684431 failed only
 because the feature changeset had not yet been committed (log line 984).
 The complete draft includes its minor changeset. Logs retained in ci-logs.
+
+Review regressions: preserve cached head snapshots, ramp continuity through
+overlapping modes, and short-phrase abstention during ramp fitting. Phrase
+pitch range includes intonation between words. Nine integration checks pass.
+Merged-CI failures 44066292401: README line limit (log 8047) and Rust
+Clippy fixed-size chunks (log 2678), both corrected; local Clippy passes.

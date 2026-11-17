@@ -173,6 +173,7 @@ export function measureWords(samples, sampleRate, result, head) {
       alpha: alphaRatio(vowelSignal, sampleRate),
       energyRatio: energyRatio(vowelSignal, sampleRate),
       pitch: pulsePitch > 0 && pulsePitch < 90 ? pulsePitch : trackedPitch,
+      pitches: f0,
       pitchSpan: semitones(quantile(f0, 0.95), quantile(f0, 0.05)),
       voiced: rows.length ? f0.length / rows.length : 0,
       wordVoiced: whole.length
@@ -216,6 +217,22 @@ export function summarize(words) {
       quantile(words.filter((w) => w.vowels > 0).map((w) => w[key])),
     ])
   );
+}
+
+/** Phrase range includes between-word intonation, not just vowel variation. */
+export function phraseSummary(words, context, baseline) {
+  const range = (rows) => {
+    const pitches = rows.flatMap((word) => word.pitches);
+    return semitones(quantile(pitches, 0.95), quantile(pitches, 0.05));
+  };
+  return {
+    ...summarize(words),
+    pitchSpan:
+      range(words) - (context ? range(context) - baseline.pitchSpan : 0),
+    f1: words.some((w) => w.f1 !== null)
+      ? mean(words.map((w) => w.f1 ?? 0))
+      : null,
+  };
 }
 
 export function vowelReferences(words) {
