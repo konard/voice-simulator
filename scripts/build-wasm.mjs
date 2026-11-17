@@ -51,9 +51,10 @@ import { THREAD_MEMORY } from '../src/engine/layout.js';
  * THREADS_TOOLCHAIN) and for issue 52 (vocal effort in the glottis and the
  * renderer; scalar file 196 952 bytes); with both, the scalar file is
  * 199 852 bytes, the SIMD file 206 225 and the threads file 208 664. Raise
- * it only with the newly measured size in the commit message.
+ * For IPA recognition the scalar file is 251 906 bytes (Rust 1.100.0),
+ * requiring 262 144 bytes. Raise it only with measured sizes in the commit.
  */
-export const WASM_SIZE_BUDGET = 212992;
+export const WASM_SIZE_BUDGET = 262144;
 
 /**
  * Whether src/engine/voice-simulator-simd.wasm is shipped: only when it
