@@ -53,7 +53,8 @@ import { THREAD_MEMORY } from '../src/engine/layout.js';
  * 199 852 bytes, the SIMD file 206 225 and the threads file 208 664. Raise
  * it only with the newly measured size in the commit message. Issue 61 adds
  * batch source analysis, including the merged codebook: scalar 278 782
- * bytes, SIMD 286 142, rounded up to 294 912 (Rust 1.100.0).
+ * bytes, SIMD 286 142, rounded up to 294 912 (Rust 1.100.0). Issue 60 adds
+ * the formant root finder within it: scalar 285 013 bytes, SIMD 292 364.
  */
 export const WASM_SIZE_BUDGET = 294912;
 

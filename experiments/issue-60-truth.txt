@@ -1,0 +1,1 @@
+frames 4350, mismatched 0, worst gap 0 Hz, tubeFormants 89.2 s, gridFormants 9.2 s

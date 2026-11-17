@@ -1,0 +1,31 @@
+frames: nasal 234, vowel 1782
+best thresholds per ratio (vowel flagged at most 0.08):
+  ratio 0.50 drop 0 dB high 0 dB: nasal flagged 0.000, vowel flagged 0.000
+  ratio 0.52 drop 0 dB high 0 dB: nasal flagged 0.017, vowel flagged 0.000
+  ratio 0.54 drop 0 dB high -11 dB: nasal flagged 0.038, vowel flagged 0.000
+  ratio 0.56 drop 0 dB high -8 dB: nasal flagged 0.047, vowel flagged 0.009
+  ratio 0.58 drop 0 dB high -8 dB: nasal flagged 0.051, vowel flagged 0.015
+  ratio 0.60 drop -13 dB high 0 dB: nasal flagged 0.051, vowel flagged 0.029 (issue ratio 0.60, no high test)
+  ratio 0.60 drop 0 dB high -8 dB: nasal flagged 0.051, vowel flagged 0.017
+  ratio 0.62 drop 0 dB high -8 dB: nasal flagged 0.051, vowel flagged 0.030
+  ratio 0.64 drop 0 dB high -8 dB: nasal flagged 0.051, vowel flagged 0.032
+  ratio 0.66 drop 0 dB high -8 dB: nasal flagged 0.073, vowel flagged 0.032
+  ratio 0.68 drop 0 dB high -5 dB: nasal flagged 0.158, vowel flagged 0.045
+  ratio 0.70 drop 0 dB high -5 dB: nasal flagged 0.231, vowel flagged 0.049
+  ratio 0.72 drop 0 dB high -5 dB: nasal flagged 0.316, vowel flagged 0.051
+  ratio 0.74 drop 0 dB high -5 dB: nasal flagged 0.363, vowel flagged 0.054
+  ratio 0.76 drop 0 dB high -5 dB: nasal flagged 0.419, vowel flagged 0.080
+  ratio 0.78 drop 0 dB high -7 dB: nasal flagged 0.440, vowel flagged 0.080
+  ratio 0.80 drop 0 dB high -7 dB: nasal flagged 0.470, vowel flagged 0.080
+  ratio 0.82 drop 0 dB high -7 dB: nasal flagged 0.491, vowel flagged 0.080
+  ratio 0.84 drop -15 dB high -8 dB: nasal flagged 0.538, vowel flagged 0.080
+  ratio 0.86 drop -15 dB high -9 dB: nasal flagged 0.628, vowel flagged 0.076
+  ratio 0.88 drop -15 dB high -9 dB: nasal flagged 0.667, vowel flagged 0.076
+  ratio 0.90 drop -13 dB high 0 dB: nasal flagged 0.769, vowel flagged 0.129 (ratio 0.90, drop -13, no high test)
+  ratio 0.90 drop -12 dB high -10 dB: nasal flagged 0.701, vowel flagged 0.067
+  ratio 0.92 drop -15 dB high -12 dB: nasal flagged 0.628, vowel flagged 0.077
+  ratio 0.94 drop -17 dB high -12 dB: nasal flagged 0.513, vowel flagged 0.070
+  ratio 0.96 drop -16 dB high -14 dB: nasal flagged 0.487, vowel flagged 0.079
+  ratio 0.98 drop -17 dB high -14 dB: nasal flagged 0.419, vowel flagged 0.080
+  ratio 1.00 drop -17 dB high -15 dB: nasal flagged 0.389, vowel flagged 0.078
+best: ratio 0.90 drop -12 dB high -10 dB: nasal flagged 0.701, vowel flagged 0.067
