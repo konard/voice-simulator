@@ -10,7 +10,10 @@ import {
   copyState,
 } from '../src/analysis/voice-fit-statistics.js';
 import { vectorDistance } from '../src/analysis/voice-fit.js';
-import { createMcdMetric } from '../src/analysis/voice-fit-objective.js';
+import {
+  createMcdMetric,
+  featureVector,
+} from '../src/analysis/voice-fit-objective.js';
 import { powerFrames, cepstra } from '../src/metrics/spectrum.js';
 import { dtw } from '../src/metrics/dtw.js';
 import {
@@ -90,6 +93,16 @@ describe('voice fitting numerics', () => {
     ).toBe(true);
     expect(vectorDistance(a, b, true, Infinity)).toBe(Infinity);
     expect(vectorDistance(a, b, true, null)).toBe(Infinity);
+  });
+  it('converts natural-log mel powers to centered decibels', () => {
+    const state = emptyState();
+    state.voicedFrames = 2;
+    // Two frames with power 100 in one band and power 1 in the others.
+    state.mel[0] = 2 * Math.log(100);
+    const vector = featureVector(state);
+    expect(Math.abs(vector.values[12] - (20 - 20 / 24)) < 1e-12).toBe(true);
+    expect(Math.abs(vector.values[13] + 20 / 24) < 1e-12).toBe(true);
+    expect(vector.scales[12]).toBe(3);
   });
   it('inverts nonmonotone measured calibration without discarding samples', () => {
     const table = [

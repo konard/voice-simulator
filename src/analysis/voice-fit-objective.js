@@ -22,7 +22,10 @@ export function featureVector(state) {
     log(f.syllableRate),
   ];
   const scales = [0.03, 1.5, 0.02, 0.05, 0.05, 0.05, 0.3, 2, 1.5, 2, 3, 0.08];
-  const mel = state.mel.map((x) => x / Math.max(1, state.voicedFrames));
+  // analyzeFrames stores ln(power); the objective's mel scale is in dB.
+  const mel = state.mel.map(
+    (x) => (10 * x) / Math.LN10 / Math.max(1, state.voicedFrames)
+  );
   const mean = mel.reduce((a, b) => a + b, 0) / 24;
   return {
     values: [...values, ...mel.map((x) => x - mean)],
