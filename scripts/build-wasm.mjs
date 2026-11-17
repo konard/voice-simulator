@@ -51,14 +51,28 @@ import { THREAD_MEMORY } from '../src/engine/layout.js';
  * THREADS_TOOLCHAIN) and for issue 52 (vocal effort in the glottis and the
  * renderer; scalar file 196 952 bytes); with both, the scalar file is
  * 199 852 bytes, the SIMD file 206 225 and the threads file 208 664. Raise
- * it only with the newly measured size in the commit message. With issues
- * 60 (formants), 61 (source analysis), 64 (codebook), 68 (IPA recognition)
- * and 82 (complete acoustics parity), scalar is 383 667 bytes and SIMD
- * is 390 932, rounded up to 393 216 (Rust 1.100.0).
+ * it only with the newly measured size in the commit message. Issue 61 adds
+ * batch source analysis, including the merged codebook: scalar 278 782
+ * bytes, SIMD 286 142, rounded up to 294 912 (Rust 1.100.0).
+ * Issue 60 adds the formant root finder: scalar 285 013, SIMD 292 364.
+ * Including issue 62's landmark stage and boundary-strength correction,
+ * the scalar file is 310 436 bytes, rounded up to 311 296 (Rust 1.100.0).
+ * With the merged formant tracker, scalar is 316 669 bytes, rounded up to
+ * 327 680 (Rust 1.100.0).
+ * IPA recognition on main measures 332 646 scalar and 338 849 SIMD bytes,
+ * rounded up to 344 064 bytes (Rust 1.100.0).
+ * With both IPA recognition and landmarks, scalar is 364 154 bytes,
+ * rounded up to 376 832 (Rust 1.100.0).
+ * Complete acoustics parity on main measures 383 667 scalar and
+ * 390 932 SIMD bytes, rounded up to 393 216 (Rust 1.100.0).
+ * With landmarks too, scalar is 415 183 and SIMD 421 828 bytes,
+ * rounded up to 425 984 (Rust 1.100.0).
  * With language identification and joint recognition, scalar is 435 525
  * bytes and SIMD 442 832, rounded up to 458 752 (Rust 1.100.0).
+ * Including landmarks too, scalar is 467 028 and SIMD 473 723 bytes,
+ * rounded up to 475 136 (Rust 1.100.0).
  */
-export const WASM_SIZE_BUDGET = 458752;
+export const WASM_SIZE_BUDGET = 475136;
 
 /**
  * Whether src/engine/voice-simulator-simd.wasm is shipped: only when it

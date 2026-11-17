@@ -7,6 +7,9 @@ import { parseArgs } from 'node:util';
 
 import {
   addLexicon,
+  analyzeFrames,
+  BROAD_CLASSES,
+  findLandmarks,
   AUDIO_FORMAT_NAMES,
   AUDIO_TIERS,
   DEFAULT_AUDIO_TIER,
@@ -122,6 +125,8 @@ function usage() {
     '  voice check <file>  Check a voice file (exit code 1 on a problem)',
     '  mesh -o head.obj    Export the low-poly head model as OBJ',
     '  match <file>        Find the head that sounds like a recording',
+    '  landmarks <file>    Experimental nuclei, sound changes and broad classes',
+    '                      as JSON (see README accuracy limits)',
     '  compare <ref> <test>',
     '                      Distances of a recording from a reference',
     '                      (LSD, MCD, f0, formants, timing)',
@@ -837,6 +842,26 @@ const COMMANDS = {
     );
     io.stdout(`${result.preset}, distance ${result.distance.toFixed(2)}`);
     io.stdout(encodeHeadConfig(result.head));
+  },
+
+  landmarks(values, positionals, io) {
+    const [file] = positionals;
+    if (!file) {
+      throw new Error('Missing <file>');
+    }
+    const { samples, sampleRate } = decodeAudio(readFileSync(file));
+    const result = findLandmarks(analyzeFrames(samples, sampleRate));
+    const json = JSON.stringify({
+      ...result,
+      broadClasses: BROAD_CLASSES,
+      classes: Array.from(result.classes.subarray(0, result.count)),
+      sonority: Array.from(result.sonority.subarray(0, result.count)),
+    });
+    if (values.out && values.out !== '-') {
+      writeOutput(values.out, json, io);
+    } else {
+      io.stdout(json);
+    }
   },
 
   compare(values, positionals, io) {

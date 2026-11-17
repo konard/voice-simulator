@@ -7,6 +7,7 @@ import { runCli } from '../bin/voice-simulator.js';
 import {
   decodeAudio,
   detectAudioFormat,
+  encodeWav,
   encodeHeadConfig,
   presetHeadConfig,
 } from '../src/index.js';
@@ -35,6 +36,23 @@ function withTempDir(run) {
 }
 
 describe('CLI audio formats', () => {
+  it('prints landmark JSON and can save the same result', () =>
+    withTempDir(async (dir) => {
+      const source = join(dir, 'silence.wav');
+      writeFileSync(source, encodeWav(new Float32Array(800), 8000));
+      const result = await cli(['landmarks', source]);
+      expect(result.code).toBe(0);
+      const json = JSON.parse(result.stdout[0]);
+      expect(json.nuclei).toEqual([]);
+      expect(json.classes.length).toBe(json.count);
+      expect(json.sonority.length).toBe(json.count);
+      expect(json.broadClasses[6]).toBe('closure');
+      const out = join(dir, 'landmarks.json');
+      expect((await cli(['landmarks', source, '-o', out])).code).toBe(0);
+      expect(JSON.parse(readFileSync(out, 'utf8'))).toEqual(json);
+      expect((await cli(['landmarks'])).stderr[0]).toBe('Missing <file>');
+    }));
+
   it('writes 16-bit WAV to stdout by default', async () => {
     const result = await cli([...SAY, '-o', '-']);
     expect(result.code).toBe(0);

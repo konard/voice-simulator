@@ -1467,9 +1467,7 @@ Configured in `.prettierrc`: single quotes, semicolons, 2-space indentation, 80-
 
 ## Contributing
 
-See [CONTRIBUTING.md](docs/CONTRIBUTING.md) for detailed contribution guidelines.
-
-Quick steps:
+See [CONTRIBUTING.md](docs/CONTRIBUTING.md) for detailed contribution guidelines. Quick steps:
 
 1. Fork the repository
 2. Create a feature branch: `git checkout -b feature/my-feature`
@@ -1487,6 +1485,8 @@ This repository implements CI/CD best practices for AI-driven development. See [
 - Multi-runtime and cross-platform testing
 - Changeset-based versioning
 - Concurrency control for CI/CD pipelines
+
+Experimental syllable nuclei and sound classes: `findLandmarks`, `createLandmarkDetector` and `BROAD_CLASSES`. See the [API, streaming contract and measured quality limits](docs/RECOGNITION-LANDMARKS.md).
 
 ## License
 

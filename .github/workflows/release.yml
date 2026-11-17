@@ -546,7 +546,7 @@ jobs:
         # developer machine, issue 23), hence the larger budget.
         # tests/performance-smoke.test.js (issue 31) runs in npm test too,
         # but only here with the engine: Rust is not slower than JavaScript.
-        run: bash scripts/run-with-budget-warning.sh 90 "Rust parity tests" node --test tests/engine-parity.test.js tests/engine-features.test.js tests/rust-parity.test.js tests/rust-recognition.test.js tests/rust-inverse-filter.test.js tests/rust-modes.test.js tests/rust-waveguide.test.js tests/rust-fdtd.test.js tests/rust-render-job.test.js tests/engine-layout.test.js tests/engine.test.js tests/engine-worker.test.js tests/engine-size.test.js tests/adaptive-stream.test.js tests/stream-governor.test.js tests/performance-smoke.test.js
+        run: bash scripts/run-with-budget-warning.sh 90 "Rust parity tests" node --test tests/engine-parity.test.js tests/engine-features.test.js tests/rust-parity.test.js tests/rust-recognition.test.js tests/rust-inverse-filter.test.js tests/rust-modes.test.js tests/rust-landmarks.test.js tests/rust-waveguide.test.js tests/rust-fdtd.test.js tests/rust-render-job.test.js tests/engine-layout.test.js tests/engine.test.js tests/engine-worker.test.js tests/engine-size.test.js tests/adaptive-stream.test.js tests/stream-governor.test.js tests/performance-smoke.test.js
 
       # The publishing jobs run the same check after they download the file.
       - name: Check the package lists the engine

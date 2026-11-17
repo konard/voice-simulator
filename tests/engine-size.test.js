@@ -12,8 +12,8 @@ import { WASM_SIZE_BUDGET } from '../scripts/build-wasm.mjs';
 const ENGINE_DIR = new globalThis.URL('../src/engine/', import.meta.url);
 
 describe('engine size', () => {
-  it('has a budget of 448 KiB', () => {
-    expect(WASM_SIZE_BUDGET).toBe(458752);
+  it('has a budget of 464 KiB', () => {
+    expect(WASM_SIZE_BUDGET).toBe(475136);
   });
 
   it('keeps every shipped .wasm within the budget', () => {

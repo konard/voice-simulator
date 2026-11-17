@@ -160,3 +160,11 @@ Final diff reviewed, no existing feature removed, latest main eeb2869 merged,
 and issue comments, PR conversation/inline comments and reviews remain empty.
 Only the measured report and this verification record change in the final
 documentation commit; mark PR 148 ready after that commit's checks succeed.
+
+Main advanced to a5b3c51 during the final readiness check. Merge conflicts
+are limited to the Rust parity command and appended API documentation;
+both landmark and mode APIs/tests are retained. Combined scalar WASM is
+472907 bytes (existing budget 475136), SHA-256
+609daed8d0b2ca8a6fef1fdda4bf07b8820dceb97f0c4cd5a7f3027dae0facee.
+`cargo fmt --all --check` and the combined mode/landmark/size tests pass (7/7).
+The PR is draft again until the merged revision's CI passes.
