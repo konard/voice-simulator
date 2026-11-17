@@ -159,6 +159,25 @@ describe('fitVoice', () => {
   });
 });
 describe('voice fitting API', () => {
+  it('reuses an identical vertex between rounds and counts only actual renders', () => {
+    const a = recordings[1],
+      calls = [],
+      trace = [];
+    const result = fitVoice(a.samples, a.sampleRate, {
+      transcript: TEXT,
+      maxRenders: 2,
+      onStep: (step) => calls.push(step),
+      trace: (event) => {
+        if (event.stage === 'voice-fit-render') {
+          trace.push(event);
+        }
+      },
+    });
+    expect(result.renders).toBe(1);
+    expect(calls.map((step) => step.renders)).toEqual([1]);
+    expect(trace.length).toBe(1);
+    expect(result.rendered).toEqual(trace[0].features);
+  });
   it('honours parts, budgets, callbacks and the generator return value', () => {
     const a = recordings[0],
       calls = [];

@@ -374,7 +374,7 @@ function countSyllables(levels, voiced) {
  *   telephone speech). `formants` always has four entries; those that
  *   were not measured are 0.
  */
-export function analyzeLegacyVoice(samples, sampleRate, options = {}) {
+export function prepareLegacyVoice(samples, sampleRate, options = {}) {
   const limit = Math.floor((options.maxDuration ?? 30) * sampleRate);
   const input =
     samples.length > limit
@@ -413,8 +413,53 @@ export function analyzeLegacyVoice(samples, sampleRate, options = {}) {
   const f0 = median(f0s);
   const f0Low = percentile(f0s, 0.05);
   const f0High = percentile(f0s, 0.95);
-  const diagnosticFrames =
-    options.sourceDiagnostics === false ? 0 : voicedIndices.length;
+  const activeSeconds = active.filter(Boolean).length * HOP;
+  const features = {
+    duration: samples.length / sampleRate,
+    activeDuration: activeSeconds,
+    voicedDuration: voicedIndices.length * HOP,
+    f0,
+    f0Low,
+    f0High,
+    f0Range: f0Low > 0 ? 12 * Math.log2(f0High / f0Low) : 0,
+    formants: [0, 0, 0, 0],
+    formantSpacing: 0,
+    vocalTractLength: 0,
+    h1h2: 0,
+    hnr: 0,
+    syllableRate:
+      activeSeconds > 0
+        ? countSyllables(
+            levels,
+            frames.map((frame) => frame.voiced)
+          ) / activeSeconds
+        : 0,
+  };
+  let completed = false;
+  return {
+    features,
+    complete() {
+      if (!completed) {
+        Object.assign(
+          features,
+          legacyDiagnostics(signal, rate, frames, voicedIndices, {
+            ...options,
+            order,
+            formantCount,
+            hop,
+            length,
+          })
+        );
+        completed = true;
+      }
+      return features;
+    },
+  };
+}
+
+function legacyDiagnostics(signal, rate, frames, voicedIndices, options) {
+  const { order, formantCount, hop, length } = options;
+  const diagnosticFrames = voicedIndices.length;
   const stride = Math.max(1, diagnosticFrames / FORMANT_FRAMES);
   const upper = highpass(signal, HNR_HIGHPASS, rate);
   const tracks = [[], [], [], []];
@@ -450,28 +495,21 @@ export function analyzeLegacyVoice(samples, sampleRate, options = {}) {
     noise.push(10 * Math.log10((1 - aperiodicity) / aperiodicity));
   }
   const spacing = median(spacings);
-  const activeSeconds = active.filter(Boolean).length * HOP;
   return {
-    duration: samples.length / sampleRate,
-    activeDuration: activeSeconds,
-    voicedDuration: voicedIndices.length * HOP,
-    f0,
-    f0Low,
-    f0High,
-    f0Range: f0Low > 0 ? 12 * Math.log2(f0High / f0Low) : 0,
     formants: tracks.map((track) => median(track)),
     formantSpacing: spacing,
     vocalTractLength: spacing > 0 ? SPEED_OF_SOUND / (2 * spacing) : 0,
     h1h2: median(tilts),
     hnr: percentile(noise, HNR_PERCENTILE),
-    syllableRate:
-      activeSeconds > 0
-        ? countSyllables(
-            levels,
-            frames.map((frame) => frame.voiced)
-          ) / activeSeconds
-        : 0,
   };
+}
+
+/** Eager compatibility entry point; fitting can retain the prepared analysis. */
+export function analyzeLegacyVoice(samples, sampleRate, options = {}) {
+  const analysis = prepareLegacyVoice(samples, sampleRate, options);
+  return options.sourceDiagnostics === false
+    ? analysis.features
+    : analysis.complete();
 }
 
 /** Shared stage-A statistics; legacy diagnostics remain available internally. */

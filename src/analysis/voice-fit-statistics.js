@@ -4,7 +4,7 @@ import { trackPitch, jitterToHead } from '../recognition/pitch.js';
 import { trackFormants } from '../recognition/formants.js';
 import { inverseFilter } from '../recognition/inverse-filter.js';
 import { HEAD_PARAMETERS, DEFAULT_HEAD } from '../head-config.js';
-import { analyzeLegacyVoice } from './voice-features.js';
+import { prepareLegacyVoice } from './voice-features.js';
 import {
   PITCH_RANGE_FACTOR,
   BREATHINESS_HNR,
@@ -201,7 +201,8 @@ export function accumulate(
   samples,
   sampleRate,
   options = {},
-  diagnostics = true
+  diagnostics = true,
+  captureDiagnostics = null
 ) {
   const maxSeconds = options.maxDuration ?? 30;
   const input = Float32Array.from(
@@ -223,11 +224,12 @@ export function accumulate(
   // that prior from a whole utterance makes the pooled dF depend on splits.
   const formants = trackFormants(frames, { pitch, vocalTractLength: 16.5 });
   const source = inverseFilter(frames, { pitch, trace: options.trace ?? null });
-  const legacy = analyzeLegacyVoice(input, sampleRate, {
+  const analysis = prepareLegacyVoice(input, sampleRate, {
     ...options,
     diagnosticsOnly: true,
-    sourceDiagnostics: diagnostics,
   });
+  const legacy = diagnostics ? analysis.complete() : analysis.features;
+  captureDiagnostics?.(analysis.complete);
   state.duration += input.length / sampleRate;
   // A 40 ms sliding window represents its 10 ms hop plus 30 ms at
   // the stretch edges. Include that coverage when pooling stretches.

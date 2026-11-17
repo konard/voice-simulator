@@ -2,6 +2,10 @@
 import { describe, it, expect } from 'test-anywhere';
 import { simplex } from '../src/analysis/voice-fit-simplex.js';
 import {
+  analyzeLegacyVoice,
+  prepareLegacyVoice,
+} from '../src/analysis/voice-features.js';
+import {
   emptyState,
   addValue,
   quantile,
@@ -28,6 +32,40 @@ const consume = (g) => {
   return next.value;
 };
 describe('voice fitting numerics', () => {
+  it('completes deferred source diagnostics without changing the measured features', () => {
+    const rate = 8000;
+    const samples = Float32Array.from({ length: 2000 }, (_, n) =>
+      [1, 2, 3].reduce(
+        (sum, harmonic) =>
+          sum + Math.sin((2 * Math.PI * 160 * harmonic * n) / rate) / harmonic,
+        0
+      )
+    );
+    const options = { diagnosticsOnly: true };
+    const analysis = prepareLegacyVoice(samples, rate, options);
+    const initial = { ...analysis.features };
+    expect(initial.hnr).toBe(0);
+    expect(initial.h1h2).toBe(0);
+    expect(initial).toEqual(
+      analyzeLegacyVoice(samples, rate, {
+        ...options,
+        sourceDiagnostics: false,
+      })
+    );
+    const completed = analysis.complete();
+    expect(completed.hnr > 0).toBe(true);
+    expect(completed.h1h2 > 0).toBe(true);
+    expect(completed).toEqual(analyzeLegacyVoice(samples, rate, options));
+    expect(analysis.complete()).toBe(completed);
+    for (const key of [
+      'f0',
+      'syllableRate',
+      'activeDuration',
+      'voicedDuration',
+    ]) {
+      expect(completed[key]).toBe(initial[key]);
+    }
+  });
   it('interpolates histogram order statistics and applies the prescribed MAD SD', () => {
     const s = emptyState();
     for (const x of [900, 900, 1100, 1100]) {

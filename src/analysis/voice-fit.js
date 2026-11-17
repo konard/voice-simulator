@@ -21,7 +21,6 @@ import {
 } from './voice-fit-statistics.js';
 import { MATCH_TEXT } from './voice-fit-calibration.js';
 import { simplex } from './voice-fit-simplex.js';
-import { analyzeLegacyVoice } from './voice-features.js';
 
 const PARTS = ['tract', 'pitch', 'source', 'rate'];
 const groups = {
@@ -97,6 +96,16 @@ function createEvaluator(state, samples, sampleRate, o, theta0, context) {
       : resample(samples, sampleRate, rate);
   const mcdMetric = o.transcript ? createMcdMetric(input, rate) : null;
   return (candidate) => {
+    // The next round starts at the preceding round's best vertex. Reuse
+    // that exact evaluation; callbacks and renders count actual synthesis.
+    if (
+      context.best &&
+      HEAD_PARAMETERS.every(
+        (p) => candidate[p.key] === context.best.head[p.key]
+      )
+    ) {
+      return context.best;
+    }
     const rendered = synthesize(o.transcript || MATCH_TEXT, {
       head: candidate,
       seed: o.seed,
@@ -111,7 +120,10 @@ function createEvaluator(state, samples, sampleRate, o, theta0, context) {
       rate < 16000 ? resample(rendered.samples, 16000, rate) : rendered.samples;
     // The objective uses inverse-filter source measures. Legacy HNR/H1-H2
     // diagnostics are needed only for the returned render, or verbose tracing.
-    const statistics = accumulate(emptyState(), audio, rate, o, false);
+    let completeDiagnostics;
+    const statistics = accumulate(emptyState(), audio, rate, o, false, (fn) => {
+      completeDiagnostics = fn;
+    });
     const mcd = mcdMetric?.(audio) ?? null;
     const distance = vectorDistance(
       target,
@@ -138,10 +150,7 @@ function createEvaluator(state, samples, sampleRate, o, theta0, context) {
     let completed = false;
     value.complete = () => {
       if (!completed) {
-        const diagnostics = analyzeLegacyVoice(audio, rate, {
-          ...o,
-          diagnosticsOnly: true,
-        });
+        const diagnostics = completeDiagnostics();
         const weight = diagnostics.voicedDuration / 0.01;
         for (const key of ['hnr', 'h1h2']) {
           value.rendered[key] =
@@ -251,6 +260,7 @@ function* fitState(state, samples, sampleRate, options) {
         const value = next.value;
         if (!best || value.cost < best.cost) {
           best = value;
+          context.best = value;
           head = { ...value.head };
           yield {
             step: step++,
