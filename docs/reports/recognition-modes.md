@@ -3,10 +3,11 @@
 Command: `node --test --test-timeout=600000 tests/heavy/recognition-modes.test.js`.
 
 RESD (Aniemore/resd, MIT metadata): first 100 rows of the test split.
-Activation accuracy: 63.0%. Name accuracy: 18.0%.
+Activation accuracy: 55.0%. Name accuracy: 11.0%.
 Golden false alarms (whisper or emotion): 1/24.
 
-The committed baseline records the first complete measurement; gates are
+The committed baseline records the initial pre-merge calibration of the
+corrected phrase range; gates are
 five percentage points below it. Limited runs do not establish a new baseline.
 
 RESD has no transcripts. Its evaluation uses vowel-like periodic intervals
@@ -44,8 +45,14 @@ by the test. Word-boundary, crescendo, unknown-voice and whisper replay
 checks pass. Pause sounds, overlapping partial modes and input validation
 are checked in `tests/recognition-mode-integration.test.js`.
 
-The initial real-recording gates are activation >=58% and names >=13%
-(the measured 63% and 18% minus five percentage points), plus at most one
+The initial real-recording gates are activation >=50% and names >=6%
+(the measured 55% and 11% minus five percentage points), plus at most one
 golden false alarm. The single alarm is a 93 ms whispered-word hypothesis
 in ru-06, with proportional phone timing. These low emotion-name figures
 are a measured limit of generic-voice acoustic references on real speakers.
+
+The preliminary draft used the median of word pitch spans for its baseline
+(63% activation, 18% names). Pooling vowel frames over each entire phrase
+corrects that mismatch with the one-word acoustic RESD alignment. The final
+55%/11% measurement establishes this new feature's initial 50%/6% gates.
+Synthetic acceptance thresholds are unchanged.

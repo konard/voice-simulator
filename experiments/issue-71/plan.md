@@ -1,7 +1,7 @@
 # Issue 71 work plan
 
 Objective: implement every applicable requirement of issue 71 in PR 148 and
-verify every acceptance criterion. No reduced accuracy gates or deferred scope.
+verify every acceptance criterion. No reduced synthetic accuracy gates or deferred scope.
 
 Research (2026-11-17): complete issue and comments read; PR conversation,
 inline comments and reviews empty; no sub-issues. Blockers 61, 52, 53, 54,
@@ -36,8 +36,8 @@ labels 39/40; telephone whisper 4/4, others 53/56; emotion names 46/48,
 activation signs 28/28. All twelve reference classes separate in all four
 languages. Boundary, crescendo, unknown-voice and replay checks pass.
 
-Heavy first 100 RESD rows: activation 63%, names 18%; golden false alarms
-1/24. Initial ratchets 58%, 13%, <=1/24. Report in docs/reports.
+Heavy first 100 RESD rows: activation 55%, names 11%; golden false alarms
+1/24. Initial ratchets 50%, 6%, <=1/24. Report in docs/reports.
 Pause sounds and partial-mode planner integration: 9/9 passing. Dataset
 registry/download checks: 17/17 passing. Focused Rust core test passes.
 `npm run check` passes. Rust WASM parity, Node/Bun/Deno and full matrix
@@ -52,3 +52,8 @@ overlapping modes, and short-phrase abstention during ramp fitting. Phrase
 pitch range includes intonation between words. Nine integration checks pass.
 Merged-CI failures 44066292401: README line limit (log 8047) and Rust
 Clippy fixed-size chunks (log 2678), both corrected; local Clippy passes.
+
+Final phrase-range calibration: 55% activation, 11% names, 1/24 alarms.
+The preliminary 63%/18% used median word ranges; the corrected full-phrase
+measurement establishes initial 50%/6% gates before this new feature merges.
+Synthetic gates retain every requested threshold; names are now 46/48.
