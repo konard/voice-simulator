@@ -494,6 +494,67 @@ The separate formant parity check also passes. The nucleus candidate ceiling
 is still 98/120, and the landmark suite still has exactly the same three
 quality failures; the merged orthography helpers do not alter those renders.
 
+## Fourth CI restart: public-API contract reproduction (2026-11-17)
+
+The freshly downloaded log for
+[run 44054878814](https://github.com/konard/voice-simulator/actions/runs/44054878814)
+is `ci-logs/restart-4-checks-44054878814.log`. Its head is `0025dcb`,
+committed at 09:21:23 UTC; the run started at 09:21:48 UTC. All nine
+runtime jobs fail exactly the same three quality assertions. Node/Ubuntu
+prints the measured recall, class confusion and missing edges at lines
+44290–44298, and the assertion failures at 46287, 46299 and 46313. The
+complete Node suite has 2926 passes, 97 skips and three failures. Pipeline
+Status aggregates those failures; it is not an independent infrastructure
+error. No runtime failure asks for a secret or repository access.
+
+The issue and all three PR comment endpoints were read again. There are
+still no required sub-issues or new acceptance rules. A fresh fetch confirms
+that `main` remains `0b6c090`, already an ancestor of `0025dcb`.
+
+This investigation uses the **public stage API** to check the timing
+conflict independently of the earlier `cleanClasses` counterexample:
+
+```sh
+node --max-old-space-size=64 experiments/issue-62/stream-closure.mjs
+bun --smol experiments/issue-62/stream-closure.mjs
+deno run -A experiments/issue-62/stream-closure.mjs
+```
+
+All three runtimes print identical results. Two one-second **PCM signals**
+contain a 140 Hz tone from 0.100 to 0.300 s, followed by silence and another
+200 ms tone. That second tone starts at 0.440 s in the first signal and
+0.600 s in the second. No frame features are fabricated: `analyzeFrames`
+and `createFrameAnalyzer` read the actual samples. The signals are identical
+through 0.4325 s, including the front end's 12.5 ms lookahead after the
+0.420 s commitment deadline for the frame at 0.360 s. The experiment also
+asserts equality of all available energy, noise, speech, periodicity, zcr,
+gravity, tilt, band and mel rows. `findLandmarks` requires classes `[6, 0]`
+(closure, silence), while
+`createLandmarkDetector` commits `[0, 0]` and preserves those labels to the
+end. Both public calls cannot meet their specified contracts on both inputs.
+The assertions verify this incompatibility on real signal inputs; their success does not mark
+the detector's timing criterion as passed.
+
+The finite nucleus-superset and smoothing-sensitivity experiment was also
+repeated on the current source with a 256 MiB heap. It reproduces 98/120
+recoverable centres (81.6667%), or 94, 93 and 96 with the three alternative
+smoothing placements. The unrestricted landmark-candidate probe reproduces
+the same four missing/mistimed edges. The focused command
+`node --max-old-space-size=256 --test --test-timeout=30000 tests/recognition-landmarks.test.js`
+again has nine passes and three failures; recall and class accuracy are
+unchanged, and RTF is 0.000601 on this container. Local logs have the
+`ci-logs/restart-4-` prefix. No production algorithm, truth label, assertion
+or workflow gate has been changed to turn this evidence into a pass.
+
+The external decision needed is a consistent timing/quality contract:
+choose provisional or later class commitment, or change retrospective
+closure cleanup; reconcile higher-peak replacement with irrevocable early
+confirmation; and permit a candidate definition or signal change that
+can supply the missing nuclei. Class accuracy and the missing edges remain
+separate unresolved implementation criteria. The default-branch npm
+bootstrap action described above also remains necessary; its PR preflight
+already skips only the credential-dependent operation with an explanation.
+
 ## Remaining work
 
 Resolve the contradictory timing contract and the unreachable nucleus target

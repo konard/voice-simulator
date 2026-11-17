@@ -1,4 +1,4 @@
-# Issue 62: third CI restart
+# Issue 62: fourth CI restart
 
 Objective: satisfy issue 62 in PR 142, resolve conflicts with current main,
 and verify every CI check without weakening the requested quality gates.
@@ -68,3 +68,29 @@ landmark modules/parity suites. Combined scalar: 364154 bytes, budget
 formant parity pass with REQUIRE_WASM=1. The quality measurements and
 98/120 candidate ceiling are unchanged. Preserve and inspect the next
 current-commit CI run before reporting completion or blockers.
+
+## Fourth restart: verify the contract through the public API
+
+- [x] Re-read issue 62, every issue/PR conversation comment, inline comment
+      and review, and the empty required-sub-issues endpoint. Both
+      prerequisites remain closed; no later feedback changes the contract.
+- [x] Fetch the default branch. Main remains 0b6c090, already an ancestor
+      of HEAD 0025dcb; no merge or history rewrite is needed.
+- [x] Download current failing run 44054878814 again and verify it started
+      after its matching commit. All nine jobs fail exactly the three
+      quality assertions; no missing credential causes the runtime failures.
+- [x] Independently repeat the nucleus candidate superset, smoothing
+      sensitivity and landmark candidate measurements with finite inputs.
+- [x] Change approach from internal helper counterexamples to actual PCM:
+      stream-closure.mjs reproduces the incompatible batch/stream labels
+      through both public analyzers and both public landmark APIs on all
+      three runtimes. Signals and all feature prefixes are identical at
+      the commitment deadline, including front-end window lookahead.
+- [x] Run the focused Node suite: 9 pass, 3 unchanged quality failures.
+- [ ] Validate, commit and push the public-API counterexample and updated
+      evidence; update PR 142 and review the final diff and working tree.
+- [ ] Inspect every final-commit CI result and preserve its failure logs.
+- [ ] Complete all original quality and timing requirements. Blocked by
+      the unchanged incompatible contract; class and edge accuracy also
+      remain unresolved. No test waiver is authorised by this finding.
+- [ ] Mark ready only after all requirements and all CI checks pass.
