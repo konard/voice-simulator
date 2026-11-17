@@ -25,7 +25,7 @@ inline comments or reviews.
 - [x] README, contributing, Rust docs, roadmap, types, CLI help and minor changeset.
 - [x] Focused regressions, npm check/test, cargo workspace tests/clippy/fmt, wasm
       parity and current-commit CI; save and inspect any failing CI logs.
-- [ ] Merge latest main, review complete PR diff, update title/body with Closes #82,
+- [x] Merge latest main, review complete PR diff, update title/body with Closes #82,
       push only prepared branch, clean tree and mark PR #145 ready; never merge.
 
 Scope: text/IPA planning and geometry construction stay in JavaScript as in the
@@ -172,3 +172,26 @@ sorts the discovered paths while retaining all scope and safety checks. The
 same job also timed out downloading the pre-existing Open-Full-Jaw dental
 fixture (`:2046`); the fresh matrix run checks whether that network failure
 recurs, without increasing its timeout or changing the anatomy checks.
+
+The complete performance rerun on the combined binary passes in
+[44055371834](https://github.com/konard/voice-simulator/actions/runs/44055371834),
+commit 908f7f7: all five files and 75 tests pass with no item limit. All 28
+feature/tier ratios are at most 1.0 (range 0.4675–0.9237); coarse 3D is 0.8803
+and the reference tier is 0.9237 on Intel Xeon 6975P-C. Raw data contains every
+expected feature and tier exactly once, finite positive timings, at least
+2.000075 seconds per engine and at least three runs in every row; recomputing
+the medians and ratios reproduces the report. The scalar SHA-256 in the CI log
+(`ci-logs/heavy-44055371834.log:237`) matches the locally rebuilt binary after
+the subsequent test and safety-comment changes. The measured report replaces
+the earlier table, and the trend command appends this passing run while
+preserving all prior history. Current-head CI must pass before marking ready.
+
+The complete implementation CI passes on a55c663 in
+[44057942673](https://github.com/konard/voice-simulator/actions/runs/44057942673):
+all nine runtime/OS jobs, Rust workspace tests, clippy, formatting, wasm builds
+and parity checks pass. Bun/macOS passes both the corrected architecture check
+and the original anatomy download test. All 13 performance tracking tests pass
+after generating the six-run history; report formatting and diff checks pass.
+Main 0b6c090 remains an ancestor. The final commit contains measured reports,
+this record and removal of the automatically generated PR placeholder only;
+its GitHub checks are required to pass before marking PR #145 ready, unmerged.

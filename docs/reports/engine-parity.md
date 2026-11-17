@@ -1,38 +1,40 @@
 # Engine parity: single-thread render times
 
-Measured on 2026-11-17 by [Heavy checks run 44044547448](https://github.com/konard/voice-simulator/actions/runs/44044547448), commit `6e2c4487e2aea60443d4f8738ae170ed4ea57e9e`. All five performance test files passed with no item limit. The final report commit changes documentation only.
+Measured on 2026-11-17 by [Heavy checks run 44055371834](https://github.com/konard/voice-simulator/actions/runs/44055371834), commit `908f7f7fdda45066976904dece41df4797addad0`. All five performance test files passed (75 tests) with no item limit.
+
+Intel Xeon 6975P-C, four cores. The scalar build SHA-256 is `ef1addd5307bace6722a10802d027671888305dec3db8ea8918f3be615edd653`, identical to the rebuilt implementation after the subsequent test and safety-comment changes (`bf9fe3c` and `a55c663`).
 
 Node v24.22.2, linux x64; seed 82; scalar wasm, one thread. Includes renderer construction, frame preparation and samples. Each engine warms once, then renders for at least 2 seconds and at least 3 runs; times are medians. Every feature and every tier.
 
 | Kind | Feature or tier | Audio (s) | JS (s) | Rust (s) | Rust / JS | Runs JS / Rust |
 | --- | --- | ---: | ---: | ---: | ---: | ---: |
-| feature | solver.waveguide | 0.723 | 0.014953 | 0.010295 | 0.6885 | 128 / 190 |
-| feature | solver.fdtd3d | 0.592 | 0.132884 | 0.125132 | 0.9417 | 15 / 16 |
-| feature | solver.fdtd2d | 0.734 | 0.057980 | 0.039196 | 0.6760 | 35 / 51 |
-| feature | source.lf | 0.723 | 0.015380 | 0.010151 | 0.6600 | 128 / 195 |
-| feature | source.folds | 0.723 | 0.015200 | 0.009555 | 0.6286 | 128 / 207 |
-| feature | source.tract-interaction | 0.723 | 0.017554 | 0.010600 | 0.6039 | 111 / 187 |
-| feature | source.subglottal | 0.723 | 0.019706 | 0.011410 | 0.5790 | 100 / 173 |
-| feature | noise.turbulence | 0.863 | 0.019254 | 0.012310 | 0.6394 | 103 / 161 |
-| feature | losses.frequency | 0.723 | 0.015998 | 0.010182 | 0.6365 | 123 / 194 |
-| feature | filters.output | 0.723 | 0.016111 | 0.010169 | 0.6312 | 123 / 195 |
-| feature | radiation | 0.723 | 0.015987 | 0.010165 | 0.6358 | 124 / 195 |
-| feature | listener.microphone | 0.723 | 0.016221 | 0.010152 | 0.6259 | 121 / 194 |
-| feature | listener.room | 0.592 | 0.020241 | 0.012099 | 0.5978 | 98 / 163 |
-| feature | mode.whisper | 0.862 | 0.028419 | 0.015591 | 0.5486 | 70 / 127 |
-| feature | mode.phonation | 0.669 | 0.019706 | 0.011064 | 0.5615 | 101 / 179 |
-| feature | mode.effort | 0.625 | 0.018478 | 0.008441 | 0.4568 | 108 / 234 |
-| feature | articulators | 0.723 | 0.022322 | 0.010623 | 0.4759 | 89 / 185 |
-| feature | tier.narrowband | 0.723 | 0.012089 | 0.006345 | 0.5248 | 161 / 310 |
-| tier | tier.telephone | 1.622 | 0.028345 | 0.017425 | 0.6148 | 69 / 111 |
-| tier | tier.narrowband | 1.622 | 0.036731 | 0.021788 | 0.5932 | 55 / 90 |
-| tier | tier.wideband | 1.622 | 0.048425 | 0.027356 | 0.5649 | 42 / 72 |
-| tier | tier.minimal | 1.622 | 0.047995 | 0.027233 | 0.5674 | 42 / 72 |
-| tier | tier.low | 1.622 | 0.073544 | 0.044805 | 0.6092 | 28 / 44 |
-| tier | tier.medium | 1.622 | 0.108797 | 0.067779 | 0.6230 | 19 / 30 |
-| tier | tier.high | 1.622 | 0.765362 | 0.710565 | 0.9284 | 3 / 3 |
-| tier | tier.ultra | 1.622 | 4.091578 | 3.902037 | 0.9537 | 3 / 3 |
-| tier | tier.studio | 1.622 | 7.722551 | 7.406592 | 0.9591 | 3 / 3 |
-| tier | tier.reference | 1.622 | 17.658464 | 17.167341 | 0.9722 | 3 / 3 |
+| feature | solver.waveguide | 0.723 | 0.014743 | 0.010274 | 0.6969 | 132 / 189 |
+| feature | solver.fdtd3d | 0.592 | 0.140039 | 0.123275 | 0.8803 | 15 / 16 |
+| feature | solver.fdtd2d | 0.734 | 0.056194 | 0.038743 | 0.6894 | 36 / 52 |
+| feature | source.lf | 0.723 | 0.015275 | 0.010025 | 0.6563 | 129 / 197 |
+| feature | source.folds | 0.723 | 0.014994 | 0.009510 | 0.6342 | 130 / 207 |
+| feature | source.tract-interaction | 0.723 | 0.017446 | 0.010437 | 0.5983 | 112 / 189 |
+| feature | source.subglottal | 0.723 | 0.019474 | 0.011347 | 0.5827 | 102 / 174 |
+| feature | noise.turbulence | 0.863 | 0.019074 | 0.012200 | 0.6396 | 104 / 162 |
+| feature | losses.frequency | 0.723 | 0.015796 | 0.010023 | 0.6345 | 124 / 197 |
+| feature | filters.output | 0.723 | 0.015798 | 0.010022 | 0.6344 | 125 / 197 |
+| feature | radiation | 0.723 | 0.015797 | 0.010020 | 0.6343 | 125 / 198 |
+| feature | listener.microphone | 0.723 | 0.016010 | 0.010042 | 0.6272 | 123 / 197 |
+| feature | listener.room | 0.592 | 0.020018 | 0.011938 | 0.5964 | 98 / 166 |
+| feature | mode.whisper | 0.862 | 0.028056 | 0.015381 | 0.5482 | 71 / 129 |
+| feature | mode.phonation | 0.669 | 0.019155 | 0.010909 | 0.5695 | 104 / 182 |
+| feature | mode.effort | 0.625 | 0.017861 | 0.008350 | 0.4675 | 111 / 237 |
+| feature | articulators | 0.723 | 0.021741 | 0.010516 | 0.4837 | 91 / 187 |
+| feature | tier.narrowband | 0.723 | 0.011965 | 0.006283 | 0.5251 | 163 / 312 |
+| tier | tier.telephone | 1.622 | 0.027836 | 0.017178 | 0.6171 | 70 / 113 |
+| tier | tier.narrowband | 1.622 | 0.036158 | 0.021580 | 0.5968 | 56 / 91 |
+| tier | tier.wideband | 1.622 | 0.048063 | 0.027169 | 0.5653 | 42 / 73 |
+| tier | tier.minimal | 1.622 | 0.047800 | 0.026816 | 0.5610 | 42 / 74 |
+| tier | tier.low | 1.622 | 0.072667 | 0.044102 | 0.6069 | 28 / 45 |
+| tier | tier.medium | 1.622 | 0.106554 | 0.066436 | 0.6235 | 19 / 30 |
+| tier | tier.high | 1.622 | 0.777388 | 0.679459 | 0.8740 | 3 / 3 |
+| tier | tier.ultra | 1.622 | 4.068923 | 3.702027 | 0.9098 | 3 / 3 |
+| tier | tier.studio | 1.622 | 7.672268 | 7.061169 | 0.9203 | 3 / 3 |
+| tier | tier.reference | 1.622 | 17.542063 | 16.202788 | 0.9237 | 3 / 3 |
 
 Command: `npm run test:heavy -- --suite performance` (built wasm required).
