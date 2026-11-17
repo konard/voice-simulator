@@ -1314,6 +1314,9 @@ impl Fdtd3d {
         self.noise_state = 0.0;
         self.burst_input = 0.0;
         self.burst_state = 0.0;
+        self.glottis_pressure = 0.0;
+        self.previous_glottis_pressure = 0.0;
+        self.last_glottal_flow = 0.0;
     }
 }
 

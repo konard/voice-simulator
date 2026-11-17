@@ -92,3 +92,8 @@ tests cover reused aligned and unaligned buffers, including zero padding and
 untouched surrounding bytes. All 33 wasm feature/API parity checks and eight
 layout checks pass; the focused Node 24 benchmark passes at 0.9068 for coarse
 3D. The full performance suite must still pass before publishing its report.
+
+The final reset audit found that 3D retained its incident glottal pressure after
+reset. The two-cell native `fdtd_reset` regression fails before clearing the
+three new interaction state values and passes afterward in both flow and
+microphone modes, matching JavaScript without changing its reference behavior.
