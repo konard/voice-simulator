@@ -52,5 +52,11 @@
     "licence": "Unknown",
     "reason": "no licence; \"all material is copyright © The University of Edinburgh\"",
     "url": "https://www.cstr.ed.ac.uk/research/projects/fda"
+  },
+  {
+    "title": "VTR Formants Database (Deng et al. 2006)",
+    "licence": "All rights reserved",
+    "reason": "\"(c) Portions hereof copyright UC Regents. All Rights Reserved.\"; formant labels of 538 TIMIT sentences, whose audio needs the paid LDC licence",
+    "url": "https://www.seas.ucla.edu/spapl/VTRFormants.html"
   }
 ]
