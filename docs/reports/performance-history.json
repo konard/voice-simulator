@@ -1076,6 +1076,275 @@
           "rtf": 4.669343895091193
         }
       ]
+    },
+    {
+      "schema": 1,
+      "date": "2026-11-17T08:54:08.670Z",
+      "commit": "8bb2a502260e203db5882f90b536f9982a7b99ab",
+      "version": "0.11.31",
+      "machine": {
+        "cpu": "INTEL(R) XEON(R) PLATINUM 8573C",
+        "cores": 4,
+        "platform": "linux",
+        "arch": "x64",
+        "runtime": "node 24.22.2"
+      },
+      "text": "The quick brown fox jumps over the dog.",
+      "calibration": 0.012155342000012751,
+      "rows": [
+        {
+          "task": "synthesis",
+          "engine": "js",
+          "tier": "telephone",
+          "solver": "waveguide",
+          "sampleRate": 8000,
+          "duration": 3.31725,
+          "runs": 5,
+          "seconds": 0.07389322500000003,
+          "median": 0.07620282299999996,
+          "rtf": 0.02227544652950487
+        },
+        {
+          "task": "synthesis",
+          "engine": "rust",
+          "tier": "telephone",
+          "solver": "waveguide",
+          "sampleRate": 8000,
+          "duration": 3.31725,
+          "runs": 5,
+          "seconds": 0.05262989799999991,
+          "median": 0.054313934000000015,
+          "rtf": 0.015865520536589014
+        },
+        {
+          "task": "synthesis",
+          "engine": "js",
+          "tier": "narrowband",
+          "solver": "waveguide",
+          "sampleRate": 11025,
+          "duration": 3.31718820861678,
+          "runs": 5,
+          "seconds": 0.08145779600000014,
+          "median": 0.0921265350000001,
+          "rtf": 0.024556278051514863
+        },
+        {
+          "task": "synthesis",
+          "engine": "rust",
+          "tier": "narrowband",
+          "solver": "waveguide",
+          "sampleRate": 11025,
+          "duration": 3.31718820861678,
+          "runs": 5,
+          "seconds": 0.06119863600000008,
+          "median": 0.06230811900000004,
+          "rtf": 0.01844894897462542
+        },
+        {
+          "task": "synthesis",
+          "engine": "js",
+          "tier": "wideband",
+          "solver": "waveguide",
+          "sampleRate": 16000,
+          "duration": 3.3171875,
+          "runs": 5,
+          "seconds": 0.10091348800000015,
+          "median": 0.1050065340000001,
+          "rtf": 0.03042140005652383
+        },
+        {
+          "task": "synthesis",
+          "engine": "rust",
+          "tier": "wideband",
+          "solver": "waveguide",
+          "sampleRate": 16000,
+          "duration": 3.3171875,
+          "runs": 5,
+          "seconds": 0.07295119399999976,
+          "median": 0.07572620899999992,
+          "rtf": 0.021991881375412078
+        },
+        {
+          "task": "synthesis",
+          "engine": "js",
+          "tier": "minimal",
+          "solver": "waveguide",
+          "sampleRate": 22050,
+          "duration": 3.31718820861678,
+          "runs": 5,
+          "seconds": 0.09927716899999996,
+          "median": 0.10320163000000002,
+          "rtf": 0.02992810861383024
+        },
+        {
+          "task": "synthesis",
+          "engine": "rust",
+          "tier": "minimal",
+          "solver": "waveguide",
+          "sampleRate": 22050,
+          "duration": 3.31718820861678,
+          "runs": 5,
+          "seconds": 0.07118340800000032,
+          "median": 0.07465742799999953,
+          "rtf": 0.02145895967406769
+        },
+        {
+          "task": "synthesis",
+          "engine": "js",
+          "tier": "low",
+          "solver": "waveguide",
+          "sampleRate": 32000,
+          "duration": 3.31715625,
+          "runs": 5,
+          "seconds": 0.15509400000000004,
+          "median": 0.1637880439999999,
+          "rtf": 0.04675510838538282
+        },
+        {
+          "task": "synthesis",
+          "engine": "rust",
+          "tier": "low",
+          "solver": "waveguide",
+          "sampleRate": 32000,
+          "duration": 3.31715625,
+          "runs": 5,
+          "seconds": 0.11764412399999946,
+          "median": 0.12084478499999932,
+          "rtf": 0.03546535500098901
+        },
+        {
+          "task": "synthesis",
+          "engine": "js",
+          "tier": "medium",
+          "solver": "waveguide",
+          "sampleRate": 48000,
+          "duration": 3.3171666666666666,
+          "runs": 5,
+          "seconds": 0.23281396199999926,
+          "median": 0.23415736100000048,
+          "rtf": 0.07018458383158296
+        },
+        {
+          "task": "synthesis",
+          "engine": "rust",
+          "tier": "medium",
+          "solver": "waveguide",
+          "sampleRate": 48000,
+          "duration": 3.3171666666666666,
+          "runs": 5,
+          "seconds": 0.17529522799999994,
+          "median": 0.1796383740000001,
+          "rtf": 0.05284486600010047
+        },
+        {
+          "task": "synthesis",
+          "engine": "js",
+          "tier": "high",
+          "solver": "fdtd3d",
+          "sampleRate": 48000,
+          "duration": 3.3171666666666666,
+          "runs": 2,
+          "seconds": 2.0423744850000003,
+          "median": 2.0694317810000005,
+          "rtf": 0.6156984831432448
+        },
+        {
+          "task": "synthesis",
+          "engine": "rust",
+          "tier": "high",
+          "solver": "fdtd3d",
+          "sampleRate": 48000,
+          "duration": 3.3171666666666666,
+          "runs": 2,
+          "seconds": 1.9893041260000008,
+          "median": 1.9949456319999999,
+          "rtf": 0.5996997817414462
+        },
+        {
+          "task": "synthesis",
+          "engine": "rust-mt",
+          "tier": "high",
+          "solver": "fdtd3d",
+          "sampleRate": 48000,
+          "duration": 3.3171666666666666,
+          "runs": 2,
+          "seconds": 1.9535019150000008,
+          "median": 1.9638302039999997,
+          "rtf": 0.5889067723458777
+        },
+        {
+          "task": "synthesis",
+          "engine": "js",
+          "tier": "ultra",
+          "solver": "fdtd3d",
+          "sampleRate": 48000,
+          "duration": 3.3171666666666666,
+          "runs": 2,
+          "seconds": 11.093311328000004,
+          "median": 11.122405561500003,
+          "rtf": 3.3442128306285497
+        },
+        {
+          "task": "synthesis",
+          "engine": "rust",
+          "tier": "ultra",
+          "solver": "fdtd3d",
+          "sampleRate": 48000,
+          "duration": 3.3171666666666666,
+          "runs": 2,
+          "seconds": 10.963014643000003,
+          "median": 10.964855036500005,
+          "rtf": 3.304933319499574
+        },
+        {
+          "task": "synthesis",
+          "engine": "rust-mt",
+          "tier": "ultra",
+          "solver": "fdtd3d",
+          "sampleRate": 48000,
+          "duration": 3.3171666666666666,
+          "runs": 2,
+          "seconds": 10.900754620000008,
+          "median": 10.912928402999999,
+          "rtf": 3.286164282771444
+        },
+        {
+          "task": "synthesis",
+          "engine": "js",
+          "tier": "studio",
+          "solver": "fdtd3d",
+          "sampleRate": 48000,
+          "duration": 3.3171666666666666,
+          "runs": 2,
+          "seconds": 21.08414157900002,
+          "median": 21.098951921000015,
+          "rtf": 6.356069410340155
+        },
+        {
+          "task": "synthesis",
+          "engine": "rust",
+          "tier": "studio",
+          "solver": "fdtd3d",
+          "sampleRate": 48000,
+          "duration": 3.3171666666666666,
+          "runs": 2,
+          "seconds": 20.854383977999998,
+          "median": 20.8650168555,
+          "rtf": 6.286806203486911
+        },
+        {
+          "task": "synthesis",
+          "engine": "rust-mt",
+          "tier": "studio",
+          "solver": "fdtd3d",
+          "sampleRate": 48000,
+          "duration": 3.3171666666666666,
+          "runs": 2,
+          "seconds": 20.73816096899999,
+          "median": 20.774171522000003,
+          "rtf": 6.251769372154948
+        }
+      ]
     }
   ]
 }

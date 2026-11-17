@@ -152,3 +152,9 @@ out-of-range endpoints and mismatched arrays. All 50 focused wasm parity,
 3D solver/field, size and architecture checks pass without skips. The builds
 measure 336,038 bytes scalar and 344,435 bytes SIMD within the existing budget.
 The complete CI speed gate remains required before finalizing the implementation.
+
+Merged main 0b6c090 with IPA recognition (issue 68), retaining its Rust API and
+parity tests alongside the feature probes. Both independently recorded passing
+performance histories are preserved. The combined wasm measures 383,667 bytes
+scalar and 390,932 bytes SIMD, giving a 393,216-byte (384 KiB) budget by the
+existing rounding rule. The speed rerun measures this combined binary.

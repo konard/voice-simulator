@@ -14,7 +14,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, it, expect } from 'test-anywhere';
-import { encodeVslex } from '../src/g2p/vslex.js';
+import { compareCodePoints, encodeVslex } from '../src/g2p/vslex.js';
 import {
   addLexicon,
   clearLexicons,
@@ -66,6 +66,46 @@ function testEntries() {
   }
   return entries;
 }
+
+describe('vslex code-point ordering', () => {
+  it('orders code points without confusing supplementary characters or prefixes', () => {
+    const words = [
+      '',
+      'a',
+      'ab',
+      'a𐀀',
+      'a😀',
+      '\ud800',
+      '\udfff',
+      '\ue000',
+      '\uffff',
+      '𐀀',
+      '𐀀a',
+      '𐀀😀',
+      '😀',
+      '中',
+      'привет',
+      'अ',
+    ];
+    const reference = (left, right) => {
+      const a = [...left];
+      const b = [...right];
+      for (let i = 0; i < Math.min(a.length, b.length); i++) {
+        if (a[i] !== b[i]) {
+          return a[i].codePointAt(0) - b[i].codePointAt(0);
+        }
+      }
+      return a.length - b.length;
+    };
+    for (const left of words) {
+      for (const right of words) {
+        expect(Math.sign(compareCodePoints(left, right))).toBe(
+          Math.sign(reference(left, right))
+        );
+      }
+    }
+  });
+});
 
 describe('pronunciation lexicons', () => {
   it('round-trips a lexicon', () => {

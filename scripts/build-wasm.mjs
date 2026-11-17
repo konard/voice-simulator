@@ -52,11 +52,11 @@ import { THREAD_MEMORY } from '../src/engine/layout.js';
  * renderer; scalar file 196 952 bytes); with both, the scalar file is
  * 199 852 bytes, the SIMD file 206 225 and the threads file 208 664. Raise
  * it only with the newly measured size in the commit message. With issues
- * 60 (formants), 61 (source analysis), 64 (codebook) and 82 (complete
- * acoustics parity), scalar is 335 481 bytes and SIMD is 344 421,
- * rounded up to 360 448 (Rust 1.100.0).
+ * 60 (formants), 61 (source analysis), 64 (codebook), 68 (IPA recognition)
+ * and 82 (complete acoustics parity), scalar is 383 667 bytes and SIMD
+ * is 390 932, rounded up to 393 216 (Rust 1.100.0).
  */
-export const WASM_SIZE_BUDGET = 360448;
+export const WASM_SIZE_BUDGET = 393216;
 
 /**
  * Whether src/engine/voice-simulator-simd.wasm is shipped: only when it
