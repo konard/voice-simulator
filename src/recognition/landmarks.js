@@ -26,6 +26,17 @@ function thresholds(options) {
   return T;
 }
 
+function previousLandmarks(output, first) {
+  const previous = new Map();
+  for (const item of output.landmarks) {
+    const t = Math.round((item.time - output.startTime) / output.hop);
+    if (t < first) {
+      previous.set(item.type, { t, type: item.type, strength: item.strength });
+    }
+  }
+  return [...previous.values()];
+}
+
 /**
  * A stage is invalid after trim/reset. `advance(true)` drains the final
  * lookahead, after the analyzer has been flushed. Returned nuclei are the
@@ -121,10 +132,17 @@ export function createLandmarkDetector(frames, options = {}) {
       const stable = final ? seen : Math.max(0, seen - smoothing - radius);
       scanNuclei(stable, emitted, final);
       const priorTime = output.landmarks.at(-1)?.time ?? -Infinity;
+      const first = Math.max(
+        0,
+        Math.floor((priorTime - output.startTime) / frames.hop) -
+          Math.round(0.02 / frames.hop)
+      );
       const candidates = landmarkCandidates(
         frames,
         T.landmarkRise,
-        Math.max(0, Math.floor((priorTime - output.startTime) / frames.hop) - 4)
+        first,
+        seen,
+        previousLandmarks(output, first)
       );
       const last = final ? seen : Math.max(0, seen - landmarkDelay);
       for (const item of candidates) {

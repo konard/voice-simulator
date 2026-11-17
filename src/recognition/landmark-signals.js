@@ -155,19 +155,30 @@ export function landmarkCandidates(
   frames,
   threshold,
   first = 0,
-  last = frames.count
+  last = frames.count,
+  previous = []
 ) {
   const coarse = Math.max(1, Math.round(0.025 / frames.hop));
   const fine = Math.max(1, Math.round(0.013 / frames.hop));
   const radius = Math.round(0.02 / frames.hop);
-  const peaks = bandPeaks(frames, threshold, first, last, {
-    coarse,
-    fine,
-    radius,
-  });
+  // A candidate near the left edge still needs the bands just before it.
+  const peaks = bandPeaks(
+    frames,
+    threshold,
+    Math.max(0, first - Math.round(0.01 / frames.hop)),
+    last,
+    {
+      coarse,
+      fine,
+      radius,
+    }
+  );
   const candidates = [];
   for (const peak of peaks) {
     const { t, b, sign } = peak;
+    if (t < first) {
+      continue;
+    }
     const before = frames.periodicity[Math.max(0, t - coarse)] >= 0.45;
     const after =
       frames.periodicity[Math.min(frames.count - 1, t + coarse)] >= 0.45;
@@ -184,7 +195,9 @@ export function landmarkCandidates(
     (a, b) =>
       a.t - b.t || a.type.localeCompare(b.type) || b.strength - a.strength
   );
-  const kept = [];
+  // Seed suppression with the last confirmed candidate of each type before
+  // this window. Dropping that history can resurrect a suppressed neighbour.
+  const kept = previous.slice();
   for (const item of candidates) {
     const prior = kept.findLastIndex((p) => p.type === item.type);
     if (prior >= 0 && (item.t - kept[prior].t) * frames.hop < 0.02 - 1e-9) {

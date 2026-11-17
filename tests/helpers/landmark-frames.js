@@ -1,6 +1,38 @@
 /** Two voiced peaks, with a shallow early valley and a deeper inter-peak
  * minimum. Tests supply features directly to isolate the landmark stage. */
 import { analyzeFrames } from '../../src/recognition/frontend.js';
+import { createRandom } from '../../src/random.js';
+
+/** Short seeded band walks expose suppression across streaming windows. */
+export function candidateFrames(seed = 5) {
+  const count = 160;
+  const random = createRandom(seed);
+  const frames = {
+    rate: 16000,
+    hop: 0.005,
+    count,
+    capacity: count,
+    startTime: 0,
+    melBands: 24,
+    mel: new Float32Array(count * 24).fill(-20),
+    band: new Float32Array(count * 6),
+    energy: new Float32Array(count).fill(-10),
+    noise: new Float32Array(count).fill(-80),
+    speech: new Uint8Array(count).fill(1),
+    periodicity: new Float32Array(count),
+    zcr: new Float32Array(count),
+    gravity: new Float32Array(count),
+    tilt: new Float32Array(count),
+  };
+  for (let t = 0; t < count; t++) {
+    frames.periodicity[t] = Math.floor(t / 13) % 2;
+    for (let b = 0; b < 6; b++) {
+      const prior = t ? frames.band[(t - 1) * 6 + b] : -30;
+      frames.band[t * 6 + b] = prior + (random() - 0.5) * 20;
+    }
+  }
+  return frames;
+}
 
 export function boundaryFrames(trailingSilence = false) {
   const frames = analyzeFrames(new Float32Array(4000), 8000);
