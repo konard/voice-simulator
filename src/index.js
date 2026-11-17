@@ -651,3 +651,13 @@ export {
   rigFrame,
   vrmVowelBinds,
 } from './animation/rig-bridge.js';
+// Simulator-generated articulatory codebook (issue 64).
+export {
+  buildCodebook,
+  serializeCodebook,
+  parseCodebook,
+  frameEnvelope,
+  CODEBOOK_CHANNELS,
+  GRID,
+  tractResponse,
+} from './recognition/codebook.js';
