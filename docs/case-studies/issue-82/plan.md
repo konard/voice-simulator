@@ -74,3 +74,10 @@ transferable source state. The Rust wrapper now returns an empty array and
 ignores supplied state for this source, while LF save/restore is unchanged.
 The new `preserves the empty transferable state of the fold source` regression
 fails with the pre-fix wrapper and passes with the fix.
+
+While the final tests ran, main merged source analysis (issue 61). The next
+matrix run failed at merge simulation, before tests, with conflicts in the
+workflow, build budget and size assertion (`ci-logs/checks-44041210533.log:10611`,
+`:10615`, `:10623`). Merged main 722373a, retained both sets of Rust parity
+tests and measured the combined wasm: scalar 329,242 bytes, SIMD 338,207.
+The size budget follows the existing rounding rule at 344,064 bytes (336 KiB).

@@ -51,11 +51,12 @@ import { THREAD_MEMORY } from '../src/engine/layout.js';
  * THREADS_TOOLCHAIN) and for issue 52 (vocal effort in the glottis and the
  * renderer; scalar file 196 952 bytes); with both, the scalar file is
  * 199 852 bytes, the SIMD file 206 225 and the threads file 208 664. Raise
- * it only with the newly measured size in the commit message. Issue 82
- * adds folds, subglottal coupling, whisper and the 2D sheet: scalar
- * 254 643 bytes and SIMD 262 474 bytes (Rust 1.100.0).
+ * it only with the newly measured size in the commit message. With issues
+ * 61 (source analysis), 64 (codebook) and 82 (complete acoustics parity),
+ * scalar is 329 242 bytes and SIMD is 338 207, rounded up to 344 064
+ * (Rust 1.100.0).
  */
-export const WASM_SIZE_BUDGET = 278528;
+export const WASM_SIZE_BUDGET = 344064;
 
 /**
  * Whether src/engine/voice-simulator-simd.wasm is shipped: only when it
