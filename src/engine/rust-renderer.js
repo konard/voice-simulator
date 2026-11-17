@@ -86,7 +86,7 @@ export function checkSupported(options) {
   }
   const source = options.source ?? DEFAULT_SOURCE;
   if (!['lf', 'folds'].includes(source)) {
-    throw unsupported(`unknown source '${source}'`);
+    throw unsupported(`Unknown source: ${source}`);
   }
   if (options.interaction && source !== 'folds') {
     throw new Error('Source-tract interaction requires source: folds');

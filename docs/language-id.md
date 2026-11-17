@@ -81,7 +81,7 @@ Measured with Node.js 26.13.0 on 2026-11-17:
 | Mixed decoded sound/language units               | 75/79 (94.94%)         | 85%                          |
 | Spans on each mixed fixture                      | At most true count + 1 | At most true count + 1       |
 | English continuity                               | 30 syllables, one span | One span                     |
-| Three-sound confidence                           | Below 0.5              | Below 0.5                    |
+| Three-sound confidence                           | 0.1503647386           | Below 0.5                    |
 | Seed-1 nearest-sound noise, 10% chance per sound | 67/75 (89.33%)         | 75%; regression floor 87.33% |
 | Warm 120-sound query, zero lexical comparisons   | 2.330 ms               | Below 50 ms                  |
 
