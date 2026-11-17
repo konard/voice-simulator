@@ -11,6 +11,7 @@ import { LANDMARK_THRESHOLDS } from '../src/recognition/landmark-thresholds.js';
 import { float64View } from '../src/engine/wasm-loader.js';
 import { loadRustEngine, noRust } from './helpers/rust-engine.js';
 import { itUnless } from './helpers/skip.js';
+import { boundaryFrames } from './helpers/landmark-frames.js';
 const it = itUnless(noRust);
 const KEYS = [
   'silence',
@@ -100,6 +101,16 @@ function packedExpected(result) {
   return rows;
 }
 describe('Rust landmark parity', () => {
+  it('matches strengths after a deeper boundary replaces an early minimum', async () => {
+    for (const trailingSilence of [false, true]) {
+      const frames = boundaryFrames(trailingSilence);
+      const expected = packedExpected(findLandmarks(frames));
+      const actual = await rustResult(frames);
+      for (let i = 0; i < expected.length; i++) {
+        expect(Math.abs(actual[i] - expected[i]) <= 1e-6).toBe(true);
+      }
+    }
+  });
   it('matches the JavaScript sonority, classes, nuclei and landmarks', async () => {
     for (const rate of [8000, 11025, 16000]) {
       for (const preset of ['male', 'female']) {

@@ -20,6 +20,14 @@ export function createNucleusScanner(frames, output, T) {
     return at;
   }
 
+  function setEnd(nucleus, right) {
+    const frame = (value) =>
+      Math.round((value - output.startTime) / frames.hop);
+    nucleus.end = time(right);
+    nucleus.strength =
+      s[frame(nucleus.time)] - Math.min(s[frame(nucleus.start)], s[right]);
+  }
+
   function emit(right, emitted) {
     if (pending < 0) {
       return;
@@ -65,13 +73,7 @@ export function createNucleusScanner(frames, output, T) {
       (!frames.speech[t] ||
         (t > 0 && t + 1 < last && s[t] <= s[t - 1] && s[t] < s[t + 1]))
     ) {
-      prev.end = time(t);
-      prev.strength =
-        s[lastPeak] -
-        Math.min(
-          s[Math.round((prev.start - output.startTime) / frames.hop)],
-          s[t]
-        );
+      setEnd(prev, t);
     }
   }
 
@@ -98,7 +100,7 @@ export function createNucleusScanner(frames, output, T) {
         if (prev) {
           const between = minimum(lastPeak, t);
           pendingLeft = between;
-          prev.end = time(between);
+          setEnd(prev, between);
         }
       }
       valley = t;
@@ -131,7 +133,7 @@ export function createNucleusScanner(frames, output, T) {
       if (prev?.end === null) {
         for (let t = lastPeak + 1; t < frames.count; t++) {
           if (!frames.speech[t]) {
-            prev.end = time(t);
+            setEnd(prev, t);
             break;
           }
         }

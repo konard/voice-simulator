@@ -314,6 +314,11 @@ fn minimum(s: &[f32], first: usize, end: usize) -> usize {
     }
     at
 }
+fn set_end(s: &[f32], nucleus: &mut Nucleus, right: usize) {
+    nucleus.end = Some(right);
+    nucleus.strength =
+        (s[nucleus.frame] as f64) - math::min(s[nucleus.start] as f64, s[right] as f64);
+}
 fn emit(
     s: &[f32],
     pending: &mut Option<usize>,
@@ -344,13 +349,12 @@ pub fn nuclei(f: &Frames<'_>, s: &[f32], thresholds: &Thresholds) -> Vec<Nucleus
         if s[t] <= s[valley] {
             valley = t;
         }
-        if let (Some(prev), Some(last)) = (output.last_mut(), last_peak) {
+        if let Some(prev) = output.last_mut() {
             if prev.end.is_none()
                 && (f.get(t, 2) == 0.0
                     || (t > 0 && t + 1 < f.count && s[t] <= s[t - 1] && s[t] < s[t + 1]))
             {
-                prev.end = Some(t);
-                prev.strength = (s[last] as f64) - math::min(s[prev.start] as f64, s[t] as f64);
+                set_end(s, prev, t);
             }
         }
         let mut is_peak = (s[t] as f64) >= f.get(t, 1) + thresholds.0[7] && f.get(t, 3) >= 0.45;
@@ -387,7 +391,7 @@ pub fn nuclei(f: &Frames<'_>, s: &[f32], thresholds: &Thresholds) -> Vec<Nucleus
                 if let Some(last) = last_peak {
                     let between = minimum(s, last, t);
                     pending_left = between;
-                    output.last_mut().unwrap().end = Some(between);
+                    set_end(s, output.last_mut().unwrap(), between);
                 }
             }
             valley = t;
@@ -419,7 +423,7 @@ pub fn nuclei(f: &Frames<'_>, s: &[f32], thresholds: &Thresholds) -> Vec<Nucleus
         if prev.end.is_none() {
             for t in last + 1..f.count {
                 if f.get(t, 2) == 0.0 {
-                    prev.end = Some(t);
+                    set_end(s, prev, t);
                     break;
                 }
             }
@@ -459,6 +463,45 @@ pub fn find_landmarks(f: &Frames<'_>, thresholds: &Thresholds) -> Output {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn deeper_boundary_updates_strength() {
+        let count = 100;
+        let mut rows = vec![0.0; count * 14];
+        let mut s = vec![-20.0; count];
+        let points = [
+            (0, -20.0),
+            (20, 20.0),
+            (26, -10.0),
+            (32, 8.0),
+            (44, -30.0),
+            (66, 15.0),
+            (99, -50.0),
+        ];
+        for edge in points.windows(2) {
+            let (left, low) = edge[0];
+            let (right, high) = edge[1];
+            for (t, value) in s.iter_mut().enumerate().take(right + 1).skip(left) {
+                *value = low + (high - low) * (t - left) as f32 / (right - left) as f32;
+            }
+        }
+        for t in 0..count {
+            rows[t * 14 + 1] = -100.0;
+            rows[t * 14 + 2] = 1.0;
+            rows[t * 14 + 3] = 0.9;
+        }
+        let frames = Frames {
+            rows: &rows,
+            count,
+            mel_bands: 1,
+            rate: 8000.0,
+            hop: 0.005,
+        };
+        let thresholds = Thresholds([7.0, 0.75, 0.225, 800.0, 18.0, 0.6, 1.0, 10.0, 2.0, 9.0]);
+        let result = nuclei(&frames, &s, &thresholds);
+        assert_eq!(result.len(), 2);
+        assert_eq!(result[0].end, Some(44));
+        assert_eq!(result[0].strength, 50.0);
+    }
     #[test]
     fn nucleus_does_not_require_speech_flag() {
         let count = 80;
