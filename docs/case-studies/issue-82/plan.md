@@ -39,3 +39,7 @@ and README at 1505 lines. Logs are preserved locally under `ci-logs/`:
 `line-limits-44036861775.log:325`. The assertions now check ABI 5 and rejection
 of unknown solvers/sources; the README is within the 1500-line limit.
 Current-commit CI and the full performance run remain required before completion.
+
+The next CI merge included four README lines from newly merged main (issue 64),
+so `line-limits-44037755178.log:327` reported 1502 lines. Merged main explicitly
+and condensed the thread guide while retaining its API and benchmark links.

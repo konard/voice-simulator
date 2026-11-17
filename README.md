@@ -860,17 +860,13 @@ loads it with a pool of Web Workers or `worker_threads` that share its
 memory. Without that file, without `SharedArrayBuffer` or on a page that is
 not cross-origin isolated it falls back to one thread; `engine.threads`
 tells how many threads it got, `renderer.threads` how many a render uses,
-and `engine.close()` stops the workers. A render uses its threads only when
-the grid has at least `THREAD_MIN_LINKS` links. The heavy test
-`performance-threads` found no grid where 2 threads were 1.3 times faster
-than one ([docs/reports/performance-threads.md](docs/reports/performance-threads.md)),
-so that constant is `usize::MAX` for now and a render stays on one thread
-unless `threadMinLinks` (for example 0, any grid) asks for a team. The
-samples are the same bits on any number of threads. Natively,
-`voice-simulator-cli render-job <job> --threads <n|auto>` (with
-`--thread-min-links <n>`) does the same; `createThreadPool` and `withTeam`
-are the parts underneath.
-One thread stays the default.
+and `engine.close()` stops the workers. A render uses a team above
+`THREAD_MIN_LINKS`; the [thread benchmark](docs/reports/performance-threads.md)
+keeps that threshold at `usize::MAX` until two threads are 1.3 times faster.
+`threadMinLinks: 0` forces a team on any grid. Samples are bit-identical on
+any thread count; one thread stays the default. The native CLI accepts
+`render-job <job> --threads <n|auto> --thread-min-links <n>`; `createThreadPool`
+and `withTeam` expose the underlying pool and team operations.
 
 Custom solvers and WebGPU devices use `engine: 'js'`; passing them directly
 to Rust throws `ENGINE_UNSUPPORTED`. Historical pangram measurements are in
