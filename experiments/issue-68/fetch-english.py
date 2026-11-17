@@ -75,7 +75,8 @@ BOOKS = [
     ),
 ]
 
-(ROOT / "en").mkdir(exist_ok=True)
+(ROOT / "en").mkdir(parents=True, exist_ok=True)
+(ROOT / "cache").mkdir(exist_ok=True)
 for repo, name, title, author, death, year in BOOKS:
     url = f"https://raw.githubusercontent.com/GITenberg/{repo}/master/{name}"
     raw = ROOT / "cache" / name
