@@ -148,8 +148,8 @@ Malformed packets are rejected before allocation from their claimed counts.
 With the merged source-analysis, codebook and formant cores, the engine measures
 332,646 scalar and 338,849 SIMD bytes with Rust 1.100.0; the size budget
 was 344,064 bytes (336 KiB). Language identification and joint recognition
-now measure 384,428 scalar and 390,690 SIMD bytes, with a 393,216-byte
-(384 KiB) budget rounded to the next 16,384 bytes.
+with the current acoustics cores measure 435,525 scalar and 442,832 SIMD
+bytes, with a 458,752-byte (448 KiB) budget rounded to the next 16,384 bytes.
 
 `language_id.rs` derives weighted phone statistics, scores syllables, finds
 and smooths language paths, and computes confidence and duration shares.
