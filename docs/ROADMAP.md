@@ -220,6 +220,15 @@ whether a silence run is a closure conflicts with immutable classes at
 60 ms. The [investigation](case-studies/issue-62/README.md) contains executable
 counterexamples; the acceptance targets remain unchanged.
 
+The batch source analysis of [#61](https://github.com/konard/voice-simulator/issues/61)
+(`inverseFilter`) removes an all-pole tract with four-stage IAIF, then measures
+LF Rd, open and normalized amplitude quotients, speech/source H1-H2, HNR and CPP.
+It accepts the pitch track of #59 or uses local autocorrelation, reports closure
+instants and reliable-frame quartiles, and flags recordings missing the low band.
+Steady phonation gets an LF-constrained tract refinement. The same numerical code
+is in the Rust core with WebAssembly parity tests. Definitions, measured limits
+and reproducing commands are in [INVERSE-FILTER.md](INVERSE-FILTER.md).
+
 | Issue                                                      | Type    | Title                                                                          | Blocked by                                                                                                                                                                                                                                                                                                                                                             | Requirements                    |
 | ---------------------------------------------------------- | ------- | ------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------- |
 | [#58](https://github.com/konard/voice-simulator/issues/58) | Feature | Streaming analysis front end                                                   | nothing                                                                                                                                                                                                                                                                                                                                                                | R6, R7, R12, R13, R18           |

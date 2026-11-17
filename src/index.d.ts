@@ -4353,6 +4353,18 @@ export {
   type LandmarkResult,
   type LandmarkDetector,
 } from './recognition/landmarks.js';
+
+export {
+  inverseFilter,
+  INVERSE_FILTER_DEFAULTS,
+  rdToTenseness,
+  lfHarmonics,
+  type InverseFilterOptions,
+  type InverseFilterResult,
+  type SourceMeasure,
+  type SourceSummary,
+} from './recognition/inverse-filter.js';
+
 // Simulator-generated articulatory codebook (issue 64).
 export {
   buildCodebook,

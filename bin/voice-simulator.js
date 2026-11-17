@@ -121,6 +121,8 @@ function usage() {
     '  benchmark           Measure the audio LOD tiers on this machine',
     '  serve               Start the HTTP API (with streaming)',
     '',
+    'Library source analysis: inverseFilter(analyzeFrames(samples, rate))',
+    '  Batch flow, closure times and voice-source measures; docs/INVERSE-FILTER.md',
     'Library: buildCodebook / frameEnvelope provide articulatory candidates',
     '         (generated on first use; API and limits: docs/CODEBOOK.md)',
     '',

@@ -658,6 +658,14 @@ export {
   createLandmarkDetector,
   BROAD_CLASSES,
 } from './recognition/landmarks.js';
+
+export {
+  inverseFilter,
+  INVERSE_FILTER_DEFAULTS,
+  rdToTenseness,
+  lfHarmonics,
+} from './recognition/inverse-filter.js';
+
 // Simulator-generated articulatory codebook (issue 64).
 export {
   buildCodebook,

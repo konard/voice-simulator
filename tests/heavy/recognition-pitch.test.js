@@ -20,10 +20,7 @@ const PITCH_CORPORA = Object.freeze([]);
 /** Corpora named by issue 59, by the URL of their refused.json entry. */
 const CANDIDATES = Object.freeze([
   [
-    'PTDB-TUG',
-    'https://www.spsc.tugraz.at/databases-and-tools/ptdb-tug-pitch-tracking-database-from-graz-university-of-technology.html',
-    // The live page times out; retain its registry identity and cite the
-    // snapshot found by the link check in run 44033456196.
+    'PTDB-TUG (archived)',
     'https://web.archive.org/web/20261005152841/https://www.spsc.tugraz.at/databases-and-tools/ptdb-tug-pitch-tracking-database-from-graz-university-of-technology.html',
   ],
   ['Keele', 'https://zenodo.org/records/3920591'],
@@ -34,14 +31,13 @@ const refused = JSON.parse(
   readFileSync(new URL('../../datasets/refused.json', import.meta.url), 'utf8')
 );
 
-const candidates = CANDIDATES.map(([name, url, archive]) => {
+const candidates = CANDIDATES.map(([name, url]) => {
   const entry = refused.find((item) => item.url === url);
   return {
     name,
     url,
     licence: entry?.licence ?? null,
     reason: entry?.reason ?? null,
-    ...(archive ? { archive } : {}),
   };
 });
 
@@ -66,7 +62,7 @@ describe('recognition pitch on real speech', () => {
       '| ------ | ------- | ------ |',
       ...candidates.map(
         (item) =>
-          `| [${item.name}${item.archive ? ' (archived)' : ''}](${item.archive ?? item.url}) | ${item.licence} | ${item.reason} |`
+          `| [${item.name}](${item.url}) | ${item.licence} | ${item.reason} |`
       ),
       '',
       'The synthetic checks of tests/recognition-pitch.test.js measure the',

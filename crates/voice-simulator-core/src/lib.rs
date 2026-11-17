@@ -25,6 +25,10 @@ pub mod filters;
 pub mod frame;
 pub mod glottis;
 pub mod landmarks;
+
+mod inverse_dsp;
+pub mod inverse_filter;
+mod inverse_refinement;
 pub mod listener;
 pub mod losses;
 pub mod math;
