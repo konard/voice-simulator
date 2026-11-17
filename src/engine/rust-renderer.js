@@ -56,8 +56,8 @@ import { float32View, float64View } from './wasm-loader.js';
 const REST_LENGTH = 16.5;
 
 /**
- * An Error with `code = 'ENGINE_UNSUPPORTED'`: the options need a part of
- * the JavaScript renderer the Rust engine does not have.
+ * An Error with `code = 'ENGINE_UNSUPPORTED'`: invalid CPU options, or a
+ * custom solver/WebGPU device that requires an explicit JavaScript engine.
  * @param {string} message
  */
 export function unsupported(message) {
@@ -67,8 +67,7 @@ export function unsupported(message) {
 }
 
 /**
- * Throws an `unsupported` error for options the Rust renderer lacks (the
- * solver, a WebGPU device or a bandLimit not above 0).
+ * Validate the CPU solver, source, WebGPU device and band limit options.
  * The microphone and the room are checked when a renderer is built.
  * @param {object} options as for RustVoiceRenderer
  */
@@ -326,7 +325,7 @@ export class FramePlanner {
     this.teeth = options.teeth !== false;
     this.stride = frameStride(this.sections);
     this.solver = options.solver ?? 'waveguide';
-    /** The packed voxel model of the 3D solver; empty for the waveguide. */
+    /** Packed geometry of the 2D/3D solver; empty for the waveguide. */
     this.model = new Uint8Array(0);
     let listening = null;
     if (this.solver === 'fdtd3d') {
@@ -454,6 +453,7 @@ export class RustVoiceRenderer {
     this.sampleRate = sampleRate;
     this.sections = sections;
     this.solver = this.planner.solver;
+    this.source = options.source ?? DEFAULT_SOURCE;
     this.totalSamples = totalSamples;
     /** Cells of the voxel model (the 3D solver), for field(). */
     this.cells = this.solver === 'fdtd3d' ? modelCells(model) : 0;
@@ -591,6 +591,10 @@ export class RustVoiceRenderer {
    * @returns {Float64Array}
    */
   saveSources() {
+    // The reference's two-mass source has no transferable state (issue 29).
+    if (this.source === 'folds') {
+      return new Float64Array(0);
+    }
     const pointer = this.fieldValues.reserve(SOURCE_STATE.LENGTH);
     const written = check(
       this.module.exports.vs_renderer_sources_save(this.handle, pointer),
@@ -606,7 +610,7 @@ export class RustVoiceRenderer {
    * @param {ArrayLike<number>} state
    */
   restoreSources(state) {
-    if (state.length === 0) {
+    if (state.length === 0 || this.source === 'folds') {
       return;
     }
     if (state.length !== SOURCE_STATE.LENGTH) {

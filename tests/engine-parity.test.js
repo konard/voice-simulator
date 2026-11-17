@@ -49,6 +49,31 @@ describe('engine numerical parity', () => {
     expect(engine.fallbacks).toBe(0);
     expect(engine.fallbackReasons).toEqual([]);
   });
+  it('preserves the empty transferable state of the fold source', async () => {
+    const feature = ENGINE_FEATURES.find(({ id }) => id === 'source.folds');
+    const { plan, renderOptions } = prepareProbe(feature);
+    const engine = await createEngine('rust');
+    const js = new VoiceRenderer(plan, renderOptions);
+    const rust = engine.createRenderer(plan, renderOptions);
+    try {
+      js.render(new Float32Array(1024));
+      rust.render(new Float32Array(1024));
+      expect([...rust.saveSources()]).toEqual([...js.saveSources()]);
+      // A source with no transferable state ignores supplied state.
+      const state = new Float64Array(1);
+      js.restoreSources(state);
+      rust.restoreSources(state);
+      const actual = new Float32Array(1024);
+      const expected = new Float32Array(1024);
+      js.render(expected);
+      rust.render(actual);
+      expect(maxError(actual, expected) <= feature.tolerance.maxError).toBe(
+        true
+      );
+    } finally {
+      rust.free();
+    }
+  });
   it('preserves the 2D field across render chunks', async () => {
     const feature = ENGINE_FEATURES.find(({ id }) => id === 'solver.fdtd2d');
     const { plan, renderOptions } = prepareProbe(feature);

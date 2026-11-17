@@ -68,3 +68,9 @@ the complete CI performance suite must still pass before its report is copied.
 All nine Node/Bun/Deno by Linux/macOS/Windows test jobs and the Rust job passed
 on commit 6962734 in
 [run 44038929770](https://github.com/konard/voice-simulator/actions/runs/44038929770).
+
+Final API review also found that folds must retain the reference's empty
+transferable source state. The Rust wrapper now returns an empty array and
+ignores supplied state for this source, while LF save/restore is unchanged.
+The new `preserves the empty transferable state of the fold source` regression
+fails with the pre-fix wrapper and passes with the fix.
