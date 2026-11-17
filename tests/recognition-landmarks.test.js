@@ -8,6 +8,7 @@ import {
   createLandmarkDetector,
   findLandmarks,
   synthesize,
+  planUtterance,
   presetHeadConfig,
   syllabifyTokens,
 } from '../src/index.js';
@@ -107,6 +108,29 @@ describe('recognition landmarks', () => {
       const expected = 10 * Math.log10(2 * sonorityFilters(frames).length);
       for (const value of result.sonority) {
         expect(Math.abs(value - expected) < 1e-5).toBe(true);
+      }
+    }
+  });
+  it('labels the closure and frication of affricates separately', () => {
+    for (const [ipa, frication] of [
+      ['at͡sa', 5],
+      ['ad͡za', 4],
+    ]) {
+      const plan = planUtterance(ipa);
+      const parts = plan.segments.filter((s) => s.token?.affricate);
+      expect(parts.length).toBe(2);
+      const frames = {
+        count: Math.ceil(plan.duration / 0.005),
+        startTime: 0,
+        hop: 0.005,
+      };
+      const truth = frameTruth(plan, frames);
+      for (const [part, expected] of [
+        [parts[0], 6],
+        [parts[1], frication],
+      ]) {
+        const middle = Math.round((part.start + part.end) / 2 / frames.hop);
+        expect(truth[middle]).toBe(expected);
       }
     }
   });

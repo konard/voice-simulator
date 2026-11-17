@@ -9,7 +9,7 @@ import {
   smoothSonority,
 } from '../src/recognition/landmark-signals.js';
 
-export function segmentClass(segment) {
+export function segmentClass(segment, previous) {
   if (segment.kind === 'pause') {
     return 0;
   }
@@ -19,8 +19,21 @@ export function segmentClass(segment) {
   if (segment.kind === 'release') {
     return 7;
   }
+  return consonantClass(segment, previous);
+}
+
+function consonantClass(segment, previous) {
+  // The planner represents an affricate as two consonant segments sharing
+  // one token: a stop closure, then its voiced or unvoiced frication.
+  if (segment.token?.affricate) {
+    return previous?.token === segment.token
+      ? segment.token.voiced
+        ? 4
+        : 5
+      : 6;
+  }
   const manner = segment.token?.phoneme?.manner;
-  if (manner === 'plosive' || manner === 'click' || segment.token?.affricate) {
+  if (manner === 'plosive' || manner === 'click') {
     return 6;
   }
   if (manner === 'nasal') {
@@ -41,7 +54,7 @@ export function frameTruth(plan, frames) {
     }
     const seg = plan.segments[i];
     if (time >= seg.start + 0.01 && time <= seg.end - 0.01) {
-      truth[t] = segmentClass(seg);
+      truth[t] = segmentClass(seg, plan.segments[i - 1]);
     }
   }
   return truth;
