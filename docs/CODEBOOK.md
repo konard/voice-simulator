@@ -75,7 +75,8 @@ vowels; the heavy report prints the measured share against the 90% target.
 `experiments/issue-64-rendered.mjs` compares raw observations with an explicit
 neutral-source calibration for diagnosis.
 
-`query(envelope, k, out)` visits at most 512 rows of a median k-d tree, keeps
+`query(envelope, k, out)` visits at most 192 rows of a median k-d tree (within
+the issue's 512-row limit), keeps
 64 candidates by key and orders them by mean squared envelope error over
 present bands. `k` defaults to 16 when passed `undefined`, and must be 1..64.
 It reuses scratch and caller-owned arrays. Missing results have index -1 and
@@ -104,6 +105,8 @@ deno test -A tests/recognition-codebook.test.js
 npm run test:heavy -- --suite recognition
 node experiments/issue-64-query.mjs 20000
 node experiments/issue-64-rendered.mjs 2000
+# Reuse the 20000-row binary saved by issue-64-query.mjs:
+node experiments/issue-64-analysis.mjs
 ```
 
 The fast tests build 2000-row tables, print their SHA-256, check every array's
@@ -113,3 +116,6 @@ and 300 ms rendered vowels at 8 and 16 kHz run only in the manual heavy
 workflow. Reports are saved under `reports/heavy/recognition-codebook.*`.
 Rust has matching transfer and key primitives with WebAssembly parity tests;
 Rust table building remains the separate scope of #77.
+
+Measured CI results, including the rendered-vowel target misses, are preserved
+in [the issue 64 report](reports/recognition-codebook.md).

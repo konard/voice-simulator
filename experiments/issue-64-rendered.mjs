@@ -47,7 +47,7 @@ for (const sampleRate of [16000, 8000]) {
     }),
     sampleRate
   );
-  frameEnvelope(nf, 30, book, frame);
+  frameEnvelope(nf, Math.floor(nf.count / 2), book, frame);
   for (let j = 0; j < 24; j++) {
     correction[j] = frame.envelope[j] - analytic[j];
   }
@@ -62,7 +62,7 @@ for (const sampleRate of [16000, 8000]) {
       }),
       sampleRate
     );
-    frameEnvelope(frames, 30, book, frame);
+    frameEnvelope(frames, Math.floor(frames.count / 2), book, frame);
     function match() {
       book.query(frame.envelope, 16, out);
       return out.index.some(
