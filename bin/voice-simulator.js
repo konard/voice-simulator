@@ -34,12 +34,16 @@ import {
   saveVoice,
   synthesize,
   textToIpa,
+  ipaToText,
   visemeTrack,
   VISEME_FORMATS,
 } from '../src/index.js';
 import { INDEX_PAGE, createVoiceServer } from '../src/server/server.js';
 
 const OPTIONS = {
+  boundaries: { type: 'string' },
+  beam: { type: 'string' },
+  nbest: { type: 'string' },
   lang: { type: 'string', short: 'l' },
   accent: { type: 'string' },
   'accent-level': { type: 'string' },
@@ -100,6 +104,8 @@ function usage() {
     '  ipa <text>          Print the IPA transcription (en, ru, hi, zh)',
     '                      (Russian: + before a vowel or U+0301 after it sets',
     '                      the stress, з+амок; ё is restored from е)',
+    '  text <ipa>          Decode IPA into words (--lang en, ru, hi, zh)',
+    '                      --boundaries given|search --beam 32 --nbest 1 --json',
     '  say <text> -o f.wav Simulate speech and write an audio file',
     '  convert <in> -o out Convert an audio file (WAV, FLAC, AIFF, AU) to mono',
     '  timeline <text>     Print when each word and syllable is spoken',
@@ -585,6 +591,15 @@ async function quickBenchmark(values, io, engine) {
 }
 
 const COMMANDS = {
+  text(values, positionals, io) {
+    const result = ipaToText(requireText(positionals), {
+      language: values.lang,
+      boundaries: values.boundaries,
+      beam: optionalNumber(values.beam, 'beam'),
+      nbest: optionalNumber(values.nbest, 'nbest'),
+    });
+    io.stdout(values.json ? JSON.stringify(result) : result.text);
+  },
   ipa(values, positionals, io) {
     const result = textToIpa(requireText(positionals), {
       lang: values.lang,

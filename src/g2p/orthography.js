@@ -17,6 +17,17 @@
 
 import { vowelGroups } from './spelling.js';
 
+/** Phone counts of a syllable, shared by recognition and the timeline. */
+export function phoneCounts(tokens) {
+  const first = tokens.findIndex((token) => token.syllabic);
+  const last = tokens.findLastIndex((token) => token.syllabic);
+  return {
+    onset: Math.max(first, 0),
+    coda: last < 0 ? 0 : tokens.length - 1 - last,
+    size: tokens.length,
+  };
+}
+
 const HAN = /\p{Script=Han}/u;
 const CYRILLIC = /\p{Script=Cyrillic}/u;
 const RUSSIAN_VOWELS = /[аеёиоуыэюя]/i;

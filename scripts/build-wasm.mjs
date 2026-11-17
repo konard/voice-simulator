@@ -54,9 +54,11 @@ import { THREAD_MEMORY } from '../src/engine/layout.js';
  * it only with the newly measured size in the commit message. Issue 61 adds
  * batch source analysis, including the merged codebook: scalar 278 782
  * bytes, SIMD 286 142, rounded up to 294 912 (Rust 1.100.0). Issue 60 adds
- * the formant root finder within it: scalar 285 013 bytes, SIMD 292 364.
+ * the formant root finder: scalar 285 013 bytes, SIMD 292 364.
+ * IPA recognition with all merged cores measures 332 646 scalar and
+ * 338 849 SIMD bytes, rounded up to 344 064 bytes (Rust 1.100.0).
  */
-export const WASM_SIZE_BUDGET = 294912;
+export const WASM_SIZE_BUDGET = 344064;
 
 /**
  * Whether src/engine/voice-simulator-simd.wasm is shipped: only when it

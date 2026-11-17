@@ -127,6 +127,25 @@ up to the next 16 384 bytes. A change that makes the file larger than the
 budget raises it to the new measured size rounded up the same way, and the
 commit message states the measured size.
 
+The IPA-to-text numerical core (`recognition.rs`) implements articulatory
+phone distance, bounded trie edits, discounted bigram costs, beam decoding
+and confidence. IPA parsing, language rules and spelling stay shared in
+JavaScript. `vs_phone_distance` consumes two 17-number feature records;
+`vs_recognition_run` consumes a bounded Float64 packet with input features,
+boundaries, pronunciations, word counts, bigrams and unknown-spelling IDs.
+Unknown spellings that equal dictionary words share their IDs, preserving
+count lookup and distinct-text pruning. The packet layout is documented
+at the exports in `crates/voice-simulator-wasm/src/recognition.rs`.
+
+`tests/rust-recognition.test.js` compares all inventory phone pairs and
+four-language exact, substituted, inserted, deleted, unknown and n-best
+paths against JavaScript. Path identities and local costs are equal;
+logarithmic total costs have absolute error below `1e-10` (parity class B).
+Malformed packets are rejected before allocation from their claimed counts.
+With the merged source-analysis, codebook and formant cores, the engine measures
+332,646 scalar and 338,849 SIMD bytes with Rust 1.100.0; the size budget
+is 344,064 bytes (336 KiB).
+
 The command line tool:
 
 ```sh

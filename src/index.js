@@ -29,6 +29,7 @@ export {
   spellingsOf,
 } from './g2p/lexicon.js';
 export { englishDictionarySize } from './g2p/english.js';
+export { ipaToText } from './recognition/ipa-to-text.js';
 export { parseIpa, formatIpa } from './ipa/parse.js';
 export {
   getPhoneme,

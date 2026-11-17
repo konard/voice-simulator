@@ -54,15 +54,18 @@ export function symbolCandidates(alphabet) {
 
 /** Compare two strings by code point (not by UTF-16 code unit). */
 export function compareCodePoints(left, right) {
-  const a = [...left];
-  const b = [...right];
-  const length = Math.min(a.length, b.length);
-  for (let index = 0; index < length; index++) {
-    if (a[index] !== b[index]) {
-      return a[index].codePointAt(0) - b[index].codePointAt(0);
+  const length = Math.min(left.length, right.length);
+  // Read code points directly during frequent binary-search lookups.
+  // Equal code points advance both UTF-16 offsets equally.
+  for (let index = 0; index < length; ) {
+    const a = left.codePointAt(index);
+    const b = right.codePointAt(index);
+    if (a !== b) {
+      return a - b;
     }
+    index += a > 0xffff ? 2 : 1;
   }
-  return a.length - b.length;
+  return left.length - right.length;
 }
 
 function sharedPrefix(previous, word) {

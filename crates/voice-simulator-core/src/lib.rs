@@ -33,6 +33,7 @@ pub mod losses;
 pub mod math;
 pub mod radiation;
 pub mod random;
+pub mod recognition;
 pub mod renderer;
 pub mod resample;
 pub mod solver;
