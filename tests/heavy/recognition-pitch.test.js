@@ -21,7 +21,7 @@ const PITCH_CORPORA = Object.freeze([]);
 const CANDIDATES = Object.freeze([
   [
     'PTDB-TUG',
-    'https://www.spsc.tugraz.at/databases-and-tools/ptdb-tug-pitch-tracking-database-from-graz-university-of-technology.html',
+    'https://web.archive.org/web/20261005152841/https://www.spsc.tugraz.at/databases-and-tools/ptdb-tug-pitch-tracking-database-from-graz-university-of-technology.html',
   ],
   ['Keele', 'https://zenodo.org/records/3920591'],
   ['CSTR FDA', 'https://www.cstr.ed.ac.uk/research/projects/fda'],
