@@ -99,6 +99,7 @@ pub fn run_glottis(seed: u32, parameters: &[f64], data: &mut [f64]) -> usize {
         creak: parameters[24],
         falsetto: parameters[25],
         harsh: parameters[26],
+        ..GlottalControl::default()
     };
     let mut glottis = Glottis::new(&options);
     let mut periods = 0;
