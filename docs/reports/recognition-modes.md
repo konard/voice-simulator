@@ -3,7 +3,7 @@
 Command: `node --test --test-timeout=600000 tests/heavy/recognition-modes.test.js`.
 
 RESD (Aniemore/resd, MIT metadata): first 100 rows of the test split.
-Activation accuracy: 55.0%. Name accuracy: 11.0%.
+Activation accuracy: 55.0%. Name accuracy: 10.0%.
 Golden false alarms (whisper or emotion): 1/24.
 
 The committed baseline records the initial pre-merge calibration of the
@@ -19,8 +19,10 @@ without a fitted speaker voice. These alignment and voice limitations apply
 to the reported figures; they are not an end-to-end recognition benchmark.
 
 Per-recording decisions are in the JSON artifact of [Heavy checks run
-44071583815](https://github.com/konard/voice-simulator/actions/runs/44071583815),
-commit `5fe9e8db7eddae95aff4e5670b354422ea4d8387`. All four recognition files passed.
+44084694372](https://github.com/konard/voice-simulator/actions/runs/44084694372),
+commit `2f0aa44dce9a0a3c30082716c3c93a44b6423b68`. All four recognition files passed;
+the suite has 14 passing tests and one existing laryngograph-data skip.
+All three speech-mode tests passed, with no item limit.
 
 ## Synthetic acceptance matrix
 
@@ -43,9 +45,11 @@ Mandarin); the detector receives only audio, timed IPA words and the voice.
 All twelve reference names remain separate classes (no pair is closer than
 1) in each language: neutral, angry, happy, sad, afraid, bored, surprised,
 disgusted, tender, sarcastic, confident, hesitant. Confusions are printed
-by the test. Word-boundary, crescendo, unknown-voice and all fifteen English label replay
-checks pass on the same word spans. Pause sounds, overlapping partial modes and input validation
-are checked in `tests/recognition-mode-integration.test.js`.
+by the test. Word-boundary, crescendo, unknown-voice and all 60 label/language
+replay checks (15 labels in each of four languages) pass on the same word spans.
+The recognition file has 186 passing tests. Pause sounds, overlapping partial
+modes, activation replay, syllabic nuclei, reference sample rates and input
+validation add 14 passing tests in `tests/recognition-mode-integration.test.js`.
 
 The initial real-recording gates are activation >=50% and names >=6%
 (the measured 55% and 11% minus five percentage points), plus at most one
@@ -55,6 +59,8 @@ are a measured limit of generic-voice acoustic references on real speakers.
 
 The preliminary draft used the median of word pitch spans for its baseline
 (63% activation, 18% names). Pooling vowel frames over each entire phrase
-corrects that mismatch with the one-word acoustic RESD alignment. The final
-55%/11% measurement establishes this new feature's initial 50%/6% gates.
+corrects that mismatch with the one-word acoustic RESD alignment. The initial
+55%/11% measurement established this new feature's 50%/6% gates. Matching
+reference tiers to the 44.1 kHz RESD input changes names to 10%, with activation
+still 55%; the committed gates remain 50%/6%, without a downward reset.
 Synthetic acceptance thresholds are unchanged.

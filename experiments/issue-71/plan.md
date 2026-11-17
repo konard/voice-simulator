@@ -23,7 +23,7 @@ inline comments and reviews empty; no sub-issues. Blockers 61, 52, 53, 54,
       ramps, activation, all emotion classes, baseline-free, 8 kHz, replay.
 - [x] RESD registry/license/checksums, heavy first-100 evaluation, 24 golden
       false alarms, measured report and initial measured-minus-5-point gates.
-- [ ] Focused tests/check, full CI at current SHA, review diff, merge latest
+- [x] Focused tests/check, full CI at current SHA, review diff, merge latest
       main, clean tree, accurate PR description and mark ready when complete.
 
 Verification commands and measured results will be recorded alongside the
@@ -143,3 +143,20 @@ still selected minimal. The new matching-tier regression fails before the fix
 now uses low at 32 kHz and medium at 48 kHz; intermediate rates use the next
 waveguide tier. Integration 14/14 and focused ESLint pass. RESD audio is
 44.1 kHz, so rerun its full evaluation before finalizing the report.
+
+Full heavy recognition run 44084694372 at 2f0aa44 passes all four files
+(14 pass, one existing laryngograph-data skip), with no item limit. Matching
+reference tiers gives 55% activation, 10% names and 1/24 golden alarms. The
+initial 50%/6% floors remain unchanged; no downward baseline reset.
+
+Final source CI run 44084624624 at 2f0aa44 passes all nine Node/Bun/Deno
+and Linux/macOS/Windows combinations, Rust/WASM, lint/format, simulation,
+documentation, line limits and pipeline status. All other regular workflows
+also pass. The full source matrix verifies the 186 recognition cases and
+14 integration cases, including all 60 replay spans and every original gate.
+Heavy recognition and performance evidence is linked above; the later tier
+selection change is JavaScript orchestration and leaves renderer code intact.
+Final diff reviewed, no existing feature removed, latest main eeb2869 merged,
+and issue comments, PR conversation/inline comments and reviews remain empty.
+Only the measured report and this verification record change in the final
+documentation commit; mark PR 148 ready after that commit's checks succeed.
