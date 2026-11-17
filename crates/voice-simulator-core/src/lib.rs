@@ -23,6 +23,7 @@ pub mod fdtd;
 pub mod filters;
 pub mod frame;
 pub mod glottis;
+pub mod landmarks;
 pub mod listener;
 pub mod losses;
 pub mod math;

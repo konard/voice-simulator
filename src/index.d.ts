@@ -4340,3 +4340,16 @@ export declare function parseObj(text: string): {
   positions: Float64Array;
   indices: Uint32Array;
 };
+
+export {
+  findLandmarks,
+  createLandmarkDetector,
+  BROAD_CLASSES,
+  type BroadClass,
+  type LandmarkThresholds,
+  type LandmarkOptions,
+  type Nucleus,
+  type Landmark,
+  type LandmarkResult,
+  type LandmarkDetector,
+} from './recognition/landmarks.js';

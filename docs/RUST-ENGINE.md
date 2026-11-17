@@ -1112,6 +1112,7 @@ Each ported function has a class, stated by the issue that ports it.
 
 | Module (issue)           | Class |
 | ------------------------ | ----- |
+| `landmarks.rs` (62)      | B     |
 | `random.rs`              | A     |
 | `resample.rs` (27)       | B     |
 | `aerodynamics.rs` (35)   | A     |
@@ -1209,3 +1210,20 @@ runner image: `rustup toolchain install` without arguments installs the
 toolchain of `rust-toolchain.toml` (rustup 1.29 warns that the automatic
 install of `rustup show` is deprecated), and `rustup show` then prints the
 active versions into the log.
+
+## Landmark detector (issue 62)
+
+`crates/voice-simulator-core/src/landmarks.rs` ports the numerical batch
+stage of `src/recognition/landmarks.js`. `vs_landmarks` takes packed frame
+rows (13 + melBands doubles: energy, noise, speech, periodicity, zcr,
+gravity, tilt, six bands, mel), rate, hop and ten thresholds in the order
+of `landmark-thresholds.js`. It writes twelve doubles per frame: class,
+sonority, nucleus flag, nucleus start/end indices (-1 for an unknown end),
+nucleus strength, and landmark strengths in b+, b-, g+, g-, s+, s- order.
+The core result retains all detections. The plain parity export uses the
+same caller-owned allocation and error conventions as other components.
+
+`tests/rust-landmarks.test.js` checks classes and presence flags exactly
+and the complete output with class B relative RMS at most 1e-6, on all
+three rates and both hops, male and female. This numerical parity does not
+resolve the acceptance blockers documented in the issue 62 investigation.
