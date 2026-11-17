@@ -1,0 +1,296 @@
+{
+  "targets": {
+    "valid": 0.95,
+    "jumps": 0.02,
+    "jumpHz": 300
+  },
+  "total": {
+    "utterances": 24,
+    "voiced": 10270,
+    "validShare": 0.9962999026290166,
+    "steps": 9985,
+    "jumpShare": 0.0039058587881822733
+  },
+  "byLanguage": [
+    {
+      "lang": "en",
+      "utterances": 6,
+      "voiced": 2332,
+      "validShare": 0.991852487135506,
+      "steps": 2264,
+      "jumpShare": 0.0008833922261484099
+    },
+    {
+      "lang": "ru",
+      "utterances": 6,
+      "voiced": 2337,
+      "validShare": 0.9995721009841677,
+      "steps": 2276,
+      "jumpShare": 0.0013181019332161687
+    },
+    {
+      "lang": "hi",
+      "utterances": 6,
+      "voiced": 2821,
+      "validShare": 0.9978730946472882,
+      "steps": 2747,
+      "jumpShare": 0.004004368401892974
+    },
+    {
+      "lang": "zh",
+      "utterances": 6,
+      "voiced": 2780,
+      "validShare": 0.99568345323741,
+      "steps": 2698,
+      "jumpShare": 0.008524833209785025
+    }
+  ],
+  "rows": [
+    {
+      "id": "en-01",
+      "lang": "en",
+      "rate": 16000,
+      "vocalTractLength": 14.43,
+      "voiced": 249,
+      "valid": 248,
+      "steps": 237,
+      "jumps": 0
+    },
+    {
+      "id": "en-02",
+      "lang": "en",
+      "rate": 16000,
+      "vocalTractLength": 16.73,
+      "voiced": 495,
+      "valid": 480,
+      "steps": 487,
+      "jumps": 0
+    },
+    {
+      "id": "en-03",
+      "lang": "en",
+      "rate": 16000,
+      "vocalTractLength": 13.29,
+      "voiced": 380,
+      "valid": 380,
+      "steps": 377,
+      "jumps": 2
+    },
+    {
+      "id": "en-04",
+      "lang": "en",
+      "rate": 16000,
+      "vocalTractLength": 14.47,
+      "voiced": 373,
+      "valid": 370,
+      "steps": 359,
+      "jumps": 0
+    },
+    {
+      "id": "en-05",
+      "lang": "en",
+      "rate": 16000,
+      "vocalTractLength": 14.84,
+      "voiced": 465,
+      "valid": 465,
+      "steps": 448,
+      "jumps": 0
+    },
+    {
+      "id": "en-06",
+      "lang": "en",
+      "rate": 16000,
+      "vocalTractLength": 14.51,
+      "voiced": 370,
+      "valid": 370,
+      "steps": 356,
+      "jumps": 0
+    },
+    {
+      "id": "ru-01",
+      "lang": "ru",
+      "rate": 16000,
+      "vocalTractLength": 14.34,
+      "voiced": 289,
+      "valid": 289,
+      "steps": 281,
+      "jumps": 0
+    },
+    {
+      "id": "ru-02",
+      "lang": "ru",
+      "rate": 16000,
+      "vocalTractLength": 13.54,
+      "voiced": 463,
+      "valid": 462,
+      "steps": 448,
+      "jumps": 0
+    },
+    {
+      "id": "ru-03",
+      "lang": "ru",
+      "rate": 16000,
+      "vocalTractLength": 15.97,
+      "voiced": 222,
+      "valid": 222,
+      "steps": 211,
+      "jumps": 1
+    },
+    {
+      "id": "ru-04",
+      "lang": "ru",
+      "rate": 16000,
+      "vocalTractLength": 17.3,
+      "voiced": 449,
+      "valid": 449,
+      "steps": 438,
+      "jumps": 1
+    },
+    {
+      "id": "ru-05",
+      "lang": "ru",
+      "rate": 16000,
+      "vocalTractLength": 13.18,
+      "voiced": 310,
+      "valid": 310,
+      "steps": 304,
+      "jumps": 0
+    },
+    {
+      "id": "ru-06",
+      "lang": "ru",
+      "rate": 16000,
+      "vocalTractLength": 13.24,
+      "voiced": 604,
+      "valid": 604,
+      "steps": 594,
+      "jumps": 1
+    },
+    {
+      "id": "hi-01",
+      "lang": "hi",
+      "rate": 16000,
+      "vocalTractLength": 12.99,
+      "voiced": 689,
+      "valid": 686,
+      "steps": 674,
+      "jumps": 8
+    },
+    {
+      "id": "hi-02",
+      "lang": "hi",
+      "rate": 16000,
+      "vocalTractLength": 13.65,
+      "voiced": 452,
+      "valid": 452,
+      "steps": 441,
+      "jumps": 2
+    },
+    {
+      "id": "hi-03",
+      "lang": "hi",
+      "rate": 16000,
+      "vocalTractLength": 14.33,
+      "voiced": 524,
+      "valid": 524,
+      "steps": 509,
+      "jumps": 0
+    },
+    {
+      "id": "hi-04",
+      "lang": "hi",
+      "rate": 16000,
+      "vocalTractLength": 14.06,
+      "voiced": 426,
+      "valid": 425,
+      "steps": 414,
+      "jumps": 0
+    },
+    {
+      "id": "hi-05",
+      "lang": "hi",
+      "rate": 16000,
+      "vocalTractLength": 12.94,
+      "voiced": 361,
+      "valid": 361,
+      "steps": 350,
+      "jumps": 0
+    },
+    {
+      "id": "hi-06",
+      "lang": "hi",
+      "rate": 16000,
+      "vocalTractLength": 12.37,
+      "voiced": 369,
+      "valid": 367,
+      "steps": 359,
+      "jumps": 1
+    },
+    {
+      "id": "zh-01",
+      "lang": "zh",
+      "rate": 16000,
+      "vocalTractLength": 13.27,
+      "voiced": 443,
+      "valid": 439,
+      "steps": 429,
+      "jumps": 2
+    },
+    {
+      "id": "zh-02",
+      "lang": "zh",
+      "rate": 16000,
+      "vocalTractLength": 13.28,
+      "voiced": 473,
+      "valid": 472,
+      "steps": 461,
+      "jumps": 10
+    },
+    {
+      "id": "zh-03",
+      "lang": "zh",
+      "rate": 16000,
+      "vocalTractLength": 14.16,
+      "voiced": 455,
+      "valid": 455,
+      "steps": 437,
+      "jumps": 0
+    },
+    {
+      "id": "zh-04",
+      "lang": "zh",
+      "rate": 16000,
+      "vocalTractLength": 14.01,
+      "voiced": 471,
+      "valid": 471,
+      "steps": 460,
+      "jumps": 1
+    },
+    {
+      "id": "zh-05",
+      "lang": "zh",
+      "rate": 16000,
+      "vocalTractLength": 14.72,
+      "voiced": 486,
+      "valid": 483,
+      "steps": 472,
+      "jumps": 1
+    },
+    {
+      "id": "zh-06",
+      "lang": "zh",
+      "rate": 16000,
+      "vocalTractLength": 14.23,
+      "voiced": 452,
+      "valid": 448,
+      "steps": 439,
+      "jumps": 9
+    }
+  ],
+  "vtr": {
+    "title": "VTR Formants Database (Deng et al. 2006)",
+    "licence": "All rights reserved",
+    "reason": "\"(c) Portions hereof copyright UC Regents. All Rights Reserved.\"; formant labels of 538 TIMIT sentences, whose audio needs the paid LDC licence",
+    "url": "https://www.seas.ucla.edu/spapl/VTRFormants.html"
+  }
+}
