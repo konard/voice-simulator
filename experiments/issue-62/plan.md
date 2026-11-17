@@ -1,4 +1,4 @@
-# Issue 62: fourth CI restart
+# Issue 62: CI investigation and acceptance plan
 
 Objective: satisfy issue 62 in PR 142, resolve conflicts with current main,
 and verify every CI check without weakening the requested quality gates.
@@ -97,9 +97,34 @@ current-commit CI run before reporting completion or blockers.
 - [x] Verify the merged engine: 70 focused checks pass without skips;
       cargo fmt passes. The public PCM conflict repeats on all runtimes,
       and the focused quality suite retains the same three failures.
-- [ ] Commit and push the merge, inspect all resulting CI and update
+- [x] Commit and push the merge, inspect all resulting CI and update
       PR 142 with the final evidence.
 - [ ] Complete all original quality and timing requirements. Blocked by
       the unchanged incompatible contract; class and edge accuracy also
       remain unresolved. No test waiver is authorised by this finding.
 - [ ] Mark ready only after all requirements and all CI checks pass.
+
+## Fifth restart: independently bound the fine-band edge candidates
+
+- [x] Re-read the complete issue, all comments and reviews; required
+      sub-issues remain empty and prerequisites remain closed.
+- [x] Fetch origin and confirm main 80b9c3d is already in HEAD 311681b.
+- [x] Download latest failed run 44062832031 and default-branch run
+      44060989726, verify SHAs/timestamps, and inspect actual failures.
+- [x] Reproduce the focused quality suite: nine pass, three fail, with
+      unchanged nucleus, class and edge measurements.
+- [x] Change approach: independently enumerate the necessary fine-band
+      falling peaks through the public analyzer, without calling the
+      detector or any of its numerical helpers. Check rounding both ways,
+      literal 13 ms interpolation and all continuous-time slope changes.
+      No allowed peak is within 20 ms of the requested apa closure edge.
+- [x] Recheck nucleus smoothing sensitivity and class-search diagnostics.
+      Neither provides a valid route to the required quality gates.
+- [x] Verify the new finite experiment on Node.js, Bun and Deno; check
+      formatting/lint and commit the experiment and exact evidence.
+- [ ] Push only issue-62-c339234ca063, review the current diff, update
+      PR 142 and wait for every resulting CI job to finish.
+- [ ] All acceptance criteria pass. Blocked by the unchanged nucleus,
+      fine-peak placement and causal commitment contradictions. Class
+      accuracy also remains unresolved; do not waive its gate.
+- [ ] Mark ready only after every requirement and all checks pass.

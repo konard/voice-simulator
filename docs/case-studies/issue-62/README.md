@@ -142,7 +142,7 @@ acceptance of the issue as a whole.
       assertions retain the requested 90%, 10%, 85%/80% and 20 ms gates.
 - [ ] Synthetic quality gates pass on Node.js, Bun and Deno.
 - [x] Noise-only, streaming timing/immutability, affricate truth regression,
-      and CPU tests; all nine CI runtimes measure RTF below 0.001.
+      and CPU tests; the latest nine CI runtimes measure RTF 0.000115–0.001084.
 - [x] Golden report on all 24 utterances, syllabifyIpa truth, counts and MARE.
 - [x] Rust numerical core and WASM bridge; parity on 12 rate/voice/hop cases.
 - [x] README, CLI command/help, roadmap, Rust documentation, minor changeset.
@@ -588,10 +588,89 @@ quality suite remains at nine passes and three failures with unchanged
 accuracy and missing edges. Logs for the merge use the
 `ci-logs/restart-4-main-80b9c3d-` prefix.
 
+## Fifth restart: independent fine-peak feasibility (2026-11-17)
+
+The current default branch is still `80b9c3d`, already an ancestor of
+`311681b`. The complete issue, empty issue comments/sub-issues and all PR
+conversation comments, inline comments and reviews were fetched again.
+No subsequent instruction changes the detector or acceptance rules.
+
+Freshly downloaded [run 44062832031](https://github.com/konard/voice-simulator/actions/runs/44062832031)
+started at 10:13:37 UTC on `311681be381c9431ab16706743cd4fc7c778b930`,
+after its 10:12:43 UTC commit. The full log is preserved locally as
+`ci-logs/checks-44062832031.log`. Node/Ubuntu prints nucleus recall and
+extras at line 40419, class accuracy at 40420–40421, missing edges at
+40426, and RTF 0.000565 at 40427. The three failures are at 42421,
+42435 and 42449, pointing to `tests/recognition-landmarks.test.js:174`,
+`:247` and `:280`. Every runtime job reproduces these failures. The
+aggregate is correctly failing; there is no credential problem in these
+tests. All other applicable checks pass.
+
+The new investigation avoids the detector's candidate construction entirely:
+
+```sh
+node --max-old-space-size=128 experiments/issue-62/edge-feasibility.mjs
+```
+
+It renders the requested `apa` case once, reads band 0 from the public frame
+analyzer and enumerates every falling fine-band peak. It permits even peaks
+without a coarse maximum, a voicing crossing or sufficient strength, and
+does not suppress neighbours. A reported `g-` must at least belong to this
+superset under the issue's fine-peak placement rule. None is within 20 ms of
+the planned closure at **0.17407036 s**:
+
+| Fine difference interpretation                        | Nearest falling peak |     Error |
+| ----------------------------------------------------- | -------------------: | --------: |
+| 13 ms rounded to 15 ms                                |              0.200 s | 25.930 ms |
+| 13 ms rounded down to 10 ms                           |              0.195 s | 20.930 ms |
+| Literal 13 ms, linearly interpolated, frame grid      |              0.200 s | 25.930 ms |
+| Literal 13 ms, linearly interpolated, continuous time |              0.198 s | 23.930 ms |
+
+The continuous variant checks every slope change of the piecewise linear
+band difference, including subframe locations. This rules out a rounding
+fix and strengthens the earlier detector-specific edge diagnostic: with
+these required signals, **no threshold or grouping change can supply the
+required `apa` g- edge at a fine peak**. Other missing edges still need
+investigation; this experiment establishes no bound for them.
+
+The finite probe passes on Node.js, Bun (`--smol`) and Deno
+(`--v8-flags=--max-old-space-size=128`), with byte-identical output.
+`npm run check`, including formatting, lint and engine inventory, also
+passes. These checks validate the evidence; they do not make the detector's
+quality assertions pass.
+
+The bounded local quality suite again has 9 passes and 3 failures, with the
+same recall, extras, class accuracies and missing edges as CI. Repeating
+`nucleus-ceiling.mjs --smoothing-sensitivity` still gives 98/120 recoverable
+centres, with the alternative moving means at 94, 93 and 96. The diagnostic
+sentence-label class search reaches 70.9166% at 16 kHz and 69.7473% at 8 kHz;
+it is not a proven global optimum, does not meet the gates, and is not used
+to set shipped thresholds. The silence/closure necessary-condition bound
+alone is 92.87%/92.53% and therefore does not prove the class target
+impossible. No quality claim is inferred from it.
+
+Reproduction commands and outputs are preserved under the local
+`ci-logs/restart-5-` prefix. The exact blockers needing a contract change are
+the required nucleus candidate/recall combination, fine-peak edge placement
+versus the 20 ms reference tolerance, immutable 60 ms classes versus
+retrospective 150 ms cleanup, and early irrevocable nucleus confirmation
+versus later replacement. A consistent specification must permit different
+signal/detection or reference rules and resolve the streaming commitment
+semantics before all these criteria can be implemented together. The class
+accuracy gate remains unresolved independently. No production code, fixtures,
+thresholds, assertions or CI gates were changed to conceal these failures.
+
+The freshly downloaded default-branch log
+`ci-logs/main-checks-44060989726.log`, lines 152–160, confirms the separate
+npm bootstrap action described above. PR preflight already skips only the
+credential-dependent operation with an explanation; main fails explicitly
+with the exact secret and trusted-publisher setup instructions.
+
 ## Remaining work
 
-Resolve the contradictory timing contract and the unreachable nucleus target
-before treating this as a releasable stage. Class accuracy and the four
-missing landmark edges also need an effective algorithm or input change;
-repeatable calibration alone does not fix them. Keep the three ordinary test
-failures visible and keep PR #142 unmerged until every criterion is met.
+Resolve the contradictory timing contract and the unreachable nucleus and
+fine-peak edge targets before treating this as a releasable stage. Class
+accuracy and the remaining missing edges need an effective algorithm or
+input change; repeatable calibration alone does not fix them. Keep the
+three ordinary test failures visible and keep PR #142 unmerged until every
+criterion is met.
