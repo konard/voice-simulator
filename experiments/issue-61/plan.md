@@ -50,4 +50,6 @@ the harmonic table then has only one entry, so H1-H2 must be NaN as in JS.
 `ci-logs/inverse-boundary-before.log` records the failure; the same test passes
 after replacing the second-harmonic index with a checked lookup. JS and rebuilt
 Wasm parity tests also cover the boundary. Final measured scalar/SIMD files:
-273883 / 281279 bytes, below the 294912-byte ceiling.
+278782 / 286142 bytes after merging main through 1f016e0 (the articulatory
+codebook), below the unchanged 294912-byte ceiling. Both public APIs are
+preserved, and the generated pitch citation uses the archived label from main.

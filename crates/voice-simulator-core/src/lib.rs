@@ -17,6 +17,7 @@ extern crate alloc;
 extern crate std;
 
 pub mod aerodynamics;
+pub mod codebook;
 pub mod config;
 pub mod effort;
 pub mod fdtd;

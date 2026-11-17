@@ -118,6 +118,8 @@ function usage() {
     '',
     'Library source analysis: inverseFilter(analyzeFrames(samples, rate))',
     '  Batch flow, closure times and voice-source measures; docs/INVERSE-FILTER.md',
+    'Library: buildCodebook / frameEnvelope provide articulatory candidates',
+    '         (generated on first use; API and limits: docs/CODEBOOK.md)',
     '',
     'Options:',
     '  -l, --lang <code>     auto | en | ru | hi | zh (default auto)',

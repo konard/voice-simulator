@@ -4351,3 +4351,20 @@ export {
   type SourceMeasure,
   type SourceSummary,
 } from './recognition/inverse-filter.js';
+
+// Simulator-generated articulatory codebook (issue 64).
+export {
+  buildCodebook,
+  serializeCodebook,
+  parseCodebook,
+  frameEnvelope,
+  CODEBOOK_CHANNELS,
+  GRID,
+  tractResponse,
+  type Codebook,
+  type CodebookOptions,
+  type CodebookStats,
+  type CodebookChannel,
+  type CodebookQuery,
+  type CodebookFrame,
+} from './recognition/codebook.js';
