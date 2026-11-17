@@ -11,7 +11,7 @@ import {
   HISTOGRAMS,
 } from '../src/analysis/voice-fit-statistics.js';
 import { simplex } from '../src/analysis/voice-fit-simplex.js';
-import { vectorDistance } from '../src/analysis/voice-fit.js';
+import { featureVector, vectorDistance } from '../src/analysis/voice-fit.js';
 const it = itUnless(noRust);
 const near = (a, b) =>
   expect(Math.abs(a - b) <= 1e-6 * Math.max(1, Math.abs(b))).toBe(true);
@@ -69,6 +69,15 @@ describe('Rust voice fitting primitives', () => {
           vectorDistance(a, b, transcript, 2)
         );
       }
+      state.voicedFrames = 2;
+      state.mel[0] = 2 * Math.log(100);
+      float64View(engine, pointer, 24).set(state.mel);
+      // In-place conversion also verifies the export does not alias its input.
+      expect(e.vs_voice_fit_mel(pointer, 2, pointer)).toBe(0);
+      const mel = float64View(engine, pointer, 24);
+      featureVector(state)
+        .values.slice(12)
+        .forEach((x, i) => near(mel[i], x));
       expect(e.vs_voice_fit_histogram(0, 1, 0, 1, 0, 0.5, out) < 0).toBe(true);
     } finally {
       e.vs_free(pointer, 4096 * 8);

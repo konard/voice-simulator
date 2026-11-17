@@ -107,6 +107,15 @@ pub fn table_inverse(value: f64, table: &[(f64, f64)]) -> f64 {
     }
     best.1
 }
+/// Mean centered mel energy in dB from accumulated natural-log powers.
+pub fn centered_mel(log_power_sums: &[f64], voiced_frames: usize) -> Vec<f64> {
+    let mel: Vec<_> = log_power_sums
+        .iter()
+        .map(|x| 10.0 * x / core::f64::consts::LN_10 / voiced_frames.max(1) as f64)
+        .collect();
+    let mean = mel.iter().sum::<f64>() / mel.len().max(1) as f64;
+    mel.into_iter().map(|x| x - mean).collect()
+}
 /// Feature RMS, with NaN indicating an unavailable feature.
 pub fn distance(
     target: &[f64],

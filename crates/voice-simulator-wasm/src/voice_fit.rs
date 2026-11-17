@@ -2,6 +2,25 @@
 use crate::{error, f64_slice};
 use voice_simulator_core::voice_fit::{self, Histogram};
 
+/// Convert the 24 accumulated natural-log mel powers to centered dB.
+#[no_mangle]
+pub extern "C" fn vs_voice_fit_mel(input: u32, voiced_frames: u32, out: u32) -> i32 {
+    let sums = match f64_slice(input, 24) {
+        Ok(v) => v.to_vec(),
+        Err(code) => return code,
+    };
+    if sums.iter().any(|x| !x.is_finite()) {
+        return error::BAD_ARGUMENT;
+    }
+    let mel = voice_fit::centered_mel(&sums, voiced_frames as usize);
+    let output = match f64_slice(out, 24) {
+        Ok(v) => v,
+        Err(code) => return code,
+    };
+    output.copy_from_slice(&mel);
+    0
+}
+
 /// [quantile, median SD] of nonnegative finite histogram counts.
 #[no_mangle]
 pub extern "C" fn vs_voice_fit_histogram(
