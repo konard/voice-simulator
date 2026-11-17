@@ -210,3 +210,18 @@ tests prove concurrent starts, failure propagation from either shard, and
 waiting for both children. All 16 runner/budget tests pass under Node and
 the actual Bun sharding CLI (3 plus 13 tests in complementary shards).
 All nine current-head CI legs remain required before marking ready.
+
+Final source CI run 44092035318 at 857df6f passes every check and all nine
+Node/Bun/Deno x Linux/macOS/Windows legs. The saved gate summary verifies
+identical counts on every platform and exactly 60 replay spans per platform:
+effort 14/16 exact and 16/16 near; whisper 4/4; other labels 39/40;
+telephone whisper 4/4 and others 53/56; emotion names 46/48; signs 28/28.
+The three Bun logs verify complementary 112/223 and 111/223 file shards,
+with no failures: Linux 182 seconds, macOS 281, Windows 352, all within
+the unchanged 500-second suite budget. All four other regular workflows
+also pass at this source revision. Main a5b3c51 remains fully merged;
+the final PR diff is reviewed, the tree is clean, and conditional issues
+70/72/73/75 are still open. No new issue or PR comments, reviews or required
+sub-issues exist. The report retains the merged full heavy run's 55%/10%
+RESD and 1/24 golden results. Only this verification record changes in the
+final documentation commit; mark ready after its checks pass too.
