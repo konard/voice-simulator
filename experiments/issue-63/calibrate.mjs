@@ -1,6 +1,9 @@
 // Unlicense. Render only the default head; no target-head fitting.
 import { synthesize } from '../../src/synthesize.js';
-import { analyzeLegacyVoice } from '../../src/analysis/voice-features.js';
+import {
+  analyzeLegacyVoice,
+  percentile,
+} from '../../src/analysis/voice-features.js';
 import { analyzeFrames } from '../../src/recognition/frontend.js';
 import { trackPitch } from '../../src/recognition/pitch.js';
 import { inverseFilter } from '../../src/recognition/inverse-filter.js';
@@ -18,11 +21,19 @@ for (const text of [MATCH_TEXT, 'The north wind and the sun.']) {
       pitch = trackPitch(frames);
     const source = inverseFilter(frames, { pitch }),
       legacy = analyzeLegacyVoice(samples, sampleRate);
+    const steady = Array.from(source.hnr).filter(
+      (_, t) =>
+        source.reliable[t] &&
+        pitch.f0[t - 1] > 0 &&
+        pitch.f0[t + 1] > 0 &&
+        Math.abs(pitch.f0[t + 1] - pitch.f0[t - 1]) / pitch.f0[t] < 0.005
+    );
     console.log(
       JSON.stringify({
         text,
         breathiness,
         hnr: source.summary.hnr.median,
+        steadyHnr: percentile(steady, 0.5),
         range: 12 * Math.log2(pitch.high / pitch.low),
         rangeFactor: 3 / (12 * Math.log2(pitch.high / pitch.low)),
         syllableRate: legacy.syllableRate,

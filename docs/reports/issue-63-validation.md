@@ -6,8 +6,10 @@ existing matching tests have not been relaxed.
 
 ## Requirement inventory
 
-The complete issue and all PR comment types were read; none contained comments
-at the latest review. Required prerequisites 59, 60, 61, 17 and 32 are closed.
+The complete issue and all PR comment types were read. The issue has no
+comments; the PR has three automation conversation comments and no inline
+comments or reviews as of November 17, 2026. Required prerequisites
+59, 60, 61, 17 and 32 are closed.
 Optional fold source 33 and voice files 41 are merged. Landmark issue 62 is
 open and its module is absent, so the specified envelope fallback is used.
 
@@ -191,8 +193,8 @@ At 3487780, [run 44072787727](https://github.com/konard/voice-simulator/actions/
 Deno/Ubuntu job 134003920312 finishes in 235 s with 2,954 passes and five
 failures. Saved log `test-deno-ubuntu-134003920312.log` records transcript
 recovery at line 4208 and uncertainty at line 4218. The continuation test
-passes. Legacy failures at lines 4226, 4234 and 4242 report female tract
-error 0.119755, male pitch error 0.156910 and small-female tract error
+passes. Legacy failures at lines 4226, 4234 and 4242 report female speech-rate
+error 0.119755, male pitch error 0.156910 and small-female speech-rate error
 0.138217, all above the unchanged 0.1 gates. The complete result is at
 line 4257. Earlier OS jobs also encountered the existing five-minute
 suite budget; increasing it has not been used as a solution.
@@ -214,3 +216,72 @@ Earlier CI exposed a worker chunk above 500 kB, an obsolete WASM size
 assertion, narrow-band F4 and a CodeQL source-factory guard. Those were fixed;
 Rust Engine, example app and security passed at 49f1aa7. These infrastructure
 passes do not satisfy the outstanding acoustic gates.
+
+## CI repair follow-up at f525c91
+
+The latest default branch was fetched and is already an ancestor of this
+implementation commit. The fresh complete failed run
+[44077893432](https://github.com/konard/voice-simulator/actions/runs/44077893432)
+at 75cd6c7 was downloaded to `ci-logs/checks-44077893432.log` before
+investigation. It confirms five assertion failures on the runtimes that
+finish, as well as suite-budget overruns. These are numerical and runtime
+failures; no missing secret or repository access was found.
+
+The candidate evaluator now retains its already prepared legacy analysis
+for completion of the winning render's HNR/H1-H2 diagnostics. It also
+reuses the best vertex when the next simplex round evaluates the identical
+head. Cached evaluations do not increment `renders` or call `onStep`;
+the simplex budget and objective are unchanged. Only one best evaluation
+is cached; the cache cannot grow with `maxRenders`.
+
+New automated regressions pass on Node, Bun and Deno:
+
+```sh
+node --test --test-name-pattern='deferred source|reuses an identical|is deterministic' tests/voice-fit-numerics.test.js tests/voice-fit.test.js
+bun test --test-name-pattern 'deferred source|reuses an identical|is deterministic' tests/voice-fit-numerics.test.js tests/voice-fit.test.js
+deno test -A --filter '/deferred source|reuses an identical|is deterministic/' tests/voice-fit-numerics.test.js tests/voice-fit.test.js
+node experiments/issue-63/legacy-diagnostics.mjs
+```
+
+Each runtime passes all three selected regressions. The last command loads
+the pre-change implementation from 75cd6c7 into temporary modules, compares
+eager and deferred diagnostics on both specified heads, and checks exact
+equality of the two-render fit results except `renders`: two actual renders
+before, one after. The new vertex-count regression fails before the fix.
+`npm run check` passes locally. No Rust numerical expressions change in
+this refactor.
+
+The ten-second performance command at f525c91, on Node v26.13.0 and AMD
+EPYC (with IBPB), measures Stage A at 2.335652 s (RTF 0.233565), refinement
+at 54.247191 s with 39 actual renders, and RSS 231,686,144 bytes. Both
+performance gates pass locally. This run is not a controlled wall-time
+comparison with the earlier measurement.
+
+The bounded source probes did not resolve the accuracy gates:
+
+- `source-reliability.mjs` measures 15 recordings. Calibrating a stationary
+  subset of reliable frames improves head B's pitch but changes the specified
+  median-HNR estimator. A temporary experiment still returns speech rate
+  1.097456 for its true 0.9 and leaves two legacy regressions. That production
+  change was discarded; only the experiment scripts remain.
+- `hnr-window.mjs` compares five window rules on seven recordings. Capping
+  the HNR window at 30 ms improves B's inferred breathiness from 0.653678
+  to 0.531536, still far from its true 0.2. The inverse-filter definition and
+  calibration table were left unchanged.
+- `analysis-rates.mjs` compares the existing working-rate option at 8000,
+  11025 and 16000 Hz on both heads. Head A's prescribed pitch SD remains
+  5.959401, 5.948061 and 5.948061 Hz, respectively. Changing the working
+  rate does not satisfy its uncertainty gate.
+
+The focused failing acceptance selection was re-run after the refactor:
+
+```sh
+node --test --test-name-pattern='recovers synthetic voices with a transcript|reports uncertainty' tests/voice-fit.test.js
+```
+
+It still fails both assertions: head B selects pitch 126 Hz, and head A's
+pitch SD exceeds 5 Hz. Both fits now use nine actual renders within the
+unchanged ten-evaluation budget. The archived full heavy report remains
+explicitly tied to its measured implementation revision; no new passing
+heavy-suite result is claimed. The original acceptance criteria and tests
+remain unchanged, and the PR must remain a draft while they fail.

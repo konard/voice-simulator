@@ -133,3 +133,31 @@ No required criteria are complete until backed by measured evidence below.
    log line numbers in the validation report and PR.
 5. Keep the PR draft while any acceptance gate remains unmet. Passing
    infrastructure or protocol checks does not complete the acoustic gates.
+
+## CI repair follow-up
+
+- [x] Re-read issue 63 and all PR conversation, inline and review comments.
+- [x] Fetch the default branch and verify it is already an ancestor of HEAD.
+- [x] Preserve fresh complete logs for run 44077893432 at head 75cd6c7.
+- [x] Identify the five accuracy failures and suite-budget overruns.
+- [x] Profile one bounded fit and eliminate redundant analysis work.
+- [ ] Verify focused regressions across Node, Bun and Deno, then current CI.
+- [ ] Reconcile every remaining acceptance gate with measured evidence;
+      update the validation report and PR without concealing unmet gates.
+
+### Follow-up evidence
+
+- f525c91 reuses the round-one best vertex and retains prepared legacy
+  pitch analysis for final diagnostics. New regressions pass on Node, Bun
+  and Deno (three each); `npm run check` passes. The baseline comparison
+  experiment proves exact diagnostic/result equality and two actual renders
+  reduced to one for a two-evaluation fit on both required heads.
+- Ten-second timing at f525c91: statistics 2.335652 s (RTF 0.233565),
+  refinement 54.247191 s, 39 actual renders, RSS 231,686,144 bytes.
+- The stationary-HNR source initializer was tried and discarded: B recovers
+  pitch 100 Hz but rate 1.097456 versus 0.9; two legacy cases still fail.
+  The original HNR estimator and calibration remain in production.
+- Shorter HNR windows still infer B breathiness 0.531536 rather than 0.2.
+  Working-rate changes leave A pitch SD above 5 Hz at all three rates.
+- After the refactor the two failing acceptance tests still reproduce,
+  including B pitch 126 Hz and A uncertainty. No gate has been relaxed.
