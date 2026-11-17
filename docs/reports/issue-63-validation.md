@@ -578,3 +578,59 @@ launcher and this draft in disposable fixtures: the previous launcher exits
 1 and the draft exits 0. `npm run check` passes (699 packages, 1629 files).
 Actual runner timing still needs CI verification. Scheduling does not
 correct the five accuracy assertions or the landmark/heavy requirements.
+
+## Completed scheduling run and remaining macOS queues
+
+[Run 44109469815](https://github.com/konard/voice-simulator/actions/runs/44109469815)
+was created at 15:01:00 UTC on November 17, 2026 for
+`e679949d07abaaa99e68421ca281ebd6ed2cb418` and completed with failure.
+All nine runtime logs, Pipeline Status and the full run log are preserved
+under `ci-logs/runtime-scheduling-` and `ci-logs/ci-44109469815.log`.
+All other jobs and all four other workflows pass, including the example app.
+
+| Runtime | Ubuntu suite | macOS suite | Windows suite |
+| --- | --- | --- | --- |
+| Node | 294 s, 6 assertions | 300 s deadline | 193 s, 6 assertions |
+| Deno | 188 s, 6 assertions | 200 s, 6 assertions | 249 s, 6 assertions |
+| Bun | 441 s, 6 assertions | 500 s deadline | 429 s, 6 assertions |
+
+Five failures are the unchanged acoustic assertions above. The sixth is
+a stale assertion in `tests/visible-skips.test.js` that expects the workflow
+to invoke Deno directly. The delegated launcher still grants `-A`; the test
+now checks the workflow delegation and those original flags in the runner.
+The focused pre-fix command exits 1; after the fix all 715 scheduling,
+deadline and skip-policy tests pass on each runtime. Logs are preserved
+as `runtime-deno-guard-before.log` and `runtime-deno-guard-{node,bun,deno}.log`.
+
+Representative assertion evidence: Node Ubuntu job 134131830886 records the
+stale guard at line 5161, transcript recovery at 5175, uncertainty at 5189,
+and legacy rate/pitch/rate errors at 5234/5248/5260. Bun Ubuntu job
+134131830931 completes at line 5241 with no test timeout. Pipeline Status
+job 134139033602 reports `Failing jobs: test` at line 269. The seven completed
+suites establish improved coverage, not passing acoustic acceptance.
+
+Node macOS job 134131830873 reaches its deadline at line 4998 while the
+fitting file has run for only 22831 ms (line 5010). Matching has already
+finished with three numerical failures. The revised launcher also puts
+`voice-fit.test.js` in Node's early priority queue, sequential with matching.
+
+Bun macOS job 134131834276 reaches its deadline at line 5095. Its first
+bulk shard finishes at 15:08:05, while the other shard spends roughly
+101 seconds on `recognition-modes.test.js` (15:08:41 to 15:10:22) and
+continues beyond 15:11:22. The revised launcher excludes modes from the
+native shard selection and runs it after the shorter first shard, while
+the second worker continues. Both workers still use ordinary Bun processes,
+both are reaped after failures, and matching still runs alone first.
+
+The basic native-worker probe `node experiments/issue-63/native-bun-queue.mjs`
+confirms isolation, overlap, full completion and a nonzero failing status on
+three finite fixture files. It does not reproduce or disprove Bun's reported
+macOS exit races. Upstream issues 45483, 41024 and 39987 remain open, so the
+native-worker prototype was discarded in favor of ordinary processes.
+
+The revised fixture checks cover every maintained file and failure in the
+matching, first-shard, mode and second-shard phases. All 716 scheduling,
+deadline and skip-policy checks pass on Node, Bun and Deno. Actual CI timing
+of the revision remains to be verified. The five numerical assertions and
+landmark/heavy criteria remain unfinished, and no deadline, objective,
+uncertainty formula or gate is relaxed.

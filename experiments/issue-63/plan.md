@@ -28,7 +28,7 @@ merged; include optional fold-source refinement and saveVoice compatibility.
 Issue 62 merged during this follow-up, in main a5b3c51. Its detector is now
 present; integrating its nuclei without breaking rate and continuation is
 an additional unmet requirement (see the merge follow-up below).
-The issue has no comments. The PR has seven automation conversation comments
+The issue has no comments. The PR has six automation conversation comments
 and no inline comments or reviews at the latest November 17 review.
 
 ## Requirements and verification
@@ -265,3 +265,24 @@ The acceptance failures and heavy gates above remain unfinished.
 No acoustic objective, uncertainty formula, acceptance threshold or deadline
 changes with this scheduling repair. The five numerical failures and the
 landmark/heavy requirements remain unfinished.
+
+### Scheduling follow-up at e679949
+
+- [x] Preserve and read all nine runtime logs and Pipeline Status from
+      run 44109469815, created 15:01:00 UTC for e679949.
+- [x] Confirm seven suites finish inside their deadlines; Node/macOS and
+      Bun/macOS still reach 300/500 seconds respectively.
+- [x] Reproduce the stale Deno permission assertion before fixing it;
+      check the delegated runner retains `test -A --parallel`.
+- [x] Start Node's fitting file in the priority queue too, sequential with
+      matching. Rebalance Bun's long recognition-mode file onto the shorter
+      first worker, retaining ordinary processes and both native shards.
+- [x] Verify file coverage, phase ordering, reaping and every failure path:
+      716 scheduling, deadline and skip-policy checks pass on each runtime.
+- [ ] Verify the revised scheduling in fresh current-head CI.
+
+Bun's native worker queue passes the finite basic isolation/overlap/failure
+probe in `native-bun-queue.mjs`, but this cannot exclude its reported macOS
+subprocess-exit races. Issues oven-sh/bun#45483, #41024 and #39987 are still
+open, so the native-worker prototype was discarded. No stress probe or
+timeout increase is used. Five acoustic assertions remain unresolved.

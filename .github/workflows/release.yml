@@ -405,8 +405,8 @@ jobs:
         # The 222-file sequential suite exceeded 500s on macOS in issue 71
         # while making progress, after all mode assertions passed. Keep
         # every test and the existing 500s deadline (warning at 350s).
-        # Run matching before those shards, so DSP tests retain their 30s
-        # per-test budget without competing with another Bun process.
+        # Run matching alone first, then put recognition-modes after the
+        # shorter first shard to balance work without native parallel workers.
         run: bash scripts/run-with-budget-warning.sh 500 "Bun test suite" bash scripts/run-bun-tests.sh
 
       - name: Setup Deno

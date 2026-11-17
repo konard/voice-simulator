@@ -70,14 +70,16 @@ try {
     'show',
     'ab5449363a21042644aa9357e07b441f05dd0167:scripts/run-bun-tests.sh',
   ]);
-  for (const version of ['previous', 'draft']) {
+  for (const version of ['main', 'previous', 'draft']) {
     writeFileSync(
       join(fixtureRoot, 'scripts/run-bun-tests.sh'),
-      version === 'previous' ? old : readFileSync('scripts/run-bun-tests.sh')
+      version === 'main' ? old : readFileSync('scripts/run-bun-tests.sh')
     );
     writeFileSync(
       join(fixtureRoot, 'scripts/run-runtime-tests.sh'),
-      readFileSync('scripts/run-runtime-tests.sh')
+      version === 'previous'
+        ? execFileSync('git', ['show', 'e679949:scripts/run-runtime-tests.sh'])
+        : readFileSync('scripts/run-runtime-tests.sh')
     );
     const result = spawnSync(
       process.execPath,
@@ -89,7 +91,7 @@ try {
       { cwd: fixtureRoot, encoding: 'utf8' }
     );
     console.log(JSON.stringify({ version, status: result.status }));
-    deepStrictEqual(result.status, version === 'previous' ? 1 : 0);
+    deepStrictEqual(result.status, version === 'draft' ? 0 : 1);
   }
 } finally {
   rmSync(fixtureRoot, { recursive: true, force: true });
