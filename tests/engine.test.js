@@ -7,6 +7,7 @@ import { describe, it, expect } from 'test-anywhere';
 
 import {
   Waveguide,
+  ENGINE_FEATURES,
   createEngine,
   getEngine,
   registerSolver,
@@ -40,7 +41,7 @@ describe('engines', () => {
     expect(engine.name).toBe('js');
     expect(engine.reason).toBe(null);
     expect(engine.threads).toBe(1);
-    expect(engine.features()).toEqual([]);
+    expect(engine.features()).toEqual(ENGINE_FEATURES.map(({ id }) => id));
     const sync = getEngine({ engine: 'js', source: untouchable });
     expect(sync.name).toBe('js');
   });
@@ -55,6 +56,8 @@ describe('engines', () => {
     expect(engine.reason.length > 0).toBe(true);
     const result = synthesize('Hi.', { engine, tier: 'minimal' });
     expect(peak(result.samples) > 0.01).toBe(true);
+    expect(engine.fallbacks).toBe(1);
+    expect(engine.fallbackReasons).toEqual([engine.reason]);
   });
 
   it('rust is an error when it cannot load', async () => {
@@ -99,7 +102,7 @@ describe('engines', () => {
     }
   });
 
-  itUnless(noRust)('unsupported renders go to JavaScript', async () => {
+  itUnless(noRust)('custom solvers explicitly select JavaScript', async () => {
     registerSolver('test-tube', (options) => {
       const solver = new Waveguide(options);
       solver.stepDuration = (shape) =>
@@ -111,9 +114,11 @@ describe('engines', () => {
     expect(typeof engine.supports(options)).toBe('string');
     expect(engine.supports({ solver: 'waveguide' })).toBe(null);
     const { plan } = synthesize('Hi.', { tier: 'minimal' });
-    const renderer = engine.createRenderer(plan, options);
+    expect(() => engine.createRenderer(plan, options)).toThrow('test-tube');
+    expect(engine.fallbacks).toBe(0);
+    const renderer = getEngine('js').createRenderer(plan, options);
     expect(renderer.engine).toBe('js');
-    expect(renderer.fallbackReason).toContain('test-tube');
+    expect(renderer.fallbackReason).toBe(null);
     const samples = new Float32Array(2048);
     expect(renderer.render(samples) > 0).toBe(true);
   });

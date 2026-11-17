@@ -199,6 +199,8 @@ export {
 } from './engine/wasm-loader.js';
 // The engine choice: Rust by default, JavaScript as the fallback (issue 25)
 export {
+  ENGINE_FEATURES,
+  JS_ONLY,
   createEngine,
   getEngine,
   Engine,

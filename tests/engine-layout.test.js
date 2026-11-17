@@ -11,6 +11,9 @@ import { readFileSync } from 'node:fs';
 import { describe, it, expect } from 'test-anywhere';
 
 import { createListener } from '../src/acoustics/microphone.js';
+import { buildVoxelModel } from '../src/acoustics/voxel-model.js';
+import { DEFAULT_HEAD } from '../src/head-config.js';
+import { packVoxelModel, writeVoxelModel } from '../src/engine/pack-model.js';
 import {
   FRAME,
   FRAME_EXTRA_VALUES,
@@ -38,6 +41,28 @@ function rustConstants(path) {
 }
 
 describe('engine layouts (issue 22)', () => {
+  it('packs identical model bytes into reused aligned and unaligned views', () => {
+    const model = buildVoxelModel(DEFAULT_HEAD, { dx: 3 });
+    const expected = new Uint8Array(packVoxelModel(model));
+    for (const offset of [1, 16]) {
+      const storage = new Uint8Array(expected.length + offset + 8).fill(0xa5);
+      const packed = writeVoxelModel(model, (bytes) =>
+        storage.subarray(offset, offset + bytes)
+      );
+      expect(packed.length).toBe(expected.length);
+      expect(packed.every((value, index) => value === expected[index])).toBe(
+        true
+      );
+      expect(storage.subarray(0, offset).every((value) => value === 0xa5)).toBe(
+        true
+      );
+      expect(
+        storage
+          .subarray(offset + expected.length)
+          .every((value) => value === 0xa5)
+      ).toBe(true);
+    }
+  });
   it('RENDERER_CONFIG matches config.rs', () => {
     const rust = rustConstants('crates/voice-simulator-core/src/config.rs');
     expect(rust).toEqual({ ...RENDERER_CONFIG });

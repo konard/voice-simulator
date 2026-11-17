@@ -1,18 +1,18 @@
 /**
  * The engine that renders a voice (issue 25): the Rust engine
  * (`voice-simulator.wasm`, see docs/RUST-ENGINE.md) by default, the
- * JavaScript renderer where the Rust engine cannot load or cannot render
- * the asked options.
+ * JavaScript renderer when WebAssembly cannot load.
  *
  * `createEngine` loads an engine and `getEngine` gives one without a
  * promise; both cache the engine by `engine|threads|simd`, so the file is
  * read and compiled once. The engine makes renderers: a RustVoiceRenderer
- * when it is the Rust engine and the options are ones Rust supports, else a
- * VoiceRenderer. Every renderer it makes says which engine renders
+ * when it is the Rust engine, else a VoiceRenderer. Every renderer it makes says which engine renders
  * (`renderer.engine`) and why it is not Rust (`renderer.fallbackReason`).
  */
 
 import { VoiceRenderer } from '../acoustics/voice.js';
+import { ENGINE_FEATURES } from './features.js';
+export { ENGINE_FEATURES, JS_ONLY } from './features.js';
 import { RustVoiceRenderer, checkSupported } from './rust-renderer.js';
 import {
   loadEngineModule,
@@ -108,17 +108,37 @@ export class Engine {
     this.reason = reason;
     this.module = module;
     this.key = key;
+    /** Number of renderers handed to JS because WebAssembly could not load. */
+    this.fallbacks = 0;
+    /** Load failure reason for every such renderer. */
+    this.fallbackReasons = [];
   }
 
-  /** Optional engine features in use (none yet). */
+  /** Capabilities reported by the loaded engine. */
   features() {
-    return [];
+    if (this.name === 'js') {
+      return ENGINE_FEATURES.map(({ id }) => id);
+    }
+    if (!this.module) {
+      throw new Error('features: the engine is closed');
+    }
+    const { exports, memory } = this.module;
+    const decoder = new globalThis.TextDecoder();
+    return Array.from({ length: exports.vs_features_count() }, (_, index) =>
+      decoder.decode(
+        new Uint8Array(
+          memory.buffer,
+          exports.vs_feature_ptr(index),
+          exports.vs_feature_len(index)
+        )
+      )
+    );
   }
 
   /**
-   * Why this engine renders `renderOptions` in JavaScript, or null when it
-   * renders them itself. The microphone and the room are checked when the
-   * renderer is built (createRenderer falls back then).
+   * Why the options are unsupported, or null when this engine accepts them.
+   * The microphone and room are checked when the renderer is built.
+   * Custom solvers and WebGPU require an explicit JavaScript engine.
    * @param {object} [renderOptions] as for VoiceRenderer
    * @returns {string|null}
    */
@@ -139,35 +159,29 @@ export class Engine {
 
   /**
    * A renderer of `plan`: a RustVoiceRenderer when this is the Rust engine
-   * and it supports the options, else a VoiceRenderer. Free a Rust
+   * or a VoiceRenderer for a JavaScript engine. Free a Rust
    * renderer with `free()` when done.
    * @param {object} plan Result of planUtterance.
    * @param {object} [renderOptions] as for VoiceRenderer
    * @returns {(VoiceRenderer|RustVoiceRenderer) & {engine: 'rust'|'js', fallbackReason: string|null}}
    */
   createRenderer(plan, renderOptions = {}) {
-    let reason = this.reason;
     if (this.name === 'rust') {
       if (!this.module) {
         throw new Error('createRenderer: the engine is closed');
       }
-      reason = this.supports(renderOptions);
-      if (reason === null) {
-        try {
-          return tagged(
-            new RustVoiceRenderer(this.module, plan, renderOptions),
-            'rust',
-            null
-          );
-        } catch (error) {
-          if (error.code !== 'ENGINE_UNSUPPORTED') {
-            throw error;
-          }
-          reason = error.message;
-        }
-      }
+      return tagged(
+        new RustVoiceRenderer(this.module, plan, renderOptions),
+        'rust',
+        null
+      );
     }
-    return tagged(new VoiceRenderer(plan, renderOptions), 'js', reason);
+    const renderer = new VoiceRenderer(plan, renderOptions);
+    if (this.reason) {
+      this.fallbacks += 1;
+      this.fallbackReasons.push(this.reason);
+    }
+    return tagged(renderer, 'js', this.reason);
   }
 
   /**

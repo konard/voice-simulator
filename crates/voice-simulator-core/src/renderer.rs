@@ -22,6 +22,8 @@ use crate::effort;
 use crate::fdtd::model::Model;
 use crate::fdtd::parallel::Team;
 use crate::fdtd::solver::{Fdtd3d, FdtdOptions, Output};
+use crate::fdtd2d::Fdtd2d;
+use crate::folds::{rest_area, FoldOptions, IncidentPressure, Load, VocalFolds};
 use crate::frame;
 use crate::glottis::{noise_breathiness, GlottalControl, Glottis, GlottisOptions};
 use crate::listener::Listener;
@@ -30,6 +32,7 @@ use crate::solver::Solver;
 use crate::source_state;
 use crate::stages::{NoiseSources, OutputStage};
 use crate::waveguide::{PiriformBranch, Waveguide, WaveguideOptions};
+use crate::{subglottal::Subglottal, whisper};
 
 /// Amplitude of the frication noise of a default voiceless fricative.
 pub const FRICATION_GAIN: f64 = 0.592;
@@ -102,6 +105,15 @@ fn finite(value: f64) -> Result<f64, RenderError> {
 pub struct Renderer<S: Solver = Waveguide> {
     solver: S,
     glottis: Glottis,
+    folds: Option<VocalFolds>,
+    interaction: bool,
+    subglottal: Option<Subglottal>,
+    above: IncidentPressure,
+    below: IncidentPressure,
+    baseline_reflection: f64,
+    whisper_level: f64,
+    whisper_release: f64,
+    pitch: f64,
     noise: NoiseSources,
     aerodynamics: Aerodynamics,
     output: OutputStage,
@@ -131,6 +143,7 @@ struct Common<'a> {
     settings: Settings,
     vocal_tract_length: f64,
     glottis: Glottis,
+    folds: Option<VocalFolds>,
     noise: NoiseSources,
     output: OutputStage,
     listener: Listener,
@@ -177,6 +190,7 @@ impl<'a> Common<'a> {
             return Err(RenderError::Config);
         }
         let mut glottis_options = GlottisOptions::new(seed(header[config::GLOTTIS_SEED])?);
+        glottis_options.pitch = finite(header[config::PITCH])?;
         glottis_options.tenseness = finite(header[config::TENSENESS])?;
         glottis_options.breathiness = settings.breathiness;
         glottis_options.jitter = finite(header[config::JITTER])?;
@@ -200,12 +214,27 @@ impl<'a> Common<'a> {
                 None
             },
         );
+        let folds = if header[config::SOURCE] == 1.0 {
+            Some(VocalFolds::new(
+                FoldOptions {
+                    length: finite(header[config::FOLD_LENGTH])?,
+                    mass: finite(header[config::FOLD_MASS])?,
+                    stiffness: finite(header[config::FOLD_STIFFNESS])?,
+                    damping: finite(header[config::FOLD_DAMPING])?,
+                    pressure_coefficient: finite(header[config::PRESSURE_COEFFICIENT])?,
+                },
+                &glottis_options,
+            ))
+        } else {
+            None
+        };
         Ok(Self {
             header,
             nose,
             settings,
             vocal_tract_length,
             glottis: Glottis::new(&glottis_options),
+            folds,
             noise: NoiseSources::new(seed(header[config::NOISE_SEED])?),
             output,
             listener: Listener::new(listener_values).ok_or(RenderError::Config)?,
@@ -213,14 +242,33 @@ impl<'a> Common<'a> {
     }
 
     fn renderer<S: Solver>(self, solver: S) -> Renderer<S> {
-        Renderer::with_solver(
+        let mut renderer = Renderer::with_solver(
             solver,
             self.glottis,
             self.noise,
             self.output,
             self.listener,
             self.settings,
-        )
+        );
+        renderer.folds = self.folds;
+        renderer.interaction = self.header[config::INTERACTION] != 0.0;
+        renderer.baseline_reflection = crate::glottis::glottal_reflection(
+            self.settings.glottal_chink,
+            self.vocal_tract_length,
+        );
+        renderer.pitch = self.header[config::PITCH];
+        if renderer.interaction {
+            renderer.solver.set_glottal_reflection(1.0);
+            if self.header[config::SUBGLOTTAL] != 0.0 {
+                renderer.subglottal = Some(Subglottal::new(
+                    self.vocal_tract_length,
+                    self.header[config::SUBGLOTTAL_LENGTH],
+                    self.header[config::WALL_LOSS],
+                    self.header[config::SUBGLOTTAL_LOSS],
+                ));
+            }
+        }
+        renderer
     }
 }
 
@@ -306,6 +354,8 @@ pub enum AnyRenderer {
     Waveguide(Box<Renderer<Waveguide>>),
     /// The 3D FDTD solver.
     Fdtd3d(Box<Renderer<Fdtd3d>>),
+    /// The depth-averaged 2D sheet.
+    Fdtd2d(Box<Renderer<Fdtd2d>>),
 }
 
 /// Runs `$body` with `$renderer` bound to the renderer inside `$any`.
@@ -314,6 +364,7 @@ macro_rules! dispatch {
         match $any {
             AnyRenderer::Waveguide($renderer) => $body,
             AnyRenderer::Fdtd3d($renderer) => $body,
+            AnyRenderer::Fdtd2d($renderer) => $body,
         }
     };
 }
@@ -330,6 +381,22 @@ impl AnyRenderer {
             Renderer::new(values).map(|renderer| Self::Waveguide(Box::new(renderer)))
         } else if solver == config::SOLVER_FDTD3D {
             Renderer::new_fdtd(values, model).map(|renderer| Self::Fdtd3d(Box::new(renderer)))
+        } else if solver == config::SOLVER_FDTD2D {
+            let common = Common::parse(values)?;
+            let reflection = crate::glottis::glottal_reflection(
+                common.settings.glottal_chink,
+                common.vocal_tract_length,
+            );
+            let sheet = Fdtd2d::new(
+                model,
+                common.vocal_tract_length,
+                common.header[config::WALL_LOSS],
+                common.header[config::NASAL_LOSS],
+                reflection,
+                common.nose,
+            )
+            .ok_or(RenderError::Model)?;
+            Ok(Self::Fdtd2d(Box::new(common.renderer(sheet))))
         } else {
             Err(RenderError::Config)
         }
@@ -413,7 +480,7 @@ impl AnyRenderer {
     /// waveguide, which has no grid.
     pub fn kernel_steps(&mut self, count: usize) -> bool {
         match self {
-            Self::Waveguide(_) => false,
+            Self::Waveguide(_) | Self::Fdtd2d(_) => false,
             Self::Fdtd3d(renderer) => {
                 renderer.solver_mut().kernel_steps(count);
                 true
@@ -425,7 +492,7 @@ impl AnyRenderer {
     /// waveguide.
     pub fn grid_size(&self) -> (usize, usize) {
         match self {
-            Self::Waveguide(_) => (0, 0),
+            Self::Waveguide(_) | Self::Fdtd2d(_) => (0, 0),
             Self::Fdtd3d(renderer) => {
                 let grid = renderer.solver().grid();
                 (grid.links(), grid.cells())
@@ -436,7 +503,7 @@ impl AnyRenderer {
     /// Threads that step the solver: 1 but with a team.
     pub fn threads(&self) -> usize {
         match self {
-            Self::Waveguide(_) => 1,
+            Self::Waveguide(_) | Self::Fdtd2d(_) => 1,
             Self::Fdtd3d(renderer) => renderer.solver().threads(),
         }
     }
@@ -458,6 +525,15 @@ impl<S: Solver> Renderer<S> {
         Self {
             solver,
             glottis,
+            folds: None,
+            interaction: false,
+            subglottal: None,
+            above: IncidentPressure::default(),
+            below: IncidentPressure::default(),
+            baseline_reflection: 0.75,
+            whisper_level: 0.0,
+            whisper_release: 0.0,
+            pitch: 120.0,
             noise,
             aerodynamics: Aerodynamics::new(settings.oral_compliance),
             output,
@@ -479,6 +555,7 @@ impl<S: Solver> Renderer<S> {
                 creak: 0.0,
                 falsetto: 0.0,
                 harsh: 0.0,
+                ..GlottalControl::default()
             },
             frication_position: 1.0,
             frication_amplitude: 0.0,
@@ -641,6 +718,10 @@ impl<S: Solver> Renderer<S> {
         self.control.creak = frame[frame::CREAK];
         self.control.falsetto = frame[frame::FALSETTO];
         self.control.harsh = frame[frame::HARSH];
+        self.control.whisper = frame[frame::WHISPER];
+        self.control.adduction = frame[frame::ADDUCTION];
+        self.control.fold_tension = frame[frame::FOLD_TENSION];
+        self.control.lung_pressure = Some(frame[frame::LUNG_PRESSURE]);
         self.frication_position = frame[frame::FRICATION_POSITION];
         self.update_airflow(frame, rate);
         self.output.configure(rate);
@@ -651,17 +732,62 @@ impl<S: Solver> Renderer<S> {
     fn update_airflow(&mut self, frame: &[f64], rate: f64) {
         let settings = self.settings;
         let block_duration = settings.block_size as f64 / settings.sample_rate;
-        let control = &self.control;
-        let opening = glottal_area_of(
-            control.voicing,
-            control.aspiration,
-            control.closure,
-            noise_breathiness(settings.breathiness, control.breath, 0.0),
-            settings.glottal_chink,
-            &settings.areas,
-        );
+        let whispers = self.control.whisper > 0.0;
         let frication_area = frame[frame::FRICATION_AREA];
-        let constriction = frication_area + frame[frame::VELUM_AREA];
+        let constriction = if whispers {
+            let areas = frame::areas(frame);
+            let from = (frame[frame::VELUM_INDEX] as usize).min(areas.len());
+            let mut narrowest = f64::INFINITY;
+            for &area in &areas[from..] {
+                narrowest = crate::math::min(narrowest, area);
+            }
+            if frame[frame::FRICATION_GAIN] > 0.0 && frication_area < narrowest {
+                narrowest = frication_area;
+            }
+            if !narrowest.is_finite() {
+                narrowest = frication_area;
+            }
+            narrowest + frame[frame::VELUM_AREA]
+        } else {
+            frication_area + frame[frame::VELUM_AREA]
+        };
+        if whispers || self.whisper_level != 0.0 {
+            self.control.stop_closure = (1.0 - constriction / 0.05).clamp(0.0, 1.0);
+            self.whisper_release = if self.control.stop_closure >= 1.0 {
+                1.0
+            } else {
+                self.whisper_release * math::exp(-block_duration / 0.02)
+            };
+            self.control.fricative = frame[frame::FRICATION_GAIN].clamp(0.0, 1.0);
+            if !self.interaction {
+                let level = math::round_half_up(self.control.whisper.clamp(0.0, 1.0) * 20.0) / 20.0;
+                if level != self.whisper_level {
+                    self.whisper_level = level;
+                    self.solver
+                        .set_glottal_reflection(self.baseline_reflection * (1.0 - 1.65 * level));
+                }
+            }
+        }
+        let control = &self.control;
+        let mut opening = if let Some(folds) = &self.folds {
+            if folds.started {
+                folds.mean_area
+            } else {
+                max(0.0, rest_area(control.adduction)) * (1.0 - control.closure)
+            }
+        } else {
+            glottal_area_of(
+                control.voicing * (1.0 - control.whisper.clamp(0.0, 1.0)),
+                control.aspiration,
+                control.closure,
+                noise_breathiness(settings.breathiness, control.breath, 0.0),
+                settings.glottal_chink,
+                &settings.areas,
+            )
+        };
+        if whispers {
+            opening += whisper::posture(control);
+        }
         let air = self.aerodynamics.step(
             block_duration,
             10.0 * frame[frame::LUNG_PRESSURE],
@@ -669,6 +795,7 @@ impl<S: Solver> Renderer<S> {
             constriction,
         );
         let re_critical = settings.re_critical;
+        self.control.oral_pressure = air.oral_pressure;
         // The effort raises the lung pressure; the noise follows its own rule.
         let effort = frame[frame::EFFORT];
         let noise_gain = effort::noise_gain(effort);
@@ -694,7 +821,22 @@ impl<S: Solver> Renderer<S> {
             let obstacle = frame[frame::FRICATION_OBSTACLE];
             self.frication_amplitude *= obstacle + settings.wall_source * (1.0 - obstacle);
         }
-        let target = air.flow_derivative * settings.transient_gain * effort::transient_gain(effort);
+        let mut target = if self.interaction {
+            0.0
+        } else {
+            air.flow_derivative * settings.transient_gain * effort::transient_gain(effort)
+        };
+        if whispers {
+            let quiet = whisper::quiet(self.control.whisper, self.control.effort);
+            self.control.aspiration_strength = self.control.aspiration_strength.map(|v| v * quiet);
+            self.frication_amplitude *= quiet;
+            self.noise
+                .tune_whisper(strouhal_frequency_at(air.flow, opening, settings.strouhal));
+            target *= (1.0
+                - self.control.whisper.clamp(0.0, 1.0)
+                    * (1.0 - self.whisper_release.clamp(0.0, 1.0)))
+                * quiet;
+        }
         let steps = max(1.0, block_duration * rate);
         self.transient_step = (target - self.transient) / steps;
     }
@@ -705,9 +847,53 @@ impl<S: Solver> Renderer<S> {
     fn step(&mut self) -> f64 {
         let white = self.noise.white.white();
         let aspiration = self.noise.aspiration.process(white);
-        let source = self
-            .glottis
-            .step(self.step_duration, &self.control, aspiration);
+        if self.control.whisper > 0.0 {
+            self.control.whisper_noise = self.noise.whisper.process(white);
+        }
+        let load = if self.interaction {
+            let (incident, area) = self.solver.glottal_load();
+            let above = Load {
+                pressure: self.above.step(incident, self.step_duration),
+                area,
+            };
+            let below = if let Some(sub) = &mut self.subglottal {
+                sub.configure(self.step_duration);
+                let (incident, area) = sub.load();
+                Load {
+                    pressure: self.below.step(incident, self.step_duration),
+                    area,
+                }
+            } else {
+                Load {
+                    pressure: 0.0,
+                    area: f64::INFINITY,
+                }
+            };
+            Some([below, above])
+        } else {
+            None
+        };
+        let source = if let Some(folds) = &mut self.folds {
+            let value = folds.step(self.step_duration, &self.control, aspiration, load);
+            if self.control.whisper > 0.0 {
+                value * (1.0 - self.control.whisper.min(1.0))
+                    + whisper::noise(
+                        &self.control,
+                        self.control.whisper_noise,
+                        self.control.aspiration_strength.unwrap_or(0.0),
+                        self.pitch,
+                    ) * 0.45
+                        * folds.aspiration_level
+            } else {
+                value
+            }
+        } else {
+            self.glottis
+                .step(self.step_duration, &self.control, aspiration)
+        };
+        if let Some(sub) = &mut self.subglottal {
+            sub.step(-source);
+        }
         let white = self.noise.white.white();
         let amplitude = self.frication_amplitude;
         let noise = if amplitude <= 1e-6 {
