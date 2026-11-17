@@ -1,5 +1,5 @@
 /**
- * Articulatory edit costs (issue 68). Final starting calibration: vowels
+ * Articulatory edit costs (issue 68). Final calibration: vowels
  * height 2, backness 1.5, rounding .5, length .3, nasality .3;
  * consonants manner .5, place .35/11, voicing .25, aspiration .2,
  * palatalisation .2; tone .5, third/half-third 0, third/rising .15;

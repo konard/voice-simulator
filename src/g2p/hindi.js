@@ -128,7 +128,7 @@ function addVowelMark(units, mark, final) {
  * Transliterate into consonant / vowel units with inherent schwas. The
  * conjunct ज्ञ is said ɡj in Hindi (ज्ञान ɡjaːn), not d͡ʒɲ as spelled.
  */
-function toUnits(word) {
+export function hindiUnits(word) {
   const units = [];
   const chars = [
     ...word.normalize('NFC').replaceAll('ज्ञ', 'ग्य').normalize('NFD'),
@@ -225,7 +225,7 @@ export function hindiWordToIpa(word) {
   if (known) {
     return { ipa: known[0], source: 'dictionary' };
   }
-  const units = deleteSchwas(toUnits(word));
+  const units = deleteSchwas(hindiUnits(word));
   const ipa = units
     .map((unit) =>
       unit.nasal
