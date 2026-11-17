@@ -208,6 +208,7 @@ describe('speech dataset registry', () => {
           split: 'validation',
           length: 3,
           textColumn: 'raw_transcription',
+          audioColumn: 'audio',
           textSha256: null,
         },
       });
@@ -383,7 +384,7 @@ describe('speech dataset rows', () => {
             row: {
               raw_transcription: text,
               gender: at % 2,
-              audio: [{ src: `${base}/audio/${at}.wav?Expires=1` }],
+              speech: [{ src: `${base}/audio/${at}.wav?Expires=1` }],
             },
             truncated_cells: [],
           }));
@@ -408,6 +409,7 @@ describe('speech dataset rows', () => {
             split: 'validation',
             length: 3,
             textColumn: 'raw_transcription',
+            audioColumn: 'speech',
             textSha256: hex(joinTexts(texts)),
           },
         });

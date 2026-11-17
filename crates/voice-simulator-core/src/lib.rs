@@ -38,6 +38,7 @@ pub mod listener;
 pub mod losses;
 pub mod math;
 pub mod mixed_recognition;
+pub mod modes;
 pub mod nose_line;
 pub mod radiation;
 pub mod random;

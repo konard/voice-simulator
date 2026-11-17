@@ -330,7 +330,12 @@ describe('CI timeout policy', () => {
     expect(packageJson.scripts.test).toBe(
       'node --test --test-timeout=30000 tests/*.test.js'
     );
-    expect(releaseWorkflow).toContain('bun test --timeout 30000');
+    expect(getStepBlock(releaseWorkflow, 'Run tests (Bun)')).toContain(
+      'bash scripts/run-bun-tests.sh'
+    );
+    expect(readFileSync('scripts/run-bun-tests.sh', 'utf8')).toContain(
+      'test --timeout 30000'
+    );
   });
 
   it('documents that the Bun flag bounds a test and not the suite', () => {

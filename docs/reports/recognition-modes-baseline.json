@@ -1,0 +1,14 @@
+{
+  "activation": 0.5,
+  "names": 0.06,
+  "measured": {
+    "activation": 0.55,
+    "names": 0.11,
+    "rows": 100,
+    "golden": 24,
+    "falseAlarms": 1
+  },
+  "date": "2026-11-17",
+  "command": "node --test --test-timeout=600000 tests/heavy/recognition-modes.test.js",
+  "calibration": "Initial pre-merge measurement after correcting phrase pitch range to pool vowel frames across words; replaces the preliminary median-of-word range measurement."
+}

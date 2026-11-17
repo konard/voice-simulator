@@ -314,11 +314,15 @@ const unit = (value, low, high) =>
  * it is not given): semitones, degrees and slopes × i, factors f^i,
  * effort 0.5 + (e − 0.5)·i. The name `neutral` (or none) with a non-zero
  * arousal, valence or dominance uses the rules of the dimensions instead.
- * @param {string|{name?: string, intensity?: number, arousal?: number, valence?: number, dominance?: number}} [emotion]
+ * `realized` retains an observation whose effects are already in the mode.
+ * @param {string|{name?: string, intensity?: number, arousal?: number, valence?: number, dominance?: number, realized?: boolean}} [emotion]
  * @returns {{pitch: number, range: number, rate: number, effort: number, phonation: Record<string, number>, pauses: number, precision: number, smile: number, glide: number, finalRise: number, stressLength: number, jitter: number}}
  */
 export function emotionChanges(emotion = {}) {
   const spec = typeof emotion === 'string' ? { name: emotion } : emotion;
+  if (spec.realized) {
+    return scaledRow(EMOTIONS.neutral, 0);
+  }
   const name = spec.name ?? 'neutral';
   if (name !== 'neutral' && Object.hasOwn(EMOTIONS, name)) {
     return scaledRow(EMOTIONS[name], unit(spec.intensity ?? 1, 0, 1));
@@ -334,7 +338,7 @@ export function emotionChanges(emotion = {}) {
 
 /** Whether an emotion changes nothing (neutral at the origin). */
 export function isNeutralEmotion(emotion) {
-  if (!emotion) {
+  if (!emotion || emotion.realized) {
     return true;
   }
   const name = emotion.name ?? 'neutral';

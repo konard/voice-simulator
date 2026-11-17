@@ -532,56 +532,18 @@ impl Fdtd3d {
         }
     }
 
-    /// Step this solver's private grid. Construction validates every endpoint
-    /// with `Grid::index`; no method changes endpoints or resizes its arrays.
-    /// The scalar wasm path therefore needs no repeated cell bounds checks.
+    /// Step this solver's private grid, whose array lengths and endpoints
+    /// construction validates and no method changes.
     #[allow(unsafe_code)]
     fn step_grid(&mut self) {
         #[cfg(any(not(target_arch = "wasm32"), target_feature = "simd128"))]
         self.grid.step(self.active_from);
         #[cfg(all(target_arch = "wasm32", not(target_feature = "simd128")))]
-        {
-            let Grid {
-                link_a,
-                link_b,
-                velocity,
-                damping,
-                conductance,
-                pressure,
-                divergence,
-                ..
-            } = &mut self.grid;
-            let from = self.active_from;
-            // SAFETY: new() validates endpoints with Grid::index. All link
-            // arrays have equal lengths, all cell arrays have equal lengths,
-            // and this private grid never resizes or changes endpoints.
-            // skip_closed keeps active_from at or below the link count.
-            // Each pointer advances within its own allocation. The two
-            // divergence updates are sequential, including equal endpoints.
-            unsafe {
-                let mut a = link_a.as_ptr().add(from);
-                let mut b = link_b.as_ptr().add(from);
-                let mut v = velocity.as_mut_ptr().add(from);
-                let end = velocity.as_ptr().add(velocity.len());
-                let mut k = damping.as_ptr().add(from);
-                let mut c = conductance.as_ptr().add(from);
-                let p = pressure.as_ptr();
-                let d = divergence.as_mut_ptr();
-                while v.cast_const() != end {
-                    let (i, j) = (*a as usize, *b as usize);
-                    let u = *k * (*v - COURANT * (*p.add(j) - *p.add(i)));
-                    *v = u;
-                    let value = *c * u;
-                    *d.add(i) += value;
-                    *d.add(j) -= value;
-                    a = a.add(1);
-                    b = b.add(1);
-                    v = v.add(1);
-                    k = k.add(1);
-                    c = c.add(1);
-                }
-            }
-            self.grid.pressure_pass();
+        // SAFETY: new() validates endpoints with Grid::index. All link
+        // arrays have equal lengths, all cell arrays have equal lengths,
+        // and skip_closed keeps active_from at or below the link count.
+        unsafe {
+            super::kernel::step_validated(&mut self.grid, self.active_from);
         }
     }
 

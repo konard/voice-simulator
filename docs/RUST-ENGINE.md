@@ -972,7 +972,7 @@ voice-simulator-cli kernel-steps job.bin 2000 --threads 2
   comment naming the rule "a part writes only its own index range":
 
   ```sh
-  rg -l '\bunsafe\b' crates/voice-simulator-core/src # parallel.rs, solver.rs
+  rg -l '\bunsafe\b' crates/voice-simulator-core/src # parallel.rs, solver.rs, kernel.rs
   ```
 
 - **Threshold.** A solver starts a team only for more than one thread and
@@ -1144,13 +1144,17 @@ worker of the app asks for one thread, so it needs none.
   (`[lints.rust]`) in place of `#![forbid(unsafe_code)]` in `lib.rs`:
   `forbid` cannot be lifted for one module. `fdtd/parallel.rs` allows it
   for the thread team. Issue 82 also allows it only in the private
-  `Fdtd3d::step_grid` method: the scalar wasm scatter loop advances pointers
+  `Fdtd3d::step_grid` method and its private `kernel::step_validated` helper:
+  the scalar wasm scatter loop advances pointers
   through arrays whose lengths and endpoints are validated at construction.
   The grid stays private, exposes only a shared reference and never changes
   endpoints or array lengths. Divergence updates remain sequential even when
-  both endpoints coincide. Native and SIMD steps retain `Grid::step`, and
+  both endpoints coincide. Four links per iteration reduce loop bookkeeping;
+  remainder links keep their original order. A small native unit test compares
+  every bit for empty grids, all skipped prefixes, chunk remainders and shared
+  endpoints. Native and SIMD steps retain `Grid::step`, and
   the public grid kernel remains checked. `tests/rust-crates.test.js` checks
-  both exceptions, the method's scope and a `// SAFETY:` comment per block;
+  these exceptions, the functions' scope and a `// SAFETY:` comment per block;
   `fdtd_reset` tests reject invalid endpoints and mismatched link arrays.
 
 `experiments/issue-24/bench` (its own Cargo project, not in the workspace)
@@ -1298,6 +1302,22 @@ runner image: `rustup toolchain install` without arguments installs the
 toolchain of `rust-toolchain.toml` (rustup 1.29 warns that the automatic
 install of `rustup show` is deprecated), and `rustup show` then prints the
 active versions into the log.
+
+Acoustic mode recognition exports `vs_mode_rules(input, has_f1, known, out)`.
+Input is two 11-double feature rows (word and baseline): alpha, pitch, F1
+difference, voiced share, source H1-H2, HNR, CPP, jitter, rate, energy ratio,
+pitch span. Output is six word decisions (E, effort, confidence, quality id,
+degree, tempo) followed by the six-component phrase vector. The export
+validates flags, pointers and finite input and permits overlapping buffers.
+The numerical core is `modes.rs`; class B parity tolerance is 1e-10.
+`vs_mode_emotion(input, count, out)` reads the phrase vector followed by
+2–12 six-double reference vectors and writes activation, winning index,
+nearest/next distances, intensity and name confidence. Its six-double output
+may overlap input. Names and span construction remain with the caller.
+
+With landmarks from main `a5b3c51`, the combined scalar engine measures
+472907 bytes, within the existing 475136-byte budget. Both mode and landmark
+WASM parity suites pass on that binary; no size-budget change is needed.
 
 ## Landmark detector (issue 62)
 
