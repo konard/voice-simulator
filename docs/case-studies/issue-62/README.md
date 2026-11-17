@@ -41,7 +41,18 @@ Local validation on 2026-11-17: Node/Bun/Deno each pass 22 focused rule,
 quality and streaming checks. Eight additional Node checks pass for boundary
 strengths, WASM parity and engine size, and the CLI check passes. Repository
 checks (`npm run check`) and both heavy landmark tests pass. Complete matrix
-results are linked from the pull request after the final commit is tested.
+verification [44080857443](https://github.com/konard/voice-simulator/actions/runs/44080857443)
+passes on `0e907a9`: all nine Node/Bun/Deno × Linux/macOS/Windows jobs, Rust,
+format/policy, documentation, simulation, compilation, file limits and release
+checks. The four companion workflows also pass. Rust CI includes 187 parity
+checks and seven thread tests without skips. All nine jobs retain the same
+quality measurements, with landmark RTF 0.000127–0.000978 against the 0.02
+limit. The PR links subsequent documentation checks and is ready for review.
+
+Two fresh full calibrations (3780 renders each) match each other and the
+committed formatted module, SHA-256
+`01e01bce0d21594143f2fef34dcda058430a1cac740526f2e7f9fb45356b1203`.
+The complete golden JSON report also matches the committed 24-row report.
 
 Everything below records the original specification investigation. Statements
 about unfinished work, permanent draft status and unchanged gates describe

@@ -21,19 +21,29 @@ sections below record investigations under the original contract.
       signs, every decision-tree branch, cleanup and streaming commitments.
 - [x] Update API/types, README, roadmap, issue plan, changeset and PR draft to
       describe the delivered contract and limitations consistently.
-- [ ] Verify focused tests on Node/Bun/Deno, repository checks, golden counts,
+- [x] Verify focused tests on Node/Bun/Deno, repository checks, golden counts,
       tenth-material stability and two byte-identical full calibrations.
-- [ ] Commit atomic changes, push only issue-62-c339234ca063, review the full
+- [x] Commit atomic changes, push only issue-62-c339234ca063, review the full
       PR diff, verify current main is included, and wait for all CI jobs.
-- [ ] Investigate any fresh failures from preserved logs; update final
+- [x] Investigate any fresh failures from preserved logs; update final
       evidence and mark PR 142 ready after every revised criterion passes.
 
 Current local evidence: 22 focused checks pass on each of Node.js, Bun and
 Deno; eight further Node checks pass for boundaries, WASM parity and size,
 and the landmark CLI check passes. `npm run check` and rustfmt pass. Both
 heavy tests pass, with the same 24 golden rows and all tenth-material
-thresholds within one step. Full calibration reproducibility is being
-rechecked sequentially; numerical and calibration code is unchanged.
+thresholds within one step. Two fresh complete 3780-render calibrations
+are byte-identical to the committed module after formatting, SHA-256
+`01e01bce0d21594143f2fef34dcda058430a1cac740526f2e7f9fb45356b1203`.
+
+Complete implementation CI [44080857443](https://github.com/konard/voice-simulator/actions/runs/44080857443)
+passes on `0e907a9802e926d7ce4f9edb7ce91e86dec716c1`: all nine runtime/OS
+jobs, Rust and the aggregate status gate. All four companion workflows pass
+on that SHA. The preserved log confirms unchanged quality measurements and
+landmark RTF 0.000127–0.000978, below 0.02 in every job. Current main
+`eeb2869` is included; the diff preserves all existing public features.
+PR 142 was marked ready after these checks passed. Its description links
+the implementation run and records subsequent documentation checks.
 
 ## Earlier investigation
 
