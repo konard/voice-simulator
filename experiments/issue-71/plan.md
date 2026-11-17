@@ -105,3 +105,28 @@ suite remains the acceptance evidence. Native bitwise regression (all prefix
 lengths and remainders, shared endpoints and empty grids) passes; WASM solver
 and default/teeth/enclosure render parity pass, with zero sample differences.
 Clippy passes and the scalar WASM is 441308 bytes (458752-byte budget).
+
+Expanded four-language replay regression initially fails 8/60 cases
+(replay-all-languages.log). Traces identify weak noise pitch being treated
+as falsetto, omitted syllabic consonants, unstable creak degree, spurious
+word effort during tempo changes, physical modes misnamed as emotions,
+and phrase activation applied again across gaps in physical labels.
+The complete 60-case audit covers all four languages and passes.
+Focused Node recognition/integration: 199/199 passing (186 + 13). All
+accuracy counts remain 14/16 effort exact, 16/16 near, 4/4 whisper,
+39/40 other labels, 53/56 telephone other labels, 46/48 emotion names,
+and 28/28 activation signs. Physical references compete as unnamed alternatives,
+while twelve emotion reference classes and all synthetic gates stay intact.
+
+Performance run 44079046577 at d6a904f passes all 75 tests. The runner is
+Intel Xeon 6975P-C; studio/reference scalar Rust/JS medians are 0.9161/0.9294.
+These measurements do not establish the same gain on the earlier AMD
+runner. Trend and engine-parity reports are copied only from this green run;
+the baseline is unchanged. All regular checks at d6a904f also pass.
+
+Updated Rust word-rule parity passes (two WASM tests), native rule test and
+Clippy pass. Scalar WASM is 441404 bytes. Comparing its 475 function bodies
+with the green d6a904f binary changes only one internal function (the word
+classifier); renderer function bodies are unchanged. The bounded comparison
+script is experiments/issue-71/compare-wasm.mjs. Latest main eeb2869 remains
+merged. Current-head runtime CI and refreshed recording report remain open.
