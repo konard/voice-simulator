@@ -336,7 +336,8 @@ fn emit(
     });
     Some(t)
 }
-/// Same causal confirmation order as the JavaScript stage, even in batch.
+/// Same causal confirmation order as JavaScript, even in batch: confirmed
+/// peaks win over later higher peaks within the 80 ms exclusion interval.
 pub fn nuclei(f: &Frames<'_>, s: &[f32], thresholds: &Thresholds) -> Vec<Nucleus> {
     let mut output: Vec<Nucleus> = Vec::new();
     let mut pending = None;

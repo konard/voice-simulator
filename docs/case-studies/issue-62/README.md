@@ -3,7 +3,51 @@
 Issue: <https://github.com/konard/voice-simulator/issues/62>.
 Pull request: <https://github.com/konard/voice-simulator/pull/142>.
 
-## Status: unfinished
+## Current delivery contract
+
+The owner requested realistic requirements and a mergeable implementation in
+[PR feedback](https://github.com/konard/voice-simulator/pull/142#issuecomment-6947242499).
+The delivered contract and regression limits are specified in
+[RECOGNITION-LANDMARKS.md](../../RECOGNITION-LANDMARKS.md) and the
+[revised issue plan](../issue-11/plan/P50-syllable-nuclei-landmarks-broad-classes.md).
+This explicitly replaces the earlier incompatible timing rules and quality
+gates. It does not claim the original quality goals were reached.
+
+The stage preserves confirmed nuclei and the 60 ms immutable class prefix;
+batch retains retrospective cleanup. The synthetic regression limits are
+60% nucleus recall, 35% extras/truth, 46%/45% class accuracy at 16/8 kHz,
+and the existing six of ten planned edges within 20 ms. Independent analytic
+feature tests require all six event types and every class-tree branch,
+including rejection and cleanup. Noise, latency, CPU, calibration and Rust
+parity gates are retained. No runtime job is disabled or allowed to fail.
+
+### Requirement and verification map
+
+| Delivered requirement                                          | Implementation                                                  | Verification                                                                                                           |
+| -------------------------------------------------------------- | --------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| Mel sonority, voiced peaks, valley boundaries and confirmation | `landmark-signals.js`, `landmark-nuclei.js`                     | `recognition-landmarks.test.js`, `recognition-landmark-boundaries.test.js`, analytic peak tests                        |
+| Coarse/fine rises, all six signs, grouping and suppression     | `landmark-signals.js`, `landmarks.js`                           | Analytic transitions and rejection tests; streaming suppression at both hops and four chunk sizes                      |
+| Ordered eight-class tree and median/run cleanup                | `landmark-signals.js`                                           | Every tree branch and cleanup rule; unchanged four-language confusion measurements                                     |
+| Immutable 60 ms class prefix and confirmed nucleus times       | `landmarks.js`, `landmark-nuclei.js`                            | Actual PCM closure counterexample and later-higher-peak regression in `recognition-landmark-streaming.test.js`         |
+| Public batch/stream API, options, arrays, exports and types    | `landmarks.js`, `landmarks.d.ts`, package indexes               | API, invalid input, trim/reset, lifecycle, timing and typed-array checks                                               |
+| JSON command, saved output and help                            | `bin/voice-simulator.js`                                        | Landmark CLI audio test                                                                                                |
+| Deterministic calibration and generated thresholds             | `calibrate-landmarks.mjs`, `landmark-material.mjs`              | Two complete 3780-render calibrations match the committed module; tenth-material thresholds differ by at most one step |
+| Synthetic quality, noise rejection and CPU budget              | Versioned `tests/fixtures/landmark-quality.json`                | Original sentences/truth/tolerances retained; noise at two rates; RTF below 0.02                                       |
+| Golden-set counts and measured 15% goal                        | Heavy landmark suite and committed golden report                | All 24 recordings, per-utterance truth/counts, 24.41% MARE, human-review flags                                         |
+| Rust numerical core and additive WASM bridge                   | `landmarks.rs` in core and bridge                               | Native tests; JS/WASM comparison at three rates, two voices and two hops, plus boundary-strength regression            |
+| Documentation and next release                                 | API guide, README, roadmap, revised issue plan, minor changeset | Repository policy, format, link and release checks                                                                     |
+
+Local validation on 2026-11-17: Node/Bun/Deno each pass 22 focused rule,
+quality and streaming checks. Eight additional Node checks pass for boundary
+strengths, WASM parity and engine size, and the CLI check passes. Repository
+checks (`npm run check`) and both heavy landmark tests pass. Complete matrix
+results are linked from the pull request after the final commit is tested.
+
+Everything below records the original specification investigation. Statements
+about unfinished work, permanent draft status and unchanged gates describe
+that earlier contract, before the owner's acceptance revision.
+
+## Historical investigation before the acceptance revision
 
 The implementation is an experimental draft. The requested quality gates
 remain failing. Required timing rules conflict with each other, and the

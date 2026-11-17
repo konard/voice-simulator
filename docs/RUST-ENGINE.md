@@ -1314,7 +1314,8 @@ same caller-owned allocation and error conventions as other components.
 `tests/rust-landmarks.test.js` checks classes and presence flags exactly
 and the complete output with class B relative RMS at most 1e-6, on all
 three rates and both hops, male and female. This numerical parity does not
-resolve the acceptance blockers documented in the issue 62 investigation.
+measure recognition accuracy. The [experimental quality limits and causal
+streaming contract](RECOGNITION-LANDMARKS.md) apply to both implementations.
 
 With complete acoustics parity, language identification and joint
 recognition from main `eeb2869`, the combined scalar engine is 467028 bytes

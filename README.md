@@ -1488,7 +1488,7 @@ This repository implements CI/CD best practices for AI-driven development. See [
 - Changeset-based versioning
 - Concurrency control for CI/CD pipelines
 
-Experimental syllable nuclei and sound classes: `findLandmarks`, `createLandmarkDetector` and `BROAD_CLASSES`. See the [API and measured limits](docs/RECOGNITION-LANDMARKS.md); issue #62 remains unfinished.
+Experimental syllable nuclei and sound classes: `findLandmarks`, `createLandmarkDetector` and `BROAD_CLASSES`. See the [API, streaming contract and measured quality limits](docs/RECOGNITION-LANDMARKS.md).
 
 ## License
 

@@ -44,7 +44,9 @@ function previousLandmarks(output, first) {
  *
  * Closure clean-up is retrospective in batch mode. Streaming labels honour
  * the 60 ms commitment deadline; an open silence run is not relabelled after
- * commitment. See the counterexample in experiments/issue-62/causality.mjs.
+ * commitment. Batch and streaming classes can consequently differ. Confirmed
+ * nucleus times take priority over later higher peaks within 80 ms. See
+ * docs/RECOGNITION-LANDMARKS.md for the measured quality and timing contract.
  * @param {import('./frontend.js').FrameSet} frames
  * @param {import('./landmarks.js').LandmarkOptions} [options]
  */

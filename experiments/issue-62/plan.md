@@ -1,7 +1,41 @@
 # Issue 62: CI investigation and acceptance plan
 
-Objective: satisfy issue 62 in PR 142, resolve conflicts with current main,
-and verify every CI check without weakening the requested quality gates.
+Objective: deliver issue 62 in PR 142 under the owner's revised request for
+realistic requirements, with every applicable CI check passing. Preserve the
+original quality goals and measured limitations explicitly.
+
+## Current acceptance revision (2026-11-17)
+
+Authority: https://github.com/konard/voice-simulator/pull/142#issuecomment-6947242499
+asks for realistic requirements and a mergeable implementation. Earlier
+sections below record investigations under the original contract.
+
+- [x] Read issue, all comments/reviews, prerequisites and required sub-issues.
+- [x] Download fresh run 44071097877; verify matching SHA and timestamps.
+      The same three quality assertions fail in all nine runtime jobs.
+- [x] Specify immutable 60 ms streaming classes versus retrospective batch
+      cleanup, and give confirmed nuclei priority over later replacement.
+- [x] Retain multilingual measurements with explicit regression floors;
+      preserve 90%/10%, 85%/80% and all-edge goals as measured aspirations.
+- [x] Add independent controlled-signal checks for nuclei, all six landmark
+      signs, every decision-tree branch, cleanup and streaming commitments.
+- [x] Update API/types, README, roadmap, issue plan, changeset and PR draft to
+      describe the delivered contract and limitations consistently.
+- [ ] Verify focused tests on Node/Bun/Deno, repository checks, golden counts,
+      tenth-material stability and two byte-identical full calibrations.
+- [ ] Commit atomic changes, push only issue-62-c339234ca063, review the full
+      PR diff, verify current main is included, and wait for all CI jobs.
+- [ ] Investigate any fresh failures from preserved logs; update final
+      evidence and mark PR 142 ready after every revised criterion passes.
+
+Current local evidence: 22 focused checks pass on each of Node.js, Bun and
+Deno; eight further Node checks pass for boundaries, WASM parity and size,
+and the landmark CLI check passes. `npm run check` and rustfmt pass. Both
+heavy tests pass, with the same 24 golden rows and all tenth-material
+thresholds within one step. Full calibration reproducibility is being
+rechecked sequentially; numerical and calibration code is unchanged.
+
+## Earlier investigation
 
 - [x] Read the complete issue, all PR conversation comments, inline comments
       and reviews; check required sub-issues and prerequisite states.

@@ -1,4 +1,6 @@
-/** Causal nucleus confirmation shared by batch and streaming calls. */
+/** Causal nucleus confirmation shared by batch and streaming calls.
+ * A confirmed peak wins over later peaks within the exclusion interval;
+ * higher-peak replacement applies only while the earlier peak is pending. */
 export function createNucleusScanner(frames, output, T) {
   let scanned = 0;
   let pending = -1;

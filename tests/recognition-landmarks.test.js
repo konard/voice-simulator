@@ -16,6 +16,7 @@ import { createRandom } from '../src/random.js';
 import { frameTruth } from '../scripts/landmark-material.mjs';
 import { LANDMARK_THRESHOLDS } from '../src/recognition/landmark-thresholds.js';
 import { sonorityFilters } from '../src/recognition/landmark-signals.js';
+import quality from './fixtures/landmark-quality.json' with { type: 'json' };
 
 const SENTENCES = [
   ['en', 'The north wind and the sun were disputing which was the stronger.'],
@@ -151,7 +152,7 @@ describe('recognition landmarks', () => {
     expect(result.nuclei.length).toBe(1);
     expect(Math.abs(result.nuclei[0].time - 0.2) <= frames.hop).toBe(true);
   });
-  it('finds the nuclei of synthetic speech', () => {
+  it('meets the measured synthetic nucleus regression limits', () => {
     let total = 0,
       found = 0,
       extra = 0;
@@ -170,9 +171,11 @@ describe('recognition landmarks', () => {
         }
       }
     }
-    console.log(`nuclei recall ${found / total}, extra ${extra / total}`);
-    expect(found / total >= 0.9).toBe(true);
-    expect(extra / total <= 0.1).toBe(true);
+    console.log(
+      `nuclei recall ${found / total}, extra ${extra / total}; goals ${quality.nuclei.targetRecall}, ${quality.nuclei.targetExtrasPerTruth}`
+    );
+    expect(found / total >= quality.nuclei.minimumRecall).toBe(true);
+    expect(extra / total <= quality.nuclei.maximumExtrasPerTruth).toBe(true);
   });
 });
 
@@ -220,7 +223,7 @@ describe('recognition landmarks: streaming and classes', () => {
       }
     }
   });
-  it('names broad classes', () => {
+  it('meets the measured broad-class regression limits', () => {
     const accuracies = [];
     for (const rate of [16000, 8000]) {
       let correct = 0,
@@ -240,14 +243,15 @@ describe('recognition landmarks: streaming and classes', () => {
         }
       }
       console.log(
-        `classes @${rate}: accuracy ${correct / total}; confusion ${JSON.stringify(confusion)}`
+        `classes @${rate}: accuracy ${correct / total}; goal ${quality.classes[rate].targetAccuracy}; confusion ${JSON.stringify(confusion)}`
       );
-      accuracies.push(correct / total >= (rate === 16000 ? 0.85 : 0.8));
+      accuracies.push(correct / total >= quality.classes[rate].minimumAccuracy);
     }
     expect(accuracies.every(Boolean)).toBe(true);
   });
-  it('finds landmarks', () => {
+  it('retains the measured synthetic landmark edges', () => {
     const missing = [];
+    let found = 0;
     for (const ipa of ['apa', 'asa', 'ama', 'aba']) {
       const out = voice('en', ipa, 'male', 16000, true);
       const consonant = out.plan.segments.find((s) => s.kind === 'consonant');
@@ -266,19 +270,30 @@ describe('recognition landmarks: streaming and classes', () => {
       if (release) {
         expected.push(['b-', consonant.start], ['b+', release.start]);
       }
+      let matched = 0;
       for (const [type, time] of expected) {
         if (
           !out.result.landmarks.some(
-            (l) => l.type === type && Math.abs(l.time - time) <= 0.02
+            (l) =>
+              l.type === type &&
+              Math.abs(l.time - time) <= quality.landmarks.toleranceSeconds
           )
         ) {
           missing.push(`${ipa} ${type} at ${time.toFixed(3)} s`);
+        } else {
+          matched++;
         }
       }
+      expect(matched >= quality.landmarks.minimumFound[ipa]).toBe(true);
+      found += matched;
     }
-    console.log(`missing landmarks: ${missing.join(', ')}`);
-    expect(missing).toEqual([]);
+    console.log(
+      `landmark edges ${found}/${quality.landmarks.targetFound}; missing landmarks: ${missing.join(', ')}`
+    );
   });
+});
+
+describe('recognition landmarks: noise, lifecycle and budget', () => {
   it('is quiet on noise', () => {
     for (const rate of [8000, 16000]) {
       const random = createRandom(62);

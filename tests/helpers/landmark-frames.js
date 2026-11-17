@@ -3,6 +3,22 @@
 import { analyzeFrames } from '../../src/recognition/frontend.js';
 import { createRandom } from '../../src/random.js';
 
+/** Isolated features with a quiet mel floor, suitable for analytic rules. */
+export function ruleFrames(hop = 0.005, seconds = 0.8) {
+  const frames = analyzeFrames(new Float32Array(16000 * seconds), 16000, {
+    hop,
+  });
+  frames.energy.fill(-20);
+  frames.noise.fill(-80);
+  frames.speech.fill(1);
+  frames.periodicity.fill(0.9);
+  frames.zcr.fill(0);
+  frames.gravity.fill(0);
+  frames.band.fill(-40);
+  frames.mel.fill(-30);
+  return frames;
+}
+
 /** Short seeded band walks expose suppression across streaming windows. */
 export function candidateFrames(seed = 5) {
   const count = 160;

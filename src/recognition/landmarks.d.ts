@@ -25,6 +25,7 @@ export interface LandmarkOptions {
   thresholds?: Partial<LandmarkThresholds>;
 }
 export interface Nucleus {
+  /** Immutable once confirmed; later higher peaks within 80 ms are ignored. */
   time: number;
   start: number;
   /** Unknown until a following minimum or nonspeech frame arrives. */
@@ -40,7 +41,10 @@ export interface LandmarkResult {
   hop: number;
   startTime: number;
   count: number;
+  /** Immutable class prefix: count minus 60 ms of frames, or count at final.
+   * Streaming preserves this prefix even when batch would relabel a closure. */
   committed: number;
+  /** Broad acoustic guesses; see the documented experimental accuracy. */
   classes: Uint8Array;
   sonority: Float32Array;
   landmarks: Landmark[];
