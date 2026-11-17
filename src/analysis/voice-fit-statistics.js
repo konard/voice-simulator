@@ -219,7 +219,9 @@ export function accumulate(
     rate: options.analysisRate,
   });
   const pitch = trackPitch(frames);
-  const formants = trackFormants(frames, { pitch });
+  // Use the tracker's initial tract prior for every stretch. Re-estimating
+  // that prior from a whole utterance makes the pooled dF depend on splits.
+  const formants = trackFormants(frames, { pitch, vocalTractLength: 16.5 });
   const source = inverseFilter(frames, { pitch, trace: options.trace ?? null });
   const legacy = analyzeLegacyVoice(input, sampleRate, {
     ...options,
