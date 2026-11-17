@@ -66,7 +66,7 @@ describe('recognition pitch on real speech', () => {
       '| ------ | ------- | ------ |',
       ...candidates.map(
         (item) =>
-          `| [${item.name}](${item.archive ?? item.url}) | ${item.licence} | ${item.reason} |`
+          `| [${item.name}${item.archive ? ' (archived)' : ''}](${item.archive ?? item.url}) | ${item.licence} | ${item.reason} |`
       ),
       '',
       'The synthetic checks of tests/recognition-pitch.test.js measure the',

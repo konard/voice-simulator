@@ -127,7 +127,7 @@ acceptance of the issue as a whole.
 - [x] Latest main is included; the full PR diff was reviewed for regressions.
 - [ ] PR readiness: blocked by the unmet acceptance criteria.
 
-## Measurements
+## Original draft measurements
 
 Commands are run from the repository root. Outputs during this investigation
 are preserved in `/tmp/issue-62-*.log`; the reproducible scripts and persistent
@@ -205,6 +205,99 @@ Its archive diagnostic supplies the 2026-10-05 snapshot (lines 310–327).
 The report and its generator now cite that snapshot while preserving the
 original registry URL. The existing report-generation check passes. No link
 checks or quality gates are disabled.
+
+## Follow-up CI and conflict investigation (2026-11-17)
+
+The follow-up read the complete issue, all current issue and PR conversation
+comments, inline comments and reviews. No required sub-issues were returned by
+the GitHub sub-issues endpoint; prerequisites #58 and #17 remain closed.
+
+Plan and verification:
+
+- [x] Fetch current `main`, merge it without rewriting history, and preserve
+      both the new codebook API and landmark API in the exports and types.
+- [x] Download the failing workflow logs and match their head SHA and timestamps
+      to the commits under investigation.
+- [x] Reproduce the quality failures with focused Node.js, Bun and Deno runs.
+- [x] Investigate the prescribed peak superset, causal cleanup, band-edge
+      signals and class thresholds with bounded, committed experiments.
+- [x] Fix the extra nucleus speech-flag gate in JavaScript and Rust, with a
+      regression that fails before the fix and passes afterward.
+- [x] Repair the merged README line limit and align the pitch report generator
+      with the archived citation already on `main`.
+- [x] Rebuild the merged WASM engine, verify numerical parity and its size,
+      and regenerate the complete 24-utterance golden report.
+- [ ] Verify all current-head CI jobs pass; the three quality gates are still
+      unmet and must remain visible.
+
+Merge commit `939b180` includes `main` commit `1f016e0`. Conflicts were in
+`src/index.js`, `src/index.d.ts` and the pitch report citation. The existing
+codebook and CLI tests pass (23 tests). The generated pitch Markdown and JSON
+match their committed snapshots byte for byte after running the report test.
+
+Run [44035526815](https://github.com/konard/voice-simulator/actions/runs/44035526815)
+started at 07:01:34 UTC on `2fddc67` (committed at 07:00:55 UTC). All nine test
+jobs failed the same three quality assertions; the full log is preserved in
+`ci-logs/release-44035526815.log`. The Node/Ubuntu assertions are at lines
+18024, 18036 and 18050. This is an algorithm-quality failure, with no missing
+secret or private-repository access involved.
+
+After the merge, run
+[44038269916](https://github.com/konard/voice-simulator/actions/runs/44038269916)
+started at 07:23:02 UTC on `939b180` (committed at 07:22:47 UTC). It failed
+before the test matrix because the combined README had 1502 lines (full log
+`ci-logs/release-44038269916.log`, lines 3348–3352). Reflowing existing prose
+reduces it to 1498 without removing content. The file-line-limit script passes.
+The four other workflows passed on that merge commit, as did Rust Engine.
+
+The latest default-branch release run,
+[44037340756](https://github.com/konard/voice-simulator/actions/runs/44037340756),
+started at 07:15:48 UTC on `1f016e0`. Its tests pass; Release Preflight and
+Pipeline Status fail because the package is not yet published to npm and no
+bootstrap token is configured (local log
+`ci-logs/release-main-44037340756.log`, lines 158–160 and 44804–44805).
+The existing workflow already reports this credential failure without blocking
+PR checks, and fails explicitly on `main`. A maintainer must add an
+`NPM_TOKEN` repository secret containing a granular token allowed to publish
+`voice-simulator` at the repository's Actions secrets settings, then rerun the
+release. After its first publication, configure the trusted publisher for
+`konard/voice-simulator`, workflow `release.yml`, at the npm package's access
+settings and delete the bootstrap secret. No publishing credentials are
+available to complete that account action here.
+
+The extra `speech !== 0` nucleus gate was not in issue rule 3: only sonority,
+noise and periodicity gate an eligible local maximum. The new regression
+constructs a voiced sonority peak with `speech` zero; it previously returned
+zero nuclei and now returns one. A Rust unit test checks the same condition.
+The synthetic sentence measurements are unchanged by this correction.
+
+| Follow-up command                                                                              | Result                                                                                                                            |
+| ---------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| `node --test tests/recognition-landmarks.test.js`                                              | 9 pass, 3 quality failures; recall 63.3333%, extras/truth 33.3333%; classes 48.2459% / 47.1143% at 16 / 8 kHz                     |
+| `bun test tests/recognition-landmarks.test.js`                                                 | Same 9 pass and 3 failures; RTF 0.000389 (use the repository's normal `--timeout 30000` for the full suite)                       |
+| `deno test -A tests/recognition-landmarks.test.js`                                             | Same 9 pass and 3 failures; RTF 0.000647                                                                                          |
+| `CARGO_BUILD_JOBS=1 cargo test --locked -p voice-simulator-core landmarks::tests`              | Both focused tests pass                                                                                                           |
+| `CARGO_BUILD_JOBS=1 node scripts/build-wasm.mjs --require --check-size`                        | Pass; scalar 240350 bytes, below 245760; SIMD builds but is not shipped                                                           |
+| `REQUIRE_WASM=1 node --test tests/rust-landmarks.test.js tests/engine-size.test.js`            | 4 tests pass; all 12 parity combinations agree, maximum relative RMS 6.77e-17                                                     |
+| `node --test --test-name-pattern='counts syllables' tests/heavy/recognition-landmarks.test.js` | 24 utterances; refreshed snapshot MARE 24.41%, versus 19.32% before removing the extra gate; the 15% target remains a measurement |
+
+The new `edge-signals.mjs` experiment prints the coarse and fine band rises
+around `apa` and `ama`; it confirms the measured edge mismatches described
+above. `stream-landmarks.mjs` finds exactly the same 16 landmarks in batch and
+streams with 5, 10, 20 and 40 ms chunks on `apa asa ama aba`.
+
+`node --max-old-space-size=256 experiments/issue-62/class-search.mjs` tries a
+finite three-round coordinate search directly on the sentence labels as a
+**diagnostic only**. It reaches 70.9166% at 16 kHz and 69.7473% at 8 kHz, still
+below the gates. This is not a mathematical upper bound. Those held-out labels
+must not choose shipped thresholds, so the specified full-material calibration
+and its thresholds are preserved. This attempt has not resolved class accuracy.
+
+The nucleus-ceiling and causality experiments reproduce the same blockers
+after merging `main` and correcting the nucleus gate. No CI quality assertion
+has been weakened, skipped or converted to an allowed failure. The PR remains
+unfinished; the specification conflicts need resolution before every requested
+acceptance criterion can pass.
 
 ## Remaining work
 
