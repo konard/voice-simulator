@@ -1,7 +1,7 @@
 /** Rule spelling for sounds absent from the reverse vocabulary. */
 import { formatIpa, parseIpa } from '../ipa/parse.js';
 import { syllabifyTokens } from '../ipa/syllables.js';
-import { characterReadings, defaultReading } from '../g2p/chinese-readings.js';
+import { characterReadings } from '../g2p/chinese-readings.js';
 import { pinyinSyllableToIpa, syllableWithTone } from '../g2p/pinyin.js';
 import { checkLanguage } from './languages.js';
 import { getCounts } from './data/index.js';
@@ -218,11 +218,6 @@ function inverseChinese() {
     const counts = getCounts('zh').counts;
     for (const [char, readings] of characterReadings()) {
       for (const reading of readings) {
-        // An isolated fallback character must have this default reading;
-        // contextual alternatives such as 车 jū would be read back as chē.
-        if (reading !== defaultReading(char)) {
-          continue;
-        }
         const syllable = pinyinSyllableToIpa(reading);
         if (!syllable) {
           continue;
