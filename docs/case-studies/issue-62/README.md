@@ -555,6 +555,39 @@ separate unresolved implementation criteria. The default-branch npm
 bootstrap action described above also remains necessary; its PR preflight
 already skips only the credential-dependent operation with an explanation.
 
+### Main advances during verification
+
+[Run 44060207091](https://github.com/konard/voice-simulator/actions/runs/44060207091)
+on `a6e3e83` ran from 09:56:42 to 10:05:32 UTC. All nine runtime jobs have
+exactly the same three quality failures, with no additional failing tests.
+Node/Ubuntu measurements are at lines 22117–22125 and its assertion errors
+at 24115, 24127 and 24141 of
+`ci-logs/restart-4-checks-44060207091.log`. The detector's RTF is
+0.000197–0.000717 across the nine jobs, below the 0.02 target. Every
+other check and workflow passes; Pipeline Status aggregates the test failure.
+
+Main advanced to `80b9c3d` (complete Rust engine parity, PR 145) while
+that run was active. The merge preserves history and retains the new
+feature inventory and parity suites together with `rust-landmarks.test.js`
+in the Rust job, all public exports, and all numerical modules. The combined
+scalar engine built with
+`CARGO_BUILD_JOBS=1 node scripts/build-wasm.mjs --require` is 415183 bytes,
+SHA-256 `2dbbe7000be641dfd1f5eac02202aee47975af406038c2b06d562267ffd4fef2`.
+SIMD is 421828 bytes and remains unshipped. The next 16 KiB budget is
+425984 bytes, enforced by both the build and the engine-size regression.
+
+The following merged-engine check passes 70 tests, with no skips:
+
+```sh
+REQUIRE_WASM=1 node --max-old-space-size=256 --test --test-concurrency=1 --test-timeout=30000 tests/engine-parity.test.js tests/engine-features.test.js tests/rust-landmarks.test.js tests/rust-recognition.test.js tests/rust-inverse-filter.test.js tests/engine-size.test.js tests/recognition-landmark-streaming.test.js
+```
+
+`cargo fmt --all -- --check` also passes. The public PCM reproduction still
+prints the same incompatible labels on Node, Bun and Deno. The focused
+quality suite remains at nine passes and three failures with unchanged
+accuracy and missing edges. Logs for the merge use the
+`ci-logs/restart-4-main-80b9c3d-` prefix.
+
 ## Remaining work
 
 Resolve the contradictory timing contract and the unreachable nucleus target

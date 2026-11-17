@@ -28,6 +28,8 @@ the first table below when you create a new folder;
 | [#11](https://github.com/konard/voice-simulator/issues/11) | We need to make quality of the system state of the art            | [issue-11/README.md](issue-11/README.md) |
 | [#62](https://github.com/konard/voice-simulator/issues/62) | Syllable nuclei, landmarks and broad classes: acceptance blockers | [issue-62/README.md](issue-62/README.md) |
 
+| [#82](https://github.com/konard/voice-simulator/issues/82) | Complete Rust engine parity | [issue-82/plan.md](issue-82/plan.md) |
+
 ## Case studies inherited from the template
 
 | Template issue | First heading                                                                                   | Main document                                                                                  |

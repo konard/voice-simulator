@@ -290,6 +290,12 @@ pub struct Fdtd3d {
     wall_loss: f64,
     nasal_loss: f64,
     glottis_admittance: f64,
+    head_admittance: f64,
+    source_scale: f64,
+    source_gain: f64,
+    last_glottal_flow: f64,
+    glottis_pressure: f64,
+    previous_glottis_pressure: f64,
     length_scale: f64,
     cell_kind: Vec<u8>,
     cell_arc: Vec<f64>,
@@ -363,7 +369,7 @@ fn active(team: &Option<Arc<Team>>) -> Option<&Arc<Team>> {
 
 impl Fdtd3d {
     /// The solver of a model (the constructor of `Fdtd3d`). `None` when
-    /// the model has no free-air cell for the receiver.
+    /// the model has no free-air cell for the receiver or invalid link endpoints.
     pub fn new(model: Model, options: &FdtdOptions) -> Option<Self> {
         let dx = model.dx;
         let dt = (COURANT * dx) / SPEED_OF_SOUND;
@@ -390,7 +396,7 @@ impl Fdtd3d {
         let mut grid = Grid::new(link_count, cell_count);
         grid.link_a.clone_from(&grid_model.link_a);
         grid.link_b.clone_from(&grid_model.link_b);
-        if !grid.index() {
+        if grid.link_b.len() != link_count || !grid.index() {
             return None;
         }
         let envelope = envelope_areas(&grid_model, dx);
@@ -407,6 +413,12 @@ impl Fdtd3d {
             wall_loss: options.wall_loss,
             nasal_loss: options.nasal_loss,
             glottis_admittance: (1.0 - reflection) / (1.0 + reflection),
+            head_admittance: (1.0 - reflection) / (1.0 + reflection),
+            source_scale: 1.0,
+            source_gain: 0.0,
+            last_glottal_flow: 0.0,
+            glottis_pressure: 0.0,
+            previous_glottis_pressure: 0.0,
             length_scale: options.length_scale,
             fill: vec![1.0; cell_count],
             cell_area: vec![0.0; cell_count],
@@ -515,8 +527,61 @@ impl Fdtd3d {
         for _ in 0..count {
             match active(&self.team) {
                 Some(team) => team.step(&mut self.grid, self.active_from),
-                None => self.grid.step(self.active_from),
+                None => self.step_grid(),
             }
+        }
+    }
+
+    /// Step this solver's private grid. Construction validates every endpoint
+    /// with `Grid::index`; no method changes endpoints or resizes its arrays.
+    /// The scalar wasm path therefore needs no repeated cell bounds checks.
+    #[allow(unsafe_code)]
+    fn step_grid(&mut self) {
+        #[cfg(any(not(target_arch = "wasm32"), target_feature = "simd128"))]
+        self.grid.step(self.active_from);
+        #[cfg(all(target_arch = "wasm32", not(target_feature = "simd128")))]
+        {
+            let Grid {
+                link_a,
+                link_b,
+                velocity,
+                damping,
+                conductance,
+                pressure,
+                divergence,
+                ..
+            } = &mut self.grid;
+            let from = self.active_from;
+            // SAFETY: new() validates endpoints with Grid::index. All link
+            // arrays have equal lengths, all cell arrays have equal lengths,
+            // and this private grid never resizes or changes endpoints.
+            // skip_closed keeps active_from at or below the link count.
+            // Each pointer advances within its own allocation. The two
+            // divergence updates are sequential, including equal endpoints.
+            unsafe {
+                let mut a = link_a.as_ptr().add(from);
+                let mut b = link_b.as_ptr().add(from);
+                let mut v = velocity.as_mut_ptr().add(from);
+                let end = velocity.as_ptr().add(velocity.len());
+                let mut k = damping.as_ptr().add(from);
+                let mut c = conductance.as_ptr().add(from);
+                let p = pressure.as_ptr();
+                let d = divergence.as_mut_ptr();
+                while v.cast_const() != end {
+                    let (i, j) = (*a as usize, *b as usize);
+                    let u = *k * (*v - COURANT * (*p.add(j) - *p.add(i)));
+                    *v = u;
+                    let value = *c * u;
+                    *d.add(i) += value;
+                    *d.add(j) -= value;
+                    a = a.add(1);
+                    b = b.add(1);
+                    v = v.add(1);
+                    k = k.add(1);
+                    c = c.add(1);
+                }
+            }
+            self.grid.pressure_pass();
         }
     }
 
@@ -1256,10 +1321,21 @@ impl Fdtd3d {
             flow = self.source_state * self.dx * MICROPHONE_GAIN;
         }
         let mut area = 0.0;
-        for &index in &self.glottis_places[self.place()].source_cells {
+        let mut keep = 0.0;
+        let cells = &self.glottis_places[self.place()].source_cells;
+        for &index in cells {
             area += self.fill[index] * self.dx * self.dx;
+            keep += self.grid.keep[index];
         }
-        (COURANT * flow) / max(area, 1e-3)
+        self.last_glottal_flow = glottal_flow;
+        self.source_gain =
+            (COURANT * keep * self.source_scale) / (max(area, 1e-3) * max(1.0, cells.len() as f64));
+        let pressure = (COURANT * flow) / max(area, 1e-3);
+        if self.source_scale == 1.0 {
+            pressure
+        } else {
+            pressure * self.source_scale
+        }
     }
 
     /// `#measure`.
@@ -1291,6 +1367,9 @@ impl Fdtd3d {
         self.noise_state = 0.0;
         self.burst_input = 0.0;
         self.burst_state = 0.0;
+        self.glottis_pressure = 0.0;
+        self.previous_glottis_pressure = 0.0;
+        self.last_glottal_flow = 0.0;
     }
 }
 
@@ -1306,6 +1385,52 @@ fn js_sign(value: f64) -> f64 {
 }
 
 impl Solver for Fdtd3d {
+    fn glottal_load(&self) -> (f64, f64) {
+        let pressure = if self.output == Output::Microphone {
+            (self.glottis_pressure - self.leak * self.previous_glottis_pressure)
+                / (self.dx * MICROPHONE_GAIN)
+        } else {
+            self.glottis_pressure
+        };
+        (
+            (pressure - self.source_gain * self.last_glottal_flow) / 2.0,
+            if self.source_gain > 0.0 {
+                1.0 / self.source_gain
+            } else {
+                f64::INFINITY
+            },
+        )
+    }
+    fn set_glottal_reflection(&mut self, reflection: f64) {
+        let limited = max(-0.5, reflection);
+        self.glottis_admittance = (1.0 - limited) / (1.0 + limited);
+        self.share_glottis();
+        let place = self.place();
+        for n in 0..self.glottis_places[place].source_cells.len() {
+            self.update_cell(self.glottis_places[place].source_cells[n]);
+        }
+        self.source_scale = 1.0;
+        if self.glottis_admittance > self.head_admittance {
+            let mut slices = 0.0;
+            let mut open = 0.0;
+            let mut head = 0.0;
+            for &i in &self.glottis_places[place].source_cells {
+                slices += (self.dx * self.dx) / self.envelope[i];
+            }
+            let keep = |admittance: f64| {
+                let half = (COURANT * admittance) / 2.0;
+                (1.0 - half) / (1.0 + half)
+            };
+            for &i in &self.glottis_places[place].source_cells {
+                open += keep(self.base_admittance[i] + self.glottis_admittance / max(1.0, slices));
+                head += keep(self.base_admittance[i] + self.head_admittance / max(1.0, slices));
+            }
+            if open > 0.0 {
+                self.source_scale = head / open;
+            }
+        }
+    }
+
     fn set_shape(&mut self, frame: &[f64]) {
         self.length = frame[frame::LENGTH];
         self.set_areas(
@@ -1330,13 +1455,18 @@ impl Solver for Fdtd3d {
         }
         match active(&self.team) {
             Some(team) => team.step(&mut self.grid, self.active_from),
-            None => self.grid.step(self.active_from),
+            None => self.step_grid(),
         }
         let pressure = self.source_pressure(flow);
         let place = self.place();
+        let mut sum = 0.0;
         for &index in &self.glottis_places[place].source_cells {
             self.grid.pressure[index] += pressure * self.grid.keep[index];
+            sum += self.grid.pressure[index];
         }
+        self.previous_glottis_pressure = self.glottis_pressure;
+        self.glottis_pressure =
+            sum / max(1.0, self.glottis_places[place].source_cells.len() as f64);
         self.measure()
     }
 

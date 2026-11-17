@@ -87,9 +87,18 @@ current-commit CI run before reporting completion or blockers.
       three runtimes. Signals and all feature prefixes are identical at
       the commitment deadline, including front-end window lookahead.
 - [x] Run the focused Node suite: 9 pass, 3 unchanged quality failures.
-- [ ] Validate, commit and push the public-API counterexample and updated
-      evidence; update PR 142 and review the final diff and working tree.
-- [ ] Inspect every final-commit CI result and preserve its failure logs.
+- [x] Validate, commit and push the public-API counterexample and updated
+      evidence in a6e3e83; review its final diff and clean working tree.
+- [x] Inspect all a6e3e83 CI results and preserve the complete failure log.
+      All nine jobs have the same three quality failures; other checks pass.
+- [x] Merge newly advanced main 80b9c3d, retaining the feature inventory,
+      engine parity and landmark parity suites. Measure combined WASM:
+      scalar 415183, SIMD 421828 (unshipped), next 16 KiB budget 425984.
+- [x] Verify the merged engine: 70 focused checks pass without skips;
+      cargo fmt passes. The public PCM conflict repeats on all runtimes,
+      and the focused quality suite retains the same three failures.
+- [ ] Commit and push the merge, inspect all resulting CI and update
+      PR 142 with the final evidence.
 - [ ] Complete all original quality and timing requirements. Blocked by
       the unchanged incompatible contract; class and edge accuracy also
       remain unresolved. No test waiver is authorised by this finding.

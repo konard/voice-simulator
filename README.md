@@ -823,14 +823,10 @@ its first sample on the audio clock, against 110.2-150.4 ms for buffer sources
 
 `npm run build:wasm` builds the Rust engine into
 `src/engine/voice-simulator.wasm`. With it, `RustVoiceRenderer` and
-`renderPlanRust` render the waveguide tiers (`telephone` to `medium`) in
-WebAssembly with the same samples as `VoiceRenderer` and `renderPlan` (the
-largest difference measured is 1.7e-18), and since issue 23 also the 3D
-FDTD tiers (`high` to `reference`, `solver: 'fdtd3d'`; largest difference
-on `'Hello.'` at `high`: 0); the plan, the tract shape of every control
-block and the voxel model are still computed in JavaScript. Since issue 25
-it is the default engine (see [Engines](#engines)); the functions below
-use it directly.
+`renderPlanRust` render every CPU tier in WebAssembly, including the 2D and
+3D solvers, folds and whisper. Samples match `VoiceRenderer` and `renderPlan`
+within 1e-4; planning and geometry construction stay in JavaScript.
+Rust is the default engine (see [Engines](#engines)); the functions below use it directly.
 
 ```javascript
 import {
@@ -866,26 +862,19 @@ loads it with a pool of Web Workers or `worker_threads` that share its
 memory. Without that file, without `SharedArrayBuffer` or on a page that is
 not cross-origin isolated it falls back to one thread; `engine.threads`
 tells how many threads it got, `renderer.threads` how many a render uses,
-and `engine.close()` stops the workers. A render uses its threads only when
-the grid has at least `THREAD_MIN_LINKS` links. The heavy test
-`performance-threads` found no grid where 2 threads were 1.3 times faster
-than one ([docs/reports/performance-threads.md](docs/reports/performance-threads.md)),
-so that constant is `usize::MAX` for now and a render stays on one thread
-unless `threadMinLinks` (for example 0, any grid) asks for a team. The
-samples are the same bits on any number of threads. Natively,
-`voice-simulator-cli render-job <job> --threads <n|auto>` (with
-`--thread-min-links <n>`) does the same; `createThreadPool` and `withTeam`
-are the parts underneath.
-One thread stays the default.
+and `engine.close()` stops the workers. A render uses a team above
+`THREAD_MIN_LINKS`; the [thread benchmark](docs/reports/performance-threads.md)
+keeps that threshold at `usize::MAX` until two threads are 1.3 times faster.
+`threadMinLinks: 0` forces a team on any grid. Samples are bit-identical on
+any thread count; one thread stays the default. The native CLI accepts
+`render-job <job> --threads <n|auto> --thread-min-links <n>`; `createThreadPool`
+and `withTeam` expose the underlying pool and team operations.
 
-Options the engine does not handle (`solver: 'fdtd2d'`, a WebGPU `device`,
-`source: 'folds'`) throw an Error with
-`code === 'ENGINE_UNSUPPORTED'`. On the pangram of the heavy suite
-`performance` the Rust renderer is 1.5 to 2.0 times faster than JavaScript
-on the waveguide tiers
-([docs/reports/performance-rust-waveguide.md](docs/reports/performance-rust-waveguide.md))
-and 1.11 to 1.43 times faster on `high`, `ultra` and `studio`
-([docs/reports/performance-rust-fdtd.md](docs/reports/performance-rust-fdtd.md)).
+Custom solvers and WebGPU devices use `engine: 'js'`; passing them directly
+to Rust throws `ENGINE_UNSUPPORTED`. Historical pangram measurements are in
+the [waveguide](docs/reports/performance-rust-waveguide.md) and
+[3D](docs/reports/performance-rust-fdtd.md) reports; the current gate covers
+[every feature and tier](docs/reports/engine-parity.md).
 `node scripts/write-render-job.mjs <text> <tier> <out>` writes a render job
 and `voice-simulator-cli render-job <out>` (`cargo build --release -p
 voice-simulator-cli`) renders it natively and prints the SHA-256 of the
@@ -898,15 +887,17 @@ Everything that renders (`synthesize`, `synthesizeAsync`,
 `synthesizeStream`, `renderPlan`, the benchmark, the CLI, the HTTP server
 and the app's worker) takes an `engine` option:
 
-| `engine`           | Renders with                                                                                                                                                                |
-| ------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `'auto'` (default) | the Rust engine (`src/engine/voice-simulator.wasm`) when it loads and supports the options, else JavaScript; `renderer.fallbackReason` and `engine.reason` say why not Rust |
-| `'rust'`           | the Rust engine; an Error with `code === 'ENGINE_UNAVAILABLE'` when it does not load                                                                                        |
-| `'js'`             | JavaScript, without loading WebAssembly: byte-stable output (Rust and JavaScript differ by up to 1e-4 per sample)                                                           |
+| `engine`           | Renders with                                                                                                                                       |
+| ------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `'auto'` (default) | the Rust engine (`src/engine/voice-simulator.wasm`) when it loads, else JavaScript; `renderer.fallbackReason` and `engine.reason` say why not Rust |
+| `'rust'`           | the Rust engine; an Error with `code === 'ENGINE_UNAVAILABLE'` when it does not load                                                               |
+| `'js'`             | JavaScript, without loading WebAssembly: byte-stable output (Rust and JavaScript differ by up to 1e-4 per sample)                                  |
 
-Options Rust does not render (`solver: 'fdtd2d'`, a WebGPU `device`,
-`source: 'folds'`) render in JavaScript under `'auto'`. `createEngine`
-loads an engine once (cached by `engine|threads|simd`) and every renderer
+Rust includes the waveguide, 2D and 3D solvers, LF and physical fold sources,
+tract interaction, subglottal feedback and whisper. Custom registered solvers
+and a WebGPU `device` require `engine: 'js'`; the app's worker selects that
+backend when using WebGPU. Unsupported options raise `ENGINE_UNSUPPORTED`.
+`createEngine` loads an engine once (cached by `engine|threads|simd`) and every renderer
 it makes says which engine renders:
 
 ```javascript
@@ -919,6 +910,15 @@ const renderer = engine.createRenderer(plan, renderOptions);
 console.log(renderer.engine, renderer.fallbackReason); // 'rust' null
 renderer.free?.(); // a Rust renderer holds WebAssembly memory
 ```
+
+`engine.features()` returns the compiled Rust ids (or `ENGINE_FEATURES` ids
+for JavaScript). `engine.fallbacks` counts renderers handed to JavaScript
+because WebAssembly could not load; `engine.fallbackReasons` records why.
+A new engine feature is one entry in `ENGINE_FEATURES`, one line in
+`features.rs` and one parity probe; the check fails otherwise.
+`npm run check:engine-parity` needs no Rust build. The numerical probes and
+[single-thread speed report](docs/reports/engine-parity.md) keep the engines
+within the declared tolerance and Rust at least as fast.
 
 In Node.js, Bun and Deno `synthesize` (synchronous) loads the engine on
 first use; in a browser the engine loads asynchronously, so `'auto'` in

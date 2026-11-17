@@ -271,7 +271,8 @@ function prepareTier(state, message, level, device) {
 async function run(state, message, device, progress) {
   const { id } = message;
   const tier = AUDIO_TIERS[message.tier];
-  const engine = await createEngine(engineOptions(message));
+  // WebGPU is a separate JavaScript host/shader backend.
+  const engine = await createEngine(device ? 'js' : engineOptions(message));
   const prepared = prepareTier(state, message, message.tier, device);
   const { model } = prepared;
   const renderer = engine.createRenderer(prepared.plan, prepared.renderOptions);
@@ -378,7 +379,8 @@ async function openAdaptive(state, message, progress) {
     const device = await tierDevice(state, message, level);
     progress.gpu ||= Boolean(device);
     const prepared = prepareTier(state, message, level, device);
-    const renderer = engine.createRenderer(prepared.plan, {
+    const backend = device ? await createEngine('js') : engine;
+    const renderer = backend.createRenderer(prepared.plan, {
       ...prepared.renderOptions,
       ...extra,
     });
@@ -655,7 +657,7 @@ async function benchmarkGpu(state, job, cpu) {
   if (!device) {
     return null;
   }
-  const engine = await createEngine(engineOptions(message));
+  const engine = await createEngine('js');
   let deadline = globalThis.performance.now() + GPU_BENCHMARK_LIMIT;
   const measure = async (tier, { limit }) => {
     const from = globalThis.performance.now();

@@ -3,7 +3,8 @@
  * Cargo.lock is one of ours or is listed with its licence in
  * scripts/rust-allowed-crates.json, the toolchain is an exact stable
  * version, and the core crate keeps its no_std, libm-in-math.rs shape with
- * unsafe code only in fdtd/parallel.rs, the thread team of issue 24. These read files only, so they run without a Rust toolchain.
+ * unsafe code only in the thread team and private validated grid step.
+ * These read files only, so they run without a Rust toolchain.
  */
 
 import { readdirSync, readFileSync } from 'node:fs';
@@ -96,7 +97,7 @@ describe('Rust workspace', () => {
     expect(usesLibm).toEqual(['math.rs']);
   });
 
-  it('denies unsafe code in the core crate except in fdtd/parallel.rs', () => {
+  it('limits core unsafe code to the thread team and validated grid step', () => {
     const manifest = read('crates/voice-simulator-core/Cargo.toml');
     expect(/^\[lints\.rust\]\r?\nunsafe_code = "deny"$/m.test(manifest)).toBe(
       true
@@ -106,11 +107,19 @@ describe('Rust workspace', () => {
     const unsafeFiles = files.filter((file) =>
       /\bunsafe\b/.test(read(path.join(dir, file)))
     );
-    expect(unsafeFiles).toEqual(['fdtd/parallel.rs']);
-    const parallel = read(path.join(dir, 'fdtd/parallel.rs'));
-    const blocks = parallel.match(/\bunsafe\s*\{/g) ?? [];
-    const reasons = parallel.match(/\/\/ SAFETY:/g) ?? [];
-    expect(blocks.length > 0).toBe(true);
-    expect(reasons.length >= blocks.length).toBe(true);
+    expect(unsafeFiles.sort()).toEqual(['fdtd/parallel.rs', 'fdtd/solver.rs']);
+    for (const file of unsafeFiles) {
+      const source = read(path.join(dir, file));
+      const blocks = source.match(/\bunsafe\s*\{/g) ?? [];
+      const reasons = source.match(/\/\/ SAFETY:/g) ?? [];
+      expect(blocks.length > 0).toBe(true);
+      expect(reasons.length >= blocks.length).toBe(true);
+    }
+    const solver = read(path.join(dir, 'fdtd/solver.rs'));
+    expect(solver.match(/#\[allow\(unsafe_code\)\]/g)?.length).toBe(1);
+    expect(/#\[allow\(unsafe_code\)\]\s+fn step_grid\(/.test(solver)).toBe(
+      true
+    );
+    expect(solver.match(/\bunsafe\s*\{/g)?.length).toBe(1);
   });
 });

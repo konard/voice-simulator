@@ -72,11 +72,26 @@ export const RENDERER_CONFIG = Object.freeze({
   LOSS_SHAPE: 50,
   RADIATION_BAFFLE: 51,
   LENGTH_SCALE: 52,
-  HEADER: 53,
+  SOURCE: 53,
+  FOLD_LENGTH: 54,
+  FOLD_MASS: 55,
+  FOLD_STIFFNESS: 56,
+  FOLD_DAMPING: 57,
+  PRESSURE_COEFFICIENT: 58,
+  INTERACTION: 59,
+  SUBGLOTTAL: 60,
+  SUBGLOTTAL_LENGTH: 61,
+  SUBGLOTTAL_LOSS: 62,
+  PITCH: 63,
+  HEADER: 64,
 });
 
 /** Values of RENDERER_CONFIG.SOLVER and FDTD_OUTPUT. */
-export const SOLVER_CODES = Object.freeze({ waveguide: 0, fdtd3d: 1 });
+export const SOLVER_CODES = Object.freeze({
+  waveguide: 0,
+  fdtd3d: 1,
+  fdtd2d: 2,
+});
 export const FDTD_OUTPUT_CODES = Object.freeze({ flow: 0, microphone: 1 });
 
 /**
@@ -112,9 +127,13 @@ export const FRAME = Object.freeze({
   CREAK: 19,
   FALSETTO: 20,
   HARSH: 21,
-  EXTRA: 22,
-  AREAS: 23,
-  STRIDE: 23,
+  WHISPER: 22,
+  ADDUCTION: 23,
+  FOLD_TENSION: 24,
+  LATERAL: 25,
+  EXTRA: 26,
+  AREAS: 27,
+  STRIDE: 27,
 });
 
 /** Values after the areas of a frame: the incisor gap. */
@@ -199,6 +218,10 @@ export function writeFrame(target, offset, shape, lungPressure) {
   target[offset + FRAME.CREAK] = glottis.creak ?? 0;
   target[offset + FRAME.FALSETTO] = glottis.falsetto ?? 0;
   target[offset + FRAME.HARSH] = glottis.harsh ?? 0;
+  target[offset + FRAME.WHISPER] = glottis.whisper ?? 0;
+  target[offset + FRAME.ADDUCTION] = glottis.adduction ?? 0.5;
+  target[offset + FRAME.FOLD_TENSION] = glottis.foldTension ?? 1;
+  target[offset + FRAME.LATERAL] = shape.lateral ?? 0;
   target[offset + FRAME.EXTRA] = FRAME_EXTRA_VALUES;
   target.set(shape.areas, offset + FRAME.AREAS);
   target[offset + FRAME.AREAS + shape.areas.length] = shape.teeth?.gap ?? 0;
