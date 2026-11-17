@@ -21,6 +21,7 @@ import {
 } from './voice-fit-statistics.js';
 import { MATCH_TEXT } from './voice-fit-calibration.js';
 import { simplex } from './voice-fit-simplex.js';
+import { analyzeLegacyVoice } from './voice-features.js';
 
 const PARTS = ['tract', 'pitch', 'source', 'rate'];
 const groups = {
@@ -108,7 +109,9 @@ function createEvaluator(state, samples, sampleRate, o, theta0, context) {
     });
     const audio =
       rate < 16000 ? resample(rendered.samples, 16000, rate) : rendered.samples;
-    const statistics = accumulate(emptyState(), audio, rate, o);
+    // The objective uses inverse-filter source measures. Legacy HNR/H1-H2
+    // diagnostics are needed only for the returned render, or verbose tracing.
+    const statistics = accumulate(emptyState(), audio, rate, o, false);
     const mcd = mcdMetric?.(audio) ?? null;
     const distance = vectorDistance(
       target,
@@ -132,6 +135,22 @@ function createEvaluator(state, samples, sampleRate, o, theta0, context) {
       head: { ...candidate },
       rendered: stateFeatures(statistics),
     };
+    let completed = false;
+    value.complete = () => {
+      if (!completed) {
+        const diagnostics = analyzeLegacyVoice(audio, rate, {
+          ...o,
+          diagnosticsOnly: true,
+        });
+        const weight = diagnostics.voicedDuration / 0.01;
+        for (const key of ['hnr', 'h1h2']) {
+          value.rendered[key] =
+            (diagnostics[key] * weight) / Math.max(1, weight);
+        }
+        completed = true;
+      }
+      return value.rendered;
+    };
     context.renders++;
     const renders = context.renders;
     o.trace?.({
@@ -142,7 +161,7 @@ function createEvaluator(state, samples, sampleRate, o, theta0, context) {
       penalty,
       mcd,
       head: { ...candidate },
-      features: value.rendered,
+      features: o.trace ? value.complete() : value.rendered,
     });
     o.onStep?.({ step: renders, renders, distance, head: { ...candidate } });
     return value;
@@ -253,7 +272,7 @@ function* fitState(state, samples, sampleRate, options) {
     parameters,
     preset: nearestPreset(head, o.preset).name,
     features,
-    rendered: best?.rendered ?? null,
+    rendered: best?.complete() ?? null,
     distance: best?.distance ?? Infinity,
     renders: context.renders,
     voicedDuration: state.voicedSeconds,

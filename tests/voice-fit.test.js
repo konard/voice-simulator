@@ -128,10 +128,20 @@ describe('fitVoice', () => {
   });
   it('is deterministic', () => {
     const a = recordings[0],
-      o = { transcript: TEXT, maxRenders: 2 };
-    expect(fitVoice(a.samples, a.sampleRate, o)).toEqual(
-      fitVoice(a.samples, a.sampleRate, o)
-    );
+      o = { transcript: TEXT, maxRenders: 2 },
+      trace = [];
+    const normal = fitVoice(a.samples, a.sampleRate, o);
+    const traced = fitVoice(a.samples, a.sampleRate, {
+      ...o,
+      trace: (event) => {
+        if (event.stage === 'voice-fit-render') {
+          trace.push(event);
+        }
+      },
+    });
+    expect(traced).toEqual(normal);
+    const best = trace.reduce((a, b) => (a.cost <= b.cost ? a : b));
+    expect(normal.rendered).toEqual(best.features);
   });
   it('keeps matchVoice working', () => {
     const a = recordings[0];

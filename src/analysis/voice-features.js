@@ -413,13 +413,15 @@ export function analyzeLegacyVoice(samples, sampleRate, options = {}) {
   const f0 = median(f0s);
   const f0Low = percentile(f0s, 0.05);
   const f0High = percentile(f0s, 0.95);
-  const stride = Math.max(1, voicedIndices.length / FORMANT_FRAMES);
+  const diagnosticFrames =
+    options.sourceDiagnostics === false ? 0 : voicedIndices.length;
+  const stride = Math.max(1, diagnosticFrames / FORMANT_FRAMES);
   const upper = highpass(signal, HNR_HIGHPASS, rate);
   const tracks = [[], [], [], []];
   const spacings = [];
   const tilts = [];
   const noise = [];
-  for (let pick = 0; pick < voicedIndices.length; pick += stride) {
+  for (let pick = 0; pick < diagnosticFrames; pick += stride) {
     const index = voicedIndices[Math.floor(pick)];
     const start = index * hop;
     const formants = options.diagnosticsOnly

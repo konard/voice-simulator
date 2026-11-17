@@ -196,7 +196,13 @@ function collectFrames(state, frames, pitch, formants, source, formantCount) {
     }
   }
 }
-export function accumulate(state, samples, sampleRate, options = {}) {
+export function accumulate(
+  state,
+  samples,
+  sampleRate,
+  options = {},
+  diagnostics = true
+) {
   const maxSeconds = options.maxDuration ?? 30;
   const input = Float32Array.from(
     samples.length > maxSeconds * sampleRate
@@ -218,6 +224,7 @@ export function accumulate(state, samples, sampleRate, options = {}) {
   const legacy = analyzeLegacyVoice(input, sampleRate, {
     ...options,
     diagnosticsOnly: true,
+    sourceDiagnostics: diagnostics,
   });
   state.duration += input.length / sampleRate;
   // A 40 ms sliding window represents its 10 ms hop plus 30 ms at
