@@ -384,6 +384,17 @@ another synthesiser.
 
 ### Rust engine
 
+A new engine feature is one entry in `ENGINE_FEATURES`, one line in
+`features.rs` and one parity probe; the check fails otherwise.
+`node scripts/check-engine-parity.mjs` runs in `npm run check` and Rust CI.
+Every acoustics module belongs to a feature or to `JS_ONLY` with a reason.
+Run `node scripts/check-engine-parity.mjs --write-vectors` after porting a
+feature to regenerate its JavaScript reference vector. With built wasm,
+`REQUIRE_WASM=1 node --test tests/engine-parity.test.js` must pass with zero
+handoffs. The heavy performance suite measures every feature and every tier
+for at least two seconds per engine; copy `engine-parity.md` from its green
+artifact to `docs/reports/engine-parity.md`, alongside the performance trend.
+
 The Rust workspace in `crates/` reproduces numerical code of `src/` as one
 WebAssembly file. [RUST-ENGINE.md](RUST-ENGINE.md) has the interface rules,
 the determinism rules and the parity classes; read it before porting code.

@@ -892,15 +892,17 @@ Everything that renders (`synthesize`, `synthesizeAsync`,
 `synthesizeStream`, `renderPlan`, the benchmark, the CLI, the HTTP server
 and the app's worker) takes an `engine` option:
 
-| `engine`           | Renders with                                                                                                                                                                |
-| ------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `'auto'` (default) | the Rust engine (`src/engine/voice-simulator.wasm`) when it loads and supports the options, else JavaScript; `renderer.fallbackReason` and `engine.reason` say why not Rust |
-| `'rust'`           | the Rust engine; an Error with `code === 'ENGINE_UNAVAILABLE'` when it does not load                                                                                        |
-| `'js'`             | JavaScript, without loading WebAssembly: byte-stable output (Rust and JavaScript differ by up to 1e-4 per sample)                                                           |
+| `engine`           | Renders with                                                                                                                                       |
+| ------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `'auto'` (default) | the Rust engine (`src/engine/voice-simulator.wasm`) when it loads, else JavaScript; `renderer.fallbackReason` and `engine.reason` say why not Rust |
+| `'rust'`           | the Rust engine; an Error with `code === 'ENGINE_UNAVAILABLE'` when it does not load                                                               |
+| `'js'`             | JavaScript, without loading WebAssembly: byte-stable output (Rust and JavaScript differ by up to 1e-4 per sample)                                  |
 
-Options Rust does not render (`solver: 'fdtd2d'`, a WebGPU `device`,
-`source: 'folds'`) render in JavaScript under `'auto'`. `createEngine`
-loads an engine once (cached by `engine|threads|simd`) and every renderer
+Rust includes the waveguide, 2D and 3D solvers, LF and physical fold sources,
+tract interaction, subglottal feedback and whisper. Custom registered solvers
+and a WebGPU `device` require `engine: 'js'`; the app's worker selects that
+backend when using WebGPU. Unsupported options raise `ENGINE_UNSUPPORTED`.
+`createEngine` loads an engine once (cached by `engine|threads|simd`) and every renderer
 it makes says which engine renders:
 
 ```javascript
@@ -913,6 +915,15 @@ const renderer = engine.createRenderer(plan, renderOptions);
 console.log(renderer.engine, renderer.fallbackReason); // 'rust' null
 renderer.free?.(); // a Rust renderer holds WebAssembly memory
 ```
+
+`engine.features()` returns the compiled Rust ids (or `ENGINE_FEATURES` ids
+for JavaScript). `engine.fallbacks` counts renderers handed to JavaScript
+because WebAssembly could not load; `engine.fallbackReasons` records why.
+A new engine feature is one entry in `ENGINE_FEATURES`, one line in
+`features.rs` and one parity probe; the check fails otherwise.
+`npm run check:engine-parity` needs no Rust build. The numerical probes and
+[single-thread speed report](docs/reports/engine-parity.md) keep the engines
+within the declared tolerance and Rust at least as fast.
 
 In Node.js, Bun and Deno `synthesize` (synchronous) loads the engine on
 first use; in a browser the engine loads asynchronously, so `'auto'` in

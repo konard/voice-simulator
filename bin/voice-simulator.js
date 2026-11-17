@@ -210,6 +210,8 @@ function usage() {
     '      --engine <name>   auto | rust | js: the engine that renders',
     '                        (default auto: Rust when voice-simulator.wasm',
     '                        loads, else JavaScript; js is byte-stable)',
+    '                        Rust includes folds, whisper, 2D and 3D;',
+    '                        custom solvers and WebGPU require js',
     '      --threads <n|auto> Threads of the Rust engine (default 1)',
     '      --json            Machine-readable output',
     '  -h, --help            Show this help',

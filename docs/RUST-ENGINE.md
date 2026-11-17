@@ -7,7 +7,7 @@ expected output; the Rust engine has to reproduce it, and the parity tests
 check that it does. The package keeps working when no Rust tool is
 installed: the file is optional and everything falls back to JavaScript.
 
-So far the engine holds the random generator of
+The engine holds the random generator of
 `src/random.js`, the band-limited resampler of `src/audio/resample.js`
 (`resample` and `createStreamResampler`, issue 27) and the air flow of
 `src/acoustics/aerodynamics.js` with `strouhalFrequency` of
@@ -22,6 +22,9 @@ WebAssembly SIMD build (issue 23, see
 [3D FDTD solver](#3d-fdtd-solver-issue-23)), which runs on several threads
 natively and in a threads build of the WebAssembly file (issue 24, see
 [3D solver on several threads](#3d-solver-on-several-threads-issue-24)).
+Issue 82 adds the two-mass folds, source-tract and subglottal coupling,
+whisper and the 2D sheet, with an executable inventory and parity gates
+(see [Complete feature parity](#complete-feature-parity-issue-82)).
 The random generator
 proved that every link of the chain works: workspace, build, loader, CI job
 and parity tests.
@@ -51,7 +54,7 @@ and parity tests.
 | `tests/rust-threads.test.js`   | The `threads` option, its fallback and bit-identical threaded renders (issue 24)           |
 
 The core crate may depend on `libm` only, and only `src/math.rs` may call
-it (`sin`, `cos`, `exp`, `ln`, `pow`, `tanh`, `sqrt`, `floor`, `ceil`;
+it (`sin`, `cos`, `asin`, `exp`, `ln`, `pow`, `tanh`, `sqrt`, `floor`, `ceil`;
 `round_half_up` is `Math.round` of JavaScript); every other file
 calls `math::…`. A different libm could round a transcendental function
 differently, so this keeps the choice in one place.
@@ -152,9 +155,8 @@ The module imports nothing; the threads build imports only its memory
 
 - Every export starts with `vs_`. Arguments and results are `u32`, `i32` or
   `f64` only: no strings, no structs.
-- `vs_abi_version() -> u32` returns the interface version, now 4 (issue
-  23 changed `vs_renderer_new` and the frame layout, issues 52 and 54 the
-  frame layout and `vs_glottis_run`). Any
+- `vs_abi_version() -> u32` returns the interface version, now 5 (issue
+  82 extends the configuration and frame layouts for folds, whisper and 2D). Any
   breaking change of an export (removed, renamed, a different signature or
   meaning) raises it, together with `ENGINE_ABI_VERSION` in the loader.
 - `vs_alloc(bytes: u32) -> u32` returns an offset aligned to 8, or 0 when
@@ -173,7 +175,7 @@ The module imports nothing; the threads build imports only its memory
 
 | Export                                                             | Result                                                                               |
 | ------------------------------------------------------------------ | ------------------------------------------------------------------------------------ |
-| `vs_abi_version() -> u32`                                          | 4                                                                                    |
+| `vs_abi_version() -> u32`                                          | 5                                                                                    |
 | `vs_alloc(bytes) -> u32`                                           | Offset of a block aligned to 8, or 0                                                 |
 | `vs_free(ptr, bytes)`                                              | Frees a block of `vs_alloc`                                                          |
 | `vs_hash_seed_utf16(ptr, len) -> u32`                              | `hashSeed` of the `len` UTF-16 code units at `ptr`; traps on a bad range             |
@@ -319,20 +321,15 @@ per sample:
 | `config.rs`    | `RENDERER_CONFIG`                                                    |
 | `frame.rs`     | `FRAME`                                                              |
 
-The constructor throws an Error with `code = 'ENGINE_UNSUPPORTED'` for
-options the engine does not handle: a `solver` other than `'waveguide'`, a
-WebGPU `device`, `source: 'folds'` (the two-mass vocal folds of
-`folds.js`, not ported), a `bandLimit` that is not above 0, and a plan that
-whispers (`planWhispers(plan)`: a `whisper` channel above 0, issue 53), as
-the engine has no whisper source yet
-([#82](https://github.com/konard/voice-simulator/issues/82)); with
-`engine: 'auto'` (the default) such a plan is rendered in JavaScript, and
-plain text renders the same samples on the engine as before.
+The renderer supports all three CPU solvers, LF and fold sources, whisper,
+tract interaction and subglottal feedback. Custom registered solvers and
+WebGPU use an explicit JavaScript engine. Invalid or unsupported options
+raise `ENGINE_UNSUPPORTED`; a loaded Rust engine never hands them to JS.
 
 ### Configuration
 
 One `Float64Array` per renderer (`RENDERER_CONFIG` of
-`src/engine/layout.js`, the same constants in `config.rs`): 31 header
+`src/engine/layout.js`, the same constants in `config.rs`): 64 header
 values, then `NOSE_AREA_COUNT` nose areas (`noseShape(head).areas`), then
 `LISTENER_LENGTH` listener values.
 
@@ -373,15 +370,13 @@ poles[8], tapDelays[tapCount], tapGains[tapCount]]` (29 values plus the
 ### Frames
 
 One frame per control block (`blockSize` samples, aligned to the absolute
-sample position), `16 + sections` values (`FRAME` of `layout.js`, the same
-constants in `frame.rs`): 0 `length`, 1 `velumArea`, 2 `velumIndex`, 3
-`frication.index`, 4 `frication.position`, 5 `frication.area`, 6
-`frication.gain`, 7 `frication.sibilance`, 8 `frication.obstacle`, 9
-`glottis.f0`, 10 `glottis.voicing`, 11 `glottis.aspiration`, 12
-`glottis.closure`, 13 `glottis.loudness`, 14 the lung pressure (Pa), 15
-zero (reserved), then `areas[0..sections]`. `vs_renderer_render` uses frame
-`k` for the `k`-th block that starts inside the call and fails with
-`BAD_ARGUMENT` when there are fewer frames than blocks.
+sample position), `27 + sections + 1` values (`FRAME` in `layout.js` and
+`frame.rs`). Fields 0–15 hold length, velum, frication, LF control, lung
+pressure and teeth; fields 16–21 hold effort, tension and the phonation
+channels. Fields 22–25 are `WHISPER`, `ADDUCTION`, `FOLD_TENSION` and
+`LATERAL`; 26 is `EXTRA` (1), followed by oral areas and the incisor gap.
+`vs_renderer_render` uses frame `k` for the `k`-th block that starts inside
+the call and fails with `BAD_ARGUMENT` when there are too few frames.
 
 ### Deviations from the plan of issue 22
 
@@ -392,11 +387,8 @@ zero (reserved), then `areas[0..sections]`. `vs_renderer_render` uses frame
   `VoiceRenderer` reads `state.lungPressure ?? head.lungPressure` per block
   for the air flow of issue 35, so it changes with the plan.
 - Two seeds instead of three (above).
-- `source: 'folds'` is refused with `ENGINE_UNSUPPORTED`, like the other
-  solvers; the issue listed only `solver` and `device`, but the folds are a
-  different glottal source that was not part of the port.
-- Step 9 (the feature ids `solver.waveguide` and `source.lf`) was skipped:
-  `src/engine/features.js` of issue 82 does not exist yet.
+- The original port deferred folds and feature ids; issue 82 supplies both
+  through the inventory and ports described below.
 
 ### Render jobs and the native CLI
 
@@ -749,6 +741,45 @@ kernel forms alone and `experiments/issue-23-micro-kernel.mjs` a bare Rust
 loop against the hand-written kernel, which separates the code generation
 of the compiler from the solver around it.
 
+## Complete acoustics parity (issue 82)
+
+`src/engine/features.js` inventories the numerical engine. The build-free
+`node scripts/check-engine-parity.mjs` compares its ids with
+`features.rs`, checks module coverage and requires a probe and tolerance.
+It runs in `npm run check` and Rust CI; `--json` gives the inventory and
+missing ids/modules, and `--rust-file` selects a fixture.
+
+The added ports follow the JavaScript files: `folds.rs` integrates the two
+masses and collision forces; solver loads and incident-pressure integration
+couple the source above and below; `subglottal.rs` advances the travelling
+waves below the folds; `whisper.rs` and the glottis/renderer apply the
+half-open posture, filtered jet noise and reduced reflection. `sheet.rs`,
+`nose_line.rs` and `fdtd2d.rs` update the 2D depths, boundaries, velocities,
+pressures and side branches. Static anatomical grid widths are packed by
+the JS host; dynamic geometry and every acoustic step run in Rust.
+
+ABI 5 adds header fields 53–63: `SOURCE` (0 LF, 1 folds), `FOLD_LENGTH`,
+`FOLD_MASS`, `FOLD_STIFFNESS`, `FOLD_DAMPING`, `PRESSURE_COEFFICIENT`,
+`INTERACTION`, `SUBGLOTTAL`, `SUBGLOTTAL_LENGTH`, `SUBGLOTTAL_LOSS`, `PITCH`.
+`HEADER` is 64; the earlier fields keep their numbers. `SOLVER` 2 selects
+2D. Its model is little-endian f64 values `[dx, rows, columns, noseSections,
+branchCount, widths[columns], branches...]`, with each branch `[column,
+area, sections]`. Frames gain the four channels documented above.
+
+`features::features()` returns the compiled ids. The native command
+`voice-simulator-cli features` prints them as JSON. In wasm,
+`vs_features_count()` and `vs_feature_ptr(index)` / `vs_feature_len(index)`
+expose immutable UTF-8 ids; their memory must not be freed. `Engine.features()`
+decodes those exports, rather than inferring capabilities from the JS list.
+
+Every feature has a `parity: <id>` wasm test at its manifest tolerance.
+All current probes use seeded sample comparisons at 1e-4. The Rust vectors
+for the five new ports are regenerated from JS with `--write-vectors`.
+`performance-parity.test.js` measures every probe and tier on one thread
+for at least two seconds per engine, includes construction and frames, and
+fails if any median Rust/JS ratio exceeds 1. The committed table is
+[reports/engine-parity.md](reports/engine-parity.md).
+
 ## Choosing an engine (issue 25)
 
 `createEngine(options)` of `src/engine/index.js` loads the engine that
@@ -761,18 +792,15 @@ take the same `engine` option:
 - `'auto'` (the default): the Rust engine when `voice-simulator.wasm`
   loads, else JavaScript with `engine.reason` saying why ("this runtime has
   no WebAssembly", "the Rust engine (voice-simulator.wasm) is missing or
-  does not compile"). A render the engine does not support (`solver:
-'fdtd2d'` or another registered solver, a WebGPU `device`, `source:
-'folds'`, `bandLimit <= 0`) runs in JavaScript too, with the reason in
-  `renderer.fallbackReason`.
+  does not compile").
 - `'rust'`: the Rust engine, or an Error with
-  `code === 'ENGINE_UNAVAILABLE'` when it does not load. Renders it does not
-  support still fall back to JavaScript, with `fallbackReason`.
+  `code === 'ENGINE_UNAVAILABLE'` when it does not load.
 - `'js'`: the JavaScript renderer; no WebAssembly is read or compiled.
 
 The engine object is `{name: 'rust' | 'js', requested, simd, threads,
 reason}` with `createRenderer(plan, renderOptions)`, `supports(options)`,
-`features()` and `close()`; an engine object can be passed wherever an
+`features()` and `close()`, plus `fallbacks` and `fallbackReasons` counting
+renderers handed to JS after a wasm load failure; an engine object can be passed wherever an
 `engine` name can. Engines from the default files are cached by
 `engine|threads|simd`, so the file is read and compiled once; one from a
 `source` is not cached. `threads` (default 1, a positive integer or
