@@ -16,7 +16,7 @@ The issue and PR have no comments, inline comments or reviews at start.
       regularisation and deterministic two-round bounded Nelder-Mead search.
 - [x] Budget, seed, callback, progress generator, final simplex SD and full
       result, with all legacy feature keys plus source diagnostics.
-- [ ] Incremental fitter and JSON continuation, fixed state size, split
+- [x] Incremental fitter and JSON continuation, fixed state size, split
       recording agreement, optional refinement of an explicitly supplied stretch.
 - [ ] Legacy match wrappers and unchanged tests; example worker compatibility.
 - [x] Rust numerical implementation and automated parity tests.
@@ -52,13 +52,20 @@ No required criteria are complete until backed by measured evidence below.
   simplex; negative spectral tilt survives state serialization.
 - `tests/voice-fit-rust-parity.test.js`: built scalar WASM, histogram quantiles
   and MAD, feature weights and simplex paths match JS. Focused numerical,
-  Rust parity and actual matching-worker tests: 8 pass on Node, Bun and Deno.
+  Rust parity and actual matching-worker tests: 9 pass on Node, Bun and Deno.
+- `npm run check` passes after the fixed-prior correction and evidence
+  scripts: lint, formatting, duplication, numerical engine coverage and
+  dependency policy (699 packages, 1,553 files). Runtime CI remains red:
+  Deno/Ubuntu completes 2,954 passes/five failures, Bun/Ubuntu completes
+  2,956 passes/five failures; other OS jobs hit the existing suite budgets.
 - Current focused API tests verify no-refinement recovery, 8 kHz, part
   selection, callbacks, determinism, saveVoice and five-key wrapper results.
   The uncertainty and transcript recovery tests remain red; no gate weakened.
-- `experiments/issue-63/performance.mjs`: Node v26.13.0, AMD EPYC with IBPB,
-  10 s input: statistics 1.982 s (RTF 0.1982); default fit 55.922 s,
-  34 renders (spread stop), RSS 234,975,232 bytes.
+- `experiments/issue-63/performance.mjs` at 3487780: Node v26.13.0,
+  AMD EPYC with IBPB, 10 s input: statistics 1.928 s (RTF 0.1928);
+  default fit 49.751 s, all 40 renders, RSS 236,314,624 bytes.
+  Deferring unused legacy diagnostics fixed a measured 65.899 s overrun;
+  normal and verbose-trace results are asserted equal.
 - The production Vite build passes its existing 500 kB chunk guard after
   splitting shared recognition DSP. A Playwright module worker receives
   1 s of 160 Hz harmonic audio and emits five progress messages and `done`:
@@ -76,22 +83,37 @@ No required criteria are complete until backed by measured evidence below.
 - Head A has 263 voiced frames, pitch 208.855 Hz and the prescribed MAD SD
   5.948 Hz, above the <5 Hz gate. Changing the soft voicing threshold does
   not fix it (`voicing.mjs`). Capping SD would contradict the required formula.
-- Head B starts at pitch 100 Hz, tract 19.663 cm and breathiness 0.659.
+- Substituting the renderer's known f0 plan also exceeds 5 Hz, both in
+  quarter-semitone bins (5.078 Hz) and with unbinned MAD (5.373 Hz) on
+  the same 263 frames (`pitch-truth.mjs`). Even planned voicing gives
+  5.218/5.496 Hz; tracking error alone does not explain the failed gate.
+- Before the fixed-prior correction, head B starts at pitch 100 Hz,
+  tract 19.663 cm and breathiness 0.659.
   The first six required simplex vertices exhaust round one's budget.
   Their objective prefers pitch 126 Hz; the final ten-render fit retains
-  it and fails the 3% pitch and 6% tract gates (`objective.mjs`).
+  it and fails the 3% pitch gate (`objective.mjs`). The fixed prior later
+  brings the tract estimate within its gate but retains 126 Hz.
 - Corrected a review finding: `frames.mel` contains ln(power), whereas the
   objective specifies dB. A numerical regression fails before conversion
   and passes afterward; the equivalent Rust conversion has parity coverage.
   Rechecking the ten-render fits still selects pitch 126 Hz for head B.
-- Continuation now explicitly tests both specified heads. Head B changes
-  tract length from 19.663 cm whole to 18.919 cm split, failing 2% agreement.
-- Correcting only the source in the diagnostic reduces J from 12.874 to
-  5.872; changing jitter and shimmer alone leaves J at 12.852.
+- Continuation explicitly tests both specified heads. Holding the formant
+  tracker's prior at its initial 16.5 cm removes whole-utterance dependence:
+  head B is 18.817 cm whole and split, and head A is 14.768 cm for both.
+  The regression fails before the fix and passes at 3487780. The 8 kHz
+  and both no-refinement recovery cases also pass; B still selects 126 Hz.
+- At 3487780, correcting only the source in the diagnostic reduces
+  acoustic distance from 12.284 to 3.136; changing jitter and shimmer
+  alone leaves 12.053. The true head gives zero. Within the ten-render
+  simplex budget, pitch 126 has J 10.753 versus stage A 12.284, and the
+  round-two breathiness vertex lowers J to 8.311 while keeping 126 Hz.
   Cubic lag interpolation plus pitch-slope compensation still infers
   breathiness 0.568 for head B's true 0.2 (`hnr-interpolation.mjs`).
   A bounded 17-lag search still reads 0.557. Short-sentence calibration of
   range and HNR also keeps the incorrect 126 Hz pitch.
+- A separate signal probe (`hnr-signal.mjs`) compares calibrated HNR on
+  raw speech, speech high-passed at 400 Hz, and the IAIF derivative. B
+  still reads breathiness 0.661, 0.525 and 0.954, respectively, versus 0.2.
 - Full heavy workflow 44062254770 completed all 20 heads and 24 golden
   recordings in both modes at implementation SHA 4d0737d. Both tests fail.
   With text: median pitch 4.19% and rate 18.75%. Without: tract 8.92%,
