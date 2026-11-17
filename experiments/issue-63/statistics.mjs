@@ -41,6 +41,10 @@ for (const head of [
       n: whole.state.voicedFrames,
       median: quantile(whole.state, 'f0'),
       sd: medianSd(whole.state, 'f0'),
+      impliedMad:
+        (medianSd(whole.state, 'f0') *
+          Math.sqrt(whole.state.voicedFrames / 20)) /
+        1.4826,
       rate: analyzeLegacyVoice(a.samples, 16000).syllableRate,
     })
   );

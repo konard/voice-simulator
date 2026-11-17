@@ -94,36 +94,37 @@ describe('fitVoice', () => {
     expect(result.parameters.headWidth.source).toBe('default');
   });
   it('continues from a state', () => {
-    const a = recordings[0],
-      middle = Math.floor(a.samples.length / 2);
-    const fitter = createVoiceFitter();
-    fitter.update(a.samples.subarray(0, middle), a.sampleRate);
-    const resumed = createVoiceFitter({
-      state: JSON.parse(JSON.stringify(fitter.state)),
-    });
-    resumed.update(a.samples.subarray(middle), a.sampleRate);
-    const whole = fitVoice(a.samples, a.sampleRate, { refine: false });
-    const split = resumed.result();
-    for (const key of [
-      'vocalTractLength',
-      'pitch',
-      'pitchRange',
-      'tenseness',
-      'speechRate',
-    ]) {
-      expect(error(split.head[key], whole.head[key]) < 0.02).toBe(true);
+    for (const a of recordings) {
+      const middle = Math.floor(a.samples.length / 2);
+      const fitter = createVoiceFitter();
+      fitter.update(a.samples.subarray(0, middle), a.sampleRate);
+      const resumed = createVoiceFitter({
+        state: JSON.parse(JSON.stringify(fitter.state)),
+      });
+      resumed.update(a.samples.subarray(middle), a.sampleRate);
+      const whole = fitVoice(a.samples, a.sampleRate, { refine: false });
+      const split = resumed.result();
+      for (const key of [
+        'vocalTractLength',
+        'pitch',
+        'pitchRange',
+        'tenseness',
+        'speechRate',
+      ]) {
+        expect(error(split.head[key], whole.head[key]) < 0.02).toBe(true);
+      }
+      expect(split.state.histograms.f0.length).toBe(
+        whole.state.histograms.f0.length
+      );
+      const refined = resumed.result({
+        refine: true,
+        samples: a.samples,
+        sampleRate: a.sampleRate,
+        maxRenders: 1,
+      });
+      expect(refined.renders).toBe(1);
+      expect(refined.state.voicedFrames).toBe(split.state.voicedFrames);
     }
-    expect(split.state.histograms.f0.length).toBe(
-      whole.state.histograms.f0.length
-    );
-    const refined = resumed.result({
-      refine: true,
-      samples: a.samples,
-      sampleRate: a.sampleRate,
-      maxRenders: 1,
-    });
-    expect(refined.renders).toBe(1);
-    expect(refined.state.voicedFrames).toBe(split.state.voicedFrames);
   });
   it('is deterministic', () => {
     const a = recordings[0],

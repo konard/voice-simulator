@@ -575,7 +575,7 @@ much of the FLEURS and held-out AISHELL-3 text the lexicons read.
 | Formant errors                               | `formants.f1` … `f3`              | Hz and % | mean \|F test − F reference\| over voiced frames with formants in both            |
 | Timing error                                 | `timing.rmsSeconds`, `maxSeconds` | s        | per pair d = j·hop − i·hop·(Tt / Tr)                                              |
 
-Pitch comes from YIN (de Cheveigné & Kawahara 2002) at 11025 Hz on 0.04 s windows; a frame is unvoiced when it is quieter than 10 % of the 95th percentile level or its aperiodicity is 0.35 or more. Formants come from LPC on 0.03 s of each voiced frame.
+Pitch and formants come from the shared analysis front end and the pitch and formant trackers described below. The utterance features pool fixed histograms over voiced frames; formant spacing uses valid, nonnasal F1–F3 tracks.
 
 `errorRate(reference, hypothesis, unit)` compares two transcripts by the Levenshtein distance: the word error rate (WER, `unit = 'word'`), the character error rate (CER, `'char'`) and the phoneme error rate (PER, `'phone'`, IPA without stress marks and tones), each a fraction of the reference length.
 
@@ -606,7 +606,7 @@ renderings with seeds 1 and 2 are 10 to 11 dB apart
 
 ### Voice matching
 
-`fitVoice(samples, sampleRate, options)` estimates a full head configuration from one speaker. Optional `transcript`, `language` and `ipa` tell the refinement what was said; without text it renders `MATCH_TEXT`. Input can be telephone speech at 8000 Hz. At least 20 voiced frames are required.
+`fitVoice(samples, sampleRate, options)` estimates a full head configuration from one speaker. It is experimental: the [accuracy gates remain unmet](docs/reports/issue-63-validation.md). Optional `transcript`, `language` and `ipa` tell the refinement what was said; without text it renders `MATCH_TEXT`. Input can be telephone speech at 8000 Hz. At least 20 voiced frames are required.
 
 ```js
 import { fitVoice, createVoiceFitter, saveVoice } from 'voice-simulator';

@@ -2,8 +2,8 @@
  * Voice features of a recording: the measurements that voice matching
  * compares between a recording and the simulator.
  *
- * - f0 (median and 5-95 % range) with YIN (de Cheveigné & Kawahara 2002);
- * - formants F1-F4 (F1-F3 at 8 kHz) with LPC, and the formant spacing ΔF
+ * - f0 (median and 5-95 % range) with the shared pitch tracker;
+ * - tracked formants F1-F4 (F1-F3 at 8 kHz), and the formant spacing ΔF
  *   fitted to the uniform-tube pattern F_i = (2i - 1) ΔF / 2 (Reby &
  *   McComb 2003), which gives the vocal tract length L = c / (2 ΔF)
  *   (Fitch 1997);
@@ -14,6 +14,7 @@
  *   taken above 400 Hz at the best fractional lag, and summed up by the
  *   upper quartile over frames;
  * - syllable rate from peaks of the loudness envelope.
+ * analyzeLegacyVoice retains YIN and the previous independent LPC analysis.
  */
 
 import {

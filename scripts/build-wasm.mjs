@@ -56,7 +56,7 @@ import { THREAD_MEMORY } from '../src/engine/layout.js';
  * and 82 (complete acoustics parity), scalar is 383 667 bytes and SIMD
  * is 390 932, rounded up to 393 216 (Rust 1.100.0).
  */
-// Voice-fit numerical exports with the complete engine: scalar 411786 bytes
+// Voice-fit numerical exports with the complete engine: scalar 413424 bytes
 // (Rust 1.100.0), rounded up to the next 16384-byte boundary.
 export const WASM_SIZE_BUDGET = 425984;
 
