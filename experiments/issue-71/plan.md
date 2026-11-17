@@ -130,3 +130,16 @@ with the green d6a904f binary changes only one internal function (the word
 classifier); renderer function bodies are unchanged. The bounded comparison
 script is experiments/issue-71/compare-wasm.mjs. Latest main eeb2869 remains
 merged. Current-head runtime CI and refreshed recording report remain open.
+
+Refreshed full heavy recognition run 44083642157 at bb5de5b passes all four
+files (14 tests pass; the existing unavailable laryngograph corpus is skipped).
+All three mode tests pass: RESD activation 55%, names 11%, golden false alarms
+1/24, unchanged from the initial calibration. No item limit was supplied.
+The report records this run and all 60 four-language replay checks.
+
+Final requirement review found that references for inputs above 22.05 kHz
+still selected minimal. The new matching-tier regression fails before the fix
+(baseline-rate-regression-before.log:17, minimal instead of low). The selector
+now uses low at 32 kHz and medium at 48 kHz; intermediate rates use the next
+waveguide tier. Integration 14/14 and focused ESLint pass. RESD audio is
+44.1 kHz, so rerun its full evaluation before finalizing the report.

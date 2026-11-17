@@ -204,3 +204,15 @@ describe('syllabic mode features', () => {
     }
   });
 });
+
+describe('mode baseline sample rates', () => {
+  it('uses matching waveguide tiers above the minimal sample rate', () => {
+    for (const [sampleRate, tier] of [
+      [32000, 'low'],
+      [48000, 'medium'],
+    ]) {
+      const baseline = voiceBaseline('male', sampleRate, 'en');
+      expect(baseline.options.tier).toBe(tier);
+    }
+  });
+});

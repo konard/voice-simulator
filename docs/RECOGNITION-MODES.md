@@ -50,7 +50,9 @@ activation span and named emotions retain their synthesis effects.
 Use the same head configuration as synthesis for a known voice. Voice files
 and loaded voices are accepted too. The neutral sentence for each language
 is mirrored in `tests/fixtures/recognition/baseline.txt`; references are
-rendered with seed 1 at the tier matching the sample rate. The voice cache
+rendered with seed 1 at the waveguide tier matching the sample rate (including
+`low` at 32 kHz and `medium` at 48 kHz). For intermediate rates the next
+waveguide tier is used; rates above 48 kHz use `medium`. The voice cache
 holds at most eight entries. A separate cache holds sixteen neutral phone
 contexts, without retaining samples. These contexts cancel vowel identity,
 lexical stress and lexical tone before applying the rules. Timed phones,

@@ -11,6 +11,7 @@ import {
 } from './mode-features.js';
 import { emotionVector } from './mode-rules.js';
 import { EMOTIONS } from '../articulation/emotion.js';
+import { AUDIO_TIERS } from '../perf/lod.js';
 
 export const BASELINE_TEXT = Object.freeze({
   en: 'The train leaves at seven.',
@@ -34,14 +35,12 @@ export function baselineHead(voice) {
 export function voiceBaseline(voice, sampleRate, language, trace) {
   const head = baselineHead(voice);
   const lang = Object.hasOwn(BASELINE_TEXT, language) ? language : 'en';
+  // Several 48 kHz tiers share a rate. Use the cheapest matching physical
+  // solver, avoiding an FDTD render for every cached reference.
   const tier =
-    sampleRate <= 8000
-      ? 'telephone'
-      : sampleRate <= 11025
-        ? 'narrowband'
-        : sampleRate <= 16000
-          ? 'wideband'
-          : 'minimal';
+    AUDIO_TIERS.find(
+      (entry) => entry.solver === 'waveguide' && entry.sampleRate >= sampleRate
+    )?.name ?? 'medium';
   const key = JSON.stringify([
     Object.keys(head)
       .sort()
