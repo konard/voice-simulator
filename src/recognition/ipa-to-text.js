@@ -11,6 +11,8 @@ import { resultFromPath, heardIpa } from './result.js';
 // word penalty lets a few long, unrelated words beat an almost exact phrase.
 export const ACOUSTIC_WEIGHT = 10;
 export const UNKNOWN_SOUND_COST = 2;
+// Final calibrated mixed-language costs; see experiments/issue-69-word-boundaries.mjs.
+export const MIXED_LANGUAGE_COSTS = { spanMismatch: 1, switch: 1 };
 
 function integerOption(value, name, fallback) {
   const n = value ?? fallback;
@@ -106,10 +108,11 @@ function continuationCost(input, lexicons, spans, candidate, partial) {
   const changed =
     partial.lastLanguage && partial.lastLanguage !== candidate.language;
   const span = spans?.find((span) => span.from <= from && from < span.to);
-  // Final calibrated costs: span mismatch 2, word-language change 1.
   const languageCost =
-    Number(Boolean(span && span.language !== candidate.language)) * 2 +
-    Number(Boolean(changed && !input.pauses.has(from)));
+    Number(Boolean(span && span.language !== candidate.language)) *
+      MIXED_LANGUAGE_COSTS.spanMismatch +
+    Number(Boolean(changed && !input.pauses.has(from))) *
+      MIXED_LANGUAGE_COSTS.switch;
   return (
     partial.cost +
     candidate.cost +

@@ -35,17 +35,22 @@ and pauses. A syllable carrying a tone adds 3 to Mandarin. Viterbi charges
 6 per language switch, halved at a pause. A single-syllable island between
 equal labels is smoothed. When the top two scores differ by less than
 0.5 per sound, the lower-cost monolingual lexical decoding decides the span.
-These initial constants already clear every fixed acceptance threshold;
-the final values are recorded in the source comments. No stored statistics,
+These constants clear the language-identification thresholds; the mixed
+decoder calibration below also gates exact word boundaries. Final values
+are recorded in source comments. No stored statistics,
 recognition data, dependencies or recordings are added.
 
 `ipaToText(ipa, { spans })` uses a single language as before when every span
 has that language. Mixed spans search their lexicons together: span mismatch
-costs 2 at the first sound of a word; changing word language costs 1 except
+costs 1 at the first sound of a word; changing word language costs 1 except
 at a pause. Bigram counts apply only within one language, and the first word
 after a change uses its unigram count. Output words carry `language`;
 adjacent Mandarin words join without spaces, other neighbours use one space.
 Supplied spans must cover all input sounds in order without gaps or overlaps.
+`experiments/issue-69-word-boundaries.mjs` compares the starting mismatch cost
+of 2 against 1: exact decoded words improve from 63/75 (84%) to 64/75 (85.33%).
+The switch cost remains 1. This check counts word segmentation errors,
+including Mandarin, in addition to the syllable-aligned measurement below.
 
 `languageShares(words)` aggregates the final words using their language and
 valid start/end times; otherwise it uses `from`/`to` sound offsets or parses
@@ -78,12 +83,13 @@ Measured with Node.js 26.13.0 on 2026-11-17:
 | Mandarin words with tones                        | 2000/2000 (100%)       | 97%                          |
 | Mandarin sentences without tones                 | 10/10 (100%)           | 90%                          |
 | Mixed word language labels                       | 69/75 (92.00%)         | 90%                          |
-| Mixed decoded sound/language units               | 75/79 (94.94%)         | 85%                          |
+| Exact decoded words, sounds and language         | 64/75 (85.33%)         | 85%                          |
+| Mixed decoded sound/language units               | 76/79 (96.20%)         | 85%                          |
 | Spans on each mixed fixture                      | At most true count + 1 | At most true count + 1       |
 | English continuity                               | 30 syllables, one span | One span                     |
 | Three-sound confidence                           | 0.1503647386           | Below 0.5                    |
 | Seed-1 nearest-sound noise, 10% chance per sound | 67/75 (89.33%)         | 75%; regression floor 87.33% |
-| Warm 120-sound query, zero lexical comparisons   | 2.330 ms               | Below 50 ms                  |
+| Warm 120-sound query, zero lexical comparisons   | 2.209 ms               | Below 50 ms                  |
 
 Word confusion matrix, with rows as true and columns as predicted language:
 
@@ -102,7 +108,8 @@ Latin word that the converter treats as pinyin is not an English fixture.
 Decoded Mandarin words use phonological syllables for alignment, as in
 [IPA recognition](ipa-to-text.md), allowing equivalent character segmentation.
 All other decoded units are words, matched by sounds and language, with edit
-penalties for missing or extra units. Tests also cover timed offsets/shares,
+penalties for missing or extra units. A separate exact-word gate applies the
+85% requirement without syllable alignment to all four languages. Tests also cover timed offsets/shares,
 empty input, restrictions, invalid options, model arithmetic, smoothing,
 pause switch costs, monolingual compatibility, mixed joining and CLI output.
 

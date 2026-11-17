@@ -64,6 +64,11 @@ function correctLanguages(words, spans) {
         ?.language === word.lang
   ).length;
 }
+function exactWordMatches(words, decoded) {
+  const expected = words.map((w) => `${w.lang}:${ipaKey(w.ipa)}`);
+  const actual = decoded.map((w) => `${w.language}:${ipaKey(w.ipa)}`);
+  return Math.max(0, expected.length - editDistance(expected, actual));
+}
 
 // Preserve word-boundary pauses and tone placement while corrupting only sounds.
 function corruptedIpa(ipa, random) {
@@ -139,6 +144,7 @@ describe('IPA language identification', () => {
     let total = 0;
     let recovered = 0;
     let decodedTotal = 0;
+    let exactWords = 0;
     const pairs = new Map();
     for (const { text, language } of mixed) {
       const forward = textToIpa(text, { lang: language });
@@ -153,6 +159,7 @@ describe('IPA language identification', () => {
       ).length;
       expect(result.spans.length <= trueSpans + 1).toBe(true);
       const decoded = ipaToText(forward.ipa, { spans: result.spans });
+      exactWords += exactWordMatches(words, decoded.words);
       const expected = wordLabels(
         words.map((w) => ({ ...w, language: w.lang }))
       );
@@ -170,9 +177,11 @@ describe('IPA language identification', () => {
       ['ru+zh', 3],
     ]);
     console.log(
-      `mixed word languages: ${correct}/${total} (${((100 * correct) / total).toFixed(2)}%); mixed decoded sounds/languages: ${recovered}/${decodedTotal} (${((100 * recovered) / decodedTotal).toFixed(2)}%)`
+      `mixed word languages: ${correct}/${total} (${((100 * correct) / total).toFixed(2)}%); exact decoded words: ${exactWords}/${total} (${((100 * exactWords) / total).toFixed(2)}%); mixed decoded sounds/languages: ${recovered}/${decodedTotal} (${((100 * recovered) / decodedTotal).toFixed(2)}%)`
     );
     expect(correct / total >= 0.9).toBe(true);
+    expect(exactWords / total >= 0.85).toBe(true);
+    expect(exactWords / total >= 0.85).toBe(true);
     expect(recovered / decodedTotal >= 0.85).toBe(true);
   });
 

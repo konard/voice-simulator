@@ -116,9 +116,9 @@ impl Search<'_> {
                         } else {
                             last.map_or(UNKNOWN_WORD, |s| s.candidate.word)
                         };
-                        // Final costs: span mismatch 2; switch 1, waived at pauses.
+                        // Final costs: span mismatch 1; switch 1, waived at pauses.
                         let extra = if self.spans[from] != language {
-                            2.0
+                            1.0
                         } else {
                             0.0
                         } + if changed && !self.pauses[from] {

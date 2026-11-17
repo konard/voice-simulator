@@ -7,5 +7,9 @@
 - [x] Port numerical scoring, path, confidence, shares and mixed decoding to Rust and extend wasm parity tests.
 - [x] Add 12 fixed mixed fixtures (three per requested language pair) and regression/acceptance tests, including seeded noise, confusion matrix, timed input, validation and warmed performance.
 - [x] Measure and tune without changing the requested thresholds. Keep scripts in experiments/; no recognition data changes or new dependencies.
-- [ ] Focused local tests and npm check/test; use sequential low-memory Rust checks and CI for full builds/runtime/platform coverage.
+- [x] Focused local tests and npm check/test; use sequential low-memory Rust checks and CI for full builds/runtime/platform coverage.
 - [ ] Review complete PR diff, merge current main, commit/push only issue-69-747cdfb224e7, update PR title/body with measured evidence, wait for all current-commit CI checks, mark PR 147 ready.
+
+- [x] Tighten mixed transcription verification to exact word boundaries in every language. Reproduce 63/75 (84%) with mismatch cost 2, tune only that cost to 1 and verify 64/75 (85.33%), plus 76/79 (96.20%) syllable-aligned units. Mirror the final cost in Rust.
+- [x] Preserve the existing unknown-source CLI diagnostic on the Rust path; the existing regression test now passes with built wasm.
+- [ ] Import the unlimited green heavy performance artifact into the trend and engine parity report; finalize current-commit CI and PR metadata.
