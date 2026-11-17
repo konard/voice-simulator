@@ -129,12 +129,8 @@ export function recognitionPacket(input, lexicon, options, nbest) {
   return { packet, words };
 }
 
-export function runRecognition(engine, packet) {
-  const {
-    vs_alloc: alloc,
-    vs_free: free,
-    vs_recognition_run: run,
-  } = engine.exports;
+export function runRecognition(engine, packet, name = 'vs_recognition_run') {
+  const { vs_alloc: alloc, vs_free: free, [name]: run } = engine.exports;
   const outputCount = 32768;
   const pointer = alloc(packet.length * 8);
   const output = alloc(outputCount * 8);

@@ -55,8 +55,10 @@ import { THREAD_MEMORY } from '../src/engine/layout.js';
  * 60 (formants), 61 (source analysis), 64 (codebook), 68 (IPA recognition)
  * and 82 (complete acoustics parity), scalar is 383 667 bytes and SIMD
  * is 390 932, rounded up to 393 216 (Rust 1.100.0).
+ * With language identification and joint recognition, scalar is 435 525
+ * bytes and SIMD 442 832, rounded up to 458 752 (Rust 1.100.0).
  */
-export const WASM_SIZE_BUDGET = 393216;
+export const WASM_SIZE_BUDGET = 458752;
 
 /**
  * Whether src/engine/voice-simulator-simd.wasm is shipped: only when it

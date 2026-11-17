@@ -35,6 +35,7 @@ import {
   synthesize,
   textToIpa,
   ipaToText,
+  identifyLanguage,
   visemeTrack,
   VISEME_FORMATS,
 } from '../src/index.js';
@@ -44,6 +45,9 @@ const OPTIONS = {
   boundaries: { type: 'string' },
   beam: { type: 'string' },
   nbest: { type: 'string' },
+  languages: { type: 'string' },
+  'switch-penalty': { type: 'string' },
+  'min-sounds': { type: 'string' },
   lang: { type: 'string', short: 'l' },
   accent: { type: 'string' },
   'accent-level': { type: 'string' },
@@ -106,6 +110,8 @@ function usage() {
     '                      the stress, з+амок; ё is restored from е)',
     '  text <ipa>          Decode IPA into words (--lang en, ru, hi, zh)',
     '                      --boundaries given|search --beam 32 --nbest 1 --json',
+    '  language <ipa>      Identify languages and print language, sound range, confidence',
+    '                      --languages en,ru,hi,zh --switch-penalty 6 --min-sounds 8 --json',
     '  say <text> -o f.wav Simulate speech and write an audio file',
     '  convert <in> -o out Convert an audio file (WAV, FLAC, AIFF, AU) to mono',
     '  timeline <text>     Print when each word and syllable is spoken',
@@ -597,6 +603,22 @@ async function quickBenchmark(values, io, engine) {
 }
 
 const COMMANDS = {
+  language(values, positionals, io) {
+    const result = identifyLanguage(requireText(positionals), {
+      languages: values.languages?.split(','),
+      switchPenalty: optionalNumber(values['switch-penalty'], 'switch-penalty'),
+      minSounds: optionalNumber(values['min-sounds'], 'min-sounds'),
+    });
+    if (values.json) {
+      io.stdout(JSON.stringify(result));
+    } else {
+      for (const span of result.spans) {
+        io.stdout(
+          `${span.language} ${span.from}-${span.to} ${span.confidence.toFixed(2)}`
+        );
+      }
+    }
+  },
   text(values, positionals, io) {
     const result = ipaToText(requireText(positionals), {
       language: values.lang,
