@@ -634,3 +634,107 @@ deadline and skip-policy checks pass on Node, Bun and Deno. Actual CI timing
 of the revision remains to be verified. The five numerical assertions and
 landmark/heavy criteria remain unfinished, and no deadline, objective,
 uncertainty formula or gate is relaxed.
+
+## Render-budget boundary regression and current failure verification
+
+The November 17 restart re-fetched `main` (`ab5449363a21042644aa9357e07b441f05dd0167`)
+and confirmed that it is already an ancestor of `2600aff`. The issue still has
+no comments, and PR 146 has six conversation comments, no inline comments and
+no reviews. All five latest workflows were created at 15:26:25 UTC for that
+exact SHA. Checks and release run 44114344061 fails; the other four pass.
+
+Downloading the complete run again encounters the missing, unacquired macOS
+job. Six completed runtime job logs and Pipeline Status were downloaded
+individually to `ci-logs/current-job-{job-id}.log`. These contain the same five
+numerical failures, not stale failures from a previous revision:
+
+| Job | Evidence in its downloaded log |
+| --- | --- |
+| Node Ubuntu, 134149123855 | Transcript and uncertainty at 5191/5205; legacy rate/pitch/rate at 5217/5231/5243; suite exits 1 after 199 s at 5259 |
+| Bun Ubuntu, 134149123798 | Legacy errors at 343/358/373; transcript and uncertainty at 3497/3519 |
+| Deno Ubuntu, 134149123812 | Matching failures at 1700/2237/2988; transcript and uncertainty at 4453/4456; summaries at 4941/4979 |
+| Node Windows, 134149123782 | Transcript and uncertainty at 1156/1159; 300 s suite deadline at 2955 |
+| Bun Windows, 134149123975 | Legacy errors at 341/356/371; transcript and uncertainty at 3310/3331 |
+| Deno Windows, 134149124110 | Matching at 1640/1864/2564; transcript and uncertainty at 4469/4542; 300 s deadline at 4699 |
+| Pipeline Status, 134159400482 | `Failing jobs: test` at 269 |
+
+These jobs are linked from [the failed run](https://github.com/konard/voice-simulator/actions/runs/44114344061).
+No missing credential explains their numerical assertions or Windows deadlines.
+
+Review also found a separate simplex bug at the evaluation limit. Reproduce
+with initial coordinate 0.2, objective `100 * (x - 0.32)^2`, and budget 3.
+The initial vertices are 0.2 (cost 1.44) and 0.3 (cost 0.04). Reflection
+evaluates 0.4 (cost 0.64), better than the worst vertex, but contraction has
+no remaining budget. Both implementations previously returned 0.2 instead
+of retaining the measured improvement at 0.4. This misrepresents the final
+simplex used for uncertainty. The fix retains reflection in that branch
+without another evaluation or any change to the objective or stop condition.
+
+The new regression fails before the fix in both languages:
+
+- `node --test --test-name-pattern='retains an improved reflection' tests/voice-fit-numerics.test.js`:
+  exit 1, `simplex-budget-before.log:18`, assertion at test line 50.
+- `CARGO_BUILD_JOBS=1 CARGO_PROFILE_TEST_DEBUG=0 cargo test -p voice-simulator-core --lib voice_fit::tests::retains_reflection_at_budget_limit`:
+  exit 101, `simplex-rust-before.log`, returned second coordinate is not 0.4.
+
+After correction, all nine numerical tests pass individually on Node, Bun
+and Deno, and all three focused Rust tests pass. Rebuilt WASM parity passes
+both tests, including both one- and two-dimensional searches with budgets
+0, 1, 2, 3, 4, 10 and 80. The scalar/SIMD files measure 502192/507370 bytes,
+both within the unchanged 507904-byte limit. Logs are
+`simplex-{node,bun,deno,rust}-after.log`, `simplex-parity-after.log` and
+`simplex-wasm-build.log` under `ci-logs/`. This correction does not claim to
+resolve the acoustic acceptance failures.
+
+Two further source probes were bounded to nine short recordings apiece,
+using `node --max-old-space-size=384`:
+
+- `experiments/issue-63/cycle-template.mjs` normalizes and aligns successive
+  pitch-mark cycles before estimating signal and noise variance. Three-cycle
+  estimates give B 15.818338 dB, equivalent to breathiness 0.568258 against
+  its matching default-head table, instead of the true 0.2. Five and seven
+  cycles increase that bias (0.663294/0.737479). A's five-cycle estimate is
+  0.165449, but the male preset still reads 0.605013 instead of 0.14.
+  Removing a fitted linear cycle trend improves B's three-cycle estimate
+  to 0.339389; a quadratic trend over five cycles gives 0.340559. Both
+  still overestimate the true 0.2, and the male preset's three-cycle linear
+  estimate is 0.348107 versus 0.14 (`cycle-template-detrended.jsonl`).
+- `experiments/issue-63/hnr-extrapolation.mjs` uses fractional-lag periodic
+  autocorrelation and extrapolates its quadratic/quartic modulation decay
+  to zero lag. With a six-period window, B improves from inferred breathiness
+  0.653620 to 0.556647/0.478086, still above the true 0.2. The male preset's
+  quartic estimate is 0.436866 versus 0.14. Eight-period windows increase
+  the bias. Neither experiment establishes an acceptable source correction;
+  neither changes production source measurements or calibration.
+
+Fresh execution of `pitch-truth.mjs` again gives A's tracked SD 5.948061 Hz,
+known-plan SD 5.077536 Hz on the same 263 voiced frames, and known-plan SD
+5.218326 Hz with planned voicing. The unbinned known-plan MAD also exceeds
+the 5 Hz gate. Logs are `verified-pitch-truth.jsonl`, `cycle-template.jsonl`
+and `hnr-extrapolation.jsonl` under `ci-logs/`. The unresolved discrepancy
+between the specified MAD calculation and this acceptance fixture remains
+explicit; no cap, formula change or threshold change is introduced.
+
+`cycle-noise-fit.mjs` tests the strongest new idea with the complete fitter,
+using `cycle-noise.mjs` to assign detrended cycle HNR to individual frames.
+It loads modified modules in memory, writes no production file, and uses
+five default-head calibration renders plus the two specified ten-evaluation
+fits. Its measured HNR table is `[25, 24.5, 19, 13, 8.5]` dB at breathiness
+`[0, 0.25, 0.5, 0.75, 1]`. B's frame-weighted initial breathiness becomes
+0.386364 and its fitted pitch stays at 100 Hz, but speech rate becomes
+1.097456 versus the true 0.9 (21.94% error). A still passes its four
+transcript parameter tolerances. The isolated prototype therefore fails
+the requested acceptance and is not adopted. Reproduce with
+`node --max-old-space-size=384 experiments/issue-63/cycle-noise-fit.mjs`;
+saved results are `ci-logs/cycle-noise-fit.jsonl`.
+
+With the production simplex correction, the full command
+`node --max-old-space-size=384 --test --test-concurrency=1 tests/voice-fit.test.js tests/voice-match.test.js`
+completes locally in 352.24 s: **22 pass, five fail**, with no skipped,
+cancelled or timed-out tests. `ci-logs/acceptance-simplex-fix.log` records
+B's 126 Hz fit at line 2; transcript/uncertainty failures at 51/65;
+legacy errors remain 0.119755/0.156910/0.138217 at 79/93/105.
+`npm run check` passes (699 packages, 1632 files at this measurement),
+with its log in `ci-logs/simplex-check.log`. These observations establish
+the independent search correction and reproduce the remaining failures;
+they do not complete the issue or justify marking the PR ready.

@@ -2,6 +2,28 @@
 
 Objective: implement and verify the complete scope of issue 63 in PR 146.
 
+## Current CI repair investigation
+
+- [x] Read the complete issue, conversation, inline comments and reviews;
+      fetch main and confirm it is already an ancestor of the prepared branch.
+- [x] Verify all failing runtime jobs in run 44114344061 target 2600aff;
+      preserve available job logs when cancelled jobs prevent a full download.
+- [x] Confirm five shared acoustic failures and additional Windows deadlines.
+- [x] Bound a period-aligned cycle-template probe to nine recordings and
+      recheck the renderer's pitch plan against the required uncertainty formula.
+- [x] Correct the simplex's loss of an improved reflected vertex at its
+      evaluation limit; demonstrate the regression in JavaScript and Rust.
+- [x] Verify numerical parity and repository checks; commit the atomic fix
+      as 875c676. Nine numerical checks pass on each runtime, three Rust
+      tests and two rebuilt WASM parity tests pass; both size limits pass.
+- [x] Re-run both complete acceptance files: 22 pass and the same five
+      assertions fail, without a timeout (352.24 s locally). Source cycle
+      detrending fixes B's pitch in isolation but still fails its rate;
+      do not adopt this incomplete prototype.
+- [ ] Push the fix and supporting evidence; inspect current-head CI.
+- [ ] Resolve remaining acoustic, landmark, heavy-suite and runtime gates;
+      update PR evidence and mark ready only when every requirement passes.
+
 ## Second CI repair investigation
 
 - [x] Read the full issue and every PR comment type again; fetch main.
