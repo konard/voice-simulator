@@ -1,4 +1,4 @@
-# Issue 62: second CI restart
+# Issue 62: third CI restart
 
 Objective: satisfy issue 62 in PR 142, resolve conflicts with current main,
 and verify every CI check without weakening the requested quality gates.
@@ -6,14 +6,13 @@ and verify every CI check without weakening the requested quality gates.
 - [x] Read the complete issue, all PR conversation comments, inline comments
       and reviews; check required sub-issues and prerequisite states.
 - [x] Preserve fresh failing CI logs and verify their timestamps/head SHA.
-- [x] Merge current main, retaining both inverse-filter and landmark APIs,
-      both WASM parity suites, and the current release preflight behavior.
-- [x] Reproduce the quality failures after merging and investigate a different
-      approach from repeated threshold tuning.
-- [x] Fix reproducible implementation defects with focused regression tests
-      in both JavaScript and Rust; preserve existing behavior elsewhere.
-- [x] Recheck the nucleus candidate ceiling and causal timing counterexamples
-      against the merged code. Map any impossible criteria to exact evidence.
+- [x] Change investigation approach: probe streaming suppression with finite
+      generated frames instead of repeating threshold tuning.
+- [x] Fix duplicate streaming landmarks and changing group strengths;
+      add a failing-before/passing-after regression and a bounded probe.
+- [x] Merge main bc76d97, retaining formants, inverse filtering, codebook,
+      landmark exports/types and all numerical parity suites.
+- [x] Measure the combined WASM and update its size budget and regression.
 - [x] Run focused validation and npm run check with low local resource use;
       rebuild only the merged scalar/SIMD WASM needed for size/parity checks.
 - [ ] Verify full npm test and workspace checks through existing CI rather
@@ -25,22 +24,26 @@ and verify every CI check without weakening the requested quality gates.
 
 Acceptance requirements remain those in the complete inventory at
 docs/case-studies/issue-62/README.md. No required sub-issues were returned by
-the API; prerequisites 58 and 17 are closed. The latest failure is workflow
-44040092585 at 07:37:04 UTC on 9d409e0 (commit time 07:36:54 UTC), preserved
-as ci-logs/checks-44040092585.log. All nine test jobs fail the same three
+the API; prerequisites 58 and 17 are closed. The supplied failure is workflow
+44044032753 at 08:07:19 UTC on 0c22080 (commit time 08:06:24 UTC), preserved
+as ci-logs/checks-44044032753.log. All nine test jobs fail the same three
 quality gates; Pipeline Status aggregates those failures. There is no
 credential or repository-access error in these jobs.
 
-Implemented: merge 93ad6d9 includes main 722373a; boundary-strength bug fix
-2355653 has three failing-before/passing-after public-API regressions on
-Node.js, Bun and Deno, a Rust unit test, and two WASM parity cases. The
-combined engine measures 310436 bytes; a3b0c98 budgets the next 16 KiB
-boundary (311296). Focused JS/WASM/inverse-filter checks pass (13 tests),
-focused Rust tests pass (3), and npm run check passes.
+Implemented this restart: 3cbdc12 preserves band-group context and prior
+same-type suppression when advancing a stream. Seed 5 previously emitted
+two b- events 5 ms apart. The regression now checks both supported hops,
+four chunk sizes, append-only output, exact batch equality and separation
+on Node.js, Bun and Deno. The finite 128-seed probe uses a 64 MiB JS heap.
+Merge fd3120f includes main bc76d97; scalar WASM is 316669 bytes, budget
+327680, SIMD 323408 bytes (not shipped). Fourteen focused tests and the
+merged formant parity test pass with REQUIRE_WASM=1 and no skips.
 
 Unmet: the same three quality gates fail (63.3333% nucleus recall,
 33.3333% extras, 48.2459%/47.1143% class accuracy, four missing edges).
 The prescribed voiced-maximum superset covers only 98/120 centres.
 causality.mjs proves the 150 ms cleanup/60 ms commitment conflict;
 confirmation.mjs proves the early irrevocable confirmation/80 ms higher
-peak replacement conflict. Neither requirement is silently waived.
+peak replacement conflict. Neither requirement is silently waived. The
+default branch additionally requires the npm bootstrap account action
+described in the case study and PR.

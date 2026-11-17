@@ -388,6 +388,57 @@ After first publication, configure the npm trusted publisher for repository
 secret. This external account action is separate from the three quality
 failures on this PR.
 
+## Third CI restart: streaming suppression and formant merge (2026-11-17)
+
+The supplied run
+[44044032753](https://github.com/konard/voice-simulator/actions/runs/44044032753)
+started at 08:07:19 UTC on `0c22080` (commit 08:06:24 UTC). All nine runtime
+jobs failed the same three quality tests. Its full log is preserved in
+`ci-logs/checks-44044032753.log`; Node/Ubuntu prints nucleus measurements
+at line 21478, class accuracy at 21479–21480, four missing edges at 21485,
+and RTF at 21486. The issue, comments, sub-issues and all three PR comment
+endpoints were read again; there are no additional requirements.
+
+This investigation used generated streaming frames to test suppression
+history instead of repeating calibration. Seed 5 in
+`experiments/issue-62/stream-candidates.mjs` produced two `b-` landmarks at
+0.165 and 0.170 s in streaming mode; batch mode kept only the first.
+Recomputing a window discarded an earlier suppression decision and nearby
+band peaks used in group strength. Commit `3cbdc12` carries the last prior
+candidate of each type into suppression and retains the neighbouring bands.
+The bounded window still limits repeated candidate processing.
+
+`tests/recognition-landmark-streaming.test.js` fails on the previous source
+and passes after the correction on Node.js, Bun and Deno. It covers both
+supported hops, a nonzero start time, four chunk sizes, immutable appended
+events, exact batch equality and the 20 ms same-type separation. The finite
+probe checks 128 seeds with four chunk sizes:
+
+```sh
+node --max-old-space-size=64 experiments/issue-62/stream-candidates.mjs
+```
+
+Merge `fd3120f` includes `main` at `bc76d97`, retaining the formant tracker,
+inverse-filter and codebook APIs and their Rust/WASM parity coverage. The
+combined scalar measures **316669 bytes**, SHA-256
+`cc60fc93e8a11ce1a3c6fafcf957c2d18f5b1da6deb8cebcb270fab844537367`;
+the next 16 KiB size budget is **327680 bytes**. SIMD builds at 323408 bytes
+and remains unshipped. The measurement command was
+`CARGO_BUILD_JOBS=1 node scripts/build-wasm.mjs --require --check-size`.
+
+With `REQUIRE_WASM=1`, the landmark/inverse-filter parity, engine-size,
+boundary and streaming files pass all 14 focused tests without skips. The
+separate `Rust formant primitives` test passes at both 8 and 16 kHz, with
+zero measured candidate-frequency difference. These checks verify the merge
+and the streaming correction; they do not satisfy the three quality gates.
+
+Default-branch run
+[44046913741](https://github.com/konard/voice-simulator/actions/runs/44046913741)
+on `bc76d97` still fails Release Preflight for the npm bootstrap account
+action. Its log is `ci-logs/main-checks-44046913741.log`, lines 152–160.
+The existing PR preflight skips that credential-dependent operation and
+explains why; `main` reports the exact maintainer action described above.
+
 ## Remaining work
 
 Resolve the contradictory timing contract and the unreachable nucleus target
