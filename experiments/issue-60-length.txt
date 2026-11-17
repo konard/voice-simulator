@@ -1,0 +1,12 @@
+male L 13: estimate 13.86, vowel frames: planned 13.45, shape 12.74, tracked 13.75, tracked with L fixed 13.62
+male L 14: estimate 14.73, vowel frames: planned 14.45, shape 13.72, tracked 14.63, tracked with L fixed 14.45
+male L 15: estimate 15.91, vowel frames: planned 15.44, shape 14.70, tracked 15.77, tracked with L fixed 15.46
+male L 16.5: estimate 17.28, vowel frames: planned 16.92, shape 16.17, tracked 16.91, tracked with L fixed 16.91
+male L 18: estimate 18.60, vowel frames: planned 18.38, shape 17.64, tracked 18.63, tracked with L fixed 18.63
+male L 19: estimate 19.44, vowel frames: planned 19.35, shape 18.62, tracked 19.98, tracked with L fixed 19.98
+female L 13: estimate 13.82, vowel frames: planned 13.57, shape 12.78, tracked 13.66, tracked with L fixed 13.56
+female L 14: estimate 14.53, vowel frames: planned 14.57, shape 13.76, tracked 14.15, tracked with L fixed 14.17
+female L 15: estimate 16.00, vowel frames: planned 15.57, shape 14.74, tracked 15.94, tracked with L fixed 15.79
+female L 16.5: estimate 17.69, vowel frames: planned 17.05, shape 16.21, tracked 17.56, tracked with L fixed 17.54
+female L 18: estimate 18.81, vowel frames: planned 18.52, shape 17.68, tracked 18.88, tracked with L fixed 18.88
+female L 19: estimate 19.62, vowel frames: planned 19.49, shape 18.66, tracked 19.96, tracked with L fixed 19.90

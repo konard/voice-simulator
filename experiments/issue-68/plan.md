@@ -44,7 +44,7 @@ and committed in `tests/fixtures/recognition/ipa-sentences.json`.
 - [x] Rust core feature/edit/count/beam code and additive WebAssembly exports
       match JS. Six parity checks cover all phone pairs, four languages,
       unknowns, n-best output and malformed packets. Merged scalar/SIMD
-      files measure 326407 / 332635 bytes within a 336 KiB budget.
+      files measure 332646 / 338849 bytes within a 336 KiB budget.
 - [x] `tests/ipa-to-text.test.js` verifies all requested accuracy gates.
       First 5000 words per language: 100% sound recovery and 96.70–97.92%
       spelling. All forty sentences preserve sounds. Sentence spelling,
@@ -57,7 +57,7 @@ and committed in `tests/fixtures/recognition/ipa-sentences.json`.
 - [x] Local focused checks, native Rust recognition tests, clippy, rustfmt,
       required scalar/SIMD builds and the feature-specific WebAssembly
       parity checks pass. Local `npm run check` passes.
-- [x] Latest main (`722373a`) is merged, preserving source-analysis and
+- [x] Latest main (`bc76d97`) is merged, preserving source-analysis, formant and
       codebook APIs and their tests. Atomic feature commits are retained.
 - [ ] Final-commit Node/Bun/Deno CI, all other PR checks, and the full manual
       performance suite pass; its artifact is added to the performance trend.

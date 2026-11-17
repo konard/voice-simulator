@@ -1,11 +1,13 @@
 /**
  * Truth that the simulator knows about its own output, per analysis frame
- * of the recognizer (issue 59). Used by tests/recognition-pitch.test.js and
- * the issue-59 experiments, and the high-pass filter and speech level of
- * those tests.
+ * of the recognizer (issues 59 and 60). Used by
+ * tests/recognition-pitch.test.js, tests/recognition-formants.test.js and
+ * the issue-59 and issue-60 experiments, and the high-pass filter and
+ * speech level of those tests.
  */
 
-import { sampleState } from '../../src/articulation/tract-shape.js';
+import { tubeTransfer } from '../../src/acoustics/transfer.js';
+import { sampleState, tractShape } from '../../src/articulation/tract-shape.js';
 
 /** Frames closer than this (s) to a change of voicing are not scored. */
 export const VOICING_GUARD = 0.015;
@@ -42,6 +44,115 @@ export function plannedPitch(plan, hop, count) {
     }
   }
   return { f0, mask };
+}
+
+/** Grid step (Hz) and top (Hz) of tubeSpectrum, and the step of the scan
+ * in `gridFormants`. */
+const FINE_STEP = 5;
+const TOP = 5000;
+const COARSE_STEP = 50;
+
+/**
+ * `tubeFormants(areas, length, {count})` at a tenth of the cost: the
+ * transfer on a 50 Hz grid from the bottom up, and from each local maximum
+ * (or a rise into 5000 Hz) a climb on the 5 Hz grid of tubeSpectrum to the
+ * peak that findPeaks finds there (above the left neighbour, not below the
+ * right one, at most 4995 Hz), with its parabolic interpolation; the scan
+ * stops at `count` peaks. Formants are wider than 100 Hz, so each coarse
+ * maximum holds one fine one: on the planned vowels of
+ * experiments/issue-60-truth.mjs it equals tubeFormants on every frame.
+ * @param {ArrayLike<number>} areas
+ * @param {number} length
+ * @param {number} [count]
+ * @returns {number[]}
+ */
+export function gridFormants(areas, length, count = 4) {
+  const values = new Map();
+  const at = (frequency) => {
+    if (!values.has(frequency)) {
+      values.set(frequency, tubeTransfer(areas, length, frequency));
+    }
+    return values.get(frequency);
+  };
+  const peaks = [];
+  for (
+    let f = 2 * COARSE_STEP;
+    f <= TOP && peaks.length < count;
+    f += COARSE_STEP
+  ) {
+    const last = f + COARSE_STEP > TOP;
+    if (at(f) > at(f - COARSE_STEP) && (last || at(f) >= at(f + COARSE_STEP))) {
+      const peak = climb(at, f);
+      if (peak !== null) {
+        peaks.push(peak);
+      }
+    }
+  }
+  return peaks;
+}
+
+/** Peak of findPeaks on the 5 Hz grid reached from `start`, or null. */
+function climb(at, start) {
+  let f = start;
+  if (at(f + FINE_STEP) > at(f)) {
+    while (f + FINE_STEP <= TOP && at(f + FINE_STEP) > at(f)) {
+      f += FINE_STEP;
+    }
+  } else {
+    while (at(f - FINE_STEP) >= at(f)) {
+      f -= FINE_STEP;
+    }
+  }
+  if (f < 100 || f + FINE_STEP > TOP) {
+    return null;
+  }
+  const left = at(f - FINE_STEP);
+  const middle = at(f);
+  const right = at(f + FINE_STEP);
+  const offset = (0.5 * (left - right)) / (left - 2 * middle + right || 1);
+  return f + offset * FINE_STEP;
+}
+
+/**
+ * Planned formants per frame of `hop` seconds (frame t at time t hop):
+ * `tubeFormants(shape.areas, shape.length)` (F1 .. F4, or the first
+ * `formants`, by gridFormants) of
+ * `shape = tractShape(sampleState(plan, t hop), head)`. `mask` is 1 for
+ * frames inside a vowel segment of the plan with a closed velum
+ * (`shape.velumArea` 0) and 0 elsewhere; masked-out frames get null.
+ * @param {{segments: {kind: string, start: number, end: number}[], frameRate: number, frameCount: number}} plan
+ * @param {object} head Head config of the plan (`out.head`).
+ * @param {number} hop Seconds.
+ * @param {number} [count] Frames; default every frame inside the plan.
+ * @param {number} [formants] Formants per frame, default 4.
+ * @returns {{formants: (number[]|null)[], mask: Uint8Array}}
+ */
+export function plannedFormants(plan, head, hop, count, formants = 4) {
+  const frames =
+    count ?? Math.floor((plan.frameCount - 1) / plan.frameRate / hop) + 1;
+  const vowels = plan.segments.filter((segment) => segment.kind === 'vowel');
+  const rows = [];
+  const mask = new Uint8Array(frames);
+  const state = {};
+  for (let t = 0; t < frames; t++) {
+    const time = t * hop;
+    const inside = vowels.some(
+      (segment) => time >= segment.start && time < segment.end
+    );
+    if (!inside) {
+      rows.push(null);
+      continue;
+    }
+    sampleState(plan, time, state);
+    const shape = tractShape(state, head);
+    if (shape.velumArea > 0) {
+      rows.push(null);
+      continue;
+    }
+    rows.push(gridFormants(shape.areas, shape.length, formants));
+    mask[t] = 1;
+  }
+  return { formants: rows, mask };
 }
 
 /**

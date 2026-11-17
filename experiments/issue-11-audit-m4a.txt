@@ -4,6 +4,18 @@ formants female@16000: {"f0":237,"meanErrorPercent":[12.2,6.8,6.1],"over10Percen
 formants female@8000: {"f0":237,"meanErrorPercent":[12,6.7,7.1],"over10Percent":[6,0,1],"missing":0,"worst":{"vowel":"ɔ","error":0.29,"formant":3,"truth":3053,"measured":2160}}
 formants child@16000: {"f0":264,"meanErrorPercent":[16.7,12.3,6.6],"over10Percent":[8,2,1],"missing":0,"worst":{"vowel":"ɛ","error":0.69,"formant":2,"truth":2528,"measured":790}}
 formants child@8000: {"f0":264,"meanErrorPercent":[12.7,6.9,5.4],"over10Percent":[7,1,0],"missing":1,"worst":{"vowel":"i","error":0.23,"formant":1,"truth":421,"measured":325}}
+trackFormants male@16000: {"f0":87,"meanErrorPercent":[7.4,5.3,3.1],"over10Percent":[3,2,0],"missing":0,"worst":{"vowel":"ɔ","error":0.16,"formant":1,"truth":747,"measured":631}}
+trackFormants male@8000: {"f0":87,"meanErrorPercent":[7.2,5.6,3.5],"over10Percent":[2,2,0],"missing":0,"worst":{"vowel":"ɔ","error":0.17,"formant":1,"truth":747,"measured":621}}
+trackFormants female@16000: {"f0":153,"meanErrorPercent":[10.4,5.3,4.1],"over10Percent":[5,0,0],"missing":0,"worst":{"vowel":"ɔ","error":0.18,"formant":1,"truth":872,"measured":712}}
+trackFormants female@8000: {"f0":153,"meanErrorPercent":[14.4,5.4,4.2],"over10Percent":[6,0,0],"missing":0,"worst":{"vowel":"i","error":0.36,"formant":1,"truth":405,"measured":552}}
+trackFormants child@16000: {"f0":165,"meanErrorPercent":[17.9,4.8,2.8],"over10Percent":[7,0,0],"missing":0,"worst":{"vowel":"i","error":0.62,"formant":1,"truth":421,"measured":681}}
+trackFormants child@8000: {"f0":165,"meanErrorPercent":[17.1,4.2,4.5],"over10Percent":[7,0,1],"missing":0,"worst":{"vowel":"i","error":0.56,"formant":1,"truth":421,"measured":658}}
+renderer formants male@16000: {"pitch":70,"meanDifferencePercent":[6,5.2,3.1],"differencePercent":{"i":[-0.5,-4.7,-2.7],"e":[-3.5,-10.2,-3.6],"ɛ":[-4.6,-10.5,-3.5],"a":[-6.2,-6.6,-0.4],"ɑ":[-12.1,-2.1,-0.8],"ɔ":[-14.4,-4.5,-3.5],"o":[-6.5,-2.1,-3],"u":[-3.2,-1.3,-6],"ə":[-6.3,-6,-4.1],"y":[-2.6,-4,-3.6]}}
+renderer formants male@8000: {"pitch":70,"meanDifferencePercent":[5.9,5.3,3.4],"differencePercent":{"i":[-0.6,-4.9,-3.3],"e":[-3.7,-10.1,-4],"ɛ":[-4,-10.8,-4],"a":[-5.5,-6.8,-1.4],"ɑ":[-12.5,-2.2,-0.8],"ɔ":[-13.9,-3.9,-3.4],"o":[-6.7,-2.1,-2.8],"u":[-3.2,-1.5,-5.5],"ə":[-6.4,-6.3,-4.3],"y":[-2.3,-4.4,-4.1]}}
+renderer formants female@16000: {"pitch":70,"meanDifferencePercent":[7.2,5.5,4.1],"differencePercent":{"i":[-3,-4.5,-4.1],"e":[-3.4,-8.2,-6.7],"ɛ":[-5.8,-10.1,-4.8],"a":[-6.3,-7.3,-1.5],"ɑ":[-14.2,-3.2,-0.9],"ɔ":[-16.3,-6.5,-2.2],"o":[-7.5,-3.2,-3],"u":[-4.4,-1.3,-7.2],"ə":[-7.2,-6.8,-5],"y":[-4.1,-3.8,-5.4]}}
+renderer formants female@8000: {"pitch":70,"meanDifferencePercent":[6.7,5.6,3.9],"differencePercent":{"i":[-2.2,-4.1,-4.7],"e":[-2.4,-8,-6.5],"ɛ":[-4.8,-10.9,-4.5],"a":[-6,-7.7,-0.9],"ɑ":[-13.2,-3.1,-0.6],"ɔ":[-16.2,-6.4,-2.3],"o":[-6.9,-3.2,-2.7],"u":[-4.2,-1.4,-6.2],"ə":[-7,-7.2,-5],"y":[-3.7,-3.9,-5.2]}}
+renderer formants child@16000: {"pitch":70,"meanDifferencePercent":[6.9,5.2,2.8],"differencePercent":{"i":[-2.4,-4.5,-2.5],"e":[-3.3,-8.3,-4.7],"ɛ":[-4.7,-10.2,-2.9],"a":[-6.7,-7.2,-0.8],"ɑ":[-13.2,-2.4,-0.4],"ɔ":[-16.4,-5.1,-1.5],"o":[-7.7,-2.7,-2],"u":[-4.2,-0.9,-5.8],"ə":[-7.3,-6.7,-4],"y":[-2.8,-3.6,-3.7]}}
+renderer formants child@8000: {"pitch":70,"meanDifferencePercent":[6.2,5,3.9],"differencePercent":{"i":[-1.3,-4.6,-10.5],"e":[-2.3,-7.7,-5.4],"ɛ":[-4.5,-8.9,-4],"a":[-6,-7.1,-1.4],"ɑ":[-13.2,-2.7,-0.5],"ɔ":[-16.7,-5.3,-1.6],"o":[-6.9,-2.4,-2.1],"u":[-2.8,-1.1,-5.4],"ə":[-6.8,-7.1,-3.6],"y":[-1.8,-3.2,-4.1]}}
 pitch male@16000: {"frames":419,"grossPitchErrorPercent":0,"voicingDecisionErrorPercent":9.1,"fineErrorCents":12.6}
 pitch male@8000: {"frames":418,"grossPitchErrorPercent":0,"voicingDecisionErrorPercent":7.2,"fineErrorCents":12.9}
 pitch female@16000: {"frames":412,"grossPitchErrorPercent":0,"voicingDecisionErrorPercent":14.8,"fineErrorCents":11.2}
@@ -16,4 +28,4 @@ trackPitch female@16000: {"frames":411,"grossPitchErrorPercent":0,"voicingDecisi
 trackPitch female@8000: {"frames":411,"grossPitchErrorPercent":0,"voicingDecisionErrorPercent":5.4,"fineErrorCents":12}
 trackPitch child@16000: {"frames":453,"grossPitchErrorPercent":0,"voicingDecisionErrorPercent":4.4,"fineErrorCents":9.7}
 trackPitch child@8000: {"frames":453,"grossPitchErrorPercent":0,"voicingDecisionErrorPercent":4.9,"fineErrorCents":10}
-analyzeVoice cost: {"seconds":4.26,"realTimeFactor":0.163}
+analyzeVoice cost: {"seconds":4.26,"realTimeFactor":0.197}

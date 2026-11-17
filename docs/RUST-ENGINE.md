@@ -142,8 +142,8 @@ four-language exact, substituted, inserted, deleted, unknown and n-best
 paths against JavaScript. Path identities and local costs are equal;
 logarithmic total costs have absolute error below `1e-10` (parity class B).
 Malformed packets are rejected before allocation from their claimed counts.
-With the merged source-analysis and codebook cores, the engine measures
-326,407 scalar and 332,635 SIMD bytes with Rust 1.100.0; the size budget
+With the merged source-analysis, codebook and formant cores, the engine measures
+332,646 scalar and 338,849 SIMD bytes with Rust 1.100.0; the size budget
 is 344,064 bytes (336 KiB).
 
 The command line tool:
@@ -233,6 +233,22 @@ All arrays are f64; the response is in dB and the key has six values from
 24 bands. Both return 0 or an error and permit overlapping input/output.
 Parity class B limits are 1e-6 dB for the response and 1e-9 for the key.
 Table generation remains in JavaScript (Rust table building is issue 77).
+
+The formant tracker primitives (issue 60, `crates/voice-simulator-core/src/formants.rs`)
+add `vs_formant_width(order) -> i32`, `vs_formant_candidates(reflection,
+frames, order, rate, maxBandwidth, out) -> i32` and
+`vs_formant_tract_length(f1, f2, f3) -> f64`. The candidates export runs
+the root finder of `src/recognition/formants.js` (the roots of the LPC
+polynomials of orders p, p - 2 and p - 4 by the Aberth-Ehrlich iteration,
+each order warm-started from its roots of the frame before) over `frames`
+rows of `order` `f32` reflection coefficients and writes `1 + 3 w` `f64`
+values per frame (`w = vs_formant_width(order)`): the count, `w`
+frequencies, `w` bandwidths and `w` order ranks. It returns `w` or an
+error. Parity class B against `formantCandidates`: the same count and rank
+per candidate, frequencies and bandwidths within 0.01 Hz once rounded to
+`f32` (0 Hz measured on Node.js 26). The numbering, the tract length
+search, the nasal flag and the Kalman smoothing remain in JavaScript
+(issue 77).
 
 The exports of the 3D solver (`vs_simd`, `vs_fdtd_*`) are listed in
 [Solver exports](#solver-exports), those of the thread teams (`vs_threads`,
