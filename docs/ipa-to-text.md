@@ -49,6 +49,28 @@ An acoustic weight calibrates these local costs against the language model.
 The Rust core implements the same feature costs, trie search, count model
 and dynamic programming; language parsing and spelling remain shared in JS.
 
+Final local costs are vowel height 2, backness 1.5, rounding 0.5, length
+and nasality 0.3; consonant manner 0.5, place 0.35/11 per position,
+voicing 0.25, aspiration and palatalisation 0.2. Cross-kind cost is 1
+(i/j and u/w: 0.6); tone cost is 0.5, third/half-third 0,
+third/rising 0.15; stress costs 0.2. Distance is capped at 1. Gaps cost 1,
+or 0.5 for schwa and glottal stop. The candidate cutoff is
+`0.6 * (sounds used + 1)`; approximate acoustic costs have weight 10;
+unknown cost is `3 + 2 * sounds` (at most twelve sounds). Word cost is
+`-0.3 * ln(P) + 0.5`, with discount 0.75 and unigram backoff 0.4.
+An exact full path takes precedence. An exactly readable suffix can
+propose a shorter unknown-word boundary. These calibrations prevent the
+word penalty from joining noisy phrases into unrelated long words.
+
+Mandarin boundary and noise errors use phonological syllables, the forward
+engine's character units, so a multi-character corpus word and its separate
+character words can be compared. Spelling uses characters. Counts use
+non-overlapping corpus words. Standalone exact homophones keep their most
+frequent character spelling in the compact vocabulary; longer words retain
+other spellings. Rule spelling uses default character readings so its
+output can be pronounced independently. Russian fallback stress is written
+with an acute accent to preserve the heard vowel reductions.
+
 Verification uses `tests/ipa-to-text.test.js`, `tests/recognition-data.test.js`
 and the deterministic fixture at
 `tests/fixtures/recognition/ipa-sentences.json`. The bounded development

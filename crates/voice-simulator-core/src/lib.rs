@@ -17,12 +17,16 @@ extern crate alloc;
 extern crate std;
 
 pub mod aerodynamics;
+pub mod codebook;
 pub mod config;
 pub mod effort;
 pub mod fdtd;
 pub mod filters;
 pub mod frame;
 pub mod glottis;
+mod inverse_dsp;
+pub mod inverse_filter;
+mod inverse_refinement;
 pub mod listener;
 pub mod losses;
 pub mod math;

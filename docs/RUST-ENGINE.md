@@ -142,8 +142,9 @@ four-language exact, substituted, inserted, deleted, unknown and n-best
 paths against JavaScript. Path identities and local costs are equal;
 logarithmic total costs have absolute error below `1e-10` (parity class B).
 Malformed packets are rejected before allocation from their claimed counts.
-The scalar engine measures 251,906 bytes with Rust 1.100.0; the size budget
-is 262,144 bytes (256 KiB).
+With the merged source-analysis and codebook cores, the engine measures
+326,407 scalar and 332,635 SIMD bytes with Rust 1.100.0; the size budget
+is 344,064 bytes (336 KiB).
 
 The command line tool:
 
@@ -225,6 +226,13 @@ The module imports nothing; the threads build imports only its memory
 | `vs_radiation_run(area, rate, baffle, data, count) -> i32`         | A `Radiation` over the incident waves at `data` in place; 0 or error                 |
 | `vs_waveguide_run(params, n, data, count) -> i32`                  | A `Waveguide` stepped by the glottal input at `data` in place; 0 or error            |
 | `vs_stages_run(seed, sr, gain, band, rate, f, data, count) -> i32` | `NoiseSources` plus `OutputStage` over `data` in place; 0 or error                   |
+
+The codebook primitives (issue 64) add `vs_tract_response(areas, sections,
+length, frequencies, count, out)` and `vs_codebook_key(envelope, out)`.
+All arrays are f64; the response is in dB and the key has six values from
+24 bands. Both return 0 or an error and permit overlapping input/output.
+Parity class B limits are 1e-6 dB for the response and 1e-9 for the key.
+Table generation remains in JavaScript (Rust table building is issue 77).
 
 The exports of the 3D solver (`vs_simd`, `vs_fdtd_*`) are listed in
 [Solver exports](#solver-exports), those of the thread teams (`vs_threads`,

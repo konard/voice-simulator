@@ -7,6 +7,9 @@ import {
   prepareUtterance,
   synthesize,
   analyzeVoice,
+  analyzeFrames,
+  inverseFilter,
+  trackPitch,
   AUDIO_TIERS,
   HEAD_PARAMETERS,
 } from '../src/index.js';
@@ -83,6 +86,12 @@ for (const breathiness of [0, 0.5, 1]) {
   show(`breathiness ${breathiness}`, {
     hnr: Number(features.hnr.toFixed(2)),
     h1h2: Number(features.h1h2.toFixed(2)),
+  });
+  const frames = analyzeFrames(samples, sampleRate);
+  const source = inverseFilter(frames, { pitch: trackPitch(frames) });
+  show(`inverse breathiness ${breathiness}`, {
+    hnr: source.summary.hnr.median,
+    cpp: source.summary.cpp.median,
   });
 }
 

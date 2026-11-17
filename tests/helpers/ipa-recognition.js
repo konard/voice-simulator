@@ -20,6 +20,27 @@ export const soundKey = (tokens) =>
   tokens.map((t) => `${t.symbol}:${(t.tone ?? []).join('')}`).join('|');
 export const ipaKey = (ipa) => soundKey(sounds(ipa));
 
+/** Temporarily remove every pronunciation of the held-out dictionary words. */
+export function withoutWords(lexicon, words, run) {
+  const removed = [];
+  const stack = [lexicon.root];
+  while (stack.length) {
+    const node = stack.pop();
+    if (node.entries.some((entry) => words.has(entry.word))) {
+      removed.push([node, node.entries]);
+      node.entries = node.entries.filter((entry) => !words.has(entry.word));
+    }
+    stack.push(...node.children.values());
+  }
+  try {
+    return run();
+  } finally {
+    for (const [node, entries] of removed) {
+      node.entries = entries;
+    }
+  }
+}
+
 export function soundWords(words, language) {
   // Mandarin's written unit is a character/syllable; a discovered corpus
   // phrase can combine several of the forward engine's character words.

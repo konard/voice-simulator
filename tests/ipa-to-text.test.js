@@ -16,6 +16,7 @@ import {
   soundWords,
   editDistance,
   nearestOther,
+  withoutWords,
 } from './helpers/ipa-recognition.js';
 
 const phone = (ipa) => parseIpa(ipa).tokens[0];
@@ -139,18 +140,23 @@ describe('IPA to text', () => {
     });
 
     it(`${language}: rule-spells 200 held-out reverse-dictionary words`, () => {
-      // spellSounds has no access to the reverse trie: none of these 200
-      // word entries can participate in this decoding. Forward rules and
-      // character readings remain available, as they are for any unknown.
+      const heldOut = getCounts(language).words.slice(0, 200);
       let recovered = 0;
-      for (const { word } of getCounts(language).words.slice(0, 200)) {
-        const ipa = textToIpa(word, { lang: language }).ipa;
-        const spelling = spellSounds(sounds(ipa), language);
-        expect(spelling.length > 0).toBe(true);
-        recovered += Number(
-          ipaKey(textToIpa(spelling, { lang: language }).ipa) === ipaKey(ipa)
-        );
-      }
+      withoutWords(
+        getLexicon(language),
+        new Set(heldOut.map(({ word }) => word)),
+        () => {
+          for (const { word } of heldOut) {
+            const ipa = textToIpa(word, { lang: language }).ipa;
+            const spelling = spellSounds(sounds(ipa), language);
+            expect(spelling.length > 0).toBe(true);
+            recovered += Number(
+              ipaKey(textToIpa(spelling, { lang: language }).ipa) ===
+                ipaKey(ipa)
+            );
+          }
+        }
+      );
       console.log(`${language}: held-out rule spelling ${recovered}/200`);
       expect(recovered >= (language === 'en' ? 120 : 180)).toBe(true);
     });
