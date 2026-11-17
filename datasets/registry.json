@@ -526,6 +526,27 @@
           }
         ]
       }
+    },
+    {
+      "id": "resd-ru",
+      "title": "Russian Emotional Speech Dialogs (RESD), first 100 test rows",
+      "languages": ["ru"],
+      "licence": "MIT",
+      "licenceUrl": "https://huggingface.co/datasets/Aniemore/resd/blob/main/README.md",
+      "licenceQuote": "license: mit",
+      "licenceChecked": "2026-11-17",
+      "redistribution": false,
+      "citation": "Russian Emotional Speech Dialogs (RESD), Aniemore/resd on Hugging Face. Labels are not transcripts.",
+      "source": {
+        "kind": "rows",
+        "dataset": "Aniemore/resd",
+        "config": "default",
+        "split": "test",
+        "length": 100,
+        "textColumn": "emotion",
+        "audioColumn": "speech",
+        "textSha256": "c5c6f1c7df3eb775a11b4b1460f34a641a081722344b24538218e8665babfeed"
+      }
     }
   ]
 }

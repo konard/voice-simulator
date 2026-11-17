@@ -31,6 +31,7 @@ mod inverse_refinement;
 pub mod listener;
 pub mod losses;
 pub mod math;
+pub mod modes;
 pub mod radiation;
 pub mod random;
 pub mod recognition;

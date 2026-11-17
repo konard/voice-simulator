@@ -1251,3 +1251,15 @@ runner image: `rustup toolchain install` without arguments installs the
 toolchain of `rust-toolchain.toml` (rustup 1.29 warns that the automatic
 install of `rustup show` is deprecated), and `rustup show` then prints the
 active versions into the log.
+
+Acoustic mode recognition exports `vs_mode_rules(input, has_f1, known, out)`.
+Input is two 11-double feature rows (word and baseline): alpha, pitch, F1
+difference, voiced share, source H1-H2, HNR, CPP, jitter, rate, energy ratio,
+pitch span. Output is six word decisions (E, effort, confidence, quality id,
+degree, tempo) followed by the six-component phrase vector. The export
+validates flags, pointers and finite input and permits overlapping buffers.
+The numerical core is `modes.rs`; class B parity tolerance is 1e-10.
+`vs_mode_emotion(input, count, out)` reads the phrase vector followed by
+2–12 six-double reference vectors and writes activation, winning index,
+nearest/next distances, intensity and name confidence. Its six-double output
+may overlap input. Names and span construction remain with the caller.

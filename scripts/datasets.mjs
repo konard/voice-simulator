@@ -252,6 +252,9 @@ function filesProblems(label, source, problem) {
 }
 
 function rowsProblems(label, source, problem) {
+  if (source.audioColumn !== undefined && !isText(source.audioColumn)) {
+    problem('usage', `${label}: source.audioColumn must be a column name`);
+  }
   for (const key of ['dataset', 'config', 'split', 'textColumn']) {
     if (!isText(source[key])) {
       problem('usage', `${label}: missing field source.${key}`);
@@ -815,7 +818,7 @@ async function fetchRows(entry, dir, options) {
   const results = await Promise.all(
     rows.slice(0, want).map(async (item, at) => {
       const audio = `audio/${pad(at)}.wav`;
-      const src = item.row?.audio?.[0]?.src;
+      const src = item.row?.[source.audioColumn ?? 'audio']?.[0]?.src;
       if (!isText(src)) {
         throw new DatasetError(
           `${entry.id}: row ${at} has no audio link`,

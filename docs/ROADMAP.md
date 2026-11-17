@@ -522,3 +522,10 @@ The same rules are printed at the end of every issue.
 - A pull request that finishes an issue ticks nothing here: the state of an
   issue lives on GitHub. A pull request that changes the direction updates
   [VISION.md](VISION.md) and adds or edits issues, then this file.
+
+Speech-mode postprocessing for [#71](https://github.com/konard/voice-simulator/issues/71)
+is available as `recognizeModes` and `toPlanModes` for timed IPA words.
+It measures source and prosodic cues, compares synthesized voice references,
+and returns timed partial mode spans and brace-marked IPA. Integration with
+the text recognizer awaits #73; see [the API](RECOGNITION-MODES.md) and
+[measured acceptance results](reports/recognition-modes.md).

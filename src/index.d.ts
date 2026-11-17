@@ -4389,3 +4389,14 @@ export {
   type CodebookQuery,
   type CodebookFrame,
 } from './recognition/codebook.js';
+
+export {
+  recognizeModes,
+  toPlanModes,
+  type ModeWord,
+  type RecognizedMode,
+  type RecognizedSound,
+  type RecognitionModeSpan,
+  type ModeRecognitionOptions,
+  type ModeRecognitionInput,
+} from './recognition/modes.js';

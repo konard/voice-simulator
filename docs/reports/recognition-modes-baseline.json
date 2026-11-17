@@ -1,0 +1,13 @@
+{
+  "activation": 0.58,
+  "names": 0.13,
+  "measured": {
+    "activation": 0.63,
+    "names": 0.18,
+    "rows": 100,
+    "golden": 24,
+    "falseAlarms": 1
+  },
+  "date": "2026-11-17",
+  "command": "node --test --test-timeout=600000 tests/heavy/recognition-modes.test.js"
+}

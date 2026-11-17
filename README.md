@@ -1498,3 +1498,15 @@ This repository implements CI/CD best practices for AI-driven development. See [
 ## License
 
 [Unlicense](LICENSE) - Public Domain
+
+### Speech-mode recognition
+
+`recognizeModes(samples, sampleRate, result, { voice })` adds manner of speech
+to timed IPA words. A span is `{ start, end, from, to, effort: 0.75,
+notation: 'f', confidence: 0.8 }`: seconds, end-exclusive word indexes and
+only the decided mode fields. Phonation and tempo use the same brace marks
+as synthesis. Emotion spans use `notation: null`; nonverbal sounds have
+`sound` instead of word indexes. `toPlanModes(result.modes)` supplies all
+word spans, including emotions, to `planUtterance(result.ipa, { modes })`.
+See [the API and acoustic rules](docs/RECOGNITION-MODES.md) for baseline,
+abstention, diagnostics and limits. The text-recognition CLI awaits #73.

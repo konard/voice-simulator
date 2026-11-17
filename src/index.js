@@ -680,3 +680,5 @@ export {
   GRID,
   tractResponse,
 } from './recognition/codebook.js';
+
+export { recognizeModes, toPlanModes } from './recognition/modes.js';
