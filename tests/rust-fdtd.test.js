@@ -386,11 +386,12 @@ describe('the 3D FDTD solver in Rust (issue 23)', () => {
     const reference = new VoiceRenderer(plan, renderOptions);
     const rust = new RustVoiceRenderer(engine, plan, renderOptions);
     try {
-      reference.render(new Float32Array(480));
-      rust.render(new Float32Array(480));
+      reference.render(new Float32Array(2400));
+      rust.render(new Float32Array(2400));
       const expected = reference.solver.pressure;
       const actual = rust.field().pressure;
       expect(expected.length > 0).toBe(true);
+      expect(expected.some((value) => value !== 0)).toBe(true);
       expect(actual.length).toBe(expected.length);
       expect(actual.every(Number.isFinite)).toBe(true);
       expect(

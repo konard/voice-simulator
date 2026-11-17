@@ -25,10 +25,13 @@ try {
     }
     const renderer = new RustVoiceRenderer(module, plan, renderOptions);
     variants.push({ file, module, renderer, times: [] });
-    renderer.render(new Float32Array(480));
+    renderer.render(new Float32Array(2400));
   }
   for (let round = 0; round < 15; round++) {
     for (const variant of variants) {
+      // Refresh the excitation outside the timing window; prolonged bare
+      // steps alone eventually decay to a silent field.
+      variant.renderer.render(new Float32Array(480));
       const start = performance.now();
       const result = variant.module.exports.vs_renderer_kernel_steps(
         variant.renderer.handle,

@@ -555,7 +555,7 @@ impl Fdtd3d {
             // SAFETY: new() validates endpoints with Grid::index. All link
             // arrays have equal lengths, all cell arrays have equal lengths,
             // and this private grid never resizes or changes endpoints.
-            // index_links keeps active_from at or below the link count.
+            // skip_closed keeps active_from at or below the link count.
             // Each pointer advances within its own allocation. The two
             // divergence updates are sequential, including equal endpoints.
             unsafe {

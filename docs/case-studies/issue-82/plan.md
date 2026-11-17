@@ -144,9 +144,13 @@ The unsafe exception is confined to that method, documented and enforced by
 the existing architecture test; native and SIMD steps retain their old path.
 
 Command: `node --max-old-space-size=256 --stack-size=512 experiments/issue-82-validated-grid.mjs before.wasm after.wasm`.
-On the fixed studio grid (4,690 cells), two interleaved five-run comparisons
-measured median times of 661.65 vs 572.32 ms and 579.75 vs 537.29 ms per 10,000
-steps after 100,000 warm-up steps. The pressure fields match bit for bit.
+On the fixed studio grid (4,690 cells), two initial interleaved five-run
+comparisons measured medians of 661.65 vs 572.32 ms and 579.75 vs 537.29 ms per
+10,000 steps after 100,000 warm-up steps. This prolonged bare stepping decayed
+to silence. The retained experiment refreshes excitation outside the timing
+window and requires a nonzero, finite, bit-identical pressure field. On the
+combined binary it measures medians of 536.05 vs 520.22 ms; the strict full
+utterance CI benchmark determines whether every feature and tier meets 1.0.
 The native `fdtd_reset` target passes both the reset test and rejection of
 out-of-range endpoints and mismatched arrays. All 50 focused wasm parity,
 3D solver/field, size and architecture checks pass without skips. The builds
@@ -158,3 +162,5 @@ parity tests alongside the feature probes. Both independently recorded passing
 performance histories are preserved. The combined wasm measures 383,667 bytes
 scalar and 390,932 bytes SIMD, giving a 393,216-byte (384 KiB) budget by the
 existing rounding rule. The speed rerun measures this combined binary.
+The field regression also renders 2,400 samples and asserts nonzero pressure,
+so it checks numerical parity after the initial silence as well as dimensions.
