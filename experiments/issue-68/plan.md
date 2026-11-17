@@ -59,11 +59,17 @@ and committed in `tests/fixtures/recognition/ipa-sentences.json`.
       parity checks pass. Local `npm run check` passes.
 - [x] Latest main (`bc76d97`) is merged, preserving source-analysis, formant and
       codebook APIs and their tests. Atomic feature commits are retained.
-- [ ] Final-commit Node/Bun/Deno CI, all other PR checks, and the full manual
-      performance suite pass; its artifact is added to the performance trend.
-- [ ] Review final PR diff, refresh main/comments, update PR title/body with
-      costs and measurements, preserve `Fixes #68`, verify a clean tree and
-      mark PR 144 ready.
+- [x] All nine Node/Bun/Deno platform jobs and all other PR workflows pass
+      for `5ee8769` in run 44050048847 and its sibling checks.
+- [x] Full manual performance run 44048569212 passes all 46 checks with no
+      item limit. Its `8bb2a50` artifact is added to the performance trend;
+      the baseline is unchanged. Production files are identical in `5ee8769`.
+- [x] Final PR diff reviewed; main and all comment endpoints refreshed;
+      title/body updated with costs, measurements and `Fixes #68`.
+
+Finalization: commit this report and the performance trend, verify that
+commit's checks, confirm a clean tree and run `gh pr ready 144`. Keep the
+pull request unmerged.
 
 ## Verification protocol
 
@@ -88,9 +94,11 @@ The minor changeset is present; subsequent changeset checks pass.
 The first full platform run after the final main merge (44048579286) found
 one new test portability error on Bun: importing its generated source through
 an encoded data URL yielded no named export. The log is
-`ci-logs/bun-linux-44048579286.log`, lines 3022–3027. The regression test now
+`ci-logs/bun-linux-44048579286.log`, lines 3022–3027. Full-run log
+`ci-logs/release-44048579286.log` records the same error on macOS, Linux
+and Windows at lines 21119, 26238 and 38569. The regression test now
 imports the generated file in an explicit ES-module fixture; the same eight
 count-table checks pass on Bun and Node. Decoder and corpus data are unchanged.
 The earlier performance run (44048070854) was deliberately cancelled when
 main advanced; its preserved job log records cancellation at line 341.
-The replacement performance run 44048569212 tests the merged implementation.
+The replacement performance run 44048569212 passes on the merged implementation.

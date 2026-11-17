@@ -120,3 +120,11 @@ ordering, including supplementary characters. The bounded reproduction
 `node experiments/issue-68/compare-lexicons.mjs` measured 200000 comparisons
 at 79.59 ms before and 8.91 ms after, with the same checksum. The strict
 three-second cold-trie limit is unchanged.
+
+The [complete Node/Bun/Deno matrix](https://github.com/konard/voice-simulator/actions/runs/44050048847)
+passes on Linux, macOS and Windows. The
+[full performance suite](https://github.com/konard/voice-simulator/actions/runs/44048569212)
+passes all 46 checks without an item limit, including native/WebAssembly
+threading and all audio tiers. Its artifact adds the `8bb2a50` row to
+`docs/reports/performance.md`; the baseline is unchanged. The subsequent
+portable test-fixture import leaves production code and count tables unchanged.
