@@ -3,7 +3,12 @@ pub const FEATURES: &[&str] = &[
     // features:start
     "solver.waveguide",
     "solver.fdtd3d",
+    "solver.fdtd2d",
     "source.lf",
+    "source.folds",
+    "source.tract-interaction",
+    "source.subglottal",
+    "mode.whisper",
     "noise.turbulence",
     "losses.frequency",
     "filters.output",

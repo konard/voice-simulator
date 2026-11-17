@@ -68,8 +68,10 @@ impl Fdtd2d {
             return None;
         }
         let values: Vec<f64> = bytes
-            .chunks_exact(8)
-            .map(|v| f64::from_le_bytes(v.try_into().unwrap()))
+            .as_chunks::<8>()
+            .0
+            .iter()
+            .map(|v| f64::from_le_bytes(*v))
             .collect();
         if values.len() < 5 || !values.iter().all(|v| v.is_finite() && *v >= 0.0) {
             return None;
@@ -81,12 +83,12 @@ impl Fdtd2d {
             values[3] as usize,
             values[4] as usize,
         );
-        if dx <= 0.0
+        if values[1..5].iter().any(|v| math::floor(*v) != *v)
+            || dx <= 0.0
             || rows < 2
             || columns < 4
             || rows.checked_mul(columns)? > 1 << 20
-            || nose_n < 2
-            || nose_n > 4096
+            || !(2..=4096).contains(&nose_n)
             || branches > 64
             || values.len() != 5 + columns + 3 * branches
             || nose.is_empty()
@@ -102,10 +104,14 @@ impl Fdtd2d {
             mean: 0.0,
             left: 0.0,
         }];
-        for branch in values[5 + columns..].chunks_exact(3) {
+        for branch in values[5 + columns..].as_chunks::<3>().0 {
             let column = branch[0] as usize;
             let n = branch[2] as usize;
-            if column >= columns || n < 2 || n > 4096 {
+            if math::floor(branch[0]) != branch[0]
+                || math::floor(branch[2]) != branch[2]
+                || column >= columns
+                || !(2..=4096).contains(&n)
+            {
                 return None;
             }
             ports.push(Port {

@@ -36,7 +36,27 @@ pub mod threads;
 
 /// Version of the interface; raise it on any breaking change of a `vs_`
 /// export (a removed or renamed function, a changed signature or meaning).
-pub const ABI_VERSION: u32 = 4;
+pub const ABI_VERSION: u32 = 5;
+
+/// Number of capabilities compiled into this engine.
+#[no_mangle]
+pub extern "C" fn vs_features_count() -> usize {
+    voice_simulator_core::features::FEATURES.len()
+}
+/// UTF-8 bytes of a capability (valid for the module's lifetime).
+#[no_mangle]
+pub extern "C" fn vs_feature_ptr(index: usize) -> *const u8 {
+    voice_simulator_core::features::FEATURES
+        .get(index)
+        .map_or(core::ptr::null(), |id| id.as_ptr())
+}
+/// Byte length of a capability; zero for an invalid index.
+#[no_mangle]
+pub extern "C" fn vs_feature_len(index: usize) -> usize {
+    voice_simulator_core::features::FEATURES
+        .get(index)
+        .map_or(0, |id| id.len())
+}
 
 /// Alignment of every block that [`vs_alloc`] returns.
 pub const ALLOC_ALIGN: usize = 8;
@@ -565,8 +585,8 @@ mod tests {
     use super::*;
 
     #[test]
-    fn abi_version_is_four() {
-        assert_eq!(vs_abi_version(), 4);
+    fn abi_version_is_five() {
+        assert_eq!(vs_abi_version(), 5);
     }
 
     #[test]

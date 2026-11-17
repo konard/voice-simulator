@@ -12,8 +12,9 @@
  * parity class B of docs/RUST-ENGINE.md.
  */
 
+import { buildSheet, sheetColumn } from '../acoustics/sheet-model.js';
+import { sideBranches } from '../acoustics/sinuses.js';
 import { hashSeed } from '../random.js';
-import { planWhispers } from '../articulation/whisper.js';
 import { normalizeHeadConfig } from '../head-config.js';
 import { noseShape } from '../articulation/tract-shape.js';
 import {
@@ -34,7 +35,10 @@ import {
   enclosureBounds,
   voxelModelOptions,
 } from '../acoustics/voxel-model.js';
-import { VOWEL_CORRECTIONS_3D } from '../articulation/vowel-calibration.js';
+import {
+  VOWEL_CORRECTIONS_2D,
+  VOWEL_CORRECTIONS_3D,
+} from '../articulation/vowel-calibration.js';
 import { VOWEL_LENGTH_SCALE_3D } from '../articulation/vowel-space.js';
 import {
   FDTD_OUTPUT_CODES,
@@ -64,21 +68,24 @@ export function unsupported(message) {
 
 /**
  * Throws an `unsupported` error for options the Rust renderer lacks (the
- * solver, a WebGPU device, the folds source or a bandLimit not above 0).
+ * solver, a WebGPU device or a bandLimit not above 0).
  * The microphone and the room are checked when a renderer is built.
  * @param {object} options as for RustVoiceRenderer
  */
 export function checkSupported(options) {
   const solver = options.solver ?? 'waveguide';
   if (!Object.hasOwn(SOLVER_CODES, solver)) {
-    throw unsupported(`solver '${solver}' (only 'waveguide' and 'fdtd3d')`);
+    throw unsupported(`solver '${solver}' (use waveguide, fdtd2d or fdtd3d)`);
   }
   if (options.device) {
     throw unsupported('a WebGPU device');
   }
   const source = options.source ?? DEFAULT_SOURCE;
-  if (source !== 'lf') {
-    throw unsupported(`source '${source}' (only 'lf')`);
+  if (!['lf', 'folds'].includes(source)) {
+    throw unsupported(`unknown source '${source}'`);
+  }
+  if (options.interaction && source !== 'folds') {
+    throw new Error('Source-tract interaction requires source: folds');
   }
   const { bandLimit } = options;
   if (bandLimit !== undefined && bandLimit !== null && !(bandLimit > 0)) {
@@ -144,7 +151,22 @@ const ADVANCED_CONFIG = [
   ['TRANSIENT_GAIN', 'transientGain'],
   ['LOSS_SHAPE', 'lossShape'],
   ['RADIATION_BAFFLE', 'radiationBaffle'],
+  ['FOLD_LENGTH', 'foldLength'],
+  ['FOLD_MASS', 'foldMass'],
+  ['FOLD_STIFFNESS', 'foldStiffness'],
+  ['FOLD_DAMPING', 'foldDamping'],
+  ['PRESSURE_COEFFICIENT', 'glottalPressureCoefficient'],
+  ['SUBGLOTTAL_LENGTH', 'subglottalLength'],
+  ['SUBGLOTTAL_LOSS', 'subglottalLoss'],
+  ['PITCH', 'pitch'],
 ];
+
+function configureWalls(values, head) {
+  const C = RENDERER_CONFIG;
+  values[C.WALL_MASS] = head.wallMass ?? WALL_MASS;
+  values[C.WALL_RESISTANCE] = head.wallResistance ?? WALL_RESISTANCE;
+  values[C.WALL_STIFFNESS] = head.wallStiffness ?? WALL_STIFFNESS;
+}
 
 /**
  * The renderer configuration (RENDERER_CONFIG of layout.js).
@@ -184,9 +206,7 @@ export function rendererConfig(settings) {
   values[C.PIRIFORM_SECTIONS] = settings.piriform ? branch.sections : 0;
   values[C.NOSE_AREA_COUNT] = nose.length;
   values[C.LISTENER_LENGTH] = listener.length;
-  values[C.WALL_MASS] = head.wallMass ?? WALL_MASS;
-  values[C.WALL_RESISTANCE] = head.wallResistance ?? WALL_RESISTANCE;
-  values[C.WALL_STIFFNESS] = head.wallStiffness ?? WALL_STIFFNESS;
+  configureWalls(values, head);
   // The advanced source and loss values (issue 41); the head is normalized,
   // so each holds its default when the head leaves it out.
   for (const [slot, key] of ADVANCED_CONFIG) {
@@ -201,6 +221,9 @@ export function rendererConfig(settings) {
     values[C.MICROPHONE_Y] = listening.target[1];
     values[C.MICROPHONE_Z] = listening.target[2];
   }
+  values[C.SOURCE] = settings.source === 'folds' ? 1 : 0;
+  values[C.INTERACTION] = settings.interaction ? 1 : 0;
+  values[C.SUBGLOTTAL] = settings.subglottal !== false ? 1 : 0;
   values[C.LENGTH_SCALE] = settings.lengthScale ?? 1;
   values.set(nose, C.HEADER);
   values.set(listener, C.HEADER + nose.length);
@@ -270,6 +293,17 @@ function lengthScaleOf(solver, options) {
   );
 }
 
+/** Calibration shared with the corresponding reference solver. */
+function vowelCorrections(solver) {
+  if (solver === 'fdtd2d') {
+    return VOWEL_CORRECTIONS_2D;
+  }
+  if (solver === 'fdtd3d') {
+    return VOWEL_CORRECTIONS_3D;
+  }
+  return undefined;
+}
+
 /**
  * The JavaScript half of the Rust renderer: the configuration and the
  * frames, one per control block, computed as VoiceRenderer computes its
@@ -299,6 +333,9 @@ export class FramePlanner {
       const model = rendererModel(this.head, options);
       listening = fdtdListening(model, options);
       this.model = new Uint8Array(packVoxelModel(model));
+    }
+    if (this.solver === 'fdtd2d') {
+      this.model = packSheet(this.head, options);
     }
     const listener = createListener({
       microphone: options.microphone,
@@ -331,13 +368,14 @@ export class FramePlanner {
       listening,
       lengthScale: lengthScaleOf(this.solver, options),
       levelOffsetDb: options.levelOffsetDb,
+      source: options.source,
+      interaction: options.interaction,
+      subglottal: options.subglottal,
     });
     this.frames = new FrameList(this.stride);
     this.state = {};
     this.shapeOptions = { sections: this.sections, teeth: this.teeth };
-    if (this.solver === 'fdtd3d') {
-      this.shapeOptions.vowelCorrections = VOWEL_CORRECTIONS_3D;
-    }
+    this.shapeOptions.vowelCorrections = vowelCorrections(this.solver);
     /** Time of the next sample, summed as VoiceRenderer sums it. */
     this.time = 0;
     this.position = 0;
@@ -399,7 +437,7 @@ export class RustVoiceRenderer {
    * @param {object} plan Result of planUtterance.
    * @param {ConstructorParameters<typeof import('../acoustics/voice.js').VoiceRenderer>[1]} [options]
    *   as for VoiceRenderer; a `solver` other than 'waveguide' and
-   *   'fdtd3d', `device`, `source: 'folds'` and a `bandLimit` that is not
+   *   'fdtd3d', `device` and a `bandLimit` that is not
    *   above 0 throw an Error with `code = 'ENGINE_UNSUPPORTED'`. With
    *   'fdtd3d' the voxel model is `options.model`, or the one Fdtd3d
    *   builds from `dx`, `microphone`, `enclosure`, `piriform` and
@@ -408,11 +446,6 @@ export class RustVoiceRenderer {
    *   measurements).
    */
   constructor(module, plan, options = {}) {
-    if (planWhispers(plan)) {
-      // The Rust engine has no whisper source yet (issue 82): the
-      // JavaScript renderer renders plans that whisper.
-      throw unsupported('whisper is rendered in JavaScript (issue 82)');
-    }
     this.planner = new FramePlanner(plan, options);
     this.module = module;
     this.plan = plan;
@@ -424,7 +457,13 @@ export class RustVoiceRenderer {
     this.solver = this.planner.solver;
     this.totalSamples = totalSamples;
     /** Cells of the voxel model (the 3D solver), for field(). */
-    this.cells = model.length > 0 ? modelCells(model) : 0;
+    this.cells = this.solver === 'fdtd3d' ? modelCells(model) : 0;
+    if (this.solver === 'fdtd2d') {
+      const header = new Float64Array(model.buffer, model.byteOffset, 5);
+      this.sheetRows = header[1];
+      this.sheetColumns = header[2];
+      this.sheetNose = header[3];
+    }
     this.listener = this.planner.listener;
     this.handle = createRenderer(module, config, model);
     this.frames = new Scratch(module, 8);
@@ -529,8 +568,10 @@ export class RustVoiceRenderer {
       );
       return { pressure: float64View(this.module, pointer, written).slice() };
     }
-    const noseCount = noseSections(this.head, this.sections);
-    const total = this.sections + noseCount;
+    const sections = this.sheetColumns ?? this.sections;
+    const noseCount = this.sheetNose ?? noseSections(this.head, sections);
+    const cells = this.sheetRows ? this.sheetRows * sections : 0;
+    const total = sections + noseCount + cells;
     const pointer = this.fieldValues.reserve(total);
     const written = check(
       this.module.exports.vs_renderer_field(this.handle, pointer, total),
@@ -538,8 +579,9 @@ export class RustVoiceRenderer {
     );
     const values = float64View(this.module, pointer, written).slice();
     return {
-      pressure: values.subarray(0, this.sections),
-      nose: values.subarray(this.sections),
+      pressure: values.subarray(0, sections),
+      nose: values.subarray(sections, sections + noseCount),
+      ...(cells ? { cells: values.subarray(sections + noseCount) } : {}),
     };
   }
 
@@ -742,4 +784,32 @@ export function renderJobRust(module, job, options = {}) {
     frames.free();
     out.free();
   }
+}
+
+/** Static sheet dimensions, anatomical widths and branch attachments (f64 LE). */
+function packSheet(head, options) {
+  const sheet = buildSheet(head, { dx: options.dx });
+  const nose = noseShape(head);
+  const scale = sheet.length / head.vocalTractLength;
+  const step = 0.68 * sheet.dx;
+  const branches = sideBranches(head, options);
+  const values = [
+    sheet.dx,
+    sheet.rows,
+    sheet.columns,
+    Math.max(6, Math.round((nose.length * scale) / step)),
+    branches.length,
+    ...sheet.widths,
+  ];
+  for (const branch of branches) {
+    values.push(
+      sheetColumn(sheet, branch.entry / head.vocalTractLength),
+      branch.area,
+      Math.max(2, Math.round((branch.depth * scale) / step))
+    );
+  }
+  const bytes = new Uint8Array(values.length * 8);
+  const view = new DataView(bytes.buffer);
+  values.forEach((value, index) => view.setFloat64(index * 8, value, true));
+  return bytes;
 }

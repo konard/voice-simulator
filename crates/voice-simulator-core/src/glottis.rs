@@ -177,7 +177,7 @@ pub fn lf_waveform(p: &LfPulse, t: f64) -> f64 {
 }
 
 /// The control channels that `Glottis.step` reads.
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct GlottalControl {
     /// Fundamental frequency (Hz).
     pub f0: f64,
@@ -206,6 +206,20 @@ pub struct GlottalControl {
     pub falsetto: f64,
     /// Harsh voice (0 to 1).
     pub harsh: f64,
+    /// Whisper share.
+    pub whisper: f64,
+    /// Filtered whisper noise (same random draw as aspiration).
+    pub whisper_noise: f64,
+    /// Oral stop closure.
+    pub stop_closure: f64,
+    /// Fricative share.
+    pub fricative: f64,
+    /// Fold adduction.
+    pub adduction: f64,
+    /// Fold tension factor.
+    pub fold_tension: f64,
+    /// Mean oral pressure in dyn/cm².
+    pub oral_pressure: f64,
 }
 
 /// The options of `new Glottis(options)`, with the defaults of the
@@ -214,6 +228,8 @@ pub struct GlottalControl {
 pub struct GlottisOptions {
     /// `hashSeed(\`${seed}:glottis\`)`.
     pub seed: u32,
+    /// Speaker pitch for the whisper noise.
+    pub pitch: f64,
     /// Tenseness (0 lax to 1 pressed).
     pub tenseness: f64,
     /// Breathiness (0 to 1).
@@ -248,6 +264,7 @@ impl GlottisOptions {
     pub fn new(seed: u32) -> Self {
         Self {
             seed,
+            pitch: 120.0,
             tenseness: 0.6,
             breathiness: 0.2,
             jitter: 0.4,
@@ -269,6 +286,7 @@ impl GlottisOptions {
 #[derive(Clone, Debug)]
 pub struct Glottis {
     random: Random,
+    pitch: f64,
     /// Tenseness of the head.
     pub tenseness: f64,
     /// Breathiness of the head.
@@ -332,6 +350,7 @@ impl Glottis {
         let chink = max(0.0, options.chink);
         Self {
             random: Random::new(options.seed),
+            pitch: options.pitch,
             tenseness: options.tenseness,
             breathiness: options.breathiness,
             jitter_depth: 0.01 * options.jitter,
@@ -496,13 +515,13 @@ impl Glottis {
                 None => self.lung_pressure * math::pow(max(0.0, control.loudness), 2.0 / 3.0),
             };
         let area = glottal_area_of(
-            control.voicing,
+            control.voicing * (1.0 - control.whisper.clamp(0.0, 1.0)),
             control.aspiration,
             control.closure,
             noise_breathiness(self.breathiness, control.breath, 0.0),
             self.chink,
             &self.areas,
-        );
+        ) + crate::whisper::posture(control);
         if lung != self.strength_key[0] || area != self.strength_key[1] {
             self.strength_key = [lung, area];
             self.strength = open_tract_strength_at(lung, area, self.re_critical);
@@ -523,18 +542,22 @@ impl Glottis {
         };
         let tenseness = max(0.0, base - 0.5 * control.aspiration * voicing);
         let (creak, falsetto, harsh) = (control.creak, control.falsetto, control.harsh);
-        self.phase += dt;
-        if self.phase >= self.period {
-            self.phase -= self.period;
-            self.start_period(
-                phonation_f0(control.f0, creak, falsetto),
-                tenseness,
-                creak,
-                harsh,
-            );
+        let whisper = control.whisper.clamp(0.0, 1.0);
+        let voiced_share = 1.0 - whisper;
+        if voiced_share > 0.0 {
+            self.phase += dt;
+            if self.phase >= self.period {
+                self.phase -= self.period;
+                self.start_period(
+                    phonation_f0(control.f0, creak, falsetto),
+                    tenseness,
+                    creak,
+                    harsh,
+                );
+            }
         }
         let t = self.phase / self.period;
-        self.intensity = voicing * loudness * self.shimmer * self.pulse_gain;
+        self.intensity = voicing * loudness * self.shimmer * self.pulse_gain * voiced_share;
         if falsetto != 0.0 {
             self.intensity *= math::pow(10.0, (phonation::FALSETTO_DECIBELS * falsetto) / 20.0);
         }
@@ -563,15 +586,24 @@ impl Glottis {
         }
         voiced = self.tilt(voiced, dt, effort);
         let opening = max(0.0, math::sin(2.0 * PI * t));
-        let modulation = if voicing > 0.1 {
+        let modulation = (if voicing > 0.1 {
             0.3 + 0.7 * opening * min(1.0, voicing)
         } else {
             1.0
-        };
+        }) * voiced_share
+            + whisper;
         self.noise_modulation = modulation;
         let strength = match control.aspiration_strength {
             Some(strength) => strength,
-            None => self.open_tract_strength(control) * Self::noise_gain(control),
+            None => {
+                self.open_tract_strength(control)
+                    * Self::noise_gain(control)
+                    * if whisper > 0.0 {
+                        crate::whisper::quiet(whisper, control.effort)
+                    } else {
+                        1.0
+                    }
+            }
         };
         let breathiness = noise_breathiness(self.breathiness, control.breath, harsh);
         let breath_power = if breathiness == self.breathiness {
@@ -579,11 +611,17 @@ impl Glottis {
         } else {
             math::pow(breathiness, self.breath_exponent)
         };
-        let breath = ((control.aspiration + self.breath_gain * breath_power * voicing)
+        let breath = ((control.aspiration
+            + self.breath_gain * breath_power * voicing * voiced_share)
             * (1.0 - control.closure)
             + (self.chink_noise * self.chink) / 10.0)
             * strength;
-        voiced + noise * breath * modulation * 0.45 * self.aspiration_level
+        let whispered = if whisper > 0.0 {
+            crate::whisper::noise(control, control.whisper_noise, strength, self.pitch)
+        } else {
+            0.0
+        };
+        voiced + (noise * breath * modulation + whispered) * 0.45 * self.aspiration_level
     }
 }
 
@@ -606,6 +644,7 @@ mod tests {
             creak: 0.0,
             falsetto: 0.0,
             harsh: 0.0,
+            ..GlottalControl::default()
         }
     }
 

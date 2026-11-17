@@ -40,7 +40,7 @@ impl Subglottal {
             arriving: 0.0,
         }
     }
-    /// Rebuild the spatial line when the solver's time step changes.
+    /// Build the spatial line once; retune radiation when the time step changes.
     pub fn configure(&mut self, dt: f64) {
         if dt == self.dt {
             return;

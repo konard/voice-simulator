@@ -120,9 +120,35 @@ pub const RADIATION_BAFFLE: usize = 51;
 /// `VOWEL_LENGTH_SCALE_3D` unless the options give one).
 pub const LENGTH_SCALE: usize = 52;
 /// Fixed fields before the nose areas.
-pub const HEADER: usize = 53;
+/// source of the source (issue 82).
+pub const SOURCE: usize = 53;
+/// fold length of the source (issue 82).
+pub const FOLD_LENGTH: usize = 54;
+/// fold mass of the source (issue 82).
+pub const FOLD_MASS: usize = 55;
+/// fold stiffness of the source (issue 82).
+pub const FOLD_STIFFNESS: usize = 56;
+/// fold damping of the source (issue 82).
+pub const FOLD_DAMPING: usize = 57;
+/// pressure coefficient of the source (issue 82).
+pub const PRESSURE_COEFFICIENT: usize = 58;
+/// interaction of the source (issue 82).
+pub const INTERACTION: usize = 59;
+/// subglottal of the source (issue 82).
+pub const SUBGLOTTAL: usize = 60;
+/// subglottal length of the source (issue 82).
+pub const SUBGLOTTAL_LENGTH: usize = 61;
+/// subglottal loss of the source (issue 82).
+pub const SUBGLOTTAL_LOSS: usize = 62;
+/// pitch of the source (issue 82).
+pub const PITCH: usize = 63;
+/// Fixed header length.
+pub const HEADER: usize = 64;
 
 /// Values of [`SOLVER`].
 pub const SOLVER_WAVEGUIDE: f64 = 0.0;
 /// Values of [`SOLVER`].
 pub const SOLVER_FDTD3D: f64 = 1.0;
+
+/// Two-dimensional FDTD sheet.
+pub const SOLVER_FDTD2D: f64 = 2.0;

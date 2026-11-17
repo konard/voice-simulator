@@ -1,9 +1,5 @@
 //! Kelly–Lochbaum branch used by the sheet solver (`acoustics/nose-line.js`).
-use crate::{
-    losses::boundary_loss_factor,
-    math,
-    radiation::{Radiation, RADIATION_BAFFLE},
-};
+use crate::{losses::boundary_loss_factor, math, radiation::Radiation};
 use alloc::{vec, vec::Vec};
 
 /// A nasal or blind side branch, with one step of delay per section.
@@ -94,7 +90,8 @@ impl NoseLine {
     pub fn configure(&mut self, rate: f64) {
         if !self.closed {
             self.radiation
-                .configure(*self.areas.last().unwrap(), rate, RADIATION_BAFFLE);
+                // NoseLine uses the fully baffled nostril, independently of the lip baffle.
+                .configure(*self.areas.last().unwrap(), rate, 1.0);
         }
     }
     /// Scatter and propagate after the owner computes the outgoing port wave.

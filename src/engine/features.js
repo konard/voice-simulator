@@ -17,12 +17,18 @@ export const ENGINE_FEATURES = Object.freeze([
   feature(
     'solver.fdtd3d',
     ['src/acoustics/fdtd3d.js', 'src/acoustics/fdtd-kernel.js'],
-    { solver: 'fdtd3d', dx: 2 }
+    { solver: 'fdtd3d', dx: 3 },
+    'ˈa'
   ),
   feature(
     'solver.fdtd2d',
-    ['src/acoustics/fdtd2d.js', 'src/acoustics/nose-line.js'],
-    { solver: 'fdtd2d', dx: 1 }
+    [
+      'src/acoustics/fdtd2d.js',
+      'src/acoustics/nose-line.js',
+      'src/acoustics/sheet-model.js',
+    ],
+    { solver: 'fdtd2d', dx: 1 },
+    'ˈanla'
   ),
   feature('source.lf', ['src/acoustics/glottis.js']),
   feature('source.folds', ['src/acoustics/folds.js'], { source: 'folds' }),
@@ -64,14 +70,9 @@ export const ENGINE_FEATURES = Object.freeze([
     'mode.phonation',
     ['src/acoustics/glottis.js', 'src/articulation/phonation.js'],
     {},
-    '{V̤ ˈa V̤}'
+    'ˈa̤a̰a̤'
   ),
-  feature(
-    'mode.effort',
-    ['src/articulation/effort.js'],
-    { markup: 'inline' },
-    '[loud]a[/loud]'
-  ),
+  feature('mode.effort', ['src/articulation/effort.js'], {}, '{f ˈa f}'),
   feature('articulators', ['src/articulation/tract-shape.js'], {
     head: { jawPosture: 0.2, larynxPosture: 0.1 },
   }),
@@ -90,11 +91,6 @@ export const JS_ONLY = Object.freeze(
       module: 'src/acoustics/voxel-model.js',
       reason:
         'Builds static geometry once in the JS host, packed for the Rust solver.',
-    },
-    {
-      module: 'src/acoustics/sheet-model.js',
-      reason:
-        'Builds static 2D geometry once in the JS host, packed for the Rust solver.',
     },
     {
       module: 'src/acoustics/sinuses.js',

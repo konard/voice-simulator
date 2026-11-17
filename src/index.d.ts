@@ -1509,6 +1509,26 @@ export declare function loadEngineModuleSync(
 export type EngineName = 'auto' | 'rust' | 'js';
 /** The values of the `engine` option. */
 export declare const ENGINE_NAMES: readonly EngineName[];
+/** A short deterministic probe and its allowed numerical error. */
+export interface EngineFeature {
+  readonly id: string;
+  readonly modules: readonly string[];
+  readonly tolerance:
+    | { readonly kind: 'samples'; readonly maxError: number }
+    | { readonly kind: 'spectrum'; readonly maxDb: number };
+  readonly probe: {
+    readonly text?: string;
+    readonly ipa?: string;
+    readonly options: Readonly<SynthesizeOptions>;
+  };
+}
+/** Frozen inventory of the JavaScript numerical engine. */
+export declare const ENGINE_FEATURES: readonly EngineFeature[];
+/** Modules intentionally kept in the JavaScript host, with reasons. */
+export declare const JS_ONLY: readonly {
+  readonly module: string;
+  readonly reason: string;
+}[];
 /** Options of createEngine and getEngine. */
 export interface EngineOptions {
   engine?: EngineName | Engine;
@@ -1549,13 +1569,15 @@ export declare class Engine {
   /** Why the engine is JavaScript under `'auto'`, else null. */
   readonly reason: string | null;
   readonly module: EngineModule | null;
-  /** Optional engine features in use. */
+  /** Renderers handed to JavaScript because WebAssembly could not load. */
+  readonly fallbacks: number;
+  readonly fallbackReasons: readonly string[];
+  /** Capabilities reported by the loaded engine. */
   features(): string[];
-  /** Why this engine renders the options in JavaScript, or null. */
+  /** Why options are unsupported, or null. No automatic render handoff. */
   supports(renderOptions?: RenderOptions): string | null;
   /**
-   * A RustVoiceRenderer when this is the Rust engine and it supports the
-   * options, else a VoiceRenderer. Free a Rust renderer with `free()`.
+   * A RustVoiceRenderer for Rust, or a VoiceRenderer for JavaScript. Free a Rust renderer with `free()`.
    */
   createRenderer(plan: Plan, renderOptions?: RenderOptions): EngineRenderer;
   /** Drop the engine and its cache entry, and end its helper threads. */
@@ -1578,10 +1600,10 @@ export declare function getEngine(
   options?: EngineName | Engine | EngineOptions
 ): Engine;
 /**
- * VoiceRenderer with the waveguide (issue 22) or the 3D FDTD solver (issue
- * 23) on the Rust engine: the same samples within parity class B. Options
- * the engine does not handle (`solver` other than `'waveguide'` and
- * `'fdtd3d'`, `device`, `source: 'folds'`, `bandLimit <= 0`) throw an
+ * VoiceRenderer with the waveguide, 2D or 3D solver on the Rust engine:
+ * the same samples within parity class B, including folds and whisper.
+ * Options the engine does not handle (custom solvers, WebGPU `device`,
+ * `bandLimit <= 0`) throw an
  * Error with `code === 'ENGINE_UNSUPPORTED'`. With `'fdtd3d'` the voxel
  * model is `options.model`, or the one Fdtd3d builds from `dx`,
  * `microphone`, `enclosure`, `piriform` and `vallecula`. Call free() when
