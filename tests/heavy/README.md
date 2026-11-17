@@ -21,15 +21,15 @@ locally, or in the manually started GitHub Actions workflow
 Files are named `<suite>-<topic>.test.js`, for example
 `performance-tiers.test.js`. The suites are:
 
-| Suite         | What its tests do                                             |
-| ------------- | ------------------------------------------------------------- |
-| `quality`     | compare rendered speech with recordings and report the scores |
-| `recognition` | recognise datasets of recorded speech                         |
-| `roundtrip`   | text to audio to text                                         |
-| `copy`        | copy a voice from recordings                                  |
-| `performance` | measure render time and the real-time factor                  |
-| `gpu`         | run the WebGPU solver                                         |
-| `lexicon`     | measure how much of real text the pronunciation lexicons read |
+| Suite         | What its tests do                                                                |
+| ------------- | -------------------------------------------------------------------------------- |
+| `quality`     | compare rendered speech with recordings and report the scores                    |
+| `recognition` | recognise datasets of recorded speech                                            |
+| `roundtrip`   | text to audio to text                                                            |
+| `copy`        | copy a voice from recordings (20 seeded heads and all golden speakers, issue 63) |
+| `performance` | measure render time and the real-time factor                                     |
+| `gpu`         | run the WebGPU solver                                                            |
+| `lexicon`     | measure how much of real text the pronunciation lexicons read                    |
 
 `--suite all` (the default) runs every `*.test.js` file of this folder.
 

@@ -1251,3 +1251,11 @@ runner image: `rustup toolchain install` without arguments installs the
 toolchain of `rust-toolchain.toml` (rustup 1.29 warns that the automatic
 install of `rustup show` is deprecated), and `rustup show` then prints the
 active versions into the log.
+
+### Voice-fit numerics (issue 63)
+
+`voice_fit` ports the fixed-bin quantile/MAD estimator, inverse calibration,
+weighted feature objective, prior penalty and bounded Nelder–Mead search.
+`tests/voice-fit-rust-parity.test.js` exercises the WebAssembly histogram,
+distance and simplex exports against JavaScript (class B, relative limit
+1e-6). The JavaScript fitter orchestrates the shared recognition stages.

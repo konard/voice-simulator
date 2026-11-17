@@ -208,7 +208,7 @@ function usage() {
     '      --box-absorption <0-1>  Wall absorption of the box (default 0.2)',
     '      --ipa             Treat <text> as IPA',
     '      --transcript <t>  What the recording says (closer match)',
-    '      --iterations <n>  Renders while matching (default 4, max 12)',
+    '      --iterations <n>  Fit rounds of 10 renders (default 4, max 12)',
     '      --seconds <s>     Audio per benchmark measurement (default 0.3)',
     '      --repeats <n>     Benchmark measurements per tier, median (default 5)',
     '      --quick           Benchmark like the app on load: about 1 s of CPU',

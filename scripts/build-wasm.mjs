@@ -58,7 +58,9 @@ import { THREAD_MEMORY } from '../src/engine/layout.js';
  * IPA recognition with all merged cores measures 332 646 scalar and
  * 338 849 SIMD bytes, rounded up to 344 064 bytes (Rust 1.100.0).
  */
-export const WASM_SIZE_BUDGET = 344064;
+// Voice-fit histogram, objective and simplex exports: scalar 360757 bytes
+// (Rust 1.100.0), rounded up to the next 16384-byte boundary.
+export const WASM_SIZE_BUDGET = 376832;
 
 /**
  * Whether src/engine/voice-simulator-simd.wasm is shipped: only when it

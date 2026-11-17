@@ -1,0 +1,95 @@
+/** Scaled acoustic objective and cached aligned MCD. Unlicense, issue 63. */
+import { powerFrames, cepstra } from '../metrics/spectrum.js';
+import { dtw } from '../metrics/dtw.js';
+import { normalizeRms, silentFrames } from '../metrics/distortion.js';
+import {
+  stateFeatures,
+  histogramCount,
+  quantile,
+} from './voice-fit-statistics.js';
+export function featureVector(state) {
+  const f = stateFeatures(state),
+    log = (x) => (x > 0 ? Math.log(x) : null);
+  const values = [
+    log(f.f0),
+    f.f0Range,
+    log(f.formantSpacing),
+    ...f.formants.slice(0, 3).map(log),
+    ...['rd', 'h1h2Source', 'cpp', 'hnr'].map((k) =>
+      histogramCount(state, k) ? quantile(state, k) : null
+    ),
+    state.voicedFrames ? state.tilt / state.voicedFrames : null,
+    log(f.syllableRate),
+  ];
+  const scales = [0.03, 1.5, 0.02, 0.05, 0.05, 0.05, 0.3, 2, 1.5, 2, 3, 0.08];
+  const mel = state.mel.map((x) => x / Math.max(1, state.voicedFrames));
+  const mean = mel.reduce((a, b) => a + b, 0) / 24;
+  return {
+    values: [...values, ...mel.map((x) => x - mean)],
+    scales: [...scales, ...Array(24).fill(3)],
+  };
+}
+export function vectorDistance(
+  target,
+  candidate,
+  transcript = false,
+  mcd = null
+) {
+  let sum = 0,
+    weight = 0;
+  target.values.forEach((x, i) => {
+    const y = candidate.values[i];
+    if (
+      x === null ||
+      y === null ||
+      !Number.isFinite(x) ||
+      !Number.isFinite(y)
+    ) {
+      return;
+    }
+    const w = i >= 12 && !transcript ? 0.3 : 1;
+    sum += w * ((y - x) / target.scales[i]) ** 2;
+    weight += w;
+  });
+  if (transcript && Number.isFinite(mcd)) {
+    sum += 4 * mcd ** 2;
+    weight += 4;
+  }
+  return weight ? Math.sqrt(sum / weight) : Infinity;
+}
+
+function prepare(samples, rate) {
+  const power = powerFrames(normalizeRms(samples), rate);
+  return { cepstra: cepstra(power, rate), silent: silentFrames(power) };
+}
+/** Same normalization, silence mask and formula as melCepstralDistortion;
+ * retain the target spectra once for every search for repeated comparisons. */
+export function createMcdMetric(recording, rate) {
+  const target = prepare(recording, rate),
+    a = target.cepstra.map((c) => c.subarray(1));
+  return (render) => {
+    const candidate = prepare(render, rate),
+      b = candidate.cepstra.map((c) => c.subarray(1));
+    if (!a.length || !b.length) {
+      return Infinity;
+    }
+    const { path } = dtw(a, b, { band: 0.25 });
+    let sum = 0,
+      count = 0;
+    for (const [i, j] of path) {
+      if (target.silent[i]) {
+        continue;
+      }
+      let squared = 0;
+      for (let k = 0; k < a[i].length; k++) {
+        squared += (a[i][k] - b[j][k]) ** 2;
+      }
+      sum += (10 / Math.LN10) * Math.sqrt(2 * squared);
+      count++;
+    }
+    return count ? sum / count : 0;
+  };
+}
+export function alignedMcd(recording, render, sampleRate) {
+  return createMcdMetric(recording, sampleRate)(render);
+}

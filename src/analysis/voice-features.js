@@ -16,6 +16,11 @@
  * - syllable rate from peaks of the loudness envelope.
  */
 
+import {
+  accumulate,
+  emptyState,
+  stateFeatures,
+} from './voice-fit-statistics.js';
 import { estimateFormants } from '../acoustics/analysis.js';
 import { Biquad } from '../acoustics/filters.js';
 import { SPEED_OF_SOUND } from '../acoustics/transfer.js';
@@ -368,7 +373,7 @@ function countSyllables(levels, voiced) {
  *   telephone speech). `formants` always has four entries; those that
  *   were not measured are 0.
  */
-export function analyzeVoice(samples, sampleRate, options = {}) {
+export function analyzeLegacyVoice(samples, sampleRate, options = {}) {
   const limit = Math.floor((options.maxDuration ?? 30) * sampleRate);
   const input =
     samples.length > limit
@@ -416,13 +421,15 @@ export function analyzeVoice(samples, sampleRate, options = {}) {
   for (let pick = 0; pick < voicedIndices.length; pick += stride) {
     const index = voicedIndices[Math.floor(pick)];
     const start = index * hop;
-    const formants = estimateFormants(signal, rate, {
-      start: start / rate,
-      duration: 0.03,
-      count: formantCount,
-      analysisRate: rate,
-      order,
-    });
+    const formants = options.diagnosticsOnly
+      ? []
+      : estimateFormants(signal, rate, {
+          start: start / rate,
+          duration: 0.03,
+          count: formantCount,
+          analysisRate: rate,
+          order,
+        });
     formants.slice(0, 4).forEach((value, order) => tracks[order].push(value));
     if (formants.length >= 3) {
       spacings.push(formantSpacing(formants));
@@ -462,4 +469,15 @@ export function analyzeVoice(samples, sampleRate, options = {}) {
           ) / activeSeconds
         : 0,
   };
+}
+
+/** Shared stage-A statistics; legacy diagnostics remain available internally. */
+export function analyzeVoice(samples, sampleRate, options = {}) {
+  const features = stateFeatures(
+    accumulate(emptyState(), samples, sampleRate, options)
+  );
+  delete features.rd;
+  delete features.cpp;
+  delete features.h1h2Source;
+  return features;
 }

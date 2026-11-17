@@ -680,3 +680,9 @@ export {
   GRID,
   tractResponse,
 } from './recognition/codebook.js';
+
+export {
+  fitVoice,
+  fitVoiceSteps,
+  createVoiceFitter,
+} from './analysis/voice-fit.js';

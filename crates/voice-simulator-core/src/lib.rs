@@ -39,4 +39,5 @@ pub mod resample;
 pub mod solver;
 pub mod source_state;
 pub mod stages;
+pub mod voice_fit;
 pub mod waveguide;

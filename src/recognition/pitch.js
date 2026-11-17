@@ -718,6 +718,13 @@ function createMarker(frames, track, settings) {
       addPeriods(frames, sums, marks);
       track.marks = storage.subarray(0, length);
       setPerturbation(track, sums);
+      // Additive sufficient statistics; periods are seconds so stretches
+      // recorded at different sample rates can be pooled by voice fitting.
+      track.perturbation = {
+        ...sums,
+        period: sums.period / rate,
+        periodDiff: sums.periodDiff / rate,
+      };
     },
   };
 }

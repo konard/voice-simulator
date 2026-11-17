@@ -290,9 +290,8 @@ names)` a whole utterance, and `vrmVowelBinds(gltfJson)` reads the morph
   formants fitted to the men's, women's and children's means of
   Hillenbrand et al. (1995), and a posterior glottal chink (`glottalChink`)
   that gives women and children their measured spectral tilt.
-- **Copy a voice**: `matchVoice` analyses a recording (f0, formants,
-  vocal-tract length, H1-H2, HNR, speaking rate) and searches for the head
-  that sounds most like it; in the app, upload a file or record yourself.
+- **Copy a voice**: `fitVoice` estimates parameters and uncertainties; `matchVoice` analyses a recording (f0, formants,
+  vocal-tract length, H1-H2, HNR, speaking rate) and searches for the head that sounds most like it; in the app, upload a file or record yourself.
 - **Microphone and room**: place the microphone anywhere around the head
   (distance, azimuth, elevation, 1/r fall-off and delay), add a room
   reverb (eight presets or any shoebox with an RT60), or let the 3D solver
@@ -561,19 +560,7 @@ much of the FLEURS and held-out AISHELL-3 text the lexicons read.
 
 ### Comparing recordings
 
-`compareRecordings(reference, test)` measures how far a recording is from a
-reference, and `voice-simulator compare <reference> <test> [--json]` does the
-same for two audio files. Both recordings are resampled to
-min(16000 Hz, both rates), the silence at both ends is cut (frames more than
-40 dB below the loudest), both are scaled to an RMS of 0.1 and aligned by
-dynamic time warping (DTW; Sakoe & Chiba 1978) on the mel cepstra c1 to c13.
-Every metric is then taken along the alignment. Frames are 0.025 s long with
-a Hann window, taken every 0.01 s, with a 512-point FFT. Before a logarithm,
-bin powers and mel filter energies weaker than 60 dB below the strongest one
-of the same recording are raised to that level (`DYNAMIC_RANGE_DB`, option
-`range`), so an empty band costs at most the dynamic range. LSD and MCD skip
-the pairs whose reference frame is silent (40 dB below the loudest reference
-frame): pauses and the background noise are not speech to compare with.
+`compareRecordings(reference, test)` measures how far a recording is from a reference, and `voice-simulator compare <reference> <test> [--json]` does the same for two audio files. Both recordings are resampled to min(16000 Hz, both rates), the silence at both ends is cut (frames more than 40 dB below the loudest), both are scaled to an RMS of 0.1 and aligned by dynamic time warping (DTW; Sakoe & Chiba 1978) on the mel cepstra c1 to c13. Every metric is then taken along the alignment. Frames are 0.025 s long with a Hann window, taken every 0.01 s, with a 512-point FFT. Before a logarithm, bin powers and mel filter energies weaker than 60 dB below the strongest one of the same recording are raised to that level (`DYNAMIC_RANGE_DB`, option `range`), so an empty band costs at most the dynamic range. LSD and MCD skip the pairs whose reference frame is silent (40 dB below the loudest reference frame): pauses and the background noise are not speech to compare with.
 
 | Metric                                       | Field                             | Unit     | Formula                                                                           |
 | -------------------------------------------- | --------------------------------- | -------- | --------------------------------------------------------------------------------- |
@@ -588,16 +575,9 @@ frame): pauses and the background noise are not speech to compare with.
 | Formant errors                               | `formants.f1` … `f3`              | Hz and % | mean \|F test − F reference\| over voiced frames with formants in both            |
 | Timing error                                 | `timing.rmsSeconds`, `maxSeconds` | s        | per pair d = j·hop − i·hop·(Tt / Tr)                                              |
 
-Pitch comes from YIN (de Cheveigné & Kawahara 2002) at 11025 Hz on 0.04 s
-windows; a frame is unvoiced when it is quieter than 10 % of the 95th
-percentile level or its aperiodicity is 0.35 or more. Formants come from LPC
-on 0.03 s of each voiced frame.
+Pitch comes from YIN (de Cheveigné & Kawahara 2002) at 11025 Hz on 0.04 s windows; a frame is unvoiced when it is quieter than 10 % of the 95th percentile level or its aperiodicity is 0.35 or more. Formants come from LPC on 0.03 s of each voiced frame.
 
-`errorRate(reference, hypothesis, unit)` compares two transcripts by the
-Levenshtein distance: the word error rate (WER, `unit = 'word'`), the
-character error rate (CER, `'char'`) and the phoneme error rate (PER,
-`'phone'`, IPA without stress marks and tones), each a fraction of the
-reference length.
+`errorRate(reference, hypothesis, unit)` compares two transcripts by the Levenshtein distance: the word error rate (WER, `unit = 'word'`), the character error rate (CER, `'char'`) and the phoneme error rate (PER, `'phone'`, IPA without stress marks and tones), each a fraction of the reference length.
 
 ```js
 import { compareRecordings, errorRate, decodeAudio } from 'voice-simulator';
@@ -623,6 +603,25 @@ SPTK mel-generalised cepstrum: the female and the male preset head saying the
 same sentence on the `minimal` tier are 47 to 52 dB apart here, and two
 renderings with seeds 1 and 2 are 10 to 11 dB apart
 (`node experiments/issue-19-voice-pairs.mjs`).
+
+### Voice matching
+
+`fitVoice(samples, sampleRate, options)` estimates a full head configuration from one speaker. Optional `transcript`, `language` and `ipa` tell the refinement what was said; without text it renders `MATCH_TEXT`. Input can be telephone speech at 8000 Hz. At least 20 voiced frames are required.
+
+```js
+import { fitVoice, createVoiceFitter, saveVoice } from 'voice-simulator';
+const fit = fitVoice(samples, sampleRate, { transcript, maxRenders: 40 });
+const voiceFile = saveVoice({ head: fit.head });
+const listener = createVoiceFitter();
+listener.update(firstChunk, sampleRate).update(nextChunk, sampleRate);
+const estimate = listener.result(); // statistics only
+```
+
+The result contains `head`, `parameters`, `preset`, `features`, `rendered`, `distance`, `renders`, `voicedDuration` and JSON `state`. Each parameter has `value`, `sd`, `frames` and `source` (`statistics`, `refined` or `default`). The SD is a rough indicator, **not a confidence interval**. Unheard head shape parameters keep defaults. `refine: false` uses statistics without rendering; `parts` selects `tract`, `pitch`, `source` and/or `rate`.
+
+Refinement uses a bounded deterministic simplex, waveguide renders at 16000 Hz, and aligned mel-cepstral distortion when text is supplied. `seed` defaults to 1 and `maxRenders` to 40. `onStep` runs after every render; `fitVoiceSteps` yields stage A and each improvement, then returns the result. No-refinement results have `rendered: null`, `distance: Infinity`.
+
+Resume with `createVoiceFitter({ state: JSON.parse(savedState) })` or pass `state` to `fitVoice` to add another stretch. State holds fixed histograms and sums, never audio. `listener.result({ refine: true, samples, sampleRate })` refines an explicitly supplied stretch. `source: 'folds'` searches physical fold settings. The public `hnr` diagnostic retains pitch straightening; the fitting objective uses the reliable inverse-filter HNR histogram. `matchVoice` and `matchVoiceSteps` keep their five result keys and map each legacy `iterations` round to ten renders; the CLI `match` uses this wrapper.
 
 ### Analysis front end
 

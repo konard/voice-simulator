@@ -3702,7 +3702,7 @@ export declare function analyzeVoice(
 export interface VoiceMatchOptions {
   /** Restrict the starting person to one preset. */
   preset?: HeadPresetName;
-  /** Renders (default 4, at most 12). */
+  /** Rounds of ten renders (default 4, at most 12). */
   iterations?: number;
   /** What the recording says; the renders then say the same words. */
   transcript?: string;
@@ -4389,3 +4389,17 @@ export {
   type CodebookQuery,
   type CodebookFrame,
 } from './recognition/codebook.js';
+
+export {
+  fitVoice,
+  fitVoiceSteps,
+  createVoiceFitter,
+  type VoiceFitPart,
+  type VoiceFitParameter,
+  type VoiceFitState,
+  type VoiceFitStep,
+  type VoiceFitOptions,
+  type VoiceFitFeatures,
+  type VoiceFitResult,
+  type VoiceFitter,
+} from './analysis/voice-fit.js';
