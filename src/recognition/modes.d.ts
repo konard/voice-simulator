@@ -1,4 +1,10 @@
-import type { Mode, Voice, VoiceFile, HeadConfig } from '../index.js';
+import type {
+  Mode,
+  PartialMode,
+  Voice,
+  VoiceFile,
+  HeadConfig,
+} from '../index.js';
 
 /** Seconds and phonetic spelling from the preceding text recognition step. */
 export interface ModeWord {
@@ -54,8 +60,5 @@ export function recognizeModes<T extends ModeRecognitionInput>(
 export function toPlanModes(modes: RecognitionModeSpan[]): {
   from: number;
   to: number;
-  mode: Partial<Omit<Mode, 'phonation' | 'emotion'>> & {
-    phonation?: Partial<Mode['phonation']>;
-    emotion?: Partial<Mode['emotion']>;
-  };
+  mode: PartialMode;
 }[];

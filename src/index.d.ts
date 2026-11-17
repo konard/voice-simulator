@@ -167,13 +167,19 @@ export interface Mode {
   lang: string | null;
 }
 
+/** Mode overrides; unspecified properties retain their neutral defaults. */
+export type PartialMode = Partial<Omit<Mode, 'phonation' | 'emotion'>> & {
+  phonation?: Partial<Phonation>;
+  emotion?: Partial<Emotion>;
+};
+
 /**
  * A mode over IPA words `from` … `to` (exclusive), or over the sound
  * `sound` (its index among the `⸨…⸩` of the IPA).
  */
-export type ModeSpan =
-  | { from: number; to: number; mode: Mode }
-  | { sound: number; mode: Mode };
+export type ModeSpan<T = Mode> =
+  | { from: number; to: number; mode: T }
+  | { sound: number; mode: T };
 
 /** A mode of a plan from `start` to `end` seconds. */
 export type PlanMode = Mode & { start: number; end: number };
@@ -470,6 +476,8 @@ export interface SynthesizeOptions {
   lexicon?: CallLexicon;
   /** Treat the text as IPA. */
   ipa?: boolean;
+  /** Explicit word/sound modes, overriding marks in the input. */
+  modes?: ModeSpan<PartialMode>[];
   /**
    * Speech markup (docs/markup.md): a text that starts with `<speak` is
    * SSML unless `markup` is false; `true` also reads inline tags.
@@ -1038,7 +1046,7 @@ export declare function planUtterance(
     /** Values of the levels of COARTICULATION_RESISTANCE. */
     resistance?: Partial<Record<'high' | 'medium' | 'low' | 'none', number>>;
     /** Mode spans (IPA word indexes) instead of those of the IPA marks. */
-    modes?: ModeSpan[];
+    modes?: ModeSpan<PartialMode>[];
   }
 ): Plan;
 export declare function channelTargets(

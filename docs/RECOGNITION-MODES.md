@@ -36,6 +36,11 @@ const heard = recognizeModes(
 const plan = planUtterance(heard.ipa, { modes: toPlanModes(heard.modes) });
 ```
 
+For audio replay, pass the same spans to
+`synthesize(heard.ipa, { ipa: true, modes: toPlanModes(heard.modes) })`.
+Explicit spans replace modes parsed from IPA, preserving emotions and
+partial phonation settings that have no label in the output string.
+
 Use the same head configuration as synthesis for a known voice. Voice files
 and loaded voices are accepted too. The neutral sentence for each language
 is mirrored in `tests/fixtures/recognition/baseline.txt`; references are

@@ -5,6 +5,7 @@ import {
   toPlanModes,
   planUtterance,
   synthesize,
+  prepareUtterance,
 } from '../src/index.js';
 import { voiceBaseline } from '../src/recognition/mode-baseline.js';
 import { effortRamps } from '../src/recognition/mode-spans.js';
@@ -12,6 +13,22 @@ import { phraseSummary } from '../src/recognition/mode-features.js';
 import { HEAD } from './helpers/recognition-modes.js';
 
 describe('speech-mode integration', () => {
+  it('replays unlabelled emotion spans through the high-level synthesizer', () => {
+    const modes = toPlanModes([
+      { from: 0, to: 3, emotion: { name: 'angry', intensity: 1 } },
+    ]);
+    const result = prepareUtterance('{W a a a W}', {
+      ipa: true,
+      head: HEAD,
+      tier: 'minimal',
+      modes,
+    });
+    expect(result.modes[0].mode.emotion.name).toBe('angry');
+    expect(result.plan.modes.some((s) => s.emotion.name === 'angry')).toBe(
+      true
+    );
+    expect(result.plan.modes.some((s) => s.phonation.whisper > 0)).toBe(false);
+  });
   it('measures phrase pitch range across words with constant vowel pitch', () => {
     const words = [100, 200].map((pitch) => ({
       vowels: 1,
