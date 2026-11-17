@@ -50,9 +50,13 @@ else
   # Node's late fitting files otherwise start too close to the deadline.
   # Keep them sequential in this priority queue while ordinary files run.
   # Deno only needs the matching file started early.
-  priority_flags=()
-  if [ "${runtime}" = node ]; then priority_flags+=(--test-concurrency=1); fi
-  "$@" "${priority_flags[@]}" "${priority[@]}" &
+  # Bash 3.2 (macOS) treats an empty array as unset under nounset.
+  # Branch the invocation so Deno still starts its matching process.
+  if [ "${runtime}" = node ]; then
+    "$@" --test-concurrency=1 "${priority[@]}" &
+  else
+    "$@" "${priority[@]}" &
+  fi
   first_pid=$!
   "$@" "${remaining[@]}" &
   second_pid=$!

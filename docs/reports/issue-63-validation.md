@@ -738,3 +738,44 @@ legacy errors remain 0.119755/0.156910/0.138217 at 79/93/105.
 with its log in `ci-logs/simplex-check.log`. These observations establish
 the independent search correction and reproduce the remaining failures;
 they do not complete the issue or justify marking the PR ready.
+
+## macOS Bash 3.2 launcher correction
+
+Fresh [run 44125768493](https://github.com/konard/voice-simulator/actions/runs/44125768493),
+created November 17, 2026 at 16:26:22 UTC for
+`3970e7b6f2a3086bfca8e963dc35a75c20cbd329`, acquires all nine runtime runners.
+It reproduces the five acoustic assertions on Ubuntu. The macOS jobs also
+expose a separate scheduling bug: Bash 3.2 treats an empty array as unset
+under `set -u`. Deno's empty `priority_flags` expansion terminates its
+matching process before the runtime starts. The bulk process still runs.
+The bounded scheduling fixtures detect the missing process and exit 99.
+
+Downloaded job logs preserve the actual evidence:
+
+- `ci-logs/simplex-job-134189697958.log:705` reports
+  `scripts/run-runtime-tests.sh: line 55: priority_flags[@]: unbound variable`.
+  Its three scheduling assertions fail at 4932/4940/4948, alongside the
+  two voice-fit acceptance assertions; no matching tests run in that job.
+- `ci-logs/simplex-job-134189697746.log:5245` begins the Node/macOS
+  scheduling failures: expected 0/7/7, received 99 in each Deno fixture.
+- Node/Ubuntu completes in 201 s with the original five assertions
+  (`simplex-job-134189697904.log:5195/5209/5221/5235/5247`). Deno/Ubuntu
+  completes in 210 s with the same failures (4918/4928/4949/4957/4965).
+
+The launcher now invokes Node with its concurrency flag in one branch and
+Deno directly in the other. Neither branch expands an empty optional array.
+All file selections, overlap, failure propagation and reaping remain covered
+by `tests/bun-shards.test.js`; its failure message now includes captured
+stderr so a shell error is visible without a second reproduction.
+
+```sh
+node --test tests/bun-shards.test.js
+bun test tests/bun-shards.test.js
+deno test -A tests/bun-shards.test.js
+bash -n scripts/run-runtime-tests.sh
+```
+
+All eleven scheduling cases pass on each local runtime. The existing cases
+already fail before the fix on macOS as measured above; full CI must verify
+the corrected invocation with that operating system's actual Bash 3.2.
+This fixes a distinct launcher error and does not resolve the acoustic gates.

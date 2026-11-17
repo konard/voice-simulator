@@ -20,7 +20,10 @@ Objective: implement and verify the complete scope of issue 63 in PR 146.
       assertions fail, without a timeout (352.24 s locally). Source cycle
       detrending fixes B's pitch in isolation but still fails its rate;
       do not adopt this incomplete prototype.
-- [ ] Push the fix and supporting evidence; inspect current-head CI.
+- [x] Push the fix and supporting evidence; inspect current-head CI.
+- [x] Identify macOS Bash 3.2's empty-array nounset failure in fresh CI;
+      branch the Node/Deno invocation and keep the bounded scheduling fixtures.
+- [ ] Push the portable launcher fix and verify all current-head CI results.
 - [ ] Resolve remaining acoustic, landmark, heavy-suite and runtime gates;
       update PR evidence and mark ready only when every requirement passes.
 

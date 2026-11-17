@@ -11,3 +11,5 @@ Defer legacy pitch analysis to envelope peaks during candidate evaluation,
 then complete the winning render's diagnostics without changing its features.
 Retain improved simplex reflections when the render budget prevents contraction,
 including in the Rust numerical implementation.
+Start Deno's matching queue on macOS's Bash 3.2 without expanding an empty array
+under nounset; preserve process reaping and the existing suite deadlines.

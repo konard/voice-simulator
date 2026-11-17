@@ -78,7 +78,8 @@ describe('Runtime suite scheduling', () => {
               runtime === 'bun'
                 ? ['scripts/run-bun-tests.sh']
                 : ['scripts/run-runtime-tests.sh', runtime];
-            let result = 0;
+            let result = 0,
+              stderr = '';
             try {
               await runBounded(
                 'bash',
@@ -89,9 +90,10 @@ describe('Runtime suite scheduling', () => {
               if (error.timedOut || !Number.isInteger(error.code)) {
                 throw error;
               }
+              stderr = error.stderr;
               result = error.code;
             }
-            expect(result).toBe(failing === 'none' ? 0 : 7);
+            expect(result).toBe(failing === 'none' ? 0 : 7, stderr);
             const remaining = readdirSync('tests')
               .filter(
                 (file) =>
