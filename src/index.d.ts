@@ -4367,3 +4367,19 @@ export declare function parseObj(text: string): {
   positions: Float64Array;
   indices: Uint32Array;
 };
+// Simulator-generated articulatory codebook (issue 64).
+export {
+  buildCodebook,
+  serializeCodebook,
+  parseCodebook,
+  frameEnvelope,
+  CODEBOOK_CHANNELS,
+  GRID,
+  tractResponse,
+  type Codebook,
+  type CodebookOptions,
+  type CodebookStats,
+  type CodebookChannel,
+  type CodebookQuery,
+  type CodebookFrame,
+} from './recognition/codebook.js';

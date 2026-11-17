@@ -520,3 +520,60 @@ describe('Rust engine parity: aerodynamics (issue 35)', () => {
     expect(exports.vs_aero_steady_flow(1, 1, 1, 0)).toBe(-1);
   });
 });
+
+// Codebook construction stays in JS (#77); these numerical primitives are
+// shared with the Rust core and use parity class B (absolute dB error 1e-6).
+describe('Rust codebook primitives', () => {
+  it('matches the scalar oral response and detrended keys', async () => {
+    const { tractResponse, envelopeKey } =
+      await import('../src/recognition/codebook-features.js');
+    const engine = await loadRustEngine();
+    const pointer = engine.exports.vs_alloc(2048);
+    try {
+      const areas = Float64Array.from(
+        { length: 44 },
+        (_, i) => 0.1 + (i % 7) * 0.4
+      );
+      const frequencies = Float64Array.from(
+        { length: 50 },
+        (_, i) => 100 + i * 100
+      );
+      float64View(engine, pointer, 44).set(areas);
+      float64View(engine, pointer + 352, 50).set(frequencies);
+      expect(
+        engine.exports.vs_tract_response(
+          pointer,
+          44,
+          16.5,
+          pointer + 352,
+          50,
+          pointer + 752
+        )
+      ).toBe(0);
+      const expected = tractResponse(
+        areas,
+        16.5,
+        frequencies,
+        new Float64Array(50)
+      );
+      const actual = float64View(engine, pointer + 752, 50);
+      for (let i = 0; i < 50; i++) {
+        expect(Math.abs(actual[i] - expected[i])).toBeLessThan(1e-6);
+      }
+      for (const missing of [false, true]) {
+        const envelope = Float64Array.from({ length: 24 }, (_, i) =>
+          missing && i > 12 ? NaN : 10 * Math.sin(i) + i
+        );
+        float64View(engine, pointer, 24).set(envelope);
+        expect(engine.exports.vs_codebook_key(pointer, pointer + 192)).toBe(0);
+        const key = envelopeKey(envelope, new Float64Array(6));
+        const result = float64View(engine, pointer + 192, 6);
+        for (let i = 0; i < 6; i++) {
+          expect(Math.abs(result[i] - key[i])).toBeLessThan(1e-9);
+        }
+      }
+    } finally {
+      engine.exports.vs_free(pointer, 2048);
+    }
+  });
+});
