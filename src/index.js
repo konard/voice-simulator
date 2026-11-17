@@ -344,6 +344,16 @@ export {
   jitterToHead,
   trackPitch,
 } from './recognition/pitch.js';
+// Formant tracker (issue 60).
+export {
+  FORMANT_DEFAULTS,
+  NASAL_BAND_DROP,
+  NASAL_HIGH_DROP,
+  NASAL_RATIO,
+  createFormantTracker,
+  tractLengthFromFormants,
+  trackFormants,
+} from './recognition/formants.js';
 export { encodeWav, decodeWav, wavHeader } from './audio/wav.js';
 export {
   headLandmarks,

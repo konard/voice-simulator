@@ -1,0 +1,6 @@
+male@16000: L 16.16 (head 17.2) frames 1000 invalid 0 over20 0 mean % 7.3 5.3 3.1
+male@8000: L 16.31 (head 17.2) frames 1000 invalid 0 over20 0 mean % 7.2 5.4 3.4
+female@16000: L 14.08 (head 14.8) frames 1000 invalid 0 over20 0 mean % 10.3 5.5 4.1
+female@8000: L 14.22 (head 14.8) frames 1000 invalid 0 over20 158 mean % 14.0 5.3 4.0
+child@16000: L 13.09 (head 13.8) frames 1000 invalid 0 over20 171 mean % 15.6 4.8 2.8
+child@8000: L 13.82 (head 13.8) frames 1000 invalid 0 over20 195 mean % 15.4 4.4 4.4

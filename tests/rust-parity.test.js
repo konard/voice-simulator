@@ -577,3 +577,108 @@ describe('Rust codebook primitives', () => {
     }
   });
 });
+
+// The formant tracker of issue 60: its root finder (the LPC roots of the
+// orders p, p - 2 and p - 4, warm-started frame by frame) and the tract
+// length are in the Rust core; the numbering, the smoothing and the tract
+// length search stay in JS (#77). Parity class B: the same candidates per
+// frame, frequencies and bandwidths within FORMANT_LIMIT Hz once rounded
+// to f32 as the tracker stores them.
+const FORMANT_LIMIT = 0.01;
+
+describe('Rust formant primitives (issue 60)', () => {
+  it('finds the same formant candidates as trackFormants', async () => {
+    const { analyzeFrames, planUtterance, presetHeadConfig, renderPlan } =
+      await import('../src/index.js');
+    const { formantCandidates } =
+      await import('../src/recognition/formants.js');
+    const engine = await loadRustEngine();
+    const { vs_alloc: alloc, vs_free: free } = engine.exports;
+    const head = presetHeadConfig('female');
+    const plan = planUtterance('aːiːsuː', {
+      head,
+      durations: [0.15, 0.15, 0.1, 0.15],
+    });
+    for (const sampleRate of [16000, 8000]) {
+      const samples = renderPlan(plan, {
+        head,
+        solver: 'waveguide',
+        sampleRate,
+        seed: 1,
+      });
+      const frames = analyzeFrames(samples, sampleRate);
+      const expected = formantCandidates(frames);
+      const { count, order, rate } = frames;
+      const width = engine.exports.vs_formant_width(order);
+      expect(width).toBe(expected.width);
+      const stride = 1 + 3 * width;
+      const inBytes = count * order * 4;
+      const outBytes = count * stride * 8;
+      const input = alloc(inBytes);
+      const output = alloc(outBytes);
+      try {
+        float32View(engine, input, count * order).set(
+          frames.reflection.subarray(0, count * order)
+        );
+        expect(
+          engine.exports.vs_formant_candidates(
+            input,
+            count,
+            order,
+            rate,
+            700,
+            output
+          )
+        ).toBe(width);
+        const actual = float64View(engine, output, count * stride);
+        let candidates = 0;
+        let largest = 0;
+        for (let t = 0; t < count; t++) {
+          const row = t * stride;
+          expect(`${t}: ${actual[row]}`).toBe(`${t}: ${expected.count[t]}`);
+          for (let i = 0; i < expected.count[t]; i++) {
+            const slot = t * width + i;
+            largest = Math.max(
+              largest,
+              Math.abs(
+                Math.fround(actual[row + 1 + i]) - expected.frequency[slot]
+              ),
+              Math.abs(
+                Math.fround(actual[row + 1 + width + i]) -
+                  expected.bandwidth[slot]
+              )
+            );
+            expect(actual[row + 1 + 2 * width + i]).toBe(expected.rank[slot]);
+            candidates += 1;
+          }
+        }
+        console.error(
+          `formant candidates @${sampleRate}: ${count} frames, ${candidates} ` +
+            `candidates, largest difference ${largest} Hz`
+        );
+        expect(candidates).toBeGreaterThan(count);
+        expect(largest).toBeLessThan(FORMANT_LIMIT);
+      } finally {
+        free(input, inBytes);
+        free(output, outBytes);
+      }
+    }
+    for (const [f1, f2, f3] of [
+      [500, 1500, 2500],
+      [310, 2200, 3000],
+      [850, 1220, 2810],
+    ]) {
+      const { tractLengthFromFormants } = await import('../src/index.js');
+      expect(
+        Math.abs(
+          engine.exports.vs_formant_tract_length(f1, f2, f3) -
+            tractLengthFromFormants(f1, f2, f3)
+        )
+      ).toBeLessThan(1e-12);
+    }
+    expect(engine.exports.vs_formant_width(1)).toBe(-6);
+    expect(engine.exports.vs_formant_candidates(0, 1, 18, 16000, 700, 0)).toBe(
+      -1
+    );
+  });
+});

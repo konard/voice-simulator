@@ -25,6 +25,7 @@ pub mod fdtd2d;
 pub mod features;
 pub mod filters;
 pub mod folds;
+pub mod formants;
 pub mod frame;
 pub mod glottis;
 mod inverse_dsp;

@@ -113,3 +113,9 @@ committed as `docs/reports/engine-parity.md`; its passing tier report updates
 `performance-history.json` and `performance.md` through the existing trend
 command. This final commit contains documentation and measured reports only;
 the PR status checks verify it before the PR is marked ready, without merging.
+
+Main subsequently merged formant recognition (issue 60, bc76d97). Retained its
+new core module alongside folds and measured the combined wasm again: scalar
+335,481 bytes, SIMD 344,421. The existing rounding rule gives 360,448 bytes
+(352 KiB). The synthesis sources are unchanged by this upstream merge; the full
+performance suite is rerun to verify the combined binary before finalization.

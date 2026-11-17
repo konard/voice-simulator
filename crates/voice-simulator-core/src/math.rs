@@ -127,6 +127,12 @@ pub fn pow(x: f64, y: f64) -> f64 {
     libm::pow(x, y)
 }
 
+/// Angle of the point (x, y) in radians (`Math.atan2(y, x)`).
+#[inline]
+pub fn atan2(y: f64, x: f64) -> f64 {
+    libm::atan2(y, x)
+}
+
 /// Hyperbolic tangent.
 #[inline]
 pub fn tanh(x: f64) -> f64 {

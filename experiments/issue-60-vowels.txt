@@ -1,0 +1,16 @@
+tract length estimated
+  male@16000: frames 1000 invalid 0 over20 0 mean % 6.8 5.1 3.2 audit 7 5.2 3.6 above 0
+  male@8000: frames 1000 invalid 0 over20 0 mean % 6.8 5.4 3.4 audit 6.4 5.4 3.7 above 1
+  female@16000: frames 1000 invalid 0 over20 60 mean % 10.7 6.2 4.5 audit 12.2 6.8 6.1 above 0
+  female@8000: frames 1000 invalid 0 over20 223 mean % 13.3 6.1 4.2 audit 12 6.7 7.1 above 1
+  child@16000: frames 1000 invalid 85 over20 278 mean % 15.1 12.5 8.3 audit 16.7 12.3 6.6 above 2
+  child@8000: frames 1000 invalid 10 over20 211 mean % 12.1 11.5 5.7 audit 12.7 6.9 5.4 above 2
+  total invalid + over20 867, means above the audit 6
+tract length of the head
+  male@16000: frames 1000 invalid 0 over20 0 mean % 6.8 5.1 3.2 audit 7 5.2 3.6 above 0
+  male@8000: frames 1000 invalid 0 over20 0 mean % 6.8 5.4 3.4 audit 6.4 5.4 3.7 above 1
+  female@16000: frames 1000 invalid 0 over20 60 mean % 10.8 6.2 4.2 audit 12.2 6.8 6.1 above 0
+  female@8000: frames 1000 invalid 0 over20 217 mean % 13.3 6.1 4.1 audit 12 6.7 7.1 above 1
+  child@16000: frames 1000 invalid 0 over20 120 mean % 12.8 5.5 2.8 audit 16.7 12.3 6.6 above 0
+  child@8000: frames 1000 invalid 0 over20 198 mean % 13.3 5.1 5.1 audit 12.7 6.9 5.4 above 1
+  total invalid + over20 595, means above the audit 3
