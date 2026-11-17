@@ -11,6 +11,8 @@ import { resultFromPath, heardIpa } from './result.js';
 // word penalty lets a few long, unrelated words beat an almost exact phrase.
 export const ACOUSTIC_WEIGHT = 10;
 export const UNKNOWN_SOUND_COST = 2;
+// Final calibrated mixed-language costs; see experiments/issue-69-word-boundaries.mjs.
+export const MIXED_LANGUAGE_COSTS = { spanMismatch: 1, switch: 1 };
 
 function integerOption(value, name, fallback) {
   const n = value ?? fallback;
@@ -65,16 +67,72 @@ function unknownCandidates(tokens, from, end, options, knownSuffix) {
   });
 }
 
+function decoderCandidates(from, end, context) {
+  const { input, lexicons, options, exact, distance, knownSuffix } = context;
+  const { tokens } = input;
+  const { beam, given } = options;
+  const candidates = [];
+  for (const [language, lexicon] of lexicons) {
+    let found = exact
+      ? exactCandidates(tokens, from, end, lexicon, language)
+      : candidatesAt(tokens, from, end, lexicon, {
+          beam,
+          language,
+          distance,
+        });
+    if (given) {
+      found = found.filter((c) => c.to === end);
+    }
+    if (!exact) {
+      found = found.map((c) => ({ ...c, cost: c.cost * ACOUSTIC_WEIGHT }));
+    }
+    if (!exact || (given && !found.length)) {
+      found.push(
+        ...unknownCandidates(
+          tokens,
+          from,
+          end,
+          { ...options, language },
+          (end) => knownSuffix(end, lexicon, language)
+        )
+      );
+    }
+    candidates.push(...found.map((c) => ({ ...c, language })));
+  }
+  return candidates;
+}
+
+function continuationCost(input, lexicons, spans, candidate, partial) {
+  const from = candidate.from;
+  const lexicon = lexicons.get(candidate.language);
+  const changed =
+    partial.lastLanguage && partial.lastLanguage !== candidate.language;
+  const span = spans?.find((span) => span.from <= from && from < span.to);
+  const languageCost =
+    Number(Boolean(span && span.language !== candidate.language)) *
+      MIXED_LANGUAGE_COSTS.spanMismatch +
+    Number(Boolean(changed && !input.pauses.has(from))) *
+      MIXED_LANGUAGE_COSTS.switch;
+  return (
+    partial.cost +
+    candidate.cost +
+    wordCost(lexicon, changed ? null : partial.last, candidate.word) +
+    languageCost
+  );
+}
+
 export function decode(input, lexicon, options, exact) {
   const { tokens, boundaries } = input;
   const { beam, language, given } = options;
+  const lexicons = options.lexicons ?? new Map([[language, lexicon]]);
   const ends = [...boundaries].sort((a, b) => a - b);
   const best = Array.from({ length: tokens.length + 1 }, () => []);
   best[0] = [{ path: [], last: null, text: '', cost: 0 }];
   const distance = distanceCache();
   const suffixes = new Map();
-  function knownSuffix(end) {
-    if (!suffixes.has(end)) {
+  function knownSuffix(end, lexicon, language) {
+    const key = `${end}:${language}`;
+    if (!suffixes.has(key)) {
       const reachable = new Set([end]);
       for (let start = end - 1; start >= 0; start--) {
         if (
@@ -85,9 +143,9 @@ export function decode(input, lexicon, options, exact) {
           reachable.add(start);
         }
       }
-      suffixes.set(end, reachable);
+      suffixes.set(key, reachable);
     }
-    return suffixes.get(end);
+    return suffixes.get(key);
   }
   let boundaryIndex = 1;
   for (let from = 0; from < tokens.length; from++) {
@@ -99,33 +157,28 @@ export function decode(input, lexicon, options, exact) {
       continue;
     }
     best[from] = prune(best[from], beam);
-    let candidates = exact
-      ? exactCandidates(tokens, from, end, lexicon, language)
-      : candidatesAt(tokens, from, end, lexicon, { beam, language, distance });
-    if (given) {
-      candidates = candidates.filter((c) => c.to === end);
-    }
-    if (!exact) {
-      candidates = candidates.map((c) => ({
-        ...c,
-        cost: c.cost * ACOUSTIC_WEIGHT,
-      }));
-    }
-    if (!exact || (given && !candidates.length)) {
-      candidates.push(
-        ...unknownCandidates(tokens, from, end, options, knownSuffix)
-      );
-    }
+    const candidates = decoderCandidates(from, end, {
+      input,
+      lexicons,
+      options,
+      exact,
+      distance,
+      knownSuffix,
+    });
     for (const candidate of candidates) {
       for (const partial of best[from]) {
-        const cost =
-          partial.cost +
-          candidate.cost +
-          wordCost(lexicon, partial.last, candidate.word);
+        const cost = continuationCost(
+          input,
+          lexicons,
+          options.spans,
+          candidate,
+          partial
+        );
         best[candidate.to].push({
           cost,
           last: candidate.word,
-          text: `${partial.text}\t${candidate.word}`,
+          lastLanguage: candidate.language,
+          text: `${partial.text}\t${candidate.language}:${candidate.word}`,
           path: [...partial.path, candidate],
         });
       }
@@ -138,27 +191,67 @@ export function decode(input, lexicon, options, exact) {
   return prune(best[tokens.length], beam);
 }
 
+function decoderLanguages(options) {
+  const spans = options.spans;
+  if (spans !== undefined && !Array.isArray(spans)) {
+    throw new TypeError('spans must be an array');
+  }
+  const languages = [...new Set((spans ?? []).map((span) => span.language))];
+  languages.forEach(checkLanguage);
+  const language =
+    languages.length === 1 ? languages[0] : (options.language ?? 'en');
+  checkLanguage(language);
+  return { spans, languages, language };
+}
+
+function validateSpans(spans, input) {
+  if (spans?.length) {
+    let from = 0;
+    for (const span of spans) {
+      if (
+        span.from !== from ||
+        !Number.isSafeInteger(span.to) ||
+        span.to <= from ||
+        span.to > input.tokens.length
+      ) {
+        throw new RangeError(
+          'spans must cover all sounds in order, without gaps or overlaps'
+        );
+      }
+      from = span.to;
+    }
+    if (from !== input.tokens.length) {
+      throw new RangeError(
+        'spans must cover all sounds in order, without gaps or overlaps'
+      );
+    }
+  }
+}
+
 /**
- * Turn IPA sounds into lower-case words of one explicitly chosen language.
+ * Turn IPA sounds into lower-case words of one language or supplied language spans.
  * An exact full decoding takes precedence over a decoding that changes
  * sounds. This preserves the forward pronunciation on noiseless input and
  * also makes the common exact path linear in input length × word length.
  * Approximate decoding is used when no exact full path exists.
  */
 export function ipaToText(ipa, options = {}) {
-  const language = options.language ?? 'en';
-  checkLanguage(language);
+  const { spans, languages, language } = decoderLanguages(options);
   const nbest = integerOption(options.nbest, 'nbest', 1);
   const beam = integerOption(options.beam, 'beam', 32);
   const boundaries =
     options.boundaries ??
-    (typeof ipa === 'string' && /\s/u.test(ipa) && language !== 'zh'
+    (typeof ipa === 'string' &&
+    /\s/u.test(ipa) &&
+    language !== 'zh' &&
+    !languages.includes('zh')
       ? 'given'
       : 'search');
   if (!['given', 'search'].includes(boundaries)) {
     throw new RangeError('boundaries must be "given" or "search"');
   }
   const input = recognitionInput(ipa, boundaries);
+  validateSpans(spans, input);
   if (!input.tokens.length) {
     return {
       text: '',
@@ -172,6 +265,12 @@ export function ipaToText(ipa, options = {}) {
     language,
     beam: Math.max(beam, nbest),
     given: boundaries === 'given',
+    ...(languages.length > 1
+      ? {
+          spans,
+          lexicons: new Map(languages.map((lang) => [lang, getLexicon(lang)])),
+        }
+      : {}),
   };
   const paths = decode(input, lexicon, settings, true);
   if (paths.length < nbest) {

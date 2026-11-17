@@ -10,6 +10,14 @@ import type {
 
 export type LanguageCode = 'en' | 'ru' | 'hi' | 'zh';
 export {
+  identifyLanguage,
+  languageShares,
+  type LanguageSpan,
+  type LanguageShare,
+  type LanguageIdentification,
+  type LanguageIdentificationOptions,
+} from './recognition/language-id.js';
+export {
   ipaToText,
   type IpaToTextOptions,
   type IpaToTextResult,
