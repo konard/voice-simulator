@@ -21,6 +21,8 @@ const vendorChunks = [
   // src/g2p/lexicon/ since issue 47.
   [/[\\/]src[\\/]g2p[\\/][a-z]+-dict\.js$/, 'g2p-dict'],
   [/[\\/]src[\\/]g2p[\\/]lexicon[\\/][a-z]+\.js$/, 'g2p-dict'],
+  // Shared recognition DSP would put the matching worker over 500 kB.
+  [/[\\/]src[\\/]recognition[\\/]/, 'recognition'],
 ];
 
 export function vendorChunk(id) {
