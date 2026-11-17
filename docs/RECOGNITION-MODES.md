@@ -40,6 +40,11 @@ For audio replay, pass the same spans to
 `synthesize(heard.ipa, { ipa: true, modes: toPlanModes(heard.modes) })`.
 Explicit spans replace modes parsed from IPA, preserving emotions and
 partial phonation settings that have no label in the output string.
+When unnamed activation overlaps effort, rate or phonation, the adapter
+retains it with `emotion.realized: true`: those fields already account for
+its acoustic evidence. The planner preserves this observation without
+applying another emotional pitch, rate or effort change. A standalone
+activation span and named emotions retain their synthesis effects.
 
 Use the same head configuration as synthesis for a known voice. Voice files
 and loaded voices are accepted too. The neutral sentence for each language

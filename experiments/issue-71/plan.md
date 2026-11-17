@@ -30,15 +30,15 @@ Verification commands and measured results will be recorded alongside the
 implementation and in the final PR description. Heavy work runs sequentially
 or in CI within the 2.92 GiB container budget.
 
-Measured locally: focused Node matrix 127/127 passing, eight plain sentences
+Measured locally: focused Node matrix 141/141 passing, eight plain sentences
 empty; effort 14/16 exact, 16/16 within one step; whisper 4/4; other
 labels 39/40; telephone whisper 4/4, others 53/56; emotion names 46/48,
 activation signs 28/28. All twelve reference classes separate in all four
-languages. Boundary, crescendo, unknown-voice and replay checks pass.
+languages. Boundary, crescendo, unknown-voice and all fifteen English label replay checks pass.
 
 Heavy first 100 RESD rows: activation 55%, names 11%; golden false alarms
 1/24. Initial ratchets 50%, 6%, <=1/24. Report in docs/reports.
-Pause sounds and partial-mode planner integration: 11/11 passing. Dataset
+Pause sounds and partial-mode planner integration: 12/12 passing. Dataset
 registry/download checks: 17/17 passing. Focused Rust core test passes.
 `npm run check` passes. Rust WASM parity, Node/Bun/Deno and full matrix
 verification are assigned to current-head CI before finalization.
@@ -77,3 +77,12 @@ per-probe CPU budget (log 4683, engine-features line 55); the probe took
 Thread CPU accounting retains the 1 s limit; focused Deno 20/20 passing.
 Merged main eeb2869 including language recognition without removing either
 API. Local bounded ultra benchmark: Rust/JS 0.977, three interleaved runs.
+
+Expanded replay audit: all 15 English labels now retain the exact recognized
+word spans through synthesis and a second recognition. Previously pp became
+bored (regression log activation-replay-before.log, line 24): activation
+was commanding a second change of pitch, effort and rate. `toPlanModes`
+retains overlapping anonymous activation with `emotion.realized: true`;
+named presets and standalone activation still produce their effects. Node
+focused recognition/integration: 153/153 passing. Heavy recognition run
+44071583815 passes all four files, including RESD and golden gates.

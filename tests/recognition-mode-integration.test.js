@@ -113,14 +113,17 @@ describe('speech-mode integration', () => {
           effort: 0.75,
           effortEnd: 0.75,
           rate: 1.3,
-          emotion: { arousal: 0.4 },
+          emotion: { arousal: 0.4, realized: true },
           phonation: { breathy: 0.33 },
         },
       },
       {
         from: 3,
         to: 4,
-        mode: { emotion: { arousal: 0.4 }, phonation: { breathy: 0.33 } },
+        mode: {
+          emotion: { arousal: 0.4, realized: true },
+          phonation: { breathy: 0.33 },
+        },
       },
     ]);
     const plan = planUtterance('wʌn tu θri fɔɹ', { head: HEAD, modes });
@@ -128,6 +131,9 @@ describe('speech-mode integration', () => {
       (s) => s.effort === 0.75 && s.emotion.arousal === 0.4
     );
     expect(combined.phonation.breathy).toBe(0.33);
+    expect(combined.rate).toBe(1.3);
+    expect(combined.emotion.realized).toBe(true);
+    expect(combined.emotionPitch).toBe(undefined);
   });
   it('snapshots a mutable caller head before caching reference features', () => {
     const head = { ...HEAD };
@@ -151,5 +157,28 @@ describe('speech-mode integration', () => {
       }
       expect(failed).toBe(true);
     }
+  });
+});
+
+describe('recognized activation replay', () => {
+  it('realizes standalone activation while retaining overlapping observations', () => {
+    const observations = [
+      { from: 0, to: 3, emotion: { arousal: 0.7 }, notation: null },
+      { from: 0, to: 2, effort: 0.75 },
+    ];
+    const modes = toPlanModes(observations);
+    expect(observations[0].emotion.realized).toBe(undefined);
+    const plan = planUtterance('wʌn tu θri', { head: HEAD, modes });
+    expect(
+      plan.modes.some(
+        (s) => s.emotion.arousal === 0.7 && s.emotion.realized && s.rate === 1
+      )
+    ).toBe(true);
+    expect(
+      plan.modes.some(
+        (s) =>
+          s.emotion.arousal === 0.7 && !s.emotion.realized && s.emotionPitch > 0
+      )
+    ).toBe(true);
   });
 });

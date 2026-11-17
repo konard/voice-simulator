@@ -145,6 +145,8 @@ export interface Phonation {
 }
 
 export interface Emotion {
+  /** Acoustic observation already represented by the mode's physical fields. */
+  realized?: boolean;
   /** A name of EMOTION_PRESETS, e.g. 'angry'; 'neutral' by default. */
   name: string;
   /** 0 … 1; 1 when a named emotion is written without one. */

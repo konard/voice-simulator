@@ -233,27 +233,33 @@ describe('mode recognition', () => {
       recognize(audio, 'en').modes.some((s) => s.notation === 'crescendo')
     ).toBe(true);
   });
-  it('speaks what it heard on the same words', () => {
-    const audio = render('en', 'W');
-    const first = recognize(audio, 'en');
-    const modes = toPlanModes(first.modes);
-    const plan = planUtterance(first.ipa, { head: HEAD, modes });
-    expect(plan.modes.some((s) => s.phonation.whisper === 1)).toBe(true);
-    const replay = synthesize(first.ipa, {
-      ipa: true,
-      head: HEAD,
-      tier: 'minimal',
-      seed: 1,
-      engine: 'js',
-      modes,
+  for (const label of LABELS) {
+    it(`speaks ${label} again on the same words`, () => {
+      const audio = render('en', label);
+      const first = recognize(audio, 'en');
+      const modes = toPlanModes(first.modes);
+      const plan = planUtterance(first.ipa, { head: HEAD, modes });
+      expect(
+        plan.modes.some(
+          (s) => s.emotion.arousal === (modes[0].mode.emotion?.arousal ?? 0)
+        )
+      ).toBe(true);
+      const replay = synthesize(first.ipa, {
+        ipa: true,
+        head: HEAD,
+        tier: 'minimal',
+        seed: 1,
+        engine: 'js',
+        modes,
+      });
+      const second = recognize(replay, 'en');
+      const selected = (r) =>
+        r.modes
+          .filter((s) => s.notation && !s.sound)
+          .map(({ from, to, notation }) => ({ from, to, notation }));
+      expect(selected(second)).toEqual(selected(first));
     });
-    const second = recognize(replay, 'en');
-    const selected = (r) =>
-      r.modes
-        .filter((s) => s.phonation?.whisper === 1)
-        .map(({ from, to, notation }) => ({ from, to, notation }));
-    expect(selected(second)).toEqual(selected(first));
-  });
+  }
   it('retains fields, copies results, abstains on short phrases and honors modes:false', () => {
     const audio = render('en', 'f', 'Yes.');
     const input = {

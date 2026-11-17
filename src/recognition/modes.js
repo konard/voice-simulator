@@ -28,6 +28,19 @@ import {
 } from './mode-spans.js';
 import { recognizeSounds } from './mode-sounds.js';
 
+function retainActivationObservation(mode) {
+  // Activation describes the same acoustic evidence as physical labels.
+  // Keep it without commanding another pitch, effort and rate change.
+  // Named emotions remain synthesis presets.
+  if (
+    mode.emotion?.arousal !== undefined &&
+    !mode.emotion.name &&
+    (mode.effort !== undefined || mode.rate !== undefined || mode.phonation)
+  ) {
+    mode.emotion.realized = true;
+  }
+}
+
 /** Partial fields only: metadata never leaks into the synthesis plan. */
 export function toPlanModes(modes) {
   const words = modes.filter((span) => !span.sound);
@@ -63,6 +76,7 @@ export function toPlanModes(modes) {
           span.effort + (change * (to - span.from)) / (span.to - span.from);
       }
     }
+    retainActivationObservation(mode);
     result.push({ from, to, mode });
   }
   return result;

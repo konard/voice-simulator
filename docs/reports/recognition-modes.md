@@ -18,7 +18,9 @@ The golden set uses its annotated IPA with proportional neutral phone timing,
 without a fitted speaker voice. These alignment and voice limitations apply
 to the reported figures; they are not an end-to-end recognition benchmark.
 
-Per-recording decisions are in the JSON artifact.
+Per-recording decisions are in the JSON artifact of [Heavy checks run
+44071583815](https://github.com/konard/voice-simulator/actions/runs/44071583815),
+commit `5fe9e8db7eddae95aff4e5670b354422ea4d8387`. All four recognition files passed.
 
 ## Synthetic acceptance matrix
 
@@ -41,8 +43,8 @@ Mandarin); the detector receives only audio, timed IPA words and the voice.
 All twelve reference names remain separate classes (no pair is closer than
 1) in each language: neutral, angry, happy, sad, afraid, bored, surprised,
 disgusted, tender, sarcastic, confident, hesitant. Confusions are printed
-by the test. Word-boundary, crescendo, unknown-voice and whisper replay
-checks pass. Pause sounds, overlapping partial modes and input validation
+by the test. Word-boundary, crescendo, unknown-voice and all fifteen English label replay
+checks pass on the same word spans. Pause sounds, overlapping partial modes and input validation
 are checked in `tests/recognition-mode-integration.test.js`.
 
 The initial real-recording gates are activation >=50% and names >=6%
