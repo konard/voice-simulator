@@ -139,6 +139,10 @@ function createEvaluator(state, samples, sampleRate, o, theta0, context) {
       renders,
       distance,
       cost: value.cost,
+      penalty,
+      mcd,
+      head: { ...candidate },
+      features: value.rendered,
     });
     o.onStep?.({ step: renders, renders, distance, head: { ...candidate } });
     return value;

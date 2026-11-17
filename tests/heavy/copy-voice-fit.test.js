@@ -20,7 +20,14 @@ import { loadGolden } from '../helpers/golden.js';
 import { heavyLimit, writeReport } from './helpers/report.js';
 const TEXT =
   'The north wind and the sun were disputing which was the stronger.';
-const median = (x) => [...x].sort((a, b) => a - b)[Math.floor(x.length / 2)];
+const median = (x) => {
+  const sorted = [...x].sort((a, b) => a - b);
+  return (
+    (sorted[Math.floor((x.length - 1) / 2)] +
+      sorted[Math.ceil((x.length - 1) / 2)]) /
+    2
+  );
+};
 const errors = (head, truth) =>
   Object.fromEntries(
     ['vocalTractLength', 'pitch', 'speechRate', 'tenseness', 'breathiness'].map(

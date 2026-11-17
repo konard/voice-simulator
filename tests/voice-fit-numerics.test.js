@@ -10,6 +10,13 @@ import {
   copyState,
 } from '../src/analysis/voice-fit-statistics.js';
 import { vectorDistance } from '../src/analysis/voice-fit.js';
+import { createMcdMetric } from '../src/analysis/voice-fit-objective.js';
+import { powerFrames, cepstra } from '../src/metrics/spectrum.js';
+import { dtw } from '../src/metrics/dtw.js';
+import {
+  normalizeRms,
+  melCepstralDistortion,
+} from '../src/metrics/distortion.js';
 const consume = (g) => {
   let next = g.next();
   while (!next.done) {
@@ -30,6 +37,18 @@ describe('voice fitting numerics', () => {
     const clone = copyState(s);
     clone.histograms.dF[0]++;
     expect(s.histograms.dF[0]).toBe(0);
+    const even = emptyState();
+    for (const x of [600, 900, 1000, 1000]) {
+      addValue(even, 'dF', x);
+    }
+    // Median 950; absolute differences 350, 50, 50, 50 have MAD 50.
+    expect(medianSd(even, 'dF')).toBe((1.4826 * 50) / Math.sqrt(4 / 20));
+    const mixed = emptyState();
+    for (const x of [600, 800, 1000, 1200]) {
+      addValue(mixed, 'dF', x);
+    }
+    // Median 900; deviations 300, 100, 100, 300 interpolate to MAD 200.
+    expect(medianSd(mixed, 'dF')).toBe((1.4826 * 200) / Math.sqrt(4 / 20));
   });
   it('bounds evaluations and converges on a coupled objective deterministically', () => {
     const run = (budget) => {
@@ -66,6 +85,8 @@ describe('voice fitting numerics', () => {
     expect(
       Math.abs(vectorDistance(a, b, true, 3) - Math.sqrt(41 / 6)) < 1e-12
     ).toBe(true);
+    expect(vectorDistance(a, b, true, Infinity)).toBe(Infinity);
+    expect(vectorDistance(a, b, true, null)).toBe(Infinity);
   });
   it('inverts nonmonotone measured calibration without discarding samples', () => {
     const table = [
@@ -76,5 +97,30 @@ describe('voice fitting numerics', () => {
     ];
     expect(tableInverse(18, table)).toBe(0.25);
     expect(tableInverse(10, table)).toBe(0.75);
+  });
+});
+describe('voice fitting aligned distortion', () => {
+  it('matches the existing metric after alignment and reuses target preparation', () => {
+    const rate = 8000;
+    const signal = (length, frequency) =>
+      Float32Array.from({ length }, (_, i) =>
+        i < 400
+          ? 0
+          : Math.sin((2 * Math.PI * frequency * i) / rate) *
+            Math.sin((Math.PI * i) / length)
+      );
+    const target = signal(4000, 160);
+    const compare = createMcdMetric(target, rate);
+    for (const candidate of [target, signal(4500, 165), signal(3800, 220)]) {
+      const vectors = [target, candidate].map((samples) =>
+        cepstra(powerFrames(normalizeRms(samples), rate), rate).map((c) =>
+          c.subarray(1)
+        )
+      );
+      const { path } = dtw(...vectors, { band: 0.25 });
+      const expected = melCepstralDistortion(target, candidate, rate, { path });
+      expect(Math.abs(compare(candidate) - expected) < 1e-10).toBe(true);
+      expect(compare(candidate)).toBe(compare(candidate));
+    }
   });
 });

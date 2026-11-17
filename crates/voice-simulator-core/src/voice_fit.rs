@@ -58,12 +58,18 @@ impl Histogram<'_> {
             .map(|(i, n)| (math::abs(self.value(i) - centre), *n))
             .collect();
         deviations.sort_by(|a, b| a.0.total_cmp(&b.0));
+        let at = (count - 1.0) / 2.0;
         let mut sum = 0.0;
+        let mut lo = None;
         let mut mad = 0.0;
         for (d, n) in deviations {
             sum += n;
-            if sum >= count / 2.0 {
-                mad = d;
+            if lo.is_none() && sum > math::floor(at) {
+                lo = Some(d);
+            }
+            if sum > math::ceil(at) {
+                let a = lo.unwrap_or(0.0);
+                mad = a + (d - a) * (at - math::floor(at));
                 break;
             }
         }
@@ -120,7 +126,10 @@ pub fn distance(
         sum += w * error * error;
         weight += w;
     }
-    if transcript && mcd.is_finite() {
+    if transcript && !mcd.is_finite() {
+        return f64::INFINITY;
+    }
+    if transcript {
         sum += 4.0 * mcd * mcd;
         weight += 4.0;
     }

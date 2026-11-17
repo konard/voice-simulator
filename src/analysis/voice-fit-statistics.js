@@ -88,7 +88,11 @@ export function copyState(state) {
         ? Object.fromEntries(
             Object.keys(HISTOGRAMS).map((k) => [k, copy.histograms[k]])
           )
-        : copy[key],
+        : key === 'diagnostics' || key === 'perturbation'
+          ? Object.fromEntries(
+              Object.keys(expected[key]).map((k) => [k, copy[key][k]])
+            )
+          : copy[key],
     ])
   );
 }
@@ -137,12 +141,17 @@ export function medianSd(state, key) {
   const values = state.histograms[key]
     .map((n, i) => [Math.abs(binValue(key, i) - centre), n])
     .sort((a, b) => a[0] - b[0]);
+  const at = (count - 1) / 2;
   let sum = 0,
+    lo = null,
     mad = 0;
   for (const [d, n] of values) {
     sum += n;
-    if (sum >= count / 2) {
-      mad = d;
+    if (lo === null && sum > Math.floor(at)) {
+      lo = d;
+    }
+    if (sum > Math.ceil(at)) {
+      mad = lo + (d - lo) * (at - Math.floor(at));
       break;
     }
   }
@@ -151,7 +160,7 @@ export function medianSd(state, key) {
     key === 'f0' ? centre * (2 ** (1 / 48) - 1) : HISTOGRAMS[key][2];
   return (1.4826 * Math.max(mad, width / 2)) / Math.sqrt(count / 20);
 }
-function collectFrames(state, frames, pitch, formants, source) {
+function collectFrames(state, frames, pitch, formants, source, formantCount) {
   for (let t = 0; t < frames.count; t++) {
     if (!(pitch.f0[t] > 0)) {
       continue;
@@ -163,12 +172,13 @@ function collectFrames(state, frames, pitch, formants, source) {
     for (let k = 0; k < 24; k++) {
       state.mel[k] += frames.mel[t * 24 + k];
     }
-    for (let k = 0; k < 4; k++) {
+    for (let k = 0; k < Math.min(4, formantCount); k++) {
       if (formants.valid[t * 4 + k]) {
         addValue(state, `f${k + 1}`, formants.frequency[t * 4 + k]);
       }
     }
     if (
+      formantCount >= 3 &&
       !formants.nasal[t] &&
       [0, 1, 2].every((k) => formants.valid[t * 4 + k])
     ) {
@@ -200,6 +210,7 @@ export function accumulate(state, samples, sampleRate, options = {}) {
   const frames = analyzeFrames(input, sampleRate, {
     maxSeconds,
     order: options.order,
+    rate: options.analysisRate,
   });
   const pitch = trackPitch(frames);
   const formants = trackFormants(frames, { pitch });
@@ -222,7 +233,14 @@ export function accumulate(state, samples, sampleRate, options = {}) {
     state.diagnostics[key] += legacy[key] * weight;
   }
   state.nuclei += Math.round(legacy.syllableRate * legacy.activeDuration);
-  collectFrames(state, frames, pitch, formants, source);
+  collectFrames(
+    state,
+    frames,
+    pitch,
+    formants,
+    source,
+    options.formantCount ?? 4
+  );
   if (pitch.perturbation) {
     for (const key of Object.keys(state.perturbation)) {
       state.perturbation[key] += pitch.perturbation[key];

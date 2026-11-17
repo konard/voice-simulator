@@ -51,7 +51,10 @@ export function vectorDistance(
     sum += w * ((y - x) / target.scales[i]) ** 2;
     weight += w;
   });
-  if (transcript && Number.isFinite(mcd)) {
+  if (transcript && !Number.isFinite(mcd)) {
+    return Infinity;
+  }
+  if (transcript) {
     sum += 4 * mcd ** 2;
     weight += 4;
   }

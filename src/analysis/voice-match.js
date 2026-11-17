@@ -2,16 +2,9 @@
  * Voice matching: find the head whose simulated voice is closest to a
  * recording, so the simulator can copy that voice.
  *
- * 1. Measure the recording (analyzeVoice): f0 level and range, formant
- *    spacing of F1 to F3 (vocal tract length), H1-H2, harmonics-to-noise ratio and
- *    syllable rate.
- * 2. Start from the closest preset person (male, female or child at the
- *    best relative size) with the measured pitch and rate.
- * 3. Analysis by synthesis: render a calibration sentence with the current
- *    head, measure it with the same analysis and move each parameter by a
- *    secant step towards the recording's feature. The number of renders is
- *    bounded and every render uses a fixed seed, so a recording always gives
- *    the same head.
+ * Compatibility wrappers around fitVoiceSteps: each legacy round supplies
+ * ten renders to the bounded simplex search. The public featureDistance
+ * helper retains its original diagnostic scales.
  */
 
 import { formantSpacing } from './voice-features.js';
