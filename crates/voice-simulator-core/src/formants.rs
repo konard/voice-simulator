@@ -32,7 +32,7 @@ pub fn tract_length_from_formants(f1: f64, f2: f64, f3: f64) -> f64 {
     SPEED_OF_SOUND / (2.0 * spacing)
 }
 
-/// ref[k] = (2k - 1) c / (4 L), k = 1 .. K, into `out` (index k - 1).
+/// `ref[k] = (2k - 1) c / (4 L)`, k = 1 .. K, into `out` (index k - 1).
 pub fn reference_formants(length: f64, out: &mut [f64]) {
     for (k, value) in out.iter_mut().enumerate() {
         *value = ((2 * k + 1) as f64 * SPEED_OF_SOUND) / (4.0 * length);
