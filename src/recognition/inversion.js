@@ -80,7 +80,7 @@ function analysisTracks(frames, options, head, batch) {
   };
 }
 
-function createScorer(frames, search, scored, lag) {
+function createScorer(frames, search, scored) {
   // A gap ending at exactly 150 ms is a cut. Tolerate arithmetic at this boundary.
   const gapLimit = Math.ceil(0.15 / frames.hop - 1e-9);
   let t = 0;
@@ -99,9 +99,7 @@ function createScorer(frames, search, scored, lag) {
         next++;
       }
       if (next === end && !final && !cut && next - t < gapLimit) {
-        // This silence could still be an internal closure. For shorter lags,
-        // honour the deadline for the previous speech without guessing a row.
-        scored(t, next - lag);
+        // The candidate rows depend on whether speech resumes within 150 ms.
         break;
       }
       const closure =
@@ -161,16 +159,11 @@ function createInverter(frames, options, batch) {
     track.committed = last;
   }
 
-  const score = createScorer(
-    frames,
-    search,
-    (end, target = end - settings.lag) => {
-      if (!batch) {
-        commit(Math.min(target, end), end);
-      }
-    },
-    settings.lag
-  );
+  const score = createScorer(frames, search, (end) => {
+    if (!batch) {
+      commit(end - settings.lag, end);
+    }
+  });
 
   return {
     frames,

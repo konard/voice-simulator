@@ -416,6 +416,36 @@ it('scores only zero-cost closure seeds inside short gaps', () => {
   assert.equal(candidates.count[4], 0);
 });
 
+it('waits for scored closure candidates before advancing the fixed lag', () => {
+  const frames = analyzeFrames(new Float32Array(160), 8000);
+  frames.speech[0] = 1;
+  frames.speech[3] = 1;
+  const pitch = { f0: new Float32Array(4), committed: 3 };
+  const formants = { valid: new Uint8Array(16), committed: 3 };
+  const options = {
+    voice: head,
+    codebook: book(head),
+    pitch,
+    formants,
+    lag: 2,
+  };
+  const incremental = createArticulationInverter(frames, options);
+  incremental.advance();
+  assert.equal(incremental.track.frameCount, 1);
+  assert.equal(incremental.track.committed, 0);
+
+  pitch.committed = formants.committed = frames.count;
+  incremental.advance();
+  assert.equal(incremental.track.candidates.count[2], 32);
+  assert.equal(incremental.track.committed, 2);
+  incremental.advance(true);
+
+  const whole = createArticulationInverter(frames, options);
+  whole.advance(true);
+  assert.deepEqual(incremental.track.channels, whole.track.channels);
+  assert.deepEqual(incremental.track.variance, whole.track.variance);
+});
+
 it('cuts long gaps and reports unsupported controls', () => {
   const frames = analyzeFrames(new Float32Array(2000), 8000);
   const track = invertArticulation(frames, { codebook: book(head) });
