@@ -21,3 +21,7 @@ Count syllable nuclei with findLandmarks across updates, keeping the last 2 s
 of sound in the state. With a transcript, read pitch against the planned
 median f0, correct the stage A tract with one render, compare speaking times
 in the objective and keep the stage A speech rate out of the first round.
+Without a transcript, read the stage A tract and syllable rate against the
+median of twelve texts instead of MATCH_TEXT, add their spread to the tract
+sd, offset the objective's rate term by the same ratio and weigh its formant
+terms at 0.1.

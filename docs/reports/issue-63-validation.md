@@ -49,7 +49,7 @@ a bias that the stage B search cannot remove:
 | Breathiness from median HNR (table at 0, 0.25 … 1) | Median CPP inverted through `BREATHINESS_CPP` (breathiness 0–1 in 0.1 × pitch 80–290 Hz) | HNR falls 1.5–3.5 dB with pitch, tenseness or a male head alone (`hnr-dependence.txt`); `cpp-calibrate.txt` |
 | CPP histogram in 0.5 dB bins | 0.01 dB bins (fixed size, 4000 bins) | The inverse-filter CPP spans only 0.6–4.9 dB (`BREATHINESS_CPP`) |
 | `tenseness = 1 − median(rd)/3` | Median rd inverted through `TENSENESS_RD` at the measured pitch and breathiness; on a saturated stretch the mean of every tenseness within half a bin | rd is compressed (0.5–1.4), rises with breathiness and saturates near 0.85 above 210 Hz (`rd-calibrate.txt`, `tenseness-calibrate.txt`) |
-| `speechRate` = syllable rate ÷ default head's | With a transcript: rate whose planned speaking time (`prepareUtterance`) gives the measured one, `measured = 0.805 · planned + 0.267` | Residuals ≤ 3 % over four texts and three rates (`speech-time-calibrate.txt`); the syllable count read 1.2–1.78 for a rate of 1. Without a transcript the issue's syllable ratio is kept |
+| `speechRate` = syllable rate ÷ default head's | With a transcript: rate whose planned speaking time (`prepareUtterance`) gives the measured one, `measured = 0.805 · planned + 0.267` | Residuals ≤ 3 % over four texts and three rates (`speech-time-calibrate.txt`); the syllable count read 1.2–1.78 for a rate of 1. Without a transcript the issue's syllable ratio is kept, relative to the median of twelve texts (see 5cb68e7 below) |
 | `pitchRange` = 5–95 % range × constant | With a transcript: range whose planned voiced f0 range × 1.05 gives the measured one | Ratio independent of pitch, 0.94–1.25 (`pitch-range-calibrate.txt`). Without a transcript the issue's constant is kept |
 | `preset` = nearest preset of the final head | The stage A head's preset, kept while the final tract is within 1 cm of its range (as `matchVoice` on `main` did) | The female and child grids overlap: female at 209.8 Hz / 14.71 cm is nearer to the child at size 1 |
 
@@ -114,29 +114,56 @@ The example app's recognition chunk took the landmark modules and reached
 have their own chunk; the largest chunk is 360.62 kB and the workflow passes
 at b537919.
 
-### Without a transcript the gates measure the text
+### Without a transcript: readings of an average text at 5cb68e7
 
-Without a transcript stage B renders `MATCH_TEXT` as the issue specifies,
-and stage A reads the statistics of whatever sentence was said. The heavy
-recordings say the north-wind sentence. Each no-transcript reading depends
-on the text by more than its gate:
+Heavy run [44268336104](https://github.com/konard/voice-simulator/actions/runs/44268336104)
+at e21cac8 passed every gate with a transcript and all 48 golden
+comparisons. Without a transcript it passed pitch (1.80 %), rate (6.75 %),
+tenseness and breathiness, but failed the tract: median 7.01 % (gate 6 %),
+maximum 12.0 % (gate 10 %) and 8/20 heads within 3 SD (gate 16/20).
+`experiments/issue-63/heavy-none-fit.mjs` reproduces the run exactly
+(seed 5 +12.0 %, seed 13 +9.93 %).
 
-- pitch: the planned median f0 is 0.974 × pitch for the north-wind sentence
-  and 1.021 × pitch for `MATCH_TEXT` (range 3, `planned-median-texts.txt`);
-  stage A (median f0, the issue's formula) reads −2.2 % (gate 2 %), and a
-  render of `MATCH_TEXT` matching the recording's median f0 sits 4.6 % low;
-- rate: the default head at rate 1 reads 1.000 on `MATCH_TEXT` and
-  0.813–0.827 on three other sentences (`syllable-rate-texts.txt`); stage A
-  reads −10.7 % on the heavy heads (gate 8 %, `heavy-seeds-a-none.txt`);
-- tract: the dF reading of the north-wind sentence is 1.04–1.20 × the
-  truth for 12–18 cm, that of `MATCH_TEXT` 0.94–1.26 × (`tract-pitch-grid.txt`);
-  stage A reads +7.9 % (gate 6 %), up to 13.6 % on one head.
+The cause is the sentence. Stage A and the objective compared the
+recording with `MATCH_TEXT`, the only sentence the fitter renders without
+a transcript. `MATCH_TEXT` is an outlier among twelve texts: its dF tract
+reads 4 % below their median and its syllable rate 6 % above it
+(`tract-texts.txt`, `syllable-rate-texts.txt`). The ln dF term of the
+objective, with a 0.02 scale, then pulled the tract towards the
+`MATCH_TEXT` reading. The texts are `MATCH_TEXT`, two longer sentences
+and nine Harvard sentences (IEEE 1969, list 1); the heavy test sentence is
+measured but left out of every median, so the constants calibrate the
+method, not the test.
 
-No constant calibrated on other texts brings all of them within the gates,
-and a constant calibrated on the north-wind sentence would fit the test,
-not the method. These no-transcript gates are therefore **blocked**: they
-need either text-independent readings (a different method than the issue
-specifies) or a change of the gates, which only the issue author can decide.
+| Issue formula | Replacement without a transcript | Evidence |
+| --- | --- | --- |
+| `tract = c / (2 · median dF)` | Divided by `TEXT_TRACT.ratio` = 1.0568, the median reading/truth over the texts, tracts 12–18 cm and pitch 100–250 Hz; the SD adds the 0.0287 spread of one text about that median | `tract-texts.txt` (the heavy sentence reads 1.0803) |
+| `speechRate` = syllable rate ÷ default head's | Also divided by `TEXT_SYLLABLE_RATIO` = 0.9391, the median over the texts (`MATCH_TEXT` 1.000, the others 0.711–1.076) | `syllable-rate-texts.txt` (the heavy sentence reads 0.813) |
+| `ln(syllable rate)` term | Target's value minus `ln 0.9391`: what `MATCH_TEXT` would read at the same speech rate | `heavy-none-fit.txt` |
+| Weight 1 for the ln dF and ln F1–F3 terms | `TEXT_FORMANT_WEIGHT` = 0.1, as the mel terms already had 0.3 | Median tract error 7.0 % at 1, 2.7 % at 0.1 (`heavy-none-fit.txt`) |
+
+With a transcript nothing changes: `correctTract` already removes the
+bias of the words with one render, and the speaking time replaces the
+syllable rate. Over the 20 heavy heads without a transcript
+(`node experiments/issue-63/heavy-none-fit.mjs`, `heavy-none-fit.txt`):
+
+| Metric | e21cac8 (CI) | 5cb68e7 (local) | Required |
+| --- | --- | --- | --- |
+| Median tract error | 7.01 % | 2.72 % | 6 % |
+| Maximum tract error | 12.0 % | 7.50 % | 10 % |
+| Tract 3 SD coverage | 8/20 | 20/20 | 16/20 |
+| Median pitch error | 1.80 % | 1.66 % | 2 % |
+| Median rate error | 6.75 % | 7.69 % | 8 % |
+| Median tenseness absolute error | 0.050 | 0.056 | 0.15 |
+| Median breathiness absolute error | 0.075 | 0.071 | 0.2 |
+
+The golden distance gate without a transcript holds for all 24 recordings
+(`node experiments/issue-63/golden-none-fit.mjs`, `golden-none-fit.txt`).
+The earlier conclusion of this report, that the no-transcript gates were
+blocked, is withdrawn. Two limits remain. The rate passes with a 0.3 point
+margin: one sentence's landmark count scatters the per-head error from
+−33 % to +13 %. One ratio also cannot follow the length dependence of the
+dF reading: the texts read 1.24 × at 12 cm but 1.00 × at 18 cm.
 
 ## Reproduce the unit failures
 

@@ -1,0 +1,28 @@
+# node experiments/issue-63/golden-none-fit.mjs P 3 for P = 0, 1, 2 at 5cb68e7
+{"id":"en-01","distance":1.7109,"presetDistance":2.9348,"passed":true,"tract":14.48,"pitch":218,"rate":1.213}
+{"id":"en-04","distance":6.636,"presetDistance":9.2431,"passed":true,"tract":14.38,"pitch":209.5,"rate":0.5}
+{"id":"ru-01","distance":2.1189,"presetDistance":3.3831,"passed":true,"tract":13.97,"pitch":238.7,"rate":1.497}
+{"id":"ru-04","distance":1.9154,"presetDistance":3.2682,"passed":true,"tract":15.39,"pitch":113.2,"rate":1.412}
+{"id":"hi-01","distance":1.9094,"presetDistance":3.1321,"passed":true,"tract":13.07,"pitch":209.9,"rate":1.59}
+{"id":"hi-04","distance":1.1707,"presetDistance":3.0228,"passed":true,"tract":12.87,"pitch":192.9,"rate":1.166}
+{"id":"zh-01","distance":1.539,"presetDistance":3.423,"passed":true,"tract":12.26,"pitch":245,"rate":0.697}
+{"id":"zh-04","distance":1.7883,"presetDistance":3.3374,"passed":true,"tract":13.29,"pitch":222.2,"rate":1.078}
+failed 0/8
+{"id":"en-02","distance":1.7308,"presetDistance":2.9209,"passed":true,"tract":16.27,"pitch":91.2,"rate":1.184}
+{"id":"en-05","distance":6.6498,"presetDistance":9.0753,"passed":true,"tract":14.91,"pitch":236.1,"rate":0.5}
+{"id":"ru-02","distance":1.6903,"presetDistance":3.6044,"passed":true,"tract":13.28,"pitch":154.3,"rate":1.297}
+{"id":"ru-05","distance":2.0998,"presetDistance":4.2277,"passed":true,"tract":13.02,"pitch":301.8,"rate":1.214}
+{"id":"hi-02","distance":1.3089,"presetDistance":2.2372,"passed":true,"tract":13.64,"pitch":203.7,"rate":1.277}
+{"id":"hi-05","distance":2.4566,"presetDistance":3.9866,"passed":true,"tract":12.9,"pitch":234.4,"rate":1.8}
+{"id":"zh-02","distance":2.3582,"presetDistance":3.6343,"passed":true,"tract":12.87,"pitch":235.2,"rate":0.711}
+{"id":"zh-05","distance":2.0739,"presetDistance":3.5887,"passed":true,"tract":13.82,"pitch":218.6,"rate":0.901}
+failed 0/8
+{"id":"en-03","distance":1.8113,"presetDistance":4.6546,"passed":true,"tract":13.08,"pitch":320,"rate":0.555}
+{"id":"en-06","distance":1.7114,"presetDistance":3.4149,"passed":true,"tract":12.87,"pitch":185.4,"rate":1.161}
+{"id":"ru-03","distance":1.9423,"presetDistance":3.2278,"passed":true,"tract":13.54,"pitch":217.3,"rate":1.8}
+{"id":"ru-06","distance":1.996,"presetDistance":3.2068,"passed":true,"tract":13.21,"pitch":253.8,"rate":1.418}
+{"id":"hi-03","distance":1.8797,"presetDistance":3.3747,"passed":true,"tract":13.78,"pitch":189.5,"rate":1.493}
+{"id":"hi-06","distance":1.8354,"presetDistance":3.6501,"passed":true,"tract":12.41,"pitch":214.7,"rate":1.605}
+{"id":"zh-03","distance":2.8027,"presetDistance":5.1408,"passed":true,"tract":13.57,"pitch":261.8,"rate":0.5}
+{"id":"zh-06","distance":4.1901,"presetDistance":6.1095,"passed":true,"tract":12.05,"pitch":271,"rate":0.5}
+failed 0/8
