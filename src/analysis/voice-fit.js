@@ -202,7 +202,12 @@ function roundsFor(o) {
     'pitch',
     'pitchRange',
     ...(o.source === 'folds' ? [] : ['tenseness']),
-    'speechRate',
+    // With a transcript stage A reads the rate from the speaking time of the
+    // same words within 3 %; the aligned MCD cannot see timing, and its
+    // noise from parameters of round two outweighs the rate term about 15
+    // times: refining it ends at 1.20 for a true rate of 1.02 and a stage A
+    // rate of 1.06 (experiments/issue-63/match-trace-female02.txt).
+    ...(o.transcript ? [] : ['speechRate']),
   ];
   const round2 = [
     'breathiness',
@@ -235,6 +240,33 @@ function updateUncertainty(parameters, keys, vertices, head) {
     }
   }
 }
+// The dF tract of a sentence depends on its vowels: the north wind text
+// reads 7 % long for 14 to 18 cm where MATCH_TEXT reads 1 % short
+// (experiments/issue-63/tract-pitch-grid.txt), and near theta0 that error
+// alone raises the aligned MCD from 6 to 17 dB, hiding every other parameter
+// (mcd-noise.txt). With a transcript the render of theta0 says the same
+// words, so the ratio of the recording's to the render's reading removes the
+// bias of the words, as the speaking time and the planned f0 do in stage A.
+// The render counts in round one's budget.
+function correctTract(evaluate, head, stage, o, budgets) {
+  const { features, parameters, theta0 } = stage;
+  if (!o.transcript || !o.parts.includes('tract') || budgets[0] < 2) {
+    return head;
+  }
+  budgets[0]--;
+  const read = evaluate(head).rendered.vocalTractLength;
+  if (!(read > 0) || !(features.vocalTractLength > 0)) {
+    return head;
+  }
+  const p = definition('vocalTractLength');
+  const length = Math.max(
+    p.min,
+    Math.min(p.max, (head.vocalTractLength * features.vocalTractLength) / read)
+  );
+  parameters.vocalTractLength.value = length;
+  theta0.vocalTractLength = length;
+  return { ...head, vocalTractLength: length };
+}
 function* fitState(state, samples, sampleRate, options) {
   const o = optionsFor(options),
     stage = statisticsResult(state, o);
@@ -258,6 +290,13 @@ function* fitState(state, samples, sampleRate, options) {
       Math.floor(o.maxRenders * 0.6),
       o.maxRenders - Math.floor(o.maxRenders * 0.6),
     ];
+    head = correctTract(
+      evaluate,
+      head,
+      { features, parameters, theta0 },
+      o,
+      budgets
+    );
     for (const [round, allKeys] of roundsFor(o).entries()) {
       const keys = allKeys.filter((k) => o.parts.includes(groups[k]));
       if (!keys.length) {
