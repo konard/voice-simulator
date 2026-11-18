@@ -10,7 +10,9 @@ import {
 } from './helpers/bounded-run.js';
 import { itUnless, noPosixShell, sandboxed } from './helpers/skip.js';
 
-// Bun matching completes before two ordinary shards; modes follows shard one.
+// Bun matching completes before two ordinary shards; modes runs once, after
+// whichever shard finishes first. Shard one here waits for modes, like the
+// longer shard 1/2 measured in issue 63, so modes must follow shard two.
 // Deno matching overlaps the bulk run. Node splits matching by test name and
 // runs both halves and the fitting files alongside the bulk run.
 const fixture = `#!/usr/bin/env bash
@@ -32,6 +34,7 @@ for argument in "$@"; do
   esac
 done
 role=\${lane:-$role}
+if [ -f "$root/$role.started" ]; then exit 97; fi
 printf '%s\\n' "$@" > "$root/$role.args"
 touch "$root/$role.started"
 for ((poll=0; poll<500; poll++)); do
@@ -41,7 +44,9 @@ for ((poll=0; poll<500; poll++)); do
       [ ! -f "$root/first.started" ] && [ ! -f "$root/second.started" ] || exit 98
       ready=true
     elif [ "$role" = modes ]; then
-      [ -f "$root/first.finished" ] && [ -f "$root/second.started" ] && ready=true
+      [ -f "$root/first.started" ] && [ -f "$root/second.finished" ] && ready=true
+    elif [ "$role" = first ]; then
+      [ -f "$root/matching.finished" ] && [ -f "$root/modes.finished" ] && ready=true
     elif [ -f "$root/matching.finished" ] && [ -f "$root/first.started" ] && [ -f "$root/second.started" ]; then
       ready=true
     fi
