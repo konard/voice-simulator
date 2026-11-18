@@ -1,0 +1,4 @@
+{"name":"A","landmarks":5,"parts1":5,"parts2":5,"stateBytes":157130,"parts3":5}
+{"name":"B","landmarks":7,"parts1":7,"parts2":7,"stateBytes":163330,"parts3":7}
+{"name":"default","landmarks":16,"parts1":16,"parts2":16,"stateBytes":160799,"parts3":16}
+{"name":"A long","landmarks":14,"parts1":14,"parts2":14,"stateBytes":164693,"parts3":15}
