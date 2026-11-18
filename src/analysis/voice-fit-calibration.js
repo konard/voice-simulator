@@ -4,7 +4,9 @@ export const MATCH_TEXT =
 // MATCH_TEXT, default head, seed 1, waveguide, 16000 Hz, JS engine.
 // Default pitchRange 3 divided by the measured 5th–95th percentile range.
 export const PITCH_RANGE_FACTOR = 3 / 7.146042124836602;
-export const DEFAULT_SYLLABLE_RATE = 10 / 3.27;
+// findLandmarks nuclei per speech second (activeDuration + 0.03) of the
+// same render; experiments/issue-63/calibrate.mjs prints landmarkNuclei.
+export const DEFAULT_SYLLABLE_RATE = 16 / 3.27;
 // Median inverse-filter CPP (dB) of MATCH_TEXT on the default head at each
 // pitch (Hz) and breathiness (experiments/issue-63/cpp-calibrate.txt). The
 // inverse-filter HNR the issue names falls by 1.5 to 3.5 dB with low pitch,

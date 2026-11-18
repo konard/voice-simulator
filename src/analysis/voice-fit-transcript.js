@@ -55,6 +55,27 @@ export function plannedPitchRange(text, pitchRange, options = {}) {
 }
 
 /**
+ * Median planned f0 (Hz) over voiced frames of `text` on the default head at
+ * `pitch` and `pitchRange`; 0 without voicing. The plan scales with pitch.
+ */
+export function plannedMedianF0(text, pitch, pitchRange, options = {}) {
+  const p = plan(text, { pitch, pitchRange }, options),
+    { f0, voicing } = p.channels,
+    values = [];
+  for (let i = 0; i < p.frameCount; i++) {
+    if (voicing[i] > 0.5 && f0[i] > 0) {
+      values.push(f0[i]);
+    }
+  }
+  if (!values.length) {
+    return 0;
+  }
+  values.sort((a, b) => a - b);
+  const m = values.length >> 1;
+  return values.length % 2 ? values[m] : (values[m - 1] + values[m]) / 2;
+}
+
+/**
  * The value of `key` in its parameter range at which the increasing
  * `predict` equals `measured`: bisection in log value, null when the plan is
  * empty.
@@ -107,4 +128,17 @@ export function transcriptPitchRange(semitones, text, options = {}) {
     semitones,
     10
   );
+}
+
+/**
+ * The pitch whose planned median f0 of the transcript at `pitchRange` equals
+ * the measured median: the words move the median from 0.96 to 1.08 times
+ * the pitch, while the measured median is the planned one within 0.6 % to
+ * 1.3 % (experiments/issue-63/pitch-median-calibrate.txt). Null without
+ * voicing in the plan.
+ */
+export function transcriptPitch(f0, text, pitchRange, options = {}) {
+  const reference = 100;
+  const planned = plannedMedianF0(text, reference, pitchRange, options);
+  return planned > 0 && f0 > 0 ? (reference * f0) / planned : null;
 }

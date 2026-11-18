@@ -8,12 +8,19 @@ import { prepareLegacyVoice } from './voice-features.js';
 import {
   transcriptSpeechRate,
   transcriptPitchRange,
+  transcriptPitch,
 } from './voice-fit-transcript.js';
 import {
   PITCH_RANGE_FACTOR,
   DEFAULT_SYLLABLE_RATE,
 } from './voice-fit-calibration.js';
 import { cppBreathiness, rdTenseness } from './voice-fit-tables.js';
+import {
+  countNuclei,
+  emptyNuclei,
+  totalNuclei,
+  validNuclei,
+} from './voice-fit-nuclei.js';
 export { tableInverse } from './voice-fit-tables.js';
 
 export const HISTOGRAMS = Object.freeze({
@@ -42,6 +49,7 @@ export function emptyState() {
     voicedSeconds: 0,
     speechSeconds: 0,
     nuclei: 0,
+    landmarks: emptyNuclei(),
     voicedFrames: 0,
     mel: Array(24).fill(0),
     tilt: 0,
@@ -72,6 +80,7 @@ export function copyState(state) {
     Object.keys(expected)
       .filter((key) => typeof expected[key] === 'number' && key !== 'tilt')
       .some((key) => !Number.isFinite(copy[key]) || copy[key] < 0) ||
+    !validNuclei(copy.landmarks) ||
     copy.mel?.length !== 24 ||
     copy.mel.some((v) => !Number.isFinite(v)) ||
     !Number.isFinite(copy.tilt) ||
@@ -253,7 +262,10 @@ export function accumulate(
   if (diagnostics) {
     collectDiagnostics(state, legacy);
   }
-  state.nuclei += Math.round(legacy.syllableRate * legacy.activeDuration);
+  countNuclei(state, input, sampleRate, frames, {
+    order: options.order,
+    rate: options.analysisRate,
+  });
   collectFrames(
     state,
     frames,
@@ -296,13 +308,36 @@ export function stateFeatures(state) {
     cpp: quantile(state, 'cpp'),
     h1h2Source: quantile(state, 'h1h2Source'),
     syllableRate:
-      state.speechSeconds > 0 ? state.nuclei / state.speechSeconds : 0,
+      state.speechSeconds > 0 ? totalNuclei(state) / state.speechSeconds : 0,
   };
 }
 // Relative sd of the speaking-time rate: calibration residuals reach 3 %,
 // and a female head speaks the same plan up to 5 % faster
 // (experiments/issue-63/speech-time-calibrate.txt, rate-counters.txt).
 const SPEECH_TIME_SD = 0.04;
+// The f0 range and median of a sentence depend on its words: with a
+// transcript they are read against the plan of the same words, without one
+// the range against the default head on MATCH_TEXT and the pitch as the
+// median itself.
+function pitchReading(features, f0Sd, head, options) {
+  if (!options.transcript) {
+    return { range: null, pitch: features.f0, pitchSd: f0Sd };
+  }
+  const range = transcriptPitchRange(
+    features.f0Range,
+    options.transcript,
+    options
+  );
+  const pitch = transcriptPitch(
+    features.f0,
+    options.transcript,
+    range ?? head.pitchRange,
+    options
+  );
+  return pitch === null
+    ? { range, pitch: features.f0, pitchSd: f0Sd }
+    : { range, pitch, pitchSd: (f0Sd * pitch) / features.f0 };
+}
 export function statisticsResult(state, options = {}) {
   if (state.voicedFrames < 20) {
     throw new Error('No voiced speech found in the recording');
@@ -338,13 +373,13 @@ export function statisticsResult(state, options = {}) {
     (17500 * sd('dF')) / features.formantSpacing ** 2,
     count('dF')
   );
-  fit('pitch', 'pitch', features.f0, sd('f0'), count('f0'));
-  // The f0 range of a sentence depends on its words: with a transcript it is
-  // read against the planned range of the same words, without one against
-  // the default head on MATCH_TEXT.
-  const range = options.transcript
-    ? transcriptPitchRange(features.f0Range, options.transcript, options)
-    : null;
+  const { range, pitch, pitchSd } = pitchReading(
+    features,
+    sd('f0'),
+    head,
+    options
+  );
+  fit('pitch', 'pitch', pitch, pitchSd, count('f0'));
   const rangeFactor =
     range === null
       ? PITCH_RANGE_FACTOR
@@ -426,9 +461,9 @@ export function statisticsResult(state, options = {}) {
       0.01,
       features.syllableRate /
         DEFAULT_SYLLABLE_RATE /
-        Math.sqrt(Math.max(1, state.nuclei))
+        Math.sqrt(Math.max(1, totalNuclei(state)))
     ),
-    state.nuclei
+    totalNuclei(state)
   );
   return { head, parameters, features };
 }

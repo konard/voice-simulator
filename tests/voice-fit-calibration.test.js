@@ -9,13 +9,18 @@ import {
   plannedPitchRange,
   transcriptSpeechRate,
   transcriptPitchRange,
+  plannedMedianF0,
+  transcriptPitch,
 } from '../src/analysis/voice-fit-transcript.js';
 import {
   BREATHINESS_CPP,
   SPEECH_TIME,
   PLANNED_RANGE_RATIO,
 } from '../src/analysis/voice-fit-calibration.js';
-import { fitVoice, synthesize } from '../src/index.js';
+import { fitVoice, synthesize, createVoiceFitter } from '../src/index.js';
+import { analyzeFrames } from '../src/recognition/frontend.js';
+import { findLandmarks } from '../src/recognition/landmarks.js';
+import { totalNuclei } from '../src/analysis/voice-fit-nuclei.js';
 import { nearestPreset } from '../src/analysis/voice-fit.js';
 import { presetHeadConfig } from '../src/head-config.js';
 const TEXT =
@@ -83,6 +88,15 @@ describe('voice fitting calibration', () => {
       ).toBe(true);
     }
     expect(transcriptSpeechRate(0, TEXT)).toBe(null);
+    // The words move the median f0 away from the pitch; the reading
+    // inverts the plan, which is linear in the pitch.
+    for (const pitch of [90, 160, 260]) {
+      const median = plannedMedianF0(TEXT, pitch, 3);
+      expect(
+        close(transcriptPitch(median, TEXT, 3), pitch, 0.001 * pitch)
+      ).toBe(true);
+    }
+    expect(transcriptPitch(0, TEXT, 3)).toBe(null);
   });
   it('reads rate and pitch range of a preset head saying the transcript', () => {
     // The legacy matchVoice cases of tests/voice-match.test.js: syllable
@@ -101,6 +115,10 @@ describe('voice fitting calibration', () => {
     });
     expect(close(fit.head.speechRate, head.speechRate, 0.05)).toBe(true);
     expect(close(fit.head.pitchRange, head.pitchRange, 1)).toBe(true);
+    // Read against the plan of the same words the pitch is 115.6 Hz for
+    // 118 Hz, within the 3 % of issue 63 for a transcript
+    // (experiments/issue-63/preset-pitch.txt).
+    expect(close(fit.head.pitch, head.pitch, 0.03 * head.pitch)).toBe(true);
     expect(fit.parameters.speechRate.sd > 0).toBe(true);
   });
   it('keeps the preset of stage A while the tract stays in its range', () => {
@@ -114,5 +132,35 @@ describe('voice fitting calibration', () => {
     // A tract more than 1 cm below the female range (14 to 15.6) moves on.
     const small = { pitch: 260, vocalTractLength: 12.9 };
     expect(nearestPreset(small, undefined, start).name).toBe('child');
+  });
+  it('counts landmark nuclei across updates like the whole recording', () => {
+    const { samples, sampleRate } = synthesize('The north wind and the sun.', {
+      head: {
+        vocalTractLength: 18.5,
+        pitch: 100,
+        tenseness: 0.75,
+        speechRate: 0.9,
+      },
+      seed: 1,
+      sampleRate: 16000,
+      solver: 'waveguide',
+    });
+    const whole = findLandmarks(analyzeFrames(samples, sampleRate)).nuclei;
+    const one = createVoiceFitter();
+    one.update(samples, sampleRate);
+    expect(totalNuclei(one.state)).toBe(whole.length);
+    // Two stretches analysed alone count 4 + 3 nuclei for these 7.
+    const middle = Math.floor(samples.length / 2);
+    const first = createVoiceFitter();
+    first.update(samples.subarray(0, middle), sampleRate);
+    const second = createVoiceFitter({
+      state: JSON.parse(JSON.stringify(first.state)),
+    });
+    second.update(samples.subarray(middle), sampleRate);
+    expect(totalNuclei(second.state)).toBe(whole.length);
+    expect(second.state.landmarks.carry.length).toBe(2 * sampleRate);
+    const broken = JSON.parse(JSON.stringify(first.state));
+    broken.landmarks.carry.push(0.5);
+    expect(() => createVoiceFitter({ state: broken })).toThrow(RangeError);
   });
 });
