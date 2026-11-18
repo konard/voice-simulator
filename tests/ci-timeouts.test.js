@@ -190,23 +190,6 @@ function getWorkflowEnv(workflow) {
   );
 }
 
-// A budget chosen per runner, such as
-// `${{ matrix.os == 'windows-2025' && '420' || '300' }}`, may take any of
-// its quoted integer results, so the invariant checks the largest. Any other
-// expression stays unreadable.
-function expressionAlternatives(value) {
-  const body = value?.match(/^\$\{\{(.*)\}\}$/)?.[1];
-  if (body === undefined || !/^[\s\w.=!&|'-]+$/.test(body)) {
-    return null;
-  }
-  const results = body.split(/&&|\|\|/).slice(1);
-  if (results.length === 0) {
-    return null;
-  }
-  const numbers = results.map((part) => part.trim().match(/^'(\d+)'$/)?.[1]);
-  return numbers.every(Boolean) ? numbers.map(Number) : null;
-}
-
 function getStepBudgetSeconds(workflow, jobName) {
   const block = getJobBlock(workflow, jobName);
   const jobEnv = getJobEnv(block);
@@ -233,11 +216,8 @@ function getStepBudgetSeconds(workflow, jobName) {
           jobEnv[variableName] ??
           workflowEnv[variableName];
 
-        const alternatives = expressionAlternatives(resolved);
         if (resolved !== undefined && /^\d+$/.test(resolved)) {
           seconds = Number(resolved);
-        } else if (alternatives) {
-          seconds = Math.max(...alternatives);
         } else {
           seconds = NaN;
           source = `"${variableName}" does not resolve to an integer in the step, job, or workflow env`;
@@ -606,32 +586,5 @@ describe('step budget grouping', () => {
     expect(budgets[0].seconds).toBe(900);
     expect(Number.isFinite(budgets[1].seconds)).toBe(false);
     expect(budgets[1].source).toContain('"NOWHERE_BUDGET"');
-  });
-
-  it('checks the largest result of a per-runner budget expression', () => {
-    const step = (name, value) => [
-      `      - name: ${name}`,
-      '        env:',
-      `          SUITE_SECONDS: \${{ ${value} }}`,
-      `        run: bash scripts/run-with-budget-warning.sh "$SUITE_SECONDS" "${name}" npm test`,
-    ];
-    const workflow = [
-      'name: Fixture',
-      '',
-      'jobs:',
-      '  test:',
-      '    timeout-minutes: 15',
-      '    steps:',
-      ...step('per runner', "matrix.os == 'windows-2025' && '420' || '300'"),
-      ...step('computed', "matrix.os == 'windows-2025' && '420' || env.OTHER"),
-      ...step('function', "fromJSON('700')"),
-      '',
-    ].join('\n');
-
-    const budgets = getStepBudgetSeconds(workflow, 'test');
-
-    expect(budgets[0].seconds).toBe(420);
-    expect(Number.isFinite(budgets[1].seconds)).toBe(false);
-    expect(Number.isFinite(budgets[2].seconds)).toBe(false);
   });
 });

@@ -1003,15 +1003,41 @@ In the Bun jobs, matching alone took 108 s, 152 s and 176 s on Ubuntu, macOS
 and Windows. The longer shard then took 171 s, 246 s and 288 s.
 
 Node/macOS and Deno/macOS finished 10 s and 34 s before 300 s, and
-Bun/Windows 35 s before 500 s. The same Node/macOS job took 251 s and
-290 s in the two runs with unchanged Node scheduling, so that headroom is
-within ordinary runner variation. The follow-up commit therefore sets
-per-runner budgets: macOS and Windows get 420 s for Node and Deno and 600 s
-for Bun. Ubuntu keeps 300 s and 500 s. Every budget stays below 70% of the
-15-minute job backstop (630 s), and `tests/ci-timeouts.test.js` reads each
-`${{ cond && 'N' || 'M' }}` expression as its largest result. Within each
-job, the matching tests already run as separate processes, so the remaining
-time is the specified render count on slower runners, not idle scheduling.
+Bun/Windows 35 s before 500 s. Commit a6c38dd therefore gave macOS and
+Windows 420 s for Node and Deno and 600 s for Bun. Its
+[run 44294933958](https://github.com/konard/voice-simulator/actions/runs/44294933958)
+at b7af909 shows that Ubuntu needs the same headroom: Deno/Ubuntu took
+295 s of 300 s (job 134770137643, line 4974), against 218 s at ac739b6 on the
+same `ubuntu-24.04` image 20261111.370.1. Each matching test took 53–56 s
+there, against 38–39 s before, so the runner itself was slower; the code and
+scheduling were unchanged. In that run all nine jobs again fail only on
+pitch SD:
+
+| Runtime | Ubuntu | macOS | Windows |
+| --- | --- | --- | --- |
+| Node | 214 s of 300 (134770137579) | 291 s of 420 (134770137414) | 326 s of 420 (134770137543) |
+| Deno | 295 s of 300 (134770137643) | 257 s of 420 (134770137439) | 328 s of 420 (134770137613) |
+| Bun | 295 s of 500 (134770137684) | 366 s of 600 (134770137548) | 369 s of 600 (134770137526) |
+
+The suite budget is now 420 s for Node and Deno and 600 s for Bun on every
+runner. The largest measured times, 328 s (Deno/Windows) and 465 s
+(Bun/Windows), are 78% and 78% of those budgets. A job only exceeds its
+budget on a runner more than 1.28× slower than the slowest one measured so
+far; the 70% warning (294 s and 420 s) reports such drift first. Every
+budget stays below 70% of the 15-minute job backstop (630 s), which
+`tests/ci-timeouts.test.js` checks, so they cannot be raised much further.
+Within each job the matching tests already run as separate processes, so
+the remaining time is the specified render count on the JS engine, not idle
+scheduling.
+
+The issue asks that tests needing more than about 10 seconds run only in
+the manually triggered workflow. The 40-render `matchVoice` tests in
+`tests/voice-match.test.js` now take 34–88 s each, because spec item 10
+fixes the render count. They stay in the regular CI, because the acceptance
+criterion names `node --test tests/voice-fit.test.js
+tests/voice-match.test.js` on Node.js, Bun and Deno and the file must stay
+unchanged. Moving them to the manual workflow is a decision for the issue
+author.
 
 ## Dependency audit policy for pull requests
 
