@@ -1,4 +1,4 @@
-/** Simulator calibration. Unlicense. Reproduce with experiments/issue-63/calibrate.mjs, cpp-calibrate.mjs and speech-time-calibrate.mjs. */
+/** Simulator calibration. Unlicense. Reproduce with experiments/issue-63/calibrate.mjs, cpp-calibrate.mjs, speech-time-calibrate.mjs, pitch-range-calibrate.mjs and tenseness-calibrate.mjs. */
 export const MATCH_TEXT =
   'Please call Stella and ask her to bring these things with her.';
 // MATCH_TEXT, default head, seed 1, waveguide, 16000 Hz, JS engine.
@@ -42,3 +42,53 @@ export const BREATHINESS_CPP = {
 // = slope * planned seconds from first to last sound + offset; four texts at
 // speechRate 0.8, 1 and 1.25 (experiments/issue-63/speech-time-calibrate.mjs).
 export const SPEECH_TIME = { slope: 0.805, offset: 0.267 };
+// Measured 5th-95th percentile f0 range (semitones) of renders over the
+// range of the planned f0 of voiced frames: median of three texts, pitch 100
+// and 210 Hz, pitchRange 2, 3 and 4.5 (0.94 to 1.25 without the one octave
+// error; experiments/issue-63/pitch-range-calibrate.txt).
+export const PLANNED_RANGE_RATIO = 1.05;
+// Median inverse-filter rd (0.05 bins) of MATCH_TEXT on the default head
+// by pitch (Hz), breathiness and tenseness, rd[pitch][breathiness][tenseness]
+// (experiments/issue-63/tenseness-calibrate.txt). The issue names
+// tenseness = 1 - median(rd)/3, but the measured rd is compressed (0.5 to
+// 1.4 for an LF Rd of 0.45 to 2.4), rises with breathiness beyond its Rd
+// term and saturates near 0.85 above about 210 Hz (experiments/issue-63/
+// rd-calibrate.txt). 0 marks a render without rd frames.
+export const TENSENESS_RD = {
+  tenseness: [0.2, 0.35, 0.5, 0.65, 0.8, 0.95],
+  breathiness: [0.1, 0.4, 0.7, 1],
+  pitch: [80, 110, 150, 210, 290],
+  bin: 0.05,
+  rd: [
+    [
+      [0.9, 0.85, 0.8, 0.6, 0.5, 0.5],
+      [1.2, 1, 0.9, 0.8, 0.6, 0.5],
+      [1.3, 1.4, 1.25, 1.15, 0.9, 0.65],
+      [0.85, 0.85, 0.9, 0.9, 0.9, 0.85],
+    ],
+    [
+      [0.9, 0.9, 0.85, 0.65, 0.5, 0.5],
+      [1.2, 1.1, 0.9, 0.85, 0.65, 0.5],
+      [1.4, 1.4, 1.25, 1.15, 0.9, 0.7],
+      [1.1, 1.1, 1.15, 1.1, 1, 0.9],
+    ],
+    [
+      [0.9, 0.9, 0.85, 0.65, 0.5, 0.5],
+      [1.2, 1.1, 0.95, 0.85, 0.65, 0.5],
+      [1.25, 1.25, 1.2, 1.1, 0.9, 0.7],
+      [1.2, 1.2, 1.2, 1.2, 1.1, 0.9],
+    ],
+    [
+      [0.85, 0.85, 0.85, 0.7, 0.55, 0.5],
+      [0.95, 0.9, 0.85, 0.85, 0.7, 0.55],
+      [1.15, 1.15, 1.1, 0.95, 0.9, 0.8],
+      [1, 1, 1.1, 1, 0.95, 0.9],
+    ],
+    [
+      [0.85, 0.85, 0.85, 0.7, 0, 0],
+      [0.85, 0.85, 0.85, 0.85, 0.7, 0],
+      [0.85, 0.85, 0.85, 0.85, 0.85, 0.7],
+      [0.85, 0.85, 0.85, 0.85, 0.85, 0.85],
+    ],
+  ],
+};

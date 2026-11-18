@@ -24,12 +24,32 @@ const variants = [
 for (const v of variants) {
   for (const breathiness of [0.2, 0.6]) {
     const head = { ...v, breathiness };
-    const { samples } = synthesize(text, { head, seed: 1, sampleRate: 16000, solver: 'waveguide', engine: 'js' });
+    const { samples } = synthesize(text, {
+      head,
+      seed: 1,
+      sampleRate: 16000,
+      solver: 'waveguide',
+      engine: 'js',
+    });
     const frames = analyzeFrames(Float32Array.from(samples), 16000);
     const pitch = trackPitch(frames);
     const src = inverseFilter(frames, { pitch });
-    const vals = [], cpp = [];
-    for (let t = 0; t < frames.count; t++) if (pitch.f0[t] > 0 && src.reliable[t]) { vals.push(src.hnr[t]); cpp.push(src.cpp[t]); }
-    console.log(JSON.stringify(head), 'n', vals.length, 'hnr', median(vals).toFixed(2), 'cpp', median(cpp).toFixed(2));
+    const vals = [],
+      cpp = [];
+    for (let t = 0; t < frames.count; t++) {
+      if (pitch.f0[t] > 0 && src.reliable[t]) {
+        vals.push(src.hnr[t]);
+        cpp.push(src.cpp[t]);
+      }
+    }
+    console.log(
+      JSON.stringify(head),
+      'n',
+      vals.length,
+      'hnr',
+      median(vals).toFixed(2),
+      'cpp',
+      median(cpp).toFixed(2)
+    );
   }
 }

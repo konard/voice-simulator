@@ -4,7 +4,7 @@
 // the leave-one-text-out residuals.
 import { synthesize } from '../../src/synthesize.js';
 import { prepareLegacyVoice } from '../../src/analysis/voice-features.js';
-import { plannedSpeechTime } from '../../src/analysis/voice-fit-rate.js';
+import { plannedSpeechTime } from '../../src/analysis/voice-fit-transcript.js';
 import { MATCH_TEXT } from '../../src/analysis/voice-fit-calibration.js';
 const TEXTS = [
   MATCH_TEXT,

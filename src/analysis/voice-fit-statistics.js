@@ -5,12 +5,16 @@ import { trackFormants } from '../recognition/formants.js';
 import { inverseFilter } from '../recognition/inverse-filter.js';
 import { HEAD_PARAMETERS, DEFAULT_HEAD } from '../head-config.js';
 import { prepareLegacyVoice } from './voice-features.js';
-import { transcriptSpeechRate } from './voice-fit-rate.js';
+import {
+  transcriptSpeechRate,
+  transcriptPitchRange,
+} from './voice-fit-transcript.js';
 import {
   PITCH_RANGE_FACTOR,
-  BREATHINESS_CPP,
   DEFAULT_SYLLABLE_RATE,
 } from './voice-fit-calibration.js';
+import { cppBreathiness, rdTenseness } from './voice-fit-tables.js';
+export { tableInverse } from './voice-fit-tables.js';
 
 export const HISTOGRAMS = Object.freeze({
   f0: [0, 192, 1], // indices are quarter semitones above 50 Hz
@@ -295,49 +299,6 @@ export function stateFeatures(state) {
       state.speechSeconds > 0 ? state.nuclei / state.speechSeconds : 0,
   };
 }
-export function tableInverse(value, table) {
-  let best = { residual: Infinity, value: 0 };
-  for (let i = 1; i < table.length; i++) {
-    const [a, x] = table[i - 1],
-      [b, y] = table[i];
-    const t = Math.max(0, Math.min(1, (value - x) / (y - x)));
-    const residual = Math.abs(value - (x + (y - x) * t));
-    if (residual < best.residual) {
-      best = { residual, value: a + (b - a) * t };
-    }
-  }
-  return best.value;
-}
-/**
- * Breathiness from the median CPP at the median pitch: the default-head
- * CPP row at that pitch (interpolated in log pitch, clamped to the table)
- * is inverted. Returns the value and the CPP change per unit breathiness.
- */
-export function cppBreathiness(cpp, f0, table = BREATHINESS_CPP) {
-  const x = Math.log(
-    Math.max(table.pitch[0], Math.min(table.pitch.at(-1), f0))
-  );
-  let i = 1;
-  while (i < table.pitch.length - 1 && x > Math.log(table.pitch[i])) {
-    i++;
-  }
-  const t =
-    (x - Math.log(table.pitch[i - 1])) /
-    (Math.log(table.pitch[i]) - Math.log(table.pitch[i - 1]));
-  const row = table.breathiness.map((b, k) => [
-    b,
-    table.cpp[i - 1][k] + (table.cpp[i][k] - table.cpp[i - 1][k]) * t,
-  ]);
-  const value = tableInverse(cpp, row);
-  const k = Math.max(
-    1,
-    Math.min(row.length - 1, Math.ceil(value / table.breathiness[1]))
-  );
-  const slope = Math.abs(
-    (row[k][1] - row[k - 1][1]) / (row[k][0] - row[k - 1][0])
-  );
-  return { value, slope };
-}
 // Relative sd of the speaking-time rate: calibration residuals reach 3 %,
 // and a female head speaks the same plan up to 5 % faster
 // (experiments/issue-63/speech-time-calibrate.txt, rate-counters.txt).
@@ -378,14 +339,23 @@ export function statisticsResult(state, options = {}) {
     count('dF')
   );
   fit('pitch', 'pitch', features.f0, sd('f0'), count('f0'));
+  // The f0 range of a sentence depends on its words: with a transcript it is
+  // read against the planned range of the same words, without one against
+  // the default head on MATCH_TEXT.
+  const range = options.transcript
+    ? transcriptPitchRange(features.f0Range, options.transcript, options)
+    : null;
+  const rangeFactor =
+    range === null
+      ? PITCH_RANGE_FACTOR
+      : range / Math.max(features.f0Range, 0.25);
   fit(
     'pitch',
     'pitchRange',
-    features.f0Range * PITCH_RANGE_FACTOR,
-    (((sd('f0') / features.f0) * 12) / Math.LN2) * PITCH_RANGE_FACTOR,
+    range ?? features.f0Range * PITCH_RANGE_FACTOR,
+    (((sd('f0') / features.f0) * 12) / Math.LN2) * rangeFactor,
     count('f0')
   );
-  fit('source', 'tenseness', 1 - features.rd / 3, sd('rd') / 3, count('rd'));
   const breathiness = cppBreathiness(quantile(state, 'cpp'), features.f0);
   fit(
     'source',
@@ -393,6 +363,23 @@ export function statisticsResult(state, options = {}) {
     breathiness.value,
     Math.min(1, sd('cpp') / Math.max(0.1, breathiness.slope)),
     count('cpp')
+  );
+  // The median rd is compressed and saturates at high pitch; it is read
+  // against the default head at the measured pitch and breathiness.
+  const tenseness = rdTenseness(
+    features.rd,
+    features.f0,
+    count('cpp') ? breathiness.value : DEFAULT_HEAD.breathiness
+  );
+  fit(
+    'source',
+    'tenseness',
+    tenseness.value,
+    Math.min(
+      1,
+      Math.max(tenseness.spread, sd('rd') / Math.max(0.05, tenseness.slope))
+    ),
+    count('rd')
   );
   const p = state.perturbation;
   if (p.periods >= 20 && p.pairs > 0) {
