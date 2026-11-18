@@ -23,6 +23,18 @@ if (!Number.isFinite(observationWeight) || observationWeight <= 0) {
   throw new RangeError('The oracle observation weight must be positive');
 }
 
+function encode({ name, min, max }, state) {
+  return (255 * (state[name] - min)) / (max - min);
+}
+
+function distance(table, row, target) {
+  let sum = 0;
+  for (let c = 0; c < channels.length; c++) {
+    sum += (table[row * channels.length + c] - target[c]) ** 2;
+  }
+  return sum;
+}
+
 // This is a diagnostic only. Give the search precise tract observations
 // while retaining the stored row geometry, transitions, smoothing and source.
 function oracleBook(book, frames, truth) {
@@ -34,33 +46,56 @@ function oracleBook(book, frames, truth) {
       while (t < frames.count && !frames.speech[t]) {
         t++;
       }
-      CODEBOOK_CHANNELS.forEach(({ name, min, max }, c) => {
-        target[c] = (255 * (truth[t][name] - min)) / (max - min);
+      CODEBOOK_CHANNELS.forEach((channel, c) => {
+        target[c] = encode(channel, truth[t]);
       });
       t++;
       index.fill(-1);
       cost.fill(Infinity);
       for (let row = 0; row < book.size; row++) {
-        let sum = 0;
-        for (let c = 0; c < channels.length; c++) {
-          sum +=
-            (book.articulation[row * channels.length + c] - target[c]) ** 2;
-        }
-        const distance = (16 * observationWeight * sum) / 255 ** 2;
-        if (distance >= cost[k - 1]) {
+        const sum = distance(book.articulation, row, target);
+        const score = (16 * observationWeight * sum) / 255 ** 2;
+        if (score >= cost[k - 1]) {
           continue;
         }
         let at = k - 1;
-        while (at > 0 && distance < cost[at - 1]) {
+        while (at > 0 && score < cost[at - 1]) {
           cost[at] = cost[at - 1];
           index[at] = index[at - 1];
           at--;
         }
-        cost[at] = distance;
+        cost[at] = score;
         index[at] = row;
       }
     },
   };
+}
+
+function projectRows(book, states, exactTuple) {
+  const projected = Object.fromEntries(
+    CODEBOOK_CHANNELS.map(({ name }) => [name, new Float32Array(states.length)])
+  );
+  for (const [t, state] of states.entries()) {
+    const target = CODEBOOK_CHANNELS.map((channel) => encode(channel, state));
+    let best = 0;
+    let minimum = Infinity;
+    if (!exactTuple) {
+      for (let row = 0; row < book.size; row++) {
+        const score = distance(book.articulation, row, target);
+        if (score < minimum) {
+          best = row;
+          minimum = score;
+        }
+      }
+    }
+    CODEBOOK_CHANNELS.forEach(({ name, min, max }, c) => {
+      const value = exactTuple
+        ? Math.round(target[c])
+        : book.articulation[best * channels.length + c];
+      projected[name][t] = min + (value * (max - min)) / 255;
+    });
+  }
+  return projected;
 }
 
 function compare(track, truth, book, times) {
@@ -159,6 +194,12 @@ for (const sampleRate of [16000, 8000]) {
       )
   );
   const plan = articulationPlan(oracle);
+  const exact = Object.fromEntries(
+    Object.keys(audio.plan.channels).map((name) => [
+      name,
+      Float32Array.from(truth, (state) => state[name]),
+    ])
+  );
   const sourceTruth = { ...plan.channels };
   for (const name of Object.keys(sourceTruth)) {
     if (!channels.includes(name)) {
@@ -176,5 +217,14 @@ for (const sampleRate of [16000, 8000]) {
     baselineMcd: mcd(articulationPlan(baseline)),
     oracleLatticeMcd: mcd(plan),
     oracleLatticeAndSourceMcd: mcd({ ...plan, channels: sourceTruth }),
+    projectedNearestRowMcd: mcd({
+      ...plan,
+      channels: { ...exact, ...projectRows(maleBook, truth, false) },
+    }),
+    projectedComponentwiseMcd: mcd({
+      ...plan,
+      channels: { ...exact, ...projectRows(maleBook, truth, true) },
+    }),
+    sampledPlanMcd: mcd({ ...plan, channels: exact }),
   });
 }
