@@ -665,32 +665,8 @@ Measured with `node experiments/issue-58-rtf.mjs` (10 s of speech, one thread): 
 
 ### Acoustic-to-articulatory inversion
 
-```js
-import {
-  analyzeFrames,
-  articulationPlan,
-  invertArticulation,
-  renderPlan,
-} from 'voice-simulator';
-
-const track = invertArticulation(analyzeFrames(samples, sampleRate), {
-  voice: fittedHead,
-});
-const rendered = renderPlan(articulationPlan(track), {
-  sampleRate,
-  solver: 'waveguide',
-  seed: 1,
-});
-```
-
-`invertArticulation` estimates 12 tract controls and nine source controls. It
-returns per-frame means, variances, confidence, and ranked codebook candidate
-rows. `createArticulationInverter(frames, options)` accepts the live frame set
-and exposes the stable prefix as `track.committed`. The default lookahead is
-30 scored frames, or 150 ms at a 5 ms hop, plus the upstream analysis delay.
-Pass `refine: true` to enable the batch oral refinement. See the
-[golden-set render-back measurements](docs/reports/recognition-inversion.md)
-for the current accuracy.
+`invertArticulation` and `createArticulationInverter` recover 21 simulator controls from analysis frames. Use `articulationPlan(track)` to render them.
+See [inversion usage and accuracy](docs/CODEBOOK.md#acoustic-to-articulatory-inversion).
 
 ### Quality
 
