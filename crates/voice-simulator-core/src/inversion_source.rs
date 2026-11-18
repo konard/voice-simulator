@@ -152,7 +152,7 @@ mod tests {
             frames[t * FEATURES] = value;
         }
         mark_trills(&frames, 0.005, &mut out);
-        for (t, row) in out.chunks_exact(CHANNELS).enumerate() {
+        for (t, row) in out.as_chunks::<CHANNELS>().0.iter().enumerate() {
             assert_eq!(row[6] == 1.0, (3..20).contains(&t));
         }
     }
