@@ -103,6 +103,7 @@ it('uses the lowest cumulative cost across candidate rows', () => {
   const codebook = {
     articulation,
     lengthScale: 1,
+    referenceLength: 16.5,
     formants: new Float32Array(16),
     stats: { rows: { neutral: 2, vowel: 0, nasalVowel: 0, consonant: 0 } },
     query(_envelope, _k, { index, cost }) {
@@ -120,6 +121,38 @@ it('uses the lowest cumulative cost across candidate rows', () => {
   const formants = { valid: new Uint8Array(8), committed: 2 };
   const track = invertArticulation(frames, { codebook, formants, pitch });
   assert.equal(track.confidence[0], Math.fround(Math.exp(-11 / 8)));
+});
+
+it('compares formants at the codebook build length', () => {
+  const frames = analyzeFrames(new Float32Array(40), 8000);
+  frames.speech[0] = 1;
+  frames.periodicity[0] = 1;
+  const formants = {
+    valid: [1, 0, 0],
+    frequency: [750],
+    variance: [100],
+    committed: 1,
+  };
+  const pitch = { f0: new Float32Array(1), committed: 1 };
+  for (const [referenceLength, frequency] of [
+    [14, 750],
+    [15, 700],
+  ]) {
+    const codebook = {
+      lengthScale: 14 / 16.5,
+      referenceLength,
+      articulation: new Uint8Array(12),
+      formants: [frequency, 0, 0],
+      stats: { rows: { neutral: 1, vowel: 0, nasalVowel: 0, consonant: 0 } },
+      query(_envelope, _k, { index, cost }) {
+        index.fill(-1);
+        index[0] = 0;
+        cost[0] = 16;
+      },
+    };
+    const track = invertArticulation(frames, { codebook, formants, pitch });
+    assert.equal(track.candidates.cost[0], 1);
+  }
 });
 
 it('recovers steady vowels', () => {
@@ -175,6 +208,16 @@ it('recovers a sentence', () => {
     assert.ok(voicing <= 0.15, `voicing ${voicing}`);
     assert.ok(f0 <= 0.03, `f0 ${f0}`);
   }
+});
+
+it('keeps stop-burst ringing out of the 8 kHz pitch track', () => {
+  const audio = sentence(8000);
+  const { f0 } = audio.options.pitch;
+  // The release of "d" in "wind" rings briefly near 600 Hz. The adjacent
+  // voiced frames are near 120 Hz, and the release itself is unvoiced.
+  assert.ok(f0.subarray(272, 275).every((frequency) => frequency === 0));
+  assert.ok(f0[278] > 100 && f0[278] < 150);
+  assert.ok(errors(audio).f0 <= 0.03);
 });
 
 it('finds the lips in a closure', () => {

@@ -1,6 +1,7 @@
 /** Candidate scoring and temporal search for acoustic inversion. Unlicense. */
 import { CHANNELS } from '../articulation/plan.js';
 import { CODEBOOK_CHANNELS, frameEnvelope } from './codebook.js';
+import { L0 } from './codebook-features.js';
 
 export const TRACT_WIDTH = CODEBOOK_CHANNELS.length;
 export const CLOSURE_CANDIDATES = 32;
@@ -55,11 +56,14 @@ function closureSeeds(book) {
 
 function localCost(row, t, envelopeCost, frames, formants, book) {
   const scale = book.lengthScale;
+  // Stored formants are in physical Hz for the book's rounded build length.
+  // Move them onto the same 16.5 cm axis as the scaled observations.
+  const referenceScale = book.referenceLength / L0;
   const weight = frames.periodicity[t] >= 0.45 ? 1 : 0.25;
   let cost = envelopeCost / 16;
   for (let k = 0; k < 3; k++) {
     const i = t * 4 + k;
-    const reference = book.formants[row * 8 + k];
+    const reference = referenceScale * book.formants[row * 8 + k];
     if (formants.valid[i] && reference > 0) {
       const delta = scale * formants.frequency[i] - reference;
       const variance =
