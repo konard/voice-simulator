@@ -6,6 +6,7 @@ import {
   collectAdvisories,
   isNonBreakingFix,
   main,
+  OWNER_ACTION,
   report,
 } from '../scripts/npm-audit-report.mjs';
 
@@ -177,6 +178,62 @@ describe('npm audit report', () => {
     multiline.vulnerabilities.fixable.via[0].title = 'a\nb 100%';
     const [line] = report(JSON.stringify(multiline)).annotations;
     expect(line).toContain('a%0Ab 100%25');
+  });
+});
+
+describe('npm audit on pull requests', () => {
+  it('warns a pull request about an unfixable high advisory but fails the default branch with the owner action', () => {
+    const pullRequest = report(synthetic, { unfixableLevel: 'critical' });
+    expect(pullRequest.failed).toBe(false);
+    const severe = pullRequest.annotations.find((line) =>
+      line.includes('GHSA-seve-re00-0003')
+    );
+    expect(severe).toMatch(/^::warning /);
+    expect(severe).toContain(
+      'the default-branch run fails until the owner action'
+    );
+    expect(pullRequest.summary).toContain(
+      'which fails at high (critical without a non-breaking fix)'
+    );
+    expect(pullRequest.summary).toContain('reported; fails the default branch');
+
+    const defaultBranch = report(synthetic, {});
+    expect(defaultBranch.failed).toBe(true);
+    expect(defaultBranch.annotations[0]).toMatch(/^::error /);
+    expect(defaultBranch.annotations[0]).toContain(OWNER_ACTION);
+  });
+
+  it('still fails a pull request on a fixable high or any critical advisory', () => {
+    const vulnerabilities = JSON.parse(synthetic).vulnerabilities;
+    const withSevere = (severe) =>
+      JSON.stringify({ auditReportVersion: 2, vulnerabilities: { severe } });
+    const pullRequest = { unfixableLevel: 'critical' };
+    expect(
+      report(
+        withSevere({ ...vulnerabilities.severe, fixAvailable: true }),
+        pullRequest
+      ).failed
+    ).toBe(true);
+    const critical = {
+      ...vulnerabilities.severe,
+      severity: 'critical',
+      via: [advisory('severe', 'critical', 'GHSA-crit-ical-0004')],
+    };
+    expect(report(withSevere(critical), pullRequest).failed).toBe(true);
+    // A lower unfixable level never relaxes the main gate.
+    expect(report(synthetic, { unfixableLevel: 'low' }).failed).toBe(true);
+  });
+
+  it('rejects an unknown unfixable level', () => {
+    const lines = [];
+    const log = console.log;
+    console.log = (line) => lines.push(line);
+    try {
+      expect(main({ AUDIT_UNFIXABLE_LEVEL: 'severe' }, () => ({}))).toBe(1);
+    } finally {
+      console.log = log;
+    }
+    expect(lines.join('\n')).toContain('Unknown severity: severe');
   });
 });
 

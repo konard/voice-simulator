@@ -143,6 +143,16 @@ describe('security workflow', () => {
     );
     expect(workflow).toMatch(/^ {2}schedule:\n {4}- cron: '0 6 \* \* 1'$/m);
   });
+
+  // Only a pull request, which cannot patch a dependency, defers an
+  // unfixable high advisory; pushes and the weekly run keep failing on it.
+  it('defers unfixable high advisories on pull requests only', () => {
+    const audit = getJobBlock('npm-audit');
+    const lines = audit.match(/AUDIT_UNFIXABLE_LEVEL: .*/g) ?? [];
+    expect(lines).toEqual([
+      "AUDIT_UNFIXABLE_LEVEL: ${{ github.event_name == 'pull_request' && 'critical' || '' }}",
+    ]);
+  });
 });
 
 it('excludes historical experiments while scanning shipped examples', () => {
