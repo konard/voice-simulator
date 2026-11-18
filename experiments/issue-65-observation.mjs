@@ -73,17 +73,6 @@ for (const rate of [16000, 8000]) {
     ...options,
     formants: { ...formants, valid: new Uint8Array(formants.valid.length) },
   });
-  const correctedUnits = invertArticulation(frames, {
-    ...options,
-    codebook: {
-      ...book,
-      formants: Float64Array.from(
-        book.formants,
-        (f) =>
-          (f * book.referenceLength * book.lengthScale) / voice.vocalTractLength
-      ),
-    },
-  });
   const truth = articulationPlan(raw);
   const state = {};
   truth.channels = Object.fromEntries(
@@ -124,7 +113,6 @@ for (const rate of [16000, 8000]) {
     raw: mcd(articulationPlan(raw)),
     compensated: mcd(articulationPlan(adjusted)),
     withoutFormants: mcd(articulationPlan(withoutFormants)),
-    correctedUnits: mcd(articulationPlan(correctedUnits)),
   });
   for (const names of [
     ['f0', 'voicing'],
