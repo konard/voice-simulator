@@ -1031,15 +1031,21 @@ SD (logs saved as `ci-logs/10862a1-<job>.log`):
 | Deno | 256 s of 420 (134776298224) | 203 s of 420 (134776298124) | 347 s of 420 (134776298351) |
 | Bun | 287 s of 600 (134776298375) | 411 s of 600 (134776298077) | 464 s of 600 (134776298392) |
 
-Across these three runs, the largest times are 347 s (Deno/Windows) and
-465 s (Bun/Windows), or 83% and 78% of the budgets. A job exceeds its
-budget only on a runner at least 1.21× (Node and Deno) or 1.29× (Bun)
-slower than the slowest one measured. The 70% warning (294 s and 420 s)
-reports such drift first. Every budget stays below 70% of the 15-minute
-job backstop (630 s), which `tests/ci-timeouts.test.js` checks, so the
-budgets cannot be raised much further. Within each job the matching tests
-already run as separate processes, so the remaining time is the specified
-render count on the JS engine, not idle scheduling.
+[Run 44298426572](https://github.com/konard/voice-simulator/actions/runs/44298426572)
+at the report-only commit 904b10c again fails only on pitch SD. Its times
+show how much runners vary with unchanged code: Node took 287 s, 303 s
+and 270 s and Deno 191 s, 294 s and 183 s on Ubuntu, macOS and Windows. Bun
+took 277 s, 497 s and 469 s.
+
+Across these four runs, the largest times are 347 s (Deno/Windows) and
+497 s (Bun/macOS), or 83% of their budgets. A job exceeds its budget only
+on a runner at least 1.21× slower than the slowest one measured. The 70%
+warning (294 s and 420 s) reports such drift first. Every budget stays
+below 70% of the 15-minute job backstop (630 s), which
+`tests/ci-timeouts.test.js` checks, so the budgets cannot be raised much
+further. Within each job the matching tests already run as separate
+processes, so the remaining time is the specified render count on the JS
+engine, not idle scheduling.
 
 The issue asks that tests needing more than about 10 seconds run only in
 the manually triggered workflow. The 40-render `matchVoice` tests in
