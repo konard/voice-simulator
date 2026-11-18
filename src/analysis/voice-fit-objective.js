@@ -7,6 +7,10 @@ import {
   histogramCount,
   quantile,
 } from './voice-fit-statistics.js';
+import {
+  TEXT_FORMANT_WEIGHT,
+  TEXT_SYLLABLE_RATIO,
+} from './voice-fit-calibration.js';
 export function featureVector(state) {
   const f = stateFeatures(state),
     log = (x) => (x > 0 ? Math.log(x) : null);
@@ -35,6 +39,18 @@ export function featureVector(state) {
 }
 // Index of ln(syllable rate) in featureVector values.
 const RATE = 11;
+// Without a transcript the target and the candidate say different words:
+// the mel spectrum (indices 12 on) and the formants (2 to 5: dF, F1 to F3)
+// depend on them.
+function termWeight(i, transcript) {
+  if (transcript) {
+    return 1;
+  }
+  if (i >= 12) {
+    return 0.3;
+  }
+  return i >= 2 && i <= 5 ? TEXT_FORMANT_WEIGHT : 1;
+}
 export function vectorDistance(
   target,
   candidate,
@@ -54,6 +70,11 @@ export function vectorDistance(
   target.values.forEach((value, i) => {
     let x = value,
       y = candidate.values[i];
+    // Without a transcript the candidate says MATCH_TEXT: the target's
+    // syllable rate as MATCH_TEXT at the same speechRate would read.
+    if (!transcript && i === RATE && x !== null) {
+      x -= Math.log(TEXT_SYLLABLE_RATIO);
+    }
     if (timed && i === RATE) {
       x = -target.speechTime;
       y = -candidate.speechTime;
@@ -66,7 +87,7 @@ export function vectorDistance(
     ) {
       return;
     }
-    const w = i >= 12 && !transcript ? 0.3 : 1;
+    const w = termWeight(i, transcript);
     sum += w * ((y - x) / target.scales[i]) ** 2;
     weight += w;
   });

@@ -13,6 +13,8 @@ import {
 import {
   PITCH_RANGE_FACTOR,
   DEFAULT_SYLLABLE_RATE,
+  TEXT_TRACT,
+  TEXT_SYLLABLE_RATIO,
 } from './voice-fit-calibration.js';
 import { cppBreathiness, rdTenseness } from './voice-fit-tables.js';
 import {
@@ -366,11 +368,17 @@ export function statisticsResult(state, options = {}) {
   };
   const count = (key) => histogramCount(state, key),
     sd = (key) => medianSd(state, key);
+  // Without a transcript the reading is divided by the text-averaged ratio
+  // and its sd includes the spread across texts; with one, correctTract
+  // (voice-fit.js) removes the bias of the words after rendering them.
+  const text = options.transcript ? { ratio: 1, spread: 0 } : TEXT_TRACT,
+    tract = features.vocalTractLength / text.ratio,
+    tractSd = (17500 * sd('dF')) / features.formantSpacing ** 2 / text.ratio;
   fit(
     'tract',
     'vocalTractLength',
-    features.vocalTractLength,
-    (17500 * sd('dF')) / features.formantSpacing ** 2,
+    tract,
+    Math.sqrt(tractSd ** 2 + (text.spread * tract) ** 2),
     count('dF')
   );
   const { range, pitch, pitchSd } = pitchReading(
@@ -453,13 +461,17 @@ export function statisticsResult(state, options = {}) {
     );
     return { head, parameters, features };
   }
+  // A transcript the speaking time cannot read (no planned syllables) still
+  // names the words; otherwise the syllable rate of an average text is used.
+  const syllableRate =
+    features.syllableRate / (options.transcript ? 1 : TEXT_SYLLABLE_RATIO);
   fit(
     'rate',
     'speechRate',
-    features.syllableRate / DEFAULT_SYLLABLE_RATE,
+    syllableRate / DEFAULT_SYLLABLE_RATE,
     Math.max(
       0.01,
-      features.syllableRate /
+      syllableRate /
         DEFAULT_SYLLABLE_RATE /
         Math.sqrt(Math.max(1, totalNuclei(state)))
     ),

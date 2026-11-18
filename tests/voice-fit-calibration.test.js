@@ -16,7 +16,17 @@ import {
   BREATHINESS_CPP,
   SPEECH_TIME,
   PLANNED_RANGE_RATIO,
+  DEFAULT_SYLLABLE_RATE,
+  TEXT_TRACT,
+  TEXT_SYLLABLE_RATIO,
+  TEXT_FORMANT_WEIGHT,
 } from '../src/analysis/voice-fit-calibration.js';
+import {
+  accumulate,
+  emptyState,
+  statisticsResult,
+} from '../src/analysis/voice-fit-statistics.js';
+import { vectorDistance } from '../src/analysis/voice-fit-objective.js';
 import { fitVoice, synthesize, createVoiceFitter } from '../src/index.js';
 import { analyzeFrames } from '../src/recognition/frontend.js';
 import { findLandmarks } from '../src/recognition/landmarks.js';
@@ -162,5 +172,68 @@ describe('voice fitting calibration', () => {
     const broken = JSON.parse(JSON.stringify(first.state));
     broken.landmarks.carry.push(0.5);
     expect(() => createVoiceFitter({ state: broken })).toThrow(RangeError);
+  });
+});
+describe('voice fitting without a transcript', () => {
+  it('reads tract and rate of an average text without a transcript', () => {
+    const { samples } = synthesize(
+      'The birch canoe slid on the smooth planks.',
+      {
+        seed: 1,
+        sampleRate: 16000,
+        solver: 'waveguide',
+      }
+    );
+    const state = accumulate(emptyState(), samples, 16000);
+    const none = statisticsResult(state),
+      named = statisticsResult(state, {
+        transcript: 'The birch canoe slid on the smooth planks.',
+        language: 'en',
+      });
+    const reading = none.features.vocalTractLength,
+      tract = none.parameters.vocalTractLength;
+    expect(close(tract.value, reading / TEXT_TRACT.ratio, 1e-9)).toBe(true);
+    expect(tract.sd >= TEXT_TRACT.spread * tract.value).toBe(true);
+    expect(close(named.parameters.vocalTractLength.value, reading, 1e-9)).toBe(
+      true
+    );
+    expect(
+      close(
+        none.head.speechRate,
+        none.features.syllableRate /
+          DEFAULT_SYLLABLE_RATE /
+          TEXT_SYLLABLE_RATIO,
+        1e-9
+      )
+    ).toBe(true);
+  });
+  it('weighs the words out of the objective without a transcript', () => {
+    // A candidate one scale away in ln dF alone (index 2); without a
+    // transcript the target's ln syllable rate (index 11) reads as
+    // MATCH_TEXT would at the same speechRate.
+    const target = {
+      values: Array(36).fill(0),
+      scales: Array(36).fill(1),
+      speechTime: 0,
+    };
+    const candidate = {
+      ...target,
+      values: target.values.map((_, i) =>
+        i === 2 ? 1 : i === 11 ? -Math.log(TEXT_SYLLABLE_RATIO) : 0
+      ),
+    };
+    const weight = 8 + 4 * TEXT_FORMANT_WEIGHT + 24 * 0.3;
+    expect(
+      close(
+        vectorDistance(target, candidate, false),
+        Math.sqrt(TEXT_FORMANT_WEIGHT / weight),
+        1e-12
+      )
+    ).toBe(true);
+    const timed = { ...candidate, values: [...candidate.values] };
+    timed.values[11] = 0;
+    expect(
+      close(vectorDistance(target, timed, true, 0), Math.sqrt(1 / 40), 1e-12)
+    ).toBe(true);
   });
 });
