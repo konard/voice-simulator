@@ -59,6 +59,29 @@ function exhaustiveQuery(book, report) {
   };
 }
 
+function sourceCorrectedBook(book, frames, pitch, corrections) {
+  let t = 0;
+  const shifted = new Float64Array(24);
+  return {
+    ...book,
+    query(envelope, k, out) {
+      while (!frames.speech[t]) {
+        t++;
+      }
+      const frequency = pitch.f0[t++] || voice.pitch;
+      const [, correction] = corrections.reduce((best, item) =>
+        Math.abs(best[0] - frequency) <= Math.abs(item[0] - frequency)
+          ? best
+          : item
+      );
+      for (let j = 0; j < shifted.length; j++) {
+        shifted[j] = envelope[j] + correction[j];
+      }
+      return book.query(shifted, k, out);
+    },
+  };
+}
+
 const voice = presetHeadConfig('male');
 const settings = { solver: 'waveguide', engine: 'js', seed: 1 };
 const book = buildCodebook(voice, { size: 5000 });
@@ -83,10 +106,6 @@ for (const rate of [16000, 8000]) {
     ...options,
     codebook: exhaustiveQuery(book, exhaustive),
   });
-  const neutral = analyzeFrames(
-    render(steadyPlan({ ...CHANNEL_DEFAULTS, f0: voice.pitch }, 0.3)),
-    rate
-  );
   const scratch = { envelope: new Float64Array(24), key: new Float64Array(6) };
   const shape = tractShape(CHANNEL_DEFAULTS, voice);
   const analytic = new Float64Array(24);
@@ -97,19 +116,26 @@ for (const rate of [16000, 8000]) {
     analytic
   );
   normalizeEnvelope(analytic);
-  frameEnvelope(neutral, neutral.count >> 1, book, scratch);
-  const correction = analytic.map((value, j) => value - scratch.envelope[j]);
-  const codebook = {
-    ...book,
-    query(envelope, k, out) {
-      return book.query(
-        envelope.map((x, j) => x + correction[j]),
-        k,
-        out
-      );
-    },
-  };
-  const adjusted = invertArticulation(frames, { ...options, codebook });
+  function neutralCorrection(f0) {
+    const steady = steadyPlan(CHANNEL_DEFAULTS, 0.3);
+    steady.channels.f0.fill(f0);
+    const neutral = analyzeFrames(render(steady), rate);
+    frameEnvelope(neutral, neutral.count >> 1, book, scratch);
+    return [f0, analytic.map((value, j) => value - scratch.envelope[j])];
+  }
+  const corrections = [0.75, 0.875, 1, 1.125, 1.25, 1.5].map((ratio) =>
+    neutralCorrection(voice.pitch * ratio)
+  );
+  const adjusted = invertArticulation(frames, {
+    ...options,
+    codebook: sourceCorrectedBook(book, frames, pitch, [
+      neutralCorrection(100),
+    ]),
+  });
+  const conditioned = invertArticulation(frames, {
+    ...options,
+    codebook: sourceCorrectedBook(book, frames, pitch, corrections),
+  });
   const withoutFormants = invertArticulation(frames, {
     ...options,
     formants: { ...formants, valid: new Uint8Array(formants.valid.length) },
@@ -153,6 +179,7 @@ for (const rate of [16000, 8000]) {
     truthSource: mcd(oracleSource),
     raw: mcd(articulationPlan(raw)),
     compensated: mcd(articulationPlan(adjusted)),
+    pitchCompensated: mcd(articulationPlan(conditioned)),
     withoutFormants: mcd(articulationPlan(withoutFormants)),
     exhaustive: mcd(articulationPlan(exact)),
     shortlistRecall: exhaustive.recall,
@@ -187,6 +214,7 @@ for (const rate of [16000, 8000]) {
     let oracle = 0;
     let correct = 0;
     let compensated = 0;
+    let pitchCompensated = 0;
     let exactError = 0;
     let n = 0;
     for (let t = 0; t < frames.count; t++) {
@@ -205,6 +233,7 @@ for (const rate of [16000, 8000]) {
       oracle += best ** 2;
       correct += (raw.channels[key][t] - expected) ** 2;
       compensated += (adjusted.channels[key][t] - expected) ** 2;
+      pitchCompensated += (conditioned.channels[key][t] - expected) ** 2;
       exactError += (exact.channels[key][t] - expected) ** 2;
       n++;
     }
@@ -214,6 +243,7 @@ for (const rate of [16000, 8000]) {
       oracle: Math.sqrt(oracle / n),
       selected: Math.sqrt(correct / n),
       compensated: Math.sqrt(compensated / n),
+      pitchCompensated: Math.sqrt(pitchCompensated / n),
       exhaustive: Math.sqrt(exactError / n),
     });
   }
