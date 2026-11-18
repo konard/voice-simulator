@@ -746,6 +746,23 @@ fitting file has run for only 22831 ms (line 5010). Matching has already
 finished with three numerical failures. The revised launcher also puts
 `voice-fit.test.js` in Node's early priority queue, sequential with matching.
 
+That queue was still too long in run 44284703326 (988f7d1). Node macOS
+finished in 299 s of its 300 s budget: fitVoice took 24 s, the six
+matchVoice tests 34–41 s each (233 s) and the CLI test 26 s, all in one
+process. Node Windows did not finish. The ordinary queue reached
+`recognition-modes.test.js` only after 180 s, which then ran for 120 s, and
+matching was still running. Deno, which runs files in parallel, finished
+in 182–237 s. Node now starts four processes at once:
+
+- the voice-match tests named by `--test-name-pattern='matches a'`;
+- the tests that `--test-skip-pattern='matches a'` keeps, so together the
+  two keep every test of the file unchanged;
+- `voice-fit.test.js` then `recognition-modes.test.js`;
+- the ordinary files.
+
+`tests/bun-shards.test.js` checks that all four processes overlap, that
+every file runs, and that each failing process fails the suite.
+
 Bun macOS job 134131834276 reaches its deadline at line 5095. Its first
 bulk shard finishes at 15:08:05, while the other shard spends roughly
 101 seconds on `recognition-modes.test.js` (15:08:41 to 15:10:22) and

@@ -16,14 +16,11 @@ case "${runtime}" in
 esac
 
 priority=(tests/voice-match.test.js)
-if [ "${runtime}" = node ]; then
-  priority+=(tests/voice-fit.test.js)
-fi
 remaining=()
 for file in tests/*.test.js; do
   if [ "${file}" != tests/voice-match.test.js ] &&
     { [ "${runtime}" != node ] || [ "${file}" != tests/voice-fit.test.js ]; } &&
-    { [ "${runtime}" != bun ] || [ "${file}" != tests/recognition-modes.test.js ]; }; then
+    { [ "${runtime}" = deno ] || [ "${file}" != tests/recognition-modes.test.js ]; }; then
     remaining+=("${file}")
   fi
 done
@@ -46,22 +43,37 @@ if [ "${runtime}" = bun ]; then
   first_pid=$!
   "$@" --shard=2/2 "${remaining[@]}" &
   second_pid=$!
+elif [ "${runtime}" = node ]; then
+  # Each of the six 40-render matchVoice tests takes 25-40s on Node
+  # (spec item 10), and Node runs one file's tests sequentially. In one
+  # process with voice-fit the fitting files needed 283s of a 300s budget
+  # on macOS and did not finish on Windows, where recognition-modes started
+  # after 180s of ordinary files. Start four processes at once instead:
+  # the voice-match tests named by the pattern, the voice-match tests it
+  # skips (so together they keep every test of the file), voice-fit then
+  # recognition-modes, and the ordinary files.
+  split='matches a'
+  "$@" --test-name-pattern="${split}" "${priority[@]}" &
+  first_pid=$!
+  "$@" --test-skip-pattern="${split}" "${priority[@]}" &
+  rest_pid=$!
+  "$@" --test-concurrency=1 tests/voice-fit.test.js \
+    tests/recognition-modes.test.js &
+  fitting_pid=$!
+  "$@" "${remaining[@]}" &
+  second_pid=$!
 else
-  # Node's late fitting files otherwise start too close to the deadline.
-  # Keep them sequential in this priority queue while ordinary files run.
   # Deno only needs the matching file started early.
-  # Bash 3.2 (macOS) treats an empty array as unset under nounset.
-  # Branch the invocation so Deno still starts its matching process.
-  if [ "${runtime}" = node ]; then
-    "$@" --test-concurrency=1 "${priority[@]}" &
-  else
-    "$@" "${priority[@]}" &
-  fi
+  "$@" "${priority[@]}" &
   first_pid=$!
   "$@" "${remaining[@]}" &
   second_pid=$!
 fi
-# Reap both children even when a preceding phase has failed.
+# Reap every child even when a preceding phase has failed.
 wait "${first_pid}" || status=$?
 wait "${second_pid}" || status=$?
+if [ "${runtime}" = node ]; then
+  wait "${rest_pid}" || status=$?
+  wait "${fitting_pid}" || status=$?
+fi
 exit "${status}"

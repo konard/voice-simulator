@@ -374,8 +374,9 @@ jobs:
         if: matrix.runtime == 'node'
         shell: bash
         # Node sorts CLI file paths before scheduling. Start the expensive
-        # matching file in its own process so it overlaps the entire suite,
-        # rather than starting after most of the 300s budget has elapsed.
+        # matching tests (split in two by test name), voice-fit with
+        # recognition-modes, and the ordinary files in four processes, so
+        # none starts after most of the 300s budget has elapsed.
         run: bash scripts/run-with-budget-warning.sh 300 "Node.js test suite" bash scripts/run-runtime-tests.sh node
 
       - name: Verify inverse-filter CPU target
