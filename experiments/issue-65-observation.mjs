@@ -20,8 +20,44 @@ import {
   steadyPlan,
 } from '../src/recognition/codebook-features.js';
 import { frameEnvelope } from '../src/recognition/codebook.js';
+import { envelopeCost } from '../src/recognition/codebook-search.js';
 import { CHANNEL_DEFAULTS } from '../src/articulation/plan.js';
 import { LANDMARK_SENTENCES } from '../scripts/landmark-material.mjs';
+
+/** Use the same 24-band distance with no six-dimensional shortlist. */
+function exhaustiveQuery(book, report) {
+  let queries = 0;
+  let shared = 0;
+  const approximate = { index: new Int32Array(64), cost: new Float64Array(64) };
+  return {
+    ...book,
+    query(envelope, k, { index, cost }) {
+      index.fill(-1, 0, k);
+      cost.fill(Infinity, 0, k);
+      for (let row = 0; row < book.size; row++) {
+        const distance = envelopeCost(envelope, book.envelope, row);
+        if (distance >= cost[k - 1]) {
+          continue;
+        }
+        let slot = k - 1;
+        while (slot > 0 && distance < cost[slot - 1]) {
+          cost[slot] = cost[slot - 1];
+          index[slot] = index[slot - 1];
+          slot--;
+        }
+        cost[slot] = distance;
+        index[slot] = row;
+      }
+      book.query(envelope, k, approximate);
+      const exact = index.subarray(0, k);
+      for (let i = 0; i < k; i++) {
+        shared += Number(exact.includes(approximate.index[i]));
+      }
+      queries++;
+      report.recall = shared / (queries * k);
+    },
+  };
+}
 
 const voice = presetHeadConfig('male');
 const settings = { solver: 'waveguide', engine: 'js', seed: 1 };
@@ -42,6 +78,11 @@ for (const rate of [16000, 8000]) {
   });
   const options = { voice, pitch, formants, codebook: book };
   const raw = invertArticulation(frames, options);
+  const exhaustive = {};
+  const exact = invertArticulation(frames, {
+    ...options,
+    codebook: exhaustiveQuery(book, exhaustive),
+  });
   const neutral = analyzeFrames(
     render(steadyPlan({ ...CHANNEL_DEFAULTS, f0: voice.pitch }, 0.3)),
     rate
@@ -113,6 +154,8 @@ for (const rate of [16000, 8000]) {
     raw: mcd(articulationPlan(raw)),
     compensated: mcd(articulationPlan(adjusted)),
     withoutFormants: mcd(articulationPlan(withoutFormants)),
+    exhaustive: mcd(articulationPlan(exact)),
+    shortlistRecall: exhaustive.recall,
   });
   for (const names of [
     ['f0', 'voicing'],
@@ -130,6 +173,7 @@ for (const rate of [16000, 8000]) {
     let oracle = 0;
     let correct = 0;
     let compensated = 0;
+    let exactError = 0;
     let n = 0;
     for (let t = 0; t < frames.count; t++) {
       if (!frames.speech[t] || frames.periodicity[t] < 0.45) {
@@ -147,6 +191,7 @@ for (const rate of [16000, 8000]) {
       oracle += best ** 2;
       correct += (raw.channels[key][t] - expected) ** 2;
       compensated += (adjusted.channels[key][t] - expected) ** 2;
+      exactError += (exact.channels[key][t] - expected) ** 2;
       n++;
     }
     console.log({
@@ -155,6 +200,7 @@ for (const rate of [16000, 8000]) {
       oracle: Math.sqrt(oracle / n),
       selected: Math.sqrt(correct / n),
       compensated: Math.sqrt(compensated / n),
+      exhaustive: Math.sqrt(exactError / n),
     });
   }
 }
