@@ -198,7 +198,7 @@ function createInverter(frames, options, batch) {
       }
     },
     refine() {
-      refineArticulation(frames, track, book, steps, smoother.values);
+      refineArticulation(frames, track, book, steps, smoother);
       smoother.smooth(0, track.frameCount, track.frameCount);
     },
   };
@@ -231,14 +231,18 @@ export function invertArticulation(frames, options = {}) {
   const { track } = inverter;
   if (options.refine && track.confidence.some((value) => value > 0)) {
     const baselineError = renderError(frames, track);
-    const unrefined = Object.fromEntries(
-      CODEBOOK_CHANNELS.map(({ name }) => [name, track.channels[name].slice()])
-    );
+    const copyTract = (arrays) =>
+      Object.fromEntries(
+        CODEBOOK_CHANNELS.map(({ name }) => [name, arrays[name].slice()])
+      );
+    const unrefined = copyTract(track.channels);
+    const unrefinedVariance = copyTract(track.variance);
     inverter.refine();
     // The oral objective omits the noisy source and radiation detail of
     // the renderer. Keep the refinement only if the render-back improves.
     if (renderError(frames, track) > baselineError) {
       Object.assign(track.channels, unrefined);
+      Object.assign(track.variance, unrefinedVariance);
     }
   }
   return track;

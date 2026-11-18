@@ -21,6 +21,7 @@ import {
 import { VOWELS } from '../src/ipa/inventory.js';
 import { sampleState } from '../src/articulation/tract-shape.js';
 import { tractSteps } from '../src/recognition/inversion-search.js';
+import { createTractSmoother } from '../src/recognition/inversion-smoother.js';
 import { LANDMARK_SENTENCES } from '../scripts/landmark-material.mjs';
 
 const books = new Map();
@@ -304,6 +305,39 @@ it('refinement does not hurt', () => {
   assert.ok(
     comparisons.every(({ before, after, rtf }) => after <= before && rtf <= 1)
   );
+});
+
+it('measures variance around the refined tract observation', () => {
+  const steps = tractSteps(head, 200);
+  const arrays = () =>
+    Object.fromEntries(
+      CODEBOOK_CHANNELS.map(({ name }) => [name, new Float32Array(1)])
+    );
+  const track = {
+    channels: arrays(),
+    variance: arrays(),
+    candidates: {
+      width: 2,
+      count: Uint8Array.of(2),
+      index: Int32Array.of(0, 1),
+      cost: Float32Array.of(0, 0),
+    },
+  };
+  const articulation = new Uint8Array(2 * steps.length);
+  articulation[steps.length] = 255;
+  const smoother = createTractSmoother(
+    track,
+    { articulation },
+    steps,
+    Int8Array.of(0)
+  );
+  smoother.smooth(0, 1, 1);
+  assert.equal(track.variance.height[0], 0.5);
+  smoother.values[0] = 0.5;
+  smoother.remeasure(0);
+  smoother.smooth(0, 1, 1);
+  assert.equal(track.channels.height[0], 0.5);
+  assert.equal(track.variance.height[0], 0.25);
 });
 
 it('stream agrees with batch', () => {

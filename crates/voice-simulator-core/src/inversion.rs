@@ -120,7 +120,13 @@ impl Lattice<'_> {
         }
     }
 
-    fn measurement(&self, t: usize, choice: usize, count: usize) -> ([f64; WIDTH], [f64; WIDTH]) {
+    fn measurement(
+        &self,
+        t: usize,
+        choice: usize,
+        count: usize,
+        adjusted: Option<[f64; WIDTH]>,
+    ) -> ([f64; WIDTH], [f64; WIDTH]) {
         let start = t * self.stride;
         let local = &self.cost[start..start + count];
         let min = local.iter().fold(f64::INFINITY, |a, &b| a.min(b));
@@ -135,12 +141,18 @@ impl Lattice<'_> {
         let mut variance = [0.0; WIDTH];
         for c in 0..WIDTH {
             let scale = self.range[c] / 255.0;
-            let value = self.shape[chosen + c];
-            mean[c] = self.min[c] + value * scale;
+            let code = self.shape[chosen + c];
+            let center = if let Some(state) = adjusted {
+                mean[c] = state[c];
+                (state[c] - self.min[c]) / scale
+            } else {
+                mean[c] = self.min[c] + code * scale;
+                code
+            };
             let mut r = 0.0;
             for (j, w) in weights.iter().enumerate().take(count) {
                 let row = self.index[start + j] as usize;
-                let d = self.shape[row * WIDTH + c] - value;
+                let d = self.shape[row * WIDTH + c] - center;
                 r += (w / total) * d * d;
             }
             variance[c] = r.max(5.1 * 5.1) * scale * scale;
@@ -162,10 +174,7 @@ impl Lattice<'_> {
             row[WIDTH..2 * WIDTH].fill(f64::INFINITY);
             return row;
         }
-        let (mut z, mut r) = self.measurement(t, pick as usize, count);
-        if let Some(state) = adjusted {
-            z = state;
-        }
+        let (mut z, mut r) = self.measurement(t, pick as usize, count, adjusted);
         if let Some(previous) = prior {
             for c in 0..WIDTH {
                 let predicted = previous[c + WIDTH] + self.step[c] * self.step[c];
@@ -237,7 +246,7 @@ impl Lattice<'_> {
         let mut adjusted = vec![None; rows.len()];
         let selected = periodic.iter().enumerate().filter(|(_, flag)| **flag);
         for (t, _) in selected.step_by(4) {
-            if rows[t][11] < 0.1 {
+            if self.index[t * self.stride] >= 0.0 && rows[t][11] < 0.1 {
                 adjusted[t] = Some(refine_frame(t, rows[t][..WIDTH].try_into().unwrap()));
             }
         }
@@ -316,4 +325,40 @@ pub fn local_cost(distance: f64, scale: f64, periodicity: f64, formants: &[[f64;
 
 pub fn planner_step(range: f64, time_constant: f64, frame_rate: f64, speed: f64) -> f64 {
     -0.5 * range * expm1(-speed / (time_constant * frame_rate))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn refined_variance_is_centered_on_the_refined_measurement() {
+        let mut shape = [0.0; 2 * WIDTH];
+        shape[WIDTH] = 255.0;
+        let lattice = Lattice {
+            shape: &shape,
+            index: &[0.0, 1.0],
+            cost: &[0.0, 0.0],
+            stride: 2,
+            min: [0.0; WIDTH],
+            range: [1.0; WIDTH],
+            defaults: [0.0; WIDTH],
+            step: [0.2; WIDTH],
+            smoothness: 1.0,
+        };
+        let mut result = [0.0; ROW];
+        lattice.solve(&mut result);
+        assert_eq!(result[WIDTH], 0.5);
+        lattice.refine(
+            &[true],
+            |_, state| {
+                let mut adjusted = *state;
+                adjusted[0] = 0.5;
+                adjusted
+            },
+            &mut result,
+        );
+        assert_eq!(result[0], 0.5);
+        assert_eq!(result[WIDTH], 0.25);
+    }
 }

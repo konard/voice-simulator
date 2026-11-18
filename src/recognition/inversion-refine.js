@@ -54,7 +54,7 @@ function refineFrame(track, frames, t, book, steps, { grid, scratch }) {
   return next.value[0].x;
 }
 
-export function refineArticulation(frames, track, book, steps, values) {
+export function refineArticulation(frames, track, book, steps, smoother) {
   const grid = Float64Array.from(GRID, (f) => f / book.lengthScale);
   const scratch = {
     envelope: new Float64Array(GRID.length),
@@ -66,13 +66,18 @@ export function refineArticulation(frames, track, book, steps, values) {
     if (!frames.speech[t] || frames.periodicity[t] < 0.45) {
       continue;
     }
-    if (periodic++ % 4 || track.channels.velum[t] >= 0.1) {
+    if (
+      periodic++ % 4 ||
+      track.channels.velum[t] >= 0.1 ||
+      !track.candidates.count[t]
+    ) {
       continue;
     }
     const x = refineFrame(track, frames, t, book, steps, context);
     REFINED.forEach((c, j) => {
       const { min, max } = CODEBOOK_CHANNELS[c];
-      values[t * TRACT_WIDTH + c] = min + x[j] * (max - min);
+      smoother.values[t * TRACT_WIDTH + c] = min + x[j] * (max - min);
     });
+    smoother.remeasure(t);
   }
 }

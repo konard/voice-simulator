@@ -24,7 +24,8 @@ function measure(
   chosen,
   book,
   candidates,
-  { weights, values, observation }
+  { weights, values, observation },
+  refined = false
 ) {
   const table = book.articulation;
   const row = candidates.index[t * candidates.width + chosen];
@@ -34,13 +35,16 @@ function measure(
     const { min, max } = CODEBOOK_CHANNELS[c];
     const scale = (max - min) / 255;
     const code = table[row * TRACT_WIDTH + c];
+    if (!refined) {
+      values[start + c] = min + code * scale;
+    }
+    const center = refined ? (values[start + c] - min) / scale : code;
     let variance = 0;
     for (let j = 0; j < candidates.count[t]; j++) {
       const other = candidates.index[t * candidates.width + j];
-      const delta = table[other * TRACT_WIDTH + c] - code;
+      const delta = table[other * TRACT_WIDTH + c] - center;
       variance += weights[j] * delta * delta;
     }
-    values[start + c] = min + code * scale;
     observation[start + c] = Math.max(variance, 5.1 ** 2) * scale * scale;
   }
 }
@@ -154,6 +158,9 @@ export function createTractSmoother(track, book, steps, path) {
 
   return {
     values,
+    remeasure(t) {
+      measure(t, path[t], book, candidates, state, true);
+    },
     smooth(first, last, end) {
       forward(first, end);
       backward(first, last, end);
