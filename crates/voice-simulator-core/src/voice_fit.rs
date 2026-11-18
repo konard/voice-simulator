@@ -116,6 +116,26 @@ pub fn centered_mel(log_power_sums: &[f64], voiced_frames: usize) -> Vec<f64> {
     let mean = mel.iter().sum::<f64>() / mel.len().max(1) as f64;
     mel.into_iter().map(|x| x - mean).collect()
 }
+/// Index of the ln syllable rate in the feature vector.
+const RATE: usize = 11;
+/// Weight of the dF and F1 to F3 terms without a transcript (JS
+/// `TEXT_FORMANT_WEIGHT`).
+const TEXT_FORMANT_WEIGHT: f64 = 0.1;
+/// Syllable rate of an average text over MATCH_TEXT (JS `TEXT_SYLLABLE_RATIO`).
+const TEXT_SYLLABLE_RATIO: f64 = 0.9391;
+/// Weight of feature `i`: without a transcript the words differ, so the
+/// formant terms count less and the mel terms 0.3.
+fn term_weight(i: usize, transcript: bool) -> f64 {
+    if transcript {
+        1.0
+    } else if i >= 12 {
+        0.3
+    } else if (2..=5).contains(&i) {
+        TEXT_FORMANT_WEIGHT
+    } else {
+        1.0
+    }
+}
 /// Feature RMS, with NaN indicating an unavailable feature.
 pub fn distance(
     target: &[f64],
@@ -130,7 +150,14 @@ pub fn distance(
         if !x.is_finite() || !y.is_finite() {
             continue;
         }
-        let w = if i >= 12 && !transcript { 0.3 } else { 1.0 };
+        // Without a transcript the candidate says MATCH_TEXT: the target's
+        // syllable rate as MATCH_TEXT at the same speechRate would read.
+        let x = if !transcript && i == RATE {
+            x - math::ln(TEXT_SYLLABLE_RATIO)
+        } else {
+            *x
+        };
+        let w = term_weight(i, transcript);
         let error = (y - x) / scale;
         sum += w * error * error;
         weight += w;
