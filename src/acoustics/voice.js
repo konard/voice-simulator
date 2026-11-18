@@ -405,7 +405,7 @@ export class VoiceRenderer {
     }
     this.source = options.source ?? DEFAULT_SOURCE;
     const source = SOURCES.get(this.source);
-    if (!source) {
+    if (typeof source !== 'function') {
       throw new Error(`Unknown source: ${options.source}`);
     }
     this.solver = factory({

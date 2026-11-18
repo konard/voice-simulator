@@ -2,8 +2,8 @@
  * Voice features of a recording: the measurements that voice matching
  * compares between a recording and the simulator.
  *
- * - f0 (median and 5-95 % range) with YIN (de Cheveigné & Kawahara 2002);
- * - formants F1-F4 (F1-F3 at 8 kHz) with LPC, and the formant spacing ΔF
+ * - f0 (median and 5-95 % range) with the shared pitch tracker;
+ * - tracked formants F1-F4 (F1-F3 at 8 kHz), and the formant spacing ΔF
  *   fitted to the uniform-tube pattern F_i = (2i - 1) ΔF / 2 (Reby &
  *   McComb 2003), which gives the vocal tract length L = c / (2 ΔF)
  *   (Fitch 1997);
@@ -14,8 +14,14 @@
  *   taken above 400 Hz at the best fractional lag, and summed up by the
  *   upper quartile over frames;
  * - syllable rate from peaks of the loudness envelope.
+ * analyzeLegacyVoice retains YIN and the previous independent LPC analysis.
  */
 
+import {
+  accumulate,
+  emptyState,
+  stateFeatures,
+} from './voice-fit-statistics.js';
 import { estimateFormants } from '../acoustics/analysis.js';
 import { Biquad } from '../acoustics/filters.js';
 import { SPEED_OF_SOUND } from '../acoustics/transfer.js';
@@ -342,9 +348,9 @@ function countSyllables(levels, voiced) {
   for (let index = 1; index < decibels.length - 1; index++) {
     valley = Math.min(valley, decibels[index]);
     const isPeak =
-      voiced[index] &&
       decibels[index] >= decibels[index - 1] &&
-      decibels[index] > decibels[index + 1];
+      decibels[index] > decibels[index + 1] &&
+      voiced(index);
     if (isPeak && decibels[index] - valley > 2 && index - last >= 6) {
       count++;
       last = index;
@@ -368,7 +374,7 @@ function countSyllables(levels, voiced) {
  *   telephone speech). `formants` always has four entries; those that
  *   were not measured are 0.
  */
-export function analyzeVoice(samples, sampleRate, options = {}) {
+export function prepareLegacyVoice(samples, sampleRate, options = {}) {
   const limit = Math.floor((options.maxDuration ?? 30) * sampleRate);
   const input =
     samples.length > limit
@@ -390,39 +396,115 @@ export function analyzeVoice(samples, sampleRate, options = {}) {
   }
   const loud = percentile(levels, 0.95);
   const active = levels.map((level) => level > Math.max(1e-4, 0.1 * loud));
-  const frames = levels.map((level, index) => {
-    if (!active[index]) {
-      return { voiced: false };
+  const frames = active.map((value) => (value ? null : { voiced: false }));
+  let evaluated = 0;
+  function frameAt(index) {
+    if (frames[index] === null) {
+      const pitch = yinPitch(signal, index * hop, length, rate);
+      frames[index] = {
+        ...pitch,
+        voiced: pitch.aperiodicity < VOICED_APERIODICITY,
+      };
+      evaluated++;
     }
-    const pitch = yinPitch(signal, index * hop, length, rate);
-    return { ...pitch, voiced: pitch.aperiodicity < VOICED_APERIODICITY };
-  });
+    return frames[index];
+  }
+  const activeSeconds = active.filter(Boolean).length * HOP;
+  const rateFeatures = {
+    duration: samples.length / sampleRate,
+    activeDuration: activeSeconds,
+    syllableRate:
+      activeSeconds > 0
+        ? countSyllables(levels, (index) => frameAt(index).voiced) /
+          activeSeconds
+        : 0,
+  };
+  const tracePitch = (phase) =>
+    options.trace?.({
+      stage: 'legacy-voice-pitch',
+      phase,
+      evaluated,
+      activeFrames: active.filter(Boolean).length,
+    });
+  tracePitch('rate');
   const voicedIndices = [];
-  frames.forEach((frame, index) => {
-    if (frame.voiced) {
-      voicedIndices.push(index);
+  let features = null;
+  function pitchFeatures() {
+    if (!features) {
+      for (let index = 0; index < frames.length; index++) {
+        if (frameAt(index).voiced) {
+          voicedIndices.push(index);
+        }
+      }
+      const f0s = voicedIndices.map((index) => frames[index].f0);
+      const f0Low = percentile(f0s, 0.05);
+      const f0High = percentile(f0s, 0.95);
+      features = {
+        duration: rateFeatures.duration,
+        activeDuration: activeSeconds,
+        voicedDuration: voicedIndices.length * HOP,
+        f0: median(f0s),
+        f0Low,
+        f0High,
+        f0Range: f0Low > 0 ? 12 * Math.log2(f0High / f0Low) : 0,
+        formants: [0, 0, 0, 0],
+        formantSpacing: 0,
+        vocalTractLength: 0,
+        h1h2: 0,
+        hnr: 0,
+        syllableRate: rateFeatures.syllableRate,
+      };
+      tracePitch('features');
     }
-  });
-  const f0s = voicedIndices.map((index) => frames[index].f0);
-  const f0 = median(f0s);
-  const f0Low = percentile(f0s, 0.05);
-  const f0High = percentile(f0s, 0.95);
-  const stride = Math.max(1, voicedIndices.length / FORMANT_FRAMES);
+    return features;
+  }
+  let completed = false;
+  return {
+    rateFeatures,
+    get features() {
+      return pitchFeatures();
+    },
+    complete() {
+      pitchFeatures();
+      if (!completed) {
+        Object.assign(
+          features,
+          legacyDiagnostics(signal, rate, frames, voicedIndices, {
+            ...options,
+            order,
+            formantCount,
+            hop,
+            length,
+          })
+        );
+        completed = true;
+      }
+      return features;
+    },
+  };
+}
+
+function legacyDiagnostics(signal, rate, frames, voicedIndices, options) {
+  const { order, formantCount, hop, length } = options;
+  const diagnosticFrames = voicedIndices.length;
+  const stride = Math.max(1, diagnosticFrames / FORMANT_FRAMES);
   const upper = highpass(signal, HNR_HIGHPASS, rate);
   const tracks = [[], [], [], []];
   const spacings = [];
   const tilts = [];
   const noise = [];
-  for (let pick = 0; pick < voicedIndices.length; pick += stride) {
+  for (let pick = 0; pick < diagnosticFrames; pick += stride) {
     const index = voicedIndices[Math.floor(pick)];
     const start = index * hop;
-    const formants = estimateFormants(signal, rate, {
-      start: start / rate,
-      duration: 0.03,
-      count: formantCount,
-      analysisRate: rate,
-      order,
-    });
+    const formants = options.diagnosticsOnly
+      ? []
+      : estimateFormants(signal, rate, {
+          start: start / rate,
+          duration: 0.03,
+          count: formantCount,
+          analysisRate: rate,
+          order,
+        });
     formants.slice(0, 4).forEach((value, order) => tracks[order].push(value));
     if (formants.length >= 3) {
       spacings.push(formantSpacing(formants));
@@ -440,26 +522,30 @@ export function analyzeVoice(samples, sampleRate, options = {}) {
     noise.push(10 * Math.log10((1 - aperiodicity) / aperiodicity));
   }
   const spacing = median(spacings);
-  const activeSeconds = active.filter(Boolean).length * HOP;
   return {
-    duration: samples.length / sampleRate,
-    activeDuration: activeSeconds,
-    voicedDuration: voicedIndices.length * HOP,
-    f0,
-    f0Low,
-    f0High,
-    f0Range: f0Low > 0 ? 12 * Math.log2(f0High / f0Low) : 0,
     formants: tracks.map((track) => median(track)),
     formantSpacing: spacing,
     vocalTractLength: spacing > 0 ? SPEED_OF_SOUND / (2 * spacing) : 0,
     h1h2: median(tilts),
     hnr: percentile(noise, HNR_PERCENTILE),
-    syllableRate:
-      activeSeconds > 0
-        ? countSyllables(
-            levels,
-            frames.map((frame) => frame.voiced)
-          ) / activeSeconds
-        : 0,
   };
+}
+
+/** Eager compatibility entry point; fitting can retain the prepared analysis. */
+export function analyzeLegacyVoice(samples, sampleRate, options = {}) {
+  const analysis = prepareLegacyVoice(samples, sampleRate, options);
+  return options.sourceDiagnostics === false
+    ? analysis.features
+    : analysis.complete();
+}
+
+/** Shared stage-A statistics; legacy diagnostics remain available internally. */
+export function analyzeVoice(samples, sampleRate, options = {}) {
+  const features = stateFeatures(
+    accumulate(emptyState(), samples, sampleRate, options)
+  );
+  delete features.rd;
+  delete features.cpp;
+  delete features.h1h2Source;
+  return features;
 }

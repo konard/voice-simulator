@@ -3712,8 +3712,8 @@ export interface VoiceFeatures {
   /** 5-95 % f0 range in semitones. */
   f0Range: number;
   /**
-   * Median F1-F4 (Hz). Always four entries; formants beyond `formantCount`
-   * (3 at 8000 Hz) were not measured and are 0.
+   * Median F1-F4 (Hz). Always four entries; unavailable formants and
+   * formants beyond an explicit `formantCount` are 0.
    */
   formants: number[];
   formantSpacing: number;
@@ -3737,17 +3737,16 @@ export declare function analyzeVoice(
     analysisRate?: number;
     order?: number;
     /**
-     * Formants measured and fitted for the formant spacing and the vocal
-     * tract length. Default min(4, floor(0.45 rate / 1000)) where rate is
-     * the rate after resampling: 3 at 8000 Hz, 4 from 11025 Hz.
+     * Maximum formants returned (default 4, subject to the analysis band).
+     * Tract length uses frames with F1-F3 valid; F4 is excluded.
      */
     formantCount?: number;
   }
 ): VoiceFeatures;
 export interface VoiceMatchOptions {
-  /** Restrict the starting person to one preset. */
+  /** Restrict the nearest-preset label to one preset. */
   preset?: HeadPresetName;
-  /** Renders (default 4, at most 12). */
+  /** Rounds of ten renders (default 4, at most 12). */
   iterations?: number;
   /** What the recording says; the renders then say the same words. */
   transcript?: string;
@@ -4447,6 +4446,20 @@ export {
   type CodebookQuery,
   type CodebookFrame,
 } from './recognition/codebook.js';
+
+export {
+  fitVoice,
+  fitVoiceSteps,
+  createVoiceFitter,
+  type VoiceFitPart,
+  type VoiceFitParameter,
+  type VoiceFitState,
+  type VoiceFitStep,
+  type VoiceFitOptions,
+  type VoiceFitFeatures,
+  type VoiceFitResult,
+  type VoiceFitter,
+} from './analysis/voice-fit.js';
 
 export {
   recognizeModes,

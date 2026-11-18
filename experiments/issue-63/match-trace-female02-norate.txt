@@ -1,0 +1,46 @@
+truth {"vocalTractLength":14.3,"pitch":230,"pitchRange":3.6,"tenseness":0.55,"speechRate":1.02}
+step 0 {"vocalTractLength":15.351,"pitch":227.91,"pitchRange":3.753,"tenseness":0.508,"speechRate":1.064} Infinity
+  render 1 {"vocalTractLength":15.351,"pitch":227.91,"pitchRange":3.753,"tenseness":0.508,"speechRate":1.064} 8.942 mcd 28.03
+  render 2 {"vocalTractLength":14.072,"pitch":227.91,"pitchRange":3.753,"tenseness":0.508,"speechRate":1.064} 6.39 mcd 20.11
+step 2 {"vocalTractLength":14.072,"pitch":227.91,"pitchRange":3.753,"tenseness":0.508,"speechRate":1.064} 6.389521460322046
+  render 3 {"vocalTractLength":14.972,"pitch":227.91,"pitchRange":3.753,"tenseness":0.508,"speechRate":1.064} 7.948 mcd 24.95
+  render 4 {"vocalTractLength":14.072,"pitch":201.91,"pitchRange":3.753,"tenseness":0.508,"speechRate":1.064} 8.429 mcd 26.45
+  render 5 {"vocalTractLength":14.072,"pitch":227.91,"pitchRange":4.503,"tenseness":0.508,"speechRate":1.064} 6.564 mcd 20.65
+  render 6 {"vocalTractLength":14.072,"pitch":227.91,"pitchRange":3.753,"tenseness":0.408,"speechRate":1.064} 6.882 mcd 21.66
+  render 7 {"vocalTractLength":14.522,"pitch":253.91,"pitchRange":4.128,"tenseness":0.458,"speechRate":1.064} 8.243 mcd 25.81
+  render 8 {"vocalTractLength":14.409,"pitch":240.91,"pitchRange":4.035,"tenseness":0.47,"speechRate":1.064} 7.469 mcd 23.47
+  render 9 {"vocalTractLength":13.34,"pitch":234.41,"pitchRange":4.269,"tenseness":0.439,"speechRate":1.064} 7.51 mcd 23.56
+  render 10 {"vocalTractLength":13.748,"pitch":232.785,"pitchRange":4.14,"tenseness":0.456,"speechRate":1.064} 6.645 mcd 20.88
+  render 11 {"vocalTractLength":13.572,"pitch":217.347,"pitchRange":4.041,"tenseness":0.469,"speechRate":1.064} 7.572 mcd 23.8
+  render 12 {"vocalTractLength":14.2,"pitch":235.019,"pitchRange":4.036,"tenseness":0.47,"speechRate":1.064} 6.886 mcd 21.65
+  render 13 {"vocalTractLength":13.974,"pitch":233.902,"pitchRange":4.463,"tenseness":0.563,"speechRate":1.064} 6.725 mcd 21.14
+  render 14 {"vocalTractLength":13.733,"pitch":226.234,"pitchRange":4.394,"tenseness":0.547,"speechRate":1.064} 6.513 mcd 20.48
+  render 15 {"vocalTractLength":13.838,"pitch":223.517,"pitchRange":3.932,"tenseness":0.446,"speechRate":1.064} 6.671 mcd 20.98
+  render 16 {"vocalTractLength":13.872,"pitch":226.113,"pitchRange":4.065,"tenseness":0.475,"speechRate":1.064} 6.526 mcd 20.52
+  render 17 {"vocalTractLength":14.126,"pitch":221.298,"pitchRange":4.218,"tenseness":0.563,"speechRate":1.064} 5.988 mcd 18.85
+step 17 {"vocalTractLength":14.126,"pitch":221.298,"pitchRange":4.218,"tenseness":0.563,"speechRate":1.064} 5.988318405156835
+  render 18 {"vocalTractLength":14.315,"pitch":215.555,"pitchRange":4.257,"tenseness":0.616,"speechRate":1.064} 6.275 mcd 19.73
+  render 19 {"vocalTractLength":13.83,"pitch":222.868,"pitchRange":3.712,"tenseness":0.539,"speechRate":1.064} 6.472 mcd 20.36
+  render 20 {"vocalTractLength":14.008,"pitch":223.042,"pitchRange":3.973,"tenseness":0.603,"speechRate":1.064} 6.253 mcd 19.67
+  render 21 {"vocalTractLength":14.285,"pitch":221.325,"pitchRange":3.434,"tenseness":0.559,"speechRate":1.064} 6.261 mcd 19.71
+  render 22 {"vocalTractLength":14.415,"pitch":223.919,"pitchRange":3.978,"tenseness":0.577,"speechRate":1.064} 6.135 mcd 19.3
+  render 23 {"vocalTractLength":14.345,"pitch":216.883,"pitchRange":4.048,"tenseness":0.643,"speechRate":1.064} 6.271 mcd 19.72
+  render 24 {"vocalTractLength":14.277,"pitch":219.639,"pitchRange":3.974,"tenseness":0.609,"speechRate":1.064} 6.087 mcd 19.15
+  render 25 {"vocalTractLength":14.126,"pitch":221.298,"pitchRange":4.218,"tenseness":0.563,"speechRate":1.064} 7.485 mcd 23.53
+  render 26 {"vocalTractLength":14.126,"pitch":221.298,"pitchRange":4.218,"tenseness":0.563,"speechRate":1.064} 5.997 mcd 18.89
+  render 27 {"vocalTractLength":14.126,"pitch":221.298,"pitchRange":4.218,"tenseness":0.563,"speechRate":1.064} 6.709 mcd 21.1
+  render 28 {"vocalTractLength":14.126,"pitch":221.298,"pitchRange":4.218,"tenseness":0.563,"speechRate":1.064} 6.048 mcd 19.04
+  render 29 {"vocalTractLength":14.126,"pitch":221.298,"pitchRange":4.218,"tenseness":0.563,"speechRate":1.064} 6.509 mcd 20.5
+  render 30 {"vocalTractLength":14.126,"pitch":221.298,"pitchRange":4.218,"tenseness":0.563,"speechRate":1.064} 6.077 mcd 19.13
+  render 31 {"vocalTractLength":14.126,"pitch":221.298,"pitchRange":4.218,"tenseness":0.563,"speechRate":1.064} 4.955 mcd 15.63
+step 31 {"vocalTractLength":14.126,"pitch":221.298,"pitchRange":4.218,"tenseness":0.563,"speechRate":1.064} 4.955146546192456
+  render 32 {"vocalTractLength":14.126,"pitch":221.298,"pitchRange":4.218,"tenseness":0.563,"speechRate":1.064} 5.739 mcd 18.09
+  render 33 {"vocalTractLength":14.126,"pitch":221.298,"pitchRange":4.218,"tenseness":0.563,"speechRate":1.064} 5.041 mcd 15.9
+  render 34 {"vocalTractLength":14.126,"pitch":221.298,"pitchRange":4.218,"tenseness":0.563,"speechRate":1.064} 5.198 mcd 16.4
+  render 35 {"vocalTractLength":14.126,"pitch":221.298,"pitchRange":4.218,"tenseness":0.563,"speechRate":1.064} 4.986 mcd 15.73
+  render 36 {"vocalTractLength":14.126,"pitch":221.298,"pitchRange":4.218,"tenseness":0.563,"speechRate":1.064} 4.899 mcd 15.46
+step 36 {"vocalTractLength":14.126,"pitch":221.298,"pitchRange":4.218,"tenseness":0.563,"speechRate":1.064} 4.899432461611388
+  render 37 {"vocalTractLength":14.126,"pitch":221.298,"pitchRange":4.218,"tenseness":0.563,"speechRate":1.064} 4.941 mcd 15.59
+  render 38 {"vocalTractLength":14.126,"pitch":221.298,"pitchRange":4.218,"tenseness":0.563,"speechRate":1.064} 5.222 mcd 16.46
+  render 39 {"vocalTractLength":14.126,"pitch":221.298,"pitchRange":4.218,"tenseness":0.563,"speechRate":1.064} 5.055 mcd 15.95
+result {"vocalTractLength":14.126,"pitch":221.298,"pitchRange":4.218,"tenseness":0.563,"speechRate":1.064} 4.899432461611388

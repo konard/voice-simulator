@@ -330,10 +330,13 @@ describe('CI timeout policy', () => {
     expect(packageJson.scripts.test).toBe(
       'node --test --test-timeout=30000 tests/*.test.js'
     );
+    expect(getStepBlock(releaseWorkflow, 'Run tests (Node.js)')).toContain(
+      'bash scripts/run-runtime-tests.sh node'
+    );
     expect(getStepBlock(releaseWorkflow, 'Run tests (Bun)')).toContain(
       'bash scripts/run-bun-tests.sh'
     );
-    expect(readFileSync('scripts/run-bun-tests.sh', 'utf8')).toContain(
+    expect(readFileSync('scripts/run-runtime-tests.sh', 'utf8')).toContain(
       'test --timeout 30000'
     );
   });

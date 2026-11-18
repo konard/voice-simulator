@@ -50,5 +50,6 @@ pub mod solver;
 pub mod source_state;
 pub mod stages;
 pub mod subglottal;
+pub mod voice_fit;
 pub mod waveguide;
 pub mod whisper;

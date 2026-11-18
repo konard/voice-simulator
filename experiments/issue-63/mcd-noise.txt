@@ -1,0 +1,19 @@
+truth vs stage A {"vocalTractLength":[14,14.7679],"pitch":[210,208.9257],"tenseness":[0.45,0.515],"breathiness":[0.2,0.3351],"jitter":[0.4,1.2586],"shimmer":[3,5.9926],"speechRate":[1.15,1.1625],"pitchRange":[3,2.6469]}
+truth 0
+truth pitch*1.003 5.577
+truth rate 1.0325 8.14
+truth rate 1.1625 6.278
+truth tract 14.77 17.111
+stageA 18.009
+stageA pitch*1.003 17.527
+stageA rate 1.0325 17.817
+stageA rate 1.1625 18.008
+stageA tract 14.77 17.914
+truth with stage A vocalTractLength 17.107
+truth with stage A pitch 6.305
+truth with stage A tenseness 6.196
+truth with stage A breathiness 7.019
+truth with stage A jitter 5.067
+truth with stage A shimmer 1.86
+truth with stage A speechRate 6.28
+truth with stage A pitchRange 6.513

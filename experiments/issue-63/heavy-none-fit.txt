@@ -1,0 +1,33 @@
+# node experiments/issue-63/heavy-none-fit.mjs (three parts: seeds 1-7, 8-14, 15-20)
+# at TEXT_TRACT.ratio 1.0568, TEXT_SYLLABLE_RATIO 0.9391, TEXT_FORMANT_WEIGHT 0.1
+{"seed":1,"tract":-0.0314,"pitch":0.0411,"rate":-0.2008,"tenseness":-0.0811,"breathiness":0.0253,"sd":0.5216,"covered":true}
+{"seed":2,"tract":-0.0138,"pitch":-0.0191,"rate":0.1243,"tenseness":-0.0465,"breathiness":0.0489,"sd":0.57,"covered":true}
+{"seed":3,"tract":-0.0275,"pitch":0.031,"rate":0.1325,"tenseness":-0.1851,"breathiness":0.0042,"sd":0.5448,"covered":true}
+{"seed":4,"tract":-0.0505,"pitch":-0.0181,"rate":0.016,"tenseness":0.0787,"breathiness":-0.0587,"sd":0.6476,"covered":true}
+{"seed":5,"tract":0.038,"pitch":-0.003,"rate":-0.05,"tenseness":0.0696,"breathiness":-0.0132,"sd":0.5393,"covered":true}
+{"seed":6,"tract":0.0165,"pitch":-0.013,"rate":0.008,"tenseness":-0.0232,"breathiness":-0.1029,"sd":0.4934,"covered":true}
+{"seed":7,"tract":0.075,"pitch":-0.0196,"rate":-0.1567,"tenseness":-0.0561,"breathiness":-0.1707,"sd":0.4259,"covered":true}
+{"seed":8,"tract":0.0155,"pitch":-0.0301,"rate":-0.327,"tenseness":-0.0863,"breathiness":-0.0696,"sd":0.4156,"covered":true}
+{"seed":9,"tract":0.0027,"pitch":-0.0288,"rate":0.0252,"tenseness":0.0034,"breathiness":-0.0926,"sd":0.4251,"covered":true}
+{"seed":10,"tract":0.0514,"pitch":0.0039,"rate":0.0185,"tenseness":-0.0405,"breathiness":-0.1587,"sd":0.505,"covered":true}
+{"seed":11,"tract":0.0179,"pitch":0.0142,"rate":-0.0721,"tenseness":-0.0949,"breathiness":-0.1523,"sd":0.4981,"covered":true}
+{"seed":12,"tract":-0.0033,"pitch":0,"rate":-0.1029,"tenseness":0.0182,"breathiness":-0.0192,"sd":0.4468,"covered":true}
+{"seed":13,"tract":0.0193,"pitch":-0.0104,"rate":0.0818,"tenseness":0.1023,"breathiness":0.1369,"sd":0.5143,"covered":true}
+{"seed":14,"tract":0.0335,"pitch":-0.0117,"rate":-0.0052,"tenseness":-0.0073,"breathiness":-0.0601,"sd":0.4748,"covered":true}
+{"seed":15,"tract":0.027,"pitch":-0.0282,"rate":-0.0661,"tenseness":-0.0142,"breathiness":-0.138,"sd":0.43,"covered":true}
+{"seed":16,"tract":0.0383,"pitch":-0.0025,"rate":0.1213,"tenseness":-0.0024,"breathiness":-0.073,"sd":0.533,"covered":true}
+{"seed":17,"tract":-0.004,"pitch":-0.0206,"rate":-0.1653,"tenseness":-0.0563,"breathiness":-0.0835,"sd":0.529,"covered":true}
+{"seed":18,"tract":0.0568,"pitch":-0.015,"rate":0.0573,"tenseness":-0.0679,"breathiness":-0.1524,"sd":0.4652,"covered":true}
+{"seed":19,"tract":0.0501,"pitch":0.0192,"rate":-0.0033,"tenseness":-0.1197,"breathiness":-0.0503,"sd":0.402,"covered":true}
+{"seed":20,"tract":0.0062,"pitch":-0.0068,"rate":-0.1489,"tenseness":0.0336,"breathiness":-0.0428,"sd":0.5443,"covered":true}
+median |error| tract 0.0272, pitch 0.0166, rate 0.0769, tenseness 0.0562, breathiness 0.0713 ; max tract 0.0750 ; covered 20/20
+# Earlier variants of the no-transcript fit on the same heads. Each scaled
+# the stage A tract and the objective terms through temporary hooks:
+#   MATCH_TEXT calibration only (CI run 44268336104 at e21cac8, 20 heads):
+#     tract 0.0701, pitch 0.0180, rate 0.0675, maximum tract 0.120, 8/20
+#   tract / 1.058 (seeds 1-5): tract 0.0674, maximum 0.094, 2/5
+#   tract / 1.058, formant weight 0.3 (seeds 1-5): tract 0.0525, 4/5, rate 0.108
+#   tract / 1.058, formant weight 0.1 (20 heads): tract 0.0232, pitch 0.0154,
+#     rate 0.0804, maximum tract 0.0627, 18/20
+#   + rate / 0.9391 (20 heads): tract 0.0227, pitch 0.0135, rate 0.0759,
+#     maximum tract 0.0738, 17/20 (sd without the text spread)

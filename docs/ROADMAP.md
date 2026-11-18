@@ -203,6 +203,14 @@ The paralinguistic sounds of [#56](https://github.com/konard/voice-simulator/iss
 
 ### Roadmap 4: Reverse simulation (listening)
 
+Issue [#63](https://github.com/konard/voice-simulator/issues/63) adds
+`fitVoice`, its progress generator and a resumable histogram fitter. The
+statistics use the shared pitch, formant and inverse-filter stages; the
+refinement uses a bounded two-round simplex and aligned MCD. The legacy
+matching worker calls the new fitter. Acceptance measurements remain in
+progress in PR [#146](https://github.com/konard/voice-simulator/pull/146);
+its numerical recovery gates must pass before this issue is complete.
+
 The IPA-to-text stage of [#68](https://github.com/konard/voice-simulator/issues/68) uses runtime pronunciation tries, articulatory edit search and public-domain unigram/bigram counts in four explicitly selected languages. Its API, data provenance and verification are documented in [IPA recognition](ipa-to-text.md).
 
 The language stage of [#69](https://github.com/konard/voice-simulator/issues/69) derives weighted phone statistics from the same tries, identifies syllable spans with confidence and reads mixed speech through a joint language-labelled beam search. The library exports `identifyLanguage` and `languageShares`; the command line has `language`. See [language identification](language-id.md) for fixed fixtures, calibration and acceptance measurements.

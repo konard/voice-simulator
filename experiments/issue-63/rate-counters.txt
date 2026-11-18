@@ -1,0 +1,15 @@
+match default 0.85: legacy 10/3.66s lm 15 | 1: legacy 10/3.27s lm 16 | 1.15: legacy 10/2.93s lm 14
+match male 0.85: legacy 9/3.68s lm 15 | 1: legacy 8/3.25s lm 14 | 1.15: legacy 8/2.90s lm 12
+match female 0.85: legacy 14/3.54s lm 19 | 1: legacy 12/3.10s lm 18 | 1.15: legacy 11/2.83s lm 16
+match A 0.85: legacy 15/3.59s lm 18 | 1: legacy 12/3.18s lm 17 | 1.15: legacy 12/2.90s lm 14
+match B 0.85: legacy 10/3.69s lm 20 | 1: legacy 9/3.26s lm 16 | 1.15: legacy 9/2.89s lm 17
+north default 0.85: legacy 4/1.77s lm 7 | 1: legacy 4/1.56s lm 5 | 1.15: legacy 4/1.42s lm 5
+north male 0.85: legacy 5/1.76s lm 5 | 1: legacy 5/1.57s lm 5 | 1.15: legacy 4/1.42s lm 5
+north female 0.85: legacy 4/1.77s lm 9 | 1: legacy 4/1.55s lm 8 | 1.15: legacy 4/1.41s lm 7
+north A 0.85: legacy 5/1.77s lm 6 | 1: legacy 6/1.55s lm 5 | 1.15: legacy 5/1.41s lm 5
+north B 0.85: legacy 4/1.76s lm 7 | 1: legacy 4/1.57s lm 7 | 1.15: legacy 4/1.42s lm 6
+passage default 0.85: legacy 13/3.68s lm 15 | 1: legacy 10/3.27s lm 13 | 1.15: legacy 10/2.95s lm 12
+passage male 0.85: legacy 12/3.69s lm 11 | 1: legacy 12/3.27s lm 11 | 1.15: legacy 11/2.93s lm 12
+passage female 0.85: legacy 13/3.61s lm 18 | 1: legacy 10/3.18s lm 17 | 1.15: legacy 9/2.91s lm 14
+passage A 0.85: legacy 13/3.63s lm 14 | 1: legacy 12/3.23s lm 14 | 1.15: legacy 12/2.93s lm 13
+passage B 0.85: legacy 11/3.69s lm 16 | 1: legacy 11/3.25s lm 15 | 1.15: legacy 11/2.94s lm 15

@@ -1,0 +1,226 @@
+/** Numerical regression tests of issue 63. Unlicense. */
+import { describe, it, expect } from 'test-anywhere';
+import { simplex } from '../src/analysis/voice-fit-simplex.js';
+import {
+  analyzeLegacyVoice,
+  prepareLegacyVoice,
+} from '../src/analysis/voice-features.js';
+import {
+  emptyState,
+  addValue,
+  quantile,
+  medianSd,
+  tableInverse,
+  copyState,
+} from '../src/analysis/voice-fit-statistics.js';
+import { vectorDistance } from '../src/analysis/voice-fit.js';
+import {
+  createMcdMetric,
+  featureVector,
+} from '../src/analysis/voice-fit-objective.js';
+import { powerFrames, cepstra } from '../src/metrics/spectrum.js';
+import { dtw } from '../src/metrics/dtw.js';
+import {
+  normalizeRms,
+  melCepstralDistortion,
+} from '../src/metrics/distortion.js';
+const consume = (g) => {
+  let next = g.next();
+  while (!next.done) {
+    next = g.next();
+  }
+  return next.value;
+};
+describe('voice fitting evaluation budget', () => {
+  it('retains an improved reflection when the budget prevents contraction', () => {
+    const calls = [];
+    const vertices = consume(
+      simplex(
+        [0.2],
+        (x) => {
+          calls.push(x);
+          return { cost: 100 * (x[0] - 0.32) ** 2 };
+        },
+        3
+      )
+    );
+    expect(calls.length).toBe(3);
+    expect(vertices.length).toBe(2);
+    expect(Math.abs(vertices[0].x[0] - 0.3) < 1e-12).toBe(true);
+    expect(Math.abs(vertices[1].x[0] - 0.4) < 1e-12).toBe(true);
+  });
+});
+describe('voice fitting numerics', () => {
+  it('measures syllable rate using only peak frames before completing legacy pitch', () => {
+    const rate = 8000;
+    const samples = Float32Array.from(
+      { length: 4000 },
+      (_, n) =>
+        Math.sin((2 * Math.PI * 160 * n) / rate) *
+        (0.6 + 0.4 * Math.cos((2 * Math.PI * 4 * n) / rate))
+    );
+    const events = [];
+    const analysis = prepareLegacyVoice(samples, rate, {
+      diagnosticsOnly: true,
+      trace: (event) => events.push(event),
+    });
+    const partial = analysis.rateFeatures;
+    expect(partial.activeDuration > 0).toBe(true);
+    expect(partial.syllableRate > 0).toBe(true);
+    const initial = events.at(-1);
+    expect(initial.stage).toBe('legacy-voice-pitch');
+    expect(initial.evaluated < initial.activeFrames).toBe(true);
+    const completed = analysis.complete();
+    expect(completed.activeDuration).toBe(partial.activeDuration);
+    expect(completed.syllableRate).toBe(partial.syllableRate);
+    expect(completed).toEqual(
+      analyzeLegacyVoice(samples, rate, { diagnosticsOnly: true })
+    );
+    expect(events.at(-1).evaluated).toBe(initial.activeFrames);
+  });
+  it('completes deferred source diagnostics without changing the measured features', () => {
+    const rate = 8000;
+    const samples = Float32Array.from({ length: 2000 }, (_, n) =>
+      [1, 2, 3].reduce(
+        (sum, harmonic) =>
+          sum + Math.sin((2 * Math.PI * 160 * harmonic * n) / rate) / harmonic,
+        0
+      )
+    );
+    const options = { diagnosticsOnly: true };
+    const analysis = prepareLegacyVoice(samples, rate, options);
+    const initial = { ...analysis.features };
+    expect(initial.hnr).toBe(0);
+    expect(initial.h1h2).toBe(0);
+    expect(initial).toEqual(
+      analyzeLegacyVoice(samples, rate, {
+        ...options,
+        sourceDiagnostics: false,
+      })
+    );
+    const completed = analysis.complete();
+    expect(completed.hnr > 0).toBe(true);
+    expect(completed.h1h2 > 0).toBe(true);
+    expect(completed).toEqual(analyzeLegacyVoice(samples, rate, options));
+    expect(analysis.complete()).toBe(completed);
+    for (const key of [
+      'f0',
+      'syllableRate',
+      'activeDuration',
+      'voicedDuration',
+    ]) {
+      expect(completed[key]).toBe(initial[key]);
+    }
+  });
+  it('interpolates histogram order statistics and applies the prescribed MAD SD', () => {
+    const s = emptyState();
+    for (const x of [900, 900, 1100, 1100]) {
+      addValue(s, 'dF', x);
+    }
+    expect(quantile(s, 'dF')).toBe(1000);
+    expect(
+      Math.abs(medianSd(s, 'dF') - (1.4826 * 100) / Math.sqrt(4 / 20)) < 1e-9
+    ).toBe(true);
+    const clone = copyState(s);
+    clone.histograms.dF[0]++;
+    expect(s.histograms.dF[0]).toBe(0);
+    // A bright spectrum can have more high-band energy and negative tilt.
+    clone.tilt = -12;
+    expect(copyState(JSON.parse(JSON.stringify(clone))).tilt).toBe(-12);
+    const even = emptyState();
+    for (const x of [600, 900, 1000, 1000]) {
+      addValue(even, 'dF', x);
+    }
+    // Median 950; absolute differences 350, 50, 50, 50 have MAD 50.
+    expect(medianSd(even, 'dF')).toBe((1.4826 * 50) / Math.sqrt(4 / 20));
+    const mixed = emptyState();
+    for (const x of [600, 800, 1000, 1200]) {
+      addValue(mixed, 'dF', x);
+    }
+    // Median 900; deviations 300, 100, 100, 300 interpolate to MAD 200.
+    expect(medianSd(mixed, 'dF')).toBe((1.4826 * 200) / Math.sqrt(4 / 20));
+  });
+  it('bounds evaluations and converges on a coupled objective deterministically', () => {
+    const run = (budget) => {
+      const calls = [];
+      const result = consume(
+        simplex(
+          [0.9, 0.1],
+          (x) => {
+            calls.push(x);
+            return { cost: 100 * ((x[0] - 0.2) ** 2 + (x[1] - 0.7) ** 2) };
+          },
+          budget
+        )
+      );
+      return { calls, result };
+    };
+    for (const budget of [0, 1, 2, 3, 10, 80]) {
+      const a = run(budget);
+      expect(a.calls.length <= budget).toBe(true);
+      expect(a.calls.every((x) => x.every((v) => v >= 0 && v <= 1))).toBe(true);
+      expect(a).toEqual(run(budget));
+    }
+    expect(run(80).result[0].cost < 0.02).toBe(true);
+  });
+  it('weights centered mel and transcript distortion and skips missing features', () => {
+    const a = {
+      values: [0, ...Array(11).fill(null), 0],
+      scales: Array(13).fill(1),
+    };
+    const b = { values: [1, ...Array(11).fill(null), 2], scales: a.scales };
+    expect(Math.abs(vectorDistance(a, b) - Math.sqrt(2.2 / 1.3)) < 1e-12).toBe(
+      true
+    );
+    expect(
+      Math.abs(vectorDistance(a, b, true, 3) - Math.sqrt(41 / 6)) < 1e-12
+    ).toBe(true);
+    expect(vectorDistance(a, b, true, Infinity)).toBe(Infinity);
+    expect(vectorDistance(a, b, true, null)).toBe(Infinity);
+  });
+  it('converts natural-log mel powers to centered decibels', () => {
+    const state = emptyState();
+    state.voicedFrames = 2;
+    // Two frames with power 100 in one band and power 1 in the others.
+    state.mel[0] = 2 * Math.log(100);
+    const vector = featureVector(state);
+    expect(Math.abs(vector.values[12] - (20 - 20 / 24)) < 1e-12).toBe(true);
+    expect(Math.abs(vector.values[13] + 20 / 24) < 1e-12).toBe(true);
+    expect(vector.scales[12]).toBe(3);
+  });
+  it('inverts nonmonotone measured calibration without discarding samples', () => {
+    const table = [
+      [0, 16],
+      [0.25, 18],
+      [0.5, 14],
+      [1, 6],
+    ];
+    expect(tableInverse(18, table)).toBe(0.25);
+    expect(tableInverse(10, table)).toBe(0.75);
+  });
+});
+describe('voice fitting aligned distortion', () => {
+  it('matches the existing metric after alignment and reuses target preparation', () => {
+    const rate = 8000;
+    const signal = (length, frequency) =>
+      Float32Array.from({ length }, (_, i) =>
+        i < 400
+          ? 0
+          : Math.sin((2 * Math.PI * frequency * i) / rate) *
+            Math.sin((Math.PI * i) / length)
+      );
+    const target = signal(4000, 160);
+    const compare = createMcdMetric(target, rate);
+    for (const candidate of [target, signal(4500, 165), signal(3800, 220)]) {
+      const vectors = [target, candidate].map((samples) =>
+        cepstra(powerFrames(normalizeRms(samples), rate), rate).map((c) =>
+          c.subarray(1)
+        )
+      );
+      const { path } = dtw(...vectors, { band: 0.25 });
+      const expected = melCepstralDistortion(target, candidate, rate, { path });
+      expect(Math.abs(compare(candidate) - expected) < 1e-10).toBe(true);
+      expect(compare(candidate)).toBe(compare(candidate));
+    }
+  });
+});

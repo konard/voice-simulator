@@ -1,0 +1,9 @@
+{"name":"default","stretch":"whole","duration":4.1955,"nuclei":16,"legacyNuclei":10,"speechSeconds":3.27,"frameSpeechSeconds":3.665}
+{"name":"default","stretch":"first","duration":2.09775,"nuclei":8,"legacyNuclei":4,"speechSeconds":1.6600000000000001,"frameSpeechSeconds":2.005}
+{"name":"default","stretch":"second","duration":2.09775,"nuclei":8,"legacyNuclei":5,"speechSeconds":1.6,"frameSpeechSeconds":1.5250000000000001}
+{"name":"A","stretch":"whole","duration":1.83275,"nuclei":5,"legacyNuclei":5,"speechSeconds":1.4100000000000001,"frameSpeechSeconds":1.51}
+{"name":"A","stretch":"first","duration":0.916375,"nuclei":3,"legacyNuclei":4,"speechSeconds":0.8400000000000001,"frameSpeechSeconds":0.89}
+{"name":"A","stretch":"second","duration":0.916375,"nuclei":4,"legacyNuclei":1,"speechSeconds":0.5700000000000001,"frameSpeechSeconds":0.28500000000000003}
+{"name":"B","stretch":"whole","duration":2.3078125,"nuclei":7,"legacyNuclei":5,"speechSeconds":1.6900000000000002,"frameSpeechSeconds":1.835}
+{"name":"B","stretch":"first","duration":1.153875,"nuclei":4,"legacyNuclei":4,"speechSeconds":1.05,"frameSpeechSeconds":1.12}
+{"name":"B","stretch":"second","duration":1.1539375,"nuclei":3,"legacyNuclei":1,"speechSeconds":0.63,"frameSpeechSeconds":0.365}

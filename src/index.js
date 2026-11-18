@@ -691,4 +691,9 @@ export {
   tractResponse,
 } from './recognition/codebook.js';
 
+export {
+  fitVoice,
+  fitVoiceSteps,
+  createVoiceFitter,
+} from './analysis/voice-fit.js';
 export { recognizeModes, toPlanModes } from './recognition/modes.js';

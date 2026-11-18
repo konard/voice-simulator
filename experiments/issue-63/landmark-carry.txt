@@ -1,0 +1,5 @@
+{"name":"default","plain":16,"whole":16,"split2":16,"split3":16}
+{"name":"A","plain":5,"whole":5,"split2":5,"split3":5}
+{"name":"B","plain":7,"whole":7,"split2":7,"split3":7}
+{"name":"A long","plain":14,"whole":14,"split2":15,"split3":15}
+{"name":"B long","plain":20,"whole":20,"split2":20,"split3":20}

@@ -2,35 +2,17 @@
  * Voice matching: find the head whose simulated voice is closest to a
  * recording, so the simulator can copy that voice.
  *
- * 1. Measure the recording (analyzeVoice): f0 level and range, formant
- *    spacing of F1 to F3 (vocal tract length), H1-H2, harmonics-to-noise ratio and
- *    syllable rate.
- * 2. Start from the closest preset person (male, female or child at the
- *    best relative size) with the measured pitch and rate.
- * 3. Analysis by synthesis: render a calibration sentence with the current
- *    head, measure it with the same analysis and move each parameter by a
- *    secant step towards the recording's feature. The number of renders is
- *    bounded and every render uses a fixed seed, so a recording always gives
- *    the same head.
+ * Compatibility wrappers around fitVoiceSteps: each legacy round supplies
+ * ten renders to the bounded simplex search. The public featureDistance
+ * helper retains its original diagnostic scales.
  */
 
-import { analyzeVoice, formantSpacing } from './voice-features.js';
+import { formantSpacing } from './voice-features.js';
 import { SPEED_OF_SOUND } from '../acoustics/constants.js';
-import {
-  HEAD_PRESETS,
-  getHeadParameter,
-  presetHeadConfig,
-  roundHead,
-} from '../head-config.js';
-import { synthesize } from '../synthesize.js';
+import { fitVoiceSteps } from './voice-fit.js';
+import { MATCH_TEXT } from './voice-fit-calibration.js';
 import { BREATHINESS_RD, BREATHINESS_REFERENCE } from '../acoustics/glottis.js';
-
-/** Sentence rendered to compare the simulator with the recording. */
-export const MATCH_TEXT =
-  'Please call Stella and ask her to bring these things with her.';
-
-const MATCH_PRESETS = ['male', 'female', 'child'];
-const SIZES = 11;
+export { MATCH_TEXT };
 const semitones = (value) => 12 * Math.log2(value);
 
 /**
@@ -194,203 +176,30 @@ export function featureDistance(target, candidate, options = {}) {
   return count > 0 ? Math.sqrt(sum / count) : Infinity;
 }
 
-/**
- * Tract length implied by the length read from F1 to F3 in this simulator:
- * the estimate is compressed towards 15.15 cm with a slope of about 0.8
- * (experiments/issue-40-length-feature.txt).
- */
-function lengthGuess(measured) {
-  return 15.5 + (measured - 15.15) / 0.8;
-}
-
-/**
- * Closest preset person (preset and relative size) to a pitch and tract
- * length; the person supplies every parameter that is not matched directly
- * (pharynx and mouth proportions, nose, source details).
- * @param {number} pitch Hz
- * @param {number} length cm
- * @param {string} [preset] Restrict the search to one preset.
- */
-function closestPerson(pitch, length, preset) {
-  const names = preset && preset !== 'any' ? [preset] : MATCH_PRESETS;
-  let best = null;
-  for (const name of names) {
-    for (let index = 0; index < SIZES; index++) {
-      const head = presetHeadConfig(name, index / (SIZES - 1));
-      const cost =
-        ((semitones(pitch) - semitones(head.pitch)) / 3) ** 2 +
-        (length - head.vocalTractLength) ** 2;
-      if (!best || cost < best.cost) {
-        best = { cost, name, head };
-      }
-    }
-  }
-  return best;
-}
-
-/**
- * Give a head the proportions of a person of the same preset at the size
- * that fits its tract length. The preset changes only when the tract is
- * more than 1 cm outside the preset's range, so the proportions do not
- * flip between presets from one render to the next.
- */
-function withPerson(head, preset, controls) {
-  const [small, large] = HEAD_PRESETS[preset].ranges.vocalTractLength;
-  const length = head.vocalTractLength;
-  const keep = length > small - 1 && length < large + 1;
-  const person = closestPerson(head.pitch, length, keep ? preset : undefined);
-  const next = { ...person.head };
-  for (const control of controls) {
-    next[control.key] = head[control.key];
-  }
-  return { preset: person.name, head: roundHead(next) };
-}
-
-function initialHead(features, preset, controls) {
-  const head = {
-    pitch: features.f0 / 1.03,
-    vocalTractLength: lengthGuess(lowerFormantLength(features) || 15.15),
-    pitchRange: features.f0Range > 0 ? (features.f0Range - 2.4) / 1.1 : 3,
-    tenseness: 0.6,
-    breathiness: 0.2,
-    speechRate: features.syllableRate > 0 ? features.syllableRate / 4.5 : 1,
-  };
-  const person = closestPerson(head.pitch, head.vocalTractLength, preset);
-  head.tenseness = person.head.tenseness;
-  head.breathiness = person.head.breathiness;
-  return withPerson(head, person.name, controls);
-}
-
-function clamp(value, min, max) {
-  return Math.min(max, Math.max(min, value));
-}
-
-/**
- * Move every parameter one secant step towards the target features. The
- * slope comes from the last two renders when their parameter values differ,
- * and from the control's calibrated slope otherwise.
- */
-function updateHead(head, target, history, controls) {
-  const next = { ...head };
-  // The speech rate goes first: a control with a rateSlope corrects its
-  // step for the change of the rate.
-  const ordered = [...controls].sort(
-    (a, b) => (b.key === 'speechRate') - (a.key === 'speechRate')
-  );
-  for (const control of ordered) {
-    const wanted = featureY(control, target);
-    const points = history.get(control.key);
-    const last = points.at(-1);
-    if (wanted === null || last.y === null) {
-      continue;
-    }
-    // Change of the feature that comes from the speech rate alone.
-    const rateEffect = (from, to) =>
-      (control.rateSlope ?? 0) * Math.log(to.speechRate / from.speechRate);
-    let slope = control.slope;
-    const previous = points.at(-2);
-    if (previous && previous.y !== null && previous.x !== last.x) {
-      const measured =
-        (last.y - previous.y - rateEffect(previous, last)) /
-        (last.x - previous.x);
-      const ratio = measured / control.slope;
-      if (ratio > 0.25 && ratio < 4) {
-        slope = measured;
-      }
-    }
-    const step = clamp(
-      (wanted - last.y - rateEffect(last, next)) / slope,
-      -control.maxStep,
-      control.maxStep
-    );
-    const parameter = getHeadParameter(control.key);
-    next[control.key] = clamp(
-      (control.fromX ?? identity)(last.x + step, next),
-      parameter.min,
-      parameter.max
-    );
-  }
-  return roundHead(next);
-}
-
-function renderFeatures(head, options) {
-  const { samples, sampleRate } = synthesize(options.transcript || MATCH_TEXT, {
-    head,
-    lang: options.transcript ? options.lang : 'en',
-    sampleRate: 16000,
-    solver: 'waveguide',
-    seed: 1,
-    engine: options.engine,
-  });
-  return analyzeVoice(samples, sampleRate);
-}
-
-/**
- * Voice matching as a generator: every render is one step, so a user
- * interface can yield to the event loop between steps. Yields
- * `{step, total, head, distance}`; returns the same result as matchVoice.
- * @param {ArrayLike<number>} samples Mono recording.
- * @param {number} sampleRate
- * @param {{preset?: string, iterations?: number, transcript?: string, lang?: string, maxDuration?: number, engine?: 'auto'|'rust'|'js'|object}} [options]
- *   transcript is what the recording says (in `lang`, detected when
- *   omitted); the renders then say the same words, which makes pitch and
- *   rate exact.
- */
+/** Compatibility wrapper: a legacy round is a budget of ten renders. */
 export function* matchVoiceSteps(samples, sampleRate, options = {}) {
-  const features = analyzeVoice(samples, sampleRate, options);
-  if (!(features.f0 > 0) || features.voicedDuration < 0.2) {
-    throw new Error('No voiced speech found in the recording');
+  const total =
+    Math.max(
+      1,
+      Math.min(12, Math.round(options.iterations ?? options.rounds ?? 4))
+    ) * 10;
+  const steps = fitVoiceSteps(samples, sampleRate, {
+    ...options,
+    maxRenders: total,
+  });
+  let next = steps.next();
+  while (!next.done) {
+    yield { ...next.value, total };
+    next = steps.next();
   }
-  const total = clamp(Math.round(options.iterations ?? 4), 1, 12);
-  const controls = controlsFor(options);
-  let { head, preset } = initialHead(features, options.preset, controls);
-  const history = new Map(controls.map((control) => [control.key, []]));
-  let best = null;
-  yield { step: 0, total, head, distance: Infinity };
-  for (let step = 1; step <= total; step++) {
-    const rendered = renderFeatures(head, options);
-    const distance = featureDistance(features, rendered, options);
-    if (!best || distance < best.distance) {
-      best = { head, preset, rendered, distance };
-    }
-    for (const control of controls) {
-      history.get(control.key).push({
-        x: (control.toX ?? identity)(head[control.key], head),
-        y: featureY(control, rendered),
-        speechRate: head.speechRate,
-      });
-    }
-    yield { step, total, head, distance };
-    if (step < total) {
-      ({ head, preset } = withPerson(
-        updateHead(head, features, history, controls),
-        preset,
-        controls
-      ));
-    }
-  }
-  return {
-    head: best.head,
-    preset: best.preset,
-    features,
-    rendered: best.rendered,
-    distance: best.distance,
-  };
+  const { head, preset, features, rendered, distance } = next.value;
+  return { head, preset, features, rendered, distance };
 }
-
-/**
- * Find the head whose simulated voice is closest to a recording.
- * @param {ArrayLike<number>} samples Mono recording.
- * @param {number} sampleRate
- * @param {Parameters<typeof matchVoiceSteps>[2]} [options] preset restricts
- *   the starting person; iterations (default 4) bounds the renders.
- * @returns {{head: Record<string, number>, preset: string, features: object, rendered: object, distance: number}}
- */
 export function matchVoice(samples, sampleRate, options = {}) {
   const steps = matchVoiceSteps(samples, sampleRate, options);
-  let result = steps.next();
-  while (!result.done) {
-    result = steps.next();
+  let next = steps.next();
+  while (!next.done) {
+    next = steps.next();
   }
-  return result.value;
+  return next.value;
 }

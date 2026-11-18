@@ -1303,6 +1303,25 @@ toolchain of `rust-toolchain.toml` (rustup 1.29 warns that the automatic
 install of `rustup show` is deprecated), and `rustup show` then prints the
 active versions into the log.
 
+### Voice-fit numerics (issue 63)
+
+`voice_fit` ports the fixed-bin quantile/MAD estimator, inverse calibration,
+weighted feature objective, prior penalty and bounded Nelder–Mead search.
+`tests/voice-fit-rust-parity.test.js` exercises the WebAssembly histogram,
+distance and simplex exports against JavaScript (class B, relative limit
+1e-6). The JavaScript fitter orchestrates the shared recognition stages.
+
+With the landmark detector and acoustic mode recognition from main
+`ab54493`, the combined scalar engine is 502658 bytes (SHA-256
+`68b261b3632a31ffa89144ad497a7bbf45faeadfd2c9b2b364265423a28b049f`).
+SIMD is 507788 bytes and remains unshipped. Both fit the existing
+507904-byte budget. Measured with Rust 1.100.0 and
+`CARGO_BUILD_JOBS=1 cargo build --release --locked --target wasm32-unknown-unknown -p voice-simulator-wasm`,
+then the same command with `RUSTFLAGS='-C target-feature=+simd128'` and
+`--target-dir target/simd`.
+
+### Acoustic mode recognition (issue 71)
+
 Acoustic mode recognition exports `vs_mode_rules(input, has_f1, known, out)`.
 Input is two 11-double feature rows (word and baseline): alpha, pitch, F1
 difference, voiced share, source H1-H2, HNR, CPP, jitter, rate, energy ratio,
@@ -1314,10 +1333,6 @@ The numerical core is `modes.rs`; class B parity tolerance is 1e-10.
 2–12 six-double reference vectors and writes activation, winning index,
 nearest/next distances, intensity and name confidence. Its six-double output
 may overlap input. Names and span construction remain with the caller.
-
-With landmarks from main `a5b3c51`, the combined scalar engine measures
-472907 bytes, within the existing 475136-byte budget. Both mode and landmark
-WASM parity suites pass on that binary; no size-budget change is needed.
 
 ## Landmark detector (issue 62)
 

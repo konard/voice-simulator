@@ -1,0 +1,8 @@
+analyzeFrames: 129.5 ms
+trackPitch: 158.7 ms
+trackFormants: 102.4 ms
+inverseFilter: 395.5 ms
+prepareLegacyVoice: 37.4 ms
+legacy rateFeatures: 5.5 ms
+legacy complete: 351.8 ms
+countNuclei: 21.5 ms

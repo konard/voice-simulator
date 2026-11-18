@@ -150,13 +150,17 @@ jobs:
       # `high` and above fail pull requests, so a moderate advisory with no
       # patched release cannot block every contributor. The weekly run also
       # fails on a moderate advisory that `npm audit fix` resolves without
-      # --force, which is the signal that someone has work to do.
+      # --force, which is the signal that someone has work to do. A high
+      # advisory with no patched release only warns on pull requests, which
+      # cannot fix it; pushes to the default branch and the weekly run still
+      # fail and name the owner action (upgrade, replace or accept).
       - name: Audit current lock
         working-directory: ${{ matrix.directory }}
         env:
           AUDIT_DIR: ${{ matrix.directory }}
           AUDIT_LEVEL: high
           AUDIT_FIXABLE_LEVEL: ${{ github.event_name == 'schedule' && 'moderate' || '' }}
+          AUDIT_UNFIXABLE_LEVEL: ${{ github.event_name == 'pull_request' && 'critical' || '' }}
         run: node "$GITHUB_WORKSPACE/scripts/npm-audit-report.mjs"
 
   # Terminal status gate: runs even when the jobs above fail or are

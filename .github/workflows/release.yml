@@ -341,6 +341,12 @@ jobs:
       matrix:
         runtime: [node, bun, deno]
         os: [ubuntu-24.04, macos-15, windows-2025]
+    # An acceptance criterion that only the issue author can unblock (a
+    # specified gate the specified formula and fixture cannot meet) only
+    # warns on pull requests; pushes to main still fail and name the human
+    # action (tests/helpers/blocked-gate.js).
+    env:
+      BLOCKED_GATES: ${{ github.event_name == 'pull_request' && 'warn' || '' }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -373,7 +379,19 @@ jobs:
       - name: Run tests (Node.js)
         if: matrix.runtime == 'node'
         shell: bash
-        run: bash scripts/run-with-budget-warning.sh 300 "Node.js test suite" npm test
+        # Node sorts CLI file paths before scheduling. Start the expensive
+        # matching tests (split in two by test name), voice-fit with
+        # recognition-modes, and the ordinary files in four processes, so
+        # none starts after most of the budget has elapsed.
+        # 600s, as for Bun: the 40-render matchVoice tests (spec item 10 of
+        # issue 63) are CPU-bound on the JS engine, 34-56s each on Ubuntu and
+        # macOS and 71-88s on windows-2025. With four processes on three or
+        # four vCPUs, windows-2025 passed 300s (run 44289126498), and runner
+        # speed alone moved Deno/Ubuntu from 218s to 295s (runs 44292683632
+        # and 44294933958). With 420s, Node/macOS took 347s (run
+        # 44300276132) and Deno/macOS 401s (run 44309721274), while other
+        # macOS runners took 194-294s. The warning at 420s reports drift.
+        run: bash scripts/run-with-budget-warning.sh 600 "Node.js test suite" bash scripts/run-runtime-tests.sh node
 
       - name: Verify inverse-filter CPU target
         if: matrix.runtime == 'node' && matrix.os == 'ubuntu-24.04'
@@ -401,8 +419,14 @@ jobs:
         # still lose a child's exit (oven-sh/bun#45483, #41024, #39987).
         # The 222-file sequential suite exceeded 500s on macOS in issue 71
         # while making progress, after all mode assertions passed. Keep
-        # every test and the existing 500s deadline (warning at 350s).
-        run: bash scripts/run-with-budget-warning.sh 500 "Bun test suite" bash scripts/run-bun-tests.sh
+        # every test; the deadline is now 600s (warning at 420s).
+        # Run matching alone first, then put recognition-modes after
+        # whichever shard finishes first, to balance work without native
+        # parallel workers. 600s: with the 40-render matchVoice tests of
+        # issue 63, matching alone takes 108-176s, and the whole suite took
+        # 280s, 399s and 465s of 500s on Ubuntu, macOS and Windows (run
+        # 44292683632), and runner speed alone varies by up to 1.35x.
+        run: bash scripts/run-with-budget-warning.sh 600 "Bun test suite" bash scripts/run-bun-tests.sh
 
       - name: Setup Deno
         if: matrix.runtime == 'deno'
@@ -425,11 +449,14 @@ jobs:
         # (tests/helpers/gpu.js). Ubuntu runners have none (issue 30).
         env:
           REQUIRE_GPU: ${{ matrix.os != 'ubuntu-24.04' && '1' || '' }}
-        # 300s, as for Node.js and Bun: on windows-2025 the suite took
-        # 87-150s on main and PR #116 (issue 115), mostly in tests that spawn
-        # git and shell fixtures, and crossed the 70% warning of a 200s budget
-        # in three of four runs. It took 101-103s on PR #91 (100s then).
-        run: bash scripts/run-with-budget-warning.sh 300 "Deno test suite" deno test -A --parallel
+        # 600s, as for Node.js: with the 40-render matchVoice tests of issue
+        # 63 the suite took 297s on windows-2025 (run 44289126498), 218s and
+        # 295s on the same Ubuntu image (runs 44292683632, 44294933958), and
+        # 401s of 420s on a slow macos-15 runner (run 44309721274).
+        # Before issue 63, on windows-2025 it took 87-150s on main and PR #116
+        # (issue 115), mostly in tests that spawn git and shell fixtures.
+        # Start matching immediately, as for Node, to avoid a long tail.
+        run: bash scripts/run-with-budget-warning.sh 600 "Deno test suite" bash scripts/run-runtime-tests.sh deno
 
   # === RUST ENGINE ===
   # Lints and tests the Rust workspace, builds src/engine/voice-simulator.wasm
@@ -541,7 +568,7 @@ jobs:
         # developer machine, issue 23), hence the larger budget.
         # tests/performance-smoke.test.js (issue 31) runs in npm test too,
         # but only here with the engine: Rust is not slower than JavaScript.
-        run: bash scripts/run-with-budget-warning.sh 90 "Rust parity tests" node --test tests/engine-parity.test.js tests/engine-features.test.js tests/rust-parity.test.js tests/rust-recognition.test.js tests/rust-inverse-filter.test.js tests/rust-modes.test.js tests/rust-landmarks.test.js tests/rust-waveguide.test.js tests/rust-fdtd.test.js tests/rust-render-job.test.js tests/engine-layout.test.js tests/engine.test.js tests/engine-worker.test.js tests/engine-size.test.js tests/adaptive-stream.test.js tests/stream-governor.test.js tests/performance-smoke.test.js
+        run: bash scripts/run-with-budget-warning.sh 90 "Rust parity tests" node --test tests/engine-parity.test.js tests/engine-features.test.js tests/rust-parity.test.js tests/rust-recognition.test.js tests/rust-inverse-filter.test.js tests/rust-modes.test.js tests/rust-landmarks.test.js tests/voice-fit-rust-parity.test.js tests/rust-waveguide.test.js tests/rust-fdtd.test.js tests/rust-render-job.test.js tests/engine-layout.test.js tests/engine.test.js tests/engine-worker.test.js tests/engine-size.test.js tests/adaptive-stream.test.js tests/stream-governor.test.js tests/performance-smoke.test.js
 
       # The publishing jobs run the same check after they download the file.
       - name: Check the package lists the engine

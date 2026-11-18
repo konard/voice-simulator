@@ -59,6 +59,12 @@ describe('universal app chunking', () => {
       expect(vendorChunk(['repo', 'src', 'g2p', 'english.js'].join(sep))).toBe(
         undefined
       );
+      expect(
+        vendorChunk(['repo', 'src', 'recognition', 'frontend.js'].join(sep))
+      ).toBe('recognition');
+      expect(
+        vendorChunk(['repo', 'src', 'acoustics', 'waveguide.js'].join(sep))
+      ).toBe('acoustics');
     }
     expect(vendorChunk('/repo/src/index.js')).toBe(undefined);
     expect(vendorChunk('/repo/node_modules/threejs-extra/index.js')).toBe(

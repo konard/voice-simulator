@@ -1,0 +1,24 @@
+default {"speech":3.27,"landmark":16,"legacy":10}
+{"name":"seed1","truth":1.241,"landmark":13,"legacy":9,"speech":2.8}
+{"name":"seed2","truth":1.042,"landmark":16,"legacy":9,"speech":3.1799999999999997}
+{"name":"seed3","truth":0.834,"landmark":15,"legacy":10,"speech":3.77}
+{"name":"seed4","truth":0.837,"landmark":14,"legacy":10,"speech":3.71}
+{"name":"seed5","truth":1.08,"landmark":13,"legacy":15,"speech":3.05}
+{"name":"seed6","truth":0.891,"landmark":15,"legacy":10,"speech":3.6}
+{"name":"seed7","truth":1.115,"landmark":13,"legacy":9,"speech":3.01}
+{"name":"seed8","truth":1.113,"landmark":11,"legacy":8,"speech":3.02}
+{"name":"seed9","truth":1.17,"landmark":15,"legacy":9,"speech":2.92}
+{"name":"seed10","truth":1.161,"landmark":15,"legacy":14,"speech":2.84}
+{"name":"seed11","truth":1.066,"landmark":14,"legacy":10,"speech":3.11}
+{"name":"seed12","truth":1.224,"landmark":14,"legacy":9,"speech":2.81}
+{"name":"seed13","truth":0.822,"landmark":15,"legacy":12,"speech":3.79}
+{"name":"seed14","truth":0.959,"landmark":14,"legacy":13,"speech":3.36}
+{"name":"seed15","truth":1.001,"landmark":14,"legacy":12,"speech":3.26}
+{"name":"seed16","truth":0.975,"landmark":16,"legacy":11,"speech":3.31}
+{"name":"seed17","truth":0.874,"landmark":12,"legacy":13,"speech":3.61}
+{"name":"seed18","truth":0.89,"landmark":15,"legacy":14,"speech":3.55}
+{"name":"seed19","truth":1.141,"landmark":16,"legacy":9,"speech":2.98}
+{"name":"seed20","truth":0.929,"landmark":12,"legacy":10,"speech":3.3699999999999997}
+{"name":"A","truth":1.15,"landmark":5,"legacy":5,"speech":1.4100000000000001}
+{"name":"B","truth":0.9,"landmark":7,"legacy":5,"speech":1.6900000000000002}
+median relative error over seeds {"landmark":0.10736477612740691,"legacy":0.1412253719258672}

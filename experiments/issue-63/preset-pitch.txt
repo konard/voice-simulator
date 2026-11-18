@@ -1,0 +1,2 @@
+male pitch 118 -> 115.61 rate 1 -> 1.014 range 3 -> 3.75
+female pitch 216 -> 215.10 rate 1.02 -> 1.054 range 3.6 -> 3.77
