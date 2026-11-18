@@ -5,9 +5,10 @@ import { trackFormants } from '../recognition/formants.js';
 import { inverseFilter } from '../recognition/inverse-filter.js';
 import { HEAD_PARAMETERS, DEFAULT_HEAD } from '../head-config.js';
 import { prepareLegacyVoice } from './voice-features.js';
+import { transcriptSpeechRate } from './voice-fit-rate.js';
 import {
   PITCH_RANGE_FACTOR,
-  BREATHINESS_HNR,
+  BREATHINESS_CPP,
   DEFAULT_SYLLABLE_RATE,
 } from './voice-fit-calibration.js';
 
@@ -16,7 +17,7 @@ export const HISTOGRAMS = Object.freeze({
   dF: [600, 2000, 5],
   rd: [0, 3, 0.05],
   hnr: [-40, 60, 0.5],
-  cpp: [-20, 60, 0.5],
+  cpp: [-10, 30, 0.01], // the breathiness table spans 0.6 to 4.9 dB
   h1h2Source: [-60, 80, 0.5],
   h1h2: [-60, 80, 0.5],
   f1: [0, 2000, 5],
@@ -307,6 +308,40 @@ export function tableInverse(value, table) {
   }
   return best.value;
 }
+/**
+ * Breathiness from the median CPP at the median pitch: the default-head
+ * CPP row at that pitch (interpolated in log pitch, clamped to the table)
+ * is inverted. Returns the value and the CPP change per unit breathiness.
+ */
+export function cppBreathiness(cpp, f0, table = BREATHINESS_CPP) {
+  const x = Math.log(
+    Math.max(table.pitch[0], Math.min(table.pitch.at(-1), f0))
+  );
+  let i = 1;
+  while (i < table.pitch.length - 1 && x > Math.log(table.pitch[i])) {
+    i++;
+  }
+  const t =
+    (x - Math.log(table.pitch[i - 1])) /
+    (Math.log(table.pitch[i]) - Math.log(table.pitch[i - 1]));
+  const row = table.breathiness.map((b, k) => [
+    b,
+    table.cpp[i - 1][k] + (table.cpp[i][k] - table.cpp[i - 1][k]) * t,
+  ]);
+  const value = tableInverse(cpp, row);
+  const k = Math.max(
+    1,
+    Math.min(row.length - 1, Math.ceil(value / table.breathiness[1]))
+  );
+  const slope = Math.abs(
+    (row[k][1] - row[k - 1][1]) / (row[k][0] - row[k - 1][0])
+  );
+  return { value, slope };
+}
+// Relative sd of the speaking-time rate: calibration residuals reach 3 %,
+// and a female head speaks the same plan up to 5 % faster
+// (experiments/issue-63/speech-time-calibrate.txt, rate-counters.txt).
+const SPEECH_TIME_SD = 0.04;
 export function statisticsResult(state, options = {}) {
   if (state.voicedFrames < 20) {
     throw new Error('No voiced speech found in the recording');
@@ -351,12 +386,13 @@ export function statisticsResult(state, options = {}) {
     count('f0')
   );
   fit('source', 'tenseness', 1 - features.rd / 3, sd('rd') / 3, count('rd'));
+  const breathiness = cppBreathiness(quantile(state, 'cpp'), features.f0);
   fit(
     'source',
     'breathiness',
-    tableInverse(quantile(state, 'hnr'), BREATHINESS_HNR),
-    sd('hnr') / 18,
-    count('hnr')
+    breathiness.value,
+    Math.min(1, sd('cpp') / Math.max(0.1, breathiness.slope)),
+    count('cpp')
   );
   const p = state.perturbation;
   if (p.periods >= 20 && p.pairs > 0) {
@@ -377,6 +413,23 @@ export function statisticsResult(state, options = {}) {
         p.periods
       );
     }
+  }
+  // With a transcript the recording says the planned syllables, so the
+  // speaking time, steady within 3 % across texts and rates, replaces the
+  // syllable count, which scatters by 10 to 35 % across heads
+  // (experiments/issue-63/rate-counters.txt, speech-time-calibrate.txt).
+  const timed = options.transcript
+    ? transcriptSpeechRate(state.speechSeconds, options.transcript, options)
+    : null;
+  if (timed !== null) {
+    fit(
+      'rate',
+      'speechRate',
+      timed,
+      timed * SPEECH_TIME_SD,
+      Math.round(state.speechSeconds * 100)
+    );
+    return { head, parameters, features };
   }
   fit(
     'rate',

@@ -1,0 +1,13 @@
+{"slope":0.8047803525709796,"offset":0.2670255540071498}
+{"index":0,"speechRate":0.8,"planned":4.51223012837942,"measured":3.88,"residual":0.0047370380427154135,"heldOut":0.004522852633227936}
+{"index":0,"speechRate":1,"planned":3.715465705,"measured":3.27,"residual":-0.0039268030451274916,"heldOut":-0.004299972810916097}
+{"index":0,"speechRate":1.25,"planned":3.0804928453226315,"measured":2.76,"residual":-0.005019684000624136,"heldOut":-0.005574196470305548}
+{"index":1,"speechRate":0.8,"planned":1.942458402250998,"measured":1.85,"residual":-0.010660588202610954,"heldOut":-0.013714581010581872}
+{"index":1,"speechRate":1,"planned":1.6068866250000002,"measured":1.56,"residual":0.0001386786001547069,"heldOut":-0.0037602998711174784}
+{"index":1,"speechRate":1.25,"planned":1.3388871910547349,"measured":1.34,"residual":0.0033848206544386805,"heldOut":-0.0014120688151683103}
+{"index":2,"speechRate":0.8,"planned":4.615849146943858,"measured":3.8699999999999997,"residual":0.028881203591494486,"heldOut":0.03308812162194674}
+{"index":2,"speechRate":1,"planned":3.7785245983465154,"measured":3.27,"residual":0.01159263378060471,"heldOut":0.016481524364216016}
+{"index":2,"speechRate":1.25,"planned":3.117401086980315,"measured":2.78,"residual":-0.0014932734200278075,"heldOut":0.004173798600356493}
+{"index":3,"speechRate":0.8,"planned":9.011396705521385,"measured":7.45,"residual":0.00929135192397501,"heldOut":-0.00809050776155329}
+{"index":3,"speechRate":1,"planned":7.386298424579135,"measured":6.260000000000001,"residual":-0.00776782678363952,"heldOut":-0.023381868469243172}
+{"index":3,"speechRate":1.25,"planned":6.10121623864192,"measured":5.32,"residual":-0.026848776380981154,"heldOut":-0.040502185480848274}

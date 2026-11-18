@@ -1,0 +1,10 @@
+male default pitch 115.5 truth 118 mcd at 0.9/1/1.1 23.14 24.71 26.32
+male preset male pitch 115.5 truth 118 mcd at 0.9/1/1.1 17.31 19.02 22.15
+female default pitch 215.0 truth 216 mcd at 0.9/1/1.1 28.66 26.38 29.59
+female preset female pitch 215.0 truth 216 mcd at 0.9/1/1.1 30.12 26.91 29.44
+female0.2 default pitch 227.8 truth 230 mcd at 0.9/1/1.1 27.98 26.41 30.69
+female0.2 preset female pitch 227.8 truth 230 mcd at 0.9/1/1.1 29.14 25.81 28.88
+defaultB default pitch 97.2 truth 100 mcd at 0.9/1/1.1 20.54 23.29 25.45
+defaultB preset male pitch 97.2 truth 100 mcd at 0.9/1/1.1 31.96 33.86 35.70
+defaultA default pitch 205.9 truth 210 mcd at 0.9/1/1.1 25.09 21.93 27.99
+defaultA preset female pitch 205.9 truth 210 mcd at 0.9/1/1.1 25.31 19.85 24.16

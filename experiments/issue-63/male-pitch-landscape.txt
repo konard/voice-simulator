@@ -1,0 +1,8 @@
+stageA pitch 94.4 mcd 22.05
+stageA pitch 106.2 mcd 23.97
+stageA pitch 118.0 mcd 24.94
+stageA pitch 129.8 mcd 26.97
+truth pitch 94.4 mcd 11.51
+truth pitch 106.2 mcd 10.64
+truth pitch 118.0 mcd 6.83
+truth pitch 129.8 mcd 10.96
