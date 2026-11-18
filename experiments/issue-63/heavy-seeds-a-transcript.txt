@@ -1,22 +1,22 @@
-{"seed":1,"vocalTractLength":0.0785,"pitch":-0.0152,"speechRate":-0.0044,"tenseness":-0.061,"breathiness":0.125,"truth":{"tract":16.39,"pitch":90.5,"rate":1.241},"sd":0.215}
-{"seed":2,"vocalTractLength":0.0472,"pitch":-0.0264,"speechRate":0.0081,"tenseness":-0.049,"breathiness":0.154,"truth":{"tract":17.14,"pitch":145.2,"rate":1.042},"sd":0.312}
-{"seed":3,"vocalTractLength":0.0641,"pitch":-0.0226,"speechRate":0.0238,"tenseness":-0.251,"breathiness":0.157,"truth":{"tract":17.04,"pitch":96.6,"rate":0.834},"sd":0.246}
-{"seed":4,"vocalTractLength":-0.0204,"pitch":-0.0214,"speechRate":0.0393,"tenseness":0.119,"breathiness":0.09,"truth":{"tract":18.47,"pitch":146.6,"rate":0.837},"sd":0.446}
-{"seed":5,"vocalTractLength":0.0721,"pitch":-0.0147,"speechRate":0.0247,"tenseness":0.096,"breathiness":0.187,"truth":{"tract":16.83,"pitch":221.4,"rate":1.08},"sd":0.238}
-{"seed":6,"vocalTractLength":0.0835,"pitch":-0.0286,"speechRate":0.0122,"tenseness":-0.008,"breathiness":-0.003,"truth":{"tract":15.68,"pitch":90.4,"rate":0.891},"sd":0.185}
-{"seed":7,"vocalTractLength":0.136,"pitch":-0.0196,"speechRate":0.0109,"tenseness":-0.056,"breathiness":-0.137,"truth":{"tract":12.08,"pitch":100.5,"rate":1.115},"sd":0.218}
-{"seed":8,"vocalTractLength":0.0955,"pitch":-0.0243,"speechRate":0.0071,"tenseness":-0.173,"breathiness":0.03,"truth":{"tract":13.09,"pitch":196.3,"rate":1.113},"sd":0.153}
-{"seed":9,"vocalTractLength":0.089,"pitch":-0.0296,"speechRate":0.0013,"tenseness":-0.033,"breathiness":0.065,"truth":{"tract":13.39,"pitch":234.7,"rate":1.17},"sd":0.163}
-{"seed":10,"vocalTractLength":0.0743,"pitch":-0.019,"speechRate":0.0449,"tenseness":-0.015,"breathiness":-0.062,"truth":{"tract":15.51,"pitch":246,"rate":1.161},"sd":0.237}
-{"seed":11,"vocalTractLength":0.08,"pitch":-0.0248,"speechRate":0.0134,"tenseness":-0.1,"breathiness":-0.075,"truth":{"tract":15.58,"pitch":180.1,"rate":1.066},"sd":0.209}
-{"seed":12,"vocalTractLength":0.0809,"pitch":-0.0137,"speechRate":0.0051,"tenseness":0.034,"breathiness":0.028,"truth":{"tract":14.02,"pitch":102.9,"rate":1.224},"sd":0.184}
-{"seed":13,"vocalTractLength":0.0695,"pitch":-0.0234,"speechRate":0.0323,"tenseness":0.17,"breathiness":0.165,"truth":{"tract":15.96,"pitch":151.2,"rate":0.822},"sd":0.235}
-{"seed":14,"vocalTractLength":0.0806,"pitch":-0.0225,"speechRate":0.0223,"tenseness":-0.039,"breathiness":0.04,"truth":{"tract":15.14,"pitch":162.4,"rate":0.959},"sd":0.177}
-{"seed":15,"vocalTractLength":0.0853,"pitch":-0.0282,"speechRate":0.0174,"tenseness":-0.014,"breathiness":0.054,"truth":{"tract":13.66,"pitch":158.7,"rate":1.001},"sd":0.159}
-{"seed":16,"vocalTractLength":0.0766,"pitch":-0.02,"speechRate":0.0251,"tenseness":-0.019,"breathiness":-0.045,"truth":{"tract":16.42,"pitch":114.5,"rate":0.975},"sd":0.245}
-{"seed":17,"vocalTractLength":0.0667,"pitch":-0.0312,"speechRate":0.0287,"tenseness":-0.051,"breathiness":0.028,"truth":{"tract":16.74,"pitch":122.8,"rate":0.874},"sd":0.223}
-{"seed":18,"vocalTractLength":0.0808,"pitch":-0.0197,"speechRate":0.0317,"tenseness":-0.076,"breathiness":0.002,"truth":{"tract":14.79,"pitch":192.6,"rate":0.89},"sd":0.177}
-{"seed":19,"vocalTractLength":0.1104,"pitch":-0.0144,"speechRate":0.0003,"tenseness":-0.164,"breathiness":0.05,"truth":{"tract":12.41,"pitch":145.6,"rate":1.141},"sd":0.155}
-{"seed":20,"vocalTractLength":0.0556,"pitch":-0.0221,"speechRate":0.0527,"tenseness":0.024,"breathiness":0.008,"truth":{"tract":17.27,"pitch":155.5,"rate":0.929},"sd":0.239}
-median |error| {"vocalTractLength":0.0793,"pitch":0.0223,"speechRate":0.0198,"tenseness":0.0535,"breathiness":0.058}
-median signed {"vocalTractLength":0.0793,"pitch":-0.0223,"speechRate":0.0198,"tenseness":-0.036,"breathiness":0.035}
+{"seed":1,"vocalTractLength":0.0785,"pitch":0.0111,"speechRate":-0.0044,"tenseness":-0.061,"breathiness":0.125,"truth":{"tract":16.39,"pitch":90.5,"rate":1.241},"sd":0.215}
+{"seed":2,"vocalTractLength":0.0472,"pitch":-0.0004,"speechRate":0.0081,"tenseness":-0.049,"breathiness":0.154,"truth":{"tract":17.14,"pitch":145.2,"rate":1.042},"sd":0.312}
+{"seed":3,"vocalTractLength":0.0641,"pitch":-0.0224,"speechRate":0.0238,"tenseness":-0.251,"breathiness":0.157,"truth":{"tract":17.04,"pitch":96.6,"rate":0.834},"sd":0.246}
+{"seed":4,"vocalTractLength":-0.0204,"pitch":-0.021,"speechRate":0.0393,"tenseness":0.119,"breathiness":0.09,"truth":{"tract":18.47,"pitch":146.6,"rate":0.837},"sd":0.446}
+{"seed":5,"vocalTractLength":0.0721,"pitch":-0.0027,"speechRate":0.0247,"tenseness":0.096,"breathiness":0.187,"truth":{"tract":16.83,"pitch":221.4,"rate":1.08},"sd":0.238}
+{"seed":6,"vocalTractLength":0.0835,"pitch":-0.0027,"speechRate":0.0122,"tenseness":-0.008,"breathiness":-0.003,"truth":{"tract":15.68,"pitch":90.4,"rate":0.891},"sd":0.185}
+{"seed":7,"vocalTractLength":0.136,"pitch":-0.019,"speechRate":0.0109,"tenseness":-0.056,"breathiness":-0.137,"truth":{"tract":12.08,"pitch":100.5,"rate":1.115},"sd":0.218}
+{"seed":8,"vocalTractLength":0.0955,"pitch":-0.0123,"speechRate":0.0071,"tenseness":-0.173,"breathiness":0.03,"truth":{"tract":13.09,"pitch":196.3,"rate":1.113},"sd":0.153}
+{"seed":9,"vocalTractLength":0.089,"pitch":-0.0051,"speechRate":0.0013,"tenseness":-0.033,"breathiness":0.065,"truth":{"tract":13.39,"pitch":234.7,"rate":1.17},"sd":0.163}
+{"seed":10,"vocalTractLength":0.0743,"pitch":-0.007,"speechRate":0.0449,"tenseness":-0.015,"breathiness":-0.062,"truth":{"tract":15.51,"pitch":246,"rate":1.161},"sd":0.237}
+{"seed":11,"vocalTractLength":0.08,"pitch":-0.0129,"speechRate":0.0134,"tenseness":-0.1,"breathiness":-0.075,"truth":{"tract":15.58,"pitch":180.1,"rate":1.066},"sd":0.209}
+{"seed":12,"vocalTractLength":0.0809,"pitch":-0.013,"speechRate":0.0051,"tenseness":0.034,"breathiness":0.028,"truth":{"tract":14.02,"pitch":102.9,"rate":1.224},"sd":0.184}
+{"seed":13,"vocalTractLength":0.0695,"pitch":-0.0064,"speechRate":0.0323,"tenseness":0.17,"breathiness":0.165,"truth":{"tract":15.96,"pitch":151.2,"rate":0.822},"sd":0.235}
+{"seed":14,"vocalTractLength":0.0806,"pitch":-0.0105,"speechRate":0.0223,"tenseness":-0.039,"breathiness":0.04,"truth":{"tract":15.14,"pitch":162.4,"rate":0.959},"sd":0.177}
+{"seed":15,"vocalTractLength":0.0853,"pitch":-0.0276,"speechRate":0.0174,"tenseness":-0.014,"breathiness":0.054,"truth":{"tract":13.66,"pitch":158.7,"rate":1.001},"sd":0.159}
+{"seed":16,"vocalTractLength":0.0766,"pitch":-0.0199,"speechRate":0.0251,"tenseness":-0.019,"breathiness":-0.045,"truth":{"tract":16.42,"pitch":114.5,"rate":0.975},"sd":0.245}
+{"seed":17,"vocalTractLength":0.0667,"pitch":-0.0306,"speechRate":0.0287,"tenseness":-0.051,"breathiness":0.028,"truth":{"tract":16.74,"pitch":122.8,"rate":0.874},"sd":0.223}
+{"seed":18,"vocalTractLength":0.0808,"pitch":-0.0195,"speechRate":0.0317,"tenseness":-0.076,"breathiness":0.002,"truth":{"tract":14.79,"pitch":192.6,"rate":0.89},"sd":0.177}
+{"seed":19,"vocalTractLength":0.1104,"pitch":0.0201,"speechRate":0.0003,"tenseness":-0.164,"breathiness":0.05,"truth":{"tract":12.41,"pitch":145.6,"rate":1.141},"sd":0.155}
+{"seed":20,"vocalTractLength":0.0556,"pitch":-0.0215,"speechRate":0.0527,"tenseness":0.024,"breathiness":0.008,"truth":{"tract":17.27,"pitch":155.5,"rate":0.929},"sd":0.239}
+median |error| {"vocalTractLength":0.0793,"pitch":0.0129,"speechRate":0.0198,"tenseness":0.0535,"breathiness":0.058}
+median signed {"vocalTractLength":0.0793,"pitch":-0.0126,"speechRate":0.0198,"tenseness":-0.036,"breathiness":0.035}
