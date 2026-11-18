@@ -19,7 +19,11 @@ export interface VoiceFitState {
   duration: number;
   voicedSeconds: number;
   speechSeconds: number;
+  /** Committed syllable nuclei (findLandmarks). */
   nuclei: number;
+  /** Nuclei near the end that the next stretch confirms, and the last 2 s
+   * of sound as 16-bit samples so that they are counted as in one recording. */
+  landmarks: { sampleRate: number; pending: number; carry: number[] };
   voicedFrames: number;
   mel: number[];
   tilt: number;

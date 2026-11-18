@@ -17,3 +17,7 @@ Read stage A breathiness from pitch-conditioned CPP and tenseness from a
 calibrated rd table; with a transcript, read speech rate and pitch range from
 the planned speaking time and f0 range. Keep the stage A preset while the
 fitted tract stays within 1 cm of its range.
+Count syllable nuclei with findLandmarks across updates, keeping the last 2 s
+of sound in the state. With a transcript, read pitch against the planned
+median f0, correct the stage A tract with one render, compare speaking times
+in the objective and keep the stage A speech rate out of the first round.
