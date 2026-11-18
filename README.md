@@ -609,6 +609,8 @@ The result contains `head`, `parameters`, `preset`, `features`, `rendered`, `dis
 
 Refinement uses a bounded deterministic simplex, waveguide renders at 16000 Hz, and aligned mel-cepstral distortion when text is supplied. `seed` defaults to 1 and `maxRenders` to 40. `onStep` runs after every render; `fitVoiceSteps` yields stage A and each improvement, then returns the result. No-refinement results have `rendered: null`, `distance: Infinity`.
 
+Stage A reads the source and rate through tables measured once on the default head (`src/analysis/voice-fit-calibration.js`, reproducible with `experiments/issue-63/*-calibrate.mjs`). Breathiness comes from the median inverse-filter CPP at the measured pitch, tenseness from the median rd at the measured pitch and breathiness, and, with a transcript, speech rate and pitch range from the speaking time and f0 range that the planner gives the text. Without a transcript the rate is the syllable rate relative to the default head. The fitted `preset` stays the one of the stage A head while the tract stays within 1 cm of that preset's range, as `matchVoice` kept its first person.
+
 Resume with `createVoiceFitter({ state: JSON.parse(savedState) })` or pass `state` to `fitVoice` to add another stretch. State holds fixed histograms and sums, never audio. `listener.result({ refine: true, samples, sampleRate })` refines an explicitly supplied stretch. `source: 'folds'` searches physical fold settings. The public `hnr` diagnostic retains pitch straightening; the fitting objective uses the reliable inverse-filter HNR histogram. `matchVoice` and `matchVoiceSteps` keep their five result keys and map each legacy `iterations` round to ten renders; the CLI `match` uses this wrapper.
 
 ### Analysis front end

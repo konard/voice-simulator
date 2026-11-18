@@ -21,20 +21,75 @@ below. This requirement is now explicitly unfinished.
 | Shared frame, pitch, formant and inverse-filter analysis | `voice-fit-statistics.js`; fixed-bin numerical tests | Implemented |
 | Landmark nuclei after issue 62 merges | New module merged; `landmark-rate.mjs` compares counts and split behavior | Unfinished; direct integration breaks rate and continuation |
 | Fixed JSON state, 20 voiced-frame minimum, defaults and parts | `copyState`, `statisticsResult`; silence, malformed-state and selection tests | Implemented |
-| Median estimates, calibrated source/range/rate, MAD SDs | Committed calibration and `calibrate.mjs`; numerical tests | Implemented; recovery/uncertainty gates fail |
+| Median estimates, calibrated source/range/rate, MAD SDs | Committed calibration tables and `*-calibrate.mjs`; `voice-fit-calibration.test.js` | Implemented with documented deviations; pitch SD gate blocked (spec conflict) |
 | Scaled acoustic objective, aligned transcript MCD and prior | `voice-fit-objective.js`; cached MCD compared with public metric after identical alignment | Implemented |
 | Two bounded deterministic simplex rounds and render callback | `voice-fit-simplex.js`, `voice-fit.js`; budget/path tests | Implemented; parameter recovery fails |
 | Full result, progress generator and incremental API | Public declarations and API tests; JSON round trip; both-head split regression | Implemented; split regression passes |
 | Fold-source search and voice-file interoperability | Conditional fold coordinates; save/load voice API assertion | Implemented |
-| Legacy matching and analysis API | Wrappers keep five result keys; existing matching tests unchanged | Protocol passes; three accuracy regressions remain |
+| Legacy matching and analysis API | Wrappers keep five result keys; existing matching tests unchanged | All 17 `voice-match.test.js` tests pass locally at 14d9974 |
 | Rust numerical port | Histogram, MAD, calibration inversion, objective, centered mel and simplex core; WASM parity tests | Implemented primitives; orchestration stays in JS |
 | Production example app | Existing chunk tests/build and actual worker in Playwright | Current app CI passes; browser worker checked |
 | Documentation, CLI and release trigger | README, declarations, CLI help, roadmap and minor changeset | Implemented |
-| Two-head unit accuracy and uncertainty | `tests/voice-fit.test.js` | Failing |
+| Two-head unit accuracy and uncertainty | `tests/voice-fit.test.js` | Accuracy passes at 14d9974; `pitch sd < 5` blocked by the specified formula |
 | Twenty-head synthetic accuracy and coverage | Full heavy run and archived raw data | Failing on measured revision |
 | Every golden recording, both modes, SD/distance/MCD and manifest sex | 48 rows in `copy-voice-fit.md/json`; unreviewed rows marked `*` | Report complete; one distance gate fails on measured revision |
 | Stage A and default-fit performance | `performance.mjs`, measured below; deferred unused render diagnostics | Passing on local machine |
 | All runtime suites and final CI | GitHub runs linked in PR; preserved failed logs | Failing |
+
+## Stage A calibration at 14d9974
+
+Commits c3c2a29, ae6139d and 14d9974 remove the stage A biases that drove
+stage B away from the truth. The MCD term dominates `J` (about 0.316 × MCD);
+with a biased tenseness, tract or pitch range, the MCD fell monotonically
+towards low pitch and the male preset ended at 99.9 Hz for 118
+(`male-pitch-landscape.txt`, `preset-base.txt`). Each change below departs
+from a formula of the issue, because that formula measured a quantity with
+a bias that the stage B search cannot remove:
+
+| Issue formula | Replacement | Evidence |
+| --- | --- | --- |
+| Breathiness from median HNR (table at 0, 0.25 … 1) | Median CPP inverted through `BREATHINESS_CPP` (breathiness 0–1 in 0.1 × pitch 80–290 Hz) | HNR falls 1.5–3.5 dB with pitch, tenseness or a male head alone (`hnr-dependence.txt`); `cpp-calibrate.txt` |
+| CPP histogram in 0.5 dB bins | 0.01 dB bins (fixed size, 4000 bins) | The inverse-filter CPP spans only 0.6–4.9 dB (`BREATHINESS_CPP`) |
+| `tenseness = 1 − median(rd)/3` | Median rd inverted through `TENSENESS_RD` at the measured pitch and breathiness; on a saturated stretch the mean of every tenseness within half a bin | rd is compressed (0.5–1.4), rises with breathiness and saturates near 0.85 above 210 Hz (`rd-calibrate.txt`, `tenseness-calibrate.txt`) |
+| `speechRate` = syllable rate ÷ default head's | With a transcript: rate whose planned speaking time (`prepareUtterance`) gives the measured one, `measured = 0.805 · planned + 0.267` | Residuals ≤ 3 % over four texts and three rates (`speech-time-calibrate.txt`); the syllable count read 1.2–1.78 for a rate of 1. Without a transcript the issue's syllable ratio is kept |
+| `pitchRange` = 5–95 % range × constant | With a transcript: range whose planned voiced f0 range × 1.05 gives the measured one | Ratio independent of pitch, 0.94–1.25 (`pitch-range-calibrate.txt`). Without a transcript the issue's constant is kept |
+| `preset` = nearest preset of the final head | The stage A head's preset, kept while the final tract is within 1 cm of its range (as `matchVoice` on `main` did) | The female and child grids overlap: female at 209.8 Hz / 14.71 cm is nearer to the child at size 1 |
+
+Stage A against truth (`node experiments/issue-63/stage-a-sd.mjs`, saved in
+`stage-a-sd.txt`):
+
+| Head | tract | pitch | pitchRange | tenseness | speechRate | breathiness |
+| --- | --- | --- | --- | --- | --- | --- |
+| male | 17.68 (17.2) | 115.5 (118) | 3.75 (3) | 0.655 (0.62) | 1.014 (1) | 0.183 (0.14) |
+| female | 15.84 (14.8) | 215.0 (216) | 3.77 (3.6) | 0.680 (0.56) | 1.054 (1.02) | 0.483 (0.29) |
+| female 0.2 | 15.35 (14.3) | 227.8 (230) | 3.75 (3.6) | 0.508 (0.55) | 1.064 (1.02) | 0.478 (0.29) |
+| A | 14.77 (14) | 208.9 (210) | 2.65 (3) | 0.515 (0.45) | 1.163 (1.15) | 0.335 (0.2) |
+| B | 18.82 (18.5) | 100.0 (100) | 2.97 (3) | 0.750 (0.75) | 0.893 (0.9) | 0.112 (0.2) |
+
+Remaining stage A biases are the tract of the female presets (+7 %, which
+stage B removes) and their breathiness (0.48 for 0.29: their glottal chink
+and aspiration level differ from the default head the tables were measured
+on).
+
+After 40 renders (`node experiments/issue-63/legacy-presets.mjs`, saved in
+`legacy-presets.txt`) the female, male and small female presets end at
+tract 14.71/17.04/14.22 cm, pitch 209.8/113.4/222.0 Hz and rate
+1.102/0.933/1.110 for truths 14.8/17.2/14.3, 216/118/230 and 1.02/1/1.02:
+every error is below 10 %. Locally:
+
+```sh
+node --test tests/voice-match.test.js            # 17 pass
+node --test tests/voice-fit-calibration.test.js  # 5 pass
+node --test tests/voice-fit-numerics.test.js tests/voice-fit.test.js  # 18 pass, 1 fail
+npm run check                                     # passes (ci-logs/check-tenseness.log)
+```
+
+The one failure is `pitch.sd < 5` for head A, 5.948 Hz under the specified
+`1.4826 · MAD / sqrt(frames / 20)`. Its MAD comes from the intonation of the
+fixture, not from tracking error: the known planned f0 on the same frames
+gives 5.08 Hz (`pitch-truth.mjs`). Meeting it needs a change of the formula
+or the fixture, which only the issue author can decide, so this criterion
+is **blocked** and the PR stays a draft.
 
 ## Reproduce the unit failures
 
