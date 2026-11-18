@@ -21,7 +21,7 @@ import { itUnless, noPosixShell, sandboxed } from './helpers/skip.js';
 // eight --shard chunks of the ordinary files, each run exactly once. Modes
 // and chunk one wait for each other, so the workers must run concurrently.
 // Deno and Node split matching by test name and start both halves with the
-// bulk run. Node also starts a fitting lane.
+// bulk run. Node also starts a fitting lane and runs the device benchmark last.
 const fixture = `#!/usr/bin/env bash
 set -eu
 runtime="$1"
@@ -34,6 +34,7 @@ for argument in "$@"; do
   case "$argument" in
     tests/voice-match.test.js) role=matching ;;
     tests/voice-fit.test.js) if [ "$runtime" = node ]; then role=fitting; fi ;;
+    tests/device-benchmark.test.js) if [ "$runtime" = node ]; then role=benchmark; fi ;;
     tests/recognition-modes.test.js) if [ "$runtime" = bun ]; then role=modes; fi ;;
     --test-skip-pattern=*|--filter='/^([^m]|$)/') lane=rest ;;
     --shard=*/8) role="chunk\${argument#--shard=}"; role="\${role%/8}" ;;
@@ -41,6 +42,11 @@ for argument in "$@"; do
 done
 role=\${lane:-$role}
 if [ -f "$root/$role.started" ]; then exit 97; fi
+if [ "$role" = benchmark ]; then
+  for other in matching rest fitting bulk; do
+    [ -f "$root/$other.finished" ] || exit 95
+  done
+fi
 printf '%s\\n' "$@" > "$root/$role.args"
 touch "$root/$role.started"
 for ((poll=0; poll<500; poll++)); do
@@ -96,6 +102,7 @@ const ROLE_FILES = {
   matching: ['tests/voice-match.test.js'],
   rest: ['tests/voice-match.test.js'],
   fitting: ['tests/recognition-modes.test.js', 'tests/voice-fit.test.js'],
+  benchmark: ['tests/device-benchmark.test.js'],
   modes: ['tests/recognition-modes.test.js'],
 };
 const roleFiles = (role) => ROLE_FILES[role];
@@ -106,7 +113,7 @@ describe('Runtime suite scheduling', () => {
       runtime === 'bun'
         ? ['matching', 'modes', ...CHUNKS]
         : runtime === 'node'
-          ? ['matching', 'rest', 'fitting', 'bulk']
+          ? ['matching', 'rest', 'fitting', 'bulk', 'benchmark']
           : ['matching', 'rest', 'bulk'];
     const flags =
       runtime === 'node'
@@ -148,7 +155,12 @@ describe('Runtime suite scheduling', () => {
                 (file) =>
                   file.endsWith('.test.js') &&
                   file !== 'voice-match.test.js' &&
-                  !(runtime === 'node' && file === 'voice-fit.test.js') &&
+                  !(
+                    runtime === 'node' &&
+                    ['device-benchmark.test.js', 'voice-fit.test.js'].includes(
+                      file
+                    )
+                  ) &&
                   !(runtime !== 'deno' && file === 'recognition-modes.test.js')
               )
               .map((file) => `tests/${file}`)

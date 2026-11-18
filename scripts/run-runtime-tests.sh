@@ -16,10 +16,12 @@ case "${runtime}" in
 esac
 
 priority=(tests/voice-match.test.js)
+device_benchmark=tests/device-benchmark.test.js
 remaining=()
 for file in tests/*.test.js; do
   if [ "${file}" != tests/voice-match.test.js ] &&
-    { [ "${runtime}" != node ] || [ "${file}" != tests/voice-fit.test.js ]; } &&
+    { [ "${runtime}" != node ] || { [ "${file}" != tests/voice-fit.test.js ] &&
+      [ "${file}" != "${device_benchmark}" ]; }; } &&
     { [ "${runtime}" = deno ] || [ "${file}" != tests/recognition-modes.test.js ]; }; then
     remaining+=("${file}")
   fi
@@ -107,5 +109,8 @@ if [ "${runtime}" != bun ]; then
 fi
 if [ "${runtime}" = node ]; then
   wait "${fitting_pid}" || status=$?
+  # This test measures real elapsed rendering time, so run it after all
+  # synthesis-heavy test processes have exited.
+  "$@" "${device_benchmark}" || status=$?
 fi
 exit "${status}"
