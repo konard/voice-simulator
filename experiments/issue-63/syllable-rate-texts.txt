@@ -1,0 +1,4 @@
+1.000 "Please call Stella and ask her to bring these things with her."
+0.813 "The north wind and the sun were disputing which was the stronger."
+0.819 "When the sunlight strikes raindrops in the air, they act as a prism and form a rainbow."
+0.827 "A traveller came along wrapped in a warm cloak."
