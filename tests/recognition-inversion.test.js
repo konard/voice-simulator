@@ -463,6 +463,43 @@ it('cuts long gaps and reports unsupported controls', () => {
   }
 });
 
+it('detects two trill cycles with flat peaks and troughs', () => {
+  const energy = [
+    -24, -22, -19, -16, -16, -19, -22, -25, -25, -22, -19, -16, -16, -19, -22,
+    -25, -25, -22, -19, -16, -16, -19, -22,
+  ];
+  const frames = analyzeFrames(new Float32Array(40 * energy.length), 8000);
+  frames.energy.set(energy);
+  frames.speech.fill(1);
+  const pitch = { f0: new Float32Array(frames.count), committed: frames.count };
+  const formants = {
+    valid: new Uint8Array(4 * frames.count),
+    committed: frames.count,
+  };
+  const options = {
+    codebook: buildCodebook(head, { size: 1 }),
+    pitch,
+    formants,
+  };
+  const expected = new Float32Array(frames.count).fill(1, 3, 20);
+  assert.deepEqual(
+    invertArticulation(frames, options).channels.trill,
+    expected
+  );
+
+  const { track, advance } = createArticulationInverter(frames, {
+    ...options,
+    lag: 20,
+  });
+  pitch.committed = formants.committed = 20;
+  advance();
+  pitch.committed = formants.committed = 21;
+  advance();
+  pitch.committed = formants.committed = frames.count;
+  advance(true);
+  assert.deepEqual(track.channels.trill.subarray(0, frames.count), expected);
+});
+
 it('stays within the CPU budget', () => {
   const limit = Number(globalThis.process?.env.INVERSION_RTF_LIMIT ?? 0.4);
   for (const rate of [16000, 8000]) {

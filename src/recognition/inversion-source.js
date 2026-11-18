@@ -69,18 +69,26 @@ function createTrillDetector(frames) {
   const detected = new Uint8Array(frames.capacity);
   const extrema = [];
   let scanned = 1;
+  let plateauStart = 0;
+  let direction = 0;
 
   return {
     detected,
     advance(end) {
-      while (scanned + 1 < end) {
+      while (scanned < end) {
         const t = scanned++;
-        const rise = energy[t] - energy[t - 1];
-        const fall = energy[t] - energy[t + 1];
-        if (rise * fall <= 0) {
+        const change = Math.sign(energy[t] - energy[t - 1]);
+        if (change === 0) {
           continue;
         }
-        extrema.push(t);
+        const reversed = change === -direction;
+        const middle = Math.floor((plateauStart + t - 1) / 2);
+        direction = change;
+        plateauStart = t;
+        if (!reversed) {
+          continue;
+        }
+        extrema.push(middle);
         if (extrema.length < 5) {
           continue;
         }

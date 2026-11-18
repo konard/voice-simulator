@@ -97,13 +97,22 @@ fn mark_trills(frames: &[f64], hop: f64, out: &mut [f64]) {
     let energy = |t: usize| frames[t * FEATURES];
     let mut extrema = [0; 5];
     let mut count = 0;
-    for t in 1..(frames.len() / FEATURES).saturating_sub(1) {
-        let rise = energy(t) - energy(t - 1);
-        let fall = energy(t) - energy(t + 1);
-        if rise * fall <= 0.0 {
+    let mut plateau_start = 0;
+    let mut direction = 0.0;
+    for t in 1..frames.len() / FEATURES {
+        let delta = energy(t) - energy(t - 1);
+        if delta == 0.0 {
             continue;
         }
-        extrema[count] = t;
+        let change = delta.signum();
+        let reversed = change == -direction;
+        let middle = (plateau_start + t - 1) / 2;
+        direction = change;
+        plateau_start = t;
+        if !reversed {
+            continue;
+        }
+        extrema[count] = middle;
         count += 1;
         if count < extrema.len() {
             continue;
@@ -124,5 +133,27 @@ fn mark_trills(frames: &[f64], hop: f64, out: &mut [f64]) {
         }
         extrema.copy_within(1.., 0);
         count -= 1;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn detects_trill_cycles_with_flat_extrema() {
+        let energy = [
+            -24., -22., -19., -16., -16., -19., -22., -25., -25., -22., -19., -16., -16., -19.,
+            -22., -25., -25., -22., -19., -16., -16., -19., -22.,
+        ];
+        let mut frames = [0.0; FEATURES * 23];
+        let mut out = [0.0; CHANNELS * 23];
+        for (t, value) in energy.into_iter().enumerate() {
+            frames[t * FEATURES] = value;
+        }
+        mark_trills(&frames, 0.005, &mut out);
+        for (t, row) in out.chunks_exact(CHANNELS).enumerate() {
+            assert_eq!(row[6] == 1.0, (3..20).contains(&t));
+        }
     }
 }
