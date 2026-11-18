@@ -30,8 +30,11 @@ export function featureVector(state) {
   return {
     values: [...values, ...mel.map((x) => x - mean)],
     scales: [...scales, ...Array(24).fill(3)],
+    speechTime: log(state.speechSeconds),
   };
 }
+// Index of ln(syllable rate) in featureVector values.
+const RATE = 11;
 export function vectorDistance(
   target,
   candidate,
@@ -40,8 +43,21 @@ export function vectorDistance(
 ) {
   let sum = 0,
     weight = 0;
-  target.values.forEach((x, i) => {
-    const y = candidate.values[i];
+  // With a transcript both say the same syllables, so their syllable rates
+  // differ by the speaking time alone. The landmark count of one short
+  // sentence moves by two nuclei between near-identical renders
+  // (experiments/issue-63/rate-terms.txt), the speaking time by 3 %.
+  const timed =
+    transcript &&
+    Number.isFinite(target.speechTime) &&
+    Number.isFinite(candidate.speechTime);
+  target.values.forEach((value, i) => {
+    let x = value,
+      y = candidate.values[i];
+    if (timed && i === RATE) {
+      x = -target.speechTime;
+      y = -candidate.speechTime;
+    }
     if (
       x === null ||
       y === null ||
