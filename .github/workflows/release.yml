@@ -377,12 +377,14 @@ jobs:
         # matching tests (split in two by test name), voice-fit with
         # recognition-modes, and the ordinary files in four processes, so
         # none starts after most of the 300s budget has elapsed.
-        # windows-2025 gets 420s: each 40-render matchVoice test (spec item
-        # 10 of issue 63) took 71-88s there against 34-41s on Ubuntu and
-        # macOS, so the two matching halves needed 235s and 299s and the
-        # fitting process passed 300s while all four shared four vCPUs.
+        # macOS and Windows get 420s. The 40-render matchVoice tests (spec
+        # item 10 of issue 63) are CPU-bound on the JS engine: each took
+        # 71-88s on windows-2025 against 34-41s on Ubuntu, where the suite
+        # takes 187-188s. With four processes on the runners' three or four
+        # vCPUs, windows-2025 passed 300s (run 44289126498) and macos-15
+        # took 251s and 290s of 300s (runs 44289126498 and 44292683632).
         env:
-          SUITE_SECONDS: ${{ matrix.os == 'windows-2025' && '420' || '300' }}
+          SUITE_SECONDS: ${{ matrix.os != 'ubuntu-24.04' && '420' || '300' }}
         run: bash scripts/run-with-budget-warning.sh "$SUITE_SECONDS" "Node.js test suite" bash scripts/run-runtime-tests.sh node
 
       - name: Verify inverse-filter CPU target
@@ -411,11 +413,15 @@ jobs:
         # still lose a child's exit (oven-sh/bun#45483, #41024, #39987).
         # The 222-file sequential suite exceeded 500s on macOS in issue 71
         # while making progress, after all mode assertions passed. Keep
-        # every test and the existing 500s deadline (warning at 350s).
+        # every test and the 500s deadline on Ubuntu (warning at 350s).
         # Run matching alone first, then put recognition-modes after
         # whichever shard finishes first, to balance work without native
-        # parallel workers.
-        run: bash scripts/run-with-budget-warning.sh 500 "Bun test suite" bash scripts/run-bun-tests.sh
+        # parallel workers. macOS and Windows get 600s: matching alone takes
+        # 152-176s there against 108-162s on Ubuntu, and the whole suite took
+        # 399s and 465s of 500s in run 44292683632 (280s on Ubuntu).
+        env:
+          SUITE_SECONDS: ${{ matrix.os != 'ubuntu-24.04' && '600' || '500' }}
+        run: bash scripts/run-with-budget-warning.sh "$SUITE_SECONDS" "Bun test suite" bash scripts/run-bun-tests.sh
 
       - name: Setup Deno
         if: matrix.runtime == 'deno'
@@ -436,12 +442,13 @@ jobs:
         # macOS and Windows runners have a WebGPU adapter, so the GPU tests
         # of tests/fdtd-gpu.test.js must run there: without one they fail
         # (tests/helpers/gpu.js). Ubuntu runners have none (issue 30).
-        # 420s on windows-2025, as for Node.js: with the 40-render matchVoice
-        # tests of issue 63 the suite took 297s there (4m57s).
+        # 420s on macOS and Windows, as for Node.js: with the 40-render
+        # matchVoice tests of issue 63 the suite took 297s on windows-2025
+        # (run 44289126498) and 266s on macos-15 (run 44292683632).
         env:
           REQUIRE_GPU: ${{ matrix.os != 'ubuntu-24.04' && '1' || '' }}
-          SUITE_SECONDS: ${{ matrix.os == 'windows-2025' && '420' || '300' }}
-        # 300s, as for Node.js and Bun: on windows-2025 the suite took
+          SUITE_SECONDS: ${{ matrix.os != 'ubuntu-24.04' && '420' || '300' }}
+        # 300s on Ubuntu, as for Node.js: before issue 63, on windows-2025 the suite took
         # 87-150s on main and PR #116 (issue 115), mostly in tests that spawn
         # git and shell fixtures, and crossed the 70% warning of a 200s budget
         # in three of four runs. It took 101-103s on PR #91 (100s then).
