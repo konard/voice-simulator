@@ -80,17 +80,26 @@ elif [ "${runtime}" = node ]; then
   "$@" "${remaining[@]}" &
   second_pid=$!
 else
-  # Deno only needs the matching file started early.
-  "$@" "${priority[@]}" &
+  # Deno runs tests within one module serially. In the macOS timeout
+  # (44320811713), each of the three "matches a" tests took over two minutes
+  # and breathiness, profiling and CLI matching still followed them in that
+  # lane. Split on the first character to keep the filters complementary.
+  "$@" --filter='/^m/' "${priority[@]}" &
   first_pid=$!
-  "$@" "${remaining[@]}" &
+  "$@" --filter='/^([^m]|$)/' "${priority[@]}" &
+  rest_pid=$!
+  # Leave capacity for both voice-match processes on the three- and
+  # four-core hosted runners. A caller can override the bulk worker count.
+  DENO_JOBS="${DENO_JOBS:-2}" "$@" "${remaining[@]}" &
   second_pid=$!
 fi
 # Reap every child even when a preceding phase has failed.
 wait "${first_pid}" || status=$?
 wait "${second_pid}" || status=$?
-if [ "${runtime}" = node ]; then
+if [ "${runtime}" != bun ]; then
   wait "${rest_pid}" || status=$?
+fi
+if [ "${runtime}" = node ]; then
   wait "${fitting_pid}" || status=$?
 fi
 exit "${status}"

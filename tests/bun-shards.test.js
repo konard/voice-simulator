@@ -13,8 +13,8 @@ import { itUnless, noPosixShell, sandboxed } from './helpers/skip.js';
 // Bun matching completes before a queue that two workers drain: modes, then
 // eight --shard chunks of the ordinary files, each run exactly once. Modes
 // and chunk one wait for each other, so the workers must run concurrently.
-// Deno matching overlaps the bulk run. Node splits matching by test name and
-// runs both halves and the fitting files alongside the bulk run.
+// Deno and Node split matching by test name and start both halves with the
+// bulk run. Node also starts a fitting lane.
 const fixture = `#!/usr/bin/env bash
 set -eu
 runtime="$1"
@@ -28,7 +28,7 @@ for argument in "$@"; do
     tests/voice-match.test.js) role=matching ;;
     tests/voice-fit.test.js) if [ "$runtime" = node ]; then role=fitting; fi ;;
     tests/recognition-modes.test.js) if [ "$runtime" = bun ]; then role=modes; fi ;;
-    --test-skip-pattern=*) lane=rest ;;
+    --test-skip-pattern=*|--filter='/^([^m]|$)/') lane=rest ;;
     --shard=*/8) role="chunk\${argument#--shard=}"; role="\${role%/8}" ;;
   esac
 done
@@ -52,7 +52,8 @@ for ((poll=0; poll<500; poll++)); do
       ready=true
     fi
   elif [ -f "$root/matching.started" ] && [ -f "$root/bulk.started" ] &&
-    { [ "$runtime" != node ] || { [ -f "$root/rest.started" ] && [ -f "$root/fitting.started" ]; }; }; then
+    [ -f "$root/rest.started" ] &&
+    { [ "$runtime" != node ] || [ -f "$root/fitting.started" ]; }; then
     ready=true
   fi
   if [ "$ready" = true ]; then
@@ -75,8 +76,13 @@ const NODE_SCHEDULING = {
   rest: ['--test-skip-pattern=matches a'],
   fitting: ['--test-concurrency=1'],
 };
+const DENO_SCHEDULING = {
+  matching: ['--filter=/^m/'],
+  rest: ['--filter=/^([^m]|$)/'],
+};
+const RUNTIME_SCHEDULING = { node: NODE_SCHEDULING, deno: DENO_SCHEDULING };
 const schedulingFlags = (runtime, role) =>
-  SCHEDULING[role] ?? (runtime === 'node' ? NODE_SCHEDULING[role] : null) ?? [];
+  SCHEDULING[role] ?? RUNTIME_SCHEDULING[runtime]?.[role] ?? [];
 
 // Files of every process but the bulk one, which runs the remaining files.
 const ROLE_FILES = {
@@ -94,7 +100,7 @@ describe('Runtime suite scheduling', () => {
         ? ['matching', 'modes', ...CHUNKS]
         : runtime === 'node'
           ? ['matching', 'rest', 'fitting', 'bulk']
-          : ['matching', 'bulk'];
+          : ['matching', 'rest', 'bulk'];
     const flags =
       runtime === 'node'
         ? ['--test', '--test-timeout=30000']

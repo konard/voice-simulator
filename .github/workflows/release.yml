@@ -443,7 +443,7 @@ jobs:
 
       # Resolve Deno's own frozen module graph before the timed suite, as npm
       # ci does for the other runtimes. --no-run executes no test assertions,
-      # so the 100s suite budget below still measures every acceptance test.
+      # so the suite budget below still measures every acceptance test.
       - name: Prepare Deno test dependencies
         if: matrix.runtime == 'deno'
         run: deno test -A --parallel --no-run --frozen
@@ -462,7 +462,8 @@ jobs:
         # 401s of 420s on a slow macos-15 runner (run 44309721274).
         # Before issue 63, on windows-2025 it took 87-150s on main and PR #116
         # (issue 115), mostly in tests that spawn git and shell fixtures.
-        # Start matching immediately, as for Node, to avoid a long tail.
+        # Split matching into two concurrent lanes to shorten the macOS
+        # critical path. The ordinary suite uses two Deno workers.
         run: bash scripts/run-with-budget-warning.sh 600 "Deno test suite" bash scripts/run-runtime-tests.sh deno
 
   # === RUST ENGINE ===
