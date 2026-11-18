@@ -1019,16 +1019,27 @@ pitch SD:
 | Deno | 295 s of 300 (134770137643) | 257 s of 420 (134770137439) | 328 s of 420 (134770137613) |
 | Bun | 295 s of 500 (134770137684) | 366 s of 600 (134770137548) | 369 s of 600 (134770137526) |
 
-The suite budget is now 420 s for Node and Deno and 600 s for Bun on every
-runner. The largest measured times, 328 s (Deno/Windows) and 465 s
-(Bun/Windows), are 78% and 78% of those budgets. A job only exceeds its
-budget on a runner more than 1.28× slower than the slowest one measured so
-far; the 70% warning (294 s and 420 s) reports such drift first. Every
-budget stays below 70% of the 15-minute job backstop (630 s), which
-`tests/ci-timeouts.test.js` checks, so they cannot be raised much further.
-Within each job the matching tests already run as separate processes, so
-the remaining time is the specified render count on the JS engine, not idle
-scheduling.
+Commit 10862a1 sets the suite budget to 420 s for Node and Deno and 600 s
+for Bun on every runner. Its
+[run 44296714383](https://github.com/konard/voice-simulator/actions/runs/44296714383)
+finishes all nine jobs inside these budgets, and each fails only on pitch
+SD (logs saved as `ci-logs/10862a1-<job>.log`):
+
+| Runtime | Ubuntu | macOS | Windows |
+| --- | --- | --- | --- |
+| Node | 185 s of 420 (134776298062) | 196 s of 420 (134776298258) | 330 s of 420 (134776298078) |
+| Deno | 256 s of 420 (134776298224) | 203 s of 420 (134776298124) | 347 s of 420 (134776298351) |
+| Bun | 287 s of 600 (134776298375) | 411 s of 600 (134776298077) | 464 s of 600 (134776298392) |
+
+Across these three runs, the largest times are 347 s (Deno/Windows) and
+465 s (Bun/Windows), or 83% and 78% of the budgets. A job exceeds its
+budget only on a runner at least 1.21× (Node and Deno) or 1.29× (Bun)
+slower than the slowest one measured. The 70% warning (294 s and 420 s)
+reports such drift first. Every budget stays below 70% of the 15-minute
+job backstop (630 s), which `tests/ci-timeouts.test.js` checks, so the
+budgets cannot be raised much further. Within each job the matching tests
+already run as separate processes, so the remaining time is the specified
+render count on the JS engine, not idle scheduling.
 
 The issue asks that tests needing more than about 10 seconds run only in
 the manually triggered workflow. The 40-render `matchVoice` tests in
