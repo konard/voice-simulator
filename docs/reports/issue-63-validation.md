@@ -7,30 +7,28 @@ existing matching tests have not been relaxed.
 ## Requirement inventory
 
 The complete issue and all PR comment types were read. The issue has no
-comments; the PR has three automation conversation comments and no inline
-comments or reviews as of November 17, 2026. Required prerequisites
+comments; the PR has only automation conversation comments and no inline
+comments or reviews as of November 18, 2026. Required prerequisites
 59, 60, 61, 17 and 32 are closed.
 Optional fold source 33 and voice files 41 are merged. Landmark issue 62
-merged during the CI repair follow-up. Its module is now present on this
-branch, but the fitter still uses the envelope counter: the attempted
-landmark integration introduces rate and continuation failures, as measured
-below. This requirement is now explicitly unfinished.
+is merged and its `findLandmarks` now counts the fitter's syllable nuclei
+across updates (see "Landmark nuclei and transcript corrections at e21cac8").
 
 | Requirement | Implementation and verification | Status |
 | --- | --- | --- |
 | Shared frame, pitch, formant and inverse-filter analysis | `voice-fit-statistics.js`; fixed-bin numerical tests | Implemented |
-| Landmark nuclei after issue 62 merges | New module merged; `landmark-rate.mjs` compares counts and split behavior | Unfinished; direct integration breaks rate and continuation |
+| Landmark nuclei after issue 62 merges | `voice-fit-nuclei.js` with a bounded 2 s carry; whole-versus-split regression in `voice-fit-calibration.test.js`; `landmark-carry.txt` | Implemented with a documented deviation (bounded audio carry in the state) |
 | Fixed JSON state, 20 voiced-frame minimum, defaults and parts | `copyState`, `statisticsResult`; silence, malformed-state and selection tests | Implemented |
 | Median estimates, calibrated source/range/rate, MAD SDs | Committed calibration tables and `*-calibrate.mjs`; `voice-fit-calibration.test.js` | Implemented with documented deviations; pitch SD gate blocked (spec conflict) |
 | Scaled acoustic objective, aligned transcript MCD and prior | `voice-fit-objective.js`; cached MCD compared with public metric after identical alignment | Implemented |
 | Two bounded deterministic simplex rounds and render callback | `voice-fit-simplex.js`, `voice-fit.js`; budget/path tests | Implemented; parameter recovery fails |
 | Full result, progress generator and incremental API | Public declarations and API tests; JSON round trip; both-head split regression | Implemented; split regression passes |
 | Fold-source search and voice-file interoperability | Conditional fold coordinates; save/load voice API assertion | Implemented |
-| Legacy matching and analysis API | Wrappers keep five result keys; existing matching tests unchanged | All 17 `voice-match.test.js` tests pass locally at 14d9974 |
+| Legacy matching and analysis API | Wrappers keep five result keys; existing matching tests unchanged | All 17 `voice-match.test.js` tests pass locally at b537919 (`ci-logs/voice-fit-local-b537919.log`) |
 | Rust numerical port | Histogram, MAD, calibration inversion, objective, centered mel and simplex core; WASM parity tests | Implemented primitives; orchestration stays in JS |
 | Production example app | Existing chunk tests/build and actual worker in Playwright | Current app CI passes; browser worker checked |
 | Documentation, CLI and release trigger | README, declarations, CLI help, roadmap and minor changeset | Implemented |
-| Two-head unit accuracy and uncertainty | `tests/voice-fit.test.js` | Accuracy passes at 14d9974; `pitch sd < 5` blocked by the specified formula |
+| Two-head unit accuracy and uncertainty | `tests/voice-fit.test.js` | Accuracy passes at b537919; `pitch sd < 5` blocked by the specified formula |
 | Twenty-head synthetic accuracy and coverage | Full heavy run and archived raw data | Failing on measured revision |
 | Every golden recording, both modes, SD/distance/MCD and manifest sex | 48 rows in `copy-voice-fit.md/json`; unreviewed rows marked `*` | Report complete; one distance gate fails on measured revision |
 | Stage A and default-fit performance | `performance.mjs`, measured below; deferred unused render diagnostics | Passing on local machine |
@@ -91,6 +89,55 @@ gives 5.08 Hz (`pitch-truth.mjs`). Meeting it needs a change of the formula
 or the fixture, which only the issue author can decide, so this criterion
 is **blocked** and the PR stays a draft.
 
+## Landmark nuclei and transcript corrections at e21cac8
+
+Commits 25c8f3f, 27f6091 and 526a5b0 integrate `findLandmarks` (#62) and
+remove the remaining transcript-mode stage B drifts. Each change departs
+from a formula of the issue, for the measured reason given:
+
+| Issue formula | Replacement | Evidence |
+| --- | --- | --- |
+| Count of nuclei: a number in the state | `findLandmarks` nuclei; each update prepends the last 2 s of sound (16-bit samples in `state.landmarks.carry`, about 160 KB of JSON, bounded) and keeps nuclei within 0.3 s of its end pending | A stretch analysed alone counts other nuclei near its start (the frontend's noise floor remembers 1.5 s); with the carry, one, two and three updates count 16/5/7/20 as the whole recordings (`landmark-carry.txt`). The default rate is recalibrated to `16 / 3.27` |
+| `pitch` = median f0 | With a transcript: `100 · f0 / plannedMedianF0(text, 100, pitchRange)` | The planned median f0 of a text differs from the pitch parameter by 0.963–1.043 at range 3 (`planned-median-texts.txt`); stage A median pitch error of the 20 heavy heads falls from 2.23 % to 1.29 % (`heavy-seeds-a-transcript.txt`) |
+| `ln(syllable rate)` term (0.08) | With a transcript: `−ln(speech seconds)` of recording and render (same syllables) | Near the truth of head A the landmark count reads 4, 5 or 7 nuclei for rates 0.95–1.25, a term of up to 19 (`rate-terms.txt`) |
+| Round 1 starts at θ0 | With a transcript, the θ0 render's tract reading first scales the stage A tract by recording/render (one render of round 1's budget) | The dF reading depends on the text by up to 25 % and hardly on pitch (`tract-pitch-grid.txt`); a +5.5 % tract alone raises the MCD of head A from 6 to 17 dB, more than any other stage A error (`mcd-noise.txt`). Head A 14.77 → 13.77 cm (14), B 18.82 → 18.61 (18.5), female 0.2 15.35 → 14.07 (14.3) |
+| Round 1 refines `speechRate` | Not with a transcript: stage A's speaking-time rate (≤ 3 % residual) stays | Rate moves the aligned MCD by ±0.2 dB, below its render-to-render noise; female 0.2 drifted from 1.064 to 1.199 for 1.02 (`match-trace-female02.txt`), and stays at 1.064 without it (`match-trace-female02-norate.txt`) |
+
+After 40 renders (`node experiments/issue-63/legacy-presets.mjs`, saved in
+`legacy-presets.txt`) the female, male and small female presets end at
+tract 14.56/17.04/14.13 cm, pitch 214.7/118.8/221.3 Hz and rate
+1.054/1.014/1.064 for truths 14.8/17.2/14.3, 216/118/230 and 1.02/1/1.02.
+
+The example app's recognition chunk took the landmark modules and reached
+505.31 kB, failing the 500 kB guard of the Example app workflow (run
+44268316330, `ci-logs/example-app-44268316330.log`). The acoustic models now
+have their own chunk; the largest chunk is 360.62 kB and the workflow passes
+at b537919.
+
+### Without a transcript the gates measure the text
+
+Without a transcript stage B renders `MATCH_TEXT` as the issue specifies,
+and stage A reads the statistics of whatever sentence was said. The heavy
+recordings say the north-wind sentence. Each no-transcript reading depends
+on the text by more than its gate:
+
+- pitch: the planned median f0 is 0.974 × pitch for the north-wind sentence
+  and 1.021 × pitch for `MATCH_TEXT` (range 3, `planned-median-texts.txt`);
+  stage A (median f0, the issue's formula) reads −2.2 % (gate 2 %), and a
+  render of `MATCH_TEXT` matching the recording's median f0 sits 4.6 % low;
+- rate: the default head at rate 1 reads 1.000 on `MATCH_TEXT` and
+  0.813–0.827 on three other sentences (`syllable-rate-texts.txt`); stage A
+  reads −10.7 % on the heavy heads (gate 8 %, `heavy-seeds-a-none.txt`);
+- tract: the dF reading of the north-wind sentence is 1.04–1.20 × the
+  truth for 12–18 cm, that of `MATCH_TEXT` 0.94–1.26 × (`tract-pitch-grid.txt`);
+  stage A reads +7.9 % (gate 6 %), up to 13.6 % on one head.
+
+No constant calibrated on other texts brings all of them within the gates,
+and a constant calibrated on the north-wind sentence would fit the test,
+not the method. These no-transcript gates are therefore **blocked**: they
+need either text-independent readings (a different method than the issue
+specifies) or a change of the gates, which only the issue author can decide.
+
 ## Reproduce the unit failures
 
 ```sh
@@ -100,12 +147,15 @@ node experiments/issue-63/objective.mjs
 ```
 
 The specified short sentence is rendered with seed 1, JS waveguide at 16000 Hz.
-With ten refinement renders, head A returns tract 14.767932 cm, pitch
-208.854756 Hz, tenseness 0.616667 and rate 1.159574. These point estimates pass.
-Head B returns tract 18.817204 cm (1.715% error), pitch 126 Hz (26% error),
-tenseness 0.816667 and rate 0.967456. Its pitch gate fails.
-At 3487780, the ten-render distances are 5.920842 and 8.294783,
-respectively. Both no-refinement recovery cases and the 8000 Hz test pass.
+At b537919 (`ci-logs/voice-fit-local-b537919.log:28–29`), with ten
+refinement renders and the transcript, head A returns tract 13.770941 cm,
+pitch 208.925712 Hz, tenseness 0.515 and rate 1.162523; head B returns
+tract 18.614869 cm, pitch 99.999374 Hz, tenseness 0.75 and rate 0.892839.
+Both pass, as do the no-transcript, 8000 Hz, continuation, determinism and
+`matchVoice` cases: 41 of 44 tests pass, 2 Rust parity tests skip without a
+built engine, and only `pitch sd < 5` fails (`voice-fit.test.js:93`).
+Before the landmark and transcript corrections, at 3487780, head B selected
+126 Hz (26% error).
 
 Head A's f0 histogram has 263 voiced frames, median 208.854756 Hz and
 MAD 14.548368 Hz. The issue's formula gives
