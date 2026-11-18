@@ -69,6 +69,21 @@ for (const rate of [16000, 8000]) {
     },
   };
   const adjusted = invertArticulation(frames, { ...options, codebook });
+  const withoutFormants = invertArticulation(frames, {
+    ...options,
+    formants: { ...formants, valid: new Uint8Array(formants.valid.length) },
+  });
+  const correctedUnits = invertArticulation(frames, {
+    ...options,
+    codebook: {
+      ...book,
+      formants: Float64Array.from(
+        book.formants,
+        (f) =>
+          (f * book.referenceLength * book.lengthScale) / voice.vocalTractLength
+      ),
+    },
+  });
   const truth = articulationPlan(raw);
   const state = {};
   truth.channels = Object.fromEntries(
@@ -108,7 +123,21 @@ for (const rate of [16000, 8000]) {
     truthSource: mcd(oracleSource),
     raw: mcd(articulationPlan(raw)),
     compensated: mcd(articulationPlan(adjusted)),
+    withoutFormants: mcd(articulationPlan(withoutFormants)),
+    correctedUnits: mcd(articulationPlan(correctedUnits)),
   });
+  for (const names of [
+    ['f0', 'voicing'],
+    ['loudness'],
+    ['aspiration', 'frication', 'sibilance'],
+    ['trill', 'glottalClosure', 'lateral'],
+  ]) {
+    const channels = { ...truth.channels };
+    for (const name of names) {
+      channels[name] = raw.channels[name];
+    }
+    console.log({ rate, estimated: names, mcd: mcd({ ...truth, channels }) });
+  }
   for (const key of ['height', 'backness']) {
     let oracle = 0;
     let correct = 0;
@@ -154,6 +183,22 @@ for (const ipa of ['apa', 'ata', 'aka']) {
   const { start, end } = plan.segments.find(({ kind }) => kind === 'consonant');
   const center = Math.round((start + end) / (2 * frames.hop));
   const { count, width, index, cost } = track.candidates;
+  // Use the known interval only to measure whether relabeling is sufficient.
+  const speech = frames.speech.slice();
+  speech.fill(0, Math.ceil(start / frames.hop), Math.floor(end / frames.hop));
+  const knownGap = invertArticulation(
+    { ...frames, speech },
+    {
+      voice,
+      codebook: book,
+    }
+  );
+  console.log({
+    ipa,
+    measuredLip: track.channels.lipAmount[center],
+    knownGapLip: knownGap.channels.lipAmount[center],
+    knownGapCandidates: knownGap.candidates.count[center],
+  });
   for (let t = center - 2; t <= center + 2; t++) {
     const rows = index.subarray(t * width, t * width + count[t]);
     let labial = 0;
