@@ -1,4 +1,5 @@
 //! Acoustic inversion over a host-provided candidate lattice. Unlicense.
+use crate::inversion_refine::REFINED;
 use crate::math::{exp, expm1};
 use alloc::{vec, vec::Vec};
 
@@ -142,7 +143,7 @@ impl Lattice<'_> {
         for c in 0..WIDTH {
             let scale = self.range[c] / 255.0;
             let code = self.shape[chosen + c];
-            let center = if let Some(state) = adjusted {
+            let center = if let Some(state) = adjusted.filter(|_| REFINED.contains(&c)) {
                 mean[c] = state[c];
                 (state[c] - self.min[c]) / scale
             } else {
@@ -234,7 +235,8 @@ impl Lattice<'_> {
 
     /// Fit each fourth periodic frame with a closed velum and rerun batch
     /// smoothing. The host supplies forward geometry and observed LPC for
-    /// each selected frame via `refine_frame`.
+    /// each selected frame via `refine_frame`. The six oral refinement
+    /// coordinates replace their row measurements in the second pass.
     pub fn refine(
         &self,
         periodic: &[bool],
@@ -335,6 +337,7 @@ mod tests {
     fn refined_variance_is_centered_on_the_refined_measurement() {
         let mut shape = [0.0; 2 * WIDTH];
         shape[WIDTH] = 255.0;
+        shape[WIDTH + 3] = 255.0;
         let lattice = Lattice {
             shape: &shape,
             index: &[0.0, 1.0],
@@ -354,11 +357,14 @@ mod tests {
             |_, state| {
                 let mut adjusted = *state;
                 adjusted[0] = 0.5;
+                adjusted[3] = 0.5;
                 adjusted
             },
             &mut result,
         );
         assert_eq!(result[0], 0.5);
         assert_eq!(result[WIDTH], 0.25);
+        assert_eq!(result[3], 0.0);
+        assert_eq!(result[WIDTH + 3], 0.5);
     }
 }

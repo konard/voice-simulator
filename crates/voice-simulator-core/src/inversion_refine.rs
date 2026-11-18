@@ -5,7 +5,7 @@ use crate::voice_fit::simplex_with_step;
 
 pub const BANDS: usize = 24;
 pub const ORAL_SECTIONS: usize = 44;
-const REFINED: [usize; 6] = [0, 1, 2, 7, 9, 8];
+pub(crate) const REFINED: [usize; 6] = [0, 1, 2, 7, 9, 8];
 
 pub struct OralObservation<'a> {
     pub grid: &'a [f64; BANDS],
