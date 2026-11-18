@@ -32,7 +32,7 @@ across updates (see "Landmark nuclei and transcript corrections at e21cac8").
 | Twenty-head synthetic accuracy and coverage | Heavy run 44280732497 at 5cb68e7 and archived raw data | All seven gates pass in both modes |
 | Every golden recording, both modes, SD/distance/MCD and manifest sex | 48 rows in `copy-voice-fit.md/json`; unreviewed rows marked `*` | All 48 distance gates pass at 5cb68e7 |
 | Stage A and default-fit performance | `performance.mjs`, measured below; deferred unused render diagnostics | Passing on local machine |
-| All runtime suites and final CI | GitHub runs linked in PR; preserved failed logs | Failing only on `pitch sd < 5` (blocked spec conflict) |
+| All runtime suites and final CI | Run 44292683632 at ac739b6 (see "Runtime budgets for the 40-render matching tests") | All nine runtime jobs finish within budget; failing only on `pitch sd < 5` (blocked spec conflict) |
 
 ## Stage A calibration at 14d9974
 
@@ -312,6 +312,10 @@ acoustic acceptance assertions.
 `node experiments/issue-63/performance.mjs`, Node v26.13.0 on AMD EPYC
 (with IBPB), 10 s input at 3487780: statistics 1.928274 s, RTF 0.192827;
 default fit 49.750774 s, all 40 renders, RSS 236,314,624 bytes.
+The same command at ac739b6 (`src/` as of 5cb68e7, saved in
+`performance-ac739b6.txt`): statistics 2.378667 s, RTF 0.237867 (budget
+0.30); default fit 54.537802 s (budget 60 s) with 39 actual renders, RSS
+240,574,464 bytes. This machine is not the reference machine of #58.
 
 After the mel-unit correction, the first complete 40-render measurement
 took 65.898798 s and exceeded the budget. The bounded `timing.mjs` probe
@@ -360,7 +364,9 @@ passes. Legacy failures at lines 4226, 4234 and 4242 report female speech-rate
 error 0.119755, male pitch error 0.156910 and small-female speech-rate error
 0.138217, all above the unchanged 0.1 gates. The complete result is at
 line 4257. Earlier OS jobs also encountered the existing five-minute
-suite budget; increasing it has not been used as a solution.
+suite budget; increasing it was not used as a solution then. The later
+per-runner budgets for macOS and Windows are justified with measurements in
+"Runtime budgets for the 40-render matching tests" below.
 
 In the same run, Node/Ubuntu job 134003920407 reaches the 300 s suite
 budget at line 4450 of `test-node-ubuntu-134003920407.log`. Its two new
@@ -955,3 +961,66 @@ All eleven scheduling cases pass on each local runtime. The existing cases
 already fail before the fix on macOS as measured above; full CI must verify
 the corrected invocation with that operating system's actual Bash 3.2.
 This fixes a distinct launcher error and does not resolve the acoustic gates.
+
+## Runtime budgets for the 40-render matching tests
+
+Specification item 10 makes `matchVoice` spend `10 × rounds` = 40 renders.
+Test jobs do not build WASM, so every render uses the JS engine (1.16 s
+synthesis, 0.97 s accumulation, 36 ms MCD; `render-cost.mjs` above). Each
+legacy matching test therefore takes 34–41 s on Ubuntu and macOS runners and
+71–88 s on `windows-2025`. The test count and thresholds are unchanged.
+
+At bc43870, [run 44289126498](https://github.com/konard/voice-simulator/actions/runs/44289126498)
+put `recognition-modes` behind Bun's longer shard and gave every OS the
+Ubuntu budget. Each job failed the blocked `pitch sd < 5` assertion, and
+three also exceeded their budgets (saved as `ci-logs/bc43870-<job>.log`):
+
+| Job | Job id | Result | Log line |
+| --- | --- | --- | --- |
+| Node/Windows | 134750445838 | Exceeded 300 s (warning at 213 s) | 2293, 3257 |
+| Deno/Windows | 134750445403 | Exceeded 300 s; tests took 4m57s | 5003, 5006 |
+| Bun/macOS | 134750445659 | Exceeded 500 s | 5181 |
+| Bun/Windows | 134750445841 | Exceeded 500 s | 5182 |
+| Bun/Ubuntu | 134750445624 | 479 s of 500 s | 5198 |
+| Node/macOS | 134750445502 | 251 s of 300 s | 5235 |
+| Deno/macOS | 134750445602 | 269 s of 300 s | 5018 |
+
+Commit ac739b6 runs `recognition-modes` once, after whichever Bun shard
+finishes first (an atomic `mkdir` claim; `tests/bun-shards.test.js` fails
+against the earlier launcher). It also gives Node and Deno 420 s on
+`windows-2025`. [Run 44292683632](https://github.com/konard/voice-simulator/actions/runs/44292683632)
+then finishes every runtime job inside its budget. The only failure in each
+job is `fitVoice > reports uncertainty and preserves unfitted defaults`
+(`tests/voice-fit.test.js:93`, pitch SD):
+
+| Runtime | Ubuntu | macOS | Windows |
+| --- | --- | --- | --- |
+| Node | 188 s of 300 (134762216642:5252) | 290 s of 300 (134762216725:5238) | 188 s of 420 (134762216817:5246) |
+| Deno | 218 s of 300 (134762216541:4978) | 266 s of 300 (134762216677:4989) | 261 s of 420 (134762216671:4978) |
+| Bun | 280 s of 500 (134762216799:5198) | 399 s of 500 (134762217104:5100) | 465 s of 500 (134762216657:5325) |
+
+In the Bun jobs, matching alone took 108 s, 152 s and 176 s on Ubuntu, macOS
+and Windows. The longer shard then took 171 s, 246 s and 288 s.
+
+Node/macOS and Deno/macOS finished 10 s and 34 s before 300 s, and
+Bun/Windows 35 s before 500 s. The same Node/macOS job took 251 s and
+290 s in the two runs with unchanged Node scheduling, so that headroom is
+within ordinary runner variation. The follow-up commit therefore sets
+per-runner budgets: macOS and Windows get 420 s for Node and Deno and 600 s
+for Bun. Ubuntu keeps 300 s and 500 s. Every budget stays below 70% of the
+15-minute job backstop (630 s), and `tests/ci-timeouts.test.js` reads each
+`${{ cond && 'N' || 'M' }}` expression as its largest result. Within each
+job, the matching tests already run as separate processes, so the remaining
+time is the specified render count on slower runners, not idle scheduling.
+
+## Dependency audit policy for pull requests
+
+`npm audit` reports picomatch GHSA-fc5q-39xc-vjpf (high) with no patched
+release. Commit bc43870 changes the Security workflow, through
+`AUDIT_UNFIXABLE_LEVEL`. On pull requests, a **high** advisory without a
+patched release is reported as a warning. A fixable high advisory or any
+critical advisory still fails. On `main` the step still fails, and its
+annotation names the owner action: upgrade when a patched release exists,
+replace or remove the dependency, or record an explicit risk acceptance.
+`tests/npm-audit-report.test.js` and `tests/security-workflow.test.js`
+cover both branches. Security run 44292683261 passes at ac739b6.

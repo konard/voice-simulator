@@ -1,0 +1,19 @@
+{
+  "command": "node experiments/issue-63/performance.mjs",
+  "runtime": "v26.13.0",
+  "cpu": "AMD EPYC Processor (with IBPB)",
+  "seconds": 10,
+  "statisticsSeconds": 2.3786671040000007,
+  "rtf": 0.23786671040000007,
+  "fitSeconds": 54.537801789,
+  "renders": 39,
+  "voicedFrames": 1404,
+  "distance": 0.3512891716595382,
+  "memory": {
+    "rss": 240574464,
+    "heapTotal": 88199168,
+    "heapUsed": 47449296,
+    "external": 10516112,
+    "arrayBuffers": 8898356
+  }
+}
