@@ -1,5 +1,9 @@
 /** Voice configuration fitting by statistics and analysis by synthesis. Unlicense. */
-import { HEAD_PARAMETERS, presetHeadConfig } from '../head-config.js';
+import {
+  HEAD_PARAMETERS,
+  HEAD_PRESETS,
+  presetHeadConfig,
+} from '../head-config.js';
 import { synthesize } from '../synthesize.js';
 import { resample } from '../audio/resample.js';
 import {
@@ -62,7 +66,22 @@ function optionsFor(options) {
   }
   return o;
 }
-export function nearestPreset(head, preset) {
+/**
+ * Nearest preset person to a head's pitch and tract length (as matchVoice
+ * did). The female and child grids overlap (child at size 1 is 215 Hz and
+ * 14.6 cm, female at 0.5 216 Hz and 14.8 cm), so with a `start` head (stage
+ * A) its preset is kept unless the tract leaves that preset's range by more
+ * than 1 cm, as matchVoice kept the person of its first measurement.
+ */
+export function nearestPreset(head, preset, start) {
+  if (start && !(preset && preset !== 'any')) {
+    const name = nearestPreset(start, preset).name;
+    const [small, large] = HEAD_PRESETS[name].ranges.vocalTractLength;
+    const length = head.vocalTractLength;
+    if (length > small - 1 && length < large + 1) {
+      return nearestPreset(head, name);
+    }
+  }
   let best = null;
   for (const name of preset && preset !== 'any'
     ? [preset]
@@ -280,7 +299,7 @@ function* fitState(state, samples, sampleRate, options) {
   return {
     head,
     parameters,
-    preset: nearestPreset(head, o.preset).name,
+    preset: nearestPreset(head, o.preset, stage.head).name,
     features,
     rendered: best?.complete() ?? null,
     distance: best?.distance ?? Infinity,

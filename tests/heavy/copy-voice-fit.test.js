@@ -99,7 +99,7 @@ describe('voice copy fit', () => {
           maxRenders: 40,
         };
         const fit = fitVoice(item.samples, item.sampleRate, options);
-        const preset = nearestPreset(fit.head).head;
+        const preset = nearestPreset(fit.head, fit.preset).head;
         const before = render(
           transcript
             ? item.text
