@@ -10,9 +10,9 @@ import {
 } from './helpers/bounded-run.js';
 import { itUnless, noPosixShell, sandboxed } from './helpers/skip.js';
 
-// Bun matching completes before two ordinary shards; modes runs once, after
-// whichever shard finishes first. Shard one here waits for modes, like the
-// longer shard 1/2 measured in issue 63, so modes must follow shard two.
+// Bun matching completes before a queue that two workers drain: modes, then
+// eight --shard chunks of the ordinary files, each run exactly once. Modes
+// and chunk one wait for each other, so the workers must run concurrently.
 // Deno matching overlaps the bulk run. Node splits matching by test name and
 // runs both halves and the fitting files alongside the bulk run.
 const fixture = `#!/usr/bin/env bash
@@ -29,8 +29,7 @@ for argument in "$@"; do
     tests/voice-fit.test.js) if [ "$runtime" = node ]; then role=fitting; fi ;;
     tests/recognition-modes.test.js) if [ "$runtime" = bun ]; then role=modes; fi ;;
     --test-skip-pattern=*) lane=rest ;;
-    --shard=1/2) role=first ;;
-    --shard=2/2) role=second ;;
+    --shard=*/8) role="chunk\${argument#--shard=}"; role="\${role%/8}" ;;
   esac
 done
 role=\${lane:-$role}
@@ -41,13 +40,15 @@ for ((poll=0; poll<500; poll++)); do
   ready=false
   if [ "$runtime" = bun ]; then
     if [ "$role" = matching ]; then
-      [ ! -f "$root/first.started" ] && [ ! -f "$root/second.started" ] || exit 98
+      ! ls "$root"/chunk*.started "$root"/modes.started >/dev/null 2>&1 || exit 98
       ready=true
+    elif [ ! -f "$root/matching.finished" ]; then
+      exit 96
     elif [ "$role" = modes ]; then
-      [ -f "$root/first.started" ] && [ -f "$root/second.finished" ] && ready=true
-    elif [ "$role" = first ]; then
-      [ -f "$root/matching.finished" ] && [ -f "$root/modes.finished" ] && ready=true
-    elif [ -f "$root/matching.finished" ] && [ -f "$root/first.started" ] && [ -f "$root/second.started" ]; then
+      [ -f "$root/chunk1.started" ] && ready=true
+    elif [ "$role" = chunk1 ]; then
+      [ -f "$root/modes.started" ] && ready=true
+    else
       ready=true
     fi
   elif [ -f "$root/matching.started" ] && [ -f "$root/bulk.started" ] &&
@@ -65,10 +66,10 @@ exit 99
 `;
 
 // Flags each process receives after the runtime's own test flags.
-const SCHEDULING = {
-  first: ['--shard=1/2'],
-  second: ['--shard=2/2'],
-};
+const CHUNKS = Array.from({ length: 8 }, (_, i) => `chunk${i + 1}`);
+const SCHEDULING = Object.fromEntries(
+  CHUNKS.map((role, i) => [role, [`--shard=${i + 1}/8`]])
+);
 const NODE_SCHEDULING = {
   matching: ['--test-name-pattern=matches a'],
   rest: ['--test-skip-pattern=matches a'],
@@ -90,7 +91,7 @@ describe('Runtime suite scheduling', () => {
   for (const runtime of ['node', 'deno', 'bun']) {
     const roles =
       runtime === 'bun'
-        ? ['matching', 'first', 'second', 'modes']
+        ? ['matching', 'modes', ...CHUNKS]
         : runtime === 'node'
           ? ['matching', 'rest', 'fitting', 'bulk']
           : ['matching', 'bulk'];

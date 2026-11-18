@@ -31,26 +31,34 @@ if [ "${runtime}" = bun ]; then
   # competing with ordinary files on macOS/Windows. Run matching alone
   # first. Keep ordinary processes: Bun's native parallel workers can lose
   # subprocess exit notifications on macOS (oven-sh/bun#45483).
-  # Mode recognition (64-76s alone) goes to whichever worker finishes its
-  # shard first. Which shard is shorter depends on the file list: with
-  # voice-fit, shard 1/2 took 240-268s and shard 2/2 94-111s, and modes
-  # behind shard 1/2 pushed macOS and Windows past 500s (issue 63).
-  # mkdir is atomic, so exactly one worker claims modes.
-  claim_parent=$(mktemp -d "${TMPDIR:-/tmp}/runtime-modes.XXXXXX") || exit 2
+  # Two workers then pull work from a queue: mode recognition first (64-76s
+  # alone, 215s on a slow macOS runner), then eight --shard chunks of the
+  # remaining files. A fixed split into two shards depended on the file
+  # list: adding one file moved the slow files into shard 2/2, which ran
+  # past the 600s budget on macOS while shard 1/2 and modes ended 80s
+  # earlier (issue 63). With eight chunks the workers end within about one
+  # chunk of each other. mkdir is atomic, so each item runs exactly once.
+  claim_parent=$(mktemp -d "${TMPDIR:-/tmp}/runtime-queue.XXXXXX") || exit 2
   trap 'rm -rf "${claim_parent}"' EXIT
   "$@" "${priority[@]}" || status=$?
-  shard_worker() {
-    local worker_status=0
-    "$@" || worker_status=$?
+  chunks=8
+  runner=("$@")
+  queue_worker() {
+    local worker_status=0 chunk
     if mkdir "${claim_parent}/modes" 2>/dev/null; then
       "${runner[@]}" tests/recognition-modes.test.js || worker_status=$?
     fi
+    for ((chunk = 1; chunk <= chunks; chunk++)); do
+      if mkdir "${claim_parent}/chunk-${chunk}" 2>/dev/null; then
+        "${runner[@]}" --shard="${chunk}/${chunks}" "${remaining[@]}" ||
+          worker_status=$?
+      fi
+    done
     return "${worker_status}"
   }
-  runner=("$@")
-  shard_worker "$@" --shard=1/2 "${remaining[@]}" &
+  queue_worker &
   first_pid=$!
-  shard_worker "$@" --shard=2/2 "${remaining[@]}" &
+  queue_worker &
   second_pid=$!
 elif [ "${runtime}" = node ]; then
   # Each of the six 40-render matchVoice tests takes 25-40s on Node

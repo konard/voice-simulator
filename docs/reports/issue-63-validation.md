@@ -1091,3 +1091,39 @@ Blocked acceptance criterion "issue 63, reports uncertainty: sd of pitch is belo
 `tests/blocked-gate.test.js` covers both branches and pins the workflow
 expression. The criterion stays **blocked**: CI on this pull request no
 longer reports it as a failure, but it is not met.
+
+## Bun work queue instead of two fixed shards
+
+Run 44305738626, at ea8a333, passed every job but Bun/macOS. That job ran
+past its 600 s budget. Adding `tests/blocked-gate.test.js` (227 instead of
+226 ordinary files) moved Bun's split of the two `--shard` halves. Matching
+ended at 12:46:58, the same as in earlier runs (137 s). Shard 1/2 took
+167 s, and `recognition-modes` followed it in the same worker for 215 s
+(75 s in run 44300276132), ending at 12:53:21. Shard 2/2 was still running
+when the budget expired at 12:54:42, so `voice-fit.test.js` never ran. On
+this runner the parallel phase was about twice as slow as before
+(`head parameters` "anatomy" 21.1 s against 9.1 s). The matching tests
+were not slower. A fixed two-way split leaves the runtime of the suite to
+whichever half collects the slow files.
+
+`scripts/run-runtime-tests.sh` now gives Bun's two workers a queue. The
+first item is `recognition-modes`, the longest single item. It is followed
+by eight `--shard=k/8` chunks of the ordinary files (29, 29, 29 and five
+times 28 of 227 with Bun 1.4.4). Each worker claims the next item with an
+atomic `mkdir`, so each item runs exactly once. The workers end within
+about one chunk of each other, whichever files a chunk holds. Matching
+still runs alone first. `tests/bun-shards.test.js` checks the following:
+
+- matching ends before any queue item starts;
+- `recognition-modes` and chunk 1 run at the same time;
+- every chunk receives every ordinary file with its own `--shard`;
+- each item runs once;
+- a failure in any item fails the suite.
+
+It fails against the two-shard launcher (11 of 19 tests).
+
+```sh
+node --test tests/bun-shards.test.js
+bun test tests/bun-shards.test.js
+deno test -A tests/bun-shards.test.js
+```
