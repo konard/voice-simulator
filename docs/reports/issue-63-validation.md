@@ -21,7 +21,7 @@ across updates (see "Landmark nuclei and transcript corrections at e21cac8").
 | Fixed JSON state, 20 voiced-frame minimum, defaults and parts | `copyState`, `statisticsResult`; silence, malformed-state and selection tests | Implemented |
 | Median estimates, calibrated source/range/rate, MAD SDs | Committed calibration tables and `*-calibrate.mjs`; `voice-fit-calibration.test.js` | Implemented with documented deviations; pitch SD gate blocked (spec conflict) |
 | Scaled acoustic objective, aligned transcript MCD and prior | `voice-fit-objective.js`; cached MCD compared with public metric after identical alignment | Implemented |
-| Two bounded deterministic simplex rounds and render callback | `voice-fit-simplex.js`, `voice-fit.js`; budget/path tests | Implemented; parameter recovery fails |
+| Two bounded deterministic simplex rounds and render callback | `voice-fit-simplex.js`, `voice-fit.js`; budget/path tests | Implemented; two-head and twenty-head recovery pass |
 | Full result, progress generator and incremental API | Public declarations and API tests; JSON round trip; both-head split regression | Implemented; split regression passes |
 | Fold-source search and voice-file interoperability | Conditional fold coordinates; save/load voice API assertion | Implemented |
 | Legacy matching and analysis API | Wrappers keep five result keys; existing matching tests unchanged | All 17 `voice-match.test.js` tests pass locally at b537919 (`ci-logs/voice-fit-local-b537919.log`) |
@@ -29,10 +29,10 @@ across updates (see "Landmark nuclei and transcript corrections at e21cac8").
 | Production example app | Existing chunk tests/build and actual worker in Playwright | Current app CI passes; browser worker checked |
 | Documentation, CLI and release trigger | README, declarations, CLI help, roadmap and minor changeset | Implemented |
 | Two-head unit accuracy and uncertainty | `tests/voice-fit.test.js` | Accuracy passes at b537919; `pitch sd < 5` blocked by the specified formula |
-| Twenty-head synthetic accuracy and coverage | Full heavy run and archived raw data | Failing on measured revision |
-| Every golden recording, both modes, SD/distance/MCD and manifest sex | 48 rows in `copy-voice-fit.md/json`; unreviewed rows marked `*` | Report complete; one distance gate fails on measured revision |
+| Twenty-head synthetic accuracy and coverage | Heavy run 44280732497 at 5cb68e7 and archived raw data | All seven gates pass in both modes |
+| Every golden recording, both modes, SD/distance/MCD and manifest sex | 48 rows in `copy-voice-fit.md/json`; unreviewed rows marked `*` | All 48 distance gates pass at 5cb68e7 |
 | Stage A and default-fit performance | `performance.mjs`, measured below; deferred unused render diagnostics | Passing on local machine |
-| All runtime suites and final CI | GitHub runs linked in PR; preserved failed logs | Failing |
+| All runtime suites and final CI | GitHub runs linked in PR; preserved failed logs | Failing only on `pitch sd < 5` (blocked spec conflict) |
 
 ## Stage A calibration at 14d9974
 
@@ -274,31 +274,31 @@ Bounded attempts kept as reproducible experiments:
 ## Full heavy measurements
 
 The archived [Markdown](copy-voice-fit.md) and [JSON](copy-voice-fit.json)
-identify measured SHA 3487780 and [run 44072776328](https://github.com/konard/voice-simulator/actions/runs/44072776328).
-All 40 synthetic fits and 48 golden fits completed in 1,739 s. These
-measurements include the mel-unit, deferred-diagnostic and fixed-prior
-corrections. Both heavy tests still fail. The synthetic assertion lists
-all seven failing gates at line 697 of `heavy-44072776328.log`; the
-golden assertion is at line 711.
+identify measured SHA 5cb68e7 and [run 44280732497](https://github.com/konard/voice-simulator/actions/runs/44280732497).
+`src/` has not changed since that revision. Both heavy tests pass: all 40
+synthetic fits and 48 golden fits complete in 1,268.5 s
+(`heavy-44280732497.log:686–696`, 2 pass, 0 fail). The synthetic test takes
+581.5 s and the golden test 686.8 s.
 
 | Metric | With transcript | Without transcript | Required |
 | --- | --- | --- | --- |
-| Median tract error | 0.857% | 6.753% | 4% / 6% |
-| Maximum tract error | 2.793% | 10.178% | 10% |
-| Median pitch error | 4.061% | 2.487% | 2% |
-| Median rate error | 16.141% | 13.588% | 8% |
-| Median tenseness absolute error | 0.05993 | 0.04997 | 0.15 |
-| Median breathiness absolute error | 0.07587 | 0.08140 | 0.2 |
-| Tract 3 SD coverage | 20/20 | 7/20 | At least 16/20 |
+| Median tract error | 0.66% | 2.72% | 4% / 6% |
+| Maximum tract error | 2.45% | 7.50% | 10% |
+| Median pitch error | 1.83% | 1.66% | 2% |
+| Median rate error | 1.99% | 7.69% | 8% |
+| Median tenseness absolute error | 0.0342 | 0.0562 | 0.15 |
+| Median breathiness absolute error | 0.0426 | 0.0713 | 0.2 |
+| Tract 3 SD coverage | 20/20 | 20/20 | At least 16/20 |
 
-Golden distance passes 47/48 comparisons. `hi-02` with text gives 18.010081
-versus preset 17.397847. The ungated half-preset-distance target is met by
-3/48 fits (6.25%); MCD improves by at least 0.5 dB for 37/48 (77.08%).
-The manifest says `unknown` for speaker sex; the report preserves that value.
-All 12,144 parameter records in the archived JSON have finite values and
-nonnegative finite SDs. The earlier complete run 44062254770 remains
-available in Actions; it predates the corrections and is not the current
-measurement.
+Each of the 48 golden fits is at most the distance of its nearest preset.
+The ungated half-preset-distance target is met by 5/48 fits (10.42%). MCD
+improves by at least 0.5 dB for 38/48 fits (79.17%). The manifest says
+`unknown` for speaker sex, and the report keeps that value. The archived
+JSON holds 48,028 numbers. All are finite and no SD is negative. Regenerate
+the archive from the downloaded artifact with
+`node experiments/issue-63/archive-report.mjs <copy-voice-fit.json> 44280732497 5cb68e76928db34a01d3edd4ecd4772506ced1ab`.
+The earlier failing measurement at 3487780 (run 44072776328) predates the
+landmark, transcript-rate and text-averaged no-transcript corrections.
 
 ## Performance and CI evidence
 
@@ -323,6 +323,33 @@ tracing still computes every render's diagnostics; the determinism test
 asserts complete equality between normal and traced results, including the
 winning render's features. The subsequent fixed-prior change gives the
 49.750774 s measurement above.
+
+Per-render cost, measured at 988f7d1 on the same machine for the specified
+4.26 s sentence:
+
+| Stage | Time | Command |
+| --- | --- | --- |
+| Synthesis, JS engine | 1,160 ms | `node experiments/issue-63/render-cost.mjs` |
+| Synthesis, `auto` engine (WASM) | 630–745 ms | `node experiments/issue-63/render-cost.mjs auto` |
+| Stage A accumulation | 965 ms | same |
+| Aligned MCD | 36 ms | same |
+
+`node experiments/issue-63/accumulate-stages.mjs` splits the accumulation
+into analyzeFrames 129.5 ms, trackPitch 158.7 ms, trackFormants 102.4 ms,
+inverseFilter 395.5 ms, prepareLegacyVoice 37.4 ms, rateFeatures 5.5 ms,
+countNuclei 21.5 ms, and the deferred legacy `complete()` 351.8 ms. That
+last stage runs only for the returned render. Saved outputs are
+`render-cost.txt` and `accumulate-stages.txt`. Because `matchVoice` now
+spends 10 × rounds = 40 renders as specification item 10 requires, each
+legacy matching test takes 34–41 s on CI runners, compared with about 4 s
+for the earlier coarse grid. The CI change below runs those tests in
+parallel processes instead of reducing the budget.
+
+Commit 988f7d1 fixes Rust/JavaScript parity after the text-averaged
+no-transcript correction. The Rust distance now applies the same
+`TEXT_FORMANT_WEIGHT` (0.1) to dF and F1–F3, and the same
+`TEXT_SYLLABLE_RATIO` (0.9391) to the target syllable rate. Rust parity had
+failed in run 44282048688 before that commit.
 
 Logs are saved under ignored `ci-logs/` and `experiments/issue-63/*.log`.
 At 3487780, [run 44072787727](https://github.com/konard/voice-simulator/actions/runs/44072787727),
