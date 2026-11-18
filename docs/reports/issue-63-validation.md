@@ -1127,3 +1127,15 @@ node --test tests/bun-shards.test.js
 bun test tests/bun-shards.test.js
 deno test -A tests/bun-shards.test.js
 ```
+
+Run 44309721274, at 5aed070, passed every job. With the queue, the Bun
+suite took 263 s on macOS, 301 s on Ubuntu and 314 s on Windows (411–497 s
+and 464–469 s on macOS and Windows with two fixed shards). The same run's
+Deno/macOS job took 401 s of its 420 s budget. That runner was slow:
+Deno's first matching test took 131 s, and the bulk files and matching
+ended together after about 390 s. Other macOS runners took 194–294 s, and
+Node/macOS had taken 347 s in run 44300276132. Node and Deno therefore also
+get 600 s, as Bun has. The warning at 70% (420 s) still reports drift, and
+each job's budgets stay at or below 70% of the 15-minute backstop, which
+`tests/ci-timeouts.test.js` checks. The worst case is Node on Ubuntu, with
+600 s plus the 30 s inverse-filter step.
