@@ -158,8 +158,12 @@ for (const rate of [16000, 8000]) {
     shortlistRecall: exhaustive.recall,
   });
   for (const names of [
-    ['f0', 'voicing'],
+    ['f0'],
+    ['voicing'],
     ['loudness'],
+    ['aspiration'],
+    ['frication'],
+    ['sibilance'],
     ['aspiration', 'frication', 'sibilance'],
     ['trill', 'glottalClosure', 'lateral'],
   ]) {
@@ -168,6 +172,16 @@ for (const rate of [16000, 8000]) {
       channels[name] = raw.channels[name];
     }
     console.log({ rate, estimated: names, mcd: mcd({ ...truth, channels }) });
+  }
+  for (const voiced of [true, false]) {
+    const f0 = truth.channels.f0.map((value, t) =>
+      pitch.f0[t] > 0 === voiced ? raw.channels.f0[t] : value
+    );
+    console.log({
+      rate,
+      estimated: voiced ? 'f0 in voiced frames' : 'f0 in unvoiced frames',
+      mcd: mcd({ ...truth, channels: { ...truth.channels, f0 } }),
+    });
   }
   for (const key of ['height', 'backness']) {
     let oracle = 0;

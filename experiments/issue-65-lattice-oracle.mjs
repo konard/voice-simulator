@@ -18,6 +18,10 @@ import { LANDMARK_SENTENCES } from '../scripts/landmark-material.mjs';
 
 const settings = { solver: 'waveguide', engine: 'js', seed: 1 };
 const channels = CODEBOOK_CHANNELS.map(({ name }) => name);
+const observationWeight = Number(process.argv[2] ?? 1);
+if (!Number.isFinite(observationWeight) || observationWeight <= 0) {
+  throw new RangeError('The oracle observation weight must be positive');
+}
 
 // This is a diagnostic only. Give the search precise tract observations
 // while retaining the stored row geometry, transitions, smoothing and source.
@@ -42,7 +46,7 @@ function oracleBook(book, frames, truth) {
           sum +=
             (book.articulation[row * channels.length + c] - target[c]) ** 2;
         }
-        const distance = (16 * sum) / 255 ** 2;
+        const distance = (16 * observationWeight * sum) / 255 ** 2;
         if (distance >= cost[k - 1]) {
           continue;
         }
@@ -112,6 +116,7 @@ function probe({ plan, samples }, rate, voice, book, timesFor) {
   console.log({
     rate,
     pitch: voice.pitch,
+    observationWeight,
     acoustic: compare(baseline, truth, book, times),
     oracle: compare(oracle, truth, book, times),
   });
