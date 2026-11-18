@@ -84,9 +84,15 @@ else
   # (44320811713), each of the three "matches a" tests took over two minutes
   # and breathiness, profiling and CLI matching still followed them in that
   # lane. Split on the first character to keep the filters complementary.
-  "$@" --filter='/^m/' "${priority[@]}" &
+  # Git Bash on Windows otherwise converts slash-delimited regex arguments
+  # to filesystem paths before launching the native Deno executable.
+  filter_exclusions=${MSYS2_ARG_CONV_EXCL:-}
+  if [ "${filter_exclusions}" != '*' ]; then
+    filter_exclusions="${filter_exclusions:+${filter_exclusions};}--filter="
+  fi
+  MSYS2_ARG_CONV_EXCL="${filter_exclusions}" "$@" --filter='/^m/' "${priority[@]}" &
   first_pid=$!
-  "$@" --filter='/^([^m]|$)/' "${priority[@]}" &
+  MSYS2_ARG_CONV_EXCL="${filter_exclusions}" "$@" --filter='/^([^m]|$)/' "${priority[@]}" &
   rest_pid=$!
   # Leave capacity for both voice-match processes on the three- and
   # four-core hosted runners. A caller can override the bulk worker count.

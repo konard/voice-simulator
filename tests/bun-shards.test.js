@@ -1,6 +1,13 @@
 /** Bounded scheduling fixtures: full coverage, ordering and failure propagation. */
 import { describe, expect } from 'test-anywhere';
-import { mkdtempSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  readdirSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import {
@@ -170,4 +177,60 @@ describe('Runtime suite scheduling', () => {
       );
     }
   }
+});
+
+describe('Native Deno scheduling', () => {
+  const nativeDeno = globalThis.Deno?.version?.deno;
+  const bash =
+    !sandboxed && nativeDeno && process.platform === 'win32'
+      ? path.join(
+          process.env.ProgramFiles ?? 'C:/Program Files',
+          'Git',
+          'bin',
+          'bash.exe'
+        )
+      : 'bash';
+  itUnless(
+    sandboxed,
+    !nativeDeno && 'requires native Deno',
+    bash !== 'bash' && !existsSync(bash) && 'requires Git Bash'
+  )(
+    'Deno: native executable runs both voice-matching groups exactly once',
+    async () => {
+      const root = mkdtempSync(path.join(tmpdir(), 'deno-shards-'));
+      let failure;
+      try {
+        const tests = path.join(root, 'tests');
+        mkdirSync(tests);
+        const createMarker = (name) =>
+          `Deno.test('${name}', () => Deno.writeTextFileSync('${name}.ran', '', { createNew: true }));`;
+        writeFileSync(
+          path.join(tests, 'voice-match.test.js'),
+          [createMarker('matching'), createMarker('remaining')].join('\n')
+        );
+        writeFileSync(
+          path.join(tests, 'other.test.js'),
+          createMarker('ordinary')
+        );
+        const runner = path
+          .resolve('scripts/run-runtime-tests.sh')
+          .replaceAll('\\', '/');
+        await runBounded(
+          bash,
+          [runner, 'deno', process.execPath.replaceAll('\\', '/')],
+          { cwd: root, timeout: HANG_GUARD_MS }
+        );
+        expect(
+          readdirSync(root)
+            .filter((name) => name.endsWith('.ran'))
+            .sort()
+        ).toEqual(['matching.ran', 'ordinary.ran', 'remaining.ran']);
+      } catch (error) {
+        failure = error;
+        throw error;
+      } finally {
+        removeFixture(root, failure);
+      }
+    }
+  );
 });
