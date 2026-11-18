@@ -1318,11 +1318,11 @@ export declare class VoiceRenderer {
   restoreSources(state: ArrayLike<number>): void;
 }
 export declare function renderPlan(
-  plan: Plan,
+  plan: Plan | import('./recognition/inversion.js').InvertedPlan,
   options?: RenderOptions
 ): Float32Array;
 export declare function renderPlanAsync(
-  plan: Plan,
+  plan: Plan | import('./recognition/inversion.js').InvertedPlan,
   options?: RenderOptions & { chunkSize?: number }
 ): Promise<Float32Array>;
 /** Interface version of src/engine/voice-simulator.wasm (`vs_abi_version`). */
@@ -4471,3 +4471,16 @@ export {
   type ModeRecognitionOptions,
   type ModeRecognitionInput,
 } from './recognition/modes.js';
+
+// Acoustic-to-articulatory inversion (issue 65).
+export {
+  type ArticulationInverter,
+  type ArticulationTrack,
+  type InversionCandidates,
+  type InversionChannel,
+  type InversionOptions,
+  type InvertedPlan,
+  articulationPlan,
+  createArticulationInverter,
+  invertArticulation,
+} from './recognition/inversion.js';

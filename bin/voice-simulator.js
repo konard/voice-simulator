@@ -137,6 +137,8 @@ function usage() {
     '  Batch flow, closure times and voice-source measures; docs/INVERSE-FILTER.md',
     'Library: buildCodebook / frameEnvelope provide articulatory candidates',
     '         (generated on first use; API and limits: docs/CODEBOOK.md)',
+    'Library: invertArticulation / createArticulationInverter estimate tract and source controls.',
+    '         Pass articulationPlan(track) to renderPlan for resynthesis.',
     '',
     'Library: recognizeModes(samples, rate, result, { voice }) adds speech modes',
     '         to timed IPA words; toPlanModes converts spans for replay.',
