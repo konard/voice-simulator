@@ -1,0 +1,4 @@
+synthesize: 1160.1 ms
+audio 4.26 s
+accumulate (stage A of the render): 965.1 ms
+mcd: 35.8 ms
