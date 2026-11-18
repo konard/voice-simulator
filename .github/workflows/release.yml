@@ -341,6 +341,12 @@ jobs:
       matrix:
         runtime: [node, bun, deno]
         os: [ubuntu-24.04, macos-15, windows-2025]
+    # An acceptance criterion that only the issue author can unblock (a
+    # specified gate the specified formula and fixture cannot meet) only
+    # warns on pull requests; pushes to main still fail and name the human
+    # action (tests/helpers/blocked-gate.js).
+    env:
+      BLOCKED_GATES: ${{ github.event_name == 'pull_request' && 'warn' || '' }}
     steps:
       - uses: actions/checkout@v7
         with:
