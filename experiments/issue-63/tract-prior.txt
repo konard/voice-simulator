@@ -1,0 +1,14 @@
+Please call  {"vocalTractLength":12} fixed16.5 14.36 truthPrior 11.86 iter 14.36,12.87,12.13,11.86,11.88
+Please call  {"vocalTractLength":14} fixed16.5 15.25 truthPrior 13.70 iter 15.25,13.98,13.70,13.66,13.66
+Please call  {} fixed16.5 16.10 truthPrior 16.10 iter 16.10,16.09,16.09,16.09,16.09
+Please call  {"vocalTractLength":18.5} fixed16.5 17.36 truthPrior 17.92 iter 17.36,17.90,17.91,17.91,17.91
+Please call  {"vocalTractLength":20} fixed16.5 16.89 truthPrior 19.14 iter 16.89,18.25,18.91,18.98,18.99
+Please call  {"vocalTractLength":14,"pitch":210,"tenseness":0.45,"speechRate":1.15} fixed16.5 15.01 truthPrior 13.69 iter 15.01,13.92,13.69,13.66,13.66
+Please call  {"vocalTractLength":18.5,"pitch":100,"tenseness":0.75,"speechRate":0.9} fixed16.5 17.52 truthPrior 17.89 iter 17.52,17.77,17.87,17.88,17.88
+The north wi {"vocalTractLength":12} fixed16.5 13.65 truthPrior 12.83 iter 13.65,12.92,12.88,12.85,12.85
+The north wi {"vocalTractLength":14} fixed16.5 14.87 truthPrior 14.79 iter 14.87,14.80,14.80,14.80,14.80
+The north wi {} fixed16.5 17.51 truthPrior 17.51 iter 17.51,17.58,17.58,17.58,17.58
+The north wi {"vocalTractLength":18.5} fixed16.5 18.78 truthPrior 19.55 iter 18.78,19.56,19.60,19.60,19.60
+The north wi {"vocalTractLength":20} fixed16.5 15.72 truthPrior 21.06 iter 15.72,13.66,12.78,12.65,12.54
+The north wi {"vocalTractLength":14,"pitch":210,"tenseness":0.45,"speechRate":1.15} fixed16.5 14.80 truthPrior 14.76 iter 14.80,14.78,14.78,14.78,14.78
+The north wi {"vocalTractLength":18.5,"pitch":100,"tenseness":0.75,"speechRate":0.9} fixed16.5 18.81 truthPrior 19.63 iter 18.81,19.65,19.66,19.65,19.66
