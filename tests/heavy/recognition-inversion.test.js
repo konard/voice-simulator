@@ -5,11 +5,13 @@ import {
   analyzeFrames,
   articulationPlan,
   buildCodebook,
+  constantCepstrumDistortion,
   fitVoice,
   invertArticulation,
   melCepstralDistortion,
   renderPlan,
 } from '../../src/index.js';
+import { checkBlockedGate } from '../helpers/blocked-gate.js';
 import { isReviewed, loadGolden } from '../helpers/golden.js';
 import { heavyLimit, writeReport } from './helpers/report.js';
 
@@ -25,25 +27,50 @@ function joinedSpeech(items) {
   return samples;
 }
 
+/** Research target of the golden-set render-back MCD (issue 150). */
+const TARGET_DB = 9;
+
+function mean(rows, key) {
+  return rows.reduce((sum, row) => sum + row[key], 0) / rows.length;
+}
+
+function summary(rows) {
+  const mcd = mean(rows, 'mcd');
+  return {
+    target: TARGET_DB,
+    mean: mcd,
+    gap: mcd - TARGET_DB,
+    constant: mean(rows, 'constant'),
+    belowConstant: rows.filter((row) => row.mcd < row.constant).length,
+    belowTarget: rows.filter((row) => row.mcd <= TARGET_DB).length,
+    count: rows.length,
+  };
+}
+
 function report(rows) {
-  const mean = rows.reduce((sum, { mcd }) => sum + mcd, 0) / rows.length;
+  const totals = summary(rows);
   const markdown = [
     '# Golden-set articulation render-back',
     '',
     'Each head is fitted on all available utterances by that speaker without a transcript, using pass 1 without its optional refinement. Inversion uses a 5,000-row codebook. The distortion uses the original and rendered signals on the same time grid.',
     '',
-    '| Utterance | Language | Speaker | Reviewed | MCD (dB) |',
-    '| --- | --- | --- | --- | ---: |',
+    `The research target is ${TARGET_DB} dB ([issue 150](https://github.com/konard/voice-simulator/issues/150)). *Gap* is the MCD minus the target. *Constant* is the MCD of the recording from its own mean cepstrum (\`constantCepstrumDistortion\`): the score of a render whose spectrum never changes but has the mean shape of the recording. A render-back above it has not followed the spectral changes of the recording.`,
+    '',
+    '| Utterance | Language | Speaker | Reviewed | MCD (dB) | Gap (dB) | Constant (dB) |',
+    '| --- | --- | --- | --- | ---: | ---: | ---: |',
     ...rows.map(
-      ({ id, lang, speaker, reviewed, mcd }) =>
-        `| ${id} | ${lang} | ${speaker} | ${reviewed ? 'yes' : 'pending'} | ${mcd.toFixed(3)} |`
+      ({ id, lang, speaker, reviewed, mcd, constant }) =>
+        `| ${id} | ${lang} | ${speaker} | ${reviewed ? 'yes' : 'pending'} | ${mcd.toFixed(3)} | ${(mcd - TARGET_DB).toFixed(3)} | ${constant.toFixed(3)} |`
     ),
     '',
-    `Mean **${mean.toFixed(3)} dB** across ${rows.length} utterances. Research target 9 dB.`,
+    `Mean **${totals.mean.toFixed(3)} dB** across ${totals.count} utterances: ${totals.gap.toFixed(3)} dB above the ${TARGET_DB} dB research target, ${totals.belowTarget} of ${totals.count} utterances at or below it. The constant-spectrum reference averages ${totals.constant.toFixed(3)} dB; ${totals.belowConstant} of ${totals.count} render-backs are below their reference.`,
+    '',
+    'The metric sums 13 coefficients of a 26-filter DCT-II cepstrum without orthonormal scaling, so its values are about 13 times those of the conventional mel-cepstral distortion with the same name. A 3 dB spectral tilt alone scores above 9 dB. See [the issue 150 case study](https://github.com/konard/voice-simulator/blob/main/docs/case-studies/issue-150/README.md).',
     '',
     'Reproduce with `node --test tests/heavy/recognition-inversion.test.js`.',
   ].join('\n');
-  writeReport('recognition-inversion', markdown, { mean, rows });
+  writeReport('recognition-inversion', markdown, { ...totals, rows });
+  return totals;
 }
 
 it('fits golden speakers and measures every render-back', () => {
@@ -79,6 +106,7 @@ it('fits golden speakers and measures every render-back', () => {
       seed: 1,
     });
     const mcd = melCepstralDistortion(samples, rendered, sampleRate);
+    const constant = constantCepstrumDistortion(samples, sampleRate);
     assert.ok(Number.isFinite(mcd));
     rows.push({
       id,
@@ -86,9 +114,24 @@ it('fits golden speakers and measures every render-back', () => {
       speaker: speaker.id,
       reviewed: isReviewed(item),
       mcd,
+      constant,
     });
-    console.log('inversion golden', id, mcd);
+    console.log('inversion golden', id, mcd, 'constant', constant);
     report(rows);
   }
   assert.equal(rows.length, selected.length);
+  const totals = summary(rows);
+  checkBlockedGate({
+    criterion: `golden-set render-back MCD at most ${TARGET_DB} dB (issue 150)`,
+    passed: totals.mean <= TARGET_DB,
+    measured:
+      `mean ${totals.mean.toFixed(3)} dB over ${totals.count} utterances, ` +
+      `${totals.gap.toFixed(3)} dB above the target; a constant spectrum ` +
+      `scores ${totals.constant.toFixed(3)} dB`,
+    action:
+      'the issue author decides whether the 9 dB target applies to this ' +
+      'metric scale (about 13 times conventional MCD, ' +
+      'docs/case-studies/issue-150) or to a conventional MCD, and which ' +
+      'model change (rendered-template codebook, source model) to fund',
+  });
 });

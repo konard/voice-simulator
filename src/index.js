@@ -560,6 +560,7 @@ export {
   EPSILON,
   METRIC_DEFAULTS,
   compareRecordings,
+  constantCepstrumDistortion,
   dtw,
   editDistance,
   errorRate,
