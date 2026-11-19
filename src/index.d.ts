@@ -3897,6 +3897,16 @@ export declare function melCepstralDistortion(
   sampleRate: number,
   options?: DistortionOptions
 ): number;
+/**
+ * Mel-cepstral distortion (dB) of a recording from its own mean cepstrum c[1]
+ * .. c[13] over its frames that are not silent: the score a test signal with
+ * a constant spectrum of the mean shape gets from `melCepstralDistortion`.
+ */
+export declare function constantCepstrumDistortion(
+  reference: ArrayLike<number>,
+  sampleRate: number,
+  options?: Omit<DistortionOptions, 'path'>
+): number;
 /** Pitch (Hz, 0 = unvoiced) every hop seconds by YIN. */
 export declare function pitchTrack(
   samples: ArrayLike<number>,
