@@ -33,6 +33,6 @@ The research target is 9 dB ([issue 150](https://github.com/konard/voice-simulat
 
 Mean **60.749 dB** across 24 utterances: 51.749 dB above the 9 dB research target, 0 of 24 utterances at or below it. The constant-spectrum reference averages 61.041 dB; 14 of 24 render-backs are below their reference.
 
-This cepstrum is the orthonormal DCT of the natural logarithm of 26 mel filter powers. Its coefficients are about 2 sqrt(2 × 26) ≈ 14 times the cepstral coefficients of the log amplitude spectrum that conventional mel-cepstral distortion uses. A ±3 dB linear spectral tilt measures 11.3 dB here and 0.87 dB conventionally (`node experiments/issue-150-metric-scale.mjs`). See [the issue 150 case study](https://github.com/konard/voice-simulator/blob/main/docs/case-studies/issue-150/README.md).
+This cepstrum is the orthonormal DCT of the natural logarithm of 26 mel filter powers. Its coefficients are about 2 sqrt(2 × 26) ≈ 14 times the cepstral coefficients of the log amplitude spectrum that conventional mel-cepstral distortion uses. A ±3 dB linear spectral tilt measures 11.3 dB here and 0.87 dB conventionally (`node experiments/issue-150-metric-scale.mjs`). See the issue 150 case study, `docs/case-studies/issue-150/README.md`.
 
 Reproduce with `node --test tests/heavy/recognition-inversion.test.js`.
