@@ -16,10 +16,12 @@ case "${runtime}" in
 esac
 
 priority=(tests/voice-match.test.js)
+device_benchmark=tests/device-benchmark.test.js
 remaining=()
 for file in tests/*.test.js; do
   if [ "${file}" != tests/voice-match.test.js ] &&
-    { [ "${runtime}" != node ] || [ "${file}" != tests/voice-fit.test.js ]; } &&
+    { [ "${runtime}" != node ] || { [ "${file}" != tests/voice-fit.test.js ] &&
+      [ "${file}" != "${device_benchmark}" ]; }; } &&
     { [ "${runtime}" = deno ] || [ "${file}" != tests/recognition-modes.test.js ]; }; then
     remaining+=("${file}")
   fi
@@ -80,17 +82,35 @@ elif [ "${runtime}" = node ]; then
   "$@" "${remaining[@]}" &
   second_pid=$!
 else
-  # Deno only needs the matching file started early.
-  "$@" "${priority[@]}" &
+  # Deno runs tests within one module serially. In the macOS timeout
+  # (44320811713), each of the three "matches a" tests took over two minutes
+  # and breathiness, profiling and CLI matching still followed them in that
+  # lane. Split on the first character to keep the filters complementary.
+  # Git Bash on Windows otherwise converts slash-delimited regex arguments
+  # to filesystem paths before launching the native Deno executable.
+  filter_exclusions=${MSYS2_ARG_CONV_EXCL:-}
+  if [ "${filter_exclusions}" != '*' ]; then
+    filter_exclusions="${filter_exclusions:+${filter_exclusions};}--filter="
+  fi
+  MSYS2_ARG_CONV_EXCL="${filter_exclusions}" "$@" --filter='/^m/' "${priority[@]}" &
   first_pid=$!
-  "$@" "${remaining[@]}" &
+  MSYS2_ARG_CONV_EXCL="${filter_exclusions}" "$@" --filter='/^([^m]|$)/' "${priority[@]}" &
+  rest_pid=$!
+  # Leave capacity for both voice-match processes on the three- and
+  # four-core hosted runners. A caller can override the bulk worker count.
+  DENO_JOBS="${DENO_JOBS:-2}" "$@" "${remaining[@]}" &
   second_pid=$!
 fi
 # Reap every child even when a preceding phase has failed.
 wait "${first_pid}" || status=$?
 wait "${second_pid}" || status=$?
-if [ "${runtime}" = node ]; then
+if [ "${runtime}" != bun ]; then
   wait "${rest_pid}" || status=$?
+fi
+if [ "${runtime}" = node ]; then
   wait "${fitting_pid}" || status=$?
+  # This test measures real elapsed rendering time, so run it after all
+  # synthesis-heavy test processes have exited.
+  "$@" "${device_benchmark}" || status=$?
 fi
 exit "${status}"

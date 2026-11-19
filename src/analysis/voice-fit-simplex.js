@@ -1,6 +1,6 @@
 /** Bounded Nelder–Mead, with an external evaluation budget. Unlicense. */
 const clamp = (x) => Math.max(0, Math.min(1, x));
-export function* simplex(initial, evaluate, budget) {
+export function* simplex(initial, evaluate, budget, step = 0.1) {
   if (!initial.length || budget < 1) {
     return [];
   }
@@ -18,7 +18,7 @@ export function* simplex(initial, evaluate, budget) {
   vertices.push(yield* run(initial));
   for (let i = 0; i < initial.length && used < budget; i++) {
     const x = [...initial];
-    x[i] += x[i] < 0.5 ? 0.1 : -0.1;
+    x[i] += x[i] < 0.5 ? step : -step;
     vertices.push(yield* run(x));
   }
   if (vertices.length < initial.length + 1) {

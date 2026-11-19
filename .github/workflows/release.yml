@@ -400,6 +400,13 @@ jobs:
           INVERSE_FILTER_RTF_LIMIT: '0.10'
         run: bash scripts/run-with-budget-warning.sh 30 "Inverse-filter CPU target" node --test --test-name-pattern='stays within the CPU budget' tests/recognition-inverse-filter.test.js
 
+      - name: Verify articulation inversion CPU target
+        if: always() && matrix.runtime == 'node' && matrix.os == 'ubuntu-24.04'
+        shell: bash
+        env:
+          INVERSION_RTF_LIMIT: '0.10'
+        run: node --test --test-name-pattern='stays within the CPU budget' tests/recognition-inversion.test.js
+
       - name: Setup Bun
         if: matrix.runtime == 'bun'
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
@@ -436,7 +443,7 @@ jobs:
 
       # Resolve Deno's own frozen module graph before the timed suite, as npm
       # ci does for the other runtimes. --no-run executes no test assertions,
-      # so the 100s suite budget below still measures every acceptance test.
+      # so the suite budget below still measures every acceptance test.
       - name: Prepare Deno test dependencies
         if: matrix.runtime == 'deno'
         run: deno test -A --parallel --no-run --frozen
@@ -455,7 +462,8 @@ jobs:
         # 401s of 420s on a slow macos-15 runner (run 44309721274).
         # Before issue 63, on windows-2025 it took 87-150s on main and PR #116
         # (issue 115), mostly in tests that spawn git and shell fixtures.
-        # Start matching immediately, as for Node, to avoid a long tail.
+        # Split matching into two concurrent lanes to shorten the macOS
+        # critical path. The ordinary suite uses two Deno workers.
         run: bash scripts/run-with-budget-warning.sh 600 "Deno test suite" bash scripts/run-runtime-tests.sh deno
 
   # === RUST ENGINE ===
@@ -568,7 +576,7 @@ jobs:
         # developer machine, issue 23), hence the larger budget.
         # tests/performance-smoke.test.js (issue 31) runs in npm test too,
         # but only here with the engine: Rust is not slower than JavaScript.
-        run: bash scripts/run-with-budget-warning.sh 90 "Rust parity tests" node --test tests/engine-parity.test.js tests/engine-features.test.js tests/rust-parity.test.js tests/rust-recognition.test.js tests/rust-inverse-filter.test.js tests/rust-modes.test.js tests/rust-landmarks.test.js tests/voice-fit-rust-parity.test.js tests/rust-waveguide.test.js tests/rust-fdtd.test.js tests/rust-render-job.test.js tests/engine-layout.test.js tests/engine.test.js tests/engine-worker.test.js tests/engine-size.test.js tests/adaptive-stream.test.js tests/stream-governor.test.js tests/performance-smoke.test.js
+        run: bash scripts/run-with-budget-warning.sh 90 "Rust parity tests" node --test tests/engine-parity.test.js tests/engine-features.test.js tests/rust-parity.test.js tests/rust-recognition.test.js tests/rust-inverse-filter.test.js tests/rust-modes.test.js tests/rust-landmarks.test.js tests/rust-inversion.test.js tests/voice-fit-rust-parity.test.js tests/rust-waveguide.test.js tests/rust-fdtd.test.js tests/rust-render-job.test.js tests/engine-layout.test.js tests/engine.test.js tests/engine-worker.test.js tests/engine-size.test.js tests/adaptive-stream.test.js tests/stream-governor.test.js tests/performance-smoke.test.js
 
       # The publishing jobs run the same check after they download the file.
       - name: Check the package lists the engine

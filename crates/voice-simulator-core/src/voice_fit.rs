@@ -206,7 +206,16 @@ fn evaluate<F: FnMut(&[f64]) -> f64>(
 }
 /// Returns the final simplex, with at most `budget` calls of `f`.
 /// The first vertex is `initial`; remaining vertices move 0.1 towards 0.5.
-pub fn simplex<F: FnMut(&[f64]) -> f64>(initial: &[f64], budget: usize, mut f: F) -> Vec<Vertex> {
+pub fn simplex<F: FnMut(&[f64]) -> f64>(initial: &[f64], budget: usize, f: F) -> Vec<Vertex> {
+    simplex_with_step(initial, budget, 0.1, f)
+}
+
+pub fn simplex_with_step<F: FnMut(&[f64]) -> f64>(
+    initial: &[f64],
+    budget: usize,
+    step: f64,
+    mut f: F,
+) -> Vec<Vertex> {
     if initial.is_empty() || budget == 0 {
         return Vec::new();
     }
@@ -217,7 +226,7 @@ pub fn simplex<F: FnMut(&[f64]) -> f64>(initial: &[f64], budget: usize, mut f: F
             break;
         }
         let mut x = initial.to_vec();
-        x[i] += if x[i] < 0.5 { 0.1 } else { -0.1 };
+        x[i] += if x[i] < 0.5 { step } else { -step };
         vertices.push(evaluate(x, budget, &mut used, &mut f).unwrap());
     }
     let n = initial.len();

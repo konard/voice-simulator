@@ -663,6 +663,11 @@ Measured with `node experiments/issue-58-rtf.mjs` (10 s of speech, one thread): 
 
 `buildCodebook(head, { size: 20000, seed: 1, cache })` builds a deterministic simulator-generated table of tract positions, formants and spectral envelopes. `frameEnvelope(frames, t, table, out)` reads an analysis frame; `table.query(envelope, 16, out)` returns candidate rows and envelope costs without allocating. `CODEBOOK_CHANNELS` defines the twelve tract controls; `serializeCodebook` and `parseCodebook` support a caller-owned binary cache. Tables use 0.5 cm length buckets and are generated on demand. See [API, layout, source limits and verification](docs/CODEBOOK.md).
 
+### Acoustic-to-articulatory inversion
+
+`invertArticulation` and `createArticulationInverter` recover 21 simulator controls from analysis frames. Use `articulationPlan(track)` to render them.
+See [inversion usage and accuracy](docs/CODEBOOK.md#acoustic-to-articulatory-inversion).
+
 ### Quality
 
 [docs/reports/baseline-quality.md](docs/reports/baseline-quality.md) is the
