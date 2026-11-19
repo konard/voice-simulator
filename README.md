@@ -578,13 +578,10 @@ errorRate('你好吗', '你好', 'char').rate; // 0.333
 ```
 
 The lower-level functions `fft`, `powerFrames`, `melFilterbank`, `mfcc`,
-`dtw`, `logSpectralDistance`, `melCepstralDistortion`,
-`constantCepstrumDistortion`, `pitchTrack`, `f0Errors`, `formantTrack`,
-`formantErrors`, `editDistance` and `tokenize` are exported too.
-`constantCepstrumDistortion(reference, sampleRate)` is the distortion of a
-recording from its own mean cepstrum, the score of a test signal whose
-spectrum never changes; a resynthesis above it follows none of the spectral
-changes of the recording.
+`dtw`, `logSpectralDistance`, `melCepstralDistortion`, `pitchTrack`,
+`f0Errors`, `formantTrack`, `formantErrors`, `editDistance`, `tokenize` and
+`constantCepstrumDistortion` (MCD from a recording's own mean cepstrum) are
+exported too.
 
 Mel-cepstral distortion depends on how the cepstrum is computed (here: 26 mel
 filters, 13 coefficients, 16 kHz). Values are comparable inside this project
