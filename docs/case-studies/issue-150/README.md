@@ -14,18 +14,20 @@ utterance, and the target is a blocked gate. **The 9 dB target itself is not
 met and is blocked.** The mean is 60.749 dB, 51.749 dB above it. The
 measurements below show that no setting of the current model can reach it on
 this metric scale: the per-frame best of all 5,000 rendered codebook rows,
-without any smoothness, is still 42.622 dB. The issue 65 synthetic gates are
-unchanged.
+without any smoothness, is still 42.622 dB. The issue 65 synthetic gates keep
+their fixtures and thresholds. The four that the inversion of PR #149 does not
+meet yet (steady vowels, sentence, lip closure, render-back) are blocked gates
+too, so pull requests warn and the default branch fails until #149 meets them.
 
 ## Requirement and verification map
 
-| Requirement                                             | Implementation                                                                                                                  | Verification                                                                                                 |
-| ------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
-| Track the golden-set error against the 9 dB target      | `tests/heavy/recognition-inversion.test.js`: per-utterance gap, mean gap, count at or below the target, JSON fields             | Full heavy run, [report](../../reports/recognition-inversion.md)                                             |
-| Say whether an error is a model failure or a hard frame | `constantCepstrumDistortion` in `src/metrics/distortion.js`, a column of the report                                             | `tests/metrics.test.js`; 14 of 24 render-backs beat it, mean 60.749 against 61.041 dB                        |
-| Do not report the unmet target as met                   | `checkBlockedGate` with the 9 dB criterion: a warning on pull requests (`BLOCKED_GATES=warn`), a failure on main and local runs | The heavy run ends with the blocked-criterion error that names the human action                              |
-| Issue 65 keeps its synthetic gates                      | No change to `tests/recognition-inversion*.test.js` or to the inversion                                                         | The diff against PR #149 touches only the heavy test, the new metric, its types, tests and documentation     |
-| Root cause and options                                  | This document and `experiments/issue-150-*.mjs`                                                                                 | Commands below, all numbers re-measured from cached heads equal to fresh fits (60.749 dB reproduced exactly) |
+| Requirement                                             | Implementation                                                                                                                               | Verification                                                                                                 |
+| ------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| Track the golden-set error against the 9 dB target      | `tests/heavy/recognition-inversion.test.js`: per-utterance gap, mean gap, count at or below the target, JSON fields                          | Full heavy run, [report](../../reports/recognition-inversion.md)                                             |
+| Say whether an error is a model failure or a hard frame | `constantCepstrumDistortion` in `src/metrics/distortion.js`, a column of the report                                                          | `tests/metrics.test.js`; 14 of 24 render-backs beat it, mean 60.749 against 61.041 dB                        |
+| Do not report the unmet target as met                   | `checkBlockedGate` with the 9 dB criterion: a warning on pull requests (`BLOCKED_GATES=warn`), a failure on main and local runs              | The heavy run ends with the blocked-criterion error that names the human action                              |
+| Issue 65 keeps its synthetic gates                      | Same fixtures and thresholds in `tests/recognition-inversion.test.js`; the four that PR #149 does not meet yet go through `checkBlockedGate` | Pull requests warn; main and local runs fail with the measured values, as on PR #149                         |
+| Root cause and options                                  | This document and `experiments/issue-150-*.mjs`                                                                                              | Commands below, all numbers re-measured from cached heads equal to fresh fits (60.749 dB reproduced exactly) |
 
 ## Reproduce
 
