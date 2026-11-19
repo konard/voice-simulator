@@ -46,6 +46,10 @@ const COARSE_RATE = 4000;
 /** Low-pass of the coarse signal: cutoff 0.45 rc, 8 zero crossings. */
 const COARSE_CUTOFF = 0.45;
 const COARSE_ZERO_CROSSINGS = 8;
+/** Short-lag peaks can be the ringing of a consonant's release. */
+const SHORT_PERIOD_F0 = 400;
+/** Allow for comparing a coarse, interpolated peak with a refined peak. */
+const SECOND_PERIOD_TOLERANCE = 0.12;
 /**
  * Quiet frames: a frame more than ENERGY_FREE dB below the loudest frame
  * from ENERGY_SPAN seconds before to ENERGY_AHEAD after it gets
@@ -522,12 +526,24 @@ function createCandidateFinder(frames, settings, store) {
       let kept = 0;
       const count = Math.min(order.length, tried);
       for (let index = 0; index < count; index++) {
-        const refined = full.refine(peakLag[order[index]]);
+        const coarseLag = peakLag[order[index]];
+        const refined = full.refine(coarseLag);
         const frequency = refined === null ? 0 : rate / refined[0];
         if (frequency >= minF0 && frequency <= maxF0) {
           candidate.frequency = frequency;
           candidate.height = refined[1];
-          candidate.strength = strengthOf(refined[1], frequency);
+          // A brief resonant burst can have a strong short-lag peak. At
+          // high frequencies, check that it persists for a second period.
+          const second = 2 * coarseLag;
+          const lag = Math.floor(second);
+          const support =
+            frequency > SHORT_PERIOD_F0 && lag < lagMax
+              ? q[lag] + (q[lag + 1] - q[lag]) * (second - lag)
+              : refined[1];
+          candidate.strength = strengthOf(
+            Math.min(refined[1], support + SECOND_PERIOD_TOLERANCE),
+            frequency
+          );
           kept = insertCandidate(
             store,
             t * capacity,

@@ -1358,3 +1358,24 @@ recognition from main `eeb2869`, the combined scalar engine is 467028 bytes
 The next 16 KiB size budget is 475136 bytes. SIMD builds at 473723 bytes
 and remains unshipped. Measured with
 `CARGO_BUILD_JOBS=1 node scripts/build-wasm.mjs --require` (Rust 1.100.0).
+
+## Acoustic inversion (issue 65)
+
+The Rust core estimates source controls from frame observations and solves the
+articulation lattice in batch or with fixed-lag traceback and RTS smoothing.
+The native oral-refinement objective uses the same bounded simplex and accepts
+forward tract geometry from its caller. Codebook generation and public stage
+orchestration use the JavaScript host.
+
+`vs_inversion` consumes a host-scored candidate lattice and writes 12 means,
+12 variances, and confidence per frame. Its lag is in scored frames. A lag at
+least as large as the frame count selects the batch solution. The separate
+`vs_inversion_source` export consumes frame features and 18 calibrated source
+coefficients and returns the nine source controls in batch. The expected packet
+layouts are documented in `crates/voice-simulator-wasm/src/inversion.rs`.
+`REQUIRE_WASM=1 node --test tests/rust-inversion.test.js` checks both lattice
+modes and source outputs against JavaScript.
+
+`CARGO_BUILD_JOBS=1 node scripts/build-wasm.mjs --require --check-size`
+measured 544,367 scalar bytes and 549,683 SIMD bytes on Rust 1.100.0. The
+next 16 KiB size budget is 557,056 bytes.

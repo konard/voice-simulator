@@ -1318,11 +1318,11 @@ export declare class VoiceRenderer {
   restoreSources(state: ArrayLike<number>): void;
 }
 export declare function renderPlan(
-  plan: Plan,
+  plan: Plan | import('./recognition/inversion.js').InvertedPlan,
   options?: RenderOptions
 ): Float32Array;
 export declare function renderPlanAsync(
-  plan: Plan,
+  plan: Plan | import('./recognition/inversion.js').InvertedPlan,
   options?: RenderOptions & { chunkSize?: number }
 ): Promise<Float32Array>;
 /** Interface version of src/engine/voice-simulator.wasm (`vs_abi_version`). */
@@ -3897,6 +3897,16 @@ export declare function melCepstralDistortion(
   sampleRate: number,
   options?: DistortionOptions
 ): number;
+/**
+ * Mel-cepstral distortion (dB) of a recording from its own mean cepstrum c[1]
+ * .. c[13] over its frames that are not silent: the score a test signal with
+ * a constant spectrum of the mean shape gets from `melCepstralDistortion`.
+ */
+export declare function constantCepstrumDistortion(
+  reference: ArrayLike<number>,
+  sampleRate: number,
+  options?: Omit<DistortionOptions, 'path'>
+): number;
 /** Pitch (Hz, 0 = unvoiced) every hop seconds by YIN. */
 export declare function pitchTrack(
   samples: ArrayLike<number>,
@@ -4471,3 +4481,16 @@ export {
   type ModeRecognitionOptions,
   type ModeRecognitionInput,
 } from './recognition/modes.js';
+
+// Acoustic-to-articulatory inversion (issue 65).
+export {
+  type ArticulationInverter,
+  type ArticulationTrack,
+  type InversionCandidates,
+  type InversionChannel,
+  type InversionOptions,
+  type InvertedPlan,
+  articulationPlan,
+  createArticulationInverter,
+  invertArticulation,
+} from './recognition/inversion.js';

@@ -1,6 +1,13 @@
 /** Bounded scheduling fixtures: full coverage, ordering and failure propagation. */
 import { describe, expect } from 'test-anywhere';
-import { mkdtempSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  readdirSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import {
@@ -13,8 +20,8 @@ import { itUnless, noPosixShell, sandboxed } from './helpers/skip.js';
 // Bun matching completes before a queue that two workers drain: modes, then
 // eight --shard chunks of the ordinary files, each run exactly once. Modes
 // and chunk one wait for each other, so the workers must run concurrently.
-// Deno matching overlaps the bulk run. Node splits matching by test name and
-// runs both halves and the fitting files alongside the bulk run.
+// Deno and Node split matching by test name and start both halves with the
+// bulk run. Node also starts a fitting lane and runs the device benchmark last.
 const fixture = `#!/usr/bin/env bash
 set -eu
 runtime="$1"
@@ -27,13 +34,19 @@ for argument in "$@"; do
   case "$argument" in
     tests/voice-match.test.js) role=matching ;;
     tests/voice-fit.test.js) if [ "$runtime" = node ]; then role=fitting; fi ;;
+    tests/device-benchmark.test.js) if [ "$runtime" = node ]; then role=benchmark; fi ;;
     tests/recognition-modes.test.js) if [ "$runtime" = bun ]; then role=modes; fi ;;
-    --test-skip-pattern=*) lane=rest ;;
+    --test-skip-pattern=*|--filter='/^([^m]|$)/') lane=rest ;;
     --shard=*/8) role="chunk\${argument#--shard=}"; role="\${role%/8}" ;;
   esac
 done
 role=\${lane:-$role}
 if [ -f "$root/$role.started" ]; then exit 97; fi
+if [ "$role" = benchmark ]; then
+  for other in matching rest fitting bulk; do
+    [ -f "$root/$other.finished" ] || exit 95
+  done
+fi
 printf '%s\\n' "$@" > "$root/$role.args"
 touch "$root/$role.started"
 for ((poll=0; poll<500; poll++)); do
@@ -52,7 +65,8 @@ for ((poll=0; poll<500; poll++)); do
       ready=true
     fi
   elif [ -f "$root/matching.started" ] && [ -f "$root/bulk.started" ] &&
-    { [ "$runtime" != node ] || { [ -f "$root/rest.started" ] && [ -f "$root/fitting.started" ]; }; }; then
+    [ -f "$root/rest.started" ] &&
+    { [ "$runtime" != node ] || [ -f "$root/fitting.started" ]; }; then
     ready=true
   fi
   if [ "$ready" = true ]; then
@@ -75,14 +89,20 @@ const NODE_SCHEDULING = {
   rest: ['--test-skip-pattern=matches a'],
   fitting: ['--test-concurrency=1'],
 };
+const DENO_SCHEDULING = {
+  matching: ['--filter=/^m/'],
+  rest: ['--filter=/^([^m]|$)/'],
+};
+const RUNTIME_SCHEDULING = { node: NODE_SCHEDULING, deno: DENO_SCHEDULING };
 const schedulingFlags = (runtime, role) =>
-  SCHEDULING[role] ?? (runtime === 'node' ? NODE_SCHEDULING[role] : null) ?? [];
+  SCHEDULING[role] ?? RUNTIME_SCHEDULING[runtime]?.[role] ?? [];
 
 // Files of every process but the bulk one, which runs the remaining files.
 const ROLE_FILES = {
   matching: ['tests/voice-match.test.js'],
   rest: ['tests/voice-match.test.js'],
   fitting: ['tests/recognition-modes.test.js', 'tests/voice-fit.test.js'],
+  benchmark: ['tests/device-benchmark.test.js'],
   modes: ['tests/recognition-modes.test.js'],
 };
 const roleFiles = (role) => ROLE_FILES[role];
@@ -93,8 +113,8 @@ describe('Runtime suite scheduling', () => {
       runtime === 'bun'
         ? ['matching', 'modes', ...CHUNKS]
         : runtime === 'node'
-          ? ['matching', 'rest', 'fitting', 'bulk']
-          : ['matching', 'bulk'];
+          ? ['matching', 'rest', 'fitting', 'bulk', 'benchmark']
+          : ['matching', 'rest', 'bulk'];
     const flags =
       runtime === 'node'
         ? ['--test', '--test-timeout=30000']
@@ -135,7 +155,12 @@ describe('Runtime suite scheduling', () => {
                 (file) =>
                   file.endsWith('.test.js') &&
                   file !== 'voice-match.test.js' &&
-                  !(runtime === 'node' && file === 'voice-fit.test.js') &&
+                  !(
+                    runtime === 'node' &&
+                    ['device-benchmark.test.js', 'voice-fit.test.js'].includes(
+                      file
+                    )
+                  ) &&
                   !(runtime !== 'deno' && file === 'recognition-modes.test.js')
               )
               .map((file) => `tests/${file}`)
@@ -164,4 +189,60 @@ describe('Runtime suite scheduling', () => {
       );
     }
   }
+});
+
+describe('Native Deno scheduling', () => {
+  const nativeDeno = globalThis.Deno?.version?.deno;
+  const bash =
+    !sandboxed && nativeDeno && process.platform === 'win32'
+      ? path.join(
+          process.env.ProgramFiles ?? 'C:/Program Files',
+          'Git',
+          'bin',
+          'bash.exe'
+        )
+      : 'bash';
+  itUnless(
+    sandboxed,
+    !nativeDeno && 'requires native Deno',
+    bash !== 'bash' && !existsSync(bash) && 'requires Git Bash'
+  )(
+    'Deno: native executable runs both voice-matching groups exactly once',
+    async () => {
+      const root = mkdtempSync(path.join(tmpdir(), 'deno-shards-'));
+      let failure;
+      try {
+        const tests = path.join(root, 'tests');
+        mkdirSync(tests);
+        const createMarker = (name) =>
+          `Deno.test('${name}', () => Deno.writeTextFileSync('${name}.ran', '', { createNew: true }));`;
+        writeFileSync(
+          path.join(tests, 'voice-match.test.js'),
+          [createMarker('matching'), createMarker('remaining')].join('\n')
+        );
+        writeFileSync(
+          path.join(tests, 'other.test.js'),
+          createMarker('ordinary')
+        );
+        const runner = path
+          .resolve('scripts/run-runtime-tests.sh')
+          .replaceAll('\\', '/');
+        await runBounded(
+          bash,
+          [runner, 'deno', process.execPath.replaceAll('\\', '/')],
+          { cwd: root, timeout: HANG_GUARD_MS }
+        );
+        expect(
+          readdirSync(root)
+            .filter((name) => name.endsWith('.ran'))
+            .sort()
+        ).toEqual(['matching.ran', 'ordinary.ran', 'remaining.ran']);
+      } catch (error) {
+        failure = error;
+        throw error;
+      } finally {
+        removeFixture(root, failure);
+      }
+    }
+  );
 });

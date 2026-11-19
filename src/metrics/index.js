@@ -20,6 +20,7 @@ export {
 } from './spectrum.js';
 export { DTW_MAX_CELLS, dtw, euclideanDistance } from './dtw.js';
 export {
+  constantCepstrumDistortion,
   logSpectralDistance,
   melCepstralDistortion,
   normalizeRms,

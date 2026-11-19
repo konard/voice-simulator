@@ -8,6 +8,7 @@ import { describe, it, expect } from 'test-anywhere';
 import {
   METRIC_DEFAULTS,
   compareRecordings,
+  constantCepstrumDistortion,
   createRandom,
   dtw,
   editDistance,
@@ -107,6 +108,24 @@ describe('metrics: spectral distances', () => {
       y[n] = x[n] + 0.9 * (n > 0 ? y[n - 1] : 0);
     }
     expect(melCepstralDistortion(x, y, 16000) > 3).toBe(true);
+  });
+
+  it('constant-cepstrum distortion is the mcd from the mean spectrum', () => {
+    // Another stretch of the same noise has the same mean spectrum but its
+    // own fluctuation, so it is further from the frames than the mean.
+    const shifted = x.map((_, n) => x[(n + 4000) % x.length]);
+    const constant = constantCepstrumDistortion(x, 16000);
+    expect(constant < melCepstralDistortion(x, shifted, 16000)).toBe(true);
+    near(constantCepstrumDistortion(half, 16000), constant, 1e-9);
+    // A change of spectral shape halfway is missed by any constant.
+    const y = new Float64Array(x.length);
+    for (let n = 0; n < x.length; n++) {
+      y[n] = x[n] + 0.9 * (n > 0 ? y[n - 1] : 0);
+    }
+    const mid = x.length >> 1;
+    const joined = x.map((value, n) => (n < mid ? value : 0.1 * y[n]));
+    expect(constantCepstrumDistortion(joined, 16000) > 2 * constant).toBe(true);
+    expect(constantCepstrumDistortion(new Float64Array(800), 16000)).toBe(0);
   });
 });
 

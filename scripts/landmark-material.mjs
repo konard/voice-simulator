@@ -9,6 +9,13 @@ import {
   smoothSonority,
 } from '../src/recognition/landmark-signals.js';
 
+export const LANDMARK_SENTENCES = [
+  ['en', 'The north wind and the sun were disputing which was the stronger.'],
+  ['ru', 'Мама мыла раму.'],
+  ['hi', 'नमस्ते दुनिया'],
+  ['zh', '你好世界'],
+];
+
 export function segmentClass(segment, previous) {
   if (segment.kind === 'pause') {
     return 0;

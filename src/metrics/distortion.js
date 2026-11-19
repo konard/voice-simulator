@@ -163,3 +163,51 @@ export function melCepstralDistortion(
     return scale * Math.sqrt(2 * sum);
   });
 }
+
+/**
+ * Mel-cepstral distortion of a recording from its own mean cepstrum: the
+ * distortion `melCepstralDistortion` gives a test signal whose spectrum
+ * never changes and has the mean shape of the reference (issue 150). The
+ * mean is taken over the frames that are not silent, which are also the
+ * only frames scored. A render-back that does not beat this value has not
+ * followed any spectral change of the recording. It needs no test signal,
+ * so it is a per-utterance reference point for the golden-set error.
+ * @param {ArrayLike<number>} reference
+ * @param {number} sampleRate
+ * @param {{normalize?: boolean, window?: number, hop?: number, filters?: number, coefficients?: number, range?: number}} [options]
+ * @returns {number}
+ */
+export function constantCepstrumDistortion(
+  reference,
+  sampleRate,
+  options = {}
+) {
+  const normalize = options.normalize ?? true;
+  const frames = powerFrames(
+    normalize ? normalizeRms(reference) : reference,
+    sampleRate,
+    options
+  );
+  const cr = cepstra(frames, sampleRate, options);
+  const silent = silentFrames(frames);
+  const scored = cr.filter((_, index) => !silent[index]);
+  if (scored.length === 0) {
+    return 0;
+  }
+  const mean = new Float64Array(scored[0].length);
+  for (const c of scored) {
+    for (let n = 1; n < mean.length; n++) {
+      mean[n] += c[n] / scored.length;
+    }
+  }
+  const scale = 10 / Math.LN10;
+  let total = 0;
+  for (const c of scored) {
+    let sum = 0;
+    for (let n = 1; n < mean.length; n++) {
+      sum += (c[n] - mean[n]) ** 2;
+    }
+    total += scale * Math.sqrt(2 * sum);
+  }
+  return total / scored.length;
+}

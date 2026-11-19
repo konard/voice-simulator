@@ -560,6 +560,7 @@ export {
   EPSILON,
   METRIC_DEFAULTS,
   compareRecordings,
+  constantCepstrumDistortion,
   dtw,
   editDistance,
   errorRate,
@@ -697,3 +698,10 @@ export {
   createVoiceFitter,
 } from './analysis/voice-fit.js';
 export { recognizeModes, toPlanModes } from './recognition/modes.js';
+
+// Acoustic-to-articulatory inversion (issue 65).
+export {
+  invertArticulation,
+  createArticulationInverter,
+  articulationPlan,
+} from './recognition/inversion.js';

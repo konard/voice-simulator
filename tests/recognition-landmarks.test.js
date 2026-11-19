@@ -13,17 +13,14 @@ import {
   syllabifyTokens,
 } from '../src/index.js';
 import { createRandom } from '../src/random.js';
-import { frameTruth } from '../scripts/landmark-material.mjs';
+import {
+  frameTruth,
+  LANDMARK_SENTENCES as SENTENCES,
+} from '../scripts/landmark-material.mjs';
 import { LANDMARK_THRESHOLDS } from '../src/recognition/landmark-thresholds.js';
 import { sonorityFilters } from '../src/recognition/landmark-signals.js';
 import quality from './fixtures/landmark-quality.json' with { type: 'json' };
 
-const SENTENCES = [
-  ['en', 'The north wind and the sun were disputing which was the stronger.'],
-  ['ru', 'Мама мыла раму.'],
-  ['hi', 'नमस्ते दुनिया'],
-  ['zh', '你好世界'],
-];
 const voices = new Map();
 function voice(lang, text, preset, rate, ipa = false) {
   const key = `${lang}:${text}:${preset}:${rate}:${ipa}`;
