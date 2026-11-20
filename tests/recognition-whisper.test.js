@@ -11,6 +11,7 @@ import {
 } from '../src/index.js';
 import { toneCurve } from '../src/articulation/tone-model.js';
 import { createRandom } from '../src/random.js';
+import { bestTone, mean } from '../src/recognition/prosody-features.js';
 import { whisperSpeechRuns } from '../src/recognition/whisper.js';
 import { createWhisperDecisions } from '../src/recognition/whisper-stream.js';
 import { loadGolden } from './helpers/golden.js';
@@ -141,24 +142,61 @@ describe('whisper recognition', () => {
     }));
     expect(ipaToText(phones, { language: 'en' }).text).toBe('a big dog');
   });
+});
 
+describe('whisper tone recognition', () => {
   it('measures a contour from energy independently of the overall level', () => {
     const st = toneCurve([5, 1], { duration: 0.1, count: 10 });
     const frames = {
       startTime: 0,
       hop: 0.01,
+      window: 0.025,
       count: 10,
       energy: st.map((x) => x * 0.7 - 40),
+      speech: new Uint8Array(10).fill(1),
     };
     const costs = whisperTones(frames, {
       start: 0,
       end: 0.1,
-      meanDuration: 0.1 / 1.0072,
+      meanDuration: 0.1 / 1.1135,
     });
     expect(Math.abs(costs['˥˩'] - 0.25)).toBeLessThan(1e-12);
     expect(Object.entries(costs).sort((a, b) => a[1] - b[1])[0][0]).toBe('˥˩');
   });
 
+  it('guesses at least five whispered tones in the eight ma probes', () => {
+    const letters = ['˥', '˧˥', '˨˩˦', '˥˩'];
+    let correct = 0;
+    for (const preset of ['male', 'female']) {
+      const { samples, sampleRate, plan, timeline } = renderWhisper(
+        '[whisper] 妈 麻 马 骂',
+        'zh',
+        preset
+      );
+      const frames = analyzeFrames(samples, sampleRate);
+      const meanDuration = mean(
+        timeline.words.map(({ start, end }) => end - start)
+      );
+      for (const [index, word] of timeline.words.entries()) {
+        const vowel = plan.segments.find(
+          ({ kind, start }) => kind === 'vowel' && start >= word.start - 1e-9
+        );
+        const costs = whisperTones(frames, {
+          ...word,
+          vowelStart: vowel.start,
+          meanDuration,
+        });
+        const best = bestTone(costs);
+        console.log(preset, word.text, letters[index], best);
+        correct += Number(best === letters[index]);
+      }
+    }
+    console.log(`Mandarin ma probes: ${correct}/8`);
+    expect(correct).toBeGreaterThanOrEqual(5);
+  });
+});
+
+describe('whisper streaming', () => {
   it('holds the mode decision until half a second of speech or a pause', () => {
     const { samples, sampleRate } = renderWhisper(
       '[whisper] she sees five sheep'

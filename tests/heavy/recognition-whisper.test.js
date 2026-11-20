@@ -6,14 +6,12 @@ import { join } from 'node:path';
 import process from 'node:process';
 import { describe, expect } from 'test-anywhere';
 import {
-  analyzeFrames,
   audioToIpa,
   errorRate,
   ipaToText,
   parseIpa,
   synthesize,
   textToIpa,
-  whisperTones,
 } from '../../src/index.js';
 import { buildWhisperCues } from '../../scripts/build-whisper-cues.mjs';
 import { WHISPER_CUES } from '../../src/recognition/data/whisper-cues.js';
@@ -143,37 +141,6 @@ describe('whisper acceptance measurements', () => {
     const result = ipaToText(heard.segments, { language: 'en' });
     console.log('a big dog:', result.text);
     expect(result.text).toBe('a big dog');
-  });
-
-  it('guesses at least five whispered tones in the eight ma probes', () => {
-    const letters = ['˥', '˧˥', '˨˩˦', '˥˩'];
-    let correct = 0;
-    for (const preset of ['male', 'female']) {
-      const { samples, sampleRate, plan, timeline } = renderWhisper(
-        '[whisper] 妈 麻 马 骂',
-        'zh',
-        preset
-      );
-      const frames = analyzeFrames(samples, sampleRate);
-      const meanDuration =
-        timeline.words.reduce((sum, { start, end }) => sum + end - start, 0) /
-        timeline.words.length;
-      for (const [index, word] of timeline.words.entries()) {
-        const vowel = plan.segments.find(
-          ({ kind, start }) => kind === 'vowel' && start >= word.start - 1e-9
-        );
-        const costs = whisperTones(frames, {
-          ...word,
-          vowelStart: vowel.start,
-          meanDuration,
-        });
-        const [best] = Object.entries(costs).sort((a, b) => a[1] - b[1])[0];
-        console.log(preset, word.text, letters[index], best);
-        correct += Number(best === letters[index]);
-      }
-    }
-    console.log(`Mandarin ma probes: ${correct}/8`);
-    expect(correct).toBeGreaterThanOrEqual(5);
   });
 
   it('finds the right lexical tone for at least 75% of syllables across ten Mandarin sentences', () => {

@@ -199,20 +199,29 @@ export function whisperAt(spans, time) {
   return spans.find((span) => span.start <= time && time < span.end);
 }
 
-// Mean relative durations of the male and female minimal-tier whisper probes.
-// node experiments/issue-72-whisper-tones.mjs
+// Mean relative durations of medial and final syllables across rotated tone
+// sequences in male and female minimal-tier whisper probes. Phrase-final
+// lengthening moves the duration target for each tone.
+// node experiments/issue-72-whisper-tone-duration.mjs
 const TONES = [
-  ['˥', [5], 1.0544],
-  ['˧˥', [3, 5], 1.078],
-  ['˨˩˦', [2, 1, 4], 1.1251],
-  ['˥˩', [5, 1], 1.0072],
-  ['', [], 0.7353],
+  ['˥', [5], 0.9256, 1.182],
+  ['˧˥', [3, 5], 0.9564, 1.2056],
+  ['˨˩˦', [2, 1, 4], 0.9999, 1.3109],
+  ['˥˩', [5, 1], 0.8737, 1.1135],
+  ['', [], 0.7143, 0.7641],
 ];
 const POINTS = 10;
 
 function center(values) {
   const average = values.reduce((sum, value) => sum + value, 0) / values.length;
   return values.map((value) => value - average);
+}
+
+function isPhraseFinal(frames, last) {
+  // Leave one analysis window for speech overhang from the syllable itself.
+  const from = last + Math.ceil(frames.window / frames.hop);
+  const to = Math.min(frames.count, last + Math.ceil(0.2 / frames.hop));
+  return !frames.speech.subarray(from, to).includes(1);
 }
 
 export function whisperToneCost(observed, curve, length, expected) {
@@ -258,8 +267,9 @@ export function whisperTones(frames, syllable) {
         (frames.energy[Math.min(last, before + 1)] - frames.energy[before])
     );
   });
+  const phraseFinal = isPhraseFinal(frames, last);
   const costs = Object.fromEntries(
-    TONES.map(([name, levels, expected]) => {
+    TONES.map(([name, levels, medial, final]) => {
       const curve = toneCurve(levels, {
         count: POINTS,
         duration: end - vowelStart,
@@ -270,7 +280,7 @@ export function whisperTones(frames, syllable) {
           observed,
           curve,
           (end - start) / meanDuration,
-          expected
+          phraseFinal ? final : medial
         ),
       ];
     })

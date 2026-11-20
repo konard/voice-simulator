@@ -498,7 +498,7 @@ npx voice-simulator --help
 
 `recognize(samples, sampleRate, { language: 'en' })` and `voice-simulator recognize w.wav --lang en` detect whisper automatically. The result has timed `modes` and `{W … W}` in `ipa`. Pass `whisper: false` or `--no-whisper` to disable detection. `audioToIpa` and `createRecognizer` also accept explicit spans in seconds through `whisper: [{ start, end }]`.
 
-The minimal-tier, seed-1 benchmark on twelve synthetic sentences measured 71.0% phone error and 67.3% with voicing pairs treated as equal. Voicing accuracy was 56.5% across 46 female consonant probes. The tone scorer chose 2 of 8 isolated test syllables correctly, and lexical decoding recovered 6 of 54 reference tones across ten Mandarin sentences. Tones and voicing are partly guessed from the words. Run `HEAVY=1 node --test tests/heavy/recognition-whisper.test.js` to reproduce the measurements. No real whispered recordings were measured because no available dataset met the project's license requirements.
+The minimal-tier, seed-1 benchmark on twelve synthetic sentences measured 71.0% phone error and 67.3% with voicing pairs treated as equal. Voicing accuracy was 56.5% across 46 female consonant probes. The tone scorer chose 6 of 8 held-out test syllables correctly, and lexical decoding recovered 6 of 54 reference tones across ten Mandarin sentences. Tones and voicing are partly guessed from the words. Run `HEAVY=1 node --test tests/recognition-whisper.test.js tests/heavy/recognition-whisper.test.js` to reproduce the measurements. No real whispered recordings were measured because no available dataset met the project's license requirements.
 
 ### Pronunciation lexicons
 
