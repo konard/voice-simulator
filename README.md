@@ -1372,7 +1372,7 @@ dependency review on pull requests with a warning, and its
 `Dependency graph enabled` job fails on `main` with the same instruction
 (`scripts/check-dependency-graph.sh`).
 
-See the [preview screenshot workflow](docs/CONTRIBUTING.md#auto-regenerated-preview-screenshots) for local regeneration and CI.
+See [Auto-regenerated preview screenshots](docs/CONTRIBUTING.md#auto-regenerated-preview-screenshots) for CI and `npm run example:web:preview-images` usage.
 
 ### Broken Link Checker
 
