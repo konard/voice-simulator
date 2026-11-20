@@ -13,6 +13,7 @@ const stages = [
   'Formants',
   'Inverse filter',
   'Landmarks',
+  'Codebook search',
   'Inversion',
   'Audio to IPA',
   'Language identification',

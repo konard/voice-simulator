@@ -42,9 +42,9 @@ impl PartialEq for Candidate {
 impl Eq for Candidate {}
 
 pub struct Codebook<'a> {
-    tree: &'a [u32],
-    key: &'a [f32],
-    envelope: &'a [u8],
+    tree: &'a [[u32; 4]],
+    key: &'a [[f32; KEY]],
+    envelope: &'a [[u8; BANDS]],
 }
 
 impl<'a> Codebook<'a> {
@@ -67,9 +67,9 @@ impl<'a> Codebook<'a> {
             return None;
         }
         Some(Self {
-            tree,
-            key,
-            envelope,
+            tree: tree.as_chunks::<4>().0,
+            key: key.as_chunks::<KEY>().0,
+            envelope: envelope.as_chunks::<BANDS>().0,
         })
     }
 
@@ -80,33 +80,49 @@ impl<'a> Codebook<'a> {
         let mut ranked = Vec::with_capacity(NEIGHBOURS);
         for query in queries.as_chunks::<QUERY_WIDTH>().0 {
             let expected = out.len() + 2 * k;
-            let bands = &query[..BANDS];
-            let count = bands.iter().filter(|value| value.is_finite()).count();
+            let mut bands = [0; BANDS];
+            let mut levels = [0.0; BANDS];
+            let mut count = 0;
+            for (i, &value) in query[..BANDS].iter().enumerate() {
+                if value.is_finite() {
+                    bands[count] = i;
+                    levels[count] = value * 2.0 + 128.0;
+                    count += 1;
+                }
+            }
             if count > 0 {
+                let contiguous = bands[count - 1] == count - 1;
                 shortlist.clear();
                 pending.clear();
-                self.shortlist(&query[BANDS..], &mut pending, &mut shortlist);
+                self.shortlist(query.last_chunk().unwrap(), &mut pending, &mut shortlist);
                 ranked.clear();
                 ranked.extend(shortlist.iter().map(|candidate| {
                     let row = candidate.row;
-                    let distance = bands
-                        .iter()
-                        .zip(&self.envelope[row * BANDS..][..BANDS])
-                        .filter(|(value, _)| value.is_finite())
-                        .map(|(value, &stored)| {
-                            let delta = value * 2.0 + 128.0 - f64::from(stored);
-                            delta * delta
-                        })
-                        .sum::<f64>()
-                        * 0.25
-                        / count as f64;
+                    let stored = &self.envelope[row];
+                    let sum: f64 = if contiguous {
+                        levels[..count]
+                            .iter()
+                            .zip(stored)
+                            .map(|(level, stored)| difference(*level, *stored))
+                            .sum()
+                    } else {
+                        levels[..count]
+                            .iter()
+                            .zip(&bands)
+                            .map(|(level, band)| difference(*level, stored[*band]))
+                            .sum()
+                    };
+                    let distance = sum * 0.25 / count as f64;
                     Candidate { distance, row }
                 }));
+                if k < ranked.len() {
+                    ranked.select_nth_unstable(k);
+                    ranked.truncate(k);
+                }
                 ranked.sort_unstable();
                 out.extend(
                     ranked
                         .iter()
-                        .take(k)
                         .flat_map(|item| [item.row as f64, item.distance]),
                 );
             }
@@ -117,7 +133,12 @@ impl<'a> Codebook<'a> {
         out
     }
 
-    fn shortlist(&self, key: &[f64], pending: &mut Vec<Branch>, best: &mut BinaryHeap<Candidate>) {
+    fn shortlist(
+        &self,
+        key: &[f64; KEY],
+        pending: &mut Vec<Branch>,
+        best: &mut BinaryHeap<Candidate>,
+    ) {
         pending.push(Branch {
             node: 0,
             bound: 0.0,
@@ -131,10 +152,10 @@ impl<'a> Codebook<'a> {
             if best.len() == NEIGHBOURS && branch.bound > best.peek().unwrap().distance {
                 continue;
             }
-            let entry = &self.tree[branch.node as usize * 4..];
+            let entry = &self.tree[branch.node as usize];
             let row = entry[0] as usize;
             let axis = entry[1] as usize;
-            let stored = &self.key[row * KEY..][..KEY];
+            let stored = &self.key[row];
             let delta = key[axis] - f64::from(stored[axis]);
             let distance = key
                 .iter()
@@ -171,6 +192,12 @@ impl<'a> Codebook<'a> {
             }
         }
     }
+}
+
+#[inline]
+fn difference(level: f64, stored: u8) -> f64 {
+    let delta = level - f64::from(stored);
+    delta * delta
 }
 
 struct Branch {
