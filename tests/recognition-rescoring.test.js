@@ -277,6 +277,7 @@ it('respects the render budget and yields cloneable, repeatable jobs', () => {
 
 it('allows a phrase to revise published IPA while preserving published times', () => {
   const decoded = handMade('ba', ['da', 'ba']);
+  decoded.nbest[1].segments[0].confidence = 0.25;
   const split = timedReading('bla', [
     [0.06, 0.09],
     [0.09, decoded.segments[0].end],
@@ -288,14 +289,13 @@ it('allows a phrase to revise published IPA while preserving published times', (
     preserveTiming: true,
   });
   assert.equal(result.ipa, 'ba');
-  assert.equal(result.segments[0].revised, true);
-  assert.equal(result.syllables[0].revised, true);
-  for (const key of ['segments', 'syllables']) {
-    assert.deepEqual(
-      result[key].map(({ start, end }) => [start, end]),
-      decoded[key].map(({ start, end }) => [start, end])
-    );
-  }
+  assert.deepEqual(result.segments, [
+    { ...decoded.segments[0], ipa: 'b', revised: true },
+    decoded.segments[1],
+  ]);
+  assert.deepEqual(result.syllables, [
+    { ...decoded.syllables[0], ipa: 'ba', revised: true },
+  ]);
 });
 
 it('stays within the CPU budget', () => {

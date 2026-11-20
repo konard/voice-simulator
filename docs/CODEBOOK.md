@@ -173,3 +173,16 @@ landmark classes. Supplying the planner's channels instead raised this to
 the corresponding counts were 97 and 490. Improving acoustic inversion
 and broad-class estimates is needed before the same decoder can be
 verified against the original gates.
+
+## Analysis-by-synthesis rescoring
+
+Pass a decoder result with several readings to `rescoreHypotheses(decoded)` to compare uncertain stretches against waveguide renders in the fitted voice. The decoder must retain its working-rate samples and articulation track.
+
+```js
+const decoded = audioToIpa(samples, sampleRate, { language: 'en', nbest: 10 });
+const { ipa, segments, rescoring } = rescoreHypotheses(decoded);
+```
+
+`warpPlan(plan, anchors)` returns a retimed plan whose `offset` is the recording time at sample zero. `planReading(decoded, segments)` matches phone onset times and copies the recovered pitch and loudness. `planRescoring(decoded)` prepares a reference render and cloneable jobs. Call `scoreJob(job)` for a job's mel-cepstral distance.
+
+For a finished streaming phrase, pass `{ preserveTiming: true }` to keep published phone and syllable times. Changed IPA is marked `revised`. The streaming recognizer in [#73](https://github.com/konard/voice-simulator/issues/73) owns phrase boundaries and keeps rescoring off by default.

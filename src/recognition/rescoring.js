@@ -90,14 +90,15 @@ export function planRescoring(decoded, options = {}) {
     decoded,
     options
   );
+  const preserveTiming = options.preserveTiming === true;
   const regions = findRescoringRegions(
     decoded.nbest,
     maxAlternatives,
     margin,
-    options.preserveTiming
+    preserveTiming
   );
   const preparation = {
-    preserveTiming: options.preserveTiming === true,
+    preserveTiming,
     regions: regions.length,
     scheduled: [],
     jobs: [],
@@ -198,6 +199,12 @@ function spliceAnswer(base, scored) {
   return { segments: segments.concat(base.segments.slice(first)), delta };
 }
 
+function revisePublishedIpa(published, revised) {
+  return revised === published.ipa
+    ? published
+    : { ...published, ipa: revised, revised: true };
+}
+
 /** Combine regional distances with decoder costs. */
 export function applyRescoring(decoded, preparation, scores, weight) {
   let first = 0;
@@ -218,7 +225,12 @@ export function applyRescoring(decoded, preparation, scores, weight) {
     return { ...decoded, rescoring };
   }
   const base = decoded.nbest[0];
-  const { segments, delta } = spliceAnswer(base, scored);
+  const reading = spliceAnswer(base, scored);
+  const segments = preparation.preserveTiming
+    ? decoded.segments.map((segment, index) =>
+        revisePublishedIpa(segment, reading.segments[index].ipa)
+      )
+    : reading.segments;
   const ipa = joinSegments(segments);
   const answer = {
     ...base,
@@ -226,7 +238,7 @@ export function applyRescoring(decoded, preparation, scores, weight) {
     segments,
     cost:
       base.cost +
-      delta +
+      reading.delta +
       scored.reduce((sum, { winnerPenalty }) => sum + winnerPenalty, 0),
   };
   const key = pieceKey(segments);
@@ -248,12 +260,12 @@ export function applyRescoring(decoded, preparation, scores, weight) {
   const nbest = [answer, ...readings];
   normalizeReadingConfidence(nbest);
   const syllables = preparation.preserveTiming
-    ? decoded.syllables.map((syllable) => {
-        const revised = joinSegments(segments.slice(...syllable.segments));
-        return revised === syllable.ipa
-          ? syllable
-          : { ...syllable, ipa: revised, revised: true };
-      })
+    ? decoded.syllables.map((syllable) =>
+        revisePublishedIpa(
+          syllable,
+          joinSegments(segments.slice(...syllable.segments))
+        )
+      )
     : syllablesOf(segments, decoded.language);
   return { ...decoded, ipa, segments, syllables, nbest, rescoring };
 }
