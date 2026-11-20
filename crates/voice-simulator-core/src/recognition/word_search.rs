@@ -4,6 +4,7 @@
 //! substitution matrix column of each node. gaps contains insertion costs
 //! per node. Each input row contains deletion cost followed by substitution
 //! costs in feature order. The result is (end, node, cost) for each frontier.
+//! The first index in the generated candidate list wins on equal cost.
 
 use alloc::vec::Vec;
 
