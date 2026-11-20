@@ -9,6 +9,7 @@ import { BROAD_CLASSES } from './landmarks.js';
 
 const EPSILON = 1e-9;
 const MIN_SEPARATION = 0.015;
+const MAX_PHONE_DURATION = 0.4;
 
 function findGaps(frames, first, last, startTime, end) {
   const gaps = [];
@@ -69,7 +70,27 @@ function consolidate(candidates) {
       kept.push(candidate);
     }
   }
-  return Float64Array.from(kept, ({ time }) => time);
+  return kept.map(({ time }) => time);
+}
+
+function fillLongSpans(candidates, pauses) {
+  const times = [];
+  for (const time of candidates) {
+    const previous = times.at(-1) ?? time;
+    const duration = time - previous;
+    if (
+      duration > MAX_PHONE_DURATION + EPSILON &&
+      !pauses.some(({ start }) => start === previous)
+    ) {
+      // A stable tract and unchanged broad class may leave no candidates.
+      const parts = Math.ceil(duration / MAX_PHONE_DURATION);
+      for (let part = 1; part < parts; part++) {
+        times.push(previous + (part * duration) / parts);
+      }
+    }
+    times.push(time);
+  }
+  return Float64Array.from(times);
 }
 
 // Speech bounds, event candidates and their priority merging share one time grid.
@@ -127,10 +148,10 @@ export function decodeBoundaries(
     }
   }
   speedPeaks(frames, track, first, last, add);
-  const times = consolidate(candidates).filter(
+  const speechEdges = consolidate(candidates).filter(
     (time) => !pauses.some((gap) => gap.start < time && time < gap.end)
   );
-  return { times, pauses };
+  return { times: fillLongSpans(speechEdges, pauses), pauses };
 }
 
 function classCounts(frames, landmarks, start, end) {
@@ -237,7 +258,7 @@ export function prepareDecode(
     for (let to = from + 1; to <= from + 4 && to < times.length; to++) {
       const duration = times[to] - start;
       if (
-        duration > 0.4 + EPSILON ||
+        duration > MAX_PHONE_DURATION + EPSILON ||
         (pause && times[to] > pause.start + EPSILON)
       ) {
         break;

@@ -12,12 +12,17 @@ import {
 import { createRandom } from '../src/random.js';
 import { VOWELS } from '../src/ipa/inventory.js';
 import {
+  decoderTemplates,
+  TEMPLATE_CHANNELS,
+} from '../src/recognition/decode-model.js';
+import {
   analyzeForDecode,
   decoderSettings,
   prepareIpaDecode,
   resultOf,
 } from '../src/recognition/decode-pipeline.js';
 import { decodeSearch } from '../src/recognition/decode-search.js';
+import { prepareDecode } from '../src/recognition/decode-spans.js';
 import { checkBlockedGate } from './helpers/blocked-gate.js';
 import {
   DECODE_SENTENCES,
@@ -151,6 +156,50 @@ it('keeps paths with different phone strings and their lowest cost', () => {
     [1]
   );
   assert.equal(pruned.edges.filter(({ to }) => to === 3).length, 2);
+});
+
+it('decodes steady speech across a gap in boundary candidates', () => {
+  const count = 380;
+  const hop = 0.005;
+  const speech = new Uint8Array(count).fill(1);
+  speech.fill(0, 100, 280);
+  const frames = { hop, startTime: 0, speech };
+  const classes = new Uint8Array(count).fill(1);
+  classes.fill(0, 100, 280);
+  const landmarks = { count, classes, landmarks: [] };
+  const flat = new Float32Array(count);
+  const channels = Object.fromEntries(
+    TEMPLATE_CHANNELS.map((name) => [name, flat])
+  );
+  channels.voicing = Float32Array.from(speech);
+  const voice = DECODER_VOICES.male;
+  const templates = decoderTemplates(voice, ['a']);
+  const track = {
+    frameCount: count,
+    frameRate: 1 / hop,
+    startTime: 0,
+    channels,
+    variance: channels,
+  };
+  const prepared = prepareDecode(frames, landmarks, track, templates, {
+    from: 0,
+    to: count * hop,
+  });
+  assert.deepEqual(
+    Array.from(prepared.times, (time) => Math.round(time * 1000)),
+    [0, 250, 500, 1400, 1650, 1900]
+  );
+  const result = decodeSearch(
+    prepared,
+    { symbols: ['a'], costs: new Float64Array(2) },
+    { ...decoderSettings(hiRate, {}), beam: 1 }
+  );
+  assert.equal(result.paths.length, 1);
+  const pauses = result.edges.filter(({ pause }) => pause);
+  assert.deepEqual(
+    pauses.map(({ from, to }) => [from, to]),
+    [[2, 3]]
+  );
 });
 
 it('returns nothing for silence and noise', () => {

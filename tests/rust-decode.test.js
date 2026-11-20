@@ -226,5 +226,18 @@ itUnless(noRust)(
       clock: 1.25,
       readings: 0,
     });
+    // Flat speech can leave more than 400 ms between candidate boundaries.
+    speech.fill(1);
+    const flat = new Float32Array(frames.count);
+    const channels = Object.fromEntries(
+      TEMPLATE_CHANNELS.map((name) => [name, flat])
+    );
+    compare(
+      engine,
+      { ...frames, speech },
+      { ...landmarks, landmarks: [], classes: speech },
+      { ...track, channels, variance: channels },
+      ['en']
+    );
   }
 );
