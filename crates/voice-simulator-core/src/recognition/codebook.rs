@@ -4,7 +4,7 @@
 //! per row. Each f64 query holds 24 bands (NaN for missing), then six keys.
 //! The output has k consecutive (row, cost) pairs per query, with (-1, inf)
 //! for empty slots. Both heap pruning and result ranking break ties by row.
-use alloc::{collections::BinaryHeap, vec::Vec};
+use alloc::vec::Vec;
 use core::cmp::Ordering;
 
 const BANDS: usize = 24;
@@ -44,6 +44,59 @@ impl PartialEq for Candidate {
 
 impl Eq for Candidate {}
 
+/// Fixed-size max heap. The first entry is the current pruning threshold.
+struct Shortlist {
+    values: [Candidate; NEIGHBOURS],
+    len: usize,
+}
+
+impl Shortlist {
+    fn new() -> Self {
+        Self {
+            values: [Candidate {
+                distance: 0.0,
+                row: 0,
+            }; NEIGHBOURS],
+            len: 0,
+        }
+    }
+
+    fn add(&mut self, candidate: Candidate) {
+        let values = &mut self.values;
+        if self.len < NEIGHBOURS {
+            let mut child = self.len;
+            self.len += 1;
+            while child > 0 {
+                let parent = (child - 1) / 2;
+                if values[parent] >= candidate {
+                    break;
+                }
+                values[child] = values[parent];
+                child = parent;
+            }
+            values[child] = candidate;
+        } else if candidate < values[0] {
+            let mut parent = 0;
+            while parent * 2 + 2 < NEIGHBOURS {
+                let left = parent * 2 + 1;
+                let child = left + usize::from(values[left] < values[left + 1]);
+                if candidate >= values[child] {
+                    values[parent] = candidate;
+                    return;
+                }
+                values[parent] = values[child];
+                parent = child;
+            }
+            let left = parent * 2 + 1;
+            if left < NEIGHBOURS && candidate < values[left] {
+                values[parent] = values[left];
+                parent = left;
+            }
+            values[parent] = candidate;
+        }
+    }
+}
+
 pub struct Codebook<'a> {
     tree: &'a [[u32; 4]],
     key: &'a [[f32; KEY]],
@@ -78,7 +131,7 @@ impl<'a> Codebook<'a> {
 
     pub fn query(&self, queries: &[f64], k: usize) -> Vec<f64> {
         let mut out = Vec::with_capacity((queries.len() / QUERY_WIDTH) * k * 2);
-        let mut shortlist = BinaryHeap::with_capacity(NEIGHBOURS);
+        let mut shortlist = Shortlist::new();
         let mut ranked = Vec::with_capacity(NEIGHBOURS);
         for query in queries.as_chunks::<QUERY_WIDTH>().0 {
             let expected = out.len() + 2 * k;
@@ -94,7 +147,7 @@ impl<'a> Codebook<'a> {
             }
             if count > 0 {
                 let contiguous = bands[count - 1] == count - 1;
-                shortlist.clear();
+                shortlist.len = 0;
                 Search {
                     book: self,
                     key: query.last_chunk().unwrap(),
@@ -104,7 +157,7 @@ impl<'a> Codebook<'a> {
                 }
                 .walk(0, 0.0);
                 ranked.clear();
-                ranked.extend(shortlist.iter().map(|candidate| {
+                ranked.extend(shortlist.values[..shortlist.len].iter().map(|candidate| {
                     let row = candidate.row;
                     let stored = &self.envelope[row];
                     let sum: f64 = if count == BANDS {
@@ -157,7 +210,7 @@ fn difference(level: f64, stored: u8) -> f64 {
 struct Search<'a, 'table> {
     book: &'a Codebook<'table>,
     key: &'a [f64; KEY],
-    best: &'a mut BinaryHeap<Candidate>,
+    best: &'a mut Shortlist,
     axes: [f64; KEY],
     visits: usize,
 }
@@ -167,7 +220,7 @@ impl Search<'_, '_> {
         // The visit limit also bounds recursion if a malformed tree has a cycle.
         if node == u32::MAX
             || self.visits == VISITS
-            || (self.best.len() == NEIGHBOURS && bound > self.best.peek().unwrap().distance)
+            || (self.best.len == NEIGHBOURS && bound > self.best.values[0].distance)
         {
             return;
         }
@@ -186,12 +239,7 @@ impl Search<'_, '_> {
             })
             .sum();
         self.visits += 1;
-        let candidate = Candidate { row, distance };
-        if self.best.len() < NEIGHBOURS {
-            self.best.push(candidate);
-        } else if candidate < *self.best.peek().unwrap() {
-            *self.best.peek_mut().unwrap() = candidate;
-        }
+        self.best.add(Candidate { row, distance });
         let near = if delta <= 0.0 { 2 } else { 3 };
         self.walk(entry[near], bound);
         let far = entry[5 - near];
@@ -209,6 +257,26 @@ impl Search<'_, '_> {
 mod tests {
     use super::*;
     use alloc::vec;
+
+    #[test]
+    fn shortlist_keeps_the_lowest_candidates_when_it_fills() {
+        let candidates: Vec<_> = (0..192)
+            .map(|row| Candidate {
+                distance: (row % 7) as f64,
+                row: 191 - row,
+            })
+            .collect();
+        let mut shortlist = Shortlist::new();
+        for &candidate in &candidates {
+            shortlist.add(candidate);
+        }
+        let mut expected = candidates;
+        expected.sort_unstable();
+        assert_eq!(shortlist.len, NEIGHBOURS);
+        assert!(shortlist.values[0] == expected[NEIGHBOURS - 1]);
+        shortlist.values.sort_unstable();
+        assert!(shortlist.values == expected[..NEIGHBOURS]);
+    }
 
     #[test]
     fn ranks_envelopes_and_keeps_lower_entry_on_a_tie() {
