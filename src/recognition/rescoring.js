@@ -47,9 +47,14 @@ function regionJobs(decoded, region, analysis) {
   const from = before[0]?.start ?? start;
   const to = after[0]?.end ?? end;
   const recording = scoringWindow(track, grid, from, to, start, end);
-  const recordedReference = alternatives.some(({ key }) => key === keys[0])
-    ? scoringWindow(reference, grid, from, to, start, end).rows
-    : null;
+  const recordedReference = scoringWindow(
+    reference,
+    grid,
+    from,
+    to,
+    start,
+    end
+  ).rows;
   return alternatives.map(({ key, segments }) => ({
     start,
     end,
@@ -138,16 +143,25 @@ export function planRescoring(decoded, options = {}) {
   };
 }
 
-function evaluateRegion(region, scores, weight) {
+function evaluateRegion(region, scores, weight, readings) {
   const scale = weight * region.phones;
+  const baseKey = region.keys[0];
+  const baseCost = readings[0].cost;
+  const decoderCosts = new Map();
+  // A piece excludes the transition into the following phone. Use the
+  // cheapest complete path through each piece when weighing a revision.
+  for (const [index, key] of region.keys.entries()) {
+    const cost = readings[index].cost - baseCost;
+    decoderCosts.set(key, Math.min(decoderCosts.get(key) ?? Infinity, cost));
+  }
   const penalties = new Map();
   let winner;
   let best = Infinity;
   for (const [index, alternative] of region.alternatives.entries()) {
     const penalty = scale * scores[index];
     penalties.set(alternative.key, penalty);
-    const cost = alternative.cost + penalty;
-    if (cost < best) {
+    const cost = decoderCosts.get(alternative.key) + penalty;
+    if (cost < best || (cost === best && alternative.key === baseKey)) {
       best = cost;
       winner = alternative;
     }
@@ -155,7 +169,8 @@ function evaluateRegion(region, scores, weight) {
   const confidence =
     1 /
     region.alternatives.reduce(
-      (sum, { cost, key }) => sum + Math.exp(best - cost - penalties.get(key)),
+      (sum, { key }) =>
+        sum + Math.exp(best - decoderCosts.get(key) - penalties.get(key)),
       0
     );
   const fallback = scale * Math.max(...scores);
@@ -165,7 +180,7 @@ function evaluateRegion(region, scores, weight) {
     confidence,
     winnerPenalty: penalties.get(winner.key),
     penalties: region.keys.map((key) => penalties.get(key) ?? fallback),
-    changed: winner.key !== region.keys[0],
+    changed: winner.key !== baseKey,
   };
 }
 
@@ -210,7 +225,12 @@ export function applyRescoring(decoded, preparation, scores, weight) {
   let first = 0;
   const scored = preparation.scheduled.map((region) => {
     const last = first + region.alternatives.length;
-    const result = evaluateRegion(region, scores.slice(first, last), weight);
+    const result = evaluateRegion(
+      region,
+      scores.slice(first, last),
+      weight,
+      decoded.nbest
+    );
     first = last;
     return result;
   });

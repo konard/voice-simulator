@@ -99,12 +99,19 @@ export function findRescoringRegions(
     if (alternatives.length < 2 || gap > margin || end - start > 2) {
       continue;
     }
+    const selected = alternatives.slice(0, maxAlternatives);
+    // Always reserve a slot for the decoder's first choice.
+    if (!selected.some(({ key }) => key === keys[0])) {
+      selected[selected.length - 1] = alternatives.find(
+        ({ key }) => key === keys[0]
+      );
+    }
     regions.push({
       start,
       end,
       gap,
       keys,
-      alternatives: alternatives.slice(0, maxAlternatives),
+      alternatives: selected,
       phones: alternatives[0].segments.filter(({ kind }) => kind !== 'pause')
         .length,
       before: context(intervals, index, true),
