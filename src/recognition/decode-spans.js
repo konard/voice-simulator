@@ -10,7 +10,7 @@ import { BROAD_CLASSES } from './landmarks.js';
 const EPSILON = 1e-9;
 const MIN_SEPARATION = 0.015;
 
-function findGaps(frames, first, last, end) {
+function findGaps(frames, first, last, startTime, end) {
   const gaps = [];
   for (let i = first; i < last; i++) {
     if (frames.speech[i]) {
@@ -20,7 +20,7 @@ function findGaps(frames, first, last, end) {
     while (i + 1 < last && !frames.speech[i + 1]) {
       i++;
     }
-    const start = frames.startTime + from * frames.hop;
+    const start = Math.max(startTime, frames.startTime + from * frames.hop);
     const stop = i + 1 === last ? end : frames.startTime + (i + 1) * frames.hop;
     gaps.push({ start, end: stop, pause: stop - start >= 0.15 - EPSILON });
   }
@@ -97,7 +97,7 @@ export function decodeBoundaries(
     }
     return { times: new Float64Array(), pauses: [] };
   }
-  const gaps = findGaps(frames, first, last, to);
+  const gaps = findGaps(frames, first, last, from, to);
   const leading = gaps[0];
   const trailing = gaps.at(-1);
   const start =

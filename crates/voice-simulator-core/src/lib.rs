@@ -19,6 +19,7 @@ extern crate std;
 pub mod aerodynamics;
 pub mod codebook;
 pub mod config;
+pub mod decode;
 pub mod effort;
 pub mod fdtd;
 pub mod fdtd2d;
