@@ -50,9 +50,9 @@ export function decoderCodebook(voice) {
     if (books.size >= 4) {
       books.delete(books.keys().next().value);
     }
-    // The inversion benchmark uses the 5,000-row runtime table. Reuse the
-    // queried view for each head, including the query scratch and search tree.
-    books.set(key, buildCodebook(voice, { size: 5000, cache: new Map() }));
+    // Bound cold-start work. The tuning-sentence comparison in experiments/
+    // issue-66-codebook-size.mjs measures this table against larger ones.
+    books.set(key, buildCodebook(voice, { size: 256, cache: new Map() }));
   }
   return books.get(key);
 }
