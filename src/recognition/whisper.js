@@ -244,7 +244,10 @@ export function whisperTones(frames, syllable) {
     Math.ceil((end - frames.startTime) / frames.hop - EPSILON) - 1
   );
   if (last < first || end <= start || meanDuration <= 0) {
-    return Object.fromEntries(TONES.map(([name]) => [name, 0.5]));
+    return {
+      ...Object.fromEntries(TONES.map(([name]) => [name, 0.5])),
+      '˨˩': 0.5,
+    };
   }
   const observed = Array.from({ length: POINTS }, (_, i) => {
     const index = first + (i * (last - first)) / (POINTS - 1);
@@ -255,7 +258,7 @@ export function whisperTones(frames, syllable) {
         (frames.energy[Math.min(last, before + 1)] - frames.energy[before])
     );
   });
-  return Object.fromEntries(
+  const costs = Object.fromEntries(
     TONES.map(([name, levels, expected]) => {
       const curve = toneCurve(levels, {
         count: POINTS,
@@ -272,4 +275,6 @@ export function whisperTones(frames, syllable) {
       ];
     })
   );
+  costs['˨˩'] = costs['˨˩˦'];
+  return costs;
 }

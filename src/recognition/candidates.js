@@ -1,17 +1,41 @@
 /** Bounded trie edit search; paths never cross a hard boundary. */
-import { phoneDistance, gapCost } from './phone-distance.js';
+import { phoneDistance, gapCost, voicingDistance } from './phone-distance.js';
 import { soundKey } from './lexicon.js';
 import { formatIpa } from '../ipa/parse.js';
+import { syllabifyTokens } from '../ipa/syllables.js';
+import { bestTone } from './prosody-features.js';
+
+const TONE_LEVELS = '˩˨˧˦˥';
+const MANDARIN_TONES = ['5', '35', '214', '51', '', '21'];
+const toneLetters = (token) =>
+  (token.tone ?? []).map((level) => TONE_LEVELS[level - 1]).join('');
+
+function acousticTone(input, expected, language) {
+  if (language === 'zh' && input.tones) {
+    const cost = input.tones[toneLetters(expected)];
+    if (Number.isFinite(cost)) {
+      return 0.5 * cost;
+    }
+  }
+  return undefined;
+}
+
+function heardTone(token) {
+  if (token.tone?.length) {
+    return token.tone.join('');
+  }
+  return Array.from(
+    bestTone(token.tones),
+    (letter) => TONE_LEVELS.indexOf(letter) + 1
+  ).join('');
+}
 
 function allowed(entry, tokens, to, end, language) {
   if (language !== 'zh') {
     return true;
   }
   const tone = entry.tokens.at(-1)?.tone?.join('');
-  const next = tokens
-    .slice(to, end)
-    .find((t) => t.tone?.length)
-    ?.tone?.join('');
+  const next = tokens.slice(to, end).map(heardTone).find(Boolean);
   if (entry.word === '一' && tone === '35') {
     return next === '51';
   }
@@ -60,6 +84,9 @@ function insertions(states, limit, beam) {
 function exactKeys(tokens, to, end, language) {
   const token = tokens[to];
   const keys = [soundKey(token, language)];
+  if (language === 'zh' && token.tones) {
+    return MANDARIN_TONES.map((tone) => `${token.symbol}:${tone}`);
+  }
   const nextTone = tokens
     .slice(to + 1, end)
     .find((t) => t.tone?.length)
@@ -77,7 +104,35 @@ function exactKeys(tokens, to, end, language) {
   return keys;
 }
 
-function stressCost(entry, tokens, from, used) {
+function acousticStress(entry, heard, language) {
+  if (
+    !['en', 'ru'].includes(language) ||
+    !heard.some((token) => Number.isFinite(token.prominence))
+  ) {
+    return 0;
+  }
+  const expected = syllabifyTokens(entry.tokens, { language });
+  const primary = expected.findIndex((syllable) =>
+    syllable.some((token) => token.stress === 1)
+  );
+  const nuclei = syllabifyTokens(heard, { language });
+  if (expected.length < 2 || nuclei.length !== expected.length || primary < 0) {
+    return 0;
+  }
+  const scores = nuclei.map((syllable) =>
+    syllable.reduce(
+      (score, token) => Math.max(score, token.prominence ?? -Infinity),
+      -Infinity
+    )
+  );
+  return scores[primary] < Math.max(...scores) ? 0.3 : 0;
+}
+
+function stressCost(entry, tokens, from, used, language) {
+  const heard = tokens.slice(from, from + used);
+  if (heard.some((token) => Number.isFinite(token.prominence))) {
+    return acousticStress(entry, heard, language);
+  }
   if (entry.tokens.length !== used) {
     return 0;
   }
@@ -101,15 +156,13 @@ export function exactCandidates(tokens, from, end, lexicon, language) {
         if (!node) {
           continue;
         }
-        const sandhi = state.sandhi || key !== keys[0];
         const token = tokens[to];
+        const sandhi = state.sandhi || (!token.tones && key !== keys[0]);
         const cost =
           state.cost +
-          (token.whispered || token.tones
-            ? phoneDistance(
-                { ...token, stress: 0 },
-                { ...node.token, stress: 0 }
-              )
+          (acousticTone(token, node.token, language) ?? 0) +
+          (Number.isFinite(token.voicing)
+            ? 0.25 * voicingDistance(token, node.token)
             : 0);
         next.push({ node, sandhi, cost });
         for (const entry of node.entries) {
@@ -121,7 +174,9 @@ export function exactCandidates(tokens, from, end, lexicon, language) {
             to: to + 1,
             ...entry,
             ...(sandhi ? { ipa: formatIpa(tokens.slice(from, to + 1)) } : {}),
-            cost,
+            cost:
+              cost +
+              acousticStress(entry, tokens.slice(from, to + 1), language),
           });
         }
       }
@@ -137,16 +192,17 @@ export function exactCandidates(tokens, from, end, lexicon, language) {
 /** Per-call memoized feature comparisons avoid repeating work at trie forks. */
 export function distanceCache() {
   const cache = new Map();
-  return (input, expected) => {
+  return (input, expected, language) => {
     // Stress is evaluated at the terminal: the trie shares stressed and
     // unstressed versions of the same segment path.
     const a = `${input.symbol}:${(input.tone ?? []).join('')}:${input.voicing ?? ''}:${JSON.stringify(input.tones ?? null)}`;
     const b = `${expected.symbol}:${(expected.tone ?? []).join('')}`;
-    const key = `${a}\t${b}`;
+    const tone = acousticTone(input, expected, language);
+    const key = `${a}\t${b}\t${tone ?? ''}`;
     if (!cache.has(key)) {
       cache.set(
         key,
-        phoneDistance({ ...input, stress: 0 }, { ...expected, stress: 0 })
+        phoneDistance({ ...input, stress: 0 }, { ...expected, stress: 0 }, tone)
       );
     }
     return cache.get(key);
@@ -167,7 +223,7 @@ export function candidatesAt(tokens, from, end, lexicon, options) {
         next.push({ node: state.node, cost: deletion });
       }
       for (const node of state.node.children.values()) {
-        const cost = state.cost + distance(tokens[index], node.token);
+        const cost = state.cost + distance(tokens[index], node.token, language);
         if (cost <= limit) {
           next.push({ node, cost });
         }
@@ -179,7 +235,8 @@ export function candidatesAt(tokens, from, end, lexicon, options) {
         if (!allowed(entry, tokens, index + 1, end, language)) {
           continue;
         }
-        const cost = state.cost + stressCost(entry, tokens, from, used);
+        const cost =
+          state.cost + stressCost(entry, tokens, from, used, language);
         found.push({ from, to: index + 1, ...entry, cost });
       }
     }

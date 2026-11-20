@@ -272,7 +272,11 @@ function addWhisperTones(segments, syllables, spans, frames) {
       });
       const carrier =
         from + sounds.findLastIndex(({ kind }) => kind === 'vowel');
-      segments[carrier] = { ...segments[carrier], tones: syllable.tones };
+      segments[carrier] = {
+        ...segments[carrier],
+        whispered: true,
+        tones: syllable.tones,
+      };
     }
   }
 }

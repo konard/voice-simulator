@@ -45,6 +45,7 @@ export function recognitionWord(candidate, tokens, language) {
     end: heard.at(-1).end,
     confidence,
     syllables: mapped,
+    ...(candidate.unknown ? { unknown: true } : {}),
   };
 }
 

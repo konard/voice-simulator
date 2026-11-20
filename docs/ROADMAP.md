@@ -213,6 +213,10 @@ its numerical recovery gates must pass before this issue is complete.
 
 The IPA-to-text stage of [#68](https://github.com/konard/voice-simulator/issues/68) uses runtime pronunciation tries, articulatory edit search and public-domain unigram/bigram counts in four explicitly selected languages. Its API, data provenance and verification are documented in [IPA recognition](ipa-to-text.md).
 
+The prosody stages of [#70](https://github.com/konard/voice-simulator/issues/70)
+measure timed vowels before word search and restore phrase punctuation,
+emphasis, and tune spans after it. See the [library pipeline](RECOGNITION-PROSODY.md).
+
 The language stage of [#69](https://github.com/konard/voice-simulator/issues/69) derives weighted phone statistics from the same tries, identifies syllable spans with confidence and reads mixed speech through a joint language-labelled beam search. The library exports `identifyLanguage` and `languageShares`; the command line has `language`. See [language identification](language-id.md) for fixed fixtures, calibration and acceptance measurements.
 
 Whisper recognition [#72](https://github.com/konard/voice-simulator/issues/72) adds automatic detection, whispered reference spectra, and timed VoQS spans to batch and streaming decoding. Consonant duration and level provide soft voicing evidence, and Mandarin tone costs use the noise envelope and relative syllable length. The [whispered speech measurements](../README.md#whispered-speech) show the current limits.

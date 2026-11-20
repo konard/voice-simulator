@@ -711,6 +711,7 @@ export { audioToIpa, createIpaDecoder } from './recognition/decode.js';
 export { findWhisper, whisperTones } from './recognition/whisper.js';
 export { recognize, createRecognizer } from './recognition/recognize.js';
 
+export { measureProsody, markProsody } from './recognition/prosody.js';
 export {
   planReading,
   planRescoring,

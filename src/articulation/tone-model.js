@@ -219,17 +219,12 @@ export function toneCurve(tone, options = {}) {
   const scale = options.scale ?? 2;
   const duration = options.duration ?? 0.2;
   const count = Math.max(1, Math.round(options.count ?? 20));
-  const neutral = !tone?.length;
-  const levels = neutral
-    ? toneIntervals([neutralLevel(options.previous)], duration).map(
-        (interval) => ({ ...interval, rate: TONE_RATES.neutral })
-      )
-    : toneIntervals(tone, duration);
-  const intervals = levels.map((interval) => ({
-    ...interval,
-    from: (interval.from - 3) * scale,
-    to: (interval.to - 3) * scale,
-  }));
+  const intervals = scaledToneIntervals(
+    tone,
+    duration,
+    scale,
+    options.previous
+  );
   const state =
     options.start === undefined
       ? null
@@ -241,4 +236,38 @@ export function toneCurve(tone, options = {}) {
   const curve = Array.from(values.slice(0, count - 1));
   curve.push(end.value);
   return curve.slice(0, count);
+}
+
+/** Shared synthesis targets, in semitones relative to Chao level 3. */
+export function scaledToneIntervals(tone, duration, scale, previous) {
+  const neutral = !tone?.length;
+  const levels = toneIntervals(
+    neutral ? [neutralLevel(previous)] : tone,
+    duration
+  );
+  return levels.map(({ from, to, rate, ...interval }) => ({
+    ...interval,
+    rate: neutral ? TONE_RATES.neutral : rate,
+    from: (from - 3) * scale,
+    to: (to - 3) * scale,
+  }));
+}
+
+/** Evaluate a target trajectory at sorted, arbitrary times within it. */
+export function sampleToneTargets(intervals, initial, times) {
+  let state = initial;
+  let start = 0;
+  let i = 0;
+  const values = [];
+  for (const { duration, from, to, rate } of intervals) {
+    const slope = (to - from) / duration;
+    const terms = coefficients(state, slope, from, rate);
+    const end = start + duration;
+    while (i < times.length && times[i] <= end + 1e-9) {
+      values.push(evaluate(terms, slope, from, rate, times[i++] - start).value);
+    }
+    state = evaluate(terms, slope, from, rate, duration);
+    start = end;
+  }
+  return values;
 }

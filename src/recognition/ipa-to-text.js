@@ -83,9 +83,7 @@ function decoderCandidates(from, end, context) {
     if (given) {
       found = found.filter((c) => c.to === end);
     }
-    if (!exact) {
-      found = found.map((c) => ({ ...c, cost: c.cost * ACOUSTIC_WEIGHT }));
-    }
+    found = found.map((c) => ({ ...c, cost: c.cost * ACOUSTIC_WEIGHT }));
     if (!exact || (given && !found.length)) {
       found.push(
         ...unknownCandidates(
@@ -229,7 +227,7 @@ function validateSpans(spans, input) {
 }
 
 function decodeReadings(input, lexicon, settings, nbest) {
-  const weakCues = input.tokens.some((token) => token.whispered || token.tones);
+  const weakCues = input.tokens.some((token) => token.whispered);
   const paths = weakCues ? [] : decode(input, lexicon, settings, true);
   if (paths.length < nbest) {
     const exactTexts = new Set(paths.map((path) => path.text));

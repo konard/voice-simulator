@@ -14,7 +14,9 @@ export interface WhisperMode extends WhisperSpan {
   notation: 'W';
 }
 
-export type WhisperToneCosts = Record<'˥' | '˧˥' | '˨˩˦' | '˥˩' | '', number>;
+import type { ToneCosts } from './prosody.js';
+
+export type WhisperToneCosts = ToneCosts;
 
 export function findWhisper(
   samples: ArrayLike<number>,

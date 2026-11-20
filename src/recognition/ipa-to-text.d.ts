@@ -1,6 +1,6 @@
 import type { LanguageCode } from '../index.js';
-import type { WhisperToneCosts } from './whisper.js';
 import type { LanguageSpan } from './language-id.js';
+import type { ToneCosts } from './prosody.js';
 
 /** One heard sound or pause, with times in seconds. */
 export interface RecognitionSound {
@@ -10,7 +10,9 @@ export interface RecognitionSound {
   confidence: number;
   whispered?: true;
   voicing?: number;
-  tones?: WhisperToneCosts;
+  /** Acoustic Mandarin tone costs for a vowel. */
+  tones?: ToneCosts | null;
+  prominence?: number;
 }
 
 export interface RecognitionSyllable {
@@ -32,6 +34,8 @@ export interface RecognitionWord {
   end: number | null;
   confidence: number;
   syllables: RecognitionSyllable[];
+  /** Present when the decoder used its rule-spelled fallback. */
+  unknown?: true;
 }
 
 export interface IpaToTextOptions {

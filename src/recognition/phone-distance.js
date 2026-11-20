@@ -36,19 +36,13 @@ function placeDistance(a, b) {
 
 const differs = (a, b) => Number(Boolean(a) !== Boolean(b));
 
-function voicingDistance(a, b) {
-  if (a.whispered) {
+export function voicingDistance(a, b) {
+  if (a.whispered && Number.isFinite(a.voicing)) {
     return Math.abs(Number(Boolean(b.voiced)) - a.voicing);
   }
-  return b.whispered ? voicingDistance(b, a) : differs(a.voiced, b.voiced);
-}
-
-function toneEvidence(a, b) {
-  if (a.tones) {
-    const key = (b.tone ?? []).map((level) => '˩˨˧˦˥'[level - 1]).join('');
-    return 0.5 * ((a.tones[key === '˨˩' ? '˨˩˦' : key] ?? 0.5) - 0.25);
-  }
-  return toneDistance(a.tone, b.tone);
+  return b.whispered && Number.isFinite(b.voicing)
+    ? voicingDistance(b, a)
+    : differs(a.voiced, b.voiced);
 }
 
 function segmentDistance(a, b) {
@@ -94,13 +88,11 @@ export function toneDistance(a, b) {
 }
 
 /** Distance of two parsed sounds, always in [0, 1]. */
-export function phoneDistance(a, b) {
+export function phoneDistance(a, b, toneCost = toneDistance(a.tone, b.tone)) {
   const segment = segmentDistance(a, b);
   return Math.min(
     1,
-    segment +
-      toneEvidence(a, b) +
-      0.2 * Number((a.stress ?? 0) !== (b.stress ?? 0))
+    segment + toneCost + 0.2 * Number((a.stress ?? 0) !== (b.stress ?? 0))
   );
 }
 
