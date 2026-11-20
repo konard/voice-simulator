@@ -407,9 +407,11 @@ jobs:
           INVERSION_RTF_LIMIT: '0.10'
         run: node --test --test-name-pattern='stays within the CPU budget' tests/recognition-inversion.test.js
 
-      - name: Measure IPA decoder CPU targets
+      - name: Verify IPA decoder CPU targets
         if: always() && matrix.runtime == 'node' && matrix.os == 'ubuntu-24.04'
         shell: bash
+        env:
+          BLOCKED_GATES: ''
         run: node --test --test-name-pattern='stays within the CPU budget' tests/recognition-decode.test.js
 
       - name: Setup Bun

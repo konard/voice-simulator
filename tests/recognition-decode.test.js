@@ -371,13 +371,13 @@ function streamSentence(text, voice, language) {
 
 const streamingResults = [];
 for (const [language, sentences] of Object.entries(DECODE_SENTENCES)) {
-  it(`streams ${language} sentences`, () => {
-    for (const text of sentences) {
-      for (const voice of Object.values(DECODER_VOICES)) {
+  for (const [preset, voice] of Object.entries(DECODER_VOICES)) {
+    it(`streams ${language} sentences (${preset})`, () => {
+      for (const text of sentences) {
         streamingResults.push(streamSentence(text, voice, language));
       }
-    }
-  });
+    });
+  }
 }
 
 it('stream fixes phonemes in time', () => {
