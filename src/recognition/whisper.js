@@ -12,6 +12,8 @@ const TELEPHONE_THRESHOLD = -26.63;
 const EDGE_LEVEL_DROP = 10;
 const EDGE_RATIO_RISE = 5;
 const EDGE_RATIO_ALLOWANCE = 6;
+const PERIODIC_FRAME = 0.6;
+const PERIODIC_SHARE = 0.75;
 
 export function whisperSpeechRuns(frames, count = frames.count) {
   const runs = [];
@@ -81,6 +83,14 @@ function edgeThreshold(samples, sampleRate, threshold, start, before) {
   );
 }
 
+function mostlyPeriodic(periodicity, from, to) {
+  let periodic = 0;
+  for (let i = from; i < to; i++) {
+    periodic += Number(periodicity[i] >= PERIODIC_FRAME);
+  }
+  return periodic >= PERIODIC_SHARE * (to - from);
+}
+
 function measure(
   samples,
   sampleRate,
@@ -109,6 +119,15 @@ function measure(
   // A bounded interval may be ordinary frication or breathing. The extra
   // upper limit separates these from a sustained whisper between voices.
   if (ratio < threshold || (edge && edge !== 'trailing' && ratio > -10)) {
+    return null;
+  }
+  // A weak telephone-band edge can lose its pitch track even when the
+  // waveform is periodic. Require the absolute ratio in that case.
+  if (
+    sampleRate <= 8000 &&
+    ratio < base &&
+    mostlyPeriodic(frames.periodicity, from, to)
+  ) {
     return null;
   }
   return {

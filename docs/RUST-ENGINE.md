@@ -146,6 +146,9 @@ search. The prominence packet uses bit 4 of each feature mask for whisper.
 `tests/rust-whisper.test.js` compares detection spans, pooled spectra,
 whisper LPC for formant tracking, trajectory distance, and voicing and
 tone costs on the shared analysis frames and cue table.
+`vs_find_whisper_periodic` accepts the `vs_find_whisper` packet followed by
+one normalized autocorrelation value per frame, which lets it corroborate
+weak pitch edges at telephone bandwidth.
 `tests/rust-recognition.test.js` compares lexical paths and prominence with
 these cues.
 

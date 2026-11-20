@@ -18,6 +18,7 @@ import type { ToneCosts } from './prosody.js';
 
 export type WhisperToneCosts = ToneCosts;
 
+/** Find whisper spans using frame periodicity to check weak 8 kHz edges. */
 export function findWhisper(
   samples: ArrayLike<number>,
   sampleRate: number,

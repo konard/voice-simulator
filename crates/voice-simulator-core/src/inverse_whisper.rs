@@ -13,6 +13,8 @@ const TELEPHONE_THRESHOLD: f64 = -26.63;
 const EDGE_LEVEL_DROP: f64 = 10.0;
 const EDGE_RATIO_RISE: f64 = 5.0;
 const EDGE_RATIO_ALLOWANCE: f64 = 6.0;
+const PERIODIC_FRAME: f64 = 0.6;
+const PERIODIC_SHARE: f64 = 0.75;
 
 #[derive(Clone, Copy)]
 pub struct Frame {
@@ -55,7 +57,13 @@ impl Signal<'_> {
         energy_ratio(&self.samples[a..b], self.rate)
     }
 
-    fn classify(&self, from: usize, to: usize, edge: Option<Edge>) -> Option<Span> {
+    fn classify(
+        &self,
+        from: usize,
+        to: usize,
+        edge: Option<Edge>,
+        periodicity: &[f64],
+    ) -> Option<Span> {
         let (start, end) = (
             self.time(from),
             self.time(to).min(self.start + self.duration),
@@ -76,11 +84,12 @@ impl Signal<'_> {
         if voiced >= 0.05 || vowel_like as f64 * self.hop < 0.05 - EPS {
             return None;
         }
-        let mut threshold = if self.rate <= 8000.0 {
+        let base = if self.rate <= 8000.0 {
             TELEPHONE_THRESHOLD
         } else {
             RATIO_THRESHOLD
         };
+        let mut threshold = base;
         if let Some(Edge::AfterVoice { voiced_from, .. }) = edge {
             let before = self.time(voiced_from).max(start - 0.3);
             let preceding = self.ratio(before, start);
@@ -99,7 +108,21 @@ impl Signal<'_> {
             edge,
             Some(Edge::Leading | Edge::AfterVoice { closed: true, .. })
         );
-        (ratio >= threshold && !(closed && ratio > -10.0)).then(|| Span {
+        if ratio < threshold || (closed && ratio > -10.0) {
+            return None;
+        }
+        if self.rate <= 8000.0 && ratio < base {
+            let count = periodicity
+                .get(from..to)
+                .unwrap_or_default()
+                .iter()
+                .filter(|&&value| value >= PERIODIC_FRAME)
+                .count();
+            if count as f64 >= PERIODIC_SHARE * (to - from) as f64 {
+                return None;
+            }
+        }
+        Some(Span {
             start,
             end,
             confidence: (1.0 - voiced / 0.05).clamp(0.0, 1.0)
@@ -107,7 +130,7 @@ impl Signal<'_> {
         })
     }
 
-    fn edge_spans(&self, from: usize, to: usize) -> Vec<Span> {
+    fn edge_spans(&self, from: usize, to: usize, periodicity: &[f64]) -> Vec<Span> {
         let frames = &self.frames[from..to];
         let Some(first) = frames.iter().position(|frame| frame.f0 > 0.0) else {
             return Vec::new();
@@ -130,7 +153,7 @@ impl Signal<'_> {
             if (b - a) as f64 * self.hop >= 0.3 - EPS
                 && peak(&self.frames[a..b]) <= level - EDGE_LEVEL_DROP
             {
-                spans.extend(self.classify(a, b, Some(edge)));
+                spans.extend(self.classify(a, b, Some(edge), periodicity));
             }
         };
         consider(from, first, Edge::Leading);
@@ -161,6 +184,11 @@ impl Signal<'_> {
     }
 
     pub fn find(&self) -> Vec<Span> {
+        self.find_with_periodicity(&[])
+    }
+
+    /// Frame-aligned normalized autocorrelation corroborates weak pitch edges.
+    pub fn find_with_periodicity(&self, periodicity: &[f64]) -> Vec<Span> {
         let mut runs: Vec<(usize, usize)> = Vec::new();
         let mut cursor = 0;
         while cursor < self.frames.len() {
@@ -182,10 +210,10 @@ impl Signal<'_> {
             .map(|&(from, to)| {
                 if self.time(to).min(self.start + self.duration) - self.time(from) < 0.3 - EPS {
                     Vec::new()
-                } else if let Some(span) = self.classify(from, to, None) {
+                } else if let Some(span) = self.classify(from, to, None, periodicity) {
                     vec![span]
                 } else {
-                    self.edge_spans(from, to)
+                    self.edge_spans(from, to, periodicity)
                 }
             })
             .collect();

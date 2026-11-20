@@ -10,6 +10,8 @@ import { sentences } from '../tests/helpers/roundtrip.js';
 
 const tier = 'telephone';
 const level = levelForTier(tier);
+const head = process.argv.includes('--seeded-preset') ? 'random' : undefined;
+const cpuSeconds = ({ user, system }) => (user + system) / 1e6;
 for (const [lang, index] of [
   ['en', 17],
   ['ru', 1],
@@ -20,7 +22,13 @@ for (const [lang, index] of [
     continue;
   }
   const text = sentences[lang][index];
-  const spoken = synthesize(text, { lang, tier, preset: 'male', seed: 1 });
+  const spoken = synthesize(text, {
+    lang,
+    tier,
+    preset: 'male',
+    seed: 1,
+    head,
+  });
   const settings = recognitionSettings({
     level,
     ...(process.argv.includes('--no-whisper') && { whisper: false }),
@@ -28,6 +36,7 @@ for (const [lang, index] of [
     ...(process.argv.includes('--known-language') && { languages: [lang] }),
   });
   const start = performance.now();
+  const cpuStart = process.cpuUsage();
   const { decoded, input, rate } = decodeRecognitionAudio(
     spoken.samples,
     spoken.sampleRate,
@@ -35,6 +44,8 @@ for (const [lang, index] of [
     level
   );
   const afterAudio = performance.now();
+  const audioCpuSeconds = cpuSeconds(process.cpuUsage(cpuStart));
+  const cpuAfterAudio = process.cpuUsage();
   const heard = recognizeDecoded(
     decoded,
     input,
@@ -53,6 +64,8 @@ for (const [lang, index] of [
       acousticPer: errorRate(spoken.ipa, decoded.ipa, 'phone').rate,
       finalPer: errorRate(spoken.ipa, heard.ipa, 'phone').rate,
       whisper: decoded.whisperSpans,
+      audioCpuSeconds,
+      textCpuSeconds: cpuSeconds(process.cpuUsage(cpuAfterAudio)),
       audioSeconds: (afterAudio - start) / 1000,
       textSeconds: (performance.now() - afterAudio) / 1000,
     })

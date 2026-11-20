@@ -151,7 +151,7 @@ function usage() {
     '  mesh -o head.obj    Export the low-poly head model as OBJ',
     '  recognize <file>   Recognize speech from a file or - for stdin (--ipa, --json)',
     '                      --lang en,ru|auto --nbest 1 --level auto|low|medium|high',
-    '                      --no-whisper disables automatic whisper detection',
+    '                      --no-whisper disables automatic whisper detection at any rate',
     '                      --rescore; raw stdin: -f raw --sample-rate 16000 --bit-depth 16',
     '  match <file>        Find the head that sounds like a recording',
     '  landmarks <file>    Experimental nuclei, sound changes and broad classes',

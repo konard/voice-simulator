@@ -4515,6 +4515,7 @@ export {
   type IpaSyllable,
 } from './recognition/decode.js';
 
+/** Acoustic whisper detection and tone cues on the recognition frame grid. */
 export {
   findWhisper,
   whisperTones,

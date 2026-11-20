@@ -1,5 +1,6 @@
 /** Compare acoustic search costs on short 8 kHz synthetic sentences. Unlicense. */
 import { errorRate, synthesize, tokenize } from '../src/index.js';
+import { sampleState } from '../src/articulation/tract-shape.js';
 import {
   analyzeForDecode,
   decoderSettings,
@@ -7,6 +8,7 @@ import {
   segmentsOf,
 } from '../src/recognition/decode-pipeline.js';
 import { decodeSearch } from '../src/recognition/decode-search.js';
+import { createSpanScorer } from '../src/recognition/decode-spans.js';
 import { sentences } from '../tests/helpers/roundtrip.js';
 
 const indexes = { en: 17, ru: 1, hi: 1, zh: 1 };
@@ -117,6 +119,47 @@ function withLengthModels(settings) {
   };
 }
 
+// Score the original graph against the planner's articulatory controls.
+function plannedArticulation(prepared, templates, analysis, plan) {
+  const { frames, tracks } = analysis;
+  const inferred = tracks.articulation;
+  const channels = Object.fromEntries(
+    Object.entries(inferred.channels).map(([name, values]) => [
+      name,
+      new Float32Array(values.length),
+    ])
+  );
+  for (let frame = 0; frame < inferred.frameCount; frame++) {
+    const time = inferred.startTime + frame / inferred.frameRate;
+    const state = sampleState(plan, time);
+    for (const [name, values] of Object.entries(channels)) {
+      values[frame] = state[name];
+    }
+  }
+  const score = createSpanScorer(frames, tracks.landmarks, {
+    ...inferred,
+    channels,
+  });
+  const { times, spans } = prepared;
+  return {
+    times,
+    spans: spans.map((edges, from) =>
+      edges.map((span) => {
+        if (span.pause) {
+          return span;
+        }
+        const { terms } = score(times[from], times[span.to], templates);
+        return {
+          ...span,
+          terms: span.terms.map((term, index) =>
+            index % 3 === 0 ? terms[index] : term
+          ),
+        };
+      })
+    ),
+  };
+}
+
 function measureSearch(
   prepared,
   templates,
@@ -159,6 +202,16 @@ for (const [lang, index] of Object.entries(indexes)) {
     settings
   );
   const { prepared, templates } = prepareIpaDecode(analysis, settings);
+  if (process.argv.includes('--planned-articulation')) {
+    measureSearch(
+      plannedArticulation(prepared, templates, analysis, spoken.plan),
+      templates,
+      settings,
+      spoken.ipa,
+      lang,
+      'planner articulation on the inferred boundaries'
+    );
+  }
   const reference = tokenize(spoken.ipa, 'phone');
   for (const count of [3, templates.length]) {
     console.log(
