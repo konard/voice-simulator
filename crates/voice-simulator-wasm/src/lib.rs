@@ -40,6 +40,7 @@ pub mod landmarks;
 pub mod language_id;
 pub mod modes;
 pub mod recognition;
+pub mod recognizer;
 pub mod renderer;
 pub mod rescoring;
 pub mod threads;

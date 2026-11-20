@@ -714,3 +714,11 @@ export {
   scoreJob,
   warpPlan,
 } from './recognition/rescoring.js';
+
+export {
+  recognize,
+  createRecognizer,
+  RECOGNITION_LEVELS,
+  levelForTier,
+  RecognitionError,
+} from './recognition/recognizer.js';

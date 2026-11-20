@@ -6,6 +6,8 @@ import type {
   HeadConfig,
 } from '../index.js';
 
+import type { FrameSet } from './frontend.js';
+
 /** Seconds and phonetic spelling from the preceding text recognition step. */
 export interface ModeWord {
   start: number;
@@ -39,6 +41,8 @@ export interface ModeRecognitionOptions {
   modes?: boolean;
   /** Maximum audio length in seconds; default 30. */
   maxSeconds?: number;
+  /** Optional front-end frames covering the same recording. */
+  frames?: FrameSet;
   /** Optional diagnostics; no audio buffers are retained. */
   trace?: (event: { stage: string; [key: string]: unknown }) => void;
 }

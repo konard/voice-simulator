@@ -3,7 +3,14 @@
  */
 
 import { describe, expect, it } from 'test-anywhere';
-import { decodeAudio, decodeWav } from '../src/index.js';
+import {
+  decodeAudio,
+  decodeWav,
+  encodeAudio,
+  encodeRaw,
+  encodeWav,
+  synthesize,
+} from '../src/index.js';
 import { encodingOptions, synthesisOptions } from '../src/server/server.js';
 import { INDEX_PAGE } from '../src/server/index-page.js';
 import { itUnless, sandboxed } from './helpers/skip.js';
@@ -292,4 +299,78 @@ describe('voice server markup', () => {
       expect((await doctype.json()).error).toContain('document type');
     });
   });
+});
+
+describe('audio recognition endpoint', () => {
+  itNet(
+    'recognizes recorded WAV and reports invalid audio and recognition errors',
+    () =>
+      withVoiceServer({ engine: 'js' }, async (base) => {
+        const send = (body) =>
+          fetch(`${base}/api/recognize?lang=en&level=low`, {
+            method: 'POST',
+            body,
+          });
+        const signal = synthesize('A little bird sings.', {
+          tier: 'telephone',
+          seed: 1,
+        }).samples;
+        const wav = await send(encodeWav(signal, 8000));
+        expect(wav.status).toBe(200);
+        expect((await wav.json()).words.length > 0).toBe(true);
+        const invalid = await send('This is text');
+        expect(invalid.status).toBe(400);
+        await invalid.text();
+        const tooShort = await send(encodeWav(new Float32Array(100), 8000));
+        expect(tooShort.status).toBe(422);
+        expect((await tooShort.json()).code).toBe('empty');
+      })
+  );
+
+  itNet('returns 413 for byte and duration limits', () =>
+    withVoiceServer({ engine: 'js' }, async (base) => {
+      const send = (body, query = '') =>
+        fetch(`${base}/api/recognize${query}`, { method: 'POST', body });
+      const bytes = await send(new Uint8Array(10 * 1024 * 1024 + 1));
+      expect(bytes.status).toBe(413);
+      await bytes.text();
+      const silence = new Float32Array(8000 * 120 + 1);
+      for (const format of ['wav', 'flac']) {
+        const duration = await send(encodeAudio(silence, 8000, { format }));
+        expect(duration.status).toBe(413);
+        await duration.text();
+      }
+      const rawDuration = await send(
+        new Uint8Array(8000 * 120 * 2 + 2),
+        '?stream=1&rate=8000'
+      );
+      expect(rawDuration.status).toBe(413);
+      await rawDuration.text();
+    })
+  );
+
+  itNet('streams timed final and result rows for 16-bit PCM', () =>
+    withVoiceServer({ engine: 'js' }, async (base) => {
+      const samples = new Float32Array(8000 * 3);
+      samples.set(
+        synthesize('A little bird sings.', { tier: 'telephone', seed: 1 })
+          .samples
+      );
+      const url = `${base}/api/recognize?stream=1&rate=8000&lang=en&level=low`;
+      const response = await fetch(url, {
+        method: 'POST',
+        body: encodeRaw(samples, 8000),
+      });
+      expect(response.status).toBe(200);
+      expect(response.headers.get('content-type')).toBe('application/x-ndjson');
+      const [final, result] = (await response.text())
+        .trim()
+        .split('\n')
+        .map(JSON.parse);
+      expect(final.type).toBe('final');
+      expect(result.type).toBe('result');
+      expect(result.words.length > 0).toBe(true);
+      expect(result.words).toEqual(final.words);
+    })
+  );
 });

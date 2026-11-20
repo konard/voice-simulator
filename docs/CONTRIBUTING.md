@@ -570,3 +570,32 @@ If you have questions about contributing, feel free to open an issue for discuss
 
 Case studies of this repository live in `docs/case-studies/issue-N` where N is the number of the issue in this repository.
 Folders named `template-issue-N` were inherited from the template repository and are kept for reference only; see the [index of case studies](case-studies/README.md).
+
+## Auto-regenerated preview screenshots
+
+The `example-app.yml` workflow contains a `preview-regen` job that boots
+the built example app in a headless Chromium via
+[`browser-commander`](https://www.npmjs.com/package/browser-commander) +
+Playwright and writes fresh screenshots to
+`docs/screenshots/example-app/example-app-{locale}-{theme}.png` on every
+push to `main` (and on `workflow_dispatch`). Any drift is committed back to
+`main` so README/site images never go stale between releases. Screenshot-only
+pushes do not match this workflow's path filter, while a protected-branch
+fallback PR remains eligible for its required checks. The job runs in the
+official Playwright container with the browser already installed, avoiding CI
+stalls from live Chromium downloads.
+
+The same script is available locally:
+
+```bash
+npm install --prefix examples/universal-app
+npm run example:web:preview-images
+# Verbose probe of <html data-theme>, <html lang>, and PNG signatures:
+PREVIEW_VERBOSE=1 npm run example:web:preview-images
+```
+
+The matrix covers `{en, ru} × {light, dark}`; the app follows the browser
+language and the stored theme. Each tile opens the app with `?seed=preview`
+so the random head is the same in every run. Set `PREVIEW_CHROMIUM` to a
+Chromium binary when the locally installed browser build differs from the
+pinned Playwright release.

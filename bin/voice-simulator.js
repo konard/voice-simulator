@@ -43,11 +43,14 @@ import {
   VISEME_FORMATS,
 } from '../src/index.js';
 import { INDEX_PAGE, createVoiceServer } from '../src/server/server.js';
+import { recognizeCommand } from './recognize.js';
 
 const OPTIONS = {
   boundaries: { type: 'string' },
   beam: { type: 'string' },
   nbest: { type: 'string' },
+  level: { type: 'string' },
+  rescore: { type: 'boolean' },
   languages: { type: 'string' },
   'switch-penalty': { type: 'string' },
   'min-sounds': { type: 'string' },
@@ -124,6 +127,9 @@ function usage() {
     '                      a voice file, --full with every value',
     '  voice check <file>  Check a voice file (exit code 1 on a problem)',
     '  mesh -o head.obj    Export the low-poly head model as OBJ',
+    '  recognize <file>   Recognize speech from a file or - for stdin (--ipa, --json)',
+    '                      --lang en,ru|auto --nbest 1 --level auto|low|medium|high',
+    '                      --rescore; raw stdin: -f raw --sample-rate 16000 --bit-depth 16',
     '  match <file>        Find the head that sounds like a recording',
     '  landmarks <file>    Experimental nuclei, sound changes and broad classes',
     '                      as JSON (see README accuracy limits)',
@@ -614,6 +620,7 @@ async function quickBenchmark(values, io, engine) {
 }
 
 const COMMANDS = {
+  recognize: recognizeCommand,
   language(values, positionals, io) {
     const result = identifyLanguage(requireText(positionals), {
       languages: values.languages?.split(','),
@@ -949,7 +956,7 @@ const COMMANDS = {
 /**
  * Run the CLI.
  * @param {string[]} argv Arguments without the node and script paths.
- * @param {{stderr?: Function, stdout?: Function, stdoutBytes?: Function, onServer?: Function}} [io]
+ * @param {{stderr?: Function, stdout?: Function, stdoutBytes?: Function, stdin?: NodeJS.ReadableStream, onServer?: Function}} [io]
  * @returns {Promise<number>} Exit code.
  */
 export async function runCli(argv, io = {}) {
@@ -957,6 +964,7 @@ export async function runCli(argv, io = {}) {
     stderr: io.stderr ?? console.error,
     stdout: io.stdout ?? console.log,
     stdoutBytes: io.stdoutBytes ?? ((data) => process.stdout.write(data)),
+    stdin: io.stdin ?? process.stdin,
     onServer: io.onServer,
   };
   try {
