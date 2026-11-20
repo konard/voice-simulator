@@ -5,43 +5,41 @@ import { extname } from 'node:path';
 import { fileURLToPath, URL } from 'node:url';
 import { parseArgs } from 'node:util';
 
+import { addLexicon } from '../src/g2p/lexicon.js';
+import { analyzeFrames } from '../src/recognition/frontend.js';
+import { BROAD_CLASSES, findLandmarks } from '../src/recognition/landmarks.js';
 import {
-  addLexicon,
-  analyzeFrames,
-  BROAD_CLASSES,
-  findLandmarks,
   AUDIO_FORMAT_NAMES,
-  AUDIO_TIERS,
-  DEFAULT_AUDIO_TIER,
   audioEncoding,
-  ROOM_PRESETS,
-  benchmarkAudioTiers,
-  benchmarkDevice,
-  compareRecordings,
-  createEngine,
-  ENGINE_NAMES,
   decodeAudio,
+  formatFromFileName,
+} from '../src/audio/formats.js';
+import { AUDIO_TIERS, DEFAULT_AUDIO_TIER } from '../src/perf/lod.js';
+import { ROOM_PRESETS } from '../src/acoustics/room.js';
+import {
+  benchmarkAudioTiers,
+  measureAudioTier,
+} from '../src/perf/benchmark.js';
+import { benchmarkDevice } from '../src/perf/device-benchmark.js';
+import { compareRecordings } from '../src/metrics/index.js';
+import { createEngine, ENGINE_NAMES } from '../src/engine/index.js';
+import {
   DEFAULT_HEAD,
   decodeHeadConfig,
   encodeHeadConfig,
-  formatFromFileName,
-  headModelObj,
-  loadAccent,
-  loadVoice,
-  matchVoice,
-  measureAudioTier,
-  prepareUtterance,
   presetHeadConfig,
   randomHeadConfig,
-  resample,
-  saveVoice,
-  synthesize,
-  textToIpa,
-  ipaToText,
-  identifyLanguage,
-  visemeTrack,
-  VISEME_FORMATS,
-} from '../src/index.js';
+} from '../src/head-config.js';
+import { headModelObj } from '../src/geometry/model.js';
+import { loadAccent } from '../src/accent/index.js';
+import { loadVoice, saveVoice } from '../src/voice-file.js';
+import { matchVoice } from '../src/analysis/voice-match.js';
+import { prepareUtterance, synthesize } from '../src/synthesize.js';
+import { resample } from '../src/audio/resample.js';
+import { textToIpa } from '../src/g2p/index.js';
+import { ipaToText } from '../src/recognition/ipa-to-text.js';
+import { identifyLanguage } from '../src/recognition/language-id.js';
+import { visemeTrack, VISEME_FORMATS } from '../src/animation/visemes.js';
 import { recognizeCommand } from './recognize.js';
 
 const OPTIONS = {
