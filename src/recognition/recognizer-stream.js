@@ -3,6 +3,7 @@ import { createIpaDecoder } from './decode.js';
 import { joinSegments } from './decode-pipeline.js';
 import { languageShares } from './language-id.js';
 import {
+  decodeRecognitionAudio,
   decoderOptions,
   emptyRecognition,
   noisyFrames,
@@ -282,11 +283,16 @@ export function createRecognizer(options = {}) {
 
   function read(decoded, size, final) {
     const signal = phrase.buffer.subarray(0, size);
+    const readSettings = final ? settings : { ...settings, nbest: 1 };
+    // A test can supply snapshot IPA while the decoder maintains live timing.
+    const reading = settings.stages.audioToIpa
+      ? decodeRecognitionAudio(signal, sampleRate, readSettings, level)
+      : { decoded, input: signal, rate: sampleRate };
     return recognizeDecoded(
-      decoded,
-      signal,
-      sampleRate,
-      final ? settings : { ...settings, nbest: 1 },
+      reading.decoded,
+      reading.input,
+      reading.rate,
+      readSettings,
       level,
       final
     );
@@ -378,7 +384,7 @@ export function createRecognizer(options = {}) {
       restart(phrase.used);
     } else if (phrase.used > COMMIT_AFTER * sampleRate && phrase.partial) {
       const word = phrase.partial.words.findLast(
-        ({ end }) => end <= phrase.used / sampleRate - 1
+        ({ end }) => end > 0 && end <= phrase.used / sampleRate - 1
       );
       if (word) {
         restart(Math.ceil(word.end * sampleRate - EPSILON));

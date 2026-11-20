@@ -40,15 +40,21 @@ const WORD = {
   confidence: 0.8,
   syllables: [SYLLABLE],
 };
-const OPTIONS = {
+const STREAM_OPTIONS = {
   languages: ['en'],
   voice: DEFAULT_HEAD,
   modes: false,
   level: 'low',
   stages: {
-    audioToIpa: () => ({ ipa: IPA, segments: TIMED }),
     identifyLanguage: () => assert.fail('one language skips identification'),
     ipaToText: () => ({ text: WORD.text, ipa: WORD.ipa, words: [WORD] }),
+  },
+};
+const OPTIONS = {
+  ...STREAM_OPTIONS,
+  stages: {
+    ...STREAM_OPTIONS.stages,
+    audioToIpa: () => ({ ipa: IPA, segments: TIMED }),
   },
 };
 
@@ -168,7 +174,12 @@ it('passes measured prosody into text recognition when modes are enabled', () =>
   assert.deepEqual(Object.keys(result.words[0]), WORD_KEYS);
 });
 
-function capture(signal, chunkSize, options = OPTIONS, sampleRate = RATE) {
+function capture(
+  signal,
+  chunkSize,
+  options = STREAM_OPTIONS,
+  sampleRate = RATE
+) {
   const stream = createRecognizer({ ...options, sampleRate });
   const events = [];
   let pushed = 0;
@@ -206,6 +217,32 @@ it('streams the same words as one call with 1024-sample chunks', () => {
     batch.words
   );
   assert.deepEqual(result.words, batch.words);
+});
+
+it('uses the supplied IPA stage for stream partials and finals', () => {
+  const snapshots = [];
+  const options = {
+    ...OPTIONS,
+    stages: {
+      ...OPTIONS.stages,
+      audioToIpa(samples, rate, options) {
+        assert.equal(rate, 8000);
+        assert.equal(options.voice, DEFAULT_HEAD);
+        snapshots.push(samples.length / rate);
+        return snapshots.at(-1) >= 0.4
+          ? { ipa: IPA, segments: TIMED }
+          : { ipa: '' };
+      },
+    },
+  };
+  const { events, result } = capture(new Float32Array(RATE / 2), 1024, options);
+  assert.deepEqual(snapshots, [0.25, 0.5, 0.5]);
+  assert.deepEqual(
+    events.map(({ type }) => type),
+    ['partial', 'partial', 'final']
+  );
+  assert.equal(events[1].event.text, WORD.text);
+  assert.deepEqual(result.words, [WORD]);
 });
 
 it('never changes committed words or takes a syllable back', () => {

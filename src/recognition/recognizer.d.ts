@@ -17,7 +17,7 @@ export interface RecognitionOptions {
   rescoring?: boolean;
   modes?: boolean;
   level?: RecognitionLevel | 'auto';
-  /** Stage substitutions. Audio decoding is incremental in createRecognizer. */
+  /** Test substitutions. Stream IPA substitutions run on partial and final snapshots. */
   stages?: {
     audioToIpa?: typeof audioToIpa;
     identifyLanguage?: typeof identifyLanguage;

@@ -105,6 +105,15 @@ export function decoderOptions(settings, level) {
   };
 }
 
+export function decodeRecognitionAudio(samples, sampleRate, settings, level) {
+  const options = decoderOptions(settings, level);
+  const rate = Math.min(sampleRate, options.rate);
+  const input =
+    rate < sampleRate ? resample(samples, sampleRate, rate) : samples;
+  const decode = settings.stages.audioToIpa ?? audioToIpa;
+  return { decoded: decode(input, rate, options), input, rate };
+}
+
 export function emptyRecognition(nbest) {
   const result = {
     ipa: '',
@@ -282,14 +291,11 @@ export function recognize(samples, sampleRate, options = {}) {
   }
   const settings = recognitionSettings(options);
   const level = settings.level === 'auto' ? 'medium' : settings.level;
-  const decodeOptions = decoderOptions(settings, level);
-  const rate = Math.min(sampleRate, decodeOptions.rate);
-  const input =
-    rate < sampleRate ? resample(samples, sampleRate, rate) : samples;
-  const decoded = (settings.stages.audioToIpa ?? audioToIpa)(
-    input,
-    rate,
-    decodeOptions
+  const { decoded, input, rate } = decodeRecognitionAudio(
+    samples,
+    sampleRate,
+    settings,
+    level
   );
   if (noisyFrames(decoded.frames?.energy, decoded.frames?.count, seconds)) {
     throw new RecognitionError(
