@@ -33,6 +33,7 @@ number, state, objective distance, normalised parameter changes and IPA
 reading. A speaker change starts a new history. `partial` and `syllable` have
 the recognizer's event shapes. Each `final` event includes the current voice,
 and `flush` returns the aggregate recognition result with that voice.
+Flushing finishes already queued work even if background work was paused.
 
 | Option            | Default                    | Meaning                                                  |
 | ----------------- | -------------------------- | -------------------------------------------------------- |
@@ -75,7 +76,7 @@ accept the same mapping. In `stable`, the recognizer applies parameter updates
 when it detects a pause of at least 200 ms.
 
 The recognizer's confidence gate can leave a session in `inverting` through
-the end of input. For measured recovery, convergence and CPU use, run
-`npm run test:heavy -- --suite copy`. The progress scheduler can yield between
-generator steps. Existing batch renders and phoneme reads can take longer than
-one scheduling slice.
+the end of input. The measured recovery results and reproduction commands are
+in the [validation report](reports/issue-78-validation.md). The scheduler
+yields between generator steps. Batch renders and phoneme reads can take
+longer than one scheduling slice.

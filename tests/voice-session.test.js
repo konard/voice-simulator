@@ -183,14 +183,11 @@ describe('voice session', () => {
     session.backgroundShare = 0.25;
     expect(session.state).toBe('inverting');
     expect(pending.length).toBe(1);
+    session.backgroundShare = 0;
     session.flush();
-    expect(session.converged).toBe(true);
+    expect(session.voice).toEqual(saveVoice(voice));
     pending[0]();
-    expect(session.history.map(({ state }) => state)).toEqual([
-      'inverting',
-      'refining',
-      'refining',
-    ]);
+    expect(session.history.map(({ state }) => state)).toEqual(['inverting']);
   });
 });
 

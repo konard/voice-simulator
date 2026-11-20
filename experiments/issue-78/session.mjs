@@ -1,5 +1,6 @@
 /** Exercise the public session with a six-second synthetic voice. Unlicense. */
 import { performance } from 'node:perf_hooks';
+import { cpuUsage } from 'node:process';
 import {
   createVoiceSession,
   presetHeadConfig,
@@ -14,8 +15,10 @@ const { samples, duration } = synthesize(text, {
   tier: 'minimal',
   seed: 1,
   sampleRate,
+  engine: 'js',
 });
 const start = performance.now();
+const cpuStart = cpuUsage();
 const session = createVoiceSession({
   sampleRate,
   languages: ['en'],
@@ -27,9 +30,11 @@ for (let i = 0; i < samples.length; i += 4096) {
   session.push(samples.subarray(i, i + 4096));
 }
 const recognition = session.flush();
+const { system, user } = cpuUsage(cpuStart);
 console.log({
   duration,
   elapsed: (performance.now() - start) / 1000,
+  cpu: (system + user) / 1e6,
   states,
   history: session.history,
   recognized: recognition.text,

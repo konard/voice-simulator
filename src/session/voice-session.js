@@ -195,30 +195,32 @@ export function createSession(
     transition('collecting', 'speaker-change');
   }
 
+  function finishTracking(result, samples, captured, generationVoiced) {
+    if (!result) {
+      return;
+    }
+    const action = tracking.observe(result, voice, captured, generationVoiced);
+    if (action?.speakerChanged) {
+      changeSpeaker();
+    } else if (action?.drift) {
+      recognizer.discardVoiceChange();
+      awaitingPause = false;
+      converged = false;
+      stableCount = iterations = 0;
+      refinement = null;
+      transition('refining', 'drift');
+    } else if (action?.candidate && !awaitingPause) {
+      enqueue('updating', samples, {
+        voice,
+        ...result,
+        candidate: action.candidate,
+      });
+    }
+  }
+
   function receive({ result, samples, kind, captured, generationVoiced }) {
     if (kind === 'tracking') {
-      const action = tracking.observe(
-        result,
-        voice,
-        captured,
-        generationVoiced
-      );
-      if (action?.speakerChanged) {
-        changeSpeaker();
-      } else if (action?.drift) {
-        recognizer.discardVoiceChange();
-        awaitingPause = false;
-        converged = false;
-        stableCount = iterations = 0;
-        refinement = null;
-        transition('refining', 'drift');
-      } else if (action?.candidate && !awaitingPause) {
-        enqueue('updating', samples, {
-          voice,
-          ...result,
-          candidate: action.candidate,
-        });
-      }
+      finishTracking(result, samples, captured, generationVoiced);
     } else if (kind === 'updating') {
       if (result.uncertainty) {
         awaitingPause = true;
@@ -438,7 +440,7 @@ export function createSession(
         if (at > bufferOffset && window.end > lastAnalyzed) {
           analyze();
         }
-        scheduler.drain();
+        scheduler.drain(true);
         scheduler.cancel();
         recognizer.discardVoiceChange();
         const recognition =

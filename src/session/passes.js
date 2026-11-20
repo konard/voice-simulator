@@ -1,5 +1,6 @@
 /** Pass generators operating on an immutable audio snapshot. Unlicense. */
 import { fitVoiceSteps } from '../analysis/voice-fit.js';
+import { NoVoicedSpeechError } from '../analysis/voice-fit-statistics.js';
 import {
   decodeRecognitionAudio,
   recognitionSettings,
@@ -46,6 +47,21 @@ function withWords({ decoded, input, rate, options, level }) {
   };
 }
 
+function* statistics(samples, settings) {
+  try {
+    const { state } = yield* fitVoiceSteps(samples, settings.sampleRate, {
+      ...fitOptions(samples, settings),
+      refine: false,
+    });
+    return state;
+  } catch (error) {
+    if (!(error instanceof NoVoicedSpeechError)) {
+      throw error;
+    }
+    return null;
+  }
+}
+
 export const sessionPasses = {
   *fitting(samples, context, settings) {
     let fit;
@@ -69,18 +85,13 @@ export const sessionPasses = {
     const decoded = read(samples, voice, settings);
     yield;
     if (!Number.isFinite(distance)) {
-      const { state: fit } = yield* fitVoiceSteps(
-        samples,
-        settings.sampleRate,
-        {
-          ...fitOptions(samples, settings),
-          refine: false,
-        }
-      );
-      yield;
-      distance = scoreVoice(voice, fit, samples, settings);
+      const fit = yield* statistics(samples, settings);
+      if (fit) {
+        yield;
+        distance = scoreVoice(voice, fit, samples, settings);
+      }
     }
-    const usable = usableReading(decoded.decoded);
+    const usable = Number.isFinite(distance) && usableReading(decoded.decoded);
     const reading = usable
       ? withWords(decoded)
       : { decoded: decoded.decoded, words: [] };
@@ -97,15 +108,8 @@ export const sessionPasses = {
     const tokens = yield* phoneObservations(currentReading, voice, settings);
     let candidate = voice;
     let error = distance;
-    if (tokens.length) {
-      const { state: fit } = yield* fitVoiceSteps(
-        samples,
-        settings.sampleRate,
-        {
-          ...fitOptions(samples, settings),
-          refine: false,
-        }
-      );
+    const fit = tokens.length ? yield* statistics(samples, settings) : null;
+    if (fit) {
       yield;
       const objective = (head) => scoreVoice(head, fit, samples, settings);
       const limit = Math.min(distance, objective(voice));
@@ -118,6 +122,7 @@ export const sessionPasses = {
     const next = withWords(read(samples, candidate, settings));
     const changes = parameterChanges(voice.head, candidate.head);
     const unchanged =
+      fit !== null &&
       usableReading(next.decoded) &&
       Object.values(changes).every((change) => change < settings.tolerance) &&
       next.decoded.ipa === currentReading.decoded.ipa;
@@ -145,10 +150,10 @@ export const sessionPasses = {
       voice,
       settings
     );
-    const { state: fit } = yield* fitVoiceSteps(samples, settings.sampleRate, {
-      ...fitOptions(samples, settings),
-      refine: false,
-    });
+    const fit = yield* statistics(samples, settings);
+    if (!fit) {
+      return null;
+    }
     yield;
     const distance = scoreVoice(voice, fit, samples, settings);
     return { tokens, distance, samples, fit };

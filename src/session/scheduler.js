@@ -145,8 +145,8 @@ export function createSessionScheduler({ realtime, schedule }, done) {
       running = generator;
       request();
     },
-    drain() {
-      while (running && share > 0) {
+    drain(finish = false) {
+      while (running && (finish || share > 0)) {
         const start = cpuTime();
         step();
         charge(start);
