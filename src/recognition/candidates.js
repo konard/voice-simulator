@@ -197,6 +197,9 @@ export function distanceCache() {
 
 export function candidatesAt(tokens, from, end, lexicon, options) {
   const { beam, language, wordSearch } = options;
+  if (typeof wordSearch !== 'function') {
+    throw new TypeError('Approximate candidates need a word search');
+  }
   const found = exactCandidates(tokens, from, end, lexicon, language);
   const { hits, entries } = wordSearch(from, end, beam);
   for (let i = 0; i < hits.length; i += 3) {

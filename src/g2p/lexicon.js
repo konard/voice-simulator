@@ -342,7 +342,7 @@ function shippedPronunciations(lang, word) {
     return [];
   }
   const speak = SPOKEN.get(lang);
-  if (lang === 'en' || lang === 'hi' || !speak) {
+  if (lang === 'en' || lang === 'hi' || typeof speak !== 'function') {
     return found;
   }
   const ipa = speak(lexiconKey(word));

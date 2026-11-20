@@ -70,6 +70,9 @@ describe('universal app chunking', () => {
         vendorChunk(['repo', 'src', 'recognition', 'frontend.js'].join(sep))
       ).toBe('recognition');
       expect(
+        vendorChunk(['repo', 'src', 'recognition', 'pitch.js'].join(sep))
+      ).toBe('recognition-dsp');
+      expect(
         vendorChunk(['repo', 'src', 'acoustics', 'waveguide.js'].join(sep))
       ).toBe('acoustics');
     }
