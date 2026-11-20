@@ -194,7 +194,9 @@ describe('prosody recognition with timeline phones', () => {
     const total = marks.reduce((sum, [, count]) => sum + count, 0);
     assert.ok(right / total >= 0.9, `${right}/${total}`);
   });
+});
 
+describe('marks from timed prosody', () => {
   it('hears emphasis', () => {
     for (const preset of PRESETS) {
       for (const [text, focus] of [
@@ -248,6 +250,102 @@ describe('prosody recognition with timeline phones', () => {
       testMark(markProsody({ ...input.result, words }, measured)),
       '.'
     );
+  });
+});
+
+describe('prosody word search and abstention', () => {
+  it('writes continuation only when a pause and voiced phrase tail support it', () => {
+    const words = [
+      {
+        text: 'go',
+        ipa: 'ˈɡoʊ',
+        start: 0,
+        end: 0.1,
+        confidence: 0.8,
+        syllables: [],
+      },
+      {
+        text: 'stay',
+        ipa: 'ˈsteɪ',
+        start: 0.3,
+        end: 0.6,
+        confidence: 0.9,
+        syllables: [],
+      },
+    ];
+    const result = { words, modes: [] };
+    const pitch = {
+      startTime: 0,
+      hop: 0.005,
+      semitones: new Array(120).fill(0),
+      energy: new Float64Array(120).fill(1),
+    };
+    const measured = { sounds: [], pitch, median: 130, range: 4 };
+    const marked = markProsody(result, measured);
+    assert.equal(marked.text, 'Go, stay.');
+    assert.deepEqual(marked.modes, [
+      {
+        from: 0,
+        to: 1,
+        start: 0,
+        end: 0.1,
+        tune: 'continuation',
+        notation: ',',
+        confidence: 0.8,
+      },
+    ]);
+    pitch.semitones.fill(null, 0, 20);
+    const unvoiced = markProsody(result, measured);
+    assert.equal(unvoiced.text, 'Go stay.');
+    assert.deepEqual(unvoiced.modes, []);
+  });
+
+  it('marks an unknown word from its measured vowels and preserves prior modes', () => {
+    const word = {
+      text: '甲乙',
+      ipa: 'mana',
+      language: 'zh',
+      unknown: true,
+      start: 0,
+      end: 0.4,
+      syllables: [
+        { ipa: 'ma', start: 0, end: 0.2, stress: 0 },
+        { ipa: 'na', start: 0.2, end: 0.4, stress: 0 },
+      ],
+    };
+    const prior = { from: 0, to: 1, tempo: 1.1 };
+    const result = { words: [word], modes: [prior] };
+    const measured = {
+      sounds: [
+        {
+          ipa: 'a',
+          start: 0.03,
+          end: 0.2,
+          tones: { '˧˥': 0.1 },
+          prominence: 0.6,
+        },
+        {
+          ipa: 'a',
+          start: 0.23,
+          end: 0.4,
+          tones: { '˥˩': 0.1 },
+          prominence: 1,
+        },
+      ],
+      pitch: { startTime: 0, hop: 0.005, semitones: [], energy: [] },
+      median: null,
+      range: 4,
+    };
+    const marked = markProsody(result, measured);
+    assert.equal(marked.text, '甲乙。');
+    assert.equal(marked.words[0].ipa, 'ma˧˥ˈna˥˩');
+    assert.deepEqual(
+      marked.words[0].syllables.map(({ stress }) => stress),
+      [0, 1]
+    );
+    assert.equal(word.ipa, 'mana');
+    assert.deepEqual(marked.modes, [prior]);
+    assert.deepEqual(parseIpa(marked.ipa).unknown, []);
   });
 
   it('lets measured tones and stress disambiguate word candidates', () => {

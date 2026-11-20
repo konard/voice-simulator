@@ -1,8 +1,11 @@
 /** Apply measured prosody to a timed recognition result. */
 import { formatIpa, parseIpa } from '../ipa/parse.js';
-import { englishAuxiliary } from '../g2p/phrasing.js';
+import {
+  emphasizedIpa,
+  englishAuxiliary,
+  hasZhQuestionWord,
+} from '../g2p/phrasing.js';
 import { VERBALIZERS } from '../g2p/normalize.js';
-import { ZH_WH_WORDS } from '../g2p/verbalize-zh.js';
 import { POLAR_PARTICLE } from '../g2p/verbalize-hi.js';
 import { quantile } from './mode-features.js';
 import {
@@ -98,9 +101,7 @@ function phraseLanguage(words, fallback) {
 function hasWh(words, language) {
   if (language === 'zh') {
     const text = words.map((word) => word.text).join('');
-    return ZH_WH_WORDS.some((word) =>
-      word === '几' ? /几(?!乎)/u.test(text) : text.includes(word)
-    );
+    return hasZhQuestionWord(text);
   }
   const isWh = VERBALIZERS[language]?.isWhWord;
   return words.some(
@@ -303,14 +304,6 @@ function mode(words, from, to, notation, fields) {
     confidence,
     ...fields,
   };
-}
-
-function emphasizedIpa(ipa) {
-  return ipa.includes('ˈˈ')
-    ? ipa
-    : ipa.includes('ˈ')
-      ? ipa.replace('ˈ', 'ˈˈ')
-      : `ˈˈ${ipa}`;
 }
 
 function markedText(words, mark, language, sentenceStart) {

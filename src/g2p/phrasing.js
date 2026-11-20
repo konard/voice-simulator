@@ -108,16 +108,15 @@ function syllableCount(item) {
 }
 
 /** Write `ˈˈ` on a word: double its first primary stress or prefix one. */
-function emphasize(item) {
-  if (!item.ipa.includes('ˈˈ')) {
-    item.ipa = item.ipa.includes('ˈ')
-      ? item.ipa.replace('ˈ', 'ˈˈ')
-      : `ˈˈ${item.ipa}`;
+export function emphasizedIpa(ipa) {
+  if (ipa.includes('ˈˈ')) {
+    return ipa;
   }
+  return ipa.includes('ˈ') ? ipa.replace('ˈ', 'ˈˈ') : `ˈˈ${ipa}`;
 }
 
 /** Whether Mandarin text holds a question word (几 not in 几乎). */
-function hasZhQuestionWord(text) {
+export function hasZhQuestionWord(text) {
   return ZH_WH_WORDS.some((word) => {
     let at = text.indexOf(word);
     while (at >= 0) {
@@ -275,7 +274,7 @@ function markQuestion(sentence, lang) {
   if (wh) {
     end.ipa = '↘ ?';
     if (lang === 'ru') {
-      emphasize(words[wh.index]);
+      words[wh.index].ipa = emphasizedIpa(words[wh.index].ipa);
     }
     return [];
   }
