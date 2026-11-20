@@ -23,6 +23,7 @@ const result = recognize(samples, sampleRate, {
   threads: 1,
   kernels,
   level: 'low',
+  includeModeLabels: false,
   profile(stage, ms) {
     times.set(stage, (times.get(stage) ?? 0) + ms);
   },

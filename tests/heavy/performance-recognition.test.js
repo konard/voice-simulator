@@ -1,34 +1,56 @@
 /** Time 60 seconds of synthetic speech through the public recognizer (issue 77). */
 import assert from 'node:assert/strict';
+import { execFileSync } from 'node:child_process';
+import { readFileSync } from 'node:fs';
 import { availableParallelism } from 'node:os';
-import { performance } from 'node:perf_hooks';
 import { it as alwaysIt } from 'test-anywhere';
-import { recognizeAsync, synthesize } from '../../src/index.js';
-import { resample } from '../../src/audio/resample.js';
 import { measureSingleCoreRecognition } from '../../experiments/issue-77-single-core.mjs';
+import {
+  duration,
+  sampleRate as rate,
+  recognitionFixture,
+  timeRecognition,
+} from '../../experiments/issue-77-worker-scaling.mjs';
 import { noRust } from '../helpers/rust-engine.js';
 import { itUnless } from '../helpers/skip.js';
 import { writeReport } from './helpers/report.js';
 
 const it = itUnless(noRust);
 const cores = availableParallelism();
-const duration = 60;
-const rate = 16000;
+const physicalCores = linuxCoreCount();
 const limits = { js: { 1: {} }, rust: { 1: {} } };
 const rows = [];
 
-function fixture() {
-  const { samples, sampleRate } = synthesize(
-    'The quick brown fox jumps over the lazy dog.',
-    { tier: 'minimal', seed: 1, engine: 'js' }
-  );
-  const phrase = resample(samples, sampleRate, rate);
-  const input = new Float32Array(duration * rate);
-  const step = phrase.length + Math.round(0.35 * rate);
-  for (let at = 0; at + phrase.length < input.length; at += step) {
-    input.set(phrase, at);
+function linuxCoreCount() {
+  if (process.platform !== 'linux') {
+    return undefined;
   }
-  return input;
+  try {
+    const status = readFileSync('/proc/self/status', 'utf8');
+    const cpuList = /^Cpus_allowed_list:\s*(.+)$/m.exec(status)?.[1];
+    if (!cpuList) {
+      return undefined;
+    }
+    const ranges = cpuList
+      .split(',')
+      .map((range) => range.split('-').map(Number));
+    const topology = execFileSync('lscpu', ['-p=CPU,CORE,SOCKET'], {
+      encoding: 'utf8',
+    });
+    const socketsAndCores = new Set();
+    for (const row of topology.split('\n')) {
+      if (!/^\d+,\d+,\d+$/.test(row)) {
+        continue;
+      }
+      const [cpu, core, socket] = row.split(',').map(Number);
+      if (ranges.some(([first, last = first]) => first <= cpu && cpu <= last)) {
+        socketsAndCores.add(`${socket}:${core}`);
+      }
+    }
+    return socketsAndCores.size || undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 function report() {
@@ -36,19 +58,23 @@ function report() {
     '# Recognition performance',
     '',
     `Voice simulator recognition of ${duration} s of synthetic speech at ${rate} Hz on ${cores} logical cores.`,
+    ...(physicalCores
+      ? [`The CPU affinity mask covers ${physicalCores} physical cores.`]
+      : []),
     '',
     'Run `npm run test:heavy -- --suite performance` after building WebAssembly.',
     '',
-    '| Engine | Level | Threads | Seconds | Real-time factor |',
-    '| --- | --- | ---: | ---: | ---: |',
+    '| Engine | Level | Threads | Seconds | Real-time factor | CPU seconds |',
+    '| --- | --- | ---: | ---: | ---: | ---: |',
   ];
-  for (const { engine, level, threads, elapsed } of rows) {
+  for (const { engine, level, threads, elapsed, cpu } of rows) {
     header.push(
-      `| ${engine} | ${level} | ${threads} | ${elapsed.toFixed(3)} | ${(elapsed / duration).toFixed(3)} |`
+      `| ${engine} | ${level} | ${threads} | ${elapsed.toFixed(3)} | ${(elapsed / duration).toFixed(3)} | ${cpu.toFixed(3)} |`
     );
   }
   writeReport('performance-recognition', header.join('\n'), {
     cores,
+    physicalCores,
     duration,
     rate,
     rows,
@@ -56,20 +82,17 @@ function report() {
 }
 
 it('times engine, quality level and worker count on 60 seconds of speech', async () => {
-  const samples = fixture();
+  const samples = recognitionFixture();
   const threadCounts = cores >= 4 ? [1, 2, 4] : [1];
   for (const engine of ['js', 'rust']) {
     for (const threads of threadCounts) {
       for (const level of ['low', 'medium', 'high']) {
-        const started = performance.now();
-        const result = await recognizeAsync(samples, rate, {
+        const { elapsed, cpu, result } = await timeRecognition(samples, {
           engine,
           threads,
           level,
-          languages: ['en'],
         });
-        const elapsed = (performance.now() - started) / 1000;
-        rows.push({ engine, level, threads, elapsed });
+        rows.push({ engine, level, threads, elapsed, cpu });
         report();
         const byThread = (limits[engine][threads] ??= {});
         byThread[level] = elapsed;
@@ -81,7 +104,8 @@ it('times engine, quality level and worker count on 60 seconds of speech', async
 
 const verifyScaling = itUnless(
   noRust,
-  cores < 4 && `needs four logical cores, found ${cores}`
+  (physicalCores ?? cores) < 4 &&
+    `needs four cores, found ${physicalCores ?? cores} (${physicalCores ? 'physical' : 'logical'})`
 );
 verifyScaling(
   'Rust high recognition with four workers is at least 1.8 times faster',
