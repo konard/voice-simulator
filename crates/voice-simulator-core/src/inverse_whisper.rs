@@ -249,14 +249,42 @@ pub fn tone_cost(observed: &[f64; 10], curve: &[f64; 10], length: f64, expected:
     0.25 + 0.5 * (0.6 * shape + 0.4 * dur)
 }
 
+pub fn trajectory_distance(input: &[f64], reference: &[f64], width: usize, vowel: bool) -> f64 {
+    let level_scale = if vowel { 20.0 } else { 13.0 };
+    let total = input
+        .chunks_exact(width)
+        .zip(reference.chunks_exact(width))
+        .map(|(a, b)| {
+            let last = width - 1;
+            let spectral: f64 = a[..last]
+                .iter()
+                .zip(&b[..last])
+                .map(|(&x, &y)| {
+                    let d = x - y;
+                    d * d
+                })
+                .sum();
+            let level = (a[last] - b[last]) / level_scale;
+            spectral / last as f64 + level * level
+        })
+        .sum::<f64>();
+    total / (input.len() / width) as f64
+}
+
 /// Five-frame normalized-power averaging at one time and frequency band.
+/// A scale of zero averages linear quantities such as autocorrelation.
 pub fn pool_row(rows: &[f64], center: usize, width: usize, scale: f64, output: &mut [f64]) {
     let from = center.saturating_sub(2);
     let to = (center + 3).min(rows.len() / width);
+    let count = (to - from) as f64;
     for (band, result) in output.iter_mut().enumerate() {
+        if scale == 0.0 {
+            *result = (from..to).map(|row| rows[row * width + band] / count).sum();
+            continue;
+        }
         let power: f64 = (from..to)
             .map(|row| math::exp(rows[row * width + band] * scale))
             .sum();
-        *result = math::ln(power / (to - from) as f64) / scale;
+        *result = math::ln(power / count) / scale;
     }
 }

@@ -154,13 +154,19 @@ describe('whisper recognition', () => {
     const { samples, sampleRate } = renderWhisper(
       '[whisper] she sees five sheep'
     );
-    const frames = analyzeFrames(samples, sampleRate);
-    const pitch = trackPitch(frames);
+    const allFrames = analyzeFrames(samples, sampleRate);
+    const pitch = trackPitch(allFrames);
+    const [run] = whisperSpeechRuns(allFrames);
+    const frames = { ...allFrames };
+    const observe = (count) => {
+      frames.count = run.from + count;
+      frames.sampleCount = Math.round(frames.count * frames.hop * frames.rate);
+      pitch.committed = frames.count;
+    };
     const mode = createWhisperDecisions(frames, pitch, 'auto');
-    const [run] = whisperSpeechRuns(frames);
-    pitch.committed = run.from + 96;
+    observe(96);
     expect(mode.advance(false).through).toBe(run.start);
-    pitch.committed = run.from + 100;
+    observe(100);
     expect(mode.advance(false).through).toBeGreaterThanOrEqual(run.start + 0.5);
     const stream = createRecognizer(sampleRate, { language: 'en' });
     expect(

@@ -185,7 +185,6 @@ export function createIpaDecoder(sampleRate, options = {}) {
       fixed.concat(continuation),
       input.frames,
       whisper.spans,
-      language,
       fixed.length
     )
       .slice(fixed.length, fixed.length + count)

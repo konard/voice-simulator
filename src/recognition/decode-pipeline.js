@@ -260,10 +260,9 @@ function addWhisperTones(segments, syllables, spans, frames) {
       end,
       segments: [from, to],
     } = syllable;
-    const offset = segments
-      .slice(from, to)
-      .findIndex(({ kind }) => kind === 'vowel');
-    const vowel = offset >= 0 ? segments[from + offset] : undefined;
+    const sounds = segments.slice(from, to);
+    const first = sounds.findIndex(({ kind }) => kind === 'vowel');
+    const vowel = first >= 0 ? sounds[first] : undefined;
     if (vowel && whisperAt(spans, (start + end) / 2)) {
       syllable.tones = whisperTones(frames, {
         start,
@@ -271,7 +270,9 @@ function addWhisperTones(segments, syllables, spans, frames) {
         vowelStart: vowel.start,
         meanDuration,
       });
-      segments[from + offset] = { ...vowel, tones: syllable.tones };
+      const carrier =
+        from + sounds.findLastIndex(({ kind }) => kind === 'vowel');
+      segments[carrier] = { ...segments[carrier], tones: syllable.tones };
     }
   }
 }
@@ -299,7 +300,7 @@ export function resultOf(
   const { language } = settings;
   const spans = analysis.whisperSpans ?? [];
   const annotate = (segments) =>
-    whisperVoicing(segments, analysis.frames, spans, language, prefix.length);
+    whisperVoicing(segments, analysis.frames, spans, prefix.length);
   const formatted = (segments) =>
     wrapWhisperIpa(segments, whisperModeSpans(segments, spans));
   const prefixCost = prefix.reduce((sum, { cost }) => sum + cost, 0);

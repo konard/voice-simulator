@@ -38,6 +38,7 @@ impl Reader<'_> {
             stress: self.integer()? as u32,
             glide: self.integer()? as u32,
             reduced_gap: self.integer()? != 0,
+            ..Phone::default()
         })
     }
 }
@@ -87,7 +88,7 @@ pub(crate) fn parse(data: &[f64]) -> Option<Request> {
     {
         return None;
     }
-    let phones: Vec<_> = (0..input_count).map(|_| r.phone()).collect::<Option<_>>()?;
+    let mut phones: Vec<_> = (0..input_count).map(|_| r.phone()).collect::<Option<_>>()?;
     let boundaries: Vec<_> = (0..=input_count)
         .map(|_| r.integer().map(|v| v != 0))
         .collect::<Option<_>>()?;
@@ -133,6 +134,30 @@ pub(crate) fn parse(data: &[f64]) -> Option<Request> {
             return None;
         }
         unknown_words.insert((from, to), word);
+    }
+    if r.at != data.len() {
+        for phone in &mut phones {
+            let voicing = r.number()?;
+            if voicing != -1.0 {
+                if !(0.0..=1.0).contains(&voicing) {
+                    return None;
+                }
+                phone.whisper_voicing = Some(voicing);
+            }
+            let tones = [
+                r.number()?,
+                r.number()?,
+                r.number()?,
+                r.number()?,
+                r.number()?,
+            ];
+            if tones != [-1.0; 5] {
+                if !tones.iter().all(|tone| (0.25..=0.75).contains(tone)) {
+                    return None;
+                }
+                phone.whisper_tones = Some(tones);
+            }
+        }
     }
     if r.at != data.len() {
         return None;
@@ -187,7 +212,9 @@ fn run(data: &[f64]) -> Option<Vec<f64>> {
 
 /// Packet: beam/given/nbest, input/entry/word/pair/unknown counts, input features,
 /// boundary flags, word counts, entries (word, length, following, features),
-/// bigrams, unknown spelling IDs (from, to, word). IDs beyond word counts
+/// bigrams, unknown spelling IDs (from, to, word), then optional input cue rows.
+/// A cue row has voicing, then costs for tones 1, 2, 3, 4 and neutral. Use -1
+/// for absent voicing and five -1 values for absent tone evidence. IDs beyond word counts
 /// have a backoff count of one without increasing the corpus total.
 /// Output: path count; each path cost, segment count, then from/to/word/entry/cost.
 /// Returns the number of written f64s, or BAD_ARGUMENT / memory-range errors.

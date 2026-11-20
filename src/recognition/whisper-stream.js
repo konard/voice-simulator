@@ -25,14 +25,32 @@ function reconcile(previous, candidates, fixedThrough) {
 
 function decisionDue(
   run,
-  { final, paused, newRun, clock, through, nextCheck }
+  { final, paused, newRun, clock, through, nextCheck, pitchReady }
 ) {
   return (
     run &&
     (final ||
       (paused && through < run.end) ||
-      (run.end - run.start >= 0.5 - 1e-9 && (newRun || clock >= nextCheck)))
+      (pitchReady && (newRun || clock >= nextCheck)))
   );
+}
+
+function hasDecidablePitch(run, frames, pitch) {
+  const halfSecond = Math.ceil(0.5 / frames.hop - 1e-9);
+  const to = run.from + halfSecond;
+  if (run.to < to) {
+    return false;
+  }
+  if (pitch.committed >= to) {
+    return true;
+  }
+  // A fully observed window can be ruled out while its most recent pitch
+  // frames are still provisional, if the confirmed f0 already exceeds 5%.
+  let voiced = 0;
+  for (let i = run.from; i < pitch.committed; i++) {
+    voiced += Number(pitch.f0[i] > 0);
+  }
+  return voiced >= 0.05 * halfSecond;
 }
 
 export function createWhisperDecisions(frames, pitch, option) {
@@ -47,13 +65,22 @@ export function createWhisperDecisions(frames, pitch, option) {
       if (option !== 'auto') {
         return { through: end, spans: option || [] };
       }
-      const runs = whisperSpeechRuns(frames, pitch.committed);
+      const runs = whisperSpeechRuns(frames);
       const last = runs.at(-1);
-      const clock = frames.startTime + pitch.committed * frames.hop;
+      const clock = frames.startTime + frames.count * frames.hop;
       const paused = last && clock - last.end >= 0.2 - 1e-9;
       const newRun = last && last.start !== currentStart;
+      const pitchReady = last && hasDecidablePitch(last, frames, pitch);
       if (
-        decisionDue(last, { final, paused, newRun, clock, through, nextCheck })
+        decisionDue(last, {
+          final,
+          paused,
+          newRun,
+          clock,
+          through,
+          nextCheck,
+          pitchReady,
+        })
       ) {
         if (newRun) {
           if (current.length) {
@@ -74,7 +101,11 @@ export function createWhisperDecisions(frames, pitch, option) {
         through = clock;
       }
       const active = current.map((span) =>
-        !final && !paused && span.end === last?.end ? { ...span, end } : span
+        !final &&
+        !paused &&
+        span.end >= frames.startTime + pitch.committed * frames.hop - 1e-9
+          ? { ...span, end }
+          : span
       );
       const cutoff = last && last.start !== currentStart ? last.start : end;
       return {

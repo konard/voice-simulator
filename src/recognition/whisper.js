@@ -110,10 +110,16 @@ function edgeWhispers(run, frames, pitch) {
   if ((last - first) * hop < 0.08) {
     return [];
   }
-  const voicedLevel = Math.max(...energy.subarray(first, last + 1));
+  const peak = (a, b) => {
+    let level = -Infinity;
+    for (let i = a; i < b; i++) {
+      level = Math.max(level, energy[i]);
+    }
+    return level;
+  };
+  const voicedLevel = peak(first, last + 1);
   const quiet = (a, b) =>
-    (b - a) * hop >= 0.3 - EPSILON &&
-    Math.max(...energy.subarray(a, b)) <= voicedLevel - 10;
+    (b - a) * hop >= 0.3 - EPSILON && peak(a, b) <= voicedLevel - 10;
   const edges = [];
   if (quiet(from, first)) {
     // Avoid labelling a microphone's noisy lead-in before the first vowel.
@@ -209,6 +215,18 @@ function center(values) {
   return values.map((value) => value - average);
 }
 
+export function whisperToneCost(observed, curve, length, expected) {
+  const energy = center(observed);
+  const pitch = center(curve);
+  const squared = pitch.reduce(
+    (sum, value, i) => sum + (0.7 * value - energy[i]) ** 2,
+    0
+  );
+  const shape = clamp(Math.sqrt(squared / POINTS) / 4);
+  const duration = clamp(2 * Math.abs(length - expected));
+  return 0.25 + 0.5 * (0.6 * shape + 0.4 * duration);
+}
+
 /** Weak tone costs from the modulation of whisper noise and syllable length. */
 export function whisperTones(frames, syllable) {
   const {
@@ -228,32 +246,30 @@ export function whisperTones(frames, syllable) {
   if (last < first || end <= start || meanDuration <= 0) {
     return Object.fromEntries(TONES.map(([name]) => [name, 0.5]));
   }
-  const observed = center(
-    Array.from({ length: POINTS }, (_, i) => {
-      const index = first + (i * (last - first)) / (POINTS - 1);
-      const before = Math.floor(index);
-      return (
-        frames.energy[before] +
-        (index - before) *
-          (frames.energy[Math.min(last, before + 1)] - frames.energy[before])
-      );
-    })
-  );
+  const observed = Array.from({ length: POINTS }, (_, i) => {
+    const index = first + (i * (last - first)) / (POINTS - 1);
+    const before = Math.floor(index);
+    return (
+      frames.energy[before] +
+      (index - before) *
+        (frames.energy[Math.min(last, before + 1)] - frames.energy[before])
+    );
+  });
   return Object.fromEntries(
     TONES.map(([name, levels, expected]) => {
-      const curve = center(
-        toneCurve(levels, { count: POINTS, duration: end - vowelStart })
-      ).map((value) => 0.7 * value);
-      const shape = clamp(
-        Math.sqrt(
-          curve.reduce((sum, value, i) => sum + (value - observed[i]) ** 2, 0) /
-            POINTS
-        ) / 4
-      );
-      const duration = clamp(
-        2 * Math.abs((end - start) / meanDuration - expected)
-      );
-      return [name, 0.25 + 0.5 * (0.6 * shape + 0.4 * duration)];
+      const curve = toneCurve(levels, {
+        count: POINTS,
+        duration: end - vowelStart,
+      });
+      return [
+        name,
+        whisperToneCost(
+          observed,
+          curve,
+          (end - start) / meanDuration,
+          expected
+        ),
+      ];
     })
   );
 }

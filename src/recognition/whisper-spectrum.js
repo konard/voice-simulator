@@ -64,8 +64,12 @@ export function whisperFormantFrames(frames, spans) {
   const { order } = frames;
   const correlation = autocorrelate(frames);
   const pooled = new Float64Array(order + 1);
-  const out = { ...frames, lpc: frames.lpc.slice(), gain: frames.gain.slice() };
-  const reflection = new Float64Array(order);
+  const out = {
+    ...frames,
+    lpc: frames.lpc.slice(),
+    gain: frames.gain.slice(),
+    reflection: frames.reflection.slice(),
+  };
   for (const span of spans) {
     const first = rowAt(frames, span.start);
     const last = rowAt(frames, span.end);
@@ -78,12 +82,13 @@ export function whisperFormantFrames(frames, spans) {
           pooled[j] += correlation[row * (order + 1) + j] / (to - from);
         }
       }
-      const prediction = out.lpc.subarray(i * order, (i + 1) * order);
+      const start = i * order;
+      const end = start + order;
       const residual = lpcFromAutocorrelation(
         pooled,
         order,
-        prediction,
-        reflection
+        out.lpc.subarray(start, end),
+        out.reflection.subarray(start, end)
       );
       out.gain[i] = 10 * Math.log10(residual + 1e-10);
     }

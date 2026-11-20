@@ -3,12 +3,14 @@ import { energyRatio } from '../src/analysis/mode-features.js';
 import {
   analyzeFrames,
   presetHeadConfig,
+  resample,
   synthesize,
   trackPitch,
 } from '../src/index.js';
 import { DECODE_SENTENCES } from '../tests/helpers/decoder-material.js';
 
 const ratios = { voice: [], whisper: [] };
+const telephone = { voice: [], whisper: [] };
 for (const [lang, sentences] of Object.entries(DECODE_SENTENCES)) {
   for (const text of sentences) {
     for (const mode of ['voice', 'whisper']) {
@@ -26,6 +28,9 @@ for (const [lang, sentences] of Object.entries(DECODE_SENTENCES)) {
       const pitch = trackPitch(frames);
       const ratio = energyRatio(samples, sampleRate);
       ratios[mode].push(ratio);
+      telephone[mode].push(
+        energyRatio(resample(samples, sampleRate, 8000), 8000)
+      );
       console.log(
         lang,
         mode,
@@ -35,10 +40,20 @@ for (const [lang, sentences] of Object.entries(DECODE_SENTENCES)) {
     }
   }
 }
-for (const [mode, values] of Object.entries(ratios)) {
-  values.sort((a, b) => a - b);
-  const mid = Math.floor(values.length / 2);
-  console.log(mode, 'median', (values[mid] + values[mid - 1]) / 2);
+for (const [rate, measured] of [
+  ['source', ratios],
+  ['8000 Hz', telephone],
+]) {
+  for (const [mode, values] of Object.entries(measured)) {
+    values.sort((a, b) => a - b);
+    const mid = values.length / 2;
+    console.log(
+      rate,
+      mode,
+      'median',
+      (values[Math.floor(mid)] + values[Math.ceil(mid) - 1]) / 2
+    );
+  }
 }
 const mixed = synthesize('one two three [whisper] four five six', {
   head: presetHeadConfig('male'),

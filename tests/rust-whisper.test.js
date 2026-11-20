@@ -7,6 +7,15 @@ import {
   trackPitch,
 } from '../src/index.js';
 import { float64View } from '../src/engine/wasm-loader.js';
+import { toneCurve } from '../src/articulation/tone-model.js';
+import { WHISPER_CUES } from '../src/recognition/data/whisper-cues.js';
+import { whisperDistance } from '../src/recognition/whisper-decode.js';
+import { whisperVoicingProbability } from '../src/recognition/whisper-result.js';
+import {
+  poolLogPower,
+  whisperSpectrum,
+} from '../src/recognition/whisper-spectrum.js';
+import { whisperToneCost } from '../src/recognition/whisper.js';
 import { loadRustEngine, noRust } from './helpers/rust-engine.js';
 import { itUnless } from './helpers/skip.js';
 import {
@@ -62,6 +71,21 @@ function checkSpans(engine, packet, samples, expected) {
   }
 }
 
+function withPacket(engine, values, run) {
+  const size = values.length * 8;
+  const ptr = engine.exports.vs_alloc(size);
+  try {
+    float64View(engine, ptr, values.length).set(values);
+    return run(ptr);
+  } finally {
+    engine.exports.vs_free(ptr, size);
+  }
+}
+
+function expectClose(actual, expected, tolerance = 1e-9) {
+  expect(Math.abs(actual - expected)).toBeLessThan(tolerance);
+}
+
 describe('Rust whisper numerical parity', () => {
   itUnless(noRust)(
     'matches whisper spans on voiced, whispered, mixed and noisy narrowband speech',
@@ -87,6 +111,78 @@ describe('Rust whisper numerical parity', () => {
           );
         }
       }
+    }
+  );
+
+  itUnless(noRust)('matches voicing and tone costs', async () => {
+    const engine = await loadRustEngine();
+    const { vs_whisper_voicing: voice, vs_whisper_tone_cost: tone } =
+      engine.exports;
+    for (const pair of WHISPER_CUES) {
+      for (const [, [ratio], [level]] of pair) {
+        const packet = [
+          ratio,
+          level,
+          ...pair.flatMap(([, duration, db]) => [...duration, ...db]),
+        ];
+        const expected = whisperVoicingProbability(ratio, level, pair);
+        expectClose(withPacket(engine, packet, voice), expected);
+      }
+    }
+    const observed = [-31, -30, -29, -27, -30, -32, -31, -34, -30, -28];
+    for (const levels of [[5], [3, 5], [2, 1, 4], [5, 1], []]) {
+      const curve = toneCurve(levels, { count: 10, duration: 0.33 });
+      const expected = whisperToneCost(observed, curve, 1.1, 1.2);
+      expectClose(
+        withPacket(engine, [...observed, ...curve, 1.1, 1.2], tone),
+        expected
+      );
+    }
+  });
+
+  itUnless(noRust)(
+    'matches pooled spectra and trajectory distances',
+    async () => {
+      const engine = await loadRustEngine();
+      const { vs_whisper_pool: pool, vs_whisper_distance: distance } =
+        engine.exports;
+      const { samples, sampleRate } = renderWhisper('[whisper] a fresh fish');
+      const frames = analyzeFrames(samples, sampleRate);
+      const { count, melBands, mel } = frames;
+      const pooled = poolLogPower(frames, 'mel', 0, count, melBands, 1);
+      const out = engine.exports.vs_alloc(melBands * 8);
+      try {
+        withPacket(engine, mel.subarray(0, count * melBands), (ptr) => {
+          for (const i of [0, 19, count - 1]) {
+            expect(pool(ptr, count, melBands, i, 1, out)).toBe(0);
+            float64View(engine, out, melBands).forEach((value, j) =>
+              expectClose(Math.fround(value), pooled[i * melBands + j])
+            );
+          }
+        });
+      } finally {
+        engine.exports.vs_free(out, melBands * 8);
+      }
+      const spectrum = whisperSpectrum(
+        frames,
+        0.05,
+        samples.length / sampleRate
+      );
+      const width = melBands + 1;
+      const input = new Float32Array(5 * width);
+      const reference = new Float32Array(input.length);
+      for (let i = 0; i < 5; i++) {
+        spectrum.sample(0.06 + 0.03 * i, input, i * width);
+        spectrum.sample(0.21 + 0.03 * i, reference, i * width);
+      }
+      withPacket(engine, [...input, ...reference], (ptr) => {
+        for (const vowel of [false, true]) {
+          expectClose(
+            distance(ptr, width, Number(vowel)),
+            whisperDistance(input, reference, width, vowel)
+          );
+        }
+      });
     }
   );
 });

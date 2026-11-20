@@ -15,9 +15,9 @@ function sampleTrajectory(spectrum, start, end, width, output) {
   return output;
 }
 
-function renderReference(ipa, settings, voice, vowel) {
+function renderReference(ipa, settings, voice, [before, after]) {
   const { plan, samples, sampleRate } = synthesize(
-    `{W ${vowel}${ipa}${vowel} W}`,
+    `{W ${before}${ipa}${after} W}`,
     {
       head: voice,
       ipa: true,
@@ -27,7 +27,7 @@ function renderReference(ipa, settings, voice, vowel) {
     }
   );
   const frames = analyzeFrames(samples, sampleRate, settings);
-  const token = plan.tokens[1];
+  const token = plan.tokens[Number(Boolean(before))];
   const segments = plan.segments.filter((segment) => segment.token === token);
   const width = frames.melBands + 1;
   const start = segments[0].start;
@@ -55,17 +55,30 @@ function references(templates, settings, voice) {
   const table = tables.get(key);
   return templates.map(({ ipa, kind }) => {
     if (!table.has(ipa)) {
-      const contexts = kind === 'vowel' ? ['m'] : ['a', 'i', 'u'];
+      const contexts =
+        kind === 'vowel'
+          ? [
+              ['m', 'm'],
+              ['', 'p'],
+              ['p', ''],
+            ]
+          : [
+              ['a', 'a'],
+              ['i', 'i'],
+              ['u', 'u'],
+            ];
       table.set(
         ipa,
-        contexts.map((vowel) => renderReference(ipa, settings, voice, vowel))
+        contexts.map((context) =>
+          renderReference(ipa, settings, voice, context)
+        )
       );
     }
     return table.get(ipa);
   });
 }
 
-function distance(input, reference, width, vowel) {
+export function whisperDistance(input, reference, width, vowel) {
   let sum = 0;
   for (let i = 0; i < input.length; i += width) {
     let spectral = 0;
@@ -77,7 +90,7 @@ function distance(input, reference, width, vowel) {
       (input[i + width - 1] - reference[i + width - 1]) / (vowel ? 20 : 13);
     sum += spectral / (width - 1) + level * level;
   }
-  return sum / POINTS.length;
+  return sum / (input.length / width);
 }
 
 export function createWhisperScorer(frames, spans, templates, settings, voice) {
@@ -108,8 +121,13 @@ export function createWhisperScorer(frames, spans, templates, settings, voice) {
         const acoustic =
           duration *
             8 *
-            distance(input, values, width, templates[unit].kind === 'vowel') +
-          0.06;
+            whisperDistance(
+              input,
+              values,
+              width,
+              templates[unit].kind === 'vowel'
+            ) +
+          0.85;
         const score = acoustic + WHISPER_WEIGHTS.duration * timing;
         if (score < best) {
           best = score;

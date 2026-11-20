@@ -35,6 +35,15 @@ pub struct Phone {
     /// 1=i, 2=j, 3=u, 4=w; 0 for other segments.
     pub glide: u32,
     pub reduced_gap: bool,
+    pub whisper_voicing: Option<f64>,
+    /// Whispered tone costs in the order 1, 2, 3, 4, neutral.
+    pub whisper_tones: Option<[f64; 5]>,
+}
+
+impl Phone {
+    fn has_weak_cues(&self) -> bool {
+        self.whisper_voicing.is_some() || self.whisper_tones.is_some()
+    }
 }
 
 fn flag(a: bool, b: bool) -> f64 {
@@ -60,6 +69,31 @@ pub fn tone_distance(a: u32, b: u32) -> f64 {
         0.5
     }
 }
+
+fn tone_evidence(a: &Phone, b: &Phone) -> f64 {
+    let Some(costs) = a.whisper_tones else {
+        return tone_distance(a.tone, b.tone);
+    };
+    let cost = match b.tone {
+        5 => costs[0],
+        35 => costs[1],
+        21 | 214 => costs[2],
+        51 => costs[3],
+        0 => costs[4],
+        _ => 0.5,
+    };
+    0.5 * (cost - 0.25)
+}
+
+fn voicing_distance(a: &Phone, b: &Phone) -> f64 {
+    if let Some(probability) = a.whisper_voicing {
+        (f64::from(u8::from(b.voiced)) - probability).abs()
+    } else if let Some(probability) = b.whisper_voicing {
+        (f64::from(u8::from(a.voiced)) - probability).abs()
+    } else {
+        flag(a.voiced, b.voiced)
+    }
+}
 pub fn phone_distance(a: &Phone, b: &Phone) -> f64 {
     let segment = if a.vowel && b.vowel {
         2.0 * math::abs(a.height - b.height)
@@ -78,7 +112,7 @@ pub fn phone_distance(a: &Phone, b: &Phone) -> f64 {
             / 11.0;
         0.5 * if a.manner != b.manner { 1.0 } else { 0.0 }
             + 0.35 * place
-            + 0.25 * flag(a.voiced, b.voiced)
+            + 0.25 * voicing_distance(a, b)
             + 0.2 * flag(a.aspirated, b.aspirated)
             + 0.2 * flag(a.palatalized, b.palatalized)
     } else if matches!((a.glide, b.glide), (1, 2) | (2, 1) | (3, 4) | (4, 3)) {
@@ -86,8 +120,7 @@ pub fn phone_distance(a: &Phone, b: &Phone) -> f64 {
     } else {
         1.0
     };
-    (segment + tone_distance(a.tone, b.tone) + 0.2 * if a.stress != b.stress { 1.0 } else { 0.0 })
-        .min(1.0)
+    (segment + tone_evidence(a, b) + 0.2 * if a.stress != b.stress { 1.0 } else { 0.0 }).min(1.0)
 }
 pub fn gap_cost(phone: &Phone) -> f64 {
     if phone.reduced_gap {
@@ -282,14 +315,14 @@ pub fn candidates(
     exact: bool,
 ) -> Vec<Candidate> {
     let mut found = Vec::new();
-    let mut nodes = vec![0];
+    let mut nodes = vec![State { node: 0, cost: 0.0 }];
     for to in from..end {
         let next_tone = phones[to + 1..end]
             .iter()
             .find(|p| p.tone != 0)
             .map_or(0, |p| p.tone);
         let mut next = Vec::new();
-        for node in nodes {
+        for state in nodes {
             // Preserve literal keys first, then the contextual third-tone
             // forms, matching the JavaScript trie traversal order.
             for tone in [phones[to].tone, 214, 21] {
@@ -298,24 +331,31 @@ pub fn candidates(
                 {
                     continue;
                 }
-                for &child in &lexicon.nodes[node].children {
-                    let p = lexicon.nodes[child].phone;
+                for &child in &lexicon.nodes[state.node].children {
+                    let mut p = lexicon.nodes[child].phone;
                     let matches = if tone == phones[to].tone {
                         p.key == phones[to].key
                     } else {
                         p.symbol == phones[to].symbol && p.tone == tone
                     };
-                    if matches && !next.contains(&child) {
-                        next.push(child);
+                    if matches && !next.iter().any(|candidate: &State| candidate.node == child) {
+                        let mut heard = phones[to];
+                        heard.stress = 0;
+                        p.stress = 0;
+                        let cost = state.cost
+                            + if heard.has_weak_cues() {
+                                phone_distance(&heard, &p)
+                            } else {
+                                0.0
+                            };
+                        let next_state = State { node: child, cost };
+                        next.push(next_state);
                         terminals(
                             &mut found,
                             lexicon,
                             from,
                             to + 1,
-                            State {
-                                node: child,
-                                cost: 0.0,
-                            },
+                            next_state,
                             &phones[..end],
                             true,
                         );
@@ -500,7 +540,11 @@ pub fn recognize(
     nbest: usize,
 ) -> Vec<Path> {
     let beam = beam.max(nbest).max(1);
-    let mut paths = decode(phones, boundaries, lexicon, beam, given, true);
+    let mut paths = if phones.iter().any(Phone::has_weak_cues) {
+        Vec::new()
+    } else {
+        decode(phones, boundaries, lexicon, beam, given, true)
+    };
     if paths.len() < nbest {
         let approximate = decode(phones, boundaries, lexicon, beam, given, false);
         for path in approximate {

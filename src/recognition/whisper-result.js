@@ -8,18 +8,24 @@ const cuePairs = new Map(
   WHISPER_CUES.flatMap((pair) => pair.map(([ipa]) => [ipa, pair]))
 );
 
-function scoreVoice(frames, sound, vowel, pair) {
-  const { samples, startTime, rate } = frames;
-  const level = ({ start, end }) =>
-    levelDb(samples, (start - startTime) * rate, (end - startTime) * rate);
-  const ratio = (sound.end - sound.start) / (vowel.end - vowel.start);
-  const relativeDb = level(sound) - level(vowel);
+export function whisperVoicingProbability(ratio, relativeDb, pair) {
   const distance = ([, [duration, spread], [db, dbSpread]]) =>
     Math.hypot(
       (ratio - duration) / Math.max(spread, 1e-6),
       (relativeDb - db) / Math.max(dbSpread, 1e-6)
     );
   return 1 / (1 + Math.exp(distance(pair[1]) - distance(pair[0])));
+}
+
+function scoreVoice(frames, sound, vowel, pair) {
+  const { samples, startTime, rate } = frames;
+  const level = ({ start, end }) =>
+    levelDb(samples, (start - startTime) * rate, (end - startTime) * rate);
+  return whisperVoicingProbability(
+    (sound.end - sound.start) / (vowel.end - vowel.start),
+    level(sound) - level(vowel),
+    pair
+  );
 }
 
 function nextVowel(segments, index, end) {
@@ -34,7 +40,7 @@ function nextVowel(segments, index, end) {
   }
 }
 
-function scoreConsonant(sound, vowel, frames, language) {
+function scoreConsonant(sound, vowel, frames) {
   const token = parseIpa(sound.ipa).tokens[0];
   if (
     !token ||
@@ -55,18 +61,13 @@ function scoreConsonant(sound, vowel, frames, language) {
   Object.assign(sound, { whispered: true, voicing });
   if (pair && voicing !== 0.5) {
     const counterpart = pair[Number(voicing > 0.5)][0];
-    const available =
-      language.symbols.includes(counterpart) ||
-      language.symbols.includes(counterpart.replace('ɡ', 'g'));
-    if (available) {
-      sound.ipa = token.affricate
-        ? sound.ipa.replace(/^.+?͡./u, counterpart)
-        : sound.ipa.replace(token.base, counterpart);
-    }
+    sound.ipa = token.affricate
+      ? sound.ipa.replace(/^.+?͡./u, counterpart)
+      : sound.ipa.replace(token.base, counterpart);
   }
 }
 
-export function whisperVoicing(segments, frames, spans, language, from = 0) {
+export function whisperVoicing(segments, frames, spans, from = 0) {
   if (!spans.length) {
     return segments;
   }
@@ -87,8 +88,7 @@ export function whisperVoicing(segments, frames, spans, language, from = 0) {
     scoreConsonant(
       sound,
       previousVowel ?? nextVowel(segments, i, span.end),
-      frames,
-      language
+      frames
     );
   }
   return segments;

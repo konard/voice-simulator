@@ -126,6 +126,14 @@ export function recognitionPacket(input, lexicon, options, nbest) {
     packet.push(...pair.split('\t').map((word) => ids.get(word)), count);
   }
   packet.push(...unknown);
+  if (input.tokens.some((token) => token.whispered || token.tones)) {
+    for (const token of input.tokens) {
+      packet.push(
+        token.voicing ?? -1,
+        ...['˥', '˧˥', '˨˩˦', '˥˩', ''].map((key) => token.tones?.[key] ?? -1)
+      );
+    }
+  }
   return { packet, words };
 }
 

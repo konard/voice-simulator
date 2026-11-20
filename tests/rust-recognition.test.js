@@ -93,6 +93,70 @@ const cases = [
   },
 ];
 
+describe('Rust whisper lexical recognition', () => {
+  it('matches lexical paths with whispered voicing and tone evidence', async () => {
+    const engine = await loadRustEngine();
+    const cases = [
+      {
+        language: 'en',
+        records: [
+          ['bat', 'bæt', 100],
+          ['pat', 'pæt', 100],
+        ],
+        sounds: [
+          { ipa: 'p', whispered: true, voicing: 0.95 },
+          { ipa: 'æ' },
+          { ipa: 't' },
+        ],
+        winner: 'bat',
+      },
+      {
+        language: 'zh',
+        records: [
+          ['妈', 'ma˥', 100],
+          ['马', 'ma˨˩˦', 100],
+        ],
+        sounds: [
+          { ipa: 'm' },
+          {
+            ipa: 'a',
+            tones: { '˥': 0.65, '˧˥': 0.5, '˨˩˦': 0.25, '˥˩': 0.5, '': 0.5 },
+          },
+        ],
+        winner: '马',
+      },
+    ];
+    for (const { language, records, sounds, winner } of cases) {
+      const input = recognitionInput(
+        sounds.map((sound, index) => ({
+          ...sound,
+          start: index * 0.1,
+          end: (index + 1) * 0.1,
+          confidence: 1,
+        })),
+        'search'
+      );
+      const lexicon = smallLexicon(records, language);
+      const options = { language, given: false, beam: 32 };
+      const { packet, words } = recognitionPacket(input, lexicon, options, 2);
+      const actual = unpackPaths(
+        runRecognition(engine, packet),
+        words,
+        input.tokens,
+        (tokens) => spellSounds(tokens, language)
+      );
+      const expected = decode(input, lexicon, options, false).slice(0, 2);
+      expect(actual[0].path[0].word).toBe(winner);
+      for (const [i, path] of actual.entries()) {
+        expect(path.path.map(({ word }) => word)).toEqual(
+          expected[i].path.map(({ word }) => word)
+        );
+        expect(Math.abs(path.cost - expected[i].cost)).toBeLessThan(1e-9);
+      }
+    }
+  });
+});
+
 describe('Rust IPA recognition', () => {
   it('matches every inventory phone-distance pair and extra feature flags', async () => {
     const engine = await loadRustEngine();
