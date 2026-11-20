@@ -9,6 +9,7 @@ import { BROAD_CLASSES } from './landmarks.js';
 
 const EPSILON = 1e-9;
 const MIN_SEPARATION = 0.015;
+const MIN_PHONE_DURATION = 0.02;
 
 function findGaps(frames, first, last, startTime, end) {
   const gaps = [];
@@ -211,18 +212,29 @@ export function createSpanScorer(frames, landmarks, track) {
 }
 
 function whisperGrid(original, pauses, whisperSpans, bounds) {
+  const start = original[0] ?? bounds.from;
+  const end = original.at(-1) ?? bounds.to;
   const spansInBounds = whisperSpans.filter(
     ({ start, end }) => end > bounds.from && start < bounds.to
   );
-  const edges = spansInBounds
-    .flatMap(({ start, end }) => [start, end])
-    .filter(
-      (time) =>
-        time > (original[0] ?? bounds.from) &&
-        time < (original.at(-1) ?? bounds.to)
-    );
+  const edges = whisperEdges(spansInBounds, pauses, start, end);
   const times = whisperBoundaries(original, spansInBounds, edges, pauses);
   return { times, spansInBounds, edges };
+}
+
+function whisperEdges(spans, pauses, start, end) {
+  const mandatory = [start, end, ...pauses.flatMap((p) => [p.start, p.end])];
+  const candidates = [
+    ...new Set(spans.flatMap((span) => [span.start, span.end])),
+  ].filter((time) => time > start && time < end);
+  const minimum = MIN_PHONE_DURATION - EPSILON;
+  // Leave a path across short spans and gaps that cannot contain a phone.
+  return candidates.filter(
+    (time, i) =>
+      time - (candidates[i - 1] ?? -Infinity) >= minimum &&
+      (candidates[i + 1] ?? Infinity) - time >= minimum &&
+      mandatory.every((edge) => Math.abs(edge - time) >= minimum)
+  );
 }
 
 /** Keep the three terms separate so tuning can reuse the same observations. */
@@ -300,7 +312,7 @@ function scoreBoundaries({
       if (duration > 0.4 + EPSILON || times[to] > end + EPSILON) {
         break;
       }
-      if (duration < 0.02 - EPSILON) {
+      if (duration < MIN_PHONE_DURATION - EPSILON) {
         continue;
       }
       spans[from].push({ to, ...score(start, times[to], phones) });

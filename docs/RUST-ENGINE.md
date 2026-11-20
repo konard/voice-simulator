@@ -140,10 +140,13 @@ Unknown spellings that equal dictionary words share their IDs, preserving
 count lookup and distinct-text pruning. The packet layout is documented
 at the exports in `crates/voice-simulator-wasm/src/recognition.rs`.
 
-The optional whisper cue rows carry consonant voicing probabilities and
-Mandarin tone costs into the same trie search. `tests/rust-whisper.test.js`
-compares detection spans, pooled spectra, trajectory distance, voicing and
-tone costs on the shared analysis frames and cue table.
+The optional input prosody mask carries consonant voicing probabilities,
+tightly bounded Mandarin tone costs and a whisper flag into the same trie
+search. The prominence packet uses bit 4 of each feature mask for whisper.
+`tests/rust-whisper.test.js` compares detection spans, pooled spectra,
+trajectory distance, voicing and tone costs on the shared analysis frames
+and cue table. `tests/rust-recognition.test.js` compares lexical paths and
+prominence with these cues.
 
 `tests/rust-recognition.test.js` compares all inventory phone pairs and
 four-language exact, substituted, inserted, deleted, unknown and n-best

@@ -122,6 +122,15 @@ describe('whisper recognition', () => {
     expect(disabled.segments.some(({ whispered }) => whispered)).toBe(false);
   });
 
+  it('keeps decoding across explicit spans shorter than a phone', () => {
+    const { samples, sampleRate } = renderWhisper('[whisper] a fresh fish');
+    const result = audioToIpa(samples, sampleRate, {
+      language: 'en',
+      whisper: [{ start: 0.34, end: 0.345 }],
+    });
+    expect(result.segments.length).toBeGreaterThan(0);
+  });
+
   it('lets lexical context use soft voicing evidence when the preferred IPA is wrong', () => {
     const phones = ['ə', 'p', 'ɪ', 'k', 't', 'ɔ', 'k'].map((ipa, i) => ({
       ipa,

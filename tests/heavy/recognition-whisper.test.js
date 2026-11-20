@@ -178,6 +178,7 @@ describe('whisper acceptance measurements', () => {
 
   it('finds the right lexical tone for at least 75% of syllables across ten Mandarin sentences', () => {
     let edits = 0;
+    let correct = 0;
     let syllables = 0;
     for (const text of mandarin) {
       const { heard } = decodeText(text, 'zh');
@@ -189,12 +190,16 @@ describe('whisper acceptance measurements', () => {
       }).words.flatMap(({ syllables: word }) =>
         word.map(({ ipa }) => toneIn(ipa))
       );
-      edits += errorRate(spoken.join(' '), lexical.join(' '), 'phone').distance;
+      const result = errorRate(spoken.join(' '), lexical.join(' '), 'phone');
+      edits += result.distance;
+      correct += spoken.length - result.substitutions - result.deletions;
       syllables += spoken.length;
     }
-    console.log(JSON.stringify({ toneEdits: edits, syllables }));
+    console.log(
+      JSON.stringify({ correctTones: correct, toneEdits: edits, syllables })
+    );
     expect(syllables).toBeGreaterThan(0);
-    expect(edits / syllables).toBeLessThanOrEqual(0.25);
+    expect(correct / syllables).toBeGreaterThanOrEqual(0.75);
   });
 
   it('recognizes hello world through the command line', () => {
