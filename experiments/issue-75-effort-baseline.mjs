@@ -5,6 +5,7 @@ import {
   recognizeModes,
   synthesize,
 } from '../src/index.js';
+import { modeLabels } from '../src/ipa/marks.js';
 import { sentences } from '../tests/helpers/roundtrip.js';
 
 function recoveredSpan(modes, reference) {
@@ -35,7 +36,12 @@ for (const tier of ['telephone', 'wideband']) {
       level: levelForTier(tier),
     });
     const referenceWords = spoken.timeline.words;
-    const [reference] = spoken.plan.modes;
+    const reference = spoken.plan.modes.find((mode) =>
+      modeLabels(mode).includes('f')
+    );
+    if (!reference) {
+      throw new Error(`No planned loud span for ${lang} at ${tier}`);
+    }
     const measurements = {
       audioOnly: heard.modes,
       expectedWords: recoverModes(spoken, referenceWords, lang),

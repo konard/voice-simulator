@@ -307,12 +307,13 @@ from wideband through studio. The mode gate requires 6 of 8 at telephone
 and 8 of 8 at each of those higher tiers.
 
 `node experiments/issue-75-effort-baseline.mjs` repeated the loudness check
-on telephone and wideband. Giving the mode stage the synthesis voice with
-the decoded word timings recovered 1 of 4 telephone spans and 2 of 4
-wideband spans. The audio-only stage recovered 0 of 4 in both tiers, as
-did the comparisons using the synthesis word timings with or without the
-voice. Without a supplied voice, the detector compares effort with the rest of the
-same utterance.
+on telephone and wideband using the planned span labelled `f` as the reference.
+The audio-only stage recovered 0 of 4 spans in each tier, as did the stage
+given only the synthesis word timings. Giving it the synthesis voice with
+decoded word timings recovered 0 of 4 telephone spans and 1 of 4 wideband
+spans. Giving it both the synthesis voice and synthesis word timings recovered
+2 of 4 telephone and 1 of 4 wideband spans. Without a supplied voice, the
+detector compares effort with the rest of the same utterance.
 
 The benchmark requires `recognize` to work with audio, sample rate, and tier
 level. The existing mode specification requires whole-utterance `f` to
