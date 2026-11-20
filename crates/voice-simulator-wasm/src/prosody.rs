@@ -12,17 +12,17 @@ fn read_array<const N: usize>(r: &mut Reader<'_>) -> Option<[f64; N]> {
 
 fn prominence(data: &[f64]) -> Option<Vec<f64>> {
     let mut r = Reader { data, at: 0 };
-    let mut chunks = data.chunks_exact(5);
-    if !chunks.remainder().is_empty() {
+    let (rows, remainder) = data.as_chunks::<5>();
+    if !remainder.is_empty() {
         return None;
     }
-    let rows = chunks
-        .by_ref()
+    let rows = rows
+        .iter()
         .map(|_| {
             let present = r.integer()?;
-            let row = read_array::<4>(&mut r)?;
+            let values = read_array::<4>(&mut r)?;
             Some(core::array::from_fn(|i| {
-                (present & (1 << i) != 0).then_some(row[i])
+                (present & (1 << i) != 0).then_some(values[i])
             }))
         })
         .collect::<Option<Vec<_>>>()?;
@@ -102,14 +102,11 @@ fn phrase(data: &[f64]) -> Option<Vec<f64>> {
 fn focus(data: &[f64]) -> Option<Vec<f64>> {
     let mut r = Reader { data, at: 0 };
     let time = r.number()?;
-    if (data.len() - 1) % 2 != 0 {
+    let (peaks, remainder) = data[1..].as_chunks::<2>();
+    if !remainder.is_empty() || peaks.iter().flatten().any(|v| !v.is_finite()) {
         return None;
     }
-    let peaks = data[1..]
-        .chunks_exact(2)
-        .map(|_| read_array(&mut r))
-        .collect::<Option<Vec<_>>>()?;
-    Some(vec![prosody::expected_peak(&peaks, time)])
+    Some(vec![prosody::expected_peak(peaks, time)])
 }
 
 #[no_mangle]
