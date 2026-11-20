@@ -685,3 +685,28 @@ h2 {
     transition: none;
   }
 }
+
+.recognition-panel.dragging {
+  outline: 2px dashed var(--accent);
+  outline-offset: 4px;
+}
+
+.spoken .tentative {
+  color: var(--muted);
+  font-style: italic;
+}
+
+.spoken .tentative.syllable-current {
+  color: var(--accent-ink);
+}
+
+.language-badge {
+  display: inline-block;
+  margin-inline-end: 0.4em;
+  padding-inline: 0.45em;
+  background: var(--accent-soft);
+  color: var(--ink);
+  font-size: 0.75rem;
+  line-height: 1.5;
+  vertical-align: middle;
+}

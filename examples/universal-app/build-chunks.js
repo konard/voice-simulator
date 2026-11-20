@@ -30,6 +30,13 @@ const vendorChunks = [
 ];
 
 export function vendorChunk(id) {
+  // Each language's two count tables fit independently under the size guard.
+  const counts = id.match(
+    /[\\/]src[\\/]recognition[\\/]data[\\/]((?:en|hi|ru|zh)(?:-bigrams)?)\.js$/
+  );
+  if (counts) {
+    return `recognition-${counts[1]}`;
+  }
   return vendorChunks.find(([pattern]) => pattern.test(id))?.[1];
 }
 

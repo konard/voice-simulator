@@ -59,6 +59,13 @@ describe('universal app chunking', () => {
       expect(vendorChunk(['repo', 'src', 'g2p', 'english.js'].join(sep))).toBe(
         undefined
       );
+      for (const table of ['hi', 'hi-bigrams']) {
+        expect(
+          vendorChunk(
+            ['repo', 'src', 'recognition', 'data', `${table}.js`].join(sep)
+          )
+        ).toBe(`recognition-${table}`);
+      }
       expect(
         vendorChunk(['repo', 'src', 'recognition', 'frontend.js'].join(sep))
       ).toBe('recognition');

@@ -212,20 +212,25 @@ export function sameHighlight(a, b) {
  * spans keep their React-managed attributes; only classes and
  * `aria-current` change, so the live region is not re-announced.
  * @param {HTMLElement|null} root The element rendered by `SpokenText`.
- * @param {{speaking: boolean, time: number, timeline?: object|null}} frame
+ * @param {{speaking: boolean, time: number, timeline?: object|null, syllableOnlyAria?: boolean}} frame
  */
-export function paintHighlight(root, frame) {
+export function paintHighlight(
+  root,
+  { speaking, time, timeline, syllableOnlyAria }
+) {
   if (!root) {
     return;
   }
-  const current = frame.speaking
-    ? highlightAt(frame.timeline, frame.time)
-    : null;
+  const current = speaking ? highlightAt(timeline, time) : null;
   const last = painted.get(root);
-  if (last && sameHighlight(last.current, current)) {
+  if (
+    last?.timeline === timeline &&
+    last &&
+    sameHighlight(last.current, current)
+  ) {
     return;
   }
-  painted.set(root, { current });
+  painted.set(root, { current, timeline });
   for (const span of root.querySelectorAll('[data-word]')) {
     const word = current !== null && Number(span.dataset.word) === current.word;
     const first = Number(span.dataset.syllable);
@@ -237,7 +242,7 @@ export function paintHighlight(root, frame) {
       current.syllable <= last;
     span.classList.toggle('word-current', word);
     span.classList.toggle('syllable-current', syllable);
-    if (word) {
+    if (syllableOnlyAria ? syllable : word) {
       span.setAttribute('aria-current', 'true');
     } else {
       span.removeAttribute('aria-current');

@@ -33,14 +33,16 @@ describe('recognition count tables', () => {
         counts.words.length
       );
       expect(data.CORPUS_WORDS >= 1000000).toBe(true);
-      expect(
+      const bytes = (name) =>
         statSync(
           new globalThis.URL(
-            `../src/recognition/data/${language}.js`,
+            `../src/recognition/data/${name}.js`,
             import.meta.url
           )
-        ).size <= 800000
-      ).toBe(true);
+        ).size;
+      expect(bytes(language) + bytes(`${language}-bigrams`) <= 800000).toBe(
+        true
+      );
       let previous = Infinity;
       for (const { word, count } of counts.words) {
         expect(
@@ -113,9 +115,12 @@ describe('recognition count tables', () => {
         createHash('sha256').update(text).digest('hex')
       );
       writeCounts(data, 'en', dir);
-      const before = readFileSync(join(dir, 'en.js'), 'utf8');
+      const modules = ['en.js', 'en-bigrams.js'];
+      const readModules = () =>
+        modules.map((name) => readFileSync(join(dir, name), 'utf8'));
+      const before = readModules();
       writeCounts(buildCounts([first, second], 'en'), 'en', dir);
-      expect(readFileSync(join(dir, 'en.js'), 'utf8')).toBe(before);
+      expect(readModules()).toEqual(before);
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
