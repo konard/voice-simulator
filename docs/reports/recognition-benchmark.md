@@ -1,16 +1,17 @@
 # Recognition benchmark on public recordings
 
-The runner verified all six recording sources and the AISHELL-3 text index.
-With `--limit 25`, the recognition suite took 64.05 minutes on one core.
-The benchmark measured the first 25 rows of each FLEURS set and all 20 rows
-of both additional corpora. The quality floors blocked the initial baseline.
-Both benchmark reports were uploaded, and the artifact contained no audio. [Workflow and artifact](https://github.com/konard/voice-simulator/actions/runs/44810324118)
+The default recognition suite verified all six recording sources and the
+AISHELL-3 text index. It finished in 67.72 minutes on one core, within the
+90-minute budget. The benchmark measured the first 25 rows of each FLEURS
+set and all 20 rows of both additional corpora. The quality floors blocked the
+initial baseline. Both benchmark reports were uploaded, and the artifact
+contained no audio. [Default workflow and artifact](https://github.com/konard/voice-simulator/actions/runs/44824410093)
 
-Commit: `194809c12e83ed3ade2973b8c9a96e96df941135`
+Commit: `8590c9ef85baedbdca7395a41096eacc3e6a49b8`
 
-Command: `node scripts/run-heavy.mjs --suite recognition --limit 25`
+Command: `node scripts/run-heavy.mjs --suite recognition`
 
-Benchmark elapsed time: 57.27 minutes. Sample: up to 25 rows per set.
+Benchmark elapsed time: 57.86 minutes. Sample: configured prefixes up to 25 rows.
 
 Automatic language identification on all four FLEURS sets at medium: 28/87 (32.2%).
 
@@ -19,19 +20,19 @@ Automatic language identification on all four FLEURS sets at medium: 28/87 (32.2
 <!-- prettier-ignore -->
 | Level | Utterances | Skipped | Audio (min) | PER | Class errors | WER | CER | Tone errors | Language right | RTF |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| low | 23 | 2 | 3.32 | 82.5% | 59.8% | 102.0% | 85.3% | — | 69.6% | 0.97 |
-| medium | 23 | 2 | 3.32 | 82.8% | 57.2% | 107.0% | 85.6% | — | 60.9% | 1.31 |
-| high | 23 | 2 | 3.32 | 82.8% | 57.0% | 107.5% | 86.7% | — | 52.2% | 1.65 |
-| medium (known language) | 23 | 2 | 3.32 | 78.7% | 54.4% | 106.6% | 76.6% | — | 100.0% | 0.71 |
+| low | 23 | 2 | 3.32 | 82.5% | 59.8% | 102.0% | 85.3% | — | 69.6% | 0.98 |
+| medium | 23 | 2 | 3.32 | 82.8% | 57.2% | 107.0% | 85.6% | — | 60.9% | 1.32 |
+| high | 23 | 2 | 3.32 | 82.8% | 57.0% | 107.5% | 86.7% | — | 52.2% | 1.71 |
+| medium (known language) | 23 | 2 | 3.32 | 78.7% | 54.4% | 106.6% | 76.6% | — | 100.0% | 0.73 |
 
 ### fleurs-ru
 
 <!-- prettier-ignore -->
 | Level | Utterances | Skipped | Audio (min) | PER | Class errors | WER | CER | Tone errors | Language right | RTF |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| low | 22 | 3 | 3.83 | 83.8% | 60.2% | 109.3% | 90.3% | — | 45.5% | 0.68 |
-| medium | 22 | 3 | 3.83 | 83.6% | 55.5% | 130.7% | 89.4% | — | 54.5% | 0.70 |
-| high | 22 | 3 | 3.83 | 83.6% | 55.4% | 130.4% | 89.4% | — | 54.5% | 1.07 |
+| low | 22 | 3 | 3.83 | 83.8% | 60.2% | 109.3% | 90.3% | — | 45.5% | 0.70 |
+| medium | 22 | 3 | 3.83 | 83.6% | 55.5% | 130.7% | 89.4% | — | 54.5% | 0.72 |
+| high | 22 | 3 | 3.83 | 83.6% | 55.4% | 130.4% | 89.4% | — | 54.5% | 1.10 |
 | medium (known language) | 22 | 3 | 3.83 | 81.4% | 53.8% | 117.0% | 79.9% | — | 100.0% | 0.50 |
 
 ### fleurs-hi
@@ -39,10 +40,10 @@ Automatic language identification on all four FLEURS sets at medium: 28/87 (32.2
 <!-- prettier-ignore -->
 | Level | Utterances | Skipped | Audio (min) | PER | Class errors | WER | CER | Tone errors | Language right | RTF |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| low | 23 | 2 | 4.35 | 87.9% | 52.8% | 103.5% | 99.0% | — | 4.3% | 0.59 |
-| medium | 23 | 2 | 4.35 | 87.0% | 49.8% | 112.9% | 98.1% | — | 8.7% | 0.85 |
-| high | 23 | 2 | 4.35 | 86.9% | 49.9% | 112.4% | 98.1% | — | 8.7% | 1.40 |
-| medium (known language) | 23 | 2 | 4.35 | 81.5% | 47.8% | 99.6% | 85.2% | — | 100.0% | 0.62 |
+| low | 23 | 2 | 4.35 | 87.9% | 52.8% | 103.5% | 99.0% | — | 4.3% | 0.60 |
+| medium | 23 | 2 | 4.35 | 87.0% | 49.8% | 112.9% | 98.1% | — | 8.7% | 0.84 |
+| high | 23 | 2 | 4.35 | 86.9% | 49.9% | 112.4% | 98.1% | — | 8.7% | 1.38 |
+| medium (known language) | 23 | 2 | 4.35 | 81.5% | 47.8% | 99.6% | 85.2% | — | 100.0% | 0.61 |
 
 ### fleurs-zh
 
@@ -61,16 +62,16 @@ Automatic language identification on all four FLEURS sets at medium: 28/87 (32.2
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | low | 20 | 0 | 1.72 | 82.8% | 57.4% | 99.4% | 88.5% | — | 55.0% | 0.41 |
 | medium | 20 | 0 | 1.72 | 83.8% | 50.7% | 104.8% | 88.2% | — | 45.0% | 0.64 |
-| high | 20 | 0 | 1.72 | 83.7% | 50.9% | 104.1% | 88.0% | — | 50.0% | 1.02 |
+| high | 20 | 0 | 1.72 | 83.7% | 50.9% | 104.1% | 88.0% | — | 50.0% | 1.03 |
 
 ### sova-rudevices-test
 
 <!-- prettier-ignore -->
 | Level | Utterances | Skipped | Audio (min) | PER | Class errors | WER | CER | Tone errors | Language right | RTF |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| low | 20 | 0 | 1.12 | 85.7% | 57.0% | 109.4% | 91.2% | — | 45.0% | 0.29 |
-| medium | 20 | 0 | 1.12 | 86.2% | 55.2% | 116.5% | 93.6% | — | 20.0% | 0.51 |
-| high | 20 | 0 | 1.12 | 86.2% | 55.2% | 116.5% | 93.6% | — | 20.0% | 0.65 |
+| low | 20 | 0 | 1.12 | 85.7% | 57.0% | 109.4% | 91.2% | — | 45.0% | 0.30 |
+| medium | 20 | 0 | 1.12 | 86.2% | 55.2% | 116.5% | 93.6% | — | 20.0% | 0.53 |
+| high | 20 | 0 | 1.12 | 86.2% | 55.2% | 116.5% | 93.6% | — | 20.0% | 0.64 |
 
 ## Phone confusions
 
@@ -118,9 +119,12 @@ source of phone errors. [Stage probe](../../experiments/issue-76-recognition-sta
 
 With the original 50-row FLEURS defaults, the verified-download run reached
 the 90-minute deadline while measuring Hindi FLEURS. It had verified all six
-corpora and completed English and Russian FLEURS. The measured 64.05-minute
-25-row run supports reducing the default FLEURS prefixes to 25. Both additional
-corpora keep their 20-row prefixes. [50-row default run](https://github.com/konard/voice-simulator/actions/runs/44810707976)
+corpora and completed English and Russian FLEURS. The complete run with
+`--limit 25` took 64.05 minutes for the suite and 57.27 minutes for the
+benchmark. That measurement led to the 25-row FLEURS defaults. The additional
+corpora kept their 20-row prefixes. The explicit 25-row sample and the default
+run produced identical per-utterance scores and aggregate non-timing
+results. [50-row default run](https://github.com/konard/voice-simulator/actions/runs/44810707976) · [Explicit 25-row run](https://github.com/konard/voice-simulator/actions/runs/44810324118)
 
 The first no-limit run took 71.45 minutes and the run with `--limit 50`
 after merging main took 72.45 minutes. Both timed out probing Russian and
@@ -139,6 +143,11 @@ scores and refused to save an initial baseline. [One-row workflow](https://githu
 - `libritts-r-dev-clean` · LibriTTS-R, English dev.clean split, first 20 rows. [CC-BY-4.0](https://www.openslr.org/141/). Koizumi et al. (2023). LibriTTS-R: A Restored Multi-Speaker Text-to-Speech Corpus. https://arxiv.org/abs/2305.18802 [Dataset](https://huggingface.co/datasets/mythicinfinity/libritts_r)
 - `sova-rudevices-test` · SOVA RuDevices, Russian test split, first 20 rows. [CC-BY-4.0](https://github.com/sovaai/sova-dataset#license). Virtual Assistant, LLC. SOVA Dataset, RuDevices. https://github.com/sovaai/sova-dataset [Dataset](https://huggingface.co/datasets/bond005/sova_rudevices)
 - `aishell3-test-index` · AISHELL-3, transcript index of the test set (test/content.txt: one line per utterance, the WAV file name, then each Chinese character followed by its pinyin with a tone number). [Apache-2.0](https://huggingface.co/datasets/AISHELL/AISHELL-3). Shi, Bu, Xu, Zhang, Li (2021). AISHELL-3: A Multi-speaker Mandarin TTS Corpus. Proc. Interspeech 2021, 2756-2760. https://www.openslr.org/93/ [Dataset](https://huggingface.co/datasets/AISHELL/AISHELL-3)
+
+The dataset registry pins the transcript SHA-256 for each row source.
+The ignored cache stores each recording's SHA-256. The verified 20 cached
+WAVs total 4,966,000 bytes for LibriTTS-R and 2,145,104 bytes for SOVA
+RuDevices. [Dataset registry](../../datasets/registry.json)
 
 ## How to read this
 
