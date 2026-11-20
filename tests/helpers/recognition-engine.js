@@ -1,4 +1,5 @@
 /** Small feature packets for the numerical Rust recognition ABI. */
+import { syllabifyTokens } from '../../src/ipa/syllables.js';
 import { float64View } from '../../src/engine/wasm-loader.js';
 import {
   soundKey,
@@ -75,6 +76,50 @@ function following(entry, language) {
   return entry.word === '一' && tone === '51' ? 2 : 0;
 }
 
+const toneLetters = ['˥', '˧˥', '˨˩˦', '˥˩', '', '˨˩'];
+
+function nucleusRoles(tokens, language) {
+  const roles = new Map();
+  for (const syllable of syllabifyTokens(tokens, { language })) {
+    const primary = syllable.some((token) => token.stress === 1);
+    const nuclei = syllable.filter((token) => token.syllabic);
+    nuclei.forEach((token, i) =>
+      roles.set(token, i ? 2 : 1 + 4 * Number(primary))
+    );
+  }
+  return tokens.map((token) => roles.get(token) ?? 0);
+}
+
+function appendProsody(packet, tokens, entries, language) {
+  const tonal = language === 'zh';
+  const stressed = language === 'en' || language === 'ru';
+  if (
+    !tokens.some(
+      (token) =>
+        (tonal && token.tones) ||
+        (stressed && Number.isFinite(token.prominence))
+    )
+  ) {
+    return;
+  }
+  const roles = stressed ? nucleusRoles(tokens, language) : [];
+  tokens.forEach((token, i) => {
+    const tone = tonal && token.tones;
+    const stress = stressed && Number.isFinite(token.prominence);
+    packet.push(Number(Boolean(tone)) + 2 * Number(stress));
+    if (tone) {
+      packet.push(...toneLetters.map((letter) => tone[letter]));
+    }
+    if (stress) {
+      packet.push(token.prominence);
+    }
+    packet.push((roles[i] ?? 0) & 3);
+  });
+  for (const entry of entries) {
+    packet.push(...nucleusRoles(entry.tokens, language));
+  }
+}
+
 export function recognitionPacket(input, lexicon, options, nbest) {
   const encode = featureEncoder(options.language);
   const entries = entriesOf(lexicon.root);
@@ -126,6 +171,7 @@ export function recognitionPacket(input, lexicon, options, nbest) {
     packet.push(...pair.split('\t').map((word) => ids.get(word)), count);
   }
   packet.push(...unknown);
+  appendProsody(packet, input.tokens, entries, options.language);
   return { packet, words };
 }
 
