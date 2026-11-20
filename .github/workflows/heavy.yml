@@ -49,7 +49,8 @@ jobs:
     # docs/CI-TIMEOUT-BUDGETS.md.
     timeout-minutes: 330
     concurrency:
-      group: check-${{ github.workflow }}-${{ github.ref }}-${{ inputs.suite }}
+      # A short recognition sample can run alongside the default prefixes.
+      group: check-${{ github.workflow }}-${{ github.ref }}-${{ inputs.suite == 'recognition' && inputs.limit != '' && format('recognition-{0}', inputs.limit) || inputs.suite }}
       cancel-in-progress: true
     permissions:
       contents: read
