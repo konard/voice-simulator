@@ -10,6 +10,11 @@ pub trait Solver {
     /// Set the tract of one control block from a frame (see
     /// [`crate::frame`]).
     fn set_shape(&mut self, frame: &[f64]);
+    /// Set the shape with the previous frame from the same render call,
+    /// when available. Solvers with time-independent geometry may reuse it.
+    fn set_shape_after(&mut self, frame: &[f64], _previous: Option<&[f64]>) {
+        self.set_shape(frame);
+    }
     /// Seconds of physical time per step for the last frame.
     fn step_duration(&self) -> f64;
     /// Advance one step with the glottal flow derivative `flow`, the

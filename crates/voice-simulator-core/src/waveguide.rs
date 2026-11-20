@@ -91,95 +91,86 @@ fn group_ends(sections: usize, stages: f64) -> Vec<usize> {
         .collect()
 }
 
-/// Loss filters at the ends of groups of sections (`lossStages`).
+/// A loss filter at the end of one group of sections (`lossStages`).
 #[derive(Clone, Debug)]
-struct Stages {
-    ends: Vec<usize>,
-    b0: Vec<f64>,
-    b1: Vec<f64>,
-    a1: Vec<f64>,
-    right_input: Vec<f64>,
-    right_output: Vec<f64>,
-    left_input: Vec<f64>,
-    left_output: Vec<f64>,
-    design_k: Vec<f64>,
-    design_rate: Vec<f64>,
+struct LossStage {
+    end: usize,
+    b0: f64,
+    b1: f64,
+    a1: f64,
+    right_input: f64,
+    right_output: f64,
+    left_input: f64,
+    left_output: f64,
+    design_k: f64,
+    design_rate: f64,
 }
 
-impl Stages {
-    fn new(sections: usize, stages: f64) -> Self {
-        let ends = group_ends(sections, stages);
-        let groups = ends.len();
-        Self {
-            ends,
-            b0: vec![1.0; groups],
-            b1: vec![0.0; groups],
-            a1: vec![0.0; groups],
-            right_input: vec![0.0; groups],
-            right_output: vec![0.0; groups],
-            left_input: vec![0.0; groups],
-            left_output: vec![0.0; groups],
-            design_k: vec![f64::NAN; groups],
-            design_rate: vec![0.0; groups],
-        }
+impl LossStage {
+    fn groups(sections: usize, stages: f64) -> Vec<Self> {
+        group_ends(sections, stages)
+            .into_iter()
+            .map(|end| Self {
+                end,
+                b0: 1.0,
+                b1: 0.0,
+                a1: 0.0,
+                right_input: 0.0,
+                right_output: 0.0,
+                left_input: 0.0,
+                left_output: 0.0,
+                design_k: f64::NAN,
+                design_rate: 0.0,
+            })
+            .collect()
     }
 
-    /// `#setFilter`: redesign group `group` for `k` at `rate` if either changed.
-    fn set_filter(&mut self, shelves: &mut ShelfCache, group: usize, k: f64, rate: f64) {
-        if k == self.design_k[group] && rate == self.design_rate[group] {
+    /// `#setFilter`: redesign for `k` at `rate` if either changed.
+    fn set_filter(&mut self, shelves: &mut ShelfCache, k: f64, rate: f64) {
+        if k == self.design_k && rate == self.design_rate {
             return;
         }
-        self.design_k[group] = k;
-        self.design_rate[group] = rate;
+        self.design_k = k;
+        self.design_rate = rate;
         let filter = shelves.design(k, rate);
-        self.b0[group] = filter.b0;
-        self.b1[group] = filter.b1;
-        self.a1[group] = filter.a1;
+        self.b0 = filter.b0;
+        self.b1 = filter.b1;
+        self.a1 = filter.a1;
     }
 
-    /// `#filterStages`: the loss of each group on both waves of its last section.
+    /// Loss on both waves of the last section.
     #[inline]
     fn filter(&mut self, right: &mut [f64], left: &mut [f64]) {
-        for (group, &end) in self.ends.iter().enumerate() {
-            let gain = self.b0[group];
-            let zero = self.b1[group];
-            let pole = self.a1[group];
-            let to_right = right[end];
-            let to_left = left[end];
-            let out_right =
-                gain * to_right + zero * self.right_input[group] - pole * self.right_output[group];
-            let out_left =
-                gain * to_left + zero * self.left_input[group] - pole * self.left_output[group];
-            self.right_input[group] = to_right;
-            self.right_output[group] = out_right;
-            self.left_input[group] = to_left;
-            self.left_output[group] = out_left;
-            right[end] = out_right;
-            left[end] = out_left;
-        }
+        let to_right = right[self.end];
+        let to_left = left[self.end];
+        self.right_output =
+            self.b0 * to_right + self.b1 * self.right_input - self.a1 * self.right_output;
+        self.left_output =
+            self.b0 * to_left + self.b1 * self.left_input - self.a1 * self.left_output;
+        self.right_input = to_right;
+        self.left_input = to_left;
+        right[self.end] = self.right_output;
+        left[self.end] = self.left_output;
     }
 
     /// True if no filter state is above `limit`.
     fn quiet(&self, limit: f64) -> bool {
-        [
-            &self.right_input,
-            &self.right_output,
-            &self.left_input,
-            &self.left_output,
-        ]
-        .iter()
-        .all(|values| quiet(values, limit))
+        quiet(
+            &[
+                self.right_input,
+                self.right_output,
+                self.left_input,
+                self.left_output,
+            ],
+            limit,
+        )
     }
 
     fn clear(&mut self) {
-        for values in [
-            &mut self.right_input,
-            &mut self.right_output,
-            &mut self.left_input,
-            &mut self.left_output,
-        ] {
-            values.fill(0.0);
-        }
+        self.right_input = 0.0;
+        self.right_output = 0.0;
+        self.left_input = 0.0;
+        self.left_output = 0.0;
     }
 }
 
@@ -222,14 +213,19 @@ struct Walls {
     mass: f64,
     resistance: f64,
     stiffness: f64,
-    junction: Vec<usize>,
-    drive: Vec<f64>,
-    gain: Vec<f64>,
-    drop: Vec<f64>,
-    flow: Vec<f64>,
-    volume: Vec<f64>,
+    groups: Vec<WallGroup>,
     step: f64,
     spring: f64,
+}
+
+#[derive(Clone, Debug, Default)]
+struct WallGroup {
+    junction: usize,
+    drive: f64,
+    gain: f64,
+    drop: f64,
+    flow: f64,
+    volume: f64,
 }
 
 /// The waveguide (`Waveguide` of `waveguide.js`).
@@ -255,8 +251,8 @@ pub struct Waveguide {
     pub lips: Radiation,
     /// Filter at the nostrils.
     pub nostrils: Radiation,
-    stages: Stages,
-    nose_stages: Stages,
+    stages: Vec<LossStage>,
+    nose_stages: Vec<LossStage>,
     walls: Walls,
     shelves: ShelfCache,
     losses_stale: bool,
@@ -307,8 +303,8 @@ impl Waveguide {
         let n = options.sections;
         let nose = options.nose_sections;
         let wall_loss = options.wall_loss;
-        let stages = Stages::new(n, LOSS_STAGES);
-        let groups = stages.ends.len();
+        let stages = LossStage::groups(n, LOSS_STAGES);
+        let groups = stages.len();
         let branch = options.piriform;
         let loss_exponent = LOSS_REFERENCE_SECTIONS / n as f64;
         let mut waveguide = Self {
@@ -326,17 +322,12 @@ impl Waveguide {
             lips: Radiation::new(),
             nostrils: Radiation::new(),
             stages,
-            nose_stages: Stages::new(nose, NOSE_LOSS_STAGES),
+            nose_stages: LossStage::groups(nose, NOSE_LOSS_STAGES),
             walls: Walls {
                 mass: options.wall_mass,
                 resistance: options.wall_resistance * wall_loss,
                 stiffness: options.wall_stiffness,
-                junction: vec![0; groups],
-                drive: vec![0.0; groups],
-                gain: vec![0.0; groups],
-                drop: vec![0.0; groups],
-                flow: vec![0.0; groups],
-                volume: vec![0.0; groups],
+                groups: vec![WallGroup::default(); groups],
                 step: 0.0,
                 spring: 0.0,
             },
@@ -469,8 +460,8 @@ impl Waveguide {
         self.walls.step = step;
         self.walls.spring = rate * self.walls.stiffness;
         let mut start = 0;
-        for group in 0..self.stages.ends.len() {
-            let end = self.stages.ends[group];
+        for (stage, wall) in self.stages.iter_mut().zip(&mut self.walls.groups) {
+            let end = stage.end;
             let mut inverse = 0.0;
             let mut radii = 0.0;
             for &area in &self.areas[start..=end] {
@@ -478,8 +469,7 @@ impl Waveguide {
                 inverse += 1.0 / radius;
                 radii += radius;
             }
-            self.stages
-                .set_filter(&mut self.shelves, group, per_radius * inverse, self.rate);
+            stage.set_filter(&mut self.shelves, per_radius * inverse, self.rate);
             let surface = perimeter * radii;
             let middle = math::round_half_up((start + end + 1) as f64 / 2.0);
             let mut junction = max(1.0, min((self.n - 1) as f64, middle)) as usize;
@@ -490,12 +480,11 @@ impl Waveguide {
                     junction + 1
                 };
             }
-            self.walls.junction[group] = junction;
+            wall.junction = junction;
             let area = self.areas[junction - 1] + self.areas[junction];
-            self.walls.drive[group] = rate * surface * impedance;
-            self.walls.gain[group] =
-                1.0 / (1.0 + rate * (self.walls.resistance + (surface * impedance) / area));
-            self.walls.drop[group] = 1.0 / area;
+            wall.drive = rate * surface * impedance;
+            wall.gain = 1.0 / (1.0 + rate * (self.walls.resistance + (surface * impedance) / area));
+            wall.drop = 1.0 / area;
             start = end + 1;
         }
     }
@@ -507,14 +496,13 @@ impl Waveguide {
         let section_length = self.length / self.n as f64;
         let scale = self.loss_shape * self.wall_loss * self.nasal_loss;
         let mut start = 0;
-        for group in 0..self.nose_stages.ends.len() {
-            let end = self.nose_stages.ends[group];
+        for stage in &mut self.nose_stages {
+            let end = stage.end;
             let mut k = 0.0;
             for &area in &self.nose_areas[start..=end] {
                 k += viscothermal_loss(1.0, area, scale) * section_length;
             }
-            self.nose_stages
-                .set_filter(&mut self.shelves, group, k, self.rate);
+            stage.set_filter(&mut self.shelves, k, self.rate);
             start = end + 1;
         }
     }
@@ -733,7 +721,10 @@ impl Waveguide {
     fn silence_nose(&mut self) {
         if !quiet(&self.nose_right, NOSE_SILENCE)
             || !quiet(&self.nose_left, NOSE_SILENCE)
-            || !self.nose_stages.quiet(NOSE_SILENCE)
+            || !self
+                .nose_stages
+                .iter()
+                .all(|stage| stage.quiet(NOSE_SILENCE))
             || math::abs(self.nostrils.input) > NOSE_SILENCE
             || math::abs(self.nostrils.output) > NOSE_SILENCE
         {
@@ -741,7 +732,9 @@ impl Waveguide {
         }
         self.nose_right.fill(0.0);
         self.nose_left.fill(0.0);
-        self.nose_stages.clear();
+        for stage in &mut self.nose_stages {
+            stage.clear();
+        }
         self.nostrils.reset();
         self.nose_output = 0.0;
         self.nose_silent = true;
@@ -775,8 +768,8 @@ impl Waveguide {
         let walls = &mut self.walls;
         let mut junction = usize::MAX;
         let mut pressure = 0.0;
-        for group in 0..walls.junction.len() {
-            let index = walls.junction[group];
+        for group in &mut walls.groups {
+            let index = group.junction;
             if index != junction {
                 junction = index;
                 let incoming_right = self.right[index - 1];
@@ -786,12 +779,11 @@ impl Waveguide {
                     + self.reflection[index] * (incoming_right - incoming_left)
                     + if index == position { add_right } else { 0.0 };
             }
-            let flow = (walls.flow[group] + walls.drive[group] * pressure
-                - walls.spring * walls.volume[group])
-                * walls.gain[group];
-            walls.flow[group] = flow;
-            walls.volume[group] += walls.step * flow;
-            let drop = flow * walls.drop[group];
+            let flow =
+                (group.flow + group.drive * pressure - walls.spring * group.volume) * group.gain;
+            group.flow = flow;
+            group.volume += walls.step * flow;
+            let drop = flow * group.drop;
             pressure -= drop;
             self.spare_right[index] -= drop * self.damping[index];
             self.spare_left[index - 1] -= drop * self.damping[index - 1];
@@ -834,12 +826,15 @@ impl Waveguide {
             (flow - noise) * 0.5,
         );
         self.propagate_piriform();
-        self.stages.filter(&mut self.right, &mut self.left);
+        for stage in &mut self.stages {
+            stage.filter(&mut self.right, &mut self.left);
+        }
         if self.velum_open || !self.nose_silent {
             self.nose_silent = false;
             self.scatter_nose();
-            self.nose_stages
-                .filter(&mut self.nose_right, &mut self.nose_left);
+            for stage in &mut self.nose_stages {
+                stage.filter(&mut self.nose_right, &mut self.nose_left);
+            }
             if !self.velum_open {
                 self.nose_check += 1;
                 if self.nose_check >= NOSE_CHECK_STEPS {
@@ -906,6 +901,18 @@ impl Solver for Waveguide {
             frame[frame::VELUM_INDEX],
         );
         self.set_length(frame[frame::LENGTH]);
+    }
+
+    fn set_shape_after(&mut self, frame: &[f64], previous: Option<&[f64]>) {
+        if previous.is_some_and(|last| {
+            frame[frame::LENGTH] == last[frame::LENGTH]
+                && frame[frame::VELUM_AREA] == last[frame::VELUM_AREA]
+                && frame[frame::VELUM_INDEX] == last[frame::VELUM_INDEX]
+                && frame::areas(frame) == frame::areas(last)
+        }) {
+            return;
+        }
+        self.set_shape(frame);
     }
 
     fn step_duration(&self) -> f64 {
