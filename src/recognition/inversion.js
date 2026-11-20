@@ -35,8 +35,10 @@ function outputFor(frames, head, width, capacity) {
   const names = [
     ...CODEBOOK_CHANNELS.map(({ name }) => name),
     ...SOURCE_CHANNELS,
-    'whisper',
   ];
+  if (frames.whisper) {
+    names.push('whisper');
+  }
   const arrays = () =>
     Object.fromEntries(names.map((name) => [name, new Float32Array(capacity)]));
   return {

@@ -187,6 +187,9 @@ export function createSourceEstimator(frames, pitch, track, batch) {
       // Values beyond the commitment boundary come from the immutable pitch track.
       fillPitch(first, last, end);
     }
+    if (frames.whisper) {
+      channels.whisper.set(frames.whisper.subarray(first, last), first);
+    }
     let voiced = forward[end - 1];
     for (let t = end - 1; t >= first; t--) {
       voiced += alpha * (forward[t] - voiced);
@@ -201,7 +204,6 @@ export function createSourceEstimator(frames, pitch, track, batch) {
         ? (level[b] - level[a]) / (b - a)
         : 0;
       channels.trill[t] = trill.detected[t];
-      channels.whisper[t] = frames.whisper?.[t] ?? 0;
       variance.glottalClosure[t] = Infinity;
       variance.lateral[t] = Infinity;
     }

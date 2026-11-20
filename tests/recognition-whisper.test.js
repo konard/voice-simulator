@@ -132,6 +132,7 @@ describe('whisper recognition', () => {
     });
     expect(disabled.modes).toEqual([]);
     expect(disabled.segments.some(({ whispered }) => whispered)).toBe(false);
+    expect(disabled.tracks.articulation.channels.whisper).toBeUndefined();
   });
 
   it('keeps decoding across explicit spans shorter than a phone', () => {
