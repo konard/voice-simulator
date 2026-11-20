@@ -21,9 +21,11 @@ struct Candidate {
 
 impl Ord for Candidate {
     fn cmp(&self, other: &Self) -> Ordering {
+        // Squared distances are nonnegative, so their bit patterns sort in
+        // numeric order. An invalid NaN sorts after every numeric distance.
         self.distance
-            .partial_cmp(&other.distance)
-            .unwrap_or_else(|| self.distance.total_cmp(&other.distance))
+            .to_bits()
+            .cmp(&other.distance.to_bits())
             .then(self.row.cmp(&other.row))
     }
 }
@@ -105,7 +107,13 @@ impl<'a> Codebook<'a> {
                 ranked.extend(shortlist.iter().map(|candidate| {
                     let row = candidate.row;
                     let stored = &self.envelope[row];
-                    let sum: f64 = if contiguous {
+                    let sum: f64 = if count == BANDS {
+                        levels
+                            .iter()
+                            .zip(stored)
+                            .map(|(level, stored)| difference(*level, *stored))
+                            .sum()
+                    } else if contiguous {
                         levels[..count]
                             .iter()
                             .zip(stored)
