@@ -20,6 +20,7 @@ import { HeadEditor } from './components/HeadEditor.js';
 import { DEFAULT_ACOUSTICS, listeningSettings } from './engine/listening.js';
 import { readTierSetting } from './engine/benchmark-cache.js';
 import { PresetSelect, initialPreset } from './components/PresetSelect.js';
+import { Recognition } from './components/Recognition.js';
 import { VoiceMatch } from './components/VoiceMatch.js';
 import { SpokenText } from './components/SpokenText.js';
 import { useSimulator } from './engine/use-simulator.js';
@@ -539,6 +540,22 @@ export function App() {
     setSeed('');
   };
 
+  const speak = ({ text, lang, accent, mode }) =>
+    simulator.engineRef.current?.speak({
+      text,
+      lang,
+      accent,
+      head,
+      seed,
+      mode,
+      ...listening,
+    });
+  const speakBack = (text, lang) => {
+    const next = { ...speech, text, lang };
+    setSpeech(next);
+    speak(next);
+  };
+
   return h(
     'main',
     { className: 'app-shell' },
@@ -597,16 +614,7 @@ export function App() {
         setSpeech,
         simulator,
         t,
-        onSpeak: () =>
-          simulator.engineRef.current?.speak({
-            text: speech.text,
-            lang: speech.lang,
-            accent: speech.accent,
-            head,
-            seed,
-            mode: speech.mode,
-            ...listening,
-          }),
+        onSpeak: () => speak(speech),
         onStop: () => simulator.engineRef.current?.stop(),
       })
     ),
@@ -631,6 +639,12 @@ export function App() {
       t,
       onChange: setAcoustics,
     }),
-    h(VoiceMatch, { text: speech.text, lang: speech.lang, t, onHead: editHead })
+    h(VoiceMatch, {
+      text: speech.text,
+      lang: speech.lang,
+      t,
+      onHead: editHead,
+    }),
+    h(Recognition, { t, onSpeakBack: speakBack })
   );
 }

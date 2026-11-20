@@ -1,24 +1,41 @@
-import { createElement as h, useMemo } from 'react';
+import { createElement as h, Fragment, useMemo } from 'react';
 import { ipaPieces, spokenPieces, textPieces } from './highlight.js';
 
-function Pieces({ pieces, className, lang }) {
+function Pieces({ pieces, className, lang, recognition }) {
+  const { words, committedWords, mixed } = recognition ?? {};
+  const ipa = lang === 'und-fonipa';
+  let previousWord = null;
   return h(
     'p',
     { className, lang },
-    pieces.map((piece, index) =>
-      piece.word === null
-        ? piece.text
-        : h(
-            'span',
-            {
-              key: index,
-              'data-word': piece.word,
-              'data-syllable': piece.syllable ?? undefined,
-              'data-syllable-last': piece.lastSyllable,
-            },
-            piece.text
-          )
-    )
+    pieces.map((piece, index) => {
+      if (piece.word === null) {
+        return piece.text;
+      }
+      const code = words?.[piece.word].lang;
+      const badge =
+        mixed &&
+        !ipa &&
+        piece.word !== previousWord &&
+        code !== words[piece.word - 1]?.lang;
+      previousWord = piece.word;
+      return h(
+        Fragment,
+        { key: index },
+        badge ? h('span', { className: 'language-badge' }, code) : null,
+        h(
+          'span',
+          {
+            className: piece.word >= committedWords ? 'tentative' : undefined,
+            lang: ipa && code ? `${code}-fonipa` : code,
+            'data-word': piece.word,
+            'data-syllable': piece.syllable ?? undefined,
+            'data-syllable-last': piece.lastSyllable,
+          },
+          piece.text
+        )
+      );
+    })
   );
 }
 
@@ -69,22 +86,45 @@ function SaidWords({ timeline, lang }) {
  * the word and syllable being spoken highlighted by `paintHighlight`.
  * Numbers, dates and sums also show the words they are read as.
  */
-export function SpokenText({ rootRef, text, lang, timeline, t }) {
+export function SpokenText({
+  rootRef,
+  text,
+  lang,
+  timeline,
+  t,
+  committedWords,
+  modes,
+}) {
   const pieces = useMemo(() => textPieces(text, timeline), [text, timeline]);
   const ipa = useMemo(() => ipaPieces(timeline), [timeline]);
   if (!timeline?.words.length) {
     return null;
   }
+  const words = timeline.words;
+  const recognition =
+    committedWords === undefined
+      ? null
+      : {
+          words,
+          committedWords,
+          mixed: words.some((word) => word.lang !== words[0].lang),
+        };
   return h(
     'section',
     {
       ref: rootRef,
       className: 'spoken',
-      'aria-label': t.spoken,
+      'aria-label': recognition ? t.recognitionTranscript : t.spoken,
       'aria-live': 'polite',
     },
-    h(Pieces, { pieces, className: 'spoken-text', lang }),
+    h(Pieces, { pieces, className: 'spoken-text', lang, recognition }),
     h(SaidWords, { timeline, lang }),
-    h(Pieces, { pieces: ipa, className: 'spoken-ipa', lang: 'und-fonipa' })
+    h(Pieces, {
+      pieces: ipa,
+      className: 'spoken-ipa',
+      lang: 'und-fonipa',
+      recognition,
+    }),
+    modes
   );
 }

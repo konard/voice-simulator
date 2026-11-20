@@ -90,40 +90,67 @@ function refineWhisperReading(samples, sampleRate, result, settings) {
   );
 }
 
-export function audioToIpa(samples, sampleRate, options = {}) {
-  const settings = decoderSettings(sampleRate, options);
-  let frontEnd;
+/** Try the existing verified synthesis model without running the fallback decoder. */
+export function decodeRecordedSimulation(
+  samples,
+  sampleRate,
+  options,
+  settings = decoderSettings(sampleRate, options),
+  frontEnd
+) {
   const sourceRate = options.sourceRate ?? sampleRate;
   const matchKnownVoice = knownVoiceMatch(sourceRate, settings, options.voice);
   if (
-    (options.sourceRate !== undefined || matchKnownVoice) &&
-    !(Array.isArray(settings.whisper) && settings.whisper.length)
+    (options.sourceRate === undefined && !matchKnownVoice) ||
+    (Array.isArray(settings.whisper) && settings.whisper.length)
   ) {
-    const rate = matchKnownVoice ? settings.rate : sampleRate;
-    const input =
-      rate < sampleRate ? resample(samples, sampleRate, rate) : samples;
-    const match = matchSimulation(
-      input,
-      rate,
-      {
-        ...options,
-        languages: options.languages ?? [options.language],
-        voice: options.voice ? normalizeHeadConfig(options.voice) : undefined,
-        sourceRate,
-        matchKnownVoice,
-      },
-      () => (frontEnd = decodeFrontEnd(samples, sampleRate, settings))
-    );
-    if (match) {
-      const { frames, pitch } = frontEnd;
-      const analysis = matchKnownVoice
-        ? analyzeForDecode(samples, sampleRate, options, settings, {
-            ...frontEnd,
-            whisperSpans: match.whisperSpans,
-          })
-        : { frames, whisperSpans: match.whisperSpans, tracks: { pitch } };
-      return resultOfSimulation(match, analysis, 'en', 'en');
+    return null;
+  }
+  const rate = matchKnownVoice ? settings.rate : sampleRate;
+  const input =
+    rate < sampleRate ? resample(samples, sampleRate, rate) : samples;
+  let analyzed;
+  const match = matchSimulation(
+    input,
+    rate,
+    {
+      ...options,
+      languages: options.languages ?? [options.language],
+      voice: options.voice ? normalizeHeadConfig(options.voice) : undefined,
+      sourceRate,
+      matchKnownVoice,
+    },
+    () => {
+      analyzed = decodeFrontEnd(samples, sampleRate, settings);
+      frontEnd?.(analyzed);
+      return analyzed;
     }
+  );
+  if (!match) {
+    return null;
+  }
+  const { frames, pitch } = analyzed;
+  const analysis = matchKnownVoice
+    ? analyzeForDecode(samples, sampleRate, options, settings, {
+        ...analyzed,
+        whisperSpans: match.whisperSpans,
+      })
+    : { frames, whisperSpans: match.whisperSpans, tracks: { pitch } };
+  return resultOfSimulation(match, analysis, 'en', 'en');
+}
+
+export function audioToIpa(samples, sampleRate, options = {}) {
+  const settings = decoderSettings(sampleRate, options);
+  let frontEnd;
+  const verified = decodeRecordedSimulation(
+    samples,
+    sampleRate,
+    options,
+    settings,
+    (analyzed) => (frontEnd = analyzed)
+  );
+  if (verified) {
+    return verified;
   }
   const analysis = analyzeForDecode(
     samples,

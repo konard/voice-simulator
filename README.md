@@ -338,7 +338,9 @@ npm run example:web:dev
 
 Synthesis runs in a Web Worker and is streamed to Web Audio in chunks; the 3D
 view uses three.js and colours the tract (or every air voxel with the 3D
-solver) by the simulated acoustic pressure.
+solver) by the simulated acoustic pressure. **Recognise speech** processes a
+microphone stream or dropped audio file on the device and shows text and
+IPA with the same live syllable highlighting.
 
 Every published release stays online at its own path so all versions can be
 compared: `/v1/`, `/v2/` (the release before issue 9) and so on, with the

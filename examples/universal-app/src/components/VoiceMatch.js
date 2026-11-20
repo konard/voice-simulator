@@ -1,36 +1,7 @@
 import { createElement as h, useEffect, useRef, useState } from 'react';
-import { decodeAudio as decodeFile } from '../../../../src/index.js';
+import { AUDIO_FILE_ACCEPT, decodeAudio } from '../engine/decode-file.js';
 
 const NO_VOICE = 'No voiced speech found in the recording';
-
-/**
- * Decode an audio file to mono samples: WAV, FLAC, AIFF and AU with the
- * library's decoders, anything else the browser can play (MP3, Ogg, ...)
- * with Web Audio.
- */
-async function decodeAudio(buffer) {
-  try {
-    const { samples, sampleRate } = decodeFile(new Uint8Array(buffer));
-    return { samples, sampleRate };
-  } catch {
-    // Not a format the library reads; let the browser try.
-  }
-  const Context = globalThis.AudioContext ?? globalThis.webkitAudioContext;
-  const context = new Context();
-  try {
-    const audio = await context.decodeAudioData(buffer);
-    const samples = new Float32Array(audio.length);
-    for (let channel = 0; channel < audio.numberOfChannels; channel++) {
-      const data = audio.getChannelData(channel);
-      for (let index = 0; index < samples.length; index++) {
-        samples[index] += data[index] / audio.numberOfChannels;
-      }
-    }
-    return { samples, sampleRate: audio.sampleRate };
-  } finally {
-    context.close();
-  }
-}
 
 /** Start a microphone recording; resolves to a stop function. */
 async function startRecording(onAudio) {
@@ -97,7 +68,7 @@ function SourceRow({ busy, recording, t, onFile, onRecord }) {
       h('input', {
         id: 'match-file',
         type: 'file',
-        accept: 'audio/*,.wav,.flac,.aiff,.aif,.au',
+        accept: AUDIO_FILE_ACCEPT,
         disabled: busy,
         onChange: (event) => {
           const [file] = event.target.files;
