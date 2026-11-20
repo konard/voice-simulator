@@ -410,9 +410,7 @@ jobs:
       - name: Verify IPA decoder CPU targets
         if: always() && matrix.runtime == 'node' && matrix.os == 'ubuntu-24.04'
         shell: bash
-        env:
-          BLOCKED_GATES: ''
-        run: node --test --test-name-pattern='stays within the CPU budget' tests/recognition-decode.test.js
+        run: env -u BLOCKED_GATES node --test --test-name-pattern='stays within the CPU budget' tests/recognition-decode.test.js
 
       - name: Setup Bun
         if: matrix.runtime == 'bun'
