@@ -138,6 +138,7 @@ function searchPaths(input, lexicon, options, exact, wordSearches) {
   const lexicons = options.lexicons ?? new Map([[language, lexicon]]);
   const ends = [...boundaries].sort((a, b) => a - b);
   const best = Array.from({ length: tokens.length + 1 }, () => []);
+  const cutoff = new Float64Array(best.length).fill(Infinity);
   best[0] = [{ last: null, text: '', cost: 0 }];
   const suffixes = new Map();
   function knownSuffix(end, lexicon, language) {
@@ -182,9 +183,16 @@ function searchPaths(input, lexicon, options, exact, wordSearches) {
         options.spans,
         candidate
       );
+      const paths = best[candidate.to];
       for (const partial of best[from]) {
-        best[candidate.to].push({
-          cost: cost(partial),
+        const score = cost(partial);
+        // The last completed prune has already kept `beam` distinct paths
+        // here. Later paths at its worst cost also lose the stable tie.
+        if (score >= cutoff[candidate.to]) {
+          continue;
+        }
+        paths.push({
+          cost: score,
           last: candidate.word,
           lastLanguage: candidate.language,
           text: `${partial.text}\t${candidate.language}:${candidate.word}`,
@@ -193,8 +201,12 @@ function searchPaths(input, lexicon, options, exact, wordSearches) {
         });
       }
       // Bound retained partial results at each input position by the beam.
-      if (best[candidate.to].length > beam * 4) {
-        best[candidate.to] = prune(best[candidate.to], beam);
+      if (paths.length > beam * 4) {
+        const surviving = prune(paths, beam);
+        best[candidate.to] = surviving;
+        if (surviving.length === beam) {
+          cutoff[candidate.to] = surviving.at(-1).cost;
+        }
       }
     }
   }

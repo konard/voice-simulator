@@ -25,19 +25,26 @@ export function getCounts(language) {
         return { word: item.slice(0, at), count: Number(item.slice(at + 1)) };
       });
     const counts = new Map(words.map((item) => [item.word, item.count]));
-    const bigrams = new Map(
-      data.BIGRAMS.split(' ')
-        .filter(Boolean)
-        .map((item) => {
-          const [pair, count] = item.split('=');
-          const [a, b] = pair.split(',').map(Number);
-          return [`${words[a].word}\t${words[b].word}`, Number(count)];
-        })
-    );
+    let bigrams;
     opened.set(language, {
       words,
       counts,
-      bigrams,
+      get bigrams() {
+        if (!bigrams) {
+          bigrams = new Map();
+          for (const item of data.BIGRAMS.split(' ')) {
+            if (!item) {
+              continue;
+            }
+            const comma = item.indexOf(',');
+            const equals = item.indexOf('=', comma + 1);
+            const first = words[Number(item.slice(0, comma))].word;
+            const second = words[Number(item.slice(comma + 1, equals))].word;
+            bigrams.set(`${first}\t${second}`, Number(item.slice(equals + 1)));
+          }
+        }
+        return bigrams;
+      },
       total: words.reduce((sum, item) => sum + item.count, 0),
     });
   }

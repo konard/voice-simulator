@@ -17,11 +17,19 @@ const cached = new Map();
 
 export function countPronunciations(entries) {
   const singles = new Map();
-  const pairs = new Map();
-  const triples = new Map();
+  const pairRows = new Map();
+  const tripleTables = new Map();
   let total = 0;
   const add = (table, key, count) =>
     table.set(key, (table.get(key) ?? 0) + count);
+  const children = (table, key) => {
+    let found = table.get(key);
+    if (!found) {
+      found = new Map();
+      table.set(key, found);
+    }
+    return found;
+  };
   for (const { symbols, count } of entries) {
     let a;
     let b = '#';
@@ -30,13 +38,28 @@ export function countPronunciations(entries) {
     for (let i = 0; i <= symbols.length; i++) {
       const c = i === symbols.length ? '#' : (symbols[i].symbol ?? symbols[i]);
       add(singles, c, count);
-      add(pairs, `${b}\t${c}`, count);
+      add(children(pairRows, b), c, count);
       if (a !== undefined) {
-        add(triples, `${a}\t${b}\t${c}`, count);
+        add(children(children(tripleTables, a), b), c, count);
       }
       total += count;
       a = b;
       b = c;
+    }
+  }
+  const pairs = new Map();
+  const triples = new Map();
+  for (const [b, row] of pairRows) {
+    for (const [c, count] of row) {
+      pairs.set(`${b}\t${c}`, count);
+    }
+  }
+  for (const [a, table] of tripleTables) {
+    for (const [b, row] of table) {
+      const prefix = `${a}\t${b}`;
+      for (const [c, count] of row) {
+        triples.set(`${prefix}\t${c}`, count);
+      }
     }
   }
   return { singles, pairs, triples, total };

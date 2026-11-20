@@ -5,6 +5,7 @@ import {
   pronunciations,
   lexiconRevision,
   lexiconWords,
+  userPronunciations,
 } from '../g2p/lexicon.js';
 import { hanziToPinyin } from '../g2p/chinese.js';
 import { pinyinSyllableToIpa, syllableWithTone } from '../g2p/pinyin.js';
@@ -18,6 +19,11 @@ import { getCounts } from './data/index.js';
 import { checkLanguage, pronounce } from './languages.js';
 
 const cached = new Map();
+const russianAlternate = new Map([
+  ['в', 'f'],
+  ['к', 'ɡ'],
+  ['с', 'z'],
+]);
 
 /** Trie keys omit stress but retain diacritics; Mandarin tones stay too. */
 export function soundKey(token, language) {
@@ -76,11 +82,7 @@ function extraVariants(word, language) {
       ...(RUSSIAN_PROCLITICS[word] ?? []),
       RUSSIAN_ENCLITICS[word],
     ].filter(Boolean);
-    const alternate = new Map([
-      ['в', 'f'],
-      ['к', 'ɡ'],
-      ['с', 'z'],
-    ]).get(word);
+    const alternate = russianAlternate.get(word);
     return [...variants, ...(alternate ? [alternate] : [])];
   }
   return [];
@@ -136,9 +138,14 @@ export function getLexicon(language = 'en') {
     const contextual = language === 'zh' ? contextualChinese() : new Map();
     const parsed = new Map();
     for (const { word, count } of data.words) {
+      // The shipped Russian speaker already uses the same forward reading.
+      const additional =
+        language === 'ru'
+          ? (userPronunciations(language, word) ?? [])
+          : pronunciations(language, word);
       const variants = new Set([
         pronounce(word, language).ipa,
-        ...pronunciations(language, word),
+        ...additional,
         ...extraVariants(word, language),
         ...(contextual.get(word) ?? []),
       ]);
@@ -160,7 +167,16 @@ export function getLexicon(language = 'en') {
         addPronunciation(root, { word, ipa, count }, language, parsed.get(ipa));
       }
     }
-    cached.set(language, { root, ...data, revision: lexiconRevision() });
+    cached.set(language, {
+      root,
+      words: data.words,
+      counts: data.counts,
+      get bigrams() {
+        return data.bigrams;
+      },
+      total: data.total,
+      revision: lexiconRevision(),
+    });
   }
   return cached.get(language);
 }
