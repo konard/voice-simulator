@@ -22,10 +22,15 @@ export function withPitchDsp(module, settings, run) {
     );
     const refined = allocate(Float64Array, 2);
     const region = allocate(Float32Array, fullLength + 4);
+    let coarseReady = false;
+    let fullReady = false;
     settings.dsp = {
       correlate(data, window, q) {
         coarse.view().set(data.subarray(0, coarseLength));
-        coarseWindow.view().set(window);
+        if (!coarseReady) {
+          coarseWindow.view().set(window);
+          coarseReady = true;
+        }
         const count = correlate(
           coarse.pointer,
           coarse.length,
@@ -41,7 +46,10 @@ export function withPitchDsp(module, settings, run) {
       },
       load(frame, window) {
         full.view().set(frame);
-        fullWindow.view().set(window);
+        if (!fullReady) {
+          fullWindow.view().set(window);
+          fullReady = true;
+        }
       },
       refine(energy, centre) {
         refine(

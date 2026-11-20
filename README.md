@@ -683,6 +683,37 @@ Use `recognize - --format raw` for live PCM on standard input, or
 NDJSON. Partial events replace the preceding partial. Final events commit
 words in input time. See the [recognition API](docs/RECOGNIZER.md).
 
+### Recognition engines and workers
+
+Set `engine: 'auto'` to use the scalar Rust WebAssembly kernels when available,
+`'js'` for the JavaScript reference, or `'rust'` to require WebAssembly. Each
+worker has its own memory. The engine covers pitch kernels, glottal inverse
+filtering, codebook search and approximate pronunciation search.
+
+`recognize(samples, rate, options)` returns a result synchronously with
+`threads: 1` or with the thread option omitted. Use
+`await recognizeAsync(samples, rate, { engine: 'auto', threads: 4 })` for
+parallel batch recognition. Explicit `threads: 'auto'` or a count greater
+than one also makes `recognize` return a promise. The async API and file CLI
+default to up to eight logical cores. Above ten seconds, runs of silence
+of at least 300 ms allow independent chunks. With one thread, all jobs run
+in the caller. The synchronous streaming API runs inside its caller, which
+can be a worker.
+
+```sh
+voice-simulator recognize speech.wav --level high --engine rust --threads 4
+cargo run --release -p voice-simulator-cli --features parallel -- recognize speech.wav --threads 4
+```
+
+The native Rust command decodes PCM or float RIFF/WAV to IPA and reports
+per-stage times. It uses the bundled default head with acoustic analysis,
+pitch, inverse filtering, landmarks, codebook search, tract inversion
+and an IPA decoder. Its optional `--rescore` compares acoustic candidates
+with simulator-generated phone cepstra. The JavaScript recognizer adds
+speaker fitting, language identification, words, prosody and speech modes.
+Run `node scripts/build-native-recognition.mjs` to regenerate the native
+tables from the default acoustic model.
+
 ### Speech-mode recognition
 
 `recognizeModes(samples, sampleRate, result, { voice })` adds manner of speech to timed IPA words. A span is `{ start, end, from, to, effort: 0.75, notation: 'f', confidence: 0.8 }`: seconds, end-exclusive word indexes and only the decided mode fields. Phonation and tempo use synthesis brace marks; emotions use `notation: null`; sounds have `sound` instead of word indexes.

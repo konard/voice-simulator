@@ -117,6 +117,7 @@ export function fitDecoderVoice(
   try {
     return fitVoice(samples, sampleRate, {
       refine: false,
+      sourceDiagnostics: false,
       language,
       profile: settings.profile,
       kernels: settings.kernels,

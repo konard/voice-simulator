@@ -11,6 +11,17 @@ use alloc::{vec, vec::Vec};
 struct State {
     node: usize,
     cost: f64,
+    order: usize,
+}
+
+impl State {
+    fn new(node: usize, cost: f64) -> Self {
+        Self {
+            node,
+            cost,
+            order: 0,
+        }
+    }
 }
 
 pub struct Trie<'a> {
@@ -28,23 +39,31 @@ struct Scratch {
 
 impl Scratch {
     fn keep(&mut self, mut states: Vec<State>, beam: usize) -> Vec<State> {
-        self.slots.fill(usize::MAX);
         let mut count = 0;
         for i in 0..states.len() {
             let state = states[i];
             let slot = &mut self.slots[state.node];
             if *slot == usize::MAX {
-                states[count] = state;
+                states[count] = State {
+                    order: count,
+                    ..state
+                };
                 *slot = count;
                 count += 1;
             } else if state.cost < states[*slot].cost {
-                states[*slot] = state;
+                states[*slot].cost = state.cost;
             }
         }
         states.truncate(count);
-        // Stable sorting retains the lower candidate index for equal costs.
-        states.sort_by(|a, b| a.cost.total_cmp(&b.cost));
-        states.truncate(beam);
+        for state in &states {
+            self.slots[state.node] = usize::MAX;
+        }
+        let compare = |a: &State, b: &State| a.cost.total_cmp(&b.cost).then(a.order.cmp(&b.order));
+        if states.len() > beam {
+            states.select_nth_unstable_by(beam, compare);
+            states.truncate(beam);
+        }
+        states.sort_unstable_by(compare);
         states
     }
 
@@ -65,7 +84,7 @@ impl Scratch {
                 for node in trie.children(state.node) {
                     let cost = state.cost + trie.gaps[node];
                     if cost <= limit && cost < self.old[node] {
-                        next.push(State { node, cost });
+                        next.push(State::new(node, cost));
                     }
                 }
             }
@@ -96,7 +115,7 @@ impl Trie<'_> {
             slots: vec![usize::MAX; self.feature.len()],
             old: vec![f64::INFINITY; self.feature.len()],
         };
-        let mut states = scratch.insertions(vec![State { node: 0, cost: 0.0 }], 0.6, beam, self);
+        let mut states = scratch.insertions(vec![State::new(0, 0.0)], 0.6, beam, self);
         let mut result = Vec::new();
         for (index, row) in input.chunks_exact(stride).enumerate() {
             if states.is_empty() {
@@ -115,7 +134,7 @@ impl Trie<'_> {
                 for node in self.children(state.node) {
                     let cost = state.cost + row[1 + self.feature[node] as usize];
                     if cost <= limit {
-                        next.push(State { node, cost });
+                        next.push(State::new(node, cost));
                     }
                 }
             }

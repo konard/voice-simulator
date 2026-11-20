@@ -102,23 +102,34 @@ function decoderCandidates(from, end, context) {
   return candidates;
 }
 
-function continuationCost(input, lexicons, spans, candidate, partial) {
-  const from = candidate.from;
-  const lexicon = lexicons.get(candidate.language);
-  const changed =
-    partial.lastLanguage && partial.lastLanguage !== candidate.language;
+function continuation(input, lexicon, spans, candidate) {
+  const { from, language, word } = candidate;
   const span = spans?.find((span) => span.from <= from && from < span.to);
-  const languageCost =
-    Number(Boolean(span && span.language !== candidate.language)) *
-      MIXED_LANGUAGE_COSTS.spanMismatch +
-    Number(Boolean(changed && !input.pauses.has(from))) *
-      MIXED_LANGUAGE_COSTS.switch;
-  return (
-    partial.cost +
-    candidate.cost +
-    wordCost(lexicon, changed ? null : partial.last, candidate.word) +
-    languageCost
-  );
+  const mismatch =
+    Number(Boolean(span && span.language !== language)) *
+    MIXED_LANGUAGE_COSTS.spanMismatch;
+  const canSwitch = !input.pauses.has(from);
+  const costs = new Map();
+  return (partial) => {
+    const changed = partial.lastLanguage && partial.lastLanguage !== language;
+    const last = changed ? null : partial.last;
+    if (!costs.has(last)) {
+      costs.set(last, wordCost(lexicon, last, word));
+    }
+    const languageCost =
+      mismatch +
+      Number(Boolean(changed && canSwitch)) * MIXED_LANGUAGE_COSTS.switch;
+    return partial.cost + candidate.cost + costs.get(last) + languageCost;
+  };
+}
+
+function materialize(path) {
+  const words = [];
+  while (path.previous) {
+    words.push(path.candidate);
+    path = path.previous;
+  }
+  return words.reverse();
 }
 
 function searchPaths(input, lexicon, options, exact, wordSearches) {
@@ -127,7 +138,7 @@ function searchPaths(input, lexicon, options, exact, wordSearches) {
   const lexicons = options.lexicons ?? new Map([[language, lexicon]]);
   const ends = [...boundaries].sort((a, b) => a - b);
   const best = Array.from({ length: tokens.length + 1 }, () => []);
-  best[0] = [{ path: [], last: null, text: '', cost: 0 }];
+  best[0] = [{ last: null, text: '', cost: 0 }];
   const suffixes = new Map();
   function knownSuffix(end, lexicon, language) {
     const key = `${end}:${language}`;
@@ -165,20 +176,20 @@ function searchPaths(input, lexicon, options, exact, wordSearches) {
       knownSuffix,
     });
     for (const candidate of candidates) {
+      const cost = continuation(
+        input,
+        lexicons.get(candidate.language),
+        options.spans,
+        candidate
+      );
       for (const partial of best[from]) {
-        const cost = continuationCost(
-          input,
-          lexicons,
-          options.spans,
-          candidate,
-          partial
-        );
         best[candidate.to].push({
-          cost,
+          cost: cost(partial),
           last: candidate.word,
           lastLanguage: candidate.language,
           text: `${partial.text}\t${candidate.language}:${candidate.word}`,
-          path: [...partial.path, candidate],
+          candidate,
+          previous: partial,
         });
       }
       // Bound retained partial results at each input position by the beam.
@@ -187,7 +198,10 @@ function searchPaths(input, lexicon, options, exact, wordSearches) {
       }
     }
   }
-  return prune(best[tokens.length], beam);
+  return prune(best[tokens.length], beam).map((reading) => ({
+    cost: reading.cost,
+    path: materialize(reading),
+  }));
 }
 
 export function decode(input, lexicon, options, exact) {

@@ -25,9 +25,8 @@ fn words(
         return Err(error::BAD_ARGUMENT);
     }
     let input_len = rows.checked_mul(stride).ok_or(error::BAD_ARGUMENT)?;
-    // Keep owned copies because the caller can pass overlapping ranges.
-    let gaps = f64_slice(gaps, nodes)?.to_vec();
-    let input = f64_slice(distances, input_len)?.to_vec();
+    let gaps = f64_read(gaps, nodes)?;
+    let input = f64_read(distances, input_len)?;
     let table = u32_slice(topology, bound)?;
     let n = nodes as usize;
     let (child_offsets, rest) = table.split_at(n + 1);
@@ -45,10 +44,10 @@ fn words(
         child_offsets,
         children,
         feature,
-        gaps: &gaps,
+        gaps,
         terminal,
     };
-    Ok(trie.search(&input, stride as usize, beam as usize))
+    Ok(trie.search(input, stride as usize, beam as usize))
 }
 
 /// Writes triples for the approximate word search. Returns the required

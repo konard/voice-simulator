@@ -1,4 +1,4 @@
-import type { HeadConfig, LanguageCode } from '../index.js';
+import type { EngineName, HeadConfig, LanguageCode } from '../index.js';
 import type { audioToIpa, IpaDecodeOptions } from './decode.js';
 import type { ipaToText } from './ipa-to-text.js';
 import type { identifyLanguage, LanguageShare } from './language-id.js';
@@ -9,7 +9,19 @@ export type { LanguageShare } from './language-id.js';
 export type ModeSpan = RecognitionModeSpan | ProsodyModeSpan;
 export type RecognitionLevel = 'low' | 'medium' | 'high';
 
-export interface RecognitionOptions {
+export interface RecognitionEngineOptions {
+  /** Auto selects the scalar Rust engine when available. */
+  engine?: EngineName;
+  /** Auto uses up to eight logical cores for batch recognition. */
+  threads?: number | 'auto';
+}
+
+export interface RecognitionEngine {
+  readonly name: 'js' | 'rust';
+  readonly threads: number | 'auto';
+}
+
+export interface RecognitionOptions extends RecognitionEngineOptions {
   languages?: readonly LanguageCode[];
   voice?: HeadConfig | null;
   /** Maximum number of results including the primary result, from 1 to 10. */
@@ -94,8 +106,23 @@ export function levelForTier(name: string): RecognitionLevel;
 export function recognize(
   samples: ArrayLike<number>,
   sampleRate: number,
-  options?: RecognitionOptions
+  options?: RecognitionOptions & { threads?: 1 }
 ): RecognitionResult;
+export function recognize(
+  samples: ArrayLike<number>,
+  sampleRate: number,
+  options: RecognitionOptions & { threads: 'auto' }
+): Promise<RecognitionResult>;
+export function recognize(
+  samples: ArrayLike<number>,
+  sampleRate: number,
+  options: RecognitionOptions
+): RecognitionResult | Promise<RecognitionResult>;
+export function recognizeAsync(
+  samples: ArrayLike<number>,
+  sampleRate: number,
+  options?: RecognitionOptions
+): Promise<RecognitionResult>;
 export function createRecognizer(
   options: RecognitionOptions & { sampleRate: number }
 ): Recognizer;

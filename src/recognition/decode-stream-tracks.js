@@ -155,7 +155,8 @@ export function createDecodeTracks(frames, pitch, options, language) {
       frames.samples.subarray(0, to),
       frames.rate,
       language.language,
-      voice
+      voice,
+      options
     );
     fittedThrough = latestSpeech;
   }

@@ -199,6 +199,7 @@ function decodeText(input, settings, level, modelLanguage) {
     : measure(settings.profile, 'Language identification', () =>
         (stages.identifyLanguage ?? identifyLanguage)(input, {
           languages: candidates,
+          kernels: settings.kernels,
         })
       );
   return measure(settings.profile, 'IPA to text', () =>
@@ -399,11 +400,15 @@ function pieces(samples, sampleRate, options, settings) {
     return [];
   }
   const cuts = pauseCuts(samples, sampleRate);
+  const input =
+    cuts.length > 1 && !samples.subarray ? Array.from(samples) : samples;
   return cuts.slice(1).map((end, i) => {
     const start = cuts[i];
     const seconds = start / sampleRate;
     return {
-      samples: samples.subarray(start, end),
+      samples: input.subarray
+        ? input.subarray(start, end)
+        : input.slice(start, end),
       sampleRate,
       seconds,
       options: {

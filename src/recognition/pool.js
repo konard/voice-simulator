@@ -15,10 +15,11 @@ export function recognitionThreadCount(threads = 'auto') {
 
 async function createRuntimeWorker() {
   if (typeof globalThis.Worker === 'function') {
-    return new globalThis.Worker(
-      new globalThis.URL('./pool-worker.js', import.meta.url),
-      { type: 'module' }
-    );
+    // The literal Worker URL lets browser bundlers package the module graph.
+    // eslint-disable-next-line no-undef
+    return new Worker(new URL('./pool-worker.js', import.meta.url), {
+      type: 'module',
+    });
   }
   const specifier = 'node:worker_threads';
   const { Worker: NodeWorker } =

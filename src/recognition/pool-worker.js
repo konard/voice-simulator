@@ -50,7 +50,9 @@ if (typeof globalThis.postMessage === 'function') {
   );
 } else {
   const specifier = 'node:worker_threads';
-  const { parentPort } = globalThis.process.getBuiltinModule(specifier);
+  const { parentPort } =
+    globalThis.process?.getBuiltinModule?.(specifier) ??
+    (await import(/* @vite-ignore */ specifier));
   parentPort.on('message', (data) =>
     dispatch(data, (message, transfer) =>
       parentPort.postMessage(message, transfer)
