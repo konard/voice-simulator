@@ -669,6 +669,19 @@ Measured with `node experiments/issue-58-rtf.mjs` (10 s of speech, one thread): 
 `invertArticulation` and `createArticulationInverter` recover 21 simulator controls from analysis frames. Use `articulationPlan(track)` to render them. See [inversion usage and accuracy](docs/CODEBOOK.md#acoustic-to-articulatory-inversion).
 `audioToIpa(samples, sampleRate, { voice, language: 'en', nbest: 5 })` returns experimental timed phonemes and syllables, ranked readings, a lattice, and analysis tracks. It fits the head when `voice` is omitted. `createIpaDecoder(sampleRate, options)` returns fixed phonemes and nuclei as audio arrives. See the [decoder API and measured accuracy](docs/CODEBOOK.md#audio-to-ipa).
 
+### Analysis-by-synthesis rescoring
+
+Pass a decoder result with several readings to `rescoreHypotheses(decoded)` to compare uncertain stretches against waveguide renders in the fitted voice. It returns timed IPA, scored alternatives and render statistics. The decoder must retain its working-rate samples and articulation track.
+
+```js
+const decoded = audioToIpa(samples, sampleRate, { language: 'en', nbest: 10 });
+const { ipa, segments, rescoring } = rescoreHypotheses(decoded);
+```
+
+`warpPlan(plan, anchors)` returns a retimed plan whose `offset` is the recording time at sample zero. `planReading(decoded, segments)` matches phone onset times and copies the recovered pitch and loudness. `planRescoring(decoded)` prepares a reference render and cloneable jobs. Call `scoreJob(job)` for a job's mel-cepstral distance.
+
+For a finished streaming phrase, pass `{ preserveTiming: true }` to keep published phone and syllable times. Changed IPA is marked `revised`. The streaming recognizer in [#73](https://github.com/konard/voice-simulator/issues/73) owns phrase boundaries and keeps rescoring off by default.
+
 ### Quality
 
 [docs/reports/baseline-quality.md](docs/reports/baseline-quality.md) is the

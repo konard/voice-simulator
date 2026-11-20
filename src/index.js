@@ -707,3 +707,10 @@ export {
 } from './recognition/inversion.js';
 
 export { audioToIpa, createIpaDecoder } from './recognition/decode.js';
+export {
+  planReading,
+  planRescoring,
+  rescoreHypotheses,
+  scoreJob,
+  warpPlan,
+} from './recognition/rescoring.js';

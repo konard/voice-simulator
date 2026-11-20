@@ -1392,3 +1392,11 @@ tables from the host. Batch and streaming stage orchestration use JavaScript.
 transition and edge costs, readings, confidences and stream commitments on the
 same acoustic observations. `CARGO_BUILD_JOBS=1 node scripts/build-wasm.mjs
 --require --check-size` verifies the byte budget.
+
+## Analysis-by-synthesis rescoring
+
+The Rust rescoring module implements control-frame retiming, source-track
+interpolation, mel cepstra, speech-frame bias, local penalties, and banded DTW.
+The host supplies the IPA plans and orchestrates the waveguide renders and jobs.
+`REQUIRE_WASM=1 node --test tests/rust-rescoring.test.js` checks control frames,
+mel cepstra and regional acoustic scores against the JavaScript reference.
