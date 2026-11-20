@@ -2,6 +2,7 @@
 import {
   clipWhisperSpans,
   findWhisper,
+  loudFrameLimit,
   whisperSpeechRuns,
   whisperVoiceEdges,
 } from './whisper.js';
@@ -93,11 +94,18 @@ function extendOpenSpan(current, run, frames, pitch, through) {
   return [...current.slice(0, -1), { ...latest, end }];
 }
 
-function scoredThrough(pending, current, clock, paused, confirmed) {
+function scoredThrough(
+  pending,
+  current,
+  run,
+  { clock, paused, end, frames, pitch }
+) {
+  if (paused || !run) {
+    return end;
+  }
   // Keep the edge available for classification until its half-second deadline.
   if (
     pending &&
-    !paused &&
     clock < pending.start + 0.5 &&
     !current.some(
       (span) => span.start <= pending.start && pending.start < span.end
@@ -105,7 +113,13 @@ function scoredThrough(pending, current, clock, paused, confirmed) {
   ) {
     return pending.start;
   }
-  return confirmed;
+  // A quiet tail may become a whisper span. Strong frames can already feed
+  // the formant tracker while their pitch is still being confirmed.
+  const observed =
+    current.at(-1)?.end >= run.start
+      ? pitch.committed
+      : loudFrameLimit(frames.energy, run.from, run.to, pitch.committed);
+  return frames.startTime + observed * frames.hop;
 }
 
 export function createWhisperDecisions(frames, pitch, option) {
@@ -175,7 +189,13 @@ export function createWhisperDecisions(frames, pitch, option) {
         current = extendOpenSpan(current, last, frames, pitch, confirmed);
       }
       const cutoff = last && last.start !== currentStart ? last.start : end;
-      const through = scoredThrough(pending, current, clock, paused, confirmed);
+      const through = scoredThrough(pending, current, last, {
+        clock,
+        paused,
+        end,
+        frames,
+        pitch,
+      });
       return {
         through: Math.max(fixedThrough, Math.min(cutoff, through)),
         spans: decided.concat(current),

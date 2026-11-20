@@ -124,6 +124,19 @@ function framePeak(energy, from, to) {
   return peak;
 }
 
+export function loudFrameLimit(energy, from, to, confirmed) {
+  if (confirmed >= to) {
+    return confirmed;
+  }
+  const threshold = framePeak(energy, from, to) - EDGE_LEVEL_DROP;
+  for (let i = to - 1; i >= confirmed; i--) {
+    if (energy[i] > threshold) {
+      return i + 1;
+    }
+  }
+  return confirmed;
+}
+
 export function whisperVoiceEdges(run, frames, pitch, committed = run.to) {
   const { from, to, start, end } = run;
   const { hop, startTime, energy } = frames;
