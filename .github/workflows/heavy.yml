@@ -28,6 +28,13 @@ on:
         description: Largest number of items each test may process (empty = no limit)
         type: string
         default: ''
+      recognition-runner:
+        description: Linux runner for the recognition performance suite
+        type: choice
+        options:
+          - ubuntu-24.04
+          - ubuntu-24.04-arm
+        default: ubuntu-24.04
 
 # Least-privilege default; jobs escalate individually when needed.
 permissions:
@@ -43,14 +50,14 @@ env:
 jobs:
   heavy:
     name: Heavy checks
-    runs-on: ubuntu-24.04
+    runs-on: ${{ inputs.suite == 'recognition-performance' && inputs.recognition-runner || 'ubuntu-24.04' }}
     # The step budget below (18000s = 300 min) owns the deadline; this cap is
     # the backstop behind it, below the 360-minute limit of hosted runners,
     # leaving 30 minutes for checkout, install and the artifact upload. See
     # docs/CI-TIMEOUT-BUDGETS.md.
     timeout-minutes: 330
     concurrency:
-      group: check-${{ github.workflow }}-${{ github.ref }}-${{ inputs.suite }}
+      group: check-${{ github.workflow }}-${{ github.ref }}-${{ inputs.suite }}-${{ inputs.recognition-runner }}
       cancel-in-progress: true
     permissions:
       contents: read
@@ -202,7 +209,7 @@ jobs:
     concurrency:
       # The suite keeps runs of different suites on one branch from
       # cancelling each other's gate, as the heavy job's group does.
-      group: check-${{ github.workflow }}-${{ github.ref }}-${{ inputs.suite }}-pipeline-status
+      group: check-${{ github.workflow }}-${{ github.ref }}-${{ inputs.suite }}-${{ inputs.recognition-runner }}-pipeline-status
       cancel-in-progress: true
     # A status function is required: without one the gate inherits the
     # implicit "every dependency succeeded" condition and is skipped in
