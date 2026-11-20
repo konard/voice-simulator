@@ -416,6 +416,11 @@ impl Waveguide {
         self.nose_output
     }
 
+    /// Deterministic loss-filter designs, which can be reused across solvers.
+    pub fn loss_shelves_mut(&mut self) -> &mut ShelfCache {
+        &mut self.shelves
+    }
+
     /// Tract length (cm): sets the step rate, the radiation filters and,
     /// at the next step, the loss filters.
     pub fn set_length(&mut self, length: f64) {

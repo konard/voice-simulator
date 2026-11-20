@@ -11,7 +11,7 @@ import {
 import { RADIATION_BAFFLE } from '../acoustics/radiation.js';
 import { lpcBurg, lpcLevel } from './lpc.js';
 import { CHANNEL_DEFAULTS } from '../articulation/plan.js';
-import { renderPlan } from '../acoustics/voice.js';
+import { renderPlan, STEADY_TRACT } from '../acoustics/voice.js';
 import { whisperReferenceLpc } from './whisper-spectrum.js';
 
 export const L0 = 16.5;
@@ -218,6 +218,8 @@ export function steadyPlan(state, duration = 0.08) {
     duration,
     segments: [],
     tokens: [],
+    // Trills move the tract even when all plan channels are constant.
+    [STEADY_TRACT]: !values.trill,
     channels: Object.fromEntries(
       Object.entries(values).map(([name, value]) => [
         name,

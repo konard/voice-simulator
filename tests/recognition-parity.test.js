@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict';
 import { DEFAULT_HEAD, recognize, synthesize } from '../src/index.js';
+import { renderPlan, STEADY_TRACT } from '../src/acoustics/voice.js';
+import { steadyPlan } from '../src/recognition/codebook-features.js';
 import { decoderCodebook } from '../src/recognition/decode-pipeline.js';
 import { codebookQueries } from '../src/recognition/codebook-jobs.js';
 import { createRecognitionEngine } from '../src/recognition/engine.js';
@@ -11,6 +13,24 @@ import { itUnless } from './helpers/skip.js';
 
 const it = itUnless(noRust);
 const FOX = 'The quick brown fox jumps over the lazy dog.';
+
+it('reuses steady nasal reference geometry without changing samples', async () => {
+  const { renderer } = await createRecognitionEngine({
+    engine: 'rust',
+    threads: 1,
+  });
+  for (const vocalTractLength of [13, 19, 13]) {
+    const plan = steadyPlan({ height: 0.8, velum: 1 });
+    const options = {
+      engine: renderer,
+      head: { vocalTractLength },
+      sampleRate: 16000,
+    };
+    const cached = renderPlan(plan, options);
+    delete plan[STEADY_TRACT];
+    assert.deepEqual(cached, renderPlan(plan, options));
+  }
+});
 
 function frameColumns(frames) {
   const columns = [];
