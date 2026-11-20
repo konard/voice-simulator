@@ -65,4 +65,5 @@ async function receive(data) {
 let messages = Promise.resolve();
 globalThis.addEventListener('message', ({ data }) => {
   messages = messages.then(() => receive(data));
+  return messages;
 });
