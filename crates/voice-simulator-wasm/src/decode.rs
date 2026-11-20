@@ -167,7 +167,12 @@ fn decode(mut data: &[f64]) -> Option<Vec<f64>> {
             transition: &costs,
         },
     );
-    let fixed = result.readings.first().map_or(0, |best| {
+    let best = if open && result.readings.is_empty() {
+        result.provisional.as_ref()
+    } else {
+        result.readings.first()
+    };
+    let fixed = best.map_or(0, |best| {
         committed_prefix(best, &result.frontier, &graph.times, clock, !open)
     });
     let mut out = vec![

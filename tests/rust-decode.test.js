@@ -85,13 +85,18 @@ function packet(
   return Float64Array.from(values);
 }
 
-function compare(engine, frames, landmarks, track, languages, open) {
+function compare(engine, frames, landmarks, track, languages, openWindow) {
   const language = decoderLanguage({ languages });
   const templates = decoderTemplates(DEFAULT_HEAD, language.symbols);
-  const end = open ? 0.75 : frames.sampleCount / frames.rate;
-  const clock = open ? 1.05 : end;
+  const open = Boolean(openWindow);
   const beam = 16;
   const nbest = 5;
+  const endTime = frames.sampleCount / frames.rate;
+  const { end, clock, readings } = openWindow ?? {
+    end: endTime,
+    clock: endTime,
+    readings: nbest,
+  };
   const from = open ? 0.187 : 0;
   const locked = open;
   const lastUnit = open ? 3 : templates.length;
@@ -111,7 +116,18 @@ function compare(engine, frames, landmarks, track, languages, open) {
     lastUnit,
   });
   assert.ok(prepared.times.length > 5);
-  assert.equal(expected.paths.length, nbest);
+  assert.equal(expected.paths.length, readings);
+  const best = expected.paths[0] ?? (open ? expected.provisional : undefined);
+  const fixed = fixedCount(
+    pathArcs(best),
+    expected.frontier,
+    prepared.times,
+    clock,
+    !open
+  );
+  if (readings === 0) {
+    assert.ok(fixed > 0, 'An open pause can follow the last reachable phone');
+  }
   const input = packet(frames, landmarks, track, languages, templates, {
     end,
     open,
@@ -159,17 +175,8 @@ function compare(engine, frames, landmarks, track, languages, open) {
     }
     close(prepared.times.length, 'boundaries');
     close(expected.edges.length, 'edges');
-    close(nbest, 'readings');
-    close(
-      fixedCount(
-        pathArcs(expected.paths[0]),
-        expected.frontier,
-        prepared.times,
-        clock,
-        !open
-      ),
-      'fixed'
-    );
+    close(expected.paths.length, 'readings');
+    close(fixed, 'fixed');
     language.costs.forEach((cost) => close(cost, 'transition'));
     prepared.times.forEach((time) => close(time, 'time'));
     expected.edges.forEach(arc);
@@ -202,7 +209,22 @@ itUnless(noRust)(
     const landmarks = findLandmarks(frames);
     const codebook = buildCodebook(DEFAULT_HEAD, { size: 512 });
     const track = invertArticulation(frames, { codebook });
-    compare(engine, frames, landmarks, track, ['en', 'hi'], false);
-    compare(engine, frames, landmarks, track, [], true);
+    compare(engine, frames, landmarks, track, ['en', 'hi']);
+    compare(engine, frames, landmarks, track, [], {
+      end: 0.75,
+      clock: 1.05,
+      readings: 5,
+    });
+    // The next speech interval is still too short to connect to the terminal
+    // boundary. Both engines commit against the latest reachable path.
+    const speech = frames.speech.slice();
+    speech.fill(1, 0, 100);
+    speech.fill(0, 100, 140);
+    speech.fill(1, 140, 142);
+    compare(engine, { ...frames, speech }, landmarks, track, ['en'], {
+      end: 0.71,
+      clock: 1.25,
+      readings: 0,
+    });
   }
 );

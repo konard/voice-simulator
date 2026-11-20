@@ -374,6 +374,7 @@ pub struct Search {
     pub edges: Vec<Arc>,
     pub readings: Vec<Reading>,
     pub frontier: Vec<Reading>,
+    pub provisional: Option<Reading>,
 }
 
 struct History {
@@ -520,11 +521,13 @@ pub fn search(graph: &Graph, policy: &Policy<'_>) -> Search {
     let mut edges = Vec::new();
     let mut frontier = Vec::new();
     let mut terminal = Vec::new();
+    let mut last_reachable = None;
     if graph.times.is_empty() {
         return Search {
             edges,
             frontier,
             readings: terminal,
+            provisional: None,
         };
     }
     let mut history = History::new();
@@ -548,6 +551,7 @@ pub fn search(graph: &Graph, policy: &Policy<'_>) -> Search {
         if parents.is_empty() {
             continue;
         }
+        last_reachable = Some(parents[0].1.paths[0]);
         for (_, state) in &parents {
             edges.extend(&state.edges);
             if n - from <= 5 && graph.times[n - 1] - graph.times[from] <= 0.4 {
@@ -583,6 +587,9 @@ pub fn search(graph: &Graph, policy: &Policy<'_>) -> Search {
     }
     Search {
         edges,
+        provisional: last_reachable
+            .filter(|_| terminal.is_empty())
+            .map(|id| history.reading(id)),
         readings: terminal,
         frontier,
     }
