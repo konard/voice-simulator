@@ -534,7 +534,7 @@ pub fn search(graph: &Graph, policy: &Policy<'_>) -> Search {
     pending[0][policy.last_unit].paths.push(0);
     let n = graph.times.len();
     for from in 0..n {
-        let mut parents: Vec<_> = std::mem::take(&mut pending[from])
+        let mut parents: Vec<_> = core::mem::take(&mut pending[from])
             .into_iter()
             .enumerate()
             .filter(|(_, state)| !state.paths.is_empty())

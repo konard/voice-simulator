@@ -212,6 +212,12 @@ export function createIpaDecoder(sampleRate, options = {}) {
           'Reset the IPA decoder before pushing after flush'
         );
       }
+      const projected = Math.round(
+        (samplesSeen + chunk.length) * (settings.rate / sampleRate)
+      );
+      if (projected > input.frames.samples.length) {
+        throw new RangeError('The IPA decoder has reached its recording limit');
+      }
       const segments = [];
       const nuclei = [];
       for (let first = 0; first < chunk.length; first += quantum) {

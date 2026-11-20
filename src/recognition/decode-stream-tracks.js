@@ -100,8 +100,6 @@ function trackCopy(destination, source, capacity, first, copied, count) {
       );
     } else if (value && typeof value === 'object' && key !== 'head') {
       trackCopy(destination[key], value, capacity, first, copied, count);
-    } else {
-      destination[key] = value;
     }
   }
 }
@@ -109,18 +107,31 @@ function trackCopy(destination, source, capacity, first, copied, count) {
 function mergeTracks(output, section, frames, copied) {
   const { first, formants, inversion } = section;
   const capacity = frames.capacity - first;
+  const pitchFormants = formants.track;
   const articulation = inversion.track;
-  for (const [key, value] of Object.entries({
-    formants: formants.track,
+  trackCopy(
+    output.formants,
+    pitchFormants,
+    capacity,
+    first,
+    copied,
+    pitchFormants.committed
+  );
+  trackCopy(
+    output.articulation,
     articulation,
-  })) {
-    trackCopy(output[key], value, capacity, first, copied, value.committed);
-    output[key].startTime = frames.startTime;
-    output[key].committed += first;
-  }
-  output.articulation.frameCount = output.articulation.committed;
-  output.articulation.duration += first * frames.hop;
+    capacity,
+    first,
+    copied,
+    articulation.committed
+  );
+  output.formants.vocalTractLength = pitchFormants.vocalTractLength;
+  output.formants.committed = first + pitchFormants.committed;
   output.formants.count = output.formants.committed;
+  output.articulation.head = articulation.head;
+  output.articulation.committed = first + articulation.committed;
+  output.articulation.frameCount = output.articulation.committed;
+  output.articulation.duration = articulation.duration + first * frames.hop;
 }
 
 export function createDecodeTracks(frames, pitch, options, language) {
