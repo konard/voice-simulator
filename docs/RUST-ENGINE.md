@@ -161,6 +161,14 @@ and switch costs and resets bigram context at language changes. The bounded
 small deterministic lexicons, compare scores and costs within `1e-10`,
 and reject malformed packets before allocating from claimed sizes.
 
+The prosody core (`prosody.rs`) scores Mandarin target curves, normalises
+vowel prominence, and measures phrase pitch, loudness, and focus. The
+`vs_prosody_*` packets take feature rows and voiced samples from the
+recognition front end. The IPA search packet can also include tone costs,
+prominence, and syllable roles for lexical ranking. Language-specific
+orthography and IPA formatting are applied in JavaScript. Parity tests
+cover the scores and resulting word paths against the reference.
+
 The command line tool:
 
 ```sh

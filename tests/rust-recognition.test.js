@@ -2,6 +2,8 @@
 import { describe, expect } from 'test-anywhere';
 import { listSymbols } from '../src/ipa/inventory.js';
 import { float64View } from '../src/engine/wasm-loader.js';
+import { prominence, toneCosts } from '../src/recognition/prosody.js';
+import { expectedPeak, phraseCues } from '../src/recognition/prosody-mark.js';
 import { phoneDistance } from '../src/recognition/phone-distance.js';
 import { recognitionInput } from '../src/recognition/input.js';
 import { decode } from '../src/recognition/ipa-to-text.js';
@@ -198,6 +200,194 @@ describe('Rust IPA recognition', () => {
       [0, 0, 1, 0, 0, 0, 0],
     ]) {
       expect(runRecognition(engine, packet) < 0).toBe(true);
+    }
+  });
+});
+
+function sameValues(actual, expected) {
+  expect(actual.length).toBe(expected.length);
+  for (const [i, value] of expected.entries()) {
+    expect(Math.abs(actual[i] - value) < 1e-10).toBe(true);
+  }
+}
+
+describe('Rust timed prosody', () => {
+  it('matches weighted tone distances with and without onset alignment', async () => {
+    const engine = await loadRustEngine();
+    const frames = [0.4, 1.2, 0.8, -0.6, -1.9, -1.7, -0.9, 0, 1.3, 3, 3.9];
+    const fit = {
+      duration: 0.27,
+      scale: 2.1,
+      shift: -0.8,
+      value: 1.3,
+      observed: frames.slice(1),
+      times: [0.05, 0.07, 0.11, 0.14, 0.15, 0.17, 0.19, 0.22, 0.25, 0.26],
+    };
+    for (const [previous, id] of [
+      [[5], 5],
+      [[3, 5], 35],
+      [[2, 1], 21],
+      [[2, 1, 4], 214],
+      [[5, 1], 51],
+      [[], 0],
+    ]) {
+      for (const aligned of [null, fit]) {
+        const options = aligned
+          ? [
+              1,
+              fit.duration,
+              fit.value,
+              fit.shift,
+              fit.scale,
+              ...fit.observed,
+              ...fit.times,
+            ]
+          : [0];
+        for (const reduced of [false, true]) {
+          const packet = [
+            0.19,
+            2.5,
+            id,
+            Number(reduced),
+            ...options,
+            ...frames,
+          ];
+          const scores = toneCosts(
+            frames,
+            0.19,
+            2.5,
+            previous,
+            reduced,
+            aligned
+          );
+          sameValues(
+            runRecognition(engine, packet, 'vs_prosody_tones'),
+            Object.values(scores)
+          );
+        }
+      }
+    }
+    expect(
+      runRecognition(engine, [0.2, 2, 0, 0, 0, 5, 1], 'vs_prosody_tones')
+    ).toEqual([]);
+  });
+
+  it('matches normalised prominence, phrase cues, and the focus regression', async () => {
+    const engine = await loadRustEngine();
+    const rows = [
+      [0.08, -28, 11, -3],
+      [0.13, -18, 16, 0],
+      [0.21, -29, 2, -Infinity],
+      [0.1, -21, 9, 2],
+    ];
+    const prominencePacket = rows.flatMap((row) => [
+      row.reduce(
+        (mask, value, i) => (Number.isFinite(value) ? mask | (1 << i) : mask),
+        0
+      ),
+      ...row.map((v) => (Number.isFinite(v) ? v : 0)),
+    ]);
+    sameValues(
+      runRecognition(engine, prominencePacket, 'vs_prosody_prominence'),
+      [...prominence(rows)]
+    );
+    const voiced = [-2, -1, -1, 1.4, 2.1, 3.8, 2.9, 3.1, 3.4, 4, 7];
+    const tail = voiced.slice(-8);
+    const other = [0.3, -1.6, -3, 1.5];
+    const phrase = [
+      0.004,
+      0.002,
+      voiced.length,
+      ...voiced,
+      tail.length,
+      ...tail,
+      other.length,
+      ...other,
+    ];
+    sameValues(
+      runRecognition(engine, phrase, 'vs_prosody_phrase'),
+      Object.values(phraseCues(voiced, tail, phrase[0], phrase[1], other))
+    );
+    const points = [
+      [0.4, -2],
+      [0.6, 1.5],
+      [1.0, 4],
+      [1.1, 4.7],
+    ];
+    sameValues(
+      runRecognition(engine, [0.7, ...points.flat()], 'vs_prosody_focus'),
+      [
+        expectedPeak(
+          points.map(([time, value]) => ({ time, value })),
+          0.7
+        ),
+      ]
+    );
+  });
+});
+
+describe('Rust prosody in word search', () => {
+  it('uses the same tone and stress costs in word search', async () => {
+    const engine = await loadRustEngine();
+    const scores = {
+      '˥': 0.9,
+      '˧˥': 0.8,
+      '˨˩˦': 0.1,
+      '˥˩': 0.7,
+      '': 0.8,
+      '˨˩': 0.2,
+    };
+    const cases = [
+      [
+        'zh',
+        [
+          ['妈', 'ma˥', 100],
+          ['马', 'ma˨˩˦', 100],
+        ],
+        sounds('ma'),
+        1,
+        { tones: scores },
+        '马',
+      ],
+      [
+        'ru',
+        [
+          ['за́мок', 'ˈzamək', 100],
+          ['замо́к', 'zaˈmək', 100],
+        ],
+        sounds('zamək'),
+        3,
+        { prominence: 0.9 },
+        'замо́к',
+      ],
+    ];
+    for (const [language, records, phones, index, features, word] of cases) {
+      const timed = phones.map((phone, i) => ({
+        ipa: phone.symbol,
+        start: i / 10,
+        end: (i + 1) / 10,
+        confidence: 1,
+        ...(i === index ? features : {}),
+      }));
+      const input = recognitionInput(timed, 'search');
+      const lexicon = smallLexicon(records, language);
+      const options = { language, given: false, beam: 32 };
+      const exact = decode(input, lexicon, options, true);
+      const { packet, words } = recognitionPacket(input, lexicon, options, 2);
+      const actual = unpackPaths(
+        runRecognition(engine, packet),
+        words,
+        input.tokens,
+        () => ''
+      );
+      expect(actual[0].path[0].word).toBe(word);
+      expect(actual.map(({ path }) => path.map((step) => step.word))).toEqual(
+        exact.slice(0, 2).map(({ path }) => path.map((step) => step.word))
+      );
+      sameValues(
+        actual.map(({ cost }) => cost),
+        exact.slice(0, 2).map(({ cost }) => cost)
+      );
     }
   });
 });

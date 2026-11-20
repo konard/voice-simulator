@@ -1,7 +1,7 @@
 //! Numerical IPA recognition (issue 68). The caller supplies pronunciations
 //! and integer sound keys from the shared language rules. No I/O or text
 //! database is duplicated here. Costs and beam ordering mirror src/recognition.
-use crate::math;
+use crate::{math, prosody};
 use alloc::collections::BTreeMap;
 use alloc::vec;
 use alloc::vec::Vec;
@@ -35,6 +35,11 @@ pub struct Phone {
     /// 1=i, 2=j, 3=u, 4=w; 0 for other segments.
     pub glide: u32,
     pub reduced_gap: bool,
+    pub tones: Option<[f64; 6]>,
+    pub prominence: Option<f64>,
+    /// 1 starts a syllabic nucleus, 2 continues it, and 0 is nonsyllabic.
+    pub nucleus: u8,
+    pub primary: bool,
 }
 
 fn flag(a: bool, b: bool) -> f64 {
@@ -86,8 +91,11 @@ pub fn phone_distance(a: &Phone, b: &Phone) -> f64 {
     } else {
         1.0
     };
-    (segment + tone_distance(a.tone, b.tone) + 0.2 * if a.stress != b.stress { 1.0 } else { 0.0 })
-        .min(1.0)
+    let tone = a.tones.as_ref().map_or_else(
+        || tone_distance(a.tone, b.tone),
+        |costs| prosody::tone_penalty(costs, b.tone),
+    );
+    (segment + tone + 0.2 * if a.stress != b.stress { 1.0 } else { 0.0 }).min(1.0)
 }
 pub fn gap_cost(phone: &Phone) -> f64 {
     if phone.reduced_gap {
@@ -238,6 +246,51 @@ fn insertions(states: Vec<State>, limit: f64, beam: usize, lexicon: &Lexicon) ->
     }
     all
 }
+fn heard_tone(phone: &Phone) -> u32 {
+    if phone.tone != 0 {
+        return phone.tone;
+    }
+    phone.tones.as_ref().map_or(0, |costs| {
+        let best =
+            (1..costs.len()).fold(0, |best, i| if costs[i] < costs[best] { i } else { best });
+        prosody::TONES[best]
+    })
+}
+
+fn stress_cost(phones: &[Phone], entry: &[Phone], exact: bool) -> f64 {
+    if phones.iter().any(|phone| phone.prominence.is_some()) {
+        let mut count = 0;
+        let mut primary = None;
+        for phone in entry.iter().filter(|phone| phone.nucleus == 1) {
+            if phone.primary && primary.is_none() {
+                primary = Some(count);
+            }
+            count += 1;
+        }
+        let mut scores: Vec<Option<f64>> = Vec::new();
+        for phone in phones.iter().filter(|phone| phone.nucleus != 0) {
+            if phone.nucleus == 1 || scores.is_empty() {
+                scores.push(phone.prominence);
+            } else if let Some(value) = phone.prominence {
+                let best = scores.last_mut().expect("nucleus exists");
+                *best = Some(best.map_or(value, |old| old.max(value)));
+            }
+        }
+        if count == scores.len() {
+            return prosody::stress_penalty(primary, &scores);
+        }
+        return 0.0;
+    }
+    if exact || phones.len() != entry.len() {
+        return 0.0;
+    }
+    0.2 * phones
+        .iter()
+        .zip(entry)
+        .filter(|(a, b)| a.stress != b.stress)
+        .count() as f64
+}
+
 fn terminals(
     found: &mut Vec<Candidate>,
     lexicon: &Lexicon,
@@ -251,19 +304,15 @@ fn terminals(
         let item = &lexicon.entries[entry];
         let next_tone = phones[to..]
             .iter()
-            .find(|p| p.tone != 0)
-            .map_or(0, |p| p.tone);
+            .map(heard_tone)
+            .find(|&tone| tone != 0)
+            .unwrap_or(0);
         if (item.following == 1 && next_tone != 51)
             || (item.following == 2 && (next_tone == 0 || next_tone == 51))
         {
             continue;
         }
-        let mut cost = state.cost;
-        if !exact && item.phones.len() == to - from {
-            for (a, b) in phones[from..to].iter().zip(&item.phones) {
-                cost += 0.2 * if a.stress != b.stress { 1.0 } else { 0.0 };
-            }
-        }
+        let cost = state.cost + stress_cost(&phones[from..to], &item.phones, exact);
         found.push(Candidate {
             from,
             to,
@@ -282,40 +331,47 @@ pub fn candidates(
     exact: bool,
 ) -> Vec<Candidate> {
     let mut found = Vec::new();
-    let mut nodes = vec![0];
+    let mut nodes = vec![State { node: 0, cost: 0.0 }];
     for to in from..end {
+        let input = &phones[to];
         let next_tone = phones[to + 1..end]
             .iter()
             .find(|p| p.tone != 0)
             .map_or(0, |p| p.tone);
-        let mut next = Vec::new();
-        for node in nodes {
-            // Preserve literal keys first, then the contextual third-tone
-            // forms, matching the JavaScript trie traversal order.
-            for tone in [phones[to].tone, 214, 21] {
-                if tone != phones[to].tone
-                    && !(phones[to].tone == 35 && matches!(next_tone, 21 | 214))
-                {
-                    continue;
-                }
-                for &child in &lexicon.nodes[node].children {
+        let sandhi = input.tone == 35 && matches!(next_tone, 21 | 214);
+        let mut next: Vec<State> = Vec::new();
+        for state in nodes {
+            let literal = [input.tone];
+            let sandhi_tones = [input.tone, 214, 21];
+            let tones = if input.tones.is_some() {
+                &prosody::TONES[..]
+            } else if sandhi {
+                &sandhi_tones[..]
+            } else {
+                &literal[..]
+            };
+            for &tone in tones {
+                for &child in &lexicon.nodes[state.node].children {
                     let p = lexicon.nodes[child].phone;
-                    let matches = if tone == phones[to].tone {
-                        p.key == phones[to].key
+                    let matches = if input.tones.is_some() || tone != input.tone {
+                        p.symbol == input.symbol && p.tone == tone
                     } else {
-                        p.symbol == phones[to].symbol && p.tone == tone
+                        p.key == input.key
                     };
-                    if matches && !next.contains(&child) {
-                        next.push(child);
+                    if matches && !next.iter().any(|n| n.node == child) {
+                        let cost = state.cost
+                            + input
+                                .tones
+                                .as_ref()
+                                .map_or(0.0, |costs| prosody::tone_penalty(costs, p.tone));
+                        let next_state = State { node: child, cost };
+                        next.push(next_state);
                         terminals(
                             &mut found,
                             lexicon,
                             from,
                             to + 1,
-                            State {
-                                node: child,
-                                cost: 0.0,
-                            },
+                            next_state,
                             &phones[..end],
                             true,
                         );
@@ -436,10 +492,8 @@ pub fn decode(
         if given {
             arcs.retain(|c| c.to == end);
         }
-        if !exact {
-            for arc in &mut arcs {
-                arc.cost *= ACOUSTIC_WEIGHT;
-            }
+        for arc in &mut arcs {
+            arc.cost *= ACOUSTIC_WEIGHT;
         }
         if !exact || (given && arcs.is_empty()) {
             let to = end.min(from + 12);

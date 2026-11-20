@@ -83,9 +83,7 @@ function decoderCandidates(from, end, context) {
     if (given) {
       found = found.filter((c) => c.to === end);
     }
-    if (!exact) {
-      found = found.map((c) => ({ ...c, cost: c.cost * ACOUSTIC_WEIGHT }));
-    }
+    found = found.map((c) => ({ ...c, cost: c.cost * ACOUSTIC_WEIGHT }));
     if (!exact || (given && !found.length)) {
       found.push(
         ...unknownCandidates(

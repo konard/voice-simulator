@@ -4512,6 +4512,16 @@ export {
 } from './recognition/decode.js';
 
 export {
+  measureProsody,
+  markProsody,
+  type ProsodyOptions,
+  type MeasuredProsody,
+  type ProsodyModeSpan,
+  type ProsodyResult,
+  type ToneCosts,
+} from './recognition/prosody.js';
+
+export {
   planReading,
   planRescoring,
   rescoreHypotheses,
