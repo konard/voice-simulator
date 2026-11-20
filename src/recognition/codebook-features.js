@@ -45,7 +45,8 @@ export const RESPONSE_GRID = Float64Array.from(
 const COSINES = Float64Array.from({ length: 96 }, (_, i) =>
   Math.cos((Math.PI * (1 + Math.floor(i / 16)) * ((i % 16) + 0.5)) / 16)
 );
-let sectionScratch = new Float64Array(44 * 4);
+const SECTION_WIDTH = 5;
+let sectionScratch = new Float64Array(44 * SECTION_WIDTH);
 
 /**
  * The oral chain of tubeTransfer, evaluated with scalar complex arithmetic.
@@ -57,18 +58,20 @@ export function tractResponse(areas, length, frequencies, out) {
   if (!n || !(length > 0) || out.length < frequencies.length) {
     throw new RangeError('Invalid tract response dimensions');
   }
-  if (sectionScratch.length < n * 4) {
-    sectionScratch = new Float64Array(n * 4);
+  if (sectionScratch.length < n * SECTION_WIDTH) {
+    sectionScratch = new Float64Array(n * SECTION_WIDTH);
   }
   const s = sectionScratch;
   const dx = length / n;
   const rhoC = AIR_DENSITY * SPEED_OF_SOUND;
   for (let j = 0; j < n; j++) {
     const area = Math.max(areas[j], 1e-4);
-    s[j * 4] = area;
-    s[j * 4 + 1] = dx / Math.sqrt(area);
-    s[j * 4 + 2] = (constrictionLoss(area) * 44) / n;
-    s[j * 4 + 3] = 2 * Math.sqrt(Math.PI * area) * dx * rhoC;
+    const offset = j * SECTION_WIDTH;
+    s[offset] = area;
+    s[offset + 1] = dx / Math.sqrt(area);
+    s[offset + 2] = (constrictionLoss(area) * 44) / n;
+    s[offset + 3] = 2 * Math.sqrt(Math.PI * area) * dx * rhoC;
+    s[offset + 4] = 1 / area;
   }
   const lipArea = Math.max(areas[n - 1], 1e-3);
   const radius = Math.sqrt(lipArea / Math.PI);
@@ -87,22 +90,24 @@ export function tractResponse(areas, length, frequencies, out) {
     let ur = 1,
       ui = 0;
     for (let j = n - 1; j >= 0; j--) {
-      const offset = j * 4;
+      const offset = j * SECTION_WIDTH;
       const area = s[offset];
+      const inverseArea = s[offset + 4];
       const scale = s[offset + 3] * wallScale;
       const yr = WALL_RESISTANCE * scale,
         yi = -reactance * scale;
       ur += pr * yr - pi * yi;
       ui += pr * yi + pi * yr;
       const e = Math.exp(loss * s[offset + 1] + s[offset + 2]);
-      const ch = (e + 1 / e) / 2,
-        sh = (e - 1 / e) / 2;
+      const inverse = 1 / e;
+      const ch = (e + inverse) / 2,
+        sh = (e - inverse) / 2;
       const cr = co * ch,
         ci = si * sh;
       const br = co * sh,
         bi = si * ch;
-      const nextPr = cr * pr - ci * pi + (br * ur - bi * ui) / area;
-      const nextPi = cr * pi + ci * pr + (br * ui + bi * ur) / area;
+      const nextPr = cr * pr - ci * pi + (br * ur - bi * ui) * inverseArea;
+      const nextPi = cr * pi + ci * pr + (br * ui + bi * ur) * inverseArea;
       const nextUr = (br * pr - bi * pi) * area + cr * ur - ci * ui;
       ui = (br * pi + bi * pr) * area + cr * ui + ci * ur;
       pr = nextPr;
