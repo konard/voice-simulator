@@ -142,6 +142,9 @@ jobs:
         env:
           SUITE: ${{ inputs.suite }}
           LIMIT: ${{ inputs.limit }}
+          # The inherited golden inversion gate names a decision for its
+          # author. Keep the same branch policy as the regular PR tests.
+          BLOCKED_GATES: ${{ inputs.suite == 'recognition' && github.ref_type == 'branch' && github.ref_name != github.event.repository.default_branch && 'warn' || '' }}
           REQUIRE_GPU: ${{ (inputs.suite == 'gpu' || inputs.suite == 'all') && '1' || '' }}
           REQUIRE_WASM: ${{ (inputs.suite == 'performance' || inputs.suite == 'all') && '1' || '' }}
           REQUIRE_CLI: ${{ (inputs.suite == 'performance' || inputs.suite == 'all') && '1' || '' }}

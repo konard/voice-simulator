@@ -91,7 +91,7 @@ export function formatBenchmarkReport(data, details) {
   const limitText =
     limit === Math.max(...BENCHMARK.sets.map(({ rows }) => rows))
       ? `configured prefixes up to ${limit} rows`
-      : `up to ${limit} rows per set`;
+      : `up to ${limit} ${limit === 1 ? 'row' : 'rows'} per set`;
   return [
     '# Recognition benchmark on public recordings',
     '',
