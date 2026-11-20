@@ -126,13 +126,6 @@ export function createIpaDecoder(sampleRate, options = {}) {
       voice: decoder.voice,
       tracks: {
         ...tracks,
-        formants:
-          final && whisper.spans.length
-            ? trackFormants(whisperFormantFrames(frames, whisper.spans), {
-                pitch: pitch.track,
-                vocalTractLength: decoder.voice.vocalTractLength,
-              })
-            : tracks.formants,
         pitch: pitch.track,
         landmarks: landmarks.output,
         articulation: { ...articulation, frameCount: articulation.committed },
@@ -155,7 +148,7 @@ export function createIpaDecoder(sampleRate, options = {}) {
   function collect(final, segments) {
     refresh(final);
     if (final) {
-      finalResult = snapshot();
+      finalResult = snapshot(true);
     }
     while (current && commit(final, segments) && !final) {
       refresh(false);
@@ -206,7 +199,7 @@ export function createIpaDecoder(sampleRate, options = {}) {
     collect(final, segments);
   }
 
-  function snapshot() {
+  function snapshot(final = false) {
     if (!current) {
       const analysis = {
         frames: input.frames,
@@ -226,13 +219,32 @@ export function createIpaDecoder(sampleRate, options = {}) {
       });
     }
     const { analysis, prepared, templates, search } = current;
+    const { frames, tracks, voice, whisperSpans } = analysis;
+    const formants = whisperSpans.length
+      ? trackFormants(whisperFormantFrames(frames, whisperSpans), {
+          pitch: tracks.pitch,
+          vocalTractLength: voice.vocalTractLength,
+        })
+      : tracks.formants;
+    if (!final && whisperSpans.length) {
+      // Two future frames enter each pooled estimate. Only expose committed
+      // formants where the phone prefix and the pooling window are fixed.
+      formants.committed = Math.min(
+        tracks.formants.committed,
+        Math.max(0, Math.floor((from - frames.startTime) / frames.hop) - 2)
+      );
+    }
     const lattice = { times: [...archive.times], edges: [...archive.edges] };
     appendLattice(lattice, latticeOf(prepared.times, search.edges, templates));
     lattice.times = Float64Array.from(lattice.times);
-    return resultOf(analysis, settings, prepared, templates, search, {
-      prefix: fixed,
-      lattice,
-    });
+    return resultOf(
+      { ...analysis, tracks: { ...tracks, formants } },
+      settings,
+      prepared,
+      templates,
+      search,
+      { prefix: fixed, lattice }
+    );
   }
 
   reset();

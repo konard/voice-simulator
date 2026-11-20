@@ -199,6 +199,12 @@ export function whisperAt(spans, time) {
   return spans.find((span) => span.start <= time && time < span.end);
 }
 
+export function clipWhisperSpans(spans, recordingEnd) {
+  return spans
+    .filter(({ start }) => start < recordingEnd)
+    .map((span) => ({ ...span, end: Math.min(span.end, recordingEnd) }));
+}
+
 // Mean relative durations of medial and final syllables across rotated tone
 // sequences in male and female minimal-tier whisper probes. Phrase-final
 // lengthening moves the duration target for each tone.

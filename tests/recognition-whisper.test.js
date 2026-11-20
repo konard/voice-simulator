@@ -3,9 +3,11 @@ import { describe, expect, it } from 'test-anywhere';
 import {
   analyzeFrames,
   audioToIpa,
+  createIpaDecoder,
   createRecognizer,
   ipaToText,
   resample,
+  trackFormants,
   trackPitch,
   whisperTones,
 } from '../src/index.js';
@@ -13,6 +15,7 @@ import { toneCurve } from '../src/articulation/tone-model.js';
 import { createRandom } from '../src/random.js';
 import { bestTone, mean } from '../src/recognition/prosody-features.js';
 import { whisperSpeechRuns } from '../src/recognition/whisper.js';
+import { whisperFormantFrames } from '../src/recognition/whisper-spectrum.js';
 import { createWhisperDecisions } from '../src/recognition/whisper-stream.js';
 import { loadGolden } from './helpers/golden.js';
 import {
@@ -197,6 +200,34 @@ describe('whisper tone recognition', () => {
 });
 
 describe('whisper streaming', () => {
+  it('clips present spans and returns pooled formants before flush', () => {
+    const { samples, sampleRate, head } = renderWhisper(
+      '[whisper] a fresh fish'
+    );
+    const stream = createIpaDecoder(sampleRate, {
+      language: 'en',
+      voice: head,
+      whisper: [
+        { start: 0, end: 2 },
+        { start: 3, end: 4 },
+      ],
+    });
+    stream.push(samples.subarray(0, Math.floor(sampleRate * 0.44)));
+    const result = stream.result();
+    const { frames, tracks, voice, whisperSpans } = result;
+    expect(whisperSpans).toEqual([
+      { start: 0, end: frames.sampleCount / frames.rate, confidence: 1 },
+    ]);
+    const expected = trackFormants(whisperFormantFrames(frames, whisperSpans), {
+      pitch: tracks.pitch,
+      vocalTractLength: voice.vocalTractLength,
+    });
+    const columns = expected.count * 4;
+    expect(tracks.formants.frequency.slice(0, columns)).toEqual(
+      expected.frequency.slice(0, columns)
+    );
+  });
+
   it('holds the mode decision until half a second of speech or a pause', () => {
     const { samples, sampleRate } = renderWhisper(
       '[whisper] she sees five sheep'

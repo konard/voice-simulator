@@ -14,7 +14,12 @@ import { analyzeFrames, workingRate } from './frontend.js';
 import { invertArticulation } from './inversion.js';
 import { findLandmarks } from './landmarks.js';
 import { trackPitch } from './pitch.js';
-import { findWhisper, whisperAt, whisperTones } from './whisper.js';
+import {
+  clipWhisperSpans,
+  findWhisper,
+  whisperAt,
+  whisperTones,
+} from './whisper.js';
 import {
   whisperModeSpans,
   whisperVoicing,
@@ -115,13 +120,7 @@ export function analyzeForDecode(samples, sampleRate, options, settings) {
   const whisperSpans =
     settings.whisper === 'auto'
       ? findWhisper(samples, sampleRate, frames, pitch)
-      : (settings.whisper || [])
-          .filter(({ start }) => start < samples.length / sampleRate)
-          .map(({ start, end, confidence }) => ({
-            start,
-            end: Math.min(end, samples.length / sampleRate),
-            confidence,
-          }));
+      : clipWhisperSpans(settings.whisper || [], samples.length / sampleRate);
   const hasSpeech = frames.speech.subarray(0, frames.count).some(Boolean);
   const voice = options.voice
     ? normalizeHeadConfig(options.voice)

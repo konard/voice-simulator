@@ -1,5 +1,5 @@
 /** Commit mode decisions before any phone in the undecided speech. Unlicense. */
-import { findWhisper, whisperSpeechRuns } from './whisper.js';
+import { clipWhisperSpans, findWhisper, whisperSpeechRuns } from './whisper.js';
 
 function reconcile(previous, candidates, fixedThrough) {
   const kept = previous
@@ -63,7 +63,7 @@ export function createWhisperDecisions(frames, pitch, option) {
     advance(final, fixedThrough = frames.startTime) {
       const end = frames.startTime + frames.sampleCount / frames.rate;
       if (option !== 'auto') {
-        return { through: end, spans: option || [] };
+        return { through: end, spans: clipWhisperSpans(option || [], end) };
       }
       const runs = whisperSpeechRuns(frames);
       const last = runs.at(-1);
