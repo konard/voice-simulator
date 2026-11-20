@@ -116,7 +116,11 @@ impl Fft {
                 .map(|k| sin(2.0 * PI * k as f64 / size as f64))
                 .collect(),
             reversed: (0..size)
-                .map(|i| i.reverse_bits() >> (usize::BITS - bits))
+                .map(|i| {
+                    i.reverse_bits()
+                        .checked_shr(usize::BITS - bits)
+                        .unwrap_or(0)
+                })
                 .collect(),
         }
     }

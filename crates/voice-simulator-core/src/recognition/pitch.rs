@@ -4,19 +4,32 @@
 //! Mark search consumes the original f32 samples, with signed local offsets.
 use crate::{inverse_dsp::Fft, math};
 use alloc::{vec, vec::Vec};
+use core::f64::consts::PI;
 
 pub struct CoarseCorrelation {
     fft: Fft,
     real: Vec<f64>,
     imaginary: Vec<f64>,
+    power_real: Vec<f64>,
+    power_imaginary: Vec<f64>,
+    twiddles: Vec<(f64, f64)>,
 }
 
 impl CoarseCorrelation {
     pub fn new(size: usize) -> Self {
+        let half = size / 2;
         Self {
-            fft: Fft::new(size),
-            real: vec![0.0; size],
-            imaginary: vec![0.0; size],
+            fft: Fft::new(half),
+            real: vec![0.0; half],
+            imaginary: vec![0.0; half],
+            power_real: vec![0.0; half],
+            power_imaginary: vec![0.0; half],
+            twiddles: (0..half)
+                .map(|k| {
+                    let angle = 2.0 * PI * k as f64 / size as f64;
+                    (math::cos(angle), math::sin(angle))
+                })
+                .collect(),
         }
     }
 
@@ -26,22 +39,48 @@ impl CoarseCorrelation {
         window_correlation: &[f64],
         output: &mut [f64],
     ) -> bool {
-        self.real[..windowed.len()].copy_from_slice(windowed);
-        self.real[windowed.len()..].fill(0.0);
+        self.real.fill(0.0);
         self.imaginary.fill(0.0);
+        for (i, pair) in windowed.chunks(2).enumerate() {
+            self.real[i] = pair[0];
+            self.imaginary[i] = pair.get(1).copied().unwrap_or_default();
+        }
+        // A real transform packs the even and odd samples into a complex
+        // transform of half the length. Recover the two real-input spectra
+        // at k and k + N/2 from each conjugate pair.
         self.fft
             .transform(&mut self.real, &mut self.imaginary, false);
-        for (re, im) in self.real.iter_mut().zip(&mut self.imaginary) {
-            *re = *re * *re + *im * *im;
-            *im = 0.0;
+        let half = self.real.len();
+        for (k, &(cosine, sine)) in self.twiddles.iter().enumerate() {
+            let mirror = (half - k) % half;
+            let (ar, ai) = (self.real[k], self.imaginary[k]);
+            let (br, bi) = (self.real[mirror], self.imaginary[mirror]);
+            let even_re = (ar + br) * 0.5;
+            let even_im = (ai - bi) * 0.5;
+            let odd_re = (ai + bi) * 0.5;
+            let odd_im = (br - ar) * 0.5;
+            let shifted_re = cosine * odd_re + sine * odd_im;
+            let shifted_im = cosine * odd_im - sine * odd_re;
+            // Pack the inverse transform of the real, symmetric power
+            // spectrum into even and odd output lags in the same way.
+            let mean = even_re * even_re + even_im * even_im + odd_re * odd_re + odd_im * odd_im;
+            let difference = 2.0 * (even_re * shifted_re + even_im * shifted_im);
+            self.power_real[k] = mean - sine * difference;
+            self.power_imaginary[k] = cosine * difference;
         }
         self.fft
-            .transform(&mut self.real, &mut self.imaginary, true);
-        if self.real[0] <= 0.0 {
+            .transform(&mut self.power_real, &mut self.power_imaginary, true);
+        let energy = self.power_real[0];
+        if energy <= 0.0 {
             return false;
         }
-        for (lag, value) in output.iter_mut().enumerate() {
-            *value = self.real[lag] / (self.real[0] * window_correlation[lag]);
+        for (lag, (value, window)) in output.iter_mut().zip(window_correlation).enumerate() {
+            let spectrum = if lag % 2 == 0 {
+                &self.power_real
+            } else {
+                &self.power_imaginary
+            };
+            *value = spectrum[lag / 2] / (energy * window);
         }
         true
     }
@@ -136,6 +175,26 @@ pub fn mark(samples: &[f32], anchor: i32, lo: i32, hi: i32, span: i32) -> f64 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn real_fft_matches_direct_window_correlation() {
+        let frame = [0.2, -0.7, 1.0, 0.4, 0.8];
+        let energy: f64 = frame.iter().map(|x| x * x).sum();
+        let mut result = [0.0; 6];
+        assert!(CoarseCorrelation::new(16).measure(&frame, &[1.0; 6], &mut result));
+        for (lag, actual) in result.iter().enumerate() {
+            let expected = frame
+                .iter()
+                .zip(&frame[lag..])
+                .map(|(a, b)| a * b)
+                .sum::<f64>()
+                / energy;
+            assert!(
+                (actual - expected).abs() < 1e-12,
+                "lag {lag}: {actual} != {expected}"
+            );
+        }
+    }
 
     #[test]
     fn periodic_frame_refines_and_marks_to_first_equal_peak() {
