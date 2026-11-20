@@ -1,6 +1,6 @@
 /** Phone and broad-class error on synthetic and golden speech. Unlicense. */
 import assert from 'node:assert/strict';
-import { it } from 'test-anywhere';
+import { after, it } from 'test-anywhere';
 import { createVoiceFitter, errorRate, parseIpa } from '../../src/index.js';
 import { phoneClass } from '../../src/recognition/decode-model.js';
 import {
@@ -125,6 +125,7 @@ function synthetic(rows, limit) {
 
 function golden(rows, limit) {
   const items = loadGolden();
+  assert.equal(items.length, 24, 'The golden benchmark requires 24 recordings');
   const selected = items.slice(0, limit);
   for (const speaker of new Set(selected.map((item) => item.speaker.id))) {
     const recordings = items.filter((item) => item.speaker.id === speaker);
@@ -192,7 +193,7 @@ function write(rows) {
   const markdown = [
     '# Articulation-to-IPA decoder benchmark',
     '',
-    'Run `node --test tests/heavy/recognition-decode.test.js` to reproduce. Phone and broad-class error are mean per-recording edit rates. For broad-class error, both strings are mapped from IPA to phoneme manner classes before alignment. The synthetic targets are from the waveguide plan. Golden speakers each have one head fitted without refinement from all their recordings, with the supplied IPA used only for scoring.',
+    'Run `node --test tests/heavy/recognition-decode.test.js` to reproduce. Add `--test-name-pattern=golden` before the file argument to run only the golden cohort. Phone and broad-class error are mean per-recording edit rates. For broad-class error, both strings are mapped from IPA to phoneme manner classes before alignment. The synthetic targets are from the waveguide plan. Golden speakers each have one head fitted without refinement from all their recordings, with the supplied IPA used only for scoring.',
     '',
     '<!-- prettier-ignore -->',
     '| Corpus | Language | Working rate (Hz) | Language input | Items | Phone error | Broad-class error |',
@@ -202,7 +203,11 @@ function write(rows) {
         `| ${name} | ${count} | ${pct(phones)} | ${pct(classes)} |`
     ),
     '',
-    `With the language given, the golden-set mean across both rates is **${pct(known.phones)}** phone error and **${pct(known.classes)}** broad-class error. The research targets are ${pct(targets.phones)} and ${pct(targets.classes)}, respectively.`,
+    ...(known.count
+      ? [
+          `With the language given, the golden-set mean across both rates is **${pct(known.phones)}** phone error and **${pct(known.classes)}** broad-class error. The research targets are ${pct(targets.phones)} and ${pct(targets.classes)}, respectively.`,
+        ]
+      : []),
     '',
     'Long-term reference: **32.7%** phone error for the trained Kaldi monophone recognizer on the 39-phone TIMIT core test set. [Kaldi TIMIT results](https://github.com/kaldi-asr/kaldi/blob/master/egs/timit/s5/RESULTS)',
     '',
@@ -216,10 +221,19 @@ function write(rows) {
   });
 }
 
-it('measures synthetic and golden phoneme recognition', () => {
-  const rows = [];
-  const limit = heavyLimit(Infinity);
+const rows = [];
+const limit = heavyLimit(Infinity);
+
+it('measures synthetic phoneme recognition', () => {
   synthetic(rows, limit);
+});
+
+it('measures golden phoneme recognition', () => {
   golden(rows, limit);
-  write(rows);
+});
+
+after(() => {
+  if (rows.length) {
+    write(rows);
+  }
 });

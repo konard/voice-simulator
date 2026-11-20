@@ -28,6 +28,7 @@ the first table below when you create a new folder;
 | [#11](https://github.com/konard/voice-simulator/issues/11)   | We need to make quality of the system state of the art    | [issue-11/README.md](issue-11/README.md)   |
 | [#62](https://github.com/konard/voice-simulator/issues/62)   | Experimental syllable nuclei, landmarks and broad classes | [issue-62/README.md](issue-62/README.md)   |
 | [#150](https://github.com/konard/voice-simulator/issues/150) | Golden-set render-back against the 9 dB target            | [issue-150/README.md](issue-150/README.md) |
+| [#153](https://github.com/konard/voice-simulator/issues/153) | Golden-set IPA decoding accuracy                          | [issue-153/README.md](issue-153/README.md) |
 
 | [#82](https://github.com/konard/voice-simulator/issues/82) | Complete Rust engine parity | [issue-82/plan.md](issue-82/plan.md) |
 
