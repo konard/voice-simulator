@@ -1416,13 +1416,16 @@ orchestration use JavaScript.
 transition and edge costs, readings, confidences and stream commitments on the
 same acoustic observations, including mixed whisper spans.
 `CARGO_BUILD_JOBS=1 node scripts/build-wasm.mjs --require --check-size`
-measured 658243 scalar bytes and 669252 SIMD bytes on Rust 1.100.0. The next
-16 KiB size budget for the shipped scalar file is 671744 bytes.
+measured 666,361 scalar bytes and 677,082 SIMD bytes on Rust 1.100.0. The
+next 16 KiB boundary for the shipped scalar file is 671,744 bytes (656 KiB).
 
 ## Analysis-by-synthesis rescoring
 
 The Rust rescoring module implements control-frame retiming, source-track
 interpolation, mel cepstra, speech-frame bias, local penalties, and banded DTW.
 The host supplies the IPA plans and orchestrates the waveguide renders and jobs.
+The `vs_rescoring_whisper_mfcc` entry point receives half-open frame ranges
+and averages up to five mel power frames within each range before computing
+cepstra.
 `REQUIRE_WASM=1 node --test tests/rust-rescoring.test.js` checks control frames,
 mel cepstra and regional acoustic scores against the JavaScript reference.
