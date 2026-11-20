@@ -185,6 +185,8 @@ const { ipa, segments, rescoring } = rescoreHypotheses(decoded);
 
 `warpPlan(plan, anchors)` returns a retimed plan whose `offset` is the recording time at sample zero. `planReading(decoded, segments)` matches phone onset times and copies the recovered pitch and loudness. `planRescoring(decoded)` prepares a reference render and cloneable jobs. Call `scoreJob(job)` for a job's mel-cepstral distance.
 
+Each region retains the decoder's first choice. The scorer combines the render distance with the cost of the cheapest complete decoder reading containing each candidate, including transitions at the region boundary. If the costs tie, the decoder's original choice wins. `node scripts/tune-rescoring.mjs` generates the acoustic weight from synthetic tuning utterances and favors smaller weights within one paired standard error of the minimum phone error rate.
+
 For a finished streaming phrase, pass `{ preserveTiming: true }` to keep published phone and syllable times. Changed IPA is marked `revised`. The streaming recognizer in [#73](https://github.com/konard/voice-simulator/issues/73) owns phrase boundaries and keeps rescoring off by default.
 
-See the [held-out rescoring report](../reports/heavy/recognition-rescoring.md) for synthetic and golden-set phone error rates, oracle rates, and revision counts at 16 and 8 kHz.
+The full held-out evaluation checks that mean phone error does not rise at either 16 or 8 kHz for the synthetic and golden sets. See the [held-out rescoring report](../reports/heavy/recognition-rescoring.md) for phone error, oracle rates, and revision counts at each rate.
