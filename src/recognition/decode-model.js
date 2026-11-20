@@ -1,5 +1,5 @@
 /** Planner templates and text-only phonotactics for IPA decoding. Unlicense. */
-import { planUtterance } from '../articulation/plan.js';
+import { planRecognitionTemplate } from '../articulation/plan.js';
 import { sampleState } from '../articulation/tract-shape.js';
 import { listSymbols } from '../ipa/inventory.js';
 import { formatIpa, parseIpa } from '../ipa/parse.js';
@@ -92,7 +92,7 @@ function comparedChannels(kind, state) {
 function template(ipa, voice, articulationOffsets) {
   const token = parseIpa(ipa).tokens[0];
   const { kind } = token;
-  const plan = planUtterance(kind === 'vowel' ? ipa : `ə${ipa}ə`, {
+  const plan = planRecognitionTemplate(kind === 'vowel' ? ipa : `ə${ipa}ə`, {
     head: voice,
     articulationOffsets,
   });

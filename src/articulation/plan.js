@@ -1280,8 +1280,6 @@ function accentedHead(options) {
 function smoothSource(channels, pitchShape, segments, head, frameRate) {
   const speed = head.articulationSpeed;
   for (const name of [
-    'loudness',
-    'f0',
     'lungPressure',
     'adduction',
     'effort',
@@ -1289,13 +1287,9 @@ function smoothSource(channels, pitchShape, segments, head, frameRate) {
     'whisper',
   ]) {
     const timeConstant = SOURCE_TIME_CONSTANTS[name] / speed;
-    if (name === 'f0') {
-      smoothPitch(channels.f0, pitchShape, timeConstant, frameRate);
-    } else {
-      smoothChannel(channels[name], timeConstant, frameRate);
-    }
+    smoothChannel(channels[name], timeConstant, frameRate);
   }
-  addVibrato(channels.f0, head, frameRate);
+  smoothLoudnessAndPitch(channels, pitchShape, head, frameRate);
   fillFinalCreak(channels.creak, channels.f0, segments, head, frameRate);
   for (const name of PHONATION_CHANNELS) {
     smoothChannel(
@@ -1304,6 +1298,22 @@ function smoothSource(channels, pitchShape, segments, head, frameRate) {
       frameRate
     );
   }
+}
+
+function smoothLoudnessAndPitch(channels, pitchShape, head, frameRate) {
+  const speed = head.articulationSpeed;
+  smoothChannel(
+    channels.loudness,
+    SOURCE_TIME_CONSTANTS.loudness / speed,
+    frameRate
+  );
+  smoothPitch(
+    channels.f0,
+    pitchShape,
+    SOURCE_TIME_CONSTANTS.f0 / speed,
+    frameRate
+  );
+  addVibrato(channels.f0, head, frameRate);
 }
 
 /**
@@ -1324,6 +1334,15 @@ function smoothSource(channels, pitchShape, segments, head, frameRate) {
  *   of its sounds. Every token gets its `mode` (see ./modes.js).
  */
 export function planUtterance(ipa, options = {}) {
+  return makePlan(ipa, options, false);
+}
+
+/** The recognizer's phone templates read articulation, loudness and f0. */
+export function planRecognitionTemplate(ipa, options) {
+  return makePlan(ipa, options, true);
+}
+
+function makePlan(ipa, options, recognitionTemplate) {
   const parsed = typeof ipa === 'string' ? parseIpa(ipa) : null;
   const tokens = parsed ? parsed.tokens : ipa;
   assignTokenModes(tokens, options.modes ?? parsed?.modes ?? []);
@@ -1384,10 +1403,6 @@ export function planUtterance(ipa, options = {}) {
   applyModeGains(channels.loudness, modes, frameRate);
   channels.effort.set(effort);
   const whisper = fillWhisper(channels.whisper, segments, frameRate);
-  for (let frame = 0; frame < frameCount; frame++) {
-    channels.tension[frame] = TENSION_PER_DB * effort[frame];
-  }
-  const phonationTension = fillPhonation(channels, segments, head, frameRate);
   const pitchShape = fillPitch(
     channels.f0,
     speech,
@@ -1400,6 +1415,14 @@ export function planUtterance(ipa, options = {}) {
   applySoundPitch(channels.f0, segments, head, frameRate, effort);
   applySoundHarmonics(channels, segments, head, frameRate);
   lowerBreathyReleases(channels.f0, segments, frameRate);
+  if (recognitionTemplate) {
+    smoothLoudnessAndPitch(channels, pitchShape, head, frameRate);
+    return { tokens, segments, frameRate, frameCount, channels };
+  }
+  for (let frame = 0; frame < frameCount; frame++) {
+    channels.tension[frame] = TENSION_PER_DB * effort[frame];
+  }
+  const phonationTension = fillPhonation(channels, segments, head, frameRate);
   const steps = {
     loudness: channels.loudness,
     effort,
