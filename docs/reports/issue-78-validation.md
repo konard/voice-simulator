@@ -22,6 +22,21 @@ finished in `inverting`. Speech-rate error exceeded
 threshold. The sessions returned no jackknife uncertainty because they never
 converged.
 
+## End-to-end gates
+
+| Gate | Measured result |
+| --- | --- |
+| Speaker change | No `speaker-change` event and no stable voice after 12 s of the male voice followed by 12 s of the female voice |
+| Golden set | 0 of 24 recordings reduced distance by 10%. Ten returned no fitted voice. Distances remained flat for the other 14 |
+| Telephone performance | 67.54 process CPU seconds for 20 seconds at the tier's native 8 kHz. It finished eight passes. The limit is 20 CPU seconds |
+
+The telephone test was initially profiled at 16 kHz. On that run,
+95.35 of 131.19 sampled seconds were in streaming partial results. Speech-mode
+analysis took 98.38 sampled seconds across partial and final results. This
+includes reference synthesis and measurement as well as measuring the input.
+The profile used the telephone test at revision `635da4e` with
+`node --cpu-prof --test --test-concurrency=1 --test-name-pattern='fits one core at the telephone tier' tests/heavy/copy-voice-session.test.js`.
+
 ## Reproduction
 
 ```sh
@@ -29,6 +44,7 @@ node experiments/issue-78/session.mjs
 node experiments/issue-78/baseline.mjs
 node experiments/issue-78/default-plan.mjs d52d5cd
 HEAVY_OUT=/tmp/voice-78-heavy node --test --test-concurrency=1 tests/heavy/copy-voice-session.test.js
+HEAVY_OUT=/tmp/voice-78-telephone node --test --test-concurrency=1 --test-name-pattern='fits one core at the telephone tier' tests/heavy/copy-voice-session.test.js
 npm run test:heavy -- --suite copy
 ```
 
@@ -47,6 +63,8 @@ With the true source head supplied directly to the decoder, none of the
 segments reached confidence 0.5. At 8 kHz with beam width 8, one of 14 vowel
 predictions matched the synthesis plan at its midpoint. At 16 kHz, two of 16
 matched with beam widths 32 and 128.
+The [decoder report](../CODEBOOK.md) documents phone error rates for the
+existing recognizer.
 
 ## Focused checks
 
