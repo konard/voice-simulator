@@ -1,4 +1,5 @@
 /** Segmental comparison against synthesized whisper spectra. Unlicense. */
+import { parseIpa } from '../ipa/parse.js';
 import { synthesize } from '../synthesize.js';
 import { analyzeFrames } from './frontend.js';
 import { whisperAt } from './whisper.js';
@@ -27,7 +28,7 @@ export function renderWhisperReference(ipa, settings, voice, [before, after]) {
     }
   );
   const frames = analyzeFrames(samples, sampleRate, settings);
-  const token = plan.tokens[Number(Boolean(before))];
+  const token = plan.tokens[parseIpa(before).tokens.length];
   const segments = plan.segments.filter((segment) => segment.token === token);
   const width = frames.melBands + 1;
   const start = segments[0].start;
@@ -45,7 +46,12 @@ export function renderWhisperReference(ipa, settings, voice, [before, after]) {
 }
 
 export function whisperReferences(templates, settings, voice) {
-  const key = JSON.stringify([voice, settings.rate, settings.hop]);
+  const key = JSON.stringify([
+    voice,
+    settings.rate,
+    settings.hop,
+    settings.vowelContexts,
+  ]);
   if (!tables.has(key)) {
     if (tables.size >= 4) {
       tables.delete(tables.keys().next().value);
@@ -57,11 +63,11 @@ export function whisperReferences(templates, settings, voice) {
     if (!table.has(ipa)) {
       const contexts =
         kind === 'vowel'
-          ? [
+          ? (settings.vowelContexts ?? [
               ['m', 'm'],
               ['', 'p'],
               ['p', ''],
-            ]
+            ])
           : [
               ['a', 'a'],
               ['i', 'i'],

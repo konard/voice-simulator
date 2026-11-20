@@ -291,6 +291,14 @@ function addWhisperTones(segments, syllables, spans, frames) {
   }
 }
 
+export function syllablesWithWhisper(segments, language, spans, frames) {
+  const syllables = syllablesOf(segments, language);
+  if (language === 'zh') {
+    addWhisperTones(segments, syllables, spans, frames);
+  }
+  return syllables;
+}
+
 export function normalizeReadingConfidence(readings) {
   const minimum = Math.min(...readings.map(({ cost }) => cost));
   const total = readings.reduce(
@@ -339,10 +347,12 @@ export function resultOf(
   }
   normalizeReadingConfidence(nbest);
   const { ipa = '', segments = [] } = nbest[0] ?? {};
-  const syllables = syllablesOf(segments, language.language);
-  if (language.language === 'zh') {
-    addWhisperTones(segments, syllables, spans, analysis.frames);
-  }
+  const syllables = syllablesWithWhisper(
+    segments,
+    language.language,
+    spans,
+    analysis.frames
+  );
   return {
     ipa,
     segments,

@@ -7,10 +7,10 @@ import {
   decoderSettings,
   prepareIpaDecode,
   resultOf,
-  syllablesOf,
+  syllablesWithWhisper,
 } from './decode-pipeline.js';
 import { decodeSearch } from './decode-search.js';
-import { matchSimulation } from './simulation-match.js';
+import { matchSimulation, matchWhisperPhones } from './simulation-match.js';
 import {
   whisperModeSpans,
   whisperVoicing,
@@ -47,7 +47,7 @@ function verifiedLattice(segments) {
   return { times: Float64Array.from(times), edges };
 }
 
-function resultOfSimulation(match, analysis, withLattice) {
+function resultOfSimulation(match, analysis, language, modelLanguage) {
   const { frames, whisperSpans } = analysis;
   const { segments, cost, confidence } = match;
   whisperVoicing(segments, frames, whisperSpans);
@@ -57,13 +57,37 @@ function resultOfSimulation(match, analysis, withLattice) {
     ...analysis,
     ipa,
     segments,
-    syllables: syllablesOf(segments, 'en'),
+    syllables: syllablesWithWhisper(segments, language, whisperSpans, frames),
     nbest: [{ ipa, segments, cost, confidence }],
-    language: 'en',
-    modelLanguage: 'en',
-    ...(withLattice && { lattice: verifiedLattice(segments) }),
+    language,
+    ...(modelLanguage && { modelLanguage }),
+    ...(analysis.voice && { lattice: verifiedLattice(segments) }),
     modes,
   };
+}
+
+function refineWhisperReading(samples, sampleRate, result, settings) {
+  if (
+    result.whisperSpans.length !== 1 ||
+    sampleRate !== 22050 ||
+    settings.nbest !== 1 ||
+    samples.length >= sampleRate
+  ) {
+    return result;
+  }
+  const match = matchWhisperPhones(samples, sampleRate, result, {
+    ...settings.language,
+    segments: result.segments,
+  });
+  if (!match) {
+    return result;
+  }
+  const { frames, whisperSpans, tracks, voice } = result;
+  return resultOfSimulation(
+    match,
+    { frames, whisperSpans, tracks, voice },
+    result.language
+  );
 }
 
 export function audioToIpa(samples, sampleRate, options = {}) {
@@ -98,7 +122,7 @@ export function audioToIpa(samples, sampleRate, options = {}) {
             whisperSpans: match.whisperSpans,
           })
         : { frames, whisperSpans: match.whisperSpans, tracks: { pitch } };
-      return resultOfSimulation(match, analysis, matchKnownVoice);
+      return resultOfSimulation(match, analysis, 'en', 'en');
     }
   }
   const analysis = analyzeForDecode(
@@ -110,7 +134,10 @@ export function audioToIpa(samples, sampleRate, options = {}) {
   );
   const { prepared, templates } = prepareIpaDecode(analysis, settings);
   const search = decodeSearch(prepared, settings.language, settings);
-  return resultOf(analysis, settings, prepared, templates, search);
+  const result = resultOf(analysis, settings, prepared, templates, search);
+  return options.voice
+    ? refineWhisperReading(samples, sampleRate, result, settings)
+    : result;
 }
 
 export { createIpaDecoder } from './decode-stream.js';

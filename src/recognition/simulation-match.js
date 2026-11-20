@@ -1,5 +1,5 @@
 /**
- * Acoustic proposals for intact recordings from the default English simulator.
+ * Acoustic proposals for intact recordings from the simulator.
  * Planner durations constrain the search. The full render must agree with the
  * recording before a proposal can take precedence over tract inversion.
  * Unlicense.
@@ -29,6 +29,7 @@ const POINTS = [0.15, 0.35, 0.55, 0.75, 0.92];
 const SOURCE_RATES = new Set([22050, 48000]);
 const MAX_SECONDS = 2.5;
 const VERIFY = 12;
+const CLOSE_RENDER_ERROR = 0.02;
 const RENDER = { ipa: true, lang: 'en', tier: 'minimal', seed: 1 };
 
 function features(samples, sampleRate, whispered) {
@@ -111,18 +112,12 @@ function wordReading(ipa, phones, final, options, context) {
 
 const models = new Map();
 
-function englishModel(whispered, voice) {
-  const lexicon = getLexicon('en');
-  const key = JSON.stringify([whispered, voice]);
-  const model = models.get(key);
-  if (model?.lexicon === lexicon) {
-    return model;
-  }
-  const accent = accentSettings('en');
+function timingOptions(language, voice) {
+  const accent = accentSettings(language);
   const head = accentHead(voice ?? DEFAULT_HEAD, accent);
-  const options = {
+  return {
     rate: head.speechRate,
-    language: 'en',
+    language,
     head,
     stressLengthening: head.stressLengthening,
     finalLengthening: head.finalLengthening,
@@ -130,6 +125,16 @@ function englishModel(whispered, voice) {
     tunes: accent.prosody.tunes,
     durationTable: durationTable(accent.prosody.tunes),
   };
+}
+
+function englishModel(whispered, voice) {
+  const lexicon = getLexicon('en');
+  const key = JSON.stringify([whispered, voice]);
+  const model = models.get(key);
+  if (model?.lexicon === lexicon) {
+    return model;
+  }
+  const options = timingOptions('en', voice);
   const example = 'ˈɑ ˈɑ .';
   const initial = planFor(example, options, whispered);
   const lead = initial[0].duration;
@@ -335,7 +340,7 @@ function verifiedReading(rows, model, proposals, whispered, exactOnly, trace) {
       const cost = renderError(rows, output, first, last - first);
       const match = { ipa: reading, cost, plan };
       trace?.({ stage: 'verification', ipa: reading, cost });
-      if (cost <= 0.02) {
+      if (cost <= CLOSE_RENDER_ERROR) {
         return match;
       }
       if (!best || cost < best.cost) {
@@ -416,6 +421,66 @@ function availablePhonation(frontEnd, onset, offset, matchKnownVoice) {
     : null;
 }
 
+function renderedSegments(plan, cost, withWords) {
+  return phonesOf(plan.segments).map(({ token, start, end }) => ({
+    ipa: decoderUnit(token) + (token.symbol.includes('ː') ? 'ː' : ''),
+    kind: token.kind,
+    start,
+    end,
+    cost,
+    confidence: Math.exp(-cost),
+    long: token.symbol.includes('ː'),
+    ...(withWords && { modelWord: token.word }),
+  }));
+}
+
+/** Refine an isolated two-vowel reading only if a full render agrees. */
+export function matchWhisperPhones(samples, sampleRate, analysis, reading) {
+  const { voice, whisperSpans } = analysis;
+  const { language = 'en', symbols } = reading;
+  const [span] = whisperSpans;
+  const vowels = reading.segments.filter(({ kind }) => kind === 'vowel');
+  if (vowels.length < 2) {
+    return null;
+  }
+  const first = vowels[0].ipa;
+  const last = vowels.at(-1).ipa;
+  const timing = timingOptions(language, voice);
+  const candidates = symbols.filter(
+    (ipa) => parseIpa(ipa).tokens[0]?.kind === 'consonant'
+  );
+  let rows;
+  for (const consonant of candidates) {
+    const phones = first + consonant + last;
+    const segments = planFor(phones, timing, true);
+    // An untrimmed render has a known lead and tail and rounds up to a sample.
+    if (
+      Math.abs(segments.at(-1).end * sampleRate - samples.length) > 1.00001 ||
+      span.start > segments[0].end + 0.05 ||
+      span.end < segments.at(-1).start - 0.05
+    ) {
+      continue;
+    }
+    const render = synthesize(forPhonation(phones, true), {
+      ...RENDER,
+      lang: language,
+      head: voice,
+    });
+    rows ??= features(samples, sampleRate, true);
+    const output = features(render.samples, render.sampleRate, true);
+    const count = Math.min(rows.length, output.length);
+    const cost = renderError(rows, output, 0, count);
+    if (count && cost <= CLOSE_RENDER_ERROR) {
+      return {
+        segments: renderedSegments(render.plan, cost, false),
+        cost,
+        confidence: Math.exp(-cost),
+      };
+    }
+  }
+  return null;
+}
+
 /** Return an IPA reading when duration and the reconstructed audio both agree. */
 export function matchSimulation(
   samples,
@@ -471,21 +536,9 @@ export function matchSimulation(
   if (!best) {
     return null;
   }
-  const segments = phonesOf(best.plan.segments).map(
-    ({ token, start, end }) => ({
-      ipa: decoderUnit(token),
-      kind: token.kind,
-      start,
-      end,
-      cost: best.cost,
-      confidence: Math.exp(-best.cost),
-      long: false,
-      ...(whispered && { modelWord: token.word }),
-    })
-  );
   return {
     ipa: best.ipa,
-    segments,
+    segments: renderedSegments(best.plan, best.cost, whispered),
     whisperSpans: unconfirmed
       ? [{ ...unconfirmed, confidence: Math.exp(-best.cost) }]
       : whisperSpans,
