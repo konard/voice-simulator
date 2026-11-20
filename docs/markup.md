@@ -8,7 +8,8 @@ mode** spans:
    `vs:` elements, for any text that starts with `<speak`;
 2. **inline tags** such as `[whisper]Hello[/whisper]`, only when asked for
    (`markup: true`, `--markup`), so `[1]`, `a < b` or `2 * 3` in ordinary
-   text stay text;
+   text stay text. The `say` command also accepts a leading `[whisper]` by
+   default. Use `--plain` to read the tag aloud;
 3. **ExtIPA/VoQS marks** in IPA strings: brace spans such as `{W … W}`,
    timed pauses `(.)`, sounds `⸨laugh⸩` and the strong emphasis `ˈˈ`.
 

@@ -378,6 +378,15 @@ describe('CLI', () => {
     expect(Math.max(...samples.map(Math.abs)) < 0.98).toBe(true);
   });
 
+  it('reads a leading whisper tag in say and preserves the plain option', async () => {
+    const text = '[whisper]Hello.[/whisper]';
+    const implicit = await say(text, '--tier', 'minimal');
+    const explicit = await say(text, '--tier', 'minimal', '--markup');
+    const literal = await say(text, '--tier', 'minimal', '--plain');
+    expect(implicit.samples).toEqual(explicit.samples);
+    expect(literal.samples.length).toBeGreaterThan(implicit.samples.length);
+  });
+
   it('scales to --loudness', async () => {
     const { samples, sampleRate } = await say(
       'Hello there.',

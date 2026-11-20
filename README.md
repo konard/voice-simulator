@@ -468,7 +468,7 @@ npx voice-simulator ipa --markup "[whisper]Hello[/whisper] world."  # {W həˈlo
 npx voice-simulator ipa "Where are you going?"   # ˈwɛɹ ɚ ju ˈɡoʊɪŋ ↘ ?
 npx voice-simulator say "<speak>Wait<break time=\"1s\"/>now.</speak>" -o wait.wav
 npx voice-simulator say --markup "[shout]Hey![/shout] [soft]Quiet.[/soft]" -o hey.wav
-npx voice-simulator say --markup "[whisper]Hello.[/whisper]" --out w.wav
+npx voice-simulator say "[whisper]Hello.[/whisper]" --out w.wav
 npx voice-simulator say --markup "[sad]I will see you on Monday.[/sad]" -o sad.wav
 npx voice-simulator say "Hello world." --loudness=-23 -o broadcast.wav  # EBU R 128
 npx voice-simulator timeline "Hello world, how are you?"   # word and syllable times
