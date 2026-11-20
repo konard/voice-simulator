@@ -12,11 +12,11 @@ import {
   GRID,
   L0,
   RESPONSE_GRID,
+  createRenderedResponse,
   createTractResponse,
   envelopeKey,
   interpolateResponse,
   normalizeEnvelope,
-  renderedResponse,
   responseFormants,
   tractResponse,
 } from './codebook-features.js';
@@ -186,8 +186,7 @@ export function buildCodebookWithRenderer(head, options, renderer) {
   const oralResponse = createTractResponse(responseGrid);
   const response = new Float64Array(RESPONSE_GRID.length),
     correction = new Float64Array(RESPONSE_GRID.length);
-  const render = (state) =>
-    renderedResponse(state, canonical, response, responseGrid, renderer);
+  let render;
   const env = new Float64Array(24),
     key = new Float64Array(6),
     formants = new Float64Array(8);
@@ -212,15 +211,16 @@ export function buildCodebookWithRenderer(head, options, renderer) {
     }
     if (nasal) {
       if (!correctionReady) {
+        render = createRenderedResponse(canonical, responseGrid, renderer);
         const neutral = tractShape(CHANNEL_DEFAULTS, canonical);
         oralResponse(neutral.areas, neutral.length, correction);
-        render(CHANNEL_DEFAULTS);
+        render(CHANNEL_DEFAULTS, response);
         for (let j = 0; j < response.length; j++) {
           correction[j] = response[j] - correction[j];
         }
         correctionReady = true;
       }
-      render(row.state);
+      render(row.state, response);
       for (let j = 0; j < response.length; j++) {
         response[j] -= correction[j];
       }

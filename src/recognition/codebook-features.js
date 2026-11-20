@@ -133,10 +133,22 @@ function evaluateTractResponse(areas, length, terms, out) {
         yi = negativeReactance * scale;
       ur += pr * yr - pi * yi;
       ui += pr * yi + pi * yr;
-      const e = Math.exp(loss * s[offset + 1] + s[offset + 2]);
-      const inverse = 1 / e;
-      const ch = (e + inverse) / 2,
+      const attenuation = loss * s[offset + 1] + s[offset + 2];
+      let ch, sh;
+      if (attenuation >= 0 && attenuation <= 1 / 16) {
+        // The first omitted terms are below 3e-19 for cosh and 2e-21
+        // for sinh on this interval. This also avoids cancellation near zero.
+        const x = attenuation * attenuation;
+        ch = 1 + x * (1 / 2 + x * (1 / 24 + x * (1 / 720 + x / 40320)));
+        sh =
+          attenuation *
+          (1 + x * (1 / 6 + x * (1 / 120 + x * (1 / 5040 + x / 362880))));
+      } else {
+        const e = Math.exp(attenuation);
+        const inverse = 1 / e;
+        ch = (e + inverse) / 2;
         sh = (e - inverse) / 2;
+      }
       const cr = co * ch,
         ci = si * sh;
       const br = co * sh,
@@ -264,7 +276,26 @@ export function steadyPlan(state, duration = 0.08) {
   };
 }
 
+const RENDERED_ORDER = 18;
+const RENDERED_RATE = 16000;
+
 /** Order 18, with Burg LPC for voice and five-frame autocorrelation for whisper. */
+function renderedPredictor(state, head, engine) {
+  const samples = renderPlan(steadyPlan(state), {
+    head,
+    solver: 'waveguide',
+    sampleRate: RENDERED_RATE,
+    seed: 1,
+    engine,
+  });
+  const a = new Float64Array(RENDERED_ORDER),
+    k = new Float64Array(RENDERED_ORDER);
+  const power = state.whisper
+    ? whisperReferenceLpc(samples, RENDERED_RATE, RENDERED_ORDER, a, k)
+    : steadyBurg(samples, a, k);
+  return { a, power };
+}
+
 export function renderedResponse(
   state,
   head,
@@ -272,22 +303,37 @@ export function renderedResponse(
   frequencies = RESPONSE_GRID,
   engine = 'js'
 ) {
-  const samples = renderPlan(steadyPlan(state), {
-    head,
-    solver: 'waveguide',
-    sampleRate: 16000,
-    seed: 1,
-    engine,
-  });
-  const a = new Float64Array(18),
-    k = new Float64Array(18);
-  const power = state.whisper
-    ? whisperReferenceLpc(samples, 16000, 18, a, k)
-    : steadyBurg(samples, a, k);
+  const { a, power } = renderedPredictor(state, head, engine);
   for (let i = 0; i < out.length; i++) {
-    out[i] = lpcLevel(a, 18, power, frequencies[i], 16000);
+    out[i] = lpcLevel(a, RENDERED_ORDER, power, frequencies[i], RENDERED_RATE);
   }
   return out;
+}
+
+/** Reuse the predictor's frequency terms across the rows of one codebook. */
+export function createRenderedResponse(head, frequencies, engine) {
+  const order = RENDERED_ORDER;
+  const cosines = new Float64Array(frequencies.length * order);
+  const sines = new Float64Array(cosines.length);
+  for (let bin = 0; bin < frequencies.length; bin++) {
+    const omega = (2 * Math.PI * frequencies[bin]) / RENDERED_RATE;
+    for (let i = 0; i < order; i++) {
+      cosines[bin * order + i] = Math.cos(omega * (i + 1));
+      sines[bin * order + i] = Math.sin(omega * (i + 1));
+    }
+  }
+  return (state, out) => {
+    const { a, power } = renderedPredictor(state, head, engine);
+    for (let bin = 0; bin < frequencies.length; bin++) {
+      let re = 1,
+        im = 0;
+      for (let i = 0; i < order; i++) {
+        re += a[i] * cosines[bin * order + i];
+        im -= a[i] * sines[bin * order + i];
+      }
+      out[bin] = 10 * Math.log10(power / (re * re + im * im));
+    }
+  };
 }
 
 /** Burg envelope of the last 40 ms, pre-emphasis 0.97. */
