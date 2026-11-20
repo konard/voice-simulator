@@ -1,5 +1,9 @@
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
 import { test } from 'node:test';
 import { licenceGate, loadPolicy, loadRegistry } from '../scripts/datasets.mjs';
 import { textToIpa } from '../src/g2p/index.js';
@@ -11,6 +15,7 @@ import {
 import {
   BENCHMARK,
   checkBaseline,
+  fetchBenchmarkSource,
   normalizeForScoring,
   phoneClass,
   scoreUtterance,
@@ -135,6 +140,45 @@ test('enforces the quality floors before the first baseline', () => {
   assert.match(failures.join(), /fleurs-en high classErr: 0\.6/u);
   assert.match(failures.join(), /fleurs-en high per: 1/u);
   assert.match(failures.join(), /fleurs-en low cer: 0\.66/u);
+});
+
+test('retries the verified source download after a transient connection error', async () => {
+  const cache = mkdtempSync(path.join(tmpdir(), 'recognition-benchmark-'));
+  try {
+    const id = 'aishell3-test-index';
+    const entry = loadRegistry().datasets.find((dataset) => dataset.id === id);
+    const [file] = entry.source.files;
+    const content = 'transcript fixture\n';
+    file.size = Buffer.byteLength(content);
+    file.sha256 = createHash('sha256').update(content).digest('hex');
+    const registry = { schema: 1, datasets: [entry] };
+    const requests = [];
+    const fetcher = async (url, { method = 'GET' }) => {
+      requests.push({ url, method });
+      if (requests.length === 1) {
+        throw new Error('write ETIMEDOUT');
+      }
+      return new globalThis.Response(content);
+    };
+    const { source, reason } = await fetchBenchmarkSource(id, {
+      cache,
+      registry,
+      attempts: 2,
+      delay: 0,
+      fetcher,
+    });
+    assert.equal(reason, undefined);
+    assert.deepEqual(requests, [
+      { url: file.url, method: 'GET' },
+      { url: file.url, method: 'GET' },
+    ]);
+    assert.equal(
+      readFileSync(path.join(source.dir, file.name), 'utf8'),
+      content
+    );
+  } finally {
+    rmSync(cache, { recursive: true, force: true });
+  }
 });
 
 test('the benchmark file names allowed datasets and valid row prefixes', () => {

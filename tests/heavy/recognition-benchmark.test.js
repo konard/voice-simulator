@@ -5,7 +5,6 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { performance } from 'node:perf_hooks';
 import { test } from 'node:test';
-import { DatasetError, EXIT, fetchDataset } from '../../scripts/datasets.mjs';
 import { parseAishellLine } from '../../scripts/lexicon-metrics.mjs';
 import { textToIpa } from '../../src/g2p/index.js';
 import { pinyinSyllableToIpa, TONE_CONTOURS } from '../../src/g2p/pinyin.js';
@@ -13,11 +12,11 @@ import {
   recognize,
   RecognitionError,
 } from '../../src/recognition/recognizer.js';
-import { datasetSkipReason } from '../helpers/datasets.js';
 import {
   BENCHMARK,
   checkBaseline,
   compareSyllableTones,
+  fetchBenchmarkSource,
   loadBenchmark,
   prepareReference,
   scoreUtterance,
@@ -124,27 +123,16 @@ function measureLevel(rows, set, options, onConfusion) {
   return { totals, rates, utterances };
 }
 
-async function datasetForReport(id, skipped, load) {
-  const skip = await datasetSkipReason(id);
-  if (skip) {
-    skipped.push(`${id}: ${skip}`);
-    return null;
+async function sourceForReport(id, options, skipped) {
+  const { source, reason } = await fetchBenchmarkSource(id, options);
+  if (reason) {
+    skipped.push(`${id}: ${reason}`);
+    console.log(skipped.at(-1));
   }
-  try {
-    return await load();
-  } catch (error) {
-    if (!(error instanceof DatasetError) || error.code !== EXIT.network) {
-      throw error;
-    }
-    skipped.push(`${id}: download failed after retries`);
-    return null;
-  }
+  return source;
 }
 
-async function auditAishell(skipped) {
-  const source = await datasetForReport(AISHELL, skipped, () =>
-    fetchDataset(AISHELL)
-  );
+function auditAishell(source) {
   if (!source) {
     return null;
   }
@@ -192,13 +180,23 @@ test(
     const confusions = {};
     const skipped = [];
     const known = new Set();
+    // Fetch while the network connections are active, then decode one corpus
+    // at a time to keep the in-memory sample bounded by a single prefix.
+    const available = [];
     for (const set of BENCHMARK.sets) {
-      const rows = await datasetForReport(set.id, skipped, () =>
-        loadBenchmark({ set, limit })
+      const source = await sourceForReport(
+        set.id,
+        { limit: Math.min(set.rows, limit) },
+        skipped
       );
-      if (!rows) {
-        continue;
+      if (source) {
+        console.log(`${set.id}: ${source.files.length} files verified`);
+        available.push(set);
       }
+    }
+    const aishell = auditAishell(await sourceForReport(AISHELL, {}, skipped));
+    for (const set of available) {
+      const rows = await loadBenchmark({ set, limit });
       const scored = rows.map((row) => ({
         row,
         reference: prepareReference(row, set.language),
@@ -220,7 +218,6 @@ test(
       sets[set.id] = levels;
     }
 
-    const aishell = await auditAishell(skipped);
     const minutes = (performance.now() - started) / 60_000;
     const fleursLanguage = fleursLanguageAccuracy(sets);
     const data = {
@@ -256,6 +253,9 @@ test(
     const ratchet = checkBaseline(measured, baseline, { notice });
     const failures = checkFloors(measured.sets, fleursLanguage);
     if (update) {
+      if (available.length !== BENCHMARK.sets.length) {
+        failures.push('Updating the baseline requires every benchmark corpus');
+      }
       if (!notes) {
         failures.push(...baselineRegressions(measured, baseline));
       }

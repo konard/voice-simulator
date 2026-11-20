@@ -1,12 +1,18 @@
 /** Dataset loading and scoring shared by the real-speech benchmark and tests. */
 import { readFileSync } from 'node:fs';
 import { URL } from 'node:url';
-import { fetchDataset, readDataset } from '../../../scripts/datasets.mjs';
+import {
+  DatasetError,
+  EXIT,
+  fetchDataset,
+  readDataset,
+} from '../../../scripts/datasets.mjs';
 import { decodeAudio } from '../../../src/audio/formats.js';
 import { textToIpa } from '../../../src/g2p/index.js';
 import { parseIpa } from '../../../src/ipa/parse.js';
 import { syllabifyIpa } from '../../../src/ipa/syllables.js';
 import { alignEdits, errorRate } from '../../../src/metrics/text.js';
+import { datasetSkipReason } from '../../helpers/datasets.js';
 
 export { checkBaseline } from './benchmark-baseline.js';
 
@@ -16,6 +22,29 @@ export const BENCHMARK = JSON.parse(
     'utf8'
   )
 );
+
+export async function fetchBenchmarkSource(id, options = {}) {
+  let source;
+  try {
+    const reason = await datasetSkipReason(id, {
+      ...options,
+      // Use the checksum-verified download with retries as the availability
+      // probe. A single HEAD timeout can skip a corpus whose rows are usable.
+      probe: async () => {
+        source = await fetchDataset(id, options);
+        return null;
+      },
+    });
+    return reason
+      ? { reason }
+      : { source: source ?? (await fetchDataset(id, options)) };
+  } catch (error) {
+    if (!(error instanceof DatasetError) || error.code !== EXIT.network) {
+      throw error;
+    }
+    return { reason: 'download failed after retries' };
+  }
+}
 
 export async function loadBenchmark({ set, limit }) {
   const config =

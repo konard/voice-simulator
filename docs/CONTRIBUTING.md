@@ -211,7 +211,7 @@ hardware:
 HEAVY_UPDATE_BASELINE=1 node scripts/run-heavy.mjs --suite recognition
 ```
 
-After the benchmark passes its floors, this writes
+Once all benchmark corpora are measured and pass the floors, this writes
 `tests/heavy/baselines/recognition.json` and
 `docs/reports/recognition-benchmark.md`. Review and commit both files. An update
 that raises an error rate requires `HEAVY_BASELINE_REASON="..."`, which is stored
