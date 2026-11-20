@@ -251,6 +251,20 @@ export function clearLexicons() {
   spellingIndex = new Map();
 }
 
+/** The registered overrides as plain data, oldest first for addLexicon(). */
+export function registeredLexicons() {
+  const dictionaries = [];
+  for (const [lang, lexicons] of added) {
+    for (const lexicon of lexicons.slice().reverse()) {
+      const words = Object.fromEntries(
+        Array.from(lexicon.words(), (word) => [word, lexicon.lookup(word)])
+      );
+      dictionaries.push([lang, words]);
+    }
+  }
+  return dictionaries;
+}
+
 /**
  * Run `fn` with the per-call lexicons of `textToIpa(text, {lexicon})`.
  * @param {Record<string, object>|undefined} lexicons `{en: {word: ipa}}`

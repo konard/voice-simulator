@@ -1,6 +1,12 @@
 import assert from 'node:assert/strict';
 import { it } from 'test-anywhere';
-import { DEFAULT_HEAD, recognize, synthesize } from '../src/index.js';
+import {
+  addLexicon,
+  clearLexicons,
+  DEFAULT_HEAD,
+  recognize,
+  synthesize,
+} from '../src/index.js';
 import { resample } from '../src/audio/resample.js';
 import { searchCodebookJob } from '../src/recognition/codebook-jobs.js';
 import { createRecognitionEngine } from '../src/recognition/engine.js';
@@ -35,7 +41,7 @@ function recording() {
   return input;
 }
 
-function threadsMatch(engine) {
+function threadsMatch(engine, expectedWord) {
   return async () => {
     const samples = recording();
     const settings = { ...options, engine, nbest: 2 };
@@ -44,6 +50,9 @@ function threadsMatch(engine) {
       threads: 1,
     });
     assert.ok(expected.words.length);
+    if (expectedWord) {
+      assert.equal(expected.words[0].text, expectedWord);
+    }
     for (const threads of [2, 4]) {
       const other = await recognize(samples, rate, { ...settings, threads });
       assert.equal(JSON.stringify(other), JSON.stringify(expected));
@@ -51,10 +60,14 @@ function threadsMatch(engine) {
   };
 }
 
-it(
-  'JavaScript recognition does not depend on the number of threads',
-  threadsMatch('js')
-);
+it('JavaScript recognition keeps the same pronunciation overrides at every thread count', async () => {
+  addLexicon('en', { the: 'ˈpɹoʊ' });
+  try {
+    await threadsMatch('js', 'the')();
+  } finally {
+    clearLexicons();
+  }
+});
 itUnless(noRust)(
   'Rust recognition does not depend on the number of threads',
   threadsMatch('rust')

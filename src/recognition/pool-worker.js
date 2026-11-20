@@ -1,4 +1,5 @@
 /** The independent jobs of the private-memory recognition worker. Unlicense. */
+import { addLexicon } from '../g2p/lexicon.js';
 import { searchCodebookJob } from './codebook-jobs.js';
 import { createRecognitionEngine } from './engine.js';
 import { recognize } from './recognizer.js';
@@ -11,11 +12,11 @@ async function dispatch({ type, job, engine, tableId, setup }, send) {
   try {
     loaded ??= createRecognitionEngine({ engine, threads: 1 });
     const kernels = await loaded;
-    if (setup) {
-      tables.set(tableId, setup);
-    }
     switch (type) {
       case 'codebook': {
+        if (setup) {
+          tables.set(tableId, setup);
+        }
         const result = searchCodebookJob(tables.get(tableId), job, kernels);
         send({ result }, [result.buffer]);
         break;
@@ -24,6 +25,9 @@ async function dispatch({ type, job, engine, tableId, setup }, send) {
         send({ result: scoreJob(job) });
         break;
       case 'audio': {
+        for (const [language, entries] of setup?.lexicons ?? []) {
+          addLexicon(language, entries);
+        }
         const { samples, sampleRate, options } = job;
         send({
           result: recognize(samples, sampleRate, {

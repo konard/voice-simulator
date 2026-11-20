@@ -1,6 +1,7 @@
 /** Public audio recognition and shared batch/stream composition. Unlicense. */
 import { resample } from '../audio/resample.js';
 import { LANGUAGES } from '../g2p/index.js';
+import { registeredLexicons } from '../g2p/lexicon.js';
 import { decoderWhisperSpans } from './decode-pipeline.js';
 import { audioToIpa, audioToIpaParallel } from './decode.js';
 import { createRecognitionEngine, getRecognitionEngine } from './engine.js';
@@ -493,8 +494,12 @@ export async function recognizeAsync(samples, sampleRate, options = {}) {
     delete workerOptions.kernels;
     const jobs = pieces(samples, sampleRate, workerOptions, settings);
     if (jobs.length) {
-      const results = await pool.run('audio', jobs, (job) =>
-        runPiece(job, kernels)
+      const lexicons = pool.size > 1 ? registeredLexicons() : [];
+      const results = await pool.run(
+        'audio',
+        jobs,
+        (job) => runPiece(job, kernels),
+        lexicons.length ? { lexicons } : undefined
       );
       return merge(results, jobs, settings.nbest);
     }
