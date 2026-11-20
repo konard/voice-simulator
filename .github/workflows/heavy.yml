@@ -167,6 +167,13 @@ jobs:
           REQUIRE_WASM: '1'
         run: node --test tests/heavy/performance-recognition.test.js
 
+      - name: Profile recognition stages
+        if: ${{ !cancelled() && inputs.suite == 'recognition-performance' }}
+        run: |
+          mkdir -p reports/heavy
+          node scripts/profile-recognition.mjs js > reports/heavy/recognition-stages-js.md
+          node scripts/profile-recognition.mjs rust > reports/heavy/recognition-stages-rust.md
+
       - name: Upload reports
         if: ${{ !cancelled() }}
         uses: ./.github/actions/artifact-transport
