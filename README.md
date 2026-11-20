@@ -671,7 +671,20 @@ voice-simulator recognize speech.wav --level high --engine rust --threads 4
 cargo run --release -p voice-simulator-cli --features parallel -- recognize speech.wav --threads 4
 ```
 
-The native CLI reports timings for WASM-independent WAV-to-IPA recognition. Its acoustic stages and optional rescoring are described in the [recognition API](docs/RECOGNIZER.md#native-cli).
+The native CLI reads WAV and reports IPA and timings for frame analysis, pitch, formants, inverse filtering, codebook search and phone decoding. Add `--rescore` for physical waveform rescoring. The `parallel` Cargo feature enables Rayon for codebook search and rescoring. Language identification and word decoding are available through the package API. [Recognition API](docs/RECOGNIZER.md#native-cli)
+
+[Recognition measurements on a four-core Linux CI runner](https://github.com/konard/voice-simulator/actions/runs/44824234364)
+
+| Measurement               | JavaScript |      Rust | Rust speedup |
+| ------------------------- | ---------: | --------: | -----------: |
+| Cold 8 kHz CLI, one core  |  1.746 RTF | 1.607 RTF |        1.09× |
+| High, 60 s, one worker    |   19.791 s |  16.367 s |        1.21× |
+| High, 60 s, four workers  |   13.376 s |  11.503 s |        1.16× |
+| Low pitch stage, one core |  107.88 ms |  80.93 ms |        1.33× |
+| Low inverse filter stage  |  115.14 ms |  47.37 ms |        2.43× |
+| High IPA-to-text stage    |  294.75 ms | 254.67 ms |        1.16× |
+
+RTF is elapsed time divided by audio duration. The single-core CLI outputs matched. Four Rust workers were 1.42× as fast as one. `npm run test:heavy -- --suite performance` measures the CLI and worker scaling. `node scripts/profile-recognition.mjs js` and `node scripts/profile-recognition.mjs rust` measure the stages.
 
 ### Quality
 

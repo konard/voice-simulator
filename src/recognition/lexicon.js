@@ -32,8 +32,11 @@ export function soundKey(token, language) {
   );
 }
 
-export function trieNode() {
-  return { children: new Map(), entries: [] };
+const noChildren = new Map();
+const noEntries = [];
+
+export function trieNode(token) {
+  return { children: noChildren, entries: noEntries, token };
 }
 
 function contextualChinese() {
@@ -116,10 +119,18 @@ export function addPronunciation(root, entry, language, parsed) {
   let node = root;
   for (const token of tokens) {
     const key = soundKey(token, language);
-    if (!node.children.has(key)) {
-      node.children.set(key, { ...trieNode(), token });
+    let child = node.children.get(key);
+    if (!child) {
+      child = trieNode(token);
+      if (node.children === noChildren) {
+        node.children = new Map();
+      }
+      node.children.set(key, child);
     }
-    node = node.children.get(key);
+    node = child;
+  }
+  if (node.entries === noEntries) {
+    node.entries = [];
   }
   if (!node.entries.some((e) => e.word === entry.word && e.ipa === entry.ipa)) {
     node.entries.push({ ...entry, tokens });

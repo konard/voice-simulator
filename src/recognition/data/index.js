@@ -11,6 +11,7 @@ const DATA = new Map([
   ['zh', zh],
 ]);
 const opened = new Map();
+const transitionsByTable = new WeakMap();
 
 export function getCounts(language) {
   if (!DATA.has(language)) {
@@ -49,6 +50,45 @@ export function getCounts(language) {
     });
   }
   return opened.get(language);
+}
+
+/** Precompute fixed bigram costs grouped by the destination word. */
+function transitionCosts(data) {
+  const table = data.bigrams;
+  let transitions = transitionsByTable.get(table);
+  if (!transitions) {
+    transitions = new Map();
+    for (const [key, count] of table) {
+      const at = key.indexOf('\t');
+      const previous = key.slice(0, at);
+      const word = key.slice(at + 1);
+      let row = transitions.get(word);
+      if (!row) {
+        row = new Map();
+        transitions.set(word, row);
+      }
+      row.set(
+        previous,
+        -0.3 * Math.log((count - 0.75) / data.counts.get(previous)) + 0.5
+      );
+    }
+    transitionsByTable.set(table, transitions);
+  }
+  return transitions;
+}
+
+/** Score multiple predecessor words for one candidate. */
+export function wordTransition(data, word) {
+  const backoff =
+    -0.3 * Math.log((0.4 * (data.counts.get(word) ?? 1)) / data.total) + 0.5;
+  let row;
+  return (previous) => {
+    if (!previous) {
+      return backoff;
+    }
+    row ??= transitionCosts(data).get(word) ?? false;
+    return (row ? row.get(previous) : undefined) ?? backoff;
+  };
 }
 
 /** Discounted bigram probability with the specified unigram back-off. */

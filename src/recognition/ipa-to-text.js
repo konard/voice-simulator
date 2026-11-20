@@ -1,7 +1,7 @@
 /** IPA → text through a pronunciation trie and a discounted bigram model. */
 import { getLexicon } from './lexicon.js';
 import { checkLanguage } from './languages.js';
-import { wordCost } from './data/index.js';
+import { wordTransition } from './data/index.js';
 import { candidatesAt, exactCandidates, distanceCache } from './candidates.js';
 import { recognitionInput } from './input.js';
 import { withWordSearch } from './word-search.js';
@@ -109,17 +109,14 @@ function continuation(input, lexicon, spans, candidate) {
     Number(Boolean(span && span.language !== language)) *
     MIXED_LANGUAGE_COSTS.spanMismatch;
   const canSwitch = !input.pauses.has(from);
-  const costs = new Map();
+  const cost = wordTransition(lexicon, word);
   return (partial) => {
     const changed = partial.lastLanguage && partial.lastLanguage !== language;
     const last = changed ? null : partial.last;
-    if (!costs.has(last)) {
-      costs.set(last, wordCost(lexicon, last, word));
-    }
     const languageCost =
       mismatch +
       Number(Boolean(changed && canSwitch)) * MIXED_LANGUAGE_COSTS.switch;
-    return partial.cost + candidate.cost + costs.get(last) + languageCost;
+    return partial.cost + candidate.cost + cost(last) + languageCost;
   };
 }
 
