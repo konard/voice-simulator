@@ -478,7 +478,7 @@ function insertCandidate(store, row, kept, capacity, candidate) {
  * t (frequency, height, strength), their number and the strength of the
  * unvoiced candidate.
  */
-function createCandidateFinder(frames, settings, store) {
+function createCandidateFinder(frames, settings, store, shared) {
   const { lagMin, lagMax, rate, minF0, maxF0, octaveCost } = settings;
   const capacity = settings.candidates;
   const coarse = createCoarseCorrelator(frames, settings);
@@ -513,6 +513,14 @@ function createCandidateFinder(frames, settings, store) {
     order.sort((a, b) => peakHeight[b] - peakHeight[a] || a - b);
   }
 
+  function scoreUnvoiced(t, largest, peak) {
+    const ratio = peak > 0 ? largest / peak : 0;
+    store.unvoiced[t] =
+      settings.voicingThreshold +
+      Math.max(0, 2 - ratio / settings.silence) +
+      quietness(frames, settings, t);
+  }
+
   return {
     lastSample(centre) {
       return Math.max(full.lastSample(centre), coarse.lastSample(centre));
@@ -522,13 +530,26 @@ function createCandidateFinder(frames, settings, store) {
      * the largest absolute sample so far.
      */
     score(t, centre, peak) {
+      if (shared?.source) {
+        const { source } = shared;
+        const fine = t * 2;
+        store.count[t] = source.count[fine];
+        for (let i = 0; i < store.count[t]; i++) {
+          const from = fine * capacity + i;
+          const to = t * capacity + i;
+          store.frequency[to] = source.frequency[from];
+          store.height[to] = source.height[from];
+          store.strength[to] = source.strength[from];
+        }
+        scoreUnvoiced(t, source.largest[fine], peak);
+        return;
+      }
       full.load(centre);
       const { energy, largest } = full.frame;
-      const ratio = peak > 0 ? largest / peak : 0;
-      store.unvoiced[t] =
-        settings.voicingThreshold +
-        Math.max(0, 2 - ratio / settings.silence) +
-        quietness(frames, settings, t);
+      if (store.largest) {
+        store.largest[t] = largest;
+      }
+      scoreUnvoiced(t, largest, peak);
       store.count[t] = 0;
       if (!coarse.correlate(centre, q) || !(energy > 0)) {
         return;
@@ -937,6 +958,10 @@ function frameScores(track, store, capacity, t, chosen) {
  * @param {Partial<typeof PITCH_DEFAULTS>} [options]
  */
 export function createPitchTracker(frames, options = {}) {
+  return pitchTracker(frames, options);
+}
+
+function pitchTracker(frames, options, shared) {
   const settings = pitchSettings(frames, options);
   const { hop, hopSamples, lag } = settings;
   const capacity = settings.candidates;
@@ -948,9 +973,13 @@ export function createPitchTracker(frames, options = {}) {
     count: new Uint8Array(rows),
     unvoiced: new Float32Array(rows),
   };
+  if (shared && !shared.source) {
+    store.largest = new Float64Array(rows);
+    shared.save = store;
+  }
   const path = new Int8Array(rows);
   const viterbi = createViterbi(store, settings, rows);
-  const finder = createCandidateFinder(frames, settings, store);
+  const finder = createCandidateFinder(frames, settings, store, shared);
   const track = createTrack(frames, settings);
   const marker = createMarker(frames, track, settings);
   const distribution = createDistribution(rows);
@@ -1036,4 +1065,14 @@ export function trackPitch(frames, options = {}) {
   const tracker = createPitchTracker(frames, options);
   tracker.advance(true);
   return tracker.track;
+}
+
+/** Score shared 5 ms and 10 ms windows once, then solve their paths independently. */
+export function trackPitchHops({ fine, coarse }, options = {}) {
+  const shared = {};
+  const fast = pitchTracker(fine, options, shared);
+  fast.advance(true);
+  const slow = pitchTracker(coarse, options, { source: shared.save });
+  slow.advance(true);
+  return { fitPitch: fast.track, pitch: slow.track };
 }

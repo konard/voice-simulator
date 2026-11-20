@@ -11,11 +11,16 @@ import { pathArcs } from './decode-search.js';
 import { prepareDecode } from './decode-spans.js';
 import { DECODE_WEIGHTS } from './decode-weights.js';
 import { trackBatchFormants } from './formants.js';
-import { analyzeFrames, FRONTEND_DEFAULTS, workingRate } from './frontend.js';
+import {
+  analyzeFrameHops,
+  analyzeFrames,
+  FRONTEND_DEFAULTS,
+  workingRate,
+} from './frontend.js';
 import { invertArticulation } from './inversion.js';
 import { findLandmarks } from './landmarks.js';
 import { measure } from './profile.js';
-import { trackPitch } from './pitch.js';
+import { trackPitch, trackPitchHops } from './pitch.js';
 import {
   clipWhisperSpans,
   findWhisper,
@@ -77,6 +82,7 @@ export function decoderSettings(sampleRate, options) {
   return {
     profile: options.profile,
     kernels: options.kernels,
+    fitVoice: !options.voice,
     beam,
     nbest,
     lattice: options.lattice ?? true,
@@ -150,17 +156,49 @@ export function fitDecoderVoice(
 
 export function decodeFrontEnd(samples, sampleRate, settings) {
   const { profile } = settings;
-  const frames = measure(profile, 'Front end', () =>
-    analyzeFrames(samples, sampleRate, settings)
-  );
-  const pitch = measure(profile, 'Pitch', () =>
-    trackPitch(frames, { kernels: settings.kernels })
+  const canReuseFitFrames =
+    settings.fitVoice &&
+    settings.hop === 0.01 &&
+    samples instanceof Float32Array &&
+    settings.rate === sampleRate &&
+    sampleRate === workingRate(sampleRate) &&
+    samples.length <= FRONTEND_DEFAULTS.maxSeconds * sampleRate;
+  const { frames, fitFrames } = measure(profile, 'Front end', () => {
+    if (canReuseFitFrames) {
+      const { coarse, fine } = analyzeFrameHops(samples, sampleRate);
+      return { frames: coarse, fitFrames: fine };
+    }
+    return { frames: analyzeFrames(samples, sampleRate, settings) };
+  });
+  const options = { kernels: settings.kernels };
+  const { pitch, fitPitch } = measure(profile, 'Pitch', () =>
+    fitFrames
+      ? trackPitchHops({ fine: fitFrames, coarse: frames }, options)
+      : { pitch: trackPitch(frames, options) }
   );
   const whisperSpans =
     settings.whisper === 'auto'
       ? findWhisper(samples, sampleRate, frames, pitch)
       : clipWhisperSpans(settings.whisper || [], samples.length / sampleRate);
-  return { frames, pitch, whisperSpans };
+  return { frames, pitch, whisperSpans, fitFrames, fitPitch };
+}
+
+function decoderFitFrontEnd(samples, sampleRate, frontEnd) {
+  const { frames, fitFrames, fitPitch } = frontEnd;
+  if (fitFrames) {
+    return { frames: fitFrames, pitch: fitPitch };
+  }
+  // Voice fitting uses the default hop and rate and inspects at most 30 seconds.
+  if (
+    samples instanceof Float32Array &&
+    frames.hop === FRONTEND_DEFAULTS.hop &&
+    frames.rate === sampleRate &&
+    frames.rate === workingRate(sampleRate) &&
+    samples.length <= FRONTEND_DEFAULTS.maxSeconds * sampleRate
+  ) {
+    return frontEnd;
+  }
+  return undefined;
 }
 
 function prepareAnalysis(
@@ -172,15 +210,6 @@ function prepareAnalysis(
 ) {
   const { frames, pitch, whisperSpans } = frontEnd;
   const hasSpeech = frames.speech.subarray(0, frames.count).some(Boolean);
-  // Voice fitting uses the default hop and rate and inspects at most 30 seconds.
-  const fitFrontEnd =
-    samples instanceof Float32Array &&
-    frames.hop === FRONTEND_DEFAULTS.hop &&
-    frames.rate === sampleRate &&
-    frames.rate === workingRate(sampleRate) &&
-    samples.length <= FRONTEND_DEFAULTS.maxSeconds * sampleRate
-      ? frontEnd
-      : undefined;
   const voice = options.voice
     ? normalizeHeadConfig(options.voice)
     : hasSpeech
@@ -190,7 +219,7 @@ function prepareAnalysis(
           settings.language.language,
           DEFAULT_HEAD,
           settings,
-          fitFrontEnd
+          decoderFitFrontEnd(samples, sampleRate, frontEnd)
         )
       : DEFAULT_HEAD;
   const spectralFrames = whisperFormantFrames(frames, whisperSpans);
