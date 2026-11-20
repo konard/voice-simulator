@@ -125,6 +125,9 @@ const LIBRARY_USAGE = [
   'Library: recognizeModes(samples, rate, result, { voice }) adds speech modes',
   '         to timed IPA words; toPlanModes converts spans for replay.',
   '         API, baseline and limits: docs/RECOGNITION-MODES.md',
+  'Library: createVoiceSession({ sampleRate }) fits a speaker while recognising.',
+  '         copyVoice(samples, rate) uses the same passes on a recording.',
+  '         API and state diagram: docs/VOICE-SESSION.md',
   '',
 ];
 
@@ -359,6 +362,12 @@ function resolveHead(values) {
     });
   }
   return undefined;
+}
+
+function voiceArticulation(values) {
+  return values.voice !== undefined && !values.head
+    ? readVoiceFile(values.voice).articulationOffsets
+    : undefined;
 }
 
 /**
@@ -681,6 +690,7 @@ const COMMANDS = {
       breaths: values.breaths || undefined,
       seed: values.seed,
       head: resolveHead(values),
+      articulationOffsets: voiceArticulation(values),
       tier: values.tier,
       solver: values.solver,
       source: values.source,
@@ -781,6 +791,7 @@ const COMMANDS = {
         markup: markupOption(values),
         breaths: values.breaths || undefined,
         head,
+        articulationOffsets: voiceArticulation(values),
       }
     );
     const track = visemeTrack(plan, resolved, {

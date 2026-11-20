@@ -50,7 +50,41 @@ const META_KEYS = [
   'description',
   'preset',
   'accent',
+  'articulationOffsets',
 ];
+
+const OFFSET_CHANNELS = ['height', 'backness', 'rounding'];
+
+function readOffsets(offsets, report) {
+  if (offsets === undefined) {
+    return undefined;
+  }
+  if (!isPlainObject(offsets)) {
+    report('articulationOffsets must be an object');
+    return undefined;
+  }
+  const entries = [];
+  for (const [ipa, channels] of Object.entries(offsets)) {
+    if (!ipa || !isPlainObject(channels)) {
+      report(`invalid articulationOffsets entry "${ipa}"`);
+      continue;
+    }
+    const values = Object.entries(channels).filter(([name, value]) => {
+      const valid =
+        OFFSET_CHANNELS.includes(name) &&
+        Number.isFinite(value) &&
+        Math.abs(value) <= 0.15;
+      if (!valid) {
+        report(`invalid articulationOffsets value "${ipa}.${name}"`);
+      }
+      return valid;
+    });
+    if (values.length) {
+      entries.push([ipa, Object.fromEntries(values)]);
+    }
+  }
+  return entries.length ? Object.fromEntries(entries) : undefined;
+}
 
 /** Units that are not written after a number ('1' plain, 'x' factor). */
 const SILENT_UNITS = new Set(['1', 'x']);
@@ -220,11 +254,13 @@ function readVoiceObject(voice, values, report) {
       );
     }
   }
+  const articulationOffsets = readOffsets(voice.articulationOffsets, report);
   return {
     name: readText(voice, 'name', report),
     description: readText(voice, 'description', report),
     preset: readPreset(voice.preset, report),
     accent: readAccent(voice.accent, report),
+    ...(articulationOffsets && { articulationOffsets }),
   };
 }
 
@@ -352,6 +388,10 @@ export function saveVoice(voice, { full = false } = {}) {
   if (accent) {
     file.accent = accent;
   }
+  const articulationOffsets = readOffsets(voice?.articulationOffsets, () => {});
+  if (articulationOffsets) {
+    file.articulationOffsets = articulationOffsets;
+  }
   return Object.assign(file, groupValues(head, preset, full));
 }
 
@@ -438,6 +478,20 @@ export function voiceSchema() {
       ),
     };
   }
+  properties.articulationOffsets = {
+    type: 'object',
+    propertyNames: { minLength: 1 },
+    additionalProperties: {
+      type: 'object',
+      additionalProperties: false,
+      properties: Object.fromEntries(
+        OFFSET_CHANNELS.map((name) => [
+          name,
+          { type: 'number', minimum: -0.15, maximum: 0.15 },
+        ])
+      ),
+    },
+  };
   return {
     $schema: 'https://json-schema.org/draft/2020-12/schema',
     $id: 'https://github.com/konard/voice-simulator/blob/main/schemas/voice.schema.json',

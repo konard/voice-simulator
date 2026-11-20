@@ -311,11 +311,23 @@ function pushBreathyRelease(segments, token, context) {
 }
 
 function pushVowel(segments, token, index, context) {
+  const vowel = vowelTarget(token);
+  const target = vowelChannels(token);
+  const offsets = context.articulationOffsets;
+  const key = token.phoneme.symbol;
+  if (offsets && Object.hasOwn(offsets, key)) {
+    vowel.rounding = Math.max(vowel.rounding, target.rounding ?? 0);
+    for (const name of ['height', 'backness', 'rounding']) {
+      const value = offsets[key][name] ?? 0;
+      vowel[name] = Math.max(0, Math.min(1, vowel[name] + value));
+    }
+    target.rounding = vowel.rounding;
+  }
   segments.push({
     token,
     kind: 'vowel',
-    vowel: vowelTarget(token),
-    target: vowelChannels(token),
+    vowel,
+    target,
     duration: tokenParts(token, index, context)[0],
   });
 }
@@ -397,6 +409,7 @@ function pushPause(segments, token, context) {
 export function buildSegments(tokens, options) {
   const context = {
     tokens,
+    articulationOffsets: options.articulationOffsets,
     language: options.language,
     table: options.durationTable ?? durationTable(options.language),
     duration: {
@@ -1327,6 +1340,7 @@ export function planUtterance(ipa, options = {}) {
     head,
     tunes,
     breaths: options.breaths,
+    articulationOffsets: options.articulationOffsets,
   });
   if (options.durations) {
     applyDurations(segments, tokens, options.durations);

@@ -230,7 +230,11 @@ export function createDecodeTracks(frames, pitch, options, language) {
     },
     templatesAt(time) {
       const change = changes.findLast((entry) => entry.time <= time);
-      return decoderTemplates(change?.voice ?? voice, language.symbols);
+      return decoderTemplates(
+        change?.voice ?? voice,
+        language.symbols,
+        options.articulationOffsets
+      );
     },
     get voice() {
       return voice;
