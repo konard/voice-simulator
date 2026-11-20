@@ -619,8 +619,11 @@ jobs:
           bun test --timeout 30000 "${tests[@]}"
           deno test -A --frozen "${tests[@]}"
 
-      # The publishing jobs run the same check after they download the file.
-      - name: Check the package lists the engine
+      - name: Build recognition language models
+        run: node scripts/build-recognition-models.mjs
+
+      # The publishing jobs run the same check after they download the files.
+      - name: Check the package lists the engine and recognition models
         run: bash scripts/run-with-budget-warning.sh 30 "package file check" node scripts/check-package-files.mjs
 
       # The threads build (issue 24) needs the nightly compiler that
@@ -642,11 +645,13 @@ jobs:
           REQUIRE_THREADS_WASM: '1'
         run: bash scripts/run-with-budget-warning.sh 300 "threads tests" node --test --test-timeout=240000 tests/rust-threads.test.js
 
-      - name: Upload the WebAssembly engine
+      - name: Upload the WebAssembly engine and recognition language models
         uses: ./.github/actions/artifact-transport
         with:
           name: voice-simulator-wasm
-          path: src/engine/voice-simulator.wasm
+          path: |
+            src/engine/voice-simulator.wasm
+            src/engine/voice-simulator-recognition-models.json.gz
           if-no-files-found: error
           retention-days: 14
 
@@ -937,9 +942,8 @@ jobs:
           pattern: voice-simulator-wasm
           path: src/engine
 
-      # `npm pack --dry-run` lists src/engine/voice-simulator.wasm, or the
-      # release stops before it publishes a package without the engine.
-      - name: Check the package lists the engine
+      # Stop the release if npm would omit any of the downloaded files.
+      - name: Check the package lists the engine and recognition models
         run: bash scripts/run-with-budget-warning.sh 60 "package file check" node scripts/check-package-files.mjs
 
       - name: Publish to npm
@@ -1079,9 +1083,8 @@ jobs:
           pattern: voice-simulator-wasm
           path: src/engine
 
-      # `npm pack --dry-run` lists src/engine/voice-simulator.wasm, or the
-      # release stops before it publishes a package without the engine.
-      - name: Check the package lists the engine
+      # Stop the release if npm would omit any of the downloaded files.
+      - name: Check the package lists the engine and recognition models
         run: bash scripts/run-with-budget-warning.sh 60 "package file check" node scripts/check-package-files.mjs
 
       - name: Publish to npm

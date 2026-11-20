@@ -1,10 +1,10 @@
 #!/usr/bin/env node
 
 /**
- * Fails when the npm package would ship without the Rust engine.
+ * Fails when the npm package would ship without the Rust engine or its data.
  *
- * `src/engine/*.wasm` is git-ignored: the publishing jobs download the file
- * the rust job built into `src/engine/` before `npm publish`. This check runs
+ * The generated artifacts are git-ignored. The publishing jobs download them
+ * into `src/engine/` before `npm publish`. This check runs
  * `npm pack --dry-run --json` and fails unless the listed files contain
  * every path of REQUIRED_FILES: a missing download stops the release, so
  * no package goes out whose `engine: 'auto'` is always JavaScript. It
@@ -19,6 +19,7 @@ import { fileURLToPath } from 'node:url';
 /** Files the published package must contain. */
 export const REQUIRED_FILES = Object.freeze([
   'src/engine/voice-simulator.wasm',
+  'src/engine/voice-simulator-recognition-models.json.gz',
   'src/engine/worker.js',
   'src/engine/worker-protocol.js',
 ]);

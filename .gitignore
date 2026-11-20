@@ -162,3 +162,4 @@ examples/listening-test/config.js
 # jobs as an artifact, so it is never committed
 /target/
 src/engine/*.wasm
+src/engine/voice-simulator-recognition-models.json.gz

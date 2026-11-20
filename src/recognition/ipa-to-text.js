@@ -181,11 +181,17 @@ function searchPaths(input, lexicon, options, exact, wordSearches) {
         candidate
       );
       const paths = best[candidate.to];
+      const ceiling = cutoff[candidate.to];
       for (const partial of best[from]) {
+        // Predecessors are sorted, and the word cost is at least 0.5
+        // because the discounted probability never exceeds one.
+        if (partial.cost + candidate.cost + 0.5 >= ceiling) {
+          break;
+        }
         const score = cost(partial);
         // The last completed prune has already kept `beam` distinct paths
         // here. Later paths at its worst cost also lose the stable tie.
-        if (score >= cutoff[candidate.to]) {
+        if (score >= ceiling) {
           continue;
         }
         paths.push({

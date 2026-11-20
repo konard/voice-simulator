@@ -1,4 +1,5 @@
 /** Count-weighted phone statistics, derived lazily from the forward lexicons. */
+import { lexiconRevision } from '../g2p/lexicon.js';
 import { getLexicon } from './lexicon.js';
 
 // Final calibration on the 40 sentences, 8,000 words and 12 mixed fixtures:
@@ -14,74 +15,86 @@ export const LANGUAGE_MODEL = {
   lexicalGap: 0.5,
 };
 const cached = new Map();
+let builtInModels;
+
+// Optional build output for a cold file command. A user lexicon changes the
+// phone statistics, so that path always derives them from the active words.
+export function installLanguageModels(models) {
+  builtInModels = models;
+}
 
 export function countPronunciations(entries) {
-  const singles = new Map();
-  const pairRows = new Map();
-  const tripleTables = new Map();
+  const keys = ['#'];
+  const indices = new Map([['#', 0]]);
+  const singleCounts = [];
+  const pairRows = [];
+  const tripleTables = [];
   let total = 0;
   const add = (table, key, count) =>
     table.set(key, (table.get(key) ?? 0) + count);
-  const children = (table, key) => {
-    let found = table.get(key);
-    if (!found) {
-      found = new Map();
-      table.set(key, found);
+  function phoneIndex(symbol) {
+    let index = indices.get(symbol);
+    if (index === undefined) {
+      index = keys.length;
+      keys.push(symbol);
+      indices.set(symbol, index);
     }
-    return found;
-  };
+    return index;
+  }
   for (const { symbols, count } of entries) {
-    let a;
-    let b = '#';
-    add(singles, b, count);
+    let a = -1;
+    let b = 0;
+    singleCounts[0] = (singleCounts[0] ?? 0) + count;
     total += count;
     for (let i = 0; i <= symbols.length; i++) {
-      const c = i === symbols.length ? '#' : (symbols[i].symbol ?? symbols[i]);
-      add(singles, c, count);
-      add(children(pairRows, b), c, count);
-      if (a !== undefined) {
-        add(children(children(tripleTables, a), b), c, count);
+      const c =
+        i === symbols.length ? 0 : phoneIndex(symbols[i].symbol ?? symbols[i]);
+      singleCounts[c] = (singleCounts[c] ?? 0) + count;
+      add((pairRows[b] ??= new Map()), c, count);
+      if (a >= 0) {
+        const table = (tripleTables[a] ??= []);
+        add((table[b] ??= new Map()), c, count);
       }
       total += count;
       a = b;
       b = c;
     }
   }
+  const singles = new Map(singleCounts.map((count, i) => [keys[i], count]));
   const pairs = new Map();
   const triples = new Map();
-  for (const [b, row] of pairRows) {
+  pairRows.forEach((row, b) => {
     for (const [c, count] of row) {
-      pairs.set(`${b}\t${c}`, count);
+      pairs.set(`${keys[b]}\t${keys[c]}`, count);
     }
-  }
-  for (const [a, table] of tripleTables) {
-    for (const [b, row] of table) {
-      const prefix = `${a}\t${b}`;
+  });
+  tripleTables.forEach((table, a) => {
+    table.forEach((row, b) => {
+      const prefix = `${keys[a]}\t${keys[b]}`;
       for (const [c, count] of row) {
-        triples.set(`${prefix}\t${c}`, count);
+        triples.set(`${prefix}\t${keys[c]}`, count);
       }
-    }
-  }
+    });
+  });
   return { singles, pairs, triples, total };
 }
 
-function* triePronunciations(root) {
-  const stack = [root];
-  while (stack.length) {
-    const node = stack.pop();
-    for (const { tokens, count } of node.entries) {
-      yield { symbols: tokens, count };
-    }
-    stack.push(...node.children.values());
+function* languagePronunciations(lexicon) {
+  for (const { tokens, count } of lexicon.pronunciations()) {
+    yield { symbols: tokens, count };
   }
 }
 
 export function getLanguageModel(language) {
+  const builtIn = lexiconRevision() === 0 && builtInModels?.get(language);
+  if (builtIn) {
+    return builtIn;
+  }
   const lexicon = getLexicon(language);
   if (cached.get(language)?.lexicon !== lexicon) {
     cached.set(language, {
       lexicon,
-      ...countPronunciations(triePronunciations(lexicon.root)),
+      ...countPronunciations(languagePronunciations(lexicon)),
     });
   }
   return cached.get(language);

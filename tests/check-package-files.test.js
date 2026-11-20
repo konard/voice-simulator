@@ -1,6 +1,6 @@
 /**
  * scripts/check-package-files.mjs: the published package must list the Rust
- * engine and the worker.
+ * engine, its recognition data and the worker.
  */
 
 import { describe, it, expect } from 'test-anywhere';
@@ -15,8 +15,11 @@ const listing = (paths) => [
 ];
 
 describe('check-package-files', () => {
-  it('requires the engine and the worker', () => {
+  it('requires the engine, recognition data and the worker', () => {
     expect(REQUIRED_FILES).toContain('src/engine/voice-simulator.wasm');
+    expect(REQUIRED_FILES).toContain(
+      'src/engine/voice-simulator-recognition-models.json.gz'
+    );
     expect(REQUIRED_FILES).toContain('src/engine/worker.js');
   });
 
@@ -31,6 +34,7 @@ describe('check-package-files', () => {
       missingFiles(listing(['src/index.js', 'src/engine/worker.js']))
     ).toEqual([
       'src/engine/voice-simulator.wasm',
+      'src/engine/voice-simulator-recognition-models.json.gz',
       'src/engine/worker-protocol.js',
     ]);
   });

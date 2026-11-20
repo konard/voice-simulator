@@ -113,7 +113,9 @@ jobs:
 
       - name: Build scalar recognition WebAssembly
         if: inputs.suite == 'recognition-performance'
-        run: node scripts/build-wasm.mjs --require --check-size
+        run: |
+          node scripts/build-wasm.mjs --require --check-size
+          node scripts/build-recognition-models.mjs
 
       - name: Restore the speech dataset cache
         uses: actions/cache@v6

@@ -137,6 +137,44 @@ export function addPronunciation(root, entry, language, parsed) {
   }
 }
 
+function* lexiconPronunciations(language, words) {
+  const contextual = language === 'zh' ? contextualChinese() : new Map();
+  const parsed = new Map();
+  for (const { word, count } of words) {
+    // The shipped Russian speaker already uses the same forward reading.
+    const additional =
+      language === 'ru'
+        ? (userPronunciations(language, word) ?? [])
+        : pronunciations(language, word);
+    const variants = new Set([
+      pronounce(word, language).ipa,
+      ...additional,
+      ...extraVariants(word, language),
+      ...(contextual.get(word) ?? []),
+    ]);
+    for (const ipa of [...variants]) {
+      for (const surface of surfaceVariants(ipa, word, language)) {
+        variants.add(surface);
+      }
+    }
+    for (const ipa of variants) {
+      if (!ipa) {
+        continue;
+      }
+      if (!parsed.has(ipa)) {
+        parsed.set(
+          ipa,
+          parseIpa(ipa).tokens.filter((t) => t.kind !== 'pause')
+        );
+      }
+      const tokens = parsed.get(ipa);
+      if (tokens.length) {
+        yield { word, ipa, count, tokens };
+      }
+    }
+  }
+}
+
 /** The same trie object is returned on subsequent calls. */
 export function getLexicon(language = 'en') {
   checkLanguage(language);
@@ -144,42 +182,21 @@ export function getLexicon(language = 'en') {
     !cached.has(language) ||
     cached.get(language).revision !== lexiconRevision()
   ) {
-    const root = trieNode();
     const data = getCounts(language);
-    const contextual = language === 'zh' ? contextualChinese() : new Map();
-    const parsed = new Map();
-    for (const { word, count } of data.words) {
-      // The shipped Russian speaker already uses the same forward reading.
-      const additional =
-        language === 'ru'
-          ? (userPronunciations(language, word) ?? [])
-          : pronunciations(language, word);
-      const variants = new Set([
-        pronounce(word, language).ipa,
-        ...additional,
-        ...extraVariants(word, language),
-        ...(contextual.get(word) ?? []),
-      ]);
-      for (const ipa of [...variants]) {
-        for (const surface of surfaceVariants(ipa, word, language)) {
-          variants.add(surface);
-        }
-      }
-      for (const ipa of variants) {
-        if (!ipa) {
-          continue;
-        }
-        if (!parsed.has(ipa)) {
-          parsed.set(
-            ipa,
-            parseIpa(ipa).tokens.filter((t) => t.kind !== 'pause')
-          );
-        }
-        addPronunciation(root, { word, ipa, count }, language, parsed.get(ipa));
-      }
-    }
+    let root;
     cached.set(language, {
-      root,
+      get root() {
+        if (!root) {
+          root = trieNode();
+          for (const { tokens, ...entry } of this.pronunciations()) {
+            addPronunciation(root, entry, language, tokens);
+          }
+        }
+        return root;
+      },
+      pronunciations() {
+        return lexiconPronunciations(language, data.words);
+      },
       words: data.words,
       counts: data.counts,
       get bigrams() {
