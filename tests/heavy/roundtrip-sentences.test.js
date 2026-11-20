@@ -38,6 +38,7 @@ const mainGates = {
 };
 const whisperGates = {
   telephone: { per: 0.25, text: 0.35, tone: 0.3 },
+  narrowband: { tone: 0.25 },
   wideband: { per: 0.15, text: 0.25, tone: 0.25 },
   minimal: { per: 0.15, text: 0.25, tone: 0.25 },
 };
@@ -113,15 +114,14 @@ function threshold(failures, anUpperBound, name, actual, bound) {
 
 function gateWhisper(tier, lang, stats, atMost) {
   const gates = whisperGates[tier];
-  if (!gates) {
-    return;
+  if (gates.per !== undefined) {
+    atMost('PER', stats.per?.rate, gates.per);
+    atMost(
+      lang === 'zh' ? 'CER' : 'WER',
+      (stats.wer ?? stats.cer)?.rate,
+      gates.text
+    );
   }
-  atMost('PER', stats.per?.rate, gates.per);
-  atMost(
-    lang === 'zh' ? 'CER' : 'WER',
-    (stats.wer ?? stats.cer)?.rate,
-    gates.text
-  );
   if (lang === 'zh') {
     atMost('tone error', stats.toneErrors?.rate, gates.tone);
   }
@@ -146,7 +146,7 @@ function applyGates(group) {
   const atMost = threshold.bind(null, failures, true);
   const atLeast = threshold.bind(null, failures, false);
   if (set === 'modes') {
-    if (tier !== 'narrowband') {
+    if (lang === 'all' && tier !== 'narrowband') {
       atLeast(
         'mode match share',
         stats.modes,
@@ -197,6 +197,68 @@ function measureRow(set, lang, tier, presets, indexes, modes = [undefined]) {
   assert.equal(failures.length, 0, failures.join('\n'));
 }
 
+function checkModes(tier) {
+  for (const lang of Object.keys(sentences)) {
+    const whisper = groups
+      .find(
+        (group) =>
+          group.set === 'whisper' && group.lang === lang && group.tier === tier
+      )
+      ?.items.find((item) => item.preset === 'male' && item.sentence === 1);
+    const items = [];
+    const failures = [];
+    for (const mode of ['W', 'f']) {
+      try {
+        const item =
+          mode === 'W' && whisper
+            ? { ...whisper, set: 'modes' }
+            : measure({
+                set: 'modes',
+                lang,
+                tier,
+                preset: 'male',
+                index: 0,
+                mode,
+              });
+        assert.ok(item.modeSpans.length, `no planned ${mode} span`);
+        items.push(item);
+      } catch (error) {
+        failures.push(`${mode}: ${error.message}`);
+      }
+    }
+    groups.push({
+      set: 'modes',
+      lang,
+      tier,
+      presets: ['male'],
+      items,
+      stats: summarizeRoundTrips(items),
+      failures,
+      diagnostic: true,
+    });
+  }
+  const rows = groups.filter(
+    (group) => group.set === 'modes' && group.tier === tier
+  );
+  const items = rows.flatMap((row) => row.items);
+  const failures = rows.flatMap((row) =>
+    row.failures.map((failure) => `${row.lang} ${failure}`)
+  );
+  const group = {
+    set: 'modes',
+    lang: 'all',
+    tier,
+    presets: ['male'],
+    items,
+    stats: summarizeRoundTrips(items),
+    failures,
+    diagnostic: tier === 'narrowband',
+  };
+  groups.push(group);
+  applyGates(group);
+  assert.equal(failures.length, 0, failures.join('\n'));
+}
+
 for (const [lang, texts] of Object.entries(sentences)) {
   const indexes = texts.map((_, index) => index);
   for (const tier of mainTiers) {
@@ -227,9 +289,10 @@ if (markupAvailable) {
           sentences[lang].slice(0, 10).map((_, index) => index),
           ['W']
         ));
-      it(`modes ${lang} ${tier}`, () =>
-        measureRow('modes', lang, tier, ['male'], [0], ['W', 'f']));
     }
+  }
+  for (const tier of [...mainTiers, ...higherTiers]) {
+    it(`modes ${tier}`, () => checkModes(tier));
   }
 } else {
   it.skip('whisper and loud round trips require the parseMarkup export', () => {});

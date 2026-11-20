@@ -65,6 +65,22 @@ it('counts tones', () => {
   assert.equal(result.sentenceMark, '.');
 });
 
+it('compares Mandarin pronunciations one character at a time', () => {
+  const result = roundTrip('他是中国人。', {
+    ...render,
+    lang: 'zh',
+    recognize: () => ({
+      text: '她是中国人。',
+      ipa: '',
+      languages: [],
+      words: [],
+    }),
+  });
+  assert.equal(result.cer.distance, 1);
+  assert.equal(result.soundWer.distance, 0);
+  assert.equal(result.soundWer.referenceLength, 5);
+});
+
 it('measures syllable times', () => {
   const text = 'She sells sea shells.';
   const { ipa, timeline } = synthesize(text, render);

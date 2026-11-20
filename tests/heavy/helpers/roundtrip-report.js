@@ -67,7 +67,15 @@ function table(columns, rows) {
     .join('\n');
 }
 
-function reportRow({ lang, tier, presets, items, stats, failures }) {
+function reportRow({
+  lang,
+  tier,
+  presets,
+  items,
+  stats,
+  failures,
+  diagnostic,
+}) {
   return [
     lang,
     tier,
@@ -84,12 +92,17 @@ function reportRow({ lang, tier, presets, items, stats, failures }) {
     percent(stats.sentenceMark),
     percent(stats.modes),
     stats.rtf?.toFixed(3) ?? '–',
-    failures.length ? failures.join('<br>') : 'Pass',
+    failures.length
+      ? failures.map(cell).join('<br>')
+      : diagnostic
+        ? '–'
+        : 'Pass',
   ];
 }
 
 function worstSentences(groups) {
   return groups
+    .filter((group) => group.lang !== 'all')
     .flatMap((group) => group.items)
     .sort((a, b) => b.per.rate - a.per.rate || b.per.distance - a.per.distance)
     .slice(0, 20);
@@ -109,7 +122,7 @@ export function writeRoundTripReport(groups, limit, markupAvailable) {
     'All renders use seed 1. Recognition receives audio and the level for its tier. The reference tier is excluded because of its run time.',
     'Edit rates divide summed edits by summed reference length. Stress covers aligned words of equal syllable count. Timing covers start and end boundaries of aligned syllables with identical IPA. A dash indicates an inapplicable metric or no matches. Recognition RTF divides total recognition time by total audio time.',
     'Mandarin uses character error rate in place of orthographic word error, including for the whisper gate. Sound WER compares Mandarin character pronunciations in context.',
-    'The mode tests measure the share of reference spans with matching notation and at least half of their duration overlapped by a recognition span.',
+    'The mode tests measure the share of reference spans with matching notation and at least half of their duration overlapped by a recognition span. The gate uses all four languages at each tier.',
     ...(!markupAvailable
       ? [
           'Whisper and loud cases were skipped because parseMarkup is unavailable.',
