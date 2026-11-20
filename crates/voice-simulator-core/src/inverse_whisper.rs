@@ -108,7 +108,8 @@ impl Signal<'_> {
             edge,
             Some(Edge::Leading | Edge::AfterVoice { closed: true, .. })
         );
-        if ratio < threshold || (closed && ratio > -10.0) {
+        let spectral_evidence = ratio >= threshold && (!closed || ratio <= -10.0);
+        if !spectral_evidence {
             return None;
         }
         if self.rate <= 8000.0 && ratio < base {
