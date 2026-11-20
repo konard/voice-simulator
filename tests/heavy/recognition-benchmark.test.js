@@ -177,7 +177,9 @@ async function auditAishell(skipped) {
 
 test(
   'recognition benchmark on public recordings',
-  { skip: process.env.HEAVY !== '1' },
+  // The default heavy-test timeout is one hour. Let the workflow's 90-minute
+  // budget measure the full sample, including the other recognition tests.
+  { skip: process.env.HEAVY !== '1', timeout: 90 * 60_000 },
   async (t) => {
     const started = performance.now();
     const maxRows = Math.max(...BENCHMARK.sets.map(({ rows }) => rows));

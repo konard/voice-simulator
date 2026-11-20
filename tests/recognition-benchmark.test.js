@@ -4,7 +4,10 @@ import { test } from 'node:test';
 import { licenceGate, loadPolicy, loadRegistry } from '../scripts/datasets.mjs';
 import { textToIpa } from '../src/g2p/index.js';
 import { listSymbols } from '../src/ipa/inventory.js';
-import { baselineRegressions } from './heavy/helpers/benchmark-baseline.js';
+import {
+  baselineRegressions,
+  checkFloors,
+} from './heavy/helpers/benchmark-baseline.js';
 import {
   BENCHMARK,
   checkBaseline,
@@ -110,6 +113,28 @@ test('ratchets comparable rates and explains mismatched sample sizes', () => {
   measured.limit = 5;
   assert.deepEqual(checkBaseline(measured, baseline, margins), []);
   assert.match(notices.pop(), /limit/u);
+});
+
+test('enforces the quality floors before the first baseline', () => {
+  const medium = { per: 0.8, classErr: 0.55, cer: 0.5, utterances: 10 };
+  const low = { ...medium, cer: 0.65 };
+  const high = { ...medium };
+  const sets = { 'fleurs-en': { low, medium, high } };
+  const fleurs = { right: 20, length: 40 };
+
+  assert.deepEqual(checkFloors(sets, fleurs), []);
+  assert.match(checkFloors({}, null).join(), /No dataset was measured/u);
+
+  fleurs.right = 19;
+  high.classErr = 0.6;
+  high.per = 1;
+  low.cer = 0.66;
+  const failures = checkFloors(sets, fleurs);
+  assert.equal(failures.length, 4);
+  assert.match(failures.join(), /FLEURS medium languageRight: 19\/40/u);
+  assert.match(failures.join(), /fleurs-en high classErr: 0\.6/u);
+  assert.match(failures.join(), /fleurs-en high per: 1/u);
+  assert.match(failures.join(), /fleurs-en low cer: 0\.66/u);
 });
 
 test('the benchmark file names allowed datasets and valid row prefixes', () => {
