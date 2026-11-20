@@ -45,7 +45,7 @@ function weightByDuration({ spans, times }) {
 
 // Optimistic edit count if a reference-aware search could choose any path
 // through the existing graph and any of the allowed labels at each span.
-function graphErrors({ spans }, reference, symbols, count) {
+function graphErrors({ spans }, reference, symbols, count, lengthVariants) {
   const rows = spans.map(() =>
     new Float64Array(reference.length + 1).fill(Infinity)
   );
@@ -66,13 +66,21 @@ function graphErrors({ spans }, reference, symbols, count) {
       }
       const ranked = symbols.map((symbol, unit) => ({
         label: symbol + (long[unit] && language.long.has(symbol) ? 'ː' : ''),
+        alternate:
+          lengthVariants && language.long.has(symbol)
+            ? symbol + (long[unit] ? '' : 'ː')
+            : null,
         cost:
           terms[3 * unit] +
           weights.duration * terms[3 * unit + 1] +
           weights.class * terms[3 * unit + 2],
       }));
       ranked.sort((a, b) => a.cost - b.cost);
-      const labels = new Set(ranked.slice(0, count).map(({ label }) => label));
+      const labels = new Set(
+        ranked
+          .slice(0, count)
+          .flatMap(({ label, alternate }) => [label, alternate])
+      );
       next[0] = Math.min(next[0], row[0] + 1);
       for (let i = 1; i <= reference.length; i++) {
         next[i] = Math.min(
@@ -86,10 +94,61 @@ function graphErrors({ spans }, reference, symbols, count) {
   return rows.at(-1).at(-1);
 }
 
+// Let the search distinguish short from long models by the planner's
+// acoustic and duration templates. Transition costs use base phone labels.
+function withLengthModels(settings) {
+  const { language } = settings;
+  const baseUnits = language.symbols;
+  const lengths = baseUnits.filter((unit) => language.long.has(unit));
+  const symbols = [...baseUnits, ...lengths.map((unit) => `${unit}ː`)];
+  const indexes = [
+    ...baseUnits.keys(),
+    ...lengths.map((unit) => baseUnits.indexOf(unit)),
+  ];
+  const from = [...indexes, baseUnits.length];
+  const costs = Float64Array.from(
+    from.flatMap((previous) =>
+      indexes.map((next) => language.costs[previous * baseUnits.length + next])
+    )
+  );
+  return {
+    ...settings,
+    language: { ...language, symbols, costs, long: new Set() },
+  };
+}
+
+function measureSearch(
+  prepared,
+  templates,
+  settings,
+  reference,
+  lang,
+  condition
+) {
+  const { paths } = decodeSearch(prepared, settings.language, {
+    ...settings,
+    lattice: false,
+  });
+  const ipa = segmentsOf(paths[0], prepared.times, templates, settings.language)
+    .map((segment) => segment.ipa)
+    .join(' ');
+  console.log(
+    JSON.stringify({
+      lang,
+      condition,
+      reference,
+      ipa,
+      phones: tokenize(ipa, 'phone').length,
+      ...errorRate(reference, ipa, 'phone'),
+    })
+  );
+}
+
 for (const [lang, index] of Object.entries(indexes)) {
   const spoken = synthesize(sentences[lang][index], {
     lang,
     tier: 'telephone',
+    ...(process.argv.includes('--seeded-preset') && { head: 'random' }),
     preset: 'male',
     seed: 1,
   });
@@ -116,33 +175,49 @@ for (const [lang, index] of Object.entries(indexes)) {
       })
     );
   }
+  console.log(
+    JSON.stringify({
+      lang,
+      condition: 'oracle with all labels and free phone length',
+      distance: graphErrors(
+        prepared,
+        reference,
+        settings.language.symbols,
+        templates.length,
+        true
+      ),
+      referenceLength: reference.length,
+    })
+  );
+  if (process.argv.includes('--length-models')) {
+    const model = withLengthModels(settings);
+    const modeled = prepareIpaDecode(analysis, model);
+    for (const weights of [
+      settings.weights,
+      { ...settings.weights, duration: 4 },
+    ]) {
+      measureSearch(
+        modeled.prepared,
+        modeled.templates,
+        { ...model, weights },
+        spoken.ipa,
+        lang,
+        `explicit short and long phone models, duration weight ${weights.duration}`
+      );
+    }
+  }
   const weighted = weightByDuration(prepared);
-  for (const { name, durationWeighted, ...costs } of conditions) {
+  for (const { name, durationWeighted, ...weights } of conditions) {
     const input = durationWeighted
       ? { ...prepared, spans: weighted }
       : prepared;
-    const { paths } = decodeSearch(input, settings.language, {
-      ...settings,
-      lattice: false,
-      weights: { ...settings.weights, ...costs },
-    });
-    const ipa = segmentsOf(
-      paths[0],
-      prepared.times,
+    measureSearch(
+      input,
       templates,
-      settings.language
-    )
-      .map((segment) => segment.ipa)
-      .join(' ');
-    console.log(
-      JSON.stringify({
-        lang,
-        condition: name,
-        reference: spoken.ipa,
-        ipa,
-        phones: tokenize(ipa, 'phone').length,
-        ...errorRate(spoken.ipa, ipa, 'phone'),
-      })
+      { ...settings, weights: { ...settings.weights, ...weights } },
+      spoken.ipa,
+      lang,
+      name
     );
   }
 }

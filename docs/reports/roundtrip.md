@@ -1,25 +1,42 @@
 # Synthetic speech round trips
 
-Measured 2026-11-20 on commit `3fe19e7c62672efdff771ddb4fe13fad0d73d34b`.
-The [full round-trip workflow](https://github.com/konard/voice-simulator/actions/runs/44796842943)
-is in progress. The measurements below cover the three 8 kHz smoke cases.
+Measured 2026-11-20 on benchmark commit `83bd5633e3322d80d1c0863372f751f8a42092a8`.
+The [full round-trip workflow](https://github.com/konard/voice-simulator/actions/runs/44799632294)
+is in progress. These measurements use the seeded voice generator.
+
+## Telephone baseline
+
+The four rows cover the first two sentences per language with the male and
+female presets. A dash for timing means that no syllable pairs had identical
+IPA. All four rows missed the PER, sound WER, timing, and language gates.
+
+```bash
+HEAVY_LIMIT=2 HEAVY_OUT=/tmp/voice-75-telephone-report taskset -c 1 node --test --test-name-pattern='^main (en|ru|hi|zh) telephone$' tests/heavy/roundtrip-sentences.test.js
+```
+
+| Language | Tier | Presets | Cases | PER | WER | CER | Sound WER | Tone error | Stress hits | Time (ms) | Language right | Mark right | Mode hits | RTF | Gates |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| en | telephone | male, female | 4 | 85.7% | 100.0% | 96.2% | 100.0% | – | 50.0% | – | 25.0% | 100.0% | – | 5.226 | PER 0.857 (need ≤ 0.1)<br>sound WER 1.000 (need ≤ 0.2)<br>mean syllable time error (ms) unavailable (need ≤ 40)<br>language match share 0.250 (need ≥ 0.9) |
+| ru | telephone | male, female | 4 | 76.7% | 107.7% | 95.8% | 107.7% | – | – | – | 25.0% | 50.0% | – | 12.632 | PER 0.767 (need ≤ 0.1)<br>sound WER 1.077 (need ≤ 0.2)<br>mean syllable time error (ms) unavailable (need ≤ 40)<br>language match share 0.250 (need ≥ 0.9)<br>sentence mark match share 0.500 (need ≥ 0.85) |
+| hi | telephone | male, female | 4 | 94.4% | 100.0% | 100.0% | 100.0% | – | – | – | 0.0% | 50.0% | – | 1.966 | PER 0.944 (need ≤ 0.1)<br>sound WER 1.000 (need ≤ 0.2)<br>mean syllable time error (ms) unavailable (need ≤ 40)<br>language match share 0.000 (need ≥ 0.9)<br>sentence mark match share 0.500 (need ≥ 0.85) |
+| zh | telephone | male, female | 4 | 85.7% | – | 173.1% | 173.1% | 76.9% | – | – | 25.0% | 25.0% | – | 1.611 | PER 0.857 (need ≤ 0.1)<br>sound WER 1.731 (need ≤ 0.2)<br>tone error 0.769 (need ≤ 0.15)<br>mean syllable time error (ms) unavailable (need ≤ 40)<br>language match share 0.250 (need ≥ 0.9)<br>sentence mark match share 0.250 (need ≥ 0.85) |
 
 ## Single-core smoke baseline
 
-`taskset -c 0 node --test tests/roundtrip-smoke.test.js` ran in 44.6 seconds.
-All three utterances used the telephone tier, the male preset, and seed 1.
-The smoke criteria require a phone error rate of at most 10%, zero sound
-word errors, correct language detection, and a total time under 30 seconds.
+`taskset -c 0 node --test tests/roundtrip-smoke.test.js` used 45.4 seconds of
+user CPU time and took 213.0 seconds of wall time on a contended host. The
+target is under 30 seconds on one core. All three cases ran at 8 kHz using
+the male preset with seed 1.
 
-| Language | Tier | Reference text            | Heard text   | Phone errors | Sound word errors | Language right |
-| -------- | ---- | ------------------------- | ------------ | ------------ | ----------------- | -------------- |
-| English  | telephone | Is this your pen or mine? | Gktapy i.    | 13/16        | 6/6               | yes            |
-| Russian  | telephone | Привет, как дела?         | तेइ, i tie! | 9/13         | 3/3               | no             |
-| Mandarin | telephone | 我是中国人。                | 偶？            | 10/13        | 5/5               | yes            |
+| Language | Reference text            | Heard text      | Phone errors | Sound word errors | Top language |
+| -------- | ------------------------- | --------------- | ------------ | ----------------- | ------------ |
+| English  | Is this your pen or mine? | 脸 а мы я и.      | 12/16        | 6/6               | Russian      |
+| Russian  | Привет, как дела?         | Pay? A why я.   | 7/13         | 4/3               | English      |
+| Mandarin | 我是中国人。                | Leah meir अंग. | 13/13        | 11/5              | English      |
 
 ## Decoder diagnosis
 
-`node experiments/issue-75-stage-trace.mjs` compares the IPA immediately
+`node experiments/issue-75-stage-trace.mjs` uses the default voice and compares the IPA immediately
 after acoustic decoding with the IPA after text and prosody recovery.
 Acoustic phone error rates were 81.25% for English, 61.54% for Russian, and
 76.92% for Mandarin. The acoustic stage had already lost most of the
@@ -41,10 +58,22 @@ weighting acoustic costs by span duration made 49. Combining the latter two
 changes made 56 edits. The wider gap remains in acoustic phone scoring and
 segmentation.
 
-Giving a diagnostic search the reference phones and every label in the
-existing boundary graph still left 5 of 12 Hindi phones wrong. Restricting
-that search to the three best acoustic labels at each span left 39 of 54
-phones wrong across the four cases. These are lower bounds with the current
-graph and scores. Widening the beam alone cannot recover the discarded
-Hindi phones, and lexical rescoring would need to reach far below the
-highest-ranked labels for the other cases.
+With the seeded male preset
+(`node experiments/issue-75-decoder-costs.mjs --seeded-preset --length-models`),
+a diagnostic search restricted to the three best acoustic labels at each
+span still missed 42 of 54 phones. The search with the full phone inventory
+missed 5 of 12 Hindi phones because the decoder assigns one length to each
+label. Offering both lengths at every boundary gave the reference-guided
+search a path with zero edits. The ordinary acoustic search made 43 edits,
+and explicit short and long phone models made 45 and 46 at the two duration
+weights tested. The existing boundaries can accommodate the reference
+sequence, but the acoustic evidence needs to rank those labels higher.
+
+`node experiments/issue-75-telephone-templates.mjs --search` uses the seeded
+male voice to render generic phones in three contexts at 8 kHz. Even on the
+known phone boundaries and within the correct language inventory, the best
+scoring variant ranked only 22 of the 54 reference phones first. Adding
+spectral distance to the acoustic search changed the total from 44 phone
+errors to 42 in its best trial. The other weights produced 43 and 44 errors.
+All of those search trials used the correct language and disabled automatic
+whisper detection. The public benchmark uses its normal settings.
