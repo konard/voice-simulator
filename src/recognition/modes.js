@@ -364,12 +364,12 @@ export function recognizeModes(samples, sampleRate, result, options = {}) {
       }
     }
   }
+  const whisperSpans = result.whisperSpans ?? result.audio?.whisperSpans;
+  const keepSpan = (span) =>
+    whisperSpans === undefined || span.phonation?.whisper !== 1;
   const initialSpans = [
-    ...wordSpans(result.words, features, labels, 'quality').filter(
-      (span) =>
-        result.whisperSpans === undefined || span.phonation?.whisper !== 1
-    ),
-    ...whisperModeSpans(result.words, result.whisperSpans ?? []),
+    ...wordSpans(result.words, features, labels, 'quality').filter(keepSpan),
+    ...whisperModeSpans(result.words, whisperSpans ?? []),
     ...wordSpans(result.words, features, labels, 'tempo'),
   ];
   let spans = reference
@@ -415,7 +415,7 @@ export function recognizeModes(samples, sampleRate, result, options = {}) {
     options.trace?.({ stage: 'phrase', ...group, vector, decision: found });
   }
   spans.push(...recognizeSounds(samples, sampleRate, result.words));
-  const modes = [...(result.modes ?? []), ...spans].sort(
+  const modes = [...(result.modes ?? []).filter(keepSpan), ...spans].sort(
     (a, b) => a.start - b.start || b.end - a.end
   );
   options.trace?.({ stage: 'words', baseline: base, features, labels });

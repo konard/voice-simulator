@@ -6,6 +6,8 @@ import {
   createIpaDecoder,
   createRecognizer,
   ipaToText,
+  recognize,
+  recognizeModes,
   resample,
   trackFormants,
   trackPitch,
@@ -144,6 +146,19 @@ describe('whisper recognition', () => {
       ...('pkt'.includes(ipa) && { whispered: true, voicing: 0.95 }),
     }));
     expect(ipaToText(phones, { language: 'en' }).text).toBe('a big dog');
+  });
+
+  it('passes detected spans to mode recognition once', () => {
+    const { samples, sampleRate } = renderWhisper('[whisper] a fresh fish');
+    const reading = recognize(samples, sampleRate, { language: 'en' });
+    const modes = { ...reading, modes: [] };
+    const acoustics = recognizeModes(samples, sampleRate, modes);
+    const combined = recognizeModes(samples, sampleRate, reading);
+    const whispered = (output) =>
+      output.modes.filter(({ notation }) => notation === 'W');
+    expect(reading.modes.length).toBe(1);
+    expect(whispered(acoustics)).toEqual(reading.modes);
+    expect(whispered(combined)).toEqual(reading.modes);
   });
 });
 
