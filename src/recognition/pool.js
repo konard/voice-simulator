@@ -69,11 +69,22 @@ function client(worker) {
         installed.set(table, tableId);
         setup = table;
       }
+      const transfer = [];
+      if (type === 'audio' && ArrayBuffer.isView(job.samples)) {
+        // Cloning a subarray clones the entire recording's backing buffer.
+        // A private copy of this piece also preserves the samples for retries.
+        const samples =
+          job.samples instanceof Float32Array
+            ? new Float32Array(job.samples)
+            : new Float64Array(job.samples);
+        job = { ...job, samples };
+        transfer.push(samples.buffer);
+      }
       try {
         return await new Promise((res, rej) => {
           resolve = res;
           reject = rej;
-          worker.postMessage({ type, job, tableId, setup, engine });
+          worker.postMessage({ type, job, tableId, setup, engine }, transfer);
         });
       } finally {
         resolve = undefined;
@@ -108,6 +119,12 @@ export function createRecognitionPool({
       return results;
     }
     const results = new Array(jobs.length);
+    const pending = jobs.map((_, index) => index);
+    if (type === 'audio') {
+      // Start long pieces first so the final job is less likely to keep
+      // the other workers idle. Store results by original time order.
+      pending.sort((a, b) => jobs[b].samples.length - jobs[a].samples.length);
+    }
     let next = 0;
     async function task(slot) {
       let worker;
@@ -118,7 +135,7 @@ export function createRecognitionPool({
         // A runtime may prohibit worker creation. Each job is still runnable.
       }
       while (next < jobs.length) {
-        const index = next++;
+        const index = pending[next++];
         if (worker) {
           try {
             results[index] = await worker.run(type, jobs[index], table, engine);

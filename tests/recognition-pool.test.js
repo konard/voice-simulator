@@ -138,6 +138,41 @@ it('survives a failing worker and recomputes the job in input order', async () =
   assert.equal(closed, 2);
 });
 
+it('sends only the bytes belonging to each recording piece', async () => {
+  const recording = Float32Array.of(0, 1, 2, 3, 4, 5);
+  const jobs = [
+    { samples: recording.subarray(0, 2) },
+    { samples: recording.subarray(2, 5) },
+  ];
+  const pool = createRecognitionPool({
+    threads: 2,
+    createWorker() {
+      let receive;
+      return {
+        on(type, callback) {
+          if (type === 'message') {
+            receive = callback;
+          }
+        },
+        postMessage(message, transfer) {
+          const { job } = globalThis.structuredClone(message, { transfer });
+          receive({ result: [job.samples[0], job.samples.buffer.byteLength] });
+        },
+        terminate() {},
+      };
+    },
+  });
+  try {
+    assert.deepEqual(await pool.run('audio', jobs, () => null), [
+      [0, 8],
+      [2, 12],
+    ]);
+    assert.deepEqual([...recording], [0, 1, 2, 3, 4, 5]);
+  } finally {
+    await pool.close();
+  }
+});
+
 it('falls back to JavaScript if the shared loader rejects', async () => {
   const reject = () => Promise.reject(new Error('WebAssembly is unavailable'));
   const kernels = await createRecognitionEngine(
