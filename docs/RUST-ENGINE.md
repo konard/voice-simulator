@@ -1379,3 +1379,16 @@ modes and source outputs against JavaScript.
 `CARGO_BUILD_JOBS=1 node scripts/build-wasm.mjs --require --check-size`
 measured 544,367 scalar bytes and 549,683 SIMD bytes on Rust 1.100.0. The
 next 16 KiB size budget is 557,056 bytes.
+
+## Segmental IPA decoding
+
+`crates/voice-simulator-core/src/decode.rs` ports boundary candidate merging,
+span scoring, transition smoothing, beam pruning, distinct reading selection
+and fixed-prefix decisions. The WebAssembly parity entry point
+`vs_ipa_decode` takes frame observations, planner templates and transition
+tables from the host. Batch and streaming stage orchestration use JavaScript.
+
+`REQUIRE_WASM=1 node --test tests/rust-decode.test.js` compares boundaries,
+transition and edge costs, readings, confidences and stream commitments on the
+same acoustic observations. `CARGO_BUILD_JOBS=1 node scripts/build-wasm.mjs
+--require --check-size` verifies the byte budget.

@@ -139,6 +139,8 @@ function usage() {
     '         (generated on first use; API and limits: docs/CODEBOOK.md)',
     'Library: invertArticulation / createArticulationInverter estimate tract and source controls.',
     '         Pass articulationPlan(track) to renderPlan for resynthesis.',
+    'Library: audioToIpa / createIpaDecoder return experimental timed IPA,',
+    '         syllables and alternatives; see README for options and accuracy.',
     '',
     'Library: recognizeModes(samples, rate, result, { voice }) adds speech modes',
     '         to timed IPA words; toPlanModes converts spans for replay.',

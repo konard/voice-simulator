@@ -340,9 +340,15 @@ function pitchReading(features, f0Sd, head, options) {
     ? { range, pitch: features.f0, pitchSd: f0Sd }
     : { range, pitch, pitchSd: (f0Sd * pitch) / features.f0 };
 }
+export class NoVoicedSpeechError extends Error {
+  constructor() {
+    super('No voiced speech found in the recording');
+  }
+}
+
 export function statisticsResult(state, options = {}) {
   if (state.voicedFrames < 20) {
-    throw new Error('No voiced speech found in the recording');
+    throw new NoVoicedSpeechError();
   }
   const features = stateFeatures(state),
     head = { ...DEFAULT_HEAD };

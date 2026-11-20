@@ -4494,3 +4494,19 @@ export {
   createArticulationInverter,
   invertArticulation,
 } from './recognition/inversion.js';
+
+export {
+  audioToIpa,
+  createIpaDecoder,
+  type IpaDecoder,
+  type IpaDecodeOptions,
+  type IpaDecodeResult,
+  type IpaDecodeTracks,
+  type IpaLattice,
+  type IpaReading,
+  type IpaSegment,
+  type IpaStreamOptions,
+  type IpaStreamResult,
+  type IpaStreamUpdate,
+  type IpaSyllable,
+} from './recognition/decode.js';

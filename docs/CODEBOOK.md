@@ -148,3 +148,28 @@ and exposes the stable prefix as `track.committed`. The default lookahead is
 Pass `refine: true` to enable the batch oral refinement. See the
 [golden-set render-back measurements](reports/recognition-inversion.md)
 for the current accuracy.
+
+## Audio to IPA
+
+`audioToIpa(samples, sampleRate, { voice, language: 'en', nbest: 5 })` scores inverted articulation and broad sound classes against the synthesizer's phone templates. Provide a head as `voice` or leave it out to fit the head from the recording. A single `language` or several `languages` selects text-derived phone transitions for `en`, `ru`, `hi` and `zh`. With neither option the decoder uses the full IPA inventory and zero transition costs.
+
+The result contains the best IPA string, timed `segments` and `syllables`, ranked `nbest` readings, a `lattice`, and the analysis tracks. Times are in seconds. A segment's confidence ranks alternatives on the same span. To reproduce the pronunciation counts, run `node scripts/build-phonotactics.mjs`. They use English lexicon pronunciations, Russian stress entries, one Mandarin character per pronunciation group and a project-authored Hindi word list. `node scripts/tune-decoder.mjs` selects the weights on 40 separate simulator-rendered tuning sentences.
+
+`createIpaDecoder(sampleRate, options)` returns fixed segments and newly confirmed syllable nuclei from both `push(chunk)` and `flush()`. Read the full result with `result()` and call `reset()` to begin a new recording. The streaming frame buffer defaults to 30 seconds and can be set with `maxSeconds`.
+
+See the [decoder benchmark](../reports/heavy/recognition-decode.md) for measured accuracy.
+
+The synthetic recognition gates in `tests/recognition-decode.test.js` remain
+open. With the language supplied, mean phone error on the 32 held-out
+utterances was 79.79% at 16 kHz and 82.44% at 8 kHz. The universal decoder
+measured 92.12% at 16 kHz. The targets are 25%, 35% and 40%, respectively.
+
+Run `node experiments/issue-66-oracles.mjs` to inspect the upstream evidence.
+The boundary generator placed a candidate within 20 ms of 725 of 838
+planned boundaries. When given the exact planned spans, the scorer ranked
+90 of 650 in-inventory phones first from the inverted channels and observed
+landmark classes. Supplying the planner's channels instead raised this to
+401 of 650 with the same classes. With class cost disabled in both runs,
+the corresponding counts were 97 and 490. Improving acoustic inversion
+and broad-class estimates is needed before the same decoder can be
+verified against the original gates.
