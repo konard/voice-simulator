@@ -146,13 +146,18 @@ jobs:
           REQUIRE_CLI: ${{ (inputs.suite == 'performance' || inputs.suite == 'all') && '1' || '' }}
           REQUIRE_THREADS_WASM: ${{ (inputs.suite == 'performance' || inputs.suite == 'all') && '1' || '' }}
         run: |
-          LIMIT_FLAG=''
+          limit_flags=()
           if [[ "$LIMIT" =~ ^[0-9]+$ ]]; then
-            LIMIT_FLAG="--limit $LIMIT"
+            limit_flags=(--limit "$LIMIT")
           fi
-          # LIMIT_FLAG is unquoted on purpose: empty, or a flag and a number.
-          # shellcheck disable=SC2086
-          bash scripts/run-with-budget-warning.sh 18000 "Heavy checks" npm run test:heavy -- --suite "$SUITE" $LIMIT_FLAG
+          budget=18000
+          affinity=()
+          if [[ "$SUITE" == recognition ]]; then
+            budget=5400
+            core=$(awk '/^Cpus_allowed_list:/ {split($2, allowed, /[-,]/); print allowed[1]}' /proc/self/status)
+            affinity=(taskset -c "$core")
+          fi
+          bash scripts/run-with-budget-warning.sh "$budget" "Heavy checks" +            "${affinity[@]}" npm run test:heavy -- --suite "$SUITE" "${limit_flags[@]}"
 
       - name: Upload reports
         if: ${{ !cancelled() }}

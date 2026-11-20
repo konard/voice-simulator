@@ -187,6 +187,38 @@ REQUIRE_GPU=1 npm run test:heavy -- --suite gpu
 Every GPU test prints its adapter (`WebGPU adapter: {...}`) and the report
 `gpu-solver.md` names it. A software adapter says nothing about GPU speed.
 
+### Recognition benchmark
+
+Run a short sample locally or dispatch the full recognition suite on one
+GitHub Actions runner core:
+
+```bash
+node scripts/run-heavy.mjs --suite recognition --limit 5
+gh workflow run heavy.yml -f suite=recognition
+```
+
+The benchmark uses the first rows of each set in
+[datasets/benchmark.json](../datasets/benchmark.json). Keep fetched audio and
+transcripts in `.datasets/`. Only the aggregate Markdown report and a JSON
+report with aggregate counts and rates and per-row IDs and counts go into the
+workflow artifact. Use the default prefixes for comparisons against the
+committed baseline. The recognition workflow has a 90-minute test budget.
+
+To set or update the baseline, run the full suite on comparable single-core
+hardware:
+
+```bash
+HEAVY_UPDATE_BASELINE=1 node scripts/run-heavy.mjs --suite recognition
+```
+
+After the benchmark passes its floors, this writes
+`tests/heavy/baselines/recognition.json` and
+`docs/reports/recognition-benchmark.md`. Review and commit both files. An update
+that raises an error rate requires `HEAVY_BASELINE_REASON="..."`, which is stored
+with the new baseline. A regular run with the same limits and utterance counts
+allows two percentage points of error increase, four points of language
+accuracy loss, and up to 1.5 times the baseline real-time factor.
+
 ### Policy check
 
 The [vision](VISION.md) rules out neural networks and asks for a result in
