@@ -217,6 +217,38 @@ describe('recognition session', () => {
   });
 });
 
+it('validates the recognition worker start options', async () => {
+  const messages = [];
+  let handle;
+  const original = {
+    addEventListener: globalThis.addEventListener,
+    postMessage: globalThis.postMessage,
+  };
+  globalThis.addEventListener = (type, callback) => {
+    if (type === 'message') {
+      handle = (data) => callback({ data });
+    }
+  };
+  globalThis.postMessage = (message) => messages.push(message);
+  try {
+    await import('../examples/universal-app/src/engine/recognition-worker.js');
+    const start = { type: 'start', sampleRate: 16000, id: 1 };
+    handle({ ...start, languages: ['invalid'] });
+    handle({ ...start, languages: ['en'], level: 'invalid' });
+    expect(messages.map(({ message }) => message)).toEqual([
+      'languages must contain distinct supported codes',
+      'level must be auto, low, medium or high',
+    ]);
+    handle({ ...start, languages: ['en'], level: 'low' });
+    handle({ type: 'chunk', id: start.id, samples: new Float32Array(320) });
+    expect(messages.at(-1)).toEqual({ type: 'chunk', id: start.id });
+    handle({ type: 'stop', id: start.id });
+    expect(messages.at(-1).code).toBe('empty');
+  } finally {
+    Object.assign(globalThis, original);
+  }
+});
+
 describe('recognition microphone', () => {
   it('falls back without AudioWorklet', async () => {
     const { calls, context, stream } = fakeContext();

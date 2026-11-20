@@ -12,10 +12,11 @@ function fail(id, { message, code }) {
   send(id, 'error', { message, code });
 }
 
-function start({ id, sampleCount, sampleRate, languages }) {
+function start({ id, sampleCount, sampleRate, languages, level }) {
   const options = {
     sampleRate,
     sampleCount,
+    level,
     languages: languages?.map((language) =>
       languageCodes.find((code) => code === language)
     ),
