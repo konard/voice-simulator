@@ -4510,3 +4510,13 @@ export {
   type IpaStreamUpdate,
   type IpaSyllable,
 } from './recognition/decode.js';
+
+export {
+  measureProsody,
+  markProsody,
+  type ProsodyOptions,
+  type MeasuredProsody,
+  type ProsodyModeSpan,
+  type ProsodyResult,
+  type ToneCosts,
+} from './recognition/prosody.js';

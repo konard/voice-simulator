@@ -20,6 +20,20 @@ function timedSound(sound) {
   return parseIpa(sound.ipa);
 }
 
+function measuredFeatures(token, chunk) {
+  if (token.kind !== 'vowel') {
+    return {};
+  }
+  const features = {};
+  if (Object.hasOwn(chunk, 'tones')) {
+    features.tones = chunk.tones;
+  }
+  if (Number.isFinite(chunk.prominence)) {
+    features.prominence = chunk.prominence;
+  }
+  return features;
+}
+
 export function recognitionInput(ipa, boundaries) {
   const tokens = [];
   const hard = new Set([0]);
@@ -51,6 +65,7 @@ export function recognitionInput(ipa, boundaries) {
           start: chunk.start,
           end: chunk.end,
           confidence: chunk.confidence,
+          ...measuredFeatures(token, chunk),
         });
       } else {
         throw new TypeError('IPA-to-text accepts speech sounds and pauses');
