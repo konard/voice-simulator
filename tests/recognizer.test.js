@@ -213,6 +213,29 @@ it('never changes committed words or takes a syllable back', () => {
   assert.ok(words[0].end < words[1].start);
 });
 
+it('commits a long phrase at a word boundary at least one second old', () => {
+  const sampleRate = 8000;
+  const { samples } = synthesize(
+    'A little bird sings while a swift swallow flies and a clever raven calls through the night',
+    { lang: 'en', tier: 'telephone', seed: 1 }
+  );
+  assert.ok(samples.length > 6 * sampleRate);
+  const { events, result } = capture(
+    samples,
+    160,
+    { languages: ['en'], level: 'low', modes: false },
+    sampleRate
+  );
+  const finals = events.filter(({ type }) => type === 'final');
+  const [first] = finals;
+  assert.ok(first && first.pushed > 5 && first.pushed < 5.25);
+  assert.ok(first.event.words.at(-1).end <= first.pushed - 1);
+  assert.deepEqual(
+    result.words,
+    finals.flatMap(({ event }) => event.words)
+  );
+});
+
 it('reports a syllable within 200 ms and gives the first partial within 500 ms', () => {
   const { events } = capture(samplePhrase(RATE), 320);
   const nuclei = events.filter(({ type }) => type === 'syllable');

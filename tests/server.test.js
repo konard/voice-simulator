@@ -2,6 +2,9 @@
  * HTTP API: JSON endpoints, audio synthesis in every format and streaming.
  */
 
+import { once } from 'node:events';
+import { request } from 'node:http';
+import { createInterface } from 'node:readline';
 import { describe, expect, it } from 'test-anywhere';
 import {
   decodeAudio,
@@ -357,20 +360,31 @@ describe('audio recognition endpoint', () => {
           .samples
       );
       const url = `${base}/api/recognize?stream=1&rate=8000&lang=en&level=low`;
-      const response = await fetch(url, {
-        method: 'POST',
-        body: encodeRaw(samples, 8000),
-      });
-      expect(response.status).toBe(200);
-      expect(response.headers.get('content-type')).toBe('application/x-ndjson');
-      const [final, result] = (await response.text())
-        .trim()
-        .split('\n')
-        .map(JSON.parse);
-      expect(final.type).toBe('final');
-      expect(result.type).toBe('result');
-      expect(result.words.length > 0).toBe(true);
-      expect(result.words).toEqual(final.words);
+      const audio = encodeRaw(samples, 8000);
+      const split = 2 * 8000 * 2;
+      const upload = request(url, { method: 'POST' });
+      upload.setTimeout(15000, () =>
+        upload.destroy(new Error('No NDJSON response'))
+      );
+      try {
+        const responseReady = once(upload, 'response');
+        upload.write(audio.subarray(0, split));
+        const [response] = await responseReady;
+        expect(response.statusCode).toBe(200);
+        expect(response.headers['content-type']).toBe('application/x-ndjson');
+        const lines = createInterface({ input: response });
+        const rows = lines[Symbol.asyncIterator]();
+        const final = JSON.parse((await rows.next()).value);
+        expect(final.type).toBe('final');
+        upload.end(audio.subarray(split));
+        const result = JSON.parse((await rows.next()).value);
+        expect(result.type).toBe('result');
+        expect(result.words.length > 0).toBe(true);
+        expect(result.words).toEqual(final.words);
+        expect((await rows.next()).done).toBe(true);
+      } finally {
+        upload.destroy();
+      }
     })
   );
 });

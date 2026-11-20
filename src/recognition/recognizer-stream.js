@@ -188,6 +188,7 @@ function createPhraseDecoder(sampleRate, settings, level) {
     scanned: 0,
     lastSpeech: -1,
     fixed: [],
+    partial: null,
   };
 }
 
@@ -351,10 +352,13 @@ export function createRecognizer(options = {}) {
     const pause = trailingPause(phrase.decoder.frames, phrase);
     const total = offset + phrase.used;
     const due = total >= Math.ceil((nextPartial * sampleRate) / 4);
-    let partial;
     if (due) {
-      partial = read(phrase.decoder.result(), phrase.used, false);
-      const { words, ipa, text } = translated(partial, offset / sampleRate, 0);
+      phrase.partial = read(phrase.decoder.result(), phrase.used, false);
+      const { words, ipa, text } = translated(
+        phrase.partial,
+        offset / sampleRate,
+        0
+      );
       emit('partial', { words, ipa, text });
       nextPartial++;
     }
@@ -364,8 +368,8 @@ export function createRecognizer(options = {}) {
       (phrase.lastSpeech >= 0 || phrase.used >= COMMIT_AFTER * sampleRate)
     ) {
       restart(phrase.used);
-    } else if (phrase.used > COMMIT_AFTER * sampleRate && partial) {
-      const word = partial.words.findLast(
+    } else if (phrase.used > COMMIT_AFTER * sampleRate && phrase.partial) {
+      const word = phrase.partial.words.findLast(
         ({ end }) => end <= phrase.used / sampleRate - 1
       );
       if (word) {
