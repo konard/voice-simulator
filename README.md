@@ -659,75 +659,19 @@ Measured with `node experiments/issue-58-rtf.mjs` (10 s of speech, one thread): 
 
 ## Recognition (speech to text)
 
-`recognize` accepts mono samples and returns IPA, text, timed words and
-syllables, language shares, and speech modes. The decoder is experimental.
-
-```js
-import { createRecognizer, recognize } from 'voice-simulator';
-
-const result = recognize(samples, sampleRate, { languages: ['en'] });
-const live = createRecognizer({ sampleRate, level: 'auto' });
-live.on('syllable', ({ start, end }) => highlight(start, end));
-live.on('final', ({ text }) => console.log(text));
-for await (const chunk of audioChunks) live.push(chunk); // Float32Array
-const complete = live.flush();
-```
-
-```sh
-voice-simulator recognize speech.wav --lang en --json
-curl --data-binary @speech.wav 'http://localhost:8080/api/recognize?lang=en'
-```
-
-Use `recognize - --format raw` for live PCM on standard input, or
-`POST /api/recognize?stream=1&rate=16000` for 16-bit little-endian PCM and
-NDJSON. Partial events replace the preceding partial. Final events commit
-words in input time. See the [recognition API](docs/RECOGNIZER.md).
+`recognize` accepts mono samples and returns IPA, text, timed words and syllables, language shares, and speech modes. See the [recognition API and examples](docs/RECOGNIZER.md).
 
 ### Recognition engines and workers
 
-Set `engine: 'auto'` to use the scalar Rust WebAssembly kernels when available,
-`'js'` for the JavaScript reference, or `'rust'` to require WebAssembly. Each
-worker has its own memory. The engine covers pitch kernels, glottal inverse
-filtering, codebook search and approximate pronunciation search.
-
-`recognize(samples, rate, options)` returns a result synchronously with
-`threads: 1` or with the thread option omitted. Use
-`await recognizeAsync(samples, rate, { engine: 'auto', threads: 4 })` for
-parallel batch recognition. Explicit `threads: 'auto'` or a count greater
-than one also makes `recognize` return a promise. The async API and file CLI
-default to up to eight logical cores. Above ten seconds, runs of silence
-of at least 300 ms allow independent chunks. With one thread, all jobs run
-in the caller. The synchronous streaming API runs inside its caller, which
-can be a worker.
+`engine: 'auto'` selects scalar Rust WebAssembly with a JavaScript fallback. Use `'js'` for the reference or `'rust'` to require WebAssembly.
+`recognize(samples, rate, options)` is synchronous with `threads: 1` or when the option is omitted. Call `recognizeAsync` or supply `threads: 'auto'` or a count above one for parallel batch work. The async API and file CLI default to up to eight logical cores. Over ten seconds, pauses of at least 300 ms allow independent chunks. The streaming API runs synchronously inside its caller.
 
 ```sh
 voice-simulator recognize speech.wav --level high --engine rust --threads 4
 cargo run --release -p voice-simulator-cli --features parallel -- recognize speech.wav --threads 4
 ```
 
-The native Rust command decodes PCM or float RIFF/WAV to IPA and reports
-per-stage times. It uses the bundled default head with acoustic analysis,
-pitch, inverse filtering, landmarks, codebook search, tract inversion
-and an IPA decoder. Its optional `--rescore` compares acoustic candidates
-with simulator-generated phone cepstra. The JavaScript recognizer adds
-speaker fitting, language identification, words, prosody and speech modes.
-Run `node scripts/build-native-recognition.mjs` to regenerate the native
-tables from the default acoustic model.
-
-### Speech-mode recognition
-
-`recognizeModes(samples, sampleRate, result, { voice })` adds manner of speech to timed IPA words. A span is `{ start, end, from, to, effort: 0.75, notation: 'f', confidence: 0.8 }`: seconds, end-exclusive word indexes and only the decided mode fields. Phonation and tempo use synthesis brace marks; emotions use `notation: null`; sounds have `sound` instead of word indexes.
-`toPlanModes(result.modes)` supplies word spans, including emotions, to `planUtterance(result.ipa, { modes })`. It retains activation already covered by physical modes as an observation (`emotion.realized: true`) to avoid applying it twice. See [the API and acoustic rules](docs/RECOGNITION-MODES.md) for baseline, abstention, diagnostics and limits.
-
-### Articulatory codebook
-
-`buildCodebook(head, { size: 20000, seed: 1, cache })` builds a deterministic simulator-generated table of tract positions, formants and spectral envelopes. `frameEnvelope(frames, t, table, out)` reads an analysis frame; `table.query(envelope, 16, out)` returns candidate rows and envelope costs without allocating. `CODEBOOK_CHANNELS` defines the twelve tract controls; `serializeCodebook` and `parseCodebook` support a caller-owned binary cache. Tables use 0.5 cm length buckets and are generated on demand. See [API, layout, source limits and verification](docs/CODEBOOK.md).
-
-### Acoustic-to-articulatory inversion and IPA decoding
-
-`invertArticulation` and `createArticulationInverter` recover simulator controls from analysis frames. Use `articulationPlan(track)` to render them. The recognizer's batch and streaming articulation tracks include the `whisper` control and use a lazily rendered reference table within whispered spans. See [inversion usage and accuracy](docs/CODEBOOK.md#acoustic-to-articulatory-inversion).
-`audioToIpa(samples, sampleRate, { voice, language: 'en', nbest: 5 })` returns experimental timed phonemes and syllables, ranked readings, a lattice, and analysis tracks. It fits the head when `voice` is omitted. `createIpaDecoder(sampleRate, options)` returns fixed phonemes and nuclei as audio arrives. See the [decoder API and measured accuracy](docs/CODEBOOK.md#audio-to-ipa). Experimental syllable nuclei and broad sound classes are available through `findLandmarks`, `createLandmarkDetector` and `BROAD_CLASSES`. See the [landmark API, streaming contract and measured quality limits](docs/RECOGNITION-LANDMARKS.md).
-`rescoreHypotheses(decoded)` compares uncertain n-best stretches with waveguide renders in the fitted voice and returns revised timed IPA, scored alternatives and render statistics. See the [rescoring API and evaluation](docs/CODEBOOK.md#analysis-by-synthesis-rescoring). The [prosody stages](docs/RECOGNITION-PROSODY.md) measure timed vowels and restore stress, tone, punctuation and emphasis.
+The native CLI reports timings for WASM-independent WAV-to-IPA recognition. Its acoustic stages and optional rescoring are described in the [recognition API](docs/RECOGNIZER.md#native-cli).
 
 ### Quality
 

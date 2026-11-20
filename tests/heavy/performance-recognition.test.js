@@ -5,6 +5,7 @@ import { performance } from 'node:perf_hooks';
 import { it as alwaysIt } from 'test-anywhere';
 import { recognizeAsync, synthesize } from '../../src/index.js';
 import { resample } from '../../src/audio/resample.js';
+import { measureSingleCoreRecognition } from '../../experiments/issue-77-single-core.mjs';
 import { noRust } from '../helpers/rust-engine.js';
 import { itUnless } from '../helpers/skip.js';
 import { writeReport } from './helpers/report.js';
@@ -95,6 +96,33 @@ verifyScaling(
       serial / parallel >= 1.8,
       `four-worker speedup was ${(serial / parallel).toFixed(2)}x`
     );
+  }
+);
+
+itUnless(noRust, process.platform !== 'linux' && 'taskset requires Linux')(
+  'the Rust CLI engine returns the same text and runs at at most 0.25 RTF on one core',
+  () => {
+    const rows = measureSingleCoreRecognition();
+    const [rust, js] = rows;
+    writeReport(
+      'performance-recognition-single-core',
+      [
+        '# One-core recognition at 8000 Hz',
+        '',
+        'Cold runs of `taskset -c <core> node bin/voice-simulator.js recognize fox.wav --level low --engine <rust|js> --threads 1`.',
+        '',
+        '| Engine | Audio seconds | Elapsed seconds | Real-time factor |',
+        '| --- | ---: | ---: | ---: |',
+        ...rows.map(
+          ({ engine, duration, elapsed, rtf }) =>
+            `| ${engine} | ${duration.toFixed(3)} | ${elapsed.toFixed(3)} | ${rtf.toFixed(3)} |`
+        ),
+      ].join('\n'),
+      rows
+    );
+    assert.ok(rust.text);
+    assert.equal(rust.text, js.text);
+    assert.ok(rust.rtf <= 0.25, `Rust ran at ${rust.rtf.toFixed(3)} RTF`);
   }
 );
 

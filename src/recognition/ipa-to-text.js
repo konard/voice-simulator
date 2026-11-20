@@ -144,7 +144,7 @@ function searchPaths(input, lexicon, options, exact, wordSearches) {
     const key = `${end}:${language}`;
     if (!suffixes.has(key)) {
       const reachable = new Set([end]);
-      for (let start = end - 1; start >= 0; start--) {
+      for (let start = end - 1; start >= ends[boundaryIndex - 1]; start--) {
         if (
           exactCandidates(tokens, start, end, lexicon, language).some((c) =>
             reachable.has(c.to)
@@ -200,6 +200,7 @@ function searchPaths(input, lexicon, options, exact, wordSearches) {
   }
   return prune(best[tokens.length], beam).map((reading) => ({
     cost: reading.cost,
+    text: reading.text,
     path: materialize(reading),
   }));
 }

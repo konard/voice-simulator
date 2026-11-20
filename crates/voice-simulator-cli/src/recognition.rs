@@ -97,12 +97,16 @@ fn source(
 ) -> std::result::Result<Vec<f64>, &'static str> {
     let periodicity: Vec<_> = frames
         .rows
-        .chunks_exact(ROW)
+        .as_chunks::<ROW>()
+        .0
+        .iter()
         .map(|row| row[3] as f32)
         .collect();
     let mel: Vec<_> = frames
         .rows
-        .chunks_exact(ROW)
+        .as_chunks::<ROW>()
+        .0
+        .iter()
         .flat_map(|row| row[13..].iter().map(|&v| v as f32))
         .collect();
     let inverse = inverse_filter::inverse_filter(
@@ -126,7 +130,9 @@ fn source(
     )?;
     let measurements: Vec<_> = frames
         .rows
-        .chunks_exact(ROW)
+        .as_chunks::<ROW>()
+        .0
+        .iter()
         .zip(&inverse.measures[0])
         .flat_map(|(row, &pitch)| {
             [
@@ -154,7 +160,9 @@ fn source(
 
 fn invert(pairs: &[f64], model: &Model, hop: f64, frames: usize) -> Vec<f64> {
     let (index, cost): (Vec<_>, Vec<_>) = pairs
-        .chunks_exact(2)
+        .as_chunks::<2>()
+        .0
+        .iter()
         .map(|pair| (pair[0], pair[1] / 100.0))
         .unzip();
     let lattice = Lattice {
@@ -193,11 +201,13 @@ fn decode(
     ranges[..inversion::WIDTH].copy_from_slice(&model.tract.map(|x| x[1]));
     let mut values = Vec::with_capacity(track.frames.speech.len());
     let mut variance = Vec::with_capacity(values.capacity());
-    for (row, source) in track
-        .tract
-        .chunks_exact(inversion::ROW)
-        .zip(track.source.chunks_exact(inversion_source::CHANNELS))
-    {
+    for (row, source) in track.tract.as_chunks::<{ inversion::ROW }>().0.iter().zip(
+        track
+            .source
+            .as_chunks::<{ inversion_source::CHANNELS }>()
+            .0
+            .iter(),
+    ) {
         let mut value = [0.0; CHANNELS];
         let mut spread = [0.0; CHANNELS];
         value[..inversion::WIDTH].copy_from_slice(&row[..inversion::WIDTH]);
@@ -333,7 +343,11 @@ pub fn recognize(
         stages: Vec::new(),
     };
     let model = result.measure("model", Model::load);
-    let rate = f64::from(level.rate.min(sample_rate));
+    let rate = [16000, 11025, 8000]
+        .into_iter()
+        .find(|&rate| rate <= level.rate && rate <= sample_rate)
+        .map(f64::from)
+        .ok_or("recognition needs at least 8000 Hz audio")?;
     let hop = level.hop;
     let samples = result
         .measure("resample", || {

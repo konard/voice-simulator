@@ -31,7 +31,7 @@ function heardTone(token) {
 }
 
 function allowed(entry, tokens, to, end, language) {
-  if (language !== 'zh') {
+  if (language !== 'zh' || (entry.word !== '一' && entry.word !== '不')) {
     return true;
   }
   const tone = entry.tokens.at(-1)?.tone?.join('');
@@ -51,18 +51,17 @@ function allowed(entry, tokens, to, end, language) {
 function exactKeys(tokens, to, end, language) {
   const token = tokens[to];
   const keys = [soundKey(token, language)];
-  if (language === 'zh' && token.tones) {
+  if (language !== 'zh') {
+    return keys;
+  }
+  if (token.tones) {
     return MANDARIN_TONES.map((tone) => `${token.symbol}:${tone}`);
   }
   const nextTone = tokens
     .slice(to + 1, end)
     .find((t) => t.tone?.length)
     ?.tone?.join('');
-  if (
-    language === 'zh' &&
-    token.tone?.join('') === '35' &&
-    ['21', '214'].includes(nextTone)
-  ) {
+  if (token.tone?.join('') === '35' && ['21', '214'].includes(nextTone)) {
     keys.push(
       soundKey({ ...token, tone: [2, 1, 4] }, language),
       soundKey({ ...token, tone: [2, 1] }, language)
@@ -71,6 +70,8 @@ function exactKeys(tokens, to, end, language) {
   return keys;
 }
 
+const pronunciationStress = new WeakMap();
+
 function acousticStress(entry, heard, language) {
   if (
     !['en', 'ru'].includes(language) ||
@@ -78,12 +79,23 @@ function acousticStress(entry, heard, language) {
   ) {
     return 0;
   }
-  const expected = syllabifyTokens(entry.tokens, { language });
-  const primary = expected.findIndex((syllable) =>
-    syllable.some((token) => token.stress === 1)
-  );
+  let stress = pronunciationStress.get(entry);
+  if (!stress) {
+    const expected = syllabifyTokens(entry.tokens, { language });
+    stress = {
+      count: expected.length,
+      primary: expected.findIndex((syllable) =>
+        syllable.some((token) => token.stress === 1)
+      ),
+    };
+    pronunciationStress.set(entry, stress);
+  }
+  const { count, primary } = stress;
+  if (count < 2 || primary < 0) {
+    return 0;
+  }
   const nuclei = syllabifyTokens(heard, { language });
-  if (expected.length < 2 || nuclei.length !== expected.length || primary < 0) {
+  if (nuclei.length !== count) {
     return 0;
   }
   const scores = nuclei.map((syllable) =>
@@ -159,10 +171,17 @@ export function exactCandidates(tokens, from, end, lexicon, language) {
 /** Per-call memoized feature comparisons avoid repeating work at trie forks. */
 export function distanceCache() {
   const cache = new Map();
+  const heard = new WeakMap();
   return (input, expected, language) => {
     // Stress is evaluated at the terminal: the trie shares stressed and
     // unstressed versions of the same segment path.
-    const a = `${input.symbol}:${(input.tone ?? []).join('')}:${input.voicing ?? ''}:${JSON.stringify(input.tones ?? null)}`;
+    if (!heard.has(input)) {
+      heard.set(
+        input,
+        `${input.symbol}:${(input.tone ?? []).join('')}:${input.voicing ?? ''}:${JSON.stringify(input.tones ?? null)}`
+      );
+    }
+    const a = heard.get(input);
     const b = `${expected.symbol}:${(expected.tone ?? []).join('')}`;
     const tone = acousticTone(input, expected, language);
     const key = `${a}\t${b}\t${tone ?? ''}`;

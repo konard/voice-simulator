@@ -122,10 +122,10 @@ function timesMatch(js, rust) {
   }
 }
 
-function textMatches(samples, sampleRate, level, kernels) {
+function textMatches(samples, sampleRate, level) {
   const options = { level, threads: 1, languages: ['en'] };
   const js = recognize(samples, sampleRate, { ...options, engine: 'js' });
-  const rust = recognize(samples, sampleRate, { ...options, kernels });
+  const rust = recognize(samples, sampleRate, { ...options, engine: 'rust' });
   assert.equal(rust.text, js.text);
   assert.equal(rust.ipa, js.ipa);
   assert.equal(rust.words.length, js.words.length);
@@ -165,6 +165,6 @@ for (const [tier, level, rate] of [
       js.count
     );
     codebookMatches(rust, kernels);
-    textMatches(samples, sampleRate, level, kernels);
+    textMatches(samples, sampleRate, level);
   });
 }

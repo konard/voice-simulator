@@ -11,7 +11,14 @@ use alloc::{vec, vec::Vec};
 use core::f64::consts::TAU;
 
 pub const MEL: usize = 24;
-const BANDS: [f64; 7] = [0.0, 400.0, 800.0, 1200.0, 2000.0, 3500.0, 8000.0];
+const BANDS: [[f64; 2]; 6] = [
+    [0.0, 400.0],
+    [800.0, 1500.0],
+    [1200.0, 2000.0],
+    [2000.0, 3500.0],
+    [3500.0, 5000.0],
+    [5000.0, 8000.0],
+];
 pub const ROW: usize = 13 + MEL;
 
 pub struct AcousticFrames {
@@ -38,13 +45,25 @@ fn spectrum(row: &mut [f64], power: &[f64], rate: f64, size: usize) {
     let mut energy = 0.0;
     let mut moment = 0.0;
     let mut bands = [0.0; 6];
+    let (mut low, mut high) = (0.0, 0.0);
     let mut mel = [0.0; MEL];
     for (k, &power) in power.iter().enumerate() {
         let hz = k as f64 * hz_per_bin;
-        energy += power;
+        if k > 0 {
+            energy += power;
+        }
         moment += hz * power;
-        let band = BANDS.partition_point(|&edge| edge <= hz).clamp(1, 6) - 1;
-        bands[band] += power;
+        for ([left, right], band) in BANDS.iter().zip(&mut bands) {
+            if (*left..=*right).contains(&hz) {
+                *band += power;
+            }
+        }
+        if (50.0..=1000.0).contains(&hz) {
+            low += power;
+        }
+        if (1000.0..=3800.0).contains(&hz) {
+            high += power;
+        }
         let position = crate::math::ln(1.0 + hz / 700.0) / top_mel * (MEL + 1) as f64;
         let i = position as usize;
         let fraction = position - i as f64;
@@ -56,15 +75,19 @@ fn spectrum(row: &mut [f64], power: &[f64], rate: f64, size: usize) {
         }
     }
     row[5] = moment / energy.max(1e-12);
-    row[6] = 10.0 * log10((bands[4] + bands[5] + 1e-12) / (bands[0] + bands[1] + 1e-12));
+    row[6] = 10.0 * log10((low + 1e-12) / (high + 1e-12));
     row[7..13].copy_from_slice(&bands.map(|value| (10.0 * log10(value + 1e-12)).max(-100.0)));
     row[13..].copy_from_slice(&mel.map(|value| crate::math::ln(value.max(1e-12))));
 }
 
 pub fn analyze(samples: &[f32], rate: f64, hop: f64) -> AcousticFrames {
-    let shift = round(rate * hop);
+    let shift = rate * hop;
     let length = round(0.032 * rate);
-    let count = samples.len().div_ceil(shift);
+    let count = if samples.is_empty() {
+        0
+    } else {
+        ((samples.len() - 1) as f64 / shift) as usize + 1
+    };
     let size = length.next_power_of_two();
     let window = hann(length);
     let fft = Fft::new(size);
@@ -73,8 +96,8 @@ pub fn analyze(samples: &[f32], rate: f64, hop: f64) -> AcousticFrames {
     let mut power = vec![0.0; size / 2 + 1];
     let mut rows = vec![0.0; count * ROW];
     let mut peak = -100.0f64;
-    for (t, row) in rows.chunks_exact_mut(ROW).enumerate() {
-        frame(samples, t * shift, &mut real[..length]);
+    for (t, row) in rows.as_chunks_mut::<ROW>().0.iter_mut().enumerate() {
+        frame(samples, round(t as f64 * shift), &mut real[..length]);
         let energy = real[..length].iter().map(|x| x * x).sum::<f64>() / length as f64;
         row[0] = (10.0 * log10(energy.max(1e-10))).max(-100.0);
         peak = peak.max(row[0]);
@@ -96,7 +119,9 @@ pub fn analyze(samples: &[f32], rate: f64, hop: f64) -> AcousticFrames {
     }
     let noise = (peak - 45.0).max(-100.0);
     let speech = rows
-        .chunks_exact_mut(ROW)
+        .as_chunks_mut::<ROW>()
+        .0
+        .iter_mut()
         .map(|row| {
             row[1] = noise;
             let speech = u8::from(row[0] > noise + 5.0);
@@ -128,7 +153,9 @@ pub fn track_pitch(samples: &[f32], rate: f64, hop: f64, frames: &mut AcousticFr
     let mut samples_window = vec![0.0; length];
     frames
         .rows
-        .chunks_exact_mut(ROW)
+        .as_chunks_mut::<ROW>()
+        .0
+        .iter_mut()
         .zip(&frames.speech)
         .enumerate()
         .map(|(t, (row, &speech))| {
@@ -184,7 +211,13 @@ pub fn envelope_queries(
     let mut response = [f64::NAN; 24];
     let mut key = [0.0; 6];
     let mut out = vec![f64::NAN; speech.len() * QUERY_WIDTH];
-    for (t, (row, &speech)) in out.chunks_exact_mut(QUERY_WIDTH).zip(speech).enumerate() {
+    for (t, (row, &speech)) in out
+        .as_chunks_mut::<QUERY_WIDTH>()
+        .0
+        .iter_mut()
+        .zip(speech)
+        .enumerate()
+    {
         if speech == 0 {
             continue;
         }

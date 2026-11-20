@@ -23,37 +23,43 @@ export function countPronunciations(entries) {
   const add = (table, key, count) =>
     table.set(key, (table.get(key) ?? 0) + count);
   for (const { symbols, count } of entries) {
-    const sequence = ['#', ...symbols, '#'];
-    for (let i = 0; i < sequence.length; i++) {
-      add(singles, sequence[i], count);
+    let a;
+    let b = '#';
+    add(singles, b, count);
+    total += count;
+    for (let i = 0; i <= symbols.length; i++) {
+      const c = i === symbols.length ? '#' : (symbols[i].symbol ?? symbols[i]);
+      add(singles, c, count);
+      add(pairs, `${b}\t${c}`, count);
+      if (a !== undefined) {
+        add(triples, `${a}\t${b}\t${c}`, count);
+      }
       total += count;
-      if (i >= 1) {
-        add(pairs, sequence.slice(i - 1, i + 1).join('\t'), count);
-      }
-      if (i >= 2) {
-        add(triples, sequence.slice(i - 2, i + 1).join('\t'), count);
-      }
+      a = b;
+      b = c;
     }
   }
   return { singles, pairs, triples, total };
 }
 
+function* triePronunciations(root) {
+  const stack = [root];
+  while (stack.length) {
+    const node = stack.pop();
+    for (const { tokens, count } of node.entries) {
+      yield { symbols: tokens, count };
+    }
+    stack.push(...node.children.values());
+  }
+}
+
 export function getLanguageModel(language) {
   const lexicon = getLexicon(language);
   if (cached.get(language)?.lexicon !== lexicon) {
-    const entries = [];
-    const stack = [lexicon.root];
-    while (stack.length) {
-      const node = stack.pop();
-      for (const entry of node.entries) {
-        entries.push({
-          symbols: entry.tokens.map((t) => t.symbol),
-          count: entry.count,
-        });
-      }
-      stack.push(...node.children.values());
-    }
-    cached.set(language, { lexicon, ...countPronunciations(entries) });
+    cached.set(language, {
+      lexicon,
+      ...countPronunciations(triePronunciations(lexicon.root)),
+    });
   }
   return cached.get(language);
 }

@@ -63,7 +63,7 @@ itUnless(noRust)(
 it('runs independent codebook and rescoring jobs in module workers', async () => {
   const pool = createRecognitionPool({ threads: 2, engine: 'js' });
   const table = {
-    tree: Uint32Array.of(0, 0xffffffff, 0xffffffff, 0),
+    tree: Int32Array.of(0, 0, -1, -1),
     key: new Float32Array(6),
     envelope: new Uint8Array(24),
   };

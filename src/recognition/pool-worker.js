@@ -42,13 +42,7 @@ async function dispatch({ type, job, engine, tableId, setup }, send) {
   }
 }
 
-if (typeof globalThis.postMessage === 'function') {
-  globalThis.addEventListener('message', ({ data }) =>
-    dispatch(data, (message, transfer) =>
-      globalThis.postMessage(message, transfer)
-    )
-  );
-} else {
+async function listenInNode() {
   const specifier = 'node:worker_threads';
   const { parentPort } =
     globalThis.process?.getBuiltinModule?.(specifier) ??
@@ -58,4 +52,14 @@ if (typeof globalThis.postMessage === 'function') {
       parentPort.postMessage(message, transfer)
     )
   );
+}
+
+if (typeof globalThis.postMessage === 'function') {
+  globalThis.addEventListener('message', ({ data }) =>
+    dispatch(data, (message, transfer) =>
+      globalThis.postMessage(message, transfer)
+    )
+  );
+} else {
+  listenInNode();
 }

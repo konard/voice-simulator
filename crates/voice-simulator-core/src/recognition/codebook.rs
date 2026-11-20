@@ -51,12 +51,12 @@ impl<'a> Codebook<'a> {
     pub fn new(tree: &'a [u32], key: &'a [f32], envelope: &'a [u8]) -> Option<Self> {
         let size = tree.len() / 4;
         if size == 0
-            || tree.len() % 4 != 0
+            || !tree.len().is_multiple_of(4)
             || key.len() / KEY != size
             || envelope.len() / BANDS != size
-            || key.len() % KEY != 0
-            || envelope.len() % BANDS != 0
-            || tree.chunks_exact(4).any(|node| {
+            || !key.len().is_multiple_of(KEY)
+            || !envelope.len().is_multiple_of(BANDS)
+            || tree.as_chunks::<4>().0.iter().any(|node| {
                 node[0] as usize >= size
                     || node[1] as usize >= KEY
                     || node[2..]
@@ -78,7 +78,7 @@ impl<'a> Codebook<'a> {
         let mut shortlist = BinaryHeap::with_capacity(NEIGHBOURS);
         let mut pending = Vec::with_capacity(32);
         let mut ranked = Vec::with_capacity(NEIGHBOURS);
-        for query in queries.chunks_exact(QUERY_WIDTH) {
+        for query in queries.as_chunks::<QUERY_WIDTH>().0 {
             let expected = out.len() + 2 * k;
             let bands = &query[..BANDS];
             let count = bands.iter().filter(|value| value.is_finite()).count();
