@@ -35,6 +35,7 @@ function outputFor(frames, head, width, capacity) {
   const names = [
     ...CODEBOOK_CHANNELS.map(({ name }) => name),
     ...SOURCE_CHANNELS,
+    'whisper',
   ];
   const arrays = () =>
     Object.fromEntries(names.map((name) => [name, new Float32Array(capacity)]));
@@ -136,6 +137,7 @@ function createInverter(frames, options, batch) {
     createTractSearch(frames, formants, book, settings, steps, {
       candidates: track.candidates,
       history,
+      head,
     });
   const smoother = createTractSmoother(track, book, steps, path);
   const source = createSourceEstimator(frames, pitch, track, batch);

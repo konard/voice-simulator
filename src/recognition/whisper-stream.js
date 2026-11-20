@@ -25,13 +25,15 @@ function reconcile(previous, candidates, fixedThrough) {
 
 function decisionDue(
   run,
-  { final, paused, newRun, clock, through, nextCheck, pitchReady }
+  { final, paused, pausedAt, newRun, clock, nextCheck, frames, pitch }
 ) {
   return (
     run &&
     (final ||
-      (paused && through < run.end) ||
-      (pitchReady && (newRun || clock >= nextCheck)))
+      (paused && run.end !== pausedAt) ||
+      (!paused &&
+        (newRun || clock >= nextCheck) &&
+        hasDecidablePitch(run, frames, pitch)))
   );
 }
 
@@ -58,6 +60,7 @@ export function createWhisperDecisions(frames, pitch, option) {
   let nextCheck = 0;
   let through = frames.startTime;
   let currentStart;
+  let pausedAt;
   let current = [];
   return {
     advance(final, fixedThrough = frames.startTime) {
@@ -70,16 +73,16 @@ export function createWhisperDecisions(frames, pitch, option) {
       const clock = frames.startTime + frames.count * frames.hop;
       const paused = last && clock - last.end >= 0.2 - 1e-9;
       const newRun = last && last.start !== currentStart;
-      const pitchReady = last && hasDecidablePitch(last, frames, pitch);
       if (
         decisionDue(last, {
           final,
           paused,
+          pausedAt,
           newRun,
           clock,
-          through,
           nextCheck,
-          pitchReady,
+          frames,
+          pitch,
         })
       ) {
         if (newRun) {
@@ -97,6 +100,9 @@ export function createWhisperDecisions(frames, pitch, option) {
           pitch
         ).filter((span) => span.end >= last.start);
         current = reconcile(current, candidates, fixedThrough);
+        if (paused) {
+          pausedAt = last.end;
+        }
         nextCheck = clock + 0.5;
         through = clock;
       }

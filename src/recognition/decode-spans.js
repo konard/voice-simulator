@@ -6,6 +6,7 @@ import {
   TEMPLATE_POINTS,
 } from './decode-model.js';
 import { BROAD_CLASSES } from './landmarks.js';
+import { whisperAt } from './whisper.js';
 
 const EPSILON = 1e-9;
 const MIN_SEPARATION = 0.015;
@@ -79,7 +80,8 @@ export function decodeBoundaries(
   frames,
   landmarks,
   track,
-  { from, to, open = false, locked = false }
+  { from, to, open = false, locked = false },
+  whisperSpans = []
 ) {
   const first = Math.max(
     0,
@@ -127,7 +129,13 @@ export function decodeBoundaries(
       add(frames.startTime + i * frames.hop, 1);
     }
   }
-  speedPeaks(frames, track, first, last, add);
+  // In whisper, movement in the inferred tract can be caused by noise.
+  // Use the spectral landmarks and the finer whisper grid there.
+  speedPeaks(frames, track, first, last, (time, priority) => {
+    if (!whisperAt(whisperSpans, time)) {
+      add(time, priority);
+    }
+  });
   const times = consolidate(candidates).filter(
     (time) => !pauses.some((gap) => gap.start < time && time < gap.end)
   );
@@ -254,7 +262,8 @@ export function prepareDecode(
     frames,
     landmarks,
     track,
-    bounds
+    bounds,
+    whisperSpans
   );
   const { times, spansInBounds, edges } = whisperGrid(
     original,

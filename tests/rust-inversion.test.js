@@ -18,6 +18,7 @@ import {
   NOISE_CHANNELS,
 } from '../src/recognition/inversion-source.js';
 import { SOURCE_CHANNEL_MAPS } from '../src/recognition/source-channel-maps.js';
+import { whisperFormantFrames } from '../src/recognition/whisper-spectrum.js';
 import { float64View } from '../src/engine/wasm-loader.js';
 import { loadRustEngine, noRust } from './helpers/rust-engine.js';
 import { itUnless } from './helpers/skip.js';
@@ -64,7 +65,7 @@ function compare(expected, out, t) {
 function compareSource(engine, frames, pitch, expected) {
   const { frameCount, head } = expected;
   const maps = SOURCE_CHANNEL_MAPS[frames.rate];
-  const data = new Float64Array(18 + frameCount * 7);
+  const data = new Float64Array(18 + frameCount * (frames.whisper ? 8 : 7));
   NOISE_CHANNELS.forEach((name, i) => data.set(maps[name], i * 6));
   for (let t = 0; t < frameCount; t++) {
     data.set(
@@ -80,21 +81,20 @@ function compareSource(engine, frames, pitch, expected) {
       18 + t * 7
     );
   }
+  if (frames.whisper) {
+    data.set(frames.whisper.subarray(0, frameCount), 18 + frameCount * 7);
+  }
   const width = SOURCE_CHANNELS.length;
   const outLength = frameCount * width;
   const src = engine.exports.vs_alloc(data.byteLength);
   const dst = engine.exports.vs_alloc(outLength * 8);
   try {
     float64View(engine, src, data.length).set(data);
+    const estimate = frames.whisper
+      ? engine.exports.vs_inversion_source_whisper
+      : engine.exports.vs_inversion_source;
     assert.equal(
-      engine.exports.vs_inversion_source(
-        src,
-        frameCount,
-        frames.hop,
-        CHANNELS.voicing,
-        head.pitch,
-        dst
-      ),
+      estimate(src, frameCount, frames.hop, CHANNELS.voicing, head.pitch, dst),
       0
     );
     const out = float64View(engine, dst, outLength);
@@ -171,6 +171,28 @@ itUnless(noRust)(
     });
     stage.advance(true);
     compareLattice(engine, codebook, stage.track, 30);
+    compareSource(engine, frames, pitch, expected);
+  }
+);
+
+itUnless(noRust)(
+  'matches source controls and the tract lattice with whispered references',
+  async () => {
+    const engine = await loadRustEngine();
+    const { samples, sampleRate } = synthesize('apa {W aka W}', {
+      ipa: true,
+      solver: 'waveguide',
+      engine: 'js',
+      sampleRate: 8000,
+    });
+    const raw = analyzeFrames(samples, sampleRate);
+    const pitch = trackPitch(raw);
+    const end = samples.length / sampleRate;
+    const frames = whisperFormantFrames(raw, [{ start: end / 2, end }]);
+    const codebook = buildCodebook(DEFAULT_HEAD, { size: 32 });
+    const expected = invertArticulation(frames, { codebook, pitch });
+    assert.ok(expected.channels.whisper.includes(1));
+    compareLattice(engine, codebook, expected, frames.count);
     compareSource(engine, frames, pitch, expected);
   }
 );

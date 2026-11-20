@@ -95,11 +95,17 @@ describe('whisper recognition', () => {
   });
 
   it('marks timed whisper results', () => {
-    const { samples, sampleRate } = renderWhisper('[whisper] a fresh fish');
-    const heard = audioToIpa(samples, sampleRate, { language: 'en' });
+    const { samples, sampleRate, head } = renderWhisper(
+      '[whisper] a fresh fish'
+    );
+    const heard = audioToIpa(samples, sampleRate, {
+      language: 'en',
+      voice: head,
+    });
     expect(heard.ipa.startsWith('{W ')).toBe(true);
     expect(heard.modes[0].notation).toBe('W');
     expect(heard.modes[0].phonation).toEqual({ whisper: 1 });
+    expect(heard.tracks.articulation.channels.whisper.includes(1)).toBe(true);
     const sounds = heard.segments.filter((sound) => sound.whispered);
     expect(sounds.length).toBeGreaterThan(0);
     expect(sounds.every(({ voicing }) => voicing >= 0 && voicing <= 1)).toBe(
@@ -135,6 +141,20 @@ describe('whisper recognition', () => {
       whisper: [{ start: 0.34, end: 0.345 }],
     });
     expect(result.segments.length).toBeGreaterThan(0);
+  });
+
+  it('leaves acoustic costs unchanged for an explicit span between analysis frames', () => {
+    const { samples, sampleRate, head } = renderWhisper('a fresh fish');
+    const options = { language: 'en', voice: head };
+    const disabled = audioToIpa(samples, sampleRate, {
+      ...options,
+      whisper: false,
+    });
+    const betweenCentres = audioToIpa(samples, sampleRate, {
+      ...options,
+      whisper: [{ start: 0.341, end: 0.342 }],
+    });
+    expect(betweenCentres.lattice).toEqual(disabled.lattice);
   });
 
   it('lets lexical context use soft voicing evidence when the preferred IPA is wrong', () => {
@@ -215,6 +235,31 @@ describe('whisper tone recognition', () => {
 });
 
 describe('whisper streaming', () => {
+  it('uses whispered articulation after a detected change of mode at a pause', () => {
+    const { samples: voice, sampleRate, head } = renderWhisper('one two three');
+    const { samples: whispering } = renderWhisper(
+      '[whisper] she sees five sheep'
+    );
+    const transition = voice.length + Math.round(sampleRate * 0.3);
+    const samples = new Float32Array(transition + whispering.length);
+    samples.set(voice);
+    samples.set(whispering, transition);
+    const stream = createIpaDecoder(sampleRate, {
+      language: 'en',
+      voice: head,
+    });
+    stream.push(samples);
+    stream.flush();
+    const { tracks, whisperSpans } = stream.result();
+    expect(whisperSpans.length).toBe(1);
+    expect(
+      Math.abs(whisperSpans[0].start - transition / sampleRate)
+    ).toBeLessThan(0.1);
+    const { whisper } = tracks.articulation.channels;
+    expect(whisper[0]).toBe(0);
+    expect(whisper.includes(1)).toBe(true);
+  });
+
   it('clips present spans and returns pooled formants before flush', () => {
     const { samples, sampleRate, head } = renderWhisper(
       '[whisper] a fresh fish'
@@ -237,10 +282,22 @@ describe('whisper streaming', () => {
       pitch: tracks.pitch,
       vocalTractLength: voice.vocalTractLength,
     });
-    const columns = expected.count * 4;
-    expect(tracks.formants.frequency.slice(0, columns)).toEqual(
-      expected.frequency.slice(0, columns)
-    );
+    const columns = tracks.formants.committed * 4;
+    expect(columns).toBeGreaterThan(0);
+    expect(tracks.formants.valid.slice(0, columns).includes(1)).toBe(true);
+    expect(tracks.articulation.channels.whisper[0]).toBe(1);
+    const raw = trackFormants(frames, {
+      pitch: tracks.pitch,
+      vocalTractLength: voice.vocalTractLength,
+    });
+    const distance = (formants) =>
+      formants.frequency.slice(0, columns).reduce((sum, frequency, i) => {
+        const bothValid = formants.valid[i] && expected.valid[i];
+        return (
+          sum + (bothValid ? Math.abs(frequency - expected.frequency[i]) : 0)
+        );
+      }, 0);
+    expect(distance(tracks.formants)).toBeLessThan(distance(raw));
   });
 
   it('holds the mode decision until half a second of speech or a pause', () => {
@@ -261,6 +318,16 @@ describe('whisper streaming', () => {
     expect(mode.advance(false).through).toBe(run.start);
     observe(100);
     expect(mode.advance(false).through).toBeGreaterThanOrEqual(run.start + 0.5);
+    const shortFrames = { ...frames, speech: frames.speech.slice() };
+    shortFrames.speech.fill(0, run.from + 70);
+    const shortMode = createWhisperDecisions(shortFrames, pitch, 'auto');
+    expect(shortMode.advance(false).through).toBe(run.start);
+    shortFrames.count = run.from + 110;
+    shortFrames.sampleCount = Math.round(
+      shortFrames.count * shortFrames.hop * shortFrames.rate
+    );
+    pitch.committed = shortFrames.count;
+    expect(shortMode.advance(false).through).toBeGreaterThan(run.start);
     const stream = createRecognizer(sampleRate, { language: 'en' });
     expect(
       stream.push(samples.subarray(0, Math.floor(sampleRate * 0.45))).segments

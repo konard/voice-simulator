@@ -13,8 +13,7 @@ import { createLandmarkDetector } from './landmarks.js';
 import { createPitchTracker } from './pitch.js';
 import { whisperVoicing } from './whisper-result.js';
 import { createWhisperDecisions } from './whisper-stream.js';
-import { trackFormants } from './formants.js';
-import { whisperFormantFrames } from './whisper-spectrum.js';
+import { createWhisperFramePool } from './whisper-spectrum.js';
 
 function matches(other, arc) {
   return (
@@ -88,6 +87,7 @@ export function createIpaDecoder(sampleRate, options = {}) {
   let finalResult;
   let classifier;
   let whisper;
+  let pool;
 
   function reset() {
     input = createFrameAnalyzer(sampleRate, {
@@ -101,8 +101,17 @@ export function createIpaDecoder(sampleRate, options = {}) {
       settings.whisper
     );
     whisper = { through: 0, spans: [] };
+    pool =
+      settings.whisper === 'auto' || settings.whisper.length
+        ? createWhisperFramePool(input.frames)
+        : null;
     landmarks = createLandmarkDetector(input.frames);
-    decoder = createDecodeTracks(input.frames, pitch.track, options, language);
+    decoder = createDecodeTracks(
+      pool?.frames ?? input.frames,
+      pitch.track,
+      options,
+      language
+    );
     archive = { times: [], edges: [] };
     fixed = [];
     from = 0;
@@ -148,7 +157,7 @@ export function createIpaDecoder(sampleRate, options = {}) {
   function collect(final, segments) {
     refresh(final);
     if (final) {
-      finalResult = snapshot(true);
+      finalResult = snapshot();
     }
     while (current && commit(final, segments) && !final) {
       refresh(false);
@@ -193,13 +202,16 @@ export function createIpaDecoder(sampleRate, options = {}) {
 
   function advance(final, segments, nuclei) {
     pitch.advance(final);
-    whisper = classifier.advance(final, from);
+    const { frames } = input;
+    const scored = pool ? frames.startTime + pool.frames.count * frames.hop : 0;
+    whisper = classifier.advance(final, Math.max(from, scored));
+    pool?.advance(whisper, final);
     nuclei.push(...landmarks.advance(final));
     decoder.advance(final);
     collect(final, segments);
   }
 
-  function snapshot(final = false) {
+  function snapshot() {
     if (!current) {
       const analysis = {
         frames: input.frames,
@@ -219,32 +231,13 @@ export function createIpaDecoder(sampleRate, options = {}) {
       });
     }
     const { analysis, prepared, templates, search } = current;
-    const { frames, tracks, voice, whisperSpans } = analysis;
-    const formants = whisperSpans.length
-      ? trackFormants(whisperFormantFrames(frames, whisperSpans), {
-          pitch: tracks.pitch,
-          vocalTractLength: voice.vocalTractLength,
-        })
-      : tracks.formants;
-    if (!final && whisperSpans.length) {
-      // Two future frames enter each pooled estimate. Only expose committed
-      // formants where the phone prefix and the pooling window are fixed.
-      formants.committed = Math.min(
-        tracks.formants.committed,
-        Math.max(0, Math.floor((from - frames.startTime) / frames.hop) - 2)
-      );
-    }
     const lattice = { times: [...archive.times], edges: [...archive.edges] };
     appendLattice(lattice, latticeOf(prepared.times, search.edges, templates));
     lattice.times = Float64Array.from(lattice.times);
-    return resultOf(
-      { ...analysis, tracks: { ...tracks, formants } },
-      settings,
-      prepared,
-      templates,
-      search,
-      { prefix: fixed, lattice }
-    );
+    return resultOf(analysis, settings, prepared, templates, search, {
+      prefix: fixed,
+      lattice,
+    });
   }
 
   reset();

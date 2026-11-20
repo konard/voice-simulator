@@ -57,6 +57,13 @@ eight more to 5200 Hz. Formants and bandwidths come from a 25 Hz response grid
 with interpolated peaks and half-power crossings. Six detrended DCT
 coefficients of the first 16 stored bands form the search key.
 
+On the first whispered speech frame, the recognizer renders the same tract
+rows with the `whisper` channel set to 1. The second table uses LPC from
+five pooled autocorrelation windows and shares the original tract indices
+for motion costs across a mode boundary. The inversion compares whispered
+frames with those references and uses the whisper source for refinement and
+render-back.
+
 `lengthScale` is the requested tract length divided by 16.5 cm. A pure scaling
 of the default head gave a maximum 3.69% vowel-formant error at 14 cm, exceeding
 the issue's 2% tolerance. Tables therefore use `referenceLength`, the requested

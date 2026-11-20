@@ -1390,8 +1390,11 @@ least as large as the frame count selects the batch solution. The separate
 `vs_inversion_source` export consumes frame features and 18 calibrated source
 coefficients and returns the nine source controls in batch. The expected packet
 layouts are documented in `crates/voice-simulator-wasm/src/inversion.rs`.
+`vs_inversion_source_whisper` accepts the same packet followed by one
+whisper flag per frame. The JS host renders the whispered tract table
+and supplies its candidate costs to the same lattice solver.
 `REQUIRE_WASM=1 node --test tests/rust-inversion.test.js` checks both lattice
-modes and source outputs against JavaScript.
+modes and source outputs against JavaScript, including mixed phonation.
 
 `CARGO_BUILD_JOBS=1 node scripts/build-wasm.mjs --require --check-size`
 measured 544,367 scalar bytes and 549,683 SIMD bytes on Rust 1.100.0. The
@@ -1413,7 +1416,7 @@ orchestration use JavaScript.
 transition and edge costs, readings, confidences and stream commitments on the
 same acoustic observations, including mixed whisper spans.
 `CARGO_BUILD_JOBS=1 node scripts/build-wasm.mjs --require --check-size`
-measured 657289 scalar bytes and 668296 SIMD bytes on Rust 1.100.0. The next
+measured 657830 scalar bytes and 668839 SIMD bytes on Rust 1.100.0. The next
 16 KiB size budget for the shipped scalar file is 671744 bytes.
 
 ## Analysis-by-synthesis rescoring

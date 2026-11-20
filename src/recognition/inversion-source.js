@@ -19,7 +19,7 @@ export function sourceFeatures(frames, t, reference) {
     frames.energy[t] - reference,
     frames.gravity[t] / 1000,
     frames.zcr[t],
-    frames.periodicity[t],
+    frames.whisper?.[t] ? 0 : frames.periodicity[t],
     frames.tilt[t],
   ];
 }
@@ -113,18 +113,18 @@ function createTrillDetector(frames) {
   };
 }
 
-function createPitchFill(pitch, channel, fallback) {
+function createPitchFill(pitch, whisper, channel, fallback) {
   let before = -1;
   return (first, last, end) => {
     let after = first;
     for (let t = first; t < last; t++) {
-      if (pitch.f0[t] > 0) {
+      if (!whisper?.[t] && pitch.f0[t] > 0) {
         before = t;
         channel[t] = pitch.f0[t];
         continue;
       }
       after = Math.max(t + 1, after);
-      while (after < end && !(pitch.f0[after] > 0)) {
+      while (after < end && (whisper?.[after] || !(pitch.f0[after] > 0))) {
         after++;
       }
       const a = before >= 0 ? pitch.f0[before] : 0;
@@ -140,6 +140,7 @@ function createPitchFill(pitch, channel, fallback) {
 export function createSourceEstimator(frames, pitch, track, batch) {
   const { channels, variance } = track;
   const reference = energyReference(frames.capacity);
+  const whisperReference = frames.whisper && energyReference(frames.capacity);
   const map = noiseMap(frames.rate);
   const level = new Float64Array(frames.capacity + 1);
   const forward = new Float64Array(frames.capacity);
@@ -147,14 +148,22 @@ export function createSourceEstimator(frames, pitch, track, batch) {
   const window = Math.max(1, Math.round(0.05 / frames.hop));
   const left = Math.floor(window / 2);
   const trill = createTrillDetector(frames);
-  const fillPitch = createPitchFill(pitch, channels.f0, track.head.pitch);
+  const fillPitch = createPitchFill(
+    pitch,
+    frames.whisper,
+    channels.f0,
+    track.head.pitch
+  );
   let read = 0;
 
   function observe(end) {
     while (read < end) {
       const t = read++;
-      const voiced = pitch.f0[t] > 0 ? 1 : 0;
-      const ref = reference(frames.energy[t], voiced);
+      const whisper = frames.whisper?.[t];
+      const voiced = Number(!whisper && pitch.f0[t] > 0);
+      const ref = whisper
+        ? whisperReference(frames.energy[t], frames.speech[t])
+        : reference(frames.energy[t], voiced);
       if (batch) {
         channels.f0[t] = voiced ? pitch.f0[t] : NaN;
       }
@@ -182,7 +191,7 @@ export function createSourceEstimator(frames, pitch, track, batch) {
     for (let t = end - 1; t >= first; t--) {
       voiced += alpha * (forward[t] - voiced);
       if (t < last) {
-        channels.voicing[t] = voiced;
+        channels.voicing[t] = frames.whisper?.[t] ? 1 : voiced;
       }
     }
     for (let t = first; t < last; t++) {
@@ -192,6 +201,7 @@ export function createSourceEstimator(frames, pitch, track, batch) {
         ? (level[b] - level[a]) / (b - a)
         : 0;
       channels.trill[t] = trill.detected[t];
+      channels.whisper[t] = frames.whisper?.[t] ?? 0;
       variance.glottalClosure[t] = Infinity;
       variance.lateral[t] = Infinity;
     }

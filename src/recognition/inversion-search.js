@@ -2,6 +2,7 @@
 import { CHANNELS } from '../articulation/plan.js';
 import { CODEBOOK_CHANNELS, frameEnvelope } from './codebook.js';
 import { L0 } from './codebook-features.js';
+import { whisperCodebook } from './whisper-codebook.js';
 
 export const TRACT_WIDTH = CODEBOOK_CHANNELS.length;
 export const CLOSURE_CANDIDATES = 32;
@@ -59,7 +60,8 @@ function localCost(row, t, envelopeCost, frames, formants, book) {
   // Stored formants are in physical Hz for the book's rounded build length.
   // Move them onto the same 16.5 cm axis as the scaled observations.
   const referenceScale = book.referenceLength / L0;
-  const weight = frames.periodicity[t] >= 0.45 ? 1 : 0.25;
+  const weight =
+    frames.whisper?.[t] || frames.periodicity[t] >= 0.45 ? 1 : 0.25;
   let cost = envelopeCost / 16;
   for (let k = 0; k < 3; k++) {
     const i = t * 4 + k;
@@ -172,7 +174,7 @@ export function createTractSearch(
   book,
   settings,
   steps,
-  { candidates, history }
+  { candidates, history, head }
 ) {
   const table = book.articulation;
   const weights = transitionWeights(steps, 1);
@@ -200,9 +202,13 @@ export function createTractSearch(
     history
   );
   let bestSpeech = -1;
+  let quietBook;
 
   return {
     speech(t) {
+      context.book = frames.whisper?.[t]
+        ? (quietBook ??= whisperCodebook(book, head))
+        : book;
       bestSpeech = scoreSpeech(t, context);
       search.step(t);
     },

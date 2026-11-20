@@ -2,7 +2,7 @@
 import { synthesize } from '../synthesize.js';
 import { analyzeFrames } from './frontend.js';
 import { whisperAt } from './whisper.js';
-import { whisperSpectrum } from './whisper-spectrum.js';
+import { whisperRowAt, whisperSpectrum } from './whisper-spectrum.js';
 
 const POINTS = [0.1, 0.3, 0.5, 0.7, 0.9];
 export const WHISPER_WEIGHTS = { duration: 1.1, class: 0, phonotactic: 0.08 };
@@ -94,21 +94,24 @@ export function whisperDistance(input, reference, width, vowel) {
 }
 
 export function createWhisperScorer(frames, spans, templates, settings, voice) {
-  if (!spans.length) {
+  const active = spans.filter(
+    ({ start, end }) => whisperRowAt(frames, start) < whisperRowAt(frames, end)
+  );
+  if (!active.length) {
     return null;
   }
-  const data = spans.map(({ start, end }) =>
+  const data = active.map(({ start, end }) =>
     whisperSpectrum(frames, start, end)
   );
   const table = whisperReferences(templates, settings, voice);
   const width = frames.melBands + 1;
   const input = new Float32Array(POINTS.length * width);
   return (start, end) => {
-    const span = whisperAt(spans, (start + end) / 2);
+    const span = whisperAt(active, (start + end) / 2);
     if (!span) {
       return null;
     }
-    sampleTrajectory(data[spans.indexOf(span)], start, end, width, input);
+    sampleTrajectory(data[active.indexOf(span)], start, end, width, input);
     const duration = end - start;
     const terms = new Float64Array(templates.length * 3);
     const long = new Uint8Array(templates.length);

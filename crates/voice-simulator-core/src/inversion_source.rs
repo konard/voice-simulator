@@ -17,20 +17,34 @@ pub fn estimate_source(
     maps: &[[f64; 6]; 3],
     out: &mut [f64],
 ) {
+    estimate_source_with_whisper(frames, &[], hop, time_constant, fallback_pitch, maps, out);
+}
+
+/// Whisper flags are separate so voiced callers keep the same packet layout.
+pub fn estimate_source_with_whisper(
+    frames: &[f64],
+    whisper: &[f64],
+    hop: f64,
+    time_constant: f64,
+    fallback_pitch: f64,
+    maps: &[[f64; 6]; 3],
+    out: &mut [f64],
+) {
     let count = frames.len() / FEATURES;
     let alpha = -expm1(-hop / time_constant);
     let window = (round_half_up(0.05 / hop) as usize).max(1);
     let left = window / 2;
     let mut levels = vec![0.0; count + 1];
     let mut energies = Vec::with_capacity(count);
+    let mut whisper_energies = Vec::new();
+    let is_whispered = |t: usize| whisper.get(t) == Some(&1.0);
     let mut forward = 0.0;
     let mut previous = None;
     for (t, frame) in frames.as_chunks::<FEATURES>().0.iter().enumerate() {
         let energy = frame[0];
         let pitch = frame[6];
-        let voiced = if pitch > 0.0 {
-            let i = energies.partition_point(|&value| value <= energy);
-            energies.insert(i, energy);
+        let whispered = is_whispered(t);
+        let voiced = if !whispered && pitch > 0.0 {
             fill_pitch(out, previous, t, pitch);
             previous = Some((t, pitch));
             1.0
@@ -44,16 +58,24 @@ pub fn estimate_source(
             forward + alpha * (voiced - forward)
         };
         row[1] = forward;
-        let reference = if energies.is_empty() {
-            energy
+        let reference = if whispered {
+            energy_reference(&mut whisper_energies, energy, frame[5] > 0.0)
         } else {
-            energies[ceil(0.9 * energies.len() as f64) as usize - 1]
+            energy_reference(&mut energies, energy, voiced > 0.0)
         };
         levels[t + 1] = levels[t];
         if frame[5] > 0.0 {
             let delta = energy - reference;
             levels[t + 1] += pow(10.0, delta / 20.0).min(1.5);
-            let features = [1.0, delta, frame[1] / 1000.0, frame[2], frame[3], frame[4]];
+            let periodicity = if whispered { 0.0 } else { frame[3] };
+            let features = [
+                1.0,
+                delta,
+                frame[1] / 1000.0,
+                frame[2],
+                periodicity,
+                frame[4],
+            ];
             row[3..6].copy_from_slice(&noise_channels(&features, maps));
         } else {
             row[3..6].fill(0.0);
@@ -73,7 +95,7 @@ pub fn estimate_source(
         .rev()
     {
         voiced += alpha * (row[1] - voiced);
-        row[1] = voiced;
+        row[1] = if is_whispered(t) { 1.0 } else { voiced };
         let a = t.saturating_sub(left);
         let b = count.min(t.saturating_add(window - left));
         row[2] = if frames[t * FEATURES + 5] > 0.0 {
@@ -83,6 +105,18 @@ pub fn estimate_source(
         };
     }
     mark_trills(frames, hop, out);
+}
+
+fn energy_reference(energies: &mut Vec<f64>, energy: f64, include: bool) -> f64 {
+    if include {
+        let i = energies.partition_point(|&value| value <= energy);
+        energies.insert(i, energy);
+    }
+    if energies.is_empty() {
+        energy
+    } else {
+        energies[ceil(0.9 * energies.len() as f64) as usize - 1]
+    }
 }
 
 fn fill_pitch(out: &mut [f64], previous: Option<(usize, f64)>, t: usize, pitch: f64) {

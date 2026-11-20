@@ -629,6 +629,7 @@ function chosenIndex(store, settings, path, t, k) {
 function frameLength(frames, store, settings, path, t, peak) {
   if (
     !frames.speech[t] ||
+    frames.whisper?.[t] ||
     store.nasal[t] ||
     frames.periodicity[t] < LENGTH_PERIODICITY ||
     frames.energy[t] < peak - LENGTH_RANGE
@@ -704,7 +705,12 @@ function createSmoother(frames, store, settings, track, rows) {
   /** Observation variance of a candidate of bandwidth B in frame t. */
   function observation(t, bandwidth) {
     let harmonics = 0;
-    if (pitch && t < pitch.count && pitch.f0[t] > HIGH_PITCH) {
+    if (
+      !frames.whisper?.[t] &&
+      pitch &&
+      t < pitch.count &&
+      pitch.f0[t] > HIGH_PITCH
+    ) {
       harmonics = (pitch.f0[t] / 4) ** 2;
     }
     return (bandwidth / 2) ** 2 + OBSERVATION_FLOOR ** 2 + harmonics;

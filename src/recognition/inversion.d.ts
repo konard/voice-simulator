@@ -43,7 +43,8 @@ export type InversionChannel =
   | 'sibilance'
   | 'trill'
   | 'glottalClosure'
-  | 'lateral';
+  | 'lateral'
+  | 'whisper';
 
 export interface InversionCandidates {
   /** Row-major stride, max(32, requested candidates). */

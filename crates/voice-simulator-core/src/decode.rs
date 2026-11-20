@@ -100,7 +100,11 @@ fn speed_peaks(input: &Observations<'_>, first: usize, last: usize, add: &mut im
     }
 }
 
-fn boundaries(input: &Observations<'_>, bounds: &Bounds) -> (Vec<f64>, Vec<Gap>) {
+fn boundaries(
+    input: &Observations<'_>,
+    bounds: &Bounds,
+    whisper: Option<&WhisperInput<'_>>,
+) -> (Vec<f64>, Vec<Gap>) {
     let first = (math::floor((bounds.from - input.start) / input.hop + EPS) as usize)
         .min(input.values.len());
     let last = frame_at(input, bounds.to);
@@ -145,7 +149,11 @@ fn boundaries(input: &Observations<'_>, bounds: &Bounds) -> (Vec<f64>, Vec<Gap>)
             add(input.start + i as f64 * input.hop, 1);
         }
     }
-    speed_peaks(input, first, last, &mut add);
+    speed_peaks(input, first, last, &mut |time, priority| {
+        if !whisper.is_some_and(|region| region.contains(time)) {
+            add(time, priority);
+        }
+    });
     (consolidate(candidates, &pauses), pauses)
 }
 
@@ -263,7 +271,7 @@ pub fn prepare_with_whisper(
     bounds: &Bounds,
     whisper: Option<&WhisperInput<'_>>,
 ) -> Graph {
-    let (original, pauses) = boundaries(input, bounds);
+    let (original, pauses) = boundaries(input, bounds, whisper);
     let (times, edges) = match whisper {
         Some(region) => region.grid(&original, &pauses),
         None => (original, Vec::new()),
