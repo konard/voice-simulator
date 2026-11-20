@@ -16,6 +16,7 @@ on:
           - roundtrip
           - copy
           - performance
+          - recognition-performance
           - gpu
           - lexicon
         default: all
@@ -110,6 +111,10 @@ jobs:
           bash scripts/run-with-budget-warning.sh 360 "wasm build" node scripts/build-wasm.mjs --require --threads
           bash scripts/run-with-budget-warning.sh 120 "CLI build" cargo build --release --locked -p voice-simulator-cli
 
+      - name: Build scalar recognition WebAssembly
+        if: inputs.suite == 'recognition-performance'
+        run: node scripts/build-wasm.mjs --require --check-size
+
       - name: Restore the speech dataset cache
         uses: actions/cache@v6
         with:
@@ -137,6 +142,7 @@ jobs:
         run: deno run -A scripts/gpu-adapter.mjs
 
       - name: Run heavy checks
+        if: inputs.suite != 'recognition-performance'
         shell: bash
         env:
           SUITE: ${{ inputs.suite }}
@@ -153,6 +159,13 @@ jobs:
           # LIMIT_FLAG is unquoted on purpose: empty, or a flag and a number.
           # shellcheck disable=SC2086
           bash scripts/run-with-budget-warning.sh 18000 "Heavy checks" npm run test:heavy -- --suite "$SUITE" $LIMIT_FLAG
+
+      - name: Verify recognition performance targets
+        if: inputs.suite == 'recognition-performance'
+        env:
+          HEAVY_OUT: reports/heavy
+          REQUIRE_WASM: '1'
+        run: node --test tests/heavy/performance-recognition.test.js
 
       - name: Upload reports
         if: ${{ !cancelled() }}
