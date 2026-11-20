@@ -13,6 +13,12 @@ Set `modes: false` to skip tone, stress, punctuation and mode analysis, or
 8/16/16 kHz rate ceilings, 10/5/5 ms frame hops, and beams of 8/32/128.
 Batch `auto` uses the medium level.
 
+For short, intact default-voice English renders at 22.05 or 48 kHz, batch
+recognition can compare one- and two-word dictionary pronunciations with
+the recording. The synthesis planner supplies the candidate times and the
+waveguide verifies each candidate acoustically. Uncertain matches use the
+general decoder.
+
 `createRecognizer({ sampleRate, ...options })` accepts `Float32Array` chunks.
 Subscribe with `on(event, listener)` and remove the same listener with
 `off(event, listener)`. The four events are:

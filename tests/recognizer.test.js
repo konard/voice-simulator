@@ -337,6 +337,23 @@ it('recognises its own speech', () => {
   );
 });
 
+it('recovers a different simulated pronunciation and its word times', () => {
+  const { samples, sampleRate, timeline } = synthesize('Good morning.', {
+    lang: 'en',
+    tier: 'minimal',
+    seed: 1,
+  });
+  const { words } = recognize(samples, sampleRate, { languages: ['en'] });
+  assert.deepEqual(
+    words.map(({ text }) => text.toLowerCase()),
+    ['good', 'morning']
+  );
+  for (const [index, word] of words.entries()) {
+    assert.ok(Math.abs(word.start - timeline.words[index].start) < 0.01);
+    assert.ok(Math.abs(word.end - timeline.words[index].end) < 0.01);
+  }
+});
+
 it('runs faster than real time', () => {
   const sampleRate = 8000;
   const samples = samplePhrase(sampleRate);

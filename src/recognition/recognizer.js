@@ -110,8 +110,10 @@ export function decodeRecognitionAudio(samples, sampleRate, settings, level) {
   const rate = Math.min(sampleRate, options.rate);
   const input =
     rate < sampleRate ? resample(samples, sampleRate, rate) : samples;
-  const decode = settings.stages.audioToIpa ?? audioToIpa;
-  return { decoded: decode(input, rate, options), input, rate };
+  const decoded = settings.stages.audioToIpa
+    ? settings.stages.audioToIpa(input, rate, options)
+    : audioToIpa(input, rate, { ...options, sourceRate: sampleRate });
+  return { decoded, input, rate };
 }
 
 export function emptyRecognition(nbest) {
@@ -139,12 +141,18 @@ function timedPhones(decoded) {
     : decoded.ipa;
 }
 
-function decodeText(input, settings, level) {
+function decodeText(input, settings, level, modelLanguage) {
   const { languages, stages, nbest } = settings;
   const language = languages.length === 1 ? languages[0] : undefined;
+  // A verified synthesis model provides its own language. Injected stages
+  // continue to receive the languages explicitly requested by the caller.
+  const candidates =
+    modelLanguage && !stages.identifyLanguage ? [modelLanguage] : languages;
   const identification = language
     ? null
-    : (stages.identifyLanguage ?? identifyLanguage)(input, { languages });
+    : (stages.identifyLanguage ?? identifyLanguage)(input, {
+        languages: candidates,
+      });
   return (stages.ipaToText ?? ipaToText)(input, {
     language,
     spans: identification?.spans,
@@ -157,7 +165,7 @@ function recognizeProsody(decoded, samples, rate, settings, level) {
   const input = timedPhones(decoded);
   const pitch = decoded.tracks?.pitch;
   if (!settings.modes || !pitch || !Array.isArray(input)) {
-    return decodeText(input, settings, level);
+    return decodeText(input, settings, level, decoded.modelLanguage);
   }
   const options = {
     language:
@@ -166,7 +174,12 @@ function recognizeProsody(decoded, samples, rate, settings, level) {
     pitch,
   };
   const measured = measureProsody(samples, rate, input, options);
-  const primary = decodeText(measured.sounds, settings, level);
+  const primary = decodeText(
+    measured.sounds,
+    settings,
+    level,
+    decoded.modelLanguage
+  );
   return markProsody(primary, measured, options);
 }
 
