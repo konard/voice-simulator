@@ -1,0 +1,11 @@
+{
+  "schema": 1,
+  "sets": [
+    { "id": "fleurs-en", "language": "en", "rows": 25 },
+    { "id": "fleurs-ru", "language": "ru", "rows": 25 },
+    { "id": "fleurs-hi", "language": "hi", "rows": 25 },
+    { "id": "fleurs-zh", "language": "zh", "rows": 25 },
+    { "id": "libritts-r-dev-clean", "language": "en", "rows": 20 },
+    { "id": "sova-rudevices-test", "language": "ru", "rows": 20 }
+  ]
+}

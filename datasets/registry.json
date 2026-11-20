@@ -82,6 +82,46 @@
       }
     },
     {
+      "id": "libritts-r-dev-clean",
+      "title": "LibriTTS-R, English dev.clean split, first 20 rows",
+      "languages": ["en"],
+      "licence": "CC-BY-4.0",
+      "licenceUrl": "https://www.openslr.org/141/",
+      "licenceQuote": "License: CC BY 4.0",
+      "licenceChecked": "2026-11-20",
+      "redistribution": false,
+      "citation": "Koizumi et al. (2023). LibriTTS-R: A Restored Multi-Speaker Text-to-Speech Corpus. https://arxiv.org/abs/2305.18802",
+      "source": {
+        "kind": "rows",
+        "dataset": "mythicinfinity/libritts_r",
+        "config": "dev",
+        "split": "dev.clean",
+        "length": 20,
+        "textColumn": "text_original",
+        "textSha256": "9c184e99f80a39d6c8d394963d5ab9a5a2e669bd4983fb26f3016146198c2ee7"
+      }
+    },
+    {
+      "id": "sova-rudevices-test",
+      "title": "SOVA RuDevices, Russian test split, first 20 rows",
+      "languages": ["ru"],
+      "licence": "CC-BY-4.0",
+      "licenceUrl": "https://github.com/sovaai/sova-dataset#license",
+      "licenceQuote": "SOVA Dataset is licensed under Creative Commons BY 4.0 license by Virtual Assistant, LLC.",
+      "licenceChecked": "2026-11-20",
+      "redistribution": false,
+      "citation": "Virtual Assistant, LLC. SOVA Dataset, RuDevices. https://github.com/sovaai/sova-dataset",
+      "source": {
+        "kind": "rows",
+        "dataset": "bond005/sova_rudevices",
+        "config": "default",
+        "split": "test",
+        "length": 20,
+        "textColumn": "transcription",
+        "textSha256": "75b677cf6e622b01e0c5dd49063c00751feba5e0a1c19b2c308d8887b7e7ab06"
+      }
+    },
+    {
       "id": "aishell3-test-index",
       "title": "AISHELL-3, transcript index of the test set (test/content.txt: one line per utterance, the WAV file name, then each Chinese character followed by its pinyin with a tone number)",
       "languages": ["zh"],
