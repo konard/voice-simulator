@@ -220,6 +220,21 @@ function collectDiagnostics(state, legacy) {
     state.diagnostics[key] += legacy[key] * weight;
   }
 }
+
+function analyzeVoiceInput(samples, sampleRate, options) {
+  const { profile, kernels } = options;
+  const frames = measure(profile, 'Front end', () =>
+    analyzeFrames(samples, sampleRate, {
+      order: options.order,
+      rate: options.analysisRate,
+    })
+  );
+  const pitch = measure(profile, 'Pitch', () =>
+    trackPitch(frames, { kernels })
+  );
+  return { frames, pitch };
+}
+
 export function accumulate(
   state,
   samples,
@@ -239,16 +254,8 @@ export function accumulate(
       : samples
   );
   const { profile, kernels } = options;
-  const frames = measure(profile, 'Front end', () =>
-    analyzeFrames(input, sampleRate, {
-      maxSeconds,
-      order: options.order,
-      rate: options.analysisRate,
-    })
-  );
-  const pitch = measure(profile, 'Pitch', () =>
-    trackPitch(frames, { kernels })
-  );
+  const { frames, pitch } =
+    options.frontEnd ?? analyzeVoiceInput(input, sampleRate, options);
   // Use the tracker's initial tract prior for every stretch. Re-estimating
   // that prior from a whole utterance makes the pooled dF depend on splits.
   const formants = measure(profile, 'Formants', () =>

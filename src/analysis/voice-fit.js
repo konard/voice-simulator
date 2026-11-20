@@ -356,13 +356,13 @@ function* fitState(state, samples, sampleRate, options) {
     state: copyState(state),
   };
 }
-export function* fitVoiceSteps(samples, sampleRate, options = {}) {
+export function* fitVoiceSteps(samples, sampleRate, options = {}, frontEnd) {
   const o = optionsFor(options);
   const state = accumulate(
     copyState(o.state),
     samples,
     sampleRate,
-    o,
+    { ...o, frontEnd },
     o.sourceDiagnostics !== false
   );
   return yield* fitState(state, samples, sampleRate, o);
@@ -374,8 +374,8 @@ function consume(steps) {
   }
   return next.value;
 }
-export function fitVoice(samples, sampleRate, options = {}) {
-  return consume(fitVoiceSteps(samples, sampleRate, options));
+export function fitVoice(samples, sampleRate, options = {}, frontEnd) {
+  return consume(fitVoiceSteps(samples, sampleRate, options, frontEnd));
 }
 export function createVoiceFitter(options = {}) {
   const o = optionsFor(options),

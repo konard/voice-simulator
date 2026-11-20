@@ -22,19 +22,20 @@ function frameColumns(frames) {
     'zcr',
     'gravity',
     'tilt',
+    'gain',
     'band',
     'mel',
-    'mfcc',
+    'cepstrum',
+    'lpc',
+    'reflection',
   ]) {
     const data = frames[name];
-    if (ArrayBuffer.isView(data)) {
-      const width = data.length / frames.capacity;
-      for (let c = 0; c < width; c++) {
-        columns.push([
-          name,
-          Array.from({ length: frames.count }, (_, t) => data[t * width + c]),
-        ]);
-      }
+    const width = data.length / frames.capacity;
+    for (let c = 0; c < width; c++) {
+      columns.push([
+        name,
+        Array.from({ length: frames.count }, (_, t) => data[t * width + c]),
+      ]);
     }
   }
   return columns;

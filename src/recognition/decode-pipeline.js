@@ -11,7 +11,7 @@ import { pathArcs } from './decode-search.js';
 import { prepareDecode } from './decode-spans.js';
 import { DECODE_WEIGHTS } from './decode-weights.js';
 import { trackFormants } from './formants.js';
-import { analyzeFrames, workingRate } from './frontend.js';
+import { analyzeFrames, FRONTEND_DEFAULTS, workingRate } from './frontend.js';
 import { invertArticulation } from './inversion.js';
 import { findLandmarks } from './landmarks.js';
 import { measure } from './profile.js';
@@ -113,16 +113,22 @@ export function fitDecoderVoice(
   sampleRate,
   language,
   fallback,
-  settings = {}
+  settings = {},
+  frontEnd
 ) {
   try {
-    return fitVoice(samples, sampleRate, {
-      refine: false,
-      sourceDiagnostics: false,
-      language,
-      profile: settings.profile,
-      kernels: settings.kernels,
-    }).head;
+    return fitVoice(
+      samples,
+      sampleRate,
+      {
+        refine: false,
+        sourceDiagnostics: false,
+        language,
+        profile: settings.profile,
+        kernels: settings.kernels,
+      },
+      frontEnd
+    ).head;
   } catch (error) {
     if (error instanceof NoVoicedSpeechError) {
       return fallback;
@@ -155,6 +161,15 @@ function prepareAnalysis(
 ) {
   const { frames, pitch, whisperSpans } = frontEnd;
   const hasSpeech = frames.speech.subarray(0, frames.count).some(Boolean);
+  // Voice fitting uses the default hop and rate and inspects at most 30 seconds.
+  const fitFrontEnd =
+    samples instanceof Float32Array &&
+    frames.hop === FRONTEND_DEFAULTS.hop &&
+    frames.rate === sampleRate &&
+    frames.rate === workingRate(sampleRate) &&
+    samples.length <= FRONTEND_DEFAULTS.maxSeconds * sampleRate
+      ? frontEnd
+      : undefined;
   const voice = options.voice
     ? normalizeHeadConfig(options.voice)
     : hasSpeech
@@ -163,7 +178,8 @@ function prepareAnalysis(
           sampleRate,
           settings.language.language,
           DEFAULT_HEAD,
-          settings
+          settings,
+          fitFrontEnd
         )
       : DEFAULT_HEAD;
   const spectralFrames = whisperFormantFrames(frames, whisperSpans);
