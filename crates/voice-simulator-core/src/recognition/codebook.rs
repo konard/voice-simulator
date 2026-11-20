@@ -22,7 +22,8 @@ struct Candidate {
 impl Ord for Candidate {
     fn cmp(&self, other: &Self) -> Ordering {
         self.distance
-            .total_cmp(&other.distance)
+            .partial_cmp(&other.distance)
+            .unwrap_or_else(|| self.distance.total_cmp(&other.distance))
             .then(self.row.cmp(&other.row))
     }
 }
@@ -76,7 +77,6 @@ impl<'a> Codebook<'a> {
     pub fn query(&self, queries: &[f64], k: usize) -> Vec<f64> {
         let mut out = Vec::with_capacity((queries.len() / QUERY_WIDTH) * k * 2);
         let mut shortlist = BinaryHeap::with_capacity(NEIGHBOURS);
-        let mut pending = Vec::with_capacity(32);
         let mut ranked = Vec::with_capacity(NEIGHBOURS);
         for query in queries.as_chunks::<QUERY_WIDTH>().0 {
             let expected = out.len() + 2 * k;
@@ -93,8 +93,14 @@ impl<'a> Codebook<'a> {
             if count > 0 {
                 let contiguous = bands[count - 1] == count - 1;
                 shortlist.clear();
-                pending.clear();
-                self.shortlist(query.last_chunk().unwrap(), &mut pending, &mut shortlist);
+                Search {
+                    book: self,
+                    key: query.last_chunk().unwrap(),
+                    best: &mut shortlist,
+                    axes: [0.0; KEY],
+                    visits: 0,
+                }
+                .walk(0, 0.0);
                 ranked.clear();
                 ranked.extend(shortlist.iter().map(|candidate| {
                     let row = candidate.row;
@@ -132,66 +138,6 @@ impl<'a> Codebook<'a> {
         }
         out
     }
-
-    fn shortlist(
-        &self,
-        key: &[f64; KEY],
-        pending: &mut Vec<Branch>,
-        best: &mut BinaryHeap<Candidate>,
-    ) {
-        pending.push(Branch {
-            node: 0,
-            bound: 0.0,
-            axes: [0.0; KEY],
-        });
-        let mut visits = 0;
-        while let Some(branch) = pending.pop() {
-            if visits == VISITS {
-                break;
-            }
-            if best.len() == NEIGHBOURS && branch.bound > best.peek().unwrap().distance {
-                continue;
-            }
-            let entry = &self.tree[branch.node as usize];
-            let row = entry[0] as usize;
-            let axis = entry[1] as usize;
-            let stored = &self.key[row];
-            let delta = key[axis] - f64::from(stored[axis]);
-            let distance = key
-                .iter()
-                .zip(stored)
-                .map(|(a, &b)| {
-                    let difference = a - f64::from(b);
-                    difference * difference
-                })
-                .sum();
-            visits += 1;
-            let candidate = Candidate { row, distance };
-            if best.len() < NEIGHBOURS {
-                best.push(candidate);
-            } else if candidate < *best.peek().unwrap() {
-                *best.peek_mut().unwrap() = candidate;
-            }
-            let near = if delta <= 0.0 { 2 } else { 3 };
-            let far = entry[5 - near];
-            if far != u32::MAX {
-                let mut axes = branch.axes;
-                let old = axes[axis];
-                axes[axis] = old.max(delta * delta);
-                pending.push(Branch {
-                    node: far,
-                    bound: branch.bound + axes[axis] - old,
-                    axes,
-                });
-            }
-            if entry[near] != u32::MAX {
-                pending.push(Branch {
-                    node: entry[near],
-                    ..branch
-                });
-            }
-        }
-    }
 }
 
 #[inline]
@@ -200,10 +146,55 @@ fn difference(level: f64, stored: u8) -> f64 {
     delta * delta
 }
 
-struct Branch {
-    node: u32,
-    bound: f64,
+struct Search<'a, 'table> {
+    book: &'a Codebook<'table>,
+    key: &'a [f64; KEY],
+    best: &'a mut BinaryHeap<Candidate>,
     axes: [f64; KEY],
+    visits: usize,
+}
+
+impl Search<'_, '_> {
+    fn walk(&mut self, node: u32, bound: f64) {
+        // The visit limit also bounds recursion if a malformed tree has a cycle.
+        if node == u32::MAX
+            || self.visits == VISITS
+            || (self.best.len() == NEIGHBOURS && bound > self.best.peek().unwrap().distance)
+        {
+            return;
+        }
+        let entry = &self.book.tree[node as usize];
+        let row = entry[0] as usize;
+        let axis = entry[1] as usize;
+        let stored = &self.book.key[row];
+        let delta = self.key[axis] - f64::from(stored[axis]);
+        let distance = self
+            .key
+            .iter()
+            .zip(stored)
+            .map(|(a, &b)| {
+                let difference = a - f64::from(b);
+                difference * difference
+            })
+            .sum();
+        self.visits += 1;
+        let candidate = Candidate { row, distance };
+        if self.best.len() < NEIGHBOURS {
+            self.best.push(candidate);
+        } else if candidate < *self.best.peek().unwrap() {
+            *self.best.peek_mut().unwrap() = candidate;
+        }
+        let near = if delta <= 0.0 { 2 } else { 3 };
+        self.walk(entry[near], bound);
+        let far = entry[5 - near];
+        if far != u32::MAX {
+            let old = self.axes[axis];
+            let next = old.max(delta * delta);
+            self.axes[axis] = next;
+            self.walk(far, bound + next - old);
+            self.axes[axis] = old;
+        }
+    }
 }
 
 #[cfg(test)]
