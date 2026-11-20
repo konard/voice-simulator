@@ -89,11 +89,12 @@ function comparedChannels(kind, state) {
   return names;
 }
 
-function template(ipa, voice) {
+function template(ipa, voice, articulationOffsets) {
   const token = parseIpa(ipa).tokens[0];
   const { kind } = token;
   const plan = planUtterance(kind === 'vowel' ? ipa : `ə${ipa}ə`, {
     head: voice,
+    articulationOffsets,
   });
   const segments = plan.segments.filter(
     (segment) => segment.token === plan.tokens[kind === 'vowel' ? 0 : 1]
@@ -232,8 +233,8 @@ export function decoderLanguage(options) {
 
 const cached = new Map();
 
-export function decoderTemplates(voice, symbols) {
-  const key = JSON.stringify(voice);
+export function decoderTemplates(voice, symbols, articulationOffsets) {
+  const key = JSON.stringify([voice, articulationOffsets]);
   if (!cached.has(key)) {
     if (cached.size >= 8) {
       cached.delete(cached.keys().next().value);
@@ -243,7 +244,7 @@ export function decoderTemplates(voice, symbols) {
   const templates = cached.get(key);
   return symbols.map((ipa) => {
     if (!templates.has(ipa)) {
-      templates.set(ipa, template(ipa, voice));
+      templates.set(ipa, template(ipa, voice, articulationOffsets));
     }
     return templates.get(ipa);
   });

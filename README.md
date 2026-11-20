@@ -597,7 +597,7 @@ renderings with seeds 1 and 2 are 10 to 11 dB apart
 
 ### Voice matching
 
-`fitVoice(samples, sampleRate, options)` estimates a full head configuration from one speaker. It is experimental: the [accuracy gates remain unmet](docs/reports/issue-63-validation.md). Optional `transcript`, `language` and `ipa` tell the refinement what was said; without text it renders `MATCH_TEXT`. Input can be telephone speech at 8000 Hz. At least 20 voiced frames are required.
+`fitVoice(samples, sampleRate, options)` estimates a full head configuration from one speaker. It is experimental: the [accuracy gates remain unmet](docs/reports/issue-63-validation.md). Optional `transcript`, `language` and `ipa` tell the refinement what was said; without text it renders `MATCH_TEXT`. Input can be telephone speech at 8000 Hz. At least 20 voiced frames are required. For streaming audio, [voice sessions](docs/VOICE-SESSION.md) alternate fitting and recognition as more speech arrives.
 
 ```js
 import { fitVoice, createVoiceFitter, saveVoice } from 'voice-simulator';
