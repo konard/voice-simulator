@@ -157,7 +157,8 @@ jobs:
             core=$(awk '/^Cpus_allowed_list:/ {split($2, allowed, /[-,]/); print allowed[1]}' /proc/self/status)
             affinity=(taskset -c "$core")
           fi
-          bash scripts/run-with-budget-warning.sh "$budget" "Heavy checks" +            "${affinity[@]}" npm run test:heavy -- --suite "$SUITE" "${limit_flags[@]}"
+          command=("${affinity[@]}" npm run test:heavy -- --suite "$SUITE" "${limit_flags[@]}")
+          bash scripts/run-with-budget-warning.sh "$budget" "Heavy checks" "${command[@]}"
 
       - name: Upload reports
         if: ${{ !cancelled() }}
