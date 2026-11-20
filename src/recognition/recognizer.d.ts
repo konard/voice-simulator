@@ -1,5 +1,5 @@
 import type { HeadConfig, LanguageCode } from '../index.js';
-import type { audioToIpa } from './decode.js';
+import type { audioToIpa, IpaDecodeOptions } from './decode.js';
 import type { ipaToText } from './ipa-to-text.js';
 import type { identifyLanguage, LanguageShare } from './language-id.js';
 import type { RecognitionModeSpan } from './modes.js';
@@ -16,6 +16,8 @@ export interface RecognitionOptions {
   nbest?: number;
   rescoring?: boolean;
   modes?: boolean;
+  /** Detect whisper, disable it, or supply spans in seconds from input start. */
+  whisper?: IpaDecodeOptions['whisper'];
   level?: RecognitionLevel | 'auto';
   /** Test substitutions. Stream IPA substitutions run on partial and final snapshots. */
   stages?: {

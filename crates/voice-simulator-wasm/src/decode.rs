@@ -1,8 +1,9 @@
 //! Segmental decoder parity entry point.
 use crate::{error, f64_slice};
 use voice_simulator_core::decode::{
-    committed_prefix, prepare, search, transition_costs, Arc, Bounds, LanguageModel, Observations,
-    Policy, Template, Weights, CHANNELS,
+    committed_prefix, prepare_with_whisper, search, transition_costs,
+    whisper::{PhoneReferences, Reference, WhisperInput},
+    Arc, Bounds, LanguageModel, Observations, Policy, Template, Weights, CHANNELS,
 };
 
 fn integer(value: f64, max: usize) -> Option<usize> {
@@ -25,6 +26,69 @@ fn arc_values(arc: Arc) -> [f64; 6] {
         arc.confidence,
         u8::from(arc.long).into(),
     ]
+}
+
+fn whisper_input<'a>(
+    data: &mut &'a [f64],
+    frames: usize,
+    units: usize,
+    duration: f64,
+) -> Option<WhisperInput<'a>> {
+    let head = take(data, 2)?;
+    let bands = integer(head[0], 127)?;
+    let count = integer(head[1], 64)?;
+    if bands == 0 || count == 0 {
+        return None;
+    }
+    let mut spans = Vec::with_capacity(count);
+    let mut previous = 0.0;
+    for span in take(data, 2 * count)?.as_chunks::<2>().0 {
+        let [start, end] = *span;
+        if !start.is_finite()
+            || !end.is_finite()
+            || start < previous
+            || end <= start
+            || end > duration
+        {
+            return None;
+        }
+        spans.push((start, end));
+        previous = end;
+    }
+    let mel = take(data, frames * bands)?;
+    let energy = take(data, frames)?;
+    if mel.iter().chain(energy).any(|x| !x.is_finite()) {
+        return None;
+    }
+    let mut references = Vec::with_capacity(units);
+    for _ in 0..units {
+        let header = take(data, 2)?;
+        let vowel = integer(header[0], 1)? != 0;
+        let count = integer(header[1], 8)?;
+        if count == 0 {
+            return None;
+        }
+        let mut contexts = Vec::with_capacity(count);
+        for _ in 0..count {
+            let nominal = take(data, 1)?[0];
+            let trajectory = take(data, 5 * (bands + 1))?;
+            if nominal <= 0.0 || !nominal.is_finite() || trajectory.iter().any(|x| !x.is_finite()) {
+                return None;
+            }
+            contexts.push(Reference {
+                duration: nominal,
+                trajectory,
+            });
+        }
+        references.push(PhoneReferences { vowel, contexts });
+    }
+    Some(WhisperInput {
+        spans,
+        bands,
+        mel,
+        energy,
+        references,
+    })
 }
 
 fn decode(mut data: &[f64]) -> Option<Vec<f64>> {
@@ -117,6 +181,11 @@ fn decode(mut data: &[f64]) -> Option<Vec<f64>> {
             .collect::<Option<Vec<_>>>()?;
         tables.push((width, ids, counts));
     }
+    let whisper = if data.is_empty() {
+        None
+    } else {
+        Some(whisper_input(&mut data, frames, units, duration)?)
+    };
     if !data.is_empty() || (frames > 0 && ((frames - 1) as f64 * hop > duration + 1e-9)) {
         return None;
     }
@@ -128,7 +197,7 @@ fn decode(mut data: &[f64]) -> Option<Vec<f64>> {
             counts,
         })
         .collect();
-    let graph = prepare(
+    let graph = prepare_with_whisper(
         &Observations {
             start: 0.0,
             hop,
@@ -146,6 +215,7 @@ fn decode(mut data: &[f64]) -> Option<Vec<f64>> {
             open,
             locked,
         },
+        whisper.as_ref(),
     );
     let weights = Weights {
         duration: args[9],
@@ -192,7 +262,10 @@ fn decode(mut data: &[f64]) -> Option<Vec<f64>> {
 }
 
 /// Input is a header, channel ranges, frame rows, landmarks, templates and
-/// phonotactic tables. Output is a header, transition matrix, boundaries,
+/// phonotactic tables. An optional whisper suffix supplies the band and span
+/// counts, start/end pairs, raw mel bands and energy, and each phone's vowel
+/// flag and reference count followed by nominal durations and trajectories.
+/// Output is a header, transition matrix, boundaries,
 /// lattice arcs, and readings (each with path cost and arcs).
 #[no_mangle]
 pub extern "C" fn vs_ipa_decode(input: u32, len: u32, output: u32, capacity: u32) -> i32 {

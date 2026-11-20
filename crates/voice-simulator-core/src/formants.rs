@@ -44,22 +44,25 @@ pub fn reference_formants(length: f64, out: &mut [f64]) {
 /// on `a`, which must start at zero.
 pub fn predictor_from_reflection(k: &[f64], order: usize, a: &mut [f64]) {
     for m in 1..=order {
-        let reflection = k[m - 1];
-        let mut i = 1;
-        let mut j = m - 1;
-        while i < j {
-            let ai = a[i - 1];
-            let aj = a[j - 1];
-            a[i - 1] = ai + reflection * aj;
-            a[j - 1] = aj + reflection * ai;
-            i += 1;
-            j -= 1;
-        }
-        if i == j {
-            a[i - 1] += reflection * a[i - 1];
-        }
-        a[m - 1] = reflection;
+        step_up(a, m, k[m - 1], core::convert::identity);
     }
+}
+
+pub(crate) fn step_up(a: &mut [f64], order: usize, reflection: f64, round: impl Fn(f64) -> f64) {
+    let mut i = 1;
+    let mut j = order - 1;
+    while i < j {
+        let ai = a[i - 1];
+        let aj = a[j - 1];
+        a[i - 1] = round(ai + reflection * aj);
+        a[j - 1] = round(aj + reflection * ai);
+        i += 1;
+        j -= 1;
+    }
+    if i == j {
+        a[i - 1] = round(a[i - 1] + reflection * a[i - 1]);
+    }
+    a[order - 1] = round(reflection);
 }
 
 /// The start values of the root iteration into `re` and `im`.

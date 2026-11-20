@@ -140,6 +140,15 @@ Unknown spellings that equal dictionary words share their IDs, preserving
 count lookup and distinct-text pruning. The packet layout is documented
 at the exports in `crates/voice-simulator-wasm/src/recognition.rs`.
 
+The optional input prosody mask carries consonant voicing probabilities,
+tightly bounded Mandarin tone costs and a whisper flag into the same trie
+search. The prominence packet uses bit 4 of each feature mask for whisper.
+`tests/rust-whisper.test.js` compares detection spans, pooled spectra,
+whisper LPC for formant tracking, trajectory distance, and voicing and
+tone costs on the shared analysis frames and cue table.
+`tests/rust-recognition.test.js` compares lexical paths and prominence with
+these cues.
+
 `tests/rust-recognition.test.js` compares all inventory phone pairs and
 four-language exact, substituted, inserted, deleted, unknown and n-best
 paths against JavaScript. Path identities and local costs are equal;
@@ -1381,8 +1390,11 @@ least as large as the frame count selects the batch solution. The separate
 `vs_inversion_source` export consumes frame features and 18 calibrated source
 coefficients and returns the nine source controls in batch. The expected packet
 layouts are documented in `crates/voice-simulator-wasm/src/inversion.rs`.
+`vs_inversion_source_whisper` accepts the same packet followed by one
+whisper flag per frame. The JS host renders the whispered tract table
+and supplies its candidate costs to the same lattice solver.
 `REQUIRE_WASM=1 node --test tests/rust-inversion.test.js` checks both lattice
-modes and source outputs against JavaScript.
+modes and source outputs against JavaScript, including mixed phonation.
 
 `CARGO_BUILD_JOBS=1 node scripts/build-wasm.mjs --require --check-size`
 measured 544,367 scalar bytes and 549,683 SIMD bytes on Rust 1.100.0. The
@@ -1394,17 +1406,26 @@ next 16 KiB size budget is 557,056 bytes.
 span scoring, transition smoothing, beam pruning, distinct reading selection
 and fixed-prefix decisions. The WebAssembly parity entry point
 `vs_ipa_decode` takes frame observations, planner templates and transition
-tables from the host. Batch and streaming stage orchestration use JavaScript.
+tables from the host. The optional whisper suffix supplies span times,
+raw frame energies and mel bands, and synthesized whisper references.
+The Rust decoder builds the mode-aware boundaries, pools the spectra,
+and applies the matching cost for each span. Batch and streaming stage
+orchestration use JavaScript.
 
 `REQUIRE_WASM=1 node --test tests/rust-decode.test.js` compares boundaries,
 transition and edge costs, readings, confidences and stream commitments on the
-same acoustic observations. `CARGO_BUILD_JOBS=1 node scripts/build-wasm.mjs
---require --check-size` verifies the byte budget.
+same acoustic observations, including mixed whisper spans.
+`CARGO_BUILD_JOBS=1 node scripts/build-wasm.mjs --require --check-size`
+measured 666,361 scalar bytes and 677,082 SIMD bytes on Rust 1.100.0. The
+next 16 KiB boundary for the shipped scalar file is 671,744 bytes (656 KiB).
 
 ## Analysis-by-synthesis rescoring
 
 The Rust rescoring module implements control-frame retiming, source-track
 interpolation, mel cepstra, speech-frame bias, local penalties, and banded DTW.
 The host supplies the IPA plans and orchestrates the waveguide renders and jobs.
+The `vs_rescoring_whisper_mfcc` entry point receives half-open frame ranges
+and averages up to five mel power frames within each range before computing
+cepstra.
 `REQUIRE_WASM=1 node --test tests/rust-rescoring.test.js` checks control frames,
 mel cepstra and regional acoustic scores against the JavaScript reference.

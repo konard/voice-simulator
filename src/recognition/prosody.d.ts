@@ -1,10 +1,12 @@
 import type { HeadConfig, LanguageCode } from '../index.js';
+import type { FrameSet } from './frontend.js';
 import type {
   RecognitionSound,
   IpaToTextResult,
   RecognitionWord,
 } from './ipa-to-text.js';
 import type { PitchTrack } from './pitch.js';
+import type { WhisperSpan, WhisperMode } from './whisper.js';
 
 export type ToneCosts = Record<'˥' | '˧˥' | '˨˩˦' | '˨˩' | '˥˩' | '', number>;
 
@@ -13,7 +15,10 @@ export interface ProsodyOptions {
   voice?: HeadConfig | { head: HeadConfig } | null;
   /** Language hint for grouping contiguous vowels and for unlabelled words. */
   language?: LanguageCode;
-  /** Optional pitch track from the same front-end analysis. */
+  /** Override automatic detection with known whisper spans in seconds. */
+  whisperSpans?: readonly WhisperSpan[];
+  /** Reuse the frames and pitch track from the same front-end analysis. */
+  frames?: FrameSet;
   pitch?: PitchTrack;
 }
 
@@ -31,6 +36,7 @@ export interface MeasuredProsody<
   median: number | null;
   /** 5th to 95th percentile span in semitones, floored at four. */
   range: number;
+  whisperSpans?: readonly WhisperSpan[];
 }
 
 interface ProsodySpan {
@@ -71,5 +77,5 @@ export declare function markProsody<
   measured: MeasuredProsody,
   options?: ProsodyOptions
 ): Omit<T, 'modes'> & {
-  modes: (ProsodyModeSpan | NonNullable<T['modes']>[number])[];
+  modes: (ProsodyModeSpan | WhisperMode | NonNullable<T['modes']>[number])[];
 };

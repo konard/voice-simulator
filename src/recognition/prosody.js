@@ -1,6 +1,7 @@
 /** Recover lexical prosody before word search and phrase prosody after it. */
 import { analyzeFrames } from './frontend.js';
 import { trackPitch } from './pitch.js';
+import { findWhisper, whisperAt, whisperTones } from './whisper.js';
 import { quantile } from './mode-features.js';
 import {
   bestTone,
@@ -195,25 +196,56 @@ export function toneCosts(frames, duration, scale, previous, reduced, fit) {
   );
 }
 
-export function prominence(rows) {
+export function prominence(rows, whispered = []) {
   const result = new Float64Array(rows.length);
   [0.4, 0.2, 0.2, 0.2].forEach((weight, feature) => {
-    const values = rows.map((row) => row[feature]).filter(Number.isFinite);
+    const usable = (row, i) =>
+      Number.isFinite(row[feature]) && !(feature === 3 && whispered[i]);
+    const values = rows.filter(usable).map((row) => row[feature]);
     const centre = mean(values);
     const sd = Math.sqrt(mean(values.map((value) => (value - centre) ** 2)));
     if (sd > 1e-9) {
       rows.forEach((row, i) => {
-        if (Number.isFinite(row[feature])) {
+        if (usable(row, i)) {
           result[i] += (weight * (row[feature] - centre)) / sd;
         }
       });
     }
   });
-  return result;
+  return result.map((score, i) => (whispered[i] ? score / 0.8 : score));
 }
 
-function measureNuclei(nuclei, samples, sampleRate, pitch, range, voice) {
+function measureWhisperNucleus(
+  nucleus,
+  frames,
+  meanDuration,
+  measured,
+  scores
+) {
+  const { parts, sound, syllableEnd } = nucleus;
+  const tones = whisperTones(frames, {
+    start: sound.start,
+    vowelStart: sound.start,
+    end: syllableEnd,
+    meanDuration,
+  });
+  for (const part of parts) {
+    measured.set(part, {
+      ...part,
+      whispered: true,
+      tones,
+      prominence: scores.get(part),
+    });
+  }
+}
+
+function measureNuclei(
+  nuclei,
+  { samples, sampleRate, pitch, range, voice, frames, whisperSpans }
+) {
   const parts = nuclei.flatMap((nucleus) => nucleus.parts);
+  const inWhisper = ({ start, end }) =>
+    Boolean(whisperAt(whisperSpans, (start + end) / 2));
   const rows = parts.map(({ start, end }) => {
     const from = start * sampleRate;
     const to = end * sampleRate;
@@ -225,7 +257,7 @@ function measureNuclei(nuclei, samples, sampleRate, pitch, range, voice) {
       voiced.reduce((highest, value) => Math.max(highest, value), -Infinity),
     ];
   });
-  const prominenceScores = prominence(rows);
+  const prominenceScores = prominence(rows, parts.map(inWhisper));
   const scores = new Map(parts.map((part, i) => [part, prominenceScores[i]]));
   const bounds = new Map();
   for (const { group, sound, end } of nuclei) {
@@ -237,7 +269,16 @@ function measureNuclei(nuclei, samples, sampleRate, pitch, range, voice) {
     : Math.max(1.7, Math.min(3.5, range / 4));
   let previous;
   const measured = new Map();
-  nuclei.forEach(({ parts, sound, end, syllableEnd, group }, i) => {
+  const meanDuration = mean(
+    nuclei.map(({ sound, syllableEnd }) => syllableEnd - sound.start)
+  );
+  nuclei.forEach((nucleus, i) => {
+    const { parts, sound, end, syllableEnd, group } = nucleus;
+    if (inWhisper(sound)) {
+      measureWhisperNucleus(nucleus, frames, meanDuration, measured, scores);
+      previous = undefined;
+      return;
+    }
     const before = nuclei[i - 1];
     const after = nuclei[i + 1];
     const duration = syllableEnd - sound.start;
@@ -282,7 +323,10 @@ function measureNuclei(nuclei, samples, sampleRate, pitch, range, voice) {
 
 /** Analyze the vowel sounds of a timed IPA decoding. Times are in seconds. */
 export function measureProsody(samples, sampleRate, sounds, options = {}) {
-  const track = options.pitch ?? trackPitch(analyzeFrames(samples, sampleRate));
+  const frames = options.frames ?? analyzeFrames(samples, sampleRate);
+  const track = options.pitch ?? trackPitch(frames);
+  const whisperSpans =
+    options.whisperSpans ?? findWhisper(samples, sampleRate, frames, track);
   const voice = options.voice?.head ?? options.voice;
   const voicePitch = voice?.pitch;
   const median =
@@ -294,8 +338,12 @@ export function measureProsody(samples, sampleRate, sounds, options = {}) {
   // contains frication or a closure. Exclude those rows from prosodic cues.
   const trackOffset =
     track.median > 0 ? 12 * Math.log2(track.median / median) : 0;
-  const semitones = raw.map((value) =>
-    value !== null && Math.abs(value - trackOffset) <= 10 ? value : null
+  const semitones = raw.map((value, i) =>
+    value !== null &&
+    Math.abs(value - trackOffset) <= 10 &&
+    !whisperAt(whisperSpans, pitchAt(track, i))
+      ? value
+      : null
   );
   // Store linear energy per hop so intervals can be compared in decibels.
   const energy = Float64Array.from(semitones, (_, i) => {
@@ -306,18 +354,20 @@ export function measureProsody(samples, sampleRate, sounds, options = {}) {
   const pitch = { ...track, semitones, energy };
   const range = Math.max(4, span(semitones));
   const nuclei = collectNuclei(sounds, options.language);
-  const scored = measureNuclei(
-    nuclei,
+  const scored = measureNuclei(nuclei, {
     samples,
     sampleRate,
     pitch,
     range,
-    voice
-  );
+    voice,
+    frames,
+    whisperSpans,
+  });
   return {
     sounds: sounds.map((sound) => scored.get(sound) ?? sound),
     pitch,
     median,
     range,
+    whisperSpans,
   };
 }

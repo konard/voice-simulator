@@ -1,6 +1,7 @@
 /** Public audio recognition and shared batch/stream composition. Unlicense. */
 import { resample } from '../audio/resample.js';
 import { LANGUAGES } from '../g2p/index.js';
+import { decoderWhisperSpans } from './decode-pipeline.js';
 import { audioToIpa } from './decode.js';
 import { ipaToText } from './ipa-to-text.js';
 import { identifyLanguage, languageShares } from './language-id.js';
@@ -55,6 +56,7 @@ export function recognitionSettings(options) {
     nbest = 1,
     rescoring = false,
     modes = true,
+    whisper = 'auto',
     level = 'auto',
     stages = {},
   } = options;
@@ -71,6 +73,7 @@ export function recognitionSettings(options) {
     nbest,
     rescoring,
     modes,
+    whisper: decoderWhisperSpans(whisper),
     level,
     stages,
   };
@@ -94,19 +97,35 @@ export function validateSamples(samples) {
   }
 }
 
-export function decoderOptions(settings, level) {
-  const { languages, voice, nbest, rescoring } = settings;
+export function decoderOptions(settings, level, start = 0) {
+  const { languages, voice, nbest, rescoring, whisper } = settings;
   return {
     ...RECOGNITION_LEVELS[level],
     languages,
     language: languages.length === 1 ? languages[0] : undefined,
     voice,
     nbest: rescoring ? 10 : nbest,
+    whisper:
+      start && Array.isArray(whisper)
+        ? whisper
+            .filter(({ end }) => end > start)
+            .map((span) => ({
+              ...span,
+              start: Math.max(0, span.start - start),
+              end: span.end - start,
+            }))
+        : whisper,
   };
 }
 
-export function decodeRecognitionAudio(samples, sampleRate, settings, level) {
-  const options = decoderOptions(settings, level);
+export function decodeRecognitionAudio(
+  samples,
+  sampleRate,
+  settings,
+  level,
+  start
+) {
+  const options = decoderOptions(settings, level, start);
   const rate = Math.min(sampleRate, options.rate);
   const input =
     rate < sampleRate ? resample(samples, sampleRate, rate) : samples;
@@ -156,6 +175,10 @@ function decodeText(input, settings, level, modelLanguage) {
   return (stages.ipaToText ?? ipaToText)(input, {
     language,
     spans: identification?.spans,
+    boundaries:
+      modelLanguage && Array.isArray(input) && input[0]?.modelWord !== undefined
+        ? 'given'
+        : undefined,
     nbest,
     beam: RECOGNITION_LEVELS[level].beam,
   });
@@ -172,6 +195,8 @@ function recognizeProsody(decoded, samples, rate, settings, level) {
       settings.languages.length === 1 ? settings.languages[0] : undefined,
     voice: settings.voice ?? decoded.voice,
     pitch,
+    frames: decoded.frames?.speech ? decoded.frames : undefined,
+    whisperSpans: settings.whisper === false ? [] : decoded.whisperSpans,
   };
   const measured = measureProsody(samples, rate, input, options);
   const primary = decodeText(
@@ -253,11 +278,20 @@ export function recognizeDecoded(
   const primary = recognizeProsody(decoded, samples, rate, settings, level);
   const withModes =
     settings.modes && typeof recognizeModes === 'function'
-      ? recognizeModes(samples, rate, primary, {
-          voice: settings.voice ? { head: settings.voice } : undefined,
-          maxSeconds: samples.length / rate,
-          frames: decoded.frames?.speech ? decoded.frames : undefined,
-        })
+      ? recognizeModes(
+          samples,
+          rate,
+          {
+            ...primary,
+            whisperSpans:
+              settings.whisper === false ? [] : decoded.whisperSpans,
+          },
+          {
+            voice: settings.voice ? { head: settings.voice } : undefined,
+            maxSeconds: samples.length / rate,
+            frames: decoded.frames?.speech ? decoded.frames : undefined,
+          }
+        )
       : primary;
   const { ipa, text, modes = [] } = withModes;
   const words = withModes.words.map(publicWord);

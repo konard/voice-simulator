@@ -28,6 +28,7 @@ import {
   removePresetEffects,
 } from './mode-spans.js';
 import { recognizeSounds } from './mode-sounds.js';
+import { whisperModeSpans } from './whisper-result.js';
 
 function retainActivationObservation(mode, selected, words) {
   // Activation describes the same acoustic evidence as physical labels.
@@ -290,9 +291,12 @@ export function recognizeModes(samples, sampleRate, result, options = {}) {
     };
   }
   samples = samples.subarray ? samples : Float32Array.from(samples);
+  const whisperSpans = result.whisperSpans ?? result.audio?.whisperSpans;
+  const keepSpan = (span) =>
+    whisperSpans === undefined || span.phonation?.whisper !== 1;
   if (!result.words.length) {
     const modes = [
-      ...(result.modes ?? []),
+      ...(result.modes ?? []).filter(keepSpan),
       ...recognizeSounds(samples, sampleRate, [], options.frames),
     ];
     return { ...result, modes, ipa: writeIpa([], modes, result.ipa) };
@@ -370,7 +374,8 @@ export function recognizeModes(samples, sampleRate, result, options = {}) {
     }
   }
   const initialSpans = [
-    ...wordSpans(result.words, features, labels, 'quality'),
+    ...wordSpans(result.words, features, labels, 'quality').filter(keepSpan),
+    ...whisperModeSpans(result.words, whisperSpans ?? []),
     ...wordSpans(result.words, features, labels, 'tempo'),
   ];
   let spans = reference
@@ -418,7 +423,7 @@ export function recognizeModes(samples, sampleRate, result, options = {}) {
   spans.push(
     ...recognizeSounds(samples, sampleRate, result.words, options.frames)
   );
-  const modes = [...(result.modes ?? []), ...spans].sort(
+  const modes = [...(result.modes ?? []).filter(keepSpan), ...spans].sort(
     (a, b) => a.start - b.start || b.end - a.end
   );
   options.trace?.({ stage: 'words', baseline: base, features, labels });

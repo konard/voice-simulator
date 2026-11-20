@@ -708,6 +708,8 @@ export {
 
 export { audioToIpa, createIpaDecoder } from './recognition/decode.js';
 
+export { findWhisper, whisperTones } from './recognition/whisper.js';
+
 export { measureProsody, markProsody } from './recognition/prosody.js';
 export {
   planReading,

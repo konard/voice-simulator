@@ -35,6 +35,8 @@ pub struct Phone {
     /// 1=i, 2=j, 3=u, 4=w; 0 for other segments.
     pub glide: u32,
     pub reduced_gap: bool,
+    pub whisper_voicing: Option<f64>,
+    pub whispered: bool,
     pub tones: Option<[f64; 6]>,
     pub prominence: Option<f64>,
     /// 1 starts a syllabic nucleus, 2 continues it, and 0 is nonsyllabic.
@@ -65,6 +67,16 @@ pub fn tone_distance(a: u32, b: u32) -> f64 {
         0.5
     }
 }
+
+fn voicing_distance(a: &Phone, b: &Phone) -> f64 {
+    if let Some(probability) = a.whisper_voicing {
+        (f64::from(u8::from(b.voiced)) - probability).abs()
+    } else if let Some(probability) = b.whisper_voicing {
+        (f64::from(u8::from(a.voiced)) - probability).abs()
+    } else {
+        flag(a.voiced, b.voiced)
+    }
+}
 pub fn phone_distance(a: &Phone, b: &Phone) -> f64 {
     let segment = if a.vowel && b.vowel {
         2.0 * math::abs(a.height - b.height)
@@ -83,7 +95,7 @@ pub fn phone_distance(a: &Phone, b: &Phone) -> f64 {
             / 11.0;
         0.5 * if a.manner != b.manner { 1.0 } else { 0.0 }
             + 0.35 * place
-            + 0.25 * flag(a.voiced, b.voiced)
+            + 0.25 * voicing_distance(a, b)
             + 0.2 * flag(a.aspirated, b.aspirated)
             + 0.2 * flag(a.palatalized, b.palatalized)
     } else if matches!((a.glide, b.glide), (1, 2) | (2, 1) | (3, 4) | (4, 3)) {
@@ -363,7 +375,10 @@ pub fn candidates(
                             + input
                                 .tones
                                 .as_ref()
-                                .map_or(0.0, |costs| prosody::tone_penalty(costs, p.tone));
+                                .map_or(0.0, |costs| prosody::tone_penalty(costs, p.tone))
+                            + input.whisper_voicing.map_or(0.0, |probability| {
+                                0.25 * (f64::from(u8::from(p.voiced)) - probability).abs()
+                            });
                         let next_state = State { node: child, cost };
                         next.push(next_state);
                         terminals(
@@ -554,7 +569,11 @@ pub fn recognize(
     nbest: usize,
 ) -> Vec<Path> {
     let beam = beam.max(nbest).max(1);
-    let mut paths = decode(phones, boundaries, lexicon, beam, given, true);
+    let mut paths = if phones.iter().any(|phone| phone.whispered) {
+        Vec::new()
+    } else {
+        decode(phones, boundaries, lexicon, beam, given, true)
+    };
     if paths.len() < nbest {
         let approximate = decode(phones, boundaries, lexicon, beam, given, false);
         for path in approximate {

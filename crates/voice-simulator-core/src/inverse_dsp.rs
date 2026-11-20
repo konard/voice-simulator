@@ -1,5 +1,8 @@
 //! DSP of `src/recognition/inverse-dsp.js` (Unlicense, parity class B).
-use crate::math::{self, cos, sin};
+use crate::{
+    formants::step_up,
+    math::{self, cos, sin},
+};
 use alloc::{vec, vec::Vec};
 use core::f64::consts::PI;
 
@@ -78,18 +81,7 @@ fn predictor(x: &[f64], w: &[f64], p: usize) -> Vec<f64> {
             acc += a[j - 1] * r[m - j];
         }
         let reflection = -acc / error;
-        let (mut i, mut j) = (1, m - 1);
-        while i < j {
-            let (ai, aj) = (a[i - 1], a[j - 1]);
-            a[i - 1] = ai + reflection * aj;
-            a[j - 1] = aj + reflection * ai;
-            i += 1;
-            j -= 1;
-        }
-        if i == j {
-            a[i - 1] += reflection * a[i - 1];
-        }
-        a[m - 1] = reflection;
+        step_up(&mut a, m, reflection, core::convert::identity);
         error *= 1.0 - reflection * reflection;
     }
     if a.iter().any(|v| !v.is_finite()) {

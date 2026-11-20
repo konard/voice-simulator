@@ -167,6 +167,46 @@ function handMade(ipa, readings, rate = 16000) {
   };
 }
 
+it('rescoring preserves a mixed whisper reading and its source', () => {
+  const decoded = handMade('ba {W la W}', ['bala', 'pala']);
+  const [, vowel, start] = decoded.segments;
+  decoded.whisperSpans = [
+    { start: start.start, end: decoded.segments.at(-1).end, confidence: 1 },
+  ];
+  const plan = planReading(decoded, decoded.segments);
+  const whisperAt = (time) =>
+    plan.channels.whisper[Math.round((time - plan.offset) * plan.frameRate)];
+  assert.ok(whisperAt((vowel.start + vowel.end) / 2) < 0.1);
+  assert.ok(whisperAt((start.start + start.end) / 2) > 0.9);
+  const result = rescoreHypotheses(decoded);
+  assert.ok(result.rescoring.scored > 0);
+  assert.match(result.ipa, /\{W la W\}/u);
+  assert.equal(result.modes[0].start, start.start);
+});
+
+it('revises whispered voicing evidence with the published phone', () => {
+  const decoded = handMade('{W ba W}', ['la', 'ba']);
+  const original = decoded.segments[0];
+  decoded.whisperSpans = [
+    { start: original.start, end: decoded.segments.at(-1).end, confidence: 1 },
+  ];
+  Object.assign(decoded.nbest[1].segments[0], {
+    whispered: true,
+    voicing: 0.9,
+  });
+  const prepared = planRescoring(decoded, { preserveTiming: true });
+  const distances = prepared.jobs.map(({ reference }) => (reference ? 2 : 0));
+  const result = applyRescoring(decoded, prepared, distances, 1);
+  assert.deepEqual(result.segments[0], {
+    ...original,
+    ipa: 'b',
+    revised: true,
+    whispered: true,
+    voicing: 0.9,
+  });
+  assert.equal(original.whispered, undefined);
+});
+
 it('the true reading sounds closest', () => {
   const consonants = [
     'b',

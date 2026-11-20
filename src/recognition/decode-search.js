@@ -1,4 +1,5 @@
 /** Segmental Viterbi search over candidate boundaries and final phone IDs. Unlicense. */
+import { WHISPER_WEIGHTS } from './whisper-decode.js';
 
 function comparePaths(a, b) {
   return a.cost - b.cost;
@@ -59,8 +60,9 @@ function acousticCosts(terms, weights) {
 }
 
 function connect(states, parents, span, from, settings) {
-  const { to, pause, terms } = span;
-  const { width, costs, weights, nbest } = settings;
+  const { to, pause, terms, whisper } = span;
+  const { width, costs, nbest } = settings;
+  const weights = whisper ? WHISPER_WEIGHTS : settings.weights;
   if (pause) {
     const state = stateFor(states, width);
     for (const parent of parents) {

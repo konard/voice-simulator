@@ -11,6 +11,9 @@ import { createDecodeTracks } from './decode-stream-tracks.js';
 import { createFrameAnalyzer } from './frontend.js';
 import { createLandmarkDetector } from './landmarks.js';
 import { createPitchTracker } from './pitch.js';
+import { whisperVoicing } from './whisper-result.js';
+import { createWhisperDecisions } from './whisper-stream.js';
+import { createWhisperFramePool } from './whisper-spectrum.js';
 
 function matches(other, arc) {
   return (
@@ -82,6 +85,9 @@ export function createIpaDecoder(sampleRate, options = {}) {
   let closed;
   let current;
   let finalResult;
+  let classifier;
+  let whisper;
+  let pool;
 
   function reset() {
     input = createFrameAnalyzer(sampleRate, {
@@ -89,8 +95,23 @@ export function createIpaDecoder(sampleRate, options = {}) {
       maxSeconds: options.maxSeconds ?? 30,
     });
     pitch = createPitchTracker(input.frames);
+    classifier = createWhisperDecisions(
+      input.frames,
+      pitch.track,
+      settings.whisper
+    );
+    whisper = { through: 0, spans: [] };
+    pool =
+      settings.whisper === 'auto' || settings.whisper.length
+        ? createWhisperFramePool(input.frames)
+        : null;
     landmarks = createLandmarkDetector(input.frames);
-    decoder = createDecodeTracks(input.frames, pitch.track, options, language);
+    decoder = createDecodeTracks(
+      pool?.frames ?? input.frames,
+      pitch.track,
+      options,
+      language
+    );
     archive = { times: [], edges: [] };
     fixed = [];
     from = 0;
@@ -110,6 +131,7 @@ export function createIpaDecoder(sampleRate, options = {}) {
     const { articulation } = tracks;
     const analysis = {
       frames,
+      whisperSpans: whisper.spans,
       voice: decoder.voice,
       tracks: {
         ...tracks,
@@ -147,18 +169,27 @@ export function createIpaDecoder(sampleRate, options = {}) {
     const { times } = prepared;
     const best = search.paths[0] ?? (!final ? search.provisional : undefined);
     const path = pathArcs(best);
-    const count = fixedCount(
+    let count = fixedCount(
       path,
       search.frontier,
       times,
       samplesSeen / sampleRate,
       final
     );
+    while (count > 0 && times[path[count - 1].to] > whisper.through) {
+      count--;
+    }
     if (count === 0) {
       return false;
     }
-    const phones = segmentsOf(best, times, templates, language)
-      .slice(0, count)
+    const continuation = segmentsOf(best, times, templates, language);
+    const phones = whisperVoicing(
+      fixed.concat(continuation),
+      input.frames,
+      whisper.spans,
+      fixed.length
+    )
+      .slice(fixed.length, fixed.length + count)
       .map(Object.freeze);
     fixed.push(...phones);
     segments.push(...phones);
@@ -171,6 +202,10 @@ export function createIpaDecoder(sampleRate, options = {}) {
 
   function advance(final, segments, nuclei) {
     pitch.advance(final);
+    const { frames } = input;
+    const scored = pool ? frames.startTime + pool.frames.count * frames.hop : 0;
+    whisper = classifier.advance(final, Math.max(from, scored));
+    pool?.advance(whisper, final);
     nuclei.push(...landmarks.advance(final));
     decoder.advance(final);
     collect(final, segments);
@@ -180,6 +215,7 @@ export function createIpaDecoder(sampleRate, options = {}) {
     if (!current) {
       const analysis = {
         frames: input.frames,
+        whisperSpans: whisper.spans,
         voice: decoder.voice,
         tracks: {
           pitch: pitch.track,

@@ -43,7 +43,16 @@ export type InversionChannel =
   | 'sibilance'
   | 'trill'
   | 'glottalClosure'
-  | 'lateral';
+  | 'lateral'
+  | 'whisper';
+
+type InversionChannels = Record<
+  Exclude<InversionChannel, 'whisper'>,
+  Float32Array
+> & {
+  /** Present when the decoder supplies a whisper mask. */
+  whisper?: Float32Array;
+};
 
 export interface InversionCandidates {
   /** Row-major stride, max(32, requested candidates). */
@@ -65,8 +74,8 @@ export interface ArticulationTrack {
   /** Number of irrevocable rows of the channel, variance and confidence arrays. */
   committed: number;
   head: HeadConfig;
-  channels: Record<InversionChannel, Float32Array>;
-  variance: Record<InversionChannel, Float32Array>;
+  channels: InversionChannels;
+  variance: InversionChannels;
   confidence: Float32Array;
   candidates: InversionCandidates;
 }

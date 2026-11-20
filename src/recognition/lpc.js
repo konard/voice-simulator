@@ -137,8 +137,8 @@ export function lpcBurg(x, order, a, k) {
  */
 export function lpcAutocorrelation(x, order, a, k) {
   const length = checkOrder(x, order, a, k);
-  clear(a, k, order);
   if (length === 0) {
+    clear(a, k, order);
     return 0;
   }
   scratch(order + 1);
@@ -150,6 +150,12 @@ export function lpcAutocorrelation(x, order, a, k) {
     }
     r[lag] = sum;
   }
+  return lpcFromAutocorrelation(r, order, a, k) / length;
+}
+
+/** Solve the prediction coefficients from an autocorrelation sequence. */
+export function lpcFromAutocorrelation(r, order, a, k) {
+  clear(a, k, order);
   let error = r[0];
   if (!(error > 0)) {
     return 0;
@@ -164,7 +170,7 @@ export function lpcAutocorrelation(x, order, a, k) {
     stepUp(a, m, reflection);
     error *= 1 - reflection * reflection;
   }
-  return error / length;
+  return error;
 }
 
 /**

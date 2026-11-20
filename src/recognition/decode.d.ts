@@ -3,11 +3,17 @@ import type { FormantTrack } from './formants.js';
 import type { FrameSet, FrontendOptions } from './frontend.js';
 import type { ArticulationTrack } from './inversion.js';
 import type { LandmarkResult, Nucleus } from './landmarks.js';
+import type { WhisperSpan, WhisperMode, WhisperToneCosts } from './whisper.js';
 import type { PitchTrack } from './pitch.js';
 
 export interface IpaDecodeOptions {
   /** Voice geometry. If omitted, the fast acoustic fit estimates the head. */
   voice?: HeadConfig;
+  /** Detect whisper by default, disable it, or supply time spans in seconds. */
+  whisper?:
+    | 'auto'
+    | false
+    | readonly (Omit<WhisperSpan, 'confidence'> & { confidence?: number })[];
   /** Use a text-only phone transition table for this language. */
   language?: LanguageCode;
   /** Search the union of these inventories. An empty list uses all IPA units. */
@@ -37,6 +43,10 @@ export interface IpaSegment {
   /** Set when analysis-by-synthesis replaces this segment. */
   revised?: true;
   long: boolean;
+  whispered?: true;
+  /** Soft evidence for voicing from relative duration and level. */
+  voicing?: number;
+  tones?: WhisperToneCosts;
   cost: number;
 }
 
@@ -47,6 +57,7 @@ export interface IpaSyllable {
   end: number;
   /** Half-open interval of segment indices. */
   segments: [first: number, afterLast: number];
+  tones?: WhisperToneCosts;
 }
 
 export interface IpaReading {
@@ -78,6 +89,8 @@ export interface IpaDecodeResult {
   nbest: IpaReading[];
   lattice: IpaLattice;
   frames: FrameSet;
+  whisperSpans: WhisperSpan[];
+  modes: WhisperMode[];
   tracks: IpaDecodeTracks;
   voice: HeadConfig;
 }

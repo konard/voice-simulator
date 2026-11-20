@@ -12,6 +12,7 @@ import { RADIATION_BAFFLE } from '../acoustics/radiation.js';
 import { lpcBurg, lpcLevel } from './lpc.js';
 import { CHANNEL_DEFAULTS } from '../articulation/plan.js';
 import { renderPlan } from '../acoustics/voice.js';
+import { whisperReferenceLpc } from './whisper-spectrum.js';
 
 export const L0 = 16.5;
 export const CODEBOOK_CHANNELS = Object.freeze(
@@ -221,7 +222,7 @@ export function steadyPlan(state, duration = 0.08) {
   };
 }
 
-/** Burg envelope of the last 40 ms, pre-emphasis 0.97, order 18. */
+/** Order 18, with Burg LPC for voice and five-frame autocorrelation for whisper. */
 export function renderedResponse(
   state,
   head,
@@ -235,16 +236,23 @@ export function renderedResponse(
     seed: 1,
     engine: 'js',
   });
+  const a = new Float64Array(18),
+    k = new Float64Array(18);
+  const power = state.whisper
+    ? whisperReferenceLpc(samples, 16000, 18, a, k)
+    : steadyBurg(samples, a, k);
+  for (let i = 0; i < out.length; i++) {
+    out[i] = lpcLevel(a, 18, power, frequencies[i], 16000);
+  }
+  return out;
+}
+
+/** Burg envelope of the last 40 ms, pre-emphasis 0.97. */
+function steadyBurg(samples, a, k) {
   const x = new Float64Array(640);
   const start = samples.length - x.length;
   for (let i = 0; i < x.length; i++) {
     x[i] = samples[start + i] - 0.97 * (samples[start + i - 1] ?? 0);
   }
-  const a = new Float64Array(18),
-    k = new Float64Array(18);
-  const power = lpcBurg(x, 18, a, k);
-  for (let i = 0; i < out.length; i++) {
-    out[i] = lpcLevel(a, 18, power, frequencies[i], 16000);
-  }
-  return out;
+  return lpcBurg(x, a.length, a, k);
 }

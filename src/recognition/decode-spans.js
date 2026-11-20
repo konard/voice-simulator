@@ -6,9 +6,11 @@ import {
   TEMPLATE_POINTS,
 } from './decode-model.js';
 import { BROAD_CLASSES } from './landmarks.js';
+import { whisperAt } from './whisper.js';
 
 const EPSILON = 1e-9;
 const MIN_SEPARATION = 0.015;
+const MIN_PHONE_DURATION = 0.02;
 const MAX_PHONE_DURATION = 0.4;
 
 function findGaps(frames, first, last, startTime, end) {
@@ -93,13 +95,21 @@ function fillLongSpans(candidates, pauses) {
   return Float64Array.from(times);
 }
 
+function speechTimes(candidates, pauses) {
+  const edges = consolidate(candidates).filter(
+    (time) => !pauses.some((gap) => gap.start < time && time < gap.end)
+  );
+  return fillLongSpans(edges, pauses);
+}
+
 // Speech bounds, event candidates and their priority merging share one time grid.
 // eslint-disable-next-line complexity
 export function decodeBoundaries(
   frames,
   landmarks,
   track,
-  { from, to, open = false, locked = false }
+  { from, to, open = false, locked = false },
+  whisperSpans = []
 ) {
   const first = Math.max(
     0,
@@ -147,11 +157,14 @@ export function decodeBoundaries(
       add(frames.startTime + i * frames.hop, 1);
     }
   }
-  speedPeaks(frames, track, first, last, add);
-  const speechEdges = consolidate(candidates).filter(
-    (time) => !pauses.some((gap) => gap.start < time && time < gap.end)
-  );
-  return { times: fillLongSpans(speechEdges, pauses), pauses };
+  // In whisper, movement in the inferred tract can be caused by noise.
+  // Use the spectral landmarks and the finer whisper grid there.
+  speedPeaks(frames, track, first, last, (time, priority) => {
+    if (!whisperAt(whisperSpans, time)) {
+      add(time, priority);
+    }
+  });
+  return { times: speechTimes(candidates, pauses), pauses };
 }
 
 function classCounts(frames, landmarks, start, end) {
@@ -231,6 +244,32 @@ export function createSpanScorer(frames, landmarks, track) {
   };
 }
 
+function whisperGrid(original, pauses, whisperSpans, bounds) {
+  const start = original[0] ?? bounds.from;
+  const end = original.at(-1) ?? bounds.to;
+  const spansInBounds = whisperSpans.filter(
+    ({ start, end }) => end > bounds.from && start < bounds.to
+  );
+  const edges = whisperEdges(spansInBounds, pauses, start, end);
+  const times = whisperBoundaries(original, spansInBounds, edges, pauses);
+  return { times, spansInBounds, edges };
+}
+
+function whisperEdges(spans, pauses, start, end) {
+  const mandatory = [start, end, ...pauses.flatMap((p) => [p.start, p.end])];
+  const candidates = [
+    ...new Set(spans.flatMap((span) => [span.start, span.end])),
+  ].filter((time) => time > start && time < end);
+  const minimum = MIN_PHONE_DURATION - EPSILON;
+  // Leave a path across short spans and gaps that cannot contain a phone.
+  return candidates.filter(
+    (time, i) =>
+      time - (candidates[i - 1] ?? -Infinity) >= minimum &&
+      (candidates[i + 1] ?? Infinity) - time >= minimum &&
+      mandatory.every((edge) => Math.abs(edge - time) >= minimum)
+  );
+}
+
 /** Keep the three terms separate so tuning can reuse the same observations. */
 export function prepareDecode(
   frames,
@@ -238,15 +277,61 @@ export function prepareDecode(
   track,
   templates,
   bounds,
-  templatesForTime = () => templates
+  {
+    templatesForTime = () => templates,
+    whisperSpans = [],
+    whisperScore = null,
+  } = {}
 ) {
-  const { times, pauses } = decodeBoundaries(frames, landmarks, track, bounds);
-  const spans = Array.from(times, () => []);
+  const { times: original, pauses } = decodeBoundaries(
+    frames,
+    landmarks,
+    track,
+    bounds,
+    whisperSpans
+  );
+  const { times, spansInBounds, edges } = whisperGrid(
+    original,
+    pauses,
+    whisperSpans,
+    bounds
+  );
   const score = createSpanScorer(frames, landmarks, track);
+  return {
+    times,
+    spans: scoreBoundaries({
+      times,
+      pauses,
+      spansInBounds,
+      edges,
+      templatesForTime,
+      score: whisperScore
+        ? (start, end, phones) =>
+            whisperScore(start, end) ?? score(start, end, phones)
+        : score,
+    }),
+  };
+}
+
+function scoreBoundaries({
+  times,
+  pauses,
+  spansInBounds,
+  edges,
+  templatesForTime,
+  score,
+}) {
+  const spans = Array.from(times, () => []);
+  const nextEdge = (start) =>
+    edges.find((edge) => edge > start + EPSILON) ?? Infinity;
   let gap = 0;
   for (let from = 0; from < times.length - 1; from++) {
     const start = times[from];
     const phones = templatesForTime(start);
+    const whispered = spansInBounds.some(
+      (span) => span.start <= start + EPSILON && start + EPSILON < span.end
+    );
+    const limit = whispered ? 28 : 4;
     while (gap < pauses.length && pauses[gap].end <= start + EPSILON) {
       gap++;
     }
@@ -255,19 +340,49 @@ export function prepareDecode(
       spans[from].push({ to: from + 1, pause: true });
       continue;
     }
-    for (let to = from + 1; to <= from + 4 && to < times.length; to++) {
+    const end = Math.min(pause?.start ?? Infinity, nextEdge(start));
+    for (let to = from + 1; to <= from + limit && to < times.length; to++) {
       const duration = times[to] - start;
       if (
         duration > MAX_PHONE_DURATION + EPSILON ||
-        (pause && times[to] > pause.start + EPSILON)
+        times[to] > end + EPSILON
       ) {
         break;
       }
-      if (duration < 0.02 - EPSILON) {
+      if (duration < MIN_PHONE_DURATION - EPSILON) {
         continue;
       }
       spans[from].push({ to, ...score(start, times[to], phones) });
     }
   }
-  return { times, spans };
+  return spans;
+}
+
+function whisperBoundaries(original, spans, edges, pauses) {
+  if (!spans.length || !original.length) {
+    return original;
+  }
+  const start = original[0];
+  const end = original.at(-1);
+  const candidates = [...original].map((time) => ({ time, priority: 2 }));
+  for (const time of [
+    start,
+    end,
+    ...edges,
+    ...pauses.flatMap((p) => [p.start, p.end]),
+  ]) {
+    candidates.push({ time, priority: 4 });
+  }
+  for (const span of spans) {
+    for (
+      let time = Math.max(start, span.start) + 0.02;
+      time < Math.min(end, span.end);
+      time += 0.02
+    ) {
+      if (!pauses.some((p) => p.start < time && time < p.end)) {
+        candidates.push({ time, priority: 0 });
+      }
+    }
+  }
+  return speechTimes(candidates, pauses);
 }

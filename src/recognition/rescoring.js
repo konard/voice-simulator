@@ -2,6 +2,7 @@
 import {
   joinSegments,
   syllablesOf,
+  syllablesWithWhisper,
   normalizeReadingConfidence,
 } from './decode-pipeline.js';
 import { planReading } from './rescoring-plan.js';
@@ -14,19 +15,21 @@ import {
   scoreJob,
 } from './rescoring-score.js';
 import { RESCORING_WEIGHT } from './rescoring-weights.js';
+import { whisperModeSpans, wrapWhisperIpa } from './whisper-result.js';
 
 export { planReading, warpPlan } from './rescoring-plan.js';
 export { scoreJob } from './rescoring-score.js';
 
 function recordingAnalysis(decoded) {
-  const { frames } = decoded;
+  const { frames, whisperSpans } = decoded;
   const track = timedCepstra(
     frames.samples.subarray(0, frames.sampleCount),
     frames.rate,
-    frames.startTime
+    frames.startTime,
+    whisperSpans
   );
   const referencePlan = planReading(decoded, decoded.nbest[0].segments);
-  const reference = renderCepstra(referencePlan, frames.rate);
+  const reference = renderCepstra(referencePlan, frames.rate, whisperSpans);
   const { start, step } = track;
   return {
     track,
@@ -64,6 +67,9 @@ function regionJobs(decoded, region, analysis) {
     grid,
     bias,
     rate: decoded.frames.rate,
+    ...(decoded.whisperSpans?.length && {
+      whisperSpans: decoded.whisperSpans,
+    }),
     ...(key === keys[0]
       ? { reference: recordedReference }
       : { plan: planReading(decoded, [...before, ...segments, ...after]) }),
@@ -220,6 +226,26 @@ function revisePublishedIpa(published, revised) {
     : { ...published, ipa: revised, revised: true };
 }
 
+function revisePublishedPhone(published, reading) {
+  if (published.ipa === reading.ipa) {
+    return published;
+  }
+  const { whispered, voicing, tones, ...timed } = published;
+  if (!whispered && voicing === undefined && !reading.whispered) {
+    return revisePublishedIpa(published, reading.ipa);
+  }
+  const vowelTones = reading.kind === 'vowel' && (reading.tones ?? tones);
+  return {
+    ...timed,
+    ipa: reading.ipa,
+    kind: reading.kind,
+    revised: true,
+    ...((reading.whispered || vowelTones) && { whispered: true }),
+    ...(reading.voicing !== undefined && { voicing: reading.voicing }),
+    ...(vowelTones && { tones: vowelTones }),
+  };
+}
+
 /** Combine regional distances with decoder costs. */
 export function applyRescoring(decoded, preparation, scores, weight) {
   let first = 0;
@@ -248,10 +274,12 @@ export function applyRescoring(decoded, preparation, scores, weight) {
   const reading = spliceAnswer(base, scored);
   const segments = preparation.preserveTiming
     ? decoded.segments.map((segment, index) =>
-        revisePublishedIpa(segment, reading.segments[index].ipa)
+        revisePublishedPhone(segment, reading.segments[index])
       )
     : reading.segments;
-  const ipa = joinSegments(segments);
+  const spans = decoded.whisperSpans ?? [];
+  const modes = whisperModeSpans(segments, spans);
+  const ipa = wrapWhisperIpa(segments, modes);
   const answer = {
     ...base,
     ipa,
@@ -286,8 +314,18 @@ export function applyRescoring(decoded, preparation, scores, weight) {
           joinSegments(segments.slice(...syllable.segments))
         )
       )
-    : syllablesOf(segments, decoded.language);
-  return { ...decoded, ipa, segments, syllables, nbest, rescoring };
+    : spans.length
+      ? syllablesWithWhisper(segments, decoded.language, spans, decoded.frames)
+      : syllablesOf(segments, decoded.language);
+  return {
+    ...decoded,
+    ipa,
+    segments,
+    syllables,
+    nbest,
+    ...(spans.length && { modes }),
+    rescoring,
+  };
 }
 
 /** Rescore uncertain spans with the waveguide using the decoder's fitted voice. */

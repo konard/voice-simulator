@@ -4516,6 +4516,13 @@ export {
 } from './recognition/decode.js';
 
 export {
+  findWhisper,
+  whisperTones,
+  type WhisperSpan,
+  type WhisperMode,
+  type WhisperToneCosts,
+} from './recognition/whisper.js';
+export {
   measureProsody,
   markProsody,
   type ProsodyOptions,

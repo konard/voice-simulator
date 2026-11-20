@@ -453,13 +453,7 @@ const gpuResult = await synthesizeAsync('Hello world', { device });
 console.log(describeGpuDevice(device));
 ```
 
-Lower-level building blocks are exported too: `planUtterance`,
-`sampleState`, `tractShape`, `Waveguide`, `Fdtd2d`, `buildSheet`, `Fdtd3d`,
-`buildVoxelModel`, `VoiceRenderer`, `headMesh`, `tubeMesh`, `headModelObj`,
-`LodGovernor`, `StreamGovernor`, `AdaptiveStream`, `chooseTier`, `chooseTierWithGpu`, `measureAudioTier`,
-`benchmarkAudioTiersAsync` and more; see
-[`src/index.d.ts`](src/index.d.ts). A runnable example is in
-[`examples/basic-usage.js`](examples/basic-usage.js).
+The low-level exports include `planUtterance`, `sampleState`, `tractShape`, `Waveguide`, `Fdtd2d`, `buildSheet`, `Fdtd3d`, `buildVoxelModel`, `VoiceRenderer`, `headMesh`, `tubeMesh`, `headModelObj`, `LodGovernor`, `StreamGovernor`, `AdaptiveStream`, `chooseTier`, `chooseTierWithGpu`, `measureAudioTier`, and `benchmarkAudioTiersAsync`. See [`src/index.d.ts`](src/index.d.ts) and [`examples/basic-usage.js`](examples/basic-usage.js).
 
 ### CLI
 
@@ -474,7 +468,7 @@ npx voice-simulator ipa --markup "[whisper]Hello[/whisper] world."  # {W həˈlo
 npx voice-simulator ipa "Where are you going?"   # ˈwɛɹ ɚ ju ˈɡoʊɪŋ ↘ ?
 npx voice-simulator say "<speak>Wait<break time=\"1s\"/>now.</speak>" -o wait.wav
 npx voice-simulator say --markup "[shout]Hey![/shout] [soft]Quiet.[/soft]" -o hey.wav
-npx voice-simulator say --markup "[whisper]Hello.[/whisper]" --out w.wav
+npx voice-simulator say "[whisper]Hello.[/whisper]" --out w.wav
 npx voice-simulator say --markup "[sad]I will see you on Monday.[/sad]" -o sad.wav
 npx voice-simulator say "Hello world." --loudness=-23 -o broadcast.wav  # EBU R 128
 npx voice-simulator timeline "Hello world, how are you?"   # word and syllable times
@@ -499,6 +493,12 @@ npx voice-simulator say "Hello" --engine js -o js.wav   # byte-stable output
 npx voice-simulator serve --port 8080
 npx voice-simulator --help
 ```
+
+### Whispered speech
+
+`recognize(samples, sampleRate, { languages: ['en'] })` and `voice-simulator recognize w.wav --lang en` detect whisper automatically. The result has timed `modes` and `{W … W}` in `ipa`. Pass `whisper: false` or `--no-whisper` to disable detection. The batch and streaming recognizers and the IPA decoder also accept explicit spans in seconds through `whisper: [{ start, end }]`.
+
+The minimal-tier, seed-1 benchmark on twelve synthetic sentences measured 72.2% phone error and 68.6% with voicing pairs treated as equal. Voicing accuracy was 84.8% across 46 female consonant probes. The tone scorer chose 6 of 8 held-out test syllables correctly, and lexical decoding recovered 6 of 54 reference tones across ten Mandarin sentences. Tones and voicing are partly guessed from the words. Run `HEAVY=1 node --test tests/recognition-whisper.test.js tests/heavy/recognition-whisper.test.js` to reproduce the measurements. No real whispered recordings were measured because no available dataset met the project's license requirements.
 
 ### Pronunciation lexicons
 
@@ -692,7 +692,7 @@ words in input time. See the [recognition API](docs/RECOGNIZER.md).
 
 ### Acoustic-to-articulatory inversion and IPA decoding
 
-`invertArticulation` and `createArticulationInverter` recover 21 simulator controls from analysis frames. Use `articulationPlan(track)` to render them. See [inversion usage and accuracy](docs/CODEBOOK.md#acoustic-to-articulatory-inversion).
+`invertArticulation` and `createArticulationInverter` recover simulator controls from analysis frames. Use `articulationPlan(track)` to render them. The recognizer's batch and streaming articulation tracks include the `whisper` control and use a lazily rendered reference table within whispered spans. See [inversion usage and accuracy](docs/CODEBOOK.md#acoustic-to-articulatory-inversion).
 `audioToIpa(samples, sampleRate, { voice, language: 'en', nbest: 5 })` returns experimental timed phonemes and syllables, ranked readings, a lattice, and analysis tracks. It fits the head when `voice` is omitted. `createIpaDecoder(sampleRate, options)` returns fixed phonemes and nuclei as audio arrives. See the [decoder API and measured accuracy](docs/CODEBOOK.md#audio-to-ipa). Experimental syllable nuclei and broad sound classes are available through `findLandmarks`, `createLandmarkDetector` and `BROAD_CLASSES`. See the [landmark API, streaming contract and measured quality limits](docs/RECOGNITION-LANDMARKS.md).
 `rescoreHypotheses(decoded)` compares uncertain n-best stretches with waveguide renders in the fitted voice and returns revised timed IPA, scored alternatives and render statistics. See the [rescoring API and evaluation](docs/CODEBOOK.md#analysis-by-synthesis-rescoring). The [prosody stages](docs/RECOGNITION-PROSODY.md) measure timed vowels and restore stress, tone, punctuation and emphasis.
 

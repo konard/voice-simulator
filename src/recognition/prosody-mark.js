@@ -8,6 +8,8 @@ import {
 import { VERBALIZERS } from '../g2p/normalize.js';
 import { POLAR_PARTICLE } from '../g2p/verbalize-hi.js';
 import { quantile } from './mode-features.js';
+import { whisperAt } from './whisper.js';
+import { whisperModeSpans } from './whisper-result.js';
 import {
   bestTone,
   frameSlice,
@@ -16,7 +18,7 @@ import {
   voicedBetween,
 } from './prosody-features.js';
 
-function phraseRanges(words, sounds) {
+function phraseRanges(words, sounds, whispered) {
   const ranges = [];
   const pauses = sounds.filter(
     (s) => parseIpa(s.ipa).tokens[0]?.kind === 'pause'
@@ -37,7 +39,7 @@ function phraseRanges(words, sounds) {
             Math.min(start, pause.end) - Math.max(end, pause.start)
           )
         : start - end;
-    if (duration >= 0.2 - 1e-9) {
+    if (duration >= 0.2 - 1e-9 || whispered[to] !== whispered[to - 1]) {
       ranges.push({ from, to, pause: duration });
       from = to;
     }
@@ -108,6 +110,17 @@ function hasWh(words, language) {
     ({ text }, i) =>
       !(language === 'hi' && !i && text === POLAR_PARTICLE) && isWh?.(text)
   );
+}
+
+function whisperedMark(words, phrase, language) {
+  if (
+    hasWh(words, language) ||
+    (language === 'zh' && words.at(-1).text.endsWith('吗')) ||
+    (language === 'hi' && words[0].text === POLAR_PARTICLE)
+  ) {
+    return '?';
+  }
+  return Number.isFinite(phrase.pause) ? '' : '.';
 }
 
 function russianRise(words, pitch, endTime, endPitch) {
@@ -328,6 +341,46 @@ function markedText(words, mark, language, sentenceStart) {
   );
 }
 
+function appendPhraseIpa(
+  words,
+  phrase,
+  whisperModes,
+  measured,
+  { fallback, whisper, energy, otherPitch },
+  { ipa, modes }
+) {
+  const { from, to } = phrase;
+  const part = words.slice(from, to);
+  const language = phraseLanguage(part, fallback);
+  const mark = whisper
+    ? whisperedMark(part, phrase, language)
+    : phraseMark(part, phrase, language, measured, energy, otherPitch);
+  const emphasized = new Set(
+    whisper ? [] : emphasisOf(part, language, measured.pitch)
+  );
+  part.forEach((word, i) => {
+    const at = from + i;
+    if (whisperModes.some(({ from }) => from === at)) {
+      ipa.push('{W');
+    }
+    ipa.push(emphasized.has(i) ? emphasizedIpa(word.ipa) : word.ipa);
+    if (whisperModes.some(({ to }) => to === at + 1)) {
+      ipa.push('W}');
+    }
+    if (emphasized.has(i)) {
+      modes.push(mode(words, at, at + 1, 'ˈˈ', { emphasis: 1 }));
+    }
+  });
+  if (mark) {
+    ipa.push(mark);
+  }
+  if (Object.hasOwn(TUNES, mark)) {
+    const tune = whisper && hasWh(part, language) ? 'wh' : TUNES[mark];
+    modes.push(mode(words, from, to, mark, { tune }));
+  }
+  return { part, language, mark };
+}
+
 /** Restore IPA and text marks from a measured, word-aligned recording. */
 export function markProsody(result, measured, options = {}) {
   const modes = [...(result.modes ?? [])];
@@ -343,7 +396,16 @@ export function markProsody(result, measured, options = {}) {
       ? markUnknown(word, nuclei, word.language ?? word.lang ?? fallback)
       : word
   );
-  const phrases = phraseRanges(words, measured.sounds);
+  const priorWhisper = modes.filter(({ notation }) => notation === 'W');
+  const spans = measured.whisperSpans ?? options.whisperSpans ?? priorWhisper;
+  const whisperModes = whisperModeSpans(words, spans);
+  if (!priorWhisper.length) {
+    modes.push(...whisperModes);
+  }
+  const whispered = words.map(({ start, end }) =>
+    whisperAt(spans, (start + end) / 2)
+  );
+  const phrases = phraseRanges(words, measured.sounds, whispered);
   const energy = mean(measured.pitch.energy);
   const ipa = [];
   const text = [];
@@ -351,36 +413,25 @@ export function markProsody(result, measured, options = {}) {
   let previousLanguage;
   for (const phrase of phrases) {
     const { from, to } = phrase;
-    const part = words.slice(from, to);
-    const language = phraseLanguage(part, fallback);
     const otherPitch =
       phrases.length > 1
         ? [
-            ...voicedBetween(measured.pitch, words[0].start, part[0].start),
-            ...voicedBetween(measured.pitch, part.at(-1).end, words.at(-1).end),
+            ...voicedBetween(measured.pitch, words[0].start, words[from].start),
+            ...voicedBetween(
+              measured.pitch,
+              words[to - 1].end,
+              words.at(-1).end
+            ),
           ]
         : [];
-    const mark = phraseMark(
-      part,
+    const { part, language, mark } = appendPhraseIpa(
+      words,
       phrase,
-      language,
+      whisperModes,
       measured,
-      energy,
-      otherPitch
+      { fallback, whisper: whispered[from], energy, otherPitch },
+      { ipa, modes }
     );
-    const emphasized = new Set(emphasisOf(part, language, measured.pitch));
-    part.forEach((word, i) => {
-      ipa.push(emphasized.has(i) ? emphasizedIpa(word.ipa) : word.ipa);
-      if (emphasized.has(i)) {
-        modes.push(mode(words, from + i, from + i + 1, 'ˈˈ', { emphasis: 1 }));
-      }
-    });
-    if (mark) {
-      ipa.push(mark);
-    }
-    if (Object.hasOwn(TUNES, mark)) {
-      modes.push(mode(words, from, to, mark, { tune: TUNES[mark] }));
-    }
     const separator =
       text.length && (language !== 'zh' || previousLanguage !== 'zh')
         ? ' '

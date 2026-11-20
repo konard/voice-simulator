@@ -16,17 +16,20 @@ fn prominence(data: &[f64]) -> Option<Vec<f64>> {
     if !remainder.is_empty() {
         return None;
     }
-    let rows = rows
-        .iter()
-        .map(|_| {
-            let present = r.integer()?;
-            let values = read_array::<4>(&mut r)?;
-            Some(core::array::from_fn(|i| {
-                (present & (1 << i) != 0).then_some(values[i])
-            }))
-        })
-        .collect::<Option<Vec<_>>>()?;
-    Some(prosody::prominence(&rows))
+    let mut features = Vec::with_capacity(rows.len());
+    let mut whispered = Vec::with_capacity(rows.len());
+    for _ in rows {
+        let present = r.integer()?;
+        if present > 31 {
+            return None;
+        }
+        let values = read_array::<4>(&mut r)?;
+        features.push(core::array::from_fn(|i| {
+            (present & (1 << i) != 0).then_some(values[i])
+        }));
+        whispered.push(present & 16 != 0);
+    }
+    Some(prosody::prominence_with_whisper(&features, &whispered))
 }
 
 fn tones(data: &[f64]) -> Option<Vec<f64>> {

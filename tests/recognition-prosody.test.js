@@ -1,7 +1,12 @@
 import { readFileSync } from 'node:fs';
 import assert from 'node:assert/strict';
 import { describe, it } from 'test-anywhere';
-import { ipaToText, markProsody, parseIpa } from '../src/index.js';
+import {
+  ipaToText,
+  markProsody,
+  measureProsody,
+  parseIpa,
+} from '../src/index.js';
 import { bestTone } from '../src/recognition/prosody-features.js';
 import { recognitionInput } from '../src/recognition/input.js';
 import { decode } from '../src/recognition/ipa-to-text.js';
@@ -235,10 +240,13 @@ describe('marks from timed prosody', () => {
     }
   });
 
-  it('leaves out what it cannot hear in whispered speech', () => {
+  it('abstains without periodic pitch when whisper detection is disabled', () => {
     const input = render('{W ma ma W}', 'zh', 'male', { ipa: true });
     assert.ok(input.sounds.some(({ ipa }) => ipa === 'a'));
-    const measured = measure(input);
+    const { audio, sounds } = input;
+    const measured = measureProsody(audio.samples, audio.sampleRate, sounds, {
+      whisperSpans: [],
+    });
     assert.ok(measured.sounds.some((sound) => sound.tones === null));
     assert.ok(
       measured.sounds.every(
@@ -250,6 +258,28 @@ describe('marks from timed prosody', () => {
       testMark(markProsody({ ...input.result, words }, measured)),
       '.'
     );
+  });
+
+  it('uses weak energy cues and only word-based questions inside a whisper', () => {
+    const input = render('[whisper] 请喝茶', 'zh', 'male', { markup: true });
+    const measured = measure(input);
+    assert.equal(measured.whisperSpans.length, 1);
+    assert.ok(measured.pitch.semitones.every((value) => value === null));
+    for (const sound of measured.sounds.filter(
+      ({ ipa }) => parseIpa(ipa).tokens[0]?.kind === 'vowel'
+    )) {
+      assert.ok(sound.whispered && sound.tones);
+      assert.ok(
+        Object.values(sound.tones).every((cost) => cost >= 0.25 && cost <= 0.75)
+      );
+    }
+    const words = input.result.words.map((word, i, all) =>
+      i === all.length - 1 ? { ...word, text: '吗' } : word
+    );
+    const result = markProsody({ ...input.result, words }, measured);
+    assert.equal(testMark(result), '?');
+    assert.equal(result.modes[0].notation, 'W');
+    assert.match(result.ipa, /^\{W .* W\} \?$/u);
   });
 });
 

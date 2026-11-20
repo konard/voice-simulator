@@ -36,6 +36,15 @@ function placeDistance(a, b) {
 
 const differs = (a, b) => Number(Boolean(a) !== Boolean(b));
 
+export function voicingDistance(a, b) {
+  if (a.whispered && Number.isFinite(a.voicing)) {
+    return Math.abs(Number(Boolean(b.voiced)) - a.voicing);
+  }
+  return b.whispered && Number.isFinite(b.voicing)
+    ? voicingDistance(b, a)
+    : differs(a.voiced, b.voiced);
+}
+
 function segmentDistance(a, b) {
   const x = a.phoneme ?? a;
   const y = b.phoneme ?? b;
@@ -56,7 +65,7 @@ function segmentDistance(a, b) {
             (b.affricate ? 'affricate' : y.manner)
         ) +
       0.35 * placeDistance(x.place, y.place) +
-      0.25 * differs(a.voiced, b.voiced) +
+      0.25 * voicingDistance(a, b) +
       0.2 * differs(a.aspirated, b.aspirated) +
       0.2 * differs(a.palatalized, b.palatalized)
     );

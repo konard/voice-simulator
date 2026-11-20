@@ -84,6 +84,7 @@ const OPTIONS = {
   box: { type: 'string' },
   'box-absorption': { type: 'string' },
   ipa: { type: 'boolean' },
+  'no-whisper': { type: 'boolean' },
   markup: { type: 'boolean' },
   breaths: { type: 'boolean' },
   plain: { type: 'boolean' },
@@ -150,6 +151,7 @@ function usage() {
     '  mesh -o head.obj    Export the low-poly head model as OBJ',
     '  recognize <file>   Recognize speech from a file or - for stdin (--ipa, --json)',
     '                      --lang en,ru|auto --nbest 1 --level auto|low|medium|high',
+    '                      --no-whisper disables automatic whisper detection',
     '                      --rescore; raw stdin: -f raw --sample-rate 16000 --bit-depth 16',
     '  match <file>        Find the head that sounds like a recording',
     '  landmarks <file>    Experimental nuclei, sound changes and broad classes',
@@ -177,6 +179,7 @@ function usage() {
     '                        or vslex); zh takes toned pinyin. Repeat',
     '                        it for more files; the last one wins',
     '      --markup          Read inline tags: [whisper]…[/whisper], [pause 0.5],',
+    '                        A leading [whisper] in say also enables markup.',
     '                        [laugh], *word*, [tune IK4]…[/tune], [breathy],',
     '                        [creaky], [pressed], [lax], [falsetto], [harsh],',
     '                        emotions [angry], [happy 0.5], [sad], [afraid],',
@@ -666,13 +669,15 @@ const COMMANDS = {
 
   say(values, positionals, io, engine) {
     const output = audioOutput(values, 'voice');
-    const result = synthesize(requireText(positionals), {
+    const text = requireText(positionals);
+    const markup = markupOption(values);
+    const result = synthesize(text, {
       engine,
       lang: values.lang,
       ...accentOptions(values),
       weakForms: values['strong-forms'] ? false : undefined,
       ipa: values.ipa,
-      markup: markupOption(values),
+      markup: markup ?? (/^\s*\[whisper\]/iu.test(text) || undefined),
       breaths: values.breaths || undefined,
       seed: values.seed,
       head: resolveHead(values),

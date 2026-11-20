@@ -1,7 +1,7 @@
 //! Batch articulation lattice parity entry point.
 use crate::{error, f64_slice};
 use voice_simulator_core::inversion::{Lattice, ROW, WIDTH};
-use voice_simulator_core::inversion_source::{estimate_source, CHANNELS, FEATURES};
+use voice_simulator_core::inversion_source::{estimate_source_with_whisper, CHANNELS, FEATURES};
 
 /// One f64 packet: four 12-value vectors (minimum, range, step, default),
 /// quantized codebook, frame-major candidate indices, then local costs.
@@ -72,6 +72,39 @@ pub extern "C" fn vs_inversion_source(
     fallback_pitch: f64,
     output: u32,
 ) -> i32 {
+    inversion_source(
+        input,
+        count,
+        hop,
+        voicing_tau,
+        fallback_pitch,
+        output,
+        false,
+    )
+}
+
+/// The regular source packet followed by one 0/1 whisper flag per frame.
+#[no_mangle]
+pub extern "C" fn vs_inversion_source_whisper(
+    input: u32,
+    count: u32,
+    hop: f64,
+    voicing_tau: f64,
+    fallback_pitch: f64,
+    output: u32,
+) -> i32 {
+    inversion_source(input, count, hop, voicing_tau, fallback_pitch, output, true)
+}
+
+fn inversion_source(
+    input: u32,
+    count: u32,
+    hop: f64,
+    voicing_tau: f64,
+    fallback_pitch: f64,
+    output: u32,
+    with_whisper: bool,
+) -> i32 {
     if count > 100_000
         || [hop, voicing_tau, fallback_pitch]
             .iter()
@@ -79,7 +112,8 @@ pub extern "C" fn vs_inversion_source(
     {
         return error::BAD_ARGUMENT;
     }
-    let input = match f64_slice(input, 18 + count * FEATURES as u32) {
+    let length = 18 + count * FEATURES as u32;
+    let input = match f64_slice(input, length + if with_whisper { count } else { 0 }) {
         Ok(values) if values.iter().all(|value| value.is_finite()) => values.to_vec(),
         Ok(_) => return error::BAD_ARGUMENT,
         Err(code) => return code,
@@ -93,6 +127,18 @@ pub extern "C" fn vs_inversion_source(
         input[6..12].try_into().unwrap(),
         input[12..18].try_into().unwrap(),
     ];
-    estimate_source(&input[18..], hop, voicing_tau, fallback_pitch, &maps, out);
+    let (frames, whisper) = input[18..].split_at(count as usize * FEATURES);
+    if whisper.iter().any(|&flag| flag != 0.0 && flag != 1.0) {
+        return error::BAD_ARGUMENT;
+    }
+    estimate_source_with_whisper(
+        frames,
+        whisper,
+        hop,
+        voicing_tau,
+        fallback_pitch,
+        &maps,
+        out,
+    );
     error::OK
 }

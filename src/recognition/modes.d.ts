@@ -5,8 +5,8 @@ import type {
   VoiceFile,
   HeadConfig,
 } from '../index.js';
-
 import type { FrameSet } from './frontend.js';
+import type { WhisperSpan } from './whisper.js';
 
 /** Seconds and phonetic spelling from the preceding text recognition step. */
 export interface ModeWord {
@@ -52,6 +52,8 @@ export interface ModeRecognitionInput {
   lang?: string;
   language?: string;
   modes?: RecognitionModeSpan[];
+  /** Acoustic spans supplied by a preceding whisper detector. */
+  whisperSpans?: readonly WhisperSpan[];
 }
 /** Copies result, preserving unrelated fields. Word indexes are end-exclusive. */
 export function recognizeModes<T extends ModeRecognitionInput>(

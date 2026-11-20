@@ -138,6 +138,9 @@ pub(crate) fn parse(data: &[f64]) -> Option<Request> {
     if r.at != data.len() {
         for phone in &mut phones {
             let mask = r.integer()?;
+            if mask > 15 {
+                return None;
+            }
             if mask & 1 != 0 {
                 let mut tones = [0.0; 6];
                 for cost in &mut tones {
@@ -148,6 +151,14 @@ pub(crate) fn parse(data: &[f64]) -> Option<Request> {
             if mask & 2 != 0 {
                 phone.prominence = Some(r.number()?);
             }
+            if mask & 4 != 0 {
+                let voicing = r.number()?;
+                if !(0.0..=1.0).contains(&voicing) {
+                    return None;
+                }
+                phone.whisper_voicing = Some(voicing);
+            }
+            phone.whispered = mask & 8 != 0 || phone.whisper_voicing.is_some();
             phone.nucleus = u8::try_from(r.integer()?).ok()?;
         }
         for entry in &mut entries {
@@ -212,7 +223,7 @@ fn run(data: &[f64]) -> Option<Vec<f64>> {
 /// Packet: beam/given/nbest, input/entry/word/pair/unknown counts, input features,
 /// boundary flags, word counts, entries (word, length, following, features),
 /// bigrams, unknown spelling IDs (from, to, word). The spelling IDs
-/// may be followed by prosody: input mask (tone array, prominence), the values
+/// may be followed by prosody: input mask (tone array, prominence, whisper voicing, whisper flag), the values
 /// indicated by that mask, and nucleus role for each input phone, then nucleus
 /// and primary stress flags for each entry phone.
 /// IDs beyond word counts have a backoff count of one without increasing the corpus total.

@@ -20,6 +20,10 @@ import { prepareDecode } from '../src/recognition/decode-spans.js';
 import { fixedCount } from '../src/recognition/decode-stream.js';
 import { DECODE_WEIGHTS } from '../src/recognition/decode-weights.js';
 import { PHONOTACTICS } from '../src/recognition/phonotactics.js';
+import {
+  createWhisperScorer,
+  whisperReferences,
+} from '../src/recognition/whisper-decode.js';
 import { loadRustEngine, noRust } from './helpers/rust-engine.js';
 import { itUnless } from './helpers/skip.js';
 
@@ -29,7 +33,7 @@ function packet(
   track,
   languages,
   templates,
-  { end, open, clock, beam, nbest, from, locked, lastUnit }
+  { end, open, clock, beam, nbest, from, locked, lastUnit, whisperSpans }
 ) {
   const count = Math.min(track.frameCount, Math.ceil(end / frames.hop - 1e-9));
   const { duration, class: broadClass, phonotactic } = DECODE_WEIGHTS;
@@ -82,10 +86,38 @@ function packet(
       ...counts
     );
   }
+  if (whisperSpans.length) {
+    const { mel, melBands, energy } = frames;
+    values.push(melBands, whisperSpans.length);
+    for (const span of whisperSpans) {
+      values.push(span.start, span.end);
+    }
+    for (const value of mel.subarray(0, count * melBands)) {
+      values.push(value);
+    }
+    for (const value of energy.subarray(0, count)) {
+      values.push(value);
+    }
+    const settings = { rate: frames.rate, hop: frames.hop };
+    const references = whisperReferences(templates, settings, DEFAULT_HEAD);
+    for (const [i, contexts] of references.entries()) {
+      values.push(Number(templates[i].kind === 'vowel'), contexts.length);
+      for (const context of contexts) {
+        values.push(context.duration, ...context.values);
+      }
+    }
+  }
   return Float64Array.from(values);
 }
 
-function compare(engine, frames, landmarks, track, languages, openWindow) {
+function compare(
+  engine,
+  frames,
+  landmarks,
+  track,
+  languages,
+  { openWindow, whisperSpans = [] } = {}
+) {
   const language = decoderLanguage({ languages });
   const templates = decoderTemplates(DEFAULT_HEAD, language.symbols);
   const open = Boolean(openWindow);
@@ -103,12 +135,23 @@ function compare(engine, frames, landmarks, track, languages, openWindow) {
   const observed = open
     ? { ...track, frameCount: Math.ceil(end / frames.hop - 1e-9) }
     : track;
-  const prepared = prepareDecode(frames, landmarks, observed, templates, {
-    from,
-    locked,
-    to: end,
-    open,
-  });
+  const prepared = prepareDecode(
+    frames,
+    landmarks,
+    observed,
+    templates,
+    { from, locked, to: end, open },
+    {
+      whisperSpans,
+      whisperScore: createWhisperScorer(
+        frames,
+        whisperSpans,
+        templates,
+        { rate: frames.rate, hop: frames.hop },
+        DEFAULT_HEAD
+      ),
+    }
+  );
   const expected = decodeSearch(prepared, language, {
     weights: DECODE_WEIGHTS,
     beam,
@@ -137,6 +180,7 @@ function compare(engine, frames, landmarks, track, languages, openWindow) {
     from,
     locked,
     lastUnit,
+    whisperSpans,
   });
   const capacity =
     4 +
@@ -211,9 +255,7 @@ itUnless(noRust)(
     const track = invertArticulation(frames, { codebook });
     compare(engine, frames, landmarks, track, ['en', 'hi']);
     compare(engine, frames, landmarks, track, [], {
-      end: 0.75,
-      clock: 1.05,
-      readings: 5,
+      openWindow: { end: 0.75, clock: 1.05, readings: 5 },
     });
     // The next speech interval is still too short to connect to the terminal
     // boundary. Both engines commit against the latest reachable path.
@@ -222,9 +264,7 @@ itUnless(noRust)(
     speech.fill(0, 100, 140);
     speech.fill(1, 140, 142);
     compare(engine, { ...frames, speech }, landmarks, track, ['en'], {
-      end: 0.71,
-      clock: 1.25,
-      readings: 0,
+      openWindow: { end: 0.71, clock: 1.25, readings: 0 },
     });
     // Flat speech can leave more than 400 ms between candidate boundaries.
     speech.fill(1);
@@ -239,5 +279,36 @@ itUnless(noRust)(
       { ...track, channels, variance: channels },
       ['en']
     );
+  }
+);
+
+itUnless(noRust)(
+  'matches the IPA lattice across mixed whisper spans',
+  async () => {
+    const engine = await loadRustEngine();
+    const { samples, sampleRate } = synthesize('apa {W ata W} aka.', {
+      ipa: true,
+      head: DEFAULT_HEAD,
+      sampleRate: 8000,
+      tier: 'minimal',
+      engine: 'js',
+      seed: 1,
+    });
+    const frames = analyzeFrames(samples, sampleRate);
+    const landmarks = findLandmarks(frames);
+    const codebook = buildCodebook(DEFAULT_HEAD, { size: 256 });
+    const track = invertArticulation(frames, { codebook });
+    compare(engine, frames, landmarks, track, ['en'], {
+      whisperSpans: [
+        { start: 0.34, end: 0.345 },
+        { start: 0.45, end: 0.94 },
+      ],
+    });
+    // A whisper boundary inside a pause must not split the pause arc.
+    const speech = new Uint8Array(frames.count).fill(1);
+    speech.fill(0, 100, 150);
+    compare(engine, { ...frames, speech }, landmarks, track, ['en'], {
+      whisperSpans: [{ start: 0.55, end: 0.85 }],
+    });
   }
 );

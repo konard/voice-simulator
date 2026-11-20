@@ -16,18 +16,39 @@ const CONTOURS: [&[f64]; 6] = [
 const WEIGHTS: [f64; 4] = [0.4, 0.2, 0.2, 0.2];
 
 pub fn prominence(rows: &[[Option<f64>; 4]]) -> Vec<f64> {
+    prominence_with_whisper(rows, &[])
+}
+
+pub fn prominence_with_whisper(rows: &[[Option<f64>; 4]], whispered: &[bool]) -> Vec<f64> {
+    let whisper = |i| whispered.get(i).copied().unwrap_or(false);
     let mut scores = vec![0.0; rows.len()];
     for (column, weight) in WEIGHTS.into_iter().enumerate() {
-        let values = || rows.iter().filter_map(|row| row[column]);
+        let feature = |i, row: &[Option<f64>; 4]| {
+            if column == 3 && whisper(i) {
+                None
+            } else {
+                row[column]
+            }
+        };
+        let values = || {
+            rows.iter()
+                .enumerate()
+                .filter_map(|(i, row)| feature(i, row))
+        };
         let count = values().count().max(1) as f64;
         let mean = values().sum::<f64>() / count;
         let sd = math::sqrt(values().map(|x| (x - mean) * (x - mean)).sum::<f64>() / count);
         if sd > 1e-9 {
-            for (score, row) in scores.iter_mut().zip(rows) {
-                if let Some(x) = row[column] {
+            for (i, (score, row)) in scores.iter_mut().zip(rows).enumerate() {
+                if let Some(x) = feature(i, row) {
                     *score += weight * (x - mean) / sd;
                 }
             }
+        }
+    }
+    for (i, score) in scores.iter_mut().enumerate() {
+        if whisper(i) {
+            *score /= 0.8;
         }
     }
     scores

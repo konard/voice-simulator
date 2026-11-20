@@ -1,5 +1,5 @@
 /** Bounded trie edit search; paths never cross a hard boundary. */
-import { phoneDistance, gapCost } from './phone-distance.js';
+import { phoneDistance, gapCost, voicingDistance } from './phone-distance.js';
 import { soundKey } from './lexicon.js';
 import { formatIpa } from '../ipa/parse.js';
 import { syllabifyTokens } from '../ipa/syllables.js';
@@ -156,9 +156,14 @@ export function exactCandidates(tokens, from, end, lexicon, language) {
         if (!node) {
           continue;
         }
-        const sandhi = state.sandhi || (!tokens[to].tones && key !== keys[0]);
+        const token = tokens[to];
+        const sandhi = state.sandhi || (!token.tones && key !== keys[0]);
         const cost =
-          state.cost + (acousticTone(tokens[to], node.token, language) ?? 0);
+          state.cost +
+          (acousticTone(token, node.token, language) ?? 0) +
+          (Number.isFinite(token.voicing)
+            ? 0.25 * voicingDistance(token, node.token)
+            : 0);
         next.push({ node, sandhi, cost });
         for (const entry of node.entries) {
           if (!allowed(entry, tokens, to + 1, end, language)) {
@@ -190,7 +195,7 @@ export function distanceCache() {
   return (input, expected, language) => {
     // Stress is evaluated at the terminal: the trie shares stressed and
     // unstressed versions of the same segment path.
-    const a = `${input.symbol}:${(input.tone ?? []).join('')}`;
+    const a = `${input.symbol}:${(input.tone ?? []).join('')}:${input.voicing ?? ''}:${JSON.stringify(input.tones ?? null)}`;
     const b = `${expected.symbol}:${(expected.tone ?? []).join('')}`;
     const tone = acousticTone(input, expected, language);
     const key = `${a}\t${b}\t${tone ?? ''}`;

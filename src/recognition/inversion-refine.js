@@ -7,7 +7,7 @@ import {
   GRID,
   tractResponse,
 } from './codebook.js';
-import { normalizeEnvelope } from './codebook-features.js';
+import { normalizeEnvelope, renderedResponse } from './codebook-features.js';
 import { TRACT_WIDTH } from './inversion-search.js';
 
 const REFINED = [0, 1, 2, 7, 9, 8];
@@ -41,8 +41,12 @@ function refineFrame(track, frames, t, book, steps, { grid, scratch }) {
       state[name] = min + point[j] * (max - min);
       penalty += (((point[j] - start[j]) * (max - min)) / (2 * steps[c])) ** 2;
     });
-    const { areas, length } = tractShape(state, track.head);
-    tractResponse(areas, length, grid, model);
+    if (frames.whisper?.[t]) {
+      renderedResponse({ ...state, whisper: 1 }, track.head, model, grid);
+    } else {
+      const { areas, length } = tractShape(state, track.head);
+      tractResponse(areas, length, grid, model);
+    }
     normalizeEnvelope(model);
     return { cost: envelopeDistance(model, scratch.envelope) / 16 + penalty };
   }
@@ -63,7 +67,10 @@ export function refineArticulation(frames, track, book, steps, smoother) {
   const context = { grid, scratch };
   let periodic = 0;
   for (let t = 0; t < track.frameCount; t++) {
-    if (!frames.speech[t] || frames.periodicity[t] < 0.45) {
+    if (
+      !frames.speech[t] ||
+      (!frames.whisper?.[t] && frames.periodicity[t] < 0.45)
+    ) {
       continue;
     }
     if (

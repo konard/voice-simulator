@@ -8,6 +8,8 @@ export interface RecognitionSound {
   start: number;
   end: number;
   confidence: number;
+  whispered?: true;
+  voicing?: number;
   /** Acoustic Mandarin tone costs for a vowel. */
   tones?: ToneCosts | null;
   prominence?: number;

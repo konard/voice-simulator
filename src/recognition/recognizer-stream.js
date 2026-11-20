@@ -13,6 +13,7 @@ import {
   validateRate,
   validateSamples,
 } from './recognizer.js';
+import { clipWhisperSpans } from './whisper.js';
 
 const PAUSE = 0.3;
 const COMMIT_AFTER = 5;
@@ -83,6 +84,7 @@ function boundedDecode(decoded, end) {
   const times = lattice.times.filter((time) => time <= end + EPSILON);
   return {
     ...decoded,
+    whisperSpans: clipWhisperSpans(decoded.whisperSpans, end),
     segments: phones(decoded.segments),
     ipa: joinSegments(phones(decoded.segments)),
     syllables: decoded.syllables.filter(
@@ -185,9 +187,9 @@ function trailingPause(frames, state) {
   return (state.scanned - state.lastSpeech - 1) * frames.hop >= PAUSE - EPSILON;
 }
 
-function createPhraseDecoder(sampleRate, settings, level) {
+function createPhraseDecoder(sampleRate, settings, level, start) {
   const decoder = createIpaDecoder(sampleRate, {
-    ...decoderOptions(settings, level),
+    ...decoderOptions(settings, level, start),
     maxSeconds: MAX_WINDOW + 1,
   });
   return {
@@ -286,7 +288,13 @@ export function createRecognizer(options = {}) {
     const readSettings = final ? settings : { ...settings, nbest: 1 };
     // A test can supply snapshot IPA while the decoder maintains live timing.
     const reading = settings.stages.audioToIpa
-      ? decodeRecognitionAudio(signal, sampleRate, readSettings, level)
+      ? decodeRecognitionAudio(
+          signal,
+          sampleRate,
+          readSettings,
+          level,
+          offset / sampleRate
+        )
       : { decoded, input: signal, rate: sampleRate };
     return recognizeDecoded(
       reading.decoded,
@@ -348,13 +356,41 @@ export function createRecognizer(options = {}) {
         load.reset();
       }
     }
-    phrase = createPhraseDecoder(sampleRate, settings, level);
+    phrase = createPhraseDecoder(
+      sampleRate,
+      settings,
+      level,
+      offset / sampleRate
+    );
     // Only the lookahead after a word cut is replayed, with its original offset.
     const suffix = previous.buffer.subarray(size, previous.used);
     if (suffix.length) {
       phrase.buffer.set(suffix);
       phrase.used = suffix.length;
       update(phrase.decoder.push(suffix));
+    }
+  }
+
+  function previewPartial(due) {
+    const awaitingFirstWords =
+      phrase.partial &&
+      !phrase.partial.words.length &&
+      !settings.stages.audioToIpa;
+    if (!due && !awaitingFirstWords) {
+      return;
+    }
+    const preview = phrase.decoder.result();
+    if (!due && !preview.ipa) {
+      return;
+    }
+    phrase.partial = read(preview, phrase.used, false);
+    const { words, ipa, text } = translated(
+      phrase.partial,
+      offset / sampleRate,
+      0
+    );
+    if (due || words.length) {
+      emit('partial', { words, ipa, text });
     }
   }
 
@@ -366,14 +402,8 @@ export function createRecognizer(options = {}) {
     const pause = trailingPause(phrase.decoder.frames, phrase);
     const total = offset + phrase.used;
     const due = total >= Math.ceil((nextPartial * sampleRate) / 4);
+    previewPartial(due);
     if (due) {
-      phrase.partial = read(phrase.decoder.result(), phrase.used, false);
-      const { words, ipa, text } = translated(
-        phrase.partial,
-        offset / sampleRate,
-        0
-      );
-      emit('partial', { words, ipa, text });
       nextPartial++;
     }
     load.add(chunk.length, (globalThis.performance.now() - start) / 1000);

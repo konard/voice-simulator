@@ -28,7 +28,11 @@ export async function recognizeCommand(values, [file], io) {
   if (!file) {
     throw new Error('Expected an audio file or - for standard input');
   }
-  const options = { ...recognitionParams(values), rescoring: values.rescore };
+  const options = {
+    ...recognitionParams(values),
+    rescoring: values.rescore,
+    whisper: values['no-whisper'] ? false : undefined,
+  };
   const print = (result) =>
     io.stdout(
       values.json

@@ -97,7 +97,8 @@ function appendProsody(packet, tokens, entries, language) {
     !tokens.some(
       (token) =>
         (tonal && token.tones) ||
-        (stressed && Number.isFinite(token.prominence))
+        (stressed && Number.isFinite(token.prominence)) ||
+        token.whispered
     )
   ) {
     return;
@@ -106,12 +107,20 @@ function appendProsody(packet, tokens, entries, language) {
   tokens.forEach((token, i) => {
     const tone = tonal && token.tones;
     const stress = stressed && Number.isFinite(token.prominence);
-    packet.push(Number(Boolean(tone)) + 2 * Number(stress));
+    packet.push(
+      Number(Boolean(tone)) +
+        2 * Number(stress) +
+        4 * Number(Number.isFinite(token.voicing)) +
+        8 * Number(Boolean(token.whispered))
+    );
     if (tone) {
-      packet.push(...toneLetters.map((letter) => tone[letter]));
+      packet.push(...toneLetters.map((letter) => tone[letter] ?? tone['˨˩˦']));
     }
     if (stress) {
       packet.push(token.prominence);
+    }
+    if (Number.isFinite(token.voicing)) {
+      packet.push(token.voicing);
     }
     packet.push((roles[i] ?? 0) & 3);
   });
