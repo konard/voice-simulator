@@ -226,6 +226,26 @@ function revisePublishedIpa(published, revised) {
     : { ...published, ipa: revised, revised: true };
 }
 
+function revisePublishedPhone(published, reading) {
+  if (published.ipa === reading.ipa) {
+    return published;
+  }
+  const { whispered, voicing, tones, ...timed } = published;
+  if (!whispered && voicing === undefined && !reading.whispered) {
+    return revisePublishedIpa(published, reading.ipa);
+  }
+  const vowelTones = reading.kind === 'vowel' && (reading.tones ?? tones);
+  return {
+    ...timed,
+    ipa: reading.ipa,
+    kind: reading.kind,
+    revised: true,
+    ...((reading.whispered || vowelTones) && { whispered: true }),
+    ...(reading.voicing !== undefined && { voicing: reading.voicing }),
+    ...(vowelTones && { tones: vowelTones }),
+  };
+}
+
 /** Combine regional distances with decoder costs. */
 export function applyRescoring(decoded, preparation, scores, weight) {
   let first = 0;
@@ -254,7 +274,7 @@ export function applyRescoring(decoded, preparation, scores, weight) {
   const reading = spliceAnswer(base, scored);
   const segments = preparation.preserveTiming
     ? decoded.segments.map((segment, index) =>
-        revisePublishedIpa(segment, reading.segments[index].ipa)
+        revisePublishedPhone(segment, reading.segments[index])
       )
     : reading.segments;
   const spans = decoded.whisperSpans ?? [];

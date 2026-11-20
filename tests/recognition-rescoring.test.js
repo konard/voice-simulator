@@ -184,6 +184,29 @@ it('rescoring preserves a mixed whisper reading and its source', () => {
   assert.equal(result.modes[0].start, start.start);
 });
 
+it('revises whispered voicing evidence with the published phone', () => {
+  const decoded = handMade('{W ba W}', ['la', 'ba']);
+  const original = decoded.segments[0];
+  decoded.whisperSpans = [
+    { start: original.start, end: decoded.segments.at(-1).end, confidence: 1 },
+  ];
+  Object.assign(decoded.nbest[1].segments[0], {
+    whispered: true,
+    voicing: 0.9,
+  });
+  const prepared = planRescoring(decoded, { preserveTiming: true });
+  const distances = prepared.jobs.map(({ reference }) => (reference ? 2 : 0));
+  const result = applyRescoring(decoded, prepared, distances, 1);
+  assert.deepEqual(result.segments[0], {
+    ...original,
+    ipa: 'b',
+    revised: true,
+    whispered: true,
+    voicing: 0.9,
+  });
+  assert.equal(original.whispered, undefined);
+});
+
 it('the true reading sounds closest', () => {
   const consonants = [
     'b',
