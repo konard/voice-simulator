@@ -250,3 +250,39 @@ spectral distance to the acoustic search changed the total from 44 phone
 errors to 42 in its best trial. The other weights produced 43 and 44 errors.
 All of those search trials used the correct language and disabled automatic
 whisper detection. The public benchmark uses its normal settings.
+
+## Telephone whisper correction
+
+In the Russian smoke case, the detector found a span at 0.49–0.85 s. Its
+high-to-low band energy ratio was −26.95 dB, which crossed the relaxed edge
+threshold. The pitch tracker returned no F0 there, but 30 of 36 frames had
+normalized autocorrelation of at least 0.6. The corrected detector requires
+the absolute band ratio to pass for a similarly periodic telephone edge.
+
+`node experiments/issue-75-whisper-evidence.mjs --corpus` renders all 80
+sentences at 8 kHz in plain speech and again followed by the same sentence
+in a whisper. The correction reduced plain-speech false positives from 1
+of 80 to 0 of 80 and removed the same false span from the mixed Russian
+recording. In both runs 67 of 80 mixed recordings had a span overlapping
+the planned whisper, and 44 of 80 overlapped at least half of that span.
+
+After the correction, `taskset -c 4 node --test tests/roundtrip-smoke.test.js`
+took 22.7 seconds wall time. English and Mandarin returned the same results
+as the baseline. Russian recovered the top language and lowered its sound
+word errors from 4 to 3, while phone errors increased from 7 to 8 of 13.
+All three cases missed the 10% phone and zero sound-word error gates.
+
+## Whole-sentence loudness
+
+In the initial full benchmark, 0 of 36 loud spans matched. Three of four
+whisper spans matched at telephone, and four of four matched at each tier
+from wideband through studio. The mode gate requires 6 of 8 at telephone
+and 8 of 8 at each of those higher tiers.
+
+`node experiments/issue-75-effort-baseline.mjs` repeated the loudness check
+on telephone and wideband. Giving the mode stage the synthesis voice with
+the decoded word timings recovered 1 of 4 telephone spans and 2 of 4
+wideband spans. The audio-only stage recovered 0 of 4 in both tiers, as
+did the comparisons using the synthesis word timings with or without the
+voice. The no-voice path measures effort relative to the rest of the same
+utterance. It has no separate neutral reference for a whole loud sentence.
