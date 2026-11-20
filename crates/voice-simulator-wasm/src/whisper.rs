@@ -56,7 +56,7 @@ pub extern "C" fn vs_find_whisper(
         Ok(output) => output,
         Err(code) => return code,
     };
-    for (result, span) in output.chunks_exact_mut(3).zip(&found) {
+    for (result, span) in output.as_chunks_mut::<3>().0.iter_mut().zip(&found) {
         result.copy_from_slice(&[span.start, span.end, span.confidence]);
     }
     found.len() as i32

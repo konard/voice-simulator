@@ -12,6 +12,7 @@ import {
   ipaToText,
   parseIpa,
   synthesize,
+  textToIpa,
   whisperTones,
 } from '../../src/index.js';
 import { buildWhisperCues } from '../../scripts/build-whisper-cues.mjs';
@@ -32,6 +33,14 @@ const paired = new Map(
   ])
 );
 const noMarks = (ipa) => ipa.replace(/[˥˦˧˨˩ˈˌ]/gu, '');
+const toneCode = new Map([
+  ['5', 'a'],
+  ['35', 'e'],
+  ['214', 'i'],
+  ['21', 'i'],
+  ['51', 'u'],
+  ['', 'o'],
+]);
 
 function decodeText(text, language) {
   const { samples, sampleRate, plan } = renderWhisper(
@@ -51,10 +60,9 @@ function phoneErrors(reference, hypothesis, equal) {
   return errorRate(format(reference), format(hypothesis), 'phone');
 }
 
-function tonesIn(ipa) {
-  return parseIpa(ipa)
-    .tokens.filter(({ kind }) => kind === 'vowel')
-    .flatMap(({ tone }) => (tone?.length ? [tone.join('')] : []));
+function toneIn(ipa) {
+  const tone = parseIpa(ipa).tokens.find((token) => token.tone?.length)?.tone;
+  return toneCode.get(tone?.join('') ?? '') ?? 'ə';
 }
 
 const mandarin = [
@@ -172,30 +180,20 @@ describe('whisper acceptance measurements', () => {
     let edits = 0;
     let syllables = 0;
     for (const text of mandarin) {
-      const { heard, plan } = decodeText(text, 'zh');
-      const spoken = tonesIn(
-        plannedPhones(plan)
-          .map(({ ipa }) => ipa)
-          .join(' ')
+      const { heard } = decodeText(text, 'zh');
+      const spoken = textToIpa(text, { lang: 'zh' }).words.flatMap(({ ipa }) =>
+        ipa.split(/\s+/u).map(toneIn)
       );
-      const lexical = tonesIn(
-        ipaToText(heard.segments, { language: 'zh' }).ipa
+      const lexical = ipaToText(heard.segments, {
+        language: 'zh',
+      }).words.flatMap(({ syllables: word }) =>
+        word.map(({ ipa }) => toneIn(ipa))
       );
-      const represent = (tones) =>
-        tones
-          .map(
-            (tone) =>
-              ({ 5: 'a', 35: 'e', 214: 'i', 21: 'i', 51: 'u' })[tone] ?? 'o'
-          )
-          .join(' ');
-      edits += errorRate(
-        represent(spoken),
-        represent(lexical),
-        'phone'
-      ).distance;
+      edits += errorRate(spoken.join(' '), lexical.join(' '), 'phone').distance;
       syllables += spoken.length;
     }
     console.log(JSON.stringify({ toneEdits: edits, syllables }));
+    expect(syllables).toBeGreaterThan(0);
     expect(edits / syllables).toBeLessThanOrEqual(0.25);
   });
 

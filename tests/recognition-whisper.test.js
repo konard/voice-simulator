@@ -32,26 +32,30 @@ const sentences = [
 ];
 
 describe('whisper recognition', () => {
-  it('finds whispered speech, including at 8 kHz and with noise 20 dB below it', () => {
-    for (const [lang, text] of sentences) {
-      const voiced = renderWhisper(text, lang);
-      expect(detect(voiced.samples, voiced.sampleRate)).toEqual([]);
-      const { samples, sampleRate, timeline } = renderWhisper(
-        `[whisper] ${text}`,
-        lang
-      );
-      const clean = detect(samples, sampleRate);
-      expect(clean.length).toBe(1);
-      expect(clean[0].start).toBeLessThan(timeline.words[0].start + 0.15);
-      expect(clean[0].end).toBeGreaterThan(timeline.words.at(-1).end - 0.15);
-      expect(
-        detect(resample(samples, sampleRate, 8000), 8000).length
-      ).toBeGreaterThan(0);
-      expect(
-        detect(noiseBelow(samples, -20), sampleRate).length
-      ).toBeGreaterThan(0);
-    }
-  });
+  for (const lang of new Set(sentences.map(([language]) => language))) {
+    it(`finds ${lang} whispers, including at 8 kHz and with noise 20 dB below them`, () => {
+      for (const [, text] of sentences.filter(
+        ([language]) => language === lang
+      )) {
+        const voiced = renderWhisper(text, lang);
+        expect(detect(voiced.samples, voiced.sampleRate)).toEqual([]);
+        const { samples, sampleRate, timeline } = renderWhisper(
+          `[whisper] ${text}`,
+          lang
+        );
+        const clean = detect(samples, sampleRate);
+        expect(clean.length).toBe(1);
+        expect(clean[0].start).toBeLessThan(timeline.words[0].start + 0.15);
+        expect(clean[0].end).toBeGreaterThan(timeline.words.at(-1).end - 0.15);
+        expect(
+          detect(resample(samples, sampleRate, 8000), 8000).length
+        ).toBeGreaterThan(0);
+        expect(
+          detect(noiseBelow(samples, -20), sampleRate).length
+        ).toBeGreaterThan(0);
+      }
+    });
+  }
 
   it('locates a transition to whisper within 100 ms of the first whispered word', () => {
     const { samples, sampleRate, timeline } = renderWhisper(
@@ -84,7 +88,7 @@ describe('whisper recognition', () => {
     expect(falsePositives.length).toBeLessThanOrEqual(1);
   });
 
-  it('marks timed results and accepts explicit or disabled whisper detection', () => {
+  it('marks timed whisper results', () => {
     const { samples, sampleRate } = renderWhisper('[whisper] a fresh fish');
     const heard = audioToIpa(samples, sampleRate, { language: 'en' });
     expect(heard.ipa.startsWith('{W ')).toBe(true);
@@ -95,6 +99,10 @@ describe('whisper recognition', () => {
     expect(sounds.every(({ voicing }) => voicing >= 0 && voicing <= 1)).toBe(
       true
     );
+  });
+
+  it('clips explicit whisper times to the recording', () => {
+    const { samples, sampleRate } = renderWhisper('[whisper] a fresh fish');
     const explicit = audioToIpa(samples, sampleRate, {
       language: 'en',
       whisper: [{ start: 0, end: 2 }],
@@ -102,6 +110,10 @@ describe('whisper recognition', () => {
     expect(explicit.whisperSpans).toEqual([
       { start: 0, end: samples.length / sampleRate, confidence: 1 },
     ]);
+  });
+
+  it('can disable whisper detection', () => {
+    const { samples, sampleRate } = renderWhisper('[whisper] a fresh fish');
     const disabled = audioToIpa(samples, sampleRate, {
       language: 'en',
       whisper: false,
