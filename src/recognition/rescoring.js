@@ -2,6 +2,7 @@
 import {
   joinSegments,
   syllablesOf,
+  syllablesWithWhisper,
   normalizeReadingConfidence,
 } from './decode-pipeline.js';
 import { planReading } from './rescoring-plan.js';
@@ -14,19 +15,21 @@ import {
   scoreJob,
 } from './rescoring-score.js';
 import { RESCORING_WEIGHT } from './rescoring-weights.js';
+import { whisperModeSpans, wrapWhisperIpa } from './whisper-result.js';
 
 export { planReading, warpPlan } from './rescoring-plan.js';
 export { scoreJob } from './rescoring-score.js';
 
 function recordingAnalysis(decoded) {
-  const { frames } = decoded;
+  const { frames, whisperSpans } = decoded;
   const track = timedCepstra(
     frames.samples.subarray(0, frames.sampleCount),
     frames.rate,
-    frames.startTime
+    frames.startTime,
+    whisperSpans
   );
   const referencePlan = planReading(decoded, decoded.nbest[0].segments);
-  const reference = renderCepstra(referencePlan, frames.rate);
+  const reference = renderCepstra(referencePlan, frames.rate, whisperSpans);
   const { start, step } = track;
   return {
     track,
@@ -59,6 +62,9 @@ function regionJobs(decoded, region, analysis) {
     grid,
     bias,
     rate: decoded.frames.rate,
+    ...(decoded.whisperSpans?.length && {
+      whisperSpans: decoded.whisperSpans,
+    }),
     ...(key === keys[0]
       ? { reference: recordedReference }
       : { plan: planReading(decoded, [...before, ...segments, ...after]) }),
@@ -231,7 +237,9 @@ export function applyRescoring(decoded, preparation, scores, weight) {
         revisePublishedIpa(segment, reading.segments[index].ipa)
       )
     : reading.segments;
-  const ipa = joinSegments(segments);
+  const spans = decoded.whisperSpans ?? [];
+  const modes = whisperModeSpans(segments, spans);
+  const ipa = wrapWhisperIpa(segments, modes);
   const answer = {
     ...base,
     ipa,
@@ -266,8 +274,18 @@ export function applyRescoring(decoded, preparation, scores, weight) {
           joinSegments(segments.slice(...syllable.segments))
         )
       )
-    : syllablesOf(segments, decoded.language);
-  return { ...decoded, ipa, segments, syllables, nbest, rescoring };
+    : spans.length
+      ? syllablesWithWhisper(segments, decoded.language, spans, decoded.frames)
+      : syllablesOf(segments, decoded.language);
+  return {
+    ...decoded,
+    ipa,
+    segments,
+    syllables,
+    nbest,
+    ...(spans.length && { modes }),
+    rescoring,
+  };
 }
 
 /** Rescore uncertain spans with the waveguide using the decoder's fitted voice. */

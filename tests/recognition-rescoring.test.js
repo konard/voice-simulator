@@ -166,6 +166,23 @@ function handMade(ipa, readings, rate = 16000) {
   };
 }
 
+it('rescoring preserves a mixed whisper reading and its source', () => {
+  const decoded = handMade('ba {W la W}', ['bala', 'pala']);
+  const [, vowel, start] = decoded.segments;
+  decoded.whisperSpans = [
+    { start: start.start, end: decoded.segments.at(-1).end, confidence: 1 },
+  ];
+  const plan = planReading(decoded, decoded.segments);
+  const whisperAt = (time) =>
+    plan.channels.whisper[Math.round((time - plan.offset) * plan.frameRate)];
+  assert.ok(whisperAt((vowel.start + vowel.end) / 2) < 0.1);
+  assert.ok(whisperAt((start.start + start.end) / 2) > 0.9);
+  const result = rescoreHypotheses(decoded);
+  assert.ok(result.rescoring.scored > 0);
+  assert.match(result.ipa, /\{W la W\}/u);
+  assert.equal(result.modes[0].start, start.start);
+});
+
 it('the true reading sounds closest', () => {
   const consonants = [
     'b',

@@ -97,6 +97,47 @@ parity(
   }
 );
 
+parity('pools whisper rescoring spectra on the same grid', async () => {
+  const engine = await loadRustEngine();
+  const rate = 16000;
+  const plan = planUtterance('ba {W la W}');
+  const samples = renderPlan(plan, {
+    solver: 'waveguide',
+    seed: 1,
+    sampleRate: rate,
+    engine: 'js',
+  });
+  const base = timedCepstra(samples, rate, 0);
+  const from = 8;
+  const to = 23;
+  const { rows } = timedCepstra(samples, rate, 0, [
+    { start: base.start + from * base.step, end: base.start + to * base.step },
+  ]);
+  const width = rows[0].length;
+  const capacity = rows.length * width;
+  assert.notDeepEqual(rows[from + 2], base.rows[from + 2]);
+  const packet = new Float64Array(samples.length + 2);
+  packet.set(samples);
+  packet.set([from, to], samples.length);
+  withPacket(engine, packet, capacity, (source, output, values) => {
+    assert.equal(
+      engine.exports.vs_rescoring_whisper_mfcc(
+        source,
+        samples.length,
+        rate,
+        1,
+        output,
+        capacity
+      ),
+      rows.length
+    );
+    const out = values();
+    rows.forEach((row, i) =>
+      row.forEach((value, j) => close(out[i * width + j], value, 1e-8))
+    );
+  });
+});
+
 function cepstralPair(rate, engine) {
   const [recording, reference] = ['bala', 'pala'].map((ipa) => {
     const plan = planUtterance(ipa, { durations: [0.1, 0.15, 0.1, 0.15] });

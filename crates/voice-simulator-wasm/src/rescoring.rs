@@ -1,6 +1,8 @@
 //! Analysis-by-synthesis parity entry points. Unlicense.
 use crate::{error, f64_slice};
-use voice_simulator_core::rescoring::{interpolate, mfcc, mfcc_settings, score, warp_positions};
+use voice_simulator_core::rescoring::{
+    interpolate, mfcc_settings, mfcc_with_whisper, score, warp_positions,
+};
 
 /// Retimes one f64 control channel. Input is anchor pairs followed by the
 /// channel. Output is duration, offset, then the new control frames.
@@ -61,15 +63,49 @@ pub extern "C" fn vs_rescoring_mfcc(
     output: u32,
     capacity: u32,
 ) -> i32 {
-    if ![8000, 11025, 16000].contains(&rate) || count > 1_000_000 {
+    vs_rescoring_whisper_mfcc(input, count, rate, 0, output, capacity)
+}
+
+/// Like vs_rescoring_mfcc, with half-open whisper row pairs appended to the PCM.
+#[no_mangle]
+pub extern "C" fn vs_rescoring_whisper_mfcc(
+    input: u32,
+    count: u32,
+    rate: u32,
+    span_count: u32,
+    output: u32,
+    capacity: u32,
+) -> i32 {
+    if ![8000, 11025, 16000].contains(&rate) || count > 1_000_000 || span_count > 6000 {
         return error::BAD_ARGUMENT;
     }
-    let samples = match f64_slice(input, count) {
+    let data = match f64_slice(input, count + 2 * span_count) {
         Ok(values) if values.iter().all(|value| value.is_finite()) => values.to_vec(),
         Ok(_) => return error::BAD_ARGUMENT,
         Err(code) => return code,
     };
-    let values = mfcc(&samples, rate);
+    let (samples, boundaries) = data.split_at(count as usize);
+    let (width, window, hop) = mfcc_settings(rate);
+    let rows = if count == 0 {
+        0
+    } else {
+        (count as usize).saturating_sub(window) / hop + 1
+    };
+    let mut spans = Vec::with_capacity(span_count as usize);
+    let mut previous = 0;
+    for &[from, to] in boundaries.as_chunks::<2>().0 {
+        if from < previous as f64
+            || to <= from
+            || to > rows as f64
+            || from != from as usize as f64
+            || to != to as usize as f64
+        {
+            return error::BAD_ARGUMENT;
+        }
+        spans.push([from as usize, to as usize]);
+        previous = to as usize;
+    }
+    let values = mfcc_with_whisper(samples, rate, &spans);
     if values.len() > capacity as usize {
         return error::BAD_ARGUMENT;
     }
@@ -78,7 +114,7 @@ pub extern "C" fn vs_rescoring_mfcc(
         Err(code) => return code,
     };
     out.copy_from_slice(&values);
-    (values.len() / mfcc_settings(rate).0) as i32
+    (values.len() / width) as i32
 }
 
 /// DTW score on the common hop grid. Input is bias, recording rows, render rows.

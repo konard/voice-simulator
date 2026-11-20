@@ -1,6 +1,7 @@
 /** Retiming for analysis-by-synthesis. Unlicense. */
 import { planUtterance } from '../articulation/plan.js';
 import { parseIpa } from '../ipa/parse.js';
+import { whisperModeSpans } from './whisper-result.js';
 
 function validateAnchors(anchors) {
   for (const [index, [from, to]] of anchors.entries()) {
@@ -137,9 +138,19 @@ export function planReading(decoded, segments) {
   // Preserve the decoder's token boundaries even when adjacent IPA strings
   // could be parsed as one unit (for example, t followed by ʃ).
   const tokens = phones.map(({ ipa }) => parseIpa(ipa).tokens[0]);
+  const modes = whisperModeSpans(phones, decoded.whisperSpans ?? []).map(
+    ({ from, to, phonation }) => ({ from, to, mode: { phonation } })
+  );
+  if (modes.length) {
+    // Give each phone its own mode index without inserting word pauses.
+    tokens.forEach((token, index) => {
+      token.word = index;
+    });
+  }
   const plan = planUtterance(tokens, {
     head: decoded.voice,
     language: decoded.language,
+    modes,
   });
   const warped = warpPlan(plan, readingAnchors(plan, phones));
   copyProsody(warped, decoded.tracks.articulation);

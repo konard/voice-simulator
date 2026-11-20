@@ -1,31 +1,58 @@
 /** Time-local mel-cepstral scoring of copy-synthesized readings. Unlicense. */
 import { renderPlan } from '../acoustics/voice.js';
 import { dtw } from '../metrics/dtw.js';
-import { frameSettings, mfcc } from '../metrics/spectrum.js';
+import {
+  cepstra,
+  frameSettings,
+  mfcc,
+  powerFrames,
+} from '../metrics/spectrum.js';
+import { poolPowerFrames } from './whisper-spectrum.js';
 
 const HOP = 0.01;
 const MCD_SCALE = (10 * Math.SQRT2) / Math.LN10;
 
-export function timedCepstra(samples, rate, start) {
+export function timedCepstra(samples, rate, start, spans = []) {
   const { length, hop } = frameSettings(rate, { hop: HOP });
+  const options = { hop: HOP, coefficients: rate < 16000 ? 10 : 13 };
+  const center = start + length / (2 * rate);
+  const step = hop / rate;
   return {
-    start: start + length / (2 * rate),
-    step: hop / rate,
-    rows: mfcc(samples, rate, {
-      hop: HOP,
-      coefficients: rate < 16000 ? 10 : 13,
-    }).map((row) => row.subarray(1)),
+    start: center,
+    step,
+    rows: (spans.length
+      ? pooledCepstra(samples, rate, options, center, step, spans)
+      : mfcc(samples, rate, options)
+    ).map((row) => row.subarray(1)),
   };
 }
 
-export function renderCepstra(plan, rate) {
+function pooledCepstra(samples, rate, options, center, step, spans) {
+  const powers = powerFrames(samples, rate, options);
+  const rowAt = (time) =>
+    Math.min(
+      powers.length,
+      Math.max(0, Math.ceil((time - center) / step - 1e-9))
+    );
+  for (const { start, end } of spans) {
+    const from = rowAt(start);
+    const to = rowAt(end);
+    const pooled = poolPowerFrames(powers.slice(from, to));
+    pooled.forEach((row, index) => {
+      powers[from + index] = row;
+    });
+  }
+  return cepstra(powers, rate, options);
+}
+
+export function renderCepstra(plan, rate, spans) {
   const samples = renderPlan(plan, {
     solver: 'waveguide',
     sampleRate: rate,
     seed: 1,
     engine: 'js',
   });
-  return timedCepstra(samples, rate, plan.offset);
+  return timedCepstra(samples, rate, plan.offset, spans);
 }
 
 function nearestIndex({ start, step }, time) {
@@ -89,8 +116,14 @@ export function scoreJob(job) {
   const { recording, bias, from, to, start, end, grid } = job;
   const render =
     job.reference ??
-    scoringWindow(renderCepstra(job.plan, job.rate), grid, from, to, start, end)
-      .rows;
+    scoringWindow(
+      renderCepstra(job.plan, job.rate, job.whisperSpans),
+      grid,
+      from,
+      to,
+      start,
+      end
+    ).rows;
   const distance = (x, y) => distortion(x, y, bias);
   const { path } = dtw(recording.rows, render, { band: 0.1, distance });
   let sum = 0;

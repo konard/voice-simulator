@@ -18,6 +18,8 @@ in `ipa`, with timed whisper entries in `modes`. Pass `whisper: false`
 to disable detection or `whisper: [{ start, end }]` to supply known spans.
 Explicit span times are measured from the beginning of the input, including
 across phrase commits in a stream.
+Optional IPA resynthesis uses the same phonation and averages five acoustic
+power frames within those spans.
 
 For short, intact default-voice English renders at 22.05 or 48 kHz, batch
 recognition can compare one- and two-word dictionary pronunciations with

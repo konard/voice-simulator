@@ -1,5 +1,6 @@
 import type { Plan } from '../index.js';
 import type { IpaDecodeResult, IpaSegment, IpaStreamResult } from './decode.js';
+import type { WhisperSpan } from './whisper.js';
 
 export interface RescoringOptions {
   /** Keep at most this many alternatives per region. Defaults to 5. */
@@ -49,6 +50,7 @@ interface JobInput {
   recording: ScoringWindow;
   bias: Float64Array;
   rate: number;
+  whisperSpans?: readonly WhisperSpan[];
 }
 
 /** A cloneable job reuses reference cepstra or renders its own reading. */

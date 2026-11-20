@@ -140,15 +140,35 @@ impl Spectrum {
 
 /// 10 ms hop, 25 ms Hann window, 26 mel bands. Returns row-major c1..cN.
 pub fn mfcc(samples: &[f64], rate: u32) -> Vec<f64> {
+    mfcc_with_whisper(samples, rate, &[])
+}
+
+fn pool_energy(rows: &[[f64; FILTERS]], center: usize) -> [f64; FILTERS] {
+    let open = center.saturating_sub(2);
+    let close = rows.len().min(center + 3);
+    let count = (close - open) as f64;
+    core::array::from_fn(|band| rows[open..close].iter().map(|row| row[band] / count).sum())
+}
+
+/// Pool five power frames inside each half-open whisper range on the MFCC grid.
+pub fn mfcc_with_whisper(samples: &[f64], rate: u32, spans: &[[usize; 2]]) -> Vec<f64> {
     if samples.is_empty() {
         return Vec::new();
     }
     let (width, window, hop) = mfcc_settings(rate);
     let count = samples.len().saturating_sub(window) / hop + 1;
     let mut spectrum = Spectrum::new(f64::from(rate), window);
-    let energies: Vec<_> = (0..count)
+    let mut energies: Vec<_> = (0..count)
         .map(|i| spectrum.energies(&samples[i * hop..]))
         .collect();
+    // The mel filter bank is linear, so averaging the mel powers here is
+    // equivalent to averaging the FFT powers before the filter bank.
+    for &[from, to] in spans {
+        let source = energies[from..to].to_vec();
+        for (row, output) in energies[from..to].iter_mut().enumerate() {
+            *output = pool_energy(&source, row);
+        }
+    }
     let floor = (energies.iter().flatten().copied().fold(0.0, f64::max) * 1e-6).max(1e-10);
     let basis: Vec<[f64; FILTERS]> = (1..=width)
         .map(|n| {
