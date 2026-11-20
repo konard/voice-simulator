@@ -184,7 +184,7 @@ function trailingPause(frames, state) {
     }
     state.scanned++;
   }
-  return (state.scanned - state.lastSpeech - 1) * frames.hop >= PAUSE - EPSILON;
+  return (state.scanned - state.lastSpeech - 1) * frames.hop;
 }
 
 function createPhraseDecoder(sampleRate, settings, level, start) {
@@ -203,7 +203,7 @@ function createPhraseDecoder(sampleRate, settings, level, start) {
   };
 }
 
-function createEvents() {
+export function createEvents() {
   const listeners = new Map();
   return {
     emit(event, value) {
@@ -266,8 +266,14 @@ export function createRecognizer(options = {}) {
   let reportSyllables;
   let ended;
   let flushed;
+  let pending;
+  const initialVoice = settings.voice;
+  const initialOffsets = settings.articulationOffsets;
 
   function reset() {
+    settings.voice = initialVoice;
+    settings.articulationOffsets = initialOffsets;
+    pending = undefined;
     level = settings.level === 'auto' ? 'medium' : settings.level;
     phrase = createPhraseDecoder(sampleRate, settings, level);
     committed = emptyRecognition(nbest);
@@ -344,18 +350,27 @@ export function createRecognizer(options = {}) {
     offset += size;
   }
 
-  function restart(size) {
+  function applyVoice() {
+    const { voice, articulationOffsets, onApplied } = pending;
+    settings.voice = voice;
+    settings.articulationOffsets = articulationOffsets;
+    pending = undefined;
+    return onApplied;
+  }
+
+  function restart(size, adapt = false) {
     const start = globalThis.performance.now();
     const previous = phrase;
     commit(size, size === previous.used);
     load.charge((globalThis.performance.now() - start) / 1000);
-    if (settings.level === 'auto') {
+    if (settings.level === 'auto' && !settings.deterministic) {
       const next = load.choose(level);
       if (next !== level) {
         level = next;
         load.reset();
       }
     }
+    const onApplied = adapt ? applyVoice() : undefined;
     phrase = createPhraseDecoder(
       sampleRate,
       settings,
@@ -368,6 +383,26 @@ export function createRecognizer(options = {}) {
       phrase.buffer.set(suffix);
       phrase.used = suffix.length;
       update(phrase.decoder.push(suffix));
+    }
+    onApplied?.();
+  }
+
+  function setVoice(voice, articulationOffsets, immediate = false, onApplied) {
+    pending = { voice, articulationOffsets, onApplied };
+    const pause = trailingPause(phrase.decoder.frames, phrase);
+    if (immediate || pause >= 0.2 - EPSILON || phrase.used === 0) {
+      if (phrase.used) {
+        restart(phrase.used, true);
+      } else {
+        applyVoice();
+        phrase = createPhraseDecoder(
+          sampleRate,
+          settings,
+          level,
+          offset / sampleRate
+        );
+        onApplied?.();
+      }
     }
   }
 
@@ -407,8 +442,10 @@ export function createRecognizer(options = {}) {
       nextPartial++;
     }
     load.add(chunk.length, (globalThis.performance.now() - start) / 1000);
-    if (
-      pause &&
+    if (pending && pause >= 0.2 - EPSILON) {
+      restart(phrase.used, true);
+    } else if (
+      pause >= PAUSE - EPSILON &&
       (phrase.lastSpeech >= 0 || phrase.used >= COMMIT_AFTER * sampleRate)
     ) {
       restart(phrase.used);
@@ -473,5 +510,9 @@ export function createRecognizer(options = {}) {
     reset,
     on,
     off,
+    setVoice,
+    discardVoiceChange() {
+      pending = undefined;
+    },
   };
 }

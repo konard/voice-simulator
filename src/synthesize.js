@@ -163,6 +163,7 @@ export function prepareUtterance(text, options = {}) {
     accent: accent ?? undefined,
     modes: transcription.modes,
     breaths: Boolean(options.breaths),
+    articulationOffsets: options.articulationOffsets,
   });
   const timeline = utteranceTimeline(plan, {
     words: transcription.words,

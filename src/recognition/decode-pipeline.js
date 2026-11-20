@@ -85,6 +85,7 @@ export function decoderSettings(sampleRate, options) {
     ),
     hop: options.hop ?? 0.005,
     language: decoderLanguage(options),
+    articulationOffsets: options.articulationOffsets,
   };
 }
 
@@ -167,7 +168,11 @@ export function analyzeForDecode(
 
 export function prepareIpaDecode(analysis, settings, bounds, templatesForTime) {
   const { frames, tracks, voice } = analysis;
-  const templates = decoderTemplates(voice, settings.language.symbols);
+  const templates = decoderTemplates(
+    voice,
+    settings.language.symbols,
+    settings.articulationOffsets
+  );
   const { whisperSpans = [] } = analysis;
   const whisperScore = createWhisperScorer(
     frames,

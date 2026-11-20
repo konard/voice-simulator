@@ -59,6 +59,8 @@ export function recognitionSettings(options) {
     whisper = 'auto',
     level = 'auto',
     stages = {},
+    deterministic = false,
+    articulationOffsets,
   } = options;
   checkOptions(languages, nbest, level);
   if (rescoring && typeof rescoreHypotheses !== 'function') {
@@ -76,6 +78,8 @@ export function recognitionSettings(options) {
     whisper: decoderWhisperSpans(whisper),
     level,
     stages,
+    deterministic,
+    articulationOffsets,
   };
 }
 
@@ -104,6 +108,7 @@ export function decoderOptions(settings, level, start = 0) {
     languages,
     language: languages.length === 1 ? languages[0] : undefined,
     voice,
+    articulationOffsets: settings.articulationOffsets,
     nbest: rescoring ? 10 : nbest,
     whisper:
       start && Array.isArray(whisper)

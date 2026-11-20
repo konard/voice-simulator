@@ -1261,6 +1261,33 @@
           "default": 0
         }
       }
+    },
+    "articulationOffsets": {
+      "type": "object",
+      "propertyNames": {
+        "minLength": 1
+      },
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "height": {
+            "type": "number",
+            "minimum": -0.15,
+            "maximum": 0.15
+          },
+          "backness": {
+            "type": "number",
+            "minimum": -0.15,
+            "maximum": 0.15
+          },
+          "rounding": {
+            "type": "number",
+            "minimum": -0.15,
+            "maximum": 0.15
+          }
+        }
+      }
     }
   }
 }
