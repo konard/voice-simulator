@@ -10,59 +10,10 @@ import {
   segmentsOf,
 } from '../src/recognition/decode-pipeline.js';
 import { decodeSearch } from '../src/recognition/decode-search.js';
+import { TUNING } from './decoder-tuning-material.mjs';
 
 const INITIAL = { duration: 0.5, class: 4, phonotactic: 1 };
 const SCALES = [1, 0.5, 2];
-const TUNING = {
-  en: [
-    'Six thin threads hang from the cloth.',
-    'I left my lunch beside the window.',
-    'The keys fell under the stairs.',
-    'We took a bus to the coast.',
-    'A dog slept by the gate.',
-    'Did you hear the church bells?',
-    'Those green shoes belong to her.',
-    'He bought three ripe peaches.',
-    'The nurse brought a glass of water.',
-    'Leave a little room for the rest.',
-  ],
-  ru: [
-    'Шёл дождь и дул ветер.',
-    'В саду растут яблони.',
-    'Кто стучит в дверь?',
-    'Мы идём домой пешком.',
-    'Над рекой поднялся туман.',
-    'На столе лежит письмо.',
-    'Кошка спит на диване.',
-    'Скоро будет новый год.',
-    'Ребята играют в мяч.',
-    'Птицы улетели на юг.',
-  ],
-  hi: [
-    'बच्चे मैदान में खेल रहे हैं।',
-    'यह नदी बहुत गहरी है।',
-    'मुझे ठंडा पानी चाहिए।',
-    'आज बाजार बंद है।',
-    'छोटी चिड़िया पेड़ पर बैठी है।',
-    'उसने लाल टोपी पहनी है।',
-    'हम सुबह घर से निकले।',
-    'आपका क्या नाम है?',
-    'चाँद बादल के पीछे है।',
-    'तुम एक अच्छी किताब पढ़ो।',
-  ],
-  zh: [
-    '我们明天去看电影。',
-    '桌子下面有一只猫。',
-    '他想喝一杯热茶。',
-    '火车已经到站了。',
-    '我的书放在哪儿？',
-    '今天的苹果很甜。',
-    '她给朋友写了一封信。',
-    '这些小鸟飞得很快。',
-    '外面正在下雨。',
-    '我弟弟喜欢踢足球。',
-  ],
-};
 
 function combinations() {
   const grid = [];
