@@ -1,5 +1,10 @@
 /** Commit mode decisions before any phone in the undecided speech. Unlicense. */
-import { clipWhisperSpans, findWhisper, whisperSpeechRuns } from './whisper.js';
+import {
+  clipWhisperSpans,
+  findWhisper,
+  whisperSpeechRuns,
+  whisperVoiceEdges,
+} from './whisper.js';
 
 function reconcile(previous, candidates, fixedThrough) {
   const kept = previous
@@ -55,25 +60,101 @@ function hasDecidablePitch(run, frames, pitch) {
   return voiced >= 0.05 * halfSecond;
 }
 
+function pendingEdge(run, frames, pitch, current, fixedThrough) {
+  if (!run) {
+    return null;
+  }
+  const edge = whisperVoiceEdges(run, frames, pitch, pitch.committed).find(
+    ({ edge }) => edge === 'trailing'
+  );
+  if (
+    !edge ||
+    edge.start < fixedThrough - 1e-9 ||
+    current.some((span) => span.start <= edge.start && edge.start < span.end)
+  ) {
+    return null;
+  }
+  return edge;
+}
+
+function extendOpenSpan(current, run, frames, pitch, through) {
+  const latest = current.at(-1);
+  if (!latest || !run || latest.end < run.start) {
+    return current;
+  }
+  const { startTime, hop } = frames;
+  const first = Math.ceil((latest.end - startTime) / hop - 1e-9);
+  const nextVoice = pitch.f0
+    .subarray(first, pitch.committed)
+    .findIndex((f0) => f0 > 0);
+  const voicedAt =
+    nextVoice < 0 ? Infinity : startTime + (first + nextVoice) * hop;
+  const end = Math.max(latest.end, Math.min(through, run.end, voicedAt));
+  return [...current.slice(0, -1), { ...latest, end }];
+}
+
+function scoredThrough(pending, current, clock, paused, confirmed) {
+  // Keep the edge available for classification until its half-second deadline.
+  if (
+    pending &&
+    !paused &&
+    clock < pending.start + 0.5 &&
+    !current.some(
+      (span) => span.start <= pending.start && pending.start < span.end
+    )
+  ) {
+    return pending.start;
+  }
+  return confirmed;
+}
+
 export function createWhisperDecisions(frames, pitch, option) {
   const decided = [];
   let nextCheck = 0;
-  let through = frames.startTime;
   let currentStart;
   let pausedAt;
   let current = [];
+  let edgeCheck = 0;
+  function classify(last, fixedThrough, clock, paused) {
+    if (last.start !== currentStart) {
+      decided.push(...current);
+      current = [];
+      currentStart = last.start;
+    }
+    const committedFrames = { ...frames, count: pitch.committed };
+    const samples = frames.samples.subarray(0, frames.sampleCount);
+    const candidates = findWhisper(
+      samples,
+      frames.rate,
+      committedFrames,
+      pitch
+    ).filter((span) => span.end >= last.start);
+    current = reconcile(current, candidates, fixedThrough);
+    if (paused) {
+      pausedAt = last.end;
+    }
+    nextCheck = clock + 0.5;
+    edgeCheck = clock + 0.05;
+  }
   return {
     advance(final, fixedThrough = frames.startTime) {
       const end = frames.startTime + frames.sampleCount / frames.rate;
       if (option !== 'auto') {
         return { through: end, spans: clipWhisperSpans(option || [], end) };
       }
-      const runs = whisperSpeechRuns(frames);
-      const last = runs.at(-1);
+      const last = whisperSpeechRuns(frames).at(-1);
       const clock = frames.startTime + frames.count * frames.hop;
+      const confirmed = frames.startTime + pitch.committed * frames.hop;
       const paused = last && clock - last.end >= 0.2 - 1e-9;
       const newRun = last && last.start !== currentStart;
+      const pending =
+        !newRun && pendingEdge(last, frames, pitch, current, fixedThrough);
+      const edgeDue =
+        pending &&
+        confirmed >= pending.start + 0.3 - 1e-9 &&
+        clock >= edgeCheck;
       if (
+        edgeDue ||
         decisionDue(last, {
           final,
           paused,
@@ -85,38 +166,19 @@ export function createWhisperDecisions(frames, pitch, option) {
           pitch,
         })
       ) {
-        if (newRun) {
-          if (current.length) {
-            decided.push(...current);
-          }
-          currentStart = last.start;
-        }
-        const committedFrames = { ...frames, count: pitch.committed };
-        const samples = frames.samples.subarray(0, frames.sampleCount);
-        const candidates = findWhisper(
-          samples,
-          frames.rate,
-          committedFrames,
-          pitch
-        ).filter((span) => span.end >= last.start);
-        current = reconcile(current, candidates, fixedThrough);
-        if (paused) {
-          pausedAt = last.end;
-        }
-        nextCheck = clock + 0.5;
-        through = clock;
+        classify(last, fixedThrough, clock, paused);
       }
-      const active = current.map((span) =>
-        !final &&
-        !paused &&
-        span.end >= frames.startTime + pitch.committed * frames.hop - 1e-9
-          ? { ...span, end }
-          : span
-      );
+      if (final) {
+        return { through: end, spans: decided.concat(current) };
+      }
+      if (!paused) {
+        current = extendOpenSpan(current, last, frames, pitch, confirmed);
+      }
       const cutoff = last && last.start !== currentStart ? last.start : end;
+      const through = scoredThrough(pending, current, clock, paused, confirmed);
       return {
-        through: final ? end : Math.max(through, cutoff),
-        spans: decided.concat(active),
+        through: Math.max(fixedThrough, Math.min(cutoff, through)),
+        spans: decided.concat(current),
       };
     },
   };

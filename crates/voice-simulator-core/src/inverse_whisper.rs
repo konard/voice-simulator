@@ -10,6 +10,9 @@ use core::f64::consts::PI;
 const EPS: f64 = 1e-9;
 const RATIO_THRESHOLD: f64 = -20.82;
 const TELEPHONE_THRESHOLD: f64 = -26.63;
+const EDGE_LEVEL_DROP: f64 = 10.0;
+const EDGE_RATIO_RISE: f64 = 5.0;
+const EDGE_RATIO_ALLOWANCE: f64 = 6.0;
 
 #[derive(Clone, Copy)]
 pub struct Frame {
@@ -38,7 +41,7 @@ pub struct Signal<'a> {
 #[derive(Clone, Copy, PartialEq)]
 enum Edge {
     Leading,
-    Trailing,
+    Trailing { voiced_from: usize },
 }
 
 impl Signal<'_> {
@@ -73,11 +76,17 @@ impl Signal<'_> {
         if voiced >= 0.05 || vowel_like as f64 * self.hop < 0.05 - EPS {
             return None;
         }
-        let threshold = if self.rate <= 8000.0 {
+        let mut threshold = if self.rate <= 8000.0 {
             TELEPHONE_THRESHOLD
         } else {
             RATIO_THRESHOLD
         };
+        if let Some(Edge::Trailing { voiced_from }) = edge {
+            let before = self.time(voiced_from).max(start - 0.3);
+            let preceding = self.ratio(before, start);
+            threshold =
+                (threshold - EDGE_RATIO_ALLOWANCE).max(threshold.min(preceding + EDGE_RATIO_RISE));
+        }
         let mut ratio = self.ratio(start, end);
         if edge.is_some() && ratio < threshold {
             let mut time = start;
@@ -112,11 +121,18 @@ impl Signal<'_> {
         let level = peak(&frames[first..=last]);
         [
             (from, from + first, Edge::Leading),
-            (from + last + 1, to, Edge::Trailing),
+            (
+                from + last + 1,
+                to,
+                Edge::Trailing {
+                    voiced_from: from + first,
+                },
+            ),
         ]
         .into_iter()
         .filter(|&(a, b, _)| {
-            (b - a) as f64 * self.hop >= 0.3 - EPS && peak(&self.frames[a..b]) <= level - 10.0
+            (b - a) as f64 * self.hop >= 0.3 - EPS
+                && peak(&self.frames[a..b]) <= level - EDGE_LEVEL_DROP
         })
         .filter_map(|(a, b, edge)| self.classify(a, b, Some(edge)))
         .collect()

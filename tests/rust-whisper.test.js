@@ -88,6 +88,34 @@ function expectClose(actual, expected, tolerance = 1e-9) {
   expect(Math.abs(actual - expected)).toBeLessThan(tolerance);
 }
 
+function whisperFrameParity(engine, wave, rate) {
+  const frames = analyzeFrames(wave, rate);
+  const pitch = trackPitch(frames);
+  const expected = findWhisper(wave, rate, frames, pitch);
+  checkSpans(
+    engine,
+    packetOf(wave, frames, pitch, rate),
+    wave.length,
+    expected
+  );
+  return expected;
+}
+
+itUnless(noRust)(
+  'matches spans detected on a partial continuous whisper',
+  async () => {
+    const engine = await loadRustEngine();
+    const { samples, sampleRate, timeline } = renderWhisper(
+      'one two three [whisper] four five six'
+    );
+    const wave = samples.subarray(
+      0,
+      Math.floor((timeline.words[3].start + 0.5) * sampleRate)
+    );
+    expect(whisperFrameParity(engine, wave, sampleRate).length).toBe(1);
+  }
+);
+
 describe('Rust whisper numerical parity', () => {
   itUnless(noRust)(
     'matches whisper spans on voiced, whispered, mixed and noisy narrowband speech',
@@ -103,14 +131,7 @@ describe('Rust whisper numerical parity', () => {
           [samples, sampleRate],
           [noiseBelow(resample(samples, sampleRate, 8000), -20), 8000],
         ]) {
-          const frames = analyzeFrames(wave, rate);
-          const pitch = trackPitch(frames);
-          checkSpans(
-            engine,
-            packetOf(wave, frames, pitch, rate),
-            wave.length,
-            findWhisper(wave, rate, frames, pitch)
-          );
+          whisperFrameParity(engine, wave, rate);
         }
       }
     }

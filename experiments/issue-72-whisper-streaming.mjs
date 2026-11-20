@@ -3,24 +3,41 @@ import { createFrameAnalyzer } from '../src/index.js';
 import { energyRatio } from '../src/analysis/mode-features.js';
 import { createPitchTracker } from '../src/recognition/pitch.js';
 import { findWhisper, whisperSpeechRuns } from '../src/recognition/whisper.js';
+import { createWhisperFramePool } from '../src/recognition/whisper-spectrum.js';
 import { createWhisperDecisions } from '../src/recognition/whisper-stream.js';
 import { renderWhisper } from './issue-72-whisper-robustness.mjs';
 
-const { samples, sampleRate, timeline } = renderWhisper(
-  'one two three [whisper] four five six'
-);
+function example() {
+  if (!process.argv.includes('--pause')) {
+    const { samples, sampleRate, timeline } = renderWhisper(
+      process.argv[2] ?? 'one two three [whisper] four five six'
+    );
+    return { samples, sampleRate, transition: timeline.words[3].start };
+  }
+  const { samples: first, sampleRate } = renderWhisper('one two three');
+  const { samples: second } = renderWhisper('[whisper] she sees five sheep');
+  const offset = first.length + Math.round(sampleRate * 0.3);
+  const samples = new Float32Array(offset + second.length);
+  samples.set(first);
+  samples.set(second, offset);
+  return { samples, sampleRate, transition: offset / sampleRate };
+}
+
+const { samples, sampleRate, transition } = example();
 const input = createFrameAnalyzer(sampleRate);
 const { frames } = input;
 const pitch = createPitchTracker(frames);
 const classifier = createWhisperDecisions(frames, pitch.track, 'auto');
+const pool = createWhisperFramePool(frames);
 const quantum = Math.floor(sampleRate * 0.02);
-console.log('four starts', timeline.words[3].start);
+console.log('transition', transition);
 for (let start = 0; start < samples.length; start += quantum) {
   input.push(samples.subarray(start, start + quantum));
   pitch.advance();
   const time = frames.sampleCount / frames.rate;
   const runs = whisperSpeechRuns(frames);
-  const decision = classifier.advance(false);
+  const decision = classifier.advance(false, pool.frames.count * frames.hop);
+  pool.advance(decision, false);
   if (start % (quantum * 5) === 0) {
     const lastVoiced = pitch.track.f0
       .subarray(0, pitch.track.committed)
@@ -69,3 +86,6 @@ for (let start = 0; start < samples.length; start += quantum) {
     );
   }
 }
+input.flush();
+pitch.advance(true);
+console.log('final', classifier.advance(true, pool.frames.count * frames.hop));

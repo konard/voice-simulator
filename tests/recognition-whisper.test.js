@@ -3,6 +3,7 @@ import { describe, expect, it } from 'test-anywhere';
 import {
   analyzeFrames,
   audioToIpa,
+  createFrameAnalyzer,
   createIpaDecoder,
   createRecognizer,
   ipaToText,
@@ -16,8 +17,12 @@ import {
 import { toneCurve } from '../src/articulation/tone-model.js';
 import { createRandom } from '../src/random.js';
 import { bestTone, mean } from '../src/recognition/prosody-features.js';
+import { createPitchTracker } from '../src/recognition/pitch.js';
 import { whisperSpeechRuns } from '../src/recognition/whisper.js';
-import { whisperFormantFrames } from '../src/recognition/whisper-spectrum.js';
+import {
+  createWhisperFramePool,
+  whisperFormantFrames,
+} from '../src/recognition/whisper-spectrum.js';
 import { createWhisperDecisions } from '../src/recognition/whisper-stream.js';
 import { loadGolden } from './helpers/golden.js';
 import {
@@ -243,6 +248,32 @@ describe('whisper tone recognition', () => {
     console.log(`Mandarin ma probes: ${correct}/8`);
     expect(correct).toBeGreaterThanOrEqual(5);
   });
+});
+
+it('detects a continuous switch to whisper before committing the quiet tail', () => {
+  const { samples, sampleRate, timeline } = renderWhisper(
+    'one two three [whisper] four five six'
+  );
+  const start = timeline.words[3].start;
+  const input = createFrameAnalyzer(sampleRate);
+  const { frames } = input;
+  const pool = createWhisperFramePool(frames);
+  const pitch = createPitchTracker(frames);
+  const classifier = createWhisperDecisions(frames, pitch.track, 'auto');
+  const firstHalfSecond = Math.floor((start + 0.5) * sampleRate);
+  const quantum = Math.floor(sampleRate * 0.02);
+  let live;
+  for (let i = 0; i < firstHalfSecond; i += quantum) {
+    input.push(samples.subarray(i, Math.min(i + quantum, firstHalfSecond)));
+    pitch.advance();
+    live = classifier.advance(false, pool.frames.count * frames.hop);
+    pool.advance(live, false);
+  }
+  expect(live.spans.length).toBe(1);
+  expect(Math.abs(live.spans[0].start - start)).toBeLessThan(0.1);
+  const switchRow = Math.round(live.spans[0].start / frames.hop);
+  expect(pool.frames.whisper[switchRow - 1]).toBe(0);
+  expect(pool.frames.whisper[switchRow]).toBe(1);
 });
 
 describe('whisper streaming', () => {

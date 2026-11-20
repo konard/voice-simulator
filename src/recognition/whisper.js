@@ -9,6 +9,9 @@ const clamp = (value) => Math.max(0, Math.min(1, value));
 const RATIO_THRESHOLD = -20.82;
 // The same utterances at 8 kHz: voiced -32.29 dB, whispered -20.98 dB.
 const TELEPHONE_THRESHOLD = -26.63;
+const EDGE_LEVEL_DROP = 10;
+const EDGE_RATIO_RISE = 5;
+const EDGE_RATIO_ALLOWANCE = 6;
 
 export function whisperSpeechRuns(frames, count = frames.count) {
   const runs = [];
@@ -60,12 +63,30 @@ function edgeRatio(samples, sampleRate, start, end, threshold) {
   return ratio;
 }
 
+function edgeThreshold(samples, sampleRate, threshold, start, before) {
+  if (before === undefined) {
+    return threshold;
+  }
+  const voicedRatio = energyRatio(
+    samples,
+    sampleRate,
+    Math.max(before, start - 0.3) * sampleRate,
+    start * sampleRate
+  );
+  // After a level step, a large change in the band ratio is also evidence.
+  // Limit the adjustment and require vowel-like frames as in the full run.
+  return Math.max(
+    threshold - EDGE_RATIO_ALLOWANCE,
+    Math.min(threshold, voicedRatio + EDGE_RATIO_RISE)
+  );
+}
+
 function measure(
   samples,
   sampleRate,
   frames,
   pitch,
-  { from, to, start, end, edge }
+  { from, to, start, end, edge, before }
 ) {
   let voiced = 0;
   let vowelLike = 0;
@@ -80,7 +101,8 @@ function measure(
   if (voiced >= 0.05 || vowelLike * frames.hop < 0.05 - EPSILON) {
     return null;
   }
-  const threshold = sampleRate <= 8000 ? TELEPHONE_THRESHOLD : RATIO_THRESHOLD;
+  const base = sampleRate <= 8000 ? TELEPHONE_THRESHOLD : RATIO_THRESHOLD;
+  const threshold = edgeThreshold(samples, sampleRate, base, start, before);
   const ratio = edge
     ? edgeRatio(samples, sampleRate, start, end, threshold)
     : energyRatio(samples, sampleRate, start * sampleRate, end * sampleRate);
@@ -94,12 +116,21 @@ function measure(
   };
 }
 
-function edgeWhispers(run, frames, pitch) {
+function framePeak(energy, from, to) {
+  let peak = -Infinity;
+  for (let i = from; i < to; i++) {
+    peak = Math.max(peak, energy[i]);
+  }
+  return peak;
+}
+
+export function whisperVoiceEdges(run, frames, pitch, committed = run.to) {
   const { from, to, start, end } = run;
   const { hop, startTime, energy } = frames;
+  const observed = Math.min(to, committed);
   let first = from;
-  let last = to - 1;
-  while (first < to && !(pitch.f0[first] > 0)) {
+  let last = observed - 1;
+  while (first < observed && !(pitch.f0[first] > 0)) {
     first++;
   }
   while (last > first && !(pitch.f0[last] > 0)) {
@@ -110,16 +141,9 @@ function edgeWhispers(run, frames, pitch) {
   if ((last - first) * hop < 0.08) {
     return [];
   }
-  const peak = (a, b) => {
-    let level = -Infinity;
-    for (let i = a; i < b; i++) {
-      level = Math.max(level, energy[i]);
-    }
-    return level;
-  };
-  const voicedLevel = peak(first, last + 1);
+  const voicedLevel = framePeak(energy, first, last + 1);
   const quiet = (a, b) =>
-    (b - a) * hop >= 0.3 - EPSILON && peak(a, b) <= voicedLevel - 10;
+    a < b && framePeak(energy, a, b) <= voicedLevel - EDGE_LEVEL_DROP;
   const edges = [];
   if (quiet(from, first)) {
     // Avoid labelling a microphone's noisy lead-in before the first vowel.
@@ -138,6 +162,7 @@ function edgeWhispers(run, frames, pitch) {
       start: startTime + (last + 1) * hop,
       end,
       edge: 'trailing',
+      before: startTime + first * hop,
     });
   }
   return edges;
@@ -178,7 +203,10 @@ export function findWhisper(samples, sampleRate, frames, pitch) {
     const span = classify(run);
     return span
       ? [span]
-      : edgeWhispers(run, frames, pitch).map(classify).filter(Boolean);
+      : whisperVoiceEdges(run, frames, pitch)
+          .filter(({ start, end }) => end - start >= 0.3 - EPSILON)
+          .map(classify)
+          .filter(Boolean);
   });
   return runs
     .flatMap(({ start, end }, index) => {
