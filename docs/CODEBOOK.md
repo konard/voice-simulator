@@ -186,3 +186,5 @@ const { ipa, segments, rescoring } = rescoreHypotheses(decoded);
 `warpPlan(plan, anchors)` returns a retimed plan whose `offset` is the recording time at sample zero. `planReading(decoded, segments)` matches phone onset times and copies the recovered pitch and loudness. `planRescoring(decoded)` prepares a reference render and cloneable jobs. Call `scoreJob(job)` for a job's mel-cepstral distance.
 
 For a finished streaming phrase, pass `{ preserveTiming: true }` to keep published phone and syllable times. Changed IPA is marked `revised`. The streaming recognizer in [#73](https://github.com/konard/voice-simulator/issues/73) owns phrase boundaries and keeps rescoring off by default.
+
+See the [held-out rescoring report](../reports/heavy/recognition-rescoring.md) for synthetic and golden-set phone error rates, oracle rates, and revision counts at 16 and 8 kHz.
