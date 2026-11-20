@@ -607,7 +607,7 @@ impl Waveguide {
         &mut self,
         glottis: f64,
         lips: f64,
-        position: f64,
+        position: usize,
         add_right: f64,
         add_left: f64,
     ) {
@@ -616,30 +616,26 @@ impl Waveguide {
         let mut index = 1;
         let mut special = 0;
         loop {
-            let mut stop = if special < self.specials.len() {
-                self.specials[special] as f64
-            } else {
-                n as f64
-            };
-            if position >= index as f64 && position < stop {
+            let mut stop = self.specials.get(special).copied().unwrap_or(n);
+            if position >= index && position < stop {
                 stop = position;
             }
-            while (index as f64) < stop {
-                let incoming_right = self.right[index - 1];
-                let incoming_left = self.left[index];
-                let w = self.reflection[index] * (incoming_right - incoming_left);
-                self.spare_right[index] = (incoming_right + w) * self.damping[index];
-                self.spare_left[index - 1] = (incoming_left + w) * self.damping[index - 1];
-                index += 1;
-            }
-            if index >= n {
+            scatter_sections(
+                &self.right[index - 1..stop - 1],
+                &self.left[index..stop],
+                &self.reflection[index..stop],
+                &self.damping[index - 1..stop],
+                &mut self.spare_right[index..stop],
+                &mut self.spare_left[index - 1..stop - 1],
+            );
+            if stop == n {
                 break;
             }
-            self.scatter_special(index, position, add_right, add_left);
-            if special < self.specials.len() && index == self.specials[special] {
+            self.scatter_special(stop, position, add_right, add_left);
+            if self.specials.get(special) == Some(&stop) {
                 special += 1;
             }
-            index += 1;
+            index = stop + 1;
         }
         self.spare_left[n - 1] = lips * self.damping[n - 1];
         self.yield_walls(position, add_right);
@@ -649,7 +645,7 @@ impl Waveguide {
 
     /// `#scatterSpecial`: a three-port junction or the noise source.
     #[inline]
-    fn scatter_special(&mut self, index: usize, position: f64, add_right: f64, add_left: f64) {
+    fn scatter_special(&mut self, index: usize, position: usize, add_right: f64, add_left: f64) {
         let incoming_right = self.right[index - 1];
         let incoming_left = self.left[index];
         let mut out_right;
@@ -665,7 +661,7 @@ impl Waveguide {
             out_right = incoming_right + w;
             out_left = incoming_left + w;
         }
-        if index as f64 == position {
+        if index == position {
             out_right += add_right;
             out_left += add_left;
         }
@@ -756,14 +752,15 @@ impl Waveguide {
     fn scatter_nose(&mut self) {
         let n = self.nose_n;
         self.spare_nose_right[0] = self.nose_entering * self.nose_damping[0];
-        for index in 1..n {
-            let incoming_right = self.nose_right[index - 1];
-            let incoming_left = self.nose_left[index];
-            let w = self.nose_reflection[index] * (incoming_right - incoming_left);
-            self.spare_nose_right[index] = (incoming_right + w) * self.nose_damping[index];
-            self.spare_nose_left[index - 1] = (incoming_left + w) * self.nose_damping[index - 1];
-        }
         let last = n - 1;
+        scatter_sections(
+            &self.nose_right[..last],
+            &self.nose_left[1..n],
+            &self.nose_reflection[1..n],
+            &self.nose_damping[..n],
+            &mut self.spare_nose_right[1..n],
+            &mut self.spare_nose_left[..last],
+        );
         let reflected = self.nostrils.process(self.nose_right[last]);
         self.spare_nose_left[last] = reflected * self.nose_damping[last];
         self.nose_output = (self.nose_right[last] - reflected) * self.nose_areas[last];
@@ -774,7 +771,7 @@ impl Waveguide {
     /// `#yieldWalls`: the flow of the yielding wall of each group leaves
     /// the tract at its junction (reads the old waves, lowers the new).
     #[inline]
-    fn yield_walls(&mut self, position: f64, add_right: f64) {
+    fn yield_walls(&mut self, position: usize, add_right: f64) {
         let walls = &mut self.walls;
         let mut junction = usize::MAX;
         let mut pressure = 0.0;
@@ -787,11 +784,7 @@ impl Waveguide {
                 pressure = incoming_right
                     + incoming_left
                     + self.reflection[index] * (incoming_right - incoming_left)
-                    + if index as f64 == position {
-                        add_right
-                    } else {
-                        0.0
-                    };
+                    + if index == position { add_right } else { 0.0 };
             }
             let flow = (walls.flow[group] + walls.drive[group] * pressure
                 - walls.spring * walls.volume[group])
@@ -825,15 +818,18 @@ impl Waveguide {
         self.lip_output = (lip_wave - reflected) * self.areas[last];
         self.scatter_velum();
         self.scatter_piriform();
-        let source = noise != 0.0 || flow != 0.0;
+        let mut position = usize::MAX;
+        if noise != 0.0 || flow != 0.0 {
+            let clamped = min(last as f64, max(1.0, noise_position));
+            let junction = clamped as usize;
+            if junction as f64 == clamped {
+                position = junction;
+            }
+        }
         self.scatter_oral(
             self.left[0] * self.glottal_reflection + glottal_flow / self.areas[0],
             reflected,
-            if source {
-                min(last as f64, max(1.0, noise_position))
-            } else {
-                -1.0
-            },
+            position,
             (flow + noise) * 0.5,
             (flow - noise) * 0.5,
         );
@@ -869,6 +865,30 @@ impl Waveguide {
             count += 1;
         }
         count
+    }
+}
+
+/// Scatter a contiguous run of ordinary tube junctions.
+#[inline]
+fn scatter_sections(
+    right: &[f64],
+    left: &[f64],
+    reflection: &[f64],
+    damping: &[f64],
+    next_right: &mut [f64],
+    next_left: &mut [f64],
+) {
+    for (((((&r, &l), &k), damping), out_r), out_l) in right
+        .iter()
+        .zip(left)
+        .zip(reflection)
+        .zip(damping.windows(2))
+        .zip(next_right)
+        .zip(next_left)
+    {
+        let w = k * (r - l);
+        *out_r = (r + w) * damping[1];
+        *out_l = (l + w) * damping[0];
     }
 }
 
