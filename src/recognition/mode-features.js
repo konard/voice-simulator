@@ -2,7 +2,7 @@
 import { measure } from './profile.js';
 import { analyzeFrames } from './frontend.js';
 import { trackPitch } from './pitch.js';
-import { trackFormants } from './formants.js';
+import { trackBatchFormants, trackFormants } from './formants.js';
 import { inverseFilter } from './inverse-filter.js';
 import {
   alphaRatio,
@@ -64,17 +64,8 @@ function nuclei(word, phones, head) {
     }));
 }
 
-/** Analyze the recording in one pass; retain scalar word features only. */
-export function measureWords(
-  samples,
-  sampleRate,
-  result,
-  head,
-  analyzed,
-  options = {}
-) {
+function analyzeWordSignal(samples, sampleRate, head, analyzed, options) {
   const { profile, kernels } = options;
-  const words = result.words;
   const seconds = samples.length / sampleRate;
   const frames =
     analyzed ??
@@ -87,8 +78,11 @@ export function measureWords(
   const pitch = measure(profile, 'Pitch', () =>
     trackPitch(frames, { minF0: 35, maxF0: 800, kernels })
   );
+  const track = options.reuseFormantCandidates
+    ? trackBatchFormants
+    : trackFormants;
   const formants = measure(profile, 'Formants', () =>
-    trackFormants(frames, {
+    track(frames, {
       pitch,
       ...(head ? { vocalTractLength: head.vocalTractLength } : {}),
     })
@@ -96,12 +90,31 @@ export function measureWords(
   const source = measure(profile, 'Inverse filter', () =>
     inverseFilter(frames, { pitch, minF0: 35, maxF0: 800, kernels })
   );
+  return { frames, pitch, formants, source };
+}
+
+/** Analyze the recording in one pass; retain scalar word features only. */
+export function measureWords(
+  samples,
+  sampleRate,
+  result,
+  head,
+  analyzed,
+  options = {}
+) {
+  const { frames, pitch, formants, source } = analyzeWordSignal(
+    samples,
+    sampleRate,
+    head,
+    analyzed,
+    options
+  );
   const pulses = glottalPeriods(samples, sampleRate);
   const phones = result.phonemes ?? result.phones;
   const peakLevel = quantile(frames.energy.subarray(0, frames.count), 0.9);
   // Vowel extraction combines independent source, formant and pulse validity checks.
   // eslint-disable-next-line complexity
-  const measured = words.map((word) => {
+  const measured = result.words.map((word) => {
     const vowels = nuclei(word, phones, head);
     const whole = [];
     for (

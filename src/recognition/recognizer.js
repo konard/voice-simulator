@@ -164,7 +164,11 @@ export function decodeRecognitionAudio(
   );
   const decoded = settings.stages.audioToIpa
     ? settings.stages.audioToIpa(input, rate, options)
-    : audioToIpa(input, rate, { ...options, sourceRate: sampleRate });
+    : audioToIpa(input, rate, {
+        ...options,
+        sourceRate: sampleRate,
+        lattice: settings.rescoring,
+      });
   return { decoded, input, rate };
 }
 
@@ -313,7 +317,7 @@ export function recognizeDecoded(
   if (!decoded.ipa) {
     return emptyRecognition(settings.nbest);
   }
-  if (settings.rescoring && final) {
+  if (settings.rescoring && (final === 'batch' || final === 'stream')) {
     decoded = rescoreHypotheses(decoded, {
       preserveTiming: final === 'stream',
     });
@@ -336,6 +340,7 @@ export function recognizeDecoded(
               profile: settings.profile,
               kernels: settings.kernels,
               frames: decoded.frames?.speech ? decoded.frames : undefined,
+              reuseFormantCandidates: final === 'batch' || final === 'parallel',
             }
           )
         )
@@ -477,7 +482,7 @@ async function parallelDecode(samples, sampleRate, settings, level, pool) {
   let decoded = await audioToIpaParallel(
     input,
     rate,
-    { ...options, sourceRate: sampleRate },
+    { ...options, sourceRate: sampleRate, lattice: settings.rescoring },
     pool
   );
   checkNoise(decoded, samples.length / sampleRate);
@@ -486,7 +491,7 @@ async function parallelDecode(samples, sampleRate, settings, level, pool) {
     const scores = await pool.run('rescore', preparation.jobs, scoreJob);
     decoded = applyRescoring(decoded, preparation, scores, RESCORING_WEIGHT);
   }
-  return recognizeDecoded(decoded, input, rate, settings, level, false);
+  return recognizeDecoded(decoded, input, rate, settings, level, 'parallel');
 }
 
 export async function recognizeAsync(samples, sampleRate, options = {}) {

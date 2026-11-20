@@ -2,7 +2,7 @@
 import { measure } from '../recognition/profile.js';
 import { analyzeFrames } from '../recognition/frontend.js';
 import { trackPitch, jitterToHead } from '../recognition/pitch.js';
-import { trackFormants } from '../recognition/formants.js';
+import { trackBatchFormants } from '../recognition/formants.js';
 import { inverseFilter } from '../recognition/inverse-filter.js';
 import { HEAD_PARAMETERS, DEFAULT_HEAD } from '../head-config.js';
 import { prepareLegacyVoice } from './voice-features.js';
@@ -259,7 +259,7 @@ export function accumulate(
   // Use the tracker's initial tract prior for every stretch. Re-estimating
   // that prior from a whole utterance makes the pooled dF depend on splits.
   const formants = measure(profile, 'Formants', () =>
-    trackFormants(frames, { pitch, vocalTractLength: 16.5 })
+    trackBatchFormants(frames, { pitch, vocalTractLength: 16.5 })
   );
   const source = measure(profile, 'Inverse filter', () =>
     inverseFilter(frames, { pitch, kernels, trace: options.trace ?? null })

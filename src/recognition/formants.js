@@ -862,17 +862,19 @@ export function formantCandidates(frames, options = {}) {
  * Tracker over a frame set; `batch` (used by `trackFormants`) estimates the
  * tract length from the whole path before anything is committed.
  */
-function createTracker(frames, options, batch) {
+function createTracker(frames, options, batch, candidates) {
   const settings = formantSettings(frames, options);
   const { keep, lag, formants: K } = settings;
   const rows = frames.capacity;
   const rawWidth = settings.orders.reduce((sum, m) => sum + m / 2, 0);
   const store = {
     rawWidth: Math.ceil(rawWidth),
-    rawFrequency: new Float32Array(rows * Math.ceil(rawWidth)),
-    rawBandwidth: new Float32Array(rows * Math.ceil(rawWidth)),
-    rawRank: new Uint8Array(rows * Math.ceil(rawWidth)),
-    rawCount: new Uint8Array(rows),
+    rawFrequency:
+      candidates?.frequency ?? new Float32Array(rows * Math.ceil(rawWidth)),
+    rawBandwidth:
+      candidates?.bandwidth ?? new Float32Array(rows * Math.ceil(rawWidth)),
+    rawRank: candidates?.rank ?? new Uint8Array(rows * Math.ceil(rawWidth)),
+    rawCount: candidates?.count ?? new Uint8Array(rows),
     frequency: new Float32Array(rows * MAX_CANDIDATES),
     bandwidth: new Float32Array(rows * MAX_CANDIDATES),
     count: new Uint8Array(rows),
@@ -882,7 +884,7 @@ function createTracker(frames, options, batch) {
     nasal: new Uint8Array(rows),
     reset: new Uint8Array(rows),
   };
-  const finder = createRootFinder(frames, settings, store);
+  const finder = candidates ? null : createRootFinder(frames, settings, store);
   const path = new Uint8Array(rows);
   const track = createTrack(frames, settings);
   const smoother = createSmoother(frames, store, settings, track, rows);
@@ -992,7 +994,7 @@ function createTracker(frames, options, batch) {
         if (frames.speech[t]) {
           peak = Math.max(peak, frames.energy[t]);
         }
-        finder.find(t);
+        finder?.find(t);
         score(t);
         track.count++;
       }
@@ -1035,6 +1037,26 @@ export function createFormantTracker(frames, options = {}) {
  */
 export function trackFormants(frames, options = {}) {
   const tracker = createTracker(frames, options, true);
+  tracker.advance(true);
+  return tracker.track;
+}
+
+const batchCandidates = new WeakMap();
+
+/** Share roots across consumers of the same completed batch frame set. */
+export function trackBatchFormants(frames, options) {
+  if (options.maxBandwidth !== undefined) {
+    return trackFormants(frames, options);
+  }
+  if (!batchCandidates.has(frames)) {
+    batchCandidates.set(frames, formantCandidates(frames));
+  }
+  const tracker = createTracker(
+    frames,
+    options,
+    true,
+    batchCandidates.get(frames)
+  );
   tracker.advance(true);
   return tracker.track;
 }

@@ -10,7 +10,7 @@ import { decoderLanguage, decoderTemplates } from './decode-model.js';
 import { pathArcs } from './decode-search.js';
 import { prepareDecode } from './decode-spans.js';
 import { DECODE_WEIGHTS } from './decode-weights.js';
-import { trackFormants } from './formants.js';
+import { trackBatchFormants } from './formants.js';
 import { analyzeFrames, FRONTEND_DEFAULTS, workingRate } from './frontend.js';
 import { invertArticulation } from './inversion.js';
 import { findLandmarks } from './landmarks.js';
@@ -79,6 +79,7 @@ export function decoderSettings(sampleRate, options) {
     kernels: options.kernels,
     beam,
     nbest,
+    lattice: options.lattice ?? true,
     whisper: decoderWhisperSpans(whisper),
     weights: DECODE_WEIGHTS,
     rate: workingRate(
@@ -195,7 +196,7 @@ function prepareAnalysis(
   const spectralFrames = whisperFormantFrames(frames, whisperSpans);
   const { profile } = settings;
   const formants = measure(profile, 'Formants', () =>
-    trackFormants(spectralFrames, {
+    trackBatchFormants(spectralFrames, {
       pitch,
       vocalTractLength: voice.vocalTractLength,
     })
@@ -262,11 +263,9 @@ export function analyzeForDecode(
   );
   const { spectralFrames, codebook, voice } = analysis;
   const { kernels, profile } = settings;
-  const query = kernels?.module?.exports.rec_codebook_search
-    ? measure(profile, 'Inversion', () =>
-        codebookQueries(spectralFrames, codebook, voice, kernels)
-      )
-    : undefined;
+  const query = measure(profile, 'Codebook search', () =>
+    codebookQueries(spectralFrames, codebook, voice, kernels)
+  );
   return finishAnalysis(analysis, profile, query);
 }
 
@@ -495,7 +494,9 @@ export function resultOf(
     modes: whisperModeSpans(segments, spans),
     nbest,
     language: language.language,
-    lattice: lattice ?? latticeOf(times, search.edges, templates),
+    ...(settings.lattice && {
+      lattice: lattice ?? latticeOf(times, search.edges, templates),
+    }),
     ...analysis,
   };
 }

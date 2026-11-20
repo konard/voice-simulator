@@ -6,7 +6,11 @@ function comparePaths(a, b) {
 }
 
 function addPath(paths, previous, arc, cost, limit) {
-  if (paths.length === limit && cost >= paths.at(-1).cost) {
+  if (paths.length === limit && cost >= paths[paths.length - 1].cost) {
+    return;
+  }
+  if (limit === 1) {
+    paths[0] = { previous, arc, cost };
     return;
   }
   const children = previous.sequence.children;
@@ -35,7 +39,7 @@ function addPath(paths, previous, arc, cost, limit) {
 function stateFor(states, unit) {
   let state = states[unit];
   if (!state) {
-    state = { unit, paths: [], edges: [] };
+    state = { unit, paths: [], edges: null };
     states[unit] = state;
   }
   return state;
@@ -61,7 +65,7 @@ function acousticCosts(terms, weights) {
 
 function connect(states, parents, span, from, settings) {
   const { to, pause, terms, whisper } = span;
-  const { width, costs, nbest } = settings;
+  const { width, costs, nbest, lattice } = settings;
   const weights = whisper ? WHISPER_WEIGHTS : settings.weights;
   if (pause) {
     const state = stateFor(states, width);
@@ -71,7 +75,9 @@ function connect(states, parents, span, from, settings) {
         addPath(state.paths, previous, arc, previous.cost, nbest);
       }
     }
-    state.edges.push({ from, to, unit: width, cost: 0, pause });
+    if (lattice) {
+      (state.edges ??= []).push({ from, to, unit: width, cost: 0, pause });
+    }
     return;
   }
   const { scores, minimum, denominator } = acousticCosts(terms, weights);
@@ -86,7 +92,7 @@ function connect(states, parents, span, from, settings) {
       cheapest = Math.min(cost, cheapest);
       if (
         state.paths.length === nbest &&
-        parent.paths[0].cost + cost >= state.paths.at(-1).cost
+        parent.paths[0].cost + cost >= state.paths[nbest - 1].cost
       ) {
         continue;
       }
@@ -102,7 +108,9 @@ function connect(states, parents, span, from, settings) {
         addPath(state.paths, previous, arc, previous.cost + cost, nbest);
       }
     }
-    state.edges.push({ from, to, unit, cost: cheapest });
+    if (lattice) {
+      (state.edges ??= []).push({ from, to, unit, cost: cheapest });
+    }
   }
 }
 
@@ -139,7 +147,7 @@ export function decodeSearch(prepared, language, options) {
   }
   const origin = { cost: 0, sequence: { children: [] } };
   stateFor(pending[0], lastUnit).paths.push(origin);
-  const settings = { width, costs: language.costs, weights, nbest };
+  const settings = { width, costs: language.costs, weights, nbest, lattice };
   let terminal = [];
   let provisional = [];
   for (let from = 0; from < times.length; from++) {
@@ -154,7 +162,9 @@ export function decodeSearch(prepared, language, options) {
     provisional = parents;
     if (lattice) {
       for (const state of parents) {
-        edges.push(...state.edges);
+        if (state.edges) {
+          edges.push(...state.edges);
+        }
       }
     }
     if (times.at(-1) - times[from] <= 0.4 && times.length - from <= 5) {
