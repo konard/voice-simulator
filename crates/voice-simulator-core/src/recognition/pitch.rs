@@ -1,7 +1,8 @@
 //! Pitch DSP (Unlicense). Coarse FFT values, window correlations and output
 //! occupy contiguous f64 arrays indexed by sample/lag. Refined candidates
 //! return pairs (lag, height), with a negative lag for an unusable peak.
-//! Mark search consumes the original f32 samples, with signed local offsets.
+//! Full-rate frames and mark search consume the original f32 samples.
+//! The full-rate frame uses a flat f64 Hann window and returns energy and peak.
 use crate::{inverse_dsp::Fft, math};
 use alloc::{vec, vec::Vec};
 use core::f64::consts::PI;
@@ -84,6 +85,31 @@ impl CoarseCorrelation {
         }
         true
     }
+}
+
+pub fn window_frame(
+    input: &[f32],
+    leading_zeros: usize,
+    window: &[f64],
+    output: &mut [f64],
+) -> (f64, f64) {
+    debug_assert!(leading_zeros + input.len() <= output.len());
+    debug_assert_eq!(window.len(), output.len());
+    let mut mean = 0.0;
+    let mut largest = 0.0_f64;
+    output.fill(0.0);
+    for (raw, &value) in output[leading_zeros..].iter_mut().zip(input) {
+        *raw = f64::from(value);
+        mean += *raw;
+        largest = largest.max(raw.abs());
+    }
+    mean /= output.len() as f64;
+    let mut energy = 0.0;
+    for (value, &weight) in output.iter_mut().zip(window) {
+        *value = (*value - mean) * weight;
+        energy += *value * *value;
+    }
+    (energy, largest)
 }
 
 fn peak(a: f64, b: f64, c: f64) -> (f64, f64) {
@@ -196,6 +222,15 @@ pub fn mark(samples: &[f32], anchor: i32, lo: i32, hi: i32, span: i32) -> f64 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn full_rate_window_centers_samples_with_padding_before_tapering() {
+        let mut output = [42.0; 4];
+        let (energy, largest) = window_frame(&[3.0, -1.0], 1, &[0.0, 0.5, 0.5, 0.0], &mut output);
+        assert_eq!(output, [0.0, 1.25, -0.75, 0.0]);
+        assert_eq!(energy, 2.125);
+        assert_eq!(largest, 3.0);
+    }
 
     #[test]
     fn real_fft_matches_direct_window_correlation() {

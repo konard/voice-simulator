@@ -122,6 +122,44 @@ pub extern "C" fn rec_pitch(
 }
 
 #[no_mangle]
+pub extern "C" fn rec_pitch_frame(
+    input: u32,
+    count: u32,
+    leading_zeros: u32,
+    length: u32,
+    window: u32,
+    output: u32,
+    stats: u32,
+) -> i32 {
+    if length == 0 || leading_zeros > length || count > length - leading_zeros {
+        return error::BAD_ARGUMENT;
+    }
+    let run = || {
+        let bytes = length.checked_mul(8).ok_or(error::BAD_ARGUMENT)?;
+        let mut ranges = [
+            (input, count * 4),
+            (window, bytes),
+            (output, bytes),
+            (stats, 16),
+        ];
+        ranges.sort_unstable();
+        if ranges
+            .windows(2)
+            .any(|pair| u64::from(pair[0].0) + u64::from(pair[0].1) > u64::from(pair[1].0))
+        {
+            return Err(error::BAD_ARGUMENT);
+        }
+        let samples = f32_slice(input, count)?;
+        let window = f64_read(window, length)?;
+        let output = f64_slice(output, length)?;
+        let (energy, peak) = pitch::window_frame(samples, leading_zeros as usize, window, output);
+        f64_slice(stats, 2)?.copy_from_slice(&[energy, peak]);
+        Ok(0)
+    };
+    run().unwrap_or_else(core::convert::identity)
+}
+
+#[no_mangle]
 pub extern "C" fn rec_pitch_refine(
     frame: u32,
     length: u32,

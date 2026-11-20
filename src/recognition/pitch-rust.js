@@ -9,6 +9,7 @@ export function withPitchDsp(module, settings, run) {
     const { size, coarseLength, lagMax, factor, fullLength } = settings;
     const {
       rec_pitch: correlate,
+      rec_pitch_frame: windowFrame,
       rec_pitch_refine: refine,
       rec_pitch_mark: mark,
     } = module.exports;
@@ -16,6 +17,7 @@ export function withPitchDsp(module, settings, run) {
     const coarseWindow = allocate(Float64Array, lagMax + 2);
     const peaks = allocate(Float64Array, lagMax + 2);
     const full = allocate(Float64Array, fullLength);
+    const taper = allocate(Float64Array, fullLength);
     const fullWindow = allocate(
       Float64Array,
       Math.min(fullLength, factor * (lagMax + 1) + factor + 2)
@@ -45,13 +47,32 @@ export function withPitchDsp(module, settings, run) {
         }
         return count > 0;
       },
-      load(frame, window) {
-        full.view().set(frame);
+      load(frames, start, window, correlation, frame) {
+        const from = Math.max(0, start);
+        const end = Math.min(frames.sampleCount, start + fullLength);
+        const samples = frames.samples.subarray(from, end);
+        region.view().set(samples);
         fullCorrelation.view().fill(NaN);
         if (!fullReady) {
-          fullWindow.view().set(window);
+          taper.view().set(window);
+          fullWindow.view().set(correlation);
           fullReady = true;
         }
+        const error = windowFrame(
+          region.pointer,
+          samples.length,
+          Math.min(fullLength, from - start),
+          fullLength,
+          taper.pointer,
+          full.pointer,
+          refined.pointer
+        );
+        if (error) {
+          throw new Error(`Rust pitch window failed (${error})`);
+        }
+        const values = refined.view();
+        frame.energy = values[0];
+        frame.largest = values[1];
       },
       refine(energy, centre) {
         refine(

@@ -405,6 +405,10 @@ function createFullFrame(frames, settings) {
      * window and its largest |sample| before. */
     load(centre) {
       const start = centre - half;
+      if (settings.dsp) {
+        settings.dsp.load(frames, start, window, correlation, frame);
+        return;
+      }
       let mean = 0;
       let largest = 0;
       for (let n = 0; n < fullLength; n++) {
@@ -419,7 +423,6 @@ function createFullFrame(frames, settings) {
         full[n] = (full[n] - mean) * window[n];
         energy += full[n] * full[n];
       }
-      settings.dsp?.load(full, correlation);
       frame.energy = energy;
       frame.largest = largest;
     },
