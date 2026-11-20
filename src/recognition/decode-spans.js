@@ -11,6 +11,7 @@ import { whisperAt } from './whisper.js';
 const EPSILON = 1e-9;
 const MIN_SEPARATION = 0.015;
 const MIN_PHONE_DURATION = 0.02;
+const MAX_PHONE_DURATION = 0.4;
 
 function findGaps(frames, first, last, startTime, end) {
   const gaps = [];
@@ -71,7 +72,34 @@ function consolidate(candidates) {
       kept.push(candidate);
     }
   }
-  return Float64Array.from(kept, ({ time }) => time);
+  return kept.map(({ time }) => time);
+}
+
+function fillLongSpans(candidates, pauses) {
+  const times = [];
+  for (const time of candidates) {
+    const previous = times.at(-1) ?? time;
+    const duration = time - previous;
+    if (
+      duration > MAX_PHONE_DURATION + EPSILON &&
+      !pauses.some(({ start }) => start === previous)
+    ) {
+      // A stable tract and unchanged broad class may leave no candidates.
+      const parts = Math.ceil(duration / MAX_PHONE_DURATION);
+      for (let part = 1; part < parts; part++) {
+        times.push(previous + (part * duration) / parts);
+      }
+    }
+    times.push(time);
+  }
+  return Float64Array.from(times);
+}
+
+function speechTimes(candidates, pauses) {
+  const edges = consolidate(candidates).filter(
+    (time) => !pauses.some((gap) => gap.start < time && time < gap.end)
+  );
+  return fillLongSpans(edges, pauses);
 }
 
 // Speech bounds, event candidates and their priority merging share one time grid.
@@ -136,10 +164,7 @@ export function decodeBoundaries(
       add(time, priority);
     }
   });
-  const times = consolidate(candidates).filter(
-    (time) => !pauses.some((gap) => gap.start < time && time < gap.end)
-  );
-  return { times, pauses };
+  return { times: speechTimes(candidates, pauses), pauses };
 }
 
 function classCounts(frames, landmarks, start, end) {
@@ -318,7 +343,10 @@ function scoreBoundaries({
     const end = Math.min(pause?.start ?? Infinity, nextEdge(start));
     for (let to = from + 1; to <= from + limit && to < times.length; to++) {
       const duration = times[to] - start;
-      if (duration > 0.4 + EPSILON || times[to] > end + EPSILON) {
+      if (
+        duration > MAX_PHONE_DURATION + EPSILON ||
+        times[to] > end + EPSILON
+      ) {
         break;
       }
       if (duration < MIN_PHONE_DURATION - EPSILON) {
@@ -356,5 +384,5 @@ function whisperBoundaries(original, spans, edges, pauses) {
       }
     }
   }
-  return consolidate(candidates);
+  return speechTimes(candidates, pauses);
 }

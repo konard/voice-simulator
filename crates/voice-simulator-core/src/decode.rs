@@ -12,6 +12,7 @@ const POINTS: [f64; 5] = [0.1, 0.3, 0.5, 0.7, 0.9];
 const EPS: f64 = 1e-9;
 const CLASSES: usize = 8;
 const MIN_PHONE_DURATION: f64 = 0.02;
+const MAX_PHONE_DURATION: f64 = 0.4;
 
 fn square(value: f64) -> f64 {
     value * value
@@ -175,10 +176,23 @@ fn consolidate(mut candidates: Vec<(f64, u8)>, pauses: &[Gap]) -> Vec<f64> {
         }
         kept.push((time, priority));
     }
-    kept.into_iter()
+    let mut times = Vec::with_capacity(kept.len());
+    for time in kept
+        .into_iter()
         .map(|(time, _)| time)
         .filter(|&time| !pauses.iter().any(|gap| gap.start < time && time < gap.end))
-        .collect()
+    {
+        let previous = times.last().copied().unwrap_or(time);
+        let duration = time - previous;
+        if duration > MAX_PHONE_DURATION + EPS && !pauses.iter().any(|gap| gap.start == previous) {
+            let parts = math::ceil(duration / MAX_PHONE_DURATION) as usize;
+            for part in 1..parts {
+                times.push(previous + part as f64 * duration / parts as f64);
+            }
+        }
+        times.push(time);
+    }
+    times
 }
 
 fn frame_at(input: &Observations<'_>, time: f64) -> usize {
@@ -296,7 +310,7 @@ pub fn prepare_with_whisper(
             };
             let latest = next_pause.min(next_edge.unwrap_or(f64::INFINITY));
             for (to, &end) in times.iter().enumerate().skip(from + 1).take(limit) {
-                if end - start > 0.4 + EPS || end > latest + EPS {
+                if end - start > MAX_PHONE_DURATION + EPS || end > latest + EPS {
                     break;
                 }
                 if end - start >= MIN_PHONE_DURATION - EPS {

@@ -266,6 +266,19 @@ itUnless(noRust)(
     compare(engine, { ...frames, speech }, landmarks, track, ['en'], {
       openWindow: { end: 0.71, clock: 1.25, readings: 0 },
     });
+    // Flat speech can leave more than 400 ms between candidate boundaries.
+    speech.fill(1);
+    const flat = new Float32Array(frames.count);
+    const channels = Object.fromEntries(
+      TEMPLATE_CHANNELS.map((name) => [name, flat])
+    );
+    compare(
+      engine,
+      { ...frames, speech },
+      { ...landmarks, landmarks: [], classes: speech },
+      { ...track, channels, variance: channels },
+      ['en']
+    );
   }
 );
 
@@ -290,6 +303,12 @@ itUnless(noRust)(
         { start: 0.34, end: 0.345 },
         { start: 0.45, end: 0.94 },
       ],
+    });
+    // A whisper boundary inside a pause must not split the pause arc.
+    const speech = new Uint8Array(frames.count).fill(1);
+    speech.fill(0, 100, 150);
+    compare(engine, { ...frames, speech }, landmarks, track, ['en'], {
+      whisperSpans: [{ start: 0.55, end: 0.85 }],
     });
   }
 );

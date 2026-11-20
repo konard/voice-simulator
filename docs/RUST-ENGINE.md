@@ -1416,7 +1416,7 @@ orchestration use JavaScript.
 transition and edge costs, readings, confidences and stream commitments on the
 same acoustic observations, including mixed whisper spans.
 `CARGO_BUILD_JOBS=1 node scripts/build-wasm.mjs --require --check-size`
-measured 657830 scalar bytes and 668839 SIMD bytes on Rust 1.100.0. The next
+measured 658243 scalar bytes and 669252 SIMD bytes on Rust 1.100.0. The next
 16 KiB size budget for the shipped scalar file is 671744 bytes.
 
 ## Analysis-by-synthesis rescoring
