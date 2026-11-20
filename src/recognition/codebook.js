@@ -12,6 +12,7 @@ import {
   GRID,
   L0,
   RESPONSE_GRID,
+  createTractResponse,
   envelopeKey,
   interpolateResponse,
   normalizeEnvelope,
@@ -182,6 +183,7 @@ export function buildCodebookWithRenderer(head, options, renderer) {
     stats: { rows, nasalRows: 0, nonUniqueShare: 0, buildMilliseconds: 0 },
   };
   const seeds = codebookSeeds();
+  const oralResponse = createTractResponse(responseGrid);
   const response = new Float64Array(RESPONSE_GRID.length),
     correction = new Float64Array(RESPONSE_GRID.length);
   const render = (state) =>
@@ -211,7 +213,7 @@ export function buildCodebookWithRenderer(head, options, renderer) {
     if (nasal) {
       if (!correctionReady) {
         const neutral = tractShape(CHANNEL_DEFAULTS, canonical);
-        tractResponse(neutral.areas, neutral.length, responseGrid, correction);
+        oralResponse(neutral.areas, neutral.length, correction);
         render(CHANNEL_DEFAULTS);
         for (let j = 0; j < response.length; j++) {
           correction[j] = response[j] - correction[j];
@@ -224,7 +226,7 @@ export function buildCodebookWithRenderer(head, options, renderer) {
       }
     } else {
       const shape = tractShape(row.state, canonical);
-      tractResponse(shape.areas, shape.length, responseGrid, response);
+      oralResponse(shape.areas, shape.length, response);
     }
     for (let j = 0; j < 24; j++) {
       env[j] = interpolateResponse(response, GRID[j]);

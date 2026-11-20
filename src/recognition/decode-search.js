@@ -63,21 +63,69 @@ function acousticCosts(terms, weights) {
   return { scores, minimum, denominator };
 }
 
+function connectBest(states, parents, span, from, settings, weights) {
+  const { width, costs } = settings;
+  const { scores, minimum, denominator } = acousticCosts(span.terms, weights);
+  for (let unit = 0; unit < width; unit++) {
+    const state = stateFor(states, unit);
+    const acoustic = scores[unit];
+    let best = state.paths[0]?.cost ?? Infinity;
+    let hasBest = state.paths.length > 0;
+    let arcCost = 0;
+    let previous;
+    for (const parent of parents) {
+      const candidate = parent.paths[0];
+      const cost =
+        acoustic + weights.phonotactic * costs[parent.unit * width + unit];
+      const total = candidate.cost + cost;
+      if (!hasBest || !(total >= best)) {
+        previous = candidate;
+        arcCost = cost;
+        best = total;
+        hasBest = true;
+      }
+    }
+    if (previous) {
+      state.paths[0] = {
+        previous,
+        arc: {
+          from,
+          to: span.to,
+          unit,
+          cost: arcCost,
+          confidence: Math.exp(minimum - acoustic) / denominator,
+          long: Boolean(span.long?.[unit]),
+        },
+        cost: best,
+      };
+    }
+  }
+}
+
+function connectPause(states, parents, { to, pause }, from, settings) {
+  const { width, nbest, lattice } = settings;
+  const state = stateFor(states, width);
+  for (const parent of parents) {
+    const arc = { from, to, unit: width, cost: 0, confidence: 1, pause };
+    for (const previous of parent.paths) {
+      addPath(state.paths, previous, arc, previous.cost, nbest);
+    }
+  }
+  if (lattice) {
+    (state.edges ??= []).push({ from, to, unit: width, cost: 0, pause });
+  }
+}
+
 function connect(states, parents, span, from, settings) {
   const { to, pause, terms, whisper } = span;
   const { width, costs, nbest, lattice } = settings;
   const weights = whisper ? WHISPER_WEIGHTS : settings.weights;
   if (pause) {
-    const state = stateFor(states, width);
-    for (const parent of parents) {
-      const arc = { from, to, unit: width, cost: 0, confidence: 1, pause };
-      for (const previous of parent.paths) {
-        addPath(state.paths, previous, arc, previous.cost, nbest);
-      }
-    }
-    if (lattice) {
-      (state.edges ??= []).push({ from, to, unit: width, cost: 0, pause });
-    }
+    connectPause(states, parents, span, from, settings);
+    return;
+  }
+  if (nbest === 1 && !lattice) {
+    connectBest(states, parents, span, from, settings, weights);
     return;
   }
   const { scores, minimum, denominator } = acousticCosts(terms, weights);

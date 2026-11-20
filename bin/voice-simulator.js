@@ -16,12 +16,6 @@ import {
 } from '../src/audio/formats.js';
 import { AUDIO_TIERS, DEFAULT_AUDIO_TIER } from '../src/perf/lod.js';
 import { ROOM_PRESETS } from '../src/acoustics/room.js';
-import {
-  benchmarkAudioTiers,
-  measureAudioTier,
-} from '../src/perf/benchmark.js';
-import { benchmarkDevice } from '../src/perf/device-benchmark.js';
-import { compareRecordings } from '../src/metrics/index.js';
 import { createEngine, ENGINE_NAMES } from '../src/engine/index.js';
 import {
   DEFAULT_HEAD,
@@ -30,10 +24,8 @@ import {
   presetHeadConfig,
   randomHeadConfig,
 } from '../src/head-config.js';
-import { headModelObj } from '../src/geometry/model.js';
 import { loadAccent } from '../src/accent/index.js';
 import { loadVoice, saveVoice } from '../src/voice-file.js';
-import { matchVoice } from '../src/analysis/voice-match.js';
 import { prepareUtterance, synthesize } from '../src/synthesize.js';
 import { resample } from '../src/audio/resample.js';
 import { textToIpa } from '../src/g2p/index.js';
@@ -627,6 +619,7 @@ function printTierLoads(result, io, engine) {
  * (benchmarkDevice, issue 28) and the CPU time it took.
  */
 async function quickBenchmark(values, io, engine) {
+  const { benchmarkDevice } = await import('../src/perf/device-benchmark.js');
   const result = await benchmarkDevice({ engine });
   if (values.json) {
     io.stdout(JSON.stringify(result));
@@ -833,17 +826,19 @@ const COMMANDS = {
     io.stdout(`${file}${name}: ok, preset ${voice.preset ?? 'none'}${spoken}`);
   },
 
-  mesh(values, positionals, io) {
+  async mesh(values, positionals, io) {
+    const { headModelObj } = await import('../src/geometry/model.js');
     const head = resolveHead(values) ?? randomHeadConfig(1);
     const obj = headModelObj(head, { lod: optionalNumber(values.lod, 'lod') });
     writeOutput(values.out ?? 'head.obj', obj, io);
   },
 
-  match(values, positionals, io, engine) {
+  async match(values, positionals, io, engine) {
     const [file] = positionals;
     if (!file) {
       throw new Error('Missing <file>');
     }
+    const { matchVoice } = await import('../src/analysis/voice-match.js');
     const { samples, sampleRate } = decodeAudio(readFileSync(file));
     const result = matchVoice(samples, sampleRate, {
       preset: values.preset,
@@ -898,11 +893,12 @@ const COMMANDS = {
     }
   },
 
-  compare(values, positionals, io) {
+  async compare(values, positionals, io) {
     const [referenceFile, testFile] = positionals;
     if (!referenceFile || !testFile) {
       throw new Error('Missing <reference> <test>');
     }
+    const { compareRecordings } = await import('../src/metrics/index.js');
     const result = compareRecordings(
       decodeAudio(readFileSync(referenceFile)),
       decodeAudio(readFileSync(testFile))
@@ -916,10 +912,12 @@ const COMMANDS = {
     }
   },
 
-  benchmark(values, positionals, io, engine) {
+  async benchmark(values, positionals, io, engine) {
     if (values.quick) {
       return quickBenchmark(values, io, engine);
     }
+    const { benchmarkAudioTiers, measureAudioTier } =
+      await import('../src/perf/benchmark.js');
     const seconds = optionalNumber(values.seconds, 'seconds') ?? 0.3;
     const repeats = optionalNumber(values.repeats, 'repeats') ?? 5;
     if (values.tier) {

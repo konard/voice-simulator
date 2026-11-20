@@ -46,7 +46,38 @@ const COSINES = Float64Array.from({ length: 96 }, (_, i) =>
   Math.cos((Math.PI * (1 + Math.floor(i / 16)) * ((i % 16) + 0.5)) / 16)
 );
 const SECTION_WIDTH = 5;
+const FREQUENCY_WIDTH = 6;
 let sectionScratch = new Float64Array(44 * SECTION_WIDTH);
+
+function frequencyTerms(frequencies, dx, out) {
+  for (let i = 0; i < frequencies.length; i++) {
+    const f = frequencies[i];
+    const omega = 2 * Math.PI * f;
+    const phase = (omega * dx) / SPEED_OF_SOUND;
+    const reactance = omega * WALL_MASS - WALL_STIFFNESS / omega;
+    const at = i * FREQUENCY_WIDTH;
+    out[at] = omega;
+    out[at + 1] = Math.cos(phase);
+    out[at + 2] = Math.sin(phase);
+    out[at + 3] = viscothermalLoss(f, 1, LOSS_SHAPE);
+    out[at + 4] = -reactance;
+    out[at + 5] = 1 / (WALL_RESISTANCE ** 2 + reactance ** 2);
+  }
+}
+
+/** Reuse frequency terms across the rows of one codebook. */
+export function createTractResponse(frequencies) {
+  const terms = new Float64Array(frequencies.length * FREQUENCY_WIDTH);
+  let previousStep;
+  return (areas, length, out) => {
+    const step = length / areas.length;
+    if (step !== previousStep) {
+      frequencyTerms(frequencies, step, terms);
+      previousStep = step;
+    }
+    return evaluateTractResponse(areas, length, terms, out);
+  };
+}
 
 /**
  * The oral chain of tubeTransfer, evaluated with scalar complex arithmetic.
@@ -54,8 +85,13 @@ let sectionScratch = new Float64Array(44 * SECTION_WIDTH);
  * No branches; the codebook measures open velums with the renderer.
  */
 export function tractResponse(areas, length, frequencies, out) {
+  return createTractResponse(frequencies)(areas, length, out);
+}
+
+function evaluateTractResponse(areas, length, terms, out) {
   const n = areas.length;
-  if (!n || !(length > 0) || out.length < frequencies.length) {
+  const bins = terms.length / FREQUENCY_WIDTH;
+  if (!n || !(length > 0) || out.length < bins) {
     throw new RangeError('Invalid tract response dimensions');
   }
   if (sectionScratch.length < n * SECTION_WIDTH) {
@@ -75,15 +111,14 @@ export function tractResponse(areas, length, frequencies, out) {
   }
   const lipArea = Math.max(areas[n - 1], 1e-3);
   const radius = Math.sqrt(lipArea / Math.PI);
-  for (let i = 0; i < frequencies.length; i++) {
-    const f = frequencies[i];
-    const omega = 2 * Math.PI * f;
-    const phase = (omega * dx) / SPEED_OF_SOUND;
-    const co = Math.cos(phase),
-      si = Math.sin(phase);
-    const loss = viscothermalLoss(f, 1, LOSS_SHAPE);
-    const reactance = omega * WALL_MASS - WALL_STIFFNESS / omega;
-    const wallScale = 1 / (WALL_RESISTANCE ** 2 + reactance ** 2);
+  for (let i = 0; i < bins; i++) {
+    const at = i * FREQUENCY_WIDTH;
+    const omega = terms[at],
+      co = terms[at + 1],
+      si = terms[at + 2],
+      loss = terms[at + 3],
+      negativeReactance = terms[at + 4],
+      wallScale = terms[at + 5];
     const ka = (omega * radius) / SPEED_OF_SOUND;
     let pr = (((ka * ka) / 2) * (0.5 + 0.5 * RADIATION_BAFFLE)) / lipArea;
     let pi = (ka * (0.61 + 0.24 * RADIATION_BAFFLE)) / lipArea;
@@ -95,7 +130,7 @@ export function tractResponse(areas, length, frequencies, out) {
       const inverseArea = s[offset + 4];
       const scale = s[offset + 3] * wallScale;
       const yr = WALL_RESISTANCE * scale,
-        yi = -reactance * scale;
+        yi = negativeReactance * scale;
       ur += pr * yr - pi * yi;
       ui += pr * yi + pi * yr;
       const e = Math.exp(loss * s[offset + 1] + s[offset + 2]);

@@ -173,6 +173,11 @@ it('keeps paths with different phone strings and their lowest cost', () => {
     [1]
   );
   assert.equal(pruned.edges.filter(({ to }) => to === 3).length, 2);
+  const best = { beam: 2, nbest: 1, weights };
+  assert.deepEqual(
+    decodeSearch(prepared, language, { ...best, lattice: false }).paths,
+    decodeSearch(prepared, language, { ...best, lattice: true }).paths
+  );
 });
 
 it('decodes steady speech across a gap in boundary candidates', () => {
