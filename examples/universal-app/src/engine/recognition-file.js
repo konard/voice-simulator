@@ -46,6 +46,7 @@ export function verifyFile({ sampleCount, sampleRate, ...options }, send) {
       }
     },
     finish(recognizer) {
+      const fallback = recognizer.flush();
       const result = count === sampleCount ? verify() : null;
       if (result?.words.length) {
         send('final', result);
@@ -57,7 +58,6 @@ export function verifyFile({ sampleCount, sampleRate, ...options }, send) {
         }
         return result;
       }
-      const fallback = recognizer.flush();
       for (const [type, payload] of pending) {
         send(type, payload);
       }
