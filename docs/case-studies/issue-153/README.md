@@ -46,6 +46,8 @@ The duration and score-weight probes, including the use of raw periodicity, spec
 
 The waveguide probe generated templates for each speaker and rate in `/i/`, `/a/` and `/u/` contexts. It matched the observed span's cepstrum, relative energy, periodicity and spectral gravity against these templates. The best trial with a nonzero template weight reached 86.03% phone error and 56.03% broad-class error. Every tested nonzero template weight increased broad-class error from the 50.07% control.
 
+Increasing the simulator-generated inversion codebook from 256 to 1,024 rows produced 89.78% phone and 52.34% broad-class error with the default 16 inversion candidates. At 32 candidates it produced 87.31% and 51.07%. Both scored worse than the 256-row decoder on the same recordings and fitted heads.
+
 ## Reproduce
 
 ```sh
@@ -59,6 +61,7 @@ node experiments/issue-153-evidence.mjs
 LEXICAL_PRIOR=1 node experiments/issue-153-evidence.mjs
 node experiments/issue-153-phone-context.mjs
 node experiments/issue-153-rendered-templates.mjs
+node experiments/issue-153-codebook.mjs 1024
 ```
 
 The per-condition results are in the [updated benchmark report](../../../reports/heavy/recognition-decode.md) and the [PR #152 baseline report](https://github.com/konard/voice-simulator/blob/2db22212217ef09384fc6aab45d777c0aabfb0e1/reports/heavy/recognition-decode.md).
