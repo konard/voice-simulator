@@ -5,7 +5,7 @@
 //! per node. Each input row contains deletion cost followed by substitution
 //! costs in feature order. The result is (end, node, cost) for each frontier.
 
-use alloc::{vec, vec::Vec};
+use alloc::vec::Vec;
 
 #[derive(Clone, Copy)]
 struct State {
@@ -36,14 +36,17 @@ pub struct Trie<'a> {
 pub struct SearchScratch {
     slots: Vec<usize>,
     old: Vec<f64>,
+    states: Vec<State>,
+    next: Vec<State>,
+    frontier: Vec<State>,
 }
 
 impl SearchScratch {
-    fn keep(&mut self, mut states: Vec<State>, beam: usize) -> Vec<State> {
+    fn keep(slots: &mut [usize], states: &mut Vec<State>, beam: usize) {
         let mut count = 0;
         for i in 0..states.len() {
             let state = states[i];
-            let slot = &mut self.slots[state.node];
+            let slot = &mut slots[state.node];
             if *slot == usize::MAX {
                 states[count] = State {
                     order: count,
@@ -56,8 +59,8 @@ impl SearchScratch {
             }
         }
         states.truncate(count);
-        for state in &states {
-            self.slots[state.node] = usize::MAX;
+        for state in states.iter() {
+            slots[state.node] = usize::MAX;
         }
         let compare = |a: &State, b: &State| a.cost.total_cmp(&b.cost).then(a.order.cmp(&b.order));
         if states.len() > beam {
@@ -65,42 +68,45 @@ impl SearchScratch {
             states.truncate(beam);
         }
         states.sort_unstable_by(compare);
-        states
     }
 
-    fn insertions(
-        &mut self,
-        mut all: Vec<State>,
-        limit: f64,
-        beam: usize,
-        trie: &Trie,
-    ) -> Option<Vec<State>> {
-        let mut frontier = all.clone();
-        while !frontier.is_empty() {
-            for state in &all {
+    fn insertions(&mut self, limit: f64, beam: usize, trie: &Trie) -> Option<()> {
+        self.frontier.clear();
+        self.frontier.extend_from_slice(&self.states);
+        while !self.frontier.is_empty() {
+            self.next.clear();
+            self.next.extend_from_slice(&self.states);
+            for state in &self.states {
                 self.old[state.node] = state.cost;
             }
-            let mut next = all.clone();
-            for state in frontier {
+            for state in &self.frontier {
                 for node in trie.children(state.node)? {
                     let cost = state.cost + trie.gaps.get(node)?;
                     if cost <= limit && cost < self.old[node] {
-                        next.push(State::new(node, cost));
+                        self.next.push(State::new(node, cost));
                     }
                 }
             }
-            let kept = self.keep(next, beam);
-            frontier = kept
-                .iter()
-                .copied()
-                .filter(|s| s.cost < self.old[s.node])
-                .collect();
-            for state in all {
+            if self.next.len() == self.states.len() {
+                for state in &self.states {
+                    self.old[state.node] = f64::INFINITY;
+                }
+                break;
+            }
+            Self::keep(&mut self.slots, &mut self.next, beam);
+            self.frontier.clear();
+            self.frontier.extend(
+                self.next
+                    .iter()
+                    .copied()
+                    .filter(|s| s.cost < self.old[s.node]),
+            );
+            for state in &self.states {
                 self.old[state.node] = f64::INFINITY;
             }
-            all = kept;
+            core::mem::swap(&mut self.states, &mut self.next);
         }
-        Some(all)
+        Some(())
     }
 }
 
@@ -149,18 +155,20 @@ impl Trie<'_> {
         beam: usize,
         scratch: &mut SearchScratch,
     ) -> Option<Vec<f64>> {
-        let mut states = scratch.insertions(vec![State::new(0, 0.0)], 0.6, beam, self)?;
+        scratch.states.clear();
+        scratch.states.push(State::new(0, 0.0));
+        scratch.insertions(0.6, beam, self)?;
         let mut result = Vec::new();
         for (index, row) in input.chunks_exact(stride).enumerate() {
-            if states.is_empty() {
+            if scratch.states.is_empty() {
                 break;
             }
             let limit = 0.6 * (index + 2) as f64;
-            let mut next = Vec::new();
-            for state in states {
+            scratch.next.clear();
+            for &state in &scratch.states {
                 let deletion = state.cost + row[0];
                 if deletion <= limit {
-                    next.push(State {
+                    scratch.next.push(State {
                         cost: deletion,
                         ..state
                     });
@@ -169,13 +177,14 @@ impl Trie<'_> {
                     let column = *self.feature.get(node)? as usize;
                     let cost = state.cost + row[1..].get(column)?;
                     if cost <= limit {
-                        next.push(State::new(node, cost));
+                        scratch.next.push(State::new(node, cost));
                     }
                 }
             }
-            let kept = scratch.keep(next, beam);
-            states = scratch.insertions(kept, limit, beam, self)?;
-            for state in &states {
+            SearchScratch::keep(&mut scratch.slots, &mut scratch.next, beam);
+            core::mem::swap(&mut scratch.states, &mut scratch.next);
+            scratch.insertions(limit, beam, self)?;
+            for state in &scratch.states {
                 if self.terminal[state.node] != 0 {
                     result.extend([(index + 1) as f64, state.node as f64, state.cost]);
                 }
