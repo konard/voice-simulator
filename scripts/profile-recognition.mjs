@@ -37,7 +37,10 @@ for (const level of levels) {
       },
     });
     const total = globalThis.performance.now() - start;
-    const measured = [...times.values()].reduce((sum, ms) => sum + ms, 0);
+    const measured = stages.reduce(
+      (sum, stage) => sum + (times.get(stage) ?? 0),
+      0
+    );
     times.set('Other', total - measured);
     times.set('Total', total);
     runs.push(times);

@@ -191,6 +191,8 @@ function probabilityFor(tables, a, b) {
   return best;
 }
 
+const languageTables = new Map();
+
 export function decoderLanguage(options) {
   const languages = [
     ...new Set(
@@ -202,6 +204,18 @@ export function decoderLanguage(options) {
       throw new RangeError(`Unsupported decoder language: ${language}`);
     }
   }
+  const key = languages.join(',');
+  if (!languageTables.has(key)) {
+    languageTables.set(key, decoderLanguageTable(languages));
+  }
+  return {
+    ...languageTables.get(key),
+    language:
+      options.language ?? (languages.length === 1 ? languages[0] : undefined),
+  };
+}
+
+function decoderLanguageTable(languages) {
   const source = languages.map((language) => PHONOTACTICS[language]);
   const symbols = source.length
     ? [...new Set(source.flatMap(({ units }) => units))].sort()
@@ -225,8 +239,6 @@ export function decoderLanguage(options) {
   return {
     symbols,
     costs,
-    language:
-      options.language ?? (languages.length === 1 ? languages[0] : undefined),
     long: new Set(source.flatMap((model) => model.long)),
   };
 }

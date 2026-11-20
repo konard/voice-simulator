@@ -4,7 +4,7 @@ import { NoVoicedSpeechError } from '../analysis/voice-fit-statistics.js';
 import { DEFAULT_HEAD, normalizeHeadConfig } from '../head-config.js';
 import { parseIpa } from '../ipa/parse.js';
 import { syllabifyTokens } from '../ipa/syllables.js';
-import { buildCodebook } from './codebook.js';
+import { buildCodebook, buildCodebookWithRenderer } from './codebook.js';
 import { codebookQueries, codebookQueriesParallel } from './codebook-jobs.js';
 import { decoderLanguage, decoderTemplates } from './decode-model.js';
 import { pathArcs } from './decode-search.js';
@@ -88,22 +88,32 @@ export function decoderSettings(sampleRate, options) {
         : workingRate(Math.min(sampleRate, options.rate))
     ),
     hop: options.hop ?? 0.005,
-    language: decoderLanguage(options),
+    language: measure(options.profile, 'Decoder setup', () =>
+      decoderLanguage(options)
+    ),
     articulationOffsets: options.articulationOffsets,
   };
 }
 
 const books = new Map();
 
-export function decoderCodebook(voice) {
-  const key = JSON.stringify(voice);
+export function decoderCodebook(voice, kernels) {
+  const renderer = kernels?.renderer;
+  const key = JSON.stringify([voice, Boolean(renderer)]);
   if (!books.has(key)) {
     if (books.size >= 4) {
       books.delete(books.keys().next().value);
     }
     // Bound cold-start work. The tuning-sentence comparison in experiments/
     // issue-66-codebook-size.mjs measures this table against larger ones.
-    books.set(key, buildCodebook(voice, { size: 256, cache: new Map() }));
+    books.set(
+      key,
+      buildCodebookWithRenderer(
+        voice,
+        { size: 256, cache: new Map() },
+        renderer
+      )
+    );
   }
   return books.get(key);
 }
@@ -191,9 +201,11 @@ function prepareAnalysis(
     })
   );
   const landmarks = measure(profile, 'Landmarks', () => findLandmarks(frames));
-  const codebook = hasSpeech
-    ? decoderCodebook(voice)
-    : buildCodebook(voice, { size: 1 });
+  const codebook = measure(profile, 'Codebook setup', () =>
+    hasSpeech
+      ? decoderCodebook(voice, settings.kernels)
+      : buildCodebook(voice, { size: 1 })
+  );
   return {
     frames,
     spectralFrames,

@@ -239,7 +239,9 @@ function recognizeProsody(decoded, samples, rate, settings, level) {
     frames: decoded.frames?.speech ? decoded.frames : undefined,
     whisperSpans: settings.whisper === false ? [] : decoded.whisperSpans,
   };
-  const measured = measureProsody(samples, rate, input, options);
+  const measured = measure(settings.profile, 'Prosody', () =>
+    measureProsody(samples, rate, input, options)
+  );
   const primary = decodeText(
     measured.sounds,
     settings,
@@ -319,21 +321,23 @@ export function recognizeDecoded(
   const primary = recognizeProsody(decoded, samples, rate, settings, level);
   const withModes =
     settings.modes && typeof recognizeModes === 'function'
-      ? recognizeModes(
-          samples,
-          rate,
-          {
-            ...primary,
-            whisperSpans:
-              settings.whisper === false ? [] : decoded.whisperSpans,
-          },
-          {
-            voice: settings.voice ? { head: settings.voice } : undefined,
-            maxSeconds: samples.length / rate,
-            profile: settings.profile,
-            kernels: settings.kernels,
-            frames: decoded.frames?.speech ? decoded.frames : undefined,
-          }
+      ? measure(settings.profile, 'Modes', () =>
+          recognizeModes(
+            samples,
+            rate,
+            {
+              ...primary,
+              whisperSpans:
+                settings.whisper === false ? [] : decoded.whisperSpans,
+            },
+            {
+              voice: settings.voice ? { head: settings.voice } : undefined,
+              maxSeconds: samples.length / rate,
+              profile: settings.profile,
+              kernels: settings.kernels,
+              frames: decoded.frames?.speech ? decoded.frames : undefined,
+            }
+          )
         )
       : primary;
   const { ipa, text, modes = [] } = withModes;

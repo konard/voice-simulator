@@ -22,7 +22,13 @@ function rustUnavailable(cause) {
 function kernels(loaded, { engine = 'auto', threads = 'auto' }, cause) {
   const module = loaded?.module;
   if (typeof module?.exports.rec_pitch === 'function') {
-    return { name: 'rust', threads, module };
+    return {
+      name: 'rust',
+      threads,
+      module,
+      renderer:
+        typeof loaded.createRenderer === 'function' ? loaded : undefined,
+    };
   }
   if (engine === 'rust') {
     throw rustUnavailable(cause);

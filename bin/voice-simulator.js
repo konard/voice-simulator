@@ -42,7 +42,6 @@ import {
   visemeTrack,
   VISEME_FORMATS,
 } from '../src/index.js';
-import { INDEX_PAGE, createVoiceServer } from '../src/server/server.js';
 import { recognizeCommand } from './recognize.js';
 
 const OPTIONS = {
@@ -954,7 +953,9 @@ const COMMANDS = {
     printTierLoads(result, io, engine);
   },
 
-  serve(values, positionals, io, engine) {
+  async serve(values, positionals, io, engine) {
+    const { INDEX_PAGE, createVoiceServer } =
+      await import('../src/server/server.js');
     const port =
       optionalNumber(values.port ?? process.env.PORT, 'port') ?? 8080;
     const host = values.host ?? process.env.HOST ?? '127.0.0.1';
@@ -1013,8 +1014,11 @@ export async function runCli(argv, io = {}) {
       return 1;
     }
     loadLexiconFiles(values.lexicon, values.lang);
-    // Loaded once, before the command: every render of it uses this engine.
-    const engine = await createEngine(engineFlags(values));
+    // Recognition loads scalar kernels itself, including its worker fallback.
+    const engine =
+      command === 'recognize'
+        ? undefined
+        : await createEngine(engineFlags(values));
     await handler(values, rest, streams, engine);
     return 0;
   } catch (error) {

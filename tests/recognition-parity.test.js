@@ -91,7 +91,8 @@ function formantsMatch(js, rust, count) {
 function codebookMatches(frames, kernels) {
   const book = decoderCodebook(DEFAULT_HEAD);
   const js = codebookQueries(frames, book, DEFAULT_HEAD, null);
-  const rust = codebookQueries(frames, book, DEFAULT_HEAD, kernels);
+  const rustBook = decoderCodebook(DEFAULT_HEAD, kernels);
+  const rust = codebookQueries(frames, rustBook, DEFAULT_HEAD, kernels);
   const result = () => ({
     index: new Int32Array(16),
     cost: new Float64Array(16),

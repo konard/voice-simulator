@@ -1,6 +1,6 @@
 /**
  * Inverse lookup of the forward simulator, made on first use (issue 64).
- * Pure JavaScript by design: Rust table building belongs to issue 77.
+ * The recognition path can reuse the existing scalar waveguide renderer.
  */
 import { normalizeHeadConfig } from '../head-config.js';
 import { hashSeed } from '../random.js';
@@ -120,7 +120,7 @@ function duplicate(state, bucket, buckets, rawChannels, rawEnvelope, env) {
 /** Build or parse a deterministic table; length scaling is per returned view. */
 // Row generation combines feature extraction, quantization and accounting.
 /* eslint-disable max-statements, complexity */
-export function buildCodebook(head = {}, options = {}) {
+export function buildCodebookWithRenderer(head, options, renderer) {
   const size = options.size ?? 20000,
     seed = options.seed ?? 1;
   if (
@@ -155,7 +155,7 @@ export function buildCodebook(head = {}, options = {}) {
         .map((name) => [name, canonical[name]]),
     ])
   );
-  const cache = options.cache ?? memoryCache;
+  const cache = renderer ? new Map() : (options.cache ?? memoryCache);
   const cached = cache.get(id);
   if (cached !== undefined) {
     const book = parseCodebook(cached);
@@ -184,6 +184,8 @@ export function buildCodebook(head = {}, options = {}) {
   const seeds = codebookSeeds();
   const response = new Float64Array(RESPONSE_GRID.length),
     correction = new Float64Array(RESPONSE_GRID.length);
+  const render = (state) =>
+    renderedResponse(state, canonical, response, responseGrid, renderer);
   const env = new Float64Array(24),
     key = new Float64Array(6),
     formants = new Float64Array(8);
@@ -210,13 +212,13 @@ export function buildCodebook(head = {}, options = {}) {
       if (!correctionReady) {
         const neutral = tractShape(CHANNEL_DEFAULTS, canonical);
         tractResponse(neutral.areas, neutral.length, responseGrid, correction);
-        renderedResponse(CHANNEL_DEFAULTS, canonical, response, responseGrid);
+        render(CHANNEL_DEFAULTS);
         for (let j = 0; j < response.length; j++) {
           correction[j] = response[j] - correction[j];
         }
         correctionReady = true;
       }
-      renderedResponse(row.state, canonical, response, responseGrid);
+      render(row.state);
       for (let j = 0; j < response.length; j++) {
         response[j] -= correction[j];
       }
@@ -271,6 +273,10 @@ export function buildCodebook(head = {}, options = {}) {
 }
 
 /* eslint-enable max-statements, complexity */
+
+export function buildCodebook(head = {}, options = {}) {
+  return buildCodebookWithRenderer(head, options);
+}
 
 const predictor = new Float64Array(128);
 /** Caller-owned {envelope: 24 values, key: 6 values}; no frame allocations. */

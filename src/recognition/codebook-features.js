@@ -227,14 +227,15 @@ export function renderedResponse(
   state,
   head,
   out,
-  frequencies = RESPONSE_GRID
+  frequencies = RESPONSE_GRID,
+  engine = 'js'
 ) {
   const samples = renderPlan(steadyPlan(state), {
     head,
     solver: 'waveguide',
     sampleRate: 16000,
     seed: 1,
-    engine: 'js',
+    engine,
   });
   const a = new Float64Array(18),
     k = new Float64Array(18);
