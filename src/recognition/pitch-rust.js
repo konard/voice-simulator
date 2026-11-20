@@ -20,6 +20,7 @@ export function withPitchDsp(module, settings, run) {
       Float64Array,
       Math.min(fullLength, factor * (lagMax + 1) + factor + 2)
     );
+    const fullCorrelation = allocate(Float64Array, fullWindow.length);
     const refined = allocate(Float64Array, 2);
     const region = allocate(Float32Array, fullLength + 4);
     let coarseReady = false;
@@ -46,6 +47,7 @@ export function withPitchDsp(module, settings, run) {
       },
       load(frame, window) {
         full.view().set(frame);
+        fullCorrelation.view().fill(NaN);
         if (!fullReady) {
           fullWindow.view().set(window);
           fullReady = true;
@@ -60,6 +62,7 @@ export function withPitchDsp(module, settings, run) {
           energy,
           centre,
           factor,
+          fullCorrelation.pointer,
           refined.pointer
         );
         const [position, height] = refined.view();

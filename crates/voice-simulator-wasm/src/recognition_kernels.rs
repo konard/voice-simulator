@@ -130,6 +130,7 @@ pub extern "C" fn rec_pitch_refine(
     energy: f64,
     centre: i32,
     radius: i32,
+    cache: u32,
     output: u32,
 ) -> i32 {
     if !(0..=64).contains(&radius) || !(0..=1_000_000).contains(&centre) {
@@ -138,7 +139,8 @@ pub extern "C" fn rec_pitch_refine(
     let run = || {
         let frame = f64_read(frame, length)?;
         let window = f64_read(window, lags)?;
-        let (lag, score) = pitch::refine(frame, window, energy, centre, radius);
+        let cache = f64_slice(cache, lags)?;
+        let (lag, score) = pitch::refine_cached(frame, window, energy, centre, radius, cache);
         f64_slice(output, 2)?.copy_from_slice(&[lag, score]);
         Ok(0)
     };

@@ -52,7 +52,7 @@ impl CoarseCorrelation {
             .transform(&mut self.real, &mut self.imaginary, false);
         let half = self.real.len();
         for (k, &(cosine, sine)) in self.twiddles.iter().enumerate() {
-            let mirror = (half - k) % half;
+            let mirror = (half - k) & (half - 1);
             let (ar, ai) = (self.real[k], self.imaginary[k]);
             let (br, bi) = (self.real[mirror], self.imaginary[mirror]);
             let even_re = (ar + br) * 0.5;
@@ -102,16 +102,35 @@ pub fn refine(
     centre: i32,
     radius: i32,
 ) -> (f64, f64) {
-    let at = |lag: i32| {
+    refine_cached(frame, window_correlation, energy, centre, radius, &mut [])
+}
+
+pub fn refine_cached(
+    frame: &[f64],
+    window_correlation: &[f64],
+    energy: f64,
+    centre: i32,
+    radius: i32,
+    cache: &mut [f64],
+) -> (f64, f64) {
+    let mut at = |lag: i32| {
         if lag < 1 || lag as usize >= window_correlation.len() || lag as usize >= frame.len() {
             return -1.0;
         }
         let lag = lag as usize;
+        let cached = cache.get_mut(lag);
+        if let Some(&value) = cached.as_deref().filter(|value| !value.is_nan()) {
+            return value;
+        }
         let mut sum = 0.0;
         for (a, b) in frame.iter().zip(&frame[lag..]) {
             sum += a * b;
         }
-        sum / (energy * window_correlation[lag])
+        let score = sum / (energy * window_correlation[lag]);
+        if let Some(cached) = cached {
+            *cached = score;
+        }
+        score
     };
     let mut best = f64::NEG_INFINITY;
     let mut place = -1;
@@ -137,11 +156,13 @@ pub fn mark(samples: &[f32], anchor: i32, lo: i32, hi: i32, span: i32) -> f64 {
         samples.get(start..end)
     };
     let anchor_samples = window(anchor);
+    let anchor_energy = (0..span)
+        .map(|t| sample(anchor + t))
+        .fold(0.0, |sum, value| sum + value * value);
     let at = |place: i32| {
-        let (mut ab, mut aa, mut bb) = (0.0, 0.0, 0.0);
+        let (mut ab, mut bb) = (0.0, 0.0);
         let mut accumulate = |a: f64, b: f64| {
             ab += a * b;
-            aa += a * a;
             bb += b * b;
         };
         if let (Some(left), Some(right)) = (anchor_samples, window(place)) {
@@ -153,8 +174,8 @@ pub fn mark(samples: &[f32], anchor: i32, lo: i32, hi: i32, span: i32) -> f64 {
                 accumulate(sample(anchor + t), sample(place + t));
             }
         }
-        if aa > 0.0 && bb > 0.0 {
-            ab / math::sqrt(aa * bb)
+        if anchor_energy > 0.0 && bb > 0.0 {
+            ab / math::sqrt(anchor_energy * bb)
         } else {
             -1.0
         }
@@ -199,7 +220,14 @@ mod tests {
     #[test]
     fn periodic_frame_refines_and_marks_to_first_equal_peak() {
         let frame = [0.0, 1.0, 0.0, -1.0, 0.0, 1.0, 0.0, -1.0];
-        assert_eq!(refine(&frame, &[1.0; 6], 4.0, 4, 1), (4.0, 0.5));
+        let expected = refine(&frame, &[1.0; 6], 4.0, 4, 1);
+        assert_eq!(expected, (4.0, 0.5));
+        let mut cache = [f64::NAN; 6];
+        assert_eq!(
+            refine_cached(&frame, &[1.0; 6], 4.0, 4, 1, &mut cache),
+            expected
+        );
+        assert_eq!(cache[4], 0.5);
         let samples = [0.0_f32, 1.0, 0.0, -1.0, 0.0, 1.0, 0.0, -1.0, 0.0, 1.0];
         assert_eq!(mark(&samples, 0, 3, 8, 2), 4.0);
     }
