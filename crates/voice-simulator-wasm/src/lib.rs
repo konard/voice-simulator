@@ -41,6 +41,7 @@ pub mod language_id;
 pub mod modes;
 pub mod recognition;
 pub mod renderer;
+pub mod rescoring;
 pub mod threads;
 pub mod voice_fit;
 pub mod whisper;

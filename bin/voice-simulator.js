@@ -145,6 +145,8 @@ function usage() {
     '         Pass articulationPlan(track) to renderPlan for resynthesis.',
     'Library: audioToIpa / createIpaDecoder return experimental timed IPA,',
     '         syllables and alternatives; see README for options and accuracy.',
+    'Library: rescoreHypotheses compares n-best IPA readings with waveguide renders.',
+    '         Pass audioToIpa a higher nbest value to enable comparison.',
     '',
     'Library: recognizeModes(samples, rate, result, { voice }) adds speech modes',
     '         to timed IPA words; toPlanModes converts spans for replay.',

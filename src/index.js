@@ -710,3 +710,11 @@ export { audioToIpa, createIpaDecoder } from './recognition/decode.js';
 
 export { findWhisper, whisperTones } from './recognition/whisper.js';
 export { recognize, createRecognizer } from './recognition/recognize.js';
+
+export {
+  planReading,
+  planRescoring,
+  rescoreHypotheses,
+  scoreJob,
+  warpPlan,
+} from './recognition/rescoring.js';

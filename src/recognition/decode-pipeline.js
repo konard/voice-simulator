@@ -201,7 +201,7 @@ export function segmentsOf(path, times, templates, language) {
   );
 }
 
-function syllablesOf(segments, language) {
+export function syllablesOf(segments, language) {
   const syllables = [];
   let first = 0;
   while (first < segments.length) {
@@ -276,6 +276,17 @@ function addWhisperTones(segments, syllables, spans, frames) {
   }
 }
 
+export function normalizeReadingConfidence(readings) {
+  const minimum = Math.min(...readings.map(({ cost }) => cost));
+  const total = readings.reduce(
+    (sum, { cost }) => sum + Math.exp(minimum - cost),
+    0
+  );
+  for (const item of readings) {
+    item.confidence = Math.exp(minimum - item.cost) / total;
+  }
+}
+
 export function resultOf(
   analysis,
   settings,
@@ -311,13 +322,7 @@ export function resultOf(
       segments: prefix.slice(),
     });
   }
-  const total = nbest.reduce(
-    (sum, item) => sum + Math.exp(nbest[0].cost - item.cost),
-    0
-  );
-  for (const item of nbest) {
-    item.confidence = Math.exp(nbest[0].cost - item.cost) / total;
-  }
+  normalizeReadingConfidence(nbest);
   const { ipa = '', segments = [] } = nbest[0] ?? {};
   const syllables = syllablesOf(segments, language.language);
   if (language.language === 'zh') {
@@ -329,6 +334,7 @@ export function resultOf(
     syllables,
     modes: whisperModeSpans(segments, spans),
     nbest,
+    language: language.language,
     lattice: lattice ?? latticeOf(times, search.edges, templates),
     ...analysis,
   };

@@ -40,6 +40,8 @@ export interface IpaSegment {
   end: number;
   /** Relative acoustic likelihood among alternatives for this span. */
   confidence: number;
+  /** Set when analysis-by-synthesis replaces this segment. */
+  revised?: true;
   long: boolean;
   whispered?: true;
   /** Soft evidence for voicing from relative duration and level. */
@@ -50,6 +52,7 @@ export interface IpaSegment {
 
 export interface IpaSyllable {
   ipa: string;
+  revised?: true;
   start: number;
   end: number;
   /** Half-open interval of segment indices. */
@@ -78,6 +81,8 @@ export interface IpaDecodeTracks {
 }
 
 export interface IpaDecodeResult {
+  /** Language used by the planner and syllabifier, if specified. */
+  language?: LanguageCode;
   ipa: string;
   segments: IpaSegment[];
   syllables: IpaSyllable[];

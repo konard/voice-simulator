@@ -4523,3 +4523,17 @@ export {
   createRecognizer,
   type AudioRecognitionResult,
 } from './recognition/recognize.js';
+
+export {
+  planReading,
+  planRescoring,
+  rescoreHypotheses,
+  scoreJob,
+  warpPlan,
+  type RescoredIpa,
+  type RescoringJob,
+  type RescoringOptions,
+  type RescoringPreparation,
+  type RescoringStatistics,
+  type WarpedPlan,
+} from './recognition/rescoring.js';
