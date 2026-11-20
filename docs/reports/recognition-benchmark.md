@@ -1,10 +1,10 @@
 # Recognition benchmark on public recordings
 
 The runner verified all six recording sources and the AISHELL-3 text index.
-Benchmarking the first 25 rows of each FLEURS set and all 20 rows of both
-additional corpora took 64.05 minutes for the full recognition suite on one
-core. The quality floors blocked the initial baseline. Both benchmark reports
-were uploaded, and the artifact contained no audio. [Workflow and artifact](https://github.com/konard/voice-simulator/actions/runs/44810324118)
+With `--limit 25`, the recognition suite took 64.05 minutes on one core.
+The benchmark measured the first 25 rows of each FLEURS set and all 20 rows
+of both additional corpora. The quality floors blocked the initial baseline.
+Both benchmark reports were uploaded, and the artifact contained no audio. [Workflow and artifact](https://github.com/konard/voice-simulator/actions/runs/44810324118)
 
 Commit: `194809c12e83ed3ade2973b8c9a96e96df941135`
 
@@ -116,10 +116,15 @@ source of phone errors. [Stage probe](../../experiments/issue-76-recognition-sta
 
 ## Other runner measurements
 
+With the original 50-row FLEURS defaults, the verified-download run reached
+the 90-minute deadline while measuring Hindi FLEURS. It had verified all six
+corpora and completed English and Russian FLEURS. The measured 64.05-minute
+25-row run supports reducing the default FLEURS prefixes to 25. Both additional
+corpora keep their 20-row prefixes. [50-row default run](https://github.com/konard/voice-simulator/actions/runs/44810707976)
+
 The first no-limit run took 71.45 minutes and the run with `--limit 50`
 after merging main took 72.45 minutes. Both timed out probing Russian and
-Mandarin FLEURS availability before the download change. The 50-row runtime
-for all six corpora still requires a complete-source run. [First no-limit run](https://github.com/konard/voice-simulator/actions/runs/44798558209) · [Run after merging main](https://github.com/konard/voice-simulator/actions/runs/44805666981)
+Mandarin FLEURS availability before the download change. [First no-limit run](https://github.com/konard/voice-simulator/actions/runs/44798558209) · [Run after merging main](https://github.com/konard/voice-simulator/actions/runs/44805666981)
 
 The one-row smoke run measured all six corpora in 4.57 minutes. It also
 failed quality floors. A local baseline-update probe repeated its non-timing
