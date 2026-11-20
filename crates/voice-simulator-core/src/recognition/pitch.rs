@@ -2,10 +2,32 @@
 //! occupy contiguous f64 arrays indexed by sample/lag. Refined candidates
 //! return pairs (lag, height), with a negative lag for an unusable peak.
 //! Full-rate frames and mark search consume the original f32 samples.
+//! Decimation takes the original f32 samples and f64 low-pass taps, both
+//! in time order. Output samples are separated by `factor` input samples.
 //! The full-rate frame uses a flat f64 Hann window and returns energy and peak.
 use crate::{inverse_dsp::Fft, math};
 use alloc::{vec, vec::Vec};
 use core::f64::consts::PI;
+
+pub fn decimate(input: &[f32], taps: &[f64], start: i32, factor: u32, output: &mut [f64]) {
+    let mut first_tap = i64::from(start);
+    for value in output {
+        let first = (-first_tap).clamp(0, taps.len() as i64) as usize;
+        let end = (input.len() as i64 - first_tap).clamp(0, taps.len() as i64) as usize;
+        let mut sum = 0.0;
+        if first < end {
+            let from = (first_tap + first as i64) as usize;
+            for (&weight, &sample) in taps[first..end]
+                .iter()
+                .zip(&input[from..from + end - first])
+            {
+                sum += weight * f64::from(sample);
+            }
+        }
+        *value = sum;
+        first_tap += i64::from(factor);
+    }
+}
 
 pub struct CoarseCorrelation {
     fft: Fft,
@@ -222,6 +244,19 @@ pub fn mark(samples: &[f32], anchor: i32, lo: i32, hi: i32, span: i32) -> f64 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn decimation_matches_the_reference_with_padding_on_both_ends() {
+        let mut coarse = [0.0; 5];
+        decimate(
+            &[1.0, 5.0, -2.0, 3.0],
+            &[0.25, 0.5, 0.25],
+            -3,
+            2,
+            &mut coarse,
+        );
+        assert_eq!(coarse, [0.0, 1.75, 1.0, 0.75, 0.0]);
+    }
 
     #[test]
     fn full_rate_window_centers_samples_with_padding_before_tapering() {

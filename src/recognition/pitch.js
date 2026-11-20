@@ -304,6 +304,12 @@ function createCoarseCorrelator(frames, settings) {
 
   /** Fill the coarse signal up to index `last` (inclusive). */
   function fill(last) {
+    if (settings.dsp && done <= last) {
+      const output = coarse.subarray(done + margin, last + margin + 1);
+      settings.dsp.decimate(frames, kernel, half, done, output);
+      done = last + 1;
+      return;
+    }
     for (let m = done; m <= last; m++) {
       const centre = m * factor;
       let sum = 0;

@@ -1,6 +1,46 @@
 /** Scratch-buffer lifetime for the numeric pitch kernels. Unlicense. */
 import { withWasmMemory } from './wasm-memory.js';
 
+function createDecimator(decimate, allocate, coarse, factor) {
+  const block = coarse.length;
+  let lowPass;
+  return (frames, kernel, half, first, output) => {
+    if (!lowPass) {
+      const taps = allocate(Float64Array, kernel.length);
+      taps.view().set(kernel);
+      lowPass = {
+        taps,
+        samples: allocate(Float32Array, (block - 1) * factor + kernel.length),
+      };
+    }
+    for (let offset = 0; offset < output.length; offset += block) {
+      const count = Math.min(block, output.length - offset);
+      const start = (first + offset) * factor - half;
+      const end = start + (count - 1) * factor + kernel.length;
+      const from = Math.min(frames.sampleCount, Math.max(0, start));
+      const input = frames.samples.subarray(
+        from,
+        Math.max(0, Math.min(frames.sampleCount, end))
+      );
+      lowPass.samples.view().set(input);
+      const error = decimate(
+        lowPass.samples.pointer,
+        input.length,
+        lowPass.taps.pointer,
+        kernel.length,
+        start - from,
+        factor,
+        coarse.pointer,
+        count
+      );
+      if (error) {
+        throw new Error(`Rust pitch decimation failed (${error})`);
+      }
+      output.set(coarse.view().subarray(0, count), offset);
+    }
+  };
+}
+
 export function withPitchDsp(module, settings, run) {
   if (!module) {
     return run();
@@ -8,6 +48,7 @@ export function withPitchDsp(module, settings, run) {
   return withWasmMemory(module, (allocate) => {
     const { size, coarseLength, lagMax, factor, fullLength } = settings;
     const {
+      rec_pitch_decimate: decimate,
       rec_pitch: correlate,
       rec_pitch_frame: windowFrame,
       rec_pitch_refine: refine,
@@ -28,6 +69,7 @@ export function withPitchDsp(module, settings, run) {
     let coarseReady = false;
     let fullReady = false;
     settings.dsp = {
+      decimate: createDecimator(decimate, allocate, coarse, factor),
       correlate(data, window, q) {
         coarse.view().set(data.subarray(0, coarseLength));
         if (!coarseReady) {

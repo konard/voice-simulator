@@ -92,6 +92,38 @@ thread_local! {
 }
 
 #[no_mangle]
+pub extern "C" fn rec_pitch_decimate(
+    samples: u32,
+    length: u32,
+    kernel: u32,
+    taps: u32,
+    start: i32,
+    factor: u32,
+    output: u32,
+    count: u32,
+) -> i32 {
+    let run = || {
+        if factor == 0 || taps == 0 || count > i32::MAX as u32 {
+            return Err(error::BAD_ARGUMENT);
+        }
+        check_range(samples, length, 4)?;
+        let samples: &[f32] = if length == 0 {
+            &[]
+        } else {
+            // SAFETY: the input is aligned, in range and checked against the output below.
+            unsafe { core::slice::from_raw_parts(samples as usize as *const f32, length as usize) }
+        };
+        let kernel = f64_read(kernel, taps)?;
+        disjoint(output, count, samples)?;
+        disjoint(output, count, kernel)?;
+        let output = f64_slice(output, count)?;
+        pitch::decimate(samples, kernel, start, factor, output);
+        Ok(0)
+    };
+    run().unwrap_or_else(core::convert::identity)
+}
+
+#[no_mangle]
 pub extern "C" fn rec_pitch(
     frame: u32,
     length: u32,
@@ -177,6 +209,8 @@ pub extern "C" fn rec_pitch_refine(
     let run = || {
         let frame = f64_read(frame, length)?;
         let window = f64_read(window, lags)?;
+        disjoint(cache, lags, frame)?;
+        disjoint(cache, lags, window)?;
         let cache = f64_slice(cache, lags)?;
         let (lag, score) = pitch::refine_cached(frame, window, energy, centre, radius, cache);
         f64_slice(output, 2)?.copy_from_slice(&[lag, score]);
@@ -217,12 +251,12 @@ fn f64_read<'a>(offset: u32, count: u32) -> Result<&'a [f64], i32> {
     Ok(unsafe { core::slice::from_raw_parts(offset as usize as *const f64, count as usize) })
 }
 
-fn disjoint(offset: u32, count: u32, input: &[f64]) -> Result<(), i32> {
+fn disjoint<T>(offset: u32, count: u32, input: &[T]) -> Result<(), i32> {
     let start = u64::from(offset);
     let end = start + u64::from(count) * 8;
     let first = input.as_ptr() as u64;
-    let last = first + input.len() as u64 * 8;
-    if start < last && first < end {
+    let last = first + core::mem::size_of_val(input) as u64;
+    if !input.is_empty() && count != 0 && start < last && first < end {
         Err(error::BAD_ARGUMENT)
     } else {
         Ok(())

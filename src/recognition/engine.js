@@ -4,6 +4,7 @@ import { configureNodeRecognitionModels } from './node-models.js';
 
 const requiredExports = [
   'rec_pitch',
+  'rec_pitch_decimate',
   'rec_pitch_frame',
   'rec_pitch_refine',
   'rec_pitch_mark',
