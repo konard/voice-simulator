@@ -1,7 +1,9 @@
+import { LANGUAGES } from '../../../../src/g2p/index.js';
 import { createRecognizer } from '../../../../src/recognition/recognizer.js';
 import { verifyFile } from './recognition-file.js';
 
 let active;
+const languageCodes = Object.keys(LANGUAGES);
 const send = (id, type, payload) =>
   globalThis.postMessage({ id, type, ...payload });
 
@@ -10,7 +12,14 @@ function fail(id, { message, code }) {
   send(id, 'error', { message, code });
 }
 
-function start(id, options) {
+function start({ id, sampleCount, sampleRate, languages }) {
+  const options = {
+    sampleRate,
+    sampleCount,
+    languages: languages?.map((language) =>
+      languageCodes.find((code) => code === language)
+    ),
+  };
   const recognizer = createRecognizer(options);
   const emit = (type, payload) => send(id, type, payload);
   const file = verifyFile(options, emit);
@@ -23,10 +32,10 @@ function start(id, options) {
 }
 
 globalThis.addEventListener('message', ({ data }) => {
-  const { id, type, samples, ...options } = data;
+  const { id, type, samples } = data;
   try {
     if (type === 'start') {
-      start(id, options);
+      start(data);
     } else if (active && active.id === id) {
       if (type === 'chunk') {
         active.file?.push(samples);
