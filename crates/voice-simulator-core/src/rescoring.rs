@@ -2,9 +2,9 @@
 use alloc::{vec, vec::Vec};
 use core::f64::consts::{LN_10, PI, SQRT_2};
 use core::ops::Range;
-use libm::{ceil, cos, log, log10, pow, round, sqrt};
 
-use crate::inverse_dsp::Fft;
+use crate::inverse_dsp::{log10, round, Fft};
+use crate::math::{ceil, cos, ln, pow, sqrt};
 
 /// Piecewise-linear time map with unit slopes outside the anchored interval.
 pub fn map_time(anchors: &[[f64; 2]], time: f64, reverse: bool) -> f64 {
@@ -72,8 +72,8 @@ pub fn mfcc_settings(rate: u32) -> (usize, usize, usize) {
     let width = if rate < 16000 { 10 } else { 13 };
     (
         width,
-        round(0.025 * f64::from(rate)) as usize,
-        round(0.01 * f64::from(rate)) as usize,
+        round(0.025 * f64::from(rate)),
+        round(0.01 * f64::from(rate)),
     )
 }
 
@@ -159,7 +159,7 @@ pub fn mfcc(samples: &[f64], rate: u32) -> Vec<f64> {
         .collect();
     let mut out = Vec::with_capacity(count * width);
     for row in energies {
-        let logs = row.map(|value| log(value.max(floor)));
+        let logs = row.map(|value| ln(value.max(floor)));
         out.extend(
             basis
                 .iter()
