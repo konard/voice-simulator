@@ -75,7 +75,8 @@ import { THREAD_MEMORY } from '../src/engine/layout.js';
 // Voice-fit exports, landmarks and modes: scalar 502658 and SIMD 507788 bytes
 // (Rust 1.100.0), rounded up to the next 16384-byte boundary.
 // Acoustic inversion lattice and source estimates: measured in RUST-ENGINE.md.
-// Segmental IPA decoding rounds the measured scalar and SIMD sizes up to the next 16 KiB.
+// Segmental IPA decoding measures 604486 scalar and 610937 SIMD bytes
+// (Rust 1.100.0), rounded up to the next 16384-byte boundary.
 export const WASM_SIZE_BUDGET = 622592;
 
 /**

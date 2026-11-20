@@ -1,8 +1,7 @@
 /** Run recognition stages incrementally, starting a new voice inside a long gap. Unlicense. */
-import { fitVoice } from '../analysis/voice-fit.js';
 import { DEFAULT_HEAD, normalizeHeadConfig } from '../head-config.js';
 import { buildCodebook } from './codebook.js';
-import { decoderCodebook } from './decode-pipeline.js';
+import { decoderCodebook, fitDecoderVoice } from './decode-pipeline.js';
 import { decoderTemplates } from './decode-model.js';
 import { createFormantTracker } from './formants.js';
 import { createArticulationInverter } from './inversion.js';
@@ -57,6 +56,8 @@ function trackSection(frames, pitch, first, voice, silent = false) {
     voice,
     pitch: part,
     formants: formants.track,
+    // Leave time to resolve competing phone endpoints before commitment.
+    lag: 15,
     codebook: silent
       ? buildCodebook(voice, { size: 1 })
       : decoderCodebook(voice),
@@ -150,10 +151,12 @@ export function createDecodeTracks(frames, pitch, options, language) {
       frames.sampleCount,
       Math.round(last * frames.hop * frames.rate)
     );
-    voice = fitVoice(frames.samples.subarray(0, to), frames.rate, {
-      refine: false,
-      language: language.language,
-    }).head;
+    voice = fitDecoderVoice(
+      frames.samples.subarray(0, to),
+      frames.rate,
+      language.language,
+      voice
+    );
     fittedThrough = latestSpeech;
   }
 

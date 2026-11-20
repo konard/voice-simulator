@@ -293,68 +293,120 @@ it('syllables carry times', () => {
   gate('syllable starts within 50 ms', withinStart / total, 1, true);
 });
 
-it('stream fixes phonemes in time', () => {
+it('rejects an oversized stream chunk before processing it', () => {
+  const stream = createIpaDecoder(lowRate, { maxSeconds: 0.1 });
+  assert.throws(() => stream.push(new Float32Array(lowRate)), RangeError);
+  assert.equal(stream.result().frames.sampleCount, 0);
+  stream.push(new Float32Array(lowRate / 10));
+  assert.deepEqual(stream.flush().segments, []);
+  assert.equal(stream.result().frames.sampleCount, lowRate / 10);
+});
+
+it('keeps the fitted stream voice until a long gap', () => {
+  const plan = planUtterance('a', {
+    head: DECODER_VOICES.female,
+    durations: [0.6],
+  });
+  const samples = renderPlan(plan, {
+    sampleRate: hiRate,
+    solver: 'waveguide',
+    engine: 'js',
+    seed: 1,
+  });
+  const stream = createIpaDecoder(hiRate, { language: 'en' });
+  const recording = new Float32Array(samples.length + 0.45 * hiRate);
+  recording.set(samples);
+  let previous = stream.result();
+  let changes = 0;
+  for (let i = 0; i < recording.length; i += hiRate / 50) {
+    stream.push(recording.subarray(i, i + hiRate / 50));
+    const current = stream.result();
+    if (previous.tracks.formants && current.voice !== previous.voice) {
+      const { count, speech, hop } = current.frames;
+      const last = speech.subarray(0, count).findLastIndex(Boolean);
+      assert.ok((count - last - 1) * hop >= 0.3);
+      changes++;
+    }
+    previous = current;
+  }
+  assert.ok(changes >= 1);
+  stream.flush();
+  const result = stream.result();
+  assert.deepEqual(result.tracks.articulation.head, result.voice);
+  assert.equal(result.tracks.formants.count, result.frames.count);
+  const { height } = result.tracks.articulation.channels;
+  assert.ok(height.subarray(0, result.frames.count).every(Number.isFinite));
+});
+
+function streamSentence(text, voice, language) {
+  const { samples, plan } = renderDecoderText(text, voice, hiRate, language);
+  const options = { voice, language };
+  const batch = audioToIpa(samples, hiRate, options);
+  const stream = createIpaDecoder(hiRate, options);
+  const fixed = [];
   let latest = 0;
-  const excess = [];
-  for (const [language, sentences] of Object.entries(DECODE_SENTENCES)) {
-    const text = sentences[0];
-    for (const voice of Object.values(DECODER_VOICES)) {
-      const { samples, plan } = renderDecoderText(
-        text,
-        voice,
-        hiRate,
-        language
-      );
-      const options = { voice, language };
-      const batch = audioToIpa(samples, hiRate, options);
-      const stream = createIpaDecoder(hiRate, options);
-      const fixed = [];
-      for (let first = 0; first < samples.length; first += hiRate / 50) {
-        const end = Math.min(first + hiRate / 50, samples.length);
-        for (const segment of stream.push(samples.subarray(first, end))
-          .segments) {
-          fixed.push(segment);
-          if (segment.kind !== 'pause') {
-            latest = Math.max(latest, end / hiRate - segment.end);
-          }
-        }
+  function collect(segments, end) {
+    for (const segment of segments) {
+      fixed.push(segment);
+      if (segment.kind !== 'pause') {
+        latest = Math.max(latest, end / hiRate - segment.end);
       }
-      for (const segment of stream.flush().segments) {
-        fixed.push(segment);
-        if (segment.kind !== 'pause') {
-          latest = Math.max(latest, samples.length / hiRate - segment.end);
-        }
-      }
-      const recognized = stream.result();
-      assert.deepEqual(recognized.segments, fixed);
-      const ref = plannedPhones(plan).map(({ ipa }) => ipa);
-      excess.push(
-        errorRate(ref, recognized.ipa, 'phone').rate -
-          errorRate(ref, batch.ipa, 'phone').rate
-      );
-      stream.reset();
-      assert.equal(stream.result().ipa, '');
     }
   }
-  console.log(
-    'decoder streaming max delay and extra PER',
-    latest,
-    mean(excess)
-  );
+  for (let first = 0; first < samples.length; first += hiRate / 50) {
+    const end = Math.min(first + hiRate / 50, samples.length);
+    collect(stream.push(samples.subarray(first, end)).segments, end);
+  }
+  collect(stream.flush().segments, samples.length);
+  const recognized = stream.result();
+  assert.deepEqual(recognized.segments, fixed);
+  const ref = plannedPhones(plan).map(({ ipa }) => ipa);
+  const excess =
+    errorRate(ref, recognized.ipa, 'phone').rate -
+    errorRate(ref, batch.ipa, 'phone').rate;
+  stream.reset();
+  assert.equal(stream.result().ipa, '');
+  return { latest, excess };
+}
+
+const streamingResults = [];
+for (const [language, sentences] of Object.entries(DECODE_SENTENCES)) {
+  it(`streams ${language} sentences`, () => {
+    for (const text of sentences) {
+      for (const voice of Object.values(DECODER_VOICES)) {
+        streamingResults.push(streamSentence(text, voice, language));
+      }
+    }
+  });
+}
+
+it('stream fixes phonemes in time', () => {
+  assert.equal(streamingResults.length, 32);
+  const latest = Math.max(...streamingResults.map((result) => result.latest));
+  const excess = mean(streamingResults.map((result) => result.excess));
+  console.log('decoder streaming max delay and extra PER', latest, excess);
   assert.ok(latest <= 0.55, `Stream commitment took ${latest} seconds`);
-  gate('stream PER above batch', mean(excess), 0.05);
+  gate('stream PER above batch', excess, 0.05);
 });
 
 it('stays within the CPU budget', () => {
-  const voice = DECODER_VOICES.male;
-  const known = { voice, language: 'en' };
-  for (const rate of [hiRate, lowRate]) {
+  for (const [rate, voice] of [
+    [hiRate, DECODER_VOICES.male],
+    [lowRate, DECODER_VOICES.female],
+  ]) {
+    const known = { voice, language: 'en' };
     const text = DECODE_SENTENCES.en[0];
     const { samples } = renderDecoderText(text, voice, rate, 'en');
+    const duration = samples.length / rate;
+    const coldStart = globalThis.performance.now();
+    audioToIpa(samples, rate, known);
+    const cold = (globalThis.performance.now() - coldStart) / 1000 / duration;
+    const fitStart = globalThis.performance.now();
+    audioToIpa(samples, rate, { language: 'en' });
+    const fitted = (globalThis.performance.now() - fitStart) / 1000 / duration;
     const settings = decoderSettings(rate, known);
     const analysis = analyzeForDecode(samples, rate, known, settings);
     prepareIpaDecode(analysis, settings);
-    const duration = samples.length / rate;
     let decodeTime = Infinity;
     let full = Infinity;
     for (let attempt = 0; attempt < 3; attempt++) {
@@ -380,8 +432,11 @@ it('stays within the CPU budget', () => {
     }
     console.log('decode rtf', decodeTime, rate);
     console.log('audioToIpa rtf', full, rate);
-    assert.ok(full <= 1);
+    console.log('audioToIpa first call and fitted rtf', cold, fitted, rate);
+    assert.ok(Math.max(full, cold, fitted) <= 1);
     gate(`decode RTF at ${rate} Hz`, decodeTime, 0.05);
     gate(`warm audioToIpa RTF at ${rate} Hz`, full, 0.35);
+    gate(`first call RTF at ${rate} Hz`, cold, 0.35);
+    gate(`fitted voice RTF at ${rate} Hz`, fitted, 0.65);
   }
 });

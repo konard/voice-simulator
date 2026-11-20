@@ -1,5 +1,6 @@
 /** Audio to timed IPA through the simulator's own articulatory controls. Unlicense. */
 import { fitVoice } from '../analysis/voice-fit.js';
+import { NoVoicedSpeechError } from '../analysis/voice-fit-statistics.js';
 import { DEFAULT_HEAD, normalizeHeadConfig } from '../head-config.js';
 import { parseIpa } from '../ipa/parse.js';
 import { syllabifyTokens } from '../ipa/syllables.js';
@@ -57,6 +58,17 @@ export function decoderCodebook(voice) {
   return books.get(key);
 }
 
+export function fitDecoderVoice(samples, sampleRate, language, fallback) {
+  try {
+    return fitVoice(samples, sampleRate, { refine: false, language }).head;
+  } catch (error) {
+    if (error instanceof NoVoicedSpeechError) {
+      return fallback;
+    }
+    throw error;
+  }
+}
+
 export function analyzeForDecode(samples, sampleRate, options, settings) {
   const frames = analyzeFrames(samples, sampleRate, settings);
   const pitch = trackPitch(frames);
@@ -64,10 +76,12 @@ export function analyzeForDecode(samples, sampleRate, options, settings) {
   const voice = options.voice
     ? normalizeHeadConfig(options.voice)
     : hasSpeech
-      ? fitVoice(samples, sampleRate, {
-          refine: false,
-          language: settings.language.language,
-        }).head
+      ? fitDecoderVoice(
+          samples,
+          sampleRate,
+          settings.language.language,
+          DEFAULT_HEAD
+        )
       : DEFAULT_HEAD;
   const formants = trackFormants(frames, {
     pitch,
