@@ -3,10 +3,15 @@ use crate::math;
 use alloc::collections::{BTreeMap, BTreeSet};
 use alloc::{vec, vec::Vec};
 
+#[path = "decode_whisper.rs"]
+pub mod whisper;
+use whisper::{WhisperInput, WHISPER_WEIGHTS};
+
 pub const CHANNELS: usize = 21;
 const POINTS: [f64; 5] = [0.1, 0.3, 0.5, 0.7, 0.9];
 const EPS: f64 = 1e-9;
 const CLASSES: usize = 8;
+const MIN_PHONE_DURATION: f64 = 0.02;
 
 fn square(value: f64) -> f64 {
     value * value
@@ -141,6 +146,10 @@ fn boundaries(input: &Observations<'_>, bounds: &Bounds) -> (Vec<f64>, Vec<Gap>)
         }
     }
     speed_peaks(input, first, last, &mut add);
+    (consolidate(candidates, &pauses), pauses)
+}
+
+fn consolidate(mut candidates: Vec<(f64, u8)>, pauses: &[Gap]) -> Vec<f64> {
     candidates.sort_by(|a, b| a.0.total_cmp(&b.0).then(b.1.cmp(&a.1)));
     let mut kept: Vec<(f64, u8)> = Vec::new();
     for (time, priority) in candidates {
@@ -158,12 +167,10 @@ fn boundaries(input: &Observations<'_>, bounds: &Bounds) -> (Vec<f64>, Vec<Gap>)
         }
         kept.push((time, priority));
     }
-    let times = kept
-        .into_iter()
+    kept.into_iter()
         .map(|(time, _)| time)
         .filter(|&time| !pauses.iter().any(|gap| gap.start < time && time < gap.end))
-        .collect();
-    (times, pauses)
+        .collect()
 }
 
 fn frame_at(input: &Observations<'_>, time: f64) -> usize {
@@ -237,7 +244,7 @@ pub struct PhoneCost {
 
 enum Span {
     Pause(usize),
-    Phones(usize, Vec<PhoneCost>),
+    Phones(usize, Vec<PhoneCost>, bool),
 }
 
 pub struct Graph {
@@ -247,7 +254,21 @@ pub struct Graph {
 
 /// Construct the legal semi-Markov spans and the three unweighted cost terms.
 pub fn prepare(input: &Observations<'_>, templates: &[Template], bounds: &Bounds) -> Graph {
-    let (times, pauses) = boundaries(input, bounds);
+    prepare_with_whisper(input, templates, bounds, None)
+}
+
+pub fn prepare_with_whisper(
+    input: &Observations<'_>,
+    templates: &[Template],
+    bounds: &Bounds,
+    whisper: Option<&WhisperInput<'_>>,
+) -> Graph {
+    let (original, pauses) = boundaries(input, bounds);
+    let (times, edges) = match whisper {
+        Some(region) => region.grid(&original, &pauses),
+        None => (original, Vec::new()),
+    };
+    let spectra = whisper.map(|region| region.spectra(input.start, input.hop));
     let mut spans = Vec::with_capacity(times.len());
     let mut pause = 0;
     for (from, &start) in times.iter().enumerate() {
@@ -259,15 +280,23 @@ pub fn prepare(input: &Observations<'_>, templates: &[Template], bounds: &Bounds
         if (next_pause - start).abs() <= EPS {
             outgoing.push(Span::Pause(from + 1));
         } else {
-            for (to, &end) in times.iter().enumerate().skip(from + 1).take(4) {
-                if end - start > 0.4 + EPS || end > next_pause + EPS {
+            let next_edge = edges.iter().copied().find(|&edge| edge > start + EPS);
+            let limit = if whisper.is_some_and(|region| region.contains(start + EPS)) {
+                28
+            } else {
+                4
+            };
+            let latest = next_pause.min(next_edge.unwrap_or(f64::INFINITY));
+            for (to, &end) in times.iter().enumerate().skip(from + 1).take(limit) {
+                if end - start > 0.4 + EPS || end > latest + EPS {
                     break;
                 }
-                if end - start >= 0.02 - EPS {
-                    outgoing.push(Span::Phones(
-                        to,
-                        acoustic_costs(input, start, end, templates),
-                    ));
+                if end - start >= MIN_PHONE_DURATION - EPS {
+                    let terms = spectra.as_ref().and_then(|rows| rows.score(start, end));
+                    let whispered = terms.is_some();
+                    let terms =
+                        terms.unwrap_or_else(|| acoustic_costs(input, start, end, templates));
+                    outgoing.push(Span::Phones(to, terms, whispered));
                 }
             }
         }
@@ -454,7 +483,7 @@ fn connect(
     policy: &Policy<'_>,
 ) {
     let width = policy.units;
-    let (to, terms) = match span {
+    let (to, terms, whisper) = match span {
         Span::Pause(to) => {
             let arc = Arc {
                 from,
@@ -474,9 +503,13 @@ fn connect(
             state.edges.push(arc);
             return;
         }
-        Span::Phones(to, terms) => (*to, terms),
+        Span::Phones(to, terms, whisper) => (*to, terms, *whisper),
     };
-    let weights = policy.weights;
+    let weights = if whisper {
+        WHISPER_WEIGHTS
+    } else {
+        policy.weights
+    };
     let scores: Vec<f64> = terms
         .iter()
         .map(|t| t.acoustic + weights.duration * t.duration + weights.class * t.class)
@@ -574,7 +607,7 @@ pub fn search(graph: &Graph, policy: &Policy<'_>) -> Search {
             break;
         }
         for span in &graph.spans[from] {
-            let (Span::Pause(to) | Span::Phones(to, _)) = span;
+            let (Span::Pause(to) | Span::Phones(to, ..)) = span;
             connect(
                 &mut pending[*to],
                 &parents,

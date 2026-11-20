@@ -132,3 +132,48 @@ pub extern "C" fn vs_whisper_pool(
     }
     0
 }
+
+/// One pooled LPC row. Input is the hop in samples and the waveform. Output
+/// is the gain in dB, then the predictor and reflection coefficients.
+#[no_mangle]
+pub extern "C" fn vs_whisper_lpc(
+    input: u32,
+    samples: u32,
+    first: u32,
+    count: u32,
+    length: u32,
+    order: u32,
+    output: u32,
+) -> i32 {
+    if samples > 30 * 96000
+        || first > 6000
+        || !(1..=5).contains(&count)
+        || !(4..=65536).contains(&length)
+        || !(1..=127).contains(&order)
+        || order >= length
+    {
+        return error::BAD_ARGUMENT;
+    }
+    let mut result = [0.0; 255];
+    let (gain, terms) = result[..1 + 2 * order as usize].split_at_mut(1);
+    let (coefficients, reflection) = terms.split_at_mut(order as usize);
+    match f64_slice(input, 1 + samples) {
+        Ok(data) if (1.0..=f64::from(length)).contains(&data[0]) => {
+            gain[0] = inverse_whisper::pooled_lpc(
+                &data[1..],
+                data[0],
+                length as usize,
+                first as usize..(first + count) as usize,
+                coefficients,
+                reflection,
+            );
+        }
+        Ok(_) => return error::BAD_ARGUMENT,
+        Err(code) => return code,
+    }
+    match f64_slice(output, 1 + 2 * order) {
+        Ok(output) => output.copy_from_slice(&result[..output.len()]),
+        Err(code) => return code,
+    }
+    0
+}

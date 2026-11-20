@@ -77,9 +77,9 @@ import { THREAD_MEMORY } from '../src/engine/layout.js';
 // Acoustic inversion lattice and source estimates: measured in RUST-ENGINE.md.
 // Segmental IPA decoding measures 604888 scalar and 611339 SIMD bytes
 // (Rust 1.100.0), rounded up to the next 16384-byte boundary.
-// Lexical prosody and whisper recognition measure 643542 scalar bytes
+// Lexical prosody and whisper recognition measure 657289 scalar bytes
 // (Rust 1.100.0), rounded up to the next 16384-byte boundary.
-export const WASM_SIZE_BUDGET = 655360;
+export const WASM_SIZE_BUDGET = 671744;
 
 /**
  * Whether src/engine/voice-simulator-simd.wasm is shipped: only when it

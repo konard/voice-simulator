@@ -13,6 +13,7 @@ import { whisperDistance } from '../src/recognition/whisper-decode.js';
 import { whisperVoicingProbability } from '../src/recognition/whisper-result.js';
 import {
   poolLogPower,
+  whisperFormantFrames,
   whisperSpectrum,
 } from '../src/recognition/whisper-spectrum.js';
 import { whisperToneCost } from '../src/recognition/whisper.js';
@@ -183,6 +184,56 @@ describe('Rust whisper numerical parity', () => {
           );
         }
       });
+    }
+  );
+
+  itUnless(noRust)(
+    'matches pooled autocorrelation for whisper formants',
+    async () => {
+      const engine = await loadRustEngine();
+      const wave = renderWhisper('[whisper] sea foam');
+      const frames = analyzeFrames(wave.samples, wave.sampleRate);
+      const { order, window, rate, hop, count, sampleCount, samples } = frames;
+      const smoothed = whisperFormantFrames(frames, [
+        { start: 0, end: (count - 1) * hop },
+      ]);
+      const width = 1 + order * 2;
+      const size = width * 8;
+      const output = engine.exports.vs_alloc(size);
+      try {
+        const input = new Float64Array(sampleCount + 1);
+        input[0] = hop * rate;
+        input.set(samples.subarray(0, sampleCount), 1);
+        withPacket(engine, input, (ptr) => {
+          for (const center of [0, 19, count - 2]) {
+            const first = Math.max(0, center - 2);
+            const last = Math.min(count - 1, center + 3);
+            expect(
+              engine.exports.vs_whisper_lpc(
+                ptr,
+                sampleCount,
+                first,
+                last - first,
+                Math.round(window * rate),
+                order,
+                output
+              )
+            ).toBe(0);
+            const begin = center * order;
+            const end = begin + order;
+            const expected = [
+              smoothed.gain[center],
+              ...smoothed.lpc.subarray(begin, end),
+              ...smoothed.reflection.subarray(begin, end),
+            ];
+            float64View(engine, output, width).forEach((value, i) =>
+              expectClose(value, expected[i], 2e-6)
+            );
+          }
+        });
+      } finally {
+        engine.exports.vs_free(output, size);
+      }
     }
   );
 });

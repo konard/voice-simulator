@@ -1,6 +1,7 @@
 //! Acoustic whisper cues on the shared frame grid. Unlicense.
 use crate::{
-    inverse_dsp::{log10, Fft},
+    formants::step_up,
+    inverse_dsp::{hann, log10, round, sample, Fft},
     math,
 };
 use alloc::{vec, vec::Vec};
@@ -287,4 +288,50 @@ pub fn pool_row(rows: &[f64], center: usize, width: usize, scale: f64, output: &
             .sum();
         *result = math::ln(power / count) / scale;
     }
+}
+
+/// Whisper LPC uses the mean autocorrelation across at most five frames.
+pub fn pooled_lpc(
+    samples: &[f64],
+    hop_samples: f64,
+    length: usize,
+    rows: core::ops::Range<usize>,
+    coefficients: &mut [f64],
+    reflection: &mut [f64],
+) -> f64 {
+    let order = coefficients.len();
+    let window = hann(length);
+    let mut signal = vec![0.0; length];
+    let mut pooled = vec![0.0; order + 1];
+    let count = rows.len() as f64;
+    for row in rows {
+        let start = round(row as f64 * hop_samples) as isize - (length / 2) as isize;
+        let mut previous = sample(samples, start - 1);
+        for (i, value) in signal.iter_mut().enumerate() {
+            let current = sample(samples, start + i as isize);
+            *value = (current - 0.97 * previous) * window[i];
+            previous = current;
+        }
+        for (lag, value) in pooled.iter_mut().enumerate() {
+            let power: f64 = signal[lag..].iter().zip(&signal).map(|(a, b)| a * b).sum();
+            *value += (power / length as f64) / count;
+        }
+    }
+    let round = |value: f64| f64::from(value as f32);
+    let mut error = pooled[0];
+    coefficients.fill(0.0);
+    reflection.fill(0.0);
+    if error > 0.0 {
+        for m in 1..=order {
+            let mut acc = pooled[m];
+            for j in 1..m {
+                acc += coefficients[j - 1] * pooled[m - j];
+            }
+            let k = -acc / error;
+            reflection[m - 1] = round(k);
+            step_up(coefficients, m, k, round);
+            error *= 1.0 - k * k;
+        }
+    }
+    round(10.0 * log10(error + 1e-10))
 }

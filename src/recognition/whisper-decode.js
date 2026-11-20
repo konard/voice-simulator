@@ -44,7 +44,7 @@ function renderReference(ipa, settings, voice, [before, after]) {
   };
 }
 
-function references(templates, settings, voice) {
+export function whisperReferences(templates, settings, voice) {
   const key = JSON.stringify([voice, settings.rate, settings.hop]);
   if (!tables.has(key)) {
     if (tables.size >= 4) {
@@ -100,7 +100,7 @@ export function createWhisperScorer(frames, spans, templates, settings, voice) {
   const data = spans.map(({ start, end }) =>
     whisperSpectrum(frames, start, end)
   );
-  const table = references(templates, settings, voice);
+  const table = whisperReferences(templates, settings, voice);
   const width = frames.melBands + 1;
   const input = new Float32Array(POINTS.length * width);
   return (start, end) => {

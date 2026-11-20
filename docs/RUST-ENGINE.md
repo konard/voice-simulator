@@ -144,9 +144,10 @@ The optional input prosody mask carries consonant voicing probabilities,
 tightly bounded Mandarin tone costs and a whisper flag into the same trie
 search. The prominence packet uses bit 4 of each feature mask for whisper.
 `tests/rust-whisper.test.js` compares detection spans, pooled spectra,
-trajectory distance, voicing and tone costs on the shared analysis frames
-and cue table. `tests/rust-recognition.test.js` compares lexical paths and
-prominence with these cues.
+whisper LPC for formant tracking, trajectory distance, and voicing and
+tone costs on the shared analysis frames and cue table.
+`tests/rust-recognition.test.js` compares lexical paths and prominence with
+these cues.
 
 `tests/rust-recognition.test.js` compares all inventory phone pairs and
 four-language exact, substituted, inserted, deleted, unknown and n-best
@@ -1402,12 +1403,18 @@ next 16 KiB size budget is 557,056 bytes.
 span scoring, transition smoothing, beam pruning, distinct reading selection
 and fixed-prefix decisions. The WebAssembly parity entry point
 `vs_ipa_decode` takes frame observations, planner templates and transition
-tables from the host. Batch and streaming stage orchestration use JavaScript.
+tables from the host. The optional whisper suffix supplies span times,
+raw frame energies and mel bands, and synthesized whisper references.
+The Rust decoder builds the mode-aware boundaries, pools the spectra,
+and applies the matching cost for each span. Batch and streaming stage
+orchestration use JavaScript.
 
 `REQUIRE_WASM=1 node --test tests/rust-decode.test.js` compares boundaries,
 transition and edge costs, readings, confidences and stream commitments on the
-same acoustic observations. `CARGO_BUILD_JOBS=1 node scripts/build-wasm.mjs
---require --check-size` verifies the byte budget.
+same acoustic observations, including mixed whisper spans.
+`CARGO_BUILD_JOBS=1 node scripts/build-wasm.mjs --require --check-size`
+measured 657289 scalar bytes and 668296 SIMD bytes on Rust 1.100.0. The next
+16 KiB size budget for the shipped scalar file is 671744 bytes.
 
 ## Analysis-by-synthesis rescoring
 
