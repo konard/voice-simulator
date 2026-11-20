@@ -5,40 +5,40 @@ Run `node --test tests/heavy/recognition-decode.test.js` to reproduce. Phone and
 <!-- prettier-ignore -->
 | Corpus | Language | Working rate (Hz) | Language input | Items | Phone error | Broad-class error |
 | --- | --- | ---: | --- | ---: | ---: | ---: |
-| golden | en | 16000 | given | 6 | 87.11% | 58.10% |
-| golden | en | 16000 | unspecified | 6 | 103.10% | 73.63% |
-| golden | en | 8000 | given | 6 | 89.45% | 60.89% |
-| golden | en | 8000 | unspecified | 6 | 100.58% | 70.71% |
-| golden | hi | 16000 | given | 6 | 82.07% | 33.18% |
-| golden | hi | 16000 | unspecified | 6 | 97.62% | 43.27% |
-| golden | hi | 8000 | given | 6 | 81.89% | 37.40% |
-| golden | hi | 8000 | unspecified | 6 | 94.25% | 41.73% |
-| golden | ru | 16000 | given | 6 | 85.53% | 48.70% |
-| golden | ru | 16000 | unspecified | 6 | 96.32% | 57.95% |
-| golden | ru | 8000 | given | 6 | 83.71% | 50.38% |
-| golden | ru | 8000 | unspecified | 6 | 95.84% | 57.11% |
-| golden | zh | 16000 | given | 6 | 114.34% | 75.34% |
-| golden | zh | 16000 | unspecified | 6 | 146.12% | 113.22% |
-| golden | zh | 8000 | given | 6 | 121.72% | 75.37% |
-| golden | zh | 8000 | unspecified | 6 | 145.37% | 110.16% |
-| synthetic | en | 16000 | given | 50 | 82.54% | 48.84% |
-| synthetic | en | 16000 | unspecified | 50 | 89.81% | 52.39% |
-| synthetic | en | 8000 | given | 50 | 81.36% | 48.79% |
-| synthetic | en | 8000 | unspecified | 50 | 90.15% | 53.64% |
-| synthetic | hi | 16000 | given | 50 | 86.25% | 37.26% |
-| synthetic | hi | 16000 | unspecified | 50 | 98.40% | 46.60% |
-| synthetic | hi | 8000 | given | 50 | 87.75% | 38.31% |
-| synthetic | hi | 8000 | unspecified | 50 | 97.76% | 45.23% |
-| synthetic | ru | 16000 | given | 50 | 83.11% | 43.88% |
-| synthetic | ru | 16000 | unspecified | 50 | 91.54% | 44.91% |
-| synthetic | ru | 8000 | given | 50 | 83.71% | 44.01% |
-| synthetic | ru | 8000 | unspecified | 50 | 90.59% | 44.85% |
-| synthetic | zh | 16000 | given | 50 | 85.88% | 43.18% |
-| synthetic | zh | 16000 | unspecified | 50 | 104.77% | 57.63% |
-| synthetic | zh | 8000 | given | 50 | 77.10% | 38.92% |
-| synthetic | zh | 8000 | unspecified | 50 | 103.93% | 52.52% |
+| golden | en | 16000 | given | 6 | 83.38% | 63.52% |
+| golden | en | 16000 | unspecified | 6 | 99.95% | 74.67% |
+| golden | en | 8000 | given | 6 | 83.33% | 57.05% |
+| golden | en | 8000 | unspecified | 6 | 95.23% | 66.70% |
+| golden | hi | 16000 | given | 6 | 83.48% | 40.58% |
+| golden | hi | 16000 | unspecified | 6 | 97.68% | 42.87% |
+| golden | hi | 8000 | given | 6 | 81.13% | 39.74% |
+| golden | hi | 8000 | unspecified | 6 | 94.84% | 43.07% |
+| golden | ru | 16000 | given | 6 | 84.94% | 49.59% |
+| golden | ru | 16000 | unspecified | 6 | 96.82% | 57.86% |
+| golden | ru | 8000 | given | 6 | 86.68% | 49.37% |
+| golden | ru | 8000 | unspecified | 6 | 93.92% | 56.41% |
+| golden | zh | 16000 | given | 6 | 95.16% | 53.12% |
+| golden | zh | 16000 | unspecified | 6 | 121.67% | 92.96% |
+| golden | zh | 8000 | given | 6 | 94.92% | 54.93% |
+| golden | zh | 8000 | unspecified | 6 | 122.40% | 92.57% |
+| synthetic | en | 16000 | given | 50 | 82.97% | 51.37% |
+| synthetic | en | 16000 | unspecified | 50 | 89.02% | 53.12% |
+| synthetic | en | 8000 | given | 50 | 82.55% | 50.75% |
+| synthetic | en | 8000 | unspecified | 50 | 88.35% | 53.41% |
+| synthetic | hi | 16000 | given | 50 | 84.65% | 42.41% |
+| synthetic | hi | 16000 | unspecified | 50 | 95.54% | 44.77% |
+| synthetic | hi | 8000 | given | 50 | 85.59% | 42.46% |
+| synthetic | hi | 8000 | unspecified | 50 | 96.26% | 45.48% |
+| synthetic | ru | 16000 | given | 50 | 80.54% | 49.70% |
+| synthetic | ru | 16000 | unspecified | 50 | 88.07% | 50.84% |
+| synthetic | ru | 8000 | given | 50 | 82.09% | 48.98% |
+| synthetic | ru | 8000 | unspecified | 50 | 88.83% | 49.46% |
+| synthetic | zh | 16000 | given | 50 | 73.72% | 38.31% |
+| synthetic | zh | 16000 | unspecified | 50 | 89.14% | 51.16% |
+| synthetic | zh | 8000 | given | 50 | 77.32% | 39.81% |
+| synthetic | zh | 8000 | unspecified | 50 | 96.08% | 55.45% |
 
-With the language given, the golden-set mean across both rates is **93.23%** phone error and **54.92%** broad-class error. The research targets are 60.00% and 35.00%, respectively.
+With the language given, the golden-set mean across both rates is **86.63%** phone error and **50.99%** broad-class error. The research targets are 60.00% and 35.00%, respectively.
 
 Long-term reference: **32.7%** phone error for the trained Kaldi monophone recognizer on the 39-phone TIMIT core test set. [Kaldi TIMIT results](https://github.com/kaldi-asr/kaldi/blob/master/egs/timit/s5/RESULTS)
 

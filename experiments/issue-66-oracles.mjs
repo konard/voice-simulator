@@ -71,24 +71,25 @@ function oracle(input, options, vowelsOnly) {
     tracks.landmarks,
     plannedTrack(tracks.articulation, input.plan)
   );
+  const withoutClass = { ...settings.weights, class: 0 };
   const ranks = [];
   for (const { ipa, start, end } of phones) {
     const ref = decoderUnit(parseIpa(ipa).tokens[0]);
     if (!alternatives.some(({ ipa }) => ipa === ref)) {
       continue;
     }
-    ranks.push(
-      [inverted, planned].map((score, i) => {
-        const { terms } = score(start, end, alternatives);
-        const weights =
-          i === 0 ? settings.weights : { ...settings.weights, class: 0 };
-        return (
-          rankPhones(terms, weights).findIndex(
-            ({ i }) => alternatives[i].ipa === ref
-          ) + 1
-        );
-      })
-    );
+    const observed = inverted(start, end, alternatives).terms;
+    const targets = planned(start, end, alternatives).terms;
+    const rank = (terms, weights) =>
+      rankPhones(terms, weights).findIndex(
+        ({ i }) => alternatives[i].ipa === ref
+      ) + 1;
+    ranks.push({
+      observed: rank(observed, settings.weights),
+      observedWithoutClass: rank(observed, withoutClass),
+      targets: rank(targets, settings.weights),
+      targetsWithoutClass: rank(targets, withoutClass),
+    });
   }
   return {
     edges: edges.size,
@@ -97,10 +98,18 @@ function oracle(input, options, vowelsOnly) {
     ).length,
     phones: phones.length,
     present: ranks.length,
-    invertedFirst: ranks.filter(([i]) => i === 1).length,
-    invertedFive: ranks.filter(([i]) => i <= 5).length,
-    trueFirst: ranks.filter(([, i]) => i === 1).length,
-    trueFive: ranks.filter(([, i]) => i <= 5).length,
+    invertedFirst: ranks.filter(({ observed }) => observed === 1).length,
+    invertedFive: ranks.filter(({ observed }) => observed <= 5).length,
+    invertedFirstWithoutClass: ranks.filter(
+      ({ observedWithoutClass }) => observedWithoutClass === 1
+    ).length,
+    plannedFirst: ranks.filter(({ targets }) => targets === 1).length,
+    plannedFirstWithoutClass: ranks.filter(
+      ({ targetsWithoutClass }) => targetsWithoutClass === 1
+    ).length,
+    plannedFiveWithoutClass: ranks.filter(
+      ({ targetsWithoutClass }) => targetsWithoutClass <= 5
+    ).length,
   };
 }
 

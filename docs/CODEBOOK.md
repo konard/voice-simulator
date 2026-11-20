@@ -158,3 +158,18 @@ The result contains the best IPA string, timed `segments` and `syllables`, ranke
 `createIpaDecoder(sampleRate, options)` returns fixed segments and newly confirmed syllable nuclei from both `push(chunk)` and `flush()`. Read the full result with `result()` and call `reset()` to begin a new recording. The streaming frame buffer defaults to 30 seconds and can be set with `maxSeconds`.
 
 See the [decoder benchmark](../reports/heavy/recognition-decode.md) for measured accuracy.
+
+The synthetic recognition gates in `tests/recognition-decode.test.js` remain
+open. With the language supplied, mean phone error on the 32 held-out
+utterances was 79.79% at 16 kHz and 82.44% at 8 kHz. The universal decoder
+measured 92.12% at 16 kHz. The targets are 25%, 35% and 40%, respectively.
+
+Run `node experiments/issue-66-oracles.mjs` to inspect the upstream evidence.
+The boundary generator placed a candidate within 20 ms of 725 of 838
+planned boundaries. When given the exact planned spans, the scorer ranked
+90 of 650 in-inventory phones first from the inverted channels and observed
+landmark classes. Supplying the planner's channels instead raised this to
+401 of 650 with the same classes. With class cost disabled in both runs,
+the corresponding counts were 97 and 490. Improving acoustic inversion
+and broad-class estimates is needed before the same decoder can be
+verified against the original gates.
