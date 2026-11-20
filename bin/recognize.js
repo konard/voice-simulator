@@ -35,6 +35,8 @@ export async function recognizeCommand(values, [file], io) {
     ...recognitionParams(values),
     rescoring: values.rescore,
     whisper: values['no-whisper'] ? false : undefined,
+    // Plain text uses prosody for decoding, but has no fields for mode labels.
+    includeModeLabels: Boolean(values.json || values.ipa),
   };
   const print = (result) =>
     io.stdout(

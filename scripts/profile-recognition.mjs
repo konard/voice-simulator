@@ -21,6 +21,7 @@ const stages = [
   'Other',
   'Total',
 ];
+const rows = [...stages, 'Word trie search'];
 const median = (values) => values.sort((a, b) => a - b)[2];
 const levels = ['low', 'medium', 'high'];
 const report = [];
@@ -47,7 +48,7 @@ for (const level of levels) {
     runs.push(times);
   }
   report.push(
-    stages.map((stage) => {
+    rows.map((stage) => {
       const ms = median(runs.map((run) => run.get(stage) ?? 0));
       const percent = median(
         runs.map((run) => (100 * (run.get(stage) ?? 0)) / run.get('Total'))
@@ -58,6 +59,7 @@ for (const level of levels) {
 }
 console.log(`| ${engine} (ms, %) | ${levels.join(' | ')} |`);
 console.log('| --- | ---: | ---: | ---: |');
-for (const [i, stage] of stages.entries()) {
+for (const [i, stage] of rows.entries()) {
   console.log(`| ${stage} | ${report.map((level) => level[i]).join(' | ')} |`);
 }
+console.log('\nWord trie search is included in IPA to text.');

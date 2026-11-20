@@ -68,6 +68,7 @@ export function recognitionSettings(options) {
     nbest = 1,
     rescoring = false,
     modes = true,
+    includeModeLabels = modes,
     whisper = 'auto',
     level = 'auto',
     stages = {},
@@ -88,6 +89,7 @@ export function recognitionSettings(options) {
     nbest,
     rescoring,
     modes,
+    includeModeLabels,
     whisper: decoderWhisperSpans(whisper),
     level,
     stages,
@@ -224,6 +226,7 @@ function decodeText(input, settings, level, modelLanguage) {
           : undefined,
       nbest,
       kernels: settings.kernels,
+      profile: settings.profile,
       beam: RECOGNITION_LEVELS[level].beam,
     })
   );
@@ -324,7 +327,7 @@ export function recognizeDecoded(
   }
   const primary = recognizeProsody(decoded, samples, rate, settings, level);
   const withModes =
-    settings.modes && typeof recognizeModes === 'function'
+    settings.includeModeLabels && typeof recognizeModes === 'function'
       ? measure(settings.profile, 'Modes', () =>
           recognizeModes(
             samples,

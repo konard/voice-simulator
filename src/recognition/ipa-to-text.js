@@ -7,6 +7,7 @@ import { recognitionInput } from './input.js';
 import { withWordSearch } from './word-search.js';
 import { spellSounds } from './phones-to-letters.js';
 import { resultFromPath, heardIpa } from './result.js';
+import { measure } from './profile.js';
 
 // Calibrated separately from the bounded per-phone metric: otherwise the
 // word penalty lets a few long, unrelated words beat an almost exact phrase.
@@ -242,7 +243,15 @@ export function decode(input, lexicon, options, exact) {
       distance,
       options.module,
       (search) => {
-        searches.set(language, search);
+        searches.set(
+          language,
+          options.profile
+            ? (from, end, beam) =>
+                measure(options.profile, 'Word trie search', () =>
+                  search(from, end, beam)
+                )
+            : search
+        );
         return load(index + 1);
       }
     );
@@ -337,6 +346,7 @@ export function ipaToText(ipa, options = {}) {
   const settings = {
     language,
     module: options.kernels?.module,
+    profile: options.profile,
     beam: Math.max(beam, nbest),
     given: boundaries === 'given',
     ...(languages.length > 1

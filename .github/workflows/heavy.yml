@@ -167,7 +167,13 @@ jobs:
         env:
           HEAVY_OUT: reports/heavy
           REQUIRE_WASM: '1'
-        run: node --test tests/heavy/performance-recognition.test.js
+        run: |
+          mkdir -p "$HEAVY_OUT"
+          lscpu > "$HEAVY_OUT/recognition-runner-cpu.txt"
+          if [[ -r /sys/fs/cgroup/cpu.max ]]; then
+            cat /sys/fs/cgroup/cpu.max >> "$HEAVY_OUT/recognition-runner-cpu.txt"
+          fi
+          node --test tests/heavy/performance-recognition.test.js
 
       - name: Profile recognition stages
         if: ${{ !cancelled() && inputs.suite == 'recognition-performance' }}
