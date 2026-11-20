@@ -5,6 +5,7 @@ import { decoderWhisperSpans } from './decode-pipeline.js';
 import { audioToIpa } from './decode.js';
 import { ipaToText } from './ipa-to-text.js';
 import { identifyLanguage, languageShares } from './language-id.js';
+import { measure } from './profile.js';
 import { recognizeModes } from './modes.js';
 import { markProsody, measureProsody } from './prosody.js';
 import { rescoreHypotheses } from './rescoring.js';
@@ -59,6 +60,7 @@ export function recognitionSettings(options) {
     whisper = 'auto',
     level = 'auto',
     stages = {},
+    profile,
   } = options;
   checkOptions(languages, nbest, level);
   if (rescoring && typeof rescoreHypotheses !== 'function') {
@@ -76,6 +78,7 @@ export function recognitionSettings(options) {
     whisper: decoderWhisperSpans(whisper),
     level,
     stages,
+    profile,
   };
 }
 
@@ -102,6 +105,7 @@ export function decoderOptions(settings, level, start = 0) {
   return {
     ...RECOGNITION_LEVELS[level],
     languages,
+    profile: settings.profile,
     language: languages.length === 1 ? languages[0] : undefined,
     voice,
     nbest: rescoring ? 10 : nbest,
@@ -169,19 +173,25 @@ function decodeText(input, settings, level, modelLanguage) {
     modelLanguage && !stages.identifyLanguage ? [modelLanguage] : languages;
   const identification = language
     ? null
-    : (stages.identifyLanguage ?? identifyLanguage)(input, {
-        languages: candidates,
-      });
-  return (stages.ipaToText ?? ipaToText)(input, {
-    language,
-    spans: identification?.spans,
-    boundaries:
-      modelLanguage && Array.isArray(input) && input[0]?.modelWord !== undefined
-        ? 'given'
-        : undefined,
-    nbest,
-    beam: RECOGNITION_LEVELS[level].beam,
-  });
+    : measure(settings.profile, 'Language identification', () =>
+        (stages.identifyLanguage ?? identifyLanguage)(input, {
+          languages: candidates,
+        })
+      );
+  return measure(settings.profile, 'IPA to text', () =>
+    (stages.ipaToText ?? ipaToText)(input, {
+      language,
+      spans: identification?.spans,
+      boundaries:
+        modelLanguage &&
+        Array.isArray(input) &&
+        input[0]?.modelWord !== undefined
+          ? 'given'
+          : undefined,
+      nbest,
+      beam: RECOGNITION_LEVELS[level].beam,
+    })
+  );
 }
 
 function recognizeProsody(decoded, samples, rate, settings, level) {
@@ -289,6 +299,7 @@ export function recognizeDecoded(
           {
             voice: settings.voice ? { head: settings.voice } : undefined,
             maxSeconds: samples.length / rate,
+            profile: settings.profile,
             frames: decoded.frames?.speech ? decoded.frames : undefined,
           }
         )

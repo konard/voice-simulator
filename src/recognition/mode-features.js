@@ -1,4 +1,5 @@
 /** Vowel-frame features for mode recognition. Unlicense. */
+import { measure } from './profile.js';
 import { analyzeFrames } from './frontend.js';
 import { trackPitch } from './pitch.js';
 import { trackFormants } from './formants.js';
@@ -64,21 +65,37 @@ function nuclei(word, phones, head) {
 }
 
 /** Analyze the recording in one pass; retain scalar word features only. */
-export function measureWords(samples, sampleRate, result, head, analyzed) {
+export function measureWords(
+  samples,
+  sampleRate,
+  result,
+  head,
+  analyzed,
+  options = {}
+) {
+  const { profile } = options;
   const words = result.words;
   const seconds = samples.length / sampleRate;
   const frames =
     analyzed ??
-    analyzeFrames(samples, sampleRate, {
-      hop: 0.01,
-      maxSeconds: Math.max(0.1, seconds + 0.05),
-    });
-  const pitch = trackPitch(frames, { minF0: 35, maxF0: 800 });
-  const formants = trackFormants(frames, {
-    pitch,
-    ...(head ? { vocalTractLength: head.vocalTractLength } : {}),
-  });
-  const source = inverseFilter(frames, { pitch, minF0: 35, maxF0: 800 });
+    measure(profile, 'Front end', () =>
+      analyzeFrames(samples, sampleRate, {
+        hop: 0.01,
+        maxSeconds: Math.max(0.1, seconds + 0.05),
+      })
+    );
+  const pitch = measure(profile, 'Pitch', () =>
+    trackPitch(frames, { minF0: 35, maxF0: 800 })
+  );
+  const formants = measure(profile, 'Formants', () =>
+    trackFormants(frames, {
+      pitch,
+      ...(head ? { vocalTractLength: head.vocalTractLength } : {}),
+    })
+  );
+  const source = measure(profile, 'Inverse filter', () =>
+    inverseFilter(frames, { pitch, minF0: 35, maxF0: 800 })
+  );
   const pulses = glottalPeriods(samples, sampleRate);
   const phones = result.phonemes ?? result.phones;
   const peakLevel = quantile(frames.energy.subarray(0, frames.count), 0.9);

@@ -9,6 +9,7 @@ import {
   resultOf,
   syllablesWithWhisper,
 } from './decode-pipeline.js';
+import { measure } from './profile.js';
 import { decodeSearch } from './decode-search.js';
 import { matchSimulation, matchWhisperPhones } from './simulation-match.js';
 import {
@@ -159,9 +160,11 @@ export function audioToIpa(samples, sampleRate, options = {}) {
     settings,
     frontEnd
   );
-  const { prepared, templates } = prepareIpaDecode(analysis, settings);
-  const search = decodeSearch(prepared, settings.language, settings);
-  const result = resultOf(analysis, settings, prepared, templates, search);
+  const result = measure(settings.profile, 'Audio to IPA', () => {
+    const { prepared, templates } = prepareIpaDecode(analysis, settings);
+    const search = decodeSearch(prepared, settings.language, settings);
+    return resultOf(analysis, settings, prepared, templates, search);
+  });
   return options.voice
     ? refineWhisperReading(samples, sampleRate, result, settings)
     : result;

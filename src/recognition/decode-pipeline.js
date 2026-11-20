@@ -13,6 +13,7 @@ import { trackFormants } from './formants.js';
 import { analyzeFrames, workingRate } from './frontend.js';
 import { invertArticulation } from './inversion.js';
 import { findLandmarks } from './landmarks.js';
+import { measure } from './profile.js';
 import { trackPitch } from './pitch.js';
 import {
   clipWhisperSpans,
@@ -73,6 +74,7 @@ export function decoderSettings(sampleRate, options) {
     );
   }
   return {
+    profile: options.profile,
     beam,
     nbest,
     whisper: decoderWhisperSpans(whisper),
@@ -103,9 +105,16 @@ export function decoderCodebook(voice) {
   return books.get(key);
 }
 
-export function fitDecoderVoice(samples, sampleRate, language, fallback) {
+export function fitDecoderVoice(
+  samples,
+  sampleRate,
+  language,
+  fallback,
+  profile
+) {
   try {
-    return fitVoice(samples, sampleRate, { refine: false, language }).head;
+    return fitVoice(samples, sampleRate, { refine: false, language, profile })
+      .head;
   } catch (error) {
     if (error instanceof NoVoicedSpeechError) {
       return fallback;
@@ -115,8 +124,11 @@ export function fitDecoderVoice(samples, sampleRate, language, fallback) {
 }
 
 export function decodeFrontEnd(samples, sampleRate, settings) {
-  const frames = analyzeFrames(samples, sampleRate, settings);
-  const pitch = trackPitch(frames);
+  const { profile } = settings;
+  const frames = measure(profile, 'Front end', () =>
+    analyzeFrames(samples, sampleRate, settings)
+  );
+  const pitch = measure(profile, 'Pitch', () => trackPitch(frames));
   const whisperSpans =
     settings.whisper === 'auto'
       ? findWhisper(samples, sampleRate, frames, pitch)
@@ -140,23 +152,29 @@ export function analyzeForDecode(
           samples,
           sampleRate,
           settings.language.language,
-          DEFAULT_HEAD
+          DEFAULT_HEAD,
+          settings.profile
         )
       : DEFAULT_HEAD;
   const spectralFrames = whisperFormantFrames(frames, whisperSpans);
-  const formants = trackFormants(spectralFrames, {
-    pitch,
-    vocalTractLength: voice.vocalTractLength,
-  });
-  const landmarks = findLandmarks(frames);
-  const articulation = invertArticulation(spectralFrames, {
-    voice,
-    pitch,
-    formants,
-    codebook: hasSpeech
-      ? decoderCodebook(voice)
-      : buildCodebook(voice, { size: 1 }),
-  });
+  const { profile } = settings;
+  const formants = measure(profile, 'Formants', () =>
+    trackFormants(spectralFrames, {
+      pitch,
+      vocalTractLength: voice.vocalTractLength,
+    })
+  );
+  const landmarks = measure(profile, 'Landmarks', () => findLandmarks(frames));
+  const articulation = measure(profile, 'Inversion', () =>
+    invertArticulation(spectralFrames, {
+      voice,
+      pitch,
+      formants,
+      codebook: hasSpeech
+        ? decoderCodebook(voice)
+        : buildCodebook(voice, { size: 1 }),
+    })
+  );
   return {
     frames,
     whisperSpans,
