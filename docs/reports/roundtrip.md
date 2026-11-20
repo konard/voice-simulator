@@ -7,7 +7,7 @@ voice, 40 higher-tier, 320 whisper, and 72 mode cases. The mode totals
 reuse 16 whisper cases.
 
 All 16 main rows missed their phone error limits. Telephone phone error
-ranged from 84.2% to 94.0%, and top-language matches ranged from 2.5% to 37.5%.
+ranged from 84.1% to 94.0%, and top-language matches ranged from 2.5% to 37.5%.
 Compared with the [initial full benchmark](https://github.com/konard/voice-simulator/actions/runs/44799632294)
 at `83bd563`, the whisper correction changed the results of one Russian
 telephone recording. That recording returned the correct top language and
