@@ -183,7 +183,8 @@ test(
   async (t) => {
     const started = performance.now();
     const maxRows = Math.max(...BENCHMARK.sets.map(({ rows }) => rows));
-    const limit = Math.min(heavyLimit(maxRows), maxRows);
+    const requestedLimit = heavyLimit(0);
+    const limit = Math.min(requestedLimit || maxRows, maxRows);
     const commit = execFileSync('git', ['rev-parse', 'HEAD'], {
       encoding: 'utf8',
     }).trim();
@@ -261,7 +262,7 @@ test(
     } else {
       failures.push(...ratchet);
     }
-    const limitFlag = limit < maxRows ? ` --limit ${limit}` : '';
+    const limitFlag = requestedLimit ? ` --limit ${requestedLimit}` : '';
     const command = `node scripts/run-heavy.mjs --suite recognition${limitFlag}`;
     const markdown = formatBenchmarkReport(data, {
       command,
