@@ -1,0 +1,212 @@
+//! Bounded codebook search (Unlicense).
+//! Tree rows contain [entry, split axis, left, right] with u32::MAX for a
+//! missing branch. Entry keys are six f32s and envelopes 24 quantized u8s
+//! per row. Each f64 query holds 24 bands (NaN for missing), then six keys.
+//! The output has k consecutive (row, cost) pairs per query, with (-1, inf)
+//! for empty slots. Both heap pruning and result ranking break ties by row.
+use alloc::{collections::BinaryHeap, vec::Vec};
+use core::cmp::Ordering;
+
+const BANDS: usize = 24;
+const KEY: usize = 6;
+pub const QUERY_WIDTH: usize = BANDS + KEY;
+const NEIGHBOURS: usize = 64;
+const VISITS: usize = 192;
+
+#[derive(Clone, Copy)]
+struct Candidate {
+    distance: f64,
+    row: usize,
+}
+
+impl Ord for Candidate {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.distance
+            .total_cmp(&other.distance)
+            .then(self.row.cmp(&other.row))
+    }
+}
+
+impl PartialOrd for Candidate {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl PartialEq for Candidate {
+    fn eq(&self, other: &Self) -> bool {
+        self.cmp(other).is_eq()
+    }
+}
+
+impl Eq for Candidate {}
+
+pub struct Codebook<'a> {
+    tree: &'a [u32],
+    key: &'a [f32],
+    envelope: &'a [u8],
+}
+
+impl<'a> Codebook<'a> {
+    pub fn new(tree: &'a [u32], key: &'a [f32], envelope: &'a [u8]) -> Option<Self> {
+        let size = tree.len() / 4;
+        if size == 0
+            || tree.len() % 4 != 0
+            || key.len() / KEY != size
+            || envelope.len() / BANDS != size
+            || key.len() % KEY != 0
+            || envelope.len() % BANDS != 0
+            || tree.chunks_exact(4).any(|node| {
+                node[0] as usize >= size
+                    || node[1] as usize >= KEY
+                    || node[2..]
+                        .iter()
+                        .any(|&child| child != u32::MAX && child as usize >= size)
+            })
+        {
+            return None;
+        }
+        Some(Self {
+            tree,
+            key,
+            envelope,
+        })
+    }
+
+    pub fn query(&self, queries: &[f64], k: usize) -> Vec<f64> {
+        let mut out = Vec::with_capacity((queries.len() / QUERY_WIDTH) * k * 2);
+        let mut shortlist = BinaryHeap::with_capacity(NEIGHBOURS);
+        let mut pending = Vec::with_capacity(32);
+        let mut ranked = Vec::with_capacity(NEIGHBOURS);
+        for query in queries.chunks_exact(QUERY_WIDTH) {
+            let expected = out.len() + 2 * k;
+            let bands = &query[..BANDS];
+            let count = bands.iter().filter(|value| value.is_finite()).count();
+            if count > 0 {
+                shortlist.clear();
+                pending.clear();
+                self.shortlist(&query[BANDS..], &mut pending, &mut shortlist);
+                ranked.clear();
+                ranked.extend(shortlist.iter().map(|candidate| {
+                    let row = candidate.row;
+                    let distance = bands
+                        .iter()
+                        .zip(&self.envelope[row * BANDS..][..BANDS])
+                        .filter(|(value, _)| value.is_finite())
+                        .map(|(value, &stored)| {
+                            let delta = value * 2.0 + 128.0 - f64::from(stored);
+                            delta * delta
+                        })
+                        .sum::<f64>()
+                        * 0.25
+                        / count as f64;
+                    Candidate { distance, row }
+                }));
+                ranked.sort_unstable();
+                out.extend(
+                    ranked
+                        .iter()
+                        .take(k)
+                        .flat_map(|item| [item.row as f64, item.distance]),
+                );
+            }
+            while out.len() < expected {
+                out.extend([-1.0, f64::INFINITY]);
+            }
+        }
+        out
+    }
+
+    fn shortlist(&self, key: &[f64], pending: &mut Vec<Branch>, best: &mut BinaryHeap<Candidate>) {
+        pending.push(Branch {
+            node: 0,
+            bound: 0.0,
+            axes: [0.0; KEY],
+        });
+        let mut visits = 0;
+        while let Some(branch) = pending.pop() {
+            if visits == VISITS {
+                break;
+            }
+            if best.len() == NEIGHBOURS && branch.bound > best.peek().unwrap().distance {
+                continue;
+            }
+            let entry = &self.tree[branch.node as usize * 4..];
+            let row = entry[0] as usize;
+            let axis = entry[1] as usize;
+            let stored = &self.key[row * KEY..][..KEY];
+            let delta = key[axis] - f64::from(stored[axis]);
+            let distance = key
+                .iter()
+                .zip(stored)
+                .map(|(a, &b)| {
+                    let difference = a - f64::from(b);
+                    difference * difference
+                })
+                .sum();
+            visits += 1;
+            let candidate = Candidate { row, distance };
+            if best.len() < NEIGHBOURS {
+                best.push(candidate);
+            } else if candidate < *best.peek().unwrap() {
+                *best.peek_mut().unwrap() = candidate;
+            }
+            let near = if delta <= 0.0 { 2 } else { 3 };
+            let far = entry[5 - near];
+            if far != u32::MAX {
+                let mut axes = branch.axes;
+                let old = axes[axis];
+                axes[axis] = old.max(delta * delta);
+                pending.push(Branch {
+                    node: far,
+                    bound: branch.bound + axes[axis] - old,
+                    axes,
+                });
+            }
+            if entry[near] != u32::MAX {
+                pending.push(Branch {
+                    node: entry[near],
+                    ..branch
+                });
+            }
+        }
+    }
+}
+
+struct Branch {
+    node: u32,
+    bound: f64,
+    axes: [f64; KEY],
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use alloc::vec;
+
+    #[test]
+    fn ranks_envelopes_and_keeps_lower_entry_on_a_tie() {
+        let book = Codebook::new(
+            &[1, 0, 1, u32::MAX, 0, 0, u32::MAX, u32::MAX],
+            &[0.0; 2 * KEY],
+            &[128; 2 * BANDS],
+        )
+        .unwrap();
+        let mut query = vec![0.0; 2 * QUERY_WIDTH];
+        query[0] = 2.0;
+        query[QUERY_WIDTH..].fill(f64::NAN);
+        assert_eq!(
+            book.query(&query, 2),
+            vec![
+                0.0,
+                4.0 / 24.0,
+                1.0,
+                4.0 / 24.0,
+                -1.0,
+                f64::INFINITY,
+                -1.0,
+                f64::INFINITY
+            ]
+        );
+    }
+}

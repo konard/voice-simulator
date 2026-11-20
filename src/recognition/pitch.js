@@ -18,6 +18,7 @@
  */
 
 import { createFft } from './fft.js';
+import { withPitchDsp } from './pitch-rust.js';
 
 /**
  * Defaults. The two transition costs are per step of the default hop of
@@ -344,6 +345,9 @@ function createCoarseCorrelator(frames, settings) {
       for (let n = 0; n < coarseLength; n++) {
         re[n] = (coarse[start + n + margin] - mean) * window[n];
       }
+      if (settings.dsp) {
+        return settings.dsp.correlate(re, correlation, q);
+      }
       re.fill(0, coarseLength);
       im.fill(0);
       fft.forward(re, im);
@@ -415,12 +419,16 @@ function createFullFrame(frames, settings) {
         full[n] = (full[n] - mean) * window[n];
         energy += full[n] * full[n];
       }
+      settings.dsp?.load(full, correlation);
       frame.energy = energy;
       frame.largest = largest;
     },
     /** Refine a coarse lag: [full-rate lag, height] or null. */
     refine(coarseLag) {
       const centre = Math.round(coarseLag * factor);
+      if (settings.dsp) {
+        return settings.dsp.refine(frame.energy, centre);
+      }
       let best = -Infinity;
       let bestLag = -1;
       for (let lag = centre - factor; lag <= centre + factor; lag++) {
@@ -654,6 +662,9 @@ function createMarker(frames, track, settings) {
     const hi = Math.floor(Math.max(near, far));
     if (lo < first || hi + span > end) {
       return null;
+    }
+    if (settings.dsp) {
+      return settings.dsp.mark(frames, anchor, lo, hi, span);
     }
     let best = -Infinity;
     let place = -1;
@@ -985,28 +996,30 @@ export function createPitchTracker(frames, options = {}) {
      * @param {boolean} [final]
      */
     advance(final = false) {
-      for (; peakScanned < frames.sampleCount; peakScanned++) {
-        peak = Math.max(peak, Math.abs(frames.samples[peakScanned]));
-      }
-      while (track.count < frames.count) {
-        const t = track.count;
-        const middle = centre(t);
-        if (
-          !final &&
-          (finder.lastSample(middle) >= frames.sampleCount ||
-            t + settings.energyAhead >= frames.count)
-        ) {
-          break;
+      withPitchDsp(options.kernels?.module, settings, () => {
+        for (; peakScanned < frames.sampleCount; peakScanned++) {
+          peak = Math.max(peak, Math.abs(frames.samples[peakScanned]));
         }
-        finder.score(t, middle, peak);
-        viterbi.step(t);
-        track.count++;
-      }
-      commit(final ? track.count : Math.max(0, track.count - lag));
-      if (final && runStart >= 0) {
-        marker.run(runStart, track.count - 1);
-        runStart = -1;
-      }
+        while (track.count < frames.count) {
+          const t = track.count;
+          const middle = centre(t);
+          if (
+            !final &&
+            (finder.lastSample(middle) >= frames.sampleCount ||
+              t + settings.energyAhead >= frames.count)
+          ) {
+            break;
+          }
+          finder.score(t, middle, peak);
+          viterbi.step(t);
+          track.count++;
+        }
+        commit(final ? track.count : Math.max(0, track.count - lag));
+        if (final && runStart >= 0) {
+          marker.run(runStart, track.count - 1);
+          runStart = -1;
+        }
+      });
     },
   };
 }

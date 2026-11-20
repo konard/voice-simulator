@@ -1,8 +1,10 @@
+import { createRecognitionEngine } from '../../../../src/recognition/engine.js';
 import { LANGUAGES } from '../../../../src/g2p/index.js';
 import { createRecognizer } from '../../../../src/recognition/recognizer.js';
 import { verifyFile } from './recognition-file.js';
 
 let active;
+const loading = createRecognitionEngine({ engine: 'auto', threads: 1 });
 const languageCodes = Object.keys(LANGUAGES);
 const send = (id, type, payload) =>
   globalThis.postMessage({ id, type, ...payload });
@@ -12,11 +14,13 @@ function fail(id, { message, code }) {
   send(id, 'error', { message, code });
 }
 
-function start({ id, sampleCount, sampleRate, languages, level }) {
+function start({ id, sampleCount, sampleRate, languages, level }, kernels) {
   const options = {
     sampleRate,
     sampleCount,
     level,
+    threads: 1,
+    kernels,
     languages: languages?.map((language) =>
       languageCodes.find((code) => code === language)
     ),
@@ -32,11 +36,11 @@ function start({ id, sampleCount, sampleRate, languages, level }) {
   active = { id, recognizer, file };
 }
 
-globalThis.addEventListener('message', ({ data }) => {
+async function receive(data) {
   const { id, type, samples } = data;
   try {
     if (type === 'start') {
-      start(data);
+      start(data, await loading);
     } else if (active && active.id === id) {
       if (type === 'chunk') {
         active.file?.push(samples);
@@ -56,4 +60,9 @@ globalThis.addEventListener('message', ({ data }) => {
   } catch (error) {
     fail(id, error);
   }
+}
+
+let messages = Promise.resolve();
+globalThis.addEventListener('message', ({ data }) => {
+  messages = messages.then(() => receive(data));
 });

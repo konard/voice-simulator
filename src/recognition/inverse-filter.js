@@ -2,6 +2,7 @@
  * Unlicense. References and numerical definitions: docs/INVERSE-FILTER.md. */
 import { lfParameters, lfWaveform } from '../acoustics/glottis.js';
 import { createFft } from './fft.js';
+import { inverseFilterRust } from './inverse-rust.js';
 import { refine } from './inverse-refinement.js';
 import {
   block,
@@ -391,10 +392,16 @@ function summarize(values, reliable) {
 /** No stream state: call on a completed FrameSet or a finished stretch. */
 export function inverseFilter(frames, options = {}) {
   const o = settings(frames, options);
-  frames = {
-    ...frames,
-    samples: frames.samples.subarray(0, frames.sampleCount),
-  };
+  if (options.kernels?.module && !o.trace) {
+    return inverseFilterRust(options.kernels.module, frames, o, MEASURES);
+  }
+  return inverseFilterJs(
+    { ...frames, samples: frames.samples.subarray(0, frames.sampleCount) },
+    o
+  );
+}
+
+function inverseFilterJs(frames, o) {
   const { rate, hop, count, startTime } = frames;
   const f0 = localPitch(frames, o);
   const result = {

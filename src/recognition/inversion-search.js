@@ -76,10 +76,17 @@ function localCost(row, t, envelopeCost, frames, formants, book) {
   return weight * cost;
 }
 
-function scoreSpeech(t, { frames, formants, book, k, scratch, candidates }) {
+function scoreSpeech(
+  t,
+  { frames, formants, book, k, scratch, candidates, query }
+) {
   const { width, count, index, cost } = candidates;
-  frameEnvelope(frames, t, book, scratch);
-  book.query(scratch.envelope, k, scratch.query);
+  if (query) {
+    query(t, scratch.query);
+  } else {
+    frameEnvelope(frames, t, book, scratch);
+    book.query(scratch.envelope, k, scratch.query);
+  }
   const start = t * width;
   let best = -1;
   for (let j = 0; j < k && scratch.query.index[j] >= 0; j++) {
@@ -174,7 +181,7 @@ export function createTractSearch(
   book,
   settings,
   steps,
-  { candidates, history, head }
+  { candidates, history, head, query }
 ) {
   const table = book.articulation;
   const weights = transitionWeights(steps, 1);
@@ -194,6 +201,7 @@ export function createTractSearch(
     k: settings.candidates,
     scratch,
     candidates,
+    query,
   };
   const search = viterbi(
     candidates,

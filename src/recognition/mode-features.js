@@ -73,7 +73,7 @@ export function measureWords(
   analyzed,
   options = {}
 ) {
-  const { profile } = options;
+  const { profile, kernels } = options;
   const words = result.words;
   const seconds = samples.length / sampleRate;
   const frames =
@@ -85,7 +85,7 @@ export function measureWords(
       })
     );
   const pitch = measure(profile, 'Pitch', () =>
-    trackPitch(frames, { minF0: 35, maxF0: 800 })
+    trackPitch(frames, { minF0: 35, maxF0: 800, kernels })
   );
   const formants = measure(profile, 'Formants', () =>
     trackFormants(frames, {
@@ -94,7 +94,7 @@ export function measureWords(
     })
   );
   const source = measure(profile, 'Inverse filter', () =>
-    inverseFilter(frames, { pitch, minF0: 35, maxF0: 800 })
+    inverseFilter(frames, { pitch, minF0: 35, maxF0: 800, kernels })
   );
   const pulses = glottalPeriods(samples, sampleRate);
   const phones = result.phonemes ?? result.phones;

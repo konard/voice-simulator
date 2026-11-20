@@ -3,6 +3,7 @@ import { resample } from '../audio/resample.js';
 import { normalizeHeadConfig } from '../head-config.js';
 import {
   analyzeForDecode,
+  analyzeForDecodeParallel,
   decodeFrontEnd,
   decoderSettings,
   prepareIpaDecode,
@@ -160,6 +161,10 @@ export function audioToIpa(samples, sampleRate, options = {}) {
     settings,
     frontEnd
   );
+  return finishDecode(samples, sampleRate, options, settings, analysis);
+}
+
+function finishDecode(samples, sampleRate, options, settings, analysis) {
   const result = measure(settings.profile, 'Audio to IPA', () => {
     const { prepared, templates } = prepareIpaDecode(analysis, settings);
     const search = decodeSearch(prepared, settings.language, settings);
@@ -168,6 +173,30 @@ export function audioToIpa(samples, sampleRate, options = {}) {
   return options.voice
     ? refineWhisperReading(samples, sampleRate, result, settings)
     : result;
+}
+
+export async function audioToIpaParallel(samples, sampleRate, options, pool) {
+  const settings = decoderSettings(sampleRate, options);
+  let frontEnd;
+  const verified = decodeRecordedSimulation(
+    samples,
+    sampleRate,
+    options,
+    settings,
+    (analyzed) => (frontEnd = analyzed)
+  );
+  if (verified) {
+    return verified;
+  }
+  const analysis = await analyzeForDecodeParallel(
+    samples,
+    sampleRate,
+    options,
+    settings,
+    frontEnd,
+    pool
+  );
+  return finishDecode(samples, sampleRate, options, settings, analysis);
 }
 
 export { createIpaDecoder } from './decode-stream.js';

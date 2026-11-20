@@ -1,5 +1,5 @@
 /** Bounded trie edit search; paths never cross a hard boundary. */
-import { phoneDistance, gapCost, voicingDistance } from './phone-distance.js';
+import { phoneDistance, voicingDistance } from './phone-distance.js';
 import { soundKey } from './lexicon.js';
 import { formatIpa } from '../ipa/parse.js';
 import { syllabifyTokens } from '../ipa/syllables.js';
@@ -46,39 +46,6 @@ function allowed(entry, tokens, to, end, language) {
     return next === '51';
   }
   return true;
-}
-
-function cheapest(states, beam) {
-  const seen = new Map();
-  for (const state of states) {
-    if (!seen.has(state.node) || state.cost < seen.get(state.node).cost) {
-      seen.set(state.node, state);
-    }
-  }
-  return [...seen.values()].sort((a, b) => a.cost - b.cost).slice(0, beam);
-}
-
-/** Insert missing input sounds, with a finite cost threshold and beam. */
-function insertions(states, limit, beam) {
-  let all = cheapest(states, beam);
-  let frontier = all;
-  while (frontier.length) {
-    const next = [];
-    const known = new Map(all.map((s) => [s.node, s.cost]));
-    for (const state of frontier) {
-      for (const node of state.node.children.values()) {
-        const cost = state.cost + gapCost(node.token);
-        if (cost <= limit && cost < (known.get(node) ?? Infinity)) {
-          next.push({ node, cost });
-        }
-      }
-    }
-    const kept = cheapest([...all, ...next], beam);
-    const old = new Map(all.map((s) => [s.node, s.cost]));
-    frontier = kept.filter((s) => s.cost < (old.get(s.node) ?? Infinity));
-    all = kept;
-  }
-  return all;
 }
 
 function exactKeys(tokens, to, end, language) {
@@ -210,39 +177,19 @@ export function distanceCache() {
 }
 
 export function candidatesAt(tokens, from, end, lexicon, options) {
-  const { beam, language, distance } = options;
+  const { beam, language, wordSearch } = options;
   const found = exactCandidates(tokens, from, end, lexicon, language);
-  let states = insertions([{ node: lexicon.root, cost: 0 }], 0.6, beam);
-  for (let index = from; index < end && states.length; index++) {
-    const used = index - from + 1;
-    const limit = 0.6 * (used + 1);
-    const next = [];
-    for (const state of states) {
-      const deletion = state.cost + gapCost(tokens[index]);
-      if (deletion <= limit) {
-        next.push({ node: state.node, cost: deletion });
-      }
-      for (const node of state.node.children.values()) {
-        const cost = state.cost + distance(tokens[index], node.token, language);
-        if (cost <= limit) {
-          next.push({ node, cost });
-        }
-      }
-    }
-    states = insertions(cheapest(next, beam), limit, beam);
-    for (const state of states) {
-      for (const entry of state.node.entries) {
-        if (!allowed(entry, tokens, index + 1, end, language)) {
-          continue;
-        }
+  const { hits, entries } = wordSearch(from, end, beam);
+  for (let i = 0; i < hits.length; i += 3) {
+    const used = hits[i];
+    const to = from + used;
+    for (const entry of entries[hits[i + 1]]) {
+      if (allowed(entry, tokens, to, end, language)) {
         const cost =
-          state.cost + stressCost(entry, tokens, from, used, language);
-        found.push({ from, to: index + 1, ...entry, cost });
+          hits[i + 2] + stressCost(entry, tokens, from, used, language);
+        found.push({ from, to, ...entry, cost });
       }
     }
-    // No word in the trie can use a longer path than its longest word
-    // plus the allowed deletion budget. The positive gap costs and input
-    // length also bound the insertion closure.
   }
   const unique = new Map();
   for (const item of found) {

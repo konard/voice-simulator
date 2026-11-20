@@ -238,7 +238,7 @@ export function accumulate(
         )
       : samples
   );
-  const { profile } = options;
+  const { profile, kernels } = options;
   const frames = measure(profile, 'Front end', () =>
     analyzeFrames(input, sampleRate, {
       maxSeconds,
@@ -246,14 +246,16 @@ export function accumulate(
       rate: options.analysisRate,
     })
   );
-  const pitch = measure(profile, 'Pitch', () => trackPitch(frames));
+  const pitch = measure(profile, 'Pitch', () =>
+    trackPitch(frames, { kernels })
+  );
   // Use the tracker's initial tract prior for every stretch. Re-estimating
   // that prior from a whole utterance makes the pooled dF depend on splits.
   const formants = measure(profile, 'Formants', () =>
     trackFormants(frames, { pitch, vocalTractLength: 16.5 })
   );
   const source = measure(profile, 'Inverse filter', () =>
-    inverseFilter(frames, { pitch, trace: options.trace ?? null })
+    inverseFilter(frames, { pitch, kernels, trace: options.trace ?? null })
   );
   const analysis = prepareLegacyVoice(input, sampleRate, {
     ...options,

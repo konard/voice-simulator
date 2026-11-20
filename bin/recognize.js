@@ -2,7 +2,10 @@
 import { readFileSync } from 'node:fs';
 import { decodeAudio } from '../src/audio/formats.js';
 import { createRawDecoder } from '../src/audio/raw-stream.js';
-import { createRecognizer, recognize } from '../src/recognition/recognizer.js';
+import {
+  createRecognizer,
+  recognizeAsync,
+} from '../src/recognition/recognizer.js';
 import { recognitionParams } from '../src/recognition/recognizer-params.js';
 
 async function rawRecognition(input, values, options, print) {
@@ -56,5 +59,5 @@ export async function recognizeCommand(values, [file], io) {
     bytes = readFileSync(file);
   }
   const { samples, sampleRate } = decodeAudio(bytes);
-  print(recognize(samples, sampleRate, options));
+  print(await recognizeAsync(samples, sampleRate, options));
 }

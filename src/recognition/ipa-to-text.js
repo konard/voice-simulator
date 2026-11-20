@@ -4,6 +4,7 @@ import { checkLanguage } from './languages.js';
 import { wordCost } from './data/index.js';
 import { candidatesAt, exactCandidates, distanceCache } from './candidates.js';
 import { recognitionInput } from './input.js';
+import { withWordSearch } from './word-search.js';
 import { spellSounds } from './phones-to-letters.js';
 import { resultFromPath, heardIpa } from './result.js';
 
@@ -68,7 +69,8 @@ function unknownCandidates(tokens, from, end, options, knownSuffix) {
 }
 
 function decoderCandidates(from, end, context) {
-  const { input, lexicons, options, exact, distance, knownSuffix } = context;
+  const { input, lexicons, options, exact, wordSearches, knownSuffix } =
+    context;
   const { tokens } = input;
   const { beam, given } = options;
   const candidates = [];
@@ -78,7 +80,7 @@ function decoderCandidates(from, end, context) {
       : candidatesAt(tokens, from, end, lexicon, {
           beam,
           language,
-          distance,
+          wordSearch: wordSearches.get(language),
         });
     if (given) {
       found = found.filter((c) => c.to === end);
@@ -119,14 +121,13 @@ function continuationCost(input, lexicons, spans, candidate, partial) {
   );
 }
 
-export function decode(input, lexicon, options, exact) {
+function searchPaths(input, lexicon, options, exact, wordSearches) {
   const { tokens, boundaries } = input;
   const { beam, language, given } = options;
   const lexicons = options.lexicons ?? new Map([[language, lexicon]]);
   const ends = [...boundaries].sort((a, b) => a - b);
   const best = Array.from({ length: tokens.length + 1 }, () => []);
   best[0] = [{ path: [], last: null, text: '', cost: 0 }];
-  const distance = distanceCache();
   const suffixes = new Map();
   function knownSuffix(end, lexicon, language) {
     const key = `${end}:${language}`;
@@ -160,7 +161,7 @@ export function decode(input, lexicon, options, exact) {
       lexicons,
       options,
       exact,
-      distance,
+      wordSearches,
       knownSuffix,
     });
     for (const candidate of candidates) {
@@ -187,6 +188,36 @@ export function decode(input, lexicon, options, exact) {
     }
   }
   return prune(best[tokens.length], beam);
+}
+
+export function decode(input, lexicon, options, exact) {
+  const searches = new Map();
+  const run = () => searchPaths(input, lexicon, options, exact, searches);
+  if (exact) {
+    return run();
+  }
+  const sources = [
+    ...(options.lexicons ?? new Map([[options.language, lexicon]])),
+  ];
+  const distance = distanceCache();
+  function load(index) {
+    if (index === sources.length) {
+      return run();
+    }
+    const [language, source] = sources[index];
+    return withWordSearch(
+      source,
+      input.tokens,
+      language,
+      distance,
+      options.module,
+      (search) => {
+        searches.set(language, search);
+        return load(index + 1);
+      }
+    );
+  }
+  return load(0);
 }
 
 function decoderLanguages(options) {
@@ -275,6 +306,7 @@ export function ipaToText(ipa, options = {}) {
   const lexicon = getLexicon(language);
   const settings = {
     language,
+    module: options.kernels?.module,
     beam: Math.max(beam, nbest),
     given: boundaries === 'given',
     ...(languages.length > 1

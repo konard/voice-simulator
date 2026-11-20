@@ -5,6 +5,7 @@ import { DEFAULT_HEAD, normalizeHeadConfig } from '../head-config.js';
 import { parseIpa } from '../ipa/parse.js';
 import { syllabifyTokens } from '../ipa/syllables.js';
 import { buildCodebook } from './codebook.js';
+import { codebookQueries, codebookQueriesParallel } from './codebook-jobs.js';
 import { decoderLanguage, decoderTemplates } from './decode-model.js';
 import { pathArcs } from './decode-search.js';
 import { prepareDecode } from './decode-spans.js';
@@ -75,6 +76,7 @@ export function decoderSettings(sampleRate, options) {
   }
   return {
     profile: options.profile,
+    kernels: options.kernels,
     beam,
     nbest,
     whisper: decoderWhisperSpans(whisper),
@@ -110,11 +112,15 @@ export function fitDecoderVoice(
   sampleRate,
   language,
   fallback,
-  profile
+  settings = {}
 ) {
   try {
-    return fitVoice(samples, sampleRate, { refine: false, language, profile })
-      .head;
+    return fitVoice(samples, sampleRate, {
+      refine: false,
+      language,
+      profile: settings.profile,
+      kernels: settings.kernels,
+    }).head;
   } catch (error) {
     if (error instanceof NoVoicedSpeechError) {
       return fallback;
@@ -128,7 +134,9 @@ export function decodeFrontEnd(samples, sampleRate, settings) {
   const frames = measure(profile, 'Front end', () =>
     analyzeFrames(samples, sampleRate, settings)
   );
-  const pitch = measure(profile, 'Pitch', () => trackPitch(frames));
+  const pitch = measure(profile, 'Pitch', () =>
+    trackPitch(frames, { kernels: settings.kernels })
+  );
   const whisperSpans =
     settings.whisper === 'auto'
       ? findWhisper(samples, sampleRate, frames, pitch)
@@ -136,7 +144,7 @@ export function decodeFrontEnd(samples, sampleRate, settings) {
   return { frames, pitch, whisperSpans };
 }
 
-export function analyzeForDecode(
+function prepareAnalysis(
   samples,
   sampleRate,
   options,
@@ -153,7 +161,7 @@ export function analyzeForDecode(
           sampleRate,
           settings.language.language,
           DEFAULT_HEAD,
-          settings.profile
+          settings
         )
       : DEFAULT_HEAD;
   const spectralFrames = whisperFormantFrames(frames, whisperSpans);
@@ -165,14 +173,39 @@ export function analyzeForDecode(
     })
   );
   const landmarks = measure(profile, 'Landmarks', () => findLandmarks(frames));
+  const codebook = hasSpeech
+    ? decoderCodebook(voice)
+    : buildCodebook(voice, { size: 1 });
+  return {
+    frames,
+    spectralFrames,
+    whisperSpans,
+    pitch,
+    formants,
+    landmarks,
+    voice,
+    codebook,
+  };
+}
+
+function finishAnalysis(analysis, profile, query) {
+  const {
+    frames,
+    spectralFrames,
+    whisperSpans,
+    pitch,
+    formants,
+    landmarks,
+    voice,
+    codebook,
+  } = analysis;
   const articulation = measure(profile, 'Inversion', () =>
     invertArticulation(spectralFrames, {
       voice,
       pitch,
       formants,
-      codebook: hasSpeech
-        ? decoderCodebook(voice)
-        : buildCodebook(voice, { size: 1 }),
+      codebook,
+      query,
     })
   );
   return {
@@ -181,6 +214,56 @@ export function analyzeForDecode(
     tracks: { pitch, formants, landmarks, articulation },
     voice,
   };
+}
+
+export function analyzeForDecode(
+  samples,
+  sampleRate,
+  options,
+  settings,
+  frontEnd
+) {
+  const analysis = prepareAnalysis(
+    samples,
+    sampleRate,
+    options,
+    settings,
+    frontEnd
+  );
+  const { spectralFrames, codebook, voice } = analysis;
+  const { kernels, profile } = settings;
+  const query = kernels?.module?.exports.rec_codebook_search
+    ? measure(profile, 'Inversion', () =>
+        codebookQueries(spectralFrames, codebook, voice, kernels)
+      )
+    : undefined;
+  return finishAnalysis(analysis, profile, query);
+}
+
+export async function analyzeForDecodeParallel(
+  samples,
+  sampleRate,
+  options,
+  settings,
+  frontEnd,
+  pool
+) {
+  const analysis = prepareAnalysis(
+    samples,
+    sampleRate,
+    options,
+    settings,
+    frontEnd
+  );
+  const { spectralFrames, codebook, voice } = analysis;
+  const query = await codebookQueriesParallel(
+    spectralFrames,
+    codebook,
+    voice,
+    settings.kernels,
+    pool
+  );
+  return finishAnalysis(analysis, settings.profile, query);
 }
 
 export function prepareIpaDecode(analysis, settings, bounds, templatesForTime) {
