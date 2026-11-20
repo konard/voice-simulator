@@ -48,6 +48,7 @@ pub mod prosody;
 pub mod radiation;
 pub mod random;
 pub mod recognition;
+pub mod recognizer;
 pub mod renderer;
 pub mod resample;
 pub mod rescoring;

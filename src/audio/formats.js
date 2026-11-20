@@ -5,7 +5,13 @@
 
 import { decodeAiff, encodeAiff } from './aiff.js';
 import { auHeader, auSampleFormat, decodeAu, encodeAu } from './au.js';
-import { decodeFlac, encodeFlac, FLAC_BIT_DEPTHS, flacStart } from './flac.js';
+import {
+  checkAudioDuration,
+  decodeFlac,
+  encodeFlac,
+  FLAC_BIT_DEPTHS,
+  flacStart,
+} from './flac.js';
 import {
   decodeSamples,
   encodeSamples,
@@ -215,7 +221,7 @@ export function encodeAudio(samples, sampleRate, options = {}) {
  * Decode any supported file to mono floats, detecting the container.
  * Headerless data needs `{format: 'raw', sampleRate, bitDepth, ...}`.
  * @param {Uint8Array | ArrayBuffer} input
- * @param {{format?: string, sampleRate?: number, channels?: number, bitDepth?: number, float?: boolean}} [options]
+ * @param {{format?: string, sampleRate?: number, channels?: number, bitDepth?: number, float?: boolean, maxSeconds?: number}} [options]
  * @returns {{format: string, sampleRate: number, samples: Float32Array, channels: number, bitDepth: number, float: boolean}}
  */
 export function decodeAudio(input, options = {}) {
@@ -231,7 +237,12 @@ export function decodeAudio(input, options = {}) {
   const decoded =
     name === 'raw'
       ? decodeRaw(bytes, options)
-      : AUDIO_FORMATS[name].decode(bytes);
+      : AUDIO_FORMATS[name].decode(bytes, options.maxSeconds);
+  checkAudioDuration(
+    decoded.samples.length,
+    decoded.sampleRate,
+    options.maxSeconds
+  );
   return { format: name, ...decoded };
 }
 

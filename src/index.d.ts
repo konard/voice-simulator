@@ -3038,7 +3038,11 @@ export declare function encodeAudio(
 ): Uint8Array;
 export declare function decodeAudio(
   bytes: Uint8Array | ArrayBuffer,
-  options?: AudioEncodingOptions & { sampleRate?: number; channels?: number }
+  options?: AudioEncodingOptions & {
+    sampleRate?: number;
+    channels?: number;
+    maxSeconds?: number;
+  }
 ): DecodedAudio & { format: AudioFormatName };
 export declare function detectAudioFormat(
   bytes: Uint8Array
@@ -4534,3 +4538,19 @@ export {
   type RescoringStatistics,
   type WarpedPlan,
 } from './recognition/rescoring.js';
+
+export {
+  recognize,
+  createRecognizer,
+  RECOGNITION_LEVELS,
+  levelForTier,
+  RecognitionError,
+  type RecognitionOptions,
+  type RecognitionResult,
+  type RecognizedWord,
+  type RecognizedSyllable,
+  type RecognitionLevel,
+  type RecognitionEvents,
+  type Recognizer,
+  type ModeSpan as RecognizedModeSpan,
+} from './recognition/recognizer.js';

@@ -655,10 +655,36 @@ Measured with `node experiments/issue-58-rtf.mjs` (10 s of speech, one thread): 
 
 `inverseFilter(frames, { pitch: trackPitch(frames) })` estimates vocal-fold flow, closure times, Rd/OQ/NAQ, H1-H2, HNR and CPP on finished speech. See the [batch source-analysis API and limits](docs/INVERSE-FILTER.md).
 
+## Recognition (speech to text)
+
+`recognize` accepts mono samples and returns IPA, text, timed words and
+syllables, language shares, and speech modes. The decoder is experimental.
+
+```js
+import { createRecognizer, recognize } from 'voice-simulator';
+
+const result = recognize(samples, sampleRate, { languages: ['en'] });
+const live = createRecognizer({ sampleRate, level: 'auto' });
+live.on('syllable', ({ start, end }) => highlight(start, end));
+live.on('final', ({ text }) => console.log(text));
+for await (const chunk of audioChunks) live.push(chunk); // Float32Array
+const complete = live.flush();
+```
+
+```sh
+voice-simulator recognize speech.wav --lang en --json
+curl --data-binary @speech.wav 'http://localhost:8080/api/recognize?lang=en'
+```
+
+Use `recognize - --format raw` for live PCM on standard input, or
+`POST /api/recognize?stream=1&rate=16000` for 16-bit little-endian PCM and
+NDJSON. Partial events replace the preceding partial. Final events commit
+words in input time. See the [recognition API](docs/RECOGNIZER.md).
+
 ### Speech-mode recognition
 
 `recognizeModes(samples, sampleRate, result, { voice })` adds manner of speech to timed IPA words. A span is `{ start, end, from, to, effort: 0.75, notation: 'f', confidence: 0.8 }`: seconds, end-exclusive word indexes and only the decided mode fields. Phonation and tempo use synthesis brace marks; emotions use `notation: null`; sounds have `sound` instead of word indexes.
-`toPlanModes(result.modes)` supplies word spans, including emotions, to `planUtterance(result.ipa, { modes })`. It retains activation already covered by physical modes as an observation (`emotion.realized: true`) to avoid applying it twice. See [the API and acoustic rules](docs/RECOGNITION-MODES.md) for baseline, abstention, diagnostics and limits. The text-recognition CLI awaits #73.
+`toPlanModes(result.modes)` supplies word spans, including emotions, to `planUtterance(result.ipa, { modes })`. It retains activation already covered by physical modes as an observation (`emotion.realized: true`) to avoid applying it twice. See [the API and acoustic rules](docs/RECOGNITION-MODES.md) for baseline, abstention, diagnostics and limits.
 
 ### Articulatory codebook
 
@@ -1346,34 +1372,7 @@ dependency review on pull requests with a warning, and its
 `Dependency graph enabled` job fails on `main` with the same instruction
 (`scripts/check-dependency-graph.sh`).
 
-### Auto-regenerated preview screenshots
-
-The same `example-app.yml` workflow contains a `preview-regen` job that boots
-the built example app in a headless Chromium via
-[`browser-commander`](https://www.npmjs.com/package/browser-commander) +
-Playwright and writes fresh screenshots to
-`docs/screenshots/example-app/example-app-{locale}-{theme}.png` on every
-push to `main` (and on `workflow_dispatch`). Any drift is committed back to
-`main` so README/site images never go stale between releases. Screenshot-only
-pushes do not match this workflow's path filter, while a protected-branch
-fallback PR remains eligible for its required checks. The job runs in the
-official Playwright container with the browser already installed, avoiding CI
-stalls from live Chromium downloads.
-
-The same script is available locally:
-
-```bash
-npm install --prefix examples/universal-app
-npm run example:web:preview-images
-# Verbose probe of <html data-theme>, <html lang>, and PNG signatures:
-PREVIEW_VERBOSE=1 npm run example:web:preview-images
-```
-
-The matrix covers `{en, ru} × {light, dark}`; the app follows the browser
-language and the stored theme. Each tile opens the app with `?seed=preview`
-so the random head is the same in every run. Set `PREVIEW_CHROMIUM` to a
-Chromium binary when the locally installed browser build differs from the
-pinned Playwright release.
+See [Auto-regenerated preview screenshots](docs/CONTRIBUTING.md#auto-regenerated-preview-screenshots) for CI and `npm run example:web:preview-images` usage.
 
 ### Broken Link Checker
 

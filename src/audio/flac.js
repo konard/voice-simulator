@@ -674,9 +674,10 @@ export function flacStart(bytes) {
 /**
  * Decode a FLAC file to mono floats (all channels are averaged).
  * @param {Uint8Array} bytes
+ * @param {number} [maxSeconds]
  * @returns {{sampleRate: number, samples: Float32Array, channels: number, bitDepth: number, float: boolean}}
  */
-export function decodeFlac(bytes) {
+export function decodeFlac(bytes, maxSeconds = Infinity) {
   const position = flacStart(bytes);
   if (readTag(bytes, position) !== 'fLaC') {
     throw new Error('Not a FLAC file');
@@ -699,12 +700,15 @@ export function decodeFlac(bytes) {
     reader.position = next;
   }
   const blocks = [];
+  checkAudioDuration(info.total, info.sampleRate, maxSeconds);
   let frames = 0;
   while (reader.position + 2 <= bytes.length) {
     if (bytes[reader.position] !== 0xff) {
       break;
     }
     const { subframes, bitDepth } = readFrame(reader, info);
+    frames += subframes[0].length;
+    checkAudioDuration(frames, info.sampleRate, maxSeconds);
     const scale = 2 ** (bitDepth - 1);
     const interleaved = new Float64Array(
       subframes[0].length * subframes.length
@@ -715,7 +719,6 @@ export function decodeFlac(bytes) {
       }
     });
     blocks.push(mixdown(interleaved, subframes.length));
-    frames += subframes[0].length;
   }
   const samples = new Float32Array(
     info.total ? Math.min(info.total, frames) : frames
@@ -733,4 +736,12 @@ export function decodeFlac(bytes) {
     bitDepth: info.bitDepth,
     float: false,
   };
+}
+
+export class AudioDurationError extends Error {}
+
+export function checkAudioDuration(samples, sampleRate, maxSeconds) {
+  if (samples / sampleRate > maxSeconds) {
+    throw new AudioDurationError(`Audio exceeds ${maxSeconds} seconds`);
+  }
 }

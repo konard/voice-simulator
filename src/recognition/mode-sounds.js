@@ -6,7 +6,7 @@ import { quantile } from './mode-features.js';
 
 // Independent duration, periodicity and formant gates define the three sounds.
 // eslint-disable-next-line complexity
-export function recognizeSounds(samples, sampleRate, words) {
+export function recognizeSounds(samples, sampleRate, words, analyzed) {
   const pauses = [];
   let start = 0;
   for (const word of words) {
@@ -19,21 +19,20 @@ export function recognizeSounds(samples, sampleRate, words) {
     pauses.push({ start, end: samples.length / sampleRate });
   }
   const result = [];
+  let sharedPitch;
+  let sharedFormants;
   for (const pause of pauses) {
-    const signal = samples.subarray(
-      Math.round(pause.start * sampleRate),
-      Math.round(pause.end * sampleRate)
-    );
-    const frames = analyzeFrames(signal, sampleRate, {
-      hop: 0.01,
-      maxSeconds: signal.length / sampleRate + 0.1,
-    });
-    const peak = quantile(frames.energy.subarray(0, frames.count), 0.95);
+    const frames = analyzed ?? analyzePause(samples, sampleRate, pause);
+    const first = analyzed ? Math.ceil(pause.start / frames.hop) : 0;
+    const last = analyzed
+      ? Math.min(frames.count, Math.ceil(pause.end / frames.hop))
+      : frames.count;
+    const peak = quantile(frames.energy.subarray(first, last), 0.95);
     if (peak < -65) {
       continue;
     }
     const active = [];
-    for (let t = 0; t < frames.count; t++) {
+    for (let t = first; t < last; t++) {
       if (frames.energy[t] > Math.max(-65, peak - 15)) {
         active.push(t);
       }
@@ -41,7 +40,9 @@ export function recognizeSounds(samples, sampleRate, words) {
     if (!active.length) {
       continue;
     }
-    const pitch = trackPitch(frames, { minF0: 35 });
+    const pitch = analyzed
+      ? (sharedPitch ??= trackPitch(frames, { minF0: 35 }))
+      : trackPitch(frames, { minF0: 35 });
     // Resonant breath noise can produce a weak autocorrelation candidate.
     const voiced = active.filter(
       (t) => pitch.f0[t] > 0 && pitch.strength[t] >= 0.9
@@ -65,7 +66,9 @@ export function recognizeSounds(samples, sampleRate, words) {
       }
     }
     if (!sound && duration > 0.2 && voiced.length / active.length > 0.8) {
-      const formants = trackFormants(frames, { pitch });
+      const formants = analyzed
+        ? (sharedFormants ??= trackFormants(frames, { pitch }))
+        : trackFormants(frames, { pitch });
       const f1 = quantile(voiced.map((t) => formants.frequency[t * 4]));
       const f2 = quantile(voiced.map((t) => formants.frequency[t * 4 + 1]));
       const f0s = voiced.map((t) => pitch.f0[t]);
@@ -83,8 +86,11 @@ export function recognizeSounds(samples, sampleRate, words) {
     }
     if (sound) {
       result.push({
-        start: pause.start + active[0] * frames.hop,
-        end: pause.start + (active.at(-1) + 1) * frames.hop,
+        start: (analyzed ? 0 : pause.start) + active[0] * frames.hop,
+        end: Math.min(
+          pause.end,
+          (analyzed ? 0 : pause.start) + (active.at(-1) + 1) * frames.hop
+        ),
         sound,
         notation: `⸨${sound}⸩`,
         confidence,
@@ -92,4 +98,15 @@ export function recognizeSounds(samples, sampleRate, words) {
     }
   }
   return result;
+}
+
+function analyzePause(samples, sampleRate, pause) {
+  const signal = samples.subarray(
+    Math.round(pause.start * sampleRate),
+    Math.round(pause.end * sampleRate)
+  );
+  return analyzeFrames(signal, sampleRate, {
+    hop: 0.01,
+    maxSeconds: signal.length / sampleRate + 0.1,
+  });
 }

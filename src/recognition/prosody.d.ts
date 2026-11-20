@@ -13,6 +13,8 @@ export interface ProsodyOptions {
   voice?: HeadConfig | { head: HeadConfig } | null;
   /** Language hint for grouping contiguous vowels and for unlabelled words. */
   language?: LanguageCode;
+  /** Optional pitch track from the same front-end analysis. */
+  pitch?: PitchTrack;
 }
 
 export interface MeasuredProsody<

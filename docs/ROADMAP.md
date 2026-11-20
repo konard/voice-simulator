@@ -556,6 +556,11 @@ The same rules are printed at the end of every issue.
 Speech-mode postprocessing for [#71](https://github.com/konard/voice-simulator/issues/71)
 is available as `recognizeModes` and `toPlanModes` for timed IPA words.
 It measures source and prosodic cues, compares synthesized voice references,
-and returns timed partial mode spans and brace-marked IPA. Integration with
-the text recognizer awaits #73; see [the API](RECOGNITION-MODES.md) and
+and returns timed partial mode spans and brace-marked IPA. See [the API](RECOGNITION-MODES.md) and
 [measured acceptance results](reports/recognition-modes.md).
+
+The [recognition API](RECOGNIZER.md) connects timed IPA, language ID, word
+decoding, and mode recognition through batch and incremental entry points,
+the CLI, and the binary HTTP route. The acoustic round-trip target in
+[#73](https://github.com/konard/voice-simulator/issues/73) depends on the
+[IPA decoder accuracy work](https://github.com/konard/voice-simulator/issues/153).

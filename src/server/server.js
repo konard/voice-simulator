@@ -13,6 +13,7 @@
  *   GET  /api/mesh.obj?seed=&lod= -> low-poly head model (Wavefront OBJ)
  *   GET|POST /api/synthesize      -> complete audio file (WAV by default)
  *   GET|POST /api/stream          -> WAV, AU or raw streamed while simulated
+ *   POST /api/recognize           -> speech recognition JSON or live NDJSON
  *
  * Synthesis parameters come from the query string or a JSON body:
  * text, lang, accent (a code such as en-GB, ru-x-south or en-x-ru, a
@@ -61,6 +62,11 @@ import {
   synthesizeStream,
 } from '../synthesize.js';
 import { createEngine } from '../engine/index.js';
+import { RecognitionError } from '../recognition/recognizer.js';
+import { HttpError, readBytes } from './http-body.js';
+import { recognizeRoute } from './recognize.js';
+
+export { HttpError } from './http-body.js';
 
 export { INDEX_PAGE } from './index-page.js';
 
@@ -72,27 +78,11 @@ const SAMPLE_RATES = new Set([
 /** Output rate when a request names none (narrow-band tiers use theirs). */
 const DEFAULT_SAMPLE_RATE = 24000;
 
-export class HttpError extends Error {
-  constructor(status, message) {
-    super(message);
-    this.status = status;
-  }
-}
-
 async function readBody(request) {
   if (request.method !== 'POST') {
     return {};
   }
-  let size = 0;
-  const chunks = [];
-  for await (const chunk of request) {
-    size += chunk.length;
-    if (size > MAX_BODY) {
-      throw new HttpError(413, 'Request body too large');
-    }
-    chunks.push(chunk);
-  }
-  const text = Buffer.concat(chunks).toString('utf8');
+  const text = (await readBytes(request, MAX_BODY)).toString('utf8');
   if (!text.trim()) {
     return {};
   }
@@ -372,6 +362,7 @@ function requestEngine(params, engine) {
 
 function createRoutes(version, engine) {
   return {
+    'POST /api/recognize': recognizeRoute,
     'GET /api/health': () => ({ status: 'ok', version }),
     'GET /api/languages': () => Object.values(LANGUAGES),
     'GET /api/tiers': async () => ({
@@ -479,22 +470,28 @@ export function createVoiceServer(options = {}) {
         response.end(options.index);
         return;
       }
-      const method = request.method === 'POST' ? 'GET' : request.method;
-      const route = routes[`${method} ${url.pathname}`];
-      if (!route) {
+      const query = Object.fromEntries(url.searchParams);
+      const isPost = request.method === 'POST';
+      const post = isPost ? routes[`POST ${url.pathname}`] : undefined;
+      const method = isPost ? 'GET' : request.method;
+      const handler = post ?? routes[`${method} ${url.pathname}`];
+      if (!handler) {
         throw new HttpError(404, `Not found: ${url.pathname}`);
       }
-      const params = {
-        ...Object.fromEntries(url.searchParams),
-        ...(await readBody(request)),
-      };
-      const result = await route(params, response);
+      const result = post
+        ? await post(query, response, request)
+        : await handler({ ...query, ...(await readBody(request)) }, response);
       if (result !== undefined) {
         sendJson(response, 200, result);
       }
     } catch (error) {
       if (response.headersSent) {
         response.destroy(error);
+        return;
+      }
+      request.resume();
+      if (error instanceof RecognitionError) {
+        sendJson(response, 422, { error: error.message, code: error.code });
         return;
       }
       const status = error.status ?? (error instanceof MarkupError ? 400 : 500);
