@@ -4,8 +4,11 @@
 //! commands are `version`, `random`, `render-job` (issue 22, with
 //! `--threads` of issue 24) and `kernel-steps` (issue 24).
 
+mod recognition;
+mod recognition_model;
 mod render_job;
 mod sha256;
+mod wav_input;
 
 use std::io::{self, BufWriter, Write};
 use std::process::ExitCode;
@@ -52,6 +55,10 @@ Commands:
                           the links and cells of the grid and the SHA-256
                           of the bits of the pressure field after the steps
                           (the same with any number of threads).
+  recognize <file> [--level <low|medium|high>] [--threads <n|auto>] [--rescore]
+                          Read a WAV and print IPA followed by stage times in ms.
+                          Default level medium and one thread. Compile with
+                          --features parallel for multithreaded recognition.
   help                    Print this help
 ";
 
@@ -172,9 +179,58 @@ fn run(args: &[&str], out: &mut impl Write) -> Result<(), Failure> {
             writeln!(out, "field_sha256 {}", run.field_sha256)?;
             Ok(())
         }
+        ["recognize", rest @ ..] => recognize(rest, out),
         [] => Err(Failure::Usage("no command given".into())),
         [command, ..] => Err(Failure::Usage(format!("unknown command {command:?}"))),
     }
+}
+
+fn recognize(args: &[&str], out: &mut impl Write) -> Result<(), Failure> {
+    use voice_simulator_core::recognizer::LEVELS;
+    let mut file = None;
+    let mut level = LEVELS[1];
+    let mut threads = 1;
+    let mut rescoring = false;
+    let mut rest = args.iter();
+    while let Some(&word) = rest.next() {
+        if let Some(value) = option_value(word, "--level", &mut rest, "<low|medium|high>")? {
+            level = match value {
+                "low" => LEVELS[0],
+                "medium" => LEVELS[1],
+                "high" => LEVELS[2],
+                _ => {
+                    return Err(Failure::Usage(format!(
+                        "unknown recognition level {value:?}"
+                    )))
+                }
+            };
+        } else if let Some(value) = option_value(word, "--threads", &mut rest, "<n|auto>")? {
+            threads = if value == "auto" {
+                if cfg!(feature = "parallel") {
+                    std::thread::available_parallelism().map_or(1, |value| value.get().min(8))
+                } else {
+                    1
+                }
+            } else {
+                parse_threads(value)?
+            };
+        } else if word == "--rescore" {
+            rescoring = true;
+        } else if word.starts_with("--") || file.replace(word).is_some() {
+            return Err(Failure::Usage(format!(
+                "unexpected recognition argument {word:?}"
+            )));
+        }
+    }
+    let file = file.ok_or_else(|| Failure::Usage("recognize needs <file>".into()))?;
+    let (samples, rate) = wav_input::read(&mut std::fs::File::open(file)?)?;
+    let result =
+        recognition::recognize(&samples, rate, level, threads, rescoring).map_err(Failure::Job)?;
+    writeln!(out, "{}", result.ipa)?;
+    for (stage, milliseconds) in result.stages {
+        writeln!(out, "{stage} {milliseconds:.3} ms")?;
+    }
+    Ok(())
 }
 
 /// The file and the thread count of `render-job <file> [--threads <n|auto>]`

@@ -61,7 +61,7 @@ pub(crate) fn filter(x: &[f64], a: &[f64]) -> Vec<f64> {
     }
     y
 }
-fn predictor(x: &[f64], w: &[f64], p: usize) -> Vec<f64> {
+pub(crate) fn predictor(x: &[f64], w: &[f64], p: usize) -> Vec<f64> {
     let first = w.iter().position(|v| *v != 0.0).unwrap_or(w.len());
     let x: Vec<f64> = (first..x.len()).map(|n| x[n] * w[n]).collect();
     let mut a = vec![0.0; p];
