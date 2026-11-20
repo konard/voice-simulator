@@ -287,7 +287,7 @@ const DEFAULT_KEY = modeKey(MODE_DEFAULTS);
 
 /** Whether a mode is the neutral mode. */
 export function isDefaultMode(mode) {
-  return !mode || modeKey(mode) === DEFAULT_KEY;
+  return !mode || mode === MODE_DEFAULTS || modeKey(mode) === DEFAULT_KEY;
 }
 
 /** Level change in decibels of an effort (0..1): -20 to +20 dB. */

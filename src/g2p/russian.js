@@ -367,19 +367,24 @@ function homographStress(marked) {
  * `борьбе`: not `борьб|ё`). Undefined when the lexicon does not know it.
  */
 function knownStress(letters, vowels) {
+  const form = lexiconStress(letters, vowels, true);
+  if (form) {
+    return form;
+  }
   const yo = letters.includes('е');
-  const stem = lexiconStress(letters, vowels);
+  const yoForm = yo ? restoreYo(letters, vowels, true) : undefined;
+  if (yoForm) {
+    return yoForm;
+  }
+  const match = stemStress(letters);
+  const stem = match && { ...match, source: 'morphology' };
   const yoStem = yo ? restoreYo(letters, vowels) : undefined;
   const yoWins =
     yoStem &&
     (!stem ||
       yoStem.stem > stem.stem ||
       (yoStem.stem === stem.stem && yoStem.yo < yoStem.stem));
-  return (
-    lexiconStress(letters, vowels, true) ??
-    (yo ? restoreYo(letters, vowels, true) : undefined) ??
-    (yoWins ? yoStem : stem)
-  );
+  return yoWins ? yoStem : stem;
 }
 
 /**

@@ -5,6 +5,7 @@ import {
   pronunciations,
   lexiconRevision,
   lexiconWords,
+  userPronunciations,
 } from '../g2p/lexicon.js';
 import { hanziToPinyin } from '../g2p/chinese.js';
 import { pinyinSyllableToIpa, syllableWithTone } from '../g2p/pinyin.js';
@@ -18,6 +19,11 @@ import { getCounts } from './data/index.js';
 import { checkLanguage, pronounce } from './languages.js';
 
 const cached = new Map();
+const RUSSIAN_CLITIC_ALTERNATES = new Map([
+  ['в', 'f'],
+  ['к', 'ɡ'],
+  ['с', 'z'],
+]);
 
 /** Trie keys omit stress but retain diacritics; Mandarin tones stay too. */
 export function soundKey(token, language) {
@@ -32,11 +38,18 @@ export function trieNode() {
 
 function contextualChinese() {
   const variants = new Map();
+  const readings = new Map();
   // A phrase may give a character a neutral reading, e.g.
   // 户 in 窗户. Preserve these readings when the corpus segments that phrase.
   for (const phrase of lexiconWords('zh')) {
     for (const { char, pinyin } of hanziToPinyin(phrase)) {
-      const syllable = pinyin && pinyinSyllableToIpa(pinyin);
+      if (!pinyin) {
+        continue;
+      }
+      if (!readings.has(pinyin)) {
+        readings.set(pinyin, pinyinSyllableToIpa(pinyin));
+      }
+      const syllable = readings.get(pinyin);
       if (!syllable || syllable.tone !== 5) {
         continue;
       }
@@ -76,11 +89,7 @@ function extraVariants(word, language) {
       ...(RUSSIAN_PROCLITICS[word] ?? []),
       RUSSIAN_ENCLITICS[word],
     ].filter(Boolean);
-    const alternate = new Map([
-      ['в', 'f'],
-      ['к', 'ɡ'],
-      ['с', 'z'],
-    ]).get(word);
+    const alternate = RUSSIAN_CLITIC_ALTERNATES.get(word);
     return [...variants, ...(alternate ? [alternate] : [])];
   }
   return [];
@@ -136,9 +145,15 @@ export function getLexicon(language = 'en') {
     const contextual = language === 'zh' ? contextualChinese() : new Map();
     const parsed = new Map();
     for (const { word, count } of data.words) {
+      // The Russian dictionary stores stress positions. Its IPA is already
+      // produced by the same forward pronunciation used below.
+      const alternatives =
+        language === 'ru'
+          ? (userPronunciations(language, word) ?? [])
+          : pronunciations(language, word);
       const variants = new Set([
         pronounce(word, language).ipa,
-        ...pronunciations(language, word),
+        ...alternatives,
         ...extraVariants(word, language),
         ...(contextual.get(word) ?? []),
       ]);
