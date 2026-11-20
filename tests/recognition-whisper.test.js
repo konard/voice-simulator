@@ -171,15 +171,25 @@ describe('whisper recognition', () => {
 
   it('passes detected spans to mode recognition once', () => {
     const { samples, sampleRate } = renderWhisper('[whisper] a fresh fish');
-    const reading = recognize(samples, sampleRate, { language: 'en' });
-    const modes = { ...reading, modes: [] };
-    const acoustics = recognizeModes(samples, sampleRate, modes);
-    const combined = recognizeModes(samples, sampleRate, reading);
+    const options = { languages: ['en'] };
+    const reading = recognize(samples, sampleRate, options);
     const whispered = (output) =>
       output.modes.filter(({ notation }) => notation === 'W');
-    expect(reading.modes.length).toBe(1);
-    expect(whispered(acoustics)).toEqual(reading.modes);
-    expect(whispered(combined)).toEqual(reading.modes);
+    const spans = whispered(reading);
+    expect(spans.length).toBe(1);
+    const combined = recognizeModes(samples, sampleRate, {
+      ...reading,
+      whisperSpans: spans,
+    });
+    expect(whispered(combined)).toEqual(spans);
+    expect(
+      whispered(
+        recognize(samples, sampleRate, {
+          ...options,
+          whisper: false,
+        })
+      )
+    ).toEqual([]);
   });
 });
 
@@ -329,10 +339,42 @@ describe('whisper streaming', () => {
     );
     pitch.committed = shortFrames.count;
     expect(shortMode.advance(false).through).toBeGreaterThan(run.start);
-    const stream = createRecognizer(sampleRate, { language: 'en' });
+    const stream = createIpaDecoder(sampleRate, { language: 'en' });
     expect(
       stream.push(samples.subarray(0, Math.floor(sampleRate * 0.45))).segments
     ).toEqual([]);
     stream.reset();
+  });
+
+  it('keeps explicit whisper spans on the original stream timeline', () => {
+    const first = renderWhisper('a fresh fish');
+    const second = renderWhisper('[whisper] a fresh fish');
+    const { sampleRate } = first;
+    const offset = first.samples.length + Math.round(0.5 * sampleRate);
+    const samples = new Float32Array(offset + second.samples.length);
+    samples.set(first.samples);
+    samples.set(second.samples, offset);
+    const [relative] = detect(second.samples, sampleRate);
+    const start = offset / sampleRate + relative.start;
+    const end = offset / sampleRate + relative.end;
+    const stream = createRecognizer({
+      sampleRate,
+      languages: ['en'],
+      level: 'medium',
+      whisper: [{ start, end }],
+    });
+    const phrases = [];
+    stream.on('final', (result) => phrases.push(result));
+    stream.on('error', (error) => {
+      throw error;
+    });
+    stream.push(samples);
+    const result = stream.flush();
+    const whispers = result.modes.filter(({ notation }) => notation === 'W');
+    expect(phrases.length).toBe(2);
+    expect(whispers.length).toBe(1);
+    expect(Math.abs(whispers[0].start - start)).toBeLessThan(1e-7);
+    expect(Math.abs(whispers[0].end - end)).toBeLessThan(1e-7);
+    expect(whispers[0].from).toBeGreaterThan(0);
   });
 });

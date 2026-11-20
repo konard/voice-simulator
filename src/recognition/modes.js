@@ -291,10 +291,13 @@ export function recognizeModes(samples, sampleRate, result, options = {}) {
     };
   }
   samples = samples.subarray ? samples : Float32Array.from(samples);
+  const whisperSpans = result.whisperSpans ?? result.audio?.whisperSpans;
+  const keepSpan = (span) =>
+    whisperSpans === undefined || span.phonation?.whisper !== 1;
   if (!result.words.length) {
     const modes = [
-      ...(result.modes ?? []),
-      ...recognizeSounds(samples, sampleRate, []),
+      ...(result.modes ?? []).filter(keepSpan),
+      ...recognizeSounds(samples, sampleRate, [], options.frames),
     ];
     return { ...result, modes, ipa: writeIpa([], modes, result.ipa) };
   }
@@ -307,7 +310,13 @@ export function recognizeModes(samples, sampleRate, result, options = {}) {
   const reference = options.voice
     ? voiceBaseline(options.voice, sampleRate, language, options.trace)
     : null;
-  const features = measureWords(samples, sampleRate, result, reference?.head);
+  const features = measureWords(
+    samples,
+    sampleRate,
+    result,
+    reference?.head,
+    options.frames
+  );
   const base = reference?.features ?? {
     ...summarize(features),
     pitchSpan: phraseSummary(features).pitchSpan,
@@ -364,9 +373,6 @@ export function recognizeModes(samples, sampleRate, result, options = {}) {
       }
     }
   }
-  const whisperSpans = result.whisperSpans ?? result.audio?.whisperSpans;
-  const keepSpan = (span) =>
-    whisperSpans === undefined || span.phonation?.whisper !== 1;
   const initialSpans = [
     ...wordSpans(result.words, features, labels, 'quality').filter(keepSpan),
     ...whisperModeSpans(result.words, whisperSpans ?? []),
@@ -414,7 +420,9 @@ export function recognizeModes(samples, sampleRate, result, options = {}) {
     }
     options.trace?.({ stage: 'phrase', ...group, vector, decision: found });
   }
-  spans.push(...recognizeSounds(samples, sampleRate, result.words));
+  spans.push(
+    ...recognizeSounds(samples, sampleRate, result.words, options.frames)
+  );
   const modes = [...(result.modes ?? []).filter(keepSpan), ...spans].sort(
     (a, b) => a.start - b.start || b.end - a.end
   );

@@ -109,6 +109,7 @@ export interface IpaStreamUpdate {
 }
 
 export interface IpaDecoder {
+  readonly frames: FrameSet;
   push(chunk: ArrayLike<number>): IpaStreamUpdate;
   flush(): IpaStreamUpdate;
   /** Includes the current best continuation until flush. */

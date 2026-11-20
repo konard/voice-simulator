@@ -1,4 +1,5 @@
 import type { HeadConfig, LanguageCode } from '../index.js';
+import type { FrameSet } from './frontend.js';
 import type {
   RecognitionSound,
   IpaToTextResult,
@@ -16,6 +17,9 @@ export interface ProsodyOptions {
   language?: LanguageCode;
   /** Override automatic detection with known whisper spans in seconds. */
   whisperSpans?: readonly WhisperSpan[];
+  /** Reuse the frames and pitch track from the same front-end analysis. */
+  frames?: FrameSet;
+  pitch?: PitchTrack;
 }
 
 export interface MeasuredProsody<

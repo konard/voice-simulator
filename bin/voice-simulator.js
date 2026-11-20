@@ -21,7 +21,6 @@ import {
   createEngine,
   ENGINE_NAMES,
   decodeAudio,
-  recognize,
   DEFAULT_HEAD,
   decodeHeadConfig,
   encodeHeadConfig,
@@ -44,11 +43,14 @@ import {
   VISEME_FORMATS,
 } from '../src/index.js';
 import { INDEX_PAGE, createVoiceServer } from '../src/server/server.js';
+import { recognizeCommand } from './recognize.js';
 
 const OPTIONS = {
   boundaries: { type: 'string' },
   beam: { type: 'string' },
   nbest: { type: 'string' },
+  level: { type: 'string' },
+  rescore: { type: 'boolean' },
   languages: { type: 'string' },
   'switch-penalty': { type: 'string' },
   'min-sounds': { type: 'string' },
@@ -82,8 +84,8 @@ const OPTIONS = {
   box: { type: 'string' },
   'box-absorption': { type: 'string' },
   ipa: { type: 'boolean' },
-  markup: { type: 'boolean' },
   'no-whisper': { type: 'boolean' },
+  markup: { type: 'boolean' },
   breaths: { type: 'boolean' },
   plain: { type: 'boolean' },
   loudness: { type: 'string' },
@@ -105,6 +107,27 @@ const OPTIONS = {
   version: { type: 'boolean', short: 'v' },
 };
 
+const LIBRARY_USAGE = [
+  'Library source analysis: inverseFilter(analyzeFrames(samples, rate))',
+  '  Batch flow, closure times and voice-source measures; docs/INVERSE-FILTER.md',
+  'Library: buildCodebook / frameEnvelope provide articulatory candidates',
+  '         (generated on first use; API and limits: docs/CODEBOOK.md)',
+  'Library: invertArticulation / createArticulationInverter estimate tract and source controls.',
+  '         Pass articulationPlan(track) to renderPlan for resynthesis.',
+  'Library: audioToIpa / createIpaDecoder return experimental timed IPA,',
+  '         syllables and alternatives; see README for options and accuracy.',
+  'Library: rescoreHypotheses compares n-best IPA readings with waveguide renders.',
+  '         Pass audioToIpa a higher nbest value to enable comparison.',
+  '',
+  'Library measureProsody / markProsody recover tones, stress, emphasis and sentence marks.',
+  '         Use them before and after ipaToText. See docs/RECOGNITION-PROSODY.md.',
+  '',
+  'Library: recognizeModes(samples, rate, result, { voice }) adds speech modes',
+  '         to timed IPA words; toPlanModes converts spans for replay.',
+  '         API, baseline and limits: docs/RECOGNITION-MODES.md',
+  '',
+];
+
 function usage() {
   return [
     'Usage: voice-simulator <command> [options]',
@@ -117,8 +140,6 @@ function usage() {
     '                      --boundaries given|search --beam 32 --nbest 1 --json',
     '  language <ipa>      Identify languages and print language, sound range, confidence',
     '                      --languages en,ru,hi,zh --switch-penalty 6 --min-sounds 8 --json',
-    '  recognize <file>    Print recognized words (experimental, --lang en|ru|hi|zh)',
-    '                      Automatically detects whisper. --no-whisper disables it.',
     '  say <text> -o f.wav Simulate speech and write an audio file',
     '  convert <in> -o out Convert an audio file (WAV, FLAC, AIFF, AU) to mono',
     '  timeline <text>     Print when each word and syllable is spoken',
@@ -128,6 +149,10 @@ function usage() {
     '                      a voice file, --full with every value',
     '  voice check <file>  Check a voice file (exit code 1 on a problem)',
     '  mesh -o head.obj    Export the low-poly head model as OBJ',
+    '  recognize <file>   Recognize speech from a file or - for stdin (--ipa, --json)',
+    '                      --lang en,ru|auto --nbest 1 --level auto|low|medium|high',
+    '                      --no-whisper disables automatic whisper detection',
+    '                      --rescore; raw stdin: -f raw --sample-rate 16000 --bit-depth 16',
     '  match <file>        Find the head that sounds like a recording',
     '  landmarks <file>    Experimental nuclei, sound changes and broad classes',
     '                      as JSON (see README accuracy limits)',
@@ -137,22 +162,7 @@ function usage() {
     '  benchmark           Measure the audio LOD tiers on this machine',
     '  serve               Start the HTTP API (with streaming)',
     '',
-    'Library source analysis: inverseFilter(analyzeFrames(samples, rate))',
-    '  Batch flow, closure times and voice-source measures; docs/INVERSE-FILTER.md',
-    'Library: buildCodebook / frameEnvelope provide articulatory candidates',
-    '         (generated on first use; API and limits: docs/CODEBOOK.md)',
-    'Library: invertArticulation / createArticulationInverter estimate tract and source controls.',
-    '         Pass articulationPlan(track) to renderPlan for resynthesis.',
-    'Library: audioToIpa / createIpaDecoder return experimental timed IPA,',
-    '         syllables and alternatives; see README for options and accuracy.',
-    'Library: rescoreHypotheses compares n-best IPA readings with waveguide renders.',
-    '         Pass audioToIpa a higher nbest value to enable comparison.',
-    'Library measureProsody / markProsody recover tones, stress, emphasis and sentence marks.',
-    '         Use them before and after ipaToText. See docs/RECOGNITION-PROSODY.md.',
-    'Library: recognizeModes(samples, rate, result, { voice }) adds speech modes',
-    '         to timed IPA words; toPlanModes converts spans for replay.',
-    '         API, baseline and limits: docs/RECOGNITION-MODES.md',
-    '',
+    ...LIBRARY_USAGE,
     'Options:',
     '  -l, --lang <code>     auto | en | ru | hi | zh (default auto)',
     '      --accent <code|file.json>',
@@ -619,6 +629,7 @@ async function quickBenchmark(values, io, engine) {
 }
 
 const COMMANDS = {
+  recognize: recognizeCommand,
   language(values, positionals, io) {
     const result = identifyLanguage(requireText(positionals), {
       languages: values.languages?.split(','),
@@ -655,40 +666,15 @@ const COMMANDS = {
     io.stdout(values.json ? JSON.stringify(result) : result.ipa);
   },
 
-  recognize(values, positionals, io) {
-    const [input] = positionals;
-    if (!input) {
-      throw new Error('Missing audio file');
-    }
-    const { samples, sampleRate } = decodeAudio(readFileSync(input));
-    const result = recognize(samples, sampleRate, {
-      language: values.lang === 'auto' ? undefined : values.lang,
-      whisper: values['no-whisper'] ? false : 'auto',
-      voice:
-        values.head || values.voice || values.preset
-          ? resolveHead(values)
-          : undefined,
-      beam: optionalNumber(values.beam, 'beam'),
-      nbest: optionalNumber(values.nbest, 'nbest'),
-    });
-    const { audio, ...words } = result;
-    io.stdout(
-      values.json
-        ? JSON.stringify({ ...words, segments: audio.segments })
-        : words.text
-    );
-  },
-
   say(values, positionals, io, engine) {
-    const text = requireText(positionals);
     const output = audioOutput(values, 'voice');
-    const result = synthesize(text, {
+    const result = synthesize(requireText(positionals), {
       engine,
       lang: values.lang,
       ...accentOptions(values),
       weakForms: values['strong-forms'] ? false : undefined,
       ipa: values.ipa,
-      markup: markupOption(values) ?? (/\[whisper\]/iu.test(text) || undefined),
+      markup: markupOption(values),
       breaths: values.breaths || undefined,
       seed: values.seed,
       head: resolveHead(values),
@@ -979,7 +965,7 @@ const COMMANDS = {
 /**
  * Run the CLI.
  * @param {string[]} argv Arguments without the node and script paths.
- * @param {{stderr?: Function, stdout?: Function, stdoutBytes?: Function, onServer?: Function}} [io]
+ * @param {{stderr?: Function, stdout?: Function, stdoutBytes?: Function, stdin?: NodeJS.ReadableStream, onServer?: Function}} [io]
  * @returns {Promise<number>} Exit code.
  */
 export async function runCli(argv, io = {}) {
@@ -987,6 +973,7 @@ export async function runCli(argv, io = {}) {
     stderr: io.stderr ?? console.error,
     stdout: io.stdout ?? console.log,
     stdoutBytes: io.stdoutBytes ?? ((data) => process.stdout.write(data)),
+    stdin: io.stdin ?? process.stdin,
     onServer: io.onServer,
   };
   try {

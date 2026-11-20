@@ -64,13 +64,15 @@ function nuclei(word, phones, head) {
 }
 
 /** Analyze the recording in one pass; retain scalar word features only. */
-export function measureWords(samples, sampleRate, result, head) {
+export function measureWords(samples, sampleRate, result, head, analyzed) {
   const words = result.words;
   const seconds = samples.length / sampleRate;
-  const frames = analyzeFrames(samples, sampleRate, {
-    hop: 0.01,
-    maxSeconds: Math.max(0.1, seconds + 0.05),
-  });
+  const frames =
+    analyzed ??
+    analyzeFrames(samples, sampleRate, {
+      hop: 0.01,
+      maxSeconds: Math.max(0.1, seconds + 0.05),
+    });
   const pitch = trackPitch(frames, { minF0: 35, maxF0: 800 });
   const formants = trackFormants(frames, {
     pitch,

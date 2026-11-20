@@ -157,7 +157,7 @@ export function createIpaDecoder(sampleRate, options = {}) {
   function collect(final, segments) {
     refresh(final);
     if (final) {
-      finalResult = snapshot();
+      finalResult = snapshot(false);
     }
     while (current && commit(final, segments) && !final) {
       refresh(false);
@@ -211,7 +211,7 @@ export function createIpaDecoder(sampleRate, options = {}) {
     collect(final, segments);
   }
 
-  function snapshot() {
+  function snapshot(provisional) {
     if (!current) {
       const analysis = {
         frames: input.frames,
@@ -234,7 +234,11 @@ export function createIpaDecoder(sampleRate, options = {}) {
     const lattice = { times: [...archive.times], edges: [...archive.edges] };
     appendLattice(lattice, latticeOf(prepared.times, search.edges, templates));
     lattice.times = Float64Array.from(lattice.times);
-    return resultOf(analysis, settings, prepared, templates, search, {
+    const reading =
+      provisional && !search.paths.length && search.provisional
+        ? { ...search, paths: [search.provisional] }
+        : search;
+    return resultOf(analysis, settings, prepared, templates, reading, {
       prefix: fixed,
       lattice,
     });
@@ -242,6 +246,9 @@ export function createIpaDecoder(sampleRate, options = {}) {
 
   reset();
   return {
+    get frames() {
+      return input.frames;
+    },
     push(chunk) {
       if (closed) {
         throw new RangeError(
@@ -279,7 +286,7 @@ export function createIpaDecoder(sampleRate, options = {}) {
       return { segments, nuclei };
     },
     result() {
-      return finalResult ?? snapshot();
+      return finalResult ?? snapshot(true);
     },
     reset,
   };

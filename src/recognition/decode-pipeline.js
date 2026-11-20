@@ -28,7 +28,7 @@ import {
 import { createWhisperScorer } from './whisper-decode.js';
 import { whisperFormantFrames } from './whisper-spectrum.js';
 
-function decoderWhisperSpans(whisper) {
+export function decoderWhisperSpans(whisper) {
   if (whisper !== 'auto' && whisper !== false && !Array.isArray(whisper)) {
     throw new TypeError('whisper must be "auto", false, or a list of spans');
   }
