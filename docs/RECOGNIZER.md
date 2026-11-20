@@ -58,7 +58,9 @@ the processing cost of recent audio.
 Mode decisions are made at a pause or after half a second of speech. A
 quiet transition from periodic speech can also start a new decision inside
 a phrase. The spectrum is checked against the preceding voiced interval
-before the recognizer commits sounds from the quiet interval.
+before the recognizer commits sounds from the quiet interval. The detector
+can also bound a quieter whisper between two voiced intervals in one speech
+run.
 
 `voice-simulator recognize` accepts WAV, AIFF, AU and FLAC from a file or
 standard input. For raw standard input, use `--format raw` and optionally

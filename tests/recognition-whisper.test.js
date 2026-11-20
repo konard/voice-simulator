@@ -250,6 +250,16 @@ describe('whisper tone recognition', () => {
   });
 });
 
+it('locates an interior whisper in continuous speech', () => {
+  const { samples, sampleRate, timeline } = renderWhisper(
+    'one two three [whisper] we are here[/whisper] we are ready'
+  );
+  const spans = detect(samples, sampleRate);
+  expect(spans.length).toBe(1);
+  expect(Math.abs(spans[0].start - timeline.words[3].start)).toBeLessThan(0.1);
+  expect(Math.abs(spans[0].end - timeline.words[6].start)).toBeLessThan(0.1);
+});
+
 it('detects a continuous switch to whisper before committing the quiet tail', () => {
   const { samples, sampleRate, timeline } = renderWhisper(
     'one two three [whisper] four five six'
@@ -274,6 +284,34 @@ it('detects a continuous switch to whisper before committing the quiet tail', ()
   const switchRow = Math.round(live.spans[0].start / frames.hop);
   expect(pool.frames.whisper[switchRow - 1]).toBe(0);
   expect(pool.frames.whisper[switchRow]).toBe(1);
+});
+
+it('ends the streaming whisper when continuous speech returns to voice', () => {
+  const { samples, sampleRate, timeline } = renderWhisper(
+    'one two three [whisper] we are here[/whisper] we are ready'
+  );
+  const input = createFrameAnalyzer(sampleRate);
+  const { frames } = input;
+  const pool = createWhisperFramePool(frames);
+  const pitch = createPitchTracker(frames);
+  const classifier = createWhisperDecisions(frames, pitch.track, 'auto');
+  const quantum = Math.floor(sampleRate * 0.02);
+  for (let i = 0; i < samples.length; i += quantum) {
+    input.push(samples.subarray(i, i + quantum));
+    pitch.advance();
+    const decision = classifier.advance(false, pool.frames.count * frames.hop);
+    pool.advance(decision, false);
+  }
+  input.flush();
+  pitch.advance(true);
+  const final = classifier.advance(true, pool.frames.count * frames.hop);
+  pool.advance(final, true);
+  expect(final.spans.length).toBe(1);
+  const [span] = final.spans;
+  expect(Math.abs(span.start - timeline.words[3].start)).toBeLessThan(0.1);
+  expect(Math.abs(span.end - timeline.words[6].start)).toBeLessThan(0.1);
+  const resume = Math.ceil(timeline.words[6].start / frames.hop);
+  expect(pool.frames.whisper.subarray(resume).includes(1)).toBe(false);
 });
 
 describe('whisper streaming', () => {

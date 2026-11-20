@@ -125,6 +125,7 @@ describe('Rust whisper numerical parity', () => {
         'a fresh fish',
         '[whisper] a fresh fish',
         'one two three [whisper] four five six',
+        'one two three [whisper] we are here[/whisper] we are ready',
       ]) {
         const { samples, sampleRate } = renderWhisper(text);
         for (const [wave, rate] of [

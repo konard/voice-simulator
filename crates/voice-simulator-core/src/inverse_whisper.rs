@@ -38,10 +38,10 @@ pub struct Signal<'a> {
     pub frames: &'a [Frame],
 }
 
-#[derive(Clone, Copy, PartialEq)]
+#[derive(Clone, Copy)]
 enum Edge {
     Leading,
-    Trailing { voiced_from: usize },
+    AfterVoice { voiced_from: usize, closed: bool },
 }
 
 impl Signal<'_> {
@@ -81,7 +81,7 @@ impl Signal<'_> {
         } else {
             RATIO_THRESHOLD
         };
-        if let Some(Edge::Trailing { voiced_from }) = edge {
+        if let Some(Edge::AfterVoice { voiced_from, .. }) = edge {
             let before = self.time(voiced_from).max(start - 0.3);
             let preceding = self.ratio(before, start);
             threshold =
@@ -95,7 +95,11 @@ impl Signal<'_> {
                 time += 0.15;
             }
         }
-        (ratio >= threshold && !(edge == Some(Edge::Leading) && ratio > -10.0)).then(|| Span {
+        let closed = matches!(
+            edge,
+            Some(Edge::Leading | Edge::AfterVoice { closed: true, .. })
+        );
+        (ratio >= threshold && !(closed && ratio > -10.0)).then(|| Span {
             start,
             end,
             confidence: (1.0 - voiced / 0.05).clamp(0.0, 1.0)
@@ -118,24 +122,41 @@ impl Signal<'_> {
                 .map(|f| f.energy)
                 .fold(f64::NEG_INFINITY, f64::max)
         };
-        let level = peak(&frames[first..=last]);
-        [
-            (from, from + first, Edge::Leading),
-            (
-                from + last + 1,
-                to,
-                Edge::Trailing {
-                    voiced_from: from + first,
-                },
-            ),
-        ]
-        .into_iter()
-        .filter(|&(a, b, _)| {
-            (b - a) as f64 * self.hop >= 0.3 - EPS
+        let first = from + first;
+        let last = from + last;
+        let level = peak(&self.frames[first..=last]);
+        let mut spans = Vec::new();
+        let mut consider = |a: usize, b: usize, edge| {
+            if (b - a) as f64 * self.hop >= 0.3 - EPS
                 && peak(&self.frames[a..b]) <= level - EDGE_LEVEL_DROP
-        })
-        .filter_map(|(a, b, edge)| self.classify(a, b, Some(edge)))
-        .collect()
+            {
+                spans.extend(self.classify(a, b, Some(edge)));
+            }
+        };
+        consider(from, first, Edge::Leading);
+        let mut previous = first;
+        for i in first + 1..=last {
+            if self.frames[i].f0 > 0.0 {
+                consider(
+                    previous + 1,
+                    i,
+                    Edge::AfterVoice {
+                        voiced_from: first,
+                        closed: true,
+                    },
+                );
+                previous = i;
+            }
+        }
+        consider(
+            last + 1,
+            to,
+            Edge::AfterVoice {
+                voiced_from: first,
+                closed: false,
+            },
+        );
+        spans
     }
 
     pub fn find(&self) -> Vec<Span> {

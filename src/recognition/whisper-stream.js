@@ -65,9 +65,10 @@ function pendingEdge(run, frames, pitch, current, fixedThrough) {
   if (!run) {
     return null;
   }
-  const edge = whisperVoiceEdges(run, frames, pitch, pitch.committed).find(
-    ({ edge }) => edge === 'trailing'
-  );
+  const edge = whisperVoiceEdges(run, frames, pitch, {
+    committed: pitch.committed,
+    interior: false,
+  }).find(({ edge }) => edge === 'trailing');
   if (
     !edge ||
     edge.start < fixedThrough - 1e-9 ||

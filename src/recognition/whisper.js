@@ -106,7 +106,9 @@ function measure(
   const ratio = edge
     ? edgeRatio(samples, sampleRate, start, end, threshold)
     : energyRatio(samples, sampleRate, start * sampleRate, end * sampleRate);
-  if (ratio < threshold || (edge === 'leading' && ratio > -10)) {
+  // A bounded interval may be ordinary frication or breathing. The extra
+  // upper limit separates these from a sustained whisper between voices.
+  if (ratio < threshold || (edge && edge !== 'trailing' && ratio > -10)) {
     return null;
   }
   return {
@@ -137,7 +139,27 @@ export function loudFrameLimit(energy, from, to, confirmed) {
   return confirmed;
 }
 
-export function whisperVoiceEdges(run, frames, pitch, committed = run.to) {
+function quietVoiceGaps(pitch, first, last, hop, quiet) {
+  const gaps = [];
+  let previous = first;
+  for (let to = first + 1; to <= last; to++) {
+    if (pitch.f0[to] > 0) {
+      const from = previous + 1;
+      if ((to - from) * hop >= 0.3 - EPSILON && quiet(from, to)) {
+        gaps.push({ from, to });
+      }
+      previous = to;
+    }
+  }
+  return gaps;
+}
+
+export function whisperVoiceEdges(
+  run,
+  frames,
+  pitch,
+  { committed = run.to, interior = true } = {}
+) {
   const { from, to, start, end } = run;
   const { hop, startTime, energy } = frames;
   const observed = Math.min(to, committed);
@@ -167,6 +189,17 @@ export function whisperVoiceEdges(run, frames, pitch, committed = run.to) {
       end: startTime + first * hop,
       edge: 'leading',
     });
+  }
+  if (interior) {
+    for (const gap of quietVoiceGaps(pitch, first, last, hop, quiet)) {
+      edges.push({
+        ...gap,
+        start: startTime + gap.from * hop,
+        end: startTime + gap.to * hop,
+        edge: 'interior',
+        before: startTime + first * hop,
+      });
+    }
   }
   if (quiet(last + 1, to)) {
     edges.push({
