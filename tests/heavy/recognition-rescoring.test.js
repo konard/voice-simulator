@@ -140,7 +140,7 @@ function golden(limit) {
     }
     console.log('rescoring heavy complete golden', id);
   }
-  return rows;
+  return { rows, complete: selected.length === items.length };
 }
 
 function totals(rows) {
@@ -166,11 +166,13 @@ const pct = (value) => `${(100 * value).toFixed(2)}%`;
 function write(rows, limit) {
   const groups = [];
   for (const corpus of ['synthetic', 'golden']) {
-    for (const lang of languages) {
+    for (const lang of ['all', ...languages]) {
       for (const rate of rates) {
         const items = rows.filter(
           (row) =>
-            row.corpus === corpus && row.lang === lang && row.rate === rate
+            row.corpus === corpus &&
+            (lang === 'all' || row.lang === lang) &&
+            row.rate === rate
         );
         if (items.length) {
           groups.push({ corpus, lang, rate, ...totals(items) });
@@ -202,7 +204,7 @@ function write(rows, limit) {
         `| ${row.corpus} | ${row.lang} | ${row.rate} | ${row.count} | ${pct(row.before)} | ${pct(row.after)} | ${pct(row.oracle)} | ${row.changed}/${row.scored} (${pct(row.scored ? row.changed / row.scored : 0)}) | ${row.right} | ${row.wrong} | ${row.neutral} |`
     ),
     '',
-    `Synthetic PER was **${pct(summary.synthetic.before)} → ${pct(summary.synthetic.after)}** (${pct(relative)} relative reduction, target 10%). Golden PER was **${pct(summary.golden.before)} → ${pct(summary.golden.after)}** (target no increase).`,
+    `Synthetic PER was **${pct(summary.synthetic.before)} → ${pct(summary.synthetic.after)}** (${pct(relative)} relative reduction, target 10%). Golden PER was **${pct(summary.golden.before)} → ${pct(summary.golden.after)}** (target no increase at either working rate).`,
     '',
     'A right or wrong revision lowered or raised utterance PER when compared with the same final reading with only that region reverted. A neutral revision left PER unchanged.',
   ];
@@ -212,7 +214,7 @@ function write(rows, limit) {
     groups,
     rows,
   });
-  return summary;
+  return groups;
 }
 
 it('measures synthetic and golden IPA rescoring', () => {
@@ -222,15 +224,23 @@ it('measures synthetic and golden IPA rescoring', () => {
     rows.push(...synthetic(lang, limit));
     console.log('rescoring heavy complete synthetic', lang);
   }
-  rows.push(...golden(limit));
-  write(rows, limit);
-  for (const rate of rates) {
-    const { before, after } = totals(
-      rows.filter((row) => row.corpus === 'synthetic' && row.rate === rate)
-    );
-    assert.ok(
-      after <= before,
-      `Synthetic PER at ${rate} Hz rose from ${pct(before)} to ${pct(after)}`
-    );
+  const goldenSet = golden(limit);
+  rows.push(...goldenSet.rows);
+  const groups = write(rows, limit);
+  // The golden target applies to the full reference set; limited runs
+  // still report their subset alongside the existing synthetic check.
+  const corpora = goldenSet.complete ? ['synthetic', 'golden'] : ['synthetic'];
+  for (const corpus of corpora) {
+    for (const rate of rates) {
+      const group = groups.find(
+        (row) =>
+          row.corpus === corpus && row.lang === 'all' && row.rate === rate
+      );
+      assert.ok(group, `Missing ${corpus} results at ${rate} Hz`);
+      assert.ok(
+        group.after <= group.before,
+        `${corpus} PER at ${rate} Hz rose from ${pct(group.before)} to ${pct(group.after)}`
+      );
+    }
   }
 });

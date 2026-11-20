@@ -14,6 +14,7 @@ import {
   scoreJob,
   warpPlan,
 } from '../src/index.js';
+import { applyRescoring } from '../src/recognition/rescoring.js';
 import {
   DECODE_SENTENCES,
   DECODER_VOICES,
@@ -260,6 +261,30 @@ it('leaves a single reading and agreeing readings alone', () => {
     assert.equal(result.nbest, input.nbest);
     assert.equal(result.rescoring.renders, 0);
   }
+});
+
+it('uses whole-path decoder costs when comparing local readings', () => {
+  const decoded = handMade('ba', ['ba', 'da', 'ta']);
+  const [base, alternative, third] = decoded.nbest;
+  base.cost = base.segments[0].cost = 2;
+  alternative.cost = alternative.segments[1].cost = 2.75;
+  third.segments[0].cost = 1;
+  third.segments[1].cost = 2;
+  third.cost = 3;
+  const prepared = planRescoring(decoded);
+  const distances = prepared.jobs.map(({ reference }) => (reference ? 1 : 0));
+  assert.equal(applyRescoring(decoded, prepared, distances, 0).ipa, 'ba');
+  const retain = applyRescoring(decoded, prepared, distances, 0.5);
+  assert.equal(retain.ipa, 'ba');
+  assert.equal(retain.rescoring.changed, 0);
+  assert.equal(applyRescoring(decoded, prepared, distances, 0.75).ipa, 'ba');
+  const revise = applyRescoring(decoded, prepared, distances, 1);
+  assert.equal(revise.ipa, 'da');
+  assert.equal(revise.rescoring.changed, 1);
+
+  const capped = planRescoring(decoded, { maxAlternatives: 2 });
+  assert.equal(capped.jobs.length, 2);
+  assert.equal(capped.jobs.filter(({ reference }) => reference).length, 1);
 });
 
 it('respects the render budget and yields cloneable, repeatable jobs', () => {

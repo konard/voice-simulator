@@ -228,6 +228,7 @@ it('uses the supplied IPA stage for stream partials and finals', () => {
       audioToIpa(samples, rate, options) {
         assert.equal(rate, 8000);
         assert.equal(options.voice, DEFAULT_HEAD);
+        assert.equal(options.nbest, 1);
         snapshots.push(samples.length / rate);
         return snapshots.at(-1) >= 0.4
           ? { ipa: IPA, segments: TIMED }
