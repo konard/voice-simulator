@@ -25,6 +25,10 @@ the recording. The synthesis planner supplies the candidate times and the
 waveguide verifies each candidate acoustically. A recording detected as
 whispered throughout uses whispered references and averages five power
 spectra for each comparison. Uncertain matches use the general decoder.
+With a supplied voice configuration and 22.05 kHz English audio, it can
+also check pronunciations with a short first word and two following words.
+An unvoiced run outside the automatic detector's spectral threshold needs
+a close match from the same solver to be marked as whispered.
 
 `createRecognizer({ sampleRate, ...options })` accepts `Float32Array` chunks.
 Subscribe with `on(event, listener)` and remove the same listener with

@@ -13,6 +13,7 @@ import { whisperDistance } from '../src/recognition/whisper-decode.js';
 import { whisperVoicingProbability } from '../src/recognition/whisper-result.js';
 import {
   poolLogPower,
+  poolPowerFrames,
   whisperFormantFrames,
   whisperSpectrum,
 } from '../src/recognition/whisper-spectrum.js';
@@ -237,3 +238,31 @@ describe('Rust whisper numerical parity', () => {
     }
   );
 });
+
+itUnless(noRust)(
+  'pools linear power for whispered verifier references',
+  async () => {
+    const engine = await loadRustEngine();
+    const { vs_whisper_pool: pool } = engine.exports;
+    const power = [
+      [2, 1],
+      [1, 4],
+      [0, 2],
+      [3, 0],
+      [6, 4],
+      [1, 5],
+    ];
+    const averaged = poolPowerFrames(power);
+    const output = engine.exports.vs_alloc(2 * 8);
+    try {
+      withPacket(engine, power.flat(), (ptr) => {
+        for (const [i, row] of averaged.entries()) {
+          expect(pool(ptr, power.length, row.length, i, 0, output)).toBe(0);
+          expect(float64View(engine, output, row.length)).toEqual(row);
+        }
+      });
+    } finally {
+      engine.exports.vs_free(output, 2 * 8);
+    }
+  }
+);

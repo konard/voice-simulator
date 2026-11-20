@@ -149,22 +149,8 @@ export function emptyRecognition(nbest) {
 
 function timedPhones(decoded) {
   return decoded.segments?.length
-    ? decoded.segments.flatMap((segment, index, segments) => {
+    ? decoded.segments.flatMap((segment) => {
         if (segment.kind !== 'pause') {
-          const before = segments[index - 1];
-          if (before && segment.modelWord > before.modelWord) {
-            // A verified simulation supplies an acoustic word boundary even
-            // if the planner uses a silent gap shorter than an ordinary pause.
-            return [
-              {
-                ipa: '(.)',
-                start: before.end,
-                end: segment.start,
-                confidence: segment.confidence,
-              },
-              segment,
-            ];
-          }
           return [segment];
         }
         return segment.end - segment.start >= 0.3

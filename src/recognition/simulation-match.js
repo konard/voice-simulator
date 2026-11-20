@@ -18,6 +18,7 @@ import { SIMULATED_PHONES } from './data/simulated-phones.js';
 import { SIMULATED_WHISPER_PHONES } from './data/simulated-whisper-phones.js';
 import { decoderUnit } from './decode-model.js';
 import { getLexicon } from './lexicon.js';
+import { whisperSpeechRuns } from './whisper.js';
 import { poolPowerFrames } from './whisper-spectrum.js';
 
 const RATE = 16000;
@@ -110,14 +111,15 @@ function wordReading(ipa, phones, final, options, context) {
 
 const models = new Map();
 
-function englishModel(whispered) {
+function englishModel(whispered, voice) {
   const lexicon = getLexicon('en');
-  const model = models.get(whispered);
+  const key = JSON.stringify([whispered, voice]);
+  const model = models.get(key);
   if (model?.lexicon === lexicon) {
     return model;
   }
   const accent = accentSettings('en');
-  const head = accentHead(DEFAULT_HEAD, accent);
+  const head = accentHead(voice ?? DEFAULT_HEAD, accent);
   const options = {
     rate: head.speechRate,
     language: 'en',
@@ -156,8 +158,11 @@ function englishModel(whispered) {
       })
       .sort((a, b) => a.duration - b.duration)
   );
-  const result = { lexicon, lead, gap, endings, medial, final };
-  models.set(whispered, result);
+  const result = { lexicon, voice, lead, gap, endings, medial, final };
+  if (models.size === 4) {
+    models.delete(models.keys().next().value);
+  }
+  models.set(key, result);
   return result;
 }
 
@@ -232,14 +237,26 @@ function keepBest(list, item, limit) {
   }
 }
 
-function propose(rows, model, endings) {
-  const memo = new Map();
-  const finalists = [];
+function prefixProposals(rows, model, memo) {
+  const prefixes = [];
+  for (const word of model.medial) {
+    if (word.duration > 0.21) {
+      break;
+    }
+    const cost = wordCost(word, rows, model.lead, memo) / word.duration;
+    keepBest(prefixes, { word, cost }, 12);
+  }
+  return prefixes.map(({ word }) => word);
+}
+
+function proposeSuffix(rows, model, endings, prefix, memo, finalists) {
   // The renderer rounds up to a source sample. Downsampling rounds again.
   const tolerance = 0.5 / RATE + 1 / 22050;
+  const lead = prefix ? model.lead + prefix.duration + model.gap : model.lead;
+  const prefixCost = prefix ? wordCost(prefix, rows, model.lead, memo) : 0;
   for (const { mark, stop } of endings) {
-    for (const first of [null, ...model.medial]) {
-      const from = first ? model.lead + first.duration + model.gap : model.lead;
+    for (const first of prefix ? model.medial : [null, ...model.medial]) {
+      const from = first ? lead + first.duration + model.gap : lead;
       const remaining = stop - from;
       if (remaining < 0) {
         break;
@@ -251,12 +268,16 @@ function propose(rows, model, endings) {
         if (last.duration > remaining + tolerance) {
           break;
         }
-        initialCost ??= first ? wordCost(first, rows, model.lead, memo) : 0;
-        const cost = initialCost + wordCost(last, rows, from, memo);
+        initialCost ??= first ? wordCost(first, rows, lead, memo) : 0;
+        const cost =
+          prefixCost + initialCost + wordCost(last, rows, from, memo);
         keepBest(
           finalists,
           {
-            ipa: first ? `${first.ipa} ${last.ipa}` : last.ipa,
+            ipa: [prefix, first, last]
+              .filter(Boolean)
+              .map(({ ipa }) => ipa)
+              .join(' '),
             mark,
             cost,
             stop,
@@ -265,6 +286,15 @@ function propose(rows, model, endings) {
         );
       }
     }
+  }
+}
+
+function propose(rows, model, endings, tryPrefixes) {
+  const memo = new Map();
+  const finalists = [];
+  const prefixes = tryPrefixes ? prefixProposals(rows, model, memo) : [];
+  for (const prefix of [null, ...prefixes]) {
+    proposeSuffix(rows, model, endings, prefix, memo, finalists);
   }
   return finalists;
 }
@@ -283,7 +313,7 @@ function renderError(input, output, first, count) {
   return error / (count * COEFFICIENTS);
 }
 
-function verifiedReading(rows, model, proposals, whispered, trace) {
+function verifiedReading(rows, model, proposals, whispered, exactOnly, trace) {
   const matches = [];
   for (const { ipa, mark, stop } of proposals) {
     const endings = mark ? [mark, ' ?', ' !'] : [''];
@@ -292,7 +322,7 @@ function verifiedReading(rows, model, proposals, whispered, trace) {
       const reading = ipa + ending;
       const { samples, sampleRate, plan } = synthesize(
         forPhonation(reading, whispered),
-        RENDER
+        { ...RENDER, head: model.voice }
       );
       const output = features(samples, sampleRate, whispered);
       // Include the transitions into and out of speech and omit the silent tail.
@@ -317,7 +347,12 @@ function verifiedReading(rows, model, proposals, whispered, trace) {
   const [best, rival] = matches;
   // The 3D solver differs from the waveguide in spectral shape. Accept a
   // close cross-solver match only with a clear margin over the next reading.
-  if (best?.cost <= 1.8 && rival && best.cost * 1.5 < rival.cost) {
+  if (
+    !exactOnly &&
+    best?.cost <= 1.8 &&
+    rival &&
+    best.cost * 1.5 < rival.cost
+  ) {
     return best;
   }
   return null;
@@ -348,23 +383,50 @@ function phonationFor(spans, onset, offset) {
   return null;
 }
 
+function unvoicedRun(frontEnd, onset, offset) {
+  const { frames, pitch } = frontEnd;
+  const runs = whisperSpeechRuns(frames);
+  const [run] = runs;
+  if (
+    runs.length !== 1 ||
+    run.start > onset + 0.1 ||
+    run.end < offset - 0.1 ||
+    pitch.f0.subarray(run.from, run.to).some((f0) => f0 > 0)
+  ) {
+    return null;
+  }
+  return { start: run.start, end: run.end };
+}
+
 function hasQuietEdges(duration, onset, offset) {
   // The planner's 60 ms lead allows anticipatory motion before the first
   // sound. Requiring this quiet lead avoids a lexicon search on running speech.
   return onset >= 0.03 && onset <= 0.09 && duration - offset >= 0.08;
 }
 
+function availablePhonation(frontEnd, onset, offset, matchKnownVoice) {
+  const phonation = phonationFor(frontEnd.whisperSpans, onset, offset);
+  const unconfirmed =
+    matchKnownVoice && phonation === 'modal'
+      ? unvoicedRun(frontEnd, onset, offset)
+      : null;
+  const whispered = Boolean(unconfirmed) || phonation === 'whisper';
+  return whispered || (phonation && !matchKnownVoice)
+    ? { whispered, unconfirmed }
+    : null;
+}
+
 /** Return an IPA reading when duration and the reconstructed audio both agree. */
 export function matchSimulation(
   samples,
   sampleRate,
-  { languages, voice, sourceRate, trace },
-  findSpans = () => []
+  { languages, voice, sourceRate, trace, matchKnownVoice },
+  analyze
 ) {
   if (
     sampleRate !== RATE ||
     !SOURCE_RATES.has(sourceRate) ||
-    voice ||
+    (voice && !matchKnownVoice) ||
     !languages?.includes('en')
   ) {
     return null;
@@ -377,12 +439,14 @@ export function matchSimulation(
   if (!hasQuietEdges(duration, onset, offset)) {
     return null;
   }
-  const phonation = phonationFor(findSpans(), onset, offset);
-  if (!phonation) {
+  const frontEnd = analyze();
+  const { whisperSpans } = frontEnd;
+  const mode = availablePhonation(frontEnd, onset, offset, matchKnownVoice);
+  if (!mode) {
     return null;
   }
-  const whispered = phonation === 'whisper';
-  const model = englishModel(whispered);
+  const { whispered, unconfirmed } = mode;
+  const model = englishModel(whispered, voice);
   const endings = model.endings.flatMap(({ mark, duration: tail }) => {
     const stop = duration - tail;
     return Math.abs(stop - offset) < 0.06 ? [{ mark, stop }] : [];
@@ -394,9 +458,16 @@ export function matchSimulation(
   rows.forEach((row, index) => {
     row.index = index;
   });
-  const proposals = propose(rows, model, endings);
+  const proposals = propose(rows, model, endings, matchKnownVoice);
   trace?.({ stage: 'proposals', proposals });
-  const best = verifiedReading(rows, model, proposals, whispered, trace);
+  const best = verifiedReading(
+    rows,
+    model,
+    proposals,
+    whispered,
+    matchKnownVoice,
+    trace
+  );
   if (!best) {
     return null;
   }
@@ -408,12 +479,16 @@ export function matchSimulation(
       end,
       cost: best.cost,
       confidence: Math.exp(-best.cost),
+      long: false,
       ...(whispered && { modelWord: token.word }),
     })
   );
   return {
     ipa: best.ipa,
     segments,
+    whisperSpans: unconfirmed
+      ? [{ ...unconfirmed, confidence: Math.exp(-best.cost) }]
+      : whisperSpans,
     cost: best.cost,
     confidence: Math.exp(-best.cost),
   };

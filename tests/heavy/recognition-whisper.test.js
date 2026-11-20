@@ -1,4 +1,5 @@
 /** Whisper recognition quality gates on synthesized, held-out material. Unlicense. */
+import { equal } from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -177,9 +178,10 @@ describe('whisper acceptance measurements', () => {
         encoding: 'utf8',
       });
     try {
-      expect(run('say', '[whisper] hello world', '-o', wav).status).toBe(0);
+      const said = run('say', '[whisper] hello world', '-o', wav);
+      equal(said.status, 0, said.stderr);
       const result = run('recognize', wav);
-      expect(result.status).toBe(0);
+      equal(result.status, 0, result.stderr);
       console.log('CLI:', result.stdout.trim());
       expect(result.stdout.toLowerCase().replace(/\p{P}/gu, '').trim()).toBe(
         'hello world'
