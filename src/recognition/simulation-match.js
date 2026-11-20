@@ -481,6 +481,17 @@ export function matchWhisperPhones(samples, sampleRate, analysis, reading) {
   return null;
 }
 
+/** The simulation model is limited to short intact recordings at these rates. */
+export function matchableRecording(duration, sourceRate, rate, languages) {
+  return (
+    rate === RATE &&
+    SOURCE_RATES.has(sourceRate) &&
+    languages?.includes('en') &&
+    duration >= 0.3 &&
+    duration <= MAX_SECONDS
+  );
+}
+
 /** Return an IPA reading when duration and the reconstructed audio both agree. */
 export function matchSimulation(
   samples,
@@ -488,16 +499,11 @@ export function matchSimulation(
   { languages, voice, sourceRate, trace, matchKnownVoice },
   analyze
 ) {
-  if (
-    sampleRate !== RATE ||
-    !SOURCE_RATES.has(sourceRate) ||
-    (voice && !matchKnownVoice) ||
-    !languages?.includes('en')
-  ) {
-    return null;
-  }
   const duration = samples.length / sampleRate;
-  if (duration > MAX_SECONDS || duration < 0.3) {
+  if (
+    !matchableRecording(duration, sourceRate, sampleRate, languages) ||
+    (voice && !matchKnownVoice)
+  ) {
     return null;
   }
   const [onset, offset] = audibleBounds(samples);
