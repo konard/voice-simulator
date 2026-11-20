@@ -6,7 +6,7 @@
 import { parseIpa } from '../ipa/parse.js';
 
 /** Count the edits along one cheapest path through the cost matrix. */
-function traceEdits(cost, width, reference, hypothesis) {
+function traceEdits(cost, width, reference, hypothesis, onPair) {
   const counts = { substitutions: 0, deletions: 0, insertions: 0 };
   let i = reference.length;
   let j = hypothesis.length;
@@ -15,6 +15,7 @@ function traceEdits(cost, width, reference, hypothesis) {
     const same = i > 0 && j > 0 && reference[i - 1] === hypothesis[j - 1];
     if (i > 0 && j > 0 && cost[(i - 1) * width + j - 1] + !same === here) {
       counts.substitutions += same ? 0 : 1;
+      onPair?.(i - 1, j - 1, same);
       i--;
       j--;
     } else if (i > 0 && cost[(i - 1) * width + j] + 1 === here) {
@@ -37,6 +38,19 @@ function traceEdits(cost, width, reference, hypothesis) {
  * @returns {{distance: number, substitutions: number, deletions: number, insertions: number}}
  */
 export function editDistance(reference, hypothesis) {
+  return measureEdits(reference, hypothesis);
+}
+
+/** Internal alignment using the same tie-breaking as the error-rate metrics. */
+export function alignedTokenPairs(reference, hypothesis) {
+  const pairs = [];
+  measureEdits(reference, hypothesis, (ref, hyp, same) => {
+    pairs.push({ ref, hyp, same });
+  });
+  return pairs.reverse();
+}
+
+function measureEdits(reference, hypothesis, onPair) {
   const n = reference.length;
   const m = hypothesis.length;
   const width = m + 1;
@@ -55,7 +69,7 @@ export function editDistance(reference, hypothesis) {
       );
     }
   }
-  const counts = traceEdits(cost, width, reference, hypothesis);
+  const counts = traceEdits(cost, width, reference, hypothesis, onPair);
   return { distance: cost[n * width + m], ...counts };
 }
 
