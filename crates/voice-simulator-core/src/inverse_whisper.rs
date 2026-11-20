@@ -135,8 +135,9 @@ impl Signal<'_> {
         };
         consider(from, first, Edge::Leading);
         let mut previous = first;
-        for i in first + 1..=last {
-            if self.frames[i].f0 > 0.0 {
+        for (offset, frame) in self.frames[first + 1..=last].iter().enumerate() {
+            if frame.f0 > 0.0 {
+                let i = first + 1 + offset;
                 consider(
                     previous + 1,
                     i,
