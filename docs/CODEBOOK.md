@@ -148,3 +148,13 @@ and exposes the stable prefix as `track.committed`. The default lookahead is
 Pass `refine: true` to enable the batch oral refinement. See the
 [golden-set render-back measurements](reports/recognition-inversion.md)
 for the current accuracy.
+
+## Audio to IPA
+
+`audioToIpa(samples, sampleRate, { voice, language: 'en', nbest: 5 })` scores inverted articulation and broad sound classes against the synthesizer's phone templates. Provide a head as `voice` or leave it out to fit the head from the recording. A single `language` or several `languages` selects text-derived phone transitions for `en`, `ru`, `hi` and `zh`. With neither option the decoder uses the full IPA inventory and zero transition costs.
+
+The result contains the best IPA string, timed `segments` and `syllables`, ranked `nbest` readings, a `lattice`, and the analysis tracks. Times are in seconds. A segment's confidence ranks alternatives on the same span. To reproduce the pronunciation counts, run `node scripts/build-phonotactics.mjs`. They use English lexicon pronunciations, Russian stress entries, one Mandarin character per pronunciation group and a project-authored Hindi word list. `node scripts/tune-decoder.mjs` selects the weights on 40 separate simulator-rendered tuning sentences.
+
+`createIpaDecoder(sampleRate, options)` returns fixed segments and newly confirmed syllable nuclei from both `push(chunk)` and `flush()`. Read the full result with `result()` and call `reset()` to begin a new recording. The streaming frame buffer defaults to 30 seconds and can be set with `maxSeconds`.
+
+See the [decoder benchmark](../reports/heavy/recognition-decode.md) for measured accuracy.

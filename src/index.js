@@ -705,3 +705,5 @@ export {
   createArticulationInverter,
   articulationPlan,
 } from './recognition/inversion.js';
+
+export { audioToIpa, createIpaDecoder } from './recognition/decode.js';
