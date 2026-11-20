@@ -7,6 +7,7 @@ pub const CHANNELS: usize = 21;
 const POINTS: [f64; 5] = [0.1, 0.3, 0.5, 0.7, 0.9];
 const EPS: f64 = 1e-9;
 const CLASSES: usize = 8;
+const MAX_PHONE_DURATION: f64 = 0.4;
 
 fn square(value: f64) -> f64 {
     value * value
@@ -158,11 +159,22 @@ fn boundaries(input: &Observations<'_>, bounds: &Bounds) -> (Vec<f64>, Vec<Gap>)
         }
         kept.push((time, priority));
     }
-    let times = kept
+    let mut times = Vec::with_capacity(kept.len());
+    for time in kept
         .into_iter()
         .map(|(time, _)| time)
         .filter(|&time| !pauses.iter().any(|gap| gap.start < time && time < gap.end))
-        .collect();
+    {
+        let previous = times.last().copied().unwrap_or(time);
+        let duration = time - previous;
+        if duration > MAX_PHONE_DURATION + EPS && !pauses.iter().any(|gap| gap.start == previous) {
+            let parts = math::ceil(duration / MAX_PHONE_DURATION) as usize;
+            for part in 1..parts {
+                times.push(previous + part as f64 * duration / parts as f64);
+            }
+        }
+        times.push(time);
+    }
     (times, pauses)
 }
 
@@ -260,7 +272,7 @@ pub fn prepare(input: &Observations<'_>, templates: &[Template], bounds: &Bounds
             outgoing.push(Span::Pause(from + 1));
         } else {
             for (to, &end) in times.iter().enumerate().skip(from + 1).take(4) {
-                if end - start > 0.4 + EPS || end > next_pause + EPS {
+                if end - start > MAX_PHONE_DURATION + EPS || end > next_pause + EPS {
                     break;
                 }
                 if end - start >= 0.02 - EPS {
