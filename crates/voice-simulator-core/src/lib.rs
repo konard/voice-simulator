@@ -44,6 +44,7 @@ pub mod math;
 pub mod mixed_recognition;
 pub mod modes;
 pub mod nose_line;
+pub mod prosody;
 pub mod radiation;
 pub mod random;
 pub mod recognition;

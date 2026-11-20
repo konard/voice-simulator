@@ -38,6 +38,7 @@ impl Reader<'_> {
             stress: self.integer()? as u32,
             glide: self.integer()? as u32,
             reduced_gap: self.integer()? != 0,
+            ..Phone::default()
         })
     }
 }
@@ -87,7 +88,7 @@ pub(crate) fn parse(data: &[f64]) -> Option<Request> {
     {
         return None;
     }
-    let phones: Vec<_> = (0..input_count).map(|_| r.phone()).collect::<Option<_>>()?;
+    let mut phones: Vec<_> = (0..input_count).map(|_| r.phone()).collect::<Option<_>>()?;
     let boundaries: Vec<_> = (0..=input_count)
         .map(|_| r.integer().map(|v| v != 0))
         .collect::<Option<_>>()?;
@@ -133,6 +134,29 @@ pub(crate) fn parse(data: &[f64]) -> Option<Request> {
             return None;
         }
         unknown_words.insert((from, to), word);
+    }
+    if r.at != data.len() {
+        for phone in &mut phones {
+            let mask = r.integer()?;
+            if mask & 1 != 0 {
+                let mut tones = [0.0; 6];
+                for cost in &mut tones {
+                    *cost = r.number()?;
+                }
+                phone.tones = Some(tones);
+            }
+            if mask & 2 != 0 {
+                phone.prominence = Some(r.number()?);
+            }
+            phone.nucleus = u8::try_from(r.integer()?).ok()?;
+        }
+        for entry in &mut entries {
+            for phone in &mut entry.phones {
+                let role = r.integer()?;
+                phone.nucleus = (role & 3) as u8;
+                phone.primary = role & 4 != 0;
+            }
+        }
     }
     if r.at != data.len() {
         return None;
@@ -187,8 +211,11 @@ fn run(data: &[f64]) -> Option<Vec<f64>> {
 
 /// Packet: beam/given/nbest, input/entry/word/pair/unknown counts, input features,
 /// boundary flags, word counts, entries (word, length, following, features),
-/// bigrams, unknown spelling IDs (from, to, word). IDs beyond word counts
-/// have a backoff count of one without increasing the corpus total.
+/// bigrams, unknown spelling IDs (from, to, word). The spelling IDs
+/// may be followed by prosody: input mask (tone array, prominence), the values
+/// indicated by that mask, and nucleus role for each input phone, then nucleus
+/// and primary stress flags for each entry phone.
+/// IDs beyond word counts have a backoff count of one without increasing the corpus total.
 /// Output: path count; each path cost, segment count, then from/to/word/entry/cost.
 /// Returns the number of written f64s, or BAD_ARGUMENT / memory-range errors.
 #[no_mangle]

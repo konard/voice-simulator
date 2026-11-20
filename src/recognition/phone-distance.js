@@ -79,13 +79,11 @@ export function toneDistance(a, b) {
 }
 
 /** Distance of two parsed sounds, always in [0, 1]. */
-export function phoneDistance(a, b) {
+export function phoneDistance(a, b, toneCost = toneDistance(a.tone, b.tone)) {
   const segment = segmentDistance(a, b);
   return Math.min(
     1,
-    segment +
-      toneDistance(a.tone, b.tone) +
-      0.2 * Number((a.stress ?? 0) !== (b.stress ?? 0))
+    segment + toneCost + 0.2 * Number((a.stress ?? 0) !== (b.stress ?? 0))
   );
 }
 

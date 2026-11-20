@@ -39,6 +39,7 @@ pub mod inversion;
 pub mod landmarks;
 pub mod language_id;
 pub mod modes;
+pub mod prosody;
 pub mod recognition;
 pub mod recognizer;
 pub mod renderer;

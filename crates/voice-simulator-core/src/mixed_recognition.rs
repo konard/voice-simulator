@@ -67,10 +67,8 @@ impl Search<'_> {
                 if self.given {
                     arcs.retain(|c| c.to == end);
                 }
-                if !exact {
-                    for arc in &mut arcs {
-                        arc.cost *= ACOUSTIC_WEIGHT;
-                    }
+                for arc in &mut arcs {
+                    arc.cost *= ACOUSTIC_WEIGHT;
                 }
                 if !exact || (self.given && arcs.is_empty()) {
                     let to = end.min(from + 12);
