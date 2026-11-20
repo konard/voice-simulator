@@ -110,11 +110,18 @@ words in input time.
 The native Rust command decodes PCM or float RIFF/WAV to IPA and reports
 per-stage times. It uses the bundled default head with acoustic analysis,
 pitch, inverse filtering, landmarks, codebook search, tract inversion
-and an IPA decoder. Its optional `--rescore` compares acoustic candidates
-with simulator-generated phone cepstra. The JavaScript recognizer adds
+and an IPA decoder. Its optional `--rescore` reconstructs candidate waveforms
+with the scalar waveguide and compares their cepstra to the recording. The
+JavaScript recognizer adds
 speaker fitting, language identification, words, prosody and speech modes.
 Run `node scripts/build-native-recognition.mjs` to regenerate the native
 tables from the default acoustic model.
+
+To time five fox sentences per quality level, build WebAssembly and run
+`node scripts/profile-recognition.mjs js` and
+`node scripts/profile-recognition.mjs rust`. The manually triggered
+`recognition-performance` CI suite compares one, two and four threads on
+60 seconds of synthetic speech and checks the cold one-core CLI at 8 kHz.
 
 ## Speech-mode recognition
 

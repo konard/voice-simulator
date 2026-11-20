@@ -1,10 +1,11 @@
 /** Generate the default native recognizer's numeric planner and codebook tables. Unlicense. */
 import { writeFileSync } from 'node:fs';
 import { CHANNELS } from '../src/articulation/plan.js';
+import { RENDERER_CONFIG } from '../src/engine/layout.js';
+import { renderJob } from '../src/engine/rust-renderer.js';
 import { DEFAULT_HEAD } from '../src/head-config.js';
 import { LANGUAGES } from '../src/g2p/index.js';
-import { mfcc } from '../src/metrics/spectrum.js';
-import { synthesize } from '../src/synthesize.js';
+import { prepareUtterance } from '../src/synthesize.js';
 import { GRID } from '../src/recognition/codebook-features.js';
 import { CODEBOOK_CHANNELS } from '../src/recognition/codebook.js';
 import { decoderCodebook } from '../src/recognition/decode-pipeline.js';
@@ -64,6 +65,32 @@ add(Float64Array, [
   CHANNELS.voicing,
   head.f0 ?? 120,
 ]);
+
+function renderPhones(ipa) {
+  const { plan, renderOptions } = prepareUtterance(ipa, {
+    head,
+    ipa: true,
+    tier: 'minimal',
+    sampleRate: rate,
+    seed: 1,
+  });
+  const { config, frames, frameCount } = renderJob(plan, renderOptions);
+  return { plan, config, frames, stride: frames.length / frameCount };
+}
+
+function controlAt(rendered, seconds) {
+  const { config, frames, stride } = rendered;
+  const block = Math.floor(
+    (seconds * rate) / config[RENDERER_CONFIG.BLOCK_SIZE]
+  );
+  return frames.subarray(block * stride, (block + 1) * stride);
+}
+
+const silence = renderPhones('ə | ə');
+const pause = silence.plan.segments.find(({ kind }) => kind === 'pause');
+add(Uint32Array, [silence.config.length, silence.stride]);
+add(Float64Array, silence.config);
+add(Float32Array, controlAt(silence, (pause.start + pause.end) / 2));
 for (const template of templates) {
   const symbol = Buffer.from(template.ipa);
   add(Uint32Array, [
@@ -77,17 +104,14 @@ for (const template of templates) {
     template.duration,
     ...template.compared.flatMap((cell) => [cell, template.values[cell]]),
   ]);
-  const sound = synthesize(`ə${template.ipa}ə`, {
-    head,
-    ipa: true,
-    engine: 'js',
-    tier: 'minimal',
-    sampleRate: rate,
-    seed: 1,
-  });
-  const rows = mfcc(sound.samples, sound.sampleRate);
-  const central = rows[Math.floor(rows.length / 2)];
-  add(Float64Array, central.subarray(1, 13));
+  const sound = renderPhones(`ə${template.ipa}ə`);
+  const phone = sound.plan.segments.filter(({ kind }) => kind !== 'pause')[1];
+  for (const phase of [0.2, 0.5, 0.8]) {
+    add(
+      Float32Array,
+      controlAt(sound, phone.start + phase * (phone.end - phone.start))
+    );
+  }
 }
 
 writeFileSync(

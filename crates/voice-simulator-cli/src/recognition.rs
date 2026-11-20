@@ -1,5 +1,6 @@
 //! Native WAV-to-IPA orchestration (Unlicense).
 use crate::recognition_model::Model;
+use crate::recognition_rescoring::Rescoring;
 use std::time::Instant;
 use voice_simulator_core::{
     decode::{self, Bounds, Observations, Policy, Reading, Weights, CHANNELS},
@@ -11,7 +12,7 @@ use voice_simulator_core::{
         native_frontend::{self, AcousticFrames, MEL, ROW},
     },
     recognizer::Level,
-    resample, rescoring,
+    resample,
 };
 
 #[cfg(feature = "parallel")]
@@ -78,12 +79,26 @@ impl Jobs {
         book.query(rows, CANDIDATES)
     }
 
-    fn rescoring(&self, readings: &[Reading], job: impl Fn(&Reading) -> f64 + Sync) -> Vec<f64> {
+    fn rescoring(
+        &self,
+        readings: &[Reading],
+        job: impl Fn(usize, &Reading) -> std::result::Result<f64, String> + Sync,
+    ) -> std::result::Result<Vec<f64>, String> {
         #[cfg(feature = "parallel")]
         if let Some(pool) = &self.pool {
-            return pool.install(|| readings.par_iter().map(&job).collect());
+            return pool.install(|| {
+                readings
+                    .par_iter()
+                    .enumerate()
+                    .map(|(index, reading)| job(index, reading))
+                    .collect()
+            });
         }
-        readings.iter().map(job).collect()
+        readings
+            .iter()
+            .enumerate()
+            .map(|(index, reading)| job(index, reading))
+            .collect()
     }
 }
 
@@ -268,42 +283,18 @@ fn rescore(
     times: &[f64],
     jobs: &Jobs,
     model: &Model,
-) -> usize {
-    let samples: Vec<_> = samples.iter().map(|&x| f64::from(x)).collect();
-    let (width, _, shift) = rescoring::mfcc_settings(rate);
-    let stride = width - 1;
-    let coefficients = rescoring::mfcc(&samples, rate);
-    let recording: Vec<_> = coefficients
-        .chunks_exact(width)
-        .flat_map(|row| row[1..].iter().copied())
-        .collect();
-    let frame_count = recording.len() / stride;
-    let hop = shift as f64 / f64::from(rate);
-    let distances = jobs.rescoring(readings, |reading| {
-        let mut reference = vec![0.0; recording.len()];
-        let mut speech = vec![false; frame_count];
-        for arc in reading.arcs.iter().filter(|arc| !arc.pause) {
-            let from = (times[arc.from] / hop).round() as usize;
-            let to = (times[arc.to] / hop).round() as usize;
-            for i in from.min(frame_count)..to.min(frame_count) {
-                reference[i * stride..][..stride]
-                    .copy_from_slice(&model.references[arc.unit][..stride]);
-                speech[i] = true;
-            }
-        }
-        if !speech.contains(&true) {
-            return 0.0;
-        }
-        let bias = rescoring::bias(&recording, &reference, &speech, stride);
-        rescoring::score(&recording, &reference, &bias, 0..frame_count)
-    });
-    readings
+) -> std::result::Result<usize, String> {
+    let scoring = Rescoring::new(model, times, samples, rate, &readings[0])?;
+    let distances = jobs.rescoring(readings, |index, reading| {
+        scoring.distance(reading, index == 0)
+    })?;
+    Ok(readings
         .iter()
         .zip(distances)
         .enumerate()
         .map(|(i, (reading, distance))| (i, reading.cost + 0.1 * distance))
         .min_by(|a, b| a.1.total_cmp(&b.1).then(a.0.cmp(&b.0)))
-        .map_or(0, |(i, _)| i)
+        .map_or(0, |(i, _)| i))
 }
 
 fn ipa(reading: Option<&Reading>, model: &Model) -> String {
@@ -400,7 +391,7 @@ pub fn recognize(
     let best = if rescoring && readings.len() > 1 {
         result.measure("rescoring", || {
             rescore(&samples, rate as u32, &readings, &times, &jobs, &model)
-        })
+        })?
     } else {
         0
     };

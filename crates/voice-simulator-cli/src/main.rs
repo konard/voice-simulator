@@ -6,6 +6,7 @@
 
 mod recognition;
 mod recognition_model;
+mod recognition_rescoring;
 mod render_job;
 mod sha256;
 mod wav_input;
