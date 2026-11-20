@@ -21,7 +21,7 @@ const stages = [
   'Other',
   'Total',
 ];
-const rows = [...stages, 'Word trie search'];
+const rows = [...stages, 'Codebook rank', 'Word trie search'];
 const median = (values) => values.sort((a, b) => a - b)[2];
 const levels = ['low', 'medium', 'high'];
 const report = [];
@@ -62,4 +62,6 @@ console.log('| --- | ---: | ---: | ---: |');
 for (const [i, stage] of rows.entries()) {
   console.log(`| ${stage} | ${report.map((level) => level[i]).join(' | ')} |`);
 }
-console.log('\nWord trie search is included in IPA to text.');
+console.log(
+  '\nCodebook rank is included in Codebook search. Word trie search is included in IPA to text.'
+);

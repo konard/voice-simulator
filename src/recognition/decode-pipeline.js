@@ -264,7 +264,7 @@ export function analyzeForDecode(
   const { spectralFrames, codebook, voice } = analysis;
   const { kernels, profile } = settings;
   const query = measure(profile, 'Codebook search', () =>
-    codebookQueries(spectralFrames, codebook, voice, kernels)
+    codebookQueries(spectralFrames, codebook, voice, kernels, profile)
   );
   return finishAnalysis(analysis, profile, query);
 }

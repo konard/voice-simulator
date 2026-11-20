@@ -1,6 +1,7 @@
 /** Pack contiguous codebook query blocks and execute them in frame order. Unlicense. */
 import { frameEnvelope } from './codebook.js';
 import { attachQuery } from './codebook-search.js';
+import { measure } from './profile.js';
 import { withWasmMemory } from './wasm-memory.js';
 import { whisperCodebook } from './whisper-codebook.js';
 
@@ -51,7 +52,13 @@ function queryJs(book, { rows, k }) {
   const count = rows.length / WIDTH;
   const output = new Float64Array(2 * k * count);
   for (let t = 0; t < count; t++) {
-    book.query(rows.subarray(t * WIDTH, t * WIDTH + BANDS), k, query);
+    const start = t * WIDTH;
+    book.query(
+      rows.subarray(start, start + BANDS),
+      k,
+      query,
+      rows.subarray(start + BANDS, start + WIDTH)
+    );
     for (let i = 0; i < k; i++) {
       const index = 2 * (t * k + i);
       output[index] = query.index[i];
@@ -105,10 +112,13 @@ function combine(results, frames, k) {
   };
 }
 
-export function codebookQueries(frames, book, head, kernels, k = 16) {
+export function codebookQueries(frames, book, head, kernels, profile, k = 16) {
   const results = requests(frames, book, head).map(
     ([table, rows]) =>
-      rows && searchCodebookJob(tableFor(table), { rows, k }, kernels)
+      rows &&
+      measure(profile, 'Codebook rank', () =>
+        searchCodebookJob(tableFor(table), { rows, k }, kernels)
+      )
   );
   return combine(results, frames, k);
 }
