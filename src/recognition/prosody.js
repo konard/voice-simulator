@@ -282,8 +282,7 @@ function measureNuclei(nuclei, samples, sampleRate, pitch, range, voice) {
 
 /** Analyze the vowel sounds of a timed IPA decoding. Times are in seconds. */
 export function measureProsody(samples, sampleRate, sounds, options = {}) {
-  const frames = analyzeFrames(samples, sampleRate);
-  const track = trackPitch(frames);
+  const track = options.pitch ?? trackPitch(analyzeFrames(samples, sampleRate));
   const voice = options.voice?.head ?? options.voice;
   const voicePitch = voice?.pitch;
   const median =

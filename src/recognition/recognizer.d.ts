@@ -3,9 +3,10 @@ import type { audioToIpa } from './decode.js';
 import type { ipaToText } from './ipa-to-text.js';
 import type { identifyLanguage, LanguageShare } from './language-id.js';
 import type { RecognitionModeSpan } from './modes.js';
+import type { ProsodyModeSpan } from './prosody.js';
 
 export type { LanguageShare } from './language-id.js';
-export type ModeSpan = RecognitionModeSpan;
+export type ModeSpan = RecognitionModeSpan | ProsodyModeSpan;
 export type RecognitionLevel = 'low' | 'medium' | 'high';
 
 export interface RecognitionOptions {

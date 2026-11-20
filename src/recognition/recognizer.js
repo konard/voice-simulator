@@ -5,6 +5,7 @@ import { audioToIpa } from './decode.js';
 import { ipaToText } from './ipa-to-text.js';
 import { identifyLanguage, languageShares } from './language-id.js';
 import { recognizeModes } from './modes.js';
+import { markProsody, measureProsody } from './prosody.js';
 import { rescoreHypotheses } from './rescoring.js';
 
 export { createRecognizer } from './recognizer-stream.js';
@@ -129,30 +130,61 @@ function timedPhones(decoded) {
     : decoded.ipa;
 }
 
-function decodeText(decoded, settings, level) {
+function decodeText(input, settings, level) {
   const { languages, stages, nbest } = settings;
-  const input = timedPhones(decoded);
   const language = languages.length === 1 ? languages[0] : undefined;
   const identification = language
     ? null
     : (stages.identifyLanguage ?? identifyLanguage)(input, { languages });
-  const result = (stages.ipaToText ?? ipaToText)(input, {
+  return (stages.ipaToText ?? ipaToText)(input, {
     language,
     spans: identification?.spans,
     nbest,
     beam: RECOGNITION_LEVELS[level].beam,
   });
-  const words = result.words.map((word) => ({
-    ...word,
-    syllables: word.syllables.map(({ text, ipa, start, end, stress }) => ({
+}
+
+function recognizeProsody(decoded, samples, rate, settings, level) {
+  const input = timedPhones(decoded);
+  const pitch = decoded.tracks?.pitch;
+  if (!settings.modes || !pitch || !Array.isArray(input)) {
+    return decodeText(input, settings, level);
+  }
+  const options = {
+    language:
+      settings.languages.length === 1 ? settings.languages[0] : undefined,
+    voice: settings.voice ?? decoded.voice,
+    pitch,
+  };
+  const measured = measureProsody(samples, rate, input, options);
+  const primary = decodeText(measured.sounds, settings, level);
+  return markProsody(primary, measured, options);
+}
+
+function publicWord({
+  text,
+  ipa,
+  language,
+  start,
+  end,
+  confidence,
+  syllables,
+}) {
+  return {
+    text,
+    ipa,
+    language,
+    start,
+    end,
+    confidence,
+    syllables: syllables.map(({ text, ipa, start, end, stress }) => ({
       text,
       ipa,
       start,
       end,
       stress,
     })),
-  }));
-  return { ...result, words, languages: languageShares(words) };
+  };
 }
 
 function alternativesFor(decoded, primary, settings, level) {
@@ -160,7 +192,7 @@ function alternativesFor(decoded, primary, settings, level) {
   if (candidates.length < settings.nbest - 1) {
     for (const reading of (decoded.nbest ?? []).slice(1)) {
       const { text, ipa } = decodeText(
-        reading,
+        timedPhones(reading),
         { ...settings, nbest: 1 },
         level
       );
@@ -196,7 +228,7 @@ export function recognizeDecoded(
       preserveTiming: final === 'stream',
     });
   }
-  const primary = decodeText(decoded, settings, level);
+  const primary = recognizeProsody(decoded, samples, rate, settings, level);
   const withModes =
     settings.modes && typeof recognizeModes === 'function'
       ? recognizeModes(samples, rate, primary, {
@@ -205,8 +237,16 @@ export function recognizeDecoded(
           frames: decoded.frames?.speech ? decoded.frames : undefined,
         })
       : primary;
-  const { ipa, text, languages, words, modes = [] } = withModes;
-  const result = { ipa, text, languages, words, modes, voice: null };
+  const { ipa, text, modes = [] } = withModes;
+  const words = withModes.words.map(publicWord);
+  const result = {
+    ipa,
+    text,
+    languages: languageShares(words),
+    words,
+    modes,
+    voice: null,
+  };
   if (settings.nbest > 1) {
     result.alternatives = alternativesFor(decoded, primary, settings, level);
   }

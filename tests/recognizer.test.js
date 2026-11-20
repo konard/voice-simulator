@@ -151,6 +151,23 @@ function samplePhrase(rate) {
   }).samples;
 }
 
+it('passes measured prosody into text recognition when modes are enabled', () => {
+  const sampleRate = 8000;
+  const options = {
+    languages: ['en'],
+    level: 'low',
+    stages: {
+      ipaToText(phones) {
+        assert.ok(phones.some(({ prominence }) => Number.isFinite(prominence)));
+        return { text: WORD.text, ipa: WORD.ipa, words: [WORD] };
+      },
+    },
+  };
+  const result = recognize(samplePhrase(sampleRate), sampleRate, options);
+  assert.match(result.text, /^Hello/u);
+  assert.deepEqual(Object.keys(result.words[0]), WORD_KEYS);
+});
+
 function capture(signal, chunkSize, options = OPTIONS, sampleRate = RATE) {
   const stream = createRecognizer({ ...options, sampleRate });
   const events = [];

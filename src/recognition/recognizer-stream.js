@@ -77,7 +77,8 @@ function createLoadMeter(sampleRate) {
 function boundedDecode(decoded, end) {
   const phones = (segments) =>
     segments.filter((segment) => segment.end <= end + EPSILON);
-  const { frames, lattice } = decoded;
+  const { frames, lattice, tracks } = decoded;
+  const { pitch } = tracks;
   const times = lattice.times.filter((time) => time <= end + EPSILON);
   return {
     ...decoded,
@@ -98,6 +99,13 @@ function boundedDecode(decoded, end) {
       ...frames,
       count: Math.min(frames.count, Math.ceil(end / frames.hop)),
       sampleCount: Math.min(frames.sampleCount, Math.round(end * frames.rate)),
+    },
+    tracks: {
+      ...tracks,
+      pitch: {
+        ...pitch,
+        count: Math.min(pitch.count, Math.ceil(end / pitch.hop)),
+      },
     },
   };
 }

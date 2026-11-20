@@ -8,8 +8,8 @@ array when greater than one.
 
 `languages` defaults to English, Russian, Hindi and Mandarin. Pass a single
 code to skip language identification. `voice` accepts a head configuration.
-Set `modes: false` to skip mode analysis or `rescoring: true` to compare
-alternative IPA readings. The `low`, `medium` and `high` levels use
+Set `modes: false` to skip tone, stress, punctuation and mode analysis, or
+`rescoring: true` to compare alternative IPA readings. The `low`, `medium` and `high` levels use
 8/16/16 kHz rate ceilings, 10/5/5 ms frame hops, and beams of 8/32/128.
 Batch `auto` uses the medium level.
 
