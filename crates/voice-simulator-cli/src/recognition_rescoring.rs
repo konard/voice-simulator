@@ -13,44 +13,6 @@ pub struct Rescoring<'a> {
     bias: Vec<f64>,
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use voice_simulator_core::decode::Arc;
-
-    #[test]
-    fn timed_phone_controls_render_distinct_cepstra() {
-        let model = Model::load();
-        let make_reading = |symbol| Reading {
-            cost: 0.0,
-            arcs: vec![Arc {
-                from: 0,
-                to: 1,
-                unit: model
-                    .symbols
-                    .iter()
-                    .position(|&(ipa, _)| ipa == symbol)
-                    .unwrap(),
-                cost: 0.0,
-                confidence: 1.0,
-                pause: false,
-                long: false,
-            }],
-        };
-        let primary = make_reading("ə");
-        let alternative = make_reading("s");
-        for rate in [8000, 11025, 16000] {
-            let recording = vec![0.0; rate as usize / 5];
-            let scoring = Rescoring::new(&model, &[0.0, 0.2], &recording, rate, &primary).unwrap();
-            let base = scoring.distance(&primary, true).unwrap();
-            let other = scoring.distance(&alternative, false).unwrap();
-            assert!(base.is_finite() && other.is_finite());
-            assert_ne!(base, other);
-            assert_eq!(other, scoring.distance(&alternative, false).unwrap());
-        }
-    }
-}
-
 fn cepstra(samples: &[f32], rate: u32, stride: usize) -> Vec<f64> {
     let input: Vec<_> = samples.iter().map(|&value| f64::from(value)).collect();
     rescoring::mfcc(&input, rate)
@@ -161,5 +123,43 @@ impl<'a> Rescoring<'a> {
                 );
         }
         Ok(total / row_count.max(1) as f64)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use voice_simulator_core::decode::Arc;
+
+    #[test]
+    fn timed_phone_controls_render_distinct_cepstra() {
+        let model = Model::load();
+        let make_reading = |symbol| Reading {
+            cost: 0.0,
+            arcs: vec![Arc {
+                from: 0,
+                to: 1,
+                unit: model
+                    .symbols
+                    .iter()
+                    .position(|&(ipa, _)| ipa == symbol)
+                    .unwrap(),
+                cost: 0.0,
+                confidence: 1.0,
+                pause: false,
+                long: false,
+            }],
+        };
+        let primary = make_reading("ə");
+        let alternative = make_reading("s");
+        for rate in [8000, 11025, 16000] {
+            let recording = vec![0.0; rate as usize / 5];
+            let scoring = Rescoring::new(&model, &[0.0, 0.2], &recording, rate, &primary).unwrap();
+            let base = scoring.distance(&primary, true).unwrap();
+            let other = scoring.distance(&alternative, false).unwrap();
+            assert!(base.is_finite() && other.is_finite());
+            assert_ne!(base, other);
+            assert_eq!(other, scoring.distance(&alternative, false).unwrap());
+        }
     }
 }

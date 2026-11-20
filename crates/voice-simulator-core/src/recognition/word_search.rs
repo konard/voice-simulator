@@ -32,12 +32,13 @@ pub struct Trie<'a> {
     pub terminal: &'a [u32],
 }
 
-struct Scratch {
+#[derive(Default)]
+pub struct SearchScratch {
     slots: Vec<usize>,
     old: Vec<f64>,
 }
 
-impl Scratch {
+impl SearchScratch {
     fn keep(&mut self, mut states: Vec<State>, beam: usize) -> Vec<State> {
         let mut count = 0;
         for i in 0..states.len() {
@@ -73,7 +74,7 @@ impl Scratch {
         limit: f64,
         beam: usize,
         trie: &Trie,
-    ) -> Vec<State> {
+    ) -> Option<Vec<State>> {
         let mut frontier = all.clone();
         while !frontier.is_empty() {
             for state in &all {
@@ -81,8 +82,8 @@ impl Scratch {
             }
             let mut next = all.clone();
             for state in frontier {
-                for node in trie.children(state.node) {
-                    let cost = state.cost + trie.gaps[node];
+                for node in trie.children(state.node)? {
+                    let cost = state.cost + trie.gaps.get(node)?;
                     if cost <= limit && cost < self.old[node] {
                         next.push(State::new(node, cost));
                     }
@@ -99,23 +100,56 @@ impl Scratch {
             }
             all = kept;
         }
-        all
+        Some(all)
     }
 }
 
 impl Trie<'_> {
-    fn children(&self, node: usize) -> impl Iterator<Item = usize> + '_ {
-        self.children[self.child_offsets[node] as usize..self.child_offsets[node + 1] as usize]
-            .iter()
-            .map(|&id| id as usize)
+    fn children(&self, node: usize) -> Option<impl Iterator<Item = usize> + '_> {
+        let offsets = self.child_offsets.get(node..node + 2)?;
+        Some(
+            self.children
+                .get(offsets[0] as usize..offsets[1] as usize)?
+                .iter()
+                .map(|&id| id as usize),
+        )
     }
 
-    pub fn search(&self, input: &[f64], stride: usize, beam: usize) -> Vec<f64> {
-        let mut scratch = Scratch {
-            slots: vec![usize::MAX; self.feature.len()],
-            old: vec![f64::INFINITY; self.feature.len()],
-        };
-        let mut states = scratch.insertions(vec![State::new(0, 0.0)], 0.6, beam, self);
+    pub fn search(
+        &self,
+        input: &[f64],
+        stride: usize,
+        beam: usize,
+        scratch: &mut SearchScratch,
+    ) -> Option<Vec<f64>> {
+        let nodes = self.feature.len();
+        if stride < 2
+            || beam == 0
+            || nodes == 0
+            || self.gaps.len() != nodes
+            || self.terminal.len() != nodes
+        {
+            return None;
+        }
+        if scratch.slots.len() < nodes {
+            scratch.slots.resize(nodes, usize::MAX);
+            scratch.old.resize(nodes, f64::INFINITY);
+        }
+        let result = self.search_rows(input, stride, beam, scratch);
+        if result.is_none() {
+            scratch.old.fill(f64::INFINITY);
+        }
+        result
+    }
+
+    fn search_rows(
+        &self,
+        input: &[f64],
+        stride: usize,
+        beam: usize,
+        scratch: &mut SearchScratch,
+    ) -> Option<Vec<f64>> {
+        let mut states = scratch.insertions(vec![State::new(0, 0.0)], 0.6, beam, self)?;
         let mut result = Vec::new();
         for (index, row) in input.chunks_exact(stride).enumerate() {
             if states.is_empty() {
@@ -131,22 +165,23 @@ impl Trie<'_> {
                         ..state
                     });
                 }
-                for node in self.children(state.node) {
-                    let cost = state.cost + row[1 + self.feature[node] as usize];
+                for node in self.children(state.node)? {
+                    let column = *self.feature.get(node)? as usize;
+                    let cost = state.cost + row[1..].get(column)?;
                     if cost <= limit {
                         next.push(State::new(node, cost));
                     }
                 }
             }
             let kept = scratch.keep(next, beam);
-            states = scratch.insertions(kept, limit, beam, self);
+            states = scratch.insertions(kept, limit, beam, self)?;
             for state in &states {
                 if self.terminal[state.node] != 0 {
                     result.extend([(index + 1) as f64, state.node as f64, state.cost]);
                 }
             }
         }
-        result
+        Some(result)
     }
 }
 
@@ -163,6 +198,20 @@ mod tests {
             gaps: &[0.0, 1.0, 1.0],
             terminal: &[0, 1, 1],
         };
-        assert_eq!(trie.search(&[0.9, 0.2, 0.2], 3, 1), [1.0, 1.0, 0.2]);
+        let mut scratch = SearchScratch::default();
+        let input = [0.9, 0.2, 0.2];
+        assert_eq!(
+            trie.search(&input, 3, 1, &mut scratch).unwrap(),
+            [1.0, 1.0, 0.2]
+        );
+        let invalid = Trie {
+            children: &[1, 3],
+            ..trie
+        };
+        assert!(invalid.search(&input, 3, 1, &mut scratch).is_none());
+        assert_eq!(
+            trie.search(&input, 3, 1, &mut scratch).unwrap(),
+            [1.0, 1.0, 0.2]
+        );
     }
 }

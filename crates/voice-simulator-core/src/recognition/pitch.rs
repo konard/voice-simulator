@@ -92,14 +92,27 @@ pub fn refine(
 
 pub fn mark(samples: &[f32], anchor: i32, lo: i32, hi: i32, span: i32) -> f64 {
     let sample = |index: i32| f64::from(samples.get(index as usize).copied().unwrap_or_default());
+    let window = |start: i32| {
+        let start = usize::try_from(start).ok()?;
+        let end = start.checked_add(usize::try_from(span).ok()?)?;
+        samples.get(start..end)
+    };
+    let anchor_samples = window(anchor);
     let at = |place: i32| {
         let (mut ab, mut aa, mut bb) = (0.0, 0.0, 0.0);
-        for t in 0..span {
-            let a = sample(anchor + t);
-            let b = sample(place + t);
+        let mut accumulate = |a: f64, b: f64| {
             ab += a * b;
             aa += a * a;
             bb += b * b;
+        };
+        if let (Some(left), Some(right)) = (anchor_samples, window(place)) {
+            for (&a, &b) in left.iter().zip(right) {
+                accumulate(f64::from(a), f64::from(b));
+            }
+        } else {
+            for t in 0..span {
+                accumulate(sample(anchor + t), sample(place + t));
+            }
         }
         if aa > 0.0 && bb > 0.0 {
             ab / math::sqrt(aa * bb)

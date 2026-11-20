@@ -53,23 +53,23 @@ pub(crate) fn integrate(x: &[f64], leak: f64) -> Vec<f64> {
         .collect()
 }
 pub(crate) fn filter(x: &[f64], a: &[f64]) -> Vec<f64> {
-    let mut y = x.to_vec();
-    for n in 0..x.len() {
-        for k in 0..a.len().min(n) {
-            y[n] += a[k] * x[n - k - 1];
-        }
-    }
-    y
+    x.iter()
+        .enumerate()
+        .map(|(n, &sample)| {
+            let history = &x[n.saturating_sub(a.len())..n];
+            a.iter()
+                .zip(history.iter().rev())
+                .fold(sample, |sum, (coefficient, past)| sum + coefficient * past)
+        })
+        .collect()
 }
 pub(crate) fn predictor(x: &[f64], w: &[f64], p: usize) -> Vec<f64> {
     let first = w.iter().position(|v| *v != 0.0).unwrap_or(w.len());
     let x: Vec<f64> = (first..x.len()).map(|n| x[n] * w[n]).collect();
     let mut a = vec![0.0; p];
     let mut r = vec![0.0; p + 1];
-    for lag in 0..=p {
-        for n in 0..x.len().saturating_sub(lag) {
-            r[lag] += x[n] * x[n + lag];
-        }
+    for (lag, correlation) in r.iter_mut().enumerate().take(x.len()) {
+        *correlation = x.iter().zip(&x[lag..]).map(|(a, b)| a * b).sum();
     }
     let mut error = r[0];
     if error <= 0.0 {
@@ -131,15 +131,24 @@ impl Fft {
         let mut width = 1;
         while width < self.size {
             let step = self.size / (2 * width);
-            for start in (0..self.size).step_by(2 * width) {
-                for k in 0..width {
+            for (real, imaginary) in re
+                .chunks_exact_mut(2 * width)
+                .zip(im.chunks_exact_mut(2 * width))
+            {
+                let (near_re, far_re) = real.split_at_mut(width);
+                let (near_im, far_im) = imaginary.split_at_mut(width);
+                for (k, ((a_re, a_im), (b_re, b_im))) in near_re
+                    .iter_mut()
+                    .zip(near_im)
+                    .zip(far_re.iter_mut().zip(far_im))
+                    .enumerate()
+                {
                     let (wr, wi) = (self.cos[k * step], sign * self.sin[k * step]);
-                    let (a, b) = (start + k, start + k + width);
-                    let (tr, ti) = (re[b] * wr - im[b] * wi, re[b] * wi + im[b] * wr);
-                    re[b] = re[a] - tr;
-                    im[b] = im[a] - ti;
-                    re[a] += tr;
-                    im[a] += ti;
+                    let (tr, ti) = (*b_re * wr - *b_im * wi, *b_re * wi + *b_im * wr);
+                    *b_re = *a_re - tr;
+                    *b_im = *a_im - ti;
+                    *a_re += tr;
+                    *a_im += ti;
                 }
             }
             width *= 2;

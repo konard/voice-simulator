@@ -1,6 +1,6 @@
 //! Numerical recognition exports (Unlicense).
 use crate::{check_range, error, f64_slice};
-use voice_simulator_core::recognition::word_search::Trie;
+use voice_simulator_core::recognition::word_search::{SearchScratch, Trie};
 
 fn u32_slice<'a>(offset: u32, count: u32) -> Result<&'a [u32], i32> {
     check_range(offset, count, 4)?;
@@ -32,12 +32,7 @@ fn words(
     let (child_offsets, rest) = table.split_at(n + 1);
     let (children, rest) = rest.split_at(n - 1);
     let (feature, terminal) = rest.split_at(n);
-    if child_offsets[0] != 0
-        || child_offsets[n] != nodes - 1
-        || child_offsets.windows(2).any(|p| p[0] > p[1])
-        || children.iter().any(|&id| id >= nodes)
-        || feature.iter().any(|&id| id >= stride - 1)
-    {
+    if child_offsets[0] != 0 || child_offsets[n] != nodes - 1 {
         return Err(error::BAD_ARGUMENT);
     }
     let trie = Trie {
@@ -47,7 +42,10 @@ fn words(
         gaps,
         terminal,
     };
-    Ok(trie.search(input, stride as usize, beam as usize))
+    WORD_SCRATCH.with_borrow_mut(|scratch| {
+        trie.search(input, stride as usize, beam as usize, scratch)
+            .ok_or(error::BAD_ARGUMENT)
+    })
 }
 
 /// Writes triples for the approximate word search. Returns the required
@@ -89,6 +87,7 @@ use std::{cell::RefCell, collections::BTreeMap};
 use voice_simulator_core::recognition::pitch::{self, CoarseCorrelation};
 
 thread_local! {
+    static WORD_SCRATCH: RefCell<SearchScratch> = RefCell::new(SearchScratch::default());
     static CORRELATIONS: RefCell<BTreeMap<u32, CoarseCorrelation>> = const { RefCell::new(BTreeMap::new()) };
 }
 
