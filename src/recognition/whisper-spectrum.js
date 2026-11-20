@@ -1,6 +1,20 @@
 /** Five-frame power and autocorrelation pooling for whispered speech. Unlicense. */
 import { lpcFromAutocorrelation } from './lpc.js';
 
+export function poolPowerFrames(frames) {
+  return frames.map((frame, i) => {
+    const from = Math.max(0, i - 2);
+    const to = Math.min(frames.length, i + 3);
+    const sum = new Float64Array(frame.length);
+    for (let row = from; row < to; row++) {
+      for (let bin = 0; bin < sum.length; bin++) {
+        sum[bin] += frames[row][bin] / (to - from);
+      }
+    }
+    return sum;
+  });
+}
+
 export function poolLogPower(frames, key, first, last, width, scale) {
   const input = frames[key];
   const output = new Float32Array(input.length);

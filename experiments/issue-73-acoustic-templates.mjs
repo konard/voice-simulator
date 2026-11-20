@@ -4,15 +4,17 @@ import { URL } from 'node:url';
 import { renderPlan } from '../src/acoustics/voice.js';
 import { resample } from '../src/audio/resample.js';
 import { parseIpa } from '../src/ipa/parse.js';
-import { mfcc } from '../src/metrics/spectrum.js';
+import { cepstra, mfcc, powerFrames } from '../src/metrics/spectrum.js';
 import { decoderUnit } from '../src/recognition/decode-model.js';
 import { getLexicon } from '../src/recognition/lexicon.js';
+import { poolPowerFrames } from '../src/recognition/whisper-spectrum.js';
 import { prepareUtterance } from '../src/synthesize.js';
 
 const rate = 16000;
 const window = 0.025;
 const hop = 0.01;
 const points = [0.15, 0.35, 0.55, 0.75, 0.92];
+const whispered = process.argv.includes('--whisper');
 const contexts = [
   ['ə', 'ə'],
   ['', 'ə'],
@@ -31,13 +33,16 @@ function readUnits(node, units) {
 function prototype(unit, before, after) {
   const vowel = parseIpa(unit).tokens[0].kind === 'vowel';
   const ipa = `${before}${vowel ? 'ˈ' : ''}${unit}${after}.`;
-  const { plan, renderOptions } = prepareUtterance(ipa, {
-    ipa: true,
-    lang: 'en',
-    tier: 'minimal',
-    engine: 'js',
-    seed: 1,
-  });
+  const { plan, renderOptions } = prepareUtterance(
+    whispered ? `{W ${ipa} W}` : ipa,
+    {
+      ipa: true,
+      lang: 'en',
+      tier: 'minimal',
+      engine: 'js',
+      seed: 1,
+    }
+  );
   const phones = [
     ...new Set(
       plan.segments.map(({ token }) => token).filter((token) => token?.phoneme)
@@ -50,7 +55,14 @@ function prototype(unit, before, after) {
   const { end } = parts.at(-1);
   const signal = renderPlan({ ...plan, duration: end + window }, renderOptions);
   const input = resample(signal, renderOptions.sampleRate, rate);
-  const frames = mfcc(input, rate, { window, hop, coefficients: 12 });
+  const settings = { window, hop, coefficients: 12 };
+  const frames = whispered
+    ? cepstra(
+        poolPowerFrames(powerFrames(input, rate, settings)),
+        rate,
+        settings
+      )
+    : mfcc(input, rate, settings);
   return points.map((point) => {
     const center = start + point * (end - start);
     const index = Math.round((center - window / 2) / hop);
@@ -71,14 +83,19 @@ const rows = [...units]
   );
 const output = [
   '/** Generated from the physical English synthesizer by',
-  ' * node experiments/issue-73-acoustic-templates.mjs. Unlicense. */',
+  ` * node experiments/issue-73-acoustic-templates.mjs${whispered ? ' --whisper' : ''}. Unlicense. */`,
   '// prettier-ignore',
-  'export const SIMULATED_PHONES = new Map([',
+  `export const ${whispered ? 'SIMULATED_WHISPER_PHONES' : 'SIMULATED_PHONES'} = new Map([`,
   ...rows.map((row) => `  ${row},`),
   ']);',
   '',
 ].join('\n');
 writeFileSync(
-  new URL('../src/recognition/data/simulated-phones.js', import.meta.url),
+  new URL(
+    whispered
+      ? '../src/recognition/data/simulated-whisper-phones.js'
+      : '../src/recognition/data/simulated-phones.js',
+    import.meta.url
+  ),
   output
 );

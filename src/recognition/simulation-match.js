@@ -8,32 +8,35 @@ import { accentSettings } from '../accent/index.js';
 import { accentHead } from '../accent/head.js';
 import { durationTable } from '../articulation/durations.js';
 import { buildSegments } from '../articulation/plan.js';
+import { assignTokenModes } from '../articulation/modes.js';
 import { resample } from '../audio/resample.js';
 import { DEFAULT_HEAD } from '../head-config.js';
 import { parseIpa } from '../ipa/parse.js';
-import { mfcc } from '../metrics/spectrum.js';
+import { cepstra, mfcc, powerFrames } from '../metrics/spectrum.js';
 import { synthesize } from '../synthesize.js';
 import { SIMULATED_PHONES } from './data/simulated-phones.js';
+import { SIMULATED_WHISPER_PHONES } from './data/simulated-whisper-phones.js';
 import { decoderUnit } from './decode-model.js';
 import { getLexicon } from './lexicon.js';
+import { poolPowerFrames } from './whisper-spectrum.js';
 
 const RATE = 16000;
 const WINDOW = 0.025;
 const HOP = 0.01;
 const COEFFICIENTS = 12;
 const POINTS = [0.15, 0.35, 0.55, 0.75, 0.92];
+const SOURCE_RATES = new Set([22050, 48000]);
 const MAX_SECONDS = 2.5;
 const VERIFY = 12;
 const RENDER = { ipa: true, lang: 'en', tier: 'minimal', seed: 1 };
 
-function features(samples, sampleRate) {
+function features(samples, sampleRate, whispered) {
   const input =
     sampleRate === RATE ? samples : resample(samples, sampleRate, RATE);
-  return mfcc(input, RATE, {
-    window: WINDOW,
-    hop: HOP,
-    coefficients: COEFFICIENTS,
-  });
+  const options = { window: WINDOW, hop: HOP, coefficients: COEFFICIENTS };
+  return whispered
+    ? cepstra(poolPowerFrames(powerFrames(input, RATE, options)), RATE, options)
+    : mfcc(input, RATE, options);
 }
 
 function phoneFrames(rows, start, end) {
@@ -70,8 +73,20 @@ function pronunciations(root, variants = new Map()) {
   return variants;
 }
 
-function planFor(ipa, options) {
-  return buildSegments(parseIpa(ipa).tokens, options);
+function forPhonation(ipa, whispered) {
+  return whispered ? `{W ${ipa} W}` : ipa;
+}
+
+function tokensFor(ipa, whispered) {
+  const { tokens, modes } = parseIpa(forPhonation(ipa, whispered));
+  if (whispered) {
+    assignTokenModes(tokens, modes);
+  }
+  return tokens;
+}
+
+function planFor(ipa, options, whispered) {
+  return buildSegments(tokensFor(ipa, whispered), options);
 }
 
 function wordReading(ipa, phones, final, options, context) {
@@ -86,17 +101,18 @@ function wordReading(ipa, phones, final, options, context) {
     ipa,
     duration,
     phones: reading.map(({ token, start, end }) => ({
-      templates: SIMULATED_PHONES.get(decoderUnit(token)),
+      templates: context.templates.get(decoderUnit(token)),
       start: start - offset,
       end: end - offset,
     })),
   };
 }
 
-let model;
+const models = new Map();
 
-function englishModel() {
+function englishModel(whispered) {
   const lexicon = getLexicon('en');
+  const model = models.get(whispered);
   if (model?.lexicon === lexicon) {
     return model;
   }
@@ -112,29 +128,37 @@ function englishModel() {
     tunes: accent.prosody.tunes,
     durationTable: durationTable(accent.prosody.tunes),
   };
-  const initial = planFor('ˈɑ ˈɑ .', options);
+  const example = 'ˈɑ ˈɑ .';
+  const initial = planFor(example, options, whispered);
   const lead = initial[0].duration;
   const gap = initial.find(({ token }) => token?.symbol === ' ').duration;
   const endings = ['', ' .'].map((mark) => ({
     mark,
-    duration: planFor(`ˈɑ${mark}`, options).at(-1).duration,
+    duration: planFor(`ˈɑ${mark}`, options, whispered).at(-1).duration,
   }));
+  const [first, gapToken, last, end] = tokensFor(example, whispered);
+  const templates = whispered ? SIMULATED_WHISPER_PHONES : SIMULATED_PHONES;
   const words = [...pronunciations(lexicon.root)].filter(([, phones]) =>
-    phones.every((token) => SIMULATED_PHONES.has(decoderUnit(token)))
+    phones.every((token) => templates.has(decoderUnit(token)))
   );
-  const [first, gapToken, last, end] = parseIpa('ˈɑ ˈɑ .').tokens;
   const context = {
-    lead: [first, gapToken],
     follow: [gapToken, last, end],
     end,
+    templates,
   };
   const [medial, final] = [false, true].map((last) =>
     words
-      .map(([ipa, phones]) => wordReading(ipa, phones, last, options, context))
+      .map(([ipa, phones]) => {
+        const tokens = whispered
+          ? phones.map((token) => ({ ...token, mode: first.mode }))
+          : phones;
+        return wordReading(ipa, tokens, last, options, context);
+      })
       .sort((a, b) => a.duration - b.duration)
   );
-  model = { lexicon, lead, gap, endings, medial, final };
-  return model;
+  const result = { lexicon, lead, gap, endings, medial, final };
+  models.set(whispered, result);
+  return result;
 }
 
 function frameError(a, b, bias) {
@@ -259,15 +283,18 @@ function renderError(input, output, first, count) {
   return error / (count * COEFFICIENTS);
 }
 
-function verifiedReading(rows, model, proposals) {
+function verifiedReading(rows, model, proposals, whispered, trace) {
   const matches = [];
   for (const { ipa, mark, stop } of proposals) {
     const endings = mark ? [mark, ' ?', ' !'] : [''];
     let best;
     for (const ending of endings) {
       const reading = ipa + ending;
-      const { samples, sampleRate, plan } = synthesize(reading, RENDER);
-      const output = features(samples, sampleRate);
+      const { samples, sampleRate, plan } = synthesize(
+        forPhonation(reading, whispered),
+        RENDER
+      );
+      const output = features(samples, sampleRate, whispered);
       // Include the transitions into and out of speech and omit the silent tail.
       const first = Math.floor((model.lead - WINDOW) / HOP);
       const last = Math.min(
@@ -277,6 +304,7 @@ function verifiedReading(rows, model, proposals) {
       );
       const cost = renderError(rows, output, first, last - first);
       const match = { ipa: reading, cost, plan };
+      trace?.({ stage: 'verification', ipa: reading, cost });
       if (cost <= 0.02) {
         return match;
       }
@@ -305,15 +333,37 @@ function audibleBounds(samples) {
   return [samples.findIndex(above) / RATE, samples.findLastIndex(above) / RATE];
 }
 
+function phonationFor(spans, onset, offset) {
+  if (!spans.length) {
+    return 'modal';
+  }
+  const [span] = spans;
+  if (
+    spans.length === 1 &&
+    span.start <= onset + 0.1 &&
+    span.end >= offset - 0.1
+  ) {
+    return 'whisper';
+  }
+  return null;
+}
+
+function hasQuietEdges(duration, onset, offset) {
+  // The planner's 60 ms lead allows anticipatory motion before the first
+  // sound. Requiring this quiet lead avoids a lexicon search on running speech.
+  return onset >= 0.03 && onset <= 0.09 && duration - offset >= 0.08;
+}
+
 /** Return an IPA reading when duration and the reconstructed audio both agree. */
 export function matchSimulation(
   samples,
   sampleRate,
-  { languages, voice, sourceRate }
+  { languages, voice, sourceRate, trace },
+  findSpans = () => []
 ) {
   if (
     sampleRate !== RATE ||
-    (sourceRate !== 22050 && sourceRate !== 48000) ||
+    !SOURCE_RATES.has(sourceRate) ||
     voice ||
     !languages?.includes('en')
   ) {
@@ -324,12 +374,15 @@ export function matchSimulation(
     return null;
   }
   const [onset, offset] = audibleBounds(samples);
-  // The planner's 60 ms lead allows anticipatory motion before the first
-  // sound. Requiring this quiet lead avoids a lexicon search on running speech.
-  if (onset < 0.03 || onset > 0.09 || duration - offset < 0.08) {
+  if (!hasQuietEdges(duration, onset, offset)) {
     return null;
   }
-  const model = englishModel();
+  const phonation = phonationFor(findSpans(), onset, offset);
+  if (!phonation) {
+    return null;
+  }
+  const whispered = phonation === 'whisper';
+  const model = englishModel(whispered);
   const endings = model.endings.flatMap(({ mark, duration: tail }) => {
     const stop = duration - tail;
     return Math.abs(stop - offset) < 0.06 ? [{ mark, stop }] : [];
@@ -337,11 +390,13 @@ export function matchSimulation(
   if (!endings.length) {
     return null;
   }
-  const rows = features(samples, sampleRate);
+  const rows = features(samples, sampleRate, whispered);
   rows.forEach((row, index) => {
     row.index = index;
   });
-  const best = verifiedReading(rows, model, propose(rows, model, endings));
+  const proposals = propose(rows, model, endings);
+  trace?.({ stage: 'proposals', proposals });
+  const best = verifiedReading(rows, model, proposals, whispered, trace);
   if (!best) {
     return null;
   }
@@ -353,6 +408,7 @@ export function matchSimulation(
       end,
       cost: best.cost,
       confidence: Math.exp(-best.cost),
+      ...(whispered && { modelWord: token.word }),
     })
   );
   return {

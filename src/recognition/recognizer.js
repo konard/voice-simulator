@@ -149,8 +149,22 @@ export function emptyRecognition(nbest) {
 
 function timedPhones(decoded) {
   return decoded.segments?.length
-    ? decoded.segments.flatMap((segment) => {
+    ? decoded.segments.flatMap((segment, index, segments) => {
         if (segment.kind !== 'pause') {
+          const before = segments[index - 1];
+          if (before && segment.modelWord > before.modelWord) {
+            // A verified simulation supplies an acoustic word boundary even
+            // if the planner uses a silent gap shorter than an ordinary pause.
+            return [
+              {
+                ipa: '(.)',
+                start: before.end,
+                end: segment.start,
+                confidence: segment.confidence,
+              },
+              segment,
+            ];
+          }
           return [segment];
         }
         return segment.end - segment.start >= 0.3
@@ -175,6 +189,10 @@ function decodeText(input, settings, level, modelLanguage) {
   return (stages.ipaToText ?? ipaToText)(input, {
     language,
     spans: identification?.spans,
+    boundaries:
+      modelLanguage && Array.isArray(input) && input[0]?.modelWord !== undefined
+        ? 'given'
+        : undefined,
     nbest,
     beam: RECOGNITION_LEVELS[level].beam,
   });

@@ -22,8 +22,9 @@ across phrase commits in a stream.
 For short, intact default-voice English renders at 22.05 or 48 kHz, batch
 recognition can compare one- and two-word dictionary pronunciations with
 the recording. The synthesis planner supplies the candidate times and the
-waveguide verifies each candidate acoustically. Uncertain matches use the
-general decoder.
+waveguide verifies each candidate acoustically. A recording detected as
+whispered throughout uses whispered references and averages five power
+spectra for each comparison. Uncertain matches use the general decoder.
 
 `createRecognizer({ sampleRate, ...options })` accepts `Float32Array` chunks.
 Subscribe with `on(event, listener)` and remove the same listener with

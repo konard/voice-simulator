@@ -114,13 +114,24 @@ export function fitDecoderVoice(samples, sampleRate, language, fallback) {
   }
 }
 
-export function analyzeForDecode(samples, sampleRate, options, settings) {
+export function decodeFrontEnd(samples, sampleRate, settings) {
   const frames = analyzeFrames(samples, sampleRate, settings);
   const pitch = trackPitch(frames);
   const whisperSpans =
     settings.whisper === 'auto'
       ? findWhisper(samples, sampleRate, frames, pitch)
       : clipWhisperSpans(settings.whisper || [], samples.length / sampleRate);
+  return { frames, pitch, whisperSpans };
+}
+
+export function analyzeForDecode(
+  samples,
+  sampleRate,
+  options,
+  settings,
+  frontEnd = decodeFrontEnd(samples, sampleRate, settings)
+) {
+  const { frames, pitch, whisperSpans } = frontEnd;
   const hasSpeech = frames.speech.subarray(0, frames.count).some(Boolean);
   const voice = options.voice
     ? normalizeHeadConfig(options.voice)
