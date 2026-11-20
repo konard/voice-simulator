@@ -35,6 +35,10 @@ describe('check-package-files', () => {
     ).toEqual([
       'src/engine/voice-simulator.wasm',
       'src/engine/voice-simulator-recognition-models.json.gz',
+      'src/engine/voice-simulator-recognition-en.json.gz',
+      'src/engine/voice-simulator-recognition-ru.json.gz',
+      'src/engine/voice-simulator-recognition-hi.json.gz',
+      'src/engine/voice-simulator-recognition-zh.json.gz',
       'src/engine/worker-protocol.js',
     ]);
   });

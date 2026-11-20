@@ -1,56 +1,7 @@
 /** Flat pronunciation trie and approximate-search reference. Unlicense. */
 import { gapCost } from './phone-distance.js';
-import { soundKey } from './lexicon.js';
 import { withWasmMemory } from './wasm-memory.js';
-
-const packed = new WeakMap();
-
-function pack(lexicon, language) {
-  if (packed.has(lexicon)) {
-    return packed.get(lexicon);
-  }
-  const nodes = [lexicon.root];
-  const tokens = [];
-  const keys = new Map();
-  const edges = [];
-  const offsets = [];
-  const feature = [];
-  const gaps = [];
-  const terminal = [];
-  for (const node of nodes) {
-    offsets.push(edges.length);
-    for (const child of node.children.values()) {
-      edges.push(nodes.length);
-      nodes.push(child);
-    }
-    const token = node.token;
-    if (token) {
-      const key = soundKey(token, language);
-      if (!keys.has(key)) {
-        keys.set(key, tokens.length);
-        tokens.push(token);
-      }
-      feature.push(keys.get(key));
-    } else {
-      feature.push(0);
-    }
-    gaps.push(token ? gapCost(token) : 0);
-    terminal.push(Number(node.entries.length > 0));
-  }
-  offsets.push(edges.length);
-  const table = {
-    topology: Uint32Array.from([...offsets, ...edges, ...feature, ...terminal]),
-    offsets: Uint32Array.from(offsets),
-    children: Uint32Array.from(edges),
-    feature: Uint32Array.from(feature),
-    gaps: Float64Array.from(gaps),
-    terminal: Uint32Array.from(terminal),
-    entries: nodes.map(({ entries }) => entries),
-    tokens,
-  };
-  packed.set(lexicon, table);
-  return table;
-}
+import { packWordTrie } from './word-trie.js';
 
 function cheapest(states, beam) {
   const seen = new Map();
@@ -123,7 +74,7 @@ export function withWordSearch(
   module,
   run
 ) {
-  const table = pack(lexicon, language);
+  const table = packWordTrie(lexicon, language);
   const stride = 1 + table.tokens.length;
   const distances = new Float64Array(input.length * stride);
   for (const [index, token] of input.entries()) {
@@ -136,7 +87,7 @@ export function withWordSearch(
   if (!module || stride < 2) {
     return run((from, end, beam) => ({
       hits: search(table, distances, stride, from, end, beam),
-      entries: table.entries,
+      entriesAt: table.entriesAt,
     }));
   }
   return withWasmMemory(module, (allocate) => {
@@ -169,7 +120,7 @@ export function withWordSearch(
       if (length < 0 || length > out.length) {
         throw new Error(`Rust word search failed (${length})`);
       }
-      return { hits: out.view(length), entries: table.entries };
+      return { hits: out.view(length), entriesAt: table.entriesAt };
     });
   });
 }

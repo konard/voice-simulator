@@ -19,6 +19,12 @@ import { getCounts } from './data/index.js';
 import { checkLanguage, pronounce } from './languages.js';
 
 const cached = new Map();
+let readPreparedLexicon;
+
+export function installPreparedLexicons(read) {
+  readPreparedLexicon = read;
+  cached.clear();
+}
 const russianAlternate = new Map([
   ['в', 'f'],
   ['к', 'ɡ'],
@@ -184,8 +190,17 @@ export function getLexicon(language = 'en') {
   ) {
     const data = getCounts(language);
     let root;
+    let prepared;
     cached.set(language, {
+      get prepared() {
+        return this.revision === 0
+          ? (prepared ??= readPreparedLexicon?.(language, data.words) ?? false)
+          : false;
+      },
       get root() {
+        if (this.prepared) {
+          return this.prepared.root;
+        }
         if (!root) {
           root = trieNode();
           for (const { tokens, ...entry } of this.pronunciations()) {

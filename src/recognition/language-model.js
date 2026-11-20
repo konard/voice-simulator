@@ -15,12 +15,14 @@ export const LANGUAGE_MODEL = {
   lexicalGap: 0.5,
 };
 const cached = new Map();
+let readBuiltInModels;
 let builtInModels;
 
 // Optional build output for a cold file command. A user lexicon changes the
 // phone statistics, so that path always derives them from the active words.
-export function installLanguageModels(models) {
-  builtInModels = models;
+export function installLanguageModelReader(read) {
+  readBuiltInModels = read;
+  builtInModels = undefined;
 }
 
 export function countPronunciations(entries) {
@@ -86,9 +88,11 @@ function* languagePronunciations(lexicon) {
 }
 
 export function getLanguageModel(language) {
-  const builtIn = lexiconRevision() === 0 && builtInModels?.get(language);
-  if (builtIn) {
-    return builtIn;
+  if (lexiconRevision() === 0 && readBuiltInModels) {
+    builtInModels ??= readBuiltInModels() ?? new Map();
+    if (builtInModels.has(language)) {
+      return builtInModels.get(language);
+    }
   }
   const lexicon = getLexicon(language);
   if (cached.get(language)?.lexicon !== lexicon) {

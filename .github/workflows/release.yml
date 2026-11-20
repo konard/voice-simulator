@@ -651,7 +651,7 @@ jobs:
           name: voice-simulator-wasm
           path: |
             src/engine/voice-simulator.wasm
-            src/engine/voice-simulator-recognition-models.json.gz
+            src/engine/voice-simulator-recognition-*.json.gz
           if-no-files-found: error
           retention-days: 14
 

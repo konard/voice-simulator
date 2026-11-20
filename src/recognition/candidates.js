@@ -201,11 +201,11 @@ export function candidatesAt(tokens, from, end, lexicon, options) {
     throw new TypeError('Approximate candidates need a word search');
   }
   const found = exactCandidates(tokens, from, end, lexicon, language);
-  const { hits, entries } = wordSearch(from, end, beam);
+  const { hits, entriesAt } = wordSearch(from, end, beam);
   for (let i = 0; i < hits.length; i += 3) {
     const used = hits[i];
     const to = from + used;
-    for (const entry of entries[hits[i + 1]]) {
+    for (const entry of entriesAt(hits[i + 1])) {
       if (allowed(entry, tokens, to, end, language)) {
         const cost =
           hits[i + 2] + stressCost(entry, tokens, from, used, language);

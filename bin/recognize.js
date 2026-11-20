@@ -7,7 +7,6 @@ import {
   recognizeAsync,
 } from '../src/recognition/recognizer.js';
 import { recognitionParams } from '../src/recognition/recognizer-params.js';
-import { loadRecognitionModels } from './recognition-models.js';
 
 async function rawRecognition(input, values, options, print) {
   const sampleRate = Number(values['sample-rate'] ?? 16000);
@@ -37,9 +36,6 @@ export async function recognizeCommand(values, [file], io) {
     rescoring: values.rescore,
     whisper: values['no-whisper'] ? false : undefined,
   };
-  if (options.languages?.length !== 1) {
-    loadRecognitionModels();
-  }
   const print = (result) =>
     io.stdout(
       values.json

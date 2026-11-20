@@ -20,6 +20,9 @@ import { fileURLToPath } from 'node:url';
 export const REQUIRED_FILES = Object.freeze([
   'src/engine/voice-simulator.wasm',
   'src/engine/voice-simulator-recognition-models.json.gz',
+  ...['en', 'ru', 'hi', 'zh'].map(
+    (language) => `src/engine/voice-simulator-recognition-${language}.json.gz`
+  ),
   'src/engine/worker.js',
   'src/engine/worker-protocol.js',
 ]);

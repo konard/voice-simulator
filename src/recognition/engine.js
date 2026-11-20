@@ -1,5 +1,6 @@
 /** Select scalar recognition kernels through the shared engine loader. Unlicense. */
 import { createEngine, ENGINE_NAMES, getEngine } from '../engine/index.js';
+import { configureNodeRecognitionModels } from './node-models.js';
 
 export function checkRecognitionOptions({ engine = 'auto', threads = 'auto' }) {
   if (!ENGINE_NAMES.includes(engine)) {
@@ -34,6 +35,7 @@ export async function createRecognitionEngine(
   load = createEngine
 ) {
   checkRecognitionOptions(options);
+  configureNodeRecognitionModels();
   const { engine = 'auto' } = options;
   if (engine === 'js') {
     return kernels(null, options);
@@ -50,6 +52,7 @@ export async function createRecognitionEngine(
 
 export function getRecognitionEngine(options) {
   checkRecognitionOptions(options);
+  configureNodeRecognitionModels();
   const { engine = 'auto' } = options;
   const loaded =
     engine === 'js' ? null : getEngine({ engine, threads: 1, simd: false });
