@@ -79,10 +79,17 @@ impl SearchScratch {
             for state in &self.states {
                 self.old[state.node] = state.cost;
             }
+            // Each current state is retained in `next` before insertions. A
+            // full beam already has enough earlier states to win a tie.
+            let cutoff = if self.states.len() == beam {
+                self.states[beam - 1].cost
+            } else {
+                f64::INFINITY
+            };
             for state in &self.frontier {
                 for node in trie.children(state.node)? {
                     let cost = state.cost + trie.gaps.get(node)?;
-                    if cost <= limit && cost < self.old[node] {
+                    if cost <= limit && cost < cutoff && cost < self.old[node] {
                         self.next.push(State::new(node, cost));
                     }
                 }

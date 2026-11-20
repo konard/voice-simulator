@@ -72,11 +72,25 @@ function exactKeys(tokens, to, end, language) {
 
 const pronunciationStress = new WeakMap();
 
-function acousticStress(entry, heard, language) {
-  if (
-    !['en', 'ru'].includes(language) ||
-    !heard.some((token) => Number.isFinite(token.prominence))
-  ) {
+function stressEvidence(heard, language) {
+  if (!heard.some((token) => Number.isFinite(token.prominence))) {
+    return { measured: false };
+  }
+  if (!['en', 'ru'].includes(language)) {
+    return { measured: true };
+  }
+  const scores = syllabifyTokens(heard, { language }).map((syllable) =>
+    syllable.reduce(
+      (score, token) => Math.max(score, token.prominence ?? -Infinity),
+      -Infinity
+    )
+  );
+  return { measured: true, scores, peak: Math.max(...scores) };
+}
+
+function acousticStress(entry, evidence, language) {
+  const { scores, peak } = evidence;
+  if (!scores || scores.length < 2) {
     return 0;
   }
   let stress = pronunciationStress.get(entry);
@@ -91,33 +105,21 @@ function acousticStress(entry, heard, language) {
     pronunciationStress.set(entry, stress);
   }
   const { count, primary } = stress;
-  if (count < 2 || primary < 0) {
-    return 0;
-  }
-  const nuclei = syllabifyTokens(heard, { language });
-  if (nuclei.length !== count) {
-    return 0;
-  }
-  const scores = nuclei.map((syllable) =>
-    syllable.reduce(
-      (score, token) => Math.max(score, token.prominence ?? -Infinity),
-      -Infinity
-    )
-  );
-  return scores[primary] < Math.max(...scores) ? 0.3 : 0;
+  return count === scores.length && primary >= 0 && scores[primary] < peak
+    ? 0.3
+    : 0;
 }
 
-function stressCost(entry, tokens, from, used, language) {
-  const heard = tokens.slice(from, from + used);
-  if (heard.some((token) => Number.isFinite(token.prominence))) {
-    return acousticStress(entry, heard, language);
+function stressCost(entry, heard, evidence, language) {
+  if (evidence.measured) {
+    return acousticStress(entry, evidence, language);
   }
-  if (entry.tokens.length !== used) {
+  if (entry.tokens.length !== heard.length) {
     return 0;
   }
   let cost = 0;
-  for (let k = 0; k < used; k++) {
-    cost += 0.2 * Number(tokens[from + k].stress !== entry.tokens[k].stress);
+  for (let k = 0; k < heard.length; k++) {
+    cost += 0.2 * Number(heard[k].stress !== entry.tokens[k].stress);
   }
   return cost;
 }
@@ -129,6 +131,7 @@ export function exactCandidates(tokens, from, end, lexicon, language) {
   for (let to = from; to < end; to++) {
     const keys = exactKeys(tokens, to, end, language);
     const next = [];
+    let evidence;
     for (const state of states) {
       for (const key of keys) {
         const node = state.node.children.get(key);
@@ -148,14 +151,13 @@ export function exactCandidates(tokens, from, end, lexicon, language) {
           if (!allowed(entry, tokens, to + 1, end, language)) {
             continue;
           }
+          evidence ??= stressEvidence(tokens.slice(from, to + 1), language);
           result.push({
             from,
             to: to + 1,
             ...entry,
             ...(sandhi ? { ipa: formatIpa(tokens.slice(from, to + 1)) } : {}),
-            cost:
-              cost +
-              acousticStress(entry, tokens.slice(from, to + 1), language),
+            cost: cost + acousticStress(entry, evidence, language),
           });
         }
       }
@@ -202,13 +204,17 @@ export function candidatesAt(tokens, from, end, lexicon, options) {
   }
   const found = exactCandidates(tokens, from, end, lexicon, language);
   const { hits, entriesAt } = wordSearch(from, end, beam);
+  const spans = new Map();
   for (let i = 0; i < hits.length; i += 3) {
-    const used = hits[i];
-    const to = from + used;
+    const to = from + hits[i];
     for (const entry of entriesAt(hits[i + 1])) {
       if (allowed(entry, tokens, to, end, language)) {
-        const cost =
-          hits[i + 2] + stressCost(entry, tokens, from, used, language);
+        if (!spans.has(to)) {
+          const heard = tokens.slice(from, to);
+          spans.set(to, { heard, evidence: stressEvidence(heard, language) });
+        }
+        const { heard, evidence } = spans.get(to);
+        const cost = hits[i + 2] + stressCost(entry, heard, evidence, language);
         found.push({ from, to, ...entry, cost });
       }
     }

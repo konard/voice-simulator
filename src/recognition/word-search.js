@@ -98,8 +98,12 @@ export function withWordSearch(
     );
     const gaps = allocate(Float64Array, table.gaps.length, table.gaps);
     const matrix = allocate(Float64Array, distances.length, distances);
-    let out = allocate(Float64Array, Math.max(1, input.length * 16));
+    let out;
     return run((from, end, beam) => {
+      out ??= allocate(
+        Float64Array,
+        Math.max(1, input.length * Math.min(beam, 64) * 3)
+      );
       const query = () =>
         module.exports.rec_word_search(
           topology.pointer,

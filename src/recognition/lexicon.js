@@ -217,6 +217,7 @@ export function getLexicon(language = 'en') {
       get bigrams() {
         return data.bigrams;
       },
+      transitionRow: data.transitionRow,
       total: data.total,
       revision: lexiconRevision(),
     });

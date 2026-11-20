@@ -13,6 +13,31 @@ const DATA = new Map([
 const opened = new Map();
 const transitionsByTable = new WeakMap();
 
+function* bigramRows(source, words) {
+  for (const item of source.split(' ')) {
+    if (!item) {
+      continue;
+    }
+    const comma = item.indexOf(',');
+    const equals = item.indexOf('=', comma + 1);
+    const previous = words[Number(item.slice(0, comma))];
+    const next = words[Number(item.slice(comma + 1, equals))];
+    yield [previous, next, Number(item.slice(equals + 1))];
+  }
+}
+
+function setTransition(transitions, word, previous, count) {
+  let row = transitions.get(word);
+  if (!row) {
+    row = new Map();
+    transitions.set(word, row);
+  }
+  row.set(
+    previous.word,
+    -0.3 * Math.log((count - 0.75) / previous.count) + 0.5
+  );
+}
+
 export function getCounts(language) {
   if (!DATA.has(language)) {
     throw new RangeError(`unsupported recognition language "${language}"`);
@@ -27,24 +52,33 @@ export function getCounts(language) {
       });
     const counts = new Map(words.map((item) => [item.word, item.count]));
     let bigrams;
+    let transitions;
     opened.set(language, {
       words,
       counts,
       get bigrams() {
         if (!bigrams) {
           bigrams = new Map();
-          for (const item of data.BIGRAMS.split(' ')) {
-            if (!item) {
-              continue;
-            }
-            const comma = item.indexOf(',');
-            const equals = item.indexOf('=', comma + 1);
-            const first = words[Number(item.slice(0, comma))].word;
-            const second = words[Number(item.slice(comma + 1, equals))].word;
-            bigrams.set(`${first}\t${second}`, Number(item.slice(equals + 1)));
+          for (const [previous, next, count] of bigramRows(
+            data.BIGRAMS,
+            words
+          )) {
+            bigrams.set(`${previous.word}\t${next.word}`, count);
           }
         }
         return bigrams;
+      },
+      transitionRow(word) {
+        if (!transitions) {
+          transitions = new Map();
+          for (const [previous, next, count] of bigramRows(
+            data.BIGRAMS,
+            words
+          )) {
+            setTransition(transitions, next.word, previous, count);
+          }
+        }
+        return transitions.get(word);
       },
       total: words.reduce((sum, item) => sum + item.count, 0),
     });
@@ -62,14 +96,11 @@ function transitionCosts(data) {
       const at = key.indexOf('\t');
       const previous = key.slice(0, at);
       const word = key.slice(at + 1);
-      let row = transitions.get(word);
-      if (!row) {
-        row = new Map();
-        transitions.set(word, row);
-      }
-      row.set(
-        previous,
-        -0.3 * Math.log((count - 0.75) / data.counts.get(previous)) + 0.5
+      setTransition(
+        transitions,
+        word,
+        { word: previous, count: data.counts.get(previous) },
+        count
       );
     }
     transitionsByTable.set(table, transitions);
@@ -86,7 +117,10 @@ export function wordTransition(data, word) {
     if (!previous) {
       return backoff;
     }
-    row ??= transitionCosts(data).get(word) ?? false;
+    row ??=
+      (data.transitionRow
+        ? data.transitionRow(word)
+        : transitionCosts(data).get(word)) ?? false;
     return (row ? row.get(previous) : undefined) ?? backoff;
   };
 }
