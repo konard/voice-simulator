@@ -25,18 +25,17 @@ const speakerChange = { changes: [], stable: [] };
 const realtime = {};
 
 function render(head, seconds, tier = 'minimal') {
-  const { samples } = synthesize(TEXT, {
+  const { samples, sampleRate } = synthesize(TEXT, {
     head,
     lang: 'en',
     seed: 1,
-    sampleRate: RATE,
     tier,
     engine: 'js',
   });
-  if (samples.length < seconds * RATE) {
+  if (samples.length < seconds * sampleRate) {
     throw new Error('Synthetic text is too short for the test window');
   }
-  return samples.subarray(0, seconds * RATE);
+  return { samples: samples.subarray(0, seconds * sampleRate), sampleRate };
 }
 
 function errors(file, truth) {
@@ -117,7 +116,7 @@ describe('voice session', () => {
       session.on('voice', ({ voice }) => {
         first ??= voice;
       });
-      feed(session, render(truth, 20));
+      feed(session, render(truth, 20).samples);
       session.flush();
       const row = {
         id,
@@ -163,8 +162,8 @@ describe('voice session', () => {
         });
       }
     });
-    feed(session, render(presetHeadConfig('male'), 12));
-    feed(session, render(female, 12));
+    feed(session, render(presetHeadConfig('male'), 12).samples);
+    feed(session, render(female, 12).samples);
     session.flush();
     report();
     expect(speakerChange.changes.some((time) => time >= 12 && time <= 16)).toBe(
@@ -196,9 +195,13 @@ describe('voice session', () => {
   });
 
   it('fits one core at the telephone tier', async () => {
-    const samples = render(presetHeadConfig('male'), 20, 'telephone');
+    const { samples, sampleRate } = render(
+      presetHeadConfig('male'),
+      20,
+      'telephone'
+    );
     const session = createVoiceSession({
-      sampleRate: RATE,
+      sampleRate,
       languages: ['en'],
       level: 'low',
       realtime: true,
