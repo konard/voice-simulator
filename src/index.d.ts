@@ -4520,3 +4520,17 @@ export {
   type ProsodyResult,
   type ToneCosts,
 } from './recognition/prosody.js';
+
+export {
+  planReading,
+  planRescoring,
+  rescoreHypotheses,
+  scoreJob,
+  warpPlan,
+  type RescoredIpa,
+  type RescoringJob,
+  type RescoringOptions,
+  type RescoringPreparation,
+  type RescoringStatistics,
+  type WarpedPlan,
+} from './recognition/rescoring.js';

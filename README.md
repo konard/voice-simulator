@@ -666,41 +666,11 @@ Measured with `node experiments/issue-58-rtf.mjs` (10 s of speech, one thread): 
 
 ### Acoustic-to-articulatory inversion and IPA decoding
 
+The [prosody stages](docs/RECOGNITION-PROSODY.md) measure timed vowels and restore stress, tone, punctuation and emphasis.
+
 `invertArticulation` and `createArticulationInverter` recover 21 simulator controls from analysis frames. Use `articulationPlan(track)` to render them. See [inversion usage and accuracy](docs/CODEBOOK.md#acoustic-to-articulatory-inversion).
-`audioToIpa(samples, sampleRate, { voice, language: 'en', nbest: 5 })` returns experimental timed phonemes and syllables, ranked readings, a lattice, and analysis tracks. It fits the head when `voice` is omitted. `createIpaDecoder(sampleRate, options)` returns fixed phonemes and nuclei as audio arrives. See the [decoder API and measured accuracy](docs/CODEBOOK.md#audio-to-ipa).
-
-### Lexical and sentence prosody
-
-Pass timed IPA sounds through `measureProsody` before word search and apply
-`markProsody` to the decoded words:
-
-```js
-import {
-  audioToIpa,
-  ipaToText,
-  markProsody,
-  measureProsody,
-} from 'voice-simulator';
-
-const language = 'en';
-const decoded = audioToIpa(samples, sampleRate, { language });
-const options = { language };
-const measured = measureProsody(samples, sampleRate, decoded.segments, {
-  ...options,
-  voice: decoded.voice,
-});
-const words = ipaToText(measured.sounds, options);
-const result = markProsody(words, measured, options);
-```
-
-The measured vowels carry Mandarin tone costs and a prominence score. The
-word search uses these to rank tones in Mandarin and primary stress in
-English and Russian. The marked result adds punctuation, sentence capitals,
-and timed emphasis and tune spans. Its IPA can be passed to
-`synthesize(result.ipa, { ipa: true })`. Supply `options.voice` to use a
-known speaker's head configuration as the pitch reference. Unvoiced vowels
-carry `tones: null`. Recognition of sentence type uses English, Russian,
-Hindi, and Mandarin cues.
+`audioToIpa(samples, sampleRate, { voice, language: 'en', nbest: 5 })` returns experimental timed phonemes and syllables, ranked readings, a lattice, and analysis tracks. It fits the head when `voice` is omitted. `createIpaDecoder(sampleRate, options)` returns fixed phonemes and nuclei as audio arrives. See the [decoder API and measured accuracy](docs/CODEBOOK.md#audio-to-ipa). Experimental syllable nuclei and broad sound classes are available through `findLandmarks`, `createLandmarkDetector` and `BROAD_CLASSES`. See the [landmark API, streaming contract and measured quality limits](docs/RECOGNITION-LANDMARKS.md).
+`rescoreHypotheses(decoded)` compares uncertain n-best stretches with waveguide renders in the fitted voice and returns revised timed IPA, scored alternatives and render statistics. See the [rescoring API and evaluation](docs/CODEBOOK.md#analysis-by-synthesis-rescoring).
 
 ### Quality
 
@@ -1525,8 +1495,6 @@ This repository implements CI/CD best practices for AI-driven development. See [
 - Multi-runtime and cross-platform testing
 - Changeset-based versioning
 - Concurrency control for CI/CD pipelines
-
-Experimental syllable nuclei and sound classes: `findLandmarks`, `createLandmarkDetector` and `BROAD_CLASSES`. See the [API, streaming contract and measured quality limits](docs/RECOGNITION-LANDMARKS.md).
 
 ## License
 

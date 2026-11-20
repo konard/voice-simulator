@@ -42,6 +42,7 @@ pub mod modes;
 pub mod prosody;
 pub mod recognition;
 pub mod renderer;
+pub mod rescoring;
 pub mod threads;
 pub mod voice_fit;
 

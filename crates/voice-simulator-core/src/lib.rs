@@ -50,6 +50,7 @@ pub mod random;
 pub mod recognition;
 pub mod renderer;
 pub mod resample;
+pub mod rescoring;
 pub mod sheet;
 pub mod solver;
 pub mod source_state;

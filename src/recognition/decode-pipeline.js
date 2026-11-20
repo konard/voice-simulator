@@ -141,7 +141,7 @@ export function segmentsOf(path, times, templates, language) {
   );
 }
 
-function syllablesOf(segments, language) {
+export function syllablesOf(segments, language) {
   const syllables = [];
   let first = 0;
   while (first < segments.length) {
@@ -188,6 +188,17 @@ export function latticeOf(times, edges, templates) {
   };
 }
 
+export function normalizeReadingConfidence(readings) {
+  const minimum = Math.min(...readings.map(({ cost }) => cost));
+  const total = readings.reduce(
+    (sum, { cost }) => sum + Math.exp(minimum - cost),
+    0
+  );
+  for (const item of readings) {
+    item.confidence = Math.exp(minimum - item.cost) / total;
+  }
+}
+
 export function resultOf(
   analysis,
   settings,
@@ -218,19 +229,14 @@ export function resultOf(
       segments: prefix,
     });
   }
-  const total = nbest.reduce(
-    (sum, item) => sum + Math.exp(nbest[0].cost - item.cost),
-    0
-  );
-  for (const item of nbest) {
-    item.confidence = Math.exp(nbest[0].cost - item.cost) / total;
-  }
+  normalizeReadingConfidence(nbest);
   const { ipa = '', segments = [] } = nbest[0] ?? {};
   return {
     ipa,
     segments,
     syllables: syllablesOf(segments, language.language),
     nbest,
+    language: language.language,
     lattice: lattice ?? latticeOf(times, search.edges, templates),
     ...analysis,
   };

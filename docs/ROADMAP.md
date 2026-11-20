@@ -215,7 +215,7 @@ The IPA-to-text stage of [#68](https://github.com/konard/voice-simulator/issues/
 
 The prosody stages of [#70](https://github.com/konard/voice-simulator/issues/70)
 measure timed vowels before word search and restore phrase punctuation,
-emphasis, and tune spans after it. See the [library pipeline](../README.md#lexical-and-sentence-prosody).
+emphasis, and tune spans after it. See the [library pipeline](RECOGNITION-PROSODY.md).
 
 The language stage of [#69](https://github.com/konard/voice-simulator/issues/69) derives weighted phone statistics from the same tries, identifies syllable spans with confidence and reads mixed speech through a joint language-labelled beam search. The library exports `identifyLanguage` and `languageShares`; the command line has `language`. See [language identification](language-id.md) for fixed fixtures, calibration and acceptance measurements.
 
@@ -251,6 +251,8 @@ instants and reliable-frame quartiles, and flags recordings missing the low band
 Steady phonation gets an LF-constrained tract refinement. The same numerical code
 is in the Rust core with WebAssembly parity tests. Definitions, measured limits
 and reproducing commands are in [INVERSE-FILTER.md](INVERSE-FILTER.md).
+
+The analysis-by-synthesis stage of [#67](https://github.com/konard/voice-simulator/issues/67) renders uncertain n-best IPA stretches with the fitted voice and scores them against the recording with bias-corrected mel cepstra and banded dynamic time warping. It exports independent scoring jobs for [#77](https://github.com/konard/voice-simulator/issues/77) and can preserve published timings for phrase commits in [#73](https://github.com/konard/voice-simulator/issues/73).
 
 | Issue                                                      | Type    | Title                                                                          | Blocked by                                                                                                                                                                                                                                                                                                                                                             | Requirements                    |
 | ---------------------------------------------------------- | ------- | ------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------- |
