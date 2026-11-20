@@ -15,7 +15,7 @@ function sampleTrajectory(spectrum, start, end, width, output) {
   return output;
 }
 
-function renderReference(ipa, settings, voice, [before, after]) {
+export function renderWhisperReference(ipa, settings, voice, [before, after]) {
   const { plan, samples, sampleRate } = synthesize(
     `{W ${before}${ipa}${after} W}`,
     {
@@ -70,7 +70,7 @@ export function whisperReferences(templates, settings, voice) {
       table.set(
         ipa,
         contexts.map((context) =>
-          renderReference(ipa, settings, voice, context)
+          renderWhisperReference(ipa, settings, voice, context)
         )
       );
     }
