@@ -26,6 +26,8 @@ These numbers average the two rates for each of the six recordings per language.
 | Hindi    |      82.30% |            40.16% |
 | Mandarin |      95.04% |            54.02% |
 
+The only changed golden report rows are English at 16 kHz. Across 200 held-out synthetic sentences at both rates with and without the language, every reported mean matches the baseline to two decimal places.
+
 ## What limits further improvement
 
 The oracle computes the minimum edit distance over paths through the existing candidate graph. It ranks labels by the existing span score before phonotactics and uses the reference only to select an optimal path for each metric.
@@ -40,7 +42,9 @@ The oracle computes the minimum edit distance over paths through the existing ca
 
 The top three span labels would miss both targets even if the search could choose the best boundaries and labels with the reference. The graph has paths that meet the targets once the oracle can select from more labels. The observed scores seldom put those labels first. The [synthetic rank diagnostic](../../CODEBOOK.md#audio-to-ipa) also found that supplying the planner's articulation at the exact phone times raised the number of first-place labels from 90 to 401 out of 650.
 
-The duration and score-weight probes, including the use of raw periodicity, spectral gravity, local energy and formants, reached 84.5% phone and 48.3% broad-class error in their best shared trial. A text-only prior weighted by lexicon frequency gave 82.6% and 47.5% in its best shared trial with those acoustic features. These comparisons use exploratory scores. The production decoder uses its existing acoustic and phonotactic weights.
+The duration and score-weight probes, including the use of raw periodicity, spectral gravity, local energy and formants, reached 84.5% phone and 48.3% broad-class error in their best shared trial. A text-only prior weighted by lexicon frequency gave 82.6% and 47.5% in its best shared trial with those acoustic features. Conditioning on the previous two phones with a text-only model reached 87.18% and 49.95% with the existing span scores. These comparisons use exploratory scores. The production decoder uses its existing acoustic and phonotactic weights.
+
+The waveguide probe generated templates for each speaker and rate in `/i/`, `/a/` and `/u/` contexts. It matched the observed span's cepstrum, relative energy, periodicity and spectral gravity against these templates. The best trial with a nonzero template weight reached 86.03% phone error and 56.03% broad-class error. Every tested nonzero template weight increased broad-class error from the 50.07% control.
 
 ## Reproduce
 
@@ -49,9 +53,12 @@ node --test --test-name-pattern='decodes steady speech' tests/recognition-decode
 CARGO_BUILD_JOBS=1 node scripts/build-wasm.mjs --require --check-size
 REQUIRE_WASM=1 node --test tests/rust-decode.test.js
 HEAVY_OUT=/tmp/issue-153 node --test --test-name-pattern=golden tests/heavy/recognition-decode.test.js
+HEAVY_OUT=/tmp/issue-153-synthetic node --test --test-name-pattern=synthetic tests/heavy/recognition-decode.test.js
 node experiments/issue-153-decoder-diagnostics.mjs
 node experiments/issue-153-evidence.mjs
 LEXICAL_PRIOR=1 node experiments/issue-153-evidence.mjs
+node experiments/issue-153-phone-context.mjs
+node experiments/issue-153-rendered-templates.mjs
 ```
 
-See the [PR #152 baseline report](../../../reports/heavy/recognition-decode.md) for the original synthetic and golden results.
+The per-condition results are in the [updated benchmark report](../../../reports/heavy/recognition-decode.md) and the [PR #152 baseline report](https://github.com/konard/voice-simulator/blob/2db22212217ef09384fc6aab45d777c0aabfb0e1/reports/heavy/recognition-decode.md).

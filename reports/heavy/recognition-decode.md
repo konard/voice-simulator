@@ -1,12 +1,12 @@
 # Articulation-to-IPA decoder benchmark
 
-Run `node --test tests/heavy/recognition-decode.test.js` to reproduce. Phone and broad-class error are mean per-recording edit rates. For broad-class error, both strings are mapped from IPA to phoneme manner classes before alignment. The synthetic targets are from the waveguide plan. Golden speakers each have one head fitted without refinement from all their recordings, with the supplied IPA used only for scoring.
+Run `node --test tests/heavy/recognition-decode.test.js` to reproduce. Add `--test-name-pattern=golden` before the file argument to run only the golden cohort. Phone and broad-class error are mean per-recording edit rates. For broad-class error, both strings are mapped from IPA to phoneme manner classes before alignment. The synthetic targets are from the waveguide plan. Golden speakers each have one head fitted without refinement from all their recordings, with the supplied IPA used only for scoring.
 
 <!-- prettier-ignore -->
 | Corpus | Language | Working rate (Hz) | Language input | Items | Phone error | Broad-class error |
 | --- | --- | ---: | --- | ---: | ---: | ---: |
-| golden | en | 16000 | given | 6 | 83.38% | 63.52% |
-| golden | en | 16000 | unspecified | 6 | 99.95% | 74.67% |
+| golden | en | 16000 | given | 6 | 81.44% | 56.16% |
+| golden | en | 16000 | unspecified | 6 | 99.18% | 68.46% |
 | golden | en | 8000 | given | 6 | 83.33% | 57.05% |
 | golden | en | 8000 | unspecified | 6 | 95.23% | 66.70% |
 | golden | hi | 16000 | given | 6 | 83.48% | 40.58% |
@@ -38,7 +38,7 @@ Run `node --test tests/heavy/recognition-decode.test.js` to reproduce. Phone and
 | synthetic | zh | 8000 | given | 50 | 77.32% | 39.81% |
 | synthetic | zh | 8000 | unspecified | 50 | 96.08% | 55.45% |
 
-With the language given, the golden-set mean across both rates is **86.63%** phone error and **50.99%** broad-class error. The research targets are 60.00% and 35.00%, respectively.
+With the language given, the golden-set mean across both rates is **86.38%** phone error and **50.07%** broad-class error. The research targets are 60.00% and 35.00%, respectively.
 
 Long-term reference: **32.7%** phone error for the trained Kaldi monophone recognizer on the 39-phone TIMIT core test set. [Kaldi TIMIT results](https://github.com/kaldi-asr/kaldi/blob/master/egs/timit/s5/RESULTS)
 
