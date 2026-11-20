@@ -1,0 +1,225 @@
+/** Whisper recognition quality gates on synthesized, held-out material. Unlicense. */
+import { spawnSync } from 'node:child_process';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import process from 'node:process';
+import { describe, expect } from 'test-anywhere';
+import {
+  analyzeFrames,
+  audioToIpa,
+  errorRate,
+  ipaToText,
+  parseIpa,
+  synthesize,
+  whisperTones,
+} from '../../src/index.js';
+import { buildWhisperCues } from '../../scripts/build-whisper-cues.mjs';
+import { WHISPER_CUES } from '../../src/recognition/data/whisper-cues.js';
+import { renderWhisper } from '../../experiments/issue-72-whisper-robustness.mjs';
+import {
+  DECODER_VOICES,
+  DECODE_SENTENCES,
+  plannedPhones,
+} from '../helpers/decoder-material.js';
+import { itUnless } from '../helpers/skip.js';
+
+const it = itUnless(process.env.HEAVY === '1' ? null : 'requires HEAVY=1');
+const paired = new Map(
+  WHISPER_CUES.flatMap(([a, b]) => [
+    [a[0], a[0]],
+    [b[0], a[0]],
+  ])
+);
+const noMarks = (ipa) => ipa.replace(/[˥˦˧˨˩ˈˌ]/gu, '');
+
+function decodeText(text, language) {
+  const { samples, sampleRate, plan } = renderWhisper(
+    `[whisper] ${text}`,
+    language
+  );
+  const heard = audioToIpa(samples, sampleRate, {
+    language,
+    voice: DECODER_VOICES.male,
+  });
+  return { heard, plan };
+}
+
+function phoneErrors(reference, hypothesis, equal) {
+  const format = (phones) =>
+    phones.map((ipa) => (equal ? (paired.get(ipa) ?? ipa) : ipa)).join(' ');
+  return errorRate(format(reference), format(hypothesis), 'phone');
+}
+
+function tonesIn(ipa) {
+  return parseIpa(ipa)
+    .tokens.filter(({ kind }) => kind === 'vowel')
+    .flatMap(({ tone }) => (tone?.length ? [tone.join('')] : []));
+}
+
+const mandarin = [
+  ...DECODE_SENTENCES.zh,
+  '请等一下',
+  '他有一只猫',
+  '今天下雨了',
+  '我喜欢看书',
+  '我们去学校',
+  '他正在喝水',
+];
+
+function countPair([first, second]) {
+  let correct = 0;
+  for (const [expected, [ipa]] of [first, second].entries()) {
+    const { samples, sampleRate, plan } = synthesize(`{W a${ipa}a W}`, {
+      ipa: true,
+      head: DECODER_VOICES.female,
+      tier: 'minimal',
+      seed: 1,
+      engine: 'js',
+    });
+    const target = plannedPhones(plan)[1];
+    const result = audioToIpa(samples, sampleRate, {
+      voice: DECODER_VOICES.female,
+      languages: [],
+      whisper: [{ start: 0, end: samples.length / sampleRate }],
+    });
+    const sound = result.segments.find(
+      ({ start, end }) =>
+        start <= (target.start + target.end) / 2 &&
+        end > (target.start + target.end) / 2
+    );
+    correct += Number(
+      sound?.voicing !== undefined &&
+        sound.voicing !== 0.5 &&
+        Number(sound.voicing > 0.5) === expected
+    );
+  }
+  console.log(first[0], second[0], `${correct}/2`);
+  return correct;
+}
+
+describe('whisper acceptance measurements', () => {
+  it('decodes three whispered sentences per language', () => {
+    let edits = 0;
+    let equalEdits = 0;
+    let phones = 0;
+    for (const [language, sentences] of Object.entries(DECODE_SENTENCES)) {
+      for (const text of sentences.slice(0, 3)) {
+        const { heard, plan } = decodeText(text, language);
+        const reference = plannedPhones(plan).map(({ ipa }) => noMarks(ipa));
+        const hypothesis = heard.segments
+          .filter(({ kind }) => kind !== 'pause')
+          .map(({ ipa }) => noMarks(ipa));
+        edits += phoneErrors(reference, hypothesis, false).distance;
+        equalEdits += phoneErrors(reference, hypothesis, true).distance;
+        phones += reference.length;
+      }
+    }
+    console.log(JSON.stringify({ edits, equalEdits, phones }));
+    expect(
+      Math.max(edits / phones / 0.15, equalEdits / phones / 0.08)
+    ).toBeLessThanOrEqual(1);
+  });
+
+  it('chooses the correct voicing for at least 75% of female aCa probes', () => {
+    const correct = WHISPER_CUES.reduce(
+      (sum, pair) => sum + countPair(pair),
+      0
+    );
+    console.log(`Female aCa: ${correct}/${2 * WHISPER_CUES.length}`);
+    expect(correct / (2 * WHISPER_CUES.length)).toBeGreaterThanOrEqual(0.75);
+  });
+
+  it('lets words decide from whispered audio', () => {
+    const { heard } = decodeText('a big dog', 'en');
+    const result = ipaToText(heard.segments, { language: 'en' });
+    console.log('a big dog:', result.text);
+    expect(result.text).toBe('a big dog');
+  });
+
+  it('guesses at least five whispered tones in the eight ma probes', () => {
+    const letters = ['˥', '˧˥', '˨˩˦', '˥˩'];
+    let correct = 0;
+    for (const preset of ['male', 'female']) {
+      const { samples, sampleRate, plan, timeline } = renderWhisper(
+        '[whisper] 妈 麻 马 骂',
+        'zh',
+        preset
+      );
+      const frames = analyzeFrames(samples, sampleRate);
+      const meanDuration =
+        timeline.words.reduce((sum, { start, end }) => sum + end - start, 0) /
+        timeline.words.length;
+      for (const [index, word] of timeline.words.entries()) {
+        const vowel = plan.segments.find(
+          ({ kind, start }) => kind === 'vowel' && start >= word.start - 1e-9
+        );
+        const costs = whisperTones(frames, {
+          ...word,
+          vowelStart: vowel.start,
+          meanDuration,
+        });
+        const [best] = Object.entries(costs).sort((a, b) => a[1] - b[1])[0];
+        console.log(preset, word.text, letters[index], best);
+        correct += Number(best === letters[index]);
+      }
+    }
+    console.log(`Mandarin ma probes: ${correct}/8`);
+    expect(correct).toBeGreaterThanOrEqual(5);
+  });
+
+  it('finds the right lexical tone for at least 75% of syllables across ten Mandarin sentences', () => {
+    let edits = 0;
+    let syllables = 0;
+    for (const text of mandarin) {
+      const { heard, plan } = decodeText(text, 'zh');
+      const spoken = tonesIn(
+        plannedPhones(plan)
+          .map(({ ipa }) => ipa)
+          .join(' ')
+      );
+      const lexical = tonesIn(
+        ipaToText(heard.segments, { language: 'zh' }).ipa
+      );
+      const represent = (tones) =>
+        tones
+          .map(
+            (tone) =>
+              ({ 5: 'a', 35: 'e', 214: 'i', 21: 'i', 51: 'u' })[tone] ?? 'o'
+          )
+          .join(' ');
+      edits += errorRate(
+        represent(spoken),
+        represent(lexical),
+        'phone'
+      ).distance;
+      syllables += spoken.length;
+    }
+    console.log(JSON.stringify({ toneEdits: edits, syllables }));
+    expect(edits / syllables).toBeLessThanOrEqual(0.25);
+  });
+
+  it('recognizes hello world through the command line', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'voice-whisper-'));
+    const wav = join(dir, 'w.wav');
+    const run = (...args) =>
+      spawnSync(process.execPath, ['bin/voice-simulator.js', ...args], {
+        encoding: 'utf8',
+      });
+    try {
+      expect(run('say', '[whisper] hello world', '-o', wav).status).toBe(0);
+      const result = run('recognize', wav);
+      expect(result.status).toBe(0);
+      console.log('CLI:', result.stdout.trim());
+      expect(result.stdout.toLowerCase().replace(/\p{P}/gu, '').trim()).toBe(
+        'hello world'
+      );
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('ships current consonant cue statistics', () => {
+    expect(buildWhisperCues()).toEqual(WHISPER_CUES);
+  });
+});

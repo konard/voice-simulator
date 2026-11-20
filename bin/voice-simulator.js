@@ -21,6 +21,7 @@ import {
   createEngine,
   ENGINE_NAMES,
   decodeAudio,
+  recognize,
   DEFAULT_HEAD,
   decodeHeadConfig,
   encodeHeadConfig,
@@ -82,6 +83,7 @@ const OPTIONS = {
   'box-absorption': { type: 'string' },
   ipa: { type: 'boolean' },
   markup: { type: 'boolean' },
+  'no-whisper': { type: 'boolean' },
   breaths: { type: 'boolean' },
   plain: { type: 'boolean' },
   loudness: { type: 'string' },
@@ -115,6 +117,8 @@ function usage() {
     '                      --boundaries given|search --beam 32 --nbest 1 --json',
     '  language <ipa>      Identify languages and print language, sound range, confidence',
     '                      --languages en,ru,hi,zh --switch-penalty 6 --min-sounds 8 --json',
+    '  recognize <file>    Print recognized words (experimental, --lang en|ru|hi|zh)',
+    '                      Automatically detects whisper. --no-whisper disables it.',
     '  say <text> -o f.wav Simulate speech and write an audio file',
     '  convert <in> -o out Convert an audio file (WAV, FLAC, AIFF, AU) to mono',
     '  timeline <text>     Print when each word and syllable is spoken',
@@ -648,15 +652,40 @@ const COMMANDS = {
     io.stdout(values.json ? JSON.stringify(result) : result.ipa);
   },
 
+  recognize(values, positionals, io) {
+    const [input] = positionals;
+    if (!input) {
+      throw new Error('Missing audio file');
+    }
+    const { samples, sampleRate } = decodeAudio(readFileSync(input));
+    const result = recognize(samples, sampleRate, {
+      language: values.lang === 'auto' ? undefined : values.lang,
+      whisper: values['no-whisper'] ? false : 'auto',
+      voice:
+        values.head || values.voice || values.preset
+          ? resolveHead(values)
+          : undefined,
+      beam: optionalNumber(values.beam, 'beam'),
+      nbest: optionalNumber(values.nbest, 'nbest'),
+    });
+    const { audio, ...words } = result;
+    io.stdout(
+      values.json
+        ? JSON.stringify({ ...words, segments: audio.segments })
+        : words.text
+    );
+  },
+
   say(values, positionals, io, engine) {
+    const text = requireText(positionals);
     const output = audioOutput(values, 'voice');
-    const result = synthesize(requireText(positionals), {
+    const result = synthesize(text, {
       engine,
       lang: values.lang,
       ...accentOptions(values),
       weakForms: values['strong-forms'] ? false : undefined,
       ipa: values.ipa,
-      markup: markupOption(values),
+      markup: markupOption(values) ?? (/\[whisper\]/iu.test(text) || undefined),
       breaths: values.breaths || undefined,
       seed: values.seed,
       head: resolveHead(values),

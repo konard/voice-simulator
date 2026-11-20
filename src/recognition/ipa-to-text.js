@@ -228,6 +228,20 @@ function validateSpans(spans, input) {
   }
 }
 
+function decodeReadings(input, lexicon, settings, nbest) {
+  const weakCues = input.tokens.some((token) => token.whispered || token.tones);
+  const paths = weakCues ? [] : decode(input, lexicon, settings, true);
+  if (paths.length < nbest) {
+    const exactTexts = new Set(paths.map((path) => path.text));
+    paths.push(
+      ...decode(input, lexicon, settings, false).filter(
+        (path) => !exactTexts.has(path.text)
+      )
+    );
+  }
+  return paths;
+}
+
 /**
  * Turn IPA sounds into lower-case words of one language or supplied language spans.
  * An exact full decoding takes precedence over a decoding that changes
@@ -272,15 +286,7 @@ export function ipaToText(ipa, options = {}) {
         }
       : {}),
   };
-  const paths = decode(input, lexicon, settings, true);
-  if (paths.length < nbest) {
-    const exactTexts = new Set(paths.map((path) => path.text));
-    paths.push(
-      ...decode(input, lexicon, settings, false).filter(
-        (path) => !exactTexts.has(path.text)
-      )
-    );
-  }
+  const paths = decodeReadings(input, lexicon, settings, nbest);
   if (!paths.length) {
     throw new Error('no IPA decoding path');
   }

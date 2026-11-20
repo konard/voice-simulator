@@ -43,6 +43,7 @@ pub mod recognition;
 pub mod renderer;
 pub mod threads;
 pub mod voice_fit;
+pub mod whisper;
 
 /// Version of the interface; raise it on any breaking change of a `vs_`
 /// export (a removed or renamed function, a changed signature or meaning).

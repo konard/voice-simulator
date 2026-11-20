@@ -91,7 +91,7 @@ function stressCost(entry, tokens, from, used) {
 /** Exact paths are retained separately so homophones cannot consume the beam. */
 export function exactCandidates(tokens, from, end, lexicon, language) {
   const result = [];
-  let states = [{ node: lexicon.root, sandhi: false }];
+  let states = [{ node: lexicon.root, sandhi: false, cost: 0 }];
   for (let to = from; to < end; to++) {
     const keys = exactKeys(tokens, to, end, language);
     const next = [];
@@ -102,7 +102,16 @@ export function exactCandidates(tokens, from, end, lexicon, language) {
           continue;
         }
         const sandhi = state.sandhi || key !== keys[0];
-        next.push({ node, sandhi });
+        const token = tokens[to];
+        const cost =
+          state.cost +
+          (token.whispered || token.tones
+            ? phoneDistance(
+                { ...token, stress: 0 },
+                { ...node.token, stress: 0 }
+              )
+            : 0);
+        next.push({ node, sandhi, cost });
         for (const entry of node.entries) {
           if (!allowed(entry, tokens, to + 1, end, language)) {
             continue;
@@ -112,7 +121,7 @@ export function exactCandidates(tokens, from, end, lexicon, language) {
             to: to + 1,
             ...entry,
             ...(sandhi ? { ipa: formatIpa(tokens.slice(from, to + 1)) } : {}),
-            cost: 0,
+            cost,
           });
         }
       }
@@ -131,7 +140,7 @@ export function distanceCache() {
   return (input, expected) => {
     // Stress is evaluated at the terminal: the trie shares stressed and
     // unstressed versions of the same segment path.
-    const a = `${input.symbol}:${(input.tone ?? []).join('')}`;
+    const a = `${input.symbol}:${(input.tone ?? []).join('')}:${input.voicing ?? ''}:${JSON.stringify(input.tones ?? null)}`;
     const b = `${expected.symbol}:${(expected.tone ?? []).join('')}`;
     const key = `${a}\t${b}`;
     if (!cache.has(key)) {

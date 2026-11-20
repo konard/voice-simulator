@@ -28,6 +28,7 @@ import {
   removePresetEffects,
 } from './mode-spans.js';
 import { recognizeSounds } from './mode-sounds.js';
+import { whisperModeSpans } from './whisper-result.js';
 
 function retainActivationObservation(mode, selected, words) {
   // Activation describes the same acoustic evidence as physical labels.
@@ -364,7 +365,11 @@ export function recognizeModes(samples, sampleRate, result, options = {}) {
     }
   }
   const initialSpans = [
-    ...wordSpans(result.words, features, labels, 'quality'),
+    ...wordSpans(result.words, features, labels, 'quality').filter(
+      (span) =>
+        result.whisperSpans === undefined || span.phonation?.whisper !== 1
+    ),
+    ...whisperModeSpans(result.words, result.whisperSpans ?? []),
     ...wordSpans(result.words, features, labels, 'tempo'),
   ];
   let spans = reference

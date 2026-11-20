@@ -4510,3 +4510,16 @@ export {
   type IpaStreamUpdate,
   type IpaSyllable,
 } from './recognition/decode.js';
+
+export {
+  findWhisper,
+  whisperTones,
+  type WhisperSpan,
+  type WhisperMode,
+  type WhisperToneCosts,
+} from './recognition/whisper.js';
+export {
+  recognize,
+  createRecognizer,
+  type AudioRecognitionResult,
+} from './recognition/recognize.js';

@@ -453,13 +453,7 @@ const gpuResult = await synthesizeAsync('Hello world', { device });
 console.log(describeGpuDevice(device));
 ```
 
-Lower-level building blocks are exported too: `planUtterance`,
-`sampleState`, `tractShape`, `Waveguide`, `Fdtd2d`, `buildSheet`, `Fdtd3d`,
-`buildVoxelModel`, `VoiceRenderer`, `headMesh`, `tubeMesh`, `headModelObj`,
-`LodGovernor`, `StreamGovernor`, `AdaptiveStream`, `chooseTier`, `chooseTierWithGpu`, `measureAudioTier`,
-`benchmarkAudioTiersAsync` and more; see
-[`src/index.d.ts`](src/index.d.ts). A runnable example is in
-[`examples/basic-usage.js`](examples/basic-usage.js).
+The low-level exports include `planUtterance`, `sampleState`, `tractShape`, `Waveguide`, `Fdtd2d`, `buildSheet`, `Fdtd3d`, `buildVoxelModel`, `VoiceRenderer`, `headMesh`, `tubeMesh`, `headModelObj`, `LodGovernor`, `StreamGovernor`, `AdaptiveStream`, `chooseTier`, `chooseTierWithGpu`, `measureAudioTier`, and `benchmarkAudioTiersAsync`. See [`src/index.d.ts`](src/index.d.ts) and [`examples/basic-usage.js`](examples/basic-usage.js).
 
 ### CLI
 
@@ -499,6 +493,12 @@ npx voice-simulator say "Hello" --engine js -o js.wav   # byte-stable output
 npx voice-simulator serve --port 8080
 npx voice-simulator --help
 ```
+
+### Whispered speech
+
+`recognize(samples, sampleRate, { language: 'en' })` and `voice-simulator recognize w.wav --lang en` detect whisper automatically. The result has timed `modes` and `{W … W}` in `ipa`. Pass `whisper: false` or `--no-whisper` to disable detection. `audioToIpa` and `createRecognizer` also accept explicit spans in seconds through `whisper: [{ start, end }]`.
+
+The minimal-tier, seed-1 benchmark on twelve synthetic sentences measured 78.4% phone error and 74.7% with voicing pairs treated as equal. Tones and voicing are partly guessed from the words. Run `HEAVY=1 node --test tests/heavy/recognition-whisper.test.js` to reproduce the acceptance measurements. No real whispered recordings were measured because no available dataset met the project's license requirements.
 
 ### Pronunciation lexicons
 

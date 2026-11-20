@@ -29,6 +29,7 @@ pub mod folds;
 pub mod formants;
 pub mod frame;
 pub mod glottis;
+pub mod inverse_whisper;
 pub mod landmarks;
 
 mod inverse_dsp;

@@ -14,9 +14,48 @@ import { analyzeFrames, workingRate } from './frontend.js';
 import { invertArticulation } from './inversion.js';
 import { findLandmarks } from './landmarks.js';
 import { trackPitch } from './pitch.js';
+import { findWhisper, whisperAt, whisperTones } from './whisper.js';
+import {
+  whisperModeSpans,
+  whisperVoicing,
+  wrapWhisperIpa,
+} from './whisper-result.js';
+import { createWhisperScorer } from './whisper-decode.js';
+import { whisperFormantFrames } from './whisper-spectrum.js';
+
+function decoderWhisperSpans(whisper) {
+  if (whisper !== 'auto' && whisper !== false && !Array.isArray(whisper)) {
+    throw new TypeError('whisper must be "auto", false, or a list of spans');
+  }
+  const spans = Array.isArray(whisper)
+    ? whisper
+        .map(({ start, end, confidence = 1 }) => {
+          if (
+            !Number.isFinite(start) ||
+            start < 0 ||
+            !Number.isFinite(end) ||
+            end <= start ||
+            !Number.isFinite(confidence) ||
+            confidence < 0 ||
+            confidence > 1
+          ) {
+            throw new RangeError('invalid whisper span');
+          }
+          return { start, end, confidence };
+        })
+        .sort((a, b) => a.start - b.start)
+    : whisper;
+  if (
+    Array.isArray(spans) &&
+    spans.some((span, i) => i > 0 && spans[i - 1].end > span.start)
+  ) {
+    throw new RangeError('whisper spans must not overlap');
+  }
+  return spans;
+}
 
 export function decoderSettings(sampleRate, options) {
-  const { beam = 32, nbest = 1 } = options;
+  const { beam = 32, nbest = 1, whisper = 'auto' } = options;
   if (
     !Number.isSafeInteger(beam) ||
     beam < 1 ||
@@ -31,6 +70,7 @@ export function decoderSettings(sampleRate, options) {
   return {
     beam,
     nbest,
+    whisper: decoderWhisperSpans(whisper),
     weights: DECODE_WEIGHTS,
     rate: workingRate(
       sampleRate,
@@ -72,6 +112,16 @@ export function fitDecoderVoice(samples, sampleRate, language, fallback) {
 export function analyzeForDecode(samples, sampleRate, options, settings) {
   const frames = analyzeFrames(samples, sampleRate, settings);
   const pitch = trackPitch(frames);
+  const whisperSpans =
+    settings.whisper === 'auto'
+      ? findWhisper(samples, sampleRate, frames, pitch)
+      : (settings.whisper || [])
+          .filter(({ start }) => start < samples.length / sampleRate)
+          .map(({ start, end, confidence }) => ({
+            start,
+            end: Math.min(end, samples.length / sampleRate),
+            confidence,
+          }));
   const hasSpeech = frames.speech.subarray(0, frames.count).some(Boolean);
   const voice = options.voice
     ? normalizeHeadConfig(options.voice)
@@ -83,12 +133,13 @@ export function analyzeForDecode(samples, sampleRate, options, settings) {
           DEFAULT_HEAD
         )
       : DEFAULT_HEAD;
-  const formants = trackFormants(frames, {
+  const spectralFrames = whisperFormantFrames(frames, whisperSpans);
+  const formants = trackFormants(spectralFrames, {
     pitch,
     vocalTractLength: voice.vocalTractLength,
   });
   const landmarks = findLandmarks(frames);
-  const articulation = invertArticulation(frames, {
+  const articulation = invertArticulation(spectralFrames, {
     voice,
     pitch,
     formants,
@@ -98,6 +149,7 @@ export function analyzeForDecode(samples, sampleRate, options, settings) {
   });
   return {
     frames,
+    whisperSpans,
     tracks: { pitch, formants, landmarks, articulation },
     voice,
   };
@@ -106,6 +158,14 @@ export function analyzeForDecode(samples, sampleRate, options, settings) {
 export function prepareIpaDecode(analysis, settings, bounds, templatesForTime) {
   const { frames, tracks, voice } = analysis;
   const templates = decoderTemplates(voice, settings.language.symbols);
+  const { whisperSpans = [] } = analysis;
+  const whisperScore = createWhisperScorer(
+    frames,
+    whisperSpans,
+    templates,
+    settings,
+    voice
+  );
   const prepared = prepareDecode(
     frames,
     tracks.landmarks,
@@ -115,7 +175,7 @@ export function prepareIpaDecode(analysis, settings, bounds, templatesForTime) {
       from: frames.startTime,
       to: frames.startTime + frames.sampleCount / frames.rate,
     },
-    templatesForTime
+    { templatesForTime, whisperSpans, whisperScore }
   );
   return { templates, prepared };
 }
@@ -188,6 +248,34 @@ export function latticeOf(times, edges, templates) {
   };
 }
 
+function addWhisperTones(segments, syllables, spans, frames) {
+  const meanDuration =
+    syllables.reduce(
+      (sum, syllable) => sum + syllable.end - syllable.start,
+      0
+    ) / syllables.length;
+  for (const syllable of syllables) {
+    const {
+      start,
+      end,
+      segments: [from, to],
+    } = syllable;
+    const offset = segments
+      .slice(from, to)
+      .findIndex(({ kind }) => kind === 'vowel');
+    const vowel = offset >= 0 ? segments[from + offset] : undefined;
+    if (vowel && whisperAt(spans, (start + end) / 2)) {
+      syllable.tones = whisperTones(frames, {
+        start,
+        end,
+        vowelStart: vowel.start,
+        meanDuration,
+      });
+      segments[from + offset] = { ...vowel, tones: syllable.tones };
+    }
+  }
+}
+
 export function resultOf(
   analysis,
   settings,
@@ -198,13 +286,18 @@ export function resultOf(
 ) {
   const { times } = prepared;
   const { language } = settings;
+  const spans = analysis.whisperSpans ?? [];
+  const annotate = (segments) =>
+    whisperVoicing(segments, analysis.frames, spans, language, prefix.length);
+  const formatted = (segments) =>
+    wrapWhisperIpa(segments, whisperModeSpans(segments, spans));
   const prefixCost = prefix.reduce((sum, { cost }) => sum + cost, 0);
   const nbest = search.paths.map((path) => {
-    const segments = prefix.concat(
-      segmentsOf(path, times, templates, language)
+    const segments = annotate(
+      prefix.concat(segmentsOf(path, times, templates, language))
     );
     return {
-      ipa: joinSegments(segments),
+      ipa: formatted(segments),
       cost: prefixCost + path.cost,
       confidence: 0,
       segments,
@@ -212,10 +305,10 @@ export function resultOf(
   });
   if (!nbest.length && prefix.length) {
     nbest.push({
-      ipa: joinSegments(prefix),
+      ipa: formatted(prefix),
       cost: prefixCost,
       confidence: 0,
-      segments: prefix,
+      segments: prefix.slice(),
     });
   }
   const total = nbest.reduce(
@@ -226,10 +319,15 @@ export function resultOf(
     item.confidence = Math.exp(nbest[0].cost - item.cost) / total;
   }
   const { ipa = '', segments = [] } = nbest[0] ?? {};
+  const syllables = syllablesOf(segments, language.language);
+  if (language.language === 'zh') {
+    addWhisperTones(segments, syllables, spans, analysis.frames);
+  }
   return {
     ipa,
     segments,
-    syllables: syllablesOf(segments, language.language),
+    syllables,
+    modes: whisperModeSpans(segments, spans),
     nbest,
     lattice: lattice ?? latticeOf(times, search.edges, templates),
     ...analysis,

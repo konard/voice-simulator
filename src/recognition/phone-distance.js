@@ -36,6 +36,21 @@ function placeDistance(a, b) {
 
 const differs = (a, b) => Number(Boolean(a) !== Boolean(b));
 
+function voicingDistance(a, b) {
+  if (a.whispered) {
+    return Math.abs(Number(Boolean(b.voiced)) - a.voicing);
+  }
+  return b.whispered ? voicingDistance(b, a) : differs(a.voiced, b.voiced);
+}
+
+function toneEvidence(a, b) {
+  if (a.tones) {
+    const key = (b.tone ?? []).map((level) => '˩˨˧˦˥'[level - 1]).join('');
+    return 0.5 * ((a.tones[key === '˨˩' ? '˨˩˦' : key] ?? 0.5) - 0.25);
+  }
+  return toneDistance(a.tone, b.tone);
+}
+
 function segmentDistance(a, b) {
   const x = a.phoneme ?? a;
   const y = b.phoneme ?? b;
@@ -56,7 +71,7 @@ function segmentDistance(a, b) {
             (b.affricate ? 'affricate' : y.manner)
         ) +
       0.35 * placeDistance(x.place, y.place) +
-      0.25 * differs(a.voiced, b.voiced) +
+      0.25 * voicingDistance(a, b) +
       0.2 * differs(a.aspirated, b.aspirated) +
       0.2 * differs(a.palatalized, b.palatalized)
     );
@@ -84,7 +99,7 @@ export function phoneDistance(a, b) {
   return Math.min(
     1,
     segment +
-      toneDistance(a.tone, b.tone) +
+      toneEvidence(a, b) +
       0.2 * Number((a.stress ?? 0) !== (b.stress ?? 0))
   );
 }

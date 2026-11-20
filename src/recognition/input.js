@@ -11,13 +11,24 @@ function timedSound(sound) {
     sound.end < sound.start ||
     !Number.isFinite(sound.confidence) ||
     sound.confidence < 0 ||
-    sound.confidence > 1
+    sound.confidence > 1 ||
+    (sound.whispered &&
+      (!Number.isFinite(sound.voicing) ||
+        sound.voicing < 0 ||
+        sound.voicing > 1))
   ) {
     throw new TypeError(
       'sounds need IPA, finite start/end seconds and confidence in [0, 1]'
     );
   }
   return parseIpa(sound.ipa);
+}
+
+function whisperEvidence(chunk, token) {
+  return {
+    ...(chunk.whispered && { whispered: true, voicing: chunk.voicing }),
+    ...(chunk.tones && token.kind === 'vowel' && { tones: chunk.tones }),
+  };
 }
 
 export function recognitionInput(ipa, boundaries) {
@@ -51,6 +62,7 @@ export function recognitionInput(ipa, boundaries) {
           start: chunk.start,
           end: chunk.end,
           confidence: chunk.confidence,
+          ...whisperEvidence(chunk, token),
         });
       } else {
         throw new TypeError('IPA-to-text accepts speech sounds and pauses');

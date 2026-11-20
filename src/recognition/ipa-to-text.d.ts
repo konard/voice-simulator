@@ -1,4 +1,5 @@
 import type { LanguageCode } from '../index.js';
+import type { WhisperToneCosts } from './whisper.js';
 import type { LanguageSpan } from './language-id.js';
 
 /** One heard sound or pause, with times in seconds. */
@@ -7,6 +8,9 @@ export interface RecognitionSound {
   start: number;
   end: number;
   confidence: number;
+  whispered?: true;
+  voicing?: number;
+  tones?: WhisperToneCosts;
 }
 
 export interface RecognitionSyllable {
