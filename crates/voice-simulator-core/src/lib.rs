@@ -60,5 +60,6 @@ pub mod source_state;
 pub mod stages;
 pub mod subglottal;
 pub mod voice_fit;
+pub mod voice_session;
 pub mod waveguide;
 pub mod whisper;

@@ -47,6 +47,7 @@ pub mod renderer;
 pub mod rescoring;
 pub mod threads;
 pub mod voice_fit;
+pub mod voice_session;
 pub mod whisper;
 
 /// Version of the interface; raise it on any breaking change of a `vs_`

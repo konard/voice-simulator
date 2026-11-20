@@ -727,5 +727,5 @@ export {
   levelForTier,
   RecognitionError,
 } from './recognition/recognizer.js';
-
 export { createRecognitionEngine } from './recognition/engine.js';
+export { createVoiceSession, copyVoice } from './session/voice-session.js';
