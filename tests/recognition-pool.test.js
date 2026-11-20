@@ -207,3 +207,12 @@ it('falls back to JavaScript if the shared loader rejects', async () => {
     code: 'ENGINE_UNAVAILABLE',
   });
 });
+
+it('rejects a WebAssembly module with incomplete recognition exports', async () => {
+  const load = async () => ({ module: { exports: { rec_pitch() {} } } });
+  const auto = await createRecognitionEngine({ engine: 'auto' }, load);
+  assert.equal(auto.name, 'js');
+  await assert.rejects(createRecognitionEngine({ engine: 'rust' }, load), {
+    code: 'ENGINE_UNAVAILABLE',
+  });
+});

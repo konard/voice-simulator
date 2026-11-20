@@ -2,6 +2,16 @@
 import { createEngine, ENGINE_NAMES, getEngine } from '../engine/index.js';
 import { configureNodeRecognitionModels } from './node-models.js';
 
+const requiredExports = [
+  'rec_pitch',
+  'rec_pitch_frame',
+  'rec_pitch_refine',
+  'rec_pitch_mark',
+  'rec_inverse_filter',
+  'rec_codebook_search',
+  'rec_word_search',
+];
+
 export function checkRecognitionOptions({ engine = 'auto', threads = 'auto' }) {
   if (!ENGINE_NAMES.includes(engine)) {
     throw new RangeError(`Unknown recognition engine: ${engine}`);
@@ -21,7 +31,11 @@ function rustUnavailable(cause) {
 
 function kernels(loaded, { engine = 'auto', threads = 'auto' }, cause) {
   const module = loaded?.module;
-  if (typeof module?.exports.rec_pitch === 'function') {
+  if (
+    requiredExports.every(
+      (name) => typeof module?.exports?.[name] === 'function'
+    )
+  ) {
     return {
       name: 'rust',
       threads,
