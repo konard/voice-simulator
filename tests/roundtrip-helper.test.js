@@ -4,7 +4,24 @@ import { it } from 'test-anywhere';
 import { roundTrip, sentenceMark, sentences } from './helpers/roundtrip.js';
 import { synthesize } from '../src/index.js';
 
-const render = { tier: 'telephone', preset: 'male', seed: 1, lang: 'en' };
+const render = {
+  tier: 'telephone',
+  head: 'random',
+  preset: 'male',
+  seed: 1,
+  lang: 'en',
+};
+
+it('renders the selected voice preset', () => {
+  const recognize = () => ({ text: '', ipa: '', languages: [], words: [] });
+  const male = roundTrip('Yes.', { ...render, recognize });
+  const child = roundTrip('Yes.', { ...render, preset: 'child', recognize });
+  assert.deepEqual(male.spoken.head, synthesize('Yes.', render).head);
+  assert.ok(
+    male.spoken.head.vocalTractLength > child.spoken.head.vocalTractLength
+  );
+  assert.notDeepEqual(male.spoken.samples, child.spoken.samples);
+});
 
 it('has 20 sentences per language', () => {
   assert.deepEqual(Object.keys(sentences).sort(), ['en', 'hi', 'ru', 'zh']);

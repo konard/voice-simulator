@@ -105,7 +105,14 @@ export function roundTrip(text, options) {
     referenceText = text,
     recognize = recognizeAudio,
   } = options;
-  const spoken = synthesize(text, { lang, tier, preset, seed, markup });
+  const spoken = synthesize(text, {
+    lang,
+    tier,
+    head: 'random',
+    preset,
+    seed,
+    markup,
+  });
   const level = levelForTier(tier);
   const start = performance.now();
   const heard = recognize(spoken.samples, spoken.sampleRate, { level });
