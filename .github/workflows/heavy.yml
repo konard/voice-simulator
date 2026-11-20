@@ -188,6 +188,7 @@ jobs:
           mkdir -p reports/heavy
           node scripts/profile-recognition.mjs js > reports/heavy/recognition-stages-js.md
           node scripts/profile-recognition.mjs rust > reports/heavy/recognition-stages-rust.md
+          node --input-type=module -e 'import { profileSingleCoreRecognition } from "./experiments/issue-77-single-core.mjs"; process.stdout.write(profileSingleCoreRecognition())' > reports/heavy/recognition-stages-cold.txt
 
       - name: Upload reports
         if: ${{ !cancelled() }}

@@ -8,7 +8,7 @@ import { encodeWav } from '../src/audio/wav.js';
 import { resample } from '../src/audio/resample.js';
 import { synthesize } from '../src/index.js';
 
-export function measureSingleCoreRecognition() {
+function withSingleCoreFixture(run) {
   const allowed = readFileSync('/proc/self/status', 'utf8');
   const [, core] = /^Cpus_allowed_list:\s*(\d+)/m.exec(allowed);
   const rate = 8000;
@@ -23,7 +23,15 @@ export function measureSingleCoreRecognition() {
   try {
     const wav = join(folder, 'fox.wav');
     writeFileSync(wav, encodeWav(samples, rate));
-    return ['rust', 'js'].map((engine) => {
+    return run(core, wav, duration);
+  } finally {
+    rmSync(folder, { recursive: true, force: true });
+  }
+}
+
+export function measureSingleCoreRecognition() {
+  return withSingleCoreFixture((core, wav, duration) =>
+    ['rust', 'js'].map((engine) => {
       const args = [
         process.execPath,
         'bin/voice-simulator.js',
@@ -51,8 +59,26 @@ export function measureSingleCoreRecognition() {
         rtf: elapsed / duration,
         text: result.stdout.trim(),
       };
-    });
-  } finally {
-    rmSync(folder, { recursive: true, force: true });
-  }
+    })
+  );
+}
+
+export function profileSingleCoreRecognition() {
+  return withSingleCoreFixture((core, wav) => {
+    const result = spawnSync(
+      'taskset',
+      [
+        '-c',
+        core,
+        process.execPath,
+        'experiments/issue-77-cold-stages.mjs',
+        wav,
+      ],
+      { encoding: 'utf8' }
+    );
+    if (result.status !== 0) {
+      throw result.error ?? new Error(result.stderr);
+    }
+    return result.stdout;
+  });
 }
