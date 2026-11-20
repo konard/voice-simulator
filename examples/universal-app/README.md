@@ -30,6 +30,11 @@ desktop packages, and Capacitor mobile projects.
 - **Copy a voice** (`src/components/VoiceMatch.js`): upload a recording or
   record yourself and the head is fitted to it in a Web Worker
   (`src/engine/match-worker.js`).
+- **Recognise speech**: start the microphone, or choose or drop an audio file.
+  The on-device worker shows provisional text and IPA as it processes the
+  audio, highlights recognised syllables, and labels language changes and
+  detected speech modes. **Speak back** puts the final text and its first
+  language into the synthesis controls and reads it aloud.
 - **Acoustics** (`src/components/AcousticsSettings.js`): microphone
   distance and angle, room preset, or a simulated box of air around the
   head on the 3D tiers.
