@@ -81,6 +81,21 @@ it('compares Mandarin pronunciations one character at a time', () => {
   assert.equal(result.soundWer.referenceLength, 5);
 });
 
+it('counts foreign characters in a Mandarin recognition result', () => {
+  const result = roundTrip('他是中国人。', {
+    ...render,
+    lang: 'zh',
+    recognize: () => ({
+      text: 'abc她是中国人。',
+      ipa: '',
+      languages: [],
+      words: [],
+    }),
+  });
+  assert.equal(result.soundWer.insertions, 3);
+  assert.equal(result.soundWer.distance, 3);
+});
+
 it('measures syllable times', () => {
   const text = 'She sells sea shells.';
   const { ipa, timeline } = synthesize(text, render);

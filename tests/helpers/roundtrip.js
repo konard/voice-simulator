@@ -26,10 +26,31 @@ export function sentenceMark(text) {
 }
 
 function soundTokens(text, lang) {
-  const tokens = textToIpa(text, { lang }).words.map(({ ipa }) => ipa);
-  // Mandarin G2P emits one space-separated IPA syllable per Han character,
-  // including in multi-character words where the context affects pronunciation.
-  return lang === 'zh' ? tokens.flatMap((ipa) => ipa.split(/\s+/u)) : tokens;
+  const source = text.normalize('NFC');
+  const { words } = textToIpa(source, { lang });
+  if (lang !== 'zh') {
+    return words.map(({ ipa }) => ipa);
+  }
+  // Use full-text pronunciations for Han characters, including tone sandhi
+  // across word boundaries. Count unread or foreign characters individually.
+  const contextual = new Map();
+  for (const { ipa, sourceStart, original } of words) {
+    const syllables = ipa.split(/\s+/u);
+    const characters = [...original.matchAll(/\p{Script=Han}/gu)];
+    if (characters.length === syllables.length) {
+      characters.forEach(({ index }, i) => {
+        contextual.set(sourceStart + index, syllables[i]);
+      });
+    }
+  }
+  return Array.from(source.matchAll(/[^\s\p{P}\p{S}]/gu), (match) => {
+    const [character] = match;
+    return (
+      contextual.get(match.index) ??
+      textToIpa(character, { lang }).words[0]?.ipa ??
+      character.toLowerCase()
+    );
+  });
 }
 
 function tone({ ipa }) {
