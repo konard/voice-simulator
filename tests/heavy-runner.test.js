@@ -333,8 +333,9 @@ describe('heavy test isolation', () => {
   // expire with room for checkout, install and upload before the job cap.
   it('lets the heavy step budget expire before the job backstop', () => {
     const workflow = readWorkflow();
-    const budget = Number(
-      workflow.match(/run-with-budget-warning\.sh (\d+) "Heavy checks"/)[1]
+    const budgets = Array.from(
+      workflow.matchAll(/run-with-budget-warning\.sh (\d+) "Heavy checks"/g),
+      (match) => Number(match[1])
     );
     const heavyJob = workflow.slice(
       workflow.indexOf('\n  heavy:\n'),
@@ -342,7 +343,11 @@ describe('heavy test isolation', () => {
     );
     const backstop = Number(heavyJob.match(/timeout-minutes: (\d+)/)[1]);
 
+    expect(budgets).toEqual([5400, 18000]);
+    expect(workflow).toContain('5400 "Heavy checks" taskset -c "$core"');
     expect(backstop).toBeLessThanOrEqual(360);
-    expect(backstop * 60 - budget).toBeGreaterThanOrEqual(20 * 60);
+    expect(backstop * 60 - Math.max(...budgets)).toBeGreaterThanOrEqual(
+      20 * 60
+    );
   });
 });

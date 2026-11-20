@@ -51,13 +51,13 @@ jobs:
   heavy:
     name: Heavy checks
     runs-on: ${{ inputs.suite == 'recognition-performance' && inputs.recognition-runner || 'ubuntu-24.04' }}
-    # The step budget below (18000s = 300 min) owns the deadline; this cap is
-    # the backstop behind it, below the 360-minute limit of hosted runners,
-    # leaving 30 minutes for checkout, install and the artifact upload. See
-    # docs/CI-TIMEOUT-BUDGETS.md.
+    # The step budgets below own the deadlines. This cap is the backstop
+    # behind the longest one (300 minutes), leaving 30 minutes for checkout,
+    # install and artifact upload. See docs/CI-TIMEOUT-BUDGETS.md.
     timeout-minutes: 330
     concurrency:
-      group: check-${{ github.workflow }}-${{ github.ref }}-${{ inputs.suite }}-${{ inputs.recognition-runner }}
+      # Corpus limits and performance runner types can run independently.
+      group: check-${{ github.workflow }}-${{ github.ref }}-${{ inputs.suite == 'recognition' && inputs.limit != '' && format('recognition-{0}', inputs.limit) || inputs.suite == 'recognition-performance' && format('recognition-performance-{0}', inputs.recognition-runner) || inputs.suite }}
       cancel-in-progress: true
     permissions:
       contents: read
@@ -156,18 +156,25 @@ jobs:
         env:
           SUITE: ${{ inputs.suite }}
           LIMIT: ${{ inputs.limit }}
+          # The inherited golden inversion gate names a decision for its
+          # author. Keep the same branch policy as the regular PR tests.
+          BLOCKED_GATES: ${{ inputs.suite == 'recognition' && github.ref_type == 'branch' && github.ref_name != github.event.repository.default_branch && 'warn' || '' }}
           REQUIRE_GPU: ${{ (inputs.suite == 'gpu' || inputs.suite == 'all') && '1' || '' }}
           REQUIRE_WASM: ${{ (inputs.suite == 'performance' || inputs.suite == 'all') && '1' || '' }}
           REQUIRE_CLI: ${{ (inputs.suite == 'performance' || inputs.suite == 'all') && '1' || '' }}
           REQUIRE_THREADS_WASM: ${{ (inputs.suite == 'performance' || inputs.suite == 'all') && '1' || '' }}
         run: |
-          LIMIT_FLAG=''
+          limit_flags=()
           if [[ "$LIMIT" =~ ^[0-9]+$ ]]; then
-            LIMIT_FLAG="--limit $LIMIT"
+            limit_flags=(--limit "$LIMIT")
           fi
-          # LIMIT_FLAG is unquoted on purpose: empty, or a flag and a number.
-          # shellcheck disable=SC2086
-          bash scripts/run-with-budget-warning.sh 18000 "Heavy checks" npm run test:heavy -- --suite "$SUITE" $LIMIT_FLAG
+          command=(npm run test:heavy -- --suite "$SUITE" "${limit_flags[@]}")
+          if [[ "$SUITE" == recognition ]]; then
+            core=$(awk '/^Cpus_allowed_list:/ {split($2, allowed, /[-,]/); print allowed[1]}' /proc/self/status)
+            bash scripts/run-with-budget-warning.sh 5400 "Heavy checks" taskset -c "$core" "${command[@]}"
+          else
+            bash scripts/run-with-budget-warning.sh 18000 "Heavy checks" "${command[@]}"
+          fi
 
       - name: Verify recognition performance targets
         if: inputs.suite == 'recognition-performance'
@@ -208,9 +215,8 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     concurrency:
-      # The suite keeps runs of different suites on one branch from
-      # cancelling each other's gate, as the heavy job's group does.
-      group: check-${{ github.workflow }}-${{ github.ref }}-${{ inputs.suite }}-${{ inputs.recognition-runner }}-pipeline-status
+      # Match the heavy job so independent runs cannot cancel each other's gate.
+      group: check-${{ github.workflow }}-${{ github.ref }}-${{ inputs.suite == 'recognition' && inputs.limit != '' && format('recognition-{0}', inputs.limit) || inputs.suite == 'recognition-performance' && format('recognition-performance-{0}', inputs.recognition-runner) || inputs.suite }}-pipeline-status
       cancel-in-progress: true
     # A status function is required: without one the gate inherits the
     # implicit "every dependency succeeded" condition and is skipped in
