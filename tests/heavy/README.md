@@ -33,6 +33,13 @@ Files are named `<suite>-<topic>.test.js`, for example
 
 `--suite all` (the default) runs every `*.test.js` file of this folder.
 
+The `roundtrip` suite runs [roundtrip-sentences.test.js](roundtrip-sentences.test.js)
+on 80 fixed sentences across four languages, four seeded voice presets and nine
+audio tiers.
+It writes `roundtrip.md` and `roundtrip.json` to the report folder. See the
+[full benchmark report](../../docs/reports/roundtrip.md) for measured rates,
+gate failures and the twenty largest phone errors.
+
 ## Environment
 
 [`scripts/run-heavy.mjs`](../../scripts/run-heavy.mjs) runs the files one

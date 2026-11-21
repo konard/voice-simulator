@@ -47,11 +47,18 @@ export function trieNode(token) {
 
 function contextualChinese() {
   const variants = new Map();
+  const readings = new Map();
   // A phrase may give a character a neutral reading, e.g.
   // 户 in 窗户. Preserve these readings when the corpus segments that phrase.
   for (const phrase of lexiconWords('zh')) {
     for (const { char, pinyin } of hanziToPinyin(phrase)) {
-      const syllable = pinyin && pinyinSyllableToIpa(pinyin);
+      if (!pinyin) {
+        continue;
+      }
+      if (!readings.has(pinyin)) {
+        readings.set(pinyin, pinyinSyllableToIpa(pinyin));
+      }
+      const syllable = readings.get(pinyin);
       if (!syllable || syllable.tone !== 5) {
         continue;
       }

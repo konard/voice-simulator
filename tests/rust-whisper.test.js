@@ -4,6 +4,7 @@ import {
   analyzeFrames,
   findWhisper,
   resample,
+  synthesize,
   trackPitch,
 } from '../src/index.js';
 import { float64View } from '../src/engine/wasm-loader.js';
@@ -26,7 +27,8 @@ import {
 } from '../experiments/issue-72-whisper-robustness.mjs';
 
 function packetOf(samples, frames, pitch, sourceRate) {
-  const packet = new Float64Array(4 + samples.length + frames.count * 4);
+  const rowsEnd = 4 + samples.length + frames.count * 4;
+  const packet = new Float64Array(rowsEnd + frames.count);
   packet.set([
     sourceRate,
     frames.startTime,
@@ -40,6 +42,7 @@ function packetOf(samples, frames, pitch, sourceRate) {
       4 + samples.length + i * 4
     );
   }
+  packet.set(frames.periodicity.subarray(0, frames.count), rowsEnd);
   return packet;
 }
 
@@ -47,7 +50,7 @@ function checkSpans(engine, packet, samples, expected) {
   const {
     vs_alloc: alloc,
     vs_free: free,
-    vs_find_whisper: find,
+    vs_find_whisper_periodic: find,
   } = engine.exports;
   const input = alloc(packet.byteLength);
   const output = alloc(96);
@@ -56,7 +59,7 @@ function checkSpans(engine, packet, samples, expected) {
     const count = find(
       input,
       samples,
-      (packet.length - samples - 4) / 4,
+      (packet.length - samples - 4) / 5,
       output,
       4
     );
@@ -88,8 +91,8 @@ function expectClose(actual, expected, tolerance = 1e-9) {
   expect(Math.abs(actual - expected)).toBeLessThan(tolerance);
 }
 
-function whisperFrameParity(engine, wave, rate) {
-  const frames = analyzeFrames(wave, rate);
+function whisperFrameParity(engine, wave, rate, options) {
+  const frames = analyzeFrames(wave, rate, options);
   const pitch = trackPitch(frames);
   const expected = findWhisper(wave, rate, frames, pitch);
   checkSpans(
@@ -115,6 +118,41 @@ itUnless(noRust)(
     expect(whisperFrameParity(engine, wave, sampleRate).length).toBe(1);
   }
 );
+
+itUnless(noRust)(
+  'rejects a weak periodic gap on telephone speech',
+  async () => {
+    const engine = await loadRustEngine();
+    const { samples, sampleRate } = synthesize('Привет, как дела?', {
+      lang: 'ru',
+      tier: 'telephone',
+      head: 'random',
+      preset: 'male',
+      seed: 1,
+    });
+    expect(
+      whisperFrameParity(engine, samples, sampleRate, { hop: 0.01 })
+    ).toEqual([]);
+  }
+);
+
+itUnless(noRust)('matches interrupted telephone whispers', async () => {
+  const engine = await loadRustEngine();
+  const { samples, sampleRate } = synthesize(
+    '[whisper]Съешь же ещё этих мягких французских булок, да выпей чаю.[/whisper]',
+    {
+      lang: 'ru',
+      tier: 'telephone',
+      head: 'random',
+      preset: 'male',
+      seed: 1,
+      markup: true,
+    }
+  );
+  expect(
+    whisperFrameParity(engine, samples, sampleRate, { hop: 0.01 }).length
+  ).toBe(1);
+});
 
 describe('Rust whisper numerical parity', () => {
   itUnless(noRust)(

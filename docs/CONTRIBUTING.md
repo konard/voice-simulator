@@ -115,6 +115,16 @@ Reports go to `reports/heavy/` (`--out` changes the folder): every test writes
 is never committed. A report that should be kept is copied to `docs/reports/`
 by the issue that owns it.
 
+#### Round-trip recognition
+
+Run `npm run test:heavy -- --suite roundtrip` to measure synthetic speech
+recognition on a fixed corpus of 80 sentences in English, Russian, Hindi and
+Mandarin. The suite tests four presets across nine tiers and reports phone and
+text errors, lexical tone and stress, syllable timing, language, punctuation,
+speech modes and recognition speed. For a shorter run, append `--limit 2` to
+cap each language's sentence sample before testing its tiers and presets.
+The full run produces the [round-trip report](reports/roundtrip.md).
+
 #### Performance tracking
 
 `tests/heavy/performance-tiers.test.js` (issue 31) times every audio tier

@@ -6,10 +6,12 @@ import {
   createFrameAnalyzer,
   createIpaDecoder,
   createRecognizer,
+  findWhisper,
   ipaToText,
   recognize,
   recognizeModes,
   resample,
+  synthesize,
   trackFormants,
   trackPitch,
   whisperTones,
@@ -41,6 +43,54 @@ const sentences = [
   ['zh', '你好世界'],
   ['zh', '请喝茶'],
 ];
+
+it('separates a weak periodic gap from a telephone whisper', () => {
+  const text = 'Привет, как дела?';
+  const { samples, sampleRate, timeline } = synthesize(
+    `${text} [whisper]${text}[/whisper]`,
+    {
+      lang: 'ru',
+      tier: 'telephone',
+      head: 'random',
+      preset: 'male',
+      seed: 1,
+      markup: true,
+    }
+  );
+  const frames = analyzeFrames(samples, sampleRate, { hop: 0.01 });
+  const spans = findWhisper(samples, sampleRate, frames, trackPitch(frames));
+  const change = timeline.words[3].start;
+  expect(spans.length).toBeGreaterThan(0);
+  expect(spans.every(({ start }) => start >= change - 0.1)).toBe(true);
+});
+
+it('keeps interrupted telephone whispers together without bridging periodic speech', () => {
+  const { samples, sampleRate, timeline } = synthesize(
+    '[whisper]Съешь же ещё этих мягких французских булок, да выпей чаю.[/whisper]',
+    {
+      lang: 'ru',
+      tier: 'telephone',
+      head: 'random',
+      preset: 'male',
+      seed: 1,
+      markup: true,
+    }
+  );
+  const frames = analyzeFrames(samples, sampleRate, { hop: 0.01 });
+  const pitch = trackPitch(frames);
+  const runs = whisperSpeechRuns(frames);
+  expect(runs.length).toBe(3);
+  const spans = findWhisper(samples, sampleRate, frames, pitch);
+  expect(spans.length).toBe(1);
+  expect(spans[0].start).toBeLessThan(timeline.words[0].end);
+  expect(spans[0].end).toBeGreaterThan(timeline.words.at(-2).end);
+
+  const periodicity = frames.periodicity.slice();
+  periodicity.fill(1, runs[1].from, runs[1].to);
+  expect(
+    findWhisper(samples, sampleRate, { ...frames, periodicity }, pitch).length
+  ).toBe(2);
+});
 
 describe('whisper recognition', () => {
   for (const lang of new Set(sentences.map(([language]) => language))) {

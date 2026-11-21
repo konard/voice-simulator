@@ -12,10 +12,34 @@ pub extern "C" fn vs_find_whisper(
     out: u32,
     capacity: u32,
 ) -> i32 {
+    find_whisper(input, samples, frames, out, capacity, false)
+}
+
+/// The same packet with one normalized autocorrelation value per frame appended.
+#[no_mangle]
+pub extern "C" fn vs_find_whisper_periodic(
+    input: u32,
+    samples: u32,
+    frames: u32,
+    out: u32,
+    capacity: u32,
+) -> i32 {
+    find_whisper(input, samples, frames, out, capacity, true)
+}
+
+fn find_whisper(
+    input: u32,
+    samples: u32,
+    frames: u32,
+    out: u32,
+    capacity: u32,
+    has_periodicity: bool,
+) -> i32 {
     if samples > 30 * 96000 || frames > 6000 || capacity > 6000 {
         return error::BAD_ARGUMENT;
     }
-    let values = match f64_slice(input, 4 + samples + frames * 4) {
+    let packet_end = 4 + samples + frames * 4;
+    let values = match f64_slice(input, packet_end + frames * u32::from(has_periodicity)) {
         Ok(values) => values.to_vec(),
         Err(code) => return code,
     };
@@ -29,7 +53,7 @@ pub extern "C" fn vs_find_whisper(
         return error::BAD_ARGUMENT;
     }
     let end = 4 + samples as usize;
-    let rows = values[end..]
+    let rows = values[end..packet_end as usize]
         .as_chunks::<4>()
         .0
         .iter()
@@ -48,7 +72,7 @@ pub extern "C" fn vs_find_whisper(
         hop,
         frames: &rows,
     }
-    .find();
+    .find_with_periodicity(&values[packet_end as usize..]);
     if found.len() > capacity as usize {
         return error::BAD_ARGUMENT;
     }
