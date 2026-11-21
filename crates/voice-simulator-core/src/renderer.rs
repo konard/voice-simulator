@@ -1010,7 +1010,12 @@ mod tests {
     fn renders_a_vowel_in_any_chunks() {
         let total = 3000;
         let mut frames = steady_frames(22, 100, &vowel());
-        for (index, frame) in frames.chunks_exact_mut(frame::stride(22)).enumerate() {
+        for (index, frame) in frames
+            .as_chunks_mut::<{ frame::stride(22) }>()
+            .0
+            .iter_mut()
+            .enumerate()
+        {
             frame[frame::F0] += index as f64;
         }
         let mut whole = Renderer::new(&configuration(total)).unwrap();
