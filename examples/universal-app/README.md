@@ -78,7 +78,7 @@ To check microphone copying with a synthetic 20-second recording at normal
 speed and 6× CPU throttling, run from the repository root:
 
 ```bash
-npm install --no-save --package-lock=false playwright@1.59.1
+npm ci
 npx playwright install chromium
 node scripts/check-app-copy.mjs
 ```
