@@ -124,7 +124,10 @@ To time five fox sentences per quality level, build WebAssembly and run
 60 seconds of synthetic speech. The default `ubuntu-24.04` runner gates the
 cold one-core CLI at 0.25 RTF on 8 kHz speech. The `ubuntu-24.04-arm` runner
 checks scaling on four physical cores and also reports cold one-core timings.
-Both compare the CLI text across engines.
+The scaling check runs three fresh CLI processes per thread count on the
+same 60-second WAV and compares median times at `--level high --lang en`.
+It verifies identical JSON across runs. Both runners compare the cold CLI
+text across engines.
 
 ## Speech-mode recognition
 

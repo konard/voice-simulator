@@ -7,6 +7,7 @@ import { it as alwaysIt } from 'test-anywhere';
 import { measureSingleCoreRecognition } from '../../experiments/issue-77-single-core.mjs';
 import {
   duration,
+  measureCliWorkerScaling,
   sampleRate as rate,
   recognitionFixture,
   timeRecognition,
@@ -18,7 +19,6 @@ import { writeReport } from './helpers/report.js';
 const it = itUnless(noRust);
 const cores = availableParallelism();
 const physicalCores = linuxCoreCount();
-const limits = { js: { 1: {} }, rust: { 1: {} } };
 const rows = [];
 
 function linuxCoreCount() {
@@ -94,8 +94,6 @@ it('times engine, quality level and worker count on 60 seconds of speech', async
         });
         rows.push({ engine, level, threads, elapsed, cpu });
         report();
-        const byThread = (limits[engine][threads] ??= {});
-        byThread[level] = elapsed;
         assert.ok(result.ipa.length > 0);
       }
     }
@@ -108,18 +106,39 @@ const verifyScaling = itUnless(
     `needs four cores, found ${physicalCores ?? cores} (${physicalCores ? 'physical' : 'logical'})`
 );
 verifyScaling(
-  'Rust high recognition with four workers is at least 1.8 times faster',
+  'the Rust CLI at high quality runs at least 1.8 times faster with four workers',
   () => {
-    const serial = limits.rust[1].high;
-    const parallel = limits.rust[4]?.high;
-    assert.ok(
-      serial && parallel,
-      'run the recognition performance matrix before checking scaling'
+    const rows = measureCliWorkerScaling();
+    const median = (workers) =>
+      rows
+        .filter(({ threads }) => threads === workers)
+        .map(({ elapsed }) => elapsed)
+        .sort((a, b) => a - b)[1];
+    const serial = median(1);
+    const parallel = median(4);
+    const speedup = serial / parallel;
+    writeReport(
+      'performance-recognition-cli-scaling',
+      [
+        '# Recognition CLI scaling at high quality',
+        '',
+        `Fresh CLI processes decode ${duration} s of English WAV audio using Rust.`,
+        `The median times were ${serial.toFixed(3)} s with one thread and ${parallel.toFixed(3)} s with four threads (${speedup.toFixed(2)}×).`,
+        '',
+        '| Threads | Seconds |',
+        '| ---: | ---: |',
+        ...rows.map(
+          ({ threads, elapsed }) => `| ${threads} | ${elapsed.toFixed(3)} |`
+        ),
+      ].join('\n'),
+      { cores, physicalCores, duration, serial, parallel, speedup, rows }
     );
-    assert.ok(
-      serial / parallel >= 1.8,
-      `four-worker speedup was ${(serial / parallel).toFixed(2)}x`
+    assert.equal(
+      new Set(rows.map(({ digest }) => digest)).size,
+      1,
+      'CLI JSON differs'
     );
+    assert.ok(speedup >= 1.8, `four-worker speedup was ${speedup.toFixed(2)}x`);
   }
 );
 

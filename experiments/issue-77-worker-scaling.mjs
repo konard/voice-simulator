@@ -1,9 +1,14 @@
 /** Compare one and four Rust workers on the 60-second acceptance fixture. */
-import { availableParallelism } from 'node:os';
+import { execFileSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { availableParallelism, tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { performance } from 'node:perf_hooks';
 import { pathToFileURL } from 'node:url';
 import { recognizeAsync, synthesize } from '../src/index.js';
 import { resample } from '../src/audio/resample.js';
+import { encodeWav } from '../src/audio/wav.js';
 
 export const sampleRate = 16000;
 export const duration = 60;
@@ -32,6 +37,47 @@ export async function timeRecognition(samples, options) {
   const elapsed = (performance.now() - started) / 1000;
   const { user, system } = process.cpuUsage(startCpu);
   return { elapsed, cpu: (user + system) / 1e6, result };
+}
+
+export function measureCliWorkerScaling(samples = recognitionFixture()) {
+  const folder = mkdtempSync(join(tmpdir(), 'voice-simulator-workers-'));
+  try {
+    const wav = join(folder, 'speech.wav');
+    writeFileSync(
+      wav,
+      encodeWav(samples, sampleRate, { bitDepth: 32, float: true })
+    );
+    const rows = [];
+    for (const order of [
+      [1, 4],
+      [4, 1],
+      [1, 4],
+    ]) {
+      for (const threads of order) {
+        const start = performance.now();
+        const json = execFileSync(process.execPath, [
+          'bin/voice-simulator.js',
+          'recognize',
+          wav,
+          '--engine',
+          'rust',
+          '--level',
+          'high',
+          '--lang',
+          'en',
+          '--json',
+          '--threads',
+          String(threads),
+        ]);
+        const elapsed = (performance.now() - start) / 1000;
+        const digest = createHash('sha256').update(json).digest('hex');
+        rows.push({ threads, elapsed, digest });
+      }
+    }
+    return rows;
+  } finally {
+    rmSync(folder, { recursive: true, force: true });
+  }
 }
 
 if (
