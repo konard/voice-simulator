@@ -91,6 +91,7 @@ export function createSession(
     sampleRate,
     level: settings.level,
     languages: settings.languages,
+    segments: settings.segments,
     voice: DEFAULT_HEAD,
     deterministic: !realtime,
   });
@@ -444,7 +445,9 @@ export function createSession(
         scheduler.cancel();
         recognizer.discardVoiceChange();
         const recognition =
-          at < sampleRate * 0.05 ? emptyRecognition(1) : recognizer.flush();
+          at < sampleRate * 0.05
+            ? emptyRecognition(1, settings.segments)
+            : recognizer.flush();
         flushed = { ...recognition, voice: file };
         ended = true;
       }
@@ -487,6 +490,7 @@ export function copyVoice(samples, sampleRate, options = {}) {
     sampleRate,
     window: Math.max(1, samples.length) / sampleRate,
     maxIterations: 12,
+    segments: true,
     realtime: false,
   });
   session.push(

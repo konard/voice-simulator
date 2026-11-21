@@ -213,7 +213,7 @@ export function createRecognizer(options = {}) {
     pending = undefined;
     level = settings.level === 'auto' ? 'medium' : settings.level;
     phrase = createPhraseDecoder(sampleRate, settings, level);
-    committed = emptyRecognition(nbest);
+    committed = emptyRecognition(nbest, settings.segments);
     offset = 0;
     nextPartial = 1;
     reportSyllables = createSyllableEvents(emit);
@@ -228,7 +228,9 @@ export function createRecognizer(options = {}) {
 
   function read(decoded, size, final) {
     const signal = phrase.buffer.subarray(0, size);
-    const readSettings = final ? settings : { ...settings, nbest: 1 };
+    const readSettings = final
+      ? settings
+      : { ...settings, nbest: 1, segments: false };
     // A test can supply snapshot IPA while the decoder maintains live timing.
     const reading = settings.stages.audioToIpa
       ? decodeRecognitionAudio(
@@ -277,12 +279,19 @@ export function createRecognizer(options = {}) {
         committed.words.length
       );
       aggregate(committed, absolute, nbest - 1);
-      const { ipa, text, languages, words, modes } = translated(
+      const { ipa, text, languages, words, modes, segments } = translated(
         answer,
         offset / sampleRate,
         0
       );
-      emit('final', { ipa, text, languages, words, modes });
+      emit('final', {
+        ipa,
+        text,
+        languages,
+        words,
+        modes,
+        ...(segments && { segments }),
+      });
     }
     offset += size;
   }

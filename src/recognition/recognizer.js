@@ -66,6 +66,7 @@ export function recognitionSettings(options) {
     languages = Object.keys(LANGUAGES),
     voice = null,
     nbest = 1,
+    segments = false,
     rescoring = false,
     modes = true,
     includeModeLabels = modes,
@@ -87,6 +88,7 @@ export function recognitionSettings(options) {
     languages: [...languages],
     voice,
     nbest,
+    segments,
     rescoring,
     modes,
     includeModeLabels,
@@ -174,7 +176,7 @@ export function decodeRecognitionAudio(
   return { decoded, input, rate };
 }
 
-export function emptyRecognition(nbest) {
+export function emptyRecognition(nbest, segments = false) {
   const result = {
     ipa: '',
     text: '',
@@ -183,7 +185,13 @@ export function emptyRecognition(nbest) {
     modes: [],
     voice: null,
   };
-  return nbest > 1 ? { ...result, alternatives: [] } : result;
+  if (nbest > 1) {
+    result.alternatives = [];
+  }
+  if (segments) {
+    result.segments = [];
+  }
+  return result;
 }
 
 function timedPhones(decoded) {
@@ -318,7 +326,7 @@ export function recognizeDecoded(
   final
 ) {
   if (!decoded.ipa) {
-    return emptyRecognition(settings.nbest);
+    return emptyRecognition(settings.nbest, settings.segments);
   }
   if (settings.rescoring && (final === 'batch' || final === 'stream')) {
     decoded = rescoreHypotheses(decoded, {
@@ -360,6 +368,16 @@ export function recognizeDecoded(
   };
   if (settings.nbest > 1) {
     result.alternatives = alternativesFor(decoded, primary, settings, level);
+  }
+  if (settings.segments) {
+    result.segments = (decoded.segments ?? [])
+      .filter((segment) => segment.kind !== 'pause')
+      .map(({ ipa, start, end, confidence }) => ({
+        ipa,
+        start,
+        end,
+        confidence,
+      }));
   }
   return result;
 }
@@ -437,8 +455,8 @@ function pieces(samples, sampleRate, options, settings) {
   });
 }
 
-function merge(results, jobs, nbest) {
-  const result = emptyRecognition(nbest);
+function merge(results, jobs, { nbest, segments }) {
+  const result = emptyRecognition(nbest, segments);
   for (const [i, part] of results.entries()) {
     aggregate(
       result,
@@ -470,7 +488,7 @@ export function recognize(samples, sampleRate, options = {}) {
     ? merge(
         jobs.map((job) => runPiece(job, settings.kernels)),
         jobs,
-        settings.nbest
+        settings
       )
     : serial(samples, sampleRate, settings, level);
 }
@@ -518,7 +536,7 @@ export async function recognizeAsync(samples, sampleRate, options = {}) {
         (job) => runPiece(job, kernels),
         lexicons.length ? { lexicons } : undefined
       );
-      return merge(results, jobs, settings.nbest);
+      return merge(results, jobs, settings);
     }
     if (
       pool.size === 1 ||
