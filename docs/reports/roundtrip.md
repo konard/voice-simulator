@@ -316,6 +316,38 @@ phone classes and all cost weights.
 | hi | 12 | 2 | 3 | 4 | 7 |
 | zh | 13 | 0 | 6 | 8 | 12 |
 
+### Rendered vowel calibration
+
+`node experiments/issue-75-inversion-calibration.mjs --wideband --held-out`
+compares two ways to bring the acoustic codebook closer to the measured
+waveguide output. One subtracts the spectral difference between an analytic
+neutral tract and a rendered neutral tract. The other scores voiced frames
+against waveguide renders of the existing vowel seeds at five pitches.
+The second method applies only while the recent spectrum is stable.
+
+At 16 kHz the baseline recovered 7 of 31 steady vowels in both presets.
+Rendered references with 40 ms of continuous voicing and at most 16 dB² of
+spectral drift recovered 31 of 31 male vowels and 30 of 31 female vowels.
+An 80 ms window and an 8 dB² limit recovered 29 of 31 in each preset.
+
+The sentence probe uses four initial and four held-out sentences, the
+acoustic graph with all four languages enabled, and no automatic whisper
+detection. The counts below are edits divided by reference phone counts
+before transcription. Omit `--wideband` to run the telephone probe.
+
+| Method | Wideband initial | Wideband held-out | Telephone initial | Telephone held-out |
+| --- | ---: | ---: | ---: | ---: |
+| Baseline | 46/54 | 63/79 | 43/54 | 70/79 |
+| Half of neutral response difference | 42/54 | 64/79 | 44/54 | 66/79 |
+| Rendered vowels, 40 ms and 16 dB² | 47/54 | 72/79 | 50/54 | 69/79 |
+| Rendered vowels, 80 ms and 8 dB² | 44/54 | 66/79 | 49/54 | 63/79 |
+
+Every tested rendered-reference setting increased errors on the held-out
+wideband sentences. The steady vowels had 300 ms targets. The shorter
+vowels and transitions in running speech need a model of how the spectrum
+changes as the articulators move. The measured calibration settings remain
+in the experiment.
+
 ## Telephone whisper correction
 
 In the Russian smoke case, the detector found a span at 0.49–0.85 s. Its
@@ -336,6 +368,14 @@ took 22.7 seconds wall time. English and Mandarin returned the same results
 as the baseline. Russian recovered the top language and lowered its sound
 word errors from 4 to 3, while phone errors increased from 7 to 8 of 13.
 All three cases missed the 10% phone and zero sound-word error gates.
+
+`node experiments/issue-75-whisper-evidence.mjs --mode-cases` compared
+the front-end detector with the spans returned by the public recognizer
+for the four whispered telephone mode cases. The Russian case returned
+spans at 0.04–3.02 s and 4.32–5.72 s for a planned span at 0.06–6.22 s.
+The longer recognition span covered 48.1% of the planned span, below the
+50% overlap requirement. The speech run between those spans had no
+tracked pitch and a band ratio of −31.15 dB, below the −26.63 dB threshold.
 
 ## Limited local benchmark
 

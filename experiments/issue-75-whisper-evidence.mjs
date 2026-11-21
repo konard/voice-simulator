@@ -1,11 +1,13 @@
-/** Inspect the detector's evidence on voiced and whispered 8 kHz speech. */
+/** Inspect the detector's evidence on synthetic narrow-band speech. Unlicense. */
 import { energyRatio } from '../src/analysis/mode-features.js';
 import { sampleState } from '../src/articulation/tract-shape.js';
-import { synthesize } from '../src/index.js';
+import { resample } from '../src/audio/resample.js';
+import { levelForTier, recognize, synthesize } from '../src/index.js';
 import {
   decodeFrontEnd,
   decoderSettings,
 } from '../src/recognition/decode-pipeline.js';
+import { RECOGNITION_LEVELS } from '../src/recognition/recognizer.js';
 import { whisperSpeechRuns } from '../src/recognition/whisper.js';
 import { sentences } from '../tests/helpers/roundtrip.js';
 
@@ -42,11 +44,17 @@ function evidence(audio, frames, pitch, span) {
 }
 
 const wholeCorpus = process.argv.includes('--corpus');
+const modeCases = process.argv.includes('--mode-cases');
+const tier = process.argv.includes('--narrowband') ? 'narrowband' : 'telephone';
+const level = levelForTier(tier);
+const options = RECOGNITION_LEVELS[level];
 const cases = wholeCorpus
   ? Object.entries(sentences).flatMap(([lang, texts]) =>
       texts.map((_, index) => [lang, index])
     )
-  : Object.entries({ en: 17, ru: 1, hi: 1, zh: 1 });
+  : modeCases
+    ? Object.keys(sentences).map((lang) => [lang, 0])
+    : Object.entries({ en: 17, ru: 1, hi: 1, zh: 1 });
 
 for (const [lang, index] of cases) {
   const text = sentences[lang][index];
@@ -61,27 +69,42 @@ for (const [lang, index] of cases) {
           : `${text} [whisper]${text}[/whisper]`;
     const audio = synthesize(input, {
       lang,
-      tier: 'telephone',
+      tier,
       preset: 'male',
       seed: 1,
       head: 'random',
       markup: true,
     });
-    const { samples, sampleRate } = audio;
-    const settings = decoderSettings(sampleRate, { hop: 0.01, beam: 8 });
+    const sampleRate = Math.min(audio.sampleRate, options.rate);
+    const samples =
+      sampleRate < audio.sampleRate
+        ? resample(audio.samples, audio.sampleRate, sampleRate)
+        : audio.samples;
+    const settings = decoderSettings(sampleRate, options);
     const { frames, pitch, whisperSpans } = decodeFrontEnd(
       samples,
       sampleRate,
       settings
     );
     const details = (spans) =>
-      spans.map((span) => evidence(audio, frames, pitch, span));
+      spans.map((span) =>
+        evidence({ ...audio, samples, sampleRate }, frames, pitch, span)
+      );
+    const heard =
+      modeCases && mode === 'whisper'
+        ? recognize(audio.samples, audio.sampleRate, { level })
+        : null;
     console.log(
       JSON.stringify({
         lang,
+        tier,
+        sampleRate,
         sentence: index + 1,
         mode,
         recognized: details(whisperSpans),
+        ...(heard && {
+          publicWhispers: heard.modes.filter((m) => m.notation === 'W'),
+        }),
         planned: details(audio.plan.modes),
         speechRuns: details(whisperSpeechRuns(frames)),
       })
