@@ -21,6 +21,10 @@ const vendorChunks = [
   // src/g2p/lexicon/ since issue 47.
   [/[\\/]src[\\/]g2p[\\/][a-z]+-dict\.js$/, 'g2p-dict'],
   [/[\\/]src[\\/]g2p[\\/]lexicon[\\/][a-z]+\.js$/, 'g2p-dict'],
+  [
+    /[\\/]src[\\/]recognition[\\/]data[\\/]simulated-(?:whisper-)?phones\.js$/,
+    'recognition-phones',
+  ],
   // Standalone numerical kernels have no dependencies on the app or workers.
   [
     /[\\/]src[\\/]recognition[\\/](fft|lpc|pitch|pitch-rust|inverse-dsp|wasm-memory)\.js$/,
