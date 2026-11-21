@@ -165,3 +165,10 @@ numbers come from its own copy of mulberry32, the generator of
 `src/random.js`; a session's seed is drawn with `crypto.getRandomValues` and
 stored in the result, so the order of every listener's trials can be
 replayed with `ListeningTest.planSession(config, seed)`.
+
+### Recording copy studies
+
+Run `node scripts/make-copy-stimuli.mjs` to build the two studies from the public-domain golden recordings. Serve `reports/copy-stimuli/` over HTTP and open either study directory. Both use the same harness as the quality tests.
+
+- `copy-abx` compares the original and simulated speech for ten recordings.
+- `copy-similarity` uses the MUSHRA interface to rate speaker identity. The hidden reference is another utterance by the same reader. Other conditions are the copy, the same score rendered with the default voice, and a real recording of another reader in the same language.

@@ -68,6 +68,30 @@ it('returns the fixed result shape', () => {
   assert.equal(result.voice, null);
 });
 
+it('includes timed phonemes only when requested', () => {
+  const segments = [
+    { ipa: 'h', start: 0.1, end: 0.15, confidence: 0.8 },
+    { ipa: '', start: 0.15, end: 0.2, confidence: 1, kind: 'pause' },
+    { ipa: 'ə', start: 0.2, end: 0.4, confidence: 0.7 },
+  ];
+  const options = {
+    ...OPTIONS,
+    segments: true,
+    stages: { ...OPTIONS.stages, audioToIpa: () => ({ ipa: IPA, segments }) },
+  };
+  const samples = new Float32Array(RATE / 2);
+  const batch = recognize(samples, RATE, options);
+  const { events, result } = capture(samples, 1024, options);
+  const expected = [segments[0], segments[2]];
+  assert.deepEqual(Object.keys(batch), [...KEYS, 'segments']);
+  assert.deepEqual(batch.segments, expected);
+  assert.deepEqual(result.segments, expected);
+  assert.deepEqual(
+    events.find(({ type }) => type === 'final')?.event.segments,
+    expected
+  );
+});
+
 it('uses the level rate, hop and beam and forwards spans and alternatives', () => {
   const spans = [{ language: 'en', from: 0, to: 4 }];
   const alternatives = [

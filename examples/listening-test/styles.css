@@ -114,6 +114,21 @@ button.next {
   border-right: 1px solid var(--muted);
 }
 
+.mushra .scale.speaker {
+  grid-template-columns: 6.5rem repeat(2, 1fr) 2.5rem;
+}
+
+.mushra .scale.speaker span:first-child {
+  padding-left: 0.4rem;
+  text-align: left;
+}
+
+.mushra .scale.speaker span:last-child {
+  border-left: 0;
+  padding-right: 0.4rem;
+  text-align: right;
+}
+
 .mushra input[type='range'] {
   width: 100%;
 }

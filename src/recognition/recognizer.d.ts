@@ -26,6 +26,8 @@ export interface RecognitionOptions extends RecognitionEngineOptions {
   voice?: HeadConfig | null;
   /** Maximum number of results including the primary result, from 1 to 10. */
   nbest?: number;
+  /** Include the decoded phonemes and their times in seconds. Defaults to false. */
+  segments?: boolean;
   rescoring?: boolean;
   modes?: boolean;
   /** Detect whisper, disable it, or supply spans in seconds from input start. */
@@ -57,6 +59,13 @@ export interface RecognizedWord {
   syllables: RecognizedSyllable[];
 }
 
+export interface RecognizedSegment {
+  ipa: string;
+  start: number;
+  end: number;
+  confidence: number;
+}
+
 export interface RecognitionResult {
   ipa: string;
   text: string;
@@ -64,6 +73,7 @@ export interface RecognitionResult {
   words: RecognizedWord[];
   modes: ModeSpan[];
   voice: null;
+  segments?: RecognizedSegment[];
   alternatives?: { text: string; ipa: string; confidence: number }[];
 }
 
@@ -72,7 +82,7 @@ export interface RecognitionEvents {
   partial: Pick<RecognitionResult, 'words' | 'ipa' | 'text'>;
   final: Pick<
     RecognitionResult,
-    'words' | 'ipa' | 'text' | 'languages' | 'modes'
+    'words' | 'ipa' | 'text' | 'languages' | 'modes' | 'segments'
   >;
   error: Error;
 }

@@ -31,6 +31,7 @@
     { label: 'Good', from: 60, to: 80 },
     { label: 'Excellent', from: 80, to: 100 },
   ];
+  const SPEAKER_SCALE = ['0 · Different speaker', '100 · Same speaker'];
 
   const TEXT = {
     consent:
@@ -43,6 +44,9 @@
       'Listen to the reference and to every version, as often as you like. ' +
       'Rate how close each version sounds to the reference. ' +
       'One of the versions is the reference itself. Rate it 100.',
+    speaker:
+      'Compare the speaker in each clip with the reference speaker. ' +
+      'Rate speaker identity from 0 to 100, regardless of the words or audio quality.',
     abx:
       'A and B are two different versions. X is one of them. ' +
       'Listen and choose which one X is.',
@@ -136,6 +140,9 @@
       errors.push(
         `${name}: MUSHRA trial with ${count} conditions, more than ${MAX_CONDITIONS}`
       );
+    }
+    if (trial.rating !== undefined && trial.rating !== 'speaker') {
+      errors.push(`${name}: unsupported MUSHRA rating "${trial.rating}"`);
     }
     return errors;
   }
@@ -233,6 +240,7 @@
         type: 'mushra',
         id: trial.id,
         text: trial.text ?? null,
+        ...(trial.rating && { rating: trial.rating }),
         reference: trial.reference ?? trial.conditions.reference,
         conditions: names.map((name, index) => ({
           label: String.fromCharCode(65 + index),
@@ -438,7 +446,7 @@
     };
   }
 
-  function mushraRow(ui, condition, onPlay, onRate) {
+  function mushraRow(ui, condition, onPlay, onRate, keepTime) {
     const value = ui.el('output', { class: 'value', text: '0' });
     const slider = ui.el('input', {
       type: 'range',
@@ -453,7 +461,12 @@
       },
     });
     return ui.el('div', { class: 'row' }, [
-      ui.playButton(`Play ${condition.label}`, condition.file, onPlay, true),
+      ui.playButton(
+        `Play ${condition.label}`,
+        condition.file,
+        onPlay,
+        keepTime
+      ),
       slider,
       value,
     ]);
@@ -461,6 +474,7 @@
 
   /** MUSHRA screen (BS.1534-3); `done(record)` when Next is pressed. */
   function showMushra(ui, trial, progress, done) {
+    const speaker = trial.rating === 'speaker';
     const shown = Date.now();
     const names = trial.conditions.map((condition) => condition.name);
     const plays = Object.fromEntries(names.map((name) => [name, 0]));
@@ -489,23 +503,28 @@
         (rating) => {
           ratings[condition.name] = rating;
           update();
-        }
+        },
+        !speaker
       )
     );
     const scale = ui.el(
       'div',
-      { class: 'scale', 'aria-hidden': 'true' },
-      SCALE.map((band) =>
-        ui.el('span', { text: `${band.label} (${band.from}-${band.to})` })
-      )
+      { class: speaker ? 'scale speaker' : 'scale', 'aria-hidden': 'true' },
+      (speaker
+        ? SPEAKER_SCALE
+        : SCALE.map(({ label, from, to }) => `${label} (${from}-${to})`)
+      ).map((text) => ui.el('span', { text }))
     );
     ui.show(
       progress,
-      ui.el('h2', { text: 'Rate the versions' }),
-      ui.el('p', { class: 'instruction', text: TEXT.mushra }),
+      ui.el('h2', { text: speaker ? 'Same speaker?' : 'Rate the versions' }),
+      ui.el('p', {
+        class: 'instruction',
+        text: speaker ? TEXT.speaker : TEXT.mushra,
+      }),
       trial.text ? ui.el('p', { class: 'sentence', text: trial.text }) : null,
       ui.el('div', { class: 'controls' }, [
-        ui.playButton('Reference', trial.reference, null, true),
+        ui.playButton('Reference', trial.reference, null, !speaker),
         ui.el('button', {
           type: 'button',
           text: 'Stop',

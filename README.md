@@ -626,19 +626,12 @@ Resume with `createVoiceFitter({ state: JSON.parse(savedState) })` or pass `stat
 
 ### Analysis front end
 
-`createFrameAnalyzer(sampleRate, options)` turns sound into analysis frames
-while it arrives; it is the first stage of reverse simulation (Roadmap 4).
-It resamples to a working rate (`workingRate`: the largest of 8000, 11025
-and 16000 Hz not above the input rate; it never up-samples) with
-`createResampler`, which matches `resample()` within 1e-6. Every 5 ms (or
-10 ms) it measures a 25 ms frame: `energy`, `zcr`, `gravity`, `tilt`, six
-Liu (1996) `band` levels, `periodicity` (Boersma 1993), 24 log `mel`
-energies, 13 `cepstrum` coefficients, LPC `lpc`, `reflection` and `gain`
-(Burg, autocorrelation or covariance method), the `noise` floor (minimum
-statistics, Martin 2001) and a `speech` flag with 40 ms hangover. The
-defaults are `FRONTEND_DEFAULTS`. All rows live in one frame set of flat
-`Float32Array`s (`speech` is a `Uint8Array`) with `capacity` rows allocated
-once; nothing is allocated per frame.
+`createFrameAnalyzer(sampleRate, options)` is the first stage of reverse simulation (Roadmap 4). It turns incoming audio into
+analysis frames. Its `workingRate` is the largest of 8000, 11025 and 16000 Hz at or below the input rate. It uses `createResampler`,
+which matches `resample()` within 1e-6. Every 5 or 10 ms it measures a 25 ms frame for `energy`, `zcr`, `gravity`, `tilt`, six Liu (1996)
+`band` levels, `periodicity` (Boersma 1993), 24 log `mel` energies and 13 `cepstrum` coefficients. It also measures LPC `lpc`, `reflection`
+and `gain` (Burg, autocorrelation or covariance), the `noise` floor (minimum statistics, Martin 2001) and a `speech` flag with 40 ms
+hangover. See `FRONTEND_DEFAULTS`. Flat `Float32Array`s (`Uint8Array` for `speech`) allocate `capacity` rows once for all frames.
 
 ```js
 import { analyzeFrames, createFrameAnalyzer } from 'voice-simulator';
@@ -665,9 +658,15 @@ Measured with `node experiments/issue-58-rtf.mjs` (10 s of speech, one thread): 
 
 `inverseFilter(frames, { pitch: trackPitch(frames) })` estimates vocal-fold flow, closure times, Rd/OQ/NAQ, H1-H2, HNR and CPP on finished speech. See the [batch source-analysis API and limits](docs/INVERSE-FILTER.md).
 
+## Copying a voice
+
+Copy only your own voice, a voice you have permission to copy, or a public-domain recording. See [Not goals](docs/VISION.md#not-goals).
+
+Run `voice-simulator copy speech.wav -o copy.wav --score speech-score.json` to save simulated audio and its editable IPA score. See the [copy synthesis guide](docs/COPY-SYNTHESIS.md) for replay and options.
+
 ## Recognition (speech to text)
 
-`recognize` accepts mono samples and returns IPA, text, timed words and syllables, language shares, and speech modes. See the [recognition API and examples](docs/RECOGNIZER.md).
+`recognize` accepts mono samples and returns IPA, text, timed words and syllables, language shares, and speech modes. Pass `segments: true` to `recognize` or `createRecognizer` to include timed phonemes as `{ ipa, start, end, confidence }`. Times are in seconds. See the [recognition API and examples](docs/RECOGNIZER.md).
 
 ### Recognition engines and workers
 
