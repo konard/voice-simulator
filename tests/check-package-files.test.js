@@ -3,7 +3,10 @@
  * engine, its recognition data and the worker.
  */
 
+import { readFileSync } from 'node:fs';
+import { URL } from 'node:url';
 import { describe, it, expect } from 'test-anywhere';
+import { parse } from 'yaml';
 
 import {
   REQUIRED_FILES,
@@ -29,6 +32,21 @@ describe('check-package-files', () => {
   it('accepts a listing with every required file', () => {
     expect(missingFiles(listing([...REQUIRED_FILES, 'src/index.js']))).toEqual(
       []
+    );
+  });
+
+  it('uploads every generated engine file using literal paths', () => {
+    const workflow = parse(
+      readFileSync(
+        new URL('../.github/workflows/release.yml', import.meta.url),
+        'utf8'
+      )
+    );
+    const upload = workflow.jobs.rust.steps.find(
+      (step) => step.with?.name === 'voice-simulator-wasm'
+    );
+    expect(upload.with.path.trim().split(/\s+/).sort()).toEqual(
+      REQUIRED_FILES.filter((path) => !path.endsWith('.js')).sort()
     );
   });
 
