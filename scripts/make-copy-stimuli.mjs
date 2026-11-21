@@ -23,13 +23,14 @@ const { values } = parseArgs({
   options: {
     out: { type: 'string', default: 'reports/copy-stimuli' },
     engine: { type: 'string', default: 'auto' },
+    tier: { type: 'string' },
   },
 });
 const engine = await createEngine({ engine: values.engine, threads: 1 });
 const items = new Map(loadGolden().map((item) => [item.id, item]));
 const encoded = new Map();
 const sampleRate = STIMULUS.sampleRate;
-const options = { engine, sampleRate, seed: 1 };
+const options = { engine, sampleRate, seed: 1, tier: values.tier };
 const defaultVoice = saveVoice(DEFAULT_HEAD);
 const scores = new Map();
 

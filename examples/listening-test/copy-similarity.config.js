@@ -13,8 +13,8 @@ globalThis.LISTENING_TEST_CONFIG = {
   ].map(([id, reference, anchor]) => ({
     type: 'mushra',
     id,
-    text: 'Same speaker?',
-    reference: `stimuli/original-${reference}.wav`,
+    rating: 'speaker',
+    reference: `stimuli/original-${id}.wav`,
     conditions: {
       reference: `stimuli/original-${reference}.wav`,
       copy: `stimuli/copy-${id}.wav`,

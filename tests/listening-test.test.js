@@ -59,6 +59,29 @@ const CONFIG = {
 const near = (actual, expected, tolerance) =>
   expect(Math.abs(actual - expected) <= tolerance).toBe(true);
 
+it('loads the recording copy studies in the harness', () => {
+  const abx = loadConfig(path.join(TEST_DIR, 'copy-abx.config.js'));
+  const similarity = loadConfig(
+    path.join(TEST_DIR, 'copy-similarity.config.js')
+  );
+  expect(ListeningTest.validateConfig(abx)).toEqual([]);
+  expect(ListeningTest.validateConfig(similarity)).toEqual([]);
+  expect(ListeningTest.planSession(abx, 7).trials.length).toBe(10);
+  for (const trial of ListeningTest.planSession(similarity, 7).trials) {
+    expect(trial.rating).toBe('speaker');
+    const byName = Object.fromEntries(
+      trial.conditions.map(({ name, file }) => [name, file])
+    );
+    expect(Object.keys(byName).sort()).toEqual([
+      'anchor',
+      'copy',
+      'default',
+      'reference',
+    ]);
+    expect(byName.reference === trial.reference).toBe(false);
+  }
+});
+
 function mushraResult(listener, ratings) {
   return {
     schema: 1,
