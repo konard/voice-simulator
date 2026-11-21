@@ -278,6 +278,8 @@ of 6 sound-word edits. Russian made 8 of 13 and 3 of 3, and Mandarin made
 13 of 13 and 11 on 5 reference words. Only Russian returned the correct
 top language. The nine hosted runtime jobs reproduced these edit counts.
 [Checks and release](https://github.com/konard/voice-simulator/actions/runs/44942171855).
+The same one-core command on `7948edf` took 21.63 seconds wall time and
+19.60 seconds user CPU time. All three accuracy assertions still failed.
 
 ## Decoder diagnosis
 
@@ -434,6 +436,29 @@ wideband sentences. The steady vowels had 300 ms targets. The shorter
 vowels and transitions in running speech need a model of how the spectrum
 changes as the articulators move. The measured calibration settings remain
 in the experiment.
+
+### Inversion within the tier passband
+
+`node experiments/issue-75-band-limited-inversion.mjs` tests whether the tier's
+band limit or the source's spectral tilt explains the poor fit. Use
+`--wideband` for the 16 kHz probe. It searches the same codebook exhaustively
+with the production score, then limits scoring to the tier passband, removes
+the average level difference, and optionally fits out tilt in dB per octave. All
+four languages remain eligible during decoding. The synthesis IPA enters
+only when counting edits, and automatic whisper detection is disabled to
+isolate the voiced decoder.
+
+| Inversion query | Telephone male | Telephone female | Wideband male | Wideband female |
+| --- | ---: | ---: | ---: | ---: |
+| Production shortlist | 43/54 | 66/79 | 44/54 | 67/79 |
+| Exhaustive, all measured bands | 44/54 | 69/79 | 48/54 | 66/79 |
+| Exhaustive, within the passband | 48/54 | 67/79 | 48/54 | 62/79 |
+| Exhaustive, within the passband with tilt removed | 43/54 | 64/79 | 46/54 | 67/79 |
+
+The male and female columns use different sets of four sentences. The lowest
+telephone count for the held-out female sentences improved by two edits out
+of 79. That setting increased wideband male errors by two. Every setting
+left more than 60% phone error in all four columns.
 
 ## Telephone whisper correction
 
