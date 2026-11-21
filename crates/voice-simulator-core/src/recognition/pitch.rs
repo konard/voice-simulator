@@ -153,6 +153,25 @@ pub fn refine(
     refine_cached(frame, window_correlation, energy, centre, radius, &mut [])
 }
 
+fn correlation_four(frame: &[f64], lag: usize) -> [f64; 4] {
+    let common = frame.len() - lag - 3;
+    let mut sums = [0.0; 4];
+    // Keep independent accumulators in flight while sharing the first
+    // operand. Each lag keeps the same order of additions as a single dot.
+    for (&sample, later) in frame.iter().zip(frame[lag..].windows(4)) {
+        sums[0] += sample * later[0];
+        sums[1] += sample * later[1];
+        sums[2] += sample * later[2];
+        sums[3] += sample * later[3];
+    }
+    for (i, sum) in sums[..3].iter_mut().enumerate() {
+        for (&a, &b) in frame[common..].iter().zip(&frame[common + lag + i..]) {
+            *sum += a * b;
+        }
+    }
+    sums
+}
+
 pub fn refine_cached(
     frame: &[f64],
     window_correlation: &[f64],
@@ -161,6 +180,23 @@ pub fn refine_cached(
     radius: i32,
     cache: &mut [f64],
 ) -> (f64, f64) {
+    let first = (i64::from(centre) - i64::from(radius)).max(1) as usize;
+    let end = ((i64::from(centre) + i64::from(radius) + 1).max(0) as usize)
+        .min(frame.len())
+        .min(window_correlation.len())
+        .min(cache.len());
+    let mut group = first;
+    while group + 4 <= end {
+        if cache[group..group + 4].iter().all(|v| v.is_nan()) {
+            let sums = correlation_four(frame, group);
+            for (i, sum) in sums.into_iter().enumerate() {
+                cache[group + i] = sum / (energy * window_correlation[group + i]);
+            }
+            group += 4;
+        } else {
+            group += 1;
+        }
+    }
     let mut at = |lag: i32| {
         if lag < 1 || lag as usize >= window_correlation.len() || lag as usize >= frame.len() {
             return -1.0;
@@ -290,11 +326,11 @@ mod tests {
     #[test]
     fn periodic_frame_refines_and_marks_to_first_equal_peak() {
         let frame = [0.0, 1.0, 0.0, -1.0, 0.0, 1.0, 0.0, -1.0];
-        let expected = refine(&frame, &[1.0; 6], 4.0, 4, 1);
+        let expected = refine(&frame, &[1.0; 7], 4.0, 4, 2);
         assert_eq!(expected, (4.0, 0.5));
-        let mut cache = [f64::NAN; 6];
+        let mut cache = [f64::NAN; 7];
         assert_eq!(
-            refine_cached(&frame, &[1.0; 6], 4.0, 4, 1, &mut cache),
+            refine_cached(&frame, &[1.0; 7], 4.0, 4, 2, &mut cache),
             expected
         );
         assert_eq!(cache[4], 0.5);
