@@ -18,6 +18,9 @@ describe('check-package-files', () => {
   it('requires the engine, recognition data and the worker', () => {
     expect(REQUIRED_FILES).toContain('src/engine/voice-simulator.wasm');
     expect(REQUIRED_FILES).toContain(
+      'src/engine/voice-simulator-oral-codebook.bin'
+    );
+    expect(REQUIRED_FILES).toContain(
       'src/engine/voice-simulator-recognition-models.json.gz'
     );
     expect(REQUIRED_FILES).toContain('src/engine/worker.js');
@@ -34,6 +37,7 @@ describe('check-package-files', () => {
       missingFiles(listing(['src/index.js', 'src/engine/worker.js']))
     ).toEqual([
       'src/engine/voice-simulator.wasm',
+      'src/engine/voice-simulator-oral-codebook.bin',
       'src/engine/voice-simulator-recognition-models.json.gz',
       'src/engine/voice-simulator-recognition-en.json.gz',
       'src/engine/voice-simulator-recognition-ru.json.gz',

@@ -21,6 +21,7 @@ import {
   tractResponse,
 } from './codebook-features.js';
 import { codebookSeeds, proposeRow } from './codebook-seeds.js';
+import { preparedOralRows } from './codebook-data.js';
 import { attachQuery, buildTree } from './codebook-search.js';
 import { withWasmMemory } from './wasm-memory.js';
 import {
@@ -239,6 +240,7 @@ function buildCodebookRows(head, options, renderer, dsp) {
     renderer,
     dsp
   );
+  const oralRows = preparedOralRows(canonical, seed, size);
   let seedResponses = new Map();
   const response = new Float64Array(RESPONSE_GRID.length);
   const env = new Float64Array(24),
@@ -265,16 +267,21 @@ function buildCodebookRows(head, options, renderer, dsp) {
     if (nasal && book.stats.nasalRows >= Math.floor(size / 10)) {
       continue;
     }
-    evaluate(row.state, nasal, seedResponses, response);
-    for (let j = 0; j < 24; j++) {
-      env[j] = interpolateResponse(response, GRID[j]);
+    const precomputed = !nasal && oralRows?.(proposal - 1, env, formants);
+    if (!precomputed) {
+      evaluate(row.state, nasal, seedResponses, response);
+      for (let j = 0; j < 24; j++) {
+        env[j] = interpolateResponse(response, GRID[j]);
+      }
+      normalizeEnvelope(env);
     }
-    normalizeEnvelope(env);
     const bucket = Math.floor(row.state.height * 50);
     if (duplicate(row.state, bucket, buckets, rawChannels, rawEnvelope, env)) {
       continue;
     }
-    responseFormants(response, formants);
+    if (!precomputed) {
+      responseFormants(response, formants);
+    }
     for (let j = 0; j < 12; j++) {
       const { name, min, max } = CODEBOOK_CHANNELS[j];
       rawChannels[count * 12 + j] = row.state[name];

@@ -2,6 +2,14 @@
 import { installLanguageModelReader } from './language-model.js';
 import { installPreparedLexicons } from './lexicon.js';
 import { openPreparedLexicon } from './prepared-lexicon.js';
+import {
+  installOralCodebookReader,
+  openOralFeatureRows,
+  oralTableCount,
+  oralTableFile,
+  oralTableMinLength,
+  oralTableVersion,
+} from './codebook-data.js';
 
 export const recognitionModelVersion = 2;
 
@@ -93,6 +101,26 @@ export function configureNodeRecognitionModels() {
   if (!fs || !zlib) {
     return;
   }
+  let oralArchive;
+  installOralCodebookReader((length) => {
+    const index = 2 * (length - oralTableMinLength);
+    if (!Number.isInteger(index) || index < 0 || index >= oralTableCount) {
+      return undefined;
+    }
+    try {
+      oralArchive ??= fs.readFileSync(oralTableFile());
+      if (oralArchive.readUInt32LE(0) !== oralTableVersion) {
+        return undefined;
+      }
+      const start = oralArchive.readUInt32LE(4 * (index + 1));
+      const end = oralArchive.readUInt32LE(4 * (index + 2));
+      return openOralFeatureRows(
+        zlib.gunzipSync(oralArchive.subarray(start, end))
+      );
+    } catch {
+      return undefined;
+    }
+  });
   function read(kind) {
     const file = fs.readFileSync(recognitionDataFile(kind));
     const [version, rows] = JSON.parse(zlib.gunzipSync(file).toString());

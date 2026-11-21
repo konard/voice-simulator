@@ -645,12 +645,13 @@ jobs:
           REQUIRE_THREADS_WASM: '1'
         run: bash scripts/run-with-budget-warning.sh 300 "threads tests" node --test --test-timeout=240000 tests/rust-threads.test.js
 
-      - name: Upload the WebAssembly engine and recognition language models
+      - name: Upload the WebAssembly engine and recognition data
         uses: ./.github/actions/artifact-transport
         with:
           name: voice-simulator-wasm
           path: |
             src/engine/voice-simulator.wasm
+            src/engine/voice-simulator-oral-codebook.bin
             src/engine/voice-simulator-recognition-models.json.gz
             src/engine/voice-simulator-recognition-en.json.gz
             src/engine/voice-simulator-recognition-ru.json.gz

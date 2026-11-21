@@ -132,6 +132,8 @@ To time five fox sentences per quality level, build WebAssembly and run
 
 `buildCodebook(head, { size: 20000, seed: 1, cache })` builds a deterministic simulator-generated table of tract positions, formants and spectral envelopes. `frameEnvelope(frames, t, table, out)` reads an analysis frame; `table.query(envelope, 16, out)` returns candidate rows and envelope costs without allocating. `CODEBOOK_CHANNELS` defines the twelve tract controls; `serializeCodebook` and `parseCodebook` support a caller-owned binary cache. Tables use 0.5 cm length buckets and are generated on demand. See [API, layout, source limits and verification](CODEBOOK.md).
 
+`npm run build:wasm` regenerates the optional oral response data used by the Node-compatible runtime for the default 256-row codebook. Recognition computes the responses directly for custom geometry or when the file is absent. Nasal responses are rendered for the selected voice.
+
 ## Acoustic-to-articulatory inversion and IPA decoding
 
 `invertArticulation` and `createArticulationInverter` recover simulator controls from analysis frames. Use `articulationPlan(track)` to render them. The recognizer's batch and streaming articulation tracks include the `whisper` control and use a lazily rendered reference table within whispered spans. See [inversion usage and accuracy](CODEBOOK.md#acoustic-to-articulatory-inversion).

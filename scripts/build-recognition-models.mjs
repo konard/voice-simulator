@@ -11,6 +11,7 @@ import { LANGUAGES } from '../src/g2p/index.js';
 import { getLanguageModel } from '../src/recognition/language-model.js';
 import { getLexicon } from '../src/recognition/lexicon.js';
 import { serializeLexicon } from '../src/recognition/prepared-lexicon.js';
+import { buildRecognitionCodebook } from './build-recognition-codebook.mjs';
 
 function write(file, rows) {
   const asset = gzipSync(
@@ -28,3 +29,4 @@ const models = Object.keys(LANGUAGES).map((language) => {
   return [language, packLanguageModel(getLanguageModel(language))];
 });
 write(recognitionDataFile('models'), models);
+buildRecognitionCodebook();
