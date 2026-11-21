@@ -1,9 +1,16 @@
-import { createElement as h, useEffect, useMemo, useState } from 'react';
+import {
+  createElement as h,
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+} from 'react';
 import {
   ACCENTS,
   AUDIO_TIERS,
   BASE_AUDIO_LEVEL,
   DEFAULT_HEAD,
+  HEAD_PARAMETERS,
   LANGUAGES,
   VISUAL_TIERS,
   audioTierIndex,
@@ -21,6 +28,7 @@ import { DEFAULT_ACOUSTICS, listeningSettings } from './engine/listening.js';
 import { readTierSetting } from './engine/benchmark-cache.js';
 import { PresetSelect, initialPreset } from './components/PresetSelect.js';
 import { Recognition } from './components/Recognition.js';
+import { VoiceCopy } from './components/VoiceCopy.js';
 import { VoiceMatch } from './components/VoiceMatch.js';
 import { SpokenText } from './components/SpokenText.js';
 import { useSimulator } from './engine/use-simulator.js';
@@ -280,7 +288,37 @@ function MeasuredNote({ benchmark, onMeasure, t }) {
   );
 }
 
-function SpeakPanel({ speech, setSpeech, simulator, onSpeak, onStop, t }) {
+function AudioDownload({ simulator, copyVoiceActive, copyConsent, t }) {
+  return h(ExportControls, {
+    t,
+    disabled:
+      !copyConsent &&
+      (copyVoiceActive ||
+        simulator.engineRef.current?.recordingRequiresCopyConsent),
+    onDownload: (preset) => {
+      if (copyVoiceActive && !copyConsent) {
+        return;
+      }
+      const file = simulator.engineRef.current?.exportAudio(preset, {
+        copyConsent,
+      });
+      if (file) {
+        download(file.blob, file.fileName);
+      }
+    },
+  });
+}
+
+function SpeakPanel({
+  speech,
+  setSpeech,
+  simulator,
+  onSpeak,
+  onStop,
+  copyVoiceActive,
+  copyConsent,
+  t,
+}) {
   const transcription = useMemo(
     () => transcribe(speech.text, speech.lang, speech.accent),
     [speech.text, speech.lang, speech.accent]
@@ -409,15 +447,7 @@ function SpeakPanel({ speech, setSpeech, simulator, onSpeak, onStop, t }) {
             },
             t.speak
           ),
-      h(ExportControls, {
-        t,
-        onDownload: (preset) => {
-          const file = simulator.engineRef.current?.exportAudio(preset);
-          if (file) {
-            download(file.blob, file.fileName);
-          }
-        },
-      })
+      h(AudioDownload, { simulator, copyVoiceActive, copyConsent, t })
     ),
     simulator.status.error
       ? h('p', { className: 'error', role: 'alert' }, simulator.status.error)
@@ -432,8 +462,10 @@ function EditorPanel({
   locale,
   t,
   onHead,
+  onAdjust,
   onSeed,
   onPreset,
+  exportDisabled,
 }) {
   return h(
     'section',
@@ -488,10 +520,67 @@ function EditorPanel({
       preset,
       locale,
       t,
-      onChange: (key, value) => onHead({ ...head, [key]: value }),
+      onChange: (key, value) => onAdjust({ ...head, [key]: value }),
       onHead,
+      exportDisabled,
     })
   );
+}
+
+function AppHeader({ theme, nextTheme, t }) {
+  return h(
+    'header',
+    { className: 'app-header' },
+    h(
+      'div',
+      null,
+      h('p', { className: 'eyebrow' }, t.eyebrow),
+      h('h1', { id: 'app-title' }, t.title),
+      h('p', { className: 'lead' }, t.lead)
+    ),
+    h(
+      'nav',
+      { className: 'header-links' },
+      h(
+        'button',
+        { type: 'button', className: 'ghost', onClick: nextTheme },
+        `${t.theme}: ${t.themes[theme]}`
+      ),
+      h(
+        'span',
+        { className: 'versions' },
+        `${t.versions}:`,
+        VERSIONS.map((version) =>
+          h(
+            'a',
+            {
+              key: version.path,
+              href: version.href,
+              target: '_blank',
+              rel: 'noreferrer',
+              title: version.current
+                ? t.currentVersion
+                : `${t.version} ${version.number}`,
+              'aria-current': version.current ? 'page' : undefined,
+            },
+            version.path
+          )
+        )
+      ),
+      h(
+        'a',
+        { href: repositoryUrl, target: '_blank', rel: 'noreferrer' },
+        'GitHub'
+      )
+    )
+  );
+}
+
+function voiceAccentOptions(voice, fallback) {
+  const accent = voice?.accent;
+  return typeof accent === 'string'
+    ? { accent }
+    : { accent: accent?.code ?? fallback, accentLevel: accent?.strength };
 }
 
 export function App() {
@@ -501,6 +590,8 @@ export function App() {
   const [seed, setSeed] = useState(initialSeed);
   const [preset, setPreset] = useState(initialPreset);
   const [head, setHead] = useState(() => randomHeadConfig(seed, { preset }));
+  const [copiedVoice, setCopiedVoice] = useState(null);
+  const [copyConsent, setCopyConsent] = useState(false);
   const [speech, setSpeech] = useState(() => ({
     text: LANGUAGES[locale].sample,
     lang: 'auto',
@@ -532,21 +623,47 @@ export function App() {
   }, [locale, t.title]);
 
   const changeSeed = (value, nextPreset = preset) => {
+    setCopiedVoice(null);
     setSeed(value);
     setHead(randomHeadConfig(value || 1, { preset: nextPreset }));
   };
-  const editHead = (next) => {
+  const adjustHead = (next) => {
     setHead(next);
     setSeed('');
   };
+  const editHead = (next) => {
+    setCopiedVoice(null);
+    adjustHead(next);
+  };
+  const showCopiedVoice = useCallback((next) => {
+    setCopiedVoice(next);
+    setHead((previous) =>
+      HEAD_PARAMETERS.every(({ key }) => previous[key] === next.head[key])
+        ? previous
+        : next.head
+    );
+    setSeed('');
+  }, []);
+  const restoreHead = () => () => {
+    setCopiedVoice(copiedVoice);
+    setHead(head);
+    setSeed(seed);
+    setPreset(preset);
+  };
 
-  const speak = ({ text, lang, accent, mode }) =>
+  const speak = (
+    { text, lang, accent, mode },
+    voice = copiedVoice,
+    nextHead = head
+  ) =>
     simulator.engineRef.current?.speak({
       text,
       lang,
-      accent,
-      head,
-      seed,
+      ...voiceAccentOptions(voice, accent),
+      articulationOffsets: voice?.articulationOffsets,
+      head: nextHead,
+      seed: voice ? '' : seed,
+      requiresCopyConsent: Boolean(voice),
       mode,
       ...listening,
     });
@@ -559,52 +676,7 @@ export function App() {
   return h(
     'main',
     { className: 'app-shell' },
-    h(
-      'header',
-      { className: 'app-header' },
-      h(
-        'div',
-        null,
-        h('p', { className: 'eyebrow' }, t.eyebrow),
-        h('h1', { id: 'app-title' }, t.title),
-        h('p', { className: 'lead' }, t.lead)
-      ),
-      h(
-        'nav',
-        { className: 'header-links' },
-        h(
-          'button',
-          { type: 'button', className: 'ghost', onClick: nextTheme },
-          `${t.theme}: ${t.themes[theme]}`
-        ),
-        h(
-          'span',
-          { className: 'versions' },
-          `${t.versions}:`,
-          VERSIONS.map((version) =>
-            h(
-              'a',
-              {
-                key: version.path,
-                href: version.href,
-                target: '_blank',
-                rel: 'noreferrer',
-                title: version.current
-                  ? t.currentVersion
-                  : `${t.version} ${version.number}`,
-                'aria-current': version.current ? 'page' : undefined,
-              },
-              version.path
-            )
-          )
-        ),
-        h(
-          'a',
-          { href: repositoryUrl, target: '_blank', rel: 'noreferrer' },
-          'GitHub'
-        )
-      )
-    ),
+    h(AppHeader, { theme, nextTheme, t }),
     h(
       'section',
       { className: 'workspace', 'aria-labelledby': 'app-title' },
@@ -614,6 +686,8 @@ export function App() {
         setSpeech,
         simulator,
         t,
+        copyVoiceActive: Boolean(copiedVoice),
+        copyConsent,
         onSpeak: () => speak(speech),
         onStop: () => simulator.engineRef.current?.stop(),
       })
@@ -626,6 +700,8 @@ export function App() {
       locale,
       t,
       onHead: editHead,
+      onAdjust: adjustHead,
+      exportDisabled: Boolean(copiedVoice && !copyConsent),
       onSeed: changeSeed,
       onPreset: (next) => {
         setPreset(next);
@@ -645,6 +721,20 @@ export function App() {
       t,
       onHead: editHead,
     }),
-    h(Recognition, { t, onSpeakBack: speakBack })
+    h(Recognition, { t, onSpeakBack: speakBack }),
+    h(VoiceCopy, {
+      t,
+      locale,
+      benchmarkTier: AUDIO_TIERS[simulator.status.benchmark?.level]?.name,
+      tier: AUDIO_TIERS[simulator.status.audioLevel]?.name,
+      consent: copyConsent,
+      setConsent: setCopyConsent,
+      onBegin: restoreHead,
+      onHead: showCopiedVoice,
+      onSpeak: (voice) => {
+        showCopiedVoice(voice);
+        return speak(speech, voice, voice.head);
+      },
+    })
   );
 }

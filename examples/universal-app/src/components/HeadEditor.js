@@ -8,7 +8,7 @@ import {
 import { download } from '../download.js';
 import { parameterLabel } from '../i18n.js';
 
-function formatValue(parameter, value) {
+export function formatValue(parameter, value) {
   const decimals = Math.max(0, -Math.floor(Math.log10(parameter.step)));
   const unit =
     parameter.unit && parameter.unit !== 'x' && parameter.unit !== '1'
@@ -72,7 +72,15 @@ function GroupSection({ group, head, locale, t, showAll, onChange }) {
 }
 
 /** "Show all parameters", "Import voice" and "Export voice". */
-function VoiceFileBar({ head, preset, t, showAll, onShowAll, onHead }) {
+function VoiceFileBar({
+  head,
+  preset,
+  t,
+  showAll,
+  onShowAll,
+  onHead,
+  exportDisabled,
+}) {
   const input = useRef(null);
   const [error, setError] = useState(null);
   const importFile = async (file) => {
@@ -126,7 +134,11 @@ function VoiceFileBar({ head, preset, t, showAll, onShowAll, onHead }) {
         event.target.value = '';
       },
     }),
-    h('button', { type: 'button', onClick: exportFile }, t.voiceFile.export),
+    h(
+      'button',
+      { type: 'button', onClick: exportFile, disabled: exportDisabled },
+      t.voiceFile.export
+    ),
     error
       ? h('p', { className: 'error voice-file-error', role: 'alert' }, error)
       : null
@@ -138,7 +150,15 @@ function VoiceFileBar({ head, preset, t, showAll, onShowAll, onHead }) {
  * HEAD_GROUPS; the advanced ones appear with "Show all parameters". Voice
  * files (src/voice-file.js) are imported and exported as JSON.
  */
-export function HeadEditor({ head, preset, locale, t, onChange, onHead }) {
+export function HeadEditor({
+  head,
+  preset,
+  locale,
+  t,
+  onChange,
+  onHead,
+  exportDisabled,
+}) {
   const [showAll, setShowAll] = useState(false);
   return h(
     'div',
@@ -150,6 +170,7 @@ export function HeadEditor({ head, preset, locale, t, onChange, onHead }) {
       showAll,
       onShowAll: setShowAll,
       onHead,
+      exportDisabled,
     }),
     h(
       'div',

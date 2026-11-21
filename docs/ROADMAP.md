@@ -290,6 +290,11 @@ committed recognition text is kept as new hypotheses arrive.
 
 Multi-pass voice copy with continuous recognition, copy synthesis of real recordings, lowest-settings certification and the final evaluation.
 
+The [app's live copy panel](../examples/universal-app/README.md) runs fitting
+and recognition in a worker and shows the pass, timed syllables and parameter
+stability. Voice and audio export require speaker permission. End-to-end
+convergence depends on the [voice session's inversion gate](reports/issue-78-validation.md).
+
 | Issue                                                      | Type    | Title                                                                                      | Blocked by                                                                                                                                                                                                                                                                                                                                                                                                                         | Requirements     |
 | ---------------------------------------------------------- | ------- | ------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------- |
 | [#78](https://github.com/konard/voice-simulator/issues/78) | Feature | [Multi-pass voice session](VOICE-SESSION.md)                                               | [#63](https://github.com/konard/voice-simulator/issues/63), [#73](https://github.com/konard/voice-simulator/issues/73)                                                                                                                                                                                                                                                                                                             | R9, R8, R12      |

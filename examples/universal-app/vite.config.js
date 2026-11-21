@@ -10,6 +10,7 @@ import {
   isolationHeaders,
   isolationWorker,
 } from './cross-origin-isolation.js';
+import { offlineWorkerChunk, offlineWorkerChunks } from './offline-worker.js';
 
 function resolveBasePath() {
   if (process.env.GITHUB_PAGES !== 'true') {
@@ -28,7 +29,12 @@ const headers = isolationHeaders(isolated);
 
 export default defineConfig({
   base: resolveBasePath(),
-  plugins: [react(), chunkSizeGuard(), isolationWorker(isolated)],
+  plugins: [
+    react(),
+    offlineWorkerChunks(),
+    chunkSizeGuard(),
+    isolationWorker(isolated),
+  ],
   worker: {
     format: 'es',
     rollupOptions: {
@@ -43,7 +49,7 @@ export default defineConfig({
     chunkSizeWarningLimit: CHUNK_SIZE_LIMIT_KB,
     rollupOptions: {
       output: {
-        manualChunks: vendorChunk,
+        manualChunks: (id) => offlineWorkerChunk(id) ?? vendorChunk(id),
       },
     },
   },

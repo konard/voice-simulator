@@ -22,6 +22,9 @@ describe('example app i18n', () => {
     expect(Object.keys(russian.groups).sort()).toEqual(
       Object.keys(english.groups).sort()
     );
+    expect(Object.keys(russian.copyStates).sort()).toEqual(
+      Object.keys(english.copyStates).sort()
+    );
     expect(Object.keys(russian.themes).sort()).toEqual(
       Object.keys(english.themes).sort()
     );

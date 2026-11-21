@@ -34,7 +34,9 @@ describe('universal React example app', () => {
     expect(Boolean(packageJson.devDependencies['electron-builder'])).toBe(true);
     expect(Boolean(packageJson.devDependencies['@capacitor/cli'])).toBe(true);
 
-    expect(packageJson.scripts.build).toBe('vite build');
+    expect(packageJson.scripts.build).toBe(
+      'vite build --config vite.copy-worker.config.js && vite build'
+    );
     expect(packageJson.scripts['desktop:package']).toContain(
       'electron-builder --dir'
     );

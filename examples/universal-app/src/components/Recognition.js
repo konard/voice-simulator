@@ -1,6 +1,6 @@
 import { createElement as h, useMemo, useRef, useState } from 'react';
 import { LANGUAGES } from '../../../../src/g2p/index.js';
-import { AUDIO_FILE_ACCEPT, decodeAudio } from '../engine/decode-file.js';
+import { AUDIO_FILE_ACCEPT, decodeAudioFile } from '../engine/decode-file.js';
 import { createMicrophone } from '../engine/microphone.js';
 import { recognitionTimeline } from './recognition-timeline.js';
 import {
@@ -35,39 +35,33 @@ function errorText(error, t) {
   return error ? (labels[error.code] ?? error.message) : '';
 }
 
-async function readFile(file) {
-  try {
-    return await decodeAudio(await file.arrayBuffer());
-  } catch (cause) {
-    throw Object.assign(
-      new Error('Could not decode the audio file', { cause }),
-      {
-        code: 'decode-failed',
-      }
-    );
-  }
-}
-
-function SourceControls({ active, onStart, onStop, onFile, t }) {
+export function SourceControls({
+  id,
+  active,
+  onStart,
+  onStop,
+  onFile,
+  labels,
+}) {
   return h(
     'div',
     { className: 'row' },
     h(
       'button',
       { type: 'button', onClick: onStart, disabled: active },
-      t.recognitionStart
+      labels.start
     ),
     h(
       'button',
       { type: 'button', onClick: onStop, disabled: !active },
-      t.recognitionStop
+      labels.stop
     ),
     h(
       'label',
-      { className: 'field', htmlFor: 'recognition-file' },
-      h('span', null, t.recognitionFile),
+      { className: 'field', htmlFor: id },
+      h('span', null, labels.file),
       h('input', {
-        id: 'recognition-file',
+        id,
         type: 'file',
         accept: AUDIO_FILE_ACCEPT,
         disabled: active,
@@ -149,18 +143,23 @@ export function Recognition({ t, onSpeakBack }) {
         setDragging(false);
         const file = event.dataTransfer.files[0];
         if (!active && file) {
-          start(readFile(file));
+          start(decodeAudioFile(file));
         }
       },
     },
     h('h2', { id: 'recognition-title' }, t.recognitionTitle),
     h('p', { className: 'hud-note' }, t.recognitionPrivacy),
     h(SourceControls, {
+      id: 'recognition-file',
       active,
       onStart: () => start(createMicrophone()),
       onStop: () => session.stop(),
-      onFile: (file) => start(readFile(file)),
-      t,
+      onFile: (file) => start(decodeAudioFile(file)),
+      labels: {
+        start: t.recognitionStart,
+        stop: t.recognitionStop,
+        file: t.recognitionFile,
+      },
     }),
     h(LanguageChoice, { lang, onChange: setLang, disabled: active, t }),
     h(SpokenText, {

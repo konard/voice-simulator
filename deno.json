@@ -1,7 +1,7 @@
 {
   "nodeModulesDir": "auto",
   "allowScripts": {
-    "deny": ["npm:node-pty@1.1.0"]
+    "deny": ["npm:fsevents@2.3.2", "npm:node-pty@1.1.0"]
   },
   "test": {
     "include": ["tests/"],

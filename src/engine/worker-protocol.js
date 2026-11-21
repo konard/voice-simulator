@@ -256,6 +256,7 @@ function prepareTier(state, message, level, device) {
     ipa: true,
     lang: message.lang,
     head: message.head,
+    articulationOffsets: message.articulationOffsets,
     seed: message.seed,
     tier: level,
     microphone: message.microphone,

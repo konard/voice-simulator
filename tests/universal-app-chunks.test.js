@@ -90,8 +90,11 @@ describe('universal app chunking', () => {
   });
 
   it('wires the chunking and the size guard into the Vite config', () => {
-    // Once for the app, once for the workers (worker.rollupOptions).
-    expect(viteConfig.split('manualChunks: vendorChunk').length - 1).toBe(2);
+    expect(viteConfig).toContain('manualChunks: vendorChunk');
+    expect(viteConfig).toContain(
+      'manualChunks: (id) => offlineWorkerChunk(id) ?? vendorChunk(id)'
+    );
+    expect(viteConfig).toContain('offlineWorkerChunks()');
     expect(viteConfig).toContain('chunkSizeGuard()');
     expect(viteConfig).toContain('chunkSizeWarningLimit: CHUNK_SIZE_LIMIT_KB');
     expect(CHUNK_SIZE_LIMIT_KB).toBe(500);

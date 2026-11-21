@@ -13,7 +13,7 @@
   },
   "scripts": {
     "dev": "vite --host 0.0.0.0",
-    "build": "vite build",
+    "build": "vite build --config vite.copy-worker.config.js && vite build",
     "preview": "vite preview --host 0.0.0.0",
     "desktop:start": "npm run build && electron .",
     "desktop:package": "npm run build && electron-builder --dir",

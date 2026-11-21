@@ -9,6 +9,7 @@ import type {
 } from './accent/index.js';
 import type { ArticulationOffsets } from './session/voice-session.js';
 
+/** Streaming voice fitting, including voiced audio progress for the current speaker. */
 export {
   createVoiceSession,
   copyVoice,
