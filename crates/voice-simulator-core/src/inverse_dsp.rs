@@ -218,15 +218,25 @@ impl Correlation {
     }
 }
 pub(crate) fn harmonics(x: &[f64], rate: f64, f0: f64, count: usize) -> Vec<f64> {
-    let w = hann(x.len());
+    windowed_harmonics(x, &hann(x.len()), rate, f0, count)
+}
+
+pub(crate) fn windowed_harmonics(
+    x: &[f64],
+    window: &[f64],
+    rate: f64,
+    f0: f64,
+    count: usize,
+) -> Vec<f64> {
     (1..=count)
         .map(|k| {
             let angle = 2.0 * PI * f0 * k as f64 / rate;
             let (cr, ci) = (cos(angle), sin(angle));
             let (mut wr, mut wi, mut re, mut im) = (1.0, 0.0, 0.0, 0.0);
-            for n in 0..x.len() {
-                re += x[n] * w[n] * wr;
-                im -= x[n] * w[n] * wi;
+            for (&sample, &weight) in x.iter().zip(window) {
+                let weighted = sample * weight;
+                re += weighted * wr;
+                im -= weighted * wi;
                 let next = wr * cr - wi * ci;
                 wi = wi * cr + wr * ci;
                 wr = next;
