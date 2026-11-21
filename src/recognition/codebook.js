@@ -118,6 +118,44 @@ function duplicate(state, bucket, buckets, rawChannels, rawEnvelope, env) {
   return false;
 }
 
+function createCodebookResponse(head, frequencies, renderer) {
+  const oral = createTractResponse(frequencies);
+  const correction = new Float64Array(frequencies.length);
+  let render;
+  return (state, nasal, cache, response) => {
+    const shape = nasal ? null : tractShape(state, head);
+    // Seed labels can differ even when their tract and excitation agree.
+    const key =
+      cache &&
+      (shape
+        ? `${shape.length}:${shape.areas.join(',')}`
+        : CODEBOOK_CHANNELS.map(({ name }) => state[name]).join(','));
+    const cached = cache?.get(key);
+    if (cached) {
+      response.set(cached);
+      return;
+    }
+    if (shape) {
+      oral(shape.areas, shape.length, response);
+    } else {
+      if (!render) {
+        render = createRenderedResponse(head, frequencies, renderer);
+        const neutral = tractShape(CHANNEL_DEFAULTS, head);
+        oral(neutral.areas, neutral.length, correction);
+        render(CHANNEL_DEFAULTS, response);
+        for (let j = 0; j < response.length; j++) {
+          correction[j] = response[j] - correction[j];
+        }
+      }
+      render(state, response);
+      for (let j = 0; j < response.length; j++) {
+        response[j] -= correction[j];
+      }
+    }
+    cache?.set(key, response.slice());
+  };
+}
+
 /** Build or parse a deterministic table; length scaling is per returned view. */
 // Row generation combines feature extraction, quantization and accounting.
 /* eslint-disable max-statements, complexity */
@@ -183,22 +221,23 @@ export function buildCodebookWithRenderer(head, options, renderer) {
     stats: { rows, nasalRows: 0, nonUniqueShare: 0, buildMilliseconds: 0 },
   };
   const seeds = codebookSeeds();
-  const oralResponse = createTractResponse(responseGrid);
-  const response = new Float64Array(RESPONSE_GRID.length),
-    correction = new Float64Array(RESPONSE_GRID.length);
-  let render;
+  const evaluate = createCodebookResponse(canonical, responseGrid, renderer);
+  let seedResponses = new Map();
+  const response = new Float64Array(RESPONSE_GRID.length);
   const env = new Float64Array(24),
     key = new Float64Array(6),
     formants = new Float64Array(8);
   const rawChannels = new Float64Array(size * 12),
     rawEnvelope = new Float64Array(size * 24);
   const buckets = Array.from({ length: 51 }, () => []);
-  let correctionReady = false,
-    count = 0,
+  let count = 0,
     proposal = 0;
   while (count < size) {
     if (proposal > size * 100 + seeds.length) {
       throw new Error('Could not fill codebook after bounded proposals');
+    }
+    if (proposal === seeds.length) {
+      seedResponses = null;
     }
     const row =
       proposal < seeds.length
@@ -209,25 +248,7 @@ export function buildCodebookWithRenderer(head, options, renderer) {
     if (nasal && book.stats.nasalRows >= Math.floor(size / 10)) {
       continue;
     }
-    if (nasal) {
-      if (!correctionReady) {
-        render = createRenderedResponse(canonical, responseGrid, renderer);
-        const neutral = tractShape(CHANNEL_DEFAULTS, canonical);
-        oralResponse(neutral.areas, neutral.length, correction);
-        render(CHANNEL_DEFAULTS, response);
-        for (let j = 0; j < response.length; j++) {
-          correction[j] = response[j] - correction[j];
-        }
-        correctionReady = true;
-      }
-      render(row.state, response);
-      for (let j = 0; j < response.length; j++) {
-        response[j] -= correction[j];
-      }
-    } else {
-      const shape = tractShape(row.state, canonical);
-      oralResponse(shape.areas, shape.length, response);
-    }
+    evaluate(row.state, nasal, seedResponses, response);
     for (let j = 0; j < 24; j++) {
       env[j] = interpolateResponse(response, GRID[j]);
     }
