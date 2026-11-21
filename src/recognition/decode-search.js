@@ -64,30 +64,27 @@ function acousticCosts(terms, weights) {
 }
 
 function connectBest(states, parents, span, from, settings, weights) {
-  const { width, costs } = settings;
+  const { width, costs, parentRows, parentCosts } = settings;
   const { scores, minimum, denominator } = acousticCosts(span.terms, weights);
   for (let unit = 0; unit < width; unit++) {
     const state = stateFor(states, unit);
     const acoustic = scores[unit];
-    let best = state.paths[0]?.cost ?? Infinity;
-    let hasBest = state.paths.length > 0;
+    // With no current path, the first parent wins even at infinite cost.
+    let best = state.paths[0]?.cost ?? NaN;
     let arcCost = 0;
-    let previous;
-    for (const parent of parents) {
-      const candidate = parent.paths[0];
-      const cost =
-        acoustic + weights.phonotactic * costs[parent.unit * width + unit];
-      const total = candidate.cost + cost;
-      if (!hasBest || !(total >= best)) {
-        previous = candidate;
+    let bestParent = -1;
+    for (let i = 0; i < parents.length; i++) {
+      const cost = acoustic + weights.phonotactic * costs[parentRows[i] + unit];
+      const total = parentCosts[i] + cost;
+      if (!(total >= best)) {
+        bestParent = i;
         arcCost = cost;
         best = total;
-        hasBest = true;
       }
     }
-    if (previous) {
+    if (bestParent >= 0) {
       state.paths[0] = {
-        previous,
+        previous: parents[bestParent].paths[0],
         arc: {
           from,
           to: span.to,
@@ -177,6 +174,19 @@ function terminalPaths(states, limit) {
   return result;
 }
 
+function packParents(settings, parents) {
+  if (settings.nbest !== 1 || settings.lattice) {
+    return;
+  }
+  const { width } = settings;
+  const rows = (settings.parentRows ??= new Float64Array(width + 1));
+  const costs = (settings.parentCosts ??= new Float64Array(width + 1));
+  for (let i = 0; i < parents.length; i++) {
+    rows[i] = parents[i].unit * width;
+    costs[i] = parents[i].paths[0].cost;
+  }
+}
+
 export function decodeSearch(prepared, language, options) {
   const { times, spans } = prepared;
   const {
@@ -222,6 +232,7 @@ export function decodeSearch(prepared, language, options) {
       terminal = parents;
       break;
     }
+    packParents(settings, parents);
     for (const span of spans[from]) {
       connect(pending[span.to], parents, span, from, settings);
     }

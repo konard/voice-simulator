@@ -176,16 +176,15 @@ const models = new Map(
 function probabilityFor(tables, a, b) {
   let best = 0;
   for (const { ids, boundary, probability } of tables) {
-    const to = ids.get(b);
-    if (to === undefined) {
+    const to = ids[b];
+    if (to < 0) {
       continue;
     }
-    const from = a === undefined ? boundary : ids.get(a);
+    const from = ids[a];
     // A different language can start a word after a phone outside its inventory.
     const across =
-      (from === undefined ? 1 : probability(from, boundary)) *
-      probability(boundary, to);
-    const within = from === undefined ? 0 : probability(from, to);
+      (from < 0 ? 1 : probability(from, boundary)) * probability(boundary, to);
+    const within = from < 0 ? 0 : probability(from, to);
     best = Math.max(best, within, across);
   }
   return best;
@@ -227,12 +226,18 @@ function decoderLanguageTable(languages) {
   const width = symbols.length;
   const costs = new Float64Array((width + 1) * width);
   if (source.length) {
-    const tables = languages.map((language) => models.get(language));
+    const tables = languages.map((language) => {
+      const { ids, boundary, probability } = models.get(language);
+      const indices = new Int32Array(width + 1);
+      for (let i = 0; i < width; i++) {
+        indices[i] = ids.get(symbols[i]) ?? -1;
+      }
+      indices[width] = boundary;
+      return { ids: indices, boundary, probability };
+    });
     for (let from = 0; from <= width; from++) {
       for (let to = 0; to < width; to++) {
-        costs[from * width + to] = -Math.log(
-          probabilityFor(tables, symbols[from], symbols[to])
-        );
+        costs[from * width + to] = -Math.log(probabilityFor(tables, from, to));
       }
     }
   }
