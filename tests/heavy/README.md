@@ -37,7 +37,9 @@ The `copy` suite also checks copy synthesis at medium and studio quality,
 and measures how often per-syllable refinement reduces log-spectral
 distance. The tests write `copy-synthesis.md` and `copy-refinement.md`
 along with their JSON data. Run `node scripts/copy-report.mjs` to write
-the synthesis report independently.
+the synthesis report independently. The MCD limit in
+[`copy-thresholds.json`](copy-thresholds.json) is 105% of the first measured
+full-corpus mean. Later changes may lower the limits in that file.
 
 ## Environment
 
