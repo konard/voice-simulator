@@ -62,10 +62,7 @@ function compareStress(reference, hypothesis) {
     words.map(({ ipa }) => tokenize(ipa, 'phone').join(' '));
   let hits = 0;
   let count = 0;
-  const { pairs } = alignEdits(
-    phones(reference),
-    phones(hypothesis)
-  );
+  const { pairs } = alignEdits(phones(reference), phones(hypothesis));
   for (const [ref, hyp] of pairs) {
     const expected = reference[ref].syllables;
     const actual = hypothesis[hyp].syllables;

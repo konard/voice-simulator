@@ -5,7 +5,7 @@ on:
     branches:
       - main
   pull_request:
-    types: [opened, synchronize, reopened]
+    types: [opened, synchronize, reopened, ready_for_review]
   # Manual release support - consolidated here to work with npm trusted publishing
   # npm only allows ONE workflow file as trusted publisher, so all publishing
   # must go through this workflow (release.yml)
@@ -340,7 +340,8 @@ jobs:
       fail-fast: false
       matrix:
         runtime: [node, bun, deno]
-        os: [ubuntu-24.04, macos-15, windows-2025]
+        # Iterate on #162 with Linux runners while the PR is a draft.
+        os: ${{ fromJSON(github.event.pull_request.number == 162 && github.event.pull_request.draft && '["ubuntu-24.04"]' || '["ubuntu-24.04", "macos-15", "windows-2025"]') }}
     # An acceptance criterion that only the issue author can unblock (a
     # specified gate the specified formula and fixture cannot meet) only
     # warns on pull requests; pushes to main still fail and name the human
