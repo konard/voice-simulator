@@ -7,6 +7,19 @@ import { DRAFT_RATE, renderDraft } from './copy-prosody.js';
 import { REFINED_CHANNELS, scorePlan } from './score.js';
 import { sampleTrack } from './warp.js';
 
+export function blendControl(base, estimate, weight) {
+  return base * (1 - weight) + estimate * weight;
+}
+
+export function offsetControl(value, delta, distance, radius) {
+  const change = delta * (1 - distance / radius);
+  return Math.max(0, Math.min(1, value + change));
+}
+
+export function offsetPenalty(candidate, previous) {
+  return 4 * (candidate ** 2 - previous ** 2);
+}
+
 function pieceCuts(plan) {
   const cuts = [0];
   let candidates = [];
@@ -82,8 +95,11 @@ function blendSyllable(piece, inversion, syllable, accept) {
           inversion.channels[key],
           (i * inversion.frameRate) / piece.frameRate
         );
-        piece.channels[key][i] =
-          base[k][i - from] * (1 - weight) + estimate * weight;
+        piece.channels[key][i] = blendControl(
+          base[k][i - from],
+          estimate,
+          weight
+        );
       }
     });
     if (accept(0, 0)) {
@@ -110,11 +126,15 @@ function tweakSyllable(piece, { start, end, nucleus }, accept) {
       let chosen = offset;
       for (const delta of [-0.05, 0.05]) {
         for (let i = from; i < to; i++) {
-          const change = delta * (1 - Math.abs(i - nucleus) / radius);
-          channel[i] = Math.max(0, Math.min(1, original[i - from] + change));
+          channel[i] = offsetControl(
+            original[i - from],
+            delta,
+            Math.abs(i - nucleus),
+            radius
+          );
         }
         const candidate = offset + delta;
-        if (accept(4 * (candidate ** 2 - chosen ** 2), 0.05)) {
+        if (accept(offsetPenalty(candidate, chosen), 0.05)) {
           best = channel.slice(from, to);
           chosen = candidate;
         }

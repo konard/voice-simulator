@@ -119,10 +119,16 @@ jobs:
           bash scripts/run-with-budget-warning.sh 120 "CLI build" cargo build --release --locked -p voice-simulator-cli
 
       - name: Build scalar recognition WebAssembly
-        if: inputs.suite == 'recognition-performance'
+        if: inputs.suite == 'recognition-performance' || inputs.suite == 'copy'
         run: |
           node scripts/build-wasm.mjs --require --check-size
           node scripts/build-recognition-models.mjs
+
+      - name: Check native copy control parity
+        if: inputs.suite == 'copy' || inputs.suite == 'all'
+        run: |
+          cargo build --locked -p voice-simulator-core --example copy_controls
+          COPY_NATIVE_PROBE="$PWD/target/debug/examples/copy_controls" node --test tests/copy-rust-parity.test.js
 
       - name: Restore the speech dataset cache
         uses: actions/cache@v6
