@@ -39,17 +39,32 @@ function indexBigrams(source, words) {
   const heads = new Uint32Array(words.length);
   const ids = new Map(words.map(({ word }, i) => [word, i]));
   let row = 0;
-  for (let start = 0; start < source.length; ) {
-    const comma = source.indexOf(',', start);
-    const equals = source.indexOf('=', comma + 1);
-    const space = source.indexOf(' ', equals + 1);
-    const end = space < 0 ? source.length : space;
-    const next = Number(source.slice(comma + 1, equals));
-    records[row * 2] = Number(source.slice(start, comma));
-    records[row * 2 + 1] = heads[next];
-    counts[row] = Number(source.slice(equals + 1, end));
-    heads[next] = ++row;
-    start = end + 1;
+  let previous = 0;
+  let next = 0;
+  let value = 0;
+  const zero = '0'.charCodeAt(0);
+  const comma = ','.charCodeAt(0);
+  const equals = '='.charCodeAt(0);
+  // The generator writes ASCII integers as "previous,next=count". Parse
+  // directly into the arrays, with the end of the text acting as a space.
+  for (let offset = 0; offset <= source.length; offset++) {
+    const code = source.charCodeAt(offset);
+    const digit = code - zero;
+    if (digit >= 0 && digit <= 9) {
+      value = value * 10 + digit;
+      continue;
+    }
+    if (code === comma) {
+      previous = value;
+    } else if (code === equals) {
+      next = value;
+    } else if (value > 0) {
+      records[row * 2] = previous;
+      records[row * 2 + 1] = heads[next];
+      counts[row] = value;
+      heads[next] = ++row;
+    }
+    value = 0;
   }
   return (word) => {
     let link = heads[ids.get(word)];
