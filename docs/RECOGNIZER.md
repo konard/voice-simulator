@@ -121,7 +121,10 @@ To time five fox sentences per quality level, build WebAssembly and run
 `node scripts/profile-recognition.mjs js` and
 `node scripts/profile-recognition.mjs rust`. The manually triggered
 `recognition-performance` CI suite compares one, two and four threads on
-60 seconds of synthetic speech and checks the cold one-core CLI at 8 kHz.
+60 seconds of synthetic speech. The default `ubuntu-24.04` runner gates the
+cold one-core CLI at 0.25 RTF on 8 kHz speech. The `ubuntu-24.04-arm` runner
+checks scaling on four physical cores and also reports cold one-core timings.
+Both compare the CLI text across engines.
 
 ## Speech-mode recognition
 

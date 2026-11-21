@@ -677,17 +677,17 @@ The GitHub Actions reports below include the test input, runner CPU topology and
 
 | Measurement                     | JavaScript |      Rust | Rust speedup |
 | ------------------------------- | ---------: | --------: | -----------: |
-| Cold 8 kHz CLI, one core, x64   |  0.326 RTF | 0.313 RTF |        1.04× |
-| Cold 8 kHz CLI, one core, ARM64 |  0.372 RTF | 0.353 RTF |        1.05× |
-| Pitch, low, x64                 |   71.48 ms |  36.07 ms |        1.98× |
-| Inverse filter, low, x64        |   93.80 ms |  36.83 ms |        2.55× |
-| Codebook rank, high, x64        |    6.75 ms |   3.33 ms |        2.03× |
-| Word trie search, high, x64     |   48.07 ms |   8.22 ms |        5.85× |
-| IPA to text, high, x64          |   96.63 ms |  55.14 ms |        1.75× |
+| Cold 8 kHz CLI, one core, x64   |  0.274 RTF | 0.245 RTF |        1.12× |
+| Cold 8 kHz CLI, one core, ARM64 |  0.327 RTF | 0.287 RTF |        1.14× |
+| Pitch, low, x64                 |   70.19 ms |  31.00 ms |        2.26× |
+| Inverse filter, low, x64        |   84.64 ms |  28.90 ms |        2.93× |
+| Codebook rank, high, x64        |    6.78 ms |   3.31 ms |        2.05× |
+| Word trie search, high, x64     |   47.34 ms |   7.26 ms |        6.52× |
+| IPA to text, high, x64          |   93.17 ms |  52.11 ms |        1.79× |
 
-RTF is elapsed time divided by audio duration. The Rust and JavaScript single-core CLI outputs matched. The cold Rust runs exceeded the 0.25 RTF target. On four physical ARM64 cores, Rust high recognition of 60 seconds took 8.665 s with one worker and 4.509 s with four, a 1.92× speedup. The x64 runner had two physical cores. [Linux x64](https://github.com/konard/voice-simulator/actions/runs/44842434135), [Linux ARM64](https://github.com/konard/voice-simulator/actions/runs/44842433983)
+RTF is elapsed time divided by audio duration. The default x64 CI runner met the 0.25 RTF target for the cold Rust CLI. Both engines printed the same text on both runners. On four physical ARM64 cores, Rust high recognition of 60 seconds took 7.018 s with one worker and 3.798 s with four, a 1.85× speedup. The x64 runner had two physical cores. [Linux x64](https://github.com/konard/voice-simulator/actions/runs/44849741353), [Linux ARM64](https://github.com/konard/voice-simulator/actions/runs/44849745124)
 
-`npm run test:heavy -- --suite performance` measures the CLI and worker scaling. `node scripts/profile-recognition.mjs js` and `node scripts/profile-recognition.mjs rust` measure the stages.
+After `npm run build:wasm`, `node --test tests/heavy/performance-recognition.test.js` measures the CLI and worker scaling. `node scripts/profile-recognition.mjs js` and `node scripts/profile-recognition.mjs rust` measure the stages. The manually triggered `recognition-performance` workflow checks cold latency on the x64 reference runner and scaling on any runner with four physical cores. It also records cold timings on ARM64.
 
 ### Quality
 

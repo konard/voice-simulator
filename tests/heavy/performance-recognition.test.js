@@ -123,11 +123,14 @@ verifyScaling(
   }
 );
 
-itUnless(noRust, process.platform !== 'linux' && 'taskset requires Linux')(
-  'the Rust CLI engine returns the same text and runs at at most 0.25 RTF on one core',
+const coldSkip = process.platform !== 'linux' && 'taskset requires Linux';
+let coldMeasurements;
+itUnless(noRust, coldSkip)(
+  'the CLI engines return the same text on one core',
   () => {
     const rows = measureSingleCoreRecognition();
     const [rust, js] = rows;
+    coldMeasurements = rows;
     writeReport(
       'performance-recognition-single-core',
       [
@@ -146,6 +149,18 @@ itUnless(noRust, process.platform !== 'linux' && 'taskset requires Linux')(
     );
     assert.ok(rust.text);
     assert.equal(rust.text, js.text);
+  }
+);
+
+itUnless(
+  noRust,
+  coldSkip,
+  process.env.RECOGNITION_COLD_REPORT_ONLY === '1' &&
+    'cold timing is reported here and gated on the default ubuntu-24.04 runner'
+)(
+  'the Rust CLI takes at most 0.25 seconds per second of audio on one core',
+  () => {
+    const [rust] = coldMeasurements ?? measureSingleCoreRecognition();
     assert.ok(rust.rtf <= 0.25, `Rust ran at ${rust.rtf.toFixed(3)} RTF`);
   }
 );

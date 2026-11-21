@@ -29,7 +29,7 @@ on:
         type: string
         default: ''
       recognition-runner:
-        description: Linux runner for the recognition performance suite
+        description: Recognition performance runner (x64 cold CLI reference or four-core ARM64)
         type: choice
         options:
           - ubuntu-24.04
@@ -181,6 +181,8 @@ jobs:
         env:
           HEAVY_OUT: reports/heavy
           REQUIRE_WASM: '1'
+          # The default runner is the reference for absolute single-core time.
+          RECOGNITION_COLD_REPORT_ONLY: ${{ inputs.recognition-runner == 'ubuntu-24.04-arm' && '1' || '' }}
         run: |
           mkdir -p "$HEAVY_OUT"
           lscpu > "$HEAVY_OUT/recognition-runner-cpu.txt"
