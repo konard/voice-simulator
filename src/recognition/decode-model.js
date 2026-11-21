@@ -38,6 +38,15 @@ const CONSONANT_CHANNELS = [
   'sibilance',
   'trill',
 ];
+const OBSERVED_CHANNELS = [
+  ...new Set([
+    ...VOWEL_CHANNELS,
+    ...CONSONANT_CHANNELS,
+    'lipArea',
+    'tongueArea',
+    'tongueLocation',
+  ]),
+];
 
 /** Representative broad class for edit distance on phone strings. */
 export function phoneClass(token) {
@@ -258,7 +267,7 @@ export function decoderTemplates(voice, symbols, articulationOffsets) {
     if (!templates.has(ipa)) {
       planPhone ??= createRecognitionTemplatePlanner(
         { head: voice, articulationOffsets },
-        TEMPLATE_CHANNELS
+        OBSERVED_CHANNELS
       );
       templates.set(ipa, template(ipa, planPhone));
     }

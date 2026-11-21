@@ -1331,20 +1331,53 @@ export function planUtterance(ipa, options = {}) {
   return makePlan(ipa, options, accentedHead(options), false);
 }
 
-/** The recognizer's phone templates read articulation, loudness and f0. */
+/** Plan the channels read by the recognizer's phone templates. */
 export function createRecognitionTemplatePlanner(options, sampledChannels) {
   const config = accentedHead(options);
   return (ipa) => makePlan(ipa, options, config, true, sampledChannels);
 }
 
-function articulationNames(sampledChannels, segments) {
-  // Sound harmonics read the whole tract. Plain phone templates only need
-  // the requested channels and height, which drives pitch.
-  return sampledChannels && !segments.some((segment) => segment.soundOf)
-    ? ARTICULATOR_NAMES.filter(
-        (name) => name === 'height' || sampledChannels.includes(name)
-      )
-    : ARTICULATOR_NAMES;
+function articulationOnlyNames(sampledChannels, segments) {
+  // Procedural sounds may read additional articulation channels.
+  if (
+    sampledChannels?.every((name) => Object.hasOwn(ARTICULATORS, name)) &&
+    !segments.some((segment) => segment.soundOf)
+  ) {
+    return ARTICULATOR_NAMES.filter((name) => sampledChannels.includes(name));
+  }
+}
+
+function planArticulation(
+  segments,
+  options,
+  head,
+  frameRate,
+  frameCount,
+  names = ARTICULATOR_NAMES
+) {
+  const channels = {};
+  const targetOptions = { ...options, head };
+  for (const name of names) {
+    const targets = channelTargets(segments, name, targetOptions);
+    const { timeConstant, lead } = articulatorFor(
+      name,
+      head,
+      options.articulators?.[name]
+    );
+    channels[name] = approachTargets(
+      targets,
+      timeConstant,
+      frameRate,
+      DYNAMICS_ORDER,
+      {
+        lead,
+        limited: LIMITED_LEADS.has(name),
+        frameCount,
+        fallback: DEFAULTS[name],
+      }
+    );
+  }
+  return channels;
 }
 
 function makePlan(ipa, options, config, recognitionTemplate, sampledChannels) {
@@ -1381,27 +1414,17 @@ function makePlan(ipa, options, config, recognitionTemplate, sampledChannels) {
     speech
   );
   markSegmentEffort(segments, effort, frameRate);
-  const channels = {};
-  const targetOptions = { ...options, head };
-  for (const name of articulationNames(sampledChannels, segments)) {
-    const targets = channelTargets(segments, name, targetOptions);
-    const { timeConstant, lead } = articulatorFor(
-      name,
-      head,
-      options.articulators?.[name]
-    );
-    channels[name] = approachTargets(
-      targets,
-      timeConstant,
-      frameRate,
-      DYNAMICS_ORDER,
-      {
-        lead,
-        limited: LIMITED_LEADS.has(name),
-        frameCount,
-        fallback: DEFAULTS[name],
-      }
-    );
+  const subset = articulationOnlyNames(sampledChannels, segments);
+  const channels = planArticulation(
+    segments,
+    options,
+    head,
+    frameRate,
+    frameCount,
+    subset
+  );
+  if (subset) {
+    return { tokens, segments, frameRate, frameCount, channels };
   }
   for (const name of Object.keys(SOURCE_TIME_CONSTANTS)) {
     channels[name] = new Float32Array(frameCount);

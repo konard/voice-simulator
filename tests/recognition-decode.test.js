@@ -11,10 +11,12 @@ import {
 } from '../src/index.js';
 import { createRandom } from '../src/random.js';
 import { createRecognitionTemplatePlanner } from '../src/articulation/plan.js';
+import { sampleState } from '../src/articulation/tract-shape.js';
 import { VOWELS } from '../src/ipa/inventory.js';
 import {
   decoderTemplates,
   TEMPLATE_CHANNELS,
+  TEMPLATE_POINTS,
 } from '../src/recognition/decode-model.js';
 import {
   analyzeForDecode,
@@ -53,6 +55,29 @@ it('uses the same phone trajectories as the synthesis planner', () => {
         `${ipa}: ${name}`
       );
     }
+  }
+});
+
+it('uses the same phone trajectories when planning only scored channels', () => {
+  const phones = ['a', 'pʰ', 't͡ʃ', 'ǃ', 'a˨˩˦'];
+  const head = { pitch: 181, speechRate: 1.4, vibrato: 0.7 };
+  for (const { ipa, kind, duration, compared, values } of decoderTemplates(
+    head,
+    phones
+  )) {
+    const vowel = kind === 'vowel';
+    const full = planUtterance(vowel ? ipa : `ə${ipa}ə`, { head });
+    const origin = full.segments.find(
+      (segment) => segment.token === full.tokens[vowel ? 0 : 1]
+    ).start;
+    const states = TEMPLATE_POINTS.map((point) =>
+      sampleState(full, origin + duration * point)
+    );
+    const expected = Float64Array.from(compared, (cell) => {
+      const point = Math.floor(cell / TEMPLATE_CHANNELS.length);
+      return states[point][TEMPLATE_CHANNELS[cell % TEMPLATE_CHANNELS.length]];
+    });
+    assert.deepEqual(values, expected, ipa);
   }
 });
 
