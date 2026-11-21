@@ -1230,30 +1230,24 @@ const SPEED_KEYS = Object.freeze(
 );
 
 /**
- * Time constant and lead of every articulator, with the overrides: the
+ * Time constant and lead of an articulator, with the overrides: the
  * head's articulationSpeed and speed<Channel> divide both,
  * coarticulation multiplies the lead, and roundingLead and velumLead set
  * the leads of rounding, lipProtrusion and velum.
  */
-function articulatorsFor(head, overrides = {}) {
-  return Object.fromEntries(
-    ARTICULATOR_NAMES.map((name) => {
-      const lead = head[HEAD_LEADS[name]];
-      const entry = {
-        ...ARTICULATORS[name],
-        ...(lead === undefined ? {} : { lead }),
-        ...overrides[name],
-      };
-      const speed = head.articulationSpeed * (head[SPEED_KEYS[name]] ?? 1);
-      return [
-        name,
-        {
-          timeConstant: entry.timeConstant / speed,
-          lead: (entry.lead * head.coarticulation) / speed,
-        },
-      ];
-    })
-  );
+function articulatorFor(name, head, override) {
+  const defaults = ARTICULATORS[name];
+  const lead = head[HEAD_LEADS[name]];
+  const entry = {
+    timeConstant: defaults.timeConstant,
+    lead: lead === undefined ? defaults.lead : lead,
+    ...override,
+  };
+  const speed = head.articulationSpeed * (head[SPEED_KEYS[name]] ?? 1);
+  return {
+    timeConstant: entry.timeConstant / speed,
+    lead: (entry.lead * head.coarticulation) / speed,
+  };
 }
 
 /**
@@ -1338,11 +1332,21 @@ export function planUtterance(ipa, options = {}) {
 }
 
 /** The recognizer's phone templates read articulation, loudness and f0. */
-export function planRecognitionTemplate(ipa, options) {
-  return makePlan(ipa, options, true);
+export function planRecognitionTemplate(ipa, options, sampledChannels) {
+  return makePlan(ipa, options, true, sampledChannels);
 }
 
-function makePlan(ipa, options, recognitionTemplate) {
+function articulationNames(sampledChannels, segments) {
+  // Sound harmonics read the whole tract. Plain phone templates only need
+  // the requested channels and height, which drives pitch.
+  return sampledChannels && !segments.some((segment) => segment.soundOf)
+    ? ARTICULATOR_NAMES.filter(
+        (name) => name === 'height' || sampledChannels.includes(name)
+      )
+    : ARTICULATOR_NAMES;
+}
+
+function makePlan(ipa, options, recognitionTemplate, sampledChannels) {
   const parsed = typeof ipa === 'string' ? parseIpa(ipa) : null;
   const tokens = parsed ? parsed.tokens : ipa;
   assignTokenModes(tokens, options.modes ?? parsed?.modes ?? []);
@@ -1377,10 +1381,14 @@ function makePlan(ipa, options, recognitionTemplate) {
   );
   markSegmentEffort(segments, effort, frameRate);
   const channels = {};
-  const articulators = articulatorsFor(head, options.articulators);
-  for (const name of ARTICULATOR_NAMES) {
-    const targets = channelTargets(segments, name, { ...options, head });
-    const { timeConstant, lead } = articulators[name];
+  const targetOptions = { ...options, head };
+  for (const name of articulationNames(sampledChannels, segments)) {
+    const targets = channelTargets(segments, name, targetOptions);
+    const { timeConstant, lead } = articulatorFor(
+      name,
+      head,
+      options.articulators?.[name]
+    );
     channels[name] = approachTargets(
       targets,
       timeConstant,

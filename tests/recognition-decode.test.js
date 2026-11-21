@@ -40,7 +40,7 @@ it('uses the same phone trajectories as the synthesis planner', () => {
   const options = { head: { pitch: 181, speechRate: 5, vibrato: 0.7 } };
   for (const ipa of ['a', 'əpʰə', 'ət͡ʃə', 'əǃə', 'a˨˩˦']) {
     const full = planUtterance(ipa, options);
-    const template = planRecognitionTemplate(ipa, options);
+    const template = planRecognitionTemplate(ipa, options, TEMPLATE_CHANNELS);
     assert.deepEqual(template.segments, full.segments);
     for (const name of TEMPLATE_CHANNELS) {
       assert.deepEqual(

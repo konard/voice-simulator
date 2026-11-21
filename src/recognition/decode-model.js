@@ -92,28 +92,26 @@ function comparedChannels(kind, state) {
 function template(ipa, voice, articulationOffsets) {
   const token = parseIpa(ipa).tokens[0];
   const { kind } = token;
-  const plan = planRecognitionTemplate(kind === 'vowel' ? ipa : `ə${ipa}ə`, {
-    head: voice,
-    articulationOffsets,
-  });
+  const plan = planRecognitionTemplate(
+    kind === 'vowel' ? ipa : `ə${ipa}ə`,
+    { head: voice, articulationOffsets },
+    TEMPLATE_CHANNELS
+  );
   const segments = plan.segments.filter(
     (segment) => segment.token === plan.tokens[kind === 'vowel' ? 0 : 1]
   );
   const start = segments[0].start;
   const duration = segments.at(-1).end - start;
   const compared = [];
-  const values = new Float64Array(
-    TEMPLATE_CHANNELS.length * TEMPLATE_POINTS.length
-  );
+  const values = [];
+  const state = {};
   TEMPLATE_POINTS.forEach((relative, point) => {
-    const state = sampleState(plan, start + duration * relative);
-    TEMPLATE_CHANNELS.forEach((name, col) => {
-      values[point * TEMPLATE_CHANNELS.length + col] = state[name];
-    });
+    sampleState(plan, start + duration * relative, state);
     for (const name of comparedChannels(kind, state)) {
       compared.push(
         point * TEMPLATE_CHANNELS.length + TEMPLATE_CHANNELS.indexOf(name)
       );
+      values.push(state[name]);
     }
   });
   return {
@@ -126,8 +124,8 @@ function template(ipa, voice, articulationOffsets) {
       (mask, name) => mask | (1 << BROAD_CLASSES.indexOf(name)),
       0
     ),
-    compared,
-    values,
+    compared: Uint16Array.from(compared),
+    values: Float64Array.from(values),
   };
 }
 
