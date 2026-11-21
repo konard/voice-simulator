@@ -92,6 +92,39 @@ it('keeps interrupted telephone whispers together without bridging periodic spee
   ).toBe(2);
 });
 
+it('joins narrowband whispers across brief pitch detections', () => {
+  const audio = synthesize(
+    '[whisper]The quick brown fox jumps over the lazy dog.[/whisper]',
+    {
+      tier: 'narrowband',
+      head: 'random',
+      preset: 'male',
+      seed: 1,
+      markup: true,
+    }
+  );
+  const rate = 8000;
+  const samples = resample(audio.samples, audio.sampleRate, rate);
+  const frames = analyzeFrames(samples, rate, { hop: 0.01 });
+  const pitch = trackPitch(frames);
+  const [first, middle, last] = whisperSpeechRuns(frames);
+  expect(pitch.f0.subarray(middle.from, middle.to).some(Boolean)).toBe(true);
+
+  const [span, ...others] = findWhisper(samples, rate, frames, pitch);
+  expect(others).toEqual([]);
+  expect(span.start).toBe(first.start);
+  expect(span.end).toBe(last.end);
+
+  const f0 = pitch.f0.slice();
+  const periodicity = frames.periodicity.slice();
+  f0.fill(120, middle.from, middle.from + 5);
+  periodicity.fill(1, middle.from, middle.from + 5);
+  expect(
+    findWhisper(samples, rate, { ...frames, periodicity }, { ...pitch, f0 })
+      .length
+  ).toBe(2);
+});
+
 describe('whisper recognition', () => {
   for (const lang of new Set(sentences.map(([language]) => language))) {
     it(`finds ${lang} whispers, including at 8 kHz and with noise 20 dB below them`, () => {

@@ -14,6 +14,7 @@ const EDGE_RATIO_RISE = 5;
 const EDGE_RATIO_ALLOWANCE = 6;
 const PERIODIC_FRAME = 0.6;
 const PERIODIC_SHARE = 0.75;
+const SUSTAINED_PITCH = 0.03;
 const NEARBY_RUN = 0.5;
 
 export function whisperSpeechRuns(frames, count = frames.count) {
@@ -259,6 +260,20 @@ function coversRun(span, run) {
   return span?.start === run.start && span.end === run.end;
 }
 
+function hasSustainedPitch(frames, pitch, from, to) {
+  let consecutive = 0;
+  for (let i = from; i < to; i++) {
+    consecutive =
+      pitch.f0[i] > 0 && frames.periodicity[i] >= PERIODIC_FRAME
+        ? consecutive + 1
+        : 0;
+    if (consecutive * frames.hop >= SUSTAINED_PITCH - EPSILON) {
+      return true;
+    }
+  }
+  return false;
+}
+
 function bridgeWhisper(runs, decisions, index, frames, pitch, classify) {
   const run = runs[index];
   const left = runs[index - 1];
@@ -274,13 +289,13 @@ function bridgeWhisper(runs, decisions, index, frames, pitch, classify) {
     return null;
   }
   if (
-    pitch.f0.subarray(left.to, right.from).some((f0) => f0 > 0) ||
+    hasSustainedPitch(frames, pitch, left.to, right.from) ||
     mostlyPeriodic(frames.periodicity, run.from, run.to)
   ) {
     return null;
   }
-  // Telephone filtering can hide the high band in a short vowel run. Require
-  // the usual spectral evidence across both anchors and the intervening run.
+  // Narrow bands can hide the high band or produce brief spurious pitch.
+  // Require the usual spectral evidence across both anchors and the gap.
   const combined = classify({ ...left, to: right.to, end: right.end });
   return (
     combined && {

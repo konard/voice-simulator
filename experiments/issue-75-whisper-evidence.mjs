@@ -24,6 +24,13 @@ function evidence(audio, frames, pitch, span) {
   const from = Math.round(start / frames.hop);
   const to = Math.min(frames.count, Math.round(end / frames.hop));
   const { samples, sampleRate, plan } = audio;
+  let consecutive = 0;
+  let sustained = 0;
+  for (let i = from; i < to; i++) {
+    consecutive =
+      pitch.f0[i] > 0 && frames.periodicity[i] >= 0.6 ? consecutive + 1 : 0;
+    sustained = Math.max(sustained, consecutive);
+  }
   return {
     start,
     end,
@@ -34,6 +41,7 @@ function evidence(audio, frames, pitch, span) {
       end * sampleRate
     ),
     pitchShare: fraction(from, to, (i) => pitch.f0[i] > 0),
+    sustainedPitch: sustained * frames.hop,
     periodicShare: fraction(from, to, (i) => frames.periodicity[i] >= 0.6),
     planVoicedShare: fraction(
       from,
@@ -45,6 +53,7 @@ function evidence(audio, frames, pitch, span) {
 
 const wholeCorpus = process.argv.includes('--corpus');
 const modeCases = process.argv.includes('--mode-cases');
+const frontEndOnly = process.argv.includes('--front-end-only');
 const tier = process.argv.includes('--narrowband') ? 'narrowband' : 'telephone';
 const level = levelForTier(tier);
 const options = RECOGNITION_LEVELS[level];
@@ -91,7 +100,7 @@ for (const [lang, index] of cases) {
         evidence({ ...audio, samples, sampleRate }, frames, pitch, span)
       );
     const heard =
-      modeCases && mode === 'whisper'
+      modeCases && mode === 'whisper' && !frontEndOnly
         ? recognize(audio.samples, audio.sampleRate, { level })
         : null;
     console.log(

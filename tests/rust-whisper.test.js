@@ -154,6 +154,28 @@ itUnless(noRust)('matches interrupted telephone whispers', async () => {
   ).toBe(1);
 });
 
+itUnless(noRust)(
+  'matches narrowband whispers with brief pitch detections',
+  async () => {
+    const engine = await loadRustEngine();
+    const { samples, sampleRate } = synthesize(
+      '[whisper]The quick brown fox jumps over the lazy dog.[/whisper]',
+      {
+        tier: 'narrowband',
+        head: 'random',
+        preset: 'male',
+        seed: 1,
+        markup: true,
+      }
+    );
+    const rate = 8000;
+    const wave = resample(samples, sampleRate, rate);
+    expect(whisperFrameParity(engine, wave, rate, { hop: 0.01 }).length).toBe(
+      1
+    );
+  }
+);
+
 describe('Rust whisper numerical parity', () => {
   itUnless(noRust)(
     'matches whisper spans on voiced, whispered, mixed and noisy narrowband speech',

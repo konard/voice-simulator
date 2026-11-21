@@ -15,6 +15,7 @@ const EDGE_RATIO_RISE: f64 = 5.0;
 const EDGE_RATIO_ALLOWANCE: f64 = 6.0;
 const PERIODIC_FRAME: f64 = 0.6;
 const PERIODIC_SHARE: f64 = 0.75;
+const SUSTAINED_PITCH: f64 = 0.03;
 const NEARBY_RUN: f64 = 0.5;
 
 fn mostly_periodic(periodicity: &[f64], from: usize, to: usize) -> bool {
@@ -187,6 +188,21 @@ impl Signal<'_> {
         spans
     }
 
+    fn has_sustained_pitch(&self, from: usize, to: usize, periodicity: &[f64]) -> bool {
+        let mut consecutive = 0;
+        for (frame, &periodic) in self.frames[from..to].iter().zip(&periodicity[from..to]) {
+            consecutive = if frame.f0 > 0.0 && periodic >= PERIODIC_FRAME {
+                consecutive + 1
+            } else {
+                0
+            };
+            if consecutive as f64 * self.hop >= SUSTAINED_PITCH - EPS {
+                return true;
+            }
+        }
+        false
+    }
+
     fn bridge_whisper(
         &self,
         runs: &[(usize, usize)],
@@ -207,7 +223,7 @@ impl Signal<'_> {
             || b.start != self.time(right_from)
             || b.end != self.time(right_to).min(self.start + self.duration)
             || (from - left_to).max(right_from - to) as f64 * self.hop > NEARBY_RUN + EPS
-            || self.frames[left_to..right_from].iter().any(|f| f.f0 > 0.0)
+            || self.has_sustained_pitch(left_to, right_from, periodicity)
             || mostly_periodic(periodicity, from, to)
         {
             return None;
