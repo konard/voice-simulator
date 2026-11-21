@@ -320,7 +320,9 @@ and child voices, WebGPU) in
 
 ### Vision and roadmap
 
-Where the project is going is written in [docs/VISION.md](docs/VISION.md): one physical model that both speaks (text → IPA → audio) and listens (audio → IPA → language → text), copies voices, uses no neural networks and stays in the public domain. Today the simulator speaks; listening and voice copying from real recordings are planned, not delivered.
+The project aims to use one physical model for synthesis (text → IPA → audio), recognition (audio → IPA → language → text), and voice copying. It stays in the public domain and uses no neural networks. [Vision](docs/VISION.md)
+
+The example app supports local recognition and initial voice fitting from microphone input and audio files. The voice session’s convergence criteria remain open. [Voice session validation](docs/reports/issue-78-validation.md)
 
 The plan is [docs/ROADMAP.md](docs/ROADMAP.md): GitHub issues marked as bugs and features, grouped in six milestones, with the blockers between them. The analysis, the survey of similar projects and the research behind the plan are in [docs/case-studies/issue-11](docs/case-studies/issue-11/README.md).
 
@@ -596,6 +598,12 @@ renderings with seeds 1 and 2 are 10 to 11 dB apart
 (`node experiments/issue-19-voice-pairs.mjs`).
 
 ### Voice matching
+
+In the [web app](examples/universal-app/README.md), the live **Copy a voice**
+panel uses a background voice session to show the fit, recognised syllables,
+and voice stability while you speak or process a local audio file. Use the
+fitted voice to read the main text or repeat a finished utterance. The speaker
+permission checkbox enables voice and audio export. Audio stays on the device.
 
 `fitVoice(samples, sampleRate, options)` estimates a full head configuration from one speaker. It is experimental: the [accuracy gates remain unmet](docs/reports/issue-63-validation.md). Optional `transcript`, `language` and `ipa` tell the refinement what was said; without text it renders `MATCH_TEXT`. Input can be telephone speech at 8000 Hz. At least 20 voiced frames are required. For streaming audio, [voice sessions](docs/VOICE-SESSION.md) alternate fitting and recognition as more speech arrives.
 

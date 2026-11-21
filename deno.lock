@@ -5,12 +5,13 @@
     "npm:@eslint/js@^10.0.1": "10.0.1_eslint@10.15.0",
     "npm:command-stream@2.4.0": "2.4.0",
     "npm:eslint-config-prettier@^10.1.8": "10.1.8_eslint@10.15.0",
-    "npm:eslint-plugin-prettier@^5.5.4": "5.5.6_eslint@10.15.0_eslint-config-prettier@10.1.8__eslint@10.15.0_prettier@3.8.4",
+    "npm:eslint-plugin-prettier@^5.5.4": "5.5.6_eslint@10.15.0_eslint-config-prettier@10.1.8_prettier@3.8.4",
     "npm:eslint@^10.13.0": "10.15.0",
     "npm:husky@^9.1.7": "9.1.7",
     "npm:jscpd@^5.4.0": "5.4.0",
     "npm:lino-arguments@0.4.0": "0.4.0",
     "npm:lint-staged@^16.4.0": "16.4.0",
+    "npm:playwright@1.59.1": "1.59.1",
     "npm:prettier@^3.6.2": "3.8.4",
     "npm:test-anywhere@~0.8.48": "0.8.50",
     "npm:yaml@2.9.1": "2.9.1"
@@ -519,7 +520,7 @@
       ],
       "bin": true
     },
-    "eslint-plugin-prettier@5.5.6_eslint@10.15.0_eslint-config-prettier@10.1.8__eslint@10.15.0_prettier@3.8.4": {
+    "eslint-plugin-prettier@5.5.6_eslint@10.15.0_eslint-config-prettier@10.1.8_prettier@3.8.4": {
       "integrity": "sha512-ifetmTcxWfz+4qRW3pH/ujdTq2jQIj59AxJMIN26K5avYgU8dxycUETQonWiW+wPrYXA0j3Try0l1CnwVQtDqQ==",
       "dependencies": [
         "eslint",
@@ -694,6 +695,11 @@
     },
     "flatted@3.4.2": {
       "integrity": "sha512-PjDse7RzhcPkIJwy5t7KPWQSZ9cAbzQXcafsetQoD7sOJRQlGikNbx7yZp2OotDnJyrDcbyRq3Ttb18iYOqkxA=="
+    },
+    "fsevents@2.3.2": {
+      "integrity": "sha512-xiqMQR4xAeHTuB9uWm+fFRcIOgKBMiOBP+eXiyT7jsgVCq1bkVygt00oASowB7EdtpOHaaPgKt812P9ab+DDKA==",
+      "os": ["darwin"],
+      "scripts": true
     },
     "get-caller-file@2.0.5": {
       "integrity": "sha512-DyFP3BM/3YHTQOCUL/w0OZHR0lpKeGrxotcHWcqNEdnltqFwXVfhEBQ94eIo34AfQpo0rGki4cyIiftY06h2Fg=="
@@ -1008,6 +1014,20 @@
     "picomatch@4.0.7": {
       "integrity": "sha512-qcJu88Q2IWqJsDD529JKMdwGm/dvInW4HvQnRwiH9JtihJvzGOscDtHE3x1pBKeUOTysQ8kVmLnJ2kJu7yhcGA=="
     },
+    "playwright-core@1.59.1": {
+      "integrity": "sha512-HBV/RJg81z5BiiZ9yPzIiClYV/QMsDCKUyogwH9p3MCP6IYjUFu/MActgYAvK0oWyV9NlwM3GLBjADyWgydVyg==",
+      "bin": true
+    },
+    "playwright@1.59.1": {
+      "integrity": "sha512-C8oWjPR3F81yljW9o5OxcWzfh6avkVwDD2VYdwIGqTkl+OGFISgypqzfu7dOe4QNLL2aqcWBmI3PMtLIK233lw==",
+      "dependencies": [
+        "playwright-core"
+      ],
+      "optionalDependencies": [
+        "fsevents"
+      ],
+      "bin": true
+    },
     "prelude-ls@1.2.1": {
       "integrity": "sha512-vkcDPrRZo1QZLbn5RLGPpg/WmIQ65qoWWhcGKf/b5eplkkarX0m9z8ppCat4mlOqUsWpyNuYgO3VRyrYHSzX5g=="
     },
@@ -1206,6 +1226,7 @@
         "npm:jscpd@^5.4.0",
         "npm:lino-arguments@0.4.0",
         "npm:lint-staged@^16.4.0",
+        "npm:playwright@1.59.1",
         "npm:prettier@^3.6.2",
         "npm:test-anywhere@~0.8.48",
         "npm:yaml@2.9.1"
