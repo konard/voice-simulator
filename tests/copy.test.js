@@ -32,10 +32,10 @@ const near = (actual, expected, limit) =>
     `${actual} outside ${expected} ± ${limit}`
   );
 
-function vowelWithPitch() {
+function vowelWithPitch(duration = 0.85) {
   const plan = planUtterance('aː', {
     head: { pitch: 125, vibrato: 0 },
-    durations: [0.85],
+    durations: [duration],
   });
   for (let i = 0; i < plan.frameCount; i++) {
     plan.channels.f0[i] = 100 + (50 * i) / (plan.frameCount - 1);
@@ -120,11 +120,23 @@ describe('copy controls', () => {
 
   it('round-trips a score and replays pitch edits', () => {
     const plan = vowelWithPitch();
+    const modes = [
+      {
+        from: 0,
+        to: 1,
+        start: 0,
+        end: plan.duration,
+        notation: null,
+        confidence: 1,
+        phonation: { tension: 0.5 },
+      },
+    ];
     const score = toScore(
       plan,
-      { words: [], languages: [] },
+      { words: [], languages: [], modes },
       saveVoice(plan.head)
     );
+    assert.deepEqual(score.modes, modes);
     const output = renderScore(score, options);
     const decoded = JSON.parse(JSON.stringify(score));
     assert.deepEqual(renderScore(decoded, options).samples, output.samples);
@@ -136,7 +148,13 @@ describe('copy controls', () => {
       0.2
     );
     decoded.segments[0].ipa = 'i';
-    assert.notDeepEqual(renderScore(decoded, options).samples, higher.samples);
+    const editedPhone = renderScore(decoded, options);
+    assert.notDeepEqual(editedPhone.samples, higher.samples);
+    decoded.segments[0].start += 0.1;
+    assert.notDeepEqual(
+      renderScore(decoded, options).samples,
+      editedPhone.samples
+    );
   });
 });
 
@@ -184,7 +202,7 @@ describe('copy synthesis', () => {
       const replay = join(directory, 'replay.wav');
       const score = join(directory, 'score.json');
       const voice = join(directory, 'voice.json');
-      const original = renderPlan(vowelWithPitch(), draft);
+      const original = renderPlan(vowelWithPitch(0.18), draft);
       writeFileSync(input, encodeWav(original, sampleRate));
       writeFileSync(voice, JSON.stringify(saveVoice({ pitch: 125 })));
       const errors = [];

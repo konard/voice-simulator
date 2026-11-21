@@ -53,7 +53,8 @@ export function measureCopyMetrics(
       output.samples,
       output.sampleRate,
       score.voice,
-      options
+      options,
+      false
     );
     timing = timingError(score, copy);
   } catch (error) {
@@ -71,14 +72,21 @@ export function measureCopyMetrics(
   };
 }
 
-function recognizeWithVoice(samples, sampleRate, voice, options) {
+function recognizeWithVoice(
+  samples,
+  sampleRate,
+  voice,
+  options,
+  includeModeLabels = true
+) {
   const { head, articulationOffsets } = loadVoice(voice);
   return recognize(samples, sampleRate, {
     languages: options.languages,
     voice: head,
     articulationOffsets,
     deterministic: true,
-    segments: true,
+    includeModeLabels,
+    segments: includeModeLabels,
   });
 }
 
@@ -172,7 +180,7 @@ function makeScore(
   if (impose.loudness) {
     matchLoudness(plan, samples, sampleRate, seed);
   }
-  const score = toScore(plan, recognition, voice);
+  const score = toScore(plan, { ...recognition, modes }, voice);
   score.planDuration = plan.duration;
   score.duration = duration;
   score.render = { tier: options.tier, seed, sampleRate: options.sampleRate };

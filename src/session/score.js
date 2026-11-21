@@ -49,7 +49,7 @@ export function toScore(plan, recognition, voice) {
       ),
     },
     loudness: { rate, values: Array.from(channels.loudness) },
-    modes: plan.modes,
+    modes: recognition.modes,
   };
 }
 
