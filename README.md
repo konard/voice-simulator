@@ -626,19 +626,12 @@ Resume with `createVoiceFitter({ state: JSON.parse(savedState) })` or pass `stat
 
 ### Analysis front end
 
-`createFrameAnalyzer(sampleRate, options)` turns sound into analysis frames
-while it arrives; it is the first stage of reverse simulation (Roadmap 4).
-It resamples to a working rate (`workingRate`: the largest of 8000, 11025
-and 16000 Hz not above the input rate; it never up-samples) with
-`createResampler`, which matches `resample()` within 1e-6. Every 5 ms (or
-10 ms) it measures a 25 ms frame: `energy`, `zcr`, `gravity`, `tilt`, six
-Liu (1996) `band` levels, `periodicity` (Boersma 1993), 24 log `mel`
-energies, 13 `cepstrum` coefficients, LPC `lpc`, `reflection` and `gain`
-(Burg, autocorrelation or covariance method), the `noise` floor (minimum
-statistics, Martin 2001) and a `speech` flag with 40 ms hangover. The
-defaults are `FRONTEND_DEFAULTS`. All rows live in one frame set of flat
-`Float32Array`s (`speech` is a `Uint8Array`) with `capacity` rows allocated
-once; nothing is allocated per frame.
+`createFrameAnalyzer(sampleRate, options)` is the first stage of reverse simulation (Roadmap 4). It turns incoming audio into
+analysis frames. Its `workingRate` is the largest of 8000, 11025 and 16000 Hz at or below the input rate. It uses `createResampler`,
+which matches `resample()` within 1e-6. Every 5 or 10 ms it measures a 25 ms frame for `energy`, `zcr`, `gravity`, `tilt`, six Liu (1996)
+`band` levels, `periodicity` (Boersma 1993), 24 log `mel` energies and 13 `cepstrum` coefficients. It also measures LPC `lpc`, `reflection`
+and `gain` (Burg, autocorrelation or covariance), the `noise` floor (minimum statistics, Martin 2001) and a `speech` flag with 40 ms
+hangover. See `FRONTEND_DEFAULTS`. Flat `Float32Array`s (`Uint8Array` for `speech`) allocate `capacity` rows once for all frames.
 
 ```js
 import { analyzeFrames, createFrameAnalyzer } from 'voice-simulator';
