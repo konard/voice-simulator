@@ -1,18 +1,50 @@
 import assert from 'node:assert/strict';
 import { DEFAULT_HEAD, recognize, synthesize } from '../src/index.js';
 import { renderPlan, STEADY_TRACT } from '../src/acoustics/voice.js';
-import { steadyPlan } from '../src/recognition/codebook-features.js';
+import { TRACT_SECTIONS } from '../src/articulation/tract-shape.js';
+import {
+  createTractResponse,
+  RESPONSE_GRID,
+  steadyPlan,
+} from '../src/recognition/codebook-features.js';
 import { decoderCodebook } from '../src/recognition/decode-pipeline.js';
 import { codebookQueries } from '../src/recognition/codebook-jobs.js';
 import { createRecognitionEngine } from '../src/recognition/engine.js';
 import { analyzeFrames } from '../src/recognition/frontend.js';
 import { trackFormants } from '../src/recognition/formants.js';
 import { trackPitch } from '../src/recognition/pitch.js';
+import { withWasmMemory } from '../src/recognition/wasm-memory.js';
 import { noRust } from './helpers/rust-engine.js';
 import { itUnless } from './helpers/skip.js';
 
 const it = itUnless(noRust);
 const FOX = 'The quick brown fox jumps over the lazy dog.';
+
+it('prepares the same oral response in scalar Rust and JavaScript', async () => {
+  const { module } = await createRecognitionEngine({ engine: 'rust' });
+  const reference = createTractResponse(RESPONSE_GRID);
+  withWasmMemory(module, (allocate) => {
+    const compute = createTractResponse(RESPONSE_GRID, {
+      allocate,
+      response: module.exports.rec_codebook_tract,
+    });
+    const areas = Float64Array.from({ length: TRACT_SECTIONS }, (_, i) =>
+      i % 11 === 0 ? 0.02 : 1 + (i % 9) / 3
+    );
+    const js = new Float64Array(RESPONSE_GRID.length);
+    const rust = new Float64Array(RESPONSE_GRID.length);
+    for (const length of [13, 19, 13]) {
+      reference(areas, length, js);
+      compute(areas, length, rust);
+      for (let i = 0; i < rust.length; i++) {
+        assert.ok(
+          Math.abs(rust[i] - js[i]) <= 1e-10,
+          `bin ${i} at ${length} cm`
+        );
+      }
+    }
+  });
+});
 
 it('reuses steady nasal reference geometry without changing samples', async () => {
   const { renderer } = await createRecognitionEngine({

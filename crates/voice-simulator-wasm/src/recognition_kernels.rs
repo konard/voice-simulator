@@ -265,6 +265,36 @@ fn disjoint<T>(offset: u32, count: u32, input: &[T]) -> Result<(), i32> {
 
 use crate::u8_slice;
 use voice_simulator_core::recognition::codebook::{Codebook, QUERY_WIDTH};
+use voice_simulator_core::recognition::codebook_response;
+
+#[no_mangle]
+pub extern "C" fn rec_codebook_tract(
+    frequencies: u32,
+    bins: u32,
+    sections: u32,
+    length: u32,
+    lip_area: f64,
+    out: u32,
+) -> i32 {
+    let run = || {
+        if bins > 4096 || !(1..=1024).contains(&length) {
+            return Err(error::BAD_ARGUMENT);
+        }
+        let terms = f64_read(frequencies, bins * 6)?;
+        let geometry = f64_read(sections, length * 5)?;
+        disjoint(out, bins, terms)?;
+        disjoint(out, bins, geometry)?;
+        let output = f64_slice(out, bins)?;
+        codebook_response::power(
+            terms.as_chunks().0,
+            geometry.as_chunks().0,
+            lip_area,
+            output,
+        );
+        Ok(0)
+    };
+    run().unwrap_or_else(core::convert::identity)
+}
 
 #[no_mangle]
 pub extern "C" fn rec_codebook_search(

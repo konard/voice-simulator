@@ -22,6 +22,7 @@ import {
 } from './codebook-features.js';
 import { codebookSeeds, proposeRow } from './codebook-seeds.js';
 import { attachQuery, buildTree } from './codebook-search.js';
+import { withWasmMemory } from './wasm-memory.js';
 import {
   CODEBOOK_VERSION,
   ROW_KINDS,
@@ -118,8 +119,8 @@ function duplicate(state, bucket, buckets, rawChannels, rawEnvelope, env) {
   return false;
 }
 
-function createCodebookResponse(head, frequencies, renderer) {
-  const oral = createTractResponse(frequencies);
+function createCodebookResponse(head, frequencies, renderer, dsp) {
+  const oral = createTractResponse(frequencies, dsp);
   const correction = new Float64Array(frequencies.length);
   let render;
   return (state, nasal, cache, response) => {
@@ -157,9 +158,20 @@ function createCodebookResponse(head, frequencies, renderer) {
 }
 
 /** Build or parse a deterministic table; length scaling is per returned view. */
+export function buildCodebookWithRenderer(head, options, renderer) {
+  const module = renderer?.module;
+  const response = module?.exports?.rec_codebook_tract;
+  if (!response) {
+    return buildCodebookRows(head, options, renderer);
+  }
+  return withWasmMemory(module, (allocate) =>
+    buildCodebookRows(head, options, renderer, { allocate, response })
+  );
+}
+
 // Row generation combines feature extraction, quantization and accounting.
 /* eslint-disable max-statements, complexity */
-export function buildCodebookWithRenderer(head, options, renderer) {
+function buildCodebookRows(head, options, renderer, dsp) {
   const size = options.size ?? 20000,
     seed = options.seed ?? 1;
   if (
@@ -221,7 +233,12 @@ export function buildCodebookWithRenderer(head, options, renderer) {
     stats: { rows, nasalRows: 0, nonUniqueShare: 0, buildMilliseconds: 0 },
   };
   const seeds = codebookSeeds();
-  const evaluate = createCodebookResponse(canonical, responseGrid, renderer);
+  const evaluate = createCodebookResponse(
+    canonical,
+    responseGrid,
+    renderer,
+    dsp
+  );
   let seedResponses = new Map();
   const response = new Float64Array(RESPONSE_GRID.length);
   const env = new Float64Array(24),

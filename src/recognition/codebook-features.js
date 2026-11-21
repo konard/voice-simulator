@@ -11,6 +11,7 @@ import {
 import { RADIATION_BAFFLE } from '../acoustics/radiation.js';
 import { lpcBurg, lpcLevel } from './lpc.js';
 import { CHANNEL_DEFAULTS } from '../articulation/plan.js';
+import { TRACT_SECTIONS } from '../articulation/tract-shape.js';
 import { renderPlan, STEADY_TRACT } from '../acoustics/voice.js';
 import { whisperReferenceLpc } from './whisper-spectrum.js';
 
@@ -66,16 +67,52 @@ function frequencyTerms(frequencies, dx, out) {
 }
 
 /** Reuse frequency terms across the rows of one codebook. */
-export function createTractResponse(frequencies) {
-  const terms = new Float64Array(frequencies.length * FREQUENCY_WIDTH);
+export function createTractResponse(frequencies, dsp) {
+  const width = frequencies.length * FREQUENCY_WIDTH;
+  const terms = new Float64Array(width);
+  const wasm = dsp && prepareTractKernel(dsp, frequencies.length, width);
   let previousStep;
   return (areas, length, out) => {
     const step = length / areas.length;
     if (step !== previousStep) {
       frequencyTerms(frequencies, step, terms);
+      wasm?.terms.view().set(terms);
       previousStep = step;
     }
+    if (wasm) {
+      fillSections(areas, length, wasm.sections.view());
+      wasm.compute(areas, out);
+      return out;
+    }
     return evaluateTractResponse(areas, length, terms, out);
+  };
+}
+
+function prepareTractKernel({ allocate, response }, count, width) {
+  const terms = allocate(Float64Array, width);
+  const sections = allocate(Float64Array, TRACT_SECTIONS * SECTION_WIDTH);
+  const power = allocate(Float64Array, count);
+  return {
+    terms,
+    sections,
+    compute(areas, out) {
+      const lipArea = Math.max(areas[areas.length - 1], 1e-3);
+      const error = response(
+        terms.pointer,
+        count,
+        sections.pointer,
+        areas.length,
+        lipArea,
+        power.pointer
+      );
+      if (error) {
+        throw new Error(`Rust codebook tract response failed (${error})`);
+      }
+      const values = power.view();
+      for (let i = 0; i < count; i++) {
+        out[i] = -10 * Math.log10(values[i]);
+      }
+    },
   };
 }
 
@@ -88,16 +125,8 @@ export function tractResponse(areas, length, frequencies, out) {
   return createTractResponse(frequencies)(areas, length, out);
 }
 
-function evaluateTractResponse(areas, length, terms, out) {
+function fillSections(areas, length, s) {
   const n = areas.length;
-  const bins = terms.length / FREQUENCY_WIDTH;
-  if (!n || !(length > 0) || out.length < bins) {
-    throw new RangeError('Invalid tract response dimensions');
-  }
-  if (sectionScratch.length < n * SECTION_WIDTH) {
-    sectionScratch = new Float64Array(n * SECTION_WIDTH);
-  }
-  const s = sectionScratch;
   const dx = length / n;
   const rhoC = AIR_DENSITY * SPEED_OF_SOUND;
   for (let j = 0; j < n; j++) {
@@ -109,6 +138,19 @@ function evaluateTractResponse(areas, length, terms, out) {
     s[offset + 3] = 2 * Math.sqrt(Math.PI * area) * dx * rhoC;
     s[offset + 4] = 1 / area;
   }
+}
+
+function evaluateTractResponse(areas, length, terms, out) {
+  const n = areas.length;
+  const bins = terms.length / FREQUENCY_WIDTH;
+  if (!n || !(length > 0) || out.length < bins) {
+    throw new RangeError('Invalid tract response dimensions');
+  }
+  if (sectionScratch.length < n * SECTION_WIDTH) {
+    sectionScratch = new Float64Array(n * SECTION_WIDTH);
+  }
+  const s = sectionScratch;
+  fillSections(areas, length, s);
   const lipArea = Math.max(areas[n - 1], 1e-3);
   const radius = Math.sqrt(lipArea / Math.PI);
   for (let i = 0; i < bins; i++) {
