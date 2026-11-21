@@ -18,6 +18,34 @@ pub fn sample_track(values: &[f32], frame: f64) -> f64 {
     start + (f64::from(values[ceil(frame) as usize]) - start) * (frame - left)
 }
 
+/// Target start and end, followed by source start and end, all in seconds.
+pub type WarpSpan = [f64; 4];
+
+/// Retiming one channel across the shared phone and pause anchors.
+pub fn warp_track(
+    values: &[f32],
+    spans: &[WarpSpan],
+    frame_rate: f64,
+    frame_count: usize,
+    mute_pauses: bool,
+) -> Vec<f32> {
+    let mut index = 0;
+    (0..frame_count)
+        .map(|frame| {
+            let time = frame as f64 / frame_rate;
+            while index + 1 < spans.len() && time >= spans[index][1] {
+                index += 1;
+            }
+            let span = spans[index];
+            if mute_pauses && span[3] <= span[2] {
+                0.0
+            } else {
+                sample_track(values, source_frame(time, span, frame_rate)) as f32
+            }
+        })
+        .collect()
+}
+
 /// Bound the stretch while allowing room for the unchanged release.
 pub fn phone_duration(planned: f64, release: f64, requested: f64, clamp: bool) -> f64 {
     if !clamp && requested > release {
@@ -144,6 +172,19 @@ pub fn rms_track(samples: &[f32], rate: f64, count: usize, frame_rate: f64) -> (
 /// Level correction for one pair of voiced windows.
 pub fn loudness_gain(reference: f64, draft: f64) -> f64 {
     pow(10.0, 0.8 * (reference - draft) / 20.0).clamp(0.25, 4.0)
+}
+
+/// Apply one gated gain adjustment on the reference and draft level tracks.
+pub fn match_levels(
+    loudness: &mut [f32],
+    (reference, reference_gate): (&[f64], f64),
+    (draft, draft_gate): (&[f64], f64),
+) {
+    for ((level, &to), &from) in loudness.iter_mut().zip(reference).zip(draft) {
+        if from > draft_gate && to > reference_gate {
+            *level = (f64::from(*level) * loudness_gain(to, from)) as f32;
+        }
+    }
 }
 
 /// Blend a score channel with its inverted articulation.

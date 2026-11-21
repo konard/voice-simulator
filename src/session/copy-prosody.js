@@ -97,6 +97,16 @@ export function loudnessGain(reference, draft) {
   return Math.max(0.25, Math.min(4, 10 ** ((0.8 * (reference - draft)) / 20)));
 }
 
+export function matchLevels(loudness, reference, draft) {
+  for (let i = 0; i < loudness.length; i++) {
+    const from = draft.values[i];
+    const to = reference.values[i];
+    if (from > draft.threshold && to > reference.threshold) {
+      loudness[i] *= loudnessGain(to, from);
+    }
+  }
+}
+
 export function renderDraft(plan, seed) {
   return renderPlan(plan, {
     solver: 'waveguide',
@@ -116,12 +126,6 @@ export function matchLoudness(plan, samples, sampleRate, seed) {
       frameCount,
       frameRate
     );
-    for (let i = 0; i < frameCount; i++) {
-      const from = draft.values[i];
-      const to = reference.values[i];
-      if (from > draft.threshold && to > reference.threshold) {
-        channels.loudness[i] *= loudnessGain(to, from);
-      }
-    }
+    matchLevels(channels.loudness, reference, draft);
   }
 }

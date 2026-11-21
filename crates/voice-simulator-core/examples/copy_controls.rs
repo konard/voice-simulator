@@ -30,4 +30,19 @@ fn main() {
         penalty_change(0.1, 0.05),
     ];
     println!("{control:?}");
+    let input = [0.3, 0.5, 0.7, 0.8, 0.9];
+    let spans = [
+        [0.0, 0.005, 0.0, 0.0],
+        [0.005, 0.035, 0.0, 0.02],
+        [0.035, 0.04, 0.02, 0.02],
+    ];
+    println!("{:?}", warp_track(&input, &spans, 200.0, 9, true));
+
+    let mut loudness = input;
+    match_levels(
+        &mut loudness,
+        (&[-25.0, -45.0, -35.0, -20.0, -18.0], -40.0),
+        (&[-28.0, -60.0, -60.0, -25.0, -12.0], -50.0),
+    );
+    println!("{loudness:?}");
 }

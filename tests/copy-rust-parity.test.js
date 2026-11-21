@@ -4,6 +4,7 @@ import { execFileSync } from 'node:child_process';
 import { itUnless } from './helpers/skip.js';
 import {
   loudnessGain,
+  matchLevels,
   pitchContour,
   rmsTrack,
 } from '../src/session/copy-prosody.js';
@@ -16,6 +17,7 @@ import {
   phoneDuration,
   sampleTrack,
   sourceFrame,
+  warpPlan,
 } from '../src/session/warp.js';
 
 const native = process.env.COPY_NATIVE_PROBE;
@@ -38,12 +40,11 @@ itUnless(
   );
   const { values, threshold } = rmsTrack(audio, 16000, 11, 200);
   // Rust prints shortest decimal representations of f32; round back before comparing.
-  const [nativePitch, nativeLevels, nativeControls] = execFileSync(native, {
-    encoding: 'utf8',
-  })
-    .trim()
-    .split('\n')
-    .map((line) => JSON.parse(line.replaceAll('-inf', 'null')));
+  const [nativePitch, nativeLevels, nativeControls, nativeWarp, nativeGain] =
+    execFileSync(native, { encoding: 'utf8' })
+      .trim()
+      .split('\n')
+      .map((line) => JSON.parse(line.replaceAll('-inf', 'null')));
   assert.deepEqual(Float32Array.from(nativePitch), pitchContour(f0, 200, 130));
   const near = (actual, expected) =>
     assert.ok(
@@ -74,4 +75,31 @@ itUnless(
     offsetPenalty(0.1, 0.05),
   ];
   expected.forEach((value, i) => near(nativeControls[i], value));
+
+  const loudness = new Float32Array([0.3, 0.5, 0.7, 0.8, 0.9]);
+  const plan = {
+    frameRate: 200,
+    duration: 0.02,
+    channels: { loudness },
+    segments: [
+      {
+        kind: 'vowel',
+        token: { kind: 'vowel', symbol: 'a', base: 'a' },
+        start: 0,
+        end: 0.02,
+        duration: 0.02,
+      },
+    ],
+  };
+  const warped = warpPlan(plan, [{ ipa: 'a', start: 0.005, end: 0.035 }], {
+    duration: 0.04,
+  });
+  assert.deepEqual(Float32Array.from(nativeWarp), warped.channels.loudness);
+
+  matchLevels(
+    loudness,
+    { values: [-25, -45, -35, -20, -18], threshold: -40 },
+    { values: [-28, -60, -60, -25, -12], threshold: -50 }
+  );
+  assert.deepEqual(Float32Array.from(nativeGain), loudness);
 });
