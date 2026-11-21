@@ -140,6 +140,7 @@ function createInverter(frames, options, batch) {
       candidates: track.candidates,
       history,
       head,
+      query: options.query,
     });
   const smoother = createTractSmoother(track, book, steps, path);
   const source = createSourceEstimator(frames, pitch, track, batch);

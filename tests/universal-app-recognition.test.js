@@ -233,16 +233,20 @@ it('validates the recognition worker start options', async () => {
   try {
     await import('../examples/universal-app/src/engine/recognition-worker.js');
     const start = { type: 'start', sampleRate: 16000, id: 1 };
-    handle({ ...start, languages: ['invalid'] });
-    handle({ ...start, languages: ['en'], level: 'invalid' });
+    await handle({ ...start, languages: ['invalid'] });
+    await handle({ ...start, languages: ['en'], level: 'invalid' });
     expect(messages.map(({ message }) => message)).toEqual([
       'languages must contain distinct supported codes',
       'level must be auto, low, medium or high',
     ]);
     handle({ ...start, languages: ['en'], level: 'low' });
-    handle({ type: 'chunk', id: start.id, samples: new Float32Array(320) });
+    await handle({
+      type: 'chunk',
+      id: start.id,
+      samples: new Float32Array(320),
+    });
     expect(messages.at(-1)).toEqual({ type: 'chunk', id: start.id });
-    handle({ type: 'stop', id: start.id });
+    await handle({ type: 'stop', id: start.id });
     expect(messages.at(-1).code).toBe('empty');
   } finally {
     Object.assign(globalThis, original);

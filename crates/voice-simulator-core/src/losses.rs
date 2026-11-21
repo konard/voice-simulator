@@ -116,11 +116,9 @@ fn design_grid(rate: f64) -> [f64; GRID_POINTS] {
 }
 
 /// For a pole at -a, the C, D of `fitShelf`.
-fn fit_shelf(a: f64, grid: &[f64; GRID_POINTS], rate: f64) -> Fit {
+fn fit_shelf(a: f64, grid: &[(f64, f64); GRID_POINTS]) -> Fit {
     let mut rows = [(0.0, 0.0); GRID_POINTS];
-    for (row, &frequency) in rows.iter_mut().zip(grid) {
-        let c = math::cos((2.0 * PI * frequency) / rate);
-        let s = math::sqrt(frequency);
+    for (row, &(c, s)) in rows.iter_mut().zip(grid) {
         *row = (1.0 / s, (a + c) / (1.0 + a * a + 2.0 * a * c) / s);
     }
     let mut weights = [1.0 / GRID_POINTS as f64; GRID_POINTS];
@@ -170,33 +168,38 @@ fn zero_loss(b: f64, c: f64) -> f64 {
 
 /// The shelf of a rate rounded to 500 Hz (`shelfShape` without its cache).
 fn shelf(rate: f64) -> Shelf {
-    let grid = design_grid(rate);
+    let grid = design_grid(rate).map(|frequency| {
+        (
+            math::cos((2.0 * PI * frequency) / rate),
+            math::sqrt(frequency),
+        )
+    });
     // Golden-section search for the pole.
     let ratio = (math::sqrt(5.0) - 1.0) / 2.0;
     let mut low = -0.98;
     let mut high = 0.5;
     let mut x1 = high - ratio * (high - low);
     let mut x2 = low + ratio * (high - low);
-    let mut f1 = fit_shelf(x1, &grid, rate);
-    let mut f2 = fit_shelf(x2, &grid, rate);
+    let mut f1 = fit_shelf(x1, &grid);
+    let mut f2 = fit_shelf(x2, &grid);
     for _ in 0..30 {
         if f1.error < f2.error {
             high = x2;
             x2 = x1;
             f2 = f1;
             x1 = high - ratio * (high - low);
-            f1 = fit_shelf(x1, &grid, rate);
+            f1 = fit_shelf(x1, &grid);
         } else {
             low = x1;
             x1 = x2;
             f1 = f2;
             x2 = low + ratio * (high - low);
-            f2 = fit_shelf(x2, &grid, rate);
+            f2 = fit_shelf(x2, &grid);
         }
     }
     let fit = if f1.error < f2.error { f1 } else { f2 };
-    let band_low = math::cos((2.0 * PI * grid[0]) / rate);
-    let band_high = math::cos((2.0 * PI * grid[GRID_POINTS - 1]) / rate);
+    let band_low = grid[0].0;
+    let band_high = grid[GRID_POINTS - 1].0;
     let a = fit.a;
     let h = |c: f64| (a + c) / (1.0 + math::pow(a, 2.0) + 2.0 * a * c);
     Shelf {
@@ -220,8 +223,11 @@ pub struct ShelfCache {
 
 impl ShelfCache {
     /// An empty cache.
-    pub fn new() -> Self {
-        Self::default()
+    pub const fn new() -> Self {
+        Self {
+            shelves: Vec::new(),
+            last: None,
+        }
     }
 
     fn shape(&mut self, sample_rate: f64) -> Shelf {
@@ -234,6 +240,11 @@ impl ShelfCache {
         let index = match self.shelves.iter().position(|(key, _)| *key == rate) {
             Some(index) => index,
             None => {
+                // Keep a bound even for a cache reused across renderers with
+                // many different tract lengths.
+                if self.shelves.len() == 64 {
+                    self.shelves.clear();
+                }
                 self.shelves.push((rate, shelf(rate)));
                 self.shelves.len() - 1
             }

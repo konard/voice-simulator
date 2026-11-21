@@ -1,6 +1,6 @@
 /**
  * Inverse lookup of the forward simulator, made on first use (issue 64).
- * Pure JavaScript by design: Rust table building belongs to issue 77.
+ * The recognition path can reuse the existing scalar waveguide renderer.
  */
 import { normalizeHeadConfig } from '../head-config.js';
 import { hashSeed } from '../random.js';
@@ -12,15 +12,18 @@ import {
   GRID,
   L0,
   RESPONSE_GRID,
+  createRenderedResponse,
+  createTractResponse,
   envelopeKey,
   interpolateResponse,
   normalizeEnvelope,
-  renderedResponse,
   responseFormants,
   tractResponse,
 } from './codebook-features.js';
 import { codebookSeeds, proposeRow } from './codebook-seeds.js';
+import { preparedOralRows } from './codebook-data.js';
 import { attachQuery, buildTree } from './codebook-search.js';
+import { withWasmMemory } from './wasm-memory.js';
 import {
   CODEBOOK_VERSION,
   ROW_KINDS,
@@ -117,10 +120,59 @@ function duplicate(state, bucket, buckets, rawChannels, rawEnvelope, env) {
   return false;
 }
 
+function createCodebookResponse(head, frequencies, renderer, dsp) {
+  const oral = createTractResponse(frequencies, dsp);
+  const correction = new Float64Array(frequencies.length);
+  let render;
+  return (state, nasal, cache, response) => {
+    const shape = nasal ? null : tractShape(state, head);
+    // Seed labels can differ even when their tract and excitation agree.
+    const key =
+      cache &&
+      (shape
+        ? `${shape.length}:${shape.areas.join(',')}`
+        : CODEBOOK_CHANNELS.map(({ name }) => state[name]).join(','));
+    const cached = cache?.get(key);
+    if (cached) {
+      response.set(cached);
+      return;
+    }
+    if (shape) {
+      oral(shape.areas, shape.length, response);
+    } else {
+      if (!render) {
+        render = createRenderedResponse(head, frequencies, renderer);
+        const neutral = tractShape(CHANNEL_DEFAULTS, head);
+        oral(neutral.areas, neutral.length, correction);
+        render(CHANNEL_DEFAULTS, response);
+        for (let j = 0; j < response.length; j++) {
+          correction[j] = response[j] - correction[j];
+        }
+      }
+      render(state, response);
+      for (let j = 0; j < response.length; j++) {
+        response[j] -= correction[j];
+      }
+    }
+    cache?.set(key, response.slice());
+  };
+}
+
 /** Build or parse a deterministic table; length scaling is per returned view. */
+export function buildCodebookWithRenderer(head, options, renderer) {
+  const module = renderer?.module;
+  const response = module?.exports?.rec_codebook_tract;
+  if (!response) {
+    return buildCodebookRows(head, options, renderer);
+  }
+  return withWasmMemory(module, (allocate) =>
+    buildCodebookRows(head, options, renderer, { allocate, response })
+  );
+}
+
 // Row generation combines feature extraction, quantization and accounting.
 /* eslint-disable max-statements, complexity */
-export function buildCodebook(head = {}, options = {}) {
+function buildCodebookRows(head, options, renderer, dsp) {
   const size = options.size ?? 20000,
     seed = options.seed ?? 1;
   if (
@@ -155,7 +207,7 @@ export function buildCodebook(head = {}, options = {}) {
         .map((name) => [name, canonical[name]]),
     ])
   );
-  const cache = options.cache ?? memoryCache;
+  const cache = renderer ? new Map() : (options.cache ?? memoryCache);
   const cached = cache.get(id);
   if (cached !== undefined) {
     const book = parseCodebook(cached);
@@ -182,20 +234,29 @@ export function buildCodebook(head = {}, options = {}) {
     stats: { rows, nasalRows: 0, nonUniqueShare: 0, buildMilliseconds: 0 },
   };
   const seeds = codebookSeeds();
-  const response = new Float64Array(RESPONSE_GRID.length),
-    correction = new Float64Array(RESPONSE_GRID.length);
+  const evaluate = createCodebookResponse(
+    canonical,
+    responseGrid,
+    renderer,
+    dsp
+  );
+  const oralRows = preparedOralRows(canonical, seed, size);
+  let seedResponses = new Map();
+  const response = new Float64Array(RESPONSE_GRID.length);
   const env = new Float64Array(24),
     key = new Float64Array(6),
     formants = new Float64Array(8);
   const rawChannels = new Float64Array(size * 12),
     rawEnvelope = new Float64Array(size * 24);
   const buckets = Array.from({ length: 51 }, () => []);
-  let correctionReady = false,
-    count = 0,
+  let count = 0,
     proposal = 0;
   while (count < size) {
     if (proposal > size * 100 + seeds.length) {
       throw new Error('Could not fill codebook after bounded proposals');
+    }
+    if (proposal === seeds.length) {
+      seedResponses = null;
     }
     const row =
       proposal < seeds.length
@@ -206,33 +267,21 @@ export function buildCodebook(head = {}, options = {}) {
     if (nasal && book.stats.nasalRows >= Math.floor(size / 10)) {
       continue;
     }
-    if (nasal) {
-      if (!correctionReady) {
-        const neutral = tractShape(CHANNEL_DEFAULTS, canonical);
-        tractResponse(neutral.areas, neutral.length, responseGrid, correction);
-        renderedResponse(CHANNEL_DEFAULTS, canonical, response, responseGrid);
-        for (let j = 0; j < response.length; j++) {
-          correction[j] = response[j] - correction[j];
-        }
-        correctionReady = true;
+    const precomputed = !nasal && oralRows?.(proposal - 1, env, formants);
+    if (!precomputed) {
+      evaluate(row.state, nasal, seedResponses, response);
+      for (let j = 0; j < 24; j++) {
+        env[j] = interpolateResponse(response, GRID[j]);
       }
-      renderedResponse(row.state, canonical, response, responseGrid);
-      for (let j = 0; j < response.length; j++) {
-        response[j] -= correction[j];
-      }
-    } else {
-      const shape = tractShape(row.state, canonical);
-      tractResponse(shape.areas, shape.length, responseGrid, response);
+      normalizeEnvelope(env);
     }
-    for (let j = 0; j < 24; j++) {
-      env[j] = interpolateResponse(response, GRID[j]);
-    }
-    normalizeEnvelope(env);
     const bucket = Math.floor(row.state.height * 50);
     if (duplicate(row.state, bucket, buckets, rawChannels, rawEnvelope, env)) {
       continue;
     }
-    responseFormants(response, formants);
+    if (!precomputed) {
+      responseFormants(response, formants);
+    }
     for (let j = 0; j < 12; j++) {
       const { name, min, max } = CODEBOOK_CHANNELS[j];
       rawChannels[count * 12 + j] = row.state[name];
@@ -271,6 +320,10 @@ export function buildCodebook(head = {}, options = {}) {
 }
 
 /* eslint-enable max-statements, complexity */
+
+export function buildCodebook(head = {}, options = {}) {
+  return buildCodebookWithRenderer(head, options);
+}
 
 const predictor = new Float64Array(128);
 /** Caller-owned {envelope: 24 values, key: 6 values}; no frame allocations. */

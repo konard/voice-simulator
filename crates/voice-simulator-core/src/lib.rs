@@ -33,6 +33,7 @@ pub mod inverse_whisper;
 pub mod landmarks;
 
 mod inverse_dsp;
+#[path = "recognition/inverse_filter.rs"]
 pub mod inverse_filter;
 mod inverse_refinement;
 pub mod inversion;

@@ -1,7 +1,8 @@
 /** Fixed-memory sufficient statistics for voice fitting. Unlicense, issue 63. */
+import { measure } from '../recognition/profile.js';
 import { analyzeFrames } from '../recognition/frontend.js';
 import { trackPitch, jitterToHead } from '../recognition/pitch.js';
-import { trackFormants } from '../recognition/formants.js';
+import { trackBatchFormants } from '../recognition/formants.js';
 import { inverseFilter } from '../recognition/inverse-filter.js';
 import { HEAD_PARAMETERS, DEFAULT_HEAD } from '../head-config.js';
 import { prepareLegacyVoice } from './voice-features.js';
@@ -154,20 +155,27 @@ export function medianSd(state, key) {
   if (!count) {
     return 0;
   }
-  const values = state.histograms[key]
-    .map((n, i) => [Math.abs(binValue(key, i) - centre), n])
-    .sort((a, b) => a[0] - b[0]);
+  const bins = state.histograms[key];
+  const values = [];
+  for (let i = 0; i < bins.length; i++) {
+    if (bins[i] > 0) {
+      values.push([Math.abs(binValue(key, i) - centre), bins[i]]);
+    }
+  }
+  values.sort((a, b) => a[0] - b[0]);
   const at = (count - 1) / 2;
+  const lower = Math.floor(at);
+  const upper = Math.ceil(at);
   let sum = 0,
     lo = null,
     mad = 0;
   for (const [d, n] of values) {
     sum += n;
-    if (lo === null && sum > Math.floor(at)) {
+    if (lo === null && sum > lower) {
       lo = d;
     }
-    if (sum > Math.ceil(at)) {
-      mad = lo + (d - lo) * (at - Math.floor(at));
+    if (sum > upper) {
+      mad = lo + (d - lo) * (at - lower);
       break;
     }
   }
@@ -219,6 +227,21 @@ function collectDiagnostics(state, legacy) {
     state.diagnostics[key] += legacy[key] * weight;
   }
 }
+
+function analyzeVoiceInput(samples, sampleRate, options) {
+  const { profile, kernels } = options;
+  const frames = measure(profile, 'Front end', () =>
+    analyzeFrames(samples, sampleRate, {
+      order: options.order,
+      rate: options.analysisRate,
+    })
+  );
+  const pitch = measure(profile, 'Pitch', () =>
+    trackPitch(frames, { kernels })
+  );
+  return { frames, pitch };
+}
+
 export function accumulate(
   state,
   samples,
@@ -237,16 +260,17 @@ export function accumulate(
         )
       : samples
   );
-  const frames = analyzeFrames(input, sampleRate, {
-    maxSeconds,
-    order: options.order,
-    rate: options.analysisRate,
-  });
-  const pitch = trackPitch(frames);
+  const { profile, kernels } = options;
+  const { frames, pitch } =
+    options.frontEnd ?? analyzeVoiceInput(input, sampleRate, options);
   // Use the tracker's initial tract prior for every stretch. Re-estimating
   // that prior from a whole utterance makes the pooled dF depend on splits.
-  const formants = trackFormants(frames, { pitch, vocalTractLength: 16.5 });
-  const source = inverseFilter(frames, { pitch, trace: options.trace ?? null });
+  const formants = measure(profile, 'Formants', () =>
+    trackBatchFormants(frames, { pitch, vocalTractLength: 16.5 })
+  );
+  const source = measure(profile, 'Inverse filter', () =>
+    inverseFilter(frames, { pitch, kernels, trace: options.trace ?? null })
+  );
   const analysis = prepareLegacyVoice(input, sampleRate, {
     ...options,
     diagnosticsOnly: true,

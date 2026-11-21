@@ -1,3 +1,9 @@
 {
-  "libm": "MIT"
+  "crossbeam-deque": "MIT",
+  "crossbeam-epoch": "MIT",
+  "crossbeam-utils": "MIT",
+  "either": "MIT",
+  "libm": "MIT",
+  "rayon": "MIT",
+  "rayon-core": "MIT"
 }

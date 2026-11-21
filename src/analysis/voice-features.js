@@ -413,11 +413,12 @@ export function prepareLegacyVoice(samples, sampleRate, options = {}) {
   const rateFeatures = {
     duration: samples.length / sampleRate,
     activeDuration: activeSeconds,
-    syllableRate:
-      activeSeconds > 0
+    get syllableRate() {
+      return activeSeconds > 0
         ? countSyllables(levels, (index) => frameAt(index).voiced) /
-          activeSeconds
-        : 0,
+            activeSeconds
+        : 0;
+    },
   };
   const tracePitch = (phase) =>
     options.trace?.({
@@ -426,7 +427,10 @@ export function prepareLegacyVoice(samples, sampleRate, options = {}) {
       evaluated,
       activeFrames: active.filter(Boolean).length,
     });
-  tracePitch('rate');
+  if (options.trace) {
+    void rateFeatures.syllableRate;
+    tracePitch('rate');
+  }
   const voicedIndices = [];
   let features = null;
   function pitchFeatures() {

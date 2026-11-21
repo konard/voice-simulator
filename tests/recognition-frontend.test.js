@@ -20,6 +20,7 @@ import {
   resample,
   synthesize,
 } from '../src/index.js';
+import { analyzeFrameHops } from '../src/recognition/frontend.js';
 
 /** Every array of a frame set with its row width. */
 const COLUMNS = [
@@ -82,6 +83,16 @@ function whiteNoise(length, level, seed) {
   const amplitude = 10 ** (level / 20) * Math.sqrt(3);
   return Float32Array.from({ length }, () => (random() * 2 - 1) * amplitude);
 }
+
+it('shares waveform analysis across hops while preserving independent noise tracking', () => {
+  const sampleRate = 8000;
+  const samples = whiteNoise(8401, -28, 77);
+  samples.fill(0, 0, 3200);
+  samples.fill(0, 7900);
+  const { fine, coarse } = analyzeFrameHops(samples, sampleRate);
+  expect(fine).toEqual(analyzeFrames(samples, sampleRate, { hop: 0.005 }));
+  expect(coarse).toEqual(analyzeFrames(samples, sampleRate, { hop: 0.01 }));
+});
 
 describe('recognition front end: transforms', () => {
   it('transforms like a direct sum', () => {

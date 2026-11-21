@@ -103,26 +103,41 @@ export function lpcBurg(x, order, a, k) {
     power += x[n] * x[n];
   }
   let error = power / length;
-  for (let m = 1; m <= order && m < length; m++) {
-    let s1 = 0;
-    let s2 = 0;
-    for (let n = m; n < length; n++) {
-      const fn = f[n];
-      const bn = b[n - 1];
-      s1 += fn * bn;
-      s2 += fn * fn + bn * bn;
-    }
+  let s1 = 0;
+  let s2 = 0;
+  for (let n = 1; n < length; n++) {
+    const fn = f[n];
+    const bn = b[n - 1];
+    s1 += fn * bn;
+    s2 += fn * fn + bn * bn;
+  }
+  const last = Math.min(order, length - 1);
+  for (let m = 1; m <= last; m++) {
     const reflection = s2 > 0 ? (-2 * s1) / s2 : 0;
-    // Downwards, so b[n - 1] still holds the old value when n is updated.
-    for (let n = length - 1; n >= m; n--) {
-      const fn = f[n];
-      const bn = b[n - 1];
-      f[n] = fn + reflection * bn;
-      b[n] = bn + reflection * fn;
-    }
     k[m - 1] = reflection;
     stepUp(a, m, reflection);
     error *= 1 - reflection * reflection;
+    if (m === last) {
+      break;
+    }
+    // Carry the old backward value forward while accumulating the next
+    // order from the updated errors in ascending sample order.
+    let previous = b[m];
+    let backward = b[m - 1] + reflection * f[m];
+    f[m] += reflection * b[m - 1];
+    s1 = 0;
+    s2 = 0;
+    for (let n = m + 1; n < length; n++) {
+      const fn = f[n];
+      const forward = fn + reflection * previous;
+      f[n] = forward;
+      s1 += forward * backward;
+      s2 += forward * forward + backward * backward;
+      b[n - 1] = backward;
+      backward = previous + reflection * fn;
+      previous = b[n];
+    }
+    b[length - 1] = backward;
   }
   return error;
 }

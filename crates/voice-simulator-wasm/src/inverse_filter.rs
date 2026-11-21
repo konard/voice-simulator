@@ -119,6 +119,11 @@ pub extern "C" fn vs_inverse_filter(input: u32, length: u32, output: u32, capaci
         Err(e) => e,
     }
 }
+/// Recognition entry point for the same source-analysis packet.
+#[no_mangle]
+pub extern "C" fn rec_inverse_filter(input: u32, length: u32, output: u32, capacity: u32) -> i32 {
+    vs_inverse_filter(input, length, output, capacity)
+}
 #[cfg(test)]
 mod tests {
     use super::*;

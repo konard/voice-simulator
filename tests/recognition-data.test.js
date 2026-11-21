@@ -15,7 +15,11 @@ import {
   buildCounts,
   writeCounts,
 } from '../scripts/build-recognition-data.mjs';
-import { getCounts, wordCost } from '../src/recognition/data/index.js';
+import {
+  getCounts,
+  wordCost,
+  wordTransition,
+} from '../src/recognition/data/index.js';
 import * as en from '../src/recognition/data/en.js';
 import * as ru from '../src/recognition/data/ru.js';
 import * as hi from '../src/recognition/data/hi.js';
@@ -94,6 +98,19 @@ describe('recognition count tables', () => {
     expect(wordCost(data, null, 'b')).toBe(
       -0.3 * Math.log((0.4 * 5) / 15) + 0.5
     );
+  });
+
+  it('scores indexed corpus pairs and missing predecessors exactly as the reference', () => {
+    for (const language of ['en', 'ru', 'hi', 'zh']) {
+      const data = getCounts(language);
+      for (const [pair] of Array.from(data.bigrams).slice(0, 16)) {
+        const [previous, word] = pair.split('\t');
+        const transition = wordTransition(data, word);
+        expect(transition(previous)).toBe(wordCost(data, previous, word));
+        expect(transition('')).toBe(wordCost(data, '', word));
+        expect(transition('🦊')).toBe(wordCost(data, '🦊', word));
+      }
+    }
   });
 
   it('counts real source words and pairs without bridging sentence or file boundaries', () => {

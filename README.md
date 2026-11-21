@@ -659,44 +659,35 @@ Measured with `node experiments/issue-58-rtf.mjs` (10 s of speech, one thread): 
 
 ## Recognition (speech to text)
 
-`recognize` accepts mono samples and returns IPA, text, timed words and
-syllables, language shares, and speech modes. The decoder is experimental.
+`recognize` accepts mono samples and returns IPA, text, timed words and syllables, language shares, and speech modes. See the [recognition API and examples](docs/RECOGNIZER.md).
 
-```js
-import { createRecognizer, recognize } from 'voice-simulator';
+### Recognition engines and workers
 
-const result = recognize(samples, sampleRate, { languages: ['en'] });
-const live = createRecognizer({ sampleRate, level: 'auto' });
-live.on('syllable', ({ start, end }) => highlight(start, end));
-live.on('final', ({ text }) => console.log(text));
-for await (const chunk of audioChunks) live.push(chunk); // Float32Array
-const complete = live.flush();
-```
+`engine: 'auto'` selects scalar Rust WebAssembly with a JavaScript fallback. Use `'js'` for the reference or `'rust'` to require WebAssembly.
+`recognize(samples, rate, options)` is synchronous with `threads: 1` or when the option is omitted. Call `recognizeAsync` or supply `threads: 'auto'` or a count above one for parallel batch work. The async API and file CLI default to up to eight logical cores. Over ten seconds, pauses of at least 300 ms allow independent chunks. The streaming API runs synchronously inside its caller.
 
 ```sh
-voice-simulator recognize speech.wav --lang en --json
-curl --data-binary @speech.wav 'http://localhost:8080/api/recognize?lang=en'
+voice-simulator recognize speech.wav --level high --engine rust --threads 4
+cargo run --release -p voice-simulator-cli --features parallel -- recognize speech.wav --threads 4
 ```
 
-Use `recognize - --format raw` for live PCM on standard input, or
-`POST /api/recognize?stream=1&rate=16000` for 16-bit little-endian PCM and
-NDJSON. Partial events replace the preceding partial. Final events commit
-words in input time. See the [recognition API](docs/RECOGNIZER.md).
+The native CLI reads WAV and reports IPA and timings for frame analysis, pitch, formants, inverse filtering, codebook search and phone decoding. Add `--rescore` for physical waveform rescoring. The `parallel` Cargo feature enables Rayon for codebook search and rescoring. Language identification and word decoding are available through the package API. [Recognition API](docs/RECOGNIZER.md#native-cli)
 
-### Speech-mode recognition
+The GitHub Actions reports below include the test input, runner CPU topology and raw timings.
 
-`recognizeModes(samples, sampleRate, result, { voice })` adds manner of speech to timed IPA words. A span is `{ start, end, from, to, effort: 0.75, notation: 'f', confidence: 0.8 }`: seconds, end-exclusive word indexes and only the decided mode fields. Phonation and tempo use synthesis brace marks; emotions use `notation: null`; sounds have `sound` instead of word indexes.
-`toPlanModes(result.modes)` supplies word spans, including emotions, to `planUtterance(result.ipa, { modes })`. It retains activation already covered by physical modes as an observation (`emotion.realized: true`) to avoid applying it twice. See [the API and acoustic rules](docs/RECOGNITION-MODES.md) for baseline, abstention, diagnostics and limits.
+| Measurement                     | JavaScript |      Rust | Rust speedup |
+| ------------------------------- | ---------: | --------: | -----------: |
+| Cold 8 kHz CLI, one core, x64   |  0.274 RTF | 0.245 RTF |        1.12× |
+| Cold 8 kHz CLI, one core, ARM64 |  0.327 RTF | 0.287 RTF |        1.14× |
+| Pitch, low, x64                 |   70.19 ms |  31.00 ms |        2.26× |
+| Inverse filter, low, x64        |   84.64 ms |  28.90 ms |        2.93× |
+| Codebook rank, high, x64        |    6.78 ms |   3.31 ms |        2.05× |
+| Word trie search, high, x64     |   47.34 ms |   7.26 ms |        6.52× |
+| IPA to text, high, x64          |   93.17 ms |  52.11 ms |        1.79× |
 
-### Articulatory codebook
+RTF is elapsed time divided by audio duration. The default x64 CI runner met the 0.25 RTF target for the cold Rust CLI. Both engines printed the same text on both runners. On four physical ARM64 cores, Rust high recognition of 60 seconds took 7.018 s with one worker and 3.798 s with four, a 1.85× speedup. The x64 runner had two physical cores. [Linux x64](https://github.com/konard/voice-simulator/actions/runs/44849741353), [Linux ARM64](https://github.com/konard/voice-simulator/actions/runs/44849745124)
 
-`buildCodebook(head, { size: 20000, seed: 1, cache })` builds a deterministic simulator-generated table of tract positions, formants and spectral envelopes. `frameEnvelope(frames, t, table, out)` reads an analysis frame; `table.query(envelope, 16, out)` returns candidate rows and envelope costs without allocating. `CODEBOOK_CHANNELS` defines the twelve tract controls; `serializeCodebook` and `parseCodebook` support a caller-owned binary cache. Tables use 0.5 cm length buckets and are generated on demand. See [API, layout, source limits and verification](docs/CODEBOOK.md).
-
-### Acoustic-to-articulatory inversion and IPA decoding
-
-`invertArticulation` and `createArticulationInverter` recover simulator controls from analysis frames. Use `articulationPlan(track)` to render them. The recognizer's batch and streaming articulation tracks include the `whisper` control and use a lazily rendered reference table within whispered spans. See [inversion usage and accuracy](docs/CODEBOOK.md#acoustic-to-articulatory-inversion).
-`audioToIpa(samples, sampleRate, { voice, language: 'en', nbest: 5 })` returns experimental timed phonemes and syllables, ranked readings, a lattice, and analysis tracks. It fits the head when `voice` is omitted. `createIpaDecoder(sampleRate, options)` returns fixed phonemes and nuclei as audio arrives. See the [decoder API and measured accuracy](docs/CODEBOOK.md#audio-to-ipa). Experimental syllable nuclei and broad sound classes are available through `findLandmarks`, `createLandmarkDetector` and `BROAD_CLASSES`. See the [landmark API, streaming contract and measured quality limits](docs/RECOGNITION-LANDMARKS.md).
-`rescoreHypotheses(decoded)` compares uncertain n-best stretches with waveguide renders in the fitted voice and returns revised timed IPA, scored alternatives and render statistics. See the [rescoring API and evaluation](docs/CODEBOOK.md#analysis-by-synthesis-rescoring). The [prosody stages](docs/RECOGNITION-PROSODY.md) measure timed vowels and restore stress, tone, punctuation and emphasis.
+After `npm run build:wasm`, `node --test tests/heavy/performance-recognition.test.js` measures the CLI and worker scaling. `node scripts/profile-recognition.mjs js` and `node scripts/profile-recognition.mjs rust` measure the stages. The manually triggered `recognition-performance` workflow checks cold latency on the x64 reference runner and scaling on any runner with four physical cores. It also records cold timings on ARM64.
 
 ### Quality
 

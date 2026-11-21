@@ -243,7 +243,7 @@ function formantSettings(frames, options) {
  */
 function aberthRoots(a, m, re, im) {
   for (let round = 0; round < ABERTH_ROUNDS; round++) {
-    let largest = 0;
+    let converged = true;
     for (let i = 0; i < m; i++) {
       const zr = re[i];
       const zi = im[i];
@@ -282,19 +282,17 @@ function aberthRoots(a, m, re, im) {
       const wi = (ni * qr - nr * qi) / qq;
       re[i] = zr - wr;
       im[i] = zi - wi;
-      const step = Math.hypot(wr, wi);
       if (!Number.isFinite(re[i]) || !Number.isFinite(im[i])) {
         return -1;
       }
-      // A root that P(z) = 0 hits exactly gives 0 / 0 = NaN: no step.
-      if (Number.isNaN(step)) {
-        re[i] = zr;
-        im[i] = zi;
-      } else if (step > largest) {
-        largest = step;
-      }
+      // Once a step reaches the tolerance, finish the round without
+      // measuring the rest. A single component can also rule it out.
+      converged &&=
+        Math.abs(wr) < ABERTH_TOLERANCE &&
+        Math.abs(wi) < ABERTH_TOLERANCE &&
+        Math.hypot(wr, wi) < ABERTH_TOLERANCE;
     }
-    if (largest < ABERTH_TOLERANCE) {
+    if (converged) {
       return 1;
     }
   }
@@ -321,12 +319,18 @@ function createRootFinder(frames, settings, store) {
   const p = frames.order;
   const reflection = new Float64Array(p);
   const predictor = new Float64Array(p);
-  const models = orders.map((m) => ({
-    m,
-    re: new Float64Array(m),
-    im: new Float64Array(m),
-    started: false,
-  }));
+  const models = orders.map((m) => {
+    const initialRe = new Float64Array(m);
+    const initialIm = new Float64Array(m);
+    startRoots(m, initialRe, initialIm);
+    return {
+      m,
+      re: initialRe.slice(),
+      im: initialIm.slice(),
+      initialRe,
+      initialIm,
+    };
+  });
   const width = store.rawWidth;
   return {
     find(t) {
@@ -337,19 +341,17 @@ function createRootFinder(frames, settings, store) {
       let count = 0;
       for (let rank = 0; rank < models.length; rank++) {
         const model = models[rank];
-        const { m, re, im } = model;
+        const { m, re, im, initialRe, initialIm } = model;
         predictor.fill(0);
         predictorFromReflection(reflection, m, predictor);
-        if (!model.started) {
-          startRoots(m, re, im);
-          model.started = true;
-        }
         // Not finite, or no convergence from the roots of the frame before:
         // start again from the first-frame values once.
         if (aberthRoots(predictor, m, re, im) !== 1) {
-          startRoots(m, re, im);
+          re.set(initialRe);
+          im.set(initialIm);
           if (aberthRoots(predictor, m, re, im) === -1) {
-            startRoots(m, re, im);
+            re.set(initialRe);
+            im.set(initialIm);
             continue;
           }
         }
@@ -862,17 +864,19 @@ export function formantCandidates(frames, options = {}) {
  * Tracker over a frame set; `batch` (used by `trackFormants`) estimates the
  * tract length from the whole path before anything is committed.
  */
-function createTracker(frames, options, batch) {
+function createTracker(frames, options, batch, candidates) {
   const settings = formantSettings(frames, options);
   const { keep, lag, formants: K } = settings;
   const rows = frames.capacity;
   const rawWidth = settings.orders.reduce((sum, m) => sum + m / 2, 0);
   const store = {
     rawWidth: Math.ceil(rawWidth),
-    rawFrequency: new Float32Array(rows * Math.ceil(rawWidth)),
-    rawBandwidth: new Float32Array(rows * Math.ceil(rawWidth)),
-    rawRank: new Uint8Array(rows * Math.ceil(rawWidth)),
-    rawCount: new Uint8Array(rows),
+    rawFrequency:
+      candidates?.frequency ?? new Float32Array(rows * Math.ceil(rawWidth)),
+    rawBandwidth:
+      candidates?.bandwidth ?? new Float32Array(rows * Math.ceil(rawWidth)),
+    rawRank: candidates?.rank ?? new Uint8Array(rows * Math.ceil(rawWidth)),
+    rawCount: candidates?.count ?? new Uint8Array(rows),
     frequency: new Float32Array(rows * MAX_CANDIDATES),
     bandwidth: new Float32Array(rows * MAX_CANDIDATES),
     count: new Uint8Array(rows),
@@ -882,7 +886,7 @@ function createTracker(frames, options, batch) {
     nasal: new Uint8Array(rows),
     reset: new Uint8Array(rows),
   };
-  const finder = createRootFinder(frames, settings, store);
+  const finder = candidates ? null : createRootFinder(frames, settings, store);
   const path = new Uint8Array(rows);
   const track = createTrack(frames, settings);
   const smoother = createSmoother(frames, store, settings, track, rows);
@@ -992,7 +996,7 @@ function createTracker(frames, options, batch) {
         if (frames.speech[t]) {
           peak = Math.max(peak, frames.energy[t]);
         }
-        finder.find(t);
+        finder?.find(t);
         score(t);
         track.count++;
       }
@@ -1035,6 +1039,26 @@ export function createFormantTracker(frames, options = {}) {
  */
 export function trackFormants(frames, options = {}) {
   const tracker = createTracker(frames, options, true);
+  tracker.advance(true);
+  return tracker.track;
+}
+
+const batchCandidates = new WeakMap();
+
+/** Share roots across consumers of the same completed batch frame set. */
+export function trackBatchFormants(frames, options) {
+  if (options.maxBandwidth !== undefined) {
+    return trackFormants(frames, options);
+  }
+  if (!batchCandidates.has(frames)) {
+    batchCandidates.set(frames, formantCandidates(frames));
+  }
+  const tracker = createTracker(
+    frames,
+    options,
+    true,
+    batchCandidates.get(frames)
+  );
   tracker.advance(true);
   return tracker.track;
 }

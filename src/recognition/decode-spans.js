@@ -167,8 +167,8 @@ export function decodeBoundaries(
   return { times: speechTimes(candidates, pauses), pauses };
 }
 
-function classCounts(frames, landmarks, start, end) {
-  const out = new Uint16Array(BROAD_CLASSES.length);
+function classCounts(frames, landmarks, start, end, counts) {
+  counts.fill(0);
   const from = Math.max(
     0,
     Math.ceil((start - frames.startTime) / frames.hop - EPSILON)
@@ -178,13 +178,19 @@ function classCounts(frames, landmarks, start, end) {
     Math.ceil((end - frames.startTime) / frames.hop - EPSILON)
   );
   for (let frame = from; frame < to; frame++) {
-    out[landmarks.classes[frame]]++;
+    counts[landmarks.classes[frame]]++;
   }
-  return [out, Math.max(1, to - from)];
+  return Math.max(1, to - from);
 }
 
-function sample(track, start, duration, means, precision) {
-  const { channels, variance } = track;
+function sample(
+  track,
+  { channels, variance },
+  start,
+  duration,
+  means,
+  precision
+) {
   const width = TEMPLATE_CHANNELS.length;
   TEMPLATE_POINTS.forEach((relative, point) => {
     const index = Math.max(
@@ -197,16 +203,14 @@ function sample(track, start, duration, means, precision) {
     const lo = Math.floor(index);
     const hi = Math.min(lo + 1, track.frameCount - 1);
     const ratio = index - lo;
+    const remaining = 1 - ratio;
     for (let col = 0; col < width; col++) {
-      const name = TEMPLATE_CHANNELS[col];
-      const data = channels[name];
-      const spread = variance[name];
+      const data = channels[col];
+      const spread = variance[col];
       const cell = point * width + col;
-      means[cell] = (1 - ratio) * data[lo] + ratio * data[hi];
+      means[cell] = remaining * data[lo] + ratio * data[hi];
       const v =
-        ratio === 0
-          ? spread[lo]
-          : (1 - ratio) * spread[lo] + ratio * spread[hi];
+        ratio === 0 ? spread[lo] : remaining * spread[lo] + ratio * spread[hi];
       precision[cell] = 1 / (v + TEMPLATE_FLOORS[col]);
     }
   });
@@ -217,10 +221,15 @@ export function createSpanScorer(frames, landmarks, track) {
     TEMPLATE_CHANNELS.length * TEMPLATE_POINTS.length
   );
   const precision = new Float64Array(means.length);
+  const counts = new Uint16Array(BROAD_CLASSES.length);
+  const sampled = {
+    channels: TEMPLATE_CHANNELS.map((name) => track.channels[name]),
+    variance: TEMPLATE_CHANNELS.map((name) => track.variance[name]),
+  };
   return (start, end, phones) => {
     const duration = end - start;
-    const [counts, frameCount] = classCounts(frames, landmarks, start, end);
-    sample(track, start, duration, means, precision);
+    const frameCount = classCounts(frames, landmarks, start, end, counts);
+    sample(track, sampled, start, duration, means, precision);
     const terms = new Float64Array(phones.length * 3);
     const long = new Uint8Array(phones.length);
     phones.forEach((unit, index) => {
@@ -228,7 +237,7 @@ export function createSpanScorer(frames, landmarks, track) {
       let mismatch = 0;
       for (let i = 0; i < unit.compared.length; i++) {
         const cell = unit.compared[i];
-        acoustic += (means[cell] - unit.values[cell]) ** 2 * precision[cell];
+        acoustic += (means[cell] - unit.values[i]) ** 2 * precision[cell];
       }
       for (let i = 0; i < counts.length; i++) {
         if (!(unit.classMask & (1 << i))) {

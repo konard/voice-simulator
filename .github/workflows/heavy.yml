@@ -16,6 +16,7 @@ on:
           - roundtrip
           - copy
           - performance
+          - recognition-performance
           - gpu
           - lexicon
         default: all
@@ -27,6 +28,13 @@ on:
         description: Largest number of items each test may process (empty = no limit)
         type: string
         default: ''
+      recognition-runner:
+        description: Recognition performance runner (x64 cold CLI reference or four-core ARM64)
+        type: choice
+        options:
+          - ubuntu-24.04
+          - ubuntu-24.04-arm
+        default: ubuntu-24.04
 
 # Least-privilege default; jobs escalate individually when needed.
 permissions:
@@ -42,14 +50,14 @@ env:
 jobs:
   heavy:
     name: Heavy checks
-    runs-on: ubuntu-24.04
+    runs-on: ${{ inputs.suite == 'recognition-performance' && inputs.recognition-runner || 'ubuntu-24.04' }}
     # The step budgets below own the deadlines. This cap is the backstop
     # behind the longest one (300 minutes), leaving 30 minutes for checkout,
     # install and artifact upload. See docs/CI-TIMEOUT-BUDGETS.md.
     timeout-minutes: 330
     concurrency:
-      # A short recognition sample can run alongside the default prefixes.
-      group: check-${{ github.workflow }}-${{ github.ref }}-${{ inputs.suite == 'recognition' && inputs.limit != '' && format('recognition-{0}', inputs.limit) || inputs.suite }}
+      # Corpus limits and performance runner types can run independently.
+      group: check-${{ github.workflow }}-${{ github.ref }}-${{ inputs.suite == 'recognition' && inputs.limit != '' && format('recognition-{0}', inputs.limit) || inputs.suite == 'recognition-performance' && format('recognition-performance-{0}', inputs.recognition-runner) || inputs.suite }}
       cancel-in-progress: true
     permissions:
       contents: read
@@ -110,6 +118,12 @@ jobs:
           bash scripts/run-with-budget-warning.sh 360 "wasm build" node scripts/build-wasm.mjs --require --threads
           bash scripts/run-with-budget-warning.sh 120 "CLI build" cargo build --release --locked -p voice-simulator-cli
 
+      - name: Build scalar recognition WebAssembly
+        if: inputs.suite == 'recognition-performance'
+        run: |
+          node scripts/build-wasm.mjs --require --check-size
+          node scripts/build-recognition-models.mjs
+
       - name: Restore the speech dataset cache
         uses: actions/cache@v6
         with:
@@ -137,6 +151,7 @@ jobs:
         run: deno run -A scripts/gpu-adapter.mjs
 
       - name: Run heavy checks
+        if: inputs.suite != 'recognition-performance'
         shell: bash
         env:
           SUITE: ${{ inputs.suite }}
@@ -161,6 +176,29 @@ jobs:
             bash scripts/run-with-budget-warning.sh 18000 "Heavy checks" "${command[@]}"
           fi
 
+      - name: Verify recognition performance targets
+        if: inputs.suite == 'recognition-performance'
+        env:
+          HEAVY_OUT: reports/heavy
+          REQUIRE_WASM: '1'
+          # The default runner is the reference for absolute single-core time.
+          RECOGNITION_COLD_REPORT_ONLY: ${{ inputs.recognition-runner == 'ubuntu-24.04-arm' && '1' || '' }}
+        run: |
+          mkdir -p "$HEAVY_OUT"
+          lscpu > "$HEAVY_OUT/recognition-runner-cpu.txt"
+          if [[ -r /sys/fs/cgroup/cpu.max ]]; then
+            cat /sys/fs/cgroup/cpu.max >> "$HEAVY_OUT/recognition-runner-cpu.txt"
+          fi
+          node --test tests/heavy/performance-recognition.test.js
+
+      - name: Profile recognition stages
+        if: ${{ !cancelled() && inputs.suite == 'recognition-performance' }}
+        run: |
+          mkdir -p reports/heavy
+          node scripts/profile-recognition.mjs js > reports/heavy/recognition-stages-js.md
+          node scripts/profile-recognition.mjs rust > reports/heavy/recognition-stages-rust.md
+          node --input-type=module -e 'import { profileSingleCoreRecognition } from "./experiments/issue-77-single-core.mjs"; process.stdout.write(profileSingleCoreRecognition())' > reports/heavy/recognition-stages-cold.txt
+
       - name: Upload reports
         if: ${{ !cancelled() }}
         uses: ./.github/actions/artifact-transport
@@ -180,7 +218,7 @@ jobs:
     timeout-minutes: 5
     concurrency:
       # Match the heavy job so independent runs cannot cancel each other's gate.
-      group: check-${{ github.workflow }}-${{ github.ref }}-${{ inputs.suite == 'recognition' && inputs.limit != '' && format('recognition-{0}', inputs.limit) || inputs.suite }}-pipeline-status
+      group: check-${{ github.workflow }}-${{ github.ref }}-${{ inputs.suite == 'recognition' && inputs.limit != '' && format('recognition-{0}', inputs.limit) || inputs.suite == 'recognition-performance' && format('recognition-performance-{0}', inputs.recognition-runner) || inputs.suite }}-pipeline-status
       cancel-in-progress: true
     # A status function is required: without one the gate inherits the
     # implicit "every dependency succeeded" condition and is skipped in

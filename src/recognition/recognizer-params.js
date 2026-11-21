@@ -1,5 +1,5 @@
 /** Shared recognition options for the CLI and HTTP query strings. */
-export function recognitionParams({ lang, nbest, level }) {
+export function recognitionParams({ lang, nbest, level, engine, threads }) {
   return {
     languages:
       lang === undefined || lang === 'auto'
@@ -7,5 +7,8 @@ export function recognitionParams({ lang, nbest, level }) {
         : lang.split(',').map((code) => code.trim()),
     nbest: nbest === undefined ? undefined : Number(nbest),
     level,
+    engine,
+    threads:
+      threads === undefined || threads === 'auto' ? threads : Number(threads),
   };
 }

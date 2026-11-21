@@ -41,6 +41,7 @@ pub mod language_id;
 pub mod modes;
 pub mod prosody;
 pub mod recognition;
+pub mod recognition_kernels;
 pub mod recognizer;
 pub mod renderer;
 pub mod rescoring;

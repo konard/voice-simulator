@@ -315,7 +315,8 @@ export function recognizeModes(samples, sampleRate, result, options = {}) {
     sampleRate,
     result,
     reference?.head,
-    options.frames
+    options.frames,
+    options
   );
   const base = reference?.features ?? {
     ...summarize(features),

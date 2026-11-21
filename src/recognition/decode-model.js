@@ -1,5 +1,5 @@
 /** Planner templates and text-only phonotactics for IPA decoding. Unlicense. */
-import { planUtterance } from '../articulation/plan.js';
+import { createRecognitionTemplatePlanner } from '../articulation/plan.js';
 import { sampleState } from '../articulation/tract-shape.js';
 import { listSymbols } from '../ipa/inventory.js';
 import { formatIpa, parseIpa } from '../ipa/parse.js';
@@ -37,6 +37,15 @@ const CONSONANT_CHANNELS = [
   'frication',
   'sibilance',
   'trill',
+];
+const OBSERVED_CHANNELS = [
+  ...new Set([
+    ...VOWEL_CHANNELS,
+    ...CONSONANT_CHANNELS,
+    'lipArea',
+    'tongueArea',
+    'tongueLocation',
+  ]),
 ];
 
 /** Representative broad class for edit distance on phone strings. */
@@ -89,31 +98,25 @@ function comparedChannels(kind, state) {
   return names;
 }
 
-function template(ipa, voice, articulationOffsets) {
+function template(ipa, planPhone) {
   const token = parseIpa(ipa).tokens[0];
   const { kind } = token;
-  const plan = planUtterance(kind === 'vowel' ? ipa : `ə${ipa}ə`, {
-    head: voice,
-    articulationOffsets,
-  });
+  const plan = planPhone(kind === 'vowel' ? ipa : `ə${ipa}ə`);
   const segments = plan.segments.filter(
     (segment) => segment.token === plan.tokens[kind === 'vowel' ? 0 : 1]
   );
   const start = segments[0].start;
   const duration = segments.at(-1).end - start;
   const compared = [];
-  const values = new Float64Array(
-    TEMPLATE_CHANNELS.length * TEMPLATE_POINTS.length
-  );
+  const values = [];
+  const state = {};
   TEMPLATE_POINTS.forEach((relative, point) => {
-    const state = sampleState(plan, start + duration * relative);
-    TEMPLATE_CHANNELS.forEach((name, col) => {
-      values[point * TEMPLATE_CHANNELS.length + col] = state[name];
-    });
+    sampleState(plan, start + duration * relative, state);
     for (const name of comparedChannels(kind, state)) {
       compared.push(
         point * TEMPLATE_CHANNELS.length + TEMPLATE_CHANNELS.indexOf(name)
       );
+      values.push(state[name]);
     }
   });
   return {
@@ -126,8 +129,8 @@ function template(ipa, voice, articulationOffsets) {
       (mask, name) => mask | (1 << BROAD_CLASSES.indexOf(name)),
       0
     ),
-    compared,
-    values,
+    compared: Uint16Array.from(compared),
+    values: Float64Array.from(values),
   };
 }
 
@@ -176,20 +179,21 @@ const models = new Map(
 function probabilityFor(tables, a, b) {
   let best = 0;
   for (const { ids, boundary, probability } of tables) {
-    const to = ids.get(b);
-    if (to === undefined) {
+    const to = ids[b];
+    if (to < 0) {
       continue;
     }
-    const from = a === undefined ? boundary : ids.get(a);
+    const from = ids[a];
     // A different language can start a word after a phone outside its inventory.
     const across =
-      (from === undefined ? 1 : probability(from, boundary)) *
-      probability(boundary, to);
-    const within = from === undefined ? 0 : probability(from, to);
+      (from < 0 ? 1 : probability(from, boundary)) * probability(boundary, to);
+    const within = from < 0 ? 0 : probability(from, to);
     best = Math.max(best, within, across);
   }
   return best;
 }
+
+const languageTables = new Map();
 
 export function decoderLanguage(options) {
   const languages = [
@@ -202,6 +206,18 @@ export function decoderLanguage(options) {
       throw new RangeError(`Unsupported decoder language: ${language}`);
     }
   }
+  const key = languages.join(',');
+  if (!languageTables.has(key)) {
+    languageTables.set(key, decoderLanguageTable(languages));
+  }
+  return {
+    ...languageTables.get(key),
+    language:
+      options.language ?? (languages.length === 1 ? languages[0] : undefined),
+  };
+}
+
+function decoderLanguageTable(languages) {
   const source = languages.map((language) => PHONOTACTICS[language]);
   const symbols = source.length
     ? [...new Set(source.flatMap(({ units }) => units))].sort()
@@ -213,20 +229,24 @@ export function decoderLanguage(options) {
   const width = symbols.length;
   const costs = new Float64Array((width + 1) * width);
   if (source.length) {
-    const tables = languages.map((language) => models.get(language));
+    const tables = languages.map((language) => {
+      const { ids, boundary, probability } = models.get(language);
+      const indices = new Int32Array(width + 1);
+      for (let i = 0; i < width; i++) {
+        indices[i] = ids.get(symbols[i]) ?? -1;
+      }
+      indices[width] = boundary;
+      return { ids: indices, boundary, probability };
+    });
     for (let from = 0; from <= width; from++) {
       for (let to = 0; to < width; to++) {
-        costs[from * width + to] = -Math.log(
-          probabilityFor(tables, symbols[from], symbols[to])
-        );
+        costs[from * width + to] = -Math.log(probabilityFor(tables, from, to));
       }
     }
   }
   return {
     symbols,
     costs,
-    language:
-      options.language ?? (languages.length === 1 ? languages[0] : undefined),
     long: new Set(source.flatMap((model) => model.long)),
   };
 }
@@ -242,9 +262,14 @@ export function decoderTemplates(voice, symbols, articulationOffsets) {
     cached.set(key, new Map());
   }
   const templates = cached.get(key);
+  let planPhone;
   return symbols.map((ipa) => {
     if (!templates.has(ipa)) {
-      templates.set(ipa, template(ipa, voice, articulationOffsets));
+      planPhone ??= createRecognitionTemplatePlanner(
+        { head: voice, articulationOffsets },
+        OBSERVED_CHANNELS
+      );
+      templates.set(ipa, template(ipa, planPhone));
     }
     return templates.get(ipa);
   });

@@ -6,7 +6,11 @@ function comparePaths(a, b) {
 }
 
 function addPath(paths, previous, arc, cost, limit) {
-  if (paths.length === limit && cost >= paths.at(-1).cost) {
+  if (paths.length === limit && cost >= paths[paths.length - 1].cost) {
+    return;
+  }
+  if (limit === 1) {
+    paths[0] = { previous, arc, cost };
     return;
   }
   const children = previous.sequence.children;
@@ -35,7 +39,7 @@ function addPath(paths, previous, arc, cost, limit) {
 function stateFor(states, unit) {
   let state = states[unit];
   if (!state) {
-    state = { unit, paths: [], edges: [] };
+    state = { unit, paths: [], edges: null };
     states[unit] = state;
   }
   return state;
@@ -59,19 +63,74 @@ function acousticCosts(terms, weights) {
   return { scores, minimum, denominator };
 }
 
-function connect(states, parents, span, from, settings) {
-  const { to, pause, terms, whisper } = span;
-  const { width, costs, nbest } = settings;
-  const weights = whisper ? WHISPER_WEIGHTS : settings.weights;
-  if (pause) {
-    const state = stateFor(states, width);
-    for (const parent of parents) {
-      const arc = { from, to, unit: width, cost: 0, confidence: 1, pause };
-      for (const previous of parent.paths) {
-        addPath(state.paths, previous, arc, previous.cost, nbest);
+function connectBest(states, parents, span, from, settings, weights) {
+  const { width, costs, parentRows, parentCosts, uniformParents } = settings;
+  const { scores, minimum, denominator } = acousticCosts(span.terms, weights);
+  for (let unit = 0; unit < width; unit++) {
+    const state = stateFor(states, unit);
+    const acoustic = scores[unit];
+    // With no current path, the first parent wins even at infinite cost.
+    let best = state.paths[0]?.cost ?? NaN;
+    let arcCost = 0;
+    let bestParent = -1;
+    // The beam is ordered by cost. With uniform transitions it can only
+    // improve a phone through its first parent, including when costs tie.
+    const count =
+      uniformParents &&
+      Number.isFinite(acoustic) &&
+      Number.isFinite(weights.phonotactic)
+        ? 1
+        : parents.length;
+    for (let i = 0; i < count; i++) {
+      const cost = acoustic + weights.phonotactic * costs[parentRows[i] + unit];
+      const total = parentCosts[i] + cost;
+      if (!(total >= best)) {
+        bestParent = i;
+        arcCost = cost;
+        best = total;
       }
     }
-    state.edges.push({ from, to, unit: width, cost: 0, pause });
+    if (bestParent >= 0) {
+      state.paths[0] = {
+        previous: parents[bestParent].paths[0],
+        arc: {
+          from,
+          to: span.to,
+          unit,
+          cost: arcCost,
+          confidence: Math.exp(minimum - acoustic) / denominator,
+          long: Boolean(span.long?.[unit]),
+        },
+        cost: best,
+      };
+    }
+  }
+}
+
+function connectPause(states, parents, { to, pause }, from, settings) {
+  const { width, nbest, lattice } = settings;
+  const state = stateFor(states, width);
+  for (const parent of parents) {
+    const arc = { from, to, unit: width, cost: 0, confidence: 1, pause };
+    for (const previous of parent.paths) {
+      addPath(state.paths, previous, arc, previous.cost, nbest);
+    }
+  }
+  if (lattice) {
+    (state.edges ??= []).push({ from, to, unit: width, cost: 0, pause });
+  }
+}
+
+function connect(states, parents, span, from, settings) {
+  const { to, pause, terms, whisper } = span;
+  const { width, costs, nbest, lattice } = settings;
+  const weights = whisper ? WHISPER_WEIGHTS : settings.weights;
+  if (pause) {
+    connectPause(states, parents, span, from, settings);
+    return;
+  }
+  if (nbest === 1 && !lattice) {
+    connectBest(states, parents, span, from, settings, weights);
     return;
   }
   const { scores, minimum, denominator } = acousticCosts(terms, weights);
@@ -86,7 +145,7 @@ function connect(states, parents, span, from, settings) {
       cheapest = Math.min(cost, cheapest);
       if (
         state.paths.length === nbest &&
-        parent.paths[0].cost + cost >= state.paths.at(-1).cost
+        parent.paths[0].cost + cost >= state.paths[nbest - 1].cost
       ) {
         continue;
       }
@@ -102,7 +161,9 @@ function connect(states, parents, span, from, settings) {
         addPath(state.paths, previous, arc, previous.cost + cost, nbest);
       }
     }
-    state.edges.push({ from, to, unit, cost: cheapest });
+    if (lattice) {
+      (state.edges ??= []).push({ from, to, unit, cost: cheapest });
+    }
   }
 }
 
@@ -119,6 +180,21 @@ function terminalPaths(states, limit) {
     }
   }
   return result;
+}
+
+function packParents(settings, parents) {
+  if (settings.nbest !== 1 || settings.lattice) {
+    return;
+  }
+  const { width } = settings;
+  const rows = (settings.parentRows ??= new Float64Array(width + 1));
+  const costs = (settings.parentCosts ??= new Float64Array(width + 1));
+  settings.uniformParents = settings.uniformTransitions;
+  for (let i = 0; i < parents.length; i++) {
+    rows[i] = parents[i].unit * width;
+    costs[i] = parents[i].paths[0].cost;
+    settings.uniformParents &&= !Number.isNaN(costs[i]);
+  }
 }
 
 export function decodeSearch(prepared, language, options) {
@@ -139,7 +215,14 @@ export function decodeSearch(prepared, language, options) {
   }
   const origin = { cost: 0, sequence: { children: [] } };
   stateFor(pending[0], lastUnit).paths.push(origin);
-  const settings = { width, costs: language.costs, weights, nbest };
+  const settings = {
+    width,
+    costs: language.costs,
+    weights,
+    nbest,
+    lattice,
+    uniformTransitions: language.costs.every((cost) => cost === 0),
+  };
   let terminal = [];
   let provisional = [];
   for (let from = 0; from < times.length; from++) {
@@ -154,7 +237,9 @@ export function decodeSearch(prepared, language, options) {
     provisional = parents;
     if (lattice) {
       for (const state of parents) {
-        edges.push(...state.edges);
+        if (state.edges) {
+          edges.push(...state.edges);
+        }
       }
     }
     if (times.at(-1) - times[from] <= 0.4 && times.length - from <= 5) {
@@ -164,6 +249,7 @@ export function decodeSearch(prepared, language, options) {
       terminal = parents;
       break;
     }
+    packParents(settings, parents);
     for (const span of spans[from]) {
       connect(pending[span.to], parents, span, from, settings);
     }

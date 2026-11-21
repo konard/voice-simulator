@@ -5,44 +5,33 @@ import { extname } from 'node:path';
 import { fileURLToPath, URL } from 'node:url';
 import { parseArgs } from 'node:util';
 
+import { addLexicon } from '../src/g2p/lexicon.js';
+import { analyzeFrames } from '../src/recognition/frontend.js';
+import { BROAD_CLASSES, findLandmarks } from '../src/recognition/landmarks.js';
 import {
-  addLexicon,
-  analyzeFrames,
-  BROAD_CLASSES,
-  findLandmarks,
   AUDIO_FORMAT_NAMES,
-  AUDIO_TIERS,
-  DEFAULT_AUDIO_TIER,
   audioEncoding,
-  ROOM_PRESETS,
-  benchmarkAudioTiers,
-  benchmarkDevice,
-  compareRecordings,
-  createEngine,
-  ENGINE_NAMES,
   decodeAudio,
+  formatFromFileName,
+} from '../src/audio/formats.js';
+import { AUDIO_TIERS, DEFAULT_AUDIO_TIER } from '../src/perf/lod.js';
+import { ROOM_PRESETS } from '../src/acoustics/room.js';
+import { createEngine, ENGINE_NAMES } from '../src/engine/index.js';
+import {
   DEFAULT_HEAD,
   decodeHeadConfig,
   encodeHeadConfig,
-  formatFromFileName,
-  headModelObj,
-  loadAccent,
-  loadVoice,
-  matchVoice,
-  measureAudioTier,
-  prepareUtterance,
   presetHeadConfig,
   randomHeadConfig,
-  resample,
-  saveVoice,
-  synthesize,
-  textToIpa,
-  ipaToText,
-  identifyLanguage,
-  visemeTrack,
-  VISEME_FORMATS,
-} from '../src/index.js';
-import { INDEX_PAGE, createVoiceServer } from '../src/server/server.js';
+} from '../src/head-config.js';
+import { loadAccent } from '../src/accent/index.js';
+import { loadVoice, saveVoice } from '../src/voice-file.js';
+import { prepareUtterance, synthesize } from '../src/synthesize.js';
+import { resample } from '../src/audio/resample.js';
+import { textToIpa } from '../src/g2p/index.js';
+import { ipaToText } from '../src/recognition/ipa-to-text.js';
+import { identifyLanguage } from '../src/recognition/language-id.js';
+import { visemeTrack, VISEME_FORMATS } from '../src/animation/visemes.js';
 import { recognizeCommand } from './recognize.js';
 
 const OPTIONS = {
@@ -154,6 +143,7 @@ function usage() {
     '  mesh -o head.obj    Export the low-poly head model as OBJ',
     '  recognize <file>   Recognize speech from a file or - for stdin (--ipa, --json)',
     '                      --lang en,ru|auto --nbest 1 --level auto|low|medium|high',
+    '                      --engine auto|rust|js --threads n|auto (file default auto)',
     '                      --no-whisper disables automatic whisper detection',
     '                      --rescore; raw stdin: -f raw --sample-rate 16000 --bit-depth 16',
     '  match <file>        Find the head that sounds like a recording',
@@ -629,6 +619,7 @@ function printTierLoads(result, io, engine) {
  * (benchmarkDevice, issue 28) and the CPU time it took.
  */
 async function quickBenchmark(values, io, engine) {
+  const { benchmarkDevice } = await import('../src/perf/device-benchmark.js');
   const result = await benchmarkDevice({ engine });
   if (values.json) {
     io.stdout(JSON.stringify(result));
@@ -835,17 +826,19 @@ const COMMANDS = {
     io.stdout(`${file}${name}: ok, preset ${voice.preset ?? 'none'}${spoken}`);
   },
 
-  mesh(values, positionals, io) {
+  async mesh(values, positionals, io) {
+    const { headModelObj } = await import('../src/geometry/model.js');
     const head = resolveHead(values) ?? randomHeadConfig(1);
     const obj = headModelObj(head, { lod: optionalNumber(values.lod, 'lod') });
     writeOutput(values.out ?? 'head.obj', obj, io);
   },
 
-  match(values, positionals, io, engine) {
+  async match(values, positionals, io, engine) {
     const [file] = positionals;
     if (!file) {
       throw new Error('Missing <file>');
     }
+    const { matchVoice } = await import('../src/analysis/voice-match.js');
     const { samples, sampleRate } = decodeAudio(readFileSync(file));
     const result = matchVoice(samples, sampleRate, {
       preset: values.preset,
@@ -900,11 +893,12 @@ const COMMANDS = {
     }
   },
 
-  compare(values, positionals, io) {
+  async compare(values, positionals, io) {
     const [referenceFile, testFile] = positionals;
     if (!referenceFile || !testFile) {
       throw new Error('Missing <reference> <test>');
     }
+    const { compareRecordings } = await import('../src/metrics/index.js');
     const result = compareRecordings(
       decodeAudio(readFileSync(referenceFile)),
       decodeAudio(readFileSync(testFile))
@@ -918,10 +912,12 @@ const COMMANDS = {
     }
   },
 
-  benchmark(values, positionals, io, engine) {
+  async benchmark(values, positionals, io, engine) {
     if (values.quick) {
       return quickBenchmark(values, io, engine);
     }
+    const { benchmarkAudioTiers, measureAudioTier } =
+      await import('../src/perf/benchmark.js');
     const seconds = optionalNumber(values.seconds, 'seconds') ?? 0.3;
     const repeats = optionalNumber(values.repeats, 'repeats') ?? 5;
     if (values.tier) {
@@ -953,7 +949,9 @@ const COMMANDS = {
     printTierLoads(result, io, engine);
   },
 
-  serve(values, positionals, io, engine) {
+  async serve(values, positionals, io, engine) {
+    const { INDEX_PAGE, createVoiceServer } =
+      await import('../src/server/server.js');
     const port =
       optionalNumber(values.port ?? process.env.PORT, 'port') ?? 8080;
     const host = values.host ?? process.env.HOST ?? '127.0.0.1';
@@ -1012,8 +1010,11 @@ export async function runCli(argv, io = {}) {
       return 1;
     }
     loadLexiconFiles(values.lexicon, values.lang);
-    // Loaded once, before the command: every render of it uses this engine.
-    const engine = await createEngine(engineFlags(values));
+    // Recognition loads scalar kernels itself, including its worker fallback.
+    const engine =
+      command === 'recognize'
+        ? undefined
+        : await createEngine(engineFlags(values));
     await handler(values, rest, streams, engine);
     return 0;
   } catch (error) {

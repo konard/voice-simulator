@@ -4572,6 +4572,9 @@ export {
 export {
   recognize,
   createRecognizer,
+  recognizeAsync,
+  type RecognitionEngine,
+  type RecognitionEngineOptions,
   RECOGNITION_LEVELS,
   levelForTier,
   RecognitionError,
@@ -4584,3 +4587,7 @@ export {
   type Recognizer,
   type ModeSpan as RecognizedModeSpan,
 } from './recognition/recognizer.js';
+
+export declare function createRecognitionEngine(
+  options?: import('./recognition/recognizer.js').RecognitionEngineOptions
+): Promise<import('./recognition/recognizer.js').RecognitionEngine>;

@@ -21,11 +21,16 @@ const vendorChunks = [
   // src/g2p/lexicon/ since issue 47.
   [/[\\/]src[\\/]g2p[\\/][a-z]+-dict\.js$/, 'g2p-dict'],
   [/[\\/]src[\\/]g2p[\\/]lexicon[\\/][a-z]+\.js$/, 'g2p-dict'],
-  // Shared recognition DSP would put the matching worker over 500 kB.
+  [
+    /[\\/]src[\\/]recognition[\\/]data[\\/]simulated-(?:whisper-)?phones\.js$/,
+    'recognition-phones',
+  ],
+  // Standalone numerical kernels have no dependencies on the app or workers.
+  [
+    /[\\/]src[\\/]recognition[\\/](fft|lpc|pitch|pitch-rust|inverse-dsp|wasm-memory)\.js$/,
+    'recognition-dsp',
+  ],
   [/[\\/]src[\\/]recognition[\\/]/, 'recognition'],
-  // The recognition chunk also takes the synthesis modules it shares; with
-  // the voice fitter's syllable nuclei (issue 63) it reached 505 kB, so the
-  // acoustic models have their own.
   [/[\\/]src[\\/]acoustics[\\/]/, 'acoustics'],
 ];
 

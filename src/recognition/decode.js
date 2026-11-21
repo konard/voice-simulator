@@ -3,12 +3,14 @@ import { resample } from '../audio/resample.js';
 import { normalizeHeadConfig } from '../head-config.js';
 import {
   analyzeForDecode,
+  analyzeForDecodeParallel,
   decodeFrontEnd,
   decoderSettings,
   prepareIpaDecode,
   resultOf,
   syllablesWithWhisper,
 } from './decode-pipeline.js';
+import { measure } from './profile.js';
 import { decodeSearch } from './decode-search.js';
 import { matchSimulation, matchWhisperPhones } from './simulation-match.js';
 import {
@@ -159,12 +161,42 @@ export function audioToIpa(samples, sampleRate, options = {}) {
     settings,
     frontEnd
   );
-  const { prepared, templates } = prepareIpaDecode(analysis, settings);
-  const search = decodeSearch(prepared, settings.language, settings);
-  const result = resultOf(analysis, settings, prepared, templates, search);
+  return finishDecode(samples, sampleRate, options, settings, analysis);
+}
+
+function finishDecode(samples, sampleRate, options, settings, analysis) {
+  const result = measure(settings.profile, 'Audio to IPA', () => {
+    const { prepared, templates } = prepareIpaDecode(analysis, settings);
+    const search = decodeSearch(prepared, settings.language, settings);
+    return resultOf(analysis, settings, prepared, templates, search);
+  });
   return options.voice
     ? refineWhisperReading(samples, sampleRate, result, settings)
     : result;
+}
+
+export async function audioToIpaParallel(samples, sampleRate, options, pool) {
+  const settings = decoderSettings(sampleRate, options);
+  let frontEnd;
+  const verified = decodeRecordedSimulation(
+    samples,
+    sampleRate,
+    options,
+    settings,
+    (analyzed) => (frontEnd = analyzed)
+  );
+  if (verified) {
+    return verified;
+  }
+  const analysis = await analyzeForDecodeParallel(
+    samples,
+    sampleRate,
+    options,
+    settings,
+    frontEnd,
+    pool
+  );
+  return finishDecode(samples, sampleRate, options, settings, analysis);
 }
 
 export { createIpaDecoder } from './decode-stream.js';
