@@ -62,38 +62,39 @@ impl Shortlist {
     }
 
     fn add(&mut self, candidate: Candidate) {
-        let values = &mut self.values;
         if self.len < NEIGHBOURS {
-            let mut child = self.len;
+            self.values[self.len] = candidate;
             self.len += 1;
-            while child > 0 {
-                let parent = (child - 1) / 2;
-                if values[parent] >= candidate {
-                    break;
+            if self.len == NEIGHBOURS {
+                // Pruning only starts with a full shortlist. Heapify its
+                // initial entries together, from the last parent to the root.
+                for parent in (0..NEIGHBOURS / 2).rev() {
+                    self.sift_down(parent, self.values[parent]);
                 }
-                values[child] = values[parent];
-                child = parent;
             }
-            values[child] = candidate;
-        } else if candidate < values[0] {
-            let mut parent = 0;
-            while parent * 2 + 2 < NEIGHBOURS {
-                let left = parent * 2 + 1;
-                let child = left + usize::from(values[left] < values[left + 1]);
-                if candidate >= values[child] {
-                    values[parent] = candidate;
-                    return;
-                }
-                values[parent] = values[child];
-                parent = child;
-            }
-            let left = parent * 2 + 1;
-            if left < NEIGHBOURS && candidate < values[left] {
-                values[parent] = values[left];
-                parent = left;
-            }
-            values[parent] = candidate;
+        } else if candidate < self.values[0] {
+            self.sift_down(0, candidate);
         }
+    }
+
+    fn sift_down(&mut self, mut parent: usize, candidate: Candidate) {
+        let values = &mut self.values;
+        while parent * 2 + 2 < NEIGHBOURS {
+            let left = parent * 2 + 1;
+            let child = left + usize::from(values[left] < values[left + 1]);
+            if candidate >= values[child] {
+                values[parent] = candidate;
+                return;
+            }
+            values[parent] = values[child];
+            parent = child;
+        }
+        let left = parent * 2 + 1;
+        if left < NEIGHBOURS && candidate < values[left] {
+            values[parent] = values[left];
+            parent = left;
+        }
+        values[parent] = candidate;
     }
 }
 
@@ -218,8 +219,7 @@ struct Search<'a, 'table> {
 impl Search<'_, '_> {
     fn walk(&mut self, node: u32, bound: f64) {
         // The visit limit also bounds recursion if a malformed tree has a cycle.
-        if node == u32::MAX
-            || self.visits == VISITS
+        if self.visits == VISITS
             || (self.best.len == NEIGHBOURS && bound > self.best.values[0].distance)
         {
             return;
@@ -241,9 +241,11 @@ impl Search<'_, '_> {
         self.visits += 1;
         self.best.add(Candidate { row, distance });
         let near = if delta <= 0.0 { 2 } else { 3 };
-        self.walk(entry[near], bound);
+        if entry[near] != u32::MAX {
+            self.walk(entry[near], bound);
+        }
         let far = entry[5 - near];
-        if far != u32::MAX {
+        if far != u32::MAX && self.visits < VISITS {
             let old = self.axes[axis];
             let next = old.max(delta * delta);
             self.axes[axis] = next;
