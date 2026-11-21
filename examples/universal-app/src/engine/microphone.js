@@ -12,7 +12,7 @@ function stopTracks(stream) {
 async function captureNode(context, receive, fail) {
   if (context.audioWorklet) {
     await context.audioWorklet.addModule(
-      new URL('./capture-processor.js', import.meta.url)
+      new URL('./capture-processor.js?inline', import.meta.url)
     );
     const node = new globalThis.AudioWorkletNode(
       context,
@@ -39,6 +39,7 @@ export function createMicrophone(
   callbacks = {},
   {
     context,
+    sampleRate,
     getUserMedia = (constraints) =>
       globalThis.navigator.mediaDevices.getUserMedia(constraints),
   } = {}
@@ -74,7 +75,8 @@ export function createMicrophone(
       }
       capture.stream = stream;
       const Context = globalThis.AudioContext ?? globalThis.webkitAudioContext;
-      const ctx = context ?? new Context();
+      const ctx =
+        context ?? new Context(sampleRate ? { sampleRate } : undefined);
       capture.context = ctx;
       const node = await captureNode(
         ctx,

@@ -26,16 +26,16 @@
  * PNG signatures, and prints the resolved <html data-theme> and <html lang>
  * so a regression is diagnosable from CI logs alone.
  */
-/* global document, window, URL, Worker, MessageEvent, Image */
+/* global document, window, Worker, MessageEvent, Image */
 
 import { spawn } from 'node:child_process';
-import { createServer } from 'node:http';
 import { mkdir, readFile, stat, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { makeBrowserCommander } from 'browser-commander';
 import { chromium } from 'playwright';
+import { createStaticServer } from './example-app-static.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(__dirname, '..');
@@ -75,18 +75,6 @@ const PREVIEW_BENCHMARK = Object.freeze({
   gpu: false,
   gpuPending: false,
 });
-
-const contentTypes = new Map([
-  ['.css', 'text/css; charset=utf-8'],
-  ['.html', 'text/html; charset=utf-8'],
-  ['.js', 'text/javascript; charset=utf-8'],
-  ['.json', 'application/json; charset=utf-8'],
-  ['.map', 'application/json; charset=utf-8'],
-  ['.png', 'image/png'],
-  ['.svg', 'image/svg+xml'],
-  ['.woff', 'font/woff'],
-  ['.woff2', 'font/woff2'],
-]);
 
 function log(message) {
   console.log(`[preview] ${message}`);
@@ -146,58 +134,6 @@ async function ensureExampleAppBuild() {
     });
   }
   await runNpm(['run', 'build'], exampleAppRoot);
-}
-
-async function createStaticServer(rootDir) {
-  const root = path.resolve(rootDir);
-
-  const server = createServer(async (request, response) => {
-    try {
-      const requestUrl = new URL(request.url ?? '/', 'http://127.0.0.1');
-      const pathname =
-        requestUrl.pathname === '/' ? '/index.html' : requestUrl.pathname;
-      const requestedPath = path.resolve(
-        root,
-        `.${decodeURIComponent(pathname)}`
-      );
-
-      if (
-        requestedPath !== root &&
-        !requestedPath.startsWith(`${root}${path.sep}`)
-      ) {
-        response.writeHead(403);
-        response.end('Forbidden');
-        return;
-      }
-
-      const fileStat = await stat(requestedPath);
-      const filePath = fileStat.isDirectory()
-        ? path.join(requestedPath, 'index.html')
-        : requestedPath;
-      const body = await readFile(filePath);
-      const contentType =
-        contentTypes.get(path.extname(filePath)) ?? 'application/octet-stream';
-
-      response.writeHead(200, { 'content-type': contentType });
-      response.end(body);
-    } catch {
-      response.writeHead(404);
-      response.end('Not found');
-    }
-  });
-
-  await new Promise((resolve, reject) => {
-    server.once('error', reject);
-    server.listen(0, '127.0.0.1', resolve);
-  });
-
-  const address = server.address();
-  const url = `http://127.0.0.1:${address.port}/`;
-
-  return {
-    url,
-    close: () => new Promise((resolve) => server.close(resolve)),
-  };
 }
 
 function pngDimensions(buffer) {

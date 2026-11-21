@@ -91,6 +91,7 @@ export function createSession(
     sampleRate,
     level: settings.level,
     languages: settings.languages,
+    includeModeLabels: settings.includeModeLabels,
     voice: DEFAULT_HEAD,
     deterministic: !realtime,
   });
@@ -424,6 +425,9 @@ export function createSession(
     },
     get load() {
       return scheduler.load;
+    },
+    get voicedSeconds() {
+      return voiced;
     },
     get backgroundShare() {
       return backgroundShare;

@@ -710,3 +710,35 @@ h2 {
   line-height: 1.5;
   vertical-align: middle;
 }
+
+.copy-indicators {
+  align-items: start;
+}
+
+.copy-indicators progress,
+.copy-indicators meter {
+  width: 100%;
+  min-width: 10rem;
+  accent-color: var(--accent);
+}
+
+.copy-parameters {
+  width: 100%;
+  max-width: 42rem;
+  border-collapse: collapse;
+  font-variant-numeric: tabular-nums;
+}
+
+.copy-parameters :is(th, td) {
+  padding: 0.35rem 0.6rem;
+  border-bottom: 1px solid var(--line);
+  text-align: start;
+}
+
+.copy-parameters tbody th {
+  font-weight: normal;
+}
+
+.copy-actions > .row {
+  margin-block-start: 0.65rem;
+}

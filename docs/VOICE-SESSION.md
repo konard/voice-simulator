@@ -80,3 +80,7 @@ the end of input. The measured recovery results and reproduction commands are
 in the [validation report](reports/issue-78-validation.md). The scheduler
 yields between generator steps. Batch renders and phoneme reads can take
 longer than one scheduling slice.
+The `voicedSeconds` property reports the voiced duration for the current
+speaker. The example app uses it to show progress toward the first fit.
+Set `includeModeLabels: false` to keep timed recognition and skip the extra
+reference renders used to classify expressive modes in live results.

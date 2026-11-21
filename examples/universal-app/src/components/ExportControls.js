@@ -18,9 +18,9 @@ function storedPreset() {
 
 /**
  * Audio file format menu with a download button for the last utterance.
- * @param {{t: object, onDownload: (preset: string) => void}} props
+ * @param {{t: object, disabled?: boolean, onDownload: (preset: string) => void}} props
  */
-export function ExportControls({ t, onDownload }) {
+export function ExportControls({ t, disabled, onDownload }) {
   const [preset, setPreset] = useState(storedPreset);
   const choose = (id) => {
     setPreset(id);
@@ -39,6 +39,7 @@ export function ExportControls({ t, onDownload }) {
         id: 'audio-export',
         'aria-label': t.audioFormat,
         title: t.audioFormat,
+        disabled,
         value: preset,
         onChange: (event) => choose(event.target.value),
       },
@@ -52,7 +53,7 @@ export function ExportControls({ t, onDownload }) {
     ),
     h(
       'button',
-      { type: 'button', onClick: () => onDownload(preset) },
+      { type: 'button', disabled, onClick: () => onDownload(preset) },
       t.download
     )
   );

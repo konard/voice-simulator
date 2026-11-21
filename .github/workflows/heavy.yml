@@ -94,6 +94,15 @@ jobs:
       - name: Install dependencies
         run: npm install
 
+      - name: Install the example app and Playwright Chromium
+        if: inputs.suite == 'copy' || inputs.suite == 'all'
+        env:
+          ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
+        run: |
+          npm ci --prefix examples/universal-app --no-audit --no-fund
+          npm install --no-save --package-lock=false --no-audit --no-fund playwright@1.59.1 # zizmor: ignore[adhoc-packages]
+          npx playwright install --with-deps chromium
+
       # Speech datasets fetched by scripts/datasets.mjs (issue 16). The key
       # changes with the registry, so a changed checksum fetches again.
       # The cache stays on the runner side: .datasets/ is never uploaded as
