@@ -1,6 +1,7 @@
 /** Numerical parity of copy controls in JavaScript and native Rust. Unlicense. */
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
+import { pitchBeforePhonation } from '../src/acoustics/glottis.js';
 import { itUnless } from './helpers/skip.js';
 import {
   loudnessGain,
@@ -73,6 +74,9 @@ itUnless(
     Math.fround(blendControl(0.375, 0.614, 0.5)),
     Math.fround(offsetControl(0.375, -0.05, 4, 10)),
     offsetPenalty(0.1, 0.05),
+    pitchBeforePhonation(240, 0, 1),
+    pitchBeforePhonation(25, 1, 0),
+    pitchBeforePhonation(60, 0.7, 0.2),
   ];
   expected.forEach((value, i) => near(nativeControls[i], value));
 

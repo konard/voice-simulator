@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, it } from 'test-anywhere';
 import { runCli } from '../bin/voice-simulator.js';
+import { toPlanModes } from '../src/recognition/modes.js';
 import { applyPitch, repairOctaves } from '../src/session/copy-prosody.js';
 import { groupPhones, warpPlan } from '../src/session/warp.js';
 import {
@@ -99,6 +100,32 @@ describe('copy controls', () => {
       pitchTrack(copy, sampleRate)
     );
     near(measurement.rmseCents, 0, 30);
+  });
+
+  it('copies and replays acoustic pitch in falsetto', () => {
+    const modes = [
+      { from: 0, to: 1, start: 0, end: 0.85, phonation: { falsetto: 1 } },
+    ];
+    const settings = {
+      head: { pitch: 125, vibrato: 0 },
+      durations: [0.85],
+      modes: toPlanModes(modes),
+    };
+    const source = planUtterance('aː', settings);
+    const target = planUtterance('aː', settings);
+    const original = renderPlan(source, draft);
+    const pitch = medianPitch(original);
+    near(pitch, 250, 5);
+
+    applyPitch(target, original, sampleRate, modes);
+    near(medianPitch(renderPlan(target, draft)), pitch, 5);
+    const score = toScore(
+      target,
+      { words: [], languages: [], modes },
+      saveVoice(target.head)
+    );
+    near(score.f0.values[Math.floor(score.f0.values.length / 2)], pitch, 5);
+    near(medianPitch(renderScore(score, options).samples), pitch, 5);
   });
 
   it('repairs an octave jump', () => {

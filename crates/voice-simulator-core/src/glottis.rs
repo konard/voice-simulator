@@ -63,21 +63,34 @@ pub mod phonation {
 /// Lowest f0 (Hz) a period can have (vocal fry).
 pub const MIN_F0: f64 = 20.0;
 
+fn phonation_pitch_scale(creak: f64, falsetto: f64) -> f64 {
+    math::pow(
+        2.0,
+        (falsetto * phonation::FALSETTO_SEMITONES - creak * phonation::CREAK_SEMITONES) / 12.0,
+    )
+}
+
 /// `phonationF0`: f0 under creak and falsetto (0..1), shifted by
 /// `12 (f - c)` semitones but not below 25 Hz (nor below `f0`).
 pub fn phonation_f0(f0: f64, creak: f64, falsetto: f64) -> f64 {
     if creak == 0.0 && falsetto == 0.0 {
         return f0;
     }
-    let shifted = f0
-        * math::pow(
-            2.0,
-            (falsetto * phonation::FALSETTO_SEMITONES - creak * phonation::CREAK_SEMITONES) / 12.0,
-        );
+    let shifted = f0 * phonation_pitch_scale(creak, falsetto);
     if creak > 0.0 {
         max(min(f0, phonation::CREAK_FLOOR), shifted)
     } else {
         shifted
+    }
+}
+
+/// Control pitch that produces the requested acoustic f0 with these modes.
+pub fn pitch_before_phonation(f0: f64, creak: f64, falsetto: f64) -> f64 {
+    let scale = phonation_pitch_scale(creak, falsetto);
+    if scale < 1.0 && f0 <= phonation::CREAK_FLOOR {
+        f0
+    } else {
+        f0 / scale
     }
 }
 

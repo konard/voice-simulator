@@ -1,4 +1,5 @@
 /** Portable copy-synthesis scores and their renderer. Unlicense. */
+import { phonationF0, pitchBeforePhonation } from '../acoustics/glottis.js';
 import { renderPlan } from '../acoustics/voice.js';
 import { interpolateGaps, planUtterance } from '../articulation/plan.js';
 import { formatIpa, parseIpa } from '../ipa/parse.js';
@@ -45,7 +46,9 @@ export function toScore(plan, recognition, voice) {
     f0: {
       rate,
       values: Array.from(channels.f0, (hz, i) =>
-        channels.voicing[i] > 0.05 && channels.whisper[i] < 1 ? hz : 0
+        channels.voicing[i] > 0.05 && channels.whisper[i] < 1
+          ? phonationF0(hz, channels.creak[i], channels.falsetto[i])
+          : 0
       ),
     },
     loudness: { rate, values: Array.from(channels.loudness) },
@@ -110,11 +113,17 @@ function setTrack(plan, key, track) {
           plan.head.pitch
         )
       : track.values;
-  const channel = plan.channels[key];
+  const { channels, frameRate } = plan;
+  const channel = channels[key];
   for (let i = 0; i < channel.length; i++) {
-    if (key !== 'f0' || plan.channels.whisper[i] < 1) {
-      channel[i] = sampleTrack(values, (i * track.rate) / plan.frameRate);
+    if (key === 'f0' && channels.whisper[i] >= 1) {
+      continue;
     }
+    const value = sampleTrack(values, (i * track.rate) / frameRate);
+    channel[i] =
+      key === 'f0'
+        ? pitchBeforePhonation(value, channels.creak[i], channels.falsetto[i])
+        : value;
   }
 }
 

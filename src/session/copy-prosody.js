@@ -1,4 +1,5 @@
 /** Measured pitch and level on a synthesis plan's control grid. Unlicense. */
+import { pitchBeforePhonation } from '../acoustics/glottis.js';
 import { interpolateGaps, smoothChannel } from '../articulation/plan.js';
 import { renderPlan } from '../acoustics/voice.js';
 import { analyzeFrames } from '../recognition/frontend.js';
@@ -70,7 +71,11 @@ export function applyPitch(plan, samples, sampleRate, modes) {
           time >= span.start && time < span.end && span.phonation?.whisper
       )
     ) {
-      channels.f0[i] = filtered[i];
+      channels.f0[i] = pitchBeforePhonation(
+        filtered[i],
+        channels.creak[i],
+        channels.falsetto[i]
+      );
     }
   }
 }

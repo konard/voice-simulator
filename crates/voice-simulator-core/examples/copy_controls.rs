@@ -1,5 +1,6 @@
 //! Native parity probe for the JavaScript copy controls. Unlicense.
 use voice_simulator_core::copy_synthesis::*;
+use voice_simulator_core::glottis::pitch_before_phonation;
 
 fn main() {
     let f0: Vec<_> = (0..72)
@@ -28,6 +29,9 @@ fn main() {
         f64::from(blend(0.375, 0.614, 0.5)),
         f64::from(offset(0.375, -0.05, 4, 10)),
         penalty_change(0.1, 0.05),
+        pitch_before_phonation(240.0, 0.0, 1.0),
+        pitch_before_phonation(25.0, 1.0, 0.0),
+        pitch_before_phonation(60.0, 0.7, 0.2),
     ];
     println!("{control:?}");
     let input = [0.3, 0.5, 0.7, 0.8, 0.9];

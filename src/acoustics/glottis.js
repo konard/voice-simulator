@@ -128,6 +128,11 @@ export const PHONATION_SOURCE = Object.freeze({
 /** Lowest f0 (Hz) a period can have (vocal fry). */
 export const MIN_F0 = 20;
 
+function phonationPitchScale(creak, falsetto) {
+  const { creakSemitones, falsettoSemitones } = PHONATION_SOURCE;
+  return 2 ** ((falsetto * falsettoSemitones - creak * creakSemitones) / 12);
+}
+
 /**
  * f0 of the glottis under creak `c` and falsetto `f` (0..1): shifted by
  * `12 (f - c)` semitones, but not below 25 Hz (nor below `f0` itself).
@@ -139,15 +144,16 @@ export function phonationF0(f0, creak, falsetto) {
   if (creak === 0 && falsetto === 0) {
     return f0;
   }
-  const source = PHONATION_SOURCE;
-  const shifted =
-    f0 *
-    2 **
-      ((falsetto * source.falsettoSemitones - creak * source.creakSemitones) /
-        12);
+  const shifted = f0 * phonationPitchScale(creak, falsetto);
   return creak > 0
-    ? Math.max(Math.min(f0, source.creakFloor), shifted)
+    ? Math.max(Math.min(f0, PHONATION_SOURCE.creakFloor), shifted)
     : shifted;
+}
+
+/** Control pitch that produces the requested acoustic f0 with these modes. */
+export function pitchBeforePhonation(f0, creak, falsetto) {
+  const scale = phonationPitchScale(creak, falsetto);
+  return scale < 1 && f0 <= PHONATION_SOURCE.creakFloor ? f0 : f0 / scale;
 }
 
 /**
