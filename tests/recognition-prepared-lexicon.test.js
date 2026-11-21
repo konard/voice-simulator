@@ -4,11 +4,40 @@ import { parseIpa } from '../src/ipa/parse.js';
 import { exactCandidates } from '../src/recognition/candidates.js';
 import { addPronunciation, trieNode } from '../src/recognition/lexicon.js';
 import {
+  countPronunciations,
+  phoneProbability,
+} from '../src/recognition/language-model.js';
+import {
+  openPackedLanguageModel,
+  packLanguageModel,
+} from '../src/recognition/node-models.js';
+import {
   openPreparedLexicon,
   serializeLexicon,
 } from '../src/recognition/prepared-lexicon.js';
 import { withWordSearch } from '../src/recognition/word-search.js';
 import { phoneDistance } from '../src/recognition/phone-distance.js';
+
+it('preserves language scores for known and missing phones in generated count tables', () => {
+  const reference = countPronunciations([
+    { symbols: ['a', 'b', 'a'], count: 2 },
+    { symbols: ['a', 'b', 'kʰ'], count: 15 },
+    { symbols: ['kʰ', 'b'], count: 3 },
+  ]);
+  const packed = openPackedLanguageModel(
+    JSON.parse(JSON.stringify(packLanguageModel(reference)))
+  );
+  const phones = ['#', 'a', 'b', 'kʰ', 'ɹ'];
+  for (const a of phones) {
+    for (const b of phones) {
+      for (const c of phones) {
+        expect(phoneProbability(packed, a, b, c)).toBe(
+          phoneProbability(reference, a, b, c)
+        );
+      }
+    }
+  }
+});
 
 it('reads stressed pronunciations, homophones and Mandarin tones from a prepared trie', () => {
   const cases = [

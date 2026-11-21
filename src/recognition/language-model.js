@@ -104,18 +104,26 @@ export function getLanguageModel(language) {
   return cached.get(language);
 }
 
-export function phoneProbability(model, a, b, c) {
+function phoneCounts(model, a, b, c) {
   const pair = `${a}\t${b}`;
+  return [
+    model.triples.get(`${pair}\t${c}`),
+    model.pairs.get(pair),
+    model.pairs.get(`${b}\t${c}`),
+    model.singles.get(b),
+    model.singles.get(c),
+  ];
+}
+
+export function phoneProbability(model, a, b, c) {
+  const [abc, ab, bc, prior, current] = model.counts
+    ? model.counts(a, b, c)
+    : phoneCounts(model, a, b, c);
   return (
-    (LANGUAGE_MODEL.trigram * (model.triples.get(`${pair}\t${c}`) ?? 0)) /
-      (model.pairs.get(pair) || Infinity) +
-    (LANGUAGE_MODEL.bigram * (model.pairs.get(`${b}\t${c}`) ?? 0)) /
-      (model.singles.get(b) || Infinity) +
+    (LANGUAGE_MODEL.trigram * (abc ?? 0)) / (ab || Infinity) +
+    (LANGUAGE_MODEL.bigram * (bc ?? 0)) / (prior || Infinity) +
     LANGUAGE_MODEL.unigram *
-      Math.max(
-        (model.singles.get(c) ?? 0) / (model.total || 1),
-        LANGUAGE_MODEL.floor
-      )
+      Math.max((current ?? 0) / (model.total || 1), LANGUAGE_MODEL.floor)
   );
 }
 

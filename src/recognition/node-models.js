@@ -3,7 +3,7 @@ import { installLanguageModelReader } from './language-model.js';
 import { installPreparedLexicons } from './lexicon.js';
 import { openPreparedLexicon } from './prepared-lexicon.js';
 
-export const recognitionModelVersion = 1;
+export const recognitionModelVersion = 2;
 
 export const recognitionDataFile = (kind) =>
   new globalThis.URL(
@@ -12,6 +12,75 @@ export const recognitionDataFile = (kind) =>
   );
 
 let configured = false;
+
+/** Counts are stored as sorted (index, count) pairs in one numeric array. */
+function countAt(rows, index) {
+  if (Number.isNaN(index)) {
+    return 0;
+  }
+  let lo = 0;
+  let hi = rows.length / 2;
+  while (lo < hi) {
+    const mid = Math.floor((lo + hi) / 2);
+    if (rows[mid * 2] < index) {
+      lo = mid + 1;
+    } else {
+      hi = mid;
+    }
+  }
+  return rows[lo * 2] === index ? rows[lo * 2 + 1] : 0;
+}
+
+export function openPackedLanguageModel([
+  units,
+  singles,
+  pairs,
+  triples,
+  total,
+]) {
+  const ids = new Map(units.map((unit, index) => [unit, index]));
+  const width = units.length;
+  return {
+    total,
+    counts(a, b, c) {
+      const first = ids.get(a);
+      const previous = ids.get(b);
+      const current = ids.get(c);
+      const ab = first * width + previous;
+      return [
+        countAt(triples, ab * width + current),
+        countAt(pairs, ab),
+        countAt(pairs, previous * width + current),
+        singles[previous],
+        singles[current],
+      ];
+    },
+  };
+}
+
+function packCounts(counts, ids) {
+  const rows = [];
+  const width = ids.size;
+  for (const [key, count] of counts) {
+    const index = key
+      .split('\t')
+      .reduce((previous, unit) => previous * width + ids.get(unit), 0);
+    rows.push([index, count]);
+  }
+  return rows.sort(([a], [b]) => a - b).flat();
+}
+
+export function packLanguageModel({ singles, pairs, triples, total }) {
+  const units = [...singles.keys()];
+  const ids = new Map(units.map((unit, index) => [unit, index]));
+  return [
+    units,
+    [...singles.values()],
+    packCounts(pairs, ids),
+    packCounts(triples, ids),
+    total,
+  ];
+}
 
 export function configureNodeRecognitionModels() {
   if (configured) {
@@ -43,14 +112,9 @@ export function configureNodeRecognitionModels() {
     try {
       const rows = read('models');
       return new Map(
-        rows?.map(([language, singles, pairs, triples, total]) => [
+        rows?.map(([language, model]) => [
           language,
-          {
-            singles: new Map(singles),
-            pairs: new Map(pairs),
-            triples: new Map(triples),
-            total,
-          },
+          openPackedLanguageModel(model),
         ])
       );
     } catch {

@@ -3,6 +3,7 @@ import { Buffer } from 'node:buffer';
 import { writeFileSync } from 'node:fs';
 import { gzipSync } from 'node:zlib';
 import {
+  packLanguageModel,
   recognitionDataFile,
   recognitionModelVersion,
 } from '../src/recognition/node-models.js';
@@ -20,11 +21,10 @@ function write(file, rows) {
 }
 
 const models = Object.keys(LANGUAGES).map((language) => {
-  const { singles, pairs, triples, total } = getLanguageModel(language);
   write(
     recognitionDataFile(language),
     serializeLexicon(getLexicon(language), language)
   );
-  return [language, [...singles], [...pairs], [...triples], total];
+  return [language, packLanguageModel(getLanguageModel(language))];
 });
 write(recognitionDataFile('models'), models);
