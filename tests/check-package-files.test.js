@@ -43,6 +43,10 @@ describe('check-package-files', () => {
       'src/engine/voice-simulator-recognition-ru.json.gz',
       'src/engine/voice-simulator-recognition-hi.json.gz',
       'src/engine/voice-simulator-recognition-zh.json.gz',
+      'src/engine/voice-simulator-word-transitions-en.bin.gz',
+      'src/engine/voice-simulator-word-transitions-ru.bin.gz',
+      'src/engine/voice-simulator-word-transitions-hi.bin.gz',
+      'src/engine/voice-simulator-word-transitions-zh.bin.gz',
       'src/engine/worker-protocol.js',
     ]);
   });

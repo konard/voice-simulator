@@ -4,6 +4,11 @@ import { parseIpa } from '../src/ipa/parse.js';
 import { exactCandidates } from '../src/recognition/candidates.js';
 import { addPronunciation, trieNode } from '../src/recognition/lexicon.js';
 import {
+  getCounts,
+  openWordTransitions,
+  packWordTransitions,
+} from '../src/recognition/data/index.js';
+import {
   countPronunciations,
   phoneProbability,
 } from '../src/recognition/language-model.js';
@@ -17,6 +22,21 @@ import {
 } from '../src/recognition/prepared-lexicon.js';
 import { withWordSearch } from '../src/recognition/word-search.js';
 import { phoneDistance } from '../src/recognition/phone-distance.js';
+
+it('opens the same discounted transition costs from packed word counts', () => {
+  const language = 'en';
+  const { words, transitionRow } = getCounts(language);
+  const [offsets, pairs] = packWordTransitions(language);
+  const read = openWordTransitions(
+    words,
+    Uint32Array.from(offsets),
+    Uint32Array.from(pairs)
+  );
+  for (const { word } of words.slice(0, 128)) {
+    expect(read(word)).toEqual(transitionRow(word));
+  }
+  expect(read('mangosteenish')).toBeUndefined();
+});
 
 it('preserves language scores for known and missing phones in generated count tables', () => {
   const reference = countPronunciations([

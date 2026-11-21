@@ -6,8 +6,11 @@ import {
   packLanguageModel,
   recognitionDataFile,
   recognitionModelVersion,
+  wordTransitionFile,
+  wordTransitionVersion,
 } from '../src/recognition/node-models.js';
 import { LANGUAGES } from '../src/g2p/index.js';
+import { packWordTransitions } from '../src/recognition/data/index.js';
 import { getLanguageModel } from '../src/recognition/language-model.js';
 import { getLexicon } from '../src/recognition/lexicon.js';
 import { serializeLexicon } from '../src/recognition/prepared-lexicon.js';
@@ -21,11 +24,28 @@ function write(file, rows) {
   console.log(`${file.pathname.split('/').at(-1)}: ${asset.length} bytes`);
 }
 
+function writeWordTransitions(language) {
+  const [offsets, pairs] = packWordTransitions(language);
+  const bytes = Buffer.alloc((2 + offsets.length + pairs.length) * 4);
+  let offset = bytes.writeUInt32LE(wordTransitionVersion, 0);
+  offset = bytes.writeUInt32LE(offsets.length, offset);
+  for (const row of [offsets, pairs]) {
+    for (const value of row) {
+      offset = bytes.writeUInt32LE(value, offset);
+    }
+  }
+  const asset = gzipSync(bytes);
+  const file = wordTransitionFile(language);
+  writeFileSync(file, asset);
+  console.log(`${file.pathname.split('/').at(-1)}: ${asset.length} bytes`);
+}
+
 const models = Object.keys(LANGUAGES).map((language) => {
   write(
     recognitionDataFile(language),
     serializeLexicon(getLexicon(language), language)
   );
+  writeWordTransitions(language);
   return [language, packLanguageModel(getLanguageModel(language))];
 });
 write(recognitionDataFile('models'), models);

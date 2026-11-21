@@ -164,3 +164,4 @@ examples/listening-test/config.js
 src/engine/*.wasm
 src/engine/voice-simulator-recognition-*.json.gz
 src/engine/voice-simulator-oral-codebook.bin
+src/engine/voice-simulator-word-transitions-*.bin.gz

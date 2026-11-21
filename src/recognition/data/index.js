@@ -12,6 +12,11 @@ const DATA = new Map([
 ]);
 const opened = new Map();
 const transitionsByTable = new WeakMap();
+let readTransitions;
+
+export function installWordTransitionReader(read) {
+  readTransitions = read;
+}
 
 function* bigramRows(source, words) {
   for (const item of source.split(' ')) {
@@ -28,6 +33,54 @@ function* bigramRows(source, words) {
 
 function discountedCost(count, previousCount) {
   return -0.3 * Math.log((count - 0.75) / previousCount) + 0.5;
+}
+
+/** A destination's range in offsets points to (previous word ID, count) pairs. */
+export function packWordTransitions(language) {
+  const { words } = getCounts(language);
+  const ids = new Map(words.map(({ word }, index) => [word, index]));
+  const rows = Array.from(words, () => []);
+  for (const [previous, next, count] of bigramRows(
+    DATA.get(language).BIGRAMS,
+    words
+  )) {
+    rows[ids.get(next.word)].push(ids.get(previous.word), count);
+  }
+  const offsets = [0];
+  const pairs = [];
+  for (const row of rows) {
+    // The source index opens each row in reverse order.
+    for (let i = row.length - 2; i >= 0; i -= 2) {
+      pairs.push(row[i], row[i + 1]);
+    }
+    offsets.push(pairs.length);
+  }
+  return [offsets, pairs];
+}
+
+export function openWordTransitions(words, offsets, pairs) {
+  if (
+    offsets.length !== words.length + 1 ||
+    offsets[0] !== 0 ||
+    offsets.at(-1) !== pairs.length
+  ) {
+    return undefined;
+  }
+  const ids = new Map(words.map(({ word }, i) => [word, i]));
+  return (word) => {
+    const id = ids.get(word);
+    const start = offsets[id];
+    const end = offsets[id + 1];
+    if (!(start < end)) {
+      return undefined;
+    }
+    const result = new Map();
+    for (let i = start; i < end; i += 2) {
+      const previous = words[pairs[i]];
+      result.set(previous.word, discountedCost(pairs[i + 1], previous.count));
+    }
+    return result;
+  };
 }
 
 /** Link the encoded pairs by destination without opening their cost maps. */
@@ -124,7 +177,9 @@ export function getCounts(language) {
       },
       transitionRow(word) {
         if (!rows.has(word)) {
-          openRow ??= indexBigrams(data.BIGRAMS, words);
+          openRow ??=
+            readTransitions?.(language, words) ??
+            indexBigrams(data.BIGRAMS, words);
           const row = openRow(word);
           if (row) {
             rows.set(word, row);

@@ -3,6 +3,10 @@ import { installLanguageModelReader } from './language-model.js';
 import { installPreparedLexicons } from './lexicon.js';
 import { openPreparedLexicon } from './prepared-lexicon.js';
 import {
+  installWordTransitionReader,
+  openWordTransitions,
+} from './data/index.js';
+import {
   installOralCodebookReader,
   openOralFeatureRows,
   oralTableCount,
@@ -16,6 +20,13 @@ export const recognitionModelVersion = 2;
 export const recognitionDataFile = (kind) =>
   new globalThis.URL(
     `../engine/voice-simulator-recognition-${kind}.json.gz`,
+    import.meta.url
+  );
+
+export const wordTransitionVersion = 1;
+export const wordTransitionFile = (language) =>
+  new globalThis.URL(
+    `../engine/voice-simulator-word-transitions-${language}.bin.gz`,
     import.meta.url
   );
 
@@ -101,6 +112,36 @@ export function configureNodeRecognitionModels() {
   if (!fs || !zlib) {
     return;
   }
+  installWordTransitionReader((language, words) => {
+    try {
+      const bytes = zlib.gunzipSync(
+        fs.readFileSync(wordTransitionFile(language))
+      );
+      const header = 2 * Uint32Array.BYTES_PER_ELEMENT;
+      if (process.getBuiltinModule('node:os').endianness() === 'BE') {
+        return undefined;
+      }
+      if (bytes.readUInt32LE(0) !== wordTransitionVersion) {
+        return undefined;
+      }
+      const length = bytes.readUInt32LE(4);
+      if (length !== words.length + 1) {
+        return undefined;
+      }
+      const data = new Uint32Array(
+        bytes.buffer,
+        bytes.byteOffset + header,
+        (bytes.length - header) / Uint32Array.BYTES_PER_ELEMENT
+      );
+      return openWordTransitions(
+        words,
+        data.subarray(0, length),
+        data.subarray(length)
+      );
+    } catch {
+      // Source installations can index the same transitions on demand.
+    }
+  });
   let oralArchive;
   installOralCodebookReader((length) => {
     const index = 2 * (length - oralTableMinLength);

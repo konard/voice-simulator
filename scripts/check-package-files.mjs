@@ -24,6 +24,10 @@ export const REQUIRED_FILES = Object.freeze([
   ...['en', 'ru', 'hi', 'zh'].map(
     (language) => `src/engine/voice-simulator-recognition-${language}.json.gz`
   ),
+  ...['en', 'ru', 'hi', 'zh'].map(
+    (language) =>
+      `src/engine/voice-simulator-word-transitions-${language}.bin.gz`
+  ),
   'src/engine/worker.js',
   'src/engine/worker-protocol.js',
 ]);
