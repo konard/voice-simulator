@@ -26,15 +26,6 @@ function rowFor(item, tier, recognition, metrics) {
   };
 }
 
-export function measureCopy(item, options) {
-  const { metrics, recognition } = copyRecording(
-    item.samples,
-    item.sampleRate,
-    options
-  );
-  return rowFor(item, options.tier, recognition, metrics);
-}
-
 export function* measureTiers(item, tiers, options) {
   const [first, ...others] = tiers;
   const { samples, sampleRate } = item;

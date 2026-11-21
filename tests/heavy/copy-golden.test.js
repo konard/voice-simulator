@@ -8,9 +8,13 @@ import {
   COPY_TIERS,
   copyReportContext,
   formatCopyReport,
-  measureCopy,
   measureTiers,
 } from '../../scripts/copy-report.mjs';
+import {
+  copyRecording,
+  compareRecordings,
+  renderScore,
+} from '../../src/index.js';
 import { loadGolden } from '../helpers/golden.js';
 import { heavyLimit, writeReport } from './helpers/report.js';
 
@@ -63,11 +67,20 @@ it('copies the golden set', async () => {
 it('refinement helps', async () => {
   const engine = await createEngine({ threads: 1 });
   const options = { engine, tier: 'medium' };
-  const rows = golden.map((item) => ({
-    id: item.id,
-    base: measureCopy(item, options).lsd,
-    refined: measureCopy(item, { ...options, refine: true }).lsd,
-  }));
+  const rows = golden.map((item) => {
+    const { score, metrics } = copyRecording(item.samples, item.sampleRate, {
+      ...options,
+      refine: true,
+    });
+    // Both copies use the same recording analysis. Replay the base score
+    // before the measured articulation tracks are applied.
+    const base = renderScore({ ...score, articulation: undefined }, options);
+    return {
+      id: item.id,
+      base: compareRecordings(item, base).lsd,
+      refined: metrics.lsd,
+    };
+  });
   const improved = rows.filter(({ base, refined }) => refined < base).length;
   const lines = [
     '# Copy refinement',

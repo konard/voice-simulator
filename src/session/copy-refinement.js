@@ -160,7 +160,8 @@ function searchPiece(piece, reference, syllables, render) {
       return false;
     }
     const cost = logSpectralDistance(reference, audio, DRAFT_RATE) + penalty;
-    if (cost + improvement < best) {
+    const reduction = best - cost;
+    if (reduction > 0 && reduction >= improvement) {
       best = cost - penalty;
       return true;
     }
