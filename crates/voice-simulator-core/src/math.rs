@@ -121,6 +121,18 @@ pub fn ln(x: f64) -> f64 {
     libm::log(x)
 }
 
+/// Base-two logarithm.
+#[inline]
+pub fn log2(x: f64) -> f64 {
+    libm::log2(x)
+}
+
+/// Base-ten logarithm.
+#[inline]
+pub fn log10(x: f64) -> f64 {
+    libm::log10(x)
+}
+
 /// `x` raised to `y`.
 #[inline]
 pub fn pow(x: f64, y: f64) -> f64 {

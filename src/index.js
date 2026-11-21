@@ -729,3 +729,6 @@ export {
 } from './recognition/recognizer.js';
 export { createRecognitionEngine } from './recognition/engine.js';
 export { createVoiceSession, copyVoice } from './session/voice-session.js';
+
+export { copyRecording } from './session/copy.js';
+export { renderScore, toScore } from './session/score.js';

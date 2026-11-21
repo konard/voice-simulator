@@ -10,6 +10,7 @@ import type {
   RecognitionEvents,
   RecognitionOptions,
   RecognitionResult,
+  RecognizedSegment,
   Recognizer,
 } from '../recognition/recognizer.js';
 
@@ -39,6 +40,7 @@ export interface VoiceSessionOptions {
   realtime?: boolean;
   backgroundShare?: number;
   level?: RecognitionOptions['level'];
+  segments?: boolean;
   /** Include the recognizer's speech-mode classifications. Defaults to true. */
   includeModeLabels?: boolean;
   schedule?: (fn: () => void) => unknown;
@@ -109,7 +111,7 @@ export interface VoiceSession {
 export interface CopyVoiceResult {
   voice: VoiceFile | null;
   uncertainty: Record<string, number> | null;
-  recognition: VoiceSessionRecognition;
+  recognition: VoiceSessionRecognition & { segments: RecognizedSegment[] };
   passes: number;
   converged: boolean;
   history: readonly VoiceSessionPass[];
@@ -121,6 +123,6 @@ export function copyVoice(
   sampleRate: number,
   options?: Omit<
     VoiceSessionOptions,
-    'sampleRate' | 'window' | 'maxIterations' | 'realtime'
+    'sampleRate' | 'window' | 'maxIterations' | 'realtime' | 'segments'
   >
 ): CopyVoiceResult;

@@ -56,6 +56,9 @@ const OPTIONS = {
   seed: { type: 'string', short: 's' },
   head: { type: 'string' },
   voice: { type: 'string' },
+  score: { type: 'string' },
+  'from-score': { type: 'string' },
+  refine: { type: 'boolean' },
   'voice-file': { type: 'boolean' },
   full: { type: 'boolean' },
   preset: { type: 'string' },
@@ -149,6 +152,10 @@ function usage() {
     '                      --no-whisper disables automatic whisper detection',
     '                      --rescore; raw stdin: -f raw --sample-rate 16000 --bit-depth 16',
     '  match <file>        Find the head that sounds like a recording',
+    '  copy <in> -o out    Simulate a recording and optionally write --score <file>',
+    '                      --voice <file> --refine --tier <name> --json',
+    '  copy --from-score <file> -o out  Render a saved or edited score',
+    '  Copy only your own voice, a voice you have permission to copy, or a public-domain recording.',
     '  landmarks <file>    Experimental nuclei, sound changes and broad classes',
     '                      as JSON (see README accuracy limits)',
     '  compare <ref> <test>',
@@ -633,6 +640,73 @@ async function quickBenchmark(values, io, engine) {
 
 const COMMANDS = {
   recognize: recognizeCommand,
+  async copy(values, positionals, io, engine) {
+    const { copyRecording } = await import('../src/session/copy.js');
+    const { renderScore } = await import('../src/session/score.js');
+    const scorePath = values['from-score'];
+    if (positionals.length !== (scorePath ? 0 : 1)) {
+      throw new Error('Supply one input recording or --from-score <file>');
+    }
+    const options = {
+      tier: values.tier,
+      sampleRate: optionalNumber(values['sample-rate'], 'sample-rate'),
+      seed: values.seed,
+      engine,
+    };
+    const output = audioOutput(values, 'copy');
+    let result;
+    if (scorePath) {
+      result = renderScore(
+        JSON.parse(readFileSync(scorePath, 'utf8')),
+        options
+      );
+    } else {
+      const input = decodeAudio(readFileSync(positionals[0]));
+      result = copyRecording(input.samples, input.sampleRate, {
+        ...options,
+        languages: values.languages?.split(','),
+        voice: values.voice && readFileSync(values.voice, 'utf8'),
+        refine: values.refine,
+      });
+      if (values.score) {
+        writeFileSync(
+          values.score,
+          `${JSON.stringify(result.score, null, 2)}\n`
+        );
+      }
+    }
+    writeOutput(
+      output.out,
+      output.encode(result.samples, result.sampleRate),
+      io
+    );
+    if (!result.metrics) {
+      return;
+    }
+    const report = output.out === '-' ? io.stderr : io.stdout;
+    if (values.json) {
+      report(
+        JSON.stringify({
+          text: result.recognition.text,
+          metrics: result.metrics,
+        })
+      );
+    } else {
+      report(result.recognition.text);
+      for (const line of formatComparison(result.metrics)) {
+        report(line);
+      }
+      report(
+        `Syllable timing error ${fixed(result.metrics.timingError, 1, ' ms')}`
+      );
+      for (const warning of result.metrics.warnings) {
+        report(
+          warning.message ??
+            `Clamped ${warning.ipa} at ${warning.start.toFixed(3)} s`
+        );
+      }
+    }
+  },
   language(values, positionals, io) {
     const result = identifyLanguage(requireText(positionals), {
       languages: values.languages?.split(','),

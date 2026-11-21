@@ -11,6 +11,7 @@ export function translated(result, seconds, wordIndex) {
       ...time(word),
       syllables: word.syllables.map(time),
     })),
+    ...(result.segments && { segments: result.segments.map(time) }),
     modes: result.modes.map((span) =>
       span.from === undefined
         ? time(span)
@@ -61,4 +62,5 @@ export function aggregate(result, phrase, alternativeLimit) {
   result.ipa = [result.ipa, phrase.ipa].filter(Boolean).join(' ');
   result.words.push(...phrase.words);
   result.modes.push(...phrase.modes);
+  result.segments?.push(...(phrase.segments ?? []));
 }
