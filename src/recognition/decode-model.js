@@ -250,15 +250,16 @@ export function decoderTemplates(voice, symbols, articulationOffsets) {
     if (cached.size >= 8) {
       cached.delete(cached.keys().next().value);
     }
-    const planPhone = createRecognitionTemplatePlanner(
-      { head: voice, articulationOffsets },
-      TEMPLATE_CHANNELS
-    );
-    cached.set(key, { templates: new Map(), planPhone });
+    cached.set(key, new Map());
   }
-  const { templates, planPhone } = cached.get(key);
+  const templates = cached.get(key);
+  let planPhone;
   return symbols.map((ipa) => {
     if (!templates.has(ipa)) {
+      planPhone ??= createRecognitionTemplatePlanner(
+        { head: voice, articulationOffsets },
+        TEMPLATE_CHANNELS
+      );
       templates.set(ipa, template(ipa, planPhone));
     }
     return templates.get(ipa);
