@@ -126,6 +126,7 @@
     ]
   },
   "allowScripts": {
+    "fsevents": false,
     "node-pty": false
   },
   "overrides": {
