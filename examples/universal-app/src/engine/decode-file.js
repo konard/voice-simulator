@@ -30,3 +30,15 @@ export async function decodeAudio(buffer) {
     context.close();
   }
 }
+export async function decodeAudioFile(file) {
+  try {
+    return await decodeAudio(await file.arrayBuffer());
+  } catch (cause) {
+    throw Object.assign(
+      new Error('Could not decode the audio file', { cause }),
+      {
+        code: 'decode-failed',
+      }
+    );
+  }
+}

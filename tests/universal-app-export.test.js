@@ -57,7 +57,7 @@ describe('example app audio export', () => {
       'utf8'
     );
     expect(app).toContain('h(ExportControls, {');
-    expect(app).toContain('exportAudio(preset)');
+    expect(app).toMatch(/exportAudio\(preset, \{\s*copyConsent,/);
     expect(controls).toContain('EXPORT_PRESETS.map(');
     expect(controls.includes('node:')).toBe(false);
   });

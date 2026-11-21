@@ -126,6 +126,7 @@ function benchmarkEngine({ engine = RUST } = {}) {
     unlock: async () => {},
     stalled: () => false,
     begin() {},
+    push() {},
     stop() {},
     end() {},
   };
@@ -141,7 +142,7 @@ function benchmarkEngine({ engine = RUST } = {}) {
 }
 
 /** An utterance in the sound mode; returns its id. */
-async function speakSound(engine) {
+async function speakSound(engine, options = {}) {
   const job = await engine.speak({
     text: 'ˈa',
     ipa: true,
@@ -149,9 +150,37 @@ async function speakSound(engine) {
     head: {},
     seed: '1',
     mode: 'sound',
+    ...options,
   });
   return job.id;
 }
+
+it('keeps speaker permission on copied audio after playback stops', async () => {
+  const { engine, worker, reply } = benchmarkEngine();
+  const articulationOffsets = { a: { height: 0.1 } };
+  const id = await speakSound(engine, {
+    articulationOffsets,
+    requiresCopyConsent: true,
+  });
+  expect(postedOf(worker, 'speak')[0].articulationOffsets).toEqual(
+    articulationOffsets
+  );
+  reply({ type: 'start', id, sampleRate: 16000, totalSamples: 320 });
+  reply({
+    type: 'chunk',
+    id,
+    start: 0,
+    samples: new Float32Array(320),
+    load: 0,
+  });
+  engine.stop();
+  expect(engine.recordingRequiresCopyConsent).toBe(true);
+  expect(engine.exportAudio()).toBe(null);
+  expect(
+    engine.exportAudio(undefined, { copyConsent: true })?.blob.size
+  ).toBeGreaterThan(0);
+  engine.dispose();
+});
 
 describe('voice engine benchmark', () => {
   it('starts automatic quality at minimal, above the narrow-band tiers', () => {

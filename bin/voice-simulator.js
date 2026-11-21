@@ -118,6 +118,8 @@ const LIBRARY_USAGE = [
   '         to timed IPA words; toPlanModes converts spans for replay.',
   '         API, baseline and limits: docs/RECOGNITION-MODES.md',
   'Library: createVoiceSession({ sampleRate }) fits a speaker while recognising.',
+  '         Read session.voicedSeconds for capture progress.',
+  '         Pass includeModeLabels: false to skip speech-mode classification.',
   '         copyVoice(samples, rate) uses the same passes on a recording.',
   '         API and state diagram: docs/VOICE-SESSION.md',
   '',

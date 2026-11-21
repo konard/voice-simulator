@@ -41,6 +41,8 @@ export interface VoiceSessionOptions {
   backgroundShare?: number;
   level?: RecognitionOptions['level'];
   segments?: boolean;
+  /** Include the recognizer's speech-mode classifications. Defaults to true. */
+  includeModeLabels?: boolean;
   schedule?: (fn: () => void) => unknown;
 }
 
@@ -90,6 +92,8 @@ export interface VoiceSession {
   readonly converged: boolean;
   readonly history: readonly VoiceSessionPass[];
   readonly load: number;
+  /** Voiced audio measured for the current speaker. Resets on speaker change. */
+  readonly voicedSeconds: number;
   backgroundShare: number;
   push(chunk: Float32Array): void;
   flush(): VoiceSessionRecognition;

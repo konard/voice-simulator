@@ -92,7 +92,15 @@ jobs:
           node-version: '24.x'
 
       - name: Install dependencies
-        run: npm install
+        run: npm ci
+
+      - name: Install the example app and Playwright Chromium
+        if: inputs.suite == 'copy' || inputs.suite == 'all'
+        env:
+          ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
+        run: |
+          npm ci --prefix examples/universal-app --no-audit --no-fund
+          npx playwright install --with-deps chromium
 
       # Speech datasets fetched by scripts/datasets.mjs (issue 16). The key
       # changes with the registry, so a changed checksum fetches again.

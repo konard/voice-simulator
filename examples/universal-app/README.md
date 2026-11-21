@@ -35,6 +35,15 @@ desktop packages, and Capacitor mobile projects.
   audio, highlights recognised syllables, and labels language changes and
   detected speech modes. **Speak back** puts the final text and its first
   language into the synthesis controls and reads it aloud.
+- **Copy a voice** (after **Recognise speech**): start the microphone or
+  choose an audio file. The local session shows the current pass, the recognised
+  text and syllables, fitted parameters, and the stability of the fit.
+  **Speak main text with this voice** applies the fitted voice to the app and
+  reads the main text. **Repeat what was said** synthesises the last finished
+  utterance. **Reset copied voice** restores the head shown before the session.
+  Saving the voice or exporting its audio requires checking the speaker
+  permission box. The app keeps that choice for the current speaker on this
+  page only.
 - **Acoustics** (`src/components/AcousticsSettings.js`): microphone
   distance and angle, room preset, or a simulated box of air around the
   head on the 3D tiers.
@@ -64,6 +73,18 @@ desktop packages, and Capacitor mobile projects.
 ```bash
 npm install --prefix examples/universal-app
 ```
+
+To check microphone copying with a synthetic 20-second recording at normal
+speed and 6× CPU throttling, run from the repository root:
+
+```bash
+npm ci
+npx playwright install chromium
+node scripts/check-app-copy.mjs
+```
+
+The check measures the longest main-thread task and counts requests during
+capture. It saves the panel to `docs/screenshots/copy-voice.png`.
 
 ## Web
 

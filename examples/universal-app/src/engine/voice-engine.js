@@ -226,6 +226,7 @@ export class VoiceEngine {
         from: null,
         to: null,
         time: cached.time,
+        level: cached.level,
         engine: cached.engine,
         cached: true,
       },
@@ -343,6 +344,7 @@ export class VoiceEngine {
       benchmark: {
         measuring: !final,
         from: previous?.from ?? null,
+        level: message.version !== undefined ? message.level : undefined,
         to: previous?.to ?? globalThis.performance.now(),
         time: final && message.version !== undefined ? Date.now() : null,
         engine: message.engine ?? null,
@@ -463,6 +465,7 @@ export class VoiceEngine {
     const plan = planUtterance(transcription.ipa, {
       head: request.head,
       language: transcription.lang,
+      articulationOffsets: request.articulationOffsets,
     });
     const timeline = utteranceTimeline(plan, {
       words: transcription.words,
@@ -478,6 +481,7 @@ export class VoiceEngine {
       plan,
       timeline,
       sound: request.mode !== 'visual',
+      requiresCopyConsent: request.requiresCopyConsent,
       startedAt: null,
       fields: [],
       fieldIndex: 0,
@@ -521,6 +525,7 @@ export class VoiceEngine {
       ipa: transcription.ipa,
       lang: transcription.lang,
       head: request.head,
+      articulationOffsets: request.articulationOffsets,
       seed: request.seed,
       tier: this.audioLevel,
       auto: this.auto,
@@ -540,8 +545,15 @@ export class VoiceEngine {
    */
   async #transcribe(request) {
     const read = () =>
-      textToIpa(request.text, { lang: request.lang, accent: request.accent });
+      textToIpa(request.text, {
+        lang: request.lang,
+        accent: request.accent,
+        accentLevel: request.accentLevel,
+      });
     const first = read();
+    if (request.requiresCopyConsent) {
+      return first;
+    }
     const langs = [first.lang, ...first.words.map((word) => word.lang)];
     const added = await this.addFullLexicons(langs);
     return added.length > 0 ? read() : first;
@@ -871,12 +883,19 @@ export class VoiceEngine {
     return { samples, sampleRate: job.sampleRate };
   }
 
+  get recordingRequiresCopyConsent() {
+    return Boolean((this.job ?? this.lastJob)?.requiresCopyConsent);
+  }
+
   /**
    * The last utterance as a file in an export preset (see audio-export.js).
    * @param {string} [preset] Default 16-bit WAV.
    * @returns {{blob: Blob, fileName: string} | null}
    */
-  exportAudio(preset) {
+  exportAudio(preset, { copyConsent = false } = {}) {
+    if (this.recordingRequiresCopyConsent && !copyConsent) {
+      return null;
+    }
     const recording = this.recording();
     return recording
       ? exportAudio(recording.samples, recording.sampleRate, preset)
