@@ -262,6 +262,30 @@ errors to 42 in its best trial. The other weights produced 43 and 44 errors.
 All of those search trials used the correct language and disabled automatic
 whisper detection. The public benchmark uses its normal settings.
 
+### Decoder diagnostics after merging `main`
+
+On `cfc0ec9`, `taskset -c 1 node --test tests/roundtrip-smoke.test.js`
+took 19 seconds. English made 12 phone edits out of 16 and six sound word
+edits out of six, Russian made 8 out of 13 and three out of three, and
+Mandarin made 13 out of 13 and 11 out of five. Only Russian returned the
+correct top language. The same errors reproduced in Node.js, Bun, and Deno
+on Ubuntu. [Checks and release](https://github.com/konard/voice-simulator/actions/runs/44920846059).
+
+`taskset -c 1 node experiments/issue-75-lexicon-search.mjs` scores the
+dictionary directly on the acoustic span graph for the three smoke inputs
+and Hindi sentence 2. The probe used the known language and allowed word
+boundaries within 45 ms of the planner times. With acoustic costs alone,
+none of the 17 reference words ranked in the top three. Adding unigram costs
+put one word in the top three. Subtracting the cheapest cost on each span
+(`--relative`) also put only one word in the top three with unigram costs.
+All four Hindi words were in the dictionary. They had no feasible paths at
+those boundaries until the probe accepted both short and long phones.
+
+`taskset -c 1 node experiments/issue-75-decoder-costs.mjs --seeded-preset --language-templates`
+used the planner's language-specific duration rules to generate acoustic
+templates. Across the same four recordings, phone edits increased from 43
+to 44 out of 54. The Russian case accounted for the increase.
+
 ## Telephone whisper correction
 
 In the Russian smoke case, the detector found a span at 0.49–0.85 s. Its

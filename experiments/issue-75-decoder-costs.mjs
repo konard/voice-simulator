@@ -1,6 +1,11 @@
 /** Compare acoustic search costs on short 8 kHz synthetic sentences. Unlicense. */
 import { errorRate, synthesize, tokenize } from '../src/index.js';
+import { createRecognitionTemplatePlanner } from '../src/articulation/plan.js';
 import { sampleState } from '../src/articulation/tract-shape.js';
+import {
+  TEMPLATE_CHANNELS,
+  TEMPLATE_POINTS,
+} from '../src/recognition/decode-model.js';
 import {
   analyzeForDecode,
   decoderSettings,
@@ -8,7 +13,10 @@ import {
   segmentsOf,
 } from '../src/recognition/decode-pipeline.js';
 import { decodeSearch } from '../src/recognition/decode-search.js';
-import { createSpanScorer } from '../src/recognition/decode-spans.js';
+import {
+  createSpanScorer,
+  prepareDecode,
+} from '../src/recognition/decode-spans.js';
 import { sentences } from '../tests/helpers/roundtrip.js';
 
 const indexes = { en: 17, ru: 1, hi: 1, zh: 1 };
@@ -160,6 +168,33 @@ function plannedArticulation(prepared, templates, analysis, plan) {
   };
 }
 
+// A supplied language gives access to the same timing rules used by the
+// synthesizer. Articulation inferred from the audio stays unchanged.
+function languageTemplates(templates, voice, language) {
+  const planPhone = createRecognitionTemplatePlanner(
+    { head: voice, language },
+    TEMPLATE_CHANNELS
+  );
+  return templates.map((unit) => {
+    const vowel = unit.kind === 'vowel';
+    const plan = planPhone(vowel ? unit.ipa : `ə${unit.ipa}ə`);
+    const target = plan.tokens[vowel ? 0 : 1];
+    const segments = plan.segments.filter(({ token }) => token === target);
+    const start = segments[0].start;
+    const duration = segments.at(-1).end - start;
+    const states = TEMPLATE_POINTS.map((point) =>
+      sampleState(plan, start + point * duration)
+    );
+    const width = TEMPLATE_CHANNELS.length;
+    const values = Float64Array.from(
+      unit.compared,
+      (cell) =>
+        states[Math.floor(cell / width)][TEMPLATE_CHANNELS[cell % width]]
+    );
+    return { ...unit, values, duration };
+  });
+}
+
 function measureSearch(
   prepared,
   templates,
@@ -202,6 +237,28 @@ for (const [lang, index] of Object.entries(indexes)) {
     settings
   );
   const { prepared, templates } = prepareIpaDecode(analysis, settings);
+  if (process.argv.includes('--language-templates')) {
+    const matched = languageTemplates(templates, analysis.voice, lang);
+    const { frames, tracks } = analysis;
+    const prepared = prepareDecode(
+      frames,
+      tracks.landmarks,
+      tracks.articulation,
+      matched,
+      {
+        from: frames.startTime,
+        to: frames.startTime + frames.sampleCount / frames.rate,
+      }
+    );
+    measureSearch(
+      prepared,
+      matched,
+      settings,
+      spoken.ipa,
+      lang,
+      'templates with reference language timing'
+    );
+  }
   if (process.argv.includes('--planned-articulation')) {
     measureSearch(
       plannedArticulation(prepared, templates, analysis, spoken.plan),
