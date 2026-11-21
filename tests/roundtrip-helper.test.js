@@ -1,6 +1,10 @@
 /** Check the metric definitions with controlled recognition results. Unlicense. */
 import assert from 'node:assert/strict';
 import { it } from 'test-anywhere';
+import {
+  roundTripReport,
+  summarizeRoundTrips,
+} from './heavy/helpers/roundtrip-report.js';
 import { roundTrip, sentenceMark, sentences } from './helpers/roundtrip.js';
 import { synthesize } from '../src/index.js';
 
@@ -144,4 +148,54 @@ it('normalizes the last sentence mark', () => {
   assert.equal(sentenceMark('你好。你好吗？'), '?');
   assert.equal(sentenceMark('你好。请坐！'), '!');
   assert.equal(sentenceMark('undecided'), null);
+});
+
+it('reports each measured preset and lists reused mode cases once', () => {
+  const item = {
+    set: 'main',
+    lang: 'en',
+    tier: 'telephone',
+    preset: 'male',
+    sentence: 1,
+    per: { distance: 1, referenceLength: 4, rate: 0.25 },
+    timeErrors: { errors: [], total: 0 },
+    stressExpected: 0,
+    duration: 1,
+    seconds: 0.1,
+    text: 'Stop!',
+    heardText: 'Stop!',
+    referenceIpa: 'stɒp',
+    heardIpa: 'stɑp',
+  };
+  const female = {
+    ...item,
+    preset: 'female',
+    per: { distance: 4, referenceLength: 6, rate: 4 / 6 },
+  };
+  const whisper = { ...item, set: 'whisper', mode: 'W' };
+  const loud = { ...item, set: 'modes', mode: 'f' };
+  const groups = [
+    { set: 'main', presets: ['male', 'female'], items: [item, female] },
+    { set: 'whisper', presets: ['male'], items: [whisper] },
+    {
+      set: 'modes',
+      presets: ['male'],
+      items: [{ ...whisper, set: 'modes' }, loud],
+    },
+  ].map((row) => ({
+    ...row,
+    lang: item.lang,
+    tier: item.tier,
+    stats: summarizeRoundTrips(row.items),
+    failures: [],
+  }));
+  const { markdown, data } = roundTripReport(groups, 80, true);
+  assert.ok(markdown.includes('| en | telephone | male, female | 2 | 50.0% |'));
+  assert.ok(markdown.includes('| en | telephone | male | 1 | 25.0% |'));
+  assert.ok(markdown.includes('| en | telephone | female | 1 | 66.7% |'));
+  assert.equal(data.worst.length, 4);
+  assert.deepEqual(
+    data.worst.filter(({ mode }) => mode),
+    [whisper, loud]
+  );
 });

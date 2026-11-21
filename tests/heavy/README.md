@@ -38,7 +38,7 @@ on 80 fixed sentences across four languages, four seeded voice presets and nine
 audio tiers.
 It writes `roundtrip.md` and `roundtrip.json` to the report folder. See the
 [full benchmark report](../../docs/reports/roundtrip.md) for measured rates,
-gate failures and the twenty largest phone errors.
+per-preset breakdowns, gate failures and the twenty largest phone errors.
 
 The `copy` suite also checks copy synthesis at medium and studio quality,
 and measures how often per-syllable refinement reduces log-spectral

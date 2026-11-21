@@ -5,6 +5,8 @@ The [full round-trip run](https://github.com/konard/voice-simulator/actions/runs
 finished with 4 passing and 73 failing tests. It covers 640 main, 80 extra
 voice, 40 higher-tier, 320 whisper, and 72 mode cases. The mode totals
 reuse 16 whisper cases, for 1,136 distinct round trips.
+The per-preset rows and the deduplicated ranking use the JSON measurements
+from that run.
 
 All 16 main rows missed their phone error limits. Telephone phone error
 ranged from 84.1% to 94.0%, and top-language matches ranged from 2.5% to 37.5%.
@@ -27,26 +29,60 @@ Mandarin uses character error rate in place of orthographic word error, includin
 
 The mode tests measure the share of reference spans with matching notation and at least half of their duration overlapped by a recognition span. The gate uses all four languages at each tier.
 
+Rows for male and female presets show their separate measurements when the gates use their combined results.
+
 ## main
 
 | Language | Tier | Presets | Cases | PER | WER | CER | Sound WER | Tone error | Stress hits | Time (ms) | Language right | Mark right | Mode hits | RTF | Gates |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | en | telephone | male, female | 40 | 86.4% | 98.9% | 95.0% | 99.3% | – | 33.3% | 110.6 | 27.5% | 62.5% | – | 0.204 | PER 0.864 (need ≤ 0.1)<br>sound WER 0.993 (need ≤ 0.2)<br>mean syllable time error (ms) 110.599 (need ≤ 40)<br>language match share 0.275 (need ≥ 0.9)<br>sentence mark match share 0.625 (need ≥ 0.85) |
+| en | telephone | male | 20 | 85.3% | 100.0% | 96.2% | 100.0% | – | 33.3% | 68.2 | 25.0% | 60.0% | – | 0.242 | – |
+| en | telephone | female | 20 | 87.4% | 97.9% | 93.8% | 98.6% | – | – | 131.8 | 30.0% | 65.0% | – | 0.165 | – |
 | en | narrowband | male, female | 40 | 85.0% | 99.6% | 91.4% | 99.6% | – | 33.3% | 266.8 | 52.5% | 60.0% | – | 0.168 | PER 0.850 (need ≤ 0.08)<br>sound WER 0.996 (need ≤ 0.15)<br>mean syllable time error (ms) 266.842 (need ≤ 35)<br>language match share 0.525 (need ≥ 0.92)<br>stress hit share 0.333 (need ≥ 0.9) |
+| en | narrowband | male | 20 | 84.1% | 97.9% | 90.2% | 97.9% | – | 0.0% | 266.8 | 60.0% | 55.0% | – | 0.161 | – |
+| en | narrowband | female | 20 | 86.0% | 101.4% | 92.6% | 101.4% | – | 100.0% | – | 45.0% | 65.0% | – | 0.176 | – |
 | en | wideband | male, female | 40 | 83.9% | 101.8% | 90.5% | 101.8% | – | 0.0% | 254.8 | 50.0% | 60.0% | – | 0.289 | PER 0.839 (need ≤ 0.05)<br>sound WER 1.018 (need ≤ 0.1)<br>mean syllable time error (ms) 254.836 (need ≤ 30)<br>language match share 0.500 (need ≥ 0.95)<br>stress hit share 0.000 (need ≥ 0.9)<br>sentence mark match share 0.600 (need ≥ 0.9) |
+| en | wideband | male | 20 | 82.2% | 103.5% | 88.5% | 103.5% | – | 0.0% | 74.7 | 55.0% | 65.0% | – | 0.290 | – |
+| en | wideband | female | 20 | 85.5% | 100.0% | 92.5% | 100.0% | – | 0.0% | 435.0 | 45.0% | 55.0% | – | 0.287 | – |
 | en | minimal | male, female | 40 | 84.2% | 100.7% | 92.4% | 100.7% | – | 40.0% | 118.5 | 40.0% | 67.5% | – | 0.559 | PER 0.842 (need ≤ 0.05)<br>sound WER 1.007 (need ≤ 0.1)<br>mean syllable time error (ms) 118.469 (need ≤ 30)<br>language match share 0.400 (need ≥ 0.95)<br>stress hit share 0.400 (need ≥ 0.9)<br>sentence mark match share 0.675 (need ≥ 0.9) |
+| en | minimal | male | 20 | 84.1% | 102.1% | 93.0% | 102.1% | – | 50.0% | – | 35.0% | 70.0% | – | 0.801 | – |
+| en | minimal | female | 20 | 84.3% | 99.3% | 91.8% | 99.3% | – | 33.3% | 118.5 | 45.0% | 65.0% | – | 0.313 | – |
 | ru | telephone | male, female | 40 | 84.1% | 103.4% | 94.3% | 106.9% | – | 14.3% | 52.9 | 32.5% | 55.0% | – | 0.288 | PER 0.841 (need ≤ 0.1)<br>sound WER 1.069 (need ≤ 0.2)<br>mean syllable time error (ms) 52.918 (need ≤ 40)<br>language match share 0.325 (need ≥ 0.9)<br>sentence mark match share 0.550 (need ≥ 0.85) |
+| ru | telephone | male | 20 | 85.6% | 102.3% | 92.5% | 105.7% | – | 0.0% | – | 45.0% | 55.0% | – | 0.173 | – |
+| ru | telephone | female | 20 | 82.7% | 104.6% | 96.0% | 108.0% | – | 50.0% | 52.9 | 20.0% | 55.0% | – | 0.406 | – |
 | ru | narrowband | male, female | 40 | 85.4% | 106.3% | 92.5% | 108.0% | – | 28.6% | 203.2 | 42.5% | 55.0% | – | 0.418 | PER 0.854 (need ≤ 0.08)<br>sound WER 1.080 (need ≤ 0.15)<br>mean syllable time error (ms) 203.244 (need ≤ 35)<br>language match share 0.425 (need ≥ 0.92)<br>stress hit share 0.286 (need ≥ 0.9) |
+| ru | narrowband | male | 20 | 85.6% | 105.7% | 92.8% | 109.2% | – | 0.0% | 42.9 | 50.0% | 45.0% | – | 0.400 | – |
+| ru | narrowband | female | 20 | 85.1% | 106.9% | 92.3% | 106.9% | – | 66.7% | 256.7 | 35.0% | 65.0% | – | 0.437 | – |
 | ru | wideband | male, female | 40 | 83.3% | 110.9% | 92.3% | 113.8% | – | 71.4% | 136.6 | 40.0% | 62.5% | – | 0.550 | PER 0.833 (need ≤ 0.05)<br>sound WER 1.138 (need ≤ 0.1)<br>mean syllable time error (ms) 136.596 (need ≤ 30)<br>language match share 0.400 (need ≥ 0.95)<br>stress hit share 0.714 (need ≥ 0.9)<br>sentence mark match share 0.625 (need ≥ 0.9) |
+| ru | wideband | male | 20 | 83.9% | 110.3% | 93.3% | 111.5% | – | 50.0% | 29.2 | 40.0% | 60.0% | – | 0.520 | – |
+| ru | wideband | female | 20 | 82.7% | 111.5% | 91.3% | 116.1% | – | 100.0% | 158.1 | 40.0% | 65.0% | – | 0.581 | – |
 | ru | minimal | male, female | 40 | 83.7% | 118.4% | 92.8% | 121.3% | – | 16.7% | 201.9 | 35.0% | 62.5% | – | 0.977 | PER 0.837 (need ≤ 0.05)<br>sound WER 1.213 (need ≤ 0.1)<br>mean syllable time error (ms) 201.927 (need ≤ 30)<br>language match share 0.350 (need ≥ 0.95)<br>stress hit share 0.167 (need ≥ 0.9)<br>sentence mark match share 0.625 (need ≥ 0.9) |
+| ru | minimal | male | 20 | 83.2% | 116.1% | 91.5% | 118.4% | – | 0.0% | 174.6 | 40.0% | 60.0% | – | 1.348 | – |
+| ru | minimal | female | 20 | 84.1% | 120.7% | 94.0% | 124.1% | – | 50.0% | 256.5 | 30.0% | 65.0% | – | 0.598 | – |
 | hi | telephone | male, female | 40 | 94.0% | 101.0% | 100.0% | 101.0% | – | – | – | 2.5% | 70.0% | – | 0.184 | PER 0.940 (need ≤ 0.1)<br>sound WER 1.010 (need ≤ 0.2)<br>mean syllable time error (ms) unavailable (need ≤ 40)<br>language match share 0.025 (need ≥ 0.9)<br>sentence mark match share 0.700 (need ≥ 0.85) |
+| hi | telephone | male | 20 | 94.5% | 102.0% | 100.0% | 102.0% | – | – | – | 5.0% | 85.0% | – | 0.177 | – |
+| hi | telephone | female | 20 | 93.4% | 100.0% | 100.0% | 100.0% | – | – | – | 0.0% | 55.0% | – | 0.192 | – |
 | hi | narrowband | male, female | 40 | 94.4% | 101.5% | 100.0% | 101.5% | – | – | – | 0.0% | 60.0% | – | 0.309 | PER 0.944 (need ≤ 0.08)<br>sound WER 1.015 (need ≤ 0.15)<br>mean syllable time error (ms) unavailable (need ≤ 35)<br>language match share 0.000 (need ≥ 0.92) |
+| hi | narrowband | male | 20 | 94.3% | 102.0% | 100.0% | 102.0% | – | – | – | 0.0% | 60.0% | – | 0.416 | – |
+| hi | narrowband | female | 20 | 94.5% | 101.0% | 100.0% | 101.0% | – | – | – | 0.0% | 60.0% | – | 0.200 | – |
 | hi | wideband | male, female | 40 | 92.0% | 104.6% | 100.0% | 104.6% | – | – | – | 5.0% | 57.5% | – | 0.450 | PER 0.920 (need ≤ 0.05)<br>sound WER 1.046 (need ≤ 0.1)<br>mean syllable time error (ms) unavailable (need ≤ 30)<br>language match share 0.050 (need ≥ 0.95)<br>sentence mark match share 0.575 (need ≥ 0.9) |
+| hi | wideband | male | 20 | 92.2% | 104.1% | 100.0% | 104.1% | – | – | – | 5.0% | 60.0% | – | 0.583 | – |
+| hi | wideband | female | 20 | 91.7% | 105.1% | 100.0% | 105.1% | – | – | – | 5.0% | 55.0% | – | 0.313 | – |
 | hi | minimal | male, female | 40 | 92.0% | 106.1% | 99.7% | 106.1% | – | – | – | 0.0% | 60.0% | – | 1.213 | PER 0.920 (need ≤ 0.05)<br>sound WER 1.061 (need ≤ 0.1)<br>mean syllable time error (ms) unavailable (need ≤ 30)<br>language match share 0.000 (need ≥ 0.95)<br>sentence mark match share 0.600 (need ≥ 0.9) |
+| hi | minimal | male | 20 | 91.1% | 108.2% | 100.0% | 108.2% | – | – | – | 0.0% | 60.0% | – | 2.068 | – |
+| hi | minimal | female | 20 | 92.8% | 104.1% | 99.4% | 104.1% | – | – | – | 0.0% | 60.0% | – | 0.342 | – |
 | zh | telephone | male, female | 40 | 87.4% | – | 150.4% | 150.4% | 77.9% | – | – | 37.5% | 60.0% | – | 0.173 | PER 0.874 (need ≤ 0.1)<br>sound WER 1.504 (need ≤ 0.2)<br>tone error 0.779 (need ≤ 0.15)<br>mean syllable time error (ms) unavailable (need ≤ 40)<br>language match share 0.375 (need ≥ 0.9)<br>sentence mark match share 0.600 (need ≥ 0.85) |
+| zh | telephone | male | 20 | 86.5% | – | 151.9% | 151.9% | 80.2% | – | – | 30.0% | 65.0% | – | 0.173 | – |
+| zh | telephone | female | 20 | 88.3% | – | 148.9% | 148.9% | 75.6% | – | – | 45.0% | 55.0% | – | 0.172 | – |
 | zh | narrowband | male, female | 40 | 86.5% | – | 152.3% | 152.3% | 82.1% | – | – | 12.5% | 60.0% | – | 0.180 | PER 0.865 (need ≤ 0.08)<br>sound WER 1.523 (need ≤ 0.15)<br>tone error 0.821 (need ≤ 0.12)<br>mean syllable time error (ms) unavailable (need ≤ 35)<br>language match share 0.125 (need ≥ 0.92) |
+| zh | narrowband | male | 20 | 86.2% | – | 159.5% | 159.5% | 83.2% | – | – | 10.0% | 55.0% | – | 0.180 | – |
+| zh | narrowband | female | 20 | 86.8% | – | 145.0% | 145.0% | 80.9% | – | – | 15.0% | 65.0% | – | 0.179 | – |
 | zh | wideband | male, female | 40 | 88.7% | – | 180.9% | 180.9% | 85.1% | – | – | 17.5% | 67.5% | – | 0.300 | PER 0.887 (need ≤ 0.05)<br>sound WER 1.809 (need ≤ 0.1)<br>tone error 0.851 (need ≤ 0.1)<br>mean syllable time error (ms) unavailable (need ≤ 30)<br>language match share 0.175 (need ≥ 0.95)<br>sentence mark match share 0.675 (need ≥ 0.9) |
+| zh | wideband | male | 20 | 90.8% | – | 184.0% | 184.0% | 85.5% | – | – | 15.0% | 65.0% | – | 0.299 | – |
+| zh | wideband | female | 20 | 86.5% | – | 177.9% | 177.9% | 84.7% | – | – | 20.0% | 70.0% | – | 0.301 | – |
 | zh | minimal | male, female | 40 | 86.7% | – | 185.9% | 185.9% | 87.0% | – | – | 20.0% | 72.5% | – | 0.700 | PER 0.867 (need ≤ 0.05)<br>sound WER 1.859 (need ≤ 0.1)<br>tone error 0.870 (need ≤ 0.1)<br>mean syllable time error (ms) unavailable (need ≤ 30)<br>language match share 0.200 (need ≥ 0.95)<br>sentence mark match share 0.725 (need ≥ 0.9) |
+| zh | minimal | male | 20 | 88.3% | – | 203.8% | 203.8% | 89.3% | – | – | 5.0% | 65.0% | – | 1.067 | – |
+| zh | minimal | female | 20 | 85.1% | – | 167.9% | 167.9% | 84.7% | – | – | 35.0% | 80.0% | – | 0.326 | – |
 
 ## voices
 
@@ -99,21 +135,53 @@ The mode tests measure the share of reference spans with matching notation and a
 | Language | Tier | Presets | Cases | PER | WER | CER | Sound WER | Tone error | Stress hits | Time (ms) | Language right | Mark right | Mode hits | RTF | Gates |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | en | telephone | male, female | 20 | 88.3% | 104.4% | 96.0% | 107.6% | – | – | 166.4 | 25.0% | 60.0% | 70.0% | 0.252 | PER 0.883 (need ≤ 0.25)<br>WER 1.044 (need ≤ 0.35) |
+| en | telephone | male | 10 | 89.5% | 103.8% | 95.3% | 106.3% | – | – | – | 30.0% | 60.0% | 70.0% | 0.375 | – |
+| en | telephone | female | 10 | 87.0% | 105.1% | 96.8% | 108.9% | – | – | 166.4 | 20.0% | 60.0% | 70.0% | 0.127 | – |
 | en | narrowband | male, female | 20 | 83.8% | 101.3% | 89.6% | 102.5% | – | – | 26.9 | 40.0% | 60.0% | 90.0% | 0.151 | Pass |
+| en | narrowband | male | 10 | 76.9% | 103.8% | 85.3% | 103.8% | – | – | 26.9 | 50.0% | 60.0% | 90.0% | 0.151 | – |
+| en | narrowband | female | 10 | 90.6% | 98.7% | 93.8% | 101.3% | – | – | – | 30.0% | 60.0% | 90.0% | 0.152 | – |
 | en | wideband | male, female | 20 | 83.0% | 105.1% | 90.4% | 105.7% | – | 100.0% | 28.1 | 35.0% | 60.0% | 80.0% | 0.577 | PER 0.830 (need ≤ 0.15)<br>WER 1.051 (need ≤ 0.25) |
+| en | wideband | male | 10 | 80.5% | 97.5% | 90.3% | 98.7% | – | – | 27.2 | 40.0% | 60.0% | 90.0% | 0.918 | – |
+| en | wideband | female | 10 | 85.6% | 112.7% | 90.6% | 112.7% | – | 100.0% | 30.9 | 30.0% | 60.0% | 70.0% | 0.230 | – |
 | en | minimal | male, female | 20 | 81.8% | 99.4% | 86.2% | 99.4% | – | – | 25.8 | 45.0% | 60.0% | 90.0% | 0.470 | PER 0.818 (need ≤ 0.15)<br>WER 0.994 (need ≤ 0.25) |
+| en | minimal | male | 10 | 82.7% | 94.9% | 84.1% | 94.9% | – | – | 29.1 | 60.0% | 60.0% | 90.0% | 0.668 | – |
+| en | minimal | female | 10 | 80.9% | 103.8% | 88.2% | 103.8% | – | – | 12.5 | 30.0% | 60.0% | 90.0% | 0.268 | – |
 | ru | telephone | male, female | 20 | 82.9% | 112.5% | 83.3% | 115.9% | – | – | 34.9 | 75.0% | 60.0% | 90.0% | 0.122 | PER 0.829 (need ≤ 0.25)<br>WER 1.125 (need ≤ 0.35) |
+| ru | telephone | male | 10 | 83.3% | 115.9% | 81.6% | 115.9% | – | – | 34.9 | 90.0% | 60.0% | 80.0% | 0.116 | – |
+| ru | telephone | female | 10 | 82.4% | 109.1% | 84.9% | 115.9% | – | – | – | 60.0% | 60.0% | 100.0% | 0.128 | – |
 | ru | narrowband | male, female | 20 | 86.8% | 101.1% | 88.4% | 103.4% | – | – | 42.6 | 60.0% | 60.0% | 90.0% | 0.136 | Pass |
+| ru | narrowband | male | 10 | 84.3% | 97.7% | 88.2% | 97.7% | – | – | 42.6 | 60.0% | 60.0% | 90.0% | 0.131 | – |
+| ru | narrowband | female | 10 | 89.4% | 104.5% | 88.7% | 109.1% | – | – | – | 60.0% | 60.0% | 90.0% | 0.141 | – |
 | ru | wideband | male, female | 20 | 86.1% | 112.5% | 82.8% | 115.9% | – | – | – | 90.0% | 60.0% | 70.0% | 0.206 | PER 0.861 (need ≤ 0.15)<br>WER 1.125 (need ≤ 0.25) |
+| ru | wideband | male | 10 | 84.7% | 113.6% | 84.9% | 120.5% | – | – | – | 90.0% | 60.0% | 70.0% | 0.205 | – |
+| ru | wideband | female | 10 | 87.5% | 111.4% | 80.7% | 111.4% | – | – | – | 90.0% | 60.0% | 70.0% | 0.208 | – |
 | ru | minimal | male, female | 20 | 85.2% | 117.0% | 84.2% | 119.3% | – | – | 12.7 | 90.0% | 60.0% | 70.0% | 0.527 | PER 0.852 (need ≤ 0.15)<br>WER 1.170 (need ≤ 0.25) |
+| ru | minimal | male | 10 | 85.6% | 122.7% | 84.4% | 127.3% | – | – | 12.7 | 90.0% | 60.0% | 70.0% | 0.218 | – |
+| ru | minimal | female | 10 | 84.7% | 111.4% | 84.0% | 111.4% | – | – | – | 90.0% | 60.0% | 70.0% | 0.842 | – |
 | hi | telephone | male, female | 20 | 94.1% | 104.0% | 99.7% | 111.0% | – | – | – | 5.0% | 60.0% | 95.0% | 0.157 | PER 0.941 (need ≤ 0.25)<br>WER 1.040 (need ≤ 0.35) |
+| hi | telephone | male | 10 | 91.6% | 108.0% | 99.4% | 114.0% | – | – | – | 10.0% | 60.0% | 90.0% | 0.175 | – |
+| hi | telephone | female | 10 | 96.6% | 100.0% | 100.0% | 108.0% | – | – | – | 0.0% | 60.0% | 100.0% | 0.137 | – |
 | hi | narrowband | male, female | 20 | 96.3% | 102.0% | 100.0% | 103.0% | – | – | – | 0.0% | 60.0% | 100.0% | 0.142 | Pass |
+| hi | narrowband | male | 10 | 95.5% | 102.0% | 100.0% | 104.0% | – | – | – | 0.0% | 60.0% | 100.0% | 0.142 | – |
+| hi | narrowband | female | 10 | 97.2% | 102.0% | 100.0% | 102.0% | – | – | – | 0.0% | 60.0% | 100.0% | 0.142 | – |
 | hi | wideband | male, female | 20 | 95.2% | 103.0% | 100.0% | 106.0% | – | – | – | 0.0% | 60.0% | 95.0% | 0.238 | PER 0.952 (need ≤ 0.15)<br>WER 1.030 (need ≤ 0.25) |
+| hi | wideband | male | 10 | 94.9% | 102.0% | 100.0% | 108.0% | – | – | – | 0.0% | 60.0% | 90.0% | 0.233 | – |
+| hi | wideband | female | 10 | 95.5% | 104.0% | 100.0% | 104.0% | – | – | – | 0.0% | 60.0% | 100.0% | 0.244 | – |
 | hi | minimal | male, female | 20 | 96.1% | 113.0% | 99.1% | 115.0% | – | – | – | 5.0% | 60.0% | 90.0% | 0.345 | PER 0.961 (need ≤ 0.15)<br>WER 1.130 (need ≤ 0.25) |
+| hi | minimal | male | 10 | 95.5% | 122.0% | 98.3% | 126.0% | – | – | – | 10.0% | 60.0% | 80.0% | 0.248 | – |
+| hi | minimal | female | 10 | 96.6% | 104.0% | 100.0% | 104.0% | – | – | – | 0.0% | 60.0% | 100.0% | 0.443 | – |
 | zh | telephone | male, female | 20 | 87.2% | – | 146.9% | 147.7% | 101.6% | – | – | 55.0% | 50.0% | 85.0% | 0.501 | PER 0.872 (need ≤ 0.25)<br>CER 1.469 (need ≤ 0.35)<br>tone error 1.016 (need ≤ 0.3) |
+| zh | telephone | male | 10 | 89.0% | – | 153.1% | 154.7% | 103.1% | – | – | 50.0% | 50.0% | 80.0% | 0.855 | – |
+| zh | telephone | female | 10 | 85.4% | – | 140.6% | 140.6% | 100.0% | – | – | 60.0% | 50.0% | 90.0% | 0.140 | – |
 | zh | narrowband | male, female | 20 | 85.4% | – | 147.7% | 149.2% | 90.6% | – | – | 35.0% | 45.0% | 90.0% | 0.153 | tone error 0.906 (need ≤ 0.25) |
+| zh | narrowband | male | 10 | 82.3% | – | 153.1% | 156.3% | 90.6% | – | – | 40.0% | 40.0% | 80.0% | 0.153 | – |
+| zh | narrowband | female | 10 | 88.4% | – | 142.2% | 142.2% | 90.6% | – | – | 30.0% | 50.0% | 100.0% | 0.153 | – |
 | zh | wideband | male, female | 20 | 86.9% | – | 149.2% | 149.2% | 89.8% | – | 22.3 | 30.0% | 45.0% | 95.0% | 0.667 | PER 0.869 (need ≤ 0.15)<br>CER 1.492 (need ≤ 0.25)<br>tone error 0.898 (need ≤ 0.25) |
+| zh | wideband | male | 10 | 89.6% | – | 150.0% | 150.0% | 90.6% | – | – | 40.0% | 40.0% | 100.0% | 1.089 | – |
+| zh | wideband | female | 10 | 84.1% | – | 148.4% | 148.4% | 89.1% | – | 22.3 | 20.0% | 50.0% | 90.0% | 0.236 | – |
 | zh | minimal | male, female | 20 | 87.8% | – | 141.4% | 141.4% | 89.1% | – | 12.7 | 40.0% | 45.0% | 95.0% | 0.691 | PER 0.878 (need ≤ 0.15)<br>CER 1.414 (need ≤ 0.25)<br>tone error 0.891 (need ≤ 0.25) |
+| zh | minimal | male | 10 | 89.6% | – | 134.4% | 134.4% | 87.5% | – | – | 50.0% | 40.0% | 100.0% | 0.929 | – |
+| zh | minimal | female | 10 | 86.0% | – | 148.4% | 148.4% | 90.6% | – | 12.7 | 30.0% | 50.0% | 90.0% | 0.447 | – |
 
 ## modes
 
@@ -167,28 +235,28 @@ The mode tests measure the share of reference spans with matching notation and a
 
 ## 20 worst round trips by phone error rate
 
-| Set | Language | Tier | Preset | Sentence | PER | Reference text | Heard text | Reference IPA | Heard IPA |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| main | ru | wideband | male | 20 | 150.0% | Да. | Act. | da . | ˈækt. |
-| main | ru | minimal | male | 20 | 150.0% | Да. | Kite. | da . | kˈaɪt. |
-| tiers | ru | high | male | 20 | 150.0% | Да. | Could. | da . | kəd. |
-| tiers | ru | studio | male | 20 | 150.0% | Да. | क् अप। | da . | k əp. |
-| main | hi | narrowband | male | 20 | 150.0% | हाँ। | Die. | ɦãː . | dˈaɪ. |
-| tiers | en | ultra | male | 20 | 133.3% | Yes. | Gr ft. | ˈjɛs . | ɡɹ ft. |
-| main | en | wideband | male | 15 | 125.0% | Stop! | च गप्प। | ˈstɑp ! | t͡ʃə ɡəpp. |
-| main | ru | minimal | male | 16 | 125.0% | Стой! | Buffet. | stoj ! | bəfˈeɪ. |
-| whisper | en | narrowband | female | 9 | 100.0% | Are the children playing outside now? | 啊哩欸呃欸此欸无。 | {W ɚ ðə ˈt͡ʃɪldɹən ˈpleɪɪŋ ˈaʊtˈsaɪd ˈnaʊ W} ? | {W æ˨˩˦d͡ʑiˈɛ̃˥oɛ̃˨˩˦d͡ʒʰẽ˨˩˦ɛ̃ũ˨˩˦ W} . |
-| whisper | hi | wideband | male | 7 | 100.0% | मुझे एक गिलास ठंडा पानी चाहिए। | Аэбьбьазьжвоа м и а. | {W mʊd͡ʒʱeː eːk ɡɪlaːs ʈʰəɳɖaː paːniː t͡ʃaːɦɪeː W} . | {lento {W yt͡ʃʱebʲbʲɥazʲʐvoˈa W} lento} {W m ĩd͡ʒ a W} . ⸨inhale⸩ |
-| whisper | hi | wideband | female | 7 | 100.0% | मुझे एक गिलास ठंडा पानी चाहिए। | Оэгьгезаабе и. | {W mʊd͡ʒʱeː eːk ɡɪlaːs ʈʰəɳɖaː paːniː t͡ʃaːɦɪeː W} . | {W õt͡ʃʱẽɡʲɡʲˈɛzɖʰɤæbʲe ĩd͡ʒʰɹ W} . ⸨inhale⸩ |
-| whisper | hi | minimal | female | 7 | 100.0% | मुझे एक गिलास ठंडा पानी चाहिए। | Оэгьгезаабе и. | {W mʊd͡ʒʱeː eːk ɡɪlaːs ʈʰəɳɖaː paːniː t͡ʃaːɦɪeː W} . | {W õt͡ʃʱẽɡʲɡʲˈɛzɖʰɤæbʲe ĩd͡ʒʰɹ W} . ⸨inhale⸩ |
-| main | zh | wideband | male | 12 | 100.0% | 火车站离这里远不远？ | Ко с к ичйакэийаи. | xwo˨˩ ʈ͡ʂʰɤ˥ ʈ͡ʂan˥˩ li˧˥ ʈ͡ʂɤ˥˩ li˧˥ ɥɛn˨˩ pu ɥɛn˨˩˦ ? | kə s k ɪt͡ɕjəŋkwˈeɪjaɪ. |
-| main | zh | minimal | male | 12 | 100.0% | 火车站离这里远不远？ | To for quake were мы your? | xwo˨˩ ʈ͡ʂʰɤ˥ ʈ͡ʂan˥˩ li˧˥ ʈ͡ʂɤ˥˩ li˧˥ ɥɛn˨˩ pu ɥɛn˨˩˦ ? | {yesno tə fɚ kwˈeɪk wɚ mɨ jɚ yesno} ? |
-| modes | zh | high | male | 1 | 100.0% | 你好，你今天怎么样？ | Ифовяаивэв жаиоуа. | {W ni˧˥ xɑʊ˨˩˦ , ni˨˩ t͡ɕin˥ tʰjɛn˥ t͡sən˨˩ mɤ jɑŋ˥˩ W} ↘ ? | {W ĩʋfõvʲyyʈ͡ʂʰĩvˈẽv ʐɤiˈouə W} . |
-| main | hi | narrowband | male | 13 | 100.0% | ढोल की आवाज़ दूर तक जाती है। | But why date i я? | ɖʱoːl kiː aːʋaːz d̪uːɾ t̪ək d͡ʒaːt̪iː ɦɛː . | {lento {V͉ {wh bət wh} V͉} lento} {wh wˈaɪ dˈeɪt ˈaɪ ja wh} ? |
-| main | hi | narrowband | female | 13 | 100.0% | ढोल की आवाज़ दूर तक जाती है। | Die when i why 雅? | ɖʱoːl kiː aːʋaːz d̪uːɾ t̪ək d͡ʒaːt̪iː ɦɛː . | {lento {V͉ {wh dˈaɪ wh} V͉} lento} {wh wˈɛn ˈaɪ wˈaɪ ja˨˩ wh} ? |
-| main | zh | telephone | female | 18 | 100.0% | 老师让学生写日记。 | Been i were мать a why? | lɑʊ˨˩ ʂɻ̩˥ ʐɑŋ˥˩ ɕɥɛ˧˥ ʂəŋ ɕjɛ˨˩ ʐɻ̩˥˩ t͡ɕi˥˩ . | {wh bən ˈaɪ wɚ wh} {V͉ {wh matʲ ˈeɪ wˈaɪ wh} V͉} ? |
-| whisper | ru | minimal | male | 3 | 100.0% | Сегодня хорошая погода. | 此热日呃呃。 | {W sʲɪˈvodʲnʲə xɐˈroʂəjə pɐˈɡodə W} . | {W d͡ʒʱɔ̃˨˩˦ɣɤ˥ʐɨˈɤɤ˨˩˦ W} . |
-| whisper | hi | telephone | female | 9 | 100.0% | तुम्हारा भाई कहाँ रहता है? | 呃欸爱啊欸啊。 | {W t̪ʊmɦaːɾaː bʱaːiː kəɦãː ɾəɦt̪aː ɦɛː W} ↘ ? | {W ɤˈɛaɪ˨˩˦aɛa˥ W} . ⸨inhale⸩ |
+| Set | Language | Tier | Preset | Sentence | Mode | PER | Reference text | Heard text | Reference IPA | Heard IPA |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| main | ru | wideband | male | 20 | – | 150.0% | Да. | Act. | da . | ˈækt. |
+| main | ru | minimal | male | 20 | – | 150.0% | Да. | Kite. | da . | kˈaɪt. |
+| tiers | ru | high | male | 20 | – | 150.0% | Да. | Could. | da . | kəd. |
+| tiers | ru | studio | male | 20 | – | 150.0% | Да. | क् अप। | da . | k əp. |
+| main | hi | narrowband | male | 20 | – | 150.0% | हाँ। | Die. | ɦãː . | dˈaɪ. |
+| tiers | en | ultra | male | 20 | – | 133.3% | Yes. | Gr ft. | ˈjɛs . | ɡɹ ft. |
+| main | en | wideband | male | 15 | – | 125.0% | Stop! | च गप्प। | ˈstɑp ! | t͡ʃə ɡəpp. |
+| main | ru | minimal | male | 16 | – | 125.0% | Стой! | Buffet. | stoj ! | bəfˈeɪ. |
+| whisper | en | narrowband | female | 9 | W | 100.0% | Are the children playing outside now? | 啊哩欸呃欸此欸无。 | {W ɚ ðə ˈt͡ʃɪldɹən ˈpleɪɪŋ ˈaʊtˈsaɪd ˈnaʊ W} ? | {W æ˨˩˦d͡ʑiˈɛ̃˥oɛ̃˨˩˦d͡ʒʰẽ˨˩˦ɛ̃ũ˨˩˦ W} . |
+| whisper | hi | wideband | male | 7 | W | 100.0% | मुझे एक गिलास ठंडा पानी चाहिए। | Аэбьбьазьжвоа м и а. | {W mʊd͡ʒʱeː eːk ɡɪlaːs ʈʰəɳɖaː paːniː t͡ʃaːɦɪeː W} . | {lento {W yt͡ʃʱebʲbʲɥazʲʐvoˈa W} lento} {W m ĩd͡ʒ a W} . ⸨inhale⸩ |
+| whisper | hi | wideband | female | 7 | W | 100.0% | मुझे एक गिलास ठंडा पानी चाहिए। | Оэгьгезаабе и. | {W mʊd͡ʒʱeː eːk ɡɪlaːs ʈʰəɳɖaː paːniː t͡ʃaːɦɪeː W} . | {W õt͡ʃʱẽɡʲɡʲˈɛzɖʰɤæbʲe ĩd͡ʒʰɹ W} . ⸨inhale⸩ |
+| whisper | hi | minimal | female | 7 | W | 100.0% | मुझे एक गिलास ठंडा पानी चाहिए। | Оэгьгезаабе и. | {W mʊd͡ʒʱeː eːk ɡɪlaːs ʈʰəɳɖaː paːniː t͡ʃaːɦɪeː W} . | {W õt͡ʃʱẽɡʲɡʲˈɛzɖʰɤæbʲe ĩd͡ʒʰɹ W} . ⸨inhale⸩ |
+| main | zh | wideband | male | 12 | – | 100.0% | 火车站离这里远不远？ | Ко с к ичйакэийаи. | xwo˨˩ ʈ͡ʂʰɤ˥ ʈ͡ʂan˥˩ li˧˥ ʈ͡ʂɤ˥˩ li˧˥ ɥɛn˨˩ pu ɥɛn˨˩˦ ? | kə s k ɪt͡ɕjəŋkwˈeɪjaɪ. |
+| main | zh | minimal | male | 12 | – | 100.0% | 火车站离这里远不远？ | To for quake were мы your? | xwo˨˩ ʈ͡ʂʰɤ˥ ʈ͡ʂan˥˩ li˧˥ ʈ͡ʂɤ˥˩ li˧˥ ɥɛn˨˩ pu ɥɛn˨˩˦ ? | {yesno tə fɚ kwˈeɪk wɚ mɨ jɚ yesno} ? |
+| modes | zh | high | male | 1 | W | 100.0% | 你好，你今天怎么样？ | Ифовяаивэв жаиоуа. | {W ni˧˥ xɑʊ˨˩˦ , ni˨˩ t͡ɕin˥ tʰjɛn˥ t͡sən˨˩ mɤ jɑŋ˥˩ W} ↘ ? | {W ĩʋfõvʲyyʈ͡ʂʰĩvˈẽv ʐɤiˈouə W} . |
+| main | hi | narrowband | male | 13 | – | 100.0% | ढोल की आवाज़ दूर तक जाती है। | But why date i я? | ɖʱoːl kiː aːʋaːz d̪uːɾ t̪ək d͡ʒaːt̪iː ɦɛː . | {lento {V͉ {wh bət wh} V͉} lento} {wh wˈaɪ dˈeɪt ˈaɪ ja wh} ? |
+| main | hi | narrowband | female | 13 | – | 100.0% | ढोल की आवाज़ दूर तक जाती है। | Die when i why 雅? | ɖʱoːl kiː aːʋaːz d̪uːɾ t̪ək d͡ʒaːt̪iː ɦɛː . | {lento {V͉ {wh dˈaɪ wh} V͉} lento} {wh wˈɛn ˈaɪ wˈaɪ ja˨˩ wh} ? |
+| main | zh | telephone | female | 18 | – | 100.0% | 老师让学生写日记。 | Been i were мать a why? | lɑʊ˨˩ ʂɻ̩˥ ʐɑŋ˥˩ ɕɥɛ˧˥ ʂəŋ ɕjɛ˨˩ ʐɻ̩˥˩ t͡ɕi˥˩ . | {wh bən ˈaɪ wɚ wh} {V͉ {wh matʲ ˈeɪ wˈaɪ wh} V͉} ? |
+| whisper | ru | minimal | male | 3 | W | 100.0% | Сегодня хорошая погода. | 此热日呃呃。 | {W sʲɪˈvodʲnʲə xɐˈroʂəjə pɐˈɡodə W} . | {W d͡ʒʱɔ̃˨˩˦ɣɤ˥ʐɨˈɤɤ˨˩˦ W} . |
+| whisper | hi | telephone | female | 9 | W | 100.0% | तुम्हारा भाई कहाँ रहता है? | 呃欸爱啊欸啊。 | {W t̪ʊmɦaːɾaː bʱaːiː kəɦãː ɾəɦt̪aː ɦɛː W} ↘ ? | {W ɤˈɛaɪ˨˩˦aɛa˥ W} . ⸨inhale⸩ |
 
 ## Single-core smoke baseline
 

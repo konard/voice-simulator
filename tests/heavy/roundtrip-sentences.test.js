@@ -4,10 +4,10 @@ import { after, it } from 'test-anywhere';
 import * as simulator from '../../src/index.js';
 import { modeLabels } from '../../src/ipa/marks.js';
 import { roundTrip, sentenceMark, sentences } from '../helpers/roundtrip.js';
-import { heavyLimit } from './helpers/report.js';
+import { heavyLimit, writeReport } from './helpers/report.js';
 import {
+  roundTripReport,
   summarizeRoundTrips,
-  writeRoundTripReport,
 } from './helpers/roundtrip-report.js';
 
 const telephone = {
@@ -97,7 +97,7 @@ function measure({ set, lang, tier, preset, index, mode }) {
     stressExpected: spoken.timeline.words.filter(
       (word) => word.syllables.length >= 2
     ).length,
-    ...(mode && { modeSpans: modeSpans(spoken, heard, mode) }),
+    ...(mode && { mode, modeSpans: modeSpans(spoken, heard, mode) }),
   };
 }
 
@@ -298,4 +298,7 @@ if (markupAvailable) {
   it.skip('whisper and loud round trips require the parseMarkup export', () => {});
 }
 
-after(() => writeRoundTripReport(groups, limit, markupAvailable));
+after(() => {
+  const { markdown, data } = roundTripReport(groups, limit, markupAvailable);
+  writeReport('roundtrip', markdown, data);
+});
