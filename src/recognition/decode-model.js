@@ -1,5 +1,5 @@
 /** Planner templates and text-only phonotactics for IPA decoding. Unlicense. */
-import { planRecognitionTemplate } from '../articulation/plan.js';
+import { createRecognitionTemplatePlanner } from '../articulation/plan.js';
 import { sampleState } from '../articulation/tract-shape.js';
 import { listSymbols } from '../ipa/inventory.js';
 import { formatIpa, parseIpa } from '../ipa/parse.js';
@@ -89,14 +89,10 @@ function comparedChannels(kind, state) {
   return names;
 }
 
-function template(ipa, voice, articulationOffsets) {
+function template(ipa, planPhone) {
   const token = parseIpa(ipa).tokens[0];
   const { kind } = token;
-  const plan = planRecognitionTemplate(
-    kind === 'vowel' ? ipa : `ə${ipa}ə`,
-    { head: voice, articulationOffsets },
-    TEMPLATE_CHANNELS
-  );
+  const plan = planPhone(kind === 'vowel' ? ipa : `ə${ipa}ə`);
   const segments = plan.segments.filter(
     (segment) => segment.token === plan.tokens[kind === 'vowel' ? 0 : 1]
   );
@@ -254,12 +250,16 @@ export function decoderTemplates(voice, symbols, articulationOffsets) {
     if (cached.size >= 8) {
       cached.delete(cached.keys().next().value);
     }
-    cached.set(key, new Map());
+    const planPhone = createRecognitionTemplatePlanner(
+      { head: voice, articulationOffsets },
+      TEMPLATE_CHANNELS
+    );
+    cached.set(key, { templates: new Map(), planPhone });
   }
-  const templates = cached.get(key);
+  const { templates, planPhone } = cached.get(key);
   return symbols.map((ipa) => {
     if (!templates.has(ipa)) {
-      templates.set(ipa, template(ipa, voice, articulationOffsets));
+      templates.set(ipa, template(ipa, planPhone));
     }
     return templates.get(ipa);
   });

@@ -10,7 +10,7 @@ import {
   syllabifyTokens,
 } from '../src/index.js';
 import { createRandom } from '../src/random.js';
-import { planRecognitionTemplate } from '../src/articulation/plan.js';
+import { createRecognitionTemplatePlanner } from '../src/articulation/plan.js';
 import { VOWELS } from '../src/ipa/inventory.js';
 import {
   decoderTemplates,
@@ -38,9 +38,13 @@ const lowRate = 8000;
 
 it('uses the same phone trajectories as the synthesis planner', () => {
   const options = { head: { pitch: 181, speechRate: 5, vibrato: 0.7 } };
+  const planPhone = createRecognitionTemplatePlanner(
+    options,
+    TEMPLATE_CHANNELS
+  );
   for (const ipa of ['a', 'əpʰə', 'ət͡ʃə', 'əǃə', 'a˨˩˦']) {
     const full = planUtterance(ipa, options);
-    const template = planRecognitionTemplate(ipa, options, TEMPLATE_CHANNELS);
+    const template = planPhone(ipa);
     assert.deepEqual(template.segments, full.segments);
     for (const name of TEMPLATE_CHANNELS) {
       assert.deepEqual(

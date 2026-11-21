@@ -1328,12 +1328,13 @@ function smoothLoudnessAndPitch(channels, pitchShape, head, frameRate) {
  *   of its sounds. Every token gets its `mode` (see ./modes.js).
  */
 export function planUtterance(ipa, options = {}) {
-  return makePlan(ipa, options, false);
+  return makePlan(ipa, options, accentedHead(options), false);
 }
 
 /** The recognizer's phone templates read articulation, loudness and f0. */
-export function planRecognitionTemplate(ipa, options, sampledChannels) {
-  return makePlan(ipa, options, true, sampledChannels);
+export function createRecognitionTemplatePlanner(options, sampledChannels) {
+  const config = accentedHead(options);
+  return (ipa) => makePlan(ipa, options, config, true, sampledChannels);
 }
 
 function articulationNames(sampledChannels, segments) {
@@ -1346,12 +1347,12 @@ function articulationNames(sampledChannels, segments) {
     : ARTICULATOR_NAMES;
 }
 
-function makePlan(ipa, options, recognitionTemplate, sampledChannels) {
+function makePlan(ipa, options, config, recognitionTemplate, sampledChannels) {
   const parsed = typeof ipa === 'string' ? parseIpa(ipa) : null;
   const tokens = parsed ? parsed.tokens : ipa;
   assignTokenModes(tokens, options.modes ?? parsed?.modes ?? []);
   realiseEmotions(tokens);
-  const { head, table, tunes } = accentedHead(options);
+  const { head, table, tunes } = config;
   const frameRate = options.frameRate ?? CONTROL_RATE;
   const segments = buildSegments(tokens, {
     rate: head.speechRate,

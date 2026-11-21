@@ -155,20 +155,27 @@ export function medianSd(state, key) {
   if (!count) {
     return 0;
   }
-  const values = state.histograms[key]
-    .map((n, i) => [Math.abs(binValue(key, i) - centre), n])
-    .sort((a, b) => a[0] - b[0]);
+  const bins = state.histograms[key];
+  const values = [];
+  for (let i = 0; i < bins.length; i++) {
+    if (bins[i] > 0) {
+      values.push([Math.abs(binValue(key, i) - centre), bins[i]]);
+    }
+  }
+  values.sort((a, b) => a[0] - b[0]);
   const at = (count - 1) / 2;
+  const lower = Math.floor(at);
+  const upper = Math.ceil(at);
   let sum = 0,
     lo = null,
     mad = 0;
   for (const [d, n] of values) {
     sum += n;
-    if (lo === null && sum > Math.floor(at)) {
+    if (lo === null && sum > lower) {
       lo = d;
     }
-    if (sum > Math.ceil(at)) {
-      mad = lo + (d - lo) * (at - Math.floor(at));
+    if (sum > upper) {
+      mad = lo + (d - lo) * (at - lower);
       break;
     }
   }
