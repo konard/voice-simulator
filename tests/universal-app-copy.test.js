@@ -67,6 +67,7 @@ describe('voice copy worker', () => {
       await host.handle({
         type: 'chunk',
         samples: samples.subarray(i, i + 320),
+        acknowledge: i === 0,
       });
     }
     await host.handle({ type: 'stop' });
@@ -89,6 +90,9 @@ describe('voice copy worker', () => {
     ).toBeLessThanOrEqual(0.08);
     expect(messages.filter(({ event }) => event.type === 'load').length).toBe(
       8
+    );
+    expect(messages.filter(({ event }) => event.type === 'chunk').length).toBe(
+      1
     );
     const required = [
       'collecting',
@@ -147,6 +151,9 @@ describe('voice copy controller', () => {
     expect(
       worker.messages('chunk').map(({ samples }) => samples.length)
     ).toEqual([320, 1]);
+    expect(
+      worker.messages('chunk').every(({ acknowledge }) => acknowledge)
+    ).toBe(true);
     worker.emit({ type: 'load', load: 0.4 });
     expect(worker.messages('share')).toEqual([
       { type: 'share', value: 0 },
@@ -190,6 +197,7 @@ describe('voice copy controller', () => {
       },
     });
     const [first] = worker.messages('chunk');
+    expect(first.acknowledge).toBe(undefined);
     expect(first.samples.length).toBe(320);
     expect(first.samples[319]).toBe(0.75);
     expect(worker.sent[1].transfer).toEqual([first.samples.buffer]);

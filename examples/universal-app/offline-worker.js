@@ -52,7 +52,7 @@ export function offlineWorkerChunks() {
       }
       return `
         ${imports.join('\n')}
-        const source = new Blob([${names.join(', ')}], { type: 'text/javascript' });
+        const source = new Blob([[${names.join(', ')}].join('')], { type: 'text/javascript' });
         let url;
         export default function CopyWorker() {
           url ??= URL.createObjectURL(source);

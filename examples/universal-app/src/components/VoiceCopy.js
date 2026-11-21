@@ -1,5 +1,6 @@
 import {
   createElement as h,
+  memo,
   useEffect,
   useMemo,
   useRef,
@@ -18,6 +19,8 @@ import { SourceControls } from './Recognition.js';
 import { recognitionTimeline } from './recognition-timeline.js';
 import { useRecognitionHighlight } from './recognition-preview.js';
 import { SpokenText } from './SpokenText.js';
+
+const CopyTranscript = memo(SpokenText);
 
 function useCopySession() {
   const pending = useRef([]);
@@ -104,7 +107,7 @@ function Progress({ status, t }) {
   );
 }
 
-function Parameters({ voice, uncertainty, locale, t }) {
+const Parameters = memo(({ voice, uncertainty, locale, t }) => {
   if (!voice) {
     return null;
   }
@@ -142,7 +145,7 @@ function Parameters({ voice, uncertainty, locale, t }) {
       )
     )
   );
-}
+});
 
 function save(voice) {
   const file =
@@ -332,7 +335,7 @@ export function VoiceCopy({
         .join(' ')
     ),
     h(Progress, { status, t }),
-    h(SpokenText, {
+    h(CopyTranscript, {
       rootRef: root,
       text,
       timeline,

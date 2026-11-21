@@ -121,7 +121,9 @@ export class CopySession {
     }
     const samples = job.file.slice(job.offset, job.offset + job.stride);
     job.offset += samples.length;
-    job.worker.postMessage({ type: 'chunk', samples }, [samples.buffer]);
+    job.worker.postMessage({ type: 'chunk', samples, acknowledge: true }, [
+      samples.buffer,
+    ]);
   }
 
   stop() {

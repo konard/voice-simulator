@@ -85,7 +85,6 @@ function startSession({ sampleRate, languages, level = 'auto' }, post) {
         post({ type: 'load', load: session.load });
         nextLoad += sampleRate;
       }
-      post({ type: 'chunk' });
     },
     repeat(tier) {
       if (!final || !session.voice) {
@@ -142,6 +141,9 @@ export function createSessionHost({ post }) {
           switch (type) {
             case 'chunk':
               active.push(message.samples);
+              if (message.acknowledge) {
+                post({ type: 'chunk' });
+              }
               break;
             case 'stop':
               if (session.backgroundShare === 0) {
