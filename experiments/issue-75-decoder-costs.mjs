@@ -3,6 +3,8 @@ import { errorRate, synthesize, tokenize } from '../src/index.js';
 import { createRecognitionTemplatePlanner } from '../src/articulation/plan.js';
 import { sampleState } from '../src/articulation/tract-shape.js';
 import {
+  decoderLanguage,
+  decoderUnit,
   TEMPLATE_CHANNELS,
   TEMPLATE_POINTS,
 } from '../src/recognition/decode-model.js';
@@ -127,10 +129,7 @@ function withLengthModels(settings) {
   };
 }
 
-// Score the original graph against the planner's articulatory controls.
-function plannedArticulation(prepared, templates, analysis, plan) {
-  const { frames, tracks } = analysis;
-  const inferred = tracks.articulation;
+function plannedTrack(inferred, plan) {
   const channels = Object.fromEntries(
     Object.entries(inferred.channels).map(([name, values]) => [
       name,
@@ -144,10 +143,17 @@ function plannedArticulation(prepared, templates, analysis, plan) {
       values[frame] = state[name];
     }
   }
-  const score = createSpanScorer(frames, tracks.landmarks, {
-    ...inferred,
-    channels,
-  });
+  return { ...inferred, channels };
+}
+
+// Score the original graph against the planner's articulatory controls.
+function plannedArticulation(prepared, templates, analysis, plan) {
+  const { frames, tracks } = analysis;
+  const score = createSpanScorer(
+    frames,
+    tracks.landmarks,
+    plannedTrack(tracks.articulation, plan)
+  );
   const { times, spans } = prepared;
   return {
     times,
@@ -222,6 +228,67 @@ function measureSearch(
   );
 }
 
+// Remove segmentation and phone transitions from the comparison and use
+// the correct language inventory. Both runs retain the inferred classes.
+function measureKnownSpans(analysis, templates, plan, lang) {
+  const { frames, tracks } = analysis;
+  const inventory = new Set(decoderLanguage({ language: lang }).symbols);
+  const phones = templates.filter(({ ipa }) => inventory.has(ipa));
+  const spans = [];
+  for (const { token, start, end } of plan.segments) {
+    if (!token?.phoneme) {
+      continue;
+    }
+    if (spans.at(-1)?.token === token) {
+      spans.at(-1).end = end;
+    } else {
+      spans.push({ token, start, end });
+    }
+  }
+  const articulations = {
+    inferred: tracks.articulation,
+    planned: plannedTrack(tracks.articulation, plan),
+  };
+  for (const [source, track] of Object.entries(articulations)) {
+    const score = createSpanScorer(frames, tracks.landmarks, track);
+    console.log(
+      JSON.stringify({ lang, source, ...rankKnownPhones(spans, phones, score) })
+    );
+  }
+}
+
+function rankKnownPhones(spans, phones, score) {
+  const results = {
+    count: spans.length,
+    absent: 0,
+    first: 0,
+    topFive: 0,
+  };
+  for (const { token, start, end } of spans) {
+    const unit = decoderUnit(token);
+    const expected = phones.findIndex(({ ipa }) => ipa === unit);
+    if (expected < 0) {
+      results.absent++;
+      continue;
+    }
+    const { terms } = score(start, end, phones);
+    const { duration, class: broadClass } = settings.weights;
+    const costs = phones.map(
+      (_, i) =>
+        terms[i * 3] +
+        duration * terms[i * 3 + 1] +
+        broadClass * terms[i * 3 + 2]
+    );
+    const rank = costs.filter(
+      (cost, i) =>
+        cost < costs[expected] || (cost === costs[expected] && i < expected)
+    ).length;
+    results.first += Number(rank === 0);
+    results.topFive += Number(rank < 5);
+  }
+  return results;
+}
+
 for (const [lang, index] of Object.entries(indexes)) {
   const spoken = synthesize(sentences[lang][index], {
     lang,
@@ -237,6 +304,10 @@ for (const [lang, index] of Object.entries(indexes)) {
     settings
   );
   const { prepared, templates } = prepareIpaDecode(analysis, settings);
+  if (process.argv.includes('--reference-spans')) {
+    measureKnownSpans(analysis, templates, spoken.plan, lang);
+    continue;
+  }
   if (process.argv.includes('--language-templates')) {
     const matched = languageTemplates(templates, analysis.voice, lang);
     const { frames, tracks } = analysis;

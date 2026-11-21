@@ -295,6 +295,27 @@ in Mandarin. In the English smoke case, the text stage returned all six
 words. The missing question mark changes how the pronunciation used for
 Sound WER stresses “or.”
 
+`taskset -c 0 node experiments/issue-75-decoder-reachability.mjs` found a
+complete path through the acoustic span graph for all 160 telephone
+recordings with the seeded male and female voices.
+
+`taskset -c 0 node experiments/issue-75-decoder-costs.mjs --seeded-preset --reference-spans`
+evaluated the default acoustic costs at the planner's phone boundaries
+for the three smoke recordings and Hindi sentence 2. It restricted the
+candidates to the correct language and ignored phone transitions and length
+labels. The correct phone was in the inventory for all 54 spans. Using
+articulation inferred from the audio, it ranked first in 6 and in the first
+five in 23. Replacing the inferred controls with the planner's controls
+raised those counts to 27 and 44. The second run kept the inferred broad
+phone classes and all cost weights.
+
+| Language | Phones | Inferred, first | Inferred, top five | Planned, first | Planned, top five |
+| --- | --- | --- | --- | --- | --- |
+| en | 16 | 0 | 4 | 7 | 14 |
+| ru | 13 | 4 | 10 | 8 | 11 |
+| hi | 12 | 2 | 3 | 4 | 7 |
+| zh | 13 | 0 | 6 | 8 | 12 |
+
 ## Telephone whisper correction
 
 In the Russian smoke case, the detector found a span at 0.49–0.85 s. Its
