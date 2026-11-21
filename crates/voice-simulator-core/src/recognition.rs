@@ -647,3 +647,9 @@ mod tests {
         assert_eq!(paths[0].segments[0].word, 0);
     }
 }
+
+pub mod codebook;
+pub mod codebook_response;
+pub mod native_frontend;
+pub mod pitch;
+pub mod word_search;

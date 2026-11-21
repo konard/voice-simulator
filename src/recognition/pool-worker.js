@@ -1,0 +1,69 @@
+/** The independent jobs of the private-memory recognition worker. Unlicense. */
+import { addLexicon } from '../g2p/lexicon.js';
+import { searchCodebookJob } from './codebook-jobs.js';
+import { createRecognitionEngine } from './engine.js';
+import { recognize } from './recognizer.js';
+import { scoreJob } from './rescoring.js';
+
+const tables = new Map();
+let loaded;
+
+async function dispatch({ type, job, engine, tableId, setup }, send) {
+  try {
+    loaded ??= createRecognitionEngine({ engine, threads: 1 });
+    const kernels = await loaded;
+    switch (type) {
+      case 'codebook': {
+        if (setup) {
+          tables.set(tableId, setup);
+        }
+        const result = searchCodebookJob(tables.get(tableId), job, kernels);
+        send({ result }, [result.buffer]);
+        break;
+      }
+      case 'rescore':
+        send({ result: scoreJob(job) });
+        break;
+      case 'audio': {
+        for (const [language, entries] of setup?.lexicons ?? []) {
+          addLexicon(language, entries);
+        }
+        const { samples, sampleRate, options } = job;
+        send({
+          result: recognize(samples, sampleRate, {
+            ...options,
+            kernels,
+            threads: 1,
+          }),
+        });
+        break;
+      }
+      default:
+        throw new Error(`Unknown recognition job: ${type}`);
+    }
+  } catch (error) {
+    send({ error: error.message });
+  }
+}
+
+async function listenInNode() {
+  const specifier = 'node:worker_threads';
+  const { parentPort } =
+    globalThis.process?.getBuiltinModule?.(specifier) ??
+    (await import(/* @vite-ignore */ specifier));
+  parentPort.on('message', (data) =>
+    dispatch(data, (message, transfer) =>
+      parentPort.postMessage(message, transfer)
+    )
+  );
+}
+
+if (typeof globalThis.postMessage === 'function') {
+  globalThis.addEventListener('message', ({ data }) =>
+    dispatch(data, (message, transfer) =>
+      globalThis.postMessage(message, transfer)
+    )
+  );
+} else {
+  listenInNode();
+}

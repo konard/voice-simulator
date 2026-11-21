@@ -219,6 +219,9 @@ export function blockShape(plan, time, state, head, options) {
   return tractShape(state, head, options);
 }
 
+/** Marks an internal plan whose tract can be computed once per renderer. */
+export const STEADY_TRACT = Symbol('steadyTract');
+
 export class NoiseSources {
   constructor(seed) {
     this.white = createNoise(`${seed}:noise`);

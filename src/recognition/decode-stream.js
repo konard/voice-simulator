@@ -94,7 +94,7 @@ export function createIpaDecoder(sampleRate, options = {}) {
       ...settings,
       maxSeconds: options.maxSeconds ?? 30,
     });
-    pitch = createPitchTracker(input.frames);
+    pitch = createPitchTracker(input.frames, { kernels: settings.kernels });
     classifier = createWhisperDecisions(
       input.frames,
       pitch.track,

@@ -20,6 +20,8 @@ import {
   trackPitch,
 } from '../src/index.js';
 import { createRandom, randomNormal } from '../src/random.js';
+import { analyzeFrameHops } from '../src/recognition/frontend.js';
+import { trackPitchHops } from '../src/recognition/pitch.js';
 import {
   highPass,
   maskedPair,
@@ -33,6 +35,15 @@ const PRESETS = ['male', 'female', 'child'];
 const RATES = [16000, 8000];
 
 const voices = new Map();
+
+it('shares pitch candidates without changing either hop’s pitch path', () => {
+  const sampleRate = 8000;
+  const samples = renderPlan(planUtterance('ama'), { sampleRate, seed: 1 });
+  const frames = analyzeFrameHops(samples, sampleRate);
+  const { pitch, fitPitch } = trackPitchHops(frames);
+  expect(fitPitch).toEqual(trackPitch(frames.fine));
+  expect(pitch).toEqual(trackPitch(frames.coarse));
+});
 
 /** The sentence for `preset` at `sampleRate` (waveguide, seed 1), cached. */
 function voice(preset, sampleRate) {

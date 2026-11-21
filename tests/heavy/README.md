@@ -43,8 +43,9 @@ gate failures and the twenty largest phone errors.
 ## Environment
 
 [`scripts/run-heavy.mjs`](../../scripts/run-heavy.mjs) runs the files one
-after another in `node --test` with a one-hour timeout per test; the files
-`gpu-*.test.js` need WebGPU and run after them in
+after another in `node --test` with a default one-hour timeout per test. The
+public-recording recognition benchmark uses a 90-minute timeout to match its
+workflow budget. The files `gpu-*.test.js` need WebGPU and run after them in
 `deno test -A --config deno.heavy.json`, together with
 `tests/fdtd-gpu.test.js` (see "Suite `gpu`" in
 [docs/CONTRIBUTING.md](../../docs/CONTRIBUTING.md)). Both get:

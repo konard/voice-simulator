@@ -587,6 +587,10 @@ function measureLpc(kernel, row) {
  * @param {Partial<typeof FRONTEND_DEFAULTS>} [options]
  */
 export function createFrameAnalyzer(sampleRate, options = {}) {
+  return frameAnalyzer(sampleRate, options);
+}
+
+function frameAnalyzer(sampleRate, options, onFrame) {
   const settings = frontendSettings(sampleRate, options);
   const tables = frontendTables(settings);
   const { rate, length, half, hopSamples, capacity, sampleCapacity } = settings;
@@ -658,6 +662,7 @@ export function createFrameAnalyzer(sampleRate, options = {}) {
       noise,
       periodicity
     );
+    onFrame?.(frames, row, meanPower, periodicity);
   }
 
   /** Add the frames before absolute frame `lastFrame`. */
@@ -764,4 +769,47 @@ export function analyzeFrames(samples, sampleRate, options = {}) {
   analyzer.push(samples);
   analyzer.flush();
   return analyzer.frames;
+}
+
+/** Share the per-window features of the default 5 ms and 10 ms batch grids. */
+export function analyzeFrameHops(samples, sampleRate) {
+  const maxSeconds = samples.length / sampleRate;
+  const fast = { maxSeconds };
+  const slow = frontendSettings(sampleRate, { maxSeconds, hop: 0.01 });
+  const coarse = createFrameSet(slow, null);
+  const noiseTracker = createNoiseTracker(slow.hop);
+  const coarseColumns = frameColumns(coarse);
+  let fineColumns;
+  const analyzer = frameAnalyzer(
+    sampleRate,
+    fast,
+    (frames, row, power, period) => {
+      if (row % 2 !== 0 || coarse.count >= coarse.capacity) {
+        return;
+      }
+      fineColumns ??= frameColumns(frames);
+      const target = coarse.count++;
+      for (let i = 0; i < coarseColumns.length; i++) {
+        const [column, width] = coarseColumns[i];
+        const [source] = fineColumns[i];
+        for (let j = 0; j < width; j++) {
+          column[target * width + j] = source[row * width + j];
+        }
+      }
+      // The coarse grid's noise history is independent of the fine grid's.
+      const noise = noiseTracker.noiseFloor(power);
+      coarse.noise[target] = noise;
+      coarse.speech[target] = noiseTracker.speech(
+        coarse.energy[target],
+        noise,
+        period
+      );
+    }
+  );
+  analyzer.push(samples);
+  analyzer.flush();
+  const fine = analyzer.frames;
+  coarse.samples = fine.samples;
+  coarse.sampleCount = fine.sampleCount;
+  return { fine, coarse };
 }

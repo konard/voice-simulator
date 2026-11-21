@@ -22,6 +22,7 @@ import {
   DEFAULT_SOURCE,
   levelFactor,
   noseSections,
+  STEADY_TRACT,
 } from '../acoustics/voice.js';
 import { piriformBranch } from '../acoustics/waveguide.js';
 import {
@@ -434,13 +435,18 @@ export class FramePlanner {
     for (let index = 0; index < count; index++) {
       if ((this.position + index) % blockSize === 0 || !this.hasShape) {
         this.hasShape = true;
-        const shape = blockShape(
-          this.plan,
-          this.time,
-          this.state,
-          this.head,
-          this.shapeOptions
-        );
+        const shape =
+          this.steadyShape ??
+          blockShape(
+            this.plan,
+            this.time,
+            this.state,
+            this.head,
+            this.shapeOptions
+          );
+        if (this.plan[STEADY_TRACT]) {
+          this.steadyShape = shape;
+        }
         const lung = this.state.lungPressure ?? this.head.lungPressure;
         frames.ensure(blocks + 1);
         writeFrame(frames.values, blocks * stride, shape, lung);

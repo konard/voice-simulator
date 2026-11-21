@@ -5,6 +5,7 @@
 
 use std::cell::RefCell;
 
+use voice_simulator_core::losses::ShelfCache;
 use voice_simulator_core::renderer::{AnyRenderer, RenderError};
 use voice_simulator_core::source_state;
 
@@ -13,6 +14,7 @@ use crate::{check_range, error, f32_slice, f64_slice, u8_slice};
 thread_local! {
     /// The live renderers; handle `h` is slot `h - 1`.
     static RENDERERS: RefCell<Vec<Option<AnyRenderer>>> = const { RefCell::new(Vec::new()) };
+    static LOSS_SHELVES: RefCell<ShelfCache> = const { RefCell::new(ShelfCache::new()) };
 }
 
 fn code(error: RenderError) -> i32 {
@@ -28,10 +30,16 @@ fn code(error: RenderError) -> i32 {
 /// model `model` (the 3D solver only); returns its handle (> 0) or
 /// [`error::BAD_ARGUMENT`].
 pub fn renderer_new(values: &[f64], model: &[u8]) -> i32 {
-    let renderer = match AnyRenderer::new(values, model) {
+    let mut renderer = match AnyRenderer::new(values, model) {
         Ok(renderer) => renderer,
         Err(error) => return code(error),
     };
+    if let AnyRenderer::Waveguide(waveguide) = &mut renderer {
+        // Reuse filter designs across independent reference sounds.
+        LOSS_SHELVES.with_borrow_mut(|shelves| {
+            *waveguide.solver_mut().loss_shelves_mut() = core::mem::take(shelves);
+        });
+    }
     RENDERERS.with_borrow_mut(|slots| {
         let index = match slots.iter().position(Option::is_none) {
             Some(index) => {
@@ -68,7 +76,14 @@ pub fn renderer_render(handle: i32, frames: &[f64], out: &mut [f32]) -> i32 {
 
 /// Drops the renderer of `handle`.
 pub fn renderer_free(handle: i32) -> i32 {
-    let code = with_renderer(handle, |_| error::OK);
+    let code = with_renderer(handle, |renderer| {
+        if let AnyRenderer::Waveguide(waveguide) = renderer {
+            LOSS_SHELVES.with_borrow_mut(|shelves| {
+                *shelves = core::mem::take(waveguide.solver_mut().loss_shelves_mut());
+            });
+        }
+        error::OK
+    });
     if code == error::OK {
         RENDERERS.with_borrow_mut(|slots| slots[handle as usize - 1] = None);
     }

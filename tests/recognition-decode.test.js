@@ -10,10 +10,13 @@ import {
   syllabifyTokens,
 } from '../src/index.js';
 import { createRandom } from '../src/random.js';
+import { createRecognitionTemplatePlanner } from '../src/articulation/plan.js';
+import { sampleState } from '../src/articulation/tract-shape.js';
 import { VOWELS } from '../src/ipa/inventory.js';
 import {
   decoderTemplates,
   TEMPLATE_CHANNELS,
+  TEMPLATE_POINTS,
 } from '../src/recognition/decode-model.js';
 import {
   analyzeForDecode,
@@ -34,6 +37,49 @@ import {
 
 const hiRate = 16000;
 const lowRate = 8000;
+
+it('uses the same phone trajectories as the synthesis planner', () => {
+  const options = { head: { pitch: 181, speechRate: 5, vibrato: 0.7 } };
+  const planPhone = createRecognitionTemplatePlanner(
+    options,
+    TEMPLATE_CHANNELS
+  );
+  for (const ipa of ['a', 'əpʰə', 'ət͡ʃə', 'əǃə', 'a˨˩˦']) {
+    const full = planUtterance(ipa, options);
+    const template = planPhone(ipa);
+    assert.deepEqual(template.segments, full.segments);
+    for (const name of TEMPLATE_CHANNELS) {
+      assert.deepEqual(
+        template.channels[name],
+        full.channels[name],
+        `${ipa}: ${name}`
+      );
+    }
+  }
+});
+
+it('uses the same phone trajectories when planning only scored channels', () => {
+  const phones = ['a', 'pʰ', 't͡ʃ', 'ǃ', 'a˨˩˦'];
+  const head = { pitch: 181, speechRate: 1.4, vibrato: 0.7 };
+  for (const { ipa, kind, duration, compared, values } of decoderTemplates(
+    head,
+    phones
+  )) {
+    const vowel = kind === 'vowel';
+    const full = planUtterance(vowel ? ipa : `ə${ipa}ə`, { head });
+    const origin = full.segments.find(
+      (segment) => segment.token === full.tokens[vowel ? 0 : 1]
+    ).start;
+    const states = TEMPLATE_POINTS.map((point) =>
+      sampleState(full, origin + duration * point)
+    );
+    const expected = Float64Array.from(compared, (cell) => {
+      const point = Math.floor(cell / TEMPLATE_CHANNELS.length);
+      return states[point][TEMPLATE_CHANNELS[cell % TEMPLATE_CHANNELS.length]];
+    });
+    assert.deepEqual(values, expected, ipa);
+  }
+});
 
 function gate(criterion, observed, target, min = false) {
   console.log('decoder', criterion, observed);
@@ -156,6 +202,11 @@ it('keeps paths with different phone strings and their lowest cost', () => {
     [1]
   );
   assert.equal(pruned.edges.filter(({ to }) => to === 3).length, 2);
+  const best = { beam: 2, nbest: 1, weights };
+  assert.deepEqual(
+    decodeSearch(prepared, language, { ...best, lattice: false }).paths,
+    decodeSearch(prepared, language, { ...best, lattice: true }).paths
+  );
 });
 
 it('decodes steady speech across a gap in boundary candidates', () => {

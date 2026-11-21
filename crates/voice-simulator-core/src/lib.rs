@@ -33,6 +33,7 @@ pub mod inverse_whisper;
 pub mod landmarks;
 
 mod inverse_dsp;
+#[path = "recognition/inverse_filter.rs"]
 pub mod inverse_filter;
 mod inverse_refinement;
 pub mod inversion;
@@ -59,5 +60,6 @@ pub mod source_state;
 pub mod stages;
 pub mod subglottal;
 pub mod voice_fit;
+pub mod voice_session;
 pub mod waveguide;
 pub mod whisper;

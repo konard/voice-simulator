@@ -1,4 +1,5 @@
 /** Count-weighted phone statistics, derived lazily from the forward lexicons. */
+import { lexiconRevision } from '../g2p/lexicon.js';
 import { getLexicon } from './lexicon.js';
 
 // Final calibration on the 40 sentences, 8,000 words and 12 mixed fixtures:
@@ -14,62 +15,115 @@ export const LANGUAGE_MODEL = {
   lexicalGap: 0.5,
 };
 const cached = new Map();
+let readBuiltInModels;
+let builtInModels;
+
+// Optional build output for a cold file command. A user lexicon changes the
+// phone statistics, so that path always derives them from the active words.
+export function installLanguageModelReader(read) {
+  readBuiltInModels = read;
+  builtInModels = undefined;
+}
 
 export function countPronunciations(entries) {
-  const singles = new Map();
-  const pairs = new Map();
-  const triples = new Map();
+  const keys = ['#'];
+  const indices = new Map([['#', 0]]);
+  const singleCounts = [];
+  const pairRows = [];
+  const tripleTables = [];
   let total = 0;
   const add = (table, key, count) =>
     table.set(key, (table.get(key) ?? 0) + count);
+  function phoneIndex(symbol) {
+    let index = indices.get(symbol);
+    if (index === undefined) {
+      index = keys.length;
+      keys.push(symbol);
+      indices.set(symbol, index);
+    }
+    return index;
+  }
   for (const { symbols, count } of entries) {
-    const sequence = ['#', ...symbols, '#'];
-    for (let i = 0; i < sequence.length; i++) {
-      add(singles, sequence[i], count);
+    let a = -1;
+    let b = 0;
+    singleCounts[0] = (singleCounts[0] ?? 0) + count;
+    total += count;
+    for (let i = 0; i <= symbols.length; i++) {
+      const c =
+        i === symbols.length ? 0 : phoneIndex(symbols[i].symbol ?? symbols[i]);
+      singleCounts[c] = (singleCounts[c] ?? 0) + count;
+      add((pairRows[b] ??= new Map()), c, count);
+      if (a >= 0) {
+        const table = (tripleTables[a] ??= []);
+        add((table[b] ??= new Map()), c, count);
+      }
       total += count;
-      if (i >= 1) {
-        add(pairs, sequence.slice(i - 1, i + 1).join('\t'), count);
-      }
-      if (i >= 2) {
-        add(triples, sequence.slice(i - 2, i + 1).join('\t'), count);
-      }
+      a = b;
+      b = c;
     }
   }
+  const singles = new Map(singleCounts.map((count, i) => [keys[i], count]));
+  const pairs = new Map();
+  const triples = new Map();
+  pairRows.forEach((row, b) => {
+    for (const [c, count] of row) {
+      pairs.set(`${keys[b]}\t${keys[c]}`, count);
+    }
+  });
+  tripleTables.forEach((table, a) => {
+    table.forEach((row, b) => {
+      const prefix = `${keys[a]}\t${keys[b]}`;
+      for (const [c, count] of row) {
+        triples.set(`${prefix}\t${keys[c]}`, count);
+      }
+    });
+  });
   return { singles, pairs, triples, total };
 }
 
+function* languagePronunciations(lexicon) {
+  for (const { tokens, count } of lexicon.pronunciations()) {
+    yield { symbols: tokens, count };
+  }
+}
+
 export function getLanguageModel(language) {
+  if (lexiconRevision() === 0 && readBuiltInModels) {
+    builtInModels ??= readBuiltInModels() ?? new Map();
+    if (builtInModels.has(language)) {
+      return builtInModels.get(language);
+    }
+  }
   const lexicon = getLexicon(language);
   if (cached.get(language)?.lexicon !== lexicon) {
-    const entries = [];
-    const stack = [lexicon.root];
-    while (stack.length) {
-      const node = stack.pop();
-      for (const entry of node.entries) {
-        entries.push({
-          symbols: entry.tokens.map((t) => t.symbol),
-          count: entry.count,
-        });
-      }
-      stack.push(...node.children.values());
-    }
-    cached.set(language, { lexicon, ...countPronunciations(entries) });
+    cached.set(language, {
+      lexicon,
+      ...countPronunciations(languagePronunciations(lexicon)),
+    });
   }
   return cached.get(language);
 }
 
-export function phoneProbability(model, a, b, c) {
+function phoneCounts(model, a, b, c) {
   const pair = `${a}\t${b}`;
+  return [
+    model.triples.get(`${pair}\t${c}`),
+    model.pairs.get(pair),
+    model.pairs.get(`${b}\t${c}`),
+    model.singles.get(b),
+    model.singles.get(c),
+  ];
+}
+
+export function phoneProbability(model, a, b, c) {
+  const [abc, ab, bc, prior, current] = model.counts
+    ? model.counts(a, b, c)
+    : phoneCounts(model, a, b, c);
   return (
-    (LANGUAGE_MODEL.trigram * (model.triples.get(`${pair}\t${c}`) ?? 0)) /
-      (model.pairs.get(pair) || Infinity) +
-    (LANGUAGE_MODEL.bigram * (model.pairs.get(`${b}\t${c}`) ?? 0)) /
-      (model.singles.get(b) || Infinity) +
+    (LANGUAGE_MODEL.trigram * (abc ?? 0)) / (ab || Infinity) +
+    (LANGUAGE_MODEL.bigram * (bc ?? 0)) / (prior || Infinity) +
     LANGUAGE_MODEL.unigram *
-      Math.max(
-        (model.singles.get(c) ?? 0) / (model.total || 1),
-        LANGUAGE_MODEL.floor
-      )
+      Math.max((current ?? 0) / (model.total || 1), LANGUAGE_MODEL.floor)
   );
 }
 

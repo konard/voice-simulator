@@ -670,12 +670,14 @@ impl<S: Solver> Renderer<S> {
         let block = self.settings.block_size;
         let output_step = 1.0 / self.settings.sample_rate;
         let mut frames = frames.chunks_exact(stride);
+        let mut previous_frame = None;
         let mut written = 0;
         while written < count {
             let offset = self.position % block;
             if offset == 0 || !self.has_shape {
                 let frame = frames.next().ok_or(RenderError::TooFewFrames)?;
-                self.update_shape(frame);
+                self.update_shape(frame, previous_frame);
+                previous_frame = Some(frame);
             }
             let block_end = count.min(written + block - offset);
             for sample in &mut out[written..block_end] {
@@ -701,9 +703,9 @@ impl<S: Solver> Renderer<S> {
         self.solver.field(out)
     }
 
-    fn update_shape(&mut self, frame: &[f64]) {
+    fn update_shape(&mut self, frame: &[f64], previous_frame: Option<&[f64]>) {
         self.has_shape = true;
-        self.solver.set_shape(frame);
+        self.solver.set_shape_after(frame, previous_frame);
         self.step_duration = self.solver.step_duration();
         let rate = 1.0 / self.step_duration;
         self.noise.configure(rate);
@@ -1007,7 +1009,15 @@ mod tests {
     #[test]
     fn renders_a_vowel_in_any_chunks() {
         let total = 3000;
-        let frames = steady_frames(22, 100, &vowel());
+        let mut frames = steady_frames(22, 100, &vowel());
+        for (index, frame) in frames
+            .as_chunks_mut::<{ frame::stride(22) }>()
+            .0
+            .iter_mut()
+            .enumerate()
+        {
+            frame[frame::F0] += index as f64;
+        }
         let mut whole = Renderer::new(&configuration(total)).unwrap();
         let mut expected = vec![0.0f32; total + 10];
         assert_eq!(whole.render(&frames, &mut expected), Ok(total));
@@ -1015,13 +1025,16 @@ mod tests {
         let mut chunked = Renderer::new(&configuration(total)).unwrap();
         let mut actual = vec![0.0f32; total];
         let mut start = 0;
+        let mut used = 0;
         while start < total {
             let end = (start + 37).min(total);
             let blocks = chunked.blocks(end - start);
             let stride = chunked.frame_stride();
+            let next = used + blocks * stride;
             let written = chunked
-                .render(&frames[..blocks * stride], &mut actual[start..end])
+                .render(&frames[used..next], &mut actual[start..end])
                 .unwrap();
+            used = next;
             start += written;
         }
         assert_eq!(&actual[..], &expected[..total]);

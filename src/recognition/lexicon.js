@@ -19,7 +19,13 @@ import { getCounts } from './data/index.js';
 import { checkLanguage, pronounce } from './languages.js';
 
 const cached = new Map();
-const RUSSIAN_CLITIC_ALTERNATES = new Map([
+let readPreparedLexicon;
+
+export function installPreparedLexicons(read) {
+  readPreparedLexicon = read;
+  cached.clear();
+}
+const russianAlternate = new Map([
   ['в', 'f'],
   ['к', 'ɡ'],
   ['с', 'z'],
@@ -32,8 +38,11 @@ export function soundKey(token, language) {
   );
 }
 
-export function trieNode() {
-  return { children: new Map(), entries: [] };
+const noChildren = new Map();
+const noEntries = [];
+
+export function trieNode(token) {
+  return { children: noChildren, entries: noEntries, token };
 }
 
 function contextualChinese() {
@@ -89,7 +98,7 @@ function extraVariants(word, language) {
       ...(RUSSIAN_PROCLITICS[word] ?? []),
       RUSSIAN_ENCLITICS[word],
     ].filter(Boolean);
-    const alternate = RUSSIAN_CLITIC_ALTERNATES.get(word);
+    const alternate = russianAlternate.get(word);
     return [...variants, ...(alternate ? [alternate] : [])];
   }
   return [];
@@ -123,13 +132,59 @@ export function addPronunciation(root, entry, language, parsed) {
   let node = root;
   for (const token of tokens) {
     const key = soundKey(token, language);
-    if (!node.children.has(key)) {
-      node.children.set(key, { ...trieNode(), token });
+    let child = node.children.get(key);
+    if (!child) {
+      child = trieNode(token);
+      if (node.children === noChildren) {
+        node.children = new Map();
+      }
+      node.children.set(key, child);
     }
-    node = node.children.get(key);
+    node = child;
+  }
+  if (node.entries === noEntries) {
+    node.entries = [];
   }
   if (!node.entries.some((e) => e.word === entry.word && e.ipa === entry.ipa)) {
     node.entries.push({ ...entry, tokens });
+  }
+}
+
+function* lexiconPronunciations(language, words) {
+  const contextual = language === 'zh' ? contextualChinese() : new Map();
+  const parsed = new Map();
+  for (const { word, count } of words) {
+    // The shipped Russian speaker already uses the same forward reading.
+    const additional =
+      language === 'ru'
+        ? (userPronunciations(language, word) ?? [])
+        : pronunciations(language, word);
+    const variants = new Set([
+      pronounce(word, language).ipa,
+      ...additional,
+      ...extraVariants(word, language),
+      ...(contextual.get(word) ?? []),
+    ]);
+    for (const ipa of [...variants]) {
+      for (const surface of surfaceVariants(ipa, word, language)) {
+        variants.add(surface);
+      }
+    }
+    for (const ipa of variants) {
+      if (!ipa) {
+        continue;
+      }
+      if (!parsed.has(ipa)) {
+        parsed.set(
+          ipa,
+          parseIpa(ipa).tokens.filter((t) => t.kind !== 'pause')
+        );
+      }
+      const tokens = parsed.get(ipa);
+      if (tokens.length) {
+        yield { word, ipa, count, tokens };
+      }
+    }
   }
 }
 
@@ -140,42 +195,39 @@ export function getLexicon(language = 'en') {
     !cached.has(language) ||
     cached.get(language).revision !== lexiconRevision()
   ) {
-    const root = trieNode();
     const data = getCounts(language);
-    const contextual = language === 'zh' ? contextualChinese() : new Map();
-    const parsed = new Map();
-    for (const { word, count } of data.words) {
-      // The Russian dictionary stores stress positions. Its IPA is already
-      // produced by the same forward pronunciation used below.
-      const alternatives =
-        language === 'ru'
-          ? (userPronunciations(language, word) ?? [])
-          : pronunciations(language, word);
-      const variants = new Set([
-        pronounce(word, language).ipa,
-        ...alternatives,
-        ...extraVariants(word, language),
-        ...(contextual.get(word) ?? []),
-      ]);
-      for (const ipa of [...variants]) {
-        for (const surface of surfaceVariants(ipa, word, language)) {
-          variants.add(surface);
+    let root;
+    let prepared;
+    cached.set(language, {
+      get prepared() {
+        return this.revision === 0
+          ? (prepared ??= readPreparedLexicon?.(language, data.words) ?? false)
+          : false;
+      },
+      get root() {
+        if (this.prepared) {
+          return this.prepared.root;
         }
-      }
-      for (const ipa of variants) {
-        if (!ipa) {
-          continue;
+        if (!root) {
+          root = trieNode();
+          for (const { tokens, ...entry } of this.pronunciations()) {
+            addPronunciation(root, entry, language, tokens);
+          }
         }
-        if (!parsed.has(ipa)) {
-          parsed.set(
-            ipa,
-            parseIpa(ipa).tokens.filter((t) => t.kind !== 'pause')
-          );
-        }
-        addPronunciation(root, { word, ipa, count }, language, parsed.get(ipa));
-      }
-    }
-    cached.set(language, { root, ...data, revision: lexiconRevision() });
+        return root;
+      },
+      pronunciations() {
+        return lexiconPronunciations(language, data.words);
+      },
+      words: data.words,
+      counts: data.counts,
+      get bigrams() {
+        return data.bigrams;
+      },
+      transitionRow: data.transitionRow,
+      total: data.total,
+      revision: lexiconRevision(),
+    });
   }
   return cached.get(language);
 }

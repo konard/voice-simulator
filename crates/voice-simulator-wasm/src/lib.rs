@@ -41,11 +41,13 @@ pub mod language_id;
 pub mod modes;
 pub mod prosody;
 pub mod recognition;
+pub mod recognition_kernels;
 pub mod recognizer;
 pub mod renderer;
 pub mod rescoring;
 pub mod threads;
 pub mod voice_fit;
+pub mod voice_session;
 pub mod whisper;
 
 /// Version of the interface; raise it on any breaking change of a `vs_`

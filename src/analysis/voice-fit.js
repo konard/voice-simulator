@@ -134,6 +134,7 @@ function createEvaluator(state, samples, sampleRate, o, theta0, context) {
       ipa: o.transcript ? o.ipa : false,
       engine: o.engine,
       source: o.source,
+      articulationOffsets: o.articulationOffsets,
     });
     const audio =
       rate < 16000 ? resample(rendered.samples, 16000, rate) : rendered.samples;
@@ -194,6 +195,14 @@ function createEvaluator(state, samples, sampleRate, o, theta0, context) {
     o.onStep?.({ step: renders, renders, distance, head: { ...candidate } });
     return value;
   };
+}
+
+/** Score a supplied voice with the same acoustic objective as fitVoice. */
+export function measureVoiceFit(state, samples, sampleRate, head, options) {
+  const o = optionsFor(options);
+  return createEvaluator(state, samples, sampleRate, o, head, {
+    renders: 0,
+  })(head).distance;
 }
 
 function roundsFor(o) {
@@ -347,9 +356,15 @@ function* fitState(state, samples, sampleRate, options) {
     state: copyState(state),
   };
 }
-export function* fitVoiceSteps(samples, sampleRate, options = {}) {
+export function* fitVoiceSteps(samples, sampleRate, options = {}, frontEnd) {
   const o = optionsFor(options);
-  const state = accumulate(copyState(o.state), samples, sampleRate, o);
+  const state = accumulate(
+    copyState(o.state),
+    samples,
+    sampleRate,
+    { ...o, frontEnd },
+    o.sourceDiagnostics !== false
+  );
   return yield* fitState(state, samples, sampleRate, o);
 }
 function consume(steps) {
@@ -359,8 +374,8 @@ function consume(steps) {
   }
   return next.value;
 }
-export function fitVoice(samples, sampleRate, options = {}) {
-  return consume(fitVoiceSteps(samples, sampleRate, options));
+export function fitVoice(samples, sampleRate, options = {}, frontEnd) {
+  return consume(fitVoiceSteps(samples, sampleRate, options, frontEnd));
 }
 export function createVoiceFitter(options = {}) {
   const o = optionsFor(options),

@@ -1,13 +1,25 @@
 /** Public audio recognition and shared batch/stream composition. Unlicense. */
 import { resample } from '../audio/resample.js';
 import { LANGUAGES } from '../g2p/index.js';
+import { registeredLexicons } from '../g2p/lexicon.js';
 import { decoderWhisperSpans } from './decode-pipeline.js';
-import { audioToIpa } from './decode.js';
+import { audioToIpa, audioToIpaParallel } from './decode.js';
+import { createRecognitionEngine, getRecognitionEngine } from './engine.js';
 import { ipaToText } from './ipa-to-text.js';
 import { identifyLanguage, languageShares } from './language-id.js';
+import { measure } from './profile.js';
 import { recognizeModes } from './modes.js';
 import { markProsody, measureProsody } from './prosody.js';
-import { rescoreHypotheses } from './rescoring.js';
+import {
+  applyRescoring,
+  planRescoring,
+  rescoreHypotheses,
+  scoreJob,
+} from './rescoring.js';
+import { RESCORING_WEIGHT } from './rescoring-weights.js';
+import { createRecognitionPool } from './pool.js';
+import { aggregate, translated } from './recognizer-result.js';
+import { pauseCuts } from './recognizer-pauses.js';
 
 export { createRecognizer } from './recognizer-stream.js';
 
@@ -56,9 +68,13 @@ export function recognitionSettings(options) {
     nbest = 1,
     rescoring = false,
     modes = true,
+    includeModeLabels = modes,
     whisper = 'auto',
     level = 'auto',
     stages = {},
+    profile,
+    deterministic = false,
+    articulationOffsets,
   } = options;
   checkOptions(languages, nbest, level);
   if (rescoring && typeof rescoreHypotheses !== 'function') {
@@ -73,9 +89,14 @@ export function recognitionSettings(options) {
     nbest,
     rescoring,
     modes,
+    includeModeLabels,
     whisper: decoderWhisperSpans(whisper),
     level,
     stages,
+    profile,
+    kernels: options.kernels ?? getRecognitionEngine(options),
+    deterministic,
+    articulationOffsets,
   };
 }
 
@@ -102,8 +123,11 @@ export function decoderOptions(settings, level, start = 0) {
   return {
     ...RECOGNITION_LEVELS[level],
     languages,
+    profile: settings.profile,
+    kernels: settings.kernels,
     language: languages.length === 1 ? languages[0] : undefined,
     voice,
+    articulationOffsets: settings.articulationOffsets,
     nbest: rescoring ? 10 : nbest,
     whisper:
       start && Array.isArray(whisper)
@@ -118,6 +142,14 @@ export function decoderOptions(settings, level, start = 0) {
   };
 }
 
+function decodeInput(samples, sampleRate, settings, level, start) {
+  const options = decoderOptions(settings, level, start);
+  const rate = Math.min(sampleRate, options.rate);
+  const input =
+    rate < sampleRate ? resample(samples, sampleRate, rate) : samples;
+  return { input, rate, options };
+}
+
 export function decodeRecognitionAudio(
   samples,
   sampleRate,
@@ -125,13 +157,20 @@ export function decodeRecognitionAudio(
   level,
   start
 ) {
-  const options = decoderOptions(settings, level, start);
-  const rate = Math.min(sampleRate, options.rate);
-  const input =
-    rate < sampleRate ? resample(samples, sampleRate, rate) : samples;
+  const { input, rate, options } = decodeInput(
+    samples,
+    sampleRate,
+    settings,
+    level,
+    start
+  );
   const decoded = settings.stages.audioToIpa
     ? settings.stages.audioToIpa(input, rate, options)
-    : audioToIpa(input, rate, { ...options, sourceRate: sampleRate });
+    : audioToIpa(input, rate, {
+        ...options,
+        sourceRate: sampleRate,
+        lattice: settings.rescoring,
+      });
   return { decoded, input, rate };
 }
 
@@ -169,19 +208,28 @@ function decodeText(input, settings, level, modelLanguage) {
     modelLanguage && !stages.identifyLanguage ? [modelLanguage] : languages;
   const identification = language
     ? null
-    : (stages.identifyLanguage ?? identifyLanguage)(input, {
-        languages: candidates,
-      });
-  return (stages.ipaToText ?? ipaToText)(input, {
-    language,
-    spans: identification?.spans,
-    boundaries:
-      modelLanguage && Array.isArray(input) && input[0]?.modelWord !== undefined
-        ? 'given'
-        : undefined,
-    nbest,
-    beam: RECOGNITION_LEVELS[level].beam,
-  });
+    : measure(settings.profile, 'Language identification', () =>
+        (stages.identifyLanguage ?? identifyLanguage)(input, {
+          languages: candidates,
+          kernels: settings.kernels,
+        })
+      );
+  return measure(settings.profile, 'IPA to text', () =>
+    (stages.ipaToText ?? ipaToText)(input, {
+      language,
+      spans: identification?.spans,
+      boundaries:
+        modelLanguage &&
+        Array.isArray(input) &&
+        input[0]?.modelWord !== undefined
+          ? 'given'
+          : undefined,
+      nbest,
+      kernels: settings.kernels,
+      profile: settings.profile,
+      beam: RECOGNITION_LEVELS[level].beam,
+    })
+  );
 }
 
 function recognizeProsody(decoded, samples, rate, settings, level) {
@@ -198,7 +246,9 @@ function recognizeProsody(decoded, samples, rate, settings, level) {
     frames: decoded.frames?.speech ? decoded.frames : undefined,
     whisperSpans: settings.whisper === false ? [] : decoded.whisperSpans,
   };
-  const measured = measureProsody(samples, rate, input, options);
+  const measured = measure(settings.profile, 'Prosody', () =>
+    measureProsody(samples, rate, input, options)
+  );
   const primary = decodeText(
     measured.sounds,
     settings,
@@ -270,27 +320,32 @@ export function recognizeDecoded(
   if (!decoded.ipa) {
     return emptyRecognition(settings.nbest);
   }
-  if (settings.rescoring && final) {
+  if (settings.rescoring && (final === 'batch' || final === 'stream')) {
     decoded = rescoreHypotheses(decoded, {
       preserveTiming: final === 'stream',
     });
   }
   const primary = recognizeProsody(decoded, samples, rate, settings, level);
   const withModes =
-    settings.modes && typeof recognizeModes === 'function'
-      ? recognizeModes(
-          samples,
-          rate,
-          {
-            ...primary,
-            whisperSpans:
-              settings.whisper === false ? [] : decoded.whisperSpans,
-          },
-          {
-            voice: settings.voice ? { head: settings.voice } : undefined,
-            maxSeconds: samples.length / rate,
-            frames: decoded.frames?.speech ? decoded.frames : undefined,
-          }
+    settings.includeModeLabels && typeof recognizeModes === 'function'
+      ? measure(settings.profile, 'Modes', () =>
+          recognizeModes(
+            samples,
+            rate,
+            {
+              ...primary,
+              whisperSpans:
+                settings.whisper === false ? [] : decoded.whisperSpans,
+            },
+            {
+              voice: settings.voice ? { head: settings.voice } : undefined,
+              maxSeconds: samples.length / rate,
+              profile: settings.profile,
+              kernels: settings.kernels,
+              frames: decoded.frames?.speech ? decoded.frames : undefined,
+              reuseFormantCandidates: final === 'batch' || final === 'parallel',
+            }
+          )
         )
       : primary;
   const { ipa, text, modes = [] } = withModes;
@@ -326,29 +381,154 @@ export function noisyFrames(energy, count, seconds) {
   return loud / size > -99 && (loud - quiet) / size < 5;
 }
 
-export function recognize(samples, sampleRate, options = {}) {
+function checkAudio(samples, sampleRate) {
   validateRate(sampleRate);
   validateSamples(samples);
-  const seconds = samples.length / sampleRate;
-  if (seconds < 0.05) {
+  if (samples.length / sampleRate < 0.05) {
     throw new RecognitionError(
       'empty',
       'Recognition needs at least 50 ms of audio'
     );
   }
-  const settings = recognitionSettings(options);
-  const level = settings.level === 'auto' ? 'medium' : settings.level;
+}
+
+function checkNoise(decoded, duration) {
+  if (noisyFrames(decoded.frames?.energy, decoded.frames?.count, duration)) {
+    throw new RecognitionError(
+      'too-noisy',
+      'Audio has less than 5 dB of energy contrast'
+    );
+  }
+}
+
+function serial(samples, sampleRate, settings, level) {
   const { decoded, input, rate } = decodeRecognitionAudio(
     samples,
     sampleRate,
     settings,
     level
   );
-  if (noisyFrames(decoded.frames?.energy, decoded.frames?.count, seconds)) {
-    throw new RecognitionError(
-      'too-noisy',
-      'Audio has less than 5 dB of energy contrast'
+  checkNoise(decoded, samples.length / sampleRate);
+  return recognizeDecoded(decoded, input, rate, settings, level, 'batch');
+}
+
+function pieces(samples, sampleRate, options, settings) {
+  // User-provided callbacks observe the entire original input.
+  if (Object.keys(settings.stages).length || settings.profile) {
+    return [];
+  }
+  const cuts = pauseCuts(samples, sampleRate);
+  const input =
+    cuts.length > 1 && !samples.subarray ? Array.from(samples) : samples;
+  return cuts.slice(1).map((end, i) => {
+    const start = cuts[i];
+    const seconds = start / sampleRate;
+    return {
+      samples: input.subarray
+        ? input.subarray(start, end)
+        : input.slice(start, end),
+      sampleRate,
+      seconds,
+      options: {
+        ...options,
+        whisper: decoderOptions(settings, 'low', seconds).whisper,
+      },
+    };
+  });
+}
+
+function merge(results, jobs, nbest) {
+  const result = emptyRecognition(nbest);
+  for (const [i, part] of results.entries()) {
+    aggregate(
+      result,
+      translated(part, jobs[i].seconds, result.words.length),
+      nbest - 1
     );
   }
-  return recognizeDecoded(decoded, input, rate, settings, level, 'batch');
+  result.languages = languageShares(result.words);
+  return result;
+}
+
+function runPiece(job, kernels) {
+  const settings = recognitionSettings({ ...job.options, kernels });
+  const level = settings.level === 'auto' ? 'medium' : settings.level;
+  return serial(job.samples, job.sampleRate, settings, level);
+}
+
+export function recognize(samples, sampleRate, options = {}) {
+  if (options.threads === 'auto' || options.threads > 1) {
+    return recognizeAsync(samples, sampleRate, options);
+  }
+  checkAudio(samples, sampleRate);
+  const settings = recognitionSettings(options);
+  const level = settings.level === 'auto' ? 'medium' : settings.level;
+  const jobs = options.unsplit
+    ? []
+    : pieces(samples, sampleRate, options, settings);
+  return jobs.length
+    ? merge(
+        jobs.map((job) => runPiece(job, settings.kernels)),
+        jobs,
+        settings.nbest
+      )
+    : serial(samples, sampleRate, settings, level);
+}
+
+async function parallelDecode(samples, sampleRate, settings, level, pool) {
+  const { input, rate, options } = decodeInput(
+    samples,
+    sampleRate,
+    settings,
+    level
+  );
+  let decoded = await audioToIpaParallel(
+    input,
+    rate,
+    { ...options, sourceRate: sampleRate, lattice: settings.rescoring },
+    pool
+  );
+  checkNoise(decoded, samples.length / sampleRate);
+  if (settings.rescoring && decoded.ipa) {
+    const preparation = planRescoring(decoded);
+    const scores = await pool.run('rescore', preparation.jobs, scoreJob);
+    decoded = applyRescoring(decoded, preparation, scores, RESCORING_WEIGHT);
+  }
+  return recognizeDecoded(decoded, input, rate, settings, level, 'parallel');
+}
+
+export async function recognizeAsync(samples, sampleRate, options = {}) {
+  checkAudio(samples, sampleRate);
+  const kernels = options.kernels ?? (await createRecognitionEngine(options));
+  const settings = recognitionSettings({ ...options, kernels });
+  const level = settings.level === 'auto' ? 'medium' : settings.level;
+  const pool = createRecognitionPool({
+    threads: kernels.threads,
+    engine: kernels.name,
+  });
+  try {
+    const workerOptions = { ...options, unsplit: true };
+    delete workerOptions.kernels;
+    const jobs = pieces(samples, sampleRate, workerOptions, settings);
+    if (jobs.length) {
+      const lexicons = pool.size > 1 ? registeredLexicons() : [];
+      const results = await pool.run(
+        'audio',
+        jobs,
+        (job) => runPiece(job, kernels),
+        lexicons.length ? { lexicons } : undefined
+      );
+      return merge(results, jobs, settings.nbest);
+    }
+    if (
+      pool.size === 1 ||
+      Object.keys(settings.stages).length ||
+      settings.profile
+    ) {
+      return serial(samples, sampleRate, settings, level);
+    }
+    return await parallelDecode(samples, sampleRate, settings, level, pool);
+  } finally {
+    await pool.close();
+  }
 }

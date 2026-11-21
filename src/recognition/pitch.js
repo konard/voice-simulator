@@ -18,6 +18,7 @@
  */
 
 import { createFft } from './fft.js';
+import { withPitchDsp } from './pitch-rust.js';
 
 /**
  * Defaults. The two transition costs are per step of the default hop of
@@ -303,6 +304,12 @@ function createCoarseCorrelator(frames, settings) {
 
   /** Fill the coarse signal up to index `last` (inclusive). */
   function fill(last) {
+    if (settings.dsp && done <= last) {
+      const output = coarse.subarray(done + margin, last + margin + 1);
+      settings.dsp.decimate(frames, kernel, half, done, output);
+      done = last + 1;
+      return;
+    }
     for (let m = done; m <= last; m++) {
       const centre = m * factor;
       let sum = 0;
@@ -343,6 +350,9 @@ function createCoarseCorrelator(frames, settings) {
       mean /= coarseLength;
       for (let n = 0; n < coarseLength; n++) {
         re[n] = (coarse[start + n + margin] - mean) * window[n];
+      }
+      if (settings.dsp) {
+        return settings.dsp.correlate(re, correlation, q);
       }
       re.fill(0, coarseLength);
       im.fill(0);
@@ -401,6 +411,10 @@ function createFullFrame(frames, settings) {
      * window and its largest |sample| before. */
     load(centre) {
       const start = centre - half;
+      if (settings.dsp) {
+        settings.dsp.load(frames, start, window, correlation, frame);
+        return;
+      }
       let mean = 0;
       let largest = 0;
       for (let n = 0; n < fullLength; n++) {
@@ -421,6 +435,9 @@ function createFullFrame(frames, settings) {
     /** Refine a coarse lag: [full-rate lag, height] or null. */
     refine(coarseLag) {
       const centre = Math.round(coarseLag * factor);
+      if (settings.dsp) {
+        return settings.dsp.refine(frame.energy, centre);
+      }
       let best = -Infinity;
       let bestLag = -1;
       for (let lag = centre - factor; lag <= centre + factor; lag++) {
@@ -467,7 +484,7 @@ function insertCandidate(store, row, kept, capacity, candidate) {
  * t (frequency, height, strength), their number and the strength of the
  * unvoiced candidate.
  */
-function createCandidateFinder(frames, settings, store) {
+function createCandidateFinder(frames, settings, store, shared) {
   const { lagMin, lagMax, rate, minF0, maxF0, octaveCost } = settings;
   const capacity = settings.candidates;
   const coarse = createCoarseCorrelator(frames, settings);
@@ -502,6 +519,14 @@ function createCandidateFinder(frames, settings, store) {
     order.sort((a, b) => peakHeight[b] - peakHeight[a] || a - b);
   }
 
+  function scoreUnvoiced(t, largest, peak) {
+    const ratio = peak > 0 ? largest / peak : 0;
+    store.unvoiced[t] =
+      settings.voicingThreshold +
+      Math.max(0, 2 - ratio / settings.silence) +
+      quietness(frames, settings, t);
+  }
+
   return {
     lastSample(centre) {
       return Math.max(full.lastSample(centre), coarse.lastSample(centre));
@@ -511,13 +536,26 @@ function createCandidateFinder(frames, settings, store) {
      * the largest absolute sample so far.
      */
     score(t, centre, peak) {
+      if (shared?.source) {
+        const { source } = shared;
+        const fine = t * 2;
+        store.count[t] = source.count[fine];
+        for (let i = 0; i < store.count[t]; i++) {
+          const from = fine * capacity + i;
+          const to = t * capacity + i;
+          store.frequency[to] = source.frequency[from];
+          store.height[to] = source.height[from];
+          store.strength[to] = source.strength[from];
+        }
+        scoreUnvoiced(t, source.largest[fine], peak);
+        return;
+      }
       full.load(centre);
       const { energy, largest } = full.frame;
-      const ratio = peak > 0 ? largest / peak : 0;
-      store.unvoiced[t] =
-        settings.voicingThreshold +
-        Math.max(0, 2 - ratio / settings.silence) +
-        quietness(frames, settings, t);
+      if (store.largest) {
+        store.largest[t] = largest;
+      }
+      scoreUnvoiced(t, largest, peak);
       store.count[t] = 0;
       if (!coarse.correlate(centre, q) || !(energy > 0)) {
         return;
@@ -654,6 +692,9 @@ function createMarker(frames, track, settings) {
     const hi = Math.floor(Math.max(near, far));
     if (lo < first || hi + span > end) {
       return null;
+    }
+    if (settings.dsp) {
+      return settings.dsp.mark(frames, anchor, lo, hi, span);
     }
     let best = -Infinity;
     let place = -1;
@@ -923,6 +964,10 @@ function frameScores(track, store, capacity, t, chosen) {
  * @param {Partial<typeof PITCH_DEFAULTS>} [options]
  */
 export function createPitchTracker(frames, options = {}) {
+  return pitchTracker(frames, options);
+}
+
+function pitchTracker(frames, options, shared) {
   const settings = pitchSettings(frames, options);
   const { hop, hopSamples, lag } = settings;
   const capacity = settings.candidates;
@@ -934,9 +979,13 @@ export function createPitchTracker(frames, options = {}) {
     count: new Uint8Array(rows),
     unvoiced: new Float32Array(rows),
   };
+  if (shared && !shared.source) {
+    store.largest = new Float64Array(rows);
+    shared.save = store;
+  }
   const path = new Int8Array(rows);
   const viterbi = createViterbi(store, settings, rows);
-  const finder = createCandidateFinder(frames, settings, store);
+  const finder = createCandidateFinder(frames, settings, store, shared);
   const track = createTrack(frames, settings);
   const marker = createMarker(frames, track, settings);
   const distribution = createDistribution(rows);
@@ -985,28 +1034,30 @@ export function createPitchTracker(frames, options = {}) {
      * @param {boolean} [final]
      */
     advance(final = false) {
-      for (; peakScanned < frames.sampleCount; peakScanned++) {
-        peak = Math.max(peak, Math.abs(frames.samples[peakScanned]));
-      }
-      while (track.count < frames.count) {
-        const t = track.count;
-        const middle = centre(t);
-        if (
-          !final &&
-          (finder.lastSample(middle) >= frames.sampleCount ||
-            t + settings.energyAhead >= frames.count)
-        ) {
-          break;
+      withPitchDsp(options.kernels?.module, settings, () => {
+        for (; peakScanned < frames.sampleCount; peakScanned++) {
+          peak = Math.max(peak, Math.abs(frames.samples[peakScanned]));
         }
-        finder.score(t, middle, peak);
-        viterbi.step(t);
-        track.count++;
-      }
-      commit(final ? track.count : Math.max(0, track.count - lag));
-      if (final && runStart >= 0) {
-        marker.run(runStart, track.count - 1);
-        runStart = -1;
-      }
+        while (track.count < frames.count) {
+          const t = track.count;
+          const middle = centre(t);
+          if (
+            !final &&
+            (finder.lastSample(middle) >= frames.sampleCount ||
+              t + settings.energyAhead >= frames.count)
+          ) {
+            break;
+          }
+          finder.score(t, middle, peak);
+          viterbi.step(t);
+          track.count++;
+        }
+        commit(final ? track.count : Math.max(0, track.count - lag));
+        if (final && runStart >= 0) {
+          marker.run(runStart, track.count - 1);
+          runStart = -1;
+        }
+      });
     },
   };
 }
@@ -1020,4 +1071,14 @@ export function trackPitch(frames, options = {}) {
   const tracker = createPitchTracker(frames, options);
   tracker.advance(true);
   return tracker.track;
+}
+
+/** Score shared 5 ms and 10 ms windows once, then solve their paths independently. */
+export function trackPitchHops({ fine, coarse }, options = {}) {
+  const shared = {};
+  const fast = pitchTracker(fine, options, shared);
+  fast.advance(true);
+  const slow = pitchTracker(coarse, options, { source: shared.save });
+  slow.advance(true);
+  return { fitPitch: fast.track, pitch: slow.track };
 }

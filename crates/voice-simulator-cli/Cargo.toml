@@ -13,3 +13,7 @@ path = "src/main.rs"
 
 [dependencies]
 voice-simulator-core = { path = "../voice-simulator-core" }
+rayon = { version = "1.11", optional = true }
+
+[features]
+parallel = ["dep:rayon"]

@@ -15,7 +15,7 @@ function traceEdits(cost, width, reference, hypothesis, onPair) {
     const same = i > 0 && j > 0 && reference[i - 1] === hypothesis[j - 1];
     if (i > 0 && j > 0 && cost[(i - 1) * width + j - 1] + !same === here) {
       counts.substitutions += same ? 0 : 1;
-      onPair?.(i - 1, j - 1, same);
+      onPair?.(i - 1, j - 1);
       i--;
       j--;
     } else if (i > 0 && cost[(i - 1) * width + j] + 1 === here) {
@@ -41,13 +41,13 @@ export function editDistance(reference, hypothesis) {
   return measureEdits(reference, hypothesis);
 }
 
-/** Internal alignment using the same tie-breaking as the error-rate metrics. */
-export function alignedTokenPairs(reference, hypothesis) {
+/** Levenshtein counts and the index pairs of matches and substitutions. */
+export function alignEdits(reference, hypothesis) {
   const pairs = [];
-  measureEdits(reference, hypothesis, (ref, hyp, same) => {
-    pairs.push({ ref, hyp, same });
-  });
-  return pairs.reverse();
+  const counts = measureEdits(reference, hypothesis, (i, j) =>
+    pairs.push([i, j])
+  );
+  return { ...counts, pairs: pairs.reverse() };
 }
 
 function measureEdits(reference, hypothesis, onPair) {

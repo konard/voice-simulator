@@ -538,8 +538,10 @@ pub fn inverse_filter(
         let period = rate / f0;
         let length = round(2.0 * period);
         let source = block(&d, centre, length);
-        let h = harmonics(
+        let window = windows.entry(length).or_insert_with(|| hann(length));
+        let h = windowed_harmonics(
             &source,
+            window,
             rate,
             f0,
             10.min(math::floor(0.45 * rate / f0) as usize),
@@ -549,7 +551,7 @@ pub fn inverse_filter(
         measures[2][t] = fit as f32;
         measures[3][t] = oq as f32;
         measures[6][t] = h.get(1).map_or(f32::NAN, |h2| (h[0] - h2) as f32);
-        let speech = harmonics(&block(&raw, centre, length), rate, f0, 2);
+        let speech = windowed_harmonics(&block(&raw, centre, length), window, rate, f0, 2);
         measures[5][t] = (speech[0] - speech[1]) as f32;
         let flow = block(&g, centre, length);
         let (mut lo, mut hi, mut peak) = (f64::INFINITY, f64::NEG_INFINITY, 0.0_f64);

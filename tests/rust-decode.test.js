@@ -74,8 +74,8 @@ function packet(
       template.classMask,
       template.compared.length
     );
-    template.compared.forEach((cell) =>
-      values.push(cell, template.values[cell])
+    template.compared.forEach((cell, position) =>
+      values.push(cell, template.values[position])
     );
   }
   for (const lang of languages) {

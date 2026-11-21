@@ -7,6 +7,20 @@ import type {
   AccentOption,
   AccentSettings,
 } from './accent/index.js';
+import type { ArticulationOffsets } from './session/voice-session.js';
+
+export {
+  createVoiceSession,
+  copyVoice,
+  type ArticulationOffsets,
+  type VoiceSession,
+  type VoiceSessionOptions,
+  type VoiceSessionState,
+  type VoiceSessionEvents,
+  type VoiceSessionPass,
+  type VoiceSessionRecognition,
+  type CopyVoiceResult,
+} from './session/voice-session.js';
 
 export type LanguageCode = 'en' | 'ru' | 'hi' | 'zh';
 export {
@@ -476,6 +490,7 @@ export type GPUDeviceLike = object;
 
 export interface SynthesizeOptions {
   lang?: 'auto' | LanguageCode;
+  articulationOffsets?: ArticulationOffsets;
   /** Accent of the language (code, region such as "GB", {code, strength} or definition). */
   accent?: AccentOption;
   /** Strength of the accent when the option has none, 0 to 1 (default 1). */
@@ -1043,6 +1058,7 @@ export declare function planUtterance(
   ipa: string | object[],
   options?: {
     head?: HeadConfig;
+    articulationOffsets?: ArticulationOffsets;
     language?: string;
     frameRate?: number;
     /** Measured duration of every token in seconds (null keeps the plan's). */
@@ -3663,6 +3679,7 @@ export interface VoiceFile {
   preset?: Exclude<HeadPresetName, 'any'>;
   /** Accent the voice speaks with; an accent option wins over it. */
   accent?: AccentCode | { code: AccentCode; strength?: number };
+  articulationOffsets?: ArticulationOffsets;
   anatomy?: HeadConfig;
   folds?: HeadConfig;
   breathing?: HeadConfig;
@@ -3677,6 +3694,7 @@ export interface Voice {
   accent: AccentCode | { code: AccentCode; strength: number } | null;
   /** Complete: the values the file leaves out come from the preset or the defaults. */
   head: HeadConfig;
+  articulationOffsets?: ArticulationOffsets;
   /** The problems clamped or skipped by a lenient load. */
   warnings: string[];
 }
@@ -3696,7 +3714,12 @@ export declare function loadVoice(
 /** A voice file object: only the values that differ from the preset, or all with `full`. */
 export declare function saveVoice(
   voice:
-    | (Partial<Pick<Voice, 'name' | 'description' | 'preset' | 'accent'>> & {
+    | (Partial<
+        Pick<
+          Voice,
+          'name' | 'description' | 'preset' | 'accent' | 'articulationOffsets'
+        >
+      > & {
         head: HeadConfig;
       })
     | HeadConfig,
@@ -4550,6 +4573,9 @@ export {
 export {
   recognize,
   createRecognizer,
+  recognizeAsync,
+  type RecognitionEngine,
+  type RecognitionEngineOptions,
   RECOGNITION_LEVELS,
   levelForTier,
   RecognitionError,
@@ -4562,3 +4588,7 @@ export {
   type Recognizer,
   type ModeSpan as RecognizedModeSpan,
 } from './recognition/recognizer.js';
+
+export declare function createRecognitionEngine(
+  options?: import('./recognition/recognizer.js').RecognitionEngineOptions
+): Promise<import('./recognition/recognizer.js').RecognitionEngine>;

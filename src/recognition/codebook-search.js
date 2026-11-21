@@ -61,7 +61,7 @@ export function envelopeCost(envelope, stored, row) {
 // eslint-disable-next-line max-lines-per-function
 export function attachQuery(book) {
   const { tree, key, envelope: stored } = book;
-  const queryKey = new Float64Array(6);
+  const keyScratch = new Float64Array(6);
   const indices = new Int32Array(64),
     distances = new Float64Array(64);
   const stack = new Int32Array(64),
@@ -71,7 +71,7 @@ export function attachQuery(book) {
     levels = new Float64Array(24);
   // Keep scratch and heap updates local on the allocation-free frame path.
   /* eslint-disable max-statements, complexity, max-lines-per-function */
-  book.query = (envelope, k = 16, out) => {
+  book.query = (envelope, k = 16, out, packedKey) => {
     if (
       !envelope ||
       envelope.length !== 24 ||
@@ -100,7 +100,7 @@ export function attachQuery(book) {
     if (!present) {
       return out;
     }
-    envelopeKey(envelope, queryKey);
+    const queryKey = packedKey ?? envelopeKey(envelope, keyScratch);
     let count = 0,
       visits = 0,
       pending = 1;

@@ -11,7 +11,8 @@ import {
 import { RADIATION_BAFFLE } from '../acoustics/radiation.js';
 import { lpcBurg, lpcLevel } from './lpc.js';
 import { CHANNEL_DEFAULTS } from '../articulation/plan.js';
-import { renderPlan } from '../acoustics/voice.js';
+import { TRACT_SECTIONS } from '../articulation/tract-shape.js';
+import { renderPlan, STEADY_TRACT } from '../acoustics/voice.js';
 import { whisperReferenceLpc } from './whisper-spectrum.js';
 
 export const L0 = 16.5;
@@ -45,7 +46,75 @@ export const RESPONSE_GRID = Float64Array.from(
 const COSINES = Float64Array.from({ length: 96 }, (_, i) =>
   Math.cos((Math.PI * (1 + Math.floor(i / 16)) * ((i % 16) + 0.5)) / 16)
 );
-let sectionScratch = new Float64Array(44 * 4);
+const SECTION_WIDTH = 5;
+const FREQUENCY_WIDTH = 6;
+let sectionScratch = new Float64Array(44 * SECTION_WIDTH);
+
+function frequencyTerms(frequencies, dx, out) {
+  for (let i = 0; i < frequencies.length; i++) {
+    const f = frequencies[i];
+    const omega = 2 * Math.PI * f;
+    const phase = (omega * dx) / SPEED_OF_SOUND;
+    const reactance = omega * WALL_MASS - WALL_STIFFNESS / omega;
+    const at = i * FREQUENCY_WIDTH;
+    out[at] = omega;
+    out[at + 1] = Math.cos(phase);
+    out[at + 2] = Math.sin(phase);
+    out[at + 3] = viscothermalLoss(f, 1, LOSS_SHAPE);
+    out[at + 4] = -reactance;
+    out[at + 5] = 1 / (WALL_RESISTANCE ** 2 + reactance ** 2);
+  }
+}
+
+/** Reuse frequency terms across the rows of one codebook. */
+export function createTractResponse(frequencies, dsp) {
+  const width = frequencies.length * FREQUENCY_WIDTH;
+  const terms = new Float64Array(width);
+  const wasm = dsp && prepareTractKernel(dsp, frequencies.length, width);
+  let previousStep;
+  return (areas, length, out) => {
+    const step = length / areas.length;
+    if (step !== previousStep) {
+      frequencyTerms(frequencies, step, terms);
+      wasm?.terms.view().set(terms);
+      previousStep = step;
+    }
+    if (wasm) {
+      fillSections(areas, length, wasm.sections.view());
+      wasm.compute(areas, out);
+      return out;
+    }
+    return evaluateTractResponse(areas, length, terms, out);
+  };
+}
+
+function prepareTractKernel({ allocate, response }, count, width) {
+  const terms = allocate(Float64Array, width);
+  const sections = allocate(Float64Array, TRACT_SECTIONS * SECTION_WIDTH);
+  const power = allocate(Float64Array, count);
+  return {
+    terms,
+    sections,
+    compute(areas, out) {
+      const lipArea = Math.max(areas[areas.length - 1], 1e-3);
+      const error = response(
+        terms.pointer,
+        count,
+        sections.pointer,
+        areas.length,
+        lipArea,
+        power.pointer
+      );
+      if (error) {
+        throw new Error(`Rust codebook tract response failed (${error})`);
+      }
+      const values = power.view();
+      for (let i = 0; i < count; i++) {
+        out[i] = -10 * Math.log10(values[i]);
+      }
+    },
+  };
+}
 
 /**
  * The oral chain of tubeTransfer, evaluated with scalar complex arithmetic.
@@ -53,56 +122,81 @@ let sectionScratch = new Float64Array(44 * 4);
  * No branches; the codebook measures open velums with the renderer.
  */
 export function tractResponse(areas, length, frequencies, out) {
+  return createTractResponse(frequencies)(areas, length, out);
+}
+
+function fillSections(areas, length, s) {
   const n = areas.length;
-  if (!n || !(length > 0) || out.length < frequencies.length) {
-    throw new RangeError('Invalid tract response dimensions');
-  }
-  if (sectionScratch.length < n * 4) {
-    sectionScratch = new Float64Array(n * 4);
-  }
-  const s = sectionScratch;
   const dx = length / n;
   const rhoC = AIR_DENSITY * SPEED_OF_SOUND;
   for (let j = 0; j < n; j++) {
     const area = Math.max(areas[j], 1e-4);
-    s[j * 4] = area;
-    s[j * 4 + 1] = dx / Math.sqrt(area);
-    s[j * 4 + 2] = (constrictionLoss(area) * 44) / n;
-    s[j * 4 + 3] = 2 * Math.sqrt(Math.PI * area) * dx * rhoC;
+    const offset = j * SECTION_WIDTH;
+    s[offset] = area;
+    s[offset + 1] = dx / Math.sqrt(area);
+    s[offset + 2] = (constrictionLoss(area) * 44) / n;
+    s[offset + 3] = 2 * Math.sqrt(Math.PI * area) * dx * rhoC;
+    s[offset + 4] = 1 / area;
   }
+}
+
+function evaluateTractResponse(areas, length, terms, out) {
+  const n = areas.length;
+  const bins = terms.length / FREQUENCY_WIDTH;
+  if (!n || !(length > 0) || out.length < bins) {
+    throw new RangeError('Invalid tract response dimensions');
+  }
+  if (sectionScratch.length < n * SECTION_WIDTH) {
+    sectionScratch = new Float64Array(n * SECTION_WIDTH);
+  }
+  const s = sectionScratch;
+  fillSections(areas, length, s);
   const lipArea = Math.max(areas[n - 1], 1e-3);
   const radius = Math.sqrt(lipArea / Math.PI);
-  for (let i = 0; i < frequencies.length; i++) {
-    const f = frequencies[i];
-    const omega = 2 * Math.PI * f;
-    const phase = (omega * dx) / SPEED_OF_SOUND;
-    const co = Math.cos(phase),
-      si = Math.sin(phase);
-    const loss = viscothermalLoss(f, 1, LOSS_SHAPE);
-    const reactance = omega * WALL_MASS - WALL_STIFFNESS / omega;
-    const wallScale = 1 / (WALL_RESISTANCE ** 2 + reactance ** 2);
+  for (let i = 0; i < bins; i++) {
+    const at = i * FREQUENCY_WIDTH;
+    const omega = terms[at],
+      co = terms[at + 1],
+      si = terms[at + 2],
+      loss = terms[at + 3],
+      negativeReactance = terms[at + 4],
+      wallScale = terms[at + 5];
     const ka = (omega * radius) / SPEED_OF_SOUND;
     let pr = (((ka * ka) / 2) * (0.5 + 0.5 * RADIATION_BAFFLE)) / lipArea;
     let pi = (ka * (0.61 + 0.24 * RADIATION_BAFFLE)) / lipArea;
     let ur = 1,
       ui = 0;
     for (let j = n - 1; j >= 0; j--) {
-      const offset = j * 4;
+      const offset = j * SECTION_WIDTH;
       const area = s[offset];
+      const inverseArea = s[offset + 4];
       const scale = s[offset + 3] * wallScale;
       const yr = WALL_RESISTANCE * scale,
-        yi = -reactance * scale;
+        yi = negativeReactance * scale;
       ur += pr * yr - pi * yi;
       ui += pr * yi + pi * yr;
-      const e = Math.exp(loss * s[offset + 1] + s[offset + 2]);
-      const ch = (e + 1 / e) / 2,
-        sh = (e - 1 / e) / 2;
+      const attenuation = loss * s[offset + 1] + s[offset + 2];
+      let ch, sh;
+      if (attenuation >= 0 && attenuation <= 1 / 16) {
+        // The first omitted terms are below 3e-19 for cosh and 2e-21
+        // for sinh on this interval. This also avoids cancellation near zero.
+        const x = attenuation * attenuation;
+        ch = 1 + x * (1 / 2 + x * (1 / 24 + x * (1 / 720 + x / 40320)));
+        sh =
+          attenuation *
+          (1 + x * (1 / 6 + x * (1 / 120 + x * (1 / 5040 + x / 362880))));
+      } else {
+        const e = Math.exp(attenuation);
+        const inverse = 1 / e;
+        ch = (e + inverse) / 2;
+        sh = (e - inverse) / 2;
+      }
       const cr = co * ch,
         ci = si * sh;
       const br = co * sh,
         bi = si * ch;
-      const nextPr = cr * pr - ci * pi + (br * ur - bi * ui) / area;
-      const nextPi = cr * pi + ci * pr + (br * ui + bi * ur) / area;
+      const nextPr = cr * pr - ci * pi + (br * ur - bi * ui) * inverseArea;
+      const nextPi = cr * pi + ci * pr + (br * ui + bi * ur) * inverseArea;
       const nextUr = (br * pr - bi * pi) * area + cr * ur - ci * ui;
       ui = (br * pi + bi * pr) * area + cr * ui + ci * ur;
       pr = nextPr;
@@ -213,6 +307,8 @@ export function steadyPlan(state, duration = 0.08) {
     duration,
     segments: [],
     tokens: [],
+    // Trills move the tract even when all plan channels are constant.
+    [STEADY_TRACT]: !values.trill,
     channels: Object.fromEntries(
       Object.entries(values).map(([name, value]) => [
         name,
@@ -222,29 +318,64 @@ export function steadyPlan(state, duration = 0.08) {
   };
 }
 
+const RENDERED_ORDER = 18;
+const RENDERED_RATE = 16000;
+
 /** Order 18, with Burg LPC for voice and five-frame autocorrelation for whisper. */
+function renderedPredictor(state, head, engine) {
+  const samples = renderPlan(steadyPlan(state), {
+    head,
+    solver: 'waveguide',
+    sampleRate: RENDERED_RATE,
+    seed: 1,
+    engine,
+  });
+  const a = new Float64Array(RENDERED_ORDER),
+    k = new Float64Array(RENDERED_ORDER);
+  const power = state.whisper
+    ? whisperReferenceLpc(samples, RENDERED_RATE, RENDERED_ORDER, a, k)
+    : steadyBurg(samples, a, k);
+  return { a, power };
+}
+
 export function renderedResponse(
   state,
   head,
   out,
-  frequencies = RESPONSE_GRID
+  frequencies = RESPONSE_GRID,
+  engine = 'js'
 ) {
-  const samples = renderPlan(steadyPlan(state), {
-    head,
-    solver: 'waveguide',
-    sampleRate: 16000,
-    seed: 1,
-    engine: 'js',
-  });
-  const a = new Float64Array(18),
-    k = new Float64Array(18);
-  const power = state.whisper
-    ? whisperReferenceLpc(samples, 16000, 18, a, k)
-    : steadyBurg(samples, a, k);
+  const { a, power } = renderedPredictor(state, head, engine);
   for (let i = 0; i < out.length; i++) {
-    out[i] = lpcLevel(a, 18, power, frequencies[i], 16000);
+    out[i] = lpcLevel(a, RENDERED_ORDER, power, frequencies[i], RENDERED_RATE);
   }
   return out;
+}
+
+/** Reuse the predictor's frequency terms across the rows of one codebook. */
+export function createRenderedResponse(head, frequencies, engine) {
+  const order = RENDERED_ORDER;
+  const cosines = new Float64Array(frequencies.length * order);
+  const sines = new Float64Array(cosines.length);
+  for (let bin = 0; bin < frequencies.length; bin++) {
+    const omega = (2 * Math.PI * frequencies[bin]) / RENDERED_RATE;
+    for (let i = 0; i < order; i++) {
+      cosines[bin * order + i] = Math.cos(omega * (i + 1));
+      sines[bin * order + i] = Math.sin(omega * (i + 1));
+    }
+  }
+  return (state, out) => {
+    const { a, power } = renderedPredictor(state, head, engine);
+    for (let bin = 0; bin < frequencies.length; bin++) {
+      let re = 1,
+        im = 0;
+      for (let i = 0; i < order; i++) {
+        re += a[i] * cosines[bin * order + i];
+        im -= a[i] * sines[bin * order + i];
+      }
+      out[bin] = 10 * Math.log10(power / (re * re + im * im));
+    }
+  };
 }
 
 /** Burg envelope of the last 40 ms, pre-emphasis 0.97. */

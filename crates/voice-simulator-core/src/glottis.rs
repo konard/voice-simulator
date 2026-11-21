@@ -588,8 +588,13 @@ impl Glottis {
             self.falsetto_smoothed = voiced;
         }
         voiced = self.tilt(voiced, dt, effort);
-        let opening = max(0.0, math::sin(2.0 * PI * t));
         let modulation = (if voicing > 0.1 {
+            // The closing half-cycle contributes zero after clamping.
+            let opening = if t > 0.5 && t <= 1.0 {
+                0.0
+            } else {
+                max(0.0, math::sin(2.0 * PI * t))
+            };
             0.3 + 0.7 * opening * min(1.0, voicing)
         } else {
             1.0

@@ -57,7 +57,7 @@
     "changeset:version": "node scripts/changeset-version.mjs",
     "changeset:publish": "changeset publish",
     "changeset:status": "changeset status --since=origin/main",
-    "build:wasm": "node scripts/build-wasm.mjs"
+    "build:wasm": "node scripts/build-wasm.mjs && node scripts/build-recognition-models.mjs"
   },
   "keywords": [
     "voice",

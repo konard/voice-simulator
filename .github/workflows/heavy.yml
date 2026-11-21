@@ -16,6 +16,7 @@ on:
           - roundtrip
           - copy
           - performance
+          - recognition-performance
           - gpu
           - lexicon
         default: all
@@ -27,6 +28,13 @@ on:
         description: Largest number of items each test may process (empty = no limit)
         type: string
         default: ''
+      recognition-runner:
+        description: Recognition performance runner (x64 cold CLI reference or four-core ARM64)
+        type: choice
+        options:
+          - ubuntu-24.04
+          - ubuntu-24.04-arm
+        default: ubuntu-24.04
 
 # Least-privilege default; jobs escalate individually when needed.
 permissions:
@@ -42,14 +50,14 @@ env:
 jobs:
   heavy:
     name: Heavy checks
-    runs-on: ubuntu-24.04
-    # The step budget below (18000s = 300 min) owns the deadline; this cap is
-    # the backstop behind it, below the 360-minute limit of hosted runners,
-    # leaving 30 minutes for checkout, install and the artifact upload. See
-    # docs/CI-TIMEOUT-BUDGETS.md.
+    runs-on: ${{ inputs.suite == 'recognition-performance' && inputs.recognition-runner || 'ubuntu-24.04' }}
+    # The step budgets below own the deadlines. This cap is the backstop
+    # behind the longest one (300 minutes), leaving 30 minutes for checkout,
+    # install and artifact upload. See docs/CI-TIMEOUT-BUDGETS.md.
     timeout-minutes: 330
     concurrency:
-      group: check-${{ github.workflow }}-${{ github.ref }}-${{ inputs.suite }}
+      # Corpus limits and performance runner types can run independently.
+      group: check-${{ github.workflow }}-${{ github.ref }}-${{ inputs.suite == 'recognition' && inputs.limit != '' && format('recognition-{0}', inputs.limit) || inputs.suite == 'recognition-performance' && format('recognition-performance-{0}', inputs.recognition-runner) || inputs.suite }}
       cancel-in-progress: true
     permissions:
       contents: read
@@ -110,6 +118,12 @@ jobs:
           bash scripts/run-with-budget-warning.sh 360 "wasm build" node scripts/build-wasm.mjs --require --threads
           bash scripts/run-with-budget-warning.sh 120 "CLI build" cargo build --release --locked -p voice-simulator-cli
 
+      - name: Build scalar recognition WebAssembly
+        if: inputs.suite == 'recognition-performance'
+        run: |
+          node scripts/build-wasm.mjs --require --check-size
+          node scripts/build-recognition-models.mjs
+
       - name: Restore the speech dataset cache
         uses: actions/cache@v6
         with:
@@ -137,22 +151,53 @@ jobs:
         run: deno run -A scripts/gpu-adapter.mjs
 
       - name: Run heavy checks
+        if: inputs.suite != 'recognition-performance'
         shell: bash
         env:
           SUITE: ${{ inputs.suite }}
           LIMIT: ${{ inputs.limit }}
+          # The inherited golden inversion gate names a decision for its
+          # author. Keep the same branch policy as the regular PR tests.
+          BLOCKED_GATES: ${{ inputs.suite == 'recognition' && github.ref_type == 'branch' && github.ref_name != github.event.repository.default_branch && 'warn' || '' }}
           REQUIRE_GPU: ${{ (inputs.suite == 'gpu' || inputs.suite == 'all') && '1' || '' }}
           REQUIRE_WASM: ${{ (inputs.suite == 'performance' || inputs.suite == 'all') && '1' || '' }}
           REQUIRE_CLI: ${{ (inputs.suite == 'performance' || inputs.suite == 'all') && '1' || '' }}
           REQUIRE_THREADS_WASM: ${{ (inputs.suite == 'performance' || inputs.suite == 'all') && '1' || '' }}
         run: |
-          LIMIT_FLAG=''
+          limit_flags=()
           if [[ "$LIMIT" =~ ^[0-9]+$ ]]; then
-            LIMIT_FLAG="--limit $LIMIT"
+            limit_flags=(--limit "$LIMIT")
           fi
-          # LIMIT_FLAG is unquoted on purpose: empty, or a flag and a number.
-          # shellcheck disable=SC2086
-          bash scripts/run-with-budget-warning.sh 18000 "Heavy checks" npm run test:heavy -- --suite "$SUITE" $LIMIT_FLAG
+          command=(npm run test:heavy -- --suite "$SUITE" "${limit_flags[@]}")
+          if [[ "$SUITE" == recognition ]]; then
+            core=$(awk '/^Cpus_allowed_list:/ {split($2, allowed, /[-,]/); print allowed[1]}' /proc/self/status)
+            bash scripts/run-with-budget-warning.sh 5400 "Heavy checks" taskset -c "$core" "${command[@]}"
+          else
+            bash scripts/run-with-budget-warning.sh 18000 "Heavy checks" "${command[@]}"
+          fi
+
+      - name: Verify recognition performance targets
+        if: inputs.suite == 'recognition-performance'
+        env:
+          HEAVY_OUT: reports/heavy
+          REQUIRE_WASM: '1'
+          # The default runner is the reference for absolute single-core time.
+          RECOGNITION_COLD_REPORT_ONLY: ${{ inputs.recognition-runner == 'ubuntu-24.04-arm' && '1' || '' }}
+        run: |
+          mkdir -p "$HEAVY_OUT"
+          lscpu > "$HEAVY_OUT/recognition-runner-cpu.txt"
+          if [[ -r /sys/fs/cgroup/cpu.max ]]; then
+            cat /sys/fs/cgroup/cpu.max >> "$HEAVY_OUT/recognition-runner-cpu.txt"
+          fi
+          node --test tests/heavy/performance-recognition.test.js
+
+      - name: Profile recognition stages
+        if: ${{ !cancelled() && inputs.suite == 'recognition-performance' }}
+        run: |
+          mkdir -p reports/heavy
+          node scripts/profile-recognition.mjs js > reports/heavy/recognition-stages-js.md
+          node scripts/profile-recognition.mjs rust > reports/heavy/recognition-stages-rust.md
+          node --input-type=module -e 'import { profileSingleCoreRecognition } from "./experiments/issue-77-single-core.mjs"; process.stdout.write(profileSingleCoreRecognition())' > reports/heavy/recognition-stages-cold.txt
 
       - name: Upload reports
         if: ${{ !cancelled() }}
@@ -172,9 +217,8 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     concurrency:
-      # The suite keeps runs of different suites on one branch from
-      # cancelling each other's gate, as the heavy job's group does.
-      group: check-${{ github.workflow }}-${{ github.ref }}-${{ inputs.suite }}-pipeline-status
+      # Match the heavy job so independent runs cannot cancel each other's gate.
+      group: check-${{ github.workflow }}-${{ github.ref }}-${{ inputs.suite == 'recognition' && inputs.limit != '' && format('recognition-{0}', inputs.limit) || inputs.suite == 'recognition-performance' && format('recognition-performance-{0}', inputs.recognition-runner) || inputs.suite }}-pipeline-status
       cancel-in-progress: true
     # A status function is required: without one the gate inherits the
     # implicit "every dependency succeeded" condition and is skipped in

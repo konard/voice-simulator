@@ -311,11 +311,23 @@ function pushBreathyRelease(segments, token, context) {
 }
 
 function pushVowel(segments, token, index, context) {
+  const vowel = vowelTarget(token);
+  const target = vowelChannels(token);
+  const offsets = context.articulationOffsets;
+  const key = token.phoneme.symbol;
+  if (offsets && Object.hasOwn(offsets, key)) {
+    vowel.rounding = Math.max(vowel.rounding, target.rounding ?? 0);
+    for (const name of ['height', 'backness', 'rounding']) {
+      const value = offsets[key][name] ?? 0;
+      vowel[name] = Math.max(0, Math.min(1, vowel[name] + value));
+    }
+    target.rounding = vowel.rounding;
+  }
   segments.push({
     token,
     kind: 'vowel',
-    vowel: vowelTarget(token),
-    target: vowelChannels(token),
+    vowel,
+    target,
     duration: tokenParts(token, index, context)[0],
   });
 }
@@ -397,6 +409,7 @@ function pushPause(segments, token, context) {
 export function buildSegments(tokens, options) {
   const context = {
     tokens,
+    articulationOffsets: options.articulationOffsets,
     language: options.language,
     table: options.durationTable ?? durationTable(options.language),
     duration: {
@@ -1217,30 +1230,24 @@ const SPEED_KEYS = Object.freeze(
 );
 
 /**
- * Time constant and lead of every articulator, with the overrides: the
+ * Time constant and lead of an articulator, with the overrides: the
  * head's articulationSpeed and speed<Channel> divide both,
  * coarticulation multiplies the lead, and roundingLead and velumLead set
  * the leads of rounding, lipProtrusion and velum.
  */
-function articulatorsFor(head, overrides = {}) {
-  return Object.fromEntries(
-    ARTICULATOR_NAMES.map((name) => {
-      const lead = head[HEAD_LEADS[name]];
-      const entry = {
-        ...ARTICULATORS[name],
-        ...(lead === undefined ? {} : { lead }),
-        ...overrides[name],
-      };
-      const speed = head.articulationSpeed * (head[SPEED_KEYS[name]] ?? 1);
-      return [
-        name,
-        {
-          timeConstant: entry.timeConstant / speed,
-          lead: (entry.lead * head.coarticulation) / speed,
-        },
-      ];
-    })
-  );
+function articulatorFor(name, head, override) {
+  const defaults = ARTICULATORS[name];
+  const lead = head[HEAD_LEADS[name]];
+  const entry = {
+    timeConstant: defaults.timeConstant,
+    lead: lead === undefined ? defaults.lead : lead,
+    ...override,
+  };
+  const speed = head.articulationSpeed * (head[SPEED_KEYS[name]] ?? 1);
+  return {
+    timeConstant: entry.timeConstant / speed,
+    lead: (entry.lead * head.coarticulation) / speed,
+  };
 }
 
 /**
@@ -1267,8 +1274,6 @@ function accentedHead(options) {
 function smoothSource(channels, pitchShape, segments, head, frameRate) {
   const speed = head.articulationSpeed;
   for (const name of [
-    'loudness',
-    'f0',
     'lungPressure',
     'adduction',
     'effort',
@@ -1276,13 +1281,9 @@ function smoothSource(channels, pitchShape, segments, head, frameRate) {
     'whisper',
   ]) {
     const timeConstant = SOURCE_TIME_CONSTANTS[name] / speed;
-    if (name === 'f0') {
-      smoothPitch(channels.f0, pitchShape, timeConstant, frameRate);
-    } else {
-      smoothChannel(channels[name], timeConstant, frameRate);
-    }
+    smoothChannel(channels[name], timeConstant, frameRate);
   }
-  addVibrato(channels.f0, head, frameRate);
+  smoothLoudnessAndPitch(channels, pitchShape, head, frameRate);
   fillFinalCreak(channels.creak, channels.f0, segments, head, frameRate);
   for (const name of PHONATION_CHANNELS) {
     smoothChannel(
@@ -1291,6 +1292,22 @@ function smoothSource(channels, pitchShape, segments, head, frameRate) {
       frameRate
     );
   }
+}
+
+function smoothLoudnessAndPitch(channels, pitchShape, head, frameRate) {
+  const speed = head.articulationSpeed;
+  smoothChannel(
+    channels.loudness,
+    SOURCE_TIME_CONSTANTS.loudness / speed,
+    frameRate
+  );
+  smoothPitch(
+    channels.f0,
+    pitchShape,
+    SOURCE_TIME_CONSTANTS.f0 / speed,
+    frameRate
+  );
+  addVibrato(channels.f0, head, frameRate);
 }
 
 /**
@@ -1311,11 +1328,64 @@ function smoothSource(channels, pitchShape, segments, head, frameRate) {
  *   of its sounds. Every token gets its `mode` (see ./modes.js).
  */
 export function planUtterance(ipa, options = {}) {
+  return makePlan(ipa, options, accentedHead(options), false);
+}
+
+/** Plan the channels read by the recognizer's phone templates. */
+export function createRecognitionTemplatePlanner(options, sampledChannels) {
+  const config = accentedHead(options);
+  return (ipa) => makePlan(ipa, options, config, true, sampledChannels);
+}
+
+function articulationOnlyNames(sampledChannels, segments) {
+  // Procedural sounds may read additional articulation channels.
+  if (
+    sampledChannels?.every((name) => Object.hasOwn(ARTICULATORS, name)) &&
+    !segments.some((segment) => segment.soundOf)
+  ) {
+    return ARTICULATOR_NAMES.filter((name) => sampledChannels.includes(name));
+  }
+}
+
+function planArticulation(
+  segments,
+  options,
+  head,
+  frameRate,
+  frameCount,
+  names = ARTICULATOR_NAMES
+) {
+  const channels = {};
+  const targetOptions = { ...options, head };
+  for (const name of names) {
+    const targets = channelTargets(segments, name, targetOptions);
+    const { timeConstant, lead } = articulatorFor(
+      name,
+      head,
+      options.articulators?.[name]
+    );
+    channels[name] = approachTargets(
+      targets,
+      timeConstant,
+      frameRate,
+      DYNAMICS_ORDER,
+      {
+        lead,
+        limited: LIMITED_LEADS.has(name),
+        frameCount,
+        fallback: DEFAULTS[name],
+      }
+    );
+  }
+  return channels;
+}
+
+function makePlan(ipa, options, config, recognitionTemplate, sampledChannels) {
   const parsed = typeof ipa === 'string' ? parseIpa(ipa) : null;
   const tokens = parsed ? parsed.tokens : ipa;
   assignTokenModes(tokens, options.modes ?? parsed?.modes ?? []);
   realiseEmotions(tokens);
-  const { head, table, tunes } = accentedHead(options);
+  const { head, table, tunes } = config;
   const frameRate = options.frameRate ?? CONTROL_RATE;
   const segments = buildSegments(tokens, {
     rate: head.speechRate,
@@ -1327,6 +1397,7 @@ export function planUtterance(ipa, options = {}) {
     head,
     tunes,
     breaths: options.breaths,
+    articulationOffsets: options.articulationOffsets,
   });
   if (options.durations) {
     applyDurations(segments, tokens, options.durations);
@@ -1343,23 +1414,17 @@ export function planUtterance(ipa, options = {}) {
     speech
   );
   markSegmentEffort(segments, effort, frameRate);
-  const channels = {};
-  const articulators = articulatorsFor(head, options.articulators);
-  for (const name of ARTICULATOR_NAMES) {
-    const targets = channelTargets(segments, name, { ...options, head });
-    const { timeConstant, lead } = articulators[name];
-    channels[name] = approachTargets(
-      targets,
-      timeConstant,
-      frameRate,
-      DYNAMICS_ORDER,
-      {
-        lead,
-        limited: LIMITED_LEADS.has(name),
-        frameCount,
-        fallback: DEFAULTS[name],
-      }
-    );
+  const subset = articulationOnlyNames(sampledChannels, segments);
+  const channels = planArticulation(
+    segments,
+    options,
+    head,
+    frameRate,
+    frameCount,
+    subset
+  );
+  if (subset) {
+    return { tokens, segments, frameRate, frameCount, channels };
   }
   for (const name of Object.keys(SOURCE_TIME_CONSTANTS)) {
     channels[name] = new Float32Array(frameCount);
@@ -1370,10 +1435,6 @@ export function planUtterance(ipa, options = {}) {
   applyModeGains(channels.loudness, modes, frameRate);
   channels.effort.set(effort);
   const whisper = fillWhisper(channels.whisper, segments, frameRate);
-  for (let frame = 0; frame < frameCount; frame++) {
-    channels.tension[frame] = TENSION_PER_DB * effort[frame];
-  }
-  const phonationTension = fillPhonation(channels, segments, head, frameRate);
   const pitchShape = fillPitch(
     channels.f0,
     speech,
@@ -1386,6 +1447,14 @@ export function planUtterance(ipa, options = {}) {
   applySoundPitch(channels.f0, segments, head, frameRate, effort);
   applySoundHarmonics(channels, segments, head, frameRate);
   lowerBreathyReleases(channels.f0, segments, frameRate);
+  if (recognitionTemplate) {
+    smoothLoudnessAndPitch(channels, pitchShape, head, frameRate);
+    return { tokens, segments, frameRate, frameCount, channels };
+  }
+  for (let frame = 0; frame < frameCount; frame++) {
+    channels.tension[frame] = TENSION_PER_DB * effort[frame];
+  }
+  const phonationTension = fillPhonation(channels, segments, head, frameRate);
   const steps = {
     loudness: channels.loudness,
     effort,

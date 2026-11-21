@@ -10,7 +10,7 @@ import {
   textToIpa,
   tokenize,
 } from '../../src/index.js';
-import { alignedTokenPairs } from '../../src/metrics/text.js';
+import { alignEdits } from '../../src/metrics/text.js';
 
 export const sentences = JSON.parse(
   readFileSync(
@@ -62,10 +62,11 @@ function compareStress(reference, hypothesis) {
     words.map(({ ipa }) => tokenize(ipa, 'phone').join(' '));
   let hits = 0;
   let count = 0;
-  for (const { ref, hyp } of alignedTokenPairs(
+  const { pairs } = alignEdits(
     phones(reference),
     phones(hypothesis)
-  )) {
+  );
+  for (const [ref, hyp] of pairs) {
     const expected = reference[ref].syllables;
     const actual = hypothesis[hyp].syllables;
     if (expected.length >= 2 && expected.length === actual.length) {
@@ -78,13 +79,13 @@ function compareStress(reference, hypothesis) {
 }
 
 function compareTimes(reference, hypothesis) {
-  const pairs = alignedTokenPairs(
+  const { pairs } = alignEdits(
     reference.map(({ ipa }) => ipa),
     hypothesis.map(({ ipa }) => ipa)
   );
   const errors = [];
-  for (const { ref, hyp, same } of pairs) {
-    if (same) {
+  for (const [ref, hyp] of pairs) {
+    if (reference[ref].ipa === hypothesis[hyp].ipa) {
       errors.push(
         1000 * Math.abs(reference[ref].start - hypothesis[hyp].start),
         1000 * Math.abs(reference[ref].end - hypothesis[hyp].end)

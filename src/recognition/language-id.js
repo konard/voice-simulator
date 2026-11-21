@@ -81,7 +81,7 @@ function rankedScores(span, languages) {
     .sort((a, b) => b.score - a.score);
 }
 
-function lexicalLanguage(span, input, ranked) {
+function lexicalLanguage(span, input, ranked, kernels) {
   const tokens = input.tokens.slice(span.from, span.to);
   // Reinsert boundaries: otherwise adjacent words silently become one word
   // during the lexical comparison, especially for timed input.
@@ -102,6 +102,7 @@ function lexicalLanguage(span, input, ranked) {
     let cost;
     ipaToText(ipa, {
       language,
+      kernels,
       trace: (event) => {
         cost = event.cost;
       },
@@ -187,7 +188,7 @@ export function identifyLanguage(ipa, options = {}) {
       (ranked[0].score - ranked[1].score) / (span.to - span.from) <
         LANGUAGE_MODEL.lexicalGap
     ) {
-      span.language = lexicalLanguage(span, input, ranked);
+      span.language = lexicalLanguage(span, input, ranked, options.kernels);
       lexicalChecks++;
     }
   }

@@ -66,8 +66,9 @@ describe('IPA to text', () => {
     it(`${language}: finds all 5000 vocabulary pronunciations and at least 90% of spellings`, () => {
       const start = globalThis.performance.now();
       const lexicon = getLexicon(language);
+      const root = lexicon.root;
       const coldMs = globalThis.performance.now() - start;
-      expect(getLexicon(language)).toBe(lexicon);
+      expect(getLexicon(language).root).toBe(root);
       expect(coldMs < 3000).toBe(true);
       let sameSounds = 0;
       let spelling = 0;

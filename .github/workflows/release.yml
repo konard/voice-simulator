@@ -578,6 +578,9 @@ jobs:
       - name: Run Rust tests
         run: bash scripts/run-with-budget-warning.sh 90 "cargo test" cargo test --workspace --locked
 
+      - name: Test native recognition with Rayon
+        run: cargo test --locked -p voice-simulator-cli --features parallel
+
       - name: Build the WebAssembly engine
         run: bash scripts/run-with-budget-warning.sh 90 "wasm build" node scripts/build-wasm.mjs --require --check-size
 
@@ -595,10 +598,32 @@ jobs:
         # developer machine, issue 23), hence the larger budget.
         # tests/performance-smoke.test.js (issue 31) runs in npm test too,
         # but only here with the engine: Rust is not slower than JavaScript.
-        run: bash scripts/run-with-budget-warning.sh 90 "Rust parity tests" node --test tests/engine-parity.test.js tests/engine-features.test.js tests/rust-parity.test.js tests/rust-recognition.test.js tests/rust-inverse-filter.test.js tests/rust-modes.test.js tests/rust-whisper.test.js tests/rust-landmarks.test.js tests/rust-inversion.test.js tests/rust-decode.test.js tests/rust-rescoring.test.js tests/rust-recognizer.test.js tests/voice-fit-rust-parity.test.js tests/rust-waveguide.test.js tests/rust-fdtd.test.js tests/rust-render-job.test.js tests/engine-layout.test.js tests/engine.test.js tests/engine-worker.test.js tests/engine-size.test.js tests/adaptive-stream.test.js tests/stream-governor.test.js tests/performance-smoke.test.js
+        run: bash scripts/run-with-budget-warning.sh 90 "Rust parity tests" node --test tests/engine-parity.test.js tests/engine-features.test.js tests/rust-parity.test.js tests/rust-recognition.test.js tests/rust-inverse-filter.test.js tests/rust-modes.test.js tests/rust-whisper.test.js tests/rust-landmarks.test.js tests/rust-inversion.test.js tests/rust-decode.test.js tests/rust-rescoring.test.js tests/rust-recognizer.test.js tests/voice-fit-rust-parity.test.js tests/voice-session-rust-parity.test.js tests/rust-waveguide.test.js tests/rust-fdtd.test.js tests/rust-render-job.test.js tests/engine-layout.test.js tests/engine.test.js tests/engine-worker.test.js tests/engine-size.test.js tests/adaptive-stream.test.js tests/stream-governor.test.js tests/performance-smoke.test.js
 
-      # The publishing jobs run the same check after they download the file.
-      - name: Check the package lists the engine
+      - name: Set up Bun for recognition parity
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: '1.x'
+
+      - name: Set up Deno for recognition parity
+        uses: denoland/setup-deno@22d081ff2d3a40755e97629de92e3bcbfa7cf2ed # v2.0.5
+        with:
+          deno-version: v2.x
+
+      - name: Verify recognition kernels and workers across runtimes
+        env:
+          REQUIRE_WASM: '1'
+        run: |
+          tests=(tests/recognition-parity.test.js tests/recognition-pool.test.js)
+          node --test "${tests[@]}"
+          bun test --timeout 30000 "${tests[@]}"
+          deno test -A --frozen "${tests[@]}"
+
+      - name: Build recognition language models
+        run: node scripts/build-recognition-models.mjs
+
+      # The publishing jobs run the same check after they download the files.
+      - name: Check the package lists the engine and recognition models
         run: bash scripts/run-with-budget-warning.sh 30 "package file check" node scripts/check-package-files.mjs
 
       # The threads build (issue 24) needs the nightly compiler that
@@ -620,11 +645,23 @@ jobs:
           REQUIRE_THREADS_WASM: '1'
         run: bash scripts/run-with-budget-warning.sh 300 "threads tests" node --test --test-timeout=240000 tests/rust-threads.test.js
 
-      - name: Upload the WebAssembly engine
+      - name: Upload the WebAssembly engine and recognition data
         uses: ./.github/actions/artifact-transport
         with:
           name: voice-simulator-wasm
-          path: src/engine/voice-simulator.wasm
+          # The artifact transport resolves literal paths without its glob matcher.
+          path: |
+            src/engine/voice-simulator.wasm
+            src/engine/voice-simulator-oral-codebook.bin
+            src/engine/voice-simulator-word-transitions-en.bin.gz
+            src/engine/voice-simulator-word-transitions-ru.bin.gz
+            src/engine/voice-simulator-word-transitions-hi.bin.gz
+            src/engine/voice-simulator-word-transitions-zh.bin.gz
+            src/engine/voice-simulator-recognition-models.json.gz
+            src/engine/voice-simulator-recognition-en.json.gz
+            src/engine/voice-simulator-recognition-ru.json.gz
+            src/engine/voice-simulator-recognition-hi.json.gz
+            src/engine/voice-simulator-recognition-zh.json.gz
           if-no-files-found: error
           retention-days: 14
 
@@ -915,9 +952,8 @@ jobs:
           pattern: voice-simulator-wasm
           path: src/engine
 
-      # `npm pack --dry-run` lists src/engine/voice-simulator.wasm, or the
-      # release stops before it publishes a package without the engine.
-      - name: Check the package lists the engine
+      # Stop the release if npm would omit any of the downloaded files.
+      - name: Check the package lists the engine and recognition models
         run: bash scripts/run-with-budget-warning.sh 60 "package file check" node scripts/check-package-files.mjs
 
       - name: Publish to npm
@@ -1057,9 +1093,8 @@ jobs:
           pattern: voice-simulator-wasm
           path: src/engine
 
-      # `npm pack --dry-run` lists src/engine/voice-simulator.wasm, or the
-      # release stops before it publishes a package without the engine.
-      - name: Check the package lists the engine
+      # Stop the release if npm would omit any of the downloaded files.
+      - name: Check the package lists the engine and recognition models
         run: bash scripts/run-with-budget-warning.sh 60 "package file check" node scripts/check-package-files.mjs
 
       - name: Publish to npm

@@ -53,23 +53,23 @@ pub(crate) fn integrate(x: &[f64], leak: f64) -> Vec<f64> {
         .collect()
 }
 pub(crate) fn filter(x: &[f64], a: &[f64]) -> Vec<f64> {
-    let mut y = x.to_vec();
-    for n in 0..x.len() {
-        for k in 0..a.len().min(n) {
-            y[n] += a[k] * x[n - k - 1];
-        }
-    }
-    y
+    x.iter()
+        .enumerate()
+        .map(|(n, &sample)| {
+            let history = &x[n.saturating_sub(a.len())..n];
+            a.iter()
+                .zip(history.iter().rev())
+                .fold(sample, |sum, (coefficient, past)| sum + coefficient * past)
+        })
+        .collect()
 }
-fn predictor(x: &[f64], w: &[f64], p: usize) -> Vec<f64> {
+pub(crate) fn predictor(x: &[f64], w: &[f64], p: usize) -> Vec<f64> {
     let first = w.iter().position(|v| *v != 0.0).unwrap_or(w.len());
     let x: Vec<f64> = (first..x.len()).map(|n| x[n] * w[n]).collect();
     let mut a = vec![0.0; p];
     let mut r = vec![0.0; p + 1];
-    for lag in 0..=p {
-        for n in 0..x.len().saturating_sub(lag) {
-            r[lag] += x[n] * x[n + lag];
-        }
+    for (lag, correlation) in r.iter_mut().enumerate().take(x.len()) {
+        *correlation = x.iter().zip(&x[lag..]).map(|(a, b)| a * b).sum();
     }
     let mut error = r[0];
     if error <= 0.0 {
@@ -116,7 +116,11 @@ impl Fft {
                 .map(|k| sin(2.0 * PI * k as f64 / size as f64))
                 .collect(),
             reversed: (0..size)
-                .map(|i| i.reverse_bits() >> (usize::BITS - bits))
+                .map(|i| {
+                    i.reverse_bits()
+                        .checked_shr(usize::BITS - bits)
+                        .unwrap_or(0)
+                })
                 .collect(),
         }
     }
@@ -131,15 +135,24 @@ impl Fft {
         let mut width = 1;
         while width < self.size {
             let step = self.size / (2 * width);
-            for start in (0..self.size).step_by(2 * width) {
-                for k in 0..width {
+            for (real, imaginary) in re
+                .chunks_exact_mut(2 * width)
+                .zip(im.chunks_exact_mut(2 * width))
+            {
+                let (near_re, far_re) = real.split_at_mut(width);
+                let (near_im, far_im) = imaginary.split_at_mut(width);
+                for (k, ((a_re, a_im), (b_re, b_im))) in near_re
+                    .iter_mut()
+                    .zip(near_im)
+                    .zip(far_re.iter_mut().zip(far_im))
+                    .enumerate()
+                {
                     let (wr, wi) = (self.cos[k * step], sign * self.sin[k * step]);
-                    let (a, b) = (start + k, start + k + width);
-                    let (tr, ti) = (re[b] * wr - im[b] * wi, re[b] * wi + im[b] * wr);
-                    re[b] = re[a] - tr;
-                    im[b] = im[a] - ti;
-                    re[a] += tr;
-                    im[a] += ti;
+                    let (tr, ti) = (*b_re * wr - *b_im * wi, *b_re * wi + *b_im * wr);
+                    *b_re = *a_re - tr;
+                    *b_im = *a_im - ti;
+                    *a_re += tr;
+                    *a_im += ti;
                 }
             }
             width *= 2;
@@ -152,6 +165,81 @@ impl Fft {
         }
     }
 }
+
+/// Transform a real signal, apply a function to its symmetric power
+/// spectrum, then transform back using two half-length complex FFTs.
+pub(crate) struct RealPower {
+    fft: Fft,
+    input: (Vec<f64>, Vec<f64>),
+    output: (Vec<f64>, Vec<f64>),
+    twiddles: Vec<(f64, f64)>,
+}
+
+impl RealPower {
+    pub(crate) fn new(size: usize) -> Self {
+        let half = size / 2;
+        Self {
+            fft: Fft::new(half),
+            input: (vec![0.0; half], vec![0.0; half]),
+            output: (vec![0.0; half], vec![0.0; half]),
+            twiddles: (0..=half / 2)
+                .map(|k| {
+                    let angle = 2.0 * PI * k as f64 / size as f64;
+                    (cos(angle), sin(angle))
+                })
+                .collect(),
+        }
+    }
+
+    pub(crate) fn size(&self) -> usize {
+        self.input.0.len() * 2
+    }
+
+    pub(crate) fn apply(
+        &mut self,
+        mut signal: impl Iterator<Item = f64>,
+        spectrum: impl Fn(f64, f64, f64, f64) -> (f64, f64),
+    ) {
+        let (real, imaginary) = &mut self.input;
+        for (even, odd) in real.iter_mut().zip(imaginary.iter_mut()) {
+            *even = signal.next().unwrap_or_default();
+            *odd = signal.next().unwrap_or_default();
+        }
+        self.fft.transform(real, imaginary, false);
+        let half = real.len();
+        let (even, odd) = &mut self.output;
+        for (k, &(cosine, sine)) in self.twiddles.iter().enumerate() {
+            let mirror = (half - k) & (half - 1);
+            let (ar, ai) = (real[k], imaginary[k]);
+            let (br, bi) = (real[mirror], imaginary[mirror]);
+            let even_re = (ar + br) * 0.5;
+            let even_im = (ai - bi) * 0.5;
+            let odd_re = (ai + bi) * 0.5;
+            let odd_im = (br - ar) * 0.5;
+            let shifted_re = cosine * odd_re + sine * odd_im;
+            let shifted_im = cosine * odd_im - sine * odd_re;
+            // The two symmetric bins k and k + N/2 supply the mean and
+            // half-difference for the packed even/odd inverse transform.
+            let (mean, difference) = spectrum(even_re, even_im, shifted_re, shifted_im);
+            even[k] = mean - sine * difference;
+            odd[k] = cosine * difference;
+            if mirror != k {
+                even[mirror] = mean + sine * difference;
+                odd[mirror] = odd[k];
+            }
+        }
+        self.fft.transform(even, odd, true);
+    }
+
+    pub(crate) fn at(&self, index: usize) -> f64 {
+        if index.is_multiple_of(2) {
+            self.output.0[index / 2]
+        } else {
+            self.output.1[index / 2]
+        }
+    }
+}
+
 pub(crate) struct Correlation {
     fft: Fft,
     w: Vec<f64>,
@@ -205,15 +293,25 @@ impl Correlation {
     }
 }
 pub(crate) fn harmonics(x: &[f64], rate: f64, f0: f64, count: usize) -> Vec<f64> {
-    let w = hann(x.len());
+    windowed_harmonics(x, &hann(x.len()), rate, f0, count)
+}
+
+pub(crate) fn windowed_harmonics(
+    x: &[f64],
+    window: &[f64],
+    rate: f64,
+    f0: f64,
+    count: usize,
+) -> Vec<f64> {
     (1..=count)
         .map(|k| {
             let angle = 2.0 * PI * f0 * k as f64 / rate;
             let (cr, ci) = (cos(angle), sin(angle));
             let (mut wr, mut wi, mut re, mut im) = (1.0, 0.0, 0.0, 0.0);
-            for n in 0..x.len() {
-                re += x[n] * w[n] * wr;
-                im -= x[n] * w[n] * wi;
+            for (&sample, &weight) in x.iter().zip(window) {
+                let weighted = sample * weight;
+                re += weighted * wr;
+                im -= weighted * wi;
                 let next = wr * cr - wi * ci;
                 wi = wi * cr + wr * ci;
                 wr = next;
@@ -223,10 +321,8 @@ pub(crate) fn harmonics(x: &[f64], rate: f64, f0: f64, count: usize) -> Vec<f64>
         .collect()
 }
 pub(crate) struct Cpp {
-    fft: Fft,
+    power: RealPower,
     w: Vec<f64>,
-    re: Vec<f64>,
-    im: Vec<f64>,
     rate: f64,
     min: f64,
     max: f64,
@@ -236,10 +332,8 @@ impl Cpp {
         let length = round(0.04 * rate);
         let size = length.next_power_of_two();
         Self {
-            fft: Fft::new(size),
+            power: RealPower::new(size),
             w: hann(length),
-            re: vec![0.0; size],
-            im: vec![0.0; size],
             rate,
             min,
             max,
@@ -247,21 +341,24 @@ impl Cpp {
     }
     pub(crate) fn measure(&mut self, x: &[f64], centre: usize) -> f64 {
         let start = centre as isize - (self.w.len() / 2) as isize;
-        self.re.fill(0.0);
-        self.im.fill(0.0);
-        for n in 0..self.w.len() {
-            self.re[n] = sample(x, start + n as isize) * self.w[n];
-        }
-        self.fft.transform(&mut self.re, &mut self.im, false);
-        for k in 0..self.re.len() {
-            self.re[k] = 10.0 * log10(self.re[k] * self.re[k] + self.im[k] * self.im[k] + 1e-12);
-            self.im[k] = 0.0;
-        }
-        self.fft.transform(&mut self.re, &mut self.im, true);
+        self.power.apply(
+            self.w
+                .iter()
+                .enumerate()
+                .map(|(n, weight)| sample(x, start + n as isize) * weight),
+            |a, b, c, d| {
+                let (real, imaginary) = (a + c, b + d);
+                let positive = 10.0 * log10(real * real + imaginary * imaginary + 1e-12);
+                let (real, imaginary) = (a - c, b - d);
+                let negative = 10.0 * log10(real * real + imaginary * imaginary + 1e-12);
+                ((positive + negative) * 0.5, (positive - negative) * 0.5)
+            },
+        );
         let first = math::ceil(0.001 * self.rate) as usize;
-        let last = (self.re.len() / 2).min(math::floor(self.rate / self.min) as usize);
+        let last = (self.power.size() / 2).min(math::floor(self.rate / self.min) as usize);
         let (mut sx, mut sy, mut sxx, mut sxy) = (0.0, 0.0, 0.0, 0.0);
-        for (q, &value) in self.re.iter().enumerate().take(last + 1).skip(first) {
+        for q in first..=last {
+            let value = self.power.at(q);
             let v = q as f64;
             sx += v;
             sy += value;
@@ -273,11 +370,11 @@ impl Cpp {
         let intercept = (sy - slope * sx) / count;
         let mut peak = math::ceil(self.rate / self.max) as usize;
         for q in peak + 1..=last {
-            if self.re[q] > self.re[peak] {
+            if self.power.at(q) > self.power.at(peak) {
                 peak = q;
             }
         }
-        self.re[peak] - intercept - slope * peak as f64
+        self.power.at(peak) - intercept - slope * peak as f64
     }
 }
 pub(crate) fn hnr(x: &[f64], centre: usize, period: f64, w: &[f64]) -> f64 {
