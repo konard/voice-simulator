@@ -4581,6 +4581,7 @@ export {
   type RecognitionOptions,
   type RecognitionResult,
   type RecognizedWord,
+  type RecognizedSegment,
   type RecognizedSyllable,
   type RecognitionLevel,
   type RecognitionEvents,
@@ -4591,3 +4592,16 @@ export {
 export declare function createRecognitionEngine(
   options?: import('./recognition/recognizer.js').RecognitionEngineOptions
 ): Promise<import('./recognition/recognizer.js').RecognitionEngine>;
+
+export {
+  copyRecording,
+  renderScore,
+  toScore,
+  type CopyOptions,
+  type CopyResult,
+  type CopyMetrics,
+  type CopyScore,
+  type CopyWarning,
+  type ScoreTrack,
+  type ScoreRenderOptions,
+} from './session/copy.js';

@@ -657,9 +657,22 @@ Measured with `node experiments/issue-58-rtf.mjs` (10 s of speech, one thread): 
 
 `inverseFilter(frames, { pitch: trackPitch(frames) })` estimates vocal-fold flow, closure times, Rd/OQ/NAQ, H1-H2, HNR and CPP on finished speech. See the [batch source-analysis API and limits](docs/INVERSE-FILTER.md).
 
+## Copying a voice
+
+Copy only your own voice, a voice you have permission to copy, or a public-domain recording. See [Not goals](docs/VISION.md#not-goals).
+
+```sh
+voice-simulator copy speech.wav -o copy.wav --score speech-score.json
+voice-simulator copy --from-score speech-score.json -o replay.wav
+```
+
+`copyRecording(samples, sampleRate, options)` analyzes mono speech and synthesizes a copy from its recognized phonemes, timing, pitch, loudness, and measured voice modes. It returns the audio, a voice file, the editable score, the recognition result, and acoustic metrics. Pass `voice` or `--voice voice.json` to reuse a fitted voice. Choose a synthesis tier with `tier` or `--tier`. Set one of `impose.durations`, `impose.pitch`, `impose.loudness`, or `impose.modes` to `false` to use the corresponding synthesis defaults. Optional `refine: true` or `--refine` searches for a closer articulation. The JavaScript option `refineBudget` limits its draft renders and defaults to 200.
+
+Use `renderScore(score, options)` or `--from-score` after editing the score's `segments` (IPA and times in seconds), `f0` (Hz, with zero marking unvoiced frames), or `loudness` (linear gain). `toScore(plan, recognition, voice)` also exports an existing synthesis plan. Copy quality depends on recognition and voice fitting. The CLI prints recognized text and measured differences, with `--json` for structured output.
+
 ## Recognition (speech to text)
 
-`recognize` accepts mono samples and returns IPA, text, timed words and syllables, language shares, and speech modes. See the [recognition API and examples](docs/RECOGNIZER.md).
+`recognize` accepts mono samples and returns IPA, text, timed words and syllables, language shares, and speech modes. Pass `segments: true` to `recognize` or `createRecognizer` to include timed phonemes as `{ ipa, start, end, confidence }`. Times are in seconds. See the [recognition API and examples](docs/RECOGNIZER.md).
 
 ### Recognition engines and workers
 

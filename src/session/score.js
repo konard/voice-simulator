@@ -1,0 +1,188 @@
+/** Portable copy-synthesis scores and their renderer. Unlicense. */
+import { renderPlan } from '../acoustics/voice.js';
+import { interpolateGaps, planUtterance } from '../articulation/plan.js';
+import { formatIpa, parseIpa } from '../ipa/parse.js';
+import { DEFAULT_AUDIO_TIER } from '../perf/lod.js';
+import { toPlanModes } from '../recognition/modes.js';
+import { getAudioTier } from '../synthesize.js';
+import { loadVoice } from '../voice-file.js';
+import { groupPhones, sampleTrack, warpPlan } from './warp.js';
+
+const FORMAT = 'voice-simulator/score';
+export const REFINED_CHANNELS = ['height', 'backness', 'rounding'];
+const isPhone = (token) => token.kind === 'vowel' || token.kind === 'consonant';
+
+export function planRecording(ipa, language, voice, modes) {
+  return planProsody(parseIpa(ipa).tokens, language, voice, modes);
+}
+
+function planProsody(tokens, language, voice, modes) {
+  const { head, articulationOffsets } = loadVoice(voice);
+  const plan = planUtterance(tokens, {
+    head: { ...head, vibrato: 0 },
+    language,
+    articulationOffsets,
+    modes: toPlanModes(modes.filter(({ from, to }) => from >= 0 && to > from)),
+  });
+  return { ...plan, modes };
+}
+
+export function toScore(plan, recognition, voice) {
+  const { channels, frameRate: rate } = plan;
+  return {
+    format: FORMAT,
+    version: 1,
+    duration: plan.duration,
+    voice,
+    language: recognition.languages[0]?.language,
+    ipa: formatIpa(plan.tokens),
+    words: recognition.words,
+    segments: groupPhones(plan.segments).map(({ token, start, end }) => ({
+      ipa: formatIpa([token]),
+      start,
+      end,
+    })),
+    f0: {
+      rate,
+      values: Array.from(channels.f0, (hz, i) =>
+        channels.voicing[i] > 0.05 && channels.whisper[i] < 1 ? hz : 0
+      ),
+    },
+    loudness: { rate, values: Array.from(channels.loudness) },
+    modes: plan.modes,
+  };
+}
+
+function editedTokens(score) {
+  const original = parseIpa(score.ipa ?? '').tokens;
+  if (original.filter(isPhone).length !== score.segments.length) {
+    let wordIndex = 0;
+    const parts = score.segments.map((segment, i) => {
+      if (
+        i &&
+        segment.start >= (score.words[wordIndex + 1]?.start ?? Infinity)
+      ) {
+        wordIndex++;
+        return ` ${segment.ipa}`;
+      }
+      return segment.ipa;
+    });
+    return parseIpa(parts.join('')).tokens;
+  }
+  let i = 0;
+  return original.map((token) => {
+    if (!isPhone(token)) {
+      return token;
+    }
+    const { ipa } = score.segments[i++];
+    if (ipa === formatIpa([token])) {
+      return token;
+    }
+    const parsed = parseIpa(ipa);
+    if (
+      parsed.unknown.length ||
+      parsed.tokens.length !== 1 ||
+      !isPhone(parsed.tokens[0])
+    ) {
+      throw new TypeError(`Expected one IPA phoneme, got ${ipa}`);
+    }
+    return { ...parsed.tokens[0], word: token.word };
+  });
+}
+
+function setTrack(plan, key, track) {
+  if (
+    !track ||
+    !Number.isFinite(track.rate) ||
+    track.rate <= 0 ||
+    !Array.isArray(track.values) ||
+    !track.values.length ||
+    track.values.some((value) => !Number.isFinite(value) || value < 0)
+  ) {
+    throw new TypeError(`Invalid score channel ${key}`);
+  }
+  const values =
+    key === 'f0'
+      ? interpolateGaps(
+          Float32Array.from(track.values, (hz) => hz || NaN),
+          plan.head.pitch
+        )
+      : track.values;
+  const channel = plan.channels[key];
+  for (let i = 0; i < channel.length; i++) {
+    if (key !== 'f0' || plan.channels.whisper[i] < 1) {
+      channel[i] = sampleTrack(values, (i * track.rate) / plan.frameRate);
+    }
+  }
+}
+
+function checkScore(score) {
+  if (
+    score?.format !== FORMAT ||
+    score.version !== 1 ||
+    !Number.isFinite(score.duration) ||
+    score.duration < 0 ||
+    !Array.isArray(score.segments) ||
+    !Array.isArray(score.words) ||
+    !Array.isArray(score.modes)
+  ) {
+    throw new TypeError('Expected a version 1 voice-simulator score');
+  }
+  let previousStart = 0;
+  for (const { ipa, start, end } of score.segments) {
+    if (
+      typeof ipa !== 'string' ||
+      !Number.isFinite(start) ||
+      !Number.isFinite(end) ||
+      start < previousStart ||
+      end <= start
+    ) {
+      throw new TypeError(
+        'Score segments need IPA and ordered, positive times'
+      );
+    }
+    previousStart = start;
+  }
+}
+
+export function scorePlan(score) {
+  checkScore(score);
+  const base = planProsody(
+    editedTokens(score),
+    score.language,
+    score.voice,
+    score.modes
+  );
+  const plan = warpPlan(base, score.segments, {
+    byIndex: true,
+    clamp: false,
+    duration: score.planDuration ?? score.duration,
+  });
+  setTrack(plan, 'f0', score.f0);
+  setTrack(plan, 'loudness', score.loudness);
+  for (const key of REFINED_CHANNELS) {
+    if (score.articulation?.[key]) {
+      setTrack(plan, key, score.articulation[key]);
+    }
+  }
+  return plan;
+}
+
+export function renderScore(score, options = {}) {
+  const plan = scorePlan(score);
+  const tier = getAudioTier(
+    options.tier ?? score.render?.tier ?? DEFAULT_AUDIO_TIER
+  );
+  const sampleRate =
+    options.sampleRate ?? score.render?.sampleRate ?? tier.sampleRate;
+  const seed = options.seed ?? score.render?.seed ?? 1;
+  const draft = renderPlan(plan, {
+    ...tier,
+    sampleRate,
+    seed,
+    engine: options.engine,
+  });
+  const samples = new Float32Array(Math.round(score.duration * sampleRate));
+  samples.set(draft.subarray(0, samples.length));
+  return { samples, sampleRate, duration: samples.length / sampleRate };
+}

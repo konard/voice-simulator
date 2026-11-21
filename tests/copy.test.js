@@ -1,0 +1,243 @@
+/** Copy-synthesis regressions at the 16 kHz minimal tier. Unlicense. */
+import assert from 'node:assert/strict';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { describe, it } from 'test-anywhere';
+import { runCli } from '../bin/voice-simulator.js';
+import { applyPitch, repairOctaves } from '../src/session/copy-prosody.js';
+import { groupPhones, warpPlan } from '../src/session/warp.js';
+import {
+  copyRecording,
+  encodeWav,
+  errorRate,
+  f0Errors,
+  pitchTrack,
+  planUtterance,
+  presetHeadConfig,
+  renderPlan,
+  renderScore,
+  saveVoice,
+  synthesize,
+  toScore,
+} from '../src/index.js';
+import { rmsLevel } from '../src/metrics/distortion.js';
+
+const sampleRate = 16000;
+const options = { tier: 'minimal', sampleRate, seed: 1, engine: 'js' };
+const draft = { sampleRate, sections: 22, seed: 1, engine: 'js' };
+const near = (actual, expected, limit) =>
+  assert.ok(
+    Number.isFinite(actual) && Math.abs(actual - expected) <= limit,
+    `${actual} outside ${expected} ± ${limit}`
+  );
+
+function vowelWithPitch() {
+  const plan = planUtterance('aː', {
+    head: { pitch: 125, vibrato: 0 },
+    durations: [0.85],
+  });
+  for (let i = 0; i < plan.frameCount; i++) {
+    plan.channels.f0[i] = 100 + (50 * i) / (plan.frameCount - 1);
+  }
+  return plan;
+}
+
+function medianPitch(samples) {
+  const values = pitchTrack(samples, sampleRate)
+    .filter((hz) => hz > 0)
+    .sort();
+  return values[Math.floor(values.length / 2)];
+}
+
+describe('copy controls', () => {
+  it('keeps measured durations', () => {
+    const plan = planUtterance('ˈmama');
+    const measurements = groupPhones(plan.segments).map(
+      ({ token, start, end }) => ({
+        ipa: token.symbol,
+        start: start * 1.5,
+        end: end * 1.5,
+      })
+    );
+    const result = groupPhones(warpPlan(plan, measurements).segments);
+    for (const [index, group] of result.entries()) {
+      near(
+        group.end - group.start,
+        measurements[index].end - measurements[index].start,
+        1 / plan.frameRate
+      );
+    }
+    const stop = planUtterance('ta');
+    const stretched = warpPlan(
+      stop,
+      groupPhones(stop.segments).map(({ token, start, end }) => ({
+        ipa: token.symbol,
+        start: 10 * start,
+        end: 10 * end,
+      }))
+    );
+    near(
+      stretched.segments.find(({ kind }) => kind === 'release').duration,
+      stop.segments.find(({ kind }) => kind === 'release').duration,
+      1e-9
+    );
+    assert.equal(stretched.warnings.length, 2);
+  });
+
+  it('imposes the measured pitch', () => {
+    const source = vowelWithPitch();
+    const target = planUtterance('aː', {
+      head: source.head,
+      durations: [0.85],
+    });
+    const original = renderPlan(source, draft);
+    applyPitch(target, original, sampleRate, []);
+    const copy = renderPlan(target, draft);
+    const measurement = f0Errors(
+      pitchTrack(original, sampleRate),
+      pitchTrack(copy, sampleRate)
+    );
+    near(measurement.rmseCents, 0, 30);
+  });
+
+  it('repairs an octave jump', () => {
+    const values = new Float32Array(64).fill(120);
+    values.fill(240, 24, 29);
+    assert.deepEqual(
+      repairOctaves(values, 200),
+      new Float32Array(64).fill(120)
+    );
+  });
+
+  it('raises a vowel by 6 dB when the loudness doubles', () => {
+    const plan = vowelWithPitch();
+    const source = renderPlan(plan, draft);
+    plan.channels.loudness = plan.channels.loudness.map((value) => 2 * value);
+    const louder = renderPlan(plan, draft);
+    near(20 * Math.log10(rmsLevel(louder) / rmsLevel(source)), 6, 1);
+  });
+
+  it('round-trips a score and replays pitch edits', () => {
+    const plan = vowelWithPitch();
+    const score = toScore(
+      plan,
+      { words: [], languages: [] },
+      saveVoice(plan.head)
+    );
+    const output = renderScore(score, options);
+    const decoded = JSON.parse(JSON.stringify(score));
+    assert.deepEqual(renderScore(decoded, options).samples, output.samples);
+    decoded.f0.values = decoded.f0.values.map((value) => value * 2 ** (2 / 12));
+    const higher = renderScore(decoded, options);
+    near(
+      12 * Math.log2(medianPitch(higher.samples) / medianPitch(output.samples)),
+      2,
+      0.2
+    );
+    decoded.segments[0].ipa = 'i';
+    assert.notDeepEqual(renderScore(decoded, options).samples, higher.samples);
+  });
+});
+
+describe('copy synthesis', () => {
+  it('copies a synthetic original', () => {
+    const source = synthesize('Hello world.', {
+      ...options,
+      head: presetHeadConfig('female'),
+    });
+    const result = copyRecording(source.samples, sampleRate, {
+      ...options,
+      languages: ['en'],
+    });
+    const phonemeError = errorRate(
+      source.ipa,
+      result.recognition.ipa,
+      'phone'
+    ).rate;
+    assert.deepEqual(
+      renderScore(JSON.parse(JSON.stringify(result.score)), options).samples,
+      result.samples
+    );
+    const { rmseCents } = result.metrics.f0;
+    const { timingError } = result.metrics;
+    assert.ok(
+      phonemeError === 0 &&
+        rmseCents !== null &&
+        rmseCents <= 30 &&
+        timingError !== null &&
+        timingError <= 10,
+      JSON.stringify({
+        recognized: result.recognition.text,
+        phonemeError,
+        rmseCents,
+        timingError,
+      })
+    );
+  });
+
+  it('CLI copy writes audio and a score', async () => {
+    const directory = mkdtempSync(join(tmpdir(), 'voice-copy-'));
+    try {
+      const input = join(directory, 'in.wav');
+      const output = join(directory, 'out.wav');
+      const replay = join(directory, 'replay.wav');
+      const score = join(directory, 'score.json');
+      const voice = join(directory, 'voice.json');
+      const original = renderPlan(vowelWithPitch(), draft);
+      writeFileSync(input, encodeWav(original, sampleRate));
+      writeFileSync(voice, JSON.stringify(saveVoice({ pitch: 125 })));
+      const errors = [];
+      const logs = [];
+      const io = {
+        stderr: (line) => errors.push(line),
+        stdout: (line) => logs.push(line),
+      };
+      const args = [
+        '--tier',
+        'minimal',
+        '--sample-rate',
+        '16000',
+        '--engine',
+        'js',
+      ];
+      assert.equal(
+        await runCli(
+          [
+            'copy',
+            input,
+            '-o',
+            output,
+            '--score',
+            score,
+            '--voice',
+            voice,
+            '--languages',
+            'en',
+            '--json',
+            ...args,
+          ],
+          io
+        ),
+        0,
+        errors.join('\n')
+      );
+      assert.equal(
+        JSON.parse(readFileSync(score)).format,
+        'voice-simulator/score'
+      );
+      assert.ok(JSON.parse(logs.at(-1)).metrics);
+      assert.equal(
+        await runCli(
+          ['copy', '--from-score', score, '-o', replay, '--engine', 'js'],
+          io
+        ),
+        0,
+        errors.join('\n')
+      );
+      assert.deepEqual(readFileSync(output), readFileSync(replay));
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
+  });
+});
