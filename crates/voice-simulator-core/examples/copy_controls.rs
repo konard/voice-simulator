@@ -10,9 +10,7 @@ fn main() {
             _ => 120.0 + i as f32 * 0.25,
         })
         .collect();
-    let audio: Vec<_> = (0..640)
-        .map(|i| ((i % 31) as f32 - 15.0) / 128.0)
-        .collect();
+    let audio: Vec<_> = (0..640).map(|i| ((i % 31) as f32 - 15.0) / 128.0).collect();
     let (levels, threshold) = rms_track(&audio, 16000.0, 11, 200.0);
     println!("{:?}", pitch_contour(&f0, 200.0, 130.0));
     println!("{levels:?}");

@@ -661,14 +661,7 @@ Measured with `node experiments/issue-58-rtf.mjs` (10 s of speech, one thread): 
 
 Copy only your own voice, a voice you have permission to copy, or a public-domain recording. See [Not goals](docs/VISION.md#not-goals).
 
-```sh
-voice-simulator copy speech.wav -o copy.wav --score speech-score.json
-voice-simulator copy --from-score speech-score.json -o replay.wav
-```
-
-`copyRecording(samples, sampleRate, options)` analyzes mono speech and synthesizes a copy from its recognized phonemes, timing, pitch, loudness, and measured voice modes. It returns the audio, a voice file, the editable score, the recognition result, and acoustic metrics. Pass `voice` or `--voice voice.json` to reuse a fitted voice. Choose a synthesis tier with `tier` or `--tier`. Set one of `impose.durations`, `impose.pitch`, `impose.loudness`, or `impose.modes` to `false` to use the corresponding synthesis defaults. Optional `refine: true` or `--refine` searches for a closer articulation. The JavaScript option `refineBudget` limits its draft renders and defaults to 200.
-
-Use `renderScore(score, options)` or `--from-score` after editing the score's `segments` (IPA and times in seconds), `f0` (Hz, with zero marking unvoiced frames), or `loudness` (linear gain). `toScore(plan, recognition, voice)` also exports an existing synthesis plan. Copy quality depends on recognition and voice fitting. The CLI prints recognized text and measured differences, with `--json` for structured output.
+Run `voice-simulator copy speech.wav -o copy.wav --score speech-score.json` to save simulated audio and its editable IPA score. See the [copy synthesis guide](docs/COPY-SYNTHESIS.md) for replay and options.
 
 ## Recognition (speech to text)
 
