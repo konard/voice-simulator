@@ -21,14 +21,14 @@ const golden = loadGolden().slice(0, heavyLimit(24));
 
 it('copies the golden set', async () => {
   const engine = await createEngine({ threads: 1 });
-  const rows = [];
-  for (const item of golden) {
-    rows.push(...measureTiers(item, COPY_TIERS, { engine }));
-  }
   const context = copyReportContext(
     'npm run test:heavy -- --suite copy',
     engine.name
   );
+  const rows = [];
+  for (const item of golden) {
+    rows.push(...measureTiers(item, COPY_TIERS, { engine }));
+  }
   writeReport('copy-synthesis', formatCopyReport(rows, context), {
     ...context,
     rows,

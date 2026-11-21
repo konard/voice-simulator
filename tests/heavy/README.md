@@ -33,6 +33,12 @@ Files are named `<suite>-<topic>.test.js`, for example
 
 `--suite all` (the default) runs every `*.test.js` file of this folder.
 
+The `copy` suite also checks copy synthesis at medium and studio quality,
+and measures how often per-syllable refinement reduces log-spectral
+distance. The tests write `copy-synthesis.md` and `copy-refinement.md`
+along with their JSON data. Run `node scripts/copy-report.mjs` to write
+the synthesis report independently.
+
 ## Environment
 
 [`scripts/run-heavy.mjs`](../../scripts/run-heavy.mjs) runs the files one

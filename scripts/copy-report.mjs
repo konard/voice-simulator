@@ -123,6 +123,10 @@ function main() {
 
 async function run(values) {
   const engine = await createEngine({ engine: values.engine, threads: 1 });
+  const context = copyReportContext(
+    ['node', 'scripts/copy-report.mjs', ...process.argv.slice(2)].join(' '),
+    engine.name
+  );
   const items = loadGolden().filter(
     ({ id }) => !values.id || values.id.includes(id)
   );
@@ -137,10 +141,6 @@ async function run(values) {
       console.log(JSON.stringify(row));
     }
   }
-  const context = copyReportContext(
-    ['node', 'scripts/copy-report.mjs', ...process.argv.slice(2)].join(' '),
-    engine.name
-  );
   mkdirSync(dirname(values.out), { recursive: true });
   writeFileSync(values.out, formatCopyReport(rows, context));
   writeFileSync(
