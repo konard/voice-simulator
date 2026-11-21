@@ -467,6 +467,9 @@ high-to-low band energy ratio was −26.95 dB, which crossed the relaxed edge
 threshold. The pitch tracker returned no F0 there, but 30 of 36 frames had
 normalized autocorrelation of at least 0.6. The corrected detector requires
 the absolute band ratio to pass for a similarly periodic telephone edge.
+The `weak periodic gap` test also exercises frames supplied without
+periodicity. They retain the original spectral decision, consistent with
+the older WebAssembly frame packet.
 
 `node experiments/issue-75-whisper-evidence.mjs --corpus` renders all 80
 sentences at 8 kHz in plain speech and again followed by the same sentence

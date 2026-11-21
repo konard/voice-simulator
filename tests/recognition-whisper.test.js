@@ -58,10 +58,20 @@ it('separates a weak periodic gap from a telephone whisper', () => {
     }
   );
   const frames = analyzeFrames(samples, sampleRate, { hop: 0.01 });
-  const spans = findWhisper(samples, sampleRate, frames, trackPitch(frames));
+  const pitch = trackPitch(frames);
+  const spans = findWhisper(samples, sampleRate, frames, pitch);
   const change = timeline.words[3].start;
   expect(spans.length).toBeGreaterThan(0);
   expect(spans.every(({ start }) => start >= change - 0.1)).toBe(true);
+
+  const withoutPeriodicity = { ...frames, periodicity: undefined };
+  const fallbackSpans = findWhisper(
+    samples,
+    sampleRate,
+    withoutPeriodicity,
+    pitch
+  );
+  expect(fallbackSpans.some(({ start }) => start < change - 0.1)).toBe(true);
 });
 
 it('keeps interrupted telephone whispers together without bridging periodic speech', () => {

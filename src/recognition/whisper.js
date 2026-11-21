@@ -86,6 +86,9 @@ function edgeThreshold(samples, sampleRate, threshold, start, before) {
 }
 
 function mostlyPeriodic(periodicity, from, to) {
+  if (!periodicity) {
+    return false;
+  }
   let periodic = 0;
   for (let i = from; i < to; i++) {
     periodic += Number(periodicity[i] >= PERIODIC_FRAME);
