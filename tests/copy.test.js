@@ -140,6 +140,10 @@ describe('copy controls', () => {
     const output = renderScore(score, options);
     const decoded = JSON.parse(JSON.stringify(score));
     assert.deepEqual(renderScore(decoded, options).samples, output.samples);
+    assert.deepEqual(
+      renderScore({ ...decoded, ipa: undefined }, options).samples,
+      output.samples
+    );
     decoded.f0.values = decoded.f0.values.map((value) => value * 2 ** (2 / 12));
     const higher = renderScore(decoded, options);
     near(

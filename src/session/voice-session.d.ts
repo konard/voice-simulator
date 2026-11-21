@@ -53,7 +53,6 @@ export interface VoiceSessionPass {
 }
 export interface VoiceSessionRecognition extends Omit<
   RecognitionResult,
-  RecognizedSegment,
   'voice'
 > {
   voice: VoiceFile | null;

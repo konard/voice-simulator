@@ -56,18 +56,20 @@ export function toScore(plan, recognition, voice) {
 function editedTokens(score) {
   const original = parseIpa(score.ipa ?? '').tokens;
   if (original.filter(isPhone).length !== score.segments.length) {
+    const tokens = [];
+    const pause = parseIpa('a a').tokens[1];
     let wordIndex = 0;
-    const parts = score.segments.map((segment, i) => {
-      if (
-        i &&
-        segment.start >= (score.words[wordIndex + 1]?.start ?? Infinity)
-      ) {
+    for (const segment of score.segments) {
+      const previous = wordIndex;
+      while (segment.start >= (score.words[wordIndex + 1]?.start ?? Infinity)) {
         wordIndex++;
-        return ` ${segment.ipa}`;
       }
-      return segment.ipa;
-    });
-    return parseIpa(parts.join('')).tokens;
+      if (tokens.length && wordIndex !== previous) {
+        tokens.push({ ...pause });
+      }
+      tokens.push({ ...scorePhone(segment.ipa), word: wordIndex });
+    }
+    return tokens;
   }
   let i = 0;
   return original.map((token) => {
@@ -78,16 +80,16 @@ function editedTokens(score) {
     if (ipa === formatIpa([token])) {
       return token;
     }
-    const parsed = parseIpa(ipa);
-    if (
-      parsed.unknown.length ||
-      parsed.tokens.length !== 1 ||
-      !isPhone(parsed.tokens[0])
-    ) {
-      throw new TypeError(`Expected one IPA phoneme, got ${ipa}`);
-    }
-    return { ...parsed.tokens[0], word: token.word };
+    return { ...scorePhone(ipa), word: token.word };
   });
+}
+
+function scorePhone(ipa) {
+  const { tokens, unknown } = parseIpa(ipa);
+  if (unknown.length || tokens.length !== 1 || !isPhone(tokens[0])) {
+    throw new TypeError(`Expected one IPA phoneme, got ${ipa}`);
+  }
+  return tokens[0];
 }
 
 function setTrack(plan, key, track) {

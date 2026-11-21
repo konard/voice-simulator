@@ -4569,6 +4569,7 @@ export {
   type WarpedPlan,
 } from './recognition/rescoring.js';
 
+/** Set `segments: true` to include timed phonemes in recognition results. */
 export {
   recognize,
   createRecognizer,
