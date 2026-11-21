@@ -39,6 +39,30 @@ const conditions = [
     phonotactic: 0.25,
   },
 ];
+const defaultSpanCost = {
+  name: 'default',
+  offset: 0,
+  weights: settings.weights,
+};
+const spanCostConditions = [
+  defaultSpanCost,
+  ...[-0.02, -0.01, 0.01, 0.02].map((offset) => ({
+    name: 'shifted time grid',
+    offset,
+    weights: settings.weights,
+  })),
+  {
+    name: 'no class cost',
+    offset: 0,
+    weights: { ...settings.weights, class: 0 },
+  },
+  {
+    name: 'no duration cost',
+    offset: 0,
+    weights: { ...settings.weights, duration: 0 },
+  },
+  { name: 'articulation alone', offset: 0, weights: { class: 0, duration: 0 } },
+];
 
 function weightByDuration({ spans, times }) {
   return spans.map((row, from) =>
@@ -249,15 +273,28 @@ function measureKnownSpans(analysis, templates, plan, lang) {
     inferred: tracks.articulation,
     planned: plannedTrack(tracks.articulation, plan),
   };
+  const compareCosts = process.argv.includes('--span-costs');
+  const conditions = compareCosts ? spanCostConditions : [defaultSpanCost];
   for (const [source, track] of Object.entries(articulations)) {
     const score = createSpanScorer(frames, tracks.landmarks, track);
-    console.log(
-      JSON.stringify({ lang, source, ...rankKnownPhones(spans, phones, score) })
-    );
+    for (const condition of conditions) {
+      console.log(
+        JSON.stringify({
+          lang,
+          source,
+          ...(compareCosts && {
+            name: condition.name,
+            offset: condition.offset,
+          }),
+          ...rankKnownPhones(spans, phones, score, condition),
+        })
+      );
+    }
   }
 }
 
-function rankKnownPhones(spans, phones, score) {
+function rankKnownPhones(spans, phones, score, { offset, weights }) {
+  const { duration, class: broadClass } = weights;
   const results = {
     count: spans.length,
     absent: 0,
@@ -271,8 +308,7 @@ function rankKnownPhones(spans, phones, score) {
       results.absent++;
       continue;
     }
-    const { terms } = score(start, end, phones);
-    const { duration, class: broadClass } = settings.weights;
+    const { terms } = score(start + offset, end + offset, phones);
     const costs = phones.map(
       (_, i) =>
         terms[i * 3] +
