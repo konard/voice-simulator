@@ -1,7 +1,7 @@
 //! Numeric controls for copy synthesis. Unlicense.
 use alloc::vec::Vec;
 
-use crate::math::{ceil, exp, floor, pow, round_half_up};
+use crate::math::{ceil, exp, floor, log10, log2, pow, round_half_up};
 
 /// Play a source span against its measured start and end.
 pub fn source_frame(time: f64, span: [f64; 4], frame_rate: f64) -> f64 {
@@ -77,7 +77,7 @@ pub fn repair_octaves(values: &[f32], frame_rate: f64) -> Vec<f32> {
                 return f32::NAN;
             }
             let ratio = f64::from(value) / voiced_median(values, i, radius, &mut buffer);
-            let distance = 12.0 * libm::log2(ratio);
+            let distance = 12.0 * log2(ratio);
             let octave = distance.signum();
             if distance.abs() <= 9.0 {
                 value
@@ -158,7 +158,7 @@ pub fn rms_track(samples: &[f32], rate: f64, count: usize, frame_rate: f64) -> (
                 sum + f64::from(sample) * f64::from(sample)
             });
             let level = if sum > 0.0 {
-                10.0 * libm::log10(sum / (end - start) as f64)
+                10.0 * log10(sum / (end - start) as f64)
             } else {
                 f64::NEG_INFINITY
             };
