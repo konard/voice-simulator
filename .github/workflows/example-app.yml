@@ -2,7 +2,7 @@ name: Example app
 
 on:
   pull_request:
-    types: [opened, synchronize, reopened, ready_for_review]
+    types: [opened, synchronize, reopened]
     paths:
       - 'examples/universal-app/**'
       - 'src/**'
@@ -253,8 +253,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # Iterate on #162 with Linux runners while the PR is a draft.
-        os: ${{ fromJSON(github.event.pull_request.number == 162 && github.event.pull_request.draft && '["ubuntu-24.04"]' || '["ubuntu-24.04", "macos-15", "windows-2025"]') }}
+        os: [ubuntu-24.04, macos-15, windows-2025]
     steps:
       - uses: actions/checkout@v7
         with:
@@ -367,7 +366,7 @@ jobs:
   ios-build:
     name: Build iOS app
     needs: [wasm-build]
-    if: github.event_name == 'workflow_dispatch' && github.ref_name != 'issue-75-d83d002e01c2' && vars.EXAMPLE_APP_ENABLE_IOS_BUILD == 'true'
+    if: github.event_name == 'workflow_dispatch' && vars.EXAMPLE_APP_ENABLE_IOS_BUILD == 'true'
     runs-on: macos-15
     timeout-minutes: 30
     concurrency:
