@@ -75,6 +75,8 @@ export function createLandmarkDetector(frames, options = {}) {
   let seen = 0;
   let finalized = false;
   const radius = Math.round(0.04 / frames.hop);
+  const peakLookback = Math.round(0.2 / frames.hop);
+  const burstLookback = Math.round(0.02 / frames.hop);
   const smoothing = Math.ceil(0.02 / frames.hop);
   const landmarkDelay = Math.ceil(0.07 / frames.hop);
   const time = (t) => output.startTime + t * frames.hop;
@@ -82,24 +84,26 @@ export function createLandmarkDetector(frames, options = {}) {
   const scanNuclei = createNucleusScanner(frames, output, T);
 
   function classifyPending(candidates) {
+    let next = 0;
+    let lastBurst = -Infinity;
     for (let t = output.committed; t < seen; t++) {
       let peak = -Infinity;
-      for (
-        let j = Math.max(0, t - Math.round(0.2 / frames.hop));
-        j <= Math.min(seen - 1, t + radius);
-        j++
-      ) {
+      const end = Math.min(seen - 1, t + radius);
+      for (let j = Math.max(0, t - peakLookback); j <= end; j++) {
         peak = Math.max(peak, s[j]);
       }
-      const earlier = Math.max(0, t - Math.round(0.02 / frames.hop));
+      // Candidates are in time order. Only the latest eligible burst can
+      // determine whether this frame is within the lookback window.
+      while (next < candidates.length && candidates[next].t <= t) {
+        const item = candidates[next++];
+        if (item.type === 'b+') {
+          lastBurst = item.t;
+        }
+      }
+      const earlier = Math.max(0, t - burstLookback);
       const burst =
         (rawClasses[earlier] === 0 || rawClasses[earlier] === 6) &&
-        candidates.some(
-          (item) =>
-            item.type === 'b+' &&
-            item.t <= t &&
-            (t - item.t) * frames.hop <= 0.02 + 1e-9
-        );
+        (t - lastBurst) * frames.hop <= 0.02 + 1e-9;
       rawClasses[t] = classifyFrame(frames, s, t, peak, burst, T);
     }
   }
