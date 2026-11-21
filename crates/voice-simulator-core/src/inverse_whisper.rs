@@ -15,6 +15,17 @@ const EDGE_RATIO_RISE: f64 = 5.0;
 const EDGE_RATIO_ALLOWANCE: f64 = 6.0;
 const PERIODIC_FRAME: f64 = 0.6;
 const PERIODIC_SHARE: f64 = 0.75;
+const NEARBY_RUN: f64 = 0.5;
+
+fn mostly_periodic(periodicity: &[f64], from: usize, to: usize) -> bool {
+    let count = periodicity
+        .get(from..to)
+        .unwrap_or_default()
+        .iter()
+        .filter(|&&value| value >= PERIODIC_FRAME)
+        .count();
+    count as f64 >= PERIODIC_SHARE * (to - from) as f64
+}
 
 #[derive(Clone, Copy)]
 pub struct Frame {
@@ -112,16 +123,8 @@ impl Signal<'_> {
         if !spectral_evidence {
             return None;
         }
-        if self.rate <= 8000.0 && ratio < base {
-            let count = periodicity
-                .get(from..to)
-                .unwrap_or_default()
-                .iter()
-                .filter(|&&value| value >= PERIODIC_FRAME)
-                .count();
-            if count as f64 >= PERIODIC_SHARE * (to - from) as f64 {
-                return None;
-            }
+        if self.rate <= 8000.0 && ratio < base && mostly_periodic(periodicity, from, to) {
+            return None;
         }
         Some(Span {
             start,
@@ -184,6 +187,39 @@ impl Signal<'_> {
         spans
     }
 
+    fn bridge_whisper(
+        &self,
+        runs: &[(usize, usize)],
+        decisions: &[Vec<Span>],
+        i: usize,
+        periodicity: &[f64],
+    ) -> Option<Span> {
+        let left = i.checked_sub(1)?;
+        let right = i + 1;
+        let &(left_from, left_to) = runs.get(left)?;
+        let &(right_from, right_to) = runs.get(right)?;
+        let (from, to) = runs[i];
+        let a = decisions[left].first()?;
+        let b = decisions[right].first()?;
+        if !decisions[i].is_empty()
+            || a.start != self.time(left_from)
+            || a.end != self.time(left_to).min(self.start + self.duration)
+            || b.start != self.time(right_from)
+            || b.end != self.time(right_to).min(self.start + self.duration)
+            || (from - left_to).max(right_from - to) as f64 * self.hop > NEARBY_RUN + EPS
+            || self.frames[left_to..right_from].iter().any(|f| f.f0 > 0.0)
+            || mostly_periodic(periodicity, from, to)
+        {
+            return None;
+        }
+        let combined = self.classify(left_from, right_to, None, periodicity)?;
+        Some(Span {
+            start: a.end,
+            end: b.start,
+            confidence: combined.confidence,
+        })
+    }
+
     pub fn find(&self) -> Vec<Span> {
         self.find_with_periodicity(&[])
     }
@@ -223,14 +259,21 @@ impl Signal<'_> {
             let start = self.time(from);
             let end = self.time(to).min(self.start + self.duration);
             let mut inherited = Vec::new();
-            if end - start < 0.3 - EPS {
+            let bridge = if self.rate <= 8000.0 && periodicity.len() >= self.frames.len() {
+                self.bridge_whisper(&runs, &decisions, i, periodicity)
+            } else {
+                None
+            };
+            if let Some(span) = bridge {
+                inherited.push(span);
+            } else if end - start < 0.3 - EPS {
                 let back = i
                     .checked_sub(1)
                     .map_or(f64::INFINITY, |j| start - self.time(runs[j].1));
                 let forward = runs
                     .get(i + 1)
                     .map_or(f64::INFINITY, |&(a, _)| self.time(a) - end);
-                if back.min(forward) <= 0.5 + EPS {
+                if back.min(forward) <= NEARBY_RUN + EPS {
                     let source = if back <= forward {
                         decisions[i - 1].last()
                     } else {

@@ -136,6 +136,24 @@ itUnless(noRust)(
   }
 );
 
+itUnless(noRust)('matches interrupted telephone whispers', async () => {
+  const engine = await loadRustEngine();
+  const { samples, sampleRate } = synthesize(
+    '[whisper]Съешь же ещё этих мягких французских булок, да выпей чаю.[/whisper]',
+    {
+      lang: 'ru',
+      tier: 'telephone',
+      head: 'random',
+      preset: 'male',
+      seed: 1,
+      markup: true,
+    }
+  );
+  expect(
+    whisperFrameParity(engine, samples, sampleRate, { hop: 0.01 }).length
+  ).toBe(1);
+});
+
 describe('Rust whisper numerical parity', () => {
   itUnless(noRust)(
     'matches whisper spans on voiced, whispered, mixed and noisy narrowband speech',

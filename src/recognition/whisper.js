@@ -14,6 +14,7 @@ const EDGE_RATIO_RISE = 5;
 const EDGE_RATIO_ALLOWANCE = 6;
 const PERIODIC_FRAME = 0.6;
 const PERIODIC_SHARE = 0.75;
+const NEARBY_RUN = 0.5;
 
 export function whisperSpeechRuns(frames, count = frames.count) {
   const runs = [];
@@ -238,7 +239,7 @@ function nearest(runs, index) {
   const back = index > 0 ? start - runs[index - 1].end : Infinity;
   const forward =
     index + 1 < runs.length ? runs[index + 1].start - end : Infinity;
-  return Math.min(back, forward) <= 0.5 + EPSILON
+  return Math.min(back, forward) <= NEARBY_RUN + EPSILON
     ? index + (back <= forward ? -1 : 1)
     : -1;
 }
@@ -252,6 +253,42 @@ function joinSpans(spans, span) {
     spans.push(span);
   }
   return spans;
+}
+
+function coversRun(span, run) {
+  return span?.start === run.start && span.end === run.end;
+}
+
+function bridgeWhisper(runs, decisions, index, frames, pitch, classify) {
+  const run = runs[index];
+  const left = runs[index - 1];
+  const right = runs[index + 1];
+  if (
+    !left ||
+    !right ||
+    decisions[index].length ||
+    !coversRun(decisions[index - 1][0], left) ||
+    !coversRun(decisions[index + 1][0], right) ||
+    Math.max(run.start - left.end, right.start - run.end) > NEARBY_RUN + EPSILON
+  ) {
+    return null;
+  }
+  if (
+    pitch.f0.subarray(left.to, right.from).some((f0) => f0 > 0) ||
+    mostlyPeriodic(frames.periodicity, run.from, run.to)
+  ) {
+    return null;
+  }
+  // Telephone filtering can hide the high band in a short vowel run. Require
+  // the usual spectral evidence across both anchors and the intervening run.
+  const combined = classify({ ...left, to: right.to, end: right.end });
+  return (
+    combined && {
+      start: left.end,
+      end: right.start,
+      confidence: combined.confidence,
+    }
+  );
 }
 
 /** Find whispered speech in seconds on the same time axis as the input. */
@@ -275,6 +312,19 @@ export function findWhisper(samples, sampleRate, frames, pitch) {
   });
   return runs
     .flatMap(({ start, end }, index) => {
+      if (sampleRate <= 8000 && frames.periodicity) {
+        const bridge = bridgeWhisper(
+          runs,
+          decisions,
+          index,
+          frames,
+          pitch,
+          classify
+        );
+        if (bridge) {
+          return [bridge];
+        }
+      }
       if (end - start >= 0.3 - EPSILON) {
         return decisions[index];
       }

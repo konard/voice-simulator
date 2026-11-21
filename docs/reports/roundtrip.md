@@ -377,6 +377,25 @@ The longer recognition span covered 48.1% of the planned span, below the
 50% overlap requirement. The speech run between those spans had no
 tracked pitch and a band ratio of −31.15 dB, below the −26.63 dB threshold.
 
+At 8 kHz the detector now joins two fully classified whisper runs across
+one unvoiced, mostly aperiodic run when the combined interval passes the
+regular whisper test. A regression verifies that periodic speech in the
+middle keeps the spans separate. The Rust test compares the span boundaries
+and confidence with JavaScript.
+
+With this change, the `--corpus` probe still detected no whispers in 80
+plain recordings. Of the 80 mixed recordings, 67 still had a detected
+whisper, and the number with at least half of the planned whisper covered
+increased from 44 to 46. A focused run of the mode gate measured four of
+eight matches instead of three, recovering the Russian whisper. The gate
+requires six of eight. The smoke suite took 24.64 seconds on one core and
+reported the same three accuracy failures shown above.
+
+```sh
+HEAVY_OUT=/tmp/roundtrip-modes node --test --test-name-pattern='^modes telephone$' tests/heavy/roundtrip-sentences.test.js
+taskset -c 3 node --test tests/roundtrip-smoke.test.js
+```
+
 ## Limited local benchmark
 
 `npm run test:heavy -- --suite roundtrip --limit 2` at `83bd563` wrote
