@@ -232,7 +232,7 @@ impl RealPower {
     }
 
     pub(crate) fn at(&self, index: usize) -> f64 {
-        if index % 2 == 0 {
+        if index.is_multiple_of(2) {
             self.output.0[index / 2]
         } else {
             self.output.1[index / 2]
