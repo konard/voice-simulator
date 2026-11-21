@@ -64,7 +64,7 @@ function acousticCosts(terms, weights) {
 }
 
 function connectBest(states, parents, span, from, settings, weights) {
-  const { width, costs, parentRows, parentCosts } = settings;
+  const { width, costs, parentRows, parentCosts, uniformParents } = settings;
   const { scores, minimum, denominator } = acousticCosts(span.terms, weights);
   for (let unit = 0; unit < width; unit++) {
     const state = stateFor(states, unit);
@@ -73,7 +73,15 @@ function connectBest(states, parents, span, from, settings, weights) {
     let best = state.paths[0]?.cost ?? NaN;
     let arcCost = 0;
     let bestParent = -1;
-    for (let i = 0; i < parents.length; i++) {
+    // The beam is ordered by cost. With uniform transitions it can only
+    // improve a phone through its first parent, including when costs tie.
+    const count =
+      uniformParents &&
+      Number.isFinite(acoustic) &&
+      Number.isFinite(weights.phonotactic)
+        ? 1
+        : parents.length;
+    for (let i = 0; i < count; i++) {
       const cost = acoustic + weights.phonotactic * costs[parentRows[i] + unit];
       const total = parentCosts[i] + cost;
       if (!(total >= best)) {
@@ -181,9 +189,11 @@ function packParents(settings, parents) {
   const { width } = settings;
   const rows = (settings.parentRows ??= new Float64Array(width + 1));
   const costs = (settings.parentCosts ??= new Float64Array(width + 1));
+  settings.uniformParents = settings.uniformTransitions;
   for (let i = 0; i < parents.length; i++) {
     rows[i] = parents[i].unit * width;
     costs[i] = parents[i].paths[0].cost;
+    settings.uniformParents &&= !Number.isNaN(costs[i]);
   }
 }
 
@@ -205,7 +215,14 @@ export function decodeSearch(prepared, language, options) {
   }
   const origin = { cost: 0, sequence: { children: [] } };
   stateFor(pending[0], lastUnit).paths.push(origin);
-  const settings = { width, costs: language.costs, weights, nbest, lattice };
+  const settings = {
+    width,
+    costs: language.costs,
+    weights,
+    nbest,
+    lattice,
+    uniformTransitions: language.costs.every((cost) => cost === 0),
+  };
   let terminal = [];
   let provisional = [];
   for (let from = 0; from < times.length; from++) {
