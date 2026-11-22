@@ -150,6 +150,37 @@ it('normalizes the last sentence mark', () => {
   assert.equal(sentenceMark('undecided'), null);
 });
 
+it('rejects a marked benchmark case when the plan lacks the expected mode', () => {
+  const recognize = () => ({ text: '', ipa: '', languages: [], words: [] });
+  assert.throws(
+    () => roundTrip('Yes.', { ...render, mode: 'W', recognize }),
+    /no planned W span/u
+  );
+});
+
+it('counts a recognition span with the expected mode and half the duration', () => {
+  const text = '[whisper]Yes.[/whisper]';
+  const { plan } = synthesize(text, { ...render, markup: true });
+  const { start, end } = plan.modes.find(
+    (span) => span.phonation.whisper === 1
+  );
+  const result = roundTrip(text, {
+    ...render,
+    mode: 'W',
+    referenceText: 'Yes.',
+    recognize: () => ({
+      text: 'Yes.',
+      ipa: '',
+      languages: [],
+      words: [],
+      modes: [{ start, end: start + (end - start) * 0.5, notation: 'W' }],
+    }),
+  });
+  assert.deepEqual(result.modeSpans, [
+    { start, end, label: 'W', matched: true },
+  ]);
+});
+
 it('reports each measured preset and lists reused mode cases once', () => {
   const item = {
     set: 'main',

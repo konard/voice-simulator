@@ -1,4 +1,5 @@
 /** Metrics for the simulator's text-to-audio-to-text benchmark. Unlicense. */
+import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { performance } from 'node:perf_hooks';
 import { URL } from 'node:url';
@@ -10,6 +11,7 @@ import {
   textToIpa,
   tokenize,
 } from '../../src/index.js';
+import { modeLabels } from '../../src/ipa/marks.js';
 import { alignEdits } from '../../src/metrics/text.js';
 
 export const sentences = JSON.parse(
@@ -93,13 +95,27 @@ function compareTimes(reference, hypothesis) {
   return { errors, total, mean: errors.length ? total / errors.length : null };
 }
 
+function compareModes(expected, actual, label) {
+  return expected.map(({ start, end }) => ({
+    start,
+    end,
+    label,
+    matched: actual.some(
+      (span) =>
+        span.notation === label &&
+        Math.min(end, span.end) - Math.max(start, span.start) >=
+          (end - start) / 2
+    ),
+  }));
+}
+
 export function roundTrip(text, options) {
   const {
     lang,
     tier,
     preset,
     seed,
-    markup,
+    mode,
     referenceText = text,
     recognize = recognizeAudio,
   } = options;
@@ -109,8 +125,16 @@ export function roundTrip(text, options) {
     head: 'random',
     preset,
     seed,
-    markup,
+    markup: Boolean(mode),
   });
+  const plannedModes = mode
+    ? spoken.plan.modes.filter(
+        (span) => span.end > span.start && modeLabels(span).includes(mode)
+      )
+    : null;
+  if (plannedModes) {
+    assert.ok(plannedModes.length, `no planned ${mode} span`);
+  }
   const level = levelForTier(tier);
   const start = performance.now();
   const heard = recognize(spoken.samples, spoken.sampleRate, { level });
@@ -141,5 +165,8 @@ export function roundTrip(text, options) {
     timeErrors: compareTimes(reference, hypothesis),
     languageRight: languages[0]?.language === lang,
     sentenceMark: sentenceMark(heard.text),
+    ...(plannedModes && {
+      modeSpans: compareModes(plannedModes, heard.modes, mode),
+    }),
   };
 }

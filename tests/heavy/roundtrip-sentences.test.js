@@ -2,7 +2,6 @@
 import assert from 'node:assert/strict';
 import { after, it } from 'test-anywhere';
 import * as simulator from '../../src/index.js';
-import { modeLabels } from '../../src/ipa/marks.js';
 import { roundTrip, sentenceMark, sentences } from '../helpers/roundtrip.js';
 import { heavyLimit, writeReport } from './helpers/report.js';
 import {
@@ -48,22 +47,6 @@ const markupAvailable = typeof simulator.parseMarkup === 'function';
 const limit = Math.min(heavyLimit(80), 80);
 const groups = [];
 
-function modeSpans(spoken, heard, label) {
-  return spoken.plan.modes
-    .filter((span) => modeLabels(span).includes(label))
-    .map(({ start, end }) => ({
-      start,
-      end,
-      label,
-      matched: heard.modes.some(
-        (span) =>
-          span.notation === label &&
-          Math.min(end, span.end) - Math.max(start, span.start) >=
-            (end - start) / 2
-      ),
-    }));
-}
-
 function measure({ set, lang, tier, preset, index, mode }) {
   const text = sentences[lang][index];
   const input =
@@ -76,7 +59,7 @@ function measure({ set, lang, tier, preset, index, mode }) {
     tier,
     preset,
     seed: 1,
-    markup: Boolean(mode),
+    mode,
     referenceText: text,
   });
   return {
@@ -97,7 +80,7 @@ function measure({ set, lang, tier, preset, index, mode }) {
     stressExpected: spoken.timeline.words.filter(
       (word) => word.syllables.length >= 2
     ).length,
-    ...(mode && { mode, modeSpans: modeSpans(spoken, heard, mode) }),
+    ...(mode && { mode }),
   };
 }
 
@@ -220,7 +203,6 @@ function checkModes(tier) {
                 index: 0,
                 mode,
               });
-        assert.ok(item.modeSpans.length, `no planned ${mode} span`);
         items.push(item);
       } catch (error) {
         failures.push(`${mode}: ${error.message}`);
