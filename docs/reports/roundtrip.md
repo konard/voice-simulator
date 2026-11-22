@@ -630,3 +630,30 @@ the gate of 0.5. The gap override gave 0.013, and the two filters gave
 0.161 and 0.095. The recognizer made 44 edits over 54 reference phones
 on four telephone sentences, one per language. Each high-pass filter
 increased that total to 47 edits.
+
+## Scoring vowels at pitch harmonics
+
+`node experiments/issue-75-vowel-harmonics.mjs` rendered steady vowel
+references at quarter-semitone pitch steps using the same seed-1 head
+as each recording. It scored the candidates by their level-normalized
+harmonic energy in a 40 ms window around each known vowel midpoint.
+The score used frequencies between 300 Hz and the tier's passband limit,
+capped at 4800 Hz. The test set includes all 31 sustained vowels and 35
+vowels from four running sentences, one in each language.
+
+The table uses pitch tracked from the audio. Each count gives the
+number of reference vowels ranked first or among the first five.
+
+| Tier | Preset | Sustained first | Sustained top five | Running first | Running top five |
+| --- | --- | ---: | ---: | ---: | ---: |
+| telephone | male | 20/31 | 26/31 | 18/35 | 26/35 |
+| telephone | female | 13/31 | 24/31 | 12/35 | 24/35 |
+| wideband | male | 27/31 | 31/31 | 19/35 | 30/35 |
+| wideband | female | 22/31 | 29/31 | 14/35 | 30/35 |
+
+Replacing the tracked pitch with the planned pitch raised the first-place
+count in two sustained groups by one each. It matched or reduced all four
+running counts. Removing a linear spectral tilt reduced or preserved the
+first-place count in each of the eight tracked-pitch groups. The harmonic
+score relies on the known head and boundaries and still ranked at most
+19 of 35 running vowels first. The probe does not change the recognizer.
