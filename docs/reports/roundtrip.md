@@ -657,3 +657,30 @@ running counts. Removing a linear spectral tilt reduced or preserved the
 first-place count in each of the eight tracked-pitch groups. The harmonic
 score relies on the known head and boundaries and still ranked at most
 19 of 35 running vowels first. The probe does not change the recognizer.
+
+## Punctuation from the pitch contour
+
+`node experiments/issue-75-prosody-contours.mjs` measured all 80 sentences
+at telephone and wideband with both seeded voices. It first gave the
+existing punctuation classifier the transcript and exact timings. It
+then fitted the measured vowel pitch to three synthesis plans with the
+same text ending in a period, question mark or exclamation point. The
+score removes a constant pitch offset in semitones. Two variants shift
+the sample times by 20 ms or use seed 2 for the candidate head. A tied
+score counts as unresolved.
+
+Results were the same at both tiers. Each language has 40 cases per tier.
+
+| Language | Existing classifier | Contour fit | Shifted 20 ms | Different head | Identical audio |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| en | 32 | 40 | 40 | 40 | 0 |
+| ru | 29 | 40 | 37 | 37 | 0 |
+| hi | 36 | 34 | 34 | 6 | 6 |
+| zh | 26 | 34 | 32 | 6 | 4 |
+
+Replacing the question mark with a period produced identical sample
+counts and sample values in three Hindi sentences and two Mandarin
+sentences with each preset. Examples include `तुम्हारा भाई कहाँ रहता है?`
+and `你叫什么名字？`. Word cues can still restore a question mark in those
+cases. The contour fit also requires the correct words and their vowel
+times. It has no production wiring.
