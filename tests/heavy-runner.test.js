@@ -17,6 +17,7 @@ import {
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath, URL } from 'node:url';
+import { parse } from 'yaml';
 import { heavyLimit, writeReport } from './heavy/helpers/report.js';
 import { itUnless, sandboxed } from './helpers/skip.js';
 
@@ -323,10 +324,22 @@ describe('heavy test isolation', () => {
     expect(workflow.slice(runStep)).toContain(
       "REQUIRE_GPU: ${{ (inputs.suite == 'gpu' || inputs.suite == 'all') && '1' || '' }}"
     );
-    const release = readFileSync('.github/workflows/release.yml', 'utf8');
-    expect(release).toContain(
-      "REQUIRE_GPU: ${{ matrix.os != 'ubuntu-24.04' && '1' || '' }}"
+  });
+
+  it('runs regular runtime tests on Ubuntu with an optional GPU', () => {
+    const release = parse(
+      readFileSync('.github/workflows/release.yml', 'utf8')
     );
+    const runtimeTests = release.jobs.test;
+
+    expect(runtimeTests.strategy.matrix).toEqual({
+      runtime: ['node', 'bun', 'deno'],
+      os: ['ubuntu-24.04'],
+    });
+    expect(runtimeTests.env?.REQUIRE_GPU).toBe(undefined);
+    for (const step of runtimeTests.steps) {
+      expect(step.env?.REQUIRE_GPU).toBe(undefined);
+    }
   });
 
   // The step budget owns the deadline (docs/CI-TIMEOUT-BUDGETS.md): it must
