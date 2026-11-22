@@ -769,3 +769,38 @@ The short render verifier did not find a waveform match for the female
 “Pass me.” or either “We see rain.” recording. Those inputs went through
 ordinary voice fitting and recognition and retained substantial phone errors.
 The telephone benchmark does not use the short-recording copy path.
+
+## Cepstral vowel references in connected speech
+
+The probe compares 12 cepstral coefficients in an 80 ms window around
+each planned vowel midpoint. References are waveguide renders at three
+pitches with the same stock head as the input. The score excludes the
+gain coefficient and includes a pitch term from the tracked F0. The table
+reports the top-ranked result at pitch weight 2. A match requires tongue
+height within 0.15 and backness within 0.2 of the planned state.
+
+```sh
+node experiments/issue-75-vowel-cepstra.mjs --steady --connected
+node experiments/issue-75-vowel-cepstra.mjs --steady --telephone --connected
+```
+
+| Rate | Head | Sustained | Reordered and lengthened | Connected |
+| --- | --- | ---: | ---: | ---: |
+| 16 kHz | Male | 31/31 | 31/31 | 15/21 |
+| 16 kHz | Female | 31/31 | 31/31 | 15/21 |
+| 8 kHz | Male | 31/31 | 31/31 | 12/21 |
+| 8 kHz | Female | 30/31 | 30/31 | 13/21 |
+
+The connected sample uses the English, Russian, and Mandarin smoke
+sentences and Hindi sentence 2. The counts include vowels supported by
+the steady reference inventory. Even with the supplied voice and midpoint,
+the best-scoring reference misses six of 21 vowels at 16 kHz for each voice.
+Short vowels and transitions can share the measurement window with their
+neighbors.
+
+A prototype used trailing spectral stability to choose the windows without
+reference timings. With a supplied voice, it recovered 29 and 27 of the 31
+steady vowels in the inherited inversion test, up from seven per voice.
+It took 0.891 times the audio duration on the first 16 kHz call to `audioToIpa`,
+above the 0.35 limit. The prototype was omitted from production. The
+cepstral comparison remains available for testing new observation models.
