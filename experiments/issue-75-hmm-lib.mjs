@@ -145,15 +145,18 @@ export function frameLabels(plan, frames) {
       segments.push(seg);
     }
   }
+  let previous;
   for (const seg of segments) {
     let label;
     if (seg.kind === 'pause') {
       label = 'sil';
-    } else if (seg.kind === 'release') {
+    } else if (seg.kind === 'release' || seg.token === previous) {
+      // Stop releases and the frication of affricates.
       label = `${seg.token.symbol}_r`;
     } else {
       label = seg.token.symbol;
     }
+    previous = seg.token;
     const from = Math.round((seg.start * RATE - WINDOW / 2) / HOP);
     const to = Math.round((seg.end * RATE - WINDOW / 2) / HOP);
     for (let t = Math.max(0, from); t < Math.min(frames, to); t++) {
@@ -165,6 +168,25 @@ export function frameLabels(plan, frames) {
     }
   }
   return { labels, states };
+}
+
+/** Units of each spoken token, e.g. "k k_r" for a released stop. */
+export function tokenUnits(plan) {
+  const out = [];
+  let previous;
+  for (const seg of plan.segments) {
+    if (seg.kind === 'pause') {
+      previous = undefined;
+      continue;
+    }
+    if (seg.token === previous) {
+      out[out.length - 1] += ` ${seg.token.symbol}_r`;
+    } else {
+      out.push(seg.token.symbol);
+    }
+    previous = seg.token;
+  }
+  return out;
 }
 
 export function referencePhones(plan) {

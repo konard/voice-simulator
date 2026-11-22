@@ -10,6 +10,7 @@ import {
   createRandom,
   features,
   frameLabels,
+  tokenUnits,
   sampleSentence,
 } from './issue-75-hmm-lib.mjs';
 
@@ -41,6 +42,7 @@ for (let i = 0; i < Number(count); i++) {
   items.push({
     text,
     frames: f.length,
+    units: tokenUnits(spoken.plan),
     labels,
     states: [...states],
     feats: Buffer.from(
