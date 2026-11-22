@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, it } from 'test-anywhere';
 import { runCli } from '../bin/voice-simulator.js';
+import { measureTiers } from '../scripts/copy-report.mjs';
 import { toPlanModes } from '../src/recognition/modes.js';
 import { applyPitch, repairOctaves } from '../src/session/copy-prosody.js';
 import { groupPhones, warpPlan } from '../src/session/warp.js';
@@ -190,6 +191,26 @@ describe('copy controls', () => {
 });
 
 describe('copy synthesis', () => {
+  it('reports copy metrics for each requested tier', () => {
+    const item = {
+      id: 'silence',
+      ipa: '',
+      samples: new Float32Array(sampleRate / 5),
+      sampleRate,
+    };
+    const rows = Array.from(
+      measureTiers(item, ['minimal', 'telephone'], {
+        ...options,
+        voice: saveVoice({ pitch: 125 }),
+      })
+    );
+    assert.deepEqual(
+      rows.map(({ tier }) => tier),
+      ['minimal', 'telephone']
+    );
+    assert.ok(rows.every(({ mcd }) => Number.isFinite(mcd)));
+  });
+
   it('copies a synthetic original', () => {
     const head = presetHeadConfig('female');
     const languages = ['en'];

@@ -44,7 +44,9 @@ export function* measureTiers(item, tiers, options) {
       item,
       tier,
       recognition,
-      measureCopyMetrics(samples, sampleRate, output, score, options, warnings)
+      measureCopyMetrics(samples, sampleRate, output, score, options, {
+        warnings,
+      })
     );
   }
 }
