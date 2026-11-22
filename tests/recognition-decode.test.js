@@ -21,8 +21,10 @@ import {
 import {
   analyzeForDecode,
   decoderSettings,
+  latticeOf,
   prepareIpaDecode,
   resultOf,
+  segmentsOf,
 } from '../src/recognition/decode-pipeline.js';
 import { decodeSearch } from '../src/recognition/decode-search.js';
 import { prepareDecode } from '../src/recognition/decode-spans.js';
@@ -207,6 +209,48 @@ it('keeps paths with different phone strings and their lowest cost', () => {
     decodeSearch(prepared, language, { ...best, lattice: false }).paths,
     decodeSearch(prepared, language, { ...best, lattice: true }).paths
   );
+});
+
+it('keeps contrastive vowel lengths in n-best readings and the lattice', () => {
+  const symbols = ['a'];
+  const templates = [{ ipa: 'a', kind: 'vowel' }];
+  const span = (to, cost, long = 0) => ({
+    to,
+    terms: Float64Array.of(cost, 0, 0),
+    long: Uint8Array.of(long),
+  });
+  const times = Float64Array.of(0, 0.06, 0.13, 0.19);
+  const prepared = {
+    times,
+    spans: [[span(1, 0), span(2, 1, 1)], [span(3, 0, 1)], [span(3, 0)], []],
+  };
+  for (const contrastive of [true, false]) {
+    const language = {
+      symbols,
+      costs: new Float64Array(2),
+      long: new Set(contrastive ? symbols : []),
+    };
+    const { paths, edges } = decodeSearch(prepared, language, {
+      beam: 1,
+      nbest: 2,
+      weights: { duration: 0, class: 0, phonotactic: 0 },
+    });
+    assert.deepEqual(
+      paths.map((path) =>
+        segmentsOf(path, times, templates, language).map(({ ipa }) => ipa)
+      ),
+      contrastive
+        ? [
+            ['a', 'aː'],
+            ['aː', 'a'],
+          ]
+        : [['a', 'a']]
+    );
+    assert.deepEqual(
+      latticeOf(times, edges, templates, language).edges.map(({ ipa }) => ipa),
+      contrastive ? ['a', 'aː', 'aː', 'a'] : ['a', 'a', 'a', 'a']
+    );
+  }
 });
 
 it('decodes steady speech across a gap in boundary candidates', () => {

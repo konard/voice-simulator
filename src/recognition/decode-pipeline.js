@@ -353,6 +353,10 @@ export function prepareIpaDecode(analysis, settings, bounds, templatesForTime) {
   return { templates, prepared };
 }
 
+function phoneIpa(ipa, long, language) {
+  return long && language.long.has(ipa) ? `${ipa}ː` : ipa;
+}
+
 export function segmentsOf(path, times, templates, language) {
   return pathArcs(path).map(
     ({ unit, from, to, pause, cost, confidence, long = false }) => {
@@ -360,9 +364,7 @@ export function segmentsOf(path, times, templates, language) {
       const end = times[to];
       const template = templates[unit];
       return {
-        ipa: pause
-          ? ''
-          : template.ipa + (long && language.long.has(template.ipa) ? 'ː' : ''),
+        ipa: pause ? '' : phoneIpa(template.ipa, long, language),
         kind: pause ? 'pause' : template.kind,
         start,
         end,
@@ -409,13 +411,13 @@ export function joinSegments(segments) {
   return segments.map(({ ipa }) => ipa).join('');
 }
 
-export function latticeOf(times, edges, templates) {
+export function latticeOf(times, edges, templates, language) {
   return {
     times,
-    edges: edges.map(({ from, to, unit, pause, cost }) => ({
+    edges: edges.map(({ from, to, unit, pause, cost, long }) => ({
       from,
       to,
-      ipa: pause ? '' : templates[unit].ipa,
+      ipa: pause ? '' : phoneIpa(templates[unit].ipa, long, language),
       cost,
     })),
   };
@@ -524,7 +526,7 @@ export function resultOf(
     nbest,
     language: language.language,
     ...(settings.lattice && {
-      lattice: lattice ?? latticeOf(times, search.edges, templates),
+      lattice: lattice ?? latticeOf(times, search.edges, templates, language),
     }),
     ...analysis,
   };

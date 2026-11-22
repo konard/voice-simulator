@@ -5,7 +5,7 @@ function comparePaths(a, b) {
   return a.cost - b.cost;
 }
 
-function addPath(paths, previous, arc, cost, limit) {
+function addPath(paths, previous, arc, cost, limit, phone = 0) {
   if (paths.length === limit && cost >= paths[paths.length - 1].cost) {
     return;
   }
@@ -16,7 +16,7 @@ function addPath(paths, previous, arc, cost, limit) {
   const children = previous.sequence.children;
   const sequence = arc.pause
     ? previous.sequence
-    : (children[arc.unit] ?? (children[arc.unit] = { children: [] }));
+    : (children[phone] ?? (children[phone] = { children: [] }));
   const duplicate = paths.findIndex((path) => path.sequence === sequence);
   if (duplicate >= 0) {
     if (paths[duplicate].cost <= cost) {
@@ -123,7 +123,7 @@ function connectPause(states, parents, { to, pause }, from, settings) {
 
 function connect(states, parents, span, from, settings) {
   const { to, pause, terms, whisper } = span;
-  const { width, costs, nbest, lattice } = settings;
+  const { width, costs, nbest, lattice, contrastiveLength } = settings;
   const weights = whisper ? WHISPER_WEIGHTS : settings.weights;
   if (pause) {
     connectPause(states, parents, span, from, settings);
@@ -138,6 +138,8 @@ function connect(states, parents, span, from, settings) {
     const state = stateFor(states, unit);
     const acoustic = scores[unit];
     const confidence = Math.exp(minimum - acoustic) / denominator;
+    const long = Boolean(span.long?.[unit]);
+    const phone = 2 * unit + Number(long && contrastiveLength[unit]);
     let cheapest = Infinity;
     for (const parent of parents) {
       const cost =
@@ -155,14 +157,14 @@ function connect(states, parents, span, from, settings) {
         unit,
         cost,
         confidence,
-        long: Boolean(span.long?.[unit]),
+        long,
       };
       for (const previous of parent.paths) {
-        addPath(state.paths, previous, arc, previous.cost + cost, nbest);
+        addPath(state.paths, previous, arc, previous.cost + cost, nbest, phone);
       }
     }
     if (lattice) {
-      (state.edges ??= []).push({ from, to, unit, cost: cheapest });
+      (state.edges ??= []).push({ from, to, unit, cost: cheapest, long });
     }
   }
 }
@@ -221,6 +223,9 @@ export function decodeSearch(prepared, language, options) {
     weights,
     nbest,
     lattice,
+    contrastiveLength: language.symbols.map(
+      (symbol) => language.long?.has(symbol) ?? false
+    ),
     uniformTransitions: language.costs.every((cost) => cost === 0),
   };
   let terminal = [];
