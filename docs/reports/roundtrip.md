@@ -601,3 +601,32 @@ window. With all changes, it lost five of eight telephone onsets and four
 of eight wideband onsets despite the known language, phone durations and
 remaining IPA. The probe was restricted to four initial consonants and
 does not measure recognition or establish a threshold for full utterances.
+
+## Stop closure detection
+
+The inversion front end marked all 122 frames with a spectral centroid
+below 50 Hz as speech in the stop intervals and their release windows.
+These frames occurred in 33 of 36 renders of /p t k/ between /a i u/ with
+male and female voices at telephone and wideband. The inversion scores
+frames marked as speech against tract envelopes. In short gaps its
+closure candidates have equal acoustic cost, so their scores depend on
+the movement between tract states.
+
+```sh
+node experiments/issue-75-stop-release.mjs
+node experiments/issue-75-stop-release.mjs --full-codebook
+node experiments/issue-75-stop-release.mjs --recognition
+```
+
+The 36 renders recovered whether the closure was labial in 23 cases
+using the original analysis, 22 when treating frames below 50 Hz as
+gaps, 21 after a 70 Hz high-pass filter, and 28 after a 140 Hz filter.
+The probe counted /p/ as correct when inferred lip amount at the
+planned closure midpoint exceeded 0.5 and /t k/ when it did not.
+
+The full-codebook probe reproduced the inherited inversion gate on
+16 kHz /apa ata aka/. Inferred lip amount for /apa/ was 0.137 against
+the gate of 0.5. The gap override gave 0.013, and the two filters gave
+0.161 and 0.095. The recognizer made 44 edits over 54 reference phones
+on four telephone sentences, one per language. Each high-pass filter
+increased that total to 47 edits.
