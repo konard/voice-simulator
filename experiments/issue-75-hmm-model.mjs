@@ -24,8 +24,14 @@ export function itemDim(item) {
 }
 
 export function loadItems(files, filter = () => true) {
+  // The rendered audio is only needed for pitch probes; drop it to keep
+  // multi-file training within memory.
   return files
-    .flatMap((file) => JSON.parse(readFileSync(file, 'utf8')))
+    .flatMap((file) =>
+      JSON.parse(readFileSync(file, 'utf8')).map(({ audio, ...item }) =>
+        process.env.KEEP_AUDIO ? { ...item, audio } : item
+      )
+    )
     .filter(filter);
 }
 

@@ -216,8 +216,9 @@ export function getLexicon(language = 'en') {
         }
         return root;
       },
-      pronunciations() {
-        return lexiconPronunciations(language, data.words);
+      /** Pronunciations of all words, or of the `limit` most frequent. */
+      pronunciations(limit = data.words.length) {
+        return lexiconPronunciations(language, data.words.slice(0, limit));
       },
       words: data.words,
       counts: data.counts,

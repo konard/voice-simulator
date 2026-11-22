@@ -184,7 +184,9 @@ function audioToIpa(samples, rate) {
     }
     const end = Math.max(start + 0.005, frameTime(a.to));
     segments.push({
-      ipa: tokenIpa(a.token),
+      ipa: env.STRIP_TONES
+        ? tokenIpa(a.token).replace(/[˥˦˧˨˩]/gu, '')
+        : tokenIpa(a.token),
       kind: a.token.kind,
       start,
       end,
