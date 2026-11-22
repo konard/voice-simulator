@@ -22,6 +22,13 @@ import {
 import { copyVoice } from './voice-session.js';
 import { warpPlan } from './warp.js';
 
+const DEFAULT_IMPOSE = {
+  durations: true,
+  pitch: true,
+  loudness: true,
+  modes: true,
+};
+
 const syllables = (result) => result.words.flatMap((word) => word.syllables);
 const readings = (syllables) =>
   syllables.map(({ ipa }) => tokenize(ipa, 'phone').join(' '));
@@ -102,7 +109,7 @@ function recognizeWithVoice(
   });
 }
 
-function analyze(samples, sampleRate, options) {
+function analyze(samples, sampleRate, options, impose) {
   if (options.voice) {
     const voice = saveVoice(loadVoice(options.voice));
     return {
@@ -114,9 +121,7 @@ function analyze(samples, sampleRate, options) {
   const { languages } = recognitionSettings({ languages: options.languages });
   if (
     !options.refine &&
-    ['durations', 'pitch', 'loudness', 'modes'].every(
-      (key) => options.impose?.[key] !== false
-    )
+    Object.keys(DEFAULT_IMPOSE).every((key) => impose[key])
   ) {
     const verified = recoverCopySimulation(samples, sampleRate, languages);
     if (verified) {
@@ -145,8 +150,9 @@ export function copyRecording(samples, sampleRate, options = {}) {
   if (!Number.isSafeInteger(refineBudget) || refineBudget < 0) {
     throw new RangeError('refineBudget must be a nonnegative integer');
   }
-  const analyzed = analyze(samples, sampleRate, options);
-  const score = makeScore(analyzed, samples, sampleRate, options, seed);
+  const impose = { ...DEFAULT_IMPOSE, ...options.impose };
+  const analyzed = analyze(samples, sampleRate, options, impose);
+  const score = makeScore(analyzed, samples, sampleRate, options, impose, seed);
   if (refine && refineBudget) {
     const refined = refineCopy(score, samples, sampleRate, {
       seed,
@@ -177,15 +183,9 @@ function makeScore(
   samples,
   sampleRate,
   options,
+  impose,
   seed
 ) {
-  const impose = {
-    durations: true,
-    pitch: true,
-    loudness: true,
-    modes: true,
-    ...options.impose,
-  };
   const modes = impose.modes ? recognition.modes : [];
   const duration = samples.length / sampleRate;
   if (!plan) {
