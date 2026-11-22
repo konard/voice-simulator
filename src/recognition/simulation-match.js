@@ -6,11 +6,13 @@
  */
 import { accentSettings } from '../accent/index.js';
 import { accentHead } from '../accent/head.js';
+import { renderPlan } from '../acoustics/voice.js';
 import { durationTable } from '../articulation/durations.js';
-import { buildSegments } from '../articulation/plan.js';
+import { buildSegments, planUtterance } from '../articulation/plan.js';
 import { assignTokenModes } from '../articulation/modes.js';
 import { resample } from '../audio/resample.js';
 import { DEFAULT_HEAD } from '../head-config.js';
+import { VOWELS } from '../ipa/inventory.js';
 import { parseIpa } from '../ipa/parse.js';
 import { cepstra, mfcc, powerFrames } from '../metrics/spectrum.js';
 import { synthesize } from '../synthesize.js';
@@ -304,11 +306,13 @@ function propose(rows, model, endings, tryPrefixes) {
   return finalists;
 }
 
-function renderError(input, output, first, count) {
-  const bias = new Float64Array(COEFFICIENTS + 1);
-  for (let i = first; i < first + count; i++) {
-    for (let j = 1; j <= COEFFICIENTS; j++) {
-      bias[j] += (input[i][j] - output[i][j]) / count;
+function renderError(input, output, first, count, removeBias = true) {
+  const bias = removeBias ? new Float64Array(COEFFICIENTS + 1) : undefined;
+  if (bias) {
+    for (let i = first; i < first + count; i++) {
+      for (let j = 1; j <= COEFFICIENTS; j++) {
+        bias[j] += (input[i][j] - output[i][j]) / count;
+      }
     }
   }
   let error = 0;
@@ -431,6 +435,89 @@ function renderedSegments(plan, cost, withWords) {
     confidence: Math.exp(-cost),
     long: token.symbol.includes('ː'),
     ...(withWords && { modelWord: token.word }),
+  }));
+}
+
+const vowelReferences = new Map();
+const VOWEL_RENDER_ERROR = 0.15;
+
+function vowelRenders(voice, duration, renderer) {
+  const key = JSON.stringify([voice, duration, Boolean(renderer)]);
+  if (!vowelReferences.has(key)) {
+    const candidates = Object.keys(VOWELS).map((ipa) => {
+      const plan = planUtterance(ipa, { head: voice, durations: [duration] });
+      const samples = renderPlan(plan, {
+        sampleRate: RATE,
+        solver: 'waveguide',
+        engine: renderer ?? 'js',
+        seed: RENDER.seed,
+      });
+      return {
+        ipa,
+        segments: renderedSegments(plan, 0, false),
+        rows: features(samples, RATE, false),
+      };
+    });
+    if (vowelReferences.size >= 4) {
+      vowelReferences.delete(vowelReferences.keys().next().value);
+    }
+    vowelReferences.set(key, candidates);
+  }
+  return vowelReferences.get(key);
+}
+
+/** Rank isolated vowels only when a known head renders the observed spectrum. */
+export function matchIsolatedVowel(samples, sampleRate, analysis, settings) {
+  const { voice, tracks, whisperSpans } = analysis;
+  const seconds = samples.length / sampleRate;
+  if (
+    sampleRate !== RATE ||
+    settings.rate !== RATE ||
+    seconds < 0.44 ||
+    seconds > 1.06 ||
+    whisperSpans.length ||
+    settings.articulationOffsets
+  ) {
+    return null;
+  }
+  const { f0, hop } = tracks.pitch;
+  const offset = audibleBounds(samples)[1];
+  if (
+    f0.filter((value) => value > 0).length * hop < 0.16 ||
+    seconds - offset < 0.1
+  ) {
+    return null;
+  }
+  const padding = planUtterance('ə', { head: voice, durations: [0] }).duration;
+  const duration = (samples.length - Math.round(padding * RATE)) / RATE;
+  const rows = features(samples, RATE, false);
+  const symbols = new Set(settings.language.symbols);
+  const matches = vowelRenders(voice, duration, settings.kernels?.renderer)
+    .filter(({ ipa }) => symbols.has(ipa))
+    .map(({ ipa, segments, rows: reference }) => ({
+      ipa,
+      segments,
+      // Retain absolute spectral shape for a vowel whose head is known.
+      cost: renderError(
+        rows,
+        reference,
+        0,
+        Math.min(rows.length, reference.length),
+        false
+      ),
+    }))
+    .sort((a, b) => a.cost - b.cost);
+  if (!(matches[0]?.cost <= VOWEL_RENDER_ERROR)) {
+    return null;
+  }
+  return matches.slice(0, settings.nbest).map(({ ipa, segments, cost }) => ({
+    ipa,
+    cost,
+    segments: segments.map((segment) => ({
+      ...segment,
+      cost,
+      confidence: Math.exp(-cost),
+    })),
   }));
 }
 

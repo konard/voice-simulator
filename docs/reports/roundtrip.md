@@ -684,3 +684,63 @@ sentences with each preset. Examples include `तुम्हारा भाई
 and `你叫什么名字？`. Word cues can still restore a question mark in those
 cases. The contour fit also requires the correct words and their vowel
 times. It has no production wiring.
+
+## Isolated sustained vowels at 16 kHz
+
+`node experiments/issue-75-isolated-vowels.mjs` compares 25 ms cepstral
+frames against duration-matched waveguide renders of the IPA vowel
+inventory. The renders exclude the gain coefficient and use the supplied
+head. Across 31 vowels each at 240, 300, and 380 ms with male, female,
+and child presets, each group ranked 30 of 31 first and all 31 in the
+top five. This held with the same render seed and with an independent
+seed. The largest best-match error with the independent seed was 0.107
+mean squared cepstral units. The batch decoder uses the vowel readings
+when the error is at most 0.15 and the recording has a sustained voiced
+interval and quiet tail.
+
+The two existing decoder checks now place 30 of 31 first and all 31 in
+the top five for each voice. A separate regression uses a changed pitch,
+370 ms duration, and a third seed. Before the fix it decoded /ɯ/ as /aa/.
+With the fix it returns /ɯ/, the planned timing within 1 ms, and ranked
+alternatives in the lattice. The same test compares a two-vowel transition
+against the regular decoder. Scalar Rust WebAssembly and JavaScript
+rank the same three alternatives for a 330 ms test vowel.
+
+```sh
+node --test --test-name-pattern='decodes single vowels|verifies a sustained vowel' tests/recognition-decode.test.js
+REQUIRE_WASM=1 node --test --test-name-pattern='ranks an isolated vowel' tests/recognition-parity.test.js
+```
+
+The round-trip corpus measures audio-only recognition. These vowel
+measurements apply to decoding with an explicit head.
+
+## Stop release templates across voices and vowels
+
+`node experiments/issue-75-release-templates.mjs` compares 10 ms
+cepstral frames around the planned release of /p t k/ between vowels.
+For each tier it compares 48 recordings against references made with an
+independent render seed. Rankings depend on knowing each release time.
+
+| Reference conditions | Telephone correct | Wideband correct |
+| --- | ---: | ---: |
+| Same head and surrounding vowels | 46/48 | 46/48 |
+| Different head, same surrounding vowels | 35/48 | 29/48 |
+| Different head and surrounding vowels | 28/48 | 26/48 |
+
+Allowing ±10 ms shifts in the last row reduced telephone accuracy to
+25/48 and left wideband at 26/48. Subtracting the following vowel's
+cepstra gave 22/48 at telephone and 27/48 at wideband before shifting.
+This score has no production wiring.
+
+## Centered averaging of sustained vowel spectra
+
+`node experiments/issue-75-inversion-calibration.mjs` and the same
+command with `--wideband --held-out` check a variant of the inversion
+that sets a vowel target when the spectral drift in a centered window is
+small. At 180 ms and a squared drift threshold of 16 dB² it recovered
+28/31 and 25/31 known-voice sustained vowel targets. In four telephone
+sentences it made 46 edits in 54 phones, up from 43 with the usual
+inversion. In wideband it made the same 46 edits in the initial 54
+phones and increased edits from 63 to 66 in the 79 held-out phones.
+Longer windows dropped steady vowel recovery to 21/31 and 19/31.
+The variant has no production wiring.

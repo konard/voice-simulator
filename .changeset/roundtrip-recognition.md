@@ -11,3 +11,4 @@ speech run when the combined audio still has whisper evidence.
 Keep confirmed narrowband whispers together across brief spurious pitch
 detections while preserving sustained voiced interruptions.
 Reduce cold-start work when building the reverse pronunciation dictionaries.
+Rank isolated 16 kHz vowels against waveguide renders when a voice is supplied.

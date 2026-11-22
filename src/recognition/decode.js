@@ -6,13 +6,18 @@ import {
   analyzeForDecodeParallel,
   decodeFrontEnd,
   decoderSettings,
+  normalizeReadingConfidence,
   prepareIpaDecode,
   resultOf,
   syllablesWithWhisper,
 } from './decode-pipeline.js';
 import { measure } from './profile.js';
 import { decodeSearch } from './decode-search.js';
-import { matchSimulation, matchWhisperPhones } from './simulation-match.js';
+import {
+  matchIsolatedVowel,
+  matchSimulation,
+  matchWhisperPhones,
+} from './simulation-match.js';
 import {
   whisperModeSpans,
   whisperVoicing,
@@ -30,7 +35,7 @@ function knownVoiceMatch(sourceRate, settings, voice) {
   );
 }
 
-function verifiedLattice(segments) {
+function verifiedLattice(segments, alternatives = []) {
   const times = [segments[0].start];
   const edges = [];
   for (const { start, end, ipa, cost } of segments) {
@@ -46,10 +51,19 @@ function verifiedLattice(segments) {
     edges.push({ from: times.length - 1, to: times.length, ipa, cost });
     times.push(end);
   }
+  for (const { ipa, cost } of alternatives) {
+    edges.push({ from: 0, to: 1, ipa, cost });
+  }
   return { times: Float64Array.from(times), edges };
 }
 
-function resultOfSimulation(match, analysis, language, modelLanguage) {
+function resultOfSimulation(
+  match,
+  analysis,
+  language,
+  modelLanguage,
+  { nbest, lattice = Boolean(analysis.voice) } = {}
+) {
   const { frames, whisperSpans } = analysis;
   const { segments, cost, confidence } = match;
   whisperVoicing(segments, frames, whisperSpans);
@@ -60,10 +74,10 @@ function resultOfSimulation(match, analysis, language, modelLanguage) {
     ipa,
     segments,
     syllables: syllablesWithWhisper(segments, language, whisperSpans, frames),
-    nbest: [{ ipa, segments, cost, confidence }],
+    nbest: nbest ?? [{ ipa, segments, cost, confidence }],
     language,
     ...(modelLanguage && { modelLanguage }),
-    ...(analysis.voice && { lattice: verifiedLattice(segments) }),
+    ...(lattice && { lattice: verifiedLattice(segments, nbest?.slice(1)) }),
     modes,
   };
 }
@@ -166,6 +180,19 @@ export function audioToIpa(samples, sampleRate, options = {}) {
 
 function finishDecode(samples, sampleRate, options, settings, analysis) {
   const result = measure(settings.profile, 'Audio to IPA', () => {
+    const matched = options.voice
+      ? matchIsolatedVowel(samples, sampleRate, analysis, settings)
+      : null;
+    if (matched) {
+      normalizeReadingConfidence(matched);
+      return resultOfSimulation(
+        matched[0],
+        analysis,
+        settings.language.language,
+        undefined,
+        { nbest: matched, lattice: settings.lattice }
+      );
+    }
     const { prepared, templates } = prepareIpaDecode(analysis, settings);
     const search = decodeSearch(prepared, settings.language, settings);
     return resultOf(analysis, settings, prepared, templates, search);

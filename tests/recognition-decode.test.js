@@ -294,6 +294,46 @@ for (const [preset, voice] of Object.entries(DECODER_VOICES)) {
   });
 }
 
+it('verifies a sustained vowel at a different pitch, duration and seed', () => {
+  const voice = { ...DECODER_VOICES.female, pitch: 204 };
+  const options = { voice, nbest: 3 };
+  const plan = planUtterance('ɯ', { head: voice, durations: [0.37] });
+  const render = (plan) =>
+    renderPlan(plan, {
+      sampleRate: hiRate,
+      solver: 'waveguide',
+      engine: 'js',
+      seed: 3,
+    });
+  const result = audioToIpa(render(plan), hiRate, options);
+  assert.equal(result.ipa, 'ɯ');
+  const [phone] = plannedPhones(plan);
+  assert.ok(Math.abs(result.segments[0].start - phone.start) < 0.001);
+  assert.ok(Math.abs(result.segments[0].end - phone.end) < 0.001);
+  assert.equal(result.nbest.length, options.nbest);
+  assert.ok(
+    Math.abs(result.nbest.reduce((sum, row) => sum + row.confidence, 0) - 1) <
+      1e-12
+  );
+  assert.deepEqual(
+    result.lattice.edges.map(({ ipa }) => ipa),
+    result.nbest.map(({ ipa }) => ipa)
+  );
+
+  const transition = render(
+    planUtterance('aɪ', { head: voice, durations: [0.19, 0.18] })
+  );
+  const settings = decoderSettings(hiRate, options);
+  const analysis = analyzeForDecode(transition, hiRate, options, settings);
+  const { prepared, templates } = prepareIpaDecode(analysis, settings);
+  const search = decodeSearch(prepared, settings.language, settings);
+  const fallback = resultOf(analysis, settings, prepared, templates, search);
+  assert.deepEqual(
+    audioToIpa(transition, hiRate, options).nbest,
+    fallback.nbest
+  );
+});
+
 // Measure shards separately so a single test does not consume the runtime's timeout.
 for (const language of Object.keys(DECODE_SENTENCES)) {
   for (const sampleRate of [hiRate, lowRate]) {

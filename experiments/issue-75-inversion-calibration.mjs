@@ -162,7 +162,7 @@ function renderedVowels(voice, book, frames, plan, candidates) {
 }
 
 function renderedInversion(frames, voice, book, candidates, options) {
-  const { hold, drift = 16 } = options;
+  const { hold, drift = 16, centered = false } = options;
   const pitch = options.pitch ?? trackPitch(frames);
   const formants =
     options.formants ??
@@ -173,7 +173,7 @@ function renderedInversion(frames, voice, book, candidates, options) {
   const valid = formants.valid.slice();
   const available = candidates.filter(({ row }) => row >= 0);
   const analytic = calibratedQuery(frames, book, null, 0, true);
-  const width = Math.round(hold / frames.hop);
+  const width = Math.round(hold / frames.hop / (centered ? 2 : 1));
   const envelopeDelta = (before, current) =>
     before.reduce(
       (total, db, i) =>
@@ -182,16 +182,22 @@ function renderedInversion(frames, voice, book, candidates, options) {
     ) / before.length;
   const refs = { uses: 0 };
   const query = (t, out) => {
+    const right = centered ? t + width : t;
     if (
       t < width + 6 ||
-      pitch.f0.subarray(t - width, t + 1).some((f0) => !f0)
+      right + (centered ? 6 : 0) >= frames.count ||
+      pitch.f0.subarray(t - width, right + 1).some((f0) => !f0)
     ) {
       analytic(t, out);
       return;
     }
-    const envelope = meanEnvelopes(frames, t - 3, book);
+    const envelope = meanEnvelopes(frames, centered ? t : t - 3, book);
     const before = meanEnvelopes(frames, t - width, book);
-    if (envelopeDelta(before, envelope) > drift) {
+    const after = centered ? meanEnvelopes(frames, right, book) : envelope;
+    if (
+      envelopeDelta(before, envelope) > drift ||
+      envelopeDelta(envelope, after) > drift
+    ) {
       analytic(t, out);
       return;
     }
@@ -246,6 +252,10 @@ const stabilitySettings = [
   { hold: 0.08, drift: 8 },
   { hold: 0.08, drift: 16 },
   { hold: 0.12, drift: 16 },
+  { hold: 0.18, drift: 8, centered: true },
+  { hold: 0.18, drift: 16, centered: true },
+  { hold: 0.22, drift: 8, centered: true },
+  { hold: 0.22, drift: 16, centered: true },
 ];
 
 function steadyVowels() {
