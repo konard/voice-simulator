@@ -571,3 +571,33 @@ produce zero effort spans without `options.voice`, and its regression tests
 enforce that behavior. Even detecting all four whispers yields 4 of 8 spans
 at each tier, below both mode thresholds.
 [Mode specification](https://github.com/konard/voice-simulator/issues/71).
+
+## Scoring consonants in a rendered phrase
+
+`node experiments/issue-75-contextual-templates.mjs` ranked the initial
+consonant in four short IPA phrases. Each phrase was spoken by two voices
+at telephone and wideband. The experiment rendered seven substitutions
+for each onset and gave each candidate the reference phone durations.
+It compared normalized waveform correlation and squared distance between
+mel-frequency cepstra over the onset, excluding the energy coefficient.
+
+The table counts first-place reference phones out of eight per tier. The
+timing change shifts the candidate window 10 ms later. The voice change
+uses seed 2 for the same preset. The last row combines all four changes.
+
+| Candidate change | Telephone waveform | Telephone cepstra | Wideband waveform | Wideband cepstra |
+| --- | ---: | ---: | ---: | ---: |
+| Control with reference context | 8 | 8 | 8 | 8 |
+| Question tune | 8 | 8 | 8 | 8 |
+| Next vowel | 2 | 6 | 2 | 7 |
+| Voice seed | 2 | 8 | 2 | 8 |
+| Timing | 1 | 6 | 1 | 8 |
+| All changes | 1 | 3 | 2 | 4 |
+
+The run took 55 seconds. Changing a neighboring vowel had a larger effect
+than changing the final punctuation. Cepstral distance retained more
+correct onsets when the renderer used a different voice seed or a shifted
+window. With all changes, it lost five of eight telephone onsets and four
+of eight wideband onsets despite the known language, phone durations and
+remaining IPA. The probe was restricted to four initial consonants and
+does not measure recognition or establish a threshold for full utterances.
