@@ -1,6 +1,11 @@
 import { setTimeout as delay } from 'node:timers/promises';
 
+class ArtifactListingPendingError extends Error {}
+
 export function isTransientArtifactError(error) {
+  if (error instanceof ArtifactListingPendingError) {
+    return true;
+  }
   const chain = [];
   for (let item = error; item && !chain.includes(item); item = item.cause) {
     chain.push(item);
@@ -90,18 +95,21 @@ export async function downloadArtifactsWithRetry(
   if (!/^[\w.-]+\*?$/.test(pattern)) {
     throw new Error('Artifact pattern must be a name or prefix followed by *');
   }
-  const { artifacts } = await retryArtifact(
-    () => client.listArtifacts({ latest: true }),
-    retryOptions
-  );
-  const selected = artifacts.filter((artifact) =>
-    pattern.endsWith('*')
-      ? artifact.name.startsWith(pattern.slice(0, -1))
-      : artifact.name === pattern
-  );
-  if (!selected.length) {
-    throw new Error(`Required artifacts not found: ${pattern}`);
-  }
+  const selected = await retryArtifact(async () => {
+    const { artifacts } = await client.listArtifacts({ latest: true });
+    const matches = artifacts.filter((artifact) =>
+      pattern.endsWith('*')
+        ? artifact.name.startsWith(pattern.slice(0, -1))
+        : artifact.name === pattern
+    );
+    // GitHub can finalize an upload before it appears in the listing.
+    if (!matches.length) {
+      throw new ArtifactListingPendingError(
+        `Required artifacts not found: ${pattern}`
+      );
+    }
+    return matches;
+  }, retryOptions);
   for (const artifact of selected) {
     await retryArtifact(
       () =>

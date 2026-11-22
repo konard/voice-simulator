@@ -202,6 +202,27 @@ describe('artifact evidence and downloads', () => {
       /not found/
     );
   });
+  it('retries a listing that has not caught up with a finalized upload', async () => {
+    let listings = 0;
+    const sleeps = [];
+    const downloads = [];
+    const client = {
+      listArtifacts: async () => ({
+        artifacts: [
+          { id: 1, name: 'transport-roundtrip' },
+          ...(++listings === 2 ? [{ id: 2, name: 'pages-roundtrip' }] : []),
+        ],
+      }),
+      downloadArtifact: async (id) => downloads.push(id),
+    };
+    await downloadArtifactsWithRetry(client, 'pages-round*', 'out', {
+      ...fast,
+      sleep: async (milliseconds) => sleeps.push(milliseconds),
+    });
+    assert.equal(listings, 2);
+    assert.deepEqual(sleeps, [5000]);
+    assert.deepEqual(downloads, [2]);
+  });
   it('passes the recorded upload digest so the SDK verifies downloads', async () => {
     const seen = [];
     const client = {
