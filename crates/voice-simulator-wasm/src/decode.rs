@@ -140,8 +140,11 @@ fn decode(mut data: &[f64]) -> Option<Vec<f64>> {
         return None;
     }
     let mut templates = Vec::with_capacity(units);
-    for _ in 0..units {
+    let mut contrastive_length = [false; 128];
+    for long in &mut contrastive_length[..units] {
         let header = take(&mut data, 3)?;
+        let classes = integer(header[1], 511)?;
+        *long = classes >= 256;
         let count = integer(header[2], CHANNELS * 5)?;
         if header[0] <= 0.0 || !header[0].is_finite() || count == 0 {
             return None;
@@ -155,7 +158,7 @@ fn decode(mut data: &[f64]) -> Option<Vec<f64>> {
         }
         templates.push(Template {
             duration: header[0],
-            classes: integer(header[1], 255)? as u8,
+            classes: classes as u8,
             compared,
         });
     }
@@ -233,6 +236,7 @@ fn decode(mut data: &[f64]) -> Option<Vec<f64>> {
             beam,
             nbest,
             last_unit,
+            contrastive_length: &contrastive_length,
             weights,
             transition: &costs,
         },
@@ -262,7 +266,8 @@ fn decode(mut data: &[f64]) -> Option<Vec<f64>> {
 }
 
 /// Input is a header, channel ranges, frame rows, landmarks, templates and
-/// phonotactic tables. An optional whisper suffix supplies the band and span
+/// phonotactic tables. Bit 8 in the template class mask flags a unit with
+/// contrastive length. An optional whisper suffix supplies the band and span
 /// counts, start/end pairs, raw mel bands and energy, and each phone's vowel
 /// flag and reference count followed by nominal durations and trajectories.
 /// Output is a header, transition matrix, boundaries,

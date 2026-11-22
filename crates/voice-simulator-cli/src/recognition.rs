@@ -257,6 +257,7 @@ fn decode(
         },
     );
     let units = model.templates.len();
+    let contrastive_length: Vec<_> = model.symbols.iter().map(|&(_, long)| long).collect();
     let readings = decode::search(
         &graph,
         &Policy {
@@ -264,6 +265,7 @@ fn decode(
             beam: level.beam as usize,
             nbest,
             last_unit: units,
+            contrastive_length: &contrastive_length,
             transition: &model.transitions,
             weights: Weights {
                 duration: 1.0,

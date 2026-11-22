@@ -1,6 +1,6 @@
 //! Segmental IPA decoding from the shared recognition frame grid.
 use crate::math;
-use alloc::collections::{BTreeMap, BTreeSet};
+use alloc::collections::BTreeMap;
 use alloc::{vec, vec::Vec};
 
 #[path = "decode_whisper.rs"]
@@ -339,6 +339,8 @@ pub struct Policy<'a> {
     pub beam: usize,
     pub nbest: usize,
     pub last_unit: usize,
+    /// Units whose length is rendered as a separate IPA reading.
+    pub contrastive_length: &'a [bool],
     /// Row major: units plus the start/pause row, by units.
     pub transition: &'a [f64],
     pub weights: Weights,
@@ -456,9 +458,11 @@ impl History {
             prefix.sequence
         } else {
             let next = self.sequences.len() + 1;
+            let long = arc.long && policy.contrastive_length[arc.unit];
+            let unit = 2 * arc.unit + usize::from(long);
             *self
                 .sequences
-                .entry((prefix.sequence, arc.unit))
+                .entry((prefix.sequence, unit))
                 .or_insert(next)
         };
         if let Some(i) = paths
@@ -619,13 +623,17 @@ pub fn search(graph: &Graph, policy: &Policy<'_>) -> Search {
                 .flat_map(|(_, state)| state.paths)
                 .collect();
             ids.sort_by(|&a, &b| history.paths[a].cost.total_cmp(&history.paths[b].cost));
-            let mut seen = BTreeSet::new();
-            terminal = ids
-                .into_iter()
-                .filter(|&id| seen.insert(history.paths[id].sequence))
-                .take(policy.nbest)
-                .map(|id| history.reading(id))
-                .collect();
+            let mut seen = Vec::with_capacity(policy.nbest);
+            for id in ids {
+                let sequence = history.paths[id].sequence;
+                if !seen.contains(&sequence) {
+                    seen.push(sequence);
+                    terminal.push(history.reading(id));
+                    if terminal.len() == policy.nbest {
+                        break;
+                    }
+                }
+            }
             break;
         }
         for span in &graph.spans[from] {
@@ -683,4 +691,62 @@ pub fn committed_prefix(
             age >= 0.5 - EPS || (age >= 0.3 - EPS && (deadline || consensus))
         })
         .count()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn retains_paths_with_contrastive_length() {
+        let span = |to, acoustic, long| {
+            Span::Phones(
+                to,
+                vec![PhoneCost {
+                    acoustic,
+                    duration: 0.0,
+                    class: 0.0,
+                    long,
+                }],
+                false,
+            )
+        };
+        let graph = Graph {
+            times: vec![0.0, 0.06, 0.13, 0.19],
+            spans: vec![
+                vec![span(1, 0.0, false), span(2, 1.0, true)],
+                vec![span(3, 0.0, true)],
+                vec![span(3, 0.0, false)],
+                vec![],
+            ],
+        };
+        for contrastive in [true, false] {
+            let result = search(
+                &graph,
+                &Policy {
+                    units: 1,
+                    beam: 1,
+                    nbest: 2,
+                    last_unit: 1,
+                    contrastive_length: &[contrastive],
+                    transition: &[0.0, 0.0],
+                    weights: Weights {
+                        duration: 0.0,
+                        class: 0.0,
+                        phonotactic: 0.0,
+                    },
+                },
+            );
+            let lengths: Vec<_> = result
+                .readings
+                .iter()
+                .map(|reading| [reading.arcs[0].long, reading.arcs[1].long])
+                .collect();
+            let mut expected = vec![[false, true]];
+            if contrastive {
+                expected.push([true, false]);
+            }
+            assert_eq!(lengths, expected);
+        }
+    }
 }
