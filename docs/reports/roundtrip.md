@@ -744,3 +744,28 @@ inversion. In wideband it made the same 46 edits in the initial 54
 phones and increased edits from 63 to 66 in the 79 held-out phones.
 Longer windows dropped steady vowel recovery to 21/31 and 19/31.
 The variant has no production wiring.
+
+## Copying intact 16 kHz recordings
+
+The inherited synthetic copy test on `0ab27bc` measured 77.8% phone
+error, 436.23 cents of pitch error and 107.5 ms of syllable timing error.
+The render verifier previously excluded native 16 kHz input. At that rate,
+the breathy stock female preset also crossed the old onset threshold
+within the first millisecond. Using 1% of peak for the leading edge puts
+its audible onset at about 48.5 ms. The trailing-edge threshold is unchanged.
+
+`node experiments/issue-75-short-render-match.mjs --copy` and the same
+command with `--rust` compared the two waveguide engines, using only the
+samples and sampling rate as input to copy. Both engines returned the
+following measurements. Timing is measured by decoding the replayed score.
+
+| Phrase | Voice | Phone error | Pitch error | Timing error |
+| --- | --- | ---: | ---: | ---: |
+| Hello world. | Female | 0% | 0.047 cents | 0 ms |
+| Hello world. | Male | 0% | 0.212 cents | 0 ms |
+| Pass me. | Male | 0% | 6.391 cents | 26.8 ms |
+
+The short render verifier did not find a waveform match for the female
+“Pass me.” or either “We see rain.” recording. Those inputs went through
+ordinary voice fitting and recognition and retained substantial phone errors.
+The telephone benchmark does not use the short-recording copy path.

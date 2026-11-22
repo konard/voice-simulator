@@ -154,6 +154,7 @@ function usage() {
     '  match <file>        Find the head that sounds like a recording',
     '  copy <in> -o out    Simulate a recording and optionally write --score <file>',
     '                      --voice <file> --refine --tier <name> --json',
+    '                      Can recover short 16 kHz English recordings of stock voices',
     '  copy --from-score <file> -o out  Render a saved or edited score',
     '  Copy only your own voice, a voice you have permission to copy, or a public-domain recording.',
     '  landmarks <file>    Experimental nuclei, sound changes and broad classes',

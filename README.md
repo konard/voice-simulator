@@ -662,7 +662,7 @@ Measured with `node experiments/issue-58-rtf.mjs` (10 s of speech, one thread): 
 
 Copy only your own voice, a voice you have permission to copy, or a public-domain recording. See [Not goals](docs/VISION.md#not-goals).
 
-Run `voice-simulator copy speech.wav -o copy.wav --score speech-score.json` to save simulated audio and its editable IPA score. See the [copy synthesis guide](docs/COPY-SYNTHESIS.md) for replay and options.
+Run `voice-simulator copy speech.wav -o copy.wav --score speech-score.json` to save simulated audio and its editable IPA score. For short 16 kHz English recordings from a stock simulator voice, copying can recover the original prosody by verifying the input against a new waveguide render. See the [copy synthesis guide](docs/COPY-SYNTHESIS.md) for replay and options.
 
 ## Recognition (speech to text)
 

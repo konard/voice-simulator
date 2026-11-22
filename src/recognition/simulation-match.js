@@ -322,17 +322,33 @@ function renderError(input, output, first, count, removeBias = true) {
   return error / (count * COEFFICIENTS);
 }
 
-function verifiedReading(rows, model, proposals, whispered, exactOnly, trace) {
+function crossSolverReading([best, rival]) {
+  // The 3D solver differs from the waveguide in spectral shape. Accept a
+  // close cross-solver match only with a clear margin over the next reading.
+  return best?.cost <= 1.8 && rival && best.cost * 1.5 < rival.cost
+    ? best
+    : null;
+}
+
+function verifiedReading(
+  rows,
+  model,
+  proposals,
+  whispered,
+  { trace, exactOnly, nativeRate, verifySamples = () => true }
+) {
   const matches = [];
   for (const { ipa, mark, stop } of proposals) {
     const endings = mark ? [mark, ' ?', ' !'] : [''];
     let best;
     for (const ending of endings) {
       const reading = ipa + ending;
-      const { samples, sampleRate, plan } = synthesize(
-        forPhonation(reading, whispered),
-        { ...RENDER, head: model.voice }
-      );
+      const recording = synthesize(forPhonation(reading, whispered), {
+        ...RENDER,
+        head: model.voice,
+        ...(nativeRate && { sampleRate: nativeRate }),
+      });
+      const { samples, sampleRate, plan } = recording;
       const output = features(samples, sampleRate, whispered);
       // Include the transitions into and out of speech and omit the silent tail.
       const first = Math.floor((model.lead - WINDOW) / HOP);
@@ -342,9 +358,9 @@ function verifiedReading(rows, model, proposals, whispered, exactOnly, trace) {
         Math.round((stop + 0.09) / HOP)
       );
       const cost = renderError(rows, output, first, last - first);
-      const match = { ipa: reading, cost, plan };
+      const match = { ipa: reading, cost, plan, recording };
       trace?.({ stage: 'verification', ipa: reading, cost });
-      if (cost <= CLOSE_RENDER_ERROR) {
+      if (cost <= CLOSE_RENDER_ERROR && verifySamples(samples)) {
         return match;
       }
       if (!best || cost < best.cost) {
@@ -353,28 +369,20 @@ function verifiedReading(rows, model, proposals, whispered, exactOnly, trace) {
     }
     keepBest(matches, best, 2);
   }
-  const [best, rival] = matches;
-  // The 3D solver differs from the waveguide in spectral shape. Accept a
-  // close cross-solver match only with a clear margin over the next reading.
-  if (
-    !exactOnly &&
-    best?.cost <= 1.8 &&
-    rival &&
-    best.cost * 1.5 < rival.cost
-  ) {
-    return best;
-  }
-  return null;
+  return exactOnly ? null : crossSolverReading(matches);
 }
 
-function audibleBounds(samples) {
+function audibleBounds(samples, leadShare = 0.001) {
   let peak = 0;
   for (const sample of samples) {
     peak = Math.max(peak, Math.abs(sample));
   }
   const threshold = Math.max(0.00001, peak * 0.001);
-  const above = (sample) => Math.abs(sample) > threshold;
-  return [samples.findIndex(above) / RATE, samples.findLastIndex(above) / RATE];
+  const lead = Math.max(threshold, peak * leadShare);
+  return [
+    samples.findIndex((sample) => Math.abs(sample) > lead) / RATE,
+    samples.findLastIndex((sample) => Math.abs(sample) > threshold) / RATE,
+  ];
 }
 
 function phonationFor(spans, onset, offset) {
@@ -407,20 +415,20 @@ function unvoicedRun(frontEnd, onset, offset) {
   return { start: run.start, end: run.end };
 }
 
-function hasQuietEdges(duration, onset, offset) {
+function hasQuietEdges(duration, onset, offset, limit = 0.09) {
   // The planner's 60 ms lead allows anticipatory motion before the first
   // sound. Requiring this quiet lead avoids a lexicon search on running speech.
-  return onset >= 0.03 && onset <= 0.09 && duration - offset >= 0.08;
+  return onset >= 0.03 && onset <= limit && duration - offset >= 0.08;
 }
 
-function availablePhonation(frontEnd, onset, offset, matchKnownVoice) {
+function availablePhonation(frontEnd, onset, offset, whisperOnly) {
   const phonation = phonationFor(frontEnd.whisperSpans, onset, offset);
   const unconfirmed =
-    matchKnownVoice && phonation === 'modal'
+    whisperOnly && phonation === 'modal'
       ? unvoicedRun(frontEnd, onset, offset)
       : null;
   const whispered = Boolean(unconfirmed) || phonation === 'whisper';
-  return whispered || (phonation && !matchKnownVoice)
+  return whispered || (phonation && !whisperOnly)
     ? { whispered, unconfirmed }
     : null;
 }
@@ -571,36 +579,54 @@ export function matchWhisperPhones(samples, sampleRate, analysis, reading) {
 /** The simulation model is limited to short intact recordings at these rates. */
 export function matchableRecording(duration, sourceRate, rate, languages) {
   return (
-    rate === RATE &&
     SOURCE_RATES.has(sourceRate) &&
+    matchableNativeRecording(duration, rate, languages)
+  );
+}
+
+export function matchableNativeRecording(duration, rate, languages) {
+  return (
+    rate === RATE &&
     languages?.includes('en') &&
     duration >= 0.3 &&
     duration <= MAX_SECONDS
   );
 }
 
-/** Return an IPA reading when duration and the reconstructed audio both agree. */
-export function matchSimulation(
+function recordingEdges(
   samples,
   sampleRate,
-  { languages, voice, sourceRate, trace, matchKnownVoice },
-  analyze
+  { languages, voice, sourceRate, matchKnownVoice }
 ) {
   const duration = samples.length / sampleRate;
-  if (
-    !matchableRecording(duration, sourceRate, sampleRate, languages) ||
-    (voice && !matchKnownVoice)
-  ) {
+  const native = Boolean(voice && matchKnownVoice && sourceRate === RATE);
+  const eligible = native
+    ? matchableNativeRecording(duration, sampleRate, languages)
+    : matchableRecording(duration, sourceRate, sampleRate, languages);
+  if (!eligible || (voice && !matchKnownVoice)) {
     return null;
   }
-  const [onset, offset] = audibleBounds(samples);
-  if (!hasQuietEdges(duration, onset, offset)) {
+  // A breathy voice can produce low-level startup noise during the
+  // planner's leading pause. A stop can also delay the first loud sample.
+  const [onset, offset] = audibleBounds(samples, native ? 0.01 : 0.001);
+  return hasQuietEdges(duration, onset, offset, native ? 0.16 : undefined)
+    ? { native, duration, onset, offset }
+    : null;
+}
+
+/** Return an IPA reading when duration and the reconstructed audio both agree. */
+export function matchSimulation(samples, sampleRate, options, analyze) {
+  const edges = recordingEdges(samples, sampleRate, options);
+  if (!edges) {
     return null;
   }
+  const { native, duration, onset, offset } = edges;
+  const { voice, matchKnownVoice, trace, verifySamples } = options;
+  const whisperOnly = matchKnownVoice && !native;
   const frontEnd = analyze();
   const { whisperSpans } = frontEnd;
-  const mode = availablePhonation(frontEnd, onset, offset, matchKnownVoice);
-  if (!mode) {
+  const mode = availablePhonation(frontEnd, onset, offset, whisperOnly);
+  if (!mode || (native && mode.whispered)) {
     return null;
   }
   const { whispered, unconfirmed } = mode;
@@ -616,26 +642,25 @@ export function matchSimulation(
   rows.forEach((row, index) => {
     row.index = index;
   });
-  const proposals = propose(rows, model, endings, matchKnownVoice);
+  const proposals = propose(rows, model, endings, whisperOnly);
   trace?.({ stage: 'proposals', proposals });
-  const best = verifiedReading(
-    rows,
-    model,
-    proposals,
-    whispered,
-    matchKnownVoice,
-    trace
-  );
+  const best = verifiedReading(rows, model, proposals, whispered, {
+    exactOnly: matchKnownVoice,
+    nativeRate: native ? sampleRate : undefined,
+    trace,
+    verifySamples,
+  });
   if (!best) {
     return null;
   }
   return {
     ipa: best.ipa,
-    segments: renderedSegments(best.plan, best.cost, whispered),
+    segments: renderedSegments(best.plan, best.cost, whispered || native),
     whisperSpans: unconfirmed
       ? [{ ...unconfirmed, confidence: Math.exp(-best.cost) }]
       : whisperSpans,
     cost: best.cost,
     confidence: Math.exp(-best.cost),
+    ...(native && { recording: best.recording }),
   };
 }

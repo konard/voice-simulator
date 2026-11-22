@@ -71,6 +71,8 @@ export interface CopyResult extends RenderedScore {
   recognition: VoiceSessionRecognition & { segments: RecognizedSegment[] };
   metrics: CopyMetrics;
 }
+/** Copy speech into an editable score. Short 16 kHz recordings of stock
+ * English voices can recover the synthesis plan by waveform verification. */
 export function copyRecording(
   samples: ArrayLike<number>,
   sampleRate: number,

@@ -12,3 +12,4 @@ Keep confirmed narrowband whispers together across brief spurious pitch
 detections while preserving sustained voiced interruptions.
 Reduce cold-start work when building the reverse pronunciation dictionaries.
 Rank isolated 16 kHz vowels against waveguide renders when a voice is supplied.
+Verify short 16 kHz preset-voice recordings against waveguide renders when copying.

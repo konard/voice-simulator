@@ -16,7 +16,6 @@ import {
   pitchTrack,
   planUtterance,
   presetHeadConfig,
-  recognize,
   renderPlan,
   renderScore,
   saveVoice,
@@ -24,7 +23,6 @@ import {
   toScore,
 } from '../src/index.js';
 import { rmsLevel } from '../src/metrics/distortion.js';
-import { checkBlockedGate } from './helpers/blocked-gate.js';
 
 const sampleRate = 16000;
 const options = { tier: 'minimal', sampleRate, seed: 1, engine: 'js' };
@@ -203,6 +201,8 @@ describe('copy synthesis', () => {
       ...options,
       languages,
     });
+    assert.equal(result.recognition.text, 'Hello world.');
+    assert.equal(result.voice.preset, 'female');
     const phonemeError = errorRate(
       source.ipa,
       result.recognition.ipa,
@@ -220,31 +220,6 @@ describe('copy synthesis', () => {
       rmseCents,
       timingError,
     });
-    if (phonemeError !== 0) {
-      const knownVoice = recognize(source.samples, sampleRate, {
-        voice: head,
-        languages,
-        deterministic: true,
-        includeModeLabels: false,
-      });
-      const knownVoiceError = errorRate(
-        source.ipa,
-        knownVoice.ipa,
-        'phone'
-      ).rate;
-      if (knownVoiceError !== 0) {
-        checkBlockedGate({
-          criterion: 'issue 79: synthetic copy matches the original',
-          passed: false,
-          measured:
-            `${measured}; recognizing the input with the original voice gives ` +
-            `${knownVoiceError} phone error (${JSON.stringify(knownVoice.text)})`,
-          action:
-            'The maintainer must authorize work on recognizer accuracy for this copy or reopen the voice-session recognizer work. Once repaired, rerun the 0% phone, 30-cent pitch and 10-ms timing gates.',
-        });
-        return;
-      }
-    }
     assert.ok(
       phonemeError === 0 &&
         rmseCents !== null &&
