@@ -8,7 +8,13 @@
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { performance } from 'node:perf_hooks';
 import { recognize } from '../src/index.js';
-import { roundTrip, sentences } from '../tests/helpers/roundtrip.js';
+import {
+  roundTrip,
+  sentenceMark,
+  sentences,
+} from '../tests/helpers/roundtrip.js';
+import { analyzeFrames } from '../src/recognition/frontend.js';
+import { trackPitch } from '../src/recognition/pitch.js';
 import { features } from './issue-75-hmm-lib.mjs';
 import { applyLda, fitLda, transformItems } from './issue-75-hmm-lda.mjs';
 import { trainContextModel } from './issue-75-hmm-context.mjs';
@@ -189,9 +195,13 @@ function audioToIpa(samples, rate) {
     lastWord = a.word;
   }
   audioToIpa.last = decoded;
+  const tracks = env.PITCH_TRACK
+    ? { pitch: trackPitch(analyzeFrames(samples, rate, { hop: 0.01 })) }
+    : undefined;
   return {
     ipa: segments.map((s) => s.ipa).join(''),
     segments,
+    ...(tracks && { tracks }),
     ...(decoded.lang && { modelLanguage: decoded.lang }),
   };
 }
@@ -241,7 +251,23 @@ for (const tier of tierArg.split(',')) {
           sum.stress[0] += r.stressHits.hits;
           sum.stress[1] += r.stressHits.count;
         }
-        sum.mark += r.sentenceMark !== null;
+        sum.mark += r.sentenceMark === sentenceMark(text);
+        if (env.TONES && r.toneErrors) {
+          const tones = (words) =>
+            words
+              .flatMap((w) => w.syllables)
+              .map((s) => s.ipa.match(/[˥˦˧˨˩]/gu)?.join('') ?? '-')
+              .join(' ');
+          console.log(
+            'tones',
+            r.toneErrors.rate.toFixed(2),
+            tones(r.spoken.timeline.words),
+            '|',
+            tones(r.heard.words),
+            '|',
+            r.heard.words.map((w) => w.ipa).join(' ')
+          );
+        }
         if (env.VERBOSE || r.soundWer.rate > 0) {
           const raw = audioToIpa.last.words.map((w) => w.word).join(' ');
           console.log(

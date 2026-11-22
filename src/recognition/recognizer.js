@@ -20,6 +20,7 @@ import { RESCORING_WEIGHT } from './rescoring-weights.js';
 import { createRecognitionPool } from './pool.js';
 import { aggregate, translated } from './recognizer-result.js';
 import { pauseCuts } from './recognizer-pauses.js';
+import { realiseChineseTones } from './zh-tones.js';
 
 export { createRecognizer } from './recognizer-stream.js';
 
@@ -356,8 +357,9 @@ export function recognizeDecoded(
           )
         )
       : primary;
-  const { ipa, text, modes = [] } = withModes;
-  const words = withModes.words.map(publicWord);
+  const toned = realiseChineseTones(withModes);
+  const { ipa, text, modes = [] } = toned;
+  const words = toned.words.map(publicWord);
   const result = {
     ipa,
     text,

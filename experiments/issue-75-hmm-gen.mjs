@@ -2,6 +2,7 @@
  * Render training utterances for the HMM probe.
  * node experiments/issue-75-hmm-gen.mjs <lang> <count> <firstSeed> <tier> <out.bin>
  * Voices: random heads of the presets any, male, female, child by seed.
+ * Env WHISPER=1 (or 0.5 for half) wraps sentences in whisper markup.
  * Env PITCH=1 adds pitch statics (30 dims) and zh tone units; the 8 kHz
  * audio is kept as base64 Int16 in "audio".
  * Unlicense.
@@ -21,6 +22,8 @@ const [lang, count = '50', first = '1000', tier = 'telephone', out] =
   process.argv.slice(2);
 const presets = ['any', 'male', 'female', 'child'];
 const pitch = process.env.PITCH === '1';
+// WHISPER=1 renders whole whispered sentences, WHISPER=0.5 every other one.
+const whisper = Number(process.env.WHISPER ?? 0);
 const items = [];
 let seconds = 0;
 for (let i = 0; i < Number(count); i++) {
@@ -29,8 +32,10 @@ for (let i = 0; i < Number(count); i++) {
   const text = sampleSentence(lang, random);
   let spoken;
   try {
-    spoken = synthesize(text, {
+    const whispered = whisper > 0 && (whisper >= 1 || seed % 2 === 0);
+    spoken = synthesize(whispered ? `[whisper]${text}[/whisper]` : text, {
       lang,
+      markup: whispered,
       tier,
       head: 'random',
       preset: presets[seed % 4],
