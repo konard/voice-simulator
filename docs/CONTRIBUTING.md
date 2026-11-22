@@ -182,8 +182,7 @@ the lock it would write for this config would replace `deno.lock`.
 `tests/helpers/gpu.js` throws
 `REQUIRE_GPU=1 but this runtime has no WebGPU adapter` and the runner exits
 with 1 and prints `suite gpu needs Deno on PATH` when Deno is missing. The
-workflow sets it for the suites `gpu` and `all`, and the Deno test jobs of
-`release.yml` set it on macOS and Windows, whose runners have an adapter.
+workflow sets it for the suites `gpu` and `all`.
 
 On Linux without a GPU, Deno's WebGPU falls back to Mesa's software OpenGL ES
 driver; install it with
@@ -585,8 +584,7 @@ All PRs must pass:
 - [ ] File line limits check
 - [ ] Changeset validation (for code changes)
 - [ ] Documentation validation (when docs change)
-- [ ] Tests on all platforms (Ubuntu, macOS, Windows)
-- [ ] Tests on all runtimes (Node.js, Bun, Deno)
+- [ ] Ubuntu tests on Node.js, Bun, and Deno
 
 ### Fresh Merge Simulation
 

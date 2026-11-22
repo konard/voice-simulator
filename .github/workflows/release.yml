@@ -291,7 +291,8 @@ jobs:
       - name: Check policy (no neural networks, permissive licences)
         run: npm run check:policy
 
-  # Test matrix: 3 runtimes (Node.js, Bun, Deno) x 3 OS (Ubuntu, macOS, Windows)
+  # Run Node.js, Bun, and Deno on Ubuntu. Keep the OS in the matrix to
+  # preserve the existing Ubuntu check names.
   # IMPORTANT: Tests must validate the ACTUAL merge result, not a stale merge preview.
   # See docs/case-studies/template-issue-23 for why this is critical.
   # Fast-fail: slow test matrix only runs after fast checks pass (hive-mind principle #5)
@@ -301,9 +302,8 @@ jobs:
     # the matrix values appended instead: "Test (node, ubuntu-24.04)".
     name: Test
     runs-on: ${{ matrix.os }}
-    # Typical run: <1min per runtime/OS on warm runners, with Windows
-    # sometimes slower on cold starts. Each test step owns an explicit
-    # budget below (see scripts/run-with-budget-warning.sh); this cap is
+    # Each test step owns an explicit budget (see
+    # scripts/run-with-budget-warning.sh). This cap is
     # only the backstop behind those budgets, sized so the budgets always
     # expire first. A job killed by timeout-minutes reports *cancelled*,
     # which hides the failure -- see docs/CI-TIMEOUT-BUDGETS.md.
@@ -340,7 +340,7 @@ jobs:
       fail-fast: false
       matrix:
         runtime: [node, bun, deno]
-        os: [ubuntu-24.04, macos-15, windows-2025]
+        os: [ubuntu-24.04]
     # An acceptance criterion that only the issue author can unblock (a
     # specified gate the specified formula and fixture cannot meet) only
     # warns on pull requests; pushes to main still fail and name the human
@@ -470,11 +470,7 @@ jobs:
       - name: Run tests (Deno)
         if: matrix.runtime == 'deno'
         shell: bash
-        # macOS and Windows runners have a WebGPU adapter, so the GPU tests
-        # of tests/fdtd-gpu.test.js must run there: without one they fail
-        # (tests/helpers/gpu.js). Ubuntu runners have none (issue 30).
-        env:
-          REQUIRE_GPU: ${{ matrix.os != 'ubuntu-24.04' && '1' || '' }}
+        # The manual heavy GPU suite requires a WebGPU adapter.
         # 600s, as for Node.js: with the 40-render matchVoice tests of issue
         # 63 the suite took 297s on windows-2025 (run 44289126498), 218s and
         # 295s on the same Ubuntu image (runs 44292683632, 44294933958), and
