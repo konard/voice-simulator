@@ -12,7 +12,7 @@ import { roundTrip, sentences } from '../tests/helpers/roundtrip.js';
 import { features } from './issue-75-hmm-lib.mjs';
 import { applyLda, fitLda, transformItems } from './issue-75-hmm-lda.mjs';
 import { trainContextModel } from './issue-75-hmm-context.mjs';
-import { loadItems, trainModel } from './issue-75-hmm-model.mjs';
+import { itemDim, loadItems, trainModel } from './issue-75-hmm-model.mjs';
 import {
   alignWords,
   buildNetwork,
@@ -98,7 +98,11 @@ if (env.MODEL && existsSync(env.MODEL)) {
   expansions = learnExpansions(items);
   if (env.LDA) {
     const sample = items.filter((_, i) => i % 4 === 0);
-    lda = fitLda(sample, { dims: Number(env.LDA), ctx: Number(env.CTX ?? 4) });
+    lda = fitLda(sample, {
+      dims: Number(env.LDA),
+      ctx: Number(env.CTX ?? 4),
+      dim: itemDim(items[0]),
+    });
     items = transformItems(lda, items);
     console.log('lda', elapsed());
   }
@@ -128,12 +132,14 @@ console.log(
 );
 
 function frontEnd(samples, rate) {
-  const f = features(samples, rate);
+  const pitch = (lda?.dim ?? 26) === 30;
+  const f = features(samples, rate, { pitch });
   if (!lda) {
     return f;
   }
-  const flat = new Float32Array(f.length * 26);
-  f.forEach((v, t) => flat.set(v, t * 26));
+  const D = lda.dim;
+  const flat = new Float32Array(f.length * D);
+  f.forEach((v, t) => flat.set(v, t * D));
   const out = applyLda(lda, flat, f.length);
   const n = lda.rows.length;
   return Array.from({ length: f.length }, (_, t) =>
@@ -202,6 +208,9 @@ for (const tier of tierArg.split(',')) {
       sec: 0,
       audio: 0,
       time: [0, 0],
+      tone: [0, 0],
+      stress: [0, 0],
+      mark: 0,
     };
     decodeSeconds = 0;
     for (const preset of presets) {
@@ -224,6 +233,15 @@ for (const tier of tierArg.split(',')) {
         sum.audio += r.spoken.duration;
         sum.time[0] += r.timeErrors.total;
         sum.time[1] += r.timeErrors.errors.length;
+        if (r.toneErrors) {
+          sum.tone[0] += r.toneErrors.distance;
+          sum.tone[1] += r.toneErrors.referenceLength;
+        }
+        if (r.stressHits) {
+          sum.stress[0] += r.stressHits.hits;
+          sum.stress[1] += r.stressHits.count;
+        }
+        sum.mark += r.sentenceMark !== null;
         if (env.VERBOSE || r.soundWer.rate > 0) {
           const raw = audioToIpa.last.words.map((w) => w.word).join(' ');
           console.log(
@@ -251,6 +269,12 @@ for (const tier of tierArg.split(',')) {
       'time',
       (sum.time[0] / Math.max(1, sum.time[1])).toFixed(1),
       'ms',
+      ...(sum.tone[1] ? ['tone', (sum.tone[0] / sum.tone[1]).toFixed(3)] : []),
+      ...(sum.stress[1]
+        ? ['stress', (sum.stress[0] / sum.stress[1]).toFixed(3)]
+        : []),
+      'marks',
+      (sum.mark / sum.n).toFixed(2),
       'RTF decode',
       (decodeSeconds / sum.audio).toFixed(2),
       'recognize',

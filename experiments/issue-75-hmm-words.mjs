@@ -6,6 +6,7 @@
  */
 import { getLexicon } from '../src/recognition/lexicon.js';
 import { contextClass, contextKey } from './issue-75-hmm-context.mjs';
+import { toneClass, toneUnits } from './issue-75-hmm-lib.mjs';
 import { gmmScore } from './issue-75-hmm-model.mjs';
 
 const TONES = ['', '˩', '˨', '˧', '˦', '˥'];
@@ -54,6 +55,31 @@ export function stateIndexer(model) {
     const cd = key ? model.contextIndex?.get(key) : undefined;
     return cd ?? ci.get(`${unit}#${s}`);
   };
+}
+
+/**
+ * Tone variants of a Mandarin pronunciation: a word-final third tone may
+ * be read as a rising tone (third-tone sandhi), 不 and 一 change by context.
+ */
+export function toneVariants(word, tokens) {
+  const out = [tokens];
+  const toned = tokens.findLastIndex((t) => t.tone?.length);
+  if (toned < 0) {
+    return out;
+  }
+  const withTone = (tone) =>
+    tokens.map((t, i) => (i === toned ? { ...t, tone } : t));
+  const c = toneClass(tokens[toned].tone);
+  if (c === 3) {
+    out.push(withTone([3, 5]));
+  }
+  if (word === '不' || word === '一') {
+    out.push(withTone([3, 5]));
+  }
+  if (word === '一') {
+    out.push(withTone([5, 1]));
+  }
+  return out;
 }
 
 function lnProbability(cost) {
@@ -118,44 +144,51 @@ export function buildNetwork(
     const root = { children: new Map() };
     const silence = newNode('sil', lang);
     const seen = new Set();
+    const tonal = lang === 'zh' && model.units.some((u) => u.includes('@'));
     for (const entry of lexicon.pronunciations()) {
       if (!allowed.has(entry.word)) {
         continue;
       }
-      const tokens = entry.tokens.filter(
+      const spoken = entry.tokens.filter(
         (t) => t.kind === 'vowel' || t.kind === 'consonant'
       );
-      if (!tokens.length || tokens.some((t) => !stateOf.has(`${t.symbol}#0`))) {
-        skipped++;
-        continue;
-      }
-      const key = `${entry.word}\t${tokens.map(tokenIpa).join(' ')}`;
-      if (seen.has(key)) {
-        continue;
-      }
-      seen.add(key);
-      let node = root;
-      tokens.forEach((t, i) => {
-        const left = i ? contextClass(tokens[i - 1].symbol) : null;
-        const right =
-          i + 1 < tokens.length ? contextClass(tokens[i + 1].symbol) : null;
-        const key = `${t.symbol}>${right}`;
-        let child = node.children.get(key);
-        if (!child) {
-          child = newNode(t.symbol, lang, left, right);
-          node.children.set(key, child);
+      for (const tokens of tonal
+        ? toneVariants(entry.word, spoken)
+        : [spoken]) {
+        const units = tonal ? toneUnits(tokens) : tokens.map((t) => t.symbol);
+        if (!tokens.length || units.some((u) => !stateOf.has(`${u}#0`))) {
+          skipped++;
+          continue;
         }
-        node = child;
-      });
-      const id = words.length;
-      words.push({
-        word: entry.word,
-        lang,
-        ipa: entry.ipa,
-        tokens,
-        count: entry.count,
-      });
-      node.words.push(id);
+        const key = `${entry.word}\t${tokens.map(tokenIpa).join(' ')}`;
+        if (seen.has(key)) {
+          continue;
+        }
+        seen.add(key);
+        let node = root;
+        tokens.forEach((t, i) => {
+          const left = i ? contextClass(tokens[i - 1].symbol) : null;
+          const right =
+            i + 1 < tokens.length ? contextClass(tokens[i + 1].symbol) : null;
+          const key = `${units[i]}>${right}`;
+          let child = node.children.get(key);
+          if (!child) {
+            child = newNode(units[i], lang, left, right);
+            node.children.set(key, child);
+          }
+          node = child;
+        });
+        const id = words.length;
+        words.push({
+          word: entry.word,
+          lang,
+          ipa: entry.ipa,
+          tokens,
+          units,
+          count: entry.count,
+        });
+        node.words.push(id);
+      }
     }
     // Unigram look-ahead: the best ln p of any word below each node.
     const uni = (id) =>
@@ -476,9 +509,10 @@ export function alignWords(
       const right =
         i + 1 < w.tokens.length ? contextClass(w.tokens[i + 1].symbol) : null;
       tokens.push({ word: wi, token: t });
-      pushUnit(t.symbol, ti, false, left, right);
-      if (stateOf.has(`${t.symbol}_r#0`)) {
-        pushUnit(`${t.symbol}_r`, ti, true, left, right);
+      const unit = w.units?.[i] ?? t.symbol;
+      pushUnit(unit, ti, false, left, right);
+      if (stateOf.has(`${unit}_r#0`)) {
+        pushUnit(`${unit}_r`, ti, true, left, right);
       }
     });
     sil();

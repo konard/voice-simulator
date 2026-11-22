@@ -5,7 +5,7 @@
  */
 import { decodeFeats } from './issue-75-hmm-model.mjs';
 
-export const STATIC = 13;
+export const STATIC = 13; // cepstral statics of 26-dim features
 
 /** Cyclic Jacobi eigen decomposition of a symmetric matrix (row-major). */
 export function symmetricEigen(matrix, n) {
@@ -67,6 +67,7 @@ export function symmetricEigen(matrix, n) {
 
 /** Stack the static cepstra of frames t-ctx..t+ctx. */
 export function stack(feats, frames, dim, ctx) {
+  const STATIC = dim === 26 ? 13 : dim / 2;
   const width = STATIC * (2 * ctx + 1);
   const out = new Float64Array(frames * width);
   for (let t = 0; t < frames; t++) {
@@ -81,7 +82,7 @@ export function stack(feats, frames, dim, ctx) {
 }
 
 export function fitLda(items, { ctx = 4, dims = 40, dim = 26 } = {}) {
-  const width = STATIC * (2 * ctx + 1);
+  const width = (dim / 2) * (2 * ctx + 1);
   const classes = new Map();
   const total = new Float64Array(width);
   let count = 0;

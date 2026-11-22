@@ -9,6 +9,8 @@ import { resample } from '../src/audio/resample.js';
 import { fft, hzToMel, melToHz } from '../src/metrics/spectrum.js';
 import { getCounts } from '../src/recognition/data/index.js';
 import { createRandom } from '../src/random.js';
+import { analyzeFrames } from '../src/recognition/frontend.js';
+import { trackPitch } from '../src/recognition/pitch.js';
 
 export const RATE = 8000;
 const WINDOW = 200;
@@ -48,9 +50,52 @@ const DCT = Array.from({ length: CEPS }, (_, n) =>
   )
 );
 
+/** Speech at the model rate. */
+export function modelAudio(samples, sampleRate) {
+  return sampleRate === RATE ? samples : resample(samples, sampleRate, RATE);
+}
+
+/**
+ * Pitch statics per frame: log2 f0 minus the utterance median of the
+ * voiced frames, interpolated across unvoiced frames, and the voicing.
+ */
+export function pitchStatics(x, count) {
+  const frames = analyzeFrames(x, RATE, { hop: 0.01 });
+  const p = trackPitch(frames);
+  const lf0 = new Float64Array(count).fill(NaN);
+  const voicing = new Float64Array(count);
+  for (let t = 0; t < count; t++) {
+    const time = (t * HOP + WINDOW / 2) / RATE;
+    const i = Math.round((time - p.startTime) / p.hop);
+    if (i >= 0 && i < p.count) {
+      voicing[t] = p.voicing[i];
+      if (p.f0[i] > 0 && p.voicing[i] > 0.5) {
+        lf0[t] = Math.log2(p.f0[i]);
+      }
+    }
+  }
+  const voiced = [...lf0].filter((v) => !Number.isNaN(v)).sort((a, b) => a - b);
+  const median = voiced.length ? voiced[voiced.length >> 1] : 0;
+  let last = -1;
+  for (let t = 0; t <= count; t++) {
+    if (t < count && Number.isNaN(lf0[t])) {
+      continue;
+    }
+    const right = t < count ? lf0[t] : null;
+    const left = last >= 0 ? lf0[last] : right;
+    for (let u = last + 1; u < t; u++) {
+      const a = left ?? median;
+      const b = right ?? a;
+      lf0[u] = a + ((b - a) * (u - last)) / (t - last);
+    }
+    last = t;
+  }
+  return { lf0: lf0.map((v) => v - median), voicing };
+}
+
 /** Log mel cepstra c0..c12 with CMN of c1.., c0 relative to the max, plus deltas. */
-export function features(samples, sampleRate) {
-  const x = sampleRate === RATE ? samples : resample(samples, sampleRate, RATE);
+export function features(samples, sampleRate, { pitch = false } = {}) {
+  const x = modelAudio(samples, sampleRate);
   const count = Math.max(0, Math.floor((x.length - WINDOW) / HOP) + 1);
   const re = new Float64Array(SIZE);
   const im = new Float64Array(SIZE);
@@ -116,23 +161,81 @@ export function features(samples, sampleRate) {
     }
     return v;
   });
-  const D = CEPS * 2;
-  return base.map((c, t) => {
-    const v = new Float32Array(D);
+  let statics = base;
+  if (pitch) {
+    const { lf0, voicing } = pitchStatics(x, base.length);
+    statics = base.map((c, t) => {
+      const v = new Float64Array(CEPS + 2);
+      v.set(c);
+      v[CEPS] = 4 * lf0[t];
+      v[CEPS + 1] = voicing[t];
+      return v;
+    });
+  }
+  const S = statics[0]?.length ?? CEPS;
+  return statics.map((c, t) => {
+    const v = new Float32Array(2 * S);
     v.set(c);
-    const a = base[Math.max(0, t - 2)];
-    const b = base[Math.max(0, t - 1)];
-    const d = base[Math.min(base.length - 1, t + 1)];
-    const e = base[Math.min(base.length - 1, t + 2)];
-    for (let n = 0; n < CEPS; n++) {
-      v[CEPS + n] = (2 * (e[n] - a[n]) + (d[n] - b[n])) / 10;
+    const a = statics[Math.max(0, t - 2)];
+    const b = statics[Math.max(0, t - 1)];
+    const d = statics[Math.min(statics.length - 1, t + 1)];
+    const e = statics[Math.min(statics.length - 1, t + 2)];
+    for (let n = 0; n < S; n++) {
+      v[S + n] = (2 * (e[n] - a[n]) + (d[n] - b[n])) / 10;
     }
     return v;
   });
 }
 
+/** Tone class of a token tone: 1 level, 2 rising, 3 low, 4 falling, 0 none. */
+export function toneClass(tone) {
+  if (!tone?.length) {
+    return 0;
+  }
+  const [a] = tone;
+  const b = tone.at(-1);
+  if (tone.length === 3 || (a <= 2 && b <= 2)) {
+    return 3;
+  }
+  return b > a ? 2 : b < a ? 4 : 1;
+}
+
+/**
+ * Unit names of a token list: vowels of a toned syllable (the toned vowel
+ * and the vowels right before it) take the tone class, as "a@4".
+ */
+export function toneUnits(tokens) {
+  const units = tokens.map((t) => t.symbol);
+  for (let i = 0; i < tokens.length; i++) {
+    const c = toneClass(tokens[i].tone);
+    if (!c) {
+      continue;
+    }
+    for (let j = i; j >= 0 && tokens[j].kind === 'vowel'; j--) {
+      if (j < i && tokens[j].tone?.length) {
+        break;
+      }
+      units[j] = `${tokens[j].symbol}@${c}`;
+    }
+  }
+  return units;
+}
+
+/** Unit name of every plan token (Map token → unit). */
+export function planTokenUnits(plan, tones) {
+  const tokens = [];
+  for (const seg of plan.segments) {
+    if (seg.kind !== 'pause' && seg.token !== tokens.at(-1)) {
+      tokens.push(seg.token);
+    }
+  }
+  const units = tones ? toneUnits(tokens) : tokens.map((t) => t.symbol);
+  return new Map(tokens.map((t, i) => [t, units[i]]));
+}
+
 /** Frame labels from the plan segments: phone symbol and third of segment. */
-export function frameLabels(plan, frames) {
+export function frameLabels(plan, frames, { tones = false } = {}) {
+  const unitOf = planTokenUnits(plan, tones);
   const labels = new Array(frames).fill('sil');
   const states = new Int8Array(frames);
   // Word-boundary pauses shorter than 30 ms carry no silence: the
@@ -152,9 +255,9 @@ export function frameLabels(plan, frames) {
       label = 'sil';
     } else if (seg.kind === 'release' || seg.token === previous) {
       // Stop releases and the frication of affricates.
-      label = `${seg.token.symbol}_r`;
+      label = `${unitOf.get(seg.token)}_r`;
     } else {
-      label = seg.token.symbol;
+      label = unitOf.get(seg.token);
     }
     previous = seg.token;
     const from = Math.round((seg.start * RATE - WINDOW / 2) / HOP);
@@ -171,7 +274,8 @@ export function frameLabels(plan, frames) {
 }
 
 /** Units of each spoken token, e.g. "k k_r" for a released stop. */
-export function tokenUnits(plan) {
+export function tokenUnits(plan, { tones = false } = {}) {
+  const unitOf = planTokenUnits(plan, tones);
   const out = [];
   let previous;
   for (const seg of plan.segments) {
@@ -180,9 +284,9 @@ export function tokenUnits(plan) {
       continue;
     }
     if (seg.token === previous) {
-      out[out.length - 1] += ` ${seg.token.symbol}_r`;
+      out[out.length - 1] += ` ${unitOf.get(seg.token)}_r`;
     } else {
-      out.push(seg.token.symbol);
+      out.push(unitOf.get(seg.token));
     }
     previous = seg.token;
   }
