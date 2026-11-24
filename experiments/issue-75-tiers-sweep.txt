@@ -1,0 +1,33 @@
+Per-language pruning of the HMM word decoder (issue 75), measured on
+2026-11-24 at commit 570a11c plus the change.
+
+Telephone, sentences 1-20, male and female:
+node experiments/issue-75-hmm-eval.mjs telephone hi,ru male,female 0 20
+
+            one beam (before)          per-language beam (after)
+  lang      PER    soundWER  lang      PER    soundWER  lang
+  en        0.125  0.299     1.00      0.125  0.299     1.00
+  ru        0.178  0.455     0.93      0.173  0.463     0.95
+  hi        0.208  0.374     0.97      0.188  0.359     1.00
+  zh        0.069  0.281     0.97      0.069  0.281     0.97
+
+Tiers set, sentences 2 and 20, male, random head seed 1:
+node experiments/issue-75-tiers-sweep.mjs <cacheDir>
+
+  model                         decoder   mean PER  language  ms/utt
+  shipped                       before    0.490     35/48     1945
+  shipped                       after     0.490     35/48     3095
+  candidate (hmm5+6+7, CD 240)  before    0.315     40/48     1775
+  candidate (hmm5+6+7, CD 240)  after     0.305     41/48     2983
+
+With the candidate model, "She sells sea shells by the sea shore." at the
+high tier went from Mandarin ("取捐躯倦拜个去作。", PER 0.86) to English
+("She cells she cells i the she showed.", PER 0.36). The candidate was not
+shipped: its Mandarin sound WER at telephone is 0.431 against 0.281.
+
+Remaining errors of the tiers set (shipped model, after):
+- The 3D tiers (high, ultra, studio) fit the models poorly (about -51 to
+  -60 log-likelihood per frame against -37 at medium): en sentence 2 PER
+  0.77-0.95.
+- One-word answers (sentence 20: Yes. / Да. / हाँ। / 对。) are often heard
+  in another language: ru and zh at most tiers.

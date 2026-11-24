@@ -6,6 +6,10 @@ import {
   hmmFrameTime,
   hmmPitchStatics,
 } from '../src/recognition/hmm-features.js';
+import {
+  HMM_DECODE_DEFAULTS,
+  languageThresholds,
+} from '../src/recognition/hmm-decode.js';
 import { getHmmModel } from '../src/recognition/hmm-model.js';
 import {
   firstToneClass,
@@ -162,4 +166,29 @@ it('lets a rising sandhi variant go on only before the tone that causes it', () 
       assert.equal(firstToneClass(zh.words[id].tokens), before);
     }
   }
+});
+
+it('prunes each language against its own best token (issue 75)', () => {
+  // English trails Mandarin by 200 at this frame, more than the beam of
+  // 120: one beam over all languages would drop every English token.
+  const nodes = [{ lang: 'en' }, { lang: 'en' }, { lang: 'zh' }];
+  const frame = (en) => [
+    [0, en],
+    [1, en - 140],
+    [2, -300],
+  ];
+  const settings = { ...HMM_DECODE_DEFAULTS, beam: 120, languageBeam: 400 };
+  const kept = languageThresholds(nodes, frame(-500), -300, settings);
+  assert.equal(kept.get('en'), -620);
+  assert.equal(kept.get('zh'), -420);
+  // A language more than languageBeam behind the best goes.
+  const gone = languageThresholds(nodes, frame(-800), -300, settings);
+  assert.equal(gone.get('en'), -700);
+  // maxActive keeps the best nodes of each language, not of all.
+  const one = languageThresholds(nodes, frame(-500), -300, {
+    ...settings,
+    maxActive: 1,
+  });
+  assert.equal(one.get('en'), -500);
+  assert.equal(one.get('zh'), -420);
 });

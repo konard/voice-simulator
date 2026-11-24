@@ -7,7 +7,13 @@
 import { stateIndex, stateScore } from './hmm-model.js';
 
 export const HMM_DECODE_DEFAULTS = Object.freeze({
+  // Beam of each language against its own best token: the languages share
+  // no words, so a fixed beam over all of them let one language's tokens
+  // crowd out the right one long before the sentence ended (the 3D tiers
+  // decoded English as Mandarin). A language goes only once its best token
+  // falls `languageBeam` behind the best of all.
   beam: 120,
+  languageBeam: 400,
   lmw: 8,
   wip: -4,
   silencePenalty: -2,
@@ -226,6 +232,34 @@ function backtrace(words, records, best) {
 }
 
 /**
+ * Pruning threshold of each language at one frame: `beam` below its own
+ * best token, at most `languageBeam` below the best of all, and its
+ * `maxActive` best nodes.
+ */
+export function languageThresholds(nodes, processed, best, settings) {
+  const { beam, languageBeam, maxActive } = settings;
+  const values = new Map();
+  for (const [id, nodeBest] of processed) {
+    const { lang } = nodes[id];
+    if (!values.has(lang)) {
+      values.set(lang, []);
+    }
+    values.get(lang).push(nodeBest);
+  }
+  const thresholds = new Map();
+  for (const [lang, scores] of values) {
+    const own = scores.reduce((a, b) => Math.max(a, b), -Infinity);
+    let threshold = Math.max(own - beam, best - languageBeam);
+    if (scores.length > maxActive) {
+      scores.sort((a, b) => b - a);
+      threshold = Math.max(threshold, scores[maxActive - 1]);
+    }
+    thresholds.set(lang, threshold);
+  }
+  return thresholds;
+}
+
+/**
  * Best word sequence of the frames: words with their tokens, units and
  * frame ranges, the total score and the language of the last word.
  * `options.onWordEnd(id, score, start, end)` sees every word end inside
@@ -234,7 +268,7 @@ function backtrace(words, records, best) {
  */
 export function decodeWords(network, feats, frames, options = {}) {
   const settings = { ...HMM_DECODE_DEFAULTS, ...options };
-  const { beam, lmw, releaseSkip, maxActive, oovStart } = settings;
+  const { lmw, releaseSkip, oovStart } = settings;
   const languages = settings.languages ?? [...network.trees.keys()];
   const { nodes, words, emit, stay, go, trees } = network;
   const S = emit.length;
@@ -292,19 +326,16 @@ export function decodeWords(network, feats, frames, options = {}) {
       best = Math.max(best, nodeBest);
       processed.push([id, nodeBest]);
     }
-    let threshold = best - beam;
-    if (processed.length > maxActive) {
-      const sorted = processed.map((p) => p[1]).sort((a, b) => b - a);
-      threshold = Math.max(threshold, sorted[maxActive - 1]);
-    }
+    const thresholds = languageThresholds(nodes, processed, best, settings);
     const next = new Map();
     const nextActive = [];
     const wordEnds = new Map();
     for (const [id, nodeBest] of processed) {
+      const node = nodes[id];
+      const threshold = thresholds.get(node.lang);
       if (nodeBest < threshold) {
         continue;
       }
-      const node = nodes[id];
       const f = node.first;
       for (let i = 0; i < node.count; i++) {
         if (cur[f + i] < threshold) {
@@ -362,7 +393,7 @@ export function decodeWords(network, feats, frames, options = {}) {
       }
     }
     for (const rec of wordEnds.values()) {
-      if (rec.score >= threshold) {
+      if (rec.score >= thresholds.get(rec.lang)) {
         restart(next, network, records, rec, settings);
       }
     }

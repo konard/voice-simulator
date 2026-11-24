@@ -42,3 +42,7 @@ tone no longer splits it.
 The 3D tiers (high, ultra, studio) no longer turn to NaN for some random
 heads: a lip or nostril opening scaled up to the lip area is capped at the
 conductance its cell can carry stably (JavaScript and Rust).
+The word decoder prunes each language against its own best token (and drops
+a language only once it falls 400 behind the best of all), so audio that
+fits the models poorly, as from the 3D tiers, no longer loses the right
+language early in the sentence.
