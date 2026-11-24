@@ -36,3 +36,6 @@ Mandarin is heard as `f`; `recognize()` passes a `trace` option on to the
 mode stage. The round-trip mode check passes the speaking voice.
 A whisper split by silent stop closures of up to 0.5 s, with no other speech
 between its parts, is now heard as one whispered span (JavaScript and Rust).
+A loud or soft sentence is heard as one effort span when three in four of its
+words keep their pitch within 6% of the pooled pitch, so one word of misheard
+tone no longer splits it.

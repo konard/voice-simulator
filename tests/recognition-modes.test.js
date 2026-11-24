@@ -315,6 +315,30 @@ describe('mode recognition', () => {
       heard.modes.some((s) => s.notation === 'f' && s.from === 0 && s.to === 4)
     ).toBe(true);
   });
+  it('hears one loud sentence despite a word of misheard tone (issue 75)', () => {
+    // node experiments/issue-75-misheard-effort.mjs
+    const audio = render('zh', 'f', '你好，你今天怎么样？');
+    const w = audio.timeline.words;
+    const join = (a, b, ipa) => ({
+      ...w[a],
+      end: w[b].end,
+      ipa:
+        ipa ??
+        w
+          .slice(a, b + 1)
+          .map((x) => x.ipa)
+          .join(''),
+    });
+    // As wideband recognition heard it: 你好 | 泥 | 今天 | 怎么样.
+    const words = [join(0, 1), join(2, 2, 'ni˧˥'), join(3, 4), join(5, 7)];
+    const heard = recognize(
+      { ...audio, timeline: { ...audio.timeline, words } },
+      'zh'
+    );
+    expect(
+      heard.modes.some((s) => s.notation === 'f' && s.from === 0 && s.to === 4)
+    ).toBe(true);
+  });
   it('retains fields, copies results, abstains on short phrases and honors modes:false', () => {
     const audio = render('en', 'f', 'Yes.');
     const input = {

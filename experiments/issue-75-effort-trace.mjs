@@ -41,6 +41,9 @@ for (const lang of langs.split(',')) {
   const pooled = summarize(vowels);
   const pitches = vowels.map((w) => w.pitch);
   const spread = quantile(pitches, 0.9) - quantile(pitches, 0.1);
+  const steady =
+    pitches.filter((p) => Math.abs(p - pooled.pitch) < pooled.pitch * 0.06)
+      .length / pitches.length;
   const r = (v) => (Number.isFinite(v) ? v.toFixed(2) : String(v));
   console.log(
     lang,
@@ -50,7 +53,8 @@ for (const lang of langs.split(',')) {
   console.log(
     `  displacement ${r(semitones(pooled.pitch, base.pitch))} st (≥3)` +
       ` pitch ${r(pooled.pitch)}/${r(base.pitch)}` +
-      ` spread ${r(spread)} < ${r(pooled.pitch * 0.12)}` +
+      ` spread ${r(spread)} (was < ${r(pooled.pitch * 0.12)})` +
+      ` steady ${r(steady)} (≥0.75)` +
       ` jitter ${r(pooled.jitter)} (<2) voiced ${r(pooled.voiced)} (>0.8)` +
       ` cpp ${r(pooled.cpp - base.cpp)} (>-1.5) hnr ${r(pooled.hnr - base.hnr)} (>-4)`
   );

@@ -240,19 +240,21 @@ function corroborateLabels(features, base, knownVoice, labels) {
     f1: knownVoice ? quantile(vowels.map((w) => w.f1)) : null,
   };
   const displacement = semitones(pooled.pitch, base.pitch);
-  const spread =
-    quantile(
-      vowels.map((w) => w.pitch),
-      0.9
-    ) -
-    quantile(
-      vowels.map((w) => w.pitch),
-      0.1
-    );
+  // The pitch of the voiced words stays within a 12% band: the 10th to
+  // 90th percentile, or three in four words around the pooled pitch, so
+  // one word whose tone or phones were misheard (its neutral pitch is then
+  // wrong) does not break the band of a longer sentence.
+  // node experiments/issue-75-effort-trace.mjs wideband zh
+  const pitches = vowels.map((w) => w.pitch);
+  const band = pooled.pitch * 0.12;
+  const steady =
+    quantile(pitches, 0.9) - quantile(pitches, 0.1) < band ||
+    pitches.filter((p) => Math.abs(p - pooled.pitch) < band / 2).length >=
+      0.75 * pitches.length;
   const coherent =
     knownVoice &&
     Math.abs(displacement) >= 3 &&
-    spread < pooled.pitch * 0.12 &&
+    steady &&
     pooled.jitter < 2 &&
     pooled.voiced > 0.8 &&
     pooled.cpp - base.cpp > -1.5 &&
