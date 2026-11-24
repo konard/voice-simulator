@@ -9,7 +9,7 @@
  * the candidates that end near its end with its rank among them (aligned
  * candidates). The oracle error is the share of reference words that are
  * not among the top `TOP` candidates at their own boundaries.
- * node experiments/issue-75-smoke-diagnose.mjs [lang:index ...] [tier] [preset]
+ * node experiments/issue-75-smoke-diagnose.mjs [lang:index|lang:text ...] [tier] [preset|-]
  * Environment: TOP (5), MARGIN (frames, 3). Unlicense.
  */
 import { synthesize } from '../src/index.js';
@@ -30,6 +30,8 @@ const MARGIN = Number(process.env.MARGIN ?? 3);
 const LANGUAGES = ['en', 'ru', 'hi', 'zh'];
 const model = getHmmModel();
 const frameOf = (time) => Math.round((time * 8000 - 60) / 80);
+// Tone-stream features of the current case (hmm-tone.js).
+let tone = null;
 const show = (words) =>
   words.map((w) => w.word || `[${w.units.join('')}]`).join(' ');
 
@@ -52,6 +54,7 @@ function referenceWords(spoken, lang) {
 function alignedScore(network, feats, frames, words) {
   let score = -Infinity;
   alignWords(network, feats, frames, words, {
+    tone,
     onScore: (s) => {
       score = s;
     },
@@ -63,6 +66,7 @@ function alignedScore(network, feats, frames, words) {
 function wordEnds(network, feats, frames) {
   const ends = new Map();
   const decoded = decodeWords(network, feats, frames, {
+    tone,
     onWordEnd(id, score, start, end) {
       const list = ends.get(end) ?? [];
       list.push({ id, score, start });
@@ -92,23 +96,25 @@ let missed = 0;
 let total = 0;
 for (const item of cases.length ? cases : ['en:17', 'ru:1', 'zh:1']) {
   const [lang, index] = item.split(':');
-  const text = sentences[lang][Number(index)];
-  const spoken = synthesize(text, {
-    lang,
-    tier,
-    preset,
-    head: 'random',
-    seed: 1,
-  });
-  const { feats, frames } = hmmFeatures(
-    spoken.samples,
-    spoken.sampleRate,
-    model.lda
+  // A case is lang:index of the round-trip sentences or lang:text; the
+  // preset "-" synthesises as recognizer.test.js does (default voice).
+  const text = /^\d+$/u.test(index) ? sentences[lang][Number(index)] : index;
+  const spoken = synthesize(
+    text,
+    preset === '-'
+      ? { lang, tier, seed: 1 }
+      : { lang, tier, preset, head: 'random', seed: 1 }
   );
+  const {
+    feats,
+    frames,
+    tone: toneFeats,
+  } = hmmFeatures(spoken.samples, spoken.sampleRate, model.lda);
+  tone = toneFeats;
   const blindNet = getNetwork(model, LANGUAGES);
   const knownNet = getNetwork(model, [lang]);
   const { decoded: blind, ends } = wordEnds(blindNet, feats, frames);
-  const known = decodeWords(knownNet, feats, frames);
+  const known = decodeWords(knownNet, feats, frames, { tone });
   const ref = referenceWords(spoken, lang);
   const scores = {
     blind: alignedScore(knownNet, feats, frames, blind.words),
@@ -126,7 +132,7 @@ for (const item of cases.length ? cases : ['en:17', 'ru:1', 'zh:1']) {
     `  ref    ${ref.map((w) => w.units.join('')).join(' ')}  acoustic ${scores.ref.toFixed(1)} (${scores.ref > scores.blind ? 'search/LM error' : 'model error'} if blind is wrong)`
   );
   const languageScores = LANGUAGES.map((l) => {
-    const d = decodeWords(getNetwork(model, [l]), feats, frames);
+    const d = decodeWords(getNetwork(model, [l]), feats, frames, { tone });
     return `${l} ${d.score.toFixed(1)}`;
   });
   console.log(`  language scores ${languageScores.join(', ')}`);

@@ -7,6 +7,7 @@
 import { resample } from '../audio/resample.js';
 import { fft, hzToMel, melToHz } from '../metrics/spectrum.js';
 import { analyzeFrames } from './frontend.js';
+import { hmmToneFeatures } from './hmm-tone.js';
 import { trackPitch } from './pitch.js';
 
 export const HMM_RATE = 8000;
@@ -242,9 +243,16 @@ export function applyLda(lda, statics) {
   return out;
 }
 
-/** Model features of speech at any rate, plus the 8 kHz pitch track. */
+/**
+ * Model features of speech at any rate, the tone-stream features
+ * (hmm-tone.js) and the 8 kHz pitch track.
+ */
 export function hmmFeatures(samples, sampleRate, lda) {
   const x = hmmAudio(samples, sampleRate);
   const { statics, pitch } = hmmStatics(x);
-  return { feats: applyLda(lda, statics), frames: statics.length, pitch };
+  const tone = hmmToneFeatures(
+    statics.map((v) => v[CEPS] / 4),
+    statics.map((v) => v[CEPS + 1])
+  );
+  return { feats: applyLda(lda, statics), frames: statics.length, pitch, tone };
 }

@@ -18,4 +18,6 @@ languages (`decoder: 'words'`), trained only on the simulator's own speech.
 Spell words outside the vocabulary with a per-language phone loop (`oov`,
 on by default; `--no-oov` on the command line). The previous phone decoder
 stays available as `decoder: 'phones'` (`--decoder phones`). The HMM state
-scores and LDA projection also run in the Rust engine.
+scores and LDA projection also run in the Rust engine. A tone stream of
+pitch-shape mixtures helps the word decoder tell Mandarin tones apart, and
+pitches more than an octave from the median are ignored.

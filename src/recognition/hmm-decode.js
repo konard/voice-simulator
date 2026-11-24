@@ -18,18 +18,68 @@ export const HMM_DECODE_DEFAULTS = Object.freeze({
   oovStart: -60,
   oovPhone: -4,
   oovWeight: 8,
+  // Weight of the tone stream (hmm-tone.js) against the spectral one; it
+  // applies when `tone` features are given.
+  toneWeight: 2,
 });
 
 /** ln p of a shipped bigram cost (the costs are 0.5 - 0.3 ln p). */
 const lnProbability = (cost) => -(cost - 0.5) / 0.3;
 
-function emissionCache(model, feats) {
+/**
+ * Tone-stream score of each tone mixture at frame t: the weight times the
+ * log posterior of its tone class among the classes of its state, 0 for
+ * the mixture of the states without a tone (hmm-tone.js).
+ */
+function toneCache(tone, feats, weight) {
+  const { states, stateOfKey } = tone;
+  const scores = new Float64Array(states);
+  const peak = new Float64Array(3);
+  const sum = new Float64Array(3);
+  let frame = -1;
+  return (key, t) => {
+    if (frame !== t) {
+      frame = t;
+      peak.fill(-Infinity);
+      sum.fill(0);
+      for (let k = 0; k < states; k++) {
+        const s = stateOfKey[k];
+        if (s >= 0) {
+          scores[k] = stateScore(k, feats, t * tone.dims, tone);
+          peak[s] = Math.max(peak[s], scores[k]);
+        }
+      }
+      for (let k = 0; k < states; k++) {
+        const s = stateOfKey[k];
+        if (s >= 0) {
+          sum[s] += Math.exp(scores[k] - peak[s]);
+        }
+      }
+      for (let k = 0; k < states; k++) {
+        const s = stateOfKey[k];
+        scores[k] =
+          s < 0 ? 0 : weight * (scores[k] - peak[s] - Math.log(sum[s]));
+      }
+    }
+    return scores[key];
+  };
+}
+
+function emissionCache(model, feats, { tone, toneWeight }) {
   const stamp = new Int32Array(model.states).fill(-1);
   const value = new Float64Array(model.states);
+  const toneScore =
+    tone && model.tone && toneWeight
+      ? toneCache(model.tone, tone, toneWeight)
+      : null;
+  const ofTone = model.tone?.ofState;
   return (m, t) => {
     if (stamp[m] !== t) {
       stamp[m] = t;
       value[m] = stateScore(m, feats, t * model.dims, model);
+      if (toneScore) {
+        value[m] += toneScore(ofTone[m], t);
+      }
     }
     return value[m];
   };
@@ -165,6 +215,7 @@ function backtrace(words, records, best) {
  * frame ranges, the total score and the language of the last word.
  * `options.onWordEnd(id, score, start, end)` sees every word end inside
  * the beam, its score relative to the best token of its last frame.
+ * `options.tone` (the `tone` of hmmFeatures) adds the tone stream.
  */
 export function decodeWords(network, feats, frames, options = {}) {
   const settings = { ...HMM_DECODE_DEFAULTS, ...options };
@@ -172,7 +223,7 @@ export function decodeWords(network, feats, frames, options = {}) {
   const languages = settings.languages ?? [...network.trees.keys()];
   const { nodes, words, emit, stay, go, trees } = network;
   const S = emit.length;
-  const score = emissionCache(network.model, feats);
+  const score = emissionCache(network.model, feats, settings);
   let prev = new Float64Array(S).fill(-Infinity);
   let cur = new Float64Array(S).fill(-Infinity);
   let prevHist = new Int32Array(S);
@@ -352,12 +403,14 @@ function alignmentChain(model, words) {
 /**
  * Forced alignment of the decoded words with optional silence between
  * them and optional stop releases; returns per-token frame ranges.
+ * `options.tone` adds the tone stream, as for decodeWords.
  */
 export function alignWords(network, feats, frames, words, options = {}) {
-  const { silencePenalty } = { ...HMM_DECODE_DEFAULTS, ...options };
+  const settings = { ...HMM_DECODE_DEFAULTS, ...options };
+  const { silencePenalty } = settings;
   const { model } = network;
   const { chain, tokens } = alignmentChain(model, words);
-  const score = emissionCache(model, feats);
+  const score = emissionCache(model, feats, settings);
   const N = chain.length;
   let prev = new Float64Array(N).fill(-Infinity);
   let cur = new Float64Array(N);

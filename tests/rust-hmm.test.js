@@ -1,8 +1,17 @@
 /** Class B parity of the Gaussian HMM kernels of the word decoder (issue 75). */
 import { describe, expect } from 'test-anywhere';
-import { applyLda, hmmStatics } from '../src/recognition/hmm-features.js';
+import {
+  applyLda,
+  hmmFeatures,
+  hmmStatics,
+} from '../src/recognition/hmm-features.js';
 import { getHmmModel, stateScore } from '../src/recognition/hmm-model.js';
-import { hmmLdaRust, hmmStateScoresRust } from '../src/recognition/hmm-rust.js';
+import {
+  hmmLdaRust,
+  hmmStateScoresRust,
+  hmmToneFeaturesRust,
+} from '../src/recognition/hmm-rust.js';
+import { hmmToneFeatures } from '../src/recognition/hmm-tone.js';
 import { loadRustEngine, noRust } from './helpers/rust-engine.js';
 import { itUnless } from './helpers/skip.js';
 
@@ -57,6 +66,34 @@ describe('Rust HMM kernels (issue 75)', () => {
       for (const m of states) {
         const js = stateScore(m, feats, t * model.dims, model);
         const got = rust[t * states.length + m];
+        worst = Math.max(worst, Math.abs(got - js) / (1 + Math.abs(js)));
+      }
+    }
+    expect(worst < 1e-12).toBe(true);
+  });
+
+  it('computes the tone features as hmmToneFeatures does', async () => {
+    const module = await loadRustEngine();
+    const { statics } = hmmStatics(sound());
+    const lf0 = statics.map((v) => v[13] / 4);
+    const voicing = statics.map((v) => v[14]);
+    const js = hmmToneFeatures(lf0, voicing);
+    const rust = hmmToneFeaturesRust(module, lf0, voicing);
+    expect(rust.length).toBe(js.length);
+    expect(rust.every((v, i) => v === js[i])).toBe(true);
+  });
+
+  it('scores the tone mixtures as stateScore does', async () => {
+    const module = await loadRustEngine();
+    const { lda, tone } = getHmmModel();
+    const { tone: feats, frames } = hmmFeatures(sound(), RATE, lda);
+    const states = Uint32Array.from({ length: tone.states }, (_, i) => i);
+    const rust = hmmStateScoresRust(module, tone, feats, frames, states);
+    let worst = 0;
+    for (let t = 0; t < frames; t++) {
+      for (const k of states) {
+        const js = stateScore(k, feats, t * tone.dims, tone);
+        const got = rust[t * states.length + k];
         worst = Math.max(worst, Math.abs(got - js) / (1 + Math.abs(js)));
       }
     }

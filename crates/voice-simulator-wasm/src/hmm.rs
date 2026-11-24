@@ -1,6 +1,8 @@
 //! Gaussian HMM exports of the word decoder (issue 75, Unlicense).
 use crate::{check_range, error, f32_slice, f64_slice};
-use voice_simulator_core::recognition::hmm::{state_scores, Lda, Mixtures};
+use voice_simulator_core::recognition::hmm::{
+    state_scores, tone_features, Lda, Mixtures, TONE_DIMS,
+};
 
 fn read<'a, T>(offset: u32, count: u32) -> Result<&'a [T], i32> {
     check_range(offset, count, core::mem::size_of::<T>() as u32)?;
@@ -87,6 +89,24 @@ pub extern "C" fn rec_hmm_lda(
         let statics = read::<f64>(statics, size(frames, stat)?)?;
         let out = f32_slice(out, size(frames, dims)?)?;
         if lda.apply(statics, out) {
+            Ok(0)
+        } else {
+            Err(error::BAD_ARGUMENT)
+        }
+    };
+    run().unwrap_or_else(core::convert::identity)
+}
+
+/// Writes the tone-stream features of `frames` frames of log2 f0 relative
+/// to the median and voicing (f64 each) to `out` (f32, frames × 6), as
+/// `hmmToneFeatures` of hmm-tone.js. Returns 0 or a negative error code.
+#[no_mangle]
+pub extern "C" fn rec_hmm_tone(lf0: u32, voicing: u32, frames: u32, out: u32) -> i32 {
+    let run = || {
+        let lf0 = read::<f64>(lf0, frames)?;
+        let voicing = read::<f64>(voicing, frames)?;
+        let out = f32_slice(out, size(frames, TONE_DIMS as u32)?)?;
+        if tone_features(lf0, voicing, out) {
             Ok(0)
         } else {
             Err(error::BAD_ARGUMENT)

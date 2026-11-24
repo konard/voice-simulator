@@ -1,9 +1,11 @@
 /**
  * The Gaussian HMM kernels of the Rust engine (issue 75): state scores as
- * `stateScore` of hmm-model.js and the projection as `applyLda` of
- * hmm-features.js, computed by `rec_hmm_scores` and `rec_hmm_lda` of the
- * WebAssembly engine. Unlicense.
+ * `stateScore` of hmm-model.js, the projection as `applyLda` of
+ * hmm-features.js and the tone-stream features as `hmmToneFeatures` of
+ * hmm-tone.js, computed by `rec_hmm_scores`, `rec_hmm_lda` and
+ * `rec_hmm_tone` of the WebAssembly engine. Unlicense.
  */
+import { HMM_TONE_DIMS } from './hmm-tone.js';
 import { withWasmMemory } from './wasm-memory.js';
 
 function check(code, name) {
@@ -83,6 +85,34 @@ export function hmmLdaRust(module, lda, statics) {
         out.pointer
       ),
       'HMM LDA'
+    );
+    return Float32Array.from(out.view());
+  });
+}
+
+/**
+ * `hmmToneFeatures(lf0, voicing)` in Rust.
+ * @param {{exports: object, memory: WebAssembly.Memory}} module
+ * @param {ArrayLike<number>} lf0
+ * @param {ArrayLike<number>} voicing
+ */
+export function hmmToneFeaturesRust(module, lf0, voicing) {
+  const frames = lf0.length;
+  if (voicing.length !== frames) {
+    throw new Error('Rust HMM tone failed (lengths differ)');
+  }
+  return withWasmMemory(module, (allocate) => {
+    const pitch = allocate(Float64Array, frames, lf0);
+    const voiced = allocate(Float64Array, frames, voicing);
+    const out = allocate(Float32Array, frames * HMM_TONE_DIMS);
+    check(
+      module.exports.rec_hmm_tone(
+        pitch.pointer,
+        voiced.pointer,
+        frames,
+        out.pointer
+      ),
+      'HMM tone'
     );
     return Float32Array.from(out.view());
   });

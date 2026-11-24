@@ -212,3 +212,12 @@ the Unlicense like the rest of the repository. The steps and seeds are in
 "Recognition model" of [tests/heavy/README.md](../../../tests/heavy/README.md);
 `node scripts/build-hmm-model.mjs <model.json>` packs a trained model into
 these files.
+
+## Tone stream (`hmm-tone.js`)
+
+The tone mixtures of the word decoder (issue 75) score the pitch shape of a
+frame (height, slopes and curvature over up to ±30 frames, voicing) for each
+Mandarin tone class and state, and for every other state together. They are
+fitted on the same synthesised training files as the acoustic model, with
+`node scripts/build-hmm-tone.mjs <train.json...>`, so they are in the public
+domain under the Unlicense like the rest of the repository.

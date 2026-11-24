@@ -142,6 +142,61 @@ impl Lda<'_> {
     }
 }
 
+/// Values per frame of the tone stream (`HMM_TONE_DIMS` of hmm-tone.js).
+pub const TONE_DIMS: usize = 6;
+
+/// Mean, least-squares slope and curvature of `v` over `t ± w`, the ends
+/// held, as `window` of hmm-tone.js.
+fn tone_window(v: &[f64], t: usize, w: isize) -> (f64, f64, f64) {
+    let last = v.len() as isize - 1;
+    let at = |k: isize| v[(t as isize + k).clamp(0, last) as usize];
+    let count = (2 * w + 1) as f64;
+    let (mut mean, mut k2, mut k4) = (0.0, 0.0, 0.0);
+    for k in -w..=w {
+        let kf = k as f64;
+        mean += at(k);
+        k2 += kf * kf;
+        k4 += kf * kf * kf * kf;
+    }
+    mean /= count;
+    let (mut slope, mut curve) = (0.0, 0.0);
+    for k in -w..=w {
+        let kf = k as f64;
+        let y = at(k);
+        slope += kf * y;
+        curve += kf * kf * (y - mean);
+    }
+    (mean, slope / k2, curve / (k4 - k2 * k2 / count))
+}
+
+/// Tone-stream features (`TONE_DIMS` per frame) from log2 f0 relative to
+/// the median and voicing, as `hmmToneFeatures` of hmm-tone.js: height,
+/// slopes over ±5 and ±10 frames, curvature over ±10, height against the
+/// ±30-frame mean and voicing. Returns false when the sizes disagree.
+pub fn tone_features(lf0: &[f64], voicing: &[f64], out: &mut [f32]) -> bool {
+    let frames = lf0.len();
+    if voicing.len() != frames || out.len() < frames * TONE_DIMS {
+        return false;
+    }
+    for t in 0..frames {
+        let (_, near, _) = tone_window(lf0, t, 5);
+        let (_, mid, curve) = tone_window(lf0, t, 10);
+        let (wide, _, _) = tone_window(lf0, t, 30);
+        let row = [
+            4.0 * lf0[t],
+            40.0 * near,
+            40.0 * mid,
+            400.0 * curve,
+            4.0 * (lf0[t] - wide),
+            voicing[t],
+        ];
+        for (d, value) in row.into_iter().enumerate() {
+            out[t * TONE_DIMS + d] = value as f32;
+        }
+    }
+    true
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -191,5 +246,20 @@ mod tests {
         let mut out = [0.0f32; 3];
         assert!(lda.apply(&[1.0, 2.0, 4.0], &mut out));
         assert_eq!(out, [4.0, 7.0, 10.0]);
+    }
+
+    #[test]
+    fn tone_features_follow_a_rising_line() {
+        // lf0 = t / 100: slope 0.01 per frame inside the ±10 window, no
+        // curvature, and the ±30 mean held at the start.
+        let lf0: alloc::vec::Vec<f64> = (0..80).map(|t| t as f64 / 100.0).collect();
+        let voicing = alloc::vec![1.0; 80];
+        let mut out = alloc::vec![0.0f32; 80 * TONE_DIMS];
+        assert!(tone_features(&lf0, &voicing, &mut out));
+        let row = &out[40 * TONE_DIMS..41 * TONE_DIMS];
+        assert!((row[0] - 1.6).abs() < 1e-6);
+        assert!((row[1] - 0.4).abs() < 1e-6 && (row[2] - 0.4).abs() < 1e-6);
+        assert!(row[3].abs() < 1e-5 && row[4].abs() < 1e-6 && row[5] == 1.0);
+        assert!(!tone_features(&lf0, &voicing[1..], &mut out));
     }
 }

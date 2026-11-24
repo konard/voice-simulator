@@ -100,8 +100,17 @@ Training runs on a developer machine, not in CI, in three steps:
 
    ```bash
    node scripts/build-hmm-model.mjs /tmp/hmm/model.json
+   node scripts/build-hmm-tone.mjs /tmp/hmm/*-*.json
    node --test tests/roundtrip-smoke.test.js
    ```
+
+   `build-hmm-tone.mjs` fits the tone stream (`src/recognition/hmm-tone.js`):
+   eight Gaussians of pitch-shape features per Mandarin tone class and state,
+   and eight for every eighth frame of the other states, about 11 minutes for
+   the 28 files. The decoder adds `toneWeight` times the log posterior of the
+   tone class to the spectral score of a toned state (`search.toneWeight`,
+   default 2), because the ±4 frames the LDA sees cannot tell a level tone
+   rising out of a low one from a rising tone.
 
 `experiments/issue-75-hmm-eval.mjs [tier] [langs] [presets] [from] [to]`
 scores the committed model on the round-trip sentences without the rest of the

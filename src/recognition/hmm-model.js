@@ -8,6 +8,8 @@
  */
 import { CONSONANTS, VOWELS } from '../ipa/inventory.js';
 import { HMM_MODEL } from './data/hmm-model.js';
+import { HMM_TONE } from './data/hmm-tone.js';
+import { unpackHmmTone } from './hmm-tone.js';
 
 const BASE64 =
   'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
@@ -123,7 +125,10 @@ export function unpackHmmModel(data) {
 let model;
 /** The shipped model, unpacked on first use. */
 export function getHmmModel() {
-  model ??= unpackHmmModel(HMM_MODEL);
+  if (!model) {
+    model = unpackHmmModel(HMM_MODEL);
+    model.tone = unpackHmmTone(HMM_TONE, model.units, model.contextIndex);
+  }
   return model;
 }
 

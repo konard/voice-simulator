@@ -21,7 +21,7 @@ const spoken = synthesize(sentences[lang][Number(index)], {
   head: 'random',
   seed: 1,
 });
-const { feats, frames } = hmmFeatures(
+const { feats, frames, tone } = hmmFeatures(
   spoken.samples,
   spoken.sampleRate,
   model.lda
@@ -42,6 +42,7 @@ const network = getNetwork(model, [lang]);
 const score = (list) => {
   let s = -Infinity;
   const aligned = alignWords(network, feats, frames, list, {
+    tone,
     onScore: (v) => {
       s = v;
     },
