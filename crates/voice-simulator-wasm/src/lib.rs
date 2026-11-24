@@ -34,6 +34,7 @@ pub mod components;
 pub mod decode;
 pub mod fdtd;
 pub mod formants;
+pub mod hmm;
 pub mod inverse_filter;
 pub mod inversion;
 pub mod landmarks;

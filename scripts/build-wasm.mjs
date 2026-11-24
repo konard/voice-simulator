@@ -80,7 +80,9 @@ import { THREAD_MEMORY } from '../src/engine/layout.js';
 // Lexical prosody and whisper recognition measure 666361 scalar bytes
 // (Rust 1.100.0), rounded up to the next 16384-byte boundary.
 // Recognition kernels measure 704578 scalar bytes (Rust 1.100.0).
-export const WASM_SIZE_BUDGET = 720896;
+// The HMM word decoder kernels of issue 75 measure 722213 scalar and
+// 731355 SIMD bytes (Rust 1.100.0), rounded up to 737280.
+export const WASM_SIZE_BUDGET = 737280;
 
 /**
  * Whether src/engine/voice-simulator-simd.wasm is shipped: only when it
