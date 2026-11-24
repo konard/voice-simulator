@@ -75,6 +75,12 @@ import { FdtdGpu } from './fdtd-gpu.js';
 const COURANT = 0.5;
 const MIN_FILL = 1e-4;
 /**
+ * Largest COURANT² Σ conductance / (fill (1 + h)) of a cell that keeps the
+ * step stable: the Gershgorin bound of the pressure-velocity leapfrog, the
+ * uniform-grid limit COURANT² · 6 ≤ 2 of a free-air cell.
+ */
+const STABLE_LOAD = 2;
+/**
  * Microphone level per cm of cell size: matches the waveguide output level
  * for the same source (the radiated pressure is sampled at one point).
  */
@@ -391,6 +397,7 @@ export class Fdtd3d {
     this.outputSigns = Float64Array.from(outputLinks, (link) =>
       this.cellKind[this.linkA[link]] === CELL_AIR ? -1 : 1
     );
+    this.#indexOpenings();
     this.#placeGlottis(model);
     this.#placePouches(model);
     this.#closeLinks();
@@ -1109,13 +1116,53 @@ export class Fdtd3d {
   }
 
   /**
+   * The tube cell of each opening link, the number of openings of that
+   * cell and its other links (#scaleOpenings keeps the cell stable).
+   */
+  #indexOpenings() {
+    const { outputLinks, linkA, linkB, linkKind, cellKind } = this;
+    const cells = Int32Array.from(outputLinks, (link) =>
+      cellKind[linkA[link]] === CELL_AIR ? linkB[link] : linkA[link]
+    );
+    const others = new Map([...cells].map((cell) => [cell, []]));
+    const shares = new Map();
+    for (let link = 0; link < this.linkCount; link++) {
+      const opening =
+        linkKind[link] === LINK_LIPS || linkKind[link] === LINK_NOSTRILS;
+      for (const cell of [linkA[link], linkB[link]]) {
+        if (!others.has(cell)) {
+          continue;
+        }
+        if (opening) {
+          shares.set(cell, (shares.get(cell) ?? 0) + 1);
+        } else {
+          others.get(cell).push(link);
+        }
+      }
+    }
+    this.openingCells = cells;
+    this.openingShares = Int32Array.from(cells, (cell) => shares.get(cell));
+    this.openingOthers = Array.from(cells, (cell) =>
+      Int32Array.from(others.get(cell))
+    );
+  }
+
+  /**
    * Lips and nostrils open by the end area of their tube at any grid size:
    * the cubes at a tilted or partly covered end leave more or fewer faces
    * to the free air than the cross-section holds, so scale the opening
    * links of each tube until their conductances add up to that area.
+   *
+   * A scaled opening never takes its cell past STABLE_LOAD: when the end
+   * area falls on cells that are nearly closed (lip corners of a narrow
+   * mouth during a stop), the scale would give a cell of fill 1e-4 an
+   * opening of 0.45 and the field blows up within a few steps. Such a link
+   * keeps the share of the cell's budget its openings leave (at least its
+   * unscaled conductance), so the mouth radiates a little less there.
    */
   #scaleOpenings() {
     const { outputLinks, conductance, linkKind, dx } = this;
+    const { fill, admittance, openingCells, openingShares } = this;
     const totals = [0, 0];
     for (const link of outputLinks) {
       totals[linkKind[link] === LINK_LIPS ? 0 : 1] +=
@@ -1125,9 +1172,23 @@ export class Fdtd3d {
       const area = this.tubeAreas[kind]?.at(-1) ?? 0;
       return area / Math.max(totals[position], 1e-12);
     });
-    for (const link of outputLinks) {
+    for (let index = 0; index < outputLinks.length; index++) {
+      const link = outputLinks[index];
       const scale = scales[linkKind[link] === LINK_LIPS ? 0 : 1];
-      conductance[link] = Math.min(1, conductance[link] * scale);
+      const cell = openingCells[index];
+      let others = 0;
+      for (const other of this.openingOthers[index]) {
+        others += conductance[other];
+      }
+      const load = 1 + (COURANT * admittance[cell]) / 2;
+      const budget =
+        ((STABLE_LOAD / COURANT ** 2) * fill[cell] * load - others) /
+        openingShares[index];
+      conductance[link] = Math.min(
+        1,
+        conductance[link] * scale,
+        Math.max(budget, conductance[link])
+      );
     }
   }
 

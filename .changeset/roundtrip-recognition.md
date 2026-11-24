@@ -39,3 +39,6 @@ between its parts, is now heard as one whispered span (JavaScript and Rust).
 A loud or soft sentence is heard as one effort span when three in four of its
 words keep their pitch within 6% of the pooled pitch, so one word of misheard
 tone no longer splits it.
+The 3D tiers (high, ultra, studio) no longer turn to NaN for some random
+heads: a lip or nostril opening scaled up to the lip area is capped at the
+conductance its cell can carry stably (JavaScript and Rust).
