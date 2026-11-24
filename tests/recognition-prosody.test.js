@@ -411,3 +411,54 @@ describe('prosody word search and abstention', () => {
     assert.equal(heard[0].path[0].word, 'замо́к');
   });
 });
+
+describe('phrase breaks from pauses', () => {
+  it('reads a Russian rise before a comma pause as a continuation', () => {
+    // A comma is a weaker IK3 rise on the stressed syllable with a 0.2 s
+    // pause; the same rise before a 0.42 s sentence pause asks a question.
+    const syllable = (ipa, stress, start, end) => ({ ipa, stress, start, end });
+    const marks = [0.2, 0.42].map((pause) => {
+      const words = [
+        {
+          text: 'привет',
+          ipa: 'prʲɪˈvʲet',
+          language: 'ru',
+          start: 0,
+          end: 0.5,
+          confidence: 0.9,
+          syllables: [
+            syllable('prʲɪ', 0, 0, 0.2),
+            syllable('ˈvʲet', 1, 0.2, 0.5),
+          ],
+        },
+        {
+          text: 'как',
+          ipa: 'kak',
+          language: 'ru',
+          start: 0.5 + pause,
+          end: 0.8 + pause,
+          confidence: 0.9,
+          syllables: [syllable('kak', 0, 0.5 + pause, 0.8 + pause)],
+        },
+      ];
+      const frames = Math.ceil((0.8 + pause) / 0.005);
+      // Level, then six semitones up through the stressed vowel.
+      const semitones = Array.from({ length: frames }, (_, i) => {
+        const t = i * 0.005;
+        if (t >= 0.5 && t < 0.5 + pause) {
+          return null;
+        }
+        return t < 0.2 || t >= 0.5 ? 0 : (6 * (t - 0.2)) / 0.3;
+      });
+      const pitch = {
+        startTime: 0,
+        hop: 0.005,
+        semitones,
+        energy: new Float64Array(frames).fill(1),
+      };
+      const measured = { sounds: [], pitch, median: 110, range: 4 };
+      return markProsody({ words, modes: [] }, measured).text;
+    });
+    assert.deepEqual(marks, ['Привет, как?', 'Привет? Как?']);
+  });
+});

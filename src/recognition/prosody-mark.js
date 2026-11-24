@@ -7,6 +7,7 @@ import {
 } from '../g2p/phrasing.js';
 import { VERBALIZERS } from '../g2p/normalize.js';
 import { POLAR_PARTICLE } from '../g2p/verbalize-hi.js';
+import { BOUNDARIES } from '../articulation/prosody.js';
 import { quantile } from './mode-features.js';
 import { whisperAt } from './whisper.js';
 import { whisperModeSpans } from './whisper-result.js';
@@ -170,6 +171,12 @@ export function phraseCues(
   };
 }
 
+/**
+ * Shortest pause after a sentence (s): halfway between the synthesiser's
+ * comma and sentence pauses (BOUNDARIES in articulation/prosody.js).
+ */
+const SENTENCE_PAUSE = (BOUNDARIES.comma.pause + BOUNDARIES.period.pause) / 2;
+
 function phraseMark(
   words,
   phrase,
@@ -188,6 +195,7 @@ function phraseMark(
   // en tail rise ≥ 3, hi ≥ 4; ru stressed rise ≥ 5 followed by a fall
   // zh mean pitch rises ≥ 2 between the outer thirds → question
   // level ≥ 1, span ≥ 1.2 × range, loud ≥ 2 with other phrases → exclamation
+  // nonfinal pause < 0.31 s → continuation (no question or exclamation)
   // nonfinal pause < 0.5 s → continuation; otherwise → statement
   if (tail.length < 5) {
     return Number.isFinite(phrase.pause) ? '' : '.';
@@ -203,7 +211,10 @@ function phraseMark(
     utteranceEnergy,
     otherPitch
   );
-  const polar = polarMark(words, language, cues, pitch, tail);
+  // A shorter pause than a sentence's ends a clause: its rise or raised
+  // register is a continuation (a Russian comma is a weaker IK3).
+  const clause = phrase.pause < SENTENCE_PAUSE;
+  const polar = clause ? '' : polarMark(words, language, cues, pitch, tail);
   if (polar) {
     return polar;
   }
@@ -211,6 +222,7 @@ function phraseMark(
   // Some of the forward tunes fall sharply or narrow despite a raised
   // register (IK2). Compare the upper register with other speech as well.
   if (
+    !clause &&
     otherPitch.length >= 5 &&
     cues.loud >= 2 &&
     (expanded || cues.reset >= 1)
