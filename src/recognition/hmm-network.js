@@ -4,6 +4,7 @@
  * node per phone (three states, six with a stop release), with unigram
  * look-ahead for the word bigram. Unlicense.
  */
+import { lexiconRevision } from '../g2p/lexicon.js';
 import { getLexicon } from './lexicon.js';
 import { contextClass, stateIndex, toneClass, toneUnits } from './hmm-model.js';
 
@@ -155,10 +156,12 @@ const networks = new WeakMap();
 
 /** Cached network of a model and language list. */
 export function getNetwork(model, languages, options = {}) {
+  // Pronunciations added with addLexicon() change the trees.
+  const revision = lexiconRevision();
   const key = `${languages.join(',')}:${options.maxWords ?? 8000}`;
   let byModel = networks.get(model);
-  if (!byModel) {
-    byModel = new Map();
+  if (!byModel || byModel.revision !== revision) {
+    byModel = Object.assign(new Map(), { revision });
     networks.set(model, byModel);
   }
   let network = byModel.get(key);

@@ -4,5 +4,10 @@
 import part0 from './hmm-model-0.js';
 import part1 from './hmm-model-1.js';
 import part2 from './hmm-model-2.js';
+import part3 from './hmm-model-3.js';
+import part4 from './hmm-model-4.js';
+import part5 from './hmm-model-5.js';
 
-export const HMM_MODEL = JSON.parse(part0 + part1 + part2);
+export const HMM_MODEL = JSON.parse(
+  part0 + part1 + part2 + part3 + part4 + part5
+);
