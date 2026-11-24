@@ -102,6 +102,28 @@ it('keeps interrupted telephone whispers together without bridging periodic spee
   ).toBe(2);
 });
 
+it('joins wideband whisper runs across silent stop closures', () => {
+  const { samples, sampleRate, timeline } = synthesize(
+    '[whisper]Съешь же ещё этих мягких французских булок, да выпей чаю.[/whisper]',
+    {
+      lang: 'ru',
+      tier: 'wideband',
+      head: 'random',
+      preset: 'male',
+      seed: 1,
+      markup: true,
+    }
+  );
+  const frames = analyzeFrames(samples, sampleRate, { hop: 0.01 });
+  const pitch = trackPitch(frames);
+  // Closures of 0.2-0.4 s split the speech into four runs.
+  expect(whisperSpeechRuns(frames).length).toBe(4);
+  const spans = findWhisper(samples, sampleRate, frames, pitch);
+  expect(spans.length).toBe(1);
+  expect(spans[0].start).toBeLessThan(timeline.words[0].end);
+  expect(spans[0].end).toBeGreaterThan(timeline.words.at(-2).end);
+});
+
 it('joins narrowband whispers across brief pitch detections', () => {
   const audio = synthesize(
     '[whisper]The quick brown fox jumps over the lazy dog.[/whisper]',

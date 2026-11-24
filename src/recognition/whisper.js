@@ -248,9 +248,23 @@ function nearest(runs, index) {
     : -1;
 }
 
-function joinSpans(spans, span) {
+// Stop closures inside a whisper are silent: join whisper spans across a
+// gap up to NEARBY_RUN when no other speech run lies inside that gap.
+// node experiments/issue-75-whisper-runs.mjs wideband ru 1
+function joinSpans(runs) {
+  return (spans, span) => joinSpan(spans, span, runs);
+}
+
+function joinSpan(spans, span, runs) {
   const previous = spans.at(-1);
-  if (previous && previous.end + 0.2 > span.start + EPSILON) {
+  const silent =
+    previous &&
+    span.start - previous.end <= NEARBY_RUN + EPSILON &&
+    !runs.some(
+      ({ start, end }) =>
+        start >= previous.end - EPSILON && end <= span.start + EPSILON
+    );
+  if (previous && (previous.end + 0.2 > span.start + EPSILON || silent)) {
     previous.confidence = Math.min(previous.confidence, span.confidence);
     previous.end = span.end;
   } else {
@@ -353,7 +367,7 @@ export function findWhisper(samples, sampleRate, frames, pitch) {
         ];
       return source ? [{ start, end, confidence: source.confidence }] : [];
     })
-    .reduce(joinSpans, []);
+    .reduce(joinSpans(runs), []);
 }
 
 export function whisperAt(spans, time) {

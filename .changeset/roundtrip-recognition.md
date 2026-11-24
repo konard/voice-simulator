@@ -34,3 +34,5 @@ heard phones that keeps the recognised phrase marks and sentence tune
 (`, … ↘ ?`) and keeps a Mandarin word whole, so a loud question in Hindi or
 Mandarin is heard as `f`; `recognize()` passes a `trace` option on to the
 mode stage. The round-trip mode check passes the speaking voice.
+A whisper split by silent stop closures of up to 0.5 s, with no other speech
+between its parts, is now heard as one whispered span (JavaScript and Rust).

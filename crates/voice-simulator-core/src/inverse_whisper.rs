@@ -305,8 +305,17 @@ impl Signal<'_> {
                 }
             }
             for span in decisions[i].iter().chain(&inherited) {
+                // Stop closures inside a whisper are silent: join across a
+                // gap up to NEARBY_RUN that holds no other speech run.
+                let silent = |previous: &Span| {
+                    span.start - previous.end <= NEARBY_RUN + EPS
+                        && !runs.iter().any(|&(a, b)| {
+                            self.time(a) >= previous.end - EPS
+                                && self.time(b).min(self.start + self.duration) <= span.start + EPS
+                        })
+                };
                 match spans.last_mut() {
-                    Some(previous) if previous.end + 0.2 > span.start + EPS => {
+                    Some(previous) if previous.end + 0.2 > span.start + EPS || silent(previous) => {
                         previous.confidence = previous.confidence.min(span.confidence);
                         previous.end = span.end;
                     }
