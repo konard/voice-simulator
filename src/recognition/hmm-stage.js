@@ -11,6 +11,13 @@ import { hmmFeatures, hmmFrameTime } from './hmm-features.js';
 import { getHmmModel } from './hmm-model.js';
 import { getNetwork, tokenIpa } from './hmm-network.js';
 import { alignWords, decodeWords } from './hmm-decode.js';
+import { syllablesWithWhisper } from './decode-pipeline.js';
+import { clipWhisperSpans, findWhisper } from './whisper.js';
+import {
+  whisperModeSpans,
+  whisperVoicing,
+  wrapWhisperIpa,
+} from './whisper-result.js';
 
 /** Pauses of at least this length between words become "|". */
 const PAUSE = 0.3;
@@ -55,9 +62,12 @@ function timedSegments(aligned) {
  * @param {ArrayLike<number>} samples
  * @param {number} sampleRate
  * @param {{languages?: string[], maxWords?: number,
+ *   whisper?: 'auto'|false|{start: number, end: number}[],
  *   search?: Partial<typeof import('./hmm-decode.js').HMM_DECODE_DEFAULTS>}}
- *   [options] `search` tunes the beam and weights; other decoder options
- *   (the phone decoder's beam, hop and rate) do not apply.
+ *   [options] `search` tunes the beam and weights; `whisper` finds
+ *   whispered spans ('auto'), skips them (false) or takes them as given;
+ *   other decoder options (the phone decoder's beam, hop and rate) do not
+ *   apply.
  */
 export function hmmAudioToIpa(samples, sampleRate, options = {}) {
   const model = getHmmModel();
@@ -74,19 +84,42 @@ export function hmmAudioToIpa(samples, sampleRate, options = {}) {
     : [];
   const segments = timedSegments(aligned);
   const analysis = analyzeFrames(samples, sampleRate, { hop: 0.01 });
+  const pitch = trackPitch(analysis);
+  const whisperSpans = whisperSpansOf(samples, sampleRate, analysis, pitch, {
+    whisper: options.whisper ?? 'auto',
+  });
+  whisperVoicing(segments, analysis, whisperSpans);
+  const modes = whisperModeSpans(segments, whisperSpans);
+  const plain = segments.map((s) => s.ipa).join('');
+  const ipa = modes.length ? wrapWhisperIpa(segments, modes) : plain;
+  const language = decoded.lang ?? languages[0];
   return {
-    ipa: segments.map((s) => s.ipa).join(''),
+    ipa,
     segments,
+    syllables: syllablesWithWhisper(segments, language, whisperSpans, analysis),
+    nbest: [{ ipa, segments, cost: 0, confidence: 1 }],
     words: decoded.words.map(({ word, lang, start, end }) => ({
       text: word,
       language: lang,
       start: hmmFrameTime(start),
       end: hmmFrameTime(end),
     })),
-    tracks: { pitch: trackPitch(analysis) },
+    tracks: { pitch },
     // Energies only: the noise check reads them, prosody and modes
     // analyse the audio at their own hops.
     frames: { energy: analysis.energy, count: analysis.count },
+    whisperSpans,
+    modes,
+    language,
     ...(decoded.lang && { modelLanguage: decoded.lang }),
   };
+}
+
+function whisperSpansOf(samples, sampleRate, analysis, pitch, { whisper }) {
+  if (whisper === false) {
+    return [];
+  }
+  return Array.isArray(whisper)
+    ? clipWhisperSpans(whisper, samples.length / sampleRate)
+    : findWhisper(samples, sampleRate, analysis, pitch);
 }

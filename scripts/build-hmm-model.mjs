@@ -7,7 +7,8 @@
  * node scripts/build-hmm-model.mjs <model.json> [out.js]
  * Unlicense.
  */
-import { readFileSync, writeFileSync } from 'node:fs';
+import { readFileSync, readdirSync, unlinkSync, writeFileSync } from 'node:fs';
+import { basename, dirname, join } from 'node:path';
 import { Buffer } from 'node:buffer';
 
 const base64 = (array) =>
@@ -92,20 +93,56 @@ export function packHmmModel(plain) {
   };
 }
 
+/** Characters per data part: each part becomes its own app chunk, which
+ * must stay under Vite's 500 kB warning (examples/universal-app). */
+const PART = 400000;
+
+const HEADER = `/** Gaussian HMM states trained on the simulator's own renders, packed by
+ * node scripts/build-hmm-model.mjs (training: tests/heavy/README.md,
+ * "Recognition model"). Unlicense. */
+`;
+
+/** Module sources: the packed JSON in parts and an index joining them. */
+export function hmmModelSources(packed, name = 'hmm-model') {
+  const json = JSON.stringify(packed);
+  const parts = [];
+  for (let at = 0; at < json.length; at += PART) {
+    parts.push(json.slice(at, at + PART));
+  }
+  const files = parts.map((part, i) => [
+    `${name}-${i}.js`,
+    `${HEADER}// prettier-ignore\nexport default ${JSON.stringify(part)};\n`,
+  ]);
+  const imports = parts
+    .map((_, i) => `import part${i} from './${name}-${i}.js';\n`)
+    .join('');
+  const joined = parts.map((_, i) => `part${i}`).join(' + ');
+  files.push([
+    `${name}.js`,
+    `${HEADER}${imports}\nexport const HMM_MODEL = JSON.parse(${joined});\n`,
+  ]);
+  return files;
+}
+
 if (process.argv[1]?.endsWith('build-hmm-model.mjs')) {
   const [input, out = 'src/recognition/data/hmm-model.js'] =
     process.argv.slice(2);
   const packed = packHmmModel(JSON.parse(readFileSync(input, 'utf8')));
-  const source = `/** Gaussian HMM states trained on the simulator's own renders, packed by
- * node scripts/build-hmm-model.mjs (training: tests/heavy/README.md,
- * "Recognition model"). Unlicense. */
-// prettier-ignore
-export const HMM_MODEL = ${JSON.stringify(packed)};
-`;
-  writeFileSync(out, source);
+  const dir = dirname(out);
+  const name = basename(out, '.js');
+  for (const file of readdirSync(dir)) {
+    if (file.startsWith(`${name}-`) && /-\d+\.js$/.test(file)) {
+      unlinkSync(join(dir, file));
+    }
+  }
+  let bytes = 0;
+  for (const [file, source] of hmmModelSources(packed, name)) {
+    writeFileSync(join(dir, file), source);
+    bytes += source.length;
+  }
   console.log(
     out,
-    source.length,
+    bytes,
     'bytes',
     packed.units.length,
     'units',

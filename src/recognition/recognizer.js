@@ -191,7 +191,10 @@ export function decodeRecognitionAudio(
   );
   if (usesWordDecoder(settings)) {
     const decoded = measure(settings.profile, 'Audio to IPA', () =>
-      hmmAudioToIpa(input, rate, { languages: settings.languages })
+      hmmAudioToIpa(input, rate, {
+        languages: settings.languages,
+        whisper: settings.whisper,
+      })
     );
     return { decoded, input, rate };
   }

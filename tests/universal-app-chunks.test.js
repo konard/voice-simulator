@@ -79,6 +79,15 @@ describe('universal app chunking', () => {
           )
         )
       ).toBe('recognition-phones');
+      for (const part of [0, 3]) {
+        expect(
+          vendorChunk(
+            ['repo', 'src', 'recognition', 'data', `hmm-model-${part}.js`].join(
+              sep
+            )
+          )
+        ).toBe(`recognition-hmm-${part}`);
+      }
       expect(
         vendorChunk(['repo', 'src', 'acoustics', 'waveguide.js'].join(sep))
       ).toBe('acoustics');
