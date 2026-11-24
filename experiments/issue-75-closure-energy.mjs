@@ -2,7 +2,7 @@
  * Per-frame c0 (dB below the loudest frame), c1, voicing and plan label of
  * a span of a round-trip sentence, to see the closure and release of a
  * stop as the HMM features see them.
- * node experiments/issue-75-closure-energy.mjs <lang> <index> <from> <to>
+ * node experiments/issue-75-closure-energy.mjs <lang> <index|text> <from> <to>
  * Environment: TIER (telephone), PRESET (male).
  * Unlicense.
  */
@@ -12,7 +12,8 @@ import { sentences } from '../tests/helpers/roundtrip.js';
 import { frameLabels } from './issue-75-hmm-lib.mjs';
 
 const [lang, index, from, to] = process.argv.slice(2);
-const spoken = synthesize(sentences[lang][Number(index)], {
+const text = /^\d+$/u.test(index) ? sentences[lang][Number(index)] : index;
+const spoken = synthesize(text, {
   lang,
   tier: process.env.TIER ?? 'telephone',
   preset: process.env.PRESET ?? 'male',
