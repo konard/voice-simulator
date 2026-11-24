@@ -4,7 +4,7 @@
  * recogniser, with the shipped word bigrams, beam and histogram pruning,
  * then a forced alignment of the best words for phone times. Unlicense.
  */
-import { contextClass, stateIndex, stateScore } from './hmm-model.js';
+import { stateIndex, stateScore } from './hmm-model.js';
 
 export const HMM_DECODE_DEFAULTS = Object.freeze({
   beam: 120,
@@ -13,6 +13,11 @@ export const HMM_DECODE_DEFAULTS = Object.freeze({
   silencePenalty: -2,
   releaseSkip: -1,
   maxActive: 6000,
+  // A word outside the vocabulary: its start, each phone, and the weight
+  // of the phone bigram of the loop.
+  oovStart: -60,
+  oovPhone: -4,
+  oovWeight: 8,
 });
 
 /** ln p of a shipped bigram cost (the costs are 0.5 - 0.3 ln p). */
@@ -30,11 +35,17 @@ function emissionCache(model, feats) {
   };
 }
 
-function languageModel(network, records, { lmw, wip }) {
+function languageModel(network, records, settings) {
+  const { lmw, wip, oovPhone, oovWeight } = settings;
   const { words, trees } = network;
   const cache = new Map();
   return (hist, id) => {
     const w = words[id];
+    if (w.oov) {
+      const before = w.begin ? '' : words[records[hist].id].units[0];
+      const row = trees.get(w.lang).loop.bigram.get(before);
+      return oovWeight * row.get(w.units[0]) + oovPhone;
+    }
     const previous = hist >= 0 ? records[hist].word : null;
     const key = `${previous ?? ''}\t${id}`;
     let v = cache.get(key);
@@ -58,8 +69,8 @@ function enter(map, node, score, hist, start) {
   }
 }
 
-/** Tokens at the roots and silences of every language at frame 0. */
-function initialEntries(network, records, languages, lmw) {
+/** Tokens at the roots, loops and silences of every language at frame 0. */
+function initialEntries(network, records, languages, { lmw, oovStart }) {
   const entries = new Map();
   for (const lang of languages) {
     const tree = network.trees.get(lang);
@@ -68,18 +79,33 @@ function initialEntries(network, records, languages, lmw) {
     for (const node of tree.root) {
       enter(entries, node.id, lmw * node.lookLn, startRecord, 0);
     }
+    for (const node of tree.loop.begin) {
+      enter(entries, node.id, oovStart, startRecord, 0);
+    }
     enter(entries, tree.silence.id, 0, startRecord, 0);
   }
   return entries;
 }
 
-/** Record a word end and start the next word or a silence after it. */
-function restart(next, network, records, rec, { lmw, silencePenalty }) {
+/**
+ * Record a word end and start the next word, a word outside the vocabulary
+ * (or, after a loop phone, the rest of that word) or a silence after it.
+ */
+function restart(next, network, records, rec, settings) {
+  const { lmw, silencePenalty, oovStart } = settings;
   const r = records.length;
   records.push(rec);
   const tree = network.trees.get(rec.lang);
   for (const child of tree.root) {
     enter(next, child.id, rec.score + lmw * child.lookLn, r, rec.end);
+  }
+  for (const node of tree.loop.begin) {
+    enter(next, node.id, rec.score + oovStart, r, rec.end);
+  }
+  if (rec.oov) {
+    for (const node of tree.loop.next) {
+      enter(next, node.id, rec.score, r, rec.end);
+    }
   }
   enter(next, tree.silence.id, rec.score + silencePenalty, r, rec.end);
 }
@@ -111,12 +137,38 @@ function finalRecord(network, records, languages, frames, last) {
 }
 
 /**
+ * Words of the best record back to the start; loop phones that go on with
+ * an out-of-vocabulary word join it.
+ */
+function backtrace(words, records, best) {
+  const out = [];
+  for (let r = best; r && r.word !== null; r = records[r.prev] ?? null) {
+    const w = { ...words[r.id], start: r.start, end: r.end };
+    const after = out[0];
+    if (after?.oov && !after.begin && after.start === w.end) {
+      // A loop phone that goes on with the word before it.
+      out[0] = {
+        ...w,
+        tokens: [...w.tokens, ...after.tokens],
+        units: [...w.units, ...after.units],
+        end: after.end,
+      };
+    } else {
+      out.unshift(w);
+    }
+  }
+  return out;
+}
+
+/**
  * Best word sequence of the frames: words with their tokens, units and
  * frame ranges, the total score and the language of the last word.
+ * `options.onWordEnd(id, score, start, end)` sees every word end inside
+ * the beam, its score relative to the best token of its last frame.
  */
 export function decodeWords(network, feats, frames, options = {}) {
   const settings = { ...HMM_DECODE_DEFAULTS, ...options };
-  const { beam, lmw, releaseSkip, maxActive } = settings;
+  const { beam, lmw, releaseSkip, maxActive, oovStart } = settings;
   const languages = settings.languages ?? [...network.trees.keys()];
   const { nodes, words, emit, stay, go, trees } = network;
   const S = emit.length;
@@ -130,7 +182,7 @@ export function decodeWords(network, feats, frames, options = {}) {
   const stamp = new Int32Array(nodes.length).fill(-2);
   const records = [];
   const lm = languageModel(network, records, settings);
-  let entries = initialEntries(network, records, languages, lmw);
+  let entries = initialEntries(network, records, languages, settings);
   let active = [];
   for (let t = 0; t < frames; t++) {
     const work = new Set(active);
@@ -213,6 +265,9 @@ export function decodeWords(network, feats, frames, options = {}) {
         for (const child of tree.root) {
           enter(next, child.id, exit + lmw * child.lookLn, hist, t + 1);
         }
+        for (const loopNode of tree.loop.begin) {
+          enter(next, loopNode.id, exit + oovStart, hist, t + 1);
+        }
         continue;
       }
       const look = lmw * node.lookLn;
@@ -221,6 +276,7 @@ export function decodeWords(network, feats, frames, options = {}) {
       }
       for (const wid of node.words) {
         const s = exit - look + lm(hist, wid);
+        settings.onWordEnd?.(wid, s - best, start, t + 1);
         const lang = words[wid].lang;
         const end = wordEnds.get(lang);
         if (!end || s > end.score) {
@@ -232,6 +288,7 @@ export function decodeWords(network, feats, frames, options = {}) {
             start,
             end: t + 1,
             score: s,
+            oov: Boolean(words[wid].oov),
           });
         }
       }
@@ -252,12 +309,8 @@ export function decodeWords(network, feats, frames, options = {}) {
     prev,
     prevHist,
   });
-  const out = [];
-  for (let r = best; r && r.word !== null; r = records[r.prev] ?? null) {
-    out.unshift({ ...words[r.id], start: r.start, end: r.end });
-  }
   return {
-    words: out,
+    words: backtrace(words, records, best),
     score: best?.score ?? -Infinity,
     lang: best?.lang ?? null,
   };
@@ -282,9 +335,8 @@ function alignmentChain(model, words) {
   pushUnit('sil', -1, true);
   words.forEach((w, wi) => {
     w.tokens.forEach((t, i) => {
-      const left = i ? contextClass(w.tokens[i - 1].symbol) : null;
-      const right =
-        i + 1 < w.tokens.length ? contextClass(w.tokens[i + 1].symbol) : null;
+      const left = i ? w.tokens[i - 1].symbol : null;
+      const right = i + 1 < w.tokens.length ? w.tokens[i + 1].symbol : null;
       const unit = w.units[i];
       pushUnit(unit, tokens.length, false, left, right);
       if (model.ciIndex.has(`${unit}_r#0`)) {
@@ -348,6 +400,7 @@ export function alignWords(network, feats, frames, words, options = {}) {
     [prev, cur] = [cur, prev];
   }
   let at = prev[N - 4] > prev[N - 1] ? N - 4 : N - 1;
+  options.onScore?.(prev[at]);
   const spans = tokens.map(() => [Infinity, -Infinity]);
   for (let t = frames - 1; t >= 0 && at >= 0; t--) {
     const ti = chain[at].token;

@@ -7,7 +7,10 @@ import {
 } from '../src/recognition/hmm-features.js';
 import { getHmmModel } from '../src/recognition/hmm-model.js';
 import { getNetwork } from '../src/recognition/hmm-network.js';
-import { hmmAudioToIpa } from '../src/recognition/hmm-stage.js';
+import {
+  hmmAudioToIpa,
+  stressOutOfVocabulary,
+} from '../src/recognition/hmm-stage.js';
 
 const RATE = 8000;
 
@@ -49,4 +52,48 @@ it('adds the words of addLexicon() to the decoding network', () => {
     clearLexicons();
   }
   assert.equal(has(), false);
+});
+
+it('adds a phone loop for words outside the vocabulary unless oov is off', () => {
+  const model = getHmmModel();
+  const loop = getNetwork(model, ['en'], { maxWords: 200 }).trees.get(
+    'en'
+  ).loop;
+  assert.ok(loop.begin.length > 20);
+  assert.equal(loop.next.length, loop.begin.length);
+  // Every row of the phone bigram is a distribution over the phones.
+  for (const row of loop.bigram.values()) {
+    const total = [...row.values()].reduce((sum, ln) => sum + Math.exp(ln), 0);
+    assert.ok(Math.abs(total - 1) < 1e-9);
+  }
+  const closed = getNetwork(model, ['en'], { maxWords: 200, oov: false });
+  assert.equal(closed.trees.get('en').loop.begin.length, 0);
+  assert.ok(closed.nodes.every((node) => !node.loop));
+});
+
+it('stresses the longest full vowel of a word outside the vocabulary', () => {
+  const vowel = (symbol, from, to) => ({
+    word: 0,
+    from,
+    to,
+    token: { symbol, kind: 'vowel' },
+  });
+  const aligned = [
+    vowel('ə', 0, 20),
+    { word: 0, from: 20, to: 25, token: { symbol: 'k', kind: 'consonant' } },
+    vowel('ɪ', 25, 30),
+    vowel('æ', 30, 38),
+  ];
+  stressOutOfVocabulary([{ oov: true, lang: 'en' }], aligned);
+  assert.deepEqual(
+    aligned.map((a) => a.token.stress ?? 0),
+    [0, 0, 0, 1]
+  );
+  // Russian marks no stress on a one-vowel word, Hindi on none.
+  const one = [vowel('a', 0, 9)];
+  stressOutOfVocabulary([{ oov: true, lang: 'ru' }], one);
+  const hindi = [vowel('a', 0, 9), vowel('i', 9, 12)];
+  stressOutOfVocabulary([{ oov: true, lang: 'hi' }], hindi);
+  assert.equal(one[0].token.stress, undefined);
+  assert.ok(hindi.every((a) => a.token.stress === undefined));
 });

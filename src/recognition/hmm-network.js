@@ -6,9 +6,12 @@
  */
 import { lexiconRevision } from '../g2p/lexicon.js';
 import { getLexicon } from './lexicon.js';
-import { contextClass, stateIndex, toneClass, toneUnits } from './hmm-model.js';
+import { stateIndex, toneClass, toneUnits } from './hmm-model.js';
 
 const TONES = ['', '˩', '˨', '˧', '˦', '˥'];
+
+/** Words per language in the decoding network. */
+export const HMM_MAX_WORDS = 20000;
 
 /** IPA of a lexicon token with its stress mark and tone letters. */
 export function tokenIpa(token) {
@@ -88,11 +91,58 @@ function spokenTokens(entry) {
   );
 }
 
-function addTree(builder, model, lang, words, maxWords) {
+/**
+ * Phone loop of a language for words outside its vocabulary: per phone of
+ * its pronunciations a node that begins such a word and one that goes on
+ * with it, each ending a one-phone pseudo-word that the decoder joins with
+ * the ones before it (hmm-decode.js). `bigram` holds ln p of a phone after
+ * the previous one ('' at the start of a word), from the pronunciations.
+ */
+function addLoop(builder, lang, words, phones, pairs) {
+  const symbols = [...phones.keys()].sort();
+  const bigram = new Map();
+  for (const from of ['', ...symbols]) {
+    const row = pairs.get(from) ?? new Map();
+    let total = symbols.length;
+    for (const n of row.values()) {
+      total += n;
+    }
+    // Add-one smoothing over the phones.
+    bigram.set(
+      from,
+      new Map(
+        symbols.map((to) => [to, Math.log(((row.get(to) ?? 0) + 1) / total)])
+      )
+    );
+  }
+  const node = (symbol, begin) => {
+    const n = builder.newNode(symbol, lang);
+    n.loop = true;
+    n.words.push(words.length);
+    words.push({
+      word: '',
+      lang,
+      tokens: [{ symbol, kind: phones.get(symbol).kind }],
+      units: [symbol],
+      oov: true,
+      begin,
+    });
+    return n;
+  };
+  return {
+    begin: symbols.map((symbol) => node(symbol, true)),
+    next: symbols.map((symbol) => node(symbol, false)),
+    bigram,
+  };
+}
+
+function addTree(builder, model, lang, words, { maxWords, oov }) {
   const lexicon = getLexicon(lang);
   const root = { children: new Map() };
   const silence = builder.newNode('sil', lang);
   const seen = new Set();
+  const phones = new Map();
+  const pairs = new Map();
   const tonal = lang === 'zh' && model.units.some((u) => u.includes('@'));
   const entries = [
     ...lexicon.pronunciations(maxWords),
@@ -111,12 +161,21 @@ function addTree(builder, model, lang, words, maxWords) {
         continue;
       }
       seen.add(`${entry.word}\t${ipa}`);
+      if (!tonal) {
+        tokens.forEach((t, i) => {
+          phones.set(t.symbol, t);
+          const from = i ? tokens[i - 1].symbol : '';
+          const row = pairs.get(from) ?? new Map();
+          pairs.set(from, row.set(t.symbol, (row.get(t.symbol) ?? 0) + 1));
+        });
+      }
       let node = root;
       tokens.forEach((t, i) => {
-        const left = i ? contextClass(tokens[i - 1].symbol) : null;
-        const right =
-          i + 1 < tokens.length ? contextClass(tokens[i + 1].symbol) : null;
-        const key = `${units[i]}>${right}`;
+        const left = i ? tokens[i - 1].symbol : null;
+        const right = i + 1 < tokens.length ? tokens[i + 1].symbol : null;
+        // Siblings that differ only in the next phone share a node when
+        // their exit states are the same.
+        const key = `${units[i]}>${stateIndex(model, units[i], 2, left, right)}>${stateIndex(model, `${units[i]}_r`, 2, left, right)}`;
         let child = node.children.get(key);
         if (!child) {
           child = builder.newNode(units[i], lang, left, right);
@@ -132,16 +191,32 @@ function addTree(builder, model, lang, words, maxWords) {
   for (const child of root.children.values()) {
     lookahead(child, uni);
   }
-  return { root: [...root.children.values()], silence, data: lexicon };
+  return {
+    root: [...root.children.values()],
+    silence,
+    loop:
+      oov && !tonal
+        ? addLoop(builder, lang, words, phones, pairs)
+        : { begin: [], next: [], bigram: new Map() },
+    data: lexicon,
+  };
 }
 
-/** Build the decoding network of the given languages. */
-export function buildNetwork(model, languages, { maxWords = 8000 } = {}) {
+/**
+ * Build the decoding network of the given languages: the lexicon trees of
+ * the `maxWords` most frequent words and, with `oov` (default), a phone
+ * loop per language without tones.
+ */
+export function buildNetwork(
+  model,
+  languages,
+  { maxWords = HMM_MAX_WORDS, oov = true } = {}
+) {
   const builder = createBuilder(model);
   const words = [];
   const trees = new Map();
   for (const lang of languages) {
-    trees.set(lang, addTree(builder, model, lang, words, maxWords));
+    trees.set(lang, addTree(builder, model, lang, words, { maxWords, oov }));
   }
   const emit = Int32Array.from(builder.emit);
   return {
@@ -161,7 +236,7 @@ const networks = new WeakMap();
 export function getNetwork(model, languages, options = {}) {
   // Pronunciations added with addLexicon() change the trees.
   const revision = lexiconRevision();
-  const key = `${languages.join(',')}:${options.maxWords ?? 8000}`;
+  const key = `${languages.join(',')}:${options.maxWords ?? HMM_MAX_WORDS}:${options.oov ?? true}`;
   let byModel = networks.get(model);
   if (!byModel || byModel.revision !== revision) {
     byModel = Object.assign(new Map(), { revision });

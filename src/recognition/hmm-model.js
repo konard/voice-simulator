@@ -1,8 +1,9 @@
 /**
  * Gaussian mixture HMM states estimated from the simulator's own renders
  * (scripts/build-hmm-model.mjs). Every phone unit has three left-to-right
- * states; entry and exit states may have versions for the broad class of
- * the neighbouring phone. Mandarin vowels carry a tone class ("a@4").
+ * states; entry and exit states may have versions for the neighbouring
+ * phone ("p:k") or, with fewer training frames, its broad class ("dor").
+ * Mandarin vowels carry a tone class ("a@4").
  * Unlicense.
  */
 import { CONSONANTS, VOWELS } from '../ipa/inventory.js';
@@ -191,6 +192,12 @@ export function contextClass(unit) {
   return c;
 }
 
+/** Phone context of a unit symbol: "p:k" for "k", "k_r" and "k@4". */
+export const phoneContext = (unit) =>
+  unit === 'sil' || unit === undefined || unit === null
+    ? 'sil'
+    : `p:${unit.replace(/_r$|@\d$/u, '')}`;
+
 /** Key of the context-dependent version of a state, or null. */
 export function contextKey(unit, s, left, right) {
   if (unit === 'sil' || s === 1) {
@@ -202,11 +209,50 @@ export function contextKey(unit, s, left, right) {
   return right ? `${unit}#2>${right}` : null;
 }
 
-/** State index of unit state s between the given contexts. */
+/**
+ * State index of unit state s between the neighbouring phone symbols
+ * (null at a word edge): the phone-context state, else the broad-class
+ * state, else the context-independent one.
+ */
 export function stateIndex(model, unit, s, left, right) {
-  const key = contextKey(unit, s, left, right);
-  const cd = key ? model.contextIndex.get(key) : undefined;
-  return cd ?? model.ciIndex.get(`${unit}#${s}`);
+  // Networks ask for the same states many times: cache them by unit,
+  // state, left and right phone without building string keys.
+  let byUnit = stateCaches.get(model);
+  if (!byUnit) {
+    byUnit = new Map();
+    stateCaches.set(model, byUnit);
+  }
+  let byState = byUnit.get(unit);
+  if (!byState) {
+    byState = [new Map(), new Map(), new Map()];
+    byUnit.set(unit, byState);
+  }
+  const l = left ?? null;
+  const r = right ?? null;
+  let byLeft = byState[s].get(l);
+  if (!byLeft) {
+    byLeft = new Map();
+    byState[s].set(l, byLeft);
+  }
+  let index = byLeft.get(r);
+  if (index === undefined) {
+    index = findState(model, unit, s, l, r);
+    byLeft.set(r, index);
+  }
+  return index;
+}
+
+const stateCaches = new WeakMap();
+
+function findState(model, unit, s, l, r) {
+  const phone = contextKey(unit, s, l && phoneContext(l), r && phoneContext(r));
+  const byPhone = phone ? model.contextIndex.get(phone) : undefined;
+  if (byPhone !== undefined) {
+    return byPhone;
+  }
+  const broad = contextKey(unit, s, l && contextClass(l), r && contextClass(r));
+  const byClass = broad ? model.contextIndex.get(broad) : undefined;
+  return byClass ?? model.ciIndex.get(`${unit}#${s}`);
 }
 
 /** Tone class of token tone levels: 1 level, 2 rising, 3 low, 4 falling. */

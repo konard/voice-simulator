@@ -12,6 +12,8 @@ import { getHmmModel } from './hmm-model.js';
 import { getNetwork, tokenIpa } from './hmm-network.js';
 import { alignWords, decodeWords } from './hmm-decode.js';
 import { syllablesWithWhisper } from './decode-pipeline.js';
+import { spellSounds } from './phones-to-letters.js';
+import { parseIpa } from '../ipa/parse.js';
 import { clipWhisperSpans, findWhisper } from './whisper.js';
 import {
   whisperModeSpans,
@@ -21,6 +23,40 @@ import {
 
 /** Pauses of at least this length between words become "|". */
 const PAUSE = 0.3;
+
+/** Vowels that are only unstressed in a language's pronunciations. */
+const REDUCED = {
+  en: new Set(['ə', 'ɚ']),
+  ru: new Set(['ɐ', 'ə', 'ɪ', 'ʊ']),
+};
+
+/**
+ * Primary stress of the words from the phone loop: the longest full vowel
+ * (any vowel when none is full). Russian marks words of two or more
+ * vowels and English every word, like their pronunciations; Hindi none.
+ */
+export function stressOutOfVocabulary(words, aligned) {
+  words.forEach((w, wi) => {
+    const reduced = REDUCED[w.lang];
+    if (!w.oov || !reduced) {
+      return;
+    }
+    const vowels = aligned.filter(
+      (a) => a.word === wi && a.token.kind === 'vowel'
+    );
+    if (vowels.length < (w.lang === 'ru' ? 2 : 1)) {
+      return;
+    }
+    const full = vowels.filter((a) => !reduced.has(a.token.symbol));
+    let best = null;
+    for (const a of full.length ? full : vowels) {
+      if (!best || a.to - a.from > best.to - best.from) {
+        best = a;
+      }
+    }
+    best.token.stress = 1;
+  });
+}
 
 function timedSegments(aligned) {
   const segments = [];
@@ -61,7 +97,7 @@ function timedSegments(aligned) {
  * with times, the pitch track and the frame energies.
  * @param {ArrayLike<number>} samples
  * @param {number} sampleRate
- * @param {{languages?: string[], maxWords?: number,
+ * @param {{languages?: string[], maxWords?: number, oov?: boolean,
  *   whisper?: 'auto'|false|{start: number, end: number}[],
  *   search?: Partial<typeof import('./hmm-decode.js').HMM_DECODE_DEFAULTS>}}
  *   [options] `search` tunes the beam and weights; `whisper` finds
@@ -74,6 +110,7 @@ export function hmmAudioToIpa(samples, sampleRate, options = {}) {
   const languages = options.languages ?? ['en', 'ru', 'hi', 'zh'];
   const network = getNetwork(model, languages, {
     maxWords: options.maxWords,
+    oov: options.oov,
   });
   const analysis = analyzeFrames(samples, sampleRate, { hop: 0.01 });
   const { feats, frames } = hmmFeatures(samples, sampleRate, model.lda);
@@ -83,9 +120,14 @@ export function hmmAudioToIpa(samples, sampleRate, options = {}) {
     frames && hasSpeech(analysis)
       ? decodeWords(network, feats, frames, options.search)
       : { words: [], lang: null };
+  // Words from the phone loop get their own tokens to take a stress.
+  decoded.words = decoded.words.map((w) =>
+    w.oov ? { ...w, tokens: w.tokens.map((t) => ({ ...t })) } : w
+  );
   const aligned = decoded.words.length
     ? alignWords(network, feats, frames, decoded.words, options.search)
     : [];
+  stressOutOfVocabulary(decoded.words, aligned);
   const segments = timedSegments(aligned);
   const pitch = trackPitch(analysis);
   const whisperSpans = whisperSpansOf(samples, sampleRate, analysis, pitch, {
@@ -101,8 +143,10 @@ export function hmmAudioToIpa(samples, sampleRate, options = {}) {
     segments,
     syllables: syllablesWithWhisper(segments, language, whisperSpans, analysis),
     nbest: [{ ipa, segments, cost: 0, confidence: 1 }],
-    words: decoded.words.map(({ word, lang }, i) => ({
-      text: word,
+    words: decoded.words.map(({ word, lang, oov, tokens }, i) => ({
+      text: oov
+        ? spellSounds(parseIpa(tokens.map(tokenIpa).join('')).tokens, lang)
+        : word,
       language: lang,
       ...wordSpan(aligned, i),
     })),
