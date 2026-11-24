@@ -492,3 +492,44 @@ describe('phrase breaks from pauses', () => {
     assert.equal(markContour(words, contour).text, 'Is this pen, oh mine.');
   });
 });
+
+describe('Mandarin phrase tunes', () => {
+  // Five syllables whose lexical tones climb (mean Chao levels 2.3 to 5).
+  const syllables = [
+    ['wo', 'wo˨˩˦'],
+    ['shi', 'ʂɻ̩˥˩'],
+    ['zhong', 'ʈ͡ʂʊŋ˥˥'],
+    ['guo', 'kwo˧˥'],
+    ['ren', 'ʐən˥˥'],
+  ];
+  const words = (gap) =>
+    syllables.map(([text, ipa], i) => {
+      const start = i * 0.3 + (i >= 3 ? gap : 0);
+      return word(text, 'zh', [syllable(ipa, 0, start, start + 0.25)]);
+    });
+  const levels = (t, list) => {
+    const i = list.findIndex((w) => t >= w.start && t < w.end);
+    const ipa = syllables[i][1];
+    const chao = [...ipa].map((c) => '˩˨˧˦˥'.indexOf(c) + 1).filter(Boolean);
+    return (2 * chao.reduce((a, b) => a + b)) / chao.length;
+  };
+
+  it('hears the tone-free trend, not the tones, as statement or question', () => {
+    // Two semitones of declination, then three of question rise, under the
+    // same climbing tones: the old last-third cue heard both as questions.
+    const marks = [-2, 3].map((rise) => {
+      const list = words(0);
+      const end = list.at(-1).end;
+      return markContour(list, (t) => levels(t, list) + (rise * t) / end).text;
+    });
+    assert.match(marks[0], /。$/u);
+    assert.match(marks[1], /？$/u);
+  });
+
+  it('breaks a phrase at a comma gap shortened by the word edges', () => {
+    // The 0.2 s comma pause, decoded as 0.18 s between the words.
+    const list = words(0.18 - 0.05);
+    const text = markContour(list, (t) => levels(t, list) - t).text;
+    assert.match(text, /^woshizhong，guoren/u);
+  });
+});

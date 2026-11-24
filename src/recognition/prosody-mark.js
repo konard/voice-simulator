@@ -20,6 +20,13 @@ import {
   voicedBetween,
 } from './prosody-features.js';
 
+/**
+ * Shortest gap (s) between two words heard as a phrase break: the comma
+ * pause of articulation/prosody.js (0.2 s) less the word edges the decoder
+ * lets into it (measured gaps 0.18–0.19 s at telephone).
+ */
+const PHRASE_GAP = 0.15;
+
 function phraseRanges(words, sounds, whispered) {
   const ranges = [];
   const pauses = sounds.filter(
@@ -41,7 +48,7 @@ function phraseRanges(words, sounds, whispered) {
             Math.min(start, pause.end) - Math.max(end, pause.start)
           )
         : start - end;
-    if (duration >= 0.2 - 1e-9 || whispered[to] !== whispered[to - 1]) {
+    if (duration >= PHRASE_GAP || whispered[to] !== whispered[to - 1]) {
       ranges.push({ from, to, pause: duration });
       from = to;
     }
@@ -263,13 +270,88 @@ function polarMark(words, language, cues, pitch, tail) {
   ) {
     return '?';
   }
-  if (
-    language === 'zh' &&
-    (words.at(-1).text.endsWith('吗') || cues.thirds >= 2)
-  ) {
-    return '?';
+  if (language === 'zh') {
+    const trend = toneTrend(words, pitch);
+    if (
+      words.at(-1).text.endsWith('吗') ||
+      (trend ?? cues.thirds) >= ZH_QUESTION_TREND
+    ) {
+      return '?';
+    }
   }
   return '';
+}
+
+const CHAO = '˩˨˧˦˥';
+
+/**
+ * Semitones of tone-free rise over a Mandarin phrase from which it is
+ * heard as a question (experiments/issue-75-zh-marks.mjs: statements
+ * reach 1.4, the A-not-A question 远不远 1.7 at telephone).
+ */
+const ZH_QUESTION_TREND = 1.6;
+
+/** Mean Chao level of the tone letters of a syllable, or null (neutral). */
+function chaoLevel(ipa) {
+  const levels = [...ipa]
+    .map((c) => CHAO.indexOf(c) + 1)
+    .filter((level) => level > 0);
+  return levels.length ? mean(levels) : null;
+}
+
+/** Solve the 3 × 3 system `a x = b` (Cramer's rule); null if singular. */
+function solve3(a, b) {
+  const det = (m) =>
+    m[0][0] * (m[1][1] * m[2][2] - m[1][2] * m[2][1]) -
+    m[0][1] * (m[1][0] * m[2][2] - m[1][2] * m[2][0]) +
+    m[0][2] * (m[1][0] * m[2][1] - m[1][1] * m[2][0]);
+  const d = det(a);
+  if (Math.abs(d) < 1e-9) {
+    return null;
+  }
+  return [0, 1, 2].map(
+    (k) => det(a.map((row, i) => row.map((v, j) => (j === k ? b[i] : v)))) / d
+  );
+}
+
+/**
+ * Pitch trend of a Mandarin phrase in semitones over its toned syllables:
+ * the time slope of a least-squares fit of each syllable's mean pitch to
+ * an offset, a slope and a multiple of its mean Chao tone level, times the
+ * time from the first to the last syllable. The lexical tones are thereby
+ * taken out: a statement declines, a question without a particle is
+ * raised towards its end (TUNES.zh.question in articulation/intonation.js).
+ * Null with fewer than four toned syllables.
+ */
+export function toneTrend(words, pitch) {
+  const rows = [];
+  for (const syllable of words.flatMap((word) => word.syllables ?? [])) {
+    const level = chaoLevel(syllable.ipa ?? '');
+    const values = voicedBetween(pitch, syllable.start, syllable.end);
+    if (level !== null && values.length >= 3) {
+      rows.push([(syllable.start + syllable.end) / 2, level, mean(values)]);
+    }
+  }
+  if (rows.length < 4) {
+    return null;
+  }
+  const a = [
+    [0, 0, 0],
+    [0, 0, 0],
+    [0, 0, 0],
+  ];
+  const b = [0, 0, 0];
+  for (const [time, level, value] of rows) {
+    const x = [1, time, level];
+    for (let i = 0; i < 3; i++) {
+      b[i] += x[i] * value;
+      for (let j = 0; j < 3; j++) {
+        a[i][j] += x[i] * x[j];
+      }
+    }
+  }
+  const fit = solve3(a, b);
+  return fit && fit[1] * (rows.at(-1)[0] - rows[0][0]);
 }
 
 function pitchPeak(syllable, pitch) {

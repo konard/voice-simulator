@@ -25,3 +25,7 @@ missing from the count corpora, such as "hello", back off as if seen three
 times instead of once.
 A Mandarin third tone read as rising by sandhi is accepted only before
 another third tone (bú and yí only before a fourth), as it is spoken.
+A Mandarin phrase is heard as a question from its pitch trend with the
+lexical tones fitted out, so rising tones at the end of a statement no
+longer turn it into a question; gaps from 0.15 s (a comma pause less the
+word edges the decoder takes in) now separate phrases with a comma.
