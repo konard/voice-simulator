@@ -43,8 +43,7 @@ function languageModel(network, records, { lmw, wip }) {
       const row = previous ? data.transitionRow(w.word) : undefined;
       const cost = row?.has(previous)
         ? row.get(previous)
-        : -0.3 * Math.log((0.4 * (data.counts.get(w.word) ?? 1)) / data.total) +
-          0.5;
+        : -0.3 * Math.log((0.4 * (w.count ?? 1)) / data.total) + 0.5;
       v = lmw * lnProbability(cost) + wip;
       cache.set(key, v);
     }

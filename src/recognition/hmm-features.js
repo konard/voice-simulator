@@ -19,6 +19,9 @@ const CEPS = 13;
 /** Centre time (s) of feature frame t. */
 export const hmmFrameTime = (t) => (t * HOP + WINDOW / 2) / HMM_RATE;
 
+/** Time (s) of the boundary before feature frame t: halfway between centres. */
+export const hmmBoundaryTime = (t) => (t * HOP + (WINDOW - HOP) / 2) / HMM_RATE;
+
 function melBank(low, high) {
   const lo = hzToMel(low);
   const hi = hzToMel(high);

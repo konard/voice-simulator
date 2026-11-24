@@ -94,7 +94,11 @@ function addTree(builder, model, lang, words, maxWords) {
   const silence = builder.newNode('sil', lang);
   const seen = new Set();
   const tonal = lang === 'zh' && model.units.some((u) => u.includes('@'));
-  for (const entry of lexicon.pronunciations(maxWords)) {
+  const entries = [
+    ...lexicon.pronunciations(maxWords),
+    ...lexicon.addedPronunciations(maxWords),
+  ];
+  for (const entry of entries) {
     const spoken = spokenTokens(entry);
     for (const tokens of tonal ? toneVariants(entry.word, spoken) : [spoken]) {
       const units = tonal ? toneUnits(tokens) : tokens.map((t) => t.symbol);
@@ -121,11 +125,10 @@ function addTree(builder, model, lang, words, maxWords) {
         node = child;
       });
       node.words.push(words.length);
-      words.push({ word: entry.word, lang, tokens, units });
+      words.push({ word: entry.word, lang, tokens, units, count: entry.count });
     }
   }
-  const uni = (id) =>
-    Math.log((lexicon.counts.get(words[id].word) ?? 1) / lexicon.total);
+  const uni = (id) => Math.log((words[id].count ?? 1) / lexicon.total);
   for (const child of root.children.values()) {
     lookahead(child, uni);
   }

@@ -7,7 +7,7 @@
  */
 import { analyzeFrames } from './frontend.js';
 import { trackPitch } from './pitch.js';
-import { hmmFeatures, hmmFrameTime } from './hmm-features.js';
+import { hmmBoundaryTime, hmmFeatures } from './hmm-features.js';
 import { getHmmModel } from './hmm-model.js';
 import { getNetwork, tokenIpa } from './hmm-network.js';
 import { alignWords, decodeWords } from './hmm-decode.js';
@@ -30,7 +30,7 @@ function timedSegments(aligned) {
     if (a.from > a.to) {
       continue;
     }
-    const start = hmmFrameTime(a.from);
+    const start = hmmBoundaryTime(a.from);
     if (a.word !== lastWord && start - lastEnd >= PAUSE && segments.length) {
       segments.push({
         ipa: '|',
@@ -41,7 +41,7 @@ function timedSegments(aligned) {
         modelWord: lastWord,
       });
     }
-    const end = Math.max(start + 0.005, hmmFrameTime(a.to));
+    const end = Math.max(start + 0.005, hmmBoundaryTime(a.to));
     segments.push({
       ipa: tokenIpa(a.token),
       kind: a.token.kind,
@@ -75,15 +75,18 @@ export function hmmAudioToIpa(samples, sampleRate, options = {}) {
   const network = getNetwork(model, languages, {
     maxWords: options.maxWords,
   });
+  const analysis = analyzeFrames(samples, sampleRate, { hop: 0.01 });
   const { feats, frames } = hmmFeatures(samples, sampleRate, model.lda);
-  const decoded = frames
-    ? decodeWords(network, feats, frames, options.search)
-    : { words: [], lang: null };
+  // Features are normalised per input, so silence alone would decode as
+  // words: decode only inputs with frames the front end calls speech.
+  const decoded =
+    frames && hasSpeech(analysis)
+      ? decodeWords(network, feats, frames, options.search)
+      : { words: [], lang: null };
   const aligned = decoded.words.length
     ? alignWords(network, feats, frames, decoded.words, options.search)
     : [];
   const segments = timedSegments(aligned);
-  const analysis = analyzeFrames(samples, sampleRate, { hop: 0.01 });
   const pitch = trackPitch(analysis);
   const whisperSpans = whisperSpansOf(samples, sampleRate, analysis, pitch, {
     whisper: options.whisper ?? 'auto',
@@ -98,11 +101,10 @@ export function hmmAudioToIpa(samples, sampleRate, options = {}) {
     segments,
     syllables: syllablesWithWhisper(segments, language, whisperSpans, analysis),
     nbest: [{ ipa, segments, cost: 0, confidence: 1 }],
-    words: decoded.words.map(({ word, lang, start, end }) => ({
+    words: decoded.words.map(({ word, lang }, i) => ({
       text: word,
       language: lang,
-      start: hmmFrameTime(start),
-      end: hmmFrameTime(end),
+      ...wordSpan(aligned, i),
     })),
     tracks: { pitch },
     // Energies only: the noise check reads them, prosody and modes
@@ -113,6 +115,28 @@ export function hmmAudioToIpa(samples, sampleRate, options = {}) {
     language,
     ...(decoded.lang && { modelLanguage: decoded.lang }),
   };
+}
+
+function hasSpeech(analysis) {
+  for (let t = 0; t < analysis.count; t++) {
+    if (analysis.speech[t]) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/** Start and end of word i: its first and last aligned phone. */
+function wordSpan(aligned, i) {
+  let from = Infinity;
+  let to = -Infinity;
+  for (const a of aligned) {
+    if (a.word === i && a.from < a.to) {
+      from = Math.min(from, a.from);
+      to = Math.max(to, a.to);
+    }
+  }
+  return { start: hmmBoundaryTime(from), end: hmmBoundaryTime(to) };
 }
 
 function whisperSpansOf(samples, sampleRate, analysis, pitch, { whisper }) {

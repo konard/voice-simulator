@@ -119,14 +119,17 @@ export function roundTrip(text, options) {
     referenceText = text,
     recognize = recognizeAudio,
   } = options;
-  const spoken = synthesize(text, {
-    lang,
-    tier,
-    head: 'random',
-    preset,
-    seed,
-    markup: Boolean(mode),
-  });
+  // Experiments may pass a cached render of the same text and options.
+  const spoken =
+    options.spoken ??
+    synthesize(text, {
+      lang,
+      tier,
+      head: 'random',
+      preset,
+      seed,
+      markup: Boolean(mode),
+    });
   const plannedModes = mode
     ? spoken.plan.modes.filter(
         (span) => span.end > span.start && modeLabels(span).includes(mode)
