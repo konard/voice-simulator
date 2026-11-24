@@ -268,8 +268,9 @@ Rows for male and female presets show their separate measurements when the gates
 ### Single-core smoke
 
 `taskset -c 0 node --test tests/roundtrip-smoke.test.js` passed all three
-cases on 2026-11-24 at `6b429fe`, in 24.4 seconds of wall time (en 19.3 s,
-which includes loading the model, ru 2.0 s and zh 2.1 s). Each case is
+cases on 2026-11-24 at `77c36a2` in 24.4 seconds (en 19.3 s, which includes
+loading the model, ru 2.0 s and zh 2.1 s) and at `fac8dae` in 26.3 seconds
+(en 21.4 s, ru 2.0 s, zh 2.0 s), as reported by `node --test`. Each case is
 telephone, male, seed 1, and needs PER ≤ 0.1, sound WER 0 and the right
 language.
 
