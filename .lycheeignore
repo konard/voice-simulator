@@ -24,3 +24,6 @@ https://medium\.com
 
 # Web Archive returns 502 to link checkers (bot protection)
 https://web\.archive\.org
+
+# Zenodo returns 403 to link checkers (bot protection)
+https://zenodo\.org
