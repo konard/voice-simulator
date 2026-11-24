@@ -5,7 +5,7 @@
  * forced alignment for phone times. Unlicense.
  */
 import { getLexicon } from '../src/recognition/lexicon.js';
-import { contextClass, contextKey } from './issue-75-hmm-context.mjs';
+import { broadOf, contextClass, contextKey } from './issue-75-hmm-context.mjs';
 import { toneClass, toneUnits } from './issue-75-hmm-lib.mjs';
 import { gmmScore } from './issue-75-hmm-model.mjs';
 
@@ -53,7 +53,12 @@ export function stateIndexer(model) {
   return (unit, s, left, right) => {
     const key = contextKey(unit, s, left, right);
     const cd = key ? model.contextIndex?.get(key) : undefined;
-    return cd ?? ci.get(`${unit}#${s}`);
+    if (cd !== undefined) {
+      return cd;
+    }
+    const broad = contextKey(unit, s, broadOf(left), broadOf(right));
+    const bd = broad ? model.contextIndex?.get(broad) : undefined;
+    return bd ?? ci.get(`${unit}#${s}`);
   };
 }
 

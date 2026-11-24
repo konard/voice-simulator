@@ -17,7 +17,7 @@ import { analyzeFrames } from '../src/recognition/frontend.js';
 import { trackPitch } from '../src/recognition/pitch.js';
 import { features } from './issue-75-hmm-lib.mjs';
 import { applyLda, fitLda, transformItems } from './issue-75-hmm-lda.mjs';
-import { trainContextModel } from './issue-75-hmm-context.mjs';
+import { realignStates, trainContextModel } from './issue-75-hmm-context.mjs';
 import { itemDim, loadItems, trainModel } from './issue-75-hmm-model.mjs';
 import {
   alignWords,
@@ -112,13 +112,21 @@ if (env.MODEL && existsSync(env.MODEL)) {
     items = transformItems(lda, items);
     console.log('lda', elapsed());
   }
-  model = env.CD
-    ? trainContextModel(items, {
-        K: Number(env.K ?? 16),
-        Kcd: Number(env.KCD ?? 8),
-        minFrames: Number(env.CD),
-      })
-    : trainModel(items, { K: Number(env.K ?? 8) });
+  const train = () =>
+    env.CD
+      ? trainContextModel(items, {
+          K: Number(env.K ?? 16),
+          Kcd: Number(env.KCD ?? 8),
+          minFrames: Number(env.CD),
+        })
+      : trainModel(items, { K: Number(env.K ?? 8) });
+  model = train();
+  // REALIGN=n re-segments the states of each phone n times and retrains.
+  for (let pass = 0; pass < Number(env.REALIGN ?? 0); pass++) {
+    items = realignStates(items, model);
+    model = train();
+    console.log('realign pass', pass + 1, elapsed());
+  }
   console.log('trained', model.units.length, 'units', elapsed());
   if (env.MODEL) {
     saveModel(env.MODEL, lda, model, expansions);

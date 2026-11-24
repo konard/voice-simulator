@@ -6,7 +6,12 @@
  * vowels). Unlicense.
  */
 import { CONSONANTS, VOWELS } from '../src/ipa/inventory.js';
-import { decodeFeats, fitGmm, itemDim } from './issue-75-hmm-model.mjs';
+import {
+  decodeFeats,
+  fitGmm,
+  gmmScore,
+  itemDim,
+} from './issue-75-hmm-model.mjs';
 
 const PLACE = {
   bilabial: 'lab',
@@ -26,9 +31,27 @@ const PLACE = {
 };
 
 const classes = new Map();
+// CONTEXT=phone keys context states on the neighbouring phone ("p:k"), backing
+// off to its broad class when the phone context has too few frames.
+const PHONE_CONTEXT = process.env.CONTEXT === 'phone';
+
+/** Context of a unit symbol: its broad class, or the phone with CONTEXT=phone. */
+export function contextClass(unit) {
+  if (unit === 'sil' || unit === undefined) {
+    return 'sil';
+  }
+  if (PHONE_CONTEXT) {
+    return `p:${unit.replace(/_r$|@\d$/u, '')}`;
+  }
+  return broadClass(unit);
+}
+
+/** The broad class of a context ("p:k" → "dor"). */
+export const broadOf = (context) =>
+  context?.startsWith('p:') ? broadClass(context.slice(2)) : context;
 
 /** Broad context class of a unit symbol ("sil", "k_r", "tʲ", "aː" …). */
-export function contextClass(unit) {
+export function broadClass(unit) {
   if (unit === 'sil' || unit === undefined) {
     return 'sil';
   }
@@ -122,6 +145,10 @@ export function trainContextModel(
       const key = contextKey(label, s, left[t], right[t]);
       if (key) {
         add(key, x);
+        const broad = contextKey(label, s, broadOf(left[t]), broadOf(right[t]));
+        if (broad !== key) {
+          add(broad, x);
+        }
       }
       if (label !== prev) {
         if (prev !== null) {
@@ -170,4 +197,63 @@ export function trainContextModel(
     states.push({ ...ci, context: key, model: fit(key, Kcd) });
   }
   return { units, states, contextIndex };
+}
+
+/**
+ * Viterbi re-segmentation of each labelled run into its three states with
+ * the context-independent state mixtures (every state keeps one frame).
+ */
+export function realignStates(items, model) {
+  const ci = new Map();
+  model.states.forEach((st) => {
+    if (!st.context) {
+      ci.set(`${st.unit}#${st.s}`, st.model);
+    }
+  });
+  let moved = 0;
+  let total = 0;
+  const out = items.map((item) => {
+    const f = decodeFeats(item.feats);
+    const D = f.length / item.frames;
+    const states = Int8Array.from(item.states);
+    let from = 0;
+    for (let t = 1; t <= item.frames; t++) {
+      if (t < item.frames && item.labels[t] === item.labels[from]) {
+        continue;
+      }
+      const length = t - from;
+      const label = item.labels[from];
+      const gmms = [0, 1, 2].map((k) => ci.get(`${label}#${k}`));
+      if (length >= 3 && gmms.every(Boolean)) {
+        const score = Array.from({ length }, () => new Float64Array(3));
+        const back = Array.from({ length }, () => new Int8Array(3));
+        for (let i = 0; i < length; i++) {
+          const x = f.subarray((from + i) * D, (from + i + 1) * D);
+          for (let k = 0; k < 3; k++) {
+            const stay = i ? score[i - 1][k] : k === 0 ? 0 : -Infinity;
+            const step = i && k ? score[i - 1][k - 1] : -Infinity;
+            back[i][k] = step > stay ? k - 1 : k;
+            score[i][k] = Math.max(stay, step) + gmmScore(gmms[k], x);
+          }
+        }
+        let k = 2;
+        for (let i = length - 1; i >= 0; i--) {
+          total++;
+          if (states[from + i] !== k) {
+            moved++;
+          }
+          states[from + i] = k;
+          k = back[i][k];
+        }
+      }
+      from = t;
+    }
+    return { ...item, states };
+  });
+  console.log(
+    'realigned',
+    (moved / Math.max(1, total)).toFixed(3),
+    'of frames moved'
+  );
+  return out;
 }
