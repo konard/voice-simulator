@@ -1,0 +1,92 @@
+# node experiments/issue-75-sibilant-band.mjs telephone && node experiments/issue-75-sibilant-band.mjs wideband (2026-11-24, commit 77c36a2)
+male sea (telephone; % of energy per 500 Hz band)
+    0 ms  -43 dB centroid   894 Hz  54  8  8 10  7 10  3  0
+   20 ms  -38 dB centroid  1999 Hz   9  9  5 28 10 24 15  0
+   40 ms  -37 dB centroid  2048 Hz   2  8 13 27 16 23 11  0
+   60 ms  -34 dB centroid  2182 Hz   3  8 13 15 12 34 15  0
+   80 ms  -33 dB centroid  1999 Hz   2  9 23 11 11 34 10  0
+  100 ms  -24 dB centroid   287 Hz  97  1  0  0  0  2  0  0
+  120 ms  -18 dB centroid   232 Hz  99  1  0  0  0  0  0  0
+  140 ms  -17 dB centroid   245 Hz  99  0  0  0  0  0  0  0
+male she (telephone; % of energy per 500 Hz band)
+    0 ms  -43 dB centroid  1026 Hz  45  9  8 20  4 10  2  0
+   20 ms  -38 dB centroid  1923 Hz  14 10  4 22  6 36  8  0
+   40 ms  -36 dB centroid  1998 Hz   5  8 13 25 12 28  8  0
+   60 ms  -34 dB centroid  2096 Hz   5 10 13 14 10 36 13  0
+   80 ms  -33 dB centroid  1918 Hz   4 11 25 11 12 28 10  0
+  100 ms  -24 dB centroid   315 Hz  96  0  0  0  0  3  0  0
+  120 ms  -18 dB centroid   233 Hz  99  0  0  0  0  0  0  0
+  140 ms  -17 dB centroid   245 Hz  99  0  0  0  0  0  0  0
+female sea (telephone; % of energy per 500 Hz band)
+    0 ms  -44 dB centroid  1441 Hz  34 11  9  7 14  9 15  0
+   20 ms  -42 dB centroid  2002 Hz   6  6 17 11 30 19 11  0
+   40 ms  -39 dB centroid  2054 Hz   5 11 13 14 16 25 15  0
+   60 ms  -38 dB centroid  2071 Hz   2  9 24 11 10 31 14  0
+   80 ms  -36 dB centroid  2360 Hz   2 11  6  7 16 18 40  0
+  100 ms  -20 dB centroid   285 Hz  96  4  0  0  0  0  0  0
+  120 ms  -16 dB centroid   284 Hz  96  4  0  0  0  0  0  0
+  140 ms  -16 dB centroid   284 Hz  96  4  0  0  0  0  0  0
+female she (telephone; % of energy per 500 Hz band)
+    0 ms  -45 dB centroid  1407 Hz  34 14 10  6 11  7 17  0
+   20 ms  -41 dB centroid  1772 Hz  15  8 18 10 24 11 13  0
+   40 ms  -39 dB centroid  1853 Hz  10 16 13 14 13 11 22  0
+   60 ms  -38 dB centroid  1919 Hz   5 11 27 13  9 19 17  0
+   80 ms  -37 dB centroid  2260 Hz   4 15  7  7 15 15 36  0
+  100 ms  -20 dB centroid   284 Hz  97  2  0  0  0  0  0  0
+  120 ms  -16 dB centroid   284 Hz  97  3  0  0  0  0  0  0
+  140 ms  -16 dB centroid   285 Hz  96  4  0  0  0  0  0  0
+male sea (wideband; % of energy per 500 Hz band)
+    0 ms  -42 dB centroid  2106 Hz  38  5  3  2 10 19  1  1  4  3  3  3  6  1  0  0
+   20 ms  -37 dB centroid  4226 Hz   2  3  4  4  4 20  3  3  4 10 11 10 12  9  1  0
+   40 ms  -34 dB centroid  4818 Hz   5  2  2  4  3  5  2  5  8  3  9  7 26 18  1  0
+   60 ms  -33 dB centroid  4719 Hz   1  4  3  4  6  9  2  1  6  4  8  9 32 10  0  0
+   80 ms  -32 dB centroid  4807 Hz   2  3  3  2  6  9  6  2  3  3  7 19 18 18  0  0
+  100 ms  -24 dB centroid   314 Hz  97  1  0  0  0  2  0  0  0  0  0  0  0  0  0  0
+  120 ms  -18 dB centroid   235 Hz  99  1  0  0  0  0  0  0  0  0  0  0  0  0  0  0
+  140 ms  -17 dB centroid   250 Hz  99  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0
+male she (wideband; % of energy per 500 Hz band)
+    0 ms  -42 dB centroid  3148 Hz  29  3  2  2  3 11  1  1  5  8 13 13  9  1  0  0
+   20 ms  -36 dB centroid  4986 Hz   1  1  1  1  1  8  1  1  4 13 33 29  6  2  0  0
+   40 ms  -32 dB centroid  5152 Hz   2  1  1  1  1  2  1  4  7  7 31 24 15  4  0  0
+   60 ms  -31 dB centroid  5196 Hz   0  1  1  1  2  2  1  1  6  8 34 23 17  4  0  0
+   80 ms  -29 dB centroid  5281 Hz   0  0  0  0  1  3  1  1  3  4 31 43  7  3  0  0
+  100 ms  -24 dB centroid   301 Hz  97  0  0  0  0  1  0  0  0  0  0  0  0  0  0  0
+  120 ms  -18 dB centroid   235 Hz  99  1  0  0  0  0  0  0  0  0  0  0  0  0  0  0
+  140 ms  -17 dB centroid   251 Hz  99  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0
+female sea (wideband; % of energy per 500 Hz band)
+    0 ms  -44 dB centroid  1996 Hz  40  6  3  2 19  3 12  1  0  2  3  3  2  5  0  0
+   20 ms  -42 dB centroid  4059 Hz   4  4  3  4  4  7 18  4  4 12  4  7  9 13  1  0
+   40 ms  -39 dB centroid  4142 Hz   1  6  5  4  5 15  7  4  3  8  8  9 12 10  3  0
+   60 ms  -39 dB centroid  4512 Hz   1  7  3  3  5 10  5  8  4  4  6  4 11 28  2  0
+   80 ms  -36 dB centroid  4555 Hz   2  3  2  1  9  9 14  3  2  4  5  6 16 15  8  0
+  100 ms  -20 dB centroid   284 Hz  97  3  0  0  0  0  0  0  0  0  0  0  0  0  0  0
+  120 ms  -16 dB centroid   288 Hz  96  4  0  0  0  0  0  0  0  0  0  0  0  0  0  0
+  140 ms  -16 dB centroid   288 Hz  96  4  0  0  0  0  0  0  0  0  0  0  0  0  0  0
+female she (wideband; % of energy per 500 Hz band)
+    0 ms  -43 dB centroid  2904 Hz  39  3  1  1  3  1 10  0  1  3  7 14 10  6  0  0
+   20 ms  -38 dB centroid  5443 Hz   1  1  1  1  1  1  6  1  3 10 11 22 31 12  0  0
+   40 ms  -35 dB centroid  5602 Hz   0  1  1  0  0  2  2  1  2  6 15 26 37  7  1  0
+   60 ms  -35 dB centroid  5876 Hz   0  1  0  0  0  1  2  2  2  3  7 12 44 24  0  0
+   80 ms  -32 dB centroid  5659 Hz   0  0  0  0  1  1  5  1  1  4 15 21 41  8  1  0
+  100 ms  -20 dB centroid   291 Hz  97  2  0  0  0  0  0  0  0  0  0  0  0  0  0  0
+  120 ms  -16 dB centroid   287 Hz  97  3  0  0  0  0  0  0  0  0  0  0  0  0  0  0
+  140 ms  -16 dB centroid   286 Hz  96  3  0  0  0  0  0  0  0  0  0  0  0  0  0  0
+
+Findings (2026-11-24):
+- Wideband, male: /s/ ("sea") spreads its noise over 4.5-7 kHz with the most
+  energy at 6-7 kHz (centroid 4.2-4.8 kHz); /ʃ/ ("she") gathers it at
+  5-6 kHz (centroid 5.0-5.3 kHz). Female: /s/ centroid 4.1-4.6 kHz, /ʃ/
+  5.4-5.9 kHz. Natural /ʃ/ peaks near 2.5-3.5 kHz, well below /s/ (Stevens
+  1998, ch. 8; Jongman, Wayland & Wong 2000, JASA 108: 1252), so the
+  simulator's /ʃ/ is about 2.5 kHz too high and sits above /s/'s centroid.
+- At telephone (band limit 3.4 kHz) both keep almost no in-band noise and
+  look alike (centroids about 2.0 and 1.9 kHz), which fits the "sells" ->
+  "shells" and "sea" -> "she" confusions of the round trip.
+- Moving PLACES.postalveolar.location back (src/articulation/phones.js)
+  lowers /ʃ/ only a little: 0.87 -> 5.0-5.3 kHz, 0.85 -> 4.9-5.1 kHz,
+  0.83 -> 4.4-4.5 kHz (male, wideband). Reaching 3 kHz needs a longer front
+  cavity (lip protrusion or a sublingual cavity) than the place alone gives.
+- Any change to the sibilant noise changes the training audio: the HMM must
+  then be retrained from a fresh corpus (56 files of 400 utterances, about
+  20 min each on one core, plus about 12 min of training). Not done in this
+  pull request; left as the next lead for the English telephone sound WER.
