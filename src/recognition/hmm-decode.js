@@ -145,12 +145,21 @@ function initialEntries(network, records, languages, { lmw, oovStart }) {
 /**
  * Record a word end and start the next word, a word outside the vocabulary
  * (or, after a loop phone, the rest of that word) or a silence after it.
+ * A rising sandhi variant goes on only with a word of the tone that causes
+ * it, without a pause (hmm-network.js toneVariants).
  */
 function restart(next, network, records, rec, settings) {
   const { lmw, silencePenalty, oovStart } = settings;
   const r = records.length;
   records.push(rec);
   const tree = network.trees.get(rec.lang);
+  const before = network.words[rec.id].before;
+  if (before) {
+    for (const child of tree.after.get(before)) {
+      enter(next, child.id, rec.score + lmw * child.lookLn, r, rec.end);
+    }
+    return;
+  }
   for (const child of tree.root) {
     enter(next, child.id, rec.score + lmw * child.lookLn, r, rec.end);
   }
@@ -173,6 +182,7 @@ function finalRecord(network, records, languages, frames, last) {
     if (
       r.word !== null &&
       r.end === frames &&
+      !network.words[r.id].before &&
       (!best || r.score > best.score)
     ) {
       best = r;
@@ -333,10 +343,12 @@ export function decodeWords(network, feats, frames, options = {}) {
       for (const wid of node.words) {
         const s = exit - look + lm(hist, wid);
         settings.onWordEnd?.(wid, s - best, start, t + 1);
-        const lang = words[wid].lang;
-        const end = wordEnds.get(lang);
+        const { lang, before } = words[wid];
+        // One word end per language and frame, apart for sandhi variants.
+        const key = before ? `${lang}${before}` : lang;
+        const end = wordEnds.get(key);
         if (!end || s > end.score) {
-          wordEnds.set(lang, {
+          wordEnds.set(key, {
             word: words[wid].word,
             id: wid,
             lang,

@@ -2,7 +2,9 @@
  * Decoding network of the Gaussian HMM recogniser: per language a prefix
  * tree over the pronunciations of the most frequent lexicon words, one
  * node per phone (three states, six with a stop release), with unigram
- * look-ahead for the word bigram. Unlicense.
+ * look-ahead for the word bigram. A Mandarin tree also has, per sandhi
+ * tone, a tree of the words that start with that tone (`after`), where a
+ * rising sandhi variant goes on. Unlicense.
  */
 import { lexiconRevision } from '../g2p/lexicon.js';
 import { getLexicon } from './lexicon.js';
@@ -23,9 +25,12 @@ export function tokenIpa(token) {
 /**
  * Tone variants of a Mandarin pronunciation: a word-final third tone may
  * be read as a rising tone (third-tone sandhi), 不 and 一 change by context.
+ * Each variant is `{ tokens, before }`: `before` is the tone class the
+ * next syllable must have for the rising variant (3 after a third tone, 4
+ * for 不 and 一, as applyToneSandhi in src/g2p/pinyin.js), absent if any.
  */
 export function toneVariants(word, tokens) {
-  const out = [tokens];
+  const out = [{ tokens }];
   const toned = tokens.findLastIndex((t) => t.tone?.length);
   if (toned < 0) {
     return out;
@@ -33,12 +38,40 @@ export function toneVariants(word, tokens) {
   const withTone = (tone) =>
     tokens.map((t, i) => (i === toned ? { ...t, tone } : t));
   if (toneClass(tokens[toned].tone) === 3 || word === '不' || word === '一') {
-    out.push(withTone([3, 5]));
+    out.push({
+      tokens: withTone([3, 5]),
+      before: word === '不' || word === '一' ? 4 : 3,
+    });
   }
   if (word === '一') {
-    out.push(withTone([5, 1]));
+    out.push({ tokens: withTone([5, 1]) });
   }
   return out;
+}
+
+/** Tone class of the first toned syllable of a token list, 0 if none. */
+export function firstToneClass(tokens) {
+  return toneClass(tokens.find((t) => t.tone?.length)?.tone);
+}
+
+/** Add a word to a prefix tree, one node per unit (see addTree). */
+function insertWord(builder, model, root, lang, words, wid) {
+  const { tokens, units } = words[wid];
+  let node = root;
+  tokens.forEach((t, i) => {
+    const left = i ? tokens[i - 1].symbol : null;
+    const right = i + 1 < tokens.length ? tokens[i + 1].symbol : null;
+    // Siblings that differ only in the next phone share a node when
+    // their exit states are the same.
+    const key = `${units[i]}>${stateIndex(model, units[i], 2, left, right)}>${stateIndex(model, `${units[i]}_r`, 2, left, right)}`;
+    let child = node.children.get(key);
+    if (!child) {
+      child = builder.newNode(units[i], lang, left, right);
+      node.children.set(key, child);
+    }
+    node = child;
+  });
+  node.words.push(wid);
 }
 
 function createBuilder(model) {
@@ -136,6 +169,28 @@ function addLoop(builder, lang, words, phones, pairs) {
   };
 }
 
+/**
+ * Per tone that causes a rising sandhi variant among the words `ids`, the
+ * tree of the words whose first syllable has it: the variant goes on there
+ * only.
+ */
+function sandhiTrees(builder, model, lang, words, ids) {
+  const after = new Map();
+  for (const wid of ids) {
+    const { before } = words[wid];
+    if (before && !after.has(before)) {
+      const sub = { children: new Map() };
+      for (const id of ids) {
+        if (firstToneClass(words[id].tokens) === before) {
+          insertWord(builder, model, sub, lang, words, id);
+        }
+      }
+      after.set(before, sub);
+    }
+  }
+  return after;
+}
+
 function addTree(builder, model, lang, words, { maxWords, oov }) {
   const lexicon = getLexicon(lang);
   const root = { children: new Map() };
@@ -144,13 +199,17 @@ function addTree(builder, model, lang, words, { maxWords, oov }) {
   const phones = new Map();
   const pairs = new Map();
   const tonal = lang === 'zh' && model.units.some((u) => u.includes('@'));
+  const ids = [];
   const entries = [
     ...lexicon.pronunciations(maxWords),
     ...lexicon.addedPronunciations(maxWords),
   ];
   for (const entry of entries) {
     const spoken = spokenTokens(entry);
-    for (const tokens of tonal ? toneVariants(entry.word, spoken) : [spoken]) {
+    const variants = tonal
+      ? toneVariants(entry.word, spoken)
+      : [{ tokens: spoken }];
+    for (const { tokens, before } of variants) {
       const units = tonal ? toneUnits(tokens) : tokens.map((t) => t.symbol);
       const ipa = tokens.map(tokenIpa).join(' ');
       if (
@@ -169,30 +228,25 @@ function addTree(builder, model, lang, words, { maxWords, oov }) {
           pairs.set(from, row.set(t.symbol, (row.get(t.symbol) ?? 0) + 1));
         });
       }
-      let node = root;
-      tokens.forEach((t, i) => {
-        const left = i ? tokens[i - 1].symbol : null;
-        const right = i + 1 < tokens.length ? tokens[i + 1].symbol : null;
-        // Siblings that differ only in the next phone share a node when
-        // their exit states are the same.
-        const key = `${units[i]}>${stateIndex(model, units[i], 2, left, right)}>${stateIndex(model, `${units[i]}_r`, 2, left, right)}`;
-        let child = node.children.get(key);
-        if (!child) {
-          child = builder.newNode(units[i], lang, left, right);
-          node.children.set(key, child);
-        }
-        node = child;
-      });
-      node.words.push(words.length);
+      const wid = words.length;
       words.push({ word: entry.word, lang, tokens, units, count: entry.count });
+      if (before) {
+        words[wid].before = before;
+      }
+      ids.push(wid);
+      insertWord(builder, model, root, lang, words, wid);
     }
   }
+  const after = sandhiTrees(builder, model, lang, words, ids);
   const uni = (id) => Math.log((words[id].count ?? 1) / lexicon.total);
-  for (const child of root.children.values()) {
-    lookahead(child, uni);
+  for (const tree of [root, ...after.values()]) {
+    for (const child of tree.children.values()) {
+      lookahead(child, uni);
+    }
   }
   return {
     root: [...root.children.values()],
+    after: new Map([...after].map(([k, v]) => [k, [...v.children.values()]])),
     silence,
     loop:
       oov && !tonal

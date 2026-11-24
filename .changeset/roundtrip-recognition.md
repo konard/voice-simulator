@@ -23,3 +23,5 @@ pitch-shape mixtures helps the word decoder tell Mandarin tones apart, and
 pitches more than an octave from the median are ignored. Lexicon words
 missing from the count corpora, such as "hello", back off as if seen three
 times instead of once.
+A Mandarin third tone read as rising by sandhi is accepted only before
+another third tone (bú and yí only before a fourth), as it is spoken.

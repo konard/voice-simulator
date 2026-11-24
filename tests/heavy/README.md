@@ -113,7 +113,12 @@ Training runs on a developer machine, not in CI, in three steps:
    rising out of a low one from a rising tone. Lexicon words that the count
    corpora never saw (count 1) back off as if seen three times
    (`search.minCount`), so that "hello", absent from pre-1926 books, is not
-   heard as the more frequent "hollow".
+   heard as the more frequent "hollow". A Mandarin word whose last third tone
+   is read rising (third-tone sandhi, and bú, yí) goes on only into a tree of
+   the words whose first tone causes that sandhi, never into a pause or the
+   end of the utterance, as `applyToneSandhi()` speaks it: without this, 中火
+   read as zhōng huó took 中国 in 我是中国人, because 国 and the rising 火
+   sound alike once 人 (second tone) follows.
 
 `experiments/issue-75-hmm-eval.mjs [tier] [langs] [presets] [from] [to]`
 scores the committed model on the round-trip sentences without the rest of the

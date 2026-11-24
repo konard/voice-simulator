@@ -7,7 +7,11 @@ import {
   hmmPitchStatics,
 } from '../src/recognition/hmm-features.js';
 import { getHmmModel } from '../src/recognition/hmm-model.js';
-import { getNetwork } from '../src/recognition/hmm-network.js';
+import {
+  firstToneClass,
+  getNetwork,
+  toneVariants,
+} from '../src/recognition/hmm-network.js';
 import { recognitionSettings } from '../src/recognition/recognizer.js';
 import {
   hmmAudioToIpa,
@@ -121,4 +125,41 @@ it('stresses the longest full vowel of a word outside the vocabulary', () => {
   stressOutOfVocabulary([{ oov: true, lang: 'hi' }], hindi);
   assert.equal(one[0].token.stress, undefined);
   assert.ok(hindi.every((a) => a.token.stress === undefined));
+});
+
+it('lets a rising sandhi variant go on only before the tone that causes it', () => {
+  const syllable = (symbol, tone) => [
+    { symbol: 'x', kind: 'consonant' },
+    { symbol, kind: 'vowel', tone },
+  ];
+  const third = toneVariants('火', syllable('wo', [2, 1, 4]));
+  assert.deepEqual(
+    third.map((v) => [v.tokens[1].tone, v.before]),
+    [
+      [[2, 1, 4], undefined],
+      [[3, 5], 3],
+    ]
+  );
+  const bu = toneVariants('不', syllable('u', [5, 1]));
+  assert.deepEqual(
+    bu.map((v) => v.before),
+    [undefined, 4]
+  );
+  const zh = getNetwork(getHmmModel(), ['zh'], { maxWords: 300 });
+  const tree = zh.trees.get('zh');
+  const variants = zh.words.filter((w) => w.lang === 'zh' && w.before);
+  assert.ok(variants.some((w) => w.before === 3));
+  // The tree after a variant holds the words of that first tone only.
+  for (const [before, roots] of tree.after) {
+    const ids = [];
+    const walk = (node) => {
+      ids.push(...node.words);
+      node.children.forEach(walk);
+    };
+    roots.forEach(walk);
+    assert.ok(ids.length > 0);
+    for (const id of ids) {
+      assert.equal(firstToneClass(zh.words[id].tokens), before);
+    }
+  }
 });
