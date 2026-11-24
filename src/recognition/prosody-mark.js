@@ -1,6 +1,7 @@
 /** Apply measured prosody to a timed recognition result. */
 import { formatIpa, parseIpa } from '../ipa/parse.js';
 import {
+  ALTERNATIVE_CONJUNCTIONS,
   emphasizedIpa,
   englishAuxiliary,
   hasZhQuestionWord,
@@ -191,12 +192,17 @@ function phraseMark(
   const tail = voicedBetween(pitch, Math.max(start, end - 0.25), end);
   // First rule that fits (semitones, except for loudness in dB):
   // fewer than five tail frames → final period only
+  // after a rise before the conjunction of an alternative question → `↘ ?`
   // wh-word → falling question; zh 吗 or initial hi क्या → question
   // en tail rise ≥ 3, hi ≥ 4; ru stressed rise ≥ 5 followed by a fall
+  //   (before the last phrase opening with or, или, या, 还是 → `↗ |`)
   // zh mean pitch rises ≥ 2 between the outer thirds → question
   // level ≥ 1, span ≥ 1.2 × range, loud ≥ 2 with other phrases → exclamation
   // nonfinal pause < 0.31 s → continuation (no question or exclamation)
   // nonfinal pause < 0.5 s → continuation; otherwise → statement
+  if (phrase.alternative === 'last') {
+    return '↘ ?';
+  }
   if (tail.length < 5) {
     return Number.isFinite(phrase.pause) ? '' : '.';
   }
@@ -214,7 +220,7 @@ function phraseMark(
   // A shorter pause than a sentence's ends a clause: its rise or raised
   // register is a continuation (a Russian comma is a weaker IK3).
   const clause = phrase.pause < SENTENCE_PAUSE;
-  const polar = clause ? '' : polarMark(words, language, cues, pitch, tail);
+  const polar = risingMark(words, phrase, language, cues, pitch, tail);
   if (polar) {
     return polar;
   }
@@ -230,6 +236,15 @@ function phraseMark(
     return '!';
   }
   return phrase.pause < 0.5 ? ',' : '.';
+}
+
+/** The mark of a phrase's rise: a question, an alternative's `↗ |` or ''. */
+function risingMark(words, phrase, language, cues, pitch, tail) {
+  const rise = polarMark(words, language, cues, pitch, tail);
+  if (rise && phrase.alternative === 'before') {
+    return '↗ |';
+  }
+  return phrase.pause < SENTENCE_PAUSE ? '' : rise;
 }
 
 function polarMark(words, language, cues, pitch, tail) {
@@ -312,6 +327,7 @@ const TUNES = {
   '?': 'yesno',
   '↗ ?': 'yesno',
   '↘ ?': 'wh',
+  '↗ |': 'alt-rise',
   '!': 'exclamation',
 };
 const CHINESE = { ',': '，', '.': '。', '?': '？', '!': '！' };
@@ -342,7 +358,8 @@ function markedText(words, mark, language, sentenceStart) {
   if (sentenceStart && ['en', 'ru'].includes(language)) {
     text = text.replace(/\p{L}/u, (letter) => letter.toUpperCase());
   }
-  const punctuation = mark.at(-1) ?? '';
+  // `↗ |` (an alternative question's rise) is not written.
+  const punctuation = mark.endsWith('|') ? '' : (mark.at(-1) ?? '');
   return (
     text +
     (language === 'zh'
@@ -393,6 +410,24 @@ function appendPhraseIpa(
   return { part, language, mark };
 }
 
+/**
+ * The phrase before the last one is 'before' an alternative question when
+ * the last opens with the language's conjunction (or, или, या, 还是), as
+ * markPhrasing() writes `A ↗ | or B ↘ ?`.
+ */
+function markAlternative(words, phrases, fallback) {
+  const last = phrases.at(-1);
+  const first = words[last.from];
+  const language = first.language ?? first.lang ?? fallback;
+  if (
+    phrases.length > 1 &&
+    first.text.toLowerCase() === ALTERNATIVE_CONJUNCTIONS[language] &&
+    last.to - last.from > 1
+  ) {
+    phrases.at(-2).alternative = 'before';
+  }
+}
+
 /** Restore IPA and text marks from a measured, word-aligned recording. */
 export function markProsody(result, measured, options = {}) {
   const modes = [...(result.modes ?? [])];
@@ -423,7 +458,8 @@ export function markProsody(result, measured, options = {}) {
   const text = [];
   let sentenceStart = true;
   let previousLanguage;
-  for (const phrase of phrases) {
+  markAlternative(words, phrases, fallback);
+  for (const [index, phrase] of phrases.entries()) {
     const { from, to } = phrase;
     const otherPitch =
       phrases.length > 1
@@ -450,6 +486,9 @@ export function markProsody(result, measured, options = {}) {
         : '';
     text.push(`${separator}${markedText(part, mark, language, sentenceStart)}`);
     sentenceStart = ['.', '!', '?'].includes(mark.at(-1));
+    if (mark === '↗ |' && phrases[index + 1]) {
+      phrases[index + 1].alternative = 'last';
+    }
     previousLanguage = language;
   }
   return { ...result, words, modes, text: text.join(''), ipa: ipa.join(' ') };

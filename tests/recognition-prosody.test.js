@@ -412,53 +412,83 @@ describe('prosody word search and abstention', () => {
   });
 });
 
+const syllable = (ipa, stress, start, end) => ({ ipa, stress, start, end });
+const word = (text, language, syllables) => ({
+  text,
+  ipa: syllables.map((s) => s.ipa).join(''),
+  language,
+  start: syllables[0].start,
+  end: syllables.at(-1).end,
+  confidence: 0.9,
+  syllables,
+});
+
+/** Marked text of words over a pitch contour (semitones at time t). */
+function markContour(words, contour) {
+  const end = words.at(-1).end;
+  const frames = Math.ceil(end / 0.005);
+  const semitones = Array.from({ length: frames }, (_, i) => {
+    const t = i * 0.005;
+    return words.some((w) => t >= w.start && t < w.end) ? contour(t) : null;
+  });
+  const pitch = {
+    startTime: 0,
+    hop: 0.005,
+    semitones,
+    energy: new Float64Array(frames).fill(1),
+  };
+  const measured = { sounds: [], pitch, median: 110, range: 4 };
+  return markProsody({ words, modes: [] }, measured);
+}
+
 describe('phrase breaks from pauses', () => {
   it('reads a Russian rise before a comma pause as a continuation', () => {
     // A comma is a weaker IK3 rise on the stressed syllable with a 0.2 s
     // pause; the same rise before a 0.42 s sentence pause asks a question.
-    const syllable = (ipa, stress, start, end) => ({ ipa, stress, start, end });
     const marks = [0.2, 0.42].map((pause) => {
       const words = [
-        {
-          text: 'привет',
-          ipa: 'prʲɪˈvʲet',
-          language: 'ru',
-          start: 0,
-          end: 0.5,
-          confidence: 0.9,
-          syllables: [
-            syllable('prʲɪ', 0, 0, 0.2),
-            syllable('ˈvʲet', 1, 0.2, 0.5),
-          ],
-        },
-        {
-          text: 'как',
-          ipa: 'kak',
-          language: 'ru',
-          start: 0.5 + pause,
-          end: 0.8 + pause,
-          confidence: 0.9,
-          syllables: [syllable('kak', 0, 0.5 + pause, 0.8 + pause)],
-        },
+        word('привет', 'ru', [
+          syllable('prʲɪ', 0, 0, 0.2),
+          syllable('ˈvʲet', 1, 0.2, 0.5),
+        ]),
+        word('как', 'ru', [syllable('kak', 0, 0.5 + pause, 0.8 + pause)]),
       ];
-      const frames = Math.ceil((0.8 + pause) / 0.005);
       // Level, then six semitones up through the stressed vowel.
-      const semitones = Array.from({ length: frames }, (_, i) => {
-        const t = i * 0.005;
-        if (t >= 0.5 && t < 0.5 + pause) {
-          return null;
-        }
-        return t < 0.2 || t >= 0.5 ? 0 : (6 * (t - 0.2)) / 0.3;
-      });
-      const pitch = {
-        startTime: 0,
-        hop: 0.005,
-        semitones,
-        energy: new Float64Array(frames).fill(1),
-      };
-      const measured = { sounds: [], pitch, median: 110, range: 4 };
-      return markProsody({ words, modes: [] }, measured).text;
+      return markContour(words, (t) =>
+        t < 0.2 || t >= 0.5 ? 0 : (6 * (t - 0.2)) / 0.3
+      ).text;
     });
     assert.deepEqual(marks, ['Привет, как?', 'Привет? Как?']);
+  });
+
+  it('hears an alternative question from a rise before its conjunction', () => {
+    const words = [
+      word('is', 'en', [syllable('ɪz', 0, 0, 0.15)]),
+      word('this', 'en', [syllable('ˈðɪs', 1, 0.15, 0.35)]),
+      word('pen', 'en', [syllable('ˈpɛn', 1, 0.35, 0.7)]),
+      word('or', 'en', [syllable('ˈɔɹ', 1, 0.9, 1.1)]),
+      word('mine', 'en', [syllable('ˈmaɪn', 1, 1.1, 1.5)]),
+    ];
+    // A rise of eight semitones on pen, a fall of eight on mine.
+    const contour = (t) => {
+      if (t < 0.35) {
+        return 0;
+      }
+      return t < 0.7
+        ? (8 * (t - 0.35)) / 0.35
+        : t < 1.1
+          ? 2
+          : 2 - 8 * (t - 1.1);
+    };
+    const marked = markContour(words, contour);
+    assert.equal(marked.text, 'Is this pen or mine?');
+    assert.match(marked.ipa, /ˈpɛn ↗ \| ˈɔɹ ˈmaɪn ↘ \?$/u);
+    assert.deepEqual(
+      marked.modes.map(({ tune }) => tune),
+      ['alt-rise', 'wh']
+    );
+    // Without a conjunction the same rise is a comma's continuation.
+    words[3] = { ...words[3], text: 'oh' };
+    assert.equal(markContour(words, contour).text, 'Is this pen, oh mine.');
   });
 });
