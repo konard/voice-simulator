@@ -45,6 +45,11 @@ export interface RecognitionOptions extends RecognitionEngineOptions {
    * decoder to lexicon words. Defaults to true.
    */
   oov?: boolean;
+  /**
+   * Diagnostics: the events of the mode stage (`recognizeModes()`'s
+   * `trace`), such as the neutral context the effort is measured against.
+   */
+  trace?: (event: { stage: string; [key: string]: unknown }) => void;
   /** Test substitutions. Stream IPA substitutions run on partial and final snapshots. */
   stages?: {
     audioToIpa?: typeof audioToIpa;

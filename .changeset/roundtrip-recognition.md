@@ -29,3 +29,8 @@ A Mandarin phrase is heard as a question from its pitch trend with the
 lexical tones fitted out, so rising tones at the end of a statement no
 longer turn it into a question; gaps from 0.15 s (a comma pause less the
 word edges the decoder takes in) now separate phrases with a comma.
+With a known voice, effort is measured against a neutral rendering of the
+heard phones that keeps the recognised phrase marks and sentence tune
+(`, … ↘ ?`) and keeps a Mandarin word whole, so a loud question in Hindi or
+Mandarin is heard as `f`; `recognize()` passes a `trace` option on to the
+mode stage. The round-trip mode check passes the speaking voice.

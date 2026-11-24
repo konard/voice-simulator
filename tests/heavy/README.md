@@ -36,6 +36,14 @@ Files are named `<suite>-<topic>.test.js`, for example
 The `roundtrip` suite runs [roundtrip-sentences.test.js](roundtrip-sentences.test.js)
 on 80 fixed sentences across four languages, four seeded voice presets and nine
 audio tiers.
+Its mode check speaks sentence 1 of each language whispered (`[whisper]`)
+and loud (`<prosody volume="loud">`, the markup of issue 50) and passes
+the speaking voice to `recognize()` as `voice`: a whole loud sentence is a
+constant effort, which issue 71 measures only against a baseline rendered
+with that voice; without it the baseline is the utterance itself and no
+`f` span is reported ([experiments/issue-75-loud-cues.mjs](../../experiments/issue-75-loud-cues.mjs)
+shows that level is normalised away and that pitch and spectral tilt of
+loud and normal speech overlap across the presets).
 It writes `roundtrip.md` and `roundtrip.json` to the report folder. See the
 [full benchmark report](../../docs/reports/roundtrip.md) for measured rates,
 per-preset breakdowns, gate failures and the twenty largest phone errors.

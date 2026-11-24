@@ -118,6 +118,9 @@ export function roundTrip(text, options) {
     mode,
     referenceText = text,
     recognize = recognizeAudio,
+    // Pass the speaking voice, so effort is measured against its rendered
+    // baseline (issue 71); without it a constant effort is never reported.
+    knownVoice = false,
   } = options;
   // Experiments may pass a cached render of the same text and options.
   const spoken =
@@ -140,7 +143,10 @@ export function roundTrip(text, options) {
   }
   const level = levelForTier(tier);
   const start = performance.now();
-  const heard = recognize(spoken.samples, spoken.sampleRate, { level });
+  const heard = recognize(spoken.samples, spoken.sampleRate, {
+    level,
+    ...(knownVoice && { voice: spoken.head }),
+  });
   const seconds = (performance.now() - start) / 1000;
   const referenceWords = spoken.timeline.words;
   const syllables = (words) => words.flatMap((word) => word.syllables);

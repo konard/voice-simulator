@@ -61,6 +61,7 @@ function measure({ set, lang, tier, preset, index, mode }) {
     seed: 1,
     mode,
     referenceText: text,
+    knownVoice: set === 'modes',
   });
   return {
     ...metrics,

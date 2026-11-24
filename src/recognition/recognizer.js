@@ -111,6 +111,8 @@ export function recognitionSettings(options) {
     articulationOffsets,
     decoder,
     oov: options.oov !== false,
+    // Test-only: diagnostic events of the mode stage.
+    trace: options.trace,
   };
 }
 
@@ -381,6 +383,7 @@ export function recognizeDecoded(
             },
             {
               voice: settings.voice ? { head: settings.voice } : undefined,
+              trace: settings.trace,
               maxSeconds: samples.length / rate,
               profile: settings.profile,
               kernels: settings.kernels,

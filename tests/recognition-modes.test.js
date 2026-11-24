@@ -15,6 +15,7 @@ import {
   estimateEffort,
   distance,
 } from '../src/recognition/mode-rules.js';
+import { neutralIpa } from '../src/recognition/modes.js';
 import {
   voiceBaseline,
   emotionReferences,
@@ -276,6 +277,44 @@ describe('mode recognition', () => {
       });
     }
   }
+  it('writes the neutral context with the heard marks, one word per word', () => {
+    const tunes = [
+      { from: 0, to: 1, notation: ',', tune: 'continuation' },
+      { from: 1, to: 2, notation: '↘ ?', tune: 'wh' },
+      { from: 0, to: 2, notation: 'f', effort: 0.75 },
+    ];
+    expect(
+      neutralIpa({
+        words: [{ ipa: 'ni˧˥ xɑʊ˨˩˦' }, { ipa: 'ni˨˩' }],
+        modes: tunes,
+      })
+    ).toBe('ni˧˥xɑʊ˨˩˦ , ni˨˩ ↘ ?');
+    expect(neutralIpa({ words: [{ ipa: 'ˈjɛs' }] })).toBe('ˈjɛs .');
+  });
+  it('hears a loud question against a neutral question (issue 75)', () => {
+    const audio = render('hi', 'f', 'नमस्ते, आप कैसे हैं?');
+    const words = audio.timeline.words;
+    const at = (from, to) => ({
+      from,
+      to,
+      start: words[from].start,
+      end: words[to - 1].end,
+    });
+    // The tunes the prosody stage of recognize() hears in this question.
+    const modes = [
+      { ...at(0, 1), notation: ',', tune: 'continuation' },
+      { ...at(1, 4), notation: '↘ ?', tune: 'wh' },
+    ];
+    const heard = recognizeModes(
+      audio.samples,
+      audio.sampleRate,
+      { ipa: audio.ipa, lang: 'hi', words, modes },
+      { voice: VOICE }
+    );
+    expect(
+      heard.modes.some((s) => s.notation === 'f' && s.from === 0 && s.to === 4)
+    ).toBe(true);
+  });
   it('retains fields, copies results, abstains on short phrases and honors modes:false', () => {
     const audio = render('en', 'f', 'Yes.');
     const input = {
