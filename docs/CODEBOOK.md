@@ -160,6 +160,8 @@ for the current accuracy.
 
 `audioToIpa(samples, sampleRate, { voice, language: 'en', nbest: 5 })` scores inverted articulation and broad sound classes against the synthesizer's phone templates. Provide a head as `voice` or leave it out to fit the head from the recording. A single `language` or several `languages` selects text-derived phone transitions for `en`, `ru`, `hi` and `zh`. With neither option the decoder uses the full IPA inventory and zero transition costs.
 
+For an isolated sustained vowel recorded at 16 kHz with a supplied head, batch decoding also compares the recording with duration-matched waveguide renders of the vowel inventory. It uses the ranked vowel readings when the whole recording closely matches a render. Learn more in the [round-trip report](reports/roundtrip.md#isolated-sustained-vowels-at-16-khz).
+
 The result contains the best IPA string, timed `segments` and `syllables`, ranked `nbest` readings, a `lattice`, and the analysis tracks. Times are in seconds. A segment's confidence ranks alternatives on the same span. To reproduce the pronunciation counts, run `node scripts/build-phonotactics.mjs`. They use English lexicon pronunciations, Russian stress entries, one Mandarin character per pronunciation group and a project-authored Hindi word list. `node scripts/tune-decoder.mjs` selects the weights on 40 separate simulator-rendered tuning sentences.
 
 `createIpaDecoder(sampleRate, options)` returns fixed segments and newly confirmed syllable nuclei from both `push(chunk)` and `flush()`. Read the full result with `result()` and call `reset()` to begin a new recording. The streaming frame buffer defaults to 30 seconds and can be set with `maxSeconds`.

@@ -51,8 +51,8 @@ export type ProsodyModeSpan = ProsodySpan &
   (
     | { emphasis: 1; notation: 'ˈˈ' }
     | {
-        tune: 'yesno' | 'wh' | 'exclamation' | 'continuation';
-        notation: '?' | '↗ ?' | '↘ ?' | '!' | ',';
+        tune: 'yesno' | 'wh' | 'exclamation' | 'continuation' | 'alt-rise';
+        notation: '?' | '↗ ?' | '↘ ?' | '!' | ',' | '↗ |';
       }
   );
 

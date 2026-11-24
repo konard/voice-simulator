@@ -145,11 +145,15 @@ export function physicalReferences(baseline) {
 }
 
 /** A neutral rendering of the known phones removes vowel identity, lexical
- * stress and lexical tone from the comparison. Only the input phones are
- * used; neither observed durations nor synthesis mode metadata are copied.
+ * stress and lexical tone from the comparison. Only the input phones (and,
+ * through `ipa`, the recognised phrase marks and tune) are used; neither
+ * observed durations nor synthesis mode metadata are copied.
  * Bounded separately so a long-running transcriber cannot retain audio. */
-export function neutralContext(baseline, words) {
-  const ipa = `${words.map((w) => w.ipa).join(' ')} .`;
+export function neutralContext(
+  baseline,
+  words,
+  ipa = `${words.map((w) => w.ipa).join(' ')} .`
+) {
   const key = JSON.stringify([baseline.options, ipa]);
   if (contexts.has(key)) {
     return contexts.get(key);

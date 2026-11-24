@@ -4,6 +4,7 @@ import { LANGUAGES } from '../g2p/index.js';
 import { registeredLexicons } from '../g2p/lexicon.js';
 import { decoderWhisperSpans } from './decode-pipeline.js';
 import { audioToIpa, audioToIpaParallel } from './decode.js';
+import { hmmAudioToIpa } from './hmm-stage.js';
 import { createRecognitionEngine, getRecognitionEngine } from './engine.js';
 import { ipaToText } from './ipa-to-text.js';
 import { identifyLanguage, languageShares } from './language-id.js';
@@ -20,6 +21,7 @@ import { RESCORING_WEIGHT } from './rescoring-weights.js';
 import { createRecognitionPool } from './pool.js';
 import { aggregate, translated } from './recognizer-result.js';
 import { pauseCuts } from './recognizer-pauses.js';
+import { realiseChineseTones } from './zh-tones.js';
 
 export { createRecognizer } from './recognizer-stream.js';
 
@@ -61,6 +63,13 @@ function checkOptions(languages, nbest, level) {
   }
 }
 
+function checkDecoder(decoder = 'words') {
+  if (decoder !== 'words' && decoder !== 'phones') {
+    throw new RangeError('decoder must be words or phones');
+  }
+  return decoder;
+}
+
 export function recognitionSettings(options) {
   const {
     languages = Object.keys(LANGUAGES),
@@ -78,6 +87,7 @@ export function recognitionSettings(options) {
     articulationOffsets,
   } = options;
   checkOptions(languages, nbest, level);
+  const decoder = checkDecoder(options.decoder);
   if (rescoring && typeof rescoreHypotheses !== 'function') {
     throw new RecognitionError(
       'rescoring-unavailable',
@@ -99,7 +109,23 @@ export function recognitionSettings(options) {
     kernels: options.kernels ?? getRecognitionEngine(options),
     deterministic,
     articulationOffsets,
+    decoder,
+    oov: options.oov !== false,
+    // Test-only: diagnostic events of the mode stage.
+    trace: options.trace,
   };
+}
+
+/**
+ * The word decoder (Gaussian HMM over the lexicon) reads whole inputs;
+ * rescoring needs the phone decoder's lattice.
+ */
+export function usesWordDecoder(settings) {
+  return (
+    settings.decoder === 'words' &&
+    !settings.rescoring &&
+    !settings.stages.audioToIpa
+  );
 }
 
 export function validateRate(sampleRate) {
@@ -166,6 +192,16 @@ export function decodeRecognitionAudio(
     level,
     start
   );
+  if (usesWordDecoder(settings)) {
+    const decoded = measure(settings.profile, 'Audio to IPA', () =>
+      hmmAudioToIpa(input, rate, {
+        languages: settings.languages,
+        whisper: settings.whisper,
+        oov: settings.oov,
+      })
+    );
+    return { decoded, input, rate };
+  }
   const decoded = settings.stages.audioToIpa
     ? settings.stages.audioToIpa(input, rate, options)
     : audioToIpa(input, rate, {
@@ -347,6 +383,7 @@ export function recognizeDecoded(
             },
             {
               voice: settings.voice ? { head: settings.voice } : undefined,
+              trace: settings.trace,
               maxSeconds: samples.length / rate,
               profile: settings.profile,
               kernels: settings.kernels,
@@ -356,8 +393,9 @@ export function recognizeDecoded(
           )
         )
       : primary;
-  const { ipa, text, modes = [] } = withModes;
-  const words = withModes.words.map(publicWord);
+  const toned = realiseChineseTones(withModes);
+  const { ipa, text, modes = [] } = toned;
+  const words = toned.words.map(publicWord);
   const result = {
     ipa,
     text,
@@ -431,8 +469,13 @@ function serial(samples, sampleRate, settings, level) {
 }
 
 function pieces(samples, sampleRate, options, settings) {
-  // User-provided callbacks observe the entire original input.
-  if (Object.keys(settings.stages).length || settings.profile) {
+  // User-provided callbacks observe the entire original input; the word
+  // decoder normalises its features over the whole utterance.
+  if (
+    Object.keys(settings.stages).length ||
+    settings.profile ||
+    usesWordDecoder(settings)
+  ) {
     return [];
   }
   const cuts = pauseCuts(samples, sampleRate);
@@ -541,7 +584,8 @@ export async function recognizeAsync(samples, sampleRate, options = {}) {
     if (
       pool.size === 1 ||
       Object.keys(settings.stages).length ||
-      settings.profile
+      settings.profile ||
+      usesWordDecoder(settings)
     ) {
       return serial(samples, sampleRate, settings, level);
     }

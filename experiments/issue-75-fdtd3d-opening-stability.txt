@@ -1,0 +1,21 @@
+js 9400 any finite load 1.98 5a9c6d2766f3
+js 9401 male finite load 1.99 16098348830a
+js 9402 female finite load 1.76 ef9038413139
+js 9403 child finite load 1.78 0f7180b39909
+js 9406 female finite load 2.00 a3d930e1ffc8
+js 9407 child finite load 1.90 f0eb1889467e
+js 9410 female finite load 2.09 16e0fbf2310d
+js 9451 child finite load 2.00 765d02db3003
+rust 9400 any finite  5edaa6e4fcbb
+rust 9401 male finite  5b7ffbce104a
+rust 9402 female finite  ef9038413139
+rust 9403 child finite  0f7180b39909
+rust 9406 female finite  a3d930e1ffc8
+rust 9407 child finite  f0eb1889467e
+rust 9410 female finite  16e0fbf2310d
+rust 9451 child finite  765d02db3003
+
+Before the fix (commit 4db83b7, JS engine, same text): largest load per head
+9451 child NaN load 1373.66, 9410 female NaN load 8.27, 9406 female NaN
+load 8.85; 9400 1.98, 9401 1.99, 9402 1.76, 9403 1.78, 9407 1.90 finite with
+the same hashes as above (healthy heads render byte-identically).

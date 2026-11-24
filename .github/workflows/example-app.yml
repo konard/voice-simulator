@@ -279,6 +279,7 @@ jobs:
         run: npm ci --prefix examples/universal-app --no-audit --no-fund
 
       - name: Verify desktop compatibility APIs
+        if: matrix.os == 'ubuntu-24.04'
         run: node --pending-deprecation --throw-deprecation scripts/check-desktop-compat.mjs
 
       - name: Package Electron app

@@ -41,10 +41,10 @@ function prune(paths, beam) {
 }
 
 function unknownCandidates(tokens, from, end, options, knownSuffix) {
-  const to = Math.min(end, from + 12);
-  if (options.given && to !== end) {
-    return [];
-  }
+  // With given boundaries the unknown word is the whole span, however
+  // long (an out-of-vocabulary word of the HMM phone loop); a search
+  // proposes unknown words of at most 12 sounds.
+  const to = options.given ? end : Math.min(end, from + 12);
   const ends = [to];
   if (!options.given) {
     // A known suffix proposes a boundary that preserves following words.

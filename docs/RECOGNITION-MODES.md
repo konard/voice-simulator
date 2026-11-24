@@ -55,7 +55,14 @@ rendered with seed 1 at the waveguide tier matching the sample rate (including
 waveguide tier is used; rates above 48 kHz use `medium`. The voice cache
 holds at most eight entries. A separate cache holds sixteen neutral phone
 contexts, without retaining samples. These contexts cancel vowel identity,
-lexical stress and lexical tone before applying the rules. Timed phones,
+lexical stress, lexical tone and the sentence tune before applying the rules:
+the heard phones are rendered with the marks of the recognised tunes
+(`nəməst̪eː , aːp kɛːseː ɦɛ̃ː ↘ ?`), as the synthesiser writes the IPA of text,
+and a Mandarin word of several syllables stays one word. Loud speech of the
+synthesiser is its normal speech with every pitch scaled by the same factor,
+so a question is compared with a neutral question; a statement context made
+the wh-question of `नमस्ते, आप कैसे हैं?` vary by 34 Hz across its words and
+hid its constant effort (issue 75). Timed phones,
 when supplied as `phonemes`, select vowel frames directly; otherwise the
 neutral phone durations are fitted to each observed word interval. Syllabic
 consonants count as nuclei too. Weak pitch fallback requires harmonic
@@ -89,8 +96,9 @@ same acoustic vectors and never emit emotion names.
 A named emotion removes redundant effects of its own preset before replay.
 Nonverbal pause sounds are conservative acoustic hypotheses.
 
-An optional `trace(event)` callback exposes baselines, word features,
-phrase vectors and decisions for diagnosis. It is off by default. All
+An optional `trace(event)` callback exposes baselines, the neutral context
+(`stage: 'context'`), word features, phrase vectors and decisions for
+diagnosis; `recognize()` passes its own `trace` option on to it. It is off by default. All
 analysis is signal processing and physical synthesis, without downloaded
 models. The numerical word rules and phrase vector also have a Rust port;
 WebAssembly parity checks use a tolerance of 1e-10.

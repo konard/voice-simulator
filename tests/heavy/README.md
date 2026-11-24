@@ -33,6 +33,21 @@ Files are named `<suite>-<topic>.test.js`, for example
 
 `--suite all` (the default) runs every `*.test.js` file of this folder.
 
+The `roundtrip` suite runs [roundtrip-sentences.test.js](roundtrip-sentences.test.js)
+on 80 fixed sentences across four languages, four seeded voice presets and nine
+audio tiers.
+Its mode check speaks sentence 1 of each language whispered (`[whisper]`)
+and loud (`<prosody volume="loud">`, the markup of issue 50) and passes
+the speaking voice to `recognize()` as `voice`: a whole loud sentence is a
+constant effort, which issue 71 measures only against a baseline rendered
+with that voice; without it the baseline is the utterance itself and no
+`f` span is reported ([experiments/issue-75-loud-cues.mjs](../../experiments/issue-75-loud-cues.mjs)
+shows that level is normalised away and that pitch and spectral tilt of
+loud and normal speech overlap across the presets).
+It writes `roundtrip.md` and `roundtrip.json` to the report folder. See the
+[full benchmark report](../../docs/reports/roundtrip.md) for measured rates,
+per-preset breakdowns, gate failures and the twenty largest phone errors.
+
 The `copy` suite also checks copy synthesis at medium and studio quality,
 and measures how often per-syllable refinement reduces log-spectral
 distance. The tests write `copy-synthesis.md` and `copy-refinement.md`
@@ -40,6 +55,87 @@ along with their JSON data. Run `node scripts/copy-report.mjs` to write
 the synthesis report independently. The MCD limit in
 [`copy-thresholds.json`](copy-thresholds.json) is 105% of the first measured
 full-corpus mean. Later changes may lower the limits in that file.
+
+## Recognition model
+
+`recognize()` decodes words with a Gaussian-mixture HMM whose parameters are
+committed in `src/recognition/data/hmm-model-*.js` (int8, about 2 MB in parts
+of 400 kB). It is trained only on speech that this library synthesises from
+its own lexicons, so no recording is needed and the licence of the model is
+that of the repository. The `roundtrip` suite measures it on sentences that
+are never used for training: the training sentences are drawn from the 4000
+most frequent words of `src/recognition/data/<lang>.js` with the seeds below,
+while the suite reads the fixed sentences of `tests/helpers/roundtrip.js`.
+Training runs on a developer machine, not in CI, in three steps:
+
+1. Render labelled utterances, 400 per file, with random heads of the presets
+   `any`, `male`, `female` and `child`:
+
+   ```bash
+   for lang in en ru hi zh; do
+     for job in "1000 telephone 0" "1800 telephone 0" "5000 narrowband 0" \
+                "6000 wideband 0" "7000 minimal 0" "8000 telephone 1" \
+                "8400 wideband 1"; do
+       set -- $job
+       PITCH=1 WHISPER=$3 node experiments/issue-75-hmm-gen.mjs \
+         $lang 400 $1 $2 /tmp/hmm/$lang-$2-$1.json
+     done
+   done
+   ```
+
+   `PITCH=1` stores the pitch features and the tone units of Mandarin;
+   `WHISPER=1` renders the file whispered.
+
+2. Fit the LDA projection (40 dimensions), three states per phone with 16
+   Gaussians, and context states with 8 Gaussians for every entry or exit
+   context seen in at least 120 frames, then run the round trip of five
+   sentences per language as a check:
+
+   ```bash
+   MODEL=/tmp/hmm/model.json CD=120 K=16 KCD=8 LDA=40 PITCH_TRACK=1 LIMIT=5 \
+     node --max-old-space-size=9000 experiments/issue-75-hmm-wordtrip.mjs \
+     telephone en,ru,hi,zh /tmp/hmm/*-*.json
+   ```
+
+   `CONTEXT=phone` keys context states on the neighbouring phone and falls
+   back to its broad class (place of articulation, vowel backness) when the
+   phone context has too few frames; without it only broad classes are used.
+   The shipped model was trained this way on the 28 files of step 1 (about
+   7.5 minutes for the LDA and the mixtures); the features of all files are
+   held in memory, so train on a machine with more than 3 GB.
+
+3. Pack the model into the source tree and run the smoke test:
+
+   ```bash
+   node scripts/build-hmm-model.mjs /tmp/hmm/model.json
+   node scripts/build-hmm-tone.mjs /tmp/hmm/*-*.json
+   node --test tests/roundtrip-smoke.test.js
+   ```
+
+   `build-hmm-tone.mjs` fits the tone stream (`src/recognition/hmm-tone.js`):
+   eight Gaussians of pitch-shape features per Mandarin tone class and state,
+   and eight for every eighth frame of the other states, about 11 minutes for
+   the 28 files. The decoder adds `toneWeight` times the log posterior of the
+   tone class to the spectral score of a toned state (`search.toneWeight`,
+   default 2), because the ±4 frames the LDA sees cannot tell a level tone
+   rising out of a low one from a rising tone. Lexicon words that the count
+   corpora never saw (count 1) back off as if seen three times
+   (`search.minCount`), so that "hello", absent from pre-1926 books, is not
+   heard as the more frequent "hollow". A Mandarin word whose last third tone
+   is read rising (third-tone sandhi, and bú, yí) goes on only into a tree of
+   the words whose first tone causes that sandhi, never into a pause or the
+   end of the utterance, as `applyToneSandhi()` speaks it: without this, 中火
+   read as zhōng huó took 中国 in 我是中国人, because 国 and the rising 火
+   sound alike once 人 (second tone) follows.
+
+`experiments/issue-75-hmm-eval.mjs [tier] [langs] [presets] [from] [to]`
+scores the committed model on the round-trip sentences without the rest of the
+suite, and `experiments/issue-75-smoke-diagnose.mjs` traces the three smoke
+cases: blind decoding, decoding with the known language, the acoustic score
+of the reference words and the rank of each reference word among the
+candidates that end at its boundaries. Its cases can be other sentences
+(`"en:Hello world." minimal -` synthesises as `tests/recognizer.test.js`
+does), and `SEARCH='{"minCount":1}'` changes the decoder settings.
 
 ## Environment
 

@@ -66,7 +66,9 @@ run.
 standard input. For raw standard input, use `--format raw` and optionally
 `--sample-rate` and `--bit-depth` (defaults 16000 and 16). `--ipa` prints IPA
 and `--json` prints structured output. Use `--no-whisper` to disable
-automatic whisper detection. Raw input prints a line for each
+automatic whisper detection. `--decoder phones` selects the phone decoder
+instead of the default HMM word decoder, and `--no-oov` keeps the word
+decoder to lexicon words (options `decoder` and `oov`). Raw input prints a line for each
 committed phrase.
 
 `POST /api/recognize` accepts an audio file as its body, with optional

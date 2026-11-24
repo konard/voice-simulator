@@ -240,6 +240,16 @@ describe('IPA to text metadata and CLI', () => {
     );
   });
 
+  it('spells a given word of more than twelve unknown sounds', () => {
+    // The HMM phone loop hands over long out-of-vocabulary words whole.
+    const result = ipaToText('pɛntɑkɑlɪmɑnɛstɑsɪkɑ mɑɪn', {
+      language: 'en',
+      boundaries: 'given',
+    });
+    expect(result.words.length).toBe(2);
+    expect(result.words[0].text.length > 12).toBe(true);
+  });
+
   it('returns distinct alternatives without changing the best result', () => {
     const first = ipaToText('ˈtu');
     const result = ipaToText('ˈtu', { nbest: 3 });

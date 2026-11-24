@@ -500,7 +500,7 @@ npx voice-simulator --help
 
 ### Whispered speech
 
-`recognize(samples, sampleRate, { languages: ['en'] })` and `voice-simulator recognize w.wav --lang en` detect whisper automatically. The result has timed `modes` and `{W … W}` in `ipa`. Pass `whisper: false` or `--no-whisper` to disable detection. The batch and streaming recognizers and the IPA decoder also accept explicit spans in seconds through `whisper: [{ start, end }]`.
+`recognize(samples, sampleRate, { languages: ['en'] })` and `voice-simulator recognize w.wav --lang en` detect whisper automatically. The result has timed `modes` and `{W … W}` in `ipa`. Pass `whisper: false` or `--no-whisper` to disable detection. The batch and streaming recognizers and the IPA decoder also accept explicit spans in seconds through `whisper: [{ start, end }]`. At 8 kHz, the detector checks waveform periodicity when weak spectral evidence coincides with a gap in tracked pitch. See the [synthetic round-trip report](docs/reports/roundtrip.md) for measurements.
 
 The minimal-tier, seed-1 benchmark on twelve synthetic sentences measured 72.2% phone error and 68.6% with voicing pairs treated as equal. Voicing accuracy was 84.8% across 46 female consonant probes. The tone scorer chose 6 of 8 held-out test syllables correctly, and lexical decoding recovered 6 of 54 reference tones across ten Mandarin sentences. Tones and voicing are partly guessed from the words. Run `HEAVY=1 node --test tests/recognition-whisper.test.js tests/heavy/recognition-whisper.test.js` to reproduce the measurements. No real whispered recordings were measured because no available dataset met the project's license requirements.
 
@@ -662,11 +662,13 @@ Measured with `node experiments/issue-58-rtf.mjs` (10 s of speech, one thread): 
 
 Copy only your own voice, a voice you have permission to copy, or a public-domain recording. See [Not goals](docs/VISION.md#not-goals).
 
-Run `voice-simulator copy speech.wav -o copy.wav --score speech-score.json` to save simulated audio and its editable IPA score. See the [copy synthesis guide](docs/COPY-SYNTHESIS.md) for replay and options.
+Run `voice-simulator copy speech.wav -o copy.wav --score speech-score.json` to save simulated audio and its editable IPA score. For short 16 kHz English recordings from a stock simulator voice, copying can recover the original prosody by verifying the input against a new waveguide render. See the [copy synthesis guide](docs/COPY-SYNTHESIS.md) for replay and options.
 
 ## Recognition (speech to text)
 
 `recognize` accepts mono samples and returns IPA, text, timed words and syllables, language shares, and speech modes. Pass `segments: true` to `recognize` or `createRecognizer` to include timed phonemes as `{ ipa, start, end, confidence }`. Times are in seconds. See the [recognition API and examples](docs/RECOGNIZER.md).
+
+By default (`decoder: 'words'`) a Gaussian HMM decodes words over the lexicons of the requested languages, trained only on this library's own synthetic speech ([how it is trained](tests/heavy/README.md#recognition-model)). A word outside the lexicon is heard through a phone loop of its language and spelled from its sounds; `oov: false` (CLI `--no-oov`) keeps to lexicon words. `decoder: 'phones'` (CLI `--decoder phones`) uses the phone decoder of `audioToIpa` and `ipaToText` instead, as do `rescoring` and substituted stages.
 
 ### Recognition engines and workers
 

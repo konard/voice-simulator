@@ -1,5 +1,11 @@
 import assert from 'node:assert/strict';
-import { DEFAULT_HEAD, recognize, synthesize } from '../src/index.js';
+import {
+  DEFAULT_HEAD,
+  audioToIpa,
+  planUtterance,
+  recognize,
+  synthesize,
+} from '../src/index.js';
 import { renderPlan, STEADY_TRACT } from '../src/acoustics/voice.js';
 import { TRACT_SECTIONS } from '../src/articulation/tract-shape.js';
 import {
@@ -19,6 +25,30 @@ import { itUnless } from './helpers/skip.js';
 
 const it = itUnless(noRust);
 const FOX = 'The quick brown fox jumps over the lazy dog.';
+
+it('ranks an isolated vowel with JavaScript and Rust renderers', async () => {
+  const kernels = await createRecognitionEngine({ engine: 'rust' });
+  const voice = { ...DEFAULT_HEAD, pitch: 173 };
+  const plan = planUtterance('ɯ', { head: voice, durations: [0.33] });
+  const sampleRate = 16000;
+  const samples = renderPlan(plan, {
+    engine: kernels.renderer,
+    sampleRate,
+    solver: 'waveguide',
+    seed: 3,
+  });
+  const options = { voice, nbest: 3 };
+  const js = audioToIpa(samples, sampleRate, options);
+  const rust = audioToIpa(samples, sampleRate, { ...options, kernels });
+  assert.equal(js.ipa, 'ɯ');
+  assert.deepEqual(
+    rust.nbest.map(({ ipa }) => ipa),
+    js.nbest.map(({ ipa }) => ipa)
+  );
+  for (const [i, reading] of js.nbest.entries()) {
+    assert.ok(Math.abs(reading.cost - rust.nbest[i].cost) < 1e-4);
+  }
+});
 
 it('prepares the same oral response in scalar Rust and JavaScript', async () => {
   const { module } = await createRecognitionEngine({ engine: 'rust' });

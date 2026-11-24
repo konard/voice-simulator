@@ -33,7 +33,7 @@ function packet(
   track,
   languages,
   templates,
-  { end, open, clock, beam, nbest, from, locked, lastUnit, whisperSpans }
+  { end, open, clock, beam, nbest, from, locked, lastUnit, whisperSpans, long }
 ) {
   const count = Math.min(track.frameCount, Math.ceil(end / frames.hop - 1e-9));
   const { duration, class: broadClass, phonotactic } = DECODE_WEIGHTS;
@@ -71,7 +71,7 @@ function packet(
   for (const template of templates) {
     values.push(
       template.duration,
-      template.classMask,
+      template.classMask + 256 * Number(long.has(template.ipa)),
       template.compared.length
     );
     template.compared.forEach((cell, position) =>
@@ -181,6 +181,7 @@ function compare(
     locked,
     lastUnit,
     whisperSpans,
+    long: language.long,
   });
   const capacity =
     4 +
@@ -212,10 +213,10 @@ function compare(
       close(cost, 'cost');
       if (confidence !== undefined) {
         close(confidence, 'confidence');
-        close(Number(Boolean(long)), 'long');
       } else {
-        i += 2;
+        i++;
       }
+      close(Number(Boolean(long)), 'long');
     }
     close(prepared.times.length, 'boundaries');
     close(expected.edges.length, 'edges');

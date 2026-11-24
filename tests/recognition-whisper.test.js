@@ -6,10 +6,12 @@ import {
   createFrameAnalyzer,
   createIpaDecoder,
   createRecognizer,
+  findWhisper,
   ipaToText,
   recognize,
   recognizeModes,
   resample,
+  synthesize,
   trackFormants,
   trackPitch,
   whisperTones,
@@ -41,6 +43,119 @@ const sentences = [
   ['zh', '你好世界'],
   ['zh', '请喝茶'],
 ];
+
+it('separates a weak periodic gap from a telephone whisper', () => {
+  const text = 'Привет, как дела?';
+  const { samples, sampleRate, timeline } = synthesize(
+    `${text} [whisper]${text}[/whisper]`,
+    {
+      lang: 'ru',
+      tier: 'telephone',
+      head: 'random',
+      preset: 'male',
+      seed: 1,
+      markup: true,
+    }
+  );
+  const frames = analyzeFrames(samples, sampleRate, { hop: 0.01 });
+  const pitch = trackPitch(frames);
+  const spans = findWhisper(samples, sampleRate, frames, pitch);
+  const change = timeline.words[3].start;
+  expect(spans.length).toBeGreaterThan(0);
+  expect(spans.every(({ start }) => start >= change - 0.1)).toBe(true);
+
+  const withoutPeriodicity = { ...frames, periodicity: undefined };
+  const fallbackSpans = findWhisper(
+    samples,
+    sampleRate,
+    withoutPeriodicity,
+    pitch
+  );
+  expect(fallbackSpans.some(({ start }) => start < change - 0.1)).toBe(true);
+});
+
+it('keeps interrupted telephone whispers together without bridging periodic speech', () => {
+  const { samples, sampleRate, timeline } = synthesize(
+    '[whisper]Съешь же ещё этих мягких французских булок, да выпей чаю.[/whisper]',
+    {
+      lang: 'ru',
+      tier: 'telephone',
+      head: 'random',
+      preset: 'male',
+      seed: 1,
+      markup: true,
+    }
+  );
+  const frames = analyzeFrames(samples, sampleRate, { hop: 0.01 });
+  const pitch = trackPitch(frames);
+  const runs = whisperSpeechRuns(frames);
+  expect(runs.length).toBe(3);
+  const spans = findWhisper(samples, sampleRate, frames, pitch);
+  expect(spans.length).toBe(1);
+  expect(spans[0].start).toBeLessThan(timeline.words[0].end);
+  expect(spans[0].end).toBeGreaterThan(timeline.words.at(-2).end);
+
+  const periodicity = frames.periodicity.slice();
+  periodicity.fill(1, runs[1].from, runs[1].to);
+  expect(
+    findWhisper(samples, sampleRate, { ...frames, periodicity }, pitch).length
+  ).toBe(2);
+});
+
+it('joins wideband whisper runs across silent stop closures', () => {
+  const { samples, sampleRate, timeline } = synthesize(
+    '[whisper]Съешь же ещё этих мягких французских булок, да выпей чаю.[/whisper]',
+    {
+      lang: 'ru',
+      tier: 'wideband',
+      head: 'random',
+      preset: 'male',
+      seed: 1,
+      markup: true,
+    }
+  );
+  const frames = analyzeFrames(samples, sampleRate, { hop: 0.01 });
+  const pitch = trackPitch(frames);
+  // Closures of 0.2-0.4 s split the speech into four runs.
+  expect(whisperSpeechRuns(frames).length).toBe(4);
+  const spans = findWhisper(samples, sampleRate, frames, pitch);
+  expect(spans.length).toBe(1);
+  expect(spans[0].start).toBeLessThan(timeline.words[0].end);
+  expect(spans[0].end).toBeGreaterThan(timeline.words.at(-2).end);
+});
+
+it('joins narrowband whispers across brief pitch detections', () => {
+  const audio = synthesize(
+    '[whisper]The quick brown fox jumps over the lazy dog.[/whisper]',
+    {
+      tier: 'narrowband',
+      head: 'random',
+      preset: 'male',
+      seed: 1,
+      markup: true,
+    }
+  );
+  const rate = 8000;
+  const samples = resample(audio.samples, audio.sampleRate, rate);
+  const frames = analyzeFrames(samples, rate, { hop: 0.01 });
+  const pitch = trackPitch(frames);
+  const [first, middle, last] = whisperSpeechRuns(frames);
+  expect(pitch.f0.subarray(middle.from, middle.to).some(Boolean)).toBe(true);
+
+  const [span, ...others] = findWhisper(samples, rate, frames, pitch);
+  expect(others).toEqual([]);
+  expect(span.start).toBe(first.start);
+  expect(span.end).toBe(last.end);
+
+  const f0 = pitch.f0.slice();
+  const periodicity = frames.periodicity.slice();
+  f0.fill(120, middle.from, middle.from + 5);
+  periodicity.fill(1, middle.from, middle.from + 5);
+  expect(
+    findWhisper(samples, rate, { ...frames, periodicity }, { ...pitch, f0 })
+      .length
+  ).toBe(2);
+});
 
 describe('whisper recognition', () => {
   for (const lang of new Set(sentences.map(([language]) => language))) {

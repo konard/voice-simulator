@@ -5,6 +5,7 @@ import {
   pronunciations,
   lexiconRevision,
   lexiconWords,
+  registeredLexicons,
   userPronunciations,
 } from '../g2p/lexicon.js';
 import { hanziToPinyin } from '../g2p/chinese.js';
@@ -47,11 +48,18 @@ export function trieNode(token) {
 
 function contextualChinese() {
   const variants = new Map();
+  const readings = new Map();
   // A phrase may give a character a neutral reading, e.g.
   // 户 in 窗户. Preserve these readings when the corpus segments that phrase.
   for (const phrase of lexiconWords('zh')) {
     for (const { char, pinyin } of hanziToPinyin(phrase)) {
-      const syllable = pinyin && pinyinSyllableToIpa(pinyin);
+      if (!pinyin) {
+        continue;
+      }
+      if (!readings.has(pinyin)) {
+        readings.set(pinyin, pinyinSyllableToIpa(pinyin));
+      }
+      const syllable = readings.get(pinyin);
       if (!syllable || syllable.tone !== 5) {
         continue;
       }
@@ -209,8 +217,35 @@ export function getLexicon(language = 'en') {
         }
         return root;
       },
-      pronunciations() {
-        return lexiconPronunciations(language, data.words);
+      /** Pronunciations of all words, or of the `limit` most frequent. */
+      pronunciations(limit = data.words.length) {
+        return lexiconPronunciations(language, data.words.slice(0, limit));
+      },
+      /**
+       * Pronunciations of the words added with addLexicon() that are not
+       * among the `limit` most frequent, counted as the word of rank
+       * `rank`: a word the user adds is expected to be heard.
+       */
+      addedPronunciations(limit = data.words.length, rank = 1000) {
+        const known = new Set(
+          data.words.slice(0, limit).map(({ word }) => word)
+        );
+        const count =
+          data.words[Math.min(rank, data.words.length - 1)]?.count ?? 1;
+        const added = new Set();
+        for (const [lang, entries] of registeredLexicons()) {
+          if (lang === language) {
+            for (const word of Object.keys(entries)) {
+              if (!known.has(word)) {
+                added.add(word);
+              }
+            }
+          }
+        }
+        return lexiconPronunciations(
+          language,
+          [...added].map((word) => ({ word, count }))
+        );
       },
       words: data.words,
       counts: data.counts,

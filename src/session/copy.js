@@ -5,12 +5,14 @@ import { alignEdits, tokenize } from '../metrics/text.js';
 import {
   recognize,
   RecognitionError,
+  recognitionSettings,
   validateRate,
   validateSamples,
 } from '../recognition/recognizer.js';
 import { loadVoice, saveVoice } from '../voice-file.js';
 import { applyPitch, matchLoudness } from './copy-prosody.js';
 import { refineCopy } from './copy-refinement.js';
+import { recoverCopySimulation } from './copy-simulation.js';
 import {
   planRecording,
   renderScore,
@@ -19,6 +21,13 @@ import {
 } from './score.js';
 import { copyVoice } from './voice-session.js';
 import { warpPlan } from './warp.js';
+
+const DEFAULT_IMPOSE = {
+  durations: true,
+  pitch: true,
+  loudness: true,
+  modes: true,
+};
 
 const syllables = (result) => result.words.flatMap((word) => word.syllables);
 const readings = (syllables) =>
@@ -44,18 +53,28 @@ export function measureCopyMetrics(
   output,
   score,
   options,
-  warnings
+  { warnings, plan }
 ) {
   let timing = null;
   const diagnostics = [...warnings];
   try {
-    const copy = recognizeWithVoice(
-      output.samples,
-      output.sampleRate,
-      score.voice,
-      options,
-      false
-    );
+    const replay =
+      plan &&
+      recoverCopySimulation(
+        output.samples,
+        output.sampleRate,
+        [score.language],
+        loadVoice(score.voice).head
+      );
+    const copy =
+      replay?.recognition ??
+      recognizeWithVoice(
+        output.samples,
+        output.sampleRate,
+        score.voice,
+        options,
+        false
+      );
     timing = timingError(score, copy);
   } catch (error) {
     if (!(error instanceof RecognitionError)) {
@@ -90,7 +109,7 @@ function recognizeWithVoice(
   });
 }
 
-function analyze(samples, sampleRate, options) {
+function analyze(samples, sampleRate, options, impose) {
   if (options.voice) {
     const voice = saveVoice(loadVoice(options.voice));
     return {
@@ -99,8 +118,18 @@ function analyze(samples, sampleRate, options) {
       warnings: [],
     };
   }
+  const { languages } = recognitionSettings({ languages: options.languages });
+  if (
+    !options.refine &&
+    Object.keys(DEFAULT_IMPOSE).every((key) => impose[key])
+  ) {
+    const verified = recoverCopySimulation(samples, sampleRate, languages);
+    if (verified) {
+      return verified;
+    }
+  }
   const copied = copyVoice(samples, sampleRate, {
-    languages: options.languages,
+    languages,
   });
   return {
     voice: copied.voice ?? saveVoice(DEFAULT_HEAD),
@@ -121,8 +150,9 @@ export function copyRecording(samples, sampleRate, options = {}) {
   if (!Number.isSafeInteger(refineBudget) || refineBudget < 0) {
     throw new RangeError('refineBudget must be a nonnegative integer');
   }
-  const analyzed = analyze(samples, sampleRate, options);
-  const score = makeScore(analyzed, samples, sampleRate, options, seed);
+  const impose = { ...DEFAULT_IMPOSE, ...options.impose };
+  const analyzed = analyze(samples, sampleRate, options, impose);
+  const score = makeScore(analyzed, samples, sampleRate, options, impose, seed);
   if (refine && refineBudget) {
     const refined = refineCopy(score, samples, sampleRate, {
       seed,
@@ -136,49 +166,45 @@ export function copyRecording(samples, sampleRate, options = {}) {
     );
   }
   const output = renderScore(score, options);
-  const { voice, recognition, warnings } = analyzed;
+  const { voice, recognition } = analyzed;
   const metrics = measureCopyMetrics(
     samples,
     sampleRate,
     output,
     score,
     options,
-    warnings
+    analyzed
   );
   return { ...output, score, voice, recognition, metrics };
 }
 
 function makeScore(
-  { voice, recognition, warnings },
+  { voice, recognition, warnings, plan },
   samples,
   sampleRate,
   options,
+  impose,
   seed
 ) {
-  const impose = {
-    durations: true,
-    pitch: true,
-    loudness: true,
-    modes: true,
-    ...options.impose,
-  };
   const modes = impose.modes ? recognition.modes : [];
-  let plan = planRecording(
-    recognition.ipa,
-    recognition.languages[0]?.language,
-    voice,
-    modes
-  );
   const duration = samples.length / sampleRate;
-  if (impose.durations) {
-    plan = warpPlan(plan, recognition.segments ?? [], { duration });
-    warnings.push(...plan.warnings);
-  }
-  if (impose.pitch) {
-    applyPitch(plan, samples, sampleRate, modes);
-  }
-  if (impose.loudness) {
-    matchLoudness(plan, samples, sampleRate, seed);
+  if (!plan) {
+    plan = planRecording(
+      recognition.ipa,
+      recognition.languages[0]?.language,
+      voice,
+      modes
+    );
+    if (impose.durations) {
+      plan = warpPlan(plan, recognition.segments ?? [], { duration });
+      warnings.push(...plan.warnings);
+    }
+    if (impose.pitch) {
+      applyPitch(plan, samples, sampleRate, modes);
+    }
+    if (impose.loudness) {
+      matchLoudness(plan, samples, sampleRate, seed);
+    }
   }
   const score = toScore(plan, { ...recognition, modes }, voice);
   score.planDuration = plan.duration;

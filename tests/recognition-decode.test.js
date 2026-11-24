@@ -21,8 +21,10 @@ import {
 import {
   analyzeForDecode,
   decoderSettings,
+  latticeOf,
   prepareIpaDecode,
   resultOf,
+  segmentsOf,
 } from '../src/recognition/decode-pipeline.js';
 import { decodeSearch } from '../src/recognition/decode-search.js';
 import { prepareDecode } from '../src/recognition/decode-spans.js';
@@ -209,6 +211,48 @@ it('keeps paths with different phone strings and their lowest cost', () => {
   );
 });
 
+it('keeps contrastive vowel lengths in n-best readings and the lattice', () => {
+  const symbols = ['a'];
+  const templates = [{ ipa: 'a', kind: 'vowel' }];
+  const span = (to, cost, long = 0) => ({
+    to,
+    terms: Float64Array.of(cost, 0, 0),
+    long: Uint8Array.of(long),
+  });
+  const times = Float64Array.of(0, 0.06, 0.13, 0.19);
+  const prepared = {
+    times,
+    spans: [[span(1, 0), span(2, 1, 1)], [span(3, 0, 1)], [span(3, 0)], []],
+  };
+  for (const contrastive of [true, false]) {
+    const language = {
+      symbols,
+      costs: new Float64Array(2),
+      long: new Set(contrastive ? symbols : []),
+    };
+    const { paths, edges } = decodeSearch(prepared, language, {
+      beam: 1,
+      nbest: 2,
+      weights: { duration: 0, class: 0, phonotactic: 0 },
+    });
+    assert.deepEqual(
+      paths.map((path) =>
+        segmentsOf(path, times, templates, language).map(({ ipa }) => ipa)
+      ),
+      contrastive
+        ? [
+            ['a', 'aː'],
+            ['aː', 'a'],
+          ]
+        : [['a', 'a']]
+    );
+    assert.deepEqual(
+      latticeOf(times, edges, templates, language).edges.map(({ ipa }) => ipa),
+      contrastive ? ['a', 'aː', 'aː', 'a'] : ['a', 'a', 'a', 'a']
+    );
+  }
+});
+
 it('decodes steady speech across a gap in boundary candidates', () => {
   const count = 380;
   const hop = 0.005;
@@ -293,6 +337,46 @@ for (const [preset, voice] of Object.entries(DECODER_VOICES)) {
     gate(`${preset} vowel first`, first / vowels.length, 0.6, true);
   });
 }
+
+it('verifies a sustained vowel at a different pitch, duration and seed', () => {
+  const voice = { ...DECODER_VOICES.female, pitch: 204 };
+  const options = { voice, nbest: 3 };
+  const plan = planUtterance('ɯ', { head: voice, durations: [0.37] });
+  const render = (plan) =>
+    renderPlan(plan, {
+      sampleRate: hiRate,
+      solver: 'waveguide',
+      engine: 'js',
+      seed: 3,
+    });
+  const result = audioToIpa(render(plan), hiRate, options);
+  assert.equal(result.ipa, 'ɯ');
+  const [phone] = plannedPhones(plan);
+  assert.ok(Math.abs(result.segments[0].start - phone.start) < 0.001);
+  assert.ok(Math.abs(result.segments[0].end - phone.end) < 0.001);
+  assert.equal(result.nbest.length, options.nbest);
+  assert.ok(
+    Math.abs(result.nbest.reduce((sum, row) => sum + row.confidence, 0) - 1) <
+      1e-12
+  );
+  assert.deepEqual(
+    result.lattice.edges.map(({ ipa }) => ipa),
+    result.nbest.map(({ ipa }) => ipa)
+  );
+
+  const transition = render(
+    planUtterance('aɪ', { head: voice, durations: [0.19, 0.18] })
+  );
+  const settings = decoderSettings(hiRate, options);
+  const analysis = analyzeForDecode(transition, hiRate, options, settings);
+  const { prepared, templates } = prepareIpaDecode(analysis, settings);
+  const search = decodeSearch(prepared, settings.language, settings);
+  const fallback = resultOf(analysis, settings, prepared, templates, search);
+  assert.deepEqual(
+    audioToIpa(transition, hiRate, options).nbest,
+    fallback.nbest
+  );
+});
 
 // Measure shards separately so a single test does not consume the runtime's timeout.
 for (const language of Object.keys(DECODE_SENTENCES)) {

@@ -1,12 +1,14 @@
 /** Apply measured prosody to a timed recognition result. */
 import { formatIpa, parseIpa } from '../ipa/parse.js';
 import {
+  ALTERNATIVE_CONJUNCTIONS,
   emphasizedIpa,
   englishAuxiliary,
   hasZhQuestionWord,
 } from '../g2p/phrasing.js';
 import { VERBALIZERS } from '../g2p/normalize.js';
 import { POLAR_PARTICLE } from '../g2p/verbalize-hi.js';
+import { BOUNDARIES } from '../articulation/prosody.js';
 import { quantile } from './mode-features.js';
 import { whisperAt } from './whisper.js';
 import { whisperModeSpans } from './whisper-result.js';
@@ -17,6 +19,13 @@ import {
   span,
   voicedBetween,
 } from './prosody-features.js';
+
+/**
+ * Shortest gap (s) between two words heard as a phrase break: the comma
+ * pause of articulation/prosody.js (0.2 s) less the word edges the decoder
+ * lets into it (measured gaps 0.18–0.19 s at telephone).
+ */
+const PHRASE_GAP = 0.15;
 
 function phraseRanges(words, sounds, whispered) {
   const ranges = [];
@@ -39,7 +48,7 @@ function phraseRanges(words, sounds, whispered) {
             Math.min(start, pause.end) - Math.max(end, pause.start)
           )
         : start - end;
-    if (duration >= 0.2 - 1e-9 || whispered[to] !== whispered[to - 1]) {
+    if (duration >= PHRASE_GAP || whispered[to] !== whispered[to - 1]) {
       ranges.push({ from, to, pause: duration });
       from = to;
     }
@@ -170,6 +179,12 @@ export function phraseCues(
   };
 }
 
+/**
+ * Shortest pause after a sentence (s): halfway between the synthesiser's
+ * comma and sentence pauses (BOUNDARIES in articulation/prosody.js).
+ */
+const SENTENCE_PAUSE = (BOUNDARIES.comma.pause + BOUNDARIES.period.pause) / 2;
+
 function phraseMark(
   words,
   phrase,
@@ -184,11 +199,17 @@ function phraseMark(
   const tail = voicedBetween(pitch, Math.max(start, end - 0.25), end);
   // First rule that fits (semitones, except for loudness in dB):
   // fewer than five tail frames → final period only
+  // after a rise before the conjunction of an alternative question → `↘ ?`
   // wh-word → falling question; zh 吗 or initial hi क्या → question
   // en tail rise ≥ 3, hi ≥ 4; ru stressed rise ≥ 5 followed by a fall
+  //   (before the last phrase opening with or, или, या, 还是 → `↗ |`)
   // zh mean pitch rises ≥ 2 between the outer thirds → question
   // level ≥ 1, span ≥ 1.2 × range, loud ≥ 2 with other phrases → exclamation
+  // nonfinal pause < 0.31 s → continuation (no question or exclamation)
   // nonfinal pause < 0.5 s → continuation; otherwise → statement
+  if (phrase.alternative === 'last') {
+    return '↘ ?';
+  }
   if (tail.length < 5) {
     return Number.isFinite(phrase.pause) ? '' : '.';
   }
@@ -203,7 +224,10 @@ function phraseMark(
     utteranceEnergy,
     otherPitch
   );
-  const polar = polarMark(words, language, cues, pitch, tail);
+  // A shorter pause than a sentence's ends a clause: its rise or raised
+  // register is a continuation (a Russian comma is a weaker IK3).
+  const clause = phrase.pause < SENTENCE_PAUSE;
+  const polar = risingMark(words, phrase, language, cues, pitch, tail);
   if (polar) {
     return polar;
   }
@@ -211,6 +235,7 @@ function phraseMark(
   // Some of the forward tunes fall sharply or narrow despite a raised
   // register (IK2). Compare the upper register with other speech as well.
   if (
+    !clause &&
     otherPitch.length >= 5 &&
     cues.loud >= 2 &&
     (expanded || cues.reset >= 1)
@@ -218,6 +243,15 @@ function phraseMark(
     return '!';
   }
   return phrase.pause < 0.5 ? ',' : '.';
+}
+
+/** The mark of a phrase's rise: a question, an alternative's `↗ |` or ''. */
+function risingMark(words, phrase, language, cues, pitch, tail) {
+  const rise = polarMark(words, language, cues, pitch, tail);
+  if (rise && phrase.alternative === 'before') {
+    return '↗ |';
+  }
+  return phrase.pause < SENTENCE_PAUSE ? '' : rise;
 }
 
 function polarMark(words, language, cues, pitch, tail) {
@@ -236,13 +270,88 @@ function polarMark(words, language, cues, pitch, tail) {
   ) {
     return '?';
   }
-  if (
-    language === 'zh' &&
-    (words.at(-1).text.endsWith('吗') || cues.thirds >= 2)
-  ) {
-    return '?';
+  if (language === 'zh') {
+    const trend = toneTrend(words, pitch);
+    if (
+      words.at(-1).text.endsWith('吗') ||
+      (trend ?? cues.thirds) >= ZH_QUESTION_TREND
+    ) {
+      return '?';
+    }
   }
   return '';
+}
+
+const CHAO = '˩˨˧˦˥';
+
+/**
+ * Semitones of tone-free rise over a Mandarin phrase from which it is
+ * heard as a question (experiments/issue-75-zh-marks.mjs: statements
+ * reach 1.4, the A-not-A question 远不远 1.7 at telephone).
+ */
+const ZH_QUESTION_TREND = 1.6;
+
+/** Mean Chao level of the tone letters of a syllable, or null (neutral). */
+function chaoLevel(ipa) {
+  const levels = [...ipa]
+    .map((c) => CHAO.indexOf(c) + 1)
+    .filter((level) => level > 0);
+  return levels.length ? mean(levels) : null;
+}
+
+/** Solve the 3 × 3 system `a x = b` (Cramer's rule); null if singular. */
+function solve3(a, b) {
+  const det = (m) =>
+    m[0][0] * (m[1][1] * m[2][2] - m[1][2] * m[2][1]) -
+    m[0][1] * (m[1][0] * m[2][2] - m[1][2] * m[2][0]) +
+    m[0][2] * (m[1][0] * m[2][1] - m[1][1] * m[2][0]);
+  const d = det(a);
+  if (Math.abs(d) < 1e-9) {
+    return null;
+  }
+  return [0, 1, 2].map(
+    (k) => det(a.map((row, i) => row.map((v, j) => (j === k ? b[i] : v)))) / d
+  );
+}
+
+/**
+ * Pitch trend of a Mandarin phrase in semitones over its toned syllables:
+ * the time slope of a least-squares fit of each syllable's mean pitch to
+ * an offset, a slope and a multiple of its mean Chao tone level, times the
+ * time from the first to the last syllable. The lexical tones are thereby
+ * taken out: a statement declines, a question without a particle is
+ * raised towards its end (TUNES.zh.question in articulation/intonation.js).
+ * Null with fewer than four toned syllables.
+ */
+export function toneTrend(words, pitch) {
+  const rows = [];
+  for (const syllable of words.flatMap((word) => word.syllables ?? [])) {
+    const level = chaoLevel(syllable.ipa ?? '');
+    const values = voicedBetween(pitch, syllable.start, syllable.end);
+    if (level !== null && values.length >= 3) {
+      rows.push([(syllable.start + syllable.end) / 2, level, mean(values)]);
+    }
+  }
+  if (rows.length < 4) {
+    return null;
+  }
+  const a = [
+    [0, 0, 0],
+    [0, 0, 0],
+    [0, 0, 0],
+  ];
+  const b = [0, 0, 0];
+  for (const [time, level, value] of rows) {
+    const x = [1, time, level];
+    for (let i = 0; i < 3; i++) {
+      b[i] += x[i] * value;
+      for (let j = 0; j < 3; j++) {
+        a[i][j] += x[i] * x[j];
+      }
+    }
+  }
+  const fit = solve3(a, b);
+  return fit && fit[1] * (rows.at(-1)[0] - rows[0][0]);
 }
 
 function pitchPeak(syllable, pitch) {
@@ -300,6 +409,7 @@ const TUNES = {
   '?': 'yesno',
   '↗ ?': 'yesno',
   '↘ ?': 'wh',
+  '↗ |': 'alt-rise',
   '!': 'exclamation',
 };
 const CHINESE = { ',': '，', '.': '。', '?': '？', '!': '！' };
@@ -330,7 +440,8 @@ function markedText(words, mark, language, sentenceStart) {
   if (sentenceStart && ['en', 'ru'].includes(language)) {
     text = text.replace(/\p{L}/u, (letter) => letter.toUpperCase());
   }
-  const punctuation = mark.at(-1) ?? '';
+  // `↗ |` (an alternative question's rise) is not written.
+  const punctuation = mark.endsWith('|') ? '' : (mark.at(-1) ?? '');
   return (
     text +
     (language === 'zh'
@@ -381,6 +492,24 @@ function appendPhraseIpa(
   return { part, language, mark };
 }
 
+/**
+ * The phrase before the last one is 'before' an alternative question when
+ * the last opens with the language's conjunction (or, или, या, 还是), as
+ * markPhrasing() writes `A ↗ | or B ↘ ?`.
+ */
+function markAlternative(words, phrases, fallback) {
+  const last = phrases.at(-1);
+  const first = words[last.from];
+  const language = first.language ?? first.lang ?? fallback;
+  if (
+    phrases.length > 1 &&
+    first.text.toLowerCase() === ALTERNATIVE_CONJUNCTIONS[language] &&
+    last.to - last.from > 1
+  ) {
+    phrases.at(-2).alternative = 'before';
+  }
+}
+
 /** Restore IPA and text marks from a measured, word-aligned recording. */
 export function markProsody(result, measured, options = {}) {
   const modes = [...(result.modes ?? [])];
@@ -411,7 +540,8 @@ export function markProsody(result, measured, options = {}) {
   const text = [];
   let sentenceStart = true;
   let previousLanguage;
-  for (const phrase of phrases) {
+  markAlternative(words, phrases, fallback);
+  for (const [index, phrase] of phrases.entries()) {
     const { from, to } = phrase;
     const otherPitch =
       phrases.length > 1
@@ -438,6 +568,9 @@ export function markProsody(result, measured, options = {}) {
         : '';
     text.push(`${separator}${markedText(part, mark, language, sentenceStart)}`);
     sentenceStart = ['.', '!', '?'].includes(mark.at(-1));
+    if (mark === '↗ |' && phrases[index + 1]) {
+      phrases[index + 1].alternative = 'last';
+    }
     previousLanguage = language;
   }
   return { ...result, words, modes, text: text.join(''), ipa: ipa.join(' ') };

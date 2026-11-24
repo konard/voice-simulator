@@ -504,6 +504,23 @@ describe('3D FDTD rendering', () => {
     solver.damping.set(damping);
   });
 
+  it('stays stable when the lips open on nearly closed corners (issue 75)', () => {
+    // The lip corners of this narrow child mouth stay nearly closed during
+    // /t/ while the lips are open: scaling the openings to the lip area gave
+    // a cell of fill 1e-4 an opening of 0.45 and the audio turned to NaN.
+    const head = randomHeadConfig(9451, { preset: 'child' });
+    for (const engine of ['js', 'auto']) {
+      const { samples } = synthesize('ta', {
+        lang: 'en',
+        tier: 'high',
+        head,
+        engine,
+      });
+      expect([engine, samples.every(Number.isFinite)]).toEqual([engine, true]);
+      expect(rms(samples)).toBeGreaterThan(0.01);
+    }
+  });
+
   it('works with a microphone in front of the lips', () => {
     const heard = renderPlan(planUtterance('ˈa'), {
       ...options,

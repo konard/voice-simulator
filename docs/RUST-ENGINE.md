@@ -146,6 +146,9 @@ search. The prominence packet uses bit 4 of each feature mask for whisper.
 `tests/rust-whisper.test.js` compares detection spans, pooled spectra,
 whisper LPC for formant tracking, trajectory distance, and voicing and
 tone costs on the shared analysis frames and cue table.
+`vs_find_whisper_periodic` accepts the `vs_find_whisper` packet followed by
+one normalized autocorrelation value per frame, which lets it corroborate
+weak pitch edges at telephone bandwidth.
 `tests/rust-recognition.test.js` compares lexical paths and prominence with
 these cues.
 
@@ -1350,6 +1353,30 @@ The numerical core is `modes.rs`; class B parity tolerance is 1e-10.
 2–12 six-double reference vectors and writes activation, winning index,
 nearest/next distances, intensity and name confidence. Its six-double output
 may overlap input. Names and span construction remain with the caller.
+
+### HMM word decoder kernels (issue 75)
+
+`recognition/hmm.rs` ports the numerical kernels of the default word
+decoder: `applyLda` of `src/recognition/hmm-features.js` (context stacking
+clamped at the ends, minus the mean, times the projection rows),
+`stateScore` of `src/recognition/hmm-model.js` (log-sum-exp over diagonal
+Gaussians, summed in f64 from f32 means and halved inverse variances), which
+also scores the tone-stream mixtures, and `hmmToneFeatures` of
+`src/recognition/hmm-tone.js` (pitch height, least-squares slopes and
+curvature over held-edge windows).
+`rec_hmm_lda(statics, frames, stat, ctx, rows, mean, dims, out)` writes
+`frames × dims` floats, `rec_hmm_scores(first, states, mu, inv, norm,
+mixtures, dims, feats, frames, chosen, count, out)` writes the scores of the
+chosen states frame-major, and `rec_hmm_tone(lf0, voicing, frames, out)`
+writes `frames × 6` floats. All return 0 or an error code. The JS wrappers
+are in `src/recognition/hmm-rust.js`; the token-passing search and the
+lexicon network stay in JavaScript. `tests/rust-hmm.test.js` checks all
+states of the shipped model and of its tone stream (class B, relative limit
+1e-12 for the scores and 1e-6 for the projection; the tone features are
+bit-identical). With these kernels, the scalar engine is
+724126 bytes and SIMD 733268 bytes (Rust 1.100.0,
+`CARGO_BUILD_JOBS=1 node scripts/build-wasm.mjs --require`), within the
+737280-byte (720 KiB) budget.
 
 ## Landmark detector (issue 62)
 

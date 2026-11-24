@@ -257,10 +257,7 @@ export function decodeBlock(data, index, tables = blockTables(data)) {
   const finish = () => {
     if (word !== null) {
       variants.push(pronunciation);
-      entries.push([
-        word.map((char) => letterOf?.get(char) ?? char).join(''),
-        variants,
-      ]);
+      entries.push([word.join(''), variants]);
     }
   };
   let inWord = false;
@@ -273,7 +270,7 @@ export function decodeBlock(data, index, tables = blockTables(data)) {
       pronunciation = '';
       inWord = true;
     } else if (inWord && letters.has(char)) {
-      word.push(char);
+      word.push(letterOf?.get(char) ?? char);
     } else if (char === '/') {
       inWord = false;
       variants.push(pronunciation);

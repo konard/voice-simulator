@@ -16,11 +16,14 @@ import { noRust } from './helpers/rust-engine.js';
 import { itUnless } from './helpers/skip.js';
 
 const rate = 8000;
+// The phone decoder splits long inputs at pauses across the workers; the
+// word decoder reads whole inputs on the calling thread.
 const options = {
   level: 'low',
   languages: ['en'],
   voice: DEFAULT_HEAD,
   modes: false,
+  decoder: 'phones',
 };
 
 function speech() {

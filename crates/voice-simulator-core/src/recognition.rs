@@ -650,6 +650,7 @@ mod tests {
 
 pub mod codebook;
 pub mod codebook_response;
+pub mod hmm;
 pub mod native_frontend;
 pub mod pitch;
 pub mod word_search;

@@ -28,6 +28,9 @@ use crate::solver::Solver;
 
 /// Smallest fill of a tube cell.
 pub const MIN_FILL: f64 = 1e-4;
+/// Largest `COURANT² Σ conductance / (fill (1 + h))` of a cell that keeps
+/// the step stable (`STABLE_LOAD`): the Gershgorin bound of the leapfrog.
+const STABLE_LOAD: f64 = 2.0;
 /// Microphone level per cm of cell size.
 pub const MICROPHONE_GAIN: f64 = 3.9;
 /// Time constant of the leaky source integrator in microphone mode (s).
@@ -313,6 +316,12 @@ pub struct Fdtd3d {
     spans: Option<Spans>,
     output_links: Vec<usize>,
     output_signs: Vec<f64>,
+    /// `#indexOpenings`: the tube cell of each opening link, the number of
+    /// openings of that cell and its other links.
+    opening_cells: Vec<usize>,
+    opening_slots: Vec<usize>,
+    opening_shares: Vec<f64>,
+    opening_others: Vec<Vec<usize>>,
     velum_links: Vec<usize>,
     /// Whole cells the glottis may move up or down from its rest place.
     glottis_travel: i64,
@@ -434,6 +443,10 @@ impl Fdtd3d {
             spans: None,
             output_links: Vec::new(),
             output_signs: Vec::new(),
+            opening_cells: Vec::new(),
+            opening_slots: Vec::new(),
+            opening_shares: Vec::new(),
+            opening_others: Vec::new(),
             velum_links: Vec::new(),
             glottis_travel: 0,
             glottis_places: Vec::new(),
@@ -580,6 +593,7 @@ impl Fdtd3d {
                 }
             })
             .collect();
+        self.index_openings();
         self.place_glottis();
         self.place_pouches();
         self.close_links();
@@ -1171,7 +1185,49 @@ impl Fdtd3d {
         }
     }
 
-    /// `#scaleOpenings`.
+    /// `#indexOpenings`: openings of one cell share a slot.
+    fn index_openings(&mut self) {
+        let mut slot = vec![usize::MAX; self.cell_kind.len()];
+        self.opening_cells.clear();
+        self.opening_slots.clear();
+        self.opening_shares.clear();
+        self.opening_others.clear();
+        for &link in &self.output_links {
+            let a = self.grid.link_a[link] as usize;
+            let cell = if self.cell_kind[a] == CELL_AIR {
+                self.grid.link_b[link] as usize
+            } else {
+                a
+            };
+            if slot[cell] == usize::MAX {
+                slot[cell] = self.opening_others.len();
+                self.opening_shares.push(0.0);
+                self.opening_others.push(Vec::new());
+            }
+            self.opening_cells.push(cell);
+            self.opening_slots.push(slot[cell]);
+        }
+        for link in 0..self.link_kind.len() {
+            let kind = self.link_kind[link];
+            for cell in [
+                self.grid.link_a[link] as usize,
+                self.grid.link_b[link] as usize,
+            ] {
+                let at = slot[cell];
+                if at == usize::MAX {
+                    continue;
+                }
+                if kind == LINK_LIPS || kind == LINK_NOSTRILS {
+                    self.opening_shares[at] += 1.0;
+                } else {
+                    self.opening_others[at].push(link);
+                }
+            }
+        }
+    }
+
+    /// `#scaleOpenings`: a scaled opening never takes its cell past
+    /// [`STABLE_LOAD`].
     fn scale_openings(&mut self) {
         let dx = self.dx;
         let mut totals = [0.0, 0.0];
@@ -1186,9 +1242,20 @@ impl Fdtd3d {
                 .unwrap_or(0.0);
             area / max(totals[tube], 1e-12)
         });
-        for &link in &self.output_links {
+        for (index, &link) in self.output_links.iter().enumerate() {
             let scale = scales[usize::from(self.link_kind[link] != LINK_LIPS)];
-            self.grid.conductance[link] = min(1.0, self.grid.conductance[link] * scale);
+            let cell = self.opening_cells[index];
+            let at = self.opening_slots[index];
+            let mut others = 0.0;
+            for &other in &self.opening_others[at] {
+                others += self.grid.conductance[other];
+            }
+            let load = 1.0 + (COURANT * self.admittance[cell]) / 2.0;
+            let budget = ((STABLE_LOAD / (COURANT * COURANT)) * self.fill[cell] * load - others)
+                / self.opening_shares[at];
+            let conductance = self.grid.conductance[link];
+            self.grid.conductance[link] =
+                min(min(1.0, conductance * scale), max(budget, conductance));
         }
     }
 
