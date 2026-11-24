@@ -121,33 +121,43 @@ export function trainContextModel(
   items,
   { K = 16, Kcd = 8, minFrames = 120 } = {}
 ) {
+  // A pool holds (item, frame) index pairs, not a view per frame: three
+  // views per frame of 48 training files exceed a 3 GB machine. The views of
+  // one pool are made when it is fitted, in the same order.
   const pools = new Map();
   const durations = new Map();
   const D = itemDim(items[0]);
-  const add = (key, x) => {
+  const feats = items.map((item) => decodeFeats(item.feats));
+  const add = (key, i, t) => {
     let p = pools.get(key);
     if (!p) {
       p = [];
       pools.set(key, p);
     }
-    p.push(x);
+    p.push(i, t);
   };
-  for (const item of items) {
-    const f = decodeFeats(item.feats);
+  const frames = (key) => {
+    const p = pools.get(key);
+    const out = new Array(p.length / 2);
+    for (let j = 0; j < p.length; j += 2) {
+      out[j / 2] = feats[p[j]].subarray(p[j + 1] * D, p[j + 1] * D + D);
+    }
+    return out;
+  };
+  for (const [i, item] of items.entries()) {
     const { left, right } = frameContexts(item.labels);
     let prev = null;
     let run = 0;
     for (let t = 0; t < item.frames; t++) {
       const label = item.labels[t];
       const s = item.states[t];
-      const x = f.subarray(t * D, t * D + D);
-      add(`${label}#${s}`, x);
+      add(`${label}#${s}`, i, t);
       const key = contextKey(label, s, left[t], right[t]);
       if (key) {
-        add(key, x);
+        add(key, i, t);
         const broad = contextKey(label, s, broadOf(left[t]), broadOf(right[t]));
         if (broad !== key) {
-          add(broad, x);
+          add(broad, i, t);
         }
       }
       if (label !== prev) {
@@ -169,10 +179,10 @@ export function trainContextModel(
     ),
   ].sort();
   const states = [];
-  const fit = (key, k) => fitGmm(pools.get(key), k);
+  const fit = (key, k) => fitGmm(frames(key), k);
   for (const u of units) {
-    const [frames, n] = durations.get(u) ?? [9, 3];
-    const mean = Math.max(3, frames / n);
+    const [total, n] = durations.get(u) ?? [9, 3];
+    const mean = Math.max(3, total / n);
     for (let s = 0; s < 3; s++) {
       const key = [`${u}#${s}`, `${u}#1`, `${u}#0`, `${u}#2`].find((k) =>
         pools.has(k)
@@ -188,8 +198,8 @@ export function trainContextModel(
   }
   const contextIndex = new Map();
   const ciIndex = new Map(states.map((st, i) => [`${st.unit}#${st.s}`, i]));
-  for (const [key, frames] of [...pools].sort(([a], [b]) => (a < b ? -1 : 1))) {
-    if (!/[<>]/u.test(key) || frames.length < minFrames) {
+  for (const [key, pool] of [...pools].sort(([a], [b]) => (a < b ? -1 : 1))) {
+    if (!/[<>]/u.test(key) || pool.length / 2 < minFrames) {
       continue;
     }
     const ci = states[ciIndex.get(key.split(/[<>]/u)[0])];
