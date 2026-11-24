@@ -206,8 +206,9 @@ export function applyLda(lda, feats, frames) {
 }
 
 export function transformItems(lda, items) {
-  return items.map((item) => ({
-    ...item,
-    feats: applyLda(lda, decodeFeats(item.feats), item.frames),
-  }));
+  // Transforms in place so the input features are freed item by item.
+  for (const item of items) {
+    item.feats = applyLda(lda, decodeFeats(item.feats), item.frames);
+  }
+  return items;
 }
