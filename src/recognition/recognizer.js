@@ -110,6 +110,7 @@ export function recognitionSettings(options) {
     deterministic,
     articulationOffsets,
     decoder,
+    oov: options.oov !== false,
   };
 }
 
@@ -194,6 +195,7 @@ export function decodeRecognitionAudio(
       hmmAudioToIpa(input, rate, {
         languages: settings.languages,
         whisper: settings.whisper,
+        oov: settings.oov,
       })
     );
     return { decoded, input, rate };

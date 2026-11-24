@@ -668,6 +668,8 @@ Run `voice-simulator copy speech.wav -o copy.wav --score speech-score.json` to s
 
 `recognize` accepts mono samples and returns IPA, text, timed words and syllables, language shares, and speech modes. Pass `segments: true` to `recognize` or `createRecognizer` to include timed phonemes as `{ ipa, start, end, confidence }`. Times are in seconds. See the [recognition API and examples](docs/RECOGNIZER.md).
 
+By default (`decoder: 'words'`) a Gaussian HMM decodes words over the lexicons of the requested languages, trained only on this library's own synthetic speech ([how it is trained](tests/heavy/README.md#recognition-model)). A word outside the lexicon is heard through a phone loop of its language and spelled from its sounds; `oov: false` (CLI `--no-oov`) keeps to lexicon words. `decoder: 'phones'` (CLI `--decoder phones`) uses the phone decoder of `audioToIpa` and `ipaToText` instead, as do `rescoring` and substituted stages.
+
 ### Recognition engines and workers
 
 `engine: 'auto'` selects scalar Rust WebAssembly with a JavaScript fallback. Use `'js'` for the reference or `'rust'` to require WebAssembly.

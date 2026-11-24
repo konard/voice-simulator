@@ -7,6 +7,7 @@ import {
 } from '../src/recognition/hmm-features.js';
 import { getHmmModel } from '../src/recognition/hmm-model.js';
 import { getNetwork } from '../src/recognition/hmm-network.js';
+import { recognitionSettings } from '../src/recognition/recognizer.js';
 import {
   hmmAudioToIpa,
   stressOutOfVocabulary,
@@ -19,6 +20,12 @@ it('accepts the word and phone decoders only', () => {
     () => recognize(new Float32Array(RATE), RATE, { decoder: 'frames' }),
     RangeError
   );
+});
+
+it('passes oov to the word decoder, on unless false', () => {
+  assert.equal(recognitionSettings({}).oov, true);
+  assert.equal(recognitionSettings({ oov: false }).oov, false);
+  assert.equal(recognitionSettings({ decoder: 'phones' }).decoder, 'phones');
 });
 
 it('puts frame boundaries halfway between frame centres', () => {

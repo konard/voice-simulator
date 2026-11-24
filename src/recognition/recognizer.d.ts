@@ -33,6 +33,18 @@ export interface RecognitionOptions extends RecognitionEngineOptions {
   /** Detect whisper, disable it, or supply spans in seconds from input start. */
   whisper?: IpaDecodeOptions['whisper'];
   level?: RecognitionLevel | 'auto';
+  /**
+   * `words` (default) decodes words with the Gaussian HMM over the lexicons;
+   * `phones` uses the phone decoder of `audioToIpa` and then `ipaToText`.
+   * `rescoring` and a substituted `stages.audioToIpa` use the phone decoder.
+   */
+  decoder?: 'words' | 'phones';
+  /**
+   * Word decoder only: hear a word outside the lexicon through a phone loop
+   * of the language and spell it from its sounds. `false` keeps the
+   * decoder to lexicon words. Defaults to true.
+   */
+  oov?: boolean;
   /** Test substitutions. Stream IPA substitutions run on partial and final snapshots. */
   stages?: {
     audioToIpa?: typeof audioToIpa;

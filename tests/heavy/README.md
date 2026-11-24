@@ -48,6 +48,68 @@ the synthesis report independently. The MCD limit in
 [`copy-thresholds.json`](copy-thresholds.json) is 105% of the first measured
 full-corpus mean. Later changes may lower the limits in that file.
 
+## Recognition model
+
+`recognize()` decodes words with a Gaussian-mixture HMM whose parameters are
+committed in `src/recognition/data/hmm-model-*.js` (int8, about 2 MB in parts
+of 400 kB). It is trained only on speech that this library synthesises from
+its own lexicons, so no recording is needed and the licence of the model is
+that of the repository. The `roundtrip` suite measures it on sentences that
+are never used for training: the training sentences are drawn from the 4000
+most frequent words of `src/recognition/data/<lang>.js` with the seeds below,
+while the suite reads the fixed sentences of `tests/helpers/roundtrip.js`.
+Training runs on a developer machine, not in CI, in three steps:
+
+1. Render labelled utterances, 400 per file, with random heads of the presets
+   `any`, `male`, `female` and `child`:
+
+   ```bash
+   for lang in en ru hi zh; do
+     for job in "1000 telephone 0" "1800 telephone 0" "5000 narrowband 0" \
+                "6000 wideband 0" "7000 minimal 0" "8000 telephone 1" \
+                "8400 wideband 1"; do
+       set -- $job
+       PITCH=1 WHISPER=$3 node experiments/issue-75-hmm-gen.mjs \
+         $lang 400 $1 $2 /tmp/hmm/$lang-$2-$1.json
+     done
+   done
+   ```
+
+   `PITCH=1` stores the pitch features and the tone units of Mandarin;
+   `WHISPER=1` renders the file whispered.
+
+2. Fit the LDA projection (40 dimensions), three states per phone with 16
+   Gaussians, and context states with 8 Gaussians for every entry or exit
+   context seen in at least 120 frames, then run the round trip of five
+   sentences per language as a check:
+
+   ```bash
+   MODEL=/tmp/hmm/model.json CD=120 K=16 KCD=8 LDA=40 PITCH_TRACK=1 LIMIT=5 \
+     node --max-old-space-size=9000 experiments/issue-75-hmm-wordtrip.mjs \
+     telephone en,ru,hi,zh /tmp/hmm/*-*.json
+   ```
+
+   `CONTEXT=phone` keys context states on the neighbouring phone and falls
+   back to its broad class (place of articulation, vowel backness) when the
+   phone context has too few frames; without it only broad classes are used.
+   The shipped model was trained this way on the 28 files of step 1 (about
+   7.5 minutes for the LDA and the mixtures); the features of all files are
+   held in memory, so train on a machine with more than 3 GB.
+
+3. Pack the model into the source tree and run the smoke test:
+
+   ```bash
+   node scripts/build-hmm-model.mjs /tmp/hmm/model.json
+   node --test tests/roundtrip-smoke.test.js
+   ```
+
+`experiments/issue-75-hmm-eval.mjs [tier] [langs] [presets] [from] [to]`
+scores the committed model on the round-trip sentences without the rest of the
+suite, and `experiments/issue-75-smoke-diagnose.mjs` traces the three smoke
+cases: blind decoding, decoding with the known language, the acoustic score
+of the reference words and the rank of each reference word among the
+candidates that end at its boundaries.
+
 ## Environment
 
 [`scripts/run-heavy.mjs`](../../scripts/run-heavy.mjs) runs the files one
