@@ -10,7 +10,8 @@
  * candidates). The oracle error is the share of reference words that are
  * not among the top `TOP` candidates at their own boundaries.
  * node experiments/issue-75-smoke-diagnose.mjs [lang:index|lang:text ...] [tier] [preset|-]
- * Environment: TOP (5), MARGIN (frames, 3). Unlicense.
+ * Environment: TOP (5), MARGIN (frames, 3), SEARCH (decoder settings as
+ * JSON, e.g. '{"ciBackoff":-5}'). Unlicense.
  */
 import { synthesize } from '../src/index.js';
 import { parseIpa } from '../src/ipa/parse.js';
@@ -27,6 +28,8 @@ const [tier = 'telephone', preset = 'male'] = args.filter(
 );
 const TOP = Number(process.env.TOP ?? 5);
 const MARGIN = Number(process.env.MARGIN ?? 3);
+// Decoder settings over HMM_DECODE_DEFAULTS, as JSON.
+const search = JSON.parse(process.env.SEARCH ?? '{}');
 const LANGUAGES = ['en', 'ru', 'hi', 'zh'];
 const model = getHmmModel();
 const frameOf = (time) => Math.round((time * 8000 - 60) / 80);
@@ -54,6 +57,7 @@ function referenceWords(spoken, lang) {
 function alignedScore(network, feats, frames, words) {
   let score = -Infinity;
   alignWords(network, feats, frames, words, {
+    ...search,
     tone,
     onScore: (s) => {
       score = s;
@@ -66,6 +70,7 @@ function alignedScore(network, feats, frames, words) {
 function wordEnds(network, feats, frames) {
   const ends = new Map();
   const decoded = decodeWords(network, feats, frames, {
+    ...search,
     tone,
     onWordEnd(id, score, start, end) {
       const list = ends.get(end) ?? [];
@@ -114,7 +119,7 @@ for (const item of cases.length ? cases : ['en:17', 'ru:1', 'zh:1']) {
   const blindNet = getNetwork(model, LANGUAGES);
   const knownNet = getNetwork(model, [lang]);
   const { decoded: blind, ends } = wordEnds(blindNet, feats, frames);
-  const known = decodeWords(knownNet, feats, frames, { tone });
+  const known = decodeWords(knownNet, feats, frames, { ...search, tone });
   const ref = referenceWords(spoken, lang);
   const scores = {
     blind: alignedScore(knownNet, feats, frames, blind.words),
@@ -132,7 +137,10 @@ for (const item of cases.length ? cases : ['en:17', 'ru:1', 'zh:1']) {
     `  ref    ${ref.map((w) => w.units.join('')).join(' ')}  acoustic ${scores.ref.toFixed(1)} (${scores.ref > scores.blind ? 'search/LM error' : 'model error'} if blind is wrong)`
   );
   const languageScores = LANGUAGES.map((l) => {
-    const d = decodeWords(getNetwork(model, [l]), feats, frames, { tone });
+    const d = decodeWords(getNetwork(model, [l]), feats, frames, {
+      ...search,
+      tone,
+    });
     return `${l} ${d.score.toFixed(1)}`;
   });
   console.log(`  language scores ${languageScores.join(', ')}`);

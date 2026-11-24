@@ -110,14 +110,19 @@ Training runs on a developer machine, not in CI, in three steps:
    the 28 files. The decoder adds `toneWeight` times the log posterior of the
    tone class to the spectral score of a toned state (`search.toneWeight`,
    default 2), because the ±4 frames the LDA sees cannot tell a level tone
-   rising out of a low one from a rising tone.
+   rising out of a low one from a rising tone. Lexicon words that the count
+   corpora never saw (count 1) back off as if seen three times
+   (`search.minCount`), so that "hello", absent from pre-1926 books, is not
+   heard as the more frequent "hollow".
 
 `experiments/issue-75-hmm-eval.mjs [tier] [langs] [presets] [from] [to]`
 scores the committed model on the round-trip sentences without the rest of the
 suite, and `experiments/issue-75-smoke-diagnose.mjs` traces the three smoke
 cases: blind decoding, decoding with the known language, the acoustic score
 of the reference words and the rank of each reference word among the
-candidates that end at its boundaries.
+candidates that end at its boundaries. Its cases can be other sentences
+(`"en:Hello world." minimal -` synthesises as `tests/recognizer.test.js`
+does), and `SEARCH='{"minCount":1}'` changes the decoder settings.
 
 ## Environment
 

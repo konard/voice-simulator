@@ -21,6 +21,9 @@ export const HMM_DECODE_DEFAULTS = Object.freeze({
   // Weight of the tone stream (hmm-tone.js) against the spectral one; it
   // applies when `tone` features are given.
   toneWeight: 2,
+  // Count of a lexicon word the count corpus never saw (it has count 1,
+  // SOURCES.md), for its unigram backoff.
+  minCount: 3,
 });
 
 /** ln p of a shipped bigram cost (the costs are 0.5 - 0.3 ln p). */
@@ -86,7 +89,7 @@ function emissionCache(model, feats, { tone, toneWeight }) {
 }
 
 function languageModel(network, records, settings) {
-  const { lmw, wip, oovPhone, oovWeight } = settings;
+  const { lmw, wip, oovPhone, oovWeight, minCount } = settings;
   const { words, trees } = network;
   const cache = new Map();
   return (hist, id) => {
@@ -104,7 +107,9 @@ function languageModel(network, records, settings) {
       const row = previous ? data.transitionRow(w.word) : undefined;
       const cost = row?.has(previous)
         ? row.get(previous)
-        : -0.3 * Math.log((0.4 * (w.count ?? 1)) / data.total) + 0.5;
+        : -0.3 *
+            Math.log((0.4 * Math.max(w.count ?? 1, minCount)) / data.total) +
+          0.5;
       v = lmw * lnProbability(cost) + wip;
       cache.set(key, v);
     }

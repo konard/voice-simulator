@@ -3,7 +3,8 @@
  * that search settings can be swept without changing the defaults.
  * node experiments/issue-75-hmm-eval.mjs [tier] [langs] [presets] [from] [to]
  * Environment: BLIND=0 decodes with the known language; OOV=0 drops the
- * phone loop; WORDS, LMW, WIP, BEAM, OOV_START, OOV_PHONE, TONE_WEIGHT; VERBOSE=1.
+ * phone loop; WORDS, LMW, WIP, BEAM, OOV_START, OOV_PHONE, TONE_WEIGHT,
+ * MIN_COUNT; VERBOSE=1.
  * Unlicense.
  */
 import { performance } from 'node:perf_hooks';
@@ -29,6 +30,7 @@ const search = Object.fromEntries(
     ['oovStart', 'OOV_START'],
     ['oovPhone', 'OOV_PHONE'],
     ['toneWeight', 'TONE_WEIGHT'],
+    ['minCount', 'MIN_COUNT'],
   ]
     .map(([key, name]) => [key, number(name)])
     .filter(([, v]) => v !== undefined)

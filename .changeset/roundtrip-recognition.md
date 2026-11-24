@@ -20,4 +20,6 @@ on by default; `--no-oov` on the command line). The previous phone decoder
 stays available as `decoder: 'phones'` (`--decoder phones`). The HMM state
 scores and LDA projection also run in the Rust engine. A tone stream of
 pitch-shape mixtures helps the word decoder tell Mandarin tones apart, and
-pitches more than an octave from the median are ignored.
+pitches more than an octave from the median are ignored. Lexicon words
+missing from the count corpora, such as "hello", back off as if seen three
+times instead of once.
