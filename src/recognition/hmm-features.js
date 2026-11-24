@@ -15,6 +15,8 @@ const HOP = 80;
 const SIZE = 256;
 const FILTERS = 24;
 const CEPS = 13;
+/** Octaves from the median beyond which a pitch is dropped. */
+const PITCH_RANGE = 1;
 
 /** Centre time (s) of feature frame t. */
 export const hmmFrameTime = (t) => (t * HOP + WINDOW / 2) / HMM_RATE;
@@ -146,10 +148,23 @@ function normalise(raw) {
 }
 
 /**
+ * A pitch more than PITCH_RANGE octaves from the median is a tracking
+ * error, as on the noise of a voiceless fricative: drop it, so that it is
+ * interpolated like an unvoiced frame.
+ */
+function dropOutliers(lf0, median) {
+  for (let t = 0; t < lf0.length; t++) {
+    if (Math.abs(lf0[t] - median) > PITCH_RANGE) {
+      lf0[t] = NaN;
+    }
+  }
+}
+
+/**
  * Pitch statics per frame: log2 f0 minus the utterance median of the
  * voiced frames, interpolated across unvoiced frames, and the voicing.
  */
-function pitchStatics(pitch, count) {
+export function hmmPitchStatics(pitch, count) {
   const lf0 = new Float64Array(count).fill(NaN);
   const voicing = new Float64Array(count);
   for (let t = 0; t < count; t++) {
@@ -163,6 +178,7 @@ function pitchStatics(pitch, count) {
   }
   const voiced = [...lf0].filter((v) => !Number.isNaN(v)).sort((a, b) => a - b);
   const median = voiced.length ? voiced[voiced.length >> 1] : 0;
+  dropOutliers(lf0, median);
   let last = -1;
   for (let t = 0; t <= count; t++) {
     if (t < count && Number.isNaN(lf0[t])) {
@@ -187,7 +203,7 @@ function pitchStatics(pitch, count) {
 export function hmmStatics(x) {
   const statics = normalise(rawCepstra(x));
   const pitch = trackPitch(analyzeFrames(x, HMM_RATE, { hop: 0.01 }));
-  const { lf0, voicing } = pitchStatics(pitch, statics.length);
+  const { lf0, voicing } = hmmPitchStatics(pitch, statics.length);
   statics.forEach((v, t) => {
     v[CEPS] = 4 * lf0[t];
     v[CEPS + 1] = voicing[t];

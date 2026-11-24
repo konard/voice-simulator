@@ -76,6 +76,15 @@ export function pitchStatics(x, count) {
   }
   const voiced = [...lf0].filter((v) => !Number.isNaN(v)).sort((a, b) => a - b);
   const median = voiced.length ? voiced[voiced.length >> 1] : 0;
+  // PITCH_RANGE=1 drops a pitch more than an octave from the median, as
+  // src/recognition/hmm-features.js does at decode time. The shipped model
+  // was trained without it (0, the default): training with it measured worse.
+  const range = Number(globalThis.process?.env.PITCH_RANGE ?? 0);
+  for (let t = 0; range > 0 && t < count; t++) {
+    if (Math.abs(lf0[t] - median) > range) {
+      lf0[t] = NaN;
+    }
+  }
   let last = -1;
   for (let t = 0; t <= count; t++) {
     if (t < count && Number.isNaN(lf0[t])) {

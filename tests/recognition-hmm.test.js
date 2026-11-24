@@ -4,6 +4,7 @@ import { addLexicon, clearLexicons, recognize } from '../src/index.js';
 import {
   hmmBoundaryTime,
   hmmFrameTime,
+  hmmPitchStatics,
 } from '../src/recognition/hmm-features.js';
 import { getHmmModel } from '../src/recognition/hmm-model.js';
 import { getNetwork } from '../src/recognition/hmm-network.js';
@@ -31,6 +32,23 @@ it('passes oov to the word decoder, on unless false', () => {
 it('puts frame boundaries halfway between frame centres', () => {
   const halfway = (hmmFrameTime(4) + hmmFrameTime(5)) / 2;
   assert.ok(Math.abs(hmmBoundaryTime(5) - halfway) < 1e-12);
+});
+
+it('interpolates across a pitch more than an octave from the median', () => {
+  // 100 Hz with a 3x jump, as a tracker gives on the noise of a fricative.
+  const f0 = Float64Array.from({ length: 40 }, (_, i) =>
+    i >= 18 && i < 22 ? 300 : 100
+  );
+  const pitch = {
+    startTime: hmmFrameTime(0),
+    hop: 0.01,
+    count: f0.length,
+    f0,
+    voicing: new Float64Array(f0.length).fill(1),
+  };
+  const { lf0, voicing } = hmmPitchStatics(pitch, f0.length);
+  assert.ok(lf0.every((v) => Math.abs(v) < 1e-12));
+  assert.equal(voicing[20], 1);
 });
 
 it('decodes no words from silence', () => {

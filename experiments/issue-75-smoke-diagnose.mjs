@@ -15,7 +15,7 @@
 import { synthesize } from '../src/index.js';
 import { parseIpa } from '../src/ipa/parse.js';
 import { hmmFeatures } from '../src/recognition/hmm-features.js';
-import { getHmmModel } from '../src/recognition/hmm-model.js';
+import { getHmmModel, toneUnits } from '../src/recognition/hmm-model.js';
 import { getNetwork } from '../src/recognition/hmm-network.js';
 import { alignWords, decodeWords } from '../src/recognition/hmm-decode.js';
 import { sentences } from '../tests/helpers/roundtrip.js';
@@ -33,7 +33,7 @@ const frameOf = (time) => Math.round((time * 8000 - 60) / 80);
 const show = (words) =>
   words.map((w) => w.word || `[${w.units.join('')}]`).join(' ');
 
-function referenceWords(spoken) {
+function referenceWords(spoken, lang) {
   return spoken.ipa
     .split(/[\s|.,?!]+/u)
     .filter(Boolean)
@@ -41,7 +41,10 @@ function referenceWords(spoken) {
       const tokens = parseIpa(w).tokens.filter(
         (t) => t.kind === 'vowel' || t.kind === 'consonant'
       );
-      return { word: '', tokens, units: tokens.map((t) => t.symbol) };
+      // Mandarin vowels carry their tone class, as in the network.
+      const units =
+        lang === 'zh' ? toneUnits(tokens) : tokens.map((t) => t.symbol);
+      return { word: '', tokens, units };
     })
     .filter((w) => w.tokens.length);
 }
@@ -106,7 +109,7 @@ for (const item of cases.length ? cases : ['en:17', 'ru:1', 'zh:1']) {
   const knownNet = getNetwork(model, [lang]);
   const { decoded: blind, ends } = wordEnds(blindNet, feats, frames);
   const known = decodeWords(knownNet, feats, frames);
-  const ref = referenceWords(spoken);
+  const ref = referenceWords(spoken, lang);
   const scores = {
     blind: alignedScore(knownNet, feats, frames, blind.words),
     known: alignedScore(knownNet, feats, frames, known.words),
