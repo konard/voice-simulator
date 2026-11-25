@@ -85,6 +85,10 @@ linear crescendo/diminuendo detection.
 
 Without a voice, utterance medians provide the baseline. Constant effort
 is left undecided; absolute whisper, creak and falsetto cues remain usable.
+The round-trip benchmark checks this contract (issue 168): without a voice,
+a neutral sentence followed by the same sentence spoken loudly must raise
+the heard arousal by at least 0.3, and a whole loud sentence must get no
+effort label; with the voice, the whole loud sentence must get `f`.
 Phrase pitch span uses the 95th minus 5th percentile across all its vowel
 frames, including intonation between words. Emotion activation uses the
 first four scaled prosodic components; names
