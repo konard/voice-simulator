@@ -2,7 +2,7 @@
 
 Measured 2026-11-25 by
 `node scripts/noise-baseline.mjs --languages en,ru,hi,zh --sentences 2 --snr 20,10,0 --tier telephone`
-in 11.3 minutes (issue 170).
+in 11.8 minutes (issue 170).
 
 Each of the first 2 round-trip sentences per language
 ([tests/fixtures/roundtrip/sentences.json](../../tests/fixtures/roundtrip/sentences.json))
@@ -35,7 +35,7 @@ app's live recognition.
 
 | Noise | 20 dB | 10 dB | 0 dB |
 | --- | --- | --- | --- |
-| clean | 80.0% / 15.8% | 80.0% / 15.8% | 80.0% / 15.8% |
+| clean | 63.3% / 11.9% | 63.3% / 11.9% | 63.3% / 11.9% |
 | white | 131.7% / 58.8% | 126.7% / 89.8% | 116.7% / 85.9% |
 | pink | 116.7% / 45.0% | 116.7% / 79.5% | 100.0% / 85.9% |
 | brown | 91.7% / 23.9% | 106.7% / 41.8% | 131.7% / 70.4% |
@@ -51,7 +51,7 @@ app's live recognition.
 
 | Noise | 20 dB | 10 dB | 0 dB |
 | --- | --- | --- | --- |
-| clean | 12.5% / 4.2% | 12.5% / 4.2% | 12.5% / 4.2% |
+| clean | 25.0% / 8.3% | 25.0% / 8.3% | 25.0% / 8.3% |
 | white | 112.5% / 59.2% | 112.5% / 64.2% | 100.0% / 86.7% |
 | pink | 87.5% / 50.8% | 100.0% / 82.5% | 100.0% / 74.2% |
 | brown | 62.5% / 38.3% | 62.5% / 34.2% | 100.0% / 65.8% |
