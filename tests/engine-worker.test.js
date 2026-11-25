@@ -176,4 +176,31 @@ describe('engine worker', () => {
     expect(heard.length).toBe(expected.length);
     expect(heard.every((value, index) => value === expected[index])).toBe(true);
   });
+
+  it('speech settings reach the renderer (issue 170)', async () => {
+    const settings = {
+      breaths: true,
+      source: 'folds',
+      interaction: true,
+      subglottal: false,
+      headroom: 6,
+    };
+    const { messages, handle } = recorder();
+    await handle({ ...SPEAK, ...settings });
+    const { samples } = synthesize(SPEAK.ipa, {
+      ipa: true,
+      lang: SPEAK.lang,
+      head: SPEAK.head,
+      seed: SPEAK.seed,
+      tier: SPEAK.tier,
+      ...settings,
+    });
+    const plain = recorder();
+    await plain.handle(SPEAK);
+    const heard = joined(messages);
+    expect(heard.length).toBe(samples.length);
+    expect(heard.every((value, index) => value === samples[index])).toBe(true);
+    const before = joined(plain.messages);
+    expect(heard.some((value, index) => value !== before[index])).toBe(true);
+  });
 });

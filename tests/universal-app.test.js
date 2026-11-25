@@ -57,7 +57,9 @@ describe('universal React example app', () => {
     expect(appSource).toContain("from '../../../src/index.js'");
     expect(appSource).toContain("id: 'app-title'");
     expect(appSource).toContain('useSimulator(');
-    expect(appSource).toContain('textToIpa(text, { lang, accent })');
+    expect(appSource).toContain(
+      'textToIpa(text, { lang, accent, accentLevel, weakForms })'
+    );
     expect(appSource).toContain('randomHeadConfig(');
     expect(engineSource).toContain('LodGovernor');
     // The app runs the library's synthesis worker (voice-simulator/worker).

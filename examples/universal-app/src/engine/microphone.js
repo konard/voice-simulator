@@ -1,9 +1,11 @@
-const audio = {
-  channelCount: 1,
+// Browser processing is off by default: echo cancellation, noise
+// suppression and gain control reshape the spectrum the recognizer was
+// trained on. The page can switch each back on (issue 170).
+export const DEFAULT_MICROPHONE_CONSTRAINTS = Object.freeze({
   echoCancellation: false,
   noiseSuppression: false,
   autoGainControl: false,
-};
+});
 
 function stopTracks(stream) {
   stream.getTracks().forEach((track) => track.stop());
@@ -40,6 +42,7 @@ export function createMicrophone(
   {
     context,
     sampleRate,
+    constraints,
     getUserMedia = (constraints) =>
       globalThis.navigator.mediaDevices.getUserMedia(constraints),
   } = {}
@@ -68,7 +71,13 @@ export function createMicrophone(
     const capture = {};
     active = capture;
     try {
-      const stream = await getUserMedia({ audio });
+      const stream = await getUserMedia({
+        audio: {
+          channelCount: 1,
+          ...DEFAULT_MICROPHONE_CONSTRAINTS,
+          ...constraints,
+        },
+      });
       if (active !== capture) {
         stopTracks(stream);
         return;

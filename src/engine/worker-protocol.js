@@ -21,7 +21,11 @@
  *     telling whether the chosen tier runs there
  *   {type: 'speak', id, ipa, lang, head, seed, tier, auto, chunkSize,
  *    streamRate?, maxTier?, microphone?, room?, enclosure?, gpu?, engine?,
- *    threads?, simd?}
+ *    threads?, simd?, breaths?, source?, interaction?, subglottal?,
+ *    headroom?}
+ *   (`breaths`, `source`, `interaction`, `subglottal` and `headroom` as in
+ *   synthesize(); interaction is left off on WebGPU, which cannot couple
+ *   the folds to the tract)
  *   (`gpu: false` keeps the 3D tiers on the CPU; otherwise they run on
  *   WebGPU where the browser has it, and on the CPU where it does not)
  *   {type: 'underrun', id}  (the player ran dry: in automatic mode the
@@ -264,6 +268,12 @@ function prepareTier(state, message, level, device) {
     enclosure: message.enclosure,
     device: device ?? undefined,
     model,
+    breaths: message.breaths,
+    source: message.source,
+    interaction:
+      message.source === 'folds' && !device ? message.interaction : undefined,
+    subglottal: message.subglottal,
+    headroom: message.headroom,
   });
   return { ...prepared, model };
 }

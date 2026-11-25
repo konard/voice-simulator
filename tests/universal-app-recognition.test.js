@@ -7,6 +7,14 @@ import {
 import { recognitionTimeline } from '../examples/universal-app/src/components/recognition-timeline.js';
 import { createMicrophone } from '../examples/universal-app/src/engine/microphone.js';
 import { RecognitionSession } from '../examples/universal-app/src/engine/recognition-session.js';
+import {
+  DEFAULT_RECOGNITION_SETTINGS,
+  microphoneConstraints,
+  noisyInput,
+  recognitionOptions,
+  DEFAULT_VOICE_SETTINGS,
+  voiceOptions,
+} from '../examples/universal-app/src/components/settings.js';
 
 const hello = {
   text: 'hello',
@@ -41,7 +49,8 @@ function fakeWorker() {
   };
 }
 
-const file = { samples: new Float32Array(16000), sampleRate: 16000 };
+const sampleRate = 16000;
+const file = { samples: new Float32Array(16000), sampleRate };
 
 function fakeContext() {
   const calls = [];
@@ -281,5 +290,125 @@ describe('recognition microphone', () => {
       'disconnected',
       'closed',
     ]);
+  });
+});
+
+describe('recognition settings (issue 170)', () => {
+  it('sends the settings, the input level and keeps the input', async () => {
+    const worker = fakeWorker();
+    const session = new RecognitionSession({ createWorker: () => worker });
+    const loud = { samples: new Float32Array(3200).fill(0.5), sampleRate };
+    const options = recognitionOptions({
+      ...DEFAULT_RECOGNITION_SETTINGS,
+      decoder: 'phones',
+      whisper: false,
+      minVoiced: 0,
+    });
+    expect(options).toEqual({
+      level: 'auto',
+      decoder: 'phones',
+      oov: undefined,
+      whisper: false,
+      modes: true,
+      minVoiced: 0,
+    });
+    await session.start(loud, options);
+    expect(worker.messages[0].message).toEqual({
+      type: 'start',
+      id: 1,
+      sampleRate,
+      sampleCount: 3200,
+      ...options,
+    });
+    for (let i = 0; i < 4; i++) {
+      worker.emit('chunk', { id: 1 });
+    }
+    expect(Math.round(session.status.inputLevel)).toBe(-6);
+    expect(session.recorded).toBe(true);
+    expect(session.recording().samples).toBe(loud.samples);
+    await session.start(loud, options, { keep: false });
+    expect(session.recorded).toBe(false);
+    expect(session.recording()).toBe(null);
+  });
+
+  it('keeps the microphone input and opens it with the constraints', async () => {
+    const { context, stream } = fakeContext();
+    let asked;
+    const microphone = createMicrophone(
+      {},
+      {
+        context,
+        constraints: { noiseSuppression: true },
+        getUserMedia: async (constraints) => {
+          asked = constraints.audio;
+          return stream;
+        },
+      }
+    );
+    const worker = fakeWorker();
+    const session = new RecognitionSession({ createWorker: () => worker });
+    await session.start(microphone);
+    expect(asked).toEqual({
+      channelCount: 1,
+      echoCancellation: false,
+      noiseSuppression: true,
+      autoGainControl: false,
+    });
+    expect(
+      microphoneConstraints({
+        ...DEFAULT_RECOGNITION_SETTINGS,
+        autoGainControl: true,
+      })
+    ).toEqual({
+      echoCancellation: false,
+      noiseSuppression: false,
+      autoGainControl: true,
+    });
+  });
+
+  it('lays noise over a file at the chosen ratio', () => {
+    const tone = new Float32Array(sampleRate);
+    for (let i = 0; i < tone.length; i++) {
+      tone[i] = 0.1 * Math.sin((2 * Math.PI * 200 * i) / sampleRate);
+    }
+    const input = { samples: tone, sampleRate };
+    expect(noisyInput(input, DEFAULT_RECOGNITION_SETTINGS)).toBe(input);
+    const noisy = noisyInput(input, {
+      ...DEFAULT_RECOGNITION_SETTINGS,
+      noise: 'white',
+      snr: 0,
+    });
+    const rms = (list) =>
+      Math.sqrt(list.reduce((sum, x) => sum + x * x, 0) / list.length);
+    const noise = noisy.samples.map((value, i) => value - tone[i]);
+    expect(Math.abs(20 * Math.log10(rms(tone) / rms(noise))) < 0.5).toBe(true);
+    expect(noisy.sampleRate).toBe(sampleRate);
+  });
+
+  it('maps the speech settings to the speak request', () => {
+    expect(voiceOptions(DEFAULT_VOICE_SETTINGS)).toEqual({
+      weakForms: true,
+      breaths: false,
+      source: 'lf',
+      interaction: undefined,
+      subglottal: undefined,
+      headroom: undefined,
+    });
+    expect(
+      voiceOptions({
+        ...DEFAULT_VOICE_SETTINGS,
+        source: 'folds',
+        interaction: true,
+        subglottal: false,
+        headroom: 6,
+      })
+    ).toEqual({
+      weakForms: true,
+      breaths: false,
+      source: 'folds',
+      interaction: true,
+      subglottal: false,
+      headroom: 6,
+    });
   });
 });

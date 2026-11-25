@@ -441,9 +441,10 @@ export class VoiceEngine {
 
   /**
    * Speak text.
-   * @param {{text: string, lang: string, accent?: string, head: object, seed: string, mode: 'both'|'sound'|'visual', ipa?: boolean, microphone?: object, room?: string, enclosure?: object, gpu?: boolean, engine?: 'auto'|'rust'|'js'}} request
-   *   `microphone`, `room` and `enclosure` are the listening settings
-   *   (see synthesize).
+   * @param {{text: string, lang: string, accent?: string, accentLevel?: number, weakForms?: boolean, head: object, seed: string, mode: 'both'|'sound'|'visual', ipa?: boolean, microphone?: object, room?: string, enclosure?: object, gpu?: boolean, engine?: 'auto'|'rust'|'js', breaths?: boolean, source?: 'lf'|'folds', interaction?: boolean, subglottal?: boolean, headroom?: number}} request
+   *   `microphone`, `room` and `enclosure` are the listening settings;
+   *   `accentLevel`, `weakForms`, `breaths`, `source`, `interaction`,
+   *   `subglottal` and `headroom` the voice settings (see synthesize).
    */
   async speak(request) {
     this.stop();
@@ -462,10 +463,12 @@ export class VoiceEngine {
     const transcription = request.ipa
       ? { lang: request.lang, ipa: request.text, words: [] }
       : await this.#transcribe(request);
+    // The worker plans the same utterance again: breaths change its timing.
     const plan = planUtterance(transcription.ipa, {
       head: request.head,
       language: transcription.lang,
       articulationOffsets: request.articulationOffsets,
+      breaths: Boolean(request.breaths),
     });
     const timeline = utteranceTimeline(plan, {
       words: transcription.words,
@@ -535,6 +538,11 @@ export class VoiceEngine {
       enclosure: request.enclosure,
       gpu: this.#gpu(request),
       engine: request.engine ?? this.engineName,
+      breaths: Boolean(request.breaths),
+      source: request.source,
+      interaction: request.interaction,
+      subglottal: request.subglottal,
+      headroom: request.headroom,
     });
     return job;
   }
@@ -549,6 +557,7 @@ export class VoiceEngine {
         lang: request.lang,
         accent: request.accent,
         accentLevel: request.accentLevel,
+        weakForms: request.weakForms,
       });
     const first = read();
     if (request.requiresCopyConsent) {

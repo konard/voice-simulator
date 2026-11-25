@@ -14,11 +14,32 @@ function fail(id, { message, code }) {
   send(id, 'error', { message, code });
 }
 
-function start({ id, sampleCount, sampleRate, languages, level }, kernels) {
+function start(
+  {
+    id,
+    sampleCount,
+    sampleRate,
+    languages,
+    level,
+    decoder,
+    oov,
+    whisper,
+    modes,
+    minVoiced,
+  },
+  kernels
+) {
+  // The recognition settings of the page (issue 170); undefined keeps each
+  // default of createRecognizer.
   const options = {
     sampleRate,
     sampleCount,
     level,
+    decoder,
+    oov,
+    whisper,
+    modes,
+    minVoiced,
     threads: 1,
     kernels,
     languages: languages?.map((language) =>

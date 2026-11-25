@@ -742,3 +742,44 @@ h2 {
 .copy-actions > .row {
   margin-block-start: 0.65rem;
 }
+
+/* Speech and recognition settings (issue 170). */
+.settings {
+  display: grid;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
+.settings summary {
+  color: var(--accent);
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.input-level {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.8rem;
+}
+
+.input-level .meter-bar {
+  grid-column: auto;
+}
+
+.settings-fields {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.settings h3 {
+  margin: 4px 0 0;
+  font-size: 0.9rem;
+}
