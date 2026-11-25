@@ -47,21 +47,58 @@ const markupAvailable = typeof simulator.parseMarkup === 'function';
 const limit = Math.min(heavyLimit(80), 80);
 const groups = [];
 
-function measure({ set, lang, tier, preset, index, mode }) {
-  const text = sentences[lang][index];
-  const input =
-    {
-      W: `[whisper]${text}[/whisper]`,
-      f: `<speak><prosody volume="loud">${text}</prosody></speak>`,
-    }[mode] ?? text;
-  const { spoken, heard, ...metrics } = roundTrip(input, {
+const loud = (text) => `<prosody volume="loud">${text}</prosody>`;
+
+/**
+ * The mode cases (issue 168). Without the voice, the recognizer measures
+ * effort against the utterance itself (issue 71), so the audio-only lane
+ * scores a neutral span followed by a louder one of the same voice, and a
+ * whole loud utterance is its negative control: no effort label may appear.
+ * The calibrated lane hears that loud render with its voice; it scores the
+ * mode only, so the phone and language round trips stay audio-only.
+ */
+const modeCases = {
+  W: {
+    mode: 'W',
+    input: (text) => `[whisper]${text}[/whisper]`,
+  },
+  'f relative': {
+    mode: 'f',
+    input: (text) => `<speak>${text} ${loud(text)}</speak>`,
+    reference: (text) => `${text} ${text}`,
+    modeScoring: 'relative',
+  },
+  'f control': {
+    mode: 'f',
+    input: (text) => `<speak>${loud(text)}</speak>`,
+    modeScoring: 'absent',
+  },
+  'f calibrated': {
+    mode: 'f',
+    input: (text) => `<speak>${loud(text)}</speak>`,
+    knownVoice: true,
+    modeOnly: true,
+  },
+};
+
+function measure({ set, lang, tier, preset, index, mode, spoken }) {
+  const sentence = sentences[lang][index];
+  const modeCase = modeCases[mode];
+  const text = modeCase?.reference?.(sentence) ?? sentence;
+  const {
+    spoken: rendered,
+    heard,
+    ...metrics
+  } = roundTrip(modeCase?.input(sentence) ?? sentence, {
     lang,
     tier,
     preset,
     seed: 1,
-    mode,
+    mode: modeCase?.mode,
     referenceText: text,
-    knownVoice: set === 'modes',
+    knownVoice: Boolean(modeCase?.knownVoice),
+    modeScoring: modeCase?.modeScoring,
+    spoken,
   });
   return {
     ...metrics,
@@ -72,16 +109,17 @@ function measure({ set, lang, tier, preset, index, mode }) {
     sentence: index + 1,
     text,
     heardText: heard.text,
-    referenceIpa: spoken.ipa,
+    referenceIpa: rendered.ipa,
     heardIpa: heard.ipa,
     languages: heard.languages,
-    sampleRate: spoken.sampleRate,
-    duration: spoken.duration,
+    sampleRate: rendered.sampleRate,
+    duration: rendered.duration,
     markRight: metrics.sentenceMark === sentenceMark(text),
-    stressExpected: spoken.timeline.words.filter(
+    stressExpected: rendered.timeline.words.filter(
       (word) => word.syllables.length >= 2
     ).length,
     ...(mode && { mode }),
+    ...(modeCase?.modeOnly && { modeOnly: true }),
   };
 }
 
@@ -137,6 +175,11 @@ function applyGates(group) {
         tier === 'telephone' ? 0.75 : 0.9
       );
     }
+    if (lang === 'all') {
+      // The contract of issue 71 holds at every tier: without the voice no
+      // constant effort is reported.
+      atMost('unexpected audio-only effort spans', stats.unexpectedEffort, 0);
+    }
     return;
   }
   if (set === 'whisper') {
@@ -191,22 +234,40 @@ function checkModes(tier) {
       ?.items.find((item) => item.preset === 'male' && item.sentence === 1);
     const items = [];
     const failures = [];
-    for (const mode of ['W', 'f']) {
+    const add = (mode, make) => {
       try {
-        const item =
-          mode === 'W' && whisper
-            ? { ...whisper, set: 'modes' }
-            : measure({
-                set: 'modes',
-                lang,
-                tier,
-                preset: 'male',
-                index: 0,
-                mode,
-              });
-        items.push(item);
+        items.push(make());
       } catch (error) {
         failures.push(`${mode}: ${error.message}`);
+      }
+    };
+    const options = { set: 'modes', lang, tier, preset: 'male', index: 0 };
+    add('W', () =>
+      whisper
+        ? { ...whisper, set: 'modes' }
+        : measure({ ...options, mode: 'W' })
+    );
+    add('f relative', () => measure({ ...options, mode: 'f relative' }));
+    // Both lanes hear the same whole loud render.
+    let spoken;
+    try {
+      spoken = simulator.synthesize(
+        modeCases['f control'].input(sentences[lang][0]),
+        {
+          lang,
+          tier,
+          head: 'random',
+          preset: 'male',
+          seed: 1,
+          markup: true,
+        }
+      );
+    } catch (error) {
+      failures.push(`f: ${error.message}`);
+    }
+    if (spoken) {
+      for (const mode of ['f control', 'f calibrated']) {
+        add(mode, () => measure({ ...options, mode, spoken }));
       }
     }
     groups.push({

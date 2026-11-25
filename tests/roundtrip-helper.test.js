@@ -177,8 +177,229 @@ it('counts a recognition span with the expected mode and half the duration', () 
     }),
   });
   assert.deepEqual(result.modeSpans, [
-    { start, end, label: 'W', matched: true },
+    {
+      start,
+      end,
+      label: 'W',
+      matched: true,
+      lane: 'audio-only',
+      scoring: 'overlap',
+    },
   ]);
+});
+
+// Issue 168: the audio-only lane scores loudness relative to the same voice.
+const relativeText =
+  '<speak>Yes, I will. <prosody volume="loud">Yes, I will.</prosody></speak>';
+
+function loudSpan(text) {
+  const spoken = synthesize(text, { ...render, markup: true });
+  const span = spoken.plan.modes.find((mode) => mode.effort > 0.5);
+  return { spoken, span, first: spoken.timeline.words[0].start };
+}
+
+function heardModes(modes) {
+  return () => ({ text: '', ipa: '', languages: [], words: [], modes });
+}
+
+it('scores an audio-only effort rise over the neutral span before it', () => {
+  const { spoken, span, first } = loudSpan(relativeText);
+  const options = {
+    ...render,
+    spoken,
+    mode: 'f',
+    modeScoring: 'relative',
+    referenceText: 'Yes, I will. Yes, I will.',
+  };
+  const raised = roundTrip(relativeText, {
+    ...options,
+    recognize: (_, rate, recognition) => {
+      assert.deepEqual(recognition, { level: 'low' });
+      return heardModes([
+        {
+          start: first,
+          end: span.start,
+          notation: null,
+          emotion: { arousal: -0.1 },
+        },
+        { ...span, notation: null, emotion: { arousal: 0.4 } },
+      ])();
+    },
+  });
+  const [scored] = raised.modeSpans;
+  assert.equal(scored.lane, 'audio-only');
+  assert.equal(scored.scoring, 'relative');
+  assert.deepEqual(scored.neutral, { start: first, end: span.start });
+  assert.ok(Math.abs(scored.rise - 0.5) < 1e-9);
+  assert.equal(scored.matched, true);
+  // The same arousal over both spans is no event.
+  const flat = roundTrip(relativeText, {
+    ...options,
+    recognize: heardModes([
+      {
+        start: first,
+        end: span.end,
+        notation: null,
+        emotion: { arousal: 0.4 },
+      },
+    ]),
+  });
+  assert.ok(Math.abs(flat.modeSpans[0].rise) < 1e-9);
+  assert.equal(flat.modeSpans[0].matched, false);
+  // A relative case needs neutral speech before the loud span.
+  const whole = loudSpan(
+    '<speak><prosody volume="loud">Yes, I will.</prosody></speak>'
+  );
+  assert.throws(
+    () =>
+      roundTrip('', {
+        ...options,
+        spoken: whole.spoken,
+        recognize: heardModes([]),
+      }),
+    /no neutral span before f/u
+  );
+});
+
+it('fails the audio-only control on any effort label over a whole loud span', () => {
+  const text = '<speak><prosody volume="loud">Yes, I will.</prosody></speak>';
+  const { spoken, span } = loudSpan(text);
+  const options = { ...render, spoken, mode: 'f', modeScoring: 'absent' };
+  const quiet = roundTrip(text, {
+    ...options,
+    recognize: heardModes([
+      { ...span, notation: null, emotion: { arousal: 0.6 } },
+    ]),
+  });
+  assert.deepEqual(quiet.modeSpans, [
+    {
+      start: span.start,
+      end: span.end,
+      label: 'f',
+      unexpected: [],
+      matched: true,
+      lane: 'audio-only',
+      scoring: 'absent',
+    },
+  ]);
+  const guessed = roundTrip(text, {
+    ...options,
+    recognize: heardModes([
+      { start: span.end - 0.05, end: span.end + 0.1, notation: 'p' },
+    ]),
+  });
+  assert.deepEqual(guessed.modeSpans[0].unexpected, ['p']);
+  assert.equal(guessed.modeSpans[0].matched, false);
+});
+
+it('passes the voice to the calibrated lane', () => {
+  const text = '<speak><prosody volume="loud">Yes, I will.</prosody></speak>';
+  const { spoken, span } = loudSpan(text);
+  const result = roundTrip(text, {
+    ...render,
+    spoken,
+    mode: 'f',
+    knownVoice: true,
+    recognize: (_, rate, recognition) => {
+      assert.equal(recognition.voice, spoken.head);
+      return heardModes([{ ...span, notation: 'f' }])();
+    },
+  });
+  assert.equal(result.modeSpans[0].lane, 'calibrated');
+  assert.equal(result.modeSpans[0].matched, true);
+});
+
+it('keeps mode-only items out of the round-trip metrics and reports the lanes', () => {
+  const base = {
+    set: 'modes',
+    lang: 'en',
+    tier: 'telephone',
+    preset: 'male',
+    sentence: 1,
+    timeErrors: { errors: [], total: 0 },
+    stressExpected: 0,
+    duration: 1,
+    seconds: 0.1,
+    languageRight: true,
+    text: 'Yes.',
+    heardText: 'Yes.',
+    referenceIpa: 'jɛs',
+    heardIpa: 'jɛs',
+  };
+  const span = (lane, scoring, matched, extra) => ({
+    start: 0,
+    end: 1,
+    label: 'f',
+    matched,
+    lane,
+    scoring,
+    ...extra,
+  });
+  const items = [
+    {
+      ...base,
+      mode: 'f relative',
+      per: { distance: 0, referenceLength: 4, rate: 0 },
+      modeSpans: [span('audio-only', 'relative', true, { rise: 0.61 })],
+    },
+    {
+      ...base,
+      mode: 'f control',
+      per: { distance: 1, referenceLength: 4, rate: 0.25 },
+      modeSpans: [span('audio-only', 'absent', false, { unexpected: ['f'] })],
+    },
+    {
+      ...base,
+      mode: 'f calibrated',
+      modeOnly: true,
+      languageRight: false,
+      seconds: 10,
+      per: { distance: 4, referenceLength: 4, rate: 1 },
+      modeSpans: [span('calibrated', 'overlap', false)],
+    },
+  ];
+  const stats = summarizeRoundTrips(items);
+  assert.equal(stats.per.rate, 1 / 8);
+  assert.equal(stats.language, 1);
+  assert.equal(stats.rtf, 0.1);
+  assert.equal(stats.modes, 0.5);
+  assert.equal(stats.modeCount, 2);
+  assert.equal(stats.unexpectedEffort, 1);
+  assert.equal(stats.controlCount, 1);
+  assert.equal(summarizeRoundTrips(items.slice(0, 1)).unexpectedEffort, null);
+  const groups = [
+    { lang: 'en', diagnostic: true },
+    { lang: 'all', diagnostic: false },
+  ].map((row) => ({
+    ...row,
+    set: 'modes',
+    tier: 'telephone',
+    presets: ['male'],
+    items,
+    stats,
+    failures: [],
+  }));
+  const { markdown, data } = roundTripReport(groups, 80, true);
+  assert.ok(markdown.includes('## Mode lanes'));
+  assert.ok(
+    markdown.includes(
+      '| telephone | audio-only | f | heard arousal rise ≥ 0.3 over the neutral span | 1/1 (+0.61) | – | – | – | 1/1 |'
+    )
+  );
+  assert.ok(
+    markdown.includes(
+      '| telephone | audio-only | f | no effort label (negative control) | 0/1 | – | – | – | 0/1 |'
+    )
+  );
+  assert.ok(
+    markdown.includes(
+      '| telephone | calibrated | f | label over half the span | 0/1 | – | – | – | 0/1 |'
+    )
+  );
+  assert.deepEqual(
+    data.worst.map(({ mode }) => mode),
+    ['f control', 'f relative']
+  );
 });
 
 it('reports each measured preset and lists reused mode cases once', () => {

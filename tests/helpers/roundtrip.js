@@ -95,6 +95,8 @@ function compareTimes(reference, hypothesis) {
   return { errors, total, mean: errors.length ? total / errors.length : null };
 }
 
+const overlap = (a, b) => Math.min(a.end, b.end) - Math.max(a.start, b.start);
+
 function compareModes(expected, actual, label) {
   return expected.map(({ start, end }) => ({
     start,
@@ -103,10 +105,91 @@ function compareModes(expected, actual, label) {
     matched: actual.some(
       (span) =>
         span.notation === label &&
-        Math.min(end, span.end) - Math.max(start, span.start) >=
-          (end - start) / 2
+        overlap(span, { start, end }) >= (end - start) / 2
     ),
   }));
+}
+
+/** The recognizer's own threshold for a heard arousal (classifyEmotion). */
+export const AROUSAL_RISE = 0.3;
+const EFFORT_NOTATIONS = new Set(['pp', 'p', 'f', 'ff']);
+
+/** Duration-weighted heard arousal over a span; unmarked time counts 0. */
+function heardArousal(actual, span) {
+  let total = 0;
+  for (const heard of actual) {
+    const shared = overlap(heard, span);
+    if (shared > 0 && Number.isFinite(heard.emotion?.arousal)) {
+      total += heard.emotion.arousal * shared;
+    }
+  }
+  return total / (span.end - span.start);
+}
+
+/**
+ * Score a relative effort event (issue 168): the same voice speaks a neutral
+ * span and then the planned span. Without a voice baseline the recognizer
+ * places no constant effort label, so the event counts when the heard
+ * arousal of the planned span rises by at least AROUSAL_RISE over the
+ * neutral span before it, or when a span with the expected label covers half
+ * of it.
+ */
+function compareRelative(expected, actual, label, utteranceStart) {
+  return expected.map(({ start, end }) => {
+    const neutral = { start: utteranceStart, end: start };
+    assert.ok(neutral.end > neutral.start, `no neutral span before ${label}`);
+    const rise =
+      heardArousal(actual, { start, end }) - heardArousal(actual, neutral);
+    return {
+      start,
+      end,
+      label,
+      neutral,
+      rise,
+      matched:
+        rise >= AROUSAL_RISE ||
+        compareModes([{ start, end }], actual, label)[0].matched,
+    };
+  });
+}
+
+/**
+ * The negative control: a planned constant effort that the audio-only
+ * recognizer must not report, since it has no neutral baseline of the voice
+ * (issue 71). A span passes when no heard effort label overlaps it.
+ */
+function compareAbsent(expected, actual, label) {
+  return expected.map(({ start, end }) => {
+    const unexpected = actual.filter(
+      (span) =>
+        EFFORT_NOTATIONS.has(span.notation) && overlap(span, { start, end }) > 0
+    );
+    return {
+      start,
+      end,
+      label,
+      unexpected: unexpected.map((span) => span.notation),
+      matched: !unexpected.length,
+    };
+  });
+}
+
+const modeScorers = {
+  overlap: compareModes,
+  relative: compareRelative,
+  absent: compareAbsent,
+};
+
+/** Score the planned spans; the lane of the mode report (issue 168) is
+ * 'calibrated' when the recognizer heard the voice, else 'audio-only'. */
+function scoreModes(planned, heard, spoken, { mode, modeScoring, knownVoice }) {
+  const lane = knownVoice ? 'calibrated' : 'audio-only';
+  return modeScorers[modeScoring](
+    planned,
+    heard.modes ?? [],
+    mode,
+    spoken.timeline.words[0]?.start ?? 0
+  ).map((span) => ({ ...span, lane, scoring: modeScoring }));
 }
 
 export function roundTrip(text, options) {
@@ -121,7 +204,12 @@ export function roundTrip(text, options) {
     // Pass the speaking voice, so effort is measured against its rendered
     // baseline (issue 71); without it a constant effort is never reported.
     knownVoice = false,
+    // How the planned `mode` spans are scored: 'overlap' (a heard span with
+    // the label covers half of each), 'relative' (a heard rise over the
+    // neutral speech before it) or 'absent' (no heard effort label).
+    modeScoring = 'overlap',
   } = options;
+  assert.ok(modeScorers[modeScoring], `unknown mode scoring ${modeScoring}`);
   // Experiments may pass a cached render of the same text and options.
   const spoken =
     options.spoken ??
@@ -175,7 +263,11 @@ export function roundTrip(text, options) {
     languageRight: languages[0]?.language === lang,
     sentenceMark: sentenceMark(heard.text),
     ...(plannedModes && {
-      modeSpans: compareModes(plannedModes, heard.modes, mode),
+      modeSpans: scoreModes(plannedModes, heard, spoken, {
+        mode,
+        modeScoring,
+        knownVoice,
+      }),
     }),
   };
 }
