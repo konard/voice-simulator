@@ -36,14 +36,26 @@ Files are named `<suite>-<topic>.test.js`, for example
 The `roundtrip` suite runs [roundtrip-sentences.test.js](roundtrip-sentences.test.js)
 on 80 fixed sentences across four languages, four seeded voice presets and nine
 audio tiers.
-Its mode check speaks sentence 1 of each language whispered (`[whisper]`)
-and loud (`<prosody volume="loud">`, the markup of issue 50) and passes
-the speaking voice to `recognize()` as `voice`: a whole loud sentence is a
-constant effort, which issue 71 measures only against a baseline rendered
-with that voice; without it the baseline is the utterance itself and no
-`f` span is reported ([experiments/issue-75-loud-cues.mjs](../../experiments/issue-75-loud-cues.mjs)
+Its mode check (issue 168) speaks sentence 1 of each language in two lanes,
+with the markup of issue 50. Without a voice, `recognize()` takes the
+utterance itself as the baseline (issue 71) and reports no constant effort
+([experiments/issue-75-loud-cues.mjs](../../experiments/issue-75-loud-cues.mjs)
 shows that level is normalised away and that pitch and spectral tilt of
-loud and normal speech overlap across the presets).
+loud and normal speech overlap across the presets), so:
+
+- the **audio-only** lane hears no voice. It reuses the whispered case
+  (`[whisper]`) and speaks the sentence neutrally and then again loudly
+  (`<prosody volume="loud">`): the loud span matches when its heard arousal
+  rises by at least 0.3 over the neutral span before it. Its negative
+  control renders the whole sentence loud and must show no effort label
+  at any tier;
+- the **calibrated** lane hears that whole loud render with its voice
+  (`voice: spoken.head`) and expects an `f` span over it. It scores the mode
+  only, so the phone, language and RTF figures stay audio-only.
+
+The report lists the matched/expected spans per tier, lane, label and
+language ([experiments/issue-168-relative-effort.mjs](../../experiments/issue-168-relative-effort.mjs)
+measures the rises and the controls).
 It writes `roundtrip.md` and `roundtrip.json` to the report folder. See the
 [full benchmark report](../../docs/reports/roundtrip.md) for measured rates,
 per-preset breakdowns, gate failures and the twenty largest phone errors.

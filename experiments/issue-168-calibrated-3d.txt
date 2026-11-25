@@ -1,0 +1,12 @@
+low en rate 32000 displacement 6.13, steady true, jitter 0.46, voiced 1.00, cpp 1.53, hnr 1.03 (need |displacement| ≥ 3, steady, jitter < 2, voiced > 0.8, cpp > -1.5, hnr > -4)
+  modes [["f","0.06","3.41"],[null,"0.06","3.41"]] The quick brown fox jump so were the way the dog.
+low zh rate 32000 displacement 5.98, steady true, jitter 0.81, voiced 1.00, cpp 0.79, hnr 2.26 (need |displacement| ≥ 3, steady, jitter < 2, voiced > 0.8, cpp > -1.5, hnr > -4)
+  modes [["f","0.06","3.03"],[null,"0.06","3.03"],[",","0.06","0.75"],["↘ ?","0.95","3.03"]] 你好，泥今天怎么样？
+medium en rate 48000 displacement 6.13, steady true, jitter 0.48, voiced 1.00, cpp 1.56, hnr 0.79 (need |displacement| ≥ 3, steady, jitter < 2, voiced > 0.8, cpp > -1.5, hnr > -4)
+  modes [["f","0.06","3.41"],[null,"0.06","3.41"]] The quick brown fox jump so were the way the dog.
+medium zh rate 48000 displacement 5.99, steady true, jitter 0.78, voiced 1.00, cpp 0.86, hnr 1.77 (need |displacement| ≥ 3, steady, jitter < 2, voiced > 0.8, cpp > -1.5, hnr > -4)
+  modes [["f","0.06","3.03"],[null,"0.06","3.03"],[",","0.06","0.75"],["↘ ?","0.95","3.03"]] 你好，泥今天怎么样？
+high en rate 48000 displacement 6.20, steady false, jitter 1.03, voiced 1.00, cpp 0.96, hnr -1.90 (need |displacement| ≥ 3, steady, jitter < 2, voiced > 0.8, cpp > -1.5, hnr > -4)
+  modes [[null,"0.06","3.41"],["lento","0.97","2.38"],["V͈","0.97","1.81"],["f","1.81","2.38"],["V͉","2.51","2.97"]] Dark rick better talk to dover the village dd.
+high zh rate 48000 displacement 4.51, steady false, jitter 0.79, voiced 1.00, cpp 0.08, hnr -1.27 (need |displacement| ≥ 3, steady, jitter < 2, voiced > 0.8, cpp > -1.5, hnr > -4)
+  modes [[null,"0.06","3.01"],[",","0.06","0.75"],["f","0.06","0.44"]] Milk ˈo, me to watch your inches woman of.

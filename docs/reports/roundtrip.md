@@ -1,15 +1,18 @@
 # Synthetic speech round trips
 
-Measured 2026-11-24 on commit `77c36a28c158f6bf6593888c17ae0527592aa6c2`.
-The [full round-trip run](https://github.com/konard/voice-simulator/actions/runs/45492367250)
-finished in 21 minutes with 8 passing and 69 failing tests. The tables
+Measured 2026-11-25 on commit `7f777ff9b4f563996216813683360f8e87c72a20`.
+The [full round-trip run](https://github.com/konard/voice-simulator/actions/runs/45629965290)
+finished in 30 minutes with 8 passing and 69 failing tests. The tables
 below are its `roundtrip.md` artifact. The tests that passed are the
 narrowband whisper rows for English, Russian and Hindi, and the mode rows for
-telephone, narrowband, wideband, minimal and low.
+telephone, narrowband, wideband, minimal and low. Apart from RTF, the main,
+voices, tiers and whisper tables equal those of the
+[previous full run](https://github.com/konard/voice-simulator/actions/runs/45492367250)
+on `77c36a2`; this run changes only the mode cases (issue 168).
 
 Recognition now decodes words with the Gaussian HMM (`decoder: 'words'`).
-Compared with the [previous full run](https://github.com/konard/voice-simulator/actions/runs/44942169457)
-on `8a1d734`, which used the phone decoder, telephone phone error fell:
+Compared with the [phone-decoder run](https://github.com/konard/voice-simulator/actions/runs/44942169457)
+on `8a1d734`, telephone phone error fell:
 
 | Language | PER before | PER now | Language right before | Language right now |
 | --- | --- | --- | --- | --- |
@@ -24,6 +27,15 @@ PER for Russian and Hindi, on tone error for Mandarin (17.2% against 15%),
 and on sentence marks for Russian and Mandarin. The tiers set fails on PER
 at every tier. See "Word recogniser diagnostics" below.
 
+The mode rows now report two lanes (see "Mode lanes"). In the audio-only
+lane, all 36 relative loud spans and all 36 whole-loud controls pass at the
+nine tiers, and whisper matches 35 of 36 spans. The calibrated lane matches
+`f` at 4 of 4 spans from telephone to low, 3 of 4 at medium, 0 of 4 at
+high and ultra, and 1 of 4 at studio. The mode match share rose at medium
+from 0.750 to 0.833, at high and ultra from 0.500 to 0.667, and at studio
+from 0.625 to 0.750. Those four tiers still fail the 0.9 gate; see
+"Calibrated effort on the higher tiers" below.
+
 Command: `npm run test:heavy -- --suite roundtrip`.
 
 All renders use seed 1 and select their voice preset with the seeded head generator. Recognition receives audio and the level for its tier. The reference tier is excluded because of its run time.
@@ -32,7 +44,9 @@ Edit rates divide summed edits by summed reference length. Stress covers aligned
 
 Mandarin uses character error rate in place of orthographic word error, including for the whisper gate. Sound WER compares Mandarin character pronunciations in context.
 
-The mode tests measure the share of reference spans with matching notation and at least half of their duration overlapped by a recognition span. The gate uses all four languages at each tier.
+The mode tests run two lanes (issue 168). The audio-only lane hears no voice baseline, so it reports no constant effort (issue 71): its loud case speaks a sentence neutrally and then loudly with the same voice and matches when the heard arousal of the loud span exceeds that of the neutral span by at least 0.3, or when an `f` span covers half of it. Its negative control renders the whole sentence loud, and no effort label may overlap it. The calibrated lane hears that loud render with its voice and expects an `f` span; it measures the mode only, so the PER, language and RTF columns stay audio-only. Other modes, such as whisper, match a recognition span with the same notation covering at least half of the reference span.
+
+The mode match share counts the audio-only and calibrated spans of all four languages at each tier; the controls are gated separately and must report no unexpected effort span at any tier. The mode lanes table lists the matched/expected spans with the heard arousal rise in brackets.
 
 Rows for male and female presets show their separate measurements when the gates use their combined results.
 
@@ -40,203 +54,260 @@ Rows for male and female presets show their separate measurements when the gates
 
 | Language | Tier | Presets | Cases | PER | WER | CER | Sound WER | Tone error | Stress hits | Time (ms) | Language right | Mark right | Mode hits | RTF | Gates |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| en | telephone | male, female | 40 | 9.7% | 26.8% | 13.3% | 28.2% | – | 100.0% | 8.1 | 100.0% | 85.0% | – | 0.269 | sound WER 0.282 (need ≤ 0.2) |
-| en | telephone | male | 20 | 8.7% | 24.6% | 12.3% | 26.1% | – | 100.0% | 8.1 | 100.0% | 85.0% | – | 0.281 | – |
-| en | telephone | female | 20 | 10.7% | 28.9% | 14.2% | 30.3% | – | 100.0% | 8.0 | 100.0% | 85.0% | – | 0.256 | – |
-| en | narrowband | male, female | 40 | 9.7% | 29.2% | 13.4% | 30.3% | – | 100.0% | 8.2 | 100.0% | 85.0% | – | 0.228 | PER 0.097 (need ≤ 0.08)<br>sound WER 0.303 (need ≤ 0.15) |
-| en | narrowband | male | 20 | 9.5% | 30.3% | 14.6% | 32.4% | – | 100.0% | 8.0 | 100.0% | 85.0% | – | 0.202 | – |
-| en | narrowband | female | 20 | 9.9% | 28.2% | 12.3% | 28.2% | – | 100.0% | 8.4 | 100.0% | 85.0% | – | 0.255 | – |
-| en | wideband | male, female | 40 | 10.1% | 29.6% | 15.5% | 30.6% | – | 100.0% | 7.8 | 100.0% | 85.0% | – | 0.287 | PER 0.101 (need ≤ 0.05)<br>sound WER 0.306 (need ≤ 0.1)<br>sentence mark match share 0.850 (need ≥ 0.9) |
-| en | wideband | male | 20 | 7.9% | 27.5% | 12.5% | 28.9% | – | 100.0% | 8.0 | 100.0% | 85.0% | – | 0.251 | – |
-| en | wideband | female | 20 | 12.4% | 31.7% | 18.5% | 32.4% | – | 100.0% | 7.6 | 100.0% | 85.0% | – | 0.325 | – |
-| en | minimal | male, female | 40 | 11.0% | 31.0% | 16.4% | 32.4% | – | 100.0% | 8.1 | 100.0% | 85.0% | – | 0.281 | PER 0.110 (need ≤ 0.05)<br>sound WER 0.324 (need ≤ 0.1)<br>sentence mark match share 0.850 (need ≥ 0.9) |
-| en | minimal | male | 20 | 8.3% | 28.2% | 13.4% | 30.3% | – | 100.0% | 7.6 | 100.0% | 85.0% | – | 0.253 | – |
-| en | minimal | female | 20 | 13.6% | 33.8% | 19.5% | 34.5% | – | 100.0% | 8.6 | 100.0% | 85.0% | – | 0.309 | – |
-| ru | telephone | male, female | 40 | 14.9% | 51.7% | 18.7% | 46.0% | – | 94.6% | 7.9 | 95.0% | 77.5% | – | 0.285 | PER 0.149 (need ≤ 0.1)<br>sound WER 0.460 (need ≤ 0.2)<br>sentence mark match share 0.775 (need ≥ 0.85) |
-| ru | telephone | male | 20 | 12.4% | 46.0% | 16.7% | 40.2% | – | 96.0% | 8.1 | 95.0% | 80.0% | – | 0.299 | – |
-| ru | telephone | female | 20 | 17.3% | 57.5% | 20.6% | 51.7% | – | 93.0% | 7.7 | 95.0% | 75.0% | – | 0.271 | – |
-| ru | narrowband | male, female | 40 | 14.6% | 54.0% | 18.5% | 49.4% | – | 95.7% | 7.9 | 95.0% | 77.5% | – | 0.280 | PER 0.146 (need ≤ 0.08)<br>sound WER 0.494 (need ≤ 0.15) |
-| ru | narrowband | male | 20 | 12.2% | 50.6% | 15.7% | 44.8% | – | 96.0% | 8.3 | 100.0% | 80.0% | – | 0.262 | – |
-| ru | narrowband | female | 20 | 17.1% | 57.5% | 21.4% | 54.0% | – | 95.3% | 7.5 | 90.0% | 75.0% | – | 0.298 | – |
-| ru | wideband | male, female | 40 | 14.5% | 54.0% | 19.5% | 49.4% | – | 96.6% | 7.7 | 95.0% | 77.5% | – | 0.327 | PER 0.145 (need ≤ 0.05)<br>sound WER 0.494 (need ≤ 0.1)<br>sentence mark match share 0.775 (need ≥ 0.9) |
-| ru | wideband | male | 20 | 11.0% | 43.7% | 15.4% | 36.8% | – | 98.0% | 8.1 | 95.0% | 80.0% | – | 0.305 | – |
-| ru | wideband | female | 20 | 18.0% | 64.4% | 23.6% | 62.1% | – | 95.0% | 7.2 | 95.0% | 75.0% | – | 0.349 | – |
-| ru | minimal | male, female | 40 | 14.5% | 54.6% | 19.0% | 50.0% | – | 96.7% | 7.7 | 95.0% | 77.5% | – | 0.353 | PER 0.145 (need ≤ 0.05)<br>sound WER 0.500 (need ≤ 0.1)<br>sentence mark match share 0.775 (need ≥ 0.9) |
-| ru | minimal | male | 20 | 9.0% | 44.8% | 13.9% | 37.9% | – | 98.0% | 8.0 | 100.0% | 80.0% | – | 0.329 | – |
-| ru | minimal | female | 20 | 20.0% | 64.4% | 24.1% | 62.1% | – | 95.1% | 7.4 | 90.0% | 75.0% | – | 0.377 | – |
-| hi | telephone | male, female | 40 | 14.5% | 32.7% | 18.8% | 31.6% | – | – | 9.9 | 100.0% | 90.0% | – | 0.259 | PER 0.145 (need ≤ 0.1)<br>sound WER 0.316 (need ≤ 0.2) |
-| hi | telephone | male | 20 | 14.7% | 34.7% | 18.3% | 33.7% | – | – | 10.8 | 100.0% | 90.0% | – | 0.263 | – |
-| hi | telephone | female | 20 | 14.4% | 30.6% | 19.4% | 29.6% | – | – | 8.9 | 100.0% | 90.0% | – | 0.254 | – |
-| hi | narrowband | male, female | 40 | 14.5% | 33.2% | 18.7% | 32.1% | – | – | 9.9 | 100.0% | 90.0% | – | 0.252 | PER 0.145 (need ≤ 0.08)<br>sound WER 0.321 (need ≤ 0.15) |
-| hi | narrowband | male | 20 | 13.5% | 31.6% | 17.1% | 30.6% | – | – | 11.2 | 100.0% | 90.0% | – | 0.255 | – |
-| hi | narrowband | female | 20 | 15.5% | 34.7% | 20.3% | 33.7% | – | – | 8.4 | 100.0% | 90.0% | – | 0.249 | – |
-| hi | wideband | male, female | 40 | 13.2% | 29.6% | 16.8% | 28.6% | – | – | 8.7 | 100.0% | 90.0% | – | 0.293 | PER 0.132 (need ≤ 0.05)<br>sound WER 0.286 (need ≤ 0.1) |
-| hi | wideband | male | 20 | 10.6% | 24.5% | 14.5% | 23.5% | – | – | 8.7 | 100.0% | 90.0% | – | 0.295 | – |
-| hi | wideband | female | 20 | 15.8% | 34.7% | 19.1% | 33.7% | – | – | 8.7 | 100.0% | 90.0% | – | 0.292 | – |
-| hi | minimal | male, female | 40 | 13.4% | 28.1% | 17.5% | 27.0% | – | – | 8.8 | 100.0% | 90.0% | – | 0.318 | PER 0.134 (need ≤ 0.05)<br>sound WER 0.270 (need ≤ 0.1) |
-| hi | minimal | male | 20 | 11.8% | 26.5% | 15.7% | 25.5% | – | – | 8.8 | 100.0% | 90.0% | – | 0.316 | – |
-| hi | minimal | female | 20 | 14.9% | 29.6% | 19.4% | 28.6% | – | – | 8.7 | 100.0% | 90.0% | – | 0.320 | – |
-| zh | telephone | male, female | 40 | 6.2% | – | 35.9% | 27.9% | 17.2% | – | 7.0 | 97.5% | 75.0% | – | 0.177 | sound WER 0.279 (need ≤ 0.2)<br>tone error 0.172 (need ≤ 0.15)<br>sentence mark match share 0.750 (need ≥ 0.85) |
-| zh | telephone | male | 20 | 6.9% | – | 39.7% | 32.1% | 18.3% | – | 6.9 | 95.0% | 80.0% | – | 0.187 | – |
-| zh | telephone | female | 20 | 5.4% | – | 32.1% | 23.7% | 16.0% | – | 7.2 | 100.0% | 70.0% | – | 0.167 | – |
-| zh | narrowband | male, female | 40 | 8.6% | – | 39.3% | 30.9% | 16.8% | – | 15.8 | 95.0% | 70.0% | – | 0.178 | PER 0.086 (need ≤ 0.08)<br>sound WER 0.309 (need ≤ 0.15)<br>tone error 0.168 (need ≤ 0.12) |
-| zh | narrowband | male | 20 | 10.9% | – | 45.8% | 36.6% | 18.3% | – | 6.6 | 90.0% | 70.0% | – | 0.180 | – |
-| zh | narrowband | female | 20 | 6.3% | – | 32.8% | 25.2% | 15.3% | – | 24.0 | 100.0% | 70.0% | – | 0.176 | – |
-| zh | wideband | male, female | 40 | 6.9% | – | 36.3% | 27.9% | 17.6% | – | 15.5 | 95.0% | 72.5% | – | 0.214 | PER 0.069 (need ≤ 0.05)<br>sound WER 0.279 (need ≤ 0.1)<br>tone error 0.176 (need ≤ 0.1)<br>sentence mark match share 0.725 (need ≥ 0.9) |
-| zh | wideband | male | 20 | 6.0% | – | 38.2% | 29.0% | 19.8% | – | 6.6 | 90.0% | 75.0% | – | 0.218 | – |
-| zh | wideband | female | 20 | 7.7% | – | 34.4% | 26.7% | 15.3% | – | 24.5 | 100.0% | 70.0% | – | 0.209 | – |
-| zh | minimal | male, female | 40 | 6.7% | – | 35.5% | 27.1% | 17.2% | – | 15.5 | 95.0% | 72.5% | – | 0.224 | PER 0.067 (need ≤ 0.05)<br>sound WER 0.271 (need ≤ 0.1)<br>tone error 0.172 (need ≤ 0.1)<br>sentence mark match share 0.725 (need ≥ 0.9) |
-| zh | minimal | male | 20 | 5.7% | – | 36.6% | 27.5% | 18.3% | – | 6.5 | 90.0% | 75.0% | – | 0.227 | – |
-| zh | minimal | female | 20 | 7.7% | – | 34.4% | 26.7% | 16.0% | – | 24.7 | 100.0% | 70.0% | – | 0.222 | – |
+| en | telephone | male, female | 40 | 9.7% | 26.8% | 13.3% | 28.2% | – | 100.0% | 8.1 | 100.0% | 85.0% | – | 0.285 | sound WER 0.282 (need ≤ 0.2) |
+| en | telephone | male | 20 | 8.7% | 24.6% | 12.3% | 26.1% | – | 100.0% | 8.1 | 100.0% | 85.0% | – | 0.306 | – |
+| en | telephone | female | 20 | 10.7% | 28.9% | 14.2% | 30.3% | – | 100.0% | 8.0 | 100.0% | 85.0% | – | 0.264 | – |
+| en | narrowband | male, female | 40 | 9.7% | 29.2% | 13.4% | 30.3% | – | 100.0% | 8.2 | 100.0% | 85.0% | – | 0.233 | PER 0.097 (need ≤ 0.08)<br>sound WER 0.303 (need ≤ 0.15) |
+| en | narrowband | male | 20 | 9.5% | 30.3% | 14.6% | 32.4% | – | 100.0% | 8.0 | 100.0% | 85.0% | – | 0.215 | – |
+| en | narrowband | female | 20 | 9.9% | 28.2% | 12.3% | 28.2% | – | 100.0% | 8.4 | 100.0% | 85.0% | – | 0.252 | – |
+| en | wideband | male, female | 40 | 10.1% | 29.6% | 15.5% | 30.6% | – | 100.0% | 7.8 | 100.0% | 85.0% | – | 0.302 | PER 0.101 (need ≤ 0.05)<br>sound WER 0.306 (need ≤ 0.1)<br>sentence mark match share 0.850 (need ≥ 0.9) |
+| en | wideband | male | 20 | 7.9% | 27.5% | 12.5% | 28.9% | – | 100.0% | 8.0 | 100.0% | 85.0% | – | 0.278 | – |
+| en | wideband | female | 20 | 12.4% | 31.7% | 18.5% | 32.4% | – | 100.0% | 7.6 | 100.0% | 85.0% | – | 0.326 | – |
+| en | minimal | male, female | 40 | 11.0% | 31.0% | 16.4% | 32.4% | – | 100.0% | 8.1 | 100.0% | 85.0% | – | 0.319 | PER 0.110 (need ≤ 0.05)<br>sound WER 0.324 (need ≤ 0.1)<br>sentence mark match share 0.850 (need ≥ 0.9) |
+| en | minimal | male | 20 | 8.3% | 28.2% | 13.4% | 30.3% | – | 100.0% | 7.6 | 100.0% | 85.0% | – | 0.292 | – |
+| en | minimal | female | 20 | 13.6% | 33.8% | 19.5% | 34.5% | – | 100.0% | 8.6 | 100.0% | 85.0% | – | 0.346 | – |
+| ru | telephone | male, female | 40 | 14.9% | 51.7% | 18.7% | 46.0% | – | 94.6% | 7.9 | 95.0% | 77.5% | – | 0.306 | PER 0.149 (need ≤ 0.1)<br>sound WER 0.460 (need ≤ 0.2)<br>sentence mark match share 0.775 (need ≥ 0.85) |
+| ru | telephone | male | 20 | 12.4% | 46.0% | 16.7% | 40.2% | – | 96.0% | 8.1 | 95.0% | 80.0% | – | 0.313 | – |
+| ru | telephone | female | 20 | 17.3% | 57.5% | 20.6% | 51.7% | – | 93.0% | 7.7 | 95.0% | 75.0% | – | 0.298 | – |
+| ru | narrowband | male, female | 40 | 14.6% | 54.0% | 18.5% | 49.4% | – | 95.7% | 7.9 | 95.0% | 77.5% | – | 0.294 | PER 0.146 (need ≤ 0.08)<br>sound WER 0.494 (need ≤ 0.15) |
+| ru | narrowband | male | 20 | 12.2% | 50.6% | 15.7% | 44.8% | – | 96.0% | 8.3 | 100.0% | 80.0% | – | 0.280 | – |
+| ru | narrowband | female | 20 | 17.1% | 57.5% | 21.4% | 54.0% | – | 95.3% | 7.5 | 90.0% | 75.0% | – | 0.307 | – |
+| ru | wideband | male, female | 40 | 14.5% | 54.0% | 19.5% | 49.4% | – | 96.6% | 7.7 | 95.0% | 77.5% | – | 0.340 | PER 0.145 (need ≤ 0.05)<br>sound WER 0.494 (need ≤ 0.1)<br>sentence mark match share 0.775 (need ≥ 0.9) |
+| ru | wideband | male | 20 | 11.0% | 43.7% | 15.4% | 36.8% | – | 98.0% | 8.1 | 95.0% | 80.0% | – | 0.319 | – |
+| ru | wideband | female | 20 | 18.0% | 64.4% | 23.6% | 62.1% | – | 95.0% | 7.2 | 95.0% | 75.0% | – | 0.362 | – |
+| ru | minimal | male, female | 40 | 14.5% | 54.6% | 19.0% | 50.0% | – | 96.7% | 7.7 | 95.0% | 77.5% | – | 0.360 | PER 0.145 (need ≤ 0.05)<br>sound WER 0.500 (need ≤ 0.1)<br>sentence mark match share 0.775 (need ≥ 0.9) |
+| ru | minimal | male | 20 | 9.0% | 44.8% | 13.9% | 37.9% | – | 98.0% | 8.0 | 100.0% | 80.0% | – | 0.336 | – |
+| ru | minimal | female | 20 | 20.0% | 64.4% | 24.1% | 62.1% | – | 95.1% | 7.4 | 90.0% | 75.0% | – | 0.385 | – |
+| hi | telephone | male, female | 40 | 14.5% | 32.7% | 18.8% | 31.6% | – | – | 9.9 | 100.0% | 90.0% | – | 0.278 | PER 0.145 (need ≤ 0.1)<br>sound WER 0.316 (need ≤ 0.2) |
+| hi | telephone | male | 20 | 14.7% | 34.7% | 18.3% | 33.7% | – | – | 10.8 | 100.0% | 90.0% | – | 0.283 | – |
+| hi | telephone | female | 20 | 14.4% | 30.6% | 19.4% | 29.6% | – | – | 8.9 | 100.0% | 90.0% | – | 0.273 | – |
+| hi | narrowband | male, female | 40 | 14.5% | 33.2% | 18.7% | 32.1% | – | – | 9.9 | 100.0% | 90.0% | – | 0.273 | PER 0.145 (need ≤ 0.08)<br>sound WER 0.321 (need ≤ 0.15) |
+| hi | narrowband | male | 20 | 13.5% | 31.6% | 17.1% | 30.6% | – | – | 11.2 | 100.0% | 90.0% | – | 0.278 | – |
+| hi | narrowband | female | 20 | 15.5% | 34.7% | 20.3% | 33.7% | – | – | 8.4 | 100.0% | 90.0% | – | 0.269 | – |
+| hi | wideband | male, female | 40 | 13.2% | 29.6% | 16.8% | 28.6% | – | – | 8.7 | 100.0% | 90.0% | – | 0.326 | PER 0.132 (need ≤ 0.05)<br>sound WER 0.286 (need ≤ 0.1) |
+| hi | wideband | male | 20 | 10.6% | 24.5% | 14.5% | 23.5% | – | – | 8.7 | 100.0% | 90.0% | – | 0.323 | – |
+| hi | wideband | female | 20 | 15.8% | 34.7% | 19.1% | 33.7% | – | – | 8.7 | 100.0% | 90.0% | – | 0.330 | – |
+| hi | minimal | male, female | 40 | 13.4% | 28.1% | 17.5% | 27.0% | – | – | 8.8 | 100.0% | 90.0% | – | 0.344 | PER 0.134 (need ≤ 0.05)<br>sound WER 0.270 (need ≤ 0.1) |
+| hi | minimal | male | 20 | 11.8% | 26.5% | 15.7% | 25.5% | – | – | 8.8 | 100.0% | 90.0% | – | 0.341 | – |
+| hi | minimal | female | 20 | 14.9% | 29.6% | 19.4% | 28.6% | – | – | 8.7 | 100.0% | 90.0% | – | 0.347 | – |
+| zh | telephone | male, female | 40 | 6.2% | – | 35.9% | 27.9% | 17.2% | – | 7.0 | 97.5% | 75.0% | – | 0.186 | sound WER 0.279 (need ≤ 0.2)<br>tone error 0.172 (need ≤ 0.15)<br>sentence mark match share 0.750 (need ≥ 0.85) |
+| zh | telephone | male | 20 | 6.9% | – | 39.7% | 32.1% | 18.3% | – | 6.9 | 95.0% | 80.0% | – | 0.189 | – |
+| zh | telephone | female | 20 | 5.4% | – | 32.1% | 23.7% | 16.0% | – | 7.2 | 100.0% | 70.0% | – | 0.183 | – |
+| zh | narrowband | male, female | 40 | 8.6% | – | 39.3% | 30.9% | 16.8% | – | 15.8 | 95.0% | 70.0% | – | 0.194 | PER 0.086 (need ≤ 0.08)<br>sound WER 0.309 (need ≤ 0.15)<br>tone error 0.168 (need ≤ 0.12) |
+| zh | narrowband | male | 20 | 10.9% | – | 45.8% | 36.6% | 18.3% | – | 6.6 | 90.0% | 70.0% | – | 0.196 | – |
+| zh | narrowband | female | 20 | 6.3% | – | 32.8% | 25.2% | 15.3% | – | 24.0 | 100.0% | 70.0% | – | 0.191 | – |
+| zh | wideband | male, female | 40 | 6.9% | – | 36.3% | 27.9% | 17.6% | – | 15.5 | 95.0% | 72.5% | – | 0.241 | PER 0.069 (need ≤ 0.05)<br>sound WER 0.279 (need ≤ 0.1)<br>tone error 0.176 (need ≤ 0.1)<br>sentence mark match share 0.725 (need ≥ 0.9) |
+| zh | wideband | male | 20 | 6.0% | – | 38.2% | 29.0% | 19.8% | – | 6.6 | 90.0% | 75.0% | – | 0.238 | – |
+| zh | wideband | female | 20 | 7.7% | – | 34.4% | 26.7% | 15.3% | – | 24.5 | 100.0% | 70.0% | – | 0.244 | – |
+| zh | minimal | male, female | 40 | 6.7% | – | 35.5% | 27.1% | 17.2% | – | 15.5 | 95.0% | 72.5% | – | 0.261 | PER 0.067 (need ≤ 0.05)<br>sound WER 0.271 (need ≤ 0.1)<br>tone error 0.172 (need ≤ 0.1)<br>sentence mark match share 0.725 (need ≥ 0.9) |
+| zh | minimal | male | 20 | 5.7% | – | 36.6% | 27.5% | 18.3% | – | 6.5 | 90.0% | 75.0% | – | 0.262 | – |
+| zh | minimal | female | 20 | 7.7% | – | 34.4% | 26.7% | 16.0% | – | 24.7 | 100.0% | 70.0% | – | 0.260 | – |
 
 ## voices
 
 | Language | Tier | Presets | Cases | PER | WER | CER | Sound WER | Tone error | Stress hits | Time (ms) | Language right | Mark right | Mode hits | RTF | Gates |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| en | telephone | any | 5 | 5.4% | 25.0% | 11.2% | 25.0% | – | 100.0% | 7.5 | 100.0% | 60.0% | – | 0.185 | sound WER 0.250 (need ≤ 0.2)<br>sentence mark match share 0.600 (need ≥ 0.85) |
-| en | telephone | child | 5 | 12.4% | 44.4% | 19.9% | 41.7% | – | 100.0% | 7.0 | 100.0% | 60.0% | – | 0.214 | PER 0.124 (need ≤ 0.1)<br>sound WER 0.417 (need ≤ 0.2)<br>sentence mark match share 0.600 (need ≥ 0.85) |
-| en | wideband | any | 5 | 5.4% | 19.4% | 8.1% | 19.4% | – | 100.0% | 6.2 | 100.0% | 60.0% | – | 0.225 | sentence mark match share 0.600 (need ≥ 0.9) |
-| en | wideband | child | 5 | 27.1% | 52.8% | 39.8% | 61.1% | – | 100.0% | 5.9 | 80.0% | 40.0% | – | 0.283 | PER 0.271 (need ≤ 0.1)<br>sound WER 0.611 (need ≤ 0.2)<br>language match share 0.800 (need ≥ 0.9)<br>sentence mark match share 0.400 (need ≥ 0.9) |
-| ru | telephone | any | 5 | 19.6% | 68.2% | 33.0% | 59.1% | – | 100.0% | 8.5 | 80.0% | 80.0% | – | 0.245 | PER 0.196 (need ≤ 0.1)<br>sound WER 0.591 (need ≤ 0.2)<br>language match share 0.800 (need ≥ 0.9)<br>sentence mark match share 0.800 (need ≥ 0.85) |
-| ru | telephone | child | 5 | 25.0% | 63.6% | 29.4% | 59.1% | – | 100.0% | 6.3 | 80.0% | 40.0% | – | 0.216 | PER 0.250 (need ≤ 0.1)<br>sound WER 0.591 (need ≤ 0.2)<br>language match share 0.800 (need ≥ 0.9)<br>sentence mark match share 0.400 (need ≥ 0.85) |
-| ru | wideband | any | 5 | 18.8% | 68.2% | 33.0% | 59.1% | – | 100.0% | 9.5 | 80.0% | 80.0% | – | 0.287 | PER 0.188 (need ≤ 0.1)<br>sound WER 0.591 (need ≤ 0.2)<br>language match share 0.800 (need ≥ 0.9)<br>sentence mark match share 0.800 (need ≥ 0.9) |
-| ru | wideband | child | 5 | 22.3% | 54.5% | 30.3% | 50.0% | – | 100.0% | 7.4 | 80.0% | 40.0% | – | 0.273 | PER 0.223 (need ≤ 0.1)<br>sound WER 0.500 (need ≤ 0.2)<br>language match share 0.800 (need ≥ 0.9)<br>sentence mark match share 0.400 (need ≥ 0.9) |
-| hi | telephone | any | 5 | 12.3% | 33.3% | 15.4% | 29.2% | – | – | 8.3 | 100.0% | 80.0% | – | 0.239 | PER 0.123 (need ≤ 0.1)<br>sound WER 0.292 (need ≤ 0.2)<br>sentence mark match share 0.800 (need ≥ 0.85) |
-| hi | telephone | child | 5 | 14.8% | 25.0% | 16.7% | 25.0% | – | – | 7.1 | 100.0% | 80.0% | – | 0.292 | PER 0.148 (need ≤ 0.1)<br>sound WER 0.250 (need ≤ 0.2)<br>sentence mark match share 0.800 (need ≥ 0.85) |
-| hi | wideband | any | 5 | 9.9% | 20.8% | 11.5% | 20.8% | – | – | 7.7 | 100.0% | 80.0% | – | 0.268 | sound WER 0.208 (need ≤ 0.2)<br>sentence mark match share 0.800 (need ≥ 0.9) |
-| hi | wideband | child | 5 | 13.6% | 25.0% | 14.1% | 25.0% | – | – | 7.1 | 100.0% | 80.0% | – | 0.311 | PER 0.136 (need ≤ 0.1)<br>sound WER 0.250 (need ≤ 0.2)<br>sentence mark match share 0.800 (need ≥ 0.9) |
-| zh | telephone | any | 5 | 1.1% | – | 15.2% | 9.1% | 9.1% | – | 6.0 | 100.0% | 60.0% | – | 0.118 | sentence mark match share 0.600 (need ≥ 0.85) |
-| zh | telephone | child | 5 | 7.9% | – | 30.3% | 24.2% | 24.2% | – | 7.1 | 100.0% | 60.0% | – | 0.125 | sound WER 0.242 (need ≤ 0.2)<br>tone error 0.242 (need ≤ 0.15)<br>sentence mark match share 0.600 (need ≥ 0.85) |
-| zh | wideband | any | 5 | 5.6% | – | 24.2% | 18.2% | 12.1% | – | 5.4 | 100.0% | 60.0% | – | 0.190 | sentence mark match share 0.600 (need ≥ 0.9) |
-| zh | wideband | child | 5 | 9.0% | – | 30.3% | 24.2% | 12.1% | – | 7.9 | 100.0% | 60.0% | – | 0.195 | sound WER 0.242 (need ≤ 0.2)<br>sentence mark match share 0.600 (need ≥ 0.9) |
+| en | telephone | any | 5 | 5.4% | 25.0% | 11.2% | 25.0% | – | 100.0% | 7.5 | 100.0% | 60.0% | – | 0.198 | sound WER 0.250 (need ≤ 0.2)<br>sentence mark match share 0.600 (need ≥ 0.85) |
+| en | telephone | child | 5 | 12.4% | 44.4% | 19.9% | 41.7% | – | 100.0% | 7.0 | 100.0% | 60.0% | – | 0.232 | PER 0.124 (need ≤ 0.1)<br>sound WER 0.417 (need ≤ 0.2)<br>sentence mark match share 0.600 (need ≥ 0.85) |
+| en | wideband | any | 5 | 5.4% | 19.4% | 8.1% | 19.4% | – | 100.0% | 6.2 | 100.0% | 60.0% | – | 0.258 | sentence mark match share 0.600 (need ≥ 0.9) |
+| en | wideband | child | 5 | 27.1% | 52.8% | 39.8% | 61.1% | – | 100.0% | 5.9 | 80.0% | 40.0% | – | 0.307 | PER 0.271 (need ≤ 0.1)<br>sound WER 0.611 (need ≤ 0.2)<br>language match share 0.800 (need ≥ 0.9)<br>sentence mark match share 0.400 (need ≥ 0.9) |
+| ru | telephone | any | 5 | 19.6% | 68.2% | 33.0% | 59.1% | – | 100.0% | 8.5 | 80.0% | 80.0% | – | 0.246 | PER 0.196 (need ≤ 0.1)<br>sound WER 0.591 (need ≤ 0.2)<br>language match share 0.800 (need ≥ 0.9)<br>sentence mark match share 0.800 (need ≥ 0.85) |
+| ru | telephone | child | 5 | 25.0% | 63.6% | 29.4% | 59.1% | – | 100.0% | 6.3 | 80.0% | 40.0% | – | 0.235 | PER 0.250 (need ≤ 0.1)<br>sound WER 0.591 (need ≤ 0.2)<br>language match share 0.800 (need ≥ 0.9)<br>sentence mark match share 0.400 (need ≥ 0.85) |
+| ru | wideband | any | 5 | 18.8% | 68.2% | 33.0% | 59.1% | – | 100.0% | 9.5 | 80.0% | 80.0% | – | 0.298 | PER 0.188 (need ≤ 0.1)<br>sound WER 0.591 (need ≤ 0.2)<br>language match share 0.800 (need ≥ 0.9)<br>sentence mark match share 0.800 (need ≥ 0.9) |
+| ru | wideband | child | 5 | 22.3% | 54.5% | 30.3% | 50.0% | – | 100.0% | 7.4 | 80.0% | 40.0% | – | 0.301 | PER 0.223 (need ≤ 0.1)<br>sound WER 0.500 (need ≤ 0.2)<br>language match share 0.800 (need ≥ 0.9)<br>sentence mark match share 0.400 (need ≥ 0.9) |
+| hi | telephone | any | 5 | 12.3% | 33.3% | 15.4% | 29.2% | – | – | 8.3 | 100.0% | 80.0% | – | 0.253 | PER 0.123 (need ≤ 0.1)<br>sound WER 0.292 (need ≤ 0.2)<br>sentence mark match share 0.800 (need ≥ 0.85) |
+| hi | telephone | child | 5 | 14.8% | 25.0% | 16.7% | 25.0% | – | – | 7.1 | 100.0% | 80.0% | – | 0.302 | PER 0.148 (need ≤ 0.1)<br>sound WER 0.250 (need ≤ 0.2)<br>sentence mark match share 0.800 (need ≥ 0.85) |
+| hi | wideband | any | 5 | 9.9% | 20.8% | 11.5% | 20.8% | – | – | 7.7 | 100.0% | 80.0% | – | 0.308 | sound WER 0.208 (need ≤ 0.2)<br>sentence mark match share 0.800 (need ≥ 0.9) |
+| hi | wideband | child | 5 | 13.6% | 25.0% | 14.1% | 25.0% | – | – | 7.1 | 100.0% | 80.0% | – | 0.348 | PER 0.136 (need ≤ 0.1)<br>sound WER 0.250 (need ≤ 0.2)<br>sentence mark match share 0.800 (need ≥ 0.9) |
+| zh | telephone | any | 5 | 1.1% | – | 15.2% | 9.1% | 9.1% | – | 6.0 | 100.0% | 60.0% | – | 0.139 | sentence mark match share 0.600 (need ≥ 0.85) |
+| zh | telephone | child | 5 | 7.9% | – | 30.3% | 24.2% | 24.2% | – | 7.1 | 100.0% | 60.0% | – | 0.145 | sound WER 0.242 (need ≤ 0.2)<br>tone error 0.242 (need ≤ 0.15)<br>sentence mark match share 0.600 (need ≥ 0.85) |
+| zh | wideband | any | 5 | 5.6% | – | 24.2% | 18.2% | 12.1% | – | 5.4 | 100.0% | 60.0% | – | 0.216 | sentence mark match share 0.600 (need ≥ 0.9) |
+| zh | wideband | child | 5 | 9.0% | – | 30.3% | 24.2% | 12.1% | – | 7.9 | 100.0% | 60.0% | – | 0.213 | sound WER 0.242 (need ≤ 0.2)<br>sentence mark match share 0.600 (need ≥ 0.9) |
 
 ## tiers
 
 | Language | Tier | Presets | Cases | PER | WER | CER | Sound WER | Tone error | Stress hits | Time (ms) | Language right | Mark right | Mode hits | RTF | Gates |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| en | low | male | 2 | 12.0% | 33.3% | 21.2% | 33.3% | – | – | 5.3 | 100.0% | 100.0% | – | 0.266 | PER 0.120 (need ≤ 0.1) |
-| en | medium | male | 2 | 12.0% | 33.3% | 24.2% | 33.3% | – | – | 7.3 | 100.0% | 100.0% | – | 0.266 | PER 0.120 (need ≤ 0.1) |
-| en | high | male | 2 | 96.0% | 100.0% | 100.0% | 111.1% | – | – | – | 0.0% | 100.0% | – | 0.737 | PER 0.960 (need ≤ 0.1) |
-| en | ultra | male | 2 | 84.0% | 100.0% | 81.8% | 100.0% | – | – | – | 100.0% | 100.0% | – | 0.837 | PER 0.840 (need ≤ 0.1) |
-| en | studio | male | 2 | 68.0% | 77.8% | 60.6% | 77.8% | – | – | 30.7 | 100.0% | 50.0% | – | 0.800 | PER 0.680 (need ≤ 0.1)<br>sentence mark match share 0.500 (need ≥ 0.9) |
-| ru | low | male | 2 | 26.7% | 50.0% | 20.0% | 50.0% | – | 50.0% | 8.4 | 50.0% | 100.0% | – | 0.368 | PER 0.267 (need ≤ 0.1)<br>stress hit share 0.500 (need ≥ 0.9) |
-| ru | medium | male | 2 | 26.7% | 50.0% | 20.0% | 50.0% | – | 50.0% | 8.4 | 50.0% | 100.0% | – | 0.398 | PER 0.267 (need ≤ 0.1)<br>stress hit share 0.500 (need ≥ 0.9) |
-| ru | high | male | 2 | 66.7% | 150.0% | 53.3% | 150.0% | – | 0.0% | – | 50.0% | 50.0% | – | 0.529 | PER 0.667 (need ≤ 0.1)<br>stress hit share 0.000 (need ≥ 0.9)<br>sentence mark match share 0.500 (need ≥ 0.9) |
-| ru | ultra | male | 2 | 40.0% | 50.0% | 40.0% | 50.0% | – | 50.0% | 11.8 | 50.0% | 100.0% | – | 0.562 | PER 0.400 (need ≤ 0.1)<br>stress hit share 0.500 (need ≥ 0.9) |
-| ru | studio | male | 2 | 13.3% | 25.0% | 13.3% | 25.0% | – | 100.0% | 7.9 | 50.0% | 100.0% | – | 0.468 | PER 0.133 (need ≤ 0.1) |
-| hi | low | male | 2 | 64.3% | 80.0% | 73.3% | 80.0% | – | – | 26.5 | 100.0% | 100.0% | – | 0.561 | PER 0.643 (need ≤ 0.1) |
-| hi | medium | male | 2 | 42.9% | 60.0% | 53.3% | 60.0% | – | – | 11.5 | 100.0% | 100.0% | – | 0.612 | PER 0.429 (need ≤ 0.1) |
-| hi | high | male | 2 | 78.6% | 100.0% | 86.7% | 100.0% | – | – | – | 100.0% | 100.0% | – | 1.256 | PER 0.786 (need ≤ 0.1) |
-| hi | ultra | male | 2 | 78.6% | 100.0% | 73.3% | 100.0% | – | – | – | 100.0% | 100.0% | – | 0.896 | PER 0.786 (need ≤ 0.1) |
-| hi | studio | male | 2 | 64.3% | 100.0% | 66.7% | 100.0% | – | – | – | 100.0% | 100.0% | – | 0.782 | PER 0.643 (need ≤ 0.1) |
-| zh | low | male | 2 | 35.3% | – | 100.0% | 100.0% | 50.0% | – | 6.2 | 50.0% | 100.0% | – | 0.355 | PER 0.353 (need ≤ 0.1) |
-| zh | medium | male | 2 | 11.8% | – | 116.7% | 100.0% | 33.3% | – | 5.0 | 50.0% | 100.0% | – | 0.324 | PER 0.118 (need ≤ 0.1) |
-| zh | high | male | 2 | 35.3% | – | 83.3% | 66.7% | 33.3% | – | 6.2 | 50.0% | 50.0% | – | 0.630 | PER 0.353 (need ≤ 0.1)<br>sentence mark match share 0.500 (need ≥ 0.9) |
-| zh | ultra | male | 2 | 23.5% | – | 50.0% | 50.0% | 33.3% | – | 6.2 | 50.0% | 100.0% | – | 0.559 | PER 0.235 (need ≤ 0.1) |
-| zh | studio | male | 2 | 29.4% | – | 50.0% | 50.0% | 16.7% | – | 6.2 | 50.0% | 100.0% | – | 0.497 | PER 0.294 (need ≤ 0.1) |
+| en | low | male | 2 | 12.0% | 33.3% | 21.2% | 33.3% | – | – | 5.3 | 100.0% | 100.0% | – | 0.299 | PER 0.120 (need ≤ 0.1) |
+| en | medium | male | 2 | 12.0% | 33.3% | 24.2% | 33.3% | – | – | 7.3 | 100.0% | 100.0% | – | 0.315 | PER 0.120 (need ≤ 0.1) |
+| en | high | male | 2 | 96.0% | 100.0% | 100.0% | 111.1% | – | – | – | 0.0% | 100.0% | – | 0.726 | PER 0.960 (need ≤ 0.1) |
+| en | ultra | male | 2 | 84.0% | 100.0% | 81.8% | 100.0% | – | – | – | 100.0% | 100.0% | – | 0.720 | PER 0.840 (need ≤ 0.1) |
+| en | studio | male | 2 | 68.0% | 77.8% | 60.6% | 77.8% | – | – | 30.7 | 100.0% | 50.0% | – | 0.682 | PER 0.680 (need ≤ 0.1)<br>sentence mark match share 0.500 (need ≥ 0.9) |
+| ru | low | male | 2 | 26.7% | 50.0% | 20.0% | 50.0% | – | 50.0% | 8.4 | 50.0% | 100.0% | – | 0.377 | PER 0.267 (need ≤ 0.1)<br>stress hit share 0.500 (need ≥ 0.9) |
+| ru | medium | male | 2 | 26.7% | 50.0% | 20.0% | 50.0% | – | 50.0% | 8.4 | 50.0% | 100.0% | – | 0.396 | PER 0.267 (need ≤ 0.1)<br>stress hit share 0.500 (need ≥ 0.9) |
+| ru | high | male | 2 | 66.7% | 150.0% | 53.3% | 150.0% | – | 0.0% | – | 50.0% | 50.0% | – | 0.561 | PER 0.667 (need ≤ 0.1)<br>stress hit share 0.000 (need ≥ 0.9)<br>sentence mark match share 0.500 (need ≥ 0.9) |
+| ru | ultra | male | 2 | 40.0% | 50.0% | 40.0% | 50.0% | – | 50.0% | 11.8 | 50.0% | 100.0% | – | 0.559 | PER 0.400 (need ≤ 0.1)<br>stress hit share 0.500 (need ≥ 0.9) |
+| ru | studio | male | 2 | 13.3% | 25.0% | 13.3% | 25.0% | – | 100.0% | 7.9 | 50.0% | 100.0% | – | 0.522 | PER 0.133 (need ≤ 0.1) |
+| hi | low | male | 2 | 64.3% | 80.0% | 73.3% | 80.0% | – | – | 26.5 | 100.0% | 100.0% | – | 0.562 | PER 0.643 (need ≤ 0.1) |
+| hi | medium | male | 2 | 42.9% | 60.0% | 53.3% | 60.0% | – | – | 11.5 | 100.0% | 100.0% | – | 0.547 | PER 0.429 (need ≤ 0.1) |
+| hi | high | male | 2 | 78.6% | 100.0% | 86.7% | 100.0% | – | – | – | 100.0% | 100.0% | – | 0.943 | PER 0.786 (need ≤ 0.1) |
+| hi | ultra | male | 2 | 78.6% | 100.0% | 73.3% | 100.0% | – | – | – | 100.0% | 100.0% | – | 0.724 | PER 0.786 (need ≤ 0.1) |
+| hi | studio | male | 2 | 64.3% | 100.0% | 66.7% | 100.0% | – | – | – | 100.0% | 100.0% | – | 0.716 | PER 0.643 (need ≤ 0.1) |
+| zh | low | male | 2 | 35.3% | – | 100.0% | 100.0% | 50.0% | – | 6.2 | 50.0% | 100.0% | – | 0.329 | PER 0.353 (need ≤ 0.1) |
+| zh | medium | male | 2 | 11.8% | – | 116.7% | 100.0% | 33.3% | – | 5.0 | 50.0% | 100.0% | – | 0.361 | PER 0.118 (need ≤ 0.1) |
+| zh | high | male | 2 | 35.3% | – | 83.3% | 66.7% | 33.3% | – | 6.2 | 50.0% | 50.0% | – | 0.560 | PER 0.353 (need ≤ 0.1)<br>sentence mark match share 0.500 (need ≥ 0.9) |
+| zh | ultra | male | 2 | 23.5% | – | 50.0% | 50.0% | 33.3% | – | 6.2 | 50.0% | 100.0% | – | 0.529 | PER 0.235 (need ≤ 0.1) |
+| zh | studio | male | 2 | 29.4% | – | 50.0% | 50.0% | 16.7% | – | 6.2 | 50.0% | 100.0% | – | 0.427 | PER 0.294 (need ≤ 0.1) |
 
 ## whisper
 
 | Language | Tier | Presets | Cases | PER | WER | CER | Sound WER | Tone error | Stress hits | Time (ms) | Language right | Mark right | Mode hits | RTF | Gates |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| en | telephone | male, female | 20 | 14.6% | 38.6% | 20.3% | 38.6% | – | 100.0% | 9.7 | 100.0% | 60.0% | 75.0% | 0.211 | WER 0.386 (need ≤ 0.35) |
-| en | telephone | male | 10 | 15.9% | 44.3% | 24.4% | 44.3% | – | 100.0% | 9.6 | 100.0% | 60.0% | 70.0% | 0.233 | – |
-| en | telephone | female | 10 | 13.4% | 32.9% | 16.2% | 32.9% | – | 100.0% | 9.8 | 100.0% | 60.0% | 80.0% | 0.188 | – |
-| en | narrowband | male, female | 20 | 11.2% | 25.9% | 13.4% | 25.9% | – | 100.0% | 8.9 | 100.0% | 70.0% | 95.0% | 0.202 | Pass |
-| en | narrowband | male | 10 | 8.3% | 22.8% | 9.7% | 22.8% | – | 100.0% | 8.1 | 100.0% | 70.0% | 90.0% | 0.201 | – |
-| en | narrowband | female | 10 | 14.1% | 29.1% | 17.1% | 29.1% | – | 100.0% | 9.9 | 100.0% | 70.0% | 100.0% | 0.202 | – |
-| en | wideband | male, female | 20 | 12.5% | 29.1% | 15.3% | 29.1% | – | 100.0% | 9.6 | 100.0% | 65.0% | 80.0% | 0.230 | WER 0.291 (need ≤ 0.25) |
-| en | wideband | male | 10 | 14.1% | 34.2% | 17.1% | 34.2% | – | 100.0% | 8.5 | 100.0% | 70.0% | 90.0% | 0.242 | – |
-| en | wideband | female | 10 | 10.8% | 24.1% | 13.5% | 24.1% | – | 100.0% | 10.6 | 100.0% | 60.0% | 70.0% | 0.217 | – |
-| en | minimal | male, female | 20 | 12.6% | 29.7% | 15.7% | 29.7% | – | 100.0% | 9.5 | 100.0% | 70.0% | 90.0% | 0.255 | WER 0.297 (need ≤ 0.25) |
-| en | minimal | male | 10 | 14.1% | 34.2% | 17.1% | 34.2% | – | 100.0% | 8.2 | 100.0% | 70.0% | 90.0% | 0.264 | – |
-| en | minimal | female | 10 | 11.2% | 25.3% | 14.4% | 25.3% | – | 100.0% | 10.7 | 100.0% | 70.0% | 90.0% | 0.247 | – |
-| ru | telephone | male, female | 20 | 14.8% | 52.3% | 20.8% | 46.6% | – | 96.1% | 8.8 | 100.0% | 70.0% | 90.0% | 0.274 | WER 0.523 (need ≤ 0.35) |
-| ru | telephone | male | 10 | 19.4% | 56.8% | 24.1% | 50.0% | – | 96.0% | 8.6 | 100.0% | 60.0% | 80.0% | 0.316 | – |
-| ru | telephone | female | 10 | 10.2% | 47.7% | 17.5% | 43.2% | – | 96.2% | 9.0 | 100.0% | 80.0% | 100.0% | 0.232 | – |
-| ru | narrowband | male, female | 20 | 15.5% | 59.1% | 22.9% | 56.8% | – | 93.3% | 9.1 | 100.0% | 80.0% | 100.0% | 0.294 | Pass |
-| ru | narrowband | male | 10 | 16.7% | 56.8% | 24.5% | 56.8% | – | 90.9% | 8.7 | 100.0% | 80.0% | 100.0% | 0.333 | – |
-| ru | narrowband | female | 10 | 14.4% | 61.4% | 21.2% | 56.8% | – | 95.7% | 9.5 | 100.0% | 80.0% | 100.0% | 0.255 | – |
-| ru | wideband | male, female | 20 | 13.2% | 56.8% | 19.1% | 53.4% | – | 95.8% | 8.8 | 100.0% | 80.0% | 80.0% | 0.297 | WER 0.568 (need ≤ 0.25) |
-| ru | wideband | male | 10 | 13.4% | 59.1% | 19.8% | 56.8% | – | 95.7% | 9.2 | 100.0% | 80.0% | 80.0% | 0.313 | – |
-| ru | wideband | female | 10 | 13.0% | 54.5% | 18.4% | 50.0% | – | 96.0% | 8.3 | 100.0% | 80.0% | 80.0% | 0.280 | – |
-| ru | minimal | male, female | 20 | 15.0% | 59.1% | 21.2% | 54.5% | – | 95.8% | 9.0 | 100.0% | 80.0% | 80.0% | 0.310 | PER 0.150 (need ≤ 0.15)<br>WER 0.591 (need ≤ 0.25) |
-| ru | minimal | male | 10 | 16.2% | 59.1% | 23.1% | 54.5% | – | 95.8% | 9.4 | 100.0% | 80.0% | 80.0% | 0.322 | – |
-| ru | minimal | female | 10 | 13.9% | 59.1% | 19.3% | 54.5% | – | 95.8% | 8.6 | 100.0% | 80.0% | 80.0% | 0.298 | – |
-| hi | telephone | male, female | 20 | 19.7% | 42.0% | 22.6% | 41.0% | – | – | 14.0 | 95.0% | 80.0% | 95.0% | 0.395 | WER 0.420 (need ≤ 0.35) |
-| hi | telephone | male | 10 | 25.8% | 50.0% | 28.6% | 48.0% | – | – | 13.8 | 90.0% | 80.0% | 90.0% | 0.448 | – |
-| hi | telephone | female | 10 | 13.5% | 34.0% | 16.6% | 34.0% | – | – | 14.2 | 100.0% | 80.0% | 100.0% | 0.340 | – |
-| hi | narrowband | male, female | 20 | 19.4% | 40.0% | 22.9% | 39.0% | – | – | 17.7 | 100.0% | 80.0% | 100.0% | 0.371 | Pass |
-| hi | narrowband | male | 10 | 27.0% | 52.0% | 30.9% | 50.0% | – | – | 20.4 | 100.0% | 80.0% | 100.0% | 0.393 | – |
-| hi | narrowband | female | 10 | 11.8% | 28.0% | 14.9% | 28.0% | – | – | 15.4 | 100.0% | 80.0% | 100.0% | 0.349 | – |
-| hi | wideband | male, female | 20 | 20.2% | 39.0% | 22.9% | 39.0% | – | – | 19.0 | 100.0% | 80.0% | 95.0% | 0.386 | PER 0.202 (need ≤ 0.15)<br>WER 0.390 (need ≤ 0.25) |
-| hi | wideband | male | 10 | 24.7% | 48.0% | 28.0% | 48.0% | – | – | 16.7 | 100.0% | 80.0% | 90.0% | 0.398 | – |
-| hi | wideband | female | 10 | 15.7% | 30.0% | 17.7% | 30.0% | – | – | 21.1 | 100.0% | 80.0% | 100.0% | 0.374 | – |
-| hi | minimal | male, female | 20 | 18.8% | 36.0% | 21.7% | 36.0% | – | – | 17.7 | 100.0% | 80.0% | 95.0% | 0.427 | PER 0.188 (need ≤ 0.15)<br>WER 0.360 (need ≤ 0.25) |
-| hi | minimal | male | 10 | 20.8% | 40.0% | 24.0% | 40.0% | – | – | 14.1 | 100.0% | 80.0% | 90.0% | 0.456 | – |
-| hi | minimal | female | 10 | 16.9% | 32.0% | 19.4% | 32.0% | – | – | 21.2 | 100.0% | 80.0% | 100.0% | 0.397 | – |
-| zh | telephone | male, female | 20 | 17.7% | – | 59.4% | 60.2% | 34.4% | – | 22.3 | 90.0% | 70.0% | 85.0% | 0.316 | CER 0.594 (need ≤ 0.35)<br>tone error 0.344 (need ≤ 0.3) |
-| zh | telephone | male | 10 | 20.7% | – | 60.9% | 62.5% | 37.5% | – | 18.1 | 90.0% | 70.0% | 80.0% | 0.358 | – |
-| zh | telephone | female | 10 | 14.6% | – | 57.8% | 57.8% | 31.3% | – | 26.0 | 90.0% | 70.0% | 90.0% | 0.274 | – |
-| zh | narrowband | male, female | 20 | 27.7% | – | 85.2% | 85.9% | 41.4% | – | 10.0 | 80.0% | 60.0% | 95.0% | 0.341 | tone error 0.414 (need ≤ 0.25) |
-| zh | narrowband | male | 10 | 32.3% | – | 95.3% | 98.4% | 46.9% | – | 13.0 | 80.0% | 50.0% | 90.0% | 0.405 | – |
-| zh | narrowband | female | 10 | 23.2% | – | 75.0% | 73.4% | 35.9% | – | 8.0 | 80.0% | 70.0% | 100.0% | 0.275 | – |
-| zh | wideband | male, female | 20 | 15.2% | – | 60.9% | 59.4% | 32.8% | – | 12.0 | 90.0% | 60.0% | 90.0% | 0.330 | PER 0.152 (need ≤ 0.15)<br>CER 0.609 (need ≤ 0.25)<br>tone error 0.328 (need ≤ 0.25) |
-| zh | wideband | male | 10 | 15.2% | – | 57.8% | 57.8% | 32.8% | – | 14.5 | 90.0% | 60.0% | 90.0% | 0.351 | – |
-| zh | wideband | female | 10 | 15.2% | – | 64.1% | 60.9% | 32.8% | – | 9.3 | 90.0% | 60.0% | 90.0% | 0.309 | – |
-| zh | minimal | male, female | 20 | 14.6% | – | 57.8% | 55.5% | 28.9% | – | 13.6 | 90.0% | 60.0% | 90.0% | 0.345 | CER 0.578 (need ≤ 0.25)<br>tone error 0.289 (need ≤ 0.25) |
-| zh | minimal | male | 10 | 15.2% | – | 56.3% | 54.7% | 29.7% | – | 14.0 | 90.0% | 60.0% | 90.0% | 0.368 | – |
-| zh | minimal | female | 10 | 14.0% | – | 59.4% | 56.3% | 28.1% | – | 13.1 | 90.0% | 60.0% | 90.0% | 0.322 | – |
+| en | telephone | male, female | 20 | 14.6% | 38.6% | 20.3% | 38.6% | – | 100.0% | 9.7 | 100.0% | 60.0% | 75.0% | 0.244 | WER 0.386 (need ≤ 0.35) |
+| en | telephone | male | 10 | 15.9% | 44.3% | 24.4% | 44.3% | – | 100.0% | 9.6 | 100.0% | 60.0% | 70.0% | 0.265 | – |
+| en | telephone | female | 10 | 13.4% | 32.9% | 16.2% | 32.9% | – | 100.0% | 9.8 | 100.0% | 60.0% | 80.0% | 0.223 | – |
+| en | narrowband | male, female | 20 | 11.2% | 25.9% | 13.4% | 25.9% | – | 100.0% | 8.9 | 100.0% | 70.0% | 95.0% | 0.235 | Pass |
+| en | narrowband | male | 10 | 8.3% | 22.8% | 9.7% | 22.8% | – | 100.0% | 8.1 | 100.0% | 70.0% | 90.0% | 0.235 | – |
+| en | narrowband | female | 10 | 14.1% | 29.1% | 17.1% | 29.1% | – | 100.0% | 9.9 | 100.0% | 70.0% | 100.0% | 0.236 | – |
+| en | wideband | male, female | 20 | 12.5% | 29.1% | 15.3% | 29.1% | – | 100.0% | 9.6 | 100.0% | 65.0% | 80.0% | 0.277 | WER 0.291 (need ≤ 0.25) |
+| en | wideband | male | 10 | 14.1% | 34.2% | 17.1% | 34.2% | – | 100.0% | 8.5 | 100.0% | 70.0% | 90.0% | 0.289 | – |
+| en | wideband | female | 10 | 10.8% | 24.1% | 13.5% | 24.1% | – | 100.0% | 10.6 | 100.0% | 60.0% | 70.0% | 0.265 | – |
+| en | minimal | male, female | 20 | 12.6% | 29.7% | 15.7% | 29.7% | – | 100.0% | 9.5 | 100.0% | 70.0% | 90.0% | 0.294 | WER 0.297 (need ≤ 0.25) |
+| en | minimal | male | 10 | 14.1% | 34.2% | 17.1% | 34.2% | – | 100.0% | 8.2 | 100.0% | 70.0% | 90.0% | 0.306 | – |
+| en | minimal | female | 10 | 11.2% | 25.3% | 14.4% | 25.3% | – | 100.0% | 10.7 | 100.0% | 70.0% | 90.0% | 0.282 | – |
+| ru | telephone | male, female | 20 | 14.8% | 52.3% | 20.8% | 46.6% | – | 96.1% | 8.8 | 100.0% | 70.0% | 90.0% | 0.272 | WER 0.523 (need ≤ 0.35) |
+| ru | telephone | male | 10 | 19.4% | 56.8% | 24.1% | 50.0% | – | 96.0% | 8.6 | 100.0% | 60.0% | 80.0% | 0.303 | – |
+| ru | telephone | female | 10 | 10.2% | 47.7% | 17.5% | 43.2% | – | 96.2% | 9.0 | 100.0% | 80.0% | 100.0% | 0.241 | – |
+| ru | narrowband | male, female | 20 | 15.5% | 59.1% | 22.9% | 56.8% | – | 93.3% | 9.1 | 100.0% | 80.0% | 100.0% | 0.288 | Pass |
+| ru | narrowband | male | 10 | 16.7% | 56.8% | 24.5% | 56.8% | – | 90.9% | 8.7 | 100.0% | 80.0% | 100.0% | 0.309 | – |
+| ru | narrowband | female | 10 | 14.4% | 61.4% | 21.2% | 56.8% | – | 95.7% | 9.5 | 100.0% | 80.0% | 100.0% | 0.267 | – |
+| ru | wideband | male, female | 20 | 13.2% | 56.8% | 19.1% | 53.4% | – | 95.8% | 8.8 | 100.0% | 80.0% | 80.0% | 0.313 | WER 0.568 (need ≤ 0.25) |
+| ru | wideband | male | 10 | 13.4% | 59.1% | 19.8% | 56.8% | – | 95.7% | 9.2 | 100.0% | 80.0% | 80.0% | 0.326 | – |
+| ru | wideband | female | 10 | 13.0% | 54.5% | 18.4% | 50.0% | – | 96.0% | 8.3 | 100.0% | 80.0% | 80.0% | 0.300 | – |
+| ru | minimal | male, female | 20 | 15.0% | 59.1% | 21.2% | 54.5% | – | 95.8% | 9.0 | 100.0% | 80.0% | 80.0% | 0.328 | PER 0.150 (need ≤ 0.15)<br>WER 0.591 (need ≤ 0.25) |
+| ru | minimal | male | 10 | 16.2% | 59.1% | 23.1% | 54.5% | – | 95.8% | 9.4 | 100.0% | 80.0% | 80.0% | 0.340 | – |
+| ru | minimal | female | 10 | 13.9% | 59.1% | 19.3% | 54.5% | – | 95.8% | 8.6 | 100.0% | 80.0% | 80.0% | 0.317 | – |
+| hi | telephone | male, female | 20 | 19.7% | 42.0% | 22.6% | 41.0% | – | – | 14.0 | 95.0% | 80.0% | 95.0% | 0.386 | WER 0.420 (need ≤ 0.35) |
+| hi | telephone | male | 10 | 25.8% | 50.0% | 28.6% | 48.0% | – | – | 13.8 | 90.0% | 80.0% | 90.0% | 0.436 | – |
+| hi | telephone | female | 10 | 13.5% | 34.0% | 16.6% | 34.0% | – | – | 14.2 | 100.0% | 80.0% | 100.0% | 0.335 | – |
+| hi | narrowband | male, female | 20 | 19.4% | 40.0% | 22.9% | 39.0% | – | – | 17.7 | 100.0% | 80.0% | 100.0% | 0.374 | Pass |
+| hi | narrowband | male | 10 | 27.0% | 52.0% | 30.9% | 50.0% | – | – | 20.4 | 100.0% | 80.0% | 100.0% | 0.383 | – |
+| hi | narrowband | female | 10 | 11.8% | 28.0% | 14.9% | 28.0% | – | – | 15.4 | 100.0% | 80.0% | 100.0% | 0.365 | – |
+| hi | wideband | male, female | 20 | 20.2% | 39.0% | 22.9% | 39.0% | – | – | 19.0 | 100.0% | 80.0% | 95.0% | 0.399 | PER 0.202 (need ≤ 0.15)<br>WER 0.390 (need ≤ 0.25) |
+| hi | wideband | male | 10 | 24.7% | 48.0% | 28.0% | 48.0% | – | – | 16.7 | 100.0% | 80.0% | 90.0% | 0.418 | – |
+| hi | wideband | female | 10 | 15.7% | 30.0% | 17.7% | 30.0% | – | – | 21.1 | 100.0% | 80.0% | 100.0% | 0.380 | – |
+| hi | minimal | male, female | 20 | 18.8% | 36.0% | 21.7% | 36.0% | – | – | 17.7 | 100.0% | 80.0% | 95.0% | 0.419 | PER 0.188 (need ≤ 0.15)<br>WER 0.360 (need ≤ 0.25) |
+| hi | minimal | male | 10 | 20.8% | 40.0% | 24.0% | 40.0% | – | – | 14.1 | 100.0% | 80.0% | 90.0% | 0.437 | – |
+| hi | minimal | female | 10 | 16.9% | 32.0% | 19.4% | 32.0% | – | – | 21.2 | 100.0% | 80.0% | 100.0% | 0.400 | – |
+| zh | telephone | male, female | 20 | 17.7% | – | 59.4% | 60.2% | 34.4% | – | 22.3 | 90.0% | 70.0% | 85.0% | 0.301 | CER 0.594 (need ≤ 0.35)<br>tone error 0.344 (need ≤ 0.3) |
+| zh | telephone | male | 10 | 20.7% | – | 60.9% | 62.5% | 37.5% | – | 18.1 | 90.0% | 70.0% | 80.0% | 0.332 | – |
+| zh | telephone | female | 10 | 14.6% | – | 57.8% | 57.8% | 31.3% | – | 26.0 | 90.0% | 70.0% | 90.0% | 0.271 | – |
+| zh | narrowband | male, female | 20 | 27.7% | – | 85.2% | 85.9% | 41.4% | – | 10.0 | 80.0% | 60.0% | 95.0% | 0.333 | tone error 0.414 (need ≤ 0.25) |
+| zh | narrowband | male | 10 | 32.3% | – | 95.3% | 98.4% | 46.9% | – | 13.0 | 80.0% | 50.0% | 90.0% | 0.379 | – |
+| zh | narrowband | female | 10 | 23.2% | – | 75.0% | 73.4% | 35.9% | – | 8.0 | 80.0% | 70.0% | 100.0% | 0.285 | – |
+| zh | wideband | male, female | 20 | 15.2% | – | 60.9% | 59.4% | 32.8% | – | 12.0 | 90.0% | 60.0% | 90.0% | 0.334 | PER 0.152 (need ≤ 0.15)<br>CER 0.609 (need ≤ 0.25)<br>tone error 0.328 (need ≤ 0.25) |
+| zh | wideband | male | 10 | 15.2% | – | 57.8% | 57.8% | 32.8% | – | 14.5 | 90.0% | 60.0% | 90.0% | 0.349 | – |
+| zh | wideband | female | 10 | 15.2% | – | 64.1% | 60.9% | 32.8% | – | 9.3 | 90.0% | 60.0% | 90.0% | 0.319 | – |
+| zh | minimal | male, female | 20 | 14.6% | – | 57.8% | 55.5% | 28.9% | – | 13.6 | 90.0% | 60.0% | 90.0% | 0.358 | CER 0.578 (need ≤ 0.25)<br>tone error 0.289 (need ≤ 0.25) |
+| zh | minimal | male | 10 | 15.2% | – | 56.3% | 54.7% | 29.7% | – | 14.0 | 90.0% | 60.0% | 90.0% | 0.375 | – |
+| zh | minimal | female | 10 | 14.0% | – | 59.4% | 56.3% | 28.1% | – | 13.1 | 90.0% | 60.0% | 90.0% | 0.341 | – |
 
 ## modes
 
 | Language | Tier | Presets | Cases | PER | WER | CER | Sound WER | Tone error | Stress hits | Time (ms) | Language right | Mark right | Mode hits | RTF | Gates |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| en | telephone | male | 2 | 13.2% | 50.0% | 17.1% | 50.0% | – | 100.0% | 9.0 | 100.0% | 100.0% | 100.0% | 0.489 | – |
-| ru | telephone | male | 2 | 14.9% | 40.0% | 19.6% | 30.0% | – | 100.0% | 9.8 | 100.0% | 100.0% | 100.0% | 0.319 | – |
-| hi | telephone | male | 2 | 0.0% | 0.0% | 0.0% | 0.0% | – | – | 8.6 | 100.0% | 100.0% | 100.0% | 0.608 | – |
-| zh | telephone | male | 2 | 6.8% | – | 12.5% | 25.0% | 6.3% | – | 7.5 | 100.0% | 100.0% | 100.0% | 0.518 | – |
-| all | telephone | male | 8 | 11.0% | 37.0% | 15.4% | 30.6% | 6.3% | 100.0% | 9.0 | 100.0% | 100.0% | 100.0% | 0.457 | Pass |
-| en | narrowband | male | 2 | 13.2% | 50.0% | 15.7% | 50.0% | – | 100.0% | 7.7 | 100.0% | 100.0% | 100.0% | 0.151 | – |
-| ru | narrowband | male | 2 | 16.0% | 55.0% | 26.1% | 50.0% | – | 100.0% | 6.9 | 100.0% | 100.0% | 100.0% | 0.225 | – |
-| hi | narrowband | male | 2 | 6.7% | 12.5% | 10.0% | 12.5% | – | – | 13.3 | 100.0% | 100.0% | 100.0% | 0.252 | – |
-| zh | narrowband | male | 2 | 34.1% | – | 137.5% | 137.5% | 62.5% | – | 5.3 | 50.0% | 50.0% | 100.0% | 0.228 | – |
-| all | narrowband | male | 8 | 17.4% | 45.7% | 28.8% | 67.7% | 62.5% | 100.0% | 8.3 | 87.5% | 87.5% | 100.0% | 0.211 | – |
-| en | wideband | male | 2 | 11.8% | 50.0% | 14.3% | 50.0% | – | 100.0% | 6.1 | 100.0% | 100.0% | 100.0% | 0.770 | – |
-| ru | wideband | male | 2 | 14.9% | 70.0% | 21.7% | 60.0% | – | 100.0% | 9.5 | 100.0% | 100.0% | 100.0% | 0.556 | – |
-| hi | wideband | male | 2 | 6.7% | 12.5% | 10.0% | 12.5% | – | – | 7.6 | 100.0% | 100.0% | 100.0% | 0.945 | – |
-| zh | wideband | male | 2 | 0.0% | – | 6.3% | 18.8% | 6.3% | – | 7.1 | 100.0% | 100.0% | 100.0% | 0.664 | – |
-| all | wideband | male | 8 | 10.2% | 52.2% | 16.3% | 40.3% | 6.3% | 100.0% | 7.9 | 100.0% | 100.0% | 100.0% | 0.700 | Pass |
-| en | minimal | male | 2 | 11.8% | 50.0% | 14.3% | 50.0% | – | 100.0% | 6.1 | 100.0% | 100.0% | 100.0% | 0.222 | – |
-| ru | minimal | male | 2 | 21.3% | 75.0% | 28.3% | 65.0% | – | 100.0% | 9.4 | 100.0% | 100.0% | 100.0% | 0.258 | – |
-| hi | minimal | male | 2 | 0.0% | 0.0% | 0.0% | 0.0% | – | – | 7.7 | 100.0% | 100.0% | 100.0% | 0.269 | – |
-| zh | minimal | male | 2 | 0.0% | – | 6.3% | 18.8% | 6.3% | – | 7.1 | 100.0% | 100.0% | 100.0% | 0.199 | – |
-| all | minimal | male | 8 | 11.9% | 52.2% | 17.8% | 40.3% | 6.3% | 100.0% | 7.8 | 100.0% | 100.0% | 100.0% | 0.236 | Pass |
-| en | low | male | 2 | 13.2% | 61.1% | 34.3% | 61.1% | – | – | 4.5 | 100.0% | 100.0% | 100.0% | 0.356 | – |
-| ru | low | male | 2 | 22.3% | 95.0% | 34.8% | 90.0% | – | 100.0% | 11.5 | 100.0% | 100.0% | 100.0% | 0.301 | – |
-| hi | low | male | 2 | 0.0% | 0.0% | 0.0% | 0.0% | – | – | 9.5 | 100.0% | 100.0% | 100.0% | 0.351 | – |
-| zh | low | male | 2 | 2.3% | – | 12.5% | 25.0% | 12.5% | – | 6.7 | 100.0% | 100.0% | 100.0% | 0.276 | – |
-| all | low | male | 8 | 13.1% | 65.2% | 27.9% | 53.2% | 12.5% | 100.0% | 8.6 | 100.0% | 100.0% | 100.0% | 0.317 | Pass |
-| en | medium | male | 2 | 17.6% | 61.1% | 34.3% | 61.1% | – | 100.0% | 11.4 | 100.0% | 100.0% | 100.0% | 0.306 | – |
-| ru | medium | male | 2 | 18.1% | 70.0% | 23.9% | 60.0% | – | 90.9% | 9.3 | 100.0% | 100.0% | 100.0% | 0.296 | – |
-| hi | medium | male | 2 | 16.7% | 37.5% | 20.0% | 37.5% | – | – | 12.8 | 100.0% | 50.0% | 50.0% | 0.404 | – |
-| zh | medium | male | 2 | 25.0% | – | 143.8% | 143.8% | 62.5% | – | 5.4 | 50.0% | 50.0% | 50.0% | 0.372 | – |
-| all | medium | male | 8 | 19.1% | 60.9% | 36.1% | 79.0% | 62.5% | 91.7% | 9.9 | 87.5% | 75.0% | 75.0% | 0.334 | mode match share 0.750 (need ≥ 0.9) |
-| en | high | male | 2 | 61.8% | 77.8% | 67.1% | 77.8% | – | 100.0% | 13.5 | 100.0% | 50.0% | 50.0% | 0.639 | – |
-| ru | high | male | 2 | 78.7% | 145.0% | 94.6% | 145.0% | – | 50.0% | 30.7 | 50.0% | 100.0% | 50.0% | 0.552 | – |
-| hi | high | male | 2 | 86.7% | 150.0% | 90.0% | 150.0% | – | – | 74.8 | 50.0% | 0.0% | 50.0% | 0.982 | – |
-| zh | high | male | 2 | 70.5% | – | 237.5% | 243.8% | 87.5% | – | 10.7 | 50.0% | 50.0% | 50.0% | 0.970 | – |
-| all | high | male | 8 | 73.3% | 119.6% | 95.7% | 151.6% | 87.5% | 80.0% | 24.9 | 62.5% | 50.0% | 50.0% | 0.743 | mode match share 0.500 (need ≥ 0.9) |
-| en | ultra | male | 2 | 35.3% | 61.1% | 42.9% | 61.1% | – | 100.0% | 7.8 | 100.0% | 100.0% | 50.0% | 0.443 | – |
-| ru | ultra | male | 2 | 57.4% | 130.0% | 63.0% | 130.0% | – | 33.3% | 21.0 | 100.0% | 100.0% | 50.0% | 0.492 | – |
-| hi | ultra | male | 2 | 36.7% | 62.5% | 40.0% | 62.5% | – | – | 21.8 | 100.0% | 50.0% | 50.0% | 0.675 | – |
-| zh | ultra | male | 2 | 13.6% | – | 43.8% | 56.3% | 31.3% | – | 9.7 | 100.0% | 100.0% | 50.0% | 0.521 | – |
-| all | ultra | male | 8 | 40.3% | 91.3% | 51.4% | 82.3% | 31.3% | 60.0% | 14.1 | 100.0% | 87.5% | 50.0% | 0.516 | mode match share 0.500 (need ≥ 0.9) |
-| en | studio | male | 2 | 23.5% | 44.4% | 32.9% | 44.4% | – | 100.0% | 7.9 | 100.0% | 100.0% | 100.0% | 0.406 | – |
-| ru | studio | male | 2 | 38.3% | 85.0% | 44.6% | 85.0% | – | 100.0% | 12.9 | 100.0% | 100.0% | 50.0% | 0.429 | – |
-| hi | studio | male | 2 | 33.3% | 75.0% | 30.0% | 75.0% | – | – | 10.6 | 100.0% | 0.0% | 50.0% | 0.558 | – |
-| zh | studio | male | 2 | 15.9% | – | 43.8% | 56.3% | 25.0% | – | 7.0 | 100.0% | 100.0% | 50.0% | 0.454 | – |
-| all | studio | male | 8 | 29.2% | 67.4% | 38.5% | 64.5% | 25.0% | 100.0% | 9.7 | 100.0% | 75.0% | 62.5% | 0.450 | mode match share 0.625 (need ≥ 0.9) |
+| en | telephone | male | 4 | 14.0% | 50.0% | 15.7% | 50.0% | – | 100.0% | 7.4 | 100.0% | 66.7% | 100.0% | 0.220 | – |
+| ru | telephone | male | 4 | 19.7% | 55.0% | 25.5% | 47.5% | – | 100.0% | 10.1 | 100.0% | 100.0% | 100.0% | 0.167 | – |
+| hi | telephone | male | 4 | 1.7% | 6.3% | 3.3% | 6.3% | – | – | 7.3 | 100.0% | 100.0% | 100.0% | 0.352 | – |
+| zh | telephone | male | 4 | 4.5% | – | 12.5% | 18.8% | 6.3% | – | 7.0 | 100.0% | 100.0% | 100.0% | 0.201 | – |
+| all | telephone | male | 16 | 12.9% | 44.6% | 18.0% | 35.5% | 6.3% | 100.0% | 8.3 | 100.0% | 91.7% | 100.0% | 0.219 | Pass |
+| en | narrowband | male | 4 | 11.8% | 47.2% | 13.6% | 47.2% | – | 100.0% | 7.0 | 100.0% | 66.7% | 100.0% | 0.204 | – |
+| ru | narrowband | male | 4 | 21.3% | 65.0% | 28.8% | 60.0% | – | 100.0% | 8.0 | 100.0% | 100.0% | 100.0% | 0.220 | – |
+| hi | narrowband | male | 4 | 5.0% | 12.5% | 8.3% | 12.5% | – | – | 9.7 | 100.0% | 100.0% | 100.0% | 0.318 | – |
+| zh | narrowband | male | 4 | 17.0% | – | 71.9% | 71.9% | 34.4% | – | 6.0 | 66.7% | 66.7% | 100.0% | 0.193 | – |
+| all | narrowband | male | 16 | 15.7% | 48.9% | 24.0% | 53.2% | 34.4% | 100.0% | 7.8 | 91.7% | 83.3% | 100.0% | 0.225 | – |
+| en | wideband | male | 4 | 11.8% | 47.2% | 13.6% | 47.2% | – | 100.0% | 6.4 | 100.0% | 66.7% | 100.0% | 0.264 | – |
+| ru | wideband | male | 4 | 16.0% | 67.5% | 23.4% | 57.5% | – | 100.0% | 9.6 | 100.0% | 100.0% | 100.0% | 0.263 | – |
+| hi | wideband | male | 4 | 5.0% | 12.5% | 6.7% | 12.5% | – | – | 6.6 | 100.0% | 100.0% | 100.0% | 0.335 | – |
+| zh | wideband | male | 4 | 1.1% | – | 9.4% | 15.6% | 6.3% | – | 6.6 | 100.0% | 100.0% | 100.0% | 0.226 | – |
+| all | wideband | male | 16 | 10.6% | 50.0% | 16.6% | 37.9% | 6.3% | 100.0% | 7.7 | 100.0% | 91.7% | 100.0% | 0.266 | Pass |
+| en | minimal | male | 4 | 11.8% | 47.2% | 13.6% | 47.2% | – | 100.0% | 6.4 | 100.0% | 66.7% | 100.0% | 0.291 | – |
+| ru | minimal | male | 4 | 17.0% | 65.0% | 24.5% | 55.0% | – | 100.0% | 9.8 | 100.0% | 100.0% | 100.0% | 0.291 | – |
+| hi | minimal | male | 4 | 1.7% | 6.3% | 1.7% | 6.3% | – | – | 6.6 | 100.0% | 100.0% | 100.0% | 0.351 | – |
+| zh | minimal | male | 4 | 1.1% | – | 9.4% | 15.6% | 6.3% | – | 6.6 | 100.0% | 100.0% | 100.0% | 0.240 | – |
+| all | minimal | male | 16 | 10.6% | 47.8% | 16.3% | 36.3% | 6.3% | 100.0% | 7.8 | 100.0% | 91.7% | 100.0% | 0.289 | Pass |
+| en | low | male | 4 | 14.0% | 58.3% | 26.4% | 58.3% | – | 100.0% | 5.8 | 100.0% | 66.7% | 100.0% | 0.319 | – |
+| ru | low | male | 4 | 21.8% | 87.5% | 32.1% | 80.0% | – | 100.0% | 11.2 | 100.0% | 100.0% | 100.0% | 0.299 | – |
+| hi | low | male | 4 | 6.7% | 25.0% | 8.3% | 25.0% | – | – | 9.1 | 100.0% | 66.7% | 100.0% | 0.407 | – |
+| zh | low | male | 4 | 1.1% | – | 9.4% | 15.6% | 9.4% | – | 6.4 | 100.0% | 100.0% | 100.0% | 0.227 | – |
+| all | low | male | 16 | 13.8% | 65.2% | 25.0% | 50.0% | 9.4% | 100.0% | 8.6 | 100.0% | 83.3% | 100.0% | 0.305 | Pass |
+| en | medium | male | 4 | 14.7% | 55.6% | 25.7% | 55.6% | – | 100.0% | 8.7 | 100.0% | 66.7% | 100.0% | 0.317 | – |
+| ru | medium | male | 4 | 22.9% | 80.0% | 28.3% | 70.0% | – | 95.0% | 11.0 | 100.0% | 100.0% | 100.0% | 0.343 | – |
+| hi | medium | male | 4 | 15.0% | 37.5% | 16.7% | 37.5% | – | – | 10.8 | 100.0% | 33.3% | 66.7% | 0.385 | – |
+| zh | medium | male | 4 | 12.5% | – | 75.0% | 75.0% | 34.4% | – | 6.2 | 66.7% | 66.7% | 66.7% | 0.343 | – |
+| all | medium | male | 16 | 17.6% | 63.0% | 29.3% | 62.9% | 34.4% | 95.7% | 9.6 | 91.7% | 66.7% | 83.3% | 0.343 | mode match share 0.833 (need ≥ 0.9) |
+| en | high | male | 4 | 67.6% | 86.1% | 71.4% | 86.1% | – | 100.0% | 17.6 | 100.0% | 33.3% | 66.7% | 0.651 | – |
+| ru | high | male | 4 | 83.5% | 127.5% | 97.3% | 127.5% | – | 50.0% | 30.7 | 33.3% | 100.0% | 66.7% | 0.539 | – |
+| hi | high | male | 4 | 83.3% | 118.8% | 83.3% | 118.8% | – | – | 51.6 | 66.7% | 0.0% | 66.7% | 0.887 | – |
+| zh | high | male | 4 | 73.9% | – | 175.0% | 178.1% | 71.9% | – | 10.7 | 66.7% | 33.3% | 66.7% | 0.662 | – |
+| all | high | male | 16 | 77.1% | 109.8% | 92.5% | 127.4% | 71.9% | 80.0% | 24.3 | 66.7% | 41.7% | 66.7% | 0.653 | mode match share 0.667 (need ≥ 0.9) |
+| en | ultra | male | 4 | 37.5% | 58.3% | 47.9% | 58.3% | – | 100.0% | 9.4 | 100.0% | 66.7% | 66.7% | 0.410 | – |
+| ru | ultra | male | 4 | 63.3% | 132.5% | 65.8% | 132.5% | – | 50.0% | 22.0 | 100.0% | 100.0% | 66.7% | 0.514 | – |
+| hi | ultra | male | 4 | 45.0% | 81.3% | 50.0% | 81.3% | – | – | 27.1 | 100.0% | 33.3% | 66.7% | 0.726 | – |
+| zh | ultra | male | 4 | 21.6% | – | 40.6% | 46.9% | 15.6% | – | 8.0 | 100.0% | 100.0% | 66.7% | 0.435 | – |
+| all | ultra | male | 16 | 45.8% | 94.6% | 55.5% | 82.3% | 15.6% | 80.0% | 14.4 | 100.0% | 75.0% | 66.7% | 0.502 | mode match share 0.667 (need ≥ 0.9) |
+| en | studio | male | 4 | 27.9% | 55.6% | 37.1% | 55.6% | – | 100.0% | 9.4 | 100.0% | 66.7% | 100.0% | 0.435 | – |
+| ru | studio | male | 4 | 53.7% | 112.5% | 56.0% | 112.5% | – | 90.0% | 14.3 | 100.0% | 100.0% | 66.7% | 0.447 | – |
+| hi | studio | male | 4 | 41.7% | 75.0% | 38.3% | 75.0% | – | – | 9.2 | 100.0% | 0.0% | 66.7% | 0.569 | – |
+| zh | studio | male | 4 | 14.8% | – | 43.8% | 50.0% | 18.8% | – | 7.0 | 100.0% | 100.0% | 66.7% | 0.411 | – |
+| all | studio | male | 16 | 37.5% | 83.7% | 46.2% | 75.0% | 18.8% | 93.8% | 10.0 | 100.0% | 66.7% | 75.0% | 0.455 | mode match share 0.750 (need ≥ 0.9) |
+
+## Mode lanes
+
+| Tier | Lane | Label | Scoring | en | ru | hi | zh | All |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| telephone | audio-only | W | label over half the span | 1/1 | 1/1 | 1/1 | 1/1 | 4/4 |
+| telephone | audio-only | f | heard arousal rise ≥ 0.3 over the neutral span | 1/1 (+0.75) | 1/1 (+0.66) | 1/1 (+0.63) | 1/1 (+0.70) | 4/4 |
+| telephone | audio-only | f | no effort label (negative control) | 1/1 | 1/1 | 1/1 | 1/1 | 4/4 |
+| telephone | calibrated | f | label over half the span | 1/1 | 1/1 | 1/1 | 1/1 | 4/4 |
+| narrowband | audio-only | W | label over half the span | 1/1 | 1/1 | 1/1 | 1/1 | 4/4 |
+| narrowband | audio-only | f | heard arousal rise ≥ 0.3 over the neutral span | 1/1 (+0.70) | 1/1 (+0.59) | 1/1 (+0.70) | 1/1 (+0.57) | 4/4 |
+| narrowband | audio-only | f | no effort label (negative control) | 1/1 | 1/1 | 1/1 | 1/1 | 4/4 |
+| narrowband | calibrated | f | label over half the span | 1/1 | 1/1 | 1/1 | 1/1 | 4/4 |
+| wideband | audio-only | W | label over half the span | 1/1 | 1/1 | 1/1 | 1/1 | 4/4 |
+| wideband | audio-only | f | heard arousal rise ≥ 0.3 over the neutral span | 1/1 (+0.56) | 1/1 (+0.80) | 1/1 (+0.64) | 1/1 (+0.53) | 4/4 |
+| wideband | audio-only | f | no effort label (negative control) | 1/1 | 1/1 | 1/1 | 1/1 | 4/4 |
+| wideband | calibrated | f | label over half the span | 1/1 | 1/1 | 1/1 | 1/1 | 4/4 |
+| minimal | audio-only | W | label over half the span | 1/1 | 1/1 | 1/1 | 1/1 | 4/4 |
+| minimal | audio-only | f | heard arousal rise ≥ 0.3 over the neutral span | 1/1 (+0.56) | 1/1 (+0.81) | 1/1 (+0.63) | 1/1 (+0.56) | 4/4 |
+| minimal | audio-only | f | no effort label (negative control) | 1/1 | 1/1 | 1/1 | 1/1 | 4/4 |
+| minimal | calibrated | f | label over half the span | 1/1 | 1/1 | 1/1 | 1/1 | 4/4 |
+| low | audio-only | W | label over half the span | 1/1 | 1/1 | 1/1 | 1/1 | 4/4 |
+| low | audio-only | f | heard arousal rise ≥ 0.3 over the neutral span | 1/1 (+0.53) | 1/1 (+0.81) | 1/1 (+0.62) | 1/1 (+0.54) | 4/4 |
+| low | audio-only | f | no effort label (negative control) | 1/1 | 1/1 | 1/1 | 1/1 | 4/4 |
+| low | calibrated | f | label over half the span | 1/1 | 1/1 | 1/1 | 1/1 | 4/4 |
+| medium | audio-only | W | label over half the span | 1/1 | 1/1 | 1/1 | 0/1 | 3/4 |
+| medium | audio-only | f | heard arousal rise ≥ 0.3 over the neutral span | 1/1 (+0.54) | 1/1 (+0.93) | 1/1 (+0.45) | 1/1 (+0.55) | 4/4 |
+| medium | audio-only | f | no effort label (negative control) | 1/1 | 1/1 | 1/1 | 1/1 | 4/4 |
+| medium | calibrated | f | label over half the span | 1/1 | 1/1 | 0/1 | 1/1 | 3/4 |
+| high | audio-only | W | label over half the span | 1/1 | 1/1 | 1/1 | 1/1 | 4/4 |
+| high | audio-only | f | heard arousal rise ≥ 0.3 over the neutral span | 1/1 (+1.25) | 1/1 (+0.89) | 1/1 (+0.54) | 1/1 (+0.76) | 4/4 |
+| high | audio-only | f | no effort label (negative control) | 1/1 | 1/1 | 1/1 | 1/1 | 4/4 |
+| high | calibrated | f | label over half the span | 0/1 | 0/1 | 0/1 | 0/1 | 0/4 |
+| ultra | audio-only | W | label over half the span | 1/1 | 1/1 | 1/1 | 1/1 | 4/4 |
+| ultra | audio-only | f | heard arousal rise ≥ 0.3 over the neutral span | 1/1 (+0.45) | 1/1 (+0.67) | 1/1 (+0.72) | 1/1 (+0.74) | 4/4 |
+| ultra | audio-only | f | no effort label (negative control) | 1/1 | 1/1 | 1/1 | 1/1 | 4/4 |
+| ultra | calibrated | f | label over half the span | 0/1 | 0/1 | 0/1 | 0/1 | 0/4 |
+| studio | audio-only | W | label over half the span | 1/1 | 1/1 | 1/1 | 1/1 | 4/4 |
+| studio | audio-only | f | heard arousal rise ≥ 0.3 over the neutral span | 1/1 (+0.81) | 1/1 (+0.95) | 1/1 (+0.77) | 1/1 (+0.57) | 4/4 |
+| studio | audio-only | f | no effort label (negative control) | 1/1 | 1/1 | 1/1 | 1/1 | 4/4 |
+| studio | calibrated | f | label over half the span | 1/1 | 0/1 | 0/1 | 0/1 | 1/4 |
+
+
+### Calibrated effort on the higher tiers
+
+`node experiments/issue-168-calibrated-3d.mjs` traces the `coherent` effort
+conditions of the calibrated lane (`experiments/issue-168-calibrated-3d.txt`).
+At low and medium, English and Mandarin pass every condition, with a
+displacement near 6 semitones, and `f` covers the utterance. At high, the
+displacement is still 6.20 and 4.51 semitones, but `steady` fails for
+both languages. The recogniser misheard the words, so their per-word pitches
+vary. It heard "Dark rick better talk to dover the village dd." for the
+English sentence, and the high-tier mode rows have 77.1% PER. The calibrated
+misses therefore follow the remaining recognition accuracy on the higher
+tiers, not the fixture. The production mode policy and the 0.9 gate stay
+unchanged, so these four mode tests keep failing until that accuracy
+improves.
 
 ## 20 worst round trips by phone error rate
 
@@ -615,6 +686,11 @@ produce zero effort spans without `options.voice`, and its regression tests
 enforce that behavior. Even detecting all four whispers yields 4 of 8 spans
 at each tier, below both mode thresholds.
 [Mode specification](https://github.com/konard/voice-simulator/issues/71).
+
+Issue 168 replaced this case: the audio-only lane now scores a neutral
+sentence followed by a loud one, keeps the whole loud sentence as a negative
+control, and moves whole-utterance `f` to the calibrated lane (see "Mode
+lanes").
 
 ### Scoring consonants in a rendered phrase
 
