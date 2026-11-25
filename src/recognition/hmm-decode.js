@@ -180,18 +180,9 @@ function restart(next, network, records, rec, settings) {
   enter(next, tree.silence.id, rec.score + silencePenalty, r, rec.end);
 }
 
-/** Best final: a word that ended at the last frame or a trailing silence. */
-function finalRecord(network, records, languages, frames, last) {
-  const { stamp, prev, prevHist } = last;
+/** The best word that ended on `end` and needs no following word. */
+function bestEndingAt(network, records, end) {
   let best = null;
-  // An input cut inside a word (a streaming phrase at its longest) ends no
-  // word on its last frame: keep the words up to the latest word end.
-  let end = -1;
-  for (const r of records) {
-    if (r.word !== null && r.end <= frames && r.end > end) {
-      end = r.end;
-    }
-  }
   for (const r of records) {
     if (
       r.word !== null &&
@@ -202,6 +193,18 @@ function finalRecord(network, records, languages, frames, last) {
       best = r;
     }
   }
+  return best;
+}
+
+/**
+ * Best final: a word that ended at the last frame or a trailing silence.
+ * An input cut inside a word (a streaming phrase at its longest) has
+ * neither: it keeps the words up to the latest word end (issue 170). Scores
+ * of different lengths are not comparable, so that end is only a fallback.
+ */
+function finalRecord(network, records, languages, frames, last) {
+  const { stamp, prev, prevHist } = last;
+  let best = bestEndingAt(network, records, frames);
   for (const lang of languages) {
     const sil = network.trees.get(lang).silence;
     const j = sil.first + 2;
@@ -212,7 +215,16 @@ function finalRecord(network, records, languages, frames, last) {
       }
     }
   }
-  return best;
+  if (best) {
+    return best;
+  }
+  let end = -1;
+  for (const r of records) {
+    if (r.word !== null && r.end < frames && r.end > end) {
+      end = r.end;
+    }
+  }
+  return end < 0 ? null : bestEndingAt(network, records, end);
 }
 
 /**
