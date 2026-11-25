@@ -184,10 +184,18 @@ function restart(next, network, records, rec, settings) {
 function finalRecord(network, records, languages, frames, last) {
   const { stamp, prev, prevHist } = last;
   let best = null;
+  // An input cut inside a word (a streaming phrase at its longest) ends no
+  // word on its last frame: keep the words up to the latest word end.
+  let end = -1;
+  for (const r of records) {
+    if (r.word !== null && r.end <= frames && r.end > end) {
+      end = r.end;
+    }
+  }
   for (const r of records) {
     if (
       r.word !== null &&
-      r.end === frames &&
+      r.end === end &&
       !network.words[r.id].before &&
       (!best || r.score > best.score)
     ) {

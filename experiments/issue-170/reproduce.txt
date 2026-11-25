@@ -1,0 +1,16 @@
+synth telephone 8000 Hz 2.42 s in 0.5 s
+clean
+  stream (16.0 s): "Her know her know her know her know her know'd." finals=["Her know her know her know her know her know'd."]
+  batch  (3.1 s): "Her know her know her know her know her know'd."
+white 20 dB
+  stream (10.5 s): "Snow alone alone alone a most." finals=["Snow alone alone alone a most."]
+  batch  (3.8 s): "Slow alone alone alone a most."
+white 10 dB
+  stream (14.2 s): "Her roanoke roanoke most." finals=["Her roanoke roanoke most."]
+  batch  (5.1 s): "Her no no no no no h."
+white noise only (-50 dBFS)
+  stream (0.3 s): flush error too-noisy
+  batch  (0.5 s): error too-noisy
+white noise only (-30 dBFS)
+  stream (0.3 s): flush error too-noisy
+  batch  (0.6 s): error too-noisy

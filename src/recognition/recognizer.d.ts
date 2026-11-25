@@ -46,6 +46,15 @@ export interface RecognitionOptions extends RecognitionEngineOptions {
    */
   oov?: boolean;
   /**
+   * Speech gate (issue 170): seconds of pitched (voiced) audio, plus the
+   * whispered spans given in `whisper`, that an input needs before it gives
+   * words. `recognize()` defaults to 0 (off); `createRecognizer()` gates
+   * every phrase and its previews with 0.1 s, so noise between phrases of
+   * a live microphone gives no text. Set 0 to hear whispers detected
+   * automatically, which have no pitch.
+   */
+  minVoiced?: number;
+  /**
    * Diagnostics: the events of the mode stage (`recognizeModes()`'s
    * `trace`), such as the neutral context the effort is measured against.
    */

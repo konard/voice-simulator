@@ -3118,6 +3118,13 @@ export {
   resample,
   type StreamResampler,
 } from './audio/resample.js';
+export {
+  addNoise,
+  createNoise,
+  NOISE_TYPES,
+  type NoiseOptions,
+  type NoiseType,
+} from './audio/noise.js';
 
 // Anatomy (issue 5): teeth, tongue, hard and soft palate, piriform fossae.
 export interface RenderOptions {

@@ -1,0 +1,6 @@
+pink -60..-40: speech 4.91 s, speech&periodic 1.67 s, pitch voiced 0.01 s, whisper [[0.03,5]] -> "As an air."
+pink -50..-45: speech 4.98 s, speech&periodic 1.38 s, pitch voiced 0.02 s, whisper [[0.02,5]] -> "As an."
+pink -70..-30: speech 3.57 s, speech&periodic 1.09 s, pitch voiced 0.00 s, whisper [[0.04,5]] -> "There as there fan where there?"
+Hello hello hello.{}: speech 1.33 s, speech&periodic 1.17 s, pitch voiced 1.01 s, whisper [] -> "Her know her know her no."
+Hello hello hello.{"preset":"female"}: speech 1.33 s, speech&periodic 1.17 s, pitch voiced 1.01 s, whisper [] -> "Her know her know her no."
+[whisper]Hello, how are you?[/whisper]{"markup":true}: speech 1.39 s, speech&periodic 0.22 s, pitch voiced 0.00 s, whisper [[0.04,1.59]] -> "Hello how are you?"
