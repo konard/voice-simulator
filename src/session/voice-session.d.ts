@@ -1,4 +1,6 @@
 import type {
+  Engine,
+  EngineName,
   HeadConfig,
   HeadPresetName,
   LanguageCode,
@@ -43,6 +45,11 @@ export interface VoiceSessionOptions {
   segments?: boolean;
   /** Include the recognizer's speech-mode classifications. Defaults to true. */
   includeModeLabels?: boolean;
+  /**
+   * Renderer of the voice fits (default `'js'`). The recogniser uses the
+   * engine of the same name (default `'auto'`).
+   */
+  engine?: EngineName | Engine;
   schedule?: (fn: () => void) => unknown;
 }
 

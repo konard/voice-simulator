@@ -18,7 +18,7 @@ import { parameterChanges } from './numerics.js';
 function fitOptions(samples, settings) {
   return {
     language: settings.language,
-    engine: 'js',
+    engine: settings.engine ?? 'js',
     preset: settings.preset,
     maxDuration: samples.length / settings.sampleRate,
   };
@@ -27,6 +27,7 @@ function fitOptions(samples, settings) {
 function read(samples, voice, settings) {
   const options = recognitionSettings({
     ...settings,
+    engine: settings.recognitionEngine,
     voice: voice.head,
     articulationOffsets: voice.articulationOffsets,
   });
