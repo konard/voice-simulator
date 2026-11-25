@@ -1,0 +1,24 @@
+en telephone The quick breed fox jump sober the lady dog, she shells says shells by the sea shore!
+  base pitch 138.7 alpha -19.2; neutral half pitch 129.4 alpha -20.3; loud half pitch 180.1 alpha -18.7 (5.7 st, 1.6 dB)
+  words ðə:117.9Hz/-17.0dB/E7.2/0.75 ˈkwɪk:138.7Hz/-25.4dB/E-23.4/0 ˈbɹid:135.6Hz/-21.5dB/E-9.0/0.25 ˈfɑks:134.4Hz/-12.7dB/E24.2/1 ˈd͡ʒʌmp:132.2Hz/-22.9dB/E-14.2/0.25 ˈsoʊbɚ:129.4Hz/-19.2dB/E-0.5/0.5 ðə:108.8Hz/-16.6dB/E8.2/0.75 ˈleɪɾi:122.2Hz/-26.5dB/E-28.4/0 ˈdɔɡ:124.7Hz/-20.3dB/E-5.0/0.5 *ˈʃi:167.9Hz/-25.0dB/E-20.3/0 *ˈʃɛlz:196.2Hz/-17.4dB/E9.5/0.75 *ˈsɪz:192.6Hz/-20.4dB/E-1.8/0.5 *ˈʃɛlz:189.4Hz/-18.7dB/E4.2/0.5 *ˈbaɪ:156.7Hz/-13.6dB/E21.7/1 *ðə:155.5Hz/-13.1dB/E23.6/1 *ˈsi:181.8Hz/-21.3dB/E-5.8/0.25 *ˈʃɔɹ:178.3Hz/-18.7dB/E3.6/0.5
+ru telephone Чье же еще этих не тех французских бу к, до быть и чай у, привет, как дела.
+  base pitch 113.5 alpha -20.6; neutral half pitch 111.7 alpha -21.2; loud half pitch 167.9 alpha -10.6 (7.1 st, 10.6 dB)
+  words t͡ɕje:118.9Hz/-23.8dB/E-12.0/0.25 ʐɨ:117.1Hz/-13.7dB/E25.9/1 jɪˈɕːo:115.9Hz/-22.7dB/E-7.9/0.25 ˈɛtʲɪx:114.3Hz/-21.7dB/E-4.1/0.5 nʲe:112.7Hz/-21.0dB/E-1.5/0.5 tʲex:111.7Hz/-20.2dB/E1.4/0.5 frɐnˈt͡susskʲɪx:108.9Hz/-23.4dB/E-11.0/0.25 bu:166.8Hz/-14.9dB/E23.9/1 k:0.0Hz/0.0dB/E71.4/1 də:111.5Hz/-17.5dB/E11.3/0.75 bɨtʲ:109.3Hz/-23.2dB/E-10.3/0.25 i:105.5Hz/-27.5dB/E-26.4/0 t͡ɕaj:104.0Hz/-19.6dB/E3.1/0.5 u:42.6Hz/-21.2dB/E-6.0/0.25 *prʲɪˈvʲet:167.9Hz/-19.2dB/E7.9/0.75 *kak:159.1Hz/-10.6dB/E39.7/1 *dʲɪˈɫa:301.3Hz/-8.2dB/E55.6/1
+hi telephone नमस्ते, हटकर चेहरे, मियाँ माँ माँ में!
+  base pitch 139.7 alpha -18.6; neutral half pitch 98.6 alpha -21.1; loud half pitch 146.7 alpha -18.1 (6.9 st, 3.0 dB)
+  words nəməst̪eː:115.7Hz/-21.1dB/E-10.6/0.25 ɦəʈkəɾ:98.6Hz/-18.5dB/E-1.5/0.5 t͡ʃeːɦɾeː:93.3Hz/-24.2dB/E-23.1/0 *mɪjãː:201.0Hz/-15.3dB/E15.6/1 *mãː:148.9Hz/-18.6dB/E0.5/0.5 *mãː:144.5Hz/-17.6dB/E4.2/0.5 *mẽː:139.7Hz/-20.1dB/E-5.5/0.25
+zh telephone 女好，你今田怎么样？我是中多人！
+  base pitch 131.4 alpha -20.0; neutral half pitch 115.4 alpha -23.6; loud half pitch 183.6 alpha -19.0 (8.0 st, 4.6 dB)
+  words ny˧˥:121.5Hz/-25.7dB/E-21.9/0 xɑʊ˨˩˦:90.5Hz/-17.6dB/E7.2/0.75 ni˨˩ t͡ɕin˥:115.4Hz/-24.2dB/E-16.4/0 tʰjɛn˧˥:148.7Hz/-20.3dB/E-0.2/0.5 t͡sən˨˩ mɤ jɑŋ˥˩:110.6Hz/-23.6dB/E-14.5/0.25 *wo˨˩ ʂɻ̩˥˩:141.3Hz/-15.6dB/E17.2/1 *ʈ͡ʂʊŋ˥:206.9Hz/-19.0dB/E7.5/0.75 *two˥ ʐən˧˥:183.6Hz/-19.7dB/E3.7/0.5
+en wideband The quick bell fox jump so were the lady dog, she shells she shells by the she shore!
+  base pitch 137.6 alpha -17.0; neutral half pitch 127.4 alpha -17.2; loud half pitch 179.7 alpha -16.8 (6.0 st, 0.4 dB)
+  words ðə:117.9Hz/-16.8dB/E-0.2/0.5 ˈkwɪk:138.9Hz/-25.1dB/E-30.2/0 ˈbɛl:136.4Hz/-20.7dB/E-13.9/0.25 ˈfɑks:134.4Hz/-10.2dB/E25.3/1 ˈd͡ʒʌmp:132.2Hz/-23.4dB/E-24.3/0 ˈsoʊ:130.0Hz/-17.0dB/E-0.3/0.5 wɚ:110.4Hz/-17.3dB/E-2.7/0.5 ðə:108.8Hz/-15.9dB/E2.6/0.5 ˈleɪɾi:122.5Hz/-24.3dB/E-28.4/0 ˈdɔɡ:124.7Hz/-15.5dB/E4.8/0.5 *ˈʃi:167.6Hz/-24.1dB/E-25.0/0 *ˈʃɛlz:196.3Hz/-17.0dB/E2.8/0.5 *ˈʃi:192.0Hz/-17.7dB/E-0.1/0.5 *ˈʃɛlz:189.4Hz/-16.5dB/E4.3/0.5 *ˈbaɪ:156.9Hz/-12.2dB/E18.8/1 *ðə:155.7Hz/-13.8dB/E12.8/0.75 *ˈʃi:181.8Hz/-20.2dB/E-9.7/0.25 *ˈʃɔɹ:177.5Hz/-13.8dB/E13.9/0.75
+ru wideband В ее еще этих не этих французских бу к, да быть и чаю, привет, как дела.
+  base pitch 113.7 alpha -19.9; neutral half pitch 111.9 alpha -20.6; loud half pitch 167.8 alpha -9.6 (7.0 st, 11.0 dB)
+  words f:0.0Hz/0.0dB/E69.0/1 jɪˈjo:117.3Hz/-20.2dB/E-0.9/0.5 jɪˈɕːo:115.9Hz/-19.6dB/E1.2/0.5 ˈɛtʲɪx:114.0Hz/-21.7dB/E-6.7/0.25 nʲe:113.3Hz/-20.6dB/E-2.6/0.5 ˈɛtʲɪx:111.9Hz/-21.0dB/E-4.3/0.5 frɐnˈt͡susskʲɪx:109.0Hz/-21.2dB/E-5.1/0.25 bu:167.3Hz/-14.3dB/E23.9/1 k:0.0Hz/0.0dB/E69.0/1 da:111.6Hz/-17.6dB/E8.5/0.75 bɨtʲ:109.2Hz/-24.0dB/E-15.7/0 i:105.5Hz/-25.0dB/E-19.5/0 ˈt͡ɕajʊ:101.3Hz/-19.3dB/E1.6/0.5 *prʲɪˈvʲet:167.8Hz/-17.6dB/E11.4/0.75 *kak:158.8Hz/-9.6dB/E41.0/1 *dʲɪˈɫa:301.1Hz/-7.1dB/E57.6/1
+hi wideband नमस्ते, आप कैसे है? मेरा मैं माँ मैं है!
+  base pitch 137.9 alpha -18.6; neutral half pitch 113.3 alpha -22.2; loud half pitch 144.5 alpha -17.8 (4.2 st, 4.4 dB)
+  words nəməst̪eː:115.4Hz/-21.9dB/E-13.4/0.25 aːp:111.3Hz/-17.3dB/E3.6/0.5 kɛːseː:137.9Hz/-22.5dB/E-14.7/0.25 ɦɛː:92.0Hz/-25.3dB/E-27.3/0 *meːɾaː:197.1Hz/-14.9dB/E16.9/1 *mɛ̃ː:148.7Hz/-17.8dB/E3.6/0.5 *mãː:144.5Hz/-15.8dB/E11.0/0.75 *mɛ̃ː:141.0Hz/-19.8dB/E-4.3/0.5 *ɦɛː:112.9Hz/-18.6dB/E-1.2/0.5
+zh wideband 你好，你今天怎么样？我是中多人！
+  base pitch 140.8 alpha -19.2; neutral half pitch 102.9 alpha -21.2; loud half pitch 182.8 alpha -17.0 (9.9 st, 4.2 dB)
+  words ni˧˥ xɑʊ˨˩˦:95.6Hz/-17.1dB/E5.7/0.75 ni˨˩:93.1Hz/-28.0dB/E-35.6/0 t͡ɕin˥ tʰjɛn˥:148.7Hz/-21.5dB/E-8.4/0.25 t͡sən˨˩ mɤ jɑŋ˥˩:110.2Hz/-20.8dB/E-7.7/0.25 *wo˨˩ ʂɻ̩˥˩:140.8Hz/-14.7dB/E16.7/1 *ʈ͡ʂʊŋ˥:208.1Hz/-19.2dB/E3.4/0.5 *two˥ ʐən˧˥:182.8Hz/-17.0dB/E10.2/0.75
