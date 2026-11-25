@@ -1,7 +1,14 @@
 import { mergeResults } from '../components/recognition-timeline.js';
 
+// The session keeps at most this much of a microphone input to download.
+export const MAX_KEPT_SECONDS = 120;
+// Seconds of audio per input level update.
+const LEVEL_SECONDS = 0.1;
+
 const initialStatus = () => ({
   state: 'idle',
+  // RMS of the latest 100 ms of input in dBFS, while running (issue 170).
+  inputLevel: null,
   result: mergeResults([], null),
   committedWords: 0,
   lastSyllable: null,
@@ -11,6 +18,7 @@ const initialStatus = () => ({
 export class RecognitionSession {
   #worker = null;
   #job = null;
+  #last = null;
   #nextId = 1;
 
   constructor({
@@ -54,10 +62,24 @@ export class RecognitionSession {
     }
   }
 
-  async start(source, options = {}) {
+  /**
+   * Recognize a microphone or decoded samples. `keep: false` does not keep
+   * the input for recording() (audio of a copied voice).
+   */
+  async start(source, options = {}, { keep = true } = {}) {
     this.reset();
-    const job = { id: this.#nextId++, finals: [], offset: 0, options };
+    const job = {
+      id: this.#nextId++,
+      finals: [],
+      offset: 0,
+      options,
+      keep,
+      kept: [],
+      keptLength: 0,
+      level: { sum: 0, count: 0 },
+    };
     this.#job = job;
+    this.#last = job;
     this.#emit({ state: 'asking' });
     try {
       const input = await source;
@@ -70,6 +92,8 @@ export class RecognitionSession {
           onChunk: (samples, sampleRate) => {
             if (this.#job === job && !job.stopping) {
               this.#begin(job, sampleRate);
+              this.#keep(job, samples);
+              this.#measure(job, samples);
               this.#post(job, { type: 'chunk', samples }, [samples.buffer]);
             }
           },
@@ -77,6 +101,7 @@ export class RecognitionSession {
         });
       } else {
         job.file = input.samples;
+        job.sampleRate = input.sampleRate;
         job.stride = Math.max(1, Math.floor(input.sampleRate * 0.02));
       }
       if (this.#job === job) {
@@ -104,6 +129,35 @@ export class RecognitionSession {
     this.#post(job, { type: 'stop' });
   }
 
+  /** Whether recording() has samples to give. */
+  get recorded() {
+    const job = this.#last;
+    return Boolean(
+      job?.keep && job.sampleRate && (job.file?.length || job.keptLength)
+    );
+  }
+
+  /** The input of the last session as {samples, sampleRate}, or null. */
+  recording() {
+    const job = this.#last;
+    if (!job?.keep || !job.sampleRate) {
+      return null;
+    }
+    if (job.file) {
+      return { samples: job.file, sampleRate: job.sampleRate };
+    }
+    if (!job.keptLength) {
+      return null;
+    }
+    const samples = new Float32Array(job.keptLength);
+    let offset = 0;
+    for (const chunk of job.kept) {
+      samples.set(chunk, offset);
+      offset += chunk.length;
+    }
+    return { samples, sampleRate: job.sampleRate };
+  }
+
   reset() {
     this.#discard();
     this.#emit(initialStatus());
@@ -115,7 +169,36 @@ export class RecognitionSession {
     this.#worker = null;
   }
 
+  #keep(job, samples) {
+    if (!job.keep) {
+      return;
+    }
+    job.kept.push(samples.slice());
+    job.keptLength += samples.length;
+    const limit = MAX_KEPT_SECONDS * job.sampleRate;
+    while (job.keptLength - job.kept[0].length >= limit) {
+      job.keptLength -= job.kept.shift().length;
+    }
+  }
+
+  #measure(job, samples) {
+    const { level } = job;
+    for (const sample of samples) {
+      level.sum += sample * sample;
+    }
+    level.count += samples.length;
+    if (level.count >= LEVEL_SECONDS * job.sampleRate) {
+      const rms = Math.sqrt(level.sum / level.count);
+      level.sum = 0;
+      level.count = 0;
+      this.#emit({
+        inputLevel: Math.max(-100, 20 * Math.log10(rms || 1e-5)),
+      });
+    }
+  }
+
   #begin(job, sampleRate) {
+    job.sampleRate ??= sampleRate;
     if (!job.started) {
       this.#prepare();
       job.started = true;
@@ -136,6 +219,7 @@ export class RecognitionSession {
     }
     const samples = job.file.slice(job.offset, job.offset + job.stride);
     job.offset += samples.length;
+    this.#measure(job, samples);
     this.#post(job, { type: 'chunk', samples }, [samples.buffer]);
   }
 
@@ -181,6 +265,7 @@ export class RecognitionSession {
     this.#releaseMicrophone(job);
     this.#emit({
       state: 'done',
+      inputLevel: null,
       result: {
         ...result,
         ...(job.finals.length && mergeResults(job.finals, null)),
@@ -194,6 +279,7 @@ export class RecognitionSession {
       this.#discard();
       this.#emit({
         state: 'error',
+        inputLevel: null,
         error: {
           code: error.name === 'NotAllowedError' ? 'denied' : error.code,
           message: error.message,

@@ -1,0 +1,16 @@
+synth telephone 8000 Hz 2.42 s in 0.6 s
+clean
+  stream (10.9 s): "Quo law route roll oh." finals=["Quo law route roll oh."]
+  batch  (5.3 s): "Her know her know her know her know her no."
+white 20 dB
+  stream (9.6 s): "Hail a load hue tube." finals=["Hail a load hue tube."]
+  batch  (2.9 s): "Slow alone alone alone a most."
+white 10 dB
+  stream (8.4 s): "Cale been shall to nd." finals=["Cale been shall to nd."]
+  batch  (5.3 s): "Her no no no no no h."
+white noise only (-50 dBFS)
+  stream (0.4 s): flush error too-noisy
+  batch  (0.6 s): error too-noisy
+white noise only (-30 dBFS)
+  stream (0.3 s): flush error too-noisy
+  batch  (0.6 s): error too-noisy

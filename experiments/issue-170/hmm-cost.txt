@@ -1,0 +1,6 @@
+0.5 s: 358 ms -> her no
+1 s: 877 ms -> her no her most of
+2 s: 1995 ms -> her no her no her no her no her no
+4 s: 3348 ms -> her no her no her no her no her no her no her no her no
+all langs 2 s first: 17539 ms
+all langs 2 s: 7931 ms

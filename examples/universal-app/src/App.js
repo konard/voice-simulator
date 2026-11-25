@@ -28,6 +28,8 @@ import { DEFAULT_ACOUSTICS, listeningSettings } from './engine/listening.js';
 import { readTierSetting } from './engine/benchmark-cache.js';
 import { PresetSelect, initialPreset } from './components/PresetSelect.js';
 import { Recognition } from './components/Recognition.js';
+import { VoiceSettings } from './components/VoiceSettings.js';
+import { DEFAULT_VOICE_SETTINGS, voiceOptions } from './components/settings.js';
 import { VoiceCopy } from './components/VoiceCopy.js';
 import { VoiceMatch } from './components/VoiceMatch.js';
 import { SpokenText } from './components/SpokenText.js';
@@ -84,9 +86,9 @@ function useTheme() {
   return [theme, next];
 }
 
-function transcribe(text, lang, accent) {
+function transcribe(text, lang, accent, { accentLevel, weakForms } = {}) {
   try {
-    return textToIpa(text, { lang, accent });
+    return textToIpa(text, { lang, accent, accentLevel, weakForms });
   } catch (error) {
     return { lang, ipa: '', error: error.message };
   }
@@ -320,8 +322,8 @@ function SpeakPanel({
   t,
 }) {
   const transcription = useMemo(
-    () => transcribe(speech.text, speech.lang, speech.accent),
-    [speech.text, speech.lang, speech.accent]
+    () => transcribe(speech.text, speech.lang, speech.accent, speech.voice),
+    [speech.text, speech.lang, speech.accent, speech.voice]
   );
   const speaking = simulator.status.phase === 'speaking';
   const update = (patch) => setSpeech({ ...speech, ...patch });
@@ -408,6 +410,11 @@ function SpeakPanel({
       }),
       h(AccentSelect, { transcription, onChange: update, t })
     ),
+    h(VoiceSettings, {
+      settings: speech.voice,
+      onChange: (voice) => update({ voice }),
+      t,
+    }),
     h(MeasuredNote, {
       benchmark: simulator.status.benchmark,
       onMeasure: () => simulator.engineRef.current?.measureAgain(),
@@ -583,6 +590,35 @@ function voiceAccentOptions(voice, fallback) {
     : { accent: accent?.code ?? fallback, accentLevel: accent?.strength };
 }
 
+/** The last utterance for the recognition panel, or null. */
+function spokenAudio(engine) {
+  const recording = engine?.recording();
+  return (
+    recording && {
+      ...recording,
+      requiresCopyConsent: engine.recordingRequiresCopyConsent,
+    }
+  );
+}
+
+/**
+ * The VoiceEngine.speak request of the speech settings: a copied voice's
+ * accent strength wins over the accent level setting.
+ */
+function speechRequest({ text, lang, accent, mode, voice: settings }, voice) {
+  const accentOptions = voiceAccentOptions(voice, accent);
+  return {
+    text,
+    lang,
+    mode,
+    ...voiceOptions(settings),
+    ...accentOptions,
+    accentLevel: accentOptions.accentLevel ?? settings.accentLevel,
+    articulationOffsets: voice?.articulationOffsets,
+    requiresCopyConsent: Boolean(voice),
+  };
+}
+
 export function App() {
   const locale = useMemo(() => detectLocale(), []);
   const t = strings(locale);
@@ -603,6 +639,7 @@ export function App() {
     tier: readTierSetting(),
     animateMouth: true,
     showField: true,
+    voice: { ...DEFAULT_VOICE_SETTINGS },
   }));
   const [acoustics, setAcoustics] = useState(() => ({ ...DEFAULT_ACOUSTICS }));
   const listening = useMemo(() => listeningSettings(acoustics), [acoustics]);
@@ -651,20 +688,11 @@ export function App() {
     setPreset(preset);
   };
 
-  const speak = (
-    { text, lang, accent, mode },
-    voice = copiedVoice,
-    nextHead = head
-  ) =>
+  const speak = (next, voice = copiedVoice, nextHead = head) =>
     simulator.engineRef.current?.speak({
-      text,
-      lang,
-      ...voiceAccentOptions(voice, accent),
-      articulationOffsets: voice?.articulationOffsets,
+      ...speechRequest(next, voice),
       head: nextHead,
       seed: voice ? '' : seed,
-      requiresCopyConsent: Boolean(voice),
-      mode,
       ...listening,
     });
   const speakBack = (text, lang) => {
@@ -721,7 +749,11 @@ export function App() {
       t,
       onHead: editHead,
     }),
-    h(Recognition, { t, onSpeakBack: speakBack }),
+    h(Recognition, {
+      t,
+      onSpeakBack: speakBack,
+      spokenAudio: () => spokenAudio(simulator.engineRef.current),
+    }),
     h(VoiceCopy, {
       t,
       locale,

@@ -6,12 +6,14 @@ import {
   decodeRecognitionAudio,
   decoderOptions,
   emptyRecognition,
+  heardSpeech,
   noisyFrames,
   recognizeDecoded,
   RecognitionError,
   recognitionSettings,
   validateRate,
   validateSamples,
+  usesWordDecoder,
 } from './recognizer.js';
 import { aggregate, translated } from './recognizer-result.js';
 import { clipWhisperSpans } from './whisper.js';
@@ -21,6 +23,12 @@ const COMMIT_AFTER = 5;
 const MAX_WINDOW = 7;
 const LEVELS = ['low', 'medium', 'high'];
 const EPSILON = 1e-8;
+/**
+ * Seconds of pitched audio a phrase needs before it can produce words, unless
+ * the caller sets minVoiced: a live microphone hears noise between phrases,
+ * and noise alone decoded as strings of fricatives (issue 170).
+ */
+export const STREAM_MIN_VOICED = 0.1;
 
 export function adaptiveLevel(level, recentLoad, sustainedLoad) {
   if (level > 0 && recentLoad > 0.8) {
@@ -137,6 +145,7 @@ function createPhraseDecoder(sampleRate, settings, level, start) {
     lastSpeech: -1,
     fixed: [],
     partial: null,
+    nextCut: 0,
   };
 }
 
@@ -192,6 +201,7 @@ export function createRecognizer(options = {}) {
   validateRate(sampleRate);
   const settings = recognitionSettings(options);
   const { nbest } = settings;
+  const minVoiced = settings.minVoiced ?? STREAM_MIN_VOICED;
   const stride = Math.max(1, Math.floor(sampleRate * 0.02));
   const { emit, on, off } = createEvents();
   const load = createLoadMeter(sampleRate);
@@ -226,21 +236,38 @@ export function createRecognizer(options = {}) {
     reportSyllables(decoded, phrase.fixed, offset / sampleRate);
   }
 
+  // Whispered spans the caller marked inside the phrase count as speech.
+  // An injected audioToIpa stage replaces the acoustic evidence.
+  function phraseSpeech(decoded, size) {
+    if (settings.stages.audioToIpa) {
+      return true;
+    }
+    const { whisper } = decoderOptions(settings, level, offset / sampleRate);
+    return heardSpeech(
+      decoded,
+      minVoiced,
+      Array.isArray(whisper) ? clipWhisperSpans(whisper, size / sampleRate) : []
+    );
+  }
+
   function read(decoded, size, final) {
     const signal = phrase.buffer.subarray(0, size);
     const readSettings = final
       ? settings
       : { ...settings, nbest: 1, segments: false };
     // A test can supply snapshot IPA while the decoder maintains live timing.
-    const reading = settings.stages.audioToIpa
-      ? decodeRecognitionAudio(
-          signal,
-          sampleRate,
-          readSettings,
-          level,
-          offset / sampleRate
-        )
-      : { decoded, input: signal, rate: sampleRate };
+    // Committed phrases take the word decoder, like recognize(); previews
+    // keep the incremental phone decoder, which is cheap per chunk.
+    const reading =
+      settings.stages.audioToIpa || (final && usesWordDecoder(settings))
+        ? decodeRecognitionAudio(
+            signal,
+            sampleRate,
+            readSettings,
+            level,
+            offset / sampleRate
+          )
+        : { decoded, input: signal, rate: sampleRate };
     return recognizeDecoded(
       reading.decoded,
       reading.input,
@@ -271,7 +298,9 @@ export function createRecognizer(options = {}) {
         'Audio has less than 5 dB of energy contrast'
       );
     }
-    const answer = read(decoded, size, 'stream');
+    const answer = phraseSpeech(decoded, size)
+      ? read(decoded, size, 'stream')
+      : emptyRecognition(nbest, settings.segments);
     if (answer.words.length) {
       const absolute = translated(
         answer,
@@ -356,6 +385,7 @@ export function createRecognizer(options = {}) {
     const awaitingFirstWords =
       phrase.partial &&
       !phrase.partial.words.length &&
+      !phrase.partial.gated &&
       !settings.stages.audioToIpa;
     if (!due && !awaitingFirstWords) {
       return;
@@ -364,7 +394,10 @@ export function createRecognizer(options = {}) {
     if (!due && !preview.ipa) {
       return;
     }
-    phrase.partial = read(preview, phrase.used, false);
+    phrase.partial = phraseSpeech(preview, phrase.used)
+      ? read(preview, phrase.used, false)
+      : // Below the speech gate, look again at the next quarter second.
+        { ...emptyRecognition(1), gated: true };
     const { words, ipa, text } = translated(
       phrase.partial,
       offset / sampleRate,
@@ -395,14 +428,34 @@ export function createRecognizer(options = {}) {
       (phrase.lastSpeech >= 0 || phrase.used >= COMMIT_AFTER * sampleRate)
     ) {
       restart(phrase.used);
-    } else if (phrase.used > COMMIT_AFTER * sampleRate && phrase.partial) {
-      const word = phrase.partial.words.findLast(
+    } else if (phrase.used > COMMIT_AFTER * sampleRate) {
+      const word = longPhraseWords()?.findLast(
         ({ end }) => end > 0 && end <= phrase.used / sampleRate - 1
       );
       if (word) {
         restart(Math.ceil(word.end * sampleRate - EPSILON));
       }
     }
+  }
+
+  // Words to cut a long phrase after. The word decoder only ends words at the
+  // last frame of its input, so its phrases are cut at its own word ends,
+  // read at most once a second; the phone decoder's preview words otherwise.
+  function longPhraseWords() {
+    if (settings.stages.audioToIpa || !usesWordDecoder(settings)) {
+      return phrase.partial?.words;
+    }
+    if (phrase.used < phrase.nextCut) {
+      return null;
+    }
+    phrase.nextCut = phrase.used + sampleRate;
+    return decodeRecognitionAudio(
+      phrase.buffer.subarray(0, phrase.used),
+      sampleRate,
+      settings,
+      level,
+      offset / sampleRate
+    ).decoded.words;
   }
 
   reset();

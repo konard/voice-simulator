@@ -63,6 +63,16 @@ function checkOptions(languages, nbest, level) {
   }
 }
 
+function checkMinVoiced(minVoiced) {
+  if (
+    minVoiced !== undefined &&
+    (!Number.isFinite(minVoiced) || minVoiced < 0)
+  ) {
+    throw new RangeError('minVoiced must be a non-negative number of seconds');
+  }
+  return minVoiced;
+}
+
 function checkDecoder(decoder = 'words') {
   if (decoder !== 'words' && decoder !== 'phones') {
     throw new RangeError('decoder must be words or phones');
@@ -111,6 +121,9 @@ export function recognitionSettings(options) {
     articulationOffsets,
     decoder,
     oov: options.oov !== false,
+    // Seconds of voiced (pitched) audio an input or phrase needs before it
+    // can produce words; undefined takes the caller's default (issue 170).
+    minVoiced: checkMinVoiced(options.minVoiced),
     // Test-only: diagnostic events of the mode stage.
     trace: options.trace,
   };
@@ -196,7 +209,7 @@ export function decodeRecognitionAudio(
     const decoded = measure(settings.profile, 'Audio to IPA', () =>
       hmmAudioToIpa(input, rate, {
         languages: settings.languages,
-        whisper: settings.whisper,
+        whisper: options.whisper,
         oov: settings.oov,
       })
     );
@@ -228,6 +241,31 @@ export function emptyRecognition(nbest, segments = false) {
     result.segments = [];
   }
   return result;
+}
+
+/**
+ * Seconds of speech evidence in a decoded input: frames with a pitch, plus
+ * spans the caller marked as whispered. Noise rarely has a stable pitch,
+ * while every spoken phrase but a whisper has some (issue 170).
+ */
+export function voicedSeconds(decoded, whisper) {
+  const pitch = decoded.tracks?.pitch;
+  let frames = 0;
+  if (pitch?.f0) {
+    const count = Math.min(pitch.count ?? pitch.f0.length, pitch.f0.length);
+    for (let i = 0; i < count; i++) {
+      frames += pitch.f0[i] > 0 ? 1 : 0;
+    }
+  }
+  const marked = Array.isArray(whisper)
+    ? whisper.reduce((sum, { start, end }) => sum + Math.max(0, end - start), 0)
+    : 0;
+  return frames * (pitch?.hop ?? 0) + marked;
+}
+
+/** Whether a decoded input passes the minVoiced speech gate. */
+export function heardSpeech(decoded, minVoiced, whisper) {
+  return !(minVoiced > 0) || voicedSeconds(decoded, whisper) >= minVoiced;
 }
 
 function timedPhones(decoded) {
@@ -465,6 +503,9 @@ function serial(samples, sampleRate, settings, level) {
     level
   );
   checkNoise(decoded, samples.length / sampleRate);
+  if (!heardSpeech(decoded, settings.minVoiced, settings.whisper)) {
+    return emptyRecognition(settings.nbest, settings.segments);
+  }
   return recognizeDecoded(decoded, input, rate, settings, level, 'batch');
 }
 
@@ -550,6 +591,9 @@ async function parallelDecode(samples, sampleRate, settings, level, pool) {
     pool
   );
   checkNoise(decoded, samples.length / sampleRate);
+  if (!heardSpeech(decoded, settings.minVoiced, settings.whisper)) {
+    return emptyRecognition(settings.nbest, settings.segments);
+  }
   if (settings.rescoring && decoded.ipa) {
     const preparation = planRescoring(decoded);
     const scores = await pool.run('rescore', preparation.jobs, scoreJob);
