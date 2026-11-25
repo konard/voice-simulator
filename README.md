@@ -670,6 +670,26 @@ Run `voice-simulator copy speech.wav -o copy.wav --score speech-score.json` to s
 
 By default (`decoder: 'words'`) a Gaussian HMM decodes words over the lexicons of the requested languages, trained only on this library's own synthetic speech ([how it is trained](tests/heavy/README.md#recognition-model)). A word outside the lexicon is heard through a phone loop of its language and spelled from its sounds; `oov: false` (CLI `--no-oov`) keeps to lexicon words. `decoder: 'phones'` (CLI `--decoder phones`) uses the phone decoder of `audioToIpa` and `ipaToText` instead, as do `rescoring` and substituted stages.
 
+### Recognition in noise
+
+Live recognition commits each phrase with the word decoder, like `recognize()`. A phrase needs `minVoiced` seconds of pitch-voiced speech (default 0.1 s in a stream, off in batch) before it gives words, so noise alone gives no text. `createNoise` and `addNoise` generate ten kinds of noise (white, pink, brown, blue, violet, speech-shaped, babble, mains hum, crackle and a drifting room noise) and mix them with speech at a chosen SNR:
+
+```js
+import { addNoise, recognize, synthesize } from 'voice-simulator';
+
+const { samples, sampleRate } = synthesize('Hello there', {
+  tier: 'telephone',
+});
+const noisy = addNoise(samples, sampleRate, {
+  type: 'babble',
+  snr: 10,
+  seed: 1,
+});
+console.log(recognize(noisy, sampleRate, { languages: ['en'] }).text);
+```
+
+`node scripts/noise-baseline.mjs` writes the baseline of synthesized sentences in every noise at 20, 10 and 0 dB SNR, and of noise without speech: [docs/reports/noise-baseline.md](docs/reports/noise-baseline.md). The web app's recognition settings expose the decoder, level, speech gate, whisper and mode detection, the browser's microphone processing, and the same noise over files and the last spoken audio.
+
 ### Recognition engines and workers
 
 `engine: 'auto'` selects scalar Rust WebAssembly with a JavaScript fallback. Use `'js'` for the reference or `'rust'` to require WebAssembly.

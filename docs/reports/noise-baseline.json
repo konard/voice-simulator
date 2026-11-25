@@ -1,0 +1,2949 @@
+{
+  "tier": "telephone",
+  "level": "low",
+  "languages": [
+    "en",
+    "ru",
+    "hi",
+    "zh"
+  ],
+  "types": [
+    "white",
+    "pink",
+    "brown",
+    "blue",
+    "violet",
+    "speech-shaped",
+    "babble",
+    "hum",
+    "crackle",
+    "drifting"
+  ],
+  "ratios": [
+    20,
+    10,
+    0
+  ],
+  "speech": [
+    {
+      "lang": "en",
+      "index": 0,
+      "type": "clean",
+      "snr": null,
+      "heard": "the quick brown fox jump sober the lady dog",
+      "error": null,
+      "seconds": 4.028014004,
+      "per": 0.058823529411764705,
+      "wer": 0.3333333333333333
+    },
+    {
+      "lang": "en",
+      "index": 0,
+      "type": "white",
+      "snr": 20,
+      "heard": "the smith brown fuss jump so the the relief offs",
+      "error": null,
+      "seconds": 2.387167142,
+      "per": 0.38235294117647056,
+      "wer": 0.7777777777777778
+    },
+    {
+      "lang": "en",
+      "index": 0,
+      "type": "white",
+      "snr": 10,
+      "heard": "the himself us them his evelyn forth",
+      "error": null,
+      "seconds": 4.415585878999999,
+      "per": 0.7058823529411765,
+      "wer": 0.8888888888888888
+    },
+    {
+      "lang": "en",
+      "index": 0,
+      "type": "white",
+      "snr": 0,
+      "heard": "when when an air nango as as",
+      "error": null,
+      "seconds": 4.813350296,
+      "per": 0.9117647058823529,
+      "wer": 1
+    },
+    {
+      "lang": "en",
+      "index": 0,
+      "type": "pink",
+      "snr": 20,
+      "heard": "the smith brown fox jump sober the lady forth",
+      "error": null,
+      "seconds": 2.701241958999999,
+      "per": 0.23529411764705882,
+      "wer": 0.5555555555555556
+    },
+    {
+      "lang": "en",
+      "index": 0,
+      "type": "pink",
+      "snr": 10,
+      "heard": "the himself us jump home with a disease or has",
+      "error": null,
+      "seconds": 3.5422339829999983,
+      "per": 0.6176470588235294,
+      "wer": 1
+    },
+    {
+      "lang": "en",
+      "index": 0,
+      "type": "pink",
+      "snr": 0,
+      "heard": "and when as well reading as i",
+      "error": null,
+      "seconds": 5.174332666999999,
+      "per": 0.9411764705882353,
+      "wer": 1
+    },
+    {
+      "lang": "en",
+      "index": 0,
+      "type": "brown",
+      "snr": 20,
+      "heard": "the quick brown fox jump sober the lady talk th",
+      "error": null,
+      "seconds": 1.3111619559999999,
+      "per": 0.14705882352941177,
+      "wer": 0.5555555555555556
+    },
+    {
+      "lang": "en",
+      "index": 0,
+      "type": "brown",
+      "snr": 10,
+      "heard": "that with brown fox jump sober the lady forth",
+      "error": null,
+      "seconds": 1.447267539999997,
+      "per": 0.20588235294117646,
+      "wer": 0.6666666666666666
+    },
+    {
+      "lang": "en",
+      "index": 0,
+      "type": "brown",
+      "snr": 0,
+      "heard": "the this brown father's jump home of a rigaud had",
+      "error": null,
+      "seconds": 4.273294018000004,
+      "per": 0.5,
+      "wer": 0.8888888888888888
+    },
+    {
+      "lang": "en",
+      "index": 0,
+      "type": "blue",
+      "snr": 20,
+      "heard": "see us this brown fuss jump so the the relief offs",
+      "error": null,
+      "seconds": 2.4661932679999956,
+      "per": 0.4411764705882353,
+      "wer": 1
+    },
+    {
+      "lang": "en",
+      "index": 0,
+      "type": "blue",
+      "snr": 10,
+      "heard": "says this when fuss jump so marriage horse",
+      "error": null,
+      "seconds": 4.169216611000003,
+      "per": 0.6470588235294118,
+      "wer": 1
+    },
+    {
+      "lang": "en",
+      "index": 0,
+      "type": "blue",
+      "snr": 0,
+      "heard": "them sense am as he reading death",
+      "error": null,
+      "seconds": 4.179898504999997,
+      "per": 0.8235294117647058,
+      "wer": 1
+    },
+    {
+      "lang": "en",
+      "index": 0,
+      "type": "violet",
+      "snr": 20,
+      "heard": "f the smith brown fuss jump so the the relief offs",
+      "error": null,
+      "seconds": 1.9071338390000019,
+      "per": 0.4117647058823529,
+      "wer": 0.8888888888888888
+    },
+    {
+      "lang": "en",
+      "index": 0,
+      "type": "violet",
+      "snr": 10,
+      "heard": "this this when fuss jump so marriage force",
+      "error": null,
+      "seconds": 2.824747598000002,
+      "per": 0.6176470588235294,
+      "wer": 1
+    },
+    {
+      "lang": "en",
+      "index": 0,
+      "type": "violet",
+      "snr": 0,
+      "heard": "says mrs sense of has m his marriage death",
+      "error": null,
+      "seconds": 4.274294728000001,
+      "per": 0.8529411764705882,
+      "wer": 1
+    },
+    {
+      "lang": "en",
+      "index": 0,
+      "type": "speech-shaped",
+      "snr": 20,
+      "heard": "the the with brown fox jump solar the lady forth",
+      "error": null,
+      "seconds": 1.5550096059999996,
+      "per": 0.23529411764705882,
+      "wer": 0.6666666666666666
+    },
+    {
+      "lang": "en",
+      "index": 0,
+      "type": "speech-shaped",
+      "snr": 10,
+      "heard": "the themselves us jump home relative or has",
+      "error": null,
+      "seconds": 4.063764396999999,
+      "per": 0.7352941176470589,
+      "wer": 0.8888888888888888
+    },
+    {
+      "lang": "en",
+      "index": 0,
+      "type": "speech-shaped",
+      "snr": 0,
+      "heard": "when i then and whereas",
+      "error": null,
+      "seconds": 3.223126500999999,
+      "per": 0.9117647058823529,
+      "wer": 1
+    },
+    {
+      "lang": "en",
+      "index": 0,
+      "type": "babble",
+      "snr": 20,
+      "heard": "the quick brown fox jump sober the lady forth",
+      "error": null,
+      "seconds": 1.5091865319999997,
+      "per": 0.14705882352941177,
+      "wer": 0.4444444444444444
+    },
+    {
+      "lang": "en",
+      "index": 0,
+      "type": "babble",
+      "snr": 10,
+      "heard": "the the your brown stars jump solar the ladies or the",
+      "error": null,
+      "seconds": 3.1045294989999968,
+      "per": 0.4411764705882353,
+      "wer": 0.8888888888888888
+    },
+    {
+      "lang": "en",
+      "index": 0,
+      "type": "babble",
+      "snr": 0,
+      "heard": "was large rooms over the way as always",
+      "error": null,
+      "seconds": 7.6065349330000025,
+      "per": 0.7058823529411765,
+      "wer": 0.8888888888888888
+    },
+    {
+      "lang": "en",
+      "index": 0,
+      "type": "hum",
+      "snr": 20,
+      "heard": "the quick brown fox jump sober the lady dog j",
+      "error": null,
+      "seconds": 1.0450796789999877,
+      "per": 0.08823529411764706,
+      "wer": 0.4444444444444444
+    },
+    {
+      "lang": "en",
+      "index": 0,
+      "type": "hum",
+      "snr": 10,
+      "heard": "that wit brown fox jump so or the lady dog j",
+      "error": null,
+      "seconds": 1.7227677540000004,
+      "per": 0.14705882352941177,
+      "wer": 0.7777777777777778
+    },
+    {
+      "lang": "en",
+      "index": 0,
+      "type": "hum",
+      "snr": 0,
+      "heard": "village is ground obs jumped over the day george",
+      "error": null,
+      "seconds": 2.876705349000011,
+      "per": 0.47058823529411764,
+      "wer": 0.7777777777777778
+    },
+    {
+      "lang": "en",
+      "index": 0,
+      "type": "crackle",
+      "snr": 20,
+      "heard": "that which down fox jump sober ridges dwarf",
+      "error": null,
+      "seconds": 2.3264614690000016,
+      "per": 0.38235294117647056,
+      "wer": 0.8888888888888888
+    },
+    {
+      "lang": "en",
+      "index": 0,
+      "type": "crackle",
+      "snr": 10,
+      "heard": "for which crowd fox don't souls ridge dwarf",
+      "error": null,
+      "seconds": 3.7840832620000002,
+      "per": 0.6764705882352942,
+      "wer": 0.8888888888888888
+    },
+    {
+      "lang": "en",
+      "index": 0,
+      "type": "crackle",
+      "snr": 0,
+      "heard": "traddles flute gottfried coldly dwarf",
+      "error": null,
+      "seconds": 3.941849273,
+      "per": 0.8823529411764706,
+      "wer": 1
+    },
+    {
+      "lang": "en",
+      "index": 0,
+      "type": "drifting",
+      "snr": 20,
+      "heard": "that with brown foss jump sober the relief offs",
+      "error": null,
+      "seconds": 1.3121217840000026,
+      "per": 0.29411764705882354,
+      "wer": 0.7777777777777778
+    },
+    {
+      "lang": "en",
+      "index": 0,
+      "type": "drifting",
+      "snr": 10,
+      "heard": "the smith brown fuss jump home with a disease or has",
+      "error": null,
+      "seconds": 2.7966900370000074,
+      "per": 0.47058823529411764,
+      "wer": 1
+    },
+    {
+      "lang": "en",
+      "index": 0,
+      "type": "drifting",
+      "snr": 0,
+      "heard": "and then the arrows little there i",
+      "error": null,
+      "seconds": 4.081668585000006,
+      "per": 0.8529411764705882,
+      "wer": 1
+    },
+    {
+      "lang": "en",
+      "index": 1,
+      "type": "clean",
+      "snr": null,
+      "heard": "she says she shells by the sea shore",
+      "error": null,
+      "seconds": 0.43451892099999534,
+      "per": 0.09090909090909091,
+      "wer": 0.25
+    },
+    {
+      "lang": "en",
+      "index": 1,
+      "type": "white",
+      "snr": 20,
+      "heard": "see says she says by the sea source",
+      "error": null,
+      "seconds": 0.980235474000001,
+      "per": 0.3181818181818182,
+      "wer": 0.625
+    },
+    {
+      "lang": "en",
+      "index": 1,
+      "type": "white",
+      "snr": 10,
+      "heard": "him says himself as a small h",
+      "error": null,
+      "seconds": 2.630822952999995,
+      "per": 0.7727272727272727,
+      "wer": 1
+    },
+    {
+      "lang": "en",
+      "index": 1,
+      "type": "white",
+      "snr": 0,
+      "heard": "and there and there amlah",
+      "error": null,
+      "seconds": 3.1482176400000026,
+      "per": 0.9545454545454546,
+      "wer": 1
+    },
+    {
+      "lang": "en",
+      "index": 1,
+      "type": "pink",
+      "snr": 20,
+      "heard": "she says she says by the sea forth",
+      "error": null,
+      "seconds": 0.7960465069999918,
+      "per": 0.2727272727272727,
+      "wer": 0.5
+    },
+    {
+      "lang": "en",
+      "index": 1,
+      "type": "pink",
+      "snr": 10,
+      "heard": "and says he says i the henceforth",
+      "error": null,
+      "seconds": 2.4116748949999893,
+      "per": 0.6363636363636364,
+      "wer": 0.875
+    },
+    {
+      "lang": "en",
+      "index": 1,
+      "type": "pink",
+      "snr": 0,
+      "heard": "and there and there and as",
+      "error": null,
+      "seconds": 4.545139267999999,
+      "per": 0.9545454545454546,
+      "wer": 1
+    },
+    {
+      "lang": "en",
+      "index": 1,
+      "type": "brown",
+      "snr": 20,
+      "heard": "she says she shells by the sea short th",
+      "error": null,
+      "seconds": 0.6734519,
+      "per": 0.18181818181818182,
+      "wer": 0.5
+    },
+    {
+      "lang": "en",
+      "index": 1,
+      "type": "brown",
+      "snr": 10,
+      "heard": "she says she says by the sea forth",
+      "error": null,
+      "seconds": 0.7540726409999916,
+      "per": 0.2727272727272727,
+      "wer": 0.5
+    },
+    {
+      "lang": "en",
+      "index": 1,
+      "type": "brown",
+      "snr": 0,
+      "heard": "he says he says i was the shore have",
+      "error": null,
+      "seconds": 1.9929202910000021,
+      "per": 0.5454545454545454,
+      "wer": 1
+    },
+    {
+      "lang": "en",
+      "index": 1,
+      "type": "blue",
+      "snr": 20,
+      "heard": "see says she says by the sea source",
+      "error": null,
+      "seconds": 0.9738155269999988,
+      "per": 0.3181818181818182,
+      "wer": 0.625
+    },
+    {
+      "lang": "en",
+      "index": 1,
+      "type": "blue",
+      "snr": 10,
+      "heard": "he says he says i this resource",
+      "error": null,
+      "seconds": 1.8593243059999949,
+      "per": 0.45454545454545453,
+      "wer": 1
+    },
+    {
+      "lang": "en",
+      "index": 1,
+      "type": "blue",
+      "snr": 0,
+      "heard": "himself himself himself who",
+      "error": null,
+      "seconds": 1.6395561980000057,
+      "per": 0.8181818181818182,
+      "wer": 1
+    },
+    {
+      "lang": "en",
+      "index": 1,
+      "type": "violet",
+      "snr": 20,
+      "heard": "see says she says by the sea forth",
+      "error": null,
+      "seconds": 0.8694416060000076,
+      "per": 0.3181818181818182,
+      "wer": 0.625
+    },
+    {
+      "lang": "en",
+      "index": 1,
+      "type": "violet",
+      "snr": 10,
+      "heard": "see says she says i this resource",
+      "error": null,
+      "seconds": 1.4988540659999998,
+      "per": 0.45454545454545453,
+      "wer": 1
+    },
+    {
+      "lang": "en",
+      "index": 1,
+      "type": "violet",
+      "snr": 0,
+      "heard": "him says himself as a himself h",
+      "error": null,
+      "seconds": 1.2217240729999903,
+      "per": 0.8636363636363636,
+      "wer": 1
+    },
+    {
+      "lang": "en",
+      "index": 1,
+      "type": "speech-shaped",
+      "snr": 20,
+      "heard": "he says she says by the sea forth",
+      "error": null,
+      "seconds": 0.7253011510000069,
+      "per": 0.3181818181818182,
+      "wer": 0.625
+    },
+    {
+      "lang": "en",
+      "index": 1,
+      "type": "speech-shaped",
+      "snr": 10,
+      "heard": "and there's himself by the hands north",
+      "error": null,
+      "seconds": 2.2501623689999977,
+      "per": 0.7727272727272727,
+      "wer": 0.75
+    },
+    {
+      "lang": "en",
+      "index": 1,
+      "type": "speech-shaped",
+      "snr": 0,
+      "heard": "and there rangitata",
+      "error": null,
+      "seconds": 3.72014029700002,
+      "per": 0.9090909090909091,
+      "wer": 1
+    },
+    {
+      "lang": "en",
+      "index": 1,
+      "type": "babble",
+      "snr": 20,
+      "heard": "she says she says by the sea shortly",
+      "error": null,
+      "seconds": 0.7285133280000009,
+      "per": 0.3181818181818182,
+      "wer": 0.5
+    },
+    {
+      "lang": "en",
+      "index": 1,
+      "type": "babble",
+      "snr": 10,
+      "heard": "the cells see said i the sea short with",
+      "error": null,
+      "seconds": 2.6171776700000047,
+      "per": 0.4090909090909091,
+      "wer": 0.875
+    },
+    {
+      "lang": "en",
+      "index": 1,
+      "type": "babble",
+      "snr": 0,
+      "heard": "there's threatened therefore where",
+      "error": null,
+      "seconds": 5.499817436999991,
+      "per": 0.9090909090909091,
+      "wer": 1
+    },
+    {
+      "lang": "en",
+      "index": 1,
+      "type": "hum",
+      "snr": 20,
+      "heard": "she says she shells by the sea shortly",
+      "error": null,
+      "seconds": 0.539539883999998,
+      "per": 0.22727272727272727,
+      "wer": 0.375
+    },
+    {
+      "lang": "en",
+      "index": 1,
+      "type": "hum",
+      "snr": 10,
+      "heard": "she says she says by the sea george",
+      "error": null,
+      "seconds": 1.041995676999999,
+      "per": 0.2727272727272727,
+      "wer": 0.5
+    },
+    {
+      "lang": "en",
+      "index": 1,
+      "type": "hum",
+      "snr": 0,
+      "heard": "these as he says by the sea george",
+      "error": null,
+      "seconds": 2.9023365209999903,
+      "per": 0.36363636363636365,
+      "wer": 0.625
+    },
+    {
+      "lang": "en",
+      "index": 1,
+      "type": "crackle",
+      "snr": 20,
+      "heard": "she cells she shells by the sea sort f",
+      "error": null,
+      "seconds": 1.292603774999996,
+      "per": 0.18181818181818182,
+      "wer": 0.5
+    },
+    {
+      "lang": "en",
+      "index": 1,
+      "type": "crackle",
+      "snr": 10,
+      "heard": "cecil she seldom the sea wharf",
+      "error": null,
+      "seconds": 2.47054516400001,
+      "per": 0.5454545454545454,
+      "wer": 0.75
+    },
+    {
+      "lang": "en",
+      "index": 1,
+      "type": "crackle",
+      "snr": 0,
+      "heard": "for feet lived the sleet dwarf",
+      "error": null,
+      "seconds": 3.78733707400001,
+      "per": 0.8181818181818182,
+      "wer": 0.875
+    },
+    {
+      "lang": "en",
+      "index": 1,
+      "type": "drifting",
+      "snr": 20,
+      "heard": "see says she says by the sea shore th",
+      "error": null,
+      "seconds": 0.8081832390000054,
+      "per": 0.2727272727272727,
+      "wer": 0.625
+    },
+    {
+      "lang": "en",
+      "index": 1,
+      "type": "drifting",
+      "snr": 10,
+      "heard": "and says him there's i the sea forth",
+      "error": null,
+      "seconds": 1.7682982480000065,
+      "per": 0.5454545454545454,
+      "wer": 0.75
+    },
+    {
+      "lang": "en",
+      "index": 1,
+      "type": "drifting",
+      "snr": 0,
+      "heard": "and there and there and as",
+      "error": null,
+      "seconds": 4.503811325999996,
+      "per": 0.9545454545454546,
+      "wer": 1
+    },
+    {
+      "lang": "ru",
+      "index": 0,
+      "type": "clean",
+      "snr": null,
+      "heard": "свежий еще этих мягких французских бу во к да выпей чаю",
+      "error": null,
+      "seconds": 4.906467299000011,
+      "per": 0.0851063829787234,
+      "wer": 0.6
+    },
+    {
+      "lang": "ru",
+      "index": 0,
+      "type": "white",
+      "snr": 20,
+      "heard": "слезы еще если с нас из француз из самого сам с вещами с",
+      "error": null,
+      "seconds": 2.3628765230000135,
+      "per": 0.6382978723404256,
+      "wer": 1.3
+    },
+    {
+      "lang": "ru",
+      "index": 0,
+      "type": "white",
+      "snr": 10,
+      "heard": "сам со сна нам разом сам сам сам на нам элен с",
+      "error": null,
+      "seconds": 4.565181295000016,
+      "per": 0.8723404255319149,
+      "wer": 1.2
+    },
+    {
+      "lang": "ru",
+      "index": 0,
+      "type": "white",
+      "snr": 0,
+      "heard": "сам это на на на",
+      "error": null,
+      "seconds": 2.0818390369999977,
+      "per": 0.8723404255319149,
+      "wer": 1
+    },
+    {
+      "lang": "ru",
+      "index": 0,
+      "type": "pink",
+      "snr": 20,
+      "heard": "слезы еще этих нас из французских голос да вы свеча но с",
+      "error": null,
+      "seconds": 2.244119088000007,
+      "per": 0.3617021276595745,
+      "wer": 1
+    },
+    {
+      "lang": "ru",
+      "index": 0,
+      "type": "pink",
+      "snr": 10,
+      "heard": "слезы еще из нам разом он анна анна сами с",
+      "error": null,
+      "seconds": 5.442329524000001,
+      "per": 0.7446808510638298,
+      "wer": 1
+    },
+    {
+      "lang": "ru",
+      "index": 0,
+      "type": "pink",
+      "snr": 0,
+      "heard": "она э́манамана на на на",
+      "error": null,
+      "seconds": 1.9699309069999726,
+      "per": 0.8723404255319149,
+      "wer": 1
+    },
+    {
+      "lang": "ru",
+      "index": 0,
+      "type": "brown",
+      "snr": 20,
+      "heard": "все же еще этих мягких французских голод в да выпей чаю с",
+      "error": null,
+      "seconds": 1.1694426050000184,
+      "per": 0.1702127659574468,
+      "wer": 0.5
+    },
+    {
+      "lang": "ru",
+      "index": 0,
+      "type": "brown",
+      "snr": 10,
+      "heard": "свежий еще этих на всех французских голос да вывели чаю с",
+      "error": null,
+      "seconds": 1.6300962259999943,
+      "per": 0.2978723404255319,
+      "wer": 0.8
+    },
+    {
+      "lang": "ru",
+      "index": 0,
+      "type": "brown",
+      "snr": 0,
+      "heard": "слезы еще на с нам француз с одного за за вы знаю вас",
+      "error": null,
+      "seconds": 5.125956838000013,
+      "per": 0.6382978723404256,
+      "wer": 1.3
+    },
+    {
+      "lang": "ru",
+      "index": 0,
+      "type": "blue",
+      "snr": 20,
+      "heard": "слезы еще если с нас из француз из снова сам с вещами с",
+      "error": null,
+      "seconds": 1.646331204999995,
+      "per": 0.6595744680851063,
+      "wer": 1.3
+    },
+    {
+      "lang": "ru",
+      "index": 0,
+      "type": "blue",
+      "snr": 10,
+      "heard": "сном со известно с иваном в мысли с самого сам с сами с",
+      "error": null,
+      "seconds": 4.232416641000018,
+      "per": 0.8723404255319149,
+      "wer": 1.3
+    },
+    {
+      "lang": "ru",
+      "index": 0,
+      "type": "blue",
+      "snr": 0,
+      "heard": "сам это мама дамам эс",
+      "error": null,
+      "seconds": 2.944847686000023,
+      "per": 0.8723404255319149,
+      "wer": 1
+    },
+    {
+      "lang": "ru",
+      "index": 0,
+      "type": "violet",
+      "snr": 20,
+      "heard": "слезы еще эти с нас из француз из слова сам с из а но с",
+      "error": null,
+      "seconds": 1.9923465129999969,
+      "per": 0.5957446808510638,
+      "wer": 1.5
+    },
+    {
+      "lang": "ru",
+      "index": 0,
+      "type": "violet",
+      "snr": 10,
+      "heard": "с ним со если с нас из француз из снова сам с из элен с",
+      "error": null,
+      "seconds": 2.7992032860000036,
+      "per": 0.723404255319149,
+      "wer": 1.5
+    },
+    {
+      "lang": "ru",
+      "index": 0,
+      "type": "violet",
+      "snr": 0,
+      "heard": "сам с известном сам с мама сам сам с элен с",
+      "error": null,
+      "seconds": 3.216404287000012,
+      "per": 0.8723404255319149,
+      "wer": 1.1
+    },
+    {
+      "lang": "ru",
+      "index": 0,
+      "type": "speech-shaped",
+      "snr": 20,
+      "heard": "свежий еще этих массы французских голос а вы кричали у с",
+      "error": null,
+      "seconds": 2.6203650489999855,
+      "per": 0.3829787234042553,
+      "wer": 1
+    },
+    {
+      "lang": "ru",
+      "index": 0,
+      "type": "speech-shaped",
+      "snr": 10,
+      "heard": "слезы еще из мама роман анна за вы знали за",
+      "error": null,
+      "seconds": 4.449051634999981,
+      "per": 0.7021276595744681,
+      "wer": 1
+    },
+    {
+      "lang": "ru",
+      "index": 0,
+      "type": "speech-shaped",
+      "snr": 0,
+      "heard": "анну это а",
+      "error": null,
+      "seconds": 1.0482227619999904,
+      "per": 0.9148936170212766,
+      "wer": 1
+    },
+    {
+      "lang": "ru",
+      "index": 0,
+      "type": "babble",
+      "snr": 20,
+      "heard": "свежий еще этих мягких французских голос в да выпей чаю в",
+      "error": null,
+      "seconds": 1.943163461999997,
+      "per": 0.1702127659574468,
+      "wer": 0.6
+    },
+    {
+      "lang": "ru",
+      "index": 0,
+      "type": "babble",
+      "snr": 10,
+      "heard": "с ежели что за высматривал француз блеснула за даже для и чаю с",
+      "error": null,
+      "seconds": 3.9027161199999973,
+      "per": 0.574468085106383,
+      "wer": 1.2
+    },
+    {
+      "lang": "ru",
+      "index": 0,
+      "type": "babble",
+      "snr": 0,
+      "heard": "сжимая за за с же сумма сожалея за другую",
+      "error": null,
+      "seconds": 6.354535826999985,
+      "per": 0.8723404255319149,
+      "wer": 1
+    },
+    {
+      "lang": "ru",
+      "index": 0,
+      "type": "hum",
+      "snr": 20,
+      "heard": "че же еще этих мягких французских бу во да выпей чаю уйди",
+      "error": null,
+      "seconds": 1.0885774840000086,
+      "per": 0.2127659574468085,
+      "wer": 0.5
+    },
+    {
+      "lang": "ru",
+      "index": 0,
+      "type": "hum",
+      "snr": 10,
+      "heard": "свежий еще до тех мягких французских голову в два вывели чаю в",
+      "error": null,
+      "seconds": 1.5777666730000055,
+      "per": 0.3404255319148936,
+      "wer": 0.9
+    },
+    {
+      "lang": "ru",
+      "index": 0,
+      "type": "hum",
+      "snr": 0,
+      "heard": "с ежели со на зерно век должно а из зол о за вы нельзя роль",
+      "error": null,
+      "seconds": 3.342663668000023,
+      "per": 0.723404255319149,
+      "wer": 1.5
+    },
+    {
+      "lang": "ru",
+      "index": 0,
+      "type": "crackle",
+      "snr": 20,
+      "heard": "все с же еще на этих на всех французски стула в до вы при чаю в",
+      "error": null,
+      "seconds": 2.1231137649999874,
+      "per": 0.3829787234042553,
+      "wer": 1.3
+    },
+    {
+      "lang": "ru",
+      "index": 0,
+      "type": "crackle",
+      "snr": 10,
+      "heard": "слезы блеснула этих на всех француз с стула в до быть и со друг в",
+      "error": null,
+      "seconds": 3.9219524769999845,
+      "per": 0.6808510638297872,
+      "wer": 1.5
+    },
+    {
+      "lang": "ru",
+      "index": 0,
+      "type": "crackle",
+      "snr": 0,
+      "heard": "в для в углу в в в в вдруг в в к в во рту и в вдруг в",
+      "error": null,
+      "seconds": 5.056202799999999,
+      "per": 0.9148936170212766,
+      "wer": 1.9
+    },
+    {
+      "lang": "ru",
+      "index": 0,
+      "type": "drifting",
+      "snr": 20,
+      "heard": "слезы еще этих на всех французских голос а вы свеча но с",
+      "error": null,
+      "seconds": 2.0207399009999936,
+      "per": 0.3829787234042553,
+      "wer": 1.1
+    },
+    {
+      "lang": "ru",
+      "index": 0,
+      "type": "drifting",
+      "snr": 10,
+      "heard": "сам еще из нас иваном сама с голос анны и чаю с",
+      "error": null,
+      "seconds": 4.031589113000024,
+      "per": 0.6595744680851063,
+      "wer": 1.1
+    },
+    {
+      "lang": "ru",
+      "index": 0,
+      "type": "drifting",
+      "snr": 0,
+      "heard": "а он со этом анна даром за за",
+      "error": null,
+      "seconds": 4.209696305999998,
+      "per": 0.8297872340425532,
+      "wer": 1
+    },
+    {
+      "lang": "ru",
+      "index": 1,
+      "type": "clean",
+      "snr": null,
+      "heard": "привет как дело а в",
+      "error": null,
+      "seconds": 0.3168860440000135,
+      "per": 0.23076923076923078,
+      "wer": 1
+    },
+    {
+      "lang": "ru",
+      "index": 1,
+      "type": "white",
+      "snr": 20,
+      "heard": "среде со с дела с",
+      "error": null,
+      "seconds": 1.0255406589999911,
+      "per": 0.5384615384615384,
+      "wer": 1.3333333333333333
+    },
+    {
+      "lang": "ru",
+      "index": 1,
+      "type": "white",
+      "snr": 10,
+      "heard": "элен со сна с",
+      "error": null,
+      "seconds": 1.3253233980000076,
+      "per": 0.9230769230769231,
+      "wer": 1.3333333333333333
+    },
+    {
+      "lang": "ru",
+      "index": 1,
+      "type": "white",
+      "snr": 0,
+      "heard": "а нам это а",
+      "error": null,
+      "seconds": 0.7161835320000246,
+      "per": 0.8461538461538461,
+      "wer": 1.3333333333333333
+    },
+    {
+      "lang": "ru",
+      "index": 1,
+      "type": "pink",
+      "snr": 20,
+      "heard": "среде со с дела с",
+      "error": null,
+      "seconds": 0.6409234170000127,
+      "per": 0.5384615384615384,
+      "wer": 1.3333333333333333
+    },
+    {
+      "lang": "ru",
+      "index": 1,
+      "type": "pink",
+      "snr": 10,
+      "heard": "элен леса сна вас",
+      "error": null,
+      "seconds": 1.4434419869999984,
+      "per": 0.8461538461538461,
+      "wer": 1.3333333333333333
+    },
+    {
+      "lang": "ru",
+      "index": 1,
+      "type": "pink",
+      "snr": 0,
+      "heard": "а на на",
+      "error": null,
+      "seconds": 0.8451514240000397,
+      "per": 0.8461538461538461,
+      "wer": 1
+    },
+    {
+      "lang": "ru",
+      "index": 1,
+      "type": "brown",
+      "snr": 20,
+      "heard": "привет в как дело а с",
+      "error": null,
+      "seconds": 0.4588681370000122,
+      "per": 0.3076923076923077,
+      "wer": 1.3333333333333333
+    },
+    {
+      "lang": "ru",
+      "index": 1,
+      "type": "brown",
+      "snr": 10,
+      "heard": "в невеста в дела с",
+      "error": null,
+      "seconds": 0.7811536830000114,
+      "per": 0.5384615384615384,
+      "wer": 1.3333333333333333
+    },
+    {
+      "lang": "ru",
+      "index": 1,
+      "type": "brown",
+      "snr": 0,
+      "heard": "марьи леса в дела вас",
+      "error": null,
+      "seconds": 1.459420473999984,
+      "per": 0.7692307692307693,
+      "wer": 1.3333333333333333
+    },
+    {
+      "lang": "ru",
+      "index": 1,
+      "type": "blue",
+      "snr": 20,
+      "heard": "с леса с дела с",
+      "error": null,
+      "seconds": 0.9035321709999699,
+      "per": 0.6153846153846154,
+      "wer": 1.3333333333333333
+    },
+    {
+      "lang": "ru",
+      "index": 1,
+      "type": "blue",
+      "snr": 10,
+      "heard": "с леса в нас",
+      "error": null,
+      "seconds": 1.1585928330000024,
+      "per": 0.8461538461538461,
+      "wer": 1.3333333333333333
+    },
+    {
+      "lang": "ru",
+      "index": 1,
+      "type": "blue",
+      "snr": 0,
+      "heard": "сам с этом это с",
+      "error": null,
+      "seconds": 0.6912913900000276,
+      "per": 0.9230769230769231,
+      "wer": 1.6666666666666667
+    },
+    {
+      "lang": "ru",
+      "index": 1,
+      "type": "violet",
+      "snr": 20,
+      "heard": "с лесов ее с",
+      "error": null,
+      "seconds": 0.6183596409999882,
+      "per": 0.9230769230769231,
+      "wer": 1.3333333333333333
+    },
+    {
+      "lang": "ru",
+      "index": 1,
+      "type": "violet",
+      "snr": 10,
+      "heard": "с леса с для нас",
+      "error": null,
+      "seconds": 0.7709041239999933,
+      "per": 0.8461538461538461,
+      "wer": 1.6666666666666667
+    },
+    {
+      "lang": "ru",
+      "index": 1,
+      "type": "violet",
+      "snr": 0,
+      "heard": "сам сам нас",
+      "error": null,
+      "seconds": 0.7557704169999925,
+      "per": 0.9230769230769231,
+      "wer": 1
+    },
+    {
+      "lang": "ru",
+      "index": 1,
+      "type": "speech-shaped",
+      "snr": 20,
+      "heard": "среде с вас дела с",
+      "error": null,
+      "seconds": 0.8472979109999724,
+      "per": 0.46153846153846156,
+      "wer": 1.3333333333333333
+    },
+    {
+      "lang": "ru",
+      "index": 1,
+      "type": "speech-shaped",
+      "snr": 10,
+      "heard": "элен ивановна а",
+      "error": null,
+      "seconds": 1.3942793190000229,
+      "per": 0.8461538461538461,
+      "wer": 1
+    },
+    {
+      "lang": "ru",
+      "index": 1,
+      "type": "speech-shaped",
+      "snr": 0,
+      "heard": "анна анна а",
+      "error": null,
+      "seconds": 1.2454071450000046,
+      "per": 0.8461538461538461,
+      "wer": 1
+    },
+    {
+      "lang": "ru",
+      "index": 1,
+      "type": "babble",
+      "snr": 20,
+      "heard": "привет то как дело а в",
+      "error": null,
+      "seconds": 0.9509948099999456,
+      "per": 0.38461538461538464,
+      "wer": 1.3333333333333333
+    },
+    {
+      "lang": "ru",
+      "index": 1,
+      "type": "babble",
+      "snr": 10,
+      "heard": "заревел святого дела у из",
+      "error": null,
+      "seconds": 2.039352101999975,
+      "per": 0.9230769230769231,
+      "wer": 1.3333333333333333
+    },
+    {
+      "lang": "ru",
+      "index": 1,
+      "type": "babble",
+      "snr": 0,
+      "heard": "элен разом малые",
+      "error": null,
+      "seconds": 1.1075539500000304,
+      "per": 1,
+      "wer": 1
+    },
+    {
+      "lang": "ru",
+      "index": 1,
+      "type": "hum",
+      "snr": 20,
+      "heard": "привет как дело а гь",
+      "error": null,
+      "seconds": 0.4488128199999919,
+      "per": 0.23076923076923078,
+      "wer": 1
+    },
+    {
+      "lang": "ru",
+      "index": 1,
+      "type": "hum",
+      "snr": 10,
+      "heard": "в пример как дело а где",
+      "error": null,
+      "seconds": 0.6059061579999979,
+      "per": 0.6153846153846154,
+      "wer": 1.6666666666666667
+    },
+    {
+      "lang": "ru",
+      "index": 1,
+      "type": "hum",
+      "snr": 0,
+      "heard": "ли верно взяла рь",
+      "error": null,
+      "seconds": 1.8024732369999983,
+      "per": 0.6153846153846154,
+      "wer": 1.3333333333333333
+    },
+    {
+      "lang": "ru",
+      "index": 1,
+      "type": "crackle",
+      "snr": 20,
+      "heard": "в привет в как дела в",
+      "error": null,
+      "seconds": 0.7084442149999668,
+      "per": 0.23076923076923078,
+      "wer": 1
+    },
+    {
+      "lang": "ru",
+      "index": 1,
+      "type": "crackle",
+      "snr": 10,
+      "heard": "в везде в в завтра в в",
+      "error": null,
+      "seconds": 1.5107782609999996,
+      "per": 1,
+      "wer": 2.3333333333333335
+    },
+    {
+      "lang": "ru",
+      "index": 1,
+      "type": "crackle",
+      "snr": 0,
+      "heard": "в для в встав рада в в",
+      "error": null,
+      "seconds": 1.2200756270000128,
+      "per": 1.0769230769230769,
+      "wer": 2.3333333333333335
+    },
+    {
+      "lang": "ru",
+      "index": 1,
+      "type": "drifting",
+      "snr": 20,
+      "heard": "среде с вас дела в",
+      "error": null,
+      "seconds": 0.5815113780000247,
+      "per": 0.46153846153846156,
+      "wer": 1.3333333333333333
+    },
+    {
+      "lang": "ru",
+      "index": 1,
+      "type": "drifting",
+      "snr": 10,
+      "heard": "а для леса в нас",
+      "error": null,
+      "seconds": 1.5234713880000055,
+      "per": 0.9230769230769231,
+      "wer": 1.6666666666666667
+    },
+    {
+      "lang": "ru",
+      "index": 1,
+      "type": "drifting",
+      "snr": 0,
+      "heard": "анна это",
+      "error": null,
+      "seconds": 0.9927732380000525,
+      "per": 0.9230769230769231,
+      "wer": 1
+    },
+    {
+      "lang": "hi",
+      "index": 0,
+      "type": "clean",
+      "snr": null,
+      "heard": "नमस्ते आप कैसे हैं",
+      "error": null,
+      "seconds": 4.2528362000000195,
+      "per": 0,
+      "wer": 0
+    },
+    {
+      "lang": "hi",
+      "index": 0,
+      "type": "white",
+      "snr": 20,
+      "heard": "तुमसे सास ऐसे है इस",
+      "error": null,
+      "seconds": 1.5051485190000384,
+      "per": 0.6,
+      "wer": 1.25
+    },
+    {
+      "lang": "hi",
+      "index": 0,
+      "type": "white",
+      "snr": 10,
+      "heard": "हम सिरा ऐसे ऐसा",
+      "error": null,
+      "seconds": 3.232933609,
+      "per": 0.5333333333333333,
+      "wer": 1
+    },
+    {
+      "lang": "hi",
+      "index": 0,
+      "type": "white",
+      "snr": 0,
+      "heard": "अनुमान आने ऐसा",
+      "error": null,
+      "seconds": 3.8881147289999642,
+      "per": 0.7333333333333333,
+      "wer": 1
+    },
+    {
+      "lang": "hi",
+      "index": 0,
+      "type": "pink",
+      "snr": 20,
+      "heard": "तुमसे सात ऐसे ऐसे",
+      "error": null,
+      "seconds": 1.7484976180000231,
+      "per": 0.6,
+      "wer": 1
+    },
+    {
+      "lang": "hi",
+      "index": 0,
+      "type": "pink",
+      "snr": 10,
+      "heard": "हम मसालेदार ऐसे ऐसा",
+      "error": null,
+      "seconds": 2.4268229960000025,
+      "per": 0.7333333333333333,
+      "wer": 1
+    },
+    {
+      "lang": "hi",
+      "index": 0,
+      "type": "pink",
+      "snr": 0,
+      "heard": "हनुमान आने ऐसा",
+      "error": null,
+      "seconds": 3.5301927060000016,
+      "per": 0.7333333333333333,
+      "wer": 1
+    },
+    {
+      "lang": "hi",
+      "index": 0,
+      "type": "brown",
+      "snr": 20,
+      "heard": "नमस्ते सात कैसे हैं उस",
+      "error": null,
+      "seconds": 0.7712467909999541,
+      "per": 0.26666666666666666,
+      "wer": 0.5
+    },
+    {
+      "lang": "hi",
+      "index": 0,
+      "type": "brown",
+      "snr": 10,
+      "heard": "नमस्ते हात कैसे हैः",
+      "error": null,
+      "seconds": 1.0891862819999805,
+      "per": 0.26666666666666666,
+      "wer": 0.5
+    },
+    {
+      "lang": "hi",
+      "index": 0,
+      "type": "brown",
+      "snr": 0,
+      "heard": "हम मसालेदार ऐसे ऐसा",
+      "error": null,
+      "seconds": 1.747468891000026,
+      "per": 0.7333333333333333,
+      "wer": 1
+    },
+    {
+      "lang": "hi",
+      "index": 0,
+      "type": "blue",
+      "snr": 20,
+      "heard": "तुमसे सास सिलसिले है इस",
+      "error": null,
+      "seconds": 1.105192200999998,
+      "per": 0.9333333333333333,
+      "wer": 1.25
+    },
+    {
+      "lang": "hi",
+      "index": 0,
+      "type": "blue",
+      "snr": 10,
+      "heard": "सुनसान सै से से लैस",
+      "error": null,
+      "seconds": 2.1390243060000356,
+      "per": 0.8666666666666667,
+      "wer": 1.25
+    },
+    {
+      "lang": "hi",
+      "index": 0,
+      "type": "blue",
+      "snr": 0,
+      "heard": "हम हमारे है था",
+      "error": null,
+      "seconds": 4.514643572999979,
+      "per": 0.7333333333333333,
+      "wer": 1
+    },
+    {
+      "lang": "hi",
+      "index": 0,
+      "type": "violet",
+      "snr": 20,
+      "heard": "तुमसे इस रास्ते से है इस",
+      "error": null,
+      "seconds": 1.2523854240000365,
+      "per": 0.8,
+      "wer": 1.5
+    },
+    {
+      "lang": "hi",
+      "index": 0,
+      "type": "violet",
+      "snr": 10,
+      "heard": "लोमस इससे से है इस",
+      "error": null,
+      "seconds": 1.3588061110000127,
+      "per": 0.7333333333333333,
+      "wer": 1.25
+    },
+    {
+      "lang": "hi",
+      "index": 0,
+      "type": "violet",
+      "snr": 0,
+      "heard": "सुनसान सै है से लैस",
+      "error": null,
+      "seconds": 1.7502511499999673,
+      "per": 0.8,
+      "wer": 1.25
+    },
+    {
+      "lang": "hi",
+      "index": 0,
+      "type": "speech-shaped",
+      "snr": 20,
+      "heard": "मम से सात कैसे है इस",
+      "error": null,
+      "seconds": 1.8172653109999957,
+      "per": 0.4666666666666667,
+      "wer": 1.25
+    },
+    {
+      "lang": "hi",
+      "index": 0,
+      "type": "speech-shaped",
+      "snr": 10,
+      "heard": "हम मसालेदार ऐसे ऐसा",
+      "error": null,
+      "seconds": 2.4014756240000135,
+      "per": 0.7333333333333333,
+      "wer": 1
+    },
+    {
+      "lang": "hi",
+      "index": 0,
+      "type": "speech-shaped",
+      "snr": 0,
+      "heard": "लिया है या",
+      "error": null,
+      "seconds": 2.53355406699999,
+      "per": 0.8666666666666667,
+      "wer": 1
+    },
+    {
+      "lang": "hi",
+      "index": 0,
+      "type": "babble",
+      "snr": 20,
+      "heard": "नमस्ते विवाद कैसे हैं इस",
+      "error": null,
+      "seconds": 1.7798691760000074,
+      "per": 0.4666666666666667,
+      "wer": 0.5
+    },
+    {
+      "lang": "hi",
+      "index": 0,
+      "type": "babble",
+      "snr": 10,
+      "heard": "मम इसलिए मिलन कैसे है इस",
+      "error": null,
+      "seconds": 2.860205694000004,
+      "per": 0.8666666666666667,
+      "wer": 1.25
+    },
+    {
+      "lang": "hi",
+      "index": 0,
+      "type": "babble",
+      "snr": 0,
+      "heard": "नमः आये मिलन ऐसे हैं वे",
+      "error": null,
+      "seconds": 3.76683280199999,
+      "per": 0.7333333333333333,
+      "wer": 1.25
+    },
+    {
+      "lang": "hi",
+      "index": 0,
+      "type": "hum",
+      "snr": 20,
+      "heard": "नमस्ते दाट् कैसे हैं उज्र",
+      "error": null,
+      "seconds": 0.5530667039999971,
+      "per": 0.3333333333333333,
+      "wer": 0.5
+    },
+    {
+      "lang": "hi",
+      "index": 0,
+      "type": "hum",
+      "snr": 10,
+      "heard": "नमस्ते जात कैसे हैं उज्र",
+      "error": null,
+      "seconds": 1.1140055939999876,
+      "per": 0.3333333333333333,
+      "wer": 0.5
+    },
+    {
+      "lang": "hi",
+      "index": 0,
+      "type": "hum",
+      "snr": 0,
+      "heard": "दुम तेज मगर से आज",
+      "error": null,
+      "seconds": 1.5217641549999825,
+      "per": 0.8,
+      "wer": 1.25
+    },
+    {
+      "lang": "hi",
+      "index": 0,
+      "type": "crackle",
+      "snr": 20,
+      "heard": "नमस्ते चट कैसे है फ़्",
+      "error": null,
+      "seconds": 1.2248742160000257,
+      "per": 0.3333333333333333,
+      "wer": 0.75
+    },
+    {
+      "lang": "hi",
+      "index": 0,
+      "type": "crackle",
+      "snr": 10,
+      "heard": "तुमसे तरफ़सै सिल फ़्",
+      "error": null,
+      "seconds": 1.9413814169999677,
+      "per": 0.7333333333333333,
+      "wer": 1
+    },
+    {
+      "lang": "hi",
+      "index": 0,
+      "type": "crackle",
+      "snr": 0,
+      "heard": "तुम फ़िर फ़्ल्त् तिस लोग फ़्",
+      "error": null,
+      "seconds": 2.318241012000013,
+      "per": 0.9333333333333333,
+      "wer": 1.5
+    },
+    {
+      "lang": "hi",
+      "index": 0,
+      "type": "drifting",
+      "snr": 20,
+      "heard": "मम से सात ऐसे ऐसे",
+      "error": null,
+      "seconds": 1.7458571980000124,
+      "per": 0.5333333333333333,
+      "wer": 1.25
+    },
+    {
+      "lang": "hi",
+      "index": 0,
+      "type": "drifting",
+      "snr": 10,
+      "heard": "हम मसाला ऐसे ऐसे",
+      "error": null,
+      "seconds": 1.8995005360000068,
+      "per": 0.6,
+      "wer": 1
+    },
+    {
+      "lang": "hi",
+      "index": 0,
+      "type": "drifting",
+      "snr": 0,
+      "heard": "हम लाला है",
+      "error": null,
+      "seconds": 2.7122765530000326,
+      "per": 0.6666666666666666,
+      "wer": 1
+    },
+    {
+      "lang": "hi",
+      "index": 1,
+      "type": "clean",
+      "snr": null,
+      "heard": "मेरा नाम आम है",
+      "error": null,
+      "seconds": 0.5082440479999641,
+      "per": 0.08333333333333333,
+      "wer": 0.25
+    },
+    {
+      "lang": "hi",
+      "index": 1,
+      "type": "white",
+      "snr": 20,
+      "heard": "मेरा मै मै मैं ऐसा",
+      "error": null,
+      "seconds": 0.7881512140000123,
+      "per": 0.5833333333333334,
+      "wer": 1
+    },
+    {
+      "lang": "hi",
+      "index": 1,
+      "type": "white",
+      "snr": 10,
+      "heard": "मैं मैं मैं मैं ह्",
+      "error": null,
+      "seconds": 1.2336562560000457,
+      "per": 0.75,
+      "wer": 1.25
+    },
+    {
+      "lang": "hi",
+      "index": 1,
+      "type": "white",
+      "snr": 0,
+      "heard": "",
+      "error": "too-noisy",
+      "seconds": 1.6779761639999924,
+      "per": 1,
+      "wer": 1
+    },
+    {
+      "lang": "hi",
+      "index": 1,
+      "type": "pink",
+      "snr": 20,
+      "heard": "मेरा नाम है मैं ऐसा",
+      "error": null,
+      "seconds": 1.2262017139999661,
+      "per": 0.4166666666666667,
+      "wer": 0.75
+    },
+    {
+      "lang": "hi",
+      "index": 1,
+      "type": "pink",
+      "snr": 10,
+      "heard": "मैं मैं मैंने ऐसा",
+      "error": null,
+      "seconds": 1.1115991040000226,
+      "per": 0.9166666666666666,
+      "wer": 1
+    },
+    {
+      "lang": "hi",
+      "index": 1,
+      "type": "pink",
+      "snr": 0,
+      "heard": "मैं माया",
+      "error": null,
+      "seconds": 1.9622927100000087,
+      "per": 0.75,
+      "wer": 1
+    },
+    {
+      "lang": "hi",
+      "index": 1,
+      "type": "brown",
+      "snr": 20,
+      "heard": "मेरा मैं मामा ऐसा",
+      "error": null,
+      "seconds": 0.6885620009999839,
+      "per": 0.5,
+      "wer": 0.75
+    },
+    {
+      "lang": "hi",
+      "index": 1,
+      "type": "brown",
+      "snr": 10,
+      "heard": "मेरा मैं मामा हैः",
+      "error": null,
+      "seconds": 0.831020651000028,
+      "per": 0.4166666666666667,
+      "wer": 0.75
+    },
+    {
+      "lang": "hi",
+      "index": 1,
+      "type": "brown",
+      "snr": 0,
+      "heard": "मेरा मैं मैं मैं ऐसा",
+      "error": null,
+      "seconds": 1.210342908999999,
+      "per": 0.5833333333333334,
+      "wer": 1
+    },
+    {
+      "lang": "hi",
+      "index": 1,
+      "type": "blue",
+      "snr": 20,
+      "heard": "से मै मै मै मै इस",
+      "error": null,
+      "seconds": 0.68067701699998,
+      "per": 0.8333333333333334,
+      "wer": 1.5
+    },
+    {
+      "lang": "hi",
+      "index": 1,
+      "type": "blue",
+      "snr": 10,
+      "heard": "मैं मै मैं मैं इस",
+      "error": null,
+      "seconds": 1.118618503000005,
+      "per": 0.8333333333333334,
+      "wer": 1.25
+    },
+    {
+      "lang": "hi",
+      "index": 1,
+      "type": "blue",
+      "snr": 0,
+      "heard": "",
+      "error": "too-noisy",
+      "seconds": 2.5036271569999515,
+      "per": 1,
+      "wer": 1
+    },
+    {
+      "lang": "hi",
+      "index": 1,
+      "type": "violet",
+      "snr": 20,
+      "heard": "सिर है मै मै मै इस",
+      "error": null,
+      "seconds": 0.8734567420000094,
+      "per": 0.9166666666666666,
+      "wer": 1.5
+    },
+    {
+      "lang": "hi",
+      "index": 1,
+      "type": "violet",
+      "snr": 10,
+      "heard": "से है मै मैं मै इस",
+      "error": null,
+      "seconds": 0.8254177420000196,
+      "per": 0.8333333333333334,
+      "wer": 1.5
+    },
+    {
+      "lang": "hi",
+      "index": 1,
+      "type": "violet",
+      "snr": 0,
+      "heard": "",
+      "error": "too-noisy",
+      "seconds": 1.578107533000002,
+      "per": 1,
+      "wer": 1
+    },
+    {
+      "lang": "hi",
+      "index": 1,
+      "type": "speech-shaped",
+      "snr": 20,
+      "heard": "मेरा मैं मामा हैः",
+      "error": null,
+      "seconds": 1.019847846000048,
+      "per": 0.4166666666666667,
+      "wer": 0.75
+    },
+    {
+      "lang": "hi",
+      "index": 1,
+      "type": "speech-shaped",
+      "snr": 10,
+      "heard": "मैं मैं मैंने ऐसा",
+      "error": null,
+      "seconds": 1.7339248110000045,
+      "per": 0.9166666666666666,
+      "wer": 1
+    },
+    {
+      "lang": "hi",
+      "index": 1,
+      "type": "speech-shaped",
+      "snr": 0,
+      "heard": "आया",
+      "error": null,
+      "seconds": 1.5526012780000455,
+      "per": 0.8333333333333334,
+      "wer": 1
+    },
+    {
+      "lang": "hi",
+      "index": 1,
+      "type": "babble",
+      "snr": 20,
+      "heard": "मेरा मैं मैंने ऐसहि",
+      "error": null,
+      "seconds": 1.4703994190000231,
+      "per": 0.6666666666666666,
+      "wer": 0.75
+    },
+    {
+      "lang": "hi",
+      "index": 1,
+      "type": "babble",
+      "snr": 10,
+      "heard": "मेरा मैं मैंने ऐसा है",
+      "error": null,
+      "seconds": 1.3568883869999555,
+      "per": 0.6666666666666666,
+      "wer": 0.75
+    },
+    {
+      "lang": "hi",
+      "index": 1,
+      "type": "babble",
+      "snr": 0,
+      "heard": "",
+      "error": "too-noisy",
+      "seconds": 3.684690558000002,
+      "per": 1,
+      "wer": 1
+    },
+    {
+      "lang": "hi",
+      "index": 1,
+      "type": "hum",
+      "snr": 20,
+      "heard": "मेरा नाम आम हैं उज्र",
+      "error": null,
+      "seconds": 0.7621348649999709,
+      "per": 0.4166666666666667,
+      "wer": 0.75
+    },
+    {
+      "lang": "hi",
+      "index": 1,
+      "type": "hum",
+      "snr": 10,
+      "heard": "मेरा नाम आम आज",
+      "error": null,
+      "seconds": 1.0327368529999512,
+      "per": 0.25,
+      "wer": 0.5
+    },
+    {
+      "lang": "hi",
+      "index": 1,
+      "type": "hum",
+      "snr": 0,
+      "heard": "मेरा नाम राम आज",
+      "error": null,
+      "seconds": 1.2855175399999716,
+      "per": 0.16666666666666666,
+      "wer": 0.25
+    },
+    {
+      "lang": "hi",
+      "index": 1,
+      "type": "crackle",
+      "snr": 20,
+      "heard": "मेरा नाम है मालिक",
+      "error": null,
+      "seconds": 1.1548205450000242,
+      "per": 0.5,
+      "wer": 0.5
+    },
+    {
+      "lang": "hi",
+      "index": 1,
+      "type": "crackle",
+      "snr": 10,
+      "heard": "तिलिस्म समै मिल इस",
+      "error": null,
+      "seconds": 2.7633186410000197,
+      "per": 1.1666666666666667,
+      "wer": 1
+    },
+    {
+      "lang": "hi",
+      "index": 1,
+      "type": "crackle",
+      "snr": 0,
+      "heard": "तिलिस्म समै तकलीफ़",
+      "error": null,
+      "seconds": 2.7941400469999644,
+      "per": 1.25,
+      "wer": 1
+    },
+    {
+      "lang": "hi",
+      "index": 1,
+      "type": "drifting",
+      "snr": 20,
+      "heard": "मेरा नाम है मैं ऐसा",
+      "error": null,
+      "seconds": 0.8348614260000177,
+      "per": 0.4166666666666667,
+      "wer": 0.75
+    },
+    {
+      "lang": "hi",
+      "index": 1,
+      "type": "drifting",
+      "snr": 10,
+      "heard": "है मै मैं मैं ऐसा",
+      "error": null,
+      "seconds": 0.9281116320000147,
+      "per": 0.9166666666666666,
+      "wer": 1.25
+    },
+    {
+      "lang": "hi",
+      "index": 1,
+      "type": "drifting",
+      "snr": 0,
+      "heard": "हैं मैना हैं आ",
+      "error": null,
+      "seconds": 1.5234786759999697,
+      "per": 0.75,
+      "wer": 1
+    },
+    {
+      "lang": "zh",
+      "index": 0,
+      "type": "clean",
+      "snr": null,
+      "heard": "你好你今天怎么样",
+      "error": null,
+      "seconds": 4.541495693999983,
+      "per": 0,
+      "wer": 0
+    },
+    {
+      "lang": "zh",
+      "index": 0,
+      "type": "white",
+      "snr": 20,
+      "heard": "心好似今天怎么旺儿萨",
+      "error": null,
+      "seconds": 1.1561820400000433,
+      "per": 0.4090909090909091,
+      "wer": 0.625
+    },
+    {
+      "lang": "zh",
+      "index": 0,
+      "type": "white",
+      "snr": 10,
+      "heard": "难耸三天萨么爷妈",
+      "error": null,
+      "seconds": 1.7529847590000136,
+      "per": 0.5909090909090909,
+      "wer": 0.875
+    },
+    {
+      "lang": "zh",
+      "index": 0,
+      "type": "white",
+      "snr": 0,
+      "heard": "难难爷难",
+      "error": null,
+      "seconds": 2.0424019929999484,
+      "per": 0.6818181818181818,
+      "wer": 1
+    },
+    {
+      "lang": "zh",
+      "index": 0,
+      "type": "pink",
+      "snr": 20,
+      "heard": "妹好似妹今天怎么样萨",
+      "error": null,
+      "seconds": 1.016742212000012,
+      "per": 0.45454545454545453,
+      "wer": 0.5
+    },
+    {
+      "lang": "zh",
+      "index": 0,
+      "type": "pink",
+      "snr": 10,
+      "heard": "人道难三天俺们啊马",
+      "error": null,
+      "seconds": 2.1954590069999687,
+      "per": 0.6818181818181818,
+      "wer": 1
+    },
+    {
+      "lang": "zh",
+      "index": 0,
+      "type": "pink",
+      "snr": 0,
+      "heard": "难难炼啊",
+      "error": null,
+      "seconds": 1.6847269489999743,
+      "per": 0.7272727272727273,
+      "wer": 1
+    },
+    {
+      "lang": "zh",
+      "index": 0,
+      "type": "brown",
+      "snr": 20,
+      "heard": "你好似你今天怎么样死",
+      "error": null,
+      "seconds": 0.9153481160000083,
+      "per": 0.18181818181818182,
+      "wer": 0.25
+    },
+    {
+      "lang": "zh",
+      "index": 0,
+      "type": "brown",
+      "snr": 10,
+      "heard": "你好似你今天怎么样萨",
+      "error": null,
+      "seconds": 0.836884796999977,
+      "per": 0.18181818181818182,
+      "wer": 0.25
+    },
+    {
+      "lang": "zh",
+      "index": 0,
+      "type": "brown",
+      "snr": 0,
+      "heard": "你老难今天怎么样啊",
+      "error": null,
+      "seconds": 1.6780862339999876,
+      "per": 0.18181818181818182,
+      "wer": 0.375
+    },
+    {
+      "lang": "zh",
+      "index": 0,
+      "type": "blue",
+      "snr": 20,
+      "heard": "心嫂我死今天怎么旺儿萨",
+      "error": null,
+      "seconds": 0.9711955080000334,
+      "per": 0.5454545454545454,
+      "wer": 0.875
+    },
+    {
+      "lang": "zh",
+      "index": 0,
+      "type": "blue",
+      "snr": 10,
+      "heard": "心白松三天怎么烂萨",
+      "error": null,
+      "seconds": 1.2593305890000193,
+      "per": 0.6818181818181818,
+      "wer": 0.75
+    },
+    {
+      "lang": "zh",
+      "index": 0,
+      "type": "blue",
+      "snr": 0,
+      "heard": "妈了宋散散爷妈们爷怕",
+      "error": null,
+      "seconds": 1.871408398999949,
+      "per": 0.9090909090909091,
+      "wer": 1.25
+    },
+    {
+      "lang": "zh",
+      "index": 0,
+      "type": "violet",
+      "snr": 20,
+      "heard": "心嫂我死今天怎么旺儿死",
+      "error": null,
+      "seconds": 0.9454242529999465,
+      "per": 0.5454545454545454,
+      "wer": 0.875
+    },
+    {
+      "lang": "zh",
+      "index": 0,
+      "type": "violet",
+      "snr": 10,
+      "heard": "心嫂死心天怎么万死",
+      "error": null,
+      "seconds": 1.22407456800004,
+      "per": 0.5,
+      "wer": 0.75
+    },
+    {
+      "lang": "zh",
+      "index": 0,
+      "type": "violet",
+      "snr": 0,
+      "heard": "分太散散偏三面萨",
+      "error": null,
+      "seconds": 2.215407669999986,
+      "per": 0.8181818181818182,
+      "wer": 1
+    },
+    {
+      "lang": "zh",
+      "index": 0,
+      "type": "speech-shaped",
+      "snr": 20,
+      "heard": "没好似你今天怎么样萨",
+      "error": null,
+      "seconds": 1.1618755619999719,
+      "per": 0.3181818181818182,
+      "wer": 0.375
+    },
+    {
+      "lang": "zh",
+      "index": 0,
+      "type": "speech-shaped",
+      "snr": 10,
+      "heard": "毛人三天俺们啊难",
+      "error": null,
+      "seconds": 2.169690639999986,
+      "per": 0.7272727272727273,
+      "wer": 1
+    },
+    {
+      "lang": "zh",
+      "index": 0,
+      "type": "speech-shaped",
+      "snr": 0,
+      "heard": "难了啊",
+      "error": null,
+      "seconds": 1.514690569999977,
+      "per": 0.8636363636363636,
+      "wer": 1
+    },
+    {
+      "lang": "zh",
+      "index": 0,
+      "type": "babble",
+      "snr": 20,
+      "heard": "你好公你今天怎么样发",
+      "error": null,
+      "seconds": 0.8887765689999797,
+      "per": 0.22727272727272727,
+      "wer": 0.25
+    },
+    {
+      "lang": "zh",
+      "index": 0,
+      "type": "babble",
+      "snr": 10,
+      "heard": "泥好了你今天怎么样哩",
+      "error": null,
+      "seconds": 1.378935421000002,
+      "per": 0.18181818181818182,
+      "wer": 0.375
+    },
+    {
+      "lang": "zh",
+      "index": 0,
+      "type": "babble",
+      "snr": 0,
+      "heard": "妹嚷人妹了人",
+      "error": null,
+      "seconds": 2.197138295999961,
+      "per": 0.9090909090909091,
+      "wer": 1
+    },
+    {
+      "lang": "zh",
+      "index": 0,
+      "type": "hum",
+      "snr": 20,
+      "heard": "你好得你今天怎么样死",
+      "error": null,
+      "seconds": 0.6200844520000391,
+      "per": 0.18181818181818182,
+      "wer": 0.25
+    },
+    {
+      "lang": "zh",
+      "index": 0,
+      "type": "hum",
+      "snr": 10,
+      "heard": "你好里今天怎么样立于",
+      "error": null,
+      "seconds": 1.5358706160000293,
+      "per": 0.18181818181818182,
+      "wer": 0.375
+    },
+    {
+      "lang": "zh",
+      "index": 0,
+      "type": "hum",
+      "snr": 0,
+      "heard": "",
+      "error": "too-noisy",
+      "seconds": 1.915057303999958,
+      "per": 1,
+      "wer": 1
+    },
+    {
+      "lang": "zh",
+      "index": 0,
+      "type": "crackle",
+      "snr": 20,
+      "heard": "你好底今天怎么样儿父",
+      "error": null,
+      "seconds": 0.7906875090000103,
+      "per": 0.22727272727272727,
+      "wer": 0.375
+    },
+    {
+      "lang": "zh",
+      "index": 0,
+      "type": "crackle",
+      "snr": 10,
+      "heard": "泥访我点今天分落父",
+      "error": null,
+      "seconds": 1.2410396799999872,
+      "per": 0.6363636363636364,
+      "wer": 0.875
+    },
+    {
+      "lang": "zh",
+      "index": 0,
+      "type": "crackle",
+      "snr": 0,
+      "heard": "离宝殿自思分落父",
+      "error": null,
+      "seconds": 0.8634183690000209,
+      "per": 0.7272727272727273,
+      "wer": 1
+    },
+    {
+      "lang": "zh",
+      "index": 0,
+      "type": "drifting",
+      "snr": 20,
+      "heard": "妹好似你今天怎么样萨",
+      "error": null,
+      "seconds": 0.8947156410000171,
+      "per": 0.3181818181818182,
+      "wer": 0.375
+    },
+    {
+      "lang": "zh",
+      "index": 0,
+      "type": "drifting",
+      "snr": 10,
+      "heard": "人好难今天怎么难啊",
+      "error": null,
+      "seconds": 1.6945594500000007,
+      "per": 0.4090909090909091,
+      "wer": 0.5
+    },
+    {
+      "lang": "zh",
+      "index": 0,
+      "type": "drifting",
+      "snr": 0,
+      "heard": "人啊了难散了萨",
+      "error": null,
+      "seconds": 2.3717149389999688,
+      "per": 0.7727272727272727,
+      "wer": 1
+    },
+    {
+      "lang": "zh",
+      "index": 1,
+      "type": "clean",
+      "snr": null,
+      "heard": "我是中国人",
+      "error": null,
+      "seconds": 0.9028650420000195,
+      "per": 0,
+      "wer": 0
+    },
+    {
+      "lang": "zh",
+      "index": 1,
+      "type": "white",
+      "snr": 20,
+      "heard": "果是中国人死",
+      "error": null,
+      "seconds": 0.5551078410000191,
+      "per": 0.23076923076923078,
+      "wer": 0.4
+    },
+    {
+      "lang": "zh",
+      "index": 1,
+      "type": "white",
+      "snr": 10,
+      "heard": "问人龙王发",
+      "error": null,
+      "seconds": 1.6801115180000197,
+      "per": 0.8461538461538461,
+      "wer": 1
+    },
+    {
+      "lang": "zh",
+      "index": 1,
+      "type": "white",
+      "snr": 0,
+      "heard": "难龙萨",
+      "error": null,
+      "seconds": 1.769086834000016,
+      "per": 0.8461538461538461,
+      "wer": 1
+    },
+    {
+      "lang": "zh",
+      "index": 1,
+      "type": "pink",
+      "snr": 20,
+      "heard": "我是中国人死",
+      "error": null,
+      "seconds": 0.588772554999974,
+      "per": 0.15384615384615385,
+      "wer": 0.2
+    },
+    {
+      "lang": "zh",
+      "index": 1,
+      "type": "pink",
+      "snr": 10,
+      "heard": "我是荣国人撒",
+      "error": null,
+      "seconds": 1.4402053769999765,
+      "per": 0.23076923076923078,
+      "wer": 0.4
+    },
+    {
+      "lang": "zh",
+      "index": 1,
+      "type": "pink",
+      "snr": 0,
+      "heard": "了难龙王妈",
+      "error": null,
+      "seconds": 1.2752759519999963,
+      "per": 0.8461538461538461,
+      "wer": 1
+    },
+    {
+      "lang": "zh",
+      "index": 1,
+      "type": "brown",
+      "snr": 20,
+      "heard": "我是中国人夫",
+      "error": null,
+      "seconds": 0.4173550459999824,
+      "per": 0.15384615384615385,
+      "wer": 0.2
+    },
+    {
+      "lang": "zh",
+      "index": 1,
+      "type": "brown",
+      "snr": 10,
+      "heard": "我是中国人死",
+      "error": null,
+      "seconds": 1.0245540679999976,
+      "per": 0.15384615384615385,
+      "wer": 0.2
+    },
+    {
+      "lang": "zh",
+      "index": 1,
+      "type": "brown",
+      "snr": 0,
+      "heard": "我是荣国人萨",
+      "error": null,
+      "seconds": 1.0294533059999813,
+      "per": 0.23076923076923078,
+      "wer": 0.4
+    },
+    {
+      "lang": "zh",
+      "index": 1,
+      "type": "blue",
+      "snr": 20,
+      "heard": "火势中国人死",
+      "error": null,
+      "seconds": 0.6173507910000043,
+      "per": 0.23076923076923078,
+      "wer": 0.6
+    },
+    {
+      "lang": "zh",
+      "index": 1,
+      "type": "blue",
+      "snr": 10,
+      "heard": "我们荣国临死",
+      "error": null,
+      "seconds": 1.3371572879999876,
+      "per": 0.6153846153846154,
+      "wer": 0.8
+    },
+    {
+      "lang": "zh",
+      "index": 1,
+      "type": "blue",
+      "snr": 0,
+      "heard": "算龙萨",
+      "error": null,
+      "seconds": 1.1433832990000374,
+      "per": 0.8461538461538461,
+      "wer": 1
+    },
+    {
+      "lang": "zh",
+      "index": 1,
+      "type": "violet",
+      "snr": 20,
+      "heard": "火势中国人",
+      "error": null,
+      "seconds": 0.4934437799999723,
+      "per": 0.07692307692307693,
+      "wer": 0.4
+    },
+    {
+      "lang": "zh",
+      "index": 1,
+      "type": "violet",
+      "snr": 10,
+      "heard": "所分中国人",
+      "error": null,
+      "seconds": 0.8466359069999889,
+      "per": 0.3076923076923077,
+      "wer": 0.4
+    },
+    {
+      "lang": "zh",
+      "index": 1,
+      "type": "violet",
+      "snr": 0,
+      "heard": "算龙萨",
+      "error": null,
+      "seconds": 1.3839994050000095,
+      "per": 0.8461538461538461,
+      "wer": 1
+    },
+    {
+      "lang": "zh",
+      "index": 1,
+      "type": "speech-shaped",
+      "snr": 20,
+      "heard": "我是中国人死",
+      "error": null,
+      "seconds": 1.0802949730000109,
+      "per": 0.15384615384615385,
+      "wer": 0.2
+    },
+    {
+      "lang": "zh",
+      "index": 1,
+      "type": "speech-shaped",
+      "snr": 10,
+      "heard": "我是荣国人打",
+      "error": null,
+      "seconds": 0.9867519939999911,
+      "per": 0.23076923076923078,
+      "wer": 0.4
+    },
+    {
+      "lang": "zh",
+      "index": 1,
+      "type": "speech-shaped",
+      "snr": 0,
+      "heard": "爷人人了啊",
+      "error": null,
+      "seconds": 1.3145054590000071,
+      "per": 1,
+      "wer": 1
+    },
+    {
+      "lang": "zh",
+      "index": 1,
+      "type": "babble",
+      "snr": 20,
+      "heard": "所侍中伯人死",
+      "error": null,
+      "seconds": 0.7521425509999972,
+      "per": 0.3076923076923077,
+      "wer": 0.8
+    },
+    {
+      "lang": "zh",
+      "index": 1,
+      "type": "babble",
+      "snr": 10,
+      "heard": "所寺中落人死",
+      "error": null,
+      "seconds": 1.0570169310000492,
+      "per": 0.46153846153846156,
+      "wer": 0.8
+    },
+    {
+      "lang": "zh",
+      "index": 1,
+      "type": "babble",
+      "snr": 0,
+      "heard": "落算了了四",
+      "error": null,
+      "seconds": 1.0523393240000005,
+      "per": 0.9230769230769231,
+      "wer": 1
+    },
+    {
+      "lang": "zh",
+      "index": 1,
+      "type": "hum",
+      "snr": 20,
+      "heard": "我是中国人与",
+      "error": null,
+      "seconds": 0.40768092299997805,
+      "per": 0.07692307692307693,
+      "wer": 0.2
+    },
+    {
+      "lang": "zh",
+      "index": 1,
+      "type": "hum",
+      "snr": 10,
+      "heard": "我是中国人比",
+      "error": null,
+      "seconds": 0.5787496669999673,
+      "per": 0.15384615384615385,
+      "wer": 0.2
+    },
+    {
+      "lang": "zh",
+      "index": 1,
+      "type": "hum",
+      "snr": 0,
+      "heard": "若是荣国人与",
+      "error": null,
+      "seconds": 1.0045103890000027,
+      "per": 0.23076923076923078,
+      "wer": 0.6
+    },
+    {
+      "lang": "zh",
+      "index": 1,
+      "type": "crackle",
+      "snr": 20,
+      "heard": "我我是中伯人夫",
+      "error": null,
+      "seconds": 0.4019624440000043,
+      "per": 0.38461538461538464,
+      "wer": 0.6
+    },
+    {
+      "lang": "zh",
+      "index": 1,
+      "type": "crackle",
+      "snr": 10,
+      "heard": "火时中不落人发",
+      "error": null,
+      "seconds": 0.5290804319999879,
+      "per": 0.46153846153846156,
+      "wer": 1
+    },
+    {
+      "lang": "zh",
+      "index": 1,
+      "type": "crackle",
+      "snr": 0,
+      "heard": "我不死公了发",
+      "error": null,
+      "seconds": 0.7112863839999772,
+      "per": 0.8461538461538461,
+      "wer": 1
+    },
+    {
+      "lang": "zh",
+      "index": 1,
+      "type": "drifting",
+      "snr": 20,
+      "heard": "我是中国人此",
+      "error": null,
+      "seconds": 0.5324945200000075,
+      "per": 0.15384615384615385,
+      "wer": 0.2
+    },
+    {
+      "lang": "zh",
+      "index": 1,
+      "type": "drifting",
+      "snr": 10,
+      "heard": "王荣国人萨",
+      "error": null,
+      "seconds": 0.9073321660000365,
+      "per": 0.46153846153846156,
+      "wer": 0.8
+    },
+    {
+      "lang": "zh",
+      "index": 1,
+      "type": "drifting",
+      "snr": 0,
+      "heard": "啊挪了妈",
+      "error": null,
+      "seconds": 1.4042084449999965,
+      "per": 0.9230769230769231,
+      "wer": 1
+    }
+  ],
+  "silence": [
+    {
+      "type": "white",
+      "stream": {
+        "text": "",
+        "error": "too-noisy"
+      },
+      "ungatedStream": {
+        "text": "",
+        "error": "too-noisy"
+      },
+      "batch": {
+        "text": "",
+        "error": "too-noisy"
+      },
+      "gatedBatch": {
+        "text": "",
+        "error": "too-noisy"
+      }
+    },
+    {
+      "type": "pink",
+      "stream": {
+        "text": "",
+        "error": null
+      },
+      "ungatedStream": {
+        "text": "a an",
+        "error": null
+      },
+      "batch": {
+        "text": "a",
+        "error": null
+      },
+      "gatedBatch": {
+        "text": "",
+        "error": null
+      }
+    },
+    {
+      "type": "brown",
+      "stream": {
+        "text": "",
+        "error": null
+      },
+      "ungatedStream": {
+        "text": "an",
+        "error": null
+      },
+      "batch": {
+        "text": "an",
+        "error": null
+      },
+      "gatedBatch": {
+        "text": "",
+        "error": null
+      }
+    },
+    {
+      "type": "blue",
+      "stream": {
+        "text": "",
+        "error": "too-noisy"
+      },
+      "ungatedStream": {
+        "text": "",
+        "error": "too-noisy"
+      },
+      "batch": {
+        "text": "",
+        "error": "too-noisy"
+      },
+      "gatedBatch": {
+        "text": "",
+        "error": "too-noisy"
+      }
+    },
+    {
+      "type": "violet",
+      "stream": {
+        "text": "",
+        "error": "too-noisy"
+      },
+      "ungatedStream": {
+        "text": "",
+        "error": "too-noisy"
+      },
+      "batch": {
+        "text": "",
+        "error": "too-noisy"
+      },
+      "gatedBatch": {
+        "text": "",
+        "error": "too-noisy"
+      }
+    },
+    {
+      "type": "speech-shaped",
+      "stream": {
+        "text": "",
+        "error": "too-noisy"
+      },
+      "ungatedStream": {
+        "text": "an",
+        "error": "too-noisy"
+      },
+      "batch": {
+        "text": "",
+        "error": "too-noisy"
+      },
+      "gatedBatch": {
+        "text": "",
+        "error": "too-noisy"
+      }
+    },
+    {
+      "type": "babble",
+      "stream": {
+        "text": "",
+        "error": null
+      },
+      "ungatedStream": {
+        "text": "as",
+        "error": null
+      },
+      "batch": {
+        "text": "as",
+        "error": null
+      },
+      "gatedBatch": {
+        "text": "",
+        "error": null
+      }
+    },
+    {
+      "type": "hum",
+      "stream": {
+        "text": "",
+        "error": "too-noisy"
+      },
+      "ungatedStream": {
+        "text": "",
+        "error": "too-noisy"
+      },
+      "batch": {
+        "text": "",
+        "error": "too-noisy"
+      },
+      "gatedBatch": {
+        "text": "",
+        "error": "too-noisy"
+      }
+    },
+    {
+      "type": "crackle",
+      "stream": {
+        "text": "",
+        "error": null
+      },
+      "ungatedStream": {
+        "text": "lift self lift",
+        "error": null
+      },
+      "batch": {
+        "text": "lift self lift",
+        "error": null
+      },
+      "gatedBatch": {
+        "text": "",
+        "error": null
+      }
+    },
+    {
+      "type": "drifting",
+      "stream": {
+        "text": "",
+        "error": null
+      },
+      "ungatedStream": {
+        "text": "है an",
+        "error": null
+      },
+      "batch": {
+        "text": "है",
+        "error": null
+      },
+      "gatedBatch": {
+        "text": "",
+        "error": null
+      }
+    }
+  ]
+}

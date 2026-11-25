@@ -62,6 +62,26 @@ before the recognizer commits sounds from the quiet interval. The detector
 can also bound a quieter whisper between two voiced intervals in one speech
 run.
 
+A stream reads each committed phrase with the same decoder as `recognize()`
+(the word decoder by default), so live text matches the batch text of the
+same audio. Previews (`partial`) use the cheaper phone decoder.
+
+`minVoiced` is the speech gate: the seconds of pitch-voiced audio (plus
+explicit `whisper` spans) that an input, or a phrase of a stream, needs
+before it can produce words. Noise has no pitch, so a room with nobody
+speaking gives no text. Streams default to `0.1`; batch `recognize()`
+defaults to no gate. Set `minVoiced: 0` to hear whispers that the automatic
+detector finds in noise. A steady noise with too little energy contrast
+still raises the `too-noisy` error.
+
+`createNoise(type, length, sampleRate, { seed, level })` generates `white`,
+`pink`, `brown`, `blue`, `violet`, `speech-shaped`, `babble`, `hum`,
+`crackle` or `drifting` noise at `level` dBFS RMS. `addNoise(samples,
+sampleRate, { type, snr, seed })` lays it over speech at a signal-to-noise
+ratio in dB. `node scripts/noise-baseline.mjs` measures recognition of
+synthesized sentences in each noise and how much text noise alone produces:
+[docs/reports/noise-baseline.md](reports/noise-baseline.md).
+
 `voice-simulator recognize` accepts WAV, AIFF, AU and FLAC from a file or
 standard input. For raw standard input, use `--format raw` and optionally
 `--sample-rate` and `--bit-depth` (defaults 16000 and 16). `--ipa` prints IPA
