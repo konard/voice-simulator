@@ -229,7 +229,8 @@ function addTree(builder, model, lang, words, { maxWords, oov }) {
         });
       }
       const wid = words.length;
-      words.push({ word: entry.word, lang, tokens, units, count: entry.count });
+      // `count` is the decoder's unigram backoff: the word's prior.
+      words.push({ word: entry.word, lang, tokens, units, count: entry.prior });
       if (before) {
         words[wid].before = before;
       }

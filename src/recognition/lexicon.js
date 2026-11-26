@@ -154,7 +154,7 @@ export function addPronunciation(root, entry, language, parsed) {
 function* lexiconPronunciations(language, words) {
   const contextual = language === 'zh' ? contextualChinese() : new Map();
   const parsed = new Map();
-  for (const { word, count } of words) {
+  for (const { word, count, prior } of words) {
     // The shipped Russian speaker already uses the same forward reading.
     const additional =
       language === 'ru'
@@ -183,7 +183,9 @@ function* lexiconPronunciations(language, words) {
       }
       const tokens = parsed.get(ipa);
       if (tokens.length) {
-        yield { word, ipa, count, tokens };
+        // The unigram backoff of the HMM decoder: the spoken-language
+        // counts where the language has them (issue 181), else the corpus.
+        yield { word, ipa, count, prior: prior ?? count, tokens };
       }
     }
   }

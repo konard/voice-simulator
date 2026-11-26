@@ -77,7 +77,10 @@
       "licenceChecked": "2026-11-16",
       "copyright": "Common Voice contributors, dedicated to the public domain (CC0 1.0)",
       "shipped": true,
-      "usedFor": ["data/lexicon/en-counts.txt"],
+      "usedFor": [
+        "data/lexicon/en-counts.txt",
+        "src/recognition/data/en-spoken.js"
+      ],
       "files": [
         {
           "name": "sentence-collector.txt",

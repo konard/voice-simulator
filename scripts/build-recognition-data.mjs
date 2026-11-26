@@ -314,7 +314,7 @@ export function buildCounts(files, language) {
   return { words, bigrams, total, sources };
 }
 
-function dataString(name, entries) {
+export function dataString(name, entries) {
   if (!entries.length) {
     return `export const ${name} = '';\n`;
   }

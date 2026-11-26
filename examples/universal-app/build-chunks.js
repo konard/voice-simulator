@@ -35,9 +35,10 @@ const vendorChunks = [
 ];
 
 export function vendorChunk(id) {
-  // Each language's two count tables fit independently under the size guard.
+  // Each language's count tables (and the English spoken-word prior of issue
+  // 181) fit independently under the size guard.
   const counts = id.match(
-    /[\\/]src[\\/]recognition[\\/]data[\\/]((?:en|hi|ru|zh)(?:-bigrams)?)\.js$/
+    /[\\/]src[\\/]recognition[\\/]data[\\/]((?:en|hi|ru|zh)(?:-bigrams|-spoken)?)\.js$/
   );
   if (counts) {
     return `recognition-${counts[1]}`;
