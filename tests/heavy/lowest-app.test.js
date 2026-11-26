@@ -5,15 +5,27 @@
  * Unlicense.
  */
 import assert from 'node:assert/strict';
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { test } from 'node:test';
+import { fileURLToPath, URL } from 'node:url';
 import {
   appFailures,
   checkAppLowest,
 } from '../../scripts/check-app-lowest.mjs';
 import { playwrightChromium } from '../../scripts/check-app-copy.mjs';
+import {
+  judge,
+  regressions,
+  REPORT_PATH,
+} from '../../scripts/lowest-report.mjs';
 import { heavyOut } from './helpers/report.js';
+
+const ROOT = fileURLToPath(new URL('../../', import.meta.url));
+const read = (file) =>
+  existsSync(join(ROOT, file))
+    ? JSON.parse(readFileSync(join(ROOT, file), 'utf8'))
+    : null;
 
 function save(result) {
   mkdirSync(heavyOut(), { recursive: true });
@@ -42,6 +54,15 @@ test(
     }
     save(result);
     console.log('lowest app', JSON.stringify(result));
-    assert.deepEqual(appFailures(result), []);
+    // A missed limit is reported (failed in the report, with an issue);
+    // only an app cell certified in the committed report may not fail.
+    for (const failure of appFailures(result)) {
+      console.log(`lowest app: ${failure}`);
+    }
+    const { app } = read('tests/heavy/lowest-thresholds.json');
+    const committed = read(REPORT_PATH.replace(/\.md$/u, '.json'));
+    const now = { cells: judge({ app: { js: result } }, { app }) };
+    const before = committed && { cells: { app: committed.cells.app } };
+    assert.deepEqual(regressions(before, now, { failedOnly: true }), []);
   }
 );

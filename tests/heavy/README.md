@@ -30,8 +30,27 @@ Files are named `<suite>-<topic>.test.js`, for example
 | `performance` | measure render time and the real-time factor                                     |
 | `gpu`         | run the WebGPU solver                                                            |
 | `lexicon`     | measure how much of real text the pronunciation lexicons read                    |
+| `lowest`      | certify 8 kHz on one core: every feature at the lowest settings (issue 81)       |
 
 `--suite all` (the default) runs every `*.test.js` file of this folder.
+
+The `lowest` suite (issue 81) runs every row of the lowest-settings matrix
+(synthesis, recognition, streaming, voice-fit, session, copy and modes) on
+8000 Hz audio with the JavaScript engine and the Rust engine on one thread
+without SIMD. Each row and engine is one process,
+`taskset -c 0 node --max-old-space-size=192 scripts/lowest-settings.mjs --row <row> --engine <js|rust>`
+with `UV_THREADPOOL_SIZE=1`; without `taskset` it runs unpinned and the
+report says so, and `LOWEST_PARALLEL=<n>` spreads the processes over `n`
+cores. A process that runs out of the 192 MB heap fails the memory cell
+and runs again without the cap, so the other columns are still measured.
+Each cell of the columns quality, js-1, rust-1 and memory is `certified`,
+`failed` or `unavailable` against
+[lowest-thresholds.json](lowest-thresholds.json), whose limits only ever
+become stricter; [lowest-issues.json](lowest-issues.json) maps every cell
+that is not certified to its GitHub issue. The suite fails only when a cell
+certified in [docs/reports/lowest-settings.json](../../docs/reports/lowest-settings.json)
+is no longer certified. `node scripts/lowest-settings.mjs --publish reports/heavy`
+copies the report to `docs/reports/` and the matrix to the README.
 
 The `roundtrip` suite runs [roundtrip-sentences.test.js](roundtrip-sentences.test.js)
 on 80 fixed sentences across four languages, four seeded voice presets and nine
@@ -189,6 +208,8 @@ be kept is copied to `docs/reports/` by the issue that owns it.
 | `quality-dynamics-fit.test.js`       | fits the time constants, leads and coarticulation resistance of the articulators to the golden set with `experiments/issue-11-fit-dynamics.mjs` and writes `dynamics-fit.md` / `.json`; the committed result is `experiments/issue-11-fit-dynamics.txt` (issue 38)                                                                                                                                                                                                           |
 | `quality-whisper.test.js`            | renders whispered `{W ˈa W}`, `{W ˈi W}` and `{W ˈu W}` against the voiced vowels at tier `high` and checks F1 (one LPC fit over the middle 60 % of the vowel) 100–400 Hz higher and F2 of [i] above 1800 Hz, writes `whisper-formants.md` / `.json`, and runs `say --markup "[whisper]Hello.[/whisper]" --out w.wav` at the default tier (voiced share below 0.05) (issue 53)                                                                                               |
 | `gpu-solver.test.js`                 | compares the WebGPU 3D solver with the CPU kernel over 20 000 steps and the word `həˈloʊ` at tiers `high` and `ultra`, and writes `gpu-solver.md` / `.json` with the adapter, copied to `docs/reports/` by issue 30                                                                                                                                                                                                                                                          |
+| `lowest-app.test.js`                 | builds the example app, opens it in Chromium with the CPU throttled 6 times and the telephone tier (`scripts/check-app-lowest.mjs`), speaks a 10 s text (synthesis worker RTF below 1, first sound within 1 s) and recognises the downloaded audio, and writes `lowest-app.json`, the `app` row of the matrix; skipped without Playwright Chromium (issue 81)                                                                                                                |
+| `lowest-settings.test.js`            | runs every row of the lowest-settings matrix with both engines in its own pinned, heap-capped process and writes `lowest-settings.md` / `.json` (issue 81)                                                                                                                                                                                                                                                                                                                   |
 | `lexicon-coverage.test.js`           | measures the share of running words of `fleurs-en` and `fleurs-hi` read from the lexicons (source not `rules`) and the share of syllables of every tenth AISHELL-3 line (`aishell3-train-index`, not mined) read as written, against lower bounds, and writes `lexicon-coverage.md` / `.json` (issue 47); a text that is not fetched is skipped                                                                                                                              |
 | `recognition-pitch.test.js`          | measures GPE, VDE and FFE of `trackPitch` on real speech against a laryngograph reference (target FFE at most 0.10) and writes `recognition-pitch.md` / `.json`, copied to `docs/reports/` by issue 59; the candidates PTDB-TUG, Keele and CSTR FDA are refused by the licence policy (`datasets/refused.json`), so the measurement is skipped and the report says so                                                                                                        |
 | `recognition-formants.test.js`       | tracks the formants of the golden set with `trackFormants` (f0 of `trackPitch`) and measures the share of voiced speech frames with F1, F2 and F3 valid (target 95 %) and of F2 steps above 300 Hz (target below 2 %), and writes `recognition-formants.md` / `.json`, copied to `docs/reports/` by issue 60; the VTR formant database is refused by the licence policy (`datasets/refused.json`), so no error per formant is measured                                       |

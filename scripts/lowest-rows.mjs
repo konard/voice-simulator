@@ -135,14 +135,16 @@ function speech(head, seconds) {
 
 /** Synthesis on the round-trip sentences of issue 75. */
 function synthesisRow({ engine, limit, baseline }) {
+  // Twenty sentences per language and preset; --limit caps the utterances.
   const cases = [];
-  for (let index = 0; index < Math.min(20, limit); index++) {
+  for (let index = 0; index < 20; index++) {
     for (const lang of LANGUAGES) {
       for (const preset of ['male', 'female']) {
         cases.push({ lang, preset, text: sentences[lang][index] });
       }
     }
   }
+  cases.length = Math.min(cases.length, limit);
   const heard = (samples, sampleRate, options) =>
     recognize(samples, sampleRate, { ...options, engine: engine.recognition });
   const measure = (tier, timed) => {
