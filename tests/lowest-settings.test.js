@@ -68,7 +68,7 @@ describe('lowest settings', () => {
       passed: said === 'hello world',
       measured: `"${text}" at the telephone tier is recognised at level low as "${heard.text}"`,
       action:
-        'improve the recogniser on 8 kHz speech (see tests/heavy/lowest-issues.json) or choose another sentence in issue 81',
+        'make the recogniser hear its own "Hello world." (https://github.com/konard/voice-simulator/issues/181) or choose another sentence in issue 81',
     });
   });
 
@@ -85,7 +85,7 @@ describe('lowest settings', () => {
       passed: result.peakRssMb < 256,
       measured: `peak resident memory ${result.peakRssMb} MB, most of it the recognition network that scores the speech`,
       action:
-        'shrink the recognition network (see the memory issue in tests/heavy/lowest-issues.json) or raise the memory limit in issue 81',
+        'shrink the recognition network (https://github.com/konard/voice-simulator/issues/173) or raise the memory limit in issue 81',
     });
   });
 

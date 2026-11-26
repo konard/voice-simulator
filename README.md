@@ -730,6 +730,20 @@ only become stricter. `npm run test:heavy -- --suite lowest` measures it and
 `node scripts/lowest-settings.mjs --publish reports/heavy` updates this table.
 
 <!-- lowest-settings:start -->
+<!-- prettier-ignore-start -->
+| Row | quality | js-1 | rust-1 | memory |
+| --- | --- | --- | --- | --- |
+| synthesis | certified | certified | certified | failed |
+| recognition | certified | failed | failed | failed |
+| streaming | failed | failed | failed | failed |
+| voice-fit | failed | failed | failed | failed |
+| session | failed | failed | failed | failed |
+| copy | failed | certified | certified | failed |
+| modes | certified | failed | certified | failed |
+| app | failed | certified | — | — |
+
+Measured at commit `56797cd` on AMD EPYC 7763 64-Core Processor; [report](docs/reports/lowest-settings.md).
+<!-- prettier-ignore-end -->
 <!-- lowest-settings:end -->
 
 ### Listening tests
