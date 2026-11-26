@@ -67,13 +67,10 @@ describe('lowest settings', () => {
       .toLowerCase()
       .replace(/[^\p{L}\p{N}\s]/gu, '')
       .trim();
-    checkBlockedGate({
-      criterion: 'understands its own 8 kHz speech (issue 81)',
-      passed: said === 'hello world',
-      measured: `"${text}" at the telephone tier is recognised at level low as "${heard.text}"`,
-      action:
-        'make the recogniser hear its own "Hello world." (https://github.com/konard/voice-simulator/issues/181) or choose another sentence in issue 81',
-    });
+    // The books behind the counts never saw "hello", so it was heard as
+    // "Her no world." until the decoder backed off to spoken-language
+    // counts (issue 181).
+    assert.equal(said, 'hello world', heard.text);
   });
 
   it('runs one row', { timeout: 120_000 }, async () => {
