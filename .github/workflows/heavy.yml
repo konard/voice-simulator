@@ -180,6 +180,9 @@ jobs:
           REQUIRE_WASM: ${{ (inputs.suite == 'performance' || inputs.suite == 'all') && '1' || '' }}
           REQUIRE_CLI: ${{ (inputs.suite == 'performance' || inputs.suite == 'all') && '1' || '' }}
           REQUIRE_THREADS_WASM: ${{ (inputs.suite == 'performance' || inputs.suite == 'all') && '1' || '' }}
+          # Lowest settings: each cell still runs pinned to one core of its
+          # own; four at a time fit the step budget (sequentially about 5 h).
+          LOWEST_PARALLEL: ${{ (inputs.suite == 'lowest' || inputs.suite == 'all') && '4' || '' }}
         run: |
           limit_flags=()
           if [[ "$LIMIT" =~ ^[0-9]+$ ]]; then

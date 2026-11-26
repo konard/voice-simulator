@@ -41,7 +41,10 @@ without SIMD. Each row and engine is one process,
 `taskset -c 0 node --max-old-space-size=192 scripts/lowest-settings.mjs --row <row> --engine <js|rust>`
 with `UV_THREADPOOL_SIZE=1`; without `taskset` it runs unpinned and the
 report says so, and `LOWEST_PARALLEL=<n>` spreads the processes over `n`
-cores. A process that runs out of the 192 MB heap fails the memory cell
+cores (the Heavy checks workflow uses four, one process per core). The app
+row comes from [lowest-app.test.js](lowest-app.test.js), which runs first;
+`node scripts/check-app-lowest.mjs --skip-build --out reports/heavy` measures
+it again on its own. A process that runs out of the 192 MB heap fails the memory cell
 and runs again without the cap, so the other columns are still measured.
 Each cell of the columns quality, js-1, rust-1 and memory is `certified`,
 `failed` or `unavailable` against
@@ -49,7 +52,7 @@ Each cell of the columns quality, js-1, rust-1 and memory is `certified`,
 become stricter; [lowest-issues.json](lowest-issues.json) maps every cell
 that is not certified to its GitHub issue. The suite fails only when a cell
 certified in [docs/reports/lowest-settings.json](../../docs/reports/lowest-settings.json)
-is no longer certified. `node scripts/lowest-settings.mjs --publish reports/heavy`
+fails. `node scripts/lowest-settings.mjs --publish reports/heavy`
 copies the report to `docs/reports/` and the matrix to the README.
 
 The `roundtrip` suite runs [roundtrip-sentences.test.js](roundtrip-sentences.test.js)
