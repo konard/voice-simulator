@@ -135,12 +135,10 @@ export function judge(runs, thresholds, issues = {}) {
       if (!columns[column]) {
         continue;
       }
-      const cell = cellFor(runs, row, column, columns[column]);
-      const issue = issues[`${row}/${column}`];
-      cells[row][column] = issue ? { ...cell, issue } : cell;
+      cells[row][column] = cellFor(runs, row, column, columns[column]);
     }
   }
-  return cells;
+  return linkIssues(cells, issues);
 }
 
 /** Attach the filed issues to the cells that are not certified. */
