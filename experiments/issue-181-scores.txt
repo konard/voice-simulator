@@ -1,0 +1,15 @@
+telephone: decoded "her no world" score -6182.1
+  hello world      acoustic -6009.2 lm -190.1 total -6199.3  [həloʊ wɝld]
+  her no world     acoustic -5995.9 lm -184.2 total -6180.1  [hɚ noʊ wɝld]
+  hollow world     acoustic -6040.8 lm -167.4 total -6208.2  [hɑloʊ wɝld]
+  to know world    acoustic -6055.9 lm -156.5 total -6212.4  [tə noʊ wɝld]
+wideband: decoded "hollow world" score -5793.3
+  hello world      acoustic -5606.5 lm -190.1 total -5796.6  [həloʊ wɝld]
+  her no world     acoustic -5612.8 lm -184.2 total -5797.0  [hɚ noʊ wɝld]
+  hollow world     acoustic -5623.9 lm -167.4 total -5791.3  [hɑloʊ wɝld]
+  to know world    acoustic -5665.5 lm -156.5 total -5822.0  [tə noʊ wɝld]
+default: decoded "to know world" score -7564.9
+  hello world      acoustic -7504.7 lm -190.1 total -7694.7  [həloʊ wɝld]
+  her no world     acoustic -7455.5 lm -184.2 total -7639.7  [hɚ noʊ wɝld]
+  hollow world     acoustic -7513.9 lm -167.4 total -7681.3  [hɑloʊ wɝld]
+  to know world    acoustic -7406.4 lm -156.5 total -7562.9  [tɪ noʊ wɝld]
