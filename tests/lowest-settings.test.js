@@ -67,9 +67,9 @@ describe('lowest settings', () => {
       .toLowerCase()
       .replace(/[^\p{L}\p{N}\s]/gu, '')
       .trim();
-    // The books behind the counts never saw "hello", so it was heard as
-    // "Her no world." until the decoder backed off to spoken-language
-    // counts (issue 181).
+    // The books behind the counts never saw "hello"; without the
+    // spoken-language counts that the decoder backs off to, it is heard as
+    // "Her no world." (issue 181).
     assert.equal(said, 'hello world', heard.text);
   });
 
