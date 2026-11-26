@@ -16,7 +16,8 @@
  * --publish reads <dir>/lowest-settings.json, writes
  * docs/reports/lowest-settings.md and .json and the README table. It refuses
  * (exit 1, files unchanged) when a cell certified in the committed report is
- * no longer certified, unless --allow-regression gives the reason.
+ * no longer certified, unless --allow-regression gives the reason. A
+ * <dir>/lowest-app.json measured again on its own replaces the app row.
  */
 import { mkdirSync, readFileSync, writeFileSync, existsSync } from 'node:fs';
 import path from 'node:path';
@@ -24,6 +25,7 @@ import { parseArgs } from 'node:util';
 import { fileURLToPath } from 'node:url';
 import {
   formatReport,
+  judge,
   linkIssues,
   regressions,
   replaceReadmeTable,
@@ -81,6 +83,16 @@ export function publish(dir, { root = ROOT, allowRegression } = {}) {
   const measured = readJson(path.join(dir, 'lowest-settings.json'));
   if (!measured) {
     throw new Error(`${dir}/lowest-settings.json is missing`);
+  }
+  // The app row may be measured again on its own
+  // (node scripts/check-app-lowest.mjs --skip-build --out <dir>).
+  const app = readJson(path.join(dir, 'lowest-app.json'))?.result;
+  if (app && measured.limits?.app) {
+    measured.runs = { ...measured.runs, app: { js: app } };
+    measured.cells.app = judge(
+      { app: { js: app } },
+      { app: measured.limits.app }
+    ).app;
   }
   const reportJson = path.join(root, REPORT_PATH.replace(/\.md$/u, '.json'));
   const committed = readJson(reportJson);
