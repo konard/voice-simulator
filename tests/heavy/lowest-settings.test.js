@@ -32,6 +32,7 @@ const ROWS = [
 ];
 const ENGINES = ['js', 'rust'];
 const HEAP_CAP = '--max-old-space-size=192';
+const ROW_TIMEOUT_MS = 6 * 3_600_000;
 const read = (file) =>
   existsSync(file) ? JSON.parse(readFileSync(file, 'utf8')) : null;
 const thresholds = read(path.join(ROOT, 'tests/heavy/lowest-thresholds.json'));
@@ -185,7 +186,9 @@ describe('lowest settings: 8 kHz and one core', () => {
   mkdirSync(out, { recursive: true });
   for (const row of ROWS) {
     for (const engine of ENGINES) {
-      it(`${row} with ${engine}`, async () => {
+      // A full row can take hours on one core: recognition scores 140
+      // benchmark utterances at 8 kHz and once more at 16 kHz.
+      it(`${row} with ${engine}`, { timeout: ROW_TIMEOUT_MS }, async () => {
         const measured = await result(`${row}-${engine}`);
         runs[row] ??= {};
         runs[row][engine] = measured;

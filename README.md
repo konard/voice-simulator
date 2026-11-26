@@ -719,6 +719,19 @@ measures again; a pull request that claims an improvement puts that table
 into its description. The baseline itself is regenerated only by the
 `quality` suite of the `Heavy checks` workflow.
 
+### Lowest settings
+
+Every feature is certified on 8000 Hz audio, one CPU core and a 192 MB
+heap (issue 81): the telephone tier, recognition level low, the JavaScript
+engine and the Rust engine on one thread without SIMD. Each cell is
+`certified`, `failed` (with an issue) or `unavailable`; limits live in
+[tests/heavy/lowest-thresholds.json](tests/heavy/lowest-thresholds.json) and
+only become stricter. `npm run test:heavy -- --suite lowest` measures it and
+`node scripts/lowest-settings.mjs --publish reports/heavy` updates this table.
+
+<!-- lowest-settings:start -->
+<!-- lowest-settings:end -->
+
 ### Listening tests
 
 Only people can judge whether the voice sounds natural, so a blind listening
@@ -1378,15 +1391,7 @@ See [Auto-regenerated preview screenshots](docs/CONTRIBUTING.md#auto-regenerated
 
 ### Broken Link Checker
 
-The link checker workflow (`.github/workflows/links.yml`) validates all links in Markdown and HTML files:
-
-1. **Detection**: Uses [lychee](https://github.com/lycheeverse/lychee-action) to scan all `*.md` and `*.html` files
-2. **Web Archive fallback**: For any broken links found, automatically checks the [Wayback Machine](https://web.archive.org) for archived versions
-3. **Actionable suggestions**: Reports one of three outcomes for each broken link:
-   - **Archived**: Suggests the Web Archive URL as a replacement
-   - **Not archived**: Clearly reports the link is unrecoverable
-4. **Scheduled checks**: Runs weekly to catch links that break over time (even if no files changed)
-5. **Issue creation**: On scheduled runs, creates a GitHub Issue with the full broken links report
+The link checker workflow (`.github/workflows/links.yml`) scans every `*.md` and `*.html` file with [lychee](https://github.com/lycheeverse/lychee-action), looks up each broken link in the [Wayback Machine](https://web.archive.org) and suggests the archived URL or reports the link as unrecoverable. It also runs weekly and then opens an issue with the report.
 
 Add regex patterns to `.lycheeignore` to exclude URLs from checks (e.g., local dev URLs, example.com, known rate-limited sites).
 
@@ -1436,20 +1441,10 @@ is visible in the npm registry, then publishes Docker Hub tags for `latest` and
 that same version. The Docker build also receives `NPM_PACKAGE_VERSION` as a
 build argument so Dockerfiles can install the matching published package.
 
-### ESLint Rules
+### ESLint and Prettier
 
-Customize ESLint in `eslint.config.js`. Current configuration:
-
-- ES Modules support
-- Prettier integration
-- No console restrictions (common in CLI tools)
-- Strict equality enforcement
-- Async/await best practices
-- **Strict unused variables rule**: No exceptions - all unused variables, arguments, and caught errors must be removed (no `_` prefix exceptions)
-
-### Prettier Options
-
-Configured in `.prettierrc`: single quotes, semicolons, 2-space indentation, 80-character line width, ES5 trailing commas and LF line endings.
+Customize ESLint in `eslint.config.js`: ES modules, Prettier, console allowed, strict equality, async/await rules and a **strict unused variables rule** (every unused variable, argument and caught error is removed; no `_` prefix exceptions).
+Prettier is configured in `.prettierrc`: single quotes, semicolons, 2-space indentation, 80-character line width, ES5 trailing commas and LF line endings.
 
 ## Scripts Reference
 
@@ -1461,6 +1456,7 @@ Configured in `.prettierrc`: single quotes, semicolons, 2-space indentation, 80-
 | `npm run datasets -- list`           | List, fetch or verify speech datasets (CONTRIBUTING)  |
 | `node scripts/golden.mjs verify`     | Check the golden set of `tests/fixtures/golden/`      |
 | `node scripts/quality-report.mjs`    | Score the tiers against the golden set (Quality)      |
+| `node scripts/lowest-settings.mjs`   | Measure or publish the lowest-settings matrix         |
 | `bun run lint`                       | Check code with ESLint                                |
 | `bun run lint:fix`                   | Fix ESLint issues automatically                       |
 | `bun run format`                     | Format code with Prettier                             |
@@ -1476,24 +1472,11 @@ Configured in `.prettierrc`: single quotes, semicolons, 2-space indentation, 80-
 
 ## Contributing
 
-See [CONTRIBUTING.md](docs/CONTRIBUTING.md) for detailed contribution guidelines. Quick steps:
-
-1. Fork the repository
-2. Create a feature branch: `git checkout -b feature/my-feature`
-3. Make your changes
-4. Create a changeset: `bun run changeset`
-5. Commit your changes (pre-commit hooks will run automatically)
-6. Push and create a Pull Request
+See [CONTRIBUTING.md](docs/CONTRIBUTING.md) for detailed contribution guidelines. In short: fork, create a feature branch, make your changes, add a changeset with `bun run changeset`, commit (the pre-commit hooks run) and open a pull request.
 
 ## Best Practices
 
-This repository implements CI/CD best practices for AI-driven development. See [BEST-PRACTICES.md](docs/BEST-PRACTICES.md) for details on:
-
-- File size limits for AI readability
-- Automated formatting and linting
-- Multi-runtime and cross-platform testing
-- Changeset-based versioning
-- Concurrency control for CI/CD pipelines
+This repository implements CI/CD best practices for AI-driven development: file size limits for AI readability, automated formatting and linting, multi-runtime and cross-platform testing, changeset-based versioning and concurrency control for CI/CD pipelines. See [BEST-PRACTICES.md](docs/BEST-PRACTICES.md).
 
 ## License
 

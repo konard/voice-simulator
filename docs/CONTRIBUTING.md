@@ -196,6 +196,24 @@ REQUIRE_GPU=1 npm run test:heavy -- --suite gpu
 Every GPU test prints its adapter (`WebGPU adapter: {...}`) and the report
 `gpu-solver.md` names it. A software adapter says nothing about GPU speed.
 
+#### Suite `lowest`
+
+The suite `lowest` certifies every feature at 8 kHz on one core
+([report](reports/lowest-settings.md), issue
+[#81](https://github.com/konard/voice-simulator/issues/81)). Two rules keep it
+honest:
+
+- **Limits only get stricter.** `tests/heavy/lowest-thresholds.json` may
+  tighten a limit, never loosen one. A missed limit is published as `failed`
+  with an issue in `tests/heavy/lowest-issues.json`.
+- **Run it when the cost changes.** A pull request that changes an engine, a
+  tier, the recogniser, the voice session or copy synthesis runs
+  [Heavy checks](../.github/workflows/heavy.yml) with `suite=lowest` and links
+  the run in its description. It fails when a cell certified in
+  `docs/reports/lowest-settings.json` fails. Publish the new numbers with
+  `node scripts/lowest-settings.mjs --publish reports/heavy`, which refuses a
+  regression unless it is given `--allow-regression "<reason>"`.
+
 ### Recognition benchmark
 
 Run a short sample locally or dispatch the full recognition suite on one

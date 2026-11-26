@@ -298,9 +298,12 @@ export function formatReport(data) {
 export function readmeTable(data) {
   return [
     README_START,
+    // Prettier would pad the columns; the block stays exactly as generated.
+    '<!-- prettier-ignore-start -->',
     ...matrix(data, (cell) => (cell ? cell.status : '—')),
     '',
     `Measured at commit \`${data.commit.slice(0, 7)}\` on ${data.cpu}; [report](${REPORT_PATH}).`,
+    '<!-- prettier-ignore-end -->',
     README_END,
   ].join('\n');
 }
