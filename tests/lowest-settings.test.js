@@ -58,7 +58,11 @@ describe('lowest settings', () => {
 
   it('understands its own 8 kHz speech', () => {
     const { samples, sampleRate } = speak();
-    const heard = recognize(samples, sampleRate, { lang: 'en', level: 'low' });
+    // One language: without it every lexicon is built (about 4x the CPU).
+    const heard = recognize(samples, sampleRate, {
+      languages: ['en'],
+      level: 'low',
+    });
     const said = heard.text
       .toLowerCase()
       .replace(/[^\p{L}\p{N}\s]/gu, '')
