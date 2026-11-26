@@ -22,7 +22,10 @@ function lmScore(seq) {
   let prev = null;
   for (const word of seq) {
     const row = prev ? lex.transitionRow(word) : undefined;
-    const count = lex.counts.get(word) ?? 1;
+    // The decoder's unigram: the spoken prior; BOOKS=1 for the book counts.
+    const count = process.env.BOOKS
+      ? (lex.counts.get(word) ?? 1)
+      : (network.words.find((w) => w.word === word && !w.oov)?.count ?? 1);
     const cost = row?.has(prev)
       ? row.get(prev)
       : -0.3 * Math.log((0.4 * Math.max(count, minCount)) / lex.total) + 0.5;
