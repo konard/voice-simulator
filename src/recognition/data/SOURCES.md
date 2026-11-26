@@ -200,6 +200,27 @@ counts are in descending order, with Unicode code-point tie breaks.
   Input: `ea1d47abd2df.txt`; SHA-256:
   `66ab5abbe4c032c1f2dbb93074387867682a3c8b184a211c98eee2f93399daaf`.
 
+## Spoken-word prior (`en-spoken.js`)
+
+The English word decoder (issue 181) backs a word off to how often it is
+said, not how often pre-1926 books print it: those books never saw
+"hello" (count 1), so the decoder heard "her no world" and "hollow world"
+for a synthesised "Hello world.". `en-spoken.js` keeps the Common Voice
+counts (`data/lexicon/en-counts.txt`, SHA-256
+`4281e50c635cba08cedca6a7429681bed0d82a54d1118df2bc2fa361fcc28626`, CC0 1.0;
+see the "Common Voice text corpus" section of
+[src/g2p/lexicon/NOTICE.md](../../g2p/lexicon/NOTICE.md)) of the 19,318 of the
+20,000 shipped English words that occur there, out of 13,801,754 counted
+words. `getCounts('en')` scales them to the book total as each word's
+`prior` (at least 1), and the unigram backoff of the HMM decoder uses the
+prior instead of the book count. Bigrams, and every other language, still
+use the book counts above.
+
+```sh
+node scripts/build-spoken-prior.mjs
+npx prettier --write src/recognition/data/en-spoken.js
+```
+
 ## Acoustic model (`hmm-model-*.js`)
 
 The Gaussian HMM of the word decoder (issue 75) is trained only on speech

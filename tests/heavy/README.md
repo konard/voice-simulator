@@ -153,10 +153,12 @@ Training runs on a developer machine, not in CI, in three steps:
    the 28 files. The decoder adds `toneWeight` times the log posterior of the
    tone class to the spectral score of a toned state (`search.toneWeight`,
    default 2), because the ±4 frames the LDA sees cannot tell a level tone
-   rising out of a low one from a rising tone. Lexicon words that the count
-   corpora never saw (count 1) back off as if seen three times
-   (`search.minCount`), so that "hello", absent from pre-1926 books, is not
-   heard as the more frequent "hollow". A Mandarin word whose last third tone
+   rising out of a low one from a rising tone. English words back off to
+   their Common Voice counts scaled to the book total
+   (`src/recognition/data/en-spoken.js`, issue 181), so that "hello", absent
+   from pre-1926 books, is not heard as "hollow" or "her no". Lexicon words
+   that no count saw (count 1) back off as if seen three times
+   (`search.minCount`). A Mandarin word whose last third tone
    is read rising (third-tone sandhi, and bú, yí) goes on only into a tree of
    the words whose first tone causes that sandhi, never into a pause or the
    end of the utterance, as `applyToneSandhi()` speaks it: without this, 中火

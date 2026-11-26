@@ -303,6 +303,8 @@ Source: https://github.com/common-voice/common-voice, commit
 public domain by Common Voice contributors under CC0 1.0. Only word counts
 (`data/lexicon/en-counts.txt`, `data/lexicon/hi-counts.txt`,
 `data/lexicon/ru-counts.txt`) are kept; they choose which words are shipped.
+The English counts of the shipped words are also shipped as the word
+decoder's unigram prior (`src/recognition/data/en-spoken.js`).
 
 ```text
 Creative Commons Legal Code
