@@ -104,6 +104,15 @@ function cellFor(runs, row, column, limits) {
   if (run.error) {
     return { status: 'failed', reason: run.error, metrics: {} };
   }
+  if (!Object.keys(limits).length) {
+    // Issue 81: the speed of copy synthesis is reported, with no limit.
+    const ratio = run.metrics?.cpuRatio;
+    return {
+      status: 'certified',
+      reason: `reported, no limit${Number.isFinite(ratio) ? `: CPU time / audio time ${format(ratio)}` : ''}`,
+      metrics: {},
+    };
+  }
   const metrics = Object.fromEntries(
     Object.entries(limits).map(([name, limit]) => {
       const value = run.metrics?.[name] ?? null;
@@ -168,14 +177,15 @@ export function regressions(before, after, { failedOnly = false } = {}) {
   return found;
 }
 
-function format(value) {
+function format(value, maxLength = Infinity) {
   if (value === null || value === undefined) {
     return '—';
   }
   if (typeof value === 'number') {
     return Number.isFinite(value) ? String(Number(value.toFixed(4))) : '∞';
   }
-  return String(value);
+  const text = String(value).replaceAll('|', '\\|');
+  return text.length > maxLength ? `${text.slice(0, maxLength)}…` : text;
 }
 
 function status(cell) {
@@ -240,7 +250,8 @@ function runLines(data) {
           : 'none';
       const extra = Object.entries(run.metrics ?? {})
         .filter(([, value]) => typeof value !== 'object' || value === null)
-        .map(([name, value]) => `${name} ${format(value)}`)
+        // Long texts (the recognised words) are cut; the JSON has them.
+        .map(([name, value]) => `${name} ${format(value, 60)}`)
         .join(', ');
       lines.push(
         `| ${row} | ${engine} | ${format(run.seconds)} | ${format(run.audioSeconds)} | ${format(run.peakRssMb)} | ${cap} | ${run.error ? `error: ${run.error}` : extra} |`

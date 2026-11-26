@@ -89,10 +89,11 @@ export function publish(dir, { root = ROOT, allowRegression } = {}) {
   const app = readJson(path.join(dir, 'lowest-app.json'))?.result;
   if (app && measured.limits?.app) {
     measured.runs = { ...measured.runs, app: { js: app } };
-    measured.cells.app = judge(
-      { app: { js: app } },
-      { app: measured.limits.app }
-    ).app;
+  }
+  // The cells are judged again from the runs and the limits of the
+  // measurement, so a report downloaded from Heavy checks can be published.
+  if (Object.keys(measured.runs ?? {}).length && measured.limits) {
+    measured.cells = judge(measured.runs, measured.limits);
   }
   const reportJson = path.join(root, REPORT_PATH.replace(/\.md$/u, '.json'));
   const committed = readJson(reportJson);
