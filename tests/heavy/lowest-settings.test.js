@@ -222,6 +222,11 @@ describe('lowest settings: 8 kHz and one core', () => {
       regressions: [],
     };
     writeReport('lowest-settings', formatReport(data), data);
+    if (Number.isFinite(limit)) {
+      // A run on fewer utterances is a smoke test, not the certification.
+      console.log(`lowest: --limit ${limit}, committed cells not compared`);
+      return;
+    }
     const committed = read(
       path.join(ROOT, REPORT_PATH.replace(/\.md$/u, '.json'))
     );
