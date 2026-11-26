@@ -3,6 +3,7 @@ import * as en from './en.js';
 import * as ru from './ru.js';
 import * as hi from './hi.js';
 import * as zh from './zh.js';
+import * as enSpoken from './en-spoken.js';
 
 const DATA = new Map([
   ['en', en],
@@ -10,6 +11,8 @@ const DATA = new Map([
   ['hi', hi],
   ['zh', zh],
 ]);
+// Spoken-language counts that the HMM word decoder backs off to (issue 181).
+const SPOKEN = new Map([['en', enSpoken]]);
 const opened = new Map();
 const transitionsByTable = new WeakMap();
 let readTransitions;
@@ -144,6 +147,29 @@ function setTransition(transitions, word, previous, count) {
   row.set(previous.word, discountedCost(count, previous.count));
 }
 
+/**
+ * Give every word a `prior`: its share of the spoken-language counts scaled
+ * to `total`, or 1 (never seen) when they lack it. The books behind the
+ * counts never saw everyday words such as "hello", which then lost to
+ * "her no" and "hollow" (issue 181).
+ */
+function addSpokenPrior(words, total, spoken) {
+  if (!spoken) {
+    return;
+  }
+  const shares = new Map();
+  for (const item of spoken.SPOKEN.split(' ')) {
+    const at = item.lastIndexOf('=');
+    if (at > 0) {
+      shares.set(item.slice(0, at), Number(item.slice(at + 1)));
+    }
+  }
+  const scale = total / spoken.SPOKEN_WORDS;
+  for (const item of words) {
+    item.prior = Math.max(1, (shares.get(item.word) ?? 0) * scale);
+  }
+}
+
 export function getCounts(language) {
   if (!DATA.has(language)) {
     throw new RangeError(`unsupported recognition language "${language}"`);
@@ -157,6 +183,8 @@ export function getCounts(language) {
         return { word: item.slice(0, at), count: Number(item.slice(at + 1)) };
       });
     const counts = new Map(words.map((item) => [item.word, item.count]));
+    const total = words.reduce((sum, item) => sum + item.count, 0);
+    addSpokenPrior(words, total, SPOKEN.get(language));
     let bigrams;
     let openRow;
     const rows = new Map();
@@ -187,7 +215,7 @@ export function getCounts(language) {
         }
         return rows.get(word);
       },
-      total: words.reduce((sum, item) => sum + item.count, 0),
+      total,
     });
   }
   return opened.get(language);

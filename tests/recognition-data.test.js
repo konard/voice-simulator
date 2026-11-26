@@ -16,6 +16,10 @@ import {
   writeCounts,
 } from '../scripts/build-recognition-data.mjs';
 import {
+  buildSpokenPrior,
+  readSpokenCounts,
+} from '../scripts/build-spoken-prior.mjs';
+import {
   getCounts,
   wordCost,
   wordTransition,
@@ -24,6 +28,7 @@ import * as en from '../src/recognition/data/en.js';
 import * as ru from '../src/recognition/data/ru.js';
 import * as hi from '../src/recognition/data/hi.js';
 import * as zh from '../src/recognition/data/zh.js';
+import * as enSpoken from '../src/recognition/data/en-spoken.js';
 
 describe('recognition count tables', () => {
   for (const [language, data] of Object.entries({ en, ru, hi, zh })) {
@@ -169,6 +174,40 @@ describe('recognition count tables', () => {
       expect(en.WORDS.includes('torch=4')).toBe(true);
     } finally {
       rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
+
+describe('spoken-word prior', () => {
+  it('backs English words off to the Common Voice counts (issue 181)', () => {
+    const { words, counts, total } = getCounts('en');
+    const spoken = readSpokenCounts(
+      readFileSync(
+        new globalThis.URL('../data/lexicon/en-counts.txt', import.meta.url),
+        'utf8'
+      )
+    );
+    // The committed module is what the offline generator writes.
+    const { total: spokenWords, entries } = buildSpokenPrior(
+      spoken,
+      words.map(({ word }) => word)
+    );
+    expect(enSpoken.SPOKEN_WORDS).toBe(spokenWords);
+    expect(enSpoken.SPOKEN).toBe(
+      entries.map(([word, count]) => `${word}=${count}`).join(' ')
+    );
+    const prior = new Map(words.map((item) => [item.word, item.prior]));
+    const scale = total / spokenWords;
+    expect(prior.get('hello')).toBe(180 * scale);
+    // The books never saw "hello" (count 1); the spoken text did.
+    expect(counts.get('hello')).toBe(1);
+    expect(prior.get('hello') > 10 * counts.get('hello')).toBe(true);
+    // A word without spoken counts is never seen.
+    const heard = new Set(spoken.map(([word]) => word));
+    const unseen = words.find(({ word }) => !heard.has(word));
+    expect(unseen.prior).toBe(1);
+    for (const language of ['ru', 'hi', 'zh']) {
+      expect(getCounts(language).words[0].prior).toBe(undefined);
     }
   });
 });
