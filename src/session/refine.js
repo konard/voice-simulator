@@ -297,7 +297,7 @@ export function* uncertaintyFor(voice, tokens) {
 
 export function scoreVoice(voice, fit, snapshot, settings) {
   return measureVoiceFit(fit, snapshot, settings.sampleRate, voice.head, {
-    engine: 'js',
+    engine: settings.engine ?? 'js',
     maxDuration: snapshot.length / settings.sampleRate,
     articulationOffsets: voice.articulationOffsets,
   });

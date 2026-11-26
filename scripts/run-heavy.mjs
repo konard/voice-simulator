@@ -7,7 +7,10 @@
  *   node scripts/run-heavy.mjs [--suite <name>] [--limit <n>] [--out <dir>] [--dir <dir>]
  *
  *   --suite  all (default), quality, recognition, roundtrip, copy,
- *            performance, gpu or lexicon; selects <dir>/<suite>-*.test.js.
+ *            performance, gpu, lexicon or lowest; selects
+ *            <dir>/<suite>-*.test.js. Suite lowest (issue 81) certifies
+ *            8 kHz on one core: lowest-app.test.js, then
+ *            lowest-settings.test.js, which reads the app row it wrote.
  *   --limit  positive integer: the largest number of items (utterances,
  *            files) each test may process; passed on as HEAVY_LIMIT.
  *   --out    folder for reports, default reports/heavy; passed on as
@@ -51,6 +54,7 @@ export const SUITES = Object.freeze([
   'performance',
   'gpu',
   'lexicon',
+  'lowest',
 ]);
 
 /** One hour per test: the heavy tests render and recognise whole datasets. */

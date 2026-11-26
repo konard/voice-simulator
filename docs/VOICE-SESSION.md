@@ -84,3 +84,7 @@ The `voicedSeconds` property reports the voiced duration for the current
 speaker. The example app uses it to show progress toward the first fit.
 Set `includeModeLabels: false` to keep timed recognition and skip the extra
 reference renders used to classify expressive modes in live results.
+`engine` (default `'js'`) renders the voice fits; the recognizer uses the
+engine of the same name (default `'auto'`). The lowest-settings matrix
+([report](reports/lowest-settings.md)) runs sessions with `'js'` and with
+`'rust'` on one thread without SIMD.

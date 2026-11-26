@@ -91,6 +91,13 @@ export function measureCopyMetrics(
   };
 }
 
+/** The recogniser takes the name of an Engine from createEngine(). */
+function engineName(engine) {
+  return typeof engine === 'string' || engine === undefined
+    ? engine
+    : engine?.name;
+}
+
 function recognizeWithVoice(
   samples,
   sampleRate,
@@ -100,6 +107,7 @@ function recognizeWithVoice(
 ) {
   const { head, articulationOffsets } = loadVoice(voice);
   return recognize(samples, sampleRate, {
+    engine: engineName(options.engine),
     languages: options.languages,
     voice: head,
     articulationOffsets,
@@ -130,6 +138,7 @@ function analyze(samples, sampleRate, options, impose) {
   }
   const copied = copyVoice(samples, sampleRate, {
     languages,
+    engine: options.engine,
   });
   return {
     voice: copied.voice ?? saveVoice(DEFAULT_HEAD),

@@ -1,0 +1,56 @@
+{
+  "synthesis": {
+    "quality": { "werIncrease": 0.05 },
+    "js-1": { "rtf": 0.25 },
+    "rust-1": { "rtf": 0.25 },
+    "memory": { "peakRssMb": 256 }
+  },
+  "recognition": {
+    "quality": { "perIncrease": 0.05, "werIncrease": 0.08 },
+    "js-1": { "rtf": 0.25 },
+    "rust-1": { "rtf": 0.25 },
+    "memory": { "peakRssMb": 256 }
+  },
+  "streaming": {
+    "quality": { "textMismatch": 0 },
+    "js-1": { "firstPartial": 1, "load": 0.25 },
+    "rust-1": { "firstPartial": 1, "load": 0.25 },
+    "memory": { "peakRssMb": 256 }
+  },
+  "voice-fit": {
+    "quality": { "vocalTractLengthError": 0.05, "pitchError": 0.03 },
+    "js-1": { "cpuRatio": 1 },
+    "rust-1": { "cpuRatio": 1 },
+    "memory": { "peakRssMb": 256 }
+  },
+  "session": {
+    "quality": {
+      "stable": 1,
+      "vocalTractLengthError": 0.05,
+      "pitchError": 0.03
+    },
+    "js-1": { "cpuRatio": 0.5 },
+    "rust-1": { "cpuRatio": 0.5 },
+    "memory": { "peakRssMb": 256 }
+  },
+  "copy": {
+    "quality": {
+      "f0RmseSemitones": 1.5,
+      "timingErrorMs": 30,
+      "phonemeAgreement": 0.9
+    },
+    "js-1": {},
+    "rust-1": {},
+    "memory": { "peakRssMb": 256 }
+  },
+  "modes": {
+    "quality": { "modeShare": 0.8 },
+    "js-1": { "rtf": 0.25 },
+    "rust-1": { "rtf": 0.25 },
+    "memory": { "peakRssMb": 256 }
+  },
+  "app": {
+    "quality": { "textBack": 1 },
+    "js-1": { "workerRtf": 1, "firstSound": 1 }
+  }
+}

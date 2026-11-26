@@ -19,6 +19,7 @@ on:
           - recognition-performance
           - gpu
           - lexicon
+          - lowest
         default: all
       ref:
         description: Branch or tag of this repository, or a commit on the default branch or on the branch chosen above, to test (empty = the branch chosen above)
@@ -94,8 +95,9 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      # Suites copy and lowest (issue 81) drive the built example app.
       - name: Install the example app and Playwright Chromium
-        if: inputs.suite == 'copy' || inputs.suite == 'all'
+        if: inputs.suite == 'copy' || inputs.suite == 'lowest' || inputs.suite == 'all'
         env:
           ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
         run: |
@@ -126,8 +128,9 @@ jobs:
           bash scripts/run-with-budget-warning.sh 360 "wasm build" node scripts/build-wasm.mjs --require --threads
           bash scripts/run-with-budget-warning.sh 120 "CLI build" cargo build --release --locked -p voice-simulator-cli
 
+      # Suite lowest (issue 81) runs the rust-1 column on this scalar build.
       - name: Build scalar recognition WebAssembly
-        if: inputs.suite == 'recognition-performance' || inputs.suite == 'copy'
+        if: inputs.suite == 'recognition-performance' || inputs.suite == 'copy' || inputs.suite == 'lowest'
         run: |
           node scripts/build-wasm.mjs --require --check-size
           node scripts/build-recognition-models.mjs
@@ -177,6 +180,9 @@ jobs:
           REQUIRE_WASM: ${{ (inputs.suite == 'performance' || inputs.suite == 'all') && '1' || '' }}
           REQUIRE_CLI: ${{ (inputs.suite == 'performance' || inputs.suite == 'all') && '1' || '' }}
           REQUIRE_THREADS_WASM: ${{ (inputs.suite == 'performance' || inputs.suite == 'all') && '1' || '' }}
+          # Lowest settings: each cell still runs pinned to one core of its
+          # own; four at a time fit the step budget (sequentially about 5 h).
+          LOWEST_PARALLEL: ${{ (inputs.suite == 'lowest' || inputs.suite == 'all') && '4' || '' }}
         run: |
           limit_flags=()
           if [[ "$LIMIT" =~ ^[0-9]+$ ]]; then

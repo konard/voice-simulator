@@ -1,0 +1,23 @@
+{
+  "synthesis/memory": "https://github.com/konard/voice-simulator/issues/173",
+  "recognition/js-1": "https://github.com/konard/voice-simulator/issues/174",
+  "recognition/rust-1": "https://github.com/konard/voice-simulator/issues/174",
+  "recognition/memory": "https://github.com/konard/voice-simulator/issues/173",
+  "streaming/quality": "https://github.com/konard/voice-simulator/issues/175",
+  "streaming/js-1": "https://github.com/konard/voice-simulator/issues/175",
+  "streaming/rust-1": "https://github.com/konard/voice-simulator/issues/175",
+  "streaming/memory": "https://github.com/konard/voice-simulator/issues/173",
+  "voice-fit/quality": "https://github.com/konard/voice-simulator/issues/176",
+  "voice-fit/js-1": "https://github.com/konard/voice-simulator/issues/176",
+  "voice-fit/rust-1": "https://github.com/konard/voice-simulator/issues/176",
+  "voice-fit/memory": "https://github.com/konard/voice-simulator/issues/173",
+  "session/quality": "https://github.com/konard/voice-simulator/issues/177",
+  "session/js-1": "https://github.com/konard/voice-simulator/issues/177",
+  "session/rust-1": "https://github.com/konard/voice-simulator/issues/177",
+  "session/memory": "https://github.com/konard/voice-simulator/issues/173",
+  "copy/quality": "https://github.com/konard/voice-simulator/issues/178",
+  "copy/memory": "https://github.com/konard/voice-simulator/issues/173",
+  "modes/js-1": "https://github.com/konard/voice-simulator/issues/179",
+  "modes/memory": "https://github.com/konard/voice-simulator/issues/173",
+  "app/quality": "https://github.com/konard/voice-simulator/issues/180"
+}

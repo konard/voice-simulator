@@ -6,6 +6,7 @@ import {
   validateRate,
   validateSamples,
 } from '../recognition/recognizer.js';
+import { checkRecognitionOptions } from '../recognition/engine.js';
 import { createEvents } from '../recognition/recognizer-stream.js';
 import { synthesize } from '../synthesize.js';
 import { loadVoice, saveVoice } from '../voice-file.js';
@@ -63,7 +64,19 @@ function optionsFor(options) {
   }
   settings.language =
     settings.languages?.length === 1 ? settings.languages[0] : undefined;
+  settings.recognitionEngine = recognitionEngine(settings.engine);
   return settings;
+}
+
+/**
+ * Voice fits render with `engine` (a name or an Engine from createEngine);
+ * the recogniser takes the name of that engine.
+ */
+function recognitionEngine(engine) {
+  const name =
+    typeof engine === 'string' || engine === undefined ? engine : engine?.name;
+  checkRecognitionOptions({ engine: name });
+  return name;
 }
 
 function accentOptions(accent) {
@@ -95,6 +108,7 @@ export function createSession(
     includeModeLabels: settings.includeModeLabels,
     voice: DEFAULT_HEAD,
     deterministic: !realtime,
+    engine: settings.recognitionEngine,
   });
   const scheduler = createSessionScheduler(settings, receive);
   const tracking = createSpeakerTracking(settings);

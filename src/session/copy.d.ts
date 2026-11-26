@@ -18,6 +18,10 @@ export type ScoreRenderOptions = Pick<
   SynthesizeOptions,
   'tier' | 'sampleRate' | 'seed' | 'engine'
 >;
+/**
+ * `engine` renders the copy and, by its name, also selects the recogniser
+ * and the voice-fit renderer of the analysis.
+ */
 export interface CopyOptions extends ScoreRenderOptions {
   languages?: readonly LanguageCode[];
   voice?: VoiceFile | HeadConfig | string;
