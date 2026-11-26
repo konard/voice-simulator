@@ -64,14 +64,19 @@ function optionsFor(options) {
   }
   settings.language =
     settings.languages?.length === 1 ? settings.languages[0] : undefined;
-  // Voice fits render with `engine` (a name or an Engine from
-  // createEngine); the recogniser takes the name of that engine.
-  settings.recognitionEngine =
-    typeof settings.engine === 'string' || settings.engine === undefined
-      ? settings.engine
-      : settings.engine?.name;
-  checkRecognitionOptions({ engine: settings.recognitionEngine });
+  settings.recognitionEngine = recognitionEngine(settings.engine);
   return settings;
+}
+
+/**
+ * Voice fits render with `engine` (a name or an Engine from createEngine);
+ * the recogniser takes the name of that engine.
+ */
+function recognitionEngine(engine) {
+  const name =
+    typeof engine === 'string' || engine === undefined ? engine : engine?.name;
+  checkRecognitionOptions({ engine: name });
+  return name;
 }
 
 function accentOptions(accent) {
