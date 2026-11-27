@@ -585,12 +585,14 @@ export function alignWords(network, feats, frames, words, options = {}) {
   const N = chain.length;
   let prev = new Float64Array(N).fill(-Infinity);
   let cur = new Float64Array(N);
-  const back = new Int32Array(frames * N);
+  // A predecessor can stay, advance by one, or skip three states. Store
+  // those three choices in two bits per cell.
+  const back = new Uint8Array(Math.ceil((frames * N) / 4));
   for (let t = 0; t < frames; t++) {
     const row = t * N;
     for (let n = 0; n < N; n++) {
       let s = -Infinity;
-      let arg = -1;
+      let step = 0;
       if (t === 0) {
         // Start in the first state or after skipping leading silence.
         if (n === 0) {
@@ -600,10 +602,9 @@ export function alignWords(network, feats, frames, words, options = {}) {
         }
       } else {
         s = prev[n] + chain[n].stay;
-        arg = n;
         if (n > 0 && prev[n - 1] + chain[n - 1].go > s) {
           s = prev[n - 1] + chain[n - 1].go;
-          arg = n - 1;
+          step = 1;
         }
         // Skip a whole optional unit that starts at n-3.
         if (n >= 4 && chain[n - 3].skippable) {
@@ -611,7 +612,7 @@ export function alignWords(network, feats, frames, words, options = {}) {
             prev[n - 4] + chain[n - 4].go + (chain[n - 3].sil ? 0 : -1);
           if (skip > s) {
             s = skip;
-            arg = n - 4;
+            step = 2;
           }
         }
       }
@@ -619,7 +620,8 @@ export function alignWords(network, feats, frames, words, options = {}) {
         s += score(chain[n].m, t);
       }
       cur[n] = s;
-      back[row + n] = arg;
+      const cell = row + n;
+      back[Math.floor(cell / 4)] |= step << ((cell % 4) * 2);
     }
     [prev, cur] = [cur, prev];
   }
@@ -632,7 +634,9 @@ export function alignWords(network, feats, frames, words, options = {}) {
       spans[ti][0] = Math.min(spans[ti][0], t);
       spans[ti][1] = Math.max(spans[ti][1], t + 1);
     }
-    at = back[t * N + at];
+    const cell = t * N + at;
+    const step = (back[Math.floor(cell / 4)] >> ((cell % 4) * 2)) & 3;
+    at -= step === 2 ? 4 : step;
   }
   return tokens.map((tk, i) => ({ ...tk, from: spans[i][0], to: spans[i][1] }));
 }

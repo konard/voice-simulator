@@ -8,6 +8,7 @@ import {
 } from '../src/recognition/hmm-features.js';
 import {
   HMM_DECODE_DEFAULTS,
+  alignWords,
   createThresholds,
 } from '../src/recognition/hmm-decode.js';
 import { getHmmModel } from '../src/recognition/hmm-model.js';
@@ -40,6 +41,40 @@ it('passes oov to the word decoder, on unless false', () => {
 it('puts frame boundaries halfway between frame centres', () => {
   const halfway = (hmmFrameTime(4) + hmmFrameTime(5)) / 2;
   assert.ok(Math.abs(hmmBoundaryTime(5) - halfway) < 1e-12);
+});
+
+it('aligns phones across an optional release and leading and trailing silence', () => {
+  const units = ['sil', 'p', 'p_r', 'a'];
+  const ciIndex = new Map();
+  for (const [i, unit] of units.entries()) {
+    for (let state = 0; state < 3; state++) {
+      ciIndex.set(`${unit}#${state}`, 3 * i + state);
+    }
+  }
+  const model = {
+    ciIndex,
+    contextIndex: new Map(),
+    dims: 1,
+    states: 12,
+    first: Uint32Array.from({ length: 13 }, (_, i) => i),
+    mu: Float32Array.from({ length: 12 }, (_, i) => i),
+    inv: new Float32Array(12).fill(100),
+    norm: new Float64Array(12),
+    stay: new Float64Array(12),
+    go: new Float64Array(12),
+  };
+  const words = [
+    { units: ['p', 'a'], tokens: [{ symbol: 'p' }, { symbol: 'a' }] },
+  ];
+  const features = Float32Array.of(3, 4, 5, 9, 10, 11);
+  const aligned = alignWords({ model }, features, features.length, words);
+  assert.deepEqual(
+    aligned.map(({ token, from, to }) => [token.symbol, from, to]),
+    [
+      ['p', 0, 3],
+      ['a', 3, 6],
+    ]
+  );
 });
 
 it('interpolates across a pitch more than an octave from the median', () => {

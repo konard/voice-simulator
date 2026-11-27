@@ -372,9 +372,7 @@ const linkedNodes = new Set(['child', 'sibling']);
 
 function appendColumn(column, source, start, delta = 0, sentinel = false) {
   if (start + source.length > column.length) {
-    const larger = new column.constructor(
-      Math.max(start + source.length, column.length * 2)
-    );
+    const larger = new column.constructor(start + source.length);
     larger.set(column);
     column = larger;
   }
@@ -514,11 +512,13 @@ export function getNetwork(
 ) {
   const revision = lexiconRevision();
   let cached = networks.get(model);
+  const current = cached?.builder.network.trees;
   if (
     !cached ||
     cached.revision !== revision ||
     cached.maxWords !== maxWords ||
-    cached.oov !== oov
+    cached.oov !== oov ||
+    (current.size > 0 && !languages.some((lang) => current.has(lang)))
   ) {
     cached = { revision, maxWords, oov, builder: createBuilder(model) };
     networks.set(model, cached);
