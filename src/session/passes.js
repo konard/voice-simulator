@@ -29,6 +29,9 @@ function read(samples, voice, settings) {
   const options = recognitionSettings({
     ...settings,
     engine: settings.recognitionEngine,
+    // Fitting consumes the decoded phones and word timing/stress. The
+    // streaming recognizer supplies mode labels to session listeners.
+    includeModeLabels: false,
     voice: voice.head,
     articulationOffsets: voice.articulationOffsets,
   });

@@ -314,3 +314,32 @@ it('reuses fit statistics only for the same immutable session snapshot', () => {
   expect(invert(snapshot.slice())).toBe(distance);
   expect(inverseFilters).toBe(2);
 });
+
+it('uses recognized word timing and stress for fitting without mode analysis', () => {
+  const syllable = { text: 'bird', ipa: 'bɝd', start: 0, end: 0.4, stress: 1 };
+  const word = {
+    ...syllable,
+    language: 'en',
+    confidence: 0.9,
+    syllables: [syllable],
+  };
+  const stages = [];
+  const result = consume(
+    sessionPasses.inverting(
+      samples.slice(0, SAMPLE_RATE),
+      { voice, distance: 1 },
+      {
+        ...options,
+        includeModeLabels: true,
+        stages: {
+          audioToIpa: () => reading.decoded,
+          ipaToText: () => ({ text: word.text, ipa: word.ipa, words: [word] }),
+        },
+        profile: (stage) => stages.push(stage),
+      }
+    )
+  );
+  expect(result.usable).toBe(true);
+  expect(result.reading.words[0].syllables).toEqual([syllable]);
+  expect(stages.includes('Modes')).toBe(false);
+});
