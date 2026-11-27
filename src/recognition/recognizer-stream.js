@@ -207,7 +207,10 @@ export function createRecognizer(options = {}) {
   const minVoiced = settings.minVoiced ?? STREAM_MIN_VOICED;
   const stride = Math.max(1, Math.floor(sampleRate * 0.02));
   const { emit, on, off } = createEvents();
-  const load = createLoadMeter(sampleRate);
+  const load =
+    settings.level === 'auto' && !settings.deterministic
+      ? createLoadMeter(sampleRate)
+      : null;
   let phrase;
   let level;
   let committed;
@@ -232,7 +235,7 @@ export function createRecognizer(options = {}) {
     reportSyllables = createSyllableEvents(emit);
     ended = false;
     flushed = null;
-    load.reset();
+    load?.reset();
   }
 
   function update(decoded) {
@@ -337,11 +340,11 @@ export function createRecognizer(options = {}) {
   }
 
   function restart(size, adapt = false) {
-    const start = globalThis.performance.now();
+    const start = load && globalThis.performance.now();
     const previous = phrase;
     commit(size, size === previous.used);
-    load.charge((globalThis.performance.now() - start) / 1000);
-    if (settings.level === 'auto' && !settings.deterministic) {
+    if (load) {
+      load.charge((globalThis.performance.now() - start) / 1000);
       const next = load.choose(level);
       if (next !== level) {
         level = next;
@@ -412,7 +415,7 @@ export function createRecognizer(options = {}) {
   }
 
   function advance(chunk) {
-    const start = globalThis.performance.now();
+    const start = load && globalThis.performance.now();
     phrase.buffer.set(chunk, phrase.used);
     phrase.used += chunk.length;
     update(phrase.decoder.push(chunk));
@@ -423,7 +426,7 @@ export function createRecognizer(options = {}) {
     if (due) {
       nextPartial++;
     }
-    load.add(chunk.length, (globalThis.performance.now() - start) / 1000);
+    load?.add(chunk.length, (globalThis.performance.now() - start) / 1000);
     if (pending && pause >= 0.2 - EPSILON) {
       restart(phrase.used, true);
     } else if (
