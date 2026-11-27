@@ -455,7 +455,7 @@ export function createRecognizer(options = {}) {
     return decodeRecognitionAudio(
       phrase.buffer.subarray(0, phrase.used),
       sampleRate,
-      settings,
+      { ...settings, modes: false, includeModeLabels: false },
       level,
       offset / sampleRate
     ).decoded.words;

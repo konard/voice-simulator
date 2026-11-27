@@ -14,6 +14,7 @@ import { alignWords, decodeWords } from './hmm-decode.js';
 import { syllablesWithWhisper } from './decode-pipeline.js';
 import { spellSounds } from './phones-to-letters.js';
 import { parseIpa } from '../ipa/parse.js';
+import { measure } from './profile.js';
 import { clipWhisperSpans, findWhisper } from './whisper.js';
 import {
   whisperModeSpans,
@@ -108,31 +109,43 @@ function timedSegments(aligned) {
 export function hmmAudioToIpa(samples, sampleRate, options = {}) {
   const model = getHmmModel();
   const languages = options.languages ?? ['en', 'ru', 'hi', 'zh'];
-  const analysis = analyzeFrames(samples, sampleRate, { hop: 0.01 });
-  const { feats, frames, tone } = hmmFeatures(samples, sampleRate, model.lda);
+  const analysis =
+    options.analysis ?? analyzeFrames(samples, sampleRate, { hop: 0.01 });
+  const pitch = trackPitch(analysis);
+  const { feats, frames, tone } = hmmFeatures(
+    samples,
+    sampleRate,
+    model.lda,
+    pitch
+  );
   const search = { ...options.search, tone };
   // Features are normalised per input, so silence alone would decode as
   // words: decode only inputs with frames the front end calls speech.
   const network =
     frames && hasSpeech(analysis)
-      ? getNetwork(model, languages, {
-          maxWords: options.maxWords,
-          oov: options.oov,
-        })
+      ? measure(options.profile, 'HMM network', () =>
+          getNetwork(model, languages, {
+            maxWords: options.maxWords,
+            oov: options.oov,
+          })
+        )
       : null;
   const decoded = network
-    ? decodeWords(network, feats, frames, search)
+    ? measure(options.profile, 'HMM search', () =>
+        decodeWords(network, feats, frames, search)
+      )
     : { words: [], lang: null };
   // Words from the phone loop get their own tokens to take a stress.
   decoded.words = decoded.words.map((w) =>
     w.oov ? { ...w, tokens: w.tokens.map((t) => ({ ...t })) } : w
   );
   const aligned = decoded.words.length
-    ? alignWords(network, feats, frames, decoded.words, search)
+    ? measure(options.profile, 'HMM alignment', () =>
+        alignWords(network, feats, frames, decoded.words, search)
+      )
     : [];
   stressOutOfVocabulary(decoded.words, aligned);
   const segments = timedSegments(aligned);
-  const pitch = trackPitch(analysis);
   const whisperSpans = whisperSpansOf(samples, sampleRate, analysis, pitch, {
     whisper: options.whisper ?? 'auto',
   });

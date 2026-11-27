@@ -406,7 +406,7 @@ function appendPrepared(network, lang, language, packed) {
               : 0;
     network.nodes[name] = appendColumn(
       network.nodes[name],
-      nodes[name],
+      nodes[name].subarray(1),
       network.nodeCount,
       delta,
       name === 'terminal' || linkedNodes.has(name)
@@ -415,20 +415,20 @@ function appendPrepared(network, lang, language, packed) {
   network.emit = appendColumn(network.emit, emit, network.stateCount);
   network.wordId = appendColumn(
     network.wordId,
-    wordId,
+    wordId.subarray(1),
     network.wordLinks,
     network.words.length
   );
   network.nextWord = appendColumn(
     network.nextWord,
-    nextWord,
+    nextWord.subarray(1),
     network.wordLinks,
     linkDelta,
     true
   );
-  network.nodeCount += nodes.first.length;
+  network.nodeCount += nodes.first.length - 1;
   network.stateCount += emit.length;
-  network.wordLinks += wordId.length;
+  network.wordLinks += wordId.length - 1;
   const offset = (list) => list.map((id) => id + nodeDelta);
   network.words.length += words.flags.length;
   return {
@@ -447,6 +447,24 @@ function appendPrepared(network, lang, language, packed) {
   };
 }
 
+function firstPrepared(network, lang, packed) {
+  const { nodes, emit, wordId, nextWord, tree, words } = packed;
+  const lexicon = getLexicon(lang);
+  Object.assign(network.nodes, nodes);
+  network.emit = emit;
+  network.wordId = wordId;
+  network.nextWord = nextWord;
+  network.nodeCount = nodes.first.length;
+  network.stateCount = emit.length;
+  network.wordLinks = wordId.length;
+  network.words.length = words.flags.length;
+  return {
+    ...tree,
+    data: lexicon,
+    wordTable: openHmmWords(words, lexicon.words, lang, 0),
+  };
+}
+
 /** Precompute the shipped tree for an unmodified vocabulary. */
 export function packHmmNetwork(lang) {
   const options = { maxWords: HMM_MAX_WORDS, oov: true };
@@ -456,15 +474,15 @@ export function packHmmNetwork(lang) {
   const nodes = Object.fromEntries(
     Object.entries(network.nodes).map(([name, column]) => [
       name,
-      column.slice(1, network.nodeCount),
+      column.slice(0, network.nodeCount),
     ])
   );
   return {
     nodes,
     tree,
     emit: network.emit.slice(0, network.stateCount),
-    wordId: network.wordId.slice(1, network.wordLinks),
-    nextWord: network.nextWord.slice(1, network.wordLinks),
+    wordId: network.wordId.slice(0, network.wordLinks),
+    nextWord: network.nextWord.slice(0, network.wordLinks),
     words: packHmmWords(network.words, data.words),
   };
 }
@@ -480,7 +498,9 @@ function withLanguages(builder, languages, options) {
       network.trees.set(
         lang,
         packed
-          ? appendPrepared(network, lang, language, packed)
+          ? language === 0
+            ? firstPrepared(network, lang, packed)
+            : appendPrepared(network, lang, language, packed)
           : addTree(builder, lang, language, options)
       );
       network.languages.push(lang);

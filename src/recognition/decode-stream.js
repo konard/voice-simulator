@@ -7,6 +7,7 @@ import {
   segmentsOf,
 } from './decode-pipeline.js';
 import { decodeSearch, pathArcs } from './decode-search.js';
+import { createSpanPool } from './decode-spans.js';
 import { createDecodeTracks } from './decode-stream-tracks.js';
 import { createFrameAnalyzer } from './frontend.js';
 import { createLandmarkDetector } from './landmarks.js';
@@ -73,6 +74,7 @@ export function createIpaDecoder(sampleRate, options = {}) {
   const settings = decoderSettings(sampleRate, options);
   const { language } = settings;
   const quantum = Math.max(1, Math.floor(sampleRate * 0.02));
+  const spanPool = createSpanPool();
   let input;
   let pitch;
   let landmarks;
@@ -148,10 +150,16 @@ export function createIpaDecoder(sampleRate, options = {}) {
       analysis,
       settings,
       { from, to, open: !final, locked: fixed.length > 0 },
-      decoder.templatesAt
+      decoder.templatesAt,
+      spanPool
     );
     const search = decodeSearch(prepared, language, { ...settings, lastUnit });
-    current = { analysis, prepared, templates, search };
+    current = {
+      analysis,
+      prepared: { times: prepared.times },
+      templates,
+      search,
+    };
   }
 
   function collect(final, segments) {

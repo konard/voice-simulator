@@ -24,7 +24,7 @@ export const recognitionDataFile = (kind) =>
     import.meta.url
   );
 
-export const hmmNetworkVersion = 1;
+export const hmmNetworkVersion = 2;
 export const hmmNetworkFile = (language) =>
   new globalThis.URL(
     `../engine/voice-simulator-hmm-${language}.bin.gz`,

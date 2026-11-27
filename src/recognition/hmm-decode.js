@@ -104,9 +104,11 @@ function languageModel(network, records, settings) {
     const { wordTable: packed, data, loop } = tree;
     if (packed ? packed.oov(id) : words[id].oov) {
       const beginning = packed ? packed.begin(id) : words[id].begin;
-      const phone = (wid) => (packed ? packed.phone(wid) : words[wid].units[0]);
-      const before = beginning ? '' : phone(records[hist].id);
-      return oovWeight * loop.bigram.get(before).get(phone(id)) + oovPhone;
+      const phone = packed ? packed.phone(id) : words[id].units[0];
+      const before = beginning
+        ? ''
+        : previousPhone(packed, words, records[hist].id);
+      return oovWeight * loop.bigram.get(before).get(phone) + oovPhone;
     }
     const previous = hist >= 0 ? records[hist].word : null;
     let known = cache.get(previous);
@@ -136,6 +138,10 @@ function languageModel(network, records, settings) {
     }
     return v;
   };
+}
+
+function previousPhone(packed, words, id) {
+  return packed ? packed.phone(id) : words[id].units[0];
 }
 
 /** Tokens at the roots, loops and silences of every language at frame 0. */
@@ -217,12 +223,13 @@ function bestEndingAt(records, end) {
  * of different lengths are not comparable, so that end is only a fallback.
  */
 function finalRecord(network, records, languages, frames, last) {
-  const { stamp, positions, scores, histories } = last;
+  const { positions, scores, histories } = last;
   let best = bestEndingAt(records, frames);
   for (const lang of languages) {
     const sil = network.trees.get(lang).silence;
-    const j = positions[sil] * 6 + 2;
-    if (stamp[sil] === frames - 1 && scores[j] > (best?.score ?? -Infinity)) {
+    const position = positions[sil];
+    const j = (position - 1) * 6 + 2;
+    if (position && scores[j] > (best?.score ?? -Infinity)) {
       const h = histories[j];
       if (h >= 0 && records[h].word !== null) {
         best = { ...records[h], score: scores[j] };
@@ -325,7 +332,6 @@ function stateFrame(rows) {
 function createWorkspace(nodeCount) {
   return {
     positions: new Uint32Array(nodeCount),
-    stamp: new Int32Array(nodeCount),
     previous: stateFrame(256),
     current: stateFrame(256),
     entries: createFrontier(nodeCount),
@@ -347,7 +353,7 @@ const workspaces = new WeakMap();
 export function decodeWords(network, feats, frames, options = {}) {
   const prior = workspaces.get(network.model);
   const workspace =
-    prior?.stamp.length === network.nodeCount
+    prior?.positions.length === network.nodeCount
       ? prior
       : createWorkspace(network.nodeCount);
   // A word-end callback can start another decode synchronously.
@@ -372,8 +378,8 @@ function decodeWithWorkspace(network, feats, frames, options, workspace) {
   const { first, count, optional, child, sibling, terminal, lookLn } = nodes;
   const score = emissionCache(network.model, feats, settings);
   let { previous, current, entries, next } = workspace;
-  const { positions, stamp, work, processed } = workspace;
-  stamp.fill(-2);
+  const { positions, work, processed } = workspace;
+  positions.fill(0);
   const records = [];
   const lm = languageModel(network, records, settings);
   const thresholdsOf = createThresholds(
@@ -383,12 +389,15 @@ function decodeWithWorkspace(network, feats, frames, options, workspace) {
   );
   initialEntries(entries, network, records, languages, settings);
   let active = 0;
-  const wordEnds = new Map();
+  const wordEnds = [];
+  const endings = Array.from({ length: network.languages.length * 5 }, () => ({
+    frame: -1,
+  }));
   for (let t = 0; t < frames; t++) {
     let length = active;
     for (let i = 0; i < entries.length; i++) {
       const id = entries.nodes[i];
-      if (stamp[id] !== t - 1) {
+      if (positions[id] === 0) {
         work[length++] = id;
       }
     }
@@ -401,7 +410,7 @@ function decodeWithWorkspace(network, feats, frames, options, workspace) {
       const id = work[index];
       const f = first[id];
       const wasActive = index < active;
-      const prior = positions[id] * 6;
+      const prior = (positions[id] - 1) * 6;
       const offset = index * 6;
       const entry = entries.at(id);
       let nodeBest = -Infinity;
@@ -438,8 +447,11 @@ function decodeWithWorkspace(network, feats, frames, options, workspace) {
       processed[index] = nodeBest;
     }
     const thresholds = thresholdsOf(work, processed, length, best);
+    for (let i = 0; i < active; i++) {
+      positions[work[i]] = 0;
+    }
     active = 0;
-    wordEnds.clear();
+    wordEnds.length = 0;
     for (let index = 0; index < length; index++) {
       const id = work[index];
       const language = nodes.language[id];
@@ -453,8 +465,7 @@ function decodeWithWorkspace(network, feats, frames, options, workspace) {
           scores[offset + i] = -Infinity;
         }
       }
-      positions[id] = index;
-      stamp[id] = t;
+      positions[id] = index + 1;
       work[active++] = id;
       const last = count[id] - 1;
       const firstState = first[id];
@@ -496,28 +507,43 @@ function decodeWithWorkspace(network, feats, frames, options, workspace) {
         const packed = tree.wordTable;
         const before = packed ? packed.before(wid) : words[wid].before;
         // One word end per language and frame, apart for sandhi variants.
-        const key = before ? `${lang}${before}` : lang;
-        const end = wordEnds.get(key);
-        if (!end || s > end.score) {
-          wordEnds.set(key, {
-            word: packed ? packed.name(wid) : words[wid].word,
-            before,
-            id: wid,
-            lang,
-            prev: hist,
-            start,
-            end: t + 1,
-            score: s,
-            oov: packed ? packed.oov(wid) : Boolean(words[wid].oov),
-          });
+        const end = endings[language * 5 + (before ?? 0)];
+        if (end.frame !== t) {
+          end.frame = t;
+          end.score = -Infinity;
+          wordEnds.push(end);
+        } else if (!(s > end.score)) {
+          continue;
         }
+        end.score = s;
+        end.language = language;
+        end.before = before;
+        end.id = wid;
+        end.prev = hist;
+        end.start = start;
       }
     }
-    for (const rec of wordEnds.values()) {
-      if (
-        rec.score >= thresholds[nodes.language[trees.get(rec.lang).silence]]
-      ) {
-        restart(next, network, records, rec, settings);
+    for (const { score, language, before, id, prev, start } of wordEnds) {
+      if (score >= thresholds[language]) {
+        const lang = network.languages[language];
+        const packed = trees.get(lang).wordTable;
+        restart(
+          next,
+          network,
+          records,
+          {
+            word: packed ? packed.name(id) : words[id].word,
+            before,
+            id,
+            lang,
+            prev,
+            start,
+            end: t + 1,
+            score,
+            oov: packed ? packed.oov(id) : Boolean(words[id].oov),
+          },
+          settings
+        );
       }
     }
     entries.clear();
@@ -525,7 +551,6 @@ function decodeWithWorkspace(network, feats, frames, options, workspace) {
     [previous, current] = [current, previous];
   }
   const best = finalRecord(network, records, languages, frames, {
-    stamp,
     positions,
     ...previous,
   });

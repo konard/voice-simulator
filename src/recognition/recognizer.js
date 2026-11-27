@@ -5,6 +5,7 @@ import { registeredLexicons } from '../g2p/lexicon.js';
 import { decoderWhisperSpans } from './decode-pipeline.js';
 import { audioToIpa, audioToIpaParallel } from './decode.js';
 import { hmmAudioToIpa } from './hmm-stage.js';
+import { analyzeFrameHops, analyzeFrames } from './frontend.js';
 import { createRecognitionEngine, getRecognitionEngine } from './engine.js';
 import { ipaToText } from './ipa-to-text.js';
 import { identifyLanguage, languageShares } from './language-id.js';
@@ -206,13 +207,23 @@ export function decodeRecognitionAudio(
     start
   );
   if (usesWordDecoder(settings)) {
-    const decoded = measure(settings.profile, 'Audio to IPA', () =>
-      hmmAudioToIpa(input, rate, {
+    const decoded = measure(settings.profile, 'Audio to IPA', () => {
+      const { fine, coarse } = settings.modes
+        ? analyzeFrameHops(input, rate)
+        : { coarse: analyzeFrames(input, rate, { hop: 0.01 }) };
+      const result = hmmAudioToIpa(input, rate, {
         languages: settings.languages,
         whisper: options.whisper,
         oov: settings.oov,
-      })
-    );
+        analysis: coarse,
+        profile: settings.profile,
+      });
+      result.prosodyFrames = fine;
+      if (settings.includeModeLabels) {
+        result.modeFrames = coarse;
+      }
+      return result;
+    });
     return { decoded, input, rate };
   }
   const decoded = settings.stages.audioToIpa
@@ -325,7 +336,9 @@ function recognizeProsody(decoded, samples, rate, settings, level) {
       settings.languages.length === 1 ? settings.languages[0] : undefined,
     voice: settings.voice ?? decoded.voice,
     pitch,
-    frames: decoded.frames?.speech ? decoded.frames : undefined,
+    frames:
+      decoded.prosodyFrames ??
+      (decoded.frames?.speech ? decoded.frames : undefined),
     whisperSpans: settings.whisper === false ? [] : decoded.whisperSpans,
   };
   const measured = measure(settings.profile, 'Prosody', () =>
@@ -426,6 +439,7 @@ export function recognizeDecoded(
               profile: settings.profile,
               kernels: settings.kernels,
               frames: decoded.frames?.speech ? decoded.frames : undefined,
+              wordFrames: decoded.modeFrames,
               reuseFormantCandidates: final === 'batch' || final === 'parallel',
             }
           )
