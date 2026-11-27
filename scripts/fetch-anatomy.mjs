@@ -267,7 +267,7 @@ export async function fetchAnatomy(source, output, options = {}) {
     );
     return fetchMembers(
       BODYPARTS3D.url,
-      BODYPARTS3D.size,
+      (await remoteSize(BODYPARTS3D.url, options.signal)) || BODYPARTS3D.size,
       (name) => files.has(basename(name, '.obj')),
       output,
       { signal: options.signal }
