@@ -75,9 +75,20 @@ function toneCache(tone, feats, weight) {
   };
 }
 
-function emissionCache(model, feats, { tone, toneWeight }) {
-  const stamp = new Int32Array(model.states).fill(-1);
-  const value = new Float64Array(model.states);
+function emissionWorkspace(model) {
+  return {
+    stamp: new Int32Array(model.states),
+    value: new Float64Array(model.states),
+  };
+}
+
+function emissionCache(
+  model,
+  feats,
+  { tone, toneWeight },
+  { stamp, value } = emissionWorkspace(model)
+) {
+  stamp.fill(-1);
   const toneScore =
     tone && model.tone && toneWeight
       ? toneCache(model.tone, tone, toneWeight)
@@ -111,6 +122,9 @@ function createWordHistory() {
     get length() {
       return length;
     },
+    clear() {
+      length = 0;
+    },
     add({ id, language, before, prev, start, score }, end) {
       const row = length++;
       if (row === columns.id.length) {
@@ -132,15 +146,27 @@ function createWordHistory() {
   };
 }
 
-function languageModel(network, records, settings) {
-  const { lmw, wip, oovPhone, oovWeight, minCount } = settings;
-  const { words } = network;
+function transitionCache() {
   // A bounded pair cache with no per-candidate allocations. Different
   // pronunciation IDs can spell the same word and get the same score.
   const capacity = 16384;
-  const histories = new Int32Array(capacity);
-  const candidates = new Uint32Array(capacity);
-  const costs = new Float64Array(capacity);
+  return {
+    histories: new Int32Array(capacity),
+    candidates: new Uint32Array(capacity),
+    costs: new Float64Array(capacity),
+  };
+}
+
+function languageModel(
+  network,
+  records,
+  settings,
+  { histories, candidates, costs }
+) {
+  const { lmw, wip, oovPhone, oovWeight, minCount } = settings;
+  const { words } = network;
+  const mask = candidates.length - 1;
+  candidates.fill(0);
   return (hist, id, tree) => {
     const { wordTable: packed, data, loop } = tree;
     const history = records.columns.id[hist] ?? -1;
@@ -151,8 +177,7 @@ function languageModel(network, records, settings) {
       return oovWeight * loop.bigram.get(before).get(phone) + oovPhone;
     }
     const slot =
-      (Math.imul(history, 0x9e3779b1) ^ Math.imul(id, 0x85ebca6b)) &
-      (capacity - 1);
+      (Math.imul(history, 0x9e3779b1) ^ Math.imul(id, 0x85ebca6b)) & mask;
     if (histories[slot] === history && candidates[slot] === id + 1) {
       return costs[slot];
     }
@@ -360,20 +385,27 @@ function scoreAtRank(row, size, rank) {
   return row[rank];
 }
 
+function thresholdWorkspace(languageCount) {
+  return {
+    rows: Array.from({ length: languageCount }, () => new Float64Array(256)),
+    sizes: new Uint32Array(languageCount),
+    peaks: new Float64Array(languageCount),
+    thresholds: new Float64Array(languageCount),
+  };
+}
+
 /**
  * Pruning threshold of each language at one frame: `beam` below its own
  * best token, at most `languageBeam` below the best of all, and its
  * `maxActive` best nodes.
  */
-export function createThresholds(nodes, languageCount, settings) {
+export function createThresholds(
+  nodes,
+  languageCount,
+  settings,
+  { rows, sizes, peaks, thresholds } = thresholdWorkspace(languageCount)
+) {
   const { beam, languageBeam, maxActive } = settings;
-  const rows = Array.from(
-    { length: languageCount },
-    () => new Float64Array(256)
-  );
-  const sizes = new Uint32Array(languageCount);
-  const peaks = new Float64Array(languageCount);
-  const thresholds = new Float64Array(languageCount);
   return (work, scores, length, best) => {
     sizes.fill(0);
     peaks.fill(-Infinity);
@@ -389,7 +421,7 @@ export function createThresholds(nodes, languageCount, settings) {
       rows[language][size] = score;
       peaks[language] = Math.max(peaks[language], score);
     }
-    for (let i = 0; i < rows.length; i++) {
+    for (let i = 0; i < languageCount; i++) {
       let threshold = Math.max(peaks[i] - beam, best - languageBeam);
       if (sizes[i] > maxActive) {
         threshold = Math.max(
@@ -412,7 +444,7 @@ function stateFrame(rows) {
   };
 }
 
-function createWorkspace(nodeCount) {
+function createWorkspace({ nodeCount, model, languages }) {
   return {
     positions: new Uint32Array(nodeCount),
     previous: stateFrame(256),
@@ -421,6 +453,10 @@ function createWorkspace(nodeCount) {
     next: createFrontier(nodeCount),
     work: [],
     processed: [],
+    records: createWordHistory(),
+    transitions: transitionCache(),
+    histogram: thresholdWorkspace(languages.length),
+    emission: emissionWorkspace(model),
   };
 }
 
@@ -436,9 +472,10 @@ const workspaces = new WeakMap();
 export function decodeWords(network, feats, frames, options = {}) {
   const prior = workspaces.get(network.model);
   const workspace =
-    prior?.positions.length >= network.nodeCount
+    prior?.positions.length >= network.nodeCount &&
+    prior.histogram.rows.length >= network.languages.length
       ? prior
-      : createWorkspace(network.nodeCount);
+      : createWorkspace(network);
   // A word-end callback can start another decode synchronously.
   workspaces.delete(network.model);
   try {
@@ -446,6 +483,7 @@ export function decodeWords(network, feats, frames, options = {}) {
   } finally {
     workspace.entries.clear();
     workspace.next.clear();
+    workspace.records.clear();
     workspaces.set(network.model, workspace);
   }
 }
@@ -459,16 +497,21 @@ function decodeWithWorkspace(network, feats, frames, options, workspace) {
   const { nodes, words, emit, trees, wordId, nextWord } = network;
   const { stay, go } = network.model;
   const { first, count, optional, child, sibling, terminal, lookLn } = nodes;
-  const score = emissionCache(network.model, feats, settings);
+  const score = emissionCache(
+    network.model,
+    feats,
+    settings,
+    workspace.emission
+  );
   let { previous, current, entries, next } = workspace;
-  const { positions, work, processed } = workspace;
+  const { positions, work, processed, records } = workspace;
   positions.fill(0);
-  const records = createWordHistory();
-  const lm = languageModel(network, records, settings);
+  const lm = languageModel(network, records, settings, workspace.transitions);
   const thresholdsOf = createThresholds(
     nodes.language,
     network.languages.length,
-    settings
+    settings,
+    workspace.histogram
   );
   initialEntries(entries, network, records, languages, settings);
   let active = 0;
@@ -612,8 +655,12 @@ function decodeWithWorkspace(network, feats, frames, options, workspace) {
       }
     }
     entries.clear();
-    [entries, next] = [next, entries];
-    [previous, current] = [current, previous];
+    const finished = entries;
+    entries = next;
+    next = finished;
+    const completed = previous;
+    previous = current;
+    current = completed;
   }
   const { best, score: bestScore } = finalRecord(
     network,

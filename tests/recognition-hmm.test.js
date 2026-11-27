@@ -1,8 +1,14 @@
 import assert from 'node:assert/strict';
 import { it } from 'test-anywhere';
-import { addLexicon, clearLexicons, recognize } from '../src/index.js';
+import {
+  addLexicon,
+  clearLexicons,
+  recognize,
+  synthesize,
+} from '../src/index.js';
 import {
   hmmBoundaryTime,
+  hmmFeatures,
   hmmFrameTime,
   hmmPitchStatics,
 } from '../src/recognition/hmm-features.js';
@@ -10,6 +16,7 @@ import {
   HMM_DECODE_DEFAULTS,
   alignWords,
   createThresholds,
+  decodeWords,
 } from '../src/recognition/hmm-decode.js';
 import { getHmmModel } from '../src/recognition/hmm-model.js';
 import {
@@ -100,6 +107,24 @@ it('decodes no words from silence', () => {
   });
   assert.deepEqual(decoded.words, []);
   assert.equal(decoded.ipa, '');
+});
+
+it('keeps decoder scratch separate across nested and repeated searches', () => {
+  const model = getHmmModel();
+  const network = getNetwork(model, ['en'], { maxWords: 200 });
+  const audio = synthesize('It is time.', { tier: 'telephone', lang: 'en' });
+  const { feats, frames } = hmmFeatures(audio.samples, RATE, model.lda);
+  const run = (settings) => decodeWords(network, feats, frames, settings);
+  const expected = run();
+  let nested;
+  const actual = run({
+    onWordEnd() {
+      nested ??= run();
+    },
+  });
+  assert.deepEqual(nested, expected);
+  assert.deepEqual(actual, expected);
+  assert.deepEqual(run(), expected);
 });
 
 it('adds the words of addLexicon() to the decoding network', () => {
