@@ -21,8 +21,8 @@ function insertions(table, states, limit, beam) {
     const known = new Map(all.map(({ node, cost }) => [node, cost]));
     for (const { node, cost } of frontier) {
       for (let i = table.offsets[node]; i < table.offsets[node + 1]; i++) {
-        const child = table.children[i];
-        const score = cost + table.gaps[child];
+        const child = i + 1;
+        const score = cost + table.tokenGaps[table.feature[child]];
         if (score <= limit && score < (known.get(child) ?? Infinity)) {
           next.push({ node: child, cost: score });
         }
@@ -49,7 +49,7 @@ function search(table, distances, stride, from, end, beam) {
         next.push({ node, cost: deletion });
       }
       for (let i = table.offsets[node]; i < table.offsets[node + 1]; i++) {
-        const child = table.children[i];
+        const child = i + 1;
         const score = cost + distances[row + 1 + table.feature[child]];
         if (score <= limit) {
           next.push({ node: child, cost: score });
@@ -91,12 +91,10 @@ export function withWordSearch(
     }));
   }
   return withWasmMemory(module, (allocate) => {
-    const topology = allocate(
-      Uint32Array,
-      table.topology.length,
-      table.topology
-    );
-    const gaps = allocate(Float64Array, table.gaps.length, table.gaps);
+    const topology = allocate(Uint32Array, table.nodeCount * 4);
+    table.writeTopology(topology.view());
+    const gaps = allocate(Float64Array, table.nodeCount);
+    table.writeGaps(gaps.view());
     const matrix = allocate(Float64Array, distances.length, distances);
     let out;
     return run((from, end, beam) => {

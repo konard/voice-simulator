@@ -9,6 +9,9 @@ import { createEngine } from '../src/engine/index.js';
 import { getHmmModel } from '../src/recognition/hmm-model.js';
 import { getNetwork } from '../src/recognition/hmm-network.js';
 import { configureNodeRecognitionModels } from '../src/recognition/node-models.js';
+import { createRecognitionEngine } from '../src/recognition/engine.js';
+import { BASELINE_TEXT } from '../src/recognition/mode-baseline.js';
+import { HEAD, LANGUAGES } from '../tests/helpers/recognition-modes.js';
 
 const rate = 8000;
 const [mode, engine = 'js'] = process.argv.slice(2);
@@ -61,6 +64,25 @@ if (mode === 'fit') {
   for (const lang of ['en', 'ru', 'hi', 'zh']) {
     getNetwork(model, [lang]);
     report(`vocabulary ${lang}`);
+  }
+} else if (mode === 'modes') {
+  await createRecognitionEngine({ engine });
+  for (const lang of LANGUAGES) {
+    const { samples } = synthesize(BASELINE_TEXT[lang], {
+      lang,
+      tier: 'telephone',
+      head: HEAD,
+      engine: 'js',
+      seed: 1,
+    });
+    report(`synthesis ${lang}`);
+    recognize(samples, rate, {
+      level: 'low',
+      voice: HEAD,
+      languages: [lang],
+      engine,
+      profile: report,
+    });
   }
 } else {
   const samples = render('Hello world.');

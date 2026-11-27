@@ -8,23 +8,23 @@ import { createWordTrie, packWordTrie } from './word-trie.js';
 export function serializeLexicon(lexicon, language) {
   const trie = packWordTrie(lexicon, language);
   const words = new Map(lexicon.words.map(({ word }, i) => [word, i]));
-  const offsets = [];
+  const offsets = new Uint32Array(trie.nodeCount + 1);
   const wordIds = [];
   const readings = [];
   for (let i = 0; i < trie.feature.length; i++) {
-    offsets.push(readings.length);
+    offsets[i] = readings.length;
     for (const { word, ipa } of trie.entriesAt(i)) {
       wordIds.push(words.get(word));
       readings.push(ipa);
     }
   }
-  offsets.push(readings.length);
+  offsets[trie.nodeCount] = readings.length;
   return [
     trie.tokens,
-    [...trie.offsets],
-    [...trie.feature],
+    trie.offsets,
+    trie.feature,
     offsets,
-    wordIds,
+    Uint32Array.from(wordIds),
     readings,
   ];
 }
@@ -45,7 +45,7 @@ function trieRoot(table, language) {
         get(key) {
           const feature = indices.get(key);
           for (let i = start; i < end; i++) {
-            const child = table.children[i];
+            const child = i + 1;
             if (table.feature[child] === feature) {
               return asNode(child);
             }
@@ -53,7 +53,7 @@ function trieRoot(table, language) {
         },
         *values() {
           for (let i = start; i < end; i++) {
-            yield asNode(table.children[i]);
+            yield asNode(i + 1);
           }
         },
       },

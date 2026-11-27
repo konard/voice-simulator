@@ -11,34 +11,28 @@ export function createWordTrie({
   tokens,
   entriesAt,
 }) {
-  const children = new Uint32Array(offsets.at(-1));
-  for (let i = 0; i < children.length; i++) {
-    children[i] = i + 1;
-  }
   const tokenGaps = tokens.map(gapCost);
-  const gaps = new Float64Array(feature.length);
-  for (let i = 1; i < gaps.length; i++) {
-    gaps[i] = tokenGaps[feature[i]];
-  }
-  let topology;
   return {
-    get topology() {
-      if (!topology) {
-        topology = new Uint32Array(
-          offsets.length + children.length + feature.length + terminal.length
-        );
-        let start = 0;
-        for (const column of [offsets, children, feature, terminal]) {
-          topology.set(column, start);
-          start += column.length;
-        }
+    get nodeCount() {
+      return feature.length;
+    },
+    writeTopology(target) {
+      target.set(offsets);
+      for (let i = 1; i < feature.length; i++) {
+        target[offsets.length + i - 1] = i;
       }
-      return topology;
+      target.set(feature, 2 * feature.length);
+      target.set(terminal, 3 * feature.length);
+    },
+    writeGaps(target) {
+      target[0] = 0;
+      for (let i = 1; i < feature.length; i++) {
+        target[i] = tokenGaps[feature[i]];
+      }
     },
     offsets,
-    children,
     feature,
-    gaps,
+    tokenGaps,
     terminal,
     entriesAt,
     tokens,

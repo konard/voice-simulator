@@ -22,7 +22,7 @@ export const REQUIRED_FILES = Object.freeze([
   'src/engine/voice-simulator-oral-codebook.bin',
   'src/engine/voice-simulator-recognition-models.json.gz',
   ...['en', 'ru', 'hi', 'zh'].map(
-    (language) => `src/engine/voice-simulator-recognition-${language}.json.gz`
+    (language) => `src/engine/voice-simulator-recognition-${language}.bin.gz`
   ),
   ...['en', 'ru', 'hi', 'zh'].map(
     (language) => `src/engine/voice-simulator-hmm-${language}.bin.gz`

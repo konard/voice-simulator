@@ -20,7 +20,7 @@ export const recognitionModelVersion = 2;
 
 export const recognitionDataFile = (kind) =>
   new globalThis.URL(
-    `../engine/voice-simulator-recognition-${kind}.json.gz`,
+    `../engine/voice-simulator-recognition-${kind}.${kind === 'models' ? 'json' : 'bin'}.gz`,
     import.meta.url
   );
 
@@ -172,7 +172,9 @@ export function configureNodeRecognitionModels() {
   });
   function read(kind) {
     const file = fs.readFileSync(recognitionDataFile(kind));
-    const [version, rows] = JSON.parse(zlib.gunzipSync(file).toString());
+    const bytes = zlib.gunzipSync(file);
+    const [version, rows] =
+      kind === 'models' ? JSON.parse(bytes.toString()) : v8.deserialize(bytes);
     return version === recognitionModelVersion ? rows : undefined;
   }
   const v8 = process.getBuiltinModule('node:v8');

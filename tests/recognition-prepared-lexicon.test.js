@@ -89,9 +89,7 @@ it('reads stressed pronunciations, homophones and Mandarin tones from a prepared
     }
     const words = [...counts].map(([word, count]) => ({ word, count }));
     const lexicon = { root, words };
-    const rows = JSON.parse(
-      JSON.stringify(serializeLexicon(lexicon, language))
-    );
+    const rows = serializeLexicon(lexicon, language);
     const prepared = openPreparedLexicon(rows, language, words);
     for (const [, ipa] of pronunciations) {
       const { tokens } = parseIpa(ipa);

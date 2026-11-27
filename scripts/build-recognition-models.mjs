@@ -51,7 +51,10 @@ function writeWordTransitions(language) {
 
 const models = Object.keys(LANGUAGES).map((language) => {
   const lexicon = getLexicon(language);
-  write(recognitionDataFile(language), serializeLexicon(lexicon, language));
+  writeAsset(
+    recognitionDataFile(language),
+    serialize([recognitionModelVersion, serializeLexicon(lexicon, language)])
+  );
   writeAsset(
     hmmNetworkFile(language),
     serialize([hmmNetworkVersion, packHmmNetwork(language)])

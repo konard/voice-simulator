@@ -658,10 +658,10 @@ jobs:
             src/engine/voice-simulator-word-transitions-hi.bin.gz
             src/engine/voice-simulator-word-transitions-zh.bin.gz
             src/engine/voice-simulator-recognition-models.json.gz
-            src/engine/voice-simulator-recognition-en.json.gz
-            src/engine/voice-simulator-recognition-ru.json.gz
-            src/engine/voice-simulator-recognition-hi.json.gz
-            src/engine/voice-simulator-recognition-zh.json.gz
+            src/engine/voice-simulator-recognition-en.bin.gz
+            src/engine/voice-simulator-recognition-ru.bin.gz
+            src/engine/voice-simulator-recognition-hi.bin.gz
+            src/engine/voice-simulator-recognition-zh.bin.gz
           if-no-files-found: error
           retention-days: 14
 
