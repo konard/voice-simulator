@@ -736,13 +736,13 @@ only become stricter. `npm run test:heavy -- --suite lowest` measures it and
 | synthesis | certified | certified | certified | failed |
 | recognition | certified | failed | failed | failed |
 | streaming | failed | failed | failed | failed |
-| voice-fit | failed | failed | failed | failed |
+| voice-fit | failed | failed | certified | certified |
 | session | failed | failed | failed | failed |
 | copy | failed | certified | certified | failed |
 | modes | certified | certified | certified | failed |
 | app | failed | certified | — | — |
 
-Measured at commit `4aa227e` on Intel(R) Xeon(R) 6975P-C; [report](docs/reports/lowest-settings.md).
+Measured at commit `6364e63` on AMD EPYC 9V45 96-Core Processor; [report](docs/reports/lowest-settings.md).
 <!-- prettier-ignore-end -->
 <!-- lowest-settings:end -->
 
