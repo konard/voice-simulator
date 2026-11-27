@@ -12,15 +12,29 @@ import { configureNodeRecognitionModels } from '../src/recognition/node-models.j
 import { createRecognitionEngine } from '../src/recognition/engine.js';
 import { BASELINE_TEXT } from '../src/recognition/mode-baseline.js';
 import { HEAD, LANGUAGES } from '../tests/helpers/recognition-modes.js';
+import { ROWS, loadEngine } from '../scripts/lowest-rows.mjs';
+import { getHeapStatistics } from 'node:v8';
+import { Session } from 'node:inspector/promises';
 
 const rate = 8000;
-const [mode, engine = 'js'] = process.argv.slice(2);
+const [mode, engine = 'js', limit] = process.argv.slice(2);
+let sampling;
+if (process.env.VOICE_MEMORY_SAMPLING === '1') {
+  sampling = new Session();
+  sampling.connect();
+  await sampling.post('HeapProfiler.startSampling', {
+    samplingInterval: 65536,
+    includeObjectsCollectedByMajorGC: true,
+    includeObjectsCollectedByMinorGC: true,
+  });
+}
 const mb = (bytes) => Number((bytes / 1048576).toFixed(1));
 function report(stage) {
   const { rss, heapUsed, arrayBuffers } = process.memoryUsage();
   console.log(stage, {
     rss: mb(rss),
     heap: mb(heapUsed),
+    physicalHeap: mb(getHeapStatistics().total_physical_size),
     arrays: mb(arrayBuffers),
     peak: Number((process.resourceUsage().maxRSS / 1024).toFixed(1)),
   });
@@ -36,7 +50,23 @@ function render(text, head) {
     seed: 1,
   }).samples;
 }
-if (mode === 'fit') {
+if (mode === 'streaming' || mode === 'copy' || mode === 'modes-row') {
+  const loaded = await loadEngine(engine);
+  if (loaded.unavailable) {
+    throw new Error(loaded.unavailable);
+  }
+  let peak = 0;
+  const profile = (stage) => {
+    const next = process.resourceUsage().maxRSS;
+    if (next - peak >= 2048 || /^[A-Z][a-z]+$/u.test(stage)) {
+      report(stage);
+      peak = next;
+    }
+  };
+  const count = limit === 'full' ? Infinity : Number(limit ?? 1);
+  const row = mode === 'modes-row' ? 'modes' : mode;
+  await ROWS[row]({ engine: loaded, limit: count, profile });
+} else if (mode === 'fit') {
   await createEngine({ engine, threads: 1, simd: false });
   let peak = 0;
   const text = 'The quick brown fox jumps over the lazy dog. '.repeat(10);
@@ -92,3 +122,20 @@ if (mode === 'fit') {
   }
 }
 report('done');
+if (sampling) {
+  const { profile } = await sampling.post('HeapProfiler.stopSampling');
+  const totals = new Map();
+  function sum(node) {
+    const { functionName, url, lineNumber } = node.callFrame;
+    const location = `${functionName || '(anonymous)'} ${url}:${lineNumber + 1}`;
+    totals.set(location, (totals.get(location) ?? 0) + node.selfSize);
+    node.children.forEach(sum);
+  }
+  sum(profile.head);
+  for (const [location, size] of [...totals]
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 30)) {
+    console.log(mb(size), location);
+  }
+  sampling.disconnect();
+}

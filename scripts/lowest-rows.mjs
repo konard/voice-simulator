@@ -275,14 +275,16 @@ function streamInput(seconds) {
  * wall time from the first chunk to the first partial with words; load is
  * the CPU time of the stream over the audio time.
  */
-async function streamingRow({ engine, limit }) {
+async function streamingRow({ engine, limit, profile }) {
   const duration = Math.min(60, 5 * limit);
   const samples = streamInput(duration);
+  profile?.('Input');
   const options = {
     sampleRate: RATE,
     level: LEVEL,
     languages: ['en'],
     engine: engine.recognition,
+    profile,
   };
   warmUp(options);
   const recognizer = createRecognizer(options);
@@ -311,7 +313,9 @@ async function streamingRow({ engine, limit }) {
     }
     return recognizer.flush();
   });
+  profile?.('Stream');
   const batch = recognize(samples, RATE, options);
+  profile?.('Batch');
   const mismatch = errorRate(batch.text, stream.text, 'word');
   return {
     seconds,
@@ -416,7 +420,7 @@ async function sessionRow({ engine, limit }) {
 }
 
 /** copyRecording on the golden set, resampled to 8 kHz. */
-function copyRow({ engine, limit }) {
+function copyRow({ engine, limit, profile }) {
   let seconds = 0;
   let audioSeconds = 0;
   const f0 = [];
@@ -425,7 +429,11 @@ function copyRow({ engine, limit }) {
   for (const item of goldenRecordings({ limit })) {
     const samples = resample(item.samples, item.sampleRate, RATE);
     const [copy, cpu] = cpuTime(() =>
-      copyRecording(samples, RATE, { tier: TIER, engine: engine.render })
+      copyRecording(samples, RATE, {
+        tier: TIER,
+        engine: engine.render,
+        profile,
+      })
     );
     seconds += cpu;
     audioSeconds += samples.length / RATE;
@@ -436,6 +444,7 @@ function copyRow({ engine, limit }) {
       level: LEVEL,
       languages: [copy.score.language],
       engine: engine.recognition,
+      profile,
     });
     phonemes.push(errorRate(copy.recognition.ipa, again.ipa, 'phone'));
   }
@@ -457,7 +466,7 @@ function copyRow({ engine, limit }) {
 }
 
 /** Every markup mode of issue 50 rendered at 8 kHz and recognised. */
-function modesRow({ engine, limit }) {
+function modesRow({ engine, limit, profile }) {
   let seconds = 0;
   let renderSeconds = 0;
   let audioSeconds = 0;
@@ -470,6 +479,7 @@ function modesRow({ engine, limit }) {
       languages: [lang],
       voice: HEAD,
       engine: engine.recognition,
+      profile,
     };
     // The models and the baseline of the voice load once per language.
     const neutral = telephone(
@@ -478,6 +488,7 @@ function modesRow({ engine, limit }) {
       'js'
     );
     recognize(neutral.samples, neutral.sampleRate, heard);
+    profile?.(`Warm ${lang}`);
     for (const label of LABELS.slice(0, limit)) {
       const options = { lang, head: HEAD, markup: true };
       const { ipa } = prepareUtterance(BASELINE_TEXT[lang], {
@@ -495,6 +506,7 @@ function modesRow({ engine, limit }) {
       const [result, cpu] = cpuTime(() =>
         recognize(audio.samples, audio.sampleRate, heard)
       );
+      profile?.(`${lang} ${label}`);
       seconds += cpu;
       audioSeconds += audio.samples.length / audio.sampleRate;
       total++;

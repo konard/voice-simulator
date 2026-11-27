@@ -21,6 +21,7 @@ function fitOptions(samples, settings) {
     engine: settings.engine ?? 'js',
     preset: settings.preset,
     maxDuration: samples.length / settings.sampleRate,
+    profile: settings.profile,
   };
 }
 

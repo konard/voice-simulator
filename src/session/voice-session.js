@@ -109,6 +109,7 @@ export function createSession(
     voice: DEFAULT_HEAD,
     deterministic: !realtime,
     engine: settings.recognitionEngine,
+    profile: options.profile,
   });
   const scheduler = createSessionScheduler(settings, receive);
   const tracking = createSpeakerTracking(settings);

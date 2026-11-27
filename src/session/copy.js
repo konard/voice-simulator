@@ -114,6 +114,7 @@ function recognizeWithVoice(
     deterministic: true,
     includeModeLabels,
     segments: includeModeLabels,
+    profile: options.profile,
   });
 }
 
@@ -137,9 +138,11 @@ function analyze(samples, sampleRate, options, impose) {
     }
   }
   const copied = copyVoice(samples, sampleRate, {
+    profile: options.profile,
     languages,
     engine: options.engine,
   });
+  options.profile?.('Fit and transcribe');
   return {
     voice: copied.voice ?? saveVoice(DEFAULT_HEAD),
     recognition: copied.recognition,
@@ -161,6 +164,7 @@ export function copyRecording(samples, sampleRate, options = {}) {
   }
   const impose = { ...DEFAULT_IMPOSE, ...options.impose };
   const analyzed = analyze(samples, sampleRate, options, impose);
+  options.profile?.('Analyze');
   const score = makeScore(analyzed, samples, sampleRate, options, impose, seed);
   if (refine && refineBudget) {
     const refined = refineCopy(score, samples, sampleRate, {
@@ -175,6 +179,7 @@ export function copyRecording(samples, sampleRate, options = {}) {
     );
   }
   const output = renderScore(score, options);
+  options.profile?.('Replay');
   const { voice, recognition } = analyzed;
   const metrics = measureCopyMetrics(
     samples,
