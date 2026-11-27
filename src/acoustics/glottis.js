@@ -463,33 +463,17 @@ export class Glottis {
    * Advance the pulse phase by `dt`, and start the next period (at the f0
    * of the phonation channels) when it passes the end of this one.
    */
-  #advance(dt, f0, tenseness, creak, falsetto, harsh) {
+  #advance(dt, control, { tenseness, creak, falsetto, harsh }) {
     this.phase += dt;
     if (this.phase >= this.period) {
       this.phase -= this.period;
       this.#startPeriod(
-        phonationF0(f0, creak, falsetto),
+        phonationF0(control.f0, creak, falsetto),
         tenseness,
         creak,
         harsh
       );
     }
-  }
-
-  /**
-   * The intensity of the pulses with the falsetto level and the voiced
-   * gain of the effort (`effort` dB).
-   */
-  #intensityGain(intensity, falsetto, effort) {
-    let gained = intensity;
-    if (falsetto !== 0) {
-      gained *= 10 ** ((PHONATION_SOURCE.falsettoDecibels * falsetto) / 20);
-    }
-    if (effort !== 0) {
-      this.#effortGains(effort);
-      gained *= this.effortGain;
-    }
-    return gained;
   }
 
   /**
@@ -550,8 +534,14 @@ export class Glottis {
     values.tenseness = Math.max(0, base - 0.5 * control.aspiration * voicing);
     values.creak = control.creak ?? 0;
     values.falsetto = control.falsetto ?? 0;
+    values.falsettoGain =
+      10 ** ((PHONATION_SOURCE.falsettoDecibels * values.falsetto) / 20);
     values.harsh = harsh;
     values.effort = control.effort ?? 0;
+    if (values.effort !== 0) {
+      this.#effortGains(values.effort);
+    }
+    values.effortGain = values.effort === 0 ? 1 : this.effortGain;
     values.strength = strength;
     values.breath =
       ((control.aspiration +
@@ -588,28 +578,33 @@ export class Glottis {
    */
   step(dt, control, noise) {
     const prepared = this.#blockControl === control;
+    const values = prepared
+      ? this.#block
+      : this.#prepareControl(control, this.#instant);
     const {
       whisper,
       voicedShare,
       voicing,
       level,
       tenseness,
-      creak,
       falsetto,
-      harsh,
+      falsettoGain,
       effort,
+      effortGain,
       strength,
       breath,
-    } = prepared ? this.#block : this.#prepareControl(control, this.#instant);
+    } = values;
     if (voicedShare > 0) {
-      this.#advance(dt, control.f0, tenseness, creak, falsetto, harsh);
+      this.#advance(dt, control, values);
     }
     const t = this.phase / this.period;
-    this.intensity = this.#intensityGain(
-      level * this.shimmer * this.pulseGain * voicedShare,
-      falsetto,
-      effort
-    );
+    this.intensity =
+      level *
+      this.shimmer *
+      this.pulseGain *
+      voicedShare *
+      falsettoGain *
+      effortGain;
     const voiced = this.#tilt(
       this.#voicedSample(t, tenseness, dt, falsetto),
       dt,
