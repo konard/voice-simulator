@@ -5,6 +5,7 @@ import { registeredLexicons } from '../g2p/lexicon.js';
 import { decoderWhisperSpans } from './decode-pipeline.js';
 import { audioToIpa, audioToIpaParallel } from './decode.js';
 import { hmmAudioToIpa } from './hmm-stage.js';
+import { HMM_LOW_SEARCH } from './hmm-decode.js';
 import { createRecognitionEngine, getRecognitionEngine } from './engine.js';
 import { ipaToText } from './ipa-to-text.js';
 import { identifyLanguage, languageShares } from './language-id.js';
@@ -211,6 +212,7 @@ export function decodeRecognitionAudio(
         languages: settings.languages,
         whisper: options.whisper,
         oov: settings.oov,
+        search: level === 'low' ? HMM_LOW_SEARCH : undefined,
       })
     );
     return { decoded, input, rate };

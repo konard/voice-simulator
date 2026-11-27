@@ -106,31 +106,16 @@ function timedSegments(aligned) {
  *   apply.
  */
 export function hmmAudioToIpa(samples, sampleRate, options = {}) {
-  const model = getHmmModel();
   const languages = options.languages ?? ['en', 'ru', 'hi', 'zh'];
-  const network = getNetwork(model, languages, {
-    maxWords: options.maxWords,
-    oov: options.oov,
-  });
   const analysis = analyzeFrames(samples, sampleRate, { hop: 0.01 });
-  const { feats, frames, tone } = hmmFeatures(samples, sampleRate, model.lda);
-  const search = { ...options.search, tone };
+  const pitch = trackPitch(analysis);
   // Features are normalised per input, so silence alone would decode as
   // words: decode only inputs with frames the front end calls speech.
-  const decoded =
-    frames && hasSpeech(analysis)
-      ? decodeWords(network, feats, frames, search)
-      : { words: [], lang: null };
-  // Words from the phone loop get their own tokens to take a stress.
-  decoded.words = decoded.words.map((w) =>
-    w.oov ? { ...w, tokens: w.tokens.map((t) => ({ ...t })) } : w
-  );
-  const aligned = decoded.words.length
-    ? alignWords(network, feats, frames, decoded.words, search)
-    : [];
+  const { decoded, aligned } = hasSpeech(analysis)
+    ? decodeSpeech(samples, sampleRate, pitch, { ...options, languages })
+    : { decoded: { words: [], lang: null }, aligned: [] };
   stressOutOfVocabulary(decoded.words, aligned);
   const segments = timedSegments(aligned);
-  const pitch = trackPitch(analysis);
   const whisperSpans = whisperSpansOf(samples, sampleRate, analysis, pitch, {
     whisper: options.whisper ?? 'auto',
   });
@@ -160,6 +145,29 @@ export function hmmAudioToIpa(samples, sampleRate, options = {}) {
     language,
     ...(decoded.lang && { modelLanguage: decoded.lang }),
   };
+}
+
+function decodeSpeech(samples, sampleRate, pitch, options) {
+  const model = getHmmModel();
+  const network = getNetwork(model, options.languages, options);
+  const { feats, frames, tone } = hmmFeatures(
+    samples,
+    sampleRate,
+    model.lda,
+    pitch
+  );
+  const search = { ...options.search, tone };
+  const decoded = frames
+    ? decodeWords(network, feats, frames, search)
+    : { words: [], lang: null };
+  // Words from the phone loop get their own tokens to take a stress.
+  decoded.words = decoded.words.map((w) =>
+    w.oov ? { ...w, tokens: w.tokens.map((t) => ({ ...t })) } : w
+  );
+  const aligned = decoded.words.length
+    ? alignWords(network, feats, frames, decoded.words, search)
+    : [];
+  return { decoded, aligned };
 }
 
 function hasSpeech(analysis) {

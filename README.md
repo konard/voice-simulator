@@ -670,6 +670,8 @@ Run `voice-simulator copy speech.wav -o copy.wav --score speech-score.json` to s
 
 By default (`decoder: 'words'`) a Gaussian HMM decodes words over the lexicons of the requested languages, trained only on this library's own synthetic speech ([how it is trained](tests/heavy/README.md#recognition-model)). A word outside the lexicon is heard through a phone loop of its language and spelled from its sounds; `oov: false` (CLI `--no-oov`) keeps to lexicon words. `decoder: 'phones'` (CLI `--decoder phones`) uses the phone decoder of `audioToIpa` and `ipaToText` instead, as do `rescoring` and substituted stages. Live recognition commits each phrase with the word decoder, like `recognize()`, and a phrase needs `minVoiced` seconds of pitch-voiced speech (0.1 s in a stream, off in batch), so noise alone gives no text. `addNoise(samples, sampleRate, { type, snr, seed })` mixes ten kinds of noise into speech; [docs/reports/noise-baseline.md](docs/reports/noise-baseline.md) is the baseline in each (see [RECOGNIZER.md](docs/RECOGNIZER.md)).
 
+Recognition level `low` uses a narrower word search to reduce CPU time. All levels use the same word vocabulary and acoustic model. See the [lowest-settings report](docs/reports/lowest-settings.md) for the 8 kHz benchmark.
+
 ### Recognition engines and workers
 
 `engine: 'auto'` selects scalar Rust WebAssembly with a JavaScript fallback. Use `'js'` for the reference or `'rust'` to require WebAssembly.
