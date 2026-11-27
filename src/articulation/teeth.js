@@ -64,16 +64,26 @@ function vowelGapOf(state, head) {
 }
 
 /** Gaps (cm) that the consonant channels raise the jaw towards, with weights. */
-function consonantGaps(state, head) {
-  const sibilant = head.sibilantGap ?? SIBILANT_GAP;
+function tongueGapOf(state, head, sibilant) {
   const velar = head.velarGap ?? VELAR_GAP;
   const front = smoothstep(0.66, 0.9, state.tongueLocation ?? 0.9);
-  const tongueGap = velar + (sibilant - velar) * front;
+  return velar + (sibilant - velar) * front;
+}
+
+function consonantGaps(state, head) {
+  const sibilant = head.sibilantGap ?? SIBILANT_GAP;
   return [
     [sibilant, clamp(state.sibilance ?? 0)],
-    [tongueGap, clamp((state.tongueAmount ?? 0) / 0.85)],
+    [
+      tongueGapOf(state, head, sibilant),
+      clamp((state.tongueAmount ?? 0) / 0.85),
+    ],
     [sibilant, clamp((0.4 * (state.lipAmount ?? 0)) / 0.85)],
   ];
+}
+
+function gapChange(gap, weight, vowelGap) {
+  return gap < vowelGap ? (gap - vowelGap) * weight : 0;
 }
 
 /**
@@ -102,11 +112,21 @@ export function teethGap(state, head) {
 export function impliedGap(state, head) {
   const vowelGap = vowelGapOf(state, head);
   // A consonant only ever raises the jaw towards its own gap.
-  let raised = 0;
-  for (const [gap, weight] of consonantGaps(state, head)) {
-    raised = Math.min(raised, gap < vowelGap ? (gap - vowelGap) * weight : 0);
-  }
-  return vowelGap + raised;
+  const sibilant = head.sibilantGap ?? SIBILANT_GAP;
+  const tongue = tongueGapOf(state, head, sibilant);
+  return (
+    vowelGap +
+    Math.min(
+      0,
+      gapChange(sibilant, clamp(state.sibilance ?? 0), vowelGap),
+      gapChange(tongue, clamp((state.tongueAmount ?? 0) / 0.85), vowelGap),
+      gapChange(
+        sibilant,
+        clamp((0.4 * (state.lipAmount ?? 0)) / 0.85),
+        vowelGap
+      )
+    )
+  );
 }
 
 /**
@@ -124,7 +144,7 @@ export function consonantJaw(state, head) {
   let best = { gap: vowelGap, weight: 0 };
   let raised = 0;
   for (const [gap, weight] of consonantGaps(state, head)) {
-    const change = gap < vowelGap ? (gap - vowelGap) * weight : 0;
+    const change = gapChange(gap, weight, vowelGap);
     if (change < raised) {
       raised = change;
       best = { gap, weight };

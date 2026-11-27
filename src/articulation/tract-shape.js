@@ -426,11 +426,9 @@ function fricationSource(areas, state, head, teeth, place) {
 function applyTeeth(areas, state, head, length) {
   const teeth = dentition(state, head, length);
   const last = areas.length - 1;
-  return {
-    ...teeth,
-    index: carveTeeth(areas, teeth, length),
-    outlet: Math.min(last, Math.round((teeth.end / length) * last) + 1),
-  };
+  teeth.index = carveTeeth(areas, teeth, length);
+  teeth.outlet = Math.min(last, Math.round((teeth.end / length) * last) + 1);
+  return teeth;
 }
 
 /**
