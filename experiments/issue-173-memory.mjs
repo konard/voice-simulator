@@ -13,7 +13,7 @@ import { createRecognitionEngine } from '../src/recognition/engine.js';
 import { BASELINE_TEXT } from '../src/recognition/mode-baseline.js';
 import { HEAD, LANGUAGES } from '../tests/helpers/recognition-modes.js';
 import { ROWS, loadEngine } from '../scripts/lowest-rows.mjs';
-import { getHeapStatistics } from 'node:v8';
+import { getHeapSpaceStatistics, getHeapStatistics } from 'node:v8';
 import { Session } from 'node:inspector/promises';
 
 const rate = 8000;
@@ -31,12 +31,24 @@ if (process.env.VOICE_MEMORY_SAMPLING === '1') {
 const mb = (bytes) => Number((bytes / 1048576).toFixed(1));
 function report(stage) {
   const { rss, heapUsed, arrayBuffers } = process.memoryUsage();
+  const spaces =
+    process.env.VOICE_MEMORY_SPACES === '1'
+      ? Object.fromEntries(
+          getHeapSpaceStatistics().map(
+            ({ space_name, physical_space_size }) => [
+              space_name,
+              mb(physical_space_size),
+            ]
+          )
+        )
+      : undefined;
   console.log(stage, {
     rss: mb(rss),
     heap: mb(heapUsed),
     physicalHeap: mb(getHeapStatistics().total_physical_size),
     arrays: mb(arrayBuffers),
     peak: Number((process.resourceUsage().maxRSS / 1024).toFixed(1)),
+    ...(spaces && { spaces }),
   });
 }
 
