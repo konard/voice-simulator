@@ -4,7 +4,9 @@ import { simplex } from '../src/analysis/voice-fit-simplex.js';
 import {
   analyzeLegacyVoice,
   prepareLegacyVoice,
+  resample,
 } from '../src/analysis/voice-features.js';
+import { Biquad } from '../src/acoustics/filters.js';
 import {
   emptyState,
   addValue,
@@ -48,6 +50,32 @@ describe('voice fitting evaluation budget', () => {
     expect(vertices.length).toBe(2);
     expect(Math.abs(vertices[0].x[0] - 0.3) < 1e-12).toBe(true);
     expect(Math.abs(vertices[1].x[0] - 0.4) < 1e-12).toBe(true);
+  });
+});
+describe('legacy voice resampling', () => {
+  it('matches filtering the whole input before interpolating legacy audio', () => {
+    const samples = Float32Array.from({ length: 37 }, (_, i) => Math.sin(i));
+    for (const rate of [16000, 22050, 48000]) {
+      const target = 11025;
+      const first = new Biquad().lowpass(0.45 * target, 0.54, rate);
+      const second = new Biquad().lowpass(0.45 * target, 1.31, rate);
+      const filtered = Float64Array.from(samples, (sample) =>
+        second.process(first.process(sample))
+      );
+      const ratio = rate / target;
+      const expected = Float64Array.from(
+        { length: Math.floor((samples.length - 1) / ratio) },
+        (_, i) => {
+          const position = i * ratio;
+          const left = Math.floor(position);
+          const fraction = position - left;
+          return (
+            filtered[left] * (1 - fraction) + filtered[left + 1] * fraction
+          );
+        }
+      );
+      expect(resample(samples, rate, target).samples).toEqual(expected);
+    }
   });
 });
 describe('voice fitting numerics', () => {

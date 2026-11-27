@@ -70,18 +70,21 @@ export function resample(samples, sampleRate, targetRate = ANALYSIS_RATE) {
   const filters = [new Biquad(), new Biquad()];
   filters[0].lowpass(0.45 * targetRate, 0.54, sampleRate);
   filters[1].lowpass(0.45 * targetRate, 1.31, sampleRate);
-  const filtered = new Float64Array(samples.length);
-  for (let index = 0; index < samples.length; index++) {
-    filtered[index] = filters[1].process(filters[0].process(samples[index]));
-  }
   const ratio = sampleRate / targetRate;
   const output = new Float64Array(Math.floor((samples.length - 1) / ratio));
-  for (let index = 0; index < output.length; index++) {
-    const position = index * ratio;
-    const left = Math.floor(position);
-    const fraction = position - left;
-    output[index] =
-      filtered[left] * (1 - fraction) + filtered[left + 1] * fraction;
+  let index = 0;
+  let position = 0;
+  let left = 0;
+  let previous = 0;
+  for (let read = 0; read < samples.length; read++) {
+    const value = filters[1].process(filters[0].process(samples[read]));
+    if (index < output.length && read === left + 1) {
+      const fraction = position - left;
+      output[index++] = previous * (1 - fraction) + value * fraction;
+      position = index * ratio;
+      left = Math.floor(position);
+    }
+    previous = value;
   }
   return { samples: output, sampleRate: targetRate };
 }
