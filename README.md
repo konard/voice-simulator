@@ -742,7 +742,7 @@ only become stricter. `npm run test:heavy -- --suite lowest` measures it and
 | modes | certified | certified | certified | failed |
 | app | failed | certified | — | — |
 
-Measured at commit `1ad1bca` on AMD EPYC 7763 64-Core Processor; [report](docs/reports/lowest-settings.md).
+Measured at commit `4aa227e` on Intel(R) Xeon(R) 6975P-C; [report](docs/reports/lowest-settings.md).
 <!-- prettier-ignore-end -->
 <!-- lowest-settings:end -->
 
