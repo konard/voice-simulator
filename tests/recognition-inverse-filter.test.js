@@ -11,6 +11,7 @@ import {
   trackPitch,
 } from '../src/index.js';
 import { lfParameters } from '../src/acoustics/glottis.js';
+import { inverseModeMeasures } from '../src/recognition/inverse-filter.js';
 import { highPass } from './helpers/recognition-truth.js';
 import {
   sourceVowel,
@@ -48,6 +49,18 @@ function vowel(tenseness = 0.5, f0 = 110, rate = 16000) {
 }
 
 describe('batch glottal inverse filter', () => {
+  it('keeps the source measures used by mode recognition', () => {
+    for (const rate of [8000, 16000]) {
+      const { frames, pitch, result } = vowel(0.5, 110, rate);
+      const measures = inverseModeMeasures(frames, { pitch });
+      expect(measures).toEqual({
+        h1h2Source: result.h1h2Source,
+        hnr: result.hnr,
+        cpp: result.cpp,
+      });
+    }
+  });
+
   it('returns the pulse of a known source', () => {
     for (const rate of [16000, 8000]) {
       const v = vowel(0.5, 110, rate);

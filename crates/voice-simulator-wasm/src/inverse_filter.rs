@@ -1,7 +1,7 @@
 //! Packed, additive ABI for batch source analysis (Unlicense).
-//! Layout is documented in docs/INVERSE-FILTER.md; input is copied before
-//! analysis, so allocation and an overlapping output cannot alias live views.
-use crate::{error, f64_slice};
+//! Layout is documented in docs/INVERSE-FILTER.md. Read the input before
+//! opening the output so overlapping packets cannot alias live views.
+use crate::{check_range, error, f64_slice};
 use voice_simulator_core::inverse_filter::{inverse_filter, Frames, Options};
 
 fn integer(v: f64) -> Result<usize, i32> {
@@ -69,12 +69,13 @@ fn run(input: &[f64]) -> Result<Vec<f64>, i32> {
         max_f0: input[12],
     };
     let result = inverse_filter(&frames, options).map_err(|_| error::BAD_ARGUMENT)?;
-    let mut out = vec![
+    let mut out = Vec::with_capacity(4 + 2 * n + result.gci.len() + 10 * count + 36);
+    out.extend([
         count as f64,
         n as f64,
         result.gci.len() as f64,
         f64::from(u8::from(result.low_band)),
-    ];
+    ]);
     out.extend(result.flow.iter().map(|v| *v as f64));
     out.extend(result.flow_derivative.iter().map(|v| *v as f64));
     out.extend(result.gci);
@@ -96,15 +97,10 @@ fn run(input: &[f64]) -> Result<Vec<f64>, i32> {
 /// `capacity` counts f64 values. A short output returns BAD_ARGUMENT.
 #[no_mangle]
 pub extern "C" fn vs_inverse_filter(input: u32, length: u32, output: u32, capacity: u32) -> i32 {
-    let input = match f64_slice(input, length) {
-        Ok(v) => v.to_vec(),
-        Err(e) => return e,
-    };
-    // Check the output range before doing DSP, without retaining its view.
-    if let Err(e) = f64_slice(output, capacity) {
-        return e;
-    }
-    let values = match run(&input) {
+    let values = match f64_slice(input, length).and_then(|input| {
+        check_range(output, capacity, 8)?;
+        run(input)
+    }) {
         Ok(v) => v,
         Err(e) => return e,
     };

@@ -3,7 +3,7 @@ import { measure } from './profile.js';
 import { analyzeFrames } from './frontend.js';
 import { trackPitch } from './pitch.js';
 import { trackBatchFormants, trackFormants } from './formants.js';
-import { inverseFilter } from './inverse-filter.js';
+import { inverseModeMeasures } from './inverse-filter.js';
 import {
   glottalPeriods,
   MAX_PERIOD_FACTOR,
@@ -104,7 +104,7 @@ function analyzeWordSignal(samples, sampleRate, head, analyzed, options) {
     })
   );
   const source = measure(profile, 'Inverse filter', () =>
-    inverseFilter(frames, { pitch, minF0: 35, maxF0: 800, kernels })
+    inverseModeMeasures(frames, { pitch, minF0: 35, maxF0: 800, kernels })
   );
   return { frames, pitch, formants, source };
 }

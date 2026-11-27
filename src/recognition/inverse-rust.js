@@ -3,7 +3,7 @@ import { withWasmMemory } from './wasm-memory.js';
 
 const HEADER = 14;
 
-export function inverseFilterRust(module, frames, options, measures) {
+export function inverseFilterRust(module, frames, options, measures, select) {
   const {
     count,
     sampleCount: n,
@@ -58,6 +58,18 @@ export function inverseFilterRust(module, frames, options, measures) {
       throw new RangeError(`Rust inverse filter failed (${written})`);
     }
     const values = output.view(written);
+    if (select) {
+      const first = 4 + 2 * n + values[2];
+      return Object.fromEntries(
+        select.map((name) => {
+          const start = first + measures.indexOf(name) * count;
+          return [
+            name,
+            Float32Array.from(values.subarray(start, start + count)),
+          ];
+        })
+      );
+    }
     let at = 4;
     function take(Type, size) {
       const copy = Type.from(values.subarray(at, at + size));

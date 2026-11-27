@@ -2,8 +2,7 @@
 import { createFft } from './fft.js';
 import { lpcAutocorrelation } from './lpc.js';
 
-export function hann(length) {
-  const result = new Float64Array(length);
+export function hann(length, result = new Float64Array(length)) {
   for (let n = 0; n < length; n++) {
     result[n] = 0.5 - 0.5 * Math.cos((2 * Math.PI * n) / (length - 1));
   }
