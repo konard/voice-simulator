@@ -1,6 +1,9 @@
 import assert from 'node:assert/strict';
-import { existsSync } from 'node:fs';
+import { existsSync, mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { describe, it, expect } from 'test-anywhere';
+import { BODYPARTS3D, fetchAnatomy } from '../scripts/fetch-anatomy.mjs';
 import {
   ArchiveNetworkError,
   RangeRefusedError,
@@ -90,6 +93,46 @@ describe('archive download cancellation', () => {
 
 describe('remote anatomy fixture preparation', () => {
   const probe = async () => null;
+
+  it('uses the latest BodyParts3D archive size for the ZIP tail range', async () => {
+    const output = mkdtempSync(join(tmpdir(), 'bodyparts3d-range-'));
+    const archiveSize = 100_000;
+    const tail = new Uint8Array(65_536);
+    const directoryEnd = new DataView(tail.buffer, tail.length - 22);
+    directoryEnd.setUint32(0, 0x06054b50, true);
+    directoryEnd.setUint32(12, 1, true);
+    directoryEnd.setUint32(16, archiveSize - 23, true);
+
+    const requests = [];
+    const originalFetch = globalThis.fetch;
+    globalThis.fetch = async (input, { method, headers }) => {
+      expect(input).toBe(BODYPARTS3D.url);
+      if (method === 'HEAD') {
+        requests.push('HEAD');
+        return new globalThis.Response(null, {
+          headers: { 'Content-Length': archiveSize },
+        });
+      }
+      requests.push(headers.Range);
+      const directory = headers.Range === 'bytes=99977-99977';
+      return new globalThis.Response(directory ? new Uint8Array(1) : tail, {
+        status: 206,
+      });
+    };
+    try {
+      expect(await fetchAnatomy('bodyparts3d', output, { files: [] })).toEqual(
+        []
+      );
+      expect(requests).toEqual([
+        'HEAD',
+        'bytes=34464-99999',
+        'bytes=99977-99977',
+      ]);
+    } finally {
+      globalThis.fetch = originalFetch;
+      rmSync(output, { recursive: true, force: true });
+    }
+  });
 
   it('reports cancellation while keeping unrelated errors visible', async () => {
     const controller = new AbortController();
