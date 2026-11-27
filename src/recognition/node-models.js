@@ -120,11 +120,20 @@ export function configureNodeRecognitionModels() {
   if (!fs || !zlib) {
     return;
   }
+  function readAsset(file) {
+    const compressed = fs.readFileSync(file);
+    // The packaged files have one gzip member. Its footer gives the output
+    // length, so zlib can return one buffer without concatenating chunks.
+    const length = compressed.readUInt32LE(compressed.length - 4);
+    const chunkSize = Math.max(
+      16 * 1024,
+      Math.min(8 * 1024 * 1024, length + 1)
+    );
+    return zlib.gunzipSync(compressed, { chunkSize });
+  }
   installWordTransitionReader((language, words) => {
     try {
-      const bytes = zlib.gunzipSync(
-        fs.readFileSync(wordTransitionFile(language))
-      );
+      const bytes = readAsset(wordTransitionFile(language));
       const header = 2 * Uint32Array.BYTES_PER_ELEMENT;
       if (process.getBuiltinModule('node:os').endianness() === 'BE') {
         return undefined;
@@ -171,8 +180,7 @@ export function configureNodeRecognitionModels() {
     }
   });
   function read(kind) {
-    const file = fs.readFileSync(recognitionDataFile(kind));
-    const bytes = zlib.gunzipSync(file);
+    const bytes = readAsset(recognitionDataFile(kind));
     const [version, rows] =
       kind === 'models' ? JSON.parse(bytes.toString()) : v8.deserialize(bytes);
     return version === recognitionModelVersion ? rows : undefined;
@@ -183,7 +191,7 @@ export function configureNodeRecognitionModels() {
     (language) => {
       try {
         const [version, network] = v8.deserialize(
-          zlib.gunzipSync(fs.readFileSync(hmmNetworkFile(language)))
+          readAsset(hmmNetworkFile(language))
         );
         return version === hmmNetworkVersion ? network : undefined;
       } catch {
@@ -195,7 +203,7 @@ export function configureNodeRecognitionModels() {
         hmmSizes = {};
         try {
           const [version, sizes] = JSON.parse(
-            zlib.gunzipSync(fs.readFileSync(hmmNetworkFile('index'))).toString()
+            readAsset(hmmNetworkFile('index')).toString()
           );
           if (
             version === hmmNetworkVersion &&
