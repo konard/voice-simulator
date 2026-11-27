@@ -104,16 +104,16 @@ function createEvaluator(state, samples, sampleRate, o, theta0, context) {
   }
   const target = featureVector(state);
   const rate = Math.min(16000, sampleRate);
-  samples = Array.prototype.slice.call(
-    samples,
-    0,
-    Math.floor((o.maxDuration ?? 30) * sampleRate)
-  );
-  const input =
-    sampleRate === rate
-      ? Float32Array.from(samples)
-      : resample(samples, sampleRate, rate);
-  const mcdMetric = o.transcript ? createMcdMetric(input, rate) : null;
+  let mcdMetric = null;
+  if (o.transcript) {
+    const limit = Math.floor((o.maxDuration ?? 30) * sampleRate);
+    const truncated = Array.prototype.slice.call(samples, 0, limit);
+    const input =
+      sampleRate === rate
+        ? Float32Array.from(truncated)
+        : resample(truncated, sampleRate, rate);
+    mcdMetric = createMcdMetric(input, rate);
+  }
   return (candidate) => {
     // The next round starts at the preceding round's best vertex. Reuse
     // that exact evaluation; callbacks and renders count actual synthesis.
@@ -125,7 +125,7 @@ function createEvaluator(state, samples, sampleRate, o, theta0, context) {
     ) {
       return context.best;
     }
-    const rendered = synthesize(o.transcript || MATCH_TEXT, {
+    const { samples: rendered } = synthesize(o.transcript || MATCH_TEXT, {
       head: candidate,
       seed: o.seed,
       sampleRate: 16000,
@@ -136,8 +136,7 @@ function createEvaluator(state, samples, sampleRate, o, theta0, context) {
       source: o.source,
       articulationOffsets: o.articulationOffsets,
     });
-    const audio =
-      rate < 16000 ? resample(rendered.samples, 16000, rate) : rendered.samples;
+    const audio = rate < 16000 ? resample(rendered, 16000, rate) : rendered;
     // The objective uses inverse-filter source measures. Legacy HNR/H1-H2
     // diagnostics are needed only for the returned render, or verbose tracing.
     let completeDiagnostics;

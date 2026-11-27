@@ -904,6 +904,16 @@ export function releaseRenderer(renderer) {
   renderer.solver?.gpu?.destroy();
 }
 
+/** Render a complete output while keeping temporary solver buffers bounded. */
+export function renderSamples(renderer) {
+  const samples = new Float32Array(renderer.totalSamples);
+  const chunkSize = 4096;
+  for (let start = 0; start < samples.length; start += chunkSize) {
+    renderer.render(samples.subarray(start, start + chunkSize));
+  }
+  return samples;
+}
+
 /**
  * Render a whole plan offline. `engine` (default `'auto'`) is an engine
  * name or an engine object of createEngine; the name is resolved with
@@ -918,9 +928,7 @@ export function renderPlan(plan, options = {}) {
     options
   );
   try {
-    const samples = new Float32Array(renderer.totalSamples);
-    renderer.render(samples);
-    return samples;
+    return renderSamples(renderer);
   } finally {
     releaseRenderer(renderer);
   }

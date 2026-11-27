@@ -8,7 +8,7 @@ import {
   block,
   hann,
   highPass,
-  iaif,
+  iaifPlan,
   correlationPlan,
   harmonics,
   cppPlan,
@@ -136,6 +136,9 @@ function recover(frames, f0, o) {
   const g = new Float64Array(x.length);
   const weight = new Float64Array(x.length);
   const windows = new Map();
+  const history = Math.round(0.05 * frames.rate);
+  const iaif = iaifPlan(o.tractOrder, o.glottisOrder, o.leak);
+  let scratch = new Float64Array(0);
   for (let time = 0; time < x.length / frames.rate; time += o.step) {
     const row = Math.min(f0.length - 1, Math.round(time / frames.hop));
     if (!(f0[row] > 0)) {
@@ -144,30 +147,27 @@ function recover(frames, f0, o) {
     const centre = Math.round(time * frames.rate);
     const length = Math.round(Math.max(0.032, 2.5 / f0[row]) * frames.rate);
     if (!windows.has(length)) {
-      windows.set(length, hann(length));
+      const window = new Float64Array(history + length);
+      window.set(hann(length), history);
+      windows.set(length, window);
     }
     const window = windows.get(length);
-    const history = Math.round(0.05 * frames.rate);
-    const extendedWindow = new Float64Array(history + length);
-    extendedWindow.set(window, history);
-    const extended = Float64Array.from(
-      { length: history + length },
-      (_, n) => x[centre - Math.floor(length / 2) - history + n] ?? 0
-    );
-    const pulse = iaif(
-      extended,
-      extendedWindow,
-      o.tractOrder,
-      o.glottisOrder,
-      o.leak
-    );
     const start = centre - Math.floor(length / 2);
+    if (window.length > scratch.length) {
+      scratch = new Float64Array(Math.max(window.length, scratch.length * 2));
+    }
+    const extended = scratch.subarray(0, window.length);
+    for (let n = 0; n < extended.length; n++) {
+      extended[n] = x[start - history + n] ?? 0;
+    }
+    const pulse = iaif(extended, window);
     for (let n = 0; n < length; n++) {
       const index = start + n;
       if (index >= 0 && index < x.length) {
-        d[index] += window[n] * pulse.d[n + history];
-        g[index] += window[n] * pulse.g[n + history];
-        weight[index] += window[n];
+        const w = window[n + history];
+        d[index] += w * pulse.d[n + history];
+        g[index] += w * pulse.g[n + history];
+        weight[index] += w;
       }
     }
   }

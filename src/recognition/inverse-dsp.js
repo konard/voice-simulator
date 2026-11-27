@@ -37,8 +37,7 @@ export function highPass(x, rate) {
   return y;
 }
 
-export function integrate(x, leak) {
-  const y = new Float64Array(x.length);
+export function integrate(x, leak, y = new Float64Array(x.length)) {
   let previous = 0;
   for (let n = 0; n < x.length; n++) {
     previous = x[n] + leak * previous;
@@ -47,9 +46,9 @@ export function integrate(x, leak) {
   return y;
 }
 
-export function filter(x, a) {
-  const y = Float64Array.from(x);
+export function filter(x, a, y = new Float64Array(x.length)) {
   for (let n = 0; n < x.length; n++) {
+    y[n] = x[n];
     for (let k = 0; k < a.length && k < n; k++) {
       y[n] += a[k] * x[n - k - 1];
     }
@@ -57,17 +56,15 @@ export function filter(x, a) {
   return y;
 }
 
-function predictor(x, window, order) {
-  const a = new Float64Array(order);
+function predictor(x, window, a, k, weighted) {
   let first = 0;
   while (first < window.length && window[first] === 0) {
     first++;
   }
-  const weighted = new Float64Array(x.length - first);
   for (let n = first; n < x.length; n++) {
     weighted[n - first] = x[n] * window[n];
   }
-  lpcAutocorrelation(weighted, order, a, new Float64Array(order));
+  lpcAutocorrelation(weighted.subarray(0, x.length - first), a.length, a, k);
   if (!a.every(Number.isFinite)) {
     a.fill(0);
   }
@@ -75,12 +72,32 @@ function predictor(x, window, order) {
 }
 
 /** Alku (1992), two passes: source tilt, tract, source, tract. */
-export function iaif(s, window, tractOrder, glottisOrder, leak) {
-  const u1 = filter(s, predictor(s, window, 1));
-  const g1 = integrate(filter(s, predictor(u1, window, tractOrder)), leak);
-  const u2 = integrate(filter(s, predictor(g1, window, glottisOrder)), leak);
-  const d = filter(s, predictor(u2, window, tractOrder));
-  return { d, g: integrate(d, leak) };
+export function iaifPlan(tractOrder, glottisOrder, leak) {
+  const tilt = new Float64Array(1);
+  const tract = new Float64Array(tractOrder);
+  const glottis = new Float64Array(glottisOrder);
+  const k = new Float64Array(Math.max(1, tractOrder, glottisOrder));
+  let d = new Float64Array(0);
+  let g = new Float64Array(0);
+  let weighted = new Float64Array(0);
+  return (s, w) => {
+    if (s.length > d.length) {
+      const size = Math.max(s.length, d.length * 2);
+      d = new Float64Array(size);
+      g = new Float64Array(size);
+      weighted = new Float64Array(size);
+    }
+    const flow = g.subarray(0, s.length);
+    const derivative = d.subarray(0, s.length);
+    filter(s, predictor(s, w, tilt, k, weighted), derivative);
+    filter(s, predictor(derivative, w, tract, k, weighted), derivative);
+    integrate(derivative, leak, flow);
+    filter(s, predictor(flow, w, glottis, k, weighted), derivative);
+    integrate(derivative, leak, flow);
+    filter(s, predictor(flow, w, tract, k, weighted), derivative);
+    integrate(derivative, leak, flow);
+    return { d: derivative, g: flow };
+  };
 }
 
 /** Reusable zero-padded FFT and Hann autocorrelation, for a given length. */

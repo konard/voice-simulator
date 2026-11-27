@@ -22,6 +22,7 @@ import {
   DEFAULT_SOURCE,
   levelFactor,
   noseSections,
+  renderSamples,
   STEADY_TRACT,
 } from '../acoustics/voice.js';
 import { piriformBranch } from '../acoustics/waveguide.js';
@@ -774,9 +775,7 @@ class FrameList {
 export function renderPlanRust(module, plan, options = {}) {
   const renderer = new RustVoiceRenderer(module, plan, options);
   try {
-    const samples = new Float32Array(renderer.totalSamples);
-    renderer.render(samples);
-    return samples;
+    return renderSamples(renderer);
   } finally {
     renderer.free();
   }
