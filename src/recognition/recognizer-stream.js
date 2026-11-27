@@ -90,7 +90,7 @@ function boundedDecode(decoded, end) {
     segments.filter((segment) => segment.end <= end + EPSILON);
   const { frames, lattice, tracks } = decoded;
   const { pitch } = tracks;
-  const times = lattice.times.filter((time) => time <= end + EPSILON);
+  const times = lattice?.times.filter((time) => time <= end + EPSILON);
   return {
     ...decoded,
     whisperSpans: clipWhisperSpans(decoded.whisperSpans, end),
@@ -103,10 +103,12 @@ function boundedDecode(decoded, end) {
       const segments = phones(reading.segments);
       return { ...reading, segments, ipa: joinSegments(segments) };
     }),
-    lattice: {
-      times,
-      edges: lattice.edges.filter((edge) => edge.to < times.length),
-    },
+    ...(lattice && {
+      lattice: {
+        times,
+        edges: lattice.edges.filter((edge) => edge.to < times.length),
+      },
+    }),
     frames: {
       ...frames,
       count: Math.min(frames.count, Math.ceil(end / frames.hop)),
@@ -136,6 +138,7 @@ function createPhraseDecoder(sampleRate, settings, level, start) {
   const decoder = createIpaDecoder(sampleRate, {
     ...decoderOptions(settings, level, start),
     maxSeconds: MAX_WINDOW + 1,
+    lattice: settings.rescoring,
   });
   return {
     decoder,

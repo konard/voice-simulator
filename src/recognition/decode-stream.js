@@ -196,11 +196,13 @@ export function createIpaDecoder(sampleRate, options = {}) {
     const last = path[count - 1];
     from = times[last.to];
     lastUnit = last.unit;
-    appendLattice(
-      archive,
-      latticeOf(times, search.edges, templates, language),
-      from
-    );
+    if (settings.lattice) {
+      appendLattice(
+        archive,
+        latticeOf(times, search.edges, templates, language),
+        from
+      );
+    }
     return true;
   }
 
@@ -235,12 +237,15 @@ export function createIpaDecoder(sampleRate, options = {}) {
       });
     }
     const { analysis, prepared, templates, search } = current;
-    const lattice = { times: [...archive.times], edges: [...archive.edges] };
-    appendLattice(
-      lattice,
-      latticeOf(prepared.times, search.edges, templates, language)
-    );
-    lattice.times = Float64Array.from(lattice.times);
+    let lattice;
+    if (settings.lattice) {
+      lattice = { times: [...archive.times], edges: [...archive.edges] };
+      appendLattice(
+        lattice,
+        latticeOf(prepared.times, search.edges, templates, language)
+      );
+      lattice.times = Float64Array.from(lattice.times);
+    }
     const reading =
       provisional && !search.paths.length && search.provisional
         ? { ...search, paths: [search.provisional] }
