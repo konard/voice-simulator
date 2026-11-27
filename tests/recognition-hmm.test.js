@@ -228,3 +228,28 @@ it('prunes each language against its own best token (issue 75)', () => {
     Float64Array.of(-500, -420)
   );
 });
+
+it('selects the histogram threshold with repeated scores and reused rows', () => {
+  const count = 1200;
+  const nodes = Uint8Array.from({ length: count }, (_, i) => i % 2);
+  const work = Array.from({ length: count }, (_, i) => i);
+  const maxActive = 83;
+  const thresholds = createThresholds(nodes, 2, {
+    beam: Infinity,
+    languageBeam: Infinity,
+    maxActive,
+  });
+  for (const length of [count, 250, 650]) {
+    const scores = Float64Array.from(
+      { length },
+      (_, i) => ((i * 103) % 219) - 110
+    );
+    const expected = Float64Array.from([0, 1], (lang) =>
+      scores
+        .filter((_, i) => nodes[i] === lang)
+        .sort()
+        .at(-maxActive)
+    );
+    assert.deepEqual(thresholds(work, scores, length, 108), expected);
+  }
+});

@@ -277,6 +277,47 @@ function backtrace(network, records, best) {
   return out;
 }
 
+// Partition around the requested rank. The bounded fallback keeps the cost
+// predictable for adversarial score orderings.
+function scoreAtRank(row, size, rank) {
+  if (!Number.isInteger(rank) || rank >= size) {
+    return row.subarray(0, size)[rank];
+  }
+  let left = 0;
+  let right = size - 1;
+  let attempts = 2 * Math.ceil(Math.log2(size));
+  while (left < right) {
+    if (attempts-- === 0) {
+      row.subarray(left, right + 1).sort();
+      break;
+    }
+    const pivot = row[Math.floor((left + right) / 2)];
+    let low = left;
+    let high = right;
+    while (low <= high) {
+      while (row[low] < pivot) {
+        low++;
+      }
+      while (row[high] > pivot) {
+        high--;
+      }
+      if (low <= high) {
+        const score = row[low];
+        row[low++] = row[high];
+        row[high--] = score;
+      }
+    }
+    if (rank <= high) {
+      right = high;
+    } else if (rank >= low) {
+      left = low;
+    } else {
+      break;
+    }
+  }
+  return row[rank];
+}
+
 /**
  * Pruning threshold of each language at one frame: `beam` below its own
  * best token, at most `languageBeam` below the best of all, and its
@@ -309,8 +350,10 @@ export function createThresholds(nodes, languageCount, settings) {
     for (let i = 0; i < rows.length; i++) {
       let threshold = Math.max(peaks[i] - beam, best - languageBeam);
       if (sizes[i] > maxActive) {
-        rows[i].subarray(0, sizes[i]).sort();
-        threshold = Math.max(threshold, rows[i][sizes[i] - maxActive]);
+        threshold = Math.max(
+          threshold,
+          scoreAtRank(rows[i], sizes[i], sizes[i] - maxActive)
+        );
       }
       thresholds[i] = threshold;
     }
