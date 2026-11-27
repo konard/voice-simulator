@@ -541,17 +541,15 @@ function isPulse(energy, index, near, far) {
   return value >= PHONATION_ANALYSIS.pulseShare * loudest;
 }
 
-/** Normalised cross-correlation of `length` samples at `a` and at `b`. */
-function correlation(signal, a, b, length) {
+/** Cross-correlation of a fixed window at `a` with a window at `b`. */
+function correlation(signal, a, b, length, first) {
   let product = 0;
-  let first = 0;
   let second = 0;
   if (a >= 0 && b + length <= signal.length && ArrayBuffer.isView(signal)) {
     for (let k = 0; k < length; k++) {
       const x = signal[a + k];
       const y = signal[b + k];
       product += x * y;
-      first += x * x;
       second += y * y;
     }
   } else {
@@ -559,7 +557,6 @@ function correlation(signal, a, b, length) {
       const x = signal[a + k] ?? 0;
       const y = signal[b + k] ?? 0;
       product += x * y;
-      first += x * x;
       second += y * y;
     }
   }
@@ -579,9 +576,14 @@ function matchPeriod(signal, rate, from, rough, values) {
   const start = from - Math.round(0.1 * rough);
   const low = Math.max(1, rough - spread);
   const high = rough + spread;
+  let energy = 0;
+  for (let k = 0; k < length; k++) {
+    const sample = signal[start + k] ?? 0;
+    energy += sample * sample;
+  }
   let best = low;
   for (let lag = low - 1; lag <= high + 1; lag++) {
-    const value = correlation(signal, start, start + lag, length);
+    const value = correlation(signal, start, start + lag, length, energy);
     values[lag - low + 1] = value;
     if (lag >= low && lag <= high && value > values[best - low + 1]) {
       best = lag;

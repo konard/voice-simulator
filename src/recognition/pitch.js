@@ -490,33 +490,41 @@ function createCandidateFinder(frames, settings, store, shared) {
   const coarse = createCoarseCorrelator(frames, settings);
   const full = createFullFrame(frames, settings);
   const q = new Float64Array(lagMax + 2);
-  // Local maxima of the coarse search: lag and height; the strongest
-  // `tried` of them are refined.
+  // Only the strongest coarse maxima reach full-rate refinement.
   const tried = 2 * capacity + 2;
-  const peakLag = new Float64Array(lagMax);
-  const peakHeight = new Float64Array(lagMax);
-  const order = [];
+  const peakLag = new Float64Array(tried);
+  const peakHeight = new Float64Array(tried);
   const candidate = { frequency: 0, height: 0, strength: 0 };
   const strengthOf = (height, frequency) =>
     height - octaveCost * Math.log2(maxF0 / frequency);
 
-  /** Local maxima of q, refined by a parabola, in `order` strongest
-   * first. */
+  /** Keep the strongest maxima of q, preserving lag order for ties. */
   function findMaxima() {
-    order.length = 0;
+    let count = 0;
     for (let lag = lagMin; lag <= lagMax; lag++) {
       if (q[lag] > q[lag - 1] && q[lag] >= q[lag + 1] && q[lag] > 0) {
         const [offset, top] = parabola(q[lag - 1], q[lag], q[lag + 1]);
         const exact = lag + offset;
-        peakLag[order.length] = exact;
-        peakHeight[order.length] = strengthOf(
+        const strength = strengthOf(
           Math.min(1, top),
           settings.coarseRate / exact
         );
-        order.push(order.length);
+        let slot = count;
+        while (slot > 0 && peakHeight[slot - 1] < strength) {
+          if (slot < tried) {
+            peakLag[slot] = peakLag[slot - 1];
+            peakHeight[slot] = peakHeight[slot - 1];
+          }
+          slot--;
+        }
+        if (slot < tried) {
+          peakLag[slot] = exact;
+          peakHeight[slot] = strength;
+          count = Math.min(count + 1, tried);
+        }
       }
     }
-    order.sort((a, b) => peakHeight[b] - peakHeight[a] || a - b);
+    return count;
   }
 
   function scoreUnvoiced(t, largest, peak) {
@@ -560,11 +568,10 @@ function createCandidateFinder(frames, settings, store, shared) {
       if (!coarse.correlate(centre, q) || !(energy > 0)) {
         return;
       }
-      findMaxima();
       let kept = 0;
-      const count = Math.min(order.length, tried);
+      const count = findMaxima();
       for (let index = 0; index < count; index++) {
-        const coarseLag = peakLag[order[index]];
+        const coarseLag = peakLag[index];
         const refined = full.refine(coarseLag);
         const frequency = refined === null ? 0 : rate / refined[0];
         if (frequency >= minF0 && frequency <= maxF0) {
