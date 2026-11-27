@@ -94,16 +94,14 @@ function emissionCache(
       ? toneCache(model.tone, tone, toneWeight)
       : null;
   const ofTone = model.tone?.ofState;
-  return (m, t) => {
-    if (stamp[m] !== t) {
-      stamp[m] = t;
-      value[m] = stateScore(m, feats, t * model.dims, model);
-      if (toneScore) {
-        value[m] += toneScore(ofTone[m], t);
-      }
+  function evaluate(m, t) {
+    stamp[m] = t;
+    value[m] = stateScore(m, feats, t * model.dims, model);
+    if (toneScore) {
+      value[m] += toneScore(ofTone[m], t);
     }
-    return value[m];
-  };
+  }
+  return { stamp, value, evaluate };
 }
 
 function createWordHistory() {
@@ -497,12 +495,11 @@ function decodeWithWorkspace(network, feats, frames, options, workspace) {
   const { nodes, words, emit, trees, wordId, nextWord } = network;
   const { stay, go } = network.model;
   const { first, count, optional, child, sibling, terminal, lookLn } = nodes;
-  const score = emissionCache(
-    network.model,
-    feats,
-    settings,
-    workspace.emission
-  );
+  const {
+    stamp,
+    value: emissions,
+    evaluate,
+  } = emissionCache(network.model, feats, settings, workspace.emission);
   let { previous, current, entries, next } = workspace;
   const { positions, work, processed, records } = workspace;
   positions.fill(0);
@@ -562,7 +559,11 @@ function decodeWithWorkspace(network, feats, frames, options, workspace) {
           start = entries.starts[entry];
         }
         if (s > -Infinity) {
-          s += score(emit[state], t);
+          const row = emit[state];
+          if (stamp[row] !== t) {
+            evaluate(row, t);
+          }
+          s += emissions[row];
         }
         scores[offset + i] = s;
         histories[offset + i] = hist;
@@ -741,7 +742,11 @@ export function alignWords(network, feats, frames, words, options = {}) {
   const { silencePenalty } = settings;
   const { model } = network;
   const { chain, tokens } = alignmentChain(model, words);
-  const score = emissionCache(model, feats, settings);
+  const {
+    stamp,
+    value: emissions,
+    evaluate,
+  } = emissionCache(model, feats, settings);
   const N = chain.length;
   const { stay, go, emit, skip } = alignmentColumns(chain);
   let prev = new Float64Array(N).fill(-Infinity);
@@ -750,12 +755,16 @@ export function alignWords(network, feats, frames, words, options = {}) {
   // those three choices in two bits per cell.
   const back = new Uint8Array(Math.ceil((frames * N) / 4));
   if (frames > 0) {
-    prev[0] = 0 + score(emit[0], 0);
+    evaluate(emit[0], 0);
+    prev[0] = 0 + emissions[emit[0]];
     if (chain[0].skippable && N > 3) {
-      prev[3] =
-        silencePenalty > -Infinity
-          ? silencePenalty + score(emit[3], 0)
-          : silencePenalty;
+      prev[3] = silencePenalty;
+      if (silencePenalty > -Infinity) {
+        if (stamp[emit[3]] !== 0) {
+          evaluate(emit[3], 0);
+        }
+        prev[3] += emissions[emit[3]];
+      }
     }
   }
   for (let t = 1; t < frames; t++) {
@@ -778,7 +787,11 @@ export function alignWords(network, feats, frames, words, options = {}) {
         }
       }
       if (s > -Infinity) {
-        s += score(emit[n], t);
+        const state = emit[n];
+        if (stamp[state] !== t) {
+          evaluate(state, t);
+        }
+        s += emissions[state];
       }
       cur[n] = s;
       if (step) {
