@@ -114,14 +114,24 @@ function frameLevel(signal, start, length) {
   return Math.sqrt(sum / length);
 }
 
+/** Scratch storage shared by sequential YIN frames at one sample rate. */
+export function createYinWorkspace(sampleRate) {
+  return new Float64Array(Math.ceil(sampleRate / MIN_F0) + 2);
+}
+
 /**
  * YIN pitch of one frame.
  * @returns {{f0: number, aperiodicity: number}}
  */
-export function yinPitch(signal, start, length, sampleRate) {
+export function yinPitch(
+  signal,
+  start,
+  length,
+  sampleRate,
+  normalized = createYinWorkspace(sampleRate)
+) {
   const minLag = Math.max(2, Math.floor(sampleRate / MAX_F0));
   const maxLag = Math.ceil(sampleRate / MIN_F0);
-  const normalized = new Float64Array(maxLag + 2);
   normalized[0] = 1;
   let running = 0;
   for (let lag = 1; lag <= maxLag + 1; lag++) {
@@ -379,10 +389,13 @@ function countSyllables(levels, voiced) {
  */
 export function prepareLegacyVoice(samples, sampleRate, options = {}) {
   const limit = Math.floor((options.maxDuration ?? 30) * sampleRate);
-  const input =
-    samples.length > limit
-      ? Array.prototype.slice.call(samples, 0, limit)
-      : samples;
+  let input = samples;
+  if (samples.length > limit) {
+    input =
+      samples instanceof Float32Array || samples instanceof Float64Array
+        ? samples.subarray(0, limit)
+        : Array.prototype.slice.call(samples, 0, limit);
+  }
   const { samples: signal, sampleRate: rate } = resample(
     input,
     sampleRate,
@@ -400,10 +413,11 @@ export function prepareLegacyVoice(samples, sampleRate, options = {}) {
   const loud = percentile(levels, 0.95);
   const active = levels.map((level) => level > Math.max(1e-4, 0.1 * loud));
   const frames = active.map((value) => (value ? null : { voiced: false }));
+  const yin = createYinWorkspace(rate);
   let evaluated = 0;
   function frameAt(index) {
     if (frames[index] === null) {
-      const pitch = yinPitch(signal, index * hop, length, rate);
+      const pitch = yinPitch(signal, index * hop, length, rate, yin);
       frames[index] = {
         ...pitch,
         voiced: pitch.aperiodicity < VOICED_APERIODICITY,

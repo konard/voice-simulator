@@ -1404,9 +1404,10 @@ function timedSegments(ipa, options, config) {
   return { tokens, segments };
 }
 
-/** The timed articulation segments, without planning frame-rate channels. */
-export function planUtteranceTiming(ipa, options = {}) {
-  return timedSegments(ipa, options, accentedHead(options)).segments;
+/** Reuse the head and language settings when timing several IPA words. */
+export function createUtteranceTimingPlanner(options) {
+  const config = accentedHead(options);
+  return (ipa) => timedSegments(ipa, options, config).segments;
 }
 
 function makePlan(ipa, options, config, recognitionTemplate, sampledChannels) {

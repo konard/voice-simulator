@@ -20,6 +20,7 @@ import { fft, nextPowerOfTwo } from '../metrics/spectrum.js';
 import { decimate, lpcCoefficients } from '../acoustics/analysis.js';
 import {
   ANALYSIS_RATE,
+  createYinWorkspace,
   percentile,
   resample,
   yinPitch,
@@ -148,8 +149,14 @@ function ratio(spectrum, from, to) {
   return 10 * Math.log10(Math.max(FLOOR, high) / Math.max(FLOOR, low));
 }
 
-export function vowelBandRatios(samples, sampleRate) {
-  const spectrum = averageSpectrum(samples, sampleRate);
+export function vowelBandRatios(samples, sampleRate, workspace) {
+  const spectrum = averageSpectrum(
+    samples,
+    sampleRate,
+    0,
+    samples.length,
+    workspace
+  );
   return {
     alpha: ratio(spectrum, 1000, Math.min(5000, sampleRate / 2)),
     energyRatio: ratio(spectrum, 2500, sampleRate / 2 + spectrum.binWidth),
@@ -184,9 +191,12 @@ export function frameAperiodicities(samples, sampleRate, share = SIGNAL_SHARE) {
   }
   const threshold = Math.max(1e-7, share * percentile(levels, 0.95));
   const result = [];
+  const yin = createYinWorkspace(rate);
   levels.forEach((level, index) => {
     if (level > threshold) {
-      result.push(yinPitch(signal, index * hop, length, rate).aperiodicity);
+      result.push(
+        yinPitch(signal, index * hop, length, rate, yin).aperiodicity
+      );
     }
   });
   return result;

@@ -5,18 +5,23 @@ import { trackPitchFrames } from './pitch.js';
 import { trackBatchFormants, trackFormants } from './formants.js';
 import { inverseModeMeasures } from './inverse-filter.js';
 import {
+  createAverageSpectrumWorkspace,
   glottalPeriods,
   MAX_PERIOD_FACTOR,
   vowelBandRatios,
 } from '../analysis/mode-features.js';
 import { parseIpa } from '../ipa/parse.js';
-import { planUtteranceTiming } from '../articulation/plan.js';
+import { createUtteranceTimingPlanner } from '../articulation/plan.js';
 import { semitones } from './mode-rules.js';
 
 export function quantile(values, fraction = 0.5) {
-  const sorted = Array.from(values)
-    .filter(Number.isFinite)
-    .sort((a, b) => a - b);
+  const sorted = [];
+  for (const value of values) {
+    if (Number.isFinite(value)) {
+      sorted.push(value);
+    }
+  }
+  sorted.sort((a, b) => a - b);
   if (!sorted.length) {
     return 0;
   }
@@ -31,7 +36,7 @@ const mean = (values) =>
 
 /** Locate nuclei using timed phones when available, else fit each IPA word
  * to its observed word interval. No synthesis modes/timeline metadata read. */
-function nuclei(word, phones, head) {
+function nuclei(word, phones, head, planners) {
   if (phones) {
     return phones
       .filter(
@@ -44,10 +49,13 @@ function nuclei(word, phones, head) {
       )
       .map((p) => ({ ...p, vowel: p.ipa ?? p.symbol }));
   }
-  const segments = planUtteranceTiming(word.ipa, {
-    head,
-    language: word.language ?? word.lang,
-  });
+  const language = word.language ?? word.lang;
+  let plan = planners.get(language);
+  if (!plan) {
+    plan = createUtteranceTimingPlanner({ head, language });
+    planners.set(language, plan);
+  }
+  const segments = plan(word.ipa);
   const speech = segments.filter((s) => s.kind !== 'pause');
   if (!speech.length) {
     return [];
@@ -63,7 +71,7 @@ function nuclei(word, phones, head) {
     }));
 }
 
-function vowelSamples(samples, vowels, rate) {
+function vowelSamples(samples, vowels, rate, signal) {
   const intervals = vowels.map((v) =>
     samples.subarray(
       Math.round((v.start + (v.end - v.start) * 0.25) * rate),
@@ -71,13 +79,15 @@ function vowelSamples(samples, vowels, rate) {
     )
   );
   const length = intervals.reduce((n, part) => n + part.length, 0);
-  const signal = new Float32Array(length);
+  if (signal.length < length) {
+    signal = new Float32Array(length);
+  }
   let offset = 0;
   for (const interval of intervals) {
     signal.set(interval, offset);
     offset += interval.length;
   }
-  return signal;
+  return { signal, length };
 }
 
 function analyzeWordSignal(samples, sampleRate, head, analyzed, options) {
@@ -172,6 +182,22 @@ function pulseFeatures(trains, vowels) {
   };
 }
 
+function wordVoicing(word, frames, pitch) {
+  let count = 0;
+  let voiced = 0;
+  for (
+    let t = Math.ceil(word.start / frames.hop);
+    t < frames.count && t * frames.hop < word.end;
+    t++
+  ) {
+    count++;
+    if (pitch.f0[t] > 0 && pitch.strength[t] >= 0.7) {
+      voiced++;
+    }
+  }
+  return count ? voiced / count : 0;
+}
+
 /** Analyze the recording in one pass; retain scalar word features only. */
 export function measureWords(
   samples,
@@ -190,74 +216,74 @@ export function measureWords(
   );
   const pulses = pulseTrains(samples, sampleRate);
   const phones = result.phonemes ?? result.phones;
+  const planners = new Map();
+  const spectrum = createAverageSpectrumWorkspace(sampleRate);
+  let vowelBuffer = new Float32Array(0);
   const peakLevel = quantile(frames.energy.subarray(0, frames.count), 0.9);
   const measured = result.words.map((word) => {
-    const vowels = nuclei(word, phones, head);
-    const whole = [];
-    for (
-      let t = Math.ceil(word.start / frames.hop);
-      t < frames.count && t * frames.hop < word.end;
-      t++
-    ) {
-      whole.push(t);
-    }
+    const vowels = nuclei(word, phones, head, planners);
     const rows = [];
     const f1Vowels = [];
     for (const vowel of vowels) {
       const from = vowel.start + (vowel.end - vowel.start) * 0.25;
       const to = vowel.end - (vowel.end - vowel.start) * 0.25;
-      const indices = [];
+      const frequencies = [];
       for (
         let t = Math.max(0, Math.ceil(from / frames.hop));
         t < frames.count && t * frames.hop <= to;
         t++
       ) {
-        indices.push(t);
+        rows.push(t);
+        if (formants.valid[t * 4]) {
+          frequencies.push(formants.frequency[t * 4]);
+        }
       }
-      rows.push(...indices);
       f1Vowels.push({
         vowel: vowel.vowel,
-        value: quantile(
-          indices
-            .filter((t) => formants.valid[t * 4])
-            .map((t) => formants.frequency[t * 4])
-        ),
+        value: quantile(frequencies),
       });
     }
-    const rawF0 = rows.map((t) => pitch.f0[t]).filter((v) => v > 0);
-    const f0 = rows
-      .filter((t) => pitch.strength[t] >= 0.7)
-      .map((t) => pitch.f0[t])
-      .filter((v) => v > 0);
+    const rawF0 = [];
+    const f0 = [];
+    for (const t of rows) {
+      const value = pitch.f0[t];
+      if (value > 0) {
+        rawF0.push(value);
+        if (pitch.strength[t] >= 0.7) {
+          f0.push(value);
+        }
+      }
+    }
     // Source H1-H2 removes the formant envelope, unlike raw speech H1-H2.
-    const values = (key) =>
-      rows.map((t) => source[key][t]).filter(Number.isFinite);
+    const values = (key) => rows.map((t) => source[key][t]);
+    const hnr = quantile(values('hnr'));
     const { pulsePitch, jitter } = pulseFeatures(pulses, vowels);
     // A weak periodicity peak in noise is not a usable pitch. Require
     // harmonic support across the nucleus before falling back to it.
-    const trackedPitch = quantile(
-      f0.length ? f0 : quantile(values('hnr')) > 10 ? rawF0 : []
+    const trackedPitch = quantile(f0.length ? f0 : hnr > 10 ? rawF0 : []);
+    const { signal, length } = vowelSamples(
+      samples,
+      vowels,
+      sampleRate,
+      vowelBuffer
     );
-    const vowelSignal = vowelSamples(samples, vowels, sampleRate);
+    vowelBuffer = signal;
     return {
       start: word.start,
       end: word.end,
       vowels: vowels.length,
       f1Vowels,
       f1: null,
-      ...vowelBandRatios(vowelSignal, sampleRate),
+      ...vowelBandRatios(signal.subarray(0, length), sampleRate, spectrum),
       pitch: pulsePitch > 0 && pulsePitch < 90 ? pulsePitch : trackedPitch,
       pitches: f0,
       pitchSpan: semitones(quantile(f0, 0.95), quantile(f0, 0.05)),
       voiced: rows.length ? f0.length / rows.length : 0,
-      wordVoiced: whole.length
-        ? whole.filter((t) => pitch.f0[t] > 0 && pitch.strength[t] >= 0.7)
-            .length / whole.length
-        : 0,
+      wordVoiced: wordVoicing(word, frames, pitch),
       level: quantile(rows.map((t) => frames.energy[t])),
       peakLevel,
       h1h2: quantile(values('h1h2Source')),
-      hnr: quantile(values('hnr')),
+      hnr,
       cpp: quantile(values('cpp')),
       jitter,
       rate: 0,
