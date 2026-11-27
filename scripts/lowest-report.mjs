@@ -17,6 +17,7 @@ export const ROW_NAMES = [
 export const README_START = '<!-- lowest-settings:start -->';
 export const README_END = '<!-- lowest-settings:end -->';
 export const REPORT_PATH = 'docs/reports/lowest-settings.md';
+export const HEAP_LIMIT_MB = 192;
 
 /** Metrics that must reach their limit; every other limit is a maximum. */
 const MINIMUMS = new Set([
@@ -67,35 +68,60 @@ function runFor(runs, row, column) {
   return runs[row]?.[column === 'rust-1' ? 'rust' : 'js'];
 }
 
-function memoryCell(runs, row, limits) {
+function memoryConditions(conditions) {
+  return (
+    conditions.pinned === true &&
+    conditions.limit === null &&
+    /^v24\./u.test(conditions.node)
+  );
+}
+
+function memoryErrors(measured) {
+  return measured.flatMap((run) => {
+    const problem = run.capped?.crashed ?? run.error;
+    return problem ? [`${run.engine}: ${problem}`] : [];
+  });
+}
+
+function memoryCell(runs, row, limits, conditions) {
   const measured = ['js', 'rust']
     .map((engine) => runs[row]?.[engine])
     .filter((run) => run && !run.unavailable);
   if (!measured.length) {
     return { status: 'unavailable', reason: 'no run measured memory' };
   }
-  const crashed = measured.filter((run) => run.capped?.crashed);
-  const peaks = measured.map((run) => run.peakRssMb).filter(Number.isFinite);
+  const peaks = measured
+    .map((run) => run.peakRssMb)
+    .filter((peak) => Number.isFinite(peak) && peak > 0);
   const value = peaks.length ? Math.max(...peaks) : null;
   const limit = limits.peakRssMb;
-  const failures = measured.filter((run) => run.error);
-  const complete = peaks.length === 2 && !failures.length;
+  const errors = memoryErrors(measured);
+  const complete =
+    peaks.length === 2 &&
+    measured.every((run) => run.capped?.heapLimitMb === HEAP_LIMIT_MB);
   const exceeds = value !== null && !passes('peakRssMb', value, limit);
-  const pass = complete && !crashed.length && !exceeds;
-  const errors = [...crashed, ...failures]
-    .map((run) => `${run.engine}: ${run.capped?.crashed ?? run.error}`)
-    .join('; ');
-  return {
-    status: pass ? 'certified' : errors || exceeds ? 'failed' : 'unavailable',
-    metrics: { peakRssMb: { value, limit, pass } },
-    ...(errors && { reason: errors }),
-    ...(!complete && !errors && { reason: 'both engines must measure memory' }),
-  };
+  const pass =
+    complete && memoryConditions(conditions) && !errors.length && !exceeds;
+  const metrics = { peakRssMb: { value, limit, pass } };
+  if (errors.length || exceeds) {
+    return {
+      status: 'failed',
+      metrics,
+      ...(errors.length && { reason: errors.join('; ') }),
+    };
+  }
+  if (pass) {
+    return { status: 'certified', metrics };
+  }
+  const reason = complete
+    ? 'memory certification requires full workloads pinned to one core on Node 24'
+    : 'both engines must measure capped RSS';
+  return { status: 'unavailable', metrics, reason };
 }
 
-function cellFor(runs, row, column, limits) {
+function cellFor(runs, row, column, limits, conditions) {
   if (column === 'memory') {
-    return memoryCell(runs, row, limits);
+    return memoryCell(runs, row, limits, conditions);
   }
   const run = runFor(runs, row, column);
   if (!run) {
@@ -130,7 +156,7 @@ function cellFor(runs, row, column, limits) {
  * Judge every row and column with limits against the measured runs, shaped
  * {row: {js, rust}} with the printed results of scripts/lowest-settings.mjs.
  */
-export function judge(runs, thresholds, issues = {}) {
+export function judge(runs, thresholds, issues = {}, conditions = {}) {
   const cells = {};
   for (const [row, columns] of Object.entries(thresholds)) {
     cells[row] = {};
@@ -138,7 +164,13 @@ export function judge(runs, thresholds, issues = {}) {
       if (!columns[column]) {
         continue;
       }
-      cells[row][column] = cellFor(runs, row, column, columns[column]);
+      cells[row][column] = cellFor(
+        runs,
+        row,
+        column,
+        columns[column],
+        conditions
+      );
     }
   }
   return linkIssues(cells, issues);

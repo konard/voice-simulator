@@ -93,7 +93,7 @@ export function publish(dir, { root = ROOT, allowRegression } = {}) {
   // The cells are judged again from the runs and the limits of the
   // measurement, so a report downloaded from Heavy checks can be published.
   if (Object.keys(measured.runs ?? {}).length && measured.limits) {
-    measured.cells = judge(measured.runs, measured.limits);
+    measured.cells = judge(measured.runs, measured.limits, {}, measured);
   }
   const reportJson = path.join(root, REPORT_PATH.replace(/\.md$/u, '.json'));
   const committed = readJson(reportJson);

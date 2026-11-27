@@ -13,6 +13,7 @@ import { after, describe, it } from 'node:test';
 import { fileURLToPath, URL } from 'node:url';
 import {
   formatReport,
+  HEAP_LIMIT_MB,
   judge,
   regressions,
   REPORT_PATH,
@@ -31,7 +32,7 @@ const ROWS = [
   'modes',
 ];
 const ENGINES = ['js', 'rust'];
-const HEAP_CAP = '--max-old-space-size=192';
+const HEAP_CAP = `--max-old-space-size=${HEAP_LIMIT_MB}`;
 const ROW_TIMEOUT_MS = 6 * 3_600_000;
 const read = (file) =>
   existsSync(file) ? JSON.parse(readFileSync(file, 'utf8')) : null;
@@ -102,7 +103,7 @@ const OUT_OF_MEMORY = /heap out of memory|Reached heap limit/u;
 async function measure(row, engine, core) {
   const capped = await run(row, engine, core, true);
   if (capped.result) {
-    return { ...capped.result, capped: {} };
+    return { ...capped.result, capped: { heapLimitMb: HEAP_LIMIT_MB } };
   }
   const crash = OUT_OF_MEMORY.test(capped.stderr)
     ? 'JavaScript heap out of memory'
@@ -218,9 +219,9 @@ describe('lowest settings: 8 kHz and one core', () => {
       limit: Number.isFinite(limit) ? limit : null,
       limits: thresholds,
       runs,
-      cells: judge(runs, thresholds, issues),
       regressions: [],
     };
+    data.cells = judge(runs, thresholds, issues, data);
     writeReport('lowest-settings', formatReport(data), data);
     if (Number.isFinite(limit)) {
       // A run on fewer utterances is a smoke test, not the certification.

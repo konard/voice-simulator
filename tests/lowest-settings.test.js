@@ -44,30 +44,44 @@ const oneRow = run(
 );
 oneRow.catch(() => {});
 
-describe('lowest settings', () => {
-  it('certifies memory only when both engines complete at or below the limit', () => {
-    const check = (js, rust) =>
-      judge(
-        { synthesis: { js, rust } },
-        {
-          synthesis: { memory: { peakRssMb: 256 } },
-        }
-      ).synthesis.memory.status;
-    const fits = { peakRssMb: 256 };
-    assert.equal(check(fits, fits), 'certified');
-    assert.equal(check(fits, undefined), 'unavailable');
-    assert.equal(check(fits, { engine: 'rust', error: 'failed' }), 'failed');
-    assert.equal(check(fits, { peakRssMb: 256.001 }), 'failed');
-    assert.equal(
-      check(fits, {
-        ...fits,
-        engine: 'rust',
-        capped: { crashed: 'out of memory' },
-      }),
-      'failed'
-    );
-  });
+it('certifies memory only when both engines complete at or below the limit', () => {
+  const conditions = { pinned: true, limit: null, node: 'v24.22.3' };
+  const check = (js, rust, environment = conditions) =>
+    judge(
+      { synthesis: { js, rust } },
+      {
+        synthesis: { memory: { peakRssMb: 256 } },
+      },
+      {},
+      environment
+    ).synthesis.memory.status;
+  const fits = { peakRssMb: 256, capped: { heapLimitMb: 192 } };
+  assert.equal(check(fits, fits), 'certified');
+  assert.equal(
+    check(fits, fits, { ...conditions, node: 'v26.0.0' }),
+    'unavailable'
+  );
+  assert.equal(check(fits, { ...fits, peakRssMb: 0 }), 'unavailable');
+  assert.equal(check(fits, undefined), 'unavailable');
+  assert.equal(check(fits, { peakRssMb: 256 }), 'unavailable');
+  assert.equal(check(fits, fits, { ...conditions, limit: 1 }), 'unavailable');
+  assert.equal(
+    check(fits, fits, { ...conditions, pinned: false }),
+    'unavailable'
+  );
+  assert.equal(check(fits, { engine: 'rust', error: 'failed' }), 'failed');
+  assert.equal(check(fits, { peakRssMb: 256.001 }), 'failed');
+  assert.equal(
+    check(fits, {
+      ...fits,
+      engine: 'rust',
+      capped: { crashed: 'out of memory' },
+    }),
+    'failed'
+  );
+});
 
+describe('lowest settings', () => {
   it('speaks at 8 kHz', () => {
     const { samples, sampleRate } = speak();
     assert.equal(sampleRate, 8000);
