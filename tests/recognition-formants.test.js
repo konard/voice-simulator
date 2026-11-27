@@ -25,6 +25,7 @@ import {
 import { createRandom, randomNormal } from '../src/random.js';
 import { tubeFormants } from '../src/acoustics/transfer.js';
 import { sampleState, tractShape } from '../src/articulation/tract-shape.js';
+import { trackBatchFormants } from '../src/recognition/formants.js';
 import { gridFormants, plannedFormants } from './helpers/recognition-truth.js';
 
 const TEXT =
@@ -56,6 +57,20 @@ function render(text, head, sampleRate, durations) {
   });
   return { plan, samples, head, sampleRate };
 }
+
+it('shares formant roots across growing previews without changing tracks', () => {
+  const sampleRate = 8000;
+  const { samples } = render('ama', presetHeadConfig('male'), sampleRate);
+  const analyzer = createFrameAnalyzer(sampleRate, { maxSeconds: 2 });
+  for (let at = 0; at < samples.length; at += 800) {
+    analyzer.push(samples.subarray(at, at + 800));
+    const { frames } = analyzer;
+    const options = { vocalTractLength: at ? 16.5 : null };
+    expect(trackBatchFormants(frames, options, true)).toEqual(
+      trackFormants(frames, options)
+    );
+  }
+});
 
 /** Median of the finite values of `list`. */
 function median(list) {

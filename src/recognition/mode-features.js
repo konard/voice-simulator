@@ -94,14 +94,18 @@ function analyzeWordSignal(samples, sampleRate, head, analyzed, options) {
   const pitch = measure(profile, 'Pitch', () =>
     trackPitchFrames(frames, { minF0: 35, maxF0: 800, kernels })
   );
-  const track = options.reuseFormantCandidates
-    ? trackBatchFormants
-    : trackFormants;
+  const formantOptions = {
+    pitch,
+    ...(head ? { vocalTractLength: head.vocalTractLength } : {}),
+  };
   const formants = measure(profile, 'Formants', () =>
-    track(frames, {
-      pitch,
-      ...(head ? { vocalTractLength: head.vocalTractLength } : {}),
-    })
+    options.reuseFormantCandidates
+      ? trackBatchFormants(
+          frames,
+          formantOptions,
+          options.reuseFormantCandidates === 'growing'
+        )
+      : trackFormants(frames, formantOptions)
   );
   const source = measure(profile, 'Inverse filter', () =>
     inverseModeMeasures(frames, { pitch, minF0: 35, maxF0: 800, kernels })

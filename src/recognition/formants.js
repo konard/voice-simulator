@@ -380,6 +380,24 @@ function createRootFinder(frames, settings, store) {
   };
 }
 
+function orderCandidates(indices, count, column, row) {
+  for (let i = 1; i < count; i++) {
+    const candidate = indices[i];
+    let slot = i;
+    while (slot > 0) {
+      const previous = indices[slot - 1];
+      const order =
+        column[row + candidate] - column[row + previous] ||
+        candidate - previous;
+      if (order >= 0) {
+        break;
+      }
+      indices[slot--] = previous;
+    }
+    indices[slot] = candidate;
+  }
+}
+
 /**
  * Candidates of frame t for a tract of `length` cm into `store`: those of
  * order p below 5500 * 16.5 / L Hz, then those of lower orders that lie
@@ -420,20 +438,16 @@ function selectCandidates(store, t, length, scratch) {
   }
   // Narrowest first (stable: the lower index wins a tie), then the first
   // MAX_CANDIDATES by frequency.
-  const chosen = Array.from(scratch.subarray(0, kept));
-  chosen.sort(
-    (x, y) => store.rawBandwidth[raw + x] - store.rawBandwidth[raw + y] || x - y
-  );
-  chosen.length = Math.min(chosen.length, MAX_CANDIDATES);
-  chosen.sort(
-    (x, y) => store.rawFrequency[raw + x] - store.rawFrequency[raw + y] || x - y
-  );
+  orderCandidates(scratch, kept, store.rawBandwidth, raw);
+  kept = Math.min(kept, MAX_CANDIDATES);
+  orderCandidates(scratch, kept, store.rawFrequency, raw);
   const row = t * MAX_CANDIDATES;
-  chosen.forEach((index, slot) => {
+  for (let slot = 0; slot < kept; slot++) {
+    const index = scratch[slot];
     store.frequency[row + slot] = store.rawFrequency[raw + index];
     store.bandwidth[row + slot] = store.rawBandwidth[raw + index];
-  });
-  store.count[t] = chosen.length;
+  }
+  store.count[t] = kept;
 }
 
 /** ref[k] = (2k - 1) c / (4 L), k = 1 .. K, into `out` (index k - 1). */
@@ -837,8 +851,11 @@ function createSmoother(frames, store, settings, track, rows) {
  * @param {Partial<typeof FORMANT_DEFAULTS>} [options]
  */
 export function formantCandidates(frames, options = {}) {
+  return formantCandidateReader(frames, options, frames.count).read();
+}
+
+function formantCandidateReader(frames, options, rows) {
   const settings = formantSettings(frames, options);
-  const rows = frames.count;
   const width = Math.ceil(settings.orders.reduce((sum, m) => sum + m / 2, 0));
   const store = {
     rawWidth: width,
@@ -848,15 +865,22 @@ export function formantCandidates(frames, options = {}) {
     rawCount: new Uint8Array(rows),
   };
   const finder = createRootFinder(frames, settings, store);
-  for (let t = 0; t < rows; t++) {
-    finder.find(t);
-  }
-  return {
+  let read = 0;
+  const candidates = {
     width,
     count: store.rawCount,
     frequency: store.rawFrequency,
     bandwidth: store.rawBandwidth,
     rank: store.rawRank,
+  };
+  return {
+    rows,
+    read() {
+      for (; read < frames.count; read++) {
+        finder.find(read);
+      }
+      return candidates;
+    },
   };
 }
 
@@ -867,7 +891,7 @@ export function formantCandidates(frames, options = {}) {
 function createTracker(frames, options, batch, candidates) {
   const settings = formantSettings(frames, options);
   const { keep, lag, formants: K } = settings;
-  const rows = frames.capacity;
+  const rows = batch ? frames.count : frames.capacity;
   const rawWidth = settings.orders.reduce((sum, m) => sum + m / 2, 0);
   const store = {
     rawWidth: Math.ceil(rawWidth),
@@ -1045,20 +1069,22 @@ export function trackFormants(frames, options = {}) {
 
 const batchCandidates = new WeakMap();
 
-/** Share roots across consumers of the same completed batch frame set. */
-export function trackBatchFormants(frames, options) {
+/** Share roots across consumers of the same frame set. Live callers keep
+ * their existing frames and append stable reflection coefficients. */
+export function trackBatchFormants(frames, options, growing = false) {
   if (options.maxBandwidth !== undefined) {
     return trackFormants(frames, options);
   }
-  if (!batchCandidates.has(frames)) {
-    batchCandidates.set(frames, formantCandidates(frames));
+  let reader = batchCandidates.get(frames);
+  if (!reader || frames.count > reader.rows) {
+    reader = formantCandidateReader(
+      frames,
+      {},
+      growing ? frames.capacity : frames.count
+    );
+    batchCandidates.set(frames, reader);
   }
-  const tracker = createTracker(
-    frames,
-    options,
-    true,
-    batchCandidates.get(frames)
-  );
+  const tracker = createTracker(frames, options, true, reader.read());
   tracker.advance(true);
   return tracker.track;
 }

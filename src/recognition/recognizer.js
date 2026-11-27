@@ -440,7 +440,10 @@ export function recognizeDecoded(
               kernels: settings.kernels,
               frames: decoded.frames?.speech ? decoded.frames : undefined,
               wordFrames: decoded.modeFrames,
-              reuseFormantCandidates: final === 'batch' || final === 'parallel',
+              reuseFormantCandidates:
+                final === false && !settings.stages.audioToIpa
+                  ? 'growing'
+                  : final === 'batch' || final === 'parallel',
             }
           )
         )
