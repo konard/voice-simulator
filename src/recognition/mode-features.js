@@ -5,13 +5,12 @@ import { trackPitch } from './pitch.js';
 import { trackBatchFormants, trackFormants } from './formants.js';
 import { inverseFilter } from './inverse-filter.js';
 import {
-  alphaRatio,
-  energyRatio,
   glottalPeriods,
   MAX_PERIOD_FACTOR,
+  vowelBandRatios,
 } from '../analysis/mode-features.js';
 import { parseIpa } from '../ipa/parse.js';
-import { planUtterance } from '../articulation/plan.js';
+import { planUtteranceTiming } from '../articulation/plan.js';
 import { semitones } from './mode-rules.js';
 
 export function quantile(values, fraction = 0.5) {
@@ -45,11 +44,11 @@ function nuclei(word, phones, head) {
       )
       .map((p) => ({ ...p, vowel: p.ipa ?? p.symbol }));
   }
-  const plan = planUtterance(word.ipa, {
+  const segments = planUtteranceTiming(word.ipa, {
     head,
     language: word.language ?? word.lang,
   });
-  const speech = plan.segments.filter((s) => s.kind !== 'pause');
+  const speech = segments.filter((s) => s.kind !== 'pause');
   if (!speech.length) {
     return [];
   }
@@ -62,6 +61,23 @@ function nuclei(word, phones, head) {
       end: word.start + (s.end - start) * scale,
       vowel: s.token.symbol,
     }));
+}
+
+function vowelSamples(samples, vowels, rate) {
+  const intervals = vowels.map((v) =>
+    samples.subarray(
+      Math.round((v.start + (v.end - v.start) * 0.25) * rate),
+      Math.round((v.end - (v.end - v.start) * 0.25) * rate)
+    )
+  );
+  const length = intervals.reduce((n, part) => n + part.length, 0);
+  const signal = new Float32Array(length);
+  let offset = 0;
+  for (const interval of intervals) {
+    signal.set(interval, offset);
+    offset += interval.length;
+  }
+  return signal;
 }
 
 function analyzeWordSignal(samples, sampleRate, head, analyzed, options) {
@@ -188,24 +204,14 @@ export function measureWords(
     const trackedPitch = quantile(
       f0.length ? f0 : quantile(values('hnr')) > 10 ? rawF0 : []
     );
-    const vowelSignal = Float32Array.from(
-      vowels.flatMap((v) =>
-        Array.from(
-          samples.subarray(
-            Math.round((v.start + (v.end - v.start) * 0.25) * sampleRate),
-            Math.round((v.end - (v.end - v.start) * 0.25) * sampleRate)
-          )
-        )
-      )
-    );
+    const vowelSignal = vowelSamples(samples, vowels, sampleRate);
     return {
       start: word.start,
       end: word.end,
       vowels: vowels.length,
       f1Vowels,
       f1: null,
-      alpha: alphaRatio(vowelSignal, sampleRate),
-      energyRatio: energyRatio(vowelSignal, sampleRate),
+      ...vowelBandRatios(vowelSignal, sampleRate),
       pitch: pulsePitch > 0 && pulsePitch < 90 ? pulsePitch : trackedPitch,
       pitches: f0,
       pitchSpan: semitones(quantile(f0, 0.95), quantile(f0, 0.05)),

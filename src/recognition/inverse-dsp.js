@@ -20,8 +20,8 @@ export function block(x, centre, length) {
 }
 
 /** Zero-phase first-order 50 Hz high-pass, with zero boundary states. */
-export function highPass(x, rate) {
-  const y = Float64Array.from(x);
+export function highPass(x, rate, y = new Float64Array(x.length)) {
+  y.set(x);
   const r = 1 - (2 * Math.PI * 50) / rate;
   for (const direction of [1, -1]) {
     let previous = 0;

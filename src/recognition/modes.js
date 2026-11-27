@@ -417,12 +417,7 @@ export function recognizeModes(samples, sampleRate, result, options = {}) {
   let spans = reference
     ? effortRamps(result.words, labels, initialSpans)
     : initialSpans;
-  const references = reference
-    ? [
-        ...emotionReferences(reference, options.trace),
-        ...physicalReferences(reference),
-      ]
-    : [];
+  let references;
   for (const group of groups) {
     const heard = features.slice(group.from, group.to);
     const summary = phraseSummary(
@@ -436,12 +431,17 @@ export function recognizeModes(samples, sampleRate, result, options = {}) {
       Math.abs(summary.pitchSpan - base.pitchSpan) < 1 &&
       summary.rate / base.rate > 0.8 &&
       summary.rate / base.rate < 1.2;
-    const found = classifyEmotion(
-      vector,
-      heard.reduce((n, w) => n + w.vowels, 0) >= 3 && !simpleEffort
-        ? references
-        : []
-    );
+    const useReferences =
+      reference &&
+      !simpleEffort &&
+      heard.reduce((n, w) => n + w.vowels, 0) >= 3;
+    if (useReferences) {
+      references ??= [
+        ...emotionReferences(reference, options.trace),
+        ...physicalReferences(reference),
+      ];
+    }
+    const found = classifyEmotion(vector, useReferences ? references : []);
     if (found) {
       const span = {
         ...group,

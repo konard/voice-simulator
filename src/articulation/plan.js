@@ -1380,13 +1380,12 @@ function planArticulation(
   return channels;
 }
 
-function makePlan(ipa, options, config, recognitionTemplate, sampledChannels) {
+function timedSegments(ipa, options, config) {
   const parsed = typeof ipa === 'string' ? parseIpa(ipa) : null;
   const tokens = parsed ? parsed.tokens : ipa;
   assignTokenModes(tokens, options.modes ?? parsed?.modes ?? []);
   realiseEmotions(tokens);
   const { head, table, tunes } = config;
-  const frameRate = options.frameRate ?? CONTROL_RATE;
   const segments = buildSegments(tokens, {
     rate: head.speechRate,
     language: options.language,
@@ -1402,6 +1401,18 @@ function makePlan(ipa, options, config, recognitionTemplate, sampledChannels) {
   if (options.durations) {
     applyDurations(segments, tokens, options.durations);
   }
+  return { tokens, segments };
+}
+
+/** The timed articulation segments, without planning frame-rate channels. */
+export function planUtteranceTiming(ipa, options = {}) {
+  return timedSegments(ipa, options, accentedHead(options)).segments;
+}
+
+function makePlan(ipa, options, config, recognitionTemplate, sampledChannels) {
+  const { head, tunes } = config;
+  const { tokens, segments } = timedSegments(ipa, options, config);
+  const frameRate = options.frameRate ?? CONTROL_RATE;
   const duration = segments.at(-1).end;
   const frameCount = Math.ceil(duration * frameRate) + 1;
   const modes = planModes(segments);

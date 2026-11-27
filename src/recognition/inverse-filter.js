@@ -67,7 +67,8 @@ function lfModels() {
 }
 function fitPulse(h) {
   const mean = h.reduce((a, b) => a + b, 0) / h.length;
-  let best = { fit: Infinity };
+  let best;
+  let fit = Infinity;
   for (const model of lfModels()) {
     let m = 0;
     for (let k = 0; k < h.length; k++) {
@@ -78,11 +79,12 @@ function fitPulse(h) {
       error += (h[k] - mean - (model.levels[k] - m)) ** 2;
     }
     error = Math.sqrt(error / h.length);
-    if (error < best.fit) {
-      best = { ...model, fit: error };
+    if (error < fit) {
+      fit = error;
+      best = model;
     }
   }
-  return best;
+  return { rd: best?.rd, oq: best?.oq, fit };
 }
 function localPitch(frames, o) {
   const f0 = new Float32Array(frames.count);
@@ -127,18 +129,39 @@ function localPitch(frames, o) {
     return values[Math.floor(values.length / 2)];
   });
 }
+let inverseScratch;
+
 function recover(frames, f0, o) {
-  const x = highPass(
-    frames.samples.subarray(0, frames.sampleCount),
-    frames.rate
-  );
-  const d = new Float64Array(x.length);
-  const g = new Float64Array(x.length);
-  const weight = new Float64Array(x.length);
+  const n = frames.sampleCount;
+  const cacheLimit = 8 * 16000;
+  if (n > cacheLimit) {
+    return recoverWith(frames, f0, o, new Float64Array(n * 4));
+  }
+  const scratch =
+    inverseScratch?.length >= n * 4
+      ? inverseScratch
+      : new Float64Array(4 * Math.min(cacheLimit, Math.max(1024, n * 2)));
+  // A trace can call inverseFilter again while this workspace is in use.
+  inverseScratch = undefined;
+  try {
+    return recoverWith(frames, f0, o, scratch);
+  } finally {
+    if (!inverseScratch || inverseScratch.length < scratch.length) {
+      inverseScratch = scratch;
+    }
+  }
+}
+
+function recoverWith(frames, f0, o, scratch) {
+  const n = frames.sampleCount;
+  const x = highPass(frames.samples, frames.rate, scratch.subarray(0, n));
+  const d = scratch.subarray(n, 2 * n).fill(0);
+  const g = scratch.subarray(2 * n, 3 * n).fill(0);
+  const weight = scratch.subarray(3 * n, 4 * n).fill(0);
   const windows = new Map();
   const history = Math.round(0.05 * frames.rate);
   const iaif = iaifPlan(o.tractOrder, o.glottisOrder, o.leak);
-  let scratch = new Float64Array(0);
+  let buffer = new Float64Array(0);
   for (let time = 0; time < x.length / frames.rate; time += o.step) {
     const row = Math.min(f0.length - 1, Math.round(time / frames.hop));
     if (!(f0[row] > 0)) {
@@ -153,10 +176,10 @@ function recover(frames, f0, o) {
     }
     const window = windows.get(length);
     const start = centre - Math.floor(length / 2);
-    if (window.length > scratch.length) {
-      scratch = new Float64Array(Math.max(window.length, scratch.length * 2));
+    if (window.length > buffer.length) {
+      buffer = new Float64Array(Math.max(window.length, buffer.length * 2));
     }
-    const extended = scratch.subarray(0, window.length);
+    const extended = buffer.subarray(0, window.length);
     for (let n = 0; n < extended.length; n++) {
       extended[n] = x[start - history + n] ?? 0;
     }

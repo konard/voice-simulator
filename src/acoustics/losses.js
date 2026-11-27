@@ -157,12 +157,16 @@ function designGrid(rate) {
  * zero (Lawson's iteratively reweighted least squares).
  */
 function fitShelf(a, grid, rate) {
-  const rows = grid.map((frequency) => {
+  const x = new Float64Array(grid.length);
+  const y = new Float64Array(grid.length);
+  const weights = new Float64Array(grid.length).fill(1 / grid.length);
+  for (let index = 0; index < grid.length; index++) {
+    const frequency = grid[index];
     const c = Math.cos((2 * Math.PI * frequency) / rate);
     const s = Math.sqrt(frequency);
-    return [1 / s, (a + c) / (1 + a * a + 2 * a * c) / s];
-  });
-  const weights = rows.map(() => 1 / rows.length);
+    x[index] = 1 / s;
+    y[index] = (a + c) / (1 + a * a + 2 * a * c) / s;
+  }
   let best = { error: Infinity };
   for (let iteration = 0; iteration < 40; iteration++) {
     let s11 = 0;
@@ -170,32 +174,36 @@ function fitShelf(a, grid, rate) {
     let s22 = 0;
     let t1 = 0;
     let t2 = 0;
-    rows.forEach(([x, y], index) => {
+    for (let index = 0; index < grid.length; index++) {
       const w = weights[index];
-      s11 += w * x * x;
-      s12 += w * x * y;
-      s22 += w * y * y;
-      t1 += w * x;
-      t2 += w * y;
-    });
+      const gx = x[index];
+      const gy = y[index];
+      s11 += w * gx * gx;
+      s12 += w * gx * gy;
+      s22 += w * gy * gy;
+      t1 += w * gx;
+      t2 += w * gy;
+    }
     const det = s11 * s22 - s12 * s12;
     const C = (t1 * s22 - t2 * s12) / det;
     const D = (s11 * t2 - s12 * t1) / det;
     let error = 0;
     let total = 0;
-    rows.forEach(([x, y], index) => {
-      const residual = Math.abs(C * x + D * y - 1);
+    for (let index = 0; index < grid.length; index++) {
+      const residual = Math.abs(C * x[index] + D * y[index] - 1);
       error = Math.max(error, residual);
       weights[index] *= residual;
       total += weights[index];
-    });
+    }
     if (error < best.error) {
       best = { a, C, D, error };
     }
     if (!(total > 0)) {
       break;
     }
-    weights.forEach((_, index) => (weights[index] /= total));
+    for (let index = 0; index < grid.length; index++) {
+      weights[index] /= total;
+    }
   }
   return best;
 }

@@ -123,9 +123,21 @@ function bandPower({ power, binWidth }, low, high) {
  */
 export function alphaRatio(samples, sampleRate, from, to) {
   const spectrum = averageSpectrum(samples, sampleRate, from, to);
-  const high = bandPower(spectrum, 1000, Math.min(5000, sampleRate / 2));
+  return ratio(spectrum, 1000, Math.min(5000, sampleRate / 2));
+}
+
+function ratio(spectrum, from, to) {
+  const high = bandPower(spectrum, from, to);
   const low = bandPower(spectrum, 50, 1000);
   return 10 * Math.log10(Math.max(FLOOR, high) / Math.max(FLOOR, low));
+}
+
+export function vowelBandRatios(samples, sampleRate) {
+  const spectrum = averageSpectrum(samples, sampleRate);
+  return {
+    alpha: ratio(spectrum, 1000, Math.min(5000, sampleRate / 2)),
+    energyRatio: ratio(spectrum, 2500, sampleRate / 2 + spectrum.binWidth),
+  };
 }
 
 /**
@@ -191,9 +203,7 @@ export function voicedShare(samples, sampleRate) {
  */
 export function energyRatio(samples, sampleRate, from, to) {
   const spectrum = averageSpectrum(samples, sampleRate, from, to);
-  const high = bandPower(spectrum, 2500, sampleRate / 2 + spectrum.binWidth);
-  const low = bandPower(spectrum, 50, 1000);
-  return 10 * Math.log10(Math.max(FLOOR, high) / Math.max(FLOOR, low));
+  return ratio(spectrum, 2500, sampleRate / 2 + spectrum.binWidth);
 }
 
 /**
@@ -240,7 +250,7 @@ export const PHONATION_ANALYSIS = Object.freeze({
 function analysisSignal(samples, sampleRate) {
   return sampleRate > PHONATION_ANALYSIS.rate * 1.5
     ? decimate(samples, sampleRate, PHONATION_ANALYSIS.rate)
-    : { samples: Float64Array.from(samples), sampleRate };
+    : { samples, sampleRate };
 }
 
 /** Value at `fraction` of the sorted values (0 for none). */
@@ -260,10 +270,9 @@ function quantile(values, fraction) {
  * percentile) and low (at least `lowShare` of the power below 1 kHz, a
  * second-order low-pass). Frication and silence are not.
  */
-function voicedFrames(signal, rate) {
+function voicedFrames(signal, rate, low = new Float64Array(signal.length)) {
   const hop = Math.round(PHONATION_ANALYSIS.hop * rate);
   const pole = Math.exp((-2 * Math.PI * 1000) / rate);
-  const low = new Float64Array(signal.length);
   let first = 0;
   let second = 0;
   for (let index = 0; index < signal.length; index++) {
@@ -307,9 +316,10 @@ function hann(size) {
 }
 
 /** CPP (dB) of the frame of `length` samples from `start`. */
-function frameCpp(signal, start, length, rate, window, size) {
-  const re = new Float64Array(size);
-  const im = new Float64Array(size);
+function frameCpp(signal, start, length, rate, { window, re, im }) {
+  const size = re.length;
+  re.fill(0);
+  im.fill(0);
   for (let index = 0; index < length; index++) {
     re[index] = (signal[start + index] ?? 0) * window[index];
   }
@@ -369,12 +379,16 @@ export function cpp(samples, sampleRate) {
   const hop = Math.round(PHONATION_ANALYSIS.hop * rate);
   const length = Math.round(PHONATION_ANALYSIS.window * rate);
   const size = nextPowerOfTwo(length);
-  const window = hann(length);
+  const workspace = {
+    window: hann(length),
+    re: new Float64Array(size),
+    im: new Float64Array(size),
+  };
   const values = [];
   voiced.forEach((isVoiced, frame) => {
     const start = Math.round(frame * hop + hop / 2 - length / 2);
     if (isVoiced && start >= 0 && start + length <= signal.length) {
-      values.push(frameCpp(signal, start, length, rate, window, size));
+      values.push(frameCpp(signal, start, length, rate, workspace));
     }
   });
   values.sort((a, b) => a - b);
@@ -386,33 +400,58 @@ export function cpp(samples, sampleRate) {
  * Hann frames of the pre-emphasised signal every 10 ms, each inverse
  * filtering its 10 ms. Its peaks mark the glottal closures.
  */
-function residual(signal, rate) {
-  const emphasised = new Float64Array(signal.length);
+function residual(signal, rate, emphasised, output) {
+  let previous = 0;
   for (let index = 0; index < signal.length; index++) {
-    emphasised[index] = signal[index] - 0.97 * (signal[index - 1] ?? 0);
+    const sample = signal[index];
+    emphasised[index] = sample - 0.97 * previous;
+    previous = sample ?? 0;
   }
   const order = Math.round(rate / 1000) + 2;
   const hop = Math.round(PHONATION_ANALYSIS.hop * rate);
   const length = 3 * hop;
   const window = hann(length);
   const frame = new Float64Array(length);
-  const output = new Float64Array(signal.length);
+  const lpc = {
+    correlation: new Float64Array(order + 1),
+    predictor: new Float64Array(order + 1),
+  };
   for (let start = 0; start < signal.length; start += hop) {
     const from = start + hop / 2 - length / 2;
-    for (let index = 0; index < length; index++) {
-      frame[index] = (emphasised[from + index] ?? 0) * window[index];
+    const left = Math.max(0, -from);
+    const right = Math.min(length, signal.length - from);
+    frame.fill(0, 0, left);
+    frame.fill(0, right);
+    for (let index = left; index < right; index++) {
+      frame[index] = emphasised[from + index] * window[index];
     }
-    const a = lpcCoefficients(frame, order);
+    const a = lpcCoefficients(frame, order, lpc);
     const end = Math.min(signal.length, start + hop);
     for (let index = start; index < end; index++) {
       let sum = 0;
-      for (let k = 0; k <= order; k++) {
-        sum += a[k] * (emphasised[index - k] ?? 0);
+      const last = Math.min(order, index);
+      for (let k = 0; k <= last; k++) {
+        sum += a[k] * emphasised[index - k];
       }
       output[index] = sum;
     }
   }
-  return output;
+}
+
+let pulseScratch = [];
+
+function pulseBuffers(length) {
+  // Reuse short working signals across streaming snapshots. Long inputs
+  // have their own buffers so the cache cannot retain their high-water mark.
+  const cacheLimit = 8 * PHONATION_ANALYSIS.rate;
+  if (length > cacheLimit) {
+    return Array.from({ length: 2 }, () => new Float64Array(length));
+  }
+  if ((pulseScratch[0]?.length ?? 0) < length || !pulseScratch.length) {
+    const size = Math.min(cacheLimit, Math.max(1024, 2 * length));
+    pulseScratch = Array.from({ length: 2 }, () => new Float64Array(size));
+  }
+  return pulseScratch.map((buffer) => buffer.subarray(0, length));
 }
 
 /**
@@ -424,26 +463,37 @@ function residual(signal, rate) {
  * @returns {number[][]} sample indices of the pulses of each train
  */
 function pulseCandidates(signal, rate) {
-  const voiced = voicedFrames(signal, rate);
+  const [energy, error] = ArrayBuffer.isView(signal)
+    ? pulseBuffers(signal.length)
+    : [new Float64Array(signal.length), new Float64Array(signal.length)];
+  const voiced = voicedFrames(signal, rate, energy);
   const hop = Math.round(PHONATION_ANALYSIS.hop * rate);
-  const energy = residualEnergy(signal, rate);
+  residualEnergy(signal, rate, energy, error);
   const near = Math.round(PHONATION_ANALYSIS.minPeriod * rate);
   const far = Math.round(PHONATION_ANALYSIS.maxPeriod * rate);
   const trains = [];
-  let train = [];
+  let train = null;
   const close = () => {
-    if (train.length > 1) {
+    if (train?.length > 1) {
       trains.push(train);
     }
-    train = [];
+    train = null;
   };
-  for (let index = 1; index < signal.length - 1; index++) {
-    if (!voiced[Math.floor(index / hop)]) {
+  for (let frame = 0; frame < voiced.length; frame++) {
+    if (!voiced[frame]) {
       close();
-    } else if (isPulse(energy, index, near, far)) {
-      if (train.length > 0 && index - train.at(-1) > far) {
+      continue;
+    }
+    const start = Math.max(1, frame * hop);
+    const end = Math.min(signal.length - 1, (frame + 1) * hop);
+    for (let index = start; index < end; index++) {
+      if (!isPulse(energy, index, near, far)) {
+        continue;
+      }
+      if (train && index - train[train.length - 1] > far) {
         close();
       }
+      train ??= [];
       train.push(index);
     }
   }
@@ -452,19 +502,19 @@ function pulseCandidates(signal, rate) {
 }
 
 /** Energy of the LPC residual, smoothed over 0.5 ms. */
-function residualEnergy(signal, rate) {
-  const error = residual(signal, rate);
+function residualEnergy(signal, rate, energy, error) {
+  residual(signal, rate, energy, error);
   const smooth = Math.max(1, Math.round(0.00025 * rate));
-  const energy = new Float64Array(signal.length);
   for (let index = 0; index < signal.length; index++) {
     let sum = 0;
-    for (let k = -smooth; k <= smooth; k++) {
-      const value = error[index + k] ?? 0;
+    const start = Math.max(0, index - smooth);
+    const end = Math.min(signal.length - 1, index + smooth);
+    for (let k = start; k <= end; k++) {
+      const value = error[k];
       sum += value * value;
     }
     energy[index] = sum;
   }
-  return energy;
 }
 
 /**
@@ -477,9 +527,13 @@ function isPulse(energy, index, near, far) {
     return false;
   }
   let loudest = 0;
-  for (let k = index - far; k <= index + far; k++) {
-    const other = energy[k] ?? 0;
-    if (Math.abs(k - index) <= near && other > value) {
+  const start = Math.max(0, index - far);
+  const end = Math.min(energy.length - 1, index + far);
+  const nearStart = index - near;
+  const nearEnd = index + near;
+  for (let k = start; k <= end; k++) {
+    const other = energy[k];
+    if (other > value && k >= nearStart && k <= nearEnd) {
       return false;
     }
     loudest = Math.max(loudest, other);

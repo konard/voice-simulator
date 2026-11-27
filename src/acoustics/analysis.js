@@ -11,8 +11,8 @@ import { Biquad } from './filters.js';
  * @param {number} order
  * @returns {Float64Array} a[0..order] with a[0] = 1.
  */
-export function lpcCoefficients(frame, order) {
-  const r = new Float64Array(order + 1);
+export function lpcCoefficients(frame, order, scratch) {
+  const r = scratch?.correlation ?? new Float64Array(order + 1);
   for (let lag = 0; lag <= order; lag++) {
     let sum = 0;
     for (let index = lag; index < frame.length; index++) {
@@ -21,7 +21,7 @@ export function lpcCoefficients(frame, order) {
     r[lag] = sum;
   }
   r[0] *= 1 + 1e-9;
-  const a = new Float64Array(order + 1);
+  const a = scratch?.predictor ?? new Float64Array(order + 1);
   a[0] = 1;
   let error = r[0] || 1e-12;
   for (let i = 1; i <= order; i++) {
@@ -30,9 +30,11 @@ export function lpcCoefficients(frame, order) {
       acc += a[j] * r[i - j];
     }
     const k = -acc / error;
-    const previous = Float64Array.from(a);
-    for (let j = 1; j < i; j++) {
-      a[j] = previous[j] + k * previous[i - j];
+    for (let j = 1; j <= i / 2; j++) {
+      const left = a[j];
+      const right = a[i - j];
+      a[j] = left + k * right;
+      a[i - j] = right + k * left;
     }
     a[i] = k;
     error *= 1 - k * k;
