@@ -21,7 +21,7 @@ import {
 } from '../src/index.js';
 import { createRandom, randomNormal } from '../src/random.js';
 import { analyzeFrameHops } from '../src/recognition/frontend.js';
-import { trackPitchHops } from '../src/recognition/pitch.js';
+import { trackPitchFrames, trackPitchHops } from '../src/recognition/pitch.js';
 import {
   highPass,
   maskedPair,
@@ -43,6 +43,29 @@ it('shares pitch candidates without changing either hop’s pitch path', () => {
   const { pitch, fitPitch } = trackPitchHops(frames);
   expect(fitPitch).toEqual(trackPitch(frames.fine));
   expect(pitch).toEqual(trackPitch(frames.coarse));
+});
+
+it('reuses batch pitch scratch across frame counts and candidate widths', () => {
+  const sampleRate = 8000;
+  const samples = renderPlan(planUtterance('ama'), { sampleRate, seed: 1 });
+  const whole = analyzeFrames(samples, sampleRate);
+  const short = analyzeFrames(samples.subarray(1000, 1600), sampleRate);
+  let retained;
+  for (const [frames, candidates] of [
+    [whole, 1],
+    [short, 9],
+    [whole, 4],
+    [short, 1],
+  ]) {
+    const options = { candidates };
+    const expected = trackPitch(frames, options);
+    const actual = trackPitchFrames(frames, options);
+    for (const name of ['f0', 'voicing', 'strength']) {
+      expect(actual[name]).toEqual(expected[name].subarray(0, frames.count));
+    }
+    retained ??= { track: actual, original: actual.f0.slice() };
+  }
+  expect(retained.track.f0).toEqual(retained.original);
 });
 
 /** The sentence for `preset` at `sampleRate` (waveguide, seed 1), cached. */

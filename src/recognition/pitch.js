@@ -256,8 +256,7 @@ function parabola(a, b, c, peak) {
 }
 
 /** Empty track of `capacity` rows. */
-function createTrack(frames, settings) {
-  const rows = frames.capacity;
+function createTrack(frames, settings, rows) {
   return {
     hop: settings.hop,
     startTime: frames.startTime,
@@ -870,11 +869,10 @@ function createDistribution(capacity) {
  * `step(t)` adds frame t; `trace(path, first)` writes the best path to the
  * newest frame into `path` from that frame back to `first`.
  */
-function createViterbi(store, settings, rows) {
+function createViterbi(store, settings, back) {
   const capacity = settings.candidates;
   const states = capacity + 1;
   const { voicedUnvoicedCost, octaveJumpCost } = settings;
-  const back = new Int8Array(rows * states);
   let previous = new Float64Array(states);
   let current = new Float64Array(states);
   let newest = -1;
@@ -1010,28 +1008,49 @@ export function createPitchTracker(frames, options = {}) {
   return pitchTracker(frames, options);
 }
 
-function pitchTracker(frames, options, shared, summarize = true) {
+function pitchScratch(rows, capacity, workspace) {
+  const cells = rows * capacity;
+  const traces = rows * (capacity + 1);
+  const prior = workspace?.scratch;
+  if (
+    prior?.path.length >= rows &&
+    prior.store.height.length >= cells &&
+    prior.back.length >= traces
+  ) {
+    return prior;
+  }
+  const scratch = {
+    store: {
+      frequency: new Float32Array(cells),
+      height: new Float32Array(cells),
+      strength: new Float32Array(cells),
+      count: new Uint8Array(rows),
+      unvoiced: new Float32Array(rows),
+    },
+    path: new Int8Array(rows),
+    back: new Int8Array(traces),
+  };
+  if (workspace) {
+    workspace.scratch = scratch;
+  }
+  return scratch;
+}
+
+function pitchTracker(frames, options, shared, workspace) {
   const settings = pitchSettings(frames, options);
   const { hop, hopSamples, lag } = settings;
   const capacity = settings.candidates;
-  const rows = frames.capacity;
-  const store = {
-    frequency: new Float32Array(rows * capacity),
-    height: new Float32Array(rows * capacity),
-    strength: new Float32Array(rows * capacity),
-    count: new Uint8Array(rows),
-    unvoiced: new Float32Array(rows),
-  };
+  const rows = workspace ? frames.count : frames.capacity;
+  const { store, path, back } = pitchScratch(rows, capacity, workspace);
   if (shared && !shared.source) {
     store.largest = new Float64Array(rows);
     shared.save = store;
   }
-  const path = new Int8Array(rows);
-  const viterbi = createViterbi(store, settings, rows);
+  const viterbi = createViterbi(store, settings, back);
   const finder = createCandidateFinder(frames, settings, store, shared);
-  const track = createTrack(frames, settings);
-  const marker = summarize ? createMarker(frames, track, settings) : null;
-  const distribution = summarize ? createDistribution(rows) : null;
+  const track = createTrack(frames, settings, rows);
+  const marker = workspace ? null : createMarker(frames, track, settings);
+  const distribution = workspace ? null : createDistribution(rows);
   const offset = Math.round(frames.startTime / settings.hop);
   const base = Math.round(offset * hopSamples);
   const centre = (t) => Math.round((offset + t) * hopSamples) - base;
@@ -1122,11 +1141,22 @@ export function trackPitch(frames, options = {}) {
   return tracker.track;
 }
 
+let batchPitchWorkspace;
+
 /** Frame-level pitch for mode features, which measure their own pulse trains. */
 export function trackPitchFrames(frames, options) {
-  const tracker = pitchTracker(frames, options, undefined, false);
-  tracker.advance(true);
-  return tracker.track;
+  const workspace = batchPitchWorkspace ?? {};
+  batchPitchWorkspace = undefined;
+  try {
+    const tracker = pitchTracker(frames, options, undefined, workspace);
+    tracker.advance(true);
+    return tracker.track;
+  } finally {
+    // Retain scratch for typical clips. Output columns have their own storage.
+    if (workspace.scratch?.back.length <= 65536) {
+      batchPitchWorkspace = workspace;
+    }
+  }
 }
 
 /** Score shared 5 ms and 10 ms windows once, then solve their paths independently. */
