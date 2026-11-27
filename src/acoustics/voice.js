@@ -14,6 +14,7 @@
  */
 
 import {
+  createTractWorkspace,
   sampleState,
   tractShape,
   noseShape,
@@ -214,9 +215,9 @@ export function noseSections(head, sections) {
  * @param {object} head Normalized head.
  * @param {{sections: number, teeth: boolean, vowelCorrections?: object}} options
  */
-export function blockShape(plan, time, state, head, options) {
+export function blockShape(plan, time, state, head, options, workspace) {
   sampleState(plan, time, state);
-  return tractShape(state, head, options);
+  return tractShape(state, head, options, workspace);
 }
 
 /** Marks an internal plan whose tract can be computed once per renderer. */
@@ -363,6 +364,8 @@ export class OutputStage {
 }
 
 export class VoiceRenderer {
+  #tract = createTractWorkspace();
+
   /**
    * @param {object} plan Result of planUtterance.
    * `microphone` ({distance, azimuth, elevation, compensate}, cm and
@@ -564,11 +567,18 @@ export class VoiceRenderer {
   }
 
   #updateShape(configure) {
-    this.shape = blockShape(this.plan, this.time, this.state, this.head, {
-      sections: this.sections,
-      teeth: this.teeth,
-      vowelCorrections: this.vowelCorrections,
-    });
+    this.shape = blockShape(
+      this.plan,
+      this.time,
+      this.state,
+      this.head,
+      {
+        sections: this.sections,
+        teeth: this.teeth,
+        vowelCorrections: this.vowelCorrections,
+      },
+      this.#tract
+    );
     this.solver.setShape(
       this.shape.areas,
       this.shape.velumArea,

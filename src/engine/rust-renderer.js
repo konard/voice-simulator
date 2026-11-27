@@ -16,7 +16,10 @@ import { buildSheet, sheetColumn } from '../acoustics/sheet-model.js';
 import { sideBranches } from '../acoustics/sinuses.js';
 import { hashSeed } from '../random.js';
 import { normalizeHeadConfig } from '../head-config.js';
-import { noseShape } from '../articulation/tract-shape.js';
+import {
+  createTractWorkspace,
+  noseShape,
+} from '../articulation/tract-shape.js';
 import {
   blockShape,
   DEFAULT_SOURCE,
@@ -342,6 +345,8 @@ function packedGeometry(head, options, solver, packModel) {
  * shapes. Needs no engine, so a job can be written for the CLI.
  */
 export class FramePlanner {
+  #tract = createTractWorkspace();
+
   /**
    * @param {object} plan Result of planUtterance.
    * @param {object} [options] as for RustVoiceRenderer
@@ -443,7 +448,8 @@ export class FramePlanner {
             this.time,
             this.state,
             this.head,
-            this.shapeOptions
+            this.shapeOptions,
+            this.#tract
           );
         if (this.plan[STEADY_TRACT]) {
           this.steadyShape = shape;

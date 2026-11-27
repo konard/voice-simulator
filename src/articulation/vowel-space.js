@@ -199,13 +199,12 @@ export function fitInterpolator(centers, values) {
     values.map((samples) => [...samples, 0, 0, 0, 0])
   );
   const kernel = new Float64Array(size);
-  return (at) => {
+  return (at, result = new Array(weights.length)) => {
     for (let i = 0; i < count; i++) {
       kernel[i] = distance(centers[i], at);
     }
     kernel[count] = 1;
     kernel.set(at, count + 1);
-    const result = new Array(weights.length);
     for (let i = 0; i < weights.length; i++) {
       const row = weights[i];
       let sum = 0;
@@ -319,16 +318,23 @@ function getInterpolator(corrections) {
  */
 export function vowelShape(
   { height, backness, rounded },
-  corrections = VOWEL_CORRECTIONS
+  corrections = VOWEL_CORRECTIONS,
+  workspace
 ) {
   const rounding = Number(rounded);
   // The measured set has rounding only on back vowels, so front and central
   // rounded vowels start from the unrounded shape and get rounded lips.
   const measuredRounding = backness >= 0.6 ? rounding : 0;
-  const values = getInterpolator(corrections)(
-    point([height, backness, measuredRounding])
-  );
-  const areas = new Float64Array(VOWEL_SECTIONS);
+  const at = workspace?.point ?? [0, 0, 0];
+  at[0] = height;
+  at[1] = backness;
+  at[2] = measuredRounding * ROUNDING_WEIGHT;
+  const values = getInterpolator(corrections)(at, workspace?.values);
+  const shape = workspace?.shape ?? {
+    areas: new Float64Array(VOWEL_SECTIONS),
+    length: 0,
+  };
+  const { areas } = shape;
   for (let index = 0; index < VOWEL_SECTIONS; index++) {
     const root = Math.max(0.25, values[index]);
     areas[index] = root * root;
@@ -337,11 +343,9 @@ export function vowelShape(
   if (extraRounding > 0) {
     narrowLips(areas, extraRounding);
   }
-  return {
-    areas,
-    length:
-      values[VOWEL_SECTIONS] + (extraRounding > 0 ? 1.1 * extraRounding : 0),
-  };
+  shape.length =
+    values[VOWEL_SECTIONS] + (extraRounding > 0 ? 1.1 * extraRounding : 0);
+  return shape;
 }
 
 const LIP_ROUNDING = [0.85, 0.65, 0.45, 0.32, 0.25];

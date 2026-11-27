@@ -52,6 +52,18 @@ const MIN_STRETCH = 0.3;
 /** Smaller changes of length (cm) leave the sections as they are. */
 const MIN_LENGTH_CHANGE = 1e-5;
 
+/** Intermediate shapes owned by one renderer. Published shapes own their areas. */
+export function createTractWorkspace() {
+  return {
+    full: { ...CHANNEL_DEFAULTS, time: 0 },
+    vowel: {
+      point: new Float64Array(3),
+      values: new Float64Array(VOWEL_SECTIONS + 1),
+      shape: { areas: new Float64Array(VOWEL_SECTIONS), length: 0 },
+    },
+  };
+}
+
 /** Nasal cavity cross-sections (cm²) from velum to nostrils. */
 const NOSE_PROFILE = Array.from({ length: NOSE_SECTIONS }, (_, index) => {
   const x = index / (NOSE_SECTIONS - 1);
@@ -136,14 +148,15 @@ function tongueArea(state) {
  *   tongue and the lips still reach their constrictions, as they do when a
  *   bite block holds the jaw, so the factor comes before them.
  */
-export function referenceShape(state, corrections, jaw) {
+export function referenceShape(state, corrections, jaw, workspace) {
   const base = vowelShape(
     {
       height: state.height,
       backness: state.backness,
       rounded: Math.max(0, Math.min(1, state.rounding)),
     },
-    corrections
+    corrections,
+    workspace
   );
   const { areas } = base;
   if (jaw && jaw.scale !== 1) {
@@ -461,6 +474,14 @@ export function articulatorState(state, head, full = null) {
   };
 }
 
+function stateWithDefaults(state, full) {
+  if (!full) {
+    return { ...CHANNEL_DEFAULTS, time: 0, ...state };
+  }
+  full.time = 0;
+  return Object.assign(full, CHANNEL_DEFAULTS, state);
+}
+
 /**
  * Full tract description for one moment.
  * @param {Record<string, number>} state Articulator channels (see plan.js).
@@ -469,8 +490,13 @@ export function articulatorState(state, head, full = null) {
  *   `teeth: false` leaves out the incisors (constriction and obstacle noise
  *   source); `vowelCorrections` overrides the vowel calibration.
  */
-export function tractShape(state, head, options = {}) {
-  const full = { ...CHANNEL_DEFAULTS, time: 0, ...state };
+export function tractShape(
+  state,
+  head,
+  options = {},
+  { full: channels, vowel } = {}
+) {
+  const full = stateWithDefaults(state, channels);
   const free = articulatorState(state, head, full);
   full.jaw = free.jaw;
   // The mouth from x = 0.55 of the head's tract on; the lower lip rides
@@ -481,11 +507,17 @@ export function tractShape(state, head, options = {}) {
     engagement(full.tongueAmount),
     engagement(full.lipAmount)
   );
-  const reference = referenceShape(full, options.vowelCorrections, {
-    scale:
-      1 + (jawScale(free.jaw, free.expectedJaw, head.jawArea) - 1) * (1 - held),
-    from: warpPosition(JAW_START, head.pharynxRatio),
-  });
+  const reference = referenceShape(
+    full,
+    options.vowelCorrections,
+    {
+      scale:
+        1 +
+        (jawScale(free.jaw, free.expectedJaw, head.jawArea) - 1) * (1 - held),
+      from: warpPosition(JAW_START, head.pharynxRatio),
+    },
+    vowel
+  );
   const openness = Math.max(0, Math.min(1, 1 - full.height));
   const fitted = fitToHead(reference, head, {
     sections: options.sections,
