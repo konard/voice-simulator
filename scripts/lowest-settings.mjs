@@ -43,7 +43,7 @@ Rows: synthesis, recognition, streaming, voice-fit, session, copy, modes.`;
 
 /** Peak resident memory of this process in MB. */
 export function peakRssMb() {
-  return Number((process.resourceUsage().maxRSS / 1024).toFixed(1));
+  return process.resourceUsage().maxRSS / 1024;
 }
 
 export async function runRow({ row, engine, limit = Infinity }) {

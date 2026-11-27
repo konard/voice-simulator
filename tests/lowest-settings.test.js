@@ -23,6 +23,7 @@ import {
   README_END,
   README_START,
   REPORT_PATH,
+  judge,
   replaceReadmeTable,
 } from '../scripts/lowest-report.mjs';
 import { checkBlockedGate } from './helpers/blocked-gate.js';
@@ -44,6 +45,29 @@ const oneRow = run(
 oneRow.catch(() => {});
 
 describe('lowest settings', () => {
+  it('certifies memory only when both engines complete at or below the limit', () => {
+    const check = (js, rust) =>
+      judge(
+        { synthesis: { js, rust } },
+        {
+          synthesis: { memory: { peakRssMb: 256 } },
+        }
+      ).synthesis.memory.status;
+    const fits = { peakRssMb: 256 };
+    assert.equal(check(fits, fits), 'certified');
+    assert.equal(check(fits, undefined), 'unavailable');
+    assert.equal(check(fits, { engine: 'rust', error: 'failed' }), 'failed');
+    assert.equal(check(fits, { peakRssMb: 256.001 }), 'failed');
+    assert.equal(
+      check(fits, {
+        ...fits,
+        engine: 'rust',
+        capped: { crashed: 'out of memory' },
+      }),
+      'failed'
+    );
+  });
+
   it('speaks at 8 kHz', () => {
     const { samples, sampleRate } = speak();
     assert.equal(sampleRate, 8000);

@@ -78,15 +78,18 @@ function memoryCell(runs, row, limits) {
   const peaks = measured.map((run) => run.peakRssMb).filter(Number.isFinite);
   const value = peaks.length ? Math.max(...peaks) : null;
   const limit = limits.peakRssMb;
-  const pass = !crashed.length && passes('peakRssMb', value, limit);
+  const failures = measured.filter((run) => run.error);
+  const complete = peaks.length === 2 && !failures.length;
+  const exceeds = value !== null && !passes('peakRssMb', value, limit);
+  const pass = complete && !crashed.length && !exceeds;
+  const errors = [...crashed, ...failures]
+    .map((run) => `${run.engine}: ${run.capped?.crashed ?? run.error}`)
+    .join('; ');
   return {
-    status: pass ? 'certified' : 'failed',
+    status: pass ? 'certified' : errors || exceeds ? 'failed' : 'unavailable',
     metrics: { peakRssMb: { value, limit, pass } },
-    ...(crashed.length && {
-      reason: crashed
-        .map((run) => `${run.engine}: ${run.capped.crashed}`)
-        .join('; '),
-    }),
+    ...(errors && { reason: errors }),
+    ...(!complete && !errors && { reason: 'both engines must measure memory' }),
   };
 }
 
