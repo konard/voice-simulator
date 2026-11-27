@@ -177,8 +177,10 @@ export function cppPlan(rate, minF0, maxF0) {
     const start = centre - Math.floor(length / 2);
     re.fill(0);
     im.fill(0);
-    for (let n = 0; n < length; n++) {
-      re[n] = (x[start + n] ?? 0) * window[n];
+    const firstSample = Math.max(0, -start);
+    const endSample = Math.min(length, x.length - start);
+    for (let n = firstSample; n < endSample; n++) {
+      re[n] = x[start + n] * window[n];
     }
     fft.forward(re, im);
     for (let k = 0; k < size; k++) {
@@ -222,14 +224,21 @@ export function hnr(
 ) {
   const length = window.length;
   const start = centre - Math.floor(length / 2);
+  const firstSample = Math.max(0, Math.min(length, -start));
+  const endSample = Math.max(firstSample, Math.min(length, x.length - start));
   let mean = 0;
-  for (let n = 0; n < length; n++) {
-    mean += (x[start + n] ?? 0) / length;
+  for (let n = firstSample; n < endSample; n++) {
+    mean += x[start + n] / length;
   }
+  y.fill(-mean, 0, firstSample);
+  for (let n = firstSample; n < endSample; n++) {
+    y[n] = x[start + n] - mean;
+  }
+  y.fill(-mean, endSample, length);
   let r0 = 0;
   let w0 = 0;
   for (let n = 0; n < length; n++) {
-    y[n] = ((x[start + n] ?? 0) - mean) * window[n];
+    y[n] *= window[n];
     r0 += y[n] * y[n];
     w0 += window[n] * window[n];
   }

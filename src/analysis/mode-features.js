@@ -546,12 +546,22 @@ function correlation(signal, a, b, length) {
   let product = 0;
   let first = 0;
   let second = 0;
-  for (let index = 0; index < length; index++) {
-    const x = signal[a + index] ?? 0;
-    const y = signal[b + index] ?? 0;
-    product += x * y;
-    first += x * x;
-    second += y * y;
+  if (a >= 0 && b + length <= signal.length && ArrayBuffer.isView(signal)) {
+    for (let k = 0; k < length; k++) {
+      const x = signal[a + k];
+      const y = signal[b + k];
+      product += x * y;
+      first += x * x;
+      second += y * y;
+    }
+  } else {
+    for (let k = 0; k < length; k++) {
+      const x = signal[a + k] ?? 0;
+      const y = signal[b + k] ?? 0;
+      product += x * y;
+      first += x * x;
+      second += y * y;
+    }
   }
   return first > 0 && second > 0 ? product / Math.sqrt(first * second) : 0;
 }
@@ -561,7 +571,7 @@ function correlation(signal, a, b, length) {
  * rough length `rough`: the lag within `rough` ± 15 % (at least 0.5 ms)
  * whose waveform best matches the one at `from` (normalised
  * cross-correlation over 0.8 of the period from a tenth before the pulse,
- * parabola through the best lag), and that match.
+ * parabola through the best lag). Returns zero below the match threshold.
  */
 function matchPeriod(signal, rate, from, rough, values) {
   const spread = Math.max(Math.round(0.0005 * rate), Math.round(0.15 * rough));
@@ -579,10 +589,13 @@ function matchPeriod(signal, rate, from, rough, values) {
   }
   const before = values[best - low];
   const value = values[best - low + 1];
+  if (value < PERIOD_MATCH) {
+    return 0;
+  }
   const after = values[best - low + 2];
   const curvature = before - 2 * value + after;
   const offset = curvature < 0 ? (0.5 * (before - after)) / curvature : 0;
-  return { period: best + Math.max(-0.5, Math.min(0.5, offset)), match: value };
+  return best + Math.max(-0.5, Math.min(0.5, offset));
 }
 
 /**
@@ -613,14 +626,14 @@ export function glottalPeriods(samples, sampleRate) {
     let train = null;
     for (let index = 1; index < pulses.length; index++) {
       const rough = pulses[index] - pulses[index - 1];
-      const { period, match } = matchPeriod(
+      const period = matchPeriod(
         signal,
         rate,
         pulses[index - 1],
         rough,
         correlations
       );
-      if (match < PERIOD_MATCH) {
+      if (period === 0) {
         train = null;
         continue;
       }

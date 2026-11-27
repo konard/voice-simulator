@@ -967,7 +967,7 @@ export function createPitchTracker(frames, options = {}) {
   return pitchTracker(frames, options);
 }
 
-function pitchTracker(frames, options, shared) {
+function pitchTracker(frames, options, shared, summarize = true) {
   const settings = pitchSettings(frames, options);
   const { hop, hopSamples, lag } = settings;
   const capacity = settings.candidates;
@@ -987,8 +987,8 @@ function pitchTracker(frames, options, shared) {
   const viterbi = createViterbi(store, settings, rows);
   const finder = createCandidateFinder(frames, settings, store, shared);
   const track = createTrack(frames, settings);
-  const marker = createMarker(frames, track, settings);
-  const distribution = createDistribution(rows);
+  const marker = summarize ? createMarker(frames, track, settings) : null;
+  const distribution = summarize ? createDistribution(rows) : null;
   const offset = Math.round(frames.startTime / settings.hop);
   const base = Math.round(offset * hopSamples);
   const centre = (t) => Math.round((offset + t) * hopSamples) - base;
@@ -1010,18 +1010,24 @@ function pitchTracker(frames, options, shared) {
       const voiced = path[t] < capacity;
       track.f0[t] = voiced ? onsetFrequency(pathFrequency, hop, t, newest) : 0;
       frameScores(track, store, capacity, t, path[t]);
-      if (voiced) {
-        distribution.add(track.f0[t]);
-        if (runStart < 0) {
-          runStart = t;
-        }
-      } else if (runStart >= 0) {
-        marker.run(runStart, t - 1);
-        runStart = -1;
+      if (marker) {
+        observeRun(voiced, t);
       }
     }
     track.committed = last;
-    distribution.update(track);
+    distribution?.update(track);
+  }
+
+  function observeRun(voiced, t) {
+    if (voiced) {
+      distribution.add(track.f0[t]);
+      if (runStart < 0) {
+        runStart = t;
+      }
+    } else if (runStart >= 0) {
+      marker.run(runStart, t - 1);
+      runStart = -1;
+    }
   }
 
   return {
@@ -1069,6 +1075,13 @@ function pitchTracker(frames, options, shared) {
  */
 export function trackPitch(frames, options = {}) {
   const tracker = createPitchTracker(frames, options);
+  tracker.advance(true);
+  return tracker.track;
+}
+
+/** Frame-level pitch for mode features, which measure their own pulse trains. */
+export function trackPitchFrames(frames, options) {
+  const tracker = pitchTracker(frames, options, undefined, false);
   tracker.advance(true);
   return tracker.track;
 }

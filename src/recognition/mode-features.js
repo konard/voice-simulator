@@ -1,7 +1,7 @@
 /** Vowel-frame features for mode recognition. Unlicense. */
 import { measure } from './profile.js';
 import { analyzeFrames } from './frontend.js';
-import { trackPitch } from './pitch.js';
+import { trackPitchFrames } from './pitch.js';
 import { trackBatchFormants, trackFormants } from './formants.js';
 import { inverseModeMeasures } from './inverse-filter.js';
 import {
@@ -92,7 +92,7 @@ function analyzeWordSignal(samples, sampleRate, head, analyzed, options) {
       })
     );
   const pitch = measure(profile, 'Pitch', () =>
-    trackPitch(frames, { minF0: 35, maxF0: 800, kernels })
+    trackPitchFrames(frames, { minF0: 35, maxF0: 800, kernels })
   );
   const track = options.reuseFormantCandidates
     ? trackBatchFormants
@@ -107,6 +107,65 @@ function analyzeWordSignal(samples, sampleRate, head, analyzed, options) {
     inverseModeMeasures(frames, { pitch, minF0: 35, maxF0: 800, kernels })
   );
   return { frames, pitch, formants, source };
+}
+
+function pulseTrains(samples, sampleRate) {
+  return glottalPeriods(samples, sampleRate).map(({ start, periods }) => ({
+    start,
+    end: periods.reduce((time, period) => time + period, start),
+    periods,
+  }));
+}
+
+function insideNucleus(vowels, start, end) {
+  for (const vowel of vowels) {
+    if (start >= vowel.start && end <= vowel.end) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function pulseFeatures(trains, vowels) {
+  let start = Infinity;
+  let end = -Infinity;
+  for (const vowel of vowels) {
+    start = Math.min(start, vowel.start);
+    end = Math.max(end, vowel.end);
+  }
+  const periods = [];
+  let difference = 0;
+  let pairs = 0;
+  for (const train of trains) {
+    if (train.end <= start || train.start >= end) {
+      continue;
+    }
+    let time = train.start;
+    let previous = 0;
+    for (let i = 0; i < train.periods.length && time < end; i++) {
+      const period = train.periods[i];
+      const next = time + period;
+      if (insideNucleus(vowels, time, next)) {
+        periods.push(period);
+        if (
+          previous &&
+          period / previous <= MAX_PERIOD_FACTOR &&
+          previous / period <= MAX_PERIOD_FACTOR
+        ) {
+          difference += Math.abs(period - previous);
+          pairs++;
+        }
+        previous = period;
+      } else {
+        previous = 0;
+      }
+      time = next;
+    }
+  }
+  return {
+    pulsePitch: periods.length ? 1 / quantile(periods) : 0,
+    jitter: pairs ? (100 * difference) / pairs / mean(periods) : 0,
+  };
 }
 
 /** Analyze the recording in one pass; retain scalar word features only. */
@@ -125,11 +184,9 @@ export function measureWords(
     analyzed,
     options
   );
-  const pulses = glottalPeriods(samples, sampleRate);
+  const pulses = pulseTrains(samples, sampleRate);
   const phones = result.phonemes ?? result.phones;
   const peakLevel = quantile(frames.energy.subarray(0, frames.count), 0.9);
-  // Vowel extraction combines independent source, formant and pulse validity checks.
-  // eslint-disable-next-line complexity
   const measured = result.words.map((word) => {
     const vowels = nuclei(word, phones, head);
     const whole = [];
@@ -171,34 +228,7 @@ export function measureWords(
     // Source H1-H2 removes the formant envelope, unlike raw speech H1-H2.
     const values = (key) =>
       rows.map((t) => source[key][t]).filter(Number.isFinite);
-    const periods = [];
-    let difference = 0,
-      pairs = 0;
-    for (const train of pulses) {
-      let time = train.start;
-      let previous = null;
-      for (const period of train.periods) {
-        const vowel = vowels.find(
-          (v) => time >= v.start && time + period <= v.end
-        );
-        if (vowel) {
-          periods.push(period);
-          if (
-            previous &&
-            period / previous <= MAX_PERIOD_FACTOR &&
-            previous / period <= MAX_PERIOD_FACTOR
-          ) {
-            difference += Math.abs(period - previous);
-            pairs++;
-          }
-          previous = period;
-        } else {
-          previous = null;
-        }
-        time += period;
-      }
-    }
-    const pulsePitch = periods.length ? 1 / quantile(periods) : 0;
+    const { pulsePitch, jitter } = pulseFeatures(pulses, vowels);
     // A weak periodicity peak in noise is not a usable pitch. Require
     // harmonic support across the nucleus before falling back to it.
     const trackedPitch = quantile(
@@ -225,7 +255,7 @@ export function measureWords(
       h1h2: quantile(values('h1h2Source')),
       hnr: quantile(values('hnr')),
       cpp: quantile(values('cpp')),
-      jitter: pairs ? (100 * difference) / pairs / mean(periods) : 0,
+      jitter,
       rate: 0,
     };
   });

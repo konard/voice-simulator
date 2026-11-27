@@ -183,9 +183,10 @@ function recoverWith(frames, f0, o, scratch, derivativeOnly) {
       buffer = new Float64Array(Math.max(window.length, buffer.length * 2));
     }
     const extended = buffer.subarray(0, window.length);
-    for (let n = 0; n < extended.length; n++) {
-      extended[n] = x[start - history + n] ?? 0;
-    }
+    const first = Math.max(0, start - history);
+    const last = Math.min(x.length, start - history + extended.length);
+    extended.fill(0);
+    extended.set(x.subarray(first, last), first - start + history);
     const pulse = iaif(extended, window);
     for (let n = 0; n < length; n++) {
       const index = start + n;
