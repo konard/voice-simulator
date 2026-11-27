@@ -98,8 +98,12 @@ function emissionCache(model, feats, { tone, toneWeight }) {
 function languageModel(network, records, settings) {
   const { lmw, wip, oovPhone, oovWeight, minCount } = settings;
   const { words } = network;
-  const cache = new Map();
-  let total = 0;
+  // A bounded pair cache with no per-candidate allocations. Different
+  // pronunciation IDs can spell the same word and get the same score.
+  const capacity = 16384;
+  const histories = new Int32Array(capacity);
+  const candidates = new Uint32Array(capacity);
+  const costs = new Float64Array(capacity);
   return (hist, id, tree) => {
     const { wordTable: packed, data, loop } = tree;
     if (packed ? packed.oov(id) : words[id].oov) {
@@ -110,33 +114,27 @@ function languageModel(network, records, settings) {
         : previousPhone(packed, words, records[hist].id);
       return oovWeight * loop.bigram.get(before).get(phone) + oovPhone;
     }
-    const previous = hist >= 0 ? records[hist].word : null;
-    let known = cache.get(previous);
-    if (!known) {
-      known = new Map();
-      cache.set(previous, known);
+    const record = records[hist];
+    const history = record?.id ?? -1;
+    const slot =
+      (Math.imul(history, 0x9e3779b1) ^ Math.imul(id, 0x85ebca6b)) &
+      (capacity - 1);
+    if (histories[slot] === history && candidates[slot] === id + 1) {
+      return costs[slot];
     }
-    let v = known.get(id);
-    if (v === undefined) {
-      const word = packed ? packed.name(id) : words[id].word;
-      const count = packed ? packed.count(id) : words[id].count;
-      const seen = previous ? data.transitionCost(word, previous) : undefined;
-      const cost =
-        seen ??
-        -0.3 * Math.log((0.4 * Math.max(count ?? 1, minCount)) / data.total) +
-          0.5;
-      v = lmw * lnProbability(cost) + wip;
-      // Long utterances can visit many predecessor/candidate pairs.
-      if (total === 16384) {
-        cache.clear();
-        known.clear();
-        cache.set(previous, known);
-        total = 0;
-      }
-      known.set(id, v);
-      total++;
-    }
-    return v;
+    const word = packed ? packed.name(id) : words[id].word;
+    const count = packed ? packed.count(id) : words[id].count;
+    const previous = record?.word;
+    const seen = previous ? data.transitionCost(word, previous) : undefined;
+    const cost =
+      seen ??
+      -0.3 * Math.log((0.4 * Math.max(count ?? 1, minCount)) / data.total) +
+        0.5;
+    const value = lmw * lnProbability(cost) + wip;
+    histories[slot] = history;
+    candidates[slot] = id + 1;
+    costs[slot] = value;
+    return value;
   };
 }
 
@@ -596,6 +594,23 @@ function alignmentChain(model, words) {
   return { chain, tokens };
 }
 
+function alignmentColumns(chain) {
+  const stay = new Float64Array(chain.length);
+  const go = new Float64Array(chain.length);
+  const emit = new Array(chain.length);
+  const skip = new Uint8Array(chain.length);
+  for (let n = 0; n < chain.length; n++) {
+    const state = chain[n];
+    stay[n] = state.stay;
+    go[n] = state.go;
+    emit[n] = state.m;
+    if (n >= 4 && chain[n - 3].skippable) {
+      skip[n] = chain[n - 3].sil ? 1 : 2;
+    }
+  }
+  return { stay, go, emit, skip };
+}
+
 /**
  * Forced alignment of the decoded words with optional silence between
  * them and optional stop releases; returns per-token frame ranges.
@@ -608,47 +623,52 @@ export function alignWords(network, feats, frames, words, options = {}) {
   const { chain, tokens } = alignmentChain(model, words);
   const score = emissionCache(model, feats, settings);
   const N = chain.length;
+  const { stay, go, emit, skip } = alignmentColumns(chain);
   let prev = new Float64Array(N).fill(-Infinity);
   let cur = new Float64Array(N);
   // A predecessor can stay, advance by one, or skip three states. Store
   // those three choices in two bits per cell.
   const back = new Uint8Array(Math.ceil((frames * N) / 4));
-  for (let t = 0; t < frames; t++) {
+  if (frames > 0) {
+    prev[0] = 0 + score(emit[0], 0);
+    if (chain[0].skippable && N > 3) {
+      prev[3] =
+        silencePenalty > -Infinity
+          ? silencePenalty + score(emit[3], 0)
+          : silencePenalty;
+    }
+  }
+  for (let t = 1; t < frames; t++) {
     const row = t * N;
     for (let n = 0; n < N; n++) {
-      let s = -Infinity;
+      let s = prev[n] + stay[n];
       let step = 0;
-      if (t === 0) {
-        // Start in the first state or after skipping leading silence.
-        if (n === 0) {
-          s = 0;
-        } else if (n === 3 && chain[0].skippable) {
-          s = silencePenalty;
-        }
-      } else {
-        s = prev[n] + chain[n].stay;
-        if (n > 0 && prev[n - 1] + chain[n - 1].go > s) {
-          s = prev[n - 1] + chain[n - 1].go;
+      if (n > 0) {
+        const advance = prev[n - 1] + go[n - 1];
+        if (advance > s) {
+          s = advance;
           step = 1;
         }
-        // Skip a whole optional unit that starts at n-3.
-        if (n >= 4 && chain[n - 3].skippable) {
-          const skip =
-            prev[n - 4] + chain[n - 4].go + (chain[n - 3].sil ? 0 : -1);
-          if (skip > s) {
-            s = skip;
-            step = 2;
-          }
+      }
+      if (skip[n]) {
+        const jump = prev[n - 4] + go[n - 4] + (1 - skip[n]);
+        if (jump > s) {
+          s = jump;
+          step = 2;
         }
       }
       if (s > -Infinity) {
-        s += score(chain[n].m, t);
+        s += score(emit[n], t);
       }
       cur[n] = s;
-      const cell = row + n;
-      back[Math.floor(cell / 4)] |= step << ((cell % 4) * 2);
+      if (step) {
+        const cell = row + n;
+        back[Math.floor(cell / 4)] |= step << ((cell % 4) * 2);
+      }
     }
-    [prev, cur] = [cur, prev];
+    const earlier = prev;
+    prev = cur;
+    cur = earlier;
   }
   let at = prev[N - 4] > prev[N - 1] ? N - 4 : N - 1;
   options.onScore?.(prev[at]);
