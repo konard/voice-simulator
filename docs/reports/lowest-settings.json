@@ -1,7 +1,7 @@
 {
   "version": 1,
-  "measured": "2026-11-26T01:22:10.504Z",
-  "commit": "56797cd5577e0dfffbdd1e5b4804c8752278950e",
+  "measured": "2026-11-27T23:05:44.006Z",
+  "commit": "1ad1bca1e6289f1ff2d0e11047d4d1e7b926ac70",
   "command": "node scripts/run-heavy.mjs --suite lowest",
   "cpu": "AMD EPYC 7763 64-Core Processor",
   "node": "v24.22.3",
@@ -129,17 +129,17 @@
         "engine": "js",
         "metrics": {
           "wer": 0.3537,
-          "wer16k": 0.3614,
-          "werIncrease": -0.0076,
-          "rtf": 0.0439,
-          "recognitionRtf": 0.6327,
+          "wer16k": 0.3624,
+          "werIncrease": -0.0087,
+          "rtf": 0.0394,
+          "recognitionRtf": 0.2422,
           "utterances": 160
         },
-        "seconds": 17.193,
+        "seconds": 15.415,
         "audioSeconds": 391.707,
-        "peakRssMb": 813.4,
+        "peakRssMb": 396.3671875,
         "capped": {
-          "crashed": "JavaScript heap out of memory"
+          "heapLimitMb": 192
         }
       },
       "rust": {
@@ -147,15 +147,15 @@
         "engine": "rust",
         "metrics": {
           "wer": 0.3537,
-          "rtf": 0.0267,
-          "recognitionRtf": 0.6398,
+          "rtf": 0.0246,
+          "recognitionRtf": 0.231,
           "utterances": 160
         },
-        "seconds": 10.456,
+        "seconds": 9.642,
         "audioSeconds": 391.707,
-        "peakRssMb": 795.5,
+        "peakRssMb": 357.421875,
         "capped": {
-          "crashed": "JavaScript heap out of memory"
+          "heapLimitMb": 192
         }
       }
     },
@@ -164,36 +164,36 @@
         "row": "recognition",
         "engine": "js",
         "metrics": {
-          "per": 0.8674,
-          "wer": 1.2979,
-          "per16k": 0.8669,
+          "per": 0.8665,
+          "wer": 1.2967,
+          "per16k": 0.8664,
           "wer16k": 1.2983,
-          "perIncrease": 0.0005,
-          "werIncrease": -0.0004,
-          "rtf": 1.4237,
+          "perIncrease": 0.0001,
+          "werIncrease": -0.0017,
+          "rtf": 0.4133,
           "utterances": 127
         },
-        "seconds": 1525.964,
+        "seconds": 442.928,
         "audioSeconds": 1071.807,
-        "peakRssMb": 1346.3,
+        "peakRssMb": 427.81640625,
         "capped": {
-          "crashed": "JavaScript heap out of memory"
+          "heapLimitMb": 192
         }
       },
       "rust": {
         "row": "recognition",
         "engine": "rust",
         "metrics": {
-          "per": 0.8674,
-          "wer": 1.2979,
-          "rtf": 1.5811,
+          "per": 0.8665,
+          "wer": 1.2967,
+          "rtf": 0.499,
           "utterances": 127
         },
-        "seconds": 1694.653,
+        "seconds": 534.798,
         "audioSeconds": 1071.807,
-        "peakRssMb": 1122.7,
+        "peakRssMb": 380.3828125,
         "capped": {
-          "crashed": "JavaScript heap out of memory"
+          "heapLimitMb": 192
         }
       }
     },
@@ -202,33 +202,37 @@
         "row": "streaming",
         "engine": "js",
         "metrics": {
-          "textMismatch": 0.2887,
-          "firstPartial": 1.5093,
-          "load": 2.6102,
+          "textMismatch": 0.2429,
+          "firstPartial": 1.316,
+          "load": 0.8368,
           "partials": 247,
-          "streamText": "The quick brown fox jump sober the lazy dog. She says she shells by the sea shore. Did room as a treasure yesterday. Why does the long judge and all chewing cheap toys? What a beautiful morning? Thick far greater over the suit have. A usually think about their father and mother. A large ship say down diaz that noon. Are the children praying outside now? Peas bring mia cup of hot p, some bed and the book. How far is the nearest hospital? The singer was ringing along dare. I want to record and record to day. Part whole of that your air was sure to lend. Stored. He could not hear the boys voice clearly. The will visit was one thursday. Is this your ten or nine? The photographer took a photograph of the banana tree. The.",
-          "batchText": "The quick brill fox jump sober the lady dog. She says she shells by the sea shore. Did you measure the treasure yesterday. Well does the your judge and all chewing cheap toys! What a beautiful morning thick far greater over the suit have. A usually think about well foreign mother. A large ship shade around the and at noon. Were the children playing outside near? Peas bring me a cup of hot tea, some dead and a book. How far is the nearest hospital the singer was ringing of or dead. Want to the called a new record to day. Bar to of that you where was sure to on? Stop. He could not hear the boys voice clearly. We will visit was won thursday is this your ten, own on! The photographer took a photograph of the banana tree. Ye."
+          "streamText": "The quick brown fox jump sober the lady dog. She says she cells by the sea shore. Did you my the treasure yesterday. Where does the long judge and all chewing cheap toys? What a beautiful morning? Thick far greater over the suit have. A usually think about their father and mother. A large ship sailed around vienna tools. Are the children playing outside now? Peas bring mia cup of hot to the, some medal the book. How far is the nearest hospital? The singer was ringing award as. I want to record and record today. Cartoon of that your air was sure to lend. Stored. He could not hear the boys voice clearly. The will visit was one thursday. Is this or ten or nine? The photographer took a photograph of the banana tree. The.",
+          "batchText": "The quick bill fox jump sober the lady dog. She says she shares by the sea shore. Did you measure the treasure yesterday. Well does the long judge and all chewing cheap toys! What a beautiful morning thick far greater over the suit have. A usually think about well foreign mother. A large ship shade around the and at noon. Were the children killing outside near? Peas bring mia cup of hot tea, some lead a the book. How far is the nearest hospital the singer was ringing award as. A want to the called a new record today. Car to of that you where was sure to on? Stop. He could not hear the boys voice clearly. We will visit was won thursday is this your ten, or nine! The photographer took a photograph of the banana tree. Year."
         },
-        "seconds": 156.614,
+        "seconds": 50.205,
         "audioSeconds": 60,
-        "peakRssMb": 465.1,
-        "capped": {}
+        "peakRssMb": 335.0234375,
+        "capped": {
+          "heapLimitMb": 192
+        }
       },
       "rust": {
         "row": "streaming",
         "engine": "rust",
         "metrics": {
-          "textMismatch": 0.2887,
-          "firstPartial": 1.2668,
-          "load": 1.9799,
+          "textMismatch": 0.2429,
+          "firstPartial": 1.1529,
+          "load": 0.7079,
           "partials": 247,
-          "streamText": "The quick brown fox jump sober the lazy dog. She says she shells by the sea shore. Did room as a treasure yesterday. Why does the long judge and all chewing cheap toys? What a beautiful morning? Thick far greater over the suit have. A usually think about their father and mother. A large ship say down diaz that noon. Are the children praying outside now? Peas bring mia cup of hot p, some bed and the book. How far is the nearest hospital? The singer was ringing along dare. I want to record and record to day. Part whole of that your air was sure to lend. Stored. He could not hear the boys voice clearly. The will visit was one thursday. Is this your ten or nine? The photographer took a photograph of the banana tree. The.",
-          "batchText": "The quick brill fox jump sober the lady dog. She says she shells by the sea shore. Did you measure the treasure yesterday. Well does the your judge and all chewing cheap toys! What a beautiful morning thick far greater over the suit have. A usually think about well foreign mother. A large ship shade around the and at noon. Were the children playing outside near? Peas bring me a cup of hot tea, some dead and a book. How far is the nearest hospital the singer was ringing of or dead. Want to the called a new record to day. Bar to of that you where was sure to on? Stop. He could not hear the boys voice clearly. We will visit was won thursday is this your ten, own on! The photographer took a photograph of the banana tree. Ye."
+          "streamText": "The quick brown fox jump sober the lady dog. She says she cells by the sea shore. Did you my the treasure yesterday. Where does the long judge and all chewing cheap toys? What a beautiful morning? Thick far greater over the suit have. A usually think about their father and mother. A large ship sailed around vienna tools. Are the children playing outside now? Peas bring mia cup of hot to the, some medal the book. How far is the nearest hospital? The singer was ringing award as. I want to record and record today. Cartoon of that your air was sure to lend. Stored. He could not hear the boys voice clearly. The will visit was one thursday. Is this or ten or nine? The photographer took a photograph of the banana tree. The.",
+          "batchText": "The quick bill fox jump sober the lady dog. She says she shares by the sea shore. Did you measure the treasure yesterday. Well does the long judge and all chewing cheap toys! What a beautiful morning thick far greater over the suit have. A usually think about well foreign mother. A large ship shade around the and at noon. Were the children killing outside near? Peas bring mia cup of hot tea, some lead a the book. How far is the nearest hospital the singer was ringing award as. A want to the called a new record today. Car to of that you where was sure to on? Stop. He could not hear the boys voice clearly. We will visit was won thursday is this your ten, or nine! The photographer took a photograph of the banana tree. Year."
         },
-        "seconds": 118.796,
+        "seconds": 42.473,
         "audioSeconds": 60,
-        "peakRssMb": 453.4,
-        "capped": {}
+        "peakRssMb": 346.88671875,
+        "capped": {
+          "heapLimitMb": 192
+        }
       }
     },
     "voice-fit": {
@@ -238,12 +242,14 @@
         "metrics": {
           "vocalTractLengthError": 0.0828,
           "pitchError": 0.0537,
-          "cpuRatio": 3.5856
+          "cpuRatio": 3.2196
         },
-        "seconds": 107.569,
+        "seconds": 96.589,
         "audioSeconds": 30,
-        "peakRssMb": 355.1,
-        "capped": {}
+        "peakRssMb": 284.7890625,
+        "capped": {
+          "heapLimitMb": 192
+        }
       },
       "rust": {
         "row": "voice-fit",
@@ -251,12 +257,14 @@
         "metrics": {
           "vocalTractLengthError": 0.0828,
           "pitchError": 0.0537,
-          "cpuRatio": 2.5899
+          "cpuRatio": 2.3528
         },
-        "seconds": 77.698,
+        "seconds": 70.584,
         "audioSeconds": 30,
-        "peakRssMb": 351.7,
-        "capped": {}
+        "peakRssMb": 225.23046875,
+        "capped": {
+          "heapLimitMb": 192
+        }
       }
     },
     "session": {
@@ -267,12 +275,14 @@
           "stable": 0,
           "vocalTractLengthError": 0.0226,
           "pitchError": 0.0097,
-          "cpuRatio": 14.3231
+          "cpuRatio": 3.7535
         },
-        "seconds": 859.384,
+        "seconds": 225.213,
         "audioSeconds": 60,
-        "peakRssMb": 487.2,
-        "capped": {}
+        "peakRssMb": 377.53515625,
+        "capped": {
+          "heapLimitMb": 192
+        }
       },
       "rust": {
         "row": "session",
@@ -281,12 +291,14 @@
           "stable": 0,
           "vocalTractLengthError": 0.0226,
           "pitchError": 0.0097,
-          "cpuRatio": 13.044
+          "cpuRatio": 3.3779
         },
-        "seconds": 782.642,
+        "seconds": 202.672,
         "audioSeconds": 60,
-        "peakRssMb": 501.3,
-        "capped": {}
+        "peakRssMb": 384.6328125,
+        "capped": {
+          "heapLimitMb": 192
+        }
       }
     },
     "copy": {
@@ -294,38 +306,38 @@
         "row": "copy",
         "engine": "js",
         "metrics": {
-          "f0RmseSemitones": 6.0239,
-          "timingErrorMs": 229.4,
-          "phonemeAgreement": 0.4615,
-          "maxF0RmseSemitones": 13.5423,
-          "maxTimingErrorMs": 891.8,
-          "cpuRatio": 16.1803,
+          "f0RmseSemitones": 6.0086,
+          "timingErrorMs": 271.4,
+          "phonemeAgreement": 0.4716,
+          "maxF0RmseSemitones": 12.1282,
+          "maxTimingErrorMs": 720,
+          "cpuRatio": 6.8901,
           "recordings": 24
         },
-        "seconds": 1808.629,
+        "seconds": 770.171,
         "audioSeconds": 111.78,
-        "peakRssMb": 1184.1,
+        "peakRssMb": 440.453125,
         "capped": {
-          "crashed": "JavaScript heap out of memory"
+          "heapLimitMb": 192
         }
       },
       "rust": {
         "row": "copy",
         "engine": "rust",
         "metrics": {
-          "f0RmseSemitones": 6.0239,
-          "timingErrorMs": 229.4,
-          "phonemeAgreement": 0.4615,
-          "maxF0RmseSemitones": 13.5423,
-          "maxTimingErrorMs": 891.8,
-          "cpuRatio": 15.7606,
+          "f0RmseSemitones": 6.0086,
+          "timingErrorMs": 271.4,
+          "phonemeAgreement": 0.4716,
+          "maxF0RmseSemitones": 12.1282,
+          "maxTimingErrorMs": 720,
+          "cpuRatio": 6.6734,
           "recordings": 24
         },
-        "seconds": 1761.718,
+        "seconds": 745.954,
         "audioSeconds": 111.78,
-        "peakRssMb": 1165.1,
+        "peakRssMb": 448.09375,
         "capped": {
-          "crashed": "JavaScript heap out of memory"
+          "heapLimitMb": 192
         }
       }
     },
@@ -334,50 +346,48 @@
         "row": "modes",
         "engine": "js",
         "metrics": {
-          "modeShare": 0.8833,
-          "rtf": 0.2598,
-          "renderRtf": 0.0384,
+          "modeShare": 0.9,
+          "rtf": 0.1618,
+          "renderRtf": 0.0374,
           "utterances": 60,
           "missed": [
             "en:pp",
             "en:p",
-            "en:allegro",
             "ru:f",
             "hi:pp",
             "zh:pp",
             "zh:F"
           ]
         },
-        "seconds": 28.419,
+        "seconds": 17.702,
         "audioSeconds": 109.405,
-        "peakRssMb": 673.2,
+        "peakRssMb": 316.40625,
         "capped": {
-          "crashed": "JavaScript heap out of memory"
+          "heapLimitMb": 192
         }
       },
       "rust": {
         "row": "modes",
         "engine": "rust",
         "metrics": {
-          "modeShare": 0.8833,
-          "rtf": 0.2268,
-          "renderRtf": 0.0254,
+          "modeShare": 0.9,
+          "rtf": 0.1499,
+          "renderRtf": 0.0244,
           "utterances": 60,
           "missed": [
             "en:pp",
             "en:p",
-            "en:allegro",
             "ru:f",
             "hi:pp",
             "zh:pp",
             "zh:F"
           ]
         },
-        "seconds": 24.812,
+        "seconds": 16.405,
         "audioSeconds": 109.405,
-        "peakRssMb": 725.8,
+        "peakRssMb": 325.171875,
         "capped": {
-          "crashed": "JavaScript heap out of memory"
+          "heapLimitMb": 192
         }
       }
     },
@@ -386,16 +396,16 @@
         "row": "app",
         "engine": "js",
         "metrics": {
-          "textBack": 0.7188,
-          "workerRtf": 0.235,
-          "workerRtfMeasured": 0.0392,
-          "firstSound": 0.314,
-          "firstChunk": 0.314,
-          "coldFirstSound": 1.45,
-          "startDelay": 0.314,
+          "textBack": 0.6875,
+          "workerRtf": 0.192,
+          "workerRtfMeasured": 0.032,
+          "firstSound": 0.376,
+          "firstChunk": 0.376,
+          "coldFirstSound": 1.313,
+          "startDelay": 0.375,
           "sampleRate": 8000,
           "chunks": 89,
-          "heard": "The quick brown fox jump solar the lady dog. She says she shells by the sea shore. The measure the treasure every morning before the sun come not over the. Quiet his."
+          "heard": "The quick brown fox jump solar the lady dog. She says she shares by the sea shore. The measures a treasure every morning before the sun comes up over the. Quiet his."
         },
         "audioSeconds": 11.289,
         "throttling": 6,
@@ -409,32 +419,33 @@
             "at": 0
           },
           {
-            "worker": "synth-worker-Coe86Md6.js",
+            "worker": "synth-worker-lSPKi9Tj.js",
             "type": "speak",
-            "at": 0.16
+            "at": 0.169
           },
           {
-            "worker": "synth-worker-Coe86Md6.js",
+            "worker": "synth-worker-lSPKi9Tj.js",
             "type": "start",
-            "at": 0.314
+            "at": 0.375
           },
           {
-            "worker": "synth-worker-Coe86Md6.js",
+            "worker": "synth-worker-lSPKi9Tj.js",
             "type": "end",
-            "at": 5.755
+            "at": 6.443
           }
         ],
-        "benchmarkWait": 0.122
+        "benchmarkWait": 0.108
       }
     }
   },
+  "regressions": [],
   "cells": {
     "synthesis": {
       "quality": {
         "status": "certified",
         "metrics": {
           "werIncrease": {
-            "value": -0.0076,
+            "value": -0.0087,
             "limit": 0.05,
             "pass": true
           }
@@ -444,7 +455,7 @@
         "status": "certified",
         "metrics": {
           "rtf": {
-            "value": 0.0439,
+            "value": 0.0394,
             "limit": 0.25,
             "pass": true
           }
@@ -454,7 +465,7 @@
         "status": "certified",
         "metrics": {
           "rtf": {
-            "value": 0.0267,
+            "value": 0.0246,
             "limit": 0.25,
             "pass": true
           }
@@ -464,12 +475,11 @@
         "status": "failed",
         "metrics": {
           "peakRssMb": {
-            "value": 813.4,
+            "value": 396.3671875,
             "limit": 256,
             "pass": false
           }
         },
-        "reason": "js: JavaScript heap out of memory; rust: JavaScript heap out of memory",
         "issue": "https://github.com/konard/voice-simulator/issues/173"
       }
     },
@@ -478,12 +488,12 @@
         "status": "certified",
         "metrics": {
           "perIncrease": {
-            "value": 0.0005,
+            "value": 0.0001,
             "limit": 0.05,
             "pass": true
           },
           "werIncrease": {
-            "value": -0.0004,
+            "value": -0.0017,
             "limit": 0.08,
             "pass": true
           }
@@ -493,7 +503,7 @@
         "status": "failed",
         "metrics": {
           "rtf": {
-            "value": 1.4237,
+            "value": 0.4133,
             "limit": 0.25,
             "pass": false
           }
@@ -504,7 +514,7 @@
         "status": "failed",
         "metrics": {
           "rtf": {
-            "value": 1.5811,
+            "value": 0.499,
             "limit": 0.25,
             "pass": false
           }
@@ -515,12 +525,11 @@
         "status": "failed",
         "metrics": {
           "peakRssMb": {
-            "value": 1346.3,
+            "value": 427.81640625,
             "limit": 256,
             "pass": false
           }
         },
-        "reason": "js: JavaScript heap out of memory; rust: JavaScript heap out of memory",
         "issue": "https://github.com/konard/voice-simulator/issues/173"
       }
     },
@@ -529,7 +538,7 @@
         "status": "failed",
         "metrics": {
           "textMismatch": {
-            "value": 0.2887,
+            "value": 0.2429,
             "limit": 0,
             "pass": false
           }
@@ -540,12 +549,12 @@
         "status": "failed",
         "metrics": {
           "firstPartial": {
-            "value": 1.5093,
+            "value": 1.316,
             "limit": 1,
             "pass": false
           },
           "load": {
-            "value": 2.6102,
+            "value": 0.8368,
             "limit": 0.25,
             "pass": false
           }
@@ -556,12 +565,12 @@
         "status": "failed",
         "metrics": {
           "firstPartial": {
-            "value": 1.2668,
+            "value": 1.1529,
             "limit": 1,
             "pass": false
           },
           "load": {
-            "value": 1.9799,
+            "value": 0.7079,
             "limit": 0.25,
             "pass": false
           }
@@ -572,7 +581,7 @@
         "status": "failed",
         "metrics": {
           "peakRssMb": {
-            "value": 465.1,
+            "value": 346.88671875,
             "limit": 256,
             "pass": false
           }
@@ -601,7 +610,7 @@
         "status": "failed",
         "metrics": {
           "cpuRatio": {
-            "value": 3.5856,
+            "value": 3.2196,
             "limit": 1,
             "pass": false
           }
@@ -612,7 +621,7 @@
         "status": "failed",
         "metrics": {
           "cpuRatio": {
-            "value": 2.5899,
+            "value": 2.3528,
             "limit": 1,
             "pass": false
           }
@@ -623,7 +632,7 @@
         "status": "failed",
         "metrics": {
           "peakRssMb": {
-            "value": 355.1,
+            "value": 284.7890625,
             "limit": 256,
             "pass": false
           }
@@ -657,7 +666,7 @@
         "status": "failed",
         "metrics": {
           "cpuRatio": {
-            "value": 14.3231,
+            "value": 3.7535,
             "limit": 0.5,
             "pass": false
           }
@@ -668,7 +677,7 @@
         "status": "failed",
         "metrics": {
           "cpuRatio": {
-            "value": 13.044,
+            "value": 3.3779,
             "limit": 0.5,
             "pass": false
           }
@@ -679,7 +688,7 @@
         "status": "failed",
         "metrics": {
           "peakRssMb": {
-            "value": 501.3,
+            "value": 384.6328125,
             "limit": 256,
             "pass": false
           }
@@ -692,17 +701,17 @@
         "status": "failed",
         "metrics": {
           "f0RmseSemitones": {
-            "value": 6.0239,
+            "value": 6.0086,
             "limit": 1.5,
             "pass": false
           },
           "timingErrorMs": {
-            "value": 229.4,
+            "value": 271.4,
             "limit": 30,
             "pass": false
           },
           "phonemeAgreement": {
-            "value": 0.4615,
+            "value": 0.4716,
             "limit": 0.9,
             "pass": false
           }
@@ -711,24 +720,23 @@
       },
       "js-1": {
         "status": "certified",
-        "reason": "reported, no limit: CPU time / audio time 16.1803",
+        "reason": "reported, no limit: CPU time / audio time 6.8901",
         "metrics": {}
       },
       "rust-1": {
         "status": "certified",
-        "reason": "reported, no limit: CPU time / audio time 15.7606",
+        "reason": "reported, no limit: CPU time / audio time 6.6734",
         "metrics": {}
       },
       "memory": {
         "status": "failed",
         "metrics": {
           "peakRssMb": {
-            "value": 1184.1,
+            "value": 448.09375,
             "limit": 256,
             "pass": false
           }
         },
-        "reason": "js: JavaScript heap out of memory; rust: JavaScript heap out of memory",
         "issue": "https://github.com/konard/voice-simulator/issues/173"
       }
     },
@@ -737,28 +745,27 @@
         "status": "certified",
         "metrics": {
           "modeShare": {
-            "value": 0.8833,
+            "value": 0.9,
             "limit": 0.8,
             "pass": true
           }
         }
       },
       "js-1": {
-        "status": "failed",
+        "status": "certified",
         "metrics": {
           "rtf": {
-            "value": 0.2598,
+            "value": 0.1618,
             "limit": 0.25,
-            "pass": false
+            "pass": true
           }
-        },
-        "issue": "https://github.com/konard/voice-simulator/issues/179"
+        }
       },
       "rust-1": {
         "status": "certified",
         "metrics": {
           "rtf": {
-            "value": 0.2268,
+            "value": 0.1499,
             "limit": 0.25,
             "pass": true
           }
@@ -768,12 +775,11 @@
         "status": "failed",
         "metrics": {
           "peakRssMb": {
-            "value": 725.8,
+            "value": 325.171875,
             "limit": 256,
             "pass": false
           }
         },
-        "reason": "js: JavaScript heap out of memory; rust: JavaScript heap out of memory",
         "issue": "https://github.com/konard/voice-simulator/issues/173"
       }
     },
@@ -782,7 +788,7 @@
         "status": "failed",
         "metrics": {
           "textBack": {
-            "value": 0.7188,
+            "value": 0.6875,
             "limit": 1,
             "pass": false
           }
@@ -793,18 +799,17 @@
         "status": "certified",
         "metrics": {
           "workerRtf": {
-            "value": 0.235,
+            "value": 0.192,
             "limit": 1,
             "pass": true
           },
           "firstSound": {
-            "value": 0.314,
+            "value": 0.376,
             "limit": 1,
             "pass": true
           }
         }
       }
     }
-  },
-  "regressions": []
+  }
 }

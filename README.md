@@ -739,10 +739,10 @@ only become stricter. `npm run test:heavy -- --suite lowest` measures it and
 | voice-fit | failed | failed | failed | failed |
 | session | failed | failed | failed | failed |
 | copy | failed | certified | certified | failed |
-| modes | certified | failed | certified | failed |
+| modes | certified | certified | certified | failed |
 | app | failed | certified | — | — |
 
-Measured at commit `56797cd` on AMD EPYC 7763 64-Core Processor; [report](docs/reports/lowest-settings.md).
+Measured at commit `1ad1bca` on AMD EPYC 7763 64-Core Processor; [report](docs/reports/lowest-settings.md).
 <!-- prettier-ignore-end -->
 <!-- lowest-settings:end -->
 
