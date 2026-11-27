@@ -213,15 +213,47 @@ export function cppPlan(rate, minF0, maxF0) {
   };
 }
 
+const HNR_PERIODS = 6;
+const hnrWindows = new Map();
+
+function windowProduct(window, lag) {
+  let sum = 0;
+  for (let n = 0; n + lag < window.length; n++) {
+    sum += window[n] * window[n + lag];
+  }
+  return sum;
+}
+
+function hnrWindow(length) {
+  if (!hnrWindows.has(length)) {
+    if (hnrWindows.size === 64) {
+      hnrWindows.delete(hnrWindows.keys().next().value);
+    }
+    const window = hann(length);
+    // Periods that round to this window length span at most two integer
+    // lags. Include the upper neighbour for interpolation.
+    const first = Math.max(0, Math.floor((length - 0.5) / HNR_PERIODS));
+    const products = [
+      windowProduct(window, first),
+      windowProduct(window, first + 1),
+      windowProduct(window, first + 2),
+    ];
+    hnrWindows.set(length, {
+      window,
+      first,
+      products,
+      zero: windowProduct(window, 0),
+    });
+  }
+  return hnrWindows.get(length);
+}
+
 /** Window-corrected autocorrelation, interpolated from the two integer
  * lags neighbouring a fractional pitch period. */
-export function hnr(
-  x,
-  centre,
-  period,
-  window,
-  y = new Float64Array(window.length)
-) {
+export function hnr(x, centre, period, y) {
+  const { window, first, products, zero } = hnrWindow(
+    Math.round(HNR_PERIODS * period)
+  );
   const length = window.length;
   const start = centre - Math.floor(length / 2);
   const firstSample = Math.max(0, Math.min(length, -start));
@@ -236,23 +268,20 @@ export function hnr(
   }
   y.fill(-mean, endSample, length);
   let r0 = 0;
-  let w0 = 0;
   for (let n = 0; n < length; n++) {
     y[n] *= window[n];
     r0 += y[n] * y[n];
-    w0 += window[n] * window[n];
   }
   const lag = Math.floor(period);
   let value = 0;
   for (let l = lag; l <= lag + 1; l++) {
     let r = 0;
-    let w = 0;
     for (let n = 0; n + l < length; n++) {
       r += y[n] * y[n + l];
-      w += window[n] * window[n + l];
     }
+    const w = products[l - first];
     value +=
-      (r0 > 0 && w > 0 ? (r * w0) / (r0 * w) : 0) *
+      (r0 > 0 && w > 0 ? (r * zero) / (r0 * w) : 0) *
       (l === lag ? 1 - (period - lag) : period - lag);
   }
   value = Math.max(0.001, Math.min(0.999, value));

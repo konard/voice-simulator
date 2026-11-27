@@ -9,6 +9,7 @@
 /** Smallest and largest transform sizes. */
 const MIN_SIZE = 2;
 const MAX_SIZE = 65536;
+const plans = new Map();
 
 /**
  * Plan a transform of `size` points.
@@ -32,6 +33,15 @@ export function createFft(size) {
       `createFft: size ${size} is not a power of two from ${MIN_SIZE} to ${MAX_SIZE}`
     );
   }
+  if (!plans.has(size)) {
+    plans.set(size, planFft(size));
+  }
+  return plans.get(size);
+}
+
+// Plans share only immutable tables. All calculation stays in the two
+// arrays supplied by each caller.
+function planFft(size) {
   const half = size / 2;
   const cos = new Float64Array(half);
   const sin = new Float64Array(half);

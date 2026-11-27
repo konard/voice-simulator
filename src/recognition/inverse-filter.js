@@ -501,7 +501,6 @@ function inverseFilterJs(frames, o, modesOnly = false) {
     result.gci = closures(frames, f0, d);
   }
   const cpp = cppPlan(rate, o.minF0, o.maxF0);
-  const correlations = new Map();
   const windows = new Map();
   // A supplied pitch can be as low as 20 Hz.
   const scratch = new Float64Array(Math.ceil((6 * rate) / 20));
@@ -537,14 +536,7 @@ function inverseFilterJs(frames, o, modesOnly = false) {
       result.h1h2[t] = speech[0] - speech[1];
       result.naq[t] = normalizedAmplitude(g, source, period);
     }
-    const hnrLength = Math.round(6 * period);
-    result.hnr[t] = hnr(
-      frames.samples,
-      centre,
-      period,
-      windowAt(correlations, hnrLength),
-      scratch
-    );
+    result.hnr[t] = hnr(frames.samples, centre, period, scratch);
     result.cpp[t] = cpp(frames.samples, centre);
   }
   if (modesOnly) {

@@ -225,6 +225,23 @@ function windowCorrelation(window, maxLag) {
   return result;
 }
 
+const pitchWindows = new Map();
+
+function pitchWindow(length, maxLag) {
+  const key = `${length}/${maxLag}`;
+  if (!pitchWindows.has(key)) {
+    if (pitchWindows.size === 8) {
+      pitchWindows.delete(pitchWindows.keys().next().value);
+    }
+    const window = hannWindow(length);
+    pitchWindows.set(key, {
+      window,
+      correlation: windowCorrelation(window, maxLag),
+    });
+  }
+  return pitchWindows.get(key);
+}
+
 /** Vertex of the parabola through (−1, a), (0, b), (1, c): [offset, top]. */
 function parabola(a, b, c) {
   const curvature = a - 2 * b + c;
@@ -290,8 +307,7 @@ function createCoarseCorrelator(frames, settings) {
   const { factor, coarseLength, size, lagMax } = settings;
   const samples = frames.samples;
   const { kernel, half } = coarseKernel(factor);
-  const window = hannWindow(coarseLength);
-  const correlation = windowCorrelation(window, lagMax + 1);
+  const { window, correlation } = pitchWindow(coarseLength, lagMax + 1);
   const fft = createFft(size);
   const re = new Float64Array(size);
   const im = new Float64Array(size);
@@ -379,10 +395,9 @@ function createCoarseCorrelator(frames, settings) {
  */
 function createFullFrame(frames, settings) {
   const { factor, fullLength, lagMax } = settings;
-  const window = hannWindow(fullLength);
   const maxLag = factor * (lagMax + 1) + factor + 1;
-  const correlation = windowCorrelation(
-    window,
+  const { window, correlation } = pitchWindow(
+    fullLength,
     Math.min(fullLength - 1, maxLag)
   );
   const full = new Float64Array(fullLength);
