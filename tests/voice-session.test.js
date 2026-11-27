@@ -10,6 +10,7 @@ import {
   synthesize,
 } from '../src/index.js';
 import { createSession } from '../src/session/voice-session.js';
+import { sessionPasses } from '../src/session/passes.js';
 import { emptyRecognition } from '../src/recognition/recognizer.js';
 import { createEvents } from '../src/recognition/recognizer-stream.js';
 import {
@@ -287,4 +288,29 @@ describe('voice session reductions', () => {
       ).toEqual(changed.map(() => true));
     }
   });
+});
+
+it('reuses fit statistics only for the same immutable session snapshot', () => {
+  let inverseFilters = 0;
+  const settings = {
+    ...options,
+    language: 'en',
+    stages: { audioToIpa: () => ({ ipa: '', segments: [] }) },
+    profile(stage) {
+      if (stage === 'Inverse filter') {
+        inverseFilters++;
+      }
+    },
+  };
+  const snapshot = samples.slice(0, 2 * SAMPLE_RATE);
+  const invert = (audio) =>
+    consume(
+      sessionPasses.inverting(audio, { voice, distance: Infinity }, settings)
+    ).distance;
+  const distance = invert(snapshot);
+  expect(Number.isFinite(distance)).toBe(true);
+  expect(invert(snapshot)).toBe(distance);
+  expect(inverseFilters).toBe(1);
+  expect(invert(snapshot.slice())).toBe(distance);
+  expect(inverseFilters).toBe(2);
 });

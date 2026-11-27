@@ -49,17 +49,36 @@ function withWords({ decoded, input, rate, options, level }) {
   };
 }
 
+const snapshotStatistics = new WeakMap();
+
+function fittedSnapshots(settings) {
+  let snapshots = snapshotStatistics.get(settings);
+  if (!snapshots) {
+    snapshots = new WeakMap();
+    snapshotStatistics.set(settings, snapshots);
+  }
+  return snapshots;
+}
+
 function* statistics(samples, settings) {
+  // Refinement can run several times on the same immutable window. Its
+  // acoustic statistics depend on the samples and settings, not the voice.
+  const snapshots = fittedSnapshots(settings);
+  if (snapshots.has(samples)) {
+    return snapshots.get(samples);
+  }
   try {
     const { state } = yield* fitVoiceSteps(samples, settings.sampleRate, {
       ...fitOptions(samples, settings),
       refine: false,
     });
+    snapshots.set(samples, state);
     return state;
   } catch (error) {
     if (!(error instanceof NoVoicedSpeechError)) {
       throw error;
     }
+    snapshots.set(samples, null);
     return null;
   }
 }
@@ -76,6 +95,7 @@ export const sessionPasses = {
     } catch (error) {
       return { failed: true, error };
     }
+    fittedSnapshots(settings).set(samples, fit.state);
     return {
       voice: { head: fit.head, preset: fit.preset },
       distance: fit.distance,
