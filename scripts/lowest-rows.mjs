@@ -20,13 +20,13 @@ import {
 import { resample } from '../src/audio/resample.js';
 import { createEngine } from '../src/engine/index.js';
 import { createRecognitionEngine } from '../src/recognition/engine.js';
-import { loadGolden } from '../tests/helpers/golden.js';
+import { goldenRecordings } from '../tests/helpers/golden.js';
 import { roundTrip, sentences } from '../tests/helpers/roundtrip.js';
 import { LABELS, HEAD, LANGUAGES } from '../tests/helpers/recognition-modes.js';
 import { BASELINE_TEXT } from '../src/recognition/mode-baseline.js';
 import {
   BENCHMARK,
-  loadBenchmark,
+  benchmarkRecordings,
   prepareReference,
   scoreUtterance,
 } from '../tests/heavy/helpers/benchmark.js';
@@ -193,7 +193,7 @@ async function recognitionRow({ engine, limit, baseline }) {
   let audioSeconds = 0;
   let utterances = 0;
   for (const set of BENCHMARK.sets) {
-    const rows = await loadBenchmark({ set, limit: Math.min(set.rows, limit) });
+    const rows = await benchmarkRecordings({ set, limit });
     for (const row of rows) {
       const reference = prepareReference(row, set.language);
       if (!reference) {
@@ -422,7 +422,7 @@ function copyRow({ engine, limit }) {
   const f0 = [];
   const timing = [];
   const phonemes = [];
-  for (const item of loadGolden().slice(0, limit)) {
+  for (const item of goldenRecordings({ limit })) {
     const samples = resample(item.samples, item.sampleRate, RATE);
     const [copy, cpu] = cpuTime(() =>
       copyRecording(samples, RATE, { tier: TIER, engine: engine.render })

@@ -47,6 +47,11 @@ export async function fetchBenchmarkSource(id, options = {}) {
 }
 
 export async function loadBenchmark({ set, limit }) {
+  return Array.from(await benchmarkRecordings({ set, limit }));
+}
+
+/** Prepare the selected corpus, decoding each recording only when used. */
+export async function benchmarkRecordings({ set, limit }) {
   const config =
     typeof set === 'string' ? BENCHMARK.sets.find(({ id }) => id === set) : set;
   if (!config) {
@@ -59,13 +64,15 @@ export async function loadBenchmark({ set, limit }) {
   if (recordings.length !== count) {
     throw new Error(`${id}: loaded ${recordings.length} of ${count} rows`);
   }
-  return recordings.map(({ id: rowId, text, audioPath }) => {
-    if (typeof text !== 'string' || !text.trim()) {
-      throw new Error(`${rowId}: missing reference transcript`);
+  return (function* () {
+    for (const { id: rowId, text, audioPath } of recordings) {
+      if (typeof text !== 'string' || !text.trim()) {
+        throw new Error(`${rowId}: missing reference transcript`);
+      }
+      const { samples, sampleRate } = decodeAudio(readFileSync(audioPath));
+      yield { id: rowId, language, text, samples, sampleRate };
     }
-    const { samples, sampleRate } = decodeAudio(readFileSync(audioPath));
-    return { id: rowId, language, text, samples, sampleRate };
-  });
+  })();
 }
 
 export function normalizeForScoring(text, language) {

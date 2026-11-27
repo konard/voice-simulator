@@ -35,24 +35,31 @@ export function isReviewed(item) {
  *   sampleRate: number, review: {text: string, ipa: string, by: string|null}}[]}
  */
 export function loadGolden(options = {}) {
+  return Array.from(goldenRecordings(options));
+}
+
+/** Decode one golden utterance at a time while preserving manifest order. */
+export function* goldenRecordings(options = {}) {
   const { lang, reviewedOnly = false, dir = GOLDEN_DIR } = options;
+  const limit = options.limit ?? Infinity;
   const manifest = loadManifest(dir);
-  return manifest.utterances
+  const utterances = manifest.utterances
     .filter((item) => lang === undefined || item.lang === lang)
     .filter((item) => !reviewedOnly || isReviewed(item))
-    .map((item) => {
-      const { samples, sampleRate } = decodeFlac(
-        new Uint8Array(readFileSync(path.join(dir, item.file)))
-      );
-      return {
-        id: item.id,
-        lang: item.lang,
-        text: item.text,
-        ipa: item.ipa,
-        speaker: { ...item.speaker },
-        samples,
-        sampleRate,
-        review: { ...item.review },
-      };
-    });
+    .slice(0, limit);
+  for (const item of utterances) {
+    const { samples, sampleRate } = decodeFlac(
+      new Uint8Array(readFileSync(path.join(dir, item.file)))
+    );
+    yield {
+      id: item.id,
+      lang: item.lang,
+      text: item.text,
+      ipa: item.ipa,
+      speaker: { ...item.speaker },
+      samples,
+      sampleRate,
+      review: { ...item.review },
+    };
+  }
 }
