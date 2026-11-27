@@ -33,73 +33,84 @@ function trieRoot(table, language) {
   const indices = new Map(
     table.tokens.map((token, i) => [soundKey(token, language), i])
   );
-  const cache = new Map();
   function asNode(id) {
-    if (!cache.has(id)) {
-      const start = table.offsets[id];
-      const end = table.offsets[id + 1];
-      cache.set(id, {
-        token: id === 0 ? undefined : table.tokens[table.feature[id]],
-        get entries() {
-          return table.entriesAt(id);
-        },
-        children: {
-          get(key) {
-            const feature = indices.get(key);
-            for (let i = start; i < end; i++) {
-              const child = table.children[i];
-              if (table.feature[child] === feature) {
-                return asNode(child);
-              }
+    const start = table.offsets[id];
+    const end = table.offsets[id + 1];
+    return {
+      token: id === 0 ? undefined : table.tokens[table.feature[id]],
+      get entries() {
+        return table.entriesAt(id);
+      },
+      children: {
+        get(key) {
+          const feature = indices.get(key);
+          for (let i = start; i < end; i++) {
+            const child = table.children[i];
+            if (table.feature[child] === feature) {
+              return asNode(child);
             }
-          },
-          *values() {
-            for (let i = start; i < end; i++) {
-              yield asNode(table.children[i]);
-            }
-          },
+          }
         },
-      });
-    }
-    return cache.get(id);
+        *values() {
+          for (let i = start; i < end; i++) {
+            yield asNode(table.children[i]);
+          }
+        },
+      },
+    };
   }
   return asNode(0);
 }
 
-export function openPreparedLexicon(rows, language, words) {
-  const [tokens, offsets, feature, wordOffsets, ids, readings] = rows;
-  const terminal = new Uint32Array(feature.length);
-  for (let i = 0; i < feature.length; i++) {
-    terminal[i] = Number(wordOffsets[i] < wordOffsets[i + 1]);
-  }
-  const parsed = new Map();
+function asUint32(values) {
+  return values instanceof Uint32Array ? values : Uint32Array.from(values);
+}
+
+function entryReader(words, offsets, ids, readings, withPrior) {
   const entries = new Map();
-  function entriesAt(node) {
-    if (!terminal[node]) {
+  return (node) => {
+    if (offsets[node] === offsets[node + 1]) {
       return [];
     }
     if (!entries.has(node)) {
+      if (entries.size === 256) {
+        entries.clear();
+      }
       const group = [];
-      for (let i = wordOffsets[node]; i < wordOffsets[node + 1]; i++) {
+      for (let i = offsets[node]; i < offsets[node + 1]; i++) {
         const ipa = readings[i];
-        if (!parsed.has(ipa)) {
-          parsed.set(
-            ipa,
-            parseIpa(ipa).tokens.filter((t) => t.kind !== 'pause')
-          );
-        }
-        group.push({ ...words[ids[i]], ipa, tokens: parsed.get(ipa) });
+        const word = words[ids[i]];
+        group.push({
+          ...word,
+          ...(withPrior && { prior: word.prior ?? word.count }),
+          ipa,
+          tokens: parseIpa(ipa).tokens.filter((t) => t.kind !== 'pause'),
+        });
       }
       entries.set(node, group);
     }
     return entries.get(node);
+  };
+}
+
+export function openPreparedLexicon(rows, language, words, withPrior = false) {
+  const [tokens, offsets, feature, wordOffsets, ids, readings] = rows;
+  const terminal = new Uint8Array(feature.length);
+  for (let i = 0; i < feature.length; i++) {
+    terminal[i] = Number(wordOffsets[i] < wordOffsets[i + 1]);
   }
   const table = createWordTrie({
-    offsets: Uint32Array.from(offsets),
-    feature: Uint32Array.from(feature),
+    offsets: asUint32(offsets),
+    feature: asUint32(feature),
     terminal,
     tokens,
-    entriesAt,
+    entriesAt: entryReader(
+      words,
+      asUint32(wordOffsets),
+      asUint32(ids),
+      readings,
+      withPrior
+    ),
   });
   return { table, root: trieRoot(table, language) };
 }

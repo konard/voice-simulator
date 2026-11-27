@@ -220,8 +220,11 @@ export function contextKey(unit, s, left, right) {
  * state, else the context-independent one.
  */
 export function stateIndex(model, unit, s, left, right) {
-  // Networks ask for the same states many times: cache them by unit,
-  // state, left and right phone without building string keys.
+  // An entry state depends only on the left phone; an exit state only
+  // on the right phone. The middle state has no context variants.
+  if (s === 1) {
+    return model.ciIndex.get(`${unit}#1`);
+  }
   let byUnit = stateCaches.get(model);
   if (!byUnit) {
     byUnit = new Map();
@@ -232,19 +235,12 @@ export function stateIndex(model, unit, s, left, right) {
     byState = [new Map(), new Map(), new Map()];
     byUnit.set(unit, byState);
   }
-  const l = left ?? null;
-  const r = right ?? null;
-  let byLeft = byState[s].get(l);
-  if (!byLeft) {
-    byLeft = new Map();
-    byState[s].set(l, byLeft);
+  const context = (s === 0 ? left : right) ?? null;
+  const states = byState[s];
+  if (!states.has(context)) {
+    states.set(context, findState(model, unit, s, left, right));
   }
-  let index = byLeft.get(r);
-  if (index === undefined) {
-    index = findState(model, unit, s, l, r);
-    byLeft.set(r, index);
-  }
-  return index;
+  return states.get(context);
 }
 
 const stateCaches = new WeakMap();

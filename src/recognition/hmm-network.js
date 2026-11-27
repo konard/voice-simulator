@@ -8,19 +8,18 @@
  */
 import { lexiconRevision } from '../g2p/lexicon.js';
 import { getLexicon } from './lexicon.js';
-import { stateIndex, toneClass, toneUnits } from './hmm-model.js';
-
-const TONES = ['', '˩', '˨', '˧', '˦', '˥'];
+import { getHmmModel, stateIndex, toneClass, toneUnits } from './hmm-model.js';
+import {
+  openHmmWords,
+  packHmmWords,
+  spokenTokenSelector,
+  tokenIpa,
+} from './hmm-pronunciations.js';
 
 /** Words per language in the decoding network. */
 export const HMM_MAX_WORDS = 20000;
 
-/** IPA of a lexicon token with its stress mark and tone letters. */
-export function tokenIpa(token) {
-  const tones = (token.tone ?? []).map((n) => TONES[n]).join('');
-  const stress = token.stress === 1 ? 'ˈ' : token.stress === 2 ? 'ˌ' : '';
-  return `${stress}${token.symbol}${tones}`;
-}
+export { tokenIpa } from './hmm-pronunciations.js';
 
 /**
  * Tone variants of a Mandarin pronunciation: a word-final third tone may
@@ -54,74 +53,160 @@ export function firstToneClass(tokens) {
   return toneClass(tokens.find((t) => t.tone?.length)?.tone);
 }
 
-/** Add a word to a prefix tree, one node per unit (see addTree). */
-function insertWord(builder, model, root, lang, words, wid) {
-  const { tokens, units } = words[wid];
-  let node = root;
-  tokens.forEach((t, i) => {
-    const left = i ? tokens[i - 1].symbol : null;
-    const right = i + 1 < tokens.length ? tokens[i + 1].symbol : null;
-    // Siblings that differ only in the next phone share a node when
-    // their exit states are the same.
-    const key = `${units[i]}>${stateIndex(model, units[i], 2, left, right)}>${stateIndex(model, `${units[i]}_r`, 2, left, right)}`;
-    let child = node.children.get(key);
-    if (!child) {
-      child = builder.newNode(units[i], lang, left, right);
-      node.children.set(key, child);
-    }
-    node = child;
-  });
-  node.words.push(wid);
+// Zero is the end of both linked lists. A word can end at more than one
+// node (Mandarin sandhi), so word links have their own IDs.
+const NODE_COLUMNS = {
+  first: Uint32Array,
+  count: Uint8Array,
+  optional: Uint8Array,
+  language: Uint8Array,
+  child: Uint32Array,
+  sibling: Uint32Array,
+  terminal: Uint32Array,
+  lookLn: Float64Array,
+};
+
+function grow(column) {
+  const larger = new column.constructor(column.length * 2);
+  larger.set(column);
+  return larger;
 }
 
 function createBuilder(model) {
-  const emit = [];
-  const nodes = [];
-  const addStates = (unit, left, right) => {
-    for (let s = 0; s < 3; s++) {
-      emit.push(stateIndex(model, unit, s, left, right));
-    }
+  const nodes = Object.fromEntries(
+    Object.entries(NODE_COLUMNS).map(([name, Type]) => [name, new Type(8192)])
+  );
+  const network = {
+    model,
+    nodes,
+    words: [],
+    trees: new Map(),
+    languages: [],
+    emit:
+      model.states > 65536 ? new Uint32Array(32768) : new Uint16Array(32768),
+    wordId: new Uint32Array(8192),
+    nextWord: new Uint32Array(8192),
+    nodeCount: 1,
+    stateCount: 0,
+    wordLinks: 1,
   };
-  const newNode = (symbol, lang, left = null, right = null) => {
-    const ex = model.expansions.get(symbol);
-    const released = Boolean(ex?.release) && model.ciIndex.has(`${symbol}_r#0`);
-    const node = {
-      id: nodes.length,
-      symbol,
-      lang,
-      first: emit.length,
-      count: released ? 6 : 3,
-      optional: released && ex.optional,
-      children: new Map(),
-      words: [],
-      lookLn: 0,
-    };
-    addStates(symbol, left, right);
-    if (released) {
-      addStates(`${symbol}_r`, left, right);
+
+  function addNode(lang, unit, left, right) {
+    const id = network.nodeCount++;
+    if (id === nodes.first.length) {
+      for (const key of Object.keys(nodes)) {
+        nodes[key] = grow(nodes[key]);
+      }
     }
-    nodes.push(node);
-    return node;
-  };
-  return { emit, nodes, newNode };
+    if (unit === undefined) {
+      return id; // A root has children but no emitting states.
+    }
+    const expansion = model.expansions.get(unit);
+    const release = `${unit}_r`;
+    const released = expansion?.release && model.ciIndex.has(`${release}#0`);
+    const first = network.stateCount;
+    const count = released ? 6 : 3;
+    if (first + count > network.emit.length) {
+      network.emit = grow(network.emit);
+    }
+    nodes.first[id] = first;
+    nodes.count[id] = count;
+    nodes.optional[id] = released && expansion.optional ? 1 : 0;
+    nodes.language[id] = lang;
+    for (let i = 0; i < count; i++) {
+      network.emit[first + i] = stateIndex(
+        model,
+        i < 3 ? unit : release,
+        i % 3,
+        left,
+        right
+      );
+    }
+    network.stateCount += count;
+    return id;
+  }
+
+  function addWord(node, wid) {
+    if (network.wordLinks === network.wordId.length) {
+      network.wordId = grow(network.wordId);
+      network.nextWord = grow(network.nextWord);
+    }
+    const link = network.wordLinks++;
+    network.wordId[link] = wid;
+    let tail = nodes.terminal[node];
+    if (tail === 0) {
+      nodes.terminal[node] = link;
+    } else {
+      while (network.nextWord[tail]) {
+        tail = network.nextWord[tail];
+      }
+      network.nextWord[tail] = link;
+    }
+  }
+
+  return { network, addNode, addWord };
 }
 
-function lookahead(node, uni) {
+function insertWord(builder, root, lang, wid, units) {
+  const { model, nodes, words } = builder.network;
+  const { tokens } = words[wid];
+  let node = root;
+  for (let i = 0; i < units.length; i++) {
+    const unit = units[i];
+    const left = tokens[i - 1]?.symbol ?? null;
+    const right = tokens[i + 1]?.symbol ?? null;
+    const middle = model.ciIndex.get(`${unit}#1`);
+    const exit = stateIndex(model, unit, 2, left, right);
+    const releaseExit = stateIndex(model, `${unit}_r`, 2, left, right);
+    const emit = builder.network.emit;
+    let child = nodes.child[node];
+    let last = 0;
+    // Preserve insertion order for deterministic ties. Siblings with the
+    // same unit and exit states share a node.
+    while (child) {
+      const first = nodes.first[child];
+      if (
+        emit[first + 1] === middle &&
+        emit[first + 2] === exit &&
+        (nodes.count[child] === 3 || emit[first + 5] === releaseExit)
+      ) {
+        break;
+      }
+      last = child;
+      child = nodes.sibling[child];
+    }
+    if (!child) {
+      child = builder.addNode(lang, unit, left, right);
+      if (last) {
+        nodes.sibling[last] = child;
+      } else {
+        nodes.child[node] = child;
+      }
+    }
+    node = child;
+  }
+  builder.addWord(node, wid);
+}
+
+function lookahead(network, node, uni) {
+  const { nodes, wordId, nextWord } = network;
   let best = -Infinity;
-  for (const id of node.words) {
-    best = Math.max(best, uni(id));
+  for (let link = nodes.terminal[node]; link; link = nextWord[link]) {
+    best = Math.max(best, uni(wordId[link]));
   }
-  for (const child of node.children.values()) {
-    best = Math.max(best, lookahead(child, uni));
+  for (let child = nodes.child[node]; child; child = nodes.sibling[child]) {
+    best = Math.max(best, lookahead(network, child, uni));
   }
-  node.lookLn = best;
+  nodes.lookLn[node] = best;
   return best;
 }
 
-function spokenTokens(entry) {
-  return entry.tokens.filter(
-    (t) => t.kind === 'vowel' || t.kind === 'consonant'
-  );
+function childrenOf(nodes, node) {
+  const children = [];
+  for (let child = nodes.child[node]; child; child = nodes.sibling[child]) {
+    children.push(child);
+  }
+  return children;
 }
 
 /**
@@ -131,7 +216,7 @@ function spokenTokens(entry) {
  * the ones before it (hmm-decode.js). `bigram` holds ln p of a phone after
  * the previous one ('' at the start of a word), from the pronunciations.
  */
-function addLoop(builder, lang, words, phones, pairs) {
+function addLoop(builder, lang, language, words, phones, pairs) {
   const symbols = [...phones.keys()].sort();
   const bigram = new Map();
   for (const from of ['', ...symbols]) {
@@ -149,9 +234,8 @@ function addLoop(builder, lang, words, phones, pairs) {
     );
   }
   const node = (symbol, begin) => {
-    const n = builder.newNode(symbol, lang);
-    n.loop = true;
-    n.words.push(words.length);
+    const n = builder.addNode(language, symbol);
+    builder.addWord(n, words.length);
     words.push({
       word: '',
       lang,
@@ -174,15 +258,15 @@ function addLoop(builder, lang, words, phones, pairs) {
  * tree of the words whose first syllable has it: the variant goes on there
  * only.
  */
-function sandhiTrees(builder, model, lang, words, ids) {
+function sandhiTrees(builder, lang, words, ids) {
   const after = new Map();
   for (const wid of ids) {
     const { before } = words[wid];
     if (before && !after.has(before)) {
-      const sub = { children: new Map() };
+      const sub = builder.addNode(lang);
       for (const id of ids) {
         if (firstToneClass(words[id].tokens) === before) {
-          insertWord(builder, model, sub, lang, words, id);
+          insertWord(builder, sub, lang, id, words[id].units);
         }
       }
       after.set(before, sub);
@@ -191,116 +275,259 @@ function sandhiTrees(builder, model, lang, words, ids) {
   return after;
 }
 
-function addTree(builder, model, lang, words, { maxWords, oov }) {
-  const lexicon = getLexicon(lang);
-  const root = { children: new Map() };
-  const silence = builder.newNode('sil', lang);
+let readPrepared;
+
+export function installPreparedHmm(read) {
+  readPrepared = read;
+}
+
+function* pronunciationEntries(lexicon, limit) {
+  const selectTokens = spokenTokenSelector();
+  yield* lexicon.pronunciations(limit, selectTokens);
+  yield* lexicon.addedPronunciations(limit, undefined, selectTokens);
+}
+
+function countPhonePairs(tokens, phones, pairs) {
+  tokens.forEach((token, i) => {
+    phones.set(token.symbol, token);
+    const from = i ? tokens[i - 1].symbol : '';
+    const row = pairs.get(from) ?? new Map();
+    pairs.set(from, row.set(token.symbol, (row.get(token.symbol) ?? 0) + 1));
+  });
+}
+
+function* recognizedVariants(lexicon, maxWords, model, tonal) {
   const seen = new Set();
-  const phones = new Map();
-  const pairs = new Map();
-  const tonal = lang === 'zh' && model.units.some((u) => u.includes('@'));
-  const ids = [];
-  const entries = [
-    ...lexicon.pronunciations(maxWords),
-    ...lexicon.addedPronunciations(maxWords),
-  ];
-  for (const entry of entries) {
-    const spoken = spokenTokens(entry);
+  let previousWord;
+  for (const entry of pronunciationEntries(lexicon, maxWords)) {
+    if (entry.word !== previousWord) {
+      previousWord = entry.word;
+      seen.clear();
+    }
     const variants = tonal
-      ? toneVariants(entry.word, spoken)
-      : [{ tokens: spoken }];
+      ? toneVariants(entry.word, entry.tokens)
+      : [{ tokens: entry.tokens }];
     for (const { tokens, before } of variants) {
       const units = tonal ? toneUnits(tokens) : tokens.map((t) => t.symbol);
       const ipa = tokens.map(tokenIpa).join(' ');
       if (
         !tokens.length ||
         units.some((u) => !model.ciIndex.has(`${u}#0`)) ||
-        seen.has(`${entry.word}\t${ipa}`)
+        seen.has(ipa)
       ) {
         continue;
       }
-      seen.add(`${entry.word}\t${ipa}`);
-      if (!tonal) {
-        tokens.forEach((t, i) => {
-          phones.set(t.symbol, t);
-          const from = i ? tokens[i - 1].symbol : '';
-          const row = pairs.get(from) ?? new Map();
-          pairs.set(from, row.set(t.symbol, (row.get(t.symbol) ?? 0) + 1));
-        });
-      }
-      const wid = words.length;
-      // `count` is the decoder's unigram backoff: the word's prior.
-      words.push({ word: entry.word, lang, tokens, units, count: entry.prior });
-      if (before) {
-        words[wid].before = before;
-      }
-      ids.push(wid);
-      insertWord(builder, model, root, lang, words, wid);
+      seen.add(ipa);
+      yield { word: entry.word, tokens, units, before, prior: entry.prior };
     }
   }
-  const after = sandhiTrees(builder, model, lang, words, ids);
+}
+
+function addTree(builder, lang, language, { maxWords, oov }) {
+  const { network } = builder;
+  const { model, nodes, words } = network;
+  const lexicon = getLexicon(lang);
+  const root = builder.addNode(language);
+  const silence = builder.addNode(language, 'sil');
+  const phones = new Map();
+  const pairs = new Map();
+  const tonal = lang === 'zh' && model.units.some((u) => u.includes('@'));
+  const hasLoop = oov && !tonal;
+  const ids = [];
+  for (const { word, tokens, units, before, prior } of recognizedVariants(
+    lexicon,
+    maxWords,
+    model,
+    tonal
+  )) {
+    if (hasLoop) {
+      countPhonePairs(tokens, phones, pairs);
+    }
+    const wid = words.length;
+    // `count` is the decoder's unigram backoff: the word's prior.
+    words.push({ word, lang, tokens, count: prior, ...(tonal && { units }) });
+    if (before) {
+      words[wid].before = before;
+    }
+    ids.push(wid);
+    insertWord(builder, root, language, wid, units);
+  }
+  const after = sandhiTrees(builder, language, words, ids);
   const uni = (id) => Math.log((words[id].count ?? 1) / lexicon.total);
   for (const tree of [root, ...after.values()]) {
-    for (const child of tree.children.values()) {
-      lookahead(child, uni);
-    }
+    lookahead(network, tree, uni);
   }
   return {
-    root: [...root.children.values()],
-    after: new Map([...after].map(([k, v]) => [k, [...v.children.values()]])),
+    root: childrenOf(nodes, root),
+    after: new Map([...after].map(([k, v]) => [k, childrenOf(nodes, v)])),
     silence,
-    loop:
-      oov && !tonal
-        ? addLoop(builder, lang, words, phones, pairs)
-        : { begin: [], next: [], bigram: new Map() },
+    loop: hasLoop
+      ? addLoop(builder, lang, language, words, phones, pairs)
+      : { begin: [], next: [], bigram: new Map() },
     data: lexicon,
   };
 }
 
-/**
- * Build the decoding network of the given languages: the lexicon trees of
- * the `maxWords` most frequent words and, with `oov` (default), a phone
- * loop per language without tones.
- */
+const linkedNodes = new Set(['child', 'sibling']);
+
+function appendColumn(column, source, start, delta = 0, sentinel = false) {
+  if (start + source.length > column.length) {
+    const larger = new column.constructor(
+      Math.max(start + source.length, column.length * 2)
+    );
+    larger.set(column);
+    column = larger;
+  }
+  if (!delta) {
+    column.set(source, start);
+  } else {
+    for (let i = 0; i < source.length; i++) {
+      const value = source[i];
+      column[start + i] = sentinel && value === 0 ? 0 : value + delta;
+    }
+  }
+  return column;
+}
+
+function appendPrepared(network, lang, language, packed) {
+  const { nodes, emit, wordId, nextWord, tree, words } = packed;
+  const lexicon = getLexicon(lang);
+  const first = network.words.length;
+  const nodeDelta = network.nodeCount - 1;
+  const linkDelta = network.wordLinks - 1;
+  for (const name of Object.keys(nodes)) {
+    const delta =
+      name === 'first'
+        ? network.stateCount
+        : name === 'terminal'
+          ? linkDelta
+          : linkedNodes.has(name)
+            ? nodeDelta
+            : name === 'language'
+              ? language
+              : 0;
+    network.nodes[name] = appendColumn(
+      network.nodes[name],
+      nodes[name],
+      network.nodeCount,
+      delta,
+      name === 'terminal' || linkedNodes.has(name)
+    );
+  }
+  network.emit = appendColumn(network.emit, emit, network.stateCount);
+  network.wordId = appendColumn(
+    network.wordId,
+    wordId,
+    network.wordLinks,
+    network.words.length
+  );
+  network.nextWord = appendColumn(
+    network.nextWord,
+    nextWord,
+    network.wordLinks,
+    linkDelta,
+    true
+  );
+  network.nodeCount += nodes.first.length;
+  network.stateCount += emit.length;
+  network.wordLinks += wordId.length;
+  const offset = (list) => list.map((id) => id + nodeDelta);
+  network.words.length += words.flags.length;
+  return {
+    root: offset(tree.root),
+    after: new Map(
+      [...tree.after].map(([tone, roots]) => [tone, offset(roots)])
+    ),
+    silence: tree.silence + nodeDelta,
+    loop: {
+      begin: offset(tree.loop.begin),
+      next: offset(tree.loop.next),
+      bigram: tree.loop.bigram,
+    },
+    data: lexicon,
+    wordTable: openHmmWords(words, lexicon.words, lang, first),
+  };
+}
+
+/** Precompute the shipped tree for an unmodified vocabulary. */
+export function packHmmNetwork(lang) {
+  const options = { maxWords: HMM_MAX_WORDS, oov: true };
+  const builder = createBuilder(getHmmModel());
+  const { network } = builder;
+  const { data, ...tree } = addTree(builder, lang, 0, options);
+  const nodes = Object.fromEntries(
+    Object.entries(network.nodes).map(([name, column]) => [
+      name,
+      column.slice(1, network.nodeCount),
+    ])
+  );
+  return {
+    nodes,
+    tree,
+    emit: network.emit.slice(0, network.stateCount),
+    wordId: network.wordId.slice(1, network.wordLinks),
+    nextWord: network.nextWord.slice(1, network.wordLinks),
+    words: packHmmWords(network.words, data.words),
+  };
+}
+
+function withLanguages(builder, languages, options) {
+  const { network } = builder;
+  const trees = new Map();
+  for (const lang of languages) {
+    if (!network.trees.has(lang)) {
+      const language = network.languages.length;
+      const packed =
+        options.prepared && readPrepared?.(lang, getLexicon(lang).words);
+      network.trees.set(
+        lang,
+        packed
+          ? appendPrepared(network, lang, language, packed)
+          : addTree(builder, lang, language, options)
+      );
+      network.languages.push(lang);
+    }
+    trees.set(lang, network.trees.get(lang));
+  }
+  return { ...network, trees };
+}
+
+/** Build a decoding network with the given languages and vocabulary. */
 export function buildNetwork(
   model,
   languages,
   { maxWords = HMM_MAX_WORDS, oov = true } = {}
 ) {
-  const builder = createBuilder(model);
-  const words = [];
-  const trees = new Map();
-  for (const lang of languages) {
-    trees.set(lang, addTree(builder, model, lang, words, { maxWords, oov }));
-  }
-  const emit = Int32Array.from(builder.emit);
-  return {
-    model,
-    nodes: builder.nodes,
-    words,
-    trees,
-    emit,
-    stay: Float64Array.from(emit, (m) => model.stay[m]),
-    go: Float64Array.from(emit, (m) => model.go[m]),
-  };
+  return withLanguages(createBuilder(model), languages, { maxWords, oov });
 }
 
 const networks = new WeakMap();
 
-/** Cached network of a model and language list. */
-export function getNetwork(model, languages, options = {}) {
-  // Pronunciations added with addLexicon() change the trees.
+/**
+ * Keep the most recent vocabulary configuration per model. Overlapping
+ * language lists share the same trees, including between batch and stream.
+ */
+export function getNetwork(
+  model,
+  languages,
+  { maxWords = HMM_MAX_WORDS, oov = true } = {}
+) {
   const revision = lexiconRevision();
-  const key = `${languages.join(',')}:${options.maxWords ?? HMM_MAX_WORDS}:${options.oov ?? true}`;
-  let byModel = networks.get(model);
-  if (!byModel || byModel.revision !== revision) {
-    byModel = Object.assign(new Map(), { revision });
-    networks.set(model, byModel);
+  let cached = networks.get(model);
+  if (
+    !cached ||
+    cached.revision !== revision ||
+    cached.maxWords !== maxWords ||
+    cached.oov !== oov
+  ) {
+    cached = { revision, maxWords, oov, builder: createBuilder(model) };
+    networks.set(model, cached);
   }
-  let network = byModel.get(key);
-  if (!network) {
-    network = buildNetwork(model, languages, options);
-    byModel.set(key, network);
-  }
-  return network;
+  const prepared =
+    revision === 0 &&
+    oov &&
+    maxWords === HMM_MAX_WORDS &&
+    readPrepared &&
+    model === getHmmModel();
+  return withLanguages(cached.builder, languages, { maxWords, oov, prepared });
 }

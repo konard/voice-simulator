@@ -8,7 +8,7 @@ import {
 } from '../src/recognition/hmm-features.js';
 import {
   HMM_DECODE_DEFAULTS,
-  languageThresholds,
+  createThresholds,
 } from '../src/recognition/hmm-decode.js';
 import { getHmmModel } from '../src/recognition/hmm-model.js';
 import {
@@ -79,7 +79,10 @@ it('adds the words of addLexicon() to the decoding network', () => {
     const entry = getNetwork(model, ['en'], { maxWords: 200 }).words.find(
       (w) => w.word === 'zorbex'
     );
-    assert.deepEqual(entry.units, ['z', 'ɔ', 'ɹ', 'b', 'ɛ', 'k', 's']);
+    assert.deepEqual(
+      entry.tokens.map((token) => token.symbol),
+      ['z', 'ɔ', 'ɹ', 'b', 'ɛ', 'k', 's']
+    );
     assert.ok(entry.count > 1);
   } finally {
     clearLexicons();
@@ -101,7 +104,7 @@ it('adds a phone loop for words outside the vocabulary unless oov is off', () =>
   }
   const closed = getNetwork(model, ['en'], { maxWords: 200, oov: false });
   assert.equal(closed.trees.get('en').loop.begin.length, 0);
-  assert.ok(closed.nodes.every((node) => !node.loop));
+  assert.ok(closed.words.every((word) => !word.oov));
 });
 
 it('stresses the longest full vowel of a word outside the vocabulary', () => {
@@ -156,9 +159,14 @@ it('lets a rising sandhi variant go on only before the tone that causes it', () 
   // The tree after a variant holds the words of that first tone only.
   for (const [before, roots] of tree.after) {
     const ids = [];
+    const { nodes, wordId, nextWord } = zh;
     const walk = (node) => {
-      ids.push(...node.words);
-      node.children.forEach(walk);
+      for (let link = nodes.terminal[node]; link; link = nextWord[link]) {
+        ids.push(wordId[link]);
+      }
+      for (let child = nodes.child[node]; child; child = nodes.sibling[child]) {
+        walk(child);
+      }
     };
     roots.forEach(walk);
     assert.ok(ids.length > 0);
@@ -171,24 +179,17 @@ it('lets a rising sandhi variant go on only before the tone that causes it', () 
 it('prunes each language against its own best token (issue 75)', () => {
   // English trails Mandarin by 200 at this frame, more than the beam of
   // 120: one beam over all languages would drop every English token.
-  const nodes = [{ lang: 'en' }, { lang: 'en' }, { lang: 'zh' }];
-  const frame = (en) => [
-    [0, en],
-    [1, en - 140],
-    [2, -300],
-  ];
+  const nodes = Uint8Array.of(0, 0, 1);
+  const frame = (en) => [en, en - 140, -300];
   const settings = { ...HMM_DECODE_DEFAULTS, beam: 120, languageBeam: 400 };
-  const kept = languageThresholds(nodes, frame(-500), -300, settings);
-  assert.equal(kept.get('en'), -620);
-  assert.equal(kept.get('zh'), -420);
+  const prune = (en, options = settings) =>
+    createThresholds(nodes, 2, options)([0, 1, 2], frame(en), 3, -300);
+  assert.deepEqual(prune(-500), Float64Array.of(-620, -420));
   // A language more than languageBeam behind the best goes.
-  const gone = languageThresholds(nodes, frame(-800), -300, settings);
-  assert.equal(gone.get('en'), -700);
+  assert.equal(prune(-800)[0], -700);
   // maxActive keeps the best nodes of each language, not of all.
-  const one = languageThresholds(nodes, frame(-500), -300, {
-    ...settings,
-    maxActive: 1,
-  });
-  assert.equal(one.get('en'), -500);
-  assert.equal(one.get('zh'), -420);
+  assert.deepEqual(
+    prune(-500, { ...settings, maxActive: 1 }),
+    Float64Array.of(-500, -420)
+  );
 });

@@ -2,6 +2,7 @@
 import { installLanguageModelReader } from './language-model.js';
 import { installPreparedLexicons } from './lexicon.js';
 import { openPreparedLexicon } from './prepared-lexicon.js';
+import { installPreparedHmm } from './hmm-network.js';
 import {
   installWordTransitionReader,
   openWordTransitions,
@@ -20,6 +21,13 @@ export const recognitionModelVersion = 2;
 export const recognitionDataFile = (kind) =>
   new globalThis.URL(
     `../engine/voice-simulator-recognition-${kind}.json.gz`,
+    import.meta.url
+  );
+
+export const hmmNetworkVersion = 1;
+export const hmmNetworkFile = (language) =>
+  new globalThis.URL(
+    `../engine/voice-simulator-hmm-${language}.bin.gz`,
     import.meta.url
   );
 
@@ -167,6 +175,17 @@ export function configureNodeRecognitionModels() {
     const [version, rows] = JSON.parse(zlib.gunzipSync(file).toString());
     return version === recognitionModelVersion ? rows : undefined;
   }
+  const v8 = process.getBuiltinModule('node:v8');
+  installPreparedHmm((language) => {
+    try {
+      const [version, network] = v8.deserialize(
+        zlib.gunzipSync(fs.readFileSync(hmmNetworkFile(language)))
+      );
+      return version === hmmNetworkVersion ? network : undefined;
+    } catch {
+      // Source installations can build the same network on demand.
+    }
+  });
   installPreparedLexicons((language, words) => {
     try {
       const rows = read(language);

@@ -108,19 +108,21 @@ function timedSegments(aligned) {
 export function hmmAudioToIpa(samples, sampleRate, options = {}) {
   const model = getHmmModel();
   const languages = options.languages ?? ['en', 'ru', 'hi', 'zh'];
-  const network = getNetwork(model, languages, {
-    maxWords: options.maxWords,
-    oov: options.oov,
-  });
   const analysis = analyzeFrames(samples, sampleRate, { hop: 0.01 });
   const { feats, frames, tone } = hmmFeatures(samples, sampleRate, model.lda);
   const search = { ...options.search, tone };
   // Features are normalised per input, so silence alone would decode as
   // words: decode only inputs with frames the front end calls speech.
-  const decoded =
+  const network =
     frames && hasSpeech(analysis)
-      ? decodeWords(network, feats, frames, search)
-      : { words: [], lang: null };
+      ? getNetwork(model, languages, {
+          maxWords: options.maxWords,
+          oov: options.oov,
+        })
+      : null;
+  const decoded = network
+    ? decodeWords(network, feats, frames, search)
+    : { words: [], lang: null };
   // Words from the phone loop get their own tokens to take a stress.
   decoded.words = decoded.words.map((w) =>
     w.oov ? { ...w, tokens: w.tokens.map((t) => ({ ...t })) } : w

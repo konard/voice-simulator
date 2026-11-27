@@ -4,7 +4,8 @@
  * recogniser, with the shipped word bigrams, beam and histogram pruning,
  * then a forced alignment of the best words for phone times. Unlicense.
  */
-import { stateIndex, stateScore } from './hmm-model.js';
+import { createFrontier } from './hmm-frontier.js';
+import { stateIndex, stateScore, toneUnits } from './hmm-model.js';
 
 export const HMM_DECODE_DEFAULTS = Object.freeze({
   // Beam of each language against its own best token: the languages share
@@ -96,56 +97,68 @@ function emissionCache(model, feats, { tone, toneWeight }) {
 
 function languageModel(network, records, settings) {
   const { lmw, wip, oovPhone, oovWeight, minCount } = settings;
-  const { words, trees } = network;
+  const { words } = network;
   const cache = new Map();
-  return (hist, id) => {
-    const w = words[id];
-    if (w.oov) {
-      const before = w.begin ? '' : words[records[hist].id].units[0];
-      const row = trees.get(w.lang).loop.bigram.get(before);
-      return oovWeight * row.get(w.units[0]) + oovPhone;
+  let total = 0;
+  return (hist, id, tree) => {
+    const { wordTable: packed, data, loop } = tree;
+    if (packed ? packed.oov(id) : words[id].oov) {
+      const beginning = packed ? packed.begin(id) : words[id].begin;
+      const phone = (wid) => (packed ? packed.phone(wid) : words[wid].units[0]);
+      const before = beginning ? '' : phone(records[hist].id);
+      return oovWeight * loop.bigram.get(before).get(phone(id)) + oovPhone;
     }
     const previous = hist >= 0 ? records[hist].word : null;
-    const key = `${previous ?? ''}\t${id}`;
-    let v = cache.get(key);
+    let known = cache.get(previous);
+    if (!known) {
+      known = new Map();
+      cache.set(previous, known);
+    }
+    let v = known.get(id);
     if (v === undefined) {
-      const data = trees.get(w.lang).data;
-      const row = previous ? data.transitionRow(w.word) : undefined;
+      const word = packed ? packed.name(id) : words[id].word;
+      const count = packed ? packed.count(id) : words[id].count;
+      const row = previous ? data.transitionRow(word) : undefined;
       const cost = row?.has(previous)
         ? row.get(previous)
-        : -0.3 *
-            Math.log((0.4 * Math.max(w.count ?? 1, minCount)) / data.total) +
+        : -0.3 * Math.log((0.4 * Math.max(count ?? 1, minCount)) / data.total) +
           0.5;
       v = lmw * lnProbability(cost) + wip;
-      cache.set(key, v);
+      // Long utterances can visit many predecessor/candidate pairs.
+      if (total === 16384) {
+        cache.clear();
+        known.clear();
+        cache.set(previous, known);
+        total = 0;
+      }
+      known.set(id, v);
+      total++;
     }
     return v;
   };
 }
 
-function enter(map, node, score, hist, start) {
-  const e = map.get(node);
-  if (!e || score > e[0]) {
-    map.set(node, [score, hist, start]);
-  }
-}
-
 /** Tokens at the roots, loops and silences of every language at frame 0. */
-function initialEntries(network, records, languages, { lmw, oovStart }) {
-  const entries = new Map();
+function initialEntries(
+  entries,
+  network,
+  records,
+  languages,
+  { lmw, oovStart }
+) {
+  const { lookLn } = network.nodes;
   for (const lang of languages) {
     const tree = network.trees.get(lang);
     const startRecord = records.length;
     records.push({ word: null, lang, prev: -1, start: 0, end: 0, score: 0 });
     for (const node of tree.root) {
-      enter(entries, node.id, lmw * node.lookLn, startRecord, 0);
+      entries.enter(node, lmw * lookLn[node], startRecord, 0);
     }
     for (const node of tree.loop.begin) {
-      enter(entries, node.id, oovStart, startRecord, 0);
+      entries.enter(node, oovStart, startRecord, 0);
     }
-    enter(entries, tree.silence.id, 0, startRecord, 0);
+    entries.enter(tree.silence, 0, startRecord, 0);
   }
-  return entries;
 }
 
 /**
@@ -159,35 +172,36 @@ function restart(next, network, records, rec, settings) {
   const r = records.length;
   records.push(rec);
   const tree = network.trees.get(rec.lang);
-  const before = network.words[rec.id].before;
+  const { before } = rec;
+  const { lookLn } = network.nodes;
   if (before) {
     for (const child of tree.after.get(before)) {
-      enter(next, child.id, rec.score + lmw * child.lookLn, r, rec.end);
+      next.enter(child, rec.score + lmw * lookLn[child], r, rec.end);
     }
     return;
   }
   for (const child of tree.root) {
-    enter(next, child.id, rec.score + lmw * child.lookLn, r, rec.end);
+    next.enter(child, rec.score + lmw * lookLn[child], r, rec.end);
   }
   for (const node of tree.loop.begin) {
-    enter(next, node.id, rec.score + oovStart, r, rec.end);
+    next.enter(node, rec.score + oovStart, r, rec.end);
   }
   if (rec.oov) {
     for (const node of tree.loop.next) {
-      enter(next, node.id, rec.score, r, rec.end);
+      next.enter(node, rec.score, r, rec.end);
     }
   }
-  enter(next, tree.silence.id, rec.score + silencePenalty, r, rec.end);
+  next.enter(tree.silence, rec.score + silencePenalty, r, rec.end);
 }
 
 /** The best word that ended on `end` and needs no following word. */
-function bestEndingAt(network, records, end) {
+function bestEndingAt(records, end) {
   let best = null;
   for (const r of records) {
     if (
       r.word !== null &&
       r.end === end &&
-      !network.words[r.id].before &&
+      !r.before &&
       (!best || r.score > best.score)
     ) {
       best = r;
@@ -203,15 +217,15 @@ function bestEndingAt(network, records, end) {
  * of different lengths are not comparable, so that end is only a fallback.
  */
 function finalRecord(network, records, languages, frames, last) {
-  const { stamp, prev, prevHist } = last;
-  let best = bestEndingAt(network, records, frames);
+  const { stamp, positions, scores, histories } = last;
+  let best = bestEndingAt(records, frames);
   for (const lang of languages) {
     const sil = network.trees.get(lang).silence;
-    const j = sil.first + 2;
-    if (stamp[sil.id] === frames - 1 && prev[j] > (best?.score ?? -Infinity)) {
-      const h = prevHist[j];
+    const j = positions[sil] * 6 + 2;
+    if (stamp[sil] === frames - 1 && scores[j] > (best?.score ?? -Infinity)) {
+      const h = histories[j];
       if (h >= 0 && records[h].word !== null) {
-        best = { ...records[h], score: prev[j] };
+        best = { ...records[h], score: scores[j] };
       }
     }
   }
@@ -224,17 +238,24 @@ function finalRecord(network, records, languages, frames, last) {
       end = r.end;
     }
   }
-  return end < 0 ? null : bestEndingAt(network, records, end);
+  return end < 0 ? null : bestEndingAt(records, end);
 }
 
 /**
  * Words of the best record back to the start; loop phones that go on with
  * an out-of-vocabulary word join it.
  */
-function backtrace(words, records, best) {
+function backtrace(network, records, best) {
   const out = [];
   for (let r = best; r && r.word !== null; r = records[r.prev] ?? null) {
-    const w = { ...words[r.id], start: r.start, end: r.end };
+    const table = network.trees.get(r.lang).wordTable;
+    const word = table ? table.read(r.id) : network.words[r.id];
+    const units =
+      word.units ??
+      (r.lang === 'zh'
+        ? toneUnits(word.tokens)
+        : word.tokens.map((token) => token.symbol));
+    const w = { ...word, units, start: r.start, end: r.end };
     const after = out[0];
     if (after?.oov && !after.begin && after.start === w.end) {
       // A loop phone that goes on with the word before it.
@@ -256,28 +277,65 @@ function backtrace(words, records, best) {
  * best token, at most `languageBeam` below the best of all, and its
  * `maxActive` best nodes.
  */
-export function languageThresholds(nodes, processed, best, settings) {
+export function createThresholds(nodes, languageCount, settings) {
   const { beam, languageBeam, maxActive } = settings;
-  const values = new Map();
-  for (const [id, nodeBest] of processed) {
-    const { lang } = nodes[id];
-    if (!values.has(lang)) {
-      values.set(lang, []);
+  const rows = Array.from(
+    { length: languageCount },
+    () => new Float64Array(256)
+  );
+  const sizes = new Uint32Array(languageCount);
+  const peaks = new Float64Array(languageCount);
+  const thresholds = new Float64Array(languageCount);
+  return (work, scores, length, best) => {
+    sizes.fill(0);
+    peaks.fill(-Infinity);
+    for (let i = 0; i < length; i++) {
+      const language = nodes[work[i]];
+      const score = scores[i];
+      const size = sizes[language]++;
+      if (size === rows[language].length) {
+        const expanded = new Float64Array(size * 2);
+        expanded.set(rows[language]);
+        rows[language] = expanded;
+      }
+      rows[language][size] = score;
+      peaks[language] = Math.max(peaks[language], score);
     }
-    values.get(lang).push(nodeBest);
-  }
-  const thresholds = new Map();
-  for (const [lang, scores] of values) {
-    const own = scores.reduce((a, b) => Math.max(a, b), -Infinity);
-    let threshold = Math.max(own - beam, best - languageBeam);
-    if (scores.length > maxActive) {
-      scores.sort((a, b) => b - a);
-      threshold = Math.max(threshold, scores[maxActive - 1]);
+    for (let i = 0; i < rows.length; i++) {
+      let threshold = Math.max(peaks[i] - beam, best - languageBeam);
+      if (sizes[i] > maxActive) {
+        rows[i].subarray(0, sizes[i]).sort();
+        threshold = Math.max(threshold, rows[i][sizes[i] - maxActive]);
+      }
+      thresholds[i] = threshold;
     }
-    thresholds.set(lang, threshold);
-  }
-  return thresholds;
+    return thresholds;
+  };
 }
+
+// Only the nodes visited by the beam need state scores and history.
+function stateFrame(rows) {
+  return {
+    scores: new Float64Array(6 * rows),
+    histories: new Int32Array(6 * rows),
+    starts: new Int32Array(6 * rows),
+  };
+}
+
+function createWorkspace(nodeCount) {
+  return {
+    positions: new Uint32Array(nodeCount),
+    stamp: new Int32Array(nodeCount),
+    previous: stateFrame(256),
+    current: stateFrame(256),
+    entries: createFrontier(nodeCount),
+    next: createFrontier(nodeCount),
+    work: [],
+    processed: [],
+  };
+}
+
+const workspaces = new WeakMap();
 
 /**
  * Best word sequence of the frames: words with their tokens, units and
@@ -287,149 +345,194 @@ export function languageThresholds(nodes, processed, best, settings) {
  * `options.tone` (the `tone` of hmmFeatures) adds the tone stream.
  */
 export function decodeWords(network, feats, frames, options = {}) {
+  const prior = workspaces.get(network.model);
+  const workspace =
+    prior?.stamp.length === network.nodeCount
+      ? prior
+      : createWorkspace(network.nodeCount);
+  // A word-end callback can start another decode synchronously.
+  workspaces.delete(network.model);
+  try {
+    return decodeWithWorkspace(network, feats, frames, options, workspace);
+  } finally {
+    workspace.entries.clear();
+    workspace.next.clear();
+    workspaces.set(network.model, workspace);
+  }
+}
+
+// Keep the order of emission, pruning and word ends explicit in the loop.
+// eslint-disable-next-line max-lines-per-function
+function decodeWithWorkspace(network, feats, frames, options, workspace) {
   const settings = { ...HMM_DECODE_DEFAULTS, ...options };
   const { lmw, releaseSkip, oovStart } = settings;
   const languages = settings.languages ?? [...network.trees.keys()];
-  const { nodes, words, emit, stay, go, trees } = network;
-  const S = emit.length;
+  const { nodes, words, emit, trees, wordId, nextWord } = network;
+  const { stay, go } = network.model;
+  const { first, count, optional, child, sibling, terminal, lookLn } = nodes;
   const score = emissionCache(network.model, feats, settings);
-  let prev = new Float64Array(S).fill(-Infinity);
-  let cur = new Float64Array(S).fill(-Infinity);
-  let prevHist = new Int32Array(S);
-  let curHist = new Int32Array(S);
-  let prevStart = new Int32Array(S);
-  let curStart = new Int32Array(S);
-  const stamp = new Int32Array(nodes.length).fill(-2);
+  let { previous, current, entries, next } = workspace;
+  const { positions, stamp, work, processed } = workspace;
+  stamp.fill(-2);
   const records = [];
   const lm = languageModel(network, records, settings);
-  let entries = initialEntries(network, records, languages, settings);
-  let active = [];
+  const thresholdsOf = createThresholds(
+    nodes.language,
+    network.languages.length,
+    settings
+  );
+  initialEntries(entries, network, records, languages, settings);
+  let active = 0;
+  const wordEnds = new Map();
   for (let t = 0; t < frames; t++) {
-    const work = new Set(active);
-    for (const id of entries.keys()) {
-      work.add(id);
+    let length = active;
+    for (let i = 0; i < entries.length; i++) {
+      const id = entries.nodes[i];
+      if (stamp[id] !== t - 1) {
+        work[length++] = id;
+      }
     }
+    if (current.scores.length < 6 * length) {
+      current = stateFrame(Math.max(length, current.scores.length / 3));
+    }
+    const { scores, histories, starts } = current;
     let best = -Infinity;
-    const processed = [];
-    for (const id of work) {
-      const node = nodes[id];
-      const f = node.first;
-      const wasActive = stamp[id] === t - 1;
-      const entry = entries.get(id);
+    for (let index = 0; index < length; index++) {
+      const id = work[index];
+      const f = first[id];
+      const wasActive = index < active;
+      const prior = positions[id] * 6;
+      const offset = index * 6;
+      const entry = entries.at(id);
       let nodeBest = -Infinity;
-      for (let i = node.count - 1; i >= 0; i--) {
-        const j = f + i;
+      for (let i = 0; i < count[id]; i++) {
+        const j = prior + i;
+        const state = f + i;
         let s = -Infinity;
         let hist = 0;
         let start = 0;
         if (wasActive) {
-          s = prev[j] + stay[j];
-          hist = prevHist[j];
-          start = prevStart[j];
-          if (i > 0 && prev[j - 1] + go[j - 1] > s) {
-            s = prev[j - 1] + go[j - 1];
-            hist = prevHist[j - 1];
-            start = prevStart[j - 1];
+          s = previous.scores[j] + stay[emit[state]];
+          hist = previous.histories[j];
+          start = previous.starts[j];
+          if (i > 0 && previous.scores[j - 1] + go[emit[state - 1]] > s) {
+            s = previous.scores[j - 1] + go[emit[state - 1]];
+            hist = previous.histories[j - 1];
+            start = previous.starts[j - 1];
           }
         }
-        if (i === 0 && entry && entry[0] > s) {
-          [s, hist, start] = entry;
+        if (i === 0 && entry >= 0 && entries.scores[entry] > s) {
+          s = entries.scores[entry];
+          hist = entries.histories[entry];
+          start = entries.starts[entry];
         }
         if (s > -Infinity) {
-          s += score(emit[j], t);
+          s += score(emit[state], t);
         }
-        cur[j] = s;
-        curHist[j] = hist;
-        curStart[j] = start;
+        scores[offset + i] = s;
+        histories[offset + i] = hist;
+        starts[offset + i] = start;
         nodeBest = Math.max(nodeBest, s);
       }
       best = Math.max(best, nodeBest);
-      processed.push([id, nodeBest]);
+      processed[index] = nodeBest;
     }
-    const thresholds = languageThresholds(nodes, processed, best, settings);
-    const next = new Map();
-    const nextActive = [];
-    const wordEnds = new Map();
-    for (const [id, nodeBest] of processed) {
-      const node = nodes[id];
-      const threshold = thresholds.get(node.lang);
-      if (nodeBest < threshold) {
+    const thresholds = thresholdsOf(work, processed, length, best);
+    active = 0;
+    wordEnds.clear();
+    for (let index = 0; index < length; index++) {
+      const id = work[index];
+      const language = nodes.language[id];
+      const threshold = thresholds[language];
+      if (processed[index] < threshold) {
         continue;
       }
-      const f = node.first;
-      for (let i = 0; i < node.count; i++) {
-        if (cur[f + i] < threshold) {
-          cur[f + i] = -Infinity;
+      const offset = index * 6;
+      for (let i = 0; i < count[id]; i++) {
+        if (scores[offset + i] < threshold) {
+          scores[offset + i] = -Infinity;
         }
       }
+      positions[id] = index;
       stamp[id] = t;
-      nextActive.push(id);
-      const last = f + node.count - 1;
-      let exit = cur[last] + go[last];
-      let hist = curHist[last];
-      let start = curStart[last];
-      if (node.optional && cur[f + 2] + go[f + 2] + releaseSkip > exit) {
-        exit = cur[f + 2] + go[f + 2] + releaseSkip;
-        hist = curHist[f + 2];
-        start = curStart[f + 2];
+      work[active++] = id;
+      const last = count[id] - 1;
+      const firstState = first[id];
+      let exit = scores[offset + last] + go[emit[firstState + last]];
+      let hist = histories[offset + last];
+      let start = starts[offset + last];
+      if (optional[id]) {
+        const skipped =
+          scores[offset + 2] + go[emit[firstState + 2]] + releaseSkip;
+        if (skipped > exit) {
+          exit = skipped;
+          hist = histories[offset + 2];
+          start = starts[offset + 2];
+        }
       }
       if (exit < threshold) {
         continue;
       }
-      const tree = trees.get(node.lang);
-      if (node === tree.silence) {
+      const lang = network.languages[language];
+      const tree = trees.get(lang);
+      if (id === tree.silence) {
         // Silence returns to the root with the same history.
         for (const child of tree.root) {
-          enter(next, child.id, exit + lmw * child.lookLn, hist, t + 1);
+          next.enter(child, exit + lmw * lookLn[child], hist, t + 1);
         }
         for (const loopNode of tree.loop.begin) {
-          enter(next, loopNode.id, exit + oovStart, hist, t + 1);
+          next.enter(loopNode, exit + oovStart, hist, t + 1);
         }
         continue;
       }
-      const look = lmw * node.lookLn;
-      for (const child of node.children.values()) {
-        enter(next, child.id, exit + lmw * child.lookLn - look, hist, start);
+      const look = lmw * lookLn[id];
+      for (let kid = child[id]; kid; kid = sibling[kid]) {
+        next.enter(kid, exit + lmw * lookLn[kid] - look, hist, start);
       }
-      for (const wid of node.words) {
-        const s = exit - look + lm(hist, wid);
+      for (let link = terminal[id]; link; link = nextWord[link]) {
+        const wid = wordId[link];
+        const s = exit - look + lm(hist, wid, tree);
         settings.onWordEnd?.(wid, s - best, start, t + 1);
-        const { lang, before } = words[wid];
+        const packed = tree.wordTable;
+        const before = packed ? packed.before(wid) : words[wid].before;
         // One word end per language and frame, apart for sandhi variants.
         const key = before ? `${lang}${before}` : lang;
         const end = wordEnds.get(key);
         if (!end || s > end.score) {
           wordEnds.set(key, {
-            word: words[wid].word,
+            word: packed ? packed.name(wid) : words[wid].word,
+            before,
             id: wid,
             lang,
             prev: hist,
             start,
             end: t + 1,
             score: s,
-            oov: Boolean(words[wid].oov),
+            oov: packed ? packed.oov(wid) : Boolean(words[wid].oov),
           });
         }
       }
     }
     for (const rec of wordEnds.values()) {
-      if (rec.score >= thresholds.get(rec.lang)) {
+      if (
+        rec.score >= thresholds[nodes.language[trees.get(rec.lang).silence]]
+      ) {
         restart(next, network, records, rec, settings);
       }
     }
-    entries = next;
-    active = nextActive;
-    [prev, cur] = [cur, prev];
-    [prevHist, curHist] = [curHist, prevHist];
-    [prevStart, curStart] = [curStart, prevStart];
+    entries.clear();
+    [entries, next] = [next, entries];
+    [previous, current] = [current, previous];
   }
   const best = finalRecord(network, records, languages, frames, {
     stamp,
-    prev,
-    prevHist,
+    positions,
+    ...previous,
   });
+  workspace.previous = previous;
+  workspace.current = current;
   return {
-    words: backtrace(words, records, best),
+    words: backtrace(network, records, best),
     score: best?.score ?? -Infinity,
     lang: best?.lang ?? null,
   };

@@ -1,8 +1,11 @@
 /** Build the optional cold-start data for the recognition command. Unlicense. */
 import { Buffer } from 'node:buffer';
 import { writeFileSync } from 'node:fs';
+import { serialize } from 'node:v8';
 import { gzipSync } from 'node:zlib';
 import {
+  hmmNetworkFile,
+  hmmNetworkVersion,
   packLanguageModel,
   recognitionDataFile,
   recognitionModelVersion,
@@ -13,15 +16,21 @@ import { LANGUAGES } from '../src/g2p/index.js';
 import { packWordTransitions } from '../src/recognition/data/index.js';
 import { getLanguageModel } from '../src/recognition/language-model.js';
 import { getLexicon } from '../src/recognition/lexicon.js';
+import { packHmmNetwork } from '../src/recognition/hmm-network.js';
 import { serializeLexicon } from '../src/recognition/prepared-lexicon.js';
 import { buildRecognitionCodebook } from './build-recognition-codebook.mjs';
 
-function write(file, rows) {
-  const asset = gzipSync(
-    Buffer.from(JSON.stringify([recognitionModelVersion, rows]))
-  );
+function writeAsset(file, bytes) {
+  const asset = gzipSync(bytes);
   writeFileSync(file, asset);
   console.log(`${file.pathname.split('/').at(-1)}: ${asset.length} bytes`);
+}
+
+function write(file, rows) {
+  writeAsset(
+    file,
+    Buffer.from(JSON.stringify([recognitionModelVersion, rows]))
+  );
 }
 
 function writeWordTransitions(language) {
@@ -41,9 +50,11 @@ function writeWordTransitions(language) {
 }
 
 const models = Object.keys(LANGUAGES).map((language) => {
-  write(
-    recognitionDataFile(language),
-    serializeLexicon(getLexicon(language), language)
+  const lexicon = getLexicon(language);
+  write(recognitionDataFile(language), serializeLexicon(lexicon, language));
+  writeAsset(
+    hmmNetworkFile(language),
+    serialize([hmmNetworkVersion, packHmmNetwork(language)])
   );
   writeWordTransitions(language);
   return [language, packLanguageModel(getLanguageModel(language))];

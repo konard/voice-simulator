@@ -15,21 +15,26 @@ export function createWordTrie({
   for (let i = 0; i < children.length; i++) {
     children[i] = i + 1;
   }
-  const topology = new Uint32Array(
-    offsets.length + children.length + feature.length + terminal.length
-  );
-  let start = 0;
-  for (const column of [offsets, children, feature, terminal]) {
-    topology.set(column, start);
-    start += column.length;
-  }
   const tokenGaps = tokens.map(gapCost);
   const gaps = new Float64Array(feature.length);
   for (let i = 1; i < gaps.length; i++) {
     gaps[i] = tokenGaps[feature[i]];
   }
+  let topology;
   return {
-    topology,
+    get topology() {
+      if (!topology) {
+        topology = new Uint32Array(
+          offsets.length + children.length + feature.length + terminal.length
+        );
+        let start = 0;
+        for (const column of [offsets, children, feature, terminal]) {
+          topology.set(column, start);
+          start += column.length;
+        }
+      }
+      return topology;
+    },
     offsets,
     children,
     feature,

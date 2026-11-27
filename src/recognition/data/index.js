@@ -210,6 +210,9 @@ export function getCounts(language) {
             indexBigrams(data.BIGRAMS, words);
           const row = openRow(word);
           if (row) {
+            if (rows.size === 1024) {
+              rows.delete(rows.keys().next().value);
+            }
             rows.set(word, row);
           }
         }

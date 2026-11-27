@@ -73,6 +73,9 @@ function openVslex(data) {
   const cache = new Map();
   const block = (index) => {
     if (!cache.has(index)) {
+      if (cache.size === 64) {
+        cache.delete(cache.keys().next().value);
+      }
       cache.set(index, new Map(decodeBlock(data, index, tables)));
     }
     return cache.get(index);
@@ -90,7 +93,9 @@ function openVslex(data) {
     lookup,
     *words() {
       for (let index = 0; index < data.blocks.length; index++) {
-        yield* block(index).keys();
+        for (const [word] of decodeBlock(data, index, tables)) {
+          yield word;
+        }
       }
     },
   };
