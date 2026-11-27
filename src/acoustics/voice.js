@@ -570,7 +570,7 @@ export class VoiceRenderer {
     return this.position >= this.totalSamples;
   }
 
-  #updateShape(configure) {
+  #setTract() {
     this.shape = blockShape(
       this.plan,
       this.time,
@@ -592,6 +592,20 @@ export class VoiceRenderer {
     );
     this.solver.setLength?.(this.shape.length);
     this.stepDuration = this.solver.stepDuration(this.shape);
+  }
+
+  #updateShape(configure) {
+    if (
+      this.shape &&
+      this.plan[STEADY_TRACT] &&
+      this.#builtinSolver &&
+      this.solver instanceof Waveguide &&
+      this.source === 'lf'
+    ) {
+      this.state.time = this.time;
+    } else {
+      this.#setTract();
+    }
     const rate = 1 / this.stepDuration;
     this.noise.configure(rate);
     this.#updateAirflow(rate);
