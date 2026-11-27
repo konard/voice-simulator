@@ -345,7 +345,7 @@ function packedGeometry(head, options, solver, packModel) {
  * shapes. Needs no engine, so a job can be written for the CLI.
  */
 export class FramePlanner {
-  #tract = createTractWorkspace();
+  #tract;
 
   /**
    * @param {object} plan Result of planUtterance.
@@ -363,6 +363,10 @@ export class FramePlanner {
     options = headListening(this.head, options);
     this.sampleRate = options.sampleRate ?? 48000;
     this.sections = options.sections ?? 44;
+    this.#tract = createTractWorkspace({
+      sections: this.sections,
+      reuseAreas: true,
+    });
     this.blockSize = options.blockSize ?? 32;
     this.teeth = options.teeth !== false;
     this.stride = frameStride(this.sections);

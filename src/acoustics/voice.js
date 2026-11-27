@@ -365,7 +365,7 @@ export class OutputStage {
 }
 
 export class VoiceRenderer {
-  #tract = createTractWorkspace();
+  #tract;
   #builtinSolver;
 
   /**
@@ -404,6 +404,7 @@ export class VoiceRenderer {
     options = headListening(this.head, options);
     this.sampleRate = options.sampleRate ?? 48000;
     this.sections = options.sections ?? 44;
+    this.#tract = createTractWorkspace({ sections: this.sections });
     this.blockSize = options.blockSize ?? 32;
     this.teeth = options.teeth !== false;
     const seed = options.seed ?? 1;

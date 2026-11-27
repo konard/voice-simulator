@@ -52,8 +52,8 @@ const MIN_STRETCH = 0.3;
 /** Smaller changes of length (cm) leave the sections as they are. */
 const MIN_LENGTH_CHANGE = 1e-5;
 
-/** Intermediate shapes owned by one renderer. Published shapes own their areas. */
-export function createTractWorkspace() {
+/** Scratch for a renderer. Frame writers can also reuse unpublished areas. */
+export function createTractWorkspace({ sections, reuseAreas = false } = {}) {
   return {
     full: { ...CHANNEL_DEFAULTS, time: 0 },
     vowel: {
@@ -61,6 +61,9 @@ export function createTractWorkspace() {
       values: new Float64Array(VOWEL_SECTIONS + 1),
       shape: { areas: new Float64Array(VOWEL_SECTIONS), length: 0 },
     },
+    lengths: sections === undefined ? undefined : new Float64Array(sections),
+    fitted: reuseAreas ? new Float64Array(sections) : undefined,
+    stretched: reuseAreas ? new Float64Array(sections) : undefined,
   };
 }
 
@@ -225,10 +228,10 @@ function regionScale(x, head, openness) {
  * @param {Record<string, number>} head Normalised head config.
  * @param {{sections?: number, openness?: number}} [options]
  */
-export function fitToHead(shape, head, options = {}) {
+export function fitToHead(shape, head, options = {}, target) {
   const sections = options.sections ?? TRACT_SECTIONS;
   const openness = options.openness ?? 0.5;
-  const areas = new Float64Array(sections);
+  const areas = target ?? new Float64Array(sections);
   for (let index = 0; index < sections; index++) {
     const x = index / (sections - 1);
     const area = sampleLinear(shape.areas, warpPosition(x, head.pharynxRatio));
@@ -256,12 +259,16 @@ function overlap(from, to, low, high) {
  *   total length (cm).
  */
 export function stretchSections(areas, lengths, sections = areas.length) {
+  return stretchInto(areas, lengths, sections);
+}
+
+function stretchInto(areas, lengths, sections, result) {
   const count = areas.length;
   let length = 0;
   for (let index = 0; index < count; index++) {
     length += lengths[index];
   }
-  const result = new Float64Array(sections);
+  result ??= new Float64Array(sections);
   const step = length / sections;
   let index = 0;
   let start = 0;
@@ -290,11 +297,11 @@ export function stretchSections(areas, lengths, sections = areas.length) {
  * and the last LIP_REGION cm share them; no section gets shorter than
  * MIN_STRETCH of its length.
  */
-function stretchedLengths(count, length, larynx, lips) {
+function stretchedLengths(count, length, larynx, lips, target) {
   const step = length / count;
   const larynxRegion = Math.min(LARYNX_REGION, length);
   const lipRegion = Math.min(LIP_REGION, length);
-  const lengths = new Float64Array(count);
+  const lengths = target ?? new Float64Array(count);
   for (let index = 0; index < count; index++) {
     const from = index * step;
     const to = from + step;
@@ -482,6 +489,50 @@ function stateWithDefaults(state, full) {
   return Object.assign(full, CHANNEL_DEFAULTS, state);
 }
 
+function warpTract(reference, head, sections, openness, free, workspace) {
+  const { lengths: lengthTarget, fitted, stretched } = workspace;
+  const { areas, length } = fitToHead(
+    reference,
+    head,
+    { sections, openness },
+    fitted?.length === sections ? fitted : undefined
+  );
+  const count = areas.length;
+  const velum = Math.round(
+    ((count - 1) * head.pharynxRatio * VELUM_POSITION) / REFERENCE_PHARYNX
+  );
+  applyTongueRoot(areas, length, velum, free.tongueRoot, head.tongueRootArea);
+  // Each change of length goes to the place of its organ; landmarks keep
+  // their distance from the lips. With Float32 channels, a protrusion
+  // that follows rounding may still differ by about 1e-8 cm.
+  const larynx = -free.larynxHeight;
+  const lips = free.lipProtrusion - free.expectedProtrusion;
+  if (
+    Math.abs(larynx) > MIN_LENGTH_CHANGE ||
+    Math.abs(lips) > MIN_LENGTH_CHANGE
+  ) {
+    const lengths = stretchedLengths(
+      count,
+      length,
+      larynx,
+      lips,
+      lengthTarget?.length === count ? lengthTarget : undefined
+    );
+    const equal = stretchInto(
+      areas,
+      lengths,
+      count,
+      stretched?.length === count ? stretched : undefined
+    );
+    return {
+      ...equal,
+      velum,
+      place: landmarkMap(lengths, length, equal.length),
+    };
+  }
+  return { areas, length, velum, place: (index) => index };
+}
+
 /**
  * Full tract description for one moment.
  * @param {Record<string, number>} state Articulator channels (see plan.js).
@@ -490,13 +541,8 @@ function stateWithDefaults(state, full) {
  *   `teeth: false` leaves out the incisors (constriction and obstacle noise
  *   source); `vowelCorrections` overrides the vowel calibration.
  */
-export function tractShape(
-  state,
-  head,
-  options = {},
-  { full: channels, vowel } = {}
-) {
-  const full = stateWithDefaults(state, channels);
+export function tractShape(state, head, options = {}, workspace = {}) {
+  const full = stateWithDefaults(state, workspace.full);
   const free = articulatorState(state, head, full);
   full.jaw = free.jaw;
   // The mouth from x = 0.55 of the head's tract on; the lower lip rides
@@ -516,41 +562,17 @@ export function tractShape(
         (jawScale(free.jaw, free.expectedJaw, head.jawArea) - 1) * (1 - held),
       from: warpPosition(JAW_START, head.pharynxRatio),
     },
-    vowel
+    workspace.vowel
   );
   const openness = Math.max(0, Math.min(1, 1 - full.height));
-  const fitted = fitToHead(reference, head, {
-    sections: options.sections,
+  const { areas, length, velum, place } = warpTract(
+    reference,
+    head,
+    options.sections ?? TRACT_SECTIONS,
     openness,
-  });
-  let { areas, length } = fitted;
-  const restVelum = Math.round(
-    ((areas.length - 1) * head.pharynxRatio * VELUM_POSITION) /
-      REFERENCE_PHARYNX
+    free,
+    workspace
   );
-  applyTongueRoot(
-    areas,
-    length,
-    restVelum,
-    free.tongueRoot,
-    head.tongueRootArea
-  );
-  // Each change of length goes to the place of its organ; landmarks keep
-  // their distance from the lips.
-  const larynx = -free.larynxHeight;
-  const lips = free.lipProtrusion - free.expectedProtrusion;
-  let place = (index) => index;
-  // The channels are Float32Array: a protrusion that follows the rounding
-  // differs from rounding * LIP_PROTRUSION by about 1e-8 cm.
-  if (
-    Math.abs(larynx) > MIN_LENGTH_CHANGE ||
-    Math.abs(lips) > MIN_LENGTH_CHANGE
-  ) {
-    const lengths = stretchedLengths(areas.length, length, larynx, lips);
-    const stretched = stretchSections(areas, lengths, areas.length);
-    place = landmarkMap(lengths, length, stretched.length);
-    ({ areas, length } = stretched);
-  }
   const teeth =
     options.teeth === false ? null : applyTeeth(areas, full, head, length);
   return {
@@ -560,7 +582,7 @@ export function tractShape(
       MAX_VELUM_AREA *
       Math.max(0, Math.min(1, full.velum)) *
       (head.nasalCoupling ?? 1),
-    velumIndex: place(restVelum),
+    velumIndex: place(velum),
     frication: fricationSource(areas, full, head, teeth, place),
     glottis: {
       f0: full.f0,
