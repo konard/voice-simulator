@@ -563,7 +563,7 @@ export class VoiceRenderer {
     return this.position >= this.totalSamples;
   }
 
-  #updateShape() {
+  #updateShape(configure) {
     this.shape = blockShape(this.plan, this.time, this.state, this.head, {
       sections: this.sections,
       teeth: this.teeth,
@@ -581,8 +581,7 @@ export class VoiceRenderer {
     const rate = 1 / this.stepDuration;
     this.noise.configure(rate);
     this.#updateAirflow(rate);
-    // The output filter runs when the solver outputs arrive (see #finish).
-    this.rates.push(this.steps, rate);
+    configure(this.steps, rate);
   }
 
   /**
@@ -786,8 +785,33 @@ export class VoiceRenderer {
    * outputs: index 0 and 1 are the last two of the previous call, the
    * steps of this call follow.
    */
-  #record(target, queue) {
+  #run(length, configure, step, sample) {
     this.steps = 0;
+    const outputStep = 1 / this.sampleRate;
+    let written = 0;
+    while (written < length && !this.done) {
+      const offset = this.position % this.blockSize;
+      if (offset === 0 || !this.shape) {
+        this.#updateShape(configure);
+      }
+      const blockEnd = Math.min(
+        length,
+        written + this.blockSize - offset,
+        written + this.totalSamples - this.position
+      );
+      for (; written < blockEnd; written++, this.position++) {
+        while (this.solverTime <= this.time) {
+          this.#step(step);
+          this.solverTime += this.stepDuration;
+        }
+        sample(written, 1 - (this.solverTime - this.time) / this.stepDuration);
+        this.time += outputStep;
+      }
+    }
+    return written;
+  }
+
+  #record(target, queue) {
     this.rates = [];
     const samples = {
       previous: new Int32Array(target.length),
@@ -797,33 +821,20 @@ export class VoiceRenderer {
     };
     let previous = 0;
     let current = 1;
-    const outputStep = 1 / this.sampleRate;
-    let written = 0;
-    while (written < target.length && !this.done) {
-      const offset = this.position % this.blockSize;
-      if (offset === 0 || !this.shape) {
-        this.#updateShape();
+    samples.count = this.#run(
+      target.length,
+      (step, rate) => this.rates.push(step, rate),
+      (source, position, noise, flow) => {
+        previous = current;
+        current = 2 + this.steps;
+        queue(source, position, noise, flow);
+      },
+      (index, fraction) => {
+        samples.previous[index] = previous;
+        samples.current[index] = current;
+        samples.fraction[index] = fraction;
       }
-      const blockEnd = Math.min(
-        target.length,
-        written + this.blockSize - offset,
-        written + this.totalSamples - this.position
-      );
-      for (; written < blockEnd; written++, this.position++) {
-        while (this.solverTime <= this.time) {
-          previous = current;
-          current = 2 + this.steps;
-          this.#step(queue);
-          this.solverTime += this.stepDuration;
-        }
-        samples.previous[written] = previous;
-        samples.current[written] = current;
-        samples.fraction[written] =
-          1 - (this.solverTime - this.time) / this.stepDuration;
-        this.time += outputStep;
-      }
-    }
-    samples.count = written;
+    );
     return samples;
   }
 
@@ -867,11 +878,23 @@ export class VoiceRenderer {
    * @returns {number} Number of samples written (less than target.length at the end).
    */
   render(target) {
-    const outputs = [];
-    const samples = this.#record(target, (...step) =>
-      outputs.push(this.solver.step(...step))
+    const { output, solver, listener } = this;
+    return this.#run(
+      target.length,
+      (_step, rate) => output.configure(rate),
+      (source, position, noise, flow) => {
+        this.previous = this.current;
+        this.current = output.filter(
+          solver.step(source, position, noise, flow)
+        );
+      },
+      (index, fraction) => {
+        const value = this.previous + (this.current - this.previous) * fraction;
+        target[index] = output.finish(
+          listener ? listener.process(value) : value
+        );
+      }
     );
-    return this.#finish(target, samples, outputs);
   }
 
   /**
