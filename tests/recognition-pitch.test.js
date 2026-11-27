@@ -52,12 +52,13 @@ it('reuses batch pitch scratch across frame counts and candidate widths', () => 
   const short = analyzeFrames(samples.subarray(1000, 1600), sampleRate);
   let retained;
   for (const [frames, candidates] of [
+    [whole, undefined],
     [whole, 1],
     [short, 9],
     [whole, 4],
     [short, 1],
   ]) {
-    const options = { candidates };
+    const options = candidates === undefined ? undefined : { candidates };
     const expected = trackPitch(frames, options);
     const actual = trackPitchFrames(frames, options);
     for (const name of ['f0', 'voicing', 'strength']) {

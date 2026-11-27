@@ -1,6 +1,6 @@
 /** Sample-indexed window and block pitch measurements, independent of push boundaries. Unlicense. */
 import { analyzeFrames } from '../recognition/frontend.js';
-import { trackPitch } from '../recognition/pitch.js';
+import { trackPitchFrames } from '../recognition/pitch.js';
 
 export function createAudioWindow(capacity) {
   const buffer = new Float32Array(capacity);
@@ -41,7 +41,7 @@ export function blockPitch(window, sampleRate, from, through, offset) {
     return [];
   }
   const frames = analyzeFrames(samples, sampleRate, { hop: 0.01, rate: 8000 });
-  const pitch = trackPitch(frames);
+  const pitch = trackPitchFrames(frames);
   const voiced = [];
   for (let row = 0; row < pitch.count; row++) {
     const sample = start + Math.round(row * pitch.hop * sampleRate);

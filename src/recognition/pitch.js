@@ -1143,8 +1143,8 @@ export function trackPitch(frames, options = {}) {
 
 let batchPitchWorkspace;
 
-/** Frame-level pitch for mode features, which measure their own pulse trains. */
-export function trackPitchFrames(frames, options) {
+/** Batch frame-level pitch without pulse trains or perturbation statistics. */
+export function trackPitchFrames(frames, options = {}) {
   const workspace = batchPitchWorkspace ?? {};
   batchPitchWorkspace = undefined;
   try {
