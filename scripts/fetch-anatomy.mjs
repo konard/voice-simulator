@@ -59,7 +59,6 @@ export const BODYPARTS3D = Object.freeze({
     'Mitsuhashi N, Fujieda K, Tamura T, Kawamoto S, Takagi T, Okubo K (2009) BodyParts3D: 3D structure database for anatomical concepts. Nucleic Acids Research 37, D782-D785. doi:10.1093/nar/gkn613',
   license: 'CC BY 4.0, BodyParts3D, (c) The Database Center for Life Science',
   url: 'https://dbarchive.biosciencedbc.jp/data/bodyparts3d/LATEST/isa_BP3D_4.0_obj_99.zip',
-  size: 142903898,
   units: 'millimetres; +x left, +y posterior, +z superior',
 });
 
@@ -233,7 +232,11 @@ async function remoteSize(url, signal) {
   if (!response.ok) {
     throw new Error(`${url}: HEAD answered ${response.status}`);
   }
-  return Number(response.headers.get('content-length'));
+  const size = Number(response.headers.get('content-length'));
+  if (!Number.isSafeInteger(size) || size <= 0) {
+    throw new Error(`${url}: HEAD did not report a valid archive size`);
+  }
+  return size;
 }
 
 async function fetchMembers(url, size, wanted, output, options) {
@@ -262,12 +265,13 @@ async function fetchMembers(url, size, wanted, output, options) {
  */
 export async function fetchAnatomy(source, output, options = {}) {
   if (source === 'bodyparts3d') {
+    const { url } = BODYPARTS3D;
     const files = new Set(
       options.files ?? Object.values(BODYPARTS3D_FILES).flat()
     );
     return fetchMembers(
-      BODYPARTS3D.url,
-      BODYPARTS3D.size,
+      url,
+      await remoteSize(url, options.signal),
       (name) => files.has(basename(name, '.obj')),
       output,
       { signal: options.signal }
