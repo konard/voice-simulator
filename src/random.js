@@ -38,17 +38,19 @@ export function hashSeed(value) {
  * @returns {Random}
  */
 export function createRandom(seed = 1) {
-  let state = hashSeed(seed) || 0x9e3779b9;
+  // The generator advances at the solver rate. Store its full unsigned
+  // state without boxing a number in the closure at each step.
+  const state = new Uint32Array([hashSeed(seed) || 0x9e3779b9]);
   const random = () => {
-    state = (state + 0x6d2b79f5) >>> 0;
-    let value = state;
+    let value = (state[0] + 0x6d2b79f5) >>> 0;
+    state[0] = value;
     value = Math.imul(value ^ (value >>> 15), value | 1);
     value ^= value + Math.imul(value ^ (value >>> 7), value | 61);
     return ((value ^ (value >>> 14)) >>> 0) / 4294967296;
   };
-  random.save = () => state;
+  random.save = () => state[0];
   random.restore = (saved) => {
-    state = saved >>> 0;
+    state[0] = saved;
   };
   return random;
 }
