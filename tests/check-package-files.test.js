@@ -65,6 +65,7 @@ describe('check-package-files', () => {
       'src/engine/voice-simulator-hmm-ru.bin.gz',
       'src/engine/voice-simulator-hmm-hi.bin.gz',
       'src/engine/voice-simulator-hmm-zh.bin.gz',
+      'src/engine/voice-simulator-hmm-index.bin.gz',
       'src/engine/voice-simulator-word-transitions-en.bin.gz',
       'src/engine/voice-simulator-word-transitions-ru.bin.gz',
       'src/engine/voice-simulator-word-transitions-hi.bin.gz',

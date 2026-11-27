@@ -276,9 +276,11 @@ function sandhiTrees(builder, lang, words, ids) {
 }
 
 let readPrepared;
+let readPreparedSize;
 
-export function installPreparedHmm(read) {
+export function installPreparedHmm(read, size) {
   readPrepared = read;
+  readPreparedSize = size;
 }
 
 function* pronunciationEntries(lexicon, limit) {
@@ -370,12 +372,17 @@ function addTree(builder, lang, language, { maxWords, oov }) {
 
 const linkedNodes = new Set(['child', 'sibling']);
 
-function appendColumn(column, source, start, delta = 0, sentinel = false) {
-  if (start + source.length > column.length) {
-    const larger = new column.constructor(start + source.length);
-    larger.set(column);
-    column = larger;
+function reserveColumn(column, length) {
+  if (length <= column.length) {
+    return column;
   }
+  const larger = new column.constructor(length);
+  larger.set(column);
+  return larger;
+}
+
+function appendColumn(column, source, start, delta = 0, sentinel = false) {
+  column = reserveColumn(column, start + source.length);
   if (!delta) {
     column.set(source, start);
   } else {
@@ -385,6 +392,41 @@ function appendColumn(column, source, start, delta = 0, sentinel = false) {
     }
   }
   return column;
+}
+
+function reservePrepared(network, languages) {
+  const missing = languages.filter((lang) => !network.trees.has(lang));
+  if (missing.length < 2 || !readPreparedSize) {
+    return false;
+  }
+  let nodes = network.nodeCount;
+  let states = network.stateCount;
+  let links = network.wordLinks;
+  for (const lang of new Set(missing)) {
+    const size = readPreparedSize(lang);
+    if (
+      !size ||
+      !Number.isSafeInteger(size.nodes) ||
+      size.nodes < 1 ||
+      !Number.isSafeInteger(size.states) ||
+      size.states < 0 ||
+      !Number.isSafeInteger(size.links) ||
+      size.links < 1
+    ) {
+      return false;
+    }
+    nodes += size.nodes - 1;
+    states += size.states;
+    links += size.links - 1;
+  }
+  // Allocate space for all requested trees before appending their columns.
+  for (const name of Object.keys(network.nodes)) {
+    network.nodes[name] = reserveColumn(network.nodes[name], nodes);
+  }
+  network.emit = reserveColumn(network.emit, states);
+  network.wordId = reserveColumn(network.wordId, links);
+  network.nextWord = reserveColumn(network.nextWord, links);
+  return true;
 }
 
 function appendPrepared(network, lang, language, packed) {
@@ -489,6 +531,7 @@ export function packHmmNetwork(lang) {
 
 function withLanguages(builder, languages, options) {
   const { network } = builder;
+  const reserved = options.prepared && reservePrepared(network, languages);
   const trees = new Map();
   for (const lang of languages) {
     if (!network.trees.has(lang)) {
@@ -498,7 +541,7 @@ function withLanguages(builder, languages, options) {
       network.trees.set(
         lang,
         packed
-          ? language === 0
+          ? language === 0 && !reserved
             ? firstPrepared(network, lang, packed)
             : appendPrepared(network, lang, language, packed)
           : addTree(builder, lang, language, options)

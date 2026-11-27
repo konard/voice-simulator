@@ -178,16 +178,39 @@ export function configureNodeRecognitionModels() {
     return version === recognitionModelVersion ? rows : undefined;
   }
   const v8 = process.getBuiltinModule('node:v8');
-  installPreparedHmm((language) => {
-    try {
-      const [version, network] = v8.deserialize(
-        zlib.gunzipSync(fs.readFileSync(hmmNetworkFile(language)))
-      );
-      return version === hmmNetworkVersion ? network : undefined;
-    } catch {
-      // Source installations can build the same network on demand.
+  let hmmSizes;
+  installPreparedHmm(
+    (language) => {
+      try {
+        const [version, network] = v8.deserialize(
+          zlib.gunzipSync(fs.readFileSync(hmmNetworkFile(language)))
+        );
+        return version === hmmNetworkVersion ? network : undefined;
+      } catch {
+        // Source installations can build the same network on demand.
+      }
+    },
+    (language) => {
+      if (!hmmSizes) {
+        hmmSizes = {};
+        try {
+          const [version, sizes] = JSON.parse(
+            zlib.gunzipSync(fs.readFileSync(hmmNetworkFile('index'))).toString()
+          );
+          if (
+            version === hmmNetworkVersion &&
+            typeof sizes === 'object' &&
+            sizes
+          ) {
+            hmmSizes = sizes;
+          }
+        } catch {
+          // Older installations grow the same columns as assets arrive.
+        }
+      }
+      return hmmSizes[language];
     }
-  });
+  );
   installPreparedLexicons((language, words) => {
     try {
       const rows = read(language);

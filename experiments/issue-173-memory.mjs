@@ -91,9 +91,15 @@ if (mode === 'streaming' || mode === 'copy' || mode === 'modes-row') {
   configureNodeRecognitionModels();
   const model = getHmmModel();
   report('acoustic model');
-  for (const lang of ['en', 'ru', 'hi', 'zh']) {
-    getNetwork(model, [lang]);
-    report(`vocabulary ${lang}`);
+  const languages = ['en', 'ru', 'hi', 'zh'];
+  if (limit === 'all') {
+    getNetwork(model, languages);
+    report('combined vocabulary');
+  } else {
+    for (const lang of languages) {
+      getNetwork(model, [lang]);
+      report(`vocabulary ${lang}`);
+    }
   }
 } else if (mode === 'modes') {
   await createRecognitionEngine({ engine });

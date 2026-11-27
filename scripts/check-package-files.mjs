@@ -27,6 +27,7 @@ export const REQUIRED_FILES = Object.freeze([
   ...['en', 'ru', 'hi', 'zh'].map(
     (language) => `src/engine/voice-simulator-hmm-${language}.bin.gz`
   ),
+  'src/engine/voice-simulator-hmm-index.bin.gz',
   ...['en', 'ru', 'hi', 'zh'].map(
     (language) =>
       `src/engine/voice-simulator-word-transitions-${language}.bin.gz`

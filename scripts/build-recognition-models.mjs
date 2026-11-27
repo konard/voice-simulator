@@ -49,18 +49,26 @@ function writeWordTransitions(language) {
   console.log(`${file.pathname.split('/').at(-1)}: ${asset.length} bytes`);
 }
 
+const hmmSizes = {};
 const models = Object.keys(LANGUAGES).map((language) => {
   const lexicon = getLexicon(language);
   writeAsset(
     recognitionDataFile(language),
     serialize([recognitionModelVersion, serializeLexicon(lexicon, language)])
   );
-  writeAsset(
-    hmmNetworkFile(language),
-    serialize([hmmNetworkVersion, packHmmNetwork(language)])
-  );
+  const hmm = packHmmNetwork(language);
+  writeAsset(hmmNetworkFile(language), serialize([hmmNetworkVersion, hmm]));
+  hmmSizes[language] = {
+    nodes: hmm.nodes.first.length,
+    states: hmm.emit.length,
+    links: hmm.wordId.length,
+  };
   writeWordTransitions(language);
   return [language, packLanguageModel(getLanguageModel(language))];
 });
+writeAsset(
+  hmmNetworkFile('index'),
+  Buffer.from(JSON.stringify([hmmNetworkVersion, hmmSizes]))
+);
 write(recognitionDataFile('models'), models);
 buildRecognitionCodebook();
