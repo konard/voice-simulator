@@ -199,18 +199,31 @@ function addSpokenPrior(words, total, spoken) {
   }
 }
 
+function parseWords(source) {
+  const words = [];
+  let start = 0;
+  while (start < source.length) {
+    const separator = source.indexOf(' ', start);
+    const end = separator === -1 ? source.length : separator;
+    if (end > start) {
+      const at = source.lastIndexOf('=', end - 1);
+      words.push({
+        word: source.slice(start, at),
+        count: Number(source.slice(at + 1, end)),
+      });
+    }
+    start = end + 1;
+  }
+  return words;
+}
+
 export function getCounts(language) {
   if (!DATA.has(language)) {
     throw new RangeError(`unsupported recognition language "${language}"`);
   }
   if (!opened.has(language)) {
     const data = DATA.get(language);
-    const words = data.WORDS.split(' ')
-      .filter(Boolean)
-      .map((item) => {
-        const at = item.lastIndexOf('=');
-        return { word: item.slice(0, at), count: Number(item.slice(at + 1)) };
-      });
+    const words = parseWords(data.WORDS);
     let counts;
     const total = words.reduce((sum, item) => sum + item.count, 0);
     addSpokenPrior(words, total, SPOKEN.get(language));
