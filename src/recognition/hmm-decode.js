@@ -517,9 +517,15 @@ function decodeWithWorkspace(network, feats, frames, options, workspace) {
     frame: -1,
   }));
   for (let t = 0; t < frames; t++) {
+    const {
+      nodes: entryNodes,
+      scores: entryScores,
+      histories: entryHistories,
+      starts: entryStarts,
+    } = entries.columns;
     let length = active;
     for (let i = 0; i < entries.length; i++) {
-      const id = entries.nodes[i];
+      const id = entryNodes[i];
       if (positions[id] === 0) {
         work[length++] = id;
       }
@@ -553,10 +559,10 @@ function decodeWithWorkspace(network, feats, frames, options, workspace) {
             start = previous.starts[j - 1];
           }
         }
-        if (i === 0 && entry >= 0 && entries.scores[entry] > s) {
-          s = entries.scores[entry];
-          hist = entries.histories[entry];
-          start = entries.starts[entry];
+        if (i === 0 && entry >= 0 && entryScores[entry] > s) {
+          s = entryScores[entry];
+          hist = entryHistories[entry];
+          start = entryStarts[entry];
         }
         if (s > -Infinity) {
           const row = emit[state];
