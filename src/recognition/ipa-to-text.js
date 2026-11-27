@@ -61,6 +61,7 @@ function unknownCandidates(tokens, from, end, options, knownSuffix) {
     return {
       from,
       to,
+      language: options.language,
       word: spellSounds(heard, options.language),
       ipa: heardIpa(heard),
       cost: 3 + UNKNOWN_SOUND_COST * heard.length,
@@ -86,9 +87,12 @@ function decoderCandidates(from, end, context) {
     if (given) {
       found = found.filter((c) => c.to === end);
     }
-    found = found.map((c) => ({ ...c, cost: c.cost * ACOUSTIC_WEIGHT }));
+    for (const candidate of found) {
+      candidate.cost *= ACOUSTIC_WEIGHT;
+      candidates.push(candidate);
+    }
     if (!exact || (given && !found.length)) {
-      found.push(
+      candidates.push(
         ...unknownCandidates(
           tokens,
           from,
@@ -98,7 +102,6 @@ function decoderCandidates(from, end, context) {
         )
       );
     }
-    candidates.push(...found.map((c) => ({ ...c, language })));
   }
   return candidates;
 }

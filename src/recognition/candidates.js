@@ -114,12 +114,13 @@ function stressCost(entry, heard, evidence, language) {
   if (evidence.measured) {
     return acousticStress(entry, evidence, language);
   }
-  if (entry.tokens.length !== heard.length) {
+  const { tokens } = entry;
+  if (tokens.length !== heard.length) {
     return 0;
   }
   let cost = 0;
   for (let k = 0; k < heard.length; k++) {
-    cost += 0.2 * Number(heard[k].stress !== entry.tokens[k].stress);
+    cost += 0.2 * Number(heard[k].stress !== tokens[k].stress);
   }
   return cost;
 }
@@ -155,8 +156,9 @@ export function exactCandidates(tokens, from, end, lexicon, language) {
           result.push({
             from,
             to: to + 1,
-            ...entry,
-            ...(sandhi ? { ipa: formatIpa(tokens.slice(from, to + 1)) } : {}),
+            language,
+            word: entry.word,
+            ipa: sandhi ? formatIpa(tokens.slice(from, to + 1)) : entry.ipa,
             cost: cost + acousticStress(entry, evidence, language),
           });
         }
@@ -215,7 +217,14 @@ export function candidatesAt(tokens, from, end, lexicon, options) {
         }
         const { heard, evidence } = spans.get(to);
         const cost = hits[i + 2] + stressCost(entry, heard, evidence, language);
-        found.push({ from, to, ...entry, cost });
+        found.push({
+          from,
+          to,
+          language,
+          word: entry.word,
+          ipa: entry.ipa,
+          cost,
+        });
       }
     }
   }

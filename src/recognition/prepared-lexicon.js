@@ -80,11 +80,15 @@ function entryReader(words, offsets, ids, readings, withPrior) {
       for (let i = offsets[node]; i < offsets[node + 1]; i++) {
         const ipa = readings[i];
         const word = words[ids[i]];
+        let tokens;
         group.push({
           ...word,
           ...(withPrior && { prior: word.prior ?? word.count }),
           ipa,
-          tokens: parseIpa(ipa).tokens.filter((t) => t.kind !== 'pause'),
+          get tokens() {
+            tokens ??= parseIpa(ipa).tokens.filter((t) => t.kind !== 'pause');
+            return tokens;
+          },
         });
       }
       entries.set(node, group);
