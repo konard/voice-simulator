@@ -312,22 +312,32 @@ function createCoarseCorrelator(frames, settings) {
   const re = new Float64Array(size);
   const im = new Float64Array(size);
   const frameHalf = Math.floor(coarseLength / 2);
-  const margin = frameHalf + 2;
-  const coarse = new Float64Array(
-    margin + Math.ceil((samples.length + settings.fullLength) / factor) + 4
-  );
-  let done = -margin;
+  const coarse = new Float64Array(coarseLength);
+  let previous = -Infinity;
 
-  /** Fill the coarse signal up to index `last` (inclusive). */
-  function fill(last) {
-    if (settings.dsp && done <= last) {
-      const output = coarse.subarray(done + margin, last + margin + 1);
-      settings.dsp.decimate(frames, kernel, half, done, output);
-      done = last + 1;
+  /** Keep the overlap with the previous window and fill its new tail. */
+  function fill(start) {
+    const shift = start - previous;
+    previous = start;
+    if (shift === 0) {
       return;
     }
-    for (let m = done; m <= last; m++) {
-      const centre = m * factor;
+    const kept = Math.max(0, coarseLength - shift);
+    if (kept > 0) {
+      coarse.copyWithin(0, shift);
+    }
+    if (settings.dsp) {
+      settings.dsp.decimate(
+        frames,
+        kernel,
+        half,
+        start + kept,
+        coarse.subarray(kept)
+      );
+      return;
+    }
+    for (let n = kept; n < coarseLength; n++) {
+      const centre = (start + n) * factor;
       let sum = 0;
       if (centre - half >= 0 && centre + half < frames.sampleCount) {
         for (let k = -half; k <= half; k++) {
@@ -338,9 +348,8 @@ function createCoarseCorrelator(frames, settings) {
           sum += kernel[k + half] * sampleAt(frames, centre + k);
         }
       }
-      coarse[m + margin] = sum;
+      coarse[n] = sum;
     }
-    done = Math.max(done, last + 1);
   }
 
   return {
@@ -358,14 +367,14 @@ function createCoarseCorrelator(frames, settings) {
      */
     correlate(centre, q) {
       const start = Math.round(centre / factor) - frameHalf;
-      fill(start + coarseLength - 1);
+      fill(start);
       let mean = 0;
       for (let n = 0; n < coarseLength; n++) {
-        mean += coarse[start + n + margin];
+        mean += coarse[n];
       }
       mean /= coarseLength;
       for (let n = 0; n < coarseLength; n++) {
-        re[n] = (coarse[start + n + margin] - mean) * window[n];
+        re[n] = (coarse[n] - mean) * window[n];
       }
       if (settings.dsp) {
         return settings.dsp.correlate(re, correlation, q);
