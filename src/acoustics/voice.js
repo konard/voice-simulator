@@ -181,6 +181,7 @@ const SOLVERS = new Map([
   ['fdtd2d', (options) => new Fdtd2d(options)],
   ['fdtd3d', (options) => new Fdtd3d(options)],
 ]);
+const BUILTIN_SOLVERS = new Set(SOLVERS.values());
 
 /**
  * Register an acoustic solver factory.
@@ -365,6 +366,7 @@ export class OutputStage {
 
 export class VoiceRenderer {
   #tract = createTractWorkspace();
+  #builtinSolver;
 
   /**
    * @param {object} plan Result of planUtterance.
@@ -434,6 +436,7 @@ export class VoiceRenderer {
     this.#prepareInteraction(options);
     this.vowelCorrections = VOWEL_TABLES.get(options.solver ?? 'waveguide');
     this.glottis = source(this.head, seed);
+    this.#builtinSolver = BUILTIN_SOLVERS.has(factory);
     this.noise = new NoiseSources(seed);
     this.aerodynamics = new Aerodynamics({
       compliance: this.head.oralCompliance,
@@ -591,6 +594,9 @@ export class VoiceRenderer {
     const rate = 1 / this.stepDuration;
     this.noise.configure(rate);
     this.#updateAirflow(rate);
+    if (this.#builtinSolver && this.source === 'lf') {
+      this.glottis.prepareBlock(this.shape.glottis);
+    }
     configure(this.steps, rate);
   }
 

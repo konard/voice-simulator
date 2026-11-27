@@ -160,6 +160,35 @@ function segmentLevel(samples, plan, index) {
 }
 
 describe('LF glottal pulse', () => {
+  it('shares control values across samples without changing the source', () => {
+    const ordinary = new Glottis({ seed: 5, chink: 2 });
+    const prepared = new Glottis({ seed: 5, chink: 2 });
+    const control = {
+      f0: 143,
+      voicing: 0.85,
+      aspiration: 0.1,
+      closure: 0.07,
+      loudness: 0.63,
+      effort: 2,
+      breath: 0.14,
+      creak: 0.1,
+      falsetto: 0.2,
+      harsh: 0.25,
+    };
+    for (const whisper of [0, 0.4, 1, 0]) {
+      control.whisper = whisper;
+      prepared.prepareBlock(control);
+      for (let i = 0; i < 256; i++) {
+        control.whisperNoise = Math.sin(i);
+        const noise = Math.cos(i);
+        expect(prepared.step(1 / RATE, control, noise)).toBe(
+          ordinary.step(1 / RATE, control, noise)
+        );
+      }
+    }
+    expect(prepared.saveState()).toEqual(ordinary.saveState());
+  });
+
   it('has a negative main excitation and returns to zero', () => {
     const pulse = lfParameters(0.6);
     let minimum = 0;

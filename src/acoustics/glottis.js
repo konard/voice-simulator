@@ -233,6 +233,10 @@ export function lfWaveform(p, t) {
 }
 
 export class Glottis {
+  #blockControl;
+  #block = {};
+  #instant = {};
+
   /**
    * @param {{seed?: string|number, tenseness?: number, breathiness?: number, jitter?: number, shimmer?: number, aspirationLevel?: number, chink?: number, lungPressure?: number}} [options]
    *   `jitter` and `shimmer` are standard deviations in percent, `chink`
@@ -512,6 +516,51 @@ export class Glottis {
     return voiced;
   }
 
+  /** Prepare control-rate values for the built-in renderer's next block. */
+  prepareBlock(control) {
+    this.#blockControl = control;
+    this.#prepareControl(control, this.#block);
+  }
+
+  #prepareControl(control, values) {
+    const whisper = Math.min(1, Math.max(0, control.whisper ?? 0));
+    const voicedShare = 1 - whisper;
+    const voicing = Math.max(0, control.voicing) * (1 - control.closure);
+    const tension = control.tension ?? 0;
+    const base =
+      tension === 0
+        ? this.tenseness
+        : Math.min(1, Math.max(0, this.tenseness + tension));
+    const strength =
+      control.aspirationStrength ?? this.#tractStrength(control, whisper);
+    const harsh = control.harsh ?? 0;
+    const breathiness = noiseBreathiness(
+      this.breathiness,
+      control.breath ?? 0,
+      harsh
+    );
+    values.whisper = whisper;
+    values.voicedShare = voicedShare;
+    values.voicing = voicing;
+    values.level = voicing * Math.max(0, control.loudness);
+    values.tenseness = Math.max(0, base - 0.5 * control.aspiration * voicing);
+    values.creak = control.creak ?? 0;
+    values.falsetto = control.falsetto ?? 0;
+    values.harsh = harsh;
+    values.effort = control.effort ?? 0;
+    values.strength = strength;
+    values.breath =
+      ((control.aspiration +
+        this.breathGain *
+          breathiness ** this.breathExponent *
+          voicing *
+          voicedShare) *
+        (1 - control.closure) +
+        (this.chinkNoise * this.chink) / 10) *
+      strength;
+    return values;
+  }
+
   /**
    * Advance by dt seconds and return the flow derivative sample.
    * @param {number} dt
@@ -534,26 +583,28 @@ export class Glottis {
    * @param {number} noise White noise sample in [-1, 1].
    */
   step(dt, control, noise) {
-    const whisper = Math.min(1, Math.max(0, control.whisper ?? 0));
-    const voicedShare = 1 - whisper;
-    const voicing = Math.max(0, control.voicing) * (1 - control.closure);
-    const loudness = Math.max(0, control.loudness);
-    const tension = control.tension ?? 0;
-    const base =
-      tension === 0
-        ? this.tenseness
-        : Math.min(1, Math.max(0, this.tenseness + tension));
-    const tenseness = Math.max(0, base - 0.5 * control.aspiration * voicing);
-    const creak = control.creak ?? 0;
-    const falsetto = control.falsetto ?? 0;
-    const harsh = control.harsh ?? 0;
+    const {
+      whisper,
+      voicedShare,
+      voicing,
+      level,
+      tenseness,
+      creak,
+      falsetto,
+      harsh,
+      effort,
+      strength,
+      breath,
+    } =
+      this.#blockControl === control
+        ? this.#block
+        : this.#prepareControl(control, this.#instant);
     if (voicedShare > 0) {
       this.#advance(dt, control.f0, tenseness, creak, falsetto, harsh);
     }
     const t = this.phase / this.period;
-    const effort = control.effort ?? 0;
     this.intensity = this.#intensityGain(
-      voicing * loudness * this.shimmer * this.pulseGain * voicedShare,
+      level * this.shimmer * this.pulseGain * voicedShare,
       falsetto,
       effort
     );
@@ -569,24 +620,6 @@ export class Glottis {
         voicedShare +
       whisper;
     this.noiseModulation = modulation;
-    // The lung pressure carries the loudness: the strength grows as the
-    // pressure drop to the power 1.5, and the pressure as loudness^(2/3).
-    const strength =
-      control.aspirationStrength ?? this.#tractStrength(control, whisper);
-    const breathiness = noiseBreathiness(
-      this.breathiness,
-      control.breath ?? 0,
-      harsh
-    );
-    const breath =
-      ((control.aspiration +
-        this.breathGain *
-          breathiness ** this.breathExponent *
-          voicing *
-          voicedShare) *
-        (1 - control.closure) +
-        (this.chinkNoise * this.chink) / 10) *
-      strength;
     if (whisper > 0) {
       // The whisper noise: turbulence at the half-open glottis, not
       // modulated by pulses (src/acoustics/whisper.js).
