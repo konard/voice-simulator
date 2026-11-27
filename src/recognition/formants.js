@@ -469,7 +469,7 @@ function frameStates(store, settings, t, references, scratch) {
   const { formants: K, keep } = settings;
   const n = store.count[t];
   const row = t * MAX_CANDIDATES;
-  const { cost, assign } = scratch;
+  const { cost, assign, totals } = scratch;
   for (let k = 0; k < K; k++) {
     for (let i = 0; i < n; i++) {
       const f = store.frequency[row + i];
@@ -504,7 +504,8 @@ function frameStates(store, settings, t, references, scratch) {
       out[(base + position) * COLUMNS + k] = k < K ? assign[k] : -1;
     }
   }
-  function visit(k, from, total) {
+  function visit(k, from) {
+    const total = totals[k];
     if (states === keep && !(total < local[base + states - 1])) {
       return;
     }
@@ -513,13 +514,16 @@ function frameStates(store, settings, t, references, scratch) {
       return;
     }
     assign[k] = -1;
-    visit(k + 1, from, total + EMPTY_COST);
+    totals[k + 1] = total + EMPTY_COST;
+    visit(k + 1, from);
     for (let i = from; i < n; i++) {
       assign[k] = i;
-      visit(k + 1, i + 1, total + cost[k * MAX_CANDIDATES + i]);
+      totals[k + 1] = total + cost[k * MAX_CANDIDATES + i];
+      visit(k + 1, i + 1);
     }
   }
-  visit(0, 0, 0);
+  totals[0] = 0;
+  visit(0, 0);
   store.states[t] = states;
 }
 
@@ -919,6 +923,7 @@ function createTracker(frames, options, batch, candidates) {
     index: new Int32Array(store.rawWidth),
     cost: new Float64Array(COLUMNS * MAX_CANDIDATES),
     assign: new Int8Array(COLUMNS),
+    totals: new Float64Array(COLUMNS + 1),
   };
   const lengths = new Float64Array(rows);
   let lengthCount = 0;
