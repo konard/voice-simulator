@@ -15,26 +15,26 @@ const PLACES = (
   'alveolopalatal palatal velar uvular pharyngeal glottal'
 ).split(' ');
 
-function places(place) {
-  if (place === 'labial-velar') {
-    return [0, 8];
-  }
-  if (place === 'labial-palatal') {
-    return [0, 7];
-  }
-  const index = PLACES.indexOf(place);
-  return [index < 0 ? 3 : index];
-}
+const placeIndices = new Map(PLACES.map((place, index) => [place, [index]]));
+placeIndices.set('labial-velar', [0, 8]);
+placeIndices.set('labial-palatal', [0, 7]);
+const unknownPlace = [3];
 
 function placeDistance(a, b) {
-  return (
-    Math.min(
-      ...places(a).flatMap((x) => places(b).map((y) => Math.abs(x - y)))
-    ) / 11
-  );
+  let distance = Infinity;
+  for (const x of placeIndices.get(a) ?? unknownPlace) {
+    for (const y of placeIndices.get(b) ?? unknownPlace) {
+      distance = Math.min(distance, Math.abs(x - y));
+    }
+  }
+  return distance / 11;
 }
 
 const differs = (a, b) => Number(Boolean(a) !== Boolean(b));
+const glideFor = new Map([
+  ['i', 'j'],
+  ['u', 'w'],
+]);
 
 export function voicingDistance(a, b) {
   if (a.whispered && Number.isFinite(a.voicing)) {
@@ -70,8 +70,12 @@ function segmentDistance(a, b) {
       0.2 * differs(a.palatalized, b.palatalized)
     );
   }
-  const pair = [a.base, b.base].sort().join('');
-  return pair === 'ij' || pair === 'uw' ? 0.6 : 1;
+  const xBase = a.base;
+  const yBase = b.base;
+  return (xBase && glideFor.get(yBase) === xBase) ||
+    (yBase && glideFor.get(xBase) === yBase)
+    ? 0.6
+    : 1;
 }
 
 /** Symmetric tone cost, including the two third-tone sandhi forms. */
@@ -88,11 +92,18 @@ export function toneDistance(a, b) {
 }
 
 /** Distance of two parsed sounds, always in [0, 1]. */
-export function phoneDistance(a, b, toneCost = toneDistance(a.tone, b.tone)) {
+export function phoneDistance(
+  a,
+  b,
+  toneCost = toneDistance(a.tone, b.tone),
+  stress = true
+) {
   const segment = segmentDistance(a, b);
   return Math.min(
     1,
-    segment + toneCost + 0.2 * Number((a.stress ?? 0) !== (b.stress ?? 0))
+    segment +
+      toneCost +
+      0.2 * Number(stress && (a.stress ?? 0) !== (b.stress ?? 0))
   );
 }
 

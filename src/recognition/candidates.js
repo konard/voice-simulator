@@ -180,7 +180,7 @@ export function distanceCache() {
     if (!heard.has(input)) {
       heard.set(
         input,
-        `${input.symbol}:${(input.tone ?? []).join('')}:${input.voicing ?? ''}:${JSON.stringify(input.tones ?? null)}`
+        `${input.symbol}:${(input.tone ?? []).join('')}:${input.voicing ?? ''}:${input.whispered ?? ''}:${JSON.stringify(input.tones ?? null)}`
       );
     }
     const a = heard.get(input);
@@ -188,10 +188,10 @@ export function distanceCache() {
     const tone = acousticTone(input, expected, language);
     const key = `${a}\t${b}\t${tone ?? ''}`;
     if (!cache.has(key)) {
-      cache.set(
-        key,
-        phoneDistance({ ...input, stress: 0 }, { ...expected, stress: 0 }, tone)
-      );
+      if (cache.size === 4096) {
+        cache.clear();
+      }
+      cache.set(key, phoneDistance(input, expected, tone, false));
     }
     return cache.get(key);
   };

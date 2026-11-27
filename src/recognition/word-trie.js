@@ -16,6 +16,12 @@ export function createWordTrie({
     get nodeCount() {
       return feature.length;
     },
+    writePackedTopology(target) {
+      target.set(offsets);
+      for (let i = 0; i < feature.length; i++) {
+        target[offsets.length + i] = 2 * feature[i] + terminal[i];
+      }
+    },
     writeTopology(target) {
       target.set(offsets);
       for (let i = 1; i < feature.length; i++) {
@@ -74,8 +80,12 @@ function pack(lexicon, language) {
 }
 
 export function packWordTrie(lexicon, language) {
+  const prepared = lexicon.prepared;
+  if (prepared) {
+    return prepared.table;
+  }
   if (!cached.has(lexicon)) {
-    cached.set(lexicon, lexicon.prepared?.table ?? pack(lexicon, language));
+    cached.set(lexicon, pack(lexicon, language));
   }
   return cached.get(lexicon);
 }

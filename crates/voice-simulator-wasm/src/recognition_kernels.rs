@@ -11,6 +11,7 @@ fn u32_slice<'a>(offset: u32, count: u32) -> Result<&'a [u32], i32> {
     Ok(unsafe { core::slice::from_raw_parts(offset as usize as *const u32, count as usize) })
 }
 
+#[allow(clippy::too_many_arguments)]
 fn words(
     topology: u32,
     nodes: u32,
@@ -19,18 +20,24 @@ fn words(
     rows: u32,
     stride: u32,
     beam: u32,
+    packed: bool,
 ) -> Result<Vec<f64>, i32> {
-    let bound = nodes.checked_mul(4).ok_or(error::BAD_ARGUMENT)?;
     if nodes == 0 || stride < 2 || beam == 0 {
         return Err(error::BAD_ARGUMENT);
     }
+    let bound = if packed {
+        nodes.checked_mul(2).and_then(|n| n.checked_add(1))
+    } else {
+        nodes.checked_mul(4)
+    }
+    .ok_or(error::BAD_ARGUMENT)?;
     let input_len = rows.checked_mul(stride).ok_or(error::BAD_ARGUMENT)?;
-    let gaps = f64_read(gaps, nodes)?;
+    let gaps = f64_read(gaps, if packed { stride - 1 } else { nodes })?;
     let input = f64_read(distances, input_len)?;
     let table = u32_slice(topology, bound)?;
     let n = nodes as usize;
     let (child_offsets, rest) = table.split_at(n + 1);
-    let (children, rest) = rest.split_at(n - 1);
+    let (children, rest) = rest.split_at(if packed { 0 } else { n - 1 });
     let (feature, terminal) = rest.split_at(n);
     if child_offsets[0] != 0 || child_offsets[n] != nodes - 1 {
         return Err(error::BAD_ARGUMENT);
@@ -62,7 +69,27 @@ pub extern "C" fn rec_word_search(
     out: u32,
     capacity: u32,
 ) -> i32 {
-    let values = match words(topology, nodes, gaps, distances, rows, stride, beam) {
+    let values = match words(topology, nodes, gaps, distances, rows, stride, beam, false) {
+        Ok(values) => values,
+        Err(code) => return code,
+    };
+    write_result(&values, out, capacity)
+}
+
+/// Search the breadth-first trie with packed feature and terminal fields.
+#[no_mangle]
+pub extern "C" fn rec_word_search_packed(
+    topology: u32,
+    nodes: u32,
+    gaps: u32,
+    distances: u32,
+    rows: u32,
+    stride: u32,
+    beam: u32,
+    out: u32,
+    capacity: u32,
+) -> i32 {
+    let values = match words(topology, nodes, gaps, distances, rows, stride, beam, true) {
         Ok(values) => values,
         Err(code) => return code,
     };
