@@ -32,7 +32,7 @@ export const HMM_DECODE_DEFAULTS = Object.freeze({
   minCount: 3,
 });
 
-// Level low keeps fewer competing paths per language. It uses the same
+// The low search keeps fewer competing paths per language. It uses the same
 // pronunciation network, acoustic model and alignment as the wider search.
 export const HMM_LOW_SEARCH = Object.freeze({
   beam: 65,

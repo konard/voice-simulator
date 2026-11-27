@@ -32,6 +32,10 @@ export const RECOGNITION_LEVELS = Object.freeze({
   high: Object.freeze({ rate: 16000, hop: 0.005, beam: 128 }),
 });
 
+// Short commands have little context and can afford the wider search within
+// a bounded amount of audio. Limit competing paths for longer low-rate input.
+const WIDE_SEARCH_SECONDS = 4;
+
 export function levelForTier(name) {
   if (name === 'telephone' || name === 'narrowband') {
     return 'low';
@@ -212,7 +216,10 @@ export function decodeRecognitionAudio(
         languages: settings.languages,
         whisper: options.whisper,
         oov: settings.oov,
-        search: level === 'low' ? HMM_LOW_SEARCH : undefined,
+        search:
+          level === 'low' && input.length > WIDE_SEARCH_SECONDS * rate
+            ? HMM_LOW_SEARCH
+            : undefined,
       })
     );
     return { decoded, input, rate };
