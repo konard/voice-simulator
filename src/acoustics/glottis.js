@@ -22,7 +22,7 @@ import {
   effortVoicedGain,
   TILT_CORNER,
 } from '../articulation/effort.js';
-import { whisperNoise, whisperQuiet } from './whisper.js';
+import { prepareWhisperGains, whisperNoise, whisperQuiet } from './whisper.js';
 
 /**
  * Breath noise per 10 mm² of glottal chink (issue 35): the air leaking
@@ -236,6 +236,7 @@ export class Glottis {
   #blockControl;
   #block = {};
   #instant = {};
+  #whisperGains = { drive: 0, pitch: 1, mix: 1 };
 
   /**
    * @param {{seed?: string|number, tenseness?: number, breathiness?: number, jitter?: number, shimmer?: number, aspirationLevel?: number, chink?: number, lungPressure?: number}} [options]
@@ -520,6 +521,9 @@ export class Glottis {
   prepareBlock(control) {
     this.#blockControl = control;
     this.#prepareControl(control, this.#block);
+    if (this.#block.whisper > 0) {
+      prepareWhisperGains(control, this.pitch, this.#whisperGains);
+    }
   }
 
   #prepareControl(control, values) {
@@ -583,6 +587,7 @@ export class Glottis {
    * @param {number} noise White noise sample in [-1, 1].
    */
   step(dt, control, noise) {
+    const prepared = this.#blockControl === control;
     const {
       whisper,
       voicedShare,
@@ -595,10 +600,7 @@ export class Glottis {
       effort,
       strength,
       breath,
-    } =
-      this.#blockControl === control
-        ? this.#block
-        : this.#prepareControl(control, this.#instant);
+    } = prepared ? this.#block : this.#prepareControl(control, this.#instant);
     if (voicedShare > 0) {
       this.#advance(dt, control.f0, tenseness, creak, falsetto, harsh);
     }
@@ -627,7 +629,8 @@ export class Glottis {
         control,
         control.whisperNoise ?? noise,
         strength,
-        this.pitch
+        this.pitch,
+        prepared ? this.#whisperGains : undefined
       );
       return (
         voiced +
