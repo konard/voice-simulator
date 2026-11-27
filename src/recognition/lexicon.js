@@ -261,11 +261,14 @@ export function getLexicon(language = 'en') {
         );
       },
       words: data.words,
-      counts: data.counts,
+      get counts() {
+        return data.counts;
+      },
       get bigrams() {
         return data.bigrams;
       },
       transitionRow: data.transitionRow,
+      transitionCost: data.transitionCost,
       total: data.total,
       revision: lexiconRevision(),
     });

@@ -69,12 +69,21 @@ export function openWordTransitions(words, offsets, pairs) {
   ) {
     return undefined;
   }
-  const ids = new Map(words.map(({ word }, i) => [word, i]));
-  return (word) => {
+  const ids = wordIds(words);
+  return (word, previousWord) => {
     const id = ids.get(word);
     const start = offsets[id];
     const end = offsets[id + 1];
     if (!(start < end)) {
+      return undefined;
+    }
+    if (previousWord !== undefined) {
+      const previous = ids.get(previousWord);
+      for (let i = end - 2; i >= start; i -= 2) {
+        if (pairs[i] === previous) {
+          return discountedCost(pairs[i + 1], words[previous].count);
+        }
+      }
       return undefined;
     }
     const result = new Map();
@@ -86,6 +95,14 @@ export function openWordTransitions(words, offsets, pairs) {
   };
 }
 
+function wordIds(words) {
+  const ids = new Map();
+  for (let i = 0; i < words.length; i++) {
+    ids.set(words[i].word, i);
+  }
+  return ids;
+}
+
 /** Link the encoded pairs by destination without opening their cost maps. */
 function indexBigrams(source, words) {
   // The smallest record is "0,0=1", plus the space between records.
@@ -93,7 +110,7 @@ function indexBigrams(source, words) {
   const records = new Uint32Array(capacity * 2);
   const counts = new Float64Array(capacity);
   const heads = new Uint32Array(words.length);
-  const ids = new Map(words.map(({ word }, i) => [word, i]));
+  const ids = wordIds(words);
   let row = 0;
   let previous = 0;
   let next = 0;
@@ -122,10 +139,22 @@ function indexBigrams(source, words) {
     }
     value = 0;
   }
-  return (word) => {
+  return (word, previousWord) => {
     let link = heads[ids.get(word)];
     if (!link) {
       return undefined;
+    }
+    if (previousWord !== undefined) {
+      const previous = ids.get(previousWord);
+      let cost;
+      while (link) {
+        const index = link - 1;
+        if (records[index * 2] === previous) {
+          cost = discountedCost(counts[index], words[previous].count);
+        }
+        link = records[index * 2 + 1];
+      }
+      return cost;
     }
     const result = new Map();
     while (link) {
@@ -182,15 +211,27 @@ export function getCounts(language) {
         const at = item.lastIndexOf('=');
         return { word: item.slice(0, at), count: Number(item.slice(at + 1)) };
       });
-    const counts = new Map(words.map((item) => [item.word, item.count]));
+    let counts;
     const total = words.reduce((sum, item) => sum + item.count, 0);
     addSpokenPrior(words, total, SPOKEN.get(language));
     let bigrams;
     let openRow;
     const rows = new Map();
+    const transitions = () =>
+      (openRow ??=
+        readTransitions?.(language, words) ??
+        indexBigrams(data.BIGRAMS, words));
     opened.set(language, {
       words,
-      counts,
+      get counts() {
+        if (!counts) {
+          counts = new Map();
+          for (const { word, count } of words) {
+            counts.set(word, count);
+          }
+        }
+        return counts;
+      },
       get bigrams() {
         if (!bigrams) {
           bigrams = new Map();
@@ -205,10 +246,7 @@ export function getCounts(language) {
       },
       transitionRow(word) {
         if (!rows.has(word)) {
-          openRow ??=
-            readTransitions?.(language, words) ??
-            indexBigrams(data.BIGRAMS, words);
-          const row = openRow(word);
+          const row = transitions()(word);
           if (row) {
             if (rows.size === 1024) {
               rows.delete(rows.keys().next().value);
@@ -217,6 +255,11 @@ export function getCounts(language) {
           }
         }
         return rows.get(word);
+      },
+      transitionCost(word, previousWord) {
+        return rows.has(word)
+          ? rows.get(word).get(previousWord)
+          : transitions()(word, previousWord);
       },
       total,
     });

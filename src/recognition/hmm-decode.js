@@ -104,7 +104,7 @@ function languageModel(network, records, settings) {
     const { wordTable: packed, data, loop } = tree;
     if (packed ? packed.oov(id) : words[id].oov) {
       const beginning = packed ? packed.begin(id) : words[id].begin;
-      const phone = packed ? packed.phone(id) : words[id].units[0];
+      const phone = previousPhone(packed, words, id);
       const before = beginning
         ? ''
         : previousPhone(packed, words, records[hist].id);
@@ -120,10 +120,10 @@ function languageModel(network, records, settings) {
     if (v === undefined) {
       const word = packed ? packed.name(id) : words[id].word;
       const count = packed ? packed.count(id) : words[id].count;
-      const row = previous ? data.transitionRow(word) : undefined;
-      const cost = row?.has(previous)
-        ? row.get(previous)
-        : -0.3 * Math.log((0.4 * Math.max(count ?? 1, minCount)) / data.total) +
+      const seen = previous ? data.transitionCost(word, previous) : undefined;
+      const cost =
+        seen ??
+        -0.3 * Math.log((0.4 * Math.max(count ?? 1, minCount)) / data.total) +
           0.5;
       v = lmw * lnProbability(cost) + wip;
       // Long utterances can visit many predecessor/candidate pairs.
@@ -353,7 +353,7 @@ const workspaces = new WeakMap();
 export function decodeWords(network, feats, frames, options = {}) {
   const prior = workspaces.get(network.model);
   const workspace =
-    prior?.positions.length === network.nodeCount
+    prior?.positions.length >= network.nodeCount
       ? prior
       : createWorkspace(network.nodeCount);
   // A word-end callback can start another decode synchronously.

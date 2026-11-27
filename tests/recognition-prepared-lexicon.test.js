@@ -25,7 +25,7 @@ import { phoneDistance } from '../src/recognition/phone-distance.js';
 
 it('opens the same discounted transition costs from packed word counts', () => {
   const language = 'en';
-  const { words, transitionRow } = getCounts(language);
+  const { words, transitionRow, transitionCost } = getCounts(language);
   const [offsets, pairs] = packWordTransitions(language);
   const read = openWordTransitions(
     words,
@@ -33,7 +33,13 @@ it('opens the same discounted transition costs from packed word counts', () => {
     Uint32Array.from(pairs)
   );
   for (const { word } of words.slice(0, 128)) {
-    expect(read(word)).toEqual(transitionRow(word));
+    const actual = read(word);
+    for (const [previous, cost] of actual ?? []) {
+      expect(read(word, previous)).toBe(cost);
+      expect(transitionCost(word, previous)).toBe(cost);
+    }
+    expect(actual).toEqual(transitionRow(word));
+    expect(read(word, 'mangosteenish')).toBeUndefined();
   }
   expect(read('mangosteenish')).toBeUndefined();
 });
