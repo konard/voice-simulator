@@ -36,7 +36,7 @@ function createDecimator(decimate, allocate, coarse, factor) {
       if (error) {
         throw new Error(`Rust pitch decimation failed (${error})`);
       }
-      output.set(coarse.view().subarray(0, count), offset);
+      output.set(coarse.view(count), offset);
     }
   };
 }
@@ -116,7 +116,7 @@ export function withPitchDsp(module, settings, run) {
         frame.energy = values[0];
         frame.largest = values[1];
       },
-      refine(energy, centre) {
+      refine(energy, centre, peak) {
         refine(
           full.pointer,
           full.length,
@@ -128,8 +128,12 @@ export function withPitchDsp(module, settings, run) {
           fullCorrelation.pointer,
           refined.pointer
         );
-        const [position, height] = refined.view();
-        return position < 0 ? null : [position, height];
+        const values = refined.view();
+        if (values[0] < 0) {
+          return false;
+        }
+        peak.set(values);
+        return true;
       },
       mark(frames, anchor, lo, hi, span) {
         const from = Math.max(0, Math.min(anchor, lo - 1));

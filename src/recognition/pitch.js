@@ -242,14 +242,17 @@ function pitchWindow(length, maxLag) {
   return pitchWindows.get(key);
 }
 
-/** Vertex of the parabola through (−1, a), (0, b), (1, c): [offset, top]. */
-function parabola(a, b, c) {
+/** Write [offset, top] of the parabola through (−1, a), (0, b), (1, c). */
+function parabola(a, b, c, peak) {
   const curvature = a - 2 * b + c;
   if (!(curvature < 0)) {
-    return [0, b];
+    peak[0] = 0;
+    peak[1] = b;
+    return;
   }
   const offset = (0.5 * (a - c)) / curvature;
-  return [offset, b - 0.25 * (a - c) * offset];
+  peak[0] = offset;
+  peak[1] = b - 0.25 * (a - c) * offset;
 }
 
 /** Empty track of `capacity` rows. */
@@ -456,11 +459,11 @@ function createFullFrame(frames, settings) {
       frame.energy = energy;
       frame.largest = largest;
     },
-    /** Refine a coarse lag: [full-rate lag, height] or null. */
-    refine(coarseLag) {
+    /** Write [full-rate lag, height] of a valid refined maximum. */
+    refine(coarseLag, peak) {
       const centre = Math.round(coarseLag * factor);
       if (settings.dsp) {
-        return settings.dsp.refine(frame.energy, centre);
+        return settings.dsp.refine(frame.energy, centre, peak);
       }
       let best = -Infinity;
       let bestLag = -1;
@@ -472,10 +475,12 @@ function createFullFrame(frames, settings) {
         }
       }
       if (bestLag < 2) {
-        return null;
+        return false;
       }
-      const [offset, top] = parabola(at(bestLag - 1), best, at(bestLag + 1));
-      return [bestLag + offset, Math.min(1, top)];
+      parabola(at(bestLag - 1), best, at(bestLag + 1), peak);
+      peak[0] = bestLag + peak[0];
+      peak[1] = Math.min(1, peak[1]);
+      return true;
     },
   };
 }
@@ -518,6 +523,7 @@ function createCandidateFinder(frames, settings, store, shared) {
   const tried = 2 * capacity + 2;
   const peakLag = new Float64Array(tried);
   const peakHeight = new Float64Array(tried);
+  const interpolated = new Float64Array(2);
   const candidate = { frequency: 0, height: 0, strength: 0 };
   const strengthOf = (height, frequency) =>
     height - octaveCost * Math.log2(maxF0 / frequency);
@@ -527,10 +533,10 @@ function createCandidateFinder(frames, settings, store, shared) {
     let count = 0;
     for (let lag = lagMin; lag <= lagMax; lag++) {
       if (q[lag] > q[lag - 1] && q[lag] >= q[lag + 1] && q[lag] > 0) {
-        const [offset, top] = parabola(q[lag - 1], q[lag], q[lag + 1]);
-        const exact = lag + offset;
+        parabola(q[lag - 1], q[lag], q[lag + 1], interpolated);
+        const exact = lag + interpolated[0];
         const strength = strengthOf(
-          Math.min(1, top),
+          Math.min(1, interpolated[1]),
           settings.coarseRate / exact
         );
         let slot = count;
@@ -596,11 +602,13 @@ function createCandidateFinder(frames, settings, store, shared) {
       const count = findMaxima();
       for (let index = 0; index < count; index++) {
         const coarseLag = peakLag[index];
-        const refined = full.refine(coarseLag);
-        const frequency = refined === null ? 0 : rate / refined[0];
+        if (!full.refine(coarseLag, interpolated)) {
+          continue;
+        }
+        const frequency = rate / interpolated[0];
         if (frequency >= minF0 && frequency <= maxF0) {
           candidate.frequency = frequency;
-          candidate.height = refined[1];
+          candidate.height = interpolated[1];
           // A brief resonant burst can have a strong short-lag peak. At
           // high frequencies, check that it persists for a second period.
           const second = 2 * coarseLag;
@@ -608,9 +616,9 @@ function createCandidateFinder(frames, settings, store, shared) {
           const support =
             frequency > SHORT_PERIOD_F0 && lag < lagMax
               ? q[lag] + (q[lag + 1] - q[lag]) * (second - lag)
-              : refined[1];
+              : interpolated[1];
           candidate.strength = strengthOf(
-            Math.min(refined[1], support + SECOND_PERIOD_TOLERANCE),
+            Math.min(interpolated[1], support + SECOND_PERIOD_TOLERANCE),
             frequency
           );
           kept = insertCandidate(
@@ -693,6 +701,7 @@ function setPerturbation(track, sums) {
 function createMarker(frames, track, settings) {
   const { rate, hopSamples } = settings;
   const runFrames = Math.ceil(MARK_RUN / settings.hop - 1e-9);
+  const interpolated = new Float64Array(2);
   let storage = new Float64Array(256);
   let length = 0;
   const sums = {
@@ -736,12 +745,13 @@ function createMarker(frames, track, settings) {
         place = p;
       }
     }
-    const [offset] = parabola(
+    parabola(
       crossCorrelation(frames, anchor, place - 1, span),
       best,
-      crossCorrelation(frames, anchor, place + 1, span)
+      crossCorrelation(frames, anchor, place + 1, span),
+      interpolated
     );
-    return place + Math.max(-0.5, Math.min(0.5, offset));
+    return place + Math.max(-0.5, Math.min(0.5, interpolated[0]));
   }
 
   /** Marks (working samples) of the run of frames a .. b. */
@@ -922,7 +932,9 @@ function createViterbi(store, settings, rows) {
       for (let s = 0; s < states; s++) {
         current[s] -= top;
       }
-      [previous, current] = [current, previous];
+      const completed = current;
+      current = previous;
+      previous = completed;
       newest = t;
     },
     trace(path, first) {

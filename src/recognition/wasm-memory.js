@@ -12,8 +12,18 @@ export function withWasmMemory(module, run) {
       throw new RangeError('Cannot allocate recognition buffer');
     }
     allocations.push([pointer, bytes]);
-    const view = (size = length) =>
-      new Type(module.memory.buffer, pointer, size);
+    let full;
+    const view = (size = length) => {
+      const buffer = module.memory.buffer;
+      if (size !== length) {
+        return new Type(buffer, pointer, size);
+      }
+      // Memory growth detaches the old buffer and its views.
+      if (full?.buffer !== buffer) {
+        full = new Type(buffer, pointer, length);
+      }
+      return full;
+    };
     if (source) {
       view().set(source);
     }
