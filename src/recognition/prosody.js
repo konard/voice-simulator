@@ -10,7 +10,11 @@ import {
   span,
   voicedBetween,
 } from './prosody-features.js';
-import { levelDb, averageSpectrum } from '../analysis/mode-features.js';
+import {
+  levelDb,
+  averageSpectrum,
+  createAverageSpectrumWorkspace,
+} from '../analysis/mode-features.js';
 import { parseIpa } from '../ipa/parse.js';
 import { DIPHTHONGS } from '../ipa/syllables.js';
 import { TONE_CONTOURS } from '../g2p/pinyin.js';
@@ -27,8 +31,14 @@ const TONES = Object.values(TONE_CONTOURS).map((letters) => [
   Array.from(letters, (letter) => LETTERS.indexOf(letter) + 1),
 ]);
 const PAUSE = 0.2;
-function balanceDb(samples, rate, from, to) {
-  const { power, binWidth } = averageSpectrum(samples, rate, from, to);
+function balanceDb(samples, rate, from, to, spectrum) {
+  const { power, binWidth } = averageSpectrum(
+    samples,
+    rate,
+    from,
+    to,
+    spectrum
+  );
   const split = Math.min(power.length, Math.ceil(500 / binWidth));
   let high = 0;
   let low = 0;
@@ -246,6 +256,7 @@ function measureNuclei(
   const parts = nuclei.flatMap((nucleus) => nucleus.parts);
   const inWhisper = ({ start, end }) =>
     Boolean(whisperAt(whisperSpans, (start + end) / 2));
+  const spectrum = createAverageSpectrumWorkspace(sampleRate);
   const rows = parts.map(({ start, end }) => {
     const from = start * sampleRate;
     const to = end * sampleRate;
@@ -253,7 +264,7 @@ function measureNuclei(
     return [
       end - start,
       levelDb(samples, from, to),
-      balanceDb(samples, sampleRate, from, to),
+      balanceDb(samples, sampleRate, from, to, spectrum),
       voiced.reduce((highest, value) => Math.max(highest, value), -Infinity),
     ];
   });

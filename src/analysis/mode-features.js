@@ -70,29 +70,45 @@ export function levelDb(samples, from, to) {
   return 10 * Math.log10(Math.max(FLOOR, sum / Math.max(1, end - start)));
 }
 
-/**
- * Long-term average power spectrum of a stretch: Hann windows of about
- * 40 ms with half overlap (the last window zero-padded).
- * @returns {{power: Float64Array, binWidth: number}}
- */
-export function averageSpectrum(samples, sampleRate, from, to) {
-  const [start, end] = stretch(samples, from, to);
+/** Working arrays shared by sequential spectra at the same sample rate. */
+export function createAverageSpectrumWorkspace(sampleRate) {
   const size = nextPowerOfTwo(Math.round(0.04 * sampleRate));
-  const hop = size / 2;
   const window = new Float64Array(size);
   for (let index = 0; index < size; index++) {
     window[index] = 0.5 - 0.5 * Math.cos((2 * Math.PI * index) / size);
   }
-  const power = new Float64Array(size / 2 + 1);
-  const re = new Float64Array(size);
-  const im = new Float64Array(size);
+  return {
+    window,
+    power: new Float64Array(size / 2 + 1),
+    re: new Float64Array(size),
+    im: new Float64Array(size),
+  };
+}
+
+/**
+ * Long-term average power spectrum of a stretch: Hann windows of about
+ * 40 ms with half overlap (the last window zero-padded). The result owns
+ * its power array unless the caller explicitly provides a workspace.
+ * @returns {{power: Float64Array, binWidth: number}}
+ */
+export function averageSpectrum(
+  samples,
+  sampleRate,
+  from,
+  to,
+  { window, power, re, im } = createAverageSpectrumWorkspace(sampleRate)
+) {
+  const [start, end] = stretch(samples, from, to);
+  const size = window.length;
+  const hop = size / 2;
+  power.fill(0);
   for (let first = start; first < end; first += hop) {
-    re.fill(0);
     im.fill(0);
     const count = Math.min(size, end - first);
     for (let index = 0; index < count; index++) {
       re[index] = samples[first + index] * window[index];
     }
+    re.fill(0, count);
     fft(re, im);
     for (let k = 0; k <= size / 2; k++) {
       power[k] += re[k] * re[k] + im[k] * im[k];
