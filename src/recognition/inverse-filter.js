@@ -445,6 +445,10 @@ function inverseFilterJs(frames, o) {
   result.gci = closures(frames, f0, d);
   const cpp = cppPlan(rate, o.minF0, o.maxF0);
   const correlations = new Map();
+  const windows = new Map();
+  // A supplied pitch can be as low as 20 Hz.
+  const scratch = new Float64Array(Math.ceil((6 * rate) / 20));
+  const sources = new Float64Array(Math.ceil((2 * rate) / 20));
   for (let t = 0; t < count; t++) {
     if (!f0[t]) {
       continue;
@@ -452,12 +456,18 @@ function inverseFilterJs(frames, o) {
     const centre = Math.round(t * hop * rate);
     const period = rate / f0[t];
     const length = Math.round(2 * period);
-    const source = block(d, centre, length);
+    const buffer = scratch.subarray(0, length);
+    const source = block(d, centre, length, sources.subarray(0, length));
+    if (!windows.has(length)) {
+      windows.set(length, hann(length));
+    }
+    const window = windows.get(length);
     const h = harmonics(
       source,
       rate,
       f0[t],
-      Math.min(10, Math.floor((0.45 * rate) / f0[t]))
+      Math.min(10, Math.floor((0.45 * rate) / f0[t])),
+      window
     );
     const fit = fitPulse(h);
     result.rd[t] = fit.rd;
@@ -465,13 +475,14 @@ function inverseFilterJs(frames, o) {
     result.fit[t] = fit.fit;
     result.h1h2Source[t] = h[0] - h[1];
     const speech = harmonics(
-      block(frames.samples, centre, length),
+      block(frames.samples, centre, length, buffer),
       rate,
       f0[t],
-      2
+      2,
+      window
     );
     result.h1h2[t] = speech[0] - speech[1];
-    const g = block(flow, centre, length);
+    const g = block(flow, centre, length, buffer);
     let lo = Infinity;
     let hi = -Infinity;
     let peak = 0;
@@ -489,7 +500,8 @@ function inverseFilterJs(frames, o) {
       frames.samples,
       centre,
       period,
-      correlations.get(hnrLength)
+      correlations.get(hnrLength),
+      scratch
     );
     result.cpp[t] = cpp(frames.samples, centre);
     result.reliable[t] = f0[t] <= o.maxF0 && fit.fit <= 6 ? 1 : 0;

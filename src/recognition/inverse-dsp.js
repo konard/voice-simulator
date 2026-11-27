@@ -10,11 +10,14 @@ export function hann(length) {
   return result;
 }
 
-export function block(x, centre, length) {
+export function block(x, centre, length, result = new Float64Array(length)) {
   const start = centre - Math.floor(length / 2);
-  const result = new Float64Array(length);
-  for (let n = 0; n < length; n++) {
-    result[n] = x[start + n] ?? 0;
+  const first = Math.max(0, -start);
+  const end = Math.max(first, Math.min(length, x.length - start));
+  result.fill(0, 0, first);
+  result.fill(0, end);
+  for (let n = first; n < end; n++) {
+    result[n] = x[start + n];
   }
   return result;
 }
@@ -141,8 +144,7 @@ export function correlationPlan(length) {
 
 /** Hann harmonic levels, exact frequencies; oscillator recurrence avoids
  * transcendental calls in the sample loop. Bins are harmonics 1..count. */
-export function harmonics(x, rate, f0, count) {
-  const window = hann(x.length);
+export function harmonics(x, rate, f0, count, window = hann(x.length)) {
   const levels = new Float64Array(count);
   for (let k = 1; k <= count; k++) {
     const angle = (2 * Math.PI * f0 * k) / rate;
@@ -212,14 +214,19 @@ export function cppPlan(rate, minF0, maxF0) {
 
 /** Window-corrected autocorrelation, interpolated from the two integer
  * lags neighbouring a fractional pitch period. */
-export function hnr(x, centre, period, window) {
+export function hnr(
+  x,
+  centre,
+  period,
+  window,
+  y = new Float64Array(window.length)
+) {
   const length = window.length;
   const start = centre - Math.floor(length / 2);
   let mean = 0;
   for (let n = 0; n < length; n++) {
     mean += (x[start + n] ?? 0) / length;
   }
-  const y = new Float64Array(length);
   let r0 = 0;
   let w0 = 0;
   for (let n = 0; n < length; n++) {

@@ -405,7 +405,7 @@ function residual(signal, rate, emphasised, output) {
   for (let index = 0; index < signal.length; index++) {
     const sample = signal[index];
     emphasised[index] = sample - 0.97 * previous;
-    previous = sample ?? 0;
+    previous = sample;
   }
   const order = Math.round(rate / 1000) + 2;
   const hop = Math.round(PHONATION_ANALYSIS.hop * rate);
@@ -563,13 +563,12 @@ function correlation(signal, a, b, length) {
  * cross-correlation over 0.8 of the period from a tenth before the pulse,
  * parabola through the best lag), and that match.
  */
-function matchPeriod(signal, rate, from, rough) {
+function matchPeriod(signal, rate, from, rough, values) {
   const spread = Math.max(Math.round(0.0005 * rate), Math.round(0.15 * rough));
   const length = Math.max(4, Math.round(0.8 * rough));
   const start = from - Math.round(0.1 * rough);
   const low = Math.max(1, rough - spread);
   const high = rough + spread;
-  const values = new Float64Array(high - low + 3);
   let best = low;
   for (let lag = low - 1; lag <= high + 1; lag++) {
     const value = correlation(signal, start, start + lag, length);
@@ -604,6 +603,12 @@ export function glottalPeriods(samples, sampleRate) {
     sampleRate
   );
   const result = [];
+  const maxPeriod = Math.round(PHONATION_ANALYSIS.maxPeriod * rate);
+  const spread = Math.max(
+    Math.round(0.0005 * rate),
+    Math.round(0.15 * maxPeriod)
+  );
+  const correlations = new Float64Array(2 * spread + 3);
   for (const pulses of pulseCandidates(signal, rate)) {
     let train = null;
     for (let index = 1; index < pulses.length; index++) {
@@ -612,7 +617,8 @@ export function glottalPeriods(samples, sampleRate) {
         signal,
         rate,
         pulses[index - 1],
-        rough
+        rough,
+        correlations
       );
       if (match < PERIOD_MATCH) {
         train = null;

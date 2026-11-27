@@ -198,11 +198,23 @@ export function fitInterpolator(centers, values) {
     matrix,
     values.map((samples) => [...samples, 0, 0, 0, 0])
   );
+  const kernel = new Float64Array(size);
   return (at) => {
-    const kernel = [...centers.map((center) => distance(center, at)), 1, ...at];
-    return weights.map((row) =>
-      row.reduce((sum, weight, index) => sum + weight * kernel[index], 0)
-    );
+    for (let i = 0; i < count; i++) {
+      kernel[i] = distance(centers[i], at);
+    }
+    kernel[count] = 1;
+    kernel.set(at, count + 1);
+    const result = new Array(weights.length);
+    for (let i = 0; i < weights.length; i++) {
+      const row = weights[i];
+      let sum = 0;
+      for (let k = 0; k < size; k++) {
+        sum += row[k] * kernel[k];
+      }
+      result[i] = sum;
+    }
+    return result;
   };
 }
 
@@ -322,11 +334,24 @@ export function vowelShape(
     areas[index] = root * root;
   }
   const extraRounding = rounding - measuredRounding;
-  const shape = { areas, length: values[VOWEL_SECTIONS] };
-  return extraRounding > 0 ? roundLips(shape, extraRounding) : shape;
+  if (extraRounding > 0) {
+    narrowLips(areas, extraRounding);
+  }
+  return {
+    areas,
+    length:
+      values[VOWEL_SECTIONS] + (extraRounding > 0 ? 1.1 * extraRounding : 0),
+  };
 }
 
 const LIP_ROUNDING = [0.85, 0.65, 0.45, 0.32, 0.25];
+
+function narrowLips(areas, amount) {
+  const offset = areas.length - LIP_ROUNDING.length;
+  for (let i = 0; i < LIP_ROUNDING.length; i++) {
+    areas[offset + i] *= 1 - amount * (1 - LIP_ROUNDING[i]);
+  }
+}
 
 /**
  * How far rounded lips push forward (cm per unit of `rounding`): the
@@ -343,9 +368,6 @@ export const LIP_PROTRUSION = 0.6;
  */
 export function roundLips({ areas, length }, amount) {
   const result = Float64Array.from(areas);
-  const offset = result.length - LIP_ROUNDING.length;
-  LIP_ROUNDING.forEach((factor, index) => {
-    result[offset + index] *= 1 - amount * (1 - factor);
-  });
+  narrowLips(result, amount);
   return { areas: result, length: length + 1.1 * amount };
 }
