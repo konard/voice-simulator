@@ -1,4 +1,5 @@
 /** Segmental Viterbi search over candidate boundaries and final phone IDs. Unlicense. */
+import { decodeBest, fillAcoustic } from './decode-best.js';
 import { WHISPER_WEIGHTS } from './whisper-decode.js';
 
 function comparePaths(a, b) {
@@ -47,64 +48,12 @@ function stateFor(states, unit) {
 
 function acousticCosts(terms, weights) {
   const scores = new Float64Array(terms.length / 3);
-  let minimum = Infinity;
-  for (let u = 0; u < scores.length; u++) {
-    const offset = 3 * u;
-    scores[u] =
-      terms[offset] +
-      weights.duration * terms[offset + 1] +
-      weights.class * terms[offset + 2];
-    minimum = Math.min(minimum, scores[u]);
-  }
+  const minimum = fillAcoustic(scores, terms, weights);
   const denominator = scores.reduce(
     (sum, value) => sum + Math.exp(minimum - value),
     0
   );
   return { scores, minimum, denominator };
-}
-
-function connectBest(states, parents, span, from, settings, weights) {
-  const { width, costs, parentRows, parentCosts, uniformParents } = settings;
-  const { scores, minimum, denominator } = acousticCosts(span.terms, weights);
-  for (let unit = 0; unit < width; unit++) {
-    const state = stateFor(states, unit);
-    const acoustic = scores[unit];
-    // With no current path, the first parent wins even at infinite cost.
-    let best = state.paths[0]?.cost ?? NaN;
-    let arcCost = 0;
-    let bestParent = -1;
-    // The beam is ordered by cost. With uniform transitions it can only
-    // improve a phone through its first parent, including when costs tie.
-    const count =
-      uniformParents &&
-      Number.isFinite(acoustic) &&
-      Number.isFinite(weights.phonotactic)
-        ? 1
-        : parents.length;
-    for (let i = 0; i < count; i++) {
-      const cost = acoustic + weights.phonotactic * costs[parentRows[i] + unit];
-      const total = parentCosts[i] + cost;
-      if (!(total >= best)) {
-        bestParent = i;
-        arcCost = cost;
-        best = total;
-      }
-    }
-    if (bestParent >= 0) {
-      state.paths[0] = {
-        previous: parents[bestParent].paths[0],
-        arc: {
-          from,
-          to: span.to,
-          unit,
-          cost: arcCost,
-          confidence: Math.exp(minimum - acoustic) / denominator,
-          long: Boolean(span.long?.[unit]),
-        },
-        cost: best,
-      };
-    }
-  }
 }
 
 function connectPause(states, parents, { to, pause }, from, settings) {
@@ -127,10 +76,6 @@ function connect(states, parents, span, from, settings) {
   const weights = whisper ? WHISPER_WEIGHTS : settings.weights;
   if (pause) {
     connectPause(states, parents, span, from, settings);
-    return;
-  }
-  if (nbest === 1 && !lattice) {
-    connectBest(states, parents, span, from, settings, weights);
     return;
   }
   const { scores, minimum, denominator } = acousticCosts(terms, weights);
@@ -184,22 +129,14 @@ function terminalPaths(states, limit) {
   return result;
 }
 
-function packParents(settings, parents) {
-  if (settings.nbest !== 1 || settings.lattice) {
-    return;
+export function decodeSearch(prepared, language, options) {
+  if (options.nbest === 1 && options.lattice === false) {
+    return decodeBest(prepared, language, options);
   }
-  const { width } = settings;
-  const rows = (settings.parentRows ??= new Float64Array(width + 1));
-  const costs = (settings.parentCosts ??= new Float64Array(width + 1));
-  settings.uniformParents = settings.uniformTransitions;
-  for (let i = 0; i < parents.length; i++) {
-    rows[i] = parents[i].unit * width;
-    costs[i] = parents[i].paths[0].cost;
-    settings.uniformParents &&= !Number.isNaN(costs[i]);
-  }
+  return searchWithAlternatives(prepared, language, options);
 }
 
-export function decodeSearch(prepared, language, options) {
+function searchWithAlternatives(prepared, language, options) {
   const { times, spans } = prepared;
   const {
     beam,
@@ -226,7 +163,6 @@ export function decodeSearch(prepared, language, options) {
     contrastiveLength: language.symbols.map(
       (symbol) => language.long?.has(symbol) ?? false
     ),
-    uniformTransitions: language.costs.every((cost) => cost === 0),
   };
   let terminal = [];
   let provisional = [];
@@ -254,7 +190,6 @@ export function decodeSearch(prepared, language, options) {
       terminal = parents;
       break;
     }
-    packParents(settings, parents);
     for (const span of spans[from]) {
       connect(pending[span.to], parents, span, from, settings);
     }

@@ -26,7 +26,8 @@ import {
   resultOf,
   segmentsOf,
 } from '../src/recognition/decode-pipeline.js';
-import { decodeSearch } from '../src/recognition/decode-search.js';
+import { createBestSearchWorkspace } from '../src/recognition/decode-best.js';
+import { decodeSearch, pathArcs } from '../src/recognition/decode-search.js';
 import { prepareDecode } from '../src/recognition/decode-spans.js';
 import { checkBlockedGate } from './helpers/blocked-gate.js';
 import {
@@ -39,6 +40,48 @@ import {
 
 const hiRate = 16000;
 const lowRate = 8000;
+
+it('keeps single-best paths and the streaming frontier with compact search', () => {
+  const times = Float64Array.of(0, 0.1, 0.2, 0.3, 0.4);
+  const phone = (to, first, second, whisper = false) => ({
+    to,
+    terms: Float64Array.of(first, 1, 0, second, 1, 0),
+    long: Uint8Array.of(0, 1),
+    whisper,
+  });
+  const spans = [
+    [phone(1, 2, 2), phone(2, 5, 6)],
+    [phone(2, 2, 3, true)],
+    [{ to: 3, pause: true }],
+    [phone(4, 2, 1)],
+  ];
+  const options = {
+    beam: 2,
+    nbest: 1,
+    weights: { duration: 0.3, class: 0.5, phonotactic: 1.1 },
+    bestSearchWorkspace: createBestSearchWorkspace(),
+  };
+  const project = ({ paths, frontier, provisional }) => ({
+    paths: paths.map(pathArcs),
+    frontier: frontier.map(pathArcs),
+    provisional: pathArcs(provisional),
+  });
+  for (const costs of [
+    new Float64Array(6),
+    Float64Array.of(0, 1, 5, 0, 1, 2),
+  ]) {
+    const language = { symbols: ['a', 'b'], costs, long: new Set(['b']) };
+    for (const bounds of [times, times.subarray(0, 1), times]) {
+      const prepared = { times: bounds, spans };
+      assert.deepEqual(
+        project(
+          decodeSearch(prepared, language, { ...options, lattice: false })
+        ),
+        project(decodeSearch(prepared, language, options))
+      );
+    }
+  }
+});
 
 it('uses the same phone trajectories as the synthesis planner', () => {
   const options = { head: { pitch: 181, speechRate: 5, vibrato: 0.7 } };
