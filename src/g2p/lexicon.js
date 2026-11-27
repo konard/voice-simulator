@@ -49,6 +49,7 @@ const SHIPPED_DATA = {
 };
 
 const opened = new Map();
+const blockScans = new WeakMap();
 const added = new Map();
 const callStack = [];
 let spellingIndex = new Map();
@@ -71,14 +72,15 @@ export function lexiconKey(word) {
 function openVslex(data) {
   const tables = blockTables(data);
   const cache = new Map();
+  let blocks = cache;
   const block = (index) => {
-    if (!cache.has(index)) {
-      if (cache.size === 64) {
+    if (!blocks.has(index)) {
+      if (blocks === cache && cache.size === 64) {
         cache.delete(cache.keys().next().value);
       }
-      cache.set(index, new Map(decodeBlock(data, index, tables)));
+      blocks.set(index, new Map(decodeBlock(data, index, tables)));
     }
-    return cache.get(index);
+    return blocks.get(index);
   };
   const lookup = (word) => {
     const key = lexiconKey(word);
@@ -87,7 +89,7 @@ function openVslex(data) {
     const found = index < 0 ? undefined : block(index).get(key);
     return found ? [...found] : null;
   };
-  return {
+  const lexicon = {
     size: data.count,
     has: (word) => lookup(word) !== null,
     lookup,
@@ -99,6 +101,20 @@ function openVslex(data) {
       }
     },
   };
+  blockScans.set(lexicon, (read) => {
+    if (blocks !== cache) {
+      return read();
+    }
+    // Keep each visited block through this scan and retain the bounded
+    // dictionary cache when the scan returns.
+    blocks = new Map(cache);
+    try {
+      return read();
+    } finally {
+      blocks = cache;
+    }
+  });
+  return lexicon;
 }
 
 function variantsOf(word, value) {
@@ -178,6 +194,11 @@ export function lexiconFor(lang, part) {
     opened.set(data, openVslex(data));
   }
   return opened.get(data);
+}
+
+export function scanShippedLexicon(lang, read) {
+  const scan = blockScans.get(lexiconFor(lang));
+  return scan ? scan(read) : read();
 }
 
 /** Why a pronunciation of `lang` cannot be used, or null when it can. */
@@ -302,6 +323,9 @@ export function withLexicon(lexicons, fn) {
 
 /** The user lexicons of `lang` in lookup order. */
 function userLexicons(lang) {
+  if (callStack.length === 0) {
+    return added.get(lang) ?? [];
+  }
   const call = callStack
     .map((frame) => frame.get(lang))
     .filter(Boolean)
@@ -316,9 +340,12 @@ function userLexicons(lang) {
  * @returns {string[]|null}
  */
 export function userPronunciations(lang, word) {
-  const found = userLexicons(lang).flatMap(
-    (lexicon) => lexicon.lookup(word) ?? []
-  );
+  const lexicons = userLexicons(lang);
+  if (lexicons.length < 2) {
+    const found = lexicons[0]?.lookup(word);
+    return found?.length ? [...new Set(found)] : null;
+  }
+  const found = lexicons.flatMap((lexicon) => lexicon.lookup(word) ?? []);
   return found.length > 0 ? [...new Set(found)] : null;
 }
 

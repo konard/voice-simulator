@@ -6,6 +6,7 @@ import {
   lexiconRevision,
   lexiconWords,
   registeredLexicons,
+  scanShippedLexicon,
   userPronunciations,
 } from '../g2p/lexicon.js';
 import { hanziToPinyin } from '../g2p/chinese.js';
@@ -211,7 +212,11 @@ export function getLexicon(language = 'en') {
         prepared ??=
           (this.revision === 0 &&
             readPreparedLexicon?.(language, data.words)) ||
-          buildLexiconTrie(this, language);
+          (language === 'en'
+            ? scanShippedLexicon(language, () =>
+                buildLexiconTrie(this, language)
+              )
+            : buildLexiconTrie(this, language));
         return prepared;
       },
       get root() {
