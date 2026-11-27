@@ -308,7 +308,7 @@ export class Glottis {
    * Without effort the high-pass still runs, so that a ramp starts without
    * a step.
    */
-  #tilt(voiced, dt, effort) {
+  #tilt(voiced, dt, { effort, tiltGain }) {
     if (dt !== this.tiltStep) {
       this.tiltStep = dt;
       this.tiltPole = 1 / (1 + 2 * Math.PI * TILT_CORNER * dt);
@@ -318,9 +318,7 @@ export class Glottis {
     this.tiltOutput = pole * (this.tiltOutput + middle - this.tiltMiddle);
     this.tiltInput = voiced;
     this.tiltMiddle = middle;
-    return effort === 0
-      ? voiced
-      : voiced + (this.tiltGain - 1) * this.tiltOutput;
+    return effort === 0 ? voiced : voiced + (tiltGain - 1) * this.tiltOutput;
   }
 
   /**
@@ -542,6 +540,7 @@ export class Glottis {
       this.#effortGains(values.effort);
     }
     values.effortGain = values.effort === 0 ? 1 : this.effortGain;
+    values.tiltGain = this.tiltGain;
     values.strength = strength;
     values.breath =
       ((control.aspiration +
@@ -589,7 +588,6 @@ export class Glottis {
       tenseness,
       falsetto,
       falsettoGain,
-      effort,
       effortGain,
       strength,
       breath,
@@ -608,7 +606,7 @@ export class Glottis {
     const voiced = this.#tilt(
       this.#voicedSample(t, tenseness, dt, falsetto),
       dt,
-      effort
+      values
     );
     // Aspiration is strongest while the folds are open.
     const opening = Math.max(0, Math.sin(2 * Math.PI * t));

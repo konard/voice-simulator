@@ -184,6 +184,12 @@ describe('LF glottal pulse', () => {
         expect(prepared.step(1 / RATE, control, noise)).toBe(
           ordinary.step(1 / RATE, control, noise)
         );
+        if (i % 64 === 0) {
+          const instant = { ...control, effort: -3 };
+          expect(prepared.step(1 / RATE, instant, noise)).toBe(
+            ordinary.step(1 / RATE, instant, noise)
+          );
+        }
       }
     }
     expect(prepared.saveState()).toEqual(ordinary.saveState());
