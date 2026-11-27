@@ -559,9 +559,24 @@ function nasalFlag(frames, store, settings, t, firstReference) {
 function createViterbi(store, settings, rows) {
   const { keep, formants: K } = settings;
   const back = new Uint8Array(rows * keep);
+  const movements = new Float64Array(MAX_CANDIDATES * MAX_CANDIDATES);
   let previous = new Float64Array(keep);
   let current = new Float64Array(keep);
   let newest = -1;
+
+  // A frequency pair can fill different formant numbers in many states.
+  // Its cost depends only on the pair, so evaluate the logarithm once.
+  function movementCosts(t) {
+    const now = t * MAX_CANDIDATES;
+    const before = now - MAX_CANDIDATES;
+    for (let i = 0; i < store.count[t]; i++) {
+      for (let j = 0; j < store.count[t - 1]; j++) {
+        movements[i * MAX_CANDIDATES + j] = Math.abs(
+          Math.log2(store.frequency[now + i] / store.frequency[before + j])
+        );
+      }
+    }
+  }
 
   function transition(t, s, p) {
     const a = (t * keep + s) * COLUMNS;
@@ -571,12 +586,7 @@ function createViterbi(store, settings, rows) {
       const i = store.assign[a + k];
       const j = store.assign[b + k];
       if (i >= 0 && j >= 0) {
-        total += Math.abs(
-          Math.log2(
-            store.frequency[t * MAX_CANDIDATES + i] /
-              store.frequency[(t - 1) * MAX_CANDIDATES + j]
-          )
-        );
+        total += movements[i * MAX_CANDIDATES + j];
       } else if (i >= 0 || j >= 0) {
         total += APPEAR_COST;
       }
@@ -588,6 +598,9 @@ function createViterbi(store, settings, rows) {
     step(t, reset) {
       const states = store.states[t];
       const before = t > 0 ? store.states[t - 1] : 0;
+      if (t > 0 && !reset) {
+        movementCosts(t);
+      }
       let cheapest = 0;
       for (let p = 1; p < before; p++) {
         if (previous[p] < previous[cheapest]) {
