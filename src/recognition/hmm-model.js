@@ -43,47 +43,36 @@ function bytes(base64) {
 const float32 = (base64) => new Float32Array(bytes(base64).buffer);
 const int8 = (base64) => new Int8Array(bytes(base64).buffer);
 
-function gaussianMixtures(mixtures, dims) {
+/** Unpack quantised mixtures into flat arrays for scoring. */
+export function unpackHmmModel(data) {
+  const { lda, units, contexts, durations, mixtures } = data;
+  const contextUnits = contexts.map((key) => units.indexOf(key.split('#')[0]));
+  const dims = lda.dims;
+  const counts = bytes(mixtures.counts);
   const weights = int8(mixtures.weights);
-  const means = bytes(mixtures.means);
-  const variances = bytes(mixtures.logVars);
+  const means = int8(mixtures.means);
+  const logVars = int8(mixtures.logVars);
   const [meanScale, meanOffset, varScale, varOffset] = [
     mixtures.meanScale,
     mixtures.meanOffset,
     mixtures.varScale,
     mixtures.varOffset,
   ].map(float32);
-  const meanTable = new Float32Array(dims * 256);
-  const inverseTable = new Float32Array(dims * 256);
-  const divisor = new Float64Array(dims * 256);
-  for (let d = 0; d < dims; d++) {
-    for (let code = 0; code < 256; code++) {
-      const signed = code < 128 ? code : code - 256;
-      const entry = d * 256 + code;
-      meanTable[entry] = meanOffset[d] + meanScale[d] * signed;
-      const logVar = varOffset[d] + varScale[d] * signed;
-      inverseTable[entry] = 0.5 * Math.exp(-logVar);
-      divisor[entry] = 0.5 * (Math.log(2 * Math.PI) + logVar);
-    }
-  }
-  const norm = new Float64Array(weights.length);
-  for (let c = 0; c < weights.length; c++) {
+  const total = weights.length;
+  const mu = new Float32Array(total * dims);
+  const inv = new Float32Array(total * dims);
+  const norm = new Float64Array(total);
+  for (let c = 0; c < total; c++) {
     let sum = (weights[c] / 127) * mixtures.weightRange;
     for (let d = 0; d < dims; d++) {
-      sum -= divisor[d * 256 + variances[c * dims + d]];
+      const i = c * dims + d;
+      mu[i] = meanOffset[d] + meanScale[d] * means[i];
+      const logVar = varOffset[d] + varScale[d] * logVars[i];
+      inv[i] = 0.5 * Math.exp(-logVar);
+      sum -= 0.5 * (Math.log(2 * Math.PI) + logVar);
     }
     norm[c] = sum;
   }
-  return { codes: { means, variances, meanTable, inverseTable }, norm };
-}
-
-/** Keep the shipped Gaussian coefficients quantised until they are scored. */
-export function unpackHmmModel(data) {
-  const { lda, units, contexts, durations, mixtures } = data;
-  const contextUnits = contexts.map((key) => units.indexOf(key.split('#')[0]));
-  const dims = lda.dims;
-  const counts = bytes(mixtures.counts);
-  const { codes, norm } = gaussianMixtures(mixtures, dims);
   const first = new Int32Array(counts.length + 1);
   counts.forEach((n, i) => {
     first[i + 1] = first[i] + n;
@@ -123,7 +112,8 @@ export function unpackHmmModel(data) {
     ),
     states: counts.length,
     first,
-    codes,
+    mu,
+    inv,
     norm,
     stay,
     go,
@@ -142,50 +132,17 @@ export function getHmmModel() {
   return model;
 }
 
-/** Expand the code tables straight into buffers for dense scoring kernels. */
-export function expandGaussianCoefficients(model, mu, inv) {
-  const { codes, dims } = model;
-  if (!codes) {
-    mu.set(model.mu);
-    inv.set(model.inv);
-    return;
-  }
-  const { means, variances, meanTable, inverseTable } = codes;
-  for (let base = 0; base < means.length; base += dims) {
-    for (let d = 0; d < dims; d++) {
-      const i = base + d;
-      mu[i] = meanTable[d * 256 + means[i]];
-      inv[i] = inverseTable[d * 256 + variances[i]];
-    }
-  }
-}
-
-function codedLikelihood(feats, offset, dims, base, score, codes) {
-  const { means, variances, meanTable, inverseTable } = codes;
-  for (let d = 0; d < dims; d++) {
-    const index = base + d;
-    const table = d * 256;
-    const e = feats[offset + d] - meanTable[table + means[index]];
-    score -= e * e * inverseTable[table + variances[index]];
-  }
-  return score;
-}
-
 /** Log likelihood of frame x (offset in feats) for state m. */
 export function stateScore(m, feats, offset, model) {
-  const { first, mu, inv, norm, dims, codes } = model;
+  const { first, mu, inv, norm, dims } = model;
   let max = -Infinity;
   let sum = 0;
   for (let c = first[m]; c < first[m + 1]; c++) {
     let s = norm[c];
     const base = c * dims;
-    if (codes) {
-      s = codedLikelihood(feats, offset, dims, base, s, codes);
-    } else {
-      for (let d = 0; d < dims; d++) {
-        const e = feats[offset + d] - mu[base + d];
-        s -= e * e * inv[base + d];
-      }
+    for (let d = 0; d < dims; d++) {
+      const e = feats[offset + d] - mu[base + d];
+      s -= e * e * inv[base + d];
     }
     if (s > max) {
       sum = sum * Math.exp(max - s) + 1;
