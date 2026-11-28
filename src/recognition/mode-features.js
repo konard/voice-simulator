@@ -75,9 +75,11 @@ function analyzeWordSignal(samples, sampleRate, head, analyzed, options) {
         maxSeconds: Math.max(0.1, seconds + 0.05),
       })
     );
-  const pitch = measure(profile, 'Pitch', () =>
-    trackPitch(frames, { minF0: 35, maxF0: 800, kernels })
-  );
+  const pitch =
+    options.pitch ??
+    measure(profile, 'Pitch', () =>
+      trackPitch(frames, { minF0: 35, maxF0: 800, kernels })
+    );
   const track = options.reuseFormantCandidates
     ? trackBatchFormants
     : trackFormants;
@@ -137,6 +139,7 @@ export function measureWords(
       minF0: 35,
       maxF0: 800,
       kernels: options.kernels,
+      ...(options.sourceStep && { step: options.sourceStep }),
     })
   );
   const peakLevel = quantile(frames.energy.subarray(0, frames.count), 0.9);

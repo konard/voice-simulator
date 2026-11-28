@@ -50,9 +50,10 @@ Each cell of the columns quality, js-1, rust-1 and memory is `certified`,
 `failed` or `unavailable` against
 [lowest-thresholds.json](lowest-thresholds.json), whose limits only ever
 become stricter; [lowest-issues.json](lowest-issues.json) maps every cell
-that is not certified to its GitHub issue. The full suite requires each
-streaming engine to meet the transcript, first-partial latency and CPU limits
-on one pinned core under the heap cap. It also checks the cells certified in
+that is not certified to its GitHub issue. The full suite and the single-row
+run with `LOWEST_ROW=streaming` require each streaming engine to meet the
+transcript, first-partial latency and CPU limits on one pinned core under the
+heap cap. The full suite also checks the cells certified in
 [docs/reports/lowest-settings.json](../../docs/reports/lowest-settings.json).
 A run with `--limit` is a smoke test and skips these certification checks.
 `node scripts/lowest-settings.mjs --publish reports/heavy`

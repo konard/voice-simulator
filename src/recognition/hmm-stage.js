@@ -109,7 +109,9 @@ function timedSegments(aligned) {
 export function hmmAudioToIpa(samples, sampleRate, options = {}) {
   const languages = options.languages ?? ['en', 'ru', 'hi', 'zh'];
   const analysis =
-    options.analysis ?? analyzeFrames(samples, sampleRate, { hop: 0.01 });
+    options.frontEnd?.frames ??
+    options.analysis ??
+    analyzeFrames(samples, sampleRate, { hop: 0.01 });
   // Features are normalised per input, so silence alone would decode as
   // words: decode only inputs with frames the front end calls speech.
   const reading = hasSpeech(analysis)
@@ -118,7 +120,10 @@ export function hmmAudioToIpa(samples, sampleRate, options = {}) {
   const { decoded, aligned } = reading;
   stressOutOfVocabulary(decoded.words, aligned);
   const segments = timedSegments(aligned);
-  const pitch = reading.pitch ?? trackPitch(analysis);
+  const pitch =
+    options.frontEnd?.tracks.pitch ??
+    reading.pitch ??
+    trackPitch(analysis, { kernels: options.kernels });
   const whisperSpans = whisperSpansOf(samples, sampleRate, analysis, pitch, {
     whisper: options.whisper ?? 'auto',
   });
@@ -143,7 +148,9 @@ export function hmmAudioToIpa(samples, sampleRate, options = {}) {
     })),
     tracks: { pitch },
     // Prosody uses its own hop. Mode measurements use the same 10 ms frames.
-    frames: { energy: analysis.energy, count: analysis.count },
+    frames: options.frontEnd
+      ? analysis
+      : { energy: analysis.energy, count: analysis.count },
     modeFrames: analysis,
     whisperSpans,
     modes,
@@ -160,7 +167,8 @@ function decodeSpeech(samples, sampleRate, analysis, options) {
     samples,
     sampleRate,
     model.lda,
-    atModelRate ? analysis : undefined
+    atModelRate ? analysis : undefined,
+    options.frontEnd?.tracks.pitch
   );
   const search = { ...options.search, tone };
   const decoded = frames

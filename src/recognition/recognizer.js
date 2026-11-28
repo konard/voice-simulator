@@ -357,6 +357,35 @@ function modelText(sounds, modelWords) {
   return resultFromPath(path, tokens, modelWords[0]?.language);
 }
 
+function liveWordResult(decoded, sounds) {
+  const tokens = [];
+  const path = [];
+  let index = -1;
+  for (const sound of sounds) {
+    if (sound.kind === 'pause') {
+      continue;
+    }
+    if (sound.modelWord !== index) {
+      index = sound.modelWord;
+      const { text, language, oov } = decoded.words[index];
+      path.push({
+        word: text,
+        language,
+        unknown: oov,
+        from: tokens.length,
+        to: tokens.length,
+        ipa: '',
+        cost: 0,
+      });
+    }
+    const word = path.at(-1);
+    word.ipa += sound.ipa;
+    word.to++;
+    tokens.push(sound);
+  }
+  return resultFromPath(path, tokens, decoded.modelLanguage);
+}
+
 function recognizeProsody(decoded, samples, rate, settings, level) {
   const input = timedPhones(decoded);
   const pitch = decoded.tracks?.pitch;
@@ -378,7 +407,10 @@ function recognizeProsody(decoded, samples, rate, settings, level) {
   const measured = measure(settings.profile, 'Prosody', () =>
     measureProsody(samples, rate, input, options)
   );
-  const primary = spell(measured.sounds);
+  // The live HMM has already searched the lexicon and aligned its words.
+  const primary = settings.liveWords
+    ? liveWordResult(decoded, measured.sounds)
+    : spell(measured.sounds);
   return markProsody(primary, measured, options);
 }
 
@@ -458,6 +490,8 @@ export function recognizeDecoded(
             rate,
             {
               ...primary,
+              ...(settings.liveWords &&
+                !settings.voice && { phones: decoded.segments }),
               whisperSpans:
                 settings.whisper === false ? [] : decoded.whisperSpans,
             },
@@ -469,7 +503,11 @@ export function recognizeDecoded(
               kernels: settings.kernels,
               frames: decoded.frames?.speech ? decoded.frames : undefined,
               wordFrames: decoded.modeFrames,
-              reuseFormantCandidates: final === 'batch' || final === 'parallel',
+              pitch: settings.liveWords ? decoded.tracks.pitch : undefined,
+              sourceStep:
+                settings.liveWords && !settings.voice ? 0.02 : undefined,
+              reuseFormantCandidates:
+                settings.liveWords || final === 'batch' || final === 'parallel',
             }
           )
         )

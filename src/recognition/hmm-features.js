@@ -202,11 +202,11 @@ export function hmmPitchStatics(pitch, count) {
  * Static features of 8 kHz speech: one row of 15 values per frame, and
  * the pitch track used for them.
  */
-export function hmmStatics(x, analysis) {
+export function hmmStatics(x, analysis, trackedPitch) {
   const statics = normalise(rawCepstra(x));
-  const pitch = trackPitch(
-    analysis ?? analyzeFrames(x, HMM_RATE, { hop: 0.01 })
-  );
+  const pitch =
+    trackedPitch ??
+    trackPitch(analysis ?? analyzeFrames(x, HMM_RATE, { hop: 0.01 }));
   const { lf0, voicing } = hmmPitchStatics(pitch, statics.length);
   statics.forEach((v, t) => {
     v[CEPS] = 4 * lf0[t];
@@ -250,9 +250,9 @@ export function applyLda(lda, statics) {
  * Model features of speech at any rate, the tone-stream features
  * (hmm-tone.js) and the 8 kHz pitch track.
  */
-export function hmmFeatures(samples, sampleRate, lda, analysis) {
+export function hmmFeatures(samples, sampleRate, lda, analysis, trackedPitch) {
   const x = hmmAudio(samples, sampleRate);
-  const { statics, pitch } = hmmStatics(x, analysis);
+  const { statics, pitch } = hmmStatics(x, analysis, trackedPitch);
   const tone = hmmToneFeatures(
     statics.map((v) => v[CEPS] / 4),
     statics.map((v) => v[CEPS + 1])

@@ -26,9 +26,9 @@ const copied = copyVoice(samples, sampleRate, { languages: ['en'] });
 Each chunk is a `Float32Array`. Call `reset()` before starting a new input.
 `speak` uses the most recent voice and throws `No voice yet` before the first
 voice event. The voice is a serializable voice file. The first fit and inversion
-can publish provisional estimates. `converged` becomes true when both the
-parameters and the IPA reading settle. `uncertainty` gives one jackknife
-standard error per parameter after convergence. `history` contains the pass
+can publish provisional estimates. In the standard path, `converged` becomes
+true when both the parameters and the IPA reading settle, and `uncertainty`
+gives one jackknife standard error per parameter. `history` contains the pass
 number, state, objective distance, normalised parameter changes and IPA
 reading. A speaker change starts a new history. `partial` and `syllable` have
 the recognizer's event shapes. Each `final` event includes the current voice,
@@ -68,12 +68,27 @@ stateDiagram-v2
     stable --> collecting: speaker change
 ```
 
-Refinement measures the middle half of confident phones. It uses vowel formants
+Standard refinement measures the middle half of confident phones. It uses vowel formants
 for tract length, stressed vowel frames for source parameters and planned
 durations for speech rate. Vowel habits appear as
 `voice.articulationOffsets`, keyed by IPA. `planUtterance` and `synthesize`
 accept the same mapping. In `stable`, the recognizer applies parameter updates
 when it detects a pause of at least 200 ms.
+
+At 8000 Hz with `realtime: true` and `level: 'low'` or `'auto'`, the session
+uses the telephone word decoder with a bounded search. It uses timed phones
+from the live reading for the confidence gate and emits aligned syllables at
+phrase commits. The first fit estimates the voice source. Subsequent
+refinements require fresh voiced evidence. The `stablePasses` count uses the normalised
+change in pitch and vocal tract length, and the same change is reported as
+the refinement distance. Uncertainty comes from the pooled acoustic
+statistics. Speaker tracking checks recent pitch and tract length and applies
+smoothed updates at pauses.
+
+The telephone session emits relative mode labels by default. Set
+`includeModeLabels: true` to use synthesized voice references for expressive
+labels such as named emotions. This takes additional foreground processing.
+Set `includeModeLabels: false` to skip the mode classifier.
 
 The recognizer's confidence gate can leave a session in `inverting` through
 the end of input. The measured recovery results and reproduction commands are
