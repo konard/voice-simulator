@@ -3,8 +3,10 @@ import { describe, it, expect } from 'test-anywhere';
 import { simplex } from '../src/analysis/voice-fit-simplex.js';
 import {
   analyzeLegacyVoice,
+  createYinWorkspace,
   prepareLegacyVoice,
   resample,
+  yinPitch,
 } from '../src/analysis/voice-features.js';
 import { Biquad } from '../src/acoustics/filters.js';
 import {
@@ -78,6 +80,20 @@ describe('legacy voice resampling', () => {
     }
   });
 });
+it('uses only through the right neighbour of the first qualifying YIN minimum', () => {
+  const rate = 8000;
+  const signal = Float64Array.from({ length: 480 }, (_, n) =>
+    Math.sin((2 * Math.PI * n) / 40)
+  );
+  const scratch = createYinWorkspace(rate).fill(NaN);
+  const result = yinPitch(signal, 0, 320, rate, scratch);
+
+  expect(Math.abs(result.f0 - 200) < 1).toBe(true);
+  expect(result.aperiodicity < 1e-12).toBe(true);
+  expect(Number.isFinite(scratch[41])).toBe(true);
+  expect(Number.isNaN(scratch[42])).toBe(true);
+});
+
 describe('voice fitting numerics', () => {
   it('measures syllable rate using only peak frames before completing legacy pitch', () => {
     const rate = 8000;

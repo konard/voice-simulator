@@ -120,6 +120,38 @@ export function createYinWorkspace(sampleRate) {
 }
 
 /**
+ * First dip below the YIN threshold, with its neighbours measured for
+ * interpolation. Without a dip, return the lowest measured lag.
+ */
+function yinLag(signal, start, length, minLag, maxLag, normalized) {
+  normalized[0] = 1;
+  let running = 0;
+  let below = false;
+  for (let lag = 1; lag <= maxLag + 1; lag++) {
+    let sum = 0;
+    for (let index = start; index < start + length; index++) {
+      const delta = signal[index] - (signal[index + lag] ?? 0);
+      sum += delta * delta;
+    }
+    running += sum;
+    normalized[lag] = running > 0 ? (sum * lag) / running : 1;
+    if (lag >= minLag) {
+      if (below && (lag > maxLag || !(normalized[lag] < normalized[lag - 1]))) {
+        return lag - 1;
+      }
+      below ||= normalized[lag] < YIN_THRESHOLD;
+    }
+  }
+  let best = minLag;
+  for (let lag = minLag + 1; lag <= maxLag; lag++) {
+    if (normalized[lag] < normalized[best]) {
+      best = lag;
+    }
+  }
+  return best;
+}
+
+/**
  * YIN pitch of one frame.
  * @returns {{f0: number, aperiodicity: number}}
  */
@@ -132,35 +164,7 @@ export function yinPitch(
 ) {
   const minLag = Math.max(2, Math.floor(sampleRate / MAX_F0));
   const maxLag = Math.ceil(sampleRate / MIN_F0);
-  normalized[0] = 1;
-  let running = 0;
-  for (let lag = 1; lag <= maxLag + 1; lag++) {
-    let sum = 0;
-    for (let index = start; index < start + length; index++) {
-      const delta = signal[index] - (signal[index + lag] ?? 0);
-      sum += delta * delta;
-    }
-    running += sum;
-    normalized[lag] = running > 0 ? (sum * lag) / running : 1;
-  }
-  let best = -1;
-  for (let lag = minLag; lag <= maxLag; lag++) {
-    if (normalized[lag] < YIN_THRESHOLD) {
-      while (lag < maxLag && normalized[lag + 1] < normalized[lag]) {
-        lag++;
-      }
-      best = lag;
-      break;
-    }
-  }
-  if (best < 0) {
-    best = minLag;
-    for (let lag = minLag; lag <= maxLag; lag++) {
-      if (normalized[lag] < normalized[best]) {
-        best = lag;
-      }
-    }
-  }
+  const best = yinLag(signal, start, length, minLag, maxLag, normalized);
   const before = normalized[best - 1];
   const after = normalized[best + 1];
   const curvature = before - 2 * normalized[best] + after;
