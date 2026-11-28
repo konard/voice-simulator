@@ -42,6 +42,17 @@ export function lpcCoefficients(frame, order, scratch) {
   return a;
 }
 
+function lpcMagnitude(a, frequency, sampleRate) {
+  const omega = (2 * Math.PI * frequency) / sampleRate;
+  let re = 0;
+  let im = 0;
+  for (let k = 0; k < a.length; k++) {
+    re += a[k] * Math.cos(omega * k);
+    im -= a[k] * Math.sin(omega * k);
+  }
+  return 1 / Math.hypot(re, im);
+}
+
 /** |1 / A(e^jw)| on a frequency grid. */
 export function lpcEnvelope(a, sampleRate, step = 10) {
   const count = Math.floor(sampleRate / 2 / step);
@@ -49,15 +60,8 @@ export function lpcEnvelope(a, sampleRate, step = 10) {
   const magnitudes = new Float64Array(count);
   for (let bin = 0; bin < count; bin++) {
     const frequency = (bin + 1) * step;
-    const omega = (2 * Math.PI * frequency) / sampleRate;
-    let re = 0;
-    let im = 0;
-    for (let k = 0; k < a.length; k++) {
-      re += a[k] * Math.cos(omega * k);
-      im -= a[k] * Math.sin(omega * k);
-    }
     frequencies[bin] = frequency;
-    magnitudes[bin] = 1 / Math.hypot(re, im);
+    magnitudes[bin] = lpcMagnitude(a, frequency, sampleRate);
   }
   return { frequencies, magnitudes };
 }
@@ -86,18 +90,33 @@ export function decimate(samples, sampleRate, targetRate) {
   return { samples: output, sampleRate: sampleRate / factor };
 }
 
-function peaks({ frequencies, magnitudes }, minimum = 150) {
-  const result = [];
-  for (let index = 1; index < magnitudes.length - 1; index++) {
-    if (
-      frequencies[index] > minimum &&
-      magnitudes[index] > magnitudes[index - 1] &&
-      magnitudes[index] >= magnitudes[index + 1]
-    ) {
-      result.push(frequencies[index]);
-    }
+/** Find LPC peaks as the grid is evaluated. Only the last three bins matter. */
+function formantPeaks(a, rate, count) {
+  const step = 5;
+  const bins = Math.floor(rate / 2 / step);
+  if (bins < 0 || bins === Infinity) {
+    throw new RangeError('Invalid LPC frequency grid size');
   }
-  return result;
+  const limit = Number.isInteger(count) && count >= 0 ? count : Infinity;
+  const result = [];
+  if (!(bins >= 3) || limit === 0) {
+    return result;
+  }
+  let previous = lpcMagnitude(a, step, rate);
+  let current = lpcMagnitude(a, 2 * step, rate);
+  for (let bin = 3; bin <= bins; bin++) {
+    const next = lpcMagnitude(a, bin * step, rate);
+    const frequency = (bin - 1) * step;
+    if (frequency > 150 && current > previous && current >= next) {
+      result.push(frequency);
+      if (result.length === limit) {
+        return result;
+      }
+    }
+    previous = current;
+    current = next;
+  }
+  return limit === Infinity ? result.slice(0, count) : result;
 }
 
 /**
@@ -109,7 +128,11 @@ function peaks({ frequencies, magnitudes }, minimum = 150) {
 export function estimateFormants(samples, sampleRate, options = {}) {
   const start = Math.floor((options.start ?? 0) * sampleRate);
   const length = Math.floor((options.duration ?? 0.05) * sampleRate);
-  const slice = Array.prototype.slice.call(samples, start, start + length);
+  const slice =
+    (samples instanceof Float32Array || samples instanceof Float64Array) &&
+    samples.buffer instanceof ArrayBuffer
+      ? samples.subarray(start, start + length)
+      : Array.prototype.slice.call(samples, start, start + length);
   const decimated = decimate(slice, sampleRate, options.analysisRate ?? 11025);
   const frame = decimated.samples;
   for (let index = frame.length - 1; index > 0; index--) {
@@ -121,10 +144,7 @@ export function estimateFormants(samples, sampleRate, options = {}) {
   }
   const order = options.order ?? 12;
   const a = lpcCoefficients(frame, order);
-  return peaks(lpcEnvelope(a, decimated.sampleRate, 5)).slice(
-    0,
-    options.count ?? 4
-  );
+  return formantPeaks(a, decimated.sampleRate, options.count ?? 4);
 }
 
 /**

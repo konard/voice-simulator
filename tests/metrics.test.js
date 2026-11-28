@@ -27,6 +27,12 @@ import {
   synthesize,
   tokenize,
 } from '../src/index.js';
+import {
+  decimate,
+  estimateFormants,
+  lpcCoefficients,
+  lpcEnvelope,
+} from '../src/acoustics/analysis.js';
 import { median, yinPitch } from '../src/analysis/voice-features.js';
 import { trimSilence } from '../src/metrics/compare.js';
 import { normalizeRms } from '../src/metrics/distortion.js';
@@ -315,6 +321,46 @@ describe('metrics: pitch and formants', () => {
     expect(result.f1.percent).toBe(10);
     expect(result.f2.hz).toBe(0);
     expect(result.f3.percent).toBe(4);
+  });
+
+  it('finds the same formant peaks as a complete LPC envelope', () => {
+    for (const rate of [8000, 22050]) {
+      const samples = noise(0.04, rate);
+      const start = Math.floor(0.01 * rate);
+      const length = Math.floor(0.02 * rate);
+      const { samples: frame, sampleRate } = decimate(
+        samples.slice(start, start + length),
+        rate,
+        11025
+      );
+      for (let i = frame.length - 1; i > 0; i--) {
+        frame[i] -= 0.94 * frame[i - 1];
+      }
+      for (let i = 0; i < frame.length; i++) {
+        frame[i] *=
+          0.54 - 0.46 * Math.cos((2 * Math.PI * i) / (frame.length - 1));
+      }
+      const { frequencies, magnitudes } = lpcEnvelope(
+        lpcCoefficients(frame, 12),
+        sampleRate,
+        5
+      );
+      const peaks = Array.from(frequencies).filter(
+        (frequency, i) =>
+          frequency > 150 &&
+          magnitudes[i] > magnitudes[i - 1] &&
+          magnitudes[i] >= magnitudes[i + 1]
+      );
+      expect(peaks.length).toBeGreaterThan(3);
+      for (const count of [0, 3, 3.5, -1]) {
+        const args = { start: 0.01, duration: 0.02, count };
+        const expected = peaks.slice(0, count);
+        expect(estimateFormants(samples, rate, args)).toEqual(expected);
+        expect(estimateFormants(Array.from(samples), rate, args)).toEqual(
+          expected
+        );
+      }
+    }
   });
 });
 
