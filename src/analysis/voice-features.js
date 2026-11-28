@@ -206,10 +206,22 @@ function cubicAt(signal, position) {
   const index = Math.floor(position);
   const x = position - index;
   const last = signal.length - 1;
-  const p0 = signal[Math.min(last, Math.max(0, index - 1))];
-  const p1 = signal[Math.min(last, Math.max(0, index))];
-  const p2 = signal[Math.min(last, Math.max(0, index + 1))];
-  const p3 = signal[Math.min(last, Math.max(0, index + 2))];
+  // Most of a pitch window is interior. Clamp the four neighbours only
+  // where the interpolator actually reaches an edge of the recording.
+  let a = index - 1;
+  let b = index;
+  let c = index + 1;
+  let d = index + 2;
+  if (!(a >= 0 && d <= last)) {
+    a = Math.min(last, Math.max(0, a));
+    b = Math.min(last, Math.max(0, b));
+    c = Math.min(last, Math.max(0, c));
+    d = Math.min(last, Math.max(0, d));
+  }
+  const p0 = signal[a];
+  const p1 = signal[b];
+  const p2 = signal[c];
+  const p3 = signal[d];
   return (
     p1 +
     0.5 *
