@@ -252,24 +252,19 @@ function initialEntries(
  * A rising sandhi variant goes on only with a word of the tone that causes
  * it, without a pause (hmm-network.js toneVariants).
  */
-function restart(next, network, records, rec, end, settings) {
-  const { lmw, silencePenalty, oovStart } = settings;
+function restart(next, network, records, rec, end, pass) {
+  const { lookLn, settings } = pass;
+  const { lmw, silencePenalty } = settings;
   const { id, language, before, score } = rec;
   const r = records.add(rec, end);
   const tree = network.trees.get(network.languages[language]);
-  const { lookLn } = network.nodes;
   if (before) {
     for (const child of tree.after.get(before)) {
       next.enter(child, score + lmw * lookLn[child], r, end);
     }
     return;
   }
-  for (const child of tree.root) {
-    next.enter(child, score + lmw * lookLn[child], r, end);
-  }
-  for (const node of tree.loop.begin) {
-    next.enter(node, score + oovStart, r, end);
-  }
+  enterRoots(next, tree, score, r, end, pass);
   if (tree.wordTable ? tree.wordTable.oov(id) : network.words[id].oov) {
     for (const node of tree.loop.next) {
       next.enter(node, score, r, end);
@@ -508,15 +503,114 @@ export function decodeWords(network, feats, frames, options = {}) {
   }
 }
 
+/** Prune the frame and queue its outgoing nodes and best word ends. */
+function pruneFrame(network, pass, thresholds, t) {
+  const { nodes, words, emit, wordId, nextWord } = network;
+  const { first, count, optional, child, sibling, terminal, lookLn } = nodes;
+  const { go } = network.model;
+  const {
+    positions,
+    work,
+    length,
+    current,
+    best,
+    lm,
+    settings,
+    next,
+    wordEnds,
+    endings,
+  } = pass;
+  const { lmw, releaseSkip } = settings;
+  const { scores, histories, starts, peaks } = current;
+  for (let i = 0; i < pass.active; i++) {
+    positions[work[i]] = 0;
+  }
+  let active = 0;
+  wordEnds.length = 0;
+  for (let index = 0; index < length; index++) {
+    const id = work[index];
+    const language = nodes.language[id];
+    const threshold = thresholds[language];
+    if (peaks[index] < threshold) {
+      continue;
+    }
+    const offset = index * 6;
+    for (let i = 0; i < count[id]; i++) {
+      if (scores[offset + i] < threshold) {
+        scores[offset + i] = -Infinity;
+      }
+    }
+    positions[id] = index + 1;
+    work[active++] = id;
+    const last = count[id] - 1;
+    const firstState = first[id];
+    let exit = scores[offset + last] + go[emit[firstState + last]];
+    let hist = histories[offset + last];
+    let start = starts[offset + last];
+    if (optional[id]) {
+      const skipped =
+        scores[offset + 2] + go[emit[firstState + 2]] + releaseSkip;
+      if (skipped > exit) {
+        exit = skipped;
+        hist = histories[offset + 2];
+        start = starts[offset + 2];
+      }
+    }
+    if (exit < threshold) {
+      continue;
+    }
+    const tree = pass.trees[language];
+    if (id === tree.silence) {
+      // Silence returns to the root with the same history.
+      enterRoots(next, tree, exit, hist, t + 1, pass);
+      continue;
+    }
+    const look = lmw * lookLn[id];
+    for (let kid = child[id]; kid; kid = sibling[kid]) {
+      next.enter(kid, exit + lmw * lookLn[kid] - look, hist, start);
+    }
+    for (let link = terminal[id]; link; link = nextWord[link]) {
+      const wid = wordId[link];
+      const s = exit - look + lm(hist, wid, tree);
+      settings.onWordEnd?.(wid, s - best, start, t + 1);
+      const packed = tree.wordTable;
+      const before = packed ? packed.before(wid) : words[wid].before;
+      // One word end per language and frame, apart for sandhi variants.
+      const end = endings[language * 5 + (before ?? 0)];
+      if (end.frame !== t) {
+        end.frame = t;
+        end.score = -Infinity;
+        wordEnds.push(end);
+      } else if (!(s > end.score)) {
+        continue;
+      }
+      end.score = s;
+      end.language = language;
+      end.before = before;
+      end.id = wid;
+      end.prev = hist;
+      end.start = start;
+    }
+  }
+  return active;
+}
+
+function enterRoots(next, tree, score, history, frame, { lookLn, settings }) {
+  const { lmw, oovStart } = settings;
+  const { root, loop } = tree;
+  for (let i = 0; i < root.length; i++) {
+    const node = root[i];
+    next.enter(node, score + lmw * lookLn[node], history, frame);
+  }
+  for (let i = 0; i < loop.begin.length; i++) {
+    next.enter(loop.begin[i], score + oovStart, history, frame);
+  }
+}
+
 // Keep the order of emission, pruning and word ends explicit in the loop.
-// eslint-disable-next-line max-lines-per-function
 function decodeWithWorkspace(network, feats, frames, options, workspace) {
   const settings = { ...HMM_DECODE_DEFAULTS, ...options };
-  const { lmw, releaseSkip, oovStart } = settings;
   const languages = settings.languages ?? [...network.trees.keys()];
-  const { nodes, words, emit, trees, wordId, nextWord } = network;
-  const { go } = network.model;
-  const { first, count, optional, child, sibling, terminal, lookLn } = nodes;
   const emissions = emissionCache(
     network.model,
     feats,
@@ -529,7 +623,7 @@ function decodeWithWorkspace(network, feats, frames, options, workspace) {
   positions.fill(0);
   const lm = languageModel(network, records, settings, workspace.transitions);
   const thresholdsOf = createThresholds(
-    nodes.language,
+    network.nodes.language,
     network.languages.length,
     settings,
     workspace.histogram
@@ -539,6 +633,12 @@ function decodeWithWorkspace(network, feats, frames, options, workspace) {
   const wordEnds = [];
   const endings = Array.from({ length: network.languages.length * 5 }, () => ({
     frame: -1,
+    score: -Infinity,
+    language: 0,
+    before: 0,
+    id: 0,
+    prev: 0,
+    start: 0,
   }));
   const pass = {
     positions,
@@ -548,7 +648,15 @@ function decodeWithWorkspace(network, feats, frames, options, workspace) {
     previous,
     current,
     entries,
+    next,
+    wordEnds,
+    endings,
+    lookLn: network.nodes.lookLn,
     emissions,
+    best: -Infinity,
+    lm,
+    settings,
+    trees: network.languages.map((lang) => network.trees.get(lang)),
   };
   for (let t = 0; t < frames; t++) {
     const entryNodes = entries.columns.nodes;
@@ -568,94 +676,20 @@ function decodeWithWorkspace(network, feats, frames, options, workspace) {
     if (current.peaks.length < length) {
       current = stateFrame(Math.max(length, 2 * current.peaks.length));
     }
-    const { scores, histories, starts, peaks } = current;
     pass.work = work;
     pass.active = active;
     pass.length = length;
     pass.previous = previous;
     pass.current = current;
     pass.entries = entries;
-    const best = scoreFrame(network, pass, t);
-    const thresholds = thresholdsOf(work, peaks, length, best);
-    for (let i = 0; i < active; i++) {
-      positions[work[i]] = 0;
-    }
-    active = 0;
-    wordEnds.length = 0;
-    for (let index = 0; index < length; index++) {
-      const id = work[index];
-      const language = nodes.language[id];
-      const threshold = thresholds[language];
-      if (peaks[index] < threshold) {
-        continue;
-      }
-      const offset = index * 6;
-      for (let i = 0; i < count[id]; i++) {
-        if (scores[offset + i] < threshold) {
-          scores[offset + i] = -Infinity;
-        }
-      }
-      positions[id] = index + 1;
-      work[active++] = id;
-      const last = count[id] - 1;
-      const firstState = first[id];
-      let exit = scores[offset + last] + go[emit[firstState + last]];
-      let hist = histories[offset + last];
-      let start = starts[offset + last];
-      if (optional[id]) {
-        const skipped =
-          scores[offset + 2] + go[emit[firstState + 2]] + releaseSkip;
-        if (skipped > exit) {
-          exit = skipped;
-          hist = histories[offset + 2];
-          start = starts[offset + 2];
-        }
-      }
-      if (exit < threshold) {
-        continue;
-      }
-      const lang = network.languages[language];
-      const tree = trees.get(lang);
-      if (id === tree.silence) {
-        // Silence returns to the root with the same history.
-        for (const child of tree.root) {
-          next.enter(child, exit + lmw * lookLn[child], hist, t + 1);
-        }
-        for (const loopNode of tree.loop.begin) {
-          next.enter(loopNode, exit + oovStart, hist, t + 1);
-        }
-        continue;
-      }
-      const look = lmw * lookLn[id];
-      for (let kid = child[id]; kid; kid = sibling[kid]) {
-        next.enter(kid, exit + lmw * lookLn[kid] - look, hist, start);
-      }
-      for (let link = terminal[id]; link; link = nextWord[link]) {
-        const wid = wordId[link];
-        const s = exit - look + lm(hist, wid, tree);
-        settings.onWordEnd?.(wid, s - best, start, t + 1);
-        const packed = tree.wordTable;
-        const before = packed ? packed.before(wid) : words[wid].before;
-        // One word end per language and frame, apart for sandhi variants.
-        const end = endings[language * 5 + (before ?? 0)];
-        if (end.frame !== t) {
-          end.frame = t;
-          end.score = -Infinity;
-          wordEnds.push(end);
-        } else if (!(s > end.score)) {
-          continue;
-        }
-        end.score = s;
-        end.language = language;
-        end.before = before;
-        end.id = wid;
-        end.prev = hist;
-        end.start = start;
-      }
-    }
-    for (const end of wordEnds) {
+    pass.next = next;
+    pass.best = scoreFrame(network, pass, t);
+    const thresholds = thresholdsOf(work, current.peaks, length, pass.best);
+    active = pruneFrame(network, pass, thresholds, t);
+    for (let i = 0; i < wordEnds.length; i++) {
+      const end = wordEnds[i];
       if (end.score >= thresholds[end.language]) {
-        restart(next, network, records, end, t + 1, settings);
+        restart(next, network, records, end, t + 1, pass);
       }
     }
     entries.clear();
