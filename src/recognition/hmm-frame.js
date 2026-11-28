@@ -91,5 +91,5 @@ export function scoreFrame(network, pass, frame) {
     peaks[row] = score;
     best = Math.max(best, score);
   }
-  return best;
+  pass.framePeak[0] = best;
 }

@@ -202,7 +202,7 @@ function languageModel(network, records, settings, cache) {
     candidates.fill(0);
     unigramIds.fill(0);
   }
-  function unigram(id, packed, data) {
+  function unigramSlot(id, packed, data) {
     const slot = id & mask;
     if (unigramIds[slot] !== id + 1) {
       const count = packed ? packed.count(id) : words[id].count;
@@ -212,36 +212,34 @@ function languageModel(network, records, settings, cache) {
       unigramIds[slot] = id + 1;
       unigramCosts[slot] = lmw * lnProbability(cost) + wip;
     }
-    return unigramCosts[slot];
+    return slot;
   }
 
-  function calculate(history, id, tree) {
+  function cacheMiss(history, id, tree, slot) {
     const { wordTable: packed, data, loop } = tree;
     if (packed ? packed.oov(id) : words[id].oov) {
       const beginning = packed ? packed.begin(id) : words[id].begin;
       const phone = previousPhone(packed, words, id);
       const before = beginning ? '' : previousPhone(packed, words, history);
-      return oovWeight * loop.bigram.get(before).get(phone) + oovPhone;
+      costs[slot] = oovWeight * loop.bigram.get(before).get(phone) + oovPhone;
+    } else {
+      const seen = transitionCost(packed, data, words, id, history);
+      costs[slot] =
+        seen === undefined || seen === null
+          ? unigramCosts[unigramSlot(id, packed, data)]
+          : lmw * lnProbability(seen) + wip;
     }
-    const seen = transitionCost(packed, data, words, id, history);
-    return seen === undefined || seen === null
-      ? unigram(id, packed, data)
-      : lmw * lnProbability(seen) + wip;
-  }
-  function cacheMiss(history, id, tree, slot) {
-    const value = calculate(history, id, tree);
     histories[slot] = history;
     candidates[slot] = id + 1;
-    costs[slot] = value;
-    return value;
   }
-  return function wordScore(hist, id, tree) {
+  return function wordScoreSlot(hist, id, tree) {
     const history = records.columns.id[hist] ?? -1;
     const slot =
       (Math.imul(history, 0x9e3779b1) ^ Math.imul(id, 0x85ebca6b)) & mask;
-    return histories[slot] === history && candidates[slot] === id + 1
-      ? costs[slot]
-      : cacheMiss(history, id, tree, slot);
+    if (histories[slot] !== history || candidates[slot] !== id + 1) {
+      cacheMiss(history, id, tree, slot);
+    }
+    return slot;
   };
 }
 
@@ -577,7 +575,8 @@ function pruneFrame(network, pass, thresholds, t) {
     active: previousActive,
     current: { peaks, state: available },
     entries: { index: entryIndex, columns: queued },
-    lm,
+    wordScoreSlot,
+    transitionCosts,
     settings,
     next,
     wordEnds,
@@ -651,13 +650,17 @@ function pruneFrame(network, pass, thresholds, t) {
       enterRoots(next, tree, exit, hist, endFrame, pass);
       continue;
     }
-    const look = lmw * lookLn[id];
-    next.enterChildren(id, nodes, lmw, exit, hist, start);
+    if (nodes.child[id]) {
+      next.enterChildren(id, nodes, lmw, exit, hist, start);
+    }
     const packed = tree.wordTable;
     for (let link = terminal[id]; link; link = nextWord[link]) {
       const wid = wordId[link];
-      const s = exit - look + lm(hist, wid, tree);
-      settings.onWordEnd?.(wid, s - pass.best, start, endFrame);
+      const s =
+        exit -
+        lmw * lookLn[id] +
+        transitionCosts[wordScoreSlot(hist, wid, tree)];
+      settings.onWordEnd?.(wid, s - pass.framePeak[0], start, endFrame);
       const before = packed ? packed.before(wid) : words[wid].before;
       // One word end per language and frame, apart for sandhi variants.
       const slot = language * 5 + (before ?? 0);
@@ -721,12 +724,12 @@ function advanceFrames(network, frames, pass, thresholdsOf, records) {
   const { wordEnds, endings, endingScores } = pass;
   for (let t = 0; t < frames; t++) {
     prepareFrame(pass, network.nodeCount);
-    pass.best = scoreFrame(network, pass, t);
+    scoreFrame(network, pass, t);
     const thresholds = thresholdsOf(
       pass.work,
       pass.current.peaks,
       pass.length,
-      pass.best
+      pass.framePeak[0]
     );
     pass.active = pruneFrame(network, pass, thresholds, t);
     for (let i = 0; i < wordEnds.length; i++) {
@@ -756,7 +759,12 @@ function decodeWithWorkspace(network, feats, frames, options, workspace) {
   const { previous, current, entries, next, positions, records, work } =
     workspace;
   positions.fill(0);
-  const lm = languageModel(network, records, settings, workspace.transitions);
+  const wordScoreSlot = languageModel(
+    network,
+    records,
+    settings,
+    workspace.transitions
+  );
   const thresholdsOf = createThresholds(
     network.nodes.language,
     network.languages.length,
@@ -787,8 +795,9 @@ function decodeWithWorkspace(network, feats, frames, options, workspace) {
     endingScores: new Float64Array(endings.length),
     lookLn: network.nodes.lookLn,
     emissions,
-    best: -Infinity,
-    lm,
+    framePeak: new Float64Array(1),
+    wordScoreSlot,
+    transitionCosts: workspace.transitions.costs,
     settings,
     trees: network.languages.map((lang) => network.trees.get(lang)),
   };
