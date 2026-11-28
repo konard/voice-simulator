@@ -32,6 +32,7 @@ import { SOUND_NAMES, isDefaultMode } from '../markup/modes.js';
 import { ModeStack, wordSpans, writeMarks } from './marks.js';
 
 const SUPERSCRIPT_TONES = { '¹': 1, '²': 2, '³': 3, '⁴': 4, '⁵': 5 };
+const WRITTEN_TONES = Object.keys(TONE_LETTERS);
 
 /** Symbols that IPA writers commonly substitute with lookalikes. */
 const ALIASES = { g: 'ɡ', ':': 'ː', "'": 'ˈ', ʦ: 't', ʧ: 't', ʤ: 'd' };
@@ -394,6 +395,17 @@ function consumeMarkup(state, text) {
  */
 export function parseIpa(text) {
   const normalized = normalizeText(text);
+  if (normalized.length === 1 && !LIGATURE_TAILS[normalized]) {
+    const symbol = ALIASES[normalized] ?? normalized;
+    const phoneme = getPhoneme(symbol);
+    if (phoneme) {
+      return {
+        tokens: [createSegment(symbol, phoneme, 0)],
+        unknown: [],
+        modes: [],
+      };
+    }
+  }
   const markup = /[{}⸨(]|ˈˈ/u.test(normalized);
   const state = {
     tokens: [],
@@ -450,9 +462,7 @@ function tokenText(token) {
   }
   text += token.symbol;
   if (token.tone) {
-    text += token.tone
-      .map((level) => Object.keys(TONE_LETTERS)[5 - level])
-      .join('');
+    text += token.tone.map((level) => WRITTEN_TONES[5 - level]).join('');
   }
   return text;
 }

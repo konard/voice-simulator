@@ -3,7 +3,7 @@ const TONES = ['', '˩', '˨', '˧', '˦', '˥'];
 
 /** IPA of a lexicon token with its stress mark and tone letters. */
 export function tokenIpa(token) {
-  const tones = (token.tone ?? []).map((n) => TONES[n]).join('');
+  const tones = token.tone?.map((n) => TONES[n]).join('') ?? '';
   const stress = token.stress === 1 ? 'ˈ' : token.stress === 2 ? 'ˌ' : '';
   return `${stress}${token.symbol}${tones}`;
 }
