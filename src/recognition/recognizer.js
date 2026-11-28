@@ -216,6 +216,7 @@ export function decodeRecognitionAudio(
         whisper: options.whisper,
         oov: settings.oov,
         analysis: coarse,
+        framePitch: true,
         profile: settings.profile,
       });
       result.prosodyFrames = fine;

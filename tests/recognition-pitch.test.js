@@ -64,6 +64,10 @@ it('reuses batch pitch scratch across frame counts and candidate widths', () => 
     for (const name of ['f0', 'voicing', 'strength']) {
       expect(actual[name]).toEqual(expected[name].subarray(0, frames.count));
     }
+    const prosody = trackPitchFrames(frames, { ...options, percentiles: true });
+    for (const name of ['low', 'median', 'high']) {
+      expect(prosody[name]).toBe(expected[name]);
+    }
     retained ??= { track: actual, original: actual.f0.slice() };
   }
   expect(retained.track.f0).toEqual(retained.original);

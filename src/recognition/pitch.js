@@ -1050,7 +1050,8 @@ function pitchTracker(frames, options, shared, workspace) {
   const finder = createCandidateFinder(frames, settings, store, shared);
   const track = createTrack(frames, settings, rows);
   const marker = workspace ? null : createMarker(frames, track, settings);
-  const distribution = workspace ? null : createDistribution(rows);
+  const distribution =
+    !workspace || options.percentiles ? createDistribution(rows) : null;
   const offset = Math.round(frames.startTime / settings.hop);
   const base = Math.round(offset * hopSamples);
   const centre = (t) => Math.round((offset + t) * hopSamples) - base;
@@ -1072,6 +1073,9 @@ function pitchTracker(frames, options, shared, workspace) {
       const voiced = path[t] < capacity;
       track.f0[t] = voiced ? onsetFrequency(pathFrequency, hop, t, newest) : 0;
       frameScores(track, store, capacity, t, path[t]);
+      if (voiced) {
+        distribution?.add(track.f0[t]);
+      }
       if (marker) {
         observeRun(voiced, t);
       }
@@ -1082,7 +1086,6 @@ function pitchTracker(frames, options, shared, workspace) {
 
   function observeRun(voiced, t) {
     if (voiced) {
-      distribution.add(track.f0[t]);
       if (runStart < 0) {
         runStart = t;
       }
@@ -1143,7 +1146,7 @@ export function trackPitch(frames, options = {}) {
 
 let batchPitchWorkspace;
 
-/** Batch frame-level pitch without pulse trains or perturbation statistics. */
+/** Batch frame-level pitch and optional percentiles, without pulse trains. */
 export function trackPitchFrames(frames, options = {}) {
   const workspace = batchPitchWorkspace ?? {};
   batchPitchWorkspace = undefined;

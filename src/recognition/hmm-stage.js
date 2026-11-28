@@ -6,7 +6,7 @@
  * Unlicense.
  */
 import { analyzeFrames } from './frontend.js';
-import { trackPitch } from './pitch.js';
+import { trackPitch, trackPitchFrames } from './pitch.js';
 import { hmmBoundaryTime, hmmFeatures } from './hmm-features.js';
 import { getHmmModel } from './hmm-model.js';
 import { getNetwork, tokenIpa } from './hmm-network.js';
@@ -98,7 +98,7 @@ function timedSegments(aligned) {
  * with times, the pitch track and the frame energies.
  * @param {ArrayLike<number>} samples
  * @param {number} sampleRate
- * @param {{languages?: string[], maxWords?: number, oov?: boolean,
+ * @param {{languages?: string[], maxWords?: number, oov?: boolean, framePitch?: boolean,
  *   whisper?: 'auto'|false|{start: number, end: number}[],
  *   search?: Partial<typeof import('./hmm-decode.js').HMM_DECODE_DEFAULTS>}}
  *   [options] `search` tunes the beam and weights; `whisper` finds
@@ -111,7 +111,9 @@ export function hmmAudioToIpa(samples, sampleRate, options = {}) {
   const languages = options.languages ?? ['en', 'ru', 'hi', 'zh'];
   const analysis =
     options.analysis ?? analyzeFrames(samples, sampleRate, { hop: 0.01 });
-  const pitch = trackPitch(analysis);
+  const pitch = options.framePitch
+    ? trackPitchFrames(analysis, { percentiles: true })
+    : trackPitch(analysis);
   const { feats, frames, tone } = hmmFeatures(
     samples,
     sampleRate,
