@@ -211,7 +211,7 @@ export function getLexicon(language = 'en') {
       get prepared() {
         prepared ??=
           (this.revision === 0 &&
-            readPreparedLexicon?.(language, data.words)) ||
+            readPreparedLexicon?.(language, data.ranked)) ||
           (language === 'en'
             ? scanShippedLexicon(language, () =>
                 buildLexiconTrie(this, language)
@@ -265,7 +265,11 @@ export function getLexicon(language = 'en') {
           selectTokens
         );
       },
-      words: data.words,
+      ranked: data.ranked,
+      get words() {
+        return data.words;
+      },
+      wordCount: data.wordCount,
       get counts() {
         return data.counts;
       },

@@ -66,15 +66,12 @@ export function openHmmWords(data, ranked, lang, first, copy = true) {
   const { symbols } = data;
   const index = (id) => id - first;
   const flag = (id) => flags[index(id)];
-  const entry = (id) => ranked[rows[index(id)]];
-  const name = (id) => (flag(id) >= 0x10 ? '' : entry(id).word);
+  const rankAt = (id) => rows[index(id)];
+  const name = (id) => (flag(id) >= 0x10 ? '' : ranked.name(rankAt(id)));
   return {
     name,
-    rank: (id) => (flag(id) >= 0x10 ? -1 : (rows[index(id)] ?? -1)),
-    count(id) {
-      const word = entry(id);
-      return word.prior ?? word.count;
-    },
+    rank: (id) => (flag(id) >= 0x10 ? -1 : (rankAt(id) ?? -1)),
+    count: (id) => ranked.weight(rankAt(id)),
     before: (id) => flag(id) & 0xf,
     oov: (id) => flag(id) >= 0x10,
     begin: (id) => flag(id) === 0x10,
@@ -90,8 +87,7 @@ export function openHmmWords(data, ranked, lang, first, copy = true) {
         word.oov = true;
         word.begin = flag(id) === 0x10;
       } else {
-        const { prior, count } = entry(id);
-        word.count = prior ?? count;
+        word.count = ranked.weight(rankAt(id));
         if (flag(id)) {
           word.before = flag(id);
         }

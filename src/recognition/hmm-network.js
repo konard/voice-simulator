@@ -487,7 +487,7 @@ function appendPrepared(network, lang, language, packed) {
       bigram: tree.loop.bigram,
     },
     data: lexicon,
-    wordTable: openHmmWords(words, lexicon.words, lang, first),
+    wordTable: openHmmWords(words, lexicon.ranked, lang, first),
   };
 }
 
@@ -505,7 +505,7 @@ function firstPrepared(network, lang, packed) {
   return {
     ...tree,
     data: lexicon,
-    wordTable: openHmmWords(words, lexicon.words, lang, 0, false),
+    wordTable: openHmmWords(words, lexicon.ranked, lang, 0, false),
   };
 }
 

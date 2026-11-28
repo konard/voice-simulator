@@ -2,6 +2,7 @@
 import { parseIpa } from '../ipa/parse.js';
 import { soundKey } from './lexicon.js';
 import { createWordTrie, packWordTrie } from './word-trie.js';
+import { rankedWordReader } from './data/index.js';
 
 // Children have consecutive breadth-first node indices. The entry rows index
 // the shipped count table and keep the IPA for stress and context checks.
@@ -67,6 +68,7 @@ function asUint32(values) {
 }
 
 function entryReader(words, offsets, ids, readings, withPrior) {
+  const ranked = rankedWordReader(words);
   const entries = new Map();
   return (node) => {
     if (offsets[node] === offsets[node + 1]) {
@@ -79,7 +81,7 @@ function entryReader(words, offsets, ids, readings, withPrior) {
       const group = [];
       for (let i = offsets[node]; i < offsets[node + 1]; i++) {
         const ipa = readings[i];
-        const word = words[ids[i]];
+        const word = ranked.read(ids[i]);
         let tokens;
         group.push({
           ...word,
