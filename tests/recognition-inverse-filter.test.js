@@ -11,6 +11,7 @@ import {
   trackPitch,
 } from '../src/index.js';
 import { lfParameters } from '../src/acoustics/glottis.js';
+import { measureModeSource } from '../src/recognition/inverse-filter.js';
 import { highPass } from './helpers/recognition-truth.js';
 import {
   sourceVowel,
@@ -152,6 +153,26 @@ describe('batch glottal inverse filter', () => {
     expect(Number.isFinite(median(result.cpp))).toBe(true);
     expect(result.summary.rd.frames).toBe(0);
     expect(result.summary.rd.median).toBe(null);
+  });
+  it('matches full source analysis on the rows the mode classifier reads', () => {
+    const v = vowel();
+    for (const [samples, lowBand] of [
+      [v.samples, true],
+      [highPass(v.samples, v.rate, 300), false],
+    ]) {
+      const { frames, pitch } = known(samples, v.rate, v.f0);
+      const full = inverseFilter(frames, { pitch, minF0: 35, maxF0: 800 });
+      expect(full.lowBand).toBe(lowBand);
+      const selected = Uint8Array.from({ length: frames.count }, (_, t) =>
+        t % 3 === 1 ? 1 : 0
+      );
+      const features = measureModeSource(frames, pitch, selected);
+      for (const key of ['h1h2Source', 'hnr', 'cpp']) {
+        expect(Array.from(features[key])).toEqual(
+          Array.from(full[key], (value, t) => (selected[t] ? value : NaN))
+        );
+      }
+    }
   });
 });
 

@@ -140,6 +140,7 @@ export function hmmAudioToIpa(samples, sampleRate, options = {}) {
     // Energies only: the noise check reads them, prosody and modes
     // analyse the audio at their own hops.
     frames: { energy: analysis.energy, count: analysis.count },
+    wordFrames: analysis,
     whisperSpans,
     modes,
     language,

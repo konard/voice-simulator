@@ -31,6 +31,7 @@ const MEASURES = [
   'cpp',
 ];
 const SOURCE_MEASURES = ['rd', 'oq', 'naq', 'h1h2', 'h1h2Source'];
+const MODE_MEASURES = ['h1h2Source', 'hnr', 'cpp'];
 
 export function rdToTenseness(rd) {
   return 1 - rd / 3;
@@ -401,75 +402,113 @@ export function inverseFilter(frames, options = {}) {
   );
 }
 
-function inverseFilterJs(frames, o) {
-  const { rate, hop, count, startTime } = frames;
-  const f0 = localPitch(frames, o);
-  const result = {
-    hop,
-    startTime,
-    count,
-    rate,
-    ...recover(frames, f0, o),
-    f0,
-    reliable: new Uint8Array(count),
-    lowBand: lowBand(frames, f0),
-    summary: {},
-  };
-  for (const name of MEASURES.slice(1)) {
-    result[name] = new Float32Array(count).fill(NaN);
+/** The mode classifier reads only these measurements at vowel nuclei. */
+export function measureModeSource(frames, pitch, rows, kernels) {
+  const options = { pitch, minF0: 35, maxF0: 800, kernels };
+  if (kernels?.module) {
+    return inverseFilter(frames, options);
   }
-  const { flow, flowDerivative: d } = result;
-  result.gci = closures(frames, f0, d);
+  return inverseFilterJs(
+    { ...frames, samples: frames.samples.subarray(0, frames.sampleCount) },
+    settings(frames, options),
+    rows
+  );
+}
+
+function measurePulse(result, t, frame, f0, source, harmonicsAtF0) {
+  const { samples, flow, rate, centre, length, period, maxF0 } = frame;
+  const fit = fitPulse(harmonicsAtF0);
+  result.rd[t] = fit.rd;
+  result.oq[t] = fit.oq;
+  result.fit[t] = fit.fit;
+  const speech = harmonics(block(samples, centre, length), rate, f0, 2);
+  result.h1h2[t] = speech[0] - speech[1];
+  const g = block(flow, centre, length);
+  let lo = Infinity;
+  let hi = -Infinity;
+  let peak = 0;
+  for (let n = 0; n < length; n++) {
+    lo = Math.min(lo, g[n]);
+    hi = Math.max(hi, g[n]);
+    peak = Math.max(peak, -source[n]);
+  }
+  result.naq[t] = peak > 0 ? (hi - lo) / (peak * period) : NaN;
+  result.reliable[t] = f0 <= maxF0 && fit.fit <= 6 ? 1 : 0;
+}
+
+function measureSourceRows(frames, o, result, modeRows) {
+  const { rate, hop, count, samples } = frames;
+  const { flow, flowDerivative: derivative, f0 } = result;
   const cpp = cppPlan(rate, o.minF0, o.maxF0);
   const correlations = new Map();
   for (let t = 0; t < count; t++) {
-    if (!f0[t]) {
+    if (!f0[t] || (modeRows && !modeRows[t])) {
       continue;
     }
     const centre = Math.round(t * hop * rate);
     const period = rate / f0[t];
     const length = Math.round(2 * period);
-    const source = block(d, centre, length);
-    const h = harmonics(
-      source,
-      rate,
-      f0[t],
-      Math.min(10, Math.floor((0.45 * rate) / f0[t]))
-    );
-    const fit = fitPulse(h);
-    result.rd[t] = fit.rd;
-    result.oq[t] = fit.oq;
-    result.fit[t] = fit.fit;
-    result.h1h2Source[t] = h[0] - h[1];
-    const speech = harmonics(
-      block(frames.samples, centre, length),
-      rate,
-      f0[t],
-      2
-    );
-    result.h1h2[t] = speech[0] - speech[1];
-    const g = block(flow, centre, length);
-    let lo = Infinity;
-    let hi = -Infinity;
-    let peak = 0;
-    for (let n = 0; n < length; n++) {
-      lo = Math.min(lo, g[n]);
-      hi = Math.max(hi, g[n]);
-      peak = Math.max(peak, -source[n]);
+    if (derivative) {
+      const source = block(derivative, centre, length);
+      const harmonicsAtF0 = harmonics(
+        source,
+        rate,
+        f0[t],
+        Math.min(modeRows ? 2 : 10, Math.floor((0.45 * rate) / f0[t]))
+      );
+      result.h1h2Source[t] = harmonicsAtF0[0] - harmonicsAtF0[1];
+      if (!modeRows) {
+        measurePulse(
+          result,
+          t,
+          {
+            samples,
+            flow,
+            rate,
+            centre,
+            length,
+            period,
+            maxF0: o.maxF0,
+          },
+          f0[t],
+          source,
+          harmonicsAtF0
+        );
+      }
     }
-    result.naq[t] = peak > 0 ? (hi - lo) / (peak * period) : NaN;
     const hnrLength = Math.round(6 * period);
     if (!correlations.has(hnrLength)) {
       correlations.set(hnrLength, hann(hnrLength));
     }
-    result.hnr[t] = hnr(
-      frames.samples,
-      centre,
-      period,
-      correlations.get(hnrLength)
-    );
-    result.cpp[t] = cpp(frames.samples, centre);
-    result.reliable[t] = f0[t] <= o.maxF0 && fit.fit <= 6 ? 1 : 0;
+    result.hnr[t] = hnr(samples, centre, period, correlations.get(hnrLength));
+    result.cpp[t] = cpp(samples, centre);
+  }
+}
+
+function inverseFilterJs(frames, o, modeRows) {
+  const { rate, hop, count, startTime } = frames;
+  const f0 = localPitch(frames, o);
+  const validLowBand = lowBand(frames, f0);
+  const result = {
+    hop,
+    startTime,
+    count,
+    rate,
+    ...(!modeRows || validLowBand ? recover(frames, f0, o) : {}),
+    f0,
+    reliable: new Uint8Array(count),
+    lowBand: validLowBand,
+    summary: {},
+  };
+  for (const name of modeRows ? MODE_MEASURES : MEASURES.slice(1)) {
+    result[name] = new Float32Array(count).fill(NaN);
+  }
+  if (!modeRows) {
+    result.gci = closures(frames, f0, result.flowDerivative);
+  }
+  measureSourceRows(frames, o, result, modeRows);
+  if (modeRows) {
+    return result;
   }
   if (!result.lowBand) {
     for (const name of SOURCE_MEASURES) {

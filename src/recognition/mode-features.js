@@ -3,7 +3,7 @@ import { measure } from './profile.js';
 import { analyzeFrames } from './frontend.js';
 import { trackPitch } from './pitch.js';
 import { trackBatchFormants, trackFormants } from './formants.js';
-import { inverseFilter } from './inverse-filter.js';
+import { measureModeSource } from './inverse-filter.js';
 import {
   alphaRatio,
   energyRatio,
@@ -81,16 +81,32 @@ function analyzeWordSignal(samples, sampleRate, head, analyzed, options) {
   const track = options.reuseFormantCandidates
     ? trackBatchFormants
     : trackFormants;
-  const formants = measure(profile, 'Formants', () =>
-    track(frames, {
-      pitch,
-      ...(head ? { vocalTractLength: head.vocalTractLength } : {}),
-    })
-  );
-  const source = measure(profile, 'Inverse filter', () =>
-    inverseFilter(frames, { pitch, minF0: 35, maxF0: 800, kernels })
-  );
-  return { frames, pitch, formants, source };
+  const formants =
+    options.measureFormants === false
+      ? null
+      : measure(profile, 'Formants', () =>
+          track(frames, {
+            pitch,
+            ...(head ? { vocalTractLength: head.vocalTractLength } : {}),
+          })
+        );
+  return { frames, pitch, formants };
+}
+
+/** Frame indices in the inner half of each vowel. */
+function vowelRows(vowel, frames, selected) {
+  const { start, end } = vowel;
+  const margin = (end - start) * 0.25;
+  const indices = [];
+  for (
+    let t = Math.max(0, Math.ceil((start + margin) / frames.hop));
+    t < frames.count && t * frames.hop <= end - margin;
+    t++
+  ) {
+    selected[t] = 1;
+    indices.push(t);
+  }
+  return indices;
 }
 
 /** Analyze the recording in one pass; retain scalar word features only. */
@@ -102,20 +118,30 @@ export function measureWords(
   analyzed,
   options = {}
 ) {
-  const { frames, pitch, formants, source } = analyzeWordSignal(
+  const { frames, pitch, formants } = analyzeWordSignal(
     samples,
     sampleRate,
     head,
     analyzed,
     options
   );
-  const pulses = glottalPeriods(samples, sampleRate);
   const phones = result.phonemes ?? result.phones;
+  const selected = new Uint8Array(frames.count);
+  const nucleiByWord = result.words.map((word) =>
+    nuclei(word, phones, head).map((vowel) => ({
+      ...vowel,
+      indices: vowelRows(vowel, frames, selected),
+    }))
+  );
+  const source = measure(options.profile, 'Inverse filter', () =>
+    measureModeSource(frames, pitch, selected, options.kernels)
+  );
+  const pulses = glottalPeriods(samples, sampleRate);
   const peakLevel = quantile(frames.energy.subarray(0, frames.count), 0.9);
   // Vowel extraction combines independent source, formant and pulse validity checks.
   // eslint-disable-next-line complexity
-  const measured = result.words.map((word) => {
-    const vowels = nuclei(word, phones, head);
+  const measured = result.words.map((word, i) => {
+    const vowels = nucleiByWord[i];
     const whole = [];
     for (
       let t = Math.ceil(word.start / frames.hop);
@@ -126,26 +152,18 @@ export function measureWords(
     }
     const rows = [];
     const f1Vowels = [];
-    for (const vowel of vowels) {
-      const from = vowel.start + (vowel.end - vowel.start) * 0.25;
-      const to = vowel.end - (vowel.end - vowel.start) * 0.25;
-      const indices = [];
-      for (
-        let t = Math.max(0, Math.ceil(from / frames.hop));
-        t < frames.count && t * frames.hop <= to;
-        t++
-      ) {
-        indices.push(t);
-      }
+    for (const { vowel, indices } of vowels) {
       rows.push(...indices);
-      f1Vowels.push({
-        vowel: vowel.vowel,
-        value: quantile(
-          indices
-            .filter((t) => formants.valid[t * 4])
-            .map((t) => formants.frequency[t * 4])
-        ),
-      });
+      if (formants) {
+        f1Vowels.push({
+          vowel,
+          value: quantile(
+            indices
+              .filter((t) => formants.valid[t * 4])
+              .map((t) => formants.frequency[t * 4])
+          ),
+        });
+      }
     }
     const rawF0 = rows.map((t) => pitch.f0[t]).filter((v) => v > 0);
     const f0 = rows

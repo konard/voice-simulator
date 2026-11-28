@@ -435,6 +435,7 @@ export function recognizeDecoded(
               profile: settings.profile,
               kernels: settings.kernels,
               frames: decoded.frames?.speech ? decoded.frames : undefined,
+              wordFrames: decoded.wordFrames,
               reuseFormantCandidates: final === 'batch' || final === 'parallel',
             }
           )
