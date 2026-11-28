@@ -7,7 +7,7 @@
 import { resample } from '../audio/resample.js';
 import { hzToMel, melToHz } from '../metrics/spectrum.js';
 import { createFft } from './fft.js';
-import { analyzeFrames } from './frontend.js';
+import { analyzePitchFrames } from './frontend.js';
 import { hmmToneFeatures } from './hmm-tone.js';
 import { trackPitch } from './pitch.js';
 
@@ -219,7 +219,7 @@ export function hmmPitchStatics(pitch, count) {
 
 function staticFeatures(
   samples,
-  pitch = trackPitch(analyzeFrames(samples, HMM_RATE, { hop: 0.01 }))
+  pitch = trackPitch(analyzePitchFrames(samples, HMM_RATE, 0.01))
 ) {
   const values = rawCepstra(samples);
   normalise(values);

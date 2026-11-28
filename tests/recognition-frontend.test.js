@@ -19,8 +19,12 @@ import {
   predictorFromReflection,
   resample,
   synthesize,
+  trackPitch,
 } from '../src/index.js';
-import { analyzeFrameHops } from '../src/recognition/frontend.js';
+import {
+  analyzeFrameHops,
+  analyzePitchFrames,
+} from '../src/recognition/frontend.js';
 
 /** Every array of a frame set with its row width. */
 const COLUMNS = [
@@ -92,6 +96,22 @@ it('shares waveform analysis across hops while preserving independent noise trac
   const { fine, coarse } = analyzeFrameHops(samples, sampleRate);
   expect(fine).toEqual(analyzeFrames(samples, sampleRate, { hop: 0.005 }));
   expect(coarse).toEqual(analyzeFrames(samples, sampleRate, { hop: 0.01 }));
+});
+
+it('measures the pitch inputs without building unused spectral columns', () => {
+  const sampleRate = 16000;
+  const samples = whiteNoise(12001, -30, 77);
+  samples.fill(0, 0, 3200);
+  for (let i = 4000; i < 7600; i++) {
+    samples[i] += 0.2 * Math.sin((2 * Math.PI * 150 * i) / sampleRate);
+  }
+  samples.fill(0, 11500);
+  const full = analyzeFrames(samples, sampleRate, { hop: 0.01 });
+  const pitchOnly = analyzePitchFrames(samples, sampleRate, 0.01);
+  expect(pitchOnly.energy).toEqual(full.energy);
+  expect(pitchOnly.noise).toEqual(full.noise);
+  expect(pitchOnly.mel).toBeUndefined();
+  expect(trackPitch(pitchOnly)).toEqual(trackPitch(full));
 });
 
 describe('recognition front end: transforms', () => {

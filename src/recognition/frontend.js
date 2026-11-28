@@ -303,11 +303,11 @@ function rangePower(power, range) {
 }
 
 /** Empty frame set of `settings.capacity` rows. */
-function createFrameSet(settings, samples, storage) {
+function createFrameSet(settings, samples, storage, pitchOnly = false) {
   const rows = settings.capacity;
   const column = (key, width = 1, Type = Float32Array) =>
     storage?.(key, rows * width, Type) ?? new Type(rows * width);
-  return {
+  const shared = {
     rate: settings.rate,
     hop: settings.hop,
     window: settings.window,
@@ -321,11 +321,17 @@ function createFrameSet(settings, samples, storage) {
     samples,
     sampleCount: 0,
     energy: column('energy'),
+    noise: column('noise'),
+  };
+  if (pitchOnly) {
+    return shared;
+  }
+  return {
+    ...shared,
     zcr: column('zcr'),
     tilt: column('tilt'),
     gravity: column('gravity'),
     periodicity: column('periodicity'),
-    noise: column('noise'),
     gain: column('gain'),
     speech: column('speech', 1, Uint8Array),
     lpc: column('lpc', settings.order),
@@ -570,6 +576,21 @@ function measureLpc(kernel, row) {
   frames.gain[row] = 10 * Math.log10(residual + EPSILON);
 }
 
+function measurePitchFrame(frames, row, buffer, start, length, noiseTracker) {
+  let sum = 0;
+  for (let n = 0; n < length; n++) {
+    const value = buffer[start + n];
+    sum += value * value;
+  }
+  const meanPower = sum / length + EPSILON;
+  frames.energy[row] = 10 * Math.log10(meanPower);
+  const noise = noiseTracker.noiseFloor(meanPower);
+  frames.noise[row] = noise;
+  // Only the strong energy gate updates the floor for the next frame.
+  // Use the rounded energy just as the full front end does.
+  noiseTracker.speech(frames.energy[row], noise, 0);
+}
+
 /**
  * Streaming analyzer: sound in, analysis frames out.
  *
@@ -591,9 +612,8 @@ export function createFrameAnalyzer(sampleRate, options = {}) {
   return frameAnalyzer(sampleRate, options);
 }
 
-function frameAnalyzer(sampleRate, options, onFrame, storage) {
+function frameAnalyzer(sampleRate, options, onFrame, storage, pitchOnly) {
   const settings = frontendSettings(sampleRate, options);
-  const tables = frontendTables(settings);
   const { rate, length, half, hopSamples, capacity, sampleCapacity } = settings;
   // The buffer holds `margin` samples before `samples[0]` (zeros before the
   // signal, the trimmed past after `trim`) and `length` zeros after the
@@ -605,11 +625,19 @@ function frameAnalyzer(sampleRate, options, onFrame, storage) {
   const frames = createFrameSet(
     settings,
     buffer.subarray(margin, margin + sampleCapacity),
-    storage
+    storage,
+    pitchOnly
   );
-  const columns = frameColumns(frames);
+  const columns = pitchOnly
+    ? [
+        [frames.energy, 1],
+        [frames.noise, 1],
+      ]
+    : frameColumns(frames);
   const noiseTracker = createNoiseTracker(settings.hop);
-  const kernel = createKernel(settings, tables, frames);
+  const kernel = pitchOnly
+    ? null
+    : createKernel(settings, frontendTables(settings), frames);
   const ratio = rate / sampleRate;
   let resampler = null;
   // Absolute positions since the last reset: `offset` frames and `base`
@@ -669,6 +697,13 @@ function frameAnalyzer(sampleRate, options, onFrame, storage) {
     onFrame?.(frames, row, meanPower, periodicity);
   }
 
+  function analysePitch(row) {
+    const start = margin + centre(offset + row) - half - base;
+    measurePitchFrame(frames, row, buffer, start, length, noiseTracker);
+  }
+
+  const analyseFrame = pitchOnly ? analysePitch : analyse;
+
   /** Add the frames before absolute frame `lastFrame`. */
   function addFrames(lastFrame) {
     let added = 0;
@@ -676,7 +711,7 @@ function frameAnalyzer(sampleRate, options, onFrame, storage) {
       if (frames.count >= capacity) {
         throw new RangeError(`frame set is full (${capacity} frames)`);
       }
-      analyse(frames.count);
+      analyseFrame(frames.count);
       frames.count++;
       added++;
     }
@@ -766,11 +801,21 @@ function frameAnalyzer(sampleRate, options, onFrame, storage) {
  * @param {Partial<typeof FRONTEND_DEFAULTS>} [options]
  */
 export function analyzeFrames(samples, sampleRate, options = {}, storage) {
+  return analyzeRecording(samples, sampleRate, options, storage, false);
+}
+
+/** The default frame grid at a given hop, with the inputs of the pitch tracker. */
+export function analyzePitchFrames(samples, sampleRate, hop) {
+  return analyzeRecording(samples, sampleRate, { hop }, undefined, true);
+}
+
+function analyzeRecording(samples, sampleRate, options, storage, pitchOnly) {
   const analyzer = frameAnalyzer(
     sampleRate,
     { ...options, maxSeconds: samples.length / sampleRate },
     undefined,
-    storage
+    storage,
+    pitchOnly
   );
   analyzer.push(samples);
   analyzer.flush();
