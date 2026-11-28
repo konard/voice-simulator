@@ -3,6 +3,48 @@ import { withWasmMemory } from './wasm-memory.js';
 
 const HEADER = 14;
 
+function compactModes(module, frames, pitch, header, select, rows) {
+  const { count, sampleCount: n, melBands } = frames;
+  return withWasmMemory(module, (allocate) => {
+    const metadata = allocate(Float64Array, HEADER, header);
+    const indices = allocate(Float64Array, rows.length, rows);
+    const speech = allocate(
+      Uint8Array,
+      count,
+      frames.speech.subarray(0, count)
+    );
+    const length = n + count * (1 + melBands + Number(Boolean(pitch)));
+    const input = allocate(Float32Array, length);
+    const output = allocate(Float32Array, select.length * count);
+    const values = input.view();
+    values.set(frames.samples.subarray(0, n));
+    values.set(frames.periodicity.subarray(0, count), n);
+    values.set(frames.mel.subarray(0, count * melBands), n + count);
+    if (pitch) {
+      values.set(pitch.f0.subarray(0, count), length - count);
+    }
+    const written = module.exports.rec_inverse_modes_f32(
+      metadata.pointer,
+      input.pointer,
+      speech.pointer,
+      indices.pointer,
+      indices.length,
+      output.pointer,
+      output.length
+    );
+    if (written < 0) {
+      throw new RangeError(`Rust inverse filter failed (${written})`);
+    }
+    const result = output.view(written);
+    return Object.fromEntries(
+      select.map((name, column) => [
+        name,
+        result.slice(column * count, (column + 1) * count),
+      ])
+    );
+  });
+}
+
 export function inverseFilterRust(
   module,
   frames,
@@ -21,7 +63,27 @@ export function inverseFilterRust(
     melBands,
   } = frames;
   const { pitch, tractOrder, glottisOrder, leak, step, minF0, maxF0 } = options;
-  const { rec_inverse_modes, rec_inverse_filter } = module.exports;
+  const header = [
+    rate,
+    hop,
+    window,
+    startTime,
+    count,
+    n,
+    melBands,
+    tractOrder,
+    glottisOrder,
+    leak,
+    step,
+    minF0,
+    maxF0,
+    Number(Boolean(pitch)),
+  ];
+  const { rec_inverse_modes, rec_inverse_modes_f32, rec_inverse_filter } =
+    module.exports;
+  if (select && rows && typeof rec_inverse_modes_f32 === 'function') {
+    return compactModes(module, frames, pitch, header, select, rows);
+  }
   const useModes = select && rows && typeof rec_inverse_modes === 'function';
   const packetLength =
     HEADER + n + count * (2 + melBands + Number(Boolean(pitch)));
@@ -33,22 +95,7 @@ export function inverseFilterRust(
     const input = allocate(Float64Array, length);
     const output = allocate(Float64Array, capacity);
     const packet = input.view();
-    packet.set([
-      rate,
-      hop,
-      window,
-      startTime,
-      count,
-      n,
-      melBands,
-      tractOrder,
-      glottisOrder,
-      leak,
-      step,
-      minF0,
-      maxF0,
-      Number(Boolean(pitch)),
-    ]);
+    packet.set(header);
     packet.set(frames.samples.subarray(0, n), HEADER);
     packet.set(frames.speech.subarray(0, count), HEADER + n);
     packet.set(frames.periodicity.subarray(0, count), HEADER + n + count);

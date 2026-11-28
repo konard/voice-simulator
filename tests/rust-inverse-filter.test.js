@@ -185,6 +185,11 @@ describe('Rust inverse filter parity', () => {
   it('matches full Rust source measures at the requested mode rows', async () => {
     const module = await loadRustEngine();
     expect(typeof module.exports.rec_inverse_modes).toBe('function');
+    expect(typeof module.exports.rec_inverse_modes_f32).toBe('function');
+    const legacy = {
+      ...module,
+      exports: { ...module.exports, rec_inverse_modes_f32: undefined },
+    };
     for (const [rate, removeLowBand] of [
       [16000, false],
       [8000, true],
@@ -206,6 +211,13 @@ describe('Rust inverse filter parity', () => {
       const full = inverseFilter(frames, options);
       expect(full.lowBand).toBe(!removeLowBand);
       const mode = inverseModeMeasures(frames, options, rows);
+      expect(mode).toEqual(
+        inverseModeMeasures(
+          frames,
+          { pitch, kernels: { module: legacy } },
+          rows
+        )
+      );
       const empty = inverseModeMeasures(frames, options, []);
       expect(Object.keys(mode)).toEqual(['h1h2Source', 'hnr', 'cpp']);
       for (const name of Object.keys(mode)) {
@@ -242,5 +254,6 @@ describe('Rust inverse filter parity', () => {
     const e = (await loadRustEngine()).exports;
     expect(e.vs_inverse_filter(0, 0, 0, 0)).toBe(-6);
     expect(e.vs_inverse_filter(1, 14, 0, 0)).toBe(-2);
+    expect(e.rec_inverse_modes_f32(1, 0, 0, 0, 0, 0, 0)).toBe(-2);
   });
 });

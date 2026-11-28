@@ -178,11 +178,18 @@ allocation or output writes, allowing overlap safely. Output:
 Capacity `40 + 3 * sampleCount + 10 * count` covers the output. The existing
 ABI version and synthesis exports keep their signatures.
 
-The mode classifier calls `rec_inverse_modes` with the same input followed by
-zero-based vowel frame indices. The output contains three `count`-element
-columns in the order h1h2Source, hnr, cpp. Entries outside the requested rows
-and measurements unavailable in a requested row are NaN. This path skips
-the pulse, flow, and summary diagnostics used by the full inverse filter.
+The mode classifier calls
+`rec_inverse_modes_f32(header, input, speech, indices, rows, output, capacity)`.
+The header is the same 14 f64 values. The input holds consecutive f32 arrays
+for samples, periodicity, mel and optional f0. Speech flags are bytes and the
+`rows` zero-based vowel frame indices are f64. The number returned and the
+output capacity count f32 values. Older engines can use `rec_inverse_modes`,
+which takes the full f64 input packet followed by the vowel frame indices and
+uses f64 output.
+
+Both mode exports write three `count`-element columns in the order h1h2Source,
+hnr, cpp. Entries outside the requested rows and measurements unavailable in a
+requested row are NaN. The mode exports skip pulse, flow and summary analysis.
 
 ## References
 
