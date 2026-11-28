@@ -5,7 +5,7 @@ import { alignEdits, tokenize } from '../metrics/text.js';
 import {
   recognize,
   RecognitionError,
-  recognitionSettings,
+  recognitionLanguages,
   validateRate,
   validateSamples,
 } from '../recognition/recognizer.js';
@@ -128,7 +128,7 @@ function analyze(samples, sampleRate, options, impose) {
       warnings: [],
     };
   }
-  const { languages } = recognitionSettings({ languages: options.languages });
+  const languages = recognitionLanguages(options.languages);
   if (
     !options.refine &&
     Object.keys(DEFAULT_IMPOSE).every((key) => impose[key])

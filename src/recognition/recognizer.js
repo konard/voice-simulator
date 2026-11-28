@@ -59,7 +59,7 @@ export class RecognitionError extends Error {
   }
 }
 
-function checkOptions(languages, nbest, level) {
+export function recognitionLanguages(languages = Object.keys(LANGUAGES)) {
   if (
     !Array.isArray(languages) ||
     !languages.length ||
@@ -68,6 +68,10 @@ function checkOptions(languages, nbest, level) {
   ) {
     throw new RangeError('languages must contain distinct supported codes');
   }
+  return [...languages];
+}
+
+function checkOptions(nbest, level) {
   if (!Number.isInteger(nbest) || nbest < 1 || nbest > 10) {
     throw new RangeError('nbest must be an integer from 1 to 10');
   }
@@ -95,7 +99,7 @@ function checkDecoder(decoder = 'words') {
 
 export function recognitionSettings(options) {
   const {
-    languages = Object.keys(LANGUAGES),
+    languages,
     voice = null,
     nbest = 1,
     segments = false,
@@ -109,7 +113,8 @@ export function recognitionSettings(options) {
     deterministic = false,
     articulationOffsets,
   } = options;
-  checkOptions(languages, nbest, level);
+  const supportedLanguages = recognitionLanguages(languages);
+  checkOptions(nbest, level);
   const decoder = checkDecoder(options.decoder);
   if (rescoring && typeof rescoreHypotheses !== 'function') {
     throw new RecognitionError(
@@ -118,7 +123,7 @@ export function recognitionSettings(options) {
     );
   }
   return {
-    languages: [...languages],
+    languages: supportedLanguages,
     voice,
     nbest,
     segments,
