@@ -17,6 +17,8 @@ function* measure(samples, settings, state, estimateSource) {
       preset: settings.preset,
       analysisRate: settings.sampleRate,
       analysisHop: 0.01,
+      // Short live observations may cover only part of an intonation contour.
+      medianPitch: true,
       estimateSource,
       maxDuration: samples.length / settings.sampleRate,
       refine: false,

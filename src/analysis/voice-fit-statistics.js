@@ -360,7 +360,7 @@ const SPEECH_TIME_SD = 0.04;
 function pitchReading(state, features, f0Sd, head, options) {
   if (!options.transcript) {
     let pitch = features.f0;
-    if (options.telephone) {
+    if (options.telephone && !options.medianPitch) {
       // Centre the 10th–90th percentile range in semitones to reduce the
       // influence of how long a phrase stays at high or low pitches.
       // Keep that centre within the central half of the observed pitches.
