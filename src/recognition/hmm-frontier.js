@@ -17,27 +17,52 @@ export function createFrontier(nodeCount) {
       columns[name] = grown;
     }
   }
+  function enter(node, score, history, start) {
+    let i = index[node] - 1;
+    if (i < 0) {
+      i = length++;
+      if (i === columns.nodes.length) {
+        grow(Math.min(i * 2, nodeCount));
+      }
+      index[node] = i + 1;
+      columns.nodes[i] = node;
+    } else if (!(score > columns.scores[i])) {
+      return;
+    }
+    columns.scores[i] = score;
+    columns.histories[i] = history;
+    columns.starts[i] = start;
+  }
   return {
     columns,
     index,
     get length() {
       return length;
     },
-    enter(node, score, history, start) {
-      let i = index[node] - 1;
-      if (i < 0) {
-        i = length++;
-        if (i === columns.nodes.length) {
-          grow(Math.min(i * 2, nodeCount));
-        }
-        index[node] = i + 1;
-        columns.nodes[i] = node;
-      } else if (!(score > columns.scores[i])) {
-        return;
+    enter,
+    enterList(nodes, score, history, start) {
+      for (let i = 0; i < nodes.length; i++) {
+        enter(nodes[i], score, history, start);
       }
-      columns.scores[i] = score;
-      columns.histories[i] = history;
-      columns.starts[i] = start;
+    },
+    enterWeighted(nodes, weights, scale, score, history, start) {
+      for (let i = 0; i < nodes.length; i++) {
+        const node = nodes[i];
+        enter(node, score + scale * weights[node], history, start);
+      }
+    },
+    enterChildren(
+      id,
+      { child, sibling, lookLn },
+      scale,
+      score,
+      history,
+      start
+    ) {
+      const parent = scale * lookLn[id];
+      for (let node = child[id]; node; node = sibling[node]) {
+        enter(node, score + scale * lookLn[node] - parent, history, start);
+      }
     },
     clear() {
       const { nodes } = columns;

@@ -300,19 +300,12 @@ function restart(network, records, rec, score, end, pass) {
   const r = records.add(rec, end, score);
   const tree = pass.trees[language];
   if (before) {
-    const roots = tree.after.get(before);
-    for (let i = 0; i < roots.length; i++) {
-      const child = roots[i];
-      next.enter(child, score + lmw * lookLn[child], r, end);
-    }
+    next.enterWeighted(tree.after.get(before), lookLn, lmw, score, r, end);
     return;
   }
   enterRoots(next, tree, score, r, end, pass);
   if (tree.wordTable ? tree.wordTable.oov(id) : network.words[id].oov) {
-    const phones = tree.loop.next;
-    for (let i = 0; i < phones.length; i++) {
-      next.enter(phones[i], score, r, end);
-    }
+    next.enterList(tree.loop.next, score, r, end);
   }
   next.enter(tree.silence, score + silencePenalty, r, end);
 }
@@ -594,7 +587,7 @@ function retainStates(pass, target, offset, count, threshold) {
 /** Prune the frame and queue its outgoing nodes and best word ends. */
 function pruneFrame(network, pass, thresholds, t) {
   const { nodes, words, emit, wordId, nextWord } = network;
-  const { first, count, optional, child, sibling, terminal, lookLn } = nodes;
+  const { first, count, optional, terminal, lookLn } = nodes;
   const { go } = network.model;
   const {
     positions,
@@ -653,9 +646,7 @@ function pruneFrame(network, pass, thresholds, t) {
       continue;
     }
     const look = lmw * lookLn[id];
-    for (let kid = child[id]; kid; kid = sibling[kid]) {
-      next.enter(kid, exit + lmw * lookLn[kid] - look, hist, start);
-    }
+    next.enterChildren(id, nodes, lmw, exit, hist, start);
     const packed = tree.wordTable;
     for (let link = terminal[id]; link; link = nextWord[link]) {
       const wid = wordId[link];
@@ -685,13 +676,8 @@ function pruneFrame(network, pass, thresholds, t) {
 function enterRoots(next, tree, score, history, frame, { lookLn, settings }) {
   const { lmw, oovStart } = settings;
   const { root, loop } = tree;
-  for (let i = 0; i < root.length; i++) {
-    const node = root[i];
-    next.enter(node, score + lmw * lookLn[node], history, frame);
-  }
-  for (let i = 0; i < loop.begin.length; i++) {
-    next.enter(loop.begin[i], score + oovStart, history, frame);
-  }
+  next.enterWeighted(root, lookLn, lmw, score, history, frame);
+  next.enterList(loop.begin, score + oovStart, history, frame);
 }
 
 function prepareFrame(pass, nodeCount) {
