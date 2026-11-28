@@ -4,16 +4,8 @@ export function scoreFrame(network, pass, frame) {
   const {
     work,
     active,
-    length,
-    previous: {
-      scores: priorScores,
-      histories: priorHistories,
-      starts: priorStarts,
-    },
-    current: {
-      state: { scores, histories, starts },
-      peaks,
-    },
+    state: { scores, histories, starts },
+    peaks,
     entries: { index: entryIndex, columns: entry },
     emissions,
   } = pass;
@@ -30,9 +22,14 @@ export function scoreFrame(network, pass, frame) {
     const offset = row * 6;
     const candidate = entryIndex[id] - 1;
     const firstMixture = emit[f];
-    let nodeBest = priorScores[offset] + stay[firstMixture];
-    let history = priorHistories[offset];
-    let start = priorStarts[offset];
+    // A state can stay or advance by one. Carry the old predecessor as
+    // we overwrite the row, keeping the emission evaluation in order.
+    let priorScore = scores[offset];
+    let priorHistory = histories[offset];
+    let priorStart = starts[offset];
+    let nodeBest = priorScore + stay[firstMixture];
+    let history = priorHistory;
+    let start = priorStart;
     if (candidate >= 0 && entry.scores[candidate] > nodeBest) {
       nodeBest = entry.scores[candidate];
       history = entry.histories[candidate];
@@ -52,12 +49,17 @@ export function scoreFrame(network, pass, frame) {
     for (let state = 1; state < states; state++) {
       const j = offset + state;
       const mixture = emit[f + state];
-      let score = priorScores[j] + stay[mixture];
-      let source = j;
-      const step = priorScores[j - 1] + go[priorMixture];
+      const oldScore = scores[j];
+      const oldHistory = histories[j];
+      const oldStart = starts[j];
+      let score = oldScore + stay[mixture];
+      const step = priorScore + go[priorMixture];
+      history = oldHistory;
+      start = oldStart;
       if (step > score) {
         score = step;
-        source--;
+        history = priorHistory;
+        start = priorStart;
       }
       if (score > -Infinity) {
         if (stamp[mixture] !== frame) {
@@ -66,15 +68,29 @@ export function scoreFrame(network, pass, frame) {
         score += value[mixture];
       }
       scores[j] = score;
-      histories[j] = priorHistories[source];
-      starts[j] = priorStarts[source];
+      histories[j] = history;
+      starts[j] = start;
       nodeBest = Math.max(nodeBest, score);
+      priorScore = oldScore;
+      priorHistory = oldHistory;
+      priorStart = oldStart;
       priorMixture = mixture;
     }
     best = Math.max(best, nodeBest);
     peaks[row] = nodeBest;
   }
-  // New nodes need only one score, even when the next frontier is large.
+  pass.framePeak[0] = scoreNewNodes(network, pass, frame, best);
+}
+
+/** New nodes need only one score, even when the next frontier is large. */
+function scoreNewNodes(network, pass, frame, best) {
+  const { work, active, length, entries, emissions, peaks } = pass;
+  const { index: entryIndex, columns: entry } = entries;
+  const { stamp, value } = emissions;
+  const {
+    nodes: { first },
+    emit,
+  } = network;
   for (let row = active; row < length; row++) {
     const id = work[row];
     const mixture = emit[first[id]];
@@ -92,5 +108,5 @@ export function scoreFrame(network, pass, frame) {
     peaks[row] = score;
     best = Math.max(best, score);
   }
-  pass.framePeak[0] = best;
+  return best;
 }

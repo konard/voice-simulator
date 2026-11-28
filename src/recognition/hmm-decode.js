@@ -471,8 +471,8 @@ function growHistory(previous) {
 function createWorkspace({ nodeCount, model, languages }) {
   return {
     activeNodes: new Uint8Array(nodeCount),
-    previous: stateHistory(256),
-    current: { state: stateHistory(256), peaks: new Float64Array(256) },
+    state: stateHistory(256),
+    peaks: new Float64Array(256),
     entries: new Frontier(nodeCount),
     next: new Frontier(nodeCount),
     work: new Uint32Array(256),
@@ -523,10 +523,10 @@ function retainStates({ count, language }, pass, thresholds) {
     work,
     length,
     active: previousActive,
-    current: { peaks, state: available },
+    peaks,
     entries: { index: entryIndex, columns: queued },
   } = pass;
-  let { scores, histories, starts } = pass.previous;
+  let { scores, histories, starts } = pass.state;
   for (let i = 0; i < previousActive; i++) {
     activeNodes[work[i]] = 0;
   }
@@ -540,16 +540,25 @@ function retainStates({ count, language }, pass, thresholds) {
     const offset = active * 6;
     const states = count[id];
     if (offset === scores.length) {
-      pass.previous = growHistory(pass.previous);
-      ({ scores, histories, starts } = pass.previous);
+      pass.state = growHistory(pass.state);
+      ({ scores, histories, starts } = pass.state);
     }
     if (index < previousActive) {
-      const source = index * 6;
-      for (let i = 0; i < states; i++) {
-        const score = available.scores[source + i];
-        scores[offset + i] = score < threshold ? -Infinity : score;
-        histories[offset + i] = available.histories[source + i];
-        starts[offset + i] = available.starts[source + i];
+      if (active === index) {
+        for (let i = offset; i < offset + states; i++) {
+          if (scores[i] < threshold) {
+            scores[i] = -Infinity;
+          }
+        }
+      } else {
+        // The compacted row always precedes its source in the same columns.
+        const source = index * 6;
+        for (let i = 0; i < states; i++) {
+          const score = scores[source + i];
+          scores[offset + i] = score < threshold ? -Infinity : score;
+          histories[offset + i] = histories[source + i];
+          starts[offset + i] = starts[source + i];
+        }
       }
     } else {
       // A newly entered node could only emit its first state this frame.
@@ -609,7 +618,7 @@ function queueExits(pass, thresholds, t) {
     network,
     work,
     active,
-    previous: { scores, histories, starts },
+    state: { scores, histories, starts },
     settings,
     next,
     rootScores,
@@ -689,15 +698,8 @@ function prepareFrame(pass, nodeCount) {
       work[length++] = id;
     }
   }
-  const { current } = pass;
-  const rows = current.state.scores.length / 6;
-  if (rows < active) {
-    current.state = stateHistory(Math.max(active, 2 * rows));
-  }
-  if (current.peaks.length < length) {
-    current.peaks = new Float64Array(
-      Math.max(length, 2 * current.peaks.length)
-    );
+  if (pass.peaks.length < length) {
+    pass.peaks = new Float64Array(Math.max(length, 2 * pass.peaks.length));
   }
   pass.length = length;
 }
@@ -720,7 +722,7 @@ function advanceFrames(network, frames, pass, histogram, records) {
       beams,
       histogram,
       pass.work,
-      pass.current.peaks,
+      pass.peaks,
       pass.length,
       pass.framePeak[0]
     );
@@ -746,8 +748,7 @@ function decodeWithWorkspace(network, feats, frames, options, workspace) {
   const languages = settings.languages ?? [...network.trees.keys()];
   const emissions = workspace.emission;
   emissions.begin(feats, settings);
-  const { previous, current, entries, next, activeNodes, records, work } =
-    workspace;
+  const { state, peaks, entries, next, activeNodes, records, work } = workspace;
   activeNodes.fill(0);
   const lm = languageModel(network, records, settings, workspace.transitions);
   initialEntries(entries, network, records, languages, settings);
@@ -766,8 +767,8 @@ function decodeWithWorkspace(network, feats, frames, options, workspace) {
     work,
     active: 0,
     length: 0,
-    previous,
-    current,
+    state,
+    peaks,
     entries,
     next,
     wordEnds,
@@ -790,11 +791,11 @@ function decodeWithWorkspace(network, feats, frames, options, workspace) {
     {
       work: pass.work,
       active: pass.active,
-      ...pass.previous,
+      ...pass.state,
     }
   );
-  workspace.previous = pass.previous;
-  workspace.current = pass.current;
+  workspace.state = pass.state;
+  workspace.peaks = pass.peaks;
   workspace.work = pass.work;
   return {
     words: backtrace(network, records, best),
