@@ -755,58 +755,54 @@ function decodeWithWorkspace(network, feats, frames, options, workspace) {
   };
 }
 
-function alignmentChain(model, words) {
-  const chain = [];
+function alignmentColumns(capacity) {
+  return {
+    stay: new Float64Array(capacity),
+    go: new Float64Array(capacity),
+    emit: new Int32Array(capacity),
+    token: new Int32Array(capacity),
+    skip: new Uint8Array(capacity),
+    previous: new Float64Array(capacity),
+    current: new Float64Array(capacity),
+  };
+}
+
+function alignmentChain(model, words, { stay, go, emit, token, skip }) {
   const tokens = [];
-  const pushUnit = (unit, token, skippable, left = null, right = null) => {
+  let count = 0;
+  function pushUnit(unit, tokenIndex, skipKind, left = null, right = null) {
+    if (count >= 1) {
+      // The decision to skip this unit is recorded at the state after it.
+      skip[count + 3] = skipKind;
+    }
     for (let s = 0; s < 3; s++) {
       const m = stateIndex(model, unit, s, left, right);
-      chain.push({
-        m,
-        stay: model.stay[m],
-        go: model.go[m],
-        token,
-        skippable: skippable && s === 0,
-        sil: unit === 'sil',
-      });
+      stay[count] = model.stay[m];
+      go[count] = model.go[m];
+      emit[count] = m ?? -1;
+      token[count++] = tokenIndex;
     }
-  };
-  pushUnit('sil', -1, true);
+  }
+  pushUnit('sil', -1, 1);
   words.forEach((w, wi) => {
     w.tokens.forEach((t, i) => {
       const left = i ? w.tokens[i - 1].symbol : null;
       const right = i + 1 < w.tokens.length ? w.tokens[i + 1].symbol : null;
       const unit = w.units[i];
-      pushUnit(unit, tokens.length, false, left, right);
+      pushUnit(unit, tokens.length, 0, left, right);
       if (model.ciIndex.has(`${unit}_r#0`)) {
-        pushUnit(`${unit}_r`, tokens.length, true, left, right);
+        pushUnit(`${unit}_r`, tokens.length, 2, left, right);
       }
-      tokens.push({ word: wi, token: t });
+      tokens.push({ word: wi, token: t, from: Infinity, to: -Infinity });
     });
-    pushUnit('sil', -1, true);
+    pushUnit('sil', -1, 1);
   });
-  return { chain, tokens };
-}
-
-function alignmentColumns(chain) {
-  const stay = new Float64Array(chain.length);
-  const go = new Float64Array(chain.length);
-  const emit = new Array(chain.length);
-  const skip = new Uint8Array(chain.length);
-  for (let n = 0; n < chain.length; n++) {
-    const state = chain[n];
-    stay[n] = state.stay;
-    go[n] = state.go;
-    emit[n] = state.m;
-    if (n >= 4 && chain[n - 3].skippable) {
-      skip[n] = chain[n - 3].sil ? 1 : 2;
-    }
-  }
-  return { stay, go, emit, skip };
+  return { count, tokens };
 }
 
 const alignmentWorkspaces = new WeakMap();
 const MAX_CACHED_TRACE_BYTES = 4 * 1024 * 1024;
+const MAX_CACHED_ALIGNMENT_STATES = 4096;
 
 /**
  * Forced alignment of the decoded words with optional silence between
@@ -818,6 +814,7 @@ export function alignWords(network, feats, frames, words, options = {}) {
   const workspace = alignmentWorkspaces.get(model) ?? {
     emission: emissionWorkspace(model),
     back: new Uint8Array(0),
+    columns: alignmentColumns(0),
   };
   // A score callback can align a different utterance using the same model.
   alignmentWorkspaces.delete(model);
@@ -831,16 +828,35 @@ export function alignWords(network, feats, frames, words, options = {}) {
 function alignWithWorkspace(model, feats, frames, words, options, workspace) {
   const settings = { ...HMM_DECODE_DEFAULTS, ...options };
   const { silencePenalty } = settings;
-  const { chain, tokens } = alignmentChain(model, words);
+  // Each word is followed by silence, and each phone may have a release.
+  let capacity = 3;
+  words.forEach(({ tokens }) => {
+    capacity += 3 + 6 * tokens.length;
+  });
+  let { columns } = workspace;
+  if (capacity > columns.stay.length) {
+    if (capacity <= MAX_CACHED_ALIGNMENT_STATES) {
+      columns = alignmentColumns(
+        Math.min(
+          MAX_CACHED_ALIGNMENT_STATES,
+          Math.max(capacity, columns.stay.length * 2)
+        )
+      );
+      workspace.columns = columns;
+    } else {
+      columns = alignmentColumns(capacity);
+    }
+  }
+  const { stay, go, emit, token, skip } = columns;
+  skip.fill(0, 0, capacity);
+  const { count: N, tokens } = alignmentChain(model, words, columns);
   const {
     stamp,
     value: emissions,
     evaluate,
   } = emissionCache(model, feats, settings, workspace.emission);
-  const N = chain.length;
-  const { stay, go, emit, skip } = alignmentColumns(chain);
-  let prev = new Float64Array(N).fill(-Infinity);
-  let cur = new Float64Array(N);
+  let { previous: prev, current: cur } = columns;
+  prev.fill(-Infinity, 0, N);
   // A predecessor can stay, advance by one, or skip three states. Store
   // those three choices in two bits per cell.
   const bytes = Math.ceil((frames * N) / 4);
@@ -858,7 +874,7 @@ function alignWithWorkspace(model, feats, frames, words, options, workspace) {
   if (frames > 0) {
     evaluate(emit[0], 0);
     prev[0] = 0 + emissions[emit[0]];
-    if (chain[0].skippable && N > 3) {
+    if (N > 3) {
       prev[3] = silencePenalty;
       if (silencePenalty > -Infinity) {
         if (stamp[emit[3]] !== 0) {
@@ -906,16 +922,15 @@ function alignWithWorkspace(model, feats, frames, words, options, workspace) {
   }
   let at = prev[N - 4] > prev[N - 1] ? N - 4 : N - 1;
   options.onScore?.(prev[at]);
-  const spans = tokens.map(() => [Infinity, -Infinity]);
   for (let t = frames - 1; t >= 0 && at >= 0; t--) {
-    const ti = chain[at].token;
-    if (ti >= 0) {
-      spans[ti][0] = Math.min(spans[ti][0], t);
-      spans[ti][1] = Math.max(spans[ti][1], t + 1);
+    const span = tokens[token[at]];
+    if (span) {
+      span.from = Math.min(span.from, t);
+      span.to = Math.max(span.to, t + 1);
     }
     const cell = t * N + at;
     const step = (back[Math.floor(cell / 4)] >> ((cell % 4) * 2)) & 3;
     at -= step === 2 ? 4 : step;
   }
-  return tokens.map((tk, i) => ({ ...tk, from: spans[i][0], to: spans[i][1] }));
+  return tokens;
 }
