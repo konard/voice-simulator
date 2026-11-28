@@ -26,6 +26,7 @@ import {
 import { readExtended, writeExtended } from '../src/audio/aiff.js';
 import { auHeader } from '../src/audio/au.js';
 import { decodeAudioWithStorage } from '../src/audio/formats.js';
+import { decodeSamples } from '../src/audio/pcm.js';
 
 function tone(length, seed = 1) {
   let state = seed;
@@ -122,6 +123,27 @@ describe('audio format round trips', () => {
       const result = decode(file.subarray(3));
       expect(result.channels).toBe(3);
       expect(Array.from(result.samples)).toEqual([0, Math.fround(-1 / 3)]);
+    }
+  });
+
+  it('averages unaligned 32-bit float channels in both byte orders', () => {
+    const values = [-0, -0, -0.5, 0.75, Infinity, -Infinity];
+    const offset = 3;
+    const bytes = new Uint8Array(offset + 4 * values.length);
+    const view = new DataView(bytes.buffer);
+    for (const little of [false, true]) {
+      values.forEach((value, index) =>
+        view.setFloat32(offset + index * 4, value, little)
+      );
+      const samples = decodeSamples(bytes, offset, bytes.length - offset, 2, {
+        bitDepth: 32,
+        kind: 'float',
+        little,
+      });
+      expect(samples.length).toBe(3);
+      expect(Object.is(samples[0], 0)).toBe(true);
+      expect(samples[1]).toBe(0.125);
+      expect(Number.isNaN(samples[2])).toBe(true);
     }
   });
 

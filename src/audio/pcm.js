@@ -213,6 +213,18 @@ function decodeInt16Mono(view, offset, frames, channels, little, mono) {
   }
 }
 
+function decodeFloat32Mono(view, offset, frames, channels, little, mono) {
+  let at = offset;
+  for (let frame = 0; frame < frames; frame++) {
+    let sum = 0;
+    for (let channel = 0; channel < channels; channel++) {
+      sum += view.getFloat32(at, little);
+      at += 4;
+    }
+    mono[frame] = sum / channels;
+  }
+}
+
 /**
  * Decode interleaved sample bytes to mono floats (channels are averaged).
  * @param {Uint8Array} bytes
@@ -236,6 +248,10 @@ export function decodeSamples(
   const mono = allocate ? allocate(frames) : new Float32Array(frames);
   if (format.kind === 'int' && width === 2) {
     decodeInt16Mono(view, offset, frames, channels, format.little, mono);
+    return mono;
+  }
+  if (format.kind === 'float' && width === 4) {
+    decodeFloat32Mono(view, offset, frames, channels, format.little, mono);
     return mono;
   }
   let at = offset;
