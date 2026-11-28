@@ -137,8 +137,8 @@ export function hmmAudioToIpa(samples, sampleRate, options = {}) {
       ...wordSpan(aligned, i),
     })),
     tracks: { pitch },
-    // Energies only: the noise check reads them, prosody and modes
-    // analyse the audio at their own hops.
+    // Prosody uses a finer grid and sound detection analyzes isolated pauses.
+    // The word-level mode measurements can reuse the decoder's 10 ms grid.
     frames: { energy: analysis.energy, count: analysis.count },
     wordFrames: analysis,
     whisperSpans,

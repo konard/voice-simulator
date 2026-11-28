@@ -35,9 +35,9 @@ export const HMM_DECODE_DEFAULTS = Object.freeze({
 // The low search keeps fewer competing paths per language. It uses the same
 // pronunciation network, acoustic model and alignment as the wider search.
 export const HMM_LOW_SEARCH = Object.freeze({
-  beam: 65,
-  languageBeam: 170,
-  maxActive: 480,
+  beam: 60,
+  languageBeam: 150,
+  maxActive: 340,
 });
 
 /** ln p of a shipped bigram cost (the costs are 0.5 - 0.3 ln p). */
@@ -357,6 +357,23 @@ function tokenBuffer() {
   };
 }
 
+/** A newly entered unit can emit only its initial state. */
+function scoreEntry({ cur, entries, score }, base, count, id, emission, t) {
+  const { scores, history, starts } = cur;
+  const entry = entries.score[id];
+  const reachable = entry > -Infinity;
+  const value = reachable ? entry + score(emission, t) : -Infinity;
+  scores[base] = value;
+  history[base] = reachable ? entries.history[id] : 0;
+  starts[base] = reachable ? entries.start[id] : 0;
+  for (let j = base + 1; j < base + count; j++) {
+    scores[j] = -Infinity;
+    history[j] = 0;
+    starts[j] = 0;
+  }
+  return value;
+}
+
 /** Score the surviving tokens and all new entries, in search order. */
 function scoreFrame(network, search, t) {
   const { firstState, emit, language, model } = network;
@@ -386,29 +403,32 @@ function scoreFrame(network, search, t) {
     const id = work[k];
     const first = firstState[id];
     const count = firstState[id + 1] - first;
-    const wasActive = stamp[id] === t - 1;
-    const old = offsets[id];
     const base = k * STATES_PER_TOKEN;
+    const lang = language[id];
+    if (stamp[id] !== t - 1) {
+      const nodeBest = scoreEntry(search, base, count, id, emit[first], t);
+      entries.queued[id] = 0;
+      nodeScores[k] = nodeBest;
+      languageBest[lang] = Math.max(languageBest[lang], nodeBest);
+      best = Math.max(best, nodeBest);
+      continue;
+    }
+    const old = offsets[id];
     const entry = entries.queued[id] ? entries.score[id] : -Infinity;
     let nodeBest = -Infinity;
     for (let i = count - 1; i >= 0; i--) {
       const j = base + i;
       const m = emit[first + i];
-      let value = -Infinity;
-      let hist = 0;
-      let start = 0;
-      if (wasActive) {
-        const previous = old + i;
-        value = prevScores[previous] + stay[m];
-        hist = prevHistory[previous];
-        start = prevStarts[previous];
-        if (i > 0) {
-          const advance = prevScores[previous - 1] + go[emit[first + i - 1]];
-          if (advance > value) {
-            value = advance;
-            hist = prevHistory[previous - 1];
-            start = prevStarts[previous - 1];
-          }
+      const previous = old + i;
+      let value = prevScores[previous] + stay[m];
+      let hist = prevHistory[previous];
+      let start = prevStarts[previous];
+      if (i > 0) {
+        const advance = prevScores[previous - 1] + go[emit[first + i - 1]];
+        if (advance > value) {
+          value = advance;
+          hist = prevHistory[previous - 1];
+          start = prevStarts[previous - 1];
         }
       }
       if (i === 0 && entry > value) {
@@ -426,7 +446,6 @@ function scoreFrame(network, search, t) {
     }
     entries.queued[id] = 0;
     nodeScores[k] = nodeBest;
-    const lang = language[id];
     languageBest[lang] = Math.max(languageBest[lang], nodeBest);
     best = Math.max(best, nodeBest);
   }
@@ -584,7 +603,9 @@ export function decodeWords(network, feats, frames, options = {}) {
     const best = scoreFrame(network, search, t);
     languageThresholds(language, search, best, settings);
     propagateFrame(network, search, t, best);
-    [search.prev, search.cur] = [search.cur, search.prev];
+    const previous = search.prev;
+    search.prev = search.cur;
+    search.cur = previous;
   }
   const best = finalRecord(network, records, languages, frames, {
     stamp: search.stamp,
