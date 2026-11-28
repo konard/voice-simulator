@@ -181,18 +181,22 @@ function releaseRecoveryScratch(scratch) {
   }
 }
 
-function recover(frames, f0, o, scratch, stationary) {
+function minimumVoicedPitch(f0) {
+  let lowest = Infinity;
+  for (const pitch of f0) {
+    if (pitch > 0 && pitch < lowest) {
+      lowest = pitch;
+    }
+  }
+  return lowest;
+}
+
+function recover(frames, f0, o, scratch, stationary, lowestPitch) {
   const n = frames.sampleCount;
   const derivativeOnly = stationary !== undefined;
   const roundAsReady = derivativeOnly && stationary.length === 0;
   const x = highPass(frames.samples, frames.rate, scratch.subarray(0, n));
   const g = derivativeOnly ? null : scratch.subarray(2 * n, 3 * n).fill(0);
-  let lowestPitch = Infinity;
-  for (const pitch of f0) {
-    if (pitch > 0 && pitch < lowestPitch) {
-      lowestPitch = pitch;
-    }
-  }
   const width = recoveryLength(lowestPitch, frames.rate);
   const weight = new Float64Array(Math.max(1, Math.min(n, width)));
   // After the last window touching a sample, mode measurements need only its
@@ -204,7 +208,6 @@ function recover(frames, f0, o, scratch, stationary) {
     ? new Float32Array(scratch.buffer, n * Float64Array.BYTES_PER_ELEMENT, n)
     : d;
   const normalize = normalizer(frames, f0, weight, d, g, derivative);
-  const windows = new Map();
   const history = Math.round(0.05 * frames.rate);
   const iaif = iaifPlan(o.tractOrder, o.glottisOrder, o.leak, !derivativeOnly);
   let buffer = new Float64Array(0);
@@ -215,7 +218,7 @@ function recover(frames, f0, o, scratch, stationary) {
     }
     const centre = Math.round(time * frames.rate);
     const length = recoveryLength(f0[row], frames.rate);
-    const window = windowAt(windows, length, history);
+    const window = windowAt(length, history);
     const start = centre - Math.floor(length / 2);
     // No window at this or a subsequent centre reaches before this sample.
     normalize(Math.max(0, centre - Math.floor(width / 2)));
@@ -299,16 +302,26 @@ function normalizer(frames, f0, weight, d, g, derivative) {
   };
 }
 
-function windowAt(windows, length, prefix = 0) {
-  let window = windows.get(length);
-  if (!window) {
-    if (windows.size >= 64) {
-      windows.delete(windows.keys().next().value);
-    }
-    window = new Float64Array(length + prefix);
-    hann(length, prefix ? window.subarray(prefix) : window);
-    windows.set(length, window);
+const windows = new Map();
+const WINDOW_LIMIT = 1024 * 1024;
+let windowBytes = 0;
+
+function windowAt(length, prefix = 0) {
+  // At the supported rates and pitches both lengths fit in 13 bits.
+  const key = prefix * 8192 + length;
+  const cached = windows.get(key);
+  if (cached) {
+    return cached;
   }
+  const window = new Float64Array(length + prefix);
+  hann(length, prefix ? window.subarray(prefix) : window);
+  while (windowBytes + window.byteLength > WINDOW_LIMIT) {
+    const oldest = windows.keys().next().value;
+    windowBytes -= windows.get(oldest).byteLength;
+    windows.delete(oldest);
+  }
+  windows.set(key, window);
+  windowBytes += window.byteLength;
   return window;
 }
 function steadySpectrum(frames, first, last, pitch) {
@@ -593,12 +606,13 @@ function inverseMeasures(
   { f0, hasLowBand, modesOnly, rows, scratch, stationary }
 ) {
   const { rate, hop, count, startTime } = frames;
+  const lowestPitch = minimumVoicedPitch(f0);
   const result = {
     hop,
     startTime,
     count,
     rate,
-    ...(scratch && recover(frames, f0, o, scratch, stationary)),
+    ...(scratch && recover(frames, f0, o, scratch, stationary, lowestPitch)),
     f0,
     reliable: new Uint8Array(count),
     lowBand: hasLowBand,
@@ -613,14 +627,14 @@ function inverseMeasures(
     result.gci = closures(frames, f0, d);
   }
   const cpp = cppPlan(rate, o.minF0, o.maxF0);
-  const windows = new Map();
-  // A supplied pitch can be as low as 20 Hz.
-  const signal = new Float64Array(Math.ceil((6 * rate) / 20));
-  const sources = new Float64Array(Math.ceil((2 * rate) / 20));
+  const longestPeriod = rate / lowestPitch;
+  const signal = new Float64Array(Math.round(6 * longestPeriod));
+  const sources = modesOnly
+    ? signal
+    : new Float64Array(Math.round(2 * longestPeriod));
   const spectralPlan = {
     scratch: signal,
     sources,
-    windows,
     frames,
     modesOnly,
     maxF0: o.maxF0,
@@ -670,7 +684,7 @@ function measureSourceFrame(
   t,
   centre,
   period,
-  { scratch, sources, windows, frames, modesOnly, maxF0 }
+  { scratch, sources, frames, modesOnly, maxF0 }
 ) {
   const { flow, flowDerivative, f0 } = result;
   const { rate, samples } = frames;
@@ -681,7 +695,7 @@ function measureSourceFrame(
     length,
     sources.subarray(0, length)
   );
-  const window = windowAt(windows, length);
+  const window = windowAt(length);
   const h = harmonics(
     source,
     rate,

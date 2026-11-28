@@ -265,6 +265,8 @@ export function cepstralPeak(plan, x, centre) {
 
 const HNR_PERIODS = 6;
 const hnrWindows = new Map();
+const HNR_WINDOW_LIMIT = 2 * 1024 * 1024;
+let hnrWindowBytes = 0;
 
 function windowProduct(window, lag) {
   let sum = 0;
@@ -275,27 +277,30 @@ function windowProduct(window, lag) {
 }
 
 function hnrWindow(length) {
-  if (!hnrWindows.has(length)) {
-    if (hnrWindows.size === 64) {
-      hnrWindows.delete(hnrWindows.keys().next().value);
-    }
-    const window = hann(length);
-    // Periods that round to this window length span at most two integer
-    // lags. Include the upper neighbour for interpolation.
-    const first = Math.max(0, Math.floor((length - 0.5) / HNR_PERIODS));
-    const products = [
-      windowProduct(window, first),
-      windowProduct(window, first + 1),
-      windowProduct(window, first + 2),
-    ];
-    hnrWindows.set(length, {
-      window,
-      first,
-      products,
-      zero: windowProduct(window, 0),
-    });
+  const previous = hnrWindows.get(length);
+  if (previous) {
+    return previous;
   }
-  return hnrWindows.get(length);
+  const window = hann(length);
+  // Periods that round to this window length span at most two integer
+  // lags. Include the upper neighbour for interpolation.
+  const first = Math.max(0, Math.floor((length - 0.5) / HNR_PERIODS));
+  const products = [
+    windowProduct(window, first),
+    windowProduct(window, first + 1),
+    windowProduct(window, first + 2),
+  ];
+  const plan = { window, first, products, zero: windowProduct(window, 0) };
+  if (window.byteLength <= HNR_WINDOW_LIMIT) {
+    while (hnrWindowBytes + window.byteLength > HNR_WINDOW_LIMIT) {
+      const oldest = hnrWindows.keys().next().value;
+      hnrWindowBytes -= hnrWindows.get(oldest).window.byteLength;
+      hnrWindows.delete(oldest);
+    }
+    hnrWindows.set(length, plan);
+    hnrWindowBytes += window.byteLength;
+  }
+  return plan;
 }
 
 /** Window-corrected autocorrelation, interpolated from the two integer
