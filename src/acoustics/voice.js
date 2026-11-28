@@ -223,6 +223,7 @@ export function blockShape(plan, time, state, head, options, workspace) {
 
 /** Marks an internal plan whose tract can be computed once per renderer. */
 export const STEADY_TRACT = Symbol('steadyTract');
+const OFFLINE_WAVEGUIDE = Symbol('offlineWaveguide');
 
 export class NoiseSources {
   constructor(seed) {
@@ -404,7 +405,6 @@ export class VoiceRenderer {
     options = headListening(this.head, options);
     this.sampleRate = options.sampleRate ?? 48000;
     this.sections = options.sections ?? 44;
-    this.#tract = createTractWorkspace({ sections: this.sections });
     this.blockSize = options.blockSize ?? 32;
     this.teeth = options.teeth !== false;
     const seed = options.seed ?? 1;
@@ -438,6 +438,10 @@ export class VoiceRenderer {
     this.vowelCorrections = VOWEL_TABLES.get(options.solver ?? 'waveguide');
     this.glottis = source(this.head, seed);
     this.#builtinSolver = BUILTIN_SOLVERS.has(factory);
+    this.#tract = createTractWorkspace({
+      sections: this.sections,
+      reuseAreas: this.#unpublishedShape(options),
+    });
     this.noise = new NoiseSources(seed);
     this.aerodynamics = new Aerodynamics({
       compliance: this.head.oralCompliance,
@@ -488,6 +492,15 @@ export class VoiceRenderer {
   #seek(seconds) {
     this.position = Math.round((seconds ?? 0) * this.sampleRate);
     this.time = this.position / this.sampleRate;
+  }
+
+  /** The built-in waveguide copies its inputs during setShape. */
+  #unpublishedShape(options) {
+    return (
+      options[OFFLINE_WAVEGUIDE] &&
+      this.#builtinSolver &&
+      this.solver instanceof Waveguide
+    );
   }
 
   /**
@@ -977,9 +990,13 @@ export function renderSamples(renderer) {
  * @returns {Float32Array}
  */
 export function renderPlan(plan, options = {}) {
-  const renderer = getEngine(engineOptions(options)).createRenderer(
+  const engine = getEngine(engineOptions(options));
+  const offlineWaveguide =
+    engine.name === 'js' &&
+    (options.engine === undefined || typeof options.engine === 'string');
+  const renderer = engine.createRenderer(
     plan,
-    options
+    offlineWaveguide ? { ...options, [OFFLINE_WAVEGUIDE]: true } : options
   );
   try {
     return renderSamples(renderer);

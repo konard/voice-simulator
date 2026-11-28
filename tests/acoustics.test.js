@@ -29,7 +29,7 @@ import {
 import { tubeFormants } from '../src/acoustics/transfer.js';
 import { Biquad } from '../src/acoustics/filters.js';
 import { Waveguide } from '../src/acoustics/waveguide.js';
-import { analyzeVoice, synthesize } from '../src/index.js';
+import { analyzeVoice, prepareUtterance, synthesize } from '../src/index.js';
 import { createRandom, randomNormal } from '../src/random.js';
 import { encodeWav, decodeWav, wavHeader } from '../src/audio/wav.js';
 import { DEFAULT_HEAD, normalizeHeadConfig } from '../src/head-config.js';
@@ -361,6 +361,19 @@ describe('waveguide synthesis', () => {
       total += renderer.render(block);
     }
     expect(Math.abs(total - plan.duration * RATE)).toBeLessThan(130);
+  });
+
+  it('reuses offline waveguide shapes without changing mixed-source audio', () => {
+    for (const source of ['lf', 'folds']) {
+      const { plan, renderOptions } = prepareUtterance(
+        'Ma. [whisper]Sat.[/whisper] Ma.',
+        { markup: true, tier: 'telephone', engine: 'js', source }
+      );
+      const renderer = new VoiceRenderer(plan, renderOptions);
+      const expected = new Float32Array(renderer.totalSamples);
+      renderer.render(expected);
+      expect(renderPlan(plan, renderOptions)).toEqual(expected);
+    }
   });
 
   it('exposes the pressure field of the tract for visualisation', () => {
