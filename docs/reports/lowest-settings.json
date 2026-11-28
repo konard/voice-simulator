@@ -438,51 +438,43 @@
         "row": "modes",
         "engine": "js",
         "metrics": {
-          "modeShare": 0.8833,
-          "rtf": 0.2598,
-          "renderRtf": 0.0384,
+          "modeShare": 0.9167,
+          "rtf": 0.0709,
+          "renderRtf": 0.0163,
           "utterances": 60,
           "missed": [
             "en:pp",
-            "en:p",
-            "en:allegro",
             "ru:f",
             "hi:pp",
             "zh:pp",
             "zh:F"
           ]
         },
-        "seconds": 28.419,
+        "seconds": 7.758,
         "audioSeconds": 109.405,
-        "peakRssMb": 673.2,
-        "capped": {
-          "crashed": "JavaScript heap out of memory"
-        }
+        "peakRssMb": 402.9,
+        "capped": {}
       },
       "rust": {
         "row": "modes",
         "engine": "rust",
         "metrics": {
-          "modeShare": 0.8833,
-          "rtf": 0.2268,
-          "renderRtf": 0.0254,
+          "modeShare": 0.9167,
+          "rtf": 0.0689,
+          "renderRtf": 0.0117,
           "utterances": 60,
           "missed": [
             "en:pp",
-            "en:p",
-            "en:allegro",
             "ru:f",
             "hi:pp",
             "zh:pp",
             "zh:F"
           ]
         },
-        "seconds": 24.812,
+        "seconds": 7.539,
         "audioSeconds": 109.405,
-        "peakRssMb": 725.8,
-        "capped": {
-          "crashed": "JavaScript heap out of memory"
-        }
+        "peakRssMb": 413,
+        "capped": {}
       }
     },
     "app": {
@@ -832,28 +824,27 @@
         "status": "certified",
         "metrics": {
           "modeShare": {
-            "value": 0.8833,
+            "value": 0.9167,
             "limit": 0.8,
             "pass": true
           }
         }
       },
       "js-1": {
-        "status": "failed",
+        "status": "certified",
         "metrics": {
           "rtf": {
-            "value": 0.2598,
+            "value": 0.0709,
             "limit": 0.25,
-            "pass": false
+            "pass": true
           }
-        },
-        "issue": "https://github.com/konard/voice-simulator/issues/179"
+        }
       },
       "rust-1": {
         "status": "certified",
         "metrics": {
           "rtf": {
-            "value": 0.2268,
+            "value": 0.0689,
             "limit": 0.25,
             "pass": true
           }
@@ -863,12 +854,11 @@
         "status": "failed",
         "metrics": {
           "peakRssMb": {
-            "value": 725.8,
+            "value": 413,
             "limit": 256,
             "pass": false
           }
         },
-        "reason": "js: JavaScript heap out of memory; rust: JavaScript heap out of memory",
         "issue": "https://github.com/konard/voice-simulator/issues/173"
       }
     },
@@ -925,6 +915,15 @@
       "measured": "2026-11-28T01:46:10.008Z",
       "commit": "ec44eefef653c0ebeaa56fbd421b5f545a82017f",
       "command": "LOWEST_ROW=streaming node --test tests/heavy/lowest-settings.test.js",
+      "cpu": "Intel(R) Xeon(R) 6975P-C",
+      "node": "v24.22.3",
+      "pinned": true,
+      "core": 0
+    },
+    "modes": {
+      "measured": "2026-11-28T03:24:02.990Z",
+      "commit": "d2675fd381d7fa9fb731f928dfed0c500bfdded8",
+      "command": "LOWEST_ROW=modes node --test tests/heavy/lowest-settings.test.js",
       "cpu": "Intel(R) Xeon(R) 6975P-C",
       "node": "v24.22.3",
       "pinned": true,

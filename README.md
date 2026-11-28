@@ -739,7 +739,7 @@ only become stricter. `npm run test:heavy -- --suite lowest` measures it and
 | voice-fit | certified | certified | certified | failed |
 | session | certified | certified | certified | failed |
 | copy | failed | certified | certified | failed |
-| modes | certified | failed | certified | failed |
+| modes | certified | certified | certified | failed |
 | app | failed | certified | — | — |
 
 Full matrix measured at commit `56797cd` on AMD EPYC 7763 64-Core Processor. See the [report](docs/reports/lowest-settings.md).
