@@ -42,7 +42,9 @@ function checkFrames(f) {
     throw new RangeError('frames exceed sample count');
   }
   for (let n = 0; n < f.sampleCount; n++) {
-    range(f.samples[n], -Infinity, Infinity, 'sample');
+    if (!Number.isFinite(f.samples[n])) {
+      throw new RangeError('invalid sample');
+    }
   }
 }
 export function suppliedPitch(value, rate) {
