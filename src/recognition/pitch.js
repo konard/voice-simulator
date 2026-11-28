@@ -279,6 +279,14 @@ function sampleAt(frames, index) {
   return index >= 0 && index < frames.sampleCount ? frames.samples[index] : 0;
 }
 
+function samplePeak(samples, start, end, prior) {
+  let peak = prior;
+  for (let n = start; n < end; n++) {
+    peak = Math.max(peak, Math.abs(samples[n]));
+  }
+  return peak;
+}
+
 /**
  * Extra unvoiced strength of frame `t` from the front end's energies: a
  * frame far below the loudest frame of the last 200 ms (and the next 10 ms)
@@ -300,6 +308,49 @@ function quietness(frames, settings, t) {
   );
 }
 
+function decimateTail(frames, kernel, factor, start, coarse, kept) {
+  const { samples, sampleCount } = frames;
+  const half = (kernel.length - 1) / 2;
+  for (let n = kept; n < coarse.length; n++) {
+    const first = (start + n) * factor - half;
+    const from = Math.max(0, -first);
+    const to = Math.min(kernel.length, sampleCount - first);
+    let sum = 0;
+    for (let k = from; k < to; k++) {
+      sum += kernel[k] * samples[first + k];
+    }
+    coarse[n] = sum;
+  }
+}
+
+function windowCoarse(coarse, window, re) {
+  let mean = 0;
+  for (let n = 0; n < coarse.length; n++) {
+    mean += coarse[n];
+  }
+  mean /= coarse.length;
+  for (let n = 0; n < coarse.length; n++) {
+    re[n] = (coarse[n] - mean) * window[n];
+  }
+}
+
+function autocorrelate(fft, re, im, correlation, q, { lagMin, lagMax }) {
+  fft.forward(re, im);
+  for (let k = 0; k < re.length; k++) {
+    re[k] = re[k] * re[k] + im[k] * im[k];
+    im[k] = 0;
+  }
+  fft.inverse(re, im);
+  const energy = re[0];
+  if (!(energy > 0)) {
+    return false;
+  }
+  for (let lag = lagMin - 1; lag <= lagMax + 1; lag++) {
+    q[lag] = re[lag] / (energy * correlation[lag]);
+  }
+  return true;
+}
+
 /**
  * The coarse signal (low-passed, every `factor`-th sample, computed as the
  * samples arrive) and the normalised autocorrelation of its Hann-windowed
@@ -307,7 +358,6 @@ function quietness(frames, settings, t) {
  */
 function createCoarseCorrelator(frames, settings) {
   const { factor, coarseLength, size, lagMax } = settings;
-  const samples = frames.samples;
   const { kernel, half } = coarseKernel(factor);
   const { window, correlation } = pitchWindow(coarseLength, lagMax + 1);
   const fft = createFft(size);
@@ -338,20 +388,7 @@ function createCoarseCorrelator(frames, settings) {
       );
       return;
     }
-    for (let n = kept; n < coarseLength; n++) {
-      const centre = (start + n) * factor;
-      let sum = 0;
-      if (centre - half >= 0 && centre + half < frames.sampleCount) {
-        for (let k = -half; k <= half; k++) {
-          sum += kernel[k + half] * samples[centre + k];
-        }
-      } else {
-        for (let k = -half; k <= half; k++) {
-          sum += kernel[k + half] * sampleAt(frames, centre + k);
-        }
-      }
-      coarse[n] = sum;
-    }
+    decimateTail(frames, kernel, factor, start, coarse, kept);
   }
 
   return {
@@ -370,34 +407,49 @@ function createCoarseCorrelator(frames, settings) {
     correlate(centre, q) {
       const start = Math.round(centre / factor) - frameHalf;
       fill(start);
-      let mean = 0;
-      for (let n = 0; n < coarseLength; n++) {
-        mean += coarse[n];
-      }
-      mean /= coarseLength;
-      for (let n = 0; n < coarseLength; n++) {
-        re[n] = (coarse[n] - mean) * window[n];
-      }
+      windowCoarse(coarse, window, re);
       if (settings.dsp) {
         return settings.dsp.correlate(re, correlation, q);
       }
       re.fill(0, coarseLength);
       im.fill(0);
-      fft.forward(re, im);
-      for (let k = 0; k < size; k++) {
-        re[k] = re[k] * re[k] + im[k] * im[k];
-        im[k] = 0;
-      }
-      fft.inverse(re, im);
-      if (!(re[0] > 0)) {
-        return false;
-      }
-      for (let lag = settings.lagMin - 1; lag <= lagMax + 1; lag++) {
-        q[lag] = re[lag] / (re[0] * correlation[lag]);
-      }
-      return true;
+      return autocorrelate(fft, re, im, correlation, q, settings);
     },
   };
+}
+
+function loadPitchWindow(frames, start, window, full, frame) {
+  const { samples, sampleCount } = frames;
+  const from = Math.max(0, -start);
+  const to = Math.max(from, Math.min(full.length, sampleCount - start));
+  full.fill(0, 0, from);
+  full.fill(0, to);
+  let mean = 0;
+  let largest = 0;
+  for (let n = from; n < to; n++) {
+    const value = samples[start + n];
+    full[n] = value;
+    mean += value;
+    largest = Math.max(largest, Math.abs(value));
+  }
+  mean /= full.length;
+  let energy = 0;
+  for (let n = 0; n < full.length; n++) {
+    const value = (full[n] - mean) * window[n];
+    full[n] = value;
+    energy += value * value;
+  }
+  frame.energy = energy;
+  frame.largest = largest;
+}
+
+function lagPower(full, lag) {
+  const length = full.length - lag;
+  let sum = 0;
+  for (let n = 0; n < length; n++) {
+    sum += full[n] * full[n + lag];
+  }
+  return sum;
 }
 
 /**
@@ -420,11 +472,7 @@ function createFullFrame(frames, settings) {
     if (lag < 1 || lag >= correlation.length) {
       return -1;
     }
-    let sum = 0;
-    for (let n = 0; n + lag < fullLength; n++) {
-      sum += full[n] * full[n + lag];
-    }
-    return sum / (frame.energy * correlation[lag]);
+    return lagPower(full, lag) / (frame.energy * correlation[lag]);
   }
 
   return {
@@ -441,22 +489,7 @@ function createFullFrame(frames, settings) {
         settings.dsp.load(frames, start, window, correlation, frame);
         return;
       }
-      let mean = 0;
-      let largest = 0;
-      for (let n = 0; n < fullLength; n++) {
-        const value = sampleAt(frames, start + n);
-        full[n] = value;
-        mean += value;
-        largest = Math.max(largest, Math.abs(value));
-      }
-      mean /= fullLength;
-      let energy = 0;
-      for (let n = 0; n < fullLength; n++) {
-        full[n] = (full[n] - mean) * window[n];
-        energy += full[n] * full[n];
-      }
-      frame.energy = energy;
-      frame.largest = largest;
+      loadPitchWindow(frames, start, window, full, frame);
     },
     /** Write [full-rate lag, height] of a valid refined maximum. */
     refine(coarseLag, peak) {
@@ -1106,13 +1139,12 @@ function pitchTracker(frames, options, shared, workspace) {
      * @param {boolean} [final]
      */
     advance(final = false) {
-      const samples = frames.samples;
-      let maximum = peak;
-      for (; peakScanned < frames.sampleCount; peakScanned++) {
-        maximum = Math.max(maximum, Math.abs(samples[peakScanned]));
+      const sampleCount = frames.sampleCount;
+      if (peakScanned < sampleCount) {
+        peak = samplePeak(frames.samples, peakScanned, sampleCount, peak);
+        peakScanned = sampleCount;
       }
-      const clipPeak = maximum;
-      peak = clipPeak;
+      const clipPeak = peak;
       withPitchDsp(options.kernels?.module, settings, () => {
         while (track.count < frames.count) {
           const t = track.count;
