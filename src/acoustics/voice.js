@@ -372,6 +372,7 @@ export class VoiceRenderer {
   #shapeOptions = { sections: 0, teeth: true, vowelCorrections: undefined };
   #builtinSolver;
   #waveguideInputs;
+  #airflowScratch;
 
   /**
    * @param {object} plan Result of planUtterance.
@@ -508,6 +509,7 @@ export class VoiceRenderer {
     if (offlineWaveguide && this.source === 'lf') {
       // Keep solver-rate floating-point inputs and outputs in numeric storage.
       this.#waveguideInputs = new Float64Array(4);
+      this.#airflowScratch = {};
     }
   }
 
@@ -671,7 +673,8 @@ export class VoiceRenderer {
       blockDuration,
       10 * (this.state.lungPressure ?? this.head.lungPressure),
       opening,
-      constriction
+      constriction,
+      this.#airflowScratch
     );
     this.airflow = air;
     glottis.oralPressure = air.oralPressure;

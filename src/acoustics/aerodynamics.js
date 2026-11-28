@@ -207,9 +207,10 @@ export class Aerodynamics {
    * @param {number} lungPressure P_L (dyn/cm²).
    * @param {number} glottalArea A_g (cm²).
    * @param {number} constrictionArea A_c (cm²).
+   * @param {object} [result] Reusable output for an internal renderer.
    * @returns {{flow: number, flowDerivative: number, oralPressure: number, glottalDrop: number, constrictionDrop: number}}
    */
-  step(dt, lungPressure, glottalArea, constrictionArea) {
+  step(dt, lungPressure, glottalArea, constrictionArea, result = {}) {
     const lung = Math.max(0, lungPressure);
     const glottis = Math.max(0, glottalArea);
     const constriction = Math.max(0, constrictionArea);
@@ -229,12 +230,11 @@ export class Aerodynamics {
       Math.sqrt((2 * Math.max(0, this.oralPressure)) / AIR_DENSITY);
     const flowDerivative = dt > 0 ? (flow - this.flow) / dt : 0;
     this.flow = flow;
-    return {
-      flow,
-      flowDerivative,
-      oralPressure: this.oralPressure,
-      glottalDrop: lung - this.oralPressure,
-      constrictionDrop: this.oralPressure,
-    };
+    result.flow = flow;
+    result.flowDerivative = flowDerivative;
+    result.oralPressure = this.oralPressure;
+    result.glottalDrop = lung - this.oralPressure;
+    result.constrictionDrop = this.oralPressure;
+    return result;
   }
 }
