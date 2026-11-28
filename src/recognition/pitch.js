@@ -1049,9 +1049,10 @@ function pitchTracker(frames, options, shared, workspace) {
   const viterbi = createViterbi(store, settings, back);
   const finder = createCandidateFinder(frames, settings, store, shared);
   const track = createTrack(frames, settings, rows);
-  const marker = workspace ? null : createMarker(frames, track, settings);
+  const frameOnly = Boolean(workspace || options.frameOnly);
+  const marker = frameOnly ? null : createMarker(frames, track, settings);
   const distribution =
-    !workspace || options.percentiles ? createDistribution(rows) : null;
+    !frameOnly || options.percentiles ? createDistribution(rows) : null;
   const offset = Math.round(frames.startTime / settings.hop);
   const base = Math.round(offset * hopSamples);
   const centre = (t) => Math.round((offset + t) * hopSamples) - base;

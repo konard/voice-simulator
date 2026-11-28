@@ -1,7 +1,7 @@
 /** Phrase commits over the incremental IPA decoder. Unlicense. */
 import { createIpaDecoder } from './decode.js';
 import { joinSegments } from './decode-pipeline.js';
-import { createFrameAnalyzer } from './frontend.js';
+import { createFrameAnalyzer, workingRate } from './frontend.js';
 import { HMM_LOW_SEARCH } from './hmm-decode.js';
 import { HMM_LIVE_WORDS } from './hmm-network.js';
 import { createLandmarkDetector } from './landmarks.js';
@@ -108,8 +108,7 @@ function createLoadMeter(sampleRate) {
 function boundedDecode(decoded, end) {
   const phones = (segments) =>
     segments.filter((segment) => segment.end <= end + EPSILON);
-  const { frames, lattice, tracks } = decoded;
-  const { pitch } = tracks;
+  const { lattice } = decoded;
   const times = lattice?.times.filter((time) => time <= end + EPSILON);
   return {
     ...decoded,
@@ -129,6 +128,13 @@ function boundedDecode(decoded, end) {
         edges: lattice.edges.filter((edge) => edge.to < times.length),
       },
     }),
+    ...boundedAcoustics(decoded, end),
+  };
+}
+
+function boundedAcoustics({ frames, tracks }, end) {
+  const { pitch } = tracks;
+  return {
     frames: {
       ...frames,
       count: Math.min(frames.count, Math.ceil(end / frames.hop)),
@@ -277,6 +283,22 @@ export function createRecognizer(options = {}, live) {
   );
 }
 
+function speechGateOnly(
+  settings,
+  adaptive,
+  { finalOnly, liveWords, onReading, onPitch }
+) {
+  return (
+    finalOnly &&
+    !adaptive &&
+    !liveWords &&
+    !onReading &&
+    !onPitch &&
+    usesWordDecoder(settings) &&
+    !Object.keys(settings.stages).length
+  );
+}
+
 // The phrase decoder, commit cursor and reset lifecycle share this state.
 // eslint-disable-next-line max-lines-per-function
 export function createConfiguredRecognizer(
@@ -289,6 +311,7 @@ export function createConfiguredRecognizer(
     onReading,
     onPitch,
     previews = true,
+    finalOnly = false,
   } = {}
 ) {
   const { nbest } = settings;
@@ -297,13 +320,32 @@ export function createConfiguredRecognizer(
   const wordPhrases = !liveWords && usesWordPhrases(sampleRate, settings);
   const packet = wordPhrases ? new Float32Array(stride) : null;
   const { emit, has, on, off } = createEvents();
-  const liveSyllables = () => has('syllable');
-  const createDecoder = wordPhrases
-    ? (rate, options) => createWordFrontend(rate, options, liveSyllables)
-    : liveWords
-      ? createLiveFrames
-      : createIpaDecoder;
+  const liveSyllables = () => !finalOnly && has('syllable');
   const adaptive = settings.level === 'auto' && !settings.deterministic;
+  // A one-shot caller without previews still needs the same pause and
+  // speech gates. The final word read has its own phone alignment.
+  const acousticsOnly = speechGateOnly(settings, adaptive, {
+    finalOnly,
+    liveWords,
+    onReading,
+    onPitch,
+  });
+  function createDecoder(rate, options) {
+    if (wordPhrases) {
+      return createWordFrontend(rate, options, liveSyllables);
+    }
+    if (liveWords) {
+      return createLiveFrames(rate, options);
+    }
+    if (acousticsOnly) {
+      return createLiveFrames(
+        rate,
+        { ...options, rate: workingRate(Math.min(rate, options.rate)) },
+        { hop: options.hop, reportPitch: false }
+      );
+    }
+    return createIpaDecoder(rate, options);
+  }
   const load = adaptive ? createLoadMeter(sampleRate) : null;
   let phrase;
   let level;
@@ -476,9 +518,8 @@ export function createConfiguredRecognizer(
 
   function phoneCommit(size, finished) {
     const current = phrase.decoder.result();
-    const decoded = finished
-      ? current
-      : boundedDecode(current, size / sampleRate);
+    const bound = acousticsOnly ? boundedAcoustics : boundedDecode;
+    const decoded = finished ? current : bound(current, size / sampleRate);
     checkPhraseNoise(decoded.frames, size);
     return phraseSpeech(decoded, size)
       ? read(decoded, size, 'stream')
@@ -652,7 +693,7 @@ export function createConfiguredRecognizer(
     const pause = trailingPause(phrase.decoder.frames, phrase);
     const total = offset + phrase.used;
     const due = total >= Math.ceil((nextPartial * sampleRate) / 4);
-    if (previews) {
+    if (previews && !finalOnly) {
       if (wordPhrases) {
         previewWords(due, pause);
       } else if (

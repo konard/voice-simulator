@@ -97,7 +97,7 @@ export function createSession(
   {
     passes = sessionPasses,
     openRecognizer = createRecognizer,
-    previews = true,
+    finalOnly = false,
   } = {}
 ) {
   const settings = optionsFor(options);
@@ -132,7 +132,7 @@ export function createSession(
     },
     {
       liveWords,
-      previews,
+      finalOnly,
       liveModeReference: settings.includeModeLabels === true,
       onReading:
         live &&
@@ -568,7 +568,7 @@ export function copyVoice(samples, sampleRate, options = {}) {
       realtime: false,
     },
     // The one-shot caller only consumes the final reading.
-    { previews: false }
+    { finalOnly: true }
   );
   session.push(
     samples instanceof Float32Array ? samples : Float32Array.from(samples)
