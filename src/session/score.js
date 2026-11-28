@@ -179,20 +179,23 @@ export function scorePlan(score) {
   return plan;
 }
 
+export function scoreRenderSettings(defaults, options) {
+  const tier = getAudioTier(
+    options.tier ?? defaults?.tier ?? DEFAULT_AUDIO_TIER
+  );
+  return {
+    ...tier,
+    sampleRate: options.sampleRate ?? defaults?.sampleRate ?? tier.sampleRate,
+    seed: options.seed ?? defaults?.seed ?? 1,
+    engine: options.engine,
+  };
+}
+
 export function renderScore(score, options = {}) {
   const plan = scorePlan(score);
-  const tier = getAudioTier(
-    options.tier ?? score.render?.tier ?? DEFAULT_AUDIO_TIER
-  );
-  const sampleRate =
-    options.sampleRate ?? score.render?.sampleRate ?? tier.sampleRate;
-  const seed = options.seed ?? score.render?.seed ?? 1;
-  const draft = renderPlan(plan, {
-    ...tier,
-    sampleRate,
-    seed,
-    engine: options.engine,
-  });
+  const settings = scoreRenderSettings(score.render, options);
+  const { sampleRate } = settings;
+  const draft = renderPlan(plan, settings);
   const samples = new Float32Array(Math.round(score.duration * sampleRate));
   samples.set(draft.subarray(0, samples.length));
   return { samples, sampleRate, duration: samples.length / sampleRate };

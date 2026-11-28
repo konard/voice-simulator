@@ -121,13 +121,16 @@ export function renderDraft(plan, seed) {
   });
 }
 
-export function matchLoudness(plan, samples, sampleRate, seed) {
+export function matchLoudness(plan, samples, sampleRate, seed, settings) {
   const { channels, frameCount, frameRate } = plan;
   const reference = rmsTrack(samples, sampleRate, frameCount, frameRate);
+  // The telephone renderer limits the bandwidth and uses a shorter
+  // waveguide. Calibrate against that renderer, including its filter.
+  const telephone = settings?.name === 'telephone';
   for (let pass = 0; pass < 2; pass++) {
     const draft = rmsTrack(
-      renderDraft(plan, seed),
-      DRAFT_RATE,
+      telephone ? renderPlan(plan, settings) : renderDraft(plan, seed),
+      telephone ? settings.sampleRate : DRAFT_RATE,
       frameCount,
       frameRate
     );

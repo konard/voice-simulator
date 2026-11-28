@@ -7,13 +7,18 @@ import { describe, it } from 'test-anywhere';
 import { runCli } from '../bin/voice-simulator.js';
 import { measureTiers } from '../scripts/copy-report.mjs';
 import { toPlanModes } from '../src/recognition/modes.js';
-import { applyPitch, repairOctaves } from '../src/session/copy-prosody.js';
+import {
+  applyPitch,
+  matchLoudness,
+  repairOctaves,
+} from '../src/session/copy-prosody.js';
 import { groupPhones, warpPlan } from '../src/session/warp.js';
 import {
   copyRecording,
   encodeWav,
   errorRate,
   f0Errors,
+  getAudioTier,
   pitchTrack,
   planUtterance,
   presetHeadConfig,
@@ -85,6 +90,20 @@ describe('copy controls', () => {
       1e-9
     );
     assert.equal(stretched.warnings.length, 2);
+  });
+
+  it('returns to a measured phone boundary after an earlier clamp', () => {
+    const plan = planUtterance('ama');
+    const measured = [
+      { ipa: 'a', start: 0, end: 0.005 },
+      { ipa: 'm', start: 0.005, end: 0.135 },
+      { ipa: 'a', start: 0.135, end: 0.2 },
+    ];
+    const warped = warpPlan(plan, measured);
+    const phones = groupPhones(warped.segments);
+    assert.ok(phones[0].end > measured[0].end);
+    near(phones[1].end, measured[1].end, 1e-9);
+    near(phones[2].start, measured[2].start, 1e-9);
   });
 
   it('imposes the measured pitch', () => {
@@ -188,6 +207,22 @@ describe('copy controls', () => {
       editedPhone.samples
     );
   });
+});
+
+it('matches the measured level in the telephone renderer', () => {
+  const settings = { ...getAudioTier('telephone'), seed: 1, engine: 'js' };
+  const plan = () => planUtterance('uː', { head: { pitch: 125, vibrato: 0 } });
+  const original = plan();
+  const copy = plan();
+  original.channels.loudness = original.channels.loudness.map(
+    (gain) => 2 * gain
+  );
+  const samples = renderPlan(original, settings);
+
+  matchLoudness(copy, samples, settings.sampleRate, settings.seed, settings);
+
+  const level = rmsLevel(renderPlan(copy, settings));
+  near(20 * Math.log10(level / rmsLevel(samples)), 0, 0.6);
 });
 
 describe('copy synthesis', () => {

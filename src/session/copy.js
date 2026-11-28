@@ -16,6 +16,7 @@ import { recoverCopySimulation } from './copy-simulation.js';
 import {
   planRecording,
   renderScore,
+  scoreRenderSettings,
   toScore,
   REFINED_CHANNELS,
 } from './score.js';
@@ -197,6 +198,7 @@ function makeScore(
 ) {
   const modes = impose.modes ? recognition.modes : [];
   const duration = samples.length / sampleRate;
+  const render = { tier: options.tier, seed, sampleRate: options.sampleRate };
   if (!plan) {
     plan = planRecording(
       recognition.ipa,
@@ -212,12 +214,18 @@ function makeScore(
       applyPitch(plan, samples, sampleRate, modes);
     }
     if (impose.loudness) {
-      matchLoudness(plan, samples, sampleRate, seed);
+      matchLoudness(
+        plan,
+        samples,
+        sampleRate,
+        seed,
+        scoreRenderSettings(render, options)
+      );
     }
   }
   const score = toScore(plan, { ...recognition, modes }, voice);
   score.planDuration = plan.duration;
   score.duration = duration;
-  score.render = { tier: options.tier, seed, sampleRate: options.sampleRate };
+  score.render = render;
   return score;
 }
