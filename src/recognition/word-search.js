@@ -49,8 +49,8 @@ function searchBuffer(size) {
       }
     },
     clear() {
-      for (const node of nodes) {
-        positions[node] = 0;
+      for (let i = 0; i < nodes.length; i++) {
+        positions[nodes[i]] = 0;
       }
       nodes.length = 0;
       used = 0;
@@ -60,19 +60,20 @@ function searchBuffer(size) {
 
 function insertions(table, states, next, frontier, limit, beam) {
   frontier.length = 0;
-  for (const node of states.nodes) {
-    frontier.push(node);
+  for (let i = 0; i < states.nodes.length; i++) {
+    frontier.push(states.nodes[i]);
   }
   while (frontier.length) {
+    const nodes = states.nodes;
     next.clear();
-    for (const node of states.nodes) {
+    for (let i = 0; i < nodes.length; i++) {
+      const node = nodes[i];
       next.offer(node, states.cost(node));
     }
     const cutoff =
-      states.nodes.length === beam
-        ? states.cost(states.nodes[beam - 1])
-        : Infinity;
-    for (const node of frontier) {
+      nodes.length === beam ? states.cost(nodes[beam - 1]) : Infinity;
+    for (let i = 0; i < frontier.length; i++) {
+      const node = frontier[i];
       const cost = states.cost(node);
       for (let i = table.offsets[node]; i < table.offsets[node + 1]; i++) {
         const child = i + 1;
@@ -84,7 +85,8 @@ function insertions(table, states, next, frontier, limit, beam) {
     }
     next.prune(beam);
     frontier.length = 0;
-    for (const node of next.nodes) {
+    for (let i = 0; i < next.nodes.length; i++) {
+      const node = next.nodes[i];
       if (next.cost(node) < states.cost(node)) {
         frontier.push(node);
       }
@@ -109,7 +111,8 @@ function search(table, { distances, stride }, from, end, beam, scratch) {
     const next = states === a ? b : a;
     next.clear();
     const row = index * stride;
-    for (const node of states.nodes) {
+    for (let i = 0; i < states.nodes.length; i++) {
+      const node = states.nodes[i];
       const cost = states.cost(node);
       const deletion = cost + distances[row];
       if (deletion <= limit) {
@@ -125,7 +128,8 @@ function search(table, { distances, stride }, from, end, beam, scratch) {
     }
     next.prune(beam);
     states = insertions(table, next, states, frontier, limit, beam);
-    for (const node of states.nodes) {
+    for (let i = 0; i < states.nodes.length; i++) {
+      const node = states.nodes[i];
       if (table.terminal[node]) {
         if (length === result.length) {
           result = new Float64Array(length * 2);
