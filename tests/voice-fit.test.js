@@ -7,6 +7,7 @@ import {
   synthesize,
   HEAD_PARAMETERS,
   DEFAULT_HEAD,
+  presetHeadConfig,
   matchVoice,
   saveVoice,
   loadVoice,
@@ -212,6 +213,28 @@ describe('voice fitting API', () => {
     expect(loadVoice(saveVoice({ head: next.value.head })).head.pitch).toBe(
       next.value.head.pitch
     );
+  });
+  it('fits unfamiliar telephone speech with the default render budget', () => {
+    const head = presetHeadConfig('child');
+    const { samples, sampleRate } = synthesize(
+      'The north wind and the sun were disputing which was the stronger.',
+      { head, tier: 'telephone', seed: 7, engine: 'js' }
+    );
+    const result = fitVoice(samples, sampleRate, { engine: 'js' });
+    expect(
+      error(result.head.vocalTractLength, head.vocalTractLength) <= 0.05
+    ).toBe(true);
+    expect(error(result.head.pitch, head.pitch) <= 0.03).toBe(true);
+    expect(result.renders > 0 && result.renders <= 8).toBe(true);
+    expect(Number.isFinite(result.distance)).toBe(true);
+
+    const fitter = createVoiceFitter({ engine: 'js' }).update(
+      samples,
+      sampleRate
+    );
+    const resumed = createVoiceFitter({ state: fitter.state }).result();
+    expect(resumed.head.pitch).toBe(result.head.pitch);
+    expect(resumed.head.vocalTractLength).toBe(result.head.vocalTractLength);
   });
   it('rejects silence, malformed state and invalid budgets', () => {
     expect(() => fitVoice(new Float32Array(8000), 8000)).toThrow(
