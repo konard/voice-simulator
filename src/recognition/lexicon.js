@@ -274,6 +274,7 @@ export function getLexicon(language = 'en') {
       },
       transitionRow: data.transitionRow,
       transitionCost: data.transitionCost,
+      transitionCostAt: data.transitionCostAt,
       total: data.total,
       revision: lexiconRevision(),
     });

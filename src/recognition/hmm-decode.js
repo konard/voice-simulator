@@ -190,11 +190,8 @@ function languageModel(
     if (histories[slot] === history && candidates[slot] === id + 1) {
       return costs[slot];
     }
-    const word = packed ? packed.name(id) : words[id].word;
     const count = packed ? packed.count(id) : words[id].count;
-    const previous =
-      history < 0 ? null : packed ? packed.name(history) : words[history].word;
-    const seen = previous ? data.transitionCost(word, previous) : undefined;
+    const seen = transitionCost(packed, data, words, id, history);
     const cost =
       seen ??
       -0.3 * Math.log((0.4 * Math.max(count ?? 1, minCount)) / data.total) +
@@ -205,6 +202,20 @@ function languageModel(
     costs[slot] = value;
     return value;
   };
+}
+
+function transitionCost(packed, data, words, id, history) {
+  if (history < 0) {
+    return undefined;
+  }
+  if (packed) {
+    const previous = packed.rank(history);
+    return previous >= 0
+      ? data.transitionCostAt(packed.rank(id), previous)
+      : undefined;
+  }
+  const previous = words[history].word;
+  return previous ? data.transitionCost(words[id].word, previous) : undefined;
 }
 
 function previousPhone(packed, words, id) {

@@ -69,29 +69,30 @@ export function openWordTransitions(words, offsets, pairs) {
   ) {
     return undefined;
   }
-  const ids = wordIds(words);
-  return (word, previousWord) => {
-    const id = ids.get(word);
-    const start = offsets[id];
-    const end = offsets[id + 1];
-    if (!(start < end)) {
-      return undefined;
-    }
-    if (previousWord !== undefined) {
-      const previous = ids.get(previousWord);
+  return {
+    cost(id, previous) {
+      const start = offsets[id];
+      const end = offsets[id + 1];
       for (let i = end - 2; i >= start; i -= 2) {
         if (pairs[i] === previous) {
           return discountedCost(pairs[i + 1], words[previous].count);
         }
       }
       return undefined;
-    }
-    const result = new Map();
-    for (let i = start; i < end; i += 2) {
-      const previous = words[pairs[i]];
-      result.set(previous.word, discountedCost(pairs[i + 1], previous.count));
-    }
-    return result;
+    },
+    row(id) {
+      const start = offsets[id];
+      const end = offsets[id + 1];
+      if (!(start < end)) {
+        return undefined;
+      }
+      const result = new Map();
+      for (let i = start; i < end; i += 2) {
+        const previous = words[pairs[i]];
+        result.set(previous.word, discountedCost(pairs[i + 1], previous.count));
+      }
+      return result;
+    },
   };
 }
 
@@ -110,7 +111,6 @@ function indexBigrams(source, words) {
   const records = new Uint32Array(capacity * 2);
   const counts = new Float64Array(capacity);
   const heads = new Uint32Array(words.length);
-  const ids = wordIds(words);
   let row = 0;
   let previous = 0;
   let next = 0;
@@ -139,14 +139,10 @@ function indexBigrams(source, words) {
     }
     value = 0;
   }
-  return (word, previousWord) => {
-    let link = heads[ids.get(word)];
-    if (!link) {
-      return undefined;
-    }
-    if (previousWord !== undefined) {
-      const previous = ids.get(previousWord);
+  return {
+    cost(id, previous) {
       let cost;
+      let link = heads[id];
       while (link) {
         const index = link - 1;
         if (records[index * 2] === previous) {
@@ -155,15 +151,24 @@ function indexBigrams(source, words) {
         link = records[index * 2 + 1];
       }
       return cost;
-    }
-    const result = new Map();
-    while (link) {
-      const index = link - 1;
-      const previous = words[records[index * 2]];
-      result.set(previous.word, discountedCost(counts[index], previous.count));
-      link = records[index * 2 + 1];
-    }
-    return result;
+    },
+    row(id) {
+      let link = heads[id];
+      if (!link) {
+        return undefined;
+      }
+      const result = new Map();
+      while (link) {
+        const index = link - 1;
+        const previous = words[records[index * 2]];
+        result.set(
+          previous.word,
+          discountedCost(counts[index], previous.count)
+        );
+        link = records[index * 2 + 1];
+      }
+      return result;
+    },
   };
 }
 
@@ -229,7 +234,9 @@ export function getCounts(language) {
     addSpokenPrior(words, total, SPOKEN.get(language));
     let bigrams;
     let openRow;
+    let ids;
     const rows = new Map();
+    const rank = (word) => (ids ??= wordIds(words)).get(word);
     const transitions = () =>
       (openRow ??=
         readTransitions?.(language, words) ??
@@ -259,7 +266,7 @@ export function getCounts(language) {
       },
       transitionRow(word) {
         if (!rows.has(word)) {
-          const row = transitions()(word);
+          const row = transitions().row(rank(word));
           if (row) {
             if (rows.size === 1024) {
               rows.delete(rows.keys().next().value);
@@ -272,7 +279,10 @@ export function getCounts(language) {
       transitionCost(word, previousWord) {
         return rows.has(word)
           ? rows.get(word).get(previousWord)
-          : transitions()(word, previousWord);
+          : transitions().cost(rank(word), rank(previousWord));
+      },
+      transitionCostAt(word, previous) {
+        return transitions().cost(word, previous);
       },
       total,
     });

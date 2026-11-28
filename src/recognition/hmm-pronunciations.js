@@ -70,6 +70,7 @@ export function openHmmWords(data, ranked, lang, first, copy = true) {
   const name = (id) => (flag(id) >= 0x10 ? '' : entry(id).word);
   return {
     name,
+    rank: (id) => (flag(id) >= 0x10 ? -1 : (rows[index(id)] ?? -1)),
     count(id) {
       const word = entry(id);
       return word.prior ?? word.count;

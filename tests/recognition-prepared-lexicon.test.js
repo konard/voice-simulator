@@ -60,23 +60,28 @@ it('opens all prepared HMM columns in the archive buffer', () => {
 
 it('opens the same discounted transition costs from packed word counts', () => {
   const language = 'en';
-  const { words, transitionRow, transitionCost } = getCounts(language);
+  const { words, transitionRow, transitionCost, transitionCostAt } =
+    getCounts(language);
   const [offsets, pairs] = packWordTransitions(language);
   const read = openWordTransitions(
     words,
     Uint32Array.from(offsets),
     Uint32Array.from(pairs)
   );
+  const ranks = new Map(words.map(({ word }, index) => [word, index]));
   for (const { word } of words.slice(0, 128)) {
-    const actual = read(word);
+    const rank = ranks.get(word);
+    const actual = read.row(rank);
     for (const [previous, cost] of actual ?? []) {
-      expect(read(word, previous)).toBe(cost);
+      const previousRank = ranks.get(previous);
+      expect(read.cost(rank, previousRank)).toBe(cost);
+      expect(transitionCostAt(rank, previousRank)).toBe(cost);
       expect(transitionCost(word, previous)).toBe(cost);
     }
     expect(actual).toEqual(transitionRow(word));
-    expect(read(word, 'mangosteenish')).toBeUndefined();
+    expect(read.cost(rank, -1)).toBeUndefined();
   }
-  expect(read('mangosteenish')).toBeUndefined();
+  expect(read.row(-1)).toBeUndefined();
 });
 
 it('preserves language scores for known and missing phones in generated count tables', () => {
