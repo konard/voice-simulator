@@ -76,6 +76,25 @@ describe('inverse DSP workspaces', () => {
   });
 });
 
+it('keeps rounded source cues across moving pitch and unvoiced gaps', () => {
+  const { samples, rate, f0 } = vowel(0.5, 110, 8000);
+  const { frames, pitch } = known(
+    samples.subarray(0, samples.length - 1),
+    rate,
+    f0
+  );
+  for (let t = 0; t < pitch.f0.length; t++) {
+    pitch.f0[t] = t % 17 === 0 ? 0 : f0 + (t % 8) * 4;
+  }
+  const full = inverseFilter(frames, { pitch });
+  expect(full.lowBand).toBe(true);
+  expect(inverseModeMeasures(frames, { pitch })).toEqual({
+    h1h2Source: full.h1h2Source,
+    hnr: full.hnr,
+    cpp: full.cpp,
+  });
+});
+
 describe('batch glottal inverse filter', () => {
   it('keeps the source measures used by mode recognition', () => {
     for (const rate of [8000, 16000]) {

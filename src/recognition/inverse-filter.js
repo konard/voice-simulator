@@ -181,10 +181,11 @@ function releaseRecoveryScratch(scratch) {
   }
 }
 
-function recover(frames, f0, o, scratch, derivativeOnly) {
+function recover(frames, f0, o, scratch, stationary) {
   const n = frames.sampleCount;
+  const derivativeOnly = stationary !== undefined;
+  const roundAsReady = derivativeOnly && stationary.length === 0;
   const x = highPass(frames.samples, frames.rate, scratch.subarray(0, n));
-  const d = scratch.subarray(n, 2 * n).fill(0);
   const g = derivativeOnly ? null : scratch.subarray(2 * n, 3 * n).fill(0);
   let lowestPitch = Infinity;
   for (const pitch of f0) {
@@ -194,7 +195,15 @@ function recover(frames, f0, o, scratch, derivativeOnly) {
   }
   const width = recoveryLength(lowestPitch, frames.rate);
   const weight = new Float64Array(Math.max(1, Math.min(n, width)));
-  const normalize = normalizer(frames, f0, weight, d, g);
+  // After the last window touching a sample, mode measurements need only its
+  // rounded derivative. Keep doubles for the optional stationary blend.
+  const d = roundAsReady
+    ? new Float64Array(weight.length)
+    : scratch.subarray(n, 2 * n).fill(0);
+  const derivative = roundAsReady
+    ? new Float32Array(scratch.buffer, n * Float64Array.BYTES_PER_ELEMENT, n)
+    : d;
+  const normalize = normalizer(frames, f0, weight, d, g, derivative);
   const windows = new Map();
   const history = Math.round(0.05 * frames.rate);
   const iaif = iaifPlan(o.tractOrder, o.glottisOrder, o.leak, !derivativeOnly);
@@ -226,19 +235,34 @@ function recover(frames, f0, o, scratch, derivativeOnly) {
     for (let index = Math.max(0, start); index < end; index++) {
       const i = index - start + history;
       const w = window[i];
-      d[index] += w * pulse.d[i];
+      const slot = index % weight.length;
+      d[roundAsReady ? slot : index] += w * pulse.d[i];
       if (g) {
         g[index] += w * pulse.g[i];
       }
-      weight[index % weight.length] += w;
+      weight[slot] += w;
     }
   }
   normalize(n);
-  refineStationary(frames, f0, o, x, d, g);
-  if (derivativeOnly) {
+  return finishRecovery(frames, f0, o, stationary, { x, d, g, derivative });
+}
+
+function finishRecovery(frames, f0, o, stationary, { x, d, g, derivative }) {
+  if (d !== derivative) {
+    return { flowDerivative: derivative };
+  }
+  refineStationary(
+    frames,
+    o,
+    x,
+    d,
+    g,
+    stationary ?? steadySpans(frames, f0, o)
+  );
+  if (stationary !== undefined) {
     // x is no longer needed. Its prefix can hold the rounded derivative
     // until the caller has measured the requested spectral frames.
-    const flowDerivative = new Float32Array(scratch.buffer, 0, n);
+    const flowDerivative = new Float32Array(x.buffer, x.byteOffset, x.length);
     flowDerivative.set(d);
     return { flowDerivative };
   }
@@ -252,8 +276,9 @@ function recoveryLength(pitch, rate) {
   return Math.round(Math.max(0.032, 2.5 / pitch) * rate);
 }
 
-function normalizer(frames, f0, weight, d, g) {
+function normalizer(frames, f0, weight, d, g, derivative) {
   const hopSamples = frames.rate * frames.hop;
+  const ring = d !== derivative;
   let n = 0;
   return (end) => {
     for (; n < end; n++) {
@@ -261,7 +286,11 @@ function normalizer(frames, f0, weight, d, g) {
       const scale = weight[slot];
       const row = Math.min(f0.length - 1, Math.round(n / hopSamples));
       const voiced = scale > 0.01 && f0[row] > 0;
-      d[n] = voiced ? d[n] / scale : 0;
+      const index = ring ? slot : n;
+      derivative[n] = voiced ? d[index] / scale : 0;
+      if (ring) {
+        d[index] = 0;
+      }
       if (g) {
         g[n] = voiced ? g[n] / scale : 0;
       }
@@ -306,14 +335,12 @@ function steadySpectrum(frames, first, last, pitch) {
   }
   return true;
 }
-/** A single tract can be identified over a steady voiced stretch. Moving
- * speech keeps the four-stage IAIF result. The stationarity gate compares
- * pitch and centred speech harmonic levels at three separated positions. */
-function refineStationary(frames, f0, o, x, d, g) {
+/** Candidates for a single tract model require steady pitch and harmonics. */
+function* steadySpans(frames, f0, o) {
   if (o.tractOrder > 32) {
     return;
   }
-  const { rate, hop } = frames;
+  const { hop } = frames;
   for (let t = 0; t < f0.length; ) {
     if (!f0[t]) {
       t++;
@@ -326,15 +353,21 @@ function refineStationary(frames, f0, o, x, d, g) {
     if ((t - first) * hop < 0.2) {
       continue;
     }
-    const centre = Math.round(((first + t - 1) * hop * rate) / 2);
     const pitch = f0[Math.floor((first + t - 1) / 2)];
     if (!f0.subarray(first, t).every((v) => Math.abs(v / pitch - 1) <= 0.01)) {
       continue;
     }
-    const length = Math.round(0.064 * rate);
-    if (!steadySpectrum(frames, first, t, pitch)) {
-      continue;
+    if (steadySpectrum(frames, first, t, pitch)) {
+      yield { first, end: t, pitch };
     }
+  }
+}
+
+function refineStationary(frames, o, x, d, g, spans) {
+  const { rate, hop } = frames;
+  const length = Math.round(0.064 * rate);
+  for (const { first, end, pitch } of spans) {
+    const centre = Math.round(((first + end - 1) * hop * rate) / 2);
     const seed = minimum(
       d,
       centre - (0.5 * rate) / pitch,
@@ -356,7 +389,7 @@ function refineStationary(frames, f0, o, x, d, g) {
       continue;
     }
     const left = Math.max(0, Math.round((first - 0.5) * hop * rate));
-    const right = Math.min(x.length, Math.round((t - 0.5) * hop * rate));
+    const right = Math.min(x.length, Math.round((end - 0.5) * hop * rate));
     const history = Math.round(0.05 * rate);
     const start = Math.max(0, left - history);
     const residual = filter(x.subarray(start, right), fit.a);
@@ -534,8 +567,11 @@ function inverseFilterJs(frames, o, modesOnly = false, rows) {
   const recoverSource =
     !modesOnly ||
     (hasLowBand && (rows ? rows.some((t) => f0[t]) : f0.some(Boolean)));
+  const stationary =
+    recoverSource && modesOnly ? [...steadySpans(frames, f0, o)] : undefined;
+  const columns = modesOnly ? (stationary?.length ? 2 : 1.5) : 3;
   const scratch = recoverSource
-    ? takeRecoveryScratch(frames.sampleCount * (modesOnly ? 2 : 3))
+    ? takeRecoveryScratch(Math.ceil(frames.sampleCount * columns))
     : null;
   try {
     return inverseMeasures(frames, o, {
@@ -544,6 +580,7 @@ function inverseFilterJs(frames, o, modesOnly = false, rows) {
       modesOnly,
       rows,
       scratch,
+      stationary,
     });
   } finally {
     releaseRecoveryScratch(scratch);
@@ -553,7 +590,7 @@ function inverseFilterJs(frames, o, modesOnly = false, rows) {
 function inverseMeasures(
   frames,
   o,
-  { f0, hasLowBand, modesOnly, rows, scratch }
+  { f0, hasLowBand, modesOnly, rows, scratch, stationary }
 ) {
   const { rate, hop, count, startTime } = frames;
   const result = {
@@ -561,7 +598,7 @@ function inverseMeasures(
     startTime,
     count,
     rate,
-    ...(scratch && recover(frames, f0, o, scratch, modesOnly)),
+    ...(scratch && recover(frames, f0, o, scratch, stationary)),
     f0,
     reliable: new Uint8Array(count),
     lowBand: hasLowBand,
