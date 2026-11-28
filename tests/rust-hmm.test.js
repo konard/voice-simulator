@@ -51,6 +51,21 @@ test('packed HMM features match the training feature rows', () => {
   expect(spectralOnly.tone).toBeUndefined();
 });
 
+test('wideband HMM features only need frame-level pitch after resampling', () => {
+  const { lda } = getHmmModel();
+  const native = sound();
+  const wideband = Float32Array.from(
+    { length: native.length * 2 },
+    (_, i) => native[i >> 1]
+  );
+  const full = hmmFeatures(wideband, RATE * 2, lda);
+  const frameOnly = hmmFeatures(wideband, RATE * 2, lda, undefined, true, true);
+
+  expect(frameOnly.frames).toBe(full.frames);
+  expect(frameOnly.feats).toEqual(full.feats);
+  expect(frameOnly.tone).toEqual(full.tone);
+});
+
 describe('Rust HMM kernels (issue 75)', () => {
   it('projects the statics as applyLda does', async () => {
     const module = await loadRustEngine();

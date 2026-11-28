@@ -116,7 +116,8 @@ export function hmmAudioToIpa(samples, sampleRate, options = {}) {
     sampleRate,
     model.lda,
     pitch,
-    languages.includes('zh')
+    languages.includes('zh'),
+    true
   );
   const search = { ...options.search, tone };
   // Features are normalised per input, so silence alone would decode as
@@ -196,9 +197,13 @@ function hmmFrontEnd(samples, sampleRate, options) {
     };
   }
   const analysis =
-    options.analysis ?? analyzeFrames(samples, sampleRate, { hop: 0.01 });
+    options.analysis ??
+    analyzeFrames(samples, sampleRate, { hop: 0.01 }, options.frameStorage);
   const pitch = options.framePitch
-    ? trackPitchFrames(analysis, { percentiles: true })
+    ? trackPitchFrames(analysis, {
+        percentiles: true,
+        kernels: options.kernels,
+      })
     : trackPitch(analysis, { kernels: options.kernels });
   return { analysis, pitch };
 }

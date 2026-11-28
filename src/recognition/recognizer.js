@@ -589,6 +589,29 @@ function checkNoise(decoded, duration) {
   }
 }
 
+let spareFrames = new Map();
+
+/** The batch result is complete before any of these columns are reused. */
+function withBatchFrames(recognizeBatch) {
+  const columns = spareFrames ?? new Map();
+  spareFrames = undefined;
+  function frameStorage(key, length, Type) {
+    let column = columns.get(key);
+    if (!column || column.length < length) {
+      column = new Type(length);
+      if (column.byteLength <= 1024 * 1024) {
+        columns.set(key, column);
+      }
+    }
+    return column.subarray(0, length);
+  }
+  try {
+    return recognizeBatch({ framePitch: true, frameStorage });
+  } finally {
+    spareFrames = columns;
+  }
+}
+
 function serial(samples, sampleRate, settings, level, unsplit) {
   if (!unsplit && usesWordPhrases(sampleRate, settings)) {
     const stream = createConfiguredRecognizer(sampleRate, settings, true);
@@ -600,11 +623,21 @@ function serial(samples, sampleRate, settings, level, unsplit) {
     );
     return stream.flush();
   }
+  return usesWordDecoder(settings)
+    ? withBatchFrames((options) =>
+        decodeBatch(samples, sampleRate, settings, level, options)
+      )
+    : decodeBatch(samples, sampleRate, settings, level);
+}
+
+function decodeBatch(samples, sampleRate, settings, level, wordOptions) {
   const { decoded, input, rate } = decodeRecognitionAudio(
     samples,
     sampleRate,
     settings,
-    level
+    level,
+    undefined,
+    wordOptions
   );
   checkNoise(decoded, samples.length / sampleRate);
   if (!heardSpeech(decoded, settings.minVoiced, settings.whisper)) {

@@ -9,7 +9,7 @@ import { hzToMel, melToHz } from '../metrics/spectrum.js';
 import { createFft } from './fft.js';
 import { analyzePitchFrames } from './frontend.js';
 import { hmmToneFeatures } from './hmm-tone.js';
-import { trackPitch } from './pitch.js';
+import { trackPitch, trackPitchFrames } from './pitch.js';
 
 export const HMM_RATE = 8000;
 const WINDOW = 200;
@@ -293,13 +293,15 @@ export function hmmFeatures(
   sampleRate,
   lda,
   pitchAtInputRate,
-  includeTone = true
+  includeTone = true,
+  framePitch = false
 ) {
   const x = hmmAudio(samples, sampleRate);
-  const { values, count, pitch, lf0, voicing } = staticFeatures(
-    x,
-    sampleRate === HMM_RATE ? pitchAtInputRate : undefined
-  );
+  let modelPitch = sampleRate === HMM_RATE ? pitchAtInputRate : undefined;
+  if (!modelPitch && framePitch) {
+    modelPitch = trackPitchFrames(analyzePitchFrames(x, HMM_RATE, 0.01));
+  }
+  const { values, count, pitch, lf0, voicing } = staticFeatures(x, modelPitch);
   return {
     feats: projectLda(lda, count, undefined, values),
     frames: count,
