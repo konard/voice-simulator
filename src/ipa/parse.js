@@ -123,23 +123,10 @@ function lastVowel(tokens) {
   return null;
 }
 
-/** Characters of normalised text with aliases and ligatures expanded. */
-function expandLigatures(normalized) {
-  const chars = [];
-  for (const raw of normalized) {
-    const char = ALIASES[raw] ?? raw;
-    chars.push(char);
-    if (LIGATURE_TAILS[raw]) {
-      chars.push('\u0361', LIGATURE_TAILS[raw]);
-    }
-  }
-  return chars;
-}
-
 function addTone(state, level) {
   const target = lastVowel(state.tokens);
   if (target) {
-    target.tone = [...(target.tone ?? []), level];
+    (target.tone ??= []).push(level);
   }
 }
 
@@ -348,8 +335,13 @@ function addSound(state, symbol, written) {
 }
 
 function consumeText(state, text) {
-  for (const char of expandLigatures(text)) {
-    consumeChar(state, char);
+  for (const raw of text) {
+    consumeChar(state, ALIASES[raw] ?? raw);
+    const tail = LIGATURE_TAILS[raw];
+    if (tail) {
+      consumeChar(state, '\u0361');
+      consumeChar(state, tail);
+    }
   }
 }
 
@@ -379,6 +371,20 @@ function consumeChunk(state, chunk) {
   consumeText(state, chunk.slice(index));
 }
 
+function consumeMarkup(state, text) {
+  for (const [chunk] of text.matchAll(CHUNKS)) {
+    if (/^\s/u.test(chunk)) {
+      consumeText(state, chunk);
+    } else if (chunk.startsWith('{') || chunk.endsWith('}')) {
+      if (!state.modes.read(chunk)) {
+        state.unknown.push(chunk);
+      }
+    } else {
+      consumeChunk(state, chunk);
+    }
+  }
+}
+
 /**
  * Parse an IPA string.
  * @param {string} text
@@ -403,16 +409,11 @@ export function parseIpa(text) {
     sounds: 0,
     soundModes: [],
   };
-  for (const [chunk] of normalizeText(text).matchAll(CHUNKS)) {
-    if (/^\s/u.test(chunk)) {
-      consumeText(state, chunk);
-    } else if (chunk.startsWith('{') || chunk.endsWith('}')) {
-      if (!state.modes.read(chunk)) {
-        state.unknown.push(chunk);
-      }
-    } else {
-      consumeChunk(state, chunk);
-    }
+  const normalized = normalizeText(text);
+  if (/[{}⸨(]|ˈˈ/u.test(normalized)) {
+    consumeMarkup(state, normalized);
+  } else {
+    consumeText(state, normalized);
   }
   while (
     state.tokens.at(-1)?.kind === 'pause' &&
