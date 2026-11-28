@@ -26,6 +26,17 @@ export const DYNAMICS_ORDER = 2;
 /** Sub-samples per frame when the input is averaged over a frame. */
 const SUBSAMPLES = 4;
 
+/** Scratch shared by the channels of one plan. */
+export function createDynamicsWorkspace(count) {
+  return {
+    starts: new Float64Array(count),
+    shifted: new Array(count),
+    a: new Float64Array(count),
+    b: new Float64Array(count),
+    previous: new Int32Array(count),
+  };
+}
+
 /**
  * Shift targets `lead` seconds earlier. Windows stay contiguous: the first
  * target keeps its start and the last its end.
@@ -39,16 +50,25 @@ const SUBSAMPLES = 4;
  * @param {number} lead Seconds.
  * @param {{limited?: boolean}} [options]
  */
-export function anticipate(targets, lead, options = {}) {
+export function anticipate(targets, lead, options = {}, workspace) {
   if (!(lead > 0) || targets.length === 0) {
     return targets;
   }
+  const starts = shiftStarts(targets, lead, options, workspace?.starts);
+  return shiftWindows(targets, starts, workspace?.shifted);
+}
+
+function shiftStarts(
+  targets,
+  lead,
+  { limited },
+  starts = new Float64Array(targets.length)
+) {
   const first = targets[0].start;
-  const starts = new Float64Array(targets.length);
   let ownEnd = -Infinity;
   for (let index = 0; index < targets.length; index++) {
     const target = targets[index];
-    if (!options.limited) {
+    if (!limited) {
       starts[index] = target.start - lead;
     } else if ((target.strength ?? 1) >= 1) {
       starts[index] = Math.max(target.start - lead, ownEnd);
@@ -66,13 +86,20 @@ export function anticipate(targets, lead, options = {}) {
   for (let index = 1; index < targets.length; index++) {
     starts[index] = Math.max(starts[index], starts[index - 1], first);
   }
-  return targets.map((target, index) => ({
-    value: target.value,
-    start: starts[index],
-    end: index + 1 < targets.length ? starts[index + 1] : target.end,
-    strength: target.strength,
-    limiting: target.limiting,
-  }));
+  return starts;
+}
+
+function shiftWindows(targets, starts, shifted = new Array(targets.length)) {
+  for (let index = 0; index < targets.length; index++) {
+    const target = targets[index];
+    const output = (shifted[index] ??= {});
+    output.value = target.value;
+    output.start = starts[index];
+    output.end = index + 1 < targets.length ? starts[index + 1] : target.end;
+    output.strength = target.strength;
+    output.limiting = target.limiting;
+  }
+  return shifted;
 }
 
 /** Slope of the line from the end of `from` to the start of `to`. */
@@ -100,11 +127,11 @@ function lineBase(from, to, slope, fallback) {
  * first and after the last target of strength 1 the line holds their value
  * (`fallback` without any).
  */
-function targetCoefficients(targets, fallback) {
+function targetCoefficients(targets, fallback, workspace) {
   const count = targets.length;
-  const a = new Float64Array(count);
-  const b = new Float64Array(count);
-  const previous = new Int32Array(count);
+  const a = workspace?.a ?? new Float64Array(count);
+  const b = workspace?.b ?? new Float64Array(count);
+  const previous = workspace?.previous ?? new Int32Array(count);
   let own = -1;
   for (let index = 0; index < count; index++) {
     previous[index] = own;
@@ -118,6 +145,7 @@ function targetCoefficients(targets, fallback) {
     const strength = target.strength ?? 1;
     if (strength >= 1) {
       a[index] = target.value;
+      b[index] = 0;
       next = index;
       continue;
     }
@@ -138,12 +166,12 @@ function targetCoefficients(targets, fallback) {
  * linear in time, so a frame that lies in one target takes the value at its
  * middle, the same as the mean of the sub-samples.
  */
-function sampleInput(targets, frameRate, frameCount, fallback) {
+function sampleInput(targets, frameRate, frameCount, fallback, workspace) {
   const input = new Float32Array(frameCount);
   if (targets.length === 0) {
     return input.fill(fallback);
   }
-  const { a, b } = targetCoefficients(targets, fallback);
+  const { a, b } = targetCoefficients(targets, fallback, workspace);
   const period = 1 / frameRate;
   const last = targets.length - 1;
   let frame = 0;
@@ -192,14 +220,16 @@ export function approachTargets(
   order = DYNAMICS_ORDER,
   options = {}
 ) {
-  const shifted = anticipate(targets, options.lead ?? 0, options);
+  const { workspace } = options;
+  const shifted = anticipate(targets, options.lead ?? 0, options, workspace);
   const frameCount =
     options.frameCount ?? Math.ceil((targets.at(-1)?.end ?? 0) * frameRate) + 1;
   const values = sampleInput(
     shifted,
     frameRate,
     frameCount,
-    options.fallback ?? 0
+    options.fallback ?? 0,
+    workspace
   );
   const alpha = 1 - Math.exp(-1 / (timeConstant * frameRate));
   if (order === 2) {
