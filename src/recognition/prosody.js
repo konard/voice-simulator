@@ -323,10 +323,11 @@ function measureNuclei(
 
 /** Analyze the vowel sounds of a timed IPA decoding. Times are in seconds. */
 export function measureProsody(samples, sampleRate, sounds, options = {}) {
-  const frames = options.frames ?? analyzeFrames(samples, sampleRate);
-  const track = options.pitch ?? trackPitch(frames);
+  let frames = options.frames;
+  const analysis = () => (frames ??= analyzeFrames(samples, sampleRate));
+  const track = options.pitch ?? trackPitch(analysis());
   const whisperSpans =
-    options.whisperSpans ?? findWhisper(samples, sampleRate, frames, track);
+    options.whisperSpans ?? findWhisper(samples, sampleRate, analysis(), track);
   const voice = options.voice?.head ?? options.voice;
   const voicePitch = voice?.pitch;
   const median =
@@ -360,7 +361,7 @@ export function measureProsody(samples, sampleRate, sounds, options = {}) {
     pitch,
     range,
     voice,
-    frames,
+    frames: whisperSpans.length ? analysis() : frames,
     whisperSpans,
   });
   return {
