@@ -568,25 +568,55 @@ function retainStates({ count, language }, pass, thresholds) {
   pass.active = active;
 }
 
+function queueWordEnds(pass, id, exit, hist, start, t) {
+  const { network, lm, settings, wordEnds, endings, endingScores } = pass;
+  const { nodes, words, wordId, nextWord } = network;
+  const { terminal, lookLn } = nodes;
+  const language = nodes.language[id];
+  const tree = pass.trees[language];
+  const packed = tree.wordTable;
+  const transitionCosts = lm.cache.costs;
+  const exitScore = exit - settings.lmw * lookLn[id];
+  for (let link = terminal[id]; link; link = nextWord[link]) {
+    const wid = wordId[link];
+    const score =
+      exitScore + transitionCosts[wordScoreSlot(lm, hist, wid, tree)];
+    settings.onWordEnd?.(wid, score - pass.framePeak[0], start, t + 1);
+    const before = packed ? packed.before(wid) : words[wid].before;
+    // One word end per language and frame, apart for sandhi variants.
+    const slot = language * 5 + (before ?? 0);
+    const end = endings[slot];
+    if (end.frame !== t) {
+      end.frame = t;
+      wordEnds.push(slot);
+    } else if (!(score > endingScores[slot])) {
+      continue;
+    }
+    endingScores[slot] = score;
+    end.language = language;
+    end.before = before;
+    end.id = wid;
+    end.prev = hist;
+    end.start = start;
+  }
+}
+
 /** Queue transitions and word ends from the compacted states. */
-function queueExits(network, pass, thresholds, t) {
-  const { nodes, words, emit, wordId, nextWord } = network;
-  const { first, count, optional, terminal, lookLn } = nodes;
-  const { go } = network.model;
+function queueExits(pass, thresholds, t) {
   const {
+    network,
     work,
     active,
     previous: { scores, histories, starts },
-    lm,
     settings,
     next,
     rootScores,
     wordEnds,
-    endings,
-    endingScores,
   } = pass;
+  const { nodes, emit } = network;
+  const { first, count, optional, terminal } = nodes;
+  const { go } = network.model;
   const { lmw, releaseSkip } = settings;
-  const transitionCosts = lm.cache.costs;
   const endFrame = t + 1;
   wordEnds.length = 0;
   rootScores.fill(NaN);
@@ -620,30 +650,8 @@ function queueExits(network, pass, thresholds, t) {
     if (nodes.child[id]) {
       next.enterChildren(id, nodes, lmw, exit, hist, start);
     }
-    const packed = tree.wordTable;
-    for (let link = terminal[id]; link; link = nextWord[link]) {
-      const wid = wordId[link];
-      const s =
-        exit -
-        lmw * lookLn[id] +
-        transitionCosts[wordScoreSlot(lm, hist, wid, tree)];
-      settings.onWordEnd?.(wid, s - pass.framePeak[0], start, endFrame);
-      const before = packed ? packed.before(wid) : words[wid].before;
-      // One word end per language and frame, apart for sandhi variants.
-      const slot = language * 5 + (before ?? 0);
-      const end = endings[slot];
-      if (end.frame !== t) {
-        end.frame = t;
-        wordEnds.push(slot);
-      } else if (!(s > endingScores[slot])) {
-        continue;
-      }
-      endingScores[slot] = s;
-      end.language = language;
-      end.before = before;
-      end.id = wid;
-      end.prev = hist;
-      end.start = start;
+    if (terminal[id]) {
+      queueWordEnds(pass, id, exit, hist, start, t);
     }
   }
 }
@@ -715,7 +723,7 @@ function advanceFrames(network, frames, pass, histogram, records) {
       pass.framePeak[0]
     );
     retainStates(network.nodes, pass, thresholds);
-    queueExits(network, pass, thresholds, t);
+    queueExits(pass, thresholds, t);
     for (let i = 0; i < wordEnds.length; i++) {
       const slot = wordEnds[i];
       const end = endings[slot];
@@ -751,6 +759,7 @@ function decodeWithWorkspace(network, feats, frames, options, workspace) {
     start: 0,
   }));
   const pass = {
+    network,
     activeNodes,
     work,
     active: 0,
