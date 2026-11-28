@@ -18,7 +18,7 @@ import {
   createThresholds,
   decodeWords,
 } from '../src/recognition/hmm-decode.js';
-import { getHmmModel } from '../src/recognition/hmm-model.js';
+import { getHmmModel, stateIndex } from '../src/recognition/hmm-model.js';
 import { ipaToText } from '../src/recognition/ipa-to-text.js';
 import {
   HMM_LIVE_WORDS,
@@ -132,6 +132,31 @@ it('aligns phones across an optional release and leading and trailing silence', 
   );
 });
 
+it('uses only the relevant neighbor for each HMM state', () => {
+  const model = {
+    ciIndex: new Map([
+      ['a#0', 0],
+      ['a#1', 1],
+      ['a#2', 2],
+      ['t_r#0', 3],
+    ]),
+    contextIndex: new Map([
+      ['a#0<p:m', 4],
+      ['a#0<cor', 5],
+      ['a#2>p:s', 6],
+      ['t_r#0<p:m', 7],
+    ]),
+  };
+  assert.equal(stateIndex(model, 'a', 0, 'm', 's'), 4);
+  assert.equal(stateIndex(model, 'a', 0, 'm', 'n'), 4);
+  assert.equal(stateIndex(model, 'a', 0, 'n', 's'), 5);
+  assert.equal(stateIndex(model, 'a', 1, 'm', 's'), 1);
+  assert.equal(stateIndex(model, 'a', 2, 'm', 's'), 6);
+  assert.equal(stateIndex(model, 'a', 2, 'n', 's'), 6);
+  assert.equal(stateIndex(model, 'a', 2, 'n', null), 2);
+  assert.equal(stateIndex(model, 't_r', 0, 'm', 's'), 3);
+});
+
 it('interpolates across a pitch more than an octave from the median', () => {
   // 100 Hz with a 3x jump, as a tracker gives on the noise of a fricative.
   const f0 = Float64Array.from({ length: 40 }, (_, i) =>
@@ -229,6 +254,24 @@ it('reuses the decoding graph when only one of its languages is requested', () =
   assert.deepEqual(
     decoded,
     decodeWords(buildNetwork(model, ['en'], options), feats, frames)
+  );
+});
+
+it('keeps separate graphs for alternating single-language recognition', () => {
+  const model = getHmmModel();
+  const options = { maxWords: 41 };
+  const english = getNetwork(model, ['en'], options);
+  const russian = getNetwork(model, ['ru'], options);
+
+  assert.deepEqual([...russian.trees.keys()], ['ru']);
+  assert.notEqual(english.nodes.first, russian.nodes.first);
+  assert.equal(
+    getNetwork(model, ['en'], options).nodes.first,
+    english.nodes.first
+  );
+  assert.equal(
+    getNetwork(model, ['ru'], options).nodes.first,
+    russian.nodes.first
   );
 });
 

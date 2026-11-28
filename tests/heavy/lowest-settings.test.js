@@ -44,6 +44,7 @@ const rows = selected ? [selected] : ALL_ROWS;
 const ENGINES = ['js', 'rust'];
 const HEAP_CAP = `--max-old-space-size=${HEAP_LIMIT_MB}`;
 const STREAM_SECONDS = 60;
+const MODE_UTTERANCES = 60;
 const ROW_TIMEOUT_MS = 6 * 3_600_000;
 const read = (file) =>
   existsSync(file) ? JSON.parse(readFileSync(file, 'utf8')) : null;
@@ -224,6 +225,9 @@ function commit() {
 
 function checkMeasurement(measured) {
   assert.ok(!measured.error, measured.error);
+  if (measured.row === 'modes' && !Number.isFinite(limit)) {
+    certifyModes(measured.engine, measured);
+  }
   if (selected === 'copy') {
     assert.ok(pinned, 'Copy certification requires one pinned core');
     assert.ok(!measured.unavailable, measured.unavailable);
@@ -362,6 +366,27 @@ function certifyStreaming(engine, measured) {
     assert.ok(
       passes(name, value, limit),
       `streaming ${engine} ${name}: ${value} exceeds ${limit}`
+    );
+  }
+}
+
+function certifyModes(engine, measured) {
+  assert.ok(pinned, 'Mode certification requires one pinned core');
+  assert.ok(!measured.unavailable, measured.unavailable);
+  assert.ok(
+    !measured.capped?.crashed,
+    `modes ${engine}: ${measured.capped?.crashed}`
+  );
+  assert.equal(measured.metrics.utterances, MODE_UTTERANCES, `modes ${engine}`);
+  const limits = {
+    ...thresholds.modes.quality,
+    ...thresholds.modes[`${engine}-1`],
+  };
+  for (const [name, limit] of Object.entries(limits)) {
+    const value = measured.metrics[name];
+    assert.ok(
+      passes(name, value, limit),
+      `modes ${engine} ${name}: ${value}, limit ${limit}`
     );
   }
 }

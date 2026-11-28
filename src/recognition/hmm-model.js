@@ -222,9 +222,6 @@ export function contextKey(unit, s, left, right) {
 export function stateIndex(model, unit, s, left, right) {
   // An entry state depends only on the left phone; an exit state only
   // on the right phone. The middle state has no context variants.
-  if (s === 1) {
-    return model.ciIndex.get(`${unit}#1`);
-  }
   let byUnit = stateCaches.get(model);
   if (!byUnit) {
     byUnit = new Map();
@@ -235,12 +232,20 @@ export function stateIndex(model, unit, s, left, right) {
     byState = [new Map(), new Map(), new Map()];
     byUnit.set(unit, byState);
   }
-  const context = (s === 0 ? left : right) ?? null;
+  const context = (s === 0 ? left : s === 2 ? right : null) ?? null;
   const states = byState[s];
-  if (!states.has(context)) {
-    states.set(context, findState(model, unit, s, left, right));
+  let index = states.get(context);
+  if (index === undefined && !states.has(context)) {
+    index = findState(
+      model,
+      unit,
+      s,
+      s === 0 ? context : null,
+      s === 2 ? context : null
+    );
+    states.set(context, index);
   }
-  return states.get(context);
+  return index;
 }
 
 const stateCaches = new WeakMap();

@@ -566,33 +566,60 @@ export function buildNetwork(
 
 const networks = new WeakMap();
 
-/**
- * Keep the most recent vocabulary configuration per model. Overlapping
- * language lists share the same trees, including between batch and stream.
- */
+// Bound the cache to the two shipped vocabularies and the most recent
+// custom configuration. User lexicon edits invalidate all three.
+function graphCache(model, revision, maxWords, oov) {
+  let cache = networks.get(model);
+  if (cache?.revision !== revision) {
+    cache = { revision, shipped: new Map(), custom: null };
+    networks.set(model, cache);
+  }
+  const shipped = oov && PREPARED_VOCABULARIES.has(maxWords);
+  const graphs = shipped ? cache.shipped.get(maxWords) : cache.custom;
+  if (graphs?.maxWords === maxWords && graphs.oov === oov) {
+    return graphs;
+  }
+  const fresh = { maxWords, oov, singles: new Map(), shared: null };
+  if (shipped) {
+    cache.shipped.set(maxWords, fresh);
+  } else {
+    cache.custom = fresh;
+  }
+  return fresh;
+}
+
+/** Reuse a single-language graph or share columns across multilingual calls. */
 export function getNetwork(
   model,
   languages,
   { maxWords = HMM_MAX_WORDS, oov = true } = {}
 ) {
   const revision = lexiconRevision();
-  let cached = networks.get(model);
-  const current = cached?.builder.network.trees;
-  if (
-    !cached ||
-    cached.revision !== revision ||
-    cached.maxWords !== maxWords ||
-    cached.oov !== oov ||
-    (current.size > 0 && !languages.some((lang) => current.has(lang)))
-  ) {
-    cached = { revision, maxWords, oov, builder: createBuilder(model) };
-    networks.set(model, cached);
-  }
+  const graphs = graphCache(model, revision, maxWords, oov);
   const prepared =
     revision === 0 &&
     oov &&
     PREPARED_VOCABULARIES.has(maxWords) &&
     readPrepared &&
     model === getHmmModel();
-  return withLanguages(cached.builder, languages, { maxWords, oov, prepared });
+  const options = { maxWords, oov, prepared };
+  const [language] = languages;
+  const { shared, singles } = graphs;
+  if (languages.length === 1 && !shared?.network.trees.has(language)) {
+    let graph = singles.get(language);
+    if (!graph) {
+      graph = withLanguages(createBuilder(model), languages, options);
+      singles.set(language, graph);
+    }
+    return graph;
+  }
+  const graph = withLanguages(
+    (graphs.shared ??= createBuilder(model)),
+    languages,
+    options
+  );
+  for (const lang of languages) {
+    singles.delete(lang);
+  }
+  return graph;
 }
