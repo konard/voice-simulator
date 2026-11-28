@@ -201,15 +201,15 @@ export function yinPitch(
   return pitch;
 }
 
-/** Cubic (Catmull-Rom) interpolation of a signal at a fractional index. */
+/** Cubic (Catmull-Rom) interpolation of a dense signal at a fractional index. */
 function cubicAt(signal, position) {
   const index = Math.floor(position);
   const x = position - index;
   const last = signal.length - 1;
-  const p0 = signal[Math.min(last, Math.max(0, index - 1))] ?? 0;
-  const p1 = signal[Math.min(last, Math.max(0, index))] ?? 0;
-  const p2 = signal[Math.min(last, Math.max(0, index + 1))] ?? 0;
-  const p3 = signal[Math.min(last, Math.max(0, index + 2))] ?? 0;
+  const p0 = signal[Math.min(last, Math.max(0, index - 1))];
+  const p1 = signal[Math.min(last, Math.max(0, index))];
+  const p2 = signal[Math.min(last, Math.max(0, index + 1))];
+  const p3 = signal[Math.min(last, Math.max(0, index + 2))];
   return (
     p1 +
     0.5 *
@@ -332,10 +332,13 @@ function fractionalAperiodicity(signal, length, period, values) {
 
 /** Fourth-order Butterworth high-pass (two biquads). */
 function highpass(signal, frequency, rate) {
-  const filters = [new Biquad(), new Biquad()];
-  filters[0].highpass(frequency, 0.54, rate);
-  filters[1].highpass(frequency, 1.31, rate);
-  return signal.map((value) => filters[1].process(filters[0].process(value)));
+  const first = new Biquad().highpass(frequency, 0.54, rate);
+  const second = new Biquad().highpass(frequency, 1.31, rate);
+  const output = new signal.constructor(signal.length);
+  for (let i = 0; i < signal.length; i++) {
+    output[i] = second.process(first.process(signal[i]));
+  }
+  return output;
 }
 
 function harmonicLevel(windowed, frequency, sampleRate) {
