@@ -16,20 +16,25 @@ import { semitones } from './mode-rules.js';
 
 let quantileScratch = new Float64Array(64);
 
-export function quantile(values, fraction = 0.5) {
-  if (values.length <= 1) {
-    return Number.isFinite(values[0]) ? values[0] + 0 : 0;
+export function quantile(values, fraction = 0.5, rows) {
+  const length = rows?.length ?? values.length;
+  if (length === 0) {
+    return 0;
+  }
+  if (length === 1) {
+    const value = values[rows ? rows[0] : 0];
+    return Number.isFinite(value) ? value + 0 : 0;
   }
   const sorted =
-    quantileScratch.length >= values.length
+    quantileScratch.length >= length
       ? quantileScratch
-      : new Float64Array(values.length);
+      : new Float64Array(length);
   if (sorted.length <= 4096) {
     quantileScratch = sorted;
   }
   let size = 0;
-  for (let i = 0; i < values.length; i++) {
-    const value = values[i];
+  for (let i = 0; i < length; i++) {
+    const value = values[rows ? rows[i] : i];
     if (Number.isFinite(value)) {
       sorted[size++] = value;
     }
@@ -47,21 +52,34 @@ export function quantile(values, fraction = 0.5) {
 const mean = (values) =>
   values.length ? values.reduce((a, b) => a + b, 0) / values.length : 0;
 
+function timedNuclei(word, phones, vowelByIpa) {
+  const vowels = [];
+  for (let i = 0; i < phones.length; i++) {
+    if (!(i in phones)) {
+      continue;
+    }
+    const { start, end } = phones[i];
+    if (!(start >= word.start && end <= word.end)) {
+      continue;
+    }
+    const vowel = phones[i].ipa ?? phones[i].symbol ?? '';
+    let isNucleus = vowelByIpa.get(vowel);
+    if (isNucleus === undefined) {
+      isNucleus = parseIpa(vowel).tokens.some(
+        (token) => token.kind === 'vowel' || token.syllabic
+      );
+      vowelByIpa.set(vowel, isNucleus);
+    }
+    if (isNucleus) {
+      vowels.push({ start, end, vowel });
+    }
+  }
+  return vowels;
+}
+
 /** Locate nuclei using timed phones when available, else fit each IPA word
  * to its observed word interval. No synthesis modes/timeline metadata read. */
-function nuclei(word, phones, head, planners) {
-  if (phones) {
-    return phones
-      .filter(
-        (p) =>
-          p.start >= word.start &&
-          p.end <= word.end &&
-          parseIpa(p.ipa ?? p.symbol ?? '').tokens.some(
-            (t) => t.kind === 'vowel' || t.syllabic
-          )
-      )
-      .map((p) => ({ ...p, vowel: p.ipa ?? p.symbol }));
-  }
+function plannedNuclei(word, head, planners) {
   const language = word.language ?? word.lang;
   let plan = planners.get(language);
   if (!plan) {
@@ -249,11 +267,14 @@ export function measureWords(
     pulseTrains(samples, sampleRate)
   );
   const phones = result.phonemes ?? result.phones;
+  const vowelByIpa = new Map();
   const planners = new Map();
   const seen = new Uint8Array(frames.count);
   const uniqueRows = [];
   const wordVowels = result.words.map((word) => {
-    const vowels = nuclei(word, phones, head, planners);
+    const vowels = phones
+      ? timedNuclei(word, phones, vowelByIpa)
+      : plannedNuclei(word, head, planners);
     return { vowels, rows: vowelFrames(vowels, frames, seen, uniqueRows) };
   });
   const source = measure(options.profile, 'Inverse filter', () =>
@@ -276,7 +297,7 @@ export function measureWords(
     const { vowels, rows: byVowel } = wordVowels[index];
     const rows = [];
     const f1Vowels = [];
-    for (const [i, vowel] of vowels.entries()) {
+    for (let i = 0; i < vowels.length; i++) {
       const frequencies = [];
       for (const t of byVowel[i]) {
         rows.push(t);
@@ -286,7 +307,7 @@ export function measureWords(
       }
       if (formants) {
         f1Vowels.push({
-          vowel: vowel.vowel,
+          vowel: vowels[i].vowel,
           value: quantile(frequencies),
         });
       }
@@ -303,8 +324,7 @@ export function measureWords(
       }
     }
     // Source H1-H2 removes the formant envelope, unlike raw speech H1-H2.
-    const values = (key) => rows.map((t) => source[key][t]);
-    const hnr = quantile(values('hnr'));
+    const hnr = quantile(source.hnr, 0.5, rows);
     const { pulsePitch, jitter } = pulseFeatures(pulses, vowels);
     // A weak periodicity peak in noise is not a usable pitch. Require
     // harmonic support across the nucleus before falling back to it.
@@ -328,11 +348,11 @@ export function measureWords(
       pitchSpan: semitones(quantile(f0, 0.95), quantile(f0, 0.05)),
       voiced: rows.length ? f0.length / rows.length : 0,
       wordVoiced: wordVoicing(word, frames, pitch),
-      level: quantile(rows.map((t) => frames.energy[t])),
+      level: quantile(frames.energy, 0.5, rows),
       peakLevel,
-      h1h2: quantile(values('h1h2Source')),
+      h1h2: quantile(source.h1h2Source, 0.5, rows),
       hnr,
-      cpp: quantile(values('cpp')),
+      cpp: quantile(source.cpp, 0.5, rows),
       jitter,
       rate: 0,
     };
@@ -388,11 +408,21 @@ export function vowelReferences(words) {
   for (const word of words) {
     for (const { vowel, value } of word.f1Vowels) {
       if (value > 0) {
-        grouped.set(vowel, [...(grouped.get(vowel) ?? []), value]);
+        let entry = grouped.get(vowel);
+        if (!entry) {
+          entry = { total: 0, count: 0 };
+          grouped.set(vowel, entry);
+        }
+        entry.total += value;
+        entry.count++;
       }
     }
   }
-  return new Map([...grouped].map(([vowel, values]) => [vowel, mean(values)]));
+  const references = new Map();
+  for (const [vowel, { total, count }] of grouped) {
+    references.set(vowel, total / count);
+  }
+  return references;
 }
 export function relativeF1(word, references) {
   const values = word.f1Vowels
