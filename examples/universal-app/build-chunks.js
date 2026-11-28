@@ -47,13 +47,13 @@ export function vendorChunk(id) {
   if (counts) {
     return `recognition-${counts[1]}`;
   }
-  // The packed recognition HMM is split into parts of under 400 kB by
-  // scripts/build-hmm-model.mjs; each part is its own chunk.
+  // Ship the model metadata and each packed coefficient part in separate
+  // chunks. The generator keeps the coefficient parts under 400 kB.
   const model = id.match(
-    /[\\/]src[\\/]recognition[\\/]data[\\/]hmm-model-(\d+)\.js$/
+    /[\\/]src[\\/]recognition[\\/]data[\\/]hmm-model(?:-(\d+))?\.js$/
   );
   if (model) {
-    return `recognition-hmm-${model[1]}`;
+    return `recognition-hmm-${model[1] ?? 'metadata'}`;
   }
   return vendorChunks.find(([pattern]) => pattern.test(id))?.[1];
 }
