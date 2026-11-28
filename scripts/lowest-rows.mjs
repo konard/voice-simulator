@@ -156,13 +156,23 @@ function synthesisRow({ engine, limit, baseline, profile }) {
     let audioSeconds = 0;
     for (const { lang, preset, text } of cases) {
       const options = { lang, tier, head: 'random', preset, seed: 1 };
-      const [spoken, cpu] = cpuTime(() =>
-        synthesizeWithStorage(
-          text,
-          { ...options, engine: timed ? engine.render : 'js' },
-          storage
-        )
-      );
+      const [spoken, cpu] = cpuTime(() => {
+        const { samples, sampleRate, ipa, timeline, head } =
+          synthesizeWithStorage(
+            text,
+            { ...options, engine: timed ? engine.render : 'js' },
+            storage
+          );
+        // Keep the waveform and references used by the round trip. The
+        // renderer has finished with the plan and its control channels.
+        return {
+          samples,
+          sampleRate,
+          ipa,
+          timeline: { words: timeline.words },
+          head,
+        };
+      });
       profile?.(
         `Synthesis ${tier} ${lang} ${preset} ${errors.length + 1} Rendered`
       );
