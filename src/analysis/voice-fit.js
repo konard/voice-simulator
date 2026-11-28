@@ -50,8 +50,16 @@ const unit = (key, x) =>
   (x - definition(key).min) / (definition(key).max - definition(key).min);
 const physical = (key, x) =>
   definition(key).min + x * (definition(key).max - definition(key).min);
-function optionsFor(options) {
-  const o = { refine: true, maxRenders: 40, seed: 1, parts: PARTS, ...options };
+function optionsFor(options, sampleRate) {
+  const telephone = sampleRate === 8000 && !options?.transcript;
+  const o = {
+    refine: true,
+    maxRenders: telephone ? 8 : 40,
+    seed: 1,
+    parts: PARTS,
+    ...options,
+    telephone,
+  };
   if (
     !Number.isInteger(o.maxRenders) ||
     o.maxRenders < 0 ||
@@ -127,18 +135,22 @@ function createEvaluator(state, samples, sampleRate, o, theta0, context) {
     ) {
       return context.best;
     }
-    const { samples: rendered } = synthesize(o.transcript || MATCH_TEXT, {
+    const rendered = synthesize(o.transcript || MATCH_TEXT, {
       head: candidate,
       seed: o.seed,
-      sampleRate: 16000,
-      solver: 'waveguide',
+      ...(o.telephone
+        ? { tier: 'telephone' }
+        : { sampleRate: 16000, solver: 'waveguide' }),
       lang: o.transcript ? (o.language ?? o.lang) : 'en',
       ipa: o.transcript ? o.ipa : false,
       engine: o.engine,
       source: o.source,
       articulationOffsets: o.articulationOffsets,
     });
-    const audio = rate < 16000 ? resample(rendered, 16000, rate) : rendered;
+    const audio =
+      rate === rendered.sampleRate
+        ? rendered.samples
+        : resample(rendered.samples, rendered.sampleRate, rate);
     // The objective uses inverse-filter source measures. Legacy HNR/H1-H2
     // diagnostics are needed only for the returned render, or verbose tracing.
     let completeDiagnostics;
@@ -207,7 +219,7 @@ function createEvaluator(state, samples, sampleRate, o, theta0, context) {
 
 /** Score a supplied voice with the same acoustic objective as fitVoice. */
 export function measureVoiceFit(state, samples, sampleRate, head, options) {
-  const o = optionsFor(options);
+  const o = optionsFor(options, sampleRate);
   return createEvaluator(state, samples, sampleRate, o, head, {
     renders: 0,
   })(head).distance;
@@ -215,8 +227,10 @@ export function measureVoiceFit(state, samples, sampleRate, head, options) {
 
 function roundsFor(o) {
   const round1 = [
-    'vocalTractLength',
-    'pitch',
+    // At 8 kHz without a transcript, different vowels dominate the sparse
+    // upper formants and different intonation shifts f0. Keep the recording's
+    // estimates of tract length and baseline pitch while fitting the rest.
+    ...(o.telephone ? [] : ['vocalTractLength', 'pitch']),
     'pitchRange',
     ...(o.source === 'folds' ? [] : ['tenseness']),
     // With a transcript stage A reads the rate from the speaking time of the
@@ -284,9 +298,8 @@ function correctTract(evaluate, head, stage, o, budgets) {
   theta0.vocalTractLength = length;
   return { ...head, vocalTractLength: length };
 }
-function* fitState(state, samples, sampleRate, options) {
-  const o = optionsFor(options),
-    stage = statisticsResult(state, o);
+function* fitState(state, samples, sampleRate, o) {
+  const stage = statisticsResult(state, o);
   const { parameters, features } = stage;
   let head = stage.head,
     best = null,
@@ -316,9 +329,6 @@ function* fitState(state, samples, sampleRate, options) {
     );
     for (const [round, allKeys] of roundsFor(o).entries()) {
       const keys = allKeys.filter((k) => o.parts.includes(groups[k]));
-      if (!keys.length) {
-        continue;
-      }
       const base = { ...head };
       const evaluateUnit = (x) =>
         evaluate({
@@ -348,6 +358,16 @@ function* fitState(state, samples, sampleRate, options) {
       }
       updateUncertainty(parameters, keys, next.value, head);
     }
+    if (o.telephone && !best && o.parts.includes('tract')) {
+      // A tract-only request still scores the direct estimate once.
+      best = evaluate(head);
+      yield {
+        step,
+        renders: context.renders,
+        distance: best.distance,
+        head: { ...head },
+      };
+    }
   }
   for (const key of Object.keys(parameters)) {
     parameters[key].value = head[key];
@@ -365,7 +385,7 @@ function* fitState(state, samples, sampleRate, options) {
   };
 }
 export function* fitVoiceSteps(samples, sampleRate, options = {}, frontEnd) {
-  const o = optionsFor(options);
+  const o = optionsFor(options, sampleRate);
   const state = accumulate(
     copyState(o.state),
     samples,
@@ -386,7 +406,8 @@ export function fitVoice(samples, sampleRate, options = {}, frontEnd) {
   return consume(fitVoiceSteps(samples, sampleRate, options, frontEnd));
 }
 export function createVoiceFitter(options = {}) {
-  const o = optionsFor(options),
+  const initial = { ...options };
+  const o = optionsFor(initial),
     state = copyState(o.state);
   return {
     get state() {
@@ -398,11 +419,15 @@ export function createVoiceFitter(options = {}) {
     },
     result(settings = {}) {
       return consume(
-        fitState(copyState(state), settings.samples, settings.sampleRate, {
-          ...o,
-          refine: false,
-          ...settings,
-        })
+        fitState(
+          copyState(state),
+          settings.samples,
+          settings.sampleRate,
+          optionsFor(
+            { ...initial, refine: false, ...settings },
+            settings.sampleRate ?? state.landmarks.sampleRate
+          )
+        )
       );
     },
   };

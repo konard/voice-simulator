@@ -340,11 +340,24 @@ export function stateFeatures(state) {
 const SPEECH_TIME_SD = 0.04;
 // The f0 range and median of a sentence depend on its words: with a
 // transcript they are read against the plan of the same words, without one
-// the range against the default head on MATCH_TEXT and the pitch as the
-// median itself.
-function pitchReading(features, f0Sd, head, options) {
+// the range against the default head on MATCH_TEXT and the pitch from the
+// recording's f0 distribution.
+function pitchReading(state, features, f0Sd, head, options) {
   if (!options.transcript) {
-    return { range: null, pitch: features.f0, pitchSd: f0Sd };
+    let pitch = features.f0;
+    if (options.telephone) {
+      // Centre the 10th–90th percentile range in semitones to reduce the
+      // influence of how long a phrase stays at high or low pitches.
+      // Keep that centre within the central half of the observed pitches.
+      const centre = Math.sqrt(
+        quantile(state, 'f0', 0.1) * quantile(state, 'f0', 0.9)
+      );
+      pitch = Math.max(
+        quantile(state, 'f0', 0.25),
+        Math.min(quantile(state, 'f0', 0.75), centre)
+      );
+    }
+    return { range: null, pitch, pitchSd: f0Sd };
   }
   const range = transcriptPitchRange(
     features.f0Range,
@@ -409,6 +422,7 @@ export function statisticsResult(state, options = {}) {
     count('dF')
   );
   const { range, pitch, pitchSd } = pitchReading(
+    state,
     features,
     sd('f0'),
     head,
