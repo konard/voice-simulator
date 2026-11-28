@@ -1,4 +1,3 @@
-/* eslint-disable complexity, max-statements */
 /**
  * Viterbi token passing over the word network of the Gaussian HMM
  * recogniser, with the shipped word bigrams, beam and histogram pruning,
@@ -894,17 +893,13 @@ function alignWithWorkspace(model, feats, frames, words, options, workspace) {
       columns = alignmentColumns(capacity);
     }
   }
-  const { stay, go, emit, token, skip } = columns;
-  skip.fill(0, 0, capacity);
-  const { count: N, tokens } = alignmentChain(model, words, columns);
+  columns.skip.fill(0, 0, capacity);
+  const { count: states, tokens } = alignmentChain(model, words, columns);
   const cache = workspace.emission;
   cache.begin(feats, settings);
-  const { stamp, value: emissions } = cache;
-  let { previous: prev, current: cur } = columns;
-  prev.fill(-Infinity, 0, N);
   // A predecessor can stay, advance by one, or skip three states. Store
   // those three choices in two bits per cell.
-  const bytes = Math.ceil((frames * N) / 4);
+  const bytes = Math.ceil((frames * states) / 4);
   let { back } = workspace;
   if (back.length >= bytes) {
     back.fill(0, 0, bytes);
@@ -916,10 +911,38 @@ function alignWithWorkspace(model, feats, frames, words, options, workspace) {
   } else {
     back = new Uint8Array(bytes);
   }
+  const scores = scoreAlignment(
+    cache,
+    columns,
+    back,
+    frames,
+    states,
+    silencePenalty
+  );
+  let at = scores[states - 4] > scores[states - 1] ? states - 4 : states - 1;
+  options.onScore?.(scores[at]);
+  for (let t = frames - 1; t >= 0 && at >= 0; t--) {
+    const span = tokens[columns.token[at]];
+    if (span) {
+      span.from = Math.min(span.from, t);
+      span.to = Math.max(span.to, t + 1);
+    }
+    const cell = t * states + at;
+    const step = (back[Math.floor(cell / 4)] >> ((cell % 4) * 2)) & 3;
+    at -= step === 2 ? 4 : step;
+  }
+  return tokens;
+}
+
+function scoreAlignment(cache, columns, back, frames, states, silencePenalty) {
+  const { stay, go, emit, skip } = columns;
+  const { stamp, value: emissions } = cache;
+  let { previous: prev, current: cur } = columns;
+  prev.fill(-Infinity, 0, states);
   if (frames > 0) {
     cache.evaluate(emit[0], 0);
     prev[0] = 0 + emissions[emit[0]];
-    if (N > 3) {
+    if (states > 3) {
       prev[3] = silencePenalty;
       if (silencePenalty > -Infinity) {
         if (stamp[emit[3]] !== 0) {
@@ -930,8 +953,8 @@ function alignWithWorkspace(model, feats, frames, words, options, workspace) {
     }
   }
   for (let t = 1; t < frames; t++) {
-    const row = t * N;
-    for (let n = 0; n < N; n++) {
+    const row = t * states;
+    for (let n = 0; n < states; n++) {
       let s = prev[n] + stay[n];
       let step = 0;
       if (n > 0) {
@@ -965,17 +988,5 @@ function alignWithWorkspace(model, feats, frames, words, options, workspace) {
     prev = cur;
     cur = earlier;
   }
-  let at = prev[N - 4] > prev[N - 1] ? N - 4 : N - 1;
-  options.onScore?.(prev[at]);
-  for (let t = frames - 1; t >= 0 && at >= 0; t--) {
-    const span = tokens[token[at]];
-    if (span) {
-      span.from = Math.min(span.from, t);
-      span.to = Math.max(span.to, t + 1);
-    }
-    const cell = t * N + at;
-    const step = (back[Math.floor(cell / 4)] >> ((cell % 4) * 2)) & 3;
-    at -= step === 2 ? 4 : step;
-  }
-  return tokens;
+  return prev;
 }
