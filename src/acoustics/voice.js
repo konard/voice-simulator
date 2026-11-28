@@ -792,7 +792,7 @@ export class VoiceRenderer {
     return this.noise.frication.process(white) * amplitude;
   }
 
-  /** Queue one solver step with the sources of this instant. */
+  /** Advance or queue one solver step with the sources of this instant. */
   #step(queue) {
     const white = this.noise.white();
     const aspiration = this.noise.aspiration.process(white);
@@ -819,7 +819,15 @@ export class VoiceRenderer {
       this.transient += this.transientStep;
       flow = this.transient;
     }
-    queue(source, this.shape.frication.position, noise, flow);
+    const position = this.shape.frication.position;
+    if (queue) {
+      queue(source, position, noise, flow);
+    } else {
+      this.previous = this.current;
+      this.current = this.output.filter(
+        this.solver.step(source, position, noise, flow)
+      );
+    }
     this.steps++;
   }
 
@@ -922,16 +930,11 @@ export class VoiceRenderer {
    * @returns {number} Number of samples written (less than target.length at the end).
    */
   render(target) {
-    const { output, solver, listener } = this;
+    const { output, listener } = this;
     return this.#run(
       target.length,
       (_step, rate) => output.configure(rate),
-      (source, position, noise, flow) => {
-        this.previous = this.current;
-        this.current = output.filter(
-          solver.step(source, position, noise, flow)
-        );
-      },
+      null,
       (index, fraction) => {
         const value = this.previous + (this.current - this.previous) * fraction;
         target[index] = output.finish(
