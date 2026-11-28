@@ -148,6 +148,7 @@ function lossStages(sections, stages) {
 }
 
 export class Waveguide {
+  #stepBuffer = new Float64Array(4);
   // Outgoing glottal/lip waves, then turbulence position and outgoing waves.
   #junction = new Float64Array(5);
   #shelf;
@@ -800,6 +801,24 @@ export class Waveguide {
    * @returns {number} Radiated output (lips + nose).
    */
   step(glottalFlow, noisePosition, noise, flow = 0) {
+    const buffer = this.#stepBuffer;
+    buffer[0] = glottalFlow;
+    buffer[1] = noisePosition;
+    buffer[2] = noise;
+    buffer[3] = flow;
+    this.stepInto(buffer);
+    return buffer[0];
+  }
+
+  /**
+   * @internal Replace the glottal flow with the radiated output.
+   * Indices 1–3 hold the turbulence position, noise and flow.
+   */
+  stepInto(buffer) {
+    const glottalFlow = buffer[0];
+    const noisePosition = buffer[1];
+    const noise = buffer[2];
+    const flow = buffer[3];
     if (this.lossesStale) {
       this.#refreshLosses();
     }
@@ -829,7 +848,7 @@ export class Waveguide {
         this.#silenceNose();
       }
     }
-    return this.lipOutput + this.noseOutput;
+    buffer[0] = this.lipOutput + this.noseOutput;
   }
 
   /**

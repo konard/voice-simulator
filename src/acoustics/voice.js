@@ -370,6 +370,7 @@ export class OutputStage {
 export class VoiceRenderer {
   #tract;
   #builtinSolver;
+  #waveguideInputs;
 
   /**
    * @param {object} plan Result of planUtterance.
@@ -440,10 +441,7 @@ export class VoiceRenderer {
     this.vowelCorrections = VOWEL_TABLES.get(options.solver ?? 'waveguide');
     this.glottis = source(this.head, seed);
     this.#builtinSolver = BUILTIN_SOLVERS.has(factory);
-    this.#tract = createTractWorkspace({
-      sections: this.sections,
-      reuseAreas: this.#unpublishedShape(options),
-    });
+    this.#prepareTract(options);
     this.noise = new NoiseSources(seed);
     this.aerodynamics = new Aerodynamics({
       compliance: this.head.oralCompliance,
@@ -496,13 +494,20 @@ export class VoiceRenderer {
     this.time = this.position / this.sampleRate;
   }
 
-  /** The built-in waveguide copies its inputs during setShape. */
-  #unpublishedShape(options) {
-    return (
+  #prepareTract(options) {
+    // The built-in waveguide copies its inputs during setShape.
+    const offlineWaveguide =
       options[OFFLINE_WAVEGUIDE] &&
       this.#builtinSolver &&
-      this.solver instanceof Waveguide
-    );
+      this.solver instanceof Waveguide;
+    this.#tract = createTractWorkspace({
+      sections: this.sections,
+      reuseAreas: offlineWaveguide,
+    });
+    if (offlineWaveguide && this.source === 'lf') {
+      // Keep solver-rate floating-point inputs and outputs in numeric storage.
+      this.#waveguideInputs = new Float64Array(4);
+    }
   }
 
   /**
@@ -806,14 +811,23 @@ export class VoiceRenderer {
     if (control.whisper > 0) {
       control.whisperNoise = this.noise.whisper.process(white);
     }
-    let source = this.interaction
-      ? this.glottis.step(
-          this.stepDuration,
-          this.shape.glottis,
-          aspiration,
-          this.#glottalLoad()
-        )
-      : this.glottis.step(this.stepDuration, this.shape.glottis, aspiration);
+    const inputs = this.#waveguideInputs;
+    let source;
+    if (inputs) {
+      inputs[0] = aspiration;
+      inputs[1] = this.stepDuration;
+      this.glottis.stepInto(inputs, control);
+      source = inputs[0];
+    } else {
+      source = this.interaction
+        ? this.glottis.step(
+            this.stepDuration,
+            control,
+            aspiration,
+            this.#glottalLoad()
+          )
+        : this.glottis.step(this.stepDuration, control, aspiration);
+    }
     if (control.whisper > 0 && this.source === 'folds') {
       source = this.#whisperFolds(source, control);
     }
@@ -828,6 +842,13 @@ export class VoiceRenderer {
     const position = this.shape.frication.position;
     if (queue) {
       queue(source, position, noise, flow);
+    } else if (inputs) {
+      inputs[1] = position;
+      inputs[2] = noise;
+      inputs[3] = flow;
+      this.solver.stepInto(inputs);
+      this.previous = this.current;
+      this.current = this.output.filter(inputs[0]);
     } else {
       this.previous = this.current;
       this.current = this.output.filter(

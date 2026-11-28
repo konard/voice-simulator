@@ -37,6 +37,17 @@ const untouchable = {
 };
 
 describe('engines', () => {
+  it('preserves waveguide samples with buffered offline solver inputs', async () => {
+    const engine = await createEngine({ engine: 'js' });
+    const text = 'Stop here. [whisper]Speak softly.[/whisper]';
+    for (const tier of ['telephone', 'wideband']) {
+      const options = { tier, seed: 1 };
+      const expected = synthesize(text, { ...options, engine }).samples;
+      const offline = synthesize(text, { ...options, engine: 'js' }).samples;
+      expect(offline).toEqual(expected);
+    }
+  });
+
   for (const name of ['js', 'rust']) {
     itUnless(name === 'rust' && noRust)(
       `${name} reuses synthesis output without changing the waveform`,

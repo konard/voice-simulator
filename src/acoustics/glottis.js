@@ -233,6 +233,7 @@ export function lfWaveform(p, t) {
 }
 
 export class Glottis {
+  #stepBuffer = new Float64Array(2);
   #blockControl;
   #block = {};
   #instant = {};
@@ -576,6 +577,17 @@ export class Glottis {
    * @param {number} noise White noise sample in [-1, 1].
    */
   step(dt, control, noise) {
+    const buffer = this.#stepBuffer;
+    buffer[0] = noise;
+    buffer[1] = dt;
+    this.stepInto(buffer, control);
+    return buffer[0];
+  }
+
+  /** @internal Replace the noise at index 0 with the source sample. Index 1 holds dt. */
+  stepInto(buffer, control) {
+    const noise = buffer[0];
+    const dt = buffer[1];
     const prepared = this.#blockControl === control;
     const values = prepared
       ? this.#block
@@ -625,11 +637,12 @@ export class Glottis {
         this.pitch,
         prepared ? this.#whisperGains : undefined
       );
-      return (
+      buffer[0] =
         voiced +
-        (noise * breath * modulation + whispered) * 0.45 * this.aspirationLevel
-      );
+        (noise * breath * modulation + whispered) * 0.45 * this.aspirationLevel;
+    } else {
+      buffer[0] =
+        voiced + noise * breath * modulation * 0.45 * this.aspirationLevel;
     }
-    return voiced + noise * breath * modulation * 0.45 * this.aspirationLevel;
   }
 }
