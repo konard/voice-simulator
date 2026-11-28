@@ -5,7 +5,7 @@ import { trackPitch, jitterToHead } from '../recognition/pitch.js';
 import { trackBatchFormants } from '../recognition/formants.js';
 import { inverseFilter } from '../recognition/inverse-filter.js';
 import { HEAD_PARAMETERS, DEFAULT_HEAD } from '../head-config.js';
-import { prepareLegacyVoice } from './voice-features.js';
+import { prepareLegacyVoice, sliceVoiceSamples } from './voice-features.js';
 import {
   transcriptSpeechRate,
   transcriptPitchRange,
@@ -253,11 +253,7 @@ export function accumulate(
   const maxSeconds = options.maxDuration ?? 30;
   const input = Float32Array.from(
     samples.length > maxSeconds * sampleRate
-      ? Array.prototype.slice.call(
-          samples,
-          0,
-          Math.floor(maxSeconds * sampleRate)
-        )
+      ? sliceVoiceSamples(samples, Math.floor(maxSeconds * sampleRate))
       : samples
   );
   const { profile, kernels } = options;
@@ -291,6 +287,7 @@ export function accumulate(
   countNuclei(state, input, sampleRate, frames, {
     order: options.order,
     rate: options.analysisRate,
+    retainCarry: options.retainNucleiCarry,
   });
   collectFrames(
     state,

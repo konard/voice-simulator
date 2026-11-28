@@ -376,6 +376,12 @@ function countSyllables(levels, voiced) {
   return count;
 }
 
+export function sliceVoiceSamples(samples, limit) {
+  return samples instanceof Float32Array || samples instanceof Float64Array
+    ? samples.subarray(0, limit)
+    : Array.prototype.slice.call(samples, 0, limit);
+}
+
 /**
  * Measure the voice features of a recording.
  * @param {ArrayLike<number>} samples Mono samples.
@@ -392,13 +398,8 @@ function countSyllables(levels, voiced) {
  */
 export function prepareLegacyVoice(samples, sampleRate, options = {}) {
   const limit = Math.floor((options.maxDuration ?? 30) * sampleRate);
-  let input = samples;
-  if (samples.length > limit) {
-    input =
-      samples instanceof Float32Array || samples instanceof Float64Array
-        ? samples.subarray(0, limit)
-        : Array.prototype.slice.call(samples, 0, limit);
-  }
+  const input =
+    samples.length > limit ? sliceVoiceSamples(samples, limit) : samples;
   const { samples: signal, sampleRate: rate } = resample(
     input,
     sampleRate,
@@ -574,7 +575,10 @@ export function analyzeLegacyVoice(samples, sampleRate, options = {}) {
 /** Shared stage-A statistics; legacy diagnostics remain available internally. */
 export function analyzeVoice(samples, sampleRate, options = {}) {
   const features = stateFeatures(
-    accumulate(emptyState(), samples, sampleRate, options)
+    accumulate(emptyState(), samples, sampleRate, {
+      ...options,
+      retainNucleiCarry: false,
+    })
   );
   delete features.rd;
   delete features.cpp;

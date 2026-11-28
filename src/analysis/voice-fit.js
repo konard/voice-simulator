@@ -6,6 +6,7 @@ import {
 } from '../head-config.js';
 import { synthesize } from '../synthesize.js';
 import { resample } from '../audio/resample.js';
+import { sliceVoiceSamples } from './voice-features.js';
 import {
   featureVector,
   vectorDistance,
@@ -104,10 +105,11 @@ function createEvaluator(state, samples, sampleRate, o, theta0, context) {
   }
   const target = featureVector(state);
   const rate = Math.min(16000, sampleRate);
+  const analysisOptions = { ...o, retainNucleiCarry: false };
   let mcdMetric = null;
   if (o.transcript) {
     const limit = Math.floor((o.maxDuration ?? 30) * sampleRate);
-    const truncated = Array.prototype.slice.call(samples, 0, limit);
+    const truncated = sliceVoiceSamples(samples, limit);
     const input =
       sampleRate === rate
         ? Float32Array.from(truncated)
@@ -140,9 +142,16 @@ function createEvaluator(state, samples, sampleRate, o, theta0, context) {
     // The objective uses inverse-filter source measures. Legacy HNR/H1-H2
     // diagnostics are needed only for the returned render, or verbose tracing.
     let completeDiagnostics;
-    const statistics = accumulate(emptyState(), audio, rate, o, false, (fn) => {
-      completeDiagnostics = fn;
-    });
+    const statistics = accumulate(
+      emptyState(),
+      audio,
+      rate,
+      analysisOptions,
+      false,
+      (fn) => {
+        completeDiagnostics = fn;
+      }
+    );
     const mcd = mcdMetric?.(audio) ?? null;
     const distance = vectorDistance(
       target,
