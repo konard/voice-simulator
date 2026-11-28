@@ -41,6 +41,12 @@ describe('parseIpa', () => {
     expect(tokens.at(-1).tone).not.toBe(null);
   });
 
+  it('reports a supplementary code point as one unknown character', () => {
+    const { tokens, unknown } = parseIpa('a\u{10400}t');
+    expect(unknown).toEqual(['\u{10400}']);
+    expect(tokens.map(({ symbol }) => symbol)).toEqual(['a', 't']);
+  });
+
   it('formats tokens back to IPA with stress on the nucleus', () => {
     expect(formatIpa(parseIpa('həˈloʊ').tokens)).toBe('həlˈoʊ');
     expect(formatIpa(parseIpa('kʰæts').tokens)).toBe('kʰæts');

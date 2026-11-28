@@ -336,7 +336,11 @@ function addSound(state, symbol, written) {
 }
 
 function consumeText(state, text) {
-  for (const raw of text) {
+  for (let index = 0; index < text.length; index++) {
+    let raw = text[index];
+    if (text.codePointAt(index) > 0xffff) {
+      raw += text[++index];
+    }
     consumeChar(state, ALIASES[raw] ?? raw);
     const tail = LIGATURE_TAILS[raw];
     if (tail) {
