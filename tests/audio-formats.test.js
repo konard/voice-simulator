@@ -109,6 +109,22 @@ describe('audio format round trips', () => {
     expect(wavHeader(48000).length).toBe(44);
   });
 
+  it('averages signed 16-bit channels exactly in both byte orders', () => {
+    const channels = [
+      new Float32Array([-1, -1]),
+      new Float32Array([32767 / 32768, 0]),
+      new Float32Array([1 / 32768, 0]),
+    ];
+    for (const [encode, decode] of [CODECS.wav, CODECS.aiff, CODECS.au]) {
+      const bytes = encode(channels, 16000, { bitDepth: 16 });
+      const file = new Uint8Array(bytes.length + 3);
+      file.set(bytes, 3);
+      const result = decode(file.subarray(3));
+      expect(result.channels).toBe(3);
+      expect(Array.from(result.samples)).toEqual([0, Math.fround(-1 / 3)]);
+    }
+  });
+
   it('round-trips raw PCM with explicit layout', () => {
     const bytes = encodeAudio([left, right], 8000, {
       format: 'raw',

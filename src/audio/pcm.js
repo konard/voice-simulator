@@ -199,6 +199,20 @@ export function encodeSamples(channels, format) {
   return bytes;
 }
 
+// Sum the signed integers before scaling to keep the inner loop integral.
+// Container channel counts fit comfortably within the exact integer range.
+function decodeInt16Mono(view, offset, frames, channels, little, mono) {
+  let at = offset;
+  for (let frame = 0; frame < frames; frame++) {
+    let sum = 0;
+    for (let channel = 0; channel < channels; channel++) {
+      sum += view.getInt16(at, little);
+      at += 2;
+    }
+    mono[frame] = sum / 32768 / channels;
+  }
+}
+
 /**
  * Decode interleaved sample bytes to mono floats (channels are averaged).
  * @param {Uint8Array} bytes
@@ -220,6 +234,10 @@ export function decodeSamples(
   const width = format.bitDepth / 8;
   const frames = Math.floor(length / (width * channels));
   const mono = allocate ? allocate(frames) : new Float32Array(frames);
+  if (format.kind === 'int' && width === 2) {
+    decodeInt16Mono(view, offset, frames, channels, format.little, mono);
+    return mono;
+  }
   let at = offset;
   for (let frame = 0; frame < frames; frame++) {
     let sum = 0;
