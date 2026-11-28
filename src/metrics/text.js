@@ -5,25 +5,34 @@
 
 import { parseIpa } from '../ipa/parse.js';
 
-/** Count the edits along one cheapest path through the cost matrix. */
-function traceEdits(cost, width, reference, hypothesis, onPair) {
+const MATCH = 0;
+const SUBSTITUTE = 1;
+const DELETE = 2;
+const INSERT = 3;
+
+/** Count the edits along one cheapest path, including the matrix edges. */
+function traceEdits(steps, i, j, onPair) {
   const counts = { substitutions: 0, deletions: 0, insertions: 0 };
-  let i = reference.length;
-  let j = hypothesis.length;
+  const width = j;
   while (i > 0 || j > 0) {
-    const here = cost[i * width + j];
-    const same = i > 0 && j > 0 && reference[i - 1] === hypothesis[j - 1];
-    if (i > 0 && j > 0 && cost[(i - 1) * width + j - 1] + !same === here) {
-      counts.substitutions += same ? 0 : 1;
-      onPair?.(i - 1, j - 1);
-      i--;
-      j--;
-    } else if (i > 0 && cost[(i - 1) * width + j] + 1 === here) {
+    const cell = (i - 1) * width + j - 1;
+    const step =
+      j === 0
+        ? DELETE
+        : i === 0
+          ? INSERT
+          : (steps[Math.floor(cell / 4)] >>> ((cell & 3) * 2)) & 3;
+    if (step === DELETE) {
       counts.deletions++;
       i--;
-    } else {
+    } else if (step === INSERT) {
       counts.insertions++;
       j--;
+    } else {
+      counts.substitutions += step === SUBSTITUTE ? 1 : 0;
+      i--;
+      j--;
+      onPair?.(i, j);
     }
   }
   return counts;
@@ -53,24 +62,36 @@ export function alignEdits(reference, hypothesis) {
 function measureEdits(reference, hypothesis, onPair) {
   const n = reference.length;
   const m = hypothesis.length;
-  const width = m + 1;
-  const cost = new Uint32Array((n + 1) * width);
+  // Hold only the current cost row and pack four traceback choices per byte.
+  const cost = new Uint32Array(m + 1);
+  const steps = new Uint8Array(Math.ceil((n * m) / 4));
   for (let j = 0; j <= m; j++) {
     cost[j] = j;
   }
+  let cell = 0;
   for (let i = 1; i <= n; i++) {
-    cost[i * width] = i;
+    let diagonal = cost[0];
+    cost[0] = i;
     for (let j = 1; j <= m; j++) {
-      const same = reference[i - 1] === hypothesis[j - 1] ? 0 : 1;
-      cost[i * width + j] = Math.min(
-        cost[(i - 1) * width + j - 1] + same,
-        cost[(i - 1) * width + j] + 1,
-        cost[i * width + j - 1] + 1
-      );
+      const above = cost[j];
+      const same = reference[i - 1] === hypothesis[j - 1];
+      let step = same ? MATCH : SUBSTITUTE;
+      let best = diagonal + (same ? 0 : 1);
+      if (above + 1 < best) {
+        step = DELETE;
+        best = above + 1;
+      }
+      if (cost[j - 1] + 1 < best) {
+        step = INSERT;
+        best = cost[j - 1] + 1;
+      }
+      cost[j] = best;
+      diagonal = above;
+      steps[Math.floor(cell / 4)] |= step << ((cell & 3) * 2);
+      cell++;
     }
   }
-  const counts = traceEdits(cost, width, reference, hypothesis, onPair);
-  return { distance: cost[n * width + m], ...counts };
+  return { distance: cost[m], ...traceEdits(steps, n, m, onPair) };
 }
 
 function cleanText(text) {

@@ -30,6 +30,7 @@ import {
 import { median } from '../src/analysis/voice-features.js';
 import { trimSilence } from '../src/metrics/compare.js';
 import { normalizeRms } from '../src/metrics/distortion.js';
+import { alignEdits } from '../src/metrics/text.js';
 
 function noise(seconds = 1, sampleRate = 16000) {
   const random = createRandom(1);
@@ -308,6 +309,41 @@ describe('metrics: transcripts', () => {
     expect(result.substitutions).toBe(2);
     expect(result.insertions).toBe(1);
     expect(result.deletions).toBe(0);
+  });
+
+  it('traces all edit directions and prefers substitutions when tied', () => {
+    expect(alignEdits('abxyc', 'abydc')).toEqual({
+      distance: 2,
+      substitutions: 2,
+      insertions: 0,
+      deletions: 0,
+      pairs: [
+        [0, 0],
+        [1, 1],
+        [2, 2],
+        [3, 3],
+        [4, 4],
+      ],
+    });
+    expect(alignEdits('abxyc', 'bxyz')).toEqual({
+      distance: 2,
+      substitutions: 1,
+      insertions: 0,
+      deletions: 1,
+      pairs: [
+        [1, 0],
+        [2, 1],
+        [3, 2],
+        [4, 3],
+      ],
+    });
+    expect(alignEdits('', 'a')).toEqual({
+      distance: 1,
+      substitutions: 0,
+      insertions: 1,
+      deletions: 0,
+      pairs: [],
+    });
   });
 
   it('word error rate', () => {
