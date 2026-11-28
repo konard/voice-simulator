@@ -6,6 +6,7 @@ export function scoreFrame(network, pass, frame) {
     active,
     state: { scores, histories, starts },
     peaks,
+    framePeak,
     entries: { index: entryIndex, columns: entry },
     emissions,
   } = pass;
@@ -79,34 +80,38 @@ export function scoreFrame(network, pass, frame) {
     best = Math.max(best, nodeBest);
     peaks[row] = nodeBest;
   }
-  pass.framePeak[0] = scoreNewNodes(network, pass, frame, best);
+  // Share the running maximum in its numeric column across both passes.
+  framePeak[0] = best;
+  scoreNewNodes(network, pass, frame);
 }
 
 /** New nodes need only one score, even when the next frontier is large. */
-function scoreNewNodes(network, pass, frame, best) {
-  const { work, active, length, entries, emissions, peaks } = pass;
-  const { index: entryIndex, columns: entry } = entries;
+function scoreNewNodes(network, pass, frame) {
+  const { work, active, length, entries, emissions, peaks, framePeak } = pass;
+  const {
+    index: entryIndex,
+    columns: { scores: entryScores },
+  } = entries;
   const { stamp, value } = emissions;
   const {
     nodes: { first },
     emit,
   } = network;
+  let best = framePeak[0];
   for (let row = active; row < length; row++) {
     const id = work[row];
+    const queued = entryScores[entryIndex[id] - 1];
+    if (!(queued > -Infinity)) {
+      peaks[row] = -Infinity;
+      continue;
+    }
     const mixture = emit[first[id]];
-    const queued = entry.scores[entryIndex[id] - 1];
-    let score = -Infinity;
-    if (queued > score) {
-      score = queued;
+    if (stamp[mixture] !== frame) {
+      emissions.evaluate(mixture, frame);
     }
-    if (score > -Infinity) {
-      if (stamp[mixture] !== frame) {
-        emissions.evaluate(mixture, frame);
-      }
-      score += value[mixture];
-    }
+    const score = queued + value[mixture];
     peaks[row] = score;
     best = Math.max(best, score);
   }
-  return best;
+  framePeak[0] = best;
 }
