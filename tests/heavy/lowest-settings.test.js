@@ -224,6 +224,13 @@ describe('lowest settings: 8 kHz and one core', () => {
         runs[row][engine] = measured;
         console.log(`lowest ${row} ${engine}`, JSON.stringify(measured));
         assert.ok(!measured.error, measured.error);
+        if (row === 'streaming' && measured.audioSeconds === 60) {
+          // The fixture contains speech through the end of the recording.
+          assert.ok(
+            measured.metrics.batchLastWord > 55,
+            `the last batch word ended at ${measured.metrics.batchLastWord} s`
+          );
+        }
       });
     }
   }

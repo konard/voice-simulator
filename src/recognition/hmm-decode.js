@@ -35,9 +35,9 @@ export const HMM_DECODE_DEFAULTS = Object.freeze({
 // The low search keeps fewer competing paths per language. It uses the same
 // pronunciation network, acoustic model and alignment as the wider search.
 export const HMM_LOW_SEARCH = Object.freeze({
-  beam: 60,
-  languageBeam: 150,
-  maxActive: 340,
+  beam: 65,
+  languageBeam: 170,
+  maxActive: 480,
 });
 
 /** ln p of a shipped bigram cost (the costs are 0.5 - 0.3 ln p). */
