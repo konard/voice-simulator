@@ -5,11 +5,12 @@ import { registeredLexicons } from '../g2p/lexicon.js';
 import { decoderWhisperSpans } from './decode-pipeline.js';
 import { audioToIpa, audioToIpaParallel } from './decode.js';
 import { hmmAudioToIpa } from './hmm-stage.js';
-import { analyzeFrames } from './frontend.js';
 import { createRecognitionEngine, getRecognitionEngine } from './engine.js';
 import { ipaToText } from './ipa-to-text.js';
+import { recognitionInput } from './input.js';
 import { identifyLanguage, languageShares } from './language-id.js';
 import { measure } from './profile.js';
+import { heardIpa, resultFromPath } from './result.js';
 import { recognizeModes } from './modes.js';
 import { markProsody, measureProsody } from './prosody.js';
 import {
@@ -23,7 +24,11 @@ import { createRecognitionPool } from './pool.js';
 import { aggregate, translated } from './recognizer-result.js';
 import { pauseCuts } from './recognizer-pauses.js';
 import { realiseChineseTones } from './zh-tones.js';
-import { resultFromPath } from './result.js';
+
+import {
+  createConfiguredRecognizer,
+  usesWordPhrases,
+} from './recognizer-stream.js';
 
 export { createRecognizer } from './recognizer-stream.js';
 
@@ -199,7 +204,7 @@ export function decodeRecognitionAudio(
   settings,
   level,
   start,
-  frontEnd
+  wordOptions
 ) {
   const { input, rate, options } = decodeInput(
     samples,
@@ -209,29 +214,24 @@ export function decodeRecognitionAudio(
     start
   );
   if (usesWordDecoder(settings)) {
-    const decoded = measure(settings.profile, 'Audio to IPA', () => {
-      const analysis =
-        frontEnd?.frames ??
-        analyzeFrames(input, rate, { hop: 0.01 }, settings.frameStorage);
-      const result = hmmAudioToIpa(input, rate, {
+    const decoded = measure(settings.profile, 'Audio to IPA', () =>
+      hmmAudioToIpa(input, rate, {
         languages: settings.languages,
         whisper: options.whisper,
         oov: settings.oov,
-        analysis,
-        framePitch: true,
-        includeWords: settings.liveWords || settings.hmmWordSpans === true,
-        includeSyllables: settings.liveWords === true,
         profile: settings.profile,
-        frontEnd,
-        kernels: frontEnd && settings.kernels,
+        kernels: settings.kernels,
         search: settings.search,
         maxWords: settings.maxWords,
-      });
-      if (settings.includeModeLabels) {
-        result.modeFrames = analysis;
-      }
-      return result;
-    });
+        includeWords: Boolean(
+          wordOptions?.useModelWords ||
+          wordOptions?.frontEnd ||
+          settings.hmmWordSpans
+        ),
+        includeSyllables: Boolean(wordOptions?.frontEnd),
+        ...wordOptions,
+      })
+    );
     return { decoded, input, rate };
   }
   const decoded = settings.stages.audioToIpa
@@ -302,16 +302,11 @@ function timedPhones(decoded) {
 
 function decodeText(input, settings, level, modelLanguage) {
   const { languages, stages, nbest } = settings;
-  const known = modelLanguage && !stages.identifyLanguage;
-  // A single language span and an explicit language give the native text
-  // decoder the same search. Injected stages still receive their spans.
-  const language =
-    languages.length === 1
-      ? languages[0]
-      : known && !stages.ipaToText
-        ? modelLanguage
-        : undefined;
-  const candidates = known ? [modelLanguage] : languages;
+  const language = languages.length === 1 ? languages[0] : undefined;
+  // A verified synthesis model provides its own language. Injected stages
+  // continue to receive the languages explicitly requested by the caller.
+  const candidates =
+    modelLanguage && !stages.identifyLanguage ? [modelLanguage] : languages;
   const identification = language
     ? null
     : measure(settings.profile, 'Language identification', () =>
@@ -336,6 +331,40 @@ function decodeText(input, settings, level, modelLanguage) {
       beam: RECOGNITION_LEVELS[level].beam,
     })
   );
+}
+
+/** The word HMM already scored spellings against its language model. */
+function modelText(sounds, modelWords) {
+  const groups = new Map();
+  for (const sound of sounds) {
+    if (sound.kind !== 'pause') {
+      const id = sound.modelWord;
+      if (!groups.has(id)) {
+        groups.set(id, []);
+      }
+      groups.get(id).push(sound);
+    }
+  }
+  const path = [];
+  const tokens = [];
+  for (const [id, group] of groups) {
+    const heard = recognitionInput(group, 'given').tokens;
+    if (!heard.length) {
+      continue;
+    }
+    const { text, language, unknown } = modelWords[id];
+    path.push({
+      from: tokens.length,
+      to: tokens.length + heard.length,
+      word: text,
+      ipa: heardIpa(heard),
+      language,
+      cost: 0,
+      unknown,
+    });
+    tokens.push(...heard);
+  }
+  return resultFromPath(path, tokens, modelWords[0]?.language);
 }
 
 function liveWordResult(decoded, sounds) {
@@ -370,15 +399,21 @@ function liveWordResult(decoded, sounds) {
 function recognizeProsody(decoded, samples, rate, settings, level) {
   const input = timedPhones(decoded);
   const pitch = decoded.tracks?.pitch;
+  const spell = (sounds) =>
+    decoded.useModelWords && settings.nbest === 1 && Array.isArray(sounds)
+      ? modelText(sounds, decoded.words)
+      : decodeText(sounds, settings, level, decoded.modelLanguage);
   if (!settings.modes || !pitch || !Array.isArray(input)) {
-    return decodeText(input, settings, level, decoded.modelLanguage);
+    return spell(input);
   }
   const options = {
     language:
       settings.languages.length === 1 ? settings.languages[0] : undefined,
     voice: settings.voice ?? decoded.voice,
     pitch,
-    frames: decoded.frames?.speech ? decoded.frames : undefined,
+    get frames() {
+      return decoded.frames?.speech ? decoded.frames : undefined;
+    },
     whisperSpans: settings.whisper === false ? [] : decoded.whisperSpans,
   };
   const measured = measure(settings.profile, 'Prosody', () =>
@@ -387,7 +422,7 @@ function recognizeProsody(decoded, samples, rate, settings, level) {
   // The live HMM has already searched the lexicon and aligned its words.
   const primary = settings.liveWords
     ? liveWordResult(decoded, measured.sounds)
-    : decodeText(measured.sounds, settings, level, decoded.modelLanguage);
+    : spell(measured.sounds);
   return markProsody(primary, measured, options);
 }
 
@@ -459,7 +494,6 @@ export function recognizeDecoded(
     });
   }
   const primary = recognizeProsody(decoded, samples, rate, settings, level);
-  const liveWithoutVoice = settings.liveWords && !settings.voice;
   const withModes =
     settings.includeModeLabels && typeof recognizeModes === 'function'
       ? measure(settings.profile, 'Modes', () =>
@@ -468,7 +502,8 @@ export function recognizeDecoded(
             rate,
             {
               ...primary,
-              ...(liveWithoutVoice && { phones: decoded.segments }),
+              ...(settings.liveWords &&
+                !settings.voice && { phones: decoded.segments }),
               whisperSpans:
                 settings.whisper === false ? [] : decoded.whisperSpans,
             },
@@ -481,16 +516,10 @@ export function recognizeDecoded(
               frames: decoded.frames?.speech ? decoded.frames : undefined,
               wordFrames: decoded.modeFrames,
               pitch: settings.liveWords ? decoded.tracks.pitch : undefined,
-              skipFormants: liveWithoutVoice,
-              sourceStep: liveWithoutVoice ? 0.02 : undefined,
+              sourceStep:
+                settings.liveWords && !settings.voice ? 0.02 : undefined,
               reuseFormantCandidates:
-                final === false &&
-                !settings.liveWords &&
-                !settings.stages.audioToIpa
-                  ? 'growing'
-                  : settings.liveWords ||
-                    final === 'batch' ||
-                    final === 'parallel',
+                settings.liveWords || final === 'batch' || final === 'parallel',
             }
           )
         )
@@ -559,7 +588,17 @@ function checkNoise(decoded, duration) {
   }
 }
 
-function completeSerial(samples, sampleRate, settings, level) {
+function serial(samples, sampleRate, settings, level, unsplit) {
+  if (!unsplit && usesWordPhrases(sampleRate, settings)) {
+    const stream = createConfiguredRecognizer(sampleRate, settings, true);
+    stream.on('error', (error) => {
+      throw error;
+    });
+    stream.push(
+      samples instanceof Float32Array ? samples : Float32Array.from(samples)
+    );
+    return stream.flush();
+  }
   const { decoded, input, rate } = decodeRecognitionAudio(
     samples,
     sampleRate,
@@ -571,44 +610,6 @@ function completeSerial(samples, sampleRate, settings, level) {
     return emptyRecognition(settings.nbest, settings.segments);
   }
   return recognizeDecoded(decoded, input, rate, settings, level, 'batch');
-}
-
-function frameStorage() {
-  const slots = new Map();
-  return (key, length, Type) => {
-    let slot = slots.get(key);
-    if (!slot || slot.length < length) {
-      slot = new Type(Math.max(length, (slot?.length ?? 0) * 2));
-      slots.set(key, slot);
-    }
-    return slot.subarray(0, length);
-  };
-}
-
-let availableFrames = frameStorage();
-
-function serial(samples, sampleRate, settings, level) {
-  // This scratch stays within the synchronous word-decoding call. Keep at
-  // most one short-recording workspace. Profile callbacks can reenter.
-  if (
-    !availableFrames ||
-    samples.length / sampleRate > 30 ||
-    !usesWordDecoder(settings)
-  ) {
-    return completeSerial(samples, sampleRate, settings, level);
-  }
-  const storage = availableFrames;
-  availableFrames = null;
-  try {
-    return completeSerial(
-      samples,
-      sampleRate,
-      { ...settings, frameStorage: storage },
-      level
-    );
-  } finally {
-    availableFrames = storage;
-  }
 }
 
 function pieces(samples, sampleRate, options, settings) {
@@ -676,7 +677,7 @@ export function recognize(samples, sampleRate, options = {}) {
         jobs,
         settings
       )
-    : serial(samples, sampleRate, settings, level);
+    : serial(samples, sampleRate, settings, level, options.unsplit);
 }
 
 async function parallelDecode(samples, sampleRate, settings, level, pool) {
@@ -733,7 +734,7 @@ export async function recognizeAsync(samples, sampleRate, options = {}) {
       settings.profile ||
       usesWordDecoder(settings)
     ) {
-      return serial(samples, sampleRate, settings, level);
+      return serial(samples, sampleRate, settings, level, options.unsplit);
     }
     return await parallelDecode(samples, sampleRate, settings, level, pool);
   } finally {

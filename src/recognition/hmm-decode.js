@@ -34,6 +34,13 @@ export const HMM_DECODE_DEFAULTS = Object.freeze({
   minCount: 3,
 });
 
+// Keep fewer competing paths per language on the low phrase search.
+export const HMM_LOW_SEARCH = Object.freeze({
+  beam: 65,
+  languageBeam: 170,
+  maxActive: 256,
+});
+
 /** ln p of a shipped bigram cost (the costs are 0.5 - 0.3 ln p). */
 const lnProbability = (cost) => -(cost - 0.5) / 0.3;
 

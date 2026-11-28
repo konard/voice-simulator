@@ -119,16 +119,7 @@ function analyzeWordSignal(samples, sampleRate, head, analyzed, options) {
           options.reuseFormantCandidates
         )
       );
-  const source = measure(profile, 'Inverse filter', () =>
-    inverseModeMeasures(frames, {
-      pitch,
-      minF0: 35,
-      maxF0: 800,
-      kernels,
-      ...(options.sourceStep !== undefined && { step: options.sourceStep }),
-    })
-  );
-  return { frames, pitch, formants, source };
+  return { frames, pitch, formants };
 }
 
 function pulseTrains(samples, sampleRate) {
@@ -206,6 +197,25 @@ function wordVoicing(word, frames, pitch) {
   return count ? voiced / count : 0;
 }
 
+function vowelFrames(vowels, { hop, count }, seen, uniqueRows) {
+  return vowels.map(({ start, end }) => {
+    const margin = (end - start) * 0.25;
+    const rows = [];
+    for (
+      let t = Math.max(0, Math.ceil((start + margin) / hop));
+      t < count && t * hop <= end - margin;
+      t++
+    ) {
+      rows.push(t);
+      if (!seen[t]) {
+        seen[t] = 1;
+        uniqueRows.push(t);
+      }
+    }
+    return rows;
+  });
+}
+
 /** Analyze the recording in one pass; retain scalar word features only. */
 export function measureWords(
   samples,
@@ -215,32 +225,47 @@ export function measureWords(
   analyzed,
   options = {}
 ) {
-  const { frames, pitch, formants, source } = analyzeWordSignal(
+  const { frames, pitch, formants } = analyzeWordSignal(
     samples,
     sampleRate,
     head,
     analyzed,
     options
   );
-  const pulses = pulseTrains(samples, sampleRate);
+  const pulses = measure(options.profile, 'Glottal periods', () =>
+    pulseTrains(samples, sampleRate)
+  );
   const phones = result.phonemes ?? result.phones;
   const planners = new Map();
+  const seen = new Uint8Array(frames.count);
+  const uniqueRows = [];
+  const wordVowels = result.words.map((word) => {
+    const vowels = nuclei(word, phones, head, planners);
+    return { vowels, rows: vowelFrames(vowels, frames, seen, uniqueRows) };
+  });
+  const source = measure(options.profile, 'Inverse filter', () =>
+    inverseModeMeasures(
+      frames,
+      {
+        pitch,
+        minF0: 35,
+        maxF0: 800,
+        kernels: options.kernels,
+        ...(options.sourceStep !== undefined && { step: options.sourceStep }),
+      },
+      uniqueRows
+    )
+  );
   const spectrum = createAverageSpectrumWorkspace(sampleRate);
   let vowelBuffer = new Float32Array(0);
   const peakLevel = quantile(frames.energy.subarray(0, frames.count), 0.9);
-  const measured = result.words.map((word) => {
-    const vowels = nuclei(word, phones, head, planners);
+  const measured = result.words.map((word, index) => {
+    const { vowels, rows: byVowel } = wordVowels[index];
     const rows = [];
     const f1Vowels = [];
-    for (const vowel of vowels) {
-      const from = vowel.start + (vowel.end - vowel.start) * 0.25;
-      const to = vowel.end - (vowel.end - vowel.start) * 0.25;
+    for (const [i, vowel] of vowels.entries()) {
       const frequencies = [];
-      for (
-        let t = Math.max(0, Math.ceil(from / frames.hop));
-        t < frames.count && t * frames.hop <= to;
-        t++
-      ) {
+      for (const t of byVowel[i]) {
         rows.push(t);
         if (formants?.valid[t]) {
           frequencies.push(formants.frequency[t]);

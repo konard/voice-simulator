@@ -43,7 +43,9 @@ function melBank(low, high) {
         w[k] = (c - f) / (c - b);
       }
     }
-    return w;
+    const start = w.findIndex((value) => value > 0);
+    const end = w.findLastIndex((value) => value > 0) + 1;
+    return { start, weights: w.subarray(start, end) };
   });
 }
 
@@ -84,11 +86,10 @@ function logMel(x, t, re, im, logs) {
   fft(re, im);
   for (let m = 0; m < FILTERS; m++) {
     let e = 0;
-    const w = bank[m];
-    for (let k = 0; k < w.length; k++) {
-      if (w[k]) {
-        e += w[k] * (re[k] * re[k] + im[k] * im[k]);
-      }
+    const { start, weights } = bank[m];
+    for (let i = 0; i < weights.length; i++) {
+      const k = start + i;
+      e += weights[i] * (re[k] * re[k] + im[k] * im[k]);
     }
     logs[m] = Math.log(e + 1e-10);
   }

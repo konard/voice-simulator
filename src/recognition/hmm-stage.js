@@ -162,6 +162,7 @@ export function hmmAudioToIpa(samples, sampleRate, options = {}) {
         ? []
         : syllablesWithWhisper(segments, language, whisperSpans, analysis),
     nbest: [{ ipa, segments, cost: 0, confidence: 1 }],
+    useModelWords: options.useModelWords,
     words:
       options.includeWords === false ? [] : timedWords(decoded.words, aligned),
     tracks: { pitch },
@@ -170,6 +171,7 @@ export function hmmAudioToIpa(samples, sampleRate, options = {}) {
     frames: options.frontEnd
       ? analysis
       : { energy: analysis.energy, count: analysis.count },
+    modeFrames: options.useModelWords ? analysis : undefined,
     whisperSpans,
     modes,
     language,

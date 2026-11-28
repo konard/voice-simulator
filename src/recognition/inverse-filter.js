@@ -466,8 +466,8 @@ export function inverseFilter(frames, options = {}) {
   );
 }
 
-/** The three source columns used by voice-mode classification. */
-export function inverseModeMeasures(frames, options) {
+/** The three source columns used by voice-mode classification at vowel rows. */
+export function inverseModeMeasures(frames, options, rows) {
   const o = settings(frames, options);
   if (options.kernels?.module) {
     return inverseFilterRust(
@@ -481,29 +481,32 @@ export function inverseModeMeasures(frames, options) {
   return inverseFilterJs(
     { ...frames, samples: frames.samples.subarray(0, frames.sampleCount) },
     o,
-    true
+    true,
+    rows
   );
 }
 
-function inverseFilterJs(frames, o, modesOnly = false) {
+function inverseFilterJs(frames, o, modesOnly = false, rows) {
   const { rate, hop, count, startTime } = frames;
   const f0 = localPitch(frames, o);
+  const hasLowBand = lowBand(frames, f0);
+  const recoverSource = !modesOnly || hasLowBand;
   const result = {
     hop,
     startTime,
     count,
     rate,
-    ...recover(frames, f0, o, modesOnly),
+    ...(recoverSource && recover(frames, f0, o, modesOnly)),
     f0,
     reliable: new Uint8Array(count),
-    lowBand: lowBand(frames, f0),
+    lowBand: hasLowBand,
     summary: {},
   };
   const names = modesOnly ? MODE_MEASURES : MEASURES.slice(1);
   for (const name of names) {
     result[name] = new Float32Array(count).fill(NaN);
   }
-  const { flow, flowDerivative: d } = result;
+  const { flowDerivative: d } = result;
   if (!modesOnly) {
     result.gci = closures(frames, f0, d);
   }
@@ -512,47 +515,37 @@ function inverseFilterJs(frames, o, modesOnly = false) {
   // A supplied pitch can be as low as 20 Hz.
   const scratch = new Float64Array(Math.ceil((6 * rate) / 20));
   const sources = new Float64Array(Math.ceil((2 * rate) / 20));
-  for (let t = 0; t < count; t++) {
+  const spectralPlan = {
+    scratch,
+    sources,
+    windows,
+    frames,
+    modesOnly,
+    maxF0: o.maxF0,
+  };
+  const rowsCount = rows?.length ?? count;
+  for (let i = 0; i < rowsCount; i++) {
+    const t = rows ? rows[i] : i;
     if (!f0[t]) {
       continue;
     }
     const centre = Math.round(t * hop * rate);
     const period = rate / f0[t];
-    const length = Math.round(2 * period);
-    const buffer = scratch.subarray(0, length);
-    const source = block(d, centre, length, sources.subarray(0, length));
-    const window = windowAt(windows, length);
-    const h = harmonics(
-      source,
-      rate,
-      f0[t],
-      Math.min(modesOnly ? 2 : 10, Math.floor((0.45 * rate) / f0[t])),
-      window
-    );
-    result.h1h2Source[t] = h[0] - h[1];
-    if (!modesOnly) {
-      const speech = harmonics(
-        block(frames.samples, centre, length, buffer),
-        rate,
-        f0[t],
-        2,
-        window
-      );
-      const g = block(flow, centre, length, buffer);
-      addPulseFit(result, t, o.maxF0, h);
-      result.h1h2[t] = speech[0] - speech[1];
-      result.naq[t] = normalizedAmplitude(g, source, period);
+    if (d) {
+      measureSourceFrame(result, t, centre, period, spectralPlan);
     }
     result.hnr[t] = hnr(frames.samples, centre, period, scratch);
     result.cpp[t] = cpp(frames.samples, centre);
   }
   if (modesOnly) {
-    if (!result.lowBand) {
-      result.h1h2Source.fill(NaN);
-    }
     const { h1h2Source, hnr, cpp } = result;
     return { h1h2Source, hnr, cpp };
   }
+  completeInverseFilter(result, o.trace);
+  return result;
+}
+
+function completeInverseFilter(result, trace) {
   if (!result.lowBand) {
     for (const name of SOURCE_MEASURES) {
       result[name].fill(NaN);
@@ -561,14 +554,54 @@ function inverseFilterJs(frames, o, modesOnly = false) {
   for (const name of MEASURES) {
     result.summary[name] = summarize(result[name], result.reliable);
   }
-  o.trace?.({
+  trace?.({
     stage: 'complete',
-    voiced: f0.filter((v) => v > 0).length,
+    voiced: result.f0.filter((v) => v > 0).length,
     closures: result.gci.length,
     lowBand: result.lowBand,
     summary: result.summary,
   });
-  return result;
+}
+
+function measureSourceFrame(
+  result,
+  t,
+  centre,
+  period,
+  { scratch, sources, windows, frames, modesOnly, maxF0 }
+) {
+  const { flow, flowDerivative, f0 } = result;
+  const { rate, samples } = frames;
+  const length = Math.round(2 * period);
+  const source = block(
+    flowDerivative,
+    centre,
+    length,
+    sources.subarray(0, length)
+  );
+  const window = windowAt(windows, length);
+  const h = harmonics(
+    source,
+    rate,
+    f0[t],
+    Math.min(modesOnly ? 2 : 10, Math.floor((0.45 * rate) / f0[t])),
+    window
+  );
+  result.h1h2Source[t] = h[0] - h[1];
+  if (!modesOnly) {
+    const buffer = scratch.subarray(0, length);
+    const speech = harmonics(
+      block(samples, centre, length, buffer),
+      rate,
+      f0[t],
+      2,
+      window
+    );
+    const g = block(flow, centre, length, buffer);
+    addPulseFit(result, t, maxF0, h);
+    result.h1h2[t] = speech[0] - speech[1];
+    result.naq[t] = normalizedAmplitude(g, source, period);
+  }
 }
 
 function addPulseFit(result, t, maxF0, h) {

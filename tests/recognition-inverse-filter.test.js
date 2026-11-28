@@ -58,6 +58,14 @@ describe('batch glottal inverse filter', () => {
         hnr: result.hnr,
         cpp: result.cpp,
       });
+      const rows = [4, 20, frames.count - 1];
+      const selected = inverseModeMeasures(frames, { pitch }, rows);
+      for (const key of ['h1h2Source', 'hnr', 'cpp']) {
+        expect(rows.map((row) => selected[key][row])).toEqual(
+          rows.map((row) => result[key][row])
+        );
+        expect(Number.isNaN(selected[key][0])).toBe(true);
+      }
     }
   });
 
