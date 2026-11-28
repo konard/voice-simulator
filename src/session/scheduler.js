@@ -74,6 +74,10 @@ export function createSessionScheduler({ realtime, schedule }, done) {
   }
 
   function slice() {
+    // A preceding slice or a synchronous drain may finish queued work.
+    if (!running) {
+      return;
+    }
     const start = now();
     prune(start);
     const remaining = budget(start);
