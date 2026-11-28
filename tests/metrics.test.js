@@ -28,6 +28,8 @@ import {
   tokenize,
 } from '../src/index.js';
 import { median } from '../src/analysis/voice-features.js';
+import { trimSilence } from '../src/metrics/compare.js';
+import { normalizeRms } from '../src/metrics/distortion.js';
 
 function noise(seconds = 1, sampleRate = 16000) {
   const random = createRandom(1);
@@ -198,6 +200,19 @@ describe('metrics: dtw', () => {
     ]);
   });
 
+  it('traces both stretch directions across packed row boundaries', () => {
+    const a = [0, 0, 1, 2, 3];
+    const b = [0, 1, 1, 2, 3];
+    expect(dtw(a, b).path).toEqual([
+      [0, 0],
+      [1, 0],
+      [2, 1],
+      [2, 2],
+      [3, 3],
+      [4, 4],
+    ]);
+  });
+
   it('dtw follows the signals with the symmetric weight', () => {
     // b is a delayed by one frame: with weight 1 a diagonal step costs one
     // local distance for two frames and the path stays on the diagonal;
@@ -345,5 +360,27 @@ describe('metrics: compareRecordings', () => {
     expect(result.f0.rmseCents > 300).toBe(true);
     expect(Number.isFinite(result.lsd)).toBe(true);
     expect(Number.isFinite(result.timing.rmsSeconds)).toBe(true);
+  });
+
+  it('scores the same power frames and cepstra along the alignment', () => {
+    const sampleRate = 8000;
+    const a = new Float32Array(2400);
+    const b = new Float32Array(2100);
+    a.set(noise(0.18, sampleRate), 320);
+    b.set(noise(0.16, sampleRate), 160);
+    const settings = { window: 0.02, hop: 0.008, range: 32, band: 0.5 };
+    const r = normalizeRms(trimSilence(a, sampleRate, settings));
+    const t = normalizeRms(trimSilence(b, sampleRate, settings));
+    const shortCepstra = (samples) =>
+      mfcc(samples, sampleRate, settings).map((c) => c.subarray(1));
+    const { path } = dtw(shortCepstra(r), shortCepstra(t), settings);
+    const along = { ...settings, path, normalize: false };
+    const result = compareRecordings(
+      { samples: a, sampleRate },
+      { samples: b, sampleRate },
+      { ...settings, formants: false }
+    );
+    expect(result.lsd).toBe(logSpectralDistance(r, t, sampleRate, along));
+    expect(result.mcd).toBe(melCepstralDistortion(r, t, sampleRate, along));
   });
 });

@@ -7,14 +7,20 @@ import { resample } from '../audio/resample.js';
 import {
   NORMALIZED_RMS,
   SILENCE_DB,
-  logSpectralDistance,
-  melCepstralDistortion,
+  logSpectralDistanceOfFrames,
+  melCepstralDistance,
   normalizeRms,
+  silentFrames,
 } from './distortion.js';
 import { dtw } from './dtw.js';
 import { formantErrors, formantTrack } from './formants.js';
 import { f0Errors, pitchTrack } from './pitch.js';
-import { METRIC_DEFAULTS, frameSettings, mfcc } from './spectrum.js';
+import {
+  METRIC_DEFAULTS,
+  cepstra,
+  frameSettings,
+  powerFrames,
+} from './spectrum.js';
 
 /**
  * Cut the frames at both ends whose energy is more than SILENCE_DB below
@@ -45,13 +51,13 @@ export function trimSilence(samples, sampleRate, options = {}) {
   const threshold = loudest * 10 ** (-SILENCE_DB / 10);
   const first = energies.findIndex((energy) => energy >= threshold);
   const last = energies.findLastIndex((energy) => energy >= threshold);
-  return Float64Array.from(
-    Array.prototype.slice.call(
-      samples,
-      first * hop,
-      Math.min(samples.length, last * hop + length)
-    )
-  );
+  const from = first * hop;
+  const to = Math.min(samples.length, last * hop + length);
+  const trimmed = new Float64Array(to - from);
+  for (let i = from; i < to; i++) {
+    trimmed[i - from] = samples[i];
+  }
+  return trimmed;
 }
 
 function prepare(recording, rate, options) {
@@ -87,6 +93,32 @@ function timingErrors(path, hop, ratio) {
   return { rmsSeconds: Math.sqrt(sum / path.length), maxSeconds: max };
 }
 
+function alignSpectra(reference, test, rate, settings, band) {
+  const powerR = powerFrames(reference, rate, settings);
+  const powerT = powerFrames(test, rate, settings);
+  const cepstraR = cepstra(powerR, rate, settings);
+  const cepstraT = cepstra(powerT, rate, settings);
+  const aligned = dtw(
+    cepstraR.map((frame) => frame.subarray(1)),
+    cepstraT.map((frame) => frame.subarray(1)),
+    { band }
+  );
+  const silent = silentFrames(powerR);
+  return {
+    ...aligned,
+    referenceFrames: cepstraR.length,
+    testFrames: cepstraT.length,
+    lsd: logSpectralDistanceOfFrames(
+      powerR,
+      powerT,
+      aligned.path,
+      silent,
+      settings.range
+    ),
+    mcd: melCepstralDistance(cepstraR, cepstraT, aligned.path, silent),
+  };
+}
+
 /**
  * Compare a test recording with a reference recording.
  *
@@ -119,12 +151,8 @@ export function compareRecordings(reference, test, options = {}) {
     throw new RangeError('compareRecordings: a recording has no samples');
   }
   const hop = frameSettings(rate, settings).hop / rate;
-  const cepstraR = mfcc(ref, rate, settings).map((c) => c.subarray(1));
-  const cepstraT = mfcc(tst, rate, settings).map((c) => c.subarray(1));
-  const aligned = dtw(cepstraR, cepstraT, { band: options.band });
-  const { path } = aligned;
-  const along = { ...settings, path, normalize: false };
-  const n = cepstraR.length;
+  const aligned = alignSpectra(ref, tst, rate, settings, options.band);
+  const { path, referenceFrames: n } = aligned;
 
   const pitchR = pitchTrack(ref, rate, { hop });
   const pitchT = pitchTrack(tst, rate, { hop });
@@ -149,12 +177,12 @@ export function compareRecordings(reference, test, options = {}) {
       test: durationT,
       ratio: durationT / durationR,
     },
-    lsd: logSpectralDistance(ref, tst, rate, along),
-    mcd: melCepstralDistortion(ref, tst, rate, along),
+    lsd: aligned.lsd,
+    mcd: aligned.mcd,
     f0,
     formants,
     timing: timingErrors(path, hop, durationT / durationR),
     dtw: { normalizedCost: aligned.normalizedCost },
-    frames: { reference: n, test: cepstraT.length, path: path.length },
+    frames: { reference: n, test: aligned.testFrames, path: path.length },
   };
 }

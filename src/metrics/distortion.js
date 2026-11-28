@@ -110,17 +110,37 @@ export function logSpectralDistance(reference, test, sampleRate, options = {}) {
     sampleRate,
     options
   );
-  const range = options.range ?? DYNAMIC_RANGE_DB;
-  const toDb = (frames) => {
-    const floor = powerFloor(frames, range);
-    return frames.map((power) =>
-      power.map((p) => 10 * Math.log10(Math.max(p, floor)))
-    );
-  };
-  const [dbR, dbT] = [toDb(framesR), toDb(framesT)];
-  return meanOverPairs(path, silentFrames(framesR), (i, j) => {
-    const r = dbR[i];
-    const t = dbT[j];
+  return logSpectralDistanceOfFrames(
+    framesR,
+    framesT,
+    path,
+    silentFrames(framesR),
+    options.range
+  );
+}
+
+function convertToDb(frames, range) {
+  const floor = powerFloor(frames, range);
+  for (const power of frames) {
+    for (let k = 1; k < power.length; k++) {
+      power[k] = 10 * Math.log10(Math.max(power[k], floor));
+    }
+  }
+}
+
+/** Consumes the two private power matrices, converting their bins to dB. */
+export function logSpectralDistanceOfFrames(
+  reference,
+  test,
+  path,
+  silent,
+  range
+) {
+  convertToDb(reference, range ?? DYNAMIC_RANGE_DB);
+  convertToDb(test, range ?? DYNAMIC_RANGE_DB);
+  return meanOverPairs(path, silent, (i, j) => {
+    const r = reference[i];
+    const t = test[j];
     let sum = 0;
     for (let k = 1; k < r.length; k++) {
       sum += (r[k] - t[k]) ** 2;
@@ -154,8 +174,13 @@ export function melCepstralDistortion(
   );
   const cr = cepstra(framesR, sampleRate, options);
   const ct = cepstra(framesT, sampleRate, options);
+  return melCepstralDistance(cr, ct, path, silentFrames(framesR));
+}
+
+/** Score precomputed cepstra along the alignment. */
+export function melCepstralDistance(cr, ct, path, silent) {
   const scale = 10 / Math.LN10;
-  return meanOverPairs(path, silentFrames(framesR), (i, j) => {
+  return meanOverPairs(path, silent, (i, j) => {
     let sum = 0;
     for (let n = 1; n < cr[i].length; n++) {
       sum += (cr[i][n] - ct[j][n]) ** 2;
