@@ -6,6 +6,7 @@ import {
   synthesize,
 } from '../src/index.js';
 import { createEngine } from '../src/engine/index.js';
+import { tensionForPitch } from '../src/acoustics/folds.js';
 import { hmmFeatures } from '../src/recognition/hmm-features.js';
 import { getHmmModel } from '../src/recognition/hmm-model.js';
 import { getNetwork } from '../src/recognition/hmm-network.js';
@@ -111,6 +112,24 @@ if (
     hash.update(
       new Uint8Array(column.buffer, column.byteOffset, column.byteLength)
     );
+  }
+  console.log('SHA-256', hash.digest('hex'));
+  console.log('CPU seconds', process.cpuUsage().user / 1e6);
+} else if (mode === 'folds') {
+  const { createHash } = await import('node:crypto');
+  const count = Number(limit ?? 12);
+  if (!Number.isInteger(count) || count < 1 || count > 64) {
+    throw new RangeError('Expected 1 to 64 fold configurations');
+  }
+  const hash = createHash('sha256');
+  const tension = new Float64Array(1);
+  const bytes = new Uint8Array(tension.buffer);
+  for (let i = 0; i < count; i++) {
+    const head = { foldLength: 1.05 + 0.01 * i, foldMass: 0.8 + 0.02 * i };
+    for (const frequency of [95, 130, 205, 280]) {
+      tension[0] = tensionForPitch(frequency, 600 + 20 * i, head);
+      hash.update(bytes);
+    }
   }
   console.log('SHA-256', hash.digest('hex'));
   console.log('CPU seconds', process.cpuUsage().user / 1e6);

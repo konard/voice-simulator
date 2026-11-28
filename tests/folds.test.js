@@ -26,7 +26,7 @@ const RATE = FOLD_RATE;
  */
 function simulate(options = {}) {
   const rate = options.rate ?? RATE;
-  const folds = new VocalFolds({ rate });
+  const folds = new VocalFolds({ ...options.head, rate });
   const control = {
     voicing: 1,
     aspiration: 0,
@@ -125,6 +125,38 @@ function runningPeakToPeak(flow, size) {
     peakToPeak(flow.subarray(Math.max(0, index - width + 1), index + 1))
   );
 }
+
+it('calibrates pitch from the same flow as the source stepping sample by sample', () => {
+  const head = { foldLength: 1.18, foldMass: 0.9, foldDamping: 0.85 };
+  const cases = [
+    { pressure: 400, tension: 0.8, duration: 0.15, window: 0.1 },
+    { pressure: 800, tension: 1.6, duration: 0.15, window: 0.1, head },
+    {
+      pressure: 1600,
+      tension: 2.4,
+      adduction: 0.65,
+      rate: 48000,
+      duration: 0.18,
+      window: 0.09,
+      head,
+    },
+    { pressure: 800, tension: 1.2, duration: 0.08, window: 0.1 },
+  ];
+  for (const options of cases) {
+    const { flow, rate } = simulate(options);
+    const window = new Float64Array(Math.round(options.window * rate));
+    const retained = Math.min(flow.length, window.length);
+    window.set(flow.subarray(flow.length - retained), window.length - retained);
+    const pitch = foldPitch(
+      options.pressure,
+      options.tension,
+      options.head,
+      options
+    );
+    expect(pitch).toBeGreaterThan(0);
+    expect(pitch).toBe(flowPitch(window, rate));
+  }
+});
 
 describe('vocal folds', () => {
   it('oscillates at conversational lung pressure and not far below it', () => {
