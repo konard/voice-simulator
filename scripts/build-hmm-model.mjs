@@ -119,7 +119,7 @@ export function hmmModelSources(packed, name = 'hmm-model') {
   const joined = parts.map((_, i) => `part${i}`).join(' + ');
   files.push([
     `${name}.js`,
-    `${HEADER}${imports}\nexport const HMM_MODEL = JSON.parse(${joined});\n`,
+    `${HEADER}${imports}\nexport function readHmmModel() {\n  return JSON.parse(${joined});\n}\n`,
   ]);
   return files;
 }

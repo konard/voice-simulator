@@ -8,6 +8,6 @@ import part3 from './hmm-model-3.js';
 import part4 from './hmm-model-4.js';
 import part5 from './hmm-model-5.js';
 
-export const HMM_MODEL = JSON.parse(
-  part0 + part1 + part2 + part3 + part4 + part5
-);
+export function readHmmModel() {
+  return JSON.parse(part0 + part1 + part2 + part3 + part4 + part5);
+}

@@ -7,7 +7,7 @@
  * Unlicense.
  */
 import { CONSONANTS, VOWELS } from '../ipa/inventory.js';
-import { HMM_MODEL } from './data/hmm-model.js';
+import { readHmmModel } from './data/hmm-model.js';
 import { HMM_TONE } from './data/hmm-tone.js';
 import { unpackHmmTone } from './hmm-tone.js';
 
@@ -126,7 +126,7 @@ let model;
 /** The shipped model, unpacked on first use. */
 export function getHmmModel() {
   if (!model) {
-    model = unpackHmmModel(HMM_MODEL);
+    model = unpackHmmModel(readHmmModel());
     model.tone = unpackHmmTone(HMM_TONE, model.units, model.contextIndex);
   }
   return model;
