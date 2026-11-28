@@ -937,46 +937,74 @@ function createViterbi(store, settings, back) {
   let current = new Float64Array(states);
   let newest = -1;
 
+  function firstFrame(count) {
+    let top = -Infinity;
+    for (let s = 0; s < count; s++) {
+      const score = 0 + strength[s];
+      current[s] = score;
+      top = Math.max(top, score);
+    }
+    const score = 0 + unvoiced[0];
+    current[capacity] = score;
+    return Math.max(top, score);
+  }
+
+  function followingFrame(t, count) {
+    const row = t * capacity;
+    const previousRow = row - capacity;
+    const previousCount = counts[t - 1];
+    const backRow = t * states;
+    const fromUnvoiced = previous[capacity] - voicedUnvoicedCost;
+    let top = -Infinity;
+    for (let s = 0; s < count; s++) {
+      const hz = frequency[row + s];
+      let score = -Infinity;
+      let from = capacity;
+      for (let p = 0; p < previousCount; p++) {
+        const cost =
+          octaveJumpCost * Math.abs(Math.log2(hz / frequency[previousRow + p]));
+        const value = previous[p] - cost;
+        if (value > score) {
+          score = value;
+          from = p;
+        }
+      }
+      // The unvoiced state follows the voiced states, including on ties.
+      if (fromUnvoiced > score) {
+        score = fromUnvoiced;
+        from = capacity;
+      }
+      back[backRow + s] = from;
+      const emitted = score + strength[row + s];
+      current[s] = emitted;
+      top = Math.max(top, emitted);
+    }
+    let score = -Infinity;
+    let from = capacity;
+    for (let p = 0; p < previousCount; p++) {
+      const value = previous[p] - voicedUnvoicedCost;
+      if (value > score) {
+        score = value;
+        from = p;
+      }
+    }
+    if (previous[capacity] > score) {
+      score = previous[capacity];
+      from = capacity;
+    }
+    back[backRow + capacity] = from;
+    const emitted = score + unvoiced[t];
+    current[capacity] = emitted;
+    return Math.max(top, emitted);
+  }
+
   return {
     /** Add frame t (frames in order from 0). */
     step(t) {
       const count = counts[t];
-      const previousCount = t ? counts[t - 1] : 0;
-      const row = t * capacity;
-      let top = -Infinity;
-      for (let s = 0; s < states; s++) {
-        const voiced = s < capacity;
+      const top = t === 0 ? firstFrame(count) : followingFrame(t, count);
+      for (let s = count; s < capacity; s++) {
         current[s] = -Infinity;
-        if (voiced && s >= count) {
-          continue;
-        }
-        let score = 0;
-        if (t) {
-          score = -Infinity;
-          let from = capacity;
-          for (let p = 0; p < previousCount; p++) {
-            const cost = voiced
-              ? octaveJumpCost *
-                Math.abs(
-                  Math.log2(frequency[row + s] / frequency[row - capacity + p])
-                )
-              : voicedUnvoicedCost;
-            const value = previous[p] - cost;
-            if (value > score) {
-              score = value;
-              from = p;
-            }
-          }
-          // The unvoiced state follows the voiced states, including on ties.
-          const value = previous[capacity] - (voiced ? voicedUnvoicedCost : 0);
-          if (value > score) {
-            score = value;
-            from = capacity;
-          }
-          back[t * states + s] = from;
-        }
-        current[s] = score + (voiced ? strength[row + s] : unvoiced[t]);
-        top = Math.max(top, current[s]);
       }
       // Keep the numbers small: the best path scores 0.
       for (let s = 0; s < states; s++) {
