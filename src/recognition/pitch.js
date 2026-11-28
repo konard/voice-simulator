@@ -356,15 +356,13 @@ function autocorrelate(fft, re, im, correlation, q, { lagMin, lagMax }) {
  * samples arrive) and the normalised autocorrelation of its Hann-windowed
  * frames by the transform.
  */
-function createCoarseCorrelator(frames, settings) {
+function createCoarseCorrelator(frames, settings, buffers) {
   const { factor, coarseLength, size, lagMax } = settings;
   const { kernel, half } = coarseKernel(factor);
   const { window, correlation } = pitchWindow(coarseLength, lagMax + 1);
   const fft = createFft(size);
-  const re = new Float64Array(size);
-  const im = new Float64Array(size);
+  const { re, im, coarse } = buffers;
   const frameHalf = Math.floor(coarseLength / 2);
-  const coarse = new Float64Array(coarseLength);
   let previous = -Infinity;
 
   /** Keep the overlap with the previous window and fill its new tail. */
@@ -456,14 +454,13 @@ function lagPower(full, lag) {
  * The Hann-windowed full-rate frame without its mean, and the refinement
  * of a coarse lag on it.
  */
-function createFullFrame(frames, settings) {
+function createFullFrame(frames, settings, full) {
   const { factor, fullLength, lagMax } = settings;
   const maxLag = factor * (lagMax + 1) + factor + 1;
   const { window, correlation } = pitchWindow(
     fullLength,
     Math.min(fullLength - 1, maxLag)
   );
-  const full = new Float64Array(fullLength);
   const half = Math.floor(fullLength / 2);
   const frame = { energy: 0, largest: 0 };
 
@@ -545,11 +542,32 @@ function insertCandidate(store, row, kept, capacity, candidate) {
  * t (frequency, height, strength), their number and the strength of the
  * unvoiced candidate.
  */
-function createCandidateFinder(frames, settings, store, shared) {
+const MAX_BATCH_WINDOW_CELLS = 16384;
+
+function candidateBuffers(settings, workspace) {
+  const { size, coarseLength, fullLength } = settings;
+  const length = 2 * size + coarseLength + fullLength;
+  let data = workspace?.windows;
+  if (!data || data.length < length) {
+    data = new Float64Array(length);
+    if (workspace && length <= MAX_BATCH_WINDOW_CELLS) {
+      workspace.windows = data;
+    }
+  }
+  return {
+    re: data.subarray(0, size),
+    im: data.subarray(size, 2 * size),
+    coarse: data.subarray(2 * size, 2 * size + coarseLength),
+    full: data.subarray(2 * size + coarseLength, length),
+  };
+}
+
+function createCandidateFinder(frames, settings, store, shared, workspace) {
   const { lagMin, lagMax, rate, minF0, maxF0, octaveCost } = settings;
   const capacity = settings.candidates;
-  const coarse = createCoarseCorrelator(frames, settings);
-  const full = createFullFrame(frames, settings);
+  const buffers = candidateBuffers(settings, workspace);
+  const coarse = createCoarseCorrelator(frames, settings, buffers);
+  const full = createFullFrame(frames, settings, buffers.full);
   const q = new Float64Array(lagMax + 2);
   // Only the strongest coarse maxima reach full-rate refinement.
   const tried = 2 * capacity + 2;
@@ -1069,23 +1087,29 @@ function pitchScratch(rows, capacity, workspace) {
   return scratch;
 }
 
-function pitchTracker(frames, options, shared, workspace) {
+function pitchTracker(frames, options, shared, workspace, frameOnly = false) {
   const settings = pitchSettings(frames, options);
   const { hop, hopSamples, lag } = settings;
   const capacity = settings.candidates;
-  const rows = workspace ? frames.count : frames.capacity;
+  const rows = frameOnly ? frames.count : frames.capacity;
   const { store, path, back } = pitchScratch(rows, capacity, workspace);
   if (shared && !shared.source) {
     store.largest = new Float64Array(rows);
     shared.save = store;
   }
   const viterbi = createViterbi(store, settings, back);
-  const finder = createCandidateFinder(frames, settings, store, shared);
+  const finder = createCandidateFinder(
+    frames,
+    settings,
+    store,
+    shared,
+    workspace
+  );
   const track = createTrack(frames, settings, rows);
-  const frameOnly = Boolean(workspace || options.frameOnly);
-  const marker = frameOnly ? null : createMarker(frames, track, settings);
+  const marks = !frameOnly && !options.frameOnly;
+  const marker = marks ? createMarker(frames, track, settings) : null;
   const distribution =
-    !frameOnly || options.percentiles ? createDistribution(rows) : null;
+    marks || options.percentiles ? createDistribution(rows) : null;
   const offset = Math.round(frames.startTime / settings.hop);
   const base = Math.round(offset * hopSamples);
   const centre = (t) => Math.round((offset + t) * hopSamples) - base;
@@ -1176,19 +1200,27 @@ function pitchTracker(frames, options, shared, workspace) {
  * @param {Partial<typeof PITCH_DEFAULTS>} [options]
  */
 export function trackPitch(frames, options = {}) {
-  const tracker = createPitchTracker(frames, options);
-  tracker.advance(true);
-  return tracker.track;
+  return batchPitch(frames, options, false);
 }
 
 let batchPitchWorkspace;
 
 /** Batch frame-level pitch and optional percentiles, without pulse trains. */
 export function trackPitchFrames(frames, options = {}) {
+  return batchPitch(frames, options, true);
+}
+
+function batchPitch(frames, options, frameOnly) {
   const workspace = batchPitchWorkspace ?? {};
   batchPitchWorkspace = undefined;
   try {
-    const tracker = pitchTracker(frames, options, undefined, workspace);
+    const tracker = pitchTracker(
+      frames,
+      options,
+      undefined,
+      workspace,
+      frameOnly
+    );
     tracker.advance(true);
     return tracker.track;
   } finally {

@@ -48,21 +48,23 @@ it('shares pitch candidates without changing either hop’s pitch path', () => {
   expect(pitch).toEqual(trackPitch(frames.coarse));
 });
 
-it('reuses batch pitch scratch across frame counts and candidate widths', () => {
+it('reuses batch pitch scratch across frame counts and window sizes', () => {
   const sampleRate = 8000;
   const samples = renderPlan(planUtterance('ama'), { sampleRate, seed: 1 });
   const whole = analyzeFrames(samples, sampleRate);
   const short = analyzeFrames(samples.subarray(1000, 1600), sampleRate);
   let retained;
-  for (const [frames, candidates] of [
+  for (const [frames, options] of [
     [whole, undefined],
-    [whole, 1],
-    [short, 9],
-    [whole, 4],
-    [short, 1],
+    [whole, { candidates: 1, minF0: 90 }],
+    [short, { candidates: 9, minF0: 35 }],
+    [whole, { candidates: 4 }],
+    [short, { candidates: 1, minF0: 90 }],
   ]) {
-    const options = candidates === undefined ? undefined : { candidates };
-    const expected = trackPitch(frames, options);
+    const tracker = createPitchTracker(frames, options);
+    tracker.advance(true);
+    const expected = tracker.track;
+    expect(trackPitch(frames, options)).toEqual(expected);
     const actual = trackPitchFrames(frames, options);
     for (const name of ['f0', 'voicing', 'strength']) {
       expect(actual[name]).toEqual(expected[name].subarray(0, frames.count));
