@@ -67,8 +67,8 @@ ever become stricter.
 | modes | rust-1 | real-time factor | 0.076 | ≤ 0.25 | yes |
 | modes | memory | peak RSS (MB) | 408.9 | ≤ 256 | no |
 | app | quality | text recognised back | 1 | ≥ 1 | yes |
-| app | js-1 | synthesis worker real-time factor | 0.1583 | < 1 | yes |
-| app | js-1 | first sound (s) | 0.586 | ≤ 1 | yes |
+| app | js-1 | synthesis worker real-time factor | 0.1725 | < 1 | yes |
+| app | js-1 | first sound (s) | 0.556 | ≤ 1 | yes |
 
 ## Runs
 
@@ -88,9 +88,9 @@ ever become stricter.
 | copy | rust | 793.801 | 111.78 | 470.9 | 192 MB | f0RmseSemitones 4.7335, timingErrorMs 305.2, phonemeAgreement 0.3612, maxF0RmseSemitones 8.7262, maxTimingErrorMs 1122.5, cpuRatio 7.1015, recordings 24 |
 | modes | js | 8.652 | 109.405 | 402 | 192 MB | modeShare 0.9167, rtf 0.0791, renderRtf 0.0212, utterances 60 |
 | modes | rust | 8.315 | 109.405 | 408.9 | 192 MB | modeShare 0.9167, rtf 0.076, renderRtf 0.0153, utterances 60 |
-| app | js | — | 11.289 | — | 192 MB | textBack 1, workerRtf 0.1583, workerRtfMeasured 0.0264, firstSound 0.586, firstChunk 0.586, coldFirstSound 2.839, startDelay 0.578, sampleRate 8000, chunks 89, heard The quick brown fox jumps over the lazy dog. She sells sea s… |
+| app | js | — | 11.289 | — | 192 MB | textBack 1, workerRtf 0.1725, workerRtfMeasured 0.0287, firstSound 0.556, firstChunk 0.556, coldFirstSound 2.469, startDelay 0.553, sampleRate 8000, chunks 89, heard The quick brown fox jumps over the lazy dog. She sells sea s… |
 
 ## Targeted reruns
 
-- **app** at commit `c8cbe631fc3a5698ccbc796984740dbdf4b0eadc` on AMD EPYC 9V74 80-Core Processor, Node v24.22.3, measured 2026-11-28T04:47:47.099Z.
+- **app** at commit `ceb7085c91e331715122f5391f7de84ae1ad5078` on Intel(R) Xeon(R) 6975P-C, Node v24.22.3, measured 2026-11-28T04:52:43.717Z.
   Pinned with `taskset -c 0`. Command `UV_THREADPOOL_SIZE=1 taskset -c 0 node --max-old-space-size=192 scripts/check-app-lowest.mjs --skip-build --core 0 --out reports/heavy`.

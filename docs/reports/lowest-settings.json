@@ -475,12 +475,12 @@
         "engine": "js",
         "metrics": {
           "textBack": 1,
-          "workerRtf": 0.1583,
-          "workerRtfMeasured": 0.0264,
-          "firstSound": 0.586,
-          "firstChunk": 0.586,
-          "coldFirstSound": 2.839,
-          "startDelay": 0.578,
+          "workerRtf": 0.1725,
+          "workerRtfMeasured": 0.0287,
+          "firstSound": 0.556,
+          "firstChunk": 0.556,
+          "coldFirstSound": 2.469,
+          "startDelay": 0.553,
           "sampleRate": 8000,
           "chunks": 89,
           "heard": "The quick brown fox jumps over the lazy dog. She sells sea shells by the sea shore. We measure the treasure every morning before the sun comes up over the quiet hills."
@@ -499,20 +499,20 @@
           {
             "worker": "synth-worker-Coe86Md6.js",
             "type": "speak",
-            "at": 0.189
+            "at": 0.163
           },
           {
             "worker": "synth-worker-Coe86Md6.js",
             "type": "start",
-            "at": 0.578
+            "at": 0.553
           },
           {
             "worker": "synth-worker-Coe86Md6.js",
             "type": "end",
-            "at": 12.414
+            "at": 8.827
           }
         ],
-        "benchmarkWait": 0.16,
+        "benchmarkWait": 0.103,
         "capped": {}
       }
     }
@@ -865,12 +865,12 @@
         "status": "certified",
         "metrics": {
           "workerRtf": {
-            "value": 0.1583,
+            "value": 0.1725,
             "limit": 1,
             "pass": true
           },
           "firstSound": {
-            "value": 0.586,
+            "value": 0.556,
             "limit": 1,
             "pass": true
           }
@@ -881,10 +881,10 @@
   "regressions": [],
   "rowMeasurements": {
     "app": {
-      "measured": "2026-11-28T04:47:47.099Z",
-      "commit": "c8cbe631fc3a5698ccbc796984740dbdf4b0eadc",
+      "measured": "2026-11-28T04:52:43.717Z",
+      "commit": "ceb7085c91e331715122f5391f7de84ae1ad5078",
       "command": "UV_THREADPOOL_SIZE=1 taskset -c 0 node --max-old-space-size=192 scripts/check-app-lowest.mjs --skip-build --core 0 --out reports/heavy",
-      "cpu": "AMD EPYC 9V74 80-Core Processor",
+      "cpu": "Intel(R) Xeon(R) 6975P-C",
       "node": "v24.22.3",
       "pinned": true,
       "core": 0
