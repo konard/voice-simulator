@@ -200,7 +200,13 @@ function createSyllableEvents(emit) {
 // eslint-disable-next-line max-lines-per-function
 export function createRecognizer(
   options = {},
-  { liveWords = false, liveModeReference = false, onReading, onPitch } = {}
+  {
+    liveWords = false,
+    liveModeReference = false,
+    previews = true,
+    onReading,
+    onPitch,
+  } = {}
 ) {
   const { sampleRate } = options;
   validateRate(sampleRate);
@@ -474,7 +480,7 @@ export function createRecognizer(
     const total = offset + phrase.used;
     const due = total >= Math.ceil((nextPartial * sampleRate) / 4);
     // A live phrase needs one word preview before its bounded final read.
-    if (previewDue(due)) {
+    if (previews && previewDue(due)) {
       previewPartial(due);
     }
     if (due) {
