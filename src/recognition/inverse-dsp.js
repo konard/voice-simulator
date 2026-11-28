@@ -27,16 +27,21 @@ export function block(x, centre, length, result = new Float64Array(length)) {
 export function highPass(x, rate, y = new Float64Array(x.length)) {
   y.set(x);
   const r = 1 - (2 * Math.PI * 50) / rate;
-  for (const direction of [1, -1]) {
-    let previous = 0;
-    let output = 0;
-    for (let i = 0; i < y.length; i++) {
-      const n = direction === 1 ? i : y.length - 1 - i;
-      const input = y[n];
-      output = input - previous + r * output;
-      previous = input;
-      y[n] = output;
-    }
+  let previous = 0;
+  let output = 0;
+  for (let n = 0; n < y.length; n++) {
+    const input = y[n];
+    output = input - previous + r * output;
+    previous = input;
+    y[n] = output;
+  }
+  previous = 0;
+  output = 0;
+  for (let n = y.length - 1; n >= 0; n--) {
+    const input = y[n];
+    output = input - previous + r * output;
+    previous = input;
+    y[n] = output;
   }
   return y;
 }

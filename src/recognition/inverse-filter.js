@@ -191,6 +191,30 @@ function minimumVoicedPitch(f0) {
   return lowest;
 }
 
+function loadRecoveryWindow(samples, buffer, length, offset) {
+  const first = Math.max(0, -offset);
+  const last = Math.min(length, samples.length - offset);
+  buffer.fill(0, 0, first);
+  buffer.fill(0, last, length);
+  for (let i = first; i < last; i++) {
+    buffer[i] = samples[offset + i];
+  }
+}
+
+function addRecoveryWindow(state, pulse, window, start, end, history) {
+  const { d, g, weight, ring } = state;
+  for (let index = Math.max(0, start); index < end; index++) {
+    const i = index - start + history;
+    const w = window[i];
+    const slot = index % weight.length;
+    d[ring ? slot : index] += w * pulse.d[i];
+    if (g) {
+      g[index] += w * pulse.g[i];
+    }
+    weight[slot] += w;
+  }
+}
+
 function recover(
   frames,
   f0,
@@ -213,6 +237,7 @@ function recover(
   const derivative = roundAsReady
     ? new Float32Array(scratch.buffer, n * Float64Array.BYTES_PER_ELEMENT, n)
     : d;
+  const overlap = { d, g, weight, ring: roundAsReady };
   const normalize = normalizer(frames, f0, weight, d, g, derivative);
   const history = Math.round(0.05 * frames.rate);
   const iaif = new IaifWorkspace(
@@ -235,26 +260,10 @@ function recover(
     // No window at this or a subsequent centre reaches before this sample.
     normalize(Math.max(0, centre - Math.floor(width / 2)));
     buffer ??= allocate('recoveryWindow', width + history);
-    const offset = start - history;
-    const first = Math.max(0, -offset);
-    const last = Math.min(window.length, x.length - offset);
-    buffer.fill(0, 0, first);
-    buffer.fill(0, last, window.length);
-    for (let i = first; i < last; i++) {
-      buffer[i] = x[offset + i];
-    }
+    loadRecoveryWindow(x, buffer, window.length, start - history);
     const pulse = iaif.run(buffer, window);
     const end = Math.min(x.length, start + length);
-    for (let index = Math.max(0, start); index < end; index++) {
-      const i = index - start + history;
-      const w = window[i];
-      const slot = index % weight.length;
-      d[roundAsReady ? slot : index] += w * pulse.d[i];
-      if (g) {
-        g[index] += w * pulse.g[i];
-      }
-      weight[slot] += w;
-    }
+    addRecoveryWindow(overlap, pulse, window, start, end, history);
   }
   normalize(n);
   return finishRecovery(frames, f0, o, stationary, { x, d, g, derivative });
