@@ -671,7 +671,60 @@ function enterRoots(next, tree, score, history, frame, { lookLn, settings }) {
   }
 }
 
+function prepareFrame(pass, nodeCount) {
+  const { active, entries, positions } = pass;
+  let { work } = pass;
+  const capacity = Math.min(nodeCount, active + entries.length);
+  if (work.length < capacity) {
+    const grown = new Uint32Array(Math.max(capacity, 2 * work.length));
+    grown.set(work.subarray(0, active));
+    pass.work = work = grown;
+  }
+  const entryNodes = entries.columns.nodes;
+  let length = active;
+  for (let i = 0; i < entries.length; i++) {
+    const id = entryNodes[i];
+    if (positions[id] === 0) {
+      work[length++] = id;
+    }
+  }
+  const rows = pass.current.peaks.length;
+  if (rows < length) {
+    pass.current = stateFrame(Math.max(length, 2 * rows));
+  }
+  pass.length = length;
+}
+
 // Keep the order of emission, pruning and word ends explicit in the loop.
+function advanceFrames(network, frames, pass, thresholdsOf, records) {
+  const { wordEnds, endings, endingScores } = pass;
+  for (let t = 0; t < frames; t++) {
+    prepareFrame(pass, network.nodeCount);
+    pass.best = scoreFrame(network, pass, t);
+    const thresholds = thresholdsOf(
+      pass.work,
+      pass.current.peaks,
+      pass.length,
+      pass.best
+    );
+    pass.active = pruneFrame(network, pass, thresholds, t);
+    for (let i = 0; i < wordEnds.length; i++) {
+      const slot = wordEnds[i];
+      const end = endings[slot];
+      const score = endingScores[slot];
+      if (score >= thresholds[end.language]) {
+        restart(network, records, end, score, t + 1, pass);
+      }
+    }
+    const { entries, previous } = pass;
+    entries.clear();
+    pass.entries = pass.next;
+    pass.next = entries;
+    pass.previous = pass.current;
+    pass.current = previous;
+  }
+}
+
 function decodeWithWorkspace(network, feats, frames, options, workspace) {
   const settings = { ...HMM_DECODE_DEFAULTS, ...options };
   const languages = settings.languages ?? [...network.trees.keys()];
@@ -681,9 +734,8 @@ function decodeWithWorkspace(network, feats, frames, options, workspace) {
     settings,
     workspace.emission
   );
-  let { previous, current, entries, next } = workspace;
-  const { positions, records } = workspace;
-  let { work } = workspace;
+  const { previous, current, entries, next, positions, records, work } =
+    workspace;
   positions.fill(0);
   const lm = languageModel(network, records, settings, workspace.transitions);
   const thresholdsOf = createThresholds(
@@ -693,7 +745,6 @@ function decodeWithWorkspace(network, feats, frames, options, workspace) {
     workspace.histogram
   );
   initialEntries(entries, network, records, languages, settings);
-  let active = 0;
   const wordEnds = [];
   const endings = Array.from({ length: network.languages.length * 5 }, () => ({
     frame: -1,
@@ -706,7 +757,7 @@ function decodeWithWorkspace(network, feats, frames, options, workspace) {
   const pass = {
     positions,
     work,
-    active,
+    active: 0,
     length: 0,
     previous,
     current,
@@ -722,50 +773,7 @@ function decodeWithWorkspace(network, feats, frames, options, workspace) {
     settings,
     trees: network.languages.map((lang) => network.trees.get(lang)),
   };
-  for (let t = 0; t < frames; t++) {
-    const entryNodes = entries.columns.nodes;
-    const capacity = Math.min(network.nodeCount, active + entries.length);
-    if (work.length < capacity) {
-      const grown = new Uint32Array(Math.max(capacity, 2 * work.length));
-      grown.set(work.subarray(0, active));
-      work = grown;
-    }
-    let length = active;
-    for (let i = 0; i < entries.length; i++) {
-      const id = entryNodes[i];
-      if (positions[id] === 0) {
-        work[length++] = id;
-      }
-    }
-    if (current.peaks.length < length) {
-      current = stateFrame(Math.max(length, 2 * current.peaks.length));
-    }
-    pass.work = work;
-    pass.active = active;
-    pass.length = length;
-    pass.previous = previous;
-    pass.current = current;
-    pass.entries = entries;
-    pass.next = next;
-    pass.best = scoreFrame(network, pass, t);
-    const thresholds = thresholdsOf(work, current.peaks, length, pass.best);
-    active = pruneFrame(network, pass, thresholds, t);
-    for (let i = 0; i < wordEnds.length; i++) {
-      const slot = wordEnds[i];
-      const end = endings[slot];
-      const score = pass.endingScores[slot];
-      if (score >= thresholds[end.language]) {
-        restart(network, records, end, score, t + 1, pass);
-      }
-    }
-    entries.clear();
-    const finished = entries;
-    entries = next;
-    next = finished;
-    const completed = previous;
-    previous = current;
-    current = completed;
-  }
+  advanceFrames(network, frames, pass, thresholdsOf, records);
   const { best, score: bestScore } = finalRecord(
     network,
     records,
@@ -773,12 +781,12 @@ function decodeWithWorkspace(network, feats, frames, options, workspace) {
     frames,
     {
       positions,
-      ...previous,
+      ...pass.previous,
     }
   );
-  workspace.previous = previous;
-  workspace.current = current;
-  workspace.work = work;
+  workspace.previous = pass.previous;
+  workspace.current = pass.current;
+  workspace.work = pass.work;
   return {
     words: backtrace(network, records, best),
     score: bestScore,
