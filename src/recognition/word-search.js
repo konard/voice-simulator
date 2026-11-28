@@ -6,7 +6,7 @@ import { packWordTrie } from './word-trie.js';
 function searchBuffer(size) {
   const nodes = [];
   // A beam visits only a fraction of the trie. Allocate scores as nodes enter.
-  const positions = new Uint32Array(size);
+  let positions = new Uint16Array(size);
   let scores = new Float64Array(Math.min(size, 256));
   let used = 0;
   function cost(node) {
@@ -34,6 +34,9 @@ function searchBuffer(size) {
           scores = grown;
         }
         scores[used++] = cost;
+        if (used === 65536 && positions instanceof Uint16Array) {
+          positions = new Uint32Array(positions);
+        }
         positions[node] = used;
         nodes.push(node);
       }
@@ -94,7 +97,8 @@ function insertions(table, states, next, frontier, limit, beam) {
 }
 
 function search(table, { distances, stride }, from, end, beam, scratch) {
-  const result = [];
+  let length = 0;
+  let result = scratch.hits;
   const { a, b, frontier } = scratch;
   a.clear();
   b.clear();
@@ -123,11 +127,18 @@ function search(table, { distances, stride }, from, end, beam, scratch) {
     states = insertions(table, next, states, frontier, limit, beam);
     for (const node of states.nodes) {
       if (table.terminal[node]) {
-        result.push(index - from + 1, node, states.cost(node));
+        if (length === result.length) {
+          result = new Float64Array(length * 2);
+          result.set(scratch.hits);
+          scratch.hits = result;
+        }
+        result[length++] = index - from + 1;
+        result[length++] = node;
+        result[length++] = states.cost(node);
       }
     }
   }
-  return result;
+  return result.subarray(0, length);
 }
 
 const searchWorkspaces = new WeakMap();
@@ -177,6 +188,7 @@ function distanceWindow(table, input, language, distance, allocate) {
   return { stride, window };
 }
 
+/** Consume each query's hits before making another query in the same run. */
 export function withWordSearch(
   lexicon,
   input,
@@ -187,7 +199,7 @@ export function withWordSearch(
 ) {
   const table = packWordTrie(lexicon, language);
   if (!module || !table.tokens.length) {
-    const scratch = workspaceFor(table);
+    const scratch = { ...workspaceFor(table), hits: new Float64Array(3 * 64) };
     const { stride, window } = distanceWindow(
       table,
       input,
