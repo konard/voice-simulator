@@ -303,9 +303,10 @@ function rangePower(power, range) {
 }
 
 /** Empty frame set of `settings.capacity` rows. */
-function createFrameSet(settings, samples) {
+function createFrameSet(settings, samples, storage) {
   const rows = settings.capacity;
-  const column = () => new Float32Array(rows);
+  const column = (key, width = 1, Type = Float32Array) =>
+    storage?.(key, rows * width, Type) ?? new Type(rows * width);
   return {
     rate: settings.rate,
     hop: settings.hop,
@@ -319,19 +320,19 @@ function createFrameSet(settings, samples) {
     startTime: 0,
     samples,
     sampleCount: 0,
-    energy: column(),
-    zcr: column(),
-    tilt: column(),
-    gravity: column(),
-    periodicity: column(),
-    noise: column(),
-    gain: column(),
-    speech: new Uint8Array(rows),
-    lpc: new Float32Array(rows * settings.order),
-    reflection: new Float32Array(rows * settings.order),
-    mel: new Float32Array(rows * settings.melBands),
-    cepstrum: new Float32Array(rows * settings.cepstra),
-    band: new Float32Array(rows * BANDS.length),
+    energy: column('energy'),
+    zcr: column('zcr'),
+    tilt: column('tilt'),
+    gravity: column('gravity'),
+    periodicity: column('periodicity'),
+    noise: column('noise'),
+    gain: column('gain'),
+    speech: column('speech', 1, Uint8Array),
+    lpc: column('lpc', settings.order),
+    reflection: column('reflection', settings.order),
+    mel: column('mel', settings.melBands),
+    cepstrum: column('cepstrum', settings.cepstra),
+    band: column('band', BANDS.length),
   };
 }
 
@@ -590,7 +591,7 @@ export function createFrameAnalyzer(sampleRate, options = {}) {
   return frameAnalyzer(sampleRate, options);
 }
 
-function frameAnalyzer(sampleRate, options, onFrame) {
+function frameAnalyzer(sampleRate, options, onFrame, storage) {
   const settings = frontendSettings(sampleRate, options);
   const tables = frontendTables(settings);
   const { rate, length, half, hopSamples, capacity, sampleCapacity } = settings;
@@ -598,10 +599,13 @@ function frameAnalyzer(sampleRate, options, onFrame) {
   // signal, the trimmed past after `trim`) and `length` zeros after the
   // last place a sample can go.
   const margin = half + 1;
-  const buffer = new Float32Array(margin + sampleCapacity + length + 1);
+  const size = margin + sampleCapacity + length + 1;
+  const buffer =
+    storage?.('samples', size, Float32Array) ?? new Float32Array(size);
   const frames = createFrameSet(
     settings,
-    buffer.subarray(margin, margin + sampleCapacity)
+    buffer.subarray(margin, margin + sampleCapacity),
+    storage
   );
   const columns = frameColumns(frames);
   const noiseTracker = createNoiseTracker(settings.hop);
@@ -761,11 +765,13 @@ function frameAnalyzer(sampleRate, options, onFrame) {
  * @param {number} sampleRate
  * @param {Partial<typeof FRONTEND_DEFAULTS>} [options]
  */
-export function analyzeFrames(samples, sampleRate, options = {}) {
-  const analyzer = createFrameAnalyzer(sampleRate, {
-    ...options,
-    maxSeconds: samples.length / sampleRate,
-  });
+export function analyzeFrames(samples, sampleRate, options = {}, storage) {
+  const analyzer = frameAnalyzer(
+    sampleRate,
+    { ...options, maxSeconds: samples.length / sampleRate },
+    undefined,
+    storage
+  );
   analyzer.push(samples);
   analyzer.flush();
   return analyzer.frames;

@@ -36,6 +36,36 @@ import {
 
 const RATE = 8000;
 
+it('keeps batch frames private across a nested recognition callback', () => {
+  const options = { level: 'low', languages: ['en'], engine: 'js' };
+  const short = synthesize('Hello world.', {
+    lang: 'en',
+    tier: 'telephone',
+    engine: 'js',
+    seed: 1,
+  });
+  const longer = synthesize('The train leaves at seven.', {
+    lang: 'en',
+    tier: 'wideband',
+    engine: 'js',
+    seed: 1,
+  });
+  const expected = recognize(short.samples, short.sampleRate, options);
+  const otherOptions = { ...options, level: 'medium' };
+  const other = recognize(longer.samples, longer.sampleRate, otherOptions);
+  let nested;
+  const heard = recognize(short.samples, short.sampleRate, {
+    ...options,
+    profile(stage) {
+      if (stage === 'Audio to IPA') {
+        nested = recognize(longer.samples, longer.sampleRate, otherOptions);
+      }
+    },
+  });
+  assert.deepEqual(heard, expected);
+  assert.deepEqual(nested, other);
+});
+
 it('packs the same live vocabulary and transitions as the source builder', () => {
   const source = buildNetwork(getHmmModel(), ['en'], {
     maxWords: HMM_LIVE_WORDS,

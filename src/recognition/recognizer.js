@@ -211,7 +211,8 @@ export function decodeRecognitionAudio(
   if (usesWordDecoder(settings)) {
     const decoded = measure(settings.profile, 'Audio to IPA', () => {
       const analysis =
-        frontEnd?.frames ?? analyzeFrames(input, rate, { hop: 0.01 });
+        frontEnd?.frames ??
+        analyzeFrames(input, rate, { hop: 0.01 }, settings.frameStorage);
       const result = hmmAudioToIpa(input, rate, {
         languages: settings.languages,
         whisper: options.whisper,
@@ -557,7 +558,7 @@ function checkNoise(decoded, duration) {
   }
 }
 
-function serial(samples, sampleRate, settings, level) {
+function completeSerial(samples, sampleRate, settings, level) {
   const { decoded, input, rate } = decodeRecognitionAudio(
     samples,
     sampleRate,
@@ -569,6 +570,44 @@ function serial(samples, sampleRate, settings, level) {
     return emptyRecognition(settings.nbest, settings.segments);
   }
   return recognizeDecoded(decoded, input, rate, settings, level, 'batch');
+}
+
+function frameStorage() {
+  const slots = new Map();
+  return (key, length, Type) => {
+    let slot = slots.get(key);
+    if (!slot || slot.length < length) {
+      slot = new Type(Math.max(length, (slot?.length ?? 0) * 2));
+      slots.set(key, slot);
+    }
+    return slot.subarray(0, length);
+  };
+}
+
+let availableFrames = frameStorage();
+
+function serial(samples, sampleRate, settings, level) {
+  // This scratch stays within the synchronous word-decoding call. Keep at
+  // most one short-recording workspace. Profile callbacks can reenter.
+  if (
+    !availableFrames ||
+    samples.length / sampleRate > 30 ||
+    !usesWordDecoder(settings)
+  ) {
+    return completeSerial(samples, sampleRate, settings, level);
+  }
+  const storage = availableFrames;
+  availableFrames = null;
+  try {
+    return completeSerial(
+      samples,
+      sampleRate,
+      { ...settings, frameStorage: storage },
+      level
+    );
+  } finally {
+    availableFrames = storage;
+  }
 }
 
 function pieces(samples, sampleRate, options, settings) {
