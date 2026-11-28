@@ -391,32 +391,15 @@ function prepareThresholdRows(rows, totals, languageCount, maxActive) {
   return needed;
 }
 
-/** Pruning combines the relative language beams and the active-node limit. */
-function frameThresholds(
-  { nodes, languageCount, beam, languageBeam, maxActive },
-  { rows, sizes, totals, peaks, thresholds },
+function applyActiveLimit(
+  { nodes, languageCount, maxActive },
+  { rows, sizes, totals, thresholds },
   work,
   scores,
-  length,
-  best
+  length
 ) {
-  peaks.fill(-Infinity);
-  totals.fill(0);
-  for (let i = 0; i < length; i++) {
-    const language = nodes[work[i]];
-    peaks[language] = Math.max(peaks[language], scores[i]);
-    totals[language]++;
-  }
-  const globalThreshold = best - languageBeam;
-  for (let i = 0; i < languageCount; i++) {
-    thresholds[i] = Math.max(peaks[i] - beam, globalThreshold);
-  }
-  if (
-    maxActive <= 0 ||
-    length <= maxActive ||
-    !prepareThresholdRows(rows, totals, languageCount, maxActive)
-  ) {
-    return thresholds;
+  if (!prepareThresholdRows(rows, totals, languageCount, maxActive)) {
+    return;
   }
   // A score already below either beam cannot affect the final threshold.
   sizes.fill(0);
@@ -435,6 +418,26 @@ function frameThresholds(
         scoreAtRank(rows[i], sizes[i], sizes[i] - maxActive)
       );
     }
+  }
+}
+
+/** Pruning combines the relative language beams and the active-node limit. */
+function frameThresholds(beams, workspace, work, scores, length, best) {
+  const { nodes, languageCount, beam, languageBeam, maxActive } = beams;
+  const { totals, peaks, thresholds } = workspace;
+  peaks.fill(-Infinity);
+  totals.fill(0);
+  for (let i = 0; i < length; i++) {
+    const language = nodes[work[i]];
+    peaks[language] = Math.max(peaks[language], scores[i]);
+    totals[language]++;
+  }
+  const globalThreshold = best - languageBeam;
+  for (let i = 0; i < languageCount; i++) {
+    thresholds[i] = Math.max(peaks[i] - beam, globalThreshold);
+  }
+  if (!(maxActive <= 0 || length <= maxActive)) {
+    applyActiveLimit(beams, workspace, work, scores, length);
   }
   return thresholds;
 }
