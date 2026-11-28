@@ -134,7 +134,7 @@ function createWordHistory() {
     clear() {
       length = 0;
     },
-    add({ id, language, before, prev, start, score }, end) {
+    add({ id, language, before, prev, start }, end, score) {
       const row = length++;
       if (row === columns.id.length) {
         for (const [name, column] of Object.entries(columns)) {
@@ -236,11 +236,11 @@ function initialEntries(
   { lmw, oovStart }
 ) {
   const { lookLn } = network.nodes;
-  const seed = { id: -1, language: 0, before: 0, prev: -1, start: 0, score: 0 };
+  const seed = { id: -1, language: 0, before: 0, prev: -1, start: 0 };
   for (const lang of languages) {
     const tree = network.trees.get(lang);
     seed.language = network.languages.indexOf(lang);
-    const startRecord = records.add(seed, 0);
+    const startRecord = records.add(seed, 0, 0);
     for (const node of tree.root) {
       entries.enter(node, lmw * lookLn[node], startRecord, 0);
     }
@@ -257,11 +257,11 @@ function initialEntries(
  * A rising sandhi variant goes on only with a word of the tone that causes
  * it, without a pause (hmm-network.js toneVariants).
  */
-function restart(next, network, records, rec, end, pass) {
-  const { lookLn, settings } = pass;
+function restart(network, records, rec, score, end, pass) {
+  const { next, lookLn, settings } = pass;
   const { lmw, silencePenalty } = settings;
-  const { id, language, before, score } = rec;
-  const r = records.add(rec, end);
+  const { id, language, before } = rec;
+  const r = records.add(rec, end, score);
   const tree = pass.trees[language];
   if (before) {
     const roots = tree.after.get(before);
@@ -521,14 +521,15 @@ function pruneFrame(network, pass, thresholds, t) {
     work,
     length,
     current,
-    best,
     lm,
     settings,
     next,
     wordEnds,
     endings,
+    endingScores,
   } = pass;
   const { lmw, releaseSkip } = settings;
+  const endFrame = t + 1;
   const { scores, histories, starts, peaks } = current;
   for (let i = 0; i < pass.active; i++) {
     positions[work[i]] = 0;
@@ -543,14 +544,15 @@ function pruneFrame(network, pass, thresholds, t) {
       continue;
     }
     const offset = index * 6;
-    for (let i = 0; i < count[id]; i++) {
+    const states = count[id];
+    for (let i = 0; i < states; i++) {
       if (scores[offset + i] < threshold) {
         scores[offset + i] = -Infinity;
       }
     }
     positions[id] = index + 1;
     work[active++] = id;
-    const last = count[id] - 1;
+    const last = states - 1;
     const firstState = first[id];
     let exit = scores[offset + last] + go[emit[firstState + last]];
     let hist = histories[offset + last];
@@ -570,29 +572,29 @@ function pruneFrame(network, pass, thresholds, t) {
     const tree = pass.trees[language];
     if (id === tree.silence) {
       // Silence returns to the root with the same history.
-      enterRoots(next, tree, exit, hist, t + 1, pass);
+      enterRoots(next, tree, exit, hist, endFrame, pass);
       continue;
     }
     const look = lmw * lookLn[id];
     for (let kid = child[id]; kid; kid = sibling[kid]) {
       next.enter(kid, exit + lmw * lookLn[kid] - look, hist, start);
     }
+    const packed = tree.wordTable;
     for (let link = terminal[id]; link; link = nextWord[link]) {
       const wid = wordId[link];
       const s = exit - look + lm(hist, wid, tree);
-      settings.onWordEnd?.(wid, s - best, start, t + 1);
-      const packed = tree.wordTable;
+      settings.onWordEnd?.(wid, s - pass.best, start, endFrame);
       const before = packed ? packed.before(wid) : words[wid].before;
       // One word end per language and frame, apart for sandhi variants.
-      const end = endings[language * 5 + (before ?? 0)];
+      const slot = language * 5 + (before ?? 0);
+      const end = endings[slot];
       if (end.frame !== t) {
         end.frame = t;
-        end.score = -Infinity;
-        wordEnds.push(end);
-      } else if (!(s > end.score)) {
+        wordEnds.push(slot);
+      } else if (!(s > endingScores[slot])) {
         continue;
       }
-      end.score = s;
+      endingScores[slot] = s;
       end.language = language;
       end.before = before;
       end.id = wid;
@@ -641,7 +643,6 @@ function decodeWithWorkspace(network, feats, frames, options, workspace) {
   const wordEnds = [];
   const endings = Array.from({ length: network.languages.length * 5 }, () => ({
     frame: -1,
-    score: -Infinity,
     language: 0,
     before: 0,
     id: 0,
@@ -659,6 +660,7 @@ function decodeWithWorkspace(network, feats, frames, options, workspace) {
     next,
     wordEnds,
     endings,
+    endingScores: new Float64Array(endings.length),
     lookLn: network.nodes.lookLn,
     emissions,
     best: -Infinity,
@@ -695,9 +697,11 @@ function decodeWithWorkspace(network, feats, frames, options, workspace) {
     const thresholds = thresholdsOf(work, current.peaks, length, pass.best);
     active = pruneFrame(network, pass, thresholds, t);
     for (let i = 0; i < wordEnds.length; i++) {
-      const end = wordEnds[i];
-      if (end.score >= thresholds[end.language]) {
-        restart(next, network, records, end, t + 1, pass);
+      const slot = wordEnds[i];
+      const end = endings[slot];
+      const score = pass.endingScores[slot];
+      if (score >= thresholds[end.language]) {
+        restart(network, records, end, score, t + 1, pass);
       }
     }
     entries.clear();
