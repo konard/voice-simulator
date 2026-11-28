@@ -66,7 +66,7 @@ export function corpusWords(text, language, vocabulary = new Set()) {
 
 const order = (a, b) => b[1] - a[1] || (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0);
 
-function isSpokenWord(word, language) {
+export function isSpokenWord(word, language) {
   const items = normalizeText(word, {
     lang: language,
     wordLanguage: () => language,

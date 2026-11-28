@@ -740,9 +740,9 @@ only become stricter. `npm run test:heavy -- --suite lowest` measures it and
 | session | certified | certified | certified | certified |
 | copy | failed | certified | certified | failed |
 | modes | certified | certified | certified | certified |
-| app | failed | certified | — | — |
+| app | certified | certified | — | — |
 
-Measured at commit `c795e54` on Intel(R) Xeon(R) 6975P-C. See the [report](docs/reports/lowest-settings.md).
+Full matrix measured at commit `c795e54` on Intel(R) Xeon(R) 6975P-C. See the [report](docs/reports/lowest-settings.md).
 <!-- prettier-ignore-end -->
 <!-- lowest-settings:end -->
 

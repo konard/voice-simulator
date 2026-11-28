@@ -20,6 +20,7 @@ import { fileURLToPath, URL } from 'node:url';
 import { promisify } from 'node:util';
 import { recognize, synthesize } from '../src/index.js';
 import {
+  passes,
   README_END,
   README_START,
   REPORT_PATH,
@@ -144,6 +145,11 @@ describe('lowest settings', () => {
   });
 });
 
+it('requires synthesis worker RTF to be strictly below real time', () => {
+  assert.equal(passes('workerRtf', 0.9999, 1), true);
+  assert.equal(passes('workerRtf', 1, 1), false);
+});
+
 describe('lowest settings publication', () => {
   it('requires both recognition speed cells to pass under the heap cap', () => {
     const limits = {
@@ -168,6 +174,7 @@ describe('lowest settings publication', () => {
 
   const dir = mkdtempSync(path.join(tmpdir(), 'lowest-settings-'));
   after(() => rmSync(dir, { recursive: true, force: true }));
+
   const cells = (status) => ({
     synthesis: {
       quality: { status: 'certified', metrics: {} },

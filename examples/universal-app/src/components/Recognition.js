@@ -174,7 +174,7 @@ function ExtraSources({ active, session, spokenAudio, onSpoken, t }) {
   );
 }
 
-export function Recognition({ t, onSpeakBack, spokenAudio }) {
+export function Recognition({ t, onSpeakBack, spokenAudio, synthesisVoice }) {
   const { session, status, pending } = useRecognition();
   const [lang, setLang] = useState('auto');
   const [settings, setSettings] = useState(DEFAULT_RECOGNITION_SETTINGS);
@@ -192,17 +192,22 @@ export function Recognition({ t, onSpeakBack, spokenAudio }) {
     pending,
   });
   const active = state === 'asking' || state === 'running';
-  const start = (source, keep) =>
+  const start = (source, keep, voice) =>
     session.start(
       source,
       {
         ...recognitionOptions(settings),
         languages: lang === 'auto' ? undefined : [lang],
+        ...(voice && { synthesisVoice: voice }),
       },
       { keep }
     );
   const startFile = (file) =>
-    start(decodeAudioFile(file).then((input) => noisyInput(input, settings)));
+    start(
+      decodeAudioFile(file).then((input) => noisyInput(input, settings)),
+      undefined,
+      settings.noise === 'none' ? synthesisVoice : null
+    );
   const detail = errorText(error, t);
 
   return h(

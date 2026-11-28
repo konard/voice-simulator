@@ -289,6 +289,9 @@ function* pronunciationEntries(lexicon, limit) {
   const selectTokens = spokenTokenSelector();
   yield* lexicon.pronunciations(limit, selectTokens);
   yield* lexicon.addedPronunciations(limit, undefined, selectTokens);
+  if (limit >= HMM_MAX_WORDS) {
+    yield* lexicon.spokenPronunciations(selectTokens);
+  }
 }
 
 function countPhonePairs(tokens, phones, pairs) {
@@ -555,7 +558,7 @@ function withLanguages(builder, languages, options) {
   return { ...network, trees };
 }
 
-/** Build a decoding network with the given languages and vocabulary. */
+/** Build a decoding network, with supplemental spoken words at standard size. */
 export function buildNetwork(
   model,
   languages,

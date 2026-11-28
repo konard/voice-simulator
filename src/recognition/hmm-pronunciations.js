@@ -38,7 +38,12 @@ export function packHmmWords(words, ranked) {
   const symbols = [];
   const ids = new Map();
   const phones = [];
+  const supplemental = [];
   for (const [id, word] of words.entries()) {
+    if (!word.oov && !ranks.has(word.word)) {
+      ranks.set(word.word, ranked.length + supplemental.length);
+      supplemental.push({ word: word.word, count: word.count });
+    }
     rows[id] = ranks.get(word.word) ?? 0;
     flags[id] = word.oov ? (word.begin ? 0x10 : 0x20) : (word.before ?? 0);
     offsets[id] = phones.length;
@@ -53,7 +58,14 @@ export function packHmmWords(words, ranked) {
   }
   offsets[words.length] = phones.length;
   const Type = symbols.length > 65536 ? Uint32Array : Uint16Array;
-  return { rows, offsets, flags, symbols, phones: Type.from(phones) };
+  return {
+    rows,
+    offsets,
+    flags,
+    symbols,
+    supplemental,
+    phones: Type.from(phones),
+  };
 }
 
 export function openHmmWords(data, ranked, lang, first, copy = true) {
@@ -63,15 +75,29 @@ export function openHmmWords(data, ranked, lang, first, copy = true) {
   const offsets = column(data.offsets);
   const flags = column(data.flags);
   const phones = column(data.phones);
-  const { symbols } = data;
+  const { symbols, supplemental } = data;
   const index = (id) => id - first;
   const flag = (id) => flags[index(id)];
   const rankAt = (id) => rows[index(id)];
-  const name = (id) => (flag(id) >= 0x10 ? '' : ranked.name(rankAt(id)));
+  const supplementalAt = (rank) => supplemental?.[rank - ranked.length];
+  const name = (id) => {
+    if (flag(id) >= 0x10) {
+      return '';
+    }
+    const rank = rankAt(id);
+    return ranked.name(rank) ?? supplementalAt(rank)?.word;
+  };
+  const count = (id) => {
+    const rank = rankAt(id);
+    return ranked.weight(rank) ?? supplementalAt(rank)?.count;
+  };
   return {
     name,
-    rank: (id) => (flag(id) >= 0x10 ? -1 : (rankAt(id) ?? -1)),
-    count: (id) => ranked.weight(rankAt(id)),
+    rank(id) {
+      const rank = rankAt(id);
+      return flag(id) < 0x10 && rank < ranked.length ? rank : -1;
+    },
+    count,
     before: (id) => flag(id) & 0xf,
     oov: (id) => flag(id) >= 0x10,
     begin: (id) => flag(id) === 0x10,
@@ -87,7 +113,7 @@ export function openHmmWords(data, ranked, lang, first, copy = true) {
         word.oov = true;
         word.begin = flag(id) === 0x10;
       } else {
-        word.count = ranked.weight(rankAt(id));
+        word.count = count(id);
         if (flag(id)) {
           word.before = flag(id);
         }

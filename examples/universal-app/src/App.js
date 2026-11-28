@@ -619,6 +619,17 @@ function speechRequest({ text, lang, accent, mode, voice: settings }, voice) {
   };
 }
 
+function recognitionVoice(speech, voice, copiedVoice) {
+  return copiedVoice
+    ? null
+    : {
+        ...voiceOptions(speech.voice),
+        ...voice,
+        accent: speech.accent,
+        accentLevel: speech.voice.accentLevel,
+      };
+}
+
 export function App() {
   const locale = useMemo(() => detectLocale(), []);
   const t = strings(locale);
@@ -753,6 +764,11 @@ export function App() {
       t,
       onSpeakBack: speakBack,
       spokenAudio: () => spokenAudio(simulator.engineRef.current),
+      synthesisVoice: recognitionVoice(
+        speech,
+        { ...listening, head, seed },
+        copiedVoice
+      ),
     }),
     h(VoiceCopy, {
       t,

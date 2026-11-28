@@ -217,6 +217,20 @@ function spokenPriors(names, total, spoken) {
   );
 }
 
+function parseSupplemental(source, scale) {
+  return source
+    .split(' ')
+    .filter(Boolean)
+    .map((item) => {
+      const at = item.lastIndexOf('=');
+      return {
+        word: item.slice(0, at),
+        count: 1,
+        prior: Math.max(1, Number(item.slice(at + 1)) * scale),
+      };
+    });
+}
+
 function parseWords(source, spoken) {
   const names = [];
   const values = [];
@@ -259,7 +273,9 @@ export function getCounts(language) {
   }
   if (!opened.has(language)) {
     const data = DATA.get(language);
-    const ranked = parseWords(data.WORDS, SPOKEN.get(language));
+    const spoken = SPOKEN.get(language);
+    const ranked = parseWords(data.WORDS, spoken);
+    let supplemental;
     let words;
     let counts;
     let bigrams;
@@ -272,6 +288,14 @@ export function getCounts(language) {
         indexBigrams(data.BIGRAMS, ranked));
     opened.set(language, {
       ranked,
+      get supplemental() {
+        return (supplemental ??= spoken?.SUPPLEMENTAL
+          ? parseSupplemental(
+              spoken.SUPPLEMENTAL,
+              ranked.total / spoken.SPOKEN_WORDS
+            )
+          : []);
+      },
       get words() {
         return (words ??= Array.from({ length: ranked.length }, (_, id) =>
           ranked.read(id)

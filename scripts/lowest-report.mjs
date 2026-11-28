@@ -19,7 +19,7 @@ export const README_END = '<!-- lowest-settings:end -->';
 export const REPORT_PATH = 'docs/reports/lowest-settings.md';
 export const HEAP_LIMIT_MB = 192;
 
-/** Metrics that must reach their limit; every other limit is a maximum. */
+/** Metrics that must reach their limit. */
 const MINIMUMS = new Set([
   'stable',
   'phonemeAgreement',
@@ -59,6 +59,9 @@ export const METRICS = {
 export function passes(name, value, limit) {
   if (typeof value !== 'number' || Number.isNaN(value)) {
     return false;
+  }
+  if (name === 'workerRtf') {
+    return value < limit;
   }
   return MINIMUMS.has(name) ? value >= limit : value <= limit;
 }
@@ -268,7 +271,11 @@ function details(data) {
         );
       }
       for (const [name, { value, limit, pass }] of metrics) {
-        const sign = MINIMUMS.has(name) ? '≥' : '≤';
+        const sign = MINIMUMS.has(name)
+          ? '≥'
+          : name === 'workerRtf'
+            ? '<'
+            : '≤';
         lines.push(
           `| ${row} | ${column} | ${METRICS[name] ?? name} | ${format(value)} | ${sign} ${format(limit)} | ${pass ? 'yes' : 'no'} |`
         );
@@ -337,11 +344,12 @@ export function formatReport(data) {
   return [
     '# Lowest settings: 8 kHz and one core',
     '',
-    'Every row runs on 8000 Hz audio in its own Node process with',
-    '`UV_THREADPOOL_SIZE=1`, no workers and no GPU. Input recordings are',
-    'converted with `resample`. The Rust engine runs with one thread and no',
-    'SIMD. Limits come from `tests/heavy/lowest-thresholds.json` and only ever',
-    'become stricter.',
+    'The matrix runs on 8000 Hz audio with `UV_THREADPOOL_SIZE=1`. The app row',
+    'runs in Chromium and uses its normal synthesis and recognition workers.',
+    'The other rows run in Node with no workers and no GPU. Input recordings',
+    'are converted with `resample`. The Rust engine runs with one thread and',
+    'no SIMD. Limits come from `tests/heavy/lowest-thresholds.json` and only',
+    'ever become stricter.',
     '',
     `- Measured: ${data.measured}`,
     `- Commit: \`${data.commit}\``,

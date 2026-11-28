@@ -10,14 +10,18 @@ function mapColumns(network, transform) {
     Object.fromEntries(
       Object.entries(columns).map(([name, column]) => [name, transform(column)])
     );
-  const { symbols, ...words } = network.words;
+  const { symbols, supplemental, ...words } = network.words;
   return {
     nodes: entries(network.nodes),
     tree: network.tree,
     emit: transform(network.emit),
     wordId: transform(network.wordId),
     nextWord: transform(network.nextWord),
-    words: { ...entries(words), symbols },
+    words: {
+      ...entries(words),
+      symbols,
+      ...(supplemental?.length && { supplemental }),
+    },
   };
 }
 

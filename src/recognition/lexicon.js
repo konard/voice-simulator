@@ -230,6 +230,9 @@ export function getLexicon(language = 'en') {
           selectTokens
         );
       },
+      spokenPronunciations(selectTokens) {
+        return lexiconPronunciations(language, data.supplemental, selectTokens);
+      },
       /**
        * Pronunciations of the words added with addLexicon() that are not
        * among the `limit` most frequent, counted as the word of rank

@@ -26,8 +26,11 @@ export const recognitionDataFile = (kind) =>
     import.meta.url
   );
 
-export const hmmNetworkVersion = 3;
+export const hmmNetworkVersion = 4;
+const previousHmmArchiveVersion = 3;
 const serializedHmmVersion = 2;
+const hasSupplementalWords = (language, maxWords) =>
+  language === 'en' && maxWords === HMM_MAX_WORDS;
 export const hmmNetworkFile = (language, maxWords = HMM_MAX_WORDS) =>
   new globalThis.URL(
     `../engine/voice-simulator-hmm-${language}${maxWords === HMM_MAX_WORDS ? '' : `-${maxWords}`}.bin.gz`,
@@ -117,6 +120,68 @@ export function packLanguageModel({ singles, pairs, triples, total }) {
     packCounts(triples, ids),
     total,
   ];
+}
+
+function configurePreparedHmm(readAsset, v8) {
+  const hmmSizes = new Map();
+  installPreparedHmm(
+    (language, maxWords) => {
+      try {
+        const bytes = readAsset(hmmNetworkFile(language, maxWords));
+        const archive = openHmmArchive(
+          bytes,
+          hmmNetworkVersion,
+          v8.deserialize
+        );
+        if (archive) {
+          return archive;
+        }
+        if (hasSupplementalWords(language, maxWords)) {
+          return undefined;
+        }
+        const previous = openHmmArchive(
+          bytes,
+          previousHmmArchiveVersion,
+          v8.deserialize
+        );
+        if (previous) {
+          return previous;
+        }
+        const [version, network] = v8.deserialize(bytes);
+        return version === serializedHmmVersion ? network : undefined;
+      } catch {
+        // Source installations can build the same network on demand.
+      }
+    },
+    (language, maxWords) => {
+      if (!hmmSizes.has(maxWords)) {
+        hmmSizes.set(maxWords, {});
+        try {
+          const [version, sizes] = JSON.parse(
+            readAsset(hmmNetworkFile('index', maxWords)).toString()
+          );
+          if (
+            (version === hmmNetworkVersion ||
+              version === previousHmmArchiveVersion ||
+              version === serializedHmmVersion) &&
+            typeof sizes === 'object' &&
+            sizes
+          ) {
+            hmmSizes.set(maxWords, { version, sizes });
+          }
+        } catch {
+          // Older installations grow the same columns as assets arrive.
+        }
+      }
+      const { version, sizes } = hmmSizes.get(maxWords);
+      if (
+        version === hmmNetworkVersion ||
+        !hasSupplementalWords(language, maxWords)
+      ) {
+        return sizes?.[language];
+      }
+    }
+  );
 }
 
 export function configureNodeRecognitionModels() {
@@ -212,47 +277,7 @@ export function configureNodeRecognitionModels() {
     const row = modeBaselines.get(key);
     return row && globalThis.structuredClone(row);
   });
-  const hmmSizes = new Map();
-  installPreparedHmm(
-    (language, maxWords) => {
-      try {
-        const bytes = readAsset(hmmNetworkFile(language, maxWords));
-        const archive = openHmmArchive(
-          bytes,
-          hmmNetworkVersion,
-          v8.deserialize
-        );
-        if (archive) {
-          return archive;
-        }
-        const [version, network] = v8.deserialize(bytes);
-        return version === serializedHmmVersion ? network : undefined;
-      } catch {
-        // Source installations can build the same network on demand.
-      }
-    },
-    (language, maxWords) => {
-      if (!hmmSizes.has(maxWords)) {
-        hmmSizes.set(maxWords, {});
-        try {
-          const [version, sizes] = JSON.parse(
-            readAsset(hmmNetworkFile('index', maxWords)).toString()
-          );
-          if (
-            (version === hmmNetworkVersion ||
-              version === serializedHmmVersion) &&
-            typeof sizes === 'object' &&
-            sizes
-          ) {
-            hmmSizes.set(maxWords, sizes);
-          }
-        } catch {
-          // Older installations grow the same columns as assets arrive.
-        }
-      }
-      return hmmSizes.get(maxWords)[language];
-    }
-  );
+  configurePreparedHmm(readAsset, v8);
   installPreparedLexicons((language, words) => {
     try {
       const rows = read(language);
