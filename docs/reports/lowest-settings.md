@@ -6,10 +6,10 @@ converted with `resample`. The Rust engine runs with one thread and no
 SIMD. Limits come from `tests/heavy/lowest-thresholds.json` and only ever
 become stricter.
 
-- Measured: 2026-11-26T01:22:10.504Z
-- Commit: `56797cd5577e0dfffbdd1e5b4804c8752278950e`
+- Measured: 2026-11-28T02:42:13.131Z
+- Commit: `ee65cd1b9ece6aa24b5a6f990dea38774d443ae6`
 - Command: `node scripts/run-heavy.mjs --suite lowest`
-- CPU: AMD EPYC 7763 64-Core Processor
+- CPU: Intel(R) Xeon(R) 6975P-C
 - Node: v24.22.3
 - Pinning: pinned with `taskset -c 0`
 - Heap cap: `--max-old-space-size=192`
@@ -18,7 +18,7 @@ become stricter.
 | --- | --- | --- | --- | --- |
 | synthesis | certified | certified | certified | [failed](https://github.com/konard/voice-simulator/issues/173) |
 | recognition | certified | [failed](https://github.com/konard/voice-simulator/issues/174) | [failed](https://github.com/konard/voice-simulator/issues/174) | [failed](https://github.com/konard/voice-simulator/issues/173) |
-| streaming | certified | certified | certified | [failed](https://github.com/konard/voice-simulator/issues/173) |
+| streaming | certified | certified | certified | certified |
 | voice-fit | certified | certified | certified | certified |
 | session | certified | certified | certified | certified |
 | copy | [failed](https://github.com/konard/voice-simulator/issues/178) | certified | certified | [failed](https://github.com/konard/voice-simulator/issues/173) |
@@ -29,73 +29,62 @@ become stricter.
 
 | Row | Column | Metric | Value | Limit | Pass |
 | --- | --- | --- | ---: | ---: | --- |
-| synthesis | quality | WER increase over 16 kHz | -0.0076 | ≤ 0.05 | yes |
-| synthesis | js-1 | real-time factor | 0.0439 | ≤ 0.25 | yes |
-| synthesis | rust-1 | real-time factor | 0.0267 | ≤ 0.25 | yes |
-| synthesis | memory | peak RSS (MB) | 813.4 | ≤ 256 | no |
-| recognition | quality | PER increase over 16 kHz | 0.0005 | ≤ 0.05 | yes |
-| recognition | quality | WER increase over 16 kHz | -0.0004 | ≤ 0.08 | yes |
-| recognition | js-1 | real-time factor | 1.4237 | ≤ 0.25 | no |
-| recognition | rust-1 | real-time factor | 1.5811 | ≤ 0.25 | no |
-| recognition | memory | peak RSS (MB) | 1346.3 | ≤ 256 | no |
+| synthesis | quality | WER increase over 16 kHz | -0.0087 | ≤ 0.05 | yes |
+| synthesis | js-1 | real-time factor | 0.0218 | ≤ 0.25 | yes |
+| synthesis | rust-1 | real-time factor | 0.0166 | ≤ 0.25 | yes |
+| synthesis | memory | peak RSS (MB) | 384.8242 | ≤ 256 | no |
+| recognition | quality | PER increase over 16 kHz | 0.0001 | ≤ 0.05 | yes |
+| recognition | quality | WER increase over 16 kHz | -0.0017 | ≤ 0.08 | yes |
+| recognition | js-1 | real-time factor | 0.2945 | ≤ 0.25 | no |
+| recognition | rust-1 | real-time factor | 0.277 | ≤ 0.25 | no |
+| recognition | memory | peak RSS (MB) | 401.9609 | ≤ 256 | no |
 | streaming | quality | stream text differing from batch (WER) | 0 | ≤ 0 | yes |
-| streaming | js-1 | first partial with words (s) | 0.2751 | ≤ 1 | yes |
-| streaming | js-1 | CPU load | 0.1001 | ≤ 0.25 | yes |
-| streaming | rust-1 | first partial with words (s) | 0.2739 | ≤ 1 | yes |
-| streaming | rust-1 | CPU load | 0.0961 | ≤ 0.25 | yes |
-| streaming | memory | peak RSS (MB) | 330.8 | ≤ 256 | no |
+| streaming | js-1 | first partial with words (s) | 0.2764 | ≤ 1 | yes |
+| streaming | js-1 | CPU load | 0.1145 | ≤ 0.25 | yes |
+| streaming | rust-1 | first partial with words (s) | 0.2707 | ≤ 1 | yes |
+| streaming | rust-1 | CPU load | 0.0947 | ≤ 0.25 | yes |
+| streaming | memory | peak RSS (MB) | 219.0547 | ≤ 256 | yes |
 | voice-fit | quality | vocal tract length error | 0.0275 | ≤ 0.05 | yes |
 | voice-fit | quality | pitch error | 0.0214 | ≤ 0.03 | yes |
-| voice-fit | js-1 | CPU time / audio time | 0.2313 | ≤ 1 | yes |
-| voice-fit | rust-1 | CPU time / audio time | 0.2243 | ≤ 1 | yes |
-| voice-fit | memory | peak RSS (MB) | 204.0039 | ≤ 256 | yes |
+| voice-fit | js-1 | CPU time / audio time | 0.2634 | ≤ 1 | yes |
+| voice-fit | rust-1 | CPU time / audio time | 0.2564 | ≤ 1 | yes |
+| voice-fit | memory | peak RSS (MB) | 199.2773 | ≤ 256 | yes |
 | session | quality | share of voices reaching stable | 1 | ≥ 1 | yes |
 | session | quality | vocal tract length error | 0.0197 | ≤ 0.05 | yes |
-| session | quality | pitch error | 0.0112 | ≤ 0.03 | yes |
-| session | js-1 | CPU time / audio time | 0.0896 | ≤ 0.5 | yes |
-| session | rust-1 | CPU time / audio time | 0.0824 | ≤ 0.5 | yes |
-| session | memory | peak RSS (MB) | 211.3672 | ≤ 256 | yes |
-| copy | quality | mean f0 RMSE (semitones) | 6.0239 | ≤ 1.5 | no |
-| copy | quality | mean timing error (ms) | 229.4 | ≤ 30 | no |
-| copy | quality | phonemes of the copy agreeing | 0.4615 | ≥ 0.9 | no |
-| copy | js-1 | reported, no limit: CPU time / audio time 16.1803 | — | — | certified |
-| copy | rust-1 | reported, no limit: CPU time / audio time 15.7606 | — | — | certified |
-| copy | memory | peak RSS (MB) | 1184.1 | ≤ 256 | no |
-| modes | quality | share of modes recognised | 0.9 | ≥ 0.8 | yes |
-| modes | js-1 | real-time factor | 0.0713 | ≤ 0.25 | yes |
-| modes | rust-1 | real-time factor | 0.0703 | ≤ 0.25 | yes |
-| modes | memory | peak RSS (MB) | 246.6328 | ≤ 256 | yes |
-| app | quality | text recognised back | 0.7188 | ≥ 1 | no |
-| app | js-1 | synthesis worker real-time factor | 0.235 | ≤ 1 | yes |
-| app | js-1 | first sound (s) | 0.314 | ≤ 1 | yes |
+| session | quality | pitch error | 0.0117 | ≤ 0.03 | yes |
+| session | js-1 | CPU time / audio time | 0.127 | ≤ 0.5 | yes |
+| session | rust-1 | CPU time / audio time | 0.1173 | ≤ 0.5 | yes |
+| session | memory | peak RSS (MB) | 208.5234 | ≤ 256 | yes |
+| copy | quality | mean f0 RMSE (semitones) | 6.0356 | ≤ 1.5 | no |
+| copy | quality | mean timing error (ms) | 274.5 | ≤ 30 | no |
+| copy | quality | phonemes of the copy agreeing | 0.4038 | ≥ 0.9 | no |
+| copy | js-1 | reported, no limit: CPU time / audio time 2.2744 | — | — | certified |
+| copy | rust-1 | reported, no limit: CPU time / audio time 1.531 | — | — | certified |
+| copy | memory | peak RSS (MB) | 442.6133 | ≤ 256 | no |
+| modes | quality | share of modes recognised | 0.9167 | ≥ 0.8 | yes |
+| modes | js-1 | real-time factor | 0.1063 | ≤ 0.25 | yes |
+| modes | rust-1 | real-time factor | 0.0963 | ≤ 0.25 | yes |
+| modes | memory | peak RSS (MB) | 242.3594 | ≤ 256 | yes |
+| app | quality | text recognised back | 0.6875 | ≥ 1 | no |
+| app | js-1 | synthesis worker real-time factor | 0.0889 | ≤ 1 | yes |
+| app | js-1 | first sound (s) | 0.208 | ≤ 1 | yes |
 
 ## Runs
 
 | Row | Engine | CPU (s) | Audio (s) | Peak RSS (MB) | Heap cap | Other measurements |
 | --- | --- | ---: | ---: | ---: | --- | --- |
-| synthesis | js | 17.193 | 391.707 | 813.4 | crashed at 192 MB (JavaScript heap out of memory); rerun without the cap | wer 0.3537, wer16k 0.3614, werIncrease -0.0076, rtf 0.0439, recognitionRtf 0.6327, utterances 160 |
-| synthesis | rust | 10.456 | 391.707 | 795.5 | crashed at 192 MB (JavaScript heap out of memory); rerun without the cap | wer 0.3537, rtf 0.0267, recognitionRtf 0.6398, utterances 160 |
-| recognition | js | 1525.964 | 1071.807 | 1346.3 | crashed at 192 MB (JavaScript heap out of memory); rerun without the cap | per 0.8674, wer 1.2979, per16k 0.8669, wer16k 1.2983, perIncrease 0.0005, werIncrease -0.0004, rtf 1.4237, utterances 127 |
-| recognition | rust | 1694.653 | 1071.807 | 1122.7 | crashed at 192 MB (JavaScript heap out of memory); rerun without the cap | per 0.8674, wer 1.2979, rtf 1.5811, utterances 127 |
-| streaming | js | 6.006 | 60 | 326.1 | 192 MB | textMismatch 0, firstPartial 0.2751, load 0.1001, partials 240, streamText The quick brown fox jump sober the lady dog. She says she ce…, batchText The quick brown fox jump sober the lady dog. She says she ce… |
-| streaming | rust | 5.763 | 60 | 330.8 | 192 MB | textMismatch 0, firstPartial 0.2739, load 0.0961, partials 240, streamText The quick brown fox jump sober the lady dog. She says she ce…, batchText The quick brown fox jump sober the lady dog. She says she ce… |
-| voice-fit | js | 6.94 | 30 | 196.8828 | 192 MB | vocalTractLengthError 0.0275, pitchError 0.0214, cpuRatio 0.2313 |
-| voice-fit | rust | 6.729 | 30 | 204.0039 | 192 MB | vocalTractLengthError 0.0275, pitchError 0.0214, cpuRatio 0.2243 |
-| session | js | 5.374 | 60 | 167.3867 | 192 MB | stable 1, vocalTractLengthError 0.0197, pitchError 0.0112, cpuRatio 0.0896 |
-| session | rust | 4.945 | 60 | 211.3672 | 192 MB | stable 1, vocalTractLengthError 0.0197, pitchError 0.0117, cpuRatio 0.0824 |
-| copy | js | 1808.629 | 111.78 | 1184.1 | crashed at 192 MB (JavaScript heap out of memory); rerun without the cap | f0RmseSemitones 6.0239, timingErrorMs 229.4, phonemeAgreement 0.4615, maxF0RmseSemitones 13.5423, maxTimingErrorMs 891.8, cpuRatio 16.1803, recordings 24 |
-| copy | rust | 1761.718 | 111.78 | 1165.1 | crashed at 192 MB (JavaScript heap out of memory); rerun without the cap | f0RmseSemitones 6.0239, timingErrorMs 229.4, phonemeAgreement 0.4615, maxF0RmseSemitones 13.5423, maxTimingErrorMs 891.8, cpuRatio 15.7606, recordings 24 |
-| modes | js | 7.8 | 109.405 | 236.3438 | 192 MB | modeShare 0.9, rtf 0.0713, renderRtf 0.0172, utterances 60 |
-| modes | rust | 7.691 | 109.405 | 246.6328 | 192 MB | modeShare 0.9, rtf 0.0703, renderRtf 0.0128, utterances 60 |
-| app | js | — | 11.289 | — | none | textBack 0.7188, workerRtf 0.235, workerRtfMeasured 0.0392, firstSound 0.314, firstChunk 0.314, coldFirstSound 1.45, startDelay 0.314, sampleRate 8000, chunks 89, heard The quick brown fox jump solar the lady dog. She says she sh… |
-
-## Targeted reruns
-
-- **voice-fit** at commit `0b97e5ca24faa731e691393ae6ec94ebd20a053a` on AMD EPYC 9V74 80-Core Processor, Node v24.22.3, measured 2026-11-28T01:58:55.001Z.
-  Pinned with `taskset -c 0`. Command `node scripts/run-heavy.mjs --suite lowest`.
-- **session** at commit `03a6415624de82dad80e3e3c6a98841203e8e419` on AMD EPYC 9V74 80-Core Processor, Node v24.22.3, measured 2026-11-28T01:52:41.792Z.
-  Pinned with `taskset -c 0`. Command `LOWEST_ROW=session node --test tests/heavy/lowest-settings.test.js`.
-- **streaming** at commit `ec44eefef653c0ebeaa56fbd421b5f545a82017f` on Intel(R) Xeon(R) 6975P-C, Node v24.22.3, measured 2026-11-28T01:46:10.008Z.
-  Pinned with `taskset -c 0`. Command `LOWEST_ROW=streaming node --test tests/heavy/lowest-settings.test.js`.
-- **modes** at commit `88f059c812b47aa18e78b20049330057c2370e08` on AMD EPYC 9V74 80-Core Processor, Node v24.22.3, measured 2026-11-28T02:23:26.875Z.
-  Pinned with `taskset -c 0`. Command `LOWEST_ROW=modes node --test tests/heavy/lowest-settings.test.js`.
+| synthesis | js | 8.545 | 391.707 | 384.8242 | 192 MB | wer 0.3537, wer16k 0.3624, werIncrease -0.0087, rtf 0.0218, recognitionRtf 0.1675, utterances 160 |
+| synthesis | rust | 6.505 | 391.707 | 345.1992 | 192 MB | wer 0.3537, rtf 0.0166, recognitionRtf 0.1601, utterances 160 |
+| recognition | js | 315.621 | 1071.807 | 401.9609 | 192 MB | per 0.8665, wer 1.2967, per16k 0.8664, wer16k 1.2983, perIncrease 0.0001, werIncrease -0.0017, rtf 0.2945, utterances 127 |
+| recognition | rust | 296.843 | 1071.807 | 381.832 | 192 MB | per 0.8665, wer 1.2967, rtf 0.277, utterances 127 |
+| streaming | js | 6.868 | 60 | 203.957 | 192 MB | textMismatch 0, firstPartial 0.2764, load 0.1145, partials 240, streamText The quick brown fox jump sober the lady dog. She says she ce…, batchText The quick brown fox jump sober the lady dog. She says she ce… |
+| streaming | rust | 5.681 | 60 | 219.0547 | 192 MB | textMismatch 0, firstPartial 0.2707, load 0.0947, partials 240, streamText The quick brown fox jump sober the lady dog. She says she ce…, batchText The quick brown fox jump sober the lady dog. She says she ce… |
+| voice-fit | js | 7.901 | 30 | 195.75 | 192 MB | vocalTractLengthError 0.0275, pitchError 0.0214, cpuRatio 0.2634 |
+| voice-fit | rust | 7.692 | 30 | 199.2773 | 192 MB | vocalTractLengthError 0.0275, pitchError 0.0214, cpuRatio 0.2564 |
+| session | js | 7.623 | 60 | 200.5703 | 192 MB | stable 1, vocalTractLengthError 0.0197, pitchError 0.0117, cpuRatio 0.127 |
+| session | rust | 7.038 | 60 | 208.5234 | 192 MB | stable 1, vocalTractLengthError 0.0197, pitchError 0.0117, cpuRatio 0.1173 |
+| copy | js | 254.238 | 111.78 | 439.332 | 192 MB | f0RmseSemitones 6.0356, timingErrorMs 274.5, phonemeAgreement 0.4038, maxF0RmseSemitones 12.7403, maxTimingErrorMs 1098, cpuRatio 2.2744, recordings 24 |
+| copy | rust | 171.135 | 111.78 | 442.6133 | 192 MB | f0RmseSemitones 6.0356, timingErrorMs 274.5, phonemeAgreement 0.4038, maxF0RmseSemitones 12.7403, maxTimingErrorMs 1098, cpuRatio 1.531, recordings 24 |
+| modes | js | 11.634 | 109.405 | 236.6563 | 192 MB | modeShare 0.9167, rtf 0.1063, renderRtf 0.0231, utterances 60 |
+| modes | rust | 10.54 | 109.405 | 242.3594 | 192 MB | modeShare 0.9167, rtf 0.0963, renderRtf 0.0179, utterances 60 |
+| app | js | — | 11.289 | — | none | textBack 0.6875, workerRtf 0.0889, workerRtfMeasured 0.0148, firstSound 0.208, firstChunk 0.208, coldFirstSound 0.831, startDelay 0.207, sampleRate 8000, chunks 89, heard The quick brown fox jump solar the lady dog. She says she sh… |
