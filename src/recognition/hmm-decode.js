@@ -388,6 +388,12 @@ function scoreFrame(network, search, t) {
   cur.reserve(work.length);
   const { scores, history, starts } = cur;
   const { scores: prevScores, history: prevHistory, starts: prevStarts } = prev;
+  const {
+    queued,
+    score: entryScores,
+    history: entryHistory,
+    start: entryStarts,
+  } = entries;
   let best = -Infinity;
   languageBest.fill(-Infinity);
   for (let k = 0; k < work.length; k++) {
@@ -397,45 +403,50 @@ function scoreFrame(network, search, t) {
     const wasActive = stamp[id] === t - 1;
     const old = offsets[id];
     const base = k * STATES_PER_TOKEN;
-    const entry = entries.queued[id] ? entries.score[id] : -Infinity;
-    let nodeBest = -Infinity;
+    const entry = queued[id] ? entryScores[id] : -Infinity;
+    let nodeBest;
     if (wasActive) {
-      for (let i = count - 1; i >= 0; i--) {
+      const firstEmission = emit[first];
+      const stayFirst = prevScores[old] + stay[firstEmission];
+      const enterFirst = entry > stayFirst;
+      const firstScore = enterFirst ? entry : stayFirst;
+      nodeBest =
+        firstScore > -Infinity
+          ? firstScore + score(firstEmission, t)
+          : firstScore;
+      scores[base] = nodeBest;
+      history[base] = enterFirst ? entryHistory[id] : prevHistory[old];
+      starts[base] = enterFirst ? entryStarts[id] : prevStarts[old];
+
+      let before = firstEmission;
+      for (let i = 1; i < count; i++) {
         const j = base + i;
         const m = emit[first + i];
         const previous = old + i;
         let value = prevScores[previous] + stay[m];
-        let hist = prevHistory[previous];
-        let start = prevStarts[previous];
-        if (i > 0) {
-          const advance = prevScores[previous - 1] + go[emit[first + i - 1]];
-          if (advance > value) {
-            value = advance;
-            hist = prevHistory[previous - 1];
-            start = prevStarts[previous - 1];
-          }
-        }
-        if (i === 0 && entry > value) {
-          value = entry;
-          hist = entries.history[id];
-          start = entries.start[id];
+        const advance = prevScores[previous - 1] + go[before];
+        let source = previous;
+        if (advance > value) {
+          value = advance;
+          source--;
         }
         if (value > -Infinity) {
           value += score(m, t);
         }
         scores[j] = value;
-        history[j] = hist;
-        starts[j] = start;
+        history[j] = prevHistory[source];
+        starts[j] = prevStarts[source];
         nodeBest = Math.max(nodeBest, value);
+        before = m;
       }
     } else {
       nodeBest = entry > -Infinity ? entry + score(emit[first], t) : -Infinity;
       scores[base] = nodeBest;
-      history[base] = entries.history[id];
-      starts[base] = entries.start[id];
+      history[base] = entryHistory[id];
+      starts[base] = entryStarts[id];
       scores.fill(-Infinity, base + 1, base + count);
     }
-    entries.queued[id] = 0;
+    queued[id] = 0;
     nodeScores[k] = nodeBest;
     const lang = language[id];
     languageBest[lang] = Math.max(languageBest[lang], nodeBest);
@@ -616,12 +627,12 @@ export function decodeWords(network, feats, frames, options = {}, cache) {
   };
 }
 
-// A streaming recognizer runs the same search network for each preview and
-// phrase. Keep its numeric work arrays and reset only the state read by the
-// next search. Trainers and callers with their own search use fresh buffers.
+// Reuse numeric arrays and reset only the state read by the next search.
+// Streams keep a weak cache per recognizer. Batch retains only its last network.
 function searchBuffers(network, cache) {
   let buffers = cache?.get(network);
   if (!buffers) {
+    cache?.clear?.();
     const nodes = network.language.length;
     const words = network.words.length;
     buffers = {

@@ -41,6 +41,7 @@ export const RECOGNITION_LEVELS = Object.freeze({
 
 // Short commands can afford a wider search and have less context.
 const WIDE_SEARCH_SECONDS = 4;
+const batchWorkspaces = new Map();
 
 export function levelForTier(name) {
   if (name === 'telephone' || name === 'narrowband') {
@@ -601,7 +602,7 @@ function serial(samples, sampleRate, settings, level, unsplit) {
     settings,
     level,
     undefined,
-    { search }
+    { search, workspaces: batchWorkspaces }
   );
   checkNoise(decoded, samples.length / sampleRate);
   if (!heardSpeech(decoded, settings.minVoiced, settings.whisper)) {

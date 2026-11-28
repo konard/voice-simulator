@@ -84,6 +84,26 @@ it('adds nothing to words without a tone', () => {
   assert.equal(toned.score, plain.score);
 });
 
+it('resets reused search buffers between recordings and networks', () => {
+  const model = getHmmModel();
+  const spoken = synthesize('hello', { lang: 'en', tier: 'telephone' });
+  const { feats, frames, tone } = hmmFeatures(
+    spoken.samples,
+    spoken.sampleRate,
+    model.lda
+  );
+  const open = getNetwork(model, ['en'], { maxWords: 200 });
+  const closed = getNetwork(model, ['en'], { maxWords: 200, oov: false });
+  const cache = new Map();
+  const expected = decodeWords(open, feats, frames, { tone });
+
+  decodeWords(open, feats, Math.floor(frames / 2), { maxActive: 16 }, cache);
+  assert.deepEqual(decodeWords(open, feats, frames, { tone }, cache), expected);
+  decodeWords(closed, feats, frames, { tone }, cache);
+  assert.deepEqual([...cache.keys()], [closed]);
+  assert.deepEqual(decodeWords(open, feats, frames, { tone }, cache), expected);
+});
+
 it('scores a tone mixture as a Gaussian mixture', () => {
   const data = {
     dims: 1,
