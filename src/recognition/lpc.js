@@ -148,11 +148,15 @@ export function lpcBurg(x, order, a, k) {
  * @param {number} order
  * @param {Float64Array|Float32Array|number[]} a
  * @param {Float64Array|Float32Array|number[]} k
- * @param {number} [length] Number of active samples when x is scratch storage.
  * @returns {number} Residual power E (the final Levinson error over N).
  */
-export function lpcAutocorrelation(x, order, a, k, length = x.length) {
-  checkOrder(x, order, a, k);
+export function lpcAutocorrelation(x, order, a, k) {
+  const length = checkOrder(x, order, a, k);
+  return lpcAutocorrelationPrefix(x, order, a, k, length);
+}
+
+/** Autocorrelation for a validated workspace with a known active length. */
+export function lpcAutocorrelationPrefix(x, order, a, k, length) {
   if (length === 0) {
     clear(a, k, order);
     return 0;

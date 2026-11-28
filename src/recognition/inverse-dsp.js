@@ -1,6 +1,6 @@
 /** Numerical helpers for batch glottal inverse filtering (Unlicense). */
 import { createFft } from './fft.js';
-import { lpcAutocorrelation } from './lpc.js';
+import { lpcAutocorrelationPrefix } from './lpc.js';
 
 export function hann(length, result = new Float64Array(length)) {
   for (let n = 0; n < length; n++) {
@@ -75,7 +75,7 @@ function predictor(x, window, first, a, k, weighted) {
   for (let n = first; n < length; n++) {
     weighted[n - first] = x[n] * window[n];
   }
-  lpcAutocorrelation(weighted, a.length, a, k, length - first);
+  lpcAutocorrelationPrefix(weighted, a.length, a, k, length - first);
   for (let i = 0; i < a.length; i++) {
     if (!Number.isFinite(a[i])) {
       a.fill(0);
