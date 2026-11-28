@@ -65,6 +65,23 @@ function resampleAt(samples, center, cutoff, halfWidth, kernel) {
  * @returns {Float32Array}
  */
 export function resample(samples, fromRate, toRate, options = {}) {
+  return resampleWithStorage(
+    samples,
+    fromRate,
+    toRate,
+    (length) => new Float32Array(length),
+    options
+  );
+}
+
+/** Rate conversion with caller-owned output when the rates differ. */
+export function resampleWithStorage(
+  samples,
+  fromRate,
+  toRate,
+  storage,
+  options = {}
+) {
   if (!(fromRate > 0) || !(toRate > 0)) {
     throw new Error('Sample rates must be positive');
   }
@@ -76,7 +93,7 @@ export function resample(samples, fromRate, toRate, options = {}) {
   const cutoff = Math.min(1, ratio) * 0.97;
   const halfWidth = (options.zeroCrossings ?? 16) / cutoff;
   const length = Math.round(samples.length * ratio);
-  const result = new Float32Array(length);
+  const result = storage(length);
   const kernel =
     Number.isInteger(fromRate / toRate) && halfWidth > 0 && halfWidth <= 256
       ? integerKernel(cutoff, halfWidth)

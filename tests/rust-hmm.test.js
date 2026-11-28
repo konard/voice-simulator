@@ -70,6 +70,27 @@ test('wideband HMM features only need frame-level pitch after resampling', () =>
   expect(frameOnly.tone).toEqual(full.tone);
 });
 
+test('reused wideband HMM input ignores the previous clip’s tail', () => {
+  const { lda } = getHmmModel();
+  const samples = sound();
+  const modelAudio = new Float32Array(samples.length / 2);
+  const storage = (key, length, Type) =>
+    key === 'hmmAudio' ? modelAudio.subarray(0, length) : new Type(length);
+  const options = { framePitch: true };
+  hmmFeatures(samples, RATE * 2, lda, undefined, { ...options, storage });
+  expect(modelAudio.some((sample) => sample !== 0)).toBe(true);
+
+  const short = samples.subarray(300, 2400);
+  const expected = hmmFeatures(short, RATE * 2, lda, undefined, options);
+  const reused = hmmFeatures(short, RATE * 2, lda, undefined, {
+    ...options,
+    storage,
+  });
+  expect(reused.frames).toBe(expected.frames);
+  expect(reused.feats).toEqual(expected.feats);
+  expect(reused.tone).toEqual(expected.tone);
+});
+
 test('reuses HMM feature storage across inputs with different lengths', () => {
   const { lda } = getHmmModel();
   const samples = sound();

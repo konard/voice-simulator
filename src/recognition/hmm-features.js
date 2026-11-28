@@ -4,7 +4,7 @@
  * to the utterance median and the voicing; then a linear discriminant
  * projection of nine stacked frames. Unlicense.
  */
-import { resample } from '../audio/resample.js';
+import { resampleWithStorage } from '../audio/resample.js';
 import { hzToMel, melToHz } from '../metrics/spectrum.js';
 import { createFft } from './fft.js';
 import { analyzePitchFrames } from './frontend.js';
@@ -72,10 +72,12 @@ function getTables() {
 }
 
 /** Speech at the model rate. */
-export function hmmAudio(samples, sampleRate) {
+export function hmmAudio(samples, sampleRate, storage = allocate) {
   return sampleRate === HMM_RATE
     ? samples
-    : resample(samples, sampleRate, HMM_RATE);
+    : resampleWithStorage(samples, sampleRate, HMM_RATE, (length) =>
+        storage('hmmAudio', length, Float32Array)
+      );
 }
 
 function windowedPower(x, start, re, im, power, { hamming, fft }) {
@@ -300,7 +302,7 @@ export function hmmFeatures(
   pitchAtInputRate,
   { includeTone = true, framePitch = false, storage = allocate } = {}
 ) {
-  const x = hmmAudio(samples, sampleRate);
+  const x = hmmAudio(samples, sampleRate, storage);
   let modelPitch = sampleRate === HMM_RATE ? pitchAtInputRate : undefined;
   if (!modelPitch && framePitch) {
     // The input-rate analysis may still need its own samples and frame columns.
