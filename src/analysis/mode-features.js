@@ -427,22 +427,36 @@ export function cpp(samples, sampleRate) {
   return values.length === 0 ? 0 : values[Math.floor(values.length / 2)];
 }
 
-/**
- * Prediction residual of the signal: LPC (order rate/1000 + 2) of 30 ms
- * Hann frames of the pre-emphasised signal every 10 ms, each inverse
- * filtering its 10 ms. Its peaks mark the glottal closures.
- */
-function residual(signal, start, end, workspace) {
-  const { hop, length, order, window, frame, lpc, emphasised, error } =
-    workspace;
-  const base = Math.max(0, start - hop - order);
-  const through = Math.min(signal.length, end + hop);
+function preemphasize(signal, emphasised, base, through) {
   let previous = base > 0 ? signal[base - 1] : 0;
   for (let index = base; index < through; index++) {
     const sample = signal[index];
     emphasised[index - base] = sample - 0.97 * previous;
     previous = sample;
   }
+}
+
+function filterResidualFrame(a, at, limit, base, start, workspace) {
+  const { order, emphasised, error } = workspace;
+  for (let index = at; index < limit; index++) {
+    let sum = 0;
+    const last = Math.min(order, index);
+    for (let k = 0; k <= last; k++) {
+      sum += a[k] * emphasised[index - k - base];
+    }
+    error[index - start] = sum;
+  }
+}
+
+/**
+ * Prediction residual of the signal: LPC (order rate/1000 + 2) of 30 ms
+ * Hann frames of the pre-emphasised signal every 10 ms, each inverse
+ * filtering its 10 ms. Its peaks mark the glottal closures.
+ */
+function residual(signal, start, end, workspace) {
+  const { hop, length, order, window, frame, lpc, emphasised } = workspace;
+  const base = Math.max(0, start - hop - order);
+  preemphasize(signal, emphasised, base, Math.min(signal.length, end + hop));
   for (let at = start; at < end; at += hop) {
     const from = at - hop;
     const left = Math.max(0, -from);
@@ -453,15 +467,7 @@ function residual(signal, start, end, workspace) {
       frame[index] = emphasised[from + index - base] * window[index];
     }
     const a = lpcCoefficients(frame, order, lpc);
-    const limit = Math.min(end, at + hop);
-    for (let index = at; index < limit; index++) {
-      let sum = 0;
-      const last = Math.min(order, index);
-      for (let k = 0; k <= last; k++) {
-        sum += a[k] * emphasised[index - k - base];
-      }
-      error[index - start] = sum;
-    }
+    filterResidualFrame(a, at, Math.min(end, at + hop), base, start, workspace);
   }
 }
 
