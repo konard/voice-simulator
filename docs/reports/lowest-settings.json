@@ -274,81 +274,15 @@
         "metrics": {
           "stable": 1,
           "vocalTractLengthError": 0.0197,
-          "pitchError": 0.0117,
-          "cpuRatio": 0.1596
+          "pitchError": 0.0112,
+          "cpuRatio": 0.0896
         },
         "cases": [
           {
             "preset": "male",
             "stableAt": 6.52,
             "state": "refining",
-            "seconds": 4.1836,
-            "words": 53,
-            "distances": [
-              0,
-              0,
-              0.0375,
-              0.0092,
-              0.0092,
-              0.0598,
-              0.0467
-            ],
-            "vocalTractLengthError": 0.0197,
-            "pitchError": 0.0055
-          },
-          {
-            "preset": "female",
-            "stableAt": 4.52,
-            "state": "stable",
-            "seconds": 2.6671,
-            "words": 54,
-            "distances": [
-              0,
-              0,
-              0.0122,
-              0
-            ],
-            "vocalTractLengthError": 0.0141,
-            "pitchError": 0.0105
-          },
-          {
-            "preset": "child",
-            "stableAt": 7.02,
-            "state": "stable",
-            "seconds": 2.726,
-            "words": 50,
-            "distances": [
-              0,
-              0,
-              0.0131,
-              0.0272,
-              0.0065,
-              0.0139
-            ],
-            "vocalTractLengthError": 0.0168,
-            "pitchError": 0.0117
-          }
-        ],
-        "seconds": 9.577,
-        "audioSeconds": 60,
-        "peakRssMb": 330.9,
-        "capped": {}
-      },
-      "rust": {
-        "row": "session",
-        "engine": "rust",
-        "metrics": {
-          "stable": 1,
-          "vocalTractLengthError": 0.0197,
-          "pitchError": 0.0117,
-          "cpuRatio": 0.1624
-        },
-        "cases": [
-          {
-            "preset": "male",
-            "stableAt": 6.52,
-            "state": "refining",
-            "seconds": 3.9918,
+            "seconds": 2.4951,
             "words": 53,
             "distances": [
               0,
@@ -366,7 +300,75 @@
             "preset": "female",
             "stableAt": 4.5,
             "state": "stable",
-            "seconds": 2.9045,
+            "seconds": 1.4728,
+            "words": 54,
+            "distances": [
+              0,
+              0,
+              0.0122,
+              0
+            ],
+            "vocalTractLengthError": 0.0139,
+            "pitchError": 0.009
+          },
+          {
+            "preset": "child",
+            "stableAt": 7,
+            "state": "stable",
+            "seconds": 1.4061,
+            "words": 50,
+            "distances": [
+              0,
+              0,
+              0.0131,
+              0.0272,
+              0.0065,
+              0.0139
+            ],
+            "vocalTractLengthError": 0.0165,
+            "pitchError": 0.0112
+          }
+        ],
+        "seconds": 5.374,
+        "audioSeconds": 60,
+        "peakRssMb": 167.38671875,
+        "capped": {
+          "heapLimitMb": 192
+        }
+      },
+      "rust": {
+        "row": "session",
+        "engine": "rust",
+        "metrics": {
+          "stable": 1,
+          "vocalTractLengthError": 0.0197,
+          "pitchError": 0.0117,
+          "cpuRatio": 0.0824
+        },
+        "cases": [
+          {
+            "preset": "male",
+            "stableAt": 6.52,
+            "state": "refining",
+            "seconds": 2.3862,
+            "words": 53,
+            "distances": [
+              0,
+              0,
+              0.0375,
+              0.0092,
+              0.0092,
+              0.0598,
+              0.0467
+            ],
+            "vocalTractLengthError": 0.0197,
+            "pitchError": 0.0055
+          },
+          {
+            "preset": "female",
+            "stableAt": 4.5,
+            "state": "stable",
+            "seconds": 1.3399,
             "words": 54,
             "distances": [
               0,
@@ -381,7 +383,7 @@
             "preset": "child",
             "stableAt": 7.02,
             "state": "stable",
-            "seconds": 2.8494,
+            "seconds": 1.2192,
             "words": 50,
             "distances": [
               0,
@@ -395,10 +397,12 @@
             "pitchError": 0.0117
           }
         ],
-        "seconds": 9.746,
+        "seconds": 4.945,
         "audioSeconds": 60,
-        "peakRssMb": 357.3,
-        "capped": {}
+        "peakRssMb": 211.3671875,
+        "capped": {
+          "heapLimitMb": 192
+        }
       }
     },
     "copy": {
@@ -751,7 +755,7 @@
             "pass": true
           },
           "pitchError": {
-            "value": 0.0117,
+            "value": 0.0112,
             "limit": 0.03,
             "pass": true
           }
@@ -761,7 +765,7 @@
         "status": "certified",
         "metrics": {
           "cpuRatio": {
-            "value": 0.1596,
+            "value": 0.0896,
             "limit": 0.5,
             "pass": true
           }
@@ -771,22 +775,21 @@
         "status": "certified",
         "metrics": {
           "cpuRatio": {
-            "value": 0.1624,
+            "value": 0.0824,
             "limit": 0.5,
             "pass": true
           }
         }
       },
       "memory": {
-        "status": "failed",
+        "status": "certified",
         "metrics": {
           "peakRssMb": {
-            "value": 357.3,
+            "value": 211.3671875,
             "limit": 256,
-            "pass": false
+            "pass": true
           }
-        },
-        "issue": "https://github.com/konard/voice-simulator/issues/173"
+        }
       }
     },
     "copy": {
@@ -916,8 +919,8 @@
       "command": "node --test --test-name-pattern 'voice-fit with' tests/heavy/lowest-settings.test.js"
     },
     "session": {
-      "measured": "2026-11-28T01:13:16.430Z",
-      "commit": "336df9f4069def2bfdf385859008df98c2138bf0",
+      "measured": "2026-11-28T01:52:41.792Z",
+      "commit": "03a6415624de82dad80e3e3c6a98841203e8e419",
       "command": "LOWEST_ROW=session node --test tests/heavy/lowest-settings.test.js",
       "cpu": "AMD EPYC 9V74 80-Core Processor",
       "node": "v24.22.3",
