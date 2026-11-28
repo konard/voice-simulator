@@ -381,59 +381,63 @@ function thresholdWorkspace(languageCount) {
   };
 }
 
-/**
- * Pruning threshold of each language at one frame: `beam` below its own
- * best token, at most `languageBeam` below the best of all, and its
- * `maxActive` best nodes.
- */
-export function createThresholds(
-  nodes,
-  languageCount,
-  settings,
-  { rows, sizes, totals, peaks, thresholds } = thresholdWorkspace(languageCount)
+/** Pruning combines the relative language beams and the active-node limit. */
+function frameThresholds(
+  { nodes, languageCount, beam, languageBeam, maxActive },
+  { rows, sizes, totals, peaks, thresholds },
+  work,
+  scores,
+  length,
+  best
 ) {
-  const { beam, languageBeam, maxActive } = settings;
-  return (work, scores, length, best) => {
-    peaks.fill(-Infinity);
-    totals.fill(0);
-    for (let i = 0; i < length; i++) {
-      const language = nodes[work[i]];
-      peaks[language] = Math.max(peaks[language], scores[i]);
-      totals[language]++;
-    }
-    const globalThreshold = best - languageBeam;
-    for (let i = 0; i < languageCount; i++) {
-      thresholds[i] = Math.max(peaks[i] - beam, globalThreshold);
-    }
-    if (maxActive <= 0 || length <= maxActive) {
-      return thresholds;
-    }
-    // A score already below either beam cannot affect the final threshold.
-    sizes.fill(0);
-    for (let i = 0; i < length; i++) {
-      const language = nodes[work[i]];
-      const score = scores[i];
-      if (totals[language] <= maxActive || score < thresholds[language]) {
-        continue;
-      }
-      const size = sizes[language]++;
-      if (size === rows[language].length) {
-        const expanded = new Float64Array(size * 2);
-        expanded.set(rows[language]);
-        rows[language] = expanded;
-      }
-      rows[language][size] = score;
-    }
-    for (let i = 0; i < languageCount; i++) {
-      if (sizes[i] >= maxActive) {
-        thresholds[i] = Math.max(
-          thresholds[i],
-          scoreAtRank(rows[i], sizes[i], sizes[i] - maxActive)
-        );
-      }
-    }
+  peaks.fill(-Infinity);
+  totals.fill(0);
+  for (let i = 0; i < length; i++) {
+    const language = nodes[work[i]];
+    peaks[language] = Math.max(peaks[language], scores[i]);
+    totals[language]++;
+  }
+  const globalThreshold = best - languageBeam;
+  for (let i = 0; i < languageCount; i++) {
+    thresholds[i] = Math.max(peaks[i] - beam, globalThreshold);
+  }
+  if (maxActive <= 0 || length <= maxActive) {
     return thresholds;
-  };
+  }
+  // A score already below either beam cannot affect the final threshold.
+  sizes.fill(0);
+  for (let i = 0; i < length; i++) {
+    const language = nodes[work[i]];
+    const score = scores[i];
+    if (totals[language] <= maxActive || score < thresholds[language]) {
+      continue;
+    }
+    const size = sizes[language]++;
+    if (size === rows[language].length) {
+      const expanded = new Float64Array(size * 2);
+      expanded.set(rows[language]);
+      rows[language] = expanded;
+    }
+    rows[language][size] = score;
+  }
+  for (let i = 0; i < languageCount; i++) {
+    if (sizes[i] >= maxActive) {
+      thresholds[i] = Math.max(
+        thresholds[i],
+        scoreAtRank(rows[i], sizes[i], sizes[i] - maxActive)
+      );
+    }
+  }
+  return thresholds;
+}
+
+/** Create a reusable threshold selector for independent score columns. */
+export function createThresholds(nodes, languageCount, settings) {
+  const { beam, languageBeam, maxActive } = settings;
+  const beams = { nodes, languageCount, beam, languageBeam, maxActive };
+  const histogram = thresholdWorkspace(languageCount);
+  return (work, scores, length, best) =>
+    frameThresholds(beams, histogram, work, scores, length, best);
 }
 
 // Only the nodes visited by the beam need state scores and history.
@@ -658,12 +662,22 @@ function prepareFrame(pass, nodeCount) {
 }
 
 // Keep the order of emission, pruning and word ends explicit in the loop.
-function advanceFrames(network, frames, pass, thresholdsOf, records) {
+function advanceFrames(network, frames, pass, histogram, records) {
   const { wordEnds, endings, endingScores } = pass;
+  const { beam, languageBeam, maxActive } = pass.settings;
+  const beams = {
+    nodes: network.nodes.language,
+    languageCount: network.languages.length,
+    beam,
+    languageBeam,
+    maxActive,
+  };
   for (let t = 0; t < frames; t++) {
     prepareFrame(pass, network.nodeCount);
     scoreFrame(network, pass, t);
-    const thresholds = thresholdsOf(
+    const thresholds = frameThresholds(
+      beams,
+      histogram,
       pass.work,
       pass.current.peaks,
       pass.length,
@@ -694,12 +708,6 @@ function decodeWithWorkspace(network, feats, frames, options, workspace) {
     workspace;
   positions.fill(0);
   const lm = languageModel(network, records, settings, workspace.transitions);
-  const thresholdsOf = createThresholds(
-    network.nodes.language,
-    network.languages.length,
-    settings,
-    workspace.histogram
-  );
   initialEntries(entries, network, records, languages, settings);
   const wordEnds = [];
   const endings = Array.from({ length: network.languages.length * 5 }, () => ({
@@ -729,7 +737,7 @@ function decodeWithWorkspace(network, feats, frames, options, workspace) {
     settings,
     trees: network.languages.map((lang) => network.trees.get(lang)),
   };
-  advanceFrames(network, frames, pass, thresholdsOf, records);
+  advanceFrames(network, frames, pass, workspace.histogram, records);
   const { best, score: bestScore } = finalRecord(
     network,
     records,
