@@ -329,7 +329,7 @@ function voicedFrames(signal, rate) {
   }
   const loud = quantile(levels, 0.95);
   const gate = Math.max(1e-5, PHONATION_ANALYSIS.levelShare * loud);
-  return Array.from(
+  return Uint8Array.from(
     levels,
     (level, frame) => level > gate && lows[frame] >= PHONATION_ANALYSIS.lowShare
   );
@@ -598,19 +598,25 @@ function isPulse(energy, index, near, far) {
   const nearEnd = index + near;
   for (let k = start; k <= end; k++) {
     const other = energy[k];
-    if (other > value && k >= nearStart && k <= nearEnd) {
+    if (
+      Number.isNaN(other) ||
+      (other > value && k >= nearStart && k <= nearEnd)
+    ) {
       return false;
     }
-    loudest = Math.max(loudest, other);
+    if (other > loudest) {
+      loudest = other;
+    }
   }
   return value >= PHONATION_ANALYSIS.pulseShare * loudest;
 }
 
 /** Cross-correlation of a fixed window at `a` with a window at `b`. */
-function correlation(signal, a, b, length, first) {
+function writeCorrelation(signal, a, b, dense, workspace, slot) {
+  const { length, energy, values } = workspace;
   let product = 0;
   let second = 0;
-  if (a >= 0 && b + length <= signal.length && ArrayBuffer.isView(signal)) {
+  if (dense && b + length <= signal.length) {
     for (let k = 0; k < length; k++) {
       const x = signal[a + k];
       const y = signal[b + k];
@@ -625,7 +631,8 @@ function correlation(signal, a, b, length, first) {
       second += y * y;
     }
   }
-  return first > 0 && second > 0 ? product / Math.sqrt(first * second) : 0;
+  values[slot] =
+    energy > 0 && second > 0 ? product / Math.sqrt(energy * second) : 0;
 }
 
 /**
@@ -635,22 +642,26 @@ function correlation(signal, a, b, length, first) {
  * cross-correlation over 0.8 of the period from a tenth before the pulse,
  * parabola through the best lag). Returns zero below the match threshold.
  */
-function matchPeriod(signal, rate, from, rough, values) {
+function matchPeriod(signal, rate, from, rough, workspace) {
   const spread = Math.max(Math.round(0.0005 * rate), Math.round(0.15 * rough));
   const length = Math.max(4, Math.round(0.8 * rough));
   const start = from - Math.round(0.1 * rough);
   const low = Math.max(1, rough - spread);
   const high = rough + spread;
+  const dense = start >= 0 && ArrayBuffer.isView(signal);
   let energy = 0;
   for (let k = 0; k < length; k++) {
     const sample = signal[start + k] ?? 0;
     energy += sample * sample;
   }
+  const { values } = workspace;
+  workspace.length = length;
+  workspace.energy = energy;
   let best = low;
   for (let lag = low - 1; lag <= high + 1; lag++) {
-    const value = correlation(signal, start, start + lag, length, energy);
-    values[lag - low + 1] = value;
-    if (lag >= low && lag <= high && value > values[best - low + 1]) {
+    const slot = lag - low + 1;
+    writeCorrelation(signal, start, start + lag, dense, workspace, slot);
+    if (lag >= low && lag <= high && values[slot] > values[best - low + 1]) {
       best = lag;
     }
   }
@@ -688,7 +699,11 @@ export function glottalPeriods(samples, sampleRate) {
     Math.round(0.0005 * rate),
     Math.round(0.15 * maxPeriod)
   );
-  const correlations = new Float64Array(2 * spread + 3);
+  const correlations = {
+    values: new Float64Array(2 * spread + 3),
+    length: 0,
+    energy: 0,
+  };
   for (const pulses of pulseCandidates(signal, rate)) {
     let train = null;
     for (let index = 1; index < pulses.length; index++) {
