@@ -1,9 +1,9 @@
 {
   "version": 1,
-  "measured": "2026-11-28T05:55:41.181Z",
-  "commit": "93d7355e98d6867d0dc8180309c4dbf22bac152a",
+  "measured": "2026-11-28T06:37:11.182Z",
+  "commit": "9626a26b5effa981cf9db6eec76946b9064fac07",
   "command": "node scripts/run-heavy.mjs --suite lowest",
-  "cpu": "Intel(R) Xeon(R) 6975P-C",
+  "cpu": "AMD EPYC 9V45 96-Core Processor",
   "node": "v24.22.3",
   "pinned": true,
   "core": 0,
@@ -131,13 +131,13 @@
           "wer": 0.3603,
           "wer16k": 0.3581,
           "werIncrease": 0.0022,
-          "rtf": 0.0211,
-          "recognitionRtf": 0.1545,
+          "rtf": 0.0177,
+          "recognitionRtf": 0.0989,
           "utterances": 160
         },
-        "seconds": 8.266,
+        "seconds": 6.947,
         "audioSeconds": 391.707,
-        "peakRssMb": 364.70703125,
+        "peakRssMb": 351.16796875,
         "capped": {
           "heapLimitMb": 192
         }
@@ -147,13 +147,13 @@
         "engine": "rust",
         "metrics": {
           "wer": 0.3603,
-          "rtf": 0.0166,
-          "recognitionRtf": 0.1441,
+          "rtf": 0.0133,
+          "recognitionRtf": 0.0945,
           "utterances": 160
         },
-        "seconds": 6.501,
+        "seconds": 5.206,
         "audioSeconds": 391.707,
-        "peakRssMb": 322.98046875,
+        "peakRssMb": 260.1953125,
         "capped": {
           "heapLimitMb": 192
         }
@@ -170,12 +170,12 @@
           "wer16k": 1.2996,
           "perIncrease": 0.0125,
           "werIncrease": -0.0732,
-          "rtf": 0.0813,
+          "rtf": 0.0516,
           "utterances": 127
         },
-        "seconds": 87.119,
+        "seconds": 55.33,
         "audioSeconds": 1071.807,
-        "peakRssMb": 388.4140625,
+        "peakRssMb": 383.6015625,
         "capped": {
           "heapLimitMb": 192
         }
@@ -186,12 +186,12 @@
         "metrics": {
           "per": 0.8782,
           "wer": 1.2264,
-          "rtf": 0.077,
+          "rtf": 0.0588,
           "utterances": 127
         },
-        "seconds": 82.533,
+        "seconds": 63.037,
         "audioSeconds": 1071.807,
-        "peakRssMb": 345.125,
+        "peakRssMb": 332.7734375,
         "capped": {
           "heapLimitMb": 192
         }
@@ -203,17 +203,17 @@
         "engine": "js",
         "metrics": {
           "textMismatch": 0,
-          "firstPartial": 0.2541,
-          "load": 0.0829,
+          "firstPartial": 0.2652,
+          "load": 0.0659,
           "partials": 240,
           "streamText": "The quick brown fox jumps over the lady dog. She says she cells by the sea shore. Did you measure at resins s today. Wide oz the long judge and all choozhermsheeptaw is. What a beautiful morning? Thick fog mayo are the suit have. A usually think about their father and mother. Of our js its aid around then that moon. Are the children playing outside now? Peas bring mia cup of hot to the, some medal the book. How far is the nearest hospital? The singer was ringing award as. I want to the called and lettered today. Cartoon of that your air was sure to lend. Stored. He could not hear the boys voice clearly. The will visit was one thursday. Is this are ten or nine? The photographer to ka photograph of the banana pre. The.",
           "batchText": "The quick brown fox jumps over the lady dog. She says she cells by the sea shore. Did you measure at resins s today. Wide oz the long judge and all choozhermsheeptaw is. What a beautiful morning? Thick fog mayo are the suit have. A usually think about their father and mother. Of our js its aid around then that moon. Are the children playing outside now? Peas bring mia cup of hot to the, some medal the book. How far is the nearest hospital? The singer was ringing award as. I want to the called and lettered today. Cartoon of that your air was sure to lend. Stored. He could not hear the boys voice clearly. The will visit was one thursday. Is this are ten or nine? The photographer to ka photograph of the banana pre. The.",
           "batchLastWord": 59.9875,
           "wholeInputLastWord": 59.9875
         },
-        "seconds": 4.976,
+        "seconds": 3.953,
         "audioSeconds": 60,
-        "peakRssMb": 185.609375,
+        "peakRssMb": 210.3671875,
         "capped": {
           "heapLimitMb": 192
         }
@@ -223,17 +223,17 @@
         "engine": "rust",
         "metrics": {
           "textMismatch": 0,
-          "firstPartial": 0.2587,
-          "load": 0.0694,
+          "firstPartial": 0.2596,
+          "load": 0.0607,
           "partials": 240,
           "streamText": "The quick brown fox jumps over the lady dog. She says she cells by the sea shore. Did you measure at resins s today. Wide oz the long judge and all choozhermsheeptaw is. What a beautiful morning? Thick fog mayo are the suit have. A usually think about their father and mother. Of our js its aid around then that moon. Are the children playing outside now? Peas bring mia cup of hot to the, some medal the book. How far is the nearest hospital? The singer was ringing award as. I want to the called and lettered today. Cartoon of that your air was sure to lend. Stored. He could not hear the boys voice clearly. The will visit was one thursday. Is this are ten or nine? The photographer to ka photograph of the banana pre. The.",
           "batchText": "The quick brown fox jumps over the lady dog. She says she cells by the sea shore. Did you measure at resins s today. Wide oz the long judge and all choozhermsheeptaw is. What a beautiful morning? Thick fog mayo are the suit have. A usually think about their father and mother. Of our js its aid around then that moon. Are the children playing outside now? Peas bring mia cup of hot to the, some medal the book. How far is the nearest hospital? The singer was ringing award as. I want to the called and lettered today. Cartoon of that your air was sure to lend. Stored. He could not hear the boys voice clearly. The will visit was one thursday. Is this are ten or nine? The photographer to ka photograph of the banana pre. The.",
           "batchLastWord": 59.9875,
           "wholeInputLastWord": 59.9875
         },
-        "seconds": 4.164,
+        "seconds": 3.642,
         "audioSeconds": 60,
-        "peakRssMb": 230.32421875,
+        "peakRssMb": 210.953125,
         "capped": {
           "heapLimitMb": 192
         }
@@ -246,11 +246,11 @@
         "metrics": {
           "vocalTractLengthError": 0.0275,
           "pitchError": 0.0214,
-          "cpuRatio": 0.1759
+          "cpuRatio": 0.126
         },
-        "seconds": 5.277,
+        "seconds": 3.781,
         "audioSeconds": 30,
-        "peakRssMb": 197.32421875,
+        "peakRssMb": 199.6484375,
         "capped": {
           "heapLimitMb": 192
         }
@@ -261,11 +261,11 @@
         "metrics": {
           "vocalTractLengthError": 0.0275,
           "pitchError": 0.0214,
-          "cpuRatio": 0.1681
+          "cpuRatio": 0.1265
         },
-        "seconds": 5.044,
+        "seconds": 3.796,
         "audioSeconds": 30,
-        "peakRssMb": 200.84375,
+        "peakRssMb": 170.6875,
         "capped": {
           "heapLimitMb": 192
         }
@@ -277,84 +277,16 @@
         "engine": "js",
         "metrics": {
           "stable": 1,
-          "vocalTractLengthError": 0.0197,
-          "pitchError": 0.0112,
-          "cpuRatio": 0.0892
-        },
-        "cases": [
-          {
-            "preset": "male",
-            "stableAt": 6.52,
-            "state": "refining",
-            "seconds": 2.6115,
-            "words": 53,
-            "distances": [
-              0,
-              0,
-              0.0375,
-              0.0092,
-              0.0092,
-              0.0598,
-              0.0467
-            ],
-            "vocalTractLengthError": 0.0197,
-            "pitchError": 0.0055
-          },
-          {
-            "preset": "female",
-            "stableAt": 4.52,
-            "state": "stable",
-            "seconds": 1.4758,
-            "words": 54,
-            "distances": [
-              0,
-              0,
-              0.0122,
-              0
-            ],
-            "vocalTractLengthError": 0.0141,
-            "pitchError": 0.0105
-          },
-          {
-            "preset": "child",
-            "stableAt": 7,
-            "state": "stable",
-            "seconds": 1.2637,
-            "words": 50,
-            "distances": [
-              0,
-              0,
-              0.0131,
-              0.0272,
-              0.0065,
-              0.0139
-            ],
-            "vocalTractLengthError": 0.0165,
-            "pitchError": 0.0112
-          }
-        ],
-        "seconds": 5.351,
-        "audioSeconds": 60,
-        "peakRssMb": 198.296875,
-        "capped": {
-          "heapLimitMb": 192
-        }
-      },
-      "rust": {
-        "row": "session",
-        "engine": "rust",
-        "metrics": {
-          "stable": 1,
           "vocalTractLengthError": 0.0188,
-          "pitchError": 0.0117,
-          "cpuRatio": 0.0833
+          "pitchError": 0.0112,
+          "cpuRatio": 0.0618
         },
         "cases": [
           {
             "preset": "male",
             "stableAt": 6.5,
             "state": "refining",
-            "seconds": 2.1881,
+            "seconds": 1.7836,
             "words": 53,
             "distances": [
               0,
@@ -373,7 +305,7 @@
             "preset": "female",
             "stableAt": 4.5,
             "state": "stable",
-            "seconds": 1.3077,
+            "seconds": 0.9973,
             "words": 54,
             "distances": [
               0,
@@ -386,9 +318,9 @@
           },
           {
             "preset": "child",
-            "stableAt": 7.02,
+            "stableAt": 7,
             "state": "stable",
-            "seconds": 1.5006,
+            "seconds": 0.9279,
             "words": 50,
             "distances": [
               0,
@@ -398,13 +330,82 @@
               0.0065,
               0.0139
             ],
-            "vocalTractLengthError": 0.0168,
-            "pitchError": 0.0117
+            "vocalTractLengthError": 0.0165,
+            "pitchError": 0.0112
           }
         ],
-        "seconds": 4.996,
+        "seconds": 3.709,
         "audioSeconds": 60,
-        "peakRssMb": 203.24609375,
+        "peakRssMb": 178.21875,
+        "capped": {
+          "heapLimitMb": 192
+        }
+      },
+      "rust": {
+        "row": "session",
+        "engine": "rust",
+        "metrics": {
+          "stable": 1,
+          "vocalTractLengthError": 0.0188,
+          "pitchError": 0.0112,
+          "cpuRatio": 0.061
+        },
+        "cases": [
+          {
+            "preset": "male",
+            "stableAt": 6.5,
+            "state": "refining",
+            "seconds": 1.5683,
+            "words": 53,
+            "distances": [
+              0,
+              0,
+              0.0375,
+              0.0092,
+              0.0092,
+              0.0065,
+              0.0708,
+              0.0616
+            ],
+            "vocalTractLengthError": 0.0188,
+            "pitchError": 0.0054
+          },
+          {
+            "preset": "female",
+            "stableAt": 4.5,
+            "state": "stable",
+            "seconds": 0.8839,
+            "words": 54,
+            "distances": [
+              0,
+              0,
+              0.0122,
+              0
+            ],
+            "vocalTractLengthError": 0.0139,
+            "pitchError": 0.009
+          },
+          {
+            "preset": "child",
+            "stableAt": 7,
+            "state": "stable",
+            "seconds": 1.2091,
+            "words": 50,
+            "distances": [
+              0,
+              0,
+              0.0131,
+              0.0272,
+              0.0065,
+              0.0139
+            ],
+            "vocalTractLengthError": 0.0165,
+            "pitchError": 0.0112
+          }
+        ],
+        "seconds": 3.661,
+        "audioSeconds": 60,
+        "peakRssMb": 202.11328125,
         "capped": {
           "heapLimitMb": 192
         }
@@ -420,12 +421,12 @@
           "phonemeAgreement": 0.3628,
           "maxF0RmseSemitones": 8.7262,
           "maxTimingErrorMs": 1122.5,
-          "cpuRatio": 1.123,
+          "cpuRatio": 0.7789,
           "recordings": 24
         },
-        "seconds": 125.53,
+        "seconds": 87.061,
         "audioSeconds": 111.78,
-        "peakRssMb": 376.828125,
+        "peakRssMb": 374.2890625,
         "capped": {
           "heapLimitMb": 192
         }
@@ -439,12 +440,12 @@
           "phonemeAgreement": 0.3628,
           "maxF0RmseSemitones": 8.7262,
           "maxTimingErrorMs": 1122.5,
-          "cpuRatio": 0.8078,
+          "cpuRatio": 0.5766,
           "recordings": 24
         },
-        "seconds": 90.299,
+        "seconds": 64.457,
         "audioSeconds": 111.78,
-        "peakRssMb": 382.12109375,
+        "peakRssMb": 372.21875,
         "capped": {
           "heapLimitMb": 192
         }
@@ -456,8 +457,8 @@
         "engine": "js",
         "metrics": {
           "modeShare": 0.9167,
-          "rtf": 0.0988,
-          "renderRtf": 0.0229,
+          "rtf": 0.0689,
+          "renderRtf": 0.0203,
           "utterances": 60,
           "missed": [
             "en:pp",
@@ -467,9 +468,9 @@
             "zh:F"
           ]
         },
-        "seconds": 10.81,
+        "seconds": 7.537,
         "audioSeconds": 109.405,
-        "peakRssMb": 233.9765625,
+        "peakRssMb": 222.35546875,
         "capped": {
           "heapLimitMb": 192
         }
@@ -479,8 +480,8 @@
         "engine": "rust",
         "metrics": {
           "modeShare": 0.9167,
-          "rtf": 0.0875,
-          "renderRtf": 0.0172,
+          "rtf": 0.0639,
+          "renderRtf": 0.0147,
           "utterances": 60,
           "missed": [
             "en:pp",
@@ -490,9 +491,9 @@
             "zh:F"
           ]
         },
-        "seconds": 9.571,
+        "seconds": 6.996,
         "audioSeconds": 109.405,
-        "peakRssMb": 234.48828125,
+        "peakRssMb": 230.6015625,
         "capped": {
           "heapLimitMb": 192
         }
@@ -504,12 +505,12 @@
         "engine": "js",
         "metrics": {
           "textBack": 1,
-          "workerRtf": 0.089,
-          "workerRtfMeasured": 0.0148,
-          "firstSound": 0.22,
-          "firstChunk": 0.22,
-          "coldFirstSound": 0.624,
-          "startDelay": 0.219,
+          "workerRtf": 0.0694,
+          "workerRtfMeasured": 0.0116,
+          "firstSound": 0.154,
+          "firstChunk": 0.154,
+          "coldFirstSound": 0.511,
+          "startDelay": 0.153,
           "sampleRate": 8000,
           "chunks": 89,
           "heard": "The quick brown fox jumps over the lazy dog. She sells sea shells by the sea shore. We measure the treasure every morning before the sun comes up over the quiet hills."
@@ -528,20 +529,20 @@
           {
             "worker": "synth-worker-Bkcfovbf.js",
             "type": "speak",
-            "at": 0.101
+            "at": 0.077
           },
           {
             "worker": "synth-worker-Bkcfovbf.js",
             "type": "start",
-            "at": 0.219
+            "at": 0.153
           },
           {
             "worker": "synth-worker-Bkcfovbf.js",
             "type": "end",
-            "at": 2.768
+            "at": 2.424
           }
         ],
-        "benchmarkWait": 0.083
+        "benchmarkWait": 0.066
       }
     }
   },
@@ -562,7 +563,7 @@
         "status": "certified",
         "metrics": {
           "rtf": {
-            "value": 0.0211,
+            "value": 0.0177,
             "limit": 0.25,
             "pass": true
           }
@@ -572,7 +573,7 @@
         "status": "certified",
         "metrics": {
           "rtf": {
-            "value": 0.0166,
+            "value": 0.0133,
             "limit": 0.25,
             "pass": true
           }
@@ -582,7 +583,7 @@
         "status": "failed",
         "metrics": {
           "peakRssMb": {
-            "value": 364.70703125,
+            "value": 351.16796875,
             "limit": 256,
             "pass": false
           }
@@ -610,7 +611,7 @@
         "status": "certified",
         "metrics": {
           "rtf": {
-            "value": 0.0813,
+            "value": 0.0516,
             "limit": 0.25,
             "pass": true
           }
@@ -620,7 +621,7 @@
         "status": "certified",
         "metrics": {
           "rtf": {
-            "value": 0.077,
+            "value": 0.0588,
             "limit": 0.25,
             "pass": true
           }
@@ -630,7 +631,7 @@
         "status": "failed",
         "metrics": {
           "peakRssMb": {
-            "value": 388.4140625,
+            "value": 383.6015625,
             "limit": 256,
             "pass": false
           }
@@ -653,12 +654,12 @@
         "status": "certified",
         "metrics": {
           "firstPartial": {
-            "value": 0.2541,
+            "value": 0.2652,
             "limit": 1,
             "pass": true
           },
           "load": {
-            "value": 0.0829,
+            "value": 0.0659,
             "limit": 0.25,
             "pass": true
           }
@@ -668,12 +669,12 @@
         "status": "certified",
         "metrics": {
           "firstPartial": {
-            "value": 0.2587,
+            "value": 0.2596,
             "limit": 1,
             "pass": true
           },
           "load": {
-            "value": 0.0694,
+            "value": 0.0607,
             "limit": 0.25,
             "pass": true
           }
@@ -683,7 +684,7 @@
         "status": "certified",
         "metrics": {
           "peakRssMb": {
-            "value": 230.32421875,
+            "value": 210.953125,
             "limit": 256,
             "pass": true
           }
@@ -710,7 +711,7 @@
         "status": "certified",
         "metrics": {
           "cpuRatio": {
-            "value": 0.1759,
+            "value": 0.126,
             "limit": 1,
             "pass": true
           }
@@ -720,7 +721,7 @@
         "status": "certified",
         "metrics": {
           "cpuRatio": {
-            "value": 0.1681,
+            "value": 0.1265,
             "limit": 1,
             "pass": true
           }
@@ -730,7 +731,7 @@
         "status": "certified",
         "metrics": {
           "peakRssMb": {
-            "value": 200.84375,
+            "value": 199.6484375,
             "limit": 256,
             "pass": true
           }
@@ -747,7 +748,7 @@
             "pass": true
           },
           "vocalTractLengthError": {
-            "value": 0.0197,
+            "value": 0.0188,
             "limit": 0.05,
             "pass": true
           },
@@ -762,7 +763,7 @@
         "status": "certified",
         "metrics": {
           "cpuRatio": {
-            "value": 0.0892,
+            "value": 0.0618,
             "limit": 0.5,
             "pass": true
           }
@@ -772,7 +773,7 @@
         "status": "certified",
         "metrics": {
           "cpuRatio": {
-            "value": 0.0833,
+            "value": 0.061,
             "limit": 0.5,
             "pass": true
           }
@@ -782,7 +783,7 @@
         "status": "certified",
         "metrics": {
           "peakRssMb": {
-            "value": 203.24609375,
+            "value": 202.11328125,
             "limit": 256,
             "pass": true
           }
@@ -813,19 +814,19 @@
       },
       "js-1": {
         "status": "certified",
-        "reason": "reported, no limit: CPU time / audio time 1.123",
+        "reason": "reported, no limit: CPU time / audio time 0.7789",
         "metrics": {}
       },
       "rust-1": {
         "status": "certified",
-        "reason": "reported, no limit: CPU time / audio time 0.8078",
+        "reason": "reported, no limit: CPU time / audio time 0.5766",
         "metrics": {}
       },
       "memory": {
         "status": "failed",
         "metrics": {
           "peakRssMb": {
-            "value": 382.12109375,
+            "value": 374.2890625,
             "limit": 256,
             "pass": false
           }
@@ -848,7 +849,7 @@
         "status": "certified",
         "metrics": {
           "rtf": {
-            "value": 0.0988,
+            "value": 0.0689,
             "limit": 0.25,
             "pass": true
           }
@@ -858,7 +859,7 @@
         "status": "certified",
         "metrics": {
           "rtf": {
-            "value": 0.0875,
+            "value": 0.0639,
             "limit": 0.25,
             "pass": true
           }
@@ -868,7 +869,7 @@
         "status": "certified",
         "metrics": {
           "peakRssMb": {
-            "value": 234.48828125,
+            "value": 230.6015625,
             "limit": 256,
             "pass": true
           }
@@ -890,12 +891,12 @@
         "status": "certified",
         "metrics": {
           "workerRtf": {
-            "value": 0.089,
+            "value": 0.0694,
             "limit": 1,
             "pass": true
           },
           "firstSound": {
-            "value": 0.22,
+            "value": 0.154,
             "limit": 1,
             "pass": true
           }
