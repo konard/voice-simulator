@@ -112,12 +112,51 @@ export function openWordTransitions(words, offsets, pairs) {
   };
 }
 
-function wordIds(names) {
-  const ids = new Map();
-  for (let i = 0; i < names.length; i++) {
-    ids.set(names[i], i);
+function wordHash(source, start, end) {
+  let hash = 2166136261;
+  for (let i = start; i < end; i++) {
+    hash = Math.imul(hash ^ source.charCodeAt(i), 16777619);
   }
-  return ids;
+  return hash;
+}
+
+function sameWord(source, start, end, candidate, from, to) {
+  if (end - start !== to - from) {
+    return false;
+  }
+  while (start < end) {
+    if (source.charCodeAt(start++) !== candidate.charCodeAt(from++)) {
+      return false;
+    }
+  }
+  return true;
+}
+
+/** Look up rank in the count-ordered source without retaining word objects. */
+function indexWords(source, starts, ends) {
+  const capacity = 2 ** Math.ceil(Math.log2(Math.max(1, 2 * starts.length)));
+  const slots = new Uint32Array(capacity);
+  const mask = slots.length - 1;
+  function find(text, from, to) {
+    let slot = wordHash(text, from, to) & mask;
+    for (let entry; (entry = slots[slot]); slot = (slot + 1) & mask) {
+      const id = entry - 1;
+      if (sameWord(source, starts[id], ends[id], text, from, to)) {
+        break;
+      }
+    }
+    return slot;
+  }
+  for (let i = 0; i < starts.length; i++) {
+    slots[find(source, starts[i], ends[i])] = i + 1;
+  }
+  return (word) => {
+    if (typeof word !== 'string') {
+      return undefined;
+    }
+    const id = slots[find(word, 0, word.length)];
+    return id ? id - 1 : undefined;
+  };
 }
 
 /** Link the encoded pairs by destination without opening their cost maps. */
@@ -203,18 +242,19 @@ function setTransition(transitions, word, previous, count) {
  * counts never saw everyday words such as "hello", which then lost to
  * "her no" and "hollow" (issue 181).
  */
-function spokenPriors(names, total, spoken) {
-  const shares = new Map();
+function spokenPriors(length, rank, total, spoken) {
+  const scale = total / spoken.SPOKEN_WORDS;
+  const priors = new Float64Array(length).fill(1);
   for (const item of spoken.SPOKEN.split(' ')) {
     const at = item.lastIndexOf('=');
     if (at > 0) {
-      shares.set(item.slice(0, at), Number(item.slice(at + 1)));
+      const id = rank(item.slice(0, at));
+      if (id !== undefined) {
+        priors[id] = Math.max(1, Number(item.slice(at + 1)) * scale);
+      }
     }
   }
-  const scale = total / spoken.SPOKEN_WORDS;
-  return Float64Array.from(names, (word) =>
-    Math.max(1, (shares.get(word) ?? 0) * scale)
-  );
+  return priors;
 }
 
 function parseSupplemental(source, scale) {
@@ -232,34 +272,45 @@ function parseSupplemental(source, scale) {
 }
 
 function parseWords(source, spoken) {
-  const names = [];
-  const values = [];
+  let length = 0;
+  for (let i = 0; i < source.length; i++) {
+    if (source.charCodeAt(i) === 61) {
+      length++;
+    }
+  }
+  const starts = new Uint32Array(length);
+  const ends = new Uint32Array(length);
+  const counts = new Float64Array(length);
   let total = 0;
   let start = 0;
+  let id = 0;
   while (start < source.length) {
     const separator = source.indexOf(' ', start);
     const end = separator === -1 ? source.length : separator;
     if (end > start) {
       const at = source.lastIndexOf('=', end - 1);
       const count = Number(source.slice(at + 1, end));
-      names.push(source.slice(start, at));
-      values.push(count);
+      starts[id] = start;
+      ends[id] = at;
+      counts[id++] = count;
       total += count;
     }
     start = end + 1;
   }
-  const counts = Float64Array.from(values);
-  const priors = spoken && spokenPriors(names, total, spoken);
-  let ids;
+  const name = (id) =>
+    starts[id] === undefined ? undefined : source.slice(starts[id], ends[id]);
+  let findWord;
+  const rank = (word) => (findWord ??= indexWords(source, starts, ends))(word);
+  const priors = spoken && spokenPriors(length, rank, total, spoken);
   return {
-    length: names.length,
+    length,
     total,
-    name: (id) => names[id],
+    name,
     count: (id) => counts[id],
     weight: (id) => priors?.[id] ?? counts[id],
-    rank: (word) => (ids ??= wordIds(names)).get(word),
+    rank,
     read(id) {
-      const word = names[id];
+      const word = name(id);
       return word === undefined
         ? undefined
         : { word, count: counts[id], ...(priors && { prior: priors[id] }) };
