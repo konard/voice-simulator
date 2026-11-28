@@ -375,6 +375,22 @@ it('stresses the longest full vowel of a word outside the vocabulary', () => {
   stressOutOfVocabulary([{ oov: true, lang: 'hi' }], hindi);
   assert.equal(one[0].token.stress, undefined);
   assert.ok(hindi.every((a) => a.token.stress === undefined));
+
+  const several = [
+    vowel('ə', 0, 20),
+    { ...vowel('ɐ', 5, 10), word: 1 },
+    vowel('ɚ', 20, 40),
+    { ...vowel('ʊ', 10, 20), word: 1 },
+    { ...vowel('æ', 40, 50), word: 2 },
+  ];
+  stressOutOfVocabulary(
+    [{ oov: true, lang: 'en' }, { oov: true, lang: 'ru' }, { lang: 'en' }],
+    several
+  );
+  assert.deepEqual(
+    several.map((a) => a.token.stress ?? 0),
+    [1, 0, 0, 1, 0]
+  );
 });
 
 it('lets a rising sandhi variant go on only before the tone that causes it', () => {

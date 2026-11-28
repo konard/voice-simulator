@@ -31,32 +31,45 @@ const REDUCED = {
   ru: new Set(['ɐ', 'ə', 'ɪ', 'ʊ']),
 };
 
+function preferVowel(phone, previous, reduced) {
+  if (!previous) {
+    return true;
+  }
+  const full = !reduced.has(phone.token.symbol);
+  const previousFull = !reduced.has(previous.token.symbol);
+  return full === previousFull
+    ? phone.to - phone.from > previous.to - previous.from
+    : full;
+}
+
 /**
  * Primary stress of the words from the phone loop: the longest full vowel
  * (any vowel when none is full). Russian marks words of two or more
  * vowels and English every word, like their pronunciations; Hindi none.
  */
 export function stressOutOfVocabulary(words, aligned) {
-  words.forEach((w, wi) => {
-    const reduced = REDUCED[w.lang];
-    if (!w.oov || !reduced) {
-      return;
+  if (!words.some(({ oov, lang }) => oov && REDUCED[lang])) {
+    return;
+  }
+  const counts = new Uint32Array(words.length);
+  const best = new Array(words.length);
+  for (const phone of aligned) {
+    const index = phone.word;
+    const word = words[index];
+    const reduced = word?.oov && REDUCED[word.lang];
+    if (!reduced || phone.token.kind !== 'vowel') {
+      continue;
     }
-    const vowels = aligned.filter(
-      (a) => a.word === wi && a.token.kind === 'vowel'
-    );
-    if (vowels.length < (w.lang === 'ru' ? 2 : 1)) {
-      return;
+    counts[index]++;
+    if (preferVowel(phone, best[index], reduced)) {
+      best[index] = phone;
     }
-    const full = vowels.filter((a) => !reduced.has(a.token.symbol));
-    let best = null;
-    for (const a of full.length ? full : vowels) {
-      if (!best || a.to - a.from > best.to - best.from) {
-        best = a;
-      }
+  }
+  for (let index = 0; index < words.length; index++) {
+    if (counts[index] >= (words[index].lang === 'ru' ? 2 : 1)) {
+      best[index].token.stress = 1;
     }
-    best.token.stress = 1;
-  });
+  }
 }
 
 function timedSegments(aligned) {
