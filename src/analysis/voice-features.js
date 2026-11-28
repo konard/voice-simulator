@@ -55,6 +55,7 @@ const HNR_PERCENTILE = 0.75;
 /** Step and half-width (samples) of the fractional lag search for HNR. */
 const LAG_STEP = 0.1;
 const LAG_SPAN = 0.6;
+const LAG_STEPS = Math.round(LAG_SPAN / LAG_STEP);
 
 /**
  * Low-pass and linearly interpolate to a lower rate (analysis quality).
@@ -179,12 +180,11 @@ export function yinPitch(
 function cubicAt(signal, position) {
   const index = Math.floor(position);
   const x = position - index;
-  const at = (offset) =>
-    signal[Math.min(signal.length - 1, Math.max(0, index + offset))] ?? 0;
-  const p0 = at(-1);
-  const p1 = at(0);
-  const p2 = at(1);
-  const p3 = at(2);
+  const last = signal.length - 1;
+  const p0 = signal[Math.min(last, Math.max(0, index - 1))] ?? 0;
+  const p1 = signal[Math.min(last, Math.max(0, index))] ?? 0;
+  const p2 = signal[Math.min(last, Math.max(0, index + 1))] ?? 0;
+  const p3 = signal[Math.min(last, Math.max(0, index + 2))] ?? 0;
   return (
     p1 +
     0.5 *
@@ -203,21 +203,19 @@ function cubicAt(signal, position) {
  * itself period by period, as YIN assumes.
  * @param {ArrayLike<number>} signal
  * @param {number} start First sample of the stretch.
- * @param {number} length Number of samples.
+ * @param {Float64Array} output Workspace for the resampled stretch.
  * @param {number} sampleRate
  * @param {number} slope Pitch change (Hz per second).
  * @param {number} f0 Pitch (Hz) in the middle of the stretch.
- * @returns {Float64Array}
  */
-function straighten(signal, start, length, sampleRate, slope, f0) {
-  const output = new Float64Array(length);
+function straighten(signal, start, output, sampleRate, slope, f0) {
+  const { length } = output;
   const middle = start + length / 2;
   const warp = slope / (2 * f0);
   for (let n = 0; n < length; n++) {
     const t = (n - length / 2) / sampleRate;
     output[n] = cubicAt(signal, middle + (t - warp * t * t) * sampleRate);
   }
-  return output;
 }
 
 /**
@@ -239,12 +237,12 @@ function pitchSlope(frames, index, f0) {
  * YIN aperiodicity of a voiced frame after its pitch movement is taken out.
  * The stretch covers the frame and the longest lag YIN compares it with.
  */
-function straightAperiodicity(signal, frames, index, hop, length, rate) {
+function straightAperiodicity(signal, frames, index, scratch) {
+  const { hop, length, rate, straight, differences } = scratch;
   const { f0 } = frames[index];
   const slope = pitchSlope(frames, index, f0);
-  const span = length + Math.ceil(rate / MIN_F0) + 2;
-  const straight = straighten(signal, index * hop, span, rate, slope, f0);
-  return fractionalAperiodicity(straight, length, rate / f0);
+  straighten(signal, index * hop, straight, rate, slope, f0);
+  return fractionalAperiodicity(straight, length, rate / f0, differences);
 }
 
 /**
@@ -261,6 +259,14 @@ function meanDifference(signal, length, lags) {
   return total / lags;
 }
 
+function fractionalDifference(signal, length, lag, mean) {
+  let sum = 0;
+  for (let index = 0; index < length; index++) {
+    sum += (signal[index] - cubicAt(signal, index + lag)) ** 2;
+  }
+  return sum / mean;
+}
+
 /**
  * YIN aperiodicity at the best fractional lag near the period. A period is
  * rarely a whole number of samples, and at the nearest integer lag the upper
@@ -270,36 +276,30 @@ function meanDifference(signal, length, lags) {
  * refined with a parabola; the signal is read at fractional positions by
  * cubic interpolation.
  */
-function fractionalAperiodicity(signal, length, period) {
+function fractionalAperiodicity(signal, length, period, values) {
   const mean = meanDifference(signal, length, Math.round(period));
   if (!(mean > 0)) {
     return 1;
   }
-  const difference = (lag) => {
-    let sum = 0;
-    for (let index = 0; index < length; index++) {
-      sum += (signal[index] - cubicAt(signal, index + lag)) ** 2;
-    }
-    return sum / mean;
-  };
-  const steps = Math.round(LAG_SPAN / LAG_STEP);
-  const values = [];
-  for (let step = -steps; step <= steps; step++) {
-    values.push(difference(period + step * LAG_STEP));
-  }
   let at = 0;
-  values.forEach((value, step) => {
+  for (let step = 0; step < values.length; step++) {
+    const lag = period + (step - LAG_STEPS) * LAG_STEP;
+    const value = fractionalDifference(signal, length, lag, mean);
+    values[step] = value;
     if (value < values[at]) {
       at = step;
     }
-  });
+  }
   let lowest = values[at];
   if (at > 0 && at < values.length - 1) {
     const curvature = values[at - 1] - 2 * values[at] + values[at + 1];
     if (curvature > 0) {
       const shift = (0.5 * (values[at - 1] - values[at + 1])) / curvature;
-      const lag = period + (at - steps + shift) * LAG_STEP;
-      lowest = Math.min(lowest, difference(lag));
+      const lag = period + (at - LAG_STEPS + shift) * LAG_STEP;
+      lowest = Math.min(
+        lowest,
+        fractionalDifference(signal, length, lag, mean)
+      );
     }
   }
   return lowest;
@@ -523,6 +523,13 @@ function legacyDiagnostics(signal, rate, frames, voicedIndices, options) {
     hann[index] = 0.5 - 0.5 * Math.cos((2 * Math.PI * index) / length);
   }
   const windowed = new Float64Array(length);
+  const hnrScratch = {
+    hop,
+    length,
+    rate,
+    straight: new Float64Array(length + Math.ceil(rate / MIN_F0) + 2),
+    differences: new Float64Array(2 * LAG_STEPS + 1),
+  };
   for (let pick = 0; pick < diagnosticFrames; pick += stride) {
     const index = voicedIndices[Math.floor(pick)];
     const start = index * hop;
@@ -547,10 +554,7 @@ function legacyDiagnostics(signal, rate, frames, voicedIndices, options) {
     tilts.push(20 * Math.log10((h1 + 1e-12) / (h2 + 1e-12)));
     const aperiodicity = Math.min(
       0.999,
-      Math.max(
-        1e-3,
-        straightAperiodicity(upper, frames, index, hop, length, rate)
-      )
+      Math.max(1e-3, straightAperiodicity(upper, frames, index, hnrScratch))
     );
     noise.push(10 * Math.log10((1 - aperiodicity) / aperiodicity));
   }
