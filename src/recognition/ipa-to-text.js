@@ -29,20 +29,20 @@ function integerOption(value, name, fallback) {
   return n;
 }
 
-function prune(paths, beam) {
+function prune(paths, beam, seen) {
   paths.sort((a, b) => a.cost - b.cost);
-  const seen = new Set();
-  const result = [];
-  for (const path of paths) {
-    if (!seen.has(path.text)) {
-      seen.add(path.text);
-      result.push(path);
+  let count = 0;
+  for (let i = 0; i < paths.length && count < beam; i++) {
+    const path = paths[i];
+    if (seen.has(path.text)) {
+      continue;
     }
-    if (result.length === beam) {
-      break;
-    }
+    seen.add(path.text);
+    paths[count++] = path;
   }
-  return result;
+  paths.length = count;
+  seen.clear();
+  return paths;
 }
 
 function unknownCandidates(tokens, from, end, options, knownSuffix) {
@@ -143,8 +143,10 @@ function searchPaths(input, lexicon, options, exact, wordSearches) {
   const { beam, language, given } = options;
   const lexicons = options.lexicons ?? new Map([[language, lexicon]]);
   const ends = [...boundaries].sort((a, b) => a - b);
-  const best = Array.from({ length: tokens.length + 1 }, () => []);
+  const best = new Array(tokens.length + 1);
+  const seen = new Set();
   const cutoff = new Float64Array(best.length).fill(Infinity);
+  best[tokens.length] = [];
   best[0] = [{ last: null, text: '', cost: 0 }];
   const suffixes = new Map();
   function knownSuffix(end, lexicon, language) {
@@ -166,10 +168,10 @@ function searchPaths(input, lexicon, options, exact, wordSearches) {
       suffixes.clear();
     }
     const end = ends[boundaryIndex];
-    if (!best[from].length || (given && !boundaries.has(from))) {
+    if (!best[from]?.length || (given && !boundaries.has(from))) {
       continue;
     }
-    const previous = prune(best[from], beam);
+    const previous = prune(best[from], beam, seen);
     // Completed positions are only needed through surviving backpointers.
     best[from] = null;
     const candidates = decoderCandidates(from, end, {
@@ -187,7 +189,7 @@ function searchPaths(input, lexicon, options, exact, wordSearches) {
         options.spans,
         candidate
       );
-      const paths = best[candidate.to];
+      const paths = (best[candidate.to] ??= []);
       const ceiling = cutoff[candidate.to];
       for (const partial of previous) {
         // Predecessors are sorted, and the word cost is at least 0.5
@@ -212,15 +214,14 @@ function searchPaths(input, lexicon, options, exact, wordSearches) {
       }
       // Bound retained partial results at each input position by the beam.
       if (paths.length > beam * 4) {
-        const surviving = prune(paths, beam);
-        best[candidate.to] = surviving;
-        if (surviving.length === beam) {
-          cutoff[candidate.to] = surviving.at(-1).cost;
+        prune(paths, beam, seen);
+        if (paths.length === beam) {
+          cutoff[candidate.to] = paths.at(-1).cost;
         }
       }
     }
   }
-  return prune(best[tokens.length], beam).map((reading) => ({
+  return prune(best[tokens.length], beam, seen).map((reading) => ({
     cost: reading.cost,
     text: reading.text,
     path: materialize(reading),
