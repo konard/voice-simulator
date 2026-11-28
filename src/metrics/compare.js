@@ -18,8 +18,37 @@ import {
   METRIC_DEFAULTS,
   cepstra,
   frameSettings,
-  powerFrames,
+  powerFramesInto,
 } from './spectrum.js';
+
+// The waveforms and power frames never leave a comparison. Retain one
+// bounded buffer for each input and take separate storage on reentry.
+const MAX_RETAINED_VALUES = 128 * 1024;
+let idleStorage = createComparisonStorage();
+
+function reusableColumn() {
+  let buffer = new Float64Array(0);
+  return (length) => {
+    if (length > MAX_RETAINED_VALUES) {
+      return new Float64Array(length);
+    }
+    if (length > buffer.length) {
+      buffer = new Float64Array(
+        Math.min(MAX_RETAINED_VALUES, Math.max(length, buffer.length * 2))
+      );
+    }
+    return buffer.subarray(0, length);
+  };
+}
+
+function createComparisonStorage() {
+  return {
+    waveR: reusableColumn(),
+    waveT: reusableColumn(),
+    powerR: reusableColumn(),
+    powerT: reusableColumn(),
+  };
+}
 
 /**
  * Cut the frames at both ends whose energy is more than SILENCE_DB below
@@ -30,6 +59,10 @@ import {
  * @returns {Float64Array}
  */
 export function trimSilence(samples, sampleRate, options = {}) {
+  return trimAudio(samples, sampleRate, options);
+}
+
+function trimAudio(samples, sampleRate, options, allocate) {
   const { length, hop } = frameSettings(sampleRate, options);
   const energies = [];
   for (let start = 0; start < samples.length; start += hop) {
@@ -52,19 +85,19 @@ export function trimSilence(samples, sampleRate, options = {}) {
   const last = energies.findLastIndex((energy) => energy >= threshold);
   const from = first * hop;
   const to = Math.min(samples.length, last * hop + length);
-  const trimmed = new Float64Array(to - from);
+  const trimmed = allocate?.(to - from) ?? new Float64Array(to - from);
   for (let i = from; i < to; i++) {
     trimmed[i - from] = samples[i];
   }
   return trimmed;
 }
 
-function prepare(recording, rate, options) {
+function prepare(recording, rate, options, allocate) {
   const converted =
     recording.sampleRate === rate
       ? recording.samples
       : resample(recording.samples, recording.sampleRate, rate);
-  const trimmed = trimSilence(converted, rate, options);
+  const trimmed = trimAudio(converted, rate, options, allocate);
   return scaleRms(trimmed, trimmed);
 }
 
@@ -93,9 +126,9 @@ function timingErrors(path, hop, ratio) {
   return { rmsSeconds: Math.sqrt(sum / path.length), maxSeconds: max };
 }
 
-function alignSpectra(reference, test, rate, settings, band) {
-  const powerR = powerFrames(reference, rate, settings);
-  const powerT = powerFrames(test, rate, settings);
+function alignSpectra(reference, test, rate, settings, band, storage) {
+  const powerR = powerFramesInto(reference, rate, settings, storage.powerR);
+  const powerT = powerFramesInto(test, rate, settings, storage.powerT);
   const cepstraR = cepstra(powerR, rate, settings);
   const cepstraT = cepstra(powerT, rate, settings);
   const aligned = dtw(
@@ -135,6 +168,16 @@ function alignSpectra(reference, test, rate, settings, band) {
  *   the formant tracks.
  */
 export function compareRecordings(reference, test, options = {}) {
+  const storage = idleStorage ?? createComparisonStorage();
+  idleStorage = null;
+  try {
+    return compareWithStorage(reference, test, options, storage);
+  } finally {
+    idleStorage = storage;
+  }
+}
+
+function compareWithStorage(reference, test, options, storage) {
   const rate = Math.min(
     METRIC_DEFAULTS.sampleRate,
     reference.sampleRate,
@@ -145,13 +188,13 @@ export function compareRecordings(reference, test, options = {}) {
     hop: options.hop,
     range: options.range,
   };
-  const ref = prepare(reference, rate, settings);
-  const tst = prepare(test, rate, settings);
+  const ref = prepare(reference, rate, settings, storage.waveR);
+  const tst = prepare(test, rate, settings, storage.waveT);
   if (ref.length === 0 || tst.length === 0) {
     throw new RangeError('compareRecordings: a recording has no samples');
   }
   const hop = frameSettings(rate, settings).hop / rate;
-  const aligned = alignSpectra(ref, tst, rate, settings, options.band);
+  const aligned = alignSpectra(ref, tst, rate, settings, options.band, storage);
   const { path, referenceFrames: n } = aligned;
 
   const pitchR = pitchTrack(ref, rate, { hop });

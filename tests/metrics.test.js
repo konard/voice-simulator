@@ -434,5 +434,15 @@ describe('metrics: compareRecordings', () => {
     );
     expect(result.lsd).toBe(logSpectralDistance(r, t, sampleRate, along));
     expect(result.mcd).toBe(melCepstralDistortion(r, t, sampleRate, along));
+    const short = { samples: a.subarray(0, 720), sampleRate };
+    const self = compareRecordings(short, short, { formants: false });
+    expect(self.lsd).toBe(0);
+    expect(self.mcd).toBe(0);
+    const repeated = compareRecordings(
+      { samples: a, sampleRate },
+      { samples: b, sampleRate },
+      { ...settings, formants: false }
+    );
+    expect(repeated).toEqual(result);
   });
 });

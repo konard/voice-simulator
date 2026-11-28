@@ -152,11 +152,18 @@ function hann(length) {
  * @returns {Float64Array[]}
  */
 export function powerFrames(samples, sampleRate, options = {}) {
+  return powerFramesInto(samples, sampleRate, options);
+}
+
+/** For callers that own the lifetime of the whole power matrix. */
+export function powerFramesInto(samples, sampleRate, options, allocate) {
   const { length, hop, size } = frameSettings(sampleRate, options);
   const window = hann(length);
   const re = new Float64Array(size);
   const im = new Float64Array(size);
   const count = frameCount(samples, length, hop);
+  const bins = Math.floor(size / 2 + 1);
+  const matrix = allocate?.(count * bins);
   const frames = [];
   for (let frame = 0; frame < count; frame++) {
     re.fill(0);
@@ -167,7 +174,9 @@ export function powerFrames(samples, sampleRate, options = {}) {
       re[index] = samples[start + index] * window[index];
     }
     fft(re, im);
-    const power = new Float64Array(size / 2 + 1);
+    const power = matrix
+      ? matrix.subarray(frame * bins, (frame + 1) * bins)
+      : new Float64Array(bins);
     for (let k = 0; k <= size / 2; k++) {
       power[k] = re[k] * re[k] + im[k] * im[k];
     }
