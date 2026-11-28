@@ -1,5 +1,7 @@
 /** Attribute large typed array allocations in an opt-in memory probe. Unlicense. */
-const MIN_BYTES = 32 * 1024;
+const MIN_BYTES = Number(
+  process.env.VOICE_MEMORY_MIN_BUFFER_BYTES ?? 32 * 1024
+);
 
 function sampleBuffers() {
   const sites = new Map();
@@ -54,5 +56,10 @@ function sampleBuffers() {
 
 // Constructor instrumentation affects timing and cannot certify peak RSS.
 if (process.env.VOICE_MEMORY_BUFFERS === '1') {
+  if (!Number.isSafeInteger(MIN_BYTES) || MIN_BYTES < 4096) {
+    throw new RangeError(
+      'Expected an allocation threshold of at least 4096 bytes'
+    );
+  }
   sampleBuffers();
 }
