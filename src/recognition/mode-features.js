@@ -101,24 +101,34 @@ function analyzeWordSignal(samples, sampleRate, head, analyzed, options) {
         maxSeconds: Math.max(0.1, seconds + 0.05),
       })
     );
-  const pitch = measure(profile, 'Pitch', () =>
-    trackPitchFrames(frames, { minF0: 35, maxF0: 800, kernels })
-  );
+  const pitch =
+    options.pitch ??
+    measure(profile, 'Pitch', () =>
+      trackPitchFrames(frames, { minF0: 35, maxF0: 800, kernels })
+    );
   const formantOptions = {
     pitch,
     ...(head ? { vocalTractLength: head.vocalTractLength } : {}),
   };
-  const formants = measure(profile, 'Formants', () =>
-    options.reuseFormantCandidates
-      ? trackBatchFormants(
-          frames,
-          formantOptions,
-          options.reuseFormantCandidates === 'growing'
-        )
-      : trackFormants(frames, formantOptions)
-  );
+  const formants = options.skipFormants
+    ? null
+    : measure(profile, 'Formants', () =>
+        options.reuseFormantCandidates
+          ? trackBatchFormants(
+              frames,
+              formantOptions,
+              options.reuseFormantCandidates === 'growing'
+            )
+          : trackFormants(frames, formantOptions)
+      );
   const source = measure(profile, 'Inverse filter', () =>
-    inverseModeMeasures(frames, { pitch, minF0: 35, maxF0: 800, kernels })
+    inverseModeMeasures(frames, {
+      pitch,
+      minF0: 35,
+      maxF0: 800,
+      kernels,
+      ...(options.skipFormants && { step: 0.02 }),
+    })
   );
   return { frames, pitch, formants, source };
 }
@@ -234,14 +244,16 @@ export function measureWords(
         t++
       ) {
         rows.push(t);
-        if (formants.valid[t * 4]) {
+        if (formants?.valid[t * 4]) {
           frequencies.push(formants.frequency[t * 4]);
         }
       }
-      f1Vowels.push({
-        vowel: vowel.vowel,
-        value: quantile(frequencies),
-      });
+      if (formants) {
+        f1Vowels.push({
+          vowel: vowel.vowel,
+          value: quantile(frequencies),
+        });
+      }
     }
     const rawF0 = [];
     const f0 = [];

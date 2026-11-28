@@ -737,7 +737,7 @@ only become stricter. `npm run test:heavy -- --suite lowest` measures it and
 | recognition | certified | failed | failed | failed |
 | streaming | failed | failed | failed | failed |
 | voice-fit | certified | certified | certified | certified |
-| session | failed | failed | failed | failed |
+| session | certified | certified | certified | failed |
 | copy | failed | certified | certified | failed |
 | modes | certified | certified | certified | failed |
 | app | failed | certified | — | — |

@@ -18,6 +18,8 @@
  * (exit 1, files unchanged) when a cell certified in the committed report is
  * no longer certified, unless --allow-regression gives the reason. A
  * <dir>/lowest-app.json measured again on its own replaces the app row.
+ * A selected lowest-settings row replaces that row's runs and records its
+ * measurement separately from the original full run.
  */
 import { mkdirSync, readFileSync, writeFileSync, existsSync } from 'node:fs';
 import path from 'node:path';
@@ -55,7 +57,7 @@ export async function runRow({ row, engine, limit = Infinity }) {
   if (loaded.unavailable) {
     return { row, engine, unavailable: loaded.unavailable };
   }
-  const { metrics, seconds, audioSeconds } = await ROWS[row]({
+  const { metrics, seconds, audioSeconds, cases } = await ROWS[row]({
     engine: loaded,
     limit,
     // The 16 kHz quality reference is measured once, in the js run.
@@ -65,6 +67,7 @@ export async function runRow({ row, engine, limit = Infinity }) {
     row,
     engine,
     metrics,
+    ...(cases && { cases }),
     seconds: Number(seconds.toFixed(3)),
     audioSeconds: Number(audioSeconds.toFixed(3)),
     peakRssMb: peakRssMb(),
@@ -75,28 +78,87 @@ function readJson(file) {
   return existsSync(file) ? JSON.parse(readFileSync(file, 'utf8')) : null;
 }
 
+function completeRow(previous, current) {
+  return (
+    previous &&
+    Object.keys(previous).every((engine) => {
+      const result = current?.[engine];
+      return result?.metrics && !result.error && !result.unavailable;
+    })
+  );
+}
+
+function combineRow(committed, measured) {
+  const {
+    row,
+    runs,
+    limits,
+    measured: date,
+    commit,
+    command,
+    cpu,
+    node,
+    pinned,
+    core,
+    limit,
+  } = measured;
+  if (
+    limit !== null ||
+    !pinned ||
+    !limits?.[row] ||
+    !completeRow(committed?.runs?.[row], runs?.[row])
+  ) {
+    throw new Error(`Expected a complete, pinned measurement for row "${row}"`);
+  }
+  return {
+    ...committed,
+    runs: { ...committed.runs, [row]: runs[row] },
+    limits: { ...committed.limits, [row]: limits[row] },
+    rowMeasurements: {
+      ...committed.rowMeasurements,
+      [row]: {
+        measured: date,
+        commit,
+        command,
+        cpu,
+        node,
+        pinned,
+        core,
+        limit,
+      },
+    },
+  };
+}
+
+function judgeMeasurement(measured, app) {
+  if (app && measured.limits?.app) {
+    measured.runs = { ...measured.runs, app: { js: app } };
+  }
+  // Rejudge downloaded runs against the limits used on the runner.
+  if (Object.keys(measured.runs ?? {}).length && measured.limits) {
+    measured.cells = judge(measured.runs, measured.limits, {}, measured);
+  }
+}
+
 /**
  * Publish a measured matrix into the committed report and README. Returns
  * {written, regressions}; written is false when a regression was refused.
  */
 export function publish(dir, { root = ROOT, allowRegression } = {}) {
-  const measured = readJson(path.join(dir, 'lowest-settings.json'));
+  let measured = readJson(path.join(dir, 'lowest-settings.json'));
   if (!measured) {
     throw new Error(`${dir}/lowest-settings.json is missing`);
   }
-  // The app row may be measured again on its own
-  // (node scripts/check-app-lowest.mjs --skip-build --out <dir>).
-  const app = readJson(path.join(dir, 'lowest-app.json'))?.result;
-  if (app && measured.limits?.app) {
-    measured.runs = { ...measured.runs, app: { js: app } };
-  }
-  // The cells are judged again from the runs and the limits of the
-  // measurement, so a report downloaded from Heavy checks can be published.
-  if (Object.keys(measured.runs ?? {}).length && measured.limits) {
-    measured.cells = judge(measured.runs, measured.limits, {}, measured);
-  }
   const reportJson = path.join(root, REPORT_PATH.replace(/\.md$/u, '.json'));
   const committed = readJson(reportJson);
+  const selected = measured.row;
+  if (selected) {
+    measured = combineRow(committed, measured);
+  }
+  // The app row may be measured again on its own
+  // (node scripts/check-app-lowest.mjs --skip-build --out <dir>).
+  const app = !selected && readJson(path.join(dir, 'lowest-app.json'))?.result;
+  judgeMeasurement(measured, app);
   const lost = regressions(committed, measured);
   if (lost.length && !allowRegression) {
     return { written: false, regressions: lost };

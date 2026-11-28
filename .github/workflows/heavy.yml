@@ -29,6 +29,10 @@ on:
         description: Largest number of items each test may process (empty = no limit)
         type: string
         default: ''
+      lowest-row:
+        description: Run one row of the lowest-settings matrix with its full inputs (empty = all rows)
+        type: string
+        default: ''
       recognition-runner:
         description: Recognition performance runner (x64 cold CLI reference or four-core ARM64)
         type: choice
@@ -58,7 +62,7 @@ jobs:
     timeout-minutes: 330
     concurrency:
       # Corpus limits and performance runner types can run independently.
-      group: check-${{ github.workflow }}-${{ github.ref }}-${{ inputs.suite == 'recognition' && inputs.limit != '' && format('recognition-{0}', inputs.limit) || inputs.suite == 'recognition-performance' && format('recognition-performance-{0}', inputs.recognition-runner) || inputs.suite }}
+      group: check-${{ github.workflow }}-${{ github.ref }}-${{ inputs.suite == 'lowest' && inputs.lowest-row != '' && format('lowest-{0}', inputs.lowest-row) || inputs.suite == 'recognition' && inputs.limit != '' && format('recognition-{0}', inputs.limit) || inputs.suite == 'recognition-performance' && format('recognition-performance-{0}', inputs.recognition-runner) || inputs.suite }}
       cancel-in-progress: true
     permissions:
       contents: read
@@ -97,7 +101,7 @@ jobs:
 
       # Suites copy and lowest (issue 81) drive the built example app.
       - name: Install the example app and Playwright Chromium
-        if: inputs.suite == 'copy' || inputs.suite == 'lowest' || inputs.suite == 'all'
+        if: inputs.suite == 'copy' || (inputs.suite == 'lowest' && inputs.lowest-row == '') || inputs.suite == 'all'
         env:
           ELECTRON_SKIP_BINARY_DOWNLOAD: '1'
         run: |
@@ -168,7 +172,7 @@ jobs:
         run: deno run -A scripts/gpu-adapter.mjs
 
       - name: Run heavy checks
-        if: inputs.suite != 'recognition-performance'
+        if: inputs.suite != 'recognition-performance' && (inputs.suite != 'lowest' || inputs.lowest-row == '')
         shell: bash
         env:
           SUITE: ${{ inputs.suite }}
@@ -195,6 +199,13 @@ jobs:
           else
             bash scripts/run-with-budget-warning.sh 18000 "Heavy checks" "${command[@]}"
           fi
+
+      - name: Certify one lowest-settings row
+        if: inputs.suite == 'lowest' && inputs.lowest-row != ''
+        env:
+          LOWEST_ROW: ${{ inputs.lowest-row }}
+          HEAVY_OUT: reports/heavy
+        run: bash scripts/run-with-budget-warning.sh 18000 "Lowest-settings row" node --test tests/heavy/lowest-settings.test.js
 
       - name: Verify recognition performance targets
         if: inputs.suite == 'recognition-performance'
@@ -238,7 +249,7 @@ jobs:
     timeout-minutes: 5
     concurrency:
       # Match the heavy job so independent runs cannot cancel each other's gate.
-      group: check-${{ github.workflow }}-${{ github.ref }}-${{ inputs.suite == 'recognition' && inputs.limit != '' && format('recognition-{0}', inputs.limit) || inputs.suite == 'recognition-performance' && format('recognition-performance-{0}', inputs.recognition-runner) || inputs.suite }}-pipeline-status
+      group: check-${{ github.workflow }}-${{ github.ref }}-${{ inputs.suite == 'lowest' && inputs.lowest-row != '' && format('lowest-{0}', inputs.lowest-row) || inputs.suite == 'recognition' && inputs.limit != '' && format('recognition-{0}', inputs.limit) || inputs.suite == 'recognition-performance' && format('recognition-performance-{0}', inputs.recognition-runner) || inputs.suite }}-pipeline-status
       cancel-in-progress: true
     # A status function is required: without one the gate inherits the
     # implicit "every dependency succeeded" condition and is skipped in

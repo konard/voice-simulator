@@ -20,7 +20,7 @@ become stricter.
 | recognition | certified | [failed](https://github.com/konard/voice-simulator/issues/174) | [failed](https://github.com/konard/voice-simulator/issues/174) | [failed](https://github.com/konard/voice-simulator/issues/173) |
 | streaming | [failed](https://github.com/konard/voice-simulator/issues/175) | [failed](https://github.com/konard/voice-simulator/issues/175) | [failed](https://github.com/konard/voice-simulator/issues/175) | [failed](https://github.com/konard/voice-simulator/issues/173) |
 | voice-fit | certified | certified | certified | certified |
-| session | [failed](https://github.com/konard/voice-simulator/issues/177) | [failed](https://github.com/konard/voice-simulator/issues/177) | [failed](https://github.com/konard/voice-simulator/issues/177) | [failed](https://github.com/konard/voice-simulator/issues/173) |
+| session | certified | certified | certified | [failed](https://github.com/konard/voice-simulator/issues/173) |
 | copy | [failed](https://github.com/konard/voice-simulator/issues/178) | certified | certified | [failed](https://github.com/konard/voice-simulator/issues/173) |
 | modes | certified | certified | certified | [failed](https://github.com/konard/voice-simulator/issues/173) |
 | app | [failed](https://github.com/konard/voice-simulator/issues/180) | certified | — | — |
@@ -49,12 +49,12 @@ become stricter.
 | voice-fit | js-1 | CPU time / audio time | 0.4018 | ≤ 1 | yes |
 | voice-fit | rust-1 | CPU time / audio time | 0.3859 | ≤ 1 | yes |
 | voice-fit | memory | peak RSS (MB) | 199.4219 | ≤ 256 | yes |
-| session | quality | share of voices reaching stable | 0 | ≥ 1 | no |
-| session | quality | vocal tract length error | 0.0226 | ≤ 0.05 | yes |
-| session | quality | pitch error | 0.0097 | ≤ 0.03 | yes |
-| session | js-1 | CPU time / audio time | 1.4538 | ≤ 0.5 | no |
-| session | rust-1 | CPU time / audio time | 1.3088 | ≤ 0.5 | no |
-| session | memory | peak RSS (MB) | 345.9688 | ≤ 256 | no |
+| session | quality | share of voices reaching stable | 1 | ≥ 1 | yes |
+| session | quality | vocal tract length error | 0.0197 | ≤ 0.05 | yes |
+| session | quality | pitch error | 0.0117 | ≤ 0.03 | yes |
+| session | js-1 | CPU time / audio time | 0.1596 | ≤ 0.5 | yes |
+| session | rust-1 | CPU time / audio time | 0.1624 | ≤ 0.5 | yes |
+| session | memory | peak RSS (MB) | 357.3 | ≤ 256 | no |
 | copy | quality | mean f0 RMSE (semitones) | 6.0086 | ≤ 1.5 | no |
 | copy | quality | mean timing error (ms) | 271.4 | ≤ 30 | no |
 | copy | quality | phonemes of the copy agreeing | 0.4716 | ≥ 0.9 | no |
@@ -81,8 +81,8 @@ become stricter.
 | streaming | rust | 23.935 | 60 | 339.4883 | 192 MB | textMismatch 0.2429, firstPartial 0.9298, load 0.3989, partials 247, streamText The quick brown fox jump sober the lady dog. She says she ce…, batchText The quick bill fox jump sober the lady dog. She says she sha… |
 | voice-fit | js | 12.055 | 30 | 194.1367 | 192 MB | vocalTractLengthError 0.0275, pitchError 0.0214, cpuRatio 0.4018 |
 | voice-fit | rust | 11.577 | 30 | 199.4219 | 192 MB | vocalTractLengthError 0.0275, pitchError 0.0214, cpuRatio 0.3859 |
-| session | js | 87.231 | 60 | 345.9688 | 192 MB | stable 0, vocalTractLengthError 0.0226, pitchError 0.0097, cpuRatio 1.4538 |
-| session | rust | 78.525 | 60 | 345.8008 | 192 MB | stable 0, vocalTractLengthError 0.0226, pitchError 0.0097, cpuRatio 1.3088 |
+| session | js | 9.577 | 60 | 330.9 | 192 MB | stable 1, vocalTractLengthError 0.0197, pitchError 0.0117, cpuRatio 0.1596 |
+| session | rust | 9.746 | 60 | 357.3 | 192 MB | stable 1, vocalTractLengthError 0.0197, pitchError 0.0117, cpuRatio 0.1624 |
 | copy | js | 413.905 | 111.78 | 447.5273 | 192 MB | f0RmseSemitones 6.0086, timingErrorMs 271.4, phonemeAgreement 0.4716, maxF0RmseSemitones 12.1282, maxTimingErrorMs 720, cpuRatio 3.7029, recordings 24 |
 | copy | rust | 403.811 | 111.78 | 439.4766 | 192 MB | f0RmseSemitones 6.0086, timingErrorMs 271.4, phonemeAgreement 0.4716, maxF0RmseSemitones 12.1282, maxTimingErrorMs 720, cpuRatio 3.6126, recordings 24 |
 | modes | js | 9.657 | 109.405 | 320.6445 | 192 MB | modeShare 0.9, rtf 0.0883, renderRtf 0.0169, utterances 60 |
@@ -93,3 +93,5 @@ become stricter.
 
 - **voice-fit** at commit `8715933bc93332ef5d01c352520cb3730dbfe767` on AMD EPYC Processor (with IBPB), Node v24.22.3, measured 2026-11-28T01:07:58.885Z.
   Pinned with `taskset -c 0`. Command `node --test --test-name-pattern 'voice-fit with' tests/heavy/lowest-settings.test.js`.
+- **session** at commit `336df9f4069def2bfdf385859008df98c2138bf0` on AMD EPYC 9V74 80-Core Processor, Node v24.22.3, measured 2026-11-28T01:13:16.430Z.
+  Pinned with `taskset -c 0`. Command `LOWEST_ROW=session node --test tests/heavy/lowest-settings.test.js`.

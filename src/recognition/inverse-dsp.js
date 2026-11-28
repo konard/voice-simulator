@@ -50,10 +50,12 @@ export function integrate(x, leak, y = new Float64Array(x.length)) {
 
 export function filter(x, a, y = new Float64Array(x.length)) {
   for (let n = 0; n < x.length; n++) {
-    y[n] = x[n];
-    for (let k = 0; k < a.length && k < n; k++) {
-      y[n] += a[k] * x[n - k - 1];
+    let value = x[n];
+    const count = Math.min(a.length, n);
+    for (let k = 0; k < count; k++) {
+      value += a[k] * x[n - k - 1];
     }
+    y[n] = value;
   }
   return y;
 }

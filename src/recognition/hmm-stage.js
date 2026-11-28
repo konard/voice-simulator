@@ -110,11 +110,7 @@ function timedSegments(aligned) {
 export function hmmAudioToIpa(samples, sampleRate, options = {}) {
   const model = getHmmModel();
   const languages = options.languages ?? ['en', 'ru', 'hi', 'zh'];
-  const analysis =
-    options.analysis ?? analyzeFrames(samples, sampleRate, { hop: 0.01 });
-  const pitch = options.framePitch
-    ? trackPitchFrames(analysis, { percentiles: true })
-    : trackPitch(analysis);
+  const { analysis, pitch } = hmmFrontEnd(samples, sampleRate, options);
   const { feats, frames, tone } = hmmFeatures(
     samples,
     sampleRate,
@@ -169,14 +165,31 @@ export function hmmAudioToIpa(samples, sampleRate, options = {}) {
     words:
       options.includeWords === false ? [] : timedWords(decoded.words, aligned),
     tracks: { pitch },
-    // Energies only: the noise check reads them, prosody and modes
-    // analyse the audio at their own hops.
-    frames: { energy: analysis.energy, count: analysis.count },
+    // Live decoding shares its incremental frames with the mode classifier.
+    // Batch callers only need the energies here for the noise check.
+    frames: options.frontEnd
+      ? analysis
+      : { energy: analysis.energy, count: analysis.count },
     whisperSpans,
     modes,
     language,
     ...(decoded.lang && { modelLanguage: decoded.lang }),
   };
+}
+
+function hmmFrontEnd(samples, sampleRate, options) {
+  if (options.frontEnd) {
+    return {
+      analysis: options.frontEnd.frames,
+      pitch: options.frontEnd.tracks.pitch,
+    };
+  }
+  const analysis =
+    options.analysis ?? analyzeFrames(samples, sampleRate, { hop: 0.01 });
+  const pitch = options.framePitch
+    ? trackPitchFrames(analysis, { percentiles: true })
+    : trackPitch(analysis, { kernels: options.kernels });
+  return { analysis, pitch };
 }
 
 function hasSpeech(analysis) {
@@ -206,6 +219,7 @@ function timedWords(words, aligned) {
         ? spellSounds(parseIpa(tokens.map(tokenIpa).join('')).tokens, lang)
         : word,
       language: lang,
+      ...(oov && { unknown: true }),
       start: hmmBoundaryTime(from),
       end: hmmBoundaryTime(to),
     };

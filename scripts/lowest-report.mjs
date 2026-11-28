@@ -160,6 +160,10 @@ export function judge(runs, thresholds, issues = {}, conditions = {}) {
   const cells = {};
   for (const [row, columns] of Object.entries(thresholds)) {
     cells[row] = {};
+    const measurement = conditions.rowMeasurements?.[row];
+    const rowConditions = measurement
+      ? { limit: conditions.limit, ...measurement }
+      : conditions;
     for (const column of COLUMNS) {
       if (!columns[column]) {
         continue;
@@ -169,7 +173,7 @@ export function judge(runs, thresholds, issues = {}, conditions = {}) {
         row,
         column,
         columns[column],
-        conditions
+        rowConditions
       );
     }
   }

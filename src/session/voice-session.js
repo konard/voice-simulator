@@ -6,11 +6,15 @@ import {
   validateRate,
   validateSamples,
 } from '../recognition/recognizer.js';
-import { checkRecognitionOptions } from '../recognition/engine.js';
+import {
+  checkRecognitionOptions,
+  getRecognitionEngine,
+} from '../recognition/engine.js';
 import { createEvents } from '../recognition/recognizer-stream.js';
 import { synthesize } from '../synthesize.js';
 import { loadVoice, saveVoice } from '../voice-file.js';
 import { blockPitch, createAudioWindow } from './audio-window.js';
+import { createLivePasses } from './live-passes.js';
 import { sessionPasses } from './passes.js';
 import { cpuTime, createSessionScheduler } from './scheduler.js';
 import { createSpeakerTracking } from './tracking.js';
@@ -87,7 +91,7 @@ function accentOptions(accent) {
 }
 
 // State, sample cursors and scheduled pass publication share the same lifetime.
-// eslint-disable-next-line max-lines-per-function
+// eslint-disable-next-line max-lines-per-function, max-statements
 export function createSession(
   options,
   { passes = sessionPasses, openRecognizer = createRecognizer } = {}
@@ -100,17 +104,38 @@ export function createSession(
   const stride = Math.round(sampleRate * ANALYSIS_BLOCK);
   const seed = settings.voice ? loadVoice(settings.voice) : null;
   const events = createEvents();
-  const recognizer = openRecognizer({
-    sampleRate,
-    level: settings.level,
-    languages: settings.languages,
-    segments: settings.segments,
-    includeModeLabels: settings.includeModeLabels,
-    voice: DEFAULT_HEAD,
-    deterministic: !realtime,
-    engine: settings.recognitionEngine,
-    profile: options.profile,
-  });
+  const liveWords =
+    realtime && sampleRate === 8000 && ['auto', 'low'].includes(settings.level);
+  const live =
+    liveWords && passes === sessionPasses ? createLivePasses() : null;
+  let livePitch = [];
+  if (live) {
+    settings.kernels = getRecognitionEngine({
+      engine: settings.recognitionEngine,
+    });
+  }
+  const recognizer = openRecognizer(
+    {
+      sampleRate,
+      level: liveWords ? 'low' : settings.level,
+      languages: settings.languages,
+      segments: settings.segments,
+      includeModeLabels: settings.includeModeLabels,
+      voice: DEFAULT_HEAD,
+      deterministic: !realtime,
+      engine: settings.recognitionEngine,
+      profile: options.profile,
+    },
+    {
+      liveWords,
+      liveModeReference: settings.includeModeLabels === true,
+      onReading:
+        live &&
+        ((decoded, offset, final) =>
+          live.read(decoded, offset, final, settings)),
+      onPitch: live && ((row) => livePitch.push(row)),
+    }
+  );
   const scheduler = createSessionScheduler(settings, receive);
   const tracking = createSpeakerTracking(settings);
   const history = [];
@@ -136,6 +161,7 @@ export function createSession(
   let iterations = 0;
   let refinement;
   let trackAfter = 0;
+  let trackedVoiced = 0;
   let awaitingPause = false;
   let captureStart = 0;
 
@@ -188,6 +214,8 @@ export function createSession(
   function clearSpeaker(initial) {
     scheduler.cancel();
     tracking.clear();
+    live?.reset(at);
+    livePitch = [];
     bufferOffset = at;
     window.clear();
     lastAnalyzed = 0;
@@ -203,6 +231,7 @@ export function createSession(
     stableCount = iterations = 0;
     refinement = null;
     trackAfter = 0;
+    trackedVoiced = 0;
     awaitingPause = false;
   }
 
@@ -216,7 +245,9 @@ export function createSession(
     if (!result) {
       return;
     }
-    const action = tracking.observe(result, voice, captured, generationVoiced);
+    const action = live
+      ? result
+      : tracking.observe(result, voice, captured, generationVoiced);
     if (action?.speakerChanged) {
       changeSpeaker();
     } else if (action?.drift) {
@@ -280,6 +311,12 @@ export function createSession(
   }
 
   function finishRefinement(result, samples, generationVoiced) {
+    if (live) {
+      waitVoiced = generationVoiced + 0.5;
+      if (result.wait) {
+        return;
+      }
+    }
     iterations++;
     stableCount = result.unchanged ? stableCount + 1 : 0;
     converged = result.stable;
@@ -291,7 +328,8 @@ export function createSession(
     refinement = { samples, reading: result.reading };
     if (converged) {
       tracking.start(result.distance, voiced);
-      trackAfter = window.end + sampleRate;
+      trackedVoiced = voiced;
+      trackAfter = window.end + trackingInterval();
       refinement = null;
       transition('stable', 'converged');
     } else if (iterations >= settings.maxIterations) {
@@ -309,7 +347,11 @@ export function createSession(
     const captured = at;
     captureStart = captured;
     const generationVoiced = voiced;
-    const work = passes[kind](samples, context, settings);
+    const work = (live?.passes ?? passes)[kind](
+      samples,
+      { ...context, captured },
+      settings
+    );
     scheduler.replace(
       (function* () {
         const result = yield* work;
@@ -318,15 +360,25 @@ export function createSession(
     );
   }
 
+  function trackingInterval() {
+    return (live ? 5 : 1) * sampleRate;
+  }
+
+  function queueTracking() {
+    const newSpeech = live ? voiced - trackedVoiced >= 3 : tracking.hasVoiced;
+    if (window.end >= trackAfter && newSpeech) {
+      trackAfter = window.end + trackingInterval();
+      trackedVoiced = voiced;
+      enqueue('tracking', window.read(5 * sampleRate), { voice });
+    }
+  }
+
   function queueDue() {
     if (!backgroundShare || scheduler.busy || at < waitAudio) {
       return;
     }
     if (state === 'stable') {
-      if (window.end >= trackAfter && tracking.hasVoiced) {
-        trackAfter = window.end + sampleRate;
-        enqueue('tracking', window.read(5 * sampleRate), { voice });
-      }
+      queueTracking();
       return;
     }
     if (voiced + 1e-8 < waitVoiced) {
@@ -339,7 +391,7 @@ export function createSession(
       lastAttempt = at;
       transition(voice ? 'inverting' : 'fitting', 'voiced');
     }
-    const samples = refinement?.samples ?? window.read();
+    const samples = (!live && refinement?.samples) || window.read();
     enqueue(state, samples, {
       voice,
       distance: lastDistance(),
@@ -365,13 +417,10 @@ export function createSession(
   }
 
   function analyze() {
-    const pitch = blockPitch(
-      window,
-      sampleRate,
-      lastAnalyzed,
-      window.end,
-      bufferOffset
-    );
+    const pitch = live
+      ? livePitch
+      : blockPitch(window, sampleRate, lastAnalyzed, window.end, bufferOffset);
+    livePitch = [];
     lastAnalyzed = window.end;
     voiced += pitch.length / 100;
     if (state === 'stable') {

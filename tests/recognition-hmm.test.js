@@ -318,3 +318,22 @@ it('selects the histogram threshold with repeated scores and reused rows', () =>
     assert.deepEqual(thresholds(work, scores, length, 108), expected);
   }
 });
+
+it('keeps ties at the histogram pruning threshold', () => {
+  const scores = [-60, -7, -5, -3, -5, -1, -2, -80];
+  const nodes = new Uint8Array(scores.length);
+  const thresholds = createThresholds(nodes, 1, {
+    ...HMM_DECODE_DEFAULTS,
+    beam: 10,
+    maxActive: 4,
+  });
+  assert.equal(
+    thresholds(
+      scores.map((_, i) => i),
+      scores,
+      scores.length,
+      -1
+    )[0],
+    -5
+  );
+});

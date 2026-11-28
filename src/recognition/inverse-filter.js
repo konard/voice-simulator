@@ -58,10 +58,20 @@ function lfModels() {
   models ??= Array.from({ length: 38 }, (_, i) => {
     const tenseness = 0.1 + i * 0.02;
     const pulse = lfParameters(tenseness);
+    const levels = lfHarmonics(tenseness);
+    const means = levels.map((_, index) => {
+      const count = index + 1;
+      let mean = 0;
+      for (let k = 0; k < count; k++) {
+        mean += levels[k] / count;
+      }
+      return mean;
+    });
     return {
       rd: 3 * (1 - tenseness),
       oq: Math.min(1, pulse.te + pulse.ta),
-      levels: lfHarmonics(tenseness),
+      levels,
+      means,
     };
   });
   return models;
@@ -71,10 +81,7 @@ function fitPulse(h) {
   let best;
   let fit = Infinity;
   for (const model of lfModels()) {
-    let m = 0;
-    for (let k = 0; k < h.length; k++) {
-      m += model.levels[k] / h.length;
-    }
+    const m = model.means[h.length - 1];
     let error = 0;
     for (let k = 0; k < h.length; k++) {
       error += (h[k] - mean - (model.levels[k] - m)) ** 2;

@@ -74,8 +74,7 @@ export function createSessionScheduler({ realtime, schedule }, done) {
   }
 
   function slice() {
-    // A preceding slice or a synchronous drain may finish queued work.
-    if (!running) {
+    if (!running || !share) {
       return;
     }
     const start = now();

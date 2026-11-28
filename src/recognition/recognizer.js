@@ -23,6 +23,7 @@ import { createRecognitionPool } from './pool.js';
 import { aggregate, translated } from './recognizer-result.js';
 import { pauseCuts } from './recognizer-pauses.js';
 import { realiseChineseTones } from './zh-tones.js';
+import { resultFromPath } from './result.js';
 
 export { createRecognizer } from './recognizer-stream.js';
 
@@ -197,7 +198,8 @@ export function decodeRecognitionAudio(
   sampleRate,
   settings,
   level,
-  start
+  start,
+  frontEnd
 ) {
   const { input, rate, options } = decodeInput(
     samples,
@@ -208,18 +210,22 @@ export function decodeRecognitionAudio(
   );
   if (usesWordDecoder(settings)) {
     const decoded = measure(settings.profile, 'Audio to IPA', () => {
-      const { fine, coarse } = settings.modes
-        ? analyzeFrameHops(input, rate)
-        : { coarse: analyzeFrames(input, rate, { hop: 0.01 }) };
+      const { fine, coarse } = frontEnd
+        ? { coarse: frontEnd.frames }
+        : recognitionFrameHops(input, rate, settings.modes);
       const result = hmmAudioToIpa(input, rate, {
         languages: settings.languages,
         whisper: options.whisper,
         oov: settings.oov,
         analysis: coarse,
         framePitch: true,
-        includeWords: settings.hmmWordSpans === true,
-        includeSyllables: false,
+        includeWords: settings.liveWords || settings.hmmWordSpans === true,
+        includeSyllables: settings.liveWords === true,
         profile: settings.profile,
+        frontEnd,
+        kernels: frontEnd && settings.kernels,
+        search: settings.search,
+        maxWords: settings.maxWords,
       });
       result.prosodyFrames = fine;
       if (settings.includeModeLabels) {
@@ -237,6 +243,12 @@ export function decodeRecognitionAudio(
         lattice: settings.rescoring,
       });
   return { decoded, input, rate };
+}
+
+function recognitionFrameHops(input, rate, useModes) {
+  return useModes
+    ? analyzeFrameHops(input, rate)
+    : { coarse: analyzeFrames(input, rate, { hop: 0.01 }) };
 }
 
 export function emptyRecognition(nbest, segments = false) {
@@ -333,6 +345,35 @@ function decodeText(input, settings, level, modelLanguage) {
   );
 }
 
+function liveWordResult(decoded, sounds) {
+  const tokens = [];
+  const path = [];
+  let index = -1;
+  for (const sound of sounds) {
+    if (sound.kind === 'pause') {
+      continue;
+    }
+    if (sound.modelWord !== index) {
+      index = sound.modelWord;
+      const { text, language, unknown } = decoded.words[index];
+      path.push({
+        word: text,
+        language,
+        unknown,
+        from: tokens.length,
+        to: tokens.length,
+        ipa: '',
+        cost: 0,
+      });
+    }
+    const word = path.at(-1);
+    word.ipa += sound.ipa;
+    word.to++;
+    tokens.push(sound);
+  }
+  return resultFromPath(path, tokens, decoded.modelLanguage);
+}
+
 function recognizeProsody(decoded, samples, rate, settings, level) {
   const input = timedPhones(decoded);
   const pitch = decoded.tracks?.pitch;
@@ -352,12 +393,10 @@ function recognizeProsody(decoded, samples, rate, settings, level) {
   const measured = measure(settings.profile, 'Prosody', () =>
     measureProsody(samples, rate, input, options)
   );
-  const primary = decodeText(
-    measured.sounds,
-    settings,
-    level,
-    decoded.modelLanguage
-  );
+  // The live HMM has already searched the lexicon and aligned its words.
+  const primary = settings.liveWords
+    ? liveWordResult(decoded, measured.sounds)
+    : decodeText(measured.sounds, settings, level, decoded.modelLanguage);
   return markProsody(primary, measured, options);
 }
 
@@ -437,6 +476,8 @@ export function recognizeDecoded(
             rate,
             {
               ...primary,
+              ...(settings.liveWords &&
+                !settings.voice && { phones: decoded.segments }),
               whisperSpans:
                 settings.whisper === false ? [] : decoded.whisperSpans,
             },
@@ -448,10 +489,16 @@ export function recognizeDecoded(
               kernels: settings.kernels,
               frames: decoded.frames?.speech ? decoded.frames : undefined,
               wordFrames: decoded.modeFrames,
+              pitch: settings.liveWords ? decoded.tracks.pitch : undefined,
+              skipFormants: settings.liveWords && !settings.voice,
               reuseFormantCandidates:
-                final === false && !settings.stages.audioToIpa
+                final === false &&
+                !settings.liveWords &&
+                !settings.stages.audioToIpa
                   ? 'growing'
-                  : final === 'batch' || final === 'parallel',
+                  : settings.liveWords ||
+                    final === 'batch' ||
+                    final === 'parallel',
             }
           )
         )
