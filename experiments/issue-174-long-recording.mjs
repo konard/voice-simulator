@@ -4,22 +4,30 @@ import { RATE, streamInput } from '../scripts/lowest-rows.mjs';
 import {
   HMM_DECODE_DEFAULTS,
   HMM_LOW_BATCH_SEARCH,
+  HMM_LOW_MULTILINGUAL_SEARCH,
   decodeWords,
 } from '../src/recognition/hmm-decode.js';
 import { hmmFeatures } from '../src/recognition/hmm-features.js';
 import { getHmmModel } from '../src/recognition/hmm-model.js';
 import { getNetwork } from '../src/recognition/hmm-network.js';
 
-const seconds = Number(process.argv[2] ?? 60);
+const args = process.argv.slice(2);
+const multilingual = args.includes('--multilingual');
+const seconds = Number(
+  args.find((argument) => argument !== '--multilingual') ?? 60
+);
 if (!Number.isFinite(seconds) || seconds <= 0 || seconds > 60) {
   throw new RangeError('Select up to 60 seconds of audio');
 }
 const audio = streamInput(seconds);
 const model = getHmmModel();
-const network = getNetwork(model, ['en']);
+const network = getNetwork(
+  model,
+  multilingual ? ['en', 'ru', 'hi', 'zh'] : ['en']
+);
 const { feats, frames, tone } = hmmFeatures(audio, RATE, model.lda);
 for (const [name, search] of [
-  ['low', HMM_LOW_BATCH_SEARCH],
+  ['low', multilingual ? HMM_LOW_MULTILINGUAL_SEARCH : HMM_LOW_BATCH_SEARCH],
   ['narrow', { beam: 60, languageBeam: 150, maxActive: 340 }],
   ['default', HMM_DECODE_DEFAULTS],
 ]) {

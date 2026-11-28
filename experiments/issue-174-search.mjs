@@ -4,7 +4,7 @@ import { cpuUsage } from 'node:process';
 import { decodeAudio } from '../src/audio/formats.js';
 import { resample } from '../src/audio/resample.js';
 import { synthesize } from '../src/index.js';
-import { HMM_LOW_SEARCH } from '../src/recognition/hmm-decode.js';
+import { HMM_LOW_MULTILINGUAL_SEARCH } from '../src/recognition/hmm-decode.js';
 import { hmmAudioToIpa } from '../src/recognition/hmm-stage.js';
 
 const rate = 8000;
@@ -13,7 +13,10 @@ const warm = synthesize('Hello world.', { tier: 'telephone', seed: 1 });
 const language = (decoded) => decoded.modelLanguage ?? null;
 const text = (decoded) => decoded.words.map(({ text: word }) => word).join(' ');
 
-hmmAudioToIpa(warm.samples, rate, { languages, search: HMM_LOW_SEARCH });
+hmmAudioToIpa(warm.samples, rate, {
+  languages,
+  search: HMM_LOW_MULTILINGUAL_SEARCH,
+});
 for (const file of ['synthetic', ...process.argv.slice(2)]) {
   const audio = file === 'synthetic' ? warm : decodeAudio(readFileSync(file));
   const samples = resample(audio.samples, audio.sampleRate, rate);
@@ -21,7 +24,7 @@ for (const file of ['synthetic', ...process.argv.slice(2)]) {
   const searches = {};
   for (const [name, search] of [
     ['wide', undefined],
-    ['low', HMM_LOW_SEARCH],
+    ['low', HMM_LOW_MULTILINGUAL_SEARCH],
   ]) {
     const start = cpuUsage();
     const decoded = hmmAudioToIpa(samples, rate, { languages, search });

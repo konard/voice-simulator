@@ -4,7 +4,10 @@ import { LANGUAGES } from '../g2p/index.js';
 import { registeredLexicons } from '../g2p/lexicon.js';
 import { decoderWhisperSpans } from './decode-pipeline.js';
 import { audioToIpa, audioToIpaParallel } from './decode.js';
-import { HMM_LOW_BATCH_SEARCH } from './hmm-decode.js';
+import {
+  HMM_LOW_BATCH_SEARCH,
+  HMM_LOW_MULTILINGUAL_SEARCH,
+} from './hmm-decode.js';
 import { hmmAudioToIpa } from './hmm-stage.js';
 import { createRecognitionEngine, getRecognitionEngine } from './engine.js';
 import { ipaToText } from './ipa-to-text.js';
@@ -592,10 +595,13 @@ function serial(samples, sampleRate, settings, level, unsplit) {
     );
     return stream.flush();
   }
-  const search =
-    level === 'low' && samples.length > WIDE_SEARCH_SECONDS * sampleRate
-      ? HMM_LOW_BATCH_SEARCH
-      : undefined;
+  let search;
+  if (level === 'low' && samples.length > WIDE_SEARCH_SECONDS * sampleRate) {
+    search =
+      settings.languages.length === 1
+        ? HMM_LOW_BATCH_SEARCH
+        : HMM_LOW_MULTILINGUAL_SEARCH;
+  }
   const { decoded, input, rate } = decodeRecognitionAudio(
     samples,
     sampleRate,

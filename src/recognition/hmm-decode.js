@@ -46,6 +46,13 @@ export const HMM_LOW_BATCH_SEARCH = Object.freeze({
   maxActive: 480,
 });
 
+// Keep the same within-language beam while limiting work on competing languages.
+export const HMM_LOW_MULTILINGUAL_SEARCH = Object.freeze({
+  ...HMM_LOW_BATCH_SEARCH,
+  languageBeam: 120,
+  maxActive: 384,
+});
+
 /** ln p of a shipped bigram cost (the costs are 0.5 - 0.3 ln p). */
 const lnProbability = (cost) => -(cost - 0.5) / 0.3;
 
@@ -697,12 +704,14 @@ export function alignWords(network, feats, frames, words, options = {}) {
   const N = chain.length;
   let prev = new Float64Array(N).fill(-Infinity);
   let cur = new Float64Array(N);
-  const back = new Int32Array(frames * N);
+  // Each predecessor is at most four states back in the chain.
+  const back = new Uint8Array(frames * N);
   for (let t = 0; t < frames; t++) {
     const row = t * N;
     for (let n = 0; n < N; n++) {
+      const state = chain[n];
       let s = -Infinity;
-      let arg = -1;
+      let advanceBy = 0;
       if (t === 0) {
         // Start in the first state or after skipping leading silence.
         if (n === 0) {
@@ -711,11 +720,11 @@ export function alignWords(network, feats, frames, words, options = {}) {
           s = silencePenalty;
         }
       } else {
-        s = prev[n] + chain[n].stay;
-        arg = n;
-        if (n > 0 && prev[n - 1] + chain[n - 1].go > s) {
-          s = prev[n - 1] + chain[n - 1].go;
-          arg = n - 1;
+        s = prev[n] + state.stay;
+        const advance = n > 0 ? prev[n - 1] + chain[n - 1].go : -Infinity;
+        if (advance > s) {
+          s = advance;
+          advanceBy = 1;
         }
         // Skip a whole optional unit that starts at n-3.
         if (n >= 4 && chain[n - 3].skippable) {
@@ -723,15 +732,15 @@ export function alignWords(network, feats, frames, words, options = {}) {
             prev[n - 4] + chain[n - 4].go + (chain[n - 3].sil ? 0 : -1);
           if (skip > s) {
             s = skip;
-            arg = n - 4;
+            advanceBy = 4;
           }
         }
       }
       if (s > -Infinity) {
-        s += score(chain[n].m, t);
+        s += score(state.m, t);
       }
       cur[n] = s;
-      back[row + n] = arg;
+      back[row + n] = advanceBy;
     }
     [prev, cur] = [cur, prev];
   }
@@ -744,7 +753,7 @@ export function alignWords(network, feats, frames, words, options = {}) {
       spans[ti][0] = Math.min(spans[ti][0], t);
       spans[ti][1] = Math.max(spans[ti][1], t + 1);
     }
-    at = back[t * N + at];
+    at -= back[t * N + at];
   }
   return tokens.map((tk, i) => ({ ...tk, from: spans[i][0], to: spans[i][1] }));
 }
