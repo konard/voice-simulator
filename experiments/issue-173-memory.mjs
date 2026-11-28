@@ -1,4 +1,5 @@
 /** Peak memory by stage in a bounded 8 kHz workload. Unlicense. */
+import './issue-173-buffer-allocations.mjs';
 import {
   fitVoice,
   presetHeadConfig,
