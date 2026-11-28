@@ -29,7 +29,8 @@ if (process.env.VOICE_MEMORY_SAMPLING === '1') {
   await sampling.post('HeapProfiler.startSampling', {
     samplingInterval: 65536,
     includeObjectsCollectedByMajorGC: true,
-    includeObjectsCollectedByMinorGC: true,
+    includeObjectsCollectedByMinorGC:
+      process.env.VOICE_MEMORY_SURVIVORS !== '1',
   });
 }
 const mb = (bytes) => Number((bytes / 1048576).toFixed(1));
