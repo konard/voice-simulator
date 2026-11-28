@@ -42,16 +42,17 @@ function bytes(base64) {
 
 const float32 = (base64) => new Float32Array(bytes(base64).buffer);
 const int8 = (base64) => new Int8Array(bytes(base64).buffer);
+const VALUES_PER_DIMENSION = 256;
 
-/** Unpack quantised mixtures into flat arrays for scoring. */
+/** Keep mixture codes and expand each distinct value only once per dimension. */
 export function unpackHmmModel(data) {
   const { lda, units, contexts, durations, mixtures } = data;
   const contextUnits = contexts.map((key) => units.indexOf(key.split('#')[0]));
   const dims = lda.dims;
   const counts = bytes(mixtures.counts);
   const weights = int8(mixtures.weights);
-  const means = int8(mixtures.means);
-  const logVars = int8(mixtures.logVars);
+  const meanCodes = bytes(mixtures.means);
+  const varCodes = bytes(mixtures.logVars);
   const [meanScale, meanOffset, varScale, varOffset] = [
     mixtures.meanScale,
     mixtures.meanOffset,
@@ -59,17 +60,25 @@ export function unpackHmmModel(data) {
     mixtures.varOffset,
   ].map(float32);
   const total = weights.length;
-  const mu = new Float32Array(total * dims);
-  const inv = new Float32Array(total * dims);
+  const muTable = new Float32Array(dims * VALUES_PER_DIMENSION);
+  const invTable = new Float32Array(muTable.length);
+  const normalizers = new Float64Array(muTable.length);
+  const gaussian = Math.log(2 * Math.PI);
+  for (let d = 0; d < dims; d++) {
+    for (let code = 0; code < VALUES_PER_DIMENSION; code++) {
+      const signed = code < 128 ? code : code - VALUES_PER_DIMENSION;
+      const k = d * VALUES_PER_DIMENSION + code;
+      muTable[k] = meanOffset[d] + meanScale[d] * signed;
+      const logVar = varOffset[d] + varScale[d] * signed;
+      invTable[k] = 0.5 * Math.exp(-logVar);
+      normalizers[k] = 0.5 * (gaussian + logVar);
+    }
+  }
   const norm = new Float64Array(total);
   for (let c = 0; c < total; c++) {
     let sum = (weights[c] / 127) * mixtures.weightRange;
     for (let d = 0; d < dims; d++) {
-      const i = c * dims + d;
-      mu[i] = meanOffset[d] + meanScale[d] * means[i];
-      const logVar = varOffset[d] + varScale[d] * logVars[i];
-      inv[i] = 0.5 * Math.exp(-logVar);
-      sum -= 0.5 * (Math.log(2 * Math.PI) + logVar);
+      sum -= normalizers[d * VALUES_PER_DIMENSION + varCodes[c * dims + d]];
     }
     norm[c] = sum;
   }
@@ -112,14 +121,32 @@ export function unpackHmmModel(data) {
     ),
     states: counts.length,
     first,
-    mu,
-    inv,
+    parameters: { meanCodes, varCodes, muTable, invTable },
     norm,
     stay,
     go,
     ciIndex,
     contextIndex,
   };
+}
+
+/** Expand mixtures directly into the caller's buffers, such as linear memory. */
+export function writeGaussianParameters(model, mu, inv) {
+  const { dims, parameters } = model;
+  if (!parameters) {
+    mu.set(model.mu);
+    inv.set(model.inv);
+    return;
+  }
+  const { meanCodes, varCodes, muTable, invTable } = parameters;
+  for (let base = 0; base < meanCodes.length; base += dims) {
+    for (let d = 0; d < dims; d++) {
+      const i = base + d;
+      const k = d * VALUES_PER_DIMENSION;
+      mu[i] = muTable[k + meanCodes[i]];
+      inv[i] = invTable[k + varCodes[i]];
+    }
+  }
 }
 
 let model;
@@ -134,15 +161,26 @@ export function getHmmModel() {
 
 /** Log likelihood of a frame for state m, optionally written to scores[m]. */
 export function stateScore(m, feats, offset, model, scores) {
-  const { first, mu, inv, norm, dims } = model;
+  const { first, norm, dims, parameters } = model;
   let max = -Infinity;
   let sum = 0;
   for (let c = first[m]; c < first[m + 1]; c++) {
     let s = norm[c];
     const base = c * dims;
-    for (let d = 0; d < dims; d++) {
-      const e = feats[offset + d] - mu[base + d];
-      s -= e * e * inv[base + d];
+    if (parameters) {
+      const { meanCodes, varCodes, muTable, invTable } = parameters;
+      for (let d = 0; d < dims; d++) {
+        const i = base + d;
+        const k = d * VALUES_PER_DIMENSION;
+        const e = feats[offset + d] - muTable[k + meanCodes[i]];
+        s -= e * e * invTable[k + varCodes[i]];
+      }
+    } else {
+      const { mu, inv } = model;
+      for (let d = 0; d < dims; d++) {
+        const e = feats[offset + d] - mu[base + d];
+        s -= e * e * inv[base + d];
+      }
     }
     if (s > max) {
       sum = sum * Math.exp(max - s) + 1;

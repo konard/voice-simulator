@@ -5,6 +5,7 @@
  * hmm-tone.js, computed by `rec_hmm_scores`, `rec_hmm_lda` and
  * `rec_hmm_tone` of the WebAssembly engine. Unlicense.
  */
+import { writeGaussianParameters } from './hmm-model.js';
 import { HMM_TONE_DIMS } from './hmm-tone.js';
 import { withWasmMemory } from './wasm-memory.js';
 
@@ -26,8 +27,9 @@ function check(code, name) {
 export function hmmStateScoresRust(module, model, feats, frames, states) {
   return withWasmMemory(module, (allocate) => {
     const first = allocate(Int32Array, model.first.length, model.first);
-    const mu = allocate(Float32Array, model.mu.length, model.mu);
-    const inv = allocate(Float32Array, model.inv.length, model.inv);
+    const parameters = model.norm.length * model.dims;
+    const mu = allocate(Float32Array, parameters);
+    const inv = allocate(Float32Array, parameters);
     const norm = allocate(Float64Array, model.norm.length, model.norm);
     const input = allocate(
       Float32Array,
@@ -36,6 +38,7 @@ export function hmmStateScoresRust(module, model, feats, frames, states) {
     );
     const chosen = allocate(Uint32Array, states.length, states);
     const out = allocate(Float64Array, frames * states.length);
+    writeGaussianParameters(model, mu.view(), inv.view());
     check(
       module.exports.rec_hmm_scores(
         first.pointer,

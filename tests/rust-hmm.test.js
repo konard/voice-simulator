@@ -5,7 +5,12 @@ import {
   hmmFeatures,
   hmmStatics,
 } from '../src/recognition/hmm-features.js';
-import { getHmmModel, stateScore } from '../src/recognition/hmm-model.js';
+import { readHmmModel } from '../src/recognition/data/hmm-model.js';
+import {
+  getHmmModel,
+  stateScore,
+  writeGaussianParameters,
+} from '../src/recognition/hmm-model.js';
 import {
   hmmLdaRust,
   hmmStateScoresRust,
@@ -17,6 +22,49 @@ import { itUnless } from './helpers/skip.js';
 
 const it = itUnless(noRust);
 const RATE = 8000;
+
+test('packed mixtures preserve every original Gaussian parameter', () => {
+  const model = getHmmModel();
+  const { mixtures } = readHmmModel();
+  const decode = (encoded) => {
+    const decoded = globalThis.atob(encoded);
+    const bytes = new Uint8Array(decoded.length);
+    for (let i = 0; i < bytes.length; i++) {
+      bytes[i] = decoded.charCodeAt(i);
+    }
+    return bytes;
+  };
+  const [means, logVars, weights] = [
+    mixtures.means,
+    mixtures.logVars,
+    mixtures.weights,
+  ].map((encoded) => new Int8Array(decode(encoded).buffer));
+  const [meanScale, meanOffset, varScale, varOffset] = [
+    mixtures.meanScale,
+    mixtures.meanOffset,
+    mixtures.varScale,
+    mixtures.varOffset,
+  ].map((encoded) => new Float32Array(decode(encoded).buffer));
+  const mu = new Float32Array(means.length);
+  const inv = new Float32Array(means.length);
+  writeGaussianParameters(model, mu, inv);
+  let exact = true;
+  for (let c = 0; c < weights.length; c++) {
+    let norm = (weights[c] / 127) * mixtures.weightRange;
+    for (let d = 0; d < model.dims; d++) {
+      const i = c * model.dims + d;
+      const logVar = varOffset[d] + varScale[d] * logVars[i];
+      exact &&= Object.is(
+        mu[i],
+        Math.fround(meanOffset[d] + meanScale[d] * means[i])
+      );
+      exact &&= Object.is(inv[i], Math.fround(0.5 * Math.exp(-logVar)));
+      norm -= 0.5 * (Math.log(2 * Math.PI) + logVar);
+    }
+    exact &&= Object.is(model.norm[c], norm);
+  }
+  expect(exact).toBe(true);
+});
 
 /** Half a second of a gliding two-formant buzz with a quiet seeded hiss. */
 function sound() {
