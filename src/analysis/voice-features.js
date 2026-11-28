@@ -90,6 +90,22 @@ export function resample(samples, sampleRate, targetRate = ANALYSIS_RATE) {
   return { samples: output, sampleRate: targetRate };
 }
 
+/** Reuse an already suitable waveform during synchronous read-only analysis. */
+export function voiceAnalysisInput(
+  samples,
+  sampleRate,
+  targetRate = ANALYSIS_RATE
+) {
+  if (
+    sampleRate <= targetRate * 1.02 &&
+    (samples instanceof Float32Array || samples instanceof Float64Array) &&
+    samples.buffer instanceof ArrayBuffer
+  ) {
+    return { samples, sampleRate };
+  }
+  return resample(samples, sampleRate, targetRate);
+}
+
 /** Linear-interpolated percentile of a list (`fraction` 0 to 1; 0 when empty). */
 export function percentile(values, fraction) {
   if (values.length === 0) {

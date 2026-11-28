@@ -20,9 +20,9 @@ import { fft, nextPowerOfTwo } from '../metrics/spectrum.js';
 import { decimate, lpcCoefficients } from '../acoustics/analysis.js';
 import {
   ANALYSIS_RATE,
+  voiceAnalysisInput,
   createYinWorkspace,
   percentile,
-  resample,
   yinPitch,
 } from './voice-features.js';
 
@@ -174,7 +174,7 @@ export function vowelBandRatios(samples, sampleRate, workspace) {
  * @returns {number[]}
  */
 export function frameAperiodicities(samples, sampleRate, share = SIGNAL_SHARE) {
-  const { samples: signal, sampleRate: rate } = resample(
+  const { samples: signal, sampleRate: rate } = voiceAnalysisInput(
     samples,
     sampleRate,
     Math.min(sampleRate, ANALYSIS_RATE)

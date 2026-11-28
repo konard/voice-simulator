@@ -27,7 +27,7 @@ import {
   synthesize,
   tokenize,
 } from '../src/index.js';
-import { median } from '../src/analysis/voice-features.js';
+import { median, yinPitch } from '../src/analysis/voice-features.js';
 import { trimSilence } from '../src/metrics/compare.js';
 import { normalizeRms } from '../src/metrics/distortion.js';
 import { alignEdits } from '../src/metrics/text.js';
@@ -287,6 +287,22 @@ describe('metrics: pitch and formants', () => {
       }
     });
     expect(median(errors) < 0.02).toBe(true);
+  });
+
+  it('pads only the partial YIN windows without changing their pitch', () => {
+    const rate = 8000;
+    const samples = Float32Array.from({ length: 703 }, (_, i) =>
+      Math.sin((2 * Math.PI * i) / 40)
+    );
+    const track = pitchTrack(samples, rate);
+    const padded = new Float64Array(samples.length + 500);
+    padded.set(samples);
+    expect(track.length).toBe(9);
+    expect(track[5]).toBeGreaterThan(0);
+    for (let i = 0; i < track.length; i++) {
+      const { f0, aperiodicity } = yinPitch(padded, i * 80, 320, rate);
+      expect(track[i]).toBe(aperiodicity < 0.35 ? f0 : 0);
+    }
   });
 
   it('formant errors average over frames with formants in both', () => {

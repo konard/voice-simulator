@@ -5,10 +5,9 @@
  */
 
 import {
-  ANALYSIS_RATE,
+  voiceAnalysisInput,
   createYinWorkspace,
   percentile,
-  resample,
   yinPitch,
 } from '../analysis/voice-features.js';
 
@@ -18,8 +17,6 @@ export const VOICED_APERIODICITY = 0.35;
 const QUIET_SHARE = 0.1;
 /** Relative pitch difference above which a voiced frame is a gross error. */
 const GROSS_ERROR = 0.2;
-/** Longest YIN lag (60 Hz) at the analysis rate, padded after the signal. */
-const MIN_F0 = 60;
 
 /**
  * Pitch (Hz) every `hop` seconds, 0 for unvoiced frames. The recording is
@@ -34,23 +31,25 @@ const MIN_F0 = 60;
  * @returns {Float64Array}
  */
 export function pitchTrack(samples, sampleRate, options = {}) {
-  const { samples: signal, sampleRate: rate } = resample(
+  const { samples: signal, sampleRate: rate } = voiceAnalysisInput(
     samples,
-    sampleRate,
-    ANALYSIS_RATE
+    sampleRate
   );
   const hop = Math.max(1, Math.round((options.hop ?? 0.01) * rate));
   const length = Math.max(1, Math.round((options.window ?? 0.04) * rate));
   const count = Math.ceil(signal.length / hop);
-  const padded = new Float64Array(
-    count * hop + length + Math.ceil(rate / MIN_F0) + 2
-  );
-  padded.set(signal);
+  // YIN already treats look-ahead beyond the signal as zero. Only its
+  // partial windows at the end need a padded set of reference samples.
+  const tailStart = Math.max(0, signal.length - length);
+  const tail = new Float64Array(signal.length - tailStart + length);
+  tail.set(signal.subarray(tailStart));
   const levels = new Float64Array(count);
   for (let frame = 0; frame < count; frame++) {
     let sum = 0;
-    for (let index = frame * hop; index < frame * hop + length; index++) {
-      sum += padded[index] * padded[index];
+    const start = frame * hop;
+    const end = Math.min(start + length, signal.length);
+    for (let index = start; index < end; index++) {
+      sum += signal[index] * signal[index];
     }
     levels[frame] = Math.sqrt(sum / length);
   }
@@ -59,9 +58,11 @@ export function pitchTrack(samples, sampleRate, options = {}) {
   const yin = createYinWorkspace(rate);
   for (let frame = 0; frame < count; frame++) {
     if (levels[frame] > 0 && levels[frame] >= quiet) {
+      const start = frame * hop;
+      const complete = start + length <= signal.length;
       const { f0, aperiodicity } = yinPitch(
-        padded,
-        frame * hop,
+        complete ? signal : tail,
+        complete ? start : start - tailStart,
         length,
         rate,
         yin
