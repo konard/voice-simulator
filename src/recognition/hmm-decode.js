@@ -562,7 +562,8 @@ function propagateFrame(network, search, t, best) {
  */
 export function decodeWords(network, feats, frames, options = {}, cache) {
   const settings = { ...HMM_DECODE_DEFAULTS, ...options };
-  const languages = settings.languages ?? [...network.trees.keys()];
+  const languages = settings.languages ??
+    network.languages ?? [...network.trees.keys()];
   const { model, language, trees } = network;
   const records = [];
   const buffers = searchBuffers(network, cache);
@@ -614,7 +615,7 @@ export function decodeWords(network, feats, frames, options = {}, cache) {
 // phrase. Keep its numeric work arrays and reset only the state read by the
 // next search. Trainers and callers with their own search use fresh buffers.
 function searchBuffers(network, cache) {
-  let buffers = cache?.get(network);
+  let buffers = cache?.get(network.language);
   if (!buffers) {
     const nodes = network.language.length;
     const words = network.words.length;
@@ -628,7 +629,7 @@ function searchBuffers(network, cache) {
       wordScores: new Float64Array(words),
       unigram: new Float64Array(words),
     };
-    cache?.set(network, buffers);
+    cache?.set(network.language, buffers);
   }
   return buffers;
 }

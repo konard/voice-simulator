@@ -149,7 +149,8 @@ function interpolateChannels(plan, spans, count) {
 
 /**
  * Each phone supplies two anchors, with another anchor for a stop release.
- * Absolute starts absorb earlier clamps whenever there is room to do so.
+ * Use each absolute end as the next anchor, even when a previous phone
+ * had to stretch past the measured start of this one.
  */
 export function warpPlan(plan, measuredSegments, options = {}) {
   const groups = groupPhones(plan.segments);
@@ -171,9 +172,7 @@ export function warpPlan(plan, measuredSegments, options = {}) {
       measurement?.start ?? cursor + group.start - sourceEnd
     );
     const planned = group.end - group.start;
-    const requested = measurement
-      ? measurement.end - measurement.start
-      : planned;
+    const requested = measurement ? measurement.end - start : planned;
     const fixed = group.parts
       .filter(({ kind }) => kind === 'release')
       .reduce((total, part) => total + part.duration, 0);
@@ -183,11 +182,14 @@ export function warpPlan(plan, measuredSegments, options = {}) {
       requested,
       options.clamp !== false
     );
-    if (length !== requested) {
+    const measuredDuration = measurement
+      ? measurement.end - measurement.start
+      : planned;
+    if (length !== measuredDuration) {
       warnings.push({
         ipa: group.token.symbol,
         start,
-        requested,
+        requested: measuredDuration,
         duration: length,
       });
     }

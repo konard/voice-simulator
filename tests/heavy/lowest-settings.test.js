@@ -12,6 +12,7 @@ import path from 'node:path';
 import { after, describe, it } from 'node:test';
 import { fileURLToPath, URL } from 'node:url';
 import { fetchDataset } from '../../scripts/datasets.mjs';
+import { loadManifest } from '../../scripts/golden.mjs';
 import {
   formatReport,
   judge,
@@ -220,6 +221,29 @@ function commit() {
   }
 }
 
+function checkMeasurement(measured) {
+  assert.ok(!measured.error, measured.error);
+  if (selected === 'copy') {
+    assert.ok(pinned, 'Copy certification requires one pinned core');
+    assert.ok(!measured.unavailable, measured.unavailable);
+    assert.ok(
+      !measured.capped?.crashed,
+      'Copy synthesis must finish under the heap cap'
+    );
+    if (!Number.isFinite(limit)) {
+      certifyCopy(measured);
+    }
+  }
+}
+
+function certifyCopy({ engine, metrics }) {
+  assert.equal(metrics.recordings, loadManifest().utterances.length);
+  const failures = Object.entries(thresholds.copy.quality)
+    .filter(([metric, bound]) => !passes(metric, metrics[metric], bound))
+    .map(([metric, bound]) => `${metric} ${metrics[metric]} (limit ${bound})`);
+  assert.deepEqual(failures, [], `${engine} copy failed its quality limits`);
+}
+
 describe('lowest settings: 8 kHz and one core', () => {
   mkdirSync(out, { recursive: true });
   for (const row of rows) {
@@ -231,7 +255,7 @@ describe('lowest settings: 8 kHz and one core', () => {
         runs[row] ??= {};
         runs[row][engine] = measured;
         console.log(`lowest ${row} ${engine}`, JSON.stringify(measured));
-        assert.ok(!measured.error, measured.error);
+        checkMeasurement(measured);
         if (row === 'streaming' && !Number.isFinite(limit)) {
           certifyStreaming(engine, measured);
         }

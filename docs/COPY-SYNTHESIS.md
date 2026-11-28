@@ -11,4 +11,6 @@ With the default copy controls, short English recordings at 16 kHz can recover t
 
 Use `renderScore(score, options)` or `--from-score` after editing the score's `segments` (IPA and times in seconds), `f0` (Hz, with zero marking unvoiced frames), or `loudness` (linear gain). `toScore(plan, recognition, voice)` also exports an existing synthesis plan. Copy quality depends on recognition and voice fitting. The CLI prints recognized text and measured differences, with `--json` for structured output.
 
+A telephone copy with measured pitch also records a `voicing` track. Its values range from zero to one and scale the vocal fold vibration of the planned IPA at each frame. Edit this alongside `f0` to change where voicing starts or stops.
+
 The [copy synthesis report](reports/copy-synthesis.md) records the objective results for the public-domain golden recordings at medium and studio quality.

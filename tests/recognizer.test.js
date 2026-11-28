@@ -270,6 +270,28 @@ it('uses the supplied IPA stage for stream partials and finals', () => {
   assert.deepEqual(result.words, [WORD]);
 });
 
+it('can skip interim readings and still read the final phrase', () => {
+  const snapshots = [];
+  const stream = createRecognizer(
+    {
+      ...OPTIONS,
+      sampleRate: RATE,
+      stages: {
+        ...OPTIONS.stages,
+        audioToIpa(samples, rate) {
+          snapshots.push(samples.length / rate);
+          return { ipa: IPA, segments: TIMED };
+        },
+      },
+    },
+    { previews: false }
+  );
+  stream.on('partial', () => assert.fail('unexpected interim reading'));
+  stream.push(new Float32Array(RATE / 2));
+  assert.deepEqual(stream.flush().words, [WORD]);
+  assert.deepEqual(snapshots, [0.5]);
+});
+
 it('never changes committed words or takes a syllable back', () => {
   const signal = new Float32Array(4 * RATE);
   const phrase = samplePhrase(RATE);

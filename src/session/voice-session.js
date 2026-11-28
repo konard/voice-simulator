@@ -94,7 +94,11 @@ function accentOptions(accent) {
 // eslint-disable-next-line max-lines-per-function, max-statements
 export function createSession(
   options,
-  { passes = sessionPasses, openRecognizer = createRecognizer } = {}
+  {
+    passes = sessionPasses,
+    openRecognizer = createRecognizer,
+    previews = true,
+  } = {}
 ) {
   const settings = optionsFor(options);
   const { sampleRate, realtime } = settings;
@@ -127,6 +131,7 @@ export function createSession(
     },
     {
       liveWords,
+      previews,
       liveModeReference: settings.includeModeLabels === true,
       onReading:
         live &&
@@ -552,14 +557,18 @@ export function createVoiceSession(options) {
 /** Copy a voice from one recording using the same deterministic sessions. */
 export function copyVoice(samples, sampleRate, options = {}) {
   validateRate(sampleRate);
-  const session = createVoiceSession({
-    ...options,
-    sampleRate,
-    window: Math.max(1, samples.length) / sampleRate,
-    maxIterations: 12,
-    segments: true,
-    realtime: false,
-  });
+  const session = createSession(
+    {
+      ...options,
+      sampleRate,
+      window: Math.max(1, samples.length) / sampleRate,
+      maxIterations: 12,
+      segments: true,
+      realtime: false,
+    },
+    // The one-shot caller only consumes the final reading.
+    { previews: false }
+  );
   session.push(
     samples instanceof Float32Array ? samples : Float32Array.from(samples)
   );
