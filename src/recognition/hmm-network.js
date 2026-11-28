@@ -342,20 +342,24 @@ export function buildNetwork(
 
 const networks = new WeakMap();
 
-/** Cached network of a model and language list. */
+/** Reuse packed nodes across searches that request overlapping languages. */
 export function getNetwork(model, languages, options = {}) {
   // Pronunciations added with addLexicon() change the trees.
   const revision = lexiconRevision();
-  const key = `${languages.join(',')}:${options.maxWords ?? HMM_MAX_WORDS}:${options.oov ?? true}`;
+  const key = `${options.maxWords ?? HMM_MAX_WORDS}:${options.oov ?? true}`;
   let byModel = networks.get(model);
   if (!byModel || byModel.revision !== revision) {
     byModel = Object.assign(new Map(), { revision });
     networks.set(model, byModel);
   }
   let network = byModel.get(key);
-  if (!network) {
-    network = buildNetwork(model, languages, options);
+  if (!network || languages.some((language) => !network.trees.has(language))) {
+    const shared = new Set(network?.trees.keys());
+    for (const language of languages) {
+      shared.add(language);
+    }
+    network = buildNetwork(model, [...shared], options);
     byModel.set(key, network);
   }
-  return network;
+  return { ...network, languages };
 }

@@ -204,6 +204,8 @@ jobs:
         if: inputs.suite == 'lowest' && inputs.lowest-row != ''
         env:
           LOWEST_ROW: ${{ inputs.lowest-row }}
+          # Copy has two independent cells, each pinned to its own core.
+          LOWEST_PARALLEL: ${{ inputs.lowest-row == 'copy' && '2' || '1' }}
           HEAVY_OUT: reports/heavy
         run: bash scripts/run-with-budget-warning.sh 18000 "Lowest-settings row" node --test tests/heavy/lowest-settings.test.js
 

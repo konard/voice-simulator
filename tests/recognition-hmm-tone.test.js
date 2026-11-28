@@ -98,9 +98,16 @@ it('resets reused search buffers between recordings and networks', () => {
   const expected = decodeWords(open, feats, frames, { tone });
 
   decodeWords(open, feats, Math.floor(frames / 2), { maxActive: 16 }, cache);
-  assert.deepEqual(decodeWords(open, feats, frames, { tone }, cache), expected);
+  const openBuffers = cache.get(open.language);
+  const sameGraph = getNetwork(model, ['en'], { maxWords: 200 });
+  assert.deepEqual(
+    decodeWords(sameGraph, feats, frames, { tone }, cache),
+    expected
+  );
+  assert.ok(cache.get(sameGraph.language) === openBuffers);
   decodeWords(closed, feats, frames, { tone }, cache);
-  assert.deepEqual([...cache.keys()], [closed]);
+  assert.equal(cache.size, 1);
+  assert.ok(cache.has(closed.language));
   assert.deepEqual(decodeWords(open, feats, frames, { tone }, cache), expected);
 });
 

@@ -1,17 +1,25 @@
 import assert from 'node:assert/strict';
 import { it } from 'test-anywhere';
-import { addLexicon, clearLexicons, recognize } from '../src/index.js';
+import {
+  addLexicon,
+  clearLexicons,
+  recognize,
+  synthesize,
+} from '../src/index.js';
 import {
   hmmBoundaryTime,
+  hmmFeatures,
   hmmFrameTime,
   hmmPitchStatics,
 } from '../src/recognition/hmm-features.js';
 import {
+  decodeWords,
   HMM_DECODE_DEFAULTS,
   languageThresholds,
 } from '../src/recognition/hmm-decode.js';
 import { getHmmModel } from '../src/recognition/hmm-model.js';
 import {
+  buildNetwork,
   firstToneClass,
   getNetwork,
   toneVariants,
@@ -65,6 +73,24 @@ it('decodes no words from silence', () => {
   });
   assert.deepEqual(decoded.words, []);
   assert.equal(decoded.ipa, '');
+});
+
+it('reuses the decoding graph when only one of its languages is requested', () => {
+  const model = getHmmModel();
+  const options = { maxWords: 40 };
+  const multilingual = getNetwork(model, ['ru', 'en'], options);
+  const english = getNetwork(model, ['en'], options);
+  assert.deepEqual(english.languages, ['en']);
+  assert.equal(english.trees.get('en'), multilingual.trees.get('en'));
+  assert.equal(english.language, multilingual.language);
+  const spoken = synthesize('one two', { lang: 'en', tier: 'telephone' });
+  const { feats, frames } = hmmFeatures(spoken.samples, RATE, model.lda);
+  const decoded = decodeWords(english, feats, frames);
+  assert.equal(decoded.lang, 'en');
+  assert.deepEqual(
+    decoded,
+    decodeWords(buildNetwork(model, ['en'], options), feats, frames)
+  );
 });
 
 it('adds the words of addLexicon() to the decoding network', () => {
