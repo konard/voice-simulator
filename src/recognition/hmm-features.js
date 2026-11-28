@@ -262,6 +262,14 @@ export function applyLda(lda, statics) {
   return projectLda(lda, statics.length, statics);
 }
 
+function projectRow(rows, base, frame, width) {
+  let sum = 0;
+  for (let d = 0; d < width; d++) {
+    sum += rows[base + d] * frame[d];
+  }
+  return sum;
+}
+
 function projectLda(lda, frames, statics, flat, storage = allocate) {
   const { ctx, dim, width, rows, mean, dims } = lda;
   const stat = dim / 2;
@@ -279,12 +287,7 @@ function projectLda(lda, frames, statics, flat, storage = allocate) {
       }
     }
     for (let r = 0; r < dims; r++) {
-      let s = 0;
-      const base = r * width;
-      for (let d = 0; d < width; d++) {
-        s += rows[base + d] * x[d];
-      }
-      out[t * dims + r] = s;
+      out[t * dims + r] = projectRow(rows, r * width, x, width);
     }
   }
   return out;

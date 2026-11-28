@@ -294,11 +294,17 @@ function straightAperiodicity(signal, pitches, index, scratch) {
 function meanDifference(signal, length, lags) {
   let total = 0;
   for (let lag = 1; lag <= lags; lag++) {
-    for (let index = 0; index < length; index++) {
-      total += (signal[index] - signal[index + lag]) ** 2;
-    }
+    total = addLagDifference(signal, length, lag, total);
   }
   return total / lags;
+}
+
+function addLagDifference(signal, length, lag, total) {
+  for (let index = 0; index < length; index++) {
+    const difference = signal[index] - signal[index + lag];
+    total += difference * difference;
+  }
+  return total;
 }
 
 function fractionalDifference(signal, length, lag, mean) {
