@@ -2,6 +2,7 @@
 import { fitVoiceSteps } from '../analysis/voice-fit.js';
 import { NoVoicedSpeechError } from '../analysis/voice-fit-statistics.js';
 import { lexiconRevision } from '../g2p/lexicon.js';
+import { withFrameStorage } from '../recognition/frame-storage.js';
 import {
   decodeRecognitionAudio,
   recognitionSettings,
@@ -60,7 +61,20 @@ function decodeWindow(samples, settings, options, level) {
   ) {
     return last.result;
   }
-  const result = decodeRecognitionAudio(samples, sampleRate, options, level);
+  const result = withFrameStorage((frameStorage) => {
+    const { decoded, input, rate } = decodeRecognitionAudio(
+      samples,
+      sampleRate,
+      options,
+      level,
+      undefined,
+      { frameStorage }
+    );
+    // The session uses the HMM timing and pitch. Its frame energies are only
+    // needed by batch recognition's noise check, so the columns can be reused.
+    decoded.frames = undefined;
+    return { decoded, input, rate };
+  });
   snapshotDecodes.set(samples, { key, settings, result });
   return result;
 }
