@@ -142,7 +142,21 @@ function point([height, backness, rounded]) {
 }
 
 function distance(a, b) {
-  return Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
+  const x = Math.abs(a[0] - b[0]);
+  const y = Math.abs(a[1] - b[1]);
+  const z = Math.abs(a[2] - b[2]);
+  const scale = Math.max(x, y, z);
+  if (scale === 0 || !Number.isFinite(scale)) {
+    return Math.hypot(x, y, z);
+  }
+  // Scale before squaring, then compensate for rounding in the first sum.
+  // Keeping three numeric arguments here lets the render loop inline it.
+  const x2 = (x / scale) ** 2;
+  const y2 = (y / scale) ** 2;
+  const xy = x2 + y2;
+  const correction = xy - x2 - y2;
+  const z2 = (z / scale) ** 2 - correction;
+  return Math.sqrt(xy + z2) * scale;
 }
 
 function solveLinear(matrix, vectors) {
