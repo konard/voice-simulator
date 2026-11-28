@@ -511,10 +511,6 @@ function stateHistory(rows) {
   };
 }
 
-function stateFrame(rows) {
-  return { ...stateHistory(rows), peaks: new Float64Array(rows) };
-}
-
 function growHistory(previous) {
   const grown = stateHistory((previous.scores.length / 6) * 2);
   grown.scores.set(previous.scores);
@@ -527,7 +523,7 @@ function createWorkspace({ nodeCount, model, languages }) {
   return {
     positions: new Uint32Array(nodeCount),
     previous: stateHistory(256),
-    current: stateFrame(256),
+    current: { state: stateHistory(256), peaks: new Float64Array(256) },
     entries: createFrontier(nodeCount),
     next: createFrontier(nodeCount),
     work: new Uint32Array(256),
@@ -569,12 +565,26 @@ export function decodeWords(network, feats, frames, options = {}, cache) {
   }
 }
 
-function retainStates(pass, target, offset, count, threshold) {
-  const { scores, histories, starts } = pass.current;
+function retainStates(pass, target, row, node, count, threshold) {
   if (target === pass.previous.scores.length) {
     pass.previous = growHistory(pass.previous);
   }
   const kept = pass.previous;
+  if (row >= pass.active) {
+    // A newly entered node could only emit its first state this frame.
+    const { index, columns } = pass.entries;
+    const entry = index[node] - 1;
+    kept.scores[target] = pass.current.peaks[row];
+    const entered = columns.scores[entry] > -Infinity;
+    kept.histories[target] = entered ? columns.histories[entry] : 0;
+    kept.starts[target] = entered ? columns.starts[entry] : 0;
+    kept.scores.fill(-Infinity, target + 1, target + count);
+    kept.histories.fill(0, target + 1, target + count);
+    kept.starts.fill(0, target + 1, target + count);
+    return;
+  }
+  const { scores, histories, starts } = pass.current.state;
+  const offset = row * 6;
   for (let i = 0; i < count; i++) {
     const source = offset + i;
     const score = scores[source];
@@ -618,7 +628,7 @@ function pruneFrame(network, pass, thresholds, t) {
     }
     const offset = active * 6;
     const states = count[id];
-    retainStates(pass, offset, index * 6, states, threshold);
+    retainStates(pass, offset, index, id, states, threshold);
     positions[id] = active + 1;
     work[active++] = id;
     const { scores, histories, starts } = pass.previous;
@@ -697,9 +707,15 @@ function prepareFrame(pass, nodeCount) {
       work[length++] = id;
     }
   }
-  const rows = pass.current.peaks.length;
-  if (rows < length) {
-    pass.current = stateFrame(Math.max(length, 2 * rows));
+  const { current } = pass;
+  const rows = current.state.scores.length / 6;
+  if (rows < active) {
+    current.state = stateHistory(Math.max(active, 2 * rows));
+  }
+  if (current.peaks.length < length) {
+    current.peaks = new Float64Array(
+      Math.max(length, 2 * current.peaks.length)
+    );
   }
   pass.length = length;
 }
