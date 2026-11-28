@@ -223,6 +223,7 @@ export function decodeRecognitionAudio(
         kernels: settings.kernels,
         search: settings.search,
         maxWords: settings.maxWords,
+        includeModeFrames: settings.includeModeLabels,
         includeWords: Boolean(
           wordOptions?.useModelWords ||
           wordOptions?.frontEnd ||

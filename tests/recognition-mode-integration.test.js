@@ -1,6 +1,7 @@
 /** Pause sounds and mode replay integration. Unlicense. */
 import { describe, it, expect } from 'test-anywhere';
 import {
+  recognize,
   recognizeModes,
   toPlanModes,
   planUtterance,
@@ -39,6 +40,25 @@ it('keeps unknown-voice modes when unused formants are omitted', () => {
   });
   expect(stages.includes('Formants')).toBe(true);
   expect(result).toEqual(traced);
+});
+
+it('reuses the batch word analysis for mode measurement', () => {
+  const { samples, sampleRate } = synthesize('The train leaves at seven.', {
+    tier: 'telephone',
+    engine: 'js',
+    seed: 1,
+  });
+  const stages = [];
+  const result = recognize(samples, sampleRate, {
+    engine: 'js',
+    languages: ['en'],
+    level: 'low',
+    unsplit: true,
+    profile: (stage) => stages.push(stage),
+  });
+  expect(result.words.length).toBeGreaterThan(0);
+  expect(stages.includes('Glottal periods')).toBe(true);
+  expect(stages.includes('Front end')).toBe(false);
 });
 
 it('uses the prepared telephone references for the matching known voice', () => {

@@ -99,7 +99,7 @@ function timedSegments(aligned) {
  * @param {ArrayLike<number>} samples
  * @param {number} sampleRate
  * @param {{languages?: string[], maxWords?: number, oov?: boolean, framePitch?: boolean,
- *   includeWords?: boolean, includeSyllables?: boolean,
+ *   includeWords?: boolean, includeSyllables?: boolean, includeModeFrames?: boolean,
  *   whisper?: 'auto'|false|{start: number, end: number}[],
  *   search?: Partial<typeof import('./hmm-decode.js').HMM_DECODE_DEFAULTS>}}
  *   [options] `search` tunes the beam and weights; `whisper` finds
@@ -166,16 +166,25 @@ export function hmmAudioToIpa(samples, sampleRate, options = {}) {
     words:
       options.includeWords === false ? [] : timedWords(decoded.words, aligned),
     tracks: { pitch },
-    // Live decoding shares its incremental frames with the mode classifier.
-    // Batch callers only need the energies here for the noise check.
-    frames: options.frontEnd
-      ? analysis
-      : { energy: analysis.energy, count: analysis.count },
-    modeFrames: options.useModelWords ? analysis : undefined,
+    ...resultFrames(analysis, options),
     whisperSpans,
     modes,
     language,
     ...(decoded.lang && { modelLanguage: decoded.lang }),
+  };
+}
+
+function resultFrames(
+  analysis,
+  { frontEnd, useModelWords, includeModeFrames }
+) {
+  return {
+    // Batch callers need the energies here for the noise check.
+    frames: frontEnd
+      ? analysis
+      : { energy: analysis.energy, count: analysis.count },
+    // Live word decoding and batch mode classification can share analysis.
+    modeFrames: useModelWords || includeModeFrames ? analysis : undefined,
   };
 }
 
