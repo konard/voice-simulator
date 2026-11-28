@@ -136,6 +136,7 @@ function recover(frames, f0, o) {
   const g = new Float64Array(x.length);
   const weight = new Float64Array(x.length);
   const windows = new Map();
+  const history = Math.round(0.05 * frames.rate);
   for (let time = 0; time < x.length / frames.rate; time += o.step) {
     const row = Math.min(f0.length - 1, Math.round(time / frames.hop));
     if (!(f0[row] > 0)) {
@@ -144,16 +145,16 @@ function recover(frames, f0, o) {
     const centre = Math.round(time * frames.rate);
     const length = Math.round(Math.max(0.032, 2.5 / f0[row]) * frames.rate);
     if (!windows.has(length)) {
-      windows.set(length, hann(length));
+      const extendedWindow = new Float64Array(history + length);
+      extendedWindow.set(hann(length), history);
+      windows.set(length, extendedWindow);
     }
-    const window = windows.get(length);
-    const history = Math.round(0.05 * frames.rate);
-    const extendedWindow = new Float64Array(history + length);
-    extendedWindow.set(window, history);
-    const extended = Float64Array.from(
-      { length: history + length },
-      (_, n) => x[centre - Math.floor(length / 2) - history + n] ?? 0
-    );
+    const extendedWindow = windows.get(length);
+    const start = centre - Math.floor(length / 2);
+    const from = Math.max(0, start - history);
+    const to = Math.min(x.length, start + length);
+    const extended = new Float64Array(extendedWindow.length);
+    extended.set(x.subarray(from, to), from - (start - history));
     const pulse = iaif(
       extended,
       extendedWindow,
@@ -161,13 +162,13 @@ function recover(frames, f0, o) {
       o.glottisOrder,
       o.leak
     );
-    const start = centre - Math.floor(length / 2);
     for (let n = 0; n < length; n++) {
       const index = start + n;
       if (index >= 0 && index < x.length) {
-        d[index] += window[n] * pulse.d[n + history];
-        g[index] += window[n] * pulse.g[n + history];
-        weight[index] += window[n];
+        const weightAtSample = extendedWindow[n + history];
+        d[index] += weightAtSample * pulse.d[n + history];
+        g[index] += weightAtSample * pulse.g[n + history];
+        weight[index] += weightAtSample;
       }
     }
   }
@@ -399,6 +400,49 @@ export function inverseFilter(frames, options = {}) {
     { ...frames, samples: frames.samples.subarray(0, frames.sampleCount) },
     o
   );
+}
+
+/** Measure the three source cues used by speech-mode recognition at vowel rows. */
+export function inverseFilterModeCues(frames, rows, options) {
+  if (options.kernels?.module) {
+    return inverseFilter(frames, options);
+  }
+  const o = settings(frames, options);
+  const { count, rate, hop, sampleCount } = frames;
+  const samples = frames.samples.subarray(0, sampleCount);
+  const f0 = localPitch(frames, o);
+  const result = {
+    h1h2Source: new Float32Array(count).fill(NaN),
+    hnr: new Float32Array(count).fill(NaN),
+    cpp: new Float32Array(count).fill(NaN),
+  };
+  if (!rows.some((t) => f0[t] > 0)) {
+    return result;
+  }
+  const d = lowBand(frames, f0)
+    ? recover({ ...frames, samples }, f0, o).flowDerivative
+    : null;
+  const cpp = cppPlan(rate, o.minF0, o.maxF0);
+  const windows = new Map();
+  for (const t of rows) {
+    if (!f0[t]) {
+      continue;
+    }
+    const centre = Math.round(t * hop * rate);
+    const period = rate / f0[t];
+    if (d && Math.floor(0.45 * period) >= 2) {
+      const source = block(d, centre, Math.round(2 * period));
+      const h = harmonics(source, rate, f0[t], 2);
+      result.h1h2Source[t] = h[0] - h[1];
+    }
+    const length = Math.round(6 * period);
+    if (!windows.has(length)) {
+      windows.set(length, hann(length));
+    }
+    result.hnr[t] = hnr(samples, centre, period, windows.get(length));
+    result.cpp[t] = cpp(samples, centre);
+  }
+  return result;
 }
 
 function inverseFilterJs(frames, o) {
