@@ -100,9 +100,8 @@ function emissionCache(model, feats, { tone, toneWeight }) {
 function languageModel(network, records, settings) {
   const { lmw, wip, oovPhone, oovWeight, minCount } = settings;
   const { words, trees } = network;
-  const cache = new Map();
   const rows = new Map();
-  const backoffs = new Map();
+  const backoffs = new Float64Array(words.length).fill(NaN);
   return (hist, id) => {
     const w = words[id];
     if (w.oov) {
@@ -111,33 +110,20 @@ function languageModel(network, records, settings) {
       return oovWeight * row.get(w.units[0]) + oovPhone;
     }
     const previous = hist >= 0 ? records[hist].word : null;
-    let scores = cache.get(previous);
-    if (!scores) {
-      scores = new Map();
-      cache.set(previous, scores);
+    const data = trees.get(w.lang).data;
+    if (previous && !rows.has(id)) {
+      rows.set(id, data.transitionRow(w.word));
     }
-    let v = scores.get(id);
-    if (v === undefined) {
-      const data = trees.get(w.lang).data;
-      if (previous && !rows.has(id)) {
-        rows.set(id, data.transitionRow(w.word));
-      }
-      let cost = previous ? rows.get(id)?.get(previous) : undefined;
-      if (cost === undefined) {
-        if (!backoffs.has(id)) {
-          backoffs.set(
-            id,
-            -0.3 *
-              Math.log((0.4 * Math.max(w.count ?? 1, minCount)) / data.total) +
-              0.5
-          );
-        }
-        cost = backoffs.get(id);
-      }
-      v = lmw * lnProbability(cost) + wip;
-      scores.set(id, v);
+    const cost = previous ? rows.get(id)?.get(previous) : undefined;
+    if (cost !== undefined) {
+      return lmw * lnProbability(cost) + wip;
     }
-    return v;
+    // Unseen pairs use the same backoff regardless of the previous word.
+    if (Number.isNaN(backoffs[id])) {
+      const prior = (0.4 * Math.max(w.count ?? 1, minCount)) / data.total;
+      backoffs[id] = lmw * lnProbability(-0.3 * Math.log(prior) + 0.5) + wip;
+    }
+    return backoffs[id];
   };
 }
 

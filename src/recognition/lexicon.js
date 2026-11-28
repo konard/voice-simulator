@@ -151,7 +151,15 @@ export function addPronunciation(root, entry, language, parsed) {
   }
 }
 
-function* lexiconPronunciations(language, words) {
+function pronunciationTokens(ipa) {
+  return parseIpa(ipa).tokens.filter((t) => t.kind !== 'pause');
+}
+
+function* lexiconPronunciations(
+  language,
+  words,
+  tokensFor = pronunciationTokens
+) {
   const contextual = language === 'zh' ? contextualChinese() : new Map();
   const parsed = new Map();
   for (const { word, count, prior } of words) {
@@ -176,10 +184,7 @@ function* lexiconPronunciations(language, words) {
         continue;
       }
       if (!parsed.has(ipa)) {
-        parsed.set(
-          ipa,
-          parseIpa(ipa).tokens.filter((t) => t.kind !== 'pause')
-        );
+        parsed.set(ipa, tokensFor(ipa));
       }
       const tokens = parsed.get(ipa);
       if (tokens.length) {
@@ -220,15 +225,19 @@ export function getLexicon(language = 'en') {
         return root;
       },
       /** Pronunciations of all words, or of the `limit` most frequent. */
-      pronunciations(limit = data.words.length) {
-        return lexiconPronunciations(language, data.words.slice(0, limit));
+      pronunciations(limit = data.words.length, tokensFor) {
+        return lexiconPronunciations(
+          language,
+          data.words.slice(0, limit),
+          tokensFor
+        );
       },
       /**
        * Pronunciations of the words added with addLexicon() that are not
        * among the `limit` most frequent, counted as the word of rank
        * `rank`: a word the user adds is expected to be heard.
        */
-      addedPronunciations(limit = data.words.length, rank = 1000) {
+      addedPronunciations(limit = data.words.length, rank = 1000, tokensFor) {
         const known = new Set(
           data.words.slice(0, limit).map(({ word }) => word)
         );
@@ -246,7 +255,8 @@ export function getLexicon(language = 'en') {
         }
         return lexiconPronunciations(
           language,
-          [...added].map((word) => ({ word, count }))
+          [...added].map((word) => ({ word, count })),
+          tokensFor
         );
       },
       words: data.words,

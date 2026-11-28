@@ -67,6 +67,16 @@ it('decodes no words from silence', () => {
   assert.equal(decoded.ipa, '');
 });
 
+it('reuses the decoding graph when only one of its languages is requested', () => {
+  const model = getHmmModel();
+  const options = { maxWords: 40 };
+  const multilingual = getNetwork(model, ['ru', 'en'], options);
+  const english = getNetwork(model, ['en'], options);
+  assert.deepEqual([...english.trees.keys()], ['en']);
+  assert.equal(english.trees.get('en'), multilingual.trees.get('en'));
+  assert.equal(english.nodes, multilingual.nodes);
+});
+
 it('adds the words of addLexicon() to the decoding network', () => {
   const model = getHmmModel();
   const has = () =>

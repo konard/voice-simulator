@@ -7,11 +7,12 @@
  * rising sandhi variant goes on. Unlicense.
  */
 import { lexiconRevision } from '../g2p/lexicon.js';
+import { parseIpa } from '../ipa/parse.js';
 import { getLexicon } from './lexicon.js';
 import { stateIndex, toneClass, toneUnits } from './hmm-model.js';
 
 const TONES = ['', '˩', '˨', '˧', '˦', '˥'];
-const NO_CHILDREN = Object.freeze([]);
+const EMPTY = Object.freeze([]);
 
 /** Words per language in the decoding network. */
 export const HMM_MAX_WORDS = 20000;
@@ -65,6 +66,7 @@ function insertWord(builder, model, root, lang, words, wid) {
     // Siblings that differ only in the next phone share a node when
     // their exit states are the same.
     const key = `${units[i]}>${stateIndex(model, units[i], 2, left, right)}>${stateIndex(model, `${units[i]}_r`, 2, left, right)}`;
+    node.children ??= new Map();
     let child = node.children.get(key);
     if (!child) {
       child = builder.newNode(units[i], lang, left, right);
@@ -72,7 +74,15 @@ function insertWord(builder, model, root, lang, words, wid) {
     }
     node = child;
   });
-  node.words.push(wid);
+  addWord(node, wid);
+}
+
+function addWord(node, id) {
+  if (node.words === EMPTY) {
+    node.words = [id];
+  } else {
+    node.words.push(id);
+  }
 }
 
 function createBuilder(model) {
@@ -88,13 +98,12 @@ function createBuilder(model) {
     const released = Boolean(ex?.release) && model.ciIndex.has(`${symbol}_r#0`);
     const node = {
       id: nodes.length,
-      symbol,
       lang,
       first: emit.length,
       count: released ? 6 : 3,
       optional: released && ex.optional,
-      children: new Map(),
-      words: [],
+      children: null,
+      words: EMPTY,
       lookLn: 0,
     };
     addStates(symbol, left, right);
@@ -112,17 +121,13 @@ function lookahead(node, uni) {
   for (const id of node.words) {
     best = Math.max(best, uni(id));
   }
-  for (const child of node.children.values()) {
-    best = Math.max(best, lookahead(child, uni));
+  if (node.children) {
+    for (const child of node.children.values()) {
+      best = Math.max(best, lookahead(child, uni));
+    }
   }
   node.lookLn = best;
   return best;
-}
-
-function spokenTokens(entry) {
-  return entry.tokens.filter(
-    (t) => t.kind === 'vowel' || t.kind === 'consonant'
-  );
 }
 
 /**
@@ -152,7 +157,7 @@ function addLoop(builder, lang, words, phones, pairs) {
   const node = (symbol, begin) => {
     const n = builder.newNode(symbol, lang);
     n.loop = true;
-    n.words.push(words.length);
+    addWord(n, words.length);
     words.push({
       word: '',
       lang,
@@ -192,6 +197,29 @@ function sandhiTrees(builder, model, lang, words, ids) {
   return after;
 }
 
+function* wordEntries(lexicon, maxWords) {
+  // A decoder token only needs its printed IPA and vowel/consonant class.
+  // Share these small immutable values across every pronunciation in a tree.
+  const shared = new Map();
+  const tokensFor = (ipa) => {
+    const tokens = [];
+    for (const token of parseIpa(ipa).tokens) {
+      const { kind, symbol, stress, tone } = token;
+      if (kind !== 'vowel' && kind !== 'consonant') {
+        continue;
+      }
+      const key = tokenIpa(token);
+      if (!shared.has(key)) {
+        shared.set(key, { kind, symbol, stress, tone });
+      }
+      tokens.push(shared.get(key));
+    }
+    return tokens;
+  };
+  yield* lexicon.pronunciations(maxWords, tokensFor);
+  yield* lexicon.addedPronunciations(maxWords, undefined, tokensFor);
+}
+
 function addTree(builder, model, lang, words, { maxWords, oov }) {
   const lexicon = getLexicon(lang);
   const root = { children: new Map() };
@@ -201,15 +229,10 @@ function addTree(builder, model, lang, words, { maxWords, oov }) {
   const pairs = new Map();
   const tonal = lang === 'zh' && model.units.some((u) => u.includes('@'));
   const ids = [];
-  const entries = [
-    ...lexicon.pronunciations(maxWords),
-    ...lexicon.addedPronunciations(maxWords),
-  ];
-  for (const entry of entries) {
-    const spoken = spokenTokens(entry);
+  for (const entry of wordEntries(lexicon, maxWords)) {
     const variants = tonal
-      ? toneVariants(entry.word, spoken)
-      : [{ tokens: spoken }];
+      ? toneVariants(entry.word, entry.tokens)
+      : [{ tokens: entry.tokens }];
     for (const { tokens, before } of variants) {
       const units = tonal ? toneUnits(tokens) : tokens.map((t) => t.symbol);
       const ipa = tokens.map(tokenIpa).join(' ');
@@ -272,13 +295,14 @@ export function buildNetwork(
   const words = [];
   const trees = new Map();
   for (const lang of languages) {
+    const start = builder.nodes.length;
     trees.set(lang, addTree(builder, model, lang, words, { maxWords, oov }));
-  }
-  // During decoding, children are only visited in insertion order.
-  for (const node of builder.nodes) {
-    node.children = node.children.size
-      ? [...node.children.values()]
-      : NO_CHILDREN;
+    // Release the construction maps before building the next language.
+    // During decoding, children are only visited in insertion order.
+    for (let i = start; i < builder.nodes.length; i++) {
+      const node = builder.nodes[i];
+      node.children = node.children ? [...node.children.values()] : EMPTY;
+    }
   }
   const emit = Int32Array.from(builder.emit);
   return {
@@ -294,20 +318,31 @@ export function buildNetwork(
 
 const networks = new WeakMap();
 
-/** Cached network of a model and language list. */
+/** Cache the last network per model and reuse its trees for smaller requests. */
 export function getNetwork(model, languages, options = {}) {
   // Pronunciations added with addLexicon() change the trees.
   const revision = lexiconRevision();
-  const key = `${languages.join(',')}:${options.maxWords ?? HMM_MAX_WORDS}:${options.oov ?? true}`;
-  let byModel = networks.get(model);
-  if (!byModel || byModel.revision !== revision) {
-    byModel = Object.assign(new Map(), { revision });
-    networks.set(model, byModel);
+  const key = `${options.maxWords ?? HMM_MAX_WORDS}:${options.oov ?? true}`;
+  const cached = networks.get(model);
+  if (cached?.revision === revision && cached.key === key) {
+    const { network } = cached;
+    if (languages.every((lang) => network.trees.has(lang))) {
+      if (languages.join(',') === cached.languages) {
+        return network;
+      }
+      const trees = new Map(
+        languages.map((lang) => [lang, network.trees.get(lang)])
+      );
+      return { ...network, trees };
+    }
   }
-  let network = byModel.get(key);
-  if (!network) {
-    network = buildNetwork(model, languages, options);
-    byModel.set(key, network);
-  }
+  networks.delete(model);
+  const network = buildNetwork(model, languages, options);
+  networks.set(model, {
+    revision,
+    key,
+    network,
+    languages: languages.join(','),
+  });
   return network;
 }
