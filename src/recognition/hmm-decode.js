@@ -163,19 +163,45 @@ function transitionCache() {
     histories: new Int32Array(capacity),
     candidates: new Uint32Array(capacity),
     costs: new Float64Array(capacity),
+    unigramIds: new Uint32Array(capacity),
+    unigramCosts: new Float64Array(capacity),
   };
 }
 
-function languageModel(
-  network,
-  records,
-  settings,
-  { histories, candidates, costs }
-) {
+function languageModel(network, records, settings, cache) {
   const { lmw, wip, oovPhone, oovWeight, minCount } = settings;
   const { words } = network;
+  const { histories, candidates, costs, unigramIds, unigramCosts } = cache;
   const mask = candidates.length - 1;
-  candidates.fill(0);
+  const weights = cache.weights;
+  if (
+    cache.words?.deref() !== words ||
+    weights.lmw !== lmw ||
+    weights.wip !== wip ||
+    weights.oovPhone !== oovPhone ||
+    weights.oovWeight !== oovWeight ||
+    weights.minCount !== minCount
+  ) {
+    // The shared graph can append new words without changing existing IDs.
+    // Keep scores for its existing words without retaining a retired graph.
+    cache.words = new WeakRef(words);
+    cache.weights = { lmw, wip, oovPhone, oovWeight, minCount };
+    candidates.fill(0);
+    unigramIds.fill(0);
+  }
+  function unigram(id, packed, data) {
+    const slot = id & mask;
+    if (unigramIds[slot] !== id + 1) {
+      const count = packed ? packed.count(id) : words[id].count;
+      const cost =
+        -0.3 * Math.log((0.4 * Math.max(count ?? 1, minCount)) / data.total) +
+        0.5;
+      unigramIds[slot] = id + 1;
+      unigramCosts[slot] = lmw * lnProbability(cost) + wip;
+    }
+    return unigramCosts[slot];
+  }
+
   function calculate(history, id, tree) {
     const { wordTable: packed, data, loop } = tree;
     if (packed ? packed.oov(id) : words[id].oov) {
@@ -184,13 +210,10 @@ function languageModel(
       const before = beginning ? '' : previousPhone(packed, words, history);
       return oovWeight * loop.bigram.get(before).get(phone) + oovPhone;
     }
-    const count = packed ? packed.count(id) : words[id].count;
     const seen = transitionCost(packed, data, words, id, history);
-    const cost =
-      seen ??
-      -0.3 * Math.log((0.4 * Math.max(count ?? 1, minCount)) / data.total) +
-        0.5;
-    return lmw * lnProbability(cost) + wip;
+    return seen === undefined || seen === null
+      ? unigram(id, packed, data)
+      : lmw * lnProbability(seen) + wip;
   }
   function cacheMiss(history, id, tree, slot) {
     const value = calculate(history, id, tree);
@@ -782,28 +805,56 @@ function alignmentColumns(chain) {
   return { stay, go, emit, skip };
 }
 
+const alignmentWorkspaces = new WeakMap();
+const MAX_CACHED_TRACE_BYTES = 4 * 1024 * 1024;
+
 /**
  * Forced alignment of the decoded words with optional silence between
  * them and optional stop releases; returns per-token frame ranges.
  * `options.tone` adds the tone stream, as for decodeWords.
  */
 export function alignWords(network, feats, frames, words, options = {}) {
+  const { model } = network;
+  const workspace = alignmentWorkspaces.get(model) ?? {
+    emission: emissionWorkspace(model),
+    back: new Uint8Array(0),
+  };
+  // A score callback can align a different utterance using the same model.
+  alignmentWorkspaces.delete(model);
+  try {
+    return alignWithWorkspace(model, feats, frames, words, options, workspace);
+  } finally {
+    alignmentWorkspaces.set(model, workspace);
+  }
+}
+
+function alignWithWorkspace(model, feats, frames, words, options, workspace) {
   const settings = { ...HMM_DECODE_DEFAULTS, ...options };
   const { silencePenalty } = settings;
-  const { model } = network;
   const { chain, tokens } = alignmentChain(model, words);
   const {
     stamp,
     value: emissions,
     evaluate,
-  } = emissionCache(model, feats, settings);
+  } = emissionCache(model, feats, settings, workspace.emission);
   const N = chain.length;
   const { stay, go, emit, skip } = alignmentColumns(chain);
   let prev = new Float64Array(N).fill(-Infinity);
   let cur = new Float64Array(N);
   // A predecessor can stay, advance by one, or skip three states. Store
   // those three choices in two bits per cell.
-  const back = new Uint8Array(Math.ceil((frames * N) / 4));
+  const bytes = Math.ceil((frames * N) / 4);
+  let { back } = workspace;
+  if (back.length >= bytes) {
+    back.fill(0, 0, bytes);
+  } else if (bytes <= MAX_CACHED_TRACE_BYTES) {
+    back = new Uint8Array(
+      Math.min(MAX_CACHED_TRACE_BYTES, Math.max(bytes, back.length * 2))
+    );
+    workspace.back = back;
+  } else {
+    back = new Uint8Array(bytes);
+  }
   if (frames > 0) {
     evaluate(emit[0], 0);
     prev[0] = 0 + emissions[emit[0]];

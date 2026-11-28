@@ -122,7 +122,20 @@ it('aligns phones across an optional release and leading and trailing silence', 
     { units: ['p', 'a'], tokens: [{ symbol: 'p' }, { symbol: 'a' }] },
   ];
   const features = Float32Array.of(3, 4, 5, 9, 10, 11);
-  const aligned = alignWords({ model }, features, features.length, words);
+  const network = { model };
+  const shorter = features.subarray(0, 3);
+  const expectedNested = alignWords(network, shorter, shorter.length, words);
+  let nested;
+  const aligned = alignWords(network, features, features.length, words, {
+    onScore() {
+      nested = alignWords(network, shorter, shorter.length, words);
+    },
+  });
+  assert.deepEqual(nested, expectedNested);
+  assert.deepEqual(
+    alignWords(network, shorter, shorter.length, words),
+    expectedNested
+  );
   assert.deepEqual(
     aligned.map(({ token, from, to }) => [token.symbol, from, to]),
     [
