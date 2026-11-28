@@ -537,14 +537,7 @@ function pulseCandidates(signal, rate) {
 function collectPulses(signal, voiced, workspace) {
   const { hop, far, margin, blockFrames, rate } = workspace;
   const near = Math.round(PHONATION_ANALYSIS.minPeriod * rate);
-  const trains = [];
-  let train = null;
-  const close = () => {
-    if (train?.length > 1) {
-      trains.push(train);
-    }
-    train = null;
-  };
+  const state = { trains: [], train: null, near, far };
   for (let first = 0; first < voiced.length; first += blockFrames) {
     const last = Math.min(voiced.length, first + blockFrames);
     const from = Math.max(0, first * hop - margin);
@@ -552,25 +545,38 @@ function collectPulses(signal, voiced, workspace) {
     const energy = residualEnergy(signal, from, to, workspace);
     for (let frame = first; frame < last; frame++) {
       if (!voiced[frame]) {
-        close();
+        closePulseTrain(state);
         continue;
       }
       const start = Math.max(1, frame * hop);
       const end = Math.min(signal.length - 1, (frame + 1) * hop);
-      for (let index = start; index < end; index++) {
-        if (!isPulse(energy, index - from, near, far)) {
-          continue;
-        }
-        if (train && index - train[train.length - 1] > far) {
-          close();
-        }
-        train ??= [];
-        train.push(index);
-      }
+      collectPulseFrame(state, energy, from, start, end);
     }
   }
-  close();
-  return trains;
+  closePulseTrain(state);
+  return state.trains;
+}
+
+function closePulseTrain(state) {
+  if (state.train?.length > 1) {
+    state.trains.push(state.train);
+  }
+  state.train = null;
+}
+
+function collectPulseFrame(state, energy, from, start, end) {
+  const { near, far } = state;
+  for (let index = start; index < end; index++) {
+    if (!isPulse(energy, index - from, near, far)) {
+      continue;
+    }
+    const train = state.train;
+    if (train && index - train[train.length - 1] > far) {
+      closePulseTrain(state);
+    }
+    state.train ??= [];
+    state.train.push(index);
+  }
 }
 
 /** Energy of the LPC residual, smoothed over 0.5 ms. */
