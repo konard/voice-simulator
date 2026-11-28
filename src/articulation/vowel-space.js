@@ -138,7 +138,7 @@ export const VOWEL_SECTIONS = 44;
 const ROUNDING_WEIGHT = 0.6;
 
 function point([height, backness, rounded]) {
-  return [height, backness, rounded * ROUNDING_WEIGHT];
+  return Float64Array.of(height, backness, rounded * ROUNDING_WEIGHT);
 }
 
 function distance(a, b) {
@@ -197,7 +197,7 @@ export function fitInterpolator(centers, values) {
   const weights = solveLinear(
     matrix,
     values.map((samples) => [...samples, 0, 0, 0, 0])
-  );
+  ).map((row) => Float64Array.from(row));
   const kernel = new Float64Array(size);
   return (at, result = new Array(weights.length)) => {
     for (let i = 0; i < count; i++) {
