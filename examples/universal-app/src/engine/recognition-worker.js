@@ -26,6 +26,7 @@ function start(
     whisper,
     modes,
     minVoiced,
+    synthesisVoice,
   },
   kernels
 ) {
@@ -48,7 +49,7 @@ function start(
   };
   const recognizer = createRecognizer(options);
   const emit = (type, payload) => send(id, type, payload);
-  const file = verifyFile(options, emit);
+  const file = verifyFile({ ...options, synthesisVoice }, emit);
   const report = file ? file.emit : emit;
   for (const type of ['syllable', 'partial', 'final']) {
     recognizer.on(type, (payload) => report(type, payload));

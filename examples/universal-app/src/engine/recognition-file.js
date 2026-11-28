@@ -10,6 +10,7 @@ import {
   RECOGNITION_LEVELS,
   usesWordDecoder,
 } from '../../../../src/recognition/recognizer.js';
+import { matchTelephoneRecording } from '../../../../src/recognition/telephone-match.js';
 
 // Bound the buffered PCM and the full-utterance HMM search in the worker.
 const MAX_BATCH_SECONDS = 15;
@@ -19,7 +20,10 @@ const MAX_BATCH_SECONDS = 15;
  * files the batch word decoder can use context across live phrase boundaries.
  * Other short intact files can use the CLI's verified synthesis model.
  */
-export function verifyFile({ sampleCount, sampleRate, ...options }, send) {
+export function verifyFile(
+  { sampleCount, sampleRate, synthesisVoice, ...options },
+  send
+) {
   const settings = recognitionSettings(options);
   const level = settings.level === 'auto' ? 'medium' : settings.level;
   const rate = RECOGNITION_LEVELS[level].rate;
@@ -76,7 +80,16 @@ export function verifyFile({ sampleCount, sampleRate, ...options }, send) {
 
   function readCompleteFile() {
     if (batch) {
-      return recognize(samples, sampleRate, { ...options, unsplit: true });
+      const verified =
+        synthesisVoice &&
+        settings.languages.includes('en') &&
+        !settings.minVoiced
+          ? matchTelephoneRecording(samples, synthesisVoice)
+          : null;
+      return (
+        verified ??
+        recognize(samples, sampleRate, { ...options, unsplit: true })
+      );
     }
     const input = resample(samples, sampleRate, rate);
     const decoded = decodeRecordedSimulation(input, rate, {

@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'test-anywhere';
-import { synthesize } from '../src/index.js';
+import { randomHeadConfig, synthesize, textToIpa } from '../src/index.js';
+import { decodeWav, encodeWav } from '../src/audio/wav.js';
+import { matchTelephoneRecording } from '../src/recognition/telephone-match.js';
 import { fakeRoot } from './helpers/highlight-root.js';
 import {
   paintHighlight,
@@ -82,6 +84,39 @@ it('replaces streamed word guesses with a complete telephone file reading', () =
   expect(events.filter(([type]) => type === 'final')).toEqual([
     ['final', result.text],
   ]);
+});
+
+it('verifies telephone word corrections against the WAV samples', () => {
+  const seed = 'phone-bird';
+  const head = randomHeadConfig(seed, { preset: 'any' });
+  const language = { lang: 'en', accent: 'en-US', weakForms: true };
+  const text = 'The bird flew home.';
+  const { ipa } = textToIpa(text, language);
+  const rendered = synthesize(ipa, {
+    ipa: true,
+    lang: language.lang,
+    head,
+    seed,
+    tier: 'telephone',
+    engine: 'js',
+  });
+  const { samples, sampleRate } = decodeWav(
+    encodeWav(rendered.samples, rendered.sampleRate)
+  );
+  const synthesisVoice = { ...language, head, seed };
+  const reading = verifyFile(
+    { sampleRate, sampleCount: samples.length, synthesisVoice },
+    () => {}
+  );
+  reading.push(samples);
+  const result = reading.finish();
+  expect(result.text).toBe(text);
+  expect(result.words.map(({ confidence }) => confidence)).toEqual([
+    1, 1, 1, 1,
+  ]);
+  expect(
+    matchTelephoneRecording(samples, { ...synthesisVoice, seed: 'wrong-seed' })
+  ).toBeNull();
 });
 
 function fakeContext() {
