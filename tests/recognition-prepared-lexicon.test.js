@@ -196,6 +196,7 @@ it('reads stressed pronunciations, homophones and Mandarin tones from a prepared
       const exact = (trie) =>
         exactCandidates(tokens, 0, tokens.length, trie, language);
       expect(exact(prepared)).toEqual(exact(lexicon));
+      expect(exact({ root: prepared.root, prepared })).toEqual(exact(lexicon));
       expect(exact(legacy)).toEqual(exact(lexicon));
       const near = (trie) =>
         withWordSearch(
@@ -215,4 +216,21 @@ it('reads stressed pronunciations, homophones and Mandarin tones from a prepared
       expect(near({ root: prepared.root, prepared })).toEqual(near(lexicon));
     }
   }
+});
+
+it('opens ranked trie entries with lazy tokens and the original word counts', () => {
+  const root = trieNode();
+  const { ranked } = getCounts('en');
+  const word = ranked.read(ranked.rank('the'));
+  addPronunciation(root, { ...word, ipa: 'ðə' }, 'en');
+  const { table } = openPreparedLexicon(
+    serializeLexicon({ root, words: getCounts('en').words }, 'en'),
+    'en',
+    ranked
+  );
+  const terminal = table.terminal.findIndex(Boolean);
+  const [entry] = table.entriesAt(terminal);
+  const tokens = parseIpa('ðə').tokens;
+  expect(entry).toEqual({ ...word, ipa: 'ðə', tokens });
+  expect(entry.tokens).toBe(entry.tokens);
 });

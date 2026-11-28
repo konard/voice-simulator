@@ -120,6 +120,44 @@ function readingAt(readings) {
   return (i) => text.slice(offsets[i], offsets[i + 1]);
 }
 
+const parsedTokens = new WeakMap();
+const tokensProperty = {
+  enumerable: true,
+  configurable: true,
+  get() {
+    let tokens = parsedTokens.get(this);
+    if (tokens === undefined) {
+      tokens = parseIpa(this.ipa).tokens.filter(
+        (token) => token.kind !== 'pause'
+      );
+      parsedTokens.set(this, tokens);
+    }
+    return tokens;
+  },
+};
+
+function readEntry(ranked, id, ipa, withPrior) {
+  let entry;
+  if (ranked.prior) {
+    const word = ranked.name(id);
+    const count = ranked.count(id);
+    const prior = ranked.prior(id);
+    entry = { word, count };
+    if (withPrior || prior !== undefined) {
+      entry.prior = prior ?? count;
+    }
+    entry.ipa = ipa;
+  } else {
+    const word = ranked.read(id);
+    entry = {
+      ...word,
+      ...(withPrior && { prior: word.prior ?? word.count }),
+      ipa,
+    };
+  }
+  return Object.defineProperty(entry, 'tokens', tokensProperty);
+}
+
 function entryReader(words, offsets, ids, readIpa, withPrior) {
   const ranked = rankedWordReader(words);
   const entries = new Map();
@@ -127,28 +165,19 @@ function entryReader(words, offsets, ids, readIpa, withPrior) {
     if (offsets[node] === offsets[node + 1]) {
       return [];
     }
-    if (!entries.has(node)) {
-      if (entries.size === 256) {
-        entries.clear();
-      }
-      const group = [];
-      for (let i = offsets[node]; i < offsets[node + 1]; i++) {
-        const ipa = readIpa(i);
-        const word = ranked.read(ids[i]);
-        let tokens;
-        group.push({
-          ...word,
-          ...(withPrior && { prior: word.prior ?? word.count }),
-          ipa,
-          get tokens() {
-            tokens ??= parseIpa(ipa).tokens.filter((t) => t.kind !== 'pause');
-            return tokens;
-          },
-        });
-      }
-      entries.set(node, group);
+    const cached = entries.get(node);
+    if (cached) {
+      return cached;
     }
-    return entries.get(node);
+    if (entries.size === 256) {
+      entries.clear();
+    }
+    const group = [];
+    for (let i = offsets[node]; i < offsets[node + 1]; i++) {
+      group.push(readEntry(ranked, ids[i], readIpa(i), withPrior));
+    }
+    entries.set(node, group);
+    return group;
   };
 }
 

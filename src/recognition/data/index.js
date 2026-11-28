@@ -311,6 +311,7 @@ function parseWords(source, spoken) {
     total,
     name,
     count: (id) => counts[id],
+    prior: (id) => priors?.[id],
     weight: (id) => priors?.[id] ?? counts[id],
     rank,
     read(id) {

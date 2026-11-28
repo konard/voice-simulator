@@ -220,8 +220,47 @@ export function hasExactSuffix(
   });
 }
 
+function exactPreparedCandidates(tokens, from, end, { root, table }, language) {
+  const result = [];
+  let id = 0;
+  let cost = 0;
+  for (let i = from; i < end; i++) {
+    const token = tokens[i];
+    id = root.childId(id, token.symbol);
+    if (id === 0) {
+      break;
+    }
+    cost += voicingCost(token, table.tokens[table.feature[id]]);
+    if (!table.terminal[id]) {
+      continue;
+    }
+    const to = i + 1;
+    const evidence = stressEvidence(tokens.slice(from, to), language);
+    for (const entry of table.entriesAt(id)) {
+      result.push({
+        from,
+        to,
+        language,
+        word: entry.word,
+        ipa: entry.ipa,
+        cost: cost + acousticStress(entry, evidence, language),
+      });
+    }
+  }
+  return result;
+}
+
 /** Exact paths are retained separately so homophones cannot consume the beam. */
 export function exactCandidates(tokens, from, end, lexicon, language) {
+  if (language !== 'zh' && lexicon.prepared) {
+    return exactPreparedCandidates(
+      tokens,
+      from,
+      end,
+      lexicon.prepared,
+      language
+    );
+  }
   const result = [];
   let previousEnd = -1;
   let evidence;
