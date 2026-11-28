@@ -122,6 +122,40 @@ function workspaceFor(table) {
   return searchWorkspaces.get(table);
 }
 
+// A search stays within a hard boundary. Suffix queries reuse the distances
+// for that span, stored in the engine that will read them.
+function distanceWindow(table, input, language, distance, allocate) {
+  const stride = 1 + table.tokens.length;
+  let matrix;
+  let first = 0;
+  let last = 0;
+  function window(from, end) {
+    if (!matrix || from < first || end > last) {
+      const required = (end - from) * stride;
+      if (!matrix || matrix.length < required) {
+        const capacity = Math.min(
+          input.length * stride,
+          Math.max(required, (matrix?.length ?? 0) * 2)
+        );
+        matrix = allocate(capacity);
+      }
+      const values = matrix.view();
+      for (let index = from; index < end; index++) {
+        const token = input[index];
+        const row = (index - from) * stride;
+        values[row] = gapCost(token);
+        for (let i = 0; i < table.tokens.length; i++) {
+          values[row + 1 + i] = distance(token, table.tokens[i], language);
+        }
+      }
+      first = from;
+      last = end;
+    }
+    return { matrix, offset: from - first };
+  }
+  return { stride, window };
+}
+
 export function withWordSearch(
   lexicon,
   input,
@@ -131,22 +165,33 @@ export function withWordSearch(
   run
 ) {
   const table = packWordTrie(lexicon, language);
-  const stride = 1 + table.tokens.length;
-  const distances = new Float64Array(input.length * stride);
-  for (const [index, token] of input.entries()) {
-    const row = index * stride;
-    distances[row] = gapCost(token);
-    for (let i = 0; i < table.tokens.length; i++) {
-      distances[row + 1 + i] = distance(token, table.tokens[i], language);
-    }
-  }
-  if (!module || stride < 2) {
+  if (!module || !table.tokens.length) {
     const scratch = workspaceFor(table);
-    const inputRows = { distances, stride };
-    return run((from, end, beam) => ({
-      hits: search(table, inputRows, from, end, beam, scratch),
-      entriesAt: table.entriesAt,
-    }));
+    const { stride, window } = distanceWindow(
+      table,
+      input,
+      language,
+      distance,
+      (length) => {
+        const values = new Float64Array(length);
+        return { length, view: () => values };
+      }
+    );
+    return run((from, end, beam) => {
+      const { matrix, offset } = window(from, end);
+      const inputRows = { distances: matrix.view(), stride };
+      return {
+        hits: search(
+          table,
+          inputRows,
+          offset,
+          offset + end - from,
+          beam,
+          scratch
+        ),
+        entriesAt: table.entriesAt,
+      };
+    });
   }
   return withWasmMemory(module, (allocate) => {
     const packed = module.exports.rec_word_search_packed;
@@ -163,20 +208,28 @@ export function withWordSearch(
       table.writeTopology(topology.view());
       table.writeGaps(gaps.view());
     }
-    const matrix = allocate(Float64Array, distances.length, distances);
+    const { stride, window } = distanceWindow(
+      table,
+      input,
+      language,
+      distance,
+      (length) => allocate(Float64Array, length)
+    );
     let out;
     return run((from, end, beam) => {
+      const { matrix, offset } = window(from, end);
+      const count = end - from;
       out ??= allocate(
         Float64Array,
-        Math.max(1, input.length * Math.min(beam, 64) * 3)
+        Math.max(1, count * Math.min(beam, 64) * 3)
       );
       const query = () =>
         (packed ?? module.exports.rec_word_search)(
           topology.pointer,
           table.nodeCount,
           gaps.pointer,
-          matrix.pointer + from * stride * 8,
-          end - from,
+          matrix.pointer + offset * stride * Float64Array.BYTES_PER_ELEMENT,
+          count,
           stride,
           beam,
           out.pointer,

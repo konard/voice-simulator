@@ -9,6 +9,7 @@ import { recognitionInput } from '../src/recognition/input.js';
 import { decode } from '../src/recognition/ipa-to-text.js';
 import { spellSounds } from '../src/recognition/phones-to-letters.js';
 import { withWasmMemory } from '../src/recognition/wasm-memory.js';
+import { withWordSearch } from '../src/recognition/word-search.js';
 import { loadRustEngine, noRust } from './helpers/rust-engine.js';
 import { itUnless } from './helpers/skip.js';
 import { sounds } from './helpers/ipa-recognition.js';
@@ -54,6 +55,60 @@ const languageRecords = [
 ];
 
 const it = itUnless(noRust);
+
+function checkSearchWindows(module) {
+  const language = 'en';
+  const lexicon = smallLexicon(
+    [
+      ['to', 'tu', 75],
+      ['cat', 'kæt', 25],
+    ],
+    language
+  );
+  const { tokens } = recognitionInput('tukættu');
+  const reference = (from, end) =>
+    withWordSearch(
+      lexicon,
+      tokens.slice(from, end),
+      language,
+      phoneDistance,
+      module,
+      (search) => Array.from(search(0, end - from, 8).hits)
+    );
+  const ranges = [
+    [0, 2],
+    [1, 2],
+    [2, 7],
+    [5, 7],
+    [0, 2],
+  ];
+  const expected = ranges.map(([from, end]) => reference(from, end));
+  let comparisons = 0;
+  withWordSearch(
+    lexicon,
+    tokens,
+    language,
+    (...args) => {
+      comparisons++;
+      return phoneDistance(...args);
+    },
+    module,
+    (search) => {
+      for (const [index, [from, end]] of ranges.entries()) {
+        const before = comparisons;
+        const { hits } = search(from, end, 8);
+        expect(Array.from(hits)).toEqual(expected[index]);
+        expect(comparisons > before).toBe(index !== 1 && index !== 3);
+      }
+    }
+  );
+}
+
+test('JavaScript word search reuses distances within a span', () =>
+  checkSearchWindows(null));
+it('Rust word search reuses distances within a span', async () =>
+  checkSearchWindows(await loadRustEngine()));
+
 const cases = [
   {
     language: 'en',
