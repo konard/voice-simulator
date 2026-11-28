@@ -156,25 +156,23 @@ function designGrid(rate) {
  * is how the loss of a first-order shelf with that pole changes with its
  * zero (Lawson's iteratively reweighted least squares).
  */
-function fitShelf(a, grid, rate) {
-  const x = new Float64Array(grid.length);
-  const y = new Float64Array(grid.length);
-  const weights = new Float64Array(grid.length).fill(1 / grid.length);
-  for (let index = 0; index < grid.length; index++) {
-    const frequency = grid[index];
-    const c = Math.cos((2 * Math.PI * frequency) / rate);
-    const s = Math.sqrt(frequency);
-    x[index] = 1 / s;
-    y[index] = (a + c) / (1 + a * a + 2 * a * c) / s;
+function fitShelf(a, { cosine, roots, x, y, weights }) {
+  const length = x.length;
+  weights.fill(1 / length);
+  for (let index = 0; index < length; index++) {
+    const c = cosine[index];
+    y[index] = (a + c) / (1 + a * a + 2 * a * c) / roots[index];
   }
-  let best = { error: Infinity };
+  let bestError = Infinity;
+  let bestC;
+  let bestD;
   for (let iteration = 0; iteration < 40; iteration++) {
     let s11 = 0;
     let s12 = 0;
     let s22 = 0;
     let t1 = 0;
     let t2 = 0;
-    for (let index = 0; index < grid.length; index++) {
+    for (let index = 0; index < length; index++) {
       const w = weights[index];
       const gx = x[index];
       const gy = y[index];
@@ -189,23 +187,27 @@ function fitShelf(a, grid, rate) {
     const D = (s11 * t2 - s12 * t1) / det;
     let error = 0;
     let total = 0;
-    for (let index = 0; index < grid.length; index++) {
+    for (let index = 0; index < length; index++) {
       const residual = Math.abs(C * x[index] + D * y[index] - 1);
       error = Math.max(error, residual);
       weights[index] *= residual;
       total += weights[index];
     }
-    if (error < best.error) {
-      best = { a, C, D, error };
+    if (error < bestError) {
+      bestError = error;
+      bestC = C;
+      bestD = D;
     }
     if (!(total > 0)) {
       break;
     }
-    for (let index = 0; index < grid.length; index++) {
+    for (let index = 0; index < length; index++) {
       weights[index] /= total;
     }
   }
-  return best;
+  return bestError < Infinity
+    ? { a, C: bestC, D: bestD, error: bestError }
+    : { error: Infinity };
 }
 
 const shelves = new Map();
@@ -218,34 +220,45 @@ export function lossShelf(sampleRate) {
   let shape = shelves.get(rate);
   if (!shape) {
     const grid = designGrid(rate);
+    const cosine = Float64Array.from(grid, (frequency) =>
+      Math.cos((2 * Math.PI * frequency) / rate)
+    );
+    const roots = Float64Array.from(grid, Math.sqrt);
+    const fit = {
+      cosine,
+      roots,
+      x: roots.map((root) => 1 / root),
+      y: new Float64Array(grid.length),
+      weights: new Float64Array(grid.length),
+    };
     // Golden-section search for the pole.
     const ratio = (Math.sqrt(5) - 1) / 2;
     let low = -0.98;
     let high = 0.5;
     let x1 = high - ratio * (high - low);
     let x2 = low + ratio * (high - low);
-    let f1 = fitShelf(x1, grid, rate);
-    let f2 = fitShelf(x2, grid, rate);
+    let f1 = fitShelf(x1, fit);
+    let f2 = fitShelf(x2, fit);
     for (let iteration = 0; iteration < 30; iteration++) {
       if (f1.error < f2.error) {
         high = x2;
         x2 = x1;
         f2 = f1;
         x1 = high - ratio * (high - low);
-        f1 = fitShelf(x1, grid, rate);
+        f1 = fitShelf(x1, fit);
       } else {
         low = x1;
         x1 = x2;
         f1 = f2;
         x2 = low + ratio * (high - low);
-        f2 = fitShelf(x2, grid, rate);
+        f2 = fitShelf(x2, fit);
       }
     }
     shape = f1.error < f2.error ? f1 : f2;
     // The loss of the shelf is only linear in K for small K: its zero is
     // solved exactly at the two ends of the grid (designLossFilter).
-    shape.low = Math.cos((2 * Math.PI * grid[0]) / rate);
-    shape.high = Math.cos((2 * Math.PI * grid.at(-1)) / rate);
+    shape.low = cosine[0];
+    shape.high = cosine.at(-1);
     // Loss per unit K at both ends, and the loss of the pole there.
     const h = (c) => (shape.a + c) / (1 + shape.a ** 2 + 2 * shape.a * c);
     shape.slopeLow = shape.C + shape.D * h(shape.low);
