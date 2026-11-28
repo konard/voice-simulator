@@ -1001,15 +1001,16 @@ export function releaseRenderer(renderer) {
   renderer.solver?.gpu?.destroy();
 }
 
+const OFFLINE_CHUNK_SIZE = 4096;
+
 /** Render a complete output while keeping temporary solver buffers bounded. */
 export function renderSamples(renderer, allocate) {
   const { totalSamples } = renderer;
   const samples = allocate
     ? allocate(totalSamples).fill(0)
     : new Float32Array(totalSamples);
-  const chunkSize = 4096;
-  for (let start = 0; start < samples.length; start += chunkSize) {
-    renderer.render(samples.subarray(start, start + chunkSize));
+  for (let start = 0; start < samples.length; start += OFFLINE_CHUNK_SIZE) {
+    renderer.render(samples.subarray(start, start + OFFLINE_CHUNK_SIZE));
   }
   return samples;
 }
@@ -1028,19 +1029,41 @@ export function renderPlan(plan, options = {}) {
 
 /** Render into an optional, caller-owned Float32Array of the given length. */
 export function renderPlanWithStorage(plan, options, allocate) {
-  const engine = getEngine(engineOptions(options));
-  const offlineWaveguide =
-    engine.name === 'js' &&
-    (options.engine === undefined || typeof options.engine === 'string');
-  const renderer = engine.createRenderer(
-    plan,
-    offlineWaveguide ? { ...options, [OFFLINE_WAVEGUIDE]: true } : options
-  );
+  const renderer = offlineRenderer(plan, options);
   try {
     return renderSamples(renderer, allocate);
   } finally {
     releaseRenderer(renderer);
   }
+}
+
+/** Consume an offline render synchronously using a reusable audio block. */
+export function visitRenderedPlan(plan, options, visit) {
+  const renderer = offlineRenderer(plan, options);
+  try {
+    const { totalSamples } = renderer;
+    const block = new Float32Array(Math.min(totalSamples, OFFLINE_CHUNK_SIZE));
+    for (let start = 0; start < totalSamples; start += block.length) {
+      const remaining = totalSamples - start;
+      const chunk =
+        remaining < block.length ? block.subarray(0, remaining) : block;
+      renderer.render(chunk.fill(0));
+      visit(chunk);
+    }
+  } finally {
+    releaseRenderer(renderer);
+  }
+}
+
+function offlineRenderer(plan, options) {
+  const engine = getEngine(engineOptions(options));
+  const offlineWaveguide =
+    engine.name === 'js' &&
+    (options.engine === undefined || typeof options.engine === 'string');
+  return engine.createRenderer(
+    plan,
+    offlineWaveguide ? { ...options, [OFFLINE_WAVEGUIDE]: true } : options
+  );
 }
 
 /** The options of createEngine in render options. */

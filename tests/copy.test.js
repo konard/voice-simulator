@@ -10,7 +10,9 @@ import { toPlanModes } from '../src/recognition/modes.js';
 import {
   applyPitch,
   matchLoudness,
+  renderedRmsTrack,
   repairOctaves,
+  rmsTrack,
 } from '../src/session/copy-prosody.js';
 import { groupPhones, warpPlan } from '../src/session/warp.js';
 import {
@@ -56,6 +58,19 @@ function medianPitch(samples) {
     .sort();
   return values[Math.floor(values.length / 2)];
 }
+
+it('keeps loudness windows intact across renderer blocks', () => {
+  const plan = vowelWithPitch();
+  for (const rate of [8000, 16000]) {
+    const settings = { ...draft, sampleRate: rate };
+    const audio = renderPlan(plan, settings);
+    assert.ok(audio.length > 4096 && audio.length % 4096 > 0);
+    assert.deepEqual(
+      renderedRmsTrack(plan, settings),
+      rmsTrack(audio, rate, plan.frameCount, plan.frameRate)
+    );
+  }
+});
 
 describe('copy controls', () => {
   it('keeps measured durations', () => {
