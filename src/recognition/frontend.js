@@ -18,7 +18,7 @@
  * a new one.
  */
 
-import { createResampler } from '../audio/resample.js';
+import { createResampler, resampleAnalysisBuffer } from '../audio/resample.js';
 import { createFft } from './fft.js';
 import { lpcAutocorrelation, lpcBurg, lpcCovariance } from './lpc.js';
 
@@ -675,9 +675,8 @@ export function createSpeechAnalyzer(sampleRate, options) {
   return frameAnalyzer(sampleRate, options, undefined, undefined, 'speech');
 }
 
-function frameAnalyzer(sampleRate, options, onFrame, storage, features) {
-  const settings = frontendSettings(sampleRate, options);
-  const { rate, length, half, hopSamples, capacity, sampleCapacity } = settings;
+function allocateFrameBuffer(settings, storage, features) {
+  const { length, half, sampleCapacity } = settings;
   // The buffer holds `margin` samples before `samples[0]` (zeros before the
   // signal, the trimmed past after `trim`) and `length` zeros after the
   // last place a sample can go.
@@ -691,10 +690,14 @@ function frameAnalyzer(sampleRate, options, onFrame, storage, features) {
     storage,
     features
   );
-  const columns = frameColumns(frames, features);
+  return { buffer, frames, margin };
+}
+
+function createFrameProcessor(settings, frames, features, onFrame) {
   const pitchOnly = features === 'pitch';
   const speechOnly = features === 'speech';
-  const noiseTracker = createNoiseTracker(settings.hop);
+  const { length, hop } = settings;
+  const noiseTracker = createNoiseTracker(hop);
   const kernel = pitchOnly
     ? null
     : createKernel(
@@ -702,6 +705,40 @@ function frameAnalyzer(sampleRate, options, onFrame, storage, features) {
         speechOnly ? periodicityTables(settings) : frontendTables(settings),
         frames
       );
+  function analyze(row, buffer, start) {
+    if (pitchOnly) {
+      measurePitchFrame(frames, row, buffer, start, length, noiseTracker);
+      return;
+    }
+    if (speechOnly) {
+      measureSpeechFrame(kernel, row, buffer, start, noiseTracker);
+      return;
+    }
+    const meanPower = measureWaveform(kernel, row, buffer, start);
+    measureSpectrum(kernel, row);
+    measureMel(kernel, row);
+    const periodicity = measurePeriodicity(kernel, row);
+    measureLpc(kernel, row);
+    setSpeech(frames, row, meanPower, periodicity, noiseTracker);
+    onFrame?.(frames, row, meanPower, periodicity);
+  }
+  return { analyze, reset: noiseTracker.reset };
+}
+
+function frameCount(samples, hopSamples) {
+  return samples > 0 ? Math.floor((samples - 1) / hopSamples) + 1 : 0;
+}
+
+function frameAnalyzer(sampleRate, options, onFrame, storage, features) {
+  const settings = frontendSettings(sampleRate, options);
+  const { rate, length, half, hopSamples, capacity, sampleCapacity } = settings;
+  const { buffer, frames, margin } = allocateFrameBuffer(
+    settings,
+    storage,
+    features
+  );
+  const columns = frameColumns(frames, features);
+  const processor = createFrameProcessor(settings, frames, features, onFrame);
   const ratio = rate / sampleRate;
   let resampler = null;
   // Absolute positions since the last reset: `offset` frames and `base`
@@ -721,7 +758,7 @@ function frameAnalyzer(sampleRate, options, onFrame, storage, features) {
     for (const [array] of columns) {
       array.fill(0);
     }
-    noiseTracker.reset();
+    processor.reset();
     offset = 0;
     base = 0;
     end = 0;
@@ -746,21 +783,7 @@ function frameAnalyzer(sampleRate, options, onFrame, storage, features) {
   /** Analyse frame `row` (relative to the trimmed start) into its rows. */
   function analyseFrame(row) {
     const start = margin + centre(offset + row) - half - base;
-    if (pitchOnly) {
-      measurePitchFrame(frames, row, buffer, start, length, noiseTracker);
-      return;
-    }
-    if (speechOnly) {
-      measureSpeechFrame(kernel, row, buffer, start, noiseTracker);
-      return;
-    }
-    const meanPower = measureWaveform(kernel, row, buffer, start);
-    measureSpectrum(kernel, row);
-    measureMel(kernel, row);
-    const periodicity = measurePeriodicity(kernel, row);
-    measureLpc(kernel, row);
-    setSpeech(frames, row, meanPower, periodicity, noiseTracker);
-    onFrame?.(frames, row, meanPower, periodicity);
+    processor.analyze(row, buffer, start);
   }
 
   /** Add the frames before absolute frame `lastFrame`. */
@@ -816,8 +839,7 @@ function frameAnalyzer(sampleRate, options, onFrame, storage, features) {
         append(resampler.flush());
       }
       flushed = true;
-      const last = end > 0 ? Math.floor((end - 1) / hopSamples) + 1 : 0;
-      return addFrames(last);
+      return addFrames(frameCount(end, hopSamples));
     },
     /**
      * Drop the first `count` frames and their samples.
@@ -891,8 +913,7 @@ function analyzeBorrowedPitch(samples, sampleRate, hop, storage) {
   const frames = createFrameSet(settings, samples, storage, 'pitch');
   const noiseTracker = createNoiseTracker(hop);
   frames.sampleCount = samples.length;
-  const count =
-    samples.length > 0 ? Math.floor((samples.length - 1) / hopSamples) + 1 : 0;
+  const count = frameCount(samples.length, hopSamples);
   for (let row = 0; row < count; row++) {
     const start = Math.round(row * hopSamples) - half;
     measurePitchFrame(frames, row, samples, start, length, noiseTracker);
@@ -903,17 +924,77 @@ function analyzeBorrowedPitch(samples, sampleRate, hop, storage) {
   return frames;
 }
 
-function analyzeRecording(samples, sampleRate, options, storage, features) {
+function analyzeRecording(
+  samples,
+  sampleRate,
+  options,
+  storage,
+  features,
+  onFrame
+) {
+  const configured = { ...options, maxSeconds: samples.length / sampleRate };
+  if (
+    samples instanceof Float32Array &&
+    samples.buffer instanceof ArrayBuffer &&
+    workingRate(sampleRate, configured.rate) !== sampleRate
+  ) {
+    return analyzeResampled(
+      samples,
+      sampleRate,
+      frontendSettings(sampleRate, configured),
+      storage,
+      features,
+      onFrame
+    );
+  }
   const analyzer = frameAnalyzer(
     sampleRate,
-    { ...options, maxSeconds: samples.length / sampleRate },
-    undefined,
+    configured,
+    onFrame,
     storage,
     features
   );
   analyzer.push(samples);
   analyzer.flush();
   return analyzer.frames;
+}
+
+function analyzeResampled(
+  samples,
+  sampleRate,
+  settings,
+  storage,
+  features,
+  onFrame
+) {
+  const { rate, hopSamples, half, capacity } = settings;
+  const { buffer, frames, margin } = allocateFrameBuffer(
+    settings,
+    storage,
+    features
+  );
+  buffer.fill(0);
+  frames.sampleCount = resampleAnalysisBuffer(
+    samples,
+    sampleRate,
+    rate,
+    frames.samples
+  );
+  const count = frameCount(frames.sampleCount, hopSamples);
+  check(count <= capacity, `frame set is full (${capacity} frames)`);
+  for (const [column] of frameColumns(frames, features)) {
+    column.fill(0);
+  }
+  const processor = createFrameProcessor(settings, frames, features, onFrame);
+  for (let row = 0; row < count; row++) {
+    processor.analyze(
+      row,
+      buffer,
+      margin + Math.round(row * hopSamples) - half
+    );
+    frames.count++;
+  }
+  return frames;
 }
 
 /** Share the per-window features of the default 5 ms and 10 ms batch grids. */
@@ -925,9 +1006,12 @@ export function analyzeFrameHops(samples, sampleRate) {
   const noiseTracker = createNoiseTracker(slow.hop);
   const coarseColumns = frameColumns(coarse);
   let fineColumns;
-  const analyzer = frameAnalyzer(
+  const fine = analyzeRecording(
+    samples,
     sampleRate,
     fast,
+    undefined,
+    undefined,
     (frames, row, power, period) => {
       if (row % 2 !== 0 || coarse.count >= coarse.capacity) {
         return;
@@ -951,9 +1035,6 @@ export function analyzeFrameHops(samples, sampleRate) {
       );
     }
   );
-  analyzer.push(samples);
-  analyzer.flush();
-  const fine = analyzer.frames;
   coarse.samples = fine.samples;
   coarse.sampleCount = fine.sampleCount;
   return { fine, coarse };

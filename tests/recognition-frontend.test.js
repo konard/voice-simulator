@@ -278,6 +278,19 @@ describe('recognition front end: frames', () => {
     }
   });
 
+  it('writes resampled recording data directly with the same samples and frames as streaming', () => {
+    for (const rate of [16000, 44100, 12000.5]) {
+      const samples = whiteNoise(4099, -18, 73).subarray(11, 4082);
+      const options = { rate: 8000, maxSeconds: samples.length / rate };
+      const streaming = createFrameAnalyzer(rate, options);
+      for (let index = 0; index < samples.length; index += 97) {
+        streaming.push(samples.subarray(index, index + 97));
+      }
+      streaming.flush();
+      expect(analyzeFrames(samples, rate, options)).toEqual(streaming.frames);
+    }
+  });
+
   it('works at 8000 Hz', () => {
     const voice = synthesize('Hello world.', { tier: 'telephone' });
     expect(voice.sampleRate).toBe(8000);

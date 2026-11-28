@@ -172,6 +172,62 @@ function kernelTable(fromRate, toRate, cutoff, halfWidth) {
   return { phases, step, width, first, last, weights };
 }
 
+function streamingKernel(fromRate, toRate, zeroCrossings, tabulated) {
+  const ratio = toRate / fromRate;
+  const cutoff = Math.min(1, ratio) * 0.97;
+  const halfWidth = zeroCrossings / cutoff;
+  const table = tabulated
+    ? kernelTable(fromRate, toRate, cutoff, halfWidth)
+    : null;
+  return { ratio, cutoff, halfWidth, table };
+}
+
+/** One output using the same arithmetic for batch and streaming analysis. */
+function streamingSample(samples, base, limit, index, kernel) {
+  const { ratio, cutoff, halfWidth, table } = kernel;
+  if (table) {
+    const { phases, step, width, first, last, weights } = table;
+    const position = index * step;
+    const phase = position % phases;
+    const whole = (position - phase) / phases;
+    const start = whole + first[phase];
+    const from = Math.max(0, start);
+    const to = Math.min(limit - 1, whole + last[phase]);
+    const row = phase * width - start;
+    let sum = 0;
+    for (let source = from; source <= to; source++) {
+      sum += samples[source - base] * weights[row + source];
+    }
+    return sum;
+  }
+  const center = index / ratio;
+  const from = Math.max(0, Math.ceil(center - halfWidth));
+  const to = Math.min(limit - 1, Math.floor(center + halfWidth));
+  let sum = 0;
+  for (let source = from; source <= to; source++) {
+    const distance = center - source;
+    sum +=
+      samples[source - base] *
+      cutoff *
+      sinc(cutoff * distance) *
+      blackman(distance / halfWidth);
+  }
+  return sum;
+}
+
+/** Fill the final analysis buffer directly using `createResampler`'s kernel. */
+export function resampleAnalysisBuffer(samples, fromRate, toRate, output) {
+  const kernel = streamingKernel(fromRate, toRate, 16, true);
+  const length = Math.round(samples.length * kernel.ratio);
+  if (length > output.length) {
+    throw new RangeError('Analysis buffer is too short for the recording');
+  }
+  for (let index = 0; index < length; index++) {
+    output[index] = streamingSample(samples, 0, samples.length, index, kernel);
+  }
+  return length;
+}
+
 function streamResampler(fromRate, toRate, zeroCrossings, tabulated) {
   if (!(fromRate > 0) || !(toRate > 0)) {
     throw new Error('Sample rates must be positive');
@@ -183,12 +239,8 @@ function streamResampler(fromRate, toRate, zeroCrossings, tabulated) {
       held: () => 0,
     };
   }
-  const ratio = toRate / fromRate;
-  const cutoff = Math.min(1, ratio) * 0.97;
-  const halfWidth = zeroCrossings / cutoff;
-  const table = tabulated
-    ? kernelTable(fromRate, toRate, cutoff, halfWidth)
-    : null;
+  const kernel = streamingKernel(fromRate, toRate, zeroCrossings, tabulated);
+  const { ratio, halfWidth } = kernel;
   // Kept input: samples `base` .. `base + count - 1` of the whole stream.
   let kept = new Float64Array(64);
   let base = 0;
@@ -212,44 +264,6 @@ function streamResampler(fromRate, toRate, zeroCrossings, tabulated) {
     received += chunk.length;
   }
 
-  /** Output `index` from the input up to `limit` (exclusive). */
-  function output(index, limit) {
-    if (table) {
-      return tabulatedOutput(index, limit);
-    }
-    const center = index / ratio;
-    const first = Math.max(0, Math.ceil(center - halfWidth));
-    const last = Math.min(limit - 1, Math.floor(center + halfWidth));
-    let sum = 0;
-    for (let source = first; source <= last; source++) {
-      const distance = center - source;
-      sum +=
-        kept[source - base] *
-        cutoff *
-        sinc(cutoff * distance) *
-        blackman(distance / halfWidth);
-    }
-    return sum;
-  }
-
-  /** `output` with the weights of `table`. */
-  function tabulatedOutput(index, limit) {
-    const { phases, step, width, first, last, weights } = table;
-    const position = index * step;
-    const phase = position % phases;
-    const whole = (position - phase) / phases;
-    const start = whole + first[phase];
-    const from = Math.max(0, start);
-    const to = Math.min(limit - 1, whole + last[phase]);
-    // Weight of input `source` is weights[row + source].
-    const row = phase * width - start;
-    let sum = 0;
-    for (let source = from; source <= to; source++) {
-      sum += kept[source - base] * weights[row + source];
-    }
-    return sum;
-  }
-
   /** Drop the input that no output from `next` on needs. */
   function trim() {
     const needed = Math.max(0, Math.ceil(next / ratio - halfWidth));
@@ -271,7 +285,13 @@ function streamResampler(fromRate, toRate, zeroCrossings, tabulated) {
       }
       const result = new Float32Array(end - next);
       for (let index = 0; index < result.length; index++) {
-        result[index] = output(next + index, received);
+        result[index] = streamingSample(
+          kept,
+          base,
+          received,
+          next + index,
+          kernel
+        );
       }
       next = end;
       trim();
@@ -281,7 +301,13 @@ function streamResampler(fromRate, toRate, zeroCrossings, tabulated) {
       const length = Math.round(received * ratio);
       const result = new Float32Array(Math.max(0, length - next));
       for (let index = 0; index < result.length; index++) {
-        result[index] = output(next + index, received);
+        result[index] = streamingSample(
+          kept,
+          base,
+          received,
+          next + index,
+          kernel
+        );
       }
       next += result.length;
       trim();
