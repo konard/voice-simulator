@@ -68,51 +68,69 @@ export function emptyState() {
     },
   };
 }
+const nonnegativeStateFields = [
+  'duration',
+  'voicedSeconds',
+  'speechSeconds',
+  'nuclei',
+  'voicedFrames',
+];
+const diagnosticFields = ['hnr', 'h1h2', 'frames'];
+const perturbationFields = [
+  'periods',
+  'period',
+  'amplitude',
+  'pairs',
+  'periodDiff',
+  'amplitudeDiff',
+];
+function fieldsOf(state, fields) {
+  return Object.fromEntries(fields.map((key) => [key, state[key]]));
+}
 export function copyState(state) {
   if (!state) {
     return emptyState();
   }
   const copy = JSON.parse(JSON.stringify(state));
-  const expected = emptyState();
   if (
     copy.version !== 1 ||
-    Object.entries(expected.histograms).some(
-      ([key, bins]) =>
-        copy.histograms?.[key]?.length !== bins.length ||
+    Object.entries(HISTOGRAMS).some(
+      ([key, [min, max, step]]) =>
+        copy.histograms?.[key]?.length !== Math.round((max - min) / step) + 1 ||
         copy.histograms[key].some((n) => !Number.isFinite(n) || n < 0)
     ) ||
-    Object.keys(expected)
-      .filter((key) => typeof expected[key] === 'number' && key !== 'tilt')
-      .some((key) => !Number.isFinite(copy[key]) || copy[key] < 0) ||
+    nonnegativeStateFields.some(
+      (key) => !Number.isFinite(copy[key]) || copy[key] < 0
+    ) ||
     !validNuclei(copy.landmarks) ||
     copy.mel?.length !== 24 ||
     copy.mel.some((v) => !Number.isFinite(v)) ||
     !Number.isFinite(copy.tilt) ||
-    !['hnr', 'h1h2', 'frames'].every((key) =>
+    !diagnosticFields.every((key) =>
       Number.isFinite(copy.diagnostics?.[key])
     ) ||
     copy.diagnostics.frames < 0 ||
-    Object.keys(expected.perturbation).some(
+    perturbationFields.some(
       (key) =>
         !Number.isFinite(copy.perturbation?.[key]) || copy.perturbation[key] < 0
     )
   ) {
     throw new RangeError('Invalid voice fitter state');
   }
-  return Object.fromEntries(
-    Object.keys(expected).map((key) => [
-      key,
-      key === 'histograms'
-        ? Object.fromEntries(
-            Object.keys(HISTOGRAMS).map((k) => [k, copy.histograms[k]])
-          )
-        : key === 'diagnostics' || key === 'perturbation'
-          ? Object.fromEntries(
-              Object.keys(expected[key]).map((k) => [k, copy[key][k]])
-            )
-          : copy[key],
-    ])
-  );
+  return {
+    version: copy.version,
+    histograms: fieldsOf(copy.histograms, Object.keys(HISTOGRAMS)),
+    duration: copy.duration,
+    voicedSeconds: copy.voicedSeconds,
+    speechSeconds: copy.speechSeconds,
+    nuclei: copy.nuclei,
+    landmarks: copy.landmarks,
+    voicedFrames: copy.voicedFrames,
+    mel: copy.mel,
+    tilt: copy.tilt,
+    diagnostics: fieldsOf(copy.diagnostics, diagnosticFields),
+    perturbation: fieldsOf(copy.perturbation, perturbationFields),
+  };
 }
 export function addValue(state, key, value) {
   if (!Number.isFinite(value) || (key === 'f0' && value <= 0)) {

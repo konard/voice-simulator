@@ -393,7 +393,8 @@ function* fitState(state, samples, sampleRate, o) {
     distance: best?.distance ?? Infinity,
     renders: context.renders,
     voicedDuration: state.voicedSeconds,
-    state: copyState(state),
+    // Both callers pass a private snapshot. Transfer it to the result.
+    state,
   };
 }
 export function* fitVoiceSteps(samples, sampleRate, options = {}, frontEnd) {
