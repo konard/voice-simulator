@@ -6,6 +6,7 @@
  * recognition panel. Unlicense.
  *
  *   node scripts/check-app-lowest.mjs [--skip-build] [--out reports/heavy]
+ *   Add --core <id> for a publishable measurement when pinned to that core.
  *
  * - workerRtf: render time / audio time of the synthesis worker, from the
  *   `load` it sends with every chunk.
@@ -15,8 +16,9 @@
  *   (1 - word error rate, at least 0).
  */
 import assert from 'node:assert/strict';
-import { spawnSync } from 'node:child_process';
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { execFileSync, spawnSync } from 'node:child_process';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { cpus } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath, URL } from 'node:url';
 import { parseArgs } from 'node:util';
@@ -383,13 +385,49 @@ export function appFailures({ metrics, audioSeconds }) {
   return failures;
 }
 
+function rowMetadata(core) {
+  assert.match(core, /^\d+$/u, 'Expected a single CPU core');
+  const { groups } = /^Cpus_allowed_list:\s*(?<core>.+)$/mu.exec(
+    readFileSync('/proc/self/status', 'utf8')
+  );
+  assert.equal(groups.core, core, 'Process must be pinned to the reported CPU');
+  assert.equal(process.env.UV_THREADPOOL_SIZE, '1');
+  assert.ok(process.execArgv.includes('--max-old-space-size=192'));
+  assert.equal(THROTTLING, 6);
+  const { app } = JSON.parse(
+    readFileSync(
+      new URL('../tests/heavy/lowest-thresholds.json', import.meta.url),
+      'utf8'
+    )
+  );
+  return {
+    row: 'app',
+    limit: null,
+    pinned: true,
+    core: Number(core),
+    commit: execFileSync('git', ['rev-parse', 'HEAD'], {
+      cwd: ROOT,
+      encoding: 'utf8',
+    }).trim(),
+    command: `UV_THREADPOOL_SIZE=1 taskset -c ${core} node ${process.execArgv.join(' ')} ${process.argv.slice(1).join(' ')}`,
+    cpu: cpus()[Number(core)]?.model ?? cpus()[0]?.model ?? 'unknown',
+    node: process.version,
+    limits: { app },
+  };
+}
+
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const { values } = parseArgs({
     options: {
       'skip-build': { type: 'boolean' },
       out: { type: 'string' },
+      core: { type: 'string' },
     },
   });
+  if (values.core) {
+    assert.ok(values.out, '--core requires --out');
+  }
+  const metadata = values.core ? rowMetadata(values.core) : null;
   const result = await checkAppLowest({ skipBuild: values['skip-build'] });
   console.log(JSON.stringify(result, null, 2));
   if (values.out) {
@@ -398,6 +436,17 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
       join(values.out, 'lowest-app.json'),
       `${JSON.stringify({ result }, null, 2)}\n`
     );
+    if (metadata) {
+      const report = {
+        ...metadata,
+        measured: new Date().toISOString(),
+        runs: { app: { js: result } },
+      };
+      writeFileSync(
+        join(values.out, 'lowest-settings.json'),
+        `${JSON.stringify(report, null, 2)}\n`
+      );
+    }
   }
   const failures = appFailures(result);
   for (const failure of failures) {

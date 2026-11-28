@@ -216,7 +216,7 @@ jobs:
         run: |
           npm run example:web:build
           core=$(awk '/^Cpus_allowed_list:/ {split($2, allowed, /[-,]/); print allowed[1]}' /proc/self/status)
-          taskset -c "$core" node --max-old-space-size=192 scripts/check-app-lowest.mjs --skip-build --out reports/heavy
+          taskset -c "$core" node --max-old-space-size=192 scripts/check-app-lowest.mjs --skip-build --core "$core" --out reports/heavy
 
       - name: Verify recognition performance targets
         if: inputs.suite == 'recognition-performance'

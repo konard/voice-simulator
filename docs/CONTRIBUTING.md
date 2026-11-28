@@ -222,7 +222,8 @@ that report records the new commit, CPU and Node version for the selected row.
 
 Select `suite=lowest` and `lowest-row=app` to run the browser round trip on
 one core with the 192 MB Node heap cap. The run uploads `lowest-app.json`
-with the measured transcript and synthesis timings, including on failure.
+with the transcript and synthesis timings, and `lowest-settings.json` for
+the report publisher, including when the row misses a limit.
 
 ### Recognition benchmark
 
