@@ -261,13 +261,18 @@ function runLines(data) {
 
 /** The Markdown report of a judged matrix. */
 export function formatReport(data) {
-  const additionalRuns = Object.entries(data.rowMeasurements ?? {}).flatMap(
-    ([row, { measured, commit, command, cpu, node, core }]) => [
-      '',
-      `- \`${row}\` measured on ${measured} at commit \`${commit}\` on ${cpu} with Node ${node}, pinned with \`taskset -c ${core}\`.`,
-      `  Command \`${command}\`.`,
-    ]
-  );
+  const rowMeasurements = Object.entries(data.rowMeasurements ?? {});
+  const measurementLines = rowMeasurements.length
+    ? [
+        '',
+        '## Targeted reruns',
+        '',
+        ...rowMeasurements.flatMap(([row, run]) => [
+          `- **${row}** at commit \`${run.commit}\` on ${run.cpu}, Node ${run.node}, measured ${run.measured}.`,
+          `  ${run.pinned ? `Pinned with \`taskset -c ${run.core}\`.` : 'Run without CPU pinning.'} Command \`${run.command}\`.`,
+        ]),
+      ]
+    : [];
   const regressionLines = data.regressions?.length
     ? [
         '',
@@ -295,7 +300,6 @@ export function formatReport(data) {
     `- Node: ${data.node}`,
     `- Pinning: ${data.pinned ? `pinned with \`taskset -c ${data.core}\`` : 'not pinned (taskset is missing)'}`,
     `- Heap cap: \`--max-old-space-size=192\`${data.limit ? `; item limit ${data.limit}` : ''}`,
-    ...additionalRuns,
     '',
     ...matrix(data),
     '',
@@ -306,6 +310,7 @@ export function formatReport(data) {
     '## Runs',
     '',
     ...runLines(data),
+    ...measurementLines,
     ...regressionLines,
     '',
   ].join('\n');
@@ -313,19 +318,16 @@ export function formatReport(data) {
 
 /** The README block between the lowest-settings markers. */
 export function readmeTable(data) {
-  const refreshed = Object.keys(data.rowMeasurements ?? {});
-  const provenance = refreshed.length
-    ? `The ${refreshed.map((row) => `\`${row}\``).join(', ')} measurements have newer commits listed in the [report](${REPORT_PATH}).`
-    : `[report](${REPORT_PATH}).`;
+  const measured = Object.keys(data.rowMeasurements ?? {}).length
+    ? 'Full matrix measured'
+    : 'Measured';
   return [
     README_START,
     // Prettier would pad the columns; the block stays exactly as generated.
     '<!-- prettier-ignore-start -->',
     ...matrix(data, (cell) => (cell ? cell.status : '—')),
     '',
-    refreshed.length
-      ? `Full matrix measured at commit \`${data.commit.slice(0, 7)}\` on ${data.cpu}. ${provenance}`
-      : `Measured at commit \`${data.commit.slice(0, 7)}\` on ${data.cpu}; ${provenance}`,
+    `${measured} at commit \`${data.commit.slice(0, 7)}\` on ${data.cpu}. See the [report](${REPORT_PATH}).`,
     '<!-- prettier-ignore-end -->',
     README_END,
   ].join('\n');
