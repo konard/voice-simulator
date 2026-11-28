@@ -378,6 +378,20 @@ function thresholdWorkspace(languageCount) {
   };
 }
 
+function prepareThresholdRows(rows, totals, languageCount, maxActive) {
+  let needed = false;
+  for (let i = 0; i < languageCount; i++) {
+    const count = totals[i];
+    if (count > maxActive) {
+      needed = true;
+      if (rows[i].length < count) {
+        rows[i] = new Float64Array(Math.max(count, rows[i].length * 2));
+      }
+    }
+  }
+  return needed;
+}
+
 /** Pruning combines the relative language beams and the active-node limit. */
 function frameThresholds(
   { nodes, languageCount, beam, languageBeam, maxActive },
@@ -398,7 +412,11 @@ function frameThresholds(
   for (let i = 0; i < languageCount; i++) {
     thresholds[i] = Math.max(peaks[i] - beam, globalThreshold);
   }
-  if (maxActive <= 0 || length <= maxActive) {
+  if (
+    maxActive <= 0 ||
+    length <= maxActive ||
+    !prepareThresholdRows(rows, totals, languageCount, maxActive)
+  ) {
     return thresholds;
   }
   // A score already below either beam cannot affect the final threshold.
@@ -409,13 +427,7 @@ function frameThresholds(
     if (totals[language] <= maxActive || score < thresholds[language]) {
       continue;
     }
-    const size = sizes[language]++;
-    if (size === rows[language].length) {
-      const expanded = new Float64Array(size * 2);
-      expanded.set(rows[language]);
-      rows[language] = expanded;
-    }
-    rows[language][size] = score;
+    rows[language][sizes[language]++] = score;
   }
   for (let i = 0; i < languageCount; i++) {
     if (sizes[i] >= maxActive) {
