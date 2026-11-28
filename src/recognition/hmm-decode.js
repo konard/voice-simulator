@@ -505,11 +505,8 @@ export function decodeWords(network, feats, frames, options = {}, cache) {
   }
 }
 
-/** Prune the frame and queue its outgoing nodes and best word ends. */
-function pruneFrame(network, pass, thresholds, t) {
-  const { nodes, words, emit, wordId, nextWord } = network;
-  const { first, count, optional, terminal, lookLn } = nodes;
-  const { go } = network.model;
+/** Compact the states that survive this frame's language thresholds. */
+function retainStates({ count, language }, pass, thresholds) {
   const {
     positions,
     work,
@@ -517,26 +514,15 @@ function pruneFrame(network, pass, thresholds, t) {
     active: previousActive,
     current: { peaks, state: available },
     entries: { index: entryIndex, columns: queued },
-    lm,
-    settings,
-    next,
-    wordEnds,
-    endings,
-    endingScores,
   } = pass;
-  const { lmw, releaseSkip } = settings;
-  const transitionCosts = lm.cache.costs;
-  const endFrame = t + 1;
   let { scores, histories, starts } = pass.previous;
   for (let i = 0; i < previousActive; i++) {
     positions[work[i]] = 0;
   }
   let active = 0;
-  wordEnds.length = 0;
   for (let index = 0; index < length; index++) {
     const id = work[index];
-    const language = nodes.language[id];
-    const threshold = thresholds[language];
+    const threshold = thresholds[language[id]];
     if (peaks[index] < threshold) {
       continue;
     }
@@ -569,7 +555,34 @@ function pruneFrame(network, pass, thresholds, t) {
     }
     positions[id] = active + 1;
     work[active++] = id;
-    const last = states - 1;
+  }
+  pass.active = active;
+}
+
+/** Queue transitions and word ends from the compacted states. */
+function queueExits(network, pass, thresholds, t) {
+  const { nodes, words, emit, wordId, nextWord } = network;
+  const { first, count, optional, terminal, lookLn } = nodes;
+  const { go } = network.model;
+  const {
+    work,
+    active,
+    previous: { scores, histories, starts },
+    lm,
+    settings,
+    next,
+    wordEnds,
+    endings,
+    endingScores,
+  } = pass;
+  const { lmw, releaseSkip } = settings;
+  const transitionCosts = lm.cache.costs;
+  const endFrame = t + 1;
+  wordEnds.length = 0;
+  for (let row = 0; row < active; row++) {
+    const id = work[row];
+    const offset = row * 6;
+    const last = count[id] - 1;
     const firstState = first[id];
     let exit = scores[offset + last] + go[emit[firstState + last]];
     let hist = histories[offset + last];
@@ -583,7 +596,8 @@ function pruneFrame(network, pass, thresholds, t) {
         start = starts[offset + 2];
       }
     }
-    if (exit < threshold) {
+    const language = nodes.language[id];
+    if (exit < thresholds[language]) {
       continue;
     }
     const tree = pass.trees[language];
@@ -621,7 +635,6 @@ function pruneFrame(network, pass, thresholds, t) {
       end.start = start;
     }
   }
-  return active;
 }
 
 function enterRoots(next, tree, score, history, frame, { lookLn, settings }) {
@@ -683,7 +696,8 @@ function advanceFrames(network, frames, pass, histogram, records) {
       pass.length,
       pass.framePeak[0]
     );
-    pass.active = pruneFrame(network, pass, thresholds, t);
+    retainStates(network.nodes, pass, thresholds);
+    queueExits(network, pass, thresholds, t);
     for (let i = 0; i < wordEnds.length; i++) {
       const slot = wordEnds[i];
       const end = endings[slot];
