@@ -598,8 +598,9 @@ function measureLpc(kernel, row) {
 
 function measurePitchFrame(frames, row, buffer, start, length, noiseTracker) {
   let sum = 0;
-  for (let n = 0; n < length; n++) {
-    const value = buffer[start + n];
+  const end = Math.min(buffer.length, start + length);
+  for (let i = Math.max(0, start); i < end; i++) {
+    const value = buffer[i];
     sum += value * value;
   }
   const meanPower = sum / length + EPSILON;
@@ -869,7 +870,37 @@ export function analyzePitchFrames(
   hop = FRONTEND_DEFAULTS.hop,
   storage
 ) {
+  if (
+    samples instanceof Float32Array &&
+    samples.buffer instanceof ArrayBuffer &&
+    workingRate(sampleRate, FRONTEND_DEFAULTS.rate) === sampleRate
+  ) {
+    return analyzeBorrowedPitch(samples, sampleRate, hop, storage);
+  }
   return analyzeRecording(samples, sampleRate, { hop }, storage, 'pitch');
+}
+
+// Batch pitch callers consume this analysis before returning. Its windows
+// can read their input directly and account for the zero padding at the edges.
+function analyzeBorrowedPitch(samples, sampleRate, hop, storage) {
+  const settings = frontendSettings(sampleRate, {
+    hop,
+    maxSeconds: samples.length / sampleRate,
+  });
+  const { length, half, hopSamples } = settings;
+  const frames = createFrameSet(settings, samples, storage, 'pitch');
+  const noiseTracker = createNoiseTracker(hop);
+  frames.sampleCount = samples.length;
+  const count =
+    samples.length > 0 ? Math.floor((samples.length - 1) / hopSamples) + 1 : 0;
+  for (let row = 0; row < count; row++) {
+    const start = Math.round(row * hopSamples) - half;
+    measurePitchFrame(frames, row, samples, start, length, noiseTracker);
+  }
+  frames.energy.fill(0, count);
+  frames.noise.fill(0, count);
+  frames.count = count;
+  return frames;
 }
 
 function analyzeRecording(samples, sampleRate, options, storage, features) {

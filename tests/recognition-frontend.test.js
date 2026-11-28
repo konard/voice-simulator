@@ -115,6 +115,20 @@ it('measures the pitch inputs without building unused spectral columns', () => {
   expect(trackPitch(pitchOnly)).toEqual(trackPitch(full));
 });
 
+it('matches copied pitch frames at both edges of an 8 kHz sample view', () => {
+  const sampleRate = 8000;
+  const samples = whiteNoise(8347, -22, 88).subarray(19, 8293);
+  for (const hop of [0.005, 0.01]) {
+    const borrowed = analyzePitchFrames(samples, sampleRate, hop);
+    const copied = analyzePitchFrames(Array.from(samples), sampleRate, hop);
+    expect(borrowed.samples).toBe(samples);
+    expect(borrowed.count).toBe(copied.count);
+    expect(borrowed.energy).toEqual(copied.energy);
+    expect(borrowed.noise).toEqual(copied.noise);
+    expect(trackPitch(borrowed)).toEqual(trackPitch(copied));
+  }
+});
+
 it('keeps the speech gate identical with compact streaming frames', () => {
   const sampleRate = 16000;
   const samples = whiteNoise(8001, -40, 77);
