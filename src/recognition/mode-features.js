@@ -366,37 +366,45 @@ export function measureWords(
   return measured;
 }
 
+const SUMMARY_KEYS = [
+  'alpha',
+  'energyRatio',
+  'pitch',
+  'pitchSpan',
+  'voiced',
+  'h1h2',
+  'hnr',
+  'cpp',
+  'jitter',
+  'rate',
+];
+
 export function summarize(words) {
-  const keys = [
-    'alpha',
-    'energyRatio',
-    'pitch',
-    'pitchSpan',
-    'voiced',
-    'h1h2',
-    'hnr',
-    'cpp',
-    'jitter',
-    'rate',
-  ];
-  return Object.fromEntries(
-    keys.map((key) => [
-      key,
-      quantile(words.filter((w) => w.vowels > 0).map((w) => w[key])),
-    ])
-  );
+  const vowels = words.filter((w) => w.vowels > 0);
+  const values = new Array(vowels.length);
+  const summary = {};
+  for (const key of SUMMARY_KEYS) {
+    for (let i = 0; i < vowels.length; i++) {
+      values[i] = vowels[i][key];
+    }
+    summary[key] = quantile(values);
+  }
+  return summary;
+}
+
+/** Phrase range includes between-word intonation as well as vowel variation. */
+export function phrasePitchSpan(words) {
+  const pitches = words.flatMap((word) => word.pitches);
+  return semitones(quantile(pitches, 0.95), quantile(pitches, 0.05));
 }
 
 /** Phrase range includes between-word intonation, not just vowel variation. */
 export function phraseSummary(words, context, baseline) {
-  const range = (rows) => {
-    const pitches = rows.flatMap((word) => word.pitches);
-    return semitones(quantile(pitches, 0.95), quantile(pitches, 0.05));
-  };
   return {
     ...summarize(words),
     pitchSpan:
-      range(words) - (context ? range(context) - baseline.pitchSpan : 0),
+      phrasePitchSpan(words) -
+      (context ? phrasePitchSpan(context) - baseline.pitchSpan : 0),
     f1: words.some((w) => w.f1 !== null)
       ? mean(words.map((w) => w.f1 ?? 0))
       : null,

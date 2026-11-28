@@ -12,6 +12,7 @@ import {
 import {
   measureWords,
   summarize,
+  phrasePitchSpan,
   phraseSummary,
   relativeF1,
   quantile,
@@ -389,7 +390,7 @@ export function recognizeModes(samples, sampleRate, result, options = {}) {
   );
   const base = reference?.features ?? {
     ...summarize(features),
-    pitchSpan: phraseSummary(features).pitchSpan,
+    pitchSpan: phrasePitchSpan(features),
   };
   features.forEach((w) => {
     w.f1 = reference ? relativeF1(w, reference.vowels) : null;
