@@ -1,7 +1,11 @@
 /** Phrase commits over the incremental IPA decoder. Unlicense. */
 import { createIpaDecoder } from './decode.js';
 import { joinSegments } from './decode-pipeline.js';
-import { createFrameAnalyzer, workingRate } from './frontend.js';
+import {
+  createFrameAnalyzer,
+  createWordAnalyzer,
+  workingRate,
+} from './frontend.js';
 import { HMM_LOW_SEARCH } from './hmm-decode.js';
 import { HMM_LIVE_WORDS } from './hmm-network.js';
 import { createLandmarkDetector } from './landmarks.js';
@@ -161,11 +165,53 @@ function trailingPause(frames, state) {
   return (state.scanned - state.lastSpeech - 1) * frames.hop;
 }
 
+const WORD_FRONTEND_OPTIONS = { hop: 0.01, maxSeconds: MAX_WINDOW + 1 };
+
+function createBatchWordFrontend(sampleRate, includeModes) {
+  const input = createWordAnalyzer(
+    sampleRate,
+    WORD_FRONTEND_OPTIONS,
+    includeModes
+  );
+  const { frames } = input;
+  return {
+    frames,
+    phraseSamples: frames.samples,
+    reset: input.reset,
+    push(chunk) {
+      input.push(chunk);
+    },
+    flush() {
+      input.flush();
+    },
+  };
+}
+
+const spareWordFrontends = [];
+
+/** The one-shot word recognizer always works on the 8 kHz phrase grid. */
+export function recognizeWordPhrases(samples, sampleRate, settings) {
+  const mode = Number(Boolean(settings.includeModeLabels));
+  const frontend =
+    spareWordFrontends[mode] ??
+    createBatchWordFrontend(sampleRate, Boolean(mode));
+  spareWordFrontends[mode] = undefined;
+  try {
+    const stream = createConfiguredRecognizer(sampleRate, settings, frontend);
+    stream.on('error', (error) => {
+      throw error;
+    });
+    stream.push(
+      samples instanceof Float32Array ? samples : Float32Array.from(samples)
+    );
+    return stream.flush();
+  } finally {
+    spareWordFrontends[mode] = frontend;
+  }
+}
+
 function createWordFrontend(sampleRate, options, liveSyllables) {
-  const input = createFrameAnalyzer(sampleRate, {
-    hop: 0.01,
-    maxSeconds: MAX_WINDOW + 1,
-  });
+  const input = createFrameAnalyzer(sampleRate, WORD_FRONTEND_OPTIONS);
   const { frames } = input;
   const landmarks = createLandmarkDetector(frames);
   let phones;
@@ -292,7 +338,7 @@ export function createRecognizer(options = {}, live) {
   return createConfiguredRecognizer(
     sampleRate,
     recognitionSettings(options),
-    false,
+    undefined,
     live
   );
 }
@@ -315,10 +361,10 @@ function speechGateOnly(
 
 // The phrase decoder, commit cursor and reset lifecycle share this state.
 // eslint-disable-next-line max-lines-per-function
-export function createConfiguredRecognizer(
+function createConfiguredRecognizer(
   sampleRate,
   settings,
-  batch = false,
+  batchWordFrontend,
   {
     liveWords = false,
     liveModeReference = false,
@@ -329,7 +375,8 @@ export function createConfiguredRecognizer(
   } = {}
 ) {
   const { nbest } = settings;
-  const minVoiced = settings.minVoiced ?? (batch ? 0 : STREAM_MIN_VOICED);
+  const minVoiced =
+    settings.minVoiced ?? (batchWordFrontend ? 0 : STREAM_MIN_VOICED);
   const stride = Math.max(1, Math.floor(sampleRate * 0.02));
   const wordPhrases = !liveWords && usesWordPhrases(sampleRate, settings);
   const packet = wordPhrases ? new Float32Array(stride) : null;
@@ -346,6 +393,10 @@ export function createConfiguredRecognizer(
   });
   const gateWordOptions = acousticsOnly ? { framePitch: true } : undefined;
   function createDecoder(rate, options) {
+    if (batchWordFrontend) {
+      batchWordFrontend.reset();
+      return batchWordFrontend;
+    }
     if (wordPhrases) {
       return createWordFrontend(rate, options, liveSyllables);
     }
@@ -553,7 +604,7 @@ export function createConfiguredRecognizer(
   function commit(size, finishDecoder) {
     if (finishDecoder) {
       update(phrase.decoder.flush());
-    } else if (wordPhrases && !liveSyllables()) {
+    } else if (wordPhrases && !batchWordFrontend && !liveSyllables()) {
       update(phrase.decoder.report());
     }
     const answer = wordPhrases
@@ -606,11 +657,14 @@ export function createConfiguredRecognizer(
       }
     }
     const onApplied = adapt ? applyVoice() : undefined;
-    phrase = openPhrase(offset / sampleRate);
     // Only the lookahead after a word cut is replayed, with its original offset.
+    // Batch reuses the old phrase's storage, so save that lookahead before reset.
     const suffix = previous.buffer.subarray(size, previous.used);
-    if (suffix.length) {
-      update(pushPhrase(phrase, suffix));
+    const carried =
+      batchWordFrontend && suffix.length ? suffix.slice() : suffix;
+    phrase = openPhrase(offset / sampleRate);
+    if (carried.length) {
+      update(pushPhrase(phrase, carried));
     }
     onApplied?.();
   }
@@ -864,7 +918,13 @@ export function createConfiguredRecognizer(
     reset,
     on(event, listener) {
       // Account for already confirmed nuclei before a new listener arrives.
-      if (wordPhrases && !ended && event === 'syllable' && !liveSyllables()) {
+      if (
+        wordPhrases &&
+        !batchWordFrontend &&
+        !ended &&
+        event === 'syllable' &&
+        !liveSyllables()
+      ) {
         update(
           phrase.decoder.startSyllables(phrase.buffer.subarray(0, phrase.used))
         );

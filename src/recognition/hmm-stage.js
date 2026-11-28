@@ -211,8 +211,7 @@ function hmmFrontEnd(samples, sampleRate, options) {
 }
 
 function wordAnalysis(samples, sampleRate, options) {
-  const { includeSyllables, includeModeFrames, useModelWords, frameStorage } =
-    options;
+  const { includeSyllables, includeModeFrames, frameStorage } = options;
   if (includeSyllables !== false) {
     return analyzeFrames(samples, sampleRate, { hop: 0.01 }, frameStorage);
   }
@@ -220,7 +219,7 @@ function wordAnalysis(samples, sampleRate, options) {
     samples,
     sampleRate,
     frameStorage,
-    includeModeFrames || useModelWords
+    includeModeFrames
   );
 }
 

@@ -30,10 +30,7 @@ import { aggregate, translated } from './recognizer-result.js';
 import { pauseCuts } from './recognizer-pauses.js';
 import { realiseChineseTones } from './zh-tones.js';
 
-import {
-  createConfiguredRecognizer,
-  usesWordPhrases,
-} from './recognizer-stream.js';
+import { recognizeWordPhrases, usesWordPhrases } from './recognizer-stream.js';
 
 export { createRecognizer } from './recognizer-stream.js';
 
@@ -611,14 +608,7 @@ export function withBatchFrames(recognizeBatch) {
 
 function serial(samples, sampleRate, settings, level, unsplit) {
   if (!unsplit && usesWordPhrases(sampleRate, settings)) {
-    const stream = createConfiguredRecognizer(sampleRate, settings, true);
-    stream.on('error', (error) => {
-      throw error;
-    });
-    stream.push(
-      samples instanceof Float32Array ? samples : Float32Array.from(samples)
-    );
-    return stream.flush();
+    return recognizeWordPhrases(samples, sampleRate, settings);
   }
   return usesWordDecoder(settings)
     ? withBatchFrames((options) =>

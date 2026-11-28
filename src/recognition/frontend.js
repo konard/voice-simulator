@@ -686,6 +686,17 @@ export function createSpeechAnalyzer(sampleRate, options) {
   );
 }
 
+/** Streaming frames used by the batch phrase decoder. */
+export function createWordAnalyzer(sampleRate, options, includeModes) {
+  return frameAnalyzer(
+    sampleRate,
+    frontendSettings(sampleRate, options),
+    undefined,
+    undefined,
+    includeModes ? 'word-modes' : 'word-timing'
+  );
+}
+
 function allocateFrameBuffer(settings, storage, features) {
   const { length, half, sampleCapacity } = settings;
   // The buffer holds `margin` samples before `samples[0]` (zeros before the
