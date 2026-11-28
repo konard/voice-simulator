@@ -11,6 +11,11 @@ import {
   trackPitch,
 } from '../src/index.js';
 import { lfParameters } from '../src/acoustics/glottis.js';
+import {
+  correlationPlan,
+  iaifPlan,
+  hann,
+} from '../src/recognition/inverse-dsp.js';
 import { inverseModeMeasures } from '../src/recognition/inverse-filter.js';
 import { highPass } from './helpers/recognition-truth.js';
 import {
@@ -47,6 +52,29 @@ function vowel(tenseness = 0.5, f0 = 110, rate = 16000) {
   }
   return cache.get(key);
 }
+
+describe('inverse DSP workspaces', () => {
+  it('reuses window storage across edge padding, silence and shorter pulses', () => {
+    const samples = Float64Array.from({ length: 30 }, (_, i) => Math.sin(i));
+    const correlate = correlationPlan(17);
+    for (const centre of [0, 15, samples.length - 1]) {
+      expect(correlate(samples, centre)).toEqual(
+        correlationPlan(17)(samples, centre)
+      );
+      expect(correlate(new Float64Array(samples.length), centre)).toEqual(
+        new Float64Array(17)
+      );
+    }
+    const plan = iaifPlan(8, 3, 0.99);
+    plan(samples, hann(samples.length));
+    const length = 19;
+    const window = hann(length);
+    const pulse = plan(samples, window);
+    const fresh = iaifPlan(8, 3, 0.99)(samples.subarray(0, length), window);
+    expect(pulse.d.subarray(0, length)).toEqual(fresh.d);
+    expect(pulse.g.subarray(0, length)).toEqual(fresh.g);
+  });
+});
 
 describe('batch glottal inverse filter', () => {
   it('keeps the source measures used by mode recognition', () => {

@@ -100,16 +100,19 @@ function localPitch(frames, o) {
   const length = Math.round(
     Math.max(frames.window, 1.5 / o.minF0) * frames.rate
   );
-  const plan = o.pitch ? null : correlationPlan(length);
+  const correlate = o.pitch ? null : correlationPlan(length);
+  const firstLag = Math.ceil(frames.rate / o.maxF0);
+  const lastLag = Math.floor(frames.rate / o.minF0);
   for (let t = 0; t < frames.count; t++) {
     if (o.pitch) {
       f0[t] = suppliedPitch(o.pitch.f0[t], frames.rate);
     } else if (frames.speech[t] && frames.periodicity[t] >= 0.5) {
-      const r = plan.measure(
-        block(frames.samples, Math.round(t * frames.hop * frames.rate), length)
+      const r = correlate(
+        frames.samples,
+        Math.round(t * frames.hop * frames.rate)
       );
-      let lag = Math.ceil(frames.rate / o.maxF0);
-      for (let k = lag + 1; k <= Math.floor(frames.rate / o.minF0); k++) {
+      let lag = firstLag;
+      for (let k = lag + 1; k <= lastLag; k++) {
         if (r[k] > r[lag]) {
           lag = k;
         }
@@ -125,18 +128,30 @@ function localPitch(frames, o) {
       f0[t] = frames.rate / (lag + offset);
     }
   }
-  if (o.pitch) {
-    return f0;
-  }
-  return f0.map((value, t) => {
-    if (!value) {
-      return 0;
+  return o.pitch ? f0 : smoothPitch(f0);
+}
+
+function smoothPitch(f0) {
+  const sorted = new Float32Array(5);
+  const median = new Float32Array(f0.length);
+  for (let t = 0; t < f0.length; t++) {
+    if (!f0[t]) {
+      continue;
     }
-    const values = Array.from(f0.subarray(Math.max(0, t - 2), t + 3))
-      .filter((v) => v > 0)
-      .sort((a, b) => a - b);
-    return values[Math.floor(values.length / 2)];
-  });
+    let count = 0;
+    for (let n = Math.max(0, t - 2); n < Math.min(f0.length, t + 3); n++) {
+      const value = f0[n];
+      if (value > 0) {
+        let i = count++;
+        for (; i > 0 && sorted[i - 1] > value; i--) {
+          sorted[i] = sorted[i - 1];
+        }
+        sorted[i] = value;
+      }
+    }
+    median[t] = sorted[Math.floor(count / 2)];
+  }
+  return median;
 }
 let inverseScratch;
 // Cache a working buffer up to 8 MiB, enough for 32 s of two-column
@@ -198,12 +213,15 @@ function recover(frames, f0, o, scratch, derivativeOnly) {
     if (window.length > buffer.length) {
       buffer = new Float64Array(Math.max(window.length, buffer.length * 2));
     }
-    const extended = buffer.subarray(0, window.length);
-    const first = Math.max(0, start - history);
-    const last = Math.min(x.length, start - history + extended.length);
-    extended.fill(0);
-    extended.set(x.subarray(first, last), first - start + history);
-    const pulse = iaif(extended, window);
+    const offset = start - history;
+    const first = Math.max(0, -offset);
+    const last = Math.min(window.length, x.length - offset);
+    buffer.fill(0, 0, first);
+    buffer.fill(0, last, window.length);
+    for (let i = first; i < last; i++) {
+      buffer[i] = x[offset + i];
+    }
+    const pulse = iaif(buffer, window);
     const end = Math.min(x.length, start + length);
     for (let index = Math.max(0, start); index < end; index++) {
       const i = index - start + history;

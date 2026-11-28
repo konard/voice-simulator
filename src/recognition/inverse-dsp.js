@@ -39,17 +39,27 @@ export function highPass(x, rate, y = new Float64Array(x.length)) {
   return y;
 }
 
-export function integrate(x, leak, y = new Float64Array(x.length)) {
+export function integrate(
+  x,
+  leak,
+  y = new Float64Array(x.length),
+  length = x.length
+) {
   let previous = 0;
-  for (let n = 0; n < x.length; n++) {
+  for (let n = 0; n < length; n++) {
     previous = x[n] + leak * previous;
     y[n] = previous;
   }
   return y;
 }
 
-export function filter(x, a, y = new Float64Array(x.length)) {
-  for (let n = 0; n < x.length; n++) {
+export function filter(
+  x,
+  a,
+  y = new Float64Array(x.length),
+  length = x.length
+) {
+  for (let n = 0; n < length; n++) {
     let value = x[n];
     const count = Math.min(a.length, n);
     for (let k = 0; k < count; k++) {
@@ -60,15 +70,12 @@ export function filter(x, a, y = new Float64Array(x.length)) {
   return y;
 }
 
-function predictor(x, window, a, k, weighted) {
-  let first = 0;
-  while (first < window.length && window[first] === 0) {
-    first++;
-  }
-  for (let n = first; n < x.length; n++) {
+function predictor(x, window, first, a, k, weighted) {
+  const length = window.length;
+  for (let n = first; n < length; n++) {
     weighted[n - first] = x[n] * window[n];
   }
-  lpcAutocorrelation(weighted.subarray(0, x.length - first), a.length, a, k);
+  lpcAutocorrelation(weighted, a.length, a, k, length - first);
   for (let i = 0; i < a.length; i++) {
     if (!Number.isFinite(a[i])) {
       a.fill(0);
@@ -84,28 +91,33 @@ export function iaifPlan(tractOrder, glottisOrder, leak, flowOutput = true) {
   const tract = new Float64Array(tractOrder);
   const glottis = new Float64Array(glottisOrder);
   const k = new Float64Array(Math.max(1, tractOrder, glottisOrder));
-  let d = new Float64Array(0);
-  let g = new Float64Array(0);
+  const pulse = { d: new Float64Array(0), g: new Float64Array(0) };
   let weighted = new Float64Array(0);
   return (s, w) => {
-    if (s.length > d.length) {
-      const size = Math.max(s.length, d.length * 2);
-      d = new Float64Array(size);
-      g = new Float64Array(size);
+    const length = w.length;
+    if (length > pulse.d.length) {
+      const size = Math.max(length, pulse.d.length * 2);
+      pulse.d = new Float64Array(size);
+      pulse.g = new Float64Array(size);
       weighted = new Float64Array(size);
     }
-    const flow = g.subarray(0, s.length);
-    const derivative = d.subarray(0, s.length);
-    filter(s, predictor(s, w, tilt, k, weighted), derivative);
-    filter(s, predictor(derivative, w, tract, k, weighted), derivative);
-    integrate(derivative, leak, flow);
-    filter(s, predictor(flow, w, glottis, k, weighted), derivative);
-    integrate(derivative, leak, flow);
-    filter(s, predictor(flow, w, tract, k, weighted), derivative);
-    if (flowOutput) {
-      integrate(derivative, leak, flow);
+    const { d, g } = pulse;
+    let first = 0;
+    while (first < length && w[first] === 0) {
+      first++;
     }
-    return { d: derivative, g: flow };
+    filter(s, predictor(s, w, first, tilt, k, weighted), d, length);
+    filter(s, predictor(d, w, first, tract, k, weighted), d, length);
+    integrate(d, leak, g, length);
+    filter(s, predictor(g, w, first, glottis, k, weighted), d, length);
+    integrate(d, leak, g, length);
+    filter(s, predictor(g, w, first, tract, k, weighted), d, length);
+    if (flowOutput) {
+      integrate(d, leak, g, length);
+    }
+    // The first `length` samples belong to this call and are borrowed until
+    // the next window.
+    return pulse;
   };
 }
 
@@ -116,10 +128,8 @@ export function correlationPlan(length) {
   const window = hann(length);
   const re = new Float64Array(size);
   const im = new Float64Array(size);
-  function autocorrelate(x) {
-    re.fill(0);
+  function autocorrelate() {
     im.fill(0);
-    re.set(x);
     fft.forward(re, im);
     for (let k = 0; k < size; k++) {
       re[k] = re[k] * re[k] + im[k] * im[k];
@@ -127,24 +137,29 @@ export function correlationPlan(length) {
     }
     fft.inverse(re, im);
   }
-  autocorrelate(window);
+  re.set(window);
+  autocorrelate();
   const wc = re.slice(0, length);
-  return {
-    measure(x) {
-      let mean = 0;
-      for (const value of x) {
-        mean += value / length;
+  const result = new Float64Array(length);
+  return (samples, centre) => {
+    block(samples, centre, length, re);
+    let mean = 0;
+    for (let n = 0; n < length; n++) {
+      mean += re[n] / length;
+    }
+    for (let n = 0; n < length; n++) {
+      re[n] = (re[n] - mean) * window[n];
+    }
+    autocorrelate();
+    if (re[0] > 1e-30) {
+      for (let lag = 0; lag < length; lag++) {
+        result[lag] =
+          wc[lag] > 1e-12 ? (re[lag] / re[0]) * (wc[0] / wc[lag]) : 0;
       }
-      autocorrelate(x.map((v, n) => (v - mean) * window[n]));
-      const result = new Float64Array(length);
-      if (re[0] > 1e-30) {
-        for (let lag = 0; lag < length; lag++) {
-          result[lag] =
-            wc[lag] > 1e-12 ? (re[lag] / re[0]) * (wc[0] / wc[lag]) : 0;
-        }
-      }
-      return result;
-    },
+    } else {
+      result.fill(0);
+    }
+    return result;
   };
 }
 
