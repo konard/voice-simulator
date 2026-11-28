@@ -120,8 +120,9 @@ function continuation(input, lexicon, spans, candidate) {
   const canSwitch = !input.pauses.has(from);
   const cost = wordTransition(lexicon, word);
   return (partial) => {
-    const changed = partial.lastLanguage && partial.lastLanguage !== language;
-    const last = changed ? null : partial.last;
+    const lastCandidate = partial.candidate;
+    const changed = lastCandidate && lastCandidate.language !== language;
+    const last = changed ? null : (lastCandidate?.word ?? null);
     const languageCost =
       mismatch +
       Number(Boolean(changed && canSwitch)) * MIXED_LANGUAGE_COSTS.switch;
@@ -147,7 +148,7 @@ function searchPaths(input, lexicon, options, exact, wordSearches) {
   const seen = new Set();
   const cutoff = new Float64Array(best.length).fill(Infinity);
   best[tokens.length] = [];
-  best[0] = [{ last: null, text: '', cost: 0 }];
+  best[0] = [{ cost: 0, text: '', candidate: null, previous: null }];
   const suffixes = new Map();
   function knownSuffix(end, lexicon, language) {
     if (!suffixes.has(language)) {
@@ -182,7 +183,8 @@ function searchPaths(input, lexicon, options, exact, wordSearches) {
       wordSearches,
       knownSuffix,
     });
-    for (const candidate of candidates) {
+    for (let i = 0; i < candidates.length; i++) {
+      const candidate = candidates[i];
       const cost = continuation(
         input,
         lexicons.get(candidate.language),
@@ -191,7 +193,9 @@ function searchPaths(input, lexicon, options, exact, wordSearches) {
       );
       const paths = (best[candidate.to] ??= []);
       const ceiling = cutoff[candidate.to];
-      for (const partial of previous) {
+      const suffix = `\t${candidate.language}:${candidate.word}`;
+      for (let j = 0; j < previous.length; j++) {
+        const partial = previous[j];
         // Predecessors are sorted, and the word cost is at least 0.5
         // because the discounted probability never exceeds one.
         if (partial.cost + candidate.cost + 0.5 >= ceiling) {
@@ -205,9 +209,7 @@ function searchPaths(input, lexicon, options, exact, wordSearches) {
         }
         paths.push({
           cost: score,
-          last: candidate.word,
-          lastLanguage: candidate.language,
-          text: `${partial.text}\t${candidate.language}:${candidate.word}`,
+          text: partial.text + suffix,
           candidate,
           previous: partial,
         });
