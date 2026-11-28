@@ -71,11 +71,21 @@ const lines = [];
 for (let i = 0; i < packed.length; i += 48) {
   lines.push(JSON.stringify(packed.slice(i, i + 48).join(' ')));
 }
-const output = fileURLToPath(
-  new URL('../src/recognition/data/en-homophone-context.js', import.meta.url)
-);
-writeFileSync(
-  output,
-  `/** English homophone association scores from Common Voice CC0 text. See SOURCES.md. */\n` +
-    `export const ASSOCIATIONS = [\n  ${lines.join(',\n  ')},\n].join(' ');\n`
-);
+// Keep both browser chunks below the app's 500 kB guard.
+const middle = Math.ceil(lines.length / 2);
+for (const [part, data] of [
+  lines.slice(0, middle),
+  lines.slice(middle),
+].entries()) {
+  const output = fileURLToPath(
+    new URL(
+      `../src/recognition/data/en-homophone-context-${part}.js`,
+      import.meta.url
+    )
+  );
+  writeFileSync(
+    output,
+    `/** English homophone association scores from Common Voice CC0 text. See SOURCES.md. */\n` +
+      `export const ASSOCIATIONS = [\n  ${data.join(',\n  ')},\n].join(' ');\n`
+  );
+}

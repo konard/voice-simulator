@@ -226,7 +226,7 @@ node scripts/build-spoken-prior.mjs
 npx prettier --write src/recognition/data/en-spoken.js
 ```
 
-## English homophone context (`en-homophone-context.js`)
+## English homophone context (`en-homophone-context-*.js`)
 
 Telephone WAV verification proposes pronunciations against the recording.
 When two spellings have the same pronunciation, adjacent word counts rank
@@ -242,7 +242,7 @@ with the browser benchmark from both the word and pair counts.
 
 ```sh
 node scripts/build-homophone-context.mjs /path/to/sentence-collector.txt
-npx prettier --write src/recognition/data/en-homophone-context.js
+npx prettier --write 'src/recognition/data/en-homophone-context-*.js'
 ```
 
 ## Acoustic model (`hmm-model-*.js`)

@@ -1,11 +1,12 @@
 /** Resolve equal-pronunciation alternatives using adjacent words. Unlicense. */
 import { getCounts } from './data/index.js';
-import { ASSOCIATIONS } from './data/en-homophone-context.js';
+import { ASSOCIATIONS as first } from './data/en-homophone-context-0.js';
+import { ASSOCIATIONS as second } from './data/en-homophone-context-1.js';
 
 let scores;
 function association(before, word) {
   scores ??= new Map(
-    ASSOCIATIONS.split(' ').map((pair) => {
+    `${first} ${second}`.split(' ').map((pair) => {
       const i = pair.lastIndexOf('=');
       return [pair.slice(0, i), Number(pair.slice(i + 1)) / 100];
     })
