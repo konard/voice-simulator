@@ -1,12 +1,13 @@
 /** Measure low-tier recognition drift after applying the telephone output filter. Unlicense. */
 import { OutputStage } from '../src/acoustics/voice.js';
 import { resample } from '../src/audio/resample.js';
-import { errorRate, getAudioTier, recognize } from '../src/index.js';
+import { copyVoice, errorRate, getAudioTier, recognize } from '../src/index.js';
 import { alignEdits, tokenize } from '../src/metrics/text.js';
 import { loadGolden } from '../tests/helpers/golden.js';
 
 const { sampleRate, bandLimit } = getAudioTier('telephone');
-const ids = process.argv.slice(2);
+const source = process.argv.includes('--source');
+const ids = process.argv.slice(2).filter((arg) => arg !== '--source');
 const items = loadGolden().filter(({ id }) => !ids.length || ids.includes(id));
 if (ids.length && items.length !== ids.length) {
   throw new Error('Supply distinct golden recording IDs, such as en-01');
@@ -45,19 +46,25 @@ let edits = 0;
 let phones = 0;
 for (const item of items) {
   const input = resample(item.samples, item.sampleRate, sampleRate);
+  const analysis = source ? copyVoice(input, sampleRate).recognition : null;
   const options = {
     level: 'low',
-    languages: [item.lang],
+    languages: [analysis?.languages[0]?.language ?? item.lang],
     includeModeLabels: false,
   };
-  const before = recognize(input, sampleRate, options);
-  const after = recognize(telephoneFilter(input), sampleRate, options);
+  const before = analysis ?? recognize(input, sampleRate, options);
+  const after = recognize(
+    source ? input : telephoneFilter(input),
+    sampleRate,
+    options
+  );
   const error = errorRate(before.ipa, after.ipa, 'phone');
   edits += error.distance;
   phones += error.referenceLength;
   console.log(
     JSON.stringify({
       id: item.id,
+      language: options.languages[0],
       before: before.text,
       after: after.text,
       agreement: 1 - error.rate,

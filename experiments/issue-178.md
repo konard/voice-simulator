@@ -19,8 +19,11 @@ taskset -c 0 node --max-old-space-size=192 scripts/lowest-settings.mjs --row cop
 node --max-old-space-size=192 experiments/issue-178-copy.mjs
 node --max-old-space-size=192 experiments/issue-178-copy.mjs --exact en-01 en-02 ru-01 ru-02 hi-01 hi-02 zh-01 zh-02
 node --max-old-space-size=192 experiments/issue-178-bandwidth.mjs
+node --max-old-space-size=192 experiments/issue-178-bandwidth.mjs --source en-03 ru-01
 node --max-old-space-size=192 experiments/issue-178-lattice-copy.mjs en-01 en-02 en-03 en-04
 node --max-old-space-size=192 experiments/issue-178-plan-controls.mjs en-01
+node --max-old-space-size=192 experiments/issue-178-plan-controls.mjs --low en-03 ru-01
+node --max-old-space-size=192 experiments/issue-178-plan-controls.mjs --single en-03 ru-01
 node --max-old-space-size=192 experiments/issue-178-source-probe.mjs en-01 en-03 en-06
 node --max-old-space-size=192 experiments/issue-178-source-probe.mjs --feedback en-01 en-03 en-06
 node --max-old-space-size=192 experiments/issue-178-source-probe.mjs --yin en-01 ru-01
@@ -33,6 +36,11 @@ The public benchmark ran at `5978d3f1` on Node 26.13.1. Both engines completed
 `en-01` under the cap with identical quality measurements of 5.3978 semitones,
 237.1 ms and 43.75% agreement. Peak RSS was 376 MB for JavaScript and 383 MB for
 scalar Rust WebAssembly. The memory cap applies to the V8 heap.
+
+On the same revision, JavaScript finished all 24 recordings under the cap
+in CI. It measured 4.7335 semitones mean pitch error, 305.2 ms mean syllable
+error, 42.11% pooled agreement and 482.5 MB peak RSS. This run was superseded
+after its JavaScript result and before its Rust result. [Run log](https://github.com/konard/voice-simulator/actions/runs/46096390478)
 
 | Probe                      | Result                                                                                                                                                                                                                                                            |
 | -------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -68,3 +76,18 @@ Using centered YIN with planned voicing reduced pitch error from 5.40 to
 2.04 semitones on `en-01` and from 3.96 to 2.53 semitones on `ru-01`.
 Agreement fell to 18.75% and 43.75%, respectively, and syllable drift rose on
 both recordings in the single-language diagnostic.
+
+The unchanged-source control compares the copy analysis to a separate
+low-tier reading of exactly the same 8 kHz input, using the language selected
+by the copy analysis. Agreement was 53.3% on `en-03` and 43.75% on `ru-01`, or
+48.4% pooled. Mean syllable start differences were 17.5 and 230 ms.
+Running the copy analysis at the low tier gave the same readings and copy
+metrics as the default analysis on these two 8 kHz recordings. At this rate,
+the word decoder uses the same trained model and feature extraction at both
+recognition tiers.
+
+Reanalyzing the input in the selected language with the batch recognizer
+changed the score, but worsened recognition of the rendered copies.
+Agreement fell to 11.1% on `en-03` and 20.0% on `ru-01`. Syllable drift was
+560 and 570 ms, respectively. The `ru-01` copy had no jointly voiced pitch
+frames on which to measure pitch error.

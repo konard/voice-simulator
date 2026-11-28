@@ -4,22 +4,37 @@ import { renderPlan } from '../src/acoustics/voice.js';
 import {
   compareRecordings,
   copyRecording,
+  copyVoice,
+  DEFAULT_HEAD,
   errorRate,
   getAudioTier,
+  loadVoice,
   recognize,
+  saveVoice,
 } from '../src/index.js';
 import { CODEBOOK_CHANNELS } from '../src/recognition/codebook.js';
 import { analyzeFrames } from '../src/recognition/frontend.js';
 import { invertArticulation } from '../src/recognition/inversion.js';
 import { applyPitch, matchLoudness } from '../src/session/copy-prosody.js';
-import { planRecording, scorePlan } from '../src/session/score.js';
+import { measureCopyMetrics } from '../src/session/copy.js';
+import {
+  planRecording,
+  renderScore,
+  scorePlan,
+  toScore,
+} from '../src/session/score.js';
 import { sampleTrack, warpPlan } from '../src/session/warp.js';
 import { loadGolden } from '../tests/helpers/golden.js';
 
 const options = { tier: 'telephone', engine: 'js' };
 const settings = { ...getAudioTier(options.tier), engine: 'js', seed: 1 };
 const { sampleRate } = settings;
-const ids = process.argv.length > 2 ? process.argv.slice(2) : ['en-01'];
+const single = process.argv.includes('--single');
+const low = single || process.argv.includes('--low');
+const ids = process.argv.slice(2).filter((arg) => !arg.startsWith('--'));
+if (!ids.length) {
+  ids.push('en-01');
+}
 const names = CODEBOOK_CHANNELS.map(({ name }) => name);
 const noise = ['aspiration', 'frication', 'sibilance'];
 
@@ -43,10 +58,60 @@ function measure(item, input, original, output, treatment) {
       replay: reread.text,
       cents: metrics.f0.rmseCents,
       mcd: metrics.mcd,
+      timingMs:
+        output === original.samples ? original.metrics.timingError : undefined,
       agreement:
         1 - errorRate(original.recognition.ipa, reread.ipa, 'phone').rate,
     })
   );
+}
+
+function lowLevelCopy(input) {
+  const { recognition: initial, voice: fitted } = copyVoice(input, sampleRate, {
+    engine: settings.engine,
+    level: 'low',
+  });
+  const voice = fitted ?? saveVoice(DEFAULT_HEAD);
+  const language = initial.languages[0]?.language;
+  const recognition =
+    single && language ? analyzeSingle(input, language, voice) : initial;
+  const { ipa, modes, segments, languages } = recognition;
+  const base = planRecording(ipa, languages[0]?.language, voice, modes);
+  const duration = input.length / sampleRate;
+  const plan = warpPlan(base, segments ?? [], { duration });
+  const voicing = applyPitch(plan, input, sampleRate, modes, true);
+  matchLoudness(plan, input, sampleRate, settings.seed, settings);
+  const score = {
+    ...toScore(plan, recognition, voice),
+    voicing,
+    duration,
+    planDuration: plan.duration,
+  };
+  const output = renderScore(score, options);
+  const metrics = measureCopyMetrics(
+    input,
+    sampleRate,
+    output,
+    score,
+    options,
+    {
+      warnings: plan.warnings,
+    }
+  );
+  return { ...output, score, recognition, metrics };
+}
+
+function analyzeSingle(input, language, voice) {
+  const { head, articulationOffsets } = loadVoice(voice);
+  return recognize(input, sampleRate, {
+    languages: [language],
+    voice: head,
+    articulationOffsets,
+    engine: settings.engine,
+    deterministic: true,
+    level: 'low',
+    segments: true,
+  });
 }
 
 function impose(plan, inverted, channels, weight) {
@@ -67,6 +132,14 @@ if (items.length !== ids.length) {
 }
 for (const item of items) {
   const input = resample(item.samples, item.sampleRate, sampleRate);
+  if (low) {
+    const copy = lowLevelCopy(input);
+    const treatment = single
+      ? 'single-language batch analysis'
+      : 'low-tier analysis';
+    measure(item, input, copy, copy.samples, treatment);
+    continue;
+  }
   const copy = copyRecording(input, sampleRate, options);
   measure(item, input, copy, copy.samples, 'copy');
   const render = (plan, treatment) => {
