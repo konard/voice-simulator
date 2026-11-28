@@ -330,6 +330,7 @@ export function createConfiguredRecognizer(
     onReading,
     onPitch,
   });
+  const gateWordOptions = acousticsOnly ? { framePitch: true } : undefined;
   function createDecoder(rate, options) {
     if (wordPhrases) {
       return createWordFrontend(rate, options, liveSyllables);
@@ -433,7 +434,7 @@ export function createConfiguredRecognizer(
             ? { beam: 58, maxActive: 640 }
             : { beam: 48, maxActive: 280 },
         }
-      : undefined;
+      : gateWordOptions;
     // A test can supply snapshot IPA while the decoder maintains live timing.
     // Committed phrases take the word decoder, like recognize(); previews
     // keep the incremental phone decoder, which is cheap per chunk.
@@ -485,7 +486,7 @@ export function createConfiguredRecognizer(
       readSettings,
       level,
       offset / sampleRate,
-      { ...options, useModelWords: true }
+      { ...options, useModelWords: true, framePitch: true }
     );
   }
 
@@ -754,7 +755,8 @@ export function createConfiguredRecognizer(
       sampleRate,
       { ...settings, hmmWordSpans: true },
       level,
-      offset / sampleRate
+      offset / sampleRate,
+      { framePitch: true }
     ).decoded.words;
   }
 

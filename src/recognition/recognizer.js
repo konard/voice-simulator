@@ -557,7 +557,12 @@ export function noisyFrames(energy, count, seconds) {
   if (!energy || count === 0 || seconds <= 1) {
     return false;
   }
-  const sorted = energy.slice(0, count).sort((a, b) => a - b);
+  const sorted = energy.slice(0, count);
+  if (Array.isArray(sorted)) {
+    sorted.sort((a, b) => a - b);
+  } else {
+    sorted.sort();
+  }
   const size = Math.max(1, Math.floor(count / 5));
   let loud = 0;
   let quiet = 0;

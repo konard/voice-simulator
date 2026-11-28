@@ -14,18 +14,31 @@ import { parseIpa } from '../ipa/parse.js';
 import { createUtteranceTimingPlanner } from '../articulation/plan.js';
 import { semitones } from './mode-rules.js';
 
+let quantileScratch = new Float64Array(64);
+
 export function quantile(values, fraction = 0.5) {
-  const sorted = [];
-  for (const value of values) {
+  if (values.length <= 1) {
+    return Number.isFinite(values[0]) ? values[0] + 0 : 0;
+  }
+  const sorted =
+    quantileScratch.length >= values.length
+      ? quantileScratch
+      : new Float64Array(values.length);
+  if (sorted.length <= 4096) {
+    quantileScratch = sorted;
+  }
+  let size = 0;
+  for (let i = 0; i < values.length; i++) {
+    const value = values[i];
     if (Number.isFinite(value)) {
-      sorted.push(value);
+      sorted[size++] = value;
     }
   }
-  sorted.sort((a, b) => a - b);
-  if (!sorted.length) {
+  if (size === 0) {
     return 0;
   }
-  const position = (sorted.length - 1) * fraction;
+  sorted.subarray(0, size).sort();
+  const position = (size - 1) * fraction;
   const low = Math.floor(position);
   return (
     sorted[low] + (sorted[Math.ceil(position)] - sorted[low]) * (position - low)
