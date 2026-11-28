@@ -9,6 +9,7 @@ import {
   HMM_LOW_MULTILINGUAL_SEARCH,
 } from './hmm-decode.js';
 import { hmmAudioToIpa } from './hmm-stage.js';
+import { withFrameStorage } from './frame-storage.js';
 import { createRecognitionEngine, getRecognitionEngine } from './engine.js';
 import { ipaToText } from './ipa-to-text.js';
 import { recognitionInput } from './input.js';
@@ -601,27 +602,11 @@ function checkNoise(decoded, duration) {
   }
 }
 
-let spareFrames = new Map();
-
 /** The batch result is complete before any of these columns are reused. */
 export function withBatchFrames(recognizeBatch) {
-  const columns = spareFrames ?? new Map();
-  spareFrames = undefined;
-  function frameStorage(key, length, Type) {
-    let column = columns.get(key);
-    if (!column || column.length < length) {
-      column = new Type(length);
-      if (column.byteLength <= 1024 * 1024) {
-        columns.set(key, column);
-      }
-    }
-    return column.subarray(0, length);
-  }
-  try {
-    return recognizeBatch({ framePitch: true, frameStorage });
-  } finally {
-    spareFrames = columns;
-  }
+  return withFrameStorage((frameStorage) =>
+    recognizeBatch({ framePitch: true, frameStorage })
+  );
 }
 
 function serial(samples, sampleRate, settings, level, unsplit) {

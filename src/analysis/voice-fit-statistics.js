@@ -1,6 +1,7 @@
 /** Fixed-memory sufficient statistics for voice fitting. Unlicense, issue 63. */
 import { measure } from '../recognition/profile.js';
 import { analyzeFrames } from '../recognition/frontend.js';
+import { withFrameStorage } from '../recognition/frame-storage.js';
 import { trackPitch, jitterToHead } from '../recognition/pitch.js';
 import { trackBatchFormants } from '../recognition/formants.js';
 import { inverseFilter } from '../recognition/inverse-filter.js';
@@ -228,14 +229,19 @@ function collectDiagnostics(state, legacy) {
   }
 }
 
-function analyzeVoiceInput(samples, sampleRate, options) {
+function analyzeVoiceInput(samples, sampleRate, options, storage) {
   const { profile, kernels } = options;
   const frames = measure(profile, 'Front end', () =>
-    analyzeFrames(samples, sampleRate, {
-      order: options.order,
-      rate: options.analysisRate,
-      hop: options.analysisHop ?? 0.005,
-    })
+    analyzeFrames(
+      samples,
+      sampleRate,
+      {
+        order: options.order,
+        rate: options.analysisRate,
+        hop: options.analysisHop ?? 0.005,
+      },
+      storage
+    )
   );
   const pitch = measure(profile, 'Pitch', () =>
     trackPitch(frames, { kernels })
@@ -263,6 +269,26 @@ export function accumulate(
   diagnostics = true,
   captureDiagnostics = null
 ) {
+  return withFrameStorage((storage) =>
+    accumulateWithStorage(
+      state,
+      samples,
+      sampleRate,
+      options,
+      { diagnostics, captureDiagnostics },
+      storage
+    )
+  );
+}
+
+function accumulateWithStorage(
+  state,
+  samples,
+  sampleRate,
+  options,
+  { diagnostics, captureDiagnostics },
+  storage
+) {
   const maxSeconds = options.maxDuration ?? 30;
   const input = Float32Array.from(
     samples.length > maxSeconds * sampleRate
@@ -271,7 +297,7 @@ export function accumulate(
   );
   const { profile } = options;
   const { frames, pitch } =
-    options.frontEnd ?? analyzeVoiceInput(input, sampleRate, options);
+    options.frontEnd ?? analyzeVoiceInput(input, sampleRate, options, storage);
   // Use the tracker's initial tract prior for every stretch. Re-estimating
   // that prior from a whole utterance makes the pooled dF depend on splits.
   const formants = measure(profile, 'Formants', () =>
