@@ -19,7 +19,7 @@ import assert from 'node:assert/strict';
 import { execFileSync, spawnSync } from 'node:child_process';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { cpus } from 'node:os';
-import { join } from 'node:path';
+import { join, relative } from 'node:path';
 import { fileURLToPath, URL } from 'node:url';
 import { parseArgs } from 'node:util';
 import { strings } from '../examples/universal-app/src/i18n.js';
@@ -28,6 +28,7 @@ import { TIER_KEY } from '../examples/universal-app/src/engine/benchmark-cache.j
 import { errorRate } from '../src/index.js';
 import { playwrightChromium } from './check-app-copy.mjs';
 import { createStaticServer } from './example-app-static.mjs';
+import { passes } from './lowest-report.mjs';
 
 const ROOT = fileURLToPath(new URL('../', import.meta.url));
 export const THROTTLING = Number(process.env.LOWEST_THROTTLING) || 6;
@@ -365,7 +366,7 @@ export async function checkAppLowest({ skipBuild = false } = {}) {
 /** The failures of a result against the issue 81 limits. */
 export function appFailures({ metrics, audioSeconds }) {
   const failures = [];
-  if (!(metrics.workerRtf < 1)) {
+  if (!passes('workerRtf', metrics.workerRtf, 1)) {
     failures.push(`synthesis worker RTF ${metrics.workerRtf} (limit: < 1)`);
   }
   if (!(metrics.firstSound <= 1)) {
@@ -409,7 +410,7 @@ function rowMetadata(core) {
       cwd: ROOT,
       encoding: 'utf8',
     }).trim(),
-    command: `UV_THREADPOOL_SIZE=1 taskset -c ${core} node ${process.execArgv.join(' ')} ${process.argv.slice(1).join(' ')}`,
+    command: `UV_THREADPOOL_SIZE=1 taskset -c ${core} node ${process.execArgv.join(' ')} ${relative(ROOT, process.argv[1])} ${process.argv.slice(2).join(' ')}`,
     cpu: cpus()[Number(core)]?.model ?? cpus()[0]?.model ?? 'unknown',
     node: process.version,
     limits: { app },
@@ -440,7 +441,7 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
       const report = {
         ...metadata,
         measured: new Date().toISOString(),
-        runs: { app: { js: result } },
+        runs: { app: { js: { ...result, capped: {} } } },
       };
       writeFileSync(
         join(values.out, 'lowest-settings.json'),
