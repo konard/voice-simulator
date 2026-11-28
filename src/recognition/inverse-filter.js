@@ -12,6 +12,7 @@ import {
   correlationPlan,
   harmonics,
   cppPlan,
+  cepstralPeak,
   hnr,
   filter,
   integrate,
@@ -138,36 +139,34 @@ function localPitch(frames, o) {
   });
 }
 let inverseScratch;
+// Cache a working buffer up to 8 MiB, enough for 32 s of two-column
+// source recovery at 16 kHz. Larger recordings use per-call storage.
+const RECOVERY_CELLS = 1024 * 1024;
 
-function recover(frames, f0, o, derivativeOnly) {
-  const n = frames.sampleCount;
-  const width = derivativeOnly ? 2 : 3;
-  const cacheLimit = 8 * 16000;
-  if (n > cacheLimit) {
-    return recoverWith(
-      frames,
-      f0,
-      o,
-      new Float64Array(n * width),
-      derivativeOnly
-    );
+function takeRecoveryScratch(cells) {
+  if (cells > RECOVERY_CELLS) {
+    return new Float64Array(cells);
   }
   const scratch =
-    inverseScratch?.length >= n * width
+    inverseScratch?.length >= cells
       ? inverseScratch
-      : new Float64Array(width * Math.min(cacheLimit, Math.max(1024, n * 2)));
+      : new Float64Array(Math.min(RECOVERY_CELLS, Math.max(2048, cells * 2)));
   // A trace can call inverseFilter again while this workspace is in use.
   inverseScratch = undefined;
-  try {
-    return recoverWith(frames, f0, o, scratch, derivativeOnly);
-  } finally {
-    if (!inverseScratch || inverseScratch.length < scratch.length) {
-      inverseScratch = scratch;
-    }
+  return scratch;
+}
+
+function releaseRecoveryScratch(scratch) {
+  if (
+    scratch &&
+    scratch.length <= RECOVERY_CELLS &&
+    (!inverseScratch || inverseScratch.length < scratch.length)
+  ) {
+    inverseScratch = scratch;
   }
 }
 
-function recoverWith(frames, f0, o, scratch, derivativeOnly) {
+function recover(frames, f0, o, scratch, derivativeOnly) {
   const n = frames.sampleCount;
   const x = highPass(frames.samples, frames.rate, scratch.subarray(0, n));
   const d = scratch.subarray(n, 2 * n).fill(0);
@@ -183,7 +182,7 @@ function recoverWith(frames, f0, o, scratch, derivativeOnly) {
   const normalize = normalizer(frames, f0, weight, d, g);
   const windows = new Map();
   const history = Math.round(0.05 * frames.rate);
-  const iaif = iaifPlan(o.tractOrder, o.glottisOrder, o.leak);
+  const iaif = iaifPlan(o.tractOrder, o.glottisOrder, o.leak, !derivativeOnly);
   let buffer = new Float64Array(0);
   for (let time = 0; time < x.length / frames.rate; time += o.step) {
     const row = Math.min(f0.length - 1, Math.round(time / frames.hop));
@@ -218,8 +217,15 @@ function recoverWith(frames, f0, o, scratch, derivativeOnly) {
   }
   normalize(n);
   refineStationary(frames, f0, o, x, d, g);
+  if (derivativeOnly) {
+    // x is no longer needed. Its prefix can hold the rounded derivative
+    // until the caller has measured the requested spectral frames.
+    const flowDerivative = new Float32Array(scratch.buffer, 0, n);
+    flowDerivative.set(d);
+    return { flowDerivative };
+  }
   return {
-    ...(g && { flow: Float32Array.from(g) }),
+    flow: Float32Array.from(g),
     flowDerivative: Float32Array.from(d),
   };
 }
@@ -505,16 +511,39 @@ export function inverseModeMeasures(frames, options, rows) {
 }
 
 function inverseFilterJs(frames, o, modesOnly = false, rows) {
-  const { rate, hop, count, startTime } = frames;
   const f0 = localPitch(frames, o);
   const hasLowBand = lowBand(frames, f0);
-  const recoverSource = !modesOnly || hasLowBand;
+  const recoverSource =
+    !modesOnly ||
+    (hasLowBand && (rows ? rows.some((t) => f0[t]) : f0.some(Boolean)));
+  const scratch = recoverSource
+    ? takeRecoveryScratch(frames.sampleCount * (modesOnly ? 2 : 3))
+    : null;
+  try {
+    return inverseMeasures(frames, o, {
+      f0,
+      hasLowBand,
+      modesOnly,
+      rows,
+      scratch,
+    });
+  } finally {
+    releaseRecoveryScratch(scratch);
+  }
+}
+
+function inverseMeasures(
+  frames,
+  o,
+  { f0, hasLowBand, modesOnly, rows, scratch }
+) {
+  const { rate, hop, count, startTime } = frames;
   const result = {
     hop,
     startTime,
     count,
     rate,
-    ...(recoverSource && recover(frames, f0, o, modesOnly)),
+    ...(scratch && recover(frames, f0, o, scratch, modesOnly)),
     f0,
     reliable: new Uint8Array(count),
     lowBand: hasLowBand,
@@ -531,10 +560,10 @@ function inverseFilterJs(frames, o, modesOnly = false, rows) {
   const cpp = cppPlan(rate, o.minF0, o.maxF0);
   const windows = new Map();
   // A supplied pitch can be as low as 20 Hz.
-  const scratch = new Float64Array(Math.ceil((6 * rate) / 20));
+  const signal = new Float64Array(Math.ceil((6 * rate) / 20));
   const sources = new Float64Array(Math.ceil((2 * rate) / 20));
   const spectralPlan = {
-    scratch,
+    scratch: signal,
     sources,
     windows,
     frames,
@@ -552,8 +581,8 @@ function inverseFilterJs(frames, o, modesOnly = false, rows) {
     if (d) {
       measureSourceFrame(result, t, centre, period, spectralPlan);
     }
-    result.hnr[t] = hnr(frames.samples, centre, period, scratch);
-    result.cpp[t] = cpp(frames.samples, centre);
+    result.hnr[t] = hnr(frames.samples, centre, period, signal);
+    result.cpp[t] = cepstralPeak(cpp, frames.samples, centre);
   }
   if (modesOnly) {
     const { h1h2Source, hnr, cpp } = result;

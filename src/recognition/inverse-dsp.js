@@ -69,14 +69,17 @@ function predictor(x, window, a, k, weighted) {
     weighted[n - first] = x[n] * window[n];
   }
   lpcAutocorrelation(weighted.subarray(0, x.length - first), a.length, a, k);
-  if (!a.every(Number.isFinite)) {
-    a.fill(0);
+  for (let i = 0; i < a.length; i++) {
+    if (!Number.isFinite(a[i])) {
+      a.fill(0);
+      break;
+    }
   }
   return a;
 }
 
 /** Alku (1992), two passes: source tilt, tract, source, tract. */
-export function iaifPlan(tractOrder, glottisOrder, leak) {
+export function iaifPlan(tractOrder, glottisOrder, leak, flowOutput = true) {
   const tilt = new Float64Array(1);
   const tract = new Float64Array(tractOrder);
   const glottis = new Float64Array(glottisOrder);
@@ -99,7 +102,9 @@ export function iaifPlan(tractOrder, glottisOrder, leak) {
     filter(s, predictor(flow, w, glottis, k, weighted), derivative);
     integrate(derivative, leak, flow);
     filter(s, predictor(flow, w, tract, k, weighted), derivative);
-    integrate(derivative, leak, flow);
+    if (flowOutput) {
+      integrate(derivative, leak, flow);
+    }
     return { d: derivative, g: flow };
   };
 }
@@ -185,39 +190,62 @@ export function cppPlan(rate, minF0, maxF0) {
     sx += q;
     sxx += q * q;
   }
-  const denominator = count * sxx - sx * sx;
-  const half = Math.floor(length / 2);
-  return (x, centre) => {
-    const start = centre - half;
-    re.fill(0);
-    im.fill(0);
-    const firstSample = Math.max(0, -start);
-    const endSample = Math.min(length, x.length - start);
-    for (let n = firstSample; n < endSample; n++) {
-      re[n] = x[start + n] * window[n];
-    }
-    fft.forward(re, im);
-    for (let k = 0; k < size; k++) {
-      re[k] = 10 * Math.log10(re[k] * re[k] + im[k] * im[k] + 1e-12);
-      im[k] = 0;
-    }
-    fft.inverse(re, im);
-    let sy = 0;
-    let sxy = 0;
-    for (let q = first; q <= last; q++) {
-      sy += re[q];
-      sxy += q * re[q];
-    }
-    const slope = (count * sxy - sx * sy) / denominator;
-    const intercept = (sy - slope * sx) / count;
-    let peak = firstPeak;
-    for (let q = peak + 1; q <= last; q++) {
-      if (re[q] > re[peak]) {
-        peak = q;
-      }
-    }
-    return re[peak] - intercept - slope * peak;
+  return {
+    fft,
+    window,
+    re,
+    im,
+    first,
+    last,
+    firstPeak,
+    count,
+    sx,
+    denominator: count * sxx - sx * sx,
   };
+}
+
+export function cepstralPeak(plan, x, centre) {
+  const {
+    fft,
+    window,
+    re,
+    im,
+    first,
+    last,
+    firstPeak,
+    count,
+    sx,
+    denominator,
+  } = plan;
+  const start = centre - Math.floor(window.length / 2);
+  re.fill(0);
+  im.fill(0);
+  const firstSample = Math.max(0, -start);
+  const endSample = Math.min(window.length, x.length - start);
+  for (let n = firstSample; n < endSample; n++) {
+    re[n] = x[start + n] * window[n];
+  }
+  fft.forward(re, im);
+  for (let k = 0; k < re.length; k++) {
+    re[k] = 10 * Math.log10(re[k] * re[k] + im[k] * im[k] + 1e-12);
+    im[k] = 0;
+  }
+  fft.inverse(re, im);
+  let sy = 0;
+  let sxy = 0;
+  for (let q = first; q <= last; q++) {
+    sy += re[q];
+    sxy += q * re[q];
+  }
+  const slope = (count * sxy - sx * sy) / denominator;
+  const intercept = (sy - slope * sx) / count;
+  let peak = firstPeak;
+  for (let q = peak + 1; q <= last; q++) {
+    if (re[q] > re[peak]) {
+      peak = q;
+    }
+  }
+  return re[peak] - intercept - slope * peak;
 }
 
 const HNR_PERIODS = 6;
