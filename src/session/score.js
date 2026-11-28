@@ -209,7 +209,11 @@ export function renderScore(score, options = {}) {
   const settings = scoreRenderSettings(score.render, options);
   const { sampleRate } = settings;
   const draft = renderPlan(plan, settings);
-  const samples = new Float32Array(Math.round(score.duration * sampleRate));
-  samples.set(draft.subarray(0, samples.length));
+  const length = Math.round(score.duration * sampleRate);
+  let samples = draft;
+  if (draft.length !== length) {
+    samples = new Float32Array(length);
+    samples.set(draft.subarray(0, length));
+  }
   return { samples, sampleRate, duration: samples.length / sampleRate };
 }
