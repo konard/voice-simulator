@@ -2,7 +2,12 @@
 import { getLexicon } from './lexicon.js';
 import { checkLanguage } from './languages.js';
 import { wordTransition } from './data/index.js';
-import { candidatesAt, exactCandidates, distanceCache } from './candidates.js';
+import {
+  candidatesAt,
+  exactCandidates,
+  hasExactSuffix,
+  distanceCache,
+} from './candidates.js';
 import { recognitionInput } from './input.js';
 import { withWordSearch } from './word-search.js';
 import { spellSounds } from './phones-to-letters.js';
@@ -143,32 +148,30 @@ function searchPaths(input, lexicon, options, exact, wordSearches) {
   best[0] = [{ last: null, text: '', cost: 0 }];
   const suffixes = new Map();
   function knownSuffix(end, lexicon, language) {
-    const key = `${end}:${language}`;
-    if (!suffixes.has(key)) {
+    if (!suffixes.has(language)) {
       const reachable = new Set([end]);
       for (let start = end - 1; start >= ends[boundaryIndex - 1]; start--) {
-        if (
-          exactCandidates(tokens, start, end, lexicon, language).some((c) =>
-            reachable.has(c.to)
-          )
-        ) {
+        if (hasExactSuffix(tokens, start, end, lexicon, language, reachable)) {
           reachable.add(start);
         }
       }
-      suffixes.set(key, reachable);
+      suffixes.set(language, reachable);
     }
-    return suffixes.get(key);
+    return suffixes.get(language);
   }
   let boundaryIndex = 1;
   for (let from = 0; from < tokens.length; from++) {
     while (ends[boundaryIndex] <= from) {
       boundaryIndex++;
+      suffixes.clear();
     }
     const end = ends[boundaryIndex];
     if (!best[from].length || (given && !boundaries.has(from))) {
       continue;
     }
-    best[from] = prune(best[from], beam);
+    const previous = prune(best[from], beam);
+    // Completed positions are only needed through surviving backpointers.
+    best[from] = null;
     const candidates = decoderCandidates(from, end, {
       input,
       lexicons,
@@ -186,7 +189,7 @@ function searchPaths(input, lexicon, options, exact, wordSearches) {
       );
       const paths = best[candidate.to];
       const ceiling = cutoff[candidate.to];
-      for (const partial of best[from]) {
+      for (const partial of previous) {
         // Predecessors are sorted, and the word cost is at least 0.5
         // because the discounted probability never exceeds one.
         if (partial.cost + candidate.cost + 0.5 >= ceiling) {

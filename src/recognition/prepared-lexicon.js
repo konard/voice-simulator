@@ -55,37 +55,50 @@ export function serializeLexicon(lexicon, language) {
   ]);
 }
 
+class TrieNode {
+  constructor(table, indices, id) {
+    this.table = table;
+    this.indices = indices;
+    this.id = id;
+  }
+
+  get token() {
+    const { table, id } = this;
+    return id === 0 ? undefined : table.tokens[table.feature[id]];
+  }
+
+  get entries() {
+    return this.table.entriesAt(this.id);
+  }
+
+  get children() {
+    return this;
+  }
+
+  get(key) {
+    const { table, indices, id } = this;
+    const feature = indices.get(key);
+    for (let i = table.offsets[id]; i < table.offsets[id + 1]; i++) {
+      const child = i + 1;
+      if (table.feature[child] === feature) {
+        return new TrieNode(table, indices, child);
+      }
+    }
+  }
+
+  *values() {
+    const { table, indices, id } = this;
+    for (let i = table.offsets[id]; i < table.offsets[id + 1]; i++) {
+      yield new TrieNode(table, indices, i + 1);
+    }
+  }
+}
+
 function trieRoot(table, language) {
   const indices = new Map(
     table.tokens.map((token, i) => [soundKey(token, language), i])
   );
-  function asNode(id) {
-    const start = table.offsets[id];
-    const end = table.offsets[id + 1];
-    return {
-      token: id === 0 ? undefined : table.tokens[table.feature[id]],
-      get entries() {
-        return table.entriesAt(id);
-      },
-      children: {
-        get(key) {
-          const feature = indices.get(key);
-          for (let i = start; i < end; i++) {
-            const child = i + 1;
-            if (table.feature[child] === feature) {
-              return asNode(child);
-            }
-          }
-        },
-        *values() {
-          for (let i = start; i < end; i++) {
-            yield asNode(i + 1);
-          }
-        },
-      },
-    };
-  }
-  return asNode(0);
+  return new TrieNode(table, indices, 0);
 }
 
 function asIndexColumn(values) {

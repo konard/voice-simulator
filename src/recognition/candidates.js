@@ -35,7 +35,10 @@ function allowed(entry, tokens, to, end, language) {
     return true;
   }
   const tone = entry.tokens.at(-1)?.tone?.join('');
-  const next = tokens.slice(to, end).map(heardTone).find(Boolean);
+  let next;
+  for (let i = to; i < end && !next; i++) {
+    next = heardTone(tokens[i]);
+  }
   if (entry.word === '一' && tone === '35') {
     return next === '51';
   }
@@ -48,24 +51,20 @@ function allowed(entry, tokens, to, end, language) {
   return true;
 }
 
-function exactKeys(tokens, to, end, language) {
+function exactToneKeys(tokens, to, end) {
   const token = tokens[to];
-  const keys = [soundKey(token, language)];
-  if (language !== 'zh') {
-    return keys;
-  }
   if (token.tones) {
     return MANDARIN_TONES.map((tone) => `${token.symbol}:${tone}`);
   }
-  const nextTone = tokens
-    .slice(to + 1, end)
-    .find((t) => t.tone?.length)
-    ?.tone?.join('');
-  if (token.tone?.join('') === '35' && ['21', '214'].includes(nextTone)) {
-    keys.push(
-      soundKey({ ...token, tone: [2, 1, 4] }, language),
-      soundKey({ ...token, tone: [2, 1] }, language)
-    );
+  const keys = [soundKey(token, 'zh')];
+  if (token.tone?.join('') === '35') {
+    let nextTone;
+    for (let i = to + 1; i < end && !nextTone; i++) {
+      nextTone = tokens[i].tone?.length ? tokens[i].tone.join('') : undefined;
+    }
+    if (nextTone === '21' || nextTone === '214') {
+      keys.push(`${token.symbol}:214`, `${token.symbol}:21`);
+    }
   }
   return keys;
 }
@@ -125,42 +124,34 @@ function stressCost(entry, heard, evidence, language) {
   return cost;
 }
 
-/** Exact paths are retained separately so homophones cannot consume the beam. */
-export function exactCandidates(tokens, from, end, lexicon, language) {
-  const result = [];
-  let states = [{ node: lexicon.root, sandhi: false, cost: 0 }];
+function voicingCost(token, target) {
+  return Number.isFinite(token.voicing)
+    ? 0.25 * voicingDistance(token, target)
+    : 0;
+}
+
+function walkTonal(tokens, from, end, root, scored, visit) {
+  let states = [{ node: root, sandhi: false, cost: 0 }];
   for (let to = from; to < end; to++) {
-    const keys = exactKeys(tokens, to, end, language);
+    const token = tokens[to];
+    const keys = exactToneKeys(tokens, to, end);
     const next = [];
-    let evidence;
     for (const state of states) {
       for (const key of keys) {
         const node = state.node.children.get(key);
         if (!node) {
           continue;
         }
-        const token = tokens[to];
-        const sandhi = state.sandhi || (!token.tones && key !== keys[0]);
-        const cost =
-          state.cost +
-          (acousticTone(token, node.token, language) ?? 0) +
-          (Number.isFinite(token.voicing)
-            ? 0.25 * voicingDistance(token, node.token)
-            : 0);
+        const sandhi =
+          scored && (state.sandhi || (!token.tones && key !== keys[0]));
+        const cost = scored
+          ? state.cost +
+            (acousticTone(token, node.token, 'zh') ?? 0) +
+            voicingCost(token, node.token)
+          : 0;
         next.push({ node, sandhi, cost });
-        for (const entry of node.entries) {
-          if (!allowed(entry, tokens, to + 1, end, language)) {
-            continue;
-          }
-          evidence ??= stressEvidence(tokens.slice(from, to + 1), language);
-          result.push({
-            from,
-            to: to + 1,
-            language,
-            word: entry.word,
-            ipa: sandhi ? formatIpa(tokens.slice(from, to + 1)) : entry.ipa,
-            cost: cost + acousticStress(entry, evidence, language),
-          });
+        if (visit(node, to + 1, sandhi, cost)) {
+          return true;
         }
       }
     }
@@ -169,6 +160,81 @@ export function exactCandidates(tokens, from, end, lexicon, language) {
       break;
     }
   }
+  return false;
+}
+
+function walkExact(tokens, from, end, root, language, { scored, visit }) {
+  if (language === 'zh') {
+    return walkTonal(tokens, from, end, root, scored, visit);
+  }
+  let node = root;
+  let cost = 0;
+  for (let i = from; i < end; i++) {
+    const token = tokens[i];
+    node = node.children.get(soundKey(token, language));
+    if (!node) {
+      break;
+    }
+    if (scored) {
+      cost += voicingCost(token, node.token);
+    }
+    if (visit(node, i + 1, false, cost)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/** Whether an exact word can end at a position with a known suffix. */
+export function hasExactSuffix(
+  tokens,
+  from,
+  end,
+  lexicon,
+  language,
+  reachable
+) {
+  return walkExact(tokens, from, end, lexicon.root, language, {
+    scored: false,
+    visit: (node, to) =>
+      reachable.has(to) &&
+      node.entries.some((entry) => allowed(entry, tokens, to, end, language)),
+  });
+}
+
+/** Exact paths are retained separately so homophones cannot consume the beam. */
+export function exactCandidates(tokens, from, end, lexicon, language) {
+  const result = [];
+  let previousEnd = -1;
+  let evidence;
+  let sandhiIpa;
+  walkExact(tokens, from, end, lexicon.root, language, {
+    scored: true,
+    visit(node, to, sandhi, cost) {
+      if (to !== previousEnd) {
+        previousEnd = to;
+        evidence = undefined;
+        sandhiIpa = undefined;
+      }
+      for (const entry of node.entries) {
+        if (!allowed(entry, tokens, to, end, language)) {
+          continue;
+        }
+        evidence ??= stressEvidence(tokens.slice(from, to), language);
+        result.push({
+          from,
+          to,
+          language,
+          word: entry.word,
+          ipa: sandhi
+            ? (sandhiIpa ??= formatIpa(tokens.slice(from, to)))
+            : entry.ipa,
+          cost: cost + acousticStress(entry, evidence, language),
+        });
+      }
+      return false;
+    },
+  });
   return result;
 }
 
