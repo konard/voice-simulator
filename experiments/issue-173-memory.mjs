@@ -202,11 +202,15 @@ report('done');
 if (sampling) {
   const { profile } = await sampling.post('HeapProfiler.stopSampling');
   const totals = new Map();
-  function sum(node) {
+  const includeCallers = process.env.VOICE_MEMORY_CALLERS === '1';
+  function sum(node, caller) {
     const { functionName, url, lineNumber } = node.callFrame;
     const location = `${functionName || '(anonymous)'} ${url}:${lineNumber + 1}`;
-    totals.set(location, (totals.get(location) ?? 0) + node.selfSize);
-    node.children.forEach(sum);
+    const key = includeCallers && caller ? `${location} ← ${caller}` : location;
+    totals.set(key, (totals.get(key) ?? 0) + node.selfSize);
+    for (const child of node.children) {
+      sum(child, location);
+    }
   }
   sum(profile.head);
   for (const [location, size] of [...totals]
