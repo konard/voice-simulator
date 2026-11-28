@@ -18,6 +18,7 @@ import {
   synthesize,
 } from '../src/index.js';
 import { resampleWithStorage } from '../src/audio/resample.js';
+import { sampleStorage } from '../src/audio/sample-storage.js';
 import { createEngine } from '../src/engine/index.js';
 import { createRecognitionEngine } from '../src/recognition/engine.js';
 import { goldenRecordings } from '../tests/helpers/golden.js';
@@ -212,24 +213,6 @@ function synthesisRow({ engine, limit, baseline, profile }) {
       recognitionRtf: round(low.recognitionSeconds / low.audioSeconds),
       utterances: cases.length,
     },
-  };
-}
-
-// The offline rows consume one waveform at a time per processing stage.
-const MAX_RETAINED_SAMPLES = 1024 * 1024;
-
-function sampleStorage() {
-  let samples = new Float32Array(0);
-  return (length) => {
-    if (length > MAX_RETAINED_SAMPLES) {
-      return new Float32Array(length);
-    }
-    if (length > samples.length) {
-      samples = new Float32Array(
-        Math.min(MAX_RETAINED_SAMPLES, Math.max(length, 2 * samples.length))
-      );
-    }
-    return samples.subarray(0, length);
   };
 }
 

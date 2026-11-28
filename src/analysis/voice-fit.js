@@ -4,8 +4,9 @@ import {
   HEAD_PRESETS,
   presetHeadConfig,
 } from '../head-config.js';
-import { synthesize } from '../synthesize.js';
-import { resample } from '../audio/resample.js';
+import { synthesizeWithStorage } from '../synthesize.js';
+import { resample, resampleWithStorage } from '../audio/resample.js';
+import { sampleStorage } from '../audio/sample-storage.js';
 import { sliceVoiceSamples } from './voice-features.js';
 import {
   featureVector,
@@ -114,6 +115,8 @@ function createEvaluator(state, samples, sampleRate, o, theta0, context) {
   const target = featureVector(state);
   const rate = Math.min(16000, sampleRate);
   const analysisOptions = { ...o, retainNucleiCarry: false };
+  const renderStorage = sampleStorage();
+  const conversionStorage = sampleStorage();
   let mcdMetric = null;
   if (o.transcript) {
     const limit = Math.floor((o.maxDuration ?? 30) * sampleRate);
@@ -135,22 +138,31 @@ function createEvaluator(state, samples, sampleRate, o, theta0, context) {
     ) {
       return context.best;
     }
-    const rendered = synthesize(o.transcript || MATCH_TEXT, {
-      head: candidate,
-      seed: o.seed,
-      ...(o.telephone
-        ? { tier: 'telephone' }
-        : { sampleRate: 16000, solver: 'waveguide' }),
-      lang: o.transcript ? (o.language ?? o.lang) : 'en',
-      ipa: o.transcript ? o.ipa : false,
-      engine: o.engine,
-      source: o.source,
-      articulationOffsets: o.articulationOffsets,
-    });
+    const rendered = synthesizeWithStorage(
+      o.transcript || MATCH_TEXT,
+      {
+        head: candidate,
+        seed: o.seed,
+        ...(o.telephone
+          ? { tier: 'telephone' }
+          : { sampleRate: 16000, solver: 'waveguide' }),
+        lang: o.transcript ? (o.language ?? o.lang) : 'en',
+        ipa: o.transcript ? o.ipa : false,
+        engine: o.engine,
+        source: o.source,
+        articulationOffsets: o.articulationOffsets,
+      },
+      renderStorage
+    );
     const audio =
       rate === rendered.sampleRate
         ? rendered.samples
-        : resample(rendered.samples, rendered.sampleRate, rate);
+        : resampleWithStorage(
+            rendered.samples,
+            rendered.sampleRate,
+            rate,
+            conversionStorage
+          );
     // The objective uses inverse-filter source measures. Legacy HNR/H1-H2
     // diagnostics are needed only for the returned render, or verbose tracing.
     let completeDiagnostics;
