@@ -64,25 +64,33 @@ export function trimSilence(samples, sampleRate, options = {}) {
 
 function trimAudio(samples, sampleRate, options, allocate) {
   const { length, hop } = frameSettings(sampleRate, options);
-  const energies = [];
+  const energies = new Float64Array(Math.ceil(samples.length / hop));
+  let count = 0;
+  let loudest = 0;
   for (let start = 0; start < samples.length; start += hop) {
     let sum = 0;
     const end = Math.min(samples.length, start + length);
     for (let index = start; index < end; index++) {
       sum += samples[index] * samples[index];
     }
-    energies.push(sum);
+    energies[count++] = sum;
+    loudest = Math.max(loudest, sum);
     if (end === samples.length) {
       break;
     }
   }
-  const loudest = energies.reduce((max, energy) => Math.max(max, energy), 0);
   if (!(loudest > 0)) {
     return Float64Array.from(samples);
   }
   const threshold = loudest * 10 ** (-SILENCE_DB / 10);
-  const first = energies.findIndex((energy) => energy >= threshold);
-  const last = energies.findLastIndex((energy) => energy >= threshold);
+  let first = 0;
+  let last = count - 1;
+  while (energies[first] < threshold) {
+    first++;
+  }
+  while (energies[last] < threshold) {
+    last--;
+  }
   const from = first * hop;
   const to = Math.min(samples.length, last * hop + length);
   const trimmed = allocate?.(to - from) ?? new Float64Array(to - from);
@@ -105,14 +113,16 @@ function prepare(recording, rate, options, allocate) {
  * Test-track value paired with each reference frame along a path (the first
  * pair of a reference frame wins).
  */
-function warpTrack(track, path, length, empty) {
-  const warped = new Array(length).fill(undefined);
+function warpTrack(track, path, warped, empty) {
+  let previous = -1;
   for (const [i, j] of path) {
-    if (warped[i] === undefined) {
+    // DTW visits reference frames in order.
+    if (i !== previous) {
       warped[i] = track[j] ?? empty;
+      previous = i;
     }
   }
-  return warped.map((value) => value ?? empty);
+  return warped;
 }
 
 function timingErrors(path, hop, ratio) {
@@ -199,7 +209,10 @@ function compareWithStorage(reference, test, options, storage) {
 
   const pitchR = pitchTrack(ref, rate, { hop });
   const pitchT = pitchTrack(tst, rate, { hop });
-  const f0 = f0Errors(pitchR.subarray(0, n), warpTrack(pitchT, path, n, 0));
+  const f0 = f0Errors(
+    pitchR.subarray(0, n),
+    warpTrack(pitchT, path, new Float64Array(n), 0)
+  );
 
   let formants = null;
   if (options.formants !== false) {
@@ -207,7 +220,7 @@ function compareWithStorage(reference, test, options, storage) {
     const formantsT = formantTrack(tst, rate, { hop, pitch: pitchT });
     formants = formantErrors(
       formantsR.slice(0, n),
-      warpTrack(formantsT, path, n, null)
+      warpTrack(formantsT, path, new Array(n).fill(null), null)
     );
   }
 
