@@ -56,6 +56,7 @@ export function pitchTrack(samples, sampleRate, options = {}) {
   const quiet = QUIET_SHARE * percentile(levels, 0.95);
   const track = new Float64Array(count);
   const yin = createYinWorkspace(rate);
+  const pitch = { f0: 0, aperiodicity: 0 };
   for (let frame = 0; frame < count; frame++) {
     if (levels[frame] > 0 && levels[frame] >= quiet) {
       const start = frame * hop;
@@ -65,7 +66,8 @@ export function pitchTrack(samples, sampleRate, options = {}) {
         complete ? start : start - tailStart,
         length,
         rate,
-        yin
+        yin,
+        pitch
       );
       track[frame] = aperiodicity < VOICED_APERIODICITY ? f0 : 0;
     }

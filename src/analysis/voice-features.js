@@ -144,9 +144,18 @@ function yinLag(signal, start, length, minLag, maxLag, normalized) {
   normalized[0] = 1;
   let running = 0;
   let below = false;
+  const end = start + length;
+  const dense =
+    signal instanceof Float32Array || signal instanceof Float64Array;
   for (let lag = 1; lag <= maxLag + 1; lag++) {
     let sum = 0;
-    for (let index = start; index < start + length; index++) {
+    const paired = dense ? Math.min(end, signal.length - lag) : start;
+    let index = start;
+    for (; index < paired; index++) {
+      const delta = signal[index] - signal[index + lag];
+      sum += delta * delta;
+    }
+    for (; index < end; index++) {
       const delta = signal[index] - (signal[index + lag] ?? 0);
       sum += delta * delta;
     }
