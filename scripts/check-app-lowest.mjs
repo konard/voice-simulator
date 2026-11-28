@@ -213,11 +213,16 @@ async function speakOnce(page, form, text) {
   });
   await page.locator('#speech-text').fill(text);
   await form.getByRole('button', { name: t.speak, exact: true }).click();
-  // Speaking ends when the Speak button is back.
-  await form.getByRole('button', { name: t.stop, exact: true }).waitFor({
-    state: 'visible',
-    timeout: 60_000,
-  });
+  // Short utterances can finish before Playwright sees the Stop button.
+  await page.waitForFunction(
+    () =>
+      globalThis.lowestLog.some(
+        ({ worker, type }) =>
+          /synth-worker/u.test(worker ?? '') && type === 'end'
+      ),
+    undefined,
+    { timeout: 600_000 }
+  );
   await form
     .getByRole('button', { name: t.speak, exact: true })
     .waitFor({ state: 'visible', timeout: 600_000 });
