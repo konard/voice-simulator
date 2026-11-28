@@ -140,6 +140,19 @@ function checkSentences(language, sentences) {
 }
 
 describe('prosody recognition with timeline phones', () => {
+  it('does not request fine frames when pitch and empty whisper spans are supplied', () => {
+    const options = {
+      pitch: { f0: new Float64Array(0), count: 0, median: 0, hop: 0.01 },
+      whisperSpans: [],
+      get frames() {
+        throw new Error('the fine grid is unused for voiced prosody');
+      },
+    };
+    assert.deepEqual(
+      measureProsody(new Float32Array(800), 8000, [], options).sounds,
+      []
+    );
+  });
   it('hears the tone of single syllables', () => {
     for (const preset of PRESETS) {
       for (const [i, text] of ['妈', '麻', '马', '骂', '好吗'].entries()) {

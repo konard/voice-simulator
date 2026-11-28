@@ -5,7 +5,7 @@ import { registeredLexicons } from '../g2p/lexicon.js';
 import { decoderWhisperSpans } from './decode-pipeline.js';
 import { audioToIpa, audioToIpaParallel } from './decode.js';
 import { hmmAudioToIpa } from './hmm-stage.js';
-import { analyzeFrameHops, analyzeFrames } from './frontend.js';
+import { analyzeFrames } from './frontend.js';
 import { createRecognitionEngine, getRecognitionEngine } from './engine.js';
 import { ipaToText } from './ipa-to-text.js';
 import { identifyLanguage, languageShares } from './language-id.js';
@@ -210,14 +210,13 @@ export function decodeRecognitionAudio(
   );
   if (usesWordDecoder(settings)) {
     const decoded = measure(settings.profile, 'Audio to IPA', () => {
-      const { fine, coarse } = frontEnd
-        ? { coarse: frontEnd.frames }
-        : recognitionFrameHops(input, rate, settings.modes);
+      const analysis =
+        frontEnd?.frames ?? analyzeFrames(input, rate, { hop: 0.01 });
       const result = hmmAudioToIpa(input, rate, {
         languages: settings.languages,
         whisper: options.whisper,
         oov: settings.oov,
-        analysis: coarse,
+        analysis,
         framePitch: true,
         includeWords: settings.liveWords || settings.hmmWordSpans === true,
         includeSyllables: settings.liveWords === true,
@@ -227,9 +226,8 @@ export function decodeRecognitionAudio(
         search: settings.search,
         maxWords: settings.maxWords,
       });
-      result.prosodyFrames = fine;
       if (settings.includeModeLabels) {
-        result.modeFrames = coarse;
+        result.modeFrames = analysis;
       }
       return result;
     });
@@ -243,12 +241,6 @@ export function decodeRecognitionAudio(
         lattice: settings.rescoring,
       });
   return { decoded, input, rate };
-}
-
-function recognitionFrameHops(input, rate, useModes) {
-  return useModes
-    ? analyzeFrameHops(input, rate)
-    : { coarse: analyzeFrames(input, rate, { hop: 0.01 }) };
 }
 
 export function emptyRecognition(nbest, segments = false) {
@@ -385,9 +377,7 @@ function recognizeProsody(decoded, samples, rate, settings, level) {
       settings.languages.length === 1 ? settings.languages[0] : undefined,
     voice: settings.voice ?? decoded.voice,
     pitch,
-    frames:
-      decoded.prosodyFrames ??
-      (decoded.frames?.speech ? decoded.frames : undefined),
+    frames: decoded.frames?.speech ? decoded.frames : undefined,
     whisperSpans: settings.whisper === false ? [] : decoded.whisperSpans,
   };
   const measured = measure(settings.profile, 'Prosody', () =>
