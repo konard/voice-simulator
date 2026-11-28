@@ -150,27 +150,41 @@ function trailingPause(frames, state) {
   return (state.scanned - state.lastSpeech - 1) * frames.hop;
 }
 
-function createWordFrontend(sampleRate, liveSyllables) {
+function createWordFrontend(sampleRate, options, liveSyllables) {
   const input = createFrameAnalyzer(sampleRate, {
     hop: 0.01,
     maxSeconds: MAX_WINDOW + 1,
   });
   const { frames } = input;
   const landmarks = createLandmarkDetector(frames);
+  let phones;
   const report = (final = false) => ({
     segments: [],
     nuclei: landmarks.advance(final),
   });
+  function startSyllables(samples) {
+    if (phones) {
+      return null;
+    }
+    phones = createIpaDecoder(sampleRate, options);
+    return phones.push(samples);
+  }
   return {
     frames,
-    report,
+    report() {
+      return phones ? null : report();
+    },
+    startSyllables,
     push(chunk) {
       input.push(chunk);
-      return liveSyllables() ? report() : null;
+      if (phones) {
+        return phones.push(chunk);
+      }
+      return liveSyllables() ? startSyllables(chunk) : null;
     },
     flush() {
       input.flush();
-      return report(true);
+      return phones?.flush() ?? report(true);
     },
   };
 }
@@ -182,7 +196,7 @@ function createPhraseDecoder(sampleRate, settings, level, start, wordFrontend) {
   };
   return {
     decoder: wordFrontend
-      ? wordFrontend()
+      ? wordFrontend(options)
       : createIpaDecoder(sampleRate, options),
     buffer: new Float32Array(Math.ceil(MAX_WINDOW * sampleRate)),
     used: 0,
@@ -265,7 +279,7 @@ export function createConfiguredRecognizer(
   const { emit, has, on, off } = createEvents();
   const liveSyllables = () => has('syllable');
   const wordFrontend = wordPhrases
-    ? () => createWordFrontend(sampleRate, liveSyllables)
+    ? (options) => createWordFrontend(sampleRate, options, liveSyllables)
     : null;
   const adaptive = settings.level === 'auto' && !settings.deterministic;
   const load = adaptive ? createLoadMeter(sampleRate) : null;
@@ -701,8 +715,10 @@ export function createConfiguredRecognizer(
     reset,
     on(event, listener) {
       // Account for already confirmed nuclei before a new listener arrives.
-      if (wordPhrases && event === 'syllable' && !liveSyllables()) {
-        update(phrase.decoder.report());
+      if (wordPhrases && !ended && event === 'syllable' && !liveSyllables()) {
+        update(
+          phrase.decoder.startSyllables(phrase.buffer.subarray(0, phrase.used))
+        );
       }
       on(event, listener);
     },
