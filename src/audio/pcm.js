@@ -67,25 +67,6 @@ export function interleave(channels) {
 }
 
 /**
- * Average interleaved channels into mono.
- * @param {ArrayLike<number>} interleaved
- * @param {number} channels
- * @returns {Float32Array}
- */
-export function mixdown(interleaved, channels) {
-  const frames = Math.floor(interleaved.length / channels);
-  const result = new Float32Array(frames);
-  for (let frame = 0; frame < frames; frame++) {
-    let sum = 0;
-    for (let channel = 0; channel < channels; channel++) {
-      sum += interleaved[frame * channels + channel];
-    }
-    result[frame] = sum / channels;
-  }
-  return result;
-}
-
-/**
  * Float sample in [-1, 1] to a signed integer of `bits` bits (clipped).
  * @param {number} value
  * @param {number} bits
@@ -231,11 +212,17 @@ export function decodeSamples(bytes, offset, length, channels, format) {
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
   const width = format.bitDepth / 8;
   const frames = Math.floor(length / (width * channels));
-  const values = new Float64Array(frames * channels);
-  for (let index = 0; index < values.length; index++) {
-    values[index] = readSample(view, offset + index * width, format);
+  const mono = new Float32Array(frames);
+  let at = offset;
+  for (let frame = 0; frame < frames; frame++) {
+    let sum = 0;
+    for (let channel = 0; channel < channels; channel++) {
+      sum += readSample(view, at, format);
+      at += width;
+    }
+    mono[frame] = sum / channels;
   }
-  return mixdown(values, channels);
+  return mono;
 }
 
 /** Four-character code at `offset`. */
