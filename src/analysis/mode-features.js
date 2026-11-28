@@ -284,7 +284,10 @@ function quantile(values, fraction) {
   if (values.length === 0) {
     return 0;
   }
-  const sorted = [...values].sort((a, b) => a - b);
+  const sorted =
+    values instanceof Float64Array && !values.some(Number.isNaN)
+      ? values.slice().sort()
+      : [...values].sort((a, b) => a - b);
   return sorted[
     Math.min(sorted.length - 1, Math.floor(fraction * sorted.length))
   ];
