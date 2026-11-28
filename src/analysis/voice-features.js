@@ -309,15 +309,14 @@ function highpass(signal, frequency, rate) {
   return signal.map((value) => filters[1].process(filters[0].process(value)));
 }
 
-function harmonicLevel(signal, start, length, frequency, sampleRate) {
+function harmonicLevel(windowed, frequency, sampleRate) {
   let best = 0;
   for (let step = -4; step <= 4; step++) {
     const omega = (2 * Math.PI * frequency * (1 + 0.025 * step)) / sampleRate;
     let re = 0;
     let im = 0;
-    for (let index = 0; index < length; index++) {
-      const window = 0.5 - 0.5 * Math.cos((2 * Math.PI * index) / length);
-      const value = signal[start + index] * window;
+    for (let index = 0; index < windowed.length; index++) {
+      const value = windowed[index];
       re += value * Math.cos(omega * index);
       im -= value * Math.sin(omega * index);
     }
@@ -514,6 +513,11 @@ function legacyDiagnostics(signal, rate, frames, voicedIndices, options) {
   const spacings = [];
   const tilts = [];
   const noise = [];
+  const hann = new Float64Array(length);
+  for (let index = 0; index < length; index++) {
+    hann[index] = 0.5 - 0.5 * Math.cos((2 * Math.PI * index) / length);
+  }
+  const windowed = new Float64Array(length);
   for (let pick = 0; pick < diagnosticFrames; pick += stride) {
     const index = voicedIndices[Math.floor(pick)];
     const start = index * hop;
@@ -530,8 +534,11 @@ function legacyDiagnostics(signal, rate, frames, voicedIndices, options) {
     if (formants.length >= 3) {
       spacings.push(formantSpacing(formants));
     }
-    const h1 = harmonicLevel(signal, start, length, frames[index].f0, rate);
-    const h2 = harmonicLevel(signal, start, length, 2 * frames[index].f0, rate);
+    for (let n = 0; n < length; n++) {
+      windowed[n] = signal[start + n] * hann[n];
+    }
+    const h1 = harmonicLevel(windowed, frames[index].f0, rate);
+    const h2 = harmonicLevel(windowed, 2 * frames[index].f0, rate);
     tilts.push(20 * Math.log10((h1 + 1e-12) / (h2 + 1e-12)));
     const aperiodicity = Math.min(
       0.999,
