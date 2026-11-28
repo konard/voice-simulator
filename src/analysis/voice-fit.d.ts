@@ -50,6 +50,7 @@ export interface VoiceFitOptions {
   lang?: string;
   ipa?: boolean;
   refine?: boolean;
+  /** Defaults to 8 for 8000 Hz input without a transcript, and 40 otherwise. */
   maxRenders?: number;
   seed?: number | string;
   parts?: VoiceFitPart[];

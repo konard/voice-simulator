@@ -272,6 +272,18 @@ function runLines(data) {
 
 /** The Markdown report of a judged matrix. */
 export function formatReport(data) {
+  const rowMeasurements = Object.entries(data.rowMeasurements ?? {});
+  const measurementLines = rowMeasurements.length
+    ? [
+        '',
+        '## Targeted reruns',
+        '',
+        ...rowMeasurements.flatMap(([row, run]) => [
+          `- **${row}** at commit \`${run.commit}\` on ${run.cpu}, Node ${run.node}, measured ${run.measured}.`,
+          `  ${run.pinned ? `Pinned with \`taskset -c ${run.core}\`.` : 'Run without CPU pinning.'} Command \`${run.command}\`.`,
+        ]),
+      ]
+    : [];
   const regressionLines = data.regressions?.length
     ? [
         '',
@@ -309,6 +321,7 @@ export function formatReport(data) {
     '## Runs',
     '',
     ...runLines(data),
+    ...measurementLines,
     ...regressionLines,
     '',
   ].join('\n');
@@ -316,13 +329,16 @@ export function formatReport(data) {
 
 /** The README block between the lowest-settings markers. */
 export function readmeTable(data) {
+  const measured = Object.keys(data.rowMeasurements ?? {}).length
+    ? 'Full matrix measured'
+    : 'Measured';
   return [
     README_START,
     // Prettier would pad the columns; the block stays exactly as generated.
     '<!-- prettier-ignore-start -->',
     ...matrix(data, (cell) => (cell ? cell.status : '—')),
     '',
-    `Measured at commit \`${data.commit.slice(0, 7)}\` on ${data.cpu}; [report](${REPORT_PATH}).`,
+    `${measured} at commit \`${data.commit.slice(0, 7)}\` on ${data.cpu}. See the [report](${REPORT_PATH}).`,
     '<!-- prettier-ignore-end -->',
     README_END,
   ].join('\n');
