@@ -12,7 +12,12 @@
 
 import { CHANNEL_DEFAULTS } from './plan.js';
 import { carveTeeth, dentition, impliedGap } from './teeth.js';
-import { LIP_PROTRUSION, VOWEL_SECTIONS, vowelShape } from './vowel-space.js';
+import {
+  createVowelWorkspace,
+  LIP_PROTRUSION,
+  VOWEL_SECTIONS,
+  vowelShape,
+} from './vowel-space.js';
 
 export { LIP_PROTRUSION };
 
@@ -57,13 +62,9 @@ const MIN_LENGTH_CHANGE = 1e-5;
 export function createTractWorkspace({ sections, reuseAreas = false } = {}) {
   return {
     full: { ...CHANNEL_DEFAULTS, time: 0 },
-    vowel: {
-      position: { height: 0, backness: 0, rounded: 0 },
-      point: new Float64Array(3),
-      values: new Float64Array(VOWEL_SECTIONS + 1),
-      shape: { areas: new Float64Array(VOWEL_SECTIONS), length: 0 },
-    },
+    vowel: createVowelWorkspace(),
     jaw: { scale: 1, from: 0 },
+    fit: { sections, openness: 0.5, ratio: undefined, positions: undefined },
     lengths: sections === undefined ? undefined : new Float64Array(sections),
     fitted: reuseAreas ? new Float64Array(sections) : undefined,
     stretched: reuseAreas ? new Float64Array(sections) : undefined,
@@ -228,19 +229,38 @@ function regionScale(x, head, openness) {
   return scale;
 }
 
+function prepareWarpedSamples(sections, ratio, fit) {
+  if (fit.positions?.length === sections && Object.is(fit.ratio, ratio)) {
+    return;
+  }
+  const positions = new Float64Array(sections);
+  for (let i = 0; i < sections; i++) {
+    positions[i] = warpPosition(i / (sections - 1), ratio);
+  }
+  fit.positions = positions;
+  fit.ratio = ratio;
+}
+
 /**
  * Warp a reference shape onto a head and resample it.
  * @param {{areas: Float64Array, length: number}} shape
  * @param {Record<string, number>} head Normalised head config.
  * @param {{sections?: number, openness?: number}} [options]
  */
-export function fitToHead(shape, head, options = {}, target) {
+export function fitToHead(shape, head, options = {}, target, positions) {
   const sections = options.sections ?? TRACT_SECTIONS;
   const openness = options.openness ?? 0.5;
   const areas = target ?? new Float64Array(sections);
+  const original = shape.areas;
+  const ratio = head.pharynxRatio;
   for (let index = 0; index < sections; index++) {
     const x = index / (sections - 1);
-    const area = sampleLinear(shape.areas, warpPosition(x, head.pharynxRatio));
+    const position = positions ? positions[index] : warpPosition(x, ratio);
+    const scaled = position * (original.length - 1);
+    const first = Math.min(original.length - 2, Math.floor(scaled));
+    const fraction = scaled - first;
+    const area =
+      original[first] * (1 - fraction) + original[first + 1] * fraction;
     areas[index] = area * regionScale(x, head, openness);
   }
   const lipExtension = 0.5 * (head.lipThickness - 1);
@@ -503,12 +523,18 @@ function stateWithDefaults(state, full) {
 }
 
 function warpTract(reference, head, sections, openness, free, workspace) {
-  const { lengths: lengthTarget, fitted, stretched } = workspace;
+  const { lengths: lengthTarget, fitted, stretched, fit } = workspace;
+  if (fit) {
+    fit.sections = sections;
+    fit.openness = openness;
+    prepareWarpedSamples(sections, head.pharynxRatio, fit);
+  }
   const { areas, length } = fitToHead(
     reference,
     head,
-    { sections, openness },
-    fitted?.length === sections ? fitted : undefined
+    fit ?? { sections, openness },
+    fitted?.length === sections ? fitted : undefined,
+    fit?.positions
   );
   const count = areas.length;
   const velum = Math.round(

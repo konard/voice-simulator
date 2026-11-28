@@ -308,6 +308,16 @@ function getInterpolator(corrections) {
   return interpolate;
 }
 
+export function createVowelWorkspace() {
+  return {
+    position: { height: 0, backness: 0, rounded: 0 },
+    point: new Float64Array(3),
+    values: new Float64Array(VOWEL_SECTIONS + 1),
+    shape: { areas: new Float64Array(VOWEL_SECTIONS), length: 0 },
+    corrections: undefined,
+  };
+}
+
 /**
  * Area function (cm², 44 sections, glottis to lips) for a vowel position.
  * @param {{height: number, backness: number, rounded: number|boolean}} vowel
@@ -325,16 +335,23 @@ export function vowelShape(
   // The measured set has rounding only on back vowels, so front and central
   // rounded vowels start from the unrounded shape and get rounded lips.
   const measuredRounding = backness >= 0.6 ? rounding : 0;
-  const at = workspace?.point ?? new Float64Array(3);
-  at[0] = height;
-  at[1] = backness;
-  at[2] = measuredRounding * ROUNDING_WEIGHT;
-  const values = workspace?.values ?? new Float64Array(VOWEL_SECTIONS + 1);
-  getInterpolator(corrections)(at, values);
-  const shape = workspace?.shape ?? {
-    areas: new Float64Array(VOWEL_SECTIONS),
-    length: 0,
-  };
+  const scratch = workspace ?? createVowelWorkspace();
+  const { point: at, values, shape } = scratch;
+  const weightedRounding = measuredRounding * ROUNDING_WEIGHT;
+  // Adjacent blocks can share tongue-body coordinates even as the teeth,
+  // tongue tip or other articulators modify the final area function.
+  if (
+    scratch.corrections !== corrections ||
+    !Object.is(at[0], height) ||
+    !Object.is(at[1], backness) ||
+    !Object.is(at[2], weightedRounding)
+  ) {
+    at[0] = height;
+    at[1] = backness;
+    at[2] = weightedRounding;
+    getInterpolator(corrections)(at, values);
+    scratch.corrections = corrections;
+  }
   const { areas } = shape;
   for (let index = 0; index < VOWEL_SECTIONS; index++) {
     const root = Math.max(0.25, values[index]);
