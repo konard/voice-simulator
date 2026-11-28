@@ -1105,10 +1105,14 @@ function pitchTracker(frames, options, shared, workspace) {
      * @param {boolean} [final]
      */
     advance(final = false) {
+      const samples = frames.samples;
+      let maximum = peak;
+      for (; peakScanned < frames.sampleCount; peakScanned++) {
+        maximum = Math.max(maximum, Math.abs(samples[peakScanned]));
+      }
+      const clipPeak = maximum;
+      peak = clipPeak;
       withPitchDsp(options.kernels?.module, settings, () => {
-        for (; peakScanned < frames.sampleCount; peakScanned++) {
-          peak = Math.max(peak, Math.abs(frames.samples[peakScanned]));
-        }
         while (track.count < frames.count) {
           const t = track.count;
           const middle = centre(t);
@@ -1119,7 +1123,7 @@ function pitchTracker(frames, options, shared, workspace) {
           ) {
             break;
           }
-          finder.score(t, middle, peak);
+          finder.score(t, middle, clipPeak);
           viterbi.step(t);
           track.count++;
         }

@@ -33,21 +33,23 @@ function melBank(low, high) {
   const edges = Array.from({ length: FILTERS + 2 }, (_, i) =>
     melToHz(lo + ((hi - lo) * i) / (FILTERS + 1))
   );
-  return Array.from({ length: FILTERS }, (_, m) => {
+  const firstBin = new Uint16Array(FILTERS);
+  const offsets = new Uint16Array(FILTERS + 1);
+  const weights = new Float64Array(FILTERS * (SIZE / 2 + 1));
+  let used = 0;
+  for (let m = 0; m < FILTERS; m++) {
     const [a, b, c] = [edges[m], edges[m + 1], edges[m + 2]];
-    const w = new Float64Array(SIZE / 2 + 1);
-    for (let k = 0; k <= SIZE / 2; k++) {
-      const f = (k * HMM_RATE) / SIZE;
-      if (f > a && f <= b) {
-        w[k] = (f - a) / (b - a);
-      } else if (f > b && f < c) {
-        w[k] = (c - f) / (c - b);
-      }
+    const binWidth = HMM_RATE / SIZE;
+    const first = Math.floor(a / binWidth) + 1;
+    const end = Math.ceil(c / binWidth);
+    firstBin[m] = first;
+    for (let k = first; k < end; k++) {
+      const f = k * binWidth;
+      weights[used++] = f <= b ? (f - a) / (b - a) : (c - f) / (c - b);
     }
-    const start = w.findIndex((value) => value > 0);
-    const end = w.findLastIndex((value) => value > 0) + 1;
-    return { start, weights: w.subarray(start, end) };
-  });
+    offsets[m + 1] = used;
+  }
+  return { offsets, firstBin, weights: weights.slice(0, used) };
 }
 
 let tables;
@@ -90,12 +92,12 @@ function windowedPower(x, start, re, im, power, { hamming, fft }) {
   }
 }
 
-function logMel(power, bank, logs) {
+function logMel(power, { offsets, firstBin, weights }, logs) {
   for (let m = 0; m < FILTERS; m++) {
     let energy = 0;
-    const { start, weights } = bank[m];
-    for (let i = 0; i < weights.length; i++) {
-      energy += weights[i] * power[start + i];
+    let bin = firstBin[m];
+    for (let i = offsets[m], end = offsets[m + 1]; i < end; i++) {
+      energy += weights[i] * power[bin++];
     }
     logs[m] = Math.log(energy + 1e-10);
   }
