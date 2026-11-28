@@ -220,8 +220,8 @@ export function contextKey(unit, s, left, right) {
  * state, else the context-independent one.
  */
 export function stateIndex(model, unit, s, left, right) {
-  // Networks ask for the same states many times: cache them by unit,
-  // state, left and right phone without building string keys.
+  // The entry state reads only the left phone, the exit only the right.
+  // Avoid caching a separate state index for every pair of neighbors.
   let byUnit = stateCaches.get(model);
   if (!byUnit) {
     byUnit = new Map();
@@ -232,17 +232,19 @@ export function stateIndex(model, unit, s, left, right) {
     byState = [new Map(), new Map(), new Map()];
     byUnit.set(unit, byState);
   }
-  const l = left ?? null;
-  const r = right ?? null;
-  let byLeft = byState[s].get(l);
-  if (!byLeft) {
-    byLeft = new Map();
-    byState[s].set(l, byLeft);
-  }
-  let index = byLeft.get(r);
-  if (index === undefined) {
-    index = findState(model, unit, s, l, r);
-    byLeft.set(r, index);
+  const context = s === 0 ? left : s === 2 ? right : null;
+  const neighbor = context ?? null;
+  const states = byState[s];
+  let index = states.get(neighbor);
+  if (index === undefined && !states.has(neighbor)) {
+    index = findState(
+      model,
+      unit,
+      s,
+      s === 0 ? neighbor : null,
+      s === 2 ? neighbor : null
+    );
+    states.set(neighbor, index);
   }
   return index;
 }
