@@ -19,6 +19,7 @@ import {
   decodeWords,
 } from '../src/recognition/hmm-decode.js';
 import { getHmmModel } from '../src/recognition/hmm-model.js';
+import { ipaToText } from '../src/recognition/ipa-to-text.js';
 import {
   firstToneClass,
   getNetwork,
@@ -107,6 +108,45 @@ it('decodes no words from silence', () => {
   });
   assert.deepEqual(decoded.words, []);
   assert.equal(decoded.ipa, '');
+});
+
+it('keeps HMM phones and tracks when word and syllable formatting are skipped', () => {
+  const { samples } = synthesize('It is time.', {
+    tier: 'telephone',
+    lang: 'en',
+    engine: 'js',
+  });
+  const options = { languages: ['en'] };
+  const full = hmmAudioToIpa(samples, RATE, options);
+  assert.ok(full.words.length && full.syllables.length);
+  const phones = hmmAudioToIpa(samples, RATE, {
+    ...options,
+    includeWords: false,
+    includeSyllables: false,
+  });
+  assert.deepEqual(phones, { ...full, words: [], syllables: [] });
+});
+
+it('uses the HMM language directly with the built-in text decoder', () => {
+  const { samples } = synthesize('It is time.', {
+    tier: 'telephone',
+    lang: 'en',
+    engine: 'js',
+  });
+  const options = { modes: false, level: 'low', segments: true };
+  const reads = [];
+  const expected = recognize(samples, RATE, {
+    ...options,
+    stages: {
+      ipaToText(input, settings) {
+        reads.push(settings.spans);
+        return ipaToText(input, settings);
+      },
+    },
+  });
+  assert.ok(reads[0]?.length);
+  const actual = recognize(samples, RATE, options);
+  assert.deepEqual(actual, expected);
 });
 
 it('keeps decoder scratch separate across nested and repeated searches', () => {

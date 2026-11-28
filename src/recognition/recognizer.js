@@ -217,6 +217,8 @@ export function decodeRecognitionAudio(
         oov: settings.oov,
         analysis: coarse,
         framePitch: true,
+        includeWords: settings.hmmWordSpans === true,
+        includeSyllables: false,
         profile: settings.profile,
       });
       result.prosodyFrames = fine;
@@ -295,11 +297,16 @@ function timedPhones(decoded) {
 
 function decodeText(input, settings, level, modelLanguage) {
   const { languages, stages, nbest } = settings;
-  const language = languages.length === 1 ? languages[0] : undefined;
-  // A verified synthesis model provides its own language. Injected stages
-  // continue to receive the languages explicitly requested by the caller.
-  const candidates =
-    modelLanguage && !stages.identifyLanguage ? [modelLanguage] : languages;
+  const known = modelLanguage && !stages.identifyLanguage;
+  // A single language span and an explicit language give the native text
+  // decoder the same search. Injected stages still receive their spans.
+  const language =
+    languages.length === 1
+      ? languages[0]
+      : known && !stages.ipaToText
+        ? modelLanguage
+        : undefined;
+  const candidates = known ? [modelLanguage] : languages;
   const identification = language
     ? null
     : measure(settings.profile, 'Language identification', () =>

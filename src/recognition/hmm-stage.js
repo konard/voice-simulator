@@ -99,6 +99,7 @@ function timedSegments(aligned) {
  * @param {ArrayLike<number>} samples
  * @param {number} sampleRate
  * @param {{languages?: string[], maxWords?: number, oov?: boolean, framePitch?: boolean,
+ *   includeWords?: boolean, includeSyllables?: boolean,
  *   whisper?: 'auto'|false|{start: number, end: number}[],
  *   search?: Partial<typeof import('./hmm-decode.js').HMM_DECODE_DEFAULTS>}}
  *   [options] `search` tunes the beam and weights; `whisper` finds
@@ -160,15 +161,13 @@ export function hmmAudioToIpa(samples, sampleRate, options = {}) {
   return {
     ipa,
     segments,
-    syllables: syllablesWithWhisper(segments, language, whisperSpans, analysis),
+    syllables:
+      options.includeSyllables === false
+        ? []
+        : syllablesWithWhisper(segments, language, whisperSpans, analysis),
     nbest: [{ ipa, segments, cost: 0, confidence: 1 }],
-    words: decoded.words.map(({ word, lang, oov, tokens }, i) => ({
-      text: oov
-        ? spellSounds(parseIpa(tokens.map(tokenIpa).join('')).tokens, lang)
-        : word,
-      language: lang,
-      ...wordSpan(aligned, i),
-    })),
+    words:
+      options.includeWords === false ? [] : timedWords(decoded.words, aligned),
     tracks: { pitch },
     // Energies only: the noise check reads them, prosody and modes
     // analyse the audio at their own hops.
@@ -189,17 +188,28 @@ function hasSpeech(analysis) {
   return false;
 }
 
-/** Start and end of word i: its first and last aligned phone. */
-function wordSpan(aligned, i) {
-  let from = Infinity;
-  let to = -Infinity;
-  for (const a of aligned) {
-    if (a.word === i && a.from < a.to) {
-      from = Math.min(from, a.from);
-      to = Math.max(to, a.to);
+/** The alignment lists each word's phones in order. */
+function timedWords(words, aligned) {
+  let next = 0;
+  return words.map(({ word, lang, oov, tokens }, index) => {
+    let from = Infinity;
+    let to = -Infinity;
+    while (aligned[next]?.word === index) {
+      const phone = aligned[next++];
+      if (phone.from < phone.to) {
+        from = Math.min(from, phone.from);
+        to = Math.max(to, phone.to);
+      }
     }
-  }
-  return { start: hmmBoundaryTime(from), end: hmmBoundaryTime(to) };
+    return {
+      text: oov
+        ? spellSounds(parseIpa(tokens.map(tokenIpa).join('')).tokens, lang)
+        : word,
+      language: lang,
+      start: hmmBoundaryTime(from),
+      end: hmmBoundaryTime(to),
+    };
+  });
 }
 
 function whisperSpansOf(samples, sampleRate, analysis, pitch, { whisper }) {
