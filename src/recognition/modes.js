@@ -1,4 +1,5 @@
 /** Recognize manner of speech after the text step (issue 71). Unlicense. */
+import { samplesAreFinite } from '../audio/sample-validation.js';
 import { parseIpa, formatIpa } from '../ipa/parse.js';
 import { createMode, composeMode, MODE_FIELDS } from '../markup/modes.js';
 import {
@@ -110,10 +111,8 @@ function validate(samples, sampleRate, result, options) {
   ) {
     throw new RangeError('mode recognition exceeds maxSeconds (default 30)');
   }
-  for (let i = 0; i < samples.length; i++) {
-    if (!Number.isFinite(samples[i])) {
-      throw new TypeError('samples must be finite');
-    }
+  if (!samplesAreFinite(samples)) {
+    throw new TypeError('samples must be finite');
   }
   if (!Array.isArray(result?.words)) {
     throw new TypeError('mode recognition needs timed result.words');

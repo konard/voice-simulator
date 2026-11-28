@@ -1,4 +1,6 @@
 /** Input contracts for batch source analysis (Unlicense). */
+import { samplesAreFinite } from '../audio/sample-validation.js';
+
 export const INVERSE_FILTER_DEFAULTS = Object.freeze({
   pitch: null,
   tractOrder: null,
@@ -42,11 +44,8 @@ function checkFrames(f) {
   if (f.count && (f.count - 1) * f.hop * f.rate >= sampleCount) {
     throw new RangeError('frames exceed sample count');
   }
-  const { samples } = f;
-  for (let n = 0; n < sampleCount; n++) {
-    if (!Number.isFinite(samples[n])) {
-      throw new RangeError('invalid sample');
-    }
+  if (!samplesAreFinite(f.samples, sampleCount)) {
+    throw new RangeError('invalid sample');
   }
 }
 export function suppliedPitch(value, rate) {

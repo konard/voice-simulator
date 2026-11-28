@@ -1,5 +1,6 @@
 /** Public audio recognition and shared batch/stream composition. Unlicense. */
 import { resample } from '../audio/resample.js';
+import { samplesAreFinite } from '../audio/sample-validation.js';
 import { LANGUAGES } from '../g2p/index.js';
 import { registeredLexicons } from '../g2p/lexicon.js';
 import { decoderWhisperSpans } from './decode-pipeline.js';
@@ -164,10 +165,8 @@ export function validateRate(sampleRate) {
 }
 
 export function validateSamples(samples) {
-  for (let i = 0; i < samples.length; i++) {
-    if (!Number.isFinite(samples[i])) {
-      throw new RangeError('Audio samples must be finite');
-    }
+  if (!samplesAreFinite(samples)) {
+    throw new RangeError('Audio samples must be finite');
   }
 }
 
