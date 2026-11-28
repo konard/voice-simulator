@@ -356,6 +356,10 @@ function certifyStreaming(engine, measured) {
     `streaming ${engine}: ${measured.capped?.crashed}`
   );
   assert.equal(measured.audioSeconds, STREAM_SECONDS, `streaming ${engine}`);
+  for (const field of ['batchLastWord', 'wholeInputLastWord']) {
+    const last = measured.metrics[field];
+    assert.ok(last > 55, `${engine} ${field} stopped at ${last} seconds`);
+  }
   const limits = {
     ...thresholds.streaming.quality,
     ...thresholds.streaming[`${engine}-1`],

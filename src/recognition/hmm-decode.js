@@ -40,6 +40,19 @@ export const HMM_LOW_SEARCH = Object.freeze({
   maxActive: 256,
 });
 
+// Whole recordings need more paths than the independently decoded phrases.
+export const HMM_LOW_BATCH_SEARCH = Object.freeze({
+  ...HMM_LOW_SEARCH,
+  maxActive: 480,
+});
+
+// Keep the same within-language beam while limiting work on competing languages.
+export const HMM_LOW_MULTILINGUAL_SEARCH = Object.freeze({
+  ...HMM_LOW_BATCH_SEARCH,
+  languageBeam: 120,
+  maxActive: 384,
+});
+
 /** ln p of a shipped bigram cost (the costs are 0.5 - 0.3 ln p). */
 const lnProbability = (cost) => -(cost - 0.5) / 0.3;
 
@@ -382,6 +395,12 @@ function scoreFrame(network, search, t) {
   cur.reserve(work.length);
   const { scores, history, starts } = cur;
   const { scores: prevScores, history: prevHistory, starts: prevStarts } = prev;
+  const {
+    queued,
+    score: entryScores,
+    history: entryHistory,
+    start: entryStarts,
+  } = entries;
   let best = -Infinity;
   languageBest.fill(-Infinity);
   for (let k = 0; k < work.length; k++) {
@@ -391,45 +410,50 @@ function scoreFrame(network, search, t) {
     const wasActive = stamp[id] === t - 1;
     const old = offsets[id];
     const base = k * STATES_PER_TOKEN;
-    const entry = entries.queued[id] ? entries.score[id] : -Infinity;
-    let nodeBest = -Infinity;
+    const entry = queued[id] ? entryScores[id] : -Infinity;
+    let nodeBest;
     if (wasActive) {
-      for (let i = count - 1; i >= 0; i--) {
+      const firstEmission = emit[first];
+      const stayFirst = prevScores[old] + stay[firstEmission];
+      const enterFirst = entry > stayFirst;
+      const firstScore = enterFirst ? entry : stayFirst;
+      nodeBest =
+        firstScore > -Infinity
+          ? firstScore + score(firstEmission, t)
+          : firstScore;
+      scores[base] = nodeBest;
+      history[base] = enterFirst ? entryHistory[id] : prevHistory[old];
+      starts[base] = enterFirst ? entryStarts[id] : prevStarts[old];
+
+      let before = firstEmission;
+      for (let i = 1; i < count; i++) {
         const j = base + i;
         const m = emit[first + i];
         const previous = old + i;
         let value = prevScores[previous] + stay[m];
-        let hist = prevHistory[previous];
-        let start = prevStarts[previous];
-        if (i > 0) {
-          const advance = prevScores[previous - 1] + go[emit[first + i - 1]];
-          if (advance > value) {
-            value = advance;
-            hist = prevHistory[previous - 1];
-            start = prevStarts[previous - 1];
-          }
-        }
-        if (i === 0 && entry > value) {
-          value = entry;
-          hist = entries.history[id];
-          start = entries.start[id];
+        const advance = prevScores[previous - 1] + go[before];
+        let source = previous;
+        if (advance > value) {
+          value = advance;
+          source--;
         }
         if (value > -Infinity) {
           value += score(m, t);
         }
         scores[j] = value;
-        history[j] = hist;
-        starts[j] = start;
+        history[j] = prevHistory[source];
+        starts[j] = prevStarts[source];
         nodeBest = Math.max(nodeBest, value);
+        before = m;
       }
     } else {
       nodeBest = entry > -Infinity ? entry + score(emit[first], t) : -Infinity;
       scores[base] = nodeBest;
-      history[base] = entries.history[id];
-      starts[base] = entries.start[id];
+      history[base] = entryHistory[id];
+      starts[base] = entryStarts[id];
       scores.fill(-Infinity, base + 1, base + count);
     }
-    entries.queued[id] = 0;
+    queued[id] = 0;
     nodeScores[k] = nodeBest;
     const lang = language[id];
     languageBest[lang] = Math.max(languageBest[lang], nodeBest);
@@ -611,12 +635,12 @@ export function decodeWords(network, feats, frames, options = {}, cache) {
   };
 }
 
-// A streaming recognizer runs the same search network for each preview and
-// phrase. Keep its numeric work arrays and reset only the state read by the
-// next search. Trainers and callers with their own search use fresh buffers.
+// Reuse numeric arrays and reset only the state read by the next search.
+// Streams keep a weak cache per recognizer. Batch retains only its last network.
 function searchBuffers(network, cache) {
   let buffers = cache?.get(network.language);
   if (!buffers) {
+    cache?.clear?.();
     const nodes = network.language.length;
     const words = network.words.length;
     buffers = {
@@ -681,12 +705,14 @@ export function alignWords(network, feats, frames, words, options = {}) {
   const N = chain.length;
   let prev = new Float64Array(N).fill(-Infinity);
   let cur = new Float64Array(N);
-  const back = new Int32Array(frames * N);
+  // Each predecessor is at most four states back in the chain.
+  const back = new Uint8Array(frames * N);
   for (let t = 0; t < frames; t++) {
     const row = t * N;
     for (let n = 0; n < N; n++) {
+      const state = chain[n];
       let s = -Infinity;
-      let arg = -1;
+      let advanceBy = 0;
       if (t === 0) {
         // Start in the first state or after skipping leading silence.
         if (n === 0) {
@@ -695,11 +721,11 @@ export function alignWords(network, feats, frames, words, options = {}) {
           s = silencePenalty;
         }
       } else {
-        s = prev[n] + chain[n].stay;
-        arg = n;
-        if (n > 0 && prev[n - 1] + chain[n - 1].go > s) {
-          s = prev[n - 1] + chain[n - 1].go;
-          arg = n - 1;
+        s = prev[n] + state.stay;
+        const advance = n > 0 ? prev[n - 1] + chain[n - 1].go : -Infinity;
+        if (advance > s) {
+          s = advance;
+          advanceBy = 1;
         }
         // Skip a whole optional unit that starts at n-3.
         if (n >= 4 && chain[n - 3].skippable) {
@@ -707,15 +733,15 @@ export function alignWords(network, feats, frames, words, options = {}) {
             prev[n - 4] + chain[n - 4].go + (chain[n - 3].sil ? 0 : -1);
           if (skip > s) {
             s = skip;
-            arg = n - 4;
+            advanceBy = 4;
           }
         }
       }
       if (s > -Infinity) {
-        s += score(chain[n].m, t);
+        s += score(state.m, t);
       }
       cur[n] = s;
-      back[row + n] = arg;
+      back[row + n] = advanceBy;
     }
     [prev, cur] = [cur, prev];
   }
@@ -728,7 +754,7 @@ export function alignWords(network, feats, frames, words, options = {}) {
       spans[ti][0] = Math.min(spans[ti][0], t);
       spans[ti][1] = Math.max(spans[ti][1], t + 1);
     }
-    at = back[t * N + at];
+    at -= back[t * N + at];
   }
   return tokens.map((tk, i) => ({ ...tk, from: spans[i][0], to: spans[i][1] }));
 }
