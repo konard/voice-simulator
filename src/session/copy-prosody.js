@@ -45,7 +45,7 @@ export function pitchContour(measured, frameRate, fallback) {
   return smoothChannel(filtered, 0.01, frameRate);
 }
 
-export function applyPitch(plan, samples, sampleRate, modes) {
+export function applyPitch(plan, samples, sampleRate, modes, matchVoicing) {
   const { frameRate, frameCount, channels } = plan;
   const track = trackPitch(analyzeFrames(samples, sampleRate));
   const measured = Float32Array.from({ length: frameCount }, (_, i) => {
@@ -77,6 +77,17 @@ export function applyPitch(plan, samples, sampleRate, modes) {
         channels.falsetto[i]
       );
     }
+  }
+  if (matchVoicing) {
+    const gain = smoothChannel(
+      Float32Array.from(measured, (hz) => Number(hz > 0)),
+      0.005,
+      frameRate
+    );
+    for (let i = 0; i < frameCount; i++) {
+      channels.voicing[i] *= gain[i];
+    }
+    return { rate: frameRate, values: Array.from(gain) };
   }
 }
 
@@ -121,13 +132,16 @@ export function renderDraft(plan, seed) {
   });
 }
 
-export function matchLoudness(plan, samples, sampleRate, seed) {
+export function matchLoudness(plan, samples, sampleRate, seed, settings) {
   const { channels, frameCount, frameRate } = plan;
   const reference = rmsTrack(samples, sampleRate, frameCount, frameRate);
+  // The telephone renderer limits the bandwidth and uses a shorter
+  // waveguide. Calibrate against that renderer, including its filter.
+  const telephone = settings?.name === 'telephone';
   for (let pass = 0; pass < 2; pass++) {
     const draft = rmsTrack(
-      renderDraft(plan, seed),
-      DRAFT_RATE,
+      telephone ? renderPlan(plan, settings) : renderDraft(plan, seed),
+      telephone ? settings.sampleRate : DRAFT_RATE,
       frameCount,
       frameRate
     );

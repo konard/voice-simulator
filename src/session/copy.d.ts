@@ -48,6 +48,8 @@ export interface CopyScore {
   segments: Omit<RecognizedSegment, 'confidence'>[];
   /** Hertz, with zero denoting unvoiced frames. */
   f0: ScoreTrack;
+  /** Measured gain on vocal fold vibration, from zero to one. */
+  voicing?: ScoreTrack;
   loudness: ScoreTrack;
   modes: ModeSpan[];
   planDuration?: number;

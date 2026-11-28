@@ -461,7 +461,7 @@ async function sessionRow({ engine, limit, profile }) {
 }
 
 /** copyRecording on the golden set, resampled to 8 kHz. */
-function copyRow({ engine, limit, profile }) {
+function copyRow({ engine, limit, profile, traceCopy }) {
   let seconds = 0;
   let audioSeconds = 0;
   const f0 = [];
@@ -479,15 +479,27 @@ function copyRow({ engine, limit, profile }) {
     seconds += cpu;
     audioSeconds += samples.length / RATE;
     const cents = copy.metrics.f0?.rmseCents;
-    f0.push(Number.isFinite(cents) ? cents / 100 : Infinity);
-    timing.push(copy.metrics.timingError ?? Infinity);
+    const pitchError = Number.isFinite(cents) ? cents / 100 : Infinity;
+    const timingError = copy.metrics.timingError ?? Infinity;
+    f0.push(pitchError);
+    timing.push(timingError);
     const again = recognize(copy.samples, copy.sampleRate, {
       level: LEVEL,
       languages: [copy.score.language],
       engine: engine.recognition,
       profile,
     });
-    phonemes.push(errorRate(copy.recognition.ipa, again.ipa, 'phone'));
+    const phones = errorRate(copy.recognition.ipa, again.ipa, 'phone');
+    phonemes.push(phones);
+    traceCopy?.({
+      id: item.id,
+      language: copy.score.language,
+      f0RmseSemitones: round(pitchError),
+      timingErrorMs: round(timingError, 1),
+      phoneEdits: phones.distance,
+      referencePhones: phones.referenceLength,
+      seconds: round(cpu, 3),
+    });
   }
   const mean = (values) =>
     values.reduce((sum, value) => sum + value, 0) / values.length;

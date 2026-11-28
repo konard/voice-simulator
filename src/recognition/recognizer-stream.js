@@ -283,7 +283,13 @@ export function createConfiguredRecognizer(
   sampleRate,
   settings,
   batch = false,
-  { liveWords = false, liveModeReference = false, onReading, onPitch } = {}
+  {
+    liveWords = false,
+    liveModeReference = false,
+    onReading,
+    onPitch,
+    previews = true,
+  } = {}
 ) {
   const { nbest } = settings;
   const minVoiced = settings.minVoiced ?? (batch ? 0 : STREAM_MIN_VOICED);
@@ -646,13 +652,15 @@ export function createConfiguredRecognizer(
     const pause = trailingPause(phrase.decoder.frames, phrase);
     const total = offset + phrase.used;
     const due = total >= Math.ceil((nextPartial * sampleRate) / 4);
-    if (wordPhrases) {
-      previewWords(due, pause);
-    } else if (
-      !liveWords ||
-      (due && !phrase.partial?.words.length && phrase.used >= sampleRate)
-    ) {
-      previewPartial(due);
+    if (previews) {
+      if (wordPhrases) {
+        previewWords(due, pause);
+      } else if (
+        !liveWords ||
+        (due && !phrase.partial?.words.length && phrase.used >= sampleRate)
+      ) {
+        previewPartial(due);
+      }
     }
     if (due) {
       nextPartial++;

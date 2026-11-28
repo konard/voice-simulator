@@ -4,6 +4,7 @@
  * audio with one engine, or publication of a measured matrix. Unlicense.
  *
  *   node scripts/lowest-settings.mjs --row synthesis --engine js [--limit 1] [--out dir]
+ *   node scripts/lowest-settings.mjs --row copy --engine js --trace-copy
  *   node scripts/lowest-settings.mjs --publish reports/heavy [--allow-regression "reason"]
  *
  * A row prints { row, engine, metrics, seconds, audioSeconds, peakRssMb }:
@@ -38,7 +39,7 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 export const ISSUES_PATH = 'tests/heavy/lowest-issues.json';
 
 export const USAGE = `Usage:
-  node scripts/lowest-settings.mjs --row <name> --engine <js|rust> [--limit <n>] [--out <dir>]
+  node scripts/lowest-settings.mjs --row <name> --engine <js|rust> [--limit <n>] [--out <dir>] [--trace-copy]
   node scripts/lowest-settings.mjs --publish <dir> [--allow-regression "<reason>"] [--root <dir>]
 
 Rows: synthesis, recognition, streaming, voice-fit, session, copy, modes.`;
@@ -48,7 +49,7 @@ export function peakRssMb() {
   return process.resourceUsage().maxRSS / 1024;
 }
 
-export async function runRow({ row, engine, limit = Infinity }) {
+export async function runRow({ row, engine, limit = Infinity, traceCopy }) {
   const { ROWS, loadEngine } = await import('./lowest-rows.mjs');
   if (!ROWS[row]) {
     throw new RangeError(`Unknown row "${row}"`);
@@ -60,6 +61,7 @@ export async function runRow({ row, engine, limit = Infinity }) {
   const { metrics, seconds, audioSeconds, cases } = await ROWS[row]({
     engine: loaded,
     limit,
+    traceCopy,
     // The 16 kHz quality reference is measured once, in the js run.
     baseline: engine === 'js',
   });
@@ -185,6 +187,7 @@ async function main() {
       engine: { type: 'string', default: 'js' },
       limit: { type: 'string' },
       out: { type: 'string' },
+      'trace-copy': { type: 'boolean' },
       publish: { type: 'string' },
       'allow-regression': { type: 'string' },
       root: { type: 'string' },
@@ -228,6 +231,9 @@ async function main() {
     row: values.row,
     engine: values.engine,
     limit,
+    traceCopy: values['trace-copy']
+      ? (recording) => console.error(JSON.stringify(recording))
+      : undefined,
   });
   if (values.out) {
     mkdirSync(values.out, { recursive: true });

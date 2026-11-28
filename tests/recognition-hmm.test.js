@@ -214,6 +214,24 @@ it('keeps decoder scratch separate across nested and repeated searches', () => {
   assert.deepEqual(run(), expected);
 });
 
+it('reuses the decoding graph when only one of its languages is requested', () => {
+  const model = getHmmModel();
+  const options = { maxWords: 40 };
+  const multilingual = getNetwork(model, ['ru', 'en'], options);
+  const english = getNetwork(model, ['en'], options);
+  assert.deepEqual([...english.trees.keys()], ['en']);
+  assert.equal(english.trees.get('en'), multilingual.trees.get('en'));
+  assert.equal(english.nodes.language, multilingual.nodes.language);
+  const spoken = synthesize('one two', { lang: 'en', tier: 'telephone' });
+  const { feats, frames } = hmmFeatures(spoken.samples, RATE, model.lda);
+  const decoded = decodeWords(english, feats, frames);
+  assert.equal(decoded.lang, 'en');
+  assert.deepEqual(
+    decoded,
+    decodeWords(buildNetwork(model, ['en'], options), feats, frames)
+  );
+});
+
 it('adds the words of addLexicon() to the decoding network', () => {
   const model = getHmmModel();
   const has = () =>
