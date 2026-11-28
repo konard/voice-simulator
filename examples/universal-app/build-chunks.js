@@ -47,13 +47,13 @@ export function vendorChunk(id) {
   if (counts) {
     return `recognition-${counts[1]}`;
   }
-  // Ship the model metadata and each packed coefficient part in separate
-  // chunks. The generator keeps the coefficient parts under 400 kB.
+  // Ship the model metadata, tone table, and packed coefficient parts in
+  // separate chunks. The generator keeps each coefficient part under 400 kB.
   const model = id.match(
-    /[\\/]src[\\/]recognition[\\/]data[\\/]hmm-model(?:-(\d+))?\.js$/
+    /[\\/]src[\\/]recognition[\\/]data[\\/]hmm-(?:model(?:-(\d+))?|(tone))\.js$/
   );
   if (model) {
-    return `recognition-hmm-${model[1] ?? 'metadata'}`;
+    return `recognition-hmm-${model[1] ?? model[2] ?? 'metadata'}`;
   }
   return vendorChunks.find(([pattern]) => pattern.test(id))?.[1];
 }

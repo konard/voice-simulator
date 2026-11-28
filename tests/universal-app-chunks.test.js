@@ -97,6 +97,11 @@ describe('universal app chunking', () => {
           ['repo', 'src', 'recognition', 'data', 'hmm-model.js'].join(sep)
         )
       ).toBe('recognition-hmm-metadata');
+      expect(
+        vendorChunk(
+          ['repo', 'src', 'recognition', 'data', 'hmm-tone.js'].join(sep)
+        )
+      ).toBe('recognition-hmm-tone');
       for (const part of [0, 3]) {
         expect(
           vendorChunk(
