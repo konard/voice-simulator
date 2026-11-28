@@ -17,32 +17,35 @@
 
 export const HMM_TONE_DIMS = 6;
 
-/** Mean, least-squares slope and curvature of v over t ± w (edges held). */
-function window(v, t, w) {
-  const n = v.length;
-  const at = (k) => v[Math.min(n - 1, Math.max(0, t + k))];
-  const count = 2 * w + 1;
+const NEAR_WIDTH = 5;
+const MID_WIDTH = 10;
+const WIDE_WIDTH = 30;
+
+/** Sum of offset powers across a symmetric window. */
+function offsetMoment(width, power) {
+  let sum = 0;
+  for (let k = 1; k <= width; k++) {
+    sum += k ** power;
+  }
+  return 2 * sum;
+}
+
+const NEAR_SQUARES = offsetMoment(NEAR_WIDTH, 2);
+const MID_SQUARES = offsetMoment(MID_WIDTH, 2);
+const MID_CURVATURE =
+  offsetMoment(MID_WIDTH, 4) -
+  (MID_SQUARES * MID_SQUARES) / (2 * MID_WIDTH + 1);
+
+function heldSample(values, index) {
+  return values[Math.min(values.length - 1, Math.max(0, index))];
+}
+
+function windowMean(values, center, width) {
   let mean = 0;
-  let k2 = 0;
-  let k4 = 0;
-  for (let k = -w; k <= w; k++) {
-    mean += at(k);
-    k2 += k * k;
-    k4 += k ** 4;
+  for (let k = -width; k <= width; k++) {
+    mean += heldSample(values, center + k);
   }
-  mean /= count;
-  let slope = 0;
-  let curve = 0;
-  for (let k = -w; k <= w; k++) {
-    const y = at(k);
-    slope += k * y;
-    curve += k * k * (y - mean);
-  }
-  return {
-    mean,
-    slope: slope / k2,
-    curve: curve / (k4 - (k2 * k2) / count),
-  };
+  return mean / (2 * width + 1);
 }
 
 /**
@@ -56,20 +59,26 @@ export function hmmToneFeatures(lf0, voicing) {
   const frames = lf0.length;
   const out = new Float32Array(frames * HMM_TONE_DIMS);
   for (let t = 0; t < frames; t++) {
-    const near = window(lf0, t, 5);
-    const mid = window(lf0, t, 10);
-    const wide = window(lf0, t, 30);
-    out.set(
-      [
-        4 * lf0[t],
-        40 * near.slope,
-        40 * mid.slope,
-        400 * mid.curve,
-        4 * (lf0[t] - wide.mean),
-        voicing[t],
-      ],
-      t * HMM_TONE_DIMS
-    );
+    const mean = windowMean(lf0, t, MID_WIDTH);
+    let nearSlope = 0;
+    let midSlope = 0;
+    let midCurve = 0;
+    for (let k = -MID_WIDTH; k <= MID_WIDTH; k++) {
+      const value = heldSample(lf0, t + k);
+      const slope = k * value;
+      if (Math.abs(k) <= NEAR_WIDTH) {
+        nearSlope += slope;
+      }
+      midSlope += slope;
+      midCurve += k * k * (value - mean);
+    }
+    const at = t * HMM_TONE_DIMS;
+    out[at] = 4 * lf0[t];
+    out[at + 1] = 40 * (nearSlope / NEAR_SQUARES);
+    out[at + 2] = 40 * (midSlope / MID_SQUARES);
+    out[at + 3] = 400 * (midCurve / MID_CURVATURE);
+    out[at + 4] = 4 * (lf0[t] - windowMean(lf0, t, WIDE_WIDTH));
+    out[at + 5] = voicing[t];
   }
   return out;
 }
