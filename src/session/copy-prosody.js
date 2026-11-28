@@ -2,8 +2,8 @@
 import { pitchBeforePhonation } from '../acoustics/glottis.js';
 import { interpolateGaps, smoothChannel } from '../articulation/plan.js';
 import { renderPlan } from '../acoustics/voice.js';
-import { analyzeFrames } from '../recognition/frontend.js';
-import { trackPitch } from '../recognition/pitch.js';
+import { analyzePitchFrames } from '../recognition/frontend.js';
+import { trackPitchFrames } from '../recognition/pitch.js';
 import { sampleTrack } from './warp.js';
 
 export const DRAFT_RATE = 16000;
@@ -47,7 +47,7 @@ export function pitchContour(measured, frameRate, fallback) {
 
 export function applyPitch(plan, samples, sampleRate, modes, matchVoicing) {
   const { frameRate, frameCount, channels } = plan;
-  const track = trackPitch(analyzeFrames(samples, sampleRate));
+  const track = trackPitchFrames(analyzePitchFrames(samples, sampleRate));
   const measured = Float32Array.from({ length: frameCount }, (_, i) => {
     const t = i / frameRate;
     if (

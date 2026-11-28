@@ -20,7 +20,10 @@ import {
   trackPitch,
 } from '../src/index.js';
 import { createRandom, randomNormal } from '../src/random.js';
-import { analyzeFrameHops } from '../src/recognition/frontend.js';
+import {
+  analyzeFrameHops,
+  analyzePitchFrames,
+} from '../src/recognition/frontend.js';
 import { trackPitchFrames, trackPitchHops } from '../src/recognition/pitch.js';
 import {
   highPass,
@@ -71,6 +74,17 @@ it('reuses batch pitch scratch across frame counts and candidate widths', () => 
     retained ??= { track: actual, original: actual.f0.slice() };
   }
   expect(retained.track.f0).toEqual(retained.original);
+});
+
+it('keeps the default pitch contour with only pitch analysis columns', () => {
+  for (const sampleRate of [8000, 16000]) {
+    const samples = renderPlan(planUtterance('ama'), { sampleRate, seed: 1 });
+    const frames = analyzeFrames(samples, sampleRate);
+    const expected = trackPitch(frames);
+    const actual = trackPitchFrames(analyzePitchFrames(samples, sampleRate));
+    expect(actual.hop).toBe(expected.hop);
+    expect(actual.f0).toEqual(expected.f0.subarray(0, frames.count));
+  }
 });
 
 /** The sentence for `preset` at `sampleRate` (waveguide, seed 1), cached. */
