@@ -24,19 +24,26 @@ function byteLength(base64) {
 }
 
 function readBytes(base64, out, offset) {
-  const end = offset + byteLength(base64);
-  for (let i = 0; i < base64.length; i += 4) {
+  const length = byteLength(base64);
+  const triplets = length - (length % 3);
+  const end = offset + length;
+  let i = 0;
+  for (const stop = offset + triplets; offset < stop; i += 4) {
     const n =
       (SEXTETS[base64.charCodeAt(i)] << 18) |
       (SEXTETS[base64.charCodeAt(i + 1)] << 12) |
       (SEXTETS[base64.charCodeAt(i + 2)] << 6) |
       SEXTETS[base64.charCodeAt(i + 3)];
     out[offset++] = n >> 16;
+    out[offset++] = n >> 8;
+    out[offset++] = n;
+  }
+  if (offset < end) {
+    const a = SEXTETS[base64.charCodeAt(i)];
+    const b = SEXTETS[base64.charCodeAt(i + 1)];
+    out[offset++] = (a << 2) | (b >> 4);
     if (offset < end) {
-      out[offset++] = (n >> 8) & 255;
-    }
-    if (offset < end) {
-      out[offset++] = n & 255;
+      out[offset++] = (b << 4) | (SEXTETS[base64.charCodeAt(i + 2)] >> 2);
     }
   }
   return offset;
@@ -64,7 +71,6 @@ const VALUES_PER_DIMENSION = 256;
 /** Keep mixture codes and expand each distinct value only once per dimension. */
 export function unpackHmmModel(data) {
   const { lda, units, contexts, durations, mixtures } = data;
-  const contextUnits = contexts.map((key) => units.indexOf(key.split('#')[0]));
   const dims = lda.dims;
   const counts = bytes(mixtures.counts);
   const weights = int8(mixtures.weights);
@@ -104,24 +110,37 @@ export function unpackHmmModel(data) {
     first[i + 1] = first[i] + n;
   });
   const ciIndex = new Map();
+  const unitIndex = new Map();
+  const stayByUnit = new Float64Array(units.length);
+  const goByUnit = new Float64Array(units.length);
   units.forEach((unit, u) => {
+    if (!unitIndex.has(unit)) {
+      unitIndex.set(unit, u);
+    }
+    // Mean phone durations in frames give the left-to-right transitions.
+    stayByUnit[u] = Math.log(1 - 3 / durations[u]);
+    goByUnit[u] = Math.log(3 / durations[u]);
     for (let s = 0; s < 3; s++) {
       ciIndex.set(`${unit}#${s}`, 3 * u + s);
     }
   });
-  const contextIndex = new Map(
-    contexts.map((key, i) => [key, 3 * units.length + i])
-  );
-  const stateUnit = Int32Array.from({ length: counts.length }, (_, i) =>
-    i < 3 * units.length
-      ? Math.floor(i / 3)
-      : contextUnits[i - 3 * units.length]
-  );
-  // Mean phone durations in frames give the left-to-right transitions.
-  const stay = Float64Array.from(stateUnit, (u) =>
-    Math.log(1 - 3 / durations[u])
-  );
-  const go = Float64Array.from(stateUnit, (u) => Math.log(3 / durations[u]));
+  const contextIndex = new Map();
+  const stay = new Float64Array(counts.length);
+  const go = new Float64Array(counts.length);
+  const ciCount = 3 * units.length;
+  for (let i = 0; i < ciCount; i++) {
+    const u = Math.floor(i / 3);
+    stay[i] = stayByUnit[u];
+    go[i] = goByUnit[u];
+  }
+  contexts.forEach((key, i) => {
+    const state = ciCount + i;
+    const separator = key.indexOf('#');
+    const u = unitIndex.get(separator < 0 ? key : key.slice(0, separator));
+    contextIndex.set(key, state);
+    stay[state] = stayByUnit[u];
+    go[state] = goByUnit[u];
+  });
   return {
     lda: {
       ...lda,
