@@ -5,6 +5,7 @@
  * then a forced alignment of the best words for phone times. Unlicense.
  */
 import { createFrontier } from './hmm-frontier.js';
+import { scoreFrame } from './hmm-frame.js';
 import { stateIndex, stateScore, toneUnits } from './hmm-model.js';
 
 export const HMM_DECODE_DEFAULTS = Object.freeze({
@@ -442,6 +443,7 @@ function stateFrame(rows) {
     scores: new Float64Array(6 * rows),
     histories: new Int32Array(6 * rows),
     starts: new Int32Array(6 * rows),
+    peaks: new Float64Array(rows),
   };
 }
 
@@ -452,8 +454,7 @@ function createWorkspace({ nodeCount, model, languages }) {
     current: stateFrame(256),
     entries: createFrontier(nodeCount),
     next: createFrontier(nodeCount),
-    work: [],
-    processed: [],
+    work: new Uint32Array(256),
     records: createWordHistory(),
     transitions: transitionCache(),
     histogram: thresholdWorkspace(languages.length),
@@ -496,15 +497,17 @@ function decodeWithWorkspace(network, feats, frames, options, workspace) {
   const { lmw, releaseSkip, oovStart } = settings;
   const languages = settings.languages ?? [...network.trees.keys()];
   const { nodes, words, emit, trees, wordId, nextWord } = network;
-  const { stay, go } = network.model;
+  const { go } = network.model;
   const { first, count, optional, child, sibling, terminal, lookLn } = nodes;
-  const {
-    stamp,
-    value: emissions,
-    evaluate,
-  } = emissionCache(network.model, feats, settings, workspace.emission);
+  const emissions = emissionCache(
+    network.model,
+    feats,
+    settings,
+    workspace.emission
+  );
   let { previous, current, entries, next } = workspace;
-  const { positions, work, processed, records } = workspace;
+  const { positions, records } = workspace;
+  let { work } = workspace;
   positions.fill(0);
   const lm = languageModel(network, records, settings, workspace.transitions);
   const thresholdsOf = createThresholds(
@@ -519,13 +522,24 @@ function decodeWithWorkspace(network, feats, frames, options, workspace) {
   const endings = Array.from({ length: network.languages.length * 5 }, () => ({
     frame: -1,
   }));
+  const pass = {
+    positions,
+    work,
+    active,
+    length: 0,
+    previous,
+    current,
+    entries,
+    emissions,
+  };
   for (let t = 0; t < frames; t++) {
-    const {
-      nodes: entryNodes,
-      scores: entryScores,
-      histories: entryHistories,
-      starts: entryStarts,
-    } = entries.columns;
+    const entryNodes = entries.columns.nodes;
+    const capacity = Math.min(network.nodeCount, active + entries.length);
+    if (work.length < capacity) {
+      const grown = new Uint32Array(Math.max(capacity, 2 * work.length));
+      grown.set(work.subarray(0, active));
+      work = grown;
+    }
     let length = active;
     for (let i = 0; i < entries.length; i++) {
       const id = entryNodes[i];
@@ -533,56 +547,18 @@ function decodeWithWorkspace(network, feats, frames, options, workspace) {
         work[length++] = id;
       }
     }
-    if (current.scores.length < 6 * length) {
-      current = stateFrame(Math.max(length, current.scores.length / 3));
+    if (current.peaks.length < length) {
+      current = stateFrame(Math.max(length, 2 * current.peaks.length));
     }
-    const { scores, histories, starts } = current;
-    let best = -Infinity;
-    for (let index = 0; index < length; index++) {
-      const id = work[index];
-      const f = first[id];
-      const wasActive = index < active;
-      const prior = (positions[id] - 1) * 6;
-      const offset = index * 6;
-      const entry = entries.at(id);
-      let nodeBest = -Infinity;
-      for (let i = 0; i < count[id]; i++) {
-        const j = prior + i;
-        const state = f + i;
-        let s = -Infinity;
-        let hist = 0;
-        let start = 0;
-        if (wasActive) {
-          s = previous.scores[j] + stay[emit[state]];
-          hist = previous.histories[j];
-          start = previous.starts[j];
-          if (i > 0 && previous.scores[j - 1] + go[emit[state - 1]] > s) {
-            s = previous.scores[j - 1] + go[emit[state - 1]];
-            hist = previous.histories[j - 1];
-            start = previous.starts[j - 1];
-          }
-        }
-        if (i === 0 && entry >= 0 && entryScores[entry] > s) {
-          s = entryScores[entry];
-          hist = entryHistories[entry];
-          start = entryStarts[entry];
-        }
-        if (s > -Infinity) {
-          const row = emit[state];
-          if (stamp[row] !== t) {
-            evaluate(row, t);
-          }
-          s += emissions[row];
-        }
-        scores[offset + i] = s;
-        histories[offset + i] = hist;
-        starts[offset + i] = start;
-        nodeBest = Math.max(nodeBest, s);
-      }
-      best = Math.max(best, nodeBest);
-      processed[index] = nodeBest;
-    }
-    const thresholds = thresholdsOf(work, processed, length, best);
+    const { scores, histories, starts, peaks } = current;
+    pass.work = work;
+    pass.active = active;
+    pass.length = length;
+    pass.previous = previous;
+    pass.current = current;
+    pass.entries = entries;
+    const best = scoreFrame(network, pass, t);
+    const thresholds = thresholdsOf(work, peaks, length, best);
     for (let i = 0; i < active; i++) {
       positions[work[i]] = 0;
     }
@@ -592,7 +568,7 @@ function decodeWithWorkspace(network, feats, frames, options, workspace) {
       const id = work[index];
       const language = nodes.language[id];
       const threshold = thresholds[language];
-      if (processed[index] < threshold) {
+      if (peaks[index] < threshold) {
         continue;
       }
       const offset = index * 6;
@@ -684,6 +660,7 @@ function decodeWithWorkspace(network, feats, frames, options, workspace) {
   );
   workspace.previous = previous;
   workspace.current = current;
+  workspace.work = work;
   return {
     words: backtrace(network, records, best),
     score: bestScore,

@@ -12,11 +12,9 @@ export function createFrontier(nodeCount) {
   let length = 0;
   return {
     columns,
+    index,
     get length() {
       return length;
-    },
-    at(node) {
-      return index[node] - 1;
     },
     enter(node, score, history, start) {
       let i = index[node] - 1;
