@@ -14,6 +14,7 @@ import { fileURLToPath, URL } from 'node:url';
 import {
   formatReport,
   judge,
+  passes,
   regressions,
   REPORT_PATH,
 } from '../../scripts/lowest-report.mjs';
@@ -32,6 +33,7 @@ const ROWS = [
 ];
 const ENGINES = ['js', 'rust'];
 const HEAP_CAP = '--max-old-space-size=192';
+const STREAM_SECONDS = 60;
 const ROW_TIMEOUT_MS = 6 * 3_600_000;
 const read = (file) =>
   existsSync(file) ? JSON.parse(readFileSync(file, 'utf8')) : null;
@@ -226,6 +228,30 @@ describe('lowest settings: 8 kHz and one core', () => {
       // A run on fewer utterances is a smoke test, not the certification.
       console.log(`lowest: --limit ${limit}, committed cells not compared`);
       return;
+    }
+    assert.ok(pinned, 'Streaming certification requires one pinned core');
+    for (const engine of ENGINES) {
+      const measured = runs.streaming[engine];
+      assert.ok(
+        !measured.capped?.crashed,
+        `streaming ${engine}: ${measured.capped?.crashed}`
+      );
+      assert.equal(
+        measured.audioSeconds,
+        STREAM_SECONDS,
+        `streaming ${engine}`
+      );
+      const limits = {
+        ...thresholds.streaming.quality,
+        ...thresholds.streaming[`${engine}-1`],
+      };
+      for (const [name, limit] of Object.entries(limits)) {
+        const value = measured.metrics?.[name];
+        assert.ok(
+          passes(name, value, limit),
+          `streaming ${engine} ${name}: ${value} exceeds ${limit}`
+        );
+      }
     }
     const committed = read(
       path.join(ROOT, REPORT_PATH.replace(/\.md$/u, '.json'))
