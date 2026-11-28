@@ -4,6 +4,7 @@ import { installPreparedLexicons } from './lexicon.js';
 import { openPreparedLexicon } from './prepared-lexicon.js';
 import { HMM_MAX_WORDS, installPreparedHmm } from './hmm-network.js';
 import { openHmmArchive } from './hmm-archive.js';
+import { installPreparedModeBaselines } from './mode-baseline.js';
 import {
   installWordTransitionReader,
   openWordTransitions,
@@ -37,6 +38,13 @@ export const wordTransitionVersion = 1;
 export const wordTransitionFile = (language) =>
   new globalThis.URL(
     `../engine/voice-simulator-word-transitions-${language}.bin.gz`,
+    import.meta.url
+  );
+
+export const modeBaselineVersion = 1;
+export const modeBaselineFile = () =>
+  new globalThis.URL(
+    '../engine/voice-simulator-recognition-modes.bin.gz',
     import.meta.url
   );
 
@@ -188,6 +196,22 @@ export function configureNodeRecognitionModels() {
     return version === recognitionModelVersion ? rows : undefined;
   }
   const v8 = process.getBuiltinModule('node:v8');
+  let modeBaselines;
+  installPreparedModeBaselines((key) => {
+    if (!modeBaselines) {
+      modeBaselines = new Map();
+      try {
+        const [version, rows] = v8.deserialize(readAsset(modeBaselineFile()));
+        if (version === modeBaselineVersion && rows instanceof Map) {
+          modeBaselines = rows;
+        }
+      } catch {
+        // Source installations can measure these references on demand.
+      }
+    }
+    const row = modeBaselines.get(key);
+    return row && globalThis.structuredClone(row);
+  });
   const hmmSizes = new Map();
   installPreparedHmm(
     (language, maxWords) => {

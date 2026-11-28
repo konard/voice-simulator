@@ -7,7 +7,13 @@ import {
   synthesize,
   prepareUtterance,
 } from '../src/index.js';
-import { voiceBaseline } from '../src/recognition/mode-baseline.js';
+import {
+  emotionReferences,
+  installPreparedModeBaselines,
+  modeBaselineKey,
+  physicalReferences,
+  voiceBaseline,
+} from '../src/recognition/mode-baseline.js';
 import { effortRamps } from '../src/recognition/mode-spans.js';
 import {
   phraseSummary,
@@ -33,6 +39,36 @@ it('keeps unknown-voice modes when unused formants are omitted', () => {
   });
   expect(stages.includes('Formants')).toBe(true);
   expect(result).toEqual(traced);
+});
+
+it('uses the prepared telephone references for the matching known voice', () => {
+  const voice = { head: HEAD };
+  const source = voiceBaseline(voice, 8000, 'en');
+  const row = {
+    ipa: source.ipa,
+    features: source.features,
+    vowels: source.vowels,
+    references: emotionReferences(source),
+    physical: physicalReferences(source),
+  };
+  const key = modeBaselineKey(source.head, 'telephone', 'en');
+  const requested = [];
+  installPreparedModeBaselines((signature) => {
+    requested.push(signature);
+    return signature === key ? row : undefined;
+  });
+  try {
+    const baseline = voiceBaseline(voice, 8000, 'en');
+    expect(baseline.ipa).toBe(row.ipa);
+    expect(baseline.features).toBe(row.features);
+    expect(baseline.vowels).toBe(row.vowels);
+    expect(emotionReferences(baseline)).toBe(row.references);
+    expect(physicalReferences(baseline)).toBe(row.physical);
+    expect(voiceBaseline(voice, 8000, 'ru').prepared).toBeUndefined();
+    expect(requested.length).toBe(2);
+  } finally {
+    installPreparedModeBaselines(undefined);
+  }
 });
 
 describe('speech-mode integration', () => {

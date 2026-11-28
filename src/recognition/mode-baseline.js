@@ -12,6 +12,7 @@ import {
 import { emotionVector } from './mode-rules.js';
 import { EMOTIONS } from '../articulation/emotion.js';
 import { AUDIO_TIERS } from '../perf/lod.js';
+import { lexiconRevision } from '../g2p/lexicon.js';
 
 export const BASELINE_TEXT = Object.freeze({
   en: 'The train leaves at seven.',
@@ -21,6 +22,12 @@ export const BASELINE_TEXT = Object.freeze({
 });
 const cache = new Map();
 const contexts = new Map();
+let readPreparedBaseline;
+
+export function installPreparedModeBaselines(read) {
+  readPreparedBaseline = read;
+  cache.clear();
+}
 
 export function baselineHead(voice) {
   if (
@@ -32,6 +39,16 @@ export function baselineHead(voice) {
   }
   return normalizeHeadConfig(voice.head ?? loadVoice(voice).head);
 }
+export function modeBaselineKey(head, tier, language) {
+  return JSON.stringify([
+    Object.keys(head)
+      .sort()
+      .map((k) => [k, head[k]]),
+    tier,
+    language,
+  ]);
+}
+
 export function voiceBaseline(voice, sampleRate, language, trace) {
   const head = baselineHead(voice);
   const lang = Object.hasOwn(BASELINE_TEXT, language) ? language : 'en';
@@ -41,13 +58,9 @@ export function voiceBaseline(voice, sampleRate, language, trace) {
     AUDIO_TIERS.find(
       (entry) => entry.solver === 'waveguide' && entry.sampleRate >= sampleRate
     )?.name ?? 'medium';
-  const key = JSON.stringify([
-    Object.keys(head)
-      .sort()
-      .map((k) => [k, head[k]]),
-    tier,
-    lang,
-  ]);
+  const signature = modeBaselineKey(head, tier, lang);
+  const revision = lexiconRevision();
+  const key = `${revision}:${signature}`;
   if (cache.has(key)) {
     const value = cache.get(key);
     cache.delete(key);
@@ -56,22 +69,17 @@ export function voiceBaseline(voice, sampleRate, language, trace) {
     return value;
   }
   const options = { head, lang, tier, seed: 1, engine: 'js' };
-  const neutral = synthesize(BASELINE_TEXT[lang], options);
-  const words = measureWords(
-    neutral.samples,
-    neutral.sampleRate,
-    { words: neutral.timeline.words },
-    head
-  );
-  const features = phraseSummary(words);
-  const vowels = vowelReferences(words);
+  const prepared = revision === 0 ? readPreparedBaseline?.(signature) : null;
+  const { ipa, features, vowels } =
+    prepared ?? renderNeutralReference(head, lang, options);
   const value = {
     head,
-    ipa: neutral.ipa,
+    ipa,
     features,
     vowels,
     references: null,
     physical: null,
+    prepared,
     options,
     language: lang,
   };
@@ -83,19 +91,39 @@ export function voiceBaseline(voice, sampleRate, language, trace) {
   return value;
 }
 
+function renderNeutralReference(head, lang, options) {
+  const neutral = synthesize(BASELINE_TEXT[lang], options);
+  const words = measureWords(
+    neutral.samples,
+    neutral.sampleRate,
+    { words: neutral.timeline.words },
+    head
+  );
+  return {
+    ipa: neutral.ipa,
+    features: phraseSummary(words),
+    vowels: vowelReferences(words),
+  };
+}
+
 export function emotionReferences(baseline, trace) {
   if (baseline.references) {
     return baseline.references;
   }
-  baseline.references = Object.keys(EMOTIONS).map((name) => {
+  baseline.references =
+    baseline.prepared?.references ?? renderEmotions(baseline);
+  trace?.({ stage: 'emotion-references', references: baseline.references });
+  return baseline.references;
+}
+
+function renderEmotions(baseline) {
+  return Object.keys(EMOTIONS).map((name) => {
     const rendered = synthesize(
       `[${name}]${BASELINE_TEXT[baseline.language]}[/${name}]`,
       { ...baseline.options, markup: true }
     );
     return { name, vector: referenceVector(baseline, rendered) };
   });
-  trace?.({ stage: 'emotion-references', references: baseline.references });
-  return baseline.references;
 }
 
 function referenceVector(baseline, rendered) {
@@ -115,7 +143,12 @@ function referenceVector(baseline, rendered) {
  * hypotheses prevent e.g. creak alone from commanding a disgusted preset
  * (which would also slow the replay). They never emit an emotion name. */
 export function physicalReferences(baseline) {
-  baseline.physical ??= [
+  baseline.physical ??= baseline.prepared?.physical ?? renderPhysical(baseline);
+  return baseline.physical;
+}
+
+function renderPhysical(baseline) {
+  return [
     'pp',
     'p',
     'f',
@@ -141,7 +174,6 @@ export function physicalReferences(baseline) {
       })
     ),
   }));
-  return baseline.physical;
 }
 
 /** A neutral rendering of the known phones removes vowel identity, lexical

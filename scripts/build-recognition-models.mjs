@@ -24,6 +24,7 @@ import {
 } from '../src/recognition/hmm-network.js';
 import { serializeLexicon } from '../src/recognition/prepared-lexicon.js';
 import { buildRecognitionCodebook } from './build-recognition-codebook.mjs';
+import { buildModeBaselines } from './build-mode-baselines.mjs';
 
 function writeAsset(file, bytes) {
   const asset = gzipSync(bytes);
@@ -89,3 +90,4 @@ for (const [maxWords, sizes] of hmmSizes) {
 }
 write(recognitionDataFile('models'), models);
 buildRecognitionCodebook();
+buildModeBaselines();

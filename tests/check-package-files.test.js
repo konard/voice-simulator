@@ -57,6 +57,7 @@ describe('check-package-files', () => {
       'src/engine/voice-simulator.wasm',
       'src/engine/voice-simulator-oral-codebook.bin',
       'src/engine/voice-simulator-recognition-models.json.gz',
+      'src/engine/voice-simulator-recognition-modes.bin.gz',
       'src/engine/voice-simulator-recognition-en.bin.gz',
       'src/engine/voice-simulator-recognition-ru.bin.gz',
       'src/engine/voice-simulator-recognition-hi.bin.gz',
