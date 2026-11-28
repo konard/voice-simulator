@@ -303,7 +303,12 @@ export function hmmFeatures(
   const x = hmmAudio(samples, sampleRate);
   let modelPitch = sampleRate === HMM_RATE ? pitchAtInputRate : undefined;
   if (!modelPitch && framePitch) {
-    modelPitch = trackPitchFrames(analyzePitchFrames(x, HMM_RATE, 0.01));
+    // The input-rate analysis may still need its own samples and frame columns.
+    const pitchStorage = (key, length, Type) =>
+      storage(`hmmPitch:${key}`, length, Type);
+    modelPitch = trackPitchFrames(
+      analyzePitchFrames(x, HMM_RATE, 0.01, pitchStorage)
+    );
   }
   const { values, count, pitch, lf0, voicing } = staticFeatures(
     x,

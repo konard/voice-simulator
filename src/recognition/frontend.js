@@ -863,8 +863,8 @@ export function analyzeFrames(samples, sampleRate, options = {}, storage) {
 }
 
 /** The default frame grid at a given hop, with the inputs of the pitch tracker. */
-export function analyzePitchFrames(samples, sampleRate, hop) {
-  return analyzeRecording(samples, sampleRate, { hop }, undefined, 'pitch');
+export function analyzePitchFrames(samples, sampleRate, hop, storage) {
+  return analyzeRecording(samples, sampleRate, { hop }, storage, 'pitch');
 }
 
 function analyzeRecording(samples, sampleRate, options, storage, features) {

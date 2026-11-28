@@ -18,6 +18,7 @@ import {
   validateRate,
   validateSamples,
   usesWordDecoder,
+  withBatchFrames,
 } from './recognizer.js';
 import { aggregate, translated } from './recognizer-result.js';
 import { createLiveFrames } from './recognizer-live-frames.js';
@@ -181,6 +182,7 @@ function createWordFrontend(sampleRate, options, liveSyllables) {
   }
   return {
     frames,
+    phraseSamples: frames.samples,
     report() {
       return phones ? null : report();
     },
@@ -211,9 +213,13 @@ function createPhraseDecoder(
     maxSeconds: MAX_WINDOW + 1,
     lattice: settings.rescoring,
   };
+  const decoder = createDecoder(sampleRate, options);
+  const capacity = Math.ceil(MAX_WINDOW * sampleRate);
   return {
-    decoder: createDecoder(sampleRate, options),
-    buffer: new Float32Array(Math.ceil(MAX_WINDOW * sampleRate)),
+    decoder,
+    buffer:
+      decoder.phraseSamples?.subarray(0, capacity) ??
+      new Float32Array(capacity),
     used: 0,
     scanned: 0,
     lastSpeech: -1,
@@ -222,6 +228,14 @@ function createPhraseDecoder(
     nextCut: 0,
     nextPreview: Math.round(sampleRate * 0.25),
   };
+}
+
+function pushPhrase(phrase, samples) {
+  if (!phrase.decoder.phraseSamples) {
+    phrase.buffer.set(samples, phrase.used);
+  }
+  phrase.used += samples.length;
+  return phrase.decoder.push(samples);
 }
 
 export function createEvents() {
@@ -479,33 +493,42 @@ export function createConfiguredRecognizer(
     );
   }
 
-  function readWords(size, options, readSettings = settings) {
-    return decodeRecognitionAudio(
-      phrase.buffer.subarray(0, size),
-      sampleRate,
-      readSettings,
-      level,
-      offset / sampleRate,
-      { ...options, useModelWords: true, framePitch: true }
+  function readWords(size, options, consume, readSettings = settings) {
+    return withBatchFrames((frameOptions) =>
+      consume(
+        decodeRecognitionAudio(
+          phrase.buffer.subarray(0, size),
+          sampleRate,
+          readSettings,
+          level,
+          offset / sampleRate,
+          { ...frameOptions, ...options, useModelWords: true }
+        )
+      )
     );
   }
 
   function wordCommit(size, finished) {
-    const reading = readWords(size, {
-      analysis: finished ? phrase.decoder.frames : undefined,
-      search: size > 2 * sampleRate ? HMM_LOW_SEARCH : undefined,
-    });
-    checkPhraseNoise(reading.decoded.frames, size);
-    return phraseSpeech(reading.decoded, size)
-      ? recognizeDecoded(
-          reading.decoded,
-          reading.input,
-          reading.rate,
-          settings,
-          level,
-          'batch'
-        )
-      : emptyRecognition(nbest, settings.segments);
+    return readWords(
+      size,
+      {
+        analysis: finished ? phrase.decoder.frames : undefined,
+        search: size > 2 * sampleRate ? HMM_LOW_SEARCH : undefined,
+      },
+      (reading) => {
+        checkPhraseNoise(reading.decoded.frames, size);
+        return phraseSpeech(reading.decoded, size)
+          ? recognizeDecoded(
+              reading.decoded,
+              reading.input,
+              reading.rate,
+              settings,
+              level,
+              'batch'
+            )
+          : emptyRecognition(nbest, settings.segments);
+      }
+    );
   }
 
   function checkPhraseNoise(frames, size) {
@@ -587,9 +610,7 @@ export function createConfiguredRecognizer(
     // Only the lookahead after a word cut is replayed, with its original offset.
     const suffix = previous.buffer.subarray(size, previous.used);
     if (suffix.length) {
-      phrase.buffer.set(suffix);
-      phrase.used = suffix.length;
-      update(phrase.decoder.push(suffix));
+      update(pushPhrase(phrase, suffix));
     }
     onApplied?.();
   }
@@ -633,21 +654,23 @@ export function createConfiguredRecognizer(
         modes: false,
         includeModeLabels: false,
       };
-      const reading = readWords(
+      readWords(
         phrase.used,
         { analysis: phrase.decoder.frames, search: PREVIEW_SEARCH },
+        (reading) => {
+          if (phraseSpeech(reading.decoded, phrase.used)) {
+            phrase.partial = recognizeDecoded(
+              reading.decoded,
+              reading.input,
+              reading.rate,
+              readSettings,
+              level,
+              false
+            );
+          }
+        },
         readSettings
       );
-      if (phraseSpeech(reading.decoded, phrase.used)) {
-        phrase.partial = recognizeDecoded(
-          reading.decoded,
-          reading.input,
-          reading.rate,
-          readSettings,
-          level,
-          false
-        );
-      }
       phrase.nextPreview =
         phrase.used + sampleRate * (phrase.partial?.words.length ? 2 : 0.25);
     }
@@ -688,9 +711,7 @@ export function createConfiguredRecognizer(
 
   function advance(chunk) {
     const start = load && globalThis.performance.now();
-    phrase.buffer.set(chunk, phrase.used);
-    phrase.used += chunk.length;
-    update(phrase.decoder.push(chunk));
+    update(pushPhrase(phrase, chunk));
     const pause = trailingPause(phrase.decoder.frames, phrase);
     const total = offset + phrase.used;
     const due = total >= Math.ceil((nextPartial * sampleRate) / 4);
@@ -745,10 +766,11 @@ export function createConfiguredRecognizer(
     }
     phrase.nextCut = phrase.used + sampleRate;
     if (wordPhrases) {
-      return readWords(phrase.used, {
-        analysis: phrase.decoder.frames,
-        search: HMM_LOW_SEARCH,
-      }).decoded.words;
+      return readWords(
+        phrase.used,
+        { analysis: phrase.decoder.frames, search: HMM_LOW_SEARCH },
+        ({ decoded }) => decoded.words
+      );
     }
     return decodeRecognitionAudio(
       phrase.buffer.subarray(0, phrase.used),

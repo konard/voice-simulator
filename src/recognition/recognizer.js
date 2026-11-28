@@ -604,7 +604,7 @@ function checkNoise(decoded, duration) {
 let spareFrames = new Map();
 
 /** The batch result is complete before any of these columns are reused. */
-function withBatchFrames(recognizeBatch) {
+export function withBatchFrames(recognizeBatch) {
   const columns = spareFrames ?? new Map();
   spareFrames = undefined;
   function frameStorage(key, length, Type) {
