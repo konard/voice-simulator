@@ -327,43 +327,36 @@ function createFrameSet(settings, samples, storage, features) {
   if (features === 'pitch') {
     return shared;
   }
-  const speech = column('speech', 1, Uint8Array);
-  const periodicity = column('periodicity');
+  const gate = {
+    ...shared,
+    speech: column('speech', 1, Uint8Array),
+    periodicity: column('periodicity'),
+  };
   if (features === 'speech') {
-    return { ...shared, speech, periodicity };
+    return gate;
+  }
+  const gravity = column('gravity');
+  if (features === 'word-timing') {
+    return { ...gate, gravity };
   }
   return {
-    ...shared,
-    zcr: column('zcr'),
-    tilt: column('tilt'),
-    gravity: column('gravity'),
-    periodicity,
+    ...gate,
+    gravity,
     gain: column('gain'),
-    speech,
     lpc: column('lpc', settings.order),
     reflection: column('reflection', settings.order),
     mel: column('mel', settings.melBands),
-    cepstrum: column('cepstrum', settings.cepstra),
     band: column('band', BANDS.length),
+    ...(features !== 'word-modes' && {
+      zcr: column('zcr'),
+      tilt: column('tilt'),
+      cepstrum: column('cepstrum', settings.cepstra),
+    }),
   };
 }
 
 /** Arrays of a frame set with their row widths. */
-function frameColumns(frames, features) {
-  if (features === 'pitch') {
-    return [
-      [frames.energy, 1],
-      [frames.noise, 1],
-    ];
-  }
-  if (features === 'speech') {
-    return [
-      [frames.energy, 1],
-      [frames.noise, 1],
-      [frames.speech, 1],
-      [frames.periodicity, 1],
-    ];
-  }
+function frameColumns(frames) {
   return [
     [frames.energy, 1],
     [frames.zcr, 1],
@@ -378,7 +371,7 @@ function frameColumns(frames, features) {
     [frames.mel, frames.melBands],
     [frames.cepstrum, frames.cepstra],
     [frames.band, BANDS.length],
-  ];
+  ].filter(([column]) => column);
 }
 
 /**
@@ -462,7 +455,6 @@ function createKernel(settings, tables, frames) {
     settings,
     tables,
     frames,
-    raw: new Float64Array(length),
     emphasised: new Float64Array(length),
     re: new Float64Array(size),
     im: new Float64Array(size),
@@ -479,7 +471,7 @@ function createKernel(settings, tables, frames) {
  * for LPC. Returns the mean power (plus EPSILON).
  */
 function measureWaveform(kernel, row, buffer, start) {
-  const { raw, emphasised, re, im, frames } = kernel;
+  const { emphasised, re, im, frames } = kernel;
   const { length, preEmphasis } = kernel.settings;
   const hann = kernel.tables.hann;
   let sum = 0;
@@ -487,9 +479,8 @@ function measureWaveform(kernel, row, buffer, start) {
   let previous = buffer[start - 1];
   for (let n = 0; n < length; n++) {
     const value = buffer[start + n];
-    raw[n] = value;
     sum += value * value;
-    if (n > 0 && value >= 0 !== raw[n - 1] >= 0) {
+    if (n > 0 && value >= 0 !== previous >= 0) {
       crossings++;
     }
     emphasised[n] = (value - preEmphasis * previous) * hann[n];
@@ -501,7 +492,9 @@ function measureWaveform(kernel, row, buffer, start) {
   im.fill(0, length);
   const meanPower = sum / length + EPSILON;
   frames.energy[row] = 10 * Math.log10(meanPower);
-  frames.zcr[row] = crossings / (length - 1);
+  if (frames.zcr) {
+    frames.zcr[row] = crossings / (length - 1);
+  }
   return meanPower;
 }
 
@@ -519,13 +512,18 @@ function measureSpectrum(kernel, row) {
     moment += ((bin * rate) / size) * value;
   }
   frames.gravity[row] = total > 0 ? moment / total : 0;
-  frames.tilt[row] =
-    10 *
-    Math.log10(
-      (rangePower(power, tables.tiltLow) + EPSILON) /
-        (rangePower(power, tables.tiltHigh) + EPSILON)
-    );
+  if (frames.tilt) {
+    frames.tilt[row] =
+      10 *
+      Math.log10(
+        (rangePower(power, tables.tiltLow) + EPSILON) /
+          (rangePower(power, tables.tiltHigh) + EPSILON)
+      );
+  }
   const bands = tables.bands;
+  if (!bands) {
+    return;
+  }
   for (let band = 0; band < bands.length; band++) {
     frames.band[row * bands.length + band] = bands[band]
       ? 10 * Math.log10(rangePower(power, bands[band]) + EPSILON)
@@ -574,6 +572,9 @@ function measureMel(kernel, row) {
     }
     logMel[m] = Math.log(Math.max(sum, EPSILON));
     frames.mel[row * melBands + m] = logMel[m];
+  }
+  if (!frames.cepstrum) {
+    return;
   }
   for (let n = 0; n < cepstra; n++) {
     let value = 0;
@@ -636,9 +637,13 @@ function measureSpeechFrame(kernel, row, buffer, start, noiseTracker) {
   im.fill(0);
   const meanPower = sum / length + EPSILON;
   frames.energy[row] = 10 * Math.log10(meanPower);
-  tables.fft.forward(re, im);
-  for (let bin = 0; bin < power.length; bin++) {
-    power[bin] = re[bin] * re[bin] + im[bin] * im[bin];
+  if (frames.gravity) {
+    measureSpectrum(kernel, row);
+  } else {
+    tables.fft.forward(re, im);
+    for (let bin = 0; bin < power.length; bin++) {
+      power[bin] = re[bin] * re[bin] + im[bin] * im[bin];
+    }
   }
   setSpeech(
     frames,
@@ -701,14 +706,14 @@ function allocateFrameBuffer(settings, storage, features) {
 
 function createFrameProcessor(settings, frames, features, onFrame) {
   const pitchOnly = features === 'pitch';
-  const speechOnly = features === 'speech';
+  const gateOnly = features === 'speech' || features === 'word-timing';
   const { length, hop } = settings;
   const noiseTracker = createNoiseTracker(hop);
   const kernel = pitchOnly
     ? null
     : createKernel(
         settings,
-        speechOnly ? periodicityTables(settings) : frontendTables(settings),
+        gateOnly ? periodicityTables(settings) : frontendTables(settings),
         frames
       );
   function analyze(row, buffer, start) {
@@ -716,7 +721,7 @@ function createFrameProcessor(settings, frames, features, onFrame) {
       measurePitchFrame(frames, row, buffer, start, length, noiseTracker);
       return;
     }
-    if (speechOnly) {
+    if (gateOnly) {
       measureSpeechFrame(kernel, row, buffer, start, noiseTracker);
       return;
     }
@@ -742,7 +747,7 @@ function frameAnalyzer(sampleRate, settings, onFrame, storage, features) {
     storage,
     features
   );
-  const columns = frameColumns(frames, features);
+  const columns = frameColumns(frames);
   const processor = createFrameProcessor(settings, frames, features, onFrame);
   const ratio = rate / sampleRate;
   let resampler = null;
@@ -898,6 +903,19 @@ export function analyzeOwnedFrames(samples, sampleRate, options, storage) {
   });
 }
 
+/** Acoustics used by word timing, whisper detection and optional mode labels. */
+export function analyzeWordFrames(samples, sampleRate, storage, includeModes) {
+  return analyzeRecording(
+    samples,
+    sampleRate,
+    { hop: 0.01 },
+    {
+      storage,
+      features: includeModes ? 'word-modes' : 'word-timing',
+    }
+  );
+}
+
 /** Analyze only the inputs of the pitch tracker. */
 export function analyzePitchFrames(samples, sampleRate, options = {}, storage) {
   return analyzeRecording(samples, sampleRate, options, {
@@ -928,7 +946,7 @@ function analyzeBorrowed(samples, settings, storage, features) {
     }
   }
   if (storage) {
-    clearUnusedRows(frames, count, features);
+    clearUnusedRows(frames, count);
   }
   frames.count = count;
   return frames;
@@ -974,8 +992,8 @@ function analyzeRecording(
   return analyzer.frames;
 }
 
-function clearUnusedRows(frames, count, features) {
-  for (const [column, width] of frameColumns(frames, features)) {
+function clearUnusedRows(frames, count) {
+  for (const [column, width] of frameColumns(frames)) {
     column.fill(0, count * width);
   }
 }
@@ -1004,7 +1022,7 @@ function analyzeResampled(
   const count = frameCount(frames.sampleCount, hopSamples);
   check(count <= capacity, `frame set is full (${capacity} frames)`);
   if (storage) {
-    clearUnusedRows(frames, count, features);
+    clearUnusedRows(frames, count);
   }
   const processor = createFrameProcessor(settings, frames, features, onFrame);
   for (let row = 0; row < count; row++) {

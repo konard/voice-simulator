@@ -25,6 +25,7 @@ import {
   analyzeFrameHops,
   analyzeOwnedFrames,
   analyzePitchFrames,
+  analyzeWordFrames,
   createSpeechAnalyzer,
 } from '../src/recognition/frontend.js';
 
@@ -142,6 +143,21 @@ it('analyzes an owned waveform without copying its samples or changing any frame
     const copied = analyzeFrames(view, rate, { hop: 0.01 });
     expect(owned.samples).toBe(view);
     expect(owned).toEqual({ ...copied, samples: view });
+  }
+});
+
+it('preserves the measurements used by word timing, whispers and mode labels', () => {
+  for (const rate of [8000, 16000]) {
+    const samples = whiteNoise(rate / 2 + 17, -30, rate);
+    samples.fill(0, 0, 421);
+    const complete = analyzeFrames(samples, rate, { hop: 0.01 });
+    const timing = analyzeWordFrames(samples, rate, undefined, false);
+    const modes = analyzeWordFrames(samples, rate, undefined, true);
+    const { zcr, tilt, cepstrum, gain, lpc, reflection, mel, band, ...gate } =
+      complete;
+    expect(timing).toEqual(gate);
+    expect(modes).toEqual({ ...gate, gain, lpc, reflection, mel, band });
+    expect({ ...modes, zcr, tilt, cepstrum }).toEqual(complete);
   }
 });
 

@@ -5,7 +5,7 @@
  * phone decoder's (`audioToIpa` in decode.js), with the words' language.
  * Unlicense.
  */
-import { analyzeFrames } from './frontend.js';
+import { analyzeFrames, analyzeWordFrames } from './frontend.js';
 import { trackPitch, trackPitchFrames } from './pitch.js';
 import { hmmBoundaryTime, hmmFeatures } from './hmm-features.js';
 import { getHmmModel } from './hmm-model.js';
@@ -200,8 +200,7 @@ function hmmFrontEnd(samples, sampleRate, options) {
     };
   }
   const analysis =
-    options.analysis ??
-    analyzeFrames(samples, sampleRate, { hop: 0.01 }, options.frameStorage);
+    options.analysis ?? wordAnalysis(samples, sampleRate, options);
   const pitch = options.framePitch
     ? trackPitchFrames(analysis, {
         percentiles: true,
@@ -209,6 +208,20 @@ function hmmFrontEnd(samples, sampleRate, options) {
       })
     : trackPitch(analysis, { kernels: options.kernels });
   return { analysis, pitch };
+}
+
+function wordAnalysis(samples, sampleRate, options) {
+  const { includeSyllables, includeModeFrames, useModelWords, frameStorage } =
+    options;
+  if (includeSyllables !== false) {
+    return analyzeFrames(samples, sampleRate, { hop: 0.01 }, frameStorage);
+  }
+  return analyzeWordFrames(
+    samples,
+    sampleRate,
+    frameStorage,
+    includeModeFrames || useModelWords
+  );
 }
 
 function hasSpeech(analysis) {
