@@ -199,11 +199,18 @@ it('prunes each language against its own best token (issue 75)', () => {
 
 it('keeps ties at the histogram pruning threshold', () => {
   const scores = [-60, -7, -5, -3, -5, -1, -2, -80];
-  const nodes = scores.map(() => ({ lang: 'en' }));
-  const thresholds = languageThresholds(nodes, scores.entries(), -1, {
-    ...HMM_DECODE_DEFAULTS,
-    beam: 10,
-    maxActive: 4,
-  });
-  assert.equal(thresholds.get('en'), -5);
+  const thresholds = new Float64Array(1);
+  languageThresholds(
+    new Uint8Array(scores.length),
+    {
+      work: scores.map((_, index) => index),
+      nodeScores: scores,
+      languageBest: [-1],
+      buckets: [[]],
+      thresholds,
+    },
+    -1,
+    { ...HMM_DECODE_DEFAULTS, beam: 10, maxActive: 4 }
+  );
+  assert.equal(thresholds[0], -5);
 });
