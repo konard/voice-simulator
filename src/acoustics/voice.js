@@ -625,7 +625,11 @@ export class VoiceRenderer {
     if (this.#builtinSolver && this.source === 'lf') {
       this.glottis.prepareBlock(this.shape.glottis);
     }
-    configure(this.steps, rate);
+    if (configure) {
+      configure(this.steps, rate);
+    } else {
+      this.output.configure(rate);
+    }
   }
 
   /**
@@ -832,12 +836,13 @@ export class VoiceRenderer {
   }
 
   /**
-   * Run the sources and the shapes for the next samples and queue the
-   * solver steps they need. Each sample interpolates between two step
-   * outputs: index 0 and 1 are the last two of the previous call, the
-   * steps of this call follow.
+   * Run the sources and shapes for the next samples. Synchronous solvers
+   * write samples immediately. Queued solvers record the interpolation
+   * between the last two step outputs for #finish.
    */
-  #run(length, configure, step, sample) {
+  #run(target, configure, step, sample) {
+    const { output, listener } = this;
+    const length = target.length;
     this.steps = 0;
     const outputStep = 1 / this.sampleRate;
     let written = 0;
@@ -856,7 +861,16 @@ export class VoiceRenderer {
           this.#step(step);
           this.solverTime += this.stepDuration;
         }
-        sample(written, 1 - (this.solverTime - this.time) / this.stepDuration);
+        const fraction = 1 - (this.solverTime - this.time) / this.stepDuration;
+        if (sample) {
+          sample(written, fraction);
+        } else {
+          const value =
+            this.previous + (this.current - this.previous) * fraction;
+          target[written] = output.finish(
+            listener ? listener.process(value) : value
+          );
+        }
         this.time += outputStep;
       }
     }
@@ -874,7 +888,7 @@ export class VoiceRenderer {
     let previous = 0;
     let current = 1;
     samples.count = this.#run(
-      target.length,
+      target,
       (step, rate) => this.rates.push(step, rate),
       (source, position, noise, flow) => {
         previous = current;
@@ -930,18 +944,7 @@ export class VoiceRenderer {
    * @returns {number} Number of samples written (less than target.length at the end).
    */
   render(target) {
-    const { output, listener } = this;
-    return this.#run(
-      target.length,
-      (_step, rate) => output.configure(rate),
-      null,
-      (index, fraction) => {
-        const value = this.previous + (this.current - this.previous) * fraction;
-        target[index] = output.finish(
-          listener ? listener.process(value) : value
-        );
-      }
-    );
+    return this.#run(target);
   }
 
   /**
