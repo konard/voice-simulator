@@ -342,24 +342,44 @@ export function buildNetwork(
 
 const networks = new WeakMap();
 
-/** Reuse packed nodes across searches that request overlapping languages. */
-export function getNetwork(model, languages, options = {}) {
+function graphCache(model, { maxWords = HMM_MAX_WORDS, oov = true }) {
   // Pronunciations added with addLexicon() change the trees.
   const revision = lexiconRevision();
-  const key = `${options.maxWords ?? HMM_MAX_WORDS}:${options.oov ?? true}`;
+  const key = `${maxWords}:${oov}`;
   let byModel = networks.get(model);
   if (!byModel || byModel.revision !== revision) {
     byModel = Object.assign(new Map(), { revision });
     networks.set(model, byModel);
   }
-  let network = byModel.get(key);
-  if (!network || languages.some((language) => !network.trees.has(language))) {
-    const shared = new Set(network?.trees.keys());
-    for (const language of languages) {
-      shared.add(language);
-    }
-    network = buildNetwork(model, [...shared], options);
-    byModel.set(key, network);
+  if (!byModel.has(key)) {
+    byModel.set(key, { single: new Map(), multilingual: null });
   }
-  return { ...network, languages };
+  return byModel.get(key);
+}
+
+/** Reuse packed nodes without growing the graph for single-language callers. */
+export function getNetwork(model, languages, options = {}) {
+  const graphs = graphCache(model, options);
+  const { single, multilingual } = graphs;
+  if (languages.length === 1 && !multilingual?.trees.has(languages[0])) {
+    const [language] = languages;
+    if (!single.has(language)) {
+      single.set(language, buildNetwork(model, languages, options));
+    }
+    return { ...single.get(language), languages };
+  }
+  if (
+    !multilingual ||
+    languages.some((lang) => !multilingual.trees.has(lang))
+  ) {
+    const shared = new Set([
+      ...(multilingual?.trees.keys() ?? []),
+      ...languages,
+    ]);
+    graphs.multilingual = buildNetwork(model, [...shared], options);
+    for (const language of shared) {
+      single.delete(language);
+    }
+  }
+  return { ...graphs.multilingual, languages };
 }

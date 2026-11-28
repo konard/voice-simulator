@@ -93,6 +93,17 @@ it('reuses the decoding graph when only one of its languages is requested', () =
   );
 });
 
+it('keeps separate graphs for alternating single-language recognition', () => {
+  const model = getHmmModel();
+  const options = { maxWords: 41 };
+  const english = getNetwork(model, ['en'], options);
+  const russian = getNetwork(model, ['ru'], options);
+
+  assert.deepEqual([...russian.trees.keys()], ['ru']);
+  assert.equal(getNetwork(model, ['en'], options).language, english.language);
+  assert.equal(getNetwork(model, ['ru'], options).language, russian.language);
+});
+
 it('adds the words of addLexicon() to the decoding network', () => {
   const model = getHmmModel();
   const has = () =>
