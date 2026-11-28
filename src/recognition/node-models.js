@@ -3,6 +3,7 @@ import { installLanguageModelReader } from './language-model.js';
 import { installPreparedLexicons } from './lexicon.js';
 import { openPreparedLexicon } from './prepared-lexicon.js';
 import { installPreparedHmm } from './hmm-network.js';
+import { openHmmArchive } from './hmm-archive.js';
 import {
   installWordTransitionReader,
   openWordTransitions,
@@ -24,7 +25,8 @@ export const recognitionDataFile = (kind) =>
     import.meta.url
   );
 
-export const hmmNetworkVersion = 2;
+export const hmmNetworkVersion = 3;
+const serializedHmmVersion = 2;
 export const hmmNetworkFile = (language) =>
   new globalThis.URL(
     `../engine/voice-simulator-hmm-${language}.bin.gz`,
@@ -190,10 +192,17 @@ export function configureNodeRecognitionModels() {
   installPreparedHmm(
     (language) => {
       try {
-        const [version, network] = v8.deserialize(
-          readAsset(hmmNetworkFile(language))
+        const bytes = readAsset(hmmNetworkFile(language));
+        const archive = openHmmArchive(
+          bytes,
+          hmmNetworkVersion,
+          v8.deserialize
         );
-        return version === hmmNetworkVersion ? network : undefined;
+        if (archive) {
+          return archive;
+        }
+        const [version, network] = v8.deserialize(bytes);
+        return version === serializedHmmVersion ? network : undefined;
       } catch {
         // Source installations can build the same network on demand.
       }
@@ -206,7 +215,8 @@ export function configureNodeRecognitionModels() {
             readAsset(hmmNetworkFile('index')).toString()
           );
           if (
-            version === hmmNetworkVersion &&
+            (version === hmmNetworkVersion ||
+              version === serializedHmmVersion) &&
             typeof sizes === 'object' &&
             sizes
           ) {

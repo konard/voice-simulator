@@ -56,13 +56,13 @@ export function packHmmWords(words, ranked) {
   return { rows, offsets, flags, symbols, phones: Type.from(phones) };
 }
 
-export function openHmmWords(data, ranked, lang, first) {
-  // Deserialised typed arrays can be views into the entire network asset.
-  // Keep only the vocabulary columns after appending the network topology.
-  const rows = data.rows.slice();
-  const offsets = data.offsets.slice();
-  const flags = data.flags.slice();
-  const phones = data.phones.slice();
+export function openHmmWords(data, ranked, lang, first, copy = true) {
+  // Drop the source archive after its topology is appended to a shared network.
+  const column = (values) => (copy ? values.slice() : values);
+  const rows = column(data.rows);
+  const offsets = column(data.offsets);
+  const flags = column(data.flags);
+  const phones = column(data.phones);
   const { symbols } = data;
   const index = (id) => id - first;
   const flag = (id) => flags[index(id)];

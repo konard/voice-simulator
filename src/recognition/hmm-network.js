@@ -503,7 +503,7 @@ function firstPrepared(network, lang, packed) {
   return {
     ...tree,
     data: lexicon,
-    wordTable: openHmmWords(words, lexicon.words, lang, 0),
+    wordTable: openHmmWords(words, lexicon.words, lang, 0, false),
   };
 }
 

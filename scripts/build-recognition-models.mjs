@@ -16,6 +16,7 @@ import { LANGUAGES } from '../src/g2p/index.js';
 import { packWordTransitions } from '../src/recognition/data/index.js';
 import { getLanguageModel } from '../src/recognition/language-model.js';
 import { getLexicon } from '../src/recognition/lexicon.js';
+import { packHmmArchive } from '../src/recognition/hmm-archive.js';
 import { packHmmNetwork } from '../src/recognition/hmm-network.js';
 import { serializeLexicon } from '../src/recognition/prepared-lexicon.js';
 import { buildRecognitionCodebook } from './build-recognition-codebook.mjs';
@@ -57,7 +58,10 @@ const models = Object.keys(LANGUAGES).map((language) => {
     serialize([recognitionModelVersion, serializeLexicon(lexicon, language)])
   );
   const hmm = packHmmNetwork(language);
-  writeAsset(hmmNetworkFile(language), serialize([hmmNetworkVersion, hmm]));
+  writeAsset(
+    hmmNetworkFile(language),
+    packHmmArchive(hmm, hmmNetworkVersion, serialize)
+  );
   hmmSizes[language] = {
     nodes: hmm.nodes.first.length,
     states: hmm.emit.length,
