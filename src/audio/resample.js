@@ -17,6 +17,44 @@ function sinc(x) {
   return Math.sin(angle) / angle;
 }
 
+/** Integer-aligned outputs share the same filter around their centers. */
+function integerKernel(cutoff, halfWidth) {
+  // Adding a large integer center can round a near-integer bound outward.
+  const radius = Math.ceil(halfWidth);
+  const length = 2 * radius + 1;
+  const lobes = new Float64Array(length);
+  const window = new Float64Array(length);
+  for (let i = 0; i < length; i++) {
+    const distance = radius - i;
+    lobes[i] = sinc(cutoff * distance);
+    window[i] = blackman(distance / halfWidth);
+  }
+  return { radius, lobes, window };
+}
+
+function resampleAt(samples, center, cutoff, halfWidth, kernel) {
+  const first = Math.max(0, Math.ceil(center - halfWidth));
+  const last = Math.min(samples.length - 1, Math.floor(center + halfWidth));
+  let sum = 0;
+  if (kernel && Number.isInteger(center)) {
+    const { radius, lobes, window } = kernel;
+    for (let source = first; source <= last; source++) {
+      const offset = source - center + radius;
+      sum += samples[source] * cutoff * lobes[offset] * window[offset];
+    }
+  } else {
+    for (let source = first; source <= last; source++) {
+      const distance = center - source;
+      sum +=
+        samples[source] *
+        cutoff *
+        sinc(cutoff * distance) *
+        blackman(distance / halfWidth);
+    }
+  }
+  return sum;
+}
+
 /**
  * Resample mono samples to another rate.
  * @param {ArrayLike<number>} samples
@@ -39,20 +77,18 @@ export function resample(samples, fromRate, toRate, options = {}) {
   const halfWidth = (options.zeroCrossings ?? 16) / cutoff;
   const length = Math.round(samples.length * ratio);
   const result = new Float32Array(length);
+  const kernel =
+    Number.isInteger(fromRate / toRate) && halfWidth > 0 && halfWidth <= 256
+      ? integerKernel(cutoff, halfWidth)
+      : null;
   for (let index = 0; index < length; index++) {
-    const center = index / ratio;
-    const first = Math.max(0, Math.ceil(center - halfWidth));
-    const last = Math.min(samples.length - 1, Math.floor(center + halfWidth));
-    let sum = 0;
-    for (let source = first; source <= last; source++) {
-      const distance = center - source;
-      sum +=
-        samples[source] *
-        cutoff *
-        sinc(cutoff * distance) *
-        blackman(distance / halfWidth);
-    }
-    result[index] = sum;
+    result[index] = resampleAt(
+      samples,
+      index / ratio,
+      cutoff,
+      halfWidth,
+      kernel
+    );
   }
   return result;
 }
