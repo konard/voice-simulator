@@ -191,26 +191,38 @@ function minimumVoicedPitch(f0) {
   return lowest;
 }
 
-function recover(frames, f0, o, scratch, stationary, lowestPitch) {
+function recover(
+  frames,
+  f0,
+  o,
+  scratch,
+  { stationary, lowestPitch, allocate }
+) {
   const n = frames.sampleCount;
   const derivativeOnly = stationary !== undefined;
   const roundAsReady = derivativeOnly && stationary.length === 0;
   const x = highPass(frames.samples, frames.rate, scratch.subarray(0, n));
   const g = derivativeOnly ? null : scratch.subarray(2 * n, 3 * n).fill(0);
   const width = recoveryLength(lowestPitch, frames.rate);
-  const weight = new Float64Array(Math.max(1, Math.min(n, width)));
+  const weight = allocate('weight', Math.max(1, Math.min(n, width))).fill(0);
   // After the last window touching a sample, mode measurements need only its
   // rounded derivative. Keep doubles for the optional stationary blend.
   const d = roundAsReady
-    ? new Float64Array(weight.length)
+    ? allocate('derivativeRing', weight.length).fill(0)
     : scratch.subarray(n, 2 * n).fill(0);
   const derivative = roundAsReady
     ? new Float32Array(scratch.buffer, n * Float64Array.BYTES_PER_ELEMENT, n)
     : d;
   const normalize = normalizer(frames, f0, weight, d, g, derivative);
   const history = Math.round(0.05 * frames.rate);
-  const iaif = iaifPlan(o.tractOrder, o.glottisOrder, o.leak, !derivativeOnly);
-  let buffer = new Float64Array(0);
+  const iaif = iaifPlan(
+    o.tractOrder,
+    o.glottisOrder,
+    o.leak,
+    !derivativeOnly,
+    allocate
+  );
+  let buffer;
   for (let time = 0; time < x.length / frames.rate; time += o.step) {
     const row = Math.min(f0.length - 1, Math.round(time / frames.hop));
     if (!(f0[row] > 0)) {
@@ -222,9 +234,7 @@ function recover(frames, f0, o, scratch, stationary, lowestPitch) {
     const start = centre - Math.floor(length / 2);
     // No window at this or a subsequent centre reaches before this sample.
     normalize(Math.max(0, centre - Math.floor(width / 2)));
-    if (window.length > buffer.length) {
-      buffer = new Float64Array(Math.max(window.length, buffer.length * 2));
-    }
+    buffer ??= allocate('recoveryWindow', width + history);
     const offset = start - history;
     const first = Math.max(0, -offset);
     const last = Math.min(window.length, x.length - offset);
@@ -586,6 +596,8 @@ function inverseFilterJs(frames, o, modesOnly = false, rows) {
   const scratch = recoverSource
     ? takeRecoveryScratch(Math.ceil(frames.sampleCount * columns))
     : null;
+  const work = spareWindows ?? new Map();
+  spareWindows = undefined;
   try {
     return inverseMeasures(frames, o, {
       f0,
@@ -594,16 +606,35 @@ function inverseFilterJs(frames, o, modesOnly = false, rows) {
       rows,
       scratch,
       stationary,
+      allocate: (name, length) => inverseColumn(work, name, length),
     });
   } finally {
+    spareWindows = work;
     releaseRecoveryScratch(scratch);
   }
+}
+
+let spareWindows;
+const MAX_WINDOW_CELLS = 16384;
+
+// One set of short analysis windows can be shared by sequential recordings.
+// A call from a trace receives its own storage while the outer set is in use.
+function inverseColumn(work, name, length) {
+  if (length > MAX_WINDOW_CELLS) {
+    return new Float64Array(length);
+  }
+  let column = work.get(name);
+  if (!column || column.length < length) {
+    column = new Float64Array(2 ** Math.ceil(Math.log2(Math.max(1, length))));
+    work.set(name, column);
+  }
+  return column.length === length ? column : column.subarray(0, length);
 }
 
 function inverseMeasures(
   frames,
   o,
-  { f0, hasLowBand, modesOnly, rows, scratch, stationary }
+  { f0, hasLowBand, modesOnly, rows, scratch, stationary, allocate }
 ) {
   const { rate, hop, count, startTime } = frames;
   const lowestPitch = minimumVoicedPitch(f0);
@@ -612,7 +643,8 @@ function inverseMeasures(
     startTime,
     count,
     rate,
-    ...(scratch && recover(frames, f0, o, scratch, stationary, lowestPitch)),
+    ...(scratch &&
+      recover(frames, f0, o, scratch, { stationary, lowestPitch, allocate })),
     f0,
     reliable: new Uint8Array(count),
     lowBand: hasLowBand,
@@ -626,12 +658,12 @@ function inverseMeasures(
   if (!modesOnly) {
     result.gci = closures(frames, f0, d);
   }
-  const cpp = cppPlan(rate, o.minF0, o.maxF0);
+  const cpp = cppPlan(rate, o.minF0, o.maxF0, allocate);
   const longestPeriod = rate / lowestPitch;
-  const signal = new Float64Array(Math.round(6 * longestPeriod));
+  const signal = allocate('signal', Math.round(6 * longestPeriod));
   const sources = modesOnly
     ? signal
-    : new Float64Array(Math.round(2 * longestPeriod));
+    : allocate('sources', Math.round(2 * longestPeriod));
   const spectralPlan = {
     scratch: signal,
     sources,

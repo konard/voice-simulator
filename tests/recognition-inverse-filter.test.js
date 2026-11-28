@@ -95,6 +95,22 @@ it('keeps rounded source cues across moving pitch and unvoiced gaps', () => {
   });
 });
 
+it('keeps source windows separate across a nested trace', () => {
+  const outer = vowel();
+  const inner = vowel(0.65, 140, 8000);
+  let nested;
+  const result = inverseFilter(outer.frames, {
+    pitch: outer.pitch,
+    trace(event) {
+      if (event.stage === 'stationary-refinement' && !nested) {
+        nested = inverseFilter(inner.frames, { pitch: inner.pitch });
+      }
+    },
+  });
+  expect(nested).toEqual(inner.result);
+  expect(result).toEqual(outer.result);
+});
+
 describe('batch glottal inverse filter', () => {
   it('keeps the source measures used by mode recognition', () => {
     for (const rate of [8000, 16000]) {

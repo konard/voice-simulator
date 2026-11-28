@@ -2,6 +2,8 @@
 import { createFft } from './fft.js';
 import { lpcAutocorrelationPrefix } from './lpc.js';
 
+const allocateColumn = (_, length) => new Float64Array(length);
+
 export function hann(length, result = new Float64Array(length)) {
   for (let n = 0; n < length; n++) {
     result[n] = 0.5 - 0.5 * Math.cos((2 * Math.PI * n) / (length - 1));
@@ -86,7 +88,13 @@ function predictor(x, window, first, a, k, weighted) {
 }
 
 /** Alku (1992), two passes: source tilt, tract, source, tract. */
-export function iaifPlan(tractOrder, glottisOrder, leak, flowOutput = true) {
+export function iaifPlan(
+  tractOrder,
+  glottisOrder,
+  leak,
+  flowOutput = true,
+  allocate = allocateColumn
+) {
   const tilt = new Float64Array(1);
   const tract = new Float64Array(tractOrder);
   const glottis = new Float64Array(glottisOrder);
@@ -97,9 +105,9 @@ export function iaifPlan(tractOrder, glottisOrder, leak, flowOutput = true) {
     const length = w.length;
     if (length > pulse.d.length) {
       const size = Math.max(length, pulse.d.length * 2);
-      pulse.d = new Float64Array(size);
-      pulse.g = new Float64Array(size);
-      weighted = new Float64Array(size);
+      pulse.d = allocate('iaifDerivative', size);
+      pulse.g = allocate('iaifFlow', size);
+      weighted = allocate('iaifWeighted', size);
     }
     const { d, g } = pulse;
     let first = 0;
@@ -188,13 +196,13 @@ export function harmonics(x, rate, f0, count, window = hann(x.length)) {
 }
 
 /** Hillenbrand et al. (1994), with the scale defined in issue 61. */
-export function cppPlan(rate, minF0, maxF0) {
+export function cppPlan(rate, minF0, maxF0, allocate = allocateColumn) {
   const length = Math.round(0.04 * rate);
   const size = 2 ** Math.ceil(Math.log2(length));
   const fft = createFft(size);
-  const window = hann(length);
-  const re = new Float64Array(size);
-  const im = new Float64Array(size);
+  const window = hann(length, allocate('cppWindow', length));
+  const re = allocate('cppReal', size);
+  const im = allocate('cppImaginary', size);
   const first = Math.ceil(0.001 * rate);
   const last = Math.min(size / 2, Math.floor(rate / minF0));
   const firstPeak = Math.ceil(rate / maxF0);
