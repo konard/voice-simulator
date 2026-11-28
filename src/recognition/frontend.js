@@ -374,6 +374,11 @@ function frameColumns(frames) {
   ].filter(([column]) => column);
 }
 
+const NOISE_SMOOTHED = 0;
+const NOISE_BLOCK_MIN = 1;
+const NOISE_SPEECH_PEAK = 2;
+const NOISE_HISTORY_START = 3;
+
 /**
  * Noise floor by minimum statistics (Martin 2001) and the speech flag, one
  * frame at a time. The smoothed power s[t] = g s[t-1] + (1 - g) p[t],
@@ -383,69 +388,75 @@ function frameColumns(frames) {
  * speech by the 9 dB rule minus 25 dB, so a stretch of speech longer than
  * 1.5 s without a pause does not raise the floor into the speech.
  */
-function createNoiseTracker(hop) {
-  const smoothing = Math.exp(-hop / NOISE.smoothing);
-  const blockLength = Math.max(1, Math.round(NOISE.block / hop));
-  const previous = new Float64Array(NOISE.blocks - 1);
-  const hangover = Math.round(SPEECH.hangover / hop);
-  const state = {};
-  function reset() {
-    state.started = false;
-    state.smoothed = 0;
-    state.blockMin = Infinity;
-    state.blockFill = 0;
-    state.slot = 0;
-    state.speechPeak = -Infinity;
-    state.hang = 0;
-    previous.fill(Infinity);
+class NoiseTracker {
+  constructor(hop) {
+    this.smoothing = Math.exp(-hop / NOISE.smoothing);
+    this.blockLength = Math.max(1, Math.round(NOISE.block / hop));
+    this.hangover = Math.round(SPEECH.hangover / hop);
+    this.levels = new Float64Array(NOISE_HISTORY_START + NOISE.blocks - 1);
+    this.reset();
   }
-  reset();
-  return {
-    reset,
-    /** Floor (dB) after a frame of mean power `power` (linear). */
-    noiseFloor(power) {
-      state.smoothed = state.started
-        ? smoothing * state.smoothed + (1 - smoothing) * power
-        : power;
-      state.started = true;
-      state.blockMin = Math.min(state.blockMin, state.smoothed);
-      let minimum = state.blockMin;
-      for (let index = 0; index < previous.length; index++) {
-        minimum = Math.min(minimum, previous[index]);
+
+  reset() {
+    const { levels } = this;
+    levels.fill(Infinity);
+    levels[NOISE_SMOOTHED] = 0;
+    levels[NOISE_SPEECH_PEAK] = -Infinity;
+    this.started = false;
+    this.blockFill = 0;
+    this.slot = NOISE_HISTORY_START;
+    this.hang = 0;
+  }
+
+  /** Floor (dB) after a frame of mean power `power` (linear). */
+  noiseFloor(power) {
+    const { levels, smoothing } = this;
+    const smoothed = this.started
+      ? smoothing * levels[NOISE_SMOOTHED] + (1 - smoothing) * power
+      : power;
+    levels[NOISE_SMOOTHED] = smoothed;
+    this.started = true;
+    const blockMin = Math.min(levels[NOISE_BLOCK_MIN], smoothed);
+    levels[NOISE_BLOCK_MIN] = blockMin;
+    let minimum = blockMin;
+    for (let index = NOISE_HISTORY_START; index < levels.length; index++) {
+      minimum = Math.min(minimum, levels[index]);
+    }
+    if (++this.blockFill === this.blockLength) {
+      levels[this.slot++] = blockMin;
+      if (this.slot === levels.length) {
+        this.slot = NOISE_HISTORY_START;
       }
-      state.blockFill++;
-      if (state.blockFill === blockLength) {
-        previous[state.slot] = state.blockMin;
-        state.slot = (state.slot + 1) % previous.length;
-        state.blockMin = Infinity;
-        state.blockFill = 0;
-      }
-      const floor = 10 * Math.log10(minimum) + NOISE.bias;
-      // No cap before the first speech frame (speechPeak is -Infinity).
-      return state.speechPeak > -Infinity
-        ? Math.min(floor, state.speechPeak - NOISE.belowSpeech)
-        : floor;
-    },
-    /** Speech flag of a frame with its energy, floor and periodicity. */
-    speech(energy, noise, periodicity) {
-      const above = energy - noise;
-      if (above >= SPEECH.strong) {
-        state.speechPeak = Math.max(state.speechPeak, energy);
-      }
-      if (
-        above >= SPEECH.strong ||
-        (above >= SPEECH.weak && periodicity >= SPEECH.periodicity)
-      ) {
-        state.hang = hangover;
-        return 1;
-      }
-      if (state.hang > 0) {
-        state.hang--;
-        return 1;
-      }
-      return 0;
-    },
-  };
+      levels[NOISE_BLOCK_MIN] = Infinity;
+      this.blockFill = 0;
+    }
+    const floor = 10 * Math.log10(minimum) + NOISE.bias;
+    const speechPeak = levels[NOISE_SPEECH_PEAK];
+    return speechPeak > -Infinity
+      ? Math.min(floor, speechPeak - NOISE.belowSpeech)
+      : floor;
+  }
+
+  /** Speech flag of a frame with its energy, floor and periodicity. */
+  speech(energy, noise, periodicity) {
+    const above = energy - noise;
+    if (above >= SPEECH.strong) {
+      const { levels } = this;
+      levels[NOISE_SPEECH_PEAK] = Math.max(levels[NOISE_SPEECH_PEAK], energy);
+    }
+    if (
+      above >= SPEECH.strong ||
+      (above >= SPEECH.weak && periodicity >= SPEECH.periodicity)
+    ) {
+      this.hang = this.hangover;
+      return 1;
+    }
+    if (this.hang > 0) {
+      this.hang--;
+      return 1;
+    }
+    return 0;
+  }
 }
 
 /** Scratch memory and tables of the per-frame analysis. */
@@ -719,7 +730,7 @@ function createFrameProcessor(settings, frames, features, onFrame) {
   const pitchOnly = features === 'pitch';
   const gateOnly = features === 'speech' || features === 'word-timing';
   const { length, hop } = settings;
-  const noiseTracker = createNoiseTracker(hop);
+  const noiseTracker = new NoiseTracker(hop);
   const kernel = pitchOnly
     ? null
     : createKernel(
@@ -744,7 +755,7 @@ function createFrameProcessor(settings, frames, features, onFrame) {
     setSpeech(frames, row, meanPower, periodicity, noiseTracker);
     onFrame?.(frames, row, meanPower, periodicity);
   }
-  return { analyze, reset: noiseTracker.reset };
+  return { analyze, reset: () => noiseTracker.reset() };
 }
 
 function frameCount(samples, hopSamples) {
@@ -1057,7 +1068,7 @@ export function analyzeFrameHops(samples, sampleRate) {
   const maxSeconds = samples.length / sampleRate;
   const slow = frontendSettings(sampleRate, { maxSeconds, hop: 0.01 });
   const coarse = createFrameSet(slow, null);
-  const noiseTracker = createNoiseTracker(slow.hop);
+  const noiseTracker = new NoiseTracker(slow.hop);
   const coarseColumns = frameColumns(coarse);
   let fineColumns;
   const fine = analyzeRecording(
