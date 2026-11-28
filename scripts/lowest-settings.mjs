@@ -116,7 +116,7 @@ function combineRow(committed, measured) {
     limits: { ...committed.limits, [row]: limits[row] },
     rowMeasurements: {
       ...committed.rowMeasurements,
-      [row]: { measured: date, commit, command, cpu, node, core },
+      [row]: { measured: date, commit, command, cpu, node, pinned, core },
     },
   };
 }

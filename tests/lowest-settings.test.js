@@ -196,6 +196,11 @@ describe('lowest settings publication', () => {
     assert.deepEqual(result.runs.synthesis, original.runs.synthesis);
     assert.deepEqual(result.runs.session, refresh.runs.session);
     assert.equal(result.rowMeasurements.session.commit, refresh.commit);
+    assert.equal(result.rowMeasurements.session.pinned, true);
+    assert.match(
+      readFileSync(path.join(dir, REPORT_PATH), 'utf8'),
+      /Pinned with `taskset -c 0`\. Command `LOWEST_ROW=session/u
+    );
     assert.equal(result.cells.session['js-1'].status, 'certified');
     assert.equal(result.cells.session['rust-1'].status, 'certified');
   });
