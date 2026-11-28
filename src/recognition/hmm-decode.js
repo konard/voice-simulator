@@ -265,15 +265,15 @@ function bestEndingAt(records, end) {
  * of different lengths are not comparable, so that end is only a fallback.
  */
 function finalRecord(network, records, languages, frames, last) {
-  const { positions, scores, histories } = last;
+  const { work, active, scores, histories } = last;
   const { id, end: ends, score } = records.columns;
   let best = bestEndingAt(records, frames);
   let bestScore = score[best] ?? -Infinity;
   for (const lang of languages) {
     const sil = network.trees.get(lang).silence;
-    const position = positions[sil];
-    const j = (position - 1) * 6 + 2;
-    if (position && scores[j] > bestScore) {
+    const row = work.indexOf(sil);
+    const j = row * 6 + 2;
+    if (row >= 0 && row < active && scores[j] > bestScore) {
       const h = histories[j];
       if (h >= 0 && id[h] >= 0) {
         best = h;
@@ -456,7 +456,7 @@ function growHistory(previous) {
 
 function createWorkspace({ nodeCount, model, languages }) {
   return {
-    positions: new Uint32Array(nodeCount),
+    activeNodes: new Uint8Array(nodeCount),
     previous: stateHistory(256),
     current: { state: stateHistory(256), peaks: new Float64Array(256) },
     entries: new Frontier(nodeCount),
@@ -483,7 +483,7 @@ export function decodeWords(network, feats, frames, options = {}, cache) {
   const key = cache ? network.nodes.language : network.model;
   const prior = storage.get(key);
   const workspace =
-    prior?.positions.length >= network.nodeCount &&
+    prior?.activeNodes.length >= network.nodeCount &&
     prior.emission.model === network.model &&
     prior.histogram.rows.length >= network.languages.length
       ? prior
@@ -505,7 +505,7 @@ export function decodeWords(network, feats, frames, options = {}, cache) {
 /** Compact the states that survive this frame's language thresholds. */
 function retainStates({ count, language }, pass, thresholds) {
   const {
-    positions,
+    activeNodes,
     work,
     length,
     active: previousActive,
@@ -514,7 +514,7 @@ function retainStates({ count, language }, pass, thresholds) {
   } = pass;
   let { scores, histories, starts } = pass.previous;
   for (let i = 0; i < previousActive; i++) {
-    positions[work[i]] = 0;
+    activeNodes[work[i]] = 0;
   }
   let active = 0;
   for (let index = 0; index < length; index++) {
@@ -550,7 +550,7 @@ function retainStates({ count, language }, pass, thresholds) {
         starts[offset + i] = 0;
       }
     }
-    positions[id] = active + 1;
+    activeNodes[id] = 1;
     work[active++] = id;
   }
   pass.active = active;
@@ -651,7 +651,7 @@ function enterRoots(pass, language, score, history, frame) {
 }
 
 function prepareFrame(pass, nodeCount) {
-  const { active, entries, positions } = pass;
+  const { active, entries, activeNodes } = pass;
   let { work } = pass;
   const capacity = Math.min(nodeCount, active + entries.length);
   if (work.length < capacity) {
@@ -663,7 +663,7 @@ function prepareFrame(pass, nodeCount) {
   let length = active;
   for (let i = 0; i < entries.length; i++) {
     const id = entryNodes[i];
-    if (positions[id] === 0) {
+    if (activeNodes[id] === 0) {
       work[length++] = id;
     }
   }
@@ -724,9 +724,9 @@ function decodeWithWorkspace(network, feats, frames, options, workspace) {
   const languages = settings.languages ?? [...network.trees.keys()];
   const emissions = workspace.emission;
   emissions.begin(feats, settings);
-  const { previous, current, entries, next, positions, records, work } =
+  const { previous, current, entries, next, activeNodes, records, work } =
     workspace;
-  positions.fill(0);
+  activeNodes.fill(0);
   const lm = languageModel(network, records, settings, workspace.transitions);
   initialEntries(entries, network, records, languages, settings);
   const wordEnds = [];
@@ -739,7 +739,7 @@ function decodeWithWorkspace(network, feats, frames, options, workspace) {
     start: 0,
   }));
   const pass = {
-    positions,
+    activeNodes,
     work,
     active: 0,
     length: 0,
@@ -765,7 +765,8 @@ function decodeWithWorkspace(network, feats, frames, options, workspace) {
     languages,
     frames,
     {
-      positions,
+      work: pass.work,
+      active: pass.active,
       ...pass.previous,
     }
   );

@@ -18,6 +18,7 @@ import {
   createThresholds,
   decodeWords,
 } from '../src/recognition/hmm-decode.js';
+import { Frontier } from '../src/recognition/hmm-frontier.js';
 import { getHmmModel, stateIndex } from '../src/recognition/hmm-model.js';
 import { ipaToText } from '../src/recognition/ipa-to-text.js';
 import {
@@ -35,6 +36,27 @@ import {
 } from '../src/recognition/hmm-stage.js';
 
 const RATE = 8000;
+
+it('preserves queued scores when the HMM frontier needs wide indices', () => {
+  const frontier = new Frontier(65537);
+  assert.equal(frontier.index.BYTES_PER_ELEMENT, 2);
+  for (let i = 0; i < 65536; i++) {
+    frontier.enter(i, -i, i, i + 1);
+  }
+  frontier.enter(0, 2, 4, 6);
+  frontier.enter(65535, -1, 8, 10);
+  assert.equal(frontier.length, 65536);
+  assert.equal(frontier.index.BYTES_PER_ELEMENT, 4);
+  assert.equal(frontier.index[0], 1);
+  assert.equal(frontier.index[65535], 65536);
+  assert.equal(frontier.columns.scores[0], 2);
+  assert.equal(frontier.columns.histories[65535], 8);
+  assert.equal(frontier.columns.starts[65535], 10);
+  frontier.clear();
+  assert.equal(frontier.index[65535], 0);
+  frontier.enter(65535, 0, 0, 0);
+  assert.equal(frontier.index[65535], 1);
+});
 
 it('keeps batch frames private across a nested recognition callback', () => {
   const options = { level: 'low', languages: ['en'], engine: 'js' };

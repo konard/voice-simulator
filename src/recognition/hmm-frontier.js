@@ -5,7 +5,7 @@ export class Frontier {
 
   constructor(nodeCount) {
     // Zero means absent. The other values are offsets plus one.
-    this.index = new Uint32Array(nodeCount);
+    this.index = new Uint16Array(nodeCount);
     this.columns = {
       nodes: new Uint32Array(256),
       scores: new Float64Array(256),
@@ -27,12 +27,19 @@ export class Frontier {
   }
 
   enter(node, score, history, start) {
-    const { index, columns } = this;
+    let { index } = this;
+    const { columns } = this;
     let i = index[node] - 1;
     if (i < 0) {
       i = this.#length++;
       if (i === columns.nodes.length) {
         this.#grow(Math.min(i * 2, index.length));
+      }
+      if (i === 65535 && index instanceof Uint16Array) {
+        // Offsets count queued nodes, which are usually a small subset of
+        // the graph. Keep space for exceptionally wide custom searches.
+        this.index = new Uint32Array(index);
+        index = this.index;
       }
       index[node] = i + 1;
       columns.nodes[i] = node;
