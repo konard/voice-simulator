@@ -174,8 +174,11 @@ export function exactCandidates(tokens, from, end, lexicon, language) {
 
 /** Per-call memoized feature comparisons avoid repeating work at trie forks. */
 export function distanceCache() {
-  const cache = new Map();
+  const plain = new Map();
+  const tonal = new Map();
   const heard = new WeakMap();
+  const targets = new WeakMap();
+  let size = 0;
   return (input, expected, language) => {
     // Stress is evaluated at the terminal: the trie shares stressed and
     // unstressed versions of the same segment path.
@@ -186,16 +189,35 @@ export function distanceCache() {
       );
     }
     const a = heard.get(input);
-    const b = `${expected.symbol}:${(expected.tone ?? []).join('')}`;
-    const tone = acousticTone(input, expected, language);
-    const key = `${a}\t${b}\t${tone ?? ''}`;
-    if (!cache.has(key)) {
-      if (cache.size === 4096) {
-        cache.clear();
-      }
-      cache.set(key, phoneDistance(input, expected, tone, false));
+    let b = targets.get(expected);
+    if (b === undefined) {
+      b = `${expected.symbol}:${(expected.tone ?? []).join('')}`;
+      targets.set(expected, b);
     }
-    return cache.get(key);
+    // Each heard signature shares one row of distances, so ordinary
+    // comparisons can reuse the target key directly.
+    const tone = acousticTone(input, expected, language);
+    const cache = tone === undefined ? plain : tonal;
+    const key = tone === undefined ? b : `${b}\t${tone}`;
+    let row = cache.get(a);
+    const previous = row?.get(key);
+    if (previous !== undefined) {
+      return previous;
+    }
+    if (size === 4096) {
+      plain.clear();
+      tonal.clear();
+      row = undefined;
+      size = 0;
+    }
+    if (!row) {
+      row = new Map();
+      cache.set(a, row);
+    }
+    const cost = phoneDistance(input, expected, tone, false);
+    row.set(key, cost);
+    size++;
+    return cost;
   };
 }
 
