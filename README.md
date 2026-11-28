@@ -733,16 +733,16 @@ only become stricter. `npm run test:heavy -- --suite lowest` measures it and
 <!-- prettier-ignore-start -->
 | Row | quality | js-1 | rust-1 | memory |
 | --- | --- | --- | --- | --- |
-| synthesis | certified | certified | certified | failed |
-| recognition | certified | certified | certified | failed |
+| synthesis | certified | certified | certified | certified |
+| recognition | certified | certified | certified | certified |
 | streaming | certified | certified | certified | certified |
 | voice-fit | certified | certified | certified | certified |
 | session | certified | certified | certified | certified |
-| copy | failed | certified | certified | failed |
+| copy | failed | certified | certified | certified |
 | modes | certified | certified | certified | certified |
 | app | certified | certified | — | — |
 
-Measured at commit `dcafadb` on Intel(R) Xeon(R) 6975P-C. See the [report](docs/reports/lowest-settings.md).
+Measured at commit `afdb237` on AMD EPYC 7763 64-Core Processor. See the [report](docs/reports/lowest-settings.md).
 <!-- prettier-ignore-end -->
 <!-- lowest-settings:end -->
 
