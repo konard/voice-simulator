@@ -47,6 +47,9 @@ function toneCache(tone, feats, weight) {
   const sum = new Float64Array(3);
   let frame = -1;
   return (key, t) => {
+    if (stateOfKey[key] < 0) {
+      return 0;
+    }
     if (frame !== t) {
       frame = t;
       peak.fill(-Infinity);
@@ -98,6 +101,8 @@ function languageModel(network, records, settings) {
   const { lmw, wip, oovPhone, oovWeight, minCount } = settings;
   const { words, trees } = network;
   const cache = new Map();
+  const rows = new Map();
+  const backoffs = new Map();
   return (hist, id) => {
     const w = words[id];
     if (w.oov) {
@@ -106,46 +111,89 @@ function languageModel(network, records, settings) {
       return oovWeight * row.get(w.units[0]) + oovPhone;
     }
     const previous = hist >= 0 ? records[hist].word : null;
-    const key = `${previous ?? ''}\t${id}`;
-    let v = cache.get(key);
+    let scores = cache.get(previous);
+    if (!scores) {
+      scores = new Map();
+      cache.set(previous, scores);
+    }
+    let v = scores.get(id);
     if (v === undefined) {
       const data = trees.get(w.lang).data;
-      const row = previous ? data.transitionRow(w.word) : undefined;
-      const cost = row?.has(previous)
-        ? row.get(previous)
-        : -0.3 *
-            Math.log((0.4 * Math.max(w.count ?? 1, minCount)) / data.total) +
-          0.5;
+      if (previous && !rows.has(id)) {
+        rows.set(id, data.transitionRow(w.word));
+      }
+      let cost = previous ? rows.get(id)?.get(previous) : undefined;
+      if (cost === undefined) {
+        if (!backoffs.has(id)) {
+          backoffs.set(
+            id,
+            -0.3 *
+              Math.log((0.4 * Math.max(w.count ?? 1, minCount)) / data.total) +
+              0.5
+          );
+        }
+        cost = backoffs.get(id);
+      }
       v = lmw * lnProbability(cost) + wip;
-      cache.set(key, v);
+      scores.set(id, v);
     }
     return v;
   };
 }
 
-function enter(map, node, score, hist, start) {
-  const e = map.get(node);
-  if (!e || score > e[0]) {
-    map.set(node, [score, hist, start]);
-  }
+function entryBuffer(size) {
+  const scores = new Float64Array(size);
+  const history = new Int32Array(size);
+  const starts = new Int32Array(size);
+  const seen = new Int32Array(size);
+  const ids = [];
+  let generation = 1;
+  return {
+    ids,
+    scores,
+    history,
+    starts,
+    has: (id) => seen[id] === generation,
+    add(id, score, hist, start) {
+      if (seen[id] === generation) {
+        if (score <= scores[id]) {
+          return;
+        }
+      } else {
+        seen[id] = generation;
+        ids.push(id);
+      }
+      scores[id] = score;
+      history[id] = hist;
+      starts[id] = start;
+    },
+    clear() {
+      generation++;
+      ids.length = 0;
+    },
+  };
 }
 
 /** Tokens at the roots, loops and silences of every language at frame 0. */
-function initialEntries(network, records, languages, { lmw, oovStart }) {
-  const entries = new Map();
+function initialEntries(
+  entries,
+  network,
+  records,
+  languages,
+  { lmw, oovStart }
+) {
   for (const lang of languages) {
     const tree = network.trees.get(lang);
     const startRecord = records.length;
     records.push({ word: null, lang, prev: -1, start: 0, end: 0, score: 0 });
     for (const node of tree.root) {
-      enter(entries, node.id, lmw * node.lookLn, startRecord, 0);
+      entries.add(node.id, lmw * node.lookLn, startRecord, 0);
     }
     for (const node of tree.loop.begin) {
-      enter(entries, node.id, oovStart, startRecord, 0);
+      entries.add(node.id, oovStart, startRecord, 0);
     }
-    enter(entries, tree.silence.id, 0, startRecord, 0);
+    entries.add(tree.silence.id, 0, startRecord, 0);
   }
-  return entries;
 }
 
 /**
@@ -162,22 +210,22 @@ function restart(next, network, records, rec, settings) {
   const before = network.words[rec.id].before;
   if (before) {
     for (const child of tree.after.get(before)) {
-      enter(next, child.id, rec.score + lmw * child.lookLn, r, rec.end);
+      next.add(child.id, rec.score + lmw * child.lookLn, r, rec.end);
     }
     return;
   }
   for (const child of tree.root) {
-    enter(next, child.id, rec.score + lmw * child.lookLn, r, rec.end);
+    next.add(child.id, rec.score + lmw * child.lookLn, r, rec.end);
   }
   for (const node of tree.loop.begin) {
-    enter(next, node.id, rec.score + oovStart, r, rec.end);
+    next.add(node.id, rec.score + oovStart, r, rec.end);
   }
   if (rec.oov) {
     for (const node of tree.loop.next) {
-      enter(next, node.id, rec.score, r, rec.end);
+      next.add(node.id, rec.score, r, rec.end);
     }
   }
-  enter(next, tree.silence.id, rec.score + silencePenalty, r, rec.end);
+  next.add(tree.silence.id, rec.score + silencePenalty, r, rec.end);
 }
 
 /** The best word that ended on `end` and needs no following word. */
@@ -257,7 +305,6 @@ function backtrace(words, records, best) {
  * `maxActive` best nodes.
  */
 export function languageThresholds(nodes, processed, best, settings) {
-  const { beam, languageBeam, maxActive } = settings;
   const values = new Map();
   for (const [id, nodeBest] of processed) {
     const { lang } = nodes[id];
@@ -268,15 +315,29 @@ export function languageThresholds(nodes, processed, best, settings) {
   }
   const thresholds = new Map();
   for (const [lang, scores] of values) {
-    const own = scores.reduce((a, b) => Math.max(a, b), -Infinity);
-    let threshold = Math.max(own - beam, best - languageBeam);
-    if (scores.length > maxActive) {
-      scores.sort((a, b) => b - a);
-      threshold = Math.max(threshold, scores[maxActive - 1]);
-    }
-    thresholds.set(lang, threshold);
+    thresholds.set(lang, pruningThreshold(scores, best, settings));
   }
   return thresholds;
+}
+
+function pruningThreshold(scores, best, { beam, languageBeam, maxActive }) {
+  const own = scores.reduce((a, b) => Math.max(a, b), -Infinity);
+  const threshold = Math.max(own - beam, best - languageBeam);
+  if (scores.length <= maxActive) {
+    return threshold;
+  }
+  let count = 0;
+  for (const score of scores) {
+    if (score > threshold) {
+      scores[count++] = score;
+    }
+  }
+  if (count < maxActive) {
+    return threshold;
+  }
+  scores.length = count;
+  scores.sort((a, b) => b - a);
+  return scores[maxActive - 1];
 }
 
 /**
@@ -286,6 +347,8 @@ export function languageThresholds(nodes, processed, best, settings) {
  * the beam, its score relative to the best token of its last frame.
  * `options.tone` (the `tone` of hmmFeatures) adds the tone stream.
  */
+// Keep frame updates, pruning and word exits in the same hot loop.
+// eslint-disable-next-line max-lines-per-function
 export function decodeWords(network, feats, frames, options = {}) {
   const settings = { ...HMM_DECODE_DEFAULTS, ...options };
   const { lmw, releaseSkip, oovStart } = settings;
@@ -302,20 +365,31 @@ export function decodeWords(network, feats, frames, options = {}) {
   const stamp = new Int32Array(nodes.length).fill(-2);
   const records = [];
   const lm = languageModel(network, records, settings);
-  let entries = initialEntries(network, records, languages, settings);
-  let active = [];
+  let entries = entryBuffer(nodes.length);
+  let next = entryBuffer(nodes.length);
+  initialEntries(entries, network, records, languages, settings);
+  let work = [];
+  let nextActive = [];
+  const nodeScores = new Float64Array(nodes.length);
+  const languageScores = new Map(
+    [...trees.keys()].map((language) => [language, []])
+  );
+  const thresholds = new Map();
+  const wordEnds = new Map();
   for (let t = 0; t < frames; t++) {
-    const work = new Set(active);
-    for (const id of entries.keys()) {
-      work.add(id);
+    for (const id of entries.ids) {
+      if (stamp[id] !== t - 1) {
+        work.push(id);
+      }
     }
     let best = -Infinity;
-    const processed = [];
+    for (const scores of languageScores.values()) {
+      scores.length = 0;
+    }
     for (const id of work) {
       const node = nodes[id];
       const f = node.first;
       const wasActive = stamp[id] === t - 1;
-      const entry = entries.get(id);
       let nodeBest = -Infinity;
       for (let i = node.count - 1; i >= 0; i--) {
         const j = f + i;
@@ -332,8 +406,10 @@ export function decodeWords(network, feats, frames, options = {}) {
             start = prevStart[j - 1];
           }
         }
-        if (i === 0 && entry && entry[0] > s) {
-          [s, hist, start] = entry;
+        if (i === 0 && entries.has(id) && entries.scores[id] > s) {
+          s = entries.scores[id];
+          hist = entries.history[id];
+          start = entries.starts[id];
         }
         if (s > -Infinity) {
           s += score(emit[j], t);
@@ -344,16 +420,17 @@ export function decodeWords(network, feats, frames, options = {}) {
         nodeBest = Math.max(nodeBest, s);
       }
       best = Math.max(best, nodeBest);
-      processed.push([id, nodeBest]);
+      nodeScores[id] = nodeBest;
+      languageScores.get(node.lang).push(nodeBest);
     }
-    const thresholds = languageThresholds(nodes, processed, best, settings);
-    const next = new Map();
-    const nextActive = [];
-    const wordEnds = new Map();
-    for (const [id, nodeBest] of processed) {
+    for (const [lang, scores] of languageScores) {
+      thresholds.set(lang, pruningThreshold(scores, best, settings));
+    }
+    wordEnds.clear();
+    for (const id of work) {
       const node = nodes[id];
       const threshold = thresholds.get(node.lang);
-      if (nodeBest < threshold) {
+      if (nodeScores[id] < threshold) {
         continue;
       }
       const f = node.first;
@@ -380,16 +457,16 @@ export function decodeWords(network, feats, frames, options = {}) {
       if (node === tree.silence) {
         // Silence returns to the root with the same history.
         for (const child of tree.root) {
-          enter(next, child.id, exit + lmw * child.lookLn, hist, t + 1);
+          next.add(child.id, exit + lmw * child.lookLn, hist, t + 1);
         }
         for (const loopNode of tree.loop.begin) {
-          enter(next, loopNode.id, exit + oovStart, hist, t + 1);
+          next.add(loopNode.id, exit + oovStart, hist, t + 1);
         }
         continue;
       }
       const look = lmw * node.lookLn;
       for (const child of node.children.values()) {
-        enter(next, child.id, exit + lmw * child.lookLn - look, hist, start);
+        next.add(child.id, exit + lmw * child.lookLn - look, hist, start);
       }
       for (const wid of node.words) {
         const s = exit - look + lm(hist, wid);
@@ -417,8 +494,10 @@ export function decodeWords(network, feats, frames, options = {}) {
         restart(next, network, records, rec, settings);
       }
     }
-    entries = next;
-    active = nextActive;
+    entries.clear();
+    [entries, next] = [next, entries];
+    work.length = 0;
+    [work, nextActive] = [nextActive, work];
     [prev, cur] = [cur, prev];
     [prevHist, curHist] = [curHist, prevHist];
     [prevStart, curStart] = [curStart, prevStart];

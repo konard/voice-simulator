@@ -213,7 +213,7 @@ function collectFrames(state, frames, pitch, formants, source, formantCount) {
         ) / 8.75;
       addValue(state, 'dF', spacing);
     }
-    if (source.reliable[t]) {
+    if (source?.reliable[t]) {
       for (const key of ['rd', 'hnr', 'cpp', 'h1h2Source', 'h1h2']) {
         addValue(state, key, source[key][t]);
       }
@@ -234,12 +234,25 @@ function analyzeVoiceInput(samples, sampleRate, options) {
     analyzeFrames(samples, sampleRate, {
       order: options.order,
       rate: options.analysisRate,
+      hop: options.analysisHop ?? 0.005,
     })
   );
   const pitch = measure(profile, 'Pitch', () =>
     trackPitch(frames, { kernels })
   );
   return { frames, pitch };
+}
+
+function analyzeVoiceSource(
+  frames,
+  pitch,
+  { estimateSource, profile, kernels, trace }
+) {
+  return estimateSource === false
+    ? null
+    : measure(profile, 'Inverse filter', () =>
+        inverseFilter(frames, { pitch, kernels, trace: trace ?? null })
+      );
 }
 
 export function accumulate(
@@ -260,7 +273,7 @@ export function accumulate(
         )
       : samples
   );
-  const { profile, kernels } = options;
+  const { profile } = options;
   const { frames, pitch } =
     options.frontEnd ?? analyzeVoiceInput(input, sampleRate, options);
   // Use the tracker's initial tract prior for every stretch. Re-estimating
@@ -268,9 +281,7 @@ export function accumulate(
   const formants = measure(profile, 'Formants', () =>
     trackBatchFormants(frames, { pitch, vocalTractLength: 16.5 })
   );
-  const source = measure(profile, 'Inverse filter', () =>
-    inverseFilter(frames, { pitch, kernels, trace: options.trace ?? null })
-  );
+  const source = analyzeVoiceSource(frames, pitch, options);
   const analysis = prepareLegacyVoice(input, sampleRate, {
     ...options,
     diagnosticsOnly: true,
@@ -291,6 +302,7 @@ export function accumulate(
   countNuclei(state, input, sampleRate, frames, {
     order: options.order,
     rate: options.analysisRate,
+    hop: options.analysisHop,
   });
   collectFrames(
     state,

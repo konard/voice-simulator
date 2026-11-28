@@ -45,6 +45,7 @@ export function countNuclei(state, input, sampleRate, frames, options = {}) {
     combined.set(input, previous.length);
     analysed = analyzeFrames(combined, sampleRate, {
       ...options,
+      hop: options.hop ?? frames.hop,
       maxSeconds: combined.length / sampleRate + 1,
     });
   }
