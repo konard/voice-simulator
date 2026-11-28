@@ -707,7 +707,8 @@ function crossCorrelation(frames, a, b, n) {
 function peakToPeak(frames, a, b) {
   let low = Infinity;
   let high = -Infinity;
-  for (let n = Math.round(a); n < Math.round(b); n++) {
+  const end = Math.round(b);
+  for (let n = Math.round(a); n < end; n++) {
     const value = sampleAt(frames, n);
     low = Math.min(low, value);
     high = Math.max(high, value);
@@ -718,19 +719,21 @@ function peakToPeak(frames, a, b) {
 /** Add the periods between `marks` (working samples) of one run to the
  * sums of jitter and shimmer. */
 function addPeriods(frames, sums, marks) {
+  let previousPeriod = 0;
+  let previousHeight = 0;
   for (let i = 0; i + 1 < marks.length; i++) {
     const period = marks[i + 1] - marks[i];
     const height = peakToPeak(frames, marks[i], marks[i + 1]);
     sums.periods++;
     sums.period += period;
     sums.amplitude += height;
-    if (i + 2 < marks.length) {
+    if (i > 0) {
       sums.pairs++;
-      sums.periodDiff += Math.abs(period - (marks[i + 2] - marks[i + 1]));
-      sums.amplitudeDiff += Math.abs(
-        height - peakToPeak(frames, marks[i + 1], marks[i + 2])
-      );
+      sums.periodDiff += Math.abs(previousPeriod - period);
+      sums.amplitudeDiff += Math.abs(previousHeight - height);
     }
+    previousPeriod = period;
+    previousHeight = height;
   }
 }
 
@@ -912,7 +915,9 @@ function createDistribution(capacity) {
       if (length === 0) {
         return;
       }
-      [track.low, track.median, track.high] = PERCENTILES.map(at);
+      track.low = at(PERCENTILES[0]);
+      track.median = at(PERCENTILES[1]);
+      track.high = at(PERCENTILES[2]);
     },
   };
 }
