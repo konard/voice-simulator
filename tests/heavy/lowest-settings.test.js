@@ -11,6 +11,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { after, describe, it } from 'node:test';
 import { fileURLToPath, URL } from 'node:url';
+import { fetchDataset } from '../../scripts/datasets.mjs';
 import {
   formatReport,
   judge,
@@ -19,6 +20,7 @@ import {
   REPORT_PATH,
 } from '../../scripts/lowest-report.mjs';
 import { ISSUES_PATH } from '../../scripts/lowest-settings.mjs';
+import { BENCHMARK } from './helpers/benchmark.js';
 import { heavyLimit, heavyOut, writeReport } from './helpers/report.js';
 
 const ROOT = fileURLToPath(new URL('../../', import.meta.url));
@@ -95,6 +97,24 @@ function run(row, engine, core, cap) {
 }
 
 const OUT_OF_MEMORY = /heap out of memory|Reached heap limit/u;
+let recognitionCache;
+
+async function prepareRecognitionCache() {
+  for (const { id, rows } of BENCHMARK.sets) {
+    await fetchDataset(id, { limit: Math.min(rows, limit) });
+  }
+}
+
+function measurementError(row, engine, attempt) {
+  const exit = attempt.code ?? attempt.signal;
+  const diagnostic = attempt.stderr.trim();
+  console.error(`lowest ${row} ${engine} exited ${exit}\n${diagnostic}`);
+  const lines = diagnostic.split('\n');
+  const detail = lines.find((line) =>
+    /(?:Error|Exception)(?: \[[^\]]+\])?: /u.test(line)
+  );
+  return `exit ${exit}: ${detail ?? lines[0]}`;
+}
 
 /**
  * Run a cell under the heap cap. When the capped process runs out of heap,
@@ -102,6 +122,16 @@ const OUT_OF_MEMORY = /heap out of memory|Reached heap limit/u;
  * one core, so the other columns are measured.
  */
 async function measure(row, engine, core) {
+  if (row === 'recognition') {
+    // Both engines read the same files. Only the parent may fetch missing
+    // recordings so the children never write to a shared partial download.
+    recognitionCache ??= prepareRecognitionCache();
+    try {
+      await recognitionCache;
+    } catch (error) {
+      return { row, engine, error: error.message, capped: {} };
+    }
+  }
   const capped = await run(row, engine, core, true);
   if (capped.result) {
     return { ...capped.result, capped: {} };
@@ -113,7 +143,7 @@ async function measure(row, engine, core) {
     return {
       row,
       engine,
-      error: `exit ${capped.code ?? capped.signal}: ${capped.stderr.trim().split('\n').slice(-3).join(' ')}`,
+      error: measurementError(row, engine, capped),
       capped: {},
     };
   }
@@ -123,7 +153,7 @@ async function measure(row, engine, core) {
     : {
         row,
         engine,
-        error: `uncapped exit ${free.code ?? free.signal}: ${free.stderr.trim().split('\n').slice(-3).join(' ')}`,
+        error: `uncapped ${measurementError(row, engine, free)}`,
         capped: { crashed: crash },
       };
 }
