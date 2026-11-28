@@ -108,10 +108,13 @@ export function voiceAnalysisInput(
 
 /** Linear-interpolated percentile of a list (`fraction` 0 to 1; 0 when empty). */
 export function percentile(values, fraction) {
-  if (values.length === 0) {
+  return sortedPercentile(Float64Array.from(values).sort(), fraction);
+}
+
+function sortedPercentile(sorted, fraction) {
+  if (sorted.length === 0) {
     return 0;
   }
-  const sorted = Float64Array.from(values).sort();
   const position = fraction * (sorted.length - 1);
   const left = Math.floor(position);
   const right = Math.min(sorted.length - 1, left + 1);
@@ -518,14 +521,15 @@ export function prepareLegacyVoice(
           voicedIndices.push(index);
         }
       }
-      const f0s = voicedIndices.map((index) => pitches[index]);
-      const f0Low = percentile(f0s, 0.05);
-      const f0High = percentile(f0s, 0.95);
+      const f0s = Float64Array.from(voicedIndices, (index) => pitches[index]);
+      f0s.sort();
+      const f0Low = sortedPercentile(f0s, 0.05);
+      const f0High = sortedPercentile(f0s, 0.95);
       features = {
         duration: rateFeatures.duration,
         activeDuration: activeSeconds,
         voicedDuration: voicedIndices.length * HOP,
-        f0: median(f0s),
+        f0: sortedPercentile(f0s, 0.5),
         f0Low,
         f0High,
         f0Range: f0Low > 0 ? 12 * Math.log2(f0High / f0Low) : 0,
@@ -573,8 +577,10 @@ function legacyDiagnostics(signal, rate, pitches, voicedIndices, options) {
   const upper = highpass(signal, HNR_HIGHPASS, rate);
   const tracks = [[], [], [], []];
   const spacings = [];
-  const tilts = [];
-  const noise = [];
+  // Floating-point increments of the stride can admit one final frame.
+  const capacity = Math.min(diagnosticFrames, FORMANT_FRAMES + 1);
+  const tilts = new Float64Array(capacity);
+  const noise = new Float64Array(capacity);
   const hann = new Float64Array(length);
   for (let index = 0; index < length; index++) {
     hann[index] = 0.5 - 0.5 * Math.cos((2 * Math.PI * index) / length);
@@ -587,41 +593,44 @@ function legacyDiagnostics(signal, rate, pitches, voicedIndices, options) {
     straight: new Float64Array(length + Math.ceil(rate / MIN_F0) + 2),
     differences: new Float64Array(2 * LAG_STEPS + 1),
   };
-  for (let pick = 0; pick < diagnosticFrames; pick += stride) {
+  let measured = 0;
+  for (let pick = 0; pick < diagnosticFrames; pick += stride, measured++) {
     const index = voicedIndices[Math.floor(pick)];
     const start = index * hop;
-    const formants = options.diagnosticsOnly
-      ? []
-      : estimateFormants(signal, rate, {
-          start: start / rate,
-          duration: 0.03,
-          count: formantCount,
-          analysisRate: rate,
-          order,
-        });
-    formants.slice(0, 4).forEach((value, order) => tracks[order].push(value));
-    if (formants.length >= 3) {
-      spacings.push(formantSpacing(formants));
+    if (!options.diagnosticsOnly) {
+      const formants = estimateFormants(signal, rate, {
+        start: start / rate,
+        duration: 0.03,
+        count: formantCount,
+        analysisRate: rate,
+        order,
+      });
+      for (let formant = 0; formant < Math.min(formants.length, 4); formant++) {
+        tracks[formant].push(formants[formant]);
+      }
+      if (formants.length >= 3) {
+        spacings.push(formantSpacing(formants));
+      }
     }
     for (let n = 0; n < length; n++) {
       windowed[n] = signal[start + n] * hann[n];
     }
     const h1 = harmonicLevel(windowed, pitches[index], rate);
     const h2 = harmonicLevel(windowed, 2 * pitches[index], rate);
-    tilts.push(20 * Math.log10((h1 + 1e-12) / (h2 + 1e-12)));
+    tilts[measured] = 20 * Math.log10((h1 + 1e-12) / (h2 + 1e-12));
     const aperiodicity = Math.min(
       0.999,
       Math.max(1e-3, straightAperiodicity(upper, pitches, index, hnrScratch))
     );
-    noise.push(10 * Math.log10((1 - aperiodicity) / aperiodicity));
+    noise[measured] = 10 * Math.log10((1 - aperiodicity) / aperiodicity);
   }
   const spacing = median(spacings);
   return {
     formants: tracks.map((track) => median(track)),
     formantSpacing: spacing,
     vocalTractLength: spacing > 0 ? SPEED_OF_SOUND / (2 * spacing) : 0,
-    h1h2: median(tilts),
-    hnr: percentile(noise, HNR_PERCENTILE),
+    h1h2: sortedPercentile(tilts.subarray(0, measured).sort(), 0.5),
+    hnr: sortedPercentile(noise.subarray(0, measured).sort(), HNR_PERCENTILE),
   };
 }
 
