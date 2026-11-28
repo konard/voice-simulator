@@ -105,7 +105,7 @@ if (
   }
   let output;
   for (let i = 0; i < count; i++) {
-    output = hmmFeatures(samples, rate, lda, undefined, true, true);
+    output = hmmFeatures(samples, rate, lda, undefined, { framePitch: true });
   }
   const hash = createHash('sha256');
   for (const column of [output.feats, output.tone]) {

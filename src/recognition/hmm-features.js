@@ -8,7 +8,7 @@ import { resample } from '../audio/resample.js';
 import { hzToMel, melToHz } from '../metrics/spectrum.js';
 import { createFft } from './fft.js';
 import { analyzePitchFrames } from './frontend.js';
-import { hmmToneFeatures } from './hmm-tone.js';
+import { HMM_TONE_DIMS, hmmToneFeatures } from './hmm-tone.js';
 import { trackPitch, trackPitchFrames } from './pitch.js';
 
 export const HMM_RATE = 8000;
@@ -20,6 +20,7 @@ const CEPS = 13;
 const STATICS = CEPS + 2;
 /** Octaves from the median beyond which a pitch is dropped. */
 const PITCH_RANGE = 1;
+const allocate = (_key, length, Type) => new Type(length);
 
 /** Centre time (s) of feature frame t. */
 export const hmmFrameTime = (t) => (t * HOP + WINDOW / 2) / HMM_RATE;
@@ -103,15 +104,15 @@ function logMel(power, { offsets, firstBin, weights }, logs) {
   }
 }
 
-function rawCepstra(x) {
+function rawCepstra(x, storage) {
   const tables = getTables();
   const { dct, bank } = tables;
   const count = Math.max(0, Math.floor((x.length - WINDOW) / HOP) + 1);
-  const re = new Float64Array(SIZE);
-  const im = new Float64Array(SIZE);
-  const power = new Float64Array(SIZE / 2 + 1);
-  const logs = new Float64Array(FILTERS);
-  const raw = new Float64Array(count * STATICS);
+  const re = storage('hmmReal', SIZE, Float64Array);
+  const im = storage('hmmImaginary', SIZE, Float64Array);
+  const power = storage('hmmPower', SIZE / 2 + 1, Float64Array);
+  const logs = storage('hmmLogMel', FILTERS, Float64Array);
+  const raw = storage('hmmRaw', count * STATICS, Float64Array);
   for (let t = 0; t < count; t++) {
     windowedPower(x, t * HOP, re, im, power, tables);
     logMel(power, bank, logs);
@@ -193,10 +194,10 @@ function interpolatePitch(lf0, median) {
  * Pitch statics per frame: log2 f0 minus the utterance median of the
  * voiced frames, interpolated across unvoiced frames, and the voicing.
  */
-export function hmmPitchStatics(pitch, count) {
-  const lf0 = new Float64Array(count).fill(NaN);
-  const voicing = new Float64Array(count);
-  const voiced = new Float64Array(count);
+export function hmmPitchStatics(pitch, count, storage = allocate) {
+  const lf0 = storage('hmmLogPitch', count, Float64Array).fill(NaN);
+  const voicing = storage('hmmVoicing', count, Float64Array).fill(0);
+  const voiced = storage('hmmVoicedPitch', count, Float64Array);
   let used = 0;
   for (let t = 0; t < count; t++) {
     const i = Math.round((hmmFrameTime(t) - pitch.startTime) / pitch.hop);
@@ -221,12 +222,13 @@ export function hmmPitchStatics(pitch, count) {
 
 function staticFeatures(
   samples,
-  pitch = trackPitch(analyzePitchFrames(samples, HMM_RATE, 0.01))
+  pitch = trackPitch(analyzePitchFrames(samples, HMM_RATE, 0.01)),
+  storage = allocate
 ) {
-  const values = rawCepstra(samples);
+  const values = rawCepstra(samples, storage);
   normalise(values);
   const count = values.length / STATICS;
-  const { lf0, voicing } = hmmPitchStatics(pitch, count);
+  const { lf0, voicing } = hmmPitchStatics(pitch, count, storage);
   for (let t = 0; t < count; t++) {
     const at = t * STATICS;
     values[at + CEPS] = 4 * lf0[t];
@@ -258,11 +260,11 @@ export function applyLda(lda, statics) {
   return projectLda(lda, statics.length, statics);
 }
 
-function projectLda(lda, frames, statics, flat) {
+function projectLda(lda, frames, statics, flat, storage = allocate) {
   const { ctx, dim, width, rows, mean, dims } = lda;
   const stat = dim / 2;
-  const x = new Float64Array(width);
-  const out = new Float32Array(frames * dims);
+  const x = storage('hmmProjectedRow', width, Float64Array);
+  const out = storage('hmmFeatures', frames * dims, Float32Array);
   for (let t = 0; t < frames; t++) {
     for (let j = -ctx; j <= ctx; j++) {
       const frame = Math.min(frames - 1, Math.max(0, t + j));
@@ -288,26 +290,36 @@ function projectLda(lda, frames, statics, flat) {
 
 /**
  * Model features of speech at any rate, the tone-stream features
- * (hmm-tone.js) and the 8 kHz pitch track.
+ * (hmm-tone.js) and the 8 kHz pitch track. With caller-owned storage, consume
+ * the spectral and tone features before reusing the same buffers.
  */
 export function hmmFeatures(
   samples,
   sampleRate,
   lda,
   pitchAtInputRate,
-  includeTone = true,
-  framePitch = false
+  { includeTone = true, framePitch = false, storage = allocate } = {}
 ) {
   const x = hmmAudio(samples, sampleRate);
   let modelPitch = sampleRate === HMM_RATE ? pitchAtInputRate : undefined;
   if (!modelPitch && framePitch) {
     modelPitch = trackPitchFrames(analyzePitchFrames(x, HMM_RATE, 0.01));
   }
-  const { values, count, pitch, lf0, voicing } = staticFeatures(x, modelPitch);
+  const { values, count, pitch, lf0, voicing } = staticFeatures(
+    x,
+    modelPitch,
+    storage
+  );
   return {
-    feats: projectLda(lda, count, undefined, values),
+    feats: projectLda(lda, count, undefined, values, storage),
     frames: count,
     pitch,
-    tone: includeTone ? hmmToneFeatures(lf0, voicing) : undefined,
+    tone: includeTone
+      ? hmmToneFeatures(
+          lf0,
+          voicing,
+          storage('hmmTone', count * HMM_TONE_DIMS, Float32Array)
+        )
+      : undefined,
   };
 }

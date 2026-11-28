@@ -53,11 +53,15 @@ function windowMean(values, center, width) {
  * the utterance median (interpolated across unvoiced frames) and voicing.
  * @param {ArrayLike<number>} lf0
  * @param {ArrayLike<number>} voicing
+ * @param {Float32Array} [out] Storage for the feature rows.
  * @returns {Float32Array}
  */
-export function hmmToneFeatures(lf0, voicing) {
+export function hmmToneFeatures(
+  lf0,
+  voicing,
+  out = new Float32Array(lf0.length * HMM_TONE_DIMS)
+) {
   const frames = lf0.length;
-  const out = new Float32Array(frames * HMM_TONE_DIMS);
   for (let t = 0; t < frames; t++) {
     const mean = windowMean(lf0, t, MID_WIDTH);
     let nearSlope = 0;

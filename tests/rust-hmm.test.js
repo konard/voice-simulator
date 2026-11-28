@@ -42,7 +42,9 @@ test('packed HMM features match the training feature rows', () => {
   const lf0 = statics.map((row) => row[13] / 4);
   const voicing = statics.map((row) => row[14]);
   const packed = hmmFeatures(samples, RATE, lda, pitch);
-  const spectralOnly = hmmFeatures(samples, RATE, lda, pitch, false);
+  const spectralOnly = hmmFeatures(samples, RATE, lda, pitch, {
+    includeTone: false,
+  });
 
   expect(packed.frames).toBe(statics.length);
   expect(packed.feats).toEqual(applyLda(lda, statics));
@@ -59,11 +61,38 @@ test('wideband HMM features only need frame-level pitch after resampling', () =>
     (_, i) => native[i >> 1]
   );
   const full = hmmFeatures(wideband, RATE * 2, lda);
-  const frameOnly = hmmFeatures(wideband, RATE * 2, lda, undefined, true, true);
+  const frameOnly = hmmFeatures(wideband, RATE * 2, lda, undefined, {
+    framePitch: true,
+  });
 
   expect(frameOnly.frames).toBe(full.frames);
   expect(frameOnly.feats).toEqual(full.feats);
   expect(frameOnly.tone).toEqual(full.tone);
+});
+
+test('reuses HMM feature storage across inputs with different lengths', () => {
+  const { lda } = getHmmModel();
+  const samples = sound();
+  const buffers = new Map();
+  const storage = (key, length, Type) => {
+    if (!buffers.has(key)) {
+      buffers.set(key, new Type(length));
+    }
+    return buffers.get(key).subarray(0, length);
+  };
+  hmmFeatures(samples, RATE, lda, undefined, { framePitch: true, storage });
+  const short = samples.subarray(1000, 6000);
+  const expected = hmmFeatures(short, RATE, lda, undefined, {
+    framePitch: true,
+  });
+  const reused = hmmFeatures(short, RATE, lda, undefined, {
+    framePitch: true,
+    storage,
+  });
+
+  expect(reused.feats.buffer).toBe(buffers.get('hmmFeatures').buffer);
+  expect(reused.feats).toEqual(expected.feats);
+  expect(reused.tone).toEqual(expected.tone);
 });
 
 describe('Rust HMM kernels (issue 75)', () => {
