@@ -14,6 +14,7 @@ import { fileURLToPath, URL } from 'node:url';
 import {
   formatReport,
   judge,
+  passes,
   regressions,
   REPORT_PATH,
 } from '../../scripts/lowest-report.mjs';
@@ -21,7 +22,7 @@ import { ISSUES_PATH } from '../../scripts/lowest-settings.mjs';
 import { heavyLimit, heavyOut, writeReport } from './helpers/report.js';
 
 const ROOT = fileURLToPath(new URL('../../', import.meta.url));
-const ROWS = [
+const ALL_ROWS = [
   'synthesis',
   'recognition',
   'streaming',
@@ -30,6 +31,12 @@ const ROWS = [
   'copy',
   'modes',
 ];
+const selected = process.env.LOWEST_ROW || null;
+assert.ok(
+  !selected || ALL_ROWS.includes(selected),
+  `Unknown lowest row: ${selected}`
+);
+const rows = selected ? [selected] : ALL_ROWS;
 const ENGINES = ['js', 'rust'];
 const HEAP_CAP = '--max-old-space-size=192';
 const ROW_TIMEOUT_MS = 6 * 3_600_000;
@@ -111,7 +118,7 @@ async function measure(row, engine, core) {
     return {
       row,
       engine,
-      error: `exit ${capped.code ?? capped.signal}: ${capped.stderr.trim().split('\n').slice(-3).join(' ')}`,
+      error: `exit ${capped.code ?? capped.signal}: ${capped.stderr.trim()}`,
       capped: {},
     };
   }
@@ -121,7 +128,7 @@ async function measure(row, engine, core) {
     : {
         row,
         engine,
-        error: `uncapped exit ${free.code ?? free.signal}: ${free.stderr.trim().split('\n').slice(-3).join(' ')}`,
+        error: `uncapped exit ${free.code ?? free.signal}: ${free.stderr.trim()}`,
         capped: { crashed: crash },
       };
 }
@@ -150,7 +157,7 @@ function withCore(task) {
 
 const runs = {};
 const pending = new Map();
-for (const row of ROWS) {
+for (const row of rows) {
   for (const engine of ENGINES) {
     pending.set(`${row}-${engine}`, () =>
       withCore((core) => measure(row, engine, core))
@@ -184,7 +191,7 @@ function commit() {
 
 describe('lowest settings: 8 kHz and one core', () => {
   mkdirSync(out, { recursive: true });
-  for (const row of ROWS) {
+  for (const row of rows) {
     for (const engine of ENGINES) {
       // A full row can take hours on one core: recognition scores 140
       // benchmark utterances at 8 kHz and once more at 16 kHz.
@@ -194,13 +201,52 @@ describe('lowest settings: 8 kHz and one core', () => {
         runs[row][engine] = measured;
         console.log(`lowest ${row} ${engine}`, JSON.stringify(measured));
         assert.ok(!measured.error, measured.error);
+        if (
+          row === 'session' &&
+          !Number.isFinite(limit) &&
+          (selected || !measured.unavailable)
+        ) {
+          const { quality, [engine === 'js' ? 'js-1' : 'rust-1']: speed } =
+            thresholds.session;
+          assert.ok(pinned, 'Session certification requires one pinned core');
+          assert.ok(!measured.unavailable, measured.unavailable);
+          assert.ok(
+            !measured.capped?.crashed,
+            'Session must run with the heap cap'
+          );
+          assert.equal(measured.audioSeconds, 60);
+          assert.deepEqual(
+            measured.cases?.map(({ preset }) => preset),
+            ['male', 'female', 'child']
+          );
+          for (const { preset, stableAt, words } of measured.cases) {
+            assert.ok(
+              stableAt > 0 && stableAt < 20,
+              `${engine} ${preset} should reach stable during input`
+            );
+            assert.ok(
+              words > 0,
+              `${engine} ${preset} should commit recognized words`
+            );
+          }
+          for (const [metric, maximum] of Object.entries({
+            ...quality,
+            ...speed,
+          })) {
+            const value = measured.metrics?.[metric];
+            assert.ok(
+              passes(metric, value, maximum),
+              `${engine} session ${metric}: ${value}, limit ${maximum}`
+            );
+          }
+        }
       });
     }
   }
 
   after(() => {
     // The app row comes from tests/heavy/lowest-app.test.js, run before.
-    const app = read(path.join(heavyOut(), 'lowest-app.json'));
+    const app = !selected && read(path.join(heavyOut(), 'lowest-app.json'));
     if (app) {
       runs.app = { js: app.result };
     }
@@ -209,13 +255,14 @@ describe('lowest settings: 8 kHz and one core', () => {
       version: 1,
       measured: new Date().toISOString(),
       commit: commit(),
-      command: `node scripts/run-heavy.mjs --suite lowest${Number.isFinite(limit) ? ` --limit ${limit}` : ''}`,
+      command: `${selected ? `LOWEST_ROW=${selected} node --test tests/heavy/lowest-settings.test.js` : 'node scripts/run-heavy.mjs --suite lowest'}${Number.isFinite(limit) && !selected ? ` --limit ${limit}` : ''}`,
       cpu: os.cpus()[0]?.model ?? 'unknown',
       node: process.version,
       pinned,
       core: pinned ? 0 : null,
       parallel,
       limit: Number.isFinite(limit) ? limit : null,
+      ...(selected && { row: selected }),
       limits: thresholds,
       runs,
       cells: judge(runs, thresholds, issues),

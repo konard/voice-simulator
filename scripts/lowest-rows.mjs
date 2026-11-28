@@ -365,6 +365,7 @@ async function sessionRow({ engine, limit }) {
   let audioSeconds = 0;
   let stable = 0;
   const errors = { vocalTractLength: [], pitch: [] };
+  const cases = [];
   const presets = PRESETS.slice(0, limit);
   for (const preset of presets) {
     const truth = presetHeadConfig(preset);
@@ -378,9 +379,15 @@ async function sessionRow({ engine, limit }) {
         realtime: true,
         engine: engine.render,
       });
-      let reached = false;
-      session.on('state', ({ state }) => {
-        reached ||= state === 'stable';
+      let stableAt = null;
+      session.on('state', ({ state, time }) => {
+        if (state === 'stable') {
+          stableAt ??= time;
+        }
+      });
+      let failure;
+      session.on('error', (error) => {
+        failure = error;
       });
       const started = performance.now();
       for (let i = 0; i < samples.length; i += chunk) {
@@ -390,22 +397,37 @@ async function sessionRow({ engine, limit }) {
         }
         session.push(samples.slice(i, i + chunk));
       }
-      session.flush();
-      return { session, reached: reached || session.state === 'stable' };
+      const reached = stableAt;
+      const { words } = session.flush();
+      if (failure) {
+        throw failure;
+      }
+      return { session, reached, words: words.length };
     });
     seconds += cpu;
     audioSeconds += 20;
-    stable += session.reached;
+    stable += session.reached !== null;
     const head = session.session.voice
       ? loadVoice(session.session.voice).head
       : null;
     for (const key of Object.keys(errors)) {
       errors[key].push(head ? relative(head[key], truth[key]) : Infinity);
     }
+    cases.push({
+      preset,
+      stableAt: session.reached,
+      state: session.session.state,
+      seconds: round(cpu),
+      words: session.words,
+      distances: session.session.history.map(({ distance }) => round(distance)),
+      vocalTractLengthError: round(errors.vocalTractLength.at(-1)),
+      pitchError: round(errors.pitch.at(-1)),
+    });
   }
   return {
     seconds,
     audioSeconds,
+    cases,
     metrics: {
       stable: round(stable / presets.length),
       vocalTractLengthError: round(Math.max(...errors.vocalTractLength)),

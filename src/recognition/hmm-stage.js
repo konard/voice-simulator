@@ -112,8 +112,16 @@ export function hmmAudioToIpa(samples, sampleRate, options = {}) {
     maxWords: options.maxWords,
     oov: options.oov,
   });
-  const analysis = analyzeFrames(samples, sampleRate, { hop: 0.01 });
-  const { feats, frames, tone } = hmmFeatures(samples, sampleRate, model.lda);
+  const analysis =
+    options.frontEnd?.frames ??
+    analyzeFrames(samples, sampleRate, { hop: 0.01 });
+  const inputPitch = options.frontEnd?.tracks.pitch;
+  const { feats, frames, tone } = hmmFeatures(
+    samples,
+    sampleRate,
+    model.lda,
+    inputPitch
+  );
   const search = { ...options.search, tone };
   // Features are normalised per input, so silence alone would decode as
   // words: decode only inputs with frames the front end calls speech.
@@ -130,7 +138,8 @@ export function hmmAudioToIpa(samples, sampleRate, options = {}) {
     : [];
   stressOutOfVocabulary(decoded.words, aligned);
   const segments = timedSegments(aligned);
-  const pitch = trackPitch(analysis);
+  const pitch =
+    inputPitch ?? trackPitch(analysis, { kernels: options.kernels });
   const whisperSpans = whisperSpansOf(samples, sampleRate, analysis, pitch, {
     whisper: options.whisper ?? 'auto',
   });
@@ -149,12 +158,15 @@ export function hmmAudioToIpa(samples, sampleRate, options = {}) {
         ? spellSounds(parseIpa(tokens.map(tokenIpa).join('')).tokens, lang)
         : word,
       language: lang,
+      ...(oov && { unknown: true }),
       ...wordSpan(aligned, i),
     })),
     tracks: { pitch },
     // Energies only: the noise check reads them, prosody and modes
     // analyse the audio at their own hops.
-    frames: { energy: analysis.energy, count: analysis.count },
+    frames: options.frontEnd
+      ? analysis
+      : { energy: analysis.energy, count: analysis.count },
     whisperSpans,
     modes,
     language,

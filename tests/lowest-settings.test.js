@@ -89,80 +89,121 @@ describe('lowest settings', () => {
         'shrink the recognition network (https://github.com/konard/voice-simulator/issues/173) or raise the memory limit in issue 81',
     });
   });
+});
 
-  describe('publication', () => {
-    const dir = mkdtempSync(path.join(tmpdir(), 'lowest-settings-'));
-    after(() => rmSync(dir, { recursive: true, force: true }));
-    const cells = (status) => ({
-      synthesis: {
-        quality: { status: 'certified', metrics: {} },
-        'js-1': { status, metrics: {} },
-      },
-    });
-    const report = (status) => ({
-      version: 1,
-      measured: '2026-01-01T00:00:00.000Z',
-      commit: '0123456789abcdef',
-      command: 'node scripts/run-heavy.mjs --suite lowest',
-      cpu: 'test CPU',
-      node: 'v0.0.0',
-      pinned: true,
-      core: 0,
-      limits: {},
-      runs: {},
-      cells: cells(status),
-      regressions: [],
-    });
-    const reportJson = path.join(dir, REPORT_PATH.replace(/\.md$/u, '.json'));
-    const files = () =>
-      [path.join(dir, 'README.md'), path.join(dir, REPORT_PATH), reportJson]
-        .map((file) => readFileSync(file, 'utf8'))
-        .join('\n');
-    mkdirSync(path.dirname(reportJson), { recursive: true });
-    mkdirSync(path.join(dir, 'measured'));
-    writeFileSync(
-      path.join(dir, 'README.md'),
-      `# Fixture\n\n${README_START}\nold table\n${README_END}\n`
+describe('lowest settings publication', () => {
+  const dir = mkdtempSync(path.join(tmpdir(), 'lowest-settings-'));
+  after(() => rmSync(dir, { recursive: true, force: true }));
+  const cells = (status) => ({
+    synthesis: {
+      quality: { status: 'certified', metrics: {} },
+      'js-1': { status, metrics: {} },
+    },
+  });
+  const report = (status) => ({
+    version: 1,
+    measured: '2026-01-01T00:00:00.000Z',
+    commit: '0123456789abcdef',
+    command: 'node scripts/run-heavy.mjs --suite lowest',
+    cpu: 'test CPU',
+    node: 'v0.0.0',
+    pinned: true,
+    core: 0,
+    limits: {},
+    runs: {},
+    cells: cells(status),
+    regressions: [],
+  });
+  const reportJson = path.join(dir, REPORT_PATH.replace(/\.md$/u, '.json'));
+  const files = () =>
+    [path.join(dir, 'README.md'), path.join(dir, REPORT_PATH), reportJson]
+      .map((file) => readFileSync(file, 'utf8'))
+      .join('\n');
+  mkdirSync(path.dirname(reportJson), { recursive: true });
+  mkdirSync(path.join(dir, 'measured'));
+  writeFileSync(
+    path.join(dir, 'README.md'),
+    `# Fixture\n\n${README_START}\nold table\n${README_END}\n`
+  );
+  writeFileSync(path.join(dir, REPORT_PATH), '# Old report\n');
+  writeFileSync(reportJson, JSON.stringify(report('certified')));
+  writeFileSync(
+    path.join(dir, 'measured', 'lowest-settings.json'),
+    JSON.stringify(report('failed'))
+  );
+  const publish = (...extra) =>
+    run(
+      process.execPath,
+      [
+        SCRIPT,
+        '--publish',
+        path.join(dir, 'measured'),
+        '--root',
+        dir,
+        ...extra,
+      ],
+      { cwd: ROOT }
     );
-    writeFileSync(path.join(dir, REPORT_PATH), '# Old report\n');
-    writeFileSync(reportJson, JSON.stringify(report('certified')));
-    writeFileSync(
-      path.join(dir, 'measured', 'lowest-settings.json'),
-      JSON.stringify(report('failed'))
-    );
-    const publish = (...extra) =>
-      run(
-        process.execPath,
-        [
-          SCRIPT,
-          '--publish',
-          path.join(dir, 'measured'),
-          '--root',
-          dir,
-          ...extra,
-        ],
-        { cwd: ROOT }
-      );
 
-    it('refuses a regression', async () => {
-      const before = files();
-      await assert.rejects(publish(), (error) => {
-        assert.equal(error.code, 1);
-        assert.match(error.stderr, /synthesis\/js-1 \(failed\)/u);
-        return true;
-      });
-      assert.equal(files(), before);
-      await publish('--allow-regression', 'test');
-      const written = files();
-      assert.notEqual(written, before);
-      assert.match(written, /## Regressions/u);
-      assert.match(written, /synthesis \/ js-1 is failed.*Reason: test/u);
-      const readme = readFileSync(path.join(dir, 'README.md'), 'utf8');
-      assert.match(readme, /\| synthesis \| certified \| failed \|/u);
-      assert.doesNotMatch(readme, /old table/u);
+  it('refuses a regression', async () => {
+    const before = files();
+    await assert.rejects(publish(), (error) => {
+      assert.equal(error.code, 1);
+      assert.match(error.stderr, /synthesis\/js-1 \(failed\)/u);
+      return true;
     });
+    assert.equal(files(), before);
+    await publish('--allow-regression', 'test');
+    const written = files();
+    assert.notEqual(written, before);
+    assert.match(written, /## Regressions/u);
+    assert.match(written, /synthesis \/ js-1 is failed.*Reason: test/u);
+    const readme = readFileSync(path.join(dir, 'README.md'), 'utf8');
+    assert.match(readme, /\| synthesis \| certified \| failed \|/u);
+    assert.doesNotMatch(readme, /old table/u);
   });
 
+  it('refreshes a pinned row and preserves other measurements', async () => {
+    const measurement = (cpuRatio) => ({ metrics: { cpuRatio } });
+    const limits = { 'js-1': { cpuRatio: 0.5 }, 'rust-1': { cpuRatio: 0.5 } };
+    const original = {
+      ...report('failed'),
+      limits: { synthesis: limits, session: limits },
+      runs: {
+        synthesis: { js: measurement(0.3), rust: measurement(0.2) },
+        session: { js: measurement(1), rust: measurement(2) },
+      },
+      cells: {},
+    };
+    const refresh = {
+      ...original,
+      commit: 'abcdef0123456789',
+      command:
+        'LOWEST_ROW=session node --test tests/heavy/lowest-settings.test.js',
+      row: 'session',
+      limit: null,
+      runs: { session: { js: measurement(0.4) } },
+    };
+    const reportPath = path.join(dir, 'measured', 'lowest-settings.json');
+    writeFileSync(reportJson, JSON.stringify(original));
+    writeFileSync(reportPath, JSON.stringify(refresh));
+    await assert.rejects(publish(), /Expected a complete, pinned measurement/u);
+    refresh.runs.session.rust = measurement(0.35);
+    writeFileSync(reportPath, JSON.stringify(refresh));
+    await publish();
+    const result = JSON.parse(readFileSync(reportJson, 'utf8'));
+    assert.equal(result.commit, original.commit);
+    assert.deepEqual(result.runs.synthesis, original.runs.synthesis);
+    assert.deepEqual(result.runs.session, refresh.runs.session);
+    assert.equal(result.rowMeasurements.session.commit, refresh.commit);
+    assert.equal(result.rowMeasurements.session.pinned, true);
+    assert.match(
+      readFileSync(path.join(dir, REPORT_PATH), 'utf8'),
+      /Pinned with `taskset -c 0`\. Command `LOWEST_ROW=session/u
+    );
+    assert.equal(result.cells.session['js-1'].status, 'certified');
+    assert.equal(result.cells.session['rust-1'].status, 'certified');
+  });
   it('keeps the README table current', () => {
     const readme = readFileSync(path.join(ROOT, 'README.md'), 'utf8');
     const committed = JSON.parse(
