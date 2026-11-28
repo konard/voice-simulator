@@ -160,15 +160,17 @@ export function consonantJaw(state, head) {
  * @param {Record<string, number>} head
  * @param {number} length Tract length (cm).
  */
-export function dentition(state, head, length) {
+export function dentition(state, head, length, target = {}) {
   const end = Math.max(0, length - incisorDepth(head));
   const gap = teethGap(state, head);
-  return {
-    gap,
-    area: gap * teethWidth(head),
-    start: Math.max(0, end - (head.incisorThickness ?? INCISOR_THICKNESS)),
-    end,
-  };
+  target.gap = gap;
+  target.area = gap * teethWidth(head);
+  target.start = Math.max(
+    0,
+    end - (head.incisorThickness ?? INCISOR_THICKNESS)
+  );
+  target.end = end;
+  return target;
 }
 
 /**

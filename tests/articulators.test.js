@@ -40,6 +40,22 @@ it('reuses tract intermediates without changing published shapes', () => {
   expect(first).toEqual(expected);
 });
 
+it('reuses the shape and control records that only the frame writer reads', () => {
+  const workspace = createTractWorkspace({ sections: 28, reuseAreas: true });
+  const options = { sections: 28 };
+  const state = { height: 0.3, f0: 160, sibilance: 0.9 };
+  const shape = tractShape(state, DEFAULT_HEAD, options, workspace);
+  expect(shape).toEqual(tractShape(state, DEFAULT_HEAD, options));
+  const { frication, glottis, teeth } = shape;
+
+  const neutral = tractShape({}, DEFAULT_HEAD, options, workspace);
+  expect(neutral).toBe(shape);
+  expect(neutral.frication).toBe(frication);
+  expect(neutral.glottis).toBe(glottis);
+  expect(neutral.teeth).toBe(teeth);
+  expect(neutral).toEqual(tractShape({}, DEFAULT_HEAD, options));
+});
+
 /** First four formants (Hz) of a tract shape: waveguide impulse response. */
 function formants(shape) {
   const sections = shape.areas.length;
