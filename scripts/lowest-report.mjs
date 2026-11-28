@@ -261,6 +261,13 @@ function runLines(data) {
 
 /** The Markdown report of a judged matrix. */
 export function formatReport(data) {
+  const additionalRuns = Object.entries(data.rowMeasurements ?? {}).flatMap(
+    ([row, { measured, commit, command, cpu, node, core }]) => [
+      '',
+      `- \`${row}\` measured on ${measured} at commit \`${commit}\` on ${cpu} with Node ${node}, pinned with \`taskset -c ${core}\`.`,
+      `  Command \`${command}\`.`,
+    ]
+  );
   const regressionLines = data.regressions?.length
     ? [
         '',
@@ -288,6 +295,7 @@ export function formatReport(data) {
     `- Node: ${data.node}`,
     `- Pinning: ${data.pinned ? `pinned with \`taskset -c ${data.core}\`` : 'not pinned (taskset is missing)'}`,
     `- Heap cap: \`--max-old-space-size=192\`${data.limit ? `; item limit ${data.limit}` : ''}`,
+    ...additionalRuns,
     '',
     ...matrix(data),
     '',
@@ -305,13 +313,19 @@ export function formatReport(data) {
 
 /** The README block between the lowest-settings markers. */
 export function readmeTable(data) {
+  const refreshed = Object.keys(data.rowMeasurements ?? {});
+  const provenance = refreshed.length
+    ? `The ${refreshed.map((row) => `\`${row}\``).join(', ')} measurements have newer commits listed in the [report](${REPORT_PATH}).`
+    : `[report](${REPORT_PATH}).`;
   return [
     README_START,
     // Prettier would pad the columns; the block stays exactly as generated.
     '<!-- prettier-ignore-start -->',
     ...matrix(data, (cell) => (cell ? cell.status : '—')),
     '',
-    `Measured at commit \`${data.commit.slice(0, 7)}\` on ${data.cpu}; [report](${REPORT_PATH}).`,
+    refreshed.length
+      ? `Full matrix measured at commit \`${data.commit.slice(0, 7)}\` on ${data.cpu}. ${provenance}`
+      : `Measured at commit \`${data.commit.slice(0, 7)}\` on ${data.cpu}; ${provenance}`,
     '<!-- prettier-ignore-end -->',
     README_END,
   ].join('\n');

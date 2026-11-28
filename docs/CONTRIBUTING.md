@@ -214,6 +214,12 @@ honest:
   `node scripts/lowest-settings.mjs --publish reports/heavy`, which refuses a
   regression unless it is given `--allow-regression "<reason>"`.
 
+To certify a single row on its complete inputs, set the `lowest-row` input in
+Heavy checks. For example, select `suite=lowest` and `lowest-row=session` to
+run the three live voice presets with both engines. For a local run use
+`LOWEST_ROW=session node --test tests/heavy/lowest-settings.test.js`. Publishing
+that report records the new commit, CPU and Node version for the selected row.
+
 ### Recognition benchmark
 
 Run a short sample locally or dispatch the full recognition suite on one
