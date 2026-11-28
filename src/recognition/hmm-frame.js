@@ -2,7 +2,6 @@
 
 export function scoreFrame(network, pass, frame) {
   const {
-    positions,
     work,
     active,
     length,
@@ -28,15 +27,13 @@ export function scoreFrame(network, pass, frame) {
     const candidate = entryIndex[id] - 1;
     const firstMixture = emit[f];
     const wasActive = row < active;
-    let prior = 0;
     let nodeBest = -Infinity;
     let history = 0;
     let start = 0;
     if (wasActive) {
-      prior = (positions[id] - 1) * 6;
-      nodeBest = priorScores[prior] + stay[firstMixture];
-      history = priorHistories[prior];
-      start = priorStarts[prior];
+      nodeBest = priorScores[offset] + stay[firstMixture];
+      history = priorHistories[offset];
+      start = priorStarts[offset];
     }
     if (candidate >= 0 && entry.scores[candidate] > nodeBest) {
       nodeBest = entry.scores[candidate];
@@ -56,7 +53,7 @@ export function scoreFrame(network, pass, frame) {
     if (wasActive) {
       let priorMixture = firstMixture;
       for (let state = 1; state < states; state++) {
-        const j = prior + state;
+        const j = offset + state;
         const mixture = emit[f + state];
         let score = priorScores[j] + stay[mixture];
         let source = j;

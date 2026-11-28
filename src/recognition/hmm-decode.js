@@ -510,19 +510,30 @@ export function createThresholds(
 }
 
 // Only the nodes visited by the beam need state scores and history.
-function stateFrame(rows) {
+function stateHistory(rows) {
   return {
     scores: new Float64Array(6 * rows),
     histories: new Int32Array(6 * rows),
     starts: new Int32Array(6 * rows),
-    peaks: new Float64Array(rows),
   };
+}
+
+function stateFrame(rows) {
+  return { ...stateHistory(rows), peaks: new Float64Array(rows) };
+}
+
+function growHistory(previous) {
+  const grown = stateHistory((previous.scores.length / 6) * 2);
+  grown.scores.set(previous.scores);
+  grown.histories.set(previous.histories);
+  grown.starts.set(previous.starts);
+  return grown;
 }
 
 function createWorkspace({ nodeCount, model, languages }) {
   return {
     positions: new Uint32Array(nodeCount),
-    previous: stateFrame(256),
+    previous: stateHistory(256),
     current: stateFrame(256),
     entries: createFrontier(nodeCount),
     next: createFrontier(nodeCount),
@@ -565,6 +576,21 @@ export function decodeWords(network, feats, frames, options = {}, cache) {
   }
 }
 
+function retainStates(pass, target, offset, count, threshold) {
+  const { scores, histories, starts } = pass.current;
+  if (target === pass.previous.scores.length) {
+    pass.previous = growHistory(pass.previous);
+  }
+  const kept = pass.previous;
+  for (let i = 0; i < count; i++) {
+    const source = offset + i;
+    const score = scores[source];
+    kept.scores[target + i] = score < threshold ? -Infinity : score;
+    kept.histories[target + i] = histories[source];
+    kept.starts[target + i] = starts[source];
+  }
+}
+
 /** Prune the frame and queue its outgoing nodes and best word ends. */
 function pruneFrame(network, pass, thresholds, t) {
   const { nodes, words, emit, wordId, nextWord } = network;
@@ -584,7 +610,7 @@ function pruneFrame(network, pass, thresholds, t) {
   } = pass;
   const { lmw, releaseSkip } = settings;
   const endFrame = t + 1;
-  const { scores, histories, starts, peaks } = current;
+  const { peaks } = current;
   for (let i = 0; i < pass.active; i++) {
     positions[work[i]] = 0;
   }
@@ -597,15 +623,12 @@ function pruneFrame(network, pass, thresholds, t) {
     if (peaks[index] < threshold) {
       continue;
     }
-    const offset = index * 6;
+    const offset = active * 6;
     const states = count[id];
-    for (let i = 0; i < states; i++) {
-      if (scores[offset + i] < threshold) {
-        scores[offset + i] = -Infinity;
-      }
-    }
-    positions[id] = index + 1;
+    retainStates(pass, offset, index * 6, states, threshold);
+    positions[id] = active + 1;
     work[active++] = id;
+    const { scores, histories, starts } = pass.previous;
     const last = states - 1;
     const firstState = first[id];
     let exit = scores[offset + last] + go[emit[firstState + last]];
@@ -716,12 +739,10 @@ function advanceFrames(network, frames, pass, thresholdsOf, records) {
         restart(network, records, end, score, t + 1, pass);
       }
     }
-    const { entries, previous } = pass;
+    const { entries } = pass;
     entries.clear();
     pass.entries = pass.next;
     pass.next = entries;
-    pass.previous = pass.current;
-    pass.current = previous;
   }
 }
 
