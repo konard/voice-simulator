@@ -323,10 +323,12 @@ function getInterpolator(corrections) {
 }
 
 export function createVowelWorkspace() {
+  const values = new Float64Array(VOWEL_SECTIONS + 1);
   return {
     position: { height: 0, backness: 0, rounded: 0 },
     point: new Float64Array(3),
-    values: new Float64Array(VOWEL_SECTIONS + 1),
+    values,
+    baseAreas: values.subarray(0, VOWEL_SECTIONS),
     shape: { areas: new Float64Array(VOWEL_SECTIONS), length: 0 },
     corrections: undefined,
   };
@@ -350,7 +352,7 @@ export function vowelShape(
   // rounded vowels start from the unrounded shape and get rounded lips.
   const measuredRounding = backness >= 0.6 ? rounding : 0;
   const scratch = workspace ?? createVowelWorkspace();
-  const { point: at, values, shape } = scratch;
+  const { point: at, values, baseAreas, shape } = scratch;
   const weightedRounding = measuredRounding * ROUNDING_WEIGHT;
   // Adjacent blocks can share tongue-body coordinates even as the teeth,
   // tongue tip or other articulators modify the final area function.
@@ -364,13 +366,14 @@ export function vowelShape(
     at[1] = backness;
     at[2] = weightedRounding;
     getInterpolator(corrections)(at, values);
+    for (let index = 0; index < VOWEL_SECTIONS; index++) {
+      const root = Math.max(0.25, values[index]);
+      values[index] = root * root;
+    }
     scratch.corrections = corrections;
   }
   const { areas } = shape;
-  for (let index = 0; index < VOWEL_SECTIONS; index++) {
-    const root = Math.max(0.25, values[index]);
-    areas[index] = root * root;
-  }
+  areas.set(baseAreas);
   const extraRounding = rounding - measuredRounding;
   if (extraRounding > 0) {
     narrowLips(areas, extraRounding);

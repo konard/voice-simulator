@@ -184,12 +184,18 @@ export function dentition(state, head, length, target = {}) {
 export function carveTeeth(areas, teeth, length) {
   const last = areas.length - 1;
   const half = 0.5 / last;
+  const start = teeth.start / length;
+  const end = teeth.end / length;
+  // Visit only the cells that can overlap the span, including the cells
+  // at both rounded boundaries so the overlap calculation decides ties.
+  const firstCell = Math.max(0, Math.floor((start - half) * last));
+  const lastCell = Math.min(last, Math.ceil((end + half) * last));
   let best = last;
   let bestCover = 0;
-  for (let index = 0; index <= last; index++) {
+  for (let index = firstCell; index <= lastCell; index++) {
     const x = index / last;
-    const low = Math.max(x - half, teeth.start / length);
-    const high = Math.min(x + half, teeth.end / length);
+    const low = Math.max(x - half, start);
+    const high = Math.min(x + half, end);
     const cover = clamp((high - low) / (2 * half));
     if (cover > 0) {
       const narrowed = Math.min(areas[index], teeth.area);
