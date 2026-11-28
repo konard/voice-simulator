@@ -78,6 +78,13 @@ describe('universal app chunking', () => {
       expect(
         vendorChunk(['repo', 'src', 'recognition', 'pitch.js'].join(sep))
       ).toBe('recognition-dsp');
+      for (const module of ['archive', 'frame', 'frontier']) {
+        expect(
+          vendorChunk(
+            ['repo', 'src', 'recognition', `hmm-${module}.js`].join(sep)
+          )
+        ).toBe('recognition-hmm-kernels');
+      }
       expect(
         vendorChunk(
           ['repo', 'src', 'recognition', 'data', 'simulated-phones.js'].join(

@@ -30,6 +30,10 @@ const vendorChunks = [
     /[\\/]src[\\/]recognition[\\/](fft|lpc|pitch|pitch-rust|inverse-dsp|wasm-memory)\.js$/,
     'recognition-dsp',
   ],
+  [
+    /[\\/]src[\\/]recognition[\\/]hmm-(archive|frame|frontier)\.js$/,
+    'recognition-hmm-kernels',
+  ],
   [/[\\/]src[\\/]recognition[\\/]/, 'recognition'],
   [/[\\/]src[\\/]acoustics[\\/]/, 'acoustics'],
 ];
