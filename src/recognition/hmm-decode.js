@@ -37,7 +37,7 @@ export const HMM_DECODE_DEFAULTS = Object.freeze({
 export const HMM_LOW_SEARCH = Object.freeze({
   beam: 65,
   languageBeam: 170,
-  maxActive: 336,
+  maxActive: 256,
 });
 
 /** ln p of a shipped bigram cost (the costs are 0.5 - 0.3 ln p). */

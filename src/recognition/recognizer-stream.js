@@ -149,34 +149,39 @@ function trailingPause(frames, state) {
   return (state.scanned - state.lastSpeech - 1) * frames.hop;
 }
 
-function createWordFrontend(sampleRate) {
+function createWordFrontend(sampleRate, liveSyllables) {
   const input = createFrameAnalyzer(sampleRate, {
     hop: 0.01,
     maxSeconds: MAX_WINDOW + 1,
   });
   const { frames } = input;
   const landmarks = createLandmarkDetector(frames);
+  const report = (final = false) => ({
+    segments: [],
+    nuclei: landmarks.advance(final),
+  });
   return {
     frames,
+    report,
     push(chunk) {
       input.push(chunk);
-      return { segments: [], nuclei: landmarks.advance() };
+      return liveSyllables() ? report() : null;
     },
     flush() {
       input.flush();
-      return { segments: [], nuclei: landmarks.advance(true) };
+      return report(true);
     },
   };
 }
 
-function createPhraseDecoder(sampleRate, settings, level, start, wordPhrases) {
+function createPhraseDecoder(sampleRate, settings, level, start, wordFrontend) {
   const options = {
     ...decoderOptions(settings, level, start),
     maxSeconds: MAX_WINDOW + 1,
   };
   return {
-    decoder: wordPhrases
-      ? createWordFrontend(sampleRate)
+    decoder: wordFrontend
+      ? wordFrontend()
       : createIpaDecoder(sampleRate, options),
     buffer: new Float32Array(Math.ceil(MAX_WINDOW * sampleRate)),
     used: 0,
@@ -257,6 +262,10 @@ export function createConfiguredRecognizer(
   const packet = wordPhrases ? new Float32Array(stride) : null;
   const workspaces = wordPhrases ? new WeakMap() : undefined;
   const { emit, has, on, off } = createEvents();
+  const liveSyllables = () => has('syllable');
+  const wordFrontend = wordPhrases
+    ? () => createWordFrontend(sampleRate, liveSyllables)
+    : null;
   const adaptive = settings.level === 'auto' && !settings.deterministic;
   const load = adaptive ? createLoadMeter(sampleRate) : null;
   let phrase;
@@ -277,7 +286,7 @@ export function createConfiguredRecognizer(
     settings.articulationOffsets = initialOffsets;
     pending = undefined;
     level = settings.level === 'auto' ? 'medium' : settings.level;
-    phrase = createPhraseDecoder(sampleRate, settings, level, 0, wordPhrases);
+    phrase = createPhraseDecoder(sampleRate, settings, level, 0, wordFrontend);
     committed = emptyRecognition(nbest, settings.segments);
     offset = 0;
     nextPartial = 1;
@@ -289,7 +298,9 @@ export function createConfiguredRecognizer(
   }
 
   function update(decoded) {
-    reportSyllables(decoded, phrase.fixed, offset / sampleRate);
+    if (decoded) {
+      reportSyllables(decoded, phrase.fixed, offset / sampleRate);
+    }
   }
 
   // Whispered spans the caller marked inside the phrase count as speech.
@@ -386,6 +397,8 @@ export function createConfiguredRecognizer(
   function commit(size, finishDecoder) {
     if (finishDecoder) {
       update(phrase.decoder.flush());
+    } else if (wordPhrases && !liveSyllables()) {
+      update(phrase.decoder.report());
     }
     const answer = wordPhrases
       ? wordCommit(size, finishDecoder)
@@ -442,7 +455,7 @@ export function createConfiguredRecognizer(
       settings,
       level,
       offset / sampleRate,
-      wordPhrases
+      wordFrontend
     );
     // Only the lookahead after a word cut is replayed, with its original offset.
     const suffix = previous.buffer.subarray(size, previous.used);
@@ -468,7 +481,7 @@ export function createConfiguredRecognizer(
           settings,
           level,
           offset / sampleRate,
-          wordPhrases
+          wordFrontend
         );
         onApplied?.();
       }
@@ -685,7 +698,13 @@ export function createConfiguredRecognizer(
       return globalThis.structuredClone(flushed);
     },
     reset,
-    on,
+    on(event, listener) {
+      // Account for already confirmed nuclei before a new listener arrives.
+      if (wordPhrases && event === 'syllable' && !liveSyllables()) {
+        update(phrase.decoder.report());
+      }
+      on(event, listener);
+    },
     off,
     setVoice,
     discardVoiceChange() {
