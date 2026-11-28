@@ -123,7 +123,7 @@ fn fit_pulse(h: &[f64], models: &[Model]) -> (f64, f64, f64) {
     }
     (rd, oq, best)
 }
-fn local_pitch(frames: &Frames<'_>, x: &[f64], o: &Options<'_>) -> Vec<f32> {
+fn local_pitch(frames: &Frames<'_>, x: &[f32], o: &Options<'_>) -> Vec<f32> {
     let mut f0 = vec![0.0; frames.count];
     let length = round(frames.window.max(1.5 / o.min_f0) * frames.rate);
     let mut plan = if o.pitch.is_none() {
@@ -174,7 +174,7 @@ fn local_pitch(frames: &Frames<'_>, x: &[f64], o: &Options<'_>) -> Vec<f32> {
         })
         .collect()
 }
-fn minimum(x: &[f64], first: f64, last: f64) -> usize {
+fn minimum<T: PartialOrd>(x: &[T], first: f64, last: f64) -> usize {
     let mut best = math::ceil(first).max(0.0) as usize;
     let end = math::floor(last).max(0.0) as usize;
     for n in best + 1..=end.min(x.len() - 1) {
@@ -186,7 +186,7 @@ fn minimum(x: &[f64], first: f64, last: f64) -> usize {
 }
 fn refine_stationary(
     frames: &Frames<'_>,
-    raw: &[f64],
+    raw: &[f32],
     f0: &[f32],
     o: &Options<'_>,
     x: &[f64],
@@ -286,7 +286,7 @@ fn refine_stationary(
 }
 fn recover(
     frames: &Frames<'_>,
-    raw: &[f64],
+    raw: &[f32],
     f0: &[f32],
     o: &Options<'_>,
     with_flow: bool,
@@ -298,7 +298,28 @@ fn recover(
     } else {
         Vec::new()
     };
-    let mut weight = vec![0.0; x.len()];
+    let lowest = f0
+        .iter()
+        .copied()
+        .filter(|pitch| *pitch > 0.0)
+        .fold(f32::INFINITY, f32::min);
+    let width = round(0.032_f64.max(2.5 / f64::from(lowest)) * frames.rate);
+    let slots = width.min(x.len()).max(1);
+    let mut weight = vec![0.0; slots];
+    let mut next = 0;
+    let hop_samples = frames.rate * frames.hop;
+    let mut normalize = |end: usize, d: &mut [f64], g: &mut [f64], weight: &mut [f64]| {
+        for n in next..end {
+            let scale = core::mem::take(&mut weight[n % slots]);
+            let row = (f0.len() - 1).min(round(n as f64 / hop_samples));
+            let voiced = scale > 0.01 && f0[row] > 0.0;
+            d[n] = if voiced { d[n] / scale } else { 0.0 };
+            if with_flow {
+                g[n] = if voiced { g[n] / scale } else { 0.0 };
+            }
+        }
+        next = end;
+    };
     let mut windows = BTreeMap::new();
     let history = round(0.05 * frames.rate);
     let mut extended_w = vec![0.0; history];
@@ -308,6 +329,13 @@ fn recover(
         let row = (f0.len() - 1).min(round(time / frames.hop));
         if f0[row] > 0.0 {
             let centre = round(time * frames.rate);
+            // No window at this or a later centre overlaps these samples.
+            normalize(
+                centre.saturating_sub(width / 2),
+                &mut d,
+                &mut g,
+                &mut weight,
+            );
             let length = round(0.032_f64.max(2.5 / f0[row] as f64) * frames.rate);
             let w = windows.entry(length).or_insert_with(|| hann(length));
             extended_w.resize(history + length, 0.0);
@@ -337,33 +365,20 @@ fn recover(
                     if with_flow {
                         g[i] += w[n] * pg[n + history];
                     }
-                    weight[i] += w[n];
+                    weight[i % slots] += w[n];
                 }
             }
         }
         time += o.step;
     }
-    for n in 0..x.len() {
-        let row = (f0.len() - 1).min(round(n as f64 / (frames.rate * frames.hop)));
-        if weight[n] > 0.01 && f0[row] > 0.0 {
-            d[n] /= weight[n];
-            if with_flow {
-                g[n] /= weight[n];
-            }
-        } else {
-            d[n] = 0.0;
-            if with_flow {
-                g[n] = 0.0;
-            }
-        }
-    }
+    normalize(x.len(), &mut d, &mut g, &mut weight);
     refine_stationary(frames, raw, f0, o, &x, &mut d, &mut g);
     (
         g.into_iter().map(|v| v as f32).collect(),
         d.into_iter().map(|v| v as f32).collect(),
     )
 }
-fn closures(frames: &Frames<'_>, f0: &[f32], d: &[f64]) -> Vec<f64> {
+fn closures(frames: &Frames<'_>, f0: &[f32], d: &[f32]) -> Vec<f64> {
     let mut marks = vec![];
     let (rate, hop) = (frames.rate, frames.hop);
     let mut t = 0;
@@ -475,10 +490,10 @@ fn summarize(values: &[f32], reliable: &[u8]) -> Summary {
         frames: x.len(),
     }
 }
-fn prepare_filter(
-    frames: &Frames<'_>,
+fn prepare_filter<'a>(
+    frames: &Frames<'a>,
     o: &mut Options<'_>,
-) -> core::result::Result<(Vec<f64>, Vec<f32>), &'static str> {
+) -> core::result::Result<(&'a [f32], Vec<f32>), &'static str> {
     let rate = frames.rate;
     if !rate.is_finite() || !(8000.0..=48000.0).contains(&rate) {
         return Err("invalid working rate");
@@ -523,9 +538,8 @@ fn prepare_filter(
     {
         return Err("invalid frame set or pitch");
     }
-    if frames.samples[..frames.sample_count]
-        .iter()
-        .any(|v| !v.is_finite())
+    let raw = &frames.samples[..frames.sample_count];
+    if raw.iter().any(|v| !v.is_finite())
         || o.pitch.is_some_and(|p| {
             p[..count]
                 .iter()
@@ -534,11 +548,7 @@ fn prepare_filter(
     {
         return Err("invalid samples or voiced pitch");
     }
-    let raw: Vec<f64> = frames.samples[..frames.sample_count]
-        .iter()
-        .map(|v| *v as f64)
-        .collect();
-    let f0 = local_pitch(frames, &raw, o);
+    let f0 = local_pitch(frames, raw, o);
     Ok((raw, f0))
 }
 
@@ -552,17 +562,15 @@ pub fn inverse_filter(
     let (flow, flow_derivative) = if count == 0 {
         (vec![0.0; raw.len()], vec![0.0; raw.len()])
     } else {
-        recover(frames, &raw, &f0, &o, true)
+        recover(frames, raw, &f0, &o, true)
     };
     let low_band = low_band(frames, &f0);
     let mut measures = vec![vec![f32::NAN; count]; 9];
     measures[0] = f0;
-    let d: Vec<f64> = flow_derivative.iter().map(|v| *v as f64).collect();
-    let g: Vec<f64> = flow.iter().map(|v| *v as f64).collect();
-    let gci = if d.is_empty() {
+    let gci = if flow_derivative.is_empty() {
         vec![]
     } else {
-        closures(frames, &measures[0], &d)
+        closures(frames, &measures[0], &flow_derivative)
     };
     let mut reliable = vec![0; count];
     let models = models();
@@ -576,7 +584,7 @@ pub fn inverse_filter(
         let centre = round(t as f64 * frames.hop * rate);
         let period = rate / f0;
         let length = round(2.0 * period);
-        let source = block(&d, centre, length);
+        let source = block(&flow_derivative, centre, length);
         let window = windows.entry(length).or_insert_with(|| hann(length));
         let h = windowed_harmonics(
             &source,
@@ -590,13 +598,13 @@ pub fn inverse_filter(
         measures[2][t] = fit as f32;
         measures[3][t] = oq as f32;
         measures[6][t] = h.get(1).map_or(f32::NAN, |h2| (h[0] - h2) as f32);
-        let speech = windowed_harmonics(&block(&raw, centre, length), window, rate, f0, 2);
+        let speech = windowed_harmonics(&block(raw, centre, length), window, rate, f0, 2);
         measures[5][t] = (speech[0] - speech[1]) as f32;
-        let flow = block(&g, centre, length);
+        let flow_window = block(&flow, centre, length);
         let (mut lo, mut hi, mut peak) = (f64::INFINITY, f64::NEG_INFINITY, 0.0_f64);
         for n in 0..length {
-            lo = lo.min(flow[n]);
-            hi = hi.max(flow[n]);
+            lo = lo.min(flow_window[n]);
+            hi = hi.max(flow_window[n]);
             peak = peak.max(-source[n]);
         }
         measures[4][t] = if peak > 0.0 {
@@ -606,8 +614,8 @@ pub fn inverse_filter(
         };
         let hn = round(6.0 * period);
         let w = windows.entry(hn).or_insert_with(|| hann(hn));
-        measures[7][t] = hnr(&raw, centre, period, w) as f32;
-        measures[8][t] = cpp.measure(&raw, centre) as f32;
+        measures[7][t] = hnr(raw, centre, period, w) as f32;
+        measures[8][t] = cpp.measure(raw, centre) as f32;
         reliable[t] = u8::from(f0 <= o.max_f0 && fit <= 6.0);
     }
     if !low_band {
@@ -648,7 +656,7 @@ pub fn inverse_mode_measures(
     }
     let rate = frames.rate;
     let derivative = if low_band(frames, &pitches) {
-        recover(frames, &raw, &pitches, &o, false).1
+        recover(frames, raw, &pitches, &o, false).1
     } else {
         Vec::new()
     };
@@ -677,8 +685,8 @@ pub fn inverse_mode_measures(
         }
         let hn = round(6.0 * period);
         let window = windows.entry(hn).or_insert_with(|| hann(hn));
-        measures[1][t] = hnr(&raw, centre, period, window) as f32;
-        measures[2][t] = cpp.measure(&raw, centre) as f32;
+        measures[1][t] = hnr(raw, centre, period, window) as f32;
+        measures[2][t] = cpp.measure(raw, centre) as f32;
     }
     Ok(measures)
 }

@@ -17,7 +17,7 @@ pub(crate) fn hann(n: usize) -> Vec<f64> {
         .map(|i| 0.5 - 0.5 * cos(2.0 * PI * i as f64 / (n - 1) as f64))
         .collect()
 }
-pub(crate) fn block(x: &[f64], centre: usize, n: usize) -> Vec<f64> {
+pub(crate) fn block<T: Into<f64> + Copy>(x: &[T], centre: usize, n: usize) -> Vec<f64> {
     let mut out = Vec::new();
     fill_block(x, centre, n, &mut out);
     out
@@ -30,30 +30,27 @@ pub(crate) fn fill_block<T: Into<f64> + Copy>(
 ) {
     let start = centre as isize - (n / 2) as isize;
     out.clear();
-    out.extend((0..n).map(|i| {
-        x.get((start + i as isize) as usize)
-            .map_or(0.0, |&v| v.into())
-    }));
+    out.extend((0..n).map(|i| sample(x, start + i as isize)));
 }
-pub(crate) fn sample(x: &[f64], i: isize) -> f64 {
-    if i < 0 {
-        0.0
-    } else {
-        *x.get(i as usize).unwrap_or(&0.0)
-    }
+pub(crate) fn sample<T: Into<f64> + Copy>(x: &[T], i: isize) -> f64 {
+    x.get(i as usize).map_or(0.0, |&v| v.into())
 }
-pub(crate) fn high_pass(x: &[f64], rate: f64) -> Vec<f64> {
-    let mut y = x.to_vec();
+pub(crate) fn high_pass(x: &[f32], rate: f64) -> Vec<f64> {
+    let mut y = Vec::with_capacity(x.len());
     let r = 1.0 - 2.0 * PI * 50.0 / rate;
-    for reverse in [false, true] {
-        let (mut previous, mut output) = (0.0, 0.0);
-        for i in 0..y.len() {
-            let n = if reverse { y.len() - 1 - i } else { i };
-            let input = y[n];
-            output = input - previous + r * output;
-            previous = input;
-            y[n] = output;
-        }
+    let (mut previous, mut output) = (0.0, 0.0);
+    for &input in x {
+        let input = f64::from(input);
+        output = input - previous + r * output;
+        previous = input;
+        y.push(output);
+    }
+    (previous, output) = (0.0, 0.0);
+    for value in y.iter_mut().rev() {
+        let input = *value;
+        output = input - previous + r * output;
+        previous = input;
+        *value = output;
     }
     y
 }
@@ -351,7 +348,7 @@ impl Cpp {
             max,
         }
     }
-    pub(crate) fn measure(&mut self, x: &[f64], centre: usize) -> f64 {
+    pub(crate) fn measure(&mut self, x: &[f32], centre: usize) -> f64 {
         let start = centre as isize - (self.w.len() / 2) as isize;
         self.power.apply(
             self.w
@@ -389,7 +386,7 @@ impl Cpp {
         self.power.at(peak) - intercept - slope * peak as f64
     }
 }
-pub(crate) fn hnr(x: &[f64], centre: usize, period: f64, w: &[f64]) -> f64 {
+pub(crate) fn hnr(x: &[f32], centre: usize, period: f64, w: &[f64]) -> f64 {
     let length = w.len();
     let start = centre as isize - (length / 2) as isize;
     let mut mean = 0.0;
