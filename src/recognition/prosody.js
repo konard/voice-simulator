@@ -241,7 +241,7 @@ function measureWhisperNucleus(
 
 function measureNuclei(
   nuclei,
-  { samples, sampleRate, pitch, range, voice, getFrames, whisperSpans }
+  { samples, sampleRate, pitch, range, voice, frames, whisperSpans }
 ) {
   const parts = nuclei.flatMap((nucleus) => nucleus.parts);
   const inWhisper = ({ start, end }) =>
@@ -275,13 +275,7 @@ function measureNuclei(
   nuclei.forEach((nucleus, i) => {
     const { parts, sound, end, syllableEnd, group } = nucleus;
     if (inWhisper(sound)) {
-      measureWhisperNucleus(
-        nucleus,
-        getFrames(),
-        meanDuration,
-        measured,
-        scores
-      );
+      measureWhisperNucleus(nucleus, frames, meanDuration, measured, scores);
       previous = undefined;
       return;
     }
@@ -330,13 +324,10 @@ function measureNuclei(
 /** Analyze the vowel sounds of a timed IPA decoding. Times are in seconds. */
 export function measureProsody(samples, sampleRate, sounds, options = {}) {
   let frames = options.frames;
-  // A decoded pitch track and whisper spans suffice for ordinary nuclei.
-  // Only whispered nuclei need the separate spectral frame analysis.
-  const getFrames = () => (frames ??= analyzeFrames(samples, sampleRate));
-  const track = options.pitch ?? trackPitch(getFrames());
+  const analysis = () => (frames ??= analyzeFrames(samples, sampleRate));
+  const track = options.pitch ?? trackPitch(analysis());
   const whisperSpans =
-    options.whisperSpans ??
-    findWhisper(samples, sampleRate, getFrames(), track);
+    options.whisperSpans ?? findWhisper(samples, sampleRate, analysis(), track);
   const voice = options.voice?.head ?? options.voice;
   const voicePitch = voice?.pitch;
   const median =
@@ -370,7 +361,7 @@ export function measureProsody(samples, sampleRate, sounds, options = {}) {
     pitch,
     range,
     voice,
-    getFrames,
+    frames: whisperSpans.length ? analysis() : frames,
     whisperSpans,
   });
   return {

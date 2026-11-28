@@ -99,7 +99,8 @@ function timedSegments(aligned) {
  * @param {number} sampleRate
  * @param {{languages?: string[], maxWords?: number, oov?: boolean,
  *   whisper?: 'auto'|false|{start: number, end: number}[],
- *   search?: Partial<typeof import('./hmm-decode.js').HMM_DECODE_DEFAULTS>}}
+ *   search?: Partial<typeof import('./hmm-decode.js').HMM_DECODE_DEFAULTS>,
+ *   analysis?: ReturnType<typeof analyzeFrames>}}
  *   [options] `search` tunes the beam and weights; `whisper` finds
  *   whispered spans ('auto'), skips them (false) or takes them as given;
  *   other decoder options (the phone decoder's beam, hop and rate) do not
@@ -107,21 +108,22 @@ function timedSegments(aligned) {
  */
 export function hmmAudioToIpa(samples, sampleRate, options = {}) {
   const languages = options.languages ?? ['en', 'ru', 'hi', 'zh'];
-  const { frames: liveFrames, tracks } = options.frontEnd ?? {};
   const analysis =
-    liveFrames ?? analyzeFrames(samples, sampleRate, { hop: 0.01 });
-  const inputPitch = tracks?.pitch;
-  const pitch =
-    inputPitch ?? trackPitch(analysis, { kernels: options.kernels });
-  const modelPitch =
-    inputPitch ?? (sampleRate === HMM_RATE ? pitch : undefined);
+    options.frontEnd?.frames ??
+    options.analysis ??
+    analyzeFrames(samples, sampleRate, { hop: 0.01 });
   // Features are normalised per input, so silence alone would decode as
   // words: decode only inputs with frames the front end calls speech.
-  const { decoded, aligned } = hasSpeech(analysis)
-    ? decodeSpeech(samples, sampleRate, modelPitch, { ...options, languages })
+  const reading = hasSpeech(analysis)
+    ? decodeSpeech(samples, sampleRate, analysis, { ...options, languages })
     : { decoded: { words: [], lang: null }, aligned: [] };
+  const { decoded, aligned } = reading;
   stressOutOfVocabulary(decoded.words, aligned);
   const segments = timedSegments(aligned);
+  const pitch =
+    options.frontEnd?.tracks.pitch ??
+    reading.pitch ??
+    trackPitch(analysis, { kernels: options.kernels });
   const whisperSpans = whisperSpansOf(samples, sampleRate, analysis, pitch, {
     whisper: options.whisper ?? 'auto',
   });
@@ -134,22 +136,22 @@ export function hmmAudioToIpa(samples, sampleRate, options = {}) {
     ipa,
     segments,
     syllables: syllablesWithWhisper(segments, language, whisperSpans, analysis),
+    useModelWords: options.useModelWords,
     nbest: [{ ipa, segments, cost: 0, confidence: 1 }],
     words: decoded.words.map(({ word, lang, oov, tokens }, i) => ({
       text: oov
         ? spellSounds(parseIpa(tokens.map(tokenIpa).join('')).tokens, lang)
         : word,
       language: lang,
-      ...(oov && { unknown: true }),
+      oov,
       ...wordSpan(aligned, i),
     })),
     tracks: { pitch },
-    // Prosody uses a finer grid and sound detection analyzes isolated pauses.
-    // The word-level mode measurements can reuse the decoder's 10 ms grid.
+    // Prosody uses its own hop. Mode measurements use the same 10 ms frames.
     frames: options.frontEnd
       ? analysis
       : { energy: analysis.energy, count: analysis.count },
-    wordFrames: analysis,
+    modeFrames: analysis,
     whisperSpans,
     modes,
     language,
@@ -157,18 +159,20 @@ export function hmmAudioToIpa(samples, sampleRate, options = {}) {
   };
 }
 
-function decodeSpeech(samples, sampleRate, pitch, options) {
+function decodeSpeech(samples, sampleRate, analysis, options) {
   const model = getHmmModel();
   const network = getNetwork(model, options.languages, options);
-  const { feats, frames, tone } = hmmFeatures(
+  const atModelRate = sampleRate === HMM_RATE;
+  const { feats, frames, pitch, tone } = hmmFeatures(
     samples,
     sampleRate,
     model.lda,
-    pitch
+    atModelRate ? analysis : undefined,
+    options.frontEnd?.tracks.pitch
   );
   const search = { ...options.search, tone };
   const decoded = frames
-    ? decodeWords(network, feats, frames, search)
+    ? decodeWords(network, feats, frames, search, options.workspaces)
     : { words: [], lang: null };
   // Words from the phone loop get their own tokens to take a stress.
   decoded.words = decoded.words.map((w) =>
@@ -177,7 +181,7 @@ function decodeSpeech(samples, sampleRate, pitch, options) {
   const aligned = decoded.words.length
     ? alignWords(network, feats, frames, decoded.words, search)
     : [];
-  return { decoded, aligned };
+  return { decoded, aligned, pitch: atModelRate ? pitch : undefined };
 }
 
 function hasSpeech(analysis) {

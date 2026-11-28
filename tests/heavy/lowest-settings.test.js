@@ -41,6 +41,7 @@ assert.ok(
 const rows = selected ? [selected] : ALL_ROWS;
 const ENGINES = ['js', 'rust'];
 const HEAP_CAP = '--max-old-space-size=192';
+const STREAM_SECONDS = 60;
 const ROW_TIMEOUT_MS = 6 * 3_600_000;
 const read = (file) =>
   existsSync(file) ? JSON.parse(readFileSync(file, 'utf8')) : null;
@@ -231,12 +232,8 @@ describe('lowest settings: 8 kHz and one core', () => {
         runs[row][engine] = measured;
         console.log(`lowest ${row} ${engine}`, JSON.stringify(measured));
         assert.ok(!measured.error, measured.error);
-        if (row === 'streaming' && measured.audioSeconds === 60) {
-          // The fixture contains speech through the end of the recording.
-          assert.ok(
-            measured.metrics.batchLastWord > 55,
-            `the last batch word ended at ${measured.metrics.batchLastWord} s`
-          );
+        if (row === 'streaming' && !Number.isFinite(limit)) {
+          certifyStreaming(engine, measured);
         }
         if (
           row === 'session' &&
@@ -322,3 +319,28 @@ describe('lowest settings: 8 kHz and one core', () => {
     );
   });
 });
+
+function certifyStreaming(engine, measured) {
+  assert.ok(pinned, 'Streaming certification requires one pinned core');
+  assert.ok(!measured.unavailable, measured.unavailable);
+  assert.ok(
+    !measured.capped?.crashed,
+    `streaming ${engine}: ${measured.capped?.crashed}`
+  );
+  assert.equal(measured.audioSeconds, STREAM_SECONDS, `streaming ${engine}`);
+  for (const field of ['batchLastWord', 'wholeInputLastWord']) {
+    const last = measured.metrics[field];
+    assert.ok(last > 55, `${engine} ${field} stopped at ${last} seconds`);
+  }
+  const limits = {
+    ...thresholds.streaming.quality,
+    ...thresholds.streaming[`${engine}-1`],
+  };
+  for (const [name, limit] of Object.entries(limits)) {
+    const value = measured.metrics?.[name];
+    assert.ok(
+      passes(name, value, limit),
+      `streaming ${engine} ${name}: ${value} exceeds ${limit}`
+    );
+  }
+}

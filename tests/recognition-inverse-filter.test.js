@@ -11,7 +11,7 @@ import {
   trackPitch,
 } from '../src/index.js';
 import { lfParameters } from '../src/acoustics/glottis.js';
-import { measureModeSource } from '../src/recognition/inverse-filter.js';
+import { inverseFilterModeCues } from '../src/recognition/inverse-filter.js';
 import { highPass } from './helpers/recognition-truth.js';
 import {
   sourceVowel,
@@ -49,6 +49,40 @@ function vowel(tenseness = 0.5, f0 = 110, rate = 16000) {
 }
 
 describe('batch glottal inverse filter', () => {
+  it('measures the same mode cues when only vowel frames are requested', () => {
+    const { frames, pitch, result } = vowel(0.5, 110, 8000);
+    const rows = [4, 20, frames.count - 1];
+    const cues = inverseFilterModeCues(frames, rows, { pitch });
+    for (const key of ['h1h2Source', 'hnr', 'cpp']) {
+      expect(rows.map((row) => cues[key][row])).toEqual(
+        rows.map((row) => result[key][row])
+      );
+      expect(Number.isNaN(cues[key][0])).toBe(true);
+    }
+  });
+
+  it('preserves sparse source cues on wideband and bandlimited speech', () => {
+    const v = vowel();
+    for (const [samples, lowBand] of [
+      [v.samples, true],
+      [highPass(v.samples, v.rate, 300), false],
+    ]) {
+      const { frames, pitch } = known(samples, v.rate, v.f0);
+      const options = { pitch, minF0: 35, maxF0: 800 };
+      const full = inverseFilter(frames, options);
+      expect(full.lowBand).toBe(lowBand);
+      const rows = Array.from({ length: frames.count }, (_, t) => t).filter(
+        (t) => t % 3 === 1
+      );
+      const cues = inverseFilterModeCues(frames, rows, options);
+      for (const key of ['h1h2Source', 'hnr', 'cpp']) {
+        expect(Array.from(cues[key])).toEqual(
+          Array.from(full[key], (value, t) => (t % 3 === 1 ? value : NaN))
+        );
+      }
+    }
+  });
+
   it('returns the pulse of a known source', () => {
     for (const rate of [16000, 8000]) {
       const v = vowel(0.5, 110, rate);
@@ -153,26 +187,6 @@ describe('batch glottal inverse filter', () => {
     expect(Number.isFinite(median(result.cpp))).toBe(true);
     expect(result.summary.rd.frames).toBe(0);
     expect(result.summary.rd.median).toBe(null);
-  });
-  it('matches full source analysis on the rows the mode classifier reads', () => {
-    const v = vowel();
-    for (const [samples, lowBand] of [
-      [v.samples, true],
-      [highPass(v.samples, v.rate, 300), false],
-    ]) {
-      const { frames, pitch } = known(samples, v.rate, v.f0);
-      const full = inverseFilter(frames, { pitch, minF0: 35, maxF0: 800 });
-      expect(full.lowBand).toBe(lowBand);
-      const selected = Uint8Array.from({ length: frames.count }, (_, t) =>
-        t % 3 === 1 ? 1 : 0
-      );
-      const features = measureModeSource(frames, pitch, selected);
-      for (const key of ['h1h2Source', 'hnr', 'cpp']) {
-        expect(Array.from(features[key])).toEqual(
-          Array.from(full[key], (value, t) => (selected[t] ? value : NaN))
-        );
-      }
-    }
   });
 });
 

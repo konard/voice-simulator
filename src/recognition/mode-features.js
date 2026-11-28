@@ -3,7 +3,7 @@ import { measure } from './profile.js';
 import { analyzeFrames } from './frontend.js';
 import { trackPitch } from './pitch.js';
 import { trackBatchFormants, trackFormants } from './formants.js';
-import { measureModeSource } from './inverse-filter.js';
+import { inverseFilterModeCues } from './inverse-filter.js';
 import {
   alphaRatio,
   energyRatio,
@@ -83,32 +83,29 @@ function analyzeWordSignal(samples, sampleRate, head, analyzed, options) {
   const track = options.reuseFormantCandidates
     ? trackBatchFormants
     : trackFormants;
-  const formants =
-    options.skipFormants || options.measureFormants === false
-      ? null
-      : measure(profile, 'Formants', () =>
-          track(frames, {
-            pitch,
-            ...(head ? { vocalTractLength: head.vocalTractLength } : {}),
-          })
-        );
+  const formants = options.skipFormants
+    ? null
+    : measure(profile, 'Formants', () =>
+        track(frames, {
+          pitch,
+          ...(head ? { vocalTractLength: head.vocalTractLength } : {}),
+        })
+      );
   return { frames, pitch, formants };
 }
 
-/** Frame indices in the inner half of each vowel. */
-function vowelRows(vowel, frames, selected) {
-  const { start, end } = vowel;
-  const margin = (end - start) * 0.25;
-  const indices = [];
+function vowelFrames(vowel, { hop, count }) {
+  const margin = (vowel.end - vowel.start) * 0.25;
+  const end = vowel.end - margin;
+  const rows = [];
   for (
-    let t = Math.max(0, Math.ceil((start + margin) / frames.hop));
-    t < frames.count && t * frames.hop <= end - margin;
+    let t = Math.max(0, Math.ceil((vowel.start + margin) / hop));
+    t < count && t * hop <= end;
     t++
   ) {
-    selected[t] = 1;
-    indices.push(t);
+    rows.push(t);
   }
-  return indices;
+  return rows;
 }
 
 /** Analyze the recording in one pass; retain scalar word features only. */
@@ -127,29 +124,29 @@ export function measureWords(
     analyzed,
     options
   );
+  const pulses = measure(options.profile, 'Glottal periods', () =>
+    glottalPeriods(samples, sampleRate)
+  );
   const phones = result.phonemes ?? result.phones;
-  const selected = new Uint8Array(frames.count);
-  const nucleiByWord = result.words.map((word) =>
-    nuclei(word, phones, head).map((vowel) => ({
-      ...vowel,
-      indices: vowelRows(vowel, frames, selected),
-    }))
+  const wordVowels = result.words.map((word) => nuclei(word, phones, head));
+  const vowelRows = wordVowels.map((vowels) =>
+    vowels.map((vowel) => vowelFrames(vowel, frames))
   );
+  const uniqueRows = [...new Set(vowelRows.flat(2))];
   const source = measure(options.profile, 'Inverse filter', () =>
-    measureModeSource(
-      frames,
+    inverseFilterModeCues(frames, uniqueRows, {
       pitch,
-      selected,
-      options.kernels,
-      options.skipFormants ? 0.02 : undefined
-    )
+      minF0: 35,
+      maxF0: 800,
+      kernels: options.kernels,
+      ...(options.sourceStep && { step: options.sourceStep }),
+    })
   );
-  const pulses = glottalPeriods(samples, sampleRate);
   const peakLevel = quantile(frames.energy.subarray(0, frames.count), 0.9);
   // Vowel extraction combines independent source, formant and pulse validity checks.
   // eslint-disable-next-line complexity
-  const measured = result.words.map((word, i) => {
-    const vowels = nucleiByWord[i];
+  const measured = result.words.map((word, index) => {
+    const vowels = wordVowels[index];
     const whole = [];
     for (
       let t = Math.ceil(word.start / frames.hop);
@@ -158,21 +155,17 @@ export function measureWords(
     ) {
       whole.push(t);
     }
-    const rows = [];
-    const f1Vowels = [];
-    for (const { vowel, indices } of vowels) {
-      rows.push(...indices);
-      if (formants) {
-        f1Vowels.push({
-          vowel,
+    const rows = vowelRows[index].flat();
+    const f1Vowels = formants
+      ? vowels.map((vowel, i) => ({
+          vowel: vowel.vowel,
           value: quantile(
-            indices
+            vowelRows[index][i]
               .filter((t) => formants.valid[t * 4])
               .map((t) => formants.frequency[t * 4])
           ),
-        });
-      }
-    }
+        }))
+      : [];
     const rawF0 = rows.map((t) => pitch.f0[t]).filter((v) => v > 0);
     const f0 = rows
       .filter((t) => pitch.strength[t] >= 0.7)

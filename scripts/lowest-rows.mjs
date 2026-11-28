@@ -312,6 +312,7 @@ async function streamingRow({ engine, limit }) {
     return recognizer.flush();
   });
   const batch = recognize(samples, RATE, options);
+  const wholeInput = recognize(samples, RATE, { ...options, unsplit: true });
   const mismatch = errorRate(batch.text, stream.text, 'word');
   return {
     seconds,
@@ -328,6 +329,7 @@ async function streamingRow({ engine, limit }) {
       streamText: stream.text,
       batchText: batch.text,
       batchLastWord: round(batch.words.at(-1)?.end ?? 0),
+      wholeInputLastWord: round(wholeInput.words.at(-1)?.end ?? 0),
     },
   };
 }

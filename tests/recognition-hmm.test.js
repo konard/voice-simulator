@@ -201,7 +201,7 @@ it('keeps ties at the histogram pruning threshold', () => {
   const scores = [-60, -7, -5, -3, -5, -1, -2, -80];
   const thresholds = new Float64Array(1);
   languageThresholds(
-    scores.map(() => 0),
+    new Uint8Array(scores.length),
     {
       work: scores.map((_, index) => index),
       nodeScores: scores,

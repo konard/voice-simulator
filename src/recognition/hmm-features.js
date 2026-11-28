@@ -42,7 +42,9 @@ function melBank(low, high) {
         w[k] = (c - f) / (c - b);
       }
     }
-    return w;
+    const start = w.findIndex((value) => value > 0);
+    const end = w.findLastIndex((value) => value > 0) + 1;
+    return { start, weights: w.subarray(start, end) };
   });
 }
 
@@ -83,11 +85,10 @@ function logMel(x, t, re, im, logs) {
   fft(re, im);
   for (let m = 0; m < FILTERS; m++) {
     let e = 0;
-    const w = bank[m];
-    for (let k = 0; k < w.length; k++) {
-      if (w[k]) {
-        e += w[k] * (re[k] * re[k] + im[k] * im[k]);
-      }
+    const { start, weights } = bank[m];
+    for (let i = 0; i < weights.length; i++) {
+      const k = start + i;
+      e += weights[i] * (re[k] * re[k] + im[k] * im[k]);
     }
     logs[m] = Math.log(e + 1e-10);
   }
@@ -201,11 +202,11 @@ export function hmmPitchStatics(pitch, count) {
  * Static features of 8 kHz speech: one row of 15 values per frame, and
  * the pitch track used for them.
  */
-export function hmmStatics(
-  x,
-  pitch = trackPitch(analyzeFrames(x, HMM_RATE, { hop: 0.01 }))
-) {
+export function hmmStatics(x, analysis, trackedPitch) {
   const statics = normalise(rawCepstra(x));
+  const pitch =
+    trackedPitch ??
+    trackPitch(analysis ?? analyzeFrames(x, HMM_RATE, { hop: 0.01 }));
   const { lf0, voicing } = hmmPitchStatics(pitch, statics.length);
   statics.forEach((v, t) => {
     v[CEPS] = 4 * lf0[t];
@@ -249,9 +250,9 @@ export function applyLda(lda, statics) {
  * Model features of speech at any rate, the tone-stream features
  * (hmm-tone.js) and the 8 kHz pitch track.
  */
-export function hmmFeatures(samples, sampleRate, lda, inputPitch) {
+export function hmmFeatures(samples, sampleRate, lda, analysis, trackedPitch) {
   const x = hmmAudio(samples, sampleRate);
-  const { statics, pitch } = hmmStatics(x, inputPitch);
+  const { statics, pitch } = hmmStatics(x, analysis, trackedPitch);
   const tone = hmmToneFeatures(
     statics.map((v) => v[CEPS] / 4),
     statics.map((v) => v[CEPS + 1])

@@ -4,12 +4,14 @@ import { LANGUAGES } from '../g2p/index.js';
 import { registeredLexicons } from '../g2p/lexicon.js';
 import { decoderWhisperSpans } from './decode-pipeline.js';
 import { audioToIpa, audioToIpaParallel } from './decode.js';
+import { HMM_LOW_BATCH_SEARCH } from './hmm-decode.js';
 import { hmmAudioToIpa } from './hmm-stage.js';
-import { HMM_LOW_SEARCH } from './hmm-decode.js';
 import { createRecognitionEngine, getRecognitionEngine } from './engine.js';
 import { ipaToText } from './ipa-to-text.js';
+import { recognitionInput } from './input.js';
 import { identifyLanguage, languageShares } from './language-id.js';
 import { measure } from './profile.js';
+import { heardIpa, resultFromPath } from './result.js';
 import { recognizeModes } from './modes.js';
 import { markProsody, measureProsody } from './prosody.js';
 import {
@@ -23,7 +25,11 @@ import { createRecognitionPool } from './pool.js';
 import { aggregate, translated } from './recognizer-result.js';
 import { pauseCuts } from './recognizer-pauses.js';
 import { realiseChineseTones } from './zh-tones.js';
-import { resultFromPath } from './result.js';
+
+import {
+  createConfiguredRecognizer,
+  usesWordPhrases,
+} from './recognizer-stream.js';
 
 export { createRecognizer } from './recognizer-stream.js';
 
@@ -33,8 +39,7 @@ export const RECOGNITION_LEVELS = Object.freeze({
   high: Object.freeze({ rate: 16000, hop: 0.005, beam: 128 }),
 });
 
-// Short commands have little context and can afford the wider search within
-// a bounded amount of audio. Limit competing paths for longer low-rate input.
+// Short commands can afford a wider search and have less context.
 const WIDE_SEARCH_SECONDS = 4;
 
 export function levelForTier(name) {
@@ -203,7 +208,7 @@ export function decodeRecognitionAudio(
   settings,
   level,
   start,
-  frontEnd
+  wordOptions
 ) {
   const { input, rate, options } = decodeInput(
     samples,
@@ -218,14 +223,7 @@ export function decodeRecognitionAudio(
         languages: settings.languages,
         whisper: options.whisper,
         oov: settings.oov,
-        frontEnd,
-        kernels: frontEnd && settings.kernels,
-        search:
-          settings.search ??
-          (level === 'low' && input.length > WIDE_SEARCH_SECONDS * rate
-            ? HMM_LOW_SEARCH
-            : undefined),
-        maxWords: settings.maxWords,
+        ...wordOptions,
       })
     );
     return { decoded, input, rate };
@@ -329,6 +327,40 @@ function decodeText(input, settings, level, modelLanguage) {
   );
 }
 
+/** The word HMM already scored spellings against its language model. */
+function modelText(sounds, modelWords) {
+  const groups = new Map();
+  for (const sound of sounds) {
+    if (sound.kind !== 'pause') {
+      const id = sound.modelWord;
+      if (!groups.has(id)) {
+        groups.set(id, []);
+      }
+      groups.get(id).push(sound);
+    }
+  }
+  const path = [];
+  const tokens = [];
+  for (const [id, group] of groups) {
+    const heard = recognitionInput(group, 'given').tokens;
+    if (!heard.length) {
+      continue;
+    }
+    const { text, language, oov } = modelWords[id];
+    path.push({
+      from: tokens.length,
+      to: tokens.length + heard.length,
+      word: text,
+      ipa: heardIpa(heard),
+      language,
+      cost: 0,
+      unknown: oov,
+    });
+    tokens.push(...heard);
+  }
+  return resultFromPath(path, tokens, modelWords[0]?.language);
+}
+
 function liveWordResult(decoded, sounds) {
   const tokens = [];
   const path = [];
@@ -339,11 +371,11 @@ function liveWordResult(decoded, sounds) {
     }
     if (sound.modelWord !== index) {
       index = sound.modelWord;
-      const { text, language, unknown } = decoded.words[index];
+      const { text, language, oov } = decoded.words[index];
       path.push({
         word: text,
         language,
-        unknown,
+        unknown: oov,
         from: tokens.length,
         to: tokens.length,
         ipa: '',
@@ -361,8 +393,12 @@ function liveWordResult(decoded, sounds) {
 function recognizeProsody(decoded, samples, rate, settings, level) {
   const input = timedPhones(decoded);
   const pitch = decoded.tracks?.pitch;
+  const spell = (sounds) =>
+    decoded.useModelWords && settings.nbest === 1 && Array.isArray(sounds)
+      ? modelText(sounds, decoded.words)
+      : decodeText(sounds, settings, level, decoded.modelLanguage);
   if (!settings.modes || !pitch || !Array.isArray(input)) {
-    return decodeText(input, settings, level, decoded.modelLanguage);
+    return spell(input);
   }
   const options = {
     language:
@@ -378,7 +414,7 @@ function recognizeProsody(decoded, samples, rate, settings, level) {
   // The live HMM has already searched the lexicon and aligned its words.
   const primary = settings.liveWords
     ? liveWordResult(decoded, measured.sounds)
-    : decodeText(measured.sounds, settings, level, decoded.modelLanguage);
+    : spell(measured.sounds);
   return markProsody(primary, measured, options);
 }
 
@@ -470,9 +506,10 @@ export function recognizeDecoded(
               profile: settings.profile,
               kernels: settings.kernels,
               frames: decoded.frames?.speech ? decoded.frames : undefined,
-              wordFrames: decoded.wordFrames,
+              wordFrames: decoded.modeFrames,
               pitch: settings.liveWords ? decoded.tracks.pitch : undefined,
-              skipFormants: settings.liveWords && !settings.voice,
+              sourceStep:
+                settings.liveWords && !settings.voice ? 0.02 : undefined,
               reuseFormantCandidates:
                 settings.liveWords || final === 'batch' || final === 'parallel',
             }
@@ -543,12 +580,28 @@ function checkNoise(decoded, duration) {
   }
 }
 
-function serial(samples, sampleRate, settings, level) {
+function serial(samples, sampleRate, settings, level, unsplit) {
+  if (!unsplit && usesWordPhrases(sampleRate, settings)) {
+    const stream = createConfiguredRecognizer(sampleRate, settings, true);
+    stream.on('error', (error) => {
+      throw error;
+    });
+    stream.push(
+      samples instanceof Float32Array ? samples : Float32Array.from(samples)
+    );
+    return stream.flush();
+  }
+  const search =
+    level === 'low' && samples.length > WIDE_SEARCH_SECONDS * sampleRate
+      ? HMM_LOW_BATCH_SEARCH
+      : undefined;
   const { decoded, input, rate } = decodeRecognitionAudio(
     samples,
     sampleRate,
     settings,
-    level
+    level,
+    undefined,
+    { search }
   );
   checkNoise(decoded, samples.length / sampleRate);
   if (!heardSpeech(decoded, settings.minVoiced, settings.whisper)) {
@@ -622,7 +675,7 @@ export function recognize(samples, sampleRate, options = {}) {
         jobs,
         settings
       )
-    : serial(samples, sampleRate, settings, level);
+    : serial(samples, sampleRate, settings, level, options.unsplit);
 }
 
 async function parallelDecode(samples, sampleRate, settings, level, pool) {
@@ -679,7 +732,7 @@ export async function recognizeAsync(samples, sampleRate, options = {}) {
       settings.profile ||
       usesWordDecoder(settings)
     ) {
-      return serial(samples, sampleRate, settings, level);
+      return serial(samples, sampleRate, settings, level, options.unsplit);
     }
     return await parallelDecode(samples, sampleRate, settings, level, pool);
   } finally {

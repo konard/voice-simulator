@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { RATE, streamInput } from '../scripts/lowest-rows.mjs';
 import {
   HMM_DECODE_DEFAULTS,
-  HMM_LOW_SEARCH,
+  HMM_LOW_BATCH_SEARCH,
   decodeWords,
 } from '../src/recognition/hmm-decode.js';
 import { hmmFeatures } from '../src/recognition/hmm-features.js';
@@ -19,7 +19,7 @@ const model = getHmmModel();
 const network = getNetwork(model, ['en']);
 const { feats, frames, tone } = hmmFeatures(audio, RATE, model.lda);
 for (const [name, search] of [
-  ['low', HMM_LOW_SEARCH],
+  ['low', HMM_LOW_BATCH_SEARCH],
   ['narrow', { beam: 60, languageBeam: 150, maxActive: 340 }],
   ['default', HMM_DECODE_DEFAULTS],
 ]) {

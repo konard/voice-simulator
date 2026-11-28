@@ -377,7 +377,7 @@ export function recognizeModes(samples, sampleRate, result, options = {}) {
     result,
     reference?.head,
     options.wordFrames ?? options.frames,
-    { ...options, measureFormants: Boolean(reference || options.trace) }
+    { ...options, skipFormants: !reference && !options.trace }
   );
   const base = reference?.features ?? {
     ...summarize(features),
