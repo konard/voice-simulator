@@ -257,17 +257,20 @@ function restart(next, network, records, rec, end, pass) {
   const { lmw, silencePenalty } = settings;
   const { id, language, before, score } = rec;
   const r = records.add(rec, end);
-  const tree = network.trees.get(network.languages[language]);
+  const tree = pass.trees[language];
   if (before) {
-    for (const child of tree.after.get(before)) {
+    const roots = tree.after.get(before);
+    for (let i = 0; i < roots.length; i++) {
+      const child = roots[i];
       next.enter(child, score + lmw * lookLn[child], r, end);
     }
     return;
   }
   enterRoots(next, tree, score, r, end, pass);
   if (tree.wordTable ? tree.wordTable.oov(id) : network.words[id].oov) {
-    for (const node of tree.loop.next) {
-      next.enter(node, score, r, end);
+    const phones = tree.loop.next;
+    for (let i = 0; i < phones.length; i++) {
+      next.enter(phones[i], score, r, end);
     }
   }
   next.enter(tree.silence, score + silencePenalty, r, end);

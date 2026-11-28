@@ -10,6 +10,13 @@ export function createFrontier(nodeCount) {
     starts: new Int32Array(256),
   };
   let length = 0;
+  function grow(capacity) {
+    for (const [name, column] of Object.entries(columns)) {
+      const grown = new column.constructor(capacity);
+      grown.set(column);
+      columns[name] = grown;
+    }
+  }
   return {
     columns,
     index,
@@ -21,12 +28,7 @@ export function createFrontier(nodeCount) {
       if (i < 0) {
         i = length++;
         if (i === columns.nodes.length) {
-          const capacity = Math.min(i * 2, nodeCount);
-          for (const [name, column] of Object.entries(columns)) {
-            const grown = new column.constructor(capacity);
-            grown.set(column);
-            columns[name] = grown;
-          }
+          grow(Math.min(i * 2, nodeCount));
         }
         index[node] = i + 1;
         columns.nodes[i] = node;
