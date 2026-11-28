@@ -3,6 +3,16 @@ import { withWasmMemory } from './wasm-memory.js';
 
 const HEADER = 14;
 
+function nativeModeColumns(frames, pitch) {
+  return (
+    frames.samples instanceof Float32Array &&
+    frames.periodicity instanceof Float32Array &&
+    frames.mel instanceof Float32Array &&
+    frames.speech instanceof Uint8Array &&
+    (!pitch || pitch.f0 instanceof Float32Array)
+  );
+}
+
 function compactModes(module, frames, pitch, header, select, rows) {
   const { count, sampleCount: n, melBands } = frames;
   return withWasmMemory(module, (allocate) => {
@@ -81,10 +91,15 @@ export function inverseFilterRust(
   ];
   const { rec_inverse_modes, rec_inverse_modes_f32, rec_inverse_filter } =
     module.exports;
-  if (select && rows && typeof rec_inverse_modes_f32 === 'function') {
+  const project = select && rows;
+  if (
+    project &&
+    typeof rec_inverse_modes_f32 === 'function' &&
+    nativeModeColumns(frames, pitch)
+  ) {
     return compactModes(module, frames, pitch, header, select, rows);
   }
-  const useModes = select && rows && typeof rec_inverse_modes === 'function';
+  const useModes = project && typeof rec_inverse_modes === 'function';
   const packetLength =
     HEADER + n + count * (2 + melBands + Number(Boolean(pitch)));
   const length = packetLength + (useModes ? rows.length : 0);

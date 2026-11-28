@@ -230,6 +230,20 @@ describe('Rust inverse filter parity', () => {
       }
     }
   });
+  it('keeps the original packet for alternate frame column types', async () => {
+    const module = await loadRustEngine();
+    const { samples } = sourceVowel(0.3, 110, 16000);
+    const frames = analyzeFrames(samples, 16000);
+    frames.speech = Float64Array.from(frames.speech, (value) => 256 * value);
+    const original = {
+      ...module,
+      exports: { ...module.exports, rec_inverse_modes_f32: undefined },
+    };
+    const rows = [5, 11, 24];
+    expect(inverseModeMeasures(frames, { kernels: { module } }, rows)).toEqual(
+      inverseModeMeasures(frames, { kernels: { module: original } }, rows)
+    );
+  });
   it('matches local pitch on changing speech', async () => {
     const out = synthesize('Hello world.', {
       sampleRate: 8000,
