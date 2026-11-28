@@ -18,6 +18,7 @@ export { LIP_PROTRUSION };
 
 export const TRACT_SECTIONS = VOWEL_SECTIONS;
 export const NOSE_SECTIONS = 28;
+let channelNames;
 
 /** Mean length of the measured reference tracts (cm). */
 const REFERENCE_LENGTH = 17.5;
@@ -486,8 +487,17 @@ function stateWithDefaults(state, full) {
   if (!full) {
     return { ...CHANNEL_DEFAULTS, time: 0, ...state };
   }
-  full.time = 0;
-  return Object.assign(full, CHANNEL_DEFAULTS, state);
+  // A sampled control block already supplies most channels. Write each
+  // scratch property once, while still resetting channels missing from it.
+  const enumerable = Object.prototype.propertyIsEnumerable;
+  channelNames ??= Object.keys(CHANNEL_DEFAULTS);
+  for (const name of channelNames) {
+    full[name] = enumerable.call(state, name)
+      ? state[name]
+      : CHANNEL_DEFAULTS[name];
+  }
+  full.time = enumerable.call(state, 'time') ? state.time : 0;
+  return full;
 }
 
 function warpTract(reference, head, sections, openness, free, workspace) {
