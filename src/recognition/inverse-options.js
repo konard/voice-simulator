@@ -21,14 +21,15 @@ function integer(value, min, max, name) {
   }
 }
 function checkFrames(f) {
+  const { sampleCount } = f;
   integer(f.count, 0, Number.MAX_SAFE_INTEGER, 'frame count');
-  integer(f.sampleCount, 0, Number.MAX_SAFE_INTEGER, 'sample count');
+  integer(sampleCount, 0, Number.MAX_SAFE_INTEGER, 'sample count');
   integer(f.melBands, 1, Number.MAX_SAFE_INTEGER, 'mel bands');
   range(f.hop, Number.MIN_VALUE, 1, 'frame hop');
   range(f.window, Number.MIN_VALUE, 1, 'frame window');
   range(f.startTime, -Infinity, Infinity, 'frame start time');
   const widths = {
-    samples: f.sampleCount,
+    samples: sampleCount,
     speech: f.count,
     periodicity: f.count,
     mel: f.count * f.melBands,
@@ -38,11 +39,12 @@ function checkFrames(f) {
       throw new RangeError(`invalid frame ${name}`);
     }
   }
-  if (f.count && (f.count - 1) * f.hop * f.rate >= f.sampleCount) {
+  if (f.count && (f.count - 1) * f.hop * f.rate >= sampleCount) {
     throw new RangeError('frames exceed sample count');
   }
-  for (let n = 0; n < f.sampleCount; n++) {
-    if (!Number.isFinite(f.samples[n])) {
+  const { samples } = f;
+  for (let n = 0; n < sampleCount; n++) {
+    if (!Number.isFinite(samples[n])) {
       throw new RangeError('invalid sample');
     }
   }
