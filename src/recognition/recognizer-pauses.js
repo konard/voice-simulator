@@ -1,6 +1,6 @@
 /** Locate cuts inside complete quiet runs of at least 300 ms. Unlicense. */
-export function pauseCuts(samples, sampleRate) {
-  if (samples.length <= 10 * sampleRate) {
+export function pauseCuts(samples, sampleRate, minimumSeconds = 10) {
+  if (samples.length <= minimumSeconds * sampleRate) {
     return [];
   }
   const hop = Math.round(0.01 * sampleRate);

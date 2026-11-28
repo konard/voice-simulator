@@ -132,6 +132,13 @@ export default [
     },
   },
   {
+    // The packed English word pairs come from an external text corpus.
+    files: ['src/recognition/data/en-homophone-context-*.js'],
+    rules: {
+      'local/no-changelog-comments': ['warn', { checkStrings: false }],
+    },
+  },
+  {
     ignores: [
       'node_modules/**',
       '**/node_modules/**',

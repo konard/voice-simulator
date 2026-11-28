@@ -180,7 +180,7 @@ describe('recognition count tables', () => {
 
 describe('spoken-word prior', () => {
   it('backs English words off to the Common Voice counts (issue 181)', () => {
-    const { words, counts, total } = getCounts('en');
+    const { words, counts, supplemental, total } = getCounts('en');
     const spoken = readSpokenCounts(
       readFileSync(
         new globalThis.URL('../data/lexicon/en-counts.txt', import.meta.url),
@@ -188,7 +188,11 @@ describe('spoken-word prior', () => {
       )
     );
     // The committed module is what the offline generator writes.
-    const { total: spokenWords, entries } = buildSpokenPrior(
+    const {
+      total: spokenWords,
+      entries,
+      supplemental: additionalEntries,
+    } = buildSpokenPrior(
       spoken,
       words.map(({ word }) => word)
     );
@@ -196,8 +200,17 @@ describe('spoken-word prior', () => {
     expect(enSpoken.SPOKEN).toBe(
       entries.map(([word, count]) => `${word}=${count}`).join(' ')
     );
+    expect(enSpoken.SUPPLEMENTAL).toBe(
+      additionalEntries.map(([word, count]) => `${word}=${count}`).join(' ')
+    );
     const prior = new Map(words.map((item) => [item.word, item.prior]));
     const scale = total / spokenWords;
+    expect(supplemental.every(({ word }) => !counts.has(word))).toBe(true);
+    expect(supplemental.find(({ word }) => word === 'television')).toEqual({
+      word: 'television',
+      count: 1,
+      prior: 3682 * scale,
+    });
     expect(prior.get('hello')).toBe(180 * scale);
     // The books never saw "hello" (count 1); the spoken text did.
     expect(counts.get('hello')).toBe(1);

@@ -474,16 +474,16 @@
         "row": "app",
         "engine": "js",
         "metrics": {
-          "textBack": 0.6875,
-          "workerRtf": 0.0955,
-          "workerRtfMeasured": 0.0159,
-          "firstSound": 0.208,
-          "firstChunk": 0.208,
-          "coldFirstSound": 0.747,
-          "startDelay": 0.206,
+          "textBack": 1,
+          "workerRtf": 0.1725,
+          "workerRtfMeasured": 0.0287,
+          "firstSound": 0.556,
+          "firstChunk": 0.556,
+          "coldFirstSound": 2.469,
+          "startDelay": 0.553,
           "sampleRate": 8000,
           "chunks": 89,
-          "heard": "The quick brown fox jump solar the lady dog. She says she shares by the sea shore. The measures a treasure every morning before the sun comes up over the. Quiet his."
+          "heard": "The quick brown fox jumps over the lazy dog. She sells sea shells by the sea shore. We measure the treasure every morning before the sun comes up over the quiet hills."
         },
         "audioSeconds": 11.289,
         "throttling": 6,
@@ -499,20 +499,21 @@
           {
             "worker": "synth-worker-Coe86Md6.js",
             "type": "speak",
-            "at": 0.082
+            "at": 0.163
           },
           {
             "worker": "synth-worker-Coe86Md6.js",
             "type": "start",
-            "at": 0.206
+            "at": 0.553
           },
           {
             "worker": "synth-worker-Coe86Md6.js",
             "type": "end",
-            "at": 2.731
+            "at": 8.827
           }
         ],
-        "benchmarkWait": 0.075
+        "benchmarkWait": 0.103,
+        "capped": {}
       }
     }
   },
@@ -851,26 +852,25 @@
     },
     "app": {
       "quality": {
-        "status": "failed",
+        "status": "certified",
         "metrics": {
           "textBack": {
-            "value": 0.6875,
+            "value": 1,
             "limit": 1,
-            "pass": false
+            "pass": true
           }
-        },
-        "issue": "https://github.com/konard/voice-simulator/issues/180"
+        }
       },
       "js-1": {
         "status": "certified",
         "metrics": {
           "workerRtf": {
-            "value": 0.0955,
+            "value": 0.1725,
             "limit": 1,
             "pass": true
           },
           "firstSound": {
-            "value": 0.208,
+            "value": 0.556,
             "limit": 1,
             "pass": true
           }
@@ -878,5 +878,16 @@
       }
     }
   },
-  "regressions": []
+  "regressions": [],
+  "rowMeasurements": {
+    "app": {
+      "measured": "2026-11-28T04:52:43.717Z",
+      "commit": "ceb7085c91e331715122f5391f7de84ae1ad5078",
+      "command": "UV_THREADPOOL_SIZE=1 taskset -c 0 node --max-old-space-size=192 scripts/check-app-lowest.mjs --skip-build --core 0 --out reports/heavy",
+      "cpu": "Intel(R) Xeon(R) 6975P-C",
+      "node": "v24.22.3",
+      "pinned": true,
+      "core": 0
+    }
+  }
 }

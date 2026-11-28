@@ -6,6 +6,7 @@
  * recognition panel. Unlicense.
  *
  *   node scripts/check-app-lowest.mjs [--skip-build] [--out reports/heavy]
+ *   Add --core <id> for a publishable measurement when pinned to that core.
  *
  * - workerRtf: render time / audio time of the synthesis worker, from the
  *   `load` it sends with every chunk.
@@ -15,9 +16,10 @@
  *   (1 - word error rate, at least 0).
  */
 import assert from 'node:assert/strict';
-import { spawnSync } from 'node:child_process';
-import { mkdirSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { execFileSync, spawnSync } from 'node:child_process';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { cpus } from 'node:os';
+import { join, relative } from 'node:path';
 import { fileURLToPath, URL } from 'node:url';
 import { parseArgs } from 'node:util';
 import { strings } from '../examples/universal-app/src/i18n.js';
@@ -26,6 +28,7 @@ import { TIER_KEY } from '../examples/universal-app/src/engine/benchmark-cache.j
 import { errorRate } from '../src/index.js';
 import { playwrightChromium } from './check-app-copy.mjs';
 import { createStaticServer } from './example-app-static.mjs';
+import { passes } from './lowest-report.mjs';
 
 const ROOT = fileURLToPath(new URL('../', import.meta.url));
 export const THROTTLING = Number(process.env.LOWEST_THROTTLING) || 6;
@@ -213,11 +216,16 @@ async function speakOnce(page, form, text) {
   });
   await page.locator('#speech-text').fill(text);
   await form.getByRole('button', { name: t.speak, exact: true }).click();
-  // Speaking ends when the Speak button is back.
-  await form.getByRole('button', { name: t.stop, exact: true }).waitFor({
-    state: 'visible',
-    timeout: 60_000,
-  });
+  // Short utterances can finish before Playwright sees the Stop button.
+  await page.waitForFunction(
+    () =>
+      globalThis.lowestLog.some(
+        ({ worker, type }) =>
+          /synth-worker/u.test(worker ?? '') && type === 'end'
+      ),
+    undefined,
+    { timeout: 600_000 }
+  );
   await form
     .getByRole('button', { name: t.speak, exact: true })
     .waitFor({ state: 'visible', timeout: 600_000 });
@@ -358,7 +366,7 @@ export async function checkAppLowest({ skipBuild = false } = {}) {
 /** The failures of a result against the issue 81 limits. */
 export function appFailures({ metrics, audioSeconds }) {
   const failures = [];
-  if (!(metrics.workerRtf < 1)) {
+  if (!passes('workerRtf', metrics.workerRtf, 1)) {
     failures.push(`synthesis worker RTF ${metrics.workerRtf} (limit: < 1)`);
   }
   if (!(metrics.firstSound <= 1)) {
@@ -378,13 +386,49 @@ export function appFailures({ metrics, audioSeconds }) {
   return failures;
 }
 
+function rowMetadata(core) {
+  assert.match(core, /^\d+$/u, 'Expected a single CPU core');
+  const { groups } = /^Cpus_allowed_list:\s*(?<core>.+)$/mu.exec(
+    readFileSync('/proc/self/status', 'utf8')
+  );
+  assert.equal(groups.core, core, 'Process must be pinned to the reported CPU');
+  assert.equal(process.env.UV_THREADPOOL_SIZE, '1');
+  assert.ok(process.execArgv.includes('--max-old-space-size=192'));
+  assert.equal(THROTTLING, 6);
+  const { app } = JSON.parse(
+    readFileSync(
+      new URL('../tests/heavy/lowest-thresholds.json', import.meta.url),
+      'utf8'
+    )
+  );
+  return {
+    row: 'app',
+    limit: null,
+    pinned: true,
+    core: Number(core),
+    commit: execFileSync('git', ['rev-parse', 'HEAD'], {
+      cwd: ROOT,
+      encoding: 'utf8',
+    }).trim(),
+    command: `UV_THREADPOOL_SIZE=1 taskset -c ${core} node ${process.execArgv.join(' ')} ${relative(ROOT, process.argv[1])} ${process.argv.slice(2).join(' ')}`,
+    cpu: cpus()[Number(core)]?.model ?? cpus()[0]?.model ?? 'unknown',
+    node: process.version,
+    limits: { app },
+  };
+}
+
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const { values } = parseArgs({
     options: {
       'skip-build': { type: 'boolean' },
       out: { type: 'string' },
+      core: { type: 'string' },
     },
   });
+  if (values.core) {
+    assert.ok(values.out, '--core requires --out');
+  }
+  const metadata = values.core ? rowMetadata(values.core) : null;
   const result = await checkAppLowest({ skipBuild: values['skip-build'] });
   console.log(JSON.stringify(result, null, 2));
   if (values.out) {
@@ -393,6 +437,17 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
       join(values.out, 'lowest-app.json'),
       `${JSON.stringify({ result }, null, 2)}\n`
     );
+    if (metadata) {
+      const report = {
+        ...metadata,
+        measured: new Date().toISOString(),
+        runs: { app: { js: { ...result, capped: {} } } },
+      };
+      writeFileSync(
+        join(values.out, 'lowest-settings.json'),
+        `${JSON.stringify(report, null, 2)}\n`
+      );
+    }
   }
   const failures = appFailures(result);
   for (const failure of failures) {

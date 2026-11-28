@@ -216,9 +216,33 @@ words. `getCounts('en')` scales them to the book total as each word's
 prior instead of the book count. Bigrams, and every other language, still
 use the book counts above.
 
+The standard English word network also includes the 1,606 spoken words
+absent from the book vocabulary that occur at least 100 times in the same
+counts. They use the same unigram scaling and the normal text-to-IPA
+pronunciations. The indexed book vocabulary and bigrams keep their order.
+
 ```sh
 node scripts/build-spoken-prior.mjs
 npx prettier --write src/recognition/data/en-spoken.js
+```
+
+## English homophone context (`en-homophone-context-*.js`)
+
+Telephone WAV verification proposes pronunciations against the recording.
+When two spellings have the same pronunciation, adjacent word counts rank
+the spellings. Only pairs containing a homophone in the standard English
+recognition vocabulary are exported. The association compares the observed
+pair count with its expected count from the two word frequencies.
+
+The source is Common Voice's CC0 English
+[`sentence-collector.txt`](https://raw.githubusercontent.com/common-voice/common-voice/8ad2d862a1bf55ef77f8e86c1858296a7fae6ec7/server/data/en/sentence-collector.txt),
+SHA-256 `31ac8e200449ebd7aee4a8c6bd16d4dafd076cf11f7c3efe1035f0283712d136`.
+The count builder excludes each sentence sharing four consecutive words
+with the browser benchmark from both the word and pair counts.
+
+```sh
+node scripts/build-homophone-context.mjs /path/to/sentence-collector.txt
+npx prettier --write 'src/recognition/data/en-homophone-context-*.js'
 ```
 
 ## Acoustic model (`hmm-model-*.js`)

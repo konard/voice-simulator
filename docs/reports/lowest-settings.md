@@ -1,10 +1,11 @@
 # Lowest settings: 8 kHz and one core
 
-Every row runs on 8000 Hz audio in its own Node process with
-`UV_THREADPOOL_SIZE=1`, no workers and no GPU. Input recordings are
-converted with `resample`. The Rust engine runs with one thread and no
-SIMD. Limits come from `tests/heavy/lowest-thresholds.json` and only ever
-become stricter.
+The matrix runs on 8000 Hz audio with `UV_THREADPOOL_SIZE=1`. The app row
+runs in Chromium and uses its normal synthesis and recognition workers.
+The other rows run in Node with no workers and no GPU. Input recordings
+are converted with `resample`. The Rust engine runs with one thread and
+no SIMD. Limits come from `tests/heavy/lowest-thresholds.json` and only
+ever become stricter.
 
 - Measured: 2026-11-28T04:25:28.446Z
 - Commit: `7f6c3408e3381e5956fd6bd58fe5afbf0d7abc20`
@@ -23,7 +24,7 @@ become stricter.
 | session | certified | certified | certified | [failed](https://github.com/konard/voice-simulator/issues/173) |
 | copy | [failed](https://github.com/konard/voice-simulator/issues/178) | certified | certified | [failed](https://github.com/konard/voice-simulator/issues/173) |
 | modes | certified | certified | certified | [failed](https://github.com/konard/voice-simulator/issues/173) |
-| app | [failed](https://github.com/konard/voice-simulator/issues/180) | certified | — | — |
+| app | certified | certified | — | — |
 
 ## Values and limits
 
@@ -65,9 +66,9 @@ become stricter.
 | modes | js-1 | real-time factor | 0.0791 | ≤ 0.25 | yes |
 | modes | rust-1 | real-time factor | 0.076 | ≤ 0.25 | yes |
 | modes | memory | peak RSS (MB) | 408.9 | ≤ 256 | no |
-| app | quality | text recognised back | 0.6875 | ≥ 1 | no |
-| app | js-1 | synthesis worker real-time factor | 0.0955 | ≤ 1 | yes |
-| app | js-1 | first sound (s) | 0.208 | ≤ 1 | yes |
+| app | quality | text recognised back | 1 | ≥ 1 | yes |
+| app | js-1 | synthesis worker real-time factor | 0.1725 | < 1 | yes |
+| app | js-1 | first sound (s) | 0.556 | ≤ 1 | yes |
 
 ## Runs
 
@@ -87,4 +88,9 @@ become stricter.
 | copy | rust | 793.801 | 111.78 | 470.9 | 192 MB | f0RmseSemitones 4.7335, timingErrorMs 305.2, phonemeAgreement 0.3612, maxF0RmseSemitones 8.7262, maxTimingErrorMs 1122.5, cpuRatio 7.1015, recordings 24 |
 | modes | js | 8.652 | 109.405 | 402 | 192 MB | modeShare 0.9167, rtf 0.0791, renderRtf 0.0212, utterances 60 |
 | modes | rust | 8.315 | 109.405 | 408.9 | 192 MB | modeShare 0.9167, rtf 0.076, renderRtf 0.0153, utterances 60 |
-| app | js | — | 11.289 | — | none | textBack 0.6875, workerRtf 0.0955, workerRtfMeasured 0.0159, firstSound 0.208, firstChunk 0.208, coldFirstSound 0.747, startDelay 0.206, sampleRate 8000, chunks 89, heard The quick brown fox jump solar the lady dog. She says she sh… |
+| app | js | — | 11.289 | — | 192 MB | textBack 1, workerRtf 0.1725, workerRtfMeasured 0.0287, firstSound 0.556, firstChunk 0.556, coldFirstSound 2.469, startDelay 0.553, sampleRate 8000, chunks 89, heard The quick brown fox jumps over the lazy dog. She sells sea s… |
+
+## Targeted reruns
+
+- **app** at commit `ceb7085c91e331715122f5391f7de84ae1ad5078` on Intel(R) Xeon(R) 6975P-C, Node v24.22.3, measured 2026-11-28T04:52:43.717Z.
+  Pinned with `taskset -c 0`. Command `UV_THREADPOOL_SIZE=1 taskset -c 0 node --max-old-space-size=192 scripts/check-app-lowest.mjs --skip-build --core 0 --out reports/heavy`.
