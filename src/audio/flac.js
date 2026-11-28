@@ -674,6 +674,70 @@ export function flacStart(bytes) {
   return 10 + size;
 }
 
+function mixFrame(subframes, { channels, bitDepth }, output, offset, count) {
+  const scale = 2 ** (bitDepth - 1);
+  for (let frame = 0; frame < count; frame++) {
+    let sum = 0;
+    for (let channel = 0; channel < channels; channel++) {
+      sum += subframes[channel][frame] / scale;
+    }
+    output[offset + frame] = sum / channels;
+  }
+}
+
+function joinFrames(blocks, length) {
+  const samples = new Float32Array(length);
+  let offset = 0;
+  for (const block of blocks) {
+    const take = Math.min(block.length, length - offset);
+    samples.set(block.subarray(0, take), offset);
+    offset += take;
+  }
+  return samples;
+}
+
+function decodeFrames(reader, info, maxSeconds) {
+  const blocks = [];
+  // Predictors and stereo decorrelation need full-precision samples within
+  // one frame. Reuse those channel buffers and retain only the mono audio.
+  const subframes = [];
+  checkAudioDuration(info.total, info.sampleRate, maxSeconds);
+  // A known length lets us mix into the result as frames arrive. Bound the
+  // allocation from untrusted metadata to 4 MiB.
+  const output =
+    info.total && info.total <= 1024 * 1024
+      ? new Float32Array(info.total)
+      : null;
+  let frames = 0;
+  while (reader.position + 2 <= reader.bytes.length) {
+    if (reader.bytes[reader.position] !== 0xff) {
+      break;
+    }
+    const frame = readFrame(reader, info, subframes);
+    const offset = frames;
+    frames += frame.size;
+    checkAudioDuration(frames, info.sampleRate, maxSeconds);
+    if (output) {
+      mixFrame(
+        subframes,
+        frame,
+        output,
+        offset,
+        Math.min(frame.size, output.length - offset)
+      );
+    } else {
+      const mono = new Float32Array(frame.size);
+      mixFrame(subframes, frame, mono, 0, frame.size);
+      blocks.push(mono);
+    }
+  }
+  const length = info.total ? Math.min(info.total, frames) : frames;
+  if (!output) {
+    return joinFrames(blocks, length);
+  }
+  return output.length === length ? output : output.slice(0, length);
+}
+
 /**
  * Decode a FLAC file to mono floats (all channels are averaged).
  * @param {Uint8Array} bytes
@@ -702,42 +766,9 @@ export function decodeFlac(bytes, maxSeconds = Infinity) {
     }
     reader.position = next;
   }
-  const blocks = [];
-  // Predictors and stereo decorrelation need full-precision samples within
-  // one frame. Reuse those channel buffers and retain only the mono audio.
-  const subframes = [];
-  checkAudioDuration(info.total, info.sampleRate, maxSeconds);
-  let frames = 0;
-  while (reader.position + 2 <= bytes.length) {
-    if (bytes[reader.position] !== 0xff) {
-      break;
-    }
-    const { size, channels, bitDepth } = readFrame(reader, info, subframes);
-    frames += size;
-    checkAudioDuration(frames, info.sampleRate, maxSeconds);
-    const scale = 2 ** (bitDepth - 1);
-    const mono = new Float32Array(size);
-    for (let frame = 0; frame < size; frame++) {
-      let sum = 0;
-      for (let channel = 0; channel < channels; channel++) {
-        sum += subframes[channel][frame] / scale;
-      }
-      mono[frame] = sum / channels;
-    }
-    blocks.push(mono);
-  }
-  const samples = new Float32Array(
-    info.total ? Math.min(info.total, frames) : frames
-  );
-  let offset = 0;
-  for (const block of blocks) {
-    const take = Math.min(block.length, samples.length - offset);
-    samples.set(block.subarray(0, take), offset);
-    offset += take;
-  }
   return {
     sampleRate: info.sampleRate,
-    samples,
+    samples: decodeFrames(reader, info, maxSeconds),
     channels: info.channels,
     bitDepth: info.bitDepth,
     float: false,

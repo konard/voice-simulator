@@ -436,6 +436,22 @@ describe('FLAC decoder', () => {
     expect(() => decodeFlac(broken)).toThrow();
   });
 
+  it('handles unknown and inaccurate STREAMINFO sample counts', () => {
+    const bytes = encodeFlac(tone(5003), 8000);
+    const expected = decodeFlac(bytes).samples;
+    const total = new DataView(bytes.buffer, bytes.byteOffset + 22, 4);
+    for (const declared of [0, 1500, 6000, 2_000_000]) {
+      total.setUint32(0, declared);
+      const length = declared
+        ? Math.min(declared, expected.length)
+        : expected.length;
+      expect(decodeFlac(bytes).samples).toEqual(expected.subarray(0, length));
+    }
+    total.setUint32(0, 1500);
+    bytes[bytes.length - 1] ^= 1;
+    expect(() => decodeFlac(bytes)).toThrow('FLAC frame CRC mismatch');
+  });
+
   it('encodes 24-bit noise with wide Rice parameters losslessly', () => {
     const noise = Float32Array.from(tone(9000, 7), (value) => value * 0.99);
     const decoded = decodeFlac(encodeFlac(noise, 96000, { bitDepth: 24 }));
