@@ -74,6 +74,9 @@ export function createSessionScheduler({ realtime, schedule }, done) {
   }
 
   function slice() {
+    if (!running || !share) {
+      return;
+    }
     const start = now();
     prune(start);
     const remaining = budget(start);

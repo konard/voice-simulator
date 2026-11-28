@@ -20,6 +20,7 @@ import {
 } from '../src/session/refine.js';
 import { parameterChanges } from '../src/session/numerics.js';
 import { createSpeakerTracking } from '../src/session/tracking.js';
+import { createSessionScheduler } from '../src/session/scheduler.js';
 import { channelTargets } from '../src/articulation/plan.js';
 
 const SAMPLE_RATE = 16000;
@@ -188,6 +189,25 @@ describe('voice session', () => {
     expect(session.voice).toEqual(saveVoice(voice));
     pending[0]();
     expect(session.history.map(({ state }) => state)).toEqual(['inverting']);
+  });
+
+  it('discards a scheduled tick after its work has already drained', () => {
+    const pending = [];
+    const done = [];
+    const scheduler = createSessionScheduler(
+      { realtime: true, schedule: (fn) => pending.push(fn) },
+      (value) => done.push(value)
+    );
+    scheduler.share = 0.25;
+    scheduler.replace(
+      (function* () {
+        yield;
+        return 'completed';
+      })()
+    );
+    scheduler.drain();
+    pending[0]();
+    expect(done).toEqual(['completed']);
   });
 });
 
