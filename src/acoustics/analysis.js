@@ -75,12 +75,34 @@ export function lpcEnvelope(a, sampleRate, step = 10) {
  * @returns {{samples: Float64Array, sampleRate: number}}
  */
 export function decimate(samples, sampleRate, targetRate) {
+  return decimateFrame(samples, sampleRate, targetRate);
+}
+
+function decimateFrame(samples, sampleRate, targetRate, workspace) {
   const factor = Math.max(1, Math.round(sampleRate / targetRate));
-  const filters = [new Biquad(), new Biquad()];
-  const cutoff = (sampleRate / factor) * 0.45;
-  filters[0].lowpass(cutoff, 0.54, sampleRate);
-  filters[1].lowpass(cutoff, 1.31, sampleRate);
-  const output = new Float64Array(Math.floor(samples.length / factor));
+  const filters = workspace?.filters ?? [new Biquad(), new Biquad()];
+  if (workspace?.filters) {
+    filters[0].reset();
+    filters[1].reset();
+  } else {
+    const cutoff = (sampleRate / factor) * 0.45;
+    filters[0].lowpass(cutoff, 0.54, sampleRate);
+    filters[1].lowpass(cutoff, 1.31, sampleRate);
+    if (workspace) {
+      workspace.filters = filters;
+    }
+  }
+  const length = Math.floor(samples.length / factor);
+  const frame = workspace?.frame;
+  let output;
+  if (frame && frame.length >= length) {
+    output = frame.length === length ? frame : frame.subarray(0, length);
+  } else {
+    output = new Float64Array(length);
+    if (workspace) {
+      workspace.frame = output;
+    }
+  }
   for (let index = 0; index < output.length * factor; index++) {
     const value = filters[1].process(filters[0].process(samples[index]));
     if (index % factor === 0) {
@@ -126,6 +148,24 @@ function formantPeaks(a, rate, count) {
  * @param {{start?: number, duration?: number, order?: number, count?: number, analysisRate?: number}} [options]
  */
 export function estimateFormants(samples, sampleRate, options = {}) {
+  return estimateFormantFrame(samples, sampleRate, options);
+}
+
+/** Reuse the decimator, frame and LPC coefficients across adjacent windows. */
+export function createFormantEstimator(samples, sampleRate, options) {
+  const settings = { ...options };
+  const length = (settings.order ?? 12) + 1;
+  const workspace = {
+    correlation: new Float64Array(length),
+    predictor: new Float64Array(length),
+  };
+  return (start) => {
+    settings.start = start;
+    return estimateFormantFrame(samples, sampleRate, settings, workspace);
+  };
+}
+
+function estimateFormantFrame(samples, sampleRate, options, workspace) {
   const start = Math.floor((options.start ?? 0) * sampleRate);
   const length = Math.floor((options.duration ?? 0.05) * sampleRate);
   const slice =
@@ -133,7 +173,12 @@ export function estimateFormants(samples, sampleRate, options = {}) {
     samples.buffer instanceof ArrayBuffer
       ? samples.subarray(start, start + length)
       : Array.prototype.slice.call(samples, start, start + length);
-  const decimated = decimate(slice, sampleRate, options.analysisRate ?? 11025);
+  const decimated = decimateFrame(
+    slice,
+    sampleRate,
+    options.analysisRate ?? 11025,
+    workspace
+  );
   const frame = decimated.samples;
   for (let index = frame.length - 1; index > 0; index--) {
     frame[index] -= 0.94 * frame[index - 1];
@@ -143,7 +188,7 @@ export function estimateFormants(samples, sampleRate, options = {}) {
       0.54 - 0.46 * Math.cos((2 * Math.PI * index) / (frame.length - 1));
   }
   const order = options.order ?? 12;
-  const a = lpcCoefficients(frame, order);
+  const a = lpcCoefficients(frame, order, workspace);
   return formantPeaks(a, decimated.sampleRate, options.count ?? 4);
 }
 

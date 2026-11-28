@@ -22,7 +22,7 @@ import {
   emptyState,
   stateFeatures,
 } from './voice-fit-statistics.js';
-import { estimateFormants } from '../acoustics/analysis.js';
+import { createFormantEstimator } from '../acoustics/analysis.js';
 import { Biquad } from '../acoustics/filters.js';
 import { SPEED_OF_SOUND } from '../acoustics/transfer.js';
 
@@ -593,18 +593,20 @@ function legacyDiagnostics(signal, rate, pitches, voicedIndices, options) {
     straight: new Float64Array(length + Math.ceil(rate / MIN_F0) + 2),
     differences: new Float64Array(2 * LAG_STEPS + 1),
   };
-  let measured = 0;
-  for (let pick = 0; pick < diagnosticFrames; pick += stride, measured++) {
-    const index = voicedIndices[Math.floor(pick)];
-    const start = index * hop;
-    if (!options.diagnosticsOnly) {
-      const formants = estimateFormants(signal, rate, {
-        start: start / rate,
+  const estimate = options.diagnosticsOnly
+    ? null
+    : createFormantEstimator(signal, rate, {
         duration: 0.03,
         count: formantCount,
         analysisRate: rate,
         order,
       });
+  let measured = 0;
+  for (let pick = 0; pick < diagnosticFrames; pick += stride, measured++) {
+    const index = voicedIndices[Math.floor(pick)];
+    const start = index * hop;
+    if (estimate) {
+      const formants = estimate(start / rate);
       for (let formant = 0; formant < Math.min(formants.length, 4); formant++) {
         tracks[formant].push(formants[formant]);
       }

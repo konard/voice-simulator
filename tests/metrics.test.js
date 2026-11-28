@@ -16,6 +16,7 @@ import {
   f0Errors,
   fft,
   formantErrors,
+  formantTrack,
   logSpectralDistance,
   melCepstralDistortion,
   melFilterbank,
@@ -360,6 +361,23 @@ describe('metrics: pitch and formants', () => {
           expected
         );
       }
+    }
+  });
+
+  it('reuses formant windows with the same results as isolated estimates', () => {
+    for (const rate of [8000, 22050]) {
+      const samples = noise(0.042, rate);
+      const pitch = [180, 175, 0, 173, 174, 0];
+      const expected = pitch.map((f0, i) =>
+        f0 > 0
+          ? estimateFormants(samples, rate, {
+              start: i * 0.01,
+              duration: 0.03,
+              count: 3,
+            })
+          : null
+      );
+      expect(formantTrack(samples, rate, { pitch })).toEqual(expected);
     }
   });
 });
