@@ -65,6 +65,10 @@ const ORDER_STEPS = [0, 2, 4];
 /** Aberth-Ehrlich iteration: rounds, step limit and start values. */
 const ABERTH_ROUNDS = 40;
 const ABERTH_TOLERANCE = 1e-6;
+const ABERTH_TOLERANCE_SQUARED = ABERTH_TOLERANCE * ABERTH_TOLERANCE;
+// Keep the original magnitude comparison within a few ulps of the cutoff.
+const ABERTH_SQUARED_LOW = ABERTH_TOLERANCE_SQUARED * (1 - 4 * Number.EPSILON);
+const ABERTH_SQUARED_HIGH = ABERTH_TOLERANCE_SQUARED * (1 + 4 * Number.EPSILON);
 const START_RADIUS = 0.9;
 const START_PHASE = 0.1;
 /** Candidates: lowest frequency, distance below the Nyquist frequency and
@@ -285,12 +289,13 @@ function aberthRoots(a, m, re, im) {
       if (!Number.isFinite(re[i]) || !Number.isFinite(im[i])) {
         return -1;
       }
-      // Once a step reaches the tolerance, finish the round without
-      // measuring the rest. A single component can also rule it out.
-      converged &&=
-        Math.abs(wr) < ABERTH_TOLERANCE &&
-        Math.abs(wi) < ABERTH_TOLERANCE &&
-        Math.hypot(wr, wi) < ABERTH_TOLERANCE;
+      if (converged) {
+        const squared = wr * wr + wi * wi;
+        converged =
+          squared < ABERTH_SQUARED_LOW ||
+          (squared <= ABERTH_SQUARED_HIGH &&
+            Math.hypot(wr, wi) < ABERTH_TOLERANCE);
+      }
     }
     if (converged) {
       return 1;
