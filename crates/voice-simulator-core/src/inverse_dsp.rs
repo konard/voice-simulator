@@ -18,8 +18,22 @@ pub(crate) fn hann(n: usize) -> Vec<f64> {
         .collect()
 }
 pub(crate) fn block(x: &[f64], centre: usize, n: usize) -> Vec<f64> {
+    let mut out = Vec::new();
+    fill_block(x, centre, n, &mut out);
+    out
+}
+pub(crate) fn fill_block<T: Into<f64> + Copy>(
+    x: &[T],
+    centre: usize,
+    n: usize,
+    out: &mut Vec<f64>,
+) {
     let start = centre as isize - (n / 2) as isize;
-    (0..n).map(|i| sample(x, start + i as isize)).collect()
+    out.clear();
+    out.extend((0..n).map(|i| {
+        x.get((start + i as isize) as usize)
+            .map_or(0.0, |&v| v.into())
+    }));
 }
 pub(crate) fn sample(x: &[f64], i: isize) -> f64 {
     if i < 0 {
@@ -89,13 +103,11 @@ pub(crate) fn predictor(x: &[f64], w: &[f64], p: usize) -> Vec<f64> {
     }
     a
 }
-pub(crate) fn iaif(s: &[f64], w: &[f64], p: usize, q: usize, leak: f64) -> (Vec<f64>, Vec<f64>) {
+pub(crate) fn iaif(s: &[f64], w: &[f64], p: usize, q: usize, leak: f64) -> Vec<f64> {
     let u1 = filter(s, &predictor(s, w, 1));
     let g1 = integrate(&filter(s, &predictor(&u1, w, p)), leak);
     let u2 = integrate(&filter(s, &predictor(&g1, w, q)), leak);
-    let d = filter(s, &predictor(&u2, w, p));
-    let g = integrate(&d, leak);
-    (d, g)
+    filter(s, &predictor(&u2, w, p))
 }
 /// Radix-2 Cooley-Tukey; same tables and butterfly order as recognition/fft.js.
 pub(crate) struct Fft {

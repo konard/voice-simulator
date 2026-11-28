@@ -492,7 +492,8 @@ export function inverseModeMeasures(frames, options, rows) {
       frames,
       o,
       MEASURES,
-      MODE_MEASURES
+      MODE_MEASURES,
+      rows
     );
   }
   return inverseFilterJs(

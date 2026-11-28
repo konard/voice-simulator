@@ -3,7 +3,14 @@ import { withWasmMemory } from './wasm-memory.js';
 
 const HEADER = 14;
 
-export function inverseFilterRust(module, frames, options, measures, select) {
+export function inverseFilterRust(
+  module,
+  frames,
+  options,
+  measures,
+  select,
+  rows
+) {
   const {
     count,
     sampleCount: n,
@@ -14,13 +21,17 @@ export function inverseFilterRust(module, frames, options, measures, select) {
     melBands,
   } = frames;
   const { pitch, tractOrder, glottisOrder, leak, step, minF0, maxF0 } = options;
-  const length = HEADER + n + count * (2 + melBands + Number(Boolean(pitch)));
+  const { rec_inverse_modes, rec_inverse_filter } = module.exports;
+  const useModes = select && rows && typeof rec_inverse_modes === 'function';
+  const packetLength =
+    HEADER + n + count * (2 + melBands + Number(Boolean(pitch)));
+  const length = packetLength + (useModes ? rows.length : 0);
+  const capacity = useModes
+    ? select.length * count
+    : 4 + 3 * n + count * (measures.length + 1) + measures.length * 4;
   return withWasmMemory(module, (allocate) => {
     const input = allocate(Float64Array, length);
-    const output = allocate(
-      Float64Array,
-      4 + 3 * n + count * (measures.length + 1) + measures.length * 4
-    );
+    const output = allocate(Float64Array, capacity);
     const packet = input.view();
     packet.set([
       rate,
@@ -46,9 +57,13 @@ export function inverseFilterRust(module, frames, options, measures, select) {
       HEADER + n + 2 * count
     );
     if (pitch) {
-      packet.set(pitch.f0.subarray(0, count), length - count);
+      packet.set(pitch.f0.subarray(0, count), packetLength - count);
     }
-    const written = module.exports.rec_inverse_filter(
+    if (useModes) {
+      packet.set(rows, packetLength);
+    }
+    const kernel = useModes ? rec_inverse_modes : rec_inverse_filter;
+    const written = kernel(
       input.pointer,
       input.length,
       output.pointer,
@@ -59,10 +74,11 @@ export function inverseFilterRust(module, frames, options, measures, select) {
     }
     const values = output.view(written);
     if (select) {
-      const first = 4 + 2 * n + values[2];
+      const first = useModes ? 0 : 4 + 2 * n + values[2];
       return Object.fromEntries(
-        select.map((name) => {
-          const start = first + measures.indexOf(name) * count;
+        select.map((name, column) => {
+          const start =
+            first + (useModes ? column : measures.indexOf(name)) * count;
           return [
             name,
             Float32Array.from(values.subarray(start, start + count)),

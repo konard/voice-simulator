@@ -2,7 +2,9 @@
 //! Layout is documented in docs/INVERSE-FILTER.md. Read the input before
 //! opening the output so overlapping packets cannot alias live views.
 use crate::{check_range, error, f64_slice};
-use voice_simulator_core::inverse_filter::{inverse_filter, Frames, Options};
+use voice_simulator_core::inverse_filter::{
+    inverse_filter, inverse_mode_measures, Frames, Options,
+};
 
 fn integer(v: f64) -> Result<usize, i32> {
     if !v.is_finite() || v < 0.0 || v.fract() != 0.0 || v > u32::MAX as f64 {
@@ -11,7 +13,7 @@ fn integer(v: f64) -> Result<usize, i32> {
         Ok(v as usize)
     }
 }
-fn run(input: &[f64]) -> Result<Vec<f64>, i32> {
+fn run(input: &[f64], modes: bool) -> Result<Vec<f64>, i32> {
     if input.len() < 14 {
         return Err(error::BAD_ARGUMENT);
     }
@@ -24,11 +26,14 @@ fn run(input: &[f64]) -> Result<Vec<f64>, i32> {
     if pitch_flag > 1 {
         return Err(error::BAD_ARGUMENT);
     }
+    let stride = bands
+        .checked_add(2 + pitch_flag)
+        .ok_or(error::BAD_ARGUMENT)?;
     let required = 14usize
         .checked_add(n)
-        .and_then(|v| v.checked_add(count.checked_mul(2 + bands + pitch_flag)?))
+        .and_then(|v| v.checked_add(count.checked_mul(stride)?))
         .ok_or(error::BAD_ARGUMENT)?;
-    if input.len() != required {
+    if input.len() < required || (!modes && input.len() != required) {
         return Err(error::BAD_ARGUMENT);
     }
     let mut at = 14;
@@ -68,6 +73,15 @@ fn run(input: &[f64]) -> Result<Vec<f64>, i32> {
         min_f0: input[11],
         max_f0: input[12],
     };
+    if modes {
+        let rows = input[required..]
+            .iter()
+            .map(|&row| integer(row))
+            .collect::<Result<Vec<_>, _>>()?;
+        let measures =
+            inverse_mode_measures(&frames, options, &rows).map_err(|_| error::BAD_ARGUMENT)?;
+        return Ok(measures.into_iter().flatten().map(f64::from).collect());
+    }
     let result = inverse_filter(&frames, options).map_err(|_| error::BAD_ARGUMENT)?;
     let mut out = Vec::with_capacity(4 + 2 * n + result.gci.len() + 10 * count + 36);
     out.extend([
@@ -93,13 +107,10 @@ fn run(input: &[f64]) -> Result<Vec<f64>, i32> {
     }
     Ok(out)
 }
-/// Writes the packed result and returns its length, or a negative error.
-/// `capacity` counts f64 values. A short output returns BAD_ARGUMENT.
-#[no_mangle]
-pub extern "C" fn vs_inverse_filter(input: u32, length: u32, output: u32, capacity: u32) -> i32 {
+fn write_result(input: u32, length: u32, output: u32, capacity: u32, modes: bool) -> i32 {
     let values = match f64_slice(input, length).and_then(|input| {
         check_range(output, capacity, 8)?;
-        run(input)
+        run(input, modes)
     }) {
         Ok(v) => v,
         Err(e) => return e,
@@ -115,19 +126,31 @@ pub extern "C" fn vs_inverse_filter(input: u32, length: u32, output: u32, capaci
         Err(e) => e,
     }
 }
+/// Writes the packed result and returns its length, or a negative error.
+/// `capacity` counts f64 values. A short output returns BAD_ARGUMENT.
+#[no_mangle]
+pub extern "C" fn vs_inverse_filter(input: u32, length: u32, output: u32, capacity: u32) -> i32 {
+    write_result(input, length, output, capacity, false)
+}
 /// Recognition entry point for the same source-analysis packet.
 #[no_mangle]
 pub extern "C" fn rec_inverse_filter(input: u32, length: u32, output: u32, capacity: u32) -> i32 {
     vs_inverse_filter(input, length, output, capacity)
+}
+/// Reads an inverse packet followed by zero-based vowel frame indices.
+/// Writes the three source measure columns for mode recognition.
+#[no_mangle]
+pub extern "C" fn rec_inverse_modes(input: u32, length: u32, output: u32, capacity: u32) -> i32 {
+    write_result(input, length, output, capacity, true)
 }
 #[cfg(test)]
 mod tests {
     use super::*;
     #[test]
     fn malformed_layout() {
-        assert_eq!(run(&[]).unwrap_err(), error::BAD_ARGUMENT);
+        assert_eq!(run(&[], false).unwrap_err(), error::BAD_ARGUMENT);
         let mut input = [0.0; 14];
         input[4] = f64::INFINITY;
-        assert_eq!(run(&input).unwrap_err(), error::BAD_ARGUMENT);
+        assert_eq!(run(&input, false).unwrap_err(), error::BAD_ARGUMENT);
     }
 }

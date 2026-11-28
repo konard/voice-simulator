@@ -10,6 +10,7 @@ import {
   trackPitch,
 } from '../src/index.js';
 import { float64View } from '../src/engine/wasm-loader.js';
+import { inverseModeMeasures } from '../src/recognition/inverse-filter.js';
 import { loadRustEngine, noRust } from './helpers/rust-engine.js';
 import { itUnless } from './helpers/skip.js';
 import { highPass } from './helpers/recognition-truth.js';
@@ -180,6 +181,42 @@ describe('Rust inverse filter parity', () => {
     };
     expect(inverseFilter(frames, { pitch }).lowBand).toBe(false);
     await parity(frames, pitch);
+  });
+  it('matches full Rust source measures at the requested mode rows', async () => {
+    const module = await loadRustEngine();
+    expect(typeof module.exports.rec_inverse_modes).toBe('function');
+    for (const [rate, removeLowBand] of [
+      [16000, false],
+      [8000, true],
+    ]) {
+      const vowel = sourceVowel(0.5, 110, rate);
+      const samples = removeLowBand
+        ? highPass(vowel.samples, rate, 300)
+        : vowel.samples;
+      const frames = analyzeFrames(samples, rate);
+      const pitch = {
+        count: frames.count,
+        hop: frames.hop,
+        startTime: frames.startTime,
+        f0: new Float32Array(frames.count).fill(110),
+      };
+      pitch.f0[0] = 0;
+      const options = { pitch, kernels: { module } };
+      const rows = [0, 5, 11, 24, frames.count - 1];
+      const full = inverseFilter(frames, options);
+      expect(full.lowBand).toBe(!removeLowBand);
+      const mode = inverseModeMeasures(frames, options, rows);
+      const empty = inverseModeMeasures(frames, options, []);
+      expect(Object.keys(mode)).toEqual(['h1h2Source', 'hnr', 'cpp']);
+      for (const name of Object.keys(mode)) {
+        expect(mode[name].length).toBe(frames.count);
+        for (let t = 0; t < frames.count; t++) {
+          const expected = rows.includes(t) ? full[name][t] : NaN;
+          expect(Object.is(mode[name][t], expected)).toBe(true);
+          expect(Number.isNaN(empty[name][t])).toBe(true);
+        }
+      }
+    }
   });
   it('matches local pitch on changing speech', async () => {
     const out = synthesize('Hello world.', {

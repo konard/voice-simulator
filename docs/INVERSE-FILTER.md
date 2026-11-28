@@ -178,6 +178,12 @@ allocation or output writes, allowing overlap safely. Output:
 Capacity `40 + 3 * sampleCount + 10 * count` covers the output. The existing
 ABI version and synthesis exports keep their signatures.
 
+The mode classifier calls `rec_inverse_modes` with the same input followed by
+zero-based vowel frame indices. The output contains three `count`-element
+columns in the order h1h2Source, hnr, cpp. Entries outside the requested rows
+and measurements unavailable in a requested row are NaN. This path skips
+the pulse, flow, and summary diagnostics used by the full inverse filter.
+
 ## References
 
 Alku (1992), _Speech Communication_ 11, 109–118 (IAIF);
