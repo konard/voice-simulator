@@ -62,7 +62,9 @@ function render(text, head) {
     seed: 1,
   }).samples;
 }
-if (mode === 'streaming' || mode === 'copy' || mode === 'modes-row') {
+if (
+  ['streaming', 'copy', 'modes-row', 'session', 'recognition'].includes(mode)
+) {
   const loaded = await loadEngine(engine);
   if (loaded.unavailable) {
     throw new Error(loaded.unavailable);
@@ -70,14 +72,19 @@ if (mode === 'streaming' || mode === 'copy' || mode === 'modes-row') {
   let peak = 0;
   const profile = (stage) => {
     const next = process.resourceUsage().maxRSS;
-    if (next - peak >= 2048 || /^[A-Z][a-z]+$/u.test(stage)) {
+    if (next - peak >= 2048 || /^(?:[A-Z][a-z]+$|Session )/u.test(stage)) {
       report(stage);
       peak = next;
     }
   };
   const count = limit === 'full' ? Infinity : Number(limit ?? 1);
   const row = mode === 'modes-row' ? 'modes' : mode;
-  await ROWS[row]({ engine: loaded, limit: count, profile });
+  await ROWS[row]({
+    engine: loaded,
+    limit: count,
+    baseline: engine === 'js',
+    profile,
+  });
 } else if (mode === 'fit') {
   await createEngine({ engine, threads: 1, simd: false });
   let peak = 0;

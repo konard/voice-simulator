@@ -186,7 +186,7 @@ function synthesisRow({ engine, limit, baseline }) {
 }
 
 /** Recognition on the public benchmark sets of issue 76. */
-async function recognitionRow({ engine, limit, baseline }) {
+async function recognitionRow({ engine, limit, baseline, profile }) {
   warmUp({ engine: engine.recognition });
   const sums = { low: [], base: [] };
   let seconds = 0;
@@ -205,6 +205,7 @@ async function recognitionRow({ engine, limit, baseline }) {
         recognize(low, RATE, {
           level: LEVEL,
           engine: engine.recognition,
+          profile,
         })
       );
       seconds += cpu;
@@ -215,6 +216,7 @@ async function recognitionRow({ engine, limit, baseline }) {
         const heard = recognize(wide, 16000, {
           level: 'medium',
           engine: engine.recognition,
+          profile,
         });
         sums.base.push(scoreUtterance(row, heard, set.language, { reference }));
       }
@@ -364,7 +366,7 @@ function voiceFitRow({ engine, limit }) {
 }
 
 /** A real-time voice session on 20 s of each preset voice. */
-async function sessionRow({ engine, limit }) {
+async function sessionRow({ engine, limit, profile }) {
   let seconds = 0;
   let audioSeconds = 0;
   let stable = 0;
@@ -374,6 +376,7 @@ async function sessionRow({ engine, limit }) {
   for (const preset of presets) {
     const truth = presetHeadConfig(preset);
     const samples = speech(truth, 20);
+    profile?.(`Session input ${preset}`);
     const chunk = 0.02 * RATE;
     const [session, cpu] = await cpuTimeAsync(async () => {
       const session = createVoiceSession({
@@ -382,6 +385,7 @@ async function sessionRow({ engine, limit }) {
         level: LEVEL,
         realtime: true,
         engine: engine.render,
+        profile,
       });
       let stableAt = null;
       session.on('state', ({ state, time }) => {
@@ -414,6 +418,7 @@ async function sessionRow({ engine, limit }) {
     const head = session.session.voice
       ? loadVoice(session.session.voice).head
       : null;
+    profile?.(`Session complete ${preset}`);
     for (const key of Object.keys(errors)) {
       errors[key].push(head ? relative(head[key], truth[key]) : Infinity);
     }
