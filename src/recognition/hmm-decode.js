@@ -37,7 +37,7 @@ export const HMM_DECODE_DEFAULTS = Object.freeze({
 export const HMM_LOW_SEARCH = Object.freeze({
   beam: 65,
   languageBeam: 170,
-  maxActive: 480,
+  maxActive: 336,
 });
 
 /** ln p of a shipped bigram cost (the costs are 0.5 - 0.3 ln p). */
@@ -103,12 +103,12 @@ function emissionCache(model, feats, { tone, toneWeight }) {
   };
 }
 
-function languageModel(network, records, settings) {
+function languageModel(network, records, settings, buffers) {
   const { lmw, wip, oovPhone, oovWeight, minCount } = settings;
   const { words, trees } = network;
-  const predecessor = new Array(words.length);
-  const scores = new Float64Array(words.length);
-  const unigram = new Float64Array(words.length);
+  const { predecessor, wordScores: scores, unigram } = buffers;
+  predecessor.fill(undefined);
+  unigram.fill(0);
   return (hist, id) => {
     const w = words[id];
     if (w.oov) {
@@ -324,17 +324,18 @@ export function languageThresholds(
     thresholds[i] = Math.max(languageBest[i] - beam, best - languageBeam);
     buckets[i].length = 0;
   }
+  if (maxActive <= 0 || work.length <= maxActive) {
+    return;
+  }
   for (let i = 0; i < work.length; i++) {
     const lang = language[work[i]];
     if (nodeScores[i] >= thresholds[lang]) {
       buckets[lang].push(nodeScores[i]);
     }
   }
-  if (maxActive > 0) {
-    for (let i = 0; i < buckets.length; i++) {
-      if (buckets[i].length > maxActive) {
-        thresholds[i] = selectScore(buckets[i], maxActive - 1);
-      }
+  for (let i = 0; i < buckets.length; i++) {
+    if (buckets[i].length > maxActive) {
+      thresholds[i] = selectScore(buckets[i], maxActive - 1);
     }
   }
 }
@@ -392,17 +393,14 @@ function scoreFrame(network, search, t) {
     const base = k * STATES_PER_TOKEN;
     const entry = entries.queued[id] ? entries.score[id] : -Infinity;
     let nodeBest = -Infinity;
-    for (let i = count - 1; i >= 0; i--) {
-      const j = base + i;
-      const m = emit[first + i];
-      let value = -Infinity;
-      let hist = 0;
-      let start = 0;
-      if (wasActive) {
+    if (wasActive) {
+      for (let i = count - 1; i >= 0; i--) {
+        const j = base + i;
+        const m = emit[first + i];
         const previous = old + i;
-        value = prevScores[previous] + stay[m];
-        hist = prevHistory[previous];
-        start = prevStarts[previous];
+        let value = prevScores[previous] + stay[m];
+        let hist = prevHistory[previous];
+        let start = prevStarts[previous];
         if (i > 0) {
           const advance = prevScores[previous - 1] + go[emit[first + i - 1]];
           if (advance > value) {
@@ -411,19 +409,25 @@ function scoreFrame(network, search, t) {
             start = prevStarts[previous - 1];
           }
         }
+        if (i === 0 && entry > value) {
+          value = entry;
+          hist = entries.history[id];
+          start = entries.start[id];
+        }
+        if (value > -Infinity) {
+          value += score(m, t);
+        }
+        scores[j] = value;
+        history[j] = hist;
+        starts[j] = start;
+        nodeBest = Math.max(nodeBest, value);
       }
-      if (i === 0 && entry > value) {
-        value = entry;
-        hist = entries.history[id];
-        start = entries.start[id];
-      }
-      if (value > -Infinity) {
-        value += score(m, t);
-      }
-      scores[j] = value;
-      history[j] = hist;
-      starts[j] = start;
-      nodeBest = Math.max(nodeBest, value);
+    } else {
+      nodeBest = entry > -Infinity ? entry + score(emit[first], t) : -Infinity;
+      scores[base] = nodeBest;
+      history[base] = entries.history[id];
+      starts[base] = entries.start[id];
+      scores.fill(-Infinity, base + 1, base + count);
     }
     entries.queued[id] = 0;
     nodeScores[k] = nodeBest;
@@ -556,12 +560,18 @@ function propagateFrame(network, search, t, best) {
  * the beam, its score relative to the best token of its last frame.
  * `options.tone` (the `tone` of hmmFeatures) adds the tone stream.
  */
-export function decodeWords(network, feats, frames, options = {}) {
+export function decodeWords(network, feats, frames, options = {}, cache) {
   const settings = { ...HMM_DECODE_DEFAULTS, ...options };
   const languages = settings.languages ?? [...network.trees.keys()];
   const { model, language, trees } = network;
   const records = [];
-  const entries = entryQueue(language.length);
+  const buffers = searchBuffers(network, cache);
+  const { entries, stamp, offsets, prev, cur } = buffers;
+  for (const id of entries.ids) {
+    entries.queued[id] = 0;
+  }
+  entries.ids.length = 0;
+  stamp.fill(-2);
   const search = {
     work: [],
     nodeScores: [],
@@ -570,15 +580,15 @@ export function decodeWords(network, feats, frames, options = {}) {
     buckets: Array.from({ length: trees.size }, () => []),
     wordEnds: new Map(),
     treesByLanguage: Array.from(trees.values()),
-    stamp: new Int32Array(language.length).fill(-2),
-    offsets: new Int32Array(language.length),
+    stamp,
+    offsets,
     score: emissionCache(model, feats, settings),
-    lm: languageModel(network, records, settings),
+    lm: languageModel(network, records, settings, buffers),
     settings,
     entries,
     records,
-    prev: tokenBuffer(),
-    cur: tokenBuffer(),
+    prev,
+    cur,
   };
   initialEntries(network, records, languages, settings, entries.enter);
   for (let t = 0; t < frames; t++) {
@@ -598,6 +608,29 @@ export function decodeWords(network, feats, frames, options = {}) {
     score: best?.score ?? -Infinity,
     lang: best?.lang ?? null,
   };
+}
+
+// A streaming recognizer runs the same search network for each preview and
+// phrase. Keep its numeric work arrays and reset only the state read by the
+// next search. Trainers and callers with their own search use fresh buffers.
+function searchBuffers(network, cache) {
+  let buffers = cache?.get(network);
+  if (!buffers) {
+    const nodes = network.language.length;
+    const words = network.words.length;
+    buffers = {
+      entries: entryQueue(nodes),
+      stamp: new Int32Array(nodes),
+      offsets: new Int32Array(nodes),
+      prev: tokenBuffer(),
+      cur: tokenBuffer(),
+      predecessor: new Array(words),
+      wordScores: new Float64Array(words),
+      unigram: new Float64Array(words),
+    };
+    cache?.set(network, buffers);
+  }
+  return buffers;
 }
 
 function alignmentChain(model, words) {
