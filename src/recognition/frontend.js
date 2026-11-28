@@ -207,9 +207,7 @@ function binRange(low, high, rate, size) {
   return [first, last];
 }
 
-/** Constant tables of one setting: window, filters, ranges. */
-function frontendTables(settings) {
-  const { length, size, rate, melBands, cepstra, preEmphasis } = settings;
+function periodicityTables({ length, size, rate }) {
   const half = size / 2;
   const hann = new Float64Array(length);
   for (let n = 0; n < length; n++) {
@@ -232,6 +230,13 @@ function frontendTables(settings) {
   for (let lag = 0; lag <= lagMax; lag++) {
     windowCorrelation[lag] = re[lag] / re[0];
   }
+  return { hann, fft, lagMin, lagMax, windowCorrelation };
+}
+
+/** Constant tables of one setting: window, filters, ranges. */
+function frontendTables(settings) {
+  const { size, rate, melBands, cepstra, preEmphasis } = settings;
+  const half = size / 2;
   // Mel filters times the pre-emphasis gain G[k], stored sparse.
   const top = mel(Math.min(rate / 2, MEL_HIGH));
   const bottom = mel(MEL_LOW);
@@ -278,11 +283,7 @@ function frontendTables(settings) {
     }
   }
   return {
-    hann,
-    fft,
-    lagMin,
-    lagMax,
-    windowCorrelation,
+    ...periodicityTables(settings),
     melFirst,
     melLast,
     melWeights: Float64Array.from(weights),
@@ -303,7 +304,7 @@ function rangePower(power, range) {
 }
 
 /** Empty frame set of `settings.capacity` rows. */
-function createFrameSet(settings, samples, storage, pitchOnly = false) {
+function createFrameSet(settings, samples, storage, features) {
   const rows = settings.capacity;
   const column = (key, width = 1, Type = Float32Array) =>
     storage?.(key, rows * width, Type) ?? new Type(rows * width);
@@ -323,17 +324,22 @@ function createFrameSet(settings, samples, storage, pitchOnly = false) {
     energy: column('energy'),
     noise: column('noise'),
   };
-  if (pitchOnly) {
+  if (features === 'pitch') {
     return shared;
+  }
+  const speech = column('speech', 1, Uint8Array);
+  const periodicity = column('periodicity');
+  if (features === 'speech') {
+    return { ...shared, speech, periodicity };
   }
   return {
     ...shared,
     zcr: column('zcr'),
     tilt: column('tilt'),
     gravity: column('gravity'),
-    periodicity: column('periodicity'),
+    periodicity,
     gain: column('gain'),
-    speech: column('speech', 1, Uint8Array),
+    speech,
     lpc: column('lpc', settings.order),
     reflection: column('reflection', settings.order),
     mel: column('mel', settings.melBands),
@@ -343,7 +349,21 @@ function createFrameSet(settings, samples, storage, pitchOnly = false) {
 }
 
 /** Arrays of a frame set with their row widths. */
-function frameColumns(frames) {
+function frameColumns(frames, features) {
+  if (features === 'pitch') {
+    return [
+      [frames.energy, 1],
+      [frames.noise, 1],
+    ];
+  }
+  if (features === 'speech') {
+    return [
+      [frames.energy, 1],
+      [frames.noise, 1],
+      [frames.speech, 1],
+      [frames.periodicity, 1],
+    ];
+  }
   return [
     [frames.energy, 1],
     [frames.zcr, 1],
@@ -485,14 +505,14 @@ function measureWaveform(kernel, row, buffer, start) {
   return meanPower;
 }
 
-/** Power spectrum, centre of gravity, tilt and the six bands. */
+/** Centre of gravity, tilt and the six bands. */
 function measureSpectrum(kernel, row) {
   const { re, im, power, frames, tables } = kernel;
   const { size, rate } = kernel.settings;
   tables.fft.forward(re, im);
   let total = 0;
   let moment = 0;
-  for (let bin = 0; bin <= size / 2; bin++) {
+  for (let bin = 0; bin < power.length; bin++) {
     const value = re[bin] * re[bin] + im[bin] * im[bin];
     power[bin] = value;
     total += bin > 0 ? value : 0;
@@ -591,6 +611,43 @@ function measurePitchFrame(frames, row, buffer, start, length, noiseTracker) {
   noiseTracker.speech(frames.energy[row], noise, 0);
 }
 
+function setSpeech(frames, row, meanPower, periodicity, noiseTracker) {
+  const noise = noiseTracker.noiseFloor(meanPower);
+  frames.noise[row] = noise;
+  frames.speech[row] = noiseTracker.speech(
+    frames.energy[row],
+    noise,
+    periodicity
+  );
+}
+
+/** Energy and periodicity for the same speech and noise gates as full frames. */
+function measureSpeechFrame(kernel, row, buffer, start, noiseTracker) {
+  const { re, im, power, frames, tables } = kernel;
+  const { length } = kernel.settings;
+  let sum = 0;
+  for (let n = 0; n < length; n++) {
+    const value = buffer[start + n];
+    sum += value * value;
+    re[n] = value * tables.hann[n];
+  }
+  re.fill(0, length);
+  im.fill(0);
+  const meanPower = sum / length + EPSILON;
+  frames.energy[row] = 10 * Math.log10(meanPower);
+  tables.fft.forward(re, im);
+  for (let bin = 0; bin < power.length; bin++) {
+    power[bin] = re[bin] * re[bin] + im[bin] * im[bin];
+  }
+  setSpeech(
+    frames,
+    row,
+    meanPower,
+    measurePeriodicity(kernel, row),
+    noiseTracker
+  );
+}
+
 /**
  * Streaming analyzer: sound in, analysis frames out.
  *
@@ -612,7 +669,12 @@ export function createFrameAnalyzer(sampleRate, options = {}) {
   return frameAnalyzer(sampleRate, options);
 }
 
-function frameAnalyzer(sampleRate, options, onFrame, storage, pitchOnly) {
+/** Streaming frames containing the columns used for acoustic speech gating. */
+export function createSpeechAnalyzer(sampleRate, options) {
+  return frameAnalyzer(sampleRate, options, undefined, undefined, 'speech');
+}
+
+function frameAnalyzer(sampleRate, options, onFrame, storage, features) {
   const settings = frontendSettings(sampleRate, options);
   const { rate, length, half, hopSamples, capacity, sampleCapacity } = settings;
   // The buffer holds `margin` samples before `samples[0]` (zeros before the
@@ -626,18 +688,19 @@ function frameAnalyzer(sampleRate, options, onFrame, storage, pitchOnly) {
     settings,
     buffer.subarray(margin, margin + sampleCapacity),
     storage,
-    pitchOnly
+    features
   );
-  const columns = pitchOnly
-    ? [
-        [frames.energy, 1],
-        [frames.noise, 1],
-      ]
-    : frameColumns(frames);
+  const columns = frameColumns(frames, features);
+  const pitchOnly = features === 'pitch';
+  const speechOnly = features === 'speech';
   const noiseTracker = createNoiseTracker(settings.hop);
   const kernel = pitchOnly
     ? null
-    : createKernel(settings, frontendTables(settings), frames);
+    : createKernel(
+        settings,
+        speechOnly ? periodicityTables(settings) : frontendTables(settings),
+        frames
+      );
   const ratio = rate / sampleRate;
   let resampler = null;
   // Absolute positions since the last reset: `offset` frames and `base`
@@ -680,29 +743,24 @@ function frameAnalyzer(sampleRate, options, onFrame, storage, pitchOnly) {
   }
 
   /** Analyse frame `row` (relative to the trimmed start) into its rows. */
-  function analyse(row) {
+  function analyseFrame(row) {
     const start = margin + centre(offset + row) - half - base;
+    if (pitchOnly) {
+      measurePitchFrame(frames, row, buffer, start, length, noiseTracker);
+      return;
+    }
+    if (speechOnly) {
+      measureSpeechFrame(kernel, row, buffer, start, noiseTracker);
+      return;
+    }
     const meanPower = measureWaveform(kernel, row, buffer, start);
     measureSpectrum(kernel, row);
     measureMel(kernel, row);
     const periodicity = measurePeriodicity(kernel, row);
     measureLpc(kernel, row);
-    const noise = noiseTracker.noiseFloor(meanPower);
-    frames.noise[row] = noise;
-    frames.speech[row] = noiseTracker.speech(
-      frames.energy[row],
-      noise,
-      periodicity
-    );
+    setSpeech(frames, row, meanPower, periodicity, noiseTracker);
     onFrame?.(frames, row, meanPower, periodicity);
   }
-
-  function analysePitch(row) {
-    const start = margin + centre(offset + row) - half - base;
-    measurePitchFrame(frames, row, buffer, start, length, noiseTracker);
-  }
-
-  const analyseFrame = pitchOnly ? analysePitch : analyse;
 
   /** Add the frames before absolute frame `lastFrame`. */
   function addFrames(lastFrame) {
@@ -801,21 +859,21 @@ function frameAnalyzer(sampleRate, options, onFrame, storage, pitchOnly) {
  * @param {Partial<typeof FRONTEND_DEFAULTS>} [options]
  */
 export function analyzeFrames(samples, sampleRate, options = {}, storage) {
-  return analyzeRecording(samples, sampleRate, options, storage, false);
+  return analyzeRecording(samples, sampleRate, options, storage);
 }
 
 /** The default frame grid at a given hop, with the inputs of the pitch tracker. */
 export function analyzePitchFrames(samples, sampleRate, hop) {
-  return analyzeRecording(samples, sampleRate, { hop }, undefined, true);
+  return analyzeRecording(samples, sampleRate, { hop }, undefined, 'pitch');
 }
 
-function analyzeRecording(samples, sampleRate, options, storage, pitchOnly) {
+function analyzeRecording(samples, sampleRate, options, storage, features) {
   const analyzer = frameAnalyzer(
     sampleRate,
     { ...options, maxSeconds: samples.length / sampleRate },
     undefined,
     storage,
-    pitchOnly
+    features
   );
   analyzer.push(samples);
   analyzer.flush();

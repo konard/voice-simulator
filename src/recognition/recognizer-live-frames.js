@@ -1,5 +1,5 @@
 /** Acoustic timing for narrowband live word recognition. Unlicense. */
-import { createFrameAnalyzer } from './frontend.js';
+import { createFrameAnalyzer, createSpeechAnalyzer } from './frontend.js';
 import { createPitchTracker } from './pitch.js';
 
 export function createLiveFrames(
@@ -7,7 +7,8 @@ export function createLiveFrames(
   options,
   { hop = 0.01, reportPitch = true } = {}
 ) {
-  const input = createFrameAnalyzer(sampleRate, { ...options, hop });
+  const analyze = reportPitch ? createFrameAnalyzer : createSpeechAnalyzer;
+  const input = analyze(sampleRate, { ...options, hop });
   const { frames } = input;
   const pitch = createPitchTracker(frames, {
     kernels: options.kernels,

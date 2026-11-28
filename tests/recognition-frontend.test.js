@@ -24,6 +24,7 @@ import {
 import {
   analyzeFrameHops,
   analyzePitchFrames,
+  createSpeechAnalyzer,
 } from '../src/recognition/frontend.js';
 
 /** Every array of a frame set with its row width. */
@@ -112,6 +113,29 @@ it('measures the pitch inputs without building unused spectral columns', () => {
   expect(pitchOnly.noise).toEqual(full.noise);
   expect(pitchOnly.mel).toBeUndefined();
   expect(trackPitch(pitchOnly)).toEqual(trackPitch(full));
+});
+
+it('keeps the speech gate identical with compact streaming frames', () => {
+  const sampleRate = 16000;
+  const samples = whiteNoise(8001, -40, 77);
+  for (let i = 2000; i < 6200; i++) {
+    samples[i] += 0.15 * Math.sin((2 * Math.PI * 170 * i) / sampleRate);
+  }
+  const options = { rate: 8000, maxSeconds: 0.6 };
+  const full = createFrameAnalyzer(sampleRate, options);
+  const gate = createSpeechAnalyzer(sampleRate, options);
+  for (const analyzer of [full, gate]) {
+    analyzer.push(samples.subarray(0, 4000));
+    analyzer.trim(3);
+    analyzer.push(samples.subarray(4000));
+    analyzer.flush();
+  }
+  for (const column of ['energy', 'noise', 'periodicity', 'speech']) {
+    expect(gate.frames[column]).toEqual(full.frames[column]);
+  }
+  expect(gate.frames.sampleCount).toBe(full.frames.sampleCount);
+  expect(gate.frames.count).toBe(full.frames.count);
+  expect(gate.frames.mel).toBeUndefined();
 });
 
 describe('recognition front end: transforms', () => {
