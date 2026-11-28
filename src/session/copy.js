@@ -199,7 +199,9 @@ function makeScore(
   const modes = impose.modes ? recognition.modes : [];
   const duration = samples.length / sampleRate;
   const render = { tier: options.tier, seed, sampleRate: options.sampleRate };
+  let voicing;
   if (!plan) {
+    const settings = scoreRenderSettings(render, options);
     plan = planRecording(
       recognition.ipa,
       recognition.languages[0]?.language,
@@ -211,19 +213,22 @@ function makeScore(
       warnings.push(...plan.warnings);
     }
     if (impose.pitch) {
-      applyPitch(plan, samples, sampleRate, modes);
-    }
-    if (impose.loudness) {
-      matchLoudness(
+      voicing = applyPitch(
         plan,
         samples,
         sampleRate,
-        seed,
-        scoreRenderSettings(render, options)
+        modes,
+        settings.name === 'telephone'
       );
+    }
+    if (impose.loudness) {
+      matchLoudness(plan, samples, sampleRate, seed, settings);
     }
   }
   const score = toScore(plan, { ...recognition, modes }, voice);
+  if (voicing) {
+    score.voicing = voicing;
+  }
   score.planDuration = plan.duration;
   score.duration = duration;
   score.render = render;

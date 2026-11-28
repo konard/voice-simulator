@@ -45,7 +45,7 @@ export function pitchContour(measured, frameRate, fallback) {
   return smoothChannel(filtered, 0.01, frameRate);
 }
 
-export function applyPitch(plan, samples, sampleRate, modes) {
+export function applyPitch(plan, samples, sampleRate, modes, matchVoicing) {
   const { frameRate, frameCount, channels } = plan;
   const track = trackPitch(analyzeFrames(samples, sampleRate));
   const measured = Float32Array.from({ length: frameCount }, (_, i) => {
@@ -77,6 +77,17 @@ export function applyPitch(plan, samples, sampleRate, modes) {
         channels.falsetto[i]
       );
     }
+  }
+  if (matchVoicing) {
+    const gain = smoothChannel(
+      Float32Array.from(measured, (hz) => Number(hz > 0)),
+      0.005,
+      frameRate
+    );
+    for (let i = 0; i < frameCount; i++) {
+      channels.voicing[i] *= gain[i];
+    }
+    return { rate: frameRate, values: Array.from(gain) };
   }
 }
 

@@ -225,6 +225,28 @@ it('matches the measured level in the telephone renderer', () => {
   near(20 * Math.log10(level / rmsLevel(samples)), 0, 0.6);
 });
 
+it('replays measured stretches without vocal fold vibration', () => {
+  const settings = { ...getAudioTier('telephone'), seed: 1, engine: 'js' };
+  const plan = vowelWithPitch();
+  const samples = renderPlan(plan, settings);
+  samples.fill(0, 0, Math.round(0.35 * settings.sampleRate));
+
+  const voicing = applyPitch(plan, samples, settings.sampleRate, [], true);
+  const score = toScore(
+    plan,
+    { words: [], languages: [], modes: [] },
+    saveVoice(plan.head)
+  );
+  score.voicing = voicing;
+  const recorded = JSON.parse(JSON.stringify(score));
+  const track = pitchTrack(
+    renderScore(recorded, { tier: 'telephone', engine: 'js' }).samples,
+    settings.sampleRate
+  );
+  assert.equal(track.slice(4, 20).filter((hz) => hz > 0).length, 0);
+  assert.ok(track.slice(50, 75).some((hz) => hz > 0));
+});
+
 describe('copy synthesis', () => {
   it('reports copy metrics for each requested tier', () => {
     const item = {

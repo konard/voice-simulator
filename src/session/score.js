@@ -96,13 +96,16 @@ function scorePhone(ipa) {
 }
 
 function setTrack(plan, key, track) {
+  const max = key === 'voicing' ? 1 : Infinity;
   if (
     !track ||
     !Number.isFinite(track.rate) ||
     track.rate <= 0 ||
     !Array.isArray(track.values) ||
     !track.values.length ||
-    track.values.some((value) => !Number.isFinite(value) || value < 0)
+    track.values.some(
+      (value) => !Number.isFinite(value) || value < 0 || value > max
+    )
   ) {
     throw new TypeError(`Invalid score channel ${key}`);
   }
@@ -120,10 +123,17 @@ function setTrack(plan, key, track) {
       continue;
     }
     const value = sampleTrack(values, (i * track.rate) / frameRate);
-    channel[i] =
-      key === 'f0'
-        ? pitchBeforePhonation(value, channels.creak[i], channels.falsetto[i])
-        : value;
+    if (key === 'f0') {
+      channel[i] = pitchBeforePhonation(
+        value,
+        channels.creak[i],
+        channels.falsetto[i]
+      );
+    } else if (key === 'voicing') {
+      channel[i] *= value;
+    } else {
+      channel[i] = value;
+    }
   }
 }
 
@@ -171,6 +181,9 @@ export function scorePlan(score) {
   });
   setTrack(plan, 'f0', score.f0);
   setTrack(plan, 'loudness', score.loudness);
+  if (score.voicing !== undefined) {
+    setTrack(plan, 'voicing', score.voicing);
+  }
   for (const key of REFINED_CHANNELS) {
     if (score.articulation?.[key]) {
       setTrack(plan, key, score.articulation[key]);
