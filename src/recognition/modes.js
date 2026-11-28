@@ -156,7 +156,10 @@ function modeTokens(words, sourceIpa) {
       tokens.push({ kind: 'pause', symbol: ' ', strength: 0 });
     }
     for (const token of parseIpa(words[i].ipa).tokens) {
-      tokens.push(token.kind === 'pause' ? token : { ...token, word: i });
+      if (token.kind !== 'pause') {
+        token.word = i;
+      }
+      tokens.push(token);
     }
   }
   return tokens;
