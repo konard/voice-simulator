@@ -58,8 +58,8 @@ export const HMM_LOW_MULTILINGUAL_SEARCH = Object.freeze({
 /** ln p of a shipped bigram cost (the costs are 0.5 - 0.3 ln p). */
 const lnProbability = (cost) => -(cost - 0.5) / 0.3;
 
-function createWordHistory() {
-  const columns = {
+class WordHistory {
+  columns = {
     id: new Int32Array(256),
     language: new Uint8Array(256),
     before: new Uint8Array(256),
@@ -68,34 +68,31 @@ function createWordHistory() {
     end: new Int32Array(256),
     score: new Float64Array(256),
   };
-  let length = 0;
-  return {
-    columns,
-    get length() {
-      return length;
-    },
-    clear() {
-      length = 0;
-    },
-    add({ id, language, before, prev, start }, end, score) {
-      const row = length++;
-      if (row === columns.id.length) {
-        for (const [name, column] of Object.entries(columns)) {
-          const grown = new column.constructor(row * 2);
-          grown.set(column);
-          columns[name] = grown;
-        }
+  length = 0;
+
+  clear() {
+    this.length = 0;
+  }
+
+  add({ id, language, before, prev, start }, end, score) {
+    const { columns } = this;
+    const row = this.length++;
+    if (row === columns.id.length) {
+      for (const [name, column] of Object.entries(columns)) {
+        const grown = new column.constructor(row * 2);
+        grown.set(column);
+        columns[name] = grown;
       }
-      columns.id[row] = id;
-      columns.language[row] = language;
-      columns.before[row] = before;
-      columns.prev[row] = prev;
-      columns.start[row] = start;
-      columns.end[row] = end;
-      columns.score[row] = score;
-      return row;
-    },
-  };
+    }
+    columns.id[row] = id;
+    columns.language[row] = language;
+    columns.before[row] = before;
+    columns.prev[row] = prev;
+    columns.start[row] = start;
+    columns.end[row] = end;
+    columns.score[row] = score;
+    return row;
+  }
 }
 
 function transitionCache() {
@@ -465,7 +462,7 @@ function createWorkspace({ nodeCount, model, languages }) {
     entries: new Frontier(nodeCount),
     next: new Frontier(nodeCount),
     work: new Uint32Array(256),
-    records: createWordHistory(),
+    records: new WordHistory(),
     transitions: transitionCache(),
     histogram: thresholdWorkspace(languages.length),
     emission: new EmissionCache(model),
