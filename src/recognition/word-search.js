@@ -5,31 +5,52 @@ import { packWordTrie } from './word-trie.js';
 
 function searchBuffer(size) {
   const nodes = [];
-  const costs = new Float64Array(size).fill(Infinity);
-  const compare = (a, b) => costs[a] - costs[b];
+  // A beam visits only a fraction of the trie. Allocate scores as nodes enter.
+  const positions = new Uint32Array(size);
+  let scores = new Float64Array(Math.min(size, 256));
+  let used = 0;
+  function cost(node) {
+    const position = positions[node];
+    return position ? scores[position - 1] : Infinity;
+  }
+  function compare(a, b) {
+    const left = scores[positions[a] - 1];
+    const right = scores[positions[b] - 1];
+    return left < right ? -1 : Number(left > right);
+  }
   return {
     nodes,
-    costs,
+    cost,
     offer(node, cost) {
-      if (cost < costs[node]) {
-        if (costs[node] === Infinity) {
-          nodes.push(node);
+      const position = positions[node];
+      if (position) {
+        if (cost < scores[position - 1]) {
+          scores[position - 1] = cost;
         }
-        costs[node] = cost;
+      } else if (cost < Infinity) {
+        if (used === scores.length) {
+          const grown = new Float64Array(Math.max(1, scores.length * 2));
+          grown.set(scores);
+          scores = grown;
+        }
+        scores[used++] = cost;
+        positions[node] = used;
+        nodes.push(node);
       }
     },
     prune(beam) {
       // Stable sort preserves the original traversal order on ties.
       nodes.sort(compare);
       while (nodes.length > beam) {
-        costs[nodes.pop()] = Infinity;
+        positions[nodes.pop()] = 0;
       }
     },
     clear() {
       for (const node of nodes) {
-        costs[node] = Infinity;
+        positions[node] = 0;
       }
       nodes.length = 0;
+      used = 0;
     },
   };
 }
@@ -42,14 +63,14 @@ function insertions(table, states, next, frontier, limit, beam) {
   while (frontier.length) {
     next.clear();
     for (const node of states.nodes) {
-      next.offer(node, states.costs[node]);
+      next.offer(node, states.cost(node));
     }
     const cutoff =
       states.nodes.length === beam
-        ? states.costs[states.nodes[beam - 1]]
+        ? states.cost(states.nodes[beam - 1])
         : Infinity;
     for (const node of frontier) {
-      const cost = states.costs[node];
+      const cost = states.cost(node);
       for (let i = table.offsets[node]; i < table.offsets[node + 1]; i++) {
         const child = i + 1;
         const score = cost + table.tokenGaps[table.feature[child]];
@@ -61,7 +82,7 @@ function insertions(table, states, next, frontier, limit, beam) {
     next.prune(beam);
     frontier.length = 0;
     for (const node of next.nodes) {
-      if (next.costs[node] < states.costs[node]) {
+      if (next.cost(node) < states.cost(node)) {
         frontier.push(node);
       }
     }
@@ -85,7 +106,7 @@ function search(table, { distances, stride }, from, end, beam, scratch) {
     next.clear();
     const row = index * stride;
     for (const node of states.nodes) {
-      const cost = states.costs[node];
+      const cost = states.cost(node);
       const deletion = cost + distances[row];
       if (deletion <= limit) {
         next.offer(node, deletion);
@@ -102,7 +123,7 @@ function search(table, { distances, stride }, from, end, beam, scratch) {
     states = insertions(table, next, states, frontier, limit, beam);
     for (const node of states.nodes) {
       if (table.terminal[node]) {
-        result.push(index - from + 1, node, states.costs[node]);
+        result.push(index - from + 1, node, states.cost(node));
       }
     }
   }
