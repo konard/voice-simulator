@@ -1,7 +1,7 @@
 {
   "version": 1,
-  "measured": "2026-11-28T05:09:50.705Z",
-  "commit": "c795e5488c52621b35160a68c02d036408cc8af1",
+  "measured": "2026-11-28T05:39:43.674Z",
+  "commit": "484193918016566a8e24f60257ae9312ca8db0fd",
   "command": "node scripts/run-heavy.mjs --suite lowest",
   "cpu": "Intel(R) Xeon(R) 6975P-C",
   "node": "v24.22.3",
@@ -128,16 +128,16 @@
         "row": "synthesis",
         "engine": "js",
         "metrics": {
-          "wer": 0.3657,
-          "wer16k": 0.3624,
-          "werIncrease": 0.0033,
-          "rtf": 0.0214,
-          "recognitionRtf": 0.1564,
+          "wer": 0.3603,
+          "wer16k": 0.3581,
+          "werIncrease": 0.0022,
+          "rtf": 0.0216,
+          "recognitionRtf": 0.1573,
           "utterances": 160
         },
-        "seconds": 8.382,
+        "seconds": 8.454,
         "audioSeconds": 391.707,
-        "peakRssMb": 363.53515625,
+        "peakRssMb": 370.02734375,
         "capped": {
           "heapLimitMb": 192
         }
@@ -146,14 +146,14 @@
         "row": "synthesis",
         "engine": "rust",
         "metrics": {
-          "wer": 0.3657,
-          "rtf": 0.0163,
-          "recognitionRtf": 0.1441,
+          "wer": 0.3603,
+          "rtf": 0.0166,
+          "recognitionRtf": 0.1478,
           "utterances": 160
         },
-        "seconds": 6.368,
+        "seconds": 6.51,
         "audioSeconds": 391.707,
-        "peakRssMb": 262.12109375,
+        "peakRssMb": 328.3203125,
         "capped": {
           "heapLimitMb": 192
         }
@@ -164,18 +164,18 @@
         "row": "recognition",
         "engine": "js",
         "metrics": {
-          "per": 0.8787,
-          "wer": 1.2218,
-          "per16k": 0.8664,
-          "wer16k": 1.2983,
-          "perIncrease": 0.0122,
-          "werIncrease": -0.0766,
-          "rtf": 0.0817,
+          "per": 0.8782,
+          "wer": 1.2264,
+          "per16k": 0.8656,
+          "wer16k": 1.2996,
+          "perIncrease": 0.0125,
+          "werIncrease": -0.0732,
+          "rtf": 0.0818,
           "utterances": 127
         },
-        "seconds": 87.531,
+        "seconds": 87.639,
         "audioSeconds": 1071.807,
-        "peakRssMb": 393.08203125,
+        "peakRssMb": 392.86328125,
         "capped": {
           "heapLimitMb": 192
         }
@@ -184,14 +184,14 @@
         "row": "recognition",
         "engine": "rust",
         "metrics": {
-          "per": 0.8787,
-          "wer": 1.2218,
-          "rtf": 0.0765,
+          "per": 0.8782,
+          "wer": 1.2264,
+          "rtf": 0.0775,
           "utterances": 127
         },
-        "seconds": 81.952,
+        "seconds": 83.11,
         "audioSeconds": 1071.807,
-        "peakRssMb": 341.609375,
+        "peakRssMb": 344.17578125,
         "capped": {
           "heapLimitMb": 192
         }
@@ -203,17 +203,17 @@
         "engine": "js",
         "metrics": {
           "textMismatch": 0,
-          "firstPartial": 0.2595,
-          "load": 0.0837,
+          "firstPartial": 0.2694,
+          "load": 0.088,
           "partials": 240,
-          "streamText": "The quick brown fox jump sober the lady dog. She says she cells by the sea shore. Did you measure at resins s today. Wide oz the long judge and all choozhermsheeptaw is. What a beautiful morning? Thick fog mayo are the suit have. A usually think about their father and mother. Of our js its aid around then that moon. Are the children playing outside now? Peas bring mia cup of hot to the, some medal the book. How far is the nearest hospital? The singer was ringing award as. I want to the called and lettered today. Cartoon of that your air was sure to lend. Stored. He could not hear the boys voice clearly. The will visit was one thursday. Is this are ten or nine? The photographer to ka photograph of the banana pre. The.",
-          "batchText": "The quick brown fox jump sober the lady dog. She says she cells by the sea shore. Did you measure at resins s today. Wide oz the long judge and all choozhermsheeptaw is. What a beautiful morning? Thick fog mayo are the suit have. A usually think about their father and mother. Of our js its aid around then that moon. Are the children playing outside now? Peas bring mia cup of hot to the, some medal the book. How far is the nearest hospital? The singer was ringing award as. I want to the called and lettered today. Cartoon of that your air was sure to lend. Stored. He could not hear the boys voice clearly. The will visit was one thursday. Is this are ten or nine? The photographer to ka photograph of the banana pre. The.",
+          "streamText": "The quick brown fox jumps over the lady dog. She says she cells by the sea shore. Did you measure at resins s today. Wide oz the long judge and all choozhermsheeptaw is. What a beautiful morning? Thick fog mayo are the suit have. A usually think about their father and mother. Of our js its aid around then that moon. Are the children playing outside now? Peas bring mia cup of hot to the, some medal the book. How far is the nearest hospital? The singer was ringing award as. I want to the called and lettered today. Cartoon of that your air was sure to lend. Stored. He could not hear the boys voice clearly. The will visit was one thursday. Is this are ten or nine? The photographer to ka photograph of the banana pre. The.",
+          "batchText": "The quick brown fox jumps over the lady dog. She says she cells by the sea shore. Did you measure at resins s today. Wide oz the long judge and all choozhermsheeptaw is. What a beautiful morning? Thick fog mayo are the suit have. A usually think about their father and mother. Of our js its aid around then that moon. Are the children playing outside now? Peas bring mia cup of hot to the, some medal the book. How far is the nearest hospital? The singer was ringing award as. I want to the called and lettered today. Cartoon of that your air was sure to lend. Stored. He could not hear the boys voice clearly. The will visit was one thursday. Is this are ten or nine? The photographer to ka photograph of the banana pre. The.",
           "batchLastWord": 59.9875,
           "wholeInputLastWord": 59.9875
         },
-        "seconds": 5.021,
+        "seconds": 5.28,
         "audioSeconds": 60,
-        "peakRssMb": 216.1953125,
+        "peakRssMb": 207.47265625,
         "capped": {
           "heapLimitMb": 192
         }
@@ -223,17 +223,17 @@
         "engine": "rust",
         "metrics": {
           "textMismatch": 0,
-          "firstPartial": 0.2577,
-          "load": 0.0695,
+          "firstPartial": 0.2576,
+          "load": 0.071,
           "partials": 240,
-          "streamText": "The quick brown fox jump sober the lady dog. She says she cells by the sea shore. Did you measure at resins s today. Wide oz the long judge and all choozhermsheeptaw is. What a beautiful morning? Thick fog mayo are the suit have. A usually think about their father and mother. Of our js its aid around then that moon. Are the children playing outside now? Peas bring mia cup of hot to the, some medal the book. How far is the nearest hospital? The singer was ringing award as. I want to the called and lettered today. Cartoon of that your air was sure to lend. Stored. He could not hear the boys voice clearly. The will visit was one thursday. Is this are ten or nine? The photographer to ka photograph of the banana pre. The.",
-          "batchText": "The quick brown fox jump sober the lady dog. She says she cells by the sea shore. Did you measure at resins s today. Wide oz the long judge and all choozhermsheeptaw is. What a beautiful morning? Thick fog mayo are the suit have. A usually think about their father and mother. Of our js its aid around then that moon. Are the children playing outside now? Peas bring mia cup of hot to the, some medal the book. How far is the nearest hospital? The singer was ringing award as. I want to the called and lettered today. Cartoon of that your air was sure to lend. Stored. He could not hear the boys voice clearly. The will visit was one thursday. Is this are ten or nine? The photographer to ka photograph of the banana pre. The.",
+          "streamText": "The quick brown fox jumps over the lady dog. She says she cells by the sea shore. Did you measure at resins s today. Wide oz the long judge and all choozhermsheeptaw is. What a beautiful morning? Thick fog mayo are the suit have. A usually think about their father and mother. Of our js its aid around then that moon. Are the children playing outside now? Peas bring mia cup of hot to the, some medal the book. How far is the nearest hospital? The singer was ringing award as. I want to the called and lettered today. Cartoon of that your air was sure to lend. Stored. He could not hear the boys voice clearly. The will visit was one thursday. Is this are ten or nine? The photographer to ka photograph of the banana pre. The.",
+          "batchText": "The quick brown fox jumps over the lady dog. She says she cells by the sea shore. Did you measure at resins s today. Wide oz the long judge and all choozhermsheeptaw is. What a beautiful morning? Thick fog mayo are the suit have. A usually think about their father and mother. Of our js its aid around then that moon. Are the children playing outside now? Peas bring mia cup of hot to the, some medal the book. How far is the nearest hospital? The singer was ringing award as. I want to the called and lettered today. Cartoon of that your air was sure to lend. Stored. He could not hear the boys voice clearly. The will visit was one thursday. Is this are ten or nine? The photographer to ka photograph of the banana pre. The.",
           "batchLastWord": 59.9875,
           "wholeInputLastWord": 59.9875
         },
-        "seconds": 4.169,
+        "seconds": 4.261,
         "audioSeconds": 60,
-        "peakRssMb": 209.3828125,
+        "peakRssMb": 203.375,
         "capped": {
           "heapLimitMb": 192
         }
@@ -246,11 +246,11 @@
         "metrics": {
           "vocalTractLengthError": 0.0275,
           "pitchError": 0.0214,
-          "cpuRatio": 0.1736
+          "cpuRatio": 0.1732
         },
-        "seconds": 5.208,
+        "seconds": 5.197,
         "audioSeconds": 30,
-        "peakRssMb": 200.60546875,
+        "peakRssMb": 197.91796875,
         "capped": {
           "heapLimitMb": 192
         }
@@ -261,11 +261,11 @@
         "metrics": {
           "vocalTractLengthError": 0.0275,
           "pitchError": 0.0214,
-          "cpuRatio": 0.165
+          "cpuRatio": 0.1671
         },
-        "seconds": 4.95,
+        "seconds": 5.014,
         "audioSeconds": 30,
-        "peakRssMb": 199.66015625,
+        "peakRssMb": 199.0703125,
         "capped": {
           "heapLimitMb": 192
         }
@@ -277,34 +277,36 @@
         "engine": "js",
         "metrics": {
           "stable": 1,
-          "vocalTractLengthError": 0.0197,
+          "vocalTractLengthError": 0.019,
           "pitchError": 0.0112,
-          "cpuRatio": 0.0945
+          "cpuRatio": 0.0985
         },
         "cases": [
           {
             "preset": "male",
-            "stableAt": 6.52,
-            "state": "refining",
-            "seconds": 2.7616,
+            "stableAt": 11.04,
+            "state": "stable",
+            "seconds": 2.7977,
             "words": 53,
             "distances": [
               0,
               0,
               0.0375,
-              0.0092,
-              0.0092,
-              0.0598,
-              0.0467
+              0.0272,
+              0.0272,
+              0,
+              0.0472,
+              0.0096,
+              0.0095
             ],
-            "vocalTractLengthError": 0.0197,
-            "pitchError": 0.0055
+            "vocalTractLengthError": 0.019,
+            "pitchError": 0.0085
           },
           {
             "preset": "female",
-            "stableAt": 4.5,
+            "stableAt": 4.52,
             "state": "stable",
-            "seconds": 1.5707,
+            "seconds": 1.664,
             "words": 54,
             "distances": [
               0,
@@ -312,14 +314,14 @@
               0.0122,
               0
             ],
-            "vocalTractLengthError": 0.0139,
-            "pitchError": 0.009
+            "vocalTractLengthError": 0.0141,
+            "pitchError": 0.0105
           },
           {
             "preset": "child",
             "stableAt": 7,
             "state": "stable",
-            "seconds": 1.3372,
+            "seconds": 1.449,
             "words": 50,
             "distances": [
               0,
@@ -333,9 +335,9 @@
             "pitchError": 0.0112
           }
         ],
-        "seconds": 5.67,
+        "seconds": 5.911,
         "audioSeconds": 60,
-        "peakRssMb": 201.4296875,
+        "peakRssMb": 200.6875,
         "capped": {
           "heapLimitMb": 192
         }
@@ -347,14 +349,14 @@
           "stable": 1,
           "vocalTractLengthError": 0.0188,
           "pitchError": 0.0112,
-          "cpuRatio": 0.0873
+          "cpuRatio": 0.0926
         },
         "cases": [
           {
             "preset": "male",
             "stableAt": 6.5,
             "state": "refining",
-            "seconds": 2.2753,
+            "seconds": 2.3948,
             "words": 53,
             "distances": [
               0,
@@ -373,7 +375,7 @@
             "preset": "female",
             "stableAt": 4.5,
             "state": "stable",
-            "seconds": 1.5007,
+            "seconds": 1.5549,
             "words": 54,
             "distances": [
               0,
@@ -388,7 +390,7 @@
             "preset": "child",
             "stableAt": 7,
             "state": "stable",
-            "seconds": 1.4606,
+            "seconds": 1.6054,
             "words": 50,
             "distances": [
               0,
@@ -402,9 +404,9 @@
             "pitchError": 0.0112
           }
         ],
-        "seconds": 5.237,
+        "seconds": 5.555,
         "audioSeconds": 60,
-        "peakRssMb": 205.53515625,
+        "peakRssMb": 206,
         "capped": {
           "heapLimitMb": 192
         }
@@ -417,15 +419,15 @@
         "metrics": {
           "f0RmseSemitones": 4.7335,
           "timingErrorMs": 305.2,
-          "phonemeAgreement": 0.3612,
+          "phonemeAgreement": 0.3628,
           "maxF0RmseSemitones": 8.7262,
           "maxTimingErrorMs": 1122.5,
-          "cpuRatio": 1.1522,
+          "cpuRatio": 1.1383,
           "recordings": 24
         },
-        "seconds": 128.792,
+        "seconds": 127.24,
         "audioSeconds": 111.78,
-        "peakRssMb": 384.7734375,
+        "peakRssMb": 380.5078125,
         "capped": {
           "heapLimitMb": 192
         }
@@ -436,15 +438,15 @@
         "metrics": {
           "f0RmseSemitones": 4.7335,
           "timingErrorMs": 305.2,
-          "phonemeAgreement": 0.3612,
+          "phonemeAgreement": 0.3628,
           "maxF0RmseSemitones": 8.7262,
           "maxTimingErrorMs": 1122.5,
-          "cpuRatio": 0.8258,
+          "cpuRatio": 0.8289,
           "recordings": 24
         },
-        "seconds": 92.313,
+        "seconds": 92.65,
         "audioSeconds": 111.78,
-        "peakRssMb": 390.33203125,
+        "peakRssMb": 383.2890625,
         "capped": {
           "heapLimitMb": 192
         }
@@ -456,8 +458,8 @@
         "engine": "js",
         "metrics": {
           "modeShare": 0.9167,
-          "rtf": 0.0989,
-          "renderRtf": 0.023,
+          "rtf": 0.1013,
+          "renderRtf": 0.0234,
           "utterances": 60,
           "missed": [
             "en:pp",
@@ -467,9 +469,9 @@
             "zh:F"
           ]
         },
-        "seconds": 10.816,
+        "seconds": 11.086,
         "audioSeconds": 109.405,
-        "peakRssMb": 236.70703125,
+        "peakRssMb": 235.421875,
         "capped": {
           "heapLimitMb": 192
         }
@@ -479,8 +481,8 @@
         "engine": "rust",
         "metrics": {
           "modeShare": 0.9167,
-          "rtf": 0.0903,
-          "renderRtf": 0.018,
+          "rtf": 0.0898,
+          "renderRtf": 0.0175,
           "utterances": 60,
           "missed": [
             "en:pp",
@@ -490,9 +492,9 @@
             "zh:F"
           ]
         },
-        "seconds": 9.884,
+        "seconds": 9.828,
         "audioSeconds": 109.405,
-        "peakRssMb": 239.3203125,
+        "peakRssMb": 241.05078125,
         "capped": {
           "heapLimitMb": 192
         }
@@ -504,12 +506,12 @@
         "engine": "js",
         "metrics": {
           "textBack": 1,
-          "workerRtf": 0.1725,
-          "workerRtfMeasured": 0.0287,
-          "firstSound": 0.556,
-          "firstChunk": 0.556,
-          "coldFirstSound": 2.469,
-          "startDelay": 0.553,
+          "workerRtf": 0.0943,
+          "workerRtfMeasured": 0.0157,
+          "firstSound": 0.247,
+          "firstChunk": 0.247,
+          "coldFirstSound": 0.787,
+          "startDelay": 0.247,
           "sampleRate": 8000,
           "chunks": 89,
           "heard": "The quick brown fox jumps over the lazy dog. She sells sea shells by the sea shore. We measure the treasure every morning before the sun comes up over the quiet hills."
@@ -526,23 +528,22 @@
             "at": 0
           },
           {
-            "worker": "synth-worker-Coe86Md6.js",
+            "worker": "synth-worker-Bkcfovbf.js",
             "type": "speak",
-            "at": 0.163
+            "at": 0.114
           },
           {
-            "worker": "synth-worker-Coe86Md6.js",
+            "worker": "synth-worker-Bkcfovbf.js",
             "type": "start",
-            "at": 0.553
+            "at": 0.247
           },
           {
-            "worker": "synth-worker-Coe86Md6.js",
+            "worker": "synth-worker-Bkcfovbf.js",
             "type": "end",
-            "at": 8.827
+            "at": 3.412
           }
         ],
-        "benchmarkWait": 0.103,
-        "capped": {}
+        "benchmarkWait": 0.098
       }
     }
   },
@@ -553,7 +554,7 @@
         "status": "certified",
         "metrics": {
           "werIncrease": {
-            "value": 0.0033,
+            "value": 0.0022,
             "limit": 0.05,
             "pass": true
           }
@@ -563,7 +564,7 @@
         "status": "certified",
         "metrics": {
           "rtf": {
-            "value": 0.0214,
+            "value": 0.0216,
             "limit": 0.25,
             "pass": true
           }
@@ -573,7 +574,7 @@
         "status": "certified",
         "metrics": {
           "rtf": {
-            "value": 0.0163,
+            "value": 0.0166,
             "limit": 0.25,
             "pass": true
           }
@@ -583,7 +584,7 @@
         "status": "failed",
         "metrics": {
           "peakRssMb": {
-            "value": 363.53515625,
+            "value": 370.02734375,
             "limit": 256,
             "pass": false
           }
@@ -596,12 +597,12 @@
         "status": "certified",
         "metrics": {
           "perIncrease": {
-            "value": 0.0122,
+            "value": 0.0125,
             "limit": 0.05,
             "pass": true
           },
           "werIncrease": {
-            "value": -0.0766,
+            "value": -0.0732,
             "limit": 0.08,
             "pass": true
           }
@@ -611,7 +612,7 @@
         "status": "certified",
         "metrics": {
           "rtf": {
-            "value": 0.0817,
+            "value": 0.0818,
             "limit": 0.25,
             "pass": true
           }
@@ -621,7 +622,7 @@
         "status": "certified",
         "metrics": {
           "rtf": {
-            "value": 0.0765,
+            "value": 0.0775,
             "limit": 0.25,
             "pass": true
           }
@@ -631,7 +632,7 @@
         "status": "failed",
         "metrics": {
           "peakRssMb": {
-            "value": 393.08203125,
+            "value": 392.86328125,
             "limit": 256,
             "pass": false
           }
@@ -654,12 +655,12 @@
         "status": "certified",
         "metrics": {
           "firstPartial": {
-            "value": 0.2595,
+            "value": 0.2694,
             "limit": 1,
             "pass": true
           },
           "load": {
-            "value": 0.0837,
+            "value": 0.088,
             "limit": 0.25,
             "pass": true
           }
@@ -669,12 +670,12 @@
         "status": "certified",
         "metrics": {
           "firstPartial": {
-            "value": 0.2577,
+            "value": 0.2576,
             "limit": 1,
             "pass": true
           },
           "load": {
-            "value": 0.0695,
+            "value": 0.071,
             "limit": 0.25,
             "pass": true
           }
@@ -684,7 +685,7 @@
         "status": "certified",
         "metrics": {
           "peakRssMb": {
-            "value": 216.1953125,
+            "value": 207.47265625,
             "limit": 256,
             "pass": true
           }
@@ -711,7 +712,7 @@
         "status": "certified",
         "metrics": {
           "cpuRatio": {
-            "value": 0.1736,
+            "value": 0.1732,
             "limit": 1,
             "pass": true
           }
@@ -721,7 +722,7 @@
         "status": "certified",
         "metrics": {
           "cpuRatio": {
-            "value": 0.165,
+            "value": 0.1671,
             "limit": 1,
             "pass": true
           }
@@ -731,7 +732,7 @@
         "status": "certified",
         "metrics": {
           "peakRssMb": {
-            "value": 200.60546875,
+            "value": 199.0703125,
             "limit": 256,
             "pass": true
           }
@@ -748,7 +749,7 @@
             "pass": true
           },
           "vocalTractLengthError": {
-            "value": 0.0197,
+            "value": 0.019,
             "limit": 0.05,
             "pass": true
           },
@@ -763,7 +764,7 @@
         "status": "certified",
         "metrics": {
           "cpuRatio": {
-            "value": 0.0945,
+            "value": 0.0985,
             "limit": 0.5,
             "pass": true
           }
@@ -773,7 +774,7 @@
         "status": "certified",
         "metrics": {
           "cpuRatio": {
-            "value": 0.0873,
+            "value": 0.0926,
             "limit": 0.5,
             "pass": true
           }
@@ -783,7 +784,7 @@
         "status": "certified",
         "metrics": {
           "peakRssMb": {
-            "value": 205.53515625,
+            "value": 206,
             "limit": 256,
             "pass": true
           }
@@ -805,7 +806,7 @@
             "pass": false
           },
           "phonemeAgreement": {
-            "value": 0.3612,
+            "value": 0.3628,
             "limit": 0.9,
             "pass": false
           }
@@ -814,19 +815,19 @@
       },
       "js-1": {
         "status": "certified",
-        "reason": "reported, no limit: CPU time / audio time 1.1522",
+        "reason": "reported, no limit: CPU time / audio time 1.1383",
         "metrics": {}
       },
       "rust-1": {
         "status": "certified",
-        "reason": "reported, no limit: CPU time / audio time 0.8258",
+        "reason": "reported, no limit: CPU time / audio time 0.8289",
         "metrics": {}
       },
       "memory": {
         "status": "failed",
         "metrics": {
           "peakRssMb": {
-            "value": 390.33203125,
+            "value": 383.2890625,
             "limit": 256,
             "pass": false
           }
@@ -849,7 +850,7 @@
         "status": "certified",
         "metrics": {
           "rtf": {
-            "value": 0.0989,
+            "value": 0.1013,
             "limit": 0.25,
             "pass": true
           }
@@ -859,7 +860,7 @@
         "status": "certified",
         "metrics": {
           "rtf": {
-            "value": 0.0903,
+            "value": 0.0898,
             "limit": 0.25,
             "pass": true
           }
@@ -869,7 +870,7 @@
         "status": "certified",
         "metrics": {
           "peakRssMb": {
-            "value": 239.3203125,
+            "value": 241.05078125,
             "limit": 256,
             "pass": true
           }
@@ -891,29 +892,17 @@
         "status": "certified",
         "metrics": {
           "workerRtf": {
-            "value": 0.1725,
+            "value": 0.0943,
             "limit": 1,
             "pass": true
           },
           "firstSound": {
-            "value": 0.556,
+            "value": 0.247,
             "limit": 1,
             "pass": true
           }
         }
       }
-    }
-  },
-  "rowMeasurements": {
-    "app": {
-      "measured": "2026-11-28T04:52:43.717Z",
-      "commit": "ceb7085c91e331715122f5391f7de84ae1ad5078",
-      "command": "UV_THREADPOOL_SIZE=1 taskset -c 0 node --max-old-space-size=192 scripts/check-app-lowest.mjs --skip-build --core 0 --out reports/heavy",
-      "cpu": "Intel(R) Xeon(R) 6975P-C",
-      "node": "v24.22.3",
-      "pinned": true,
-      "core": 0,
-      "limit": null
     }
   }
 }
