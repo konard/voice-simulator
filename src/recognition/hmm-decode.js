@@ -79,7 +79,7 @@ function toneCache(tone, feats, weight) {
       for (let k = 0; k < states; k++) {
         const s = stateOfKey[k];
         if (s >= 0) {
-          scores[k] = stateScore(k, feats, t * tone.dims, tone);
+          stateScore(k, feats, t * tone.dims, tone, scores);
           peak[s] = Math.max(peak[s], scores[k]);
         }
       }
@@ -120,7 +120,7 @@ function emissionCache(
   const ofTone = model.tone?.ofState;
   function evaluate(m, t) {
     stamp[m] = t;
-    value[m] = stateScore(m, feats, t * model.dims, model);
+    stateScore(m, feats, t * model.dims, model, value);
     if (toneScore) {
       value[m] += toneScore(ofTone[m], t);
     }

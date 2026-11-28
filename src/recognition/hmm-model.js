@@ -132,8 +132,8 @@ export function getHmmModel() {
   return model;
 }
 
-/** Log likelihood of frame x (offset in feats) for state m. */
-export function stateScore(m, feats, offset, model) {
+/** Log likelihood of a frame for state m, optionally written to scores[m]. */
+export function stateScore(m, feats, offset, model, scores) {
   const { first, mu, inv, norm, dims } = model;
   let max = -Infinity;
   let sum = 0;
@@ -151,7 +151,12 @@ export function stateScore(m, feats, offset, model) {
       sum += Math.exp(s - max);
     }
   }
-  return max + Math.log(sum);
+  const score = max + Math.log(sum);
+  if (scores) {
+    scores[m] = score;
+  } else {
+    return score;
+  }
 }
 
 const PLACE = {
