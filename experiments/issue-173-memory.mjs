@@ -63,7 +63,14 @@ function render(text, head) {
   }).samples;
 }
 if (
-  ['streaming', 'copy', 'modes-row', 'session', 'recognition'].includes(mode)
+  [
+    'streaming',
+    'copy',
+    'modes-row',
+    'session',
+    'recognition',
+    'synthesis',
+  ].includes(mode)
 ) {
   const loaded = await loadEngine(engine);
   if (loaded.unavailable) {

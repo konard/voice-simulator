@@ -134,7 +134,7 @@ function speech(head, seconds) {
 }
 
 /** Synthesis on the round-trip sentences of issue 75. */
-function synthesisRow({ engine, limit, baseline }) {
+function synthesisRow({ engine, limit, baseline, profile }) {
   // Twenty sentences per language and preset; --limit caps the utterances.
   const cases = [];
   for (let index = 0; index < 20; index++) {
@@ -164,6 +164,7 @@ function synthesisRow({ engine, limit, baseline }) {
       );
       recognitionSeconds += recognitionCpu;
       errors.push(lang === 'zh' ? result.cer : result.wer);
+      profile?.(`Synthesis ${tier} ${lang} ${preset} ${errors.length}`);
     }
     return { wer: pooled(errors), seconds, recognitionSeconds, audioSeconds };
   };
