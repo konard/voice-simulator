@@ -75,14 +75,16 @@ function analyzeWordSignal(samples, sampleRate, head, analyzed, options) {
         maxSeconds: Math.max(0.1, seconds + 0.05),
       })
     );
-  const pitch = measure(profile, 'Pitch', () =>
-    trackPitch(frames, { minF0: 35, maxF0: 800, kernels })
-  );
+  const pitch =
+    options.pitch ??
+    measure(profile, 'Pitch', () =>
+      trackPitch(frames, { minF0: 35, maxF0: 800, kernels })
+    );
   const track = options.reuseFormantCandidates
     ? trackBatchFormants
     : trackFormants;
   const formants =
-    options.measureFormants === false
+    options.skipFormants || options.measureFormants === false
       ? null
       : measure(profile, 'Formants', () =>
           track(frames, {
@@ -134,7 +136,13 @@ export function measureWords(
     }))
   );
   const source = measure(options.profile, 'Inverse filter', () =>
-    measureModeSource(frames, pitch, selected, options.kernels)
+    measureModeSource(
+      frames,
+      pitch,
+      selected,
+      options.kernels,
+      options.skipFormants ? 0.02 : undefined
+    )
   );
   const pulses = glottalPeriods(samples, sampleRate);
   const peakLevel = quantile(frames.energy.subarray(0, frames.count), 0.9);

@@ -8,7 +8,7 @@ import {
   block,
   hann,
   highPass,
-  iaif,
+  createIaif,
   correlationPlan,
   harmonics,
   cppPlan,
@@ -58,32 +58,41 @@ function lfModels() {
   models ??= Array.from({ length: 38 }, (_, i) => {
     const tenseness = 0.1 + i * 0.02;
     const pulse = lfParameters(tenseness);
+    const levels = lfHarmonics(tenseness);
+    const means = levels.map((_, index) => {
+      const count = index + 1;
+      let mean = 0;
+      for (let k = 0; k < count; k++) {
+        mean += levels[k] / count;
+      }
+      return mean;
+    });
     return {
       rd: 3 * (1 - tenseness),
       oq: Math.min(1, pulse.te + pulse.ta),
-      levels: lfHarmonics(tenseness),
+      levels,
+      means,
     };
   });
   return models;
 }
 function fitPulse(h) {
   const mean = h.reduce((a, b) => a + b, 0) / h.length;
-  let best = { fit: Infinity };
+  let fitted;
+  let fit = Infinity;
   for (const model of lfModels()) {
-    let m = 0;
-    for (let k = 0; k < h.length; k++) {
-      m += model.levels[k] / h.length;
-    }
+    const m = model.means[h.length - 1];
     let error = 0;
     for (let k = 0; k < h.length; k++) {
       error += (h[k] - mean - (model.levels[k] - m)) ** 2;
     }
     error = Math.sqrt(error / h.length);
-    if (error < best.fit) {
-      best = { ...model, fit: error };
+    if (error < fit) {
+      fit = error;
+      fitted = model;
     }
   }
-  return best;
+  return { rd: fitted?.rd, oq: fitted?.oq, fit };
 }
 function localPitch(frames, o) {
   const f0 = new Float32Array(frames.count);
@@ -128,6 +137,20 @@ function localPitch(frames, o) {
     return values[Math.floor(values.length / 2)];
   });
 }
+function recoveryPlan(length, history, o) {
+  const window = hann(length);
+  const extended = new Float64Array(history + length);
+  const extendedWindow = new Float64Array(extended.length);
+  extendedWindow.set(window, history);
+  const extract = createIaif(
+    extendedWindow,
+    o.tractOrder,
+    o.glottisOrder,
+    o.leak
+  );
+  return { window, extended, extract };
+}
+
 function recover(frames, f0, o) {
   const x = highPass(
     frames.samples.subarray(0, frames.sampleCount),
@@ -136,7 +159,8 @@ function recover(frames, f0, o) {
   const d = new Float64Array(x.length);
   const g = new Float64Array(x.length);
   const weight = new Float64Array(x.length);
-  const windows = new Map();
+  const history = Math.round(0.05 * frames.rate);
+  let plan;
   for (let time = 0; time < x.length / frames.rate; time += o.step) {
     const row = Math.min(f0.length - 1, Math.round(time / frames.hop));
     if (!(f0[row] > 0)) {
@@ -144,25 +168,15 @@ function recover(frames, f0, o) {
     }
     const centre = Math.round(time * frames.rate);
     const length = Math.round(Math.max(0.032, 2.5 / f0[row]) * frames.rate);
-    if (!windows.has(length)) {
-      windows.set(length, hann(length));
+    if (plan?.window.length !== length) {
+      plan = recoveryPlan(length, history, o);
     }
-    const window = windows.get(length);
-    const history = Math.round(0.05 * frames.rate);
-    const extendedWindow = new Float64Array(history + length);
-    extendedWindow.set(window, history);
-    const extended = Float64Array.from(
-      { length: history + length },
-      (_, n) => x[centre - Math.floor(length / 2) - history + n] ?? 0
-    );
-    const pulse = iaif(
-      extended,
-      extendedWindow,
-      o.tractOrder,
-      o.glottisOrder,
-      o.leak
-    );
     const start = centre - Math.floor(length / 2);
+    const { window, extended, extract } = plan;
+    for (let n = 0; n < extended.length; n++) {
+      extended[n] = x[start - history + n] ?? 0;
+    }
+    const pulse = extract(extended);
     for (let n = 0; n < length; n++) {
       const index = start + n;
       if (index >= 0 && index < x.length) {
@@ -403,8 +417,14 @@ export function inverseFilter(frames, options = {}) {
 }
 
 /** The mode classifier reads only these measurements at vowel nuclei. */
-export function measureModeSource(frames, pitch, rows, kernels) {
-  const options = { pitch, minF0: 35, maxF0: 800, kernels };
+export function measureModeSource(frames, pitch, rows, kernels, step) {
+  const options = {
+    pitch,
+    minF0: 35,
+    maxF0: 800,
+    kernels,
+    ...(step !== undefined && { step }),
+  };
   if (kernels?.module) {
     return inverseFilter(frames, options);
   }
@@ -416,12 +436,12 @@ export function measureModeSource(frames, pitch, rows, kernels) {
 }
 
 function measurePulse(result, t, frame, f0, source, harmonicsAtF0) {
-  const { samples, flow, rate, centre, length, period, maxF0 } = frame;
+  const { samples, flow, rate, centre, length, period, maxF0, window } = frame;
   const fit = fitPulse(harmonicsAtF0);
   result.rd[t] = fit.rd;
   result.oq[t] = fit.oq;
   result.fit[t] = fit.fit;
-  const speech = harmonics(block(samples, centre, length), rate, f0, 2);
+  const speech = harmonics(block(samples, centre, length), rate, f0, 2, window);
   result.h1h2[t] = speech[0] - speech[1];
   const g = block(flow, centre, length);
   let lo = Infinity;
@@ -440,7 +460,13 @@ function measureSourceRows(frames, o, result, modeRows) {
   const { rate, hop, count, samples } = frames;
   const { flow, flowDerivative: derivative, f0 } = result;
   const cpp = cppPlan(rate, o.minF0, o.maxF0);
-  const correlations = new Map();
+  const windows = new Map();
+  const windowOf = (length) => {
+    if (!windows.has(length)) {
+      windows.set(length, hann(length));
+    }
+    return windows.get(length);
+  };
   for (let t = 0; t < count; t++) {
     if (!f0[t] || (modeRows && !modeRows[t])) {
       continue;
@@ -449,12 +475,14 @@ function measureSourceRows(frames, o, result, modeRows) {
     const period = rate / f0[t];
     const length = Math.round(2 * period);
     if (derivative) {
+      const window = windowOf(length);
       const source = block(derivative, centre, length);
       const harmonicsAtF0 = harmonics(
         source,
         rate,
         f0[t],
-        Math.min(modeRows ? 2 : 10, Math.floor((0.45 * rate) / f0[t]))
+        Math.min(modeRows ? 2 : 10, Math.floor((0.45 * rate) / f0[t])),
+        window
       );
       result.h1h2Source[t] = harmonicsAtF0[0] - harmonicsAtF0[1];
       if (!modeRows) {
@@ -469,6 +497,7 @@ function measureSourceRows(frames, o, result, modeRows) {
             length,
             period,
             maxF0: o.maxF0,
+            window,
           },
           f0[t],
           source,
@@ -476,11 +505,12 @@ function measureSourceRows(frames, o, result, modeRows) {
         );
       }
     }
-    const hnrLength = Math.round(6 * period);
-    if (!correlations.has(hnrLength)) {
-      correlations.set(hnrLength, hann(hnrLength));
-    }
-    result.hnr[t] = hnr(samples, centre, period, correlations.get(hnrLength));
+    result.hnr[t] = hnr(
+      samples,
+      centre,
+      period,
+      windowOf(Math.round(6 * period))
+    );
     result.cpp[t] = cpp(samples, centre);
   }
 }

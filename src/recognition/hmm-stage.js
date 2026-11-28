@@ -7,7 +7,7 @@
  */
 import { analyzeFrames } from './frontend.js';
 import { trackPitch } from './pitch.js';
-import { hmmBoundaryTime, hmmFeatures } from './hmm-features.js';
+import { HMM_RATE, hmmBoundaryTime, hmmFeatures } from './hmm-features.js';
 import { getHmmModel } from './hmm-model.js';
 import { getNetwork, tokenIpa } from './hmm-network.js';
 import { alignWords, decodeWords } from './hmm-decode.js';
@@ -107,12 +107,18 @@ function timedSegments(aligned) {
  */
 export function hmmAudioToIpa(samples, sampleRate, options = {}) {
   const languages = options.languages ?? ['en', 'ru', 'hi', 'zh'];
-  const analysis = analyzeFrames(samples, sampleRate, { hop: 0.01 });
-  const pitch = trackPitch(analysis);
+  const { frames: liveFrames, tracks } = options.frontEnd ?? {};
+  const analysis =
+    liveFrames ?? analyzeFrames(samples, sampleRate, { hop: 0.01 });
+  const inputPitch = tracks?.pitch;
+  const pitch =
+    inputPitch ?? trackPitch(analysis, { kernels: options.kernels });
+  const modelPitch =
+    inputPitch ?? (sampleRate === HMM_RATE ? pitch : undefined);
   // Features are normalised per input, so silence alone would decode as
   // words: decode only inputs with frames the front end calls speech.
   const { decoded, aligned } = hasSpeech(analysis)
-    ? decodeSpeech(samples, sampleRate, pitch, { ...options, languages })
+    ? decodeSpeech(samples, sampleRate, modelPitch, { ...options, languages })
     : { decoded: { words: [], lang: null }, aligned: [] };
   stressOutOfVocabulary(decoded.words, aligned);
   const segments = timedSegments(aligned);
@@ -134,12 +140,15 @@ export function hmmAudioToIpa(samples, sampleRate, options = {}) {
         ? spellSounds(parseIpa(tokens.map(tokenIpa).join('')).tokens, lang)
         : word,
       language: lang,
+      ...(oov && { unknown: true }),
       ...wordSpan(aligned, i),
     })),
     tracks: { pitch },
     // Prosody uses a finer grid and sound detection analyzes isolated pauses.
     // The word-level mode measurements can reuse the decoder's 10 ms grid.
-    frames: { energy: analysis.energy, count: analysis.count },
+    frames: options.frontEnd
+      ? analysis
+      : { energy: analysis.energy, count: analysis.count },
     wordFrames: analysis,
     whisperSpans,
     modes,

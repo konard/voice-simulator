@@ -196,3 +196,21 @@ it('prunes each language against its own best token (issue 75)', () => {
   assert.deepEqual(frame(-500, 1), [-500, -420]);
   assert.deepEqual(frame(-500, 2), [-550, -420]);
 });
+
+it('keeps ties at the histogram pruning threshold', () => {
+  const scores = [-60, -7, -5, -3, -5, -1, -2, -80];
+  const thresholds = new Float64Array(1);
+  languageThresholds(
+    scores.map(() => 0),
+    {
+      work: scores.map((_, index) => index),
+      nodeScores: scores,
+      languageBest: [-1],
+      buckets: [[]],
+      thresholds,
+    },
+    -1,
+    { ...HMM_DECODE_DEFAULTS, beam: 10, maxActive: 4 }
+  );
+  assert.equal(thresholds[0], -5);
+});

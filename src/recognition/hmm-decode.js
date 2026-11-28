@@ -55,6 +55,9 @@ function toneCache(tone, feats, weight) {
   const sum = new Float64Array(3);
   let frame = -1;
   return (key, t) => {
+    if (stateOfKey[key] < 0) {
+      return 0;
+    }
     if (frame !== t) {
       frame = t;
       peak.fill(-Infinity);

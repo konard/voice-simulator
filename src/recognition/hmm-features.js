@@ -251,10 +251,7 @@ export function applyLda(lda, statics) {
  */
 export function hmmFeatures(samples, sampleRate, lda, inputPitch) {
   const x = hmmAudio(samples, sampleRate);
-  const { statics, pitch } = hmmStatics(
-    x,
-    sampleRate === HMM_RATE ? inputPitch : undefined
-  );
+  const { statics, pitch } = hmmStatics(x, inputPitch);
   const tone = hmmToneFeatures(
     statics.map((v) => v[CEPS] / 4),
     statics.map((v) => v[CEPS + 1])

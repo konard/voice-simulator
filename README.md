@@ -736,15 +736,15 @@ only become stricter. `npm run test:heavy -- --suite lowest` measures it and
 | Row | quality | js-1 | rust-1 | memory |
 | --- | --- | --- | --- | --- |
 | synthesis | certified | certified | certified | failed |
-| recognition | certified | certified | certified | failed |
+| recognition | certified | failed | failed | failed |
 | streaming | failed | failed | failed | failed |
 | voice-fit | certified | certified | certified | failed |
-| session | failed | failed | failed | failed |
+| session | certified | certified | certified | failed |
 | copy | failed | certified | certified | failed |
-| modes | certified | certified | certified | failed |
+| modes | certified | failed | certified | failed |
 | app | failed | certified | — | — |
 
-Measured at commit `4bc0a83` on Intel(R) Xeon(R) 6975P-C. See the [report](docs/reports/lowest-settings.md).
+Full matrix measured at commit `56797cd` on AMD EPYC 7763 64-Core Processor. See the [report](docs/reports/lowest-settings.md).
 <!-- prettier-ignore-end -->
 <!-- lowest-settings:end -->
 
