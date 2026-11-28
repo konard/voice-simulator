@@ -25,7 +25,10 @@ import {
 import { createRandom, randomNormal } from '../src/random.js';
 import { tubeFormants } from '../src/acoustics/transfer.js';
 import { sampleState, tractShape } from '../src/articulation/tract-shape.js';
-import { trackBatchFormants } from '../src/recognition/formants.js';
+import {
+  trackBatchFormants,
+  trackFirstFormant,
+} from '../src/recognition/formants.js';
 import { gridFormants, plannedFormants } from './helpers/recognition-truth.js';
 
 const TEXT =
@@ -66,8 +69,15 @@ it('shares formant roots across growing previews without changing tracks', () =>
     analyzer.push(samples.subarray(at, at + 800));
     const { frames } = analyzer;
     const options = { vocalTractLength: at ? 16.5 : null };
-    expect(trackBatchFormants(frames, options, true)).toEqual(
-      trackFormants(frames, options)
+    const full = trackFormants(frames, options);
+    expect(trackBatchFormants(frames, options, true)).toEqual(full);
+    const first = trackFirstFormant(frames, options, 'growing');
+    const rows = { length: frames.count };
+    expect(first.frequency).toEqual(
+      Float32Array.from(rows, (_, t) => full.frequency[t * 4])
+    );
+    expect(first.valid).toEqual(
+      Uint8Array.from(rows, (_, t) => full.valid[t * 4])
     );
   }
 });

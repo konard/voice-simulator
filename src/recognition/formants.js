@@ -691,9 +691,10 @@ function sortedMedian(values, count) {
 }
 
 /** Empty track of `frames.capacity` rows. */
-function createTrack(frames, settings) {
-  const rows = frames.capacity;
-  const matrix = () => new Float32Array(rows * COLUMNS).fill(NaN);
+function createTrack(frames, settings, firstOnly) {
+  const rows = firstOnly ? frames.count : frames.capacity;
+  const width = firstOnly ? 1 : COLUMNS;
+  const matrix = () => new Float32Array(rows * width).fill(NaN);
   return {
     hop: settings.hop,
     startTime: frames.startTime,
@@ -702,11 +703,11 @@ function createTrack(frames, settings) {
     formants: settings.formants,
     vocalTractLength: settings.fixedLength ?? DEFAULT_LENGTH,
     frequency: matrix(),
-    bandwidth: matrix(),
-    variance: matrix(),
-    level: matrix(),
-    valid: new Uint8Array(rows * COLUMNS),
-    nasal: new Uint8Array(rows),
+    bandwidth: firstOnly ? null : matrix(),
+    variance: firstOnly ? null : matrix(),
+    level: firstOnly ? null : matrix(),
+    valid: new Uint8Array(rows * width),
+    nasal: firstOnly ? null : new Uint8Array(rows),
   };
 }
 
@@ -718,9 +719,11 @@ function createTrack(frames, settings) {
  * rows first .. last - 1 of the track; the filter state at last - 1 is
  * saved for the next call.
  */
-function createSmoother(frames, store, settings, track, rows) {
-  const { formants: K, processNoise, maxGap, pitch, keep } = settings;
-  const size = rows * COLUMNS;
+function createSmoother(frames, store, settings, track, rows, firstOnly) {
+  const { processNoise, maxGap, pitch, keep } = settings;
+  const K = firstOnly ? 1 : settings.formants;
+  const stride = firstOnly ? 1 : COLUMNS;
+  const size = rows * stride;
   const x = new Float64Array(size);
   const variance = new Float64Array(size);
   const smoothX = new Float64Array(size);
@@ -754,7 +757,7 @@ function createSmoother(frames, store, settings, track, rows) {
       const q = processNoise[k];
       let { x: value, variance: p, gap: empty, width: held } = saved[k];
       for (let t = first; t <= newest; t++) {
-        const cell = t * COLUMNS + k;
+        const cell = t * stride + k;
         const index = store.assign[(t * keep + path[t]) * COLUMNS + k];
         p += q;
         start[cell] = 0;
@@ -788,12 +791,12 @@ function createSmoother(frames, store, settings, track, rows) {
   function backward(first, newest) {
     for (let k = 0; k < K; k++) {
       const q = processNoise[k];
-      const end = newest * COLUMNS + k;
+      const end = newest * stride + k;
       smoothX[end] = x[end];
       smoothVariance[end] = variance[end];
       for (let t = newest - 1; t >= first; t--) {
-        const cell = t * COLUMNS + k;
-        const next = cell + COLUMNS;
+        const cell = t * stride + k;
+        const next = cell + stride;
         if (start[next] || gap[cell] > maxGap) {
           smoothX[cell] = x[cell];
           smoothVariance[cell] = variance[cell];
@@ -818,11 +821,15 @@ function createSmoother(frames, store, settings, track, rows) {
       const p = frames.order;
       for (let t = first; t < last; t++) {
         const nasal = store.nasal[t];
-        track.nasal[t] = nasal;
-        const power = 10 ** (frames.gain[t] / 10);
-        const predictor = frames.lpc.subarray(t * p, (t + 1) * p);
+        let power;
+        let predictor;
+        if (!firstOnly) {
+          track.nasal[t] = nasal;
+          power = 10 ** (frames.gain[t] / 10);
+          predictor = frames.lpc.subarray(t * p, (t + 1) * p);
+        }
         for (let k = 0; k < K; k++) {
-          const cell = t * COLUMNS + k;
+          const cell = t * stride + k;
           const valid = gap[cell] <= maxGap ? 1 : 0;
           track.valid[cell] = valid;
           if (!valid) {
@@ -830,6 +837,9 @@ function createSmoother(frames, store, settings, track, rows) {
           }
           const frequency = smoothX[cell];
           track.frequency[cell] = frequency;
+          if (firstOnly) {
+            continue;
+          }
           track.bandwidth[cell] = width[cell];
           track.variance[cell] =
             smoothVariance[cell] * (nasal ? NASAL_VARIANCE : 1);
@@ -844,7 +854,7 @@ function createSmoother(frames, store, settings, track, rows) {
       }
       if (last > first) {
         for (let k = 0; k < K; k++) {
-          const cell = (last - 1) * COLUMNS + k;
+          const cell = (last - 1) * stride + k;
           saved[k] = {
             x: x[cell],
             variance: variance[cell],
@@ -905,7 +915,7 @@ function formantCandidateReader(frames, options, rows) {
  * Tracker over a frame set; `batch` (used by `trackFormants`) estimates the
  * tract length from the whole path before anything is committed.
  */
-function createTracker(frames, options, batch, candidates) {
+function createTracker(frames, options, batch, candidates, firstOnly = false) {
   const settings = formantSettings(frames, options);
   const { keep, lag, formants: K } = settings;
   const rows = batch ? frames.count : frames.capacity;
@@ -929,8 +939,15 @@ function createTracker(frames, options, batch, candidates) {
   };
   const finder = candidates ? null : createRootFinder(frames, settings, store);
   const path = new Uint8Array(rows);
-  const track = createTrack(frames, settings);
-  const smoother = createSmoother(frames, store, settings, track, rows);
+  const track = createTrack(frames, settings, firstOnly);
+  const smoother = createSmoother(
+    frames,
+    store,
+    settings,
+    track,
+    rows,
+    firstOnly
+  );
   const references = new Float64Array(K);
   const scratch = {
     index: new Int32Array(store.rawWidth),
@@ -1093,6 +1110,28 @@ export function trackBatchFormants(frames, options, growing = false) {
   if (options.maxBandwidth !== undefined) {
     return trackFormants(frames, options);
   }
+  const tracker = createTracker(
+    frames,
+    options,
+    true,
+    readBatchCandidates(frames, growing)
+  );
+  tracker.advance(true);
+  return tracker.track;
+}
+
+/** Smooth only F1 after the same joint search over all formants. */
+export function trackFirstFormant(frames, options, reuse) {
+  const candidates = reuse
+    ? readBatchCandidates(frames, reuse === 'growing')
+    : undefined;
+  const tracker = createTracker(frames, options, true, candidates, true);
+  tracker.advance(true);
+  const { frequency, valid } = tracker.track;
+  return { frequency, valid };
+}
+
+function readBatchCandidates(frames, growing) {
   let reader = batchCandidates.get(frames);
   if (!reader || frames.count > reader.rows) {
     reader = formantCandidateReader(
@@ -1102,7 +1141,5 @@ export function trackBatchFormants(frames, options, growing = false) {
     );
     batchCandidates.set(frames, reader);
   }
-  const tracker = createTracker(frames, options, true, reader.read());
-  tracker.advance(true);
-  return tracker.track;
+  return reader.read();
 }

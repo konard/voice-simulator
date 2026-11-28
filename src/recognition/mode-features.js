@@ -2,7 +2,7 @@
 import { measure } from './profile.js';
 import { analyzeFrames } from './frontend.js';
 import { trackPitchFrames } from './pitch.js';
-import { trackBatchFormants, trackFormants } from './formants.js';
+import { trackFirstFormant } from './formants.js';
 import { inverseModeMeasures } from './inverse-filter.js';
 import {
   createAverageSpectrumWorkspace,
@@ -113,13 +113,11 @@ function analyzeWordSignal(samples, sampleRate, head, analyzed, options) {
   const formants = options.skipFormants
     ? null
     : measure(profile, 'Formants', () =>
-        options.reuseFormantCandidates
-          ? trackBatchFormants(
-              frames,
-              formantOptions,
-              options.reuseFormantCandidates === 'growing'
-            )
-          : trackFormants(frames, formantOptions)
+        trackFirstFormant(
+          frames,
+          formantOptions,
+          options.reuseFormantCandidates
+        )
       );
   const source = measure(profile, 'Inverse filter', () =>
     inverseModeMeasures(frames, {
@@ -244,8 +242,8 @@ export function measureWords(
         t++
       ) {
         rows.push(t);
-        if (formants?.valid[t * 4]) {
-          frequencies.push(formants.frequency[t * 4]);
+        if (formants?.valid[t]) {
+          frequencies.push(formants.frequency[t]);
         }
       }
       if (formants) {
