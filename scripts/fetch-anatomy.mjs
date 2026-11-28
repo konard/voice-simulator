@@ -232,11 +232,7 @@ async function remoteSize(url, signal) {
   if (!response.ok) {
     throw new Error(`${url}: HEAD answered ${response.status}`);
   }
-  const size = Number(response.headers.get('content-length'));
-  if (!Number.isSafeInteger(size) || size <= 0) {
-    throw new Error(`${url}: HEAD did not report a valid archive size`);
-  }
-  return size;
+  return Number(response.headers.get('content-length'));
 }
 
 async function fetchMembers(url, size, wanted, output, options) {
@@ -265,13 +261,12 @@ async function fetchMembers(url, size, wanted, output, options) {
  */
 export async function fetchAnatomy(source, output, options = {}) {
   if (source === 'bodyparts3d') {
-    const { url } = BODYPARTS3D;
     const files = new Set(
       options.files ?? Object.values(BODYPARTS3D_FILES).flat()
     );
     return fetchMembers(
-      url,
-      await remoteSize(url, options.signal),
+      BODYPARTS3D.url,
+      await remoteSize(BODYPARTS3D.url, options.signal),
       (name) => files.has(basename(name, '.obj')),
       output,
       { signal: options.signal }
