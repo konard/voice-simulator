@@ -412,11 +412,18 @@ export function sliceVoiceSamples(samples, limit) {
  *   telephone speech). `formants` always has four entries; those that
  *   were not measured are 0.
  */
-export function prepareLegacyVoice(samples, sampleRate, options = {}) {
+export function prepareLegacyVoice(
+  samples,
+  sampleRate,
+  options = {},
+  ownsSamples = false
+) {
   const limit = Math.floor((options.maxDuration ?? 30) * sampleRate);
   const input =
     samples.length > limit ? sliceVoiceSamples(samples, limit) : samples;
-  const { samples: signal, sampleRate: rate } = resample(
+  // A deferred analysis can keep the fitter's private snapshot directly.
+  const prepare = ownsSamples ? voiceAnalysisInput : resample;
+  const { samples: signal, sampleRate: rate } = prepare(
     input,
     sampleRate,
     options.analysisRate ?? ANALYSIS_RATE

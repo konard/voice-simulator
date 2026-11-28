@@ -1,6 +1,6 @@
 /** Fixed-memory sufficient statistics for voice fitting. Unlicense, issue 63. */
 import { measure } from '../recognition/profile.js';
-import { analyzeFrames } from '../recognition/frontend.js';
+import { analyzeOwnedFrames } from '../recognition/frontend.js';
 import { withFrameStorage } from '../recognition/frame-storage.js';
 import { trackPitch, jitterToHead } from '../recognition/pitch.js';
 import { trackBatchFormants } from '../recognition/formants.js';
@@ -232,7 +232,7 @@ function collectDiagnostics(state, legacy) {
 function analyzeVoiceInput(samples, sampleRate, options, storage) {
   const { profile, kernels } = options;
   const frames = measure(profile, 'Front end', () =>
-    analyzeFrames(
+    analyzeOwnedFrames(
       samples,
       sampleRate,
       {
@@ -304,10 +304,12 @@ function accumulateWithStorage(
     trackBatchFormants(frames, { pitch, vocalTractLength: 16.5 })
   );
   const source = analyzeVoiceSource(frames, pitch, options);
-  const analysis = prepareLegacyVoice(input, sampleRate, {
-    ...options,
-    diagnosticsOnly: true,
-  });
+  const analysis = prepareLegacyVoice(
+    input,
+    sampleRate,
+    { ...options, diagnosticsOnly: true },
+    true
+  );
   const legacy = diagnostics ? analysis.complete() : analysis.rateFeatures;
   captureDiagnostics?.(analysis.complete);
   state.duration += input.length / sampleRate;

@@ -23,6 +23,7 @@ import {
 } from '../src/index.js';
 import {
   analyzeFrameHops,
+  analyzeOwnedFrames,
   analyzePitchFrames,
   createSpeechAnalyzer,
 } from '../src/recognition/frontend.js';
@@ -126,6 +127,18 @@ it('matches copied pitch frames at both edges of an 8 kHz sample view', () => {
     expect(borrowed.energy).toEqual(copied.energy);
     expect(borrowed.noise).toEqual(copied.noise);
     expect(trackPitch(borrowed)).toEqual(trackPitch(copied));
+  }
+});
+
+it('analyzes an owned waveform without copying its samples or changing any frame', () => {
+  const rate = 8000;
+  const samples = whiteNoise(1683, -24, 331).subarray(9, 1610);
+  for (const size of [0, 7, 1601]) {
+    const view = samples.subarray(0, size);
+    const owned = analyzeOwnedFrames(view, rate, { hop: 0.01 });
+    const copied = analyzeFrames(view, rate, { hop: 0.01 });
+    expect(owned.samples).toBe(view);
+    expect(owned).toEqual({ ...copied, samples: view });
   }
 });
 

@@ -667,12 +667,18 @@ function measureSpeechFrame(kernel, row, buffer, start, noiseTracker) {
  * @param {Partial<typeof FRONTEND_DEFAULTS>} [options]
  */
 export function createFrameAnalyzer(sampleRate, options = {}) {
-  return frameAnalyzer(sampleRate, options);
+  return frameAnalyzer(sampleRate, frontendSettings(sampleRate, options));
 }
 
 /** Streaming frames containing the columns used for acoustic speech gating. */
 export function createSpeechAnalyzer(sampleRate, options) {
-  return frameAnalyzer(sampleRate, options, undefined, undefined, 'speech');
+  return frameAnalyzer(
+    sampleRate,
+    frontendSettings(sampleRate, options),
+    undefined,
+    undefined,
+    'speech'
+  );
 }
 
 function allocateFrameBuffer(settings, storage, features) {
@@ -729,8 +735,7 @@ function frameCount(samples, hopSamples) {
   return samples > 0 ? Math.floor((samples - 1) / hopSamples) + 1 : 0;
 }
 
-function frameAnalyzer(sampleRate, options, onFrame, storage, features) {
-  const settings = frontendSettings(sampleRate, options);
+function frameAnalyzer(sampleRate, settings, onFrame, storage, features) {
   const { rate, length, half, hopSamples, capacity, sampleCapacity } = settings;
   const { buffer, frames, margin } = allocateFrameBuffer(
     settings,
@@ -882,7 +887,15 @@ function frameAnalyzer(sampleRate, options, onFrame, storage, features) {
  * @param {Partial<typeof FRONTEND_DEFAULTS>} [options]
  */
 export function analyzeFrames(samples, sampleRate, options = {}, storage) {
-  return analyzeRecording(samples, sampleRate, options, storage);
+  return analyzeRecording(samples, sampleRate, options, { storage });
+}
+
+/** Analyze a private Float32 recording whose owner keeps its samples intact. */
+export function analyzeOwnedFrames(samples, sampleRate, options, storage) {
+  return analyzeRecording(samples, sampleRate, options, {
+    storage,
+    borrow: true,
+  });
 }
 
 /** The default frame grid at a given hop, with the inputs of the pitch tracker. */
@@ -892,34 +905,41 @@ export function analyzePitchFrames(
   hop = FRONTEND_DEFAULTS.hop,
   storage
 ) {
-  if (
-    samples instanceof Float32Array &&
-    samples.buffer instanceof ArrayBuffer &&
-    workingRate(sampleRate, FRONTEND_DEFAULTS.rate) === sampleRate
-  ) {
-    return analyzeBorrowedPitch(samples, sampleRate, hop, storage);
-  }
-  return analyzeRecording(samples, sampleRate, { hop }, storage, 'pitch');
+  return analyzeRecording(
+    samples,
+    sampleRate,
+    { hop },
+    {
+      storage,
+      features: 'pitch',
+      borrow: true,
+    }
+  );
 }
 
-// Batch pitch callers consume this analysis before returning. Its windows
-// can read their input directly and account for the zero padding at the edges.
-function analyzeBorrowedPitch(samples, sampleRate, hop, storage) {
-  const settings = frontendSettings(sampleRate, {
-    hop,
-    maxSeconds: samples.length / sampleRate,
-  });
+function analyzeBorrowed(samples, settings, storage, features) {
   const { length, half, hopSamples } = settings;
-  const frames = createFrameSet(settings, samples, storage, 'pitch');
-  const noiseTracker = createNoiseTracker(hop);
+  const frames = createFrameSet(settings, samples, storage, features);
+  const processor = createFrameProcessor(settings, frames, features);
+  const edge = features === 'pitch' ? null : new Float32Array(length + 1);
   frames.sampleCount = samples.length;
   const count = frameCount(samples.length, hopSamples);
   for (let row = 0; row < count; row++) {
     const start = Math.round(row * hopSamples) - half;
-    measurePitchFrame(frames, row, samples, start, length, noiseTracker);
+    if (!edge || (start > 0 && start + length <= samples.length)) {
+      processor.analyze(row, samples, start);
+    } else {
+      // Pre-emphasis also reads the sample before the window starts.
+      const from = Math.max(0, start - 1);
+      const through = Math.min(samples.length, start + length);
+      edge.fill(0);
+      edge.set(samples.subarray(from, through), from - start + 1);
+      processor.analyze(row, edge, 1);
+    }
   }
-  frames.energy.fill(0, count);
-  frames.noise.fill(0, count);
+  if (storage) {
+    clearUnusedRows(frames, count, features);
+  }
   frames.count = count;
   return frames;
 }
@@ -928,28 +948,33 @@ function analyzeRecording(
   samples,
   sampleRate,
   options,
-  storage,
-  features,
-  onFrame
+  { storage, features, onFrame, borrow } = {}
 ) {
-  const configured = { ...options, maxSeconds: samples.length / sampleRate };
+  const settings = frontendSettings(sampleRate, {
+    ...options,
+    maxSeconds: samples.length / sampleRate,
+  });
   if (
     samples instanceof Float32Array &&
-    samples.buffer instanceof ArrayBuffer &&
-    workingRate(sampleRate, configured.rate) !== sampleRate
+    samples.buffer instanceof ArrayBuffer
   ) {
-    return analyzeResampled(
-      samples,
-      sampleRate,
-      frontendSettings(sampleRate, configured),
-      storage,
-      features,
-      onFrame
-    );
+    if (sampleRate !== settings.rate) {
+      return analyzeResampled(
+        samples,
+        sampleRate,
+        settings,
+        storage,
+        features,
+        onFrame
+      );
+    }
+    if (borrow) {
+      return analyzeBorrowed(samples, settings, storage, features);
+    }
   }
   const analyzer = frameAnalyzer(
     sampleRate,
-    configured,
+    settings,
     onFrame,
     storage,
     features
@@ -957,6 +982,12 @@ function analyzeRecording(
   analyzer.push(samples);
   analyzer.flush();
   return analyzer.frames;
+}
+
+function clearUnusedRows(frames, count, features) {
+  for (const [column, width] of frameColumns(frames, features)) {
+    column.fill(0, count * width);
+  }
 }
 
 function analyzeResampled(
@@ -982,8 +1013,8 @@ function analyzeResampled(
   );
   const count = frameCount(frames.sampleCount, hopSamples);
   check(count <= capacity, `frame set is full (${capacity} frames)`);
-  for (const [column] of frameColumns(frames, features)) {
-    column.fill(0);
+  if (storage) {
+    clearUnusedRows(frames, count, features);
   }
   const processor = createFrameProcessor(settings, frames, features, onFrame);
   for (let row = 0; row < count; row++) {
@@ -1000,7 +1031,6 @@ function analyzeResampled(
 /** Share the per-window features of the default 5 ms and 10 ms batch grids. */
 export function analyzeFrameHops(samples, sampleRate) {
   const maxSeconds = samples.length / sampleRate;
-  const fast = { maxSeconds };
   const slow = frontendSettings(sampleRate, { maxSeconds, hop: 0.01 });
   const coarse = createFrameSet(slow, null);
   const noiseTracker = createNoiseTracker(slow.hop);
@@ -1009,30 +1039,30 @@ export function analyzeFrameHops(samples, sampleRate) {
   const fine = analyzeRecording(
     samples,
     sampleRate,
-    fast,
-    undefined,
-    undefined,
-    (frames, row, power, period) => {
-      if (row % 2 !== 0 || coarse.count >= coarse.capacity) {
-        return;
-      }
-      fineColumns ??= frameColumns(frames);
-      const target = coarse.count++;
-      for (let i = 0; i < coarseColumns.length; i++) {
-        const [column, width] = coarseColumns[i];
-        const [source] = fineColumns[i];
-        for (let j = 0; j < width; j++) {
-          column[target * width + j] = source[row * width + j];
+    {},
+    {
+      onFrame(frames, row, power, period) {
+        if (row % 2 !== 0 || coarse.count >= coarse.capacity) {
+          return;
         }
-      }
-      // The coarse grid's noise history is independent of the fine grid's.
-      const noise = noiseTracker.noiseFloor(power);
-      coarse.noise[target] = noise;
-      coarse.speech[target] = noiseTracker.speech(
-        coarse.energy[target],
-        noise,
-        period
-      );
+        fineColumns ??= frameColumns(frames);
+        const target = coarse.count++;
+        for (let i = 0; i < coarseColumns.length; i++) {
+          const [column, width] = coarseColumns[i];
+          const [source] = fineColumns[i];
+          for (let j = 0; j < width; j++) {
+            column[target * width + j] = source[row * width + j];
+          }
+        }
+        // The coarse grid's noise history is independent of the fine grid's.
+        const noise = noiseTracker.noiseFloor(power);
+        coarse.noise[target] = noise;
+        coarse.speech[target] = noiseTracker.speech(
+          coarse.energy[target],
+          noise,
+          period
+        );
+      },
     }
   );
   coarse.samples = fine.samples;
