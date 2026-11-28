@@ -315,6 +315,28 @@ it('reuses fit statistics only for the same immutable session snapshot', () => {
   expect(inverseFilters).toBe(2);
 });
 
+it('reuses the default word decode for the same session window and options', () => {
+  const settings = { ...options, recognitionEngine: 'js' };
+  const snapshot = samples.slice(0, SAMPLE_RATE);
+  const invert = (audio, currentVoice) =>
+    consume(
+      sessionPasses.inverting(
+        audio,
+        { voice: currentVoice, distance: 1 },
+        settings
+      )
+    ).reading;
+  const first = invert(snapshot, voice);
+  expect(first.decoded.ipa.length > 0).toBe(true);
+  const reused = invert(snapshot, adjusted);
+  expect(reused.decoded === first.decoded).toBe(true);
+  const fresh = invert(snapshot.slice(), adjusted);
+  expect(fresh.decoded === reused.decoded).toBe(false);
+  expect(fresh.words).toEqual(reused.words);
+  settings.oov = false;
+  expect(invert(snapshot, adjusted).decoded === reused.decoded).toBe(false);
+});
+
 it('uses recognized word timing and stress for fitting without mode analysis', () => {
   const syllable = { text: 'bird', ipa: 'bɝd', start: 0, end: 0.4, stress: 1 };
   const word = {

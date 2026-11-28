@@ -1,10 +1,12 @@
 /** Pass generators operating on an immutable audio snapshot. Unlicense. */
 import { fitVoiceSteps } from '../analysis/voice-fit.js';
 import { NoVoicedSpeechError } from '../analysis/voice-fit-statistics.js';
+import { lexiconRevision } from '../g2p/lexicon.js';
 import {
   decodeRecognitionAudio,
   recognitionSettings,
   recognizeDecoded,
+  usesWordDecoder,
 } from '../recognition/recognizer.js';
 import {
   controlledRefit,
@@ -25,6 +27,44 @@ function fitOptions(samples, settings) {
   };
 }
 
+const snapshotDecodes = new WeakMap();
+
+function decodeWindow(samples, settings, options, level) {
+  const { sampleRate } = settings;
+  // The built-in word decoder is independent of the fitted voice. Keep its
+  // result for the lifetime of the immutable window, while still measuring
+  // each candidate's word prosody. Custom stages and profiling observe every
+  // decode.
+  if (
+    !usesWordDecoder(options) ||
+    settings.stages !== undefined ||
+    options.profile ||
+    Array.isArray(options.whisper)
+  ) {
+    return decodeRecognitionAudio(samples, sampleRate, options, level);
+  }
+  const key = [
+    sampleRate,
+    level,
+    options.modes,
+    options.whisper,
+    options.oov,
+    lexiconRevision(),
+    ...options.languages,
+  ];
+  const last = snapshotDecodes.get(samples);
+  if (
+    last?.settings === settings &&
+    last.key.length === key.length &&
+    last.key.every((value, i) => value === key[i])
+  ) {
+    return last.result;
+  }
+  const result = decodeRecognitionAudio(samples, sampleRate, options, level);
+  snapshotDecodes.set(samples, { key, settings, result });
+  return result;
+}
+
 function read(samples, voice, settings) {
   const options = recognitionSettings({
     ...settings,
@@ -36,9 +76,9 @@ function read(samples, voice, settings) {
     articulationOffsets: voice.articulationOffsets,
   });
   const level = settings.level === 'auto' ? 'medium' : settings.level;
-  const { decoded, input, rate } = decodeRecognitionAudio(
+  const { decoded, input, rate } = decodeWindow(
     samples,
-    settings.sampleRate,
+    settings,
     options,
     level
   );
