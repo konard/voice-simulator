@@ -185,6 +185,21 @@ function walkExact(tokens, from, end, root, language, { scored, visit }) {
   return false;
 }
 
+function hasPreparedSuffix(tokens, from, end, prepared, reachable) {
+  const { root, table } = prepared;
+  let id = 0;
+  for (let i = from; i < end; i++) {
+    id = root.childId(id, tokens[i].symbol);
+    if (id === 0) {
+      break;
+    }
+    if (table.terminal[id] && reachable.has(i + 1)) {
+      return true;
+    }
+  }
+  return false;
+}
+
 /** Whether an exact word can end at a position with a known suffix. */
 export function hasExactSuffix(
   tokens,
@@ -194,6 +209,9 @@ export function hasExactSuffix(
   language,
   reachable
 ) {
+  if (language !== 'zh' && lexicon.prepared) {
+    return hasPreparedSuffix(tokens, from, end, lexicon.prepared, reachable);
+  }
   return walkExact(tokens, from, end, lexicon.root, language, {
     scored: false,
     visit: (node, to) =>

@@ -76,14 +76,21 @@ class TrieNode {
   }
 
   get(key) {
-    const { table, indices, id } = this;
-    const feature = indices.get(key);
-    for (let i = table.offsets[id]; i < table.offsets[id + 1]; i++) {
-      const child = i + 1;
-      if (table.feature[child] === feature) {
-        return new TrieNode(table, indices, child);
+    const child = this.childId(this.id, key);
+    if (child !== 0) {
+      return new TrieNode(this.table, this.indices, child);
+    }
+  }
+
+  childId(id, key) {
+    const { offsets, feature } = this.table;
+    const wanted = this.indices.get(key);
+    for (let child = offsets[id] + 1; child <= offsets[id + 1]; child++) {
+      if (feature[child] === wanted) {
+        return child;
       }
     }
+    return 0;
   }
 
   *values() {
