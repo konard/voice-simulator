@@ -141,7 +141,7 @@ let inverseScratch;
 
 function recover(frames, f0, o, derivativeOnly) {
   const n = frames.sampleCount;
-  const width = derivativeOnly ? 3 : 4;
+  const width = derivativeOnly ? 2 : 3;
   const cacheLimit = 8 * 16000;
   if (n > cacheLimit) {
     return recoverWith(
@@ -171,8 +171,16 @@ function recoverWith(frames, f0, o, scratch, derivativeOnly) {
   const n = frames.sampleCount;
   const x = highPass(frames.samples, frames.rate, scratch.subarray(0, n));
   const d = scratch.subarray(n, 2 * n).fill(0);
-  const weight = scratch.subarray(2 * n, 3 * n).fill(0);
-  const g = derivativeOnly ? null : scratch.subarray(3 * n, 4 * n).fill(0);
+  const g = derivativeOnly ? null : scratch.subarray(2 * n, 3 * n).fill(0);
+  let lowestPitch = Infinity;
+  for (const pitch of f0) {
+    if (pitch > 0 && pitch < lowestPitch) {
+      lowestPitch = pitch;
+    }
+  }
+  const width = recoveryLength(lowestPitch, frames.rate);
+  const weight = new Float64Array(Math.max(1, Math.min(n, width)));
+  const normalize = normalizer(frames, f0, weight, d, g);
   const windows = new Map();
   const history = Math.round(0.05 * frames.rate);
   const iaif = iaifPlan(o.tractOrder, o.glottisOrder, o.leak);
@@ -183,9 +191,11 @@ function recoverWith(frames, f0, o, scratch, derivativeOnly) {
       continue;
     }
     const centre = Math.round(time * frames.rate);
-    const length = Math.round(Math.max(0.032, 2.5 / f0[row]) * frames.rate);
+    const length = recoveryLength(f0[row], frames.rate);
     const window = windowAt(windows, length, history);
     const start = centre - Math.floor(length / 2);
+    // No window at this or a subsequent centre reaches before this sample.
+    normalize(Math.max(0, centre - Math.floor(width / 2)));
     if (window.length > buffer.length) {
       buffer = new Float64Array(Math.max(window.length, buffer.length * 2));
     }
@@ -195,19 +205,18 @@ function recoverWith(frames, f0, o, scratch, derivativeOnly) {
     extended.fill(0);
     extended.set(x.subarray(first, last), first - start + history);
     const pulse = iaif(extended, window);
-    for (let n = 0; n < length; n++) {
-      const index = start + n;
-      if (index >= 0 && index < x.length) {
-        const w = window[n + history];
-        d[index] += w * pulse.d[n + history];
-        if (g) {
-          g[index] += w * pulse.g[n + history];
-        }
-        weight[index] += w;
+    const end = Math.min(x.length, start + length);
+    for (let index = Math.max(0, start); index < end; index++) {
+      const i = index - start + history;
+      const w = window[i];
+      d[index] += w * pulse.d[i];
+      if (g) {
+        g[index] += w * pulse.g[i];
       }
+      weight[index % weight.length] += w;
     }
   }
-  normalizeRecovery(frames, f0, weight, d, g);
+  normalize(n);
   refineStationary(frames, f0, o, x, d, g);
   return {
     ...(g && { flow: Float32Array.from(g) }),
@@ -215,24 +224,26 @@ function recoverWith(frames, f0, o, scratch, derivativeOnly) {
   };
 }
 
-function normalizeRecovery(frames, f0, weight, d, g) {
-  for (let n = 0; n < d.length; n++) {
-    const row = Math.min(
-      f0.length - 1,
-      Math.round(n / (frames.rate * frames.hop))
-    );
-    if (weight[n] > 0.01 && f0[row] > 0) {
-      d[n] /= weight[n];
+function recoveryLength(pitch, rate) {
+  return Math.round(Math.max(0.032, 2.5 / pitch) * rate);
+}
+
+function normalizer(frames, f0, weight, d, g) {
+  const hopSamples = frames.rate * frames.hop;
+  let n = 0;
+  return (end) => {
+    for (; n < end; n++) {
+      const slot = n % weight.length;
+      const scale = weight[slot];
+      const row = Math.min(f0.length - 1, Math.round(n / hopSamples));
+      const voiced = scale > 0.01 && f0[row] > 0;
+      d[n] = voiced ? d[n] / scale : 0;
       if (g) {
-        g[n] /= weight[n];
+        g[n] = voiced ? g[n] / scale : 0;
       }
-    } else {
-      d[n] = 0;
-      if (g) {
-        g[n] = 0;
-      }
+      weight[slot] = 0;
     }
-  }
+  };
 }
 
 function windowAt(windows, length, prefix = 0) {
