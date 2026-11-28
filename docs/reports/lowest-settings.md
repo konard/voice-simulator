@@ -19,7 +19,7 @@ become stricter.
 | synthesis | certified | certified | certified | [failed](https://github.com/konard/voice-simulator/issues/173) |
 | recognition | certified | [failed](https://github.com/konard/voice-simulator/issues/174) | [failed](https://github.com/konard/voice-simulator/issues/174) | [failed](https://github.com/konard/voice-simulator/issues/173) |
 | streaming | [failed](https://github.com/konard/voice-simulator/issues/175) | [failed](https://github.com/konard/voice-simulator/issues/175) | [failed](https://github.com/konard/voice-simulator/issues/175) | [failed](https://github.com/konard/voice-simulator/issues/173) |
-| voice-fit | [failed](https://github.com/konard/voice-simulator/issues/176) | [failed](https://github.com/konard/voice-simulator/issues/176) | certified | certified |
+| voice-fit | certified | certified | certified | certified |
 | session | [failed](https://github.com/konard/voice-simulator/issues/177) | [failed](https://github.com/konard/voice-simulator/issues/177) | [failed](https://github.com/konard/voice-simulator/issues/177) | [failed](https://github.com/konard/voice-simulator/issues/173) |
 | copy | [failed](https://github.com/konard/voice-simulator/issues/178) | certified | certified | [failed](https://github.com/konard/voice-simulator/issues/173) |
 | modes | certified | certified | certified | [failed](https://github.com/konard/voice-simulator/issues/173) |
@@ -44,11 +44,11 @@ become stricter.
 | streaming | rust-1 | first partial with words (s) | 0.9298 | ≤ 1 | yes |
 | streaming | rust-1 | CPU load | 0.3989 | ≤ 0.25 | no |
 | streaming | memory | peak RSS (MB) | 339.4883 | ≤ 256 | no |
-| voice-fit | quality | vocal tract length error | 0.0828 | ≤ 0.05 | no |
-| voice-fit | quality | pitch error | 0.0537 | ≤ 0.03 | no |
-| voice-fit | js-1 | CPU time / audio time | 1.157 | ≤ 1 | no |
-| voice-fit | rust-1 | CPU time / audio time | 0.9513 | ≤ 1 | yes |
-| voice-fit | memory | peak RSS (MB) | 224.0234 | ≤ 256 | yes |
+| voice-fit | quality | vocal tract length error | 0.0275 | ≤ 0.05 | yes |
+| voice-fit | quality | pitch error | 0.0214 | ≤ 0.03 | yes |
+| voice-fit | js-1 | CPU time / audio time | 0.4018 | ≤ 1 | yes |
+| voice-fit | rust-1 | CPU time / audio time | 0.3859 | ≤ 1 | yes |
+| voice-fit | memory | peak RSS (MB) | 199.4219 | ≤ 256 | yes |
 | session | quality | share of voices reaching stable | 0 | ≥ 1 | no |
 | session | quality | vocal tract length error | 0.0226 | ≤ 0.05 | yes |
 | session | quality | pitch error | 0.0097 | ≤ 0.03 | yes |
@@ -79,8 +79,8 @@ become stricter.
 | recognition | rust | 346.803 | 1071.807 | 377.6211 | 192 MB | per 0.8665, wer 1.2967, rtf 0.3236, utterances 127 |
 | streaming | js | 31.474 | 60 | 328.3906 | 192 MB | textMismatch 0.2429, firstPartial 1.0296, load 0.5246, partials 247, streamText The quick brown fox jump sober the lady dog. She says she ce…, batchText The quick bill fox jump sober the lady dog. She says she sha… |
 | streaming | rust | 23.935 | 60 | 339.4883 | 192 MB | textMismatch 0.2429, firstPartial 0.9298, load 0.3989, partials 247, streamText The quick brown fox jump sober the lady dog. She says she ce…, batchText The quick bill fox jump sober the lady dog. She says she sha… |
-| voice-fit | js | 34.71 | 30 | 222.4805 | 192 MB | vocalTractLengthError 0.0828, pitchError 0.0537, cpuRatio 1.157 |
-| voice-fit | rust | 28.539 | 30 | 224.0234 | 192 MB | vocalTractLengthError 0.0828, pitchError 0.0537, cpuRatio 0.9513 |
+| voice-fit | js | 12.055 | 30 | 194.1367 | 192 MB | vocalTractLengthError 0.0275, pitchError 0.0214, cpuRatio 0.4018 |
+| voice-fit | rust | 11.577 | 30 | 199.4219 | 192 MB | vocalTractLengthError 0.0275, pitchError 0.0214, cpuRatio 0.3859 |
 | session | js | 87.231 | 60 | 345.9688 | 192 MB | stable 0, vocalTractLengthError 0.0226, pitchError 0.0097, cpuRatio 1.4538 |
 | session | rust | 78.525 | 60 | 345.8008 | 192 MB | stable 0, vocalTractLengthError 0.0226, pitchError 0.0097, cpuRatio 1.3088 |
 | copy | js | 413.905 | 111.78 | 447.5273 | 192 MB | f0RmseSemitones 6.0086, timingErrorMs 271.4, phonemeAgreement 0.4716, maxF0RmseSemitones 12.1282, maxTimingErrorMs 720, cpuRatio 3.7029, recordings 24 |
@@ -88,3 +88,8 @@ become stricter.
 | modes | js | 9.657 | 109.405 | 320.6445 | 192 MB | modeShare 0.9, rtf 0.0883, renderRtf 0.0169, utterances 60 |
 | modes | rust | 9.029 | 109.405 | 331.6211 | 192 MB | modeShare 0.9, rtf 0.0825, renderRtf 0.013, utterances 60 |
 | app | js | — | 11.289 | — | none | textBack 0.6875, workerRtf 0.0684, workerRtfMeasured 0.0114, firstSound 0.153, firstChunk 0.153, coldFirstSound 0.676, startDelay 0.151, sampleRate 8000, chunks 89, heard The quick brown fox jump solar the lady dog. She says she sh… |
+
+## Targeted reruns
+
+- **voice-fit** at commit `8715933bc93332ef5d01c352520cb3730dbfe767` on AMD EPYC Processor (with IBPB), Node v24.22.3, measured 2026-11-28T01:07:58.885Z.
+  Pinned with `taskset -c 0`. Command `node --test --test-name-pattern 'voice-fit with' tests/heavy/lowest-settings.test.js`.

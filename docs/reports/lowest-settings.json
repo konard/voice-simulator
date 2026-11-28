@@ -240,13 +240,13 @@
         "row": "voice-fit",
         "engine": "js",
         "metrics": {
-          "vocalTractLengthError": 0.0828,
-          "pitchError": 0.0537,
-          "cpuRatio": 1.157
+          "vocalTractLengthError": 0.0275,
+          "pitchError": 0.0214,
+          "cpuRatio": 0.4018
         },
-        "seconds": 34.71,
+        "seconds": 12.055,
         "audioSeconds": 30,
-        "peakRssMb": 222.48046875,
+        "peakRssMb": 194.13671875,
         "capped": {
           "heapLimitMb": 192
         }
@@ -255,13 +255,13 @@
         "row": "voice-fit",
         "engine": "rust",
         "metrics": {
-          "vocalTractLengthError": 0.0828,
-          "pitchError": 0.0537,
-          "cpuRatio": 0.9513
+          "vocalTractLengthError": 0.0275,
+          "pitchError": 0.0214,
+          "cpuRatio": 0.3859
         },
-        "seconds": 28.539,
+        "seconds": 11.577,
         "audioSeconds": 30,
-        "peakRssMb": 224.0234375,
+        "peakRssMb": 199.421875,
         "capped": {
           "heapLimitMb": 192
         }
@@ -591,37 +591,35 @@
     },
     "voice-fit": {
       "quality": {
-        "status": "failed",
+        "status": "certified",
         "metrics": {
           "vocalTractLengthError": {
-            "value": 0.0828,
+            "value": 0.0275,
             "limit": 0.05,
-            "pass": false
+            "pass": true
           },
           "pitchError": {
-            "value": 0.0537,
+            "value": 0.0214,
             "limit": 0.03,
-            "pass": false
+            "pass": true
           }
-        },
-        "issue": "https://github.com/konard/voice-simulator/issues/176"
+        }
       },
       "js-1": {
-        "status": "failed",
+        "status": "certified",
         "metrics": {
           "cpuRatio": {
-            "value": 1.157,
+            "value": 0.4018,
             "limit": 1,
-            "pass": false
+            "pass": true
           }
-        },
-        "issue": "https://github.com/konard/voice-simulator/issues/176"
+        }
       },
       "rust-1": {
         "status": "certified",
         "metrics": {
           "cpuRatio": {
-            "value": 0.9513,
+            "value": 0.3859,
             "limit": 1,
             "pass": true
           }
@@ -631,7 +629,7 @@
         "status": "certified",
         "metrics": {
           "peakRssMb": {
-            "value": 224.0234375,
+            "value": 199.421875,
             "limit": 256,
             "pass": true
           }
@@ -808,6 +806,17 @@
           }
         }
       }
+    }
+  },
+  "rowMeasurements": {
+    "voice-fit": {
+      "commit": "8715933bc93332ef5d01c352520cb3730dbfe767",
+      "measured": "2026-11-28T01:07:58.885Z",
+      "cpu": "AMD EPYC Processor (with IBPB)",
+      "node": "v24.22.3",
+      "pinned": true,
+      "core": 0,
+      "command": "node --test --test-name-pattern 'voice-fit with' tests/heavy/lowest-settings.test.js"
     }
   }
 }
