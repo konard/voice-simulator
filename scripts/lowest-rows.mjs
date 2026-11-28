@@ -157,10 +157,23 @@ function synthesisRow({ engine, limit, baseline, profile }) {
       const [spoken, cpu] = cpuTime(() =>
         synthesize(text, { ...options, engine: timed ? engine.render : 'js' })
       );
+      profile?.(
+        `Synthesis ${tier} ${lang} ${preset} ${errors.length + 1} Rendered`
+      );
       seconds += cpu;
       audioSeconds += spoken.samples.length / spoken.sampleRate;
+      const recognize = profile
+        ? (samples, sampleRate, settings) =>
+            heard(samples, sampleRate, {
+              ...settings,
+              profile: (stage) =>
+                profile(
+                  `Synthesis ${tier} ${lang} ${preset} ${errors.length + 1} ${stage}`
+                ),
+            })
+        : heard;
       const [result, recognitionCpu] = cpuTime(() =>
-        roundTrip(text, { ...options, spoken, recognize: heard })
+        roundTrip(text, { ...options, spoken, recognize })
       );
       recognitionSeconds += recognitionCpu;
       errors.push(lang === 'zh' ? result.cer : result.wer);
