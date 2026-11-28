@@ -234,7 +234,7 @@ function restart(network, records, rec, score, end, pass) {
     next.enterWeighted(tree.after.get(before), lookLn, lmw, score, r, end);
     return;
   }
-  enterRoots(next, tree, score, r, end, pass);
+  enterRoots(pass, language, score, r, end);
   if (tree.wordTable ? tree.wordTable.oov(id) : network.words[id].oov) {
     next.enterList(tree.loop.next, score, r, end);
   }
@@ -568,6 +568,7 @@ function queueExits(network, pass, thresholds, t) {
     lm,
     settings,
     next,
+    rootScores,
     wordEnds,
     endings,
     endingScores,
@@ -576,6 +577,7 @@ function queueExits(network, pass, thresholds, t) {
   const transitionCosts = lm.cache.costs;
   const endFrame = t + 1;
   wordEnds.length = 0;
+  rootScores.fill(NaN);
   for (let row = 0; row < active; row++) {
     const id = work[row];
     const offset = row * 6;
@@ -600,7 +602,7 @@ function queueExits(network, pass, thresholds, t) {
     const tree = pass.trees[language];
     if (id === tree.silence) {
       // Silence returns to the root with the same history.
-      enterRoots(next, tree, exit, hist, endFrame, pass);
+      enterRoots(pass, language, exit, hist, endFrame);
       continue;
     }
     if (nodes.child[id]) {
@@ -634,9 +636,16 @@ function queueExits(network, pass, thresholds, t) {
   }
 }
 
-function enterRoots(next, tree, score, history, frame, { lookLn, settings }) {
+function enterRoots(pass, language, score, history, frame) {
+  const { next, trees, rootScores, lookLn, settings } = pass;
+  // Exiting silence and ending a word propose the same weighted roots.
+  // A weaker proposal cannot replace any of the earlier entries.
+  if (score <= rootScores[language]) {
+    return;
+  }
+  rootScores[language] = score;
   const { lmw, oovStart } = settings;
-  const { root, loop } = tree;
+  const { root, loop } = trees[language];
   next.enterWeighted(root, lookLn, lmw, score, history, frame);
   next.enterList(loop.begin, score + oovStart, history, frame);
 }
@@ -740,6 +749,7 @@ function decodeWithWorkspace(network, feats, frames, options, workspace) {
     next,
     wordEnds,
     endings,
+    rootScores: new Float64Array(network.languages.length),
     endingScores: new Float64Array(endings.length),
     lookLn: network.nodes.lookLn,
     emissions,
