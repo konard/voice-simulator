@@ -980,8 +980,11 @@ export function releaseRenderer(renderer) {
 }
 
 /** Render a complete output while keeping temporary solver buffers bounded. */
-export function renderSamples(renderer) {
-  const samples = new Float32Array(renderer.totalSamples);
+export function renderSamples(renderer, allocate) {
+  const { totalSamples } = renderer;
+  const samples = allocate
+    ? allocate(totalSamples).fill(0)
+    : new Float32Array(totalSamples);
   const chunkSize = 4096;
   for (let start = 0; start < samples.length; start += chunkSize) {
     renderer.render(samples.subarray(start, start + chunkSize));
@@ -998,6 +1001,11 @@ export function renderSamples(renderer) {
  * @returns {Float32Array}
  */
 export function renderPlan(plan, options = {}) {
+  return renderPlanWithStorage(plan, options);
+}
+
+/** Render into an optional, caller-owned Float32Array of the given length. */
+export function renderPlanWithStorage(plan, options, allocate) {
   const engine = getEngine(engineOptions(options));
   const offlineWaveguide =
     engine.name === 'js' &&
@@ -1007,7 +1015,7 @@ export function renderPlan(plan, options = {}) {
     offlineWaveguide ? { ...options, [OFFLINE_WAVEGUIDE]: true } : options
   );
   try {
-    return renderSamples(renderer);
+    return renderSamples(renderer, allocate);
   } finally {
     releaseRenderer(renderer);
   }

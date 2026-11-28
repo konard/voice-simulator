@@ -6,8 +6,8 @@
 import {
   engineOptions,
   releaseRenderer,
-  renderPlan,
   renderPlanAsync,
+  renderPlanWithStorage,
 } from './acoustics/voice.js';
 import { createEngine } from './engine/index.js';
 import { planUtterance } from './articulation/plan.js';
@@ -231,10 +231,15 @@ export function prepareUtterance(text, options = {}) {
  * @returns {{lang: string, accent: string|null, accentLevel: number|null, ipa: string, words: object[], modes: {from: number, to: number, mode: object}[], warnings: {position: number, message: string}[], head: object, plan: object, timeline: object, sampleRate: number, samples: Float32Array, duration: number, levelOffsetDb: number, loudness?: number}}
  */
 export function synthesize(text, options = {}) {
+  return synthesizeWithStorage(text, options);
+}
+
+/** Synthesize into an optional output allocator for sequential consumers. */
+export function synthesizeWithStorage(text, options, allocate) {
   const prepared = prepareUtterance(text, options);
   return result(
     prepared,
-    renderPlan(prepared.plan, prepared.renderOptions),
+    renderPlanWithStorage(prepared.plan, prepared.renderOptions, allocate),
     options
   );
 }

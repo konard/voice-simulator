@@ -24,6 +24,7 @@ import { goldenRecordings } from '../tests/helpers/golden.js';
 import { roundTrip, sentences } from '../tests/helpers/roundtrip.js';
 import { LABELS, HEAD, LANGUAGES } from '../tests/helpers/recognition-modes.js';
 import { BASELINE_TEXT } from '../src/recognition/mode-baseline.js';
+import { synthesizeWithStorage } from '../src/synthesize.js';
 import {
   BENCHMARK,
   benchmarkRecordings,
@@ -147,6 +148,7 @@ function synthesisRow({ engine, limit, baseline, profile }) {
   cases.length = Math.min(cases.length, limit);
   const heard = (samples, sampleRate, options) =>
     recognize(samples, sampleRate, { ...options, engine: engine.recognition });
+  const storage = sampleStorage();
   const measure = (tier, timed) => {
     const errors = [];
     let seconds = 0;
@@ -155,7 +157,11 @@ function synthesisRow({ engine, limit, baseline, profile }) {
     for (const { lang, preset, text } of cases) {
       const options = { lang, tier, head: 'random', preset, seed: 1 };
       const [spoken, cpu] = cpuTime(() =>
-        synthesize(text, { ...options, engine: timed ? engine.render : 'js' })
+        synthesizeWithStorage(
+          text,
+          { ...options, engine: timed ? engine.render : 'js' },
+          storage
+        )
       );
       profile?.(
         `Synthesis ${tier} ${lang} ${preset} ${errors.length + 1} Rendered`
@@ -199,10 +205,10 @@ function synthesisRow({ engine, limit, baseline, profile }) {
   };
 }
 
-// The corpus rows consume one recording and one conversion at a time.
+// The offline rows consume one waveform at a time per processing stage.
 const MAX_RETAINED_SAMPLES = 1024 * 1024;
 
-function recordingStorage() {
+function sampleStorage() {
   let samples = new Float32Array(0);
   return (length) => {
     if (length > MAX_RETAINED_SAMPLES) {
@@ -226,8 +232,8 @@ function convertRecording({ samples, sampleRate }, rate, storage) {
 /** Recognition on the public benchmark sets of issue 76. */
 async function recognitionRow({ engine, limit, baseline, profile }) {
   warmUp({ engine: engine.recognition });
-  const storage = recordingStorage();
-  const conversion = recordingStorage();
+  const storage = sampleStorage();
+  const conversion = sampleStorage();
   const sums = { low: [], base: [] };
   let seconds = 0;
   let audioSeconds = 0;
@@ -492,8 +498,8 @@ async function sessionRow({ engine, limit, profile }) {
 
 /** copyRecording on the golden set, resampled to 8 kHz. */
 function copyRow({ engine, limit, profile, traceCopy }) {
-  const storage = recordingStorage();
-  const conversion = recordingStorage();
+  const storage = sampleStorage();
+  const conversion = sampleStorage();
   let seconds = 0;
   let audioSeconds = 0;
   const f0 = [];
