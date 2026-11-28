@@ -5,7 +5,8 @@
  * projection of nine stacked frames. Unlicense.
  */
 import { resample } from '../audio/resample.js';
-import { fft, hzToMel, melToHz } from '../metrics/spectrum.js';
+import { hzToMel, melToHz } from '../metrics/spectrum.js';
+import { createFft } from './fft.js';
 import { analyzeFrames } from './frontend.js';
 import { hmmToneFeatures } from './hmm-tone.js';
 import { trackPitch } from './pitch.js';
@@ -53,6 +54,7 @@ let tables;
 function getTables() {
   tables ??= {
     bank: melBank(100, 3500),
+    fft: createFft(SIZE),
     hamming: Float64Array.from(
       { length: WINDOW },
       (_, i) => 0.54 - 0.46 * Math.cos((2 * Math.PI * i) / (WINDOW - 1))
@@ -73,37 +75,44 @@ export function hmmAudio(samples, sampleRate) {
     : resample(samples, sampleRate, HMM_RATE);
 }
 
-function logMel(x, t, re, im, logs) {
-  const { bank, hamming } = getTables();
-  re.fill(0);
+function windowedPower(x, start, re, im, power, { hamming, fft }) {
+  re.fill(0, WINDOW);
   im.fill(0);
-  let prev = t * HOP > 0 ? x[t * HOP - 1] : 0;
+  let prev = start > 0 ? x[start - 1] : 0;
   for (let i = 0; i < WINDOW; i++) {
-    const s = x[t * HOP + i];
-    re[i] = (s - 0.97 * prev) * hamming[i];
-    prev = s;
+    const sample = x[start + i];
+    re[i] = (sample - 0.97 * prev) * hamming[i];
+    prev = sample;
   }
-  fft(re, im);
+  fft.forward(re, im);
+  for (let k = 0; k < power.length; k++) {
+    power[k] = re[k] * re[k] + im[k] * im[k];
+  }
+}
+
+function logMel(power, bank, logs) {
   for (let m = 0; m < FILTERS; m++) {
-    let e = 0;
+    let energy = 0;
     const { start, weights } = bank[m];
     for (let i = 0; i < weights.length; i++) {
-      const k = start + i;
-      e += weights[i] * (re[k] * re[k] + im[k] * im[k]);
+      energy += weights[i] * power[start + i];
     }
-    logs[m] = Math.log(e + 1e-10);
+    logs[m] = Math.log(energy + 1e-10);
   }
 }
 
 function rawCepstra(x) {
-  const { dct } = getTables();
+  const tables = getTables();
+  const { dct, bank } = tables;
   const count = Math.max(0, Math.floor((x.length - WINDOW) / HOP) + 1);
   const re = new Float64Array(SIZE);
   const im = new Float64Array(SIZE);
+  const power = new Float64Array(SIZE / 2 + 1);
   const logs = new Float64Array(FILTERS);
   const raw = new Float64Array(count * STATICS);
   for (let t = 0; t < count; t++) {
-    logMel(x, t, re, im, logs);
+    windowedPower(x, t * HOP, re, im, power, tables);
+    logMel(power, bank, logs);
     const at = t * STATICS;
     for (let n = 0; n < CEPS; n++) {
       let s = 0;
