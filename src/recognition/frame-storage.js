@@ -10,8 +10,11 @@ export function withFrameStorage(use) {
   function storage(key, length, Type) {
     let column = columns.get(key);
     if (!(column instanceof Type) || column.length < length) {
-      column = new Type(length);
-      if (column.byteLength <= COLUMN_LIMIT) {
+      const capacity = column instanceof Type ? column.length : 0;
+      const limit = COLUMN_LIMIT / Type.BYTES_PER_ELEMENT;
+      const grown = Math.min(limit, Math.ceil(capacity * 1.5));
+      column = new Type(Math.max(length, grown));
+      if (length <= limit) {
         columns.set(key, column);
       }
     }

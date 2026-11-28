@@ -282,7 +282,10 @@ function sampleAt(frames, index) {
 function samplePeak(samples, start, end, prior) {
   let peak = prior;
   for (let n = start; n < end; n++) {
-    peak = Math.max(peak, Math.abs(samples[n]));
+    const magnitude = Math.abs(samples[n]);
+    if (magnitude > peak || Number.isNaN(magnitude)) {
+      peak = magnitude;
+    }
   }
   return peak;
 }
