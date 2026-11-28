@@ -41,6 +41,19 @@ export const HMM_LOW_SEARCH = Object.freeze({
   maxActive: 256,
 });
 
+// Whole recordings need more paths than the independently decoded phrases.
+export const HMM_LOW_BATCH_SEARCH = Object.freeze({
+  ...HMM_LOW_SEARCH,
+  maxActive: 480,
+});
+
+// Keep the same within-language beam while limiting work on competing languages.
+export const HMM_LOW_MULTILINGUAL_SEARCH = Object.freeze({
+  ...HMM_LOW_BATCH_SEARCH,
+  languageBeam: 120,
+  maxActive: 384,
+});
+
 /** ln p of a shipped bigram cost (the costs are 0.5 - 0.3 ln p). */
 const lnProbability = (cost) => -(cost - 0.5) / 0.3;
 
@@ -515,22 +528,25 @@ const workspaces = new WeakMap();
  * the beam, its score relative to the best token of its last frame.
  * `options.tone` (the `tone` of hmmFeatures) adds the tone stream.
  */
-export function decodeWords(network, feats, frames, options = {}) {
-  const prior = workspaces.get(network.model);
+export function decodeWords(network, feats, frames, options = {}, cache) {
+  const storage = cache ?? workspaces;
+  const key = cache ? network.nodes.language : network.model;
+  const prior = storage.get(key);
   const workspace =
     prior?.positions.length >= network.nodeCount &&
     prior.histogram.rows.length >= network.languages.length
       ? prior
       : createWorkspace(network);
   // A word-end callback can start another decode synchronously.
-  workspaces.delete(network.model);
+  storage.delete(key);
   try {
     return decodeWithWorkspace(network, feats, frames, options, workspace);
   } finally {
     workspace.entries.clear();
     workspace.next.clear();
     workspace.records.clear();
-    workspaces.set(network.model, workspace);
+    cache?.clear?.();
+    storage.set(key, workspace);
   }
 }
 

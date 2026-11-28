@@ -17,7 +17,7 @@ become stricter.
 | Row | quality | js-1 | rust-1 | memory |
 | --- | --- | --- | --- | --- |
 | synthesis | certified | certified | certified | [failed](https://github.com/konard/voice-simulator/issues/173) |
-| recognition | certified | certified | [failed](https://github.com/konard/voice-simulator/issues/174) | [failed](https://github.com/konard/voice-simulator/issues/173) |
+| recognition | certified | certified | certified | [failed](https://github.com/konard/voice-simulator/issues/173) |
 | streaming | certified | certified | certified | certified |
 | voice-fit | certified | certified | certified | certified |
 | session | certified | certified | certified | certified |
@@ -35,9 +35,9 @@ become stricter.
 | synthesis | memory | peak RSS (MB) | 374.3828 | ≤ 256 | no |
 | recognition | quality | PER increase over 16 kHz | 0.0001 | ≤ 0.05 | yes |
 | recognition | quality | WER increase over 16 kHz | -0.0017 | ≤ 0.08 | yes |
-| recognition | js-1 | real-time factor | 0.2355 | ≤ 0.25 | yes |
-| recognition | rust-1 | real-time factor | 0.2945 | ≤ 0.25 | no |
-| recognition | memory | peak RSS (MB) | 393.3125 | ≤ 256 | no |
+| recognition | js-1 | real-time factor | 0.2062 | ≤ 0.25 | yes |
+| recognition | rust-1 | real-time factor | 0.2108 | ≤ 0.25 | yes |
+| recognition | memory | peak RSS (MB) | 389.5664 | ≤ 256 | no |
 | streaming | quality | stream text differing from batch (WER) | 0 | ≤ 0 | yes |
 | streaming | js-1 | first partial with words (s) | 0.2666 | ≤ 1 | yes |
 | streaming | js-1 | CPU load | 0.0824 | ≤ 0.25 | yes |
@@ -75,8 +75,8 @@ become stricter.
 | --- | --- | ---: | ---: | ---: | --- | --- |
 | synthesis | js | 7.917 | 391.707 | 374.3828 | 192 MB | wer 0.3537, wer16k 0.3624, werIncrease -0.0087, rtf 0.0202, recognitionRtf 0.1301, utterances 160 |
 | synthesis | rust | 5.953 | 391.707 | 342.0508 | 192 MB | wer 0.3537, rtf 0.0152, recognitionRtf 0.1259, utterances 160 |
-| recognition | js | 252.414 | 1071.807 | 393.3125 | 192 MB | per 0.8665, wer 1.2967, per16k 0.8664, wer16k 1.2983, perIncrease 0.0001, werIncrease -0.0017, rtf 0.2355, utterances 127 |
-| recognition | rust | 315.682 | 1071.807 | 377.6445 | 192 MB | per 0.8665, wer 1.2967, rtf 0.2945, utterances 127 |
+| recognition | js | 220.979 | 1071.807 | 389.5664 | 192 MB | per 0.8665, wer 1.2967, per16k 0.8664, wer16k 1.2983, perIncrease 0.0001, werIncrease -0.0017, rtf 0.2062, utterances 127 |
+| recognition | rust | 225.946 | 1071.807 | 346.9922 | 192 MB | per 0.8665, wer 1.2967, rtf 0.2108, utterances 127 |
 | streaming | js | 4.945 | 60 | 169.9414 | 192 MB | textMismatch 0, firstPartial 0.2666, load 0.0824, partials 240, streamText The quick brown fox jump sober the lady dog. She says she ce…, batchText The quick brown fox jump sober the lady dog. She says she ce… |
 | streaming | rust | 3.644 | 60 | 217.8594 | 192 MB | textMismatch 0, firstPartial 0.2555, load 0.0607, partials 240, streamText The quick brown fox jump sober the lady dog. She says she ce…, batchText The quick brown fox jump sober the lady dog. She says she ce… |
 | voice-fit | js | 4.69 | 30 | 198.2539 | 192 MB | vocalTractLengthError 0.0275, pitchError 0.0214, cpuRatio 0.1563 |
@@ -88,3 +88,8 @@ become stricter.
 | modes | js | 8.914 | 109.405 | 233.0508 | 192 MB | modeShare 0.9167, rtf 0.0815, renderRtf 0.0222, utterances 60 |
 | modes | rust | 8.223 | 109.405 | 239.5117 | 192 MB | modeShare 0.9167, rtf 0.0752, renderRtf 0.0161, utterances 60 |
 | app | js | — | 11.289 | — | none | textBack 0.6875, workerRtf 0.0797, workerRtfMeasured 0.0133, firstSound 0.183, firstChunk 0.183, coldFirstSound 0.74, startDelay 0.183, sampleRate 8000, chunks 89, heard The quick brown fox jump solar the lady dog. She says she sh… |
+
+## Targeted reruns
+
+- **recognition** at commit `322c1e9d1c8ad3f7608004f7be895bfa8ba15c98` on Intel(R) Xeon(R) 6975P-C, Node v24.22.3, measured 2026-11-28T04:46:46.099Z.
+  Pinned with `taskset -c 0`. Command `LOWEST_ROW=recognition node --test tests/heavy/lowest-settings.test.js`.

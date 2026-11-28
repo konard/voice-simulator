@@ -148,8 +148,19 @@ function cellFor(runs, row, column, limits, conditions) {
       return [name, { value, limit, pass: passes(name, value, limit) }];
     })
   );
-  const pass = Object.values(metrics).every((metric) => metric.pass);
-  return { status: pass ? 'certified' : 'failed', metrics };
+  // An uncapped retry provides diagnostics for recognition speed. For
+  // certification, both engines must reach the limit under the heap cap.
+  const crashed =
+    row === 'recognition' && (column === 'js-1' || column === 'rust-1')
+      ? run.capped?.crashed
+      : null;
+  const pass =
+    !crashed && Object.values(metrics).every((metric) => metric.pass);
+  return {
+    status: pass ? 'certified' : 'failed',
+    metrics,
+    ...(crashed && { reason: `192 MB heap cap: ${crashed}` }),
+  };
 }
 
 /**

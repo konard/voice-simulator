@@ -145,6 +145,27 @@ describe('lowest settings', () => {
 });
 
 describe('lowest settings publication', () => {
+  it('requires both recognition speed cells to pass under the heap cap', () => {
+    const limits = {
+      recognition: { 'js-1': { rtf: 0.25 }, 'rust-1': { rtf: 0.25 } },
+    };
+    const fast = { metrics: { rtf: 0.22 }, capped: {} };
+    const crashed = {
+      ...fast,
+      capped: { crashed: 'JavaScript heap out of memory' },
+    };
+    for (const [engine, column] of [
+      ['js', 'js-1'],
+      ['rust', 'rust-1'],
+    ]) {
+      const run = (result) =>
+        judge({ recognition: { [engine]: result } }, limits).recognition[column]
+          .status;
+      assert.equal(run(fast), 'certified');
+      assert.equal(run(crashed), 'failed');
+    }
+  });
+
   const dir = mkdtempSync(path.join(tmpdir(), 'lowest-settings-'));
   after(() => rmSync(dir, { recursive: true, force: true }));
   const cells = (status) => ({

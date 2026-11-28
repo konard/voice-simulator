@@ -4,6 +4,10 @@ import { LANGUAGES } from '../g2p/index.js';
 import { registeredLexicons } from '../g2p/lexicon.js';
 import { decoderWhisperSpans } from './decode-pipeline.js';
 import { audioToIpa, audioToIpaParallel } from './decode.js';
+import {
+  HMM_LOW_BATCH_SEARCH,
+  HMM_LOW_MULTILINGUAL_SEARCH,
+} from './hmm-decode.js';
 import { hmmAudioToIpa } from './hmm-stage.js';
 import { createRecognitionEngine, getRecognitionEngine } from './engine.js';
 import { ipaToText } from './ipa-to-text.js';
@@ -37,6 +41,9 @@ export const RECOGNITION_LEVELS = Object.freeze({
   medium: Object.freeze({ rate: 16000, hop: 0.005, beam: 32 }),
   high: Object.freeze({ rate: 16000, hop: 0.005, beam: 128 }),
 });
+
+// Short commands can afford a wider search and have less context.
+const WIDE_SEARCH_SECONDS = 4;
 
 export function levelForTier(name) {
   if (name === 'telephone' || name === 'narrowband') {
@@ -636,13 +643,24 @@ function serial(samples, sampleRate, settings, level, unsplit) {
 }
 
 function decodeBatch(samples, sampleRate, settings, level, wordOptions) {
+  let search;
+  if (
+    wordOptions &&
+    level === 'low' &&
+    samples.length > WIDE_SEARCH_SECONDS * sampleRate
+  ) {
+    search =
+      settings.languages.length === 1
+        ? HMM_LOW_BATCH_SEARCH
+        : HMM_LOW_MULTILINGUAL_SEARCH;
+  }
   const { decoded, input, rate } = decodeRecognitionAudio(
     samples,
     sampleRate,
     settings,
     level,
     undefined,
-    wordOptions
+    search ? { ...wordOptions, search } : wordOptions
   );
   checkNoise(decoded, samples.length / sampleRate);
   if (!heardSpeech(decoded, settings.minVoiced, settings.whisper)) {

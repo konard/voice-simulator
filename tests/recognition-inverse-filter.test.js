@@ -69,6 +69,28 @@ describe('batch glottal inverse filter', () => {
     }
   });
 
+  it('preserves sparse source cues on wideband and bandlimited speech', () => {
+    const v = vowel();
+    for (const [samples, lowBand] of [
+      [v.samples, true],
+      [highPass(v.samples, v.rate, 300), false],
+    ]) {
+      const { frames, pitch } = known(samples, v.rate, v.f0);
+      const options = { pitch, minF0: 35, maxF0: 800 };
+      const full = inverseFilter(frames, options);
+      expect(full.lowBand).toBe(lowBand);
+      const rows = Array.from({ length: frames.count }, (_, t) => t).filter(
+        (t) => t % 3 === 1
+      );
+      const cues = inverseModeMeasures(frames, options, rows);
+      for (const key of ['h1h2Source', 'hnr', 'cpp']) {
+        expect(Array.from(cues[key])).toEqual(
+          Array.from(full[key], (value, t) => (t % 3 === 1 ? value : NaN))
+        );
+      }
+    }
+  });
+
   it('returns the pulse of a known source', () => {
     for (const rate of [16000, 8000]) {
       const v = vowel(0.5, 110, rate);

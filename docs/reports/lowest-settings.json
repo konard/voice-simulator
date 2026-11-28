@@ -170,12 +170,12 @@
           "wer16k": 1.2983,
           "perIncrease": 0.0001,
           "werIncrease": -0.0017,
-          "rtf": 0.2355,
+          "rtf": 0.2062,
           "utterances": 127
         },
-        "seconds": 252.414,
+        "seconds": 220.979,
         "audioSeconds": 1071.807,
-        "peakRssMb": 393.3125,
+        "peakRssMb": 389.56640625,
         "capped": {
           "heapLimitMb": 192
         }
@@ -186,12 +186,12 @@
         "metrics": {
           "per": 0.8665,
           "wer": 1.2967,
-          "rtf": 0.2945,
+          "rtf": 0.2108,
           "utterances": 127
         },
-        "seconds": 315.682,
+        "seconds": 225.946,
         "audioSeconds": 1071.807,
-        "peakRssMb": 377.64453125,
+        "peakRssMb": 346.9921875,
         "capped": {
           "heapLimitMb": 192
         }
@@ -607,28 +607,27 @@
         "status": "certified",
         "metrics": {
           "rtf": {
-            "value": 0.2355,
+            "value": 0.2062,
             "limit": 0.25,
             "pass": true
           }
         }
       },
       "rust-1": {
-        "status": "failed",
+        "status": "certified",
         "metrics": {
           "rtf": {
-            "value": 0.2945,
+            "value": 0.2108,
             "limit": 0.25,
-            "pass": false
+            "pass": true
           }
-        },
-        "issue": "https://github.com/konard/voice-simulator/issues/174"
+        }
       },
       "memory": {
         "status": "failed",
         "metrics": {
           "peakRssMb": {
-            "value": 393.3125,
+            "value": 389.56640625,
             "limit": 256,
             "pass": false
           }
@@ -900,6 +899,18 @@
           }
         }
       }
+    }
+  },
+  "rowMeasurements": {
+    "recognition": {
+      "measured": "2026-11-28T04:46:46.099Z",
+      "commit": "322c1e9d1c8ad3f7608004f7be895bfa8ba15c98",
+      "command": "LOWEST_ROW=recognition node --test tests/heavy/lowest-settings.test.js",
+      "cpu": "Intel(R) Xeon(R) 6975P-C",
+      "node": "v24.22.3",
+      "pinned": true,
+      "core": 0,
+      "limit": null
     }
   }
 }

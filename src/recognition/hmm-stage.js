@@ -136,7 +136,7 @@ export function hmmAudioToIpa(samples, sampleRate, options = {}) {
       : null;
   const decoded = network
     ? measure(options.profile, 'HMM search', () =>
-        decodeWords(network, feats, frames, search)
+        decodeWords(network, feats, frames, search, options.workspaces)
       )
     : { words: [], lang: null };
   // Words from the phone loop get their own tokens to take a stress.
