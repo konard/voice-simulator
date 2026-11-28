@@ -183,7 +183,8 @@ function releaseRecoveryScratch(scratch) {
 
 function minimumVoicedPitch(f0) {
   let lowest = Infinity;
-  for (const pitch of f0) {
+  for (let i = 0; i < f0.length; i++) {
+    const pitch = f0[i];
     if (pitch > 0 && pitch < lowest) {
       lowest = pitch;
     }
@@ -228,6 +229,7 @@ function recover(
   const x = highPass(frames.samples, frames.rate, scratch.subarray(0, n));
   const g = derivativeOnly ? null : scratch.subarray(2 * n, 3 * n).fill(0);
   const width = recoveryLength(lowestPitch, frames.rate);
+  const history = Math.round(0.05 * frames.rate);
   const weight = allocate('weight', Math.max(1, Math.min(n, width))).fill(0);
   // After the last window touching a sample, mode measurements need only its
   // rounded derivative. Keep doubles for the optional stationary blend.
@@ -235,11 +237,15 @@ function recover(
     ? allocate('derivativeRing', weight.length).fill(0)
     : scratch.subarray(n, 2 * n).fill(0);
   const derivative = roundAsReady
-    ? new Float32Array(scratch.buffer, n * Float64Array.BYTES_PER_ELEMENT, n)
+    ? new Float32Array(x.buffer, x.byteOffset, n)
     : d;
+  // Derivative n occupies source cell floor(n / 2). For n at least twice
+  // the filter history, that cell precedes all later windows.
+  const prefix = roundAsReady
+    ? new Float32Array(Math.min(n, 2 * history))
+    : undefined;
   const overlap = { d, g, weight, ring: roundAsReady };
-  const normalize = normalizer(frames, f0, weight, d, g, derivative);
-  const history = Math.round(0.05 * frames.rate);
+  const normalize = normalizer(frames, f0, overlap, derivative, prefix);
   const iaif = new IaifWorkspace(
     o.tractOrder,
     o.glottisOrder,
@@ -266,6 +272,9 @@ function recover(
     addRecoveryWindow(overlap, pulse, window, start, end, history);
   }
   normalize(n);
+  if (prefix) {
+    derivative.set(prefix);
+  }
   return finishRecovery(frames, f0, o, stationary, { x, d, g, derivative });
 }
 
@@ -298,18 +307,17 @@ function recoveryLength(pitch, rate) {
   return Math.round(Math.max(0.032, 2.5 / pitch) * rate);
 }
 
-function normalizer(frames, f0, weight, d, g, derivative) {
+function normalizer(frames, f0, { d, g, weight, ring }, derivative, prefix) {
   const hopSamples = frames.rate * frames.hop;
-  const ring = d !== derivative;
   let n = 0;
-  return (end) => {
+  function write(end, output) {
     for (; n < end; n++) {
       const slot = n % weight.length;
       const scale = weight[slot];
       const row = Math.min(f0.length - 1, Math.round(n / hopSamples));
       const voiced = scale > 0.01 && f0[row] > 0;
       const index = ring ? slot : n;
-      derivative[n] = voiced ? d[index] / scale : 0;
+      output[n] = voiced ? d[index] / scale : 0;
       if (ring) {
         d[index] = 0;
       }
@@ -318,6 +326,12 @@ function normalizer(frames, f0, weight, d, g, derivative) {
       }
       weight[slot] = 0;
     }
+  }
+  return (end) => {
+    if (prefix && n < prefix.length) {
+      write(Math.min(end, prefix.length), prefix);
+    }
+    write(end, derivative);
   };
 }
 
@@ -601,9 +615,9 @@ function inverseFilterJs(frames, o, modesOnly = false, rows) {
     (hasLowBand && (rows ? rows.some((t) => f0[t]) : f0.some(Boolean)));
   const stationary =
     recoverSource && modesOnly ? [...steadySpans(frames, f0, o)] : undefined;
-  const columns = modesOnly ? (stationary?.length ? 2 : 1.5) : 3;
+  const columns = modesOnly ? (stationary?.length ? 2 : 1) : 3;
   const scratch = recoverSource
-    ? takeRecoveryScratch(Math.ceil(frames.sampleCount * columns))
+    ? takeRecoveryScratch(frames.sampleCount * columns)
     : null;
   const work = spareWindows ?? new Map();
   spareWindows = undefined;
