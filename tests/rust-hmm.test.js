@@ -1,5 +1,5 @@
 /** Class B parity of the Gaussian HMM kernels of the word decoder (issue 75). */
-import { describe, expect } from 'test-anywhere';
+import { describe, expect, it as test } from 'test-anywhere';
 import {
   applyLda,
   hmmFeatures,
@@ -34,6 +34,22 @@ function sound() {
   }
   return x;
 }
+
+test('packed HMM features match the training feature rows', () => {
+  const { lda } = getHmmModel();
+  const samples = sound();
+  const { statics, pitch } = hmmStatics(samples);
+  const lf0 = statics.map((row) => row[13] / 4);
+  const voicing = statics.map((row) => row[14]);
+  const packed = hmmFeatures(samples, RATE, lda, pitch);
+  const spectralOnly = hmmFeatures(samples, RATE, lda, pitch, false);
+
+  expect(packed.frames).toBe(statics.length);
+  expect(packed.feats).toEqual(applyLda(lda, statics));
+  expect(packed.tone).toEqual(hmmToneFeatures(lf0, voicing));
+  expect(spectralOnly.feats).toEqual(packed.feats);
+  expect(spectralOnly.tone).toBeUndefined();
+});
 
 describe('Rust HMM kernels (issue 75)', () => {
   it('projects the statics as applyLda does', async () => {

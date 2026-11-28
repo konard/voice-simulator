@@ -118,7 +118,8 @@ export function hmmAudioToIpa(samples, sampleRate, options = {}) {
     samples,
     sampleRate,
     model.lda,
-    pitch
+    pitch,
+    languages.includes('zh')
   );
   const search = { ...options.search, tone };
   // Features are normalised per input, so silence alone would decode as

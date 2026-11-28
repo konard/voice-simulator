@@ -16,6 +16,7 @@ const HOP = 80;
 const SIZE = 256;
 const FILTERS = 24;
 const CEPS = 13;
+const STATICS = CEPS + 2;
 /** Octaves from the median beyond which a pitch is dropped. */
 const PITCH_RANGE = 1;
 
@@ -99,19 +100,18 @@ function rawCepstra(x) {
   const re = new Float64Array(SIZE);
   const im = new Float64Array(SIZE);
   const logs = new Float64Array(FILTERS);
-  const raw = [];
+  const raw = new Float64Array(count * STATICS);
   for (let t = 0; t < count; t++) {
     logMel(x, t, re, im, logs);
-    const c = new Float64Array(CEPS);
+    const at = t * STATICS;
     for (let n = 0; n < CEPS; n++) {
       let s = 0;
       for (let m = 0; m < FILTERS; m++) {
         s += dct[n][m] * logs[m];
       }
-      c[n] = s;
+      raw[at + n] = s;
     }
-    c[0] /= FILTERS;
-    raw.push(c);
+    raw[at] /= FILTERS;
   }
   return raw;
 }
@@ -122,30 +122,28 @@ function rawCepstra(x) {
  */
 function normalise(raw) {
   let top = -Infinity;
-  for (const c of raw) {
-    top = Math.max(top, c[0]);
+  for (let at = 0; at < raw.length; at += STATICS) {
+    top = Math.max(top, raw[at]);
   }
   const mean = new Float64Array(CEPS);
   let used = 0;
-  for (const c of raw) {
-    if (c[0] > top - 6.9) {
+  for (let at = 0; at < raw.length; at += STATICS) {
+    if (raw[at] > top - 6.9) {
       used++;
       for (let n = 1; n < CEPS; n++) {
-        mean[n] += c[n];
+        mean[n] += raw[at + n];
       }
     }
   }
   for (let n = 1; n < CEPS; n++) {
     mean[n] /= Math.max(1, used);
   }
-  return raw.map((c) => {
-    const v = new Float64Array(CEPS + 2);
-    v[0] = Math.max(c[0] - top, -13.8);
+  for (let at = 0; at < raw.length; at += STATICS) {
+    raw[at] = Math.max(raw[at] - top, -13.8);
     for (let n = 1; n < CEPS; n++) {
-      v[n] = c[n] - mean[n];
+      raw[at + n] -= mean[n];
     }
-    return v;
-  });
+  }
 }
 
 /**
@@ -161,25 +159,8 @@ function dropOutliers(lf0, median) {
   }
 }
 
-/**
- * Pitch statics per frame: log2 f0 minus the utterance median of the
- * voiced frames, interpolated across unvoiced frames, and the voicing.
- */
-export function hmmPitchStatics(pitch, count) {
-  const lf0 = new Float64Array(count).fill(NaN);
-  const voicing = new Float64Array(count);
-  for (let t = 0; t < count; t++) {
-    const i = Math.round((hmmFrameTime(t) - pitch.startTime) / pitch.hop);
-    if (i >= 0 && i < pitch.count) {
-      voicing[t] = pitch.voicing[i];
-      if (pitch.f0[i] > 0 && pitch.voicing[i] > 0.5) {
-        lf0[t] = Math.log2(pitch.f0[i]);
-      }
-    }
-  }
-  const voiced = [...lf0].filter((v) => !Number.isNaN(v)).sort((a, b) => a - b);
-  const median = voiced.length ? voiced[voiced.length >> 1] : 0;
-  dropOutliers(lf0, median);
+function interpolatePitch(lf0, median) {
+  const count = lf0.length;
   let last = -1;
   for (let t = 0; t <= count; t++) {
     if (t < count && Number.isNaN(lf0[t])) {
@@ -194,24 +175,66 @@ export function hmmPitchStatics(pitch, count) {
     }
     last = t;
   }
-  return { lf0: lf0.map((v) => v - median), voicing };
+}
+
+/**
+ * Pitch statics per frame: log2 f0 minus the utterance median of the
+ * voiced frames, interpolated across unvoiced frames, and the voicing.
+ */
+export function hmmPitchStatics(pitch, count) {
+  const lf0 = new Float64Array(count).fill(NaN);
+  const voicing = new Float64Array(count);
+  const voiced = new Float64Array(count);
+  let used = 0;
+  for (let t = 0; t < count; t++) {
+    const i = Math.round((hmmFrameTime(t) - pitch.startTime) / pitch.hop);
+    if (i >= 0 && i < pitch.count) {
+      voicing[t] = pitch.voicing[i];
+      if (pitch.f0[i] > 0 && pitch.voicing[i] > 0.5) {
+        const value = Math.log2(pitch.f0[i]);
+        lf0[t] = value;
+        voiced[used++] = value;
+      }
+    }
+  }
+  voiced.subarray(0, used).sort();
+  const median = used ? voiced[used >> 1] : 0;
+  dropOutliers(lf0, median);
+  interpolatePitch(lf0, median);
+  for (let t = 0; t < count; t++) {
+    lf0[t] -= median;
+  }
+  return { lf0, voicing };
+}
+
+function staticFeatures(
+  samples,
+  pitch = trackPitch(analyzeFrames(samples, HMM_RATE, { hop: 0.01 }))
+) {
+  const values = rawCepstra(samples);
+  normalise(values);
+  const count = values.length / STATICS;
+  const { lf0, voicing } = hmmPitchStatics(pitch, count);
+  for (let t = 0; t < count; t++) {
+    const at = t * STATICS;
+    values[at + CEPS] = 4 * lf0[t];
+    values[at + CEPS + 1] = voicing[t];
+  }
+  return { values, count, pitch, lf0, voicing };
 }
 
 /**
  * Static features of 8 kHz speech: one row of 15 values per frame, and
  * the pitch track used for them.
  */
-export function hmmStatics(
-  x,
-  pitch = trackPitch(analyzeFrames(x, HMM_RATE, { hop: 0.01 }))
-) {
-  const statics = normalise(rawCepstra(x));
-  const { lf0, voicing } = hmmPitchStatics(pitch, statics.length);
-  statics.forEach((v, t) => {
-    v[CEPS] = 4 * lf0[t];
-    v[CEPS + 1] = voicing[t];
-  });
-  return { statics, pitch };
+export function hmmStatics(x, pitchAtInputRate) {
+  const { values, count, pitch } = staticFeatures(x, pitchAtInputRate);
+  return {
+    statics: Array.from({ length: count }, (_, t) =>
+      values.subarray(t * STATICS, (t + 1) * STATICS)
+    ),
+    pitch,
+  };
 }
 
 /**
@@ -220,17 +243,23 @@ export function hmmStatics(
  * projection rows.
  */
 export function applyLda(lda, statics) {
+  return projectLda(lda, statics.length, statics);
+}
+
+function projectLda(lda, frames, statics, flat) {
   const { ctx, dim, width, rows, mean, dims } = lda;
   const stat = dim / 2;
-  const frames = statics.length;
   const x = new Float64Array(width);
   const out = new Float32Array(frames * dims);
   for (let t = 0; t < frames; t++) {
     for (let j = -ctx; j <= ctx; j++) {
-      const row = statics[Math.min(frames - 1, Math.max(0, t + j))];
+      const frame = Math.min(frames - 1, Math.max(0, t + j));
+      const row = flat ?? statics[frame];
+      const start = flat ? frame * STATICS : 0;
+      const base = (j + ctx) * stat;
       for (let d = 0; d < stat; d++) {
-        const k = (j + ctx) * stat + d;
-        x[k] = row[d] - mean[k];
+        const k = base + d;
+        x[k] = row[start + d] - mean[k];
       }
     }
     for (let r = 0; r < dims; r++) {
@@ -249,15 +278,22 @@ export function applyLda(lda, statics) {
  * Model features of speech at any rate, the tone-stream features
  * (hmm-tone.js) and the 8 kHz pitch track.
  */
-export function hmmFeatures(samples, sampleRate, lda, pitchAtInputRate) {
+export function hmmFeatures(
+  samples,
+  sampleRate,
+  lda,
+  pitchAtInputRate,
+  includeTone = true
+) {
   const x = hmmAudio(samples, sampleRate);
-  const { statics, pitch } = hmmStatics(
+  const { values, count, pitch, lf0, voicing } = staticFeatures(
     x,
     sampleRate === HMM_RATE ? pitchAtInputRate : undefined
   );
-  const tone = hmmToneFeatures(
-    statics.map((v) => v[CEPS] / 4),
-    statics.map((v) => v[CEPS + 1])
-  );
-  return { feats: applyLda(lda, statics), frames: statics.length, pitch, tone };
+  return {
+    feats: projectLda(lda, count, undefined, values),
+    frames: count,
+    pitch,
+    tone: includeTone ? hmmToneFeatures(lf0, voicing) : undefined,
+  };
 }
