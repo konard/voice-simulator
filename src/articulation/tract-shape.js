@@ -64,7 +64,8 @@ export function createTractWorkspace({ sections, reuseAreas = false } = {}) {
     full: { ...CHANNEL_DEFAULTS, time: 0 },
     vowel: createVowelWorkspace(),
     jaw: { scale: 1, from: 0 },
-    fit: { sections, openness: 0.5, ratio: undefined, positions: undefined },
+    fit: { ratio: undefined, positions: undefined },
+    warp: { areas: null, length: 0, velum: 0, lengths: null, step: 0 },
     lengths: sections === undefined ? undefined : new Float64Array(sections),
     fitted: reuseAreas ? new Float64Array(sections) : undefined,
     stretched: reuseAreas ? new Float64Array(sections) : undefined,
@@ -251,6 +252,11 @@ export function fitToHead(shape, head, options = {}, target, positions) {
   const sections = options.sections ?? TRACT_SECTIONS;
   const openness = options.openness ?? 0.5;
   const areas = target ?? new Float64Array(sections);
+  const length = fitAreas(shape, head, sections, openness, areas, positions);
+  return { areas, length };
+}
+
+function fitAreas(shape, head, sections, openness, areas, positions) {
   const original = shape.areas;
   const ratio = head.pharynxRatio;
   for (let index = 0; index < sections; index++) {
@@ -264,9 +270,9 @@ export function fitToHead(shape, head, options = {}, target, positions) {
     areas[index] = area * regionScale(x, head, openness);
   }
   const lipExtension = 0.5 * (head.lipThickness - 1);
-  const length =
-    (shape.length * head.vocalTractLength) / REFERENCE_LENGTH + lipExtension;
-  return { areas, length };
+  return (
+    (shape.length * head.vocalTractLength) / REFERENCE_LENGTH + lipExtension
+  );
 }
 
 /** Length of the overlap of [from, to] and [low, high]. */
@@ -285,7 +291,9 @@ function overlap(from, to, low, high) {
  *   total length (cm).
  */
 export function stretchSections(areas, lengths, sections = areas.length) {
-  return stretchInto(areas, lengths, sections);
+  const result = new Float64Array(sections);
+  const length = stretchInto(areas, lengths, sections, result);
+  return { areas: result, length };
 }
 
 function stretchInto(areas, lengths, sections, result) {
@@ -294,7 +302,6 @@ function stretchInto(areas, lengths, sections, result) {
   for (let index = 0; index < count; index++) {
     length += lengths[index];
   }
-  result ??= new Float64Array(sections);
   const step = length / sections;
   let index = 0;
   let start = 0;
@@ -314,7 +321,7 @@ function stretchInto(areas, lengths, sections, result) {
     }
     result[section] = to > from ? volume / (to - from) : areas[index];
   }
-  return { areas: result, length };
+  return length;
 }
 
 /**
@@ -356,21 +363,19 @@ function stretchedPosition(lengths, step, position) {
 }
 
 /**
- * Section index of a landmark of a tract with `count` sections: `place`
- * maps the index of the unstretched tract (as a position in cm above its
- * glottis, at the section middle) onto the stretched tract, so the landmark
- * keeps its distance from the lips when the larynx moves.
+ * Map a section's midpoint onto the stretched tract so the landmark keeps
+ * its distance from the lips when the larynx moves.
  */
-function landmarkMap(lengths, length, stretched) {
+function landmarkIndex({ lengths, length, step }, index) {
+  if (lengths === null) {
+    return index;
+  }
   const count = lengths.length;
-  const step = length / count;
-  return (index) => {
-    const position = stretchedPosition(lengths, step, (index + 0.5) * step);
-    return Math.min(
-      count - 1,
-      Math.max(0, Math.round((position / stretched) * count - 0.5))
-    );
-  };
+  const position = stretchedPosition(lengths, step, (index + 0.5) * step);
+  return Math.min(
+    count - 1,
+    Math.max(0, Math.round((position / length) * count - 0.5))
+  );
 }
 
 /**
@@ -423,11 +428,12 @@ export function noseShape(head, sections = NOSE_SECTIONS) {
 }
 
 /** Narrowest section near the active articulator. */
-function constrictionIndex(areas, state, head, place) {
+function constrictionIndex(areas, state, head, warp) {
   const lips = (state.lipAmount ?? 0) > (state.tongueAmount ?? 0);
   const location = lips ? 1 : state.tongueLocation;
   const last = areas.length - 1;
-  const center = place(
+  const center = landmarkIndex(
+    warp,
     Math.round(headPosition(location, head.pharynxRatio) * last)
   );
   let best = Math.min(last, center);
@@ -452,8 +458,8 @@ function obstacleStrength(state, teeth) {
   return (state.sibilance ?? 0) * narrow;
 }
 
-function fricationSource(areas, state, head, teeth, place, target = {}) {
-  const index = constrictionIndex(areas, state, head, place);
+function fricationSource(areas, state, head, teeth, warp, target = {}) {
+  const index = constrictionIndex(areas, state, head, warp);
   const obstacle = obstacleStrength(state, teeth);
   // Sibilant jets hit the incisors: the noise starts just past them.
   const position =
@@ -525,15 +531,16 @@ function stateWithDefaults(state, full) {
 function warpTract(reference, head, sections, openness, free, workspace) {
   const { lengths: lengthTarget, fitted, stretched, fit } = workspace;
   if (fit) {
-    fit.sections = sections;
-    fit.openness = openness;
     prepareWarpedSamples(sections, head.pharynxRatio, fit);
   }
-  const { areas, length } = fitToHead(
+  const areas =
+    fitted?.length === sections ? fitted : new Float64Array(sections);
+  const length = fitAreas(
     reference,
     head,
-    fit ?? { sections, openness },
-    fitted?.length === sections ? fitted : undefined,
+    sections,
+    openness,
+    areas,
     fit?.positions
   );
   const count = areas.length;
@@ -546,6 +553,12 @@ function warpTract(reference, head, sections, openness, free, workspace) {
   // that follows rounding may still differ by about 1e-8 cm.
   const larynx = -free.larynxHeight;
   const lips = free.lipProtrusion - free.expectedProtrusion;
+  const warp = workspace.warp ?? {};
+  warp.areas = areas;
+  warp.length = length;
+  warp.velum = velum;
+  warp.lengths = null;
+  warp.step = 0;
   if (
     Math.abs(larynx) > MIN_LENGTH_CHANGE ||
     Math.abs(lips) > MIN_LENGTH_CHANGE
@@ -557,19 +570,14 @@ function warpTract(reference, head, sections, openness, free, workspace) {
       lips,
       lengthTarget?.length === count ? lengthTarget : undefined
     );
-    const equal = stretchInto(
-      areas,
-      lengths,
-      count,
-      stretched?.length === count ? stretched : undefined
-    );
-    return {
-      ...equal,
-      velum,
-      place: landmarkMap(lengths, length, equal.length),
-    };
+    const equal =
+      stretched?.length === count ? stretched : new Float64Array(count);
+    warp.areas = equal;
+    warp.lengths = lengths;
+    warp.step = length / count;
+    warp.length = stretchInto(areas, lengths, count, equal);
   }
-  return { areas, length, velum, place: (index) => index };
+  return warp;
 }
 
 function glottisShape(state, target = {}) {
@@ -630,7 +638,7 @@ export function tractShape(state, head, options = {}, workspace = {}) {
     workspace.vowel
   );
   const openness = Math.max(0, Math.min(1, 1 - full.height));
-  const { areas, length, velum, place } = warpTract(
+  const warp = warpTract(
     reference,
     head,
     options.sections ?? TRACT_SECTIONS,
@@ -638,6 +646,7 @@ export function tractShape(state, head, options = {}, workspace = {}) {
     free,
     workspace
   );
+  const { areas, length, velum } = warp;
   const teeth =
     options.teeth === false
       ? null
@@ -649,13 +658,13 @@ export function tractShape(state, head, options = {}, workspace = {}) {
     MAX_VELUM_AREA *
     Math.max(0, Math.min(1, full.velum)) *
     (head.nasalCoupling ?? 1);
-  shape.velumIndex = place(velum);
+  shape.velumIndex = landmarkIndex(warp, velum);
   shape.frication = fricationSource(
     areas,
     full,
     head,
     teeth,
-    place,
+    warp,
     shape.frication
   );
   shape.glottis = glottisShape(full, shape.glottis);
