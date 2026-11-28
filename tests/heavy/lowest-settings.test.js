@@ -220,6 +220,17 @@ function commit() {
   }
 }
 
+function checkMeasurement(measured) {
+  assert.ok(!measured.error, measured.error);
+  if (selected === 'copy') {
+    assert.ok(!measured.unavailable, measured.unavailable);
+    assert.ok(
+      !measured.capped?.crashed,
+      'Copy synthesis must finish under the heap cap'
+    );
+  }
+}
+
 describe('lowest settings: 8 kHz and one core', () => {
   mkdirSync(out, { recursive: true });
   for (const row of rows) {
@@ -231,7 +242,7 @@ describe('lowest settings: 8 kHz and one core', () => {
         runs[row] ??= {};
         runs[row][engine] = measured;
         console.log(`lowest ${row} ${engine}`, JSON.stringify(measured));
-        assert.ok(!measured.error, measured.error);
+        checkMeasurement(measured);
         if (row === 'streaming' && !Number.isFinite(limit)) {
           certifyStreaming(engine, measured);
         }
