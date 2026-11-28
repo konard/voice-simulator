@@ -31,6 +31,7 @@ import {
   decodeBlock,
   blockTables,
   findBlock,
+  indexBlock,
   isVslex,
   storedWord,
 } from './vslex.js';
@@ -78,7 +79,7 @@ function openVslex(data) {
       if (blocks === cache && cache.size === 64) {
         cache.delete(cache.keys().next().value);
       }
-      blocks.set(index, new Map(decodeBlock(data, index, tables)));
+      blocks.set(index, indexBlock(data, index, tables));
     }
     return blocks.get(index);
   };
@@ -86,8 +87,7 @@ function openVslex(data) {
     const key = lexiconKey(word);
     const stored = storedWord(data, key);
     const index = stored === null ? -1 : findBlock(data, stored);
-    const found = index < 0 ? undefined : block(index).get(key);
-    return found ? [...found] : null;
+    return index < 0 ? null : block(index)(key);
   };
   const lexicon = {
     size: data.count,
