@@ -177,7 +177,8 @@ export function yinPitch(
   start,
   length,
   sampleRate,
-  normalized = createYinWorkspace(sampleRate)
+  normalized = createYinWorkspace(sampleRate),
+  pitch = { f0: 0, aperiodicity: 0 }
 ) {
   const minLag = Math.max(2, Math.floor(sampleRate / MAX_F0));
   const maxLag = Math.ceil(sampleRate / MIN_F0);
@@ -186,10 +187,9 @@ export function yinPitch(
   const after = normalized[best + 1];
   const curvature = before - 2 * normalized[best] + after;
   const shift = curvature > 0 ? (0.5 * (before - after)) / curvature : 0;
-  return {
-    f0: sampleRate / (best + Math.max(-0.5, Math.min(0.5, shift))),
-    aperiodicity: Math.max(0, normalized[best]),
-  };
+  pitch.f0 = sampleRate / (best + Math.max(-0.5, Math.min(0.5, shift)));
+  pitch.aperiodicity = Math.max(0, normalized[best]);
+  return pitch;
 }
 
 /** Cubic (Catmull-Rom) interpolation of a signal at a fractional index. */
@@ -239,24 +239,24 @@ function straighten(signal, start, output, sampleRate, slope, f0) {
  * before and after it; 0 when one of them is unvoiced. Limited to
  * MAX_SLOPE f0 per second.
  */
-function pitchSlope(frames, index, f0) {
-  const previous = frames[index - 1];
-  const next = frames[index + 1];
-  if (!previous?.voiced || !next?.voiced) {
+function pitchSlope(pitches, index, f0) {
+  const previous = pitches[index - 1];
+  const next = pitches[index + 1];
+  if (!previous || !next) {
     return 0;
   }
   const limit = MAX_SLOPE * f0;
-  return Math.max(-limit, Math.min(limit, (next.f0 - previous.f0) / (2 * HOP)));
+  return Math.max(-limit, Math.min(limit, (next - previous) / (2 * HOP)));
 }
 
 /**
  * YIN aperiodicity of a voiced frame after its pitch movement is taken out.
  * The stretch covers the frame and the longest lag YIN compares it with.
  */
-function straightAperiodicity(signal, frames, index, scratch) {
+function straightAperiodicity(signal, pitches, index, scratch) {
   const { hop, length, rate, straight, differences } = scratch;
-  const { f0 } = frames[index];
-  const slope = pitchSlope(frames, index, f0);
+  const f0 = pitches[index];
+  const slope = pitchSlope(pitches, index, f0);
   straighten(signal, index * hop, straight, rate, slope, f0);
   return fractionalAperiodicity(straight, length, rate / f0, differences);
 }
@@ -362,7 +362,8 @@ export function formantSpacing(formants) {
 }
 
 function countSyllables(levels, voiced) {
-  const smooth = levels.map((_, index) => {
+  const decibels = new Float64Array(levels.length);
+  for (let index = 0; index < levels.length; index++) {
     let sum = 0;
     let count = 0;
     for (let offset = -1; offset <= 1; offset++) {
@@ -371,9 +372,8 @@ function countSyllables(levels, voiced) {
         count++;
       }
     }
-    return sum / count;
-  });
-  const decibels = smooth.map((value) => 20 * Math.log10(value + 1e-9));
+    decibels[index] = 20 * Math.log10(sum / count + 1e-9);
+  }
   let count = 0;
   let valley = Infinity;
   let last = -Infinity;
@@ -426,34 +426,44 @@ export function prepareLegacyVoice(samples, sampleRate, options = {}) {
     options.formantCount ?? Math.min(4, Math.floor((0.45 * rate) / 1000));
   const hop = Math.round(HOP * rate);
   const length = Math.round(WINDOW * rate);
-  const levels = [];
-  for (let start = 0; start + length <= signal.length; start += hop) {
-    levels.push(frameLevel(signal, start, length));
+  const count = Math.max(0, Math.floor((signal.length - length) / hop) + 1);
+  const levels = new Float64Array(count);
+  for (let i = 0; i < count; i++) {
+    levels[i] = frameLevel(signal, i * hop, length);
   }
   const loud = percentile(levels, 0.95);
-  const active = levels.map((level) => level > Math.max(1e-4, 0.1 * loud));
-  const frames = active.map((value) => (value ? null : { voiced: false }));
+  const threshold = Math.max(1e-4, 0.1 * loud);
+  const pending = new Uint8Array(count);
+  const pitches = new Float64Array(count);
+  let activeFrames = 0;
+  for (let i = 0; i < count; i++) {
+    if (levels[i] > threshold) {
+      pending[i] = 1;
+      activeFrames++;
+    }
+  }
   const yin = createYinWorkspace(rate);
+  const pitch = { f0: 0, aperiodicity: 0 };
   let evaluated = 0;
-  function frameAt(index) {
-    if (frames[index] === null) {
-      const pitch = yinPitch(signal, index * hop, length, rate, yin);
-      frames[index] = {
-        ...pitch,
-        voiced: pitch.aperiodicity < VOICED_APERIODICITY,
-      };
+  function isVoiced(index) {
+    if (pending[index]) {
+      yinPitch(signal, index * hop, length, rate, yin, pitch);
+      if (pitch.aperiodicity < VOICED_APERIODICITY) {
+        pitches[index] = pitch.f0;
+      }
+      pending[index] = 0;
       evaluated++;
     }
-    return frames[index];
+    return pitches[index] > 0;
   }
-  const activeSeconds = active.filter(Boolean).length * HOP;
+  const activeSeconds = activeFrames * HOP;
+  let syllables;
   const rateFeatures = {
     duration: samples.length / sampleRate,
     activeDuration: activeSeconds,
     get syllableRate() {
       return activeSeconds > 0
-        ? countSyllables(levels, (index) => frameAt(index).voiced) /
-            activeSeconds
+        ? (syllables ??= countSyllables(levels, isVoiced)) / activeSeconds
         : 0;
     },
   };
@@ -462,7 +472,7 @@ export function prepareLegacyVoice(samples, sampleRate, options = {}) {
       stage: 'legacy-voice-pitch',
       phase,
       evaluated,
-      activeFrames: active.filter(Boolean).length,
+      activeFrames,
     });
   if (options.trace) {
     void rateFeatures.syllableRate;
@@ -472,12 +482,12 @@ export function prepareLegacyVoice(samples, sampleRate, options = {}) {
   let features = null;
   function pitchFeatures() {
     if (!features) {
-      for (let index = 0; index < frames.length; index++) {
-        if (frameAt(index).voiced) {
+      for (let index = 0; index < count; index++) {
+        if (isVoiced(index)) {
           voicedIndices.push(index);
         }
       }
-      const f0s = voicedIndices.map((index) => frames[index].f0);
+      const f0s = voicedIndices.map((index) => pitches[index]);
       const f0Low = percentile(f0s, 0.05);
       const f0High = percentile(f0s, 0.95);
       features = {
@@ -510,7 +520,7 @@ export function prepareLegacyVoice(samples, sampleRate, options = {}) {
       if (!completed) {
         Object.assign(
           features,
-          legacyDiagnostics(signal, rate, frames, voicedIndices, {
+          legacyDiagnostics(signal, rate, pitches, voicedIndices, {
             ...options,
             order,
             formantCount,
@@ -525,7 +535,7 @@ export function prepareLegacyVoice(samples, sampleRate, options = {}) {
   };
 }
 
-function legacyDiagnostics(signal, rate, frames, voicedIndices, options) {
+function legacyDiagnostics(signal, rate, pitches, voicedIndices, options) {
   const { order, formantCount, hop, length } = options;
   const diagnosticFrames = voicedIndices.length;
   const stride = Math.max(1, diagnosticFrames / FORMANT_FRAMES);
@@ -565,12 +575,12 @@ function legacyDiagnostics(signal, rate, frames, voicedIndices, options) {
     for (let n = 0; n < length; n++) {
       windowed[n] = signal[start + n] * hann[n];
     }
-    const h1 = harmonicLevel(windowed, frames[index].f0, rate);
-    const h2 = harmonicLevel(windowed, 2 * frames[index].f0, rate);
+    const h1 = harmonicLevel(windowed, pitches[index], rate);
+    const h2 = harmonicLevel(windowed, 2 * pitches[index], rate);
     tilts.push(20 * Math.log10((h1 + 1e-12) / (h2 + 1e-12)));
     const aperiodicity = Math.min(
       0.999,
-      Math.max(1e-3, straightAperiodicity(upper, frames, index, hnrScratch))
+      Math.max(1e-3, straightAperiodicity(upper, pitches, index, hnrScratch))
     );
     noise.push(10 * Math.log10((1 - aperiodicity) / aperiodicity));
   }
