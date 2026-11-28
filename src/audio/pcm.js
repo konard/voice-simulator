@@ -208,11 +208,18 @@ export function encodeSamples(channels, format) {
  * @param {{bitDepth: number, kind: string, little: boolean}} format
  * @returns {Float32Array}
  */
-export function decodeSamples(bytes, offset, length, channels, format) {
+export function decodeSamples(
+  bytes,
+  offset,
+  length,
+  channels,
+  format,
+  allocate
+) {
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
   const width = format.bitDepth / 8;
   const frames = Math.floor(length / (width * channels));
-  const mono = new Float32Array(frames);
+  const mono = allocate ? allocate(frames) : new Float32Array(frames);
   let at = offset;
   for (let frame = 0; frame < frames; frame++) {
     let sum = 0;

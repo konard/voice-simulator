@@ -685,8 +685,8 @@ function mixFrame(subframes, { channels, bitDepth }, output, offset, count) {
   }
 }
 
-function joinFrames(blocks, length) {
-  const samples = new Float32Array(length);
+function joinFrames(blocks, length, allocate) {
+  const samples = allocate ? allocate(length) : new Float32Array(length);
   let offset = 0;
   for (const block of blocks) {
     const take = Math.min(block.length, length - offset);
@@ -696,7 +696,7 @@ function joinFrames(blocks, length) {
   return samples;
 }
 
-function decodeFrames(reader, info, maxSeconds) {
+function decodeFrames(reader, info, maxSeconds, allocate) {
   const blocks = [];
   // Predictors and stereo decorrelation need full-precision samples within
   // one frame. Reuse those channel buffers and retain only the mono audio.
@@ -706,7 +706,9 @@ function decodeFrames(reader, info, maxSeconds) {
   // allocation from untrusted metadata to 4 MiB.
   const output =
     info.total && info.total <= 1024 * 1024
-      ? new Float32Array(info.total)
+      ? allocate
+        ? allocate(info.total)
+        : new Float32Array(info.total)
       : null;
   let frames = 0;
   while (reader.position + 2 <= reader.bytes.length) {
@@ -733,9 +735,12 @@ function decodeFrames(reader, info, maxSeconds) {
   }
   const length = info.total ? Math.min(info.total, frames) : frames;
   if (!output) {
-    return joinFrames(blocks, length);
+    return joinFrames(blocks, length, allocate);
   }
-  return output.length === length ? output : output.slice(0, length);
+  if (output.length === length) {
+    return output;
+  }
+  return allocate ? output.subarray(0, length) : output.slice(0, length);
 }
 
 /**
@@ -744,7 +749,7 @@ function decodeFrames(reader, info, maxSeconds) {
  * @param {number} [maxSeconds]
  * @returns {{sampleRate: number, samples: Float32Array, channels: number, bitDepth: number, float: boolean}}
  */
-export function decodeFlac(bytes, maxSeconds = Infinity) {
+export function decodeFlac(bytes, maxSeconds = Infinity, allocate) {
   const position = flacStart(bytes);
   if (readTag(bytes, position) !== 'fLaC') {
     throw new Error('Not a FLAC file');
@@ -768,7 +773,7 @@ export function decodeFlac(bytes, maxSeconds = Infinity) {
   }
   return {
     sampleRate: info.sampleRate,
-    samples: decodeFrames(reader, info, maxSeconds),
+    samples: decodeFrames(reader, info, maxSeconds, allocate),
     channels: info.channels,
     bitDepth: info.bitDepth,
     float: false,

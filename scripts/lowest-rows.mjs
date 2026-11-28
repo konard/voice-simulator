@@ -17,7 +17,7 @@ import {
   recognize,
   synthesize,
 } from '../src/index.js';
-import { resample } from '../src/audio/resample.js';
+import { resampleWithStorage } from '../src/audio/resample.js';
 import { createEngine } from '../src/engine/index.js';
 import { createRecognitionEngine } from '../src/recognition/engine.js';
 import { goldenRecordings } from '../tests/helpers/golden.js';
@@ -199,22 +199,48 @@ function synthesisRow({ engine, limit, baseline, profile }) {
   };
 }
 
+// The corpus rows consume one recording and one conversion at a time.
+const MAX_RETAINED_SAMPLES = 1024 * 1024;
+
+function recordingStorage() {
+  let samples = new Float32Array(0);
+  return (length) => {
+    if (length > MAX_RETAINED_SAMPLES) {
+      return new Float32Array(length);
+    }
+    if (length > samples.length) {
+      samples = new Float32Array(
+        Math.min(MAX_RETAINED_SAMPLES, Math.max(length, 2 * samples.length))
+      );
+    }
+    return samples.subarray(0, length);
+  };
+}
+
+function convertRecording({ samples, sampleRate }, rate, storage) {
+  return sampleRate === rate
+    ? samples
+    : resampleWithStorage(samples, sampleRate, rate, storage);
+}
+
 /** Recognition on the public benchmark sets of issue 76. */
 async function recognitionRow({ engine, limit, baseline, profile }) {
   warmUp({ engine: engine.recognition });
+  const storage = recordingStorage();
+  const conversion = recordingStorage();
   const sums = { low: [], base: [] };
   let seconds = 0;
   let audioSeconds = 0;
   let utterances = 0;
   for (const set of BENCHMARK.sets) {
-    const rows = await benchmarkRecordings({ set, limit });
+    const rows = await benchmarkRecordings({ set, limit, storage });
     for (const row of rows) {
       const reference = prepareReference(row, set.language);
       if (!reference) {
         continue;
       }
       utterances++;
-      const low = resample(row.samples, row.sampleRate, RATE);
+      const low = convertRecording(row, RATE, conversion);
       const [result, cpu] = cpuTime(() =>
         recognize(low, RATE, {
           level: LEVEL,
@@ -226,7 +252,7 @@ async function recognitionRow({ engine, limit, baseline, profile }) {
       audioSeconds += low.length / RATE;
       sums.low.push(scoreUtterance(row, result, set.language, { reference }));
       if (baseline) {
-        const wide = resample(row.samples, row.sampleRate, 16000);
+        const wide = convertRecording(row, 16000, conversion);
         const heard = recognize(wide, 16000, {
           level: 'medium',
           engine: engine.recognition,
@@ -466,13 +492,15 @@ async function sessionRow({ engine, limit, profile }) {
 
 /** copyRecording on the golden set, resampled to 8 kHz. */
 function copyRow({ engine, limit, profile, traceCopy }) {
+  const storage = recordingStorage();
+  const conversion = recordingStorage();
   let seconds = 0;
   let audioSeconds = 0;
   const f0 = [];
   const timing = [];
   const phonemes = [];
-  for (const item of goldenRecordings({ limit })) {
-    const samples = resample(item.samples, item.sampleRate, RATE);
+  for (const item of goldenRecordings({ limit, storage })) {
+    const samples = convertRecording(item, RATE, conversion);
     const [copy, cpu] = cpuTime(() =>
       copyRecording(samples, RATE, {
         tier: TIER,

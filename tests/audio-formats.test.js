@@ -25,6 +25,7 @@ import {
 } from '../src/index.js';
 import { readExtended, writeExtended } from '../src/audio/aiff.js';
 import { auHeader } from '../src/audio/au.js';
+import { decodeAudioWithStorage } from '../src/audio/formats.js';
 
 function tone(length, seed = 1) {
   let state = seed;
@@ -446,6 +447,14 @@ describe('FLAC decoder', () => {
         ? Math.min(declared, expected.length)
         : expected.length;
       expect(decodeFlac(bytes).samples).toEqual(expected.subarray(0, length));
+      let output;
+      const borrowed = decodeAudioWithStorage(bytes, {}, (frames) => {
+        output = new Float32Array(frames + 8).fill(NaN);
+        return output.subarray(4, 4 + frames);
+      }).samples;
+      expect(borrowed.buffer).toBe(output.buffer);
+      expect(borrowed.byteOffset).toBe(4 * Float32Array.BYTES_PER_ELEMENT);
+      expect(borrowed).toEqual(expected.subarray(0, length));
     }
     total.setUint32(0, 1500);
     bytes[bytes.length - 1] ^= 1;
@@ -478,6 +487,32 @@ describe('audio format registry', () => {
       expect(decoded.samples.length).toBe(64);
     }
     expect(() => decodeAudio(new Uint8Array(64))).toThrow();
+  });
+
+  it('decodes mono output into reusable storage without affecting owned results', () => {
+    const left = tone(67, 3);
+    const right = tone(67, 5);
+    const output = new Float32Array(75).fill(NaN);
+    const allocate = (length) => output.subarray(4, 4 + length);
+    for (const format of AUDIO_FORMAT_NAMES) {
+      const options = { format, sampleRate: 8000, channels: 2, bitDepth: 16 };
+      for (const length of [67, 13]) {
+        const bytes = encodeAudio(
+          [left.subarray(0, length), right.subarray(0, length)],
+          8000,
+          options
+        );
+        const input = new Uint8Array(bytes.length + 3);
+        input.set(bytes, 3);
+        const view = input.subarray(3);
+        const owned = decodeAudio(view, options);
+        const borrowed = decodeAudioWithStorage(view, options, allocate);
+        expect(borrowed).toEqual(owned);
+        expect(borrowed.samples.buffer).toBe(output.buffer);
+        output.fill(NaN);
+        expect(owned).toEqual(decodeAudio(view, options));
+      }
+    }
   });
 
   it('infers formats from file names', () => {

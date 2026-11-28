@@ -7,7 +7,7 @@ import {
   fetchDataset,
   readDataset,
 } from '../../../scripts/datasets.mjs';
-import { decodeAudio } from '../../../src/audio/formats.js';
+import { decodeAudioWithStorage } from '../../../src/audio/formats.js';
 import { textToIpa } from '../../../src/g2p/index.js';
 import { parseIpa } from '../../../src/ipa/parse.js';
 import { syllabifyIpa } from '../../../src/ipa/syllables.js';
@@ -50,8 +50,8 @@ export async function loadBenchmark({ set, limit }) {
   return Array.from(await benchmarkRecordings({ set, limit }));
 }
 
-/** Prepare the selected corpus, decoding each recording only when used. */
-export async function benchmarkRecordings({ set, limit }) {
+/** Decode one recording at a time. With storage, consume it before advancing. */
+export async function benchmarkRecordings({ set, limit, storage }) {
   const config =
     typeof set === 'string' ? BENCHMARK.sets.find(({ id }) => id === set) : set;
   if (!config) {
@@ -69,7 +69,11 @@ export async function benchmarkRecordings({ set, limit }) {
       if (typeof text !== 'string' || !text.trim()) {
         throw new Error(`${rowId}: missing reference transcript`);
       }
-      const { samples, sampleRate } = decodeAudio(readFileSync(audioPath));
+      const { samples, sampleRate } = decodeAudioWithStorage(
+        readFileSync(audioPath),
+        {},
+        storage
+      );
       yield { id: rowId, language, text, samples, sampleRate };
     }
   })();

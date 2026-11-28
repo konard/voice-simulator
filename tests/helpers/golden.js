@@ -38,9 +38,9 @@ export function loadGolden(options = {}) {
   return Array.from(goldenRecordings(options));
 }
 
-/** Decode one golden utterance at a time while preserving manifest order. */
+/** Decode in manifest order. With storage, consume each item before advancing. */
 export function* goldenRecordings(options = {}) {
-  const { lang, reviewedOnly = false, dir = GOLDEN_DIR } = options;
+  const { lang, reviewedOnly = false, dir = GOLDEN_DIR, storage } = options;
   const limit = options.limit ?? Infinity;
   const manifest = loadManifest(dir);
   const utterances = manifest.utterances
@@ -49,7 +49,9 @@ export function* goldenRecordings(options = {}) {
     .slice(0, limit);
   for (const item of utterances) {
     const { samples, sampleRate } = decodeFlac(
-      new Uint8Array(readFileSync(path.join(dir, item.file)))
+      readFileSync(path.join(dir, item.file)),
+      undefined,
+      storage
     );
     yield {
       id: item.id,
