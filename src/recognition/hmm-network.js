@@ -18,6 +18,8 @@ import {
 
 /** Words per language in the decoding network. */
 export const HMM_MAX_WORDS = 20000;
+export const HMM_LIVE_WORDS = 6000;
+const PREPARED_VOCABULARIES = new Set([HMM_MAX_WORDS, HMM_LIVE_WORDS]);
 
 export { tokenIpa } from './hmm-pronunciations.js';
 
@@ -394,7 +396,7 @@ function appendColumn(column, source, start, delta = 0, sentinel = false) {
   return column;
 }
 
-function reservePrepared(network, languages) {
+function reservePrepared(network, languages, maxWords) {
   const missing = languages.filter((lang) => !network.trees.has(lang));
   if (missing.length < 2 || !readPreparedSize) {
     return false;
@@ -403,7 +405,7 @@ function reservePrepared(network, languages) {
   let states = network.stateCount;
   let links = network.wordLinks;
   for (const lang of new Set(missing)) {
-    const size = readPreparedSize(lang);
+    const size = readPreparedSize(lang, maxWords);
     if (
       !size ||
       !Number.isSafeInteger(size.nodes) ||
@@ -508,8 +510,8 @@ function firstPrepared(network, lang, packed) {
 }
 
 /** Precompute the shipped tree for an unmodified vocabulary. */
-export function packHmmNetwork(lang) {
-  const options = { maxWords: HMM_MAX_WORDS, oov: true };
+export function packHmmNetwork(lang, maxWords = HMM_MAX_WORDS) {
+  const options = { maxWords, oov: true };
   const builder = createBuilder(getHmmModel());
   const { network } = builder;
   const { data, ...tree } = addTree(builder, lang, 0, options);
@@ -531,13 +533,13 @@ export function packHmmNetwork(lang) {
 
 function withLanguages(builder, languages, options) {
   const { network } = builder;
-  const reserved = options.prepared && reservePrepared(network, languages);
+  const reserved =
+    options.prepared && reservePrepared(network, languages, options.maxWords);
   const trees = new Map();
   for (const lang of languages) {
     if (!network.trees.has(lang)) {
       const language = network.languages.length;
-      const packed =
-        options.prepared && readPrepared?.(lang, getLexicon(lang).words);
+      const packed = options.prepared && readPrepared(lang, options.maxWords);
       network.trees.set(
         lang,
         packed
@@ -589,7 +591,7 @@ export function getNetwork(
   const prepared =
     revision === 0 &&
     oov &&
-    maxWords === HMM_MAX_WORDS &&
+    PREPARED_VOCABULARIES.has(maxWords) &&
     readPrepared &&
     model === getHmmModel();
   return withLanguages(cached.builder, languages, { maxWords, oov, prepared });

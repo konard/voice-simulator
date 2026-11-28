@@ -17,7 +17,11 @@ import { packWordTransitions } from '../src/recognition/data/index.js';
 import { getLanguageModel } from '../src/recognition/language-model.js';
 import { getLexicon } from '../src/recognition/lexicon.js';
 import { packHmmArchive } from '../src/recognition/hmm-archive.js';
-import { packHmmNetwork } from '../src/recognition/hmm-network.js';
+import {
+  HMM_LIVE_WORDS,
+  HMM_MAX_WORDS,
+  packHmmNetwork,
+} from '../src/recognition/hmm-network.js';
 import { serializeLexicon } from '../src/recognition/prepared-lexicon.js';
 import { buildRecognitionCodebook } from './build-recognition-codebook.mjs';
 
@@ -50,29 +54,38 @@ function writeWordTransitions(language) {
   console.log(`${file.pathname.split('/').at(-1)}: ${asset.length} bytes`);
 }
 
-const hmmSizes = {};
+const vocabularies = [HMM_MAX_WORDS, HMM_LIVE_WORDS];
+const hmmSizes = new Map(vocabularies.map((size) => [size, {}]));
+function writeHmm(language, maxWords) {
+  const hmm = packHmmNetwork(language, maxWords);
+  writeAsset(
+    hmmNetworkFile(language, maxWords),
+    packHmmArchive(hmm, hmmNetworkVersion, serialize)
+  );
+  hmmSizes.get(maxWords)[language] = {
+    nodes: hmm.nodes.first.length,
+    states: hmm.emit.length,
+    links: hmm.wordId.length,
+  };
+}
+
 const models = Object.keys(LANGUAGES).map((language) => {
   const lexicon = getLexicon(language);
   writeAsset(
     recognitionDataFile(language),
     serialize([recognitionModelVersion, serializeLexicon(lexicon, language)])
   );
-  const hmm = packHmmNetwork(language);
-  writeAsset(
-    hmmNetworkFile(language),
-    packHmmArchive(hmm, hmmNetworkVersion, serialize)
-  );
-  hmmSizes[language] = {
-    nodes: hmm.nodes.first.length,
-    states: hmm.emit.length,
-    links: hmm.wordId.length,
-  };
+  for (const maxWords of vocabularies) {
+    writeHmm(language, maxWords);
+  }
   writeWordTransitions(language);
   return [language, packLanguageModel(getLanguageModel(language))];
 });
-writeAsset(
-  hmmNetworkFile('index'),
-  Buffer.from(JSON.stringify([hmmNetworkVersion, hmmSizes]))
-);
+for (const [maxWords, sizes] of hmmSizes) {
+  writeAsset(
+    hmmNetworkFile('index', maxWords),
+    Buffer.from(JSON.stringify([hmmNetworkVersion, sizes]))
+  );
+}
 write(recognitionDataFile('models'), models);
 buildRecognitionCodebook();

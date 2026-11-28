@@ -21,8 +21,11 @@ import {
 import { getHmmModel } from '../src/recognition/hmm-model.js';
 import { ipaToText } from '../src/recognition/ipa-to-text.js';
 import {
+  HMM_LIVE_WORDS,
+  buildNetwork,
   firstToneClass,
   getNetwork,
+  packHmmNetwork,
   toneVariants,
 } from '../src/recognition/hmm-network.js';
 import { recognitionSettings } from '../src/recognition/recognizer.js';
@@ -32,6 +35,20 @@ import {
 } from '../src/recognition/hmm-stage.js';
 
 const RATE = 8000;
+
+it('packs the same live vocabulary and transitions as the source builder', () => {
+  const source = buildNetwork(getHmmModel(), ['en'], {
+    maxWords: HMM_LIVE_WORDS,
+  });
+  const packed = packHmmNetwork('en', HMM_LIVE_WORDS);
+  assert.equal(packed.words.flags.length, source.words.length);
+  assert.deepEqual(packed.tree.root, source.trees.get('en').root);
+  assert.deepEqual(packed.emit, source.emit.subarray(0, source.stateCount));
+  assert.deepEqual(packed.wordId, source.wordId.subarray(0, source.wordLinks));
+  for (const [name, values] of Object.entries(packed.nodes)) {
+    assert.deepEqual(values, source.nodes[name].subarray(0, source.nodeCount));
+  }
+});
 
 it('accepts the word and phone decoders only', () => {
   assert.throws(

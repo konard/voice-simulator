@@ -17,6 +17,7 @@ import {
 } from './recognizer.js';
 import { aggregate, translated } from './recognizer-result.js';
 import { createLiveFrames } from './recognizer-live-frames.js';
+import { HMM_LIVE_WORDS } from './hmm-network.js';
 import { clipWhisperSpans } from './whisper.js';
 
 const PAUSE = 0.3;
@@ -297,7 +298,7 @@ export function createRecognizer(
       readSettings = {
         ...readSettings,
         liveWords,
-        maxWords: 6000,
+        maxWords: HMM_LIVE_WORDS,
         search: final
           ? { beam: 58, maxActive: 640 }
           : { beam: 48, maxActive: 280 },

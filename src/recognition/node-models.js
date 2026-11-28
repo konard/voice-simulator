@@ -2,7 +2,7 @@
 import { installLanguageModelReader } from './language-model.js';
 import { installPreparedLexicons } from './lexicon.js';
 import { openPreparedLexicon } from './prepared-lexicon.js';
-import { installPreparedHmm } from './hmm-network.js';
+import { HMM_MAX_WORDS, installPreparedHmm } from './hmm-network.js';
 import { openHmmArchive } from './hmm-archive.js';
 import {
   installWordTransitionReader,
@@ -27,9 +27,9 @@ export const recognitionDataFile = (kind) =>
 
 export const hmmNetworkVersion = 3;
 const serializedHmmVersion = 2;
-export const hmmNetworkFile = (language) =>
+export const hmmNetworkFile = (language, maxWords = HMM_MAX_WORDS) =>
   new globalThis.URL(
-    `../engine/voice-simulator-hmm-${language}.bin.gz`,
+    `../engine/voice-simulator-hmm-${language}${maxWords === HMM_MAX_WORDS ? '' : `-${maxWords}`}.bin.gz`,
     import.meta.url
   );
 
@@ -188,11 +188,11 @@ export function configureNodeRecognitionModels() {
     return version === recognitionModelVersion ? rows : undefined;
   }
   const v8 = process.getBuiltinModule('node:v8');
-  let hmmSizes;
+  const hmmSizes = new Map();
   installPreparedHmm(
-    (language) => {
+    (language, maxWords) => {
       try {
-        const bytes = readAsset(hmmNetworkFile(language));
+        const bytes = readAsset(hmmNetworkFile(language, maxWords));
         const archive = openHmmArchive(
           bytes,
           hmmNetworkVersion,
@@ -207,12 +207,12 @@ export function configureNodeRecognitionModels() {
         // Source installations can build the same network on demand.
       }
     },
-    (language) => {
-      if (!hmmSizes) {
-        hmmSizes = {};
+    (language, maxWords) => {
+      if (!hmmSizes.has(maxWords)) {
+        hmmSizes.set(maxWords, {});
         try {
           const [version, sizes] = JSON.parse(
-            readAsset(hmmNetworkFile('index')).toString()
+            readAsset(hmmNetworkFile('index', maxWords)).toString()
           );
           if (
             (version === hmmNetworkVersion ||
@@ -220,13 +220,13 @@ export function configureNodeRecognitionModels() {
             typeof sizes === 'object' &&
             sizes
           ) {
-            hmmSizes = sizes;
+            hmmSizes.set(maxWords, sizes);
           }
         } catch {
           // Older installations grow the same columns as assets arrive.
         }
       }
-      return hmmSizes[language];
+      return hmmSizes.get(maxWords)[language];
     }
   );
   installPreparedLexicons((language, words) => {
