@@ -17,6 +17,8 @@ const SEXTETS = new Uint8Array(128);
 for (let i = 0; i < 64; i++) {
   SEXTETS[BASE64.charCodeAt(i)] = i;
 }
+const NodeBuffer =
+  globalThis.process?.getBuiltinModule?.('node:buffer')?.Buffer;
 
 function byteLength(base64) {
   const padding = base64.endsWith('==') ? 2 : base64.endsWith('=') ? 1 : 0;
@@ -57,8 +59,17 @@ function bytes(encoded) {
     length += byteLength(part);
   }
   const out = new Uint8Array(length);
+  // Node can decode all the model parts straight into their final buffer.
+  const target = NodeBuffer?.from(out.buffer);
   let offset = 0;
   for (const part of parts) {
+    if (target) {
+      const size = byteLength(part);
+      if (target.write(part, offset, size, 'base64') === size) {
+        offset += size;
+        continue;
+      }
+    }
     offset = readBytes(part, out, offset);
   }
   return out;
