@@ -344,18 +344,20 @@ export class OutputStage {
   }
 
   filter(value) {
+    const { lowpass } = this;
     let result = value;
-    for (const filter of this.lowpass) {
-      result = filter.process(result);
+    for (let index = 0; index < lowpass.length; index++) {
+      result = lowpass[index].process(result);
     }
     return result;
   }
 
   finish(input) {
+    const { band } = this;
     let value = input;
-    if (this.band) {
-      for (const filter of this.band) {
-        value = filter.process(value);
+    if (band) {
+      for (let index = 0; index < band.length; index++) {
+        value = band[index].process(value);
       }
     }
     const output = value - this.dcInput + this.dcCoefficient * this.dcOutput;

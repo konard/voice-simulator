@@ -134,6 +134,8 @@ if (
   console.log('SHA-256', hash.digest('hex'));
   console.log('CPU seconds', process.cpuUsage().user / 1e6);
 } else if (mode === 'render') {
+  const { createHash } = await import('node:crypto');
+  const hash = createHash('sha256');
   const count = Number(limit ?? 3);
   if (!Number.isInteger(count) || count < 1 || count > 20) {
     throw new RangeError('Expected 1 to 20 sentences per language and preset');
@@ -142,7 +144,7 @@ if (
     for (let i = 0; i < count; i++) {
       for (const lang of LANGUAGES) {
         for (const preset of ['male', 'female']) {
-          synthesize(sentences[lang][i], {
+          const { samples } = synthesize(sentences[lang][i], {
             lang,
             tier,
             head: 'random',
@@ -150,11 +152,19 @@ if (
             seed: 1,
             engine,
           });
+          hash.update(
+            new Uint8Array(
+              samples.buffer,
+              samples.byteOffset,
+              samples.byteLength
+            )
+          );
         }
       }
     }
     report(tier);
   }
+  console.log('SHA-256', hash.digest('hex'));
   console.log('CPU seconds', process.cpuUsage().user / 1e6);
 } else if (mode === 'fit') {
   await createEngine({ engine, threads: 1, simd: false });
