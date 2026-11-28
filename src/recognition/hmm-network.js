@@ -390,10 +390,14 @@ function appendColumn(column, source, start, delta = 0, sentinel = false) {
   column = reserveColumn(column, start + source.length);
   if (!delta) {
     column.set(source, start);
-  } else {
+  } else if (sentinel) {
     for (let i = 0; i < source.length; i++) {
       const value = source[i];
-      column[start + i] = sentinel && value === 0 ? 0 : value + delta;
+      column[start + i] = value === 0 ? 0 : value + delta;
+    }
+  } else {
+    for (let i = 0; i < source.length; i++) {
+      column[start + i] = source[i] + delta;
     }
   }
   return column;
