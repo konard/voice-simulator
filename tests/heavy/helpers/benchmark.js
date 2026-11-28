@@ -1,5 +1,6 @@
 /** Dataset loading and scoring shared by the real-speech benchmark and tests. */
 import { readFileSync } from 'node:fs';
+import { readFile } from 'node:fs/promises';
 import { URL } from 'node:url';
 import {
   DatasetError,
@@ -47,11 +48,15 @@ export async function fetchBenchmarkSource(id, options = {}) {
 }
 
 export async function loadBenchmark({ set, limit }) {
-  return Array.from(await benchmarkRecordings({ set, limit }));
+  const recordings = [];
+  for await (const recording of benchmarkRecordings({ set, limit })) {
+    recordings.push(recording);
+  }
+  return recordings;
 }
 
 /** Decode one recording at a time. With storage, consume it before advancing. */
-export async function benchmarkRecordings({ set, limit, storage }) {
+export async function* benchmarkRecordings({ set, limit, storage }) {
   const config =
     typeof set === 'string' ? BENCHMARK.sets.find(({ id }) => id === set) : set;
   if (!config) {
@@ -64,19 +69,17 @@ export async function benchmarkRecordings({ set, limit, storage }) {
   if (recordings.length !== count) {
     throw new Error(`${id}: loaded ${recordings.length} of ${count} rows`);
   }
-  return (function* () {
-    for (const { id: rowId, text, audioPath } of recordings) {
-      if (typeof text !== 'string' || !text.trim()) {
-        throw new Error(`${rowId}: missing reference transcript`);
-      }
-      const { samples, sampleRate } = decodeAudioWithStorage(
-        readFileSync(audioPath),
-        {},
-        storage
-      );
-      yield { id: rowId, language, text, samples, sampleRate };
+  for (const { id: rowId, text, audioPath } of recordings) {
+    if (typeof text !== 'string' || !text.trim()) {
+      throw new Error(`${rowId}: missing reference transcript`);
     }
-  })();
+    const { samples, sampleRate } = decodeAudioWithStorage(
+      await readFile(audioPath),
+      {},
+      storage
+    );
+    yield { id: rowId, language, text, samples, sampleRate };
+  }
 }
 
 export function normalizeForScoring(text, language) {

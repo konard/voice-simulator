@@ -239,8 +239,7 @@ async function recognitionRow({ engine, limit, baseline, profile }) {
   let audioSeconds = 0;
   let utterances = 0;
   for (const set of BENCHMARK.sets) {
-    const rows = await benchmarkRecordings({ set, limit, storage });
-    for (const row of rows) {
+    for await (const row of benchmarkRecordings({ set, limit, storage })) {
       const reference = prepareReference(row, set.language);
       if (!reference) {
         continue;
@@ -497,7 +496,7 @@ async function sessionRow({ engine, limit, profile }) {
 }
 
 /** copyRecording on the golden set, resampled to 8 kHz. */
-function copyRow({ engine, limit, profile, traceCopy }) {
+async function copyRow({ engine, limit, profile, traceCopy }) {
   const storage = sampleStorage();
   const conversion = sampleStorage();
   let seconds = 0;
@@ -505,7 +504,7 @@ function copyRow({ engine, limit, profile, traceCopy }) {
   const f0 = [];
   const timing = [];
   const phonemes = [];
-  for (const item of goldenRecordings({ limit, storage })) {
+  for await (const item of goldenRecordings({ limit, storage })) {
     const samples = convertRecording(item, RATE, conversion);
     const [copy, cpu] = cpuTime(() =>
       copyRecording(samples, RATE, {
