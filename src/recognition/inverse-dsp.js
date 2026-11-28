@@ -87,7 +87,7 @@ function predictor(x, window, first, a, k, weighted) {
   return a;
 }
 
-/** Alku (1992), two passes: source tilt, tract, source, tract. */
+/** Create a reusable inverse filter returning borrowed window results. */
 export function iaifPlan(
   tractOrder,
   glottisOrder,
@@ -95,21 +95,42 @@ export function iaifPlan(
   flowOutput = true,
   allocate = allocateColumn
 ) {
-  const tilt = new Float64Array(1);
-  const tract = new Float64Array(tractOrder);
-  const glottis = new Float64Array(glottisOrder);
-  const k = new Float64Array(Math.max(1, tractOrder, glottisOrder));
-  const pulse = { d: new Float64Array(0), g: new Float64Array(0) };
-  let weighted = new Float64Array(0);
-  return (s, w) => {
+  const workspace = new IaifWorkspace(
+    tractOrder,
+    glottisOrder,
+    leak,
+    flowOutput,
+    allocate
+  );
+  return (samples, window) => workspace.run(samples, window);
+}
+
+/** Alku (1992), two passes: source tilt, tract, source, tract. */
+export class IaifWorkspace {
+  tilt = new Float64Array(1);
+  pulse = { d: new Float64Array(0), g: new Float64Array(0) };
+  weighted = new Float64Array(0);
+
+  constructor(tractOrder, glottisOrder, leak, flowOutput, allocate) {
+    this.tract = new Float64Array(tractOrder);
+    this.glottis = new Float64Array(glottisOrder);
+    this.k = new Float64Array(Math.max(1, tractOrder, glottisOrder));
+    this.leak = leak;
+    this.flowOutput = flowOutput;
+    this.allocate = allocate;
+  }
+
+  run(s, w) {
+    const { tilt, tract, glottis, k, pulse, leak, flowOutput, allocate } = this;
     const length = w.length;
     if (length > pulse.d.length) {
       const size = Math.max(length, pulse.d.length * 2);
       pulse.d = allocate('iaifDerivative', size);
       pulse.g = allocate('iaifFlow', size);
-      weighted = allocate('iaifWeighted', size);
+      this.weighted = allocate('iaifWeighted', size);
     }
     const { d, g } = pulse;
+    const { weighted } = this;
     let first = 0;
     while (first < length && w[first] === 0) {
       first++;
@@ -126,7 +147,7 @@ export function iaifPlan(
     // The first `length` samples belong to this call and are borrowed until
     // the next window.
     return pulse;
-  };
+  }
 }
 
 /** Reusable zero-padded FFT and Hann autocorrelation, for a given length. */

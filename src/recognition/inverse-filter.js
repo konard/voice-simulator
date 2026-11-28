@@ -8,7 +8,7 @@ import {
   block,
   hann,
   highPass,
-  iaifPlan,
+  IaifWorkspace,
   correlationPlan,
   harmonics,
   cppPlan,
@@ -215,7 +215,7 @@ function recover(
     : d;
   const normalize = normalizer(frames, f0, weight, d, g, derivative);
   const history = Math.round(0.05 * frames.rate);
-  const iaif = iaifPlan(
+  const iaif = new IaifWorkspace(
     o.tractOrder,
     o.glottisOrder,
     o.leak,
@@ -243,7 +243,7 @@ function recover(
     for (let i = first; i < last; i++) {
       buffer[i] = x[offset + i];
     }
-    const pulse = iaif(buffer, window);
+    const pulse = iaif.run(buffer, window);
     const end = Math.min(x.length, start + length);
     for (let index = Math.max(0, start); index < end; index++) {
       const i = index - start + history;
