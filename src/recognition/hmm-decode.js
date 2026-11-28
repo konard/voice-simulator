@@ -4,9 +4,10 @@
  * recogniser, with the shipped word bigrams, beam and histogram pruning,
  * then a forced alignment of the best words for phone times. Unlicense.
  */
-import { createFrontier } from './hmm-frontier.js';
+import { Frontier } from './hmm-frontier.js';
 import { scoreFrame } from './hmm-frame.js';
-import { stateIndex, stateScore, toneUnits } from './hmm-model.js';
+import { stateIndex, toneUnits } from './hmm-model.js';
+import { EmissionCache } from './hmm-emissions.js';
 
 export const HMM_DECODE_DEFAULTS = Object.freeze({
   // Beam of each language against its own best token: the languages share
@@ -56,77 +57,6 @@ export const HMM_LOW_MULTILINGUAL_SEARCH = Object.freeze({
 
 /** ln p of a shipped bigram cost (the costs are 0.5 - 0.3 ln p). */
 const lnProbability = (cost) => -(cost - 0.5) / 0.3;
-
-/**
- * Tone-stream score of each tone mixture at frame t: the weight times the
- * log posterior of its tone class among the classes of its state, 0 for
- * the mixture of the states without a tone (hmm-tone.js).
- */
-function toneCache(tone, feats, weight) {
-  const { states, stateOfKey } = tone;
-  const scores = new Float64Array(states);
-  const peak = new Float64Array(3);
-  const sum = new Float64Array(3);
-  let frame = -1;
-  return (key, t) => {
-    if (stateOfKey[key] < 0) {
-      return 0;
-    }
-    if (frame !== t) {
-      frame = t;
-      peak.fill(-Infinity);
-      sum.fill(0);
-      for (let k = 0; k < states; k++) {
-        const s = stateOfKey[k];
-        if (s >= 0) {
-          stateScore(k, feats, t * tone.dims, tone, scores);
-          peak[s] = Math.max(peak[s], scores[k]);
-        }
-      }
-      for (let k = 0; k < states; k++) {
-        const s = stateOfKey[k];
-        if (s >= 0) {
-          sum[s] += Math.exp(scores[k] - peak[s]);
-        }
-      }
-      for (let k = 0; k < states; k++) {
-        const s = stateOfKey[k];
-        scores[k] =
-          s < 0 ? 0 : weight * (scores[k] - peak[s] - Math.log(sum[s]));
-      }
-    }
-    return scores[key];
-  };
-}
-
-function emissionWorkspace(model) {
-  return {
-    stamp: new Int32Array(model.states),
-    value: new Float64Array(model.states),
-  };
-}
-
-function emissionCache(
-  model,
-  feats,
-  { tone, toneWeight },
-  { stamp, value } = emissionWorkspace(model)
-) {
-  stamp.fill(-1);
-  const toneScore =
-    tone && model.tone && toneWeight
-      ? toneCache(model.tone, tone, toneWeight)
-      : null;
-  const ofTone = model.tone?.ofState;
-  function evaluate(m, t) {
-    stamp[m] = t;
-    stateScore(m, feats, t * model.dims, model, value);
-    if (toneScore) {
-      value[m] += toneScore(ofTone[m], t);
-    }
-  }
-  return { stamp, value, evaluate };
-}
 
 function createWordHistory() {
   const columns = {
@@ -184,8 +114,6 @@ function transitionCache() {
 function languageModel(network, records, settings, cache) {
   const { lmw, wip, oovPhone, oovWeight, minCount } = settings;
   const { words } = network;
-  const { histories, candidates, costs, unigramIds, unigramCosts } = cache;
-  const mask = candidates.length - 1;
   const weights = cache.weights;
   if (
     cache.words?.deref() !== words ||
@@ -199,48 +127,56 @@ function languageModel(network, records, settings, cache) {
     // Keep scores for its existing words without retaining a retired graph.
     cache.words = new WeakRef(words);
     cache.weights = { lmw, wip, oovPhone, oovWeight, minCount };
-    candidates.fill(0);
-    unigramIds.fill(0);
+    cache.candidates.fill(0);
+    cache.unigramIds.fill(0);
   }
-  function unigramSlot(id, packed, data) {
-    const slot = id & mask;
-    if (unigramIds[slot] !== id + 1) {
-      const count = packed ? packed.count(id) : words[id].count;
-      const cost =
-        -0.3 * Math.log((0.4 * Math.max(count ?? 1, minCount)) / data.total) +
-        0.5;
-      unigramIds[slot] = id + 1;
-      unigramCosts[slot] = lmw * lnProbability(cost) + wip;
-    }
-    return slot;
-  }
+  return { words, records, cache, lmw, wip, oovPhone, oovWeight, minCount };
+}
 
-  function cacheMiss(history, id, tree, slot) {
-    const { wordTable: packed, data, loop } = tree;
-    if (packed ? packed.oov(id) : words[id].oov) {
-      const beginning = packed ? packed.begin(id) : words[id].begin;
-      const phone = previousPhone(packed, words, id);
-      const before = beginning ? '' : previousPhone(packed, words, history);
-      costs[slot] = oovWeight * loop.bigram.get(before).get(phone) + oovPhone;
-    } else {
-      const seen = transitionCost(packed, data, words, id, history);
-      costs[slot] =
-        seen === undefined || seen === null
-          ? unigramCosts[unigramSlot(id, packed, data)]
-          : lmw * lnProbability(seen) + wip;
-    }
+function unigramSlot({ words, cache, minCount, lmw, wip }, id, packed, data) {
+  const { unigramIds, unigramCosts } = cache;
+  const slot = id & (unigramIds.length - 1);
+  if (unigramIds[slot] !== id + 1) {
+    const count = packed ? packed.count(id) : words[id].count;
+    const cost =
+      -0.3 * Math.log((0.4 * Math.max(count ?? 1, minCount)) / data.total) +
+      0.5;
+    unigramIds[slot] = id + 1;
+    unigramCosts[slot] = lmw * lnProbability(cost) + wip;
+  }
+  return slot;
+}
+
+function writeTransitionScore(lm, history, id, tree, slot) {
+  const { words, cache, lmw, wip, oovPhone, oovWeight } = lm;
+  const { costs, unigramCosts } = cache;
+  const { wordTable: packed, data, loop } = tree;
+  if (packed ? packed.oov(id) : words[id].oov) {
+    const beginning = packed ? packed.begin(id) : words[id].begin;
+    const phone = previousPhone(packed, words, id);
+    const before = beginning ? '' : previousPhone(packed, words, history);
+    costs[slot] = oovWeight * loop.bigram.get(before).get(phone) + oovPhone;
+  } else {
+    const seen = transitionCost(packed, data, words, id, history);
+    costs[slot] =
+      seen === undefined || seen === null
+        ? unigramCosts[unigramSlot(lm, id, packed, data)]
+        : lmw * lnProbability(seen) + wip;
+  }
+}
+
+function wordScoreSlot(lm, hist, id, tree) {
+  const { histories, candidates } = lm.cache;
+  const history = lm.records.columns.id[hist] ?? -1;
+  const slot =
+    (Math.imul(history, 0x9e3779b1) ^ Math.imul(id, 0x85ebca6b)) &
+    (candidates.length - 1);
+  if (histories[slot] !== history || candidates[slot] !== id + 1) {
+    writeTransitionScore(lm, history, id, tree, slot);
     histories[slot] = history;
     candidates[slot] = id + 1;
   }
-  return function wordScoreSlot(hist, id, tree) {
-    const history = records.columns.id[hist] ?? -1;
-    const slot =
-      (Math.imul(history, 0x9e3779b1) ^ Math.imul(id, 0x85ebca6b)) & mask;
-    if (histories[slot] !== history || candidates[slot] !== id + 1) {
-      cacheMiss(history, id, tree, slot);
-    }
-    return slot;
-  };
+  return slot;
 }
 
 function transitionCost(packed, data, words, id, history) {
@@ -522,13 +458,13 @@ function createWorkspace({ nodeCount, model, languages }) {
     positions: new Uint32Array(nodeCount),
     previous: stateHistory(256),
     current: { state: stateHistory(256), peaks: new Float64Array(256) },
-    entries: createFrontier(nodeCount),
-    next: createFrontier(nodeCount),
+    entries: new Frontier(nodeCount),
+    next: new Frontier(nodeCount),
     work: new Uint32Array(256),
     records: createWordHistory(),
     transitions: transitionCache(),
     histogram: thresholdWorkspace(languages.length),
-    emission: emissionWorkspace(model),
+    emission: new EmissionCache(model),
   };
 }
 
@@ -547,6 +483,7 @@ export function decodeWords(network, feats, frames, options = {}, cache) {
   const prior = storage.get(key);
   const workspace =
     prior?.positions.length >= network.nodeCount &&
+    prior.emission.model === network.model &&
     prior.histogram.rows.length >= network.languages.length
       ? prior
       : createWorkspace(network);
@@ -555,6 +492,7 @@ export function decodeWords(network, feats, frames, options = {}, cache) {
   try {
     return decodeWithWorkspace(network, feats, frames, options, workspace);
   } finally {
+    workspace.emission.clear();
     workspace.entries.clear();
     workspace.next.clear();
     workspace.records.clear();
@@ -575,8 +513,7 @@ function pruneFrame(network, pass, thresholds, t) {
     active: previousActive,
     current: { peaks, state: available },
     entries: { index: entryIndex, columns: queued },
-    wordScoreSlot,
-    transitionCosts,
+    lm,
     settings,
     next,
     wordEnds,
@@ -584,6 +521,7 @@ function pruneFrame(network, pass, thresholds, t) {
     endingScores,
   } = pass;
   const { lmw, releaseSkip } = settings;
+  const transitionCosts = lm.cache.costs;
   const endFrame = t + 1;
   let { scores, histories, starts } = pass.previous;
   for (let i = 0; i < previousActive; i++) {
@@ -659,7 +597,7 @@ function pruneFrame(network, pass, thresholds, t) {
       const s =
         exit -
         lmw * lookLn[id] +
-        transitionCosts[wordScoreSlot(hist, wid, tree)];
+        transitionCosts[wordScoreSlot(lm, hist, wid, tree)];
       settings.onWordEnd?.(wid, s - pass.framePeak[0], start, endFrame);
       const before = packed ? packed.before(wid) : words[wid].before;
       // One word end per language and frame, apart for sandhi variants.
@@ -750,21 +688,12 @@ function advanceFrames(network, frames, pass, thresholdsOf, records) {
 function decodeWithWorkspace(network, feats, frames, options, workspace) {
   const settings = { ...HMM_DECODE_DEFAULTS, ...options };
   const languages = settings.languages ?? [...network.trees.keys()];
-  const emissions = emissionCache(
-    network.model,
-    feats,
-    settings,
-    workspace.emission
-  );
+  const emissions = workspace.emission;
+  emissions.begin(feats, settings);
   const { previous, current, entries, next, positions, records, work } =
     workspace;
   positions.fill(0);
-  const wordScoreSlot = languageModel(
-    network,
-    records,
-    settings,
-    workspace.transitions
-  );
+  const lm = languageModel(network, records, settings, workspace.transitions);
   const thresholdsOf = createThresholds(
     network.nodes.language,
     network.languages.length,
@@ -796,8 +725,7 @@ function decodeWithWorkspace(network, feats, frames, options, workspace) {
     lookLn: network.nodes.lookLn,
     emissions,
     framePeak: new Float64Array(1),
-    wordScoreSlot,
-    transitionCosts: workspace.transitions.costs,
+    lm,
     settings,
     trees: network.languages.map((lang) => network.trees.get(lang)),
   };
@@ -879,7 +807,7 @@ const MAX_CACHED_ALIGNMENT_STATES = 4096;
 export function alignWords(network, feats, frames, words, options = {}) {
   const { model } = network;
   const workspace = alignmentWorkspaces.get(model) ?? {
-    emission: emissionWorkspace(model),
+    emission: new EmissionCache(model),
     back: new Uint8Array(0),
     columns: alignmentColumns(0),
   };
@@ -888,6 +816,7 @@ export function alignWords(network, feats, frames, words, options = {}) {
   try {
     return alignWithWorkspace(model, feats, frames, words, options, workspace);
   } finally {
+    workspace.emission.clear();
     alignmentWorkspaces.set(model, workspace);
   }
 }
@@ -917,11 +846,9 @@ function alignWithWorkspace(model, feats, frames, words, options, workspace) {
   const { stay, go, emit, token, skip } = columns;
   skip.fill(0, 0, capacity);
   const { count: N, tokens } = alignmentChain(model, words, columns);
-  const {
-    stamp,
-    value: emissions,
-    evaluate,
-  } = emissionCache(model, feats, settings, workspace.emission);
+  const cache = workspace.emission;
+  cache.begin(feats, settings);
+  const { stamp, value: emissions } = cache;
   let { previous: prev, current: cur } = columns;
   prev.fill(-Infinity, 0, N);
   // A predecessor can stay, advance by one, or skip three states. Store
@@ -939,13 +866,13 @@ function alignWithWorkspace(model, feats, frames, words, options, workspace) {
     back = new Uint8Array(bytes);
   }
   if (frames > 0) {
-    evaluate(emit[0], 0);
+    cache.evaluate(emit[0], 0);
     prev[0] = 0 + emissions[emit[0]];
     if (N > 3) {
       prev[3] = silencePenalty;
       if (silencePenalty > -Infinity) {
         if (stamp[emit[3]] !== 0) {
-          evaluate(emit[3], 0);
+          cache.evaluate(emit[3], 0);
         }
         prev[3] += emissions[emit[3]];
       }
@@ -973,7 +900,7 @@ function alignWithWorkspace(model, feats, frames, words, options, workspace) {
       if (s > -Infinity) {
         const state = emit[n];
         if (stamp[state] !== t) {
-          evaluate(state, t);
+          cache.evaluate(state, t);
         }
         s += emissions[state];
       }

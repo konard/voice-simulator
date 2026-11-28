@@ -15,8 +15,9 @@ export function scoreFrame(network, pass, frame) {
       peaks,
     },
     entries: { index: entryIndex, columns: entry },
-    emissions: { stamp, value, evaluate },
+    emissions,
   } = pass;
+  const { stamp, value } = emissions;
   const {
     nodes: { first, count },
     emit,
@@ -39,7 +40,7 @@ export function scoreFrame(network, pass, frame) {
     }
     if (nodeBest > -Infinity) {
       if (stamp[firstMixture] !== frame) {
-        evaluate(firstMixture, frame);
+        emissions.evaluate(firstMixture, frame);
       }
       nodeBest += value[firstMixture];
     }
@@ -60,7 +61,7 @@ export function scoreFrame(network, pass, frame) {
       }
       if (score > -Infinity) {
         if (stamp[mixture] !== frame) {
-          evaluate(mixture, frame);
+          emissions.evaluate(mixture, frame);
         }
         score += value[mixture];
       }
@@ -84,7 +85,7 @@ export function scoreFrame(network, pass, frame) {
     }
     if (score > -Infinity) {
       if (stamp[mixture] !== frame) {
-        evaluate(mixture, frame);
+        emissions.evaluate(mixture, frame);
       }
       score += value[mixture];
     }

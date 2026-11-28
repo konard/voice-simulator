@@ -1,28 +1,38 @@
 /** Reusable, insertion-ordered entry scores for one HMM frame. Unlicense. */
 
-export function createFrontier(nodeCount) {
-  // Zero means absent. The other values are offsets plus one.
-  const index = new Uint32Array(nodeCount);
-  const columns = {
-    nodes: new Uint32Array(256),
-    scores: new Float64Array(256),
-    histories: new Int32Array(256),
-    starts: new Int32Array(256),
-  };
-  let length = 0;
-  function grow(capacity) {
-    for (const [name, column] of Object.entries(columns)) {
+export class Frontier {
+  #length = 0;
+
+  constructor(nodeCount) {
+    // Zero means absent. The other values are offsets plus one.
+    this.index = new Uint32Array(nodeCount);
+    this.columns = {
+      nodes: new Uint32Array(256),
+      scores: new Float64Array(256),
+      histories: new Int32Array(256),
+      starts: new Int32Array(256),
+    };
+  }
+
+  get length() {
+    return this.#length;
+  }
+
+  #grow(capacity) {
+    for (const [name, column] of Object.entries(this.columns)) {
       const grown = new column.constructor(capacity);
       grown.set(column);
-      columns[name] = grown;
+      this.columns[name] = grown;
     }
   }
-  function enter(node, score, history, start) {
+
+  enter(node, score, history, start) {
+    const { index, columns } = this;
     let i = index[node] - 1;
     if (i < 0) {
-      i = length++;
+      i = this.#length++;
       if (i === columns.nodes.length) {
-        grow(Math.min(i * 2, nodeCount));
+        this.#grow(Math.min(i * 2, index.length));
       }
       index[node] = i + 1;
       columns.nodes[i] = node;
@@ -33,43 +43,32 @@ export function createFrontier(nodeCount) {
     columns.histories[i] = history;
     columns.starts[i] = start;
   }
-  return {
-    columns,
-    index,
-    get length() {
-      return length;
-    },
-    enter,
-    enterList(nodes, score, history, start) {
-      for (let i = 0; i < nodes.length; i++) {
-        enter(nodes[i], score, history, start);
-      }
-    },
-    enterWeighted(nodes, weights, scale, score, history, start) {
-      for (let i = 0; i < nodes.length; i++) {
-        const node = nodes[i];
-        enter(node, score + scale * weights[node], history, start);
-      }
-    },
-    enterChildren(
-      id,
-      { child, sibling, lookLn },
-      scale,
-      score,
-      history,
-      start
-    ) {
-      const parent = scale * lookLn[id];
-      for (let node = child[id]; node; node = sibling[node]) {
-        enter(node, score + scale * lookLn[node] - parent, history, start);
-      }
-    },
-    clear() {
-      const { nodes } = columns;
-      for (let i = 0; i < length; i++) {
-        index[nodes[i]] = 0;
-      }
-      length = 0;
-    },
-  };
+
+  enterList(nodes, score, history, start) {
+    for (let i = 0; i < nodes.length; i++) {
+      this.enter(nodes[i], score, history, start);
+    }
+  }
+
+  enterWeighted(nodes, weights, scale, score, history, start) {
+    for (let i = 0; i < nodes.length; i++) {
+      const node = nodes[i];
+      this.enter(node, score + scale * weights[node], history, start);
+    }
+  }
+
+  enterChildren(id, { child, sibling, lookLn }, scale, score, history, start) {
+    const parent = scale * lookLn[id];
+    for (let node = child[id]; node; node = sibling[node]) {
+      this.enter(node, score + scale * lookLn[node] - parent, history, start);
+    }
+  }
+
+  clear() {
+    const { index, columns } = this;
+    for (let i = 0; i < this.#length; i++) {
+      index[columns.nodes[i]] = 0;
+    }
+    this.#length = 0;
+  }
 }
