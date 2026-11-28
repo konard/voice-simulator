@@ -22,7 +22,7 @@ become stricter.
 | voice-fit | certified | certified | certified | [failed](https://github.com/konard/voice-simulator/issues/173) |
 | session | certified | certified | certified | [failed](https://github.com/konard/voice-simulator/issues/173) |
 | copy | [failed](https://github.com/konard/voice-simulator/issues/178) | certified | certified | [failed](https://github.com/konard/voice-simulator/issues/173) |
-| modes | certified | [failed](https://github.com/konard/voice-simulator/issues/179) | certified | [failed](https://github.com/konard/voice-simulator/issues/173) |
+| modes | certified | certified | certified | [failed](https://github.com/konard/voice-simulator/issues/173) |
 | app | [failed](https://github.com/konard/voice-simulator/issues/180) | certified | — | — |
 
 ## Values and limits
@@ -61,10 +61,10 @@ become stricter.
 | copy | js-1 | reported, no limit: CPU time / audio time 16.1803 | — | — | certified |
 | copy | rust-1 | reported, no limit: CPU time / audio time 15.7606 | — | — | certified |
 | copy | memory | peak RSS (MB) | 1184.1 | ≤ 256 | no |
-| modes | quality | share of modes recognised | 0.8833 | ≥ 0.8 | yes |
-| modes | js-1 | real-time factor | 0.2598 | ≤ 0.25 | no |
-| modes | rust-1 | real-time factor | 0.2268 | ≤ 0.25 | yes |
-| modes | memory | peak RSS (MB) | 725.8 | ≤ 256 | no |
+| modes | quality | share of modes recognised | 0.9167 | ≥ 0.8 | yes |
+| modes | js-1 | real-time factor | 0.0709 | ≤ 0.25 | yes |
+| modes | rust-1 | real-time factor | 0.0689 | ≤ 0.25 | yes |
+| modes | memory | peak RSS (MB) | 413 | ≤ 256 | no |
 | app | quality | text recognised back | 0.7188 | ≥ 1 | no |
 | app | js-1 | synthesis worker real-time factor | 0.235 | ≤ 1 | yes |
 | app | js-1 | first sound (s) | 0.314 | ≤ 1 | yes |
@@ -85,8 +85,8 @@ become stricter.
 | session | rust | 9.746 | 60 | 357.3 | 192 MB | stable 1, vocalTractLengthError 0.0197, pitchError 0.0117, cpuRatio 0.1624 |
 | copy | js | 1808.629 | 111.78 | 1184.1 | crashed at 192 MB (JavaScript heap out of memory); rerun without the cap | f0RmseSemitones 6.0239, timingErrorMs 229.4, phonemeAgreement 0.4615, maxF0RmseSemitones 13.5423, maxTimingErrorMs 891.8, cpuRatio 16.1803, recordings 24 |
 | copy | rust | 1761.718 | 111.78 | 1165.1 | crashed at 192 MB (JavaScript heap out of memory); rerun without the cap | f0RmseSemitones 6.0239, timingErrorMs 229.4, phonemeAgreement 0.4615, maxF0RmseSemitones 13.5423, maxTimingErrorMs 891.8, cpuRatio 15.7606, recordings 24 |
-| modes | js | 28.419 | 109.405 | 673.2 | crashed at 192 MB (JavaScript heap out of memory); rerun without the cap | modeShare 0.8833, rtf 0.2598, renderRtf 0.0384, utterances 60 |
-| modes | rust | 24.812 | 109.405 | 725.8 | crashed at 192 MB (JavaScript heap out of memory); rerun without the cap | modeShare 0.8833, rtf 0.2268, renderRtf 0.0254, utterances 60 |
+| modes | js | 7.758 | 109.405 | 402.9 | 192 MB | modeShare 0.9167, rtf 0.0709, renderRtf 0.0163, utterances 60 |
+| modes | rust | 7.539 | 109.405 | 413 | 192 MB | modeShare 0.9167, rtf 0.0689, renderRtf 0.0117, utterances 60 |
 | app | js | — | 11.289 | — | none | textBack 0.7188, workerRtf 0.235, workerRtfMeasured 0.0392, firstSound 0.314, firstChunk 0.314, coldFirstSound 1.45, startDelay 0.314, sampleRate 8000, chunks 89, heard The quick brown fox jump solar the lady dog. She says she sh… |
 
 ## Targeted reruns
@@ -97,3 +97,5 @@ become stricter.
   Pinned with `taskset -c 0`. Command `LOWEST_ROW=session node --test tests/heavy/lowest-settings.test.js`.
 - **streaming** at commit `ec44eefef653c0ebeaa56fbd421b5f545a82017f` on Intel(R) Xeon(R) 6975P-C, Node v24.22.3, measured 2026-11-28T01:46:10.008Z.
   Pinned with `taskset -c 0`. Command `LOWEST_ROW=streaming node --test tests/heavy/lowest-settings.test.js`.
+- **modes** at commit `d2675fd381d7fa9fb731f928dfed0c500bfdded8` on Intel(R) Xeon(R) 6975P-C, Node v24.22.3, measured 2026-11-28T03:24:02.990Z.
+  Pinned with `taskset -c 0`. Command `LOWEST_ROW=modes node --test tests/heavy/lowest-settings.test.js`.
