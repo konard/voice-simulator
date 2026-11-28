@@ -176,11 +176,27 @@ it('reads stressed pronunciations, homophones and Mandarin tones from a prepared
     const lexicon = { root, words };
     const rows = serializeLexicon(lexicon, language);
     const prepared = openPreparedLexicon(rows, language, words);
+    const [phones, offsets, feature, wordOffsets, ids, reading] = rows;
+    const legacy = openPreparedLexicon(
+      [
+        phones,
+        Uint32Array.from(offsets),
+        Uint32Array.from(feature),
+        Uint32Array.from(wordOffsets),
+        Uint32Array.from(ids),
+        Array.from(ids, (_, i) =>
+          reading.text.slice(reading.offsets[i], reading.offsets[i + 1])
+        ),
+      ],
+      language,
+      words
+    );
     for (const [, ipa] of pronunciations) {
       const { tokens } = parseIpa(ipa);
       const exact = (trie) =>
         exactCandidates(tokens, 0, tokens.length, trie, language);
       expect(exact(prepared)).toEqual(exact(lexicon));
+      expect(exact(legacy)).toEqual(exact(lexicon));
       const near = (trie) =>
         withWordSearch(
           trie,

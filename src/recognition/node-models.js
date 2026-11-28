@@ -19,6 +19,7 @@ import {
 } from './codebook-data.js';
 
 export const recognitionModelVersion = 2;
+export const preparedLexiconVersion = 3;
 
 export const recognitionDataFile = (kind) =>
   new globalThis.URL(
@@ -258,7 +259,10 @@ export function configureNodeRecognitionModels() {
     const bytes = readAsset(recognitionDataFile(kind));
     const [version, rows] =
       kind === 'models' ? JSON.parse(bytes.toString()) : v8.deserialize(bytes);
-    return version === recognitionModelVersion ? rows : undefined;
+    return version === recognitionModelVersion ||
+      (kind !== 'models' && version === preparedLexiconVersion)
+      ? rows
+      : undefined;
   }
   const v8 = process.getBuiltinModule('node:v8');
   let modeBaselines;

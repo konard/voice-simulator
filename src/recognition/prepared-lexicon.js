@@ -4,6 +4,31 @@ import { soundKey } from './lexicon.js';
 import { createWordTrie, packWordTrie } from './word-trie.js';
 import { rankedWordReader } from './data/index.js';
 
+function narrow(values, max) {
+  return max <= 65535 ? Uint16Array.from(values) : asIndexColumn(values);
+}
+
+function packReadings(readings) {
+  const offsets = new Uint32Array(readings.length + 1);
+  for (let i = 0; i < readings.length; i++) {
+    offsets[i + 1] = offsets[i] + readings[i].length;
+  }
+  return { offsets, text: readings.join('') };
+}
+
+export function packPreparedLexicon(rows) {
+  const [tokens, children, feature, offsets, wordIds, readings] = rows;
+  const maxWord = wordIds.reduce((max, word) => Math.max(max, word), 0);
+  return [
+    tokens,
+    narrow(children, feature.length - 1),
+    tokens.length <= 256 ? Uint8Array.from(feature) : feature,
+    narrow(offsets, readings.length),
+    narrow(wordIds, maxWord),
+    packReadings(readings),
+  ];
+}
+
 // Children have consecutive breadth-first node indices. The entry rows index
 // the shipped count table and keep the IPA for stress and context checks.
 export function serializeLexicon(lexicon, language) {
@@ -20,14 +45,14 @@ export function serializeLexicon(lexicon, language) {
     }
   }
   offsets[trie.nodeCount] = readings.length;
-  return [
+  return packPreparedLexicon([
     trie.tokens,
     trie.offsets,
     trie.feature,
     offsets,
-    Uint32Array.from(wordIds),
+    wordIds,
     readings,
-  ];
+  ]);
 }
 
 function trieRoot(table, language) {
@@ -63,11 +88,19 @@ function trieRoot(table, language) {
   return asNode(0);
 }
 
-function asUint32(values) {
-  return values instanceof Uint32Array ? values : Uint32Array.from(values);
+function asIndexColumn(values) {
+  return ArrayBuffer.isView(values) ? values : Uint32Array.from(values);
 }
 
-function entryReader(words, offsets, ids, readings, withPrior) {
+function readingAt(readings) {
+  if (Array.isArray(readings)) {
+    return (i) => readings[i];
+  }
+  const { offsets, text } = readings;
+  return (i) => text.slice(offsets[i], offsets[i + 1]);
+}
+
+function entryReader(words, offsets, ids, readIpa, withPrior) {
   const ranked = rankedWordReader(words);
   const entries = new Map();
   return (node) => {
@@ -80,7 +113,7 @@ function entryReader(words, offsets, ids, readings, withPrior) {
       }
       const group = [];
       for (let i = offsets[node]; i < offsets[node + 1]; i++) {
-        const ipa = readings[i];
+        const ipa = readIpa(i);
         const word = ranked.read(ids[i]);
         let tokens;
         group.push({
@@ -106,15 +139,15 @@ export function openPreparedLexicon(rows, language, words, withPrior = false) {
     terminal[i] = Number(wordOffsets[i] < wordOffsets[i + 1]);
   }
   const table = createWordTrie({
-    offsets: asUint32(offsets),
-    feature: asUint32(feature),
+    offsets: asIndexColumn(offsets),
+    feature: asIndexColumn(feature),
     terminal,
     tokens,
     entriesAt: entryReader(
       words,
-      asUint32(wordOffsets),
-      asUint32(ids),
-      readings,
+      asIndexColumn(wordOffsets),
+      asIndexColumn(ids),
+      readingAt(readings),
       withPrior
     ),
   });

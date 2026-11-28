@@ -7,6 +7,7 @@ import {
   hmmNetworkFile,
   hmmNetworkVersion,
   packLanguageModel,
+  preparedLexiconVersion,
   recognitionDataFile,
   recognitionModelVersion,
   wordTransitionFile,
@@ -74,7 +75,7 @@ const models = Object.keys(LANGUAGES).map((language) => {
   const lexicon = getLexicon(language);
   writeAsset(
     recognitionDataFile(language),
-    serialize([recognitionModelVersion, serializeLexicon(lexicon, language)])
+    serialize([preparedLexiconVersion, serializeLexicon(lexicon, language)])
   );
   for (const maxWords of vocabularies) {
     writeHmm(language, maxWords);
