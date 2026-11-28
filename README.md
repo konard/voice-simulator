@@ -734,7 +734,7 @@ only become stricter. `npm run test:heavy -- --suite lowest` measures it and
 | Row | quality | js-1 | rust-1 | memory |
 | --- | --- | --- | --- | --- |
 | synthesis | certified | certified | certified | failed |
-| recognition | certified | failed | failed | failed |
+| recognition | certified | certified | failed | failed |
 | streaming | certified | certified | certified | certified |
 | voice-fit | certified | certified | certified | certified |
 | session | certified | certified | certified | certified |
@@ -742,7 +742,7 @@ only become stricter. `npm run test:heavy -- --suite lowest` measures it and
 | modes | certified | certified | certified | certified |
 | app | failed | certified | — | — |
 
-Measured at commit `ee65cd1` on Intel(R) Xeon(R) 6975P-C. See the [report](docs/reports/lowest-settings.md).
+Measured at commit `42b7f28` on AMD EPYC 9V45 96-Core Processor. See the [report](docs/reports/lowest-settings.md).
 <!-- prettier-ignore-end -->
 <!-- lowest-settings:end -->
 
