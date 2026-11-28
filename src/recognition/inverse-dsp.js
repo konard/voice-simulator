@@ -37,8 +37,7 @@ export function highPass(x, rate) {
   return y;
 }
 
-export function integrate(x, leak) {
-  const y = new Float64Array(x.length);
+export function integrate(x, leak, y = new Float64Array(x.length)) {
   let previous = 0;
   for (let n = 0; n < x.length; n++) {
     previous = x[n] + leak * previous;
@@ -47,40 +46,53 @@ export function integrate(x, leak) {
   return y;
 }
 
-export function filter(x, a) {
-  const y = Float64Array.from(x);
+export function filter(x, a, y = new Float64Array(x.length)) {
   for (let n = 0; n < x.length; n++) {
-    for (let k = 0; k < a.length && k < n; k++) {
-      y[n] += a[k] * x[n - k - 1];
+    let value = x[n];
+    const count = Math.min(a.length, n);
+    for (let k = 0; k < count; k++) {
+      value += a[k] * x[n - k - 1];
     }
+    y[n] = value;
   }
   return y;
 }
 
-function predictor(x, window, order) {
+function sourcePredictor(window, order) {
   const a = new Float64Array(order);
+  const reflection = new Float64Array(order);
   let first = 0;
   while (first < window.length && window[first] === 0) {
     first++;
   }
-  const weighted = new Float64Array(x.length - first);
-  for (let n = first; n < x.length; n++) {
-    weighted[n - first] = x[n] * window[n];
-  }
-  lpcAutocorrelation(weighted, order, a, new Float64Array(order));
-  if (!a.every(Number.isFinite)) {
-    a.fill(0);
-  }
-  return a;
+  const weighted = new Float64Array(window.length - first);
+  return (x) => {
+    for (let n = first; n < x.length; n++) {
+      weighted[n - first] = x[n] * window[n];
+    }
+    lpcAutocorrelation(weighted, order, a, reflection);
+    if (!a.every(Number.isFinite)) {
+      a.fill(0);
+    }
+    return a;
+  };
 }
 
 /** Alku (1992), two passes: source tilt, tract, source, tract. */
-export function iaif(s, window, tractOrder, glottisOrder, leak) {
-  const u1 = filter(s, predictor(s, window, 1));
-  const g1 = integrate(filter(s, predictor(u1, window, tractOrder)), leak);
-  const u2 = integrate(filter(s, predictor(g1, window, glottisOrder)), leak);
-  const d = filter(s, predictor(u2, window, tractOrder));
-  return { d, g: integrate(d, leak) };
+export function createIaif(window, tractOrder, glottisOrder, leak) {
+  const tilt = sourcePredictor(window, 1);
+  const tract = sourcePredictor(window, tractOrder);
+  const glottis = sourcePredictor(window, glottisOrder);
+  const d = new Float64Array(window.length);
+  const g = new Float64Array(window.length);
+  return (s) => {
+    filter(s, tilt(s), d);
+    integrate(filter(s, tract(d), d), leak, g);
+    integrate(filter(s, glottis(g), d), leak, g);
+    filter(s, tract(g), d);
+    integrate(d, leak, g);
+    return { d, g };
+  };
 }
 
 /** Reusable zero-padded FFT and Hann autocorrelation, for a given length. */
@@ -124,8 +136,7 @@ export function correlationPlan(length) {
 
 /** Hann harmonic levels, exact frequencies; oscillator recurrence avoids
  * transcendental calls in the sample loop. Bins are harmonics 1..count. */
-export function harmonics(x, rate, f0, count) {
-  const window = hann(x.length);
+export function harmonics(x, rate, f0, count, window = hann(x.length)) {
   const levels = new Float64Array(count);
   for (let k = 1; k <= count; k++) {
     const angle = (2 * Math.PI * f0 * k) / rate;
