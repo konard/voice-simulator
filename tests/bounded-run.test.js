@@ -18,8 +18,9 @@ function isAlive(pid) {
   // A killed orphan stays a zombie until init reaps it; some containers never do.
   try {
     return readFileSync(`/proc/${pid}/stat`, 'utf8').split(') ')[1][0] !== 'Z';
-  } catch {
-    return true;
+  } catch (error) {
+    // On Linux the process can be reaped between kill(0) and the read.
+    return process.platform !== 'linux' || error.code !== 'ENOENT';
   }
 }
 
