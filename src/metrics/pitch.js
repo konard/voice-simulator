@@ -38,11 +38,6 @@ export function pitchTrack(samples, sampleRate, options = {}) {
   const hop = Math.max(1, Math.round((options.hop ?? 0.01) * rate));
   const length = Math.max(1, Math.round((options.window ?? 0.04) * rate));
   const count = Math.ceil(signal.length / hop);
-  // YIN already treats look-ahead beyond the signal as zero. Only its
-  // partial windows at the end need a padded set of reference samples.
-  const tailStart = Math.max(0, signal.length - length);
-  const tail = new Float64Array(signal.length - tailStart + length);
-  tail.set(signal.subarray(tailStart));
   const levels = new Float64Array(count);
   for (let frame = 0; frame < count; frame++) {
     let sum = 0;
@@ -59,11 +54,9 @@ export function pitchTrack(samples, sampleRate, options = {}) {
   const pitch = { f0: 0, aperiodicity: 0 };
   for (let frame = 0; frame < count; frame++) {
     if (levels[frame] > 0 && levels[frame] >= quiet) {
-      const start = frame * hop;
-      const complete = start + length <= signal.length;
       const { f0, aperiodicity } = yinPitch(
-        complete ? signal : tail,
-        complete ? start : start - tailStart,
+        signal,
+        frame * hop,
         length,
         rate,
         yin,
@@ -107,30 +100,33 @@ function pearson(xs, ys) {
  */
 export function f0Errors(reference, test) {
   const frames = Math.min(reference.length, test.length);
-  const cents = [];
   const logR = [];
   const logT = [];
+  let sum = 0;
+  let squares = 0;
   let gross = 0;
   let voicing = 0;
   for (let index = 0; index < frames; index++) {
     const r = reference[index];
     const t = test[index];
     if (r > 0 && t > 0) {
-      cents.push(1200 * Math.log2(t / r));
+      const ratio = t / r;
+      const cents = 1200 * Math.log2(ratio);
+      sum += cents;
+      squares += cents * cents;
       logR.push(Math.log(r));
       logT.push(Math.log(t));
-      if (Math.abs(t / r - 1) > GROSS_ERROR) {
+      if (Math.abs(ratio - 1) > GROSS_ERROR) {
         gross++;
       }
     } else if (r > 0 || t > 0) {
       voicing++;
     }
   }
-  const voiced = cents.length;
-  const mean = (values) => values.reduce((sum, v) => sum + v, 0) / voiced;
+  const voiced = logR.length;
   return {
-    rmseCents: voiced ? Math.sqrt(mean(cents.map((e) => e * e))) : null,
-    meanCents: voiced ? mean(cents) : null,
+    rmseCents: voiced ? Math.sqrt(squares / voiced) : null,
+    meanCents: voiced ? sum / voiced : null,
     gpe: voiced ? gross / voiced : null,
     vde: frames ? voicing / frames : null,
     ffe: frames ? (gross + voicing) / frames : null,

@@ -147,7 +147,9 @@ function yinLag(signal, start, length, minLag, maxLag, normalized) {
   normalized[0] = 1;
   let running = 0;
   let below = false;
-  const end = start + length;
+  // Pairs starting beyond the recording contribute zero, including when
+  // the reference window itself reaches the end of the recording.
+  const end = Math.min(start + length, signal.length);
   const dense =
     signal instanceof Float32Array || signal instanceof Float64Array;
   for (let lag = 1; lag <= maxLag + 1; lag++) {
