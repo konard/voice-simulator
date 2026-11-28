@@ -335,9 +335,39 @@ function pruningThreshold(scores, best, { beam, languageBeam, maxActive }) {
   if (count < maxActive) {
     return threshold;
   }
-  scores.length = count;
-  scores.sort((a, b) => b - a);
-  return scores[maxActive - 1];
+  return selectScore(scores, count, maxActive - 1);
+}
+
+/** Partition in place until the required rank is bracketed by the pivot. */
+function selectScore(scores, count, rank) {
+  let left = 0;
+  let right = count - 1;
+  while (left < right) {
+    const pivot = scores[(left + right) >>> 1];
+    let i = left;
+    let j = right;
+    while (i <= j) {
+      while (scores[i] > pivot) {
+        i++;
+      }
+      while (scores[j] < pivot) {
+        j--;
+      }
+      if (i <= j) {
+        const score = scores[i];
+        scores[i++] = scores[j];
+        scores[j--] = score;
+      }
+    }
+    if (rank <= j) {
+      right = j;
+    } else if (rank >= i) {
+      left = i;
+    } else {
+      return scores[rank];
+    }
+  }
+  return scores[left];
 }
 
 /**
@@ -465,7 +495,7 @@ export function decodeWords(network, feats, frames, options = {}) {
         continue;
       }
       const look = lmw * node.lookLn;
-      for (const child of node.children.values()) {
+      for (const child of node.children) {
         next.add(child.id, exit + lmw * child.lookLn - look, hist, start);
       }
       for (const wid of node.words) {

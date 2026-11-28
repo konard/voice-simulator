@@ -192,3 +192,14 @@ it('prunes each language against its own best token (issue 75)', () => {
   assert.equal(one.get('en'), -500);
   assert.equal(one.get('zh'), -420);
 });
+
+it('keeps ties at the histogram pruning threshold', () => {
+  const scores = [-60, -7, -5, -3, -5, -1, -2, -80];
+  const nodes = scores.map(() => ({ lang: 'en' }));
+  const thresholds = languageThresholds(nodes, scores.entries(), -1, {
+    ...HMM_DECODE_DEFAULTS,
+    beam: 10,
+    maxActive: 4,
+  });
+  assert.equal(thresholds.get('en'), -5);
+});

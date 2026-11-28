@@ -11,6 +11,7 @@ import { getLexicon } from './lexicon.js';
 import { stateIndex, toneClass, toneUnits } from './hmm-model.js';
 
 const TONES = ['', '˩', '˨', '˧', '˦', '˥'];
+const NO_CHILDREN = Object.freeze([]);
 
 /** Words per language in the decoding network. */
 export const HMM_MAX_WORDS = 20000;
@@ -272,6 +273,12 @@ export function buildNetwork(
   const trees = new Map();
   for (const lang of languages) {
     trees.set(lang, addTree(builder, model, lang, words, { maxWords, oov }));
+  }
+  // During decoding, children are only visited in insertion order.
+  for (const node of builder.nodes) {
+    node.children = node.children.size
+      ? [...node.children.values()]
+      : NO_CHILDREN;
   }
   const emit = Int32Array.from(builder.emit);
   return {
