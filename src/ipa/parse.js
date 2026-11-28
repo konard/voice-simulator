@@ -226,7 +226,7 @@ function addSegment(state, char, phoneme) {
       state.pendingEmphasis = false;
     }
   }
-  if (!state.wordModes.has(state.word)) {
+  if (state.wordModes && !state.wordModes.has(state.word)) {
     state.wordModes.set(state.word, state.modes.mode);
   }
   state.tokens.push(segment);
@@ -393,6 +393,8 @@ function consumeMarkup(state, text) {
  *   (`token.word`; `to` is exclusive).
  */
 export function parseIpa(text) {
+  const normalized = normalizeText(text);
+  const markup = /[{}⸨(]|ˈˈ/u.test(normalized);
   const state = {
     tokens: [],
     unknown: [],
@@ -403,14 +405,13 @@ export function parseIpa(text) {
     pendingContour: null,
     parenDepth: 0,
     pendingTie: false,
-    modes: new ModeStack(),
-    wordModes: new Map(),
-    emphasized: new Set(),
+    modes: markup ? new ModeStack() : null,
+    wordModes: markup ? new Map() : null,
+    emphasized: markup ? new Set() : null,
     sounds: 0,
-    soundModes: [],
+    soundModes: markup ? [] : null,
   };
-  const normalized = normalizeText(text);
-  if (/[{}⸨(]|ˈˈ/u.test(normalized)) {
+  if (markup) {
     consumeMarkup(state, normalized);
   } else {
     consumeText(state, normalized);
@@ -424,10 +425,9 @@ export function parseIpa(text) {
   return {
     tokens: state.tokens,
     unknown: state.unknown,
-    modes: [
-      ...wordSpans(state.wordModes, state.emphasized),
-      ...state.soundModes,
-    ],
+    modes: markup
+      ? [...wordSpans(state.wordModes, state.emphasized), ...state.soundModes]
+      : [],
   };
 }
 
