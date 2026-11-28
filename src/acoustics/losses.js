@@ -209,18 +209,11 @@ function fitShelf(a, grid, rate) {
 }
 
 const shelves = new Map();
-/** The last rate asked for and its shape (the waveguide asks again and again). */
-let lastRate = NaN;
-let lastShape = null;
-
 /**
  * Pole and loss slopes of the best first-order shelf at a sampling rate,
  * cached per 500 Hz of rate (the waveguide rate follows the tract length).
  */
-function shelfShape(sampleRate) {
-  if (sampleRate === lastRate) {
-    return lastShape;
-  }
+export function lossShelf(sampleRate) {
   const rate = Math.max(500, Math.round(sampleRate / 500) * 500);
   let shape = shelves.get(rate);
   if (!shape) {
@@ -261,8 +254,6 @@ function shelfShape(sampleRate) {
     shape.poleHigh = zeroLoss(shape.a, shape.high);
     shelves.set(rate, shape);
   }
-  lastRate = sampleRate;
-  lastShape = shape;
   return shape;
 }
 
@@ -301,8 +292,12 @@ const ZERO_LIMIT = 0.999;
  * @returns {{b0: number, b1: number, a1: number}}
  */
 export function designLossFilter(K, sampleRate) {
-  const { a, low, high, slopeLow, slopeHigh, poleLow, poleHigh } =
-    shelfShape(sampleRate);
+  return setLossFilter(K, lossShelf(sampleRate), { b0: 0, b1: 0, a1: 0 });
+}
+
+/** Write coefficients into a filter using the shelf already selected. */
+export function setLossFilter(K, shelf, targetFilter) {
+  const { a, low, high, slopeLow, slopeHigh, poleLow, poleHigh } = shelf;
   // Loss the fitted model wants at both ends, less that of the pole.
   const wantLow = K * slopeLow + poleLow;
   const wantHigh = K * slopeHigh + poleHigh;
@@ -320,7 +315,10 @@ export function designLossFilter(K, sampleRate) {
     zero = error > target ? ZERO_LIMIT : -ZERO_LIMIT;
   }
   const b0 = Math.exp(zeroLoss(zero, low) - wantLow);
-  return { b0, b1: b0 * zero, a1: a };
+  targetFilter.b0 = b0;
+  targetFilter.b1 = b0 * zero;
+  targetFilter.a1 = a;
+  return targetFilter;
 }
 
 /**

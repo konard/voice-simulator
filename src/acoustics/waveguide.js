@@ -44,7 +44,8 @@ import {
   WALL_RESISTANCE,
   WALL_STIFFNESS,
   LOSS_REFERENCE_SECTIONS,
-  designLossFilter,
+  lossShelf,
+  setLossFilter,
   viscothermalLoss,
   wallSurface,
 } from './losses.js';
@@ -149,6 +150,8 @@ function lossStages(sections, stages) {
 export class Waveguide {
   // Outgoing glottal/lip waves, then turbulence position and outgoing waves.
   #junction = new Float64Array(5);
+  #shelf;
+  #lossCoefficients = { b0: 0, b1: 0, a1: 0 };
   /**
    * `piriform: false` leaves out the piriform fossae side branch.
    * `lossShape`, `lossStages` and `baffle` replace LOSS_SHAPE (or
@@ -271,6 +274,9 @@ export class Waveguide {
   /** Redesign the loss filters and walls once after shape or length changes. */
   #refreshLosses() {
     this.lossesStale = false;
+    if (this.rate) {
+      this.#shelf = lossShelf(this.rate);
+    }
     this.#configurePiriform();
     this.#configureLosses();
     this.#configureNoseLosses();
@@ -374,7 +380,11 @@ export class Waveguide {
     }
     stages.designK[group] = K;
     stages.designRate[group] = this.rate;
-    const { b0, b1, a1 } = designLossFilter(K, this.rate);
+    const { b0, b1, a1 } = setLossFilter(
+      K,
+      this.#shelf,
+      this.#lossCoefficients
+    );
     stages.b0[group] = b0;
     stages.b1[group] = b1;
     stages.a1[group] = a1;
@@ -401,10 +411,9 @@ export class Waveguide {
       sectionLength;
     const { filter } = piriform;
     if (K !== filter.K || this.rate !== filter.rate) {
-      Object.assign(filter, designLossFilter(K, this.rate), {
-        K,
-        rate: this.rate,
-      });
+      setLossFilter(K, this.#shelf, filter);
+      filter.K = K;
+      filter.rate = this.rate;
     }
   }
 
