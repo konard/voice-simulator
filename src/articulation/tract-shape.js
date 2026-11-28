@@ -58,10 +58,12 @@ export function createTractWorkspace({ sections, reuseAreas = false } = {}) {
   return {
     full: { ...CHANNEL_DEFAULTS, time: 0 },
     vowel: {
+      position: { height: 0, backness: 0, rounded: 0 },
       point: new Float64Array(3),
       values: new Float64Array(VOWEL_SECTIONS + 1),
       shape: { areas: new Float64Array(VOWEL_SECTIONS), length: 0 },
     },
+    jaw: { scale: 1, from: 0 },
     lengths: sections === undefined ? undefined : new Float64Array(sections),
     fitted: reuseAreas ? new Float64Array(sections) : undefined,
     stretched: reuseAreas ? new Float64Array(sections) : undefined,
@@ -156,15 +158,15 @@ function tongueArea(state) {
  *   bite block holds the jaw, so the factor comes before them.
  */
 export function referenceShape(state, corrections, jaw, workspace) {
-  const base = vowelShape(
-    {
-      height: state.height,
-      backness: state.backness,
-      rounded: Math.max(0, Math.min(1, state.rounding)),
-    },
-    corrections,
-    workspace
-  );
+  const position = workspace?.position ?? {
+    height: 0,
+    backness: 0,
+    rounded: 0,
+  };
+  position.height = state.height;
+  position.backness = state.backness;
+  position.rounded = Math.max(0, Math.min(1, state.rounding));
+  const base = vowelShape(position, corrections, workspace);
   const { areas } = base;
   if (jaw && jaw.scale !== 1) {
     const last = areas.length - 1;
@@ -591,15 +593,14 @@ export function tractShape(state, head, options = {}, workspace = {}) {
     engagement(full.tongueAmount),
     engagement(full.lipAmount)
   );
+  const jaw = workspace.jaw ?? { scale: 1, from: 0 };
+  jaw.scale =
+    1 + (jawScale(free.jaw, free.expectedJaw, head.jawArea) - 1) * (1 - held);
+  jaw.from = warpPosition(JAW_START, head.pharynxRatio);
   const reference = referenceShape(
     full,
     options.vowelCorrections,
-    {
-      scale:
-        1 +
-        (jawScale(free.jaw, free.expectedJaw, head.jawArea) - 1) * (1 - held),
-      from: warpPosition(JAW_START, head.pharynxRatio),
-    },
+    jaw,
     workspace.vowel
   );
   const openness = Math.max(0, Math.min(1, 1 - full.height));

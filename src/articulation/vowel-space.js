@@ -325,11 +325,12 @@ export function vowelShape(
   // The measured set has rounding only on back vowels, so front and central
   // rounded vowels start from the unrounded shape and get rounded lips.
   const measuredRounding = backness >= 0.6 ? rounding : 0;
-  const at = workspace?.point ?? [0, 0, 0];
+  const at = workspace?.point ?? new Float64Array(3);
   at[0] = height;
   at[1] = backness;
   at[2] = measuredRounding * ROUNDING_WEIGHT;
-  const values = getInterpolator(corrections)(at, workspace?.values);
+  const values = workspace?.values ?? new Float64Array(VOWEL_SECTIONS + 1);
+  getInterpolator(corrections)(at, values);
   const shape = workspace?.shape ?? {
     areas: new Float64Array(VOWEL_SECTIONS),
     length: 0,

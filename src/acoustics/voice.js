@@ -369,6 +369,7 @@ export class OutputStage {
 
 export class VoiceRenderer {
   #tract;
+  #shapeOptions = { sections: 0, teeth: true, vowelCorrections: undefined };
   #builtinSolver;
   #waveguideInputs;
 
@@ -591,16 +592,16 @@ export class VoiceRenderer {
   }
 
   #setTract() {
+    const options = this.#shapeOptions;
+    options.sections = this.sections;
+    options.teeth = this.teeth;
+    options.vowelCorrections = this.vowelCorrections;
     this.shape = blockShape(
       this.plan,
       this.time,
       this.state,
       this.head,
-      {
-        sections: this.sections,
-        teeth: this.teeth,
-        vowelCorrections: this.vowelCorrections,
-      },
+      options,
       this.#tract
     );
     this.solver.setShape(
