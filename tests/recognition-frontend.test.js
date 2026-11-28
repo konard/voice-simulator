@@ -108,20 +108,23 @@ it('measures the pitch inputs without building unused spectral columns', () => {
     samples[i] += 0.2 * Math.sin((2 * Math.PI * 150 * i) / sampleRate);
   }
   samples.fill(0, 11500);
-  const full = analyzeFrames(samples, sampleRate, { hop: 0.01 });
-  const pitchOnly = analyzePitchFrames(samples, sampleRate, 0.01);
-  expect(pitchOnly.energy).toEqual(full.energy);
-  expect(pitchOnly.noise).toEqual(full.noise);
-  expect(pitchOnly.mel).toBeUndefined();
-  expect(trackPitch(pitchOnly)).toEqual(trackPitch(full));
+  for (const rate of [sampleRate, 8000]) {
+    const options = { hop: 0.01, rate };
+    const full = analyzeFrames(samples, sampleRate, options);
+    const pitchOnly = analyzePitchFrames(samples, sampleRate, options);
+    expect(pitchOnly.energy).toEqual(full.energy);
+    expect(pitchOnly.noise).toEqual(full.noise);
+    expect(pitchOnly.mel).toBeUndefined();
+    expect(trackPitch(pitchOnly)).toEqual(trackPitch(full));
+  }
 });
 
 it('matches copied pitch frames at both edges of an 8 kHz sample view', () => {
   const sampleRate = 8000;
   const samples = whiteNoise(8347, -22, 88).subarray(19, 8293);
   for (const hop of [0.005, 0.01]) {
-    const borrowed = analyzePitchFrames(samples, sampleRate, hop);
-    const copied = analyzePitchFrames(Array.from(samples), sampleRate, hop);
+    const borrowed = analyzePitchFrames(samples, sampleRate, { hop });
+    const copied = analyzePitchFrames(Array.from(samples), sampleRate, { hop });
     expect(borrowed.samples).toBe(samples);
     expect(borrowed.count).toBe(copied.count);
     expect(borrowed.energy).toEqual(copied.energy);

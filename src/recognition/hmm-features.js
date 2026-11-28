@@ -224,7 +224,7 @@ export function hmmPitchStatics(pitch, count, storage = allocate) {
 
 function staticFeatures(
   samples,
-  pitch = trackPitch(analyzePitchFrames(samples, HMM_RATE, 0.01)),
+  pitch = trackPitch(analyzePitchFrames(samples, HMM_RATE, { hop: 0.01 })),
   storage = allocate
 ) {
   const values = rawCepstra(samples, storage);
@@ -309,7 +309,7 @@ export function hmmFeatures(
     const pitchStorage = (key, length, Type) =>
       storage(`hmmPitch:${key}`, length, Type);
     modelPitch = trackPitchFrames(
-      analyzePitchFrames(x, HMM_RATE, 0.01, pitchStorage)
+      analyzePitchFrames(x, HMM_RATE, { hop: 0.01 }, pitchStorage)
     );
   }
   const { values, count, pitch, lf0, voicing } = staticFeatures(

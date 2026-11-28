@@ -10,6 +10,7 @@ import {
   synthesize,
 } from '../src/index.js';
 import { createSession } from '../src/session/voice-session.js';
+import { createRecordingWindow } from '../src/session/audio-window.js';
 import { sessionPasses } from '../src/session/passes.js';
 import { emptyRecognition } from '../src/recognition/recognizer.js';
 import { createEvents } from '../src/recognition/recognizer-stream.js';
@@ -124,6 +125,22 @@ function consume(work) {
 
 describe('voice session', () => {
   let first;
+  it('keeps one-shot audio snapshots valid after subsequent pushes and a speaker change', () => {
+    const window = createRecordingWindow(8);
+    window.push(Float32Array.of(1, 2, 3, 4));
+    const prefix = window.read();
+    const range = window.read(2, 3);
+    window.push(Float32Array.of(5, 6));
+    expect(window.end).toBe(6);
+    expect(window.read().buffer).toBe(prefix.buffer);
+    window.clear();
+    expect(window.end).toBe(0);
+    window.push(Float32Array.of(7, 8));
+    expect(window.read()).toEqual(Float32Array.of(7, 8));
+    expect(prefix).toEqual(Float32Array.of(1, 2, 3, 4));
+    expect(range).toEqual(Float32Array.of(2, 3));
+  });
+
   it('walks through the states in order with a confident reading', () => {
     first = collect(4096);
     const states = first.events

@@ -23,7 +23,8 @@ export function recognizeSounds(samples, sampleRate, words, analyzed) {
   let sharedFormants;
   for (const pause of pauses) {
     const signal = analyzed ? null : pauseSignal(samples, sampleRate, pause);
-    const frames = analyzed ?? analyzePitchFrames(signal, sampleRate, 0.01);
+    const frames =
+      analyzed ?? analyzePitchFrames(signal, sampleRate, { hop: 0.01 });
     const first = analyzed ? Math.ceil(pause.start / frames.hop) : 0;
     const last = analyzed
       ? Math.min(frames.count, Math.ceil(pause.end / frames.hop))

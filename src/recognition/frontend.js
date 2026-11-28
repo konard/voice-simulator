@@ -898,23 +898,13 @@ export function analyzeOwnedFrames(samples, sampleRate, options, storage) {
   });
 }
 
-/** The default frame grid at a given hop, with the inputs of the pitch tracker. */
-export function analyzePitchFrames(
-  samples,
-  sampleRate,
-  hop = FRONTEND_DEFAULTS.hop,
-  storage
-) {
-  return analyzeRecording(
-    samples,
-    sampleRate,
-    { hop },
-    {
-      storage,
-      features: 'pitch',
-      borrow: true,
-    }
-  );
+/** Analyze only the inputs of the pitch tracker. */
+export function analyzePitchFrames(samples, sampleRate, options = {}, storage) {
+  return analyzeRecording(samples, sampleRate, options, {
+    storage,
+    features: 'pitch',
+    borrow: true,
+  });
 }
 
 function analyzeBorrowed(samples, settings, storage, features) {
