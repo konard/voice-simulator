@@ -565,35 +565,6 @@ export function decodeWords(network, feats, frames, options = {}, cache) {
   }
 }
 
-function retainStates(pass, target, row, node, count, threshold) {
-  if (target === pass.previous.scores.length) {
-    pass.previous = growHistory(pass.previous);
-  }
-  const kept = pass.previous;
-  if (row >= pass.active) {
-    // A newly entered node could only emit its first state this frame.
-    const { index, columns } = pass.entries;
-    const entry = index[node] - 1;
-    kept.scores[target] = pass.current.peaks[row];
-    const entered = columns.scores[entry] > -Infinity;
-    kept.histories[target] = entered ? columns.histories[entry] : 0;
-    kept.starts[target] = entered ? columns.starts[entry] : 0;
-    kept.scores.fill(-Infinity, target + 1, target + count);
-    kept.histories.fill(0, target + 1, target + count);
-    kept.starts.fill(0, target + 1, target + count);
-    return;
-  }
-  const { scores, histories, starts } = pass.current.state;
-  const offset = row * 6;
-  for (let i = 0; i < count; i++) {
-    const source = offset + i;
-    const score = scores[source];
-    kept.scores[target + i] = score < threshold ? -Infinity : score;
-    kept.histories[target + i] = histories[source];
-    kept.starts[target + i] = starts[source];
-  }
-}
-
 /** Prune the frame and queue its outgoing nodes and best word ends. */
 function pruneFrame(network, pass, thresholds, t) {
   const { nodes, words, emit, wordId, nextWord } = network;
@@ -603,7 +574,9 @@ function pruneFrame(network, pass, thresholds, t) {
     positions,
     work,
     length,
-    current,
+    active: previousActive,
+    current: { peaks, state: available },
+    entries: { index: entryIndex, columns: queued },
     lm,
     settings,
     next,
@@ -613,8 +586,8 @@ function pruneFrame(network, pass, thresholds, t) {
   } = pass;
   const { lmw, releaseSkip } = settings;
   const endFrame = t + 1;
-  const { peaks } = current;
-  for (let i = 0; i < pass.active; i++) {
+  let { scores, histories, starts } = pass.previous;
+  for (let i = 0; i < previousActive; i++) {
     positions[work[i]] = 0;
   }
   let active = 0;
@@ -628,10 +601,33 @@ function pruneFrame(network, pass, thresholds, t) {
     }
     const offset = active * 6;
     const states = count[id];
-    retainStates(pass, offset, index, id, states, threshold);
+    if (offset === scores.length) {
+      pass.previous = growHistory(pass.previous);
+      ({ scores, histories, starts } = pass.previous);
+    }
+    if (index < previousActive) {
+      const source = index * 6;
+      for (let i = 0; i < states; i++) {
+        const score = available.scores[source + i];
+        scores[offset + i] = score < threshold ? -Infinity : score;
+        histories[offset + i] = available.histories[source + i];
+        starts[offset + i] = available.starts[source + i];
+      }
+    } else {
+      // A newly entered node could only emit its first state this frame.
+      const entry = entryIndex[id] - 1;
+      scores[offset] = peaks[index];
+      const entered = queued.scores[entry] > -Infinity;
+      histories[offset] = entered ? queued.histories[entry] : 0;
+      starts[offset] = entered ? queued.starts[entry] : 0;
+      for (let i = 1; i < states; i++) {
+        scores[offset + i] = -Infinity;
+        histories[offset + i] = 0;
+        starts[offset + i] = 0;
+      }
+    }
     positions[id] = active + 1;
     work[active++] = id;
-    const { scores, histories, starts } = pass.previous;
     const last = states - 1;
     const firstState = first[id];
     let exit = scores[offset + last] + go[emit[firstState + last]];
