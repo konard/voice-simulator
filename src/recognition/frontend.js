@@ -791,13 +791,18 @@ function frameAnalyzer(sampleRate, settings, onFrame, storage, features) {
   }
 
   function append(values) {
-    let index = margin + end - base;
-    for (let n = 0; n < values.length; n++, index++) {
-      if (index >= 0) {
-        buffer[index] = values[n];
+    const index = margin + end - base;
+    const length = values.length;
+    if (index >= 0 && index + length <= buffer.length) {
+      buffer.set(values, index);
+    } else {
+      // Trimming can place some of the incoming samples before the margin.
+      const through = Math.min(length, buffer.length - index);
+      for (let n = Math.max(0, -index); n < through; n++) {
+        buffer[index + n] = values[n];
       }
     }
-    end += values.length;
+    end += length;
     frames.sampleCount = Math.max(0, end - base);
   }
 

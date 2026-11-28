@@ -250,18 +250,15 @@ function streamResampler(fromRate, toRate, zeroCrossings, tabulated) {
   let next = 0;
 
   function append(chunk) {
-    if (count + chunk.length > kept.length) {
-      const grown = new Float64Array(
-        Math.max(kept.length * 2, count + chunk.length)
-      );
+    const length = chunk.length;
+    if (count + length > kept.length) {
+      const grown = new Float64Array(Math.max(kept.length * 2, count + length));
       grown.set(kept.subarray(0, count));
       kept = grown;
     }
-    for (let index = 0; index < chunk.length; index++) {
-      kept[count + index] = chunk[index];
-    }
-    count += chunk.length;
-    received += chunk.length;
+    kept.set(chunk, count);
+    count += length;
+    received += length;
   }
 
   /** Drop the input that no output from `next` on needs. */
