@@ -33,9 +33,13 @@ export function rmsLevel(samples) {
  * @returns {Float64Array}
  */
 export function normalizeRms(samples, level = NORMALIZED_RMS) {
+  return scaleRms(samples, new Float64Array(samples.length), level);
+}
+
+/** Scale into a caller-owned buffer, which may also be the input. */
+export function scaleRms(samples, output, level = NORMALIZED_RMS) {
   const rms = rmsLevel(samples);
   const gain = rms > 0 ? level / rms : 1;
-  const output = new Float64Array(samples.length);
   for (let index = 0; index < samples.length; index++) {
     output[index] = samples[index] * gain;
   }

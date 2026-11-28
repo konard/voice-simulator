@@ -5,11 +5,10 @@
 
 import { resample } from '../audio/resample.js';
 import {
-  NORMALIZED_RMS,
   SILENCE_DB,
   logSpectralDistanceOfFrames,
   melCepstralDistance,
-  normalizeRms,
+  scaleRms,
   silentFrames,
 } from './distortion.js';
 import { dtw } from './dtw.js';
@@ -65,7 +64,8 @@ function prepare(recording, rate, options) {
     recording.sampleRate === rate
       ? recording.samples
       : resample(recording.samples, recording.sampleRate, rate);
-  return normalizeRms(trimSilence(converted, rate, options), NORMALIZED_RMS);
+  const trimmed = trimSilence(converted, rate, options);
+  return scaleRms(trimmed, trimmed);
 }
 
 /**
