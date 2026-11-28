@@ -24,6 +24,7 @@ import {
   analyzeFrameHops,
   analyzePitchFrames,
 } from '../src/recognition/frontend.js';
+import { withFrameStorage } from '../src/recognition/frame-storage.js';
 import { trackPitchFrames, trackPitchHops } from '../src/recognition/pitch.js';
 import {
   highPass,
@@ -87,6 +88,30 @@ it('keeps the default pitch contour with only pitch analysis columns', () => {
     expect(actual.hop).toBe(expected.hop);
     expect(actual.f0).toEqual(expected.f0.subarray(0, frames.count));
   }
+});
+
+it('overwrites reused pitch columns and resets the voiced distribution', () => {
+  const rate = 8000;
+  const samples = renderPlan(planUtterance('ama'), {
+    sampleRate: rate,
+    seed: 1,
+  });
+  const voiced = analyzePitchFrames(samples, rate);
+  const silent = analyzePitchFrames(new Float32Array(samples.length), rate);
+  const options = { percentiles: true };
+  const expected = trackPitchFrames(voiced, options);
+  expect(expected.median).toBeGreaterThan(0);
+  const buffer = withFrameStorage((storage) => {
+    const track = trackPitchFrames(voiced, options, storage);
+    expect(track).toEqual(expected);
+    return track.f0.buffer;
+  });
+  withFrameStorage((storage) => {
+    const track = trackPitchFrames(silent, options, storage);
+    expect(track.f0.buffer).toBe(buffer);
+    expect(track).toEqual(trackPitchFrames(silent, options));
+    expect(track.median).toBe(null);
+  });
 });
 
 /** The sentence for `preset` at `sampleRate` (waveguide, seed 1), cached. */

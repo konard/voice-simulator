@@ -215,10 +215,11 @@ function hmmFrontEnd(samples, sampleRate, options) {
   const analysis =
     options.analysis ?? wordAnalysis(samples, sampleRate, options);
   const pitch = options.framePitch
-    ? trackPitchFrames(analysis, {
-        percentiles: true,
-        kernels: options.kernels,
-      })
+    ? trackPitchFrames(
+        analysis,
+        { percentiles: true, kernels: options.kernels },
+        options.frameStorage
+      )
     : trackPitch(analysis, { kernels: options.kernels });
   return { analysis, pitch };
 }

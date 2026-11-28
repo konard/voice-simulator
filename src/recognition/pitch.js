@@ -256,15 +256,17 @@ function parabola(a, b, c, peak) {
 }
 
 /** Empty track of `capacity` rows. */
-function createTrack(frames, settings, rows) {
+function createTrack(frames, settings, rows, storage) {
   return {
     hop: settings.hop,
     startTime: frames.startTime,
     count: 0,
     committed: 0,
-    f0: new Float32Array(rows),
-    voicing: new Float32Array(rows),
-    strength: new Float32Array(rows),
+    f0: storage?.('pitch:f0', rows, Float32Array) ?? new Float32Array(rows),
+    voicing:
+      storage?.('pitch:voicing', rows, Float32Array) ?? new Float32Array(rows),
+    strength:
+      storage?.('pitch:strength', rows, Float32Array) ?? new Float32Array(rows),
     marks: new Float64Array(0),
     jitter: null,
     shimmer: null,
@@ -886,8 +888,10 @@ function createMarker(frames, track, settings) {
 /**
  * Sorted f0 values of the committed voiced frames and their percentiles.
  */
-function createDistribution(capacity) {
-  const values = new Float64Array(capacity);
+function createDistribution(capacity, storage) {
+  const values =
+    storage?.('pitch:distribution', capacity, Float64Array) ??
+    new Float64Array(capacity);
   let length = 0;
   const at = (fraction) => {
     const position = fraction * (length - 1);
@@ -1116,7 +1120,14 @@ function pitchScratch(rows, capacity, workspace) {
   return scratch;
 }
 
-function pitchTracker(frames, options, shared, workspace, frameOnly = false) {
+function pitchTracker(
+  frames,
+  options,
+  shared,
+  workspace,
+  frameOnly = false,
+  storage
+) {
   const settings = pitchSettings(frames, options);
   const { hop, hopSamples, lag } = settings;
   const capacity = settings.candidates;
@@ -1134,11 +1145,11 @@ function pitchTracker(frames, options, shared, workspace, frameOnly = false) {
     shared,
     workspace
   );
-  const track = createTrack(frames, settings, rows);
+  const track = createTrack(frames, settings, rows, storage);
   const marks = !frameOnly && !options.frameOnly;
   const marker = marks ? createMarker(frames, track, settings) : null;
   const distribution =
-    marks || options.percentiles ? createDistribution(rows) : null;
+    marks || options.percentiles ? createDistribution(rows, storage) : null;
   const offset = Math.round(frames.startTime / settings.hop);
   const base = Math.round(offset * hopSamples);
   const centre = (t) => Math.round((offset + t) * hopSamples) - base;
@@ -1234,12 +1245,12 @@ export function trackPitch(frames, options = {}) {
 
 let batchPitchWorkspace;
 
-/** Batch frame-level pitch and optional percentiles, without pulse trains. */
-export function trackPitchFrames(frames, options = {}) {
-  return batchPitch(frames, options, true);
+/** Batch frame-level pitch. Consume the track before reusing caller storage. */
+export function trackPitchFrames(frames, options = {}, storage) {
+  return batchPitch(frames, options, true, storage);
 }
 
-function batchPitch(frames, options, frameOnly) {
+function batchPitch(frames, options, frameOnly, storage) {
   const workspace = batchPitchWorkspace ?? {};
   batchPitchWorkspace = undefined;
   try {
@@ -1248,12 +1259,13 @@ function batchPitch(frames, options, frameOnly) {
       options,
       undefined,
       workspace,
-      frameOnly
+      frameOnly,
+      storage
     );
     tracker.advance(true);
     return tracker.track;
   } finally {
-    // Retain scratch for typical clips. Output columns have their own storage.
+    // Retain scratch for typical clips. The caller owns the output columns.
     if (workspace.scratch?.back.length <= 65536) {
       batchPitchWorkspace = workspace;
     }

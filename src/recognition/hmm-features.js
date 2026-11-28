@@ -262,12 +262,15 @@ export function applyLda(lda, statics) {
   return projectLda(lda, statics.length, statics);
 }
 
-function projectRow(rows, base, frame, width) {
-  let sum = 0;
-  for (let d = 0; d < width; d++) {
-    sum += rows[base + d] * frame[d];
+function projectFrame(rows, frame, width, out, offset, dims) {
+  for (let r = 0; r < dims; r++) {
+    const base = r * width;
+    let sum = 0;
+    for (let d = 0; d < width; d++) {
+      sum += rows[base + d] * frame[d];
+    }
+    out[offset + r] = sum;
   }
-  return sum;
 }
 
 function projectLda(lda, frames, statics, flat, storage = allocate) {
@@ -286,9 +289,7 @@ function projectLda(lda, frames, statics, flat, storage = allocate) {
         x[k] = row[start + d] - mean[k];
       }
     }
-    for (let r = 0; r < dims; r++) {
-      out[t * dims + r] = projectRow(rows, r * width, x, width);
-    }
+    projectFrame(rows, x, width, out, t * dims, dims);
   }
   return out;
 }
@@ -312,7 +313,9 @@ export function hmmFeatures(
     const pitchStorage = (key, length, Type) =>
       storage(`hmmPitch:${key}`, length, Type);
     modelPitch = trackPitchFrames(
-      analyzePitchFrames(x, HMM_RATE, { hop: 0.01 }, pitchStorage)
+      analyzePitchFrames(x, HMM_RATE, { hop: 0.01 }, pitchStorage),
+      undefined,
+      pitchStorage
     );
   }
   const { values, count, pitch, lf0, voicing } = staticFeatures(
