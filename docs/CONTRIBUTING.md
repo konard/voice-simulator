@@ -220,6 +220,10 @@ run the three live voice presets with both engines. For a local run use
 `LOWEST_ROW=session node --test tests/heavy/lowest-settings.test.js`. Publishing
 that report records the new commit, CPU and Node version for the selected row.
 
+Select `suite=lowest` and `lowest-row=app` to run the browser round trip on
+one core with the 192 MB Node heap cap. The run uploads `lowest-app.json`
+with the measured transcript and synthesis timings, including on failure.
+
 ### Recognition benchmark
 
 Run a short sample locally or dispatch the full recognition suite on one
