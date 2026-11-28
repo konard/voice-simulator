@@ -112,7 +112,7 @@ async function measure(row, engine, core) {
     return {
       row,
       engine,
-      error: `exit ${capped.code ?? capped.signal}: ${capped.stderr.trim().split('\n').slice(-3).join(' ')}`,
+      error: `exit ${capped.code ?? capped.signal}\n${capped.stderr.trim()}`,
       capped: {},
     };
   }
@@ -122,7 +122,7 @@ async function measure(row, engine, core) {
     : {
         row,
         engine,
-        error: `uncapped exit ${free.code ?? free.signal}: ${free.stderr.trim().split('\n').slice(-3).join(' ')}`,
+        error: `uncapped exit ${free.code ?? free.signal}\n${free.stderr.trim()}`,
         capped: { crashed: crash },
       };
 }
