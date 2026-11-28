@@ -248,7 +248,7 @@ async function recognitionRow({ engine, limit, baseline }) {
 }
 
 /** A minute of English speech from the round-trip sentences. */
-function streamInput(seconds) {
+export function streamInput(seconds) {
   const parts = [];
   let length = 0;
   const gap = new Float32Array(0.3 * RATE);
@@ -312,6 +312,7 @@ async function streamingRow({ engine, limit }) {
     return recognizer.flush();
   });
   const batch = recognize(samples, RATE, options);
+  const wholeInput = recognize(samples, RATE, { ...options, unsplit: true });
   const mismatch = errorRate(batch.text, stream.text, 'word');
   return {
     seconds,
@@ -327,6 +328,8 @@ async function streamingRow({ engine, limit }) {
       partials,
       streamText: stream.text,
       batchText: batch.text,
+      batchLastWord: round(batch.words.at(-1)?.end ?? 0),
+      wholeInputLastWord: round(wholeInput.words.at(-1)?.end ?? 0),
     },
   };
 }

@@ -734,7 +734,7 @@ only become stricter. `npm run test:heavy -- --suite lowest` measures it and
 | Row | quality | js-1 | rust-1 | memory |
 | --- | --- | --- | --- | --- |
 | synthesis | certified | certified | certified | failed |
-| recognition | certified | failed | failed | failed |
+| recognition | certified | certified | certified | failed |
 | streaming | certified | certified | certified | failed |
 | voice-fit | certified | certified | certified | failed |
 | session | certified | certified | certified | failed |
@@ -742,7 +742,7 @@ only become stricter. `npm run test:heavy -- --suite lowest` measures it and
 | modes | certified | certified | certified | failed |
 | app | certified | certified | — | — |
 
-Full matrix measured at commit `56797cd` on AMD EPYC 7763 64-Core Processor. See the [report](docs/reports/lowest-settings.md).
+Full matrix measured at commit `7f6c340` on AMD EPYC 9V45 96-Core Processor. See the [report](docs/reports/lowest-settings.md).
 <!-- prettier-ignore-end -->
 <!-- lowest-settings:end -->
 
