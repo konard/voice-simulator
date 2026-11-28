@@ -17,7 +17,7 @@ import {
   HMM_DECODE_DEFAULTS,
   languageThresholds,
 } from '../src/recognition/hmm-decode.js';
-import { getHmmModel } from '../src/recognition/hmm-model.js';
+import { getHmmModel, stateIndex } from '../src/recognition/hmm-model.js';
 import {
   buildNetwork,
   firstToneClass,
@@ -48,6 +48,31 @@ it('passes oov to the word decoder, on unless false', () => {
 it('puts frame boundaries halfway between frame centres', () => {
   const halfway = (hmmFrameTime(4) + hmmFrameTime(5)) / 2;
   assert.ok(Math.abs(hmmBoundaryTime(5) - halfway) < 1e-12);
+});
+
+it('uses only the relevant neighbor for each HMM state', () => {
+  const model = {
+    ciIndex: new Map([
+      ['a#0', 0],
+      ['a#1', 1],
+      ['a#2', 2],
+      ['t_r#0', 3],
+    ]),
+    contextIndex: new Map([
+      ['a#0<p:m', 4],
+      ['a#0<cor', 5],
+      ['a#2>p:s', 6],
+      ['t_r#0<p:m', 7],
+    ]),
+  };
+  assert.equal(stateIndex(model, 'a', 0, 'm', 's'), 4);
+  assert.equal(stateIndex(model, 'a', 0, 'm', 'n'), 4);
+  assert.equal(stateIndex(model, 'a', 0, 'n', 's'), 5);
+  assert.equal(stateIndex(model, 'a', 1, 'm', 's'), 1);
+  assert.equal(stateIndex(model, 'a', 2, 'm', 's'), 6);
+  assert.equal(stateIndex(model, 'a', 2, 'n', 's'), 6);
+  assert.equal(stateIndex(model, 'a', 2, 'n', null), 2);
+  assert.equal(stateIndex(model, 't_r', 0, 'm', 's'), 3);
 });
 
 it('interpolates across a pitch more than an octave from the median', () => {
