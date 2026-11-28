@@ -12,27 +12,11 @@ const text =
 const median = (values) =>
   values.sort((a, b) => a - b)[Math.floor(values.length / 2)];
 
-for (const preset of ['male', 'female', 'child']) {
-  const head = presetHeadConfig(preset);
-  const { samples, sampleRate } = synthesize(text, {
-    head,
-    tier: 'telephone',
-    seed: 1,
-  });
-  const input = samples.subarray(0, 80000);
-  const stageMs = {};
-  const fit = fitVoice(input, sampleRate, {
-    refine: false,
-    profile: (name, ms) => {
-      stageMs[name] = Math.round(ms);
-    },
-  });
+function formantsByPrior(input, sampleRate) {
   const frames = analyzeFrames(input, sampleRate);
   const pitch = trackPitch(frames);
   const rows = [];
-  for (const prior of process.env.FORMANT_PRIORS
-    ? [16.5, null, 13, 15, 17, 19]
-    : []) {
+  for (const prior of [16.5, null, 13, 15, 17, 19]) {
     const formants = trackBatchFormants(frames, {
       pitch,
       vocalTractLength: prior,
@@ -58,10 +42,28 @@ for (const preset of ['male', 'female', 'child']) {
       count: lengths.length,
     });
   }
+  return rows;
+}
+
+for (const preset of ['male', 'female', 'child']) {
+  const head = presetHeadConfig(preset);
+  const { samples, sampleRate } = synthesize(text, {
+    head,
+    tier: 'telephone',
+    seed: 1,
+  });
+  const input = samples.subarray(0, 10 * sampleRate);
+  const stageMs = {};
+  const fit = fitVoice(input, sampleRate, {
+    refine: false,
+    profile: (name, ms) => {
+      stageMs[name] = Math.round(ms);
+    },
+  });
   const f0 = Array.from({ length: 19 }, (_, i) =>
     quantile(fit.state, 'f0', (i + 1) / 20)
   );
-  const centres = [0.15, 0.2, 0.25, 0.3, 0.35].map((p) =>
+  const centres = [0.1, 0.15, 0.2, 0.25, 0.3, 0.35].map((p) =>
     Math.sqrt(quantile(fit.state, 'f0', p) * quantile(fit.state, 'f0', 1 - p))
   );
   console.log({
@@ -71,6 +73,8 @@ for (const preset of ['male', 'female', 'child']) {
     f0: f0.map(Math.round),
     centres: centres.map((value) => Number(value.toFixed(1))),
     stageMs,
-    rows,
+    ...(process.env.FORMANT_PRIORS && {
+      formants: formantsByPrior(input, sampleRate),
+    }),
   });
 }
