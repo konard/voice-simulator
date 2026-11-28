@@ -377,7 +377,12 @@ export function recognizeModes(samples, sampleRate, result, options = {}) {
     result,
     reference?.head,
     options.wordFrames ?? options.frames,
-    options
+    {
+      ...options,
+      // F1 is interpreted relative to the known voice. Keep it available
+      // to callers inspecting the underlying features through the trace.
+      skipFormants: options.skipFormants || (!reference && !options.trace),
+    }
   );
   const base = reference?.features ?? {
     ...summarize(features),

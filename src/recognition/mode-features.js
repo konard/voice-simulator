@@ -127,7 +127,7 @@ function analyzeWordSignal(samples, sampleRate, head, analyzed, options) {
       minF0: 35,
       maxF0: 800,
       kernels,
-      ...(options.skipFormants && { step: 0.02 }),
+      ...(options.sourceStep !== undefined && { step: options.sourceStep }),
     })
   );
   return { frames, pitch, formants, source };

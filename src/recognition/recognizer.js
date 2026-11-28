@@ -459,6 +459,7 @@ export function recognizeDecoded(
     });
   }
   const primary = recognizeProsody(decoded, samples, rate, settings, level);
+  const liveWithoutVoice = settings.liveWords && !settings.voice;
   const withModes =
     settings.includeModeLabels && typeof recognizeModes === 'function'
       ? measure(settings.profile, 'Modes', () =>
@@ -467,8 +468,7 @@ export function recognizeDecoded(
             rate,
             {
               ...primary,
-              ...(settings.liveWords &&
-                !settings.voice && { phones: decoded.segments }),
+              ...(liveWithoutVoice && { phones: decoded.segments }),
               whisperSpans:
                 settings.whisper === false ? [] : decoded.whisperSpans,
             },
@@ -481,7 +481,8 @@ export function recognizeDecoded(
               frames: decoded.frames?.speech ? decoded.frames : undefined,
               wordFrames: decoded.modeFrames,
               pitch: settings.liveWords ? decoded.tracks.pitch : undefined,
-              skipFormants: settings.liveWords && !settings.voice,
+              skipFormants: liveWithoutVoice,
+              sourceStep: liveWithoutVoice ? 0.02 : undefined,
               reuseFormantCandidates:
                 final === false &&
                 !settings.liveWords &&

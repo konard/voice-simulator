@@ -15,6 +15,26 @@ import {
 } from '../src/recognition/mode-features.js';
 import { HEAD } from './helpers/recognition-modes.js';
 
+it('keeps unknown-voice modes when unused formants are omitted', () => {
+  const audio = synthesize('The train leaves at seven.', {
+    tier: 'telephone',
+    seed: 1,
+    engine: 'js',
+  });
+  const heard = { words: audio.timeline.words };
+  const stages = [];
+  const result = recognizeModes(audio.samples, audio.sampleRate, heard, {
+    profile: (stage) => stages.push(stage),
+  });
+  expect(stages.includes('Formants')).toBe(false);
+  const traced = recognizeModes(audio.samples, audio.sampleRate, heard, {
+    trace() {},
+    profile: (stage) => stages.push(stage),
+  });
+  expect(stages.includes('Formants')).toBe(true);
+  expect(result).toEqual(traced);
+});
+
 describe('speech-mode integration', () => {
   it('preserves an existing sound token without duplicating its detection', () => {
     const audio = synthesize('⸨inhale⸩ a', {
