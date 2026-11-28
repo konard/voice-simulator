@@ -176,19 +176,13 @@ function languageModel(
   const { words } = network;
   const mask = candidates.length - 1;
   candidates.fill(0);
-  return (hist, id, tree) => {
+  function calculate(history, id, tree) {
     const { wordTable: packed, data, loop } = tree;
-    const history = records.columns.id[hist] ?? -1;
     if (packed ? packed.oov(id) : words[id].oov) {
       const beginning = packed ? packed.begin(id) : words[id].begin;
       const phone = previousPhone(packed, words, id);
       const before = beginning ? '' : previousPhone(packed, words, history);
       return oovWeight * loop.bigram.get(before).get(phone) + oovPhone;
-    }
-    const slot =
-      (Math.imul(history, 0x9e3779b1) ^ Math.imul(id, 0x85ebca6b)) & mask;
-    if (histories[slot] === history && candidates[slot] === id + 1) {
-      return costs[slot];
     }
     const count = packed ? packed.count(id) : words[id].count;
     const seen = transitionCost(packed, data, words, id, history);
@@ -196,11 +190,22 @@ function languageModel(
       seen ??
       -0.3 * Math.log((0.4 * Math.max(count ?? 1, minCount)) / data.total) +
         0.5;
-    const value = lmw * lnProbability(cost) + wip;
+    return lmw * lnProbability(cost) + wip;
+  }
+  function cacheMiss(history, id, tree, slot) {
+    const value = calculate(history, id, tree);
     histories[slot] = history;
     candidates[slot] = id + 1;
     costs[slot] = value;
     return value;
+  }
+  return function wordScore(hist, id, tree) {
+    const history = records.columns.id[hist] ?? -1;
+    const slot =
+      (Math.imul(history, 0x9e3779b1) ^ Math.imul(id, 0x85ebca6b)) & mask;
+    return histories[slot] === history && candidates[slot] === id + 1
+      ? costs[slot]
+      : cacheMiss(history, id, tree, slot);
   };
 }
 
