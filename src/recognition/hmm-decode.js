@@ -448,6 +448,7 @@ function thresholdWorkspace(languageCount) {
   return {
     rows: Array.from({ length: languageCount }, () => new Float64Array(256)),
     sizes: new Uint32Array(languageCount),
+    totals: new Uint32Array(languageCount),
     peaks: new Float64Array(languageCount),
     thresholds: new Float64Array(languageCount),
   };
@@ -462,15 +463,32 @@ export function createThresholds(
   nodes,
   languageCount,
   settings,
-  { rows, sizes, peaks, thresholds } = thresholdWorkspace(languageCount)
+  { rows, sizes, totals, peaks, thresholds } = thresholdWorkspace(languageCount)
 ) {
   const { beam, languageBeam, maxActive } = settings;
   return (work, scores, length, best) => {
-    sizes.fill(0);
     peaks.fill(-Infinity);
+    totals.fill(0);
+    for (let i = 0; i < length; i++) {
+      const language = nodes[work[i]];
+      peaks[language] = Math.max(peaks[language], scores[i]);
+      totals[language]++;
+    }
+    const globalThreshold = best - languageBeam;
+    for (let i = 0; i < languageCount; i++) {
+      thresholds[i] = Math.max(peaks[i] - beam, globalThreshold);
+    }
+    if (maxActive <= 0 || length <= maxActive) {
+      return thresholds;
+    }
+    // A score already below either beam cannot affect the final threshold.
+    sizes.fill(0);
     for (let i = 0; i < length; i++) {
       const language = nodes[work[i]];
       const score = scores[i];
+      if (totals[language] <= maxActive || score < thresholds[language]) {
+        continue;
+      }
       const size = sizes[language]++;
       if (size === rows[language].length) {
         const expanded = new Float64Array(size * 2);
@@ -478,17 +496,14 @@ export function createThresholds(
         rows[language] = expanded;
       }
       rows[language][size] = score;
-      peaks[language] = Math.max(peaks[language], score);
     }
     for (let i = 0; i < languageCount; i++) {
-      let threshold = Math.max(peaks[i] - beam, best - languageBeam);
-      if (sizes[i] > maxActive) {
-        threshold = Math.max(
-          threshold,
+      if (sizes[i] >= maxActive) {
+        thresholds[i] = Math.max(
+          thresholds[i],
           scoreAtRank(rows[i], sizes[i], sizes[i] - maxActive)
         );
       }
-      thresholds[i] = threshold;
     }
     return thresholds;
   };

@@ -458,3 +458,25 @@ it('keeps ties at the histogram pruning threshold', () => {
     -5
   );
 });
+
+it('leaves scores outside the beam out of the active-node histogram', () => {
+  const scores = [-1, -2, -10, -12, -20, -25];
+  const nodes = new Uint8Array(scores.length);
+  const row = new Float64Array(2);
+  const workspace = {
+    rows: [row],
+    sizes: new Uint32Array(1),
+    totals: new Uint32Array(1),
+    peaks: new Float64Array(1),
+    thresholds: new Float64Array(1),
+  };
+  const thresholds = createThresholds(
+    nodes,
+    1,
+    { ...HMM_DECODE_DEFAULTS, beam: 5, maxActive: 1 },
+    workspace
+  );
+  const work = scores.map((_, i) => i);
+  assert.equal(thresholds(work, scores, scores.length, -1)[0], -1);
+  assert.ok(workspace.rows[0] === row);
+});
