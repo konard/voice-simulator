@@ -12,7 +12,11 @@ import { decodeAudioWithStorage } from '../../../src/audio/formats.js';
 import { textToIpa } from '../../../src/g2p/index.js';
 import { parseIpa } from '../../../src/ipa/parse.js';
 import { syllabifyIpa } from '../../../src/ipa/syllables.js';
-import { alignEdits, errorRate } from '../../../src/metrics/text.js';
+import {
+  alignEdits,
+  editDistance,
+  errorRate,
+} from '../../../src/metrics/text.js';
 import { datasetSkipReason } from '../../helpers/datasets.js';
 
 export { checkBaseline } from './benchmark-baseline.js';
@@ -185,7 +189,9 @@ export function scoreUtterance(
   const hypothesis = normalizeForScoring(result.text, language);
   const tokens = phones(result.ipa);
   const symbols = tokens.map(({ symbol }) => symbol);
-  const { distance, pairs } = alignEdits(reference.symbols, symbols);
+  const { distance, pairs } = onConfusion
+    ? alignEdits(reference.symbols, symbols)
+    : editDistance(reference.symbols, symbols);
   if (onConfusion) {
     for (const [i, j] of pairs) {
       if (reference.symbols[i] !== symbols[j]) {

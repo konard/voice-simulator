@@ -62,15 +62,18 @@ export function alignEdits(reference, hypothesis) {
 function measureEdits(reference, hypothesis, onPair) {
   const n = reference.length;
   const m = hypothesis.length;
-  // Hold only the current cost row and pack four traceback choices per byte.
+  // The alignment needs its path. For counts alone, keep the chosen path's
+  // substitutions in one row and derive its insertions and deletions.
   const cost = new Uint32Array(m + 1);
-  const steps = new Uint8Array(Math.ceil((n * m) / 4));
+  const steps = onPair && new Uint8Array(Math.ceil((n * m) / 4));
+  const replaced = steps ? null : new Uint32Array(m + 1);
   for (let j = 0; j <= m; j++) {
     cost[j] = j;
   }
   let cell = 0;
   for (let i = 1; i <= n; i++) {
     let diagonal = cost[0];
+    let diagonalReplaced = 0;
     cost[0] = i;
     for (let j = 1; j <= m; j++) {
       const above = cost[j];
@@ -87,11 +90,33 @@ function measureEdits(reference, hypothesis, onPair) {
       }
       cost[j] = best;
       diagonal = above;
-      steps[Math.floor(cell / 4)] |= step << ((cell & 3) * 2);
-      cell++;
+      if (steps) {
+        steps[Math.floor(cell / 4)] |= step << ((cell & 3) * 2);
+        cell++;
+      } else {
+        const aboveReplaced = replaced[j];
+        if (step !== DELETE) {
+          replaced[j] =
+            step === INSERT
+              ? replaced[j - 1]
+              : diagonalReplaced + Number(step === SUBSTITUTE);
+        }
+        diagonalReplaced = aboveReplaced;
+      }
     }
   }
-  return { distance: cost[m], ...traceEdits(steps, n, m, onPair) };
+  const distance = cost[m];
+  if (steps) {
+    return { distance, ...traceEdits(steps, n, m, onPair) };
+  }
+  const substitutions = replaced[m];
+  const deletions = (distance - substitutions + n - m) / 2;
+  return {
+    distance,
+    substitutions,
+    deletions,
+    insertions: distance - substitutions - deletions,
+  };
 }
 
 function cleanText(text) {

@@ -373,6 +373,24 @@ describe('metrics: transcripts', () => {
     expect(result.deletions).toBe(0);
   });
 
+  it('counts edits along the same path as alignment, including ties', () => {
+    const sequences = ['', 'a', 'b', 'ab', 'ba', 'aa', 'aba', 'aabb', 'bbaa'];
+    for (const reference of sequences) {
+      for (const hypothesis of sequences) {
+        const { distance, substitutions, deletions, insertions } = alignEdits(
+          reference,
+          hypothesis
+        );
+        expect(editDistance(reference, hypothesis)).toEqual({
+          distance,
+          substitutions,
+          deletions,
+          insertions,
+        });
+      }
+    }
+  });
+
   it('traces all edit directions and prefers substitutions when tied', () => {
     expect(alignEdits('abxyc', 'abydc')).toEqual({
       distance: 2,
