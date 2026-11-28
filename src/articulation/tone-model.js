@@ -146,17 +146,22 @@ function coefficients(state, slope, offset, rate) {
   return [c1, c2, c3];
 }
 
-/** Value, velocity and acceleration at `t` of one interval. */
-function evaluate([c1, c2, c3], slope, offset, rate, t) {
+/** Sample one interval, carrying its derivatives into the next when needed. */
+function evaluate(terms, slope, offset, rate, t, state) {
+  const c1 = terms[0];
+  const c2 = terms[1];
+  const c3 = terms[2];
   const decay = Math.exp(-rate * t);
   const polynomial = c1 + c2 * t + c3 * t * t;
-  const derivative = c2 + 2 * c3 * t;
-  return {
-    value: slope * t + offset - (3 * slope) / rate + polynomial * decay,
-    velocity: slope + (derivative - rate * polynomial) * decay,
-    acceleration:
-      (2 * c3 - 2 * rate * derivative + rate ** 2 * polynomial) * decay,
-  };
+  const value = slope * t + offset - (3 * slope) / rate + polynomial * decay;
+  if (state) {
+    const derivative = c2 + 2 * c3 * t;
+    state.value = value;
+    state.velocity = slope + (derivative - rate * polynomial) * decay;
+    state.acceleration =
+      (2 * c3 - 2 * rate * derivative + rate ** 2 * polynomial) * decay;
+  }
+  return value;
 }
 
 /**
@@ -176,11 +181,12 @@ export function approachTargets(intervals, state, frameRate) {
   // are whole frame periods.
   const count = Math.max(0, Math.ceil(total * frameRate - 1e-9));
   const values = new Float64Array(count);
-  let current = state ?? {
+  const next = {
     value: intervals[0]?.from ?? 0,
     velocity: 0,
     acceleration: 0,
   };
+  let current = state ?? next;
   let start = 0;
   let frame = 0;
   intervals.forEach((interval, index) => {
@@ -194,10 +200,11 @@ export function approachTargets(intervals, state, frameRate) {
       if (!last && time >= end - 1e-9) {
         break;
       }
-      values[frame] = evaluate(terms, slope, from, rate, time - start).value;
+      values[frame] = evaluate(terms, slope, from, rate, time - start);
       frame++;
     }
-    current = evaluate(terms, slope, from, rate, duration);
+    evaluate(terms, slope, from, rate, duration, next);
+    current = next;
     start = end;
   });
   return { values, state: current };
@@ -256,6 +263,7 @@ export function scaledToneIntervals(tone, duration, scale, previous) {
 /** Evaluate a target trajectory at sorted, arbitrary times within it. */
 export function sampleToneTargets(intervals, initial, times) {
   let state = initial;
+  const next = { value: 0, velocity: 0, acceleration: 0 };
   let start = 0;
   let i = 0;
   const values = [];
@@ -264,9 +272,10 @@ export function sampleToneTargets(intervals, initial, times) {
     const terms = coefficients(state, slope, from, rate);
     const end = start + duration;
     while (i < times.length && times[i] <= end + 1e-9) {
-      values.push(evaluate(terms, slope, from, rate, times[i++] - start).value);
+      values.push(evaluate(terms, slope, from, rate, times[i++] - start));
     }
-    state = evaluate(terms, slope, from, rate, duration);
+    evaluate(terms, slope, from, rate, duration, next);
+    state = next;
     start = end;
   }
   return values;
