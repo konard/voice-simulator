@@ -102,24 +102,33 @@ const HEADER = `/** Gaussian HMM states trained on the simulator's own renders, 
  * "Recognition model"). Unlicense. */
 `;
 
-/** Module sources: the packed JSON in parts and an index joining them. */
+/** Keep the large ASCII columns separate from the Unicode metadata. */
 export function hmmModelSources(packed, name = 'hmm-model') {
-  const json = JSON.stringify(packed);
-  const parts = [];
-  for (let at = 0; at < json.length; at += PART) {
-    parts.push(json.slice(at, at + PART));
+  const metadata = { ...packed, mixtures: { ...packed.mixtures } };
+  const files = [];
+  const imports = [];
+  const columns = [];
+  for (const key of ['means', 'logVars']) {
+    const column = metadata.mixtures[key];
+    delete metadata.mixtures[key];
+    const parts = [];
+    for (let at = 0; at < column.length; at += PART) {
+      const id = files.length;
+      const file = `${name}-${id}.js`;
+      const value = JSON.stringify(column.slice(at, at + PART));
+      files.push([
+        file,
+        `${HEADER}// prettier-ignore\nexport default ${value};\n`,
+      ]);
+      imports.push(`import part${id} from './${file}';`);
+      parts.push(`part${id}`);
+    }
+    columns.push(`  data.mixtures.${key} = [${parts.join(', ')}];`);
   }
-  const files = parts.map((part, i) => [
-    `${name}-${i}.js`,
-    `${HEADER}// prettier-ignore\nexport default ${JSON.stringify(part)};\n`,
-  ]);
-  const imports = parts
-    .map((_, i) => `import part${i} from './${name}-${i}.js';\n`)
-    .join('');
-  const joined = parts.map((_, i) => `part${i}`).join(' + ');
+  const encoded = JSON.stringify(JSON.stringify(metadata));
   files.push([
     `${name}.js`,
-    `${HEADER}${imports}\nexport function readHmmModel() {\n  return JSON.parse(${joined});\n}\n`,
+    `${HEADER}${imports.join('\n')}\n\n// prettier-ignore\nconst metadata = ${encoded};\n\nexport function readHmmModel() {\n  const data = JSON.parse(metadata);\n${columns.join('\n')}\n  return data;\n}\n`,
   ]);
   return files;
 }

@@ -27,7 +27,9 @@ test('packed mixtures preserve every original Gaussian parameter', () => {
   const model = getHmmModel();
   const { mixtures } = readHmmModel();
   const decode = (encoded) => {
-    const decoded = globalThis.atob(encoded);
+    const decoded = globalThis.atob(
+      typeof encoded === 'string' ? encoded : encoded.join('')
+    );
     const bytes = new Uint8Array(decoded.length);
     for (let i = 0; i < bytes.length; i++) {
       bytes[i] = decoded.charCodeAt(i);

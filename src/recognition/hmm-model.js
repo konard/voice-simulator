@@ -18,24 +18,41 @@ for (let i = 0; i < 64; i++) {
   SEXTETS[BASE64.charCodeAt(i)] = i;
 }
 
-/** Bytes of a padded base64 string, in a fresh (aligned) buffer. */
-function bytes(base64) {
+function byteLength(base64) {
   const padding = base64.endsWith('==') ? 2 : base64.endsWith('=') ? 1 : 0;
-  const out = new Uint8Array((base64.length / 4) * 3 - padding);
-  let o = 0;
+  return (base64.length / 4) * 3 - padding;
+}
+
+function readBytes(base64, out, offset) {
+  const end = offset + byteLength(base64);
   for (let i = 0; i < base64.length; i += 4) {
     const n =
       (SEXTETS[base64.charCodeAt(i)] << 18) |
       (SEXTETS[base64.charCodeAt(i + 1)] << 12) |
       (SEXTETS[base64.charCodeAt(i + 2)] << 6) |
       SEXTETS[base64.charCodeAt(i + 3)];
-    out[o++] = n >> 16;
-    if (o < out.length) {
-      out[o++] = (n >> 8) & 255;
+    out[offset++] = n >> 16;
+    if (offset < end) {
+      out[offset++] = (n >> 8) & 255;
     }
-    if (o < out.length) {
-      out[o++] = n & 255;
+    if (offset < end) {
+      out[offset++] = n & 255;
     }
+  }
+  return offset;
+}
+
+/** Decode one base64 string or independently decodable parts into one buffer. */
+function bytes(encoded) {
+  const parts = typeof encoded === 'string' ? [encoded] : encoded;
+  let length = 0;
+  for (const part of parts) {
+    length += byteLength(part);
+  }
+  const out = new Uint8Array(length);
+  let offset = 0;
+  for (const part of parts) {
+    offset = readBytes(part, out, offset);
   }
   return out;
 }
