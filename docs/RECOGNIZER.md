@@ -62,14 +62,15 @@ before the recognizer commits sounds from the quiet interval. The detector
 can also bound a quieter whisper between two voiced intervals in one speech
 run.
 
-At 8 kHz with level `low`, the built-in word decoder uses the same phrase
-boundaries and feature normalization in batch and live recognition. The
-boundary calculation is independent of the chunk sizes passed to `push()`.
+At 8 kHz with level `low` and one selected language, the built-in word
+decoder uses the same phrase boundaries and feature normalization in batch
+and live recognition. The boundary calculation is independent of the chunk
+sizes passed to `push()`.
 With the same speech gate, the two entry points commit the same words.
 Live previews use a smaller word search and reuse the most recent reading
 between updates. Prosody and mode labels are computed when a phrase commits.
 With one requested reading, the word decoder also supplies the spelling.
-Other levels preview with the incremental phone decoder.
+Other configurations preview with the incremental phone decoder.
 
 `minVoiced` is the speech gate: the seconds of pitch-voiced audio (plus
 explicit `whisper` spans) that an input, or a phrase of a stream, needs

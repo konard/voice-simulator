@@ -93,6 +93,20 @@ describe('live recognition in noise (issue 170)', () => {
     }
   });
 
+  it('keeps whole-input language selection when several languages are enabled', () => {
+    const { samples } = synthesize(sentences.en[2], {
+      lang: 'en',
+      tier: 'telephone',
+      head: 'random',
+      preset: 'male',
+      seed: 1,
+    });
+    const options = { level: 'low', languages: ['en', 'ru'], engine: 'js' };
+    const whole = recognize(samples, RATE, { ...options, unsplit: true });
+    assert.ok(whole.words.length > 0);
+    assert.deepEqual(recognize(samples, RATE, options), whole);
+  });
+
   it('gives no text for a room noise of drifting level', () => {
     const noise = createNoise('drifting', 2 * RATE, RATE, {
       seed: 5,

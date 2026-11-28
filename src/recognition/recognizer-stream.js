@@ -36,6 +36,7 @@ export function usesWordPhrases(sampleRate, settings) {
   return (
     sampleRate === 8000 &&
     settings.level === 'low' &&
+    settings.languages.length === 1 &&
     usesWordDecoder(settings) &&
     !Object.keys(settings.stages).length
   );
