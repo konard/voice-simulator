@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'test-anywhere';
+import { synthesize } from '../src/index.js';
 import { fakeRoot } from './helpers/highlight-root.js';
 import {
   paintHighlight,
@@ -6,6 +7,7 @@ import {
 } from '../examples/universal-app/src/components/highlight.js';
 import { recognitionTimeline } from '../examples/universal-app/src/components/recognition-timeline.js';
 import { createMicrophone } from '../examples/universal-app/src/engine/microphone.js';
+import { verifyFile } from '../examples/universal-app/src/engine/recognition-file.js';
 import { RecognitionSession } from '../examples/universal-app/src/engine/recognition-session.js';
 import {
   DEFAULT_RECOGNITION_SETTINGS,
@@ -51,6 +53,36 @@ function fakeWorker() {
 
 const sampleRate = 16000;
 const file = { samples: new Float32Array(16000), sampleRate };
+
+it('replaces streamed word guesses with a complete telephone file reading', () => {
+  const { samples, sampleRate } = synthesize('Hello world.', {
+    tier: 'telephone',
+  });
+  const events = [];
+  const reading = verifyFile(
+    { sampleRate, sampleCount: samples.length, languages: ['en'] },
+    (type, payload) => events.push([type, payload.text])
+  );
+  const middle = Math.floor(samples.length / 2);
+  reading.push(samples.subarray(0, middle));
+  reading.emit('partial', { text: 'Hello' });
+  reading.emit('final', { text: 'Hollow' });
+  reading.push(samples.subarray(middle));
+  expect(events).toEqual([['partial', 'Hello']]);
+
+  const result = reading.finish({
+    flush() {
+      throw new Error('Complete telephone recording used the live fallback');
+    },
+  });
+  expect(result.words.map(({ text }) => text.toLowerCase())).toEqual([
+    'hello',
+    'world',
+  ]);
+  expect(events.filter(([type]) => type === 'final')).toEqual([
+    ['final', result.text],
+  ]);
+});
 
 function fakeContext() {
   const calls = [];
