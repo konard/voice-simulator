@@ -506,6 +506,21 @@ async function sessionRow({ engine, limit, profile }) {
 }
 
 /** copyRecording on the golden set, resampled to 8 kHz. */
+function copyForScoring(samples, engine, profile) {
+  const [copy, cpu] = cpuTime(() =>
+    copyRecording(samples, RATE, { tier: TIER, engine: engine.render, profile })
+  );
+  return {
+    samples: copy.samples,
+    sampleRate: copy.sampleRate,
+    language: copy.score.language,
+    ipa: copy.recognition.ipa,
+    cents: copy.metrics.f0?.rmseCents,
+    timingError: copy.metrics.timingError ?? Infinity,
+    cpu,
+  };
+}
+
 async function copyRow({ engine, limit, profile, traceCopy }) {
   const storage = sampleStorage();
   const conversion = sampleStorage();
@@ -516,31 +531,24 @@ async function copyRow({ engine, limit, profile, traceCopy }) {
   const phonemes = [];
   for await (const item of goldenRecordings({ limit, storage })) {
     const samples = convertRecording(item, RATE, conversion);
-    const [copy, cpu] = cpuTime(() =>
-      copyRecording(samples, RATE, {
-        tier: TIER,
-        engine: engine.render,
-        profile,
-      })
-    );
+    const copy = copyForScoring(samples, engine, profile);
+    const { cents, cpu, language, timingError } = copy;
     seconds += cpu;
     audioSeconds += samples.length / RATE;
-    const cents = copy.metrics.f0?.rmseCents;
     const pitchError = Number.isFinite(cents) ? cents / 100 : Infinity;
-    const timingError = copy.metrics.timingError ?? Infinity;
     f0.push(pitchError);
     timing.push(timingError);
     const again = recognize(copy.samples, copy.sampleRate, {
       level: LEVEL,
-      languages: [copy.score.language],
+      languages: [language],
       engine: engine.recognition,
       profile,
     });
-    const phones = errorRate(copy.recognition.ipa, again.ipa, 'phone');
+    const phones = errorRate(copy.ipa, again.ipa, 'phone');
     phonemes.push(phones);
     traceCopy?.({
       id: item.id,
-      language: copy.score.language,
+      language,
       f0RmseSemitones: round(pitchError),
       timingErrorMs: round(timingError, 1),
       phoneEdits: phones.distance,

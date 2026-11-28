@@ -8,25 +8,32 @@ import { sampleTrack } from './warp.js';
 
 export const DRAFT_RATE = 16000;
 
-function voicedMedian(values, from, to) {
-  const voiced = [];
+function voicedMedian(values, from, to, voiced) {
+  let count = 0;
   for (let i = Math.max(0, from); i <= Math.min(values.length - 1, to); i++) {
     if (values[i] > 0) {
-      voiced.push(values[i]);
+      voiced[count++] = values[i];
     }
   }
-  voiced.sort((a, b) => a - b);
-  const middle = Math.floor(voiced.length / 2);
-  return (voiced[middle] + voiced[Math.floor((voiced.length - 1) / 2)]) / 2;
+  if (!count) {
+    return NaN;
+  }
+  voiced.subarray(0, count).sort();
+  return (
+    (voiced[Math.floor(count / 2)] + voiced[Math.floor((count - 1) / 2)]) / 2
+  );
 }
 
 export function repairOctaves(values, frameRate) {
   const radius = Math.round(0.1 * frameRate);
+  const voiced = new Float64Array(
+    Math.min(values.length, Math.max(0, 2 * radius + 1))
+  );
   return Float32Array.from(values, (value, i) => {
     if (!(value > 0)) {
       return NaN;
     }
-    const median = voicedMedian(values, i - radius, i + radius);
+    const median = voicedMedian(values, i - radius, i + radius, voiced);
     const distance = 12 * Math.log2(value / median);
     if (Math.abs(distance) <= 9) {
       return value;
@@ -38,8 +45,9 @@ export function repairOctaves(values, frameRate) {
 
 export function pitchContour(measured, frameRate, fallback) {
   const repaired = repairOctaves(measured, frameRate);
+  const voiced = new Float64Array(5);
   const filtered = Float32Array.from(repaired, (value, i) =>
-    Number.isNaN(value) ? value : voicedMedian(repaired, i - 2, i + 2)
+    Number.isNaN(value) ? value : voicedMedian(repaired, i - 2, i + 2, voiced)
   );
   interpolateGaps(filtered, fallback);
   return smoothChannel(filtered, 0.01, frameRate);
