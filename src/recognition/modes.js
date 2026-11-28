@@ -136,33 +136,34 @@ function validate(samples, sampleRate, result, options) {
   }
 }
 
-function writeIpa(words, spans, sourceIpa) {
+function modeTokens(words, sourceIpa) {
+  if (sourceIpa) {
+    const original = parseIpa(sourceIpa).tokens;
+    let last = -1;
+    for (const token of original) {
+      if (token.kind !== 'pause' && token.kind !== 'sound') {
+        last = Math.max(last, token.word ?? -1);
+      }
+    }
+    if (last + 1 === words.length) {
+      return original;
+    }
+  }
   // Recognition words can contain more than one IPA word (normalization).
   const tokens = [];
-  words.forEach((word, i) => {
+  for (let i = 0; i < words.length; i++) {
     if (i) {
       tokens.push({ kind: 'pause', symbol: ' ', strength: 0 });
     }
-    tokens.push(
-      ...parseIpa(word.ipa).tokens.map((t) =>
-        t.kind === 'pause' ? t : { ...t, word: i }
-      )
-    );
-  });
-  if (sourceIpa) {
-    const original = parseIpa(sourceIpa).tokens;
-    const count =
-      1 +
-      Math.max(
-        -1,
-        ...original
-          .filter((t) => t.kind !== 'pause' && t.kind !== 'sound')
-          .map((t) => t.word ?? -1)
-      );
-    if (count === words.length) {
-      tokens.splice(0, tokens.length, ...original);
+    for (const token of parseIpa(words[i].ipa).tokens) {
+      tokens.push(token.kind === 'pause' ? token : { ...token, word: i });
     }
   }
+  return tokens;
+}
+
+function writeIpa(words, spans, sourceIpa) {
+  const tokens = modeTokens(words, sourceIpa);
   const labelled = spans.filter((s) => s.notation && !s.sound);
   const ipa = formatIpa(
     tokens,

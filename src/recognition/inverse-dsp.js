@@ -175,8 +175,20 @@ export function cppPlan(rate, minF0, maxF0) {
   const window = hann(length);
   const re = new Float64Array(size);
   const im = new Float64Array(size);
+  const first = Math.ceil(0.001 * rate);
+  const last = Math.min(size / 2, Math.floor(rate / minF0));
+  const firstPeak = Math.ceil(rate / maxF0);
+  const count = last - first + 1;
+  let sx = 0;
+  let sxx = 0;
+  for (let q = first; q <= last; q++) {
+    sx += q;
+    sxx += q * q;
+  }
+  const denominator = count * sxx - sx * sx;
+  const half = Math.floor(length / 2);
   return (x, centre) => {
-    const start = centre - Math.floor(length / 2);
+    const start = centre - half;
     re.fill(0);
     im.fill(0);
     const firstSample = Math.max(0, -start);
@@ -190,22 +202,15 @@ export function cppPlan(rate, minF0, maxF0) {
       im[k] = 0;
     }
     fft.inverse(re, im);
-    const first = Math.ceil(0.001 * rate);
-    const last = Math.min(size / 2, Math.floor(rate / minF0));
-    let sx = 0;
     let sy = 0;
-    let sxx = 0;
     let sxy = 0;
     for (let q = first; q <= last; q++) {
-      sx += q;
       sy += re[q];
-      sxx += q * q;
       sxy += q * re[q];
     }
-    const count = last - first + 1;
-    const slope = (count * sxy - sx * sy) / (count * sxx - sx * sx);
+    const slope = (count * sxy - sx * sy) / denominator;
     const intercept = (sy - slope * sx) / count;
-    let peak = Math.ceil(rate / maxF0);
+    let peak = firstPeak;
     for (let q = peak + 1; q <= last; q++) {
       if (re[q] > re[peak]) {
         peak = q;

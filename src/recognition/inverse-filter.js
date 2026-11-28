@@ -437,10 +437,16 @@ function lowBand(frames, f0) {
     if (!f0[t]) {
       continue;
     }
-    const average = (indices) =>
-      indices.reduce((v, m) => v + frames.mel[t * bands + m], 0) /
-      indices.length;
-    sum += average(low) - average(mid);
+    const row = t * bands;
+    let lowSum = 0;
+    for (let i = 0; i < low.length; i++) {
+      lowSum += frames.mel[row + low[i]];
+    }
+    let midSum = 0;
+    for (let i = 0; i < mid.length; i++) {
+      midSum += frames.mel[row + mid[i]];
+    }
+    sum += lowSum / low.length - midSum / mid.length;
     count++;
   }
   return !count || sum / count >= -4.6;
