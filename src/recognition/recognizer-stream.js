@@ -1,6 +1,9 @@
 /** Phrase commits over the incremental IPA decoder. Unlicense. */
 import { createIpaDecoder } from './decode.js';
 import { joinSegments } from './decode-pipeline.js';
+import { createFrameAnalyzer } from './frontend.js';
+import { HMM_LOW_SEARCH } from './hmm-decode.js';
+import { createLandmarkDetector } from './landmarks.js';
 import { languageShares } from './language-id.js';
 import {
   decodeRecognitionAudio,
@@ -24,6 +27,21 @@ const COMMIT_AFTER = 5;
 const MAX_WINDOW = 7;
 const LEVELS = ['low', 'medium', 'high'];
 const EPSILON = 1e-8;
+const PREVIEW_SEARCH = Object.freeze({
+  beam: 34,
+  languageBeam: 100,
+  maxActive: 96,
+});
+
+export function usesWordPhrases(sampleRate, settings) {
+  return (
+    sampleRate === 8000 &&
+    settings.level === 'low' &&
+    settings.languages.length === 1 &&
+    usesWordDecoder(settings) &&
+    !Object.keys(settings.stages).length
+  );
+}
 /**
  * Seconds of pitched audio a phrase needs before it can produce words, unless
  * the caller sets minVoiced: a live microphone hears noise between phrases,
@@ -133,14 +151,58 @@ function trailingPause(frames, state) {
   return (state.scanned - state.lastSpeech - 1) * frames.hop;
 }
 
-function createPhraseDecoder(sampleRate, settings, level, start, liveWords) {
-  const createDecoder = liveWords ? createLiveFrames : createIpaDecoder;
-  const decoder = createDecoder(sampleRate, {
-    ...decoderOptions(settings, level, start),
+function createWordFrontend(sampleRate, options, liveSyllables) {
+  const input = createFrameAnalyzer(sampleRate, {
+    hop: 0.01,
     maxSeconds: MAX_WINDOW + 1,
   });
+  const { frames } = input;
+  const landmarks = createLandmarkDetector(frames);
+  let phones;
+  const report = (final = false) => ({
+    segments: [],
+    nuclei: landmarks.advance(final),
+  });
+  function startSyllables(samples) {
+    if (phones) {
+      return null;
+    }
+    phones = createIpaDecoder(sampleRate, options);
+    return phones.push(samples);
+  }
   return {
-    decoder,
+    frames,
+    report() {
+      return phones ? null : report();
+    },
+    startSyllables,
+    push(chunk) {
+      input.push(chunk);
+      if (phones) {
+        return phones.push(chunk);
+      }
+      return liveSyllables() ? startSyllables(chunk) : null;
+    },
+    flush() {
+      input.flush();
+      return phones?.flush() ?? report(true);
+    },
+  };
+}
+
+function createPhraseDecoder(
+  sampleRate,
+  settings,
+  level,
+  start,
+  createDecoder
+) {
+  const options = {
+    ...decoderOptions(settings, level, start),
+    maxSeconds: MAX_WINDOW + 1,
+  };
+  return {
+    decoder: createDecoder(sampleRate, options),
     buffer: new Float32Array(Math.ceil(MAX_WINDOW * sampleRate)),
     used: 0,
     scanned: 0,
@@ -148,6 +210,7 @@ function createPhraseDecoder(sampleRate, settings, level, start, liveWords) {
     fixed: [],
     partial: null,
     nextCut: 0,
+    nextPreview: Math.round(sampleRate * 0.25),
   };
 }
 
@@ -167,6 +230,9 @@ export function createEvents() {
     },
     off(event, listener) {
       listeners.get(event)?.delete(listener);
+    },
+    has(event) {
+      return Boolean(listeners.get(event)?.size);
     },
   };
 }
@@ -196,26 +262,46 @@ function createSyllableEvents(emit) {
   };
 }
 
+export function createRecognizer(options = {}, live) {
+  const { sampleRate } = options;
+  validateRate(sampleRate);
+  return createConfiguredRecognizer(
+    sampleRate,
+    recognitionSettings(options),
+    false,
+    live
+  );
+}
+
 // The phrase decoder, commit cursor and reset lifecycle share this state.
 // eslint-disable-next-line max-lines-per-function
-export function createRecognizer(
-  options = {},
+export function createConfiguredRecognizer(
+  sampleRate,
+  settings,
+  batch = false,
   {
     liveWords = false,
     liveModeReference = false,
-    previews = true,
     onReading,
     onPitch,
+    previews = true,
   } = {}
 ) {
-  const { sampleRate } = options;
-  validateRate(sampleRate);
-  const settings = recognitionSettings(options);
   const { nbest } = settings;
-  const minVoiced = settings.minVoiced ?? STREAM_MIN_VOICED;
+  const minVoiced = settings.minVoiced ?? (batch ? 0 : STREAM_MIN_VOICED);
   const stride = Math.max(1, Math.floor(sampleRate * 0.02));
-  const { emit, on, off } = createEvents();
-  const load = createLoadMeter(sampleRate);
+  const wordPhrases = !liveWords && usesWordPhrases(sampleRate, settings);
+  const packet = wordPhrases ? new Float32Array(stride) : null;
+  const workspaces = wordPhrases ? new WeakMap() : undefined;
+  const { emit, has, on, off } = createEvents();
+  const liveSyllables = () => has('syllable');
+  const createDecoder = wordPhrases
+    ? (rate, options) => createWordFrontend(rate, options, liveSyllables)
+    : liveWords
+      ? createLiveFrames
+      : createIpaDecoder;
+  const adaptive = settings.level === 'auto' && !settings.deterministic;
+  const load = adaptive ? createLoadMeter(sampleRate) : null;
   let phrase;
   let level;
   let committed;
@@ -226,15 +312,26 @@ export function createRecognizer(
   let ended;
   let flushed;
   let pending;
+  let queued;
   const initialVoice = settings.voice;
   const initialOffsets = settings.articulationOffsets;
+
+  function openPhrase(start) {
+    return createPhraseDecoder(
+      sampleRate,
+      settings,
+      level,
+      start,
+      createDecoder
+    );
+  }
 
   function reset() {
     settings.voice = initialVoice;
     settings.articulationOffsets = initialOffsets;
     pending = undefined;
     level = settings.level === 'auto' ? 'medium' : settings.level;
-    phrase = openPhrase();
+    phrase = openPhrase(0);
     committed = emptyRecognition(nbest, settings.segments);
     offset = 0;
     nextPartial = 1;
@@ -242,14 +339,14 @@ export function createRecognizer(
     syllableIndex = 0;
     ended = false;
     flushed = null;
-    load.reset();
-  }
-
-  function openPhrase(start) {
-    return createPhraseDecoder(sampleRate, settings, level, start, liveWords);
+    queued = 0;
+    load?.reset();
   }
 
   function update(decoded) {
+    if (!decoded) {
+      return;
+    }
     if (!liveWords) {
       reportSyllables(decoded, phrase.fixed, offset / sampleRate);
     }
@@ -272,20 +369,9 @@ export function createRecognizer(
     );
   }
 
-  function reportAlignedSyllables(syllables, elapsed) {
-    for (const { start, end, ipa } of syllables) {
-      emit('syllable', {
-        index: syllableIndex++,
-        start: start + elapsed,
-        end: end + elapsed,
-        ipa,
-      });
-    }
-  }
-
   function read(decoded, size, final) {
     const signal = phrase.buffer.subarray(0, size);
-    let readSettings = final
+    const readSettings = final
       ? settings
       : {
           ...settings,
@@ -293,16 +379,16 @@ export function createRecognizer(
           segments: false,
           includeModeLabels: !liveWords && settings.includeModeLabels,
         };
-    if (liveWords) {
-      readSettings = {
-        ...readSettings,
-        liveWords,
-        maxWords: 6000,
-        search: final
-          ? { beam: 58, maxActive: 640 }
-          : { beam: 48, maxActive: 280 },
-      };
-    }
+    const wordOptions = liveWords
+      ? {
+          frontEnd: decoded,
+          kernels: settings.kernels,
+          maxWords: 6000,
+          search: final
+            ? { beam: 58, maxActive: 640 }
+            : { beam: 48, maxActive: 280 },
+        }
+      : undefined;
     // A test can supply snapshot IPA while the decoder maintains live timing.
     // Committed phrases take the word decoder, like recognize(); previews
     // keep the incremental phone decoder, which is cheap per chunk.
@@ -316,50 +402,95 @@ export function createRecognizer(
             readSettings,
             level,
             offset / sampleRate,
-            liveWords ? decoded : undefined
+            wordOptions
           )
         : { decoded, input: signal, rate: sampleRate };
     onReading?.(reading.decoded, offset / sampleRate, Boolean(final));
     if (liveWords && final) {
-      reportAlignedSyllables(reading.decoded.syllables, offset / sampleRate);
+      for (const { start, end, ipa } of reading.decoded.syllables) {
+        emit('syllable', {
+          index: syllableIndex++,
+          start: start + offset / sampleRate,
+          end: end + offset / sampleRate,
+          ipa,
+        });
+      }
     }
+    const modeSettings = liveWords
+      ? {
+          ...readSettings,
+          liveWords,
+          voice: liveModeReference ? settings.voice : null,
+        }
+      : readSettings;
     return recognizeDecoded(
       reading.decoded,
       reading.input,
       reading.rate,
-      // Use relative labels in the default live mode. A caller can request
-      // reference-based labels even when the word stream has a bounded beam.
-      liveWords && !liveModeReference
-        ? { ...readSettings, voice: null }
-        : readSettings,
+      modeSettings,
       level,
       final
     );
   }
 
-  function commit(size, finishDecoder) {
-    if (finishDecoder) {
-      update(phrase.decoder.flush());
-    }
-    const current = phrase.decoder.result();
-    const decoded = finishDecoder
-      ? current
-      : boundedDecode(current, size / sampleRate);
-    if (
-      noisyFrames(
-        decoded.frames.energy,
-        decoded.frames.count,
-        size / sampleRate
-      )
-    ) {
+  function readWords(size, options, readSettings = settings) {
+    return decodeRecognitionAudio(
+      phrase.buffer.subarray(0, size),
+      sampleRate,
+      readSettings,
+      level,
+      offset / sampleRate,
+      { ...options, useModelWords: true, workspaces }
+    );
+  }
+
+  function wordCommit(size, finished) {
+    const reading = readWords(size, {
+      analysis: finished ? phrase.decoder.frames : undefined,
+      search: size > 2 * sampleRate ? HMM_LOW_SEARCH : undefined,
+    });
+    checkPhraseNoise(reading.decoded.frames, size);
+    return phraseSpeech(reading.decoded, size)
+      ? recognizeDecoded(
+          reading.decoded,
+          reading.input,
+          reading.rate,
+          settings,
+          level,
+          'batch'
+        )
+      : emptyRecognition(nbest, settings.segments);
+  }
+
+  function checkPhraseNoise(frames, size) {
+    if (noisyFrames(frames.energy, frames.count, size / sampleRate)) {
       throw new RecognitionError(
         'too-noisy',
         'Audio has less than 5 dB of energy contrast'
       );
     }
-    const answer = phraseSpeech(decoded, size)
+  }
+
+  function phoneCommit(size, finished) {
+    const current = phrase.decoder.result();
+    const decoded = finished
+      ? current
+      : boundedDecode(current, size / sampleRate);
+    checkPhraseNoise(decoded.frames, size);
+    return phraseSpeech(decoded, size)
       ? read(decoded, size, 'stream')
       : emptyRecognition(nbest, settings.segments);
+  }
+
+  function commit(size, finishDecoder) {
+    if (finishDecoder) {
+      update(phrase.decoder.flush());
+    } else if (wordPhrases && !liveSyllables()) {
+      update(phrase.decoder.report());
+    }
+    const answer = wordPhrases
+      ? wordCommit(size, finishDecoder)
+      : phoneCommit(size, finishDecoder);
     if (answer.words.length) {
       const absolute = translated(
         answer,
@@ -367,19 +498,21 @@ export function createRecognizer(
         committed.words.length
       );
       aggregate(committed, absolute, nbest - 1);
-      const { ipa, text, languages, words, modes, segments } = translated(
-        answer,
-        offset / sampleRate,
-        0
-      );
-      emit('final', {
-        ipa,
-        text,
-        languages,
-        words,
-        modes,
-        ...(segments && { segments }),
-      });
+      if (has('final')) {
+        const { ipa, text, languages, words, modes, segments } = translated(
+          answer,
+          offset / sampleRate,
+          0
+        );
+        emit('final', {
+          ipa,
+          text,
+          languages,
+          words,
+          modes,
+          ...(segments && { segments }),
+        });
+      }
     }
     offset += size;
   }
@@ -393,11 +526,11 @@ export function createRecognizer(
   }
 
   function restart(size, adapt = false) {
-    const start = globalThis.performance.now();
+    const start = load && globalThis.performance.now();
     const previous = phrase;
     commit(size, size === previous.used);
-    load.charge((globalThis.performance.now() - start) / 1000);
-    if (settings.level === 'auto' && !settings.deterministic) {
+    if (load) {
+      load.charge((globalThis.performance.now() - start) / 1000);
       const next = load.choose(level);
       if (next !== level) {
         level = next;
@@ -417,13 +550,14 @@ export function createRecognizer(
   }
 
   function setVoice(voice, articulationOffsets, immediate = false, onApplied) {
-    // Only reference-based mode analysis uses the voice in the live HMM.
-    // Without it, intermediate fit passes need no new phrase.
+    // Intermediate fits leave the current live phrase open when mode labels
+    // use its own acoustic reference.
     if (liveWords && !liveModeReference && !immediate && !onApplied) {
       settings.voice = voice;
       settings.articulationOffsets = articulationOffsets;
       return;
     }
+    drainPacket();
     pending = { voice, articulationOffsets, onApplied };
     const pause = trailingPause(phrase.decoder.frames, phrase);
     if (immediate || pause >= 0.2 - EPSILON || phrase.used === 0) {
@@ -435,6 +569,49 @@ export function createRecognizer(
         onApplied?.();
       }
     }
+  }
+
+  function previewWords(due, pause) {
+    if (!due || !has('partial')) {
+      return;
+    }
+    // A phrase already showing words will be committed soon if the pause
+    // continues. Keep its preview while waiting for speech or the commit.
+    if (
+      phrase.used >= phrase.nextPreview &&
+      (!phrase.partial?.words.length || pause < PAUSE / 2)
+    ) {
+      const readSettings = {
+        ...settings,
+        nbest: 1,
+        segments: false,
+        modes: false,
+        includeModeLabels: false,
+      };
+      const reading = readWords(
+        phrase.used,
+        { analysis: phrase.decoder.frames, search: PREVIEW_SEARCH },
+        readSettings
+      );
+      if (phraseSpeech(reading.decoded, phrase.used)) {
+        phrase.partial = recognizeDecoded(
+          reading.decoded,
+          reading.input,
+          reading.rate,
+          readSettings,
+          level,
+          false
+        );
+      }
+      phrase.nextPreview =
+        phrase.used + sampleRate * (phrase.partial?.words.length ? 2 : 0.25);
+    }
+    const { words, ipa, text } = translated(
+      phrase.partial ?? emptyRecognition(1),
+      offset / sampleRate,
+      0
+    );
+    emit('partial', { words, ipa, text });
   }
 
   function previewPartial(due) {
@@ -464,29 +641,28 @@ export function createRecognizer(
     }
   }
 
-  function previewDue(due) {
-    return (
-      !liveWords ||
-      (due && !phrase.partial?.words.length && phrase.used >= sampleRate)
-    );
-  }
-
   function advance(chunk) {
-    const start = globalThis.performance.now();
+    const start = load && globalThis.performance.now();
     phrase.buffer.set(chunk, phrase.used);
     phrase.used += chunk.length;
     update(phrase.decoder.push(chunk));
     const pause = trailingPause(phrase.decoder.frames, phrase);
     const total = offset + phrase.used;
     const due = total >= Math.ceil((nextPartial * sampleRate) / 4);
-    // A live phrase needs one word preview before its bounded final read.
-    if (previews && previewDue(due)) {
-      previewPartial(due);
+    if (previews) {
+      if (wordPhrases) {
+        previewWords(due, pause);
+      } else if (
+        !liveWords ||
+        (due && !phrase.partial?.words.length && phrase.used >= sampleRate)
+      ) {
+        previewPartial(due);
+      }
     }
     if (due) {
       nextPartial++;
     }
-    load.add(chunk.length, (globalThis.performance.now() - start) / 1000);
+    load?.add(chunk.length, (globalThis.performance.now() - start) / 1000);
     commitAtPause(pause);
   }
 
@@ -523,6 +699,12 @@ export function createRecognizer(
       return null;
     }
     phrase.nextCut = phrase.used + sampleRate;
+    if (wordPhrases) {
+      return readWords(phrase.used, {
+        analysis: phrase.decoder.frames,
+        search: HMM_LOW_SEARCH,
+      }).decoded.words;
+    }
     return decodeRecognitionAudio(
       phrase.buffer.subarray(0, phrase.used),
       sampleRate,
@@ -530,6 +712,42 @@ export function createRecognizer(
       level,
       offset / sampleRate
     ).decoded.words;
+  }
+
+  function pushChunks(chunk) {
+    for (let i = 0; i < chunk.length; ) {
+      if (phrase.used === phrase.buffer.length) {
+        restart(phrase.used);
+      }
+      const size = Math.min(
+        stride,
+        phrase.buffer.length - phrase.used,
+        Math.ceil((nextPartial * sampleRate) / 4) - (offset + phrase.used)
+      );
+      const end = Math.min(chunk.length, i + size);
+      advance(chunk.subarray(i, end));
+      i = end;
+    }
+  }
+
+  function drainPacket() {
+    if (queued) {
+      const size = queued;
+      queued = 0;
+      pushChunks(packet.subarray(0, size));
+    }
+  }
+
+  function pushPackets(chunk) {
+    for (let i = 0; i < chunk.length; ) {
+      const end = Math.min(chunk.length, i + stride - queued);
+      packet.set(chunk.subarray(i, end), queued);
+      queued += end - i;
+      i = end;
+      if (queued === stride) {
+        drainPacket();
+      }
+    }
   }
 
   reset();
@@ -545,18 +763,10 @@ export function createRecognizer(
           throw new TypeError('Expected a Float32Array');
         }
         validateSamples(chunk);
-        for (let i = 0; i < chunk.length; ) {
-          if (phrase.used === phrase.buffer.length) {
-            restart(phrase.used);
-          }
-          const size = Math.min(
-            stride,
-            phrase.buffer.length - phrase.used,
-            Math.ceil((nextPartial * sampleRate) / 4) - (offset + phrase.used)
-          );
-          const end = Math.min(chunk.length, i + size);
-          advance(chunk.subarray(i, end));
-          i = end;
+        if (wordPhrases) {
+          pushPackets(chunk);
+        } else {
+          pushChunks(chunk);
         }
       } catch (error) {
         ended = true;
@@ -567,21 +777,32 @@ export function createRecognizer(
       if (flushed) {
         return globalThis.structuredClone(flushed);
       }
-      if (offset + phrase.used < 0.05 * sampleRate) {
+      if (offset + phrase.used + queued < 0.05 * sampleRate) {
         throw new RecognitionError(
           'empty',
           'Recognition needs at least 50 ms of audio'
         );
       }
-      if (!ended && phrase.used) {
-        commit(phrase.used, true);
+      if (!ended) {
+        drainPacket();
+        if (phrase.used) {
+          commit(phrase.used, true);
+        }
       }
       ended = true;
       flushed = { ...committed, languages: languageShares(committed.words) };
       return globalThis.structuredClone(flushed);
     },
     reset,
-    on,
+    on(event, listener) {
+      // Account for already confirmed nuclei before a new listener arrives.
+      if (wordPhrases && !ended && event === 'syllable' && !liveSyllables()) {
+        update(
+          phrase.decoder.startSyllables(phrase.buffer.subarray(0, phrase.used))
+        );
+      }
+      on(event, listener);
+    },
     off,
     setVoice,
     discardVoiceChange() {

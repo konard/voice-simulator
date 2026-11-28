@@ -202,32 +202,32 @@
         "row": "streaming",
         "engine": "js",
         "metrics": {
-          "textMismatch": 0.2887,
-          "firstPartial": 1.5093,
-          "load": 2.6102,
-          "partials": 247,
-          "streamText": "The quick brown fox jump sober the lazy dog. She says she shells by the sea shore. Did room as a treasure yesterday. Why does the long judge and all chewing cheap toys? What a beautiful morning? Thick far greater over the suit have. A usually think about their father and mother. A large ship say down diaz that noon. Are the children praying outside now? Peas bring mia cup of hot p, some bed and the book. How far is the nearest hospital? The singer was ringing along dare. I want to record and record to day. Part whole of that your air was sure to lend. Stored. He could not hear the boys voice clearly. The will visit was one thursday. Is this your ten or nine? The photographer took a photograph of the banana tree. The.",
-          "batchText": "The quick brill fox jump sober the lady dog. She says she shells by the sea shore. Did you measure the treasure yesterday. Well does the your judge and all chewing cheap toys! What a beautiful morning thick far greater over the suit have. A usually think about well foreign mother. A large ship shade around the and at noon. Were the children playing outside near? Peas bring me a cup of hot tea, some dead and a book. How far is the nearest hospital the singer was ringing of or dead. Want to the called a new record to day. Bar to of that you where was sure to on? Stop. He could not hear the boys voice clearly. We will visit was won thursday is this your ten, own on! The photographer took a photograph of the banana tree. Ye."
+          "textMismatch": 0,
+          "firstPartial": 0.2751,
+          "load": 0.1001,
+          "partials": 240,
+          "streamText": "The quick brown fox jump sober the lady dog. She says she cells by the sea shore. Did you measure at resins s today. Wide oz the long judge and all choozhermsheeptaw is. What a beautiful morning? Thick fog mayo are the suit have. A usually think about their father and mother. Of our js its aid around then that moon. Are the children playing outside now? Peas bring mia cup of hot to the, some medal the book. How far is the nearest hospital? The singer was ringing award as. I want to the called and lettered today. Cartoon of that your air was sure to lend. Stored. He could not hear the boys voice clearly. The will visit was one thursday. Is this are ten or nine? The photographer to ka photograph of the banana pre. The.",
+          "batchText": "The quick brown fox jump sober the lady dog. She says she cells by the sea shore. Did you measure at resins s today. Wide oz the long judge and all choozhermsheeptaw is. What a beautiful morning? Thick fog mayo are the suit have. A usually think about their father and mother. Of our js its aid around then that moon. Are the children playing outside now? Peas bring mia cup of hot to the, some medal the book. How far is the nearest hospital? The singer was ringing award as. I want to the called and lettered today. Cartoon of that your air was sure to lend. Stored. He could not hear the boys voice clearly. The will visit was one thursday. Is this are ten or nine? The photographer to ka photograph of the banana pre. The."
         },
-        "seconds": 156.614,
+        "seconds": 6.006,
         "audioSeconds": 60,
-        "peakRssMb": 465.1,
+        "peakRssMb": 326.1,
         "capped": {}
       },
       "rust": {
         "row": "streaming",
         "engine": "rust",
         "metrics": {
-          "textMismatch": 0.2887,
-          "firstPartial": 1.2668,
-          "load": 1.9799,
-          "partials": 247,
-          "streamText": "The quick brown fox jump sober the lazy dog. She says she shells by the sea shore. Did room as a treasure yesterday. Why does the long judge and all chewing cheap toys? What a beautiful morning? Thick far greater over the suit have. A usually think about their father and mother. A large ship say down diaz that noon. Are the children praying outside now? Peas bring mia cup of hot p, some bed and the book. How far is the nearest hospital? The singer was ringing along dare. I want to record and record to day. Part whole of that your air was sure to lend. Stored. He could not hear the boys voice clearly. The will visit was one thursday. Is this your ten or nine? The photographer took a photograph of the banana tree. The.",
-          "batchText": "The quick brill fox jump sober the lady dog. She says she shells by the sea shore. Did you measure the treasure yesterday. Well does the your judge and all chewing cheap toys! What a beautiful morning thick far greater over the suit have. A usually think about well foreign mother. A large ship shade around the and at noon. Were the children playing outside near? Peas bring me a cup of hot tea, some dead and a book. How far is the nearest hospital the singer was ringing of or dead. Want to the called a new record to day. Bar to of that you where was sure to on? Stop. He could not hear the boys voice clearly. We will visit was won thursday is this your ten, own on! The photographer took a photograph of the banana tree. Ye."
+          "textMismatch": 0,
+          "firstPartial": 0.2739,
+          "load": 0.0961,
+          "partials": 240,
+          "streamText": "The quick brown fox jump sober the lady dog. She says she cells by the sea shore. Did you measure at resins s today. Wide oz the long judge and all choozhermsheeptaw is. What a beautiful morning? Thick fog mayo are the suit have. A usually think about their father and mother. Of our js its aid around then that moon. Are the children playing outside now? Peas bring mia cup of hot to the, some medal the book. How far is the nearest hospital? The singer was ringing award as. I want to the called and lettered today. Cartoon of that your air was sure to lend. Stored. He could not hear the boys voice clearly. The will visit was one thursday. Is this are ten or nine? The photographer to ka photograph of the banana pre. The.",
+          "batchText": "The quick brown fox jump sober the lady dog. She says she cells by the sea shore. Did you measure at resins s today. Wide oz the long judge and all choozhermsheeptaw is. What a beautiful morning? Thick fog mayo are the suit have. A usually think about their father and mother. Of our js its aid around then that moon. Are the children playing outside now? Peas bring mia cup of hot to the, some medal the book. How far is the nearest hospital? The singer was ringing award as. I want to the called and lettered today. Cartoon of that your air was sure to lend. Stored. He could not hear the boys voice clearly. The will visit was one thursday. Is this are ten or nine? The photographer to ka photograph of the banana pre. The."
         },
-        "seconds": 118.796,
+        "seconds": 5.763,
         "audioSeconds": 60,
-        "peakRssMb": 453.4,
+        "peakRssMb": 330.8,
         "capped": {}
       }
     },
@@ -630,53 +630,50 @@
     },
     "streaming": {
       "quality": {
-        "status": "failed",
+        "status": "certified",
         "metrics": {
           "textMismatch": {
-            "value": 0.2887,
+            "value": 0,
             "limit": 0,
-            "pass": false
+            "pass": true
           }
-        },
-        "issue": "https://github.com/konard/voice-simulator/issues/175"
+        }
       },
       "js-1": {
-        "status": "failed",
+        "status": "certified",
         "metrics": {
           "firstPartial": {
-            "value": 1.5093,
+            "value": 0.2751,
             "limit": 1,
-            "pass": false
+            "pass": true
           },
           "load": {
-            "value": 2.6102,
+            "value": 0.1001,
             "limit": 0.25,
-            "pass": false
+            "pass": true
           }
-        },
-        "issue": "https://github.com/konard/voice-simulator/issues/175"
+        }
       },
       "rust-1": {
-        "status": "failed",
+        "status": "certified",
         "metrics": {
           "firstPartial": {
-            "value": 1.2668,
+            "value": 0.2739,
             "limit": 1,
-            "pass": false
+            "pass": true
           },
           "load": {
-            "value": 1.9799,
+            "value": 0.0961,
             "limit": 0.25,
-            "pass": false
+            "pass": true
           }
-        },
-        "issue": "https://github.com/konard/voice-simulator/issues/175"
+        }
       },
       "memory": {
         "status": "failed",
         "metrics": {
           "peakRssMb": {
-            "value": 465.1,
+            "value": 330.8,
             "limit": 256,
             "pass": false
           }
@@ -920,6 +917,15 @@
       "commit": "336df9f4069def2bfdf385859008df98c2138bf0",
       "command": "LOWEST_ROW=session node --test tests/heavy/lowest-settings.test.js",
       "cpu": "AMD EPYC 9V74 80-Core Processor",
+      "node": "v24.22.3",
+      "pinned": true,
+      "core": 0
+    },
+    "streaming": {
+      "measured": "2026-11-28T01:46:10.008Z",
+      "commit": "ec44eefef653c0ebeaa56fbd421b5f545a82017f",
+      "command": "LOWEST_ROW=streaming node --test tests/heavy/lowest-settings.test.js",
+      "cpu": "Intel(R) Xeon(R) 6975P-C",
       "node": "v24.22.3",
       "pinned": true,
       "core": 0

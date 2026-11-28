@@ -18,7 +18,7 @@ become stricter.
 | --- | --- | --- | --- | --- |
 | synthesis | certified | certified | certified | [failed](https://github.com/konard/voice-simulator/issues/173) |
 | recognition | certified | [failed](https://github.com/konard/voice-simulator/issues/174) | [failed](https://github.com/konard/voice-simulator/issues/174) | [failed](https://github.com/konard/voice-simulator/issues/173) |
-| streaming | [failed](https://github.com/konard/voice-simulator/issues/175) | [failed](https://github.com/konard/voice-simulator/issues/175) | [failed](https://github.com/konard/voice-simulator/issues/175) | [failed](https://github.com/konard/voice-simulator/issues/173) |
+| streaming | certified | certified | certified | [failed](https://github.com/konard/voice-simulator/issues/173) |
 | voice-fit | certified | certified | certified | [failed](https://github.com/konard/voice-simulator/issues/173) |
 | session | certified | certified | certified | [failed](https://github.com/konard/voice-simulator/issues/173) |
 | copy | [failed](https://github.com/konard/voice-simulator/issues/178) | certified | certified | [failed](https://github.com/konard/voice-simulator/issues/173) |
@@ -38,12 +38,12 @@ become stricter.
 | recognition | js-1 | real-time factor | 1.4237 | ≤ 0.25 | no |
 | recognition | rust-1 | real-time factor | 1.5811 | ≤ 0.25 | no |
 | recognition | memory | peak RSS (MB) | 1346.3 | ≤ 256 | no |
-| streaming | quality | stream text differing from batch (WER) | 0.2887 | ≤ 0 | no |
-| streaming | js-1 | first partial with words (s) | 1.5093 | ≤ 1 | no |
-| streaming | js-1 | CPU load | 2.6102 | ≤ 0.25 | no |
-| streaming | rust-1 | first partial with words (s) | 1.2668 | ≤ 1 | no |
-| streaming | rust-1 | CPU load | 1.9799 | ≤ 0.25 | no |
-| streaming | memory | peak RSS (MB) | 465.1 | ≤ 256 | no |
+| streaming | quality | stream text differing from batch (WER) | 0 | ≤ 0 | yes |
+| streaming | js-1 | first partial with words (s) | 0.2751 | ≤ 1 | yes |
+| streaming | js-1 | CPU load | 0.1001 | ≤ 0.25 | yes |
+| streaming | rust-1 | first partial with words (s) | 0.2739 | ≤ 1 | yes |
+| streaming | rust-1 | CPU load | 0.0961 | ≤ 0.25 | yes |
+| streaming | memory | peak RSS (MB) | 330.8 | ≤ 256 | no |
 | voice-fit | quality | vocal tract length error | 0.0275 | ≤ 0.05 | yes |
 | voice-fit | quality | pitch error | 0.0214 | ≤ 0.03 | yes |
 | voice-fit | js-1 | CPU time / audio time | 0.5464 | ≤ 1 | yes |
@@ -77,8 +77,8 @@ become stricter.
 | synthesis | rust | 10.456 | 391.707 | 795.5 | crashed at 192 MB (JavaScript heap out of memory); rerun without the cap | wer 0.3537, rtf 0.0267, recognitionRtf 0.6398, utterances 160 |
 | recognition | js | 1525.964 | 1071.807 | 1346.3 | crashed at 192 MB (JavaScript heap out of memory); rerun without the cap | per 0.8674, wer 1.2979, per16k 0.8669, wer16k 1.2983, perIncrease 0.0005, werIncrease -0.0004, rtf 1.4237, utterances 127 |
 | recognition | rust | 1694.653 | 1071.807 | 1122.7 | crashed at 192 MB (JavaScript heap out of memory); rerun without the cap | per 0.8674, wer 1.2979, rtf 1.5811, utterances 127 |
-| streaming | js | 156.614 | 60 | 465.1 | 192 MB | textMismatch 0.2887, firstPartial 1.5093, load 2.6102, partials 247, streamText The quick brown fox jump sober the lazy dog. She says she sh…, batchText The quick brill fox jump sober the lady dog. She says she sh… |
-| streaming | rust | 118.796 | 60 | 453.4 | 192 MB | textMismatch 0.2887, firstPartial 1.2668, load 1.9799, partials 247, streamText The quick brown fox jump sober the lazy dog. She says she sh…, batchText The quick brill fox jump sober the lady dog. She says she sh… |
+| streaming | js | 6.006 | 60 | 326.1 | 192 MB | textMismatch 0, firstPartial 0.2751, load 0.1001, partials 240, streamText The quick brown fox jump sober the lady dog. She says she ce…, batchText The quick brown fox jump sober the lady dog. She says she ce… |
+| streaming | rust | 5.763 | 60 | 330.8 | 192 MB | textMismatch 0, firstPartial 0.2739, load 0.0961, partials 240, streamText The quick brown fox jump sober the lady dog. She says she ce…, batchText The quick brown fox jump sober the lady dog. She says she ce… |
 | voice-fit | js | 16.393 | 30 | 326.4 | 192 MB | vocalTractLengthError 0.0275, pitchError 0.0214, cpuRatio 0.5464 |
 | voice-fit | rust | 15.775 | 30 | 327.6 | 192 MB | vocalTractLengthError 0.0275, pitchError 0.0214, cpuRatio 0.5258 |
 | session | js | 9.577 | 60 | 330.9 | 192 MB | stable 1, vocalTractLengthError 0.0197, pitchError 0.0117, cpuRatio 0.1596 |
@@ -95,3 +95,5 @@ become stricter.
   Pinned with `taskset -c 0`. Command `node --test --test-name-pattern 'voice-fit with' tests/heavy/lowest-settings.test.js`.
 - **session** at commit `336df9f4069def2bfdf385859008df98c2138bf0` on AMD EPYC 9V74 80-Core Processor, Node v24.22.3, measured 2026-11-28T01:13:16.430Z.
   Pinned with `taskset -c 0`. Command `LOWEST_ROW=session node --test tests/heavy/lowest-settings.test.js`.
+- **streaming** at commit `ec44eefef653c0ebeaa56fbd421b5f545a82017f` on Intel(R) Xeon(R) 6975P-C, Node v24.22.3, measured 2026-11-28T01:46:10.008Z.
+  Pinned with `taskset -c 0`. Command `LOWEST_ROW=streaming node --test tests/heavy/lowest-settings.test.js`.

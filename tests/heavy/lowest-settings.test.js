@@ -11,6 +11,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { after, describe, it } from 'node:test';
 import { fileURLToPath, URL } from 'node:url';
+import { fetchDataset } from '../../scripts/datasets.mjs';
 import {
   formatReport,
   judge,
@@ -19,6 +20,7 @@ import {
   REPORT_PATH,
 } from '../../scripts/lowest-report.mjs';
 import { ISSUES_PATH } from '../../scripts/lowest-settings.mjs';
+import { BENCHMARK } from './helpers/benchmark.js';
 import { heavyLimit, heavyOut, writeReport } from './helpers/report.js';
 
 const ROOT = fileURLToPath(new URL('../../', import.meta.url));
@@ -39,6 +41,7 @@ assert.ok(
 const rows = selected ? [selected] : ALL_ROWS;
 const ENGINES = ['js', 'rust'];
 const HEAP_CAP = '--max-old-space-size=192';
+const STREAM_SECONDS = 60;
 const ROW_TIMEOUT_MS = 6 * 3_600_000;
 const read = (file) =>
   existsSync(file) ? JSON.parse(readFileSync(file, 'utf8')) : null;
@@ -100,6 +103,24 @@ function run(row, engine, core, cap) {
 }
 
 const OUT_OF_MEMORY = /heap out of memory|Reached heap limit/u;
+let recognitionCache;
+
+async function prepareRecognitionCache() {
+  for (const { id, rows } of BENCHMARK.sets) {
+    await fetchDataset(id, { limit: Math.min(rows, limit) });
+  }
+}
+
+function measurementError(row, engine, attempt) {
+  const exit = attempt.code ?? attempt.signal;
+  const diagnostic = attempt.stderr.trim();
+  console.error(`lowest ${row} ${engine} exited ${exit}\n${diagnostic}`);
+  const lines = diagnostic.split('\n');
+  const detail = lines.find((line) =>
+    /(?:Error|Exception)(?: \[[^\]]+\])?: /u.test(line)
+  );
+  return `exit ${exit}: ${detail ?? lines[0]}`;
+}
 
 /**
  * Run a cell under the heap cap. When the capped process runs out of heap,
@@ -107,6 +128,16 @@ const OUT_OF_MEMORY = /heap out of memory|Reached heap limit/u;
  * one core, so the other columns are measured.
  */
 async function measure(row, engine, core) {
+  if (row === 'recognition') {
+    // Both engines read the same files. Only the parent may fetch missing
+    // recordings so the children never write to a shared partial download.
+    recognitionCache ??= prepareRecognitionCache();
+    try {
+      await recognitionCache;
+    } catch (error) {
+      return { row, engine, error: error.message, capped: {} };
+    }
+  }
   const capped = await run(row, engine, core, true);
   if (capped.result) {
     return { ...capped.result, capped: {} };
@@ -118,7 +149,7 @@ async function measure(row, engine, core) {
     return {
       row,
       engine,
-      error: `exit ${capped.code ?? capped.signal}: ${capped.stderr.trim()}`,
+      error: measurementError(row, engine, capped),
       capped: {},
     };
   }
@@ -128,7 +159,7 @@ async function measure(row, engine, core) {
     : {
         row,
         engine,
-        error: `uncapped exit ${free.code ?? free.signal}: ${free.stderr.trim()}`,
+        error: `uncapped ${measurementError(row, engine, free)}`,
         capped: { crashed: crash },
       };
 }
@@ -201,6 +232,9 @@ describe('lowest settings: 8 kHz and one core', () => {
         runs[row][engine] = measured;
         console.log(`lowest ${row} ${engine}`, JSON.stringify(measured));
         assert.ok(!measured.error, measured.error);
+        if (row === 'streaming' && !Number.isFinite(limit)) {
+          certifyStreaming(engine, measured);
+        }
         if (
           row === 'session' &&
           !Number.isFinite(limit) &&
@@ -285,3 +319,24 @@ describe('lowest settings: 8 kHz and one core', () => {
     );
   });
 });
+
+function certifyStreaming(engine, measured) {
+  assert.ok(pinned, 'Streaming certification requires one pinned core');
+  assert.ok(!measured.unavailable, measured.unavailable);
+  assert.ok(
+    !measured.capped?.crashed,
+    `streaming ${engine}: ${measured.capped?.crashed}`
+  );
+  assert.equal(measured.audioSeconds, STREAM_SECONDS, `streaming ${engine}`);
+  const limits = {
+    ...thresholds.streaming.quality,
+    ...thresholds.streaming[`${engine}-1`],
+  };
+  for (const [name, limit] of Object.entries(limits)) {
+    const value = measured.metrics?.[name];
+    assert.ok(
+      passes(name, value, limit),
+      `streaming ${engine} ${name}: ${value} exceeds ${limit}`
+    );
+  }
+}

@@ -179,9 +179,10 @@ function recover(frames, f0, o) {
     for (let n = 0; n < length; n++) {
       const index = start + n;
       if (index >= 0 && index < x.length) {
-        d[index] += window[n] * pulse.d[n + history];
-        g[index] += window[n] * pulse.g[n + history];
-        weight[index] += window[n];
+        const weightAtSample = window[n];
+        d[index] += weightAtSample * pulse.d[n + history];
+        g[index] += weightAtSample * pulse.g[n + history];
+        weight[index] += weightAtSample;
       }
     }
   }
@@ -413,6 +414,49 @@ export function inverseFilter(frames, options = {}) {
     { ...frames, samples: frames.samples.subarray(0, frames.sampleCount) },
     o
   );
+}
+
+/** Measure the three source cues used by speech-mode recognition at vowel rows. */
+export function inverseFilterModeCues(frames, rows, options) {
+  if (options.kernels?.module) {
+    return inverseFilter(frames, options);
+  }
+  const o = settings(frames, options);
+  const { count, rate, hop, sampleCount } = frames;
+  const samples = frames.samples.subarray(0, sampleCount);
+  const f0 = localPitch(frames, o);
+  const result = {
+    h1h2Source: new Float32Array(count).fill(NaN),
+    hnr: new Float32Array(count).fill(NaN),
+    cpp: new Float32Array(count).fill(NaN),
+  };
+  if (!rows.some((t) => f0[t] > 0)) {
+    return result;
+  }
+  const d = lowBand(frames, f0)
+    ? recover({ ...frames, samples }, f0, o).flowDerivative
+    : null;
+  const cpp = cppPlan(rate, o.minF0, o.maxF0);
+  const windows = new Map();
+  for (const t of rows) {
+    if (!f0[t]) {
+      continue;
+    }
+    const centre = Math.round(t * hop * rate);
+    const period = rate / f0[t];
+    if (d && Math.floor(0.45 * period) >= 2) {
+      const source = block(d, centre, Math.round(2 * period));
+      const h = harmonics(source, rate, f0[t], 2);
+      result.h1h2Source[t] = h[0] - h[1];
+    }
+    const length = Math.round(6 * period);
+    if (!windows.has(length)) {
+      windows.set(length, hann(length));
+    }
+    result.hnr[t] = hnr(samples, centre, period, windows.get(length));
+    result.cpp[t] = cpp(samples, centre);
+  }
+  return result;
 }
 
 function inverseFilterJs(frames, o) {

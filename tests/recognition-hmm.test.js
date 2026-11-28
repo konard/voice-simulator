@@ -1,17 +1,25 @@
 import assert from 'node:assert/strict';
 import { it } from 'test-anywhere';
-import { addLexicon, clearLexicons, recognize } from '../src/index.js';
+import {
+  addLexicon,
+  clearLexicons,
+  recognize,
+  synthesize,
+} from '../src/index.js';
 import {
   hmmBoundaryTime,
+  hmmFeatures,
   hmmFrameTime,
   hmmPitchStatics,
 } from '../src/recognition/hmm-features.js';
 import {
+  decodeWords,
   HMM_DECODE_DEFAULTS,
   languageThresholds,
 } from '../src/recognition/hmm-decode.js';
 import { getHmmModel } from '../src/recognition/hmm-model.js';
 import {
+  buildNetwork,
   firstToneClass,
   getNetwork,
   toneVariants,
@@ -72,9 +80,17 @@ it('reuses the decoding graph when only one of its languages is requested', () =
   const options = { maxWords: 40 };
   const multilingual = getNetwork(model, ['ru', 'en'], options);
   const english = getNetwork(model, ['en'], options);
-  assert.deepEqual([...english.trees.keys()], ['en']);
+  assert.deepEqual(english.languages, ['en']);
   assert.equal(english.trees.get('en'), multilingual.trees.get('en'));
-  assert.equal(english.nodes, multilingual.nodes);
+  assert.equal(english.language, multilingual.language);
+  const spoken = synthesize('one two', { lang: 'en', tier: 'telephone' });
+  const { feats, frames } = hmmFeatures(spoken.samples, RATE, model.lda);
+  const decoded = decodeWords(english, feats, frames);
+  assert.equal(decoded.lang, 'en');
+  assert.deepEqual(
+    decoded,
+    decodeWords(buildNetwork(model, ['en'], options), feats, frames)
+  );
 });
 
 it('adds the words of addLexicon() to the decoding network', () => {
@@ -111,7 +127,7 @@ it('adds a phone loop for words outside the vocabulary unless oov is off', () =>
   }
   const closed = getNetwork(model, ['en'], { maxWords: 200, oov: false });
   assert.equal(closed.trees.get('en').loop.begin.length, 0);
-  assert.ok(closed.nodes.every((node) => !node.loop));
+  assert.ok(closed.words.every((word) => !word.oov));
 });
 
 it('stresses the longest full vowel of a word outside the vocabulary', () => {
@@ -167,8 +183,12 @@ it('lets a rising sandhi variant go on only before the tone that causes it', () 
   for (const [before, roots] of tree.after) {
     const ids = [];
     const walk = (node) => {
-      ids.push(...node.words);
-      node.children.forEach(walk);
+      for (let i = zh.firstWord[node]; i < zh.firstWord[node + 1]; i++) {
+        ids.push(zh.endings[i]);
+      }
+      for (let i = zh.firstChild[node]; i < zh.firstChild[node + 1]; i++) {
+        walk(zh.children[i]);
+      }
     };
     roots.forEach(walk);
     assert.ok(ids.length > 0);
@@ -181,35 +201,42 @@ it('lets a rising sandhi variant go on only before the tone that causes it', () 
 it('prunes each language against its own best token (issue 75)', () => {
   // English trails Mandarin by 200 at this frame, more than the beam of
   // 120: one beam over all languages would drop every English token.
-  const nodes = [{ lang: 'en' }, { lang: 'en' }, { lang: 'zh' }];
-  const frame = (en) => [
-    [0, en],
-    [1, en - 140],
-    [2, -300],
-  ];
-  const settings = { ...HMM_DECODE_DEFAULTS, beam: 120, languageBeam: 400 };
-  const kept = languageThresholds(nodes, frame(-500), -300, settings);
-  assert.equal(kept.get('en'), -620);
-  assert.equal(kept.get('zh'), -420);
-  // A language more than languageBeam behind the best goes.
-  const gone = languageThresholds(nodes, frame(-800), -300, settings);
-  assert.equal(gone.get('en'), -700);
-  // maxActive keeps the best nodes of each language, not of all.
-  const one = languageThresholds(nodes, frame(-500), -300, {
-    ...settings,
-    maxActive: 1,
-  });
-  assert.equal(one.get('en'), -500);
-  assert.equal(one.get('zh'), -420);
+  const frame = (en, maxActive) => {
+    const thresholds = new Float64Array(2);
+    languageThresholds(
+      [0, 0, 1, 0, 0],
+      {
+        work: [0, 1, 2, 3, 4],
+        nodeScores: [en, en - 50, -300, en - 50, en - 140],
+        languageBest: [en, -300],
+        buckets: [[], []],
+        thresholds,
+      },
+      -300,
+      { ...HMM_DECODE_DEFAULTS, maxActive }
+    );
+    return Array.from(thresholds);
+  };
+  assert.deepEqual(frame(-500, 6000), [-620, -420]);
+  assert.deepEqual(frame(-800, 6000), [-700, -420]);
+  assert.deepEqual(frame(-500, 1), [-500, -420]);
+  assert.deepEqual(frame(-500, 2), [-550, -420]);
 });
 
 it('keeps ties at the histogram pruning threshold', () => {
   const scores = [-60, -7, -5, -3, -5, -1, -2, -80];
-  const nodes = scores.map(() => ({ lang: 'en' }));
-  const thresholds = languageThresholds(nodes, scores.entries(), -1, {
-    ...HMM_DECODE_DEFAULTS,
-    beam: 10,
-    maxActive: 4,
-  });
-  assert.equal(thresholds.get('en'), -5);
+  const thresholds = new Float64Array(1);
+  languageThresholds(
+    new Uint8Array(scores.length),
+    {
+      work: scores.map((_, index) => index),
+      nodeScores: scores,
+      languageBest: [-1],
+      buckets: [[]],
+      thresholds,
+    },
+    -1,
+    { ...HMM_DECODE_DEFAULTS, beam: 10, maxActive: 4 }
+  );
+  assert.equal(thresholds[0], -5);
 });

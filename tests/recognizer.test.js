@@ -315,6 +315,24 @@ it('commits a long phrase at a word boundary at least one second old', () => {
   );
 });
 
+it('keeps fixed IPA in live syllable events at 8 kHz', () => {
+  const sampleRate = 8000;
+  const { samples } = synthesize('Hello world.', {
+    lang: 'en',
+    tier: 'telephone',
+    seed: 1,
+  });
+  const signal = samples.subarray(0, sampleRate / 5);
+  const options = { languages: ['en'], level: 'low', modes: false };
+  const syllables = (decoder) =>
+    capture(signal, 160, { ...options, decoder }, sampleRate)
+      .events.filter(({ type }) => type === 'syllable')
+      .map(({ event }) => event);
+  const expected = syllables('phones');
+  assert.ok(expected.some(({ ipa }) => ipa));
+  assert.deepEqual(syllables('words'), expected);
+});
+
 it('reports a syllable within 200 ms and gives the first partial within 500 ms', () => {
   const { events } = capture(samplePhrase(RATE), 320);
   const nuclei = events.filter(({ type }) => type === 'syllable');
