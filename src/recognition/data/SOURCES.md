@@ -216,6 +216,11 @@ words. `getCounts('en')` scales them to the book total as each word's
 prior instead of the book count. Bigrams, and every other language, still
 use the book counts above.
 
+The standard English word network also includes the 1,606 spoken words
+absent from the book vocabulary that occur at least 100 times in the same
+counts. They use the same unigram scaling and the normal text-to-IPA
+pronunciations. The indexed book vocabulary and bigrams keep their order.
+
 ```sh
 node scripts/build-spoken-prior.mjs
 npx prettier --write src/recognition/data/en-spoken.js

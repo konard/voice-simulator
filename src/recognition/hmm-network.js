@@ -317,12 +317,16 @@ function addTree(builder, model, lang, words, { maxWords, oov }) {
 function* allPronunciations(lexicon, maxWords, selectTokens) {
   yield* lexicon.pronunciations(maxWords, selectTokens);
   yield* lexicon.addedPronunciations(maxWords, undefined, selectTokens);
+  if (maxWords >= HMM_MAX_WORDS) {
+    yield* lexicon.spokenPronunciations(selectTokens);
+  }
 }
 
 /**
  * Build the decoding network of the given languages: the lexicon trees of
- * the `maxWords` most frequent words and, with `oov` (default), a phone
- * loop per language without tones.
+ * the `maxWords` most frequent words, supplemental spoken words at the
+ * standard vocabulary size and, with `oov`, a phone loop per language
+ * without tones.
  */
 export function buildNetwork(
   model,

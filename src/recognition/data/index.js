@@ -155,7 +155,7 @@ function setTransition(transitions, word, previous, count) {
  */
 function addSpokenPrior(words, total, spoken) {
   if (!spoken) {
-    return;
+    return [];
   }
   const shares = new Map();
   for (const item of spoken.SPOKEN.split(' ')) {
@@ -168,6 +168,17 @@ function addSpokenPrior(words, total, spoken) {
   for (const item of words) {
     item.prior = Math.max(1, (shares.get(item.word) ?? 0) * scale);
   }
+  return (spoken.SUPPLEMENTAL ?? '')
+    .split(' ')
+    .filter(Boolean)
+    .map((item) => {
+      const at = item.lastIndexOf('=');
+      return {
+        word: item.slice(0, at),
+        count: 1,
+        prior: Math.max(1, Number(item.slice(at + 1)) * scale),
+      };
+    });
 }
 
 export function getCounts(language) {
@@ -184,13 +195,14 @@ export function getCounts(language) {
       });
     const counts = new Map(words.map((item) => [item.word, item.count]));
     const total = words.reduce((sum, item) => sum + item.count, 0);
-    addSpokenPrior(words, total, SPOKEN.get(language));
+    const supplemental = addSpokenPrior(words, total, SPOKEN.get(language));
     let bigrams;
     let openRow;
     const rows = new Map();
     opened.set(language, {
       words,
       counts,
+      supplemental,
       get bigrams() {
         if (!bigrams) {
           bigrams = new Map();
